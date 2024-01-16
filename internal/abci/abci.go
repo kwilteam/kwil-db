@@ -323,7 +323,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	for _, hook := range a.commitHooks {
 		err := hook(ctx, a.blockInfo)
 		if err != nil {
-			fmt.Println("commit hook failed", err)
+			a.log.Error("commit hook failed", zap.Error(err))
 			return nil, fmt.Errorf("commit hook failed: %w", err)
 		}
 	}

@@ -7,6 +7,12 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
+// EventMgr is a wrapper around the EventStore and VoteStore
+// It provides a single interface to store events and
+// check if an event is already processed.
+// This is to ensure that a node that's catching up doesn't
+// broadcast events that are already processed and overwhelm
+// the mempool.
 type EventMgr struct {
 	eventstore *EventStore
 	votestore  VoteStore
@@ -23,6 +29,7 @@ func NewEventMgr(eventstore *EventStore, votestore VoteStore) *EventMgr {
 	}
 }
 
+// Store stores an event if it is not already processed.
 func (e *EventMgr) Store(ctx context.Context, body []byte, eventType string) error {
 	event := &types.VotableEvent{
 		Body: body,
@@ -42,6 +49,7 @@ func (e *EventMgr) Store(ctx context.Context, body []byte, eventType string) err
 	return e.eventstore.Store(ctx, body, eventType)
 }
 
+// KV returns a KVStore
 func (e *EventMgr) KV(prefix []byte) sql.KVStore {
 	return e.eventstore.KV(prefix)
 }

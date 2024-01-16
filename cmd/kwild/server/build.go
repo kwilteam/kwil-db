@@ -21,6 +21,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/events/broadcast"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
+	"github.com/kwilteam/kwil-db/internal/oracles"
 	admSvc "github.com/kwilteam/kwil-db/internal/services/grpc/admin/v0"
 	functionSvc "github.com/kwilteam/kwil-db/internal/services/grpc/function/v0"
 	"github.com/kwilteam/kwil-db/internal/services/grpc/healthsvc/v0"
@@ -85,13 +86,16 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	evm := buildEventMgr(ev, v)
 
+	// Validator status updates channel
+	statusChan := make(chan bool)
+
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
 	// in order to get this, we need the comet node
 	// to get the comet node, we need the abci app
 	// to get the abci app, we need the tx router
 	// but the tx router needs the cometbft client
-	txApp := buildTxApp(d, accs, e, vstore, ac, v, ev)
+	txApp := buildTxApp(d, accs, e, vstore, ac, v, ev, statusChan)
 
 	abciApp := buildAbci(d, closers, accs, &validatorStoreAdapter{vstore},
 		txApp, snapshotModule, bootstrapperModule)
@@ -102,6 +106,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	eventBroadcaster := buildEventBroadcaster(d, ev, &wrappedCometBFTClient{cometBftClient}, txApp, vstore)
 	abciApp.AddCommitHook(eventBroadcaster.RunBroadcast)
+
+	// oracle manager
+	om := buildOracleManager(d, closers, evm, statusChan, cometBftNode)
 
 	// tx service and grpc server
 	txsvc := buildTxSvc(d, &engineAdapter{e},
@@ -117,7 +124,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		adminTPCServer: adminTCPServer,
 		gateway:        buildGatewayServer(d),
 		cometBftNode:   cometBftNode,
-		eventStore:     evm,
+		oracleMgr:      om,
 		log:            *d.log.Named("server"),
 		closers:        closers,
 		cfg:            d.cfg,
@@ -166,8 +173,8 @@ func (c *closeFuncs) closeAll() error {
 }
 
 func buildTxApp(d *coreDependencies, accs *accounts.AccountStore, db txapp.DatabaseEngine, validators txapp.ValidatorStore,
-	atomicCommitter txapp.AtomicCommitter, voteStore txapp.VoteStore, eventStore txapp.EventStore) *txapp.TxApp {
-	return txapp.NewTxApp(db, accs, validators, atomicCommitter, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore, *d.log.Named("tx-router"))
+	atomicCommitter txapp.AtomicCommitter, voteStore txapp.VoteStore, eventStore txapp.EventStore, valStatus chan bool) *txapp.TxApp {
+	return txapp.NewTxApp(db, accs, validators, atomicCommitter, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore, valStatus, *d.log.Named("tx-router"))
 }
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule,
@@ -656,4 +663,8 @@ func failBuild(err error, msg string) {
 	if err != nil {
 		panic(fmt.Sprintf("%s: %s", msg, err.Error()))
 	}
+}
+
+func buildOracleManager(d *coreDependencies, closer *closeFuncs, evm *events.EventMgr, statusChan chan bool, node *cometbft.CometBftNode) *oracles.OracleMgr {
+	return oracles.NewOracleMgr(d.ctx, d.cfg.AppCfg.Oracles, evm, node, statusChan, *d.log.Named("oracle-manager"))
 }

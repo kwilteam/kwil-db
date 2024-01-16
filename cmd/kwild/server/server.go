@@ -17,8 +17,8 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/extensions/oracles"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
+	"github.com/kwilteam/kwil-db/internal/oracles"
 	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
 	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
@@ -34,7 +34,7 @@ type Server struct {
 	gateway        *gateway.GatewayServer
 	adminTPCServer *grpc.Server
 	cometBftNode   *cometbft.CometBftNode
-	eventStore     oracles.EventStore
+	oracleMgr      *oracles.OracleMgr
 	closers        *closeFuncs
 	log            log.Logger
 
@@ -168,6 +168,19 @@ func (s *Server) Start(ctx context.Context) error {
 	})
 	s.log.Info("grpc server started", zap.String("address", s.cfg.AppCfg.AdminListenAddress))
 
+	// Start oracle manager only after node caught up
+	group.Go(func() error {
+		go func() {
+			<-groupCtx.Done()
+			s.log.Info("stop oracle manager")
+			s.oracleMgr.Stop()
+		}()
+
+		s.oracleMgr.Start()
+		return nil
+	})
+	s.log.Info("oracle manager started")
+
 	group.Go(func() error {
 		go func() {
 			<-groupCtx.Done()
@@ -180,42 +193,6 @@ func (s *Server) Start(ctx context.Context) error {
 		return s.cometBftNode.Start()
 	})
 	s.log.Info("comet node started")
-
-	group.Go(func() error {
-		// Continuously check if the node is caught up
-		for {
-			select {
-			case <-groupCtx.Done():
-				return nil
-			default:
-				// Check if the node is caught up
-				if !s.cometBftNode.IsCatchup() {
-					s.log.Info("Node caught up with the latest block")
-					oracles := oracles.RegisteredOracles()
-					for name, oracle := range oracles {
-						oracleName := name
-						oracleInst := oracle
-
-						s.log.Info("starting oracle", zap.String("name", oracleName))
-						group.Go(func() error {
-							select {
-							case <-groupCtx.Done():
-								s.log.Info("stop oracle", zap.String("name", oracleName))
-								if err := oracleInst.Stop(); err != nil {
-									s.log.Warn("failed to stop oracle", zap.String("name", oracleName), zap.Error(err))
-								}
-								return nil
-							default:
-								return oracleInst.Start(groupCtx, s.eventStore, s.cfg.AppCfg.Oracles[oracleName], *s.log.Named(oracleName))
-							}
-						})
-					}
-					// After starting all oracles, exit the loop to avoid restarting them
-					return nil
-				}
-			}
-		}
-	})
 
 	err := group.Wait()
 
