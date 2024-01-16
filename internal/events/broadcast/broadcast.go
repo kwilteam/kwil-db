@@ -32,9 +32,6 @@ type EventStore interface {
 	// GetUnbroadcastedEvents gets events that this node has not yet broadcasted.
 	// Events are only marked as "broadcasted" when they have been included in a block.
 	GetUnreceivedEvents(ctx context.Context) ([]*types.VotableEvent, error)
-
-	// DeleteEvent deletes an event from the event store.
-	DeleteEvent(ctx context.Context, id types.UUID) error
 }
 
 // Broadcaster is an interface for broadcasting to the Kwil network.

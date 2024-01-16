@@ -2,6 +2,7 @@ package oracles
 
 import (
 	"context"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/extensions/oracles"
@@ -71,6 +72,8 @@ func (omgr *OracleMgr) listenForValidatorStatusChanges() {
 				}
 			case <-omgr.ctx.Done():
 				return
+			default:
+				time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}()
