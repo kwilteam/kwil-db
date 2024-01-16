@@ -34,11 +34,11 @@ func (e *EventMgr) Store(ctx context.Context, body []byte, eventType string) err
 	if err != nil {
 		return err
 	}
+
+	// store the event only if not already processed
 	if processed {
 		return nil
 	}
-
-	// store the event only if not already processed
 	return e.eventstore.Store(ctx, body, eventType)
 }
 

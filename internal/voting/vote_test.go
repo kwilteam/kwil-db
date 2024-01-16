@@ -472,8 +472,9 @@ func Test_Votes(t *testing.T) {
 					Type: examplePayloadType,
 				}
 
-				_, err = v.ContainsBodyOrFinished(ctx, event.ID())
-				require.ErrorIs(t, err, voting.ErrResolutionNotFound)
+				res, err := v.ContainsBodyOrFinished(ctx, event.ID())
+				require.False(t, res)
+				require.NoError(t, err)
 
 				// approve vote
 				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
