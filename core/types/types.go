@@ -65,3 +65,15 @@ type DatasetIdentifier struct {
 	Owner []byte `json:"owner"`
 	DBID  string `json:"dbid"`
 }
+
+// VotableEvent is an event that can be voted.
+// It contains an event type and a body.
+// An ID can be generated from the event type and body.
+type VotableEvent struct {
+	Type string `json:"type"`
+	Body []byte `json:"body"`
+}
+
+func (e *VotableEvent) ID() UUID {
+	return NewUUIDV5(append([]byte(e.Type), e.Body...))
+}

@@ -4,30 +4,18 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	// NOTE: we are defining interfaces, but using the types defined in the
 	// packages that provide the concrete implementations. This is a bit
 	// backwards, but it at least allows us to stub out for testing.
-	modAcct "github.com/kwilteam/kwil-db/internal/modules/accounts"
-	modDataset "github.com/kwilteam/kwil-db/internal/modules/datasets"
-	modVal "github.com/kwilteam/kwil-db/internal/modules/validators"
 
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	"github.com/kwilteam/kwil-db/internal/engine/types"
+	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/validators"
 )
-
-type DatasetsModule interface {
-	Deploy(ctx context.Context, schema *types.Schema, tx *transactions.Transaction) (*modDataset.ExecutionResponse, error)
-	Drop(ctx context.Context, dbid string, tx *transactions.Transaction) (*modDataset.ExecutionResponse, error)
-	Execute(ctx context.Context, dbid string, action string, args [][]any, tx *transactions.Transaction) (*modDataset.ExecutionResponse, error)
-
-	PriceDeploy(ctx context.Context, schema *types.Schema) (*big.Int, error)
-	PriceDrop(ctx context.Context, dbid string) (*big.Int, error)
-	PriceExecute(ctx context.Context, dbid string, action string, args [][]any) (*big.Int, error)
-}
 
 // ValidatorModule handles the processing of validator approve/join/leave
 // transactions, punishment, preparation of validator updates to be applied when
@@ -50,51 +38,12 @@ type ValidatorModule interface {
 	// Punish may be used at the start of block processing when byzantine
 	// validators are listed by the consensus client (no transaction).
 	Punish(ctx context.Context, validator []byte, power int64) error
-
-	// Join creates a join request for a prospective validator.
-	Join(ctx context.Context, power int64, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
-	// Leave processes a leave request for a validator.
-	Leave(ctx context.Context, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
-	// Approve records an approval transaction from a current validator. The
-	// approver is the tx Sender.
-	Approve(ctx context.Context, joiner []byte, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
-	// Remove removes a validator from the validator set, if the sender is a
-	// current validator.
-	Remove(ctx context.Context, validator []byte, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
-
-	// Finalize is used at the end of block processing to retrieve the validator
-	// updates to be provided to the consensus client for the next block. This
-	// is not idempotent. The modules working list of updates is reset until
-	// subsequent join/approves are processed for the next block.
-	Finalize(ctx context.Context) ([]*validators.Validator, error) // end of block processing requires providing list of updates to the node's consensus client
-
-	// Updates block height stored by the validator manager. Called in the abci Commit
-	UpdateBlockHeight(ctx context.Context, blockHeight int64)
-
-	// PriceJoin returns the price of a join transaction.
-	PriceJoin(ctx context.Context) (*big.Int, error)
-
-	// PriceApprove returns the price of an approve transaction.
-	PriceApprove(ctx context.Context) (*big.Int, error)
-
-	// PriceLeave returns the price of a leave transaction.
-	PriceLeave(ctx context.Context) (*big.Int, error)
-
-	// PriceRemove returns the price of a remove transaction.
-	PriceRemove(ctx context.Context) (*big.Int, error)
-}
-
-// AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores
-type AtomicCommitter interface {
-	Begin(ctx context.Context, idempotencyKey []byte) error
-	Commit(ctx context.Context, idempotencyKey []byte) ([]byte, error)
 }
 
 // KVStore is an interface for a basic key-value store
 type KVStore interface {
 	Get(key []byte) ([]byte, error)
 	Set(key []byte, value []byte) error
-	Delete(key []byte) error
 }
 
 // SnapshotModule is an interface for a struct that implements snapshotting
@@ -125,7 +74,28 @@ type DBBootstrapModule interface {
 }
 
 type AccountsModule interface {
-	Account(ctx context.Context, acctID []byte) (*accounts.Account, error)
+	GetAccount(ctx context.Context, acctID []byte) (*accounts.Account, error)
 	Credit(ctx context.Context, acctID []byte, amt *big.Int) error
-	TransferTx(ctx context.Context, tx *modAcct.TxAcct, to []byte, amt *big.Int) error
+}
+
+// TxApp is an application that can process transactions.
+// It has methods for beginning and ending blocks, applying transactions,
+// and managing a mempool
+type TxApp interface {
+	GenesisInit(ctx context.Context, validators []*types.Validator) error
+	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
+	Begin(ctx context.Context, blockHeight int64) error
+	Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)
+	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
+	ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error)
+}
+
+// ConsensusParams returns kwil specific consensus parameters.
+// I made this its own separate interface (instead of adding it to AbciConfig)
+// since this should be dynamic and changeable via voting.
+type ConsensusParams interface {
+	// VotingPeriod is the vote expiration period
+	// for validator joins and resolutions.
+	// We may want these to be separate in the future.
+	VotingPeriod() int64
 }

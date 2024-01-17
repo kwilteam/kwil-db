@@ -109,7 +109,9 @@ type Result interface {
 	// Next returns whether or not there is another row to be read.
 	// If there is, it will increment the row index, which can be used
 	// to get the values for the current row.
-	Next() (rowReturned bool, err error)
+	Next() (rowReturned bool)
+	// Err returns the error that occurred during the query.
+	Err() error
 	// Values returns the values for the current row.
 	// The values are returned in the same order as the columns.
 	Values() ([]any, error)

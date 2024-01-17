@@ -63,6 +63,10 @@ type Result interface {
 
 	// Values gets the values of the current row.
 	Values() ([]any, error)
+
+	// ResultSet gets the result set.
+	// This finalizes the execution, copies the data, and unblocks the connection.
+	ResultSet() (*ResultSet, error)
 }
 
 type ResultSet struct {
@@ -79,13 +83,13 @@ func (r *ResultSet) Columns() []string {
 	return v
 }
 
-func (r *ResultSet) Next() (rowReturned bool, err error) {
+func (r *ResultSet) Next() (rowReturned bool) {
 	if r.i >= len(r.Rows) {
-		return false, nil
+		return false
 	}
 
 	r.i++
-	return true, nil
+	return true
 }
 
 func (r *ResultSet) Values() ([]any, error) {
@@ -97,6 +101,25 @@ func (r *ResultSet) Values() ([]any, error) {
 	copy(v, r.Rows[r.i-1])
 
 	return v, nil
+}
+
+func (r *ResultSet) Map() []map[string]any {
+	m := make([]map[string]any, len(r.Rows))
+	for i, row := range r.Rows {
+		m2 := make(map[string]any)
+		for j, col := range row {
+			m2[r.ReturnedColumns[j]] = col
+		}
+
+		m[i] = m2
+	}
+
+	return m
+}
+
+// implements Result
+func (r *ResultSet) Err() error {
+	return nil
 }
 
 type ConnectionFlag int
@@ -139,4 +162,11 @@ func (e *EmptyResult) Err() error {
 
 func (e *EmptyResult) Values() ([]any, error) {
 	return nil, nil
+}
+
+func (e *EmptyResult) ResultSet() (*ResultSet, error) {
+	return &ResultSet{
+		ReturnedColumns: []string{},
+		Rows:            [][]any{},
+	}, nil
 }
