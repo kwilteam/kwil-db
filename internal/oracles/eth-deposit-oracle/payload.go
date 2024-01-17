@@ -40,6 +40,14 @@ func (ac *AccountCredit) Apply(ctx context.Context, datastores *voting.Datastore
 		return fmt.Errorf("account address must start with 0x")
 	}
 
+	if datastores == nil {
+		return fmt.Errorf("datastores not initialized")
+	}
+
+	if datastores.Accounts == nil {
+		return fmt.Errorf("accountstore not initialized")
+	}
+
 	// decode the hex string into a byte slice
 	bts, err := hex.DecodeString(ac.Account)
 	if err != nil {
