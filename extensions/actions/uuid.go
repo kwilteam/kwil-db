@@ -22,14 +22,14 @@ func init() {
 	}
 }
 
-type uuidExtension struct {}
+type uuidExtension struct{}
 
 func (u *uuidExtension) Execute(scope CallContext, metadata map[string]string, method string, args ...any) ([]any, error) {
 	lowerMethod := strings.ToLower(method)
 	if len(args) != 1 {
 		return nil, fmt.Errorf("uuid: expected 1 argument, got %d", len(args))
 	}
-	
+
 	// convert the first argument to a byte slice, as required by the uuid library
 	var arg []byte
 	switch v := args[0].(type) {
@@ -39,7 +39,7 @@ func (u *uuidExtension) Execute(scope CallContext, metadata map[string]string, m
 		arg = v
 	case string:
 		arg = []byte(v)
-	case int:
+	case int64:
 		buf := new(bytes.Buffer)
 		// Question: should this be big endian or little endian? @brennanjl
 		err := binary.Write(buf, binary.LittleEndian, v)
