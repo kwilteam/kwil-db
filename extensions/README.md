@@ -1,6 +1,6 @@
 # Extensions
 
-Extensions are compile-time loaded pieces of code that impact core `kwild` functionality. Typically, extensions impact core consensus code, and therefore great care should be taken when implementing and choosing to use certain extensions.
+Extensions are compile-time-loaded pieces of code that impact core `kwild` functionality. Typically, extensions impact core consensus code, and therefore great care should be taken when implementing and choosing to use certain extensions.
 
 ## Interfaces and Drivers
 

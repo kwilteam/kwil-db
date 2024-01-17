@@ -11,7 +11,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	modAcct "github.com/kwilteam/kwil-db/internal/modules/accounts"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -47,15 +46,11 @@ func cloneTx(tx *transactions.Transaction) *transactions.Transaction {
 type MockAccountsModule struct {
 }
 
-func (m *MockAccountsModule) TransferTx(ctx context.Context, tx *modAcct.TxAcct, to []byte, amt *big.Int) error {
-	return nil
-}
-
 func (m *MockAccountsModule) Credit(ctx context.Context, pubKey []byte, amt *big.Int) error {
 	return nil
 }
 
-func (m *MockAccountsModule) Account(ctx context.Context, pubKey []byte) (*accounts.Account, error) {
+func (m *MockAccountsModule) GetAccount(ctx context.Context, pubKey []byte) (*accounts.Account, error) {
 	return &accounts.Account{
 		Identifier: nil,
 		Balance:    big.NewInt(0),
@@ -90,19 +85,6 @@ func newTxBts(t *testing.T, nonce uint64, signer auth.Signer) []byte {
 		t.Fatalf("could not marshal transaction! %v", err)
 	}
 	return bts
-}
-
-func newTx(t *testing.T, nonce uint64, sender string) *transactions.Transaction {
-	return &transactions.Transaction{
-		Signature: &auth.Signature{},
-		Body: &transactions.TransactionBody{
-			Description: "test",
-			Payload:     []byte(`random payload`),
-			Fee:         big.NewInt(0),
-			Nonce:       nonce,
-		},
-		Sender: []byte(sender),
-	}
 }
 
 func Test_prepareMempoolTxns(t *testing.T) {
@@ -226,7 +208,7 @@ func Test_prepareMempoolTxns(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := prepareMempoolTxns(tt.txs, 1e6, &logger)
+			got, _ := prepareMempoolTxns(tt.txs, 1e6, &logger, []byte("proposer"))
 			if len(got) != len(tt.want) {
 				t.Errorf("got %d txns, expected %d", len(got), len(tt.want))
 			}
@@ -359,7 +341,7 @@ func Test_ProcessProposal_TxValidation(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := abciApp.validateProposalTransactions(ctx, tc.txs)
+			err := abciApp.validateProposalTransactions(ctx, tc.txs, nil)
 			if tc.err {
 				assert.Error(t, err, "expected error due to %s", tc.name)
 			} else {
@@ -367,41 +349,4 @@ func Test_ProcessProposal_TxValidation(t *testing.T) {
 			}
 		})
 	}
-}
-
-func Test_CheckTx(t *testing.T) {
-	m := &mempool{
-		accountStore: &MockAccountsModule{},
-		accounts:     make(map[string]*userAccount),
-	}
-	ctx := context.Background()
-
-	// Successful transaction A: 1
-	err := m.applyTransaction(ctx, newTx(t, 1, "A"))
-	assert.NoError(t, err)
-	assert.EqualValues(t, m.accounts["A"].nonce, 1)
-
-	// Successful transaction A: 2
-	err = m.applyTransaction(ctx, newTx(t, 2, "A"))
-	assert.NoError(t, err)
-	assert.EqualValues(t, m.accounts["A"].nonce, 2)
-
-	// Duplicate nonce failure
-	err = m.applyTransaction(ctx, newTx(t, 2, "A"))
-	assert.Error(t, err)
-	assert.EqualValues(t, m.accounts["A"].nonce, 2)
-
-	// Invalid order
-	err = m.applyTransaction(ctx, newTx(t, 4, "A"))
-	assert.Error(t, err)
-	assert.EqualValues(t, m.accounts["A"].nonce, 2)
-
-	err = m.applyTransaction(ctx, newTx(t, 3, "A"))
-	assert.NoError(t, err)
-	assert.EqualValues(t, m.accounts["A"].nonce, 3)
-
-	// Recheck nonce 4 transaction
-	err = m.applyTransaction(ctx, newTx(t, 4, "A"))
-	assert.NoError(t, err)
-	assert.EqualValues(t, m.accounts["A"].nonce, 4)
 }

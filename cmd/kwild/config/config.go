@@ -57,12 +57,13 @@ type AppConfig struct {
 	SqliteFilePath     string   `mapstructure:"sqlite_file_path"`
 	ExtensionEndpoints []string `mapstructure:"extension_endpoints"`
 	//SnapshotConfig     SnapshotConfig `mapstructure:"snapshots"`
-	TLSCertFile  string `mapstructure:"tls_cert_file"`
-	TLSKeyFile   string `mapstructure:"tls_key_file"`
-	EnableRPCTLS bool   `mapstructure:"rpctls"`
-	Hostname     string `mapstructure:"hostname"`
-	ProfileMode  string `mapstructure:"profile_mode"`
-	ProfileFile  string `mapstructure:"profile_file"`
+	TLSCertFile  string                       `mapstructure:"tls_cert_file"`
+	TLSKeyFile   string                       `mapstructure:"tls_key_file"`
+	EnableRPCTLS bool                         `mapstructure:"rpctls"`
+	Hostname     string                       `mapstructure:"hostname"`
+	ProfileMode  string                       `mapstructure:"profile_mode"`
+	ProfileFile  string                       `mapstructure:"profile_file"`
+	Oracles      map[string]map[string]string `mapstructure:"oracles"`
 }
 
 type SnapshotConfig struct {
