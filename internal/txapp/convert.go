@@ -1,4 +1,4 @@
-package datasets
+package txapp
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 )
 
-func ConvertSchemaToEngine(old *transactions.Schema) (*engineTypes.Schema, error) {
+func convertSchemaToEngine(old *transactions.Schema) (*engineTypes.Schema, error) {
 	procedures, err := convertActionsToEngine(old.Actions)
 	if err != nil {
 		return nil, err

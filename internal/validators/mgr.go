@@ -97,6 +97,7 @@ type ValidatorStore interface {
 	DeleteRemoval(ctx context.Context, target, validator []byte) error
 	AddValidator(ctx context.Context, joiner []byte, power int64) error
 	RemoveValidator(ctx context.Context, validator []byte) error
+	IsCurrent(ctx context.Context, validator []byte) (bool, error)
 }
 
 // ValidatorDB state includes:
@@ -502,4 +503,10 @@ func (mgr *ValidatorMgr) UpdateBlockHeight(height int64) {
 
 func isJoinExpired(join *joinReq, blockHeight int64) bool {
 	return join.expiresAt != -1 && blockHeight >= join.expiresAt
+}
+
+// IsCurrent returns true if the given validator is in the current validator set.
+// It reads directly from the DB, and does not consider pending updates.
+func (mgr *ValidatorMgr) IsCurrent(ctx context.Context, validator []byte) (bool, error) {
+	return mgr.db.IsCurrent(ctx, validator)
 }

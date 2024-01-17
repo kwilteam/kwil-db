@@ -3,6 +3,7 @@ package transactions
 import (
 	"encoding"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 )
 
@@ -31,15 +32,17 @@ func (p PayloadType) Valid() bool {
 }
 
 const (
-	PayloadTypeDeploySchema     PayloadType = "deploy_schema"
-	PayloadTypeDropSchema       PayloadType = "drop_schema"
-	PayloadTypeExecuteAction    PayloadType = "execute_action"
-	PayloadTypeCallAction       PayloadType = "call_action"
-	PayloadTypeTransfer         PayloadType = "transfer"
-	PayloadTypeValidatorJoin    PayloadType = "validator_join"
-	PayloadTypeValidatorLeave   PayloadType = "validator_leave"
-	PayloadTypeValidatorRemove  PayloadType = "validator_remove"
-	PayloadTypeValidatorApprove PayloadType = "validator_approve"
+	PayloadTypeDeploySchema        PayloadType = "deploy_schema"
+	PayloadTypeDropSchema          PayloadType = "drop_schema"
+	PayloadTypeExecuteAction       PayloadType = "execute_action"
+	PayloadTypeCallAction          PayloadType = "call_action"
+	PayloadTypeTransfer            PayloadType = "transfer"
+	PayloadTypeValidatorJoin       PayloadType = "validator_join"
+	PayloadTypeValidatorLeave      PayloadType = "validator_leave"
+	PayloadTypeValidatorRemove     PayloadType = "validator_remove"
+	PayloadTypeValidatorApprove    PayloadType = "validator_approve"
+	PayloadTypeValidatorVoteIDs    PayloadType = "validator_vote_ids"
+	PayloadTypeValidatorVoteBodies PayloadType = "validator_vote_bodies"
 )
 
 // Payload is the interface that all payloads must implement
@@ -360,4 +363,47 @@ func (v *ValidatorLeave) UnmarshalBinary(b []byte) error {
 
 func (v *ValidatorLeave) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
+}
+
+// in the future, if/when we go to implement voting based on token weight (instead of validatorship),
+// we will create identical payloads as the VoteIDs and VoteBodies payloads, but with different types
+
+// ValidatorVoteIDs is a payload for submitting approvals for any pending resolution, by ID.
+type ValidatorVoteIDs struct {
+	// ResolutionIDs is an array of all resolution IDs the caller is approving.
+	ResolutionIDs []types.UUID
+}
+
+var _ Payload = (*ValidatorVoteIDs)(nil)
+
+func (v *ValidatorVoteIDs) MarshalBinary() (serialize.SerializedData, error) {
+	return serialize.Encode(v)
+}
+
+func (v *ValidatorVoteIDs) Type() PayloadType {
+	return PayloadTypeValidatorVoteIDs
+}
+
+func (v *ValidatorVoteIDs) UnmarshalBinary(p0 serialize.SerializedData) error {
+	return serialize.DecodeInto(p0, v)
+}
+
+// ValidatorVoteBodies is a payload for submitting the full vote bodies for any resolution.
+type ValidatorVoteBodies struct {
+	// Events is an array of the full resolution bodies the caller is voting for.
+	Events []*types.VotableEvent
+}
+
+var _ Payload = (*ValidatorVoteBodies)(nil)
+
+func (v *ValidatorVoteBodies) MarshalBinary() (serialize.SerializedData, error) {
+	return serialize.Encode(v)
+}
+
+func (v *ValidatorVoteBodies) Type() PayloadType {
+	return PayloadTypeValidatorVoteBodies
+}
+
+func (v *ValidatorVoteBodies) UnmarshalBinary(p0 serialize.SerializedData) error {
+	return serialize.DecodeInto(p0, v)
 }
