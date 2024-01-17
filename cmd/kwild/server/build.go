@@ -18,10 +18,10 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
+	"github.com/kwilteam/kwil-db/internal/events"
+	"github.com/kwilteam/kwil-db/internal/events/broadcast"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
-	acctmod "github.com/kwilteam/kwil-db/internal/modules/accounts"
-	"github.com/kwilteam/kwil-db/internal/modules/datasets"
-	"github.com/kwilteam/kwil-db/internal/modules/validators"
+	"github.com/kwilteam/kwil-db/internal/oracles"
 	admSvc "github.com/kwilteam/kwil-db/internal/services/grpc/admin/v0"
 	functionSvc "github.com/kwilteam/kwil-db/internal/services/grpc/function/v0"
 	"github.com/kwilteam/kwil-db/internal/services/grpc/healthsvc/v0"
@@ -36,7 +36,9 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/adapter"
 	"github.com/kwilteam/kwil-db/internal/sql/registry"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+	"github.com/kwilteam/kwil-db/internal/txapp"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
+	"github.com/kwilteam/kwil-db/internal/voting"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -60,40 +62,58 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// atomic committer
 	ac := buildCommitter(d, closers)
 
+	// registry
+	reg := buildRegistry(d, closers)
+
 	// engine
-	e := buildEngine(d, closers, ac)
+	e := buildEngine(d, closers, ac, reg)
 
 	// account store
 	accs := buildAccountRepository(d, closers, ac)
-	accsMod := buildAccountsModule(accs) // abci accounts module
-
-	// datasets module
-	datasetsModule := buildDatasetsModule(d, e, accs)
 
 	// validator updater and store
 	vstore := buildValidatorManager(d, closers, ac)
-
-	// validator module
-	validatorModule := buildValidatorModule(d, accs, vstore)
 
 	snapshotModule := buildSnapshotter(d)
 
 	bootstrapperModule := buildBootstrapper(d)
 
-	abciApp := buildAbci(d, closers, accsMod, datasetsModule, validatorModule,
-		ac, snapshotModule, bootstrapperModule)
+	// vote store
+	v := buildVoteStore(d, closers, accs, reg)
+
+	// event store
+	ev := buildEventStore(d, closers)
+
+	evm := buildEventMgr(ev, v)
+
+	// this is a hack
+	// we need the cometbft client to broadcast txs.
+	// in order to get this, we need the comet node
+	// to get the comet node, we need the abci app
+	// to get the abci app, we need the tx router
+	// but the tx router needs the cometbft client
+	txApp := buildTxApp(d, accs, e, vstore, ac, v, ev)
+
+	abciApp := buildAbci(d, closers, accs, &validatorStoreAdapter{vstore},
+		txApp, snapshotModule, bootstrapperModule)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 
+	eventBroadcaster := buildEventBroadcaster(d, ev, &wrappedCometBFTClient{cometBftClient}, txApp, vstore)
+	abciApp.AddCommitHook(eventBroadcaster.RunBroadcast)
+
+	// oracle manager
+	om := buildOracleManager(d, closers, evm, cometBftNode, vstore)
+
 	// tx service and grpc server
-	txsvc := buildTxSvc(d, datasetsModule, accsMod, vstore,
-		&wrappedCometBFTClient{cometBftClient}, abciApp)
+	txsvc := buildTxSvc(d, &engineAdapter{e},
+		&wrappedCometBFTClient{cometBftClient}, txApp)
 	grpcServer := buildGrpcServer(d, txsvc)
 
 	// admin service and server
-	admsvc := buildAdminSvc(d, &wrappedCometBFTClient{cometBftClient}, abciApp, vstore)
+	admsvc := buildAdminSvc(d, &wrappedCometBFTClient{cometBftClient}, txApp, vstore, abciApp.ChainID())
 	adminTCPServer := buildAdminService(d, closers, admsvc, txsvc)
 
 	return &Server{
@@ -101,6 +121,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		adminTPCServer: adminTCPServer,
 		gateway:        buildGatewayServer(d),
 		cometBftNode:   cometBftNode,
+		oracleMgr:      om,
 		log:            *d.log.Named("server"),
 		closers:        closers,
 		cfg:            d.cfg,
@@ -112,6 +133,8 @@ const (
 	accountsDBName  = "accounts"
 	validatorDBName = "validators"
 	engineName      = "engine"
+	votesDBName     = "votes"
+	eventsDBName    = "events"
 )
 
 // coreDependencies holds dependencies that are widely used
@@ -146,8 +169,14 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
-func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
-	committer *sessions.MultiCommitter, snapshotter *snapshots.SnapshotStore, bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
+func buildTxApp(d *coreDependencies, accs *accounts.AccountStore, db txapp.DatabaseEngine, validators txapp.ValidatorStore,
+	atomicCommitter txapp.AtomicCommitter, voteStore txapp.VoteStore, eventStore txapp.EventStore) *txapp.TxApp {
+	return txapp.NewTxApp(db, accs, validators, atomicCommitter, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore, *d.log.Named("tx-router"))
+}
+
+func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule,
+	validatorModule abci.ValidatorModule, txApp abci.TxApp, snapshotter *snapshots.SnapshotStore,
+	bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
 	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, config.ABCIInfoSubDirName)
 	badgerKv, err := badger.NewBadgerDB(d.ctx, badgerPath, &badger.Options{
 		GuaranteeFSync: true,
@@ -172,58 +201,76 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 	}
 	return abci.NewAbciApp(cfg,
 		accountsModule,
-		datasetsModule,
 		validatorModule,
 		badgerKv,
-		committer,
 		sh,
 		bootstrapper,
-		abci.WithLogger(*d.log.Named("abci")),
+		txApp,
+		&consensusParamAdapter{voteExpiry: d.genesisCfg.ConsensusParams.Validator.JoinExpiry},
+		*d.log.Named("abci"),
 	)
 }
 
-func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, accs txSvc.AccountReader,
-	vstore *vmgr.ValidatorMgr, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication) *txSvc.Service {
-	return txSvc.NewService(txsvc, accs, vstore, cometBftClient, nodeApp,
+func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broadcast.Broadcaster, accs broadcast.AccountInfoer, v broadcast.ValidatorStore) *broadcast.EventBroadcaster {
+	return broadcast.NewEventBroadcaster(ev, b, accs, v, buildSigner(d), d.genesisCfg.ChainID)
+}
+
+func buildVoteStore(d *coreDependencies, closer *closeFuncs, acc voting.AccountStore, reg *registry.Registry) *voting.VoteProcessor {
+	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, votesDBName), 1, 2, true)
+	if err != nil {
+		failBuild(err, "failed to open votes db")
+	}
+	closer.addCloser(db.Close)
+
+	v, err := voting.NewVoteProcessor(d.ctx, db, acc, reg, 666667, *d.log.Named("vote-processor")) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
+	if err != nil {
+		failBuild(err, "failed to build vote store")
+	}
+
+	return v
+}
+
+func buildEventStore(d *coreDependencies, closer *closeFuncs) *events.EventStore {
+	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, eventsDBName), 1, 2, true)
+	if err != nil {
+		failBuild(err, "failed to open events db")
+	}
+	closer.addCloser(db.Close)
+
+	e, err := events.NewEventStore(d.ctx, db)
+	if err != nil {
+		failBuild(err, "failed to build event store")
+	}
+
+	return e
+}
+
+func buildEventMgr(es *events.EventStore, vs *voting.VoteProcessor) *events.EventMgr {
+	return events.NewEventMgr(es, vs)
+}
+
+func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication) *txSvc.Service {
+	return txSvc.NewService(txsvc, cometBftClient, nodeApp,
 		txSvc.WithLogger(*d.log.Named("tx-service")),
 	)
 }
 
-func buildAdminSvc(d *coreDependencies, transactor admSvc.BlockchainTransactor, node admSvc.NodeApplication, validatorStore admSvc.ValidatorReader) *admSvc.Service {
+func buildAdminSvc(d *coreDependencies, transactor admSvc.BlockchainTransactor, txApp admSvc.TxApp, validatorStore admSvc.ValidatorReader, chainID string) *admSvc.Service {
+	return admSvc.NewService(transactor, txApp, validatorStore, buildSigner(d), d.cfg, chainID,
+		admSvc.WithLogger(*d.log.Named("admin-service")),
+	)
+}
+
+func buildSigner(d *coreDependencies) *auth.Ed25519Signer {
 	pk, err := crypto.Ed25519PrivateKeyFromBytes(d.privKey.Bytes())
 	if err != nil {
 		failBuild(err, "failed to build admin service")
 	}
 
-	signer := auth.Ed25519Signer{Ed25519PrivateKey: *pk}
-
-	return admSvc.NewService(transactor, node, validatorStore, &signer, d.cfg,
-		admSvc.WithLogger(*d.log.Named("admin-service")),
-	)
+	return &auth.Ed25519Signer{Ed25519PrivateKey: *pk}
 }
 
-func buildDatasetsModule(d *coreDependencies, eng datasets.Engine, accs datasets.AccountStore) *datasets.DatasetModule {
-	feeMultiplier := 1
-	if d.genesisCfg.ConsensusParams.WithoutGasCosts {
-		feeMultiplier = 0
-	}
-
-	return datasets.NewDatasetModule(eng, accs,
-		datasets.WithLogger(*d.log.Named("dataset-module")),
-		datasets.WithFeeMultiplier(int64(feeMultiplier)),
-	)
-}
-
-func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommitter) *execution.GlobalContext {
-	extensions, err := getExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
-	if err != nil {
-		failBuild(err, "failed to get extensions")
-	}
-
-	for name := range extensions {
-		d.log.Info("registered extension", zap.String("name", name))
-	}
-
+func buildRegistry(d *coreDependencies, closer *closeFuncs) *registry.Registry {
 	reg, err := registry.NewRegistry(d.ctx, func(ctx context.Context, dbid string, create bool) (registry.Pool, error) {
 		return sqlite.NewPool(ctx, dbid, 1, 2, true)
 	}, d.cfg.AppCfg.SqliteFilePath, registry.WithReaderWaitTimeout(time.Millisecond*100), registry.WithLogger(
@@ -231,6 +278,19 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommi
 	))
 	if err != nil {
 		failBuild(err, "failed to build registry")
+	}
+
+	return reg
+}
+
+func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommitter, reg *registry.Registry) *execution.GlobalContext {
+	extensions, err := getExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
+	if err != nil {
+		failBuild(err, "failed to get extensions")
+	}
+
+	for name := range extensions {
+		d.log.Info("registered extension", zap.String("name", name))
 	}
 
 	eng, err := execution.NewGlobalContext(d.ctx, reg, adaptExtensions(extensions))
@@ -245,10 +305,6 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommi
 	closer.addCloser(reg.Close)
 
 	return eng
-}
-
-func buildAccountsModule(store *accounts.AccountStore) *acctmod.AccountsModule {
-	return acctmod.NewAccountsModule(store)
 }
 
 func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *sessions.MultiCommitter) *accounts.AccountStore {
@@ -318,12 +374,6 @@ func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions
 	}
 
 	return v
-}
-
-func buildValidatorModule(d *coreDependencies, accs datasets.AccountStore,
-	vals validators.ValidatorMgr) *validators.ValidatorModule {
-	return validators.NewValidatorModule(vals, accs,
-		validators.WithLogger(*d.log.Named("validator-module")))
 }
 
 func buildSnapshotter(d *coreDependencies) *snapshots.SnapshotStore {
@@ -610,4 +660,8 @@ func failBuild(err error, msg string) {
 	if err != nil {
 		panic(fmt.Sprintf("%s: %s", msg, err.Error()))
 	}
+}
+
+func buildOracleManager(d *coreDependencies, closer *closeFuncs, evm *events.EventMgr, node *cometbft.CometBftNode, vm *vmgr.ValidatorMgr) *oracles.OracleMgr {
+	return oracles.NewOracleMgr(d.ctx, d.cfg.AppCfg.Oracles, evm, node, d.privKey.PubKey().Bytes(), vm, *d.log.Named("oracle-manager"))
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
+	"github.com/kwilteam/kwil-db/internal/oracles"
 	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
 	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
@@ -33,6 +34,7 @@ type Server struct {
 	gateway        *gateway.GatewayServer
 	adminTPCServer *grpc.Server
 	cometBftNode   *cometbft.CometBftNode
+	oracleMgr      *oracles.OracleMgr
 	closers        *closeFuncs
 	log            log.Logger
 
@@ -165,6 +167,19 @@ func (s *Server) Start(ctx context.Context) error {
 		return s.adminTPCServer.Start()
 	})
 	s.log.Info("grpc server started", zap.String("address", s.cfg.AppCfg.AdminListenAddress))
+
+	// Start oracle manager only after node caught up
+	group.Go(func() error {
+		go func() {
+			<-groupCtx.Done()
+			s.log.Info("stop oracle manager")
+			s.oracleMgr.Stop()
+		}()
+
+		s.oracleMgr.Start()
+		return nil
+	})
+	s.log.Info("oracle manager started")
 
 	group.Go(func() error {
 		// The CometBFT services do not block on Start().

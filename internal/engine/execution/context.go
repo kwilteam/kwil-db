@@ -159,22 +159,16 @@ func (e *ExtensionScoper) SetResult(result actions.Result) error {
 		ReturnedColumns: result.Columns(),
 	}
 
-	for {
-		rowReturned, err := result.Next()
-		if err != nil {
-			return err
-		}
-
-		if !rowReturned {
-			break
-		}
-
+	for result.Next() {
 		values, err := result.Values()
 		if err != nil {
 			return err
 		}
 
 		res.Rows = append(res.Rows, values)
+	}
+	if err := result.Err(); err != nil {
+		return err
 	}
 
 	e.ScopeContext.SetResult(res)
