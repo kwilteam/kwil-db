@@ -13,6 +13,7 @@ import (
 )
 
 // KFSqliteVisitor is visitor that visit Antlr parsed tree and returns the AST.
+// TODO: rename to KFSQLAstBuilder
 type KFSqliteVisitor struct {
 	sqlgrammar.BaseSQLiteParserVisitor
 
@@ -684,18 +685,10 @@ func (v *KFSqliteVisitor) VisitUpdate_stmt(ctx *sqlgrammar.Update_stmtContext) i
 	}
 
 	if ctx.FROM_() != nil {
-		fromClause := tree.FromClause{
-			JoinClause: &tree.JoinClause{},
+		joinClause := v.Visit(ctx.Relation()).(*tree.JoinClause)
+		updateStmt.From = &tree.FromClause{
+			JoinClause: joinClause,
 		}
-
-		if ctx.Join_clause() != nil {
-			fromClause.JoinClause = v.Visit(ctx.Join_clause()).(*tree.JoinClause)
-		} else {
-			// table_or_subquery
-			fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery()).(tree.TableOrSubquery)
-		}
-
-		updateStmt.From = &fromClause
 	}
 
 	if ctx.WHERE_() != nil {
@@ -882,23 +875,23 @@ func (v *KFSqliteVisitor) VisitJoin_operator(ctx *sqlgrammar.Join_operatorContex
 	return &jp
 }
 
-// VisitJoin_clause is called when visiting a join_clause, return *tree.JoinClause
-func (v *KFSqliteVisitor) VisitJoin_clause(ctx *sqlgrammar.Join_clauseContext) interface{} {
+// VisitRelation is called when visiting a relation, return *tree.JoinClause
+func (v *KFSqliteVisitor) VisitRelation(ctx *sqlgrammar.RelationContext) interface{} {
 	clause := tree.JoinClause{}
 
-	// just table_or_subquery
-	clause.TableOrSubquery = v.Visit(ctx.Table_or_subquery(0)).(tree.TableOrSubquery)
-	if len(ctx.AllTable_or_subquery()) == 1 {
+	// just table or subquery
+	clause.TableOrSubquery = v.Visit(ctx.Table_or_subquery()).(tree.TableOrSubquery)
+	if len(ctx.AllJoin_relation()) == 0 {
 		return &clause
 	}
 
-	// with joins
-	joins := make([]*tree.JoinPredicate, len(ctx.AllJoin_operator()))
-	for i, subCtx := range ctx.AllJoin_operator() {
+	// with join relations
+	joins := make([]*tree.JoinPredicate, len(ctx.AllJoin_relation()))
+	for i, subCtx := range ctx.AllJoin_relation() {
 		jp := tree.JoinPredicate{}
-		jp.JoinOperator = v.Visit(subCtx).(*tree.JoinOperator)
-		jp.Table = v.Visit(ctx.Table_or_subquery(i + 1)).(tree.TableOrSubquery)
-		jp.Constraint = v.Visit(ctx.Join_constraint(i).Expr()).(tree.Expression)
+		jp.JoinOperator = v.Visit(subCtx.Join_operator()).(*tree.JoinOperator)
+		jp.Table = v.Visit(subCtx.Table_or_subquery()).(tree.TableOrSubquery)
+		jp.Constraint = v.Visit(subCtx.Join_constraint().Expr()).(tree.Expression)
 		joins[i] = &jp
 	}
 	clause.Joins = joins
@@ -970,34 +963,10 @@ func (v *KFSqliteVisitor) VisitSelect_core(ctx *sqlgrammar.Select_coreContext) i
 	}
 
 	if ctx.FROM_() != nil {
-		fromClause := tree.FromClause{
-			JoinClause: &tree.JoinClause{},
+		joinClause := v.Visit(ctx.Relation()).(*tree.JoinClause)
+		t.From = &tree.FromClause{
+			JoinClause: joinClause,
 		}
-
-		if ctx.Join_clause() != nil {
-			fromClause.JoinClause = v.Visit(ctx.Join_clause()).(*tree.JoinClause)
-		} else {
-			// table_or_subquery
-			fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery()).(tree.TableOrSubquery)
-
-			// with comma(cartesian) join
-			//if len(ctx.AllTable_or_subquery()) == 1 {
-			//	fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery(0)).(tree.TableOrSubquery)
-			//} else {
-			//	//tos := make([]tree.TableOrSubquery, len(ctx.AllTable_or_subquery()))
-			//	//
-			//	//for i, tableOrSubqueryCtx := range ctx.AllTable_or_subquery() {
-			//	//	tos[i] = v.Visit(tableOrSubqueryCtx).(tree.TableOrSubquery)
-			//	//}
-			//	//
-			//	//fromClause.JoinClause.TableOrSubquery = &tree.TableOrSubqueryList{
-			//	//	TableOrSubqueries: tos,
-			//	//}
-			//	panic("not support comma(cartesian) join")
-			//}
-		}
-
-		t.From = &fromClause
 	}
 
 	if ctx.GetWhereExpr() != nil {
