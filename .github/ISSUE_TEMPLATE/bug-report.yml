@@ -1,0 +1,61 @@
+name: Bug Report
+description: Something with kwil-db is not working as expected.
+title: "Bug: "
+labels: ["bug"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thank you for taking the time to report an issue. This form is for reporting **bugs in kwil-db**.
+
+              If you have a **question** or are unsure if you have found a bug, please ask on the [Discord server](https://discord.com/invite/HzRPZ59Kay).
+
+              When submitting logs, please submit them as text and not as a screenshot.
+    - type: input
+      id: version
+      attributes:
+          label: Version / Commit
+          description: Please include the release version or commit hash of kwil-db you are using. Write `unknown` if you are unsure.
+          placeholder: e.g. v0.1.0 or 1234567890abcdef
+      validations:
+          required: true
+    - type: input
+      id: os
+      attributes:
+          label: Operating System
+          description: Please include the operating system you are using.
+          placeholder: e.g. Windows 10, Ubuntu 20.04, macOS 11.2.3
+      validations:
+          required: true
+    - type: textarea
+      id: expected_behavior
+      attributes:
+          label: Expected Behavior
+          description: Please describe what you expected to happen.
+          placeholder: e.g. I expected kwil-db to do X when I did Y
+      validations:
+          required: true
+    - type: textarea
+      id: actual_behavior
+      attributes:
+          label: Actual Behavior
+          description: Please describe what actually happened.
+          placeholder: e.g. kwil-db did Z instead of X when I did Y
+      validations:
+          required: true
+    - type: textarea
+      id: steps_to_reproduce
+      attributes:
+          label: Steps to Reproduce
+          description: Please describe the steps to reproduce the issue.
+          placeholder: e.g. 1. Run kwil-db with the following command `kwild --autogen`...
+      validations:
+          required: true
+    - type: textarea
+      id: additional_information
+      attributes:
+          label: Additional Information
+          description: Please include any additional information that may be helpful.
+          placeholder: e.g. I am using the following extensions `math` and `uuid`
+      validations:
+          required: false
