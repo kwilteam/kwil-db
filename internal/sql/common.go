@@ -76,6 +76,8 @@ type ResultSet struct {
 	i int // starts at 0
 }
 
+var _ Result = (*ResultSet)(nil)
+
 func (r *ResultSet) Columns() []string {
 	v := make([]string, len(r.ReturnedColumns))
 	copy(v, r.ReturnedColumns)
@@ -118,8 +120,35 @@ func (r *ResultSet) Map() []map[string]any {
 }
 
 // implements Result
+func (r *ResultSet) Close() error {
+	return nil
+}
+
+// implements Result
 func (r *ResultSet) Err() error {
 	return nil
+}
+
+// implements Result
+func (r *ResultSet) Finish() error {
+	return nil
+}
+
+// implements Result
+func (r *ResultSet) ResultSet() (*ResultSet, error) {
+	copiedColumns := make([]string, len(r.ReturnedColumns))
+	copy(copiedColumns, r.ReturnedColumns)
+
+	copiedRows := make([][]any, len(r.Rows))
+	for i, row := range r.Rows {
+		copiedRows[i] = make([]any, len(row))
+		copy(copiedRows[i], row)
+	}
+
+	return &ResultSet{
+		ReturnedColumns: copiedColumns,
+		Rows:            copiedRows,
+	}, nil
 }
 
 type ConnectionFlag int

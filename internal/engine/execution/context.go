@@ -167,9 +167,6 @@ func (e *ExtensionScoper) SetResult(result actions.Result) error {
 
 		res.Rows = append(res.Rows, values)
 	}
-	if err := result.Err(); err != nil {
-		return err
-	}
 
 	e.ScopeContext.SetResult(res)
 	return nil
