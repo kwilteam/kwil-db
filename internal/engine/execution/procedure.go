@@ -243,6 +243,8 @@ func (e *callMethod) execute(scope *ProcedureContext, dataset *Dataset) error {
 	var results []any
 	var err error
 
+	newScope := scope.NewScope()
+
 	// if no namespace is specified, we call a local procedure.
 	// this can access public and private procedures.
 	if e.Namespace == "" {
@@ -251,7 +253,7 @@ func (e *callMethod) execute(scope *ProcedureContext, dataset *Dataset) error {
 			return fmt.Errorf(`procedure "%s" not found`, e.Method)
 		}
 
-		err = procedure.call(scope.NewScope(), inputs)
+		err = procedure.call(newScope, inputs)
 	} else {
 		namespace, ok := dataset.namespaces[e.Namespace]
 		if !ok {
@@ -259,11 +261,13 @@ func (e *callMethod) execute(scope *ProcedureContext, dataset *Dataset) error {
 		}
 
 		// new scope since we are calling a namespace
-		results, err = namespace.Call(scope.NewScope(), e.Method, inputs)
+		results, err = namespace.Call(newScope, e.Method, inputs)
 	}
 	if err != nil {
 		return err
 	}
+
+	scope.Result = newScope.Result
 
 	if len(e.Receivers) > len(results) {
 		return fmt.Errorf(`%w: procedure "%s" returned %d values, but only %d receivers were specified`, ErrIncorrectNumberOfArguments, e.Method, len(results), len(e.Receivers))
