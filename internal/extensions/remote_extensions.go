@@ -52,10 +52,6 @@ func (e *RemoteExtension) Execute(ctx *execution.ProcedureContext, metadata map[
 	}, method, args...)
 }
 
-type Contexter interface {
-	Ctx() context.Context
-}
-
 // Connect connects to the given extension, and attempts to configure it with the given config.
 // If the extension is not available, an error is returned.
 func (e *RemoteExtension) Connect(ctx context.Context) error {
