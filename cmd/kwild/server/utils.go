@@ -30,8 +30,8 @@ import (
 
 // getExtensions returns both the local and remote extensions. Remote extensions are identified by
 // connecting to the specified extension URLs.
-func getExtensions(ctx context.Context, urls []string) (map[string]extActions.EngineExtension, error) {
-	exts := make(map[string]extActions.EngineExtension)
+func getExtensions(ctx context.Context, urls []string) (map[string]execution.ExtensionInitializer, error) {
+	exts := make(map[string]execution.ExtensionInitializer)
 
 	for name, ext := range extActions.RegisteredExtensions() {
 		_, ok := exts[name]
@@ -53,46 +53,9 @@ func getExtensions(ctx context.Context, urls []string) (map[string]extActions.En
 			return nil, fmt.Errorf("duplicate extension name: %s", ext.Name())
 		}
 
-		exts[ext.Name()] = ext
+		exts[ext.Name()] = extensions.AdaptLegacyExtension(ext)
 	}
 	return exts, nil
-}
-
-func adaptExtensions(exts map[string]extActions.EngineExtension) map[string]execution.NamespaceInitializer {
-	adapted := make(map[string]execution.NamespaceInitializer, len(exts))
-
-	for name, ext := range exts {
-		initializer := &extensions.ExtensionInitializer{
-			Extension: ext,
-		}
-		adapted[name] = func(ctx context.Context, metadata map[string]string) (execution.Namespace, error) {
-			// external extensions expect string as "string", however the engine now passes literals as "'string'"
-			trimmedMap := make(map[string]string, len(metadata))
-			for k, v := range metadata {
-				trimmedMap[k] = strings.Trim(v, "'")
-			}
-
-			ext, err := initializer.CreateInstance(ctx, trimmedMap)
-			if err != nil {
-				return nil, err
-			}
-
-			return &extensionAdapter{
-				ext: ext,
-			}, nil
-		}
-	}
-
-	return adapted
-}
-
-// extensionAdapater allows an extension to be used as an engine namespace.
-type extensionAdapter struct {
-	ext *extensions.Instance
-}
-
-func (e *extensionAdapter) Call(scoper *execution.ScopeContext, method string, inputs []any) ([]any, error) {
-	return e.ext.Execute(&execution.ExtensionScoper{ScopeContext: scoper}, method, inputs...)
 }
 
 // wrappedCometBFTClient satisfies the generic txsvc.BlockchainBroadcaster and

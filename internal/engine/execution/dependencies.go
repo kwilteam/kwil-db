@@ -38,13 +38,3 @@ type Databases interface {
 	// it contains a sync flag, which indicates whether it should read uncommitted data.
 	Get(ctx context.Context, dbid string, key []byte, sync bool) ([]byte, error)
 }
-
-// NamespaceInitializer is a function that initializes a namespace.
-type NamespaceInitializer func(ctx context.Context, metadata map[string]string) (Namespace, error)
-
-// Namespace is a registerable namespace that contains methods.
-// These methods can be called from a procedure.
-type Namespace interface {
-	// Call calls a method.
-	Call(scoper *ScopeContext, method string, inputs []any) ([]any, error)
-}

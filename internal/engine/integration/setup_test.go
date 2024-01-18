@@ -35,7 +35,7 @@ func setup(t *testing.T) (global *execution.GlobalContext, reg *registry.Registr
 		return nil, nil, err
 	}
 
-	global, err = execution.NewGlobalContext(ctx, reg, map[string]execution.NamespaceInitializer{
+	global, err = execution.NewGlobalContext(ctx, reg, map[string]execution.ExtensionInitializer{
 		"math": (&mathInitializer{}).initialize,
 	})
 	if err != nil {
@@ -59,7 +59,7 @@ type mathInitializer struct {
 	vals map[string]string
 }
 
-func (m *mathInitializer) initialize(_ context.Context, mp map[string]string) (execution.Namespace, error) {
+func (m *mathInitializer) initialize(_ *execution.DeploymentContext, mp map[string]string) (execution.ExtensionNamespace, error) {
 	m.vals = mp
 
 	_, ok := m.vals["fail"]
@@ -72,9 +72,9 @@ func (m *mathInitializer) initialize(_ context.Context, mp map[string]string) (e
 
 type mathExt struct{}
 
-var _ execution.Namespace = &mathExt{}
+var _ execution.ExtensionNamespace = &mathExt{}
 
-func (m *mathExt) Call(caller *execution.ScopeContext, method string, inputs []any) ([]any, error) {
+func (m *mathExt) Call(caller *execution.ProcedureContext, method string, inputs []any) ([]any, error) {
 	if method != "add" {
 		return nil, fmt.Errorf("unknown method: %s", method)
 	}
