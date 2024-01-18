@@ -293,7 +293,7 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommi
 		d.log.Info("registered extension", zap.String("name", name))
 	}
 
-	eng, err := execution.NewGlobalContext(d.ctx, reg, adaptExtensions(extensions))
+	eng, err := execution.NewGlobalContext(d.ctx, reg, extensions)
 	if err != nil {
 		failBuild(err, "failed to build engine")
 	}
