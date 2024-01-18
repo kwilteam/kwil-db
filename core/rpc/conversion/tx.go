@@ -20,6 +20,11 @@ func ConvertFromPBTx(incoming *txpb.Transaction) (*transactions.Transaction, err
 		return nil, fmt.Errorf("transaction signature not given")
 	}
 
+	// if fee is undefined, throw error
+	if incoming.Body.Fee == "" {
+		return nil, fmt.Errorf("invalid fee: expected a string, got %s", incoming.Body.Fee)
+	}
+
 	convSignature := &auth.Signature{
 		Signature: incoming.Signature.SignatureBytes,
 		Type:      incoming.Signature.SignatureType,
