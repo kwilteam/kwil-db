@@ -26,29 +26,33 @@ type uuidExtension struct{}
 
 func (u *uuidExtension) Execute(scope CallContext, metadata map[string]string, method string, args ...any) ([]any, error) {
 	lowerMethod := strings.ToLower(method)
-	if len(args) != 1 {
-		return nil, fmt.Errorf("uuid: expected 1 argument, got %d", len(args))
+
+	// if no args are provided, throw error
+	if len(args) == 0 {
+		return nil, fmt.Errorf("uuid: expected at least 1 argument, got 0")
 	}
 
-	// convert the first argument to a byte slice, as required by the uuid library
+	// convert the every argument to a byte slice, as required by the uuid library
 	var arg []byte
-	switch v := args[0].(type) {
-	default:
-		return nil, fmt.Errorf("uuid: expected byte slice or string as first argument")
-	case []byte:
-		arg = v
-	case string:
-		arg = []byte(v)
-	case int64:
-		buf := new(bytes.Buffer)
-		// Question: should this be big endian or little endian? @brennanjl
-		err := binary.Write(buf, binary.LittleEndian, v)
-		if err != nil {
-			return nil, fmt.Errorf("uuid: error converting int to byte slice: %w", err)
-		}
-		arg = buf.Bytes()
-	}
 
+	// iterate over the arguments and convert them to byte slices, and append them to the arg slice
+	for _, v := range args {
+		switch v := v.(type) {
+		default:
+			return nil, fmt.Errorf("uuid: expected byte slice, string, or int64 as argument, got %T", v)
+		case []byte:
+			arg = append(arg, v...)
+		case string:
+			arg = append(arg, []byte(v)...)
+		case int64:
+			buf := new(bytes.Buffer)
+			err := binary.Write(buf, binary.LittleEndian, v)
+			if err != nil {
+				return nil, fmt.Errorf("uuid: error converting int to byte slice: %w", err)
+			}
+			arg = append(arg, buf.Bytes()...)
+		}
+	}
 	// there will be two methods on the extension:
 	// - uuidv5: generates a uuidv5 from a byte slice and returns as a string
 	// - uuidv5bytes: generates a uuidv5 from a byte slice and returns as a byte slice
