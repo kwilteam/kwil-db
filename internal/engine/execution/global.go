@@ -248,7 +248,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 		namespace, err := initializer(&DeploymentContext{
 			Ctx:    ctx,
 			Schema: schema,
-		}, ext.ConfigMap())
+		}, ext.CleanMap())
 		if err != nil {
 			return err
 		}
