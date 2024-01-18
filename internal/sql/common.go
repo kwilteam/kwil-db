@@ -72,6 +72,8 @@ type ResultSet struct {
 	i int // starts at 0
 }
 
+var _ Result = (*ResultSet)(nil)
+
 func (r *ResultSet) Columns() []string {
 	v := make([]string, len(r.ReturnedColumns))
 	copy(v, r.ReturnedColumns)
@@ -79,13 +81,13 @@ func (r *ResultSet) Columns() []string {
 	return v
 }
 
-func (r *ResultSet) Next() (rowReturned bool, err error) {
+func (r *ResultSet) Next() (rowReturned bool) {
 	if r.i >= len(r.Rows) {
-		return false, nil
+		return false
 	}
 
 	r.i++
-	return true, nil
+	return true
 }
 
 func (r *ResultSet) Values() ([]any, error) {
@@ -97,6 +99,52 @@ func (r *ResultSet) Values() ([]any, error) {
 	copy(v, r.Rows[r.i-1])
 
 	return v, nil
+}
+
+func (r *ResultSet) Map() []map[string]any {
+	m := make([]map[string]any, len(r.Rows))
+	for i, row := range r.Rows {
+		m2 := make(map[string]any)
+		for j, col := range row {
+			m2[r.ReturnedColumns[j]] = col
+		}
+
+		m[i] = m2
+	}
+
+	return m
+}
+
+// implements Result
+func (r *ResultSet) Close() error {
+	return nil
+}
+
+// implements Result
+func (r *ResultSet) Err() error {
+	return nil
+}
+
+// implements Result
+func (r *ResultSet) Finish() error {
+	return nil
+}
+
+// implements Result
+func (r *ResultSet) ResultSet() (*ResultSet, error) {
+	copiedColumns := make([]string, len(r.ReturnedColumns))
+	copy(copiedColumns, r.ReturnedColumns)
+
+	copiedRows := make([][]any, len(r.Rows))
+	for i, row := range r.Rows {
+		copiedRows[i] = make([]any, len(row))
+		copy(copiedRows[i], row)
+	}
+
+	return &ResultSet{
+		ReturnedColumns: copiedColumns,
+		Rows:            copiedRows,
+	}, nil
 }
 
 type ConnectionFlag int
