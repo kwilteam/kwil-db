@@ -73,6 +73,7 @@ type ConsensusParams struct {
 	Evidence  EvidenceParams  `json:"evidence"`
 	Version   VersionParams   `json:"version"`
 	Validator ValidatorParams `json:"validator"`
+	Votes     VoteParams      `json:"votes"`
 
 	WithoutNonces   bool `json:"without_nonces"`
 	WithoutGasCosts bool `json:"without_gas_costs"`
@@ -95,6 +96,12 @@ type ValidatorParams struct {
 	// JoinExpiry is the number of blocks after which the validators join
 	// request expires if not approved.
 	JoinExpiry int64 `json:"join_expiry"`
+}
+
+type VoteParams struct {
+	// VoteExpiry is the number of blocks after which the resolution expires if
+	// consensus is not reached.
+	VoteExpiry int64 `json:"vote_expiry"`
 }
 
 type VersionParams struct {
@@ -137,6 +144,9 @@ func defaultConsensusParams() *ConsensusParams {
 		Validator: ValidatorParams{
 			PubKeyTypes: []string{abciPubKeyTypeEd25519},
 			JoinExpiry:  14400, // approx 1 day considering block rate of 6 sec/s
+		},
+		Votes: VoteParams{
+			VoteExpiry: 14400, // approx 1 day considering block rate of 6 sec/s
 		},
 		WithoutNonces:   false,
 		WithoutGasCosts: true,
@@ -244,6 +254,7 @@ Currently includes:
   - Without Gas Costs
   - Without Nonces
   - Allocs (account allocations, same format as ethereum genesis.json)
+  - Vote Expiry
 */
 func (genConf *GenesisConfig) ComputeGenesisHash() []byte {
 	hasher := sha256.New()
@@ -281,6 +292,7 @@ func (genConf *GenesisConfig) ComputeGenesisHash() []byte {
 		hasher.Write(alloc.bal.Bytes())
 	}
 
+	binary.Write(hasher, binary.LittleEndian, genConf.ConsensusParams.Votes.VoteExpiry)
 	return hasher.Sum(nil)
 }
 
