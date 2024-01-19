@@ -16,6 +16,8 @@ require (
 	github.com/ethereum/go-ethereum v1.13.8
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.18.0
+	github.com/jackc/pglogrepl v0.0.0-20231111135425-1627ab1b5780
+	github.com/jackc/pgx/v5 v5.5.2
 	github.com/jpillora/backoff v1.0.0
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
 	github.com/kwilteam/kuneiform v0.5.0-beta.0.20231127204550-1284c835497e
@@ -85,6 +87,10 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/holiman/uint256 v1.2.4 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jackc/pgio v1.0.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
+	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/kwilteam/action-grammar-go v0.0.1-0.20230926160920-472768e1186c // indirect
