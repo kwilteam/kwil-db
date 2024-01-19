@@ -13,6 +13,34 @@ type Logger struct {
 	L *zap.Logger
 }
 
+func (l *Logger) Level() Level {
+	return l.L.Level()
+}
+
+// non-structured logging
+
+func (l *Logger) Debugf(msg string, args ...any) {
+	l.L.Debug(fmt.Sprintf(msg, args...))
+}
+
+func (l *Logger) Infof(msg string, args ...any) {
+	l.L.Info(fmt.Sprintf(msg, args...))
+}
+
+func (l *Logger) Warnf(msg string, args ...any) {
+	l.L.Warn(fmt.Sprintf(msg, args...))
+}
+
+func (l *Logger) Errorf(msg string, args ...any) {
+	l.L.Error(fmt.Sprintf(msg, args...))
+}
+
+func (l *Logger) Logf(level Level, msg string, args ...any) {
+	l.L.Log(level, fmt.Sprintf(msg, args...))
+}
+
+// structured logging
+
 func (l *Logger) Debug(msg string, fields ...Field) {
 	l.L.Debug(msg, fields...)
 }
