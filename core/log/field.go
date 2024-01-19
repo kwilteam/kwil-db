@@ -9,6 +9,34 @@ import (
 
 type Field = zap.Field
 
+func String(key, val string) Field {
+	return zap.String(key, val)
+}
+
+func Bool(key string, val bool) Field {
+	return zap.Bool(key, val)
+}
+
+func Duration(key string, val time.Duration) Field {
+	return zap.Duration(key, val)
+}
+
+func Float[T float32 | float64](key string, val T) Field {
+	return zap.Float64(key, float64(val))
+}
+
+func Int[T int | int64 | int32 | int16 | int8](key string, val T) Field {
+	return zap.Int64(key, int64(val))
+}
+
+func Uint[T uint | uint64 | uint32 | uint16 | uint8](key string, val T) Field {
+	return zap.Uint64(key, uint64(val))
+}
+
+func Any(key string, val any) Field {
+	return zap.Any(key, val)
+}
+
 func genDetailedField() []zap.Field {
 	var fields []zap.Field
 	if info, ok := debug.ReadBuildInfo(); ok {
