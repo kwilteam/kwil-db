@@ -28,7 +28,7 @@ Discussions can lead to an issue if they determine that a feature, bug fix, or d
 
 ## Issues
 
-Issues are for reporting bugs, requesting features, requesting repository documentation, or discussing other changes to the kwil-db repository.
+Issues are for reporting bugs, requesting features, requesting repository documentation, or discussing any other changes that can be directly resolved with a pull request to the kwil-db repository.
 
 For general discussions, or discussions where it is unclear how the discussion would be closed by a pull request, please use the [discussion](https://github.com/kwilteam/kwil-db/discussions) section.
 
@@ -51,7 +51,7 @@ kwil-db uses recommended [Go commit messages](https://go.dev/doc/contribute#comm
 
 [Longer description of the PR/Issue, if necessary]
 
-[Optional: Issues Taged + Breaking changes/deprecations]
+[Optional: Issues Tagged + Breaking changes/deprecations]
 ```
 
 For example:
@@ -66,13 +66,15 @@ Resolves #123
 BREAKING CHANGE: This PR changes the behavior of the foo command. It now does something else.
 ```
 
-Breaking changes are any changes that effect the external API of packages that are consumed outside of kwil-db (i.e. proto, core, extensions, and cmd). Changes to internal packages (i.e. deployments, internal, parse, scripts, and test) are not considered breaking changes and do not need to be tagged in the commit footer.
+There are two types of breaking changes: API breaking changes and consensus breaking changes. API breaking changes are any changes that effect the external API of packages that are consumed outside of kwil-db (i.e. proto, core, extensions, and cmd). Consensus breaking changes are any changes that effect the consensus protocol of kwil-db (i.e. changes to the database, or changes to the consensus protocol in internal).
+
+Changes to internal packages (i.e. deployments, internal, parse, scripts, and test) that do not affect the database or consensus are not considered breaking changes and do not need to be tagged in the commit footer.
 
 ### Coding Style
 
 Please ensure that your contributions adhere to the following coding guidelines:
 
-- Code should adhere to the official Go [formatting](https://go.dev/doc/effective_go#formatting) guidelines (i.e. uses [`gofmt`](https://pkg.go.dev/cmd/gofmt)).
+- Code should adhere to the official Go [formatting](https://go.dev/doc/effective_go#formatting) guidelines (i.e. use [`gofmt`](https://pkg.go.dev/cmd/gofmt) or `task fmt` to format code).
 - Code must be documented adhering to the Go commentary [guidelines](https://go.dev/doc/effective_go#commentary) and Go Doc [comments](https://go.dev/doc/comment).
 - Code should be tested as much as possible. Tests should be placed in the same package as the code they are testing, in a file named `*_test.go` (e.g. `foo.go` should have a corresponding `foo_test.go`).
 
@@ -96,11 +98,15 @@ If you have conflicts, you will need to resolve them before continuing.
 
 Please ensure that all the commits in your git history match the commit message [guidelines](#commit-messages) above. You can use `git rebase -i` to edit your commit history.
 
-4. Ensure that your PR is ready to be merged and all tests pass:
+4. Ensure that your PR is ready to be merged and all unit and acceptance tests pass:
 
 ```bash
-go mod tidy
-go test ./...
+task install:deps # If first time contributing
+task fmt  
+task lint  
+task tidy  
+task test:unit  
+task test:act 
 ```
 
 5. Push your branch to github.
