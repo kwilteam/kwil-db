@@ -1,0 +1,498 @@
+package pg
+
+// This file contains the low level functions for streaming and decoding WAL
+// data messages from a logical replication slot, and digesting the messages
+// pertaining to data updates (UPDATE, INSERT, DELETE, TRUNCATE) on a subset for
+// namespaces (postgres schema). This is only used by the replMon in replmon.go
+// via the DB type's outermost transaction handling. As such, none of this is
+// exported or well generalized.
+//
+// It recognizes UPDATEs to a special kwild_internal.sentry table, and captures
+// a sequence value to identify the committed transaction. If none was set, as
+// would be done by the DB type, it remains -1.
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"hash"
+	"time"
+
+	"github.com/jackc/pglogrepl"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/kwilteam/kwil-db/core/log"
+)
+
+// replConn creates a new connection to a postgres host with the
+// `replication=database` setting in the connection string so that it can be
+// used to receive logical replication messages with WAL update data. This is
+// low level, used by DB via newReplMon to prepare the connection for startRepl.
+func replConn(ctx context.Context, host, port, user, pass, dbName string) (*pgconn.PgConn, error) {
+	const repl = true
+	connStr := connString(host, port, user, pass, dbName, repl)
+
+	return pgconn.Connect(ctx, connStr)
+}
+
+func startRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotName string,
+	schemaFilter func(string) bool) (chan []byte, chan error, error) {
+	// Create the replication slot and start postgres sending WAL data.
+	startLSN, err := createRepl(ctx, conn, publicationName, slotName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Launch the receiver goroutine, which will send commit digests and an
+	// error on return.
+	done := make(chan error, 1)
+	commitHash := make(chan []byte, 1)
+
+	go func() {
+		defer close(commitHash)
+		done <- captureRepl(ctx, conn, uint64(startLSN), commitHash, schemaFilter)
+	}()
+
+	return commitHash, done, nil
+}
+
+func createRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotName string) (pglogrepl.LSN, error) {
+	sysident, err := pglogrepl.IdentifySystem(ctx, conn)
+	if err != nil {
+		return 0, err
+	}
+
+	logger.Debug("postgres IDENTIFY_SYSTEM", log.String("SystemID", sysident.SystemID),
+		log.Int("Timeline", sysident.Timeline), log.String("XLogPos", sysident.XLogPos.String()),
+		log.String("DBName", sysident.DBName))
+
+	// const publicationName = "kwild_repl"
+	// Creating the publication should be done with psql as a superuser when
+	// creating the kwild database and role.
+	//  e.g.
+	//  CREATE USER kwild WITH SUPERUSER REPLICATION; -- verify: SELECT rolname, rolreplication FROM pg_roles WHERE rolreplication = true;
+	//  CREATE DATABASE kwild OWNER kwild;
+	//  -- then '\c kwild' to connect to the kwild database
+	//  CREATE PUBLICATION kwild_repl FOR ALL TABLES; -- applies to connected DB! also, this can be auto if kwild user is superuser
+
+	const outputPlugin = "pgoutput" // built-in
+	// const slotName = "kwild_repl"
+	slotRes, err := pglogrepl.CreateReplicationSlot(ctx, conn, slotName, outputPlugin,
+		pglogrepl.CreateReplicationSlotOptions{
+			Mode:      pglogrepl.LogicalReplication,
+			Temporary: true,
+		})
+	if err != nil {
+		return 0, err
+	}
+	slotLSN, _ := pglogrepl.ParseLSN(slotRes.ConsistentPoint)
+	logger.Infof("Created logical replication slot %v at LSN %v (%d)\n",
+		slotRes.SlotName, slotRes.ConsistentPoint, slotLSN)
+
+	pluginArgs := []string{
+		"proto_version '2'",
+		"publication_names '" + publicationName + "'",
+		"messages 'true'",
+		"streaming 'true'",
+	}
+	err = pglogrepl.StartReplication(ctx, conn, slotName, sysident.XLogPos,
+		pglogrepl.StartReplicationOptions{
+			PluginArgs: pluginArgs,
+			Mode:       pglogrepl.LogicalReplication,
+		})
+	if err != nil {
+		return 0, fmt.Errorf("StartReplication failed: %w", err)
+	}
+
+	return sysident.XLogPos, nil
+}
+
+// captureRepl begins receiving and decoding messages. Consider the conn to be
+// hijacked after calling captureRepl, and do not use it or the stream can be
+// broken.
+func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
+	commitHash chan []byte, schemaFilter func(string) bool) error {
+	if cap(commitHash) == 0 {
+		return errors.New("buffered commit hash channel required")
+	}
+
+	clientXLogPos := pglogrepl.LSN(startLSN)
+	standbyMessageTimeout := time.Second * 10
+	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
+	hasher := sha256.New()
+	relations := map[uint32]*pglogrepl.RelationMessageV2{}
+
+	var inStream bool
+	var seq int64 = -1
+
+	stats := new(walStats)
+
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if time.Now().After(nextStandbyMessageDeadline) {
+			err := pglogrepl.SendStandbyStatusUpdate(context.Background(), conn, pglogrepl.StandbyStatusUpdate{WALWritePosition: clientXLogPos})
+			if err != nil {
+				return fmt.Errorf("SendStandbyStatusUpdate failed: %w", err)
+			}
+			logger.Debugf("Sent Standby status message at %s (%d)\n", clientXLogPos.String(), uint64(clientXLogPos))
+			nextStandbyMessageDeadline = time.Now().Add(standbyMessageTimeout)
+		}
+
+		ctxStandby, cancel := context.WithDeadline(ctx, nextStandbyMessageDeadline)
+		rawMsg, err := conn.ReceiveMessage(ctxStandby)
+		cancel()
+		if err != nil {
+			if pgconn.Timeout(err) {
+				continue // nextStandbyMessageDeadline hit
+			}
+			return fmt.Errorf("ReceiveMessage failed: %w", err)
+		}
+
+		if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
+			return fmt.Errorf("received Postgres WAL error: %+v", errMsg)
+		}
+
+		msg, ok := rawMsg.(*pgproto3.CopyData)
+		if !ok {
+			logger.Errorf("Received unexpected message: %T\n", rawMsg)
+			continue
+		}
+
+		switch msg.Data[0] {
+		case pglogrepl.PrimaryKeepaliveMessageByteID:
+			pkm, err := pglogrepl.ParsePrimaryKeepaliveMessage(msg.Data[1:])
+			if err != nil {
+				return fmt.Errorf("ParsePrimaryKeepaliveMessage failed: %w", err)
+			}
+			logger.Debug("primary keepalive msg", log.String("ServerWALEnd", pkm.ServerWALEnd.String()),
+				log.String("ServerTime:", pkm.ServerTime.String()), log.Bool("ReplyRequested:", pkm.ReplyRequested))
+			if pkm.ServerWALEnd > clientXLogPos {
+				clientXLogPos = pkm.ServerWALEnd
+			}
+			if pkm.ReplyRequested {
+				nextStandbyMessageDeadline = time.Time{}
+			}
+
+		case pglogrepl.XLogDataByteID:
+			xld, err := pglogrepl.ParseXLogData(msg.Data[1:])
+			if err != nil {
+				return fmt.Errorf("ParseXLogData failed: %w", err)
+			}
+
+			commit, anySeq, err := decodeWALData(hasher, xld.WALData, relations, &inStream, stats, schemaFilter)
+			if err != nil {
+				return fmt.Errorf("decodeWALData failed: %w", err)
+			}
+			if anySeq != -1 {
+				seq = anySeq
+			}
+
+			var lsnDelta uint64
+			if xld.WALStart > clientXLogPos {
+				lsnDelta = uint64(xld.WALStart - clientXLogPos)
+				clientXLogPos = xld.WALStart
+			}
+
+			// logger.Debugf("XLogData (in stream? %v) => WALStart %s ServerWALEnd %s\n",
+			// 	inStream, xld.WALStart, xld.ServerWALEnd)
+
+			if commit {
+				cHash := hasher.Sum(nil)
+				cid := binary.BigEndian.AppendUint64(nil, uint64(seq))
+				cid = append(cid, cHash...)
+				select {
+				case commitHash <- cid:
+				default: // don't block if the receiver has choked
+					return fmt.Errorf("commit hash channel full")
+				}
+				hasher.Reset() // hasher = sha256.New()
+				logger.Infof("Commit hash %x, seq %d, LSN %v (%d) delta %d",
+					cHash, seq, xld.WALStart, xld.WALStart, lsnDelta)
+
+				logger.Debug("wal commit stats", log.Uint("inserts", stats.inserts), log.Uint("updates", stats.updates),
+					log.Uint("deletes", stats.deletes), log.Uint("truncates", stats.truncs))
+				stats.reset()
+			}
+		}
+	}
+}
+
+type walStats struct {
+	inserts uint64
+	updates uint64
+	deletes uint64
+	truncs  uint64
+}
+
+func (ws *walStats) reset() {
+	*ws = walStats{}
+}
+
+func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglogrepl.RelationMessageV2,
+	inStream *bool, stats *walStats, okSchema func(schema string) bool) (bool, int64, error) {
+	logicalMsg, err := pglogrepl.ParseV2(walData, *inStream)
+	if err != nil {
+		return false, 0, fmt.Errorf("Parse logical replication message: %w", err)
+	}
+
+	var seq int64 = -1
+	var done bool // set to true on receipt of a commit to signal the the end of a transaction
+
+	switch logicalMsg := logicalMsg.(type) {
+	case *pglogrepl.RelationMessageV2:
+		logger.Debugf(" [msg] Relation: %d (%v.%v)", logicalMsg.RelationID,
+			logicalMsg.Namespace, logicalMsg.RelationName)
+		relations[logicalMsg.RelationID] = logicalMsg
+
+	case *pglogrepl.BeginMessage:
+		logger.Debugf(" [msg] Begin: LSN %v (%d)", logicalMsg.FinalLSN, uint64(logicalMsg.FinalLSN))
+		// Indicates the beginning of a group of changes in a transaction. This
+		// is only sent for committed transactions. You won't get any events
+		// from rolled back transactions.
+
+	case *pglogrepl.CommitMessage:
+		logger.Debugf(" [msg] Commit: Commit LSN %v (%d), End LSN %v (%d)",
+			logicalMsg.CommitLSN, uint64(logicalMsg.CommitLSN),
+			logicalMsg.TransactionEndLSN, uint64(logicalMsg.TransactionEndLSN))
+
+		done = true
+
+	case *pglogrepl.InsertMessageV2:
+		rel, ok := relations[logicalMsg.RelationID]
+		if !ok {
+			return false, 0, fmt.Errorf("insert: unknown relation ID %d", logicalMsg.RelationID)
+		}
+
+		relName := rel.Namespace + "." + rel.RelationName
+		if !okSchema(rel.Namespace) {
+			// logger.Debugf("ignoring update to relation %v", relName)
+			break
+		}
+
+		insertData := encodeInsertMsg(relName, &logicalMsg.InsertMessage)
+		// logger.Debugf("insertData %x", insertData)
+		hasher.Write(insertData)
+
+		logger.Debugf(" [msg] INSERT xid %d into rel %v.%v: %v", logicalMsg.Xid,
+			rel.Namespace, rel.RelationName, &lazyValues{logicalMsg.Tuple.Columns, rel})
+
+		stats.inserts++
+
+	case *pglogrepl.UpdateMessageV2:
+		rel, ok := relations[logicalMsg.RelationID]
+		if !ok {
+			return false, 0, fmt.Errorf("insert: unknown relation ID %d", logicalMsg.RelationID)
+		}
+
+		// capture the seq value, before target schema filter
+		if rel.Namespace == internalSchemaName && rel.RelationName == sentryTableName {
+			cols := logicalMsg.NewTuple.Columns
+			if len(cols) != 1 {
+				logger.Warnf("not one column in sentry table update (%d)", len(cols))
+			} else {
+				seq, err = cols[0].Int64()
+				if err != nil {
+					logger.Warnf("invalid sequence number in sentry table update: %v", err)
+				}
+			}
+		}
+
+		relName := rel.Namespace + "." + rel.RelationName
+		if !okSchema(rel.Namespace) {
+			// logger.Debugf("ignoring update to relation %v", relName)
+			break
+		}
+
+		updateData := encodeUpdateMsg(relName, &logicalMsg.UpdateMessage)
+		// logger.Debugf("updateData %x", updateData)
+		hasher.Write(updateData)
+
+		var oldValues *lazyValues
+		if logicalMsg.OldTuple != nil { // seems to be only if primary key changes
+			oldValues = &lazyValues{logicalMsg.OldTuple.Columns, rel}
+		}
+		logger.Debugf(" [msg] UPDATE rel %v.%v: %v => %v", rel.Namespace, rel.RelationName,
+			oldValues, &lazyValues{logicalMsg.NewTuple.Columns, rel})
+
+		stats.updates++
+
+	case *pglogrepl.DeleteMessageV2:
+		rel, ok := relations[logicalMsg.RelationID]
+		if !ok {
+			return false, 0, fmt.Errorf("insert: unknown relation ID %d", logicalMsg.RelationID)
+		}
+
+		relName := rel.Namespace + "." + rel.RelationName
+		if !okSchema(rel.Namespace) {
+			// logger.Debugf("ignoring update to relation %v", relName)
+			break
+		}
+
+		deleteData := encodeDeleteMsg(relName, &logicalMsg.DeleteMessage)
+		// logger.Debugf("deleteData %x", deleteData)
+		hasher.Write(deleteData)
+
+		logger.Debugf(" [msg] DELETE from rel %v.%v: %v", rel.Namespace, rel.RelationName,
+			&lazyValues{logicalMsg.OldTuple.Columns, rel})
+
+		stats.deletes++
+
+	case *pglogrepl.TruncateMessageV2:
+		rels := make(map[uint32]*pglogrepl.RelationMessageV2)
+		for _, relID := range logicalMsg.RelationIDs {
+			rel, ok := relations[relID]
+			if !ok {
+				logger.Warnf("unknown truncated relation ID %d", relID)
+				continue
+			}
+			if okSchema(rel.Namespace) {
+				rels[relID] = rel
+				// relName := rel.Namespace + "." + rel.RelationName
+			}
+		}
+		if len(rels) == 0 {
+			logger.Debug("no relevant relations in truncate message")
+			break
+		}
+
+		hasher.Write(encodeTruncateMsg(rels, &logicalMsg.TruncateMessage))
+		stats.truncs++
+
+	case *pglogrepl.TypeMessageV2:
+		logger.Debugf("type message: %v %v %v", logicalMsg.Name, logicalMsg.Namespace, logicalMsg.DataType)
+	case *pglogrepl.OriginMessage:
+		logger.Debugf("origin message: %v %v", logicalMsg.Name, logicalMsg.CommitLSN)
+	case *pglogrepl.LogicalDecodingMessageV2:
+		logger.Debugf("logical decoding message: %q, %q, %d", logicalMsg.Prefix, logicalMsg.Content, logicalMsg.Xid)
+
+	// Stream messages.  Not expected for kwil
+	case *pglogrepl.StreamStartMessageV2:
+		*inStream = true
+		logger.Warnf(" [msg] StreamStartMessageV2: xid %d, first segment? %d", logicalMsg.Xid, logicalMsg.FirstSegment)
+	case *pglogrepl.StreamStopMessageV2:
+		*inStream = false
+		logger.Warnf(" [msg] StreamStopMessageV2")
+	case *pglogrepl.StreamCommitMessageV2:
+		logger.Warnf("Stream commit message: xid %d", logicalMsg.Xid)
+	case *pglogrepl.StreamAbortMessageV2:
+		logger.Warnf("Stream abort message: xid %d", logicalMsg.Xid)
+
+	default:
+		logger.Warnf("Unknown message type in pgoutput stream: %T", logicalMsg)
+	}
+
+	return done, seq, nil
+}
+
+// lazyValues is a fmt.Stringer used to lazily decode and print tuple column
+// data (if required for a given log level).
+type lazyValues struct {
+	cols []*pglogrepl.TupleDataColumn
+	rel  *pglogrepl.RelationMessageV2
+}
+
+func (lv *lazyValues) String() string {
+	if lv == nil {
+		return "<nil>"
+	}
+	values, err := tuplColVals(lv.cols, lv.rel)
+	if err != nil {
+		logger.Warn("column value decoding", log.String("error", err.Error()))
+		return "<invalid>" // may not be logged at all by caller
+	}
+	return fmt.Sprintf("%v", values) // alt: json.Encode to make it slightly prettier
+}
+
+var typeMap = pgtype.NewMap()
+
+func decodeTextColumnData(data []byte, dataType uint32) (interface{}, error) {
+	if dt, ok := typeMap.TypeForOID(dataType); ok {
+		return dt.Codec.DecodeValue(typeMap, dataType, pgtype.TextFormatCode, data)
+	}
+	return string(data), nil
+}
+
+func tuplColVals(cols []*pglogrepl.TupleDataColumn, rel *pglogrepl.RelationMessageV2) (map[string]any, error) {
+	values := map[string]any{}
+	for idx, col := range cols {
+		colName := rel.Columns[idx].Name
+		switch col.DataType {
+		case 'n': // null
+			values[colName] = nil
+		case 'u': // unchanged toast
+			// This TOAST value was not changed. TOAST values are not stored
+			// in the tuple, and logical replication doesn't want to spend a
+			// disk read to fetch its value for you.
+		case 't': //text
+			val, err := decodeTextColumnData(col.Data, rel.Columns[idx].DataType)
+			if err != nil {
+				return nil, fmt.Errorf("error decoding column data: %w", err)
+			}
+			values[colName] = val
+		}
+	}
+	return values, nil
+}
+
+// The following encodings of the insert/update/delete/truncate messages
+// directly affect the commit hash and are thus consensus code. Edit with care.
+
+var pgIntCoder = binary.BigEndian
+
+func encodeTupleData(td *pglogrepl.TupleData) []byte {
+	if td == nil {
+		return []byte{0}
+	}
+	var data []byte
+	data = pgIntCoder.AppendUint16(data, td.ColumnNum)
+	for _, col := range td.Columns {
+		data = append(data, col.DataType)
+
+		switch col.DataType {
+		case pglogrepl.TupleDataTypeText, pglogrepl.TupleDataTypeBinary:
+			pgIntCoder.AppendUint32(data, col.Length) // len(col.Data)
+			data = append(data, col.Data...)
+		case pglogrepl.TupleDataTypeNull, pglogrepl.TupleDataTypeToast:
+		}
+	}
+	return data
+}
+
+func encodeInsertMsg(relName string, im *pglogrepl.InsertMessage) []byte {
+	data := []byte(relName) // RelationID is dependent on the deployment
+	return append(data, encodeTupleData(im.Tuple)...)
+}
+
+func encodeUpdateMsg(relName string, um *pglogrepl.UpdateMessage) []byte {
+	data := []byte(relName) // RelationID is dependent on the deployment
+	data = append(data, um.OldTupleType)
+	data = append(data, encodeTupleData(um.OldTuple)...)
+	return append(data, encodeTupleData(um.NewTuple)...)
+}
+
+func encodeDeleteMsg(relName string, um *pglogrepl.DeleteMessage) []byte {
+	data := []byte(relName) // RelationID is dependent on the deployment
+	data = append(data, um.OldTupleType)
+	return append(data, encodeTupleData(um.OldTuple)...)
+}
+
+func encodeTruncateMsg(rels map[uint32]*pglogrepl.RelationMessageV2, tm *pglogrepl.TruncateMessage) []byte {
+	var buf bytes.Buffer
+	buf.WriteByte(tm.Option)
+	for _, rid := range tm.RelationIDs {
+		rel, ok := rels[rid]
+		if !ok {
+			continue // not a relevant relation
+		}
+		relName := rel.Namespace + "." + rel.RelationName
+		buf.WriteString(relName)
+	}
+	return buf.Bytes()
+}
