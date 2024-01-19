@@ -206,7 +206,7 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		sh,
 		bootstrapper,
 		txApp,
-		&consensusParamAdapter{voteExpiry: d.genesisCfg.ConsensusParams.Validator.JoinExpiry},
+		&consensusParamAdapter{voteExpiry: d.genesisCfg.ConsensusParams.Votes.VoteExpiry},
 		*d.log.Named("abci"),
 	)
 }
