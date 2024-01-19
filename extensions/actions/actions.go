@@ -15,15 +15,20 @@ func RegisteredExtensions() map[string]execution.ExtensionInitializer {
 	return registeredExtensions
 }
 
-// DEPRECATED: RegisterLegacyExtension registers an extension with the engine.
-// It provides backwards compatibility with the old extension system.
-// Use RegisterExtension instead.
-func RegisterLegacyExtension(name string, ext extensions.LegacyEngineExtension) error {
+// RegisterExtension registers an extension with the engine.
+func RegisterExtension(name string, ext execution.ExtensionInitializer) error {
 	name = strings.ToLower(name)
 	if _, ok := registeredExtensions[name]; ok {
 		return fmt.Errorf("extension of same name already registered:%s ", name)
 	}
 
-	registeredExtensions[name] = extensions.AdaptLegacyExtension(ext)
+	registeredExtensions[name] = ext
 	return nil
+}
+
+// DEPRECATED: RegisterLegacyExtension registers an extension with the engine.
+// It provides backwards compatibility with the old extension system.
+// Use RegisterExtension instead.
+func RegisterLegacyExtension(name string, ext extensions.LegacyEngineExtension) error {
+	return RegisterExtension(name, extensions.AdaptLegacyExtension(ext))
 }
