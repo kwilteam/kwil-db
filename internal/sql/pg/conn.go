@@ -138,9 +138,77 @@ func (p *Pool) QueryPending(ctx context.Context, stmt string, args ...any) (*sql
 }
 
 func (p *Pool) Execute(ctx context.Context, stmt string, args ...any) error {
-	// logger.Debugf("Execute %q (%v)", stmt, args)
 	_, err := p.writer.Exec(ctx, stmt, args...)
 	return err
+}
+
+func (p *Pool) Get(ctx context.Context, kvTable string, key []byte, pending bool) ([]byte, error) {
+	q := p.Query
+	if pending {
+		q = p.QueryPending
+	}
+	return Get(ctx, kvTable, key, q)
+}
+
+func (p *Pool) Set(ctx context.Context, kvTable string, key, value []byte) error {
+	return Set(ctx, kvTable, key, value, p.Execute)
+}
+
+func (p *Pool) Delete(ctx context.Context, kvTable string, key []byte) error {
+	return Delete(ctx, kvTable, key, p.Execute)
+}
+
+type QueryFn func(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error)
+
+// Get is a plain function for kv table access using any QueryFn, such as a
+// method from a DB or Pool, dealers choice.
+func Get(ctx context.Context, kvTable string, key []byte, q QueryFn) ([]byte, error) {
+	stmt := fmt.Sprintf(selectKvStmtTmpl, kvTable)
+	res, err := q(ctx, stmt, key)
+	if err != nil {
+		return nil, err
+	}
+
+	switch len(res.Rows) {
+	case 0: // this is fine
+		return nil, nil
+	case 1:
+	default:
+		return nil, errors.New("exactly one row not returned")
+	}
+
+	row := res.Rows[0]
+	if len(row) != 1 {
+		return nil, errors.New("exactly one value not in row")
+	}
+	val, ok := row[0].([]byte)
+	if !ok {
+		return nil, errors.New("value not a bytea")
+	}
+	return val, nil
+}
+
+type ExecFn func(ctx context.Context, stmt string, args ...any) error
+
+// Set is a plain function for setting values in a kv using any ExecFn, such as
+// the method from a DB or Pool.
+func Set(ctx context.Context, kvTable string, key, value []byte, e ExecFn) error {
+	stmt := fmt.Sprintf(insertKvStmtTmpl, kvTable)
+	return e(ctx, stmt, key, value)
+}
+
+// Delete is a plain function for deleting values from a kv table using any
+// ExecFn, such as the method from a DB or Pool.
+func Delete(ctx context.Context, kvTable string, key []byte, e ExecFn) error {
+	stmt := fmt.Sprintf(deleteKvStmtTmpl, kvTable)
+	return e(ctx, stmt, key)
+}
+
+// CreateKVTable is a helper to create a table compatible with the Get and Set
+// functions.
+func CreateKVTable(ctx context.Context, tableName string, e ExecFn) error {
+	createStmt := fmt.Sprintf(createKvStmtTmpl, tableName)
+	return e(ctx, createStmt)
 }
 
 func (p *Pool) Close() error {
