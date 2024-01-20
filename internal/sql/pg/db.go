@@ -374,33 +374,16 @@ func (db *DB) Get(ctx context.Context, key []byte, pending bool) ([]byte, error)
 	if pending {
 		queryFun = db.QueryPending
 	}
-	res, err := queryFun(ctx, selectKvStmt, key)
-	if err != nil {
-		return nil, err
-	}
-
-	switch len(res.Rows) {
-	case 0: // this is fine
-		return nil, nil
-	case 1:
-	default:
-		return nil, errors.New("exactly one row not returned")
-	}
-
-	row := res.Rows[0]
-	if len(row) != 1 {
-		return nil, errors.New("exactly one value not in row")
-	}
-	val, ok := row[0].([]byte)
-	if !ok {
-		return nil, errors.New("value not a bytea")
-	}
-	return val, nil
+	return Get(ctx, kvTableNameFull, key, queryFun) // not db.pool.Get because we DB has session mgmt
 }
 
-// Set
 func (db *DB) Set(ctx context.Context, key []byte, value []byte) error {
-	return db.Execute(ctx, insertKvStmt, key, value)
+	// db.Execute(ctx, insertKvStmt, key, value) // slightly efficient with no sprintf, but less consistent with Get
+	return Set(ctx, kvTableNameFull, key, value, db.Execute)
+}
+
+func (db *DB) Delete(ctx context.Context, key []byte) error {
+	return Delete(ctx, kvTableNameFull, key, db.Execute)
 }
 
 // TODO: require rw with target_session_attrs=read-write ?

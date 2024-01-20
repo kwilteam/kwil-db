@@ -25,23 +25,28 @@ const (
 			value BYTEA NOT NULL
 		);
 	`
+	createKvStmtTmpl = `CREATE TABLE IF NOT EXISTS %s (key BYTEA PRIMARY KEY, value BYTEA NOT NULL);`
 
 	insertKvStmt = `
 		INSERT INTO ` + kvTableNameFull + ` (key, value)
 		VALUES ($1, $2)
 		ON CONFLICT (key) DO UPDATE SET value = $2;
 	`
+	insertKvStmtTmpl = `INSERT INTO %s (key, value) VALUES ($1, $2)
+		ON CONFLICT (key) DO UPDATE SET value = $2;`
 
 	selectKvStmt = `
 		SELECT value
 		FROM ` + kvTableNameFull + `
 		WHERE key = $1;
 	`
+	selectKvStmtTmpl = `SELECT value FROM %s WHERE key = $1;`
 
 	deleteKvStmt = `
 		DELETE FROM ` + kvTableNameFull + `
 		WHERE key = $1;
-	` // UNUSED
+	`
+	deleteKvStmtTmpl = `DELETE FROM %s WHERE key = $1;`
 )
 
 func ensureKvTable(ctx context.Context, conn *pgx.Conn) error {
