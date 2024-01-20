@@ -21,12 +21,15 @@ var (
 	sqlFuncReplIfNeeded string
 
 	//go:embed trigger_repl2.sql
-	sqlFuncReplIfNeeded2 string // I'm still deciding which to use
+	sqlFuncReplIfNeeded2 string //nolint:unused
+	// (I'm still deciding which to use)
 
+	//nolint:unused
 	sqlCreateFuncReplIdentExists = `SELECT EXISTS (
 		SELECT 1 FROM pg_proc 
 		WHERE proname = 'set_replica_identity_full'
-	);` // checks if the repl trigger created in sqlFuncReplIfNeeded exists
+	);`
+	// (replace might be brute; this checks if the repl trigger created in sqlFuncReplIfNeeded exists)
 
 	sqlCreateEvtTriggerReplIdentExists = `SELECT EXISTS (
 		SELECT 1 FROM pg_event_trigger 
