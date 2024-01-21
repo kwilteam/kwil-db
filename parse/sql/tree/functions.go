@@ -17,9 +17,10 @@ type AnySQLFunction struct {
 
 // types of functions (like scalar, aggregate, window, etc) are extenstions of sqlFunction; this is an interface to accept any of them
 type SQLFunction interface {
-	Accepter
+	AstWalker
+
 	Name() string
-	String(...Expression) string
+	ToString(...Expression) string
 	SetDistinct(bool)
 }
 
@@ -64,7 +65,7 @@ func (s *AnySQLFunction) string(exprs ...Expression) string {
 	})
 }
 
-func (s *AnySQLFunction) String(exprs ...Expression) string {
+func (s *AnySQLFunction) ToString(exprs ...Expression) string {
 	return s.string(exprs...)
 }
 
@@ -76,46 +77,80 @@ func (s *AnySQLFunction) stringAll() string {
 }
 
 type ScalarFunction struct {
+	node
+
 	AnySQLFunction
 }
 
-func (s *ScalarFunction) Accept(w Walker) error {
+func (s *ScalarFunction) Accept(v AstVisitor) any {
+	return v.VisitScalarFunc(s)
+}
+
+func (s *ScalarFunction) Walk(w AstListener) error {
 	return run(
 		w.EnterScalarFunc(s),
 		w.ExitScalarFunc(s),
 	)
 }
 
+func NewScalarFunctionWithGetter(name string, min uint8, max uint8, distinct bool) SQLFunctionGetter {
+	return func(pos *Position) SQLFunction {
+		return &ScalarFunction{
+			AnySQLFunction: AnySQLFunction{
+				FunctionName: name,
+				Min:          min,
+				Max:          max,
+				distinct:     distinct,
+			},
+		}
+	}
+}
+
+// SQLFunctionGetter is a function that returns a SQLFunction given a position
+type SQLFunctionGetter func(pos *Position) SQLFunction
+
 var (
-	FunctionABS = ScalarFunction{AnySQLFunction{
-		FunctionName: "abs",
-		Min:          1,
-		Max:          1,
-	}}
-	FunctionERROR = ScalarFunction{AnySQLFunction{
-		FunctionName: "error",
-		Min:          1,
-		Max:          1,
-	}}
-	FunctionLENGTH = ScalarFunction{AnySQLFunction{
-		FunctionName: "length",
-		Min:          1,
-		Max:          1,
-	}}
-	FunctionLOWER = ScalarFunction{AnySQLFunction{
-		FunctionName: "lower",
-		Min:          1,
-		Max:          1,
-	}}
-	FunctionUPPER = ScalarFunction{AnySQLFunction{
-		FunctionName: "upper",
-		Min:          1,
-		Max:          1,
-	}}
-	FunctionFORMAT = ScalarFunction{AnySQLFunction{
-		FunctionName: "format",
-		Min:          1,
-	}}
+	FunctionABS = ScalarFunction{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "abs",
+			Min:          1,
+			Max:          1,
+		}}
+	FunctionERROR = ScalarFunction{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "error",
+			Min:          1,
+			Max:          1,
+		}}
+	FunctionLENGTH = ScalarFunction{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "length",
+			Min:          1,
+			Max:          1,
+		}}
+	FunctionLOWER = ScalarFunction{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "lower",
+			Min:          1,
+			Max:          1,
+		}}
+	FunctionUPPER = ScalarFunction{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "upper",
+			Min:          1,
+			Max:          1,
+		}}
+	FunctionFORMAT = ScalarFunction{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "format",
+			Min:          1,
+		}}
+	FunctionABSGetter    = NewScalarFunctionWithGetter("abs", 1, 1, false)
+	FunctionFORMATGetter = NewScalarFunctionWithGetter("format", 1, 0, false)
+	FunctionErrorGetter  = NewScalarFunctionWithGetter("error", 1, 1, false)
+	FunctionLengthGetter = NewScalarFunctionWithGetter("length", 1, 1, false)
+	FunctionLOWERGetter  = NewScalarFunctionWithGetter("lower", 1, 1, false)
+	FunctionUPPERGetter  = NewScalarFunctionWithGetter("upper", 1, 1, false)
 )
 
 // SQLFunctions is a map of all functions of all types

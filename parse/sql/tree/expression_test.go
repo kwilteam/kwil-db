@@ -230,7 +230,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 		{
 			name: "expression abs function",
 			fields: &tree.ExpressionFunction{
-				Function: &tree.FunctionABS,
+				Function: tree.FunctionABSGetter(nil),
 				Inputs: []tree.Expression{
 					&tree.ExpressionColumn{
 						Column: "foo",
@@ -255,7 +255,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 		{
 			name: "expression abs function with multiple inputs",
 			fields: &tree.ExpressionFunction{
-				Function: &tree.FunctionABS,
+				Function: tree.FunctionABSGetter(nil),
 				Inputs: []tree.Expression{
 					&tree.ExpressionColumn{
 						Column: "foo",

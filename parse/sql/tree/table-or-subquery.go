@@ -11,16 +11,22 @@ import (
 type TableOrSubquery interface {
 	ToSQL() string
 	tableOrSubquery()
-	Accept(w Walker) error
+	Walk(w AstListener) error
 }
 
 type TableOrSubqueryTable struct {
+	node
+
 	schema string
 	Name   string
 	Alias  string
 }
 
-func (t *TableOrSubqueryTable) Accept(w Walker) error {
+func (t *TableOrSubqueryTable) Accept(v AstVisitor) any {
+	return v.VisitTableOrSubqueryTable(t)
+}
+
+func (t *TableOrSubqueryTable) Walk(w AstListener) error {
 	return run(
 		w.EnterTableOrSubqueryTable(t),
 		w.ExitTableOrSubqueryTable(t),
@@ -62,14 +68,20 @@ func (t *TableOrSubqueryTable) SetSchema(schema string) {
 }
 
 type TableOrSubquerySelect struct {
+	node
+
 	Select *SelectStmt
 	Alias  string
 }
 
-func (t *TableOrSubquerySelect) Accept(w Walker) error {
+func (t *TableOrSubquerySelect) Accept(v AstVisitor) any {
+	return v.VisitTableOrSubquerySelect(t)
+}
+
+func (t *TableOrSubquerySelect) Walk(w AstListener) error {
 	return run(
 		w.EnterTableOrSubquerySelect(t),
-		accept(w, t.Select),
+		walk(w, t.Select),
 		w.ExitTableOrSubquerySelect(t),
 	)
 }
@@ -97,13 +109,19 @@ func (t *TableOrSubquerySelect) ToSQL() string {
 func (t *TableOrSubquerySelect) tableOrSubquery() {}
 
 type TableOrSubqueryList struct {
+	node
+
 	TableOrSubqueries []TableOrSubquery
 }
 
-func (t *TableOrSubqueryList) Accept(w Walker) error {
+func (t *TableOrSubqueryList) Accept(v AstVisitor) any {
+	return v.VisitTableOrSubqueryList(t)
+}
+
+func (t *TableOrSubqueryList) Walk(w AstListener) error {
 	return run(
 		w.EnterTableOrSubqueryList(t),
-		acceptMany(w, t.TableOrSubqueries),
+		walkMany(w, t.TableOrSubqueries),
 		w.ExitTableOrSubqueryList(t),
 	)
 }
@@ -124,13 +142,19 @@ func (t *TableOrSubqueryList) ToSQL() string {
 func (t *TableOrSubqueryList) tableOrSubquery() {}
 
 type TableOrSubqueryJoin struct {
+	node
+
 	JoinClause *JoinClause
 }
 
-func (t *TableOrSubqueryJoin) Accept(w Walker) error {
+func (t *TableOrSubqueryJoin) Accept(v AstVisitor) any {
+	return v.VisitTableOrSubqueryJoin(t)
+}
+
+func (t *TableOrSubqueryJoin) Walk(w AstListener) error {
 	return run(
 		w.EnterTableOrSubqueryJoin(t),
-		accept(w, t.JoinClause),
+		walk(w, t.JoinClause),
 		w.ExitTableOrSubqueryJoin(t),
 	)
 }

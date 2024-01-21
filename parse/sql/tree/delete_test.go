@@ -50,7 +50,7 @@ func TestDelete_ToSQL(t *testing.T) {
 				CTE:        tt.fields.CTE,
 				DeleteStmt: tt.fields.DeleteStmt,
 			}
-			gotStr, err := d.ToSQL()
+			gotStr, err := tree.SafeToSQL(d)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Delete.ToSQL() error = %v, wantErr %v", err, tt.wantErr)
 				return

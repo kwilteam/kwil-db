@@ -211,7 +211,7 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 
 			assert.ElementsMatch(t, tt.resultTableCols, genTable.Columns, "GetSelectCoreRelationAttributes() got = %v, want %v", got, tt.want)
 
-			sql, err := selectStmt.ToSQL()
+			sql, err := tree.SafeToSQL(selectStmt)
 			assert.NoErrorf(t, err, "error converting query to SQL: %s", err)
 
 			err = postgres.CheckSyntaxReplaceDollar(sql)

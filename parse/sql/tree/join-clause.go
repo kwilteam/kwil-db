@@ -48,15 +48,21 @@ From the SQLite documentation:
 */
 
 type JoinClause struct {
+	node
+
 	TableOrSubquery TableOrSubquery
 	Joins           []*JoinPredicate
 }
 
-func (j *JoinClause) Accept(w Walker) error {
+func (j *JoinClause) Accept(v AstVisitor) any {
+	return v.VisitJoinClause(j)
+}
+
+func (j *JoinClause) Walk(w AstListener) error {
 	return run(
 		w.EnterJoinClause(j),
-		accept(w, j.TableOrSubquery),
-		acceptMany(w, j.Joins),
+		walk(w, j.TableOrSubquery),
+		walkMany(w, j.Joins),
 		w.ExitJoinClause(j),
 	)
 }
@@ -76,17 +82,19 @@ func (j *JoinClause) ToSQL() string {
 }
 
 type JoinPredicate struct {
+	node
+
 	JoinOperator *JoinOperator
 	Table        TableOrSubquery
 	Constraint   Expression
 }
 
-func (j *JoinPredicate) Accept(w Walker) error {
+func (j *JoinPredicate) Walk(w AstListener) error {
 	return run(
 		w.EnterJoinPredicate(j),
-		accept(w, j.JoinOperator),
-		accept(w, j.Table),
-		accept(w, j.Constraint),
+		walk(w, j.JoinOperator),
+		walk(w, j.Table),
+		walk(w, j.Constraint),
 		w.ExitJoinPredicate(j),
 	)
 }
@@ -115,11 +123,17 @@ func (j *JoinPredicate) ToSQL() string {
 }
 
 type JoinOperator struct {
+	node
+
 	JoinType JoinType
 	Outer    bool
 }
 
-func (j *JoinOperator) Accept(w Walker) error {
+func (j *JoinOperator) Accept(v AstVisitor) any {
+	return v.VisitJoinOperator(j)
+}
+
+func (j *JoinOperator) Walk(w AstListener) error {
 	return run(
 		w.EnterJoinOperator(j),
 		w.ExitJoinOperator(j),

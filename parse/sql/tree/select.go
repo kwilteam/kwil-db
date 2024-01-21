@@ -7,31 +7,26 @@ import (
 )
 
 type Select struct {
+	node
+
 	CTE        []*CTE
 	SelectStmt *SelectStmt
 }
 
-func (s *Select) Accept(w Walker) error {
+func (s *Select) Accept(v AstVisitor) any {
+	return v.VisitSelect(s)
+}
+
+func (s *Select) Walk(w AstListener) error {
 	return run(
 		w.EnterSelect(s),
-		acceptMany(w, s.CTE),
-		accept(w, s.SelectStmt),
+		walkMany(w, s.CTE),
+		walk(w, s.SelectStmt),
 		w.ExitSelect(s),
 	)
 }
 
-func (s *Select) ToSQL() (str string, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err2, ok := r.(error)
-			if !ok {
-				err2 = fmt.Errorf("%v", r)
-			}
-
-			err = err2
-		}
-	}()
-
+func (s *Select) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if len(s.CTE) > 0 {
@@ -45,21 +40,27 @@ func (s *Select) ToSQL() (str string, err error) {
 
 	stmt.Token.Semicolon()
 
-	return stmt.String(), nil
+	return stmt.String()
 }
 
 type SelectStmt struct {
+	node
+
 	SelectCores []*SelectCore
 	OrderBy     *OrderBy
 	Limit       *Limit
 }
 
-func (s *SelectStmt) Accept(w Walker) error {
+func (s *SelectStmt) Accept(v AstVisitor) any {
+	return v.VisitSelectStmt(s)
+}
+
+func (s *SelectStmt) Walk(w AstListener) error {
 	return run(
 		w.EnterSelectStmt(s),
-		acceptMany(w, s.SelectCores),
-		accept(w, s.OrderBy),
-		accept(w, s.Limit),
+		walkMany(w, s.SelectCores),
+		walk(w, s.OrderBy),
+		walk(w, s.Limit),
 		w.ExitSelectStmt(s),
 	)
 }
@@ -80,6 +81,8 @@ func (s *SelectStmt) ToSQL() (res string) {
 }
 
 type SelectCore struct {
+	node
+
 	SelectType SelectType
 	Columns    []ResultColumn
 	From       *FromClause
@@ -88,14 +91,18 @@ type SelectCore struct {
 	Compound   *CompoundOperator
 }
 
-func (s *SelectCore) Accept(w Walker) error {
+func (s *SelectCore) Accept(v AstVisitor) any {
+	return v.VisitSelectCore(s)
+}
+
+func (s *SelectCore) Walk(w AstListener) error {
 	return run(
 		w.EnterSelectCore(s),
-		acceptMany(w, s.Columns),
-		accept(w, s.From),
-		accept(w, s.Where),
-		accept(w, s.GroupBy),
-		accept(w, s.Compound),
+		walkMany(w, s.Columns),
+		walk(w, s.From),
+		walk(w, s.Where),
+		walk(w, s.GroupBy),
+		walk(w, s.Compound),
 		w.ExitSelectCore(s),
 	)
 }
@@ -153,13 +160,19 @@ func (s SelectType) Valid() error {
 }
 
 type FromClause struct {
-	JoinClause *JoinClause
+	node
+
+	JoinClause *JoinClause // the relation
 }
 
-func (f *FromClause) Accept(w Walker) error {
+func (f *FromClause) Accept(v AstVisitor) any {
+	return v.VisitFromClause(f)
+}
+
+func (f *FromClause) Walk(w AstListener) error {
 	return run(
 		w.EnterFromClause(f),
-		accept(w, f.JoinClause),
+		walk(w, f.JoinClause),
 		w.ExitFromClause(f),
 	)
 }
@@ -205,10 +218,20 @@ func (c *CompoundOperatorType) ToSQL() string {
 }
 
 type CompoundOperator struct {
+	node
+
 	Operator CompoundOperatorType
 }
 
-func (c *CompoundOperator) Accept(w Walker) error {
+func (c *CompoundOperator) Accept(v AstVisitor) any {
+	return v.VisitCompoundOperator(c)
+}
+
+func (c *CompoundOperator) AcceptVisitor(v AstVisitor) any {
+	return v.VisitCompoundOperator(c)
+}
+
+func (c *CompoundOperator) Walk(w AstListener) error {
 	return run(
 		w.EnterCompoundOperator(c),
 		w.ExitCompoundOperator(c),

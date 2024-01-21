@@ -1,12 +1,13 @@
-package sqlparser
+package util_test
 
 import (
 	"testing"
 
+	"github.com/kwilteam/kwil-db/parse/internal/util"
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_extractIdentifierValue(t *testing.T) {
+func TestExtractSQLName(t *testing.T) {
 	tests := []struct {
 		name string
 		args string
@@ -22,7 +23,7 @@ func Test_extractIdentifierValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, extractSQLName(tt.args), "extractSQLName(%v)", tt.args)
+			assert.Equalf(t, tt.want, util.ExtractSQLName(tt.args), "ExtractSQLName(%v)", tt.args)
 		})
 	}
 }

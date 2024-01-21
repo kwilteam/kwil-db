@@ -4,7 +4,7 @@ import "github.com/kwilteam/kwil-db/parse/sql/tree"
 
 // SchemaWalker walks statements and ensures that their statements are targeting a postgres schema / namespace.
 type SchemaWalker struct {
-	tree.Walker
+	tree.AstListener
 	schema string
 	ctes   map[string]struct{} // we keep track of ctes since they should not be prefixed with a schema
 
@@ -14,9 +14,9 @@ type SchemaWalker struct {
 
 func NewSchemaWalker(targetSchema string) *SchemaWalker {
 	return &SchemaWalker{
-		Walker: tree.NewBaseWalker(),
-		schema: targetSchema,
-		ctes:   make(map[string]struct{}),
+		AstListener: tree.NewBaseListener(),
+		schema:      targetSchema,
+		ctes:        make(map[string]struct{}),
 	}
 }
 

@@ -453,16 +453,16 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 		}
 
 		// clean expression, since it is submitted by the user
-		err := expr.Accept(clean.NewStatementCleaner())
+		err := expr.Walk(clean.NewStatementCleaner())
 		if err != nil {
 			return nil, err
 		}
 
 		// The schema walker is not necessary for inline expressions, since
 		// we do not support table references in inline expressions.
-		accept := sqlanalyzer.NewAcceptRecoverer(expr)
-		paramVisitor := parameters.NewParametersVisitor()
-		err = accept.Accept(paramVisitor)
+		walker := sqlanalyzer.NewWalkerRecoverer(expr)
+		paramVisitor := parameters.NewParametersWalker()
+		err = walker.Walk(paramVisitor)
 		if err != nil {
 			return nil, fmt.Errorf("error replacing parameters: %w", err)
 		}
@@ -486,7 +486,7 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 			},
 		}
 
-		stmt, err := selectTree.ToSQL()
+		stmt, err := tree.SafeToSQL(selectTree)
 		if err != nil {
 			return nil, err
 		}

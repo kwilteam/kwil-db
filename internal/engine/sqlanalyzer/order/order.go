@@ -10,7 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
-func NewOrderWalker(tables []*common.Table) tree.Walker {
+func NewOrderWalker(tables []*common.Table) tree.AstListener {
 	// copy tables, since we will be modifying the tables slice to register CTEs
 	tbls := make([]*common.Table, len(tables))
 	copy(tbls, tables)
@@ -22,12 +22,12 @@ func NewOrderWalker(tables []*common.Table) tree.Walker {
 
 // orderingWalker is the highest level walker to order a statement
 type orderingWalker struct {
-	tree.BaseWalker
+	tree.BaseListener
 
 	tables []*common.Table // all tables in the schema
 }
 
-var _ tree.Walker = &orderingWalker{}
+var _ tree.AstListener = &orderingWalker{}
 
 // we need to register common table expressions as tables, so that we can order them.
 func (o *orderingWalker) EnterCTE(node *tree.CTE) error {
@@ -245,7 +245,7 @@ func containsAggregateFunc(ret tree.ResultColumn) (bool, error) {
 	containsAggregateFunc := false
 	depth := 0 // depth tracks if we are in a subquery or not
 
-	err := ret.Accept(&tree.ImplementedWalker{
+	err := ret.Walk(&tree.ImplementedListener{
 		FuncEnterAggregateFunc: func(p0 *tree.AggregateFunc) error {
 			if depth == 0 {
 				containsAggregateFunc = true
@@ -307,7 +307,7 @@ func containsGroupBy(stmt *tree.SelectCore) (bool, error) {
 	contains := false
 	depth := 0
 
-	err := stmt.Accept(&tree.ImplementedWalker{
+	err := stmt.Walk(&tree.ImplementedListener{
 		FuncEnterGroupBy: func(p0 *tree.GroupBy) error {
 			if depth == 0 {
 				if len(p0.Expressions) > 0 {

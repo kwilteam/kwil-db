@@ -5,10 +5,10 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
-func isMutative(stmt tree.Accepter) (bool, error) {
+func isMutative(stmt tree.AstWalker) (bool, error) {
 	mutativityWalker := mutative.NewMutativityWalker()
 
-	err := stmt.Accept(mutativityWalker)
+	err := stmt.Walk(mutativityWalker)
 	if err != nil {
 		return false, err
 	}

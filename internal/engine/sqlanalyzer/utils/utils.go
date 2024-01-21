@@ -39,7 +39,7 @@ func GetUsedTables(join *tree.JoinClause) ([]*tree.TableOrSubqueryTable, error) 
 	tables := make([]*tree.TableOrSubqueryTable, 0)
 	depth := 0 // depth tracks if we are in a subquery or not
 
-	err := join.Accept(&tree.ImplementedWalker{
+	err := join.Walk(&tree.ImplementedListener{
 		FuncEnterExpressionSelect: func(p0 *tree.ExpressionSelect) error {
 			depth++
 

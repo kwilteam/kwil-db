@@ -1,6 +1,8 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+import (
+	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+)
 
 type distinctable interface {
 	SQLFunction
@@ -8,10 +10,20 @@ type distinctable interface {
 }
 
 type AggregateFunc struct {
+	*node
+
 	AnySQLFunction
 }
 
-func (s *AggregateFunc) Accept(w Walker) error {
+func (s *AggregateFunc) Accept(v AstVisitor) any {
+	return v.VisitAggregateFunc(s)
+}
+
+func (s *AggregateFunc) ToSQL() string {
+	return s.ToString()
+}
+
+func (s *AggregateFunc) Walk(w AstListener) error {
 	return run(
 		w.EnterAggregateFunc(s),
 		w.ExitAggregateFunc(s),
@@ -41,25 +53,40 @@ func (s *AggregateFunc) stringDistinct(exprs ...Expression) string {
 	})
 }
 
-func (s *AggregateFunc) String(exprs ...Expression) string {
+func (s *AggregateFunc) ToString(exprs ...Expression) string {
 	if s.distinct {
 		return s.stringDistinct(exprs...)
 	}
 	return s.string(exprs...)
 }
 
-var (
-	FunctionCOUNT = AggregateFunc{AnySQLFunction: AnySQLFunction{
-		FunctionName: "count",
-		Min:          0,
-		Max:          1,
-	},
+func NewAggregateFunctionWithGetter(name string, min uint8, max uint8, distinct bool) SQLFunctionGetter {
+	return func(pos *Position) SQLFunction {
+		return &AggregateFunc{
+			AnySQLFunction: AnySQLFunction{
+				FunctionName: name,
+				Min:          min,
+				Max:          max,
+				distinct:     distinct,
+			},
+		}
 	}
+}
 
-	FunctionSUM = AggregateFunc{AnySQLFunction: AnySQLFunction{
-		FunctionName: "sum",
-		Min:          1,
-		Max:          1,
-	},
-	}
+var (
+	FunctionCOUNT = AggregateFunc{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "count",
+			Min:          0,
+			Max:          1,
+		}}
+
+	FunctionSUM = AggregateFunc{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "sum",
+			Min:          1,
+			Max:          1,
+		}}
+	FunctionCOUNTGetter   = NewAggregateFunctionWithGetter("count", 0, 1, false)
+	FunctionCOUNTDistinct = NewAggregateFunctionWithGetter("count", 0, 1, true)
 )

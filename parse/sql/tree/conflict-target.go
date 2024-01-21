@@ -5,14 +5,20 @@ import (
 )
 
 type ConflictTarget struct {
+	node
+
 	IndexedColumns []string
 	Where          Expression
 }
 
-func (c *ConflictTarget) Accept(w Walker) error {
+func (c *ConflictTarget) Accept(v AstVisitor) any {
+	return v.VisitConflictTarget(c)
+}
+
+func (c *ConflictTarget) Walk(w AstListener) error {
 	return run(
 		w.EnterConflictTarget(c),
-		accept(w, c.Where),
+		walk(w, c.Where),
 		w.ExitConflictTarget(c),
 	)
 }

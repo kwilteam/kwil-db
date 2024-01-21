@@ -19,7 +19,7 @@ require (
 	github.com/jackc/pglogrepl v0.0.0-20231111135425-1627ab1b5780
 	github.com/jackc/pgx/v5 v5.5.2
 	github.com/jpillora/backoff v1.0.0
-	github.com/kwilteam/kuneiform v0.6.0
+	github.com/kwilteam/kuneiform v0.5.1-0.20240322160357-eb097d520367
 	github.com/kwilteam/kwil-db/core v0.1.0
 	github.com/kwilteam/kwil-db/parse v0.1.1
 	github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7
@@ -44,6 +44,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/antihax/optional v1.0.0 // indirect
+	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230512164433-5d1fd1a340c9 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.10.0 // indirect

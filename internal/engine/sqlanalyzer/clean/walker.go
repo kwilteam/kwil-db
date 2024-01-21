@@ -10,14 +10,14 @@ import (
 // TODO: the statement cleaner should also check for table / column existence
 func NewStatementCleaner() *StatementCleaner {
 	return &StatementCleaner{
-		Walker: tree.NewBaseWalker(),
+		AstListener: tree.NewBaseListener(),
 	}
 }
 
-var _ tree.Walker = &StatementCleaner{}
+var _ tree.AstListener = &StatementCleaner{}
 
 type StatementCleaner struct {
-	tree.Walker
+	tree.AstListener
 }
 
 // EnterAggregateFunc checks that the function name is a valid identifier

@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/schema"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 	"github.com/kwilteam/kwil-db/parse/sql/postgres"
+	"github.com/kwilteam/kwil-db/parse/sql/tree"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -60,10 +61,10 @@ func Test_PGSchemas(t *testing.T) {
 
 			w := schema.NewSchemaWalker(tt.schema)
 
-			err = ast.Accept(w)
+			err = ast.Walk(w)
 			require.NoError(t, err)
 
-			got, err := ast.ToSQL()
+			got, err := tree.SafeToSQL(ast)
 			require.NoError(t, err)
 
 			require.Equal(t, removeWhitespace(tt.want), removeWhitespace(got))
