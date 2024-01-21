@@ -3,12 +3,12 @@ package join
 import "github.com/kwilteam/kwil-db/parse/sql/tree"
 
 type joinVisitor struct {
-	tree.Walker
+	tree.AstWalker
 }
 
-func NewJoinWalker() tree.Walker {
+func NewJoinWalker() tree.AstWalker {
 	return &joinVisitor{
-		Walker: tree.NewBaseWalker(),
+		AstWalker: tree.NewBaseWalker(),
 	}
 }
 

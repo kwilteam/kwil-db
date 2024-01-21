@@ -5,43 +5,50 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
-
-	"github.com/kwilteam/action-grammar-go/actgrammar"
-
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
+	"github.com/kwilteam/action-grammar-go/actgrammar"
+	"github.com/kwilteam/kwil-db/parse/internal/util"
+	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
-type kfActionVisitor struct {
+// astBuilder is the visitor to build the ast from the parse tree
+type astBuilder struct {
 	actgrammar.BaseActionParserVisitor
 	// @yaiba NOTE: may need schema to distinguish extension and action
 
-	trace bool
+	trace    bool
+	trackPos bool
 }
 
-type kfActionVisitorOption func(*kfActionVisitor)
+var _ actgrammar.ActionParserVisitor = &astBuilder{}
 
-func kfActionVisitorWithTrace(on bool) kfActionVisitorOption {
-	return func(l *kfActionVisitor) {
-		l.trace = on
+func newAstBuilder(trace bool, trackPos bool) *astBuilder {
+	k := &astBuilder{
+		trace:    trace,
+		trackPos: trackPos,
 	}
-}
 
-var _ actgrammar.ActionParserVisitor = &kfActionVisitor{}
-
-func newKFActionVisitor(opts ...kfActionVisitorOption) *kfActionVisitor {
-	k := &kfActionVisitor{}
-	for _, opt := range opts {
-		opt(k)
-	}
 	return k
+}
+
+func (v *astBuilder) getPos(ctx antlr.ParserRuleContext) *tree.Position {
+	if !v.trackPos {
+		return nil
+	}
+
+	return &tree.Position{
+		StartLine:   ctx.GetStart().GetLine(),
+		StartColumn: ctx.GetStart().GetColumn(),
+		EndLine:     ctx.GetStop().GetLine(),
+		EndColumn:   ctx.GetStop().GetColumn(),
+	}
 }
 
 // Visit dispatch to the visit method of the ctx
 // e.g. if the tree is a ParseContext, then dispatch call VisitParse.
 // Overwrite is needed,
 // refer to https://github.com/antlr/antlr4/pull/1841#issuecomment-576791512
-func (v *kfActionVisitor) Visit(tree antlr.ParseTree) interface{} {
+func (v *astBuilder) Visit(tree antlr.ParseTree) interface{} {
 	if v.trace {
 		fmt.Printf("visit tree: %v, %s\n", reflect.TypeOf(tree), tree.GetText())
 	}
@@ -52,7 +59,7 @@ func (v *kfActionVisitor) Visit(tree antlr.ParseTree) interface{} {
 // Overwrite is needed,
 // refer to https://github.com/antlr/antlr4/pull/1841#issuecomment-576791512
 // calling function need to convert the result to asts
-func (v *kfActionVisitor) VisitChildren(node antlr.RuleNode) interface{} {
+func (v *astBuilder) VisitChildren(node antlr.RuleNode) interface{} {
 	var result []ActionStmt
 	n := node.GetChildCount()
 	for i := 0; i < n; i++ {
@@ -70,7 +77,7 @@ func (v *kfActionVisitor) VisitChildren(node antlr.RuleNode) interface{} {
 	return result
 }
 
-func (v *kfActionVisitor) shouldVisitNextChild(node antlr.Tree, currentResult interface{}) bool {
+func (v *astBuilder) shouldVisitNextChild(node antlr.Tree, currentResult interface{}) bool {
 	if _, ok := node.(antlr.TerminalNode); ok {
 		return false
 	}
@@ -79,7 +86,7 @@ func (v *kfActionVisitor) shouldVisitNextChild(node antlr.Tree, currentResult in
 }
 
 // VisitStatement is called when start parsing, return []types.ActionStmt
-func (v *kfActionVisitor) VisitStatement(ctx *actgrammar.StatementContext) interface{} {
+func (v *astBuilder) VisitStatement(ctx *actgrammar.StatementContext) interface{} {
 	stmtCount := len(ctx.AllStmt())
 	stmts := make([]ActionStmt, stmtCount)
 
@@ -95,13 +102,13 @@ func (v *kfActionVisitor) VisitStatement(ctx *actgrammar.StatementContext) inter
 }
 
 // VisitSql_stmt is called when parse sql statement, return *types.DMLStmt
-func (v *kfActionVisitor) VisitSql_stmt(ctx *actgrammar.Sql_stmtContext) interface{} {
+func (v *astBuilder) VisitSql_stmt(ctx *actgrammar.Sql_stmtContext) interface{} {
 	stmt := ctx.GetText()
 	return &DMLStmt{Statement: stmt}
 }
 
 // VisitCall_stmt is called when parse call statement, return *types.CallStmt
-func (v *kfActionVisitor) VisitCall_stmt(ctx *actgrammar.Call_stmtContext) interface{} {
+func (v *astBuilder) VisitCall_stmt(ctx *actgrammar.Call_stmtContext) interface{} {
 	// `a.b` is only for extension calls for now
 	fnName := ctx.Call_body().Fn_name().GetText()
 	if ctx.Call_body().Fn_name().Extension_call_name() != nil {
@@ -141,7 +148,7 @@ func (v *kfActionVisitor) VisitCall_stmt(ctx *actgrammar.Call_stmtContext) inter
 }
 
 // VisitCall_receivers is called when parse call receivers, return []string
-func (v *kfActionVisitor) VisitCall_receivers(ctx *actgrammar.Call_receiversContext) interface{} {
+func (v *astBuilder) VisitCall_receivers(ctx *actgrammar.Call_receiversContext) interface{} {
 	receivers := make([]string, len(ctx.AllVariable()))
 	for i, varCtx := range ctx.AllVariable() {
 		receivers[i] = varCtx.GetText()
@@ -150,7 +157,7 @@ func (v *kfActionVisitor) VisitCall_receivers(ctx *actgrammar.Call_receiversCont
 }
 
 // VisitFn_arg_list is called when parse function argument list, return []tree.Expression
-func (v *kfActionVisitor) VisitFn_arg_list(ctx *actgrammar.Fn_arg_listContext) interface{} {
+func (v *astBuilder) VisitFn_arg_list(ctx *actgrammar.Fn_arg_listContext) interface{} {
 	args := make([]tree.Expression, len(ctx.AllFn_arg_expr()))
 	for i, argCtx := range ctx.AllFn_arg_expr() {
 		args[i] = v.Visit(argCtx).(tree.Expression)
@@ -159,12 +166,12 @@ func (v *kfActionVisitor) VisitFn_arg_list(ctx *actgrammar.Fn_arg_listContext) i
 }
 
 // VisitFn_arg_expr is called when parse function argument expression return tree.Expression
-// NOTE: this is a subset of sqlparser.KFSqliteVisitor.VisitExpr
-func (v *kfActionVisitor) VisitFn_arg_expr(ctx *actgrammar.Fn_arg_exprContext) interface{} {
+// NOTE: this is a subset of util.KFSqliteVisitor.VisitExpr
+func (v *astBuilder) VisitFn_arg_expr(ctx *actgrammar.Fn_arg_exprContext) interface{} {
 	return v.visitFn_arg_expr(ctx)
 }
 
-func (v *kfActionVisitor) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) tree.Expression {
+func (v *astBuilder) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) tree.Expression {
 	if ctx == nil {
 		return nil
 	}
@@ -348,13 +355,12 @@ func (v *kfActionVisitor) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) t
 		expr := &tree.ExpressionFunction{
 			Inputs: make([]tree.Expression, len(ctx.AllFn_arg_expr())),
 		}
-		funcName := ctx.Sfn_name().GetText()
-
-		f, ok := tree.SQLFunctions[strings.ToLower(funcName)]
+		funcName := util.ExtractSQLName(ctx.Sfn_name().GetText())
+		f, ok := tree.SQLFunctionGetterMap[strings.ToLower(funcName)]
 		if !ok {
 			panic(fmt.Sprintf("unsupported function '%s'", funcName))
 		}
-		expr.Function = f
+		expr.Function = f(v.getPos(ctx))
 
 		for i, e := range ctx.AllFn_arg_expr() {
 			expr.Inputs[i] = v.visitFn_arg_expr(e)

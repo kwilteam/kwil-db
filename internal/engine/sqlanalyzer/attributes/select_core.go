@@ -45,7 +45,7 @@ type RelationAttribute struct {
 // then the result column expressions will be tbl.col_1, tbl.col_2, etc.
 func GetSelectCoreRelationAttributes(selectCore *tree.SelectCore, tables []*types.Table) ([]*RelationAttribute, error) {
 	walker := newSelectCoreWalker(tables)
-	err := selectCore.Accept(walker)
+	err := selectCore.Walk(walker)
 	if err != nil {
 		return nil, fmt.Errorf("error analyzing select core: %w", err)
 	}
@@ -55,7 +55,7 @@ func GetSelectCoreRelationAttributes(selectCore *tree.SelectCore, tables []*type
 
 func newSelectCoreWalker(tables []*types.Table) *selectCoreAnalyzer {
 	return &selectCoreAnalyzer{
-		Walker:             tree.NewBaseWalker(),
+		AstWalker:          tree.NewBaseWalker(),
 		context:            newSelectCoreContext(nil),
 		schemaTables:       tables,
 		detectedAttributes: []*RelationAttribute{},
@@ -64,7 +64,7 @@ func newSelectCoreWalker(tables []*types.Table) *selectCoreAnalyzer {
 
 // selectCoreAnalyzer will walk the tree and identify the returned attributes for the select core
 type selectCoreAnalyzer struct {
-	tree.Walker
+	tree.AstWalker
 	context      *selectCoreContext
 	schemaTables []*types.Table
 
@@ -278,8 +278,8 @@ func findColumn(columns []*types.Column, name string) (*types.Column, error) {
 }
 
 // addTableIfNotPresent adds the table name to the column if it is not already present.
-func addTableIfNotPresent(tableName string, expr tree.Accepter) error {
-	return expr.Accept(&tree.ImplementedWalker{
+func addTableIfNotPresent(tableName string, expr tree.Walker) error {
+	return expr.Walk(&tree.ImplementedWalker{
 		FuncEnterExpressionColumn: func(col *tree.ExpressionColumn) error {
 			if col.Table == "" {
 				col.Table = tableName

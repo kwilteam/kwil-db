@@ -8,11 +8,17 @@ import (
 
 // Update Statement with CTEs
 type Update struct {
+	*BaseAstNode
+
 	CTE        []*CTE
 	UpdateStmt *UpdateStmt
 }
 
-func (u *Update) Accept(w Walker) error {
+func (u *Update) Accept(v AstVisitor) any {
+	return v.VisitUpdate(u)
+}
+
+func (u *Update) Walk(w AstWalker) error {
 	return run(
 		w.EnterUpdate(u),
 		acceptMany(w, u.CTE),
@@ -21,18 +27,7 @@ func (u *Update) Accept(w Walker) error {
 	)
 }
 
-func (u *Update) ToSQL() (str string, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err2, ok := r.(error)
-			if !ok {
-				err2 = fmt.Errorf("%v", r)
-			}
-
-			err = err2
-		}
-	}()
-
+func (u *Update) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if len(u.CTE) > 0 {
@@ -46,12 +41,14 @@ func (u *Update) ToSQL() (str string, err error) {
 
 	stmt.Token.Semicolon()
 
-	return stmt.String(), nil
+	return stmt.String()
 }
 
 // UpdateStmt is a statement that represents an UPDATE statement.
 // USE Update INSTEAD OF THIS
 type UpdateStmt struct {
+	*BaseAstNode
+
 	Or                 UpdateOr
 	QualifiedTableName *QualifiedTableName
 	UpdateSetClause    []*UpdateSetClause
@@ -60,7 +57,11 @@ type UpdateStmt struct {
 	Returning          *ReturningClause
 }
 
-func (u *UpdateStmt) Accept(w Walker) error {
+func (u *UpdateStmt) Accept(v AstVisitor) any {
+	return v.VisitUpdateStmt(u)
+}
+
+func (u *UpdateStmt) Walk(w AstWalker) error {
 	return run(
 		w.EnterUpdateStmt(u),
 		accept(w, u.QualifiedTableName),

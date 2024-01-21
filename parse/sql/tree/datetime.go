@@ -9,132 +9,162 @@ import (
 )
 
 /*
-	SQLite DateTime functions are really weird.  Would recommend reading the docs for them here: https://www.sqlite.org/lang_datefunc.html
+SQLite DateTime functions are really weird.  Would recommend reading the docs for them here: https://www.sqlite.org/lang_datefunc.html
 
-	Here, I outline exactly what we can and cannot support.
+Here, I outline exactly what we can and cannot support.
 
-	Essentially, If they take no args, they will use the machine's local time, which should not be allowed in our case.
-	This is with the exception of STRFTIME, which will use the local time unless the second argument is specified.
-	Ex:
+Essentially, If they take no args, they will use the machine's local time, which should not be allowed in our case.
+This is with the exception of STRFTIME, which will use the local time unless the second argument is specified.
+Ex:
 
-		date(time-value, modifier, modifier, ...)
-		time(time-value, modifier, modifier, ...)
-		datetime(time-value, modifier, modifier, ...)
-		julianday(time-value, modifier, modifier, ...)
-		unixepoch(time-value, modifier, modifier, ...)
-		strftime(format, time-value, modifier, modifier, ...)
+	date(time-value, modifier, modifier, ...)
+	time(time-value, modifier, modifier, ...)
+	datetime(time-value, modifier, modifier, ...)
+	julianday(time-value, modifier, modifier, ...)
+	unixepoch(time-value, modifier, modifier, ...)
+	strftime(format, time-value, modifier, modifier, ...)
 
-	Therefore, we need to make sure that the first argument is always specified, and that the second argument is specified for STRFTIME.
-	We also cannot allow julianday, since it will return a float, which we cannot guarantee precision for.
+Therefore, we need to make sure that the first argument is always specified, and that the second argument is specified for STRFTIME.
+We also cannot allow julianday, since it will return a float, which we cannot guarantee precision for.
 
-	There are also some restrictions on the string formatting substitutions.  Here are all supported by SQLite:
+There are also some restrictions on the string formatting substitutions.  Here are all supported by SQLite:
 
-		%d		day of month: 00
-		%f		fractional seconds: SS.SSS
-		%H		hour: 00-24
-		%j		day of year: 001-366
-		%J		Julian day number (fractional)
-		%m		month: 01-12
-		%M		minute: 00-59
-		%s		seconds since 1970-01-01
-		%S		seconds: 00-59
-		%w		day of week 0-6 with Sunday==0
-		%W		week of year: 00-53
-		%Y		year: 0000-9999
-		%%		%
+	%d		day of month: 00
+	%f		fractional seconds: SS.SSS
+	%H		hour: 00-24
+	%j		day of year: 001-366
+	%J		Julian day number (fractional)
+	%m		month: 01-12
+	%M		minute: 00-59
+	%s		seconds since 1970-01-01
+	%S		seconds: 00-59
+	%w		day of week 0-6 with Sunday==0
+	%W		week of year: 00-53
+	%Y		year: 0000-9999
+	%%		%
 
-	We cannot allow the following:
+We cannot allow the following:
 
-		%f		uses fractional seconds, which we cannot guarantee precision for
-		%J		uses Julian day number, which we cannot guarantee precision for
-		%s		uses seconds since 1970-01-01, which we relies on the machine's local time
+	%f		uses fractional seconds, which we cannot guarantee precision for
+	%J		uses Julian day number, which we cannot guarantee precision for
+	%s		uses seconds since 1970-01-01, which we relies on the machine's local time
 
-	We also have to guard against certain time strings. Here are all supported by SQLite:
+We also have to guard against certain time strings. Here are all supported by SQLite:
 
-		YYYY-MM-DD
-		YYYY-MM-DD HH:MM
-		YYYY-MM-DD HH:MM:SS
-		YYYY-MM-DD HH:MM:SS.SSS
-		YYYY-MM-DDTHH:MM
-		YYYY-MM-DDTHH:MM:SS
-		YYYY-MM-DDTHH:MM:SS.SSS
-		HH:MM
-		HH:MM:SS
-		HH:MM:SS.SSS
-		now
-		DDDDDDDDDD
+	YYYY-MM-DD
+	YYYY-MM-DD HH:MM
+	YYYY-MM-DD HH:MM:SS
+	YYYY-MM-DD HH:MM:SS.SSS
+	YYYY-MM-DDTHH:MM
+	YYYY-MM-DDTHH:MM:SS
+	YYYY-MM-DDTHH:MM:SS.SSS
+	HH:MM
+	HH:MM:SS
+	HH:MM:SS.SSS
+	now
+	DDDDDDDDDD
 
-	We cannot allow the following:
+We cannot allow the following:
 
-		YYYY-MM-DD HH:MM:SS.SSS 	uses fractional seconds, which we cannot guarantee precision for
-		YYYY-MM-DDTHH:MM:SS.SSS 	uses fractional seconds, which we cannot guarantee precision for
-		HH:MM:SS.SSS 				uses fractional seconds, which we cannot guarantee precision for
-		now 						uses the machine's local time
-		DDDDDDDDDD 					uses floating point, which we cannot guarantee precision for
+	YYYY-MM-DD HH:MM:SS.SSS 	uses fractional seconds, which we cannot guarantee precision for
+	YYYY-MM-DDTHH:MM:SS.SSS 	uses fractional seconds, which we cannot guarantee precision for
+	HH:MM:SS.SSS 				uses fractional seconds, which we cannot guarantee precision for
+	now 						uses the machine's local time
+	DDDDDDDDDD 					uses floating point, which we cannot guarantee precision for
 
-	Finally, we need to be concerned with modifiers.  Below is a list of all modifiers:
+Finally, we need to be concerned with modifiers.  Below is a list of all modifiers:
 
-		NNN days
-		NNN hours
-		NNN minutes
-		NNN.NNNN seconds
-		NNN months
-		NNN years
-		start of month
-		start of year
-		start of day
-		weekday N
-		unixepoch
-		julianday
-		auto
-		localtime
-		utc
+	NNN days
+	NNN hours
+	NNN minutes
+	NNN.NNNN seconds
+	NNN months
+	NNN years
+	start of month
+	start of year
+	start of day
+	weekday N
+	unixepoch
+	julianday
+	auto
+	localtime
+	utc
 
-	We cannot allow the following:
+We cannot allow the following:
 
-		NNN.NNNN seconds 	uses fractional seconds, which we cannot guarantee precision for
-		julianday 			uses floating point, which we cannot guarantee precision for
-		auto 				will auto-detect either unixepoch or julianday, and julianday is not supported
-		localtime 			uses the machine's local time
-		utc 				uses the machine's local time
-
+	NNN.NNNN seconds 	uses fractional seconds, which we cannot guarantee precision for
+	julianday 			uses floating point, which we cannot guarantee precision for
+	auto 				will auto-detect either unixepoch or julianday, and julianday is not supported
+	localtime 			uses the machine's local time
+	utc 				uses the machine's local time
 */
+var (
+	FunctionSTRFTIME = DateTimeFunction{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "strftime",
+			Min:          2,
+		}}
+	FunctionDATE = DateTimeFunction{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "date",
+			Min:          1,
+		}}
+	FunctionTIME = DateTimeFunction{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "time",
+			Min:          1,
+		}}
+	FunctionDATETIME = DateTimeFunction{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "datetime",
+			Min:          1,
+		}}
+	FunctionUNIXEPOCH = DateTimeFunction{
+		AnySQLFunction: AnySQLFunction{
+			FunctionName: "unixepoch",
+			Min:          1,
+		}}
+)
 
 type DateTimeFunction struct {
+	*BaseAstNode
+
 	AnySQLFunction
 }
 
-func (d *DateTimeFunction) Accept(w Walker) error {
+func (d *DateTimeFunction) Accept(v AstVisitor) any {
+	return v.VisitDateTimeFunc(d)
+}
+
+func (d *DateTimeFunction) Walk(w AstWalker) error {
 	return run(
 		w.EnterDateTimeFunc(d),
 		w.ExitDateTimeFunc(d),
 	)
 }
 
+func NewDateTimeFunctionWithGetter(name string, min uint8, max uint8, distinct bool) SQLFunctionGetter {
+	return func(pos *Position) SQLFunction {
+		return &DateTimeFunction{
+			AnySQLFunction: AnySQLFunction{
+				FunctionName: name,
+				Min:          min,
+				Max:          max,
+				distinct:     distinct,
+			},
+		}
+	}
+}
+
 var (
-	FunctionSTRFTIME = DateTimeFunction{AnySQLFunction{
-		FunctionName: "strftime",
-		Min:          2,
-	}}
-	FunctionDATE = DateTimeFunction{AnySQLFunction{
-		FunctionName: "date",
-		Min:          1,
-	}}
-	FunctionTIME = DateTimeFunction{AnySQLFunction{
-		FunctionName: "time",
-		Min:          1,
-	}}
-	FunctionDATETIME = DateTimeFunction{AnySQLFunction{
-		FunctionName: "datetime",
-		Min:          1,
-	}}
-	FunctionUNIXEPOCH = DateTimeFunction{AnySQLFunction{
-		FunctionName: "unixepoch",
-		Min:          1,
-	}}
+	FunctionSTRFTIMEGetter  = NewDateTimeFunctionWithGetter("strftime", 2, 0, false)
+	FunctionDATEGetter      = NewDateTimeFunctionWithGetter("date", 1, 0, false)
+	FunctionTIMEGetter      = NewDateTimeFunctionWithGetter("time", 1, 0, false)
+	FunctionDATETIMEGetter  = NewDateTimeFunctionWithGetter("datetime", 1, 0, false)
+	FunctionUNIXEPOCHGetter = NewDateTimeFunctionWithGetter("unixepoch", 1, 0, false)
 )
 
-func (d *DateTimeFunction) String(exprs ...Expression) string {
+func (d *DateTimeFunction) ToString(exprs ...Expression) string {
 	if len(exprs) < int(d.Min) {
 		panic("not enough arguments for datetime function '" + d.FunctionName + "'")
 	}

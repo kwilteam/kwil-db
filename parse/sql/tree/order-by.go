@@ -8,10 +8,16 @@ import (
 )
 
 type OrderBy struct {
+	*BaseAstNode
+
 	OrderingTerms []*OrderingTerm
 }
 
-func (o *OrderBy) Accept(w Walker) error {
+func (o *OrderBy) Accept(v AstVisitor) any {
+	return v.VisitOrderBy(o)
+}
+
+func (o *OrderBy) Walk(w AstWalker) error {
 	return run(
 		w.EnterOrderBy(o),
 		acceptMany(w, o.OrderingTerms),
@@ -36,13 +42,19 @@ func (o *OrderBy) ToSQL() string {
 }
 
 type OrderingTerm struct {
+	*BaseAstNode
+
 	Expression   Expression
 	Collation    CollationType
 	OrderType    OrderType
 	NullOrdering NullOrderingType
 }
 
-func (o *OrderingTerm) Accept(w Walker) error {
+func (o *OrderingTerm) Accept(v AstVisitor) any {
+	return v.VisitOrderingTerm(o)
+}
+
+func (o *OrderingTerm) Walk(w AstWalker) error {
 	return run(
 		w.EnterOrderingTerm(o),
 		accept(w, o.Expression),

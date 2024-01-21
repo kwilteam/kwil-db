@@ -11,15 +11,21 @@ import (
 type TableOrSubquery interface {
 	ToSQL() string
 	tableOrSubquery()
-	Accept(w Walker) error
+	Walk(w AstWalker) error
 }
 
 type TableOrSubqueryTable struct {
+	*BaseAstNode
+
 	Name  string
 	Alias string
 }
 
-func (t *TableOrSubqueryTable) Accept(w Walker) error {
+func (t *TableOrSubqueryTable) Accept(v AstVisitor) any {
+	return v.VisitTableOrSubqueryTable(t)
+}
+
+func (t *TableOrSubqueryTable) Walk(w AstWalker) error {
 	return run(
 		w.EnterTableOrSubqueryTable(t),
 		w.ExitTableOrSubqueryTable(t),
@@ -45,11 +51,17 @@ func (t *TableOrSubqueryTable) ToSQL() string {
 func (t *TableOrSubqueryTable) tableOrSubquery() {}
 
 type TableOrSubquerySelect struct {
+	*BaseAstNode
+
 	Select *SelectStmt
 	Alias  string
 }
 
-func (t *TableOrSubquerySelect) Accept(w Walker) error {
+func (t *TableOrSubquerySelect) Accept(v AstVisitor) any {
+	return v.VisitTableOrSubquerySelect(t)
+}
+
+func (t *TableOrSubquerySelect) Walk(w AstWalker) error {
 	return run(
 		w.EnterTableOrSubquerySelect(t),
 		accept(w, t.Select),
@@ -80,10 +92,16 @@ func (t *TableOrSubquerySelect) ToSQL() string {
 func (t *TableOrSubquerySelect) tableOrSubquery() {}
 
 type TableOrSubqueryList struct {
+	*BaseAstNode
+
 	TableOrSubqueries []TableOrSubquery
 }
 
-func (t *TableOrSubqueryList) Accept(w Walker) error {
+func (t *TableOrSubqueryList) Accept(v AstVisitor) any {
+	return v.VisitTableOrSubqueryList(t)
+}
+
+func (t *TableOrSubqueryList) Walk(w AstWalker) error {
 	return run(
 		w.EnterTableOrSubqueryList(t),
 		acceptMany(w, t.TableOrSubqueries),
@@ -107,10 +125,16 @@ func (t *TableOrSubqueryList) ToSQL() string {
 func (t *TableOrSubqueryList) tableOrSubquery() {}
 
 type TableOrSubqueryJoin struct {
+	*BaseAstNode
+
 	JoinClause *JoinClause
 }
 
-func (t *TableOrSubqueryJoin) Accept(w Walker) error {
+func (t *TableOrSubqueryJoin) Accept(v AstVisitor) any {
+	return v.VisitTableOrSubqueryJoin(t)
+}
+
+func (t *TableOrSubqueryJoin) Walk(w AstWalker) error {
 	return run(
 		w.EnterTableOrSubqueryJoin(t),
 		accept(w, t.JoinClause),

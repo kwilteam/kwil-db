@@ -3,22 +3,20 @@ package sqlparser
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
-
-	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
-
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
+	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
 )
 
-// Parse parses a raw sql string and returns a tree.Ast
-func Parse(sql string) (ast tree.Ast, err error) {
-	currentLine := 1
-	return ParseSql(sql, currentLine, nil, false)
+// Parse parses a raw sql string and returns a tree.ParseNode
+func Parse(sql string) (ast tree.AstNode, err error) {
+	return ParseSql(sql, nil, false, true)
 }
 
-// ParseSql parses a single raw sql statement and returns tree.Ast
-func ParseSql(sql string, currentLine int, errorListener *ErrorListener, trace bool) (ast tree.Ast, err error) {
-	var visitor *KFSqliteVisitor
+// ParseSql parses a single raw sql statement and returns tree.ParseNode
+func ParseSql(sql string, errorListener *ErrorListener,
+	trace bool, withPos bool) (ast tree.AstNode, err error) {
+	var visitor *astBuilder
 
 	if errorListener == nil {
 		errorListener = NewErrorListener()
@@ -47,10 +45,10 @@ func ParseSql(sql string, currentLine int, errorListener *ErrorListener, trace b
 		err = errorListener.Err()
 	}()
 
-	visitor = NewKFSqliteVisitor(KFVisitorWithTrace(trace))
+	visitor = newAstBuilder(trace, withPos)
 
 	parseTree := p.Parse()
 	result := visitor.Visit(parseTree)
 	// since we only expect a single statement
-	return result.([]tree.Ast)[0], err
+	return result.([]tree.AstNode)[0], err
 }

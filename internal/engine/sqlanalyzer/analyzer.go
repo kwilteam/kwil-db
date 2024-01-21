@@ -13,7 +13,7 @@ import (
 )
 
 type accepter interface {
-	Accept(walker tree.Walker) error
+	Walk(walker tree.AstWalker) error
 }
 
 // acceptWrapper is a wrapper around a statement that implements the accepter interface
@@ -22,14 +22,14 @@ type acceptWrapper struct {
 	inner accepter
 }
 
-func (a *acceptWrapper) Accept(walker tree.Walker) (err error) {
+func (a *acceptWrapper) Walk(walker tree.AstWalker) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic while walking statement: %v", r)
 		}
 	}()
 
-	return a.inner.Accept(walker)
+	return a.inner.Walk(walker)
 }
 
 // ApplyRules analyzes the given statement and returns the transformed statement.
@@ -49,27 +49,27 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table) (*Analyzed
 	accept := &acceptWrapper{inner: parsed}
 
 	clnr := clean.NewStatementCleaner()
-	err = accept.Accept(clnr)
+	err = accept.Walk(clnr)
 	if err != nil {
 		return nil, fmt.Errorf("error cleaning statement: %w", err)
 	}
 
 	if flags&NoCartesianProduct != 0 {
-		err := accept.Accept(join.NewJoinWalker())
+		err := accept.Walk(join.NewJoinWalker())
 		if err != nil {
 			return nil, fmt.Errorf("error applying join rules: %w", err)
 		}
 	}
 
 	if flags&GuaranteedOrder != 0 {
-		err := accept.Accept(order.NewOrderWalker(cleanedTables))
+		err := accept.Walk(order.NewOrderWalker(cleanedTables))
 		if err != nil {
 			return nil, fmt.Errorf("error enforcing guaranteed order: %w", err)
 		}
 	}
 
 	if flags&DeterministicAggregates != 0 {
-		err := accept.Accept(aggregate.NewGroupByWalker())
+		err := accept.Walk(aggregate.NewGroupByWalker())
 		if err != nil {
 			return nil, fmt.Errorf("error enforcing aggregate determinism: %w", err)
 		}
@@ -80,7 +80,7 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table) (*Analyzed
 		return nil, fmt.Errorf("error determining mutativity: %w", err)
 	}
 
-	generated, err := parsed.ToSQL()
+	generated, err := tree.SafeToSQL(parsed)
 	if err != nil {
 		return nil, fmt.Errorf("error generating SQL: %w", err)
 	}

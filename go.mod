@@ -84,7 +84,7 @@ require (
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/kwilteam/action-grammar-go v0.0.1-0.20230926160920-472768e1186c // indirect
-	github.com/kwilteam/sql-grammar-go v0.0.3-0.20230925230724-00685e1bac32 // indirect
+	github.com/kwilteam/sql-grammar-go v0.0.3-0.20240118203305-64d337754119 // indirect
 	github.com/lib/pq v1.10.7 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect

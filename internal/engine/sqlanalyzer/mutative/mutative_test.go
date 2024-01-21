@@ -46,7 +46,7 @@ func Test_Mutativity(t *testing.T) {
 
 			mutativityWalker := mutative.NewMutativityWalker()
 
-			err = stmt.Accept(mutativityWalker)
+			err = stmt.Walk(mutativityWalker)
 			if err != nil {
 				t.Fatalf("failed to walk statement: %v", err)
 			}

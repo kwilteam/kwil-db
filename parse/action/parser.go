@@ -12,25 +12,24 @@ package actparser
 import (
 	"fmt"
 
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
-
-	"github.com/kwilteam/action-grammar-go/actgrammar"
-
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
+	"github.com/kwilteam/action-grammar-go/actgrammar"
+	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 )
 
 // Parse parses an action statement string and returns an ActionStmt.
 // A new error listener will be created, and parsing trace is disabled.
 func Parse(stmt string) (ast ActionStmt, err error) {
-	return ParseActionStmt(stmt, nil, false)
+	return ParseActionStmt(stmt, nil, false, false)
 }
 
 // ParseActionStmt parses a single action statement and returns an ActionStmt.
 // errorListener is optional, if nil, a new error listener is created, it's
 // mostly used for testing.
 // trace is optional, if true, parsing trace will be enabled.
-func ParseActionStmt(stmt string, errorListener *sqlparser.ErrorListener, trace bool) (ast ActionStmt, err error) {
-	var visitor *kfActionVisitor
+func ParseActionStmt(stmt string, errorListener *sqlparser.ErrorListener,
+	trace bool, trackPos bool) (ast ActionStmt, err error) {
+	var visitor *astBuilder
 
 	if errorListener == nil {
 		errorListener = sqlparser.NewErrorListener()
@@ -59,7 +58,7 @@ func ParseActionStmt(stmt string, errorListener *sqlparser.ErrorListener, trace 
 		err = errorListener.Err()
 	}()
 
-	visitor = newKFActionVisitor(kfActionVisitorWithTrace(trace))
+	visitor = newAstBuilder(trace, trackPos)
 
 	parseTree := p.Statement()
 	result := visitor.Visit(parseTree)

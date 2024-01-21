@@ -48,11 +48,17 @@ From the SQLite documentation:
 */
 
 type JoinClause struct {
+	*BaseAstNode
+
 	TableOrSubquery TableOrSubquery
 	Joins           []*JoinPredicate
 }
 
-func (j *JoinClause) Accept(w Walker) error {
+func (j *JoinClause) Accept(v AstVisitor) any {
+	return v.VisitJoinClause(j)
+}
+
+func (j *JoinClause) Walk(w AstWalker) error {
 	return run(
 		w.EnterJoinClause(j),
 		accept(w, j.TableOrSubquery),
@@ -76,12 +82,14 @@ func (j *JoinClause) ToSQL() string {
 }
 
 type JoinPredicate struct {
+	*BaseAstNode
+
 	JoinOperator *JoinOperator
 	Table        TableOrSubquery
 	Constraint   Expression
 }
 
-func (j *JoinPredicate) Accept(w Walker) error {
+func (j *JoinPredicate) Walk(w AstWalker) error {
 	return run(
 		w.EnterJoinPredicate(j),
 		accept(w, j.JoinOperator),
@@ -115,12 +123,18 @@ func (j *JoinPredicate) ToSQL() string {
 }
 
 type JoinOperator struct {
+	*BaseAstNode
+
 	Natural  bool
 	JoinType JoinType
 	Outer    bool
 }
 
-func (j *JoinOperator) Accept(w Walker) error {
+func (j *JoinOperator) Accept(v AstVisitor) any {
+	return v.VisitJoinOperator(j)
+}
+
+func (j *JoinOperator) Walk(w AstWalker) error {
 	return run(
 		w.EnterJoinOperator(j),
 		w.ExitJoinOperator(j),

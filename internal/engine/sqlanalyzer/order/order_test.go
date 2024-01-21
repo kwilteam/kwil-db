@@ -283,7 +283,7 @@ func Test_Ordering(t *testing.T) {
 				OrderBy:     orderBy,
 			}
 
-			err := selectStmt.Accept(walker)
+			err := selectStmt.Walk(walker)
 			if err != nil {
 				t.Fatal(err)
 			}

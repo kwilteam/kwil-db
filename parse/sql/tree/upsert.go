@@ -23,13 +23,19 @@ func (u UpsertType) Valid() error {
 }
 
 type Upsert struct {
+	*BaseAstNode
+
 	ConflictTarget *ConflictTarget
 	Type           UpsertType
 	Updates        []*UpdateSetClause
 	Where          Expression
 }
 
-func (u *Upsert) Accept(w Walker) error {
+func (u *Upsert) Accept(v AstVisitor) any {
+	return v.VisitUpsert(u)
+}
+
+func (u *Upsert) Walk(w AstWalker) error {
 	return run(
 		w.EnterUpsert(u),
 		accept(w, u.ConflictTarget),

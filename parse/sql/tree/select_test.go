@@ -77,7 +77,7 @@ func TestSelect_ToSQL(t *testing.T) {
 				CTE:        tt.fields.CTE,
 				SelectStmt: tt.fields.SelectStmt,
 			}
-			gotStr, err := s.ToSQL()
+			gotStr, err := tree.SafeToSQL(s)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Select.ToSQL() error = %v, wantErr %v", err, tt.wantErr)
 				return

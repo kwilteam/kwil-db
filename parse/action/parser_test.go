@@ -62,14 +62,14 @@ func TestParseActionStmt(t *testing.T) {
 						Right:    &tree.ExpressionBindParameter{Parameter: "$c"},
 					},
 					&tree.ExpressionFunction{
-						Function: &tree.FunctionAddress,
+						Function: tree.FunctionAddressGetter(nil),
 						Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
 					},
 					&tree.ExpressionFunction{
-						Function: &tree.FunctionAddress,
+						Function: tree.FunctionAddressGetter(nil),
 						Inputs: []tree.Expression{
 							&tree.ExpressionFunction{
-								Function: &tree.FunctionUPPER,
+								Function: tree.FunctionUPPERGetter(nil),
 								Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
 							},
 						},
@@ -123,14 +123,14 @@ func TestParseActionStmt(t *testing.T) {
 						Right:    &tree.ExpressionBindParameter{Parameter: "$c"},
 					},
 					&tree.ExpressionFunction{
-						Function: &tree.FunctionAddress,
+						Function: tree.FunctionAddressGetter(nil),
 						Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
 					},
 					&tree.ExpressionFunction{
-						Function: &tree.FunctionAddress,
+						Function: tree.FunctionAddressGetter(nil),
 						Inputs: []tree.Expression{
 							&tree.ExpressionFunction{
-								Function: &tree.FunctionUPPER,
+								Function: tree.FunctionUPPERGetter(nil),
 								Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
 							},
 						},
@@ -176,7 +176,7 @@ func TestParseActionStmt(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotAst, err := actparser.ParseActionStmt(tt.input, nil, *trace)
+			gotAst, err := actparser.ParseActionStmt(tt.input, nil, *trace, false)
 			if err != nil {
 				t.Errorf("ParseActionStmt() error = %v", err)
 				return
@@ -222,7 +222,7 @@ func TestParseActionStmt_scalar_function(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := actparser.ParseActionStmt(tt.input, nil, *trace)
+			_, err := actparser.ParseActionStmt(tt.input, nil, *trace, false)
 			if tt.wantErr {
 				assert.Error(t, err, "ParseActionStmt(%v)", tt.input)
 			} else {

@@ -5,12 +5,18 @@ import (
 )
 
 type CTE struct {
+	*BaseAstNode
+
 	Table   string
 	Columns []string
 	Select  *SelectStmt
 }
 
-func (c *CTE) Accept(w Walker) error {
+func (c *CTE) Accept(v AstVisitor) any {
+	return v.VisitCTE(c)
+}
+
+func (c *CTE) Walk(w AstWalker) error {
 	return run(
 		w.EnterCTE(c),
 		accept(w, c.Select),

@@ -3,13 +3,13 @@ package aggregate
 import "github.com/kwilteam/kwil-db/parse/sql/tree"
 
 type groupByAnalyzer struct {
-	tree.Walker
+	tree.AstWalker
 	context *context
 }
 
-func NewGroupByWalker() tree.Walker {
+func NewGroupByWalker() tree.AstWalker {
 	return &groupByAnalyzer{
-		Walker: tree.NewBaseWalker(),
+		AstWalker: tree.NewBaseWalker(),
 	}
 }
 

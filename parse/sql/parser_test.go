@@ -338,7 +338,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 	tests := []struct {
 		name   string
 		input  string
-		expect tree.Ast
+		expect tree.AstNode
 	}{
 		// with semicolon at the end
 		{"*", "select *;", genSelectColumnStarTree()},
@@ -2302,7 +2302,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				tt.expect = nil
 			}()
 
-			astTree, err := ParseSql(tt.input, 1, nil, *trace)
+			astTree, err := ParseSql(tt.input, nil, *trace, false)
 			if err != nil {
 				t.Errorf("ParseRawSQL() got %s", err)
 				return
@@ -2311,7 +2311,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			// use assert.Exactly?
 			assert.EqualValues(t, tt.expect, astTree, "ParseRawSQL() got %+v, want %+v", astTree, tt.expect)
 
-			sql, err := astTree.ToSQL()
+			sql, err := tree.SafeToSQL(astTree)
 			if err != nil {
 				t.Errorf("ParseRawSQL() got %s", err)
 			}
@@ -2418,7 +2418,7 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			//eh := NewErrorHandler(1)
 			//el := newSqliteErrorListener(eh)
-			_, err := ParseSql(tt.input, 1, nil, *trace)
+			_, err := ParseSql(tt.input, nil, *trace, false)
 			assert.Errorf(t, err, "Parser should complain abould invalid syntax")
 
 			if !errors.Is(err, ErrInvalidSyntax) {

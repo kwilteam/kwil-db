@@ -8,7 +8,7 @@ import (
 
 func TestAggregateFunc_String(t *testing.T) {
 	type fields struct {
-		tree.AggregateFunc
+		*tree.AggregateFunc
 	}
 	type args struct {
 		exprs []tree.Expression
@@ -23,7 +23,7 @@ func TestAggregateFunc_String(t *testing.T) {
 		{
 			name: "count fails with no arguments",
 			fields: fields{
-				AggregateFunc: tree.FunctionCOUNT,
+				AggregateFunc: tree.FunctionCOUNTGetter(nil).(*tree.AggregateFunc),
 			},
 			args: args{
 				exprs: []tree.Expression{
@@ -45,7 +45,7 @@ func TestAggregateFunc_String(t *testing.T) {
 
 			s := tt.fields.AggregateFunc
 			s.SetDistinct(true)
-			got := s.String(tt.args.exprs...)
+			got := s.ToString(tt.args.exprs...)
 
 			if !compareIgnoringWhitespace(got, tt.want) {
 				t.Errorf("AggregateFunc.String() = %v, want %v", got, tt.want)

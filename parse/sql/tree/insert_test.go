@@ -61,7 +61,7 @@ func TestInsert_ToSQL(t *testing.T) {
 				CTE:        tt.fields.CTE,
 				InsertStmt: tt.fields.InsertStmt,
 			}
-			gotStr, err := ins.ToSQL()
+			gotStr, err := tree.SafeToSQL(ins)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Insert.ToSQL() error = %v, wantErr %v", err, tt.wantErr)
 				return

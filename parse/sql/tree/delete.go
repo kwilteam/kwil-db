@@ -1,17 +1,21 @@
 package tree
 
 import (
-	"fmt"
-
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 )
 
 type Delete struct {
+	*BaseAstNode
+
 	CTE        []*CTE
 	DeleteStmt *DeleteStmt
 }
 
-func (d *Delete) Accept(w Walker) error {
+func (d *Delete) Accept(v AstVisitor) any {
+	return v.VisitDelete(d)
+}
+
+func (d *Delete) Walk(w AstWalker) error {
 	return run(
 		w.EnterDelete(d),
 		acceptMany(w, d.CTE),
@@ -20,18 +24,7 @@ func (d *Delete) Accept(w Walker) error {
 	)
 }
 
-func (d *Delete) ToSQL() (str string, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err2, ok := r.(error)
-			if !ok {
-				err2 = fmt.Errorf("%v", r)
-			}
-
-			err = err2
-		}
-	}()
-
+func (d *Delete) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if len(d.CTE) > 0 {
@@ -45,16 +38,22 @@ func (d *Delete) ToSQL() (str string, err error) {
 
 	stmt.Token.Semicolon()
 
-	return stmt.String(), nil
+	return stmt.String()
 }
 
 type DeleteStmt struct {
+	*BaseAstNode
+
 	QualifiedTableName *QualifiedTableName
 	Where              Expression
 	Returning          *ReturningClause
 }
 
-func (d *DeleteStmt) Accept(w Walker) error {
+func (d *DeleteStmt) Accept(v AstVisitor) any {
+	return v.VisitDeleteStmt(d)
+}
+
+func (d *DeleteStmt) Walk(w AstWalker) error {
 	return run(
 		w.EnterDeleteStmt(d),
 		accept(w, d.QualifiedTableName),

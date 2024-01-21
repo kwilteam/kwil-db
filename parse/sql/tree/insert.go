@@ -7,11 +7,17 @@ import (
 )
 
 type Insert struct {
+	*BaseAstNode
+
 	CTE        []*CTE
 	InsertStmt *InsertStmt
 }
 
-func (ins *Insert) Accept(w Walker) error {
+func (ins *Insert) Accept(v AstVisitor) any {
+	return v.VisitInsert(ins)
+}
+
+func (ins *Insert) Walk(w AstWalker) error {
 	return run(
 		w.EnterInsert(ins),
 		acceptMany(w, ins.CTE),
@@ -20,18 +26,7 @@ func (ins *Insert) Accept(w Walker) error {
 	)
 }
 
-func (ins *Insert) ToSQL() (str string, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err2, ok := r.(error)
-			if !ok {
-				err2 = fmt.Errorf("%v", r)
-			}
-
-			err = err2
-		}
-	}()
-
+func (ins *Insert) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if len(ins.CTE) > 0 {
@@ -45,10 +40,12 @@ func (ins *Insert) ToSQL() (str string, err error) {
 
 	stmt.Token.Semicolon()
 
-	return stmt.String(), nil
+	return stmt.String()
 }
 
 type InsertStmt struct {
+	*BaseAstNode
+
 	InsertType      InsertType
 	Table           string
 	TableAlias      string
@@ -58,7 +55,11 @@ type InsertStmt struct {
 	ReturningClause *ReturningClause
 }
 
-func (ins *InsertStmt) Accept(w Walker) error {
+func (ins *InsertStmt) Accept(v AstVisitor) any {
+	return v.VisitInsertStmt(ins)
+}
+
+func (ins *InsertStmt) Walk(w AstWalker) error {
 	return run(
 		w.EnterInsertStmt(ins),
 		func() error {

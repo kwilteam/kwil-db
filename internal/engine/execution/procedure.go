@@ -336,7 +336,7 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 		}
 
 		// clean expression, since it is submitted by the user
-		err := expr.Accept(clean.NewStatementCleaner())
+		err := expr.Walk(clean.NewStatementCleaner())
 		if err != nil {
 			return nil, err
 		}
@@ -356,7 +356,7 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 			},
 		}
 
-		stmt, err := selectTree.ToSQL()
+		stmt, err := tree.SafeToSQL(selectTree)
 		if err != nil {
 			return nil, err
 		}

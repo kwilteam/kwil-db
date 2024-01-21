@@ -5,19 +5,19 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
-func NewOrderWalker(tables []*types.Table) tree.Walker {
+func NewOrderWalker(tables []*types.Table) tree.AstWalker {
 	// copy tables, since we will be modifying the tables slice to register CTEs
 	tbls := make([]*types.Table, len(tables))
 	copy(tbls, tables)
 
 	return &orderAnalyzer{
-		Walker:       tree.NewBaseWalker(),
+		AstWalker:    tree.NewBaseWalker(),
 		schemaTables: tbls,
 	}
 }
 
 type orderAnalyzer struct {
-	tree.Walker
+	tree.AstWalker
 	context *orderContext
 	// schemaTables is a list of all tables in the schema
 	schemaTables []*types.Table

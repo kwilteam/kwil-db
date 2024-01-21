@@ -13,11 +13,11 @@ import (
 // If it is invalid, it will return an error.
 func predictReturnType(expr tree.Expression, tables []*types.Table) (types.DataType, error) {
 	w := &returnTypeWalker{
-		Walker: tree.NewBaseWalker(),
-		tables: tables,
+		AstWalker: tree.NewBaseWalker(),
+		tables:    tables,
 	}
 
-	err := expr.Accept(w)
+	err := expr.Walk(w)
 	if err != nil {
 		return types.TEXT, fmt.Errorf("error predicting return type: %w", err)
 	}
@@ -38,13 +38,13 @@ func errReturnExpr(expr tree.Expression) error {
 }
 
 type returnTypeWalker struct {
-	tree.Walker
+	tree.AstWalker
 	detected     bool
 	detectedType types.DataType
 	tables       []*types.Table
 }
 
-var _ tree.Walker = &returnTypeWalker{}
+var _ tree.AstWalker = &returnTypeWalker{}
 
 func (r *returnTypeWalker) EnterExpressionArithmetic(p0 *tree.ExpressionArithmetic) error {
 	r.set(types.INT)

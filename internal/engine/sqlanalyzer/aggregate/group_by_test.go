@@ -189,7 +189,7 @@ func Test_GroupBy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			walker := aggregate.NewGroupByWalker()
 
-			err := tc.query.Accept(walker)
+			err := tc.query.Walk(walker)
 			if err != nil && (tc.wantErr == nil) {
 				t.Errorf("unexpected error: %v", err)
 			}

@@ -9,8 +9,8 @@ func run(errs ...error) error {
 	return errors.Join(errs...)
 }
 
-type Accepter interface {
-	Accept(Walker) error
+type Walker interface {
+	Walk(AstWalker) error
 }
 
 func isNil(input interface{}) bool {
@@ -26,15 +26,15 @@ func isNil(input interface{}) bool {
 	}
 }
 
-func accept(v Walker, a Accepter) error {
+func accept(v AstWalker, a Walker) error {
 	if isNil(a) {
 		return nil
 	}
 
-	return a.Accept(v)
+	return a.Walk(v)
 }
 
-func acceptMany[T Accepter](v Walker, as []T) error {
+func acceptMany[T Walker](v AstWalker, as []T) error {
 	for _, a := range as {
 		err := accept(v, a)
 		if err != nil {
@@ -45,7 +45,7 @@ func acceptMany[T Accepter](v Walker, as []T) error {
 	return nil
 }
 
-type Walker interface {
+type AstWalker interface {
 	EnterAggregateFunc(*AggregateFunc) error
 	ExitAggregateFunc(*AggregateFunc) error
 	EnterConflictTarget(*ConflictTarget) error
@@ -150,9 +150,9 @@ type Walker interface {
 
 type BaseWalker struct{}
 
-var _ Walker = &BaseWalker{}
+var _ AstWalker = &BaseWalker{}
 
-func NewBaseWalker() Walker {
+func NewBaseWalker() AstWalker {
 	return &BaseWalker{}
 }
 
@@ -556,9 +556,7 @@ func (b *BaseWalker) ExitUpsert(p0 *Upsert) error {
 	return nil
 }
 
-type BaseAccepter struct{}
-
-// ImplementedWalker implements the Walker interface.
+// ImplementedWalker implements the AstWalker interface.
 // Unlike BaseWalker, it holds the methods to be implemented
 // as functions in a struct.  This makes it easier to implement
 // for small, one-off walkers.
@@ -665,7 +663,7 @@ type ImplementedWalker struct {
 	FuncExitUpsert                      func(p0 *Upsert) error
 }
 
-var _ Walker = &ImplementedWalker{}
+var _ AstWalker = &ImplementedWalker{}
 
 func (b *ImplementedWalker) EnterAggregateFunc(p0 *AggregateFunc) error {
 	if b.FuncEnterAggregateFunc == nil {

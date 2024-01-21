@@ -8,7 +8,7 @@ import (
 
 func TestDateTimeFunction_String(t *testing.T) {
 	type fields struct {
-		Function tree.DateTimeFunction
+		Function tree.SQLFunctionGetter
 	}
 	type args struct {
 		exprs []tree.Expression
@@ -23,7 +23,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "date fails with no arguments",
 			fields: fields{
-				Function: tree.FunctionDATE,
+				Function: tree.FunctionDATEGetter,
 			},
 			args:      args{},
 			wantPanic: true,
@@ -31,7 +31,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "testing date doesn't work with 'now",
 			fields: fields{
-				Function: tree.FunctionDATE,
+				Function: tree.FunctionDATEGetter,
 			},
 			args: args{
 				exprs: []tree.Expression{&tree.ExpressionLiteral{Value: "'now'"}},
@@ -41,7 +41,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "testing date works with a single argument",
 			fields: fields{
-				Function: tree.FunctionDATE,
+				Function: tree.FunctionDATEGetter,
 			},
 			args: args{
 				exprs: []tree.Expression{&tree.ExpressionLiteral{Value: "'06-06-2023'"}},
@@ -51,7 +51,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "testing localtime modifier doesn't work",
 			fields: fields{
-				Function: tree.FunctionDATE,
+				Function: tree.FunctionDATEGetter,
 			},
 			args: args{
 				exprs: []tree.Expression{
@@ -64,7 +64,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "testing modifier whitespace doesn't matter",
 			fields: fields{
-				Function: tree.FunctionDATE,
+				Function: tree.FunctionDATEGetter,
 			},
 			args: args{
 				exprs: []tree.Expression{
@@ -77,7 +77,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "using a floating point number in an otherwise valid date() call",
 			fields: fields{
-				Function: tree.FunctionDATE,
+				Function: tree.FunctionDATEGetter,
 			},
 			args: args{
 				exprs: []tree.Expression{
@@ -90,7 +90,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "strftime using 'now'",
 			fields: fields{
-				Function: tree.FunctionSTRFTIME,
+				Function: tree.FunctionSTRFTIMEGetter,
 			},
 			args: args{
 				exprs: []tree.Expression{
@@ -103,7 +103,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "strftime with all valid modifiers')",
 			fields: fields{
-				Function: tree.FunctionSTRFTIME,
+				Function: tree.FunctionSTRFTIMEGetter,
 			},
 			args: args{
 				exprs: []tree.Expression{
@@ -126,7 +126,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "stfrtime should work with no modifiers",
 			fields: fields{
-				Function: tree.FunctionSTRFTIME,
+				Function: tree.FunctionSTRFTIMEGetter,
 			},
 			args: args{
 				exprs: []tree.Expression{
@@ -139,7 +139,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "stfrtime should work with modifiers",
 			fields: fields{
-				Function: tree.FunctionSTRFTIME,
+				Function: tree.FunctionSTRFTIMEGetter,
 			},
 			args: args{
 				exprs: []tree.Expression{
@@ -153,7 +153,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "stfrtime fails with 1 argument",
 			fields: fields{
-				Function: tree.FunctionSTRFTIME,
+				Function: tree.FunctionSTRFTIMEGetter,
 			},
 			args: args{
 				exprs: []tree.Expression{
@@ -165,7 +165,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "invalid format substitution",
 			fields: fields{
-				Function: tree.FunctionSTRFTIME,
+				Function: tree.FunctionSTRFTIMEGetter,
 			},
 			args: args{
 				exprs: []tree.Expression{
@@ -178,7 +178,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 		{
 			name: "using decimal seconds for formatted time",
 			fields: fields{
-				Function: tree.FunctionSTRFTIME,
+				Function: tree.FunctionSTRFTIMEGetter,
 			},
 			args: args{
 				exprs: []tree.Expression{
@@ -199,7 +199,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 				}()
 			}
 
-			got := tt.fields.Function.String(tt.args.exprs...)
+			got := tt.fields.Function(nil).ToString(tt.args.exprs...)
 			if tt.wantPanic {
 				return
 			}

@@ -64,6 +64,6 @@ func SearchResultColumns(expr tree.Expression) []*tree.ExpressionColumn {
 		return append(SearchResultColumns(e.Left), SearchResultColumns(e.Right)...)
 	}
 
-	fmt.Println("UNEXPECTED BUG: unhandled expression type in Walker column search", expr)
+	fmt.Println("UNEXPECTED BUG: unhandled expression type in AstWalker column search", expr)
 	return nil
 }

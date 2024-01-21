@@ -7,11 +7,17 @@ import (
 )
 
 type Select struct {
+	*BaseAstNode
+
 	CTE        []*CTE
 	SelectStmt *SelectStmt
 }
 
-func (s *Select) Accept(w Walker) error {
+func (s *Select) Accept(v AstVisitor) any {
+	return v.VisitSelect(s)
+}
+
+func (s *Select) Walk(w AstWalker) error {
 	return run(
 		w.EnterSelect(s),
 		acceptMany(w, s.CTE),
@@ -20,18 +26,7 @@ func (s *Select) Accept(w Walker) error {
 	)
 }
 
-func (s *Select) ToSQL() (str string, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err2, ok := r.(error)
-			if !ok {
-				err2 = fmt.Errorf("%v", r)
-			}
-
-			err = err2
-		}
-	}()
-
+func (s *Select) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if len(s.CTE) > 0 {
@@ -45,16 +40,22 @@ func (s *Select) ToSQL() (str string, err error) {
 
 	stmt.Token.Semicolon()
 
-	return stmt.String(), nil
+	return stmt.String()
 }
 
 type SelectStmt struct {
+	*BaseAstNode
+
 	SelectCores []*SelectCore
 	OrderBy     *OrderBy
 	Limit       *Limit
 }
 
-func (s *SelectStmt) Accept(w Walker) error {
+func (s *SelectStmt) Accept(v AstVisitor) any {
+	return v.VisitSelectStmt(s)
+}
+
+func (s *SelectStmt) Walk(w AstWalker) error {
 	return run(
 		w.EnterSelectStmt(s),
 		acceptMany(w, s.SelectCores),
@@ -80,6 +81,8 @@ func (s *SelectStmt) ToSQL() (res string) {
 }
 
 type SelectCore struct {
+	*BaseAstNode
+
 	SelectType SelectType
 	Columns    []ResultColumn
 	From       *FromClause
@@ -88,7 +91,11 @@ type SelectCore struct {
 	Compound   *CompoundOperator
 }
 
-func (s *SelectCore) Accept(w Walker) error {
+func (s *SelectCore) Accept(v AstVisitor) any {
+	return v.VisitSelectCore(s)
+}
+
+func (s *SelectCore) Walk(w AstWalker) error {
 	return run(
 		w.EnterSelectCore(s),
 		acceptMany(w, s.Columns),
@@ -153,10 +160,16 @@ func (s SelectType) Valid() error {
 }
 
 type FromClause struct {
+	*BaseAstNode
+
 	JoinClause *JoinClause
 }
 
-func (f *FromClause) Accept(w Walker) error {
+func (f *FromClause) Accept(v AstVisitor) any {
+	return v.VisitFromClause(f)
+}
+
+func (f *FromClause) Walk(w AstWalker) error {
 	return run(
 		w.EnterFromClause(f),
 		accept(w, f.JoinClause),
@@ -205,10 +218,20 @@ func (c *CompoundOperatorType) ToSQL() string {
 }
 
 type CompoundOperator struct {
+	*BaseAstNode
+
 	Operator CompoundOperatorType
 }
 
-func (c *CompoundOperator) Accept(w Walker) error {
+func (c *CompoundOperator) Accept(v AstVisitor) any {
+	return v.VisitCompoundOperator(c)
+}
+
+func (c *CompoundOperator) AcceptVisitor(v AstVisitor) any {
+	return v.VisitCompoundOperator(c)
+}
+
+func (c *CompoundOperator) Walk(w AstWalker) error {
 	return run(
 		w.EnterCompoundOperator(c),
 		w.ExitCompoundOperator(c),

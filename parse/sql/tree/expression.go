@@ -12,7 +12,7 @@ import (
 type Expression interface {
 	isExpression() // private function to prevent external packages from implementing this interface
 	ToSQL() string
-	Accept(w Walker) error
+	Walk(w AstWalker) error
 	joinable
 }
 
@@ -28,19 +28,25 @@ func (e *expressionBase) ToSQL() string {
 	panic("expressionBase: ToSQL() must be implemented by child")
 }
 
-func (e *expressionBase) Accept(w Walker) error {
-	return fmt.Errorf("expressionBase: Accept() must be implemented by child")
+func (e *expressionBase) Walk(w AstWalker) error {
+	return fmt.Errorf("expressionBase: Walk() must be implemented by child")
 }
 
 type Wrapped bool
 
 type ExpressionLiteral struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Value string
 }
 
-func (e *ExpressionLiteral) Accept(w Walker) error {
+func (e *ExpressionLiteral) Accept(v AstVisitor) any {
+	return v.VisitExpressionLiteral(e)
+}
+
+func (e *ExpressionLiteral) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionLiteral(e),
 		w.ExitExpressionLiteral(e),
@@ -89,12 +95,18 @@ func validateIsNonStringLiteral(str string) {
 }
 
 type ExpressionBindParameter struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Parameter string
 }
 
-func (e *ExpressionBindParameter) Accept(w Walker) error {
+func (e *ExpressionBindParameter) Accept(v AstVisitor) any {
+	return v.VisitExpressionBindParameter(e)
+}
+
+func (e *ExpressionBindParameter) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionBindParameter(e),
 		w.ExitExpressionBindParameter(e),
@@ -121,13 +133,19 @@ func (e *ExpressionBindParameter) ToSQL() string {
 }
 
 type ExpressionColumn struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Table  string
 	Column string
 }
 
-func (e *ExpressionColumn) Accept(w Walker) error {
+func (e *ExpressionColumn) Accept(v AstVisitor) any {
+	return v.VisitExpressionColumn(e)
+}
+
+func (e *ExpressionColumn) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionColumn(e),
 		w.ExitExpressionColumn(e),
@@ -155,13 +173,19 @@ func (e *ExpressionColumn) ToSQL() string {
 }
 
 type ExpressionUnary struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Operator UnaryOperator
 	Operand  Expression
 }
 
-func (e *ExpressionUnary) Accept(w Walker) error {
+func (e *ExpressionUnary) Accept(v AstVisitor) any {
+	return v.VisitExpressionUnary(e)
+}
+
+func (e *ExpressionUnary) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionUnary(e),
 		w.ExitExpressionUnary(e),
@@ -181,6 +205,8 @@ func (e *ExpressionUnary) ToSQL() string {
 }
 
 type ExpressionBinaryComparison struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Left     Expression
@@ -188,7 +214,11 @@ type ExpressionBinaryComparison struct {
 	Right    Expression
 }
 
-func (e *ExpressionBinaryComparison) Accept(w Walker) error {
+func (e *ExpressionBinaryComparison) Accept(v AstVisitor) any {
+	return v.VisitExpressionBinaryComparison(e)
+}
+
+func (e *ExpressionBinaryComparison) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionBinaryComparison(e),
 		accept(w, e.Left),
@@ -211,6 +241,8 @@ func (e *ExpressionBinaryComparison) ToSQL() string {
 }
 
 type ExpressionFunction struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Function SQLFunction
@@ -218,7 +250,11 @@ type ExpressionFunction struct {
 	Distinct bool
 }
 
-func (e *ExpressionFunction) Accept(w Walker) error {
+func (e *ExpressionFunction) Accept(v AstVisitor) any {
+	return v.VisitExpressionFunction(e)
+}
+
+func (e *ExpressionFunction) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionFunction(e),
 		acceptMany(w, e.Inputs),
@@ -242,7 +278,7 @@ func (e *ExpressionFunction) ToSQL() string {
 		}
 		stringToWrite = exprFunc.stringDistinct(e.Inputs...)
 	} else {
-		stringToWrite = e.Function.String(e.Inputs...)
+		stringToWrite = e.Function.ToString(e.Inputs...)
 	}
 
 	stmt.WriteString(stringToWrite)
@@ -250,12 +286,18 @@ func (e *ExpressionFunction) ToSQL() string {
 }
 
 type ExpressionList struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Expressions []Expression
 }
 
-func (e *ExpressionList) Accept(w Walker) error {
+func (e *ExpressionList) Accept(v AstVisitor) any {
+	return v.VisitExpressionList(e)
+}
+
+func (e *ExpressionList) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionList(e),
 		acceptMany(w, e.Expressions),
@@ -282,13 +324,19 @@ func (e *ExpressionList) ToSQL() string {
 }
 
 type ExpressionCollate struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Expression Expression
 	Collation  CollationType
 }
 
-func (e *ExpressionCollate) Accept(w Walker) error {
+func (e *ExpressionCollate) Accept(v AstVisitor) any {
+	return v.VisitExpressionCollate(e)
+}
+
+func (e *ExpressionCollate) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionCollate(e),
 		accept(w, e.Expression),
@@ -317,6 +365,8 @@ func (e *ExpressionCollate) ToSQL() string {
 }
 
 type ExpressionStringCompare struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Left     Expression
@@ -325,7 +375,11 @@ type ExpressionStringCompare struct {
 	Escape   Expression // can only be used with LIKE or NOT LIKE
 }
 
-func (e *ExpressionStringCompare) Accept(w Walker) error {
+func (e *ExpressionStringCompare) Accept(v AstVisitor) any {
+	return v.VisitExpressionStringCompare(e)
+}
+
+func (e *ExpressionStringCompare) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionStringCompare(e),
 		accept(w, e.Left),
@@ -357,13 +411,15 @@ func (e *ExpressionStringCompare) ToSQL() string {
 }
 
 type ExpressionIsNull struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Expression Expression
 	IsNull     bool
 }
 
-func (e *ExpressionIsNull) Accept(w Walker) error {
+func (e *ExpressionIsNull) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionIsNull(e),
 		accept(w, e.Expression),
@@ -392,6 +448,8 @@ func (e *ExpressionIsNull) ToSQL() string {
 }
 
 type ExpressionDistinct struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Left  Expression
@@ -399,7 +457,11 @@ type ExpressionDistinct struct {
 	IsNot bool
 }
 
-func (e *ExpressionDistinct) Accept(w Walker) error {
+func (e *ExpressionDistinct) Accept(v AstVisitor) any {
+	return v.VisitExpressionDistinct(e)
+}
+
+func (e *ExpressionDistinct) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionDistinct(e),
 		accept(w, e.Left),
@@ -433,6 +495,8 @@ func (e *ExpressionDistinct) ToSQL() string {
 }
 
 type ExpressionBetween struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Expression Expression
@@ -441,7 +505,11 @@ type ExpressionBetween struct {
 	Right      Expression
 }
 
-func (e *ExpressionBetween) Accept(w Walker) error {
+func (e *ExpressionBetween) Accept(v AstVisitor) any {
+	return v.VisitExpressionBetween(e)
+}
+
+func (e *ExpressionBetween) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionBetween(e),
 		accept(w, e.Expression),
@@ -480,6 +548,8 @@ func (e *ExpressionBetween) ToSQL() string {
 }
 
 type ExpressionSelect struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	IsNot    bool
@@ -487,7 +557,11 @@ type ExpressionSelect struct {
 	Select   *SelectStmt
 }
 
-func (e *ExpressionSelect) Accept(w Walker) error {
+func (e *ExpressionSelect) Accept(v AstVisitor) any {
+	return v.VisitExpressionSelect(e)
+}
+
+func (e *ExpressionSelect) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionSelect(e),
 		accept(w, e.Select),
@@ -532,6 +606,8 @@ func (e *ExpressionSelect) check() {
 }
 
 type ExpressionCase struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	CaseExpression Expression
@@ -539,7 +615,11 @@ type ExpressionCase struct {
 	ElseExpression Expression
 }
 
-func (e *ExpressionCase) Accept(w Walker) error {
+func (e *ExpressionCase) Accept(v AstVisitor) any {
+	return v.VisitExpressionCase(e)
+}
+
+func (e *ExpressionCase) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionCase(e),
 		accept(w, e.CaseExpression),
@@ -594,6 +674,8 @@ func (e *ExpressionCase) ToSQL() string {
 }
 
 type ExpressionArithmetic struct {
+	*BaseAstNode
+
 	expressionBase
 	Wrapped
 	Left     Expression
@@ -601,7 +683,11 @@ type ExpressionArithmetic struct {
 	Right    Expression
 }
 
-func (e *ExpressionArithmetic) Accept(w Walker) error {
+func (e *ExpressionArithmetic) Accept(v AstVisitor) any {
+	return v.VisitExpressionArithmetic(e)
+}
+
+func (e *ExpressionArithmetic) Walk(w AstWalker) error {
 	return run(
 		w.EnterExpressionArithmetic(e),
 		accept(w, e.Left),

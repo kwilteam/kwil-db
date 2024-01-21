@@ -3,13 +3,19 @@ package tree
 import sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 
 type QualifiedTableName struct {
+	*BaseAstNode
+
 	TableName  string
 	TableAlias string
 	IndexedBy  string
 	NotIndexed bool
 }
 
-func (q *QualifiedTableName) Accept(w Walker) error {
+func (q *QualifiedTableName) Accept(v AstVisitor) any {
+	return v.VisitQualifiedTableName(q)
+}
+
+func (q *QualifiedTableName) Walk(w AstWalker) error {
 	return run(
 		w.EnterQualifiedTableName(q),
 		w.ExitQualifiedTableName(q),
