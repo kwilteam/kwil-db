@@ -321,6 +321,13 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		},
 	}
 
+	a.blockInfo = &BlockInfo{
+		Height:         req.Height,
+		BlockHash:      req.Hash,
+		Proposer:       proposerPubKey,
+		NumProposerTxs: a.txApp.ProposerTxsCount(),
+	}
+
 	for _, hook := range a.commitHooks {
 		err := hook(ctx, a.blockInfo)
 		if err != nil {
@@ -358,12 +365,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("failed to create new app hash: %w", err)
 	}
 	res.AppHash = appHash
-
-	a.blockInfo = &BlockInfo{
-		Height:    req.Height,
-		BlockHash: req.Hash,
-		Proposer:  proposerPubKey,
-	}
 
 	return res, nil
 }
@@ -902,9 +903,10 @@ func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
 
 // BlockInfo contains information about a block.
 type BlockInfo struct {
-	Height    int64  // block height
-	Proposer  []byte // public key of the proposer
-	BlockHash []byte // hash of the block
+	Height         int64  // block height
+	Proposer       []byte // public key of the proposer
+	BlockHash      []byte // hash of the block
+	NumProposerTxs uint64
 }
 
 type CommitHook func(ctx context.Context, block *BlockInfo) error

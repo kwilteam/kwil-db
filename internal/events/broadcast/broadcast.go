@@ -76,7 +76,13 @@ type EventBroadcaster struct {
 // RunBroadcast tells the EventBroadcaster to broadcast any events it wishes.
 // It implements Kwil's abci.CommitHook function signature.
 // If the node is not a validator, it will do nothing.
-func (e *EventBroadcaster) RunBroadcast(ctx context.Context, _ *abci.BlockInfo) error {
+func (e *EventBroadcaster) RunBroadcast(ctx context.Context, blockInfo *abci.BlockInfo) error {
+	// If the node issued any ValidatorVoteBody transactions, it isn't allowed to
+	// broadcast any events within the same block.
+	if blockInfo.NumProposerTxs > 0 {
+		return nil
+	}
+
 	isCurrent, err := e.validatorStore.IsCurrent(ctx, e.signer.Identity())
 	if err != nil {
 		return err
