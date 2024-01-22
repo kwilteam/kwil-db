@@ -274,6 +274,11 @@ func (e *callMethod) execute(scope *ProcedureContext, dataset *Dataset) error {
 	}
 
 	for i, result := range results {
+		// make sure there is a receiver for the result
+		if i >= len(e.Receivers) {
+			break
+		}
+
 		scope.values[e.Receivers[i]] = result
 	}
 
