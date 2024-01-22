@@ -237,6 +237,10 @@ func (e *engineAdapter) Call(ctx context.Context, dbid string, action string, ar
 		return nil, err
 	}
 
+	if resultSet == nil {
+		return nil, nil
+	}
+
 	return resultSet.Map(), nil
 }
 
