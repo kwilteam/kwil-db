@@ -32,20 +32,12 @@ func (ac *AccountCredit) Type() string {
 	return "AccountCredit"
 }
 
-func (ac *AccountCredit) Apply(ctx context.Context, datastores *voting.Datastores, logger log.Logger) error {
+func (ac *AccountCredit) Apply(ctx context.Context, datastores voting.Datastores, logger log.Logger) error {
 	// trim the 0x prefix
 	if len(ac.Account) > 2 && ac.Account[:2] == "0x" {
 		ac.Account = ac.Account[2:]
 	} else {
 		return fmt.Errorf("account address must start with 0x")
-	}
-
-	if datastores == nil {
-		return fmt.Errorf("datastores not initialized")
-	}
-
-	if datastores.Accounts == nil {
-		return fmt.Errorf("accountstore not initialized")
 	}
 
 	// decode the hex string into a byte slice

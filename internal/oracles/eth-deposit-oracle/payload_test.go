@@ -28,7 +28,7 @@ var (
 )
 
 func Test_ValidPayload(t *testing.T) {
-	ds := &voting.Datastores{
+	ds := voting.Datastores{
 		Accounts: &mockAccountStore{
 			accounts: make(map[string]*accounts.Account),
 		},
@@ -48,25 +48,6 @@ func Test_ValidPayload(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(100), acc.Balance)
 
-}
-
-func Test_WithoutDatastores(t *testing.T) {
-	ac := validAC
-
-	err := ac.Apply(context.Background(), nil, log.NewStdOut(log.InfoLevel))
-	require.Error(t, err, "datastores not initialized")
-}
-
-func Test_WithoutAccountstore(t *testing.T) {
-	ds := &voting.Datastores{
-		Accounts:  nil,
-		Databases: nil,
-	}
-
-	ac := validAC
-
-	err := ac.Apply(context.Background(), ds, log.NewStdOut(log.InfoLevel))
-	require.Error(t, err, "accountstore not initialized")
 }
 
 type mockAccountStore struct {
