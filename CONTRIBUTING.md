@@ -93,7 +93,8 @@ git fetch <your-origin-name>
 2. Create a new branch from the main branch, and add your changes to the new branch. Ensure that your code and commits follow the [coding style](#coding-style) and [commit message](#commit-messages) guidelines above.
 
 ```bash
-git pull <your-origin-name> main
+git checkout main
+git pull
 git checkout -b <branch-name>
 ```
 
