@@ -1,6 +1,12 @@
 package types
 
-import "github.com/google/uuid"
+import (
+	"database/sql"
+	"database/sql/driver"
+	"errors"
+
+	"github.com/google/uuid"
+)
 
 var namespace = uuid.MustParse("cc1cd90f-b4db-47f4-b6df-4bbe5fca88eb")
 
@@ -18,3 +24,55 @@ func NewUUIDV5(from []byte) UUID {
 func (u UUID) String() string {
 	return uuid.UUID(u).String()
 }
+
+func (u UUID) Value() (driver.Value, error) {
+	return u[:], nil // []byte works for sql
+}
+
+var _ driver.Valuer = UUID{}
+var _ driver.Valuer = (*UUID)(nil)
+
+func (u *UUID) Scan(src any) error {
+	switch s := src.(type) {
+	case []byte:
+		copy(u[:], s)
+		return nil
+	}
+	return errors.New("not a byte slice")
+}
+
+var _ sql.Scanner = (*UUID)(nil)
+
+// pgx seems to work alright with any slice of Valuers (like a []UUID), but
+// explicitly defining the Valuer for a custom type saves some reflection
+
+type UUIDArray []UUID
+
+func (u UUIDArray) Value() (driver.Value, error) {
+	v := make([][]byte, len(u))
+	for i, ui := range u {
+		vi := make([]byte, 16)
+		copy(vi, ui[:])
+		v[i] = vi
+	}
+	return v, nil
+}
+
+var _ driver.Valuer = UUIDArray{}
+var _ driver.Valuer = (*UUIDArray)(nil)
+
+func (u *UUIDArray) Scan(src any) error {
+	switch s := src.(type) {
+	case [][]byte:
+		ux := make(UUIDArray, len(s))
+		for i, si := range s {
+			var vi UUID
+			copy(vi[:], si)
+			ux[i] = vi
+		}
+		return nil
+	}
+	return errors.New("not a byte slice slice")
+}
+
+var _ sql.Scanner = (*UUIDArray)(nil)
