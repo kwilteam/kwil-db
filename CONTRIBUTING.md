@@ -36,7 +36,7 @@ For opening issues, please follow the following guidelines:
 
 - **Use templates** for creating issues about bugs, feature requests, or documentation requests.
 - **Search** the issue tracker before opening an issue to avoid duplicates.
-- **Be clear & detailed** about what you are reporting.
+- **Be clear & detailed** about what you are reporting. If reporting a bug, please include a minimal reproducible example, a detailed explanation of your KwilD configuration, and any logs or error messages that may be relevant. 
 
 We strongly recommended submitting an issue before submitting a pull request, especially for pull requests that will require significant effort on your part. This is to ensure that the issue is not already being worked on and that your pull request will be accepted. Some features or fixes are intentionally not included in kwil-db - use issues to check with maintainers and save time!
 
@@ -80,11 +80,7 @@ Please ensure that your contributions adhere to the following coding guidelines:
 
 ### Pull Request Process
 
-1. Fork the repository and create a new branch from `main`.
-
-2. Add your changes to the main branch, and ensure that your code and commits follow the [coding style](#coding-style) and [commit message](#commit-messages) guidelines above.
-
-3. In the `kwil-db` repository, add a remote for your fork:
+1. Fork the repository by clicking the "Fork" button on the top right of the repository page. Clone the kwil-db repository and add your fork as a remote.
 
 ```bash
 git clone https://github.com/kwilteam/kwil-db
@@ -94,11 +90,14 @@ git remote add <your-origin-name> <your-fork-url>
 git fetch <your-origin-name>
 ```
 
-If you have conflicts, you will need to resolve them before continuing.
+2. Create a new branch from the main branch, and add your changes to the new branch. Ensure that your code and commits follow the [coding style](#coding-style) and [commit message](#commit-messages) guidelines above.
 
-Please ensure that all the commits in your git history match the commit message [guidelines](#commit-messages) above. You can use `git rebase -i` to edit your commit history.
+```bash
+git pull <your-origin-name> main
+git checkout -b <branch-name>
+```
 
-4. Ensure that your PR is ready to be merged and all unit and acceptance tests pass:
+3. Ensure that your PR is ready to be merged and all unit and acceptance tests pass:
 
 ```bash
 task install:deps # If first time contributing
@@ -109,17 +108,20 @@ task test:unit
 task test:act 
 ```
 
-5. Push your branch to github.
+4. Push your branch to github.
 
 ```bash
-git add .
+git add -u # Add all changes
+git add <file> # Add specific files, if necessary
 git commit -m "Your commit message"
-git push <your-origin-name> <branch-name>
+git push -u <your-origin-name> <branch-name>
 ```
 
-6. Open a pull request to the `main` branch of the kwil-db repository. Please follow the PR template. If `main` updates while the PR is open, please rebase the branch to the latest `main`.
+Please ensure that all the commits in your git history match the commit message [guidelines](#commit-messages) above. You can use `git rebase -i` to edit your commit history.
 
-7. Wait for a maintainer to review your PR. If there are any issues, you will be notified and you can make the necessary changes.
+5. Open a pull request to the `main` branch of the kwil-db repository. Please follow the PR template. If `main` updates while the PR is open, please update the branch with latest `main` (rebase or merge).
+
+6. Wait for a maintainer to review your PR. If there are any issues, you will be notified and you can make the necessary changes.
 
 ## License
 
