@@ -15,7 +15,7 @@ To build Kwil, you will need to install:
 1. [Go](https://golang.org/doc/install)
 2. [Protocol Buffers](https://developers.google.com/protocol-buffers/docs/gotutorial), with the `protoc` executable binary on your `PATH`.
 3. [Taskfile](https://taskfile.dev/installation)
-4. Protocol buffers go plugins and other command line tools.  The `tool` task will install the required versions of the tools into your `GOPATH`, so be sure to include `GOPATH/bin` on your `PATH`.
+4. Protocol buffers go plugins and other command line tools. The `tool` task will install the required versions of the tools into your `GOPATH`, so be sure to include `GOPATH/bin` on your `PATH`.
 
     ```shell
     task tools
@@ -46,3 +46,9 @@ By default, `kwild` stores all data in `~/.kwild`. To reset the data on a deploy
 ```shell
 rm -r ~/.kwild
 ```
+
+## License
+
+The kwil-db repository (i.e. everything outside of the `core` directory) is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for more details.
+
+The kwil golang SDK (i.e. everything inside of the `core` directory) is licensed under the MIT License. See [core/LICENSE.md](core/LICENSE.md) for more details.
