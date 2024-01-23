@@ -474,7 +474,7 @@ func (r *IntHelper) getCliDriver(privKey string, identity []byte) KwilIntDriver 
 
 	_, currentFilePath, _, _ := runtime.Caller(1)
 	cliBinPath := path.Join(path.Dir(currentFilePath),
-		fmt.Sprintf("../../.build/kwil-cli-%s-%s", runtime.GOOS, runtime.GOARCH))
+		"../../.build/kwil-cli")
 
 	return driver.NewKwilCliDriver(cliBinPath, r.cfg.HTTPEndpoint, privKey, testChainID, identity, logger)
 }
