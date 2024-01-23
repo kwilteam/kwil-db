@@ -19,10 +19,7 @@ fi
 BINARY=${1:-}
 
 TARGET=${TARGET:-".build"}
-TARGET="$TARGET/${BINARY}-${GOOS}-${GOARCH}"
-if [ "${GOARCH}" = "arm" ] && [ -n "${GOARM}" ]; then
-    TARGET="${TARGET}-v${GOARM}"
-fi
+TARGET="$TARGET/${BINARY}"
 export TARGET
 
 if [ -z "$CGO_ENABLED" ]; then
