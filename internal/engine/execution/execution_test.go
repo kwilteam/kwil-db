@@ -192,7 +192,7 @@ func Test_Execution(t *testing.T) {
 			engine, err := execution.NewGlobalContext(ctx,
 				&mockRegistry{
 					dbs: map[string]*trackedDB{},
-				}, map[string]execution.NamespaceInitializer{
+				}, map[string]execution.ExtensionInitializer{
 					"math": mth.initialize,
 				},
 			)
@@ -364,7 +364,7 @@ type mathInitializer struct {
 	vals map[string]string
 }
 
-func (m *mathInitializer) initialize(_ context.Context, mp map[string]string) (execution.Namespace, error) {
+func (m *mathInitializer) initialize(_ *execution.DeploymentContext, mp map[string]string) (execution.ExtensionNamespace, error) {
 	m.vals = mp
 
 	return &mathExt{}, nil
@@ -372,9 +372,9 @@ func (m *mathInitializer) initialize(_ context.Context, mp map[string]string) (e
 
 type mathExt struct{}
 
-var _ execution.Namespace = &mathExt{}
+var _ execution.ExtensionNamespace = &mathExt{}
 
-func (m *mathExt) Call(caller *execution.ScopeContext, method string, inputs []any) ([]any, error) {
+func (m *mathExt) Call(caller *execution.ProcedureContext, method string, inputs []any) ([]any, error) {
 	return nil, nil
 }
 
@@ -417,7 +417,7 @@ func Test_OrderSchemas(t *testing.T) {
 	_, err := execution.NewGlobalContext(ctx,
 		&mockRegistry{
 			dbs: make(map[string]*trackedDB),
-		}, map[string]execution.NamespaceInitializer{
+		}, map[string]execution.ExtensionInitializer{
 			"math": mth.initialize,
 		},
 	)
