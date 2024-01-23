@@ -23,7 +23,7 @@ var (
 // instruction is an instruction that can be executed.
 // It is used to define the behavior of a procedure.
 type instruction interface {
-	execute(scope *ProcedureContext, dataset *Dataset) error
+	execute(scope *ProcedureContext, dataset *baseDataset) error
 }
 
 // procedure is a predefined procedure that can be executed.
@@ -46,11 +46,11 @@ type procedure struct {
 	instructions []instruction
 
 	// dataset is the dataset that the procedure is defined in.
-	dataset *Dataset
+	dataset *baseDataset
 }
 
 // prepareProcedure parses a procedure from a types.Procedure.
-func prepareProcedure(unparsed *types.Procedure, datasetCtx *Dataset) (*procedure, error) {
+func prepareProcedure(unparsed *types.Procedure, datasetCtx *baseDataset) (*procedure, error) {
 	instructions := make([]instruction, 0)
 
 	for _, mod := range unparsed.Modifiers {
@@ -108,7 +108,7 @@ func (p *procedure) call(scope *ProcedureContext, inputs []any) error {
 func convertModifier(mod types.Modifier) (instruction, error) {
 	switch mod {
 	case types.ModifierOwner:
-		return instructionFunc(func(scope *ProcedureContext, dataset *Dataset) error {
+		return instructionFunc(func(scope *ProcedureContext, dataset *baseDataset) error {
 			if !bytes.Equal(scope.Signer, dataset.schema.Owner) {
 				return fmt.Errorf("cannot call owner procedure, not owner")
 			}
@@ -118,7 +118,7 @@ func convertModifier(mod types.Modifier) (instruction, error) {
 	}
 
 	// we do not necessarily have an instruction for every modifier type, but we do not want to return an error
-	return instructionFunc(func(scope *ProcedureContext, dataset *Dataset) error {
+	return instructionFunc(func(scope *ProcedureContext, dataset *baseDataset) error {
 		return nil
 	}), nil
 }
@@ -221,7 +221,7 @@ type callMethod struct {
 // Execute calls a method from a namespace that is accessible within this dataset.
 // If no namespace is specified, the local namespace is used.
 // It will pass all arguments to the method, and assign the return values to the receivers.
-func (e *callMethod) execute(scope *ProcedureContext, dataset *Dataset) error {
+func (e *callMethod) execute(scope *ProcedureContext, dataset *baseDataset) error {
 	var exec sql.ResultSetFunc
 	if scope.Mutative {
 		exec = dataset.readWriter
@@ -299,7 +299,7 @@ type dmlStmt struct {
 	Mutative bool
 }
 
-func (e *dmlStmt) execute(scope *ProcedureContext, dataset *Dataset) error {
+func (e *dmlStmt) execute(scope *ProcedureContext, dataset *baseDataset) error {
 	// this might be redundant
 	if !scope.Mutative && e.Mutative {
 		return fmt.Errorf("cannot mutate state in immutable procedure")
@@ -321,10 +321,10 @@ func (e *dmlStmt) execute(scope *ProcedureContext, dataset *Dataset) error {
 	return nil
 }
 
-type instructionFunc func(scope *ProcedureContext, dataset *Dataset) error
+type instructionFunc func(scope *ProcedureContext, dataset *baseDataset) error
 
 // implement instruction
-func (f instructionFunc) execute(scope *ProcedureContext, dataset *Dataset) error {
+func (f instructionFunc) execute(scope *ProcedureContext, dataset *baseDataset) error {
 	return f(scope, dataset)
 }
 

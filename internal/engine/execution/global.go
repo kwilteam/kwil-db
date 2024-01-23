@@ -21,7 +21,7 @@ type GlobalContext struct {
 
 	// datasets are the top level namespaces that are available to engine callers.
 	// These only include datasets, and do not include extensions.
-	datasets map[string]*Dataset
+	datasets map[string]*baseDataset
 
 	// datastore is the datastore that the engine is using.
 	datastore Registry
@@ -36,7 +36,7 @@ func NewGlobalContext(ctx context.Context, registry Registry, extensionInitializ
 
 	g := &GlobalContext{
 		initializers: make(map[string]ExtensionInitializer),
-		datasets:     make(map[string]*Dataset),
+		datasets:     make(map[string]*baseDataset),
 		datastore:    registry,
 	}
 
@@ -212,7 +212,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 		return fmt.Errorf("dataset %s already exists", dbid)
 	}
 
-	datasetCtx := &Dataset{
+	datasetCtx := &baseDataset{
 		readWriter: executor(dbid, g.datastore.Execute),
 		read:       executor(dbid, g.datastore.Query),
 		schema:     schema,
