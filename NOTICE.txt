@@ -1,0 +1,4 @@
+Copyright (c) 2024 Kwil, Inc. All Rights Reserved.
+
+This product statically links to the go-ethereum library (https://github.com/ethereum/go-ethereum), which is licensed under the LGPLv3 license.
+A full text of the license can be found here: https://www.gnu.org/licenses/lgpl-3.0.en.html.

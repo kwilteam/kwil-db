@@ -1,0 +1,27 @@
+name: Feature Request
+description: Suggest a new feature or change for kwil-db.
+title: "Feature Request: "
+labels: ["enhancement"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thank you for taking the time to suggest a feature or change. This form is for suggesting **features or changes to kwil-db**.
+
+              Feel free to discuss or mull over potential features in the [Discord server](https://discord.com/invite/HzRPZ59Kay).
+    - type: textarea
+      id: about-the-feature
+      attributes:
+          label: Describe the Feature
+          description: Please describe the feature, the problem it is solving, your solution and alternative you've considered.
+          placeholder: e.g. I would like to see a new data type for...
+      validations:
+          required: true
+    - type: textarea
+      id: example-implementation
+      attributes:
+          label: Example Implementation
+          description: If you have an idea of how this feature could be implemented, please describe it here.
+          placeholder: e.g. I think this feature could be implemented by adding the following code to core/client...
+      validations:
+          required: false
