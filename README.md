@@ -10,6 +10,8 @@ Learn more about Kwil at [kwil.com](https://kwil.com).
 
 ### Prerequisites
 
+To build Kwil, you will need to install:
+
 1. [Go](https://golang.org/doc/install)
 2. [Protocol Buffers](https://developers.google.com/protocol-buffers/docs/gotutorial), with the `protoc` executable binary on your `PATH`.
 3. [Taskfile](https://taskfile.dev/installation)
@@ -21,7 +23,7 @@ Learn more about Kwil at [kwil.com](https://kwil.com).
 
 ### Build
 
-Invoke `task` command to see all available tasks. The `build` task will compile both `kwild` and `kwil-cli`:
+Invoke `task` command to see all available tasks. The `build` task will compile `kwild`, `kwil-cli`, and `kwil-admin`. They will be generated in `.build/`:
 
 ```shell
 task build
@@ -29,21 +31,18 @@ task build
 
 ## Local deployment
 
-You can start a toy kwild and extension instance running in Docker containers managed by docker-compose using the confiration defined in `test/acceptance`.
-
-This is not a production deployment.
-
-### Prerequisites
-
-1. [Docker](https://docs.docker.com/get-docker/)
-2. [Docker Compose](https://docs.docker.com/compose/), included with Docker Desktop but not the standalone Docker Engine that provides the daemon and CLI client.
-3. [Docker buildx](https://github.com/docker/buildx#linux-packages), for extended build capabilities with BuildKit. Also included with Docker Desktop.
-
-### Run a local instance
+You can start a single node network using the `kwild` binary built in the step above:
 
 ```shell
-# build local docker image
-task build:docker
-# run docker container
-task dev:up
+.build/kwild --autogen
+```
+
+For more information on running nodes, and how to run a multi-node network, refer to the Kwil [documentation](<https://docs.kwil.com/docs/node/quickstart>).
+
+## Resetting local deployments
+
+By default, `kwild` stores all data in `~/.kwild`. To reset the data on a deployment, remove the data directory while the node is stopped:
+
+```shell
+rm -r ~/.kwild
 ```
