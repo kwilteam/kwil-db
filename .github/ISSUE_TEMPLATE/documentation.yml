@@ -1,0 +1,24 @@
+name: Documentation
+description: Documentation update, change or addition.
+title: "Documentation: "
+labels: ["documentation"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Please include anything about the documentation you would like to see improved.
+
+                - Missing information or details?
+                - Spelling or Grammar mistakes?
+                - Wrong Information?
+                - Dead or wrong links?
+                - Something needs code examples?
+                - General feedback or anything else?
+    - type: textarea
+      id: suggestion
+      attributes:
+          label: Suggestion
+          description: Please include your suggested change here.
+          placeholder: e.g. please add an example for how to build with a new extension
+      validations:
+          required: true
