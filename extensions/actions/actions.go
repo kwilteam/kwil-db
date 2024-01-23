@@ -5,11 +5,19 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/internal/engine/execution"
+	"github.com/kwilteam/kwil-db/internal/extensions"
 )
 
-var registeredExtensions = make(map[string]EngineExtension)
+var registeredExtensions = make(map[string]execution.ExtensionInitializer)
 
-func RegisterExtension(name string, ext EngineExtension) error {
+func RegisteredExtensions() map[string]execution.ExtensionInitializer {
+	return registeredExtensions
+}
+
+// RegisterExtension registers an extension with the engine.
+func RegisterExtension(name string, ext execution.ExtensionInitializer) error {
 	name = strings.ToLower(name)
 	if _, ok := registeredExtensions[name]; ok {
 		return fmt.Errorf("extension of same name already registered:%s ", name)
@@ -17,10 +25,6 @@ func RegisterExtension(name string, ext EngineExtension) error {
 
 	registeredExtensions[name] = ext
 	return nil
-}
-
-func RegisteredExtensions() map[string]EngineExtension {
-	return registeredExtensions
 }
 
 // EngineExtension is an extension that can be loaded into the engine.
@@ -100,11 +104,7 @@ type Result interface {
 	// Next returns whether or not there is another row to be read.
 	// If there is, it will increment the row index, which can be used
 	// to get the values for the current row.
-<<<<<<< HEAD
-	Next() (rowReturned bool, err error)
-=======
 	Next() (rowReturned bool)
->>>>>>> c27cc5d1 (fixed the sql.ResultSet struct to implement sql.Result (#456))
 	// Values returns the values for the current row.
 	// The values are returned in the same order as the columns.
 	Values() ([]any, error)
@@ -121,4 +121,11 @@ type Datastore interface {
 	// It can also be used to read uncommitted data.
 	// If called on a read-only context (such as in a view action), it will return an error.
 	Execute(ctx context.Context, dbid string, stmt string, params map[string]any) (Result, error)
+}
+
+// DEPRECATED: RegisterLegacyExtension registers an extension with the engine.
+// It provides backwards compatibility with the old extension system.
+// Use RegisterExtension instead.
+func RegisterLegacyExtension(name string, ext extensions.LegacyEngineExtension) error {
+	return RegisterExtension(name, extensions.AdaptLegacyExtension(ext))
 }

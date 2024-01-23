@@ -233,7 +233,7 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommi
 		failBuild(err, "failed to build registry")
 	}
 
-	eng, err := execution.NewGlobalContext(d.ctx, reg, adaptExtensions(extensions))
+	eng, err := execution.NewGlobalContext(d.ctx, reg, extensions)
 	if err != nil {
 		failBuild(err, "failed to build engine")
 	}
