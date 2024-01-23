@@ -6,11 +6,13 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+
+	"github.com/kwilteam/kwil-db/internal/engine/execution"
 )
 
 func init() {
 	mathExt := &MathExtension{}
-	err := RegisterExtension("math", mathExt)
+	err := RegisterLegacyExtension("math", mathExt)
 	if err != nil {
 		panic(err)
 	}
@@ -37,7 +39,7 @@ func (e *MathExtension) Initialize(ctx context.Context, metadata map[string]stri
 	return metadata, nil
 }
 
-func (e *MathExtension) Execute(ctx CallContext, metadata map[string]string, method string, args ...any) ([]any, error) {
+func (e *MathExtension) Execute(ctx *execution.ProcedureContext, metadata map[string]string, method string, args ...any) ([]any, error) {
 	switch method {
 	case "add":
 		return e.add(args...)
