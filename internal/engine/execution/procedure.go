@@ -23,7 +23,7 @@ var (
 // instruction is an instruction that can be executed.
 // It is used to define the behavior of a procedure.
 type instruction interface {
-	execute(scope *ScopeContext, dataset *dataset) error
+	execute(scope *ProcedureContext, dataset *baseDataset) error
 }
 
 // procedure is a predefined procedure that can be executed.
@@ -46,11 +46,11 @@ type procedure struct {
 	instructions []instruction
 
 	// dataset is the dataset that the procedure is defined in.
-	dataset *dataset
+	dataset *baseDataset
 }
 
 // prepareProcedure parses a procedure from a types.Procedure.
-func prepareProcedure(unparsed *types.Procedure, datasetCtx *dataset) (*procedure, error) {
+func prepareProcedure(unparsed *types.Procedure, datasetCtx *baseDataset) (*procedure, error) {
 	instructions := make([]instruction, 0)
 
 	for _, mod := range unparsed.Modifiers {
@@ -82,12 +82,12 @@ func prepareProcedure(unparsed *types.Procedure, datasetCtx *dataset) (*procedur
 }
 
 // Call executes a procedure.
-func (p *procedure) call(scope *ScopeContext, inputs []any) error {
+func (p *procedure) call(scope *ProcedureContext, inputs []any) error {
 	if len(inputs) != len(p.parameters) {
 		return fmt.Errorf(`%w: procedure "%s" requires %d arguments, but %d were provided`, ErrIncorrectNumberOfArguments, p.name, len(p.parameters), len(inputs))
 	}
 
-	if p.mutable && !scope.Mutative() {
+	if p.mutable && !scope.Mutative {
 		return fmt.Errorf(`%w: mutable procedure "%s" called with non-mutative scope`, ErrMutativeProcedure, p.name)
 	}
 
@@ -108,8 +108,8 @@ func (p *procedure) call(scope *ScopeContext, inputs []any) error {
 func convertModifier(mod types.Modifier) (instruction, error) {
 	switch mod {
 	case types.ModifierOwner:
-		return instructionFunc(func(scope *ScopeContext, dataset *dataset) error {
-			if !bytes.Equal(scope.execution.signer, dataset.schema.Owner) {
+		return instructionFunc(func(scope *ProcedureContext, dataset *baseDataset) error {
+			if !bytes.Equal(scope.Signer, dataset.schema.Owner) {
 				return fmt.Errorf("cannot call owner procedure, not owner")
 			}
 
@@ -118,7 +118,7 @@ func convertModifier(mod types.Modifier) (instruction, error) {
 	}
 
 	// we do not necessarily have an instruction for every modifier type, but we do not want to return an error
-	return instructionFunc(func(scope *ScopeContext, dataset *dataset) error {
+	return instructionFunc(func(scope *ProcedureContext, dataset *baseDataset) error {
 		return nil
 	}), nil
 }
@@ -221,9 +221,9 @@ type callMethod struct {
 // Execute calls a method from a namespace that is accessible within this dataset.
 // If no namespace is specified, the local namespace is used.
 // It will pass all arguments to the method, and assign the return values to the receivers.
-func (e *callMethod) execute(scope *ScopeContext, dataset *dataset) error {
+func (e *callMethod) execute(scope *ProcedureContext, dataset *baseDataset) error {
 	var exec sql.ResultSetFunc
-	if scope.Mutative() {
+	if scope.Mutative {
 		exec = dataset.readWriter
 	} else {
 		exec = dataset.read
@@ -232,7 +232,7 @@ func (e *callMethod) execute(scope *ScopeContext, dataset *dataset) error {
 	var inputs []any
 	vals := scope.Values() // declare here since scope.Values() is expensive
 	for _, arg := range e.Args {
-		val, err := arg(scope.Ctx(), exec, vals)
+		val, err := arg(scope.Ctx, exec, vals)
 		if err != nil {
 			return err
 		}
@@ -243,6 +243,8 @@ func (e *callMethod) execute(scope *ScopeContext, dataset *dataset) error {
 	var results []any
 	var err error
 
+	newScope := scope.NewScope()
+
 	// if no namespace is specified, we call a local procedure.
 	// this can access public and private procedures.
 	if e.Namespace == "" {
@@ -251,7 +253,7 @@ func (e *callMethod) execute(scope *ScopeContext, dataset *dataset) error {
 			return fmt.Errorf(`procedure "%s" not found`, e.Method)
 		}
 
-		err = procedure.call(scope.NewScope(scope.DBID(), scope.Procedure()), inputs)
+		err = procedure.call(newScope, inputs)
 	} else {
 		namespace, ok := dataset.namespaces[e.Namespace]
 		if !ok {
@@ -259,17 +261,24 @@ func (e *callMethod) execute(scope *ScopeContext, dataset *dataset) error {
 		}
 
 		// new scope since we are calling a namespace
-		results, err = namespace.Call(scope.NewScope(scope.DBID(), scope.Procedure()), e.Method, inputs)
+		results, err = namespace.Call(newScope, e.Method, inputs)
 	}
 	if err != nil {
 		return err
 	}
+
+	scope.Result = newScope.Result
 
 	if len(e.Receivers) > len(results) {
 		return fmt.Errorf(`%w: procedure "%s" returned %d values, but only %d receivers were specified`, ErrIncorrectNumberOfArguments, e.Method, len(results), len(e.Receivers))
 	}
 
 	for i, result := range results {
+		// make sure there is a receiver for the result
+		if i >= len(e.Receivers) {
+			break
+		}
+
 		scope.values[e.Receivers[i]] = result
 	}
 
@@ -290,32 +299,32 @@ type dmlStmt struct {
 	Mutative bool
 }
 
-func (e *dmlStmt) execute(scope *ScopeContext, dataset *dataset) error {
+func (e *dmlStmt) execute(scope *ProcedureContext, dataset *baseDataset) error {
 	// this might be redundant
-	if !scope.Mutative() && e.Mutative {
+	if !scope.Mutative && e.Mutative {
 		return fmt.Errorf("cannot mutate state in immutable procedure")
 	}
 
 	var results *sql.ResultSet
 	var err error
-	if scope.Mutative() {
-		results, err = dataset.readWriter(scope.Ctx(), e.DeterministicStatement, scope.Values())
+	if scope.Mutative {
+		results, err = dataset.readWriter(scope.Ctx, e.DeterministicStatement, scope.Values())
 	} else {
-		results, err = dataset.read(scope.Ctx(), e.NonDeterministicStatement, scope.Values())
+		results, err = dataset.read(scope.Ctx, e.NonDeterministicStatement, scope.Values())
 	}
 	if err != nil {
 		return err
 	}
 
-	scope.SetResult(results)
+	scope.Result = results
 
 	return nil
 }
 
-type instructionFunc func(scope *ScopeContext, dataset *dataset) error
+type instructionFunc func(scope *ProcedureContext, dataset *baseDataset) error
 
 // implement instruction
-func (f instructionFunc) execute(scope *ScopeContext, dataset *dataset) error {
+func (f instructionFunc) execute(scope *ProcedureContext, dataset *baseDataset) error {
 	return f(scope, dataset)
 }
 

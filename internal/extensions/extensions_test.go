@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/extensions/actions"
+	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	extensions "github.com/kwilteam/kwil-db/internal/extensions"
 	"github.com/kwilteam/kwil-extensions/client"
 	"github.com/kwilteam/kwil-extensions/types"
@@ -54,7 +55,9 @@ func (m *mockClient) Initialize(ctx context.Context, metadata map[string]string)
 
 func Test_LocalExtension(t *testing.T) {
 	ctx := context.Background()
-	callCtx := &mockCtx{}
+	callCtx := &execution.ProcedureContext{
+		Ctx: ctx,
+	}
 
 	metadata := map[string]string{
 		"round": "down",
@@ -98,7 +101,9 @@ func Test_LocalExtension(t *testing.T) {
 func Test_RemoteExtension(t *testing.T) {
 	ctx := context.Background()
 	ext := extensions.New("local:8080")
-	callCtx := &mockCtx{}
+	callCtx := &execution.ProcedureContext{
+		Ctx: ctx,
+	}
 
 	err := ext.Connect(ctx)
 	if err != nil {
@@ -123,42 +128,4 @@ func Test_RemoteExtension(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
-}
-
-type mockCtx struct{}
-
-func (m *mockCtx) Caller() string {
-	return ""
-}
-
-func (m *mockCtx) Ctx() context.Context {
-	return context.Background()
-}
-
-func (m *mockCtx) DBID() string {
-	return ""
-}
-
-func (m *mockCtx) Datastore() actions.Datastore {
-	return nil
-}
-
-func (m *mockCtx) Mutative() bool {
-	return false
-}
-
-func (m *mockCtx) Procedure() string {
-	return ""
-}
-
-func (m *mockCtx) SetResult(result actions.Result) error {
-	return nil
-}
-
-func (m *mockCtx) Signer() []byte {
-	return nil
-}
-
-func (m *mockCtx) Values() map[string]any {
-	return nil
 }

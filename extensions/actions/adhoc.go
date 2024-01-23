@@ -6,6 +6,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/internal/engine/execution"
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 /*
@@ -31,7 +34,7 @@ const adhocName = "adhoc"
 
 func init() {
 	a := &adhocExtension{}
-	err := RegisterExtension(adhocName, a)
+	err := RegisterLegacyExtension(adhocName, a)
 	if err != nil {
 		panic(err)
 	}
@@ -45,7 +48,7 @@ type adhocExtension struct{}
 // Has two methods: Execute and Query.
 // We check that only one argument is passed, and that it is a string.
 // We then execute the query against the datastore.
-func (a *adhocExtension) Execute(scope CallContext, metadata map[string]string, method string, args ...any) ([]any, error) {
+func (a *adhocExtension) Execute(scope *execution.ProcedureContext, metadata map[string]string, method string, args ...any) ([]any, error) {
 	lowerMethod := strings.ToLower(method)
 	if len(args) != 1 {
 		return nil, fmt.Errorf("adhoc: expected 1 string argument, got %d", len(args))
@@ -55,17 +58,21 @@ func (a *adhocExtension) Execute(scope CallContext, metadata map[string]string, 
 		return nil, fmt.Errorf("adhoc: expected string argument, got %T", args[0])
 	}
 
+	dataset, err := scope.Dataset(scope.DBID)
+	if err != nil {
+		return nil, err
+	}
+
 	// for either execution, we will pass the scope.Values() as the arguments.
 	// this makes it possible to use @caller, etc in the ad-hoc statement.
-	var res Result
-	var err error
+	var res *sql.ResultSet
 	switch lowerMethod {
 	default:
 		return nil, fmt.Errorf(`unknown method "%s"`, method)
 	case "execute":
-		res, err = scope.Datastore().Execute(scope.Ctx(), scope.DBID(), stmt, scope.Values())
+		res, err = dataset.Execute(scope.Ctx, stmt, scope.Values())
 	case "query":
-		res, err = scope.Datastore().Query(scope.Ctx(), scope.DBID(), stmt, scope.Values())
+		res, err = dataset.Query(scope.Ctx, stmt, scope.Values())
 	}
 	if err != nil {
 		return nil, err
@@ -73,10 +80,7 @@ func (a *adhocExtension) Execute(scope CallContext, metadata map[string]string, 
 
 	// We set the result, so that if an ad-hoc read is executed in a view action,
 	// the result will be returned to the engine.
-	err = scope.SetResult(res)
-	if err != nil {
-		return nil, err
-	}
+	scope.Result = res
 
 	return nil, nil
 }

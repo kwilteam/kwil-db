@@ -17,26 +17,26 @@ import (
 type GlobalContext struct {
 	// initializers are the namespaces that are available to datasets.
 	// This includes other datasets, or loaded extensions.
-	initializers map[string]NamespaceInitializer
+	initializers map[string]ExtensionInitializer
 
 	// datasets are the top level namespaces that are available to engine callers.
 	// These only include datasets, and do not include extensions.
-	datasets map[string]*dataset
+	datasets map[string]*baseDataset
 
 	// datastore is the datastore that the engine is using.
 	datastore Registry
 }
 
 // NewGlobalContext creates a new global context.
-func NewGlobalContext(ctx context.Context, registry Registry, extensionInitializers map[string]NamespaceInitializer) (*GlobalContext, error) {
+func NewGlobalContext(ctx context.Context, registry Registry, extensionInitializers map[string]ExtensionInitializer) (*GlobalContext, error) {
 	dbids, err := registry.List(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	g := &GlobalContext{
-		initializers: make(map[string]NamespaceInitializer),
-		datasets:     make(map[string]*dataset),
+		initializers: make(map[string]ExtensionInitializer),
+		datasets:     make(map[string]*baseDataset),
 		datastore:    registry,
 	}
 
@@ -150,17 +150,20 @@ func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionDat
 		return nil, types.ErrDatasetNotFound
 	}
 
-	execCtx := &executionContext{
-		Ctx:      ctx,
-		mutative: options.Mutative,
-		signer:   options.Signer,
-		caller:   options.Caller,
-		global:   g,
+	procedureCtx := &ProcedureContext{
+		Ctx:       ctx,
+		Signer:    options.Signer,
+		Caller:    options.Caller,
+		globalCtx: g,
+		values:    make(map[string]any),
+		DBID:      options.Dataset,
+		Procedure: options.Procedure,
+		Mutative:  options.Mutative,
 	}
 
-	_, err = dataset.Call(execCtx.NewScope(), options.Procedure, options.Args)
+	_, err = dataset.Call(procedureCtx, options.Procedure, options.Args)
 
-	return execCtx.FinalResult, err
+	return procedureCtx.Result, err
 }
 
 // ListDatasets list datasets deployed by a specific caller.
@@ -209,11 +212,11 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 		return fmt.Errorf("dataset %s already exists", dbid)
 	}
 
-	datasetCtx := &dataset{
+	datasetCtx := &baseDataset{
 		readWriter: executor(dbid, g.datastore.Execute),
 		read:       executor(dbid, g.datastore.Query),
 		schema:     schema,
-		namespaces: make(map[string]Namespace),
+		namespaces: make(map[string]ExtensionNamespace),
 		procedures: make(map[string]*procedure),
 	}
 
@@ -242,7 +245,10 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 			return fmt.Errorf(`namespace "%s" not found`, ext.Name)
 		}
 
-		namespace, err := initializer(ctx, ext.ConfigMap())
+		namespace, err := initializer(&DeploymentContext{
+			Ctx:    ctx,
+			Schema: schema,
+		}, ext.CleanMap())
 		if err != nil {
 			return err
 		}
@@ -250,7 +256,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 		datasetCtx.namespaces[ext.Alias] = namespace
 	}
 
-	g.initializers[dbid] = func(_ context.Context, _ map[string]string) (Namespace, error) {
+	g.initializers[dbid] = func(_ *DeploymentContext, _ map[string]string) (ExtensionNamespace, error) {
 		return datasetCtx, nil
 	}
 	g.datasets[dbid] = datasetCtx
