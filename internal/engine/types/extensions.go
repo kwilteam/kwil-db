@@ -1,6 +1,9 @@
 package types
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type Extension struct {
 	Name           string             `json:"name"`
@@ -26,11 +29,13 @@ func (e *Extension) Clean() error {
 	)
 }
 
-// ConfigMap returns a map of the config values for the extension
-func (e *Extension) ConfigMap() map[string]string {
+// CleanMap returns a map of the config values for the extension.
+// Since the Kueiform parser parses all values as strings, it cleans
+// the single quotes from the values.
+func (e *Extension) CleanMap() map[string]string {
 	config := make(map[string]string)
 	for _, c := range e.Initialization {
-		config[c.Key] = c.Value
+		config[c.Key] = strings.Trim(c.Value, "'")
 	}
 
 	return config
