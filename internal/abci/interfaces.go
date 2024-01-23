@@ -88,7 +88,6 @@ type TxApp interface {
 	Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)
 	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
 	ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error)
-	ProposerTxsCount() uint64
 }
 
 // ConsensusParams returns kwil specific consensus parameters.

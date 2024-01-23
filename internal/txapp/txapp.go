@@ -33,9 +33,8 @@ func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, a
 			accounts:       make(map[string]*accounts.Account),
 			validatorStore: validators,
 		},
-		signer:         signer,
-		chainID:        chainID,
-		numProposerTxs: 0,
+		signer:  signer,
+		chainID: chainID,
 	}
 }
 
@@ -57,7 +56,6 @@ type TxApp struct {
 
 	atomicCommitter AtomicCommitter
 	mempool         *mempool
-	numProposerTxs  uint64
 }
 
 // GenesisInit initializes the VoteStore with the genesis validators.
@@ -164,7 +162,6 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 	// of the current block height and "keep it"
 	// this would go in Commit
 	r.Validators.UpdateBlockHeight(blockHeight)
-	r.numProposerTxs = 0
 	return appHash, validatorUpdates, nil
 }
 
@@ -222,12 +219,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64) ([]*transaction
 		return nil, err
 	}
 
-	r.numProposerTxs = 1
 	return []*transactions.Transaction{tx}, nil
-}
-
-func (r *TxApp) ProposerTxsCount() uint64 {
-	return r.numProposerTxs
 }
 
 // TxResponse is the response from a transaction.

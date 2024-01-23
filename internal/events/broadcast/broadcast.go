@@ -17,6 +17,7 @@ package broadcast
 */
 
 import (
+	"bytes"
 	"context"
 	"math/big"
 
@@ -24,7 +25,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/abci"
 )
 
 // EventStore allows the EventBroadcaster to read events
@@ -76,18 +76,25 @@ type EventBroadcaster struct {
 // RunBroadcast tells the EventBroadcaster to broadcast any events it wishes.
 // It implements Kwil's abci.CommitHook function signature.
 // If the node is not a validator, it will do nothing.
-func (e *EventBroadcaster) RunBroadcast(ctx context.Context, blockInfo *abci.BlockInfo) error {
-	// If the node issued any ValidatorVoteBody transactions, it isn't allowed to
-	// broadcast any events within the same block.
-	if blockInfo.NumProposerTxs > 0 {
-		return nil
-	}
-
+func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) error {
+	// Only validators are allowed to broadcast events.
 	isCurrent, err := e.validatorStore.IsCurrent(ctx, e.signer.Identity())
 	if err != nil {
 		return err
 	}
 	if !isCurrent {
+		return nil
+	}
+
+	// Proposers are not allowed to broadcast voteID transactions.
+	// This is to avoid complexities around the nonce tracking arising from
+	// proposer introducing voteBody transactions in the on-going block.
+	// As the nonces for proposer induced transactions are currently not tracked
+	// by the mempool, it is not safe to introduce new transactions by proposer
+	// in the on-going block. This probably is a temporary restriction until
+	// we figure out a better way to track both
+	// mempool(uncommitted), committed and proposer introduced txns.
+	if bytes.Equal(Proposer, e.signer.Identity()) {
 		return nil
 	}
 

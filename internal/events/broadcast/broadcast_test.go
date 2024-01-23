@@ -11,7 +11,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/events/broadcast"
 	"github.com/stretchr/testify/require"
 )
@@ -103,11 +102,7 @@ func Test_Broadcaster(t *testing.T) {
 
 			bc := broadcast.NewEventBroadcaster(e, b, ai, v, validatorSigner(), "test-chain")
 
-			blockInfo := &abci.BlockInfo{
-				NumProposerTxs: 0,
-			}
-
-			err := bc.RunBroadcast(context.Background(), blockInfo)
+			err := bc.RunBroadcast(context.Background(), []byte("proposer"))
 			if tc.err != nil {
 				require.Equal(t, tc.err, err)
 				return
