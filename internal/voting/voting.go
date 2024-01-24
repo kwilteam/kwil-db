@@ -554,7 +554,7 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 			return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
 		}
 
-		err = payload.Apply(ctx, &Datastores{
+		err = payload.Apply(ctx, Datastores{
 			Accounts:  v.accounts,
 			Databases: v.registry,
 		}, v.logger)

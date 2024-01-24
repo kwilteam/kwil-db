@@ -3,6 +3,7 @@ package deposit_oracle
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -113,9 +114,9 @@ func (do *EthDepositOracle) resubscribe(ctx context.Context, sub ethereum.Subscr
 	}
 }
 
-func (do *EthDepositOracle) filterLogs(ctx context.Context, from int64, to int64) ([]AccountCredit, error) {
+func (do *EthDepositOracle) filterLogs(ctx context.Context, from int64, to int64) ([]*AccountCredit, error) {
 	// Make the queries in batches of do.cfg.maxTotalRequests to avoid overloading the server
-	events := make([]AccountCredit, 0)
+	events := make([]*AccountCredit, 0)
 	for i := from; i <= to; i += do.cfg.maxTotalRequests {
 		endBlock := min(i+do.cfg.maxTotalRequests, to)
 		query := ethereum.FilterQuery{
@@ -144,18 +145,12 @@ func (do *EthDepositOracle) filterLogs(ctx context.Context, from int64, to int64
 			}
 
 			for _, log := range logs {
-				event, err := do.eventABI.Unpack("Credit", log.Data)
+				ac, err := do.convertLogToCreditEvent(log)
 				if err != nil {
 					return nil, err
 				}
 
-				events = append(events, AccountCredit{
-					Account:   event[0].(common.Address).Hex(),
-					Amount:    event[1].(*big.Int),
-					TxHash:    log.TxHash.String(),
-					BlockHash: log.BlockHash.String(),
-					ChainID:   do.cfg.chainID,
-				})
+				events = append(events, ac)
 			}
 			retrier.Reset()
 			break
@@ -164,8 +159,32 @@ func (do *EthDepositOracle) filterLogs(ctx context.Context, from int64, to int64
 	return events, nil
 }
 
-func (do *EthDepositOracle) addEvent(ctx context.Context, credit AccountCredit) error {
+func (do *EthDepositOracle) convertLogToCreditEvent(log types.Log) (*AccountCredit, error) {
+	if (log.Topics == nil || len(log.Topics) == 0) || log.Topics[0] != do.creditEventSignature {
+		do.logger.Debug("Log is not a credit event", zap.Any("log", log.Topics))
+		return nil, fmt.Errorf("invalid credit event log")
+	}
+
+	event, err := do.eventABI.Unpack("Credit", log.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AccountCredit{
+		Account:   event[0].(common.Address).Hex(),
+		Amount:    event[1].(*big.Int),
+		TxHash:    log.TxHash.String(),
+		BlockHash: log.BlockHash.String(),
+		ChainID:   do.cfg.chainID,
+	}, nil
+}
+
+func (do *EthDepositOracle) addEvent(ctx context.Context, credit *AccountCredit) error {
 	do.logger.Debug("Adding credit event to eventstore", zap.Any("event", credit))
+
+	if credit == nil {
+		return nil
+	}
 
 	bts, err := credit.MarshalBinary()
 	if err != nil {
