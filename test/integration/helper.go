@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"os"
 	"os/signal"
 	"path"
@@ -35,6 +36,7 @@ import (
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/kwilteam/kwil-db/test/driver/operator"
+	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
@@ -83,6 +85,8 @@ type IntTestConfig struct {
 	SchemaFile                string
 	DockerComposeFile         string
 	DockerComposeOverrideFile string
+	GanacheComposeFile        string
+	WithGanache               bool
 
 	WaitTimeout time.Duration
 	LogLevel    string
@@ -94,9 +98,12 @@ type IntTestConfig struct {
 
 	BlockInterval time.Duration // timeout_commit i.e. minimum block interval
 
+	Allocs map[string]*big.Int
+
 	NValidator    int
 	NNonValidator int
 	JoinExpiry    int64
+	VoteExpiry    int64
 	WithGas       bool
 }
 
@@ -107,6 +114,22 @@ type IntHelper struct {
 	teardown    []func()
 	containers  map[string]*testcontainers.DockerContainer
 	privateKeys map[string]ed25519.PrivKey
+
+	// Oracles
+	ethDeposit EthDepositOracle
+}
+
+type EthDepositOracle struct {
+	Enabled           bool
+	UnexposedChainRPC string
+	ExposedChainRPC   string
+	Deployer          *ethdeployer.Deployer
+	EscrowAddress     string
+
+	confirmations string
+
+	byzantine_expiry string
+	byzantine_spam   string
 }
 
 func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
@@ -116,6 +139,8 @@ func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 		containers:  make(map[string]*testcontainers.DockerContainer),
 		cfg: &IntTestConfig{
 			JoinExpiry: 14400,
+			VoteExpiry: 14400,
+			Allocs:     make(map[string]*big.Int),
 		},
 	}
 
@@ -160,6 +185,48 @@ func WithGas() HelperOpt {
 	}
 }
 
+func WithVoteExpiry(expiry int64) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.VoteExpiry = expiry
+	}
+}
+
+func WithEthDepositOracle(enabled bool) HelperOpt {
+	return func(r *IntHelper) {
+		r.ethDeposit.Enabled = enabled
+	}
+}
+
+func WithConfirmations(n string) HelperOpt {
+	return func(r *IntHelper) {
+		r.ethDeposit.confirmations = n
+	}
+}
+
+func WithGenesisAlloc(allocs map[string]*big.Int) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.Allocs = allocs
+	}
+}
+
+func WithByzantineExpiry() HelperOpt {
+	return func(r *IntHelper) {
+		r.ethDeposit.byzantine_expiry = "true"
+	}
+}
+
+func WithByzantineSpam() HelperOpt {
+	return func(r *IntHelper) {
+		r.ethDeposit.byzantine_spam = "true"
+	}
+}
+
+func WithGanache() HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.WithGanache = true
+	}
+}
+
 // LoadConfig loads config from system env and .env file.
 // Envs defined in envFile will not overwrite existing env vars.
 func (r *IntHelper) LoadConfig() {
@@ -183,6 +250,7 @@ func (r *IntHelper) LoadConfig() {
 		AdminRPC:                  getEnv("KIT_ADMIN_RPC", "unix:///tmp/admin.sock"),
 		DockerComposeFile:         getEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KIT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
+		GanacheComposeFile:        getEnv("KIT_GANACHE_COMPOSE_FILE", "./ganache-docker-compose.yml"),
 	}
 
 	waitTimeout := getEnv("KIT_WAIT_TIMEOUT", "10s")
@@ -219,12 +287,6 @@ func (r *IntHelper) generateNodeConfig() {
 	// }
 	r.t.Logf("create test temp directory: %s", tmpPath)
 
-	bal, ok := big.NewInt(0).SetString("100000000000000000000000000000000", 10)
-	if !ok {
-		r.t.Fatal("failed to parse balance")
-	}
-	creatorIdent := hex.EncodeToString(r.cfg.CreatorSigner.Identity())
-
 	err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
 		ChainID:       testChainID,
 		BlockInterval: r.cfg.BlockInterval,
@@ -241,11 +303,20 @@ func (r *IntHelper) generateNodeConfig() {
 		P2pPort:                 26656,
 		JoinExpiry:              r.cfg.JoinExpiry,
 		WithoutGasCosts:         !r.cfg.WithGas,
+		VoteExpiry:              r.cfg.VoteExpiry,
 		WithoutNonces:           false,
-		Allocs: map[string]*big.Int{
-			creatorIdent: bal,
+		Allocs:                  r.cfg.Allocs,
+		FundNonValidators:       r.cfg.WithGas, // when gas is required, also give the non-validators some for tests
+		EthDeposits: nodecfg.EthDepositOracle{
+			Enabled:               r.ethDeposit.Enabled,
+			Endpoint:              r.ethDeposit.UnexposedChainRPC,
+			RequiredConfirmations: r.ethDeposit.confirmations,
+			EscrowAddress:         r.ethDeposit.EscrowAddress,
+			ChainID:               "5",
+
+			// ByzantineExpiry: r.ethDeposit.byzantine_expiry,
+			// ByzantineSpam:   r.ethDeposit.byzantine_spam,
 		},
-		FundNonValidators: r.cfg.WithGas, // when gas is required, also give the non-validators some for tests
 	}, nil)
 	require.NoError(r.t, err, "failed to generate testnet config")
 	r.home = tmpPath
@@ -256,6 +327,71 @@ func (r *IntHelper) generateNodeConfig() {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
+}
+
+func (r *IntHelper) RunGanache(ctx context.Context) {
+	r.t.Logf("run ganache")
+	time.Sleep(time.Second) // sometimes docker compose fails if previous test had some slow async clean up (no idea)
+
+	composeFiles := []string{r.cfg.GanacheComposeFile}
+	dc, err := compose.NewDockerCompose(composeFiles...)
+	require.NoError(r.t, err, "failed to create docker compose object for ganache")
+
+	r.teardown = append(r.teardown, func() {
+		r.t.Log("teardown ganache")
+		dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal)
+	})
+
+	r.t.Cleanup(func() { // redundant if test defers Teardown()
+		r.Teardown()
+	})
+
+	// Use compose.Wait to wait for containers to become "healthy" according to
+	// their defined healthchecks.
+	dockerComposeId := fmt.Sprintf("%d", time.Now().Unix())
+	stack := dc.WithEnv(map[string]string{
+		"uid": dockerComposeId,
+	})
+	stack = stack.WaitForService("ganache",
+		wait.NewLogStrategy("RPC Listening on 0.0.0.0:8545").WithStartupTimeout(r.cfg.WaitTimeout))
+
+	err = stack.Up(ctx, compose.Wait(true))
+	r.t.Log("ganache up")
+	require.NoError(r.t, err, "failed to start ganache")
+
+	// Get the Escrow address and the ChainRPCURL
+	ctr, err := dc.ServiceContainer(ctx, "ganache")
+	require.NoError(r.t, err, "failed to get container for service ganache")
+
+	exposedChainRPC, err := ctr.PortEndpoint(ctx, "8545", "ws")
+	r.t.Log("exposedChainRPC", exposedChainRPC)
+	require.NoError(r.t, err, "failed to get exposed endpoint")
+	ganacheIp, err := ctr.ContainerIP(ctx)
+	require.NoError(r.t, err, "failed to get ganache container ip")
+	unexposedChainRPC := fmt.Sprintf("ws://%s", net.JoinHostPort(ganacheIp, "8545"))
+	r.t.Log("unexposedChainRPC", unexposedChainRPC)
+
+	// Deploy contracts
+	ethDeployer, err := ethdeployer.NewDeployer(exposedChainRPC, r.cfg.CreatorRawPk, 5)
+	require.NoError(r.t, err, "failed to get deployer")
+
+	// Deploy Token and Escrow contracts
+	err = ethDeployer.Deploy()
+	require.NoError(r.t, err, "failed to deploy contracts")
+
+	r.ethDeposit.UnexposedChainRPC = unexposedChainRPC
+	r.ethDeposit.ExposedChainRPC = exposedChainRPC
+	r.ethDeposit.Deployer = ethDeployer
+	r.ethDeposit.EscrowAddress = ethDeployer.EscrowAddress()
+
+	fmt.Println("Endpoint info: ", r.ethDeposit.ExposedChainRPC, " \n Unexposed: ", r.ethDeposit.UnexposedChainRPC, "\n EscrowAddr: ", r.ethDeposit.EscrowAddress)
+
+	time.Sleep(5 * time.Second) // wait for contracts to be deployed
+	// Probably start mining here
+}
+
+func (r *IntHelper) EthDeployer() *ethdeployer.Deployer {
+	return r.ethDeposit.Deployer
 }
 
 func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services []string) {
@@ -273,6 +409,7 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 	require.NoError(r.t, err, "failed to create docker compose object for kwild cluster")
 
 	r.teardown = append(r.teardown, func() {
+
 		r.t.Log("teardown docker compose")
 		dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal)
 	})
@@ -283,6 +420,11 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 
 	stack := dc.WithEnv(envs)
 	for _, service := range services {
+		if r.ethDeposit.Enabled {
+			waitMsg := "Started listening for new blocks on ethereum"
+			stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
+		}
+
 		waitMsg, ok := logWaitStrategies[service]
 		if ok {
 			stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
@@ -293,6 +435,7 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 			stack = stack.WaitForService(service, wait.NewHealthStrategy().WithStartupTimeout(r.cfg.WaitTimeout))
 			continue
 		}
+
 	}
 	// Use compose.Wait to wait for containers to become "healthy" according to
 	// their defined healthchecks.
@@ -314,6 +457,10 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 }
 
 func (r *IntHelper) Setup(ctx context.Context, services []string) {
+	if r.cfg.WithGanache {
+		r.RunGanache(ctx)
+	}
+
 	r.generateNodeConfig()
 	r.RunDockerComposeWithServices(ctx, services)
 }
@@ -486,7 +633,7 @@ func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gat
 
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return driver.NewKwildClientDriver(kwilClt, signer, logger)
+	return driver.NewKwildClientDriver(kwilClt, signer, r.ethDeposit.Deployer, logger)
 }
 
 func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) *driver.KwildClientDriver {
@@ -503,7 +650,7 @@ func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) *driver.KwildClientD
 	})
 	require.NoError(r.t, err, "failed to create grpc client")
 
-	return driver.NewKwildClientDriver(kwilClt, signer, logger)
+	return driver.NewKwildClientDriver(kwilClt, signer, r.ethDeposit.Deployer, logger)
 }
 
 // getCLIAdminClientDriver returns a kwil-admin client driver connected to the given kwil node.
@@ -540,11 +687,15 @@ func (r *IntHelper) getCliDriver(endpoint string, privKey string, identity []byt
 	cliBinPath := path.Join(path.Dir(currentFilePath),
 		"../../.build/kwil-cli")
 
-	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, testChainID, identity, gatewayProvider, logger)
+	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, testChainID, identity, gatewayProvider, r.ethDeposit.Deployer, logger)
 }
 
 func (r *IntHelper) NodePrivateKey(name string) ed25519.PrivKey {
 	return r.privateKeys[name]
+}
+
+func (r *IntHelper) NodeKeys() map[string]ed25519.PrivKey {
+	return r.privateKeys
 }
 
 func (r *IntHelper) ServiceContainer(name string) *testcontainers.DockerContainer {

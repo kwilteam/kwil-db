@@ -2,12 +2,14 @@ package driver
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 	"os"
 
+	ec "github.com/ethereum/go-ethereum/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
@@ -15,6 +17,7 @@ import (
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
+	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
 	"go.uber.org/zap"
 )
 
@@ -28,16 +31,18 @@ func GetEnv(key, defaultValue string) string {
 
 // KwildClientDriver is driver for tests using the `client` package
 type KwildClientDriver struct {
-	clt    clientType.Client
-	signer auth.Signer
-	logger log.Logger
+	clt      clientType.Client
+	signer   auth.Signer
+	deployer *ethdeployer.Deployer
+	logger   log.Logger
 }
 
-func NewKwildClientDriver(clt clientType.Client, signer auth.Signer, logger log.Logger) *KwildClientDriver {
+func NewKwildClientDriver(clt clientType.Client, signer auth.Signer, deployer *ethdeployer.Deployer, logger log.Logger) *KwildClientDriver {
 	driver := &KwildClientDriver{
-		clt:    clt,
-		signer: signer,
-		logger: logger,
+		clt:      clt,
+		signer:   signer,
+		logger:   logger,
+		deployer: deployer,
 	}
 
 	return driver
@@ -166,4 +171,47 @@ func (d *KwildClientDriver) Call(ctx context.Context, dbid, action string, input
 
 func (d *KwildClientDriver) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 	return d.clt.ChainInfo(ctx)
+}
+
+func (d *KwildClientDriver) Approve(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error {
+	if d.deployer == nil {
+		return fmt.Errorf("deployer is nil")
+	}
+	return d.deployer.Approve(ctx, sender, amount)
+}
+
+func (d *KwildClientDriver) Deposit(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error {
+	if d.deployer == nil {
+		return fmt.Errorf("deployer is nil")
+	}
+
+	return d.deployer.Deposit(ctx, sender, amount)
+}
+
+func (d *KwildClientDriver) EscrowBalance(ctx context.Context, senderAddress *ecdsa.PrivateKey) (*big.Int, error) {
+	if d.deployer == nil {
+		return nil, fmt.Errorf("deployer is nil")
+	}
+
+	senderAddr := ec.PubkeyToAddress(senderAddress.PublicKey)
+	return d.deployer.EscrowBalance(ctx, senderAddr)
+}
+
+func (d *KwildClientDriver) UserBalance(ctx context.Context, sender *ecdsa.PrivateKey) (*big.Int, error) {
+	if d.deployer == nil {
+		return nil, fmt.Errorf("deployer is nil")
+	}
+
+	senderAddr := ec.PubkeyToAddress(sender.PublicKey)
+
+	return d.deployer.UserBalance(ctx, senderAddr)
+}
+
+func (d *KwildClientDriver) Allowance(ctx context.Context, sender *ecdsa.PrivateKey) (*big.Int, error) {
+	if d.deployer == nil {
+		return nil, fmt.Errorf("deployer is nil")
+	}
+
+	senderAddr := ec.PubkeyToAddress(sender.PublicKey)
+	return d.deployer.Allowance(ctx, senderAddr)
 }

@@ -38,7 +38,7 @@ func Test_ValidPayload(t *testing.T) {
 
 	ac := validAC
 
-	err := ac.Apply(context.Background(), ds, log.NewStdOut(log.InfoLevel))
+	err := ac.Apply(context.Background(), ds, nil, nil, log.NewStdOut(log.InfoLevel))
 	require.NoError(t, err)
 
 	// check that the account was credited

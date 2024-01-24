@@ -47,7 +47,7 @@ func Test_Routes(t *testing.T) {
 		name    string
 		fn      func(t *testing.T, callback func(*TxApp)) // required, uses callback to allow for scoped data
 		payload transactions.Payload                      // required
-		fee     string                                    // optional, if nil, will automatically use 0
+		fee     int64                                     // optional, if nil, will automatically use 0
 		ctx     TxContext                                 // optional, if nil, will automatically create a mock
 		from    auth.Signer                               // optional, if nil, will automatically use default validatorSigner1
 		err     error                                     // if not nil, expect this error
@@ -61,6 +61,7 @@ func Test_Routes(t *testing.T) {
 			// this test tests vote_id, as a local validator
 			// we expect that it will approve and then attempt to delete the event
 			name: "validator_vote_id, as local validator",
+			fee:  ValidatorVoteIDPrice,
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				approveCount := 0
 				deleteCount := 0
@@ -88,6 +89,7 @@ func Test_Routes(t *testing.T) {
 							return true, nil
 						},
 					},
+					GasEnabled: true,
 				})
 
 				assert.Equal(t, 1, approveCount)
@@ -103,6 +105,7 @@ func Test_Routes(t *testing.T) {
 			// this test tests vote_id, as a non-local validator
 			// we expect that it will approve and not attempt to delete the event
 			name: "validator_vote_id, as non-local validator",
+			fee:  ValidatorVoteIDPrice,
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				approveCount := 0
 				deleteCount := 0
@@ -130,6 +133,7 @@ func Test_Routes(t *testing.T) {
 							return true, nil
 						},
 					},
+					GasEnabled: true,
 				})
 
 				assert.Equal(t, 1, approveCount)
@@ -146,6 +150,7 @@ func Test_Routes(t *testing.T) {
 			// this test tests vote_id, from a non-validator
 			// we expect that it will fail
 			name: "validator_vote_id, as non-validator",
+			fee:  ValidatorVoteIDPrice,
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				callback(&TxApp{
 					Validators: &mockValidatorStore{
@@ -153,6 +158,7 @@ func Test_Routes(t *testing.T) {
 							return false, nil
 						},
 					},
+					GasEnabled: true,
 				})
 			},
 			payload: &transactions.ValidatorVoteIDs{
@@ -166,6 +172,7 @@ func Test_Routes(t *testing.T) {
 		{
 			// testing validator_vote_bodies, as the proposer
 			name: "validator_vote_bodies, as proposer",
+			fee:  ValidatorVoteIDPrice,
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				deleteCount := 0
 
@@ -187,6 +194,7 @@ func Test_Routes(t *testing.T) {
 							return true, nil
 						},
 					},
+					GasEnabled: true,
 				})
 				assert.Equal(t, 1, deleteCount)
 			},
@@ -207,6 +215,7 @@ func Test_Routes(t *testing.T) {
 			// testing validator_vote_bodies, as a non-proposer
 			// should fail
 			name: "validator_vote_bodies, as non-proposer",
+			fee:  ValidatorVoteIDPrice,
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				deleteCount := 0
 
@@ -228,6 +237,7 @@ func Test_Routes(t *testing.T) {
 							return true, nil
 						},
 					},
+					GasEnabled: true,
 				})
 				assert.Equal(t, 0, deleteCount) // 0, since this does not go through
 			},
@@ -257,15 +267,9 @@ func Test_Routes(t *testing.T) {
 			tx, err := transactions.CreateTransaction(tc.payload, "chainid", 1)
 			require.NoError(t, err)
 
-			if tc.fee == "" {
-				tx.Body.Fee = big.NewInt(0)
-			} else {
-				bigFee, ok := new(big.Int).SetString(tc.fee, 10)
-				if !ok {
-					t.Fatal("invalid fee")
-				}
-
-				tx.Body.Fee = bigFee
+			tx.Body.Fee = big.NewInt(0)
+			if tc.fee != 0 {
+				tx.Body.Fee = big.NewInt(tc.fee)
 			}
 
 			err = tx.Sign(tc.from)
@@ -344,7 +348,7 @@ type mockVoteStore struct {
 	alreadyProcessed            func(ctx context.Context, resolutionID types.UUID) (bool, error)
 	approve                     func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error
 	containsBodyOrFinished      func(ctx context.Context, resolutionID types.UUID) (bool, error)
-	createResolution            func(ctx context.Context, event *types.VotableEvent, expiration int64) error
+	createResolution            func(ctx context.Context, event *types.VotableEvent, expiration int64, proposer []byte) error
 	expire                      func(ctx context.Context, blockheight int64) error
 	hasVoted                    func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error)
 	processConfirmedResolutions func(ctx context.Context) ([]types.UUID, error)
@@ -375,9 +379,9 @@ func (m *mockVoteStore) ContainsBodyOrFinished(ctx context.Context, resolutionID
 	return false, nil
 }
 
-func (m *mockVoteStore) CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64) error {
+func (m *mockVoteStore) CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64, proposer []byte) error {
 	if m.createResolution != nil {
-		return m.createResolution(ctx, event, expiration)
+		return m.createResolution(ctx, event, expiration, proposer)
 	}
 
 	return nil
@@ -416,9 +420,11 @@ func (m *mockVoteStore) UpdateVoter(ctx context.Context, identifier []byte, powe
 }
 
 type mockEventStore struct {
-	deleteEvent  func(ctx context.Context, id types.UUID) error
-	getEvents    func(ctx context.Context) ([]*types.VotableEvent, error)
-	markReceived func(ctx context.Context, id types.UUID) error
+	deleteEvent              func(ctx context.Context, id types.UUID) error
+	getEvents                func(ctx context.Context) ([]*types.VotableEvent, error)
+	markReceived             func(ctx context.Context, id types.UUID) error
+	markBodyReceived         func(ctx context.Context, id types.UUID) error
+	getUnreceivedEventBodies func(ctx context.Context) ([]*types.VotableEvent, error)
 }
 
 func (m *mockEventStore) DeleteEvent(ctx context.Context, id types.UUID) error {
@@ -443,6 +449,30 @@ func (m *mockEventStore) MarkReceived(ctx context.Context, id types.UUID) error 
 	}
 
 	return nil
+}
+
+func (m *mockEventStore) MarkBodyReceived(ctx context.Context, id types.UUID) error {
+	if m.markBodyReceived != nil {
+		return m.markBodyReceived(ctx, id)
+	}
+
+	return nil
+}
+
+func (m *mockEventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) error {
+	return nil
+}
+
+func (m *mockEventStore) MarkRebroadcast(ctx context.Context, ids []types.UUID) error {
+	return nil
+}
+
+func (m *mockEventStore) GetUnreceivedEventBodies(ctx context.Context) ([]*types.VotableEvent, error) {
+	if m.getUnreceivedEventBodies != nil {
+		return m.getUnreceivedEventBodies(ctx)
+	}
+
+	return nil, nil
 }
 
 type mockValidatorStore struct {

@@ -17,7 +17,7 @@ import (
 
 func (do *EthDepositOracle) listen(ctx context.Context) error {
 	// Listen for new blocks
-	headers := make(chan *types.Header)
+	headers := make(chan *types.Header, 1)
 	sub, err := do.ethclient.SubscribeNewHead(ctx, headers)
 	if err != nil {
 		return err
@@ -25,15 +25,17 @@ func (do *EthDepositOracle) listen(ctx context.Context) error {
 
 	go func(ctx context.Context, sub ethereum.Subscription) {
 		defer sub.Unsubscribe()
-		lastHeight, err := do.getBlockHeight(ctx)
+		requiredConfirmations := do.cfg.requiredConfirmations
+
+		// catchup with the ethereum chain
+		lastHeight, err := do.catchupWithEthChain(ctx)
 		if err != nil {
-			do.logger.Error("Failed to get last processed block", zap.Error(err))
+			do.logger.Error("Failed to catchup with ethereum chain", zap.Error(err))
 			return
 		}
 
-		lastHeight = max(lastHeight, do.cfg.startingHeight)
-		requiredConfirmations := do.cfg.requiredConfirmations
 		do.logger.Info("Started listening for new blocks on ethereum: ", zap.Int64("lastHeight", lastHeight), zap.Int64("requiredConfirmations", requiredConfirmations))
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -49,15 +51,6 @@ func (do *EthDepositOracle) listen(ctx context.Context) error {
 						return
 					}
 				}
-
-			case <-time.After(do.cfg.reconnectInterval):
-				do.logger.Debug("subscription timeout")
-				sub, err = do.resubscribe(ctx, sub, headers, do.cfg.maxRetries)
-				if err != nil {
-					do.logger.Error("Failed to resubscribe", zap.Error(err))
-					return
-				}
-
 			case header := <-headers:
 				currentHeight := header.Number.Int64()
 				do.logger.Info("New block", zap.Int64("height", currentHeight))
@@ -87,6 +80,39 @@ func (do *EthDepositOracle) listen(ctx context.Context) error {
 	return nil
 }
 
+// catchupWithEthChain catches up with the ethereum chain by fetching all the deposit events
+// from the last processed block to the latest block and recording them in the eventstore
+// It returns the latest block height processed
+func (do *EthDepositOracle) catchupWithEthChain(ctx context.Context) (int64, error) {
+	// get the latest block on ethereum
+	latestBlock, err := do.ethclient.BlockByNumber(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	startHeight, err := do.getBlockHeight(ctx)
+	if err != nil {
+		do.logger.Error("Failed to get last processed block", zap.Error(err))
+		return 0, err
+	}
+	startHeight = max(startHeight, do.cfg.startingHeight)
+
+	// get all the deposit events
+	FromBlock := startHeight
+	ToBlock := latestBlock.Number().Int64() - do.cfg.requiredConfirmations
+	events, err := do.filterLogs(ctx, FromBlock, ToBlock)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, event := range events {
+		do.addEvent(ctx, event)
+	}
+	do.setBlockHeight(ctx, ToBlock)
+
+	return ToBlock, nil
+}
+
 func (do *EthDepositOracle) resubscribe(ctx context.Context, sub ethereum.Subscription, headers chan *types.Header, maxRetries uint64) (ethereum.Subscription, error) {
 	sub.Unsubscribe()
 
@@ -98,6 +124,7 @@ func (do *EthDepositOracle) resubscribe(ctx context.Context, sub ethereum.Subscr
 	}
 	// keep trying to resubscribe until it works
 	for {
+		do.logger.Debug("Resubscribing to the ethereum node ", zap.Float64("attempt", retrier.Attempt()), zap.Uint64("maxRetries", maxRetries))
 		sub, err := do.ethclient.SubscribeNewHead(ctx, headers)
 		if err != nil {
 			// fail after 50 retries,
@@ -201,7 +228,7 @@ func (do *EthDepositOracle) addEvent(ctx context.Context, credit *AccountCredit)
 
 func (do *EthDepositOracle) getBlockHeight(ctx context.Context) (int64, error) {
 	const sync = true
-	blockBytes, err := do.kvstore.Get(ctx, []byte(last_processed_block), sync)
+	blockBytes, err := do.kvstore.Get(ctx, []byte(lastProcessedBlock), sync)
 	if err == kv.ErrKeyNotFound || blockBytes == nil {
 		do.setBlockHeight(ctx, 0)
 		return 0, nil
@@ -218,5 +245,5 @@ func (do *EthDepositOracle) getBlockHeight(ctx context.Context) (int64, error) {
 func (do *EthDepositOracle) setBlockHeight(ctx context.Context, height int64) error {
 	heightBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(heightBytes, uint64(height))
-	return do.kvstore.Set(ctx, []byte(last_processed_block), heightBytes)
+	return do.kvstore.Set(ctx, []byte(lastProcessedBlock), heightBytes)
 }

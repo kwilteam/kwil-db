@@ -293,6 +293,7 @@ func (genConf *GenesisConfig) ComputeGenesisHash() []byte {
 	}
 
 	binary.Write(hasher, binary.LittleEndian, genConf.ConsensusParams.Votes.VoteExpiry)
+
 	return hasher.Sum(nil)
 }
 
