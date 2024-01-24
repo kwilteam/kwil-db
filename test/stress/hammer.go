@@ -7,22 +7,18 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"net/url"
 	"strconv"
 	"sync/atomic"
 	"time"
 
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/gatewayclient"
 	"github.com/kwilteam/kwil-db/core/log"
-	rpcClients "github.com/kwilteam/kwil-db/core/rpc/client"
-	"github.com/kwilteam/kwil-db/core/rpc/client/user"
-	userGrpc "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
-	"github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	"github.com/kwilteam/kwil-db/core/types"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
 )
 
 // runLooped executes a basic function with a specified delay between each call
@@ -73,27 +69,6 @@ func hammer(ctx context.Context) error {
 	acctID := signer.Identity()
 	fmt.Println("Identity:", hex.EncodeToString(acctID))
 
-	var rpcClient user.TxSvcClient
-
-	parsedUrl, err := url.Parse(host)
-	if err != nil {
-		return err
-	}
-
-	if parsedUrl.Scheme == "http" {
-		rpcClient = http.NewClient(parsedUrl)
-	} else {
-		conn, err := grpc.DialContext(ctx, parsedUrl.String(), rpcClients.DefaultGRPCOpts()...)
-		if err != nil {
-			return err
-		}
-
-		rpcClient = userGrpc.WrapConn(conn)
-	}
-	if err != nil {
-		return err
-	}
-
 	logger := log.New(log.Config{
 		Level:       log.InfoLevel.String(),
 		OutputPaths: []string{"stdout"},
@@ -102,34 +77,49 @@ func hammer(ctx context.Context) error {
 	})
 	logger = *logger.WithOptions(zap.AddStacktrace(zap.FatalLevel))
 	trLogger := *logger.WithOptions(zap.AddCallerSkip(1))
-	cl, err := client.WrapClient(ctx, &timedClient{rpcTiming, &logger, rpcClient}, &client.ClientOptions{
-		Signer: signer,
-		Logger: trLogger,
-	})
+
+	var kwilClt common.Client // probably should be moved to core
+	if gatewayProvider {
+		kwilClt, err = gatewayclient.NewClient(ctx, host, &gatewayclient.GatewayOptions{
+			ClientOptions: client.ClientOptions{
+				Signer:  signer,
+				ChainID: chainId,
+				Logger:  trLogger,
+			},
+		})
+	} else {
+		kwilClt, err = client.NewClient(ctx, host, &client.ClientOptions{
+			Signer:  signer,
+			ChainID: chainId,
+			Logger:  trLogger,
+		})
+	}
 
 	if err != nil {
 		return err
 	}
 
+	kwilClt = &timedClient{Client: kwilClt, logger: &logger, showReqDur: rpcTiming}
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel() // any early return cancels other goroutines
 
-	_, err = cl.Ping(ctx)
+	_, err = kwilClt.Ping(ctx)
 	if err != nil {
 		return err
 	}
 
 	// Bring up the DB test harness with a fresh test database.
-
 	h := &harness{
+		Client:              kwilClt,
 		concurrentBroadcast: !sequentialBroadcast,
-		Client:              cl,
 		logger:              &logger,
 		acctID:              acctID,
+		signer:              signer,
 		nestedLogger:        logger.WithOptions(zap.AddCallerSkip(1)),
 	}
 
-	if acct, err := cl.GetAccount(ctx, acctID, types.AccountStatusPending); err != nil {
+	if acct, err := kwilClt.GetAccount(ctx, acctID, types.AccountStatusPending); err != nil {
 		return err
 	} else { // scoping acct
 		fmt.Println(acct)
@@ -160,9 +150,16 @@ func hammer(ctx context.Context) error {
 	// bother the masterDB
 	wg.Add(1)
 	go runLooped(ctx, func() error {
-		_, err := h.ListDatabases(ctx, h.Signer.Identity())
+		_, err := h.ListDatabases(ctx, h.signer.Identity())
 		return err
 	}, "ListDatabases", badgerInterval, &logger)
+
+	// bother the authn&kgw
+	wg.Add(1)
+	go runLooped(ctx, func() error {
+		_, err := kwilClt.CallAction(ctx, dbid, actAuthnOnly, []any{})
+		return err
+	}, "call authn action", viewInterval, &logger)
 
 	// ## "deploy / drop" program - trivial deploy/drop cycle, sometimes
 	// immediately dropping. The interval for this one is different since it is
@@ -226,7 +223,7 @@ func hammer(ctx context.Context) error {
 	wg.Add(1)
 	go runLooped(ctx, func() error {
 		postID := strconv.Itoa(rand.Intn(int(pid.Load() + 1)))
-		_, err := cl.CallAction(ctx, dbid, actGetPost, []any{postID})
+		_, err := kwilClt.CallAction(ctx, dbid, actGetPost, []any{postID})
 		if err != nil {
 			return err
 		}

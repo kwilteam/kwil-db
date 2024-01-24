@@ -6,89 +6,76 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
+	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/log"
-	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
-	"github.com/kwilteam/kwil-db/core/rpc/client/user"
-	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
+// timedClient is a wrapper around a common.Client
 type timedClient struct {
+	common.Client
 	showReqDur bool
 	logger     *log.Logger
-	cl         user.TxSvcClient
+	//cl         common.Client
+}
+
+func (tc *timedClient) ChainID() string {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "ChainID")
+	}
+	return tc.Client.ChainID()
+}
+
+func (tc *timedClient) DeployDatabase(ctx context.Context, payload *transactions.Schema, opts ...client.TxOpt) (transactions.TxHash, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "DeployDatabase")
+	}
+	return tc.Client.DeployDatabase(ctx, payload, opts...)
+}
+
+func (tc *timedClient) DropDatabase(ctx context.Context, name string, opts ...client.TxOpt) (transactions.TxHash, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "DropDatabase")
+	}
+	return tc.Client.DropDatabase(ctx, name, opts...)
+}
+
+func (tc *timedClient) DropDatabaseID(ctx context.Context, dbid string, opts ...client.TxOpt) (transactions.TxHash, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "DropDatabaseID")
+	}
+	return tc.Client.DropDatabaseID(ctx, dbid, opts...)
+}
+
+func (tc *timedClient) ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...client.TxOpt) (transactions.TxHash, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "ExecuteAction")
+	}
+	return tc.Client.ExecuteAction(ctx, dbid, action, tuples, opts...)
+}
+
+func (tc *timedClient) Query(ctx context.Context, dbid string, query string) (*client.Records, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "Query")
+	}
+	return tc.Client.Query(ctx, dbid, query)
+}
+
+func (tc *timedClient) WaitTx(ctx context.Context, txHash []byte, interval time.Duration) (*transactions.TcTxQueryResponse, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "WaitTx")
+	}
+	return tc.Client.WaitTx(ctx, txHash, interval)
+}
+
+func (tc *timedClient) Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...client.TxOpt) (transactions.TxHash, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "Transfer")
+	}
+	return tc.Client.Transfer(ctx, to, amount, opts...)
 }
 
 func (tc *timedClient) printDur(t time.Time, method string) {
 	tc.logger.Info(fmt.Sprintf("%s took %vms", method, float64(time.Since(t).Microseconds())/1e3)) // not using zap Fields so it is legible
-}
-
-func (tc *timedClient) Call(ctx context.Context, req *transactions.CallMessage, _ ...rpcClient.ActionCallOption) ([]map[string]any, error) {
-	if tc.showReqDur {
-		defer tc.printDur(time.Now(), "Call")
-	}
-	return tc.cl.Call(ctx, req)
-}
-
-func (tc *timedClient) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
-	if tc.showReqDur {
-		defer tc.printDur(time.Now(), "TxQuery")
-	}
-	return tc.cl.TxQuery(ctx, txHash)
-}
-
-func (tc *timedClient) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
-	if tc.showReqDur {
-		defer tc.printDur(time.Now(), "GetSchema")
-	}
-	return tc.cl.GetSchema(ctx, dbid)
-}
-
-func (tc *timedClient) Query(ctx context.Context, dbid string, query string) ([]map[string]any, error) {
-	if tc.showReqDur {
-		defer tc.printDur(time.Now(), "Query")
-	}
-	return tc.cl.Query(ctx, dbid, query)
-}
-
-func (tc *timedClient) ListDatabases(ctx context.Context, ownerIdentifier []byte) ([]*types.DatasetIdentifier, error) {
-	if tc.showReqDur {
-		defer tc.printDur(time.Now(), "ListDatabases")
-	}
-	return tc.cl.ListDatabases(ctx, ownerIdentifier)
-}
-
-func (tc *timedClient) GetAccount(ctx context.Context, acctID []byte, status types.AccountStatus) (*types.Account, error) {
-	if tc.showReqDur {
-		defer tc.printDur(time.Now(), "GetAccount")
-	}
-	return tc.cl.GetAccount(ctx, acctID, status)
-}
-
-func (tc *timedClient) Broadcast(ctx context.Context, tx *transactions.Transaction, sync rpcClient.BroadcastWait) ([]byte, error) {
-	if tc.showReqDur {
-		defer tc.printDur(time.Now(), "Broadcast")
-	}
-	return tc.cl.Broadcast(ctx, tx, sync)
-}
-
-func (tc *timedClient) Ping(ctx context.Context) (string, error) {
-	if tc.showReqDur {
-		defer tc.printDur(time.Now(), "Ping")
-	}
-	return tc.cl.Ping(ctx)
-}
-
-func (tc *timedClient) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
-	if tc.showReqDur {
-		defer tc.printDur(time.Now(), "ChainInfo")
-	}
-	return tc.cl.ChainInfo(ctx)
-}
-
-func (tc *timedClient) EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
-	if tc.showReqDur {
-		defer tc.printDur(time.Now(), "EstimateCost")
-	}
-	return tc.cl.EstimateCost(ctx, tx)
 }

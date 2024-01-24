@@ -16,11 +16,12 @@ var testScheme string
 
 // These are the actions currently used by the harness.
 const (
-	actGetPost      = "get_post_unauthenticated"
+	actGetPost      = "get_post"
 	actCreatePost   = "create_post"
 	actCreateUser   = "create_user"
 	actListUsers    = "list_users"
 	actGetUserPosts = "get_user_posts_by_userid"
+	actAuthnOnly    = "authn_only" // matters with KGW
 )
 
 func loadTestSchema() (*transactions.Schema, error) {
@@ -54,7 +55,7 @@ func init() {
 		haveActions[act.Name] = true
 	}
 	for _, expected := range []string{actGetPost, actCreatePost, actCreateUser,
-		actListUsers, actGetUserPosts} {
+		actListUsers, actGetUserPosts, actAuthnOnly} {
 		if !haveActions[expected] {
 			panic(fmt.Sprintf("missing action %v", expected))
 		}

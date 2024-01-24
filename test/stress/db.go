@@ -11,7 +11,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
 	"github.com/kwilteam/kwil-db/core/utils/random"
-
 	"go.uber.org/zap"
 )
 
@@ -74,7 +73,7 @@ func (h *harness) deployDBAsync(ctx context.Context) (string, <-chan asyncResp, 
 		return "", nil, err
 	}
 
-	dbid := utils.GenerateDBID(schema.Name, h.Signer.Identity())
+	dbid := utils.GenerateDBID(schema.Name, h.signer.Identity())
 	// fmt.Println("deployDBAsync", dbid)
 	promise := make(chan asyncResp, 1)
 	go func() {
