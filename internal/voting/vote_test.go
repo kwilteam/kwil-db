@@ -698,7 +698,7 @@ type exampleResolutionPayload struct {
 	Amount   int64  `json:"amount"`
 }
 
-func (e *exampleResolutionPayload) Apply(ctx context.Context, datastores *voting.Datastores, logger log.Logger) error {
+func (e *exampleResolutionPayload) Apply(ctx context.Context, datastores voting.Datastores, logger log.Logger) error {
 	if e.Account == nil {
 		return fmt.Errorf("account is required")
 	}
