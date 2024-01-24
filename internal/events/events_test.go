@@ -103,6 +103,7 @@ func Test_EventStore(t *testing.T) {
 					Body: []byte("hello"),
 					Type: "test",
 				}
+				id := event.ID()
 
 				err := e.Store(ctx, event.Body, event.Type)
 				require.NoError(t, err)
@@ -112,7 +113,8 @@ func Test_EventStore(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, events, 1)
 
-				err = e.MarkReceived(ctx, event.ID())
+				// Mark event as received
+				err = e.MarkReceived(ctx, id)
 				require.NoError(t, err)
 
 				// GetEvents should still return the event
@@ -124,6 +126,54 @@ func Test_EventStore(t *testing.T) {
 				events, err = e.GetUnreceivedEvents(ctx)
 				require.NoError(t, err)
 				require.Len(t, events, 0)
+			},
+		},
+		{
+			name: "marking broadcasted",
+			fn: func(t *testing.T, e *EventStore) {
+				ctx := context.Background()
+
+				event := &types.VotableEvent{
+					Body: []byte("hello"),
+					Type: "test",
+				}
+				id := event.ID()
+
+				err := e.Store(ctx, event.Body, event.Type)
+				require.NoError(t, err)
+
+				// GetUnreceivedEvents should return the event
+				events, err := e.GetUnreceivedEvents(ctx)
+				require.NoError(t, err)
+				require.Len(t, events, 1)
+
+				// Mark event as broadcasted
+				err = e.MarkBroadcasted(ctx, []types.UUID{id})
+				require.NoError(t, err)
+
+				// GetEvents should still return the event
+				events, err = e.GetEvents(ctx)
+				require.NoError(t, err)
+				require.Len(t, events, 1)
+
+				// GetUnreceivedEvents should not return the event
+				events, err = e.GetUnreceivedEvents(ctx)
+				require.NoError(t, err)
+				require.Len(t, events, 0)
+
+				// Mark event as received
+				err = e.MarkRebroadcast(ctx, []types.UUID{id})
+				require.NoError(t, err)
+
+				// GetEvents should still return the event
+				events, err = e.GetEvents(ctx)
+				require.NoError(t, err)
+				require.Len(t, events, 1)
+
+				// GetUnreceivedEvents should not return the event
+				events, err = e.GetUnreceivedEvents(ctx)
+				require.NoError(t, err)
+				require.Len(t, events, 1)
 			},
 		},
 	}

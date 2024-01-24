@@ -18,6 +18,7 @@ type mempool struct {
 
 	accountStore   AccountReader
 	validatorStore IsValidatorChecker
+	eventStore     EventStore
 }
 
 // accountInfo retrieves the account info from the mempool state or the account store.
@@ -78,6 +79,21 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 	// would not want to allow that since there is no criteria for selecting the
 	// one to mine (normally higher fee).
 	if tx.Body.Nonce != uint64(acct.Nonce)+1 {
+		// If the transaction with invalid nonce is a ValidatorVoteIDs transaction,
+		// then mark the events for rebroadcast before discarding the transaction
+		// as the votes for these events are not yet received by the network.
+		if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteIDs {
+			// Mark these ids for rebroadcast
+			voteID := &transactions.ValidatorVoteIDs{}
+			err = voteID.UnmarshalBinary(tx.Body.Payload)
+			if err != nil {
+				return err
+			}
+			err = m.eventStore.MarkRebroadcast(ctx, voteID.ResolutionIDs)
+			if err != nil {
+				return err
+			}
+		}
 		return fmt.Errorf("%w for account %s: got %d, expected %d", transactions.ErrInvalidNonce,
 			hex.EncodeToString(tx.Sender), tx.Body.Nonce, acct.Nonce+1)
 	}

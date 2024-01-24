@@ -14,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/events/broadcast"
+	"github.com/kwilteam/kwil-db/internal/txapp"
 )
 
 func Test_Broadcaster(t *testing.T) {
@@ -22,6 +23,7 @@ func Test_Broadcaster(t *testing.T) {
 		events        []string
 		expectedNonce int
 		didBroadcast  bool
+		balance       *big.Int
 
 		broadcaster *broadcaster        // optional
 		ai          *mockAccountInfoer  // optional
@@ -49,6 +51,7 @@ func Test_Broadcaster(t *testing.T) {
 			events:        []string{"hello"},
 			expectedNonce: 1,
 			didBroadcast:  true,
+			balance:       big.NewInt(txapp.ValidatorVoteIDPrice),
 			v:             &mockValidatorStore{isValidator: true},
 		},
 		{
@@ -57,6 +60,7 @@ func Test_Broadcaster(t *testing.T) {
 				"hello",
 				"world",
 			},
+			balance:       big.NewInt(txapp.ValidatorVoteIDPrice * 2),
 			expectedNonce: 1, // should broadcast all of them at once
 			didBroadcast:  true,
 			v:             &mockValidatorStore{isValidator: true},
@@ -72,7 +76,9 @@ func Test_Broadcaster(t *testing.T) {
 
 			ai := tc.ai
 			if ai == nil {
-				ai = &mockAccountInfoer{}
+				ai = &mockAccountInfoer{
+					balance: tc.balance,
+				}
 			}
 
 			e := &mockEventStore{}
@@ -102,8 +108,8 @@ func Test_Broadcaster(t *testing.T) {
 			}
 
 			bc := broadcast.NewEventBroadcaster(e, b, ai, v, validatorSigner(), "test-chain")
-
-			err := bc.RunBroadcast(context.Background(), []byte("proposer"))
+			estimator := &feeEstimator{}
+			err := bc.RunBroadcast(context.Background(), estimator, []byte("proposer"))
 			if tc.err != nil {
 				require.Equal(t, tc.err, err)
 				return
@@ -122,6 +128,10 @@ type mockEventStore struct {
 
 func (m *mockEventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.VotableEvent, error) {
 	return m.events, nil
+}
+
+func (m *mockEventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) error {
+	return nil
 }
 
 type broadcaster struct {
@@ -158,4 +168,10 @@ type mockValidatorStore struct {
 
 func (m *mockValidatorStore) IsCurrent(ctx context.Context, validator []byte) (bool, error) {
 	return m.isValidator, nil
+}
+
+type feeEstimator struct{}
+
+func (f *feeEstimator) Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+	return big.NewInt(0), nil
 }

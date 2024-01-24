@@ -89,6 +89,7 @@ type TxApp interface {
 	Commit(ctx context.Context) error
 	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
 	ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error)
+	Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
 }
 
 // ConsensusParams returns kwil specific consensus parameters.

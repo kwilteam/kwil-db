@@ -324,7 +324,7 @@ func (r *ActHelper) getHTTPClientDriver(signer auth.Signer) KwilAcceptanceDriver
 	})
 	require.NoError(r.t, err, "failed to create http client")
 
-	return driver.NewKwildClientDriver(kwilClt, signer, logger)
+	return driver.NewKwildClientDriver(kwilClt, signer, nil, logger)
 }
 
 func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver {
@@ -341,7 +341,7 @@ func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver
 	})
 	require.NoError(r.t, err, "failed to create grpc client")
 
-	return driver.NewKwildClientDriver(kwilClt, signer, logger)
+	return driver.NewKwildClientDriver(kwilClt, signer, nil, logger)
 }
 
 func (r *ActHelper) getCliDriver(privKey string, identifier []byte) KwilAcceptanceDriver {
@@ -351,5 +351,5 @@ func (r *ActHelper) getCliDriver(privKey string, identifier []byte) KwilAcceptan
 	cliBinPath := path.Join(path.Dir(currentFilePath),
 		"../../.build/kwil-cli")
 
-	return driver.NewKwilCliDriver(cliBinPath, r.cfg.HTTPEndpoint, privKey, TestChainID, identifier, false, logger)
+	return driver.NewKwilCliDriver(cliBinPath, r.cfg.HTTPEndpoint, privKey, TestChainID, identifier, false, nil, logger)
 }

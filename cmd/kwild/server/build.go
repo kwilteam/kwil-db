@@ -263,7 +263,7 @@ func buildVoteStore(d *coreDependencies, db *pg.DB, acc voting.AccountStore) *vo
 	// register with the atomic committer as it does not affect the apphash,
 	// except via the transactions created from it.
 	v, err := voting.NewVoteProcessor(d.ctx, db, // TODO: we need to replace this nil with a good replacement
-		acc, nil, 666667, *d.log.Named("vote-processor")) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
+		acc, nil, voting.Threshold{Num: 1, Denom: 3}, *d.log.Named("vote-processor")) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
 	// yes, consensus parameters (threshold) shouldn't be here (or with that integer)
 	if err != nil {
 		failBuild(err, "failed to build vote store")

@@ -2,6 +2,7 @@ package specifications
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -118,4 +119,15 @@ type ValidatorOpsDsl interface {
 	ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error)
 	ValidatorNodeJoin(ctx context.Context) ([]byte, error)
 	ValidatorNodeLeave(ctx context.Context) ([]byte, error)
+}
+
+type DeployerDsl interface {
+	AccountBalanceDsl
+	DatabaseDeployDsl
+
+	Approve(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error
+	Deposit(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error
+	EscrowBalance(ctx context.Context, sender *ecdsa.PrivateKey) (*big.Int, error)
+	UserBalance(ctx context.Context, sender *ecdsa.PrivateKey) (*big.Int, error)
+	Allowance(ctx context.Context, sender *ecdsa.PrivateKey) (*big.Int, error)
 }

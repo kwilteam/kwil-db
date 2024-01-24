@@ -10,4 +10,5 @@ type KwilIntDriver interface {
 	specifications.ExecuteQueryDsl
 	specifications.ExecuteCallDsl
 	specifications.TransferAmountDsl
+	specifications.DeployerDsl
 }
