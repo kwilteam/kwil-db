@@ -7,6 +7,7 @@ package events
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/sql"
@@ -34,6 +35,7 @@ type Datastore interface {
 // cause any issues.
 type EventStore struct {
 	db Datastore
+	mu sync.Mutex
 }
 
 func NewEventStore(ctx context.Context, db Datastore) (*EventStore, error) {
@@ -57,14 +59,16 @@ func NewEventStore(ctx context.Context, db Datastore) (*EventStore, error) {
 // It is up to each oracle to define their own sufficiently unique prefix(es).
 func (e *EventStore) KV(prefix []byte) sql.KVStore {
 	return &scopedKVStore{
-		prefix: prefix,
-		store:  e.db,
+		prefix:     prefix,
+		eventStore: e,
 	}
 }
 
 // Store stores an event in the event store.
 // It is idempotent.
 func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	event := &types.VotableEvent{
 		Body: data,
 		Type: eventType,
@@ -123,6 +127,10 @@ func (e *EventStore) GetEvents(ctx context.Context) ([]*types.VotableEvent, erro
 // DeleteEvent deletes an event from the event store.
 // It is idempotent. If the event does not exist, it will not return an error.
 func (e *EventStore) DeleteEvent(ctx context.Context, id types.UUID) error {
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	_, err := e.db.Execute(ctx, deleteEvent, map[string]any{
 		"$id": id[:],
 	})
@@ -172,6 +180,8 @@ func (e *EventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.VotableE
 
 // MarkReceived marks that an event has been received by the network, and should not be re-broadcasted.
 func (e *EventStore) MarkReceived(ctx context.Context, id types.UUID) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	_, err := e.db.Execute(ctx, markReceived, map[string]any{
 		"$id": id[:],
 	})
@@ -180,18 +190,24 @@ func (e *EventStore) MarkReceived(ctx context.Context, id types.UUID) error {
 
 // scopedKVStore is a KVStore that is scoped to an event type.
 type scopedKVStore struct {
-	prefix []byte
-	store  Datastore
+	prefix     []byte
+	eventStore *EventStore
 }
 
 func (s *scopedKVStore) Get(ctx context.Context, key []byte) ([]byte, error) {
-	return s.store.Get(ctx, append(s.prefix, key...), true)
+	s.eventStore.mu.Lock()
+	defer s.eventStore.mu.Unlock()
+	return s.eventStore.db.Get(ctx, append(s.prefix, key...), true)
 }
 
 func (s *scopedKVStore) Set(ctx context.Context, key []byte, value []byte) error {
-	return s.store.Set(ctx, append(s.prefix, key...), value)
+	s.eventStore.mu.Lock()
+	defer s.eventStore.mu.Unlock()
+	return s.eventStore.db.Set(ctx, append(s.prefix, key...), value)
 }
 
 func (s *scopedKVStore) Delete(ctx context.Context, key []byte) error {
-	return s.store.Delete(ctx, append(s.prefix, key...))
+	s.eventStore.mu.Lock()
+	defer s.eventStore.mu.Unlock()
+	return s.eventStore.db.Delete(ctx, append(s.prefix, key...))
 }
