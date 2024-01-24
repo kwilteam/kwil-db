@@ -7,7 +7,9 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -18,9 +20,11 @@ import (
 // used nonces so it can correctly make multiple unconfirmed transactions with
 // increasing nonces. See underNonceLock and recoverNonce.
 type harness struct {
-	*client.Client
+	common.Client
 	logger *log.Logger
 	acctID []byte
+
+	signer auth.Signer
 
 	nonceMtx sync.Mutex
 	nonce    int64 // atomic.Int64
