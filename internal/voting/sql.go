@@ -58,7 +58,7 @@ var (
 	// resolutionIDExists is the sql statement used to ensure a resolution ID is present in the resolutions table
 	resolutionIDExists = `INSERT INTO resolutions (id, expiration) VALUES ($id, $expiration) ON CONFLICT(id) DO NOTHING;`
 
-	// upsertResolution is the sql statement used to ensure a resolution is present in the resolutions table
+	// upsertResolution is the sql statement used to ensure a resolution is present in the resolutions table. In scenarios where VoteID is received before VoteBody, the body and type will be updated in the existing resolution entry.
 	upsertResolution = `INSERT INTO resolutions (id, body, type, expiration)
 	VALUES ($id, $body, (
 		SELECT id
@@ -71,8 +71,7 @@ var (
 			SELECT id
 			FROM resolution_types
 			WHERE name = $type
-		),
-		expiration = $expiration;`
+		);`
 
 	// upsertVoter is the sql statement used to ensure a voter is present in the voters table.  If the voter is present, the power is updated.
 	upsertVoter = `INSERT INTO voters (id, name, power) VALUES ($id, $voter, $power) ON CONFLICT(id) DO UPDATE SET power = power + $power;`

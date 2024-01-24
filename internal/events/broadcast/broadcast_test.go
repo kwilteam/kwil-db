@@ -102,7 +102,7 @@ func Test_Broadcaster(t *testing.T) {
 
 			bc := broadcast.NewEventBroadcaster(e, b, ai, v, validatorSigner(), "test-chain")
 
-			err := bc.RunBroadcast(context.Background(), nil)
+			err := bc.RunBroadcast(context.Background(), []byte("proposer"))
 			if tc.err != nil {
 				require.Equal(t, tc.err, err)
 				return
