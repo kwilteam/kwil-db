@@ -348,6 +348,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 }
 
 func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abciTypes.ResponseCommit, error) {
+	defer a.txApp.ResetMempool()
+
 	err := a.metadataStore.IncrementBlockHeight(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to increment block height: %w", err)

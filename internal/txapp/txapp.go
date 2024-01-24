@@ -105,7 +105,7 @@ func (r *TxApp) Begin(ctx context.Context, blockHeight int64) error {
 // It takes a `syncMode` parameter, which signals whether or not the node is currently syncing data
 func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
 	// this would go in Commit
-	defer r.mempool.reset()
+	// defer r.mempool.reset()
 
 	r.log.Debug("committing block", zap.Int64("blockHeight", blockHeight))
 
@@ -175,6 +175,10 @@ func (r *TxApp) ApplyMempool(ctx context.Context, tx *transactions.Transaction) 
 	}
 
 	return r.mempool.applyTransaction(ctx, tx)
+}
+
+func (r *TxApp) ResetMempool() {
+	r.mempool.reset()
 }
 
 // GetAccount gets account info from either the mempool or the account store.
