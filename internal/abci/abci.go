@@ -115,22 +115,7 @@ type AbciApp struct {
 
 	consensusParams ConsensusParams
 
-	// commitHooks is a set of functions that are called after a block is committed.
-	// If any of the hooks return an error, the rest of the hooks will be called,
-	// and the node will then fail with a consensus error.
-	// This can be used to build extra logic within a node, such as broadcasting validator txa,
-	// sending data to Arweave, etc.
-	// It is placed within abci's `Commit` method, since abci blocks mempool updates during commit.
-	// This allows validators to automatically author transactions, and not conflict with potential
-	// transactions authored by the same validator's administrator.
-	commitHooks []CommitHook
-
-	// blockInfo is information about the last block that was finalized.
-	// it is set and at the end of FinalizeBlock.
-	// It is primarily made to be used in Commit.  If used elsewhere,
-	// the implementer should take care to ensure that they account for potential
-	// nil values (in the case of the node not yet having finalized a block).
-	blockInfo *BlockInfo
+	broadcastFn EventBroadcaster
 }
 
 func (a *AbciApp) ChainID() string {
@@ -321,11 +306,11 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		},
 	}
 
-	for _, hook := range a.commitHooks {
-		err := hook(ctx, a.blockInfo)
+	// Broadcast any events that have not been broadcasted yet
+	if a.broadcastFn != nil {
+		err = a.broadcastFn(ctx, proposerPubKey)
 		if err != nil {
-			a.log.Error("commit hook failed", zap.Error(err))
-			return nil, fmt.Errorf("commit hook failed: %w", err)
+			return nil, fmt.Errorf("failed to broadcast events: %w", err)
 		}
 	}
 
@@ -358,12 +343,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("failed to create new app hash: %w", err)
 	}
 	res.AppHash = appHash
-
-	a.blockInfo = &BlockInfo{
-		Height:    req.Height,
-		BlockHash: req.Hash,
-		Proposer:  proposerPubKey,
-	}
 
 	return res, nil
 }
@@ -900,18 +879,8 @@ func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
 	return m.SetBlockHeight(ctx, height+1)
 }
 
-// BlockInfo contains information about a block.
-type BlockInfo struct {
-	Height    int64  // block height
-	Proposer  []byte // public key of the proposer
-	BlockHash []byte // hash of the block
-}
+type EventBroadcaster func(ctx context.Context, proposer []byte) error
 
-type CommitHook func(ctx context.Context, block *BlockInfo) error
-
-// AddCommitHook adds a function to be called after a block is committed.
-// We allow this to be done ad-hoc, to give the application control over when
-// their commit hook begins taking place (e.g. before blocksync, after blocksync, etc.)
-func (a *AbciApp) AddCommitHook(hook CommitHook) {
-	a.commitHooks = append(a.commitHooks, hook)
+func (a *AbciApp) AddEventBroadcaster(broadcaster EventBroadcaster) {
+	a.broadcastFn = broadcaster
 }

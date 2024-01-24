@@ -102,7 +102,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	cometBftClient := buildCometBftClient(cometBftNode)
 
 	eventBroadcaster := buildEventBroadcaster(d, ev, &wrappedCometBFTClient{cometBftClient}, txApp, vstore)
-	abciApp.AddCommitHook(eventBroadcaster.RunBroadcast)
+	abciApp.AddEventBroadcaster(eventBroadcaster.RunBroadcast)
 
 	// oracle manager
 	om := buildOracleManager(d, closers, evm, cometBftNode, vstore)
