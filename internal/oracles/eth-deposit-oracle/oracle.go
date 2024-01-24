@@ -47,6 +47,7 @@ func init() {
 
 // EthDepositOracle listens for credit events on the escrow contract
 // deployed on the ethereum blockchain and stores them in the eventstore.
+// Requires ethereum endpoint, escrow address and chain id to be provided
 type EthDepositOracle struct {
 	cfg                  EthDepositOracleConfig
 	eventstore           oracles.EventStore

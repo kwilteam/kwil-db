@@ -49,6 +49,10 @@ func (e *EventMgr) Store(ctx context.Context, body []byte, eventType string) err
 	return e.eventstore.Store(ctx, body, eventType)
 }
 
+func (e *EventMgr) GetEvents(ctx context.Context) ([]*types.VotableEvent, error) {
+	return e.eventstore.GetEvents(ctx)
+}
+
 // KV returns a KVStore
 func (e *EventMgr) KV(prefix []byte) sql.KVStore {
 	return e.eventstore.KV(prefix)

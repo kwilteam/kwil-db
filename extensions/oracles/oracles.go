@@ -34,6 +34,9 @@ func GetOracle(name string) (Oracle, bool) {
 }
 
 type EventStore interface {
+	// KV returns a KVStore to store metadata locally
 	KV(prefix []byte) sql.KVStore
+
+	// Store stores an event in the event store
 	Store(ctx context.Context, data []byte, eventType string) error
 }
