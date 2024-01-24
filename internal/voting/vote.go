@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sort"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/accounts"
@@ -29,8 +30,18 @@ type ResolutionPayload interface {
 	Type() string
 	// UnmarshalBinary unmarshals the payload from binary data.
 	UnmarshalBinary(data []byte) error
-	// Apply is called when a resolution is approved.
-	Apply(ctx context.Context, datastores Datastores, logger log.Logger) error
+
+	// MarshalBinary marshals the payload into binary data.
+	MarshalBinary() ([]byte, error)
+
+	// Apply is called when a resolution is approved. Voters is the list of all voters voted for the resolution, including the proposer.
+	// Ensure that all changes to the datastores should be deterministic, else it will lead to consensus failures.
+	Apply(ctx context.Context, datastores Datastores, proposer []byte, voters []Voter, logger log.Logger) error
+}
+
+type Voter struct {
+	PubKey []byte
+	Power  int64
 }
 
 // Datastores provides implementers of ResolutionPayload with access
@@ -56,4 +67,13 @@ type Datasets interface {
 	// Query executes a query with the given arguments.
 	// It will not read uncommitted data.
 	Query(ctx context.Context, dbid string, query string, args ...any) (*sql.ResultSet, error)
+}
+
+func OrderedListOfVoters(voters map[string]int64) []string {
+	var orderedVoters []string
+	for voter := range voters {
+		orderedVoters = append(orderedVoters, voter)
+	}
+	sort.Strings(orderedVoters)
+	return orderedVoters
 }

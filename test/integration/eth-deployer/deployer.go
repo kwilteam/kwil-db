@@ -1,0 +1,215 @@
+package ethdeployer
+
+import (
+	"context"
+	"crypto/ecdsa"
+	"math/big"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	ec "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/kwilteam/kwil-db/test/integration/eth-deployer/contracts"
+	"github.com/stretchr/testify/require"
+)
+
+type Deployer struct {
+	endpoint string
+	privKey  *ecdsa.PrivateKey
+	chainID  *big.Int
+
+	escrowAddr common.Address
+
+	escrowInst *contracts.Escrow
+	tokenInst  *contracts.ERC20
+
+	ethClient *ethclient.Client
+
+	mu sync.Mutex
+}
+
+// NewDeployer("ws://localhost:8545","dd23ca549a97cb330b011aebb674730df8b14acaee42d211ab45692699ab8ba5")
+func NewDeployer(endpoint string, pKey string, chainID int64) (*Deployer, error) {
+	ctx := context.Background()
+	ethClient, err := ethclient.DialContext(ctx, endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	privKey, err := ec.HexToECDSA(pKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Deployer{
+		endpoint:  endpoint,
+		ethClient: ethClient,
+		privKey:   privKey,
+		chainID:   big.NewInt(chainID),
+	}, nil
+}
+
+func (d *Deployer) Deploy() error {
+	auth, err := bind.NewKeyedTransactorWithChainID(d.privKey, d.chainID)
+	if err != nil {
+		return err
+	}
+
+	tokenAddr, _, tokenInst, err := contracts.DeployERC20(auth, d.ethClient)
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(5 * time.Second)
+
+	auth, err = bind.NewKeyedTransactorWithChainID(d.privKey, d.chainID)
+	if err != nil {
+		return err
+	}
+
+	escrowAddr, _, escrowInst, err := contracts.DeployEscrow(auth, d.ethClient, tokenAddr)
+	if err != nil {
+		return err
+	}
+
+	d.escrowAddr = escrowAddr
+	d.escrowInst = escrowInst
+	d.tokenInst = tokenInst
+
+	return nil
+}
+
+func (d *Deployer) EscrowAddress() string {
+	return d.escrowAddr.String()
+}
+
+// Approves the escrow contract to spend the given amount of tokens from the senders account
+func (d *Deployer) Approve(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	auth, err := d.prepareTxAuth(ctx, sender)
+	if err != nil {
+		return err
+	}
+
+	_, err = d.tokenInst.Approve(auth, d.escrowAddr, amount)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// sender deposits given amount of tokens to the escrow contract
+func (d *Deployer) Deposit(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	auth, err := d.prepareTxAuth(ctx, sender)
+	if err != nil {
+		return err
+	}
+
+	_, err = d.escrowInst.Deposit(auth, amount)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// sender deposits given amount of tokens to the escrow contract
+func (d *Deployer) DummyTx(ctx context.Context, sender *ecdsa.PrivateKey) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	auth, err := d.prepareTxAuth(ctx, sender)
+	if err != nil {
+		return err
+	}
+
+	_, err = d.escrowInst.Test(auth)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *Deployer) VerifyDeposit(t *testing.T, ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) {
+	addr := ec.PubkeyToAddress(sender.PublicKey)
+
+	preBalance, err := d.EscrowBalance(ctx, addr)
+	require.NoError(t, err)
+
+	err = d.Deposit(ctx, sender, amount)
+	require.NoError(t, err)
+
+	postBalance, err := d.EscrowBalance(ctx, addr)
+	require.NoError(t, err)
+
+	require.Equal(t, preBalance.Add(preBalance, amount), postBalance)
+}
+
+func (d *Deployer) prepareTxAuth(ctx context.Context, sender *ecdsa.PrivateKey) (*bind.TransactOpts, error) {
+	addr := ec.PubkeyToAddress(sender.PublicKey)
+
+	nonce, err := d.ethClient.PendingNonceAt(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	auth, err := bind.NewKeyedTransactorWithChainID(sender, d.chainID)
+	if err != nil {
+		return nil, err
+	}
+
+	// suggest gas
+	gasPrice, err := d.ethClient.SuggestGasPrice(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	auth.Nonce = big.NewInt(int64(nonce))
+	auth.Value = big.NewInt(0)      // in wei
+	auth.GasLimit = uint64(3000000) // in units
+	auth.GasPrice = gasPrice
+	return auth, nil
+}
+
+// EscrowBalance returns the amount of funds deposited by a user to the escrow contract
+func (d *Deployer) EscrowBalance(ctx context.Context, address common.Address) (*big.Int, error) {
+	return d.escrowInst.Balance(&bind.CallOpts{Context: ctx}, address)
+}
+
+// UserBalance returns the user token balance
+func (d *Deployer) UserBalance(ctx context.Context, address common.Address) (*big.Int, error) {
+	return d.tokenInst.BalanceOf(&bind.CallOpts{Context: ctx}, address)
+}
+
+// Allowance returns the amount of tokens the owner has approved the escrow contract to spend
+func (d *Deployer) Allowance(ctx context.Context, owner common.Address) (*big.Int, error) {
+	return d.tokenInst.Allowance(&bind.CallOpts{Context: ctx}, owner, d.escrowAddr)
+}
+
+// Keep Mining
+func (d *Deployer) KeepMining(ctx context.Context) error {
+	// go routine to keep triggering dummy transactions
+	senderPk := "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
+	sender, err := ec.HexToECDSA(senderPk)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for {
+			d.DummyTx(ctx, sender)
+			time.Sleep(5 * time.Second)
+		}
+	}()
+	return nil
+}

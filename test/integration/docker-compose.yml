@@ -257,6 +257,132 @@ services:
       timeout: 6s
       retries: 10
 
+  node4:
+    container_name: node4
+    image: kwild:latest
+    ports:
+      - "8084:8080"
+      - "50055:50051"
+      - "26696:26656"
+      - "26697:26657"
+    env_file:
+      - .env
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/node4
+        target: /app/kwil
+    networks:
+      kwil-int-testnet:
+        ipv4_address: 172.10.100.6
+    depends_on:
+      ext1:
+        condition: service_started
+      pg4:
+        condition: service_healthy
+    command: |
+      --root-dir=/app/kwil
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
+      --app.extension-endpoints=ext1:50051
+      --app.grpc-listen-addr=:50051
+      --app.http-listen-addr=:8080
+      --app.admin-listen-addr=unix:///tmp/admin.sock
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg_db_host=pg4
+      --app.pg_db_port=5432
+      --app.pg_db_user=kwild
+      --app.pg_db_pass=kwild
+
+  pg4:
+    container_name: pg4
+    image: postgres:16.1
+    ports:
+      - "5437:5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+    volumes: 
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
+    networks:
+      kwil-int-testnet:
+        ipv4_address: 172.10.101.6
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  node5:
+    container_name: node5
+    image: kwild:latest
+    ports:
+      - "8085:8080"
+      - "50056:50051"
+      - "26706:26656"
+      - "26707:26657"
+    env_file:
+      - .env
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/node5
+        target: /app/kwil
+    networks:
+      kwil-int-testnet:
+        ipv4_address: 172.10.100.7
+    depends_on:
+        ext1:
+          condition: service_started
+        pg4:
+          condition: service_healthy
+    command: |
+      --root-dir=/app/kwil
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
+      --app.extension-endpoints=ext1:50051
+      --app.grpc-listen-addr=:50051
+      --app.http-listen-addr=:8080
+      --app.admin-listen-addr=unix:///tmp/admin.sock
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg_db_host=pg5
+      --app.pg_db_port=5432
+      --app.pg_db_user=kwild
+      --app.pg_db_pass=kwild
+
+  pg5:
+    container_name: pg5
+    image: postgres:16.1
+    ports:
+      - "5438:5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+    volumes: 
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
+    networks:
+      kwil-int-testnet:
+        ipv4_address: 172.10.101.7
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
   # this ext is shared by all nodes
   # we can make a separate ext for each node if we want
   ext1:

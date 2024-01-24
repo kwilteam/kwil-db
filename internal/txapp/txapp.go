@@ -32,6 +32,7 @@ func NewTxApp(db sql.OuterTxMaker, engine ExecutionEngine, acc AccountsStore, va
 			accountStore:   acc,
 			accounts:       make(map[string]*accounts.Account),
 			validatorStore: validators,
+			eventStore:     eventStore,
 		},
 		signer:     signer,
 		chainID:    chainID,
@@ -206,21 +207,44 @@ func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted b
 // It takes txNonce as an argument because, the proposer may have its own transactions
 // in the mempool that are included in the current block. Therefore, we need to know the
 // largest nonce of the transactions included in the block that are authored by the proposer.
+// This transaction only includes voteBodies for events whose bodies have not been received by the network.
+// Therefore, there won't be more than 1 VoteBody transaction per event.
 func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error) {
 	events, err := r.EventStore.GetEvents(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if len(events) == 0 {
+
+	// Final events are the events whose bodies have not been received by the network
+	var finalEvents []*types.VotableEvent
+	for _, event := range events {
+		// Check if the event body is already received by the network
+		containsBody, err := r.VoteStore.ContainsBodyOrFinished(ctx, event.ID())
+		if err != nil {
+			return nil, err
+		}
+		if !containsBody {
+			finalEvents = append(finalEvents, event)
+		}
+	}
+
+	if len(finalEvents) == 0 {
 		return nil, nil
 	}
 
 	tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteBodies{
-		Events: events,
+		Events: finalEvents,
 	}, r.chainID, txNonce)
 	if err != nil {
 		return nil, err
 	}
+
+	// Fee Estimate
+	amt, err := r.Price(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	tx.Body.Fee = amt
 
 	err = tx.Sign(r.signer)
 	if err != nil {

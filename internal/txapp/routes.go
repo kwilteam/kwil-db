@@ -358,6 +358,11 @@ func (v *validatorLeaveRoute) Price(ctx context.Context, router *TxApp, tx *tran
 	return big.NewInt(10000000000000), nil
 }
 
+const (
+	ValidatorVoteBodyBytePrice = 1000      // Per byte cost
+	ValidatorVoteIDPrice       = 1000 * 16 // 16 bytes for the UUID
+)
+
 // validatorVoteIDsRoute is a route for approving a set of votes based on their IDs.
 type validatorVoteIDsRoute struct{}
 
@@ -421,7 +426,16 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 }
 
 func (v *validatorVoteIDsRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
-	return bigZero, nil
+	// Check if gas costs are enabled
+
+	// VoteID pricing is based on the number of vote IDs.
+	ids := &transactions.ValidatorVoteIDs{}
+	err := ids.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal vote IDs: %w", err)
+	}
+
+	return big.NewInt(int64(len(ids.ResolutionIDs)) * ValidatorVoteIDPrice), nil
 }
 
 // validatorVoteBodiesRoute is a route for handling votes for a set of vote bodies.
@@ -450,7 +464,7 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	expiryHeight := ctx.BlockHeight + ctx.VotingPeriod
 
 	for _, event := range vote.Events {
-		err = router.VoteStore.CreateResolution(ctx.Ctx, event, expiryHeight)
+		err = router.VoteStore.CreateResolution(ctx.Ctx, event, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
@@ -462,6 +476,7 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
+		// If the local validator has already voted on the event, then we should delete the event.
 		hasVoted, err := router.VoteStore.HasVoted(ctx.Ctx, event.ID(), localValidator)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
@@ -478,5 +493,20 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 }
 
 func (v *validatorVoteBodiesRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
-	return bigZero, nil
+	// Check if gas costs are enabled
+
+	// VoteBody pricing is based on the size of the vote bodies of all the events in the tx payload.
+	votes := &transactions.ValidatorVoteBodies{}
+	err := votes.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal vote bodies: %w", err)
+	}
+
+	var totalSize int64
+
+	for _, event := range votes.Events {
+		totalSize += int64(len(event.Body))
+	}
+
+	return big.NewInt(totalSize * ValidatorVoteBodyBytePrice), nil
 }
