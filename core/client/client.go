@@ -1,4 +1,4 @@
-// Package client contains the client for interacting with the Kwil public API.
+// Package clientType contains the clientType for interacting with the Kwil public API.
 // It's supposed to be used as go-sdk for Kwil, currently used by the Kwil CLI.
 package client
 
@@ -20,13 +20,14 @@ import (
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	"github.com/kwilteam/kwil-db/core/types"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
 
 	"go.uber.org/zap"
 )
 
-// Client is a Kwil client that can interact with the main public Kwil RPC.
+// Client is a Kwil clientType that can interact with the main public Kwil RPC.
 type Client struct {
 	txClient user.TxSvcClient
 	Signer   auth.Signer
@@ -38,9 +39,11 @@ type Client struct {
 	noWarnings bool // silence warning logs
 }
 
-// NewClient creates a Kwil client. It will dial the remote host via HTTP, and
+var _ clientType.Client = (*Client)(nil)
+
+// NewClient creates a Kwil clientType. It will dial the remote host via HTTP, and
 // verify the chain ID of the remote host against the chain ID passed in.
-func NewClient(ctx context.Context, target string, options *ClientOptions) (c *Client, err error) {
+func NewClient(ctx context.Context, target string, options *clientType.Options) (c *Client, err error) {
 	parsedUrl, err := url.Parse(target)
 	if err != nil {
 		return nil, fmt.Errorf("parse url: %w", err)
@@ -50,19 +53,19 @@ func NewClient(ctx context.Context, target string, options *ClientOptions) (c *C
 
 	clt, err := WrapClient(ctx, httpClient, options)
 	if err != nil {
-		return nil, fmt.Errorf("wrap client: %w", err)
+		return nil, fmt.Errorf("wrap clientType: %w", err)
 	}
 
-	clt.logger = *clt.logger.Named("client").With(zap.String("host", target))
+	clt.logger = *clt.logger.Named("clientType").With(zap.String("host", target))
 
 	return clt, nil
 }
 
-// WrapClient wraps an rpc client with a Kwil client.
-// It provides a way to use a custom rpc client with the Kwil client.
-// Unless a custom rpc client is needed, use Dial instead.
-func WrapClient(ctx context.Context, client user.TxSvcClient, options *ClientOptions) (*Client, error) {
-	clientOptions := DefaultOptions()
+// WrapClient wraps an rpc clientType with a Kwil clientType.
+// It provides a way to use a custom rpc clientType with the Kwil clientType.
+// Unless a custom rpc clientType is needed, use Dial instead.
+func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientType.Options) (*Client, error) {
+	clientOptions := clientType.DefaultOptions()
 	clientOptions.Apply(options)
 
 	c := &Client{
@@ -84,7 +87,7 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *ClientOpt
 		}
 		c.chainID = chainID
 	} else if c.chainID != chainID {
-		return nil, fmt.Errorf("remote host chain ID %q != client configured %q", chainID, c.chainID)
+		return nil, fmt.Errorf("remote host chain ID %q != clientType configured %q", chainID, c.chainID)
 	}
 
 	return c, nil
@@ -98,16 +101,16 @@ func syncBcastFlag(syncBcast bool) rpcClient.BroadcastWait {
 	return syncFlag
 }
 
-func (c *Client) Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...TxOpt) (transactions.TxHash, error) {
+func (c *Client) Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...clientType.TxOpt) (transactions.TxHash, error) {
 	// Get account balance to ensure we can afford the transfer, and use the
 	// nonce to avoid a second GetAccount in newTx.
 	acct, err := c.txClient.GetAccount(ctx, c.Signer.Identity(), types.AccountStatusPending)
 	if err != nil {
 		return nil, err
 	}
-	nonceOpt := WithNonce(acct.Nonce + 1)
-	opts = append([]TxOpt{nonceOpt}, opts...) // prepend in case caller specified a nonce
-	txOpts := getTxOpts(opts)
+	nonceOpt := clientType.WithNonce(acct.Nonce + 1)
+	opts = append([]clientType.TxOpt{nonceOpt}, opts...) // prepend in case caller specified a nonce
+	txOpts := clientType.GetTxOpts(opts)
 
 	trans := &transactions.Transfer{
 		To:     to,
@@ -126,7 +129,7 @@ func (c *Client) Transfer(ctx context.Context, to []byte, amount *big.Int, opts 
 	c.logger.Debug("transfer", zap.String("to", hex.EncodeToString(to)),
 		zap.String("amount", amount.String()))
 
-	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.syncBcast))
+	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
 }
 
 // ChainInfo get the current blockchain information like chain ID and best block
@@ -146,8 +149,8 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Sche
 }
 
 // DeployDatabase deploys a schema
-func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schema, opts ...TxOpt) (transactions.TxHash, error) {
-	txOpts := getTxOpts(opts)
+func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schema, opts ...clientType.TxOpt) (transactions.TxHash, error) {
+	txOpts := clientType.GetTxOpts(opts)
 	tx, err := c.newTx(ctx, payload, txOpts)
 	if err != nil {
 		return nil, err
@@ -157,23 +160,23 @@ func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schem
 		zap.String("signature_type", tx.Signature.Type),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)),
 		zap.String("fee", tx.Body.Fee.String()), zap.Int64("nonce", int64(tx.Body.Nonce)))
-	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.syncBcast))
+	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
 }
 
 // DropDatabase drops a database by name, using the configured signer to derive
 // the DB ID.
-func (c *Client) DropDatabase(ctx context.Context, name string, opts ...TxOpt) (transactions.TxHash, error) {
+func (c *Client) DropDatabase(ctx context.Context, name string, opts ...clientType.TxOpt) (transactions.TxHash, error) {
 	dbid := utils.GenerateDBID(name, c.Signer.Identity())
 	return c.DropDatabaseID(ctx, dbid, opts...)
 }
 
 // DropDatabaseID drops a database by ID.
-func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt) (transactions.TxHash, error) {
+func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...clientType.TxOpt) (transactions.TxHash, error) {
 	identifier := &transactions.DropSchema{
 		DBID: dbid,
 	}
 
-	txOpts := getTxOpts(opts)
+	txOpts := clientType.GetTxOpts(opts)
 	tx, err := c.newTx(ctx, identifier, txOpts)
 	if err != nil {
 		return nil, err
@@ -184,7 +187,7 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt)
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)),
 		zap.String("fee", tx.Body.Fee.String()), zap.Int64("nonce", int64(tx.Body.Nonce)))
 
-	res, err := c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.syncBcast))
+	res, err := c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +198,7 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt)
 // ExecuteAction executes an action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
 // It can take any number of inputs, and if multiple tuples of inputs are passed, it will execute them transactionally.
-func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...TxOpt) (transactions.TxHash, error) {
+func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...clientType.TxOpt) (transactions.TxHash, error) {
 	stringTuples, err := convertTuples(tuples)
 	if err != nil {
 		return nil, err
@@ -207,7 +210,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		Arguments: stringTuples,
 	}
 
-	txOpts := getTxOpts(opts)
+	txOpts := clientType.GetTxOpts(opts)
 	tx, err := c.newTx(ctx, executionBody, txOpts)
 	if err != nil {
 		return nil, err
@@ -219,11 +222,11 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)),
 		zap.String("fee", tx.Body.Fee.String()), zap.Int64("nonce", int64(tx.Body.Nonce)))
 
-	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.syncBcast))
+	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
 }
 
 // CallAction call an action. It returns the result records.
-func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any) (*Records, error) {
+func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any) (*clientType.Records, error) {
 	stringInputs, err := convertTuple(inputs)
 	if err != nil {
 		return nil, err
@@ -250,7 +253,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		return nil, fmt.Errorf("call action: %w", err)
 	}
 
-	return NewRecordsFromMaps(res), nil
+	return clientType.NewRecordsFromMaps(res), nil
 }
 
 func DecodeOutputs(bts []byte) ([]map[string]any, error) {
@@ -268,13 +271,13 @@ func DecodeOutputs(bts []byte) ([]map[string]any, error) {
 }
 
 // Query executes a query
-func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records, error) {
+func (c *Client) Query(ctx context.Context, dbid string, query string) (*clientType.Records, error) {
 	res, err := c.txClient.Query(ctx, dbid, query)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewRecordsFromMaps(res), nil
+	return clientType.NewRecordsFromMaps(res), nil
 }
 
 func (c *Client) ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetIdentifier, error) {

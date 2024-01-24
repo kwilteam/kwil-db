@@ -3,15 +3,12 @@ package common
 import (
 	"context"
 	"fmt"
-	"math/big"
-	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/gatewayclient"
-	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 )
@@ -28,7 +25,7 @@ const (
 	UsingGateway
 )
 
-type RoundTripper func(ctx context.Context, client Client, conf *config.KwilCliConfig) error
+type RoundTripper func(ctx context.Context, client clientType.Client, conf *config.KwilCliConfig) error
 
 // DialClient dials a kwil node and calls the passed function with the client.
 // It includes the command that is being run, so that it can read global flags.
@@ -44,7 +41,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 	needPrivateKey := flags&WithoutPrivateKey == 0
 
-	clientConfig := client.ClientOptions{}
+	clientConfig := clientType.Options{}
 	if conf.PrivateKey != nil {
 		clientConfig.Signer = &auth.EthPersonalSigner{Key: *conf.PrivateKey}
 		if needPrivateKey { // only check chain ID if signing something
@@ -67,7 +64,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 	// if we reach here, we are talking to a gateway
 
 	client, err := gatewayclient.NewClient(ctx, conf.GrpcURL, &gatewayclient.GatewayOptions{
-		ClientOptions: clientConfig,
+		Options: clientConfig,
 		AuthSignFunc: func(message string, signer auth.Signer) (*auth.Signature, error) {
 			assumeYes, err := GetAssumeYesFlag(cmd)
 			if err != nil {
@@ -136,25 +133,6 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 	// automatic. Which do approach do we prefer?
 
 	return nil
-}
-
-// Client is a client that can be used to talk to a kwil node
-type Client interface {
-	CallAction(ctx context.Context, dbid string, action string, inputs []any) (*client.Records, error)
-	ChainID() string
-	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
-	DeployDatabase(ctx context.Context, payload *transactions.Schema, opts ...client.TxOpt) (transactions.TxHash, error)
-	DropDatabase(ctx context.Context, name string, opts ...client.TxOpt) (transactions.TxHash, error)
-	DropDatabaseID(ctx context.Context, dbid string, opts ...client.TxOpt) (transactions.TxHash, error)
-	ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...client.TxOpt) (transactions.TxHash, error)
-	GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error)
-	GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error)
-	ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetIdentifier, error)
-	Ping(ctx context.Context) (string, error)
-	Query(ctx context.Context, dbid string, query string) (*client.Records, error)
-	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)
-	WaitTx(ctx context.Context, txHash []byte, interval time.Duration) (*transactions.TcTxQueryResponse, error)
-	Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...client.TxOpt) (transactions.TxHash, error)
 }
 
 // promptMessage prompts the user to sign a message. Return an error if user

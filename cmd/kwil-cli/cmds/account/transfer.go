@@ -11,8 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/core/client"
-
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/spf13/cobra"
 )
 
@@ -33,9 +32,9 @@ func transferCmd() *cobra.Command {
 				return display.PrintErr(cmd, errors.New("invalid decimal amount"))
 			}
 
-			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
-				txHash, err := cl.Transfer(ctx, to, amount, client.WithNonce(nonceOverride),
-					client.WithSyncBroadcast(syncBcast))
+			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
+				txHash, err := cl.Transfer(ctx, to, amount, clientType.WithNonce(nonceOverride),
+					clientType.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("transfer failed: %w", err))
 				}

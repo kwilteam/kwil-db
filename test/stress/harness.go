@@ -7,11 +7,10 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
-	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
@@ -20,7 +19,7 @@ import (
 // used nonces so it can correctly make multiple unconfirmed transactions with
 // increasing nonces. See underNonceLock and recoverNonce.
 type harness struct {
-	common.Client
+	clientType.Client
 	logger *log.Logger
 	acctID []byte
 
@@ -92,7 +91,7 @@ func (h *harness) printf(msg string, args ...any) {
 	h.nestedLogger.Info(fmt.Sprintf(msg, args...))
 }
 
-func (h *harness) printRecs(ctx context.Context, recs *client.Records) {
+func (h *harness) printRecs(ctx context.Context, recs *clientType.Records) {
 	for recs.Next() {
 		if ctx.Err() != nil {
 			return
@@ -107,7 +106,7 @@ func (h *harness) executeActionAsync(ctx context.Context, dbid string, action st
 	err := h.underNonceLock(ctx, func(nonce int64) error {
 		var err error
 		txHash, err = h.ExecuteAction(ctx, dbid, action, inputs,
-			client.WithNonce(nonce), client.WithFee(&big.Int{}))
+			clientType.WithNonce(nonce), clientType.WithFee(&big.Int{}))
 		return err
 	})
 	if err != nil {

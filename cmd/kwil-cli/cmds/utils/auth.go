@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/gatewayclient"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +36,7 @@ func kgwAuthnCmd() *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialClient(cmd.Context(), cmd, common.UsingGateway,
-				func(ctx context.Context, client common.Client, cfg *config.KwilCliConfig) error {
+				func(ctx context.Context, client clientType.Client, cfg *config.KwilCliConfig) error {
 					if cfg.PrivateKey == nil {
 						return display.PrintErr(cmd, fmt.Errorf("private key not provided"))
 					}

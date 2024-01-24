@@ -25,7 +25,6 @@ import (
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/joho/godotenv"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/core/adminclient"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -33,6 +32,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/gatewayclient"
 	"github.com/kwilteam/kwil-db/core/log"
 	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/kwilteam/kwil-db/test/driver/operator"
 	"github.com/stretchr/testify/require"
@@ -465,19 +465,19 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driv
 func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gatewayProvider bool) *driver.KwildClientDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
-	var kwilClt common.Client
+	var kwilClt clientType.Client
 	var err error
 
 	if gatewayProvider {
 		kwilClt, err = gatewayclient.NewClient(context.TODO(), endpoint, &gatewayclient.GatewayOptions{
-			ClientOptions: client.ClientOptions{
+			Options: clientType.Options{
 				Signer:  signer,
 				ChainID: testChainID,
 				Logger:  logger,
 			},
 		})
 	} else {
-		kwilClt, err = client.NewClient(context.TODO(), endpoint, &client.ClientOptions{
+		kwilClt, err = client.NewClient(context.TODO(), endpoint, &clientType.Options{
 			Signer:  signer,
 			ChainID: testChainID,
 			Logger:  logger,
@@ -496,7 +496,7 @@ func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) *driver.KwildClientD
 	gt, err := gRPC.New(context.Background(), r.cfg.GrpcEndpoint, gtOptions...)
 	require.NoError(r.t, err, "failed to create grpc transport")
 
-	kwilClt, err := client.WrapClient(context.TODO(), gt, &client.ClientOptions{
+	kwilClt, err := client.WrapClient(context.TODO(), gt, &clientType.Options{
 		Signer:  signer,
 		ChainID: testChainID,
 		Logger:  logger,
