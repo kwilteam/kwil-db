@@ -143,8 +143,9 @@ func (e *EventStore) DeleteEvent(ctx context.Context, id types.UUID) error {
 	return err
 }
 
-// GetUnreceivedEvents gets all events that have not been received by the network in a block.
-// Events are only marked as "received" when they have been included in a block, by this validator.
+// GetUnreceivedEvents retrieves events that are neither received by the network nor previously broadcasted.
+// An event is considered "received" only after its inclusion in a block.
+// The function excludes events that have been broadcasted but are still pending in the mempool, awaiting block inclusion.
 func (e *EventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.VotableEvent, error) {
 	res, err := e.db.Query(ctx, getUnbroadcastedEvents)
 	if err != nil {
@@ -182,6 +183,23 @@ func (e *EventStore) MarkReceived(ctx context.Context, id types.UUID) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	_, err := e.db.Execute(ctx, markReceived, id[:])
+	return err
+}
+
+// MarkBroadcasted marks the event as broadcasted.
+func (e *EventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_, err := e.db.Execute(ctx, markBroadcasted, types.UUIDArray(ids))
+	return err
+}
+
+// MarkRebroadcast marks the event to be rebroadcasted. Usually in scenarios where
+// the transaction was rejected by mempool due to invalid nonces.
+func (e *EventStore) MarkRebroadcast(ctx context.Context, ids []types.UUID) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_, err := e.db.Execute(ctx, markRebroadcast, types.UUIDArray(ids))
 	return err
 }
 

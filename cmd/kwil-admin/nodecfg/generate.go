@@ -17,10 +17,10 @@ import (
 
 	// NOTE: do not use the types from these internal packages on nodecfg's
 	// exported API.
+	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
-
-	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
+	ethDepOracle "github.com/kwilteam/kwil-db/internal/oracles/eth-deposit-oracle"
 )
 
 const (
@@ -35,6 +35,14 @@ var (
 	genesisValidatorGas, _ = big.NewInt(0).SetString("10000000000000000000000", 10)
 )
 
+type EthDepositOracle struct {
+	Enabled               bool
+	Endpoint              string
+	EscrowAddress         string
+	RequiredConfirmations string
+	ChainID               string
+}
+
 type NodeGenerateConfig struct {
 	ChainID       string
 	BlockInterval time.Duration
@@ -44,6 +52,9 @@ type NodeGenerateConfig struct {
 	WithoutGasCosts bool
 	WithoutNonces   bool
 	Allocs          map[string]*big.Int
+	VoteExpiry      int64
+	// Eth deposit oracle
+	EthDeposits EthDepositOracle
 }
 
 type TestnetGenerateConfig struct {
@@ -64,8 +75,10 @@ type TestnetGenerateConfig struct {
 	JoinExpiry              int64
 	WithoutGasCosts         bool
 	WithoutNonces           bool
+	VoteExpiry              int64
 	Allocs                  map[string]*big.Int
 	FundNonValidators       bool
+	EthDeposits             EthDepositOracle
 }
 
 // ConfigOpts is a struct to alter the generation of the node config.
@@ -100,6 +113,15 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	cfg.RootDir = rootDir
 	if genCfg.BlockInterval > 0 {
 		cfg.ChainCfg.Consensus.TimeoutCommit = config.Duration(genCfg.BlockInterval)
+	}
+
+	if genCfg.EthDeposits.Enabled {
+		cfg.AppCfg.Oracles[ethDepOracle.OracleName] = map[string]string{
+			ethDepOracle.EthDepositEndpoint:              genCfg.EthDeposits.Endpoint,
+			ethDepOracle.EthDepositEscrowAddress:         genCfg.EthDeposits.EscrowAddress,
+			ethDepOracle.EthDepositRequiredConfirmations: genCfg.EthDeposits.RequiredConfirmations,
+			ethDepOracle.EthDepositChainID:               genCfg.EthDeposits.ChainID,
+		}
 	}
 
 	pub, err := GenerateNodeFiles(rootDir, cfg, false)
@@ -177,6 +199,8 @@ func (genCfg *NodeGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisC
 	genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
 	genesisCfg.ConsensusParams.WithoutGasCosts = genCfg.WithoutGasCosts
 	genesisCfg.ConsensusParams.WithoutNonces = genCfg.WithoutNonces
+	genesisCfg.ConsensusParams.Votes.VoteExpiry = genCfg.VoteExpiry
+
 	numAllocs := len(genCfg.Allocs)
 	if !genCfg.WithoutGasCosts { // when gas is enabled, give genesis validators some funds
 		numAllocs += len(genesisCfg.Validators)
@@ -228,6 +252,15 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		err = cfg.Merge(configFile)
 		if err != nil {
 			return fmt.Errorf("failed to merge config file %s: %w", genCfg.ConfigFile, err)
+		}
+	}
+
+	if genCfg.EthDeposits.Enabled {
+		cfg.AppCfg.Oracles[ethDepOracle.OracleName] = map[string]string{
+			ethDepOracle.EthDepositEndpoint:              genCfg.EthDeposits.Endpoint,
+			ethDepOracle.EthDepositEscrowAddress:         genCfg.EthDeposits.EscrowAddress,
+			ethDepOracle.EthDepositRequiredConfirmations: genCfg.EthDeposits.RequiredConfirmations,
+			ethDepOracle.EthDepositChainID:               genCfg.EthDeposits.ChainID,
 		}
 	}
 
@@ -321,6 +354,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		}
 
 		cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName // not abs/rooted because this might be run in a container
+
 		writeConfigFile(filepath.Join(nodeDir, config.ConfigFileName), cfg)
 	}
 

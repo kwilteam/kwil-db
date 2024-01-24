@@ -14,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/internal/events/broadcast"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/kv"
 	"github.com/kwilteam/kwil-db/internal/txapp"
@@ -39,8 +40,6 @@ type AbciConfig struct {
 	ChainID            string
 	ApplicationVersion uint64
 	GenesisAllocs      map[string]*big.Int
-	// genesisCft.Alloc
-	// GasEnabled bool // for mempool policy modification
 }
 
 type AtomicCommitter interface {
@@ -193,13 +192,6 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 				zap.String("payloadType", tx.Body.PayloadType.String()))
 			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "wrong chain ID"}, nil
 		}
-		// we no longer need to do this, it fails in the mempool itself
-		// // Verify Payload type
-		// if !tx.Body.PayloadType.Valid() {
-		// 	code = codeInvalidTxType
-		// 	logger.Debug("invalid payload type", zap.String("payloadType", tx.Body.PayloadType.String()))
-		// 	return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "invalid payload type"}, nil
-		// }
 
 		// Verify Signature
 		err = ident.VerifyTransaction(tx)
@@ -209,7 +201,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil
 		}
 	} else {
-		logger.Info("Recheck", zap.String("hash", hex.EncodeToString(txHash)), zap.Uint64("nonce", tx.Body.Nonce))
+		logger.Info("Recheck", zap.String("hash", hex.EncodeToString(txHash)), zap.Uint64("nonce", tx.Body.Nonce), zap.String("payloadType", tx.Body.PayloadType.String()), zap.String("sender", hex.EncodeToString(tx.Sender)))
 	}
 
 	err = a.txApp.ApplyMempool(ctx, tx)
@@ -315,7 +307,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	// Broadcast any events that have not been broadcasted yet
 	if a.broadcastFn != nil {
-		err = a.broadcastFn(ctx, proposerPubKey)
+		err = a.broadcastFn(ctx, a.txApp, proposerPubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to broadcast events: %w", err)
 		}
@@ -902,7 +894,7 @@ func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
 	return m.SetBlockHeight(ctx, height+1)
 }
 
-type EventBroadcaster func(ctx context.Context, proposer []byte) error
+type EventBroadcaster func(ctx context.Context, feeEstimator broadcast.FeeEstimator, proposer []byte) error
 
 func (a *AbciApp) AddEventBroadcaster(broadcaster EventBroadcaster) {
 	a.broadcastFn = broadcaster

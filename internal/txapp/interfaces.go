@@ -87,7 +87,7 @@ type VoteStore interface {
 	// 2. the resolution has expired
 	// 3. the resolution has been approved
 	ContainsBodyOrFinished(ctx context.Context, resolutionID types.UUID) (bool, error)
-	CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64) error
+	CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64, proposer []byte) error
 	Expire(ctx context.Context, blockheight int64) error
 	UpdateVoter(ctx context.Context, identifier []byte, power int64) error
 	// ProcessConfirmedResolutions processes all resolutions that have been confirmed.
@@ -111,4 +111,5 @@ type EventStore interface {
 	// but also to not delete it, as it may need to get the event
 	// body in case it is a future block proposer.
 	MarkReceived(ctx context.Context, id types.UUID) error
+	MarkRebroadcast(ctx context.Context, ids []types.UUID) error
 }

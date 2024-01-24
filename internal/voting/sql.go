@@ -16,9 +16,12 @@ const (
 		id BYTEA PRIMARY KEY, -- id is an rfc4122 uuid derived from the body
 		body BYTEA, -- body is the actual resolution info
 		type BYTEA, -- type is the type of resolution
+		voteBodyProposer BYTEA, -- voteBodyProposer is the identifier of the node that supplied the vote body
 		expiration INT8 NOT NULL, -- expiration is the blockheight at which the resolution expires
+		extraVoteID BOOLEAN NOT NULL DEFAULT FALSE, -- If voteBodyProposer had sent VoteID before VoteBody, this is set to true
 		UNIQUE (id, body, type),
-		FOREIGN KEY(type) REFERENCES ` + votingSchemaName + `.resolution_types(id) ON UPDATE CASCADE ON DELETE CASCADE
+		FOREIGN KEY(type) REFERENCES ` + votingSchemaName + `.resolution_types(id) ON UPDATE CASCADE ON DELETE CASCADE,
+		FOREIGN KEY(voteBodyProposer) REFERENCES ` + votingSchemaName + `.voters(id)
 	);`
 
 	// resolutionTypeIndex is the sql index used to index the type of a resolution
@@ -58,33 +61,34 @@ const (
 	// present in the resolutions table. In scenarios where VoteID is received
 	// before VoteBody, the body and type will be updated in the existing
 	// resolution entry.
-	upsertResolution = `INSERT INTO ` + votingSchemaName + `.resolutions (id, body, type, expiration)
+	upsertResolution = `INSERT INTO ` + votingSchemaName + `.resolutions (id, body, type, expiration, voteBodyProposer, extraVoteID)
 	VALUES ($1, $2, (
 		SELECT id
 		FROM ` + votingSchemaName + `.resolution_types
 		WHERE name = $3
-	), $4)
+	), $4, $5, $6)
 	ON CONFLICT(id)
 		DO UPDATE
 		SET body = $2, type = (
 			SELECT id
 			FROM ` + votingSchemaName + `.resolution_types
 			WHERE name = $3
-		);`
+		),
+		voteBodyProposer = $5,
+		extraVoteID = $6;`
 
 	// upsertVoter is the sql statement used to ensure a voter is present in the voters table.  If the voter is present, the power is updated.
 	upsertVoter = `INSERT INTO ` + votingSchemaName + `.voters (id, name, power) VALUES ($1, $2, $3)
-		ON CONFLICT(id) DO UPDATE SET power = EXCLUDED.power + $3;` // IS THIS INCREMENT REALLY RIGHT OR SHOULD THIS BE power = $3 ?
-
-	// decreaseVoterPower is the sql statement used to decrease the power of a voter
-	// this is necessary because the voters table CHECK filters before the on conflict
-	decreaseVoterPower = `UPDATE ` + votingSchemaName + `.voters SET power = power - $2 WHERE id = $1;`
+		ON CONFLICT(id) DO UPDATE SET power = $3;`
 
 	// removeVoter is the sql statement used to remove a voter from the voters table
 	removeVoter = `DELETE FROM ` + votingSchemaName + `.voters WHERE id = $1;`
 
 	// getVoterPower is the sql statement used to get the power and name of a voter
 	getVoterPower = `SELECT power FROM ` + votingSchemaName + `.voters WHERE id = $1;`
+
+	// getVoterName is the sql statement used to get the name of a voter
+	getVoterName = `SELECT name FROM ` + votingSchemaName + `.voters WHERE id = $1;`
 
 	// addVote adds a vote for a resolution
 	addVote = `INSERT INTO ` + votingSchemaName + `.votes (resolution_id, voter_id) VALUES ($1, $2)
@@ -93,23 +97,34 @@ const (
 	// hasVoted checks if a voter has voted on a resolution
 	hasVoted = `SELECT resolution_id FROM ` + votingSchemaName + `.votes WHERE resolution_id = $1 AND voter_id = $2;`
 
-	// expireResolutions is the sql statement used to expire resolutions
-	// it will expire resolutions that have an expiration less than or equal to the given blockheight
-	expireResolutions = `DELETE FROM ` + votingSchemaName + `.resolutions WHERE expiration <= $1 RETURNING id;`
+	// expired Resolutions is the sql statement used to get expired resolutions
+	expiredResolutions = `SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration, SUM(vr.power) AS approved_power, r.voteBodyProposer AS voteBodyProposer, r.extraVoteID AS extraVoteID
+	FROM ` + votingSchemaName + `.resolutions AS r
+	INNER JOIN ` + votingSchemaName + `.resolution_types AS t ON r.type = t.id
+	LEFT JOIN ` + votingSchemaName + `.votes AS v ON r.id = v.resolution_id
+	LEFT JOIN ` + votingSchemaName + `.voters AS vr ON v.voter_id = vr.id
+	WHERE r.expiration <= $1
+	GROUP BY r.id, r.body, t.name, r.expiration, r.voteBodyProposer, r.extraVoteID;`
 
-	// getResolutionBody gets a resolution body by id
-	getResolutionBody = `SELECT body FROM ` + votingSchemaName + `.resolutions WHERE id = $1;`
+	// containsBody checks if a resolution has a body
+	containsBody = `SELECT body is not null FROM ` + votingSchemaName + `.resolutions WHERE id = $1;`
+
+	// getResolutionVoters is the sql statement used to get the voters info of a resolution
+	getResolutionVoters = `SELECT vr.name, vr.power
+	FROM ` + votingSchemaName + `.votes v
+	JOIN ` + votingSchemaName + `.voters vr ON v.voter_id = vr.id
+	WHERE v.resolution_id = $1;`
 
 	// getResolutionVoteInfo is the sql statement used to get a resolution and the associated vote info.
 	// while it would be nice to get the needed power as well, it is significantly more expensive to do so.
 	// it would be better to cache the maximum needed power for a given resolution.
-	getResolutionVoteInfo = `SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration, SUM(vr.power) AS approved_power
+	getResolutionVoteInfo = `SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration, SUM(vr.power) AS approved_power, r.voteBodyProposer AS voteBodyProposer, r.extraVoteID AS extraVoteID
 	FROM ` + votingSchemaName + `.resolutions AS r
 	INNER JOIN ` + votingSchemaName + `.resolution_types AS t ON r.type = t.id
 	LEFT JOIN ` + votingSchemaName + `.votes AS v ON r.id = v.resolution_id
 	LEFT JOIN ` + votingSchemaName + `.voters AS vr ON v.voter_id = vr.id
 	WHERE r.id = $1
-	GROUP BY r.id, r.body, t.name;`
+	GROUP BY r.id, r.body, t.name, r.expiration, r.voteBodyProposer, r.extraVoteID;`
 
 	// getUnfilledResolutionVoteInfo gets en expiration and approved power for a resolution that has not been filled with a body and type
 	getUnfilledResolutionVoteInfo = `SELECT r.expiration AS expiration, SUM(vr.power) AS approved_power
@@ -130,13 +145,13 @@ const (
 	// we do not calculate the threshold here since we need to guarantee accuracy
 	// using big ints.
 	// it orders by id for determinism
-	getConfirmedResolutions = `SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration
+	getConfirmedResolutions = `SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration, SUM(vr.power) AS approved_power, r.voteBodyProposer AS voteBodyProposer, r.extraVoteID AS extraVoteID
 	FROM ` + votingSchemaName + `.resolutions AS r
 	INNER JOIN ` + votingSchemaName + `.resolution_types AS t ON r.type = t.id
 	LEFT JOIN ` + votingSchemaName + `.votes AS v ON r.id = v.resolution_id
 	LEFT JOIN ` + votingSchemaName + `.voters AS vr ON v.voter_id = vr.id
 	WHERE r.body IS NOT NULL
-	GROUP BY r.id, r.body, t.name
+	GROUP BY r.id, r.body, t.name, r.expiration, r.voteBodyProposer, r.extraVoteID
 	HAVING SUM(vr.power) >= $1
 	ORDER BY r.id;`
 
@@ -159,25 +174,3 @@ const (
 	// alreadyProcessed checks if a resolution has already been processed
 	alreadyProcessed = `SELECT id FROM ` + votingSchemaName + `.processed WHERE id = $1;`
 )
-
-// SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration FROM resolutions AS r INNER JOIN resolution_types AS t ON r.type = t.id LEFT JOIN votes AS v ON r.id = v.resolution_id LEFT JOIN voters AS vr ON v.voter_id = vr.id WHERE r.body IS NOT NULL GROUP BY r.id HAVING SUM(vr.power) >= 3 ORDER BY r.id;
-
-/* delete when we're sure we're done with the sprintf version of deleteResolutions
-
-// formatResolutionList formats a list of resolutions for use in a sql statement
-// it will hex encode the resolutions, and then wrap them in unhex()
-func formatResolutionList(r []types.UUID) string {
-	r = append(r, types.UUID{1, 2, 3})
-	var buf strings.Builder
-	for i, v := range r {
-		buf.WriteString(`'\x`)
-		buf.WriteString(hex.EncodeToString(v[:]))
-		buf.WriteString(`'`)
-		if i != len(r)-1 {
-			buf.WriteString(",")
-		}
-	}
-
-	return buf.String()
-}
-*/

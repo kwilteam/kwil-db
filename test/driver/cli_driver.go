@@ -3,6 +3,7 @@ package driver
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,11 +15,14 @@ import (
 	"strings"
 	"time"
 
+	ec "github.com/ethereum/go-ethereum/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
+	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
+
 	"go.uber.org/zap"
 )
 
@@ -30,10 +34,11 @@ type KwilCliDriver struct {
 	identity        []byte
 	gatewayProvider bool
 	chainID         string
+	deployer        *ethdeployer.Deployer
 	logger          log.Logger
 }
 
-func NewKwilCliDriver(cliBin, rpcUrl, privKey, chainID string, identity []byte, gatewayProvider bool, logger log.Logger) *KwilCliDriver {
+func NewKwilCliDriver(cliBin, rpcUrl, privKey, chainID string, identity []byte, gatewayProvider bool, deployer *ethdeployer.Deployer, logger log.Logger) *KwilCliDriver {
 	return &KwilCliDriver{
 		cliBin:          cliBin,
 		rpcUrl:          rpcUrl,
@@ -42,6 +47,7 @@ func NewKwilCliDriver(cliBin, rpcUrl, privKey, chainID string, identity []byte, 
 		gatewayProvider: gatewayProvider,
 		logger:          logger,
 		chainID:         chainID,
+		deployer:        deployer,
 	}
 }
 
@@ -587,4 +593,47 @@ func parseRespAccount(data any) (*types.Account, error) {
 		Nonce:      resp.Nonce,
 	}
 	return acct, nil
+}
+
+func (d *KwilCliDriver) Approve(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error {
+	if d.deployer == nil {
+		return fmt.Errorf("deployer is nil")
+	}
+
+	return d.deployer.Approve(ctx, sender, amount)
+}
+
+func (d *KwilCliDriver) Deposit(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error {
+	if d.deployer == nil {
+		return fmt.Errorf("deployer is nil")
+	}
+
+	return d.deployer.Deposit(ctx, sender, amount)
+}
+
+func (d *KwilCliDriver) EscrowBalance(ctx context.Context, senderAddress *ecdsa.PrivateKey) (*big.Int, error) {
+	if d.deployer == nil {
+		return nil, fmt.Errorf("deployer is nil")
+	}
+
+	senderAddr := ec.PubkeyToAddress(senderAddress.PublicKey)
+	return d.deployer.EscrowBalance(ctx, senderAddr)
+}
+
+func (d *KwilCliDriver) UserBalance(ctx context.Context, senderAddress *ecdsa.PrivateKey) (*big.Int, error) {
+	if d.deployer == nil {
+		return nil, fmt.Errorf("deployer is nil")
+	}
+
+	senderAddr := ec.PubkeyToAddress(senderAddress.PublicKey)
+	return d.deployer.UserBalance(ctx, senderAddr)
+}
+
+func (d *KwilCliDriver) Allowance(ctx context.Context, sender *ecdsa.PrivateKey) (*big.Int, error) {
+	if d.deployer == nil {
+		return nil, fmt.Errorf("deployer is nil")
+	}
+
+	senderAddr := ec.PubkeyToAddress(sender.PublicKey)
+	return d.deployer.Allowance(ctx, senderAddr)
 }

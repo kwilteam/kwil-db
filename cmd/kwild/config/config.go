@@ -451,6 +451,7 @@ func DefaultConfig() *KwildConfig {
 			// 	MaxSnapshots:    3,
 			// 	SnapshotDir:     DefaultSnapshotsDir,
 			// },
+			Oracles: make(map[string]map[string]string),
 		},
 		Logging: &Logging{
 			Level:        "info",

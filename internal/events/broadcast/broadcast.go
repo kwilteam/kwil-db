@@ -30,9 +30,18 @@ import (
 // EventStore allows the EventBroadcaster to read events
 // from the event store.
 type EventStore interface {
-	// GetUnbroadcastedEvents gets events that this node has not yet broadcasted.
+	// GetUnreceivedEvents gets events that this node has not yet broadcasted.
 	// Events are only marked as "broadcasted" when they have been included in a block.
 	GetUnreceivedEvents(ctx context.Context) ([]*types.VotableEvent, error)
+
+	// MarkBroadcasted marks list of events as broadcasted.
+	MarkBroadcasted(ctx context.Context, ids []types.UUID) error
+}
+
+// FeeEstimator estimates the fee for the VoteID transaction.
+// Fee is estimated currently based on the number of voteIDs in the transaction.
+type FeeEstimator interface {
+	Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
 }
 
 // Broadcaster is an interface for broadcasting to the Kwil network.
@@ -76,7 +85,7 @@ type EventBroadcaster struct {
 // RunBroadcast tells the EventBroadcaster to broadcast any events it wishes.
 // It implements Kwil's abci.CommitHook function signature.
 // If the node is not a validator, it will do nothing.
-func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) error {
+func (e *EventBroadcaster) RunBroadcast(ctx context.Context, feeEstimator FeeEstimator, Proposer []byte) error {
 	// Only validators are allowed to broadcast events.
 	isCurrent, err := e.validatorStore.IsCurrent(ctx, e.signer.Identity())
 	if err != nil {
@@ -112,7 +121,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) er
 		ids[i] = event.ID()
 	}
 
-	_, nonce, err := e.accountInfo.AccountInfo(ctx, e.signer.Identity(), true)
+	bal, nonce, err := e.accountInfo.AccountInfo(ctx, e.signer.Identity(), true)
 	if err != nil {
 		return err
 	}
@@ -120,6 +129,19 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) er
 	tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteIDs{ResolutionIDs: ids}, e.chainID, uint64(nonce)+1)
 	if err != nil {
 		return err
+	}
+
+	// Get the fee estimate
+	fee, err := feeEstimator.Price(ctx, tx)
+	if err != nil {
+		return err
+	}
+
+	tx.Body.Fee = fee
+
+	if bal.Cmp(fee) < 0 {
+		// Not enough balance to pay for the tx fee
+		return nil
 	}
 
 	err = tx.Sign(e.signer)
@@ -133,6 +155,12 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) er
 	}
 
 	_, err = e.broadcaster.BroadcastTx(ctx, bts, 0)
+	if err != nil {
+		return err
+	}
+
+	// mark these events as broadcasted
+	err = e.store.MarkBroadcasted(ctx, ids)
 	if err != nil {
 		return err
 	}
