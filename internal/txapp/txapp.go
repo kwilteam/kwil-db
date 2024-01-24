@@ -162,7 +162,6 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 	// of the current block height and "keep it"
 	// this would go in Commit
 	r.Validators.UpdateBlockHeight(blockHeight)
-
 	return appHash, validatorUpdates, nil
 }
 
