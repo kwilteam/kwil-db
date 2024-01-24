@@ -102,3 +102,8 @@ action multi_select() public {
 action owner_only() public owner view {
     select 'owner only';
 }
+
+@kgw(authn='true')
+action authn_only() public view {
+    select 'authn only';
+}

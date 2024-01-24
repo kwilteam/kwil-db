@@ -17,8 +17,11 @@ import (
 )
 
 var (
-	host string
-	key  string
+	host            string
+	gatewayProvider bool
+	key             string
+
+	chainId string
 
 	runTime time.Duration
 
@@ -44,8 +47,12 @@ var (
 )
 
 func main() {
-	flag.StringVar(&host, "host", "http://127.0.0.1:8080", "gRPC will be used if host is without schema")
+	flag.StringVar(&host, "host", "http://127.0.0.1:8080", "provider's http url, schema is required")
+	flag.BoolVar(&gatewayProvider, "gw", false, "gateway provider instead of vanilla provider, "+
+		"need to make sure host is same as gateway's domain")
 	flag.StringVar(&key, "key", "", "existing key to use instead of generating a new one")
+
+	flag.StringVar(&chainId, "chain", "kwil-test-chain", "chain ID")
 
 	flag.DurationVar(&runTime, "run", 30*time.Minute, "terminate after running this long")
 
