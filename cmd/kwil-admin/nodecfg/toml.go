@@ -141,6 +141,18 @@ tls_key_file = "{{ .AppCfg.TLSKeyFile }}"
 # Kwild Server hostname
 hostname = "{{ .AppCfg.Hostname }}"
 
+
+#######################################################################
+###                       Oracles Configuration                     ###
+#######################################################################
+{{- range $oracleName, $configs := .AppCfg.Oracles }}
+[app.oracles.{{$oracleName}}]
+{{- range $key, $value := $configs }}
+{{$key}} = "{{$value}}"
+{{- end }}
+{{- end }}
+
+
 #######################################################################
 ###                 Chain  Main Base Config Options                 ###
 #######################################################################

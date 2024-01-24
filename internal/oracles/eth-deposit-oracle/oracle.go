@@ -19,20 +19,30 @@ import (
 )
 
 const (
-	oracleName = "eth_deposit_oracle"
+	OracleName = "eth_deposit_oracle"
 
 	depositEventSignature = "Credit(address,uint256)"
 
 	contractABIStr = `[{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"_from","type":"address"},{"indexed":false,"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"Credit","type":"event"}]`
 
-	last_processed_block = "last_processed_block"
+	lastProcessedBlock = "lastProcessedBlock"
+
+	// Config Strings
+	EthDepositEndpoint              = "endpoint"
+	EthDepositChainID               = "chain_id"
+	EthDepositEscrowAddress         = "escrow_address"
+	EthDepositStartingHeight        = "starting_height"
+	EthDepositRequiredConfirmations = "required_confirmations"
+	EthDepositReconnectInterval     = "reconnect_interval"
+	EthDepositMaxTotalRequests      = "max_total_requests"
+	EthDepositMaxRetries            = "max_retries"
 )
 
 func init() {
 	oracle := &EthDepositOracle{}
 
 	// Register the oracle
-	err := oracles.RegisterOracle(oracleName, oracle)
+	err := oracles.RegisterOracle(OracleName, oracle)
 	if err != nil {
 		panic(err)
 	}
@@ -76,7 +86,7 @@ type EthDepositOracleConfig struct {
 func (do *EthDepositOracle) Start(ctx context.Context, eventstore oracles.EventStore, config map[string]string, logger log.Logger) error {
 	do.logger = logger
 	do.eventstore = eventstore
-	do.kvstore = eventstore.KV([]byte(oracleName))
+	do.kvstore = eventstore.KV([]byte(OracleName))
 
 	if err := do.extractConfig(ctx, config); err != nil {
 		return fmt.Errorf("failed to extract config: %w", err)
@@ -107,34 +117,36 @@ func (do *EthDepositOracle) Stop() error {
 		do.ethclient.Close()
 	}
 	// Signal to the listener to stop
-	do.done <- true
+	if do.done != nil {
+		close(do.done)
+	}
 	return nil
 }
 
 func (do *EthDepositOracle) extractConfig(ctx context.Context, metadata map[string]string) error {
 	// Endpoint
-	if endpoint, ok := metadata["endpoint"]; ok {
+	if endpoint, ok := metadata[EthDepositEndpoint]; ok {
 		do.cfg.endpoint = endpoint
 	} else {
 		return fmt.Errorf("no endpoint provided")
 	}
 
 	// Escrow Address
-	if escrowAddr, ok := metadata["escrow_address"]; ok {
+	if escrowAddr, ok := metadata[EthDepositEscrowAddress]; ok {
 		do.cfg.escrowAddress = escrowAddr
 	} else {
 		return fmt.Errorf("no escrow address provided")
 	}
 
 	// Chain ID
-	if chainID, ok := metadata["chain_id"]; ok {
+	if chainID, ok := metadata[EthDepositChainID]; ok {
 		do.cfg.chainID = chainID
 	} else {
 		return fmt.Errorf("no chain id provided")
 	}
 
 	// Required Confirmations
-	if confirmations, ok := metadata["required_confirmations"]; ok {
+	if confirmations, ok := metadata[EthDepositRequiredConfirmations]; ok {
 		// convert confirmations to int64
 		confirmations64, err := strconv.ParseInt(confirmations, 10, 64)
 		if err != nil {
@@ -146,7 +158,7 @@ func (do *EthDepositOracle) extractConfig(ctx context.Context, metadata map[stri
 	}
 
 	// Starting Height
-	if startingHeight, ok := metadata["starting_height"]; ok {
+	if startingHeight, ok := metadata[EthDepositStartingHeight]; ok {
 		// convert startingHeight to int64
 		startingHeight64, err := strconv.ParseInt(startingHeight, 10, 64)
 		if err != nil {
@@ -158,7 +170,7 @@ func (do *EthDepositOracle) extractConfig(ctx context.Context, metadata map[stri
 	}
 
 	// Reconnect Interval
-	if interval, ok := metadata["reconnect_interval"]; ok {
+	if interval, ok := metadata[EthDepositReconnectInterval]; ok {
 		// convert interval to float64
 		interval64, err := strconv.ParseFloat(interval, 64)
 		if err != nil {
@@ -168,7 +180,7 @@ func (do *EthDepositOracle) extractConfig(ctx context.Context, metadata map[stri
 	}
 
 	// MaxTotalRequests Size
-	if maxTotalRequests, ok := metadata["max_total_requests"]; ok {
+	if maxTotalRequests, ok := metadata[EthDepositMaxTotalRequests]; ok {
 		// convert maxTotalRequests to int64
 		maxTotalRequests64, err := strconv.ParseInt(maxTotalRequests, 10, 64)
 		if err != nil {
@@ -180,7 +192,7 @@ func (do *EthDepositOracle) extractConfig(ctx context.Context, metadata map[stri
 	}
 
 	// MaxRetries
-	if maxRetries, ok := metadata["max_retries"]; ok {
+	if maxRetries, ok := metadata[EthDepositMaxRetries]; ok {
 		// convert maxRetries to uint64
 		maxRetries64, err := strconv.ParseUint(maxRetries, 10, 64)
 		if err != nil {

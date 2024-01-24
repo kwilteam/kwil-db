@@ -1,0 +1,25 @@
+version: "3"
+
+services:
+  ganache:
+    container_name: ganache_$uid
+    image: trufflesuite/ganache:v7.9.2
+    ports:
+      - "8545:8545"
+    networks:
+      - kwil-int-testnet
+    command:
+      - --wallet.hdPath
+      - m/44'/60'/0'
+      - --wallet.mnemonic
+      - test test test test test test test test test test test junk
+      - --chain.chainId
+      - "5"
+
+networks:
+  kwil-int-testnet:
+    name: kwil-int-testnet
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.10.0.0/16
