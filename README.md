@@ -13,7 +13,7 @@ Learn more about Kwil at [kwil.com](https://kwil.com).
 To build Kwil, you will need to install:
 
 1. [Go](https://golang.org/doc/install)
-2. [Protocol Buffers](https://developers.google.com/protocol-buffers/docs/gotutorial), with the `protoc` executable binary on your `PATH`.
+2. [Protocol Buffers](https://protobuf.dev/downloads/), with the `protoc` executable binary on your `PATH`.
 3. [Taskfile](https://taskfile.dev/installation)
 4. Protocol buffers go plugins and other command line tools. The `tool` task will install the required versions of the tools into your `GOPATH`, so be sure to include `GOPATH/bin` on your `PATH`.
 
