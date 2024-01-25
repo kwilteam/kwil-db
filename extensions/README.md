@@ -19,7 +19,7 @@ Extensions can be included in a build either by dropping a register file in this
 To create a register file, simply create a new file called `my_extension.go` in this directory:
 
 ```go
-package extensions.go
+package extensions
 
 import _ "github.com/my_org/kwil-db/path/to/extension"
 ```
