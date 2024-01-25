@@ -18,6 +18,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	_ "github.com/kwilteam/kwil-db/extensions" // a base location where all extensions can be registered
 	_ "github.com/kwilteam/kwil-db/extensions/auth"
 )
 
