@@ -127,7 +127,7 @@ var (
 )
 
 type DateTimeFunction struct {
-	*BaseAstNode
+	node
 
 	AnySQLFunction
 }

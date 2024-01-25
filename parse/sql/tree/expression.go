@@ -35,7 +35,7 @@ func (e *expressionBase) Walk(w AstWalker) error {
 type Wrapped bool
 
 type ExpressionLiteral struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -95,7 +95,7 @@ func validateIsNonStringLiteral(str string) {
 }
 
 type ExpressionBindParameter struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -133,7 +133,7 @@ func (e *ExpressionBindParameter) ToSQL() string {
 }
 
 type ExpressionColumn struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -173,7 +173,7 @@ func (e *ExpressionColumn) ToSQL() string {
 }
 
 type ExpressionUnary struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -205,7 +205,7 @@ func (e *ExpressionUnary) ToSQL() string {
 }
 
 type ExpressionBinaryComparison struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -241,7 +241,7 @@ func (e *ExpressionBinaryComparison) ToSQL() string {
 }
 
 type ExpressionFunction struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -286,7 +286,7 @@ func (e *ExpressionFunction) ToSQL() string {
 }
 
 type ExpressionList struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -324,7 +324,7 @@ func (e *ExpressionList) ToSQL() string {
 }
 
 type ExpressionCollate struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -365,7 +365,7 @@ func (e *ExpressionCollate) ToSQL() string {
 }
 
 type ExpressionStringCompare struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -411,7 +411,7 @@ func (e *ExpressionStringCompare) ToSQL() string {
 }
 
 type ExpressionIsNull struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -448,7 +448,7 @@ func (e *ExpressionIsNull) ToSQL() string {
 }
 
 type ExpressionDistinct struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -495,7 +495,7 @@ func (e *ExpressionDistinct) ToSQL() string {
 }
 
 type ExpressionBetween struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -548,7 +548,7 @@ func (e *ExpressionBetween) ToSQL() string {
 }
 
 type ExpressionSelect struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -606,7 +606,7 @@ func (e *ExpressionSelect) check() {
 }
 
 type ExpressionCase struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped
@@ -674,7 +674,7 @@ func (e *ExpressionCase) ToSQL() string {
 }
 
 type ExpressionArithmetic struct {
-	*BaseAstNode
+	node
 
 	expressionBase
 	Wrapped

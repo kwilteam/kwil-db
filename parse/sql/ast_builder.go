@@ -813,6 +813,11 @@ func (v *astBuilder) VisitLimit_stmt(ctx *sqlgrammar.Limit_stmtContext) interfac
 		Expression: v.Visit(ctx.Expr(0)).(tree.Expression),
 	}
 
+	// LIMIT row_count OFFSET offset;
+	// IS SAME AS
+	// LIMIT offset, row_count;
+	// TODO: in the tree we should just use one or the other, not both.
+
 	if ctx.OFFSET_() != nil {
 		result.Offset = v.Visit(ctx.Expr(1)).(tree.Expression)
 	}

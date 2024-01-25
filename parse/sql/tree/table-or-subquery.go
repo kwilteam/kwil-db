@@ -15,7 +15,7 @@ type TableOrSubquery interface {
 }
 
 type TableOrSubqueryTable struct {
-	*BaseAstNode
+	node
 
 	Name  string
 	Alias string
@@ -51,7 +51,7 @@ func (t *TableOrSubqueryTable) ToSQL() string {
 func (t *TableOrSubqueryTable) tableOrSubquery() {}
 
 type TableOrSubquerySelect struct {
-	*BaseAstNode
+	node
 
 	Select *SelectStmt
 	Alias  string
@@ -92,7 +92,7 @@ func (t *TableOrSubquerySelect) ToSQL() string {
 func (t *TableOrSubquerySelect) tableOrSubquery() {}
 
 type TableOrSubqueryList struct {
-	*BaseAstNode
+	node
 
 	TableOrSubqueries []TableOrSubquery
 }
@@ -125,7 +125,7 @@ func (t *TableOrSubqueryList) ToSQL() string {
 func (t *TableOrSubqueryList) tableOrSubquery() {}
 
 type TableOrSubqueryJoin struct {
-	*BaseAstNode
+	node
 
 	JoinClause *JoinClause
 }

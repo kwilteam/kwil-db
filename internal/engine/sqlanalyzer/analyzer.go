@@ -12,14 +12,10 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
-type accepter interface {
-	Walk(walker tree.AstWalker) error
-}
-
 // acceptWrapper is a wrapper around a statement that implements the accepter interface
 // it catches panics and returns them as errors
 type acceptWrapper struct {
-	inner accepter
+	inner tree.Walker
 }
 
 func (a *acceptWrapper) Walk(walker tree.AstWalker) (err error) {

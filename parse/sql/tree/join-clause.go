@@ -48,7 +48,7 @@ From the SQLite documentation:
 */
 
 type JoinClause struct {
-	*BaseAstNode
+	node
 
 	TableOrSubquery TableOrSubquery
 	Joins           []*JoinPredicate
@@ -82,7 +82,7 @@ func (j *JoinClause) ToSQL() string {
 }
 
 type JoinPredicate struct {
-	*BaseAstNode
+	node
 
 	JoinOperator *JoinOperator
 	Table        TableOrSubquery
@@ -123,7 +123,7 @@ func (j *JoinPredicate) ToSQL() string {
 }
 
 type JoinOperator struct {
-	*BaseAstNode
+	node
 
 	Natural  bool
 	JoinType JoinType

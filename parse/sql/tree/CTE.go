@@ -5,7 +5,7 @@ import (
 )
 
 type CTE struct {
-	*BaseAstNode
+	*node
 
 	Table   string
 	Columns []string

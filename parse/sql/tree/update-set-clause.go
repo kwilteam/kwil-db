@@ -8,7 +8,7 @@ import (
 // This does NOT include the SET keyword.
 // e.g. column1 = expression, column2 = expression, ...
 type UpdateSetClause struct {
-	*BaseAstNode
+	node
 
 	Columns    []string
 	Expression Expression

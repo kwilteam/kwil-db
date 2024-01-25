@@ -7,7 +7,7 @@ import (
 )
 
 type Select struct {
-	*BaseAstNode
+	node
 
 	CTE        []*CTE
 	SelectStmt *SelectStmt
@@ -44,7 +44,7 @@ func (s *Select) ToSQL() string {
 }
 
 type SelectStmt struct {
-	*BaseAstNode
+	node
 
 	SelectCores []*SelectCore
 	OrderBy     *OrderBy
@@ -81,7 +81,7 @@ func (s *SelectStmt) ToSQL() (res string) {
 }
 
 type SelectCore struct {
-	*BaseAstNode
+	node
 
 	SelectType SelectType
 	Columns    []ResultColumn
@@ -160,9 +160,9 @@ func (s SelectType) Valid() error {
 }
 
 type FromClause struct {
-	*BaseAstNode
+	node
 
-	JoinClause *JoinClause
+	JoinClause *JoinClause // the relation
 }
 
 func (f *FromClause) Accept(v AstVisitor) any {
@@ -218,7 +218,7 @@ func (c *CompoundOperatorType) ToSQL() string {
 }
 
 type CompoundOperator struct {
-	*BaseAstNode
+	node
 
 	Operator CompoundOperatorType
 }

@@ -10,6 +10,8 @@ func run(errs ...error) error {
 }
 
 type Walker interface {
+	// Walk accepts an AstWalker to walk through itself.
+	// NOTE: 'Walk' is a bit misleading. Should we change to another name? like AcceptWalker?
 	Walk(AstWalker) error
 }
 

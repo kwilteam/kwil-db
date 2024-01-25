@@ -7,8 +7,12 @@ import (
 // Limit is a LIMIT clause.
 // It takes an expression, and can optionally take either an offset or a second expression.
 type Limit struct {
-	*BaseAstNode
+	node
 
+	// LIMIT row_count OFFSET offset;
+	// IS SAME AS
+	// LIMIT offset, row_count;
+	// TODO: in the tree we should just use one or the other, not both.
 	Expression       Expression
 	Offset           Expression
 	SecondExpression Expression

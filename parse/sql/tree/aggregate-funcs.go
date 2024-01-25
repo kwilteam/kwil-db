@@ -10,7 +10,7 @@ type distinctable interface {
 }
 
 type AggregateFunc struct {
-	*BaseAstNode
+	*node
 
 	AnySQLFunction
 }

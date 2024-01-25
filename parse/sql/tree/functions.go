@@ -75,7 +75,7 @@ func (s *AnySQLFunction) stringAll() string {
 }
 
 type ScalarFunction struct {
-	*BaseAstNode
+	node
 
 	AnySQLFunction
 }

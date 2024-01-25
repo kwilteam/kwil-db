@@ -5,7 +5,7 @@ import (
 )
 
 type GroupBy struct {
-	*BaseAstNode
+	node
 
 	Expressions []Expression
 	Having      Expression

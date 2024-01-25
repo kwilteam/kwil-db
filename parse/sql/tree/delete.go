@@ -5,7 +5,7 @@ import (
 )
 
 type Delete struct {
-	*BaseAstNode
+	node
 
 	CTE        []*CTE
 	DeleteStmt *DeleteStmt
@@ -42,7 +42,7 @@ func (d *Delete) ToSQL() string {
 }
 
 type DeleteStmt struct {
-	*BaseAstNode
+	node
 
 	QualifiedTableName *QualifiedTableName
 	Where              Expression

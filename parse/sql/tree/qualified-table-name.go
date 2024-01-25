@@ -3,7 +3,7 @@ package tree
 import sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 
 type QualifiedTableName struct {
-	*BaseAstNode
+	node
 
 	TableName  string
 	TableAlias string

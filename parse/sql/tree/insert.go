@@ -7,7 +7,7 @@ import (
 )
 
 type Insert struct {
-	*BaseAstNode
+	node
 
 	CTE        []*CTE
 	InsertStmt *InsertStmt
@@ -44,7 +44,7 @@ func (ins *Insert) ToSQL() string {
 }
 
 type InsertStmt struct {
-	*BaseAstNode
+	node
 
 	InsertType      InsertType
 	Table           string

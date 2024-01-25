@@ -5,7 +5,7 @@ import (
 )
 
 type ConflictTarget struct {
-	*BaseAstNode
+	node
 
 	IndexedColumns []string
 	Where          Expression

@@ -23,7 +23,7 @@ func (u UpsertType) Valid() error {
 }
 
 type Upsert struct {
-	*BaseAstNode
+	node
 
 	ConflictTarget *ConflictTarget
 	Type           UpsertType

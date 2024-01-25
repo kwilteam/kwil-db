@@ -8,7 +8,7 @@ import (
 
 // Update Statement with CTEs
 type Update struct {
-	*BaseAstNode
+	node
 
 	CTE        []*CTE
 	UpdateStmt *UpdateStmt
@@ -47,7 +47,7 @@ func (u *Update) ToSQL() string {
 // UpdateStmt is a statement that represents an UPDATE statement.
 // USE Update INSTEAD OF THIS
 type UpdateStmt struct {
-	*BaseAstNode
+	node
 
 	Or                 UpdateOr
 	QualifiedTableName *QualifiedTableName

@@ -8,7 +8,7 @@ import (
 )
 
 type OrderBy struct {
-	*BaseAstNode
+	node
 
 	OrderingTerms []*OrderingTerm
 }
@@ -42,7 +42,7 @@ func (o *OrderBy) ToSQL() string {
 }
 
 type OrderingTerm struct {
-	*BaseAstNode
+	node
 
 	Expression   Expression
 	Collation    CollationType

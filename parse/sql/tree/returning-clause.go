@@ -5,7 +5,7 @@ import (
 )
 
 type ReturningClause struct {
-	*BaseAstNode
+	node
 
 	Returned []*ReturningClauseColumn
 }
@@ -56,7 +56,7 @@ func (r *ReturningClause) check() {
 }
 
 type ReturningClauseColumn struct {
-	*BaseAstNode
+	node
 
 	All        bool
 	Expression Expression

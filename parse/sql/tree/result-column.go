@@ -11,7 +11,7 @@ type ResultColumn interface {
 }
 
 type ResultColumnStar struct {
-	*BaseAstNode
+	node
 }
 
 func (r *ResultColumnStar) Accept(v AstVisitor) any {
@@ -30,7 +30,7 @@ func (r *ResultColumnStar) Walk(w AstWalker) error {
 }
 
 type ResultColumnExpression struct {
-	*BaseAstNode
+	node
 
 	Expression Expression
 	Alias      string
@@ -59,7 +59,7 @@ func (r *ResultColumnExpression) Walk(w AstWalker) error {
 }
 
 type ResultColumnTable struct {
-	*BaseAstNode
+	node
 
 	TableName string
 }
