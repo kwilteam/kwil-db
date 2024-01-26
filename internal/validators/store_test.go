@@ -12,8 +12,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 )
 
-// create user kwil_test_user with SUPERUSER replication;
-// create database kwil_test_db owner kwil_test_user;
+// create user kwild with SUPERUSER replication;
+// create database kwil_test_db owner kwild;
 // create publication kwild_repl for all tables;
 
 func Test_validatorStore(t *testing.T) {
@@ -21,10 +21,10 @@ func Test_validatorStore(t *testing.T) {
 
 	cfg := &pg.PoolConfig{
 		ConnConfig: pg.ConnConfig{
-			Host:   "/var/run/postgresql",
-			Port:   "",
-			User:   "kwil_test_user",
-			Pass:   "kwil", // would be ignored if pg_hba.conf set with trust
+			Host:   "127.0.0.1",
+			Port:   "5432",
+			User:   "kwild",
+			Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
 			DBName: "kwil_test_db",
 		},
 		MaxConns: 11,

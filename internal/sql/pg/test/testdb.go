@@ -11,10 +11,10 @@ func NewTestPool(ctx context.Context, dropSchemas []string, dropTables ...string
 	// don't need or want the transaction or commit ID capabilities of pg.DB.
 	cfg := &pg.PoolConfig{
 		ConnConfig: pg.ConnConfig{
-			Host:   "/var/run/postgresql",
-			Port:   "",
-			User:   "kwil_test_user",
-			Pass:   "kwil", // would be ignored if pg_hba.conf set with trust
+			Host:   "127.0.0.1",
+			Port:   "5432",
+			User:   "kwild",
+			Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
 			DBName: "kwil_test_db",
 		},
 		MaxConns: 11,

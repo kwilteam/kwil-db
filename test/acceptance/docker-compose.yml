@@ -19,18 +19,51 @@ services:
         target: /app/kwil
       - /tmp:/var/run/kwil:rw
     depends_on:
-      - ext
+      ext:
+        condition: service_started
+      pg:
+        condition: service_healthy
     networks:
       - kwil-act-testnet
     command: |
       --root-dir=/app/kwil
       --log.level=${LOG_LEVEL:-info}
+      --log.format=plain
+      --log.time-format=rfc3339milli
       --app.extension-endpoints=ext:50051
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --chain.p2p.external-address=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg_db_host=pg
+      --app.pg_db_port=5432
+      --app.pg_db_user=kwild
+      --app.pg_db_pass=kwild
+
+  pg:
+    container_name: postgres
+    image: postgres:16.1
+    ports:
+      - "5439:5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+    volumes: 
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_tables.sql
+    networks:
+      - kwil-act-testnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 1s
+      timeout: 6s
+      retries: 20
 
   ext:
     container_name: math_ext
@@ -39,7 +72,6 @@ services:
       - "50061:50051"
     networks:
       - kwil-act-testnet
-
 
 networks:
   kwil-act-testnet:

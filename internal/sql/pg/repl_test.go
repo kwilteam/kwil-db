@@ -21,7 +21,7 @@ import (
 
 func Test_repl(t *testing.T) {
 	UseLogger(log.NewStdOut(log.DebugLevel))
-	host, port, user, pass, dbName := "/var/run/postgresql", "", "kwil_test_user", "kwil420", "kwil_test_db"
+	host, port, user, pass, dbName := "127.0.0.1", "5432", "kwild", "kwild", "kwil_test_db"
 
 	ctx := context.Background()
 	conn, err := replConn(ctx, host, port, user, pass, dbName)

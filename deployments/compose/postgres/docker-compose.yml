@@ -1,0 +1,25 @@
+services:
+  pg:
+    container_name: postgres
+    image: postgres:16.1
+    ports:
+      - "5432:5432"
+    restart: always
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      # Setting user/pass/db works, but we use docker-entrypoint-initdb.d instead for more control
+      # POSTGRES_USER: kwild
+      # POSTGRES_PASSWORD: kwild
+      # POSTGRES_DB: kwild
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+    volumes: 
+      - db:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/create_tables.sql
+
+volumes:
+  db:
+    driver: local

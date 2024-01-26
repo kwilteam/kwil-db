@@ -13,7 +13,7 @@ const (
 )
 
 func ExecuteExtensionSpecification(ctx context.Context, t *testing.T, execute ExecuteExtensionDsl) {
-	t.Logf("Executing insert action specification")
+	t.Logf("Executing extension specification")
 
 	db := SchemaLoader.Load(t, SchemaTestDB)
 	dbID := execute.DBID(db.Name)
@@ -21,6 +21,8 @@ func ExecuteExtensionSpecification(ctx context.Context, t *testing.T, execute Ex
 	// try executing extension
 	txHash, err := execute.ExecuteAction(ctx, dbID, divideActionName, []any{2, 1, 2})
 	assert.NoError(t, err)
+
+	// figure out: "ERROR: operator is not unique: unknown + unknown (SQLSTATE 42725)"
 
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
