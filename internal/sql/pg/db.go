@@ -150,7 +150,6 @@ func (db *DB) AutoCommit(auto bool) {
 // For {accounts,validators}.Datasets / registry.DB
 var _ sql.Executor = (*DB)(nil)
 var _ sql.Queryer = (*DB)(nil)
-var _ sql.PendingQueryer = (*DB)(nil)
 var _ sql.KV = (*DB)(nil)
 
 var _ sql.TxMaker = (*DB)(nil) // for dataset Registry
@@ -219,7 +218,7 @@ func (db *DB) commit(ctx context.Context) error {
 	defer db.tx.Rollback(ctx) // yes, safe even on non-error Commit!
 
 	// Do the seq update in sentry table. This ensures a replication message
-	// sequence is emitted from this transaction, and that it the data returned
+	// sequence is emitted from this transaction, and that the data returned
 	// from it includes the expected seq value.
 	seq, err := incrementSeq(ctx, db.tx)
 	if err != nil {
@@ -279,24 +278,6 @@ func (db *DB) Query(ctx context.Context, stmt string, args ...any) (*sql.ResultS
 	return db.pool.Query(ctx, stmt, args...)
 }
 
-func (db *DB) QueryPending(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
-	db.mtx.Lock()
-	defer db.mtx.Unlock()
-
-	if db.tx == nil && !db.autoCommit {
-		return nil, sql.ErrNoTransaction
-	}
-	if db.autoCommit { // with no txn, this is the same as using the read pool
-		if db.tx != nil {
-			return nil, errors.New("tx already created, cannot use auto commit")
-		}
-		// query(ctx, db.pool.writer.Query, stmt, args...)
-		return db.pool.QueryPending(ctx, stmt, args...)
-	} // actually I'm not certain that query pending makes sense in autocommit
-
-	return query(ctx, db.tx.Query, stmt, args...)
-}
-
 // discardCommitID is for Execute when in auto-commit mode.
 func (db *DB) discardCommitID(ctx context.Context, resChan chan []byte) {
 	select {
@@ -307,37 +288,32 @@ func (db *DB) discardCommitID(ctx context.Context, resChan chan []byte) {
 	}
 }
 
+// Pool is a trapdoor to get the connection pool. Probably not for normal Kwil
+// DB operation, but test setup/teardown.
+func (db *DB) Pool() *Pool {
+	return db.pool
+}
+
 // Execute runs a statement on an existing transaction, or on a short lived
 // transaction from the write connection if in auto-commit mode.
-func (db *DB) Execute(ctx context.Context, stmt string, args ...any) error {
+func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
 	if db.tx != nil {
 		if db.autoCommit {
-			return errors.New("tx already created, cannot use auto commit")
+			return nil, errors.New("tx already created, cannot use auto commit")
 		}
-		_, err := db.tx.Exec(ctx, stmt, args...)
-		return err // fmt.Println(execRes.RowsAffected())
+		return query(ctx, db.tx.Query, stmt, args...)
 	}
 	if !db.autoCommit {
-		return sql.ErrNoTransaction
+		return nil, sql.ErrNoTransaction
 	}
-
-	// if db.tx == nil {
-	// 	if !db.autoCommit {
-	// 		return sql.ErrNoTransaction
-	// 	}
-	// } else if !db.autoCommit {
-	// 	_, err := db.tx.Exec(ctx, stmt, args...)
-	// 	return err // fmt.Println(execRes.RowsAffected())
-	// } else {
-	// 	return errors.New("tx already created, cannot use auto commit")
-	// }
 
 	// We do manual autocommit since postgresql will skip it for some
 	// statements, plus we are also injecting the seq update query.
 	var resChan chan []byte
+	var res *sql.ResultSet
 	err := pgx.BeginTxFunc(ctx, db.pool.writer,
 		pgx.TxOptions{
 			AccessMode: pgx.ReadWrite,
@@ -349,15 +325,15 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) error {
 				return err
 			}
 			resChan = db.repl.recvID(seq)
-			_, err = tx.Exec(ctx, stmt, args...)
+			res, err = query(ctx, tx.Query, stmt, args...)
 			return err
 		},
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	db.discardCommitID(ctx, resChan)
-	return nil
+	return res, nil
 }
 
 // Get retrieves the value for a key using Query (read-only), optionally using
@@ -372,18 +348,18 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) error {
 func (db *DB) Get(ctx context.Context, key []byte, pending bool) ([]byte, error) {
 	queryFun := db.Query
 	if pending {
-		queryFun = db.QueryPending
+		queryFun = db.Execute
 	}
 	return Get(ctx, kvTableNameFull, key, queryFun) // not db.pool.Get because we DB has session mgmt
 }
 
 func (db *DB) Set(ctx context.Context, key []byte, value []byte) error {
 	// db.Execute(ctx, insertKvStmt, key, value) // slightly efficient with no sprintf, but less consistent with Get
-	return Set(ctx, kvTableNameFull, key, value, db.Execute)
+	return Set(ctx, kvTableNameFull, key, value, WrapQueryFun(db.Execute))
 }
 
 func (db *DB) Delete(ctx context.Context, key []byte) error {
-	return Delete(ctx, kvTableNameFull, key, db.Execute)
+	return Delete(ctx, kvTableNameFull, key, WrapQueryFun(db.Execute))
 }
 
 // TODO: require rw with target_session_attrs=read-write ?

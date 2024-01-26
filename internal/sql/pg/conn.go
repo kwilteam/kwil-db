@@ -103,8 +103,13 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	const repl = false
 	connStr := connString(cfg.Host, cfg.Port, cfg.User, cfg.Pass, cfg.DBName, repl)
 	connStr += fmt.Sprintf(" pool_max_conns=%d", cfg.MaxConns)
-
-	db, err := pgxpool.New(ctx, connStr) // sql.Open("pgx/v5", connStr)
+	pCfg, err := pgxpool.ParseConfig(connStr)
+	if err != nil {
+		return nil, err
+	}
+	// NOTE: we can consider changing the default exec mode at construction e.g.:
+	// pCfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	db, err := pgxpool.NewWithConfig(ctx, pCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -129,33 +134,28 @@ func (p *Pool) Query(ctx context.Context, stmt string, args ...any) (*sql.Result
 	return queryTx(ctx, p.pgxp, stmt, args...)
 }
 
-// WARNING: The Execute and QueryPending are for completeness and helping tests,
-// but are not intended to be used with the DB type, which performs all such
-// operations via the Tx returned from BeginTx.
+// WARNING: The Execute method is for completeness and helping tests, but is not
+// intended to be used with the DB type, which performs all such operations via
+// the Tx returned from BeginTx.
 
-func (p *Pool) QueryPending(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
+func (p *Pool) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
 	return query(ctx, p.writer.Query, stmt, args...)
-}
-
-func (p *Pool) Execute(ctx context.Context, stmt string, args ...any) error {
-	_, err := p.writer.Exec(ctx, stmt, args...)
-	return err
 }
 
 func (p *Pool) Get(ctx context.Context, kvTable string, key []byte, pending bool) ([]byte, error) {
 	q := p.Query
 	if pending {
-		q = p.QueryPending
+		q = p.Execute
 	}
 	return Get(ctx, kvTable, key, q)
 }
 
 func (p *Pool) Set(ctx context.Context, kvTable string, key, value []byte) error {
-	return Set(ctx, kvTable, key, value, p.Execute)
+	return Set(ctx, kvTable, key, value, WrapQueryFun(p.Execute))
 }
 
 func (p *Pool) Delete(ctx context.Context, kvTable string, key []byte) error {
-	return Delete(ctx, kvTable, key, p.Execute)
+	return Delete(ctx, kvTable, key, WrapQueryFun(p.Execute))
 }
 
 type QueryFn func(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error)
@@ -166,6 +166,9 @@ func Get(ctx context.Context, kvTable string, key []byte, q QueryFn) ([]byte, er
 	stmt := fmt.Sprintf(selectKvStmtTmpl, kvTable)
 	res, err := q(ctx, stmt, key)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -188,7 +191,20 @@ func Get(ctx context.Context, kvTable string, key []byte, q QueryFn) ([]byte, er
 	return val, nil
 }
 
+// ExecFn is a function that executes a query without returning any results.
+// Although most other methods require a trivial adaptor to satisfy this, it is
+// easier to implement in general, such as from third party methods that cannot
+// trivially create a ResultSet. See WrapQueryFun.
 type ExecFn func(ctx context.Context, stmt string, args ...any) error
+
+// WrapQueryFun adapts a QueryFn to an ExecFn for functions that require no
+// results.
+func WrapQueryFun(q QueryFn) ExecFn {
+	return func(ctx context.Context, stmt string, args ...any) error {
+		_, err := q(ctx, stmt, args...)
+		return err
+	}
+}
 
 // Set is a plain function for setting values in a kv using any ExecFn, such as
 // the method from a DB or Pool.
@@ -221,20 +237,22 @@ type poolTx struct {
 	RowsAffected int64 // for debugging and testing
 }
 
-func (ptx *poolTx) Execute(ctx context.Context, stmt string, args ...any) error {
-	res, err := ptx.Exec(ctx, stmt, args...)
-	if err != nil {
-		return err
-	}
-	ptx.RowsAffected += res.RowsAffected()
-	return err
+// Execute is now identical to Query. We should consider removing Query as a
+// transaction method since their is no semantic or syntactic difference
+// (transactions generated from DB or Pool use the write connection).
+func (ptx *poolTx) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
+	// This method is now identical to Query, but we previously used pgx.Tx.Exec
+	// 	res,_ := ptx.Tx.Exec(ctx, stmt, args...)
+	// 	ptx.RowsAffected += res.RowsAffected()
+	return query(ctx, ptx.Tx.Query, stmt, args...)
 }
 
 func (ptx *poolTx) Query(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
 	return query(ctx, ptx.Tx.Query, stmt, args...)
 }
 
-func (p *Pool) BeginTx(ctx context.Context) (sql.TxCloser, error) {
+// Begin starts a read-write transaction on the writer connection.
+func (p *Pool) Begin(ctx context.Context) (sql.TxCloser, error) {
 	tx, err := p.writer.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return nil, err
