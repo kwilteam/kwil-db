@@ -2,7 +2,7 @@ package pg
 
 // This file contains the low level functions for streaming and decoding WAL
 // data messages from a logical replication slot, and digesting the messages
-// pertaining to data updates (UPDATE, INSERT, DELETE, TRUNCATE) on a subset for
+// pertaining to data updates (UPDATE, INSERT, DELETE, TRUNCATE) on a subset of
 // namespaces (postgres schema). This is only used by the replMon in replmon.go
 // via the DB type's outermost transaction handling. As such, none of this is
 // exported or well generalized.

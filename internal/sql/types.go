@@ -14,9 +14,9 @@ type int64Valuer interface {
 	Int64Value() (pgtype.Int8, error)
 }
 
-// int64er is for internal use so our Numeric type can be recognized by the
+// int64errer is for internal use so our Numeric type can be recognized by the
 // Int64 function in addition to a pgtype.Numeric.
-type int64erer interface {
+type int64errer interface {
 	Int64() (int64, error)
 }
 type int64er interface {
@@ -31,7 +31,7 @@ func Int64(val interface{}) (int64, bool) {
 			return 0, false
 		}
 		return iv.Int64, true
-	case int64erer:
+	case int64errer:
 		iv, err := v.Int64()
 		if err != nil {
 			return 0, false
@@ -67,13 +67,6 @@ func Int64(val interface{}) (int64, bool) {
 	return 0, false
 }
 
-func ToNumeric(v any) (Numeric, bool) {
-	if vn, ok := v.(pgtype.Numeric); ok {
-		return Numeric{num: vn}, true
-	}
-	return Numeric{}, false
-}
-
 // TODO: register our Numeric with pgx's TypeMap so it scans into it (embedding
 // pgtype.Numeric) instead of a pgtype.Numeric.
 
@@ -83,7 +76,13 @@ type Numeric struct {
 	num pgtype.Numeric
 }
 
-func (n *Numeric) Int64() (int64, error) {
+var _ int64errer = (*Numeric)(nil)
+var _ int64errer = Numeric{}
+
+// NOTE: The Int64 and Float64 methods must have value receivers so their values
+// satisfy the int64errer interface.
+
+func (n Numeric) Int64() (int64, error) {
 	// It could represent a float64, so we use Int64Value instead of just
 	// checking if n.num.Valid && n.num.Int != nil.
 	pgInt8, err := n.num.Int64Value()
@@ -94,7 +93,7 @@ func (n *Numeric) Int64() (int64, error) {
 	return pgInt8.Int64, nil
 }
 
-func (n *Numeric) Float64() (float64, error) {
+func (n Numeric) Float64() (float64, error) {
 	pgFloat8, err := n.num.Float64Value()
 	if err != nil {
 		return 0, err
@@ -105,7 +104,7 @@ func (n *Numeric) Float64() (float64, error) {
 var big0 *big.Int = big.NewInt(0)
 var big10 *big.Int = big.NewInt(10)
 
-func (n *Numeric) BigInt() (*big.Int, error) {
+func (n Numeric) BigInt() (*big.Int, error) {
 	if !n.num.Valid || n.num.Int == nil {
 		return nil, errors.New("invalid numeric")
 	}
