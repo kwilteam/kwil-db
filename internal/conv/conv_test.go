@@ -3,7 +3,7 @@ package conv_test
 import (
 	"testing"
 
-	"github.com/kwilteam/kwil-db/internal/engine/conv"
+	"github.com/kwilteam/kwil-db/internal/conv"
 )
 
 func TestInt(t *testing.T) {
