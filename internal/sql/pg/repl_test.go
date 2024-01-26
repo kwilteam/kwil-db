@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/utils/random"
 )
 
 func Test_repl(t *testing.T) {
@@ -47,7 +48,7 @@ func Test_repl(t *testing.T) {
 	schemaFilter := func(string) bool { return true } // capture changes from all namespaces
 
 	const publicationName = "kwild_repl"
-	const slotName = "kwild_repl"
+	var slotName = publicationName + random.String(8)
 	commitChan, errChan, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter)
 	if err != nil {
 		t.Fatal(err)
