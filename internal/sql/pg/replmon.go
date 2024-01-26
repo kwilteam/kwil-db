@@ -15,6 +15,8 @@ import (
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/kwilteam/kwil-db/core/utils/random"
 )
 
 // decodeCommitPayload extracts the seq value and commit hash from the data
@@ -56,7 +58,10 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 		return nil, err
 	}
 
-	commitChan, errChan, err := startRepl(ctx, conn, "kwild_repl", "kwild_repl", schemaFilter) // todo: config publication name
+	// todo: config publication name
+	const publicationName = "kwild_repl"
+	var slotName = publicationName + random.String(8) // arbitrary, so just avoid collisions
+	commitChan, errChan, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter)
 	if err != nil {
 		quit()
 		conn.Close(ctx)
@@ -73,11 +78,11 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 	}
 
 	go func() {
-		defer quit()
 		defer close(rm.done)
+		defer quit()
 		defer conn.Close(ctx)
 
-		for cid := range commitChan {
+		for cid := range commitChan { // until commitChan is closed
 			// decode seq,chash
 			seq, cHash, err := decodeCommitPayload(cid)
 			if err != nil {
@@ -99,8 +104,8 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 	return rm, nil
 }
 
-// testing this approach so that there can be multiple receivers, and the commit
-// ID is guaranteed to pertain to the requested sequence number.
+// this channel-based approach is so that the commit ID is guaranteed to pertain
+// to the requested sequence number.
 func (rm *replMon) recvID(seq int64) chan []byte {
 	c := make(chan []byte, 1)
 

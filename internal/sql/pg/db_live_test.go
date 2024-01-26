@@ -6,10 +6,8 @@ import (
 	"context"
 	"strings"
 	"testing"
-)
 
-const (
-	pingStmt = `-- ping`
+	"github.com/jackc/pgx/v5"
 )
 
 func TestMain(m *testing.M) {
@@ -17,9 +15,12 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func TestNestedTx(t *testing.T) {
-	ctx := context.Background()
-	cfg := &DBConfig{
+const (
+	pingStmt = `-- ping`
+)
+
+var (
+	cfg = &DBConfig{
 		PoolConfig: PoolConfig{
 			ConnConfig: ConnConfig{
 				Host:   "/var/run/postgresql",
@@ -34,6 +35,73 @@ func TestNestedTx(t *testing.T) {
 			return strings.Contains(s, "ds_")
 		},
 	}
+)
+
+// TestSelectLiteralType ensures (and demonstrates) that simpler query execution
+// modes can effectively handle inline queries like `SELECT $1;` when provided
+// and argument that is not a string, which fails in the expanded execution
+// modes that try to obtain argument OIDs (postgres data types) via a
+// prepare/describe request to the postgres process.
+func TestSelectLiteralType(t *testing.T) {
+	ctx := context.Background()
+	connStr := connString(cfg.Host, cfg.Port, cfg.User, cfg.Pass, cfg.DBName, false)
+	pgCfg, err := pgx.ParseConfig(connStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// pgCfg.DefaultQueryExecMode = pgx.QueryExecModeCacheStatement // default
+	// pgCfg.DefaultQueryExecMode = pgx.QueryExecModeCacheDescribe
+	// pgCfg.DefaultQueryExecMode = pgx.QueryExecModeExec
+	pgCfg.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	conn, err := pgx.ConnectConfig(ctx, pgCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := conn.Close(ctx); err != nil {
+			t.Error(err)
+		}
+	})
+
+	var arg any = int64(1)
+	rows, err := conn.Query(ctx, `SELECT $1;`, arg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Tip: try the named argument rewriter as such:
+	// argMap := map[string]any{
+	// 	"a": int64(1),
+	// }
+	// var arg any = pgx.NamedArgs(argMap)
+	//  ^ with `SELECT @a;`
+	// (with the same result)
+
+	defer rows.Close()
+
+	for rows.Next() {
+		// rows.Values() // []any
+		var val any
+		err = rows.Scan(&val)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("%v (%T)", val, val)
+		// valInt, err := conv.Int(val)
+		// if err != nil {
+		// 	t.Fatal(err)
+		// }
+		// t.Log(valInt, "(int64)")
+	}
+
+	err = rows.Err()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+func TestNestedTx(t *testing.T) {
+	ctx := context.Background()
 
 	db, err := NewDB(ctx, cfg)
 	if err != nil {

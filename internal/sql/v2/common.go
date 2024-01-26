@@ -25,12 +25,8 @@ type Queryer interface {
 	Query(ctx context.Context, stmt string, args ...any) (*ResultSet, error)
 }
 
-type PendingQueryer interface {
-	QueryPending(ctx context.Context, query string, args ...any) (*ResultSet, error)
-}
-
 type Executor interface {
-	Execute(ctx context.Context, stmt string, args ...any) error
+	Execute(ctx context.Context, stmt string, args ...any) (*ResultSet, error)
 }
 
 type KVGetter interface {
@@ -120,6 +116,17 @@ type ResultSet struct {
 	Rows            [][]any
 
 	i int // starts at 0
+
+	Status CommandTag
+}
+
+type CommandTag struct {
+	Text         string
+	RowsAffected int64
+}
+
+func (ct *CommandTag) String() string {
+	return ct.Text // tip: prefix will be select, insert, etc.
 }
 
 var _ Result = (*ResultSet)(nil)
