@@ -2,11 +2,10 @@ package tree
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
-
-	"github.com/cstockton/go-conv"
 )
 
 type Expression interface {
@@ -80,7 +79,7 @@ func validateIsNonStringLiteral(str string) {
 		panic(fmt.Errorf("literal cannot be float.  received: %s", str))
 	}
 
-	_, err := conv.Int64(str)
+	_, err := strconv.ParseInt(str, 10, 64) // go-conv: conv.Int64(str)
 	if err == nil {
 		return
 	}

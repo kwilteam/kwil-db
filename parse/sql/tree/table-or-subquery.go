@@ -35,11 +35,14 @@ func (t *TableOrSubqueryTable) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if t.schema != "" {
+		stmt.Token.Space()
 		stmt.WriteIdentNoSpace(t.schema)
 		stmt.Token.Period()
+		stmt.WriteIdentNoSpace(t.Name)
+		stmt.Token.Space()
+	} else {
+		stmt.WriteIdentNoSpace(t.Name)
 	}
-
-	stmt.WriteIdentNoSpace(t.Name)
 
 	if t.Alias != "" {
 		stmt.Token.As()

@@ -122,11 +122,14 @@ func (ins *InsertStmt) ToSQL() string {
 	stmt.Token.Into()
 
 	if ins.schema != "" {
+		stmt.Token.Space()
 		stmt.WriteIdentNoSpace(ins.schema)
 		stmt.Token.Period()
+		stmt.WriteIdentNoSpace(ins.Table)
+		stmt.Token.Space()
+	} else {
+		stmt.WriteIdent(ins.Table)
 	}
-
-	stmt.WriteIdent(ins.Table)
 
 	if ins.TableAlias != "" {
 		stmt.Token.As()

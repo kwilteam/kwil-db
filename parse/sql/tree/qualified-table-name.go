@@ -23,11 +23,14 @@ func (q *QualifiedTableName) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if q.schema != "" {
+		stmt.Token.Space()
 		stmt.WriteIdentNoSpace(q.schema)
 		stmt.Token.Period()
+		stmt.WriteIdentNoSpace(q.TableName)
+		stmt.Token.Space()
+	} else {
+		stmt.WriteIdent(q.TableName)
 	}
-
-	stmt.WriteIdent(q.TableName)
 
 	if q.TableAlias != "" {
 		stmt.Token.As()
