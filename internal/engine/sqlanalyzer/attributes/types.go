@@ -123,6 +123,9 @@ func (r *returnTypeWalker) EnterExpressionDistinct(p0 *tree.ExpressionDistinct) 
 	r.set(types.INT)
 	return nil
 }
+
+// Boolean somewhere?
+
 func (r *returnTypeWalker) EnterExpressionFunction(p0 *tree.ExpressionFunction) error {
 	if r.detected {
 		return nil

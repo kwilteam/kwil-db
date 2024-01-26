@@ -22,7 +22,7 @@ func Test_Analyze(t *testing.T) {
 		{
 			name: "simple select",
 			stmt: "SELECT * FROM users",
-			want: `SELECT * FROM "dbid"."users" ORDER BY "users"."id" ASC NULLS LAST;`,
+			want: `SELECT * FROM "ds_dbid"."users" ORDER BY "users"."id" ASC NULLS LAST;`,
 			tables: []*types.Table{
 				tblUsers,
 			},
@@ -39,15 +39,15 @@ func Test_Analyze(t *testing.T) {
 			ORDER BY date(p.post_date) DESC NULLS LAST
 			LIMIT 20 OFFSET $offset;`,
 			want: `SELECT "p"."id", "p"."title"
-			FROM "dbid"."posts" AS "p"
-			INNER JOIN "dbid"."followers" AS "f" ON "p"."user_id" = "f"."user_id"
-			INNER JOIN "dbid"."users" AS "u" ON "u"."id" = "f"."user_id"
+			FROM "ds_dbid"."posts" AS "p"
+			INNER JOIN "ds_dbid"."followers" AS "f" ON "p"."user_id" = "f"."user_id"
+			INNER JOIN "ds_dbid"."users" AS "u" ON "u"."id" = "f"."user_id"
 			WHERE "f"."follower_id" = (
-				SELECT "id" FROM "dbid"."users" WHERE "username" = $username ORDER BY "users"."id" ASC NULLS LAST
+				SELECT "id" FROM "ds_dbid"."users" WHERE "username" = @username_arg ORDER BY "users"."id" ASC NULLS LAST
 			)
 			ORDER BY date ("p"."post_date") DESC NULLS LAST,
 			"f"."follower_id" ASC NULLS LAST, "f"."user_id" ASC NULLS LAST, "p"."id" ASC NULLS LAST, "u"."id" ASC NULLS LAST
-			LIMIT 20 OFFSET $offset;`,
+			LIMIT 20 OFFSET @offset_arg;`,
 			tables: []*types.Table{
 				tblUsers,
 				tblPosts,
@@ -60,8 +60,8 @@ func Test_Analyze(t *testing.T) {
 			FROM users AS u1
 			INNER JOIN users AS u2 ON u1.id = u2.id`,
 			want: `SELECT "u1"."id", "u1"."name", "u2"."name"
-			FROM "dbid"."users" AS "u1"
-			INNER JOIN "dbid"."users" AS "u2" ON "u1"."id" = "u2"."id"
+			FROM "ds_dbid"."users" AS "u1"
+			INNER JOIN "ds_dbid"."users" AS "u2" ON "u1"."id" = "u2"."id"
 			ORDER BY "u1"."id" ASC NULLS LAST, "u2"."id" ASC NULLS LAST;`,
 			tables: []*types.Table{
 				tblUsers,
@@ -76,7 +76,7 @@ func Test_Analyze(t *testing.T) {
 			SELECT * FROM users_aged_20`,
 			want: `WITH
 			"users_aged_20" AS (
-				SELECT "users"."id", "users"."username" FROM "dbid"."users" WHERE "age" = 20 ORDER BY "users"."id" ASC NULLS LAST
+				SELECT "users"."id", "users"."username" FROM "ds_dbid"."users" WHERE "age" = 20 ORDER BY "users"."id" ASC NULLS LAST
 			)
 			SELECT * FROM "users_aged_20" ORDER BY "users_aged_20"."id" ASC NULLS LAST, "users_aged_20"."username" ASC NULLS LAST;`,
 			tables: []*types.Table{
@@ -86,7 +86,7 @@ func Test_Analyze(t *testing.T) {
 		{
 			name: "basic insert",
 			stmt: `INSERT INTO users (id, username, age) VALUES (1, 'user1', 20)`,
-			want: `INSERT INTO "dbid"."users" ("id", "username", "age") VALUES (1, 'user1', 20);`,
+			want: `INSERT INTO "ds_dbid"."users" ("id", "username", "age") VALUES (1, 'user1', 20);`,
 			tables: []*types.Table{
 				tblUsers,
 			},
@@ -95,7 +95,7 @@ func Test_Analyze(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := sqlanalyzer.ApplyRules(tt.stmt, sqlanalyzer.AllRules, tt.tables, "dbid")
+			got, err := sqlanalyzer.ApplyRules(tt.stmt, sqlanalyzer.AllRules, tt.tables, "ds_dbid")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ApplyRules() error = %v, wantErr %v", err, tt.wantErr)
 				return

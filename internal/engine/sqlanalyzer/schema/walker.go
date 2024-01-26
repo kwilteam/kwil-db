@@ -7,6 +7,9 @@ type SchemaWalker struct {
 	tree.Walker
 	schema string
 	ctes   map[string]struct{} // we keep track of ctes since they should not be prefixed with a schema
+
+	// SetCount is the number of table refs where the schema was set by the walker.
+	SetCount int
 }
 
 func NewSchemaWalker(targetSchema string) *SchemaWalker {
@@ -27,6 +30,7 @@ func (s *SchemaWalker) set(table string, st settable) {
 		return
 	}
 
+	s.SetCount++
 	st.SetSchema(s.schema)
 }
 
