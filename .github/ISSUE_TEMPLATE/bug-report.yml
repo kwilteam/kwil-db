@@ -28,13 +28,13 @@ body:
       validations:
           required: true
     - type: textarea
-        id: configuration
-        attributes:
-            label: Configuration
-            description: Please include a detailed description of your kwil daemon configuration, including your config.toml, genesis.json, and any other configuration flags you are using. If you are reporting a bug on the testnet (i.e. https://testnet.kwil.com), please say, "I am using the testnet."
-            placeholder: e.g. I am using the following config.toml...
-        validations:
-            required: true  
+      id: configuration
+      attributes:
+          label: Configuration
+          description: Please include a detailed description of your kwil daemon configuration, including your config.toml, genesis.json, and any other configuration flags you are using. If you are reporting a bug on the testnet (i.e. https://testnet.kwil.com), please say, "I am using the testnet."
+          placeholder: e.g. I am using the following config.toml...
+      validations:
+          required: true
     - type: textarea
       id: expected_behavior
       attributes:
