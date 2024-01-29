@@ -12,10 +12,10 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-// NOTE: I feel those types are better to be defined in the clientType package
+// NOTE: I feel those types are better to be defined in the core/client package
 // but also not sure, because how to display the response is a cli thing
 //
-// A possible way to do this is define actual response types in clientType package
+// A possible way to do this is to define actual response types in core/client package
 // and wrap them in cli package?
 
 // respDBList represent databases belong to an owner in cli

@@ -9,7 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
-// Client defines methods are used to talk to a Kwil provider
+// Client defines methods are used to talk to a Kwil provider.
 type Client interface {
 	CallAction(ctx context.Context, dbid string, action string, inputs []any) (*Records, error)
 	ChainID() string

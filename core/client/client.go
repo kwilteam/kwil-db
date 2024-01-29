@@ -1,4 +1,4 @@
-// Package clientType contains the clientType for interacting with the Kwil public API.
+// Package client defines client for interacting with the Kwil provider.
 // It's supposed to be used as go-sdk for Kwil, currently used by the Kwil CLI.
 package client
 
@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -23,11 +22,10 @@ import (
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
-
 	"go.uber.org/zap"
 )
 
-// Client is a Kwil clientType that can interact with the main public Kwil RPC.
+// Client is a client that interacts with a public Kwil provider.
 type Client struct {
 	txClient user.TxSvcClient
 	Signer   auth.Signer
@@ -41,8 +39,9 @@ type Client struct {
 
 var _ clientType.Client = (*Client)(nil)
 
-// NewClient creates a Kwil clientType. It will dial the remote host via HTTP, and
-// verify the chain ID of the remote host against the chain ID passed in.
+// NewClient creates a Kwil client.
+// It by default communicates with target via HTTP; chain ID of the remote host
+// will be verified against the chain ID passed in.
 func NewClient(ctx context.Context, target string, options *clientType.Options) (c *Client, err error) {
 	parsedUrl, err := url.Parse(target)
 	if err != nil {
@@ -53,17 +52,16 @@ func NewClient(ctx context.Context, target string, options *clientType.Options) 
 
 	clt, err := WrapClient(ctx, httpClient, options)
 	if err != nil {
-		return nil, fmt.Errorf("wrap clientType: %w", err)
+		return nil, fmt.Errorf("wrap client: %w", err)
 	}
 
-	clt.logger = *clt.logger.Named("clientType").With(zap.String("host", target))
+	clt.logger = *clt.logger.Named("client").With(zap.String("host", target))
 
 	return clt, nil
 }
 
-// WrapClient wraps an rpc clientType with a Kwil clientType.
-// It provides a way to use a custom rpc clientType with the Kwil clientType.
-// Unless a custom rpc clientType is needed, use Dial instead.
+// WrapClient wraps a TxSvcClient with a Kwil client.
+// It provides a way to use a custom rpc client with the Kwil client.
 func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientType.Options) (*Client, error) {
 	clientOptions := clientType.DefaultOptions()
 	clientOptions.Apply(options)
@@ -87,7 +85,7 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 		}
 		c.chainID = chainID
 	} else if c.chainID != chainID {
-		return nil, fmt.Errorf("remote host chain ID %q != clientType configured %q", chainID, c.chainID)
+		return nil, fmt.Errorf("remote host chain ID %q != client configured %q", chainID, c.chainID)
 	}
 
 	return c, nil
@@ -101,6 +99,7 @@ func syncBcastFlag(syncBcast bool) rpcClient.BroadcastWait {
 	return syncFlag
 }
 
+// Transfer transfers balance to a given address.
 func (c *Client) Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...clientType.TxOpt) (transactions.TxHash, error) {
 	// Get account balance to ensure we can afford the transfer, and use the
 	// nonce to avoid a second GetAccount in newTx.
@@ -148,7 +147,7 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Sche
 	return ds, nil
 }
 
-// DeployDatabase deploys a schema
+// DeployDatabase deploys a database.
 func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schema, opts ...clientType.TxOpt) (transactions.TxHash, error) {
 	txOpts := clientType.GetTxOpts(opts)
 	tx, err := c.newTx(ctx, payload, txOpts)
@@ -197,7 +196,8 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...client
 
 // ExecuteAction executes an action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
-// It can take any number of inputs, and if multiple tuples of inputs are passed, it will execute them transactionally.
+// It can take any number of inputs, and if multiple tuples of inputs are passed,
+// it will execute them in separate transactions. // NOTE: IS THIS correct?
 func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...clientType.TxOpt) (transactions.TxHash, error) {
 	stringTuples, err := convertTuples(tuples)
 	if err != nil {
@@ -256,21 +256,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 	return clientType.NewRecordsFromMaps(res), nil
 }
 
-func DecodeOutputs(bts []byte) ([]map[string]any, error) {
-	if len(bts) == 0 {
-		return []map[string]any{}, nil
-	}
-
-	var outputs []map[string]any
-	err := json.Unmarshal(bts, &outputs)
-	if err != nil {
-		return nil, err
-	}
-
-	return outputs, nil
-}
-
-// Query executes a query
+// Query executes a query.
 func (c *Client) Query(ctx context.Context, dbid string, query string) (*clientType.Records, error) {
 	res, err := c.txClient.Query(ctx, dbid, query)
 	if err != nil {
@@ -280,14 +266,19 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) (*clientT
 	return clientType.NewRecordsFromMaps(res), nil
 }
 
+// ListDatabases lists databases belonging to an owner.
+// If no owner is passed, it will list all databases.
 func (c *Client) ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetIdentifier, error) {
 	return c.txClient.ListDatabases(ctx, owner)
 }
 
+// Ping pings the remote host.
 func (c *Client) Ping(ctx context.Context) (string, error) {
 	return c.txClient.Ping(ctx)
 }
 
+// GetAccount gets account info by account ID.
+// If status is AccountStatusPending, it will include the pending info.
 func (c *Client) GetAccount(ctx context.Context, acctID []byte, status types.AccountStatus) (*types.Account, error) {
 	return c.txClient.GetAccount(ctx, acctID, status)
 }
@@ -323,7 +314,7 @@ func convertTuple(tuple []any) ([]string, error) {
 	return stringTuple, nil
 }
 
-// TxQuery get transaction by hash
+// TxQuery get transaction by hash.
 func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
 	res, err := c.txClient.TxQuery(ctx, txHash)
 	if err != nil {
@@ -356,6 +347,7 @@ func (c *Client) WaitTx(ctx context.Context, txHash []byte, interval time.Durati
 	}
 }
 
+// ChainID returns the chain ID of the remote host.
 func (c *Client) ChainID() string {
 	return c.chainID
 }
