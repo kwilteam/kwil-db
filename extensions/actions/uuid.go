@@ -16,7 +16,7 @@ const uuidName = "uuid"
 
 func init() {
 	u := &uuidExtension{}
-	err := RegisterExtension("uuid", u)
+	err := RegisterExtension(uuidName, u)
 	if err != nil {
 		panic(err)
 	}
