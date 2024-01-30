@@ -4,27 +4,35 @@ package actions
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"fmt"
 	"strings"
-
 	uuid "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine/execution"
 )
 
 const uuidName = "uuid"
 
 func init() {
-	u := &uuidExtension{}
-	err := RegisterExtension(uuidName, u)
+	err := RegisterExtension(uuidName, InitializeUUID)
 	if err != nil {
 		panic(err)
 	}
 }
 
+// InitializeUUID requires no initialize parameters.
+func InitializeUUID(ctx *execution.DeploymentContext, metadata map[string]string) (execution.ExtensionNamespace, error) {
+	// if there are any parameters, throw an error
+	if len(metadata) > 0 {
+		return nil, fmt.Errorf("uuid: expected 0 parameters, got %d", len(metadata))
+	}
+
+	return &uuidExtension{}, nil
+}
+
 type uuidExtension struct{}
 
-func (u *uuidExtension) Execute(scope CallContext, metadata map[string]string, method string, args ...any) ([]any, error) {
+func (u *uuidExtension) Call(scope *execution.ProcedureContext, method string, args []any) ([]any, error) {
 	lowerMethod := strings.ToLower(method)
 
 	// if no args are provided, throw error
@@ -62,9 +70,4 @@ func (u *uuidExtension) Execute(scope CallContext, metadata map[string]string, m
 	case "uuidv5":
 		return []any{uuid.NewUUIDV5(arg).String()}, nil
 	}
-}
-
-// Takes no initialization parameters.
-func (a *uuidExtension) Initialize(ctx context.Context, metadata map[string]string) (map[string]string, error) {
-	return nil, nil
 }
