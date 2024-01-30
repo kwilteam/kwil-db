@@ -75,16 +75,16 @@ func (b *Builder) build(node tree.AstNode) *OperationBuilder {
 	return b.Visit(node).(*OperationBuilder)
 }
 
-// buildDataSource builds a data source from a statement.
-func (b *Builder) buildDataSource(node tree.AstNode) *OperationBuilder {
-	switch t := node.(type) {
-	case *tree.TableOrSubqueryTable:
-	case *tree.TableOrSubquerySelect:
-		//case // values
-		//case // join
-	}
-	return b.Visit(node).(*OperationBuilder)
-}
+//// buildDataSource builds a data source from a statement.
+//func (b *Builder) buildDataSource(node tree.AstNode) *OperationBuilder {
+//	switch t := node.(type) {
+//	case *tree.TableOrSubqueryTable:
+//	case *tree.TableOrSubquerySelect:
+//		//case // values
+//		//case // join
+//	}
+//	return b.Visit(node).(*OperationBuilder)
+//}
 
 func (b *Builder) Visit(node tree.AstNode) any {
 	return node.Accept(b)

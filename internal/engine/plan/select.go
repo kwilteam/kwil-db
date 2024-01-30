@@ -1,4 +1,4 @@
-package demo
+package plan
 
 //func (b *Builder) buildSelect(node *tree.Select) LogicalPlan {
 //	if !b.metaCollected {

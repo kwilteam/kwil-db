@@ -2,6 +2,7 @@ package plan
 
 import (
 	"context"
+
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 )
 

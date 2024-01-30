@@ -2,6 +2,7 @@ package plan
 
 import (
 	"bytes"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/operator"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )

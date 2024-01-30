@@ -1,13 +1,14 @@
-package demo
+package plan
 
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 // mockSchemaBase is a mock schema for testing.
@@ -227,12 +228,12 @@ func TestBuilder_build(t *testing.T) {
 			args: "select users.age as age, count(users.age) from users group by users.age having users.age > 18",
 		},
 		{
-			name: "join select from star",
-			args: "select * from users as u join posts as p on u.id = p.user_id",
+			name: "join select from star", // fix this
+			args: "select u.*, p.title from users as u join posts as p on u.id = p.user_id",
 		},
 		{
 			name: "join select from table",
-			args: "select u.name, p.content from users as u join posts as p on u.id = p.user_id",
+			args: "select u.name, p.title from users as u join posts as p on u.id = p.user_id",
 		},
 	}
 	for _, tt := range tests {

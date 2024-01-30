@@ -1,4 +1,4 @@
-package demo
+package plan
 
 import "github.com/kwilteam/kwil-db/parse/sql/tree"
 

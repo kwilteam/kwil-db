@@ -1,9 +1,10 @@
-package demo
+package plan
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
 type LogicalScan struct {
@@ -34,7 +35,11 @@ func (p *LogicalScan) String() string {
 	//	return "Scan: projection=" + strings.Join(p.projection, ",")
 	//}
 
-	return "Scan: table=" + p.schema.tblName
+	if p.ds.Schema().tblAlias != "" {
+		return fmt.Sprintf("Scan: table=%s(%s)", p.ds.Schema().tblName, p.ds.Schema().tblAlias)
+	}
+
+	return fmt.Sprintf("Scan: table=%s", p.ds.Schema().tblName)
 }
 
 func (p *LogicalScan) Inputs() []LogicalPlan {
@@ -62,57 +67,14 @@ func NewLogicalProjection(input LogicalPlan, exprs []tree.ResultColumnExpression
 	}
 }
 
-func exprToField(expr tree.Expression, input LogicalPlan) *field {
-	switch t := expr.(type) {
-	case *tree.ExpressionColumn:
-		for _, field := range input.Schema().fields {
-			if field.ColName == t.Column {
-				return field
-			}
-		}
-	case *tree.ExpressionLiteral:
-		return &field{
-			ColName: t.Value,
-			//Type:    t.Type,
-			Type: "text",
-		}
-	case *tree.ExpressionFunction:
-		var retType string
-		switch t.Function.Name() {
-		case "count", "min", "max":
-			retType = "int"
-		case "concat", "substr",
-		}
-		return &field{
-			ColName:         t.Function.Name(),
-			OriginalColName: t.Function.Name(),
-			//Type: "int",
-		}
-	case *tree.ExpressionCase:
-		return &field{
-			ColName: "case",
-		}
-	case *tree.ExpressionArithmetic:
-		return &field{
-			ColName: t.Operator.String(),
-			Type
-		}
-
-	default:
-		panic("not implemented")
-	}
-
-	return nil
-}
-
 func (p *LogicalProjection) Schema() *schema {
 	//return Schema(expr.map { it.toField(input) })
 
 	// projection should return a new schema based on the input schema
 	//return p.input.Schema().Select(p.exprs)
 	cols := make([]*field, len(p.exprs))
-	for _, expr := range p.exprs {
-		cols = append(cols, exprToField(expr.Expression, p.input))
+	for i, expr := range p.exprs {
+		cols[i] = exprToField(expr.Expression, p.input)
 	}
 	return newSchema(cols...)
 }
@@ -120,7 +82,7 @@ func (p *LogicalProjection) Schema() *schema {
 func (p *LogicalProjection) String() string {
 	fields := make([]string, len(p.exprs))
 	for i, expr := range p.exprs {
-		fields[i] = expr.ToSQL()
+		fields[i] = removeWhitespace(expr.ToSQL())
 	}
 	return "Projection: " + strings.Join(fields, ",")
 	//return "Projection: " + strings.Join(p.exprs, ",")
@@ -152,7 +114,7 @@ func (p *LogicalFilter) Schema() *schema {
 }
 
 func (p *LogicalFilter) String() string {
-	return "Filter: " + p.expr.ToSQL()
+	return "Filter: " + removeWhitespace(p.expr.ToSQL())
 }
 
 func (p *LogicalFilter) Inputs() []LogicalPlan {
@@ -171,11 +133,11 @@ type LogicalAggregate struct {
 	groupBy []tree.Expression
 	//aggregates []tree.Expression
 	// aggregates should be 'agg(c)'
-	aggregates []*tree.AggregateFunc
+	aggregates []*tree.ExpressionFunction
 }
 
 func NewLogicalAggregate(input LogicalPlan, groupBy []tree.Expression,
-	aggregates []*tree.AggregateFunc) *LogicalAggregate {
+	aggregates []*tree.ExpressionFunction) *LogicalAggregate {
 	return &LogicalAggregate{
 		input:      input,
 		groupBy:    groupBy,
@@ -186,21 +148,17 @@ func NewLogicalAggregate(input LogicalPlan, groupBy []tree.Expression,
 func (p *LogicalAggregate) Schema() *schema {
 	// aggregate should return a new schema based on the input schema
 	//return p.input.Schema().Select(p.groupBy)
-	panic("not implemented")
+	//panic("not implemented")
 
 	cols := make([]*field, len(p.groupBy)+len(p.aggregates))
-	for i, expr := range p.groupBy {
+	i := 0
+	for _, expr := range p.groupBy {
 		cols[i] = exprToField(expr, p.input)
+		i++
 	}
 
-	for i, expr := range p.aggregates {
-		e := tree.SQLFunctions[expr.FunctionName]
-		cols[i] = exprToField(&tree.ExpressionFunction{
-			Wrapped:  false,
-			Function: e,
-			//Inputs:   nil,
-			//Distinct: false,
-		}, p.input)
+	for j, expr := range p.aggregates {
+		cols[i+j] = exprToField(expr, p.input)
 	}
 
 	return newSchema(cols...)
@@ -209,13 +167,13 @@ func (p *LogicalAggregate) Schema() *schema {
 func (p *LogicalAggregate) String() string {
 	groupBy := make([]string, len(p.groupBy))
 	for i, expr := range p.groupBy {
-		groupBy[i] = expr.ToSQL()
+		groupBy[i] = removeWhitespace(expr.ToSQL())
 	}
 
 	if len(p.aggregates) != 0 {
 		aggrs := make([]string, len(p.aggregates))
 		for i, expr := range p.aggregates {
-			aggrs[i] = expr.ToSQL()
+			aggrs[i] = removeWhitespace(expr.ToSQL())
 		}
 		return fmt.Sprintf("Aggregate: groupBy=%s, aggregates=%s",
 			strings.Join(groupBy, ","), strings.Join(aggrs, ","))
@@ -253,9 +211,9 @@ func (p *LogicalLimit) Schema() *schema {
 
 func (p *LogicalLimit) String() string {
 	if p.offset != nil {
-		return "Limit: " + p.limit.ToSQL() + " offset " + p.offset.ToSQL()
+		return "Limit: " + removeWhitespace(p.limit.ToSQL()) + " offset " + removeWhitespace(p.offset.ToSQL())
 	}
-	return "Limit: " + p.limit.ToSQL()
+	return "Limit: " + removeWhitespace(p.limit.ToSQL())
 }
 
 func (p *LogicalLimit) Inputs() []LogicalPlan {
@@ -287,7 +245,7 @@ func (p *LogicalSort) String() string {
 	orderBy := ""
 	if p.orderBy != nil {
 		for _, term := range p.orderBy {
-			orderBy += term.ToSQL() + ","
+			orderBy += removeWhitespace(term.ToSQL()) + ","
 		}
 	}
 
@@ -307,7 +265,7 @@ type LogicalJoin struct {
 	inputR LogicalPlan
 
 	joinType tree.JoinType
-	on       tree.Expression
+	on       tree.Expression // should it be a list?
 }
 
 func NewLogicalJoin(inputL LogicalPlan, inputR LogicalPlan, joinType tree.JoinType, on tree.Expression) *LogicalJoin {
@@ -319,14 +277,26 @@ func NewLogicalJoin(inputL LogicalPlan, inputR LogicalPlan, joinType tree.JoinTy
 	}
 }
 
+// Schmea of join is the combination of left and right schema
 func (p *LogicalJoin) Schema() *schema {
-	// join should return a new schema based on the input schemas, combine columns
-	panic("not implemented")
+	// TODO: remove duplicate keys
+	// if left join or inner join, remove duplicate keys from right schema
+	// if right join, remove duplicate keys from left schema
+	cols := make([]*field, len(p.inputL.Schema().fields)+len(p.inputR.Schema().fields))
+	i := 0
+	for _, field := range p.inputL.Schema().fields {
+		cols[i] = field
+		i++
+	}
+
+	for j, field := range p.inputR.Schema().fields {
+		cols[i+j] = field
+	}
+	return newSchema(cols...)
 }
 
 func (p *LogicalJoin) String() string {
-	return "Join: "
-	//return "Join: " + p.joinType
+	return fmt.Sprintf("%s: %s", p.joinType.String(), removeWhitespace(p.on.ToSQL()))
 }
 
 func (p *LogicalJoin) Inputs() []LogicalPlan {
@@ -358,7 +328,7 @@ func (p *LogicalSet) Schema() *schema {
 }
 
 func (p *LogicalSet) String() string {
-	return "Set: " + p.setType.ToSQL()
+	return "Set: " + removeWhitespace(p.setType.ToSQL())
 }
 
 func (p *LogicalSet) Inputs() []LogicalPlan {

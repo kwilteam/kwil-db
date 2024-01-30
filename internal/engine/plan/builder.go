@@ -1,7 +1,8 @@
-package demo
+package plan
 
 import (
 	"context"
+
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
@@ -268,7 +269,9 @@ func (b *Builder) buildFrom(node *tree.SelectCore) LogicalPlan {
 	// simple relation
 	// TODO: change SQL parse rule to make it simpler
 	// return b.Visit(node.TableOrSubquery)
+
 	left := b.visitTableOrSubquery(joinClause.TableOrSubquery, node.Columns).(LogicalPlan)
+	//left := b.buildDataSource(node)
 
 	if len(joinClause.Joins) > 0 {
 		var tmpPlan LogicalPlan
@@ -424,15 +427,15 @@ func (b *Builder) buildAggregate(plan LogicalPlan,
 	}
 
 	//colAggrMap := getColumnAggregateMap(cols)
-	colAggrs := make([]*tree.AggregateFunc, 0, len(cols))
+	var colAggrs []*tree.ExpressionFunction
 
 	for _, col := range cols {
 		switch ct := col.(type) {
 		case *tree.ResultColumnExpression:
 			switch et := ct.Expression.(type) {
 			case *tree.ExpressionFunction:
-				if f, ok := et.Function.(*tree.AggregateFunc); ok {
-					colAggrs = append(colAggrs, f)
+				if _, ok := et.Function.(*tree.AggregateFunc); ok {
+					colAggrs = append(colAggrs, et)
 				}
 			}
 		}
@@ -574,15 +577,15 @@ func (b *Builder) visitTableOrSubQueryTable(node *tree.TableOrSubqueryTable, col
 		panic(err)
 	}
 
-	fields := make([]*field, 0, len(tb.Columns))
-	for _, col := range tb.Columns {
-		fields = append(fields, &field{
+	fields := make([]*field, len(tb.Columns))
+	for i, col := range tb.Columns {
+		fields[i] = &field{
 			OriginalTblName: tb.Name,
 			OriginalColName: col.Name,
 			TblName:         tb.Name,
 			ColName:         col.Name,
 			DB:              "",
-		})
+		}
 	}
 
 	s := newSchema(fields...)

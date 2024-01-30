@@ -151,6 +151,23 @@ const (
 	JoinTypeFull
 )
 
+func (j JoinType) String() string {
+	switch j {
+	case JoinTypeJoin:
+		return "JOIN"
+	case JoinTypeInner:
+		return "INNER JOIN"
+	case JoinTypeLeft:
+		return "LEFT JOIN"
+	case JoinTypeRight:
+		return "RIGHT JOIN"
+	case JoinTypeFull:
+		return "FULL JOIN"
+	default:
+		panic(fmt.Sprintf("invalid join type: %d", j))
+	}
+}
+
 func (j *JoinOperator) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 

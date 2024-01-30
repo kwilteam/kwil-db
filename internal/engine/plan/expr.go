@@ -1,4 +1,4 @@
-package demo
+package plan
 
 type LogicalExprResolver interface {
 	ResolveExpr(LogicalPlan) *field

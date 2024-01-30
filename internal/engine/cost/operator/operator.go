@@ -2,9 +2,10 @@ package operator
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
-	"strings"
 )
 
 type OperatorType uint16

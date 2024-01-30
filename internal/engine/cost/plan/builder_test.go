@@ -2,10 +2,11 @@ package plan
 
 import (
 	"fmt"
+	"testing"
+
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestPlanBuilder_build(t1 *testing.T) {
