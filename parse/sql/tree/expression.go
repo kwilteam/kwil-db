@@ -40,6 +40,7 @@ type ExpressionLiteral struct {
 	expressionBase
 	Wrapped
 	Value string
+	// TODO: add type
 }
 
 func (e *ExpressionLiteral) Accept(v AstVisitor) any {

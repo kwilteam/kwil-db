@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
+	"github.com/kwilteam/kwil-db/internal/engine/cost"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sql "github.com/kwilteam/kwil-db/internal/sql"
@@ -164,10 +165,18 @@ func prepareStmt(stmt string, immutable bool, tables []*types.Table) (instructio
 			return nil, err
 		}
 
+
+		var stubSchema *types.Schema
+		costCalculator, err := cost.GenCostCalculator(stmt.Statement, tables, stubSchema)
+		if err != nil {
+			return nil, err
+		}
+
 		i := &dmlStmt{
 			DeterministicStatement:    deterministic.Statement(),
 			NonDeterministicStatement: nonDeterministic.Statement(),
 			Mutative:                  deterministic.Mutative(),
+			CostCalculator:        costCalculator,    ,
 		}
 		instr = i
 
@@ -276,6 +285,7 @@ func (e *callMethod) execute(scope *ScopeContext, dataset *dataset) error {
 	return nil
 }
 
+
 // dmlStmt is a DML statement, we leave the parsing to sqlparser
 type dmlStmt struct {
 	// DeterministicStatement is the deterministic version of the statement.
@@ -288,6 +298,9 @@ type dmlStmt struct {
 
 	// Mutative is whether the statement mutates state.
 	Mutative bool
+
+	// CostCalculator is the cost calculator for the statement.
+	CostCalculator cost.Calculator
 }
 
 func (e *dmlStmt) execute(scope *ScopeContext, dataset *dataset) error {
