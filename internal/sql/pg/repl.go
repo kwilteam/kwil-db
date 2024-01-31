@@ -80,13 +80,16 @@ func createRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotN
 	//  -- then '\c kwild' to connect to the kwild database
 	//  CREATE PUBLICATION kwild_repl FOR ALL TABLES; -- applies to connected DB! also, this can be auto if kwild user is superuser
 
-	const outputPlugin = "pgoutput" // built-in
-	// const slotName = "kwild_repl"
-	slotRes, err := pglogrepl.CreateReplicationSlot(ctx, conn, slotName, outputPlugin,
-		pglogrepl.CreateReplicationSlotOptions{
-			Mode:      pglogrepl.LogicalReplication,
-			Temporary: true,
-		})
+	// slotRes, err := pglogrepl.CreateReplicationSlot(ctx, conn, slotName, "pgoutput",
+	// 	pglogrepl.CreateReplicationSlotOptions{
+	// 		Mode:      pglogrepl.LogicalReplication,
+	// 		Temporary: true,
+	// 	})
+
+	// We do this manually with Exec so we can enable two-phase commit mode with
+	// prepared transactions.
+	sqlStartRepl := fmt.Sprintf("CREATE_REPLICATION_SLOT %s TEMPORARY LOGICAL pgoutput TWO_PHASE", slotName)
+	slotRes, err := pglogrepl.ParseCreateReplicationSlot(conn.Exec(ctx, sqlStartRepl))
 	if err != nil {
 		return 0, err
 	}
@@ -219,7 +222,11 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
 				logger.Debug("wal commit stats", log.Uint("inserts", stats.inserts), log.Uint("updates", stats.updates),
 					log.Uint("deletes", stats.deletes), log.Uint("truncates", stats.truncs))
 				stats.reset()
+
 			}
+
+		default:
+			logger.Debug("unknown message", log.String("type", string(msg.Data[0])))
 		}
 	}
 }
@@ -237,7 +244,7 @@ func (ws *walStats) reset() {
 
 func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglogrepl.RelationMessageV2,
 	inStream *bool, stats *walStats, okSchema func(schema string) bool) (bool, int64, error) {
-	logicalMsg, err := pglogrepl.ParseV2(walData, *inStream)
+	logicalMsg, err := parseV3(walData, *inStream)
 	if err != nil {
 		return false, 0, fmt.Errorf("Parse logical replication message: %w", err)
 	}
@@ -372,7 +379,38 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 	case *pglogrepl.LogicalDecodingMessageV2:
 		logger.Debugf("logical decoding message: %q, %q, %d", logicalMsg.Prefix, logicalMsg.Content, logicalMsg.Xid)
 
-	// Stream messages.  Not expected for kwil
+	// prepared transaction messages
+	case *BeginPrepareMessageV3:
+		logger.Debugf(" [msg] BEGIN PREPARED TRANSACTION (id %v): Prepare LSN %v (%d), End LSN %v (%d) \n",
+			logicalMsg.UserGID, logicalMsg.PrepareLSN, uint64(logicalMsg.PrepareLSN),
+			logicalMsg.EndPrepareLSN, uint64(logicalMsg.EndPrepareLSN))
+	case *PrepareMessageV3:
+		logger.Debugf(" [msg] PREPARE TRANSACTION (id %v): Prepare LSN %v (%d), End LSN %v (%d) \n",
+			logicalMsg.UserGID, logicalMsg.PrepareLSN, uint64(logicalMsg.PrepareLSN),
+			logicalMsg.EndPrepareLSN, uint64(logicalMsg.EndPrepareLSN))
+
+		// - BEGIN;
+		// - mods: UPDATE / INSERT / DELETE
+		// - PREPARE TRANSACTION 'uid';
+		//	* msgs: Begin Prepared -> [update messages] -> Prepare (ready to commit)
+		// - COMMIT PREPARED 'uid';
+		//  * msgs: Commit Prepared (NO regular "Commit" message)
+		done = true // there will be a commit or a rollback, but this is the end of the update stream
+
+	case *CommitPreparedMessageV3:
+		logger.Debugf(" [msg] COMMIT PREPARED TRANSACTION (id %v): Commit LSN %v (%d), End LSN %v (%d) \n",
+			logicalMsg.UserGID, logicalMsg.CommitLSN, uint64(logicalMsg.CommitLSN),
+			logicalMsg.EndCommitLSN, uint64(logicalMsg.EndCommitLSN))
+		// done = true
+
+	case *RollbackPreparedMessageV3:
+		logger.Debugf(" [msg] ROLLBACK PREPARED TRANSACTION (id %v): Rollback LSN %v (%d), End LSN %v (%d) \n",
+			logicalMsg.UserGID, logicalMsg.RollbackLSN, uint64(logicalMsg.RollbackLSN),
+			logicalMsg.EndLSN, uint64(logicalMsg.EndLSN))
+
+		hasher.Reset()
+
+	// v2 Stream control messages.  Not expected for kwil
 	case *pglogrepl.StreamStartMessageV2:
 		*inStream = true
 		logger.Warnf(" [msg] StreamStartMessageV2: xid %d, first segment? %d", logicalMsg.Xid, logicalMsg.FirstSegment)
