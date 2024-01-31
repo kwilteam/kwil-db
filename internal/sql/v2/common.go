@@ -47,6 +47,7 @@ type KV interface {
 // started with BeginTx.
 type TxCloser interface {
 	Rollback(ctx context.Context) error
+	Precommit(ctx context.Context) ([]byte, error)
 	Commit(ctx context.Context) error
 }
 
