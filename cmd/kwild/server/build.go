@@ -171,7 +171,7 @@ func (c *closeFuncs) closeAll() error {
 
 func buildTxApp(d *coreDependencies, accs *accounts.AccountStore, db txapp.DatabaseEngine, validators txapp.ValidatorStore,
 	atomicCommitter txapp.AtomicCommitter, voteStore txapp.VoteStore, eventStore txapp.EventStore) *txapp.TxApp {
-	return txapp.NewTxApp(db, accs, validators, atomicCommitter, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore, *d.log.Named("tx-router"))
+	return txapp.NewTxApp(db, accs, validators, atomicCommitter, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore, !d.genesisCfg.ConsensusParams.WithoutGasCosts, *d.log.Named("tx-router"))
 }
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule,
