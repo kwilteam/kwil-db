@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
+
 	uuid "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 )
@@ -33,8 +34,6 @@ func InitializeUUID(ctx *execution.DeploymentContext, metadata map[string]string
 type uuidExtension struct{}
 
 func (u *uuidExtension) Call(scope *execution.ProcedureContext, method string, args []any) ([]any, error) {
-	lowerMethod := strings.ToLower(method)
-
 	// if no args are provided, throw error
 	if len(args) == 0 {
 		return nil, fmt.Errorf("uuid: expected at least 1 argument, got 0")
@@ -61,9 +60,12 @@ func (u *uuidExtension) Call(scope *execution.ProcedureContext, method string, a
 			arg = append(arg, buf.Bytes()...)
 		}
 	}
+
+	// convert the method to lowercase
+	lowerMethod := strings.ToLower(method)
+
 	// there will be two methods on the extension:
 	// - uuidv5: generates a uuidv5 from a byte slice and returns as a string
-	// - uuidv5bytes: generates a uuidv5 from a byte slice and returns as a byte slice
 	switch lowerMethod {
 	default:
 		return nil, fmt.Errorf("uuid: unknown method %s", method)
