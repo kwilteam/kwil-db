@@ -64,7 +64,7 @@ func (u *uuidExtension) Call(scope *execution.ProcedureContext, method string, a
 	// convert the method to lowercase
 	lowerMethod := strings.ToLower(method)
 
-	// there will be two methods on the extension:
+	// there will be one method on the extension:
 	// - uuidv5: generates a uuidv5 from a byte slice and returns as a string
 	switch lowerMethod {
 	default:
