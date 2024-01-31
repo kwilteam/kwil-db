@@ -4,6 +4,7 @@ package pg
 
 import (
 	"context"
+	"errors"
 
 	"github.com/kwilteam/kwil-db/internal/sql/v2" // temporary v2 for refactoring
 
@@ -39,6 +40,11 @@ func (tx *nestedTx) Execute(ctx context.Context, stmt string, args ...any) (*sql
 	return query(ctx, tx.Tx.Query, stmt, args...)
 }
 
+func (tx *nestedTx) Precommit(context.Context) ([]byte, error) {
+	// only the outer transaction does the prepared transaction
+	return nil, errors.New("cannot prepare transaction from a nested transaction")
+}
+
 // Commit is direct from embedded pgx.Tx.
 // func (tx *nestedTx) Commit(ctx context.Context) error { return tx.Tx.Commit(ctx) }
 
@@ -48,10 +54,18 @@ func (tx *nestedTx) Execute(ctx context.Context, stmt string, args ...any) (*sql
 
 // dbTx is the type returned by (*DB).BeginTx. It embeds all the nestedTx
 // methods (thus returning a *nestedTx from it's BeginTx), but shadows Commit
-// and Rollback to allow the DB to begin a new transaction.
+// and Rollback to allow the DB to begin a subsequent transaction, and to
+// coordinate the two-phase commit process using a "prepared transaction".
 type dbTx struct {
 	*nestedTx     // should embed pgx.Tx
 	db        *DB // for top level DB lifetime mgmt
+}
+
+// Precommit creates a prepared transaction for a two-phase commit. An ID
+// derived from the updates is return. This must be called before Commit. Either
+// Commit or Rollback must follow.
+func (tx *dbTx) Precommit(ctx context.Context) ([]byte, error) {
+	return tx.db.precommit(ctx)
 }
 
 // Commit commits the transaction. This partly satisfies sql.Tx.
