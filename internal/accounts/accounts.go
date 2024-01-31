@@ -137,7 +137,21 @@ type Send struct {
 }
 */
 
-// Spend spends an amount from an account. It blocks until the spend is written to the database.
+// Spend spends an amount from an account and records nonces. It blocks until the spend is written to the database.
+// The following scenarios are possible when spending from an account:
+// InvalidNonce:
+//
+//	If the nonce validation fails, no updates are made to the account and transaction is aborted.
+//
+// InsufficientFunds:
+//
+//	If GasCosts are enabled and the account doesn't have enough balance to pay for the transaction,
+//	the entire balance is spent and records the nonce for the account and transaction is aborted.
+//
+// ValidSpend:
+//
+//	If account has enough funds, the amount is spent and the nonce is updated.
+//	If GasCosts are disabled, only the nonces are updated for the account.
 func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 	a.rw.Lock()
 	defer a.rw.Unlock()
@@ -146,12 +160,42 @@ func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 		return nil
 	}
 
-	balance, nonce, err := a.checkSpend(ctx, spend)
+	var account *Account
+	var err error
+	if a.gasEnabled && spend.Amount.Cmp(big.NewInt(0)) > 0 { // don't automatically create accounts when gas is required
+		account, err = a.getAccountSynchronous(ctx, spend.AccountID)
+	} else { // with no gas or a free transaction, we'll create the account if it doesn't exist
+		account, err = a.getOrCreateAccount(ctx, spend.AccountID)
+	}
 	if err != nil {
-		return fmt.Errorf("failed to check spend: %w", err)
+		return fmt.Errorf("Spend: failed to get account: %w", err)
 	}
 
-	err = a.updateAccount(ctx, spend.AccountID, balance, nonce)
+	// Invalid Nonce: No updates to the account
+	err = account.validateNonce(spend.Nonce)
+	if err != nil {
+		return fmt.Errorf("Spend: failed to validate nonce: %w", err)
+	}
+
+	// Spend only if the GasCosts are enabled.
+	if a.gasEnabled {
+		_, err = account.validateSpend(spend.Amount)
+		if err != nil {
+			// Insufficient Funds: spend the entire balance and update the nonce
+			spend.Amount = account.Balance
+			return errors.Join(err, a.spend(ctx, spend, account))
+		}
+	} else {
+		spend.Amount = big.NewInt(0)
+	}
+
+	// Valid spend: update account balance and nonce
+	return a.spend(ctx, spend, account)
+}
+
+func (a *AccountStore) spend(ctx context.Context, spend *Spend, account *Account) error {
+	newBal := new(big.Int).Sub(account.Balance, spend.Amount)
+	err := a.updateAccount(ctx, spend.AccountID, newBal, spend.Nonce)
 	if err != nil {
 		return fmt.Errorf("failed to update account: %w", err)
 	}
@@ -185,40 +229,4 @@ func (a *AccountStore) Credit(ctx context.Context, acctID []byte, amt *big.Int) 
 
 	b := append(acctID, amt.Bytes()...)
 	return a.committable.Register(b)
-}
-
-// checkSpend checks that a spend is valid.  If gas costs are enabled, it checks that the account has enough gas to pay for the spend.
-// If nonces are enabled, it checks that the nonce is correct.  It returns the new balance and nonce if the spend is valid. It returns an
-// error if the spend is invalid.
-func (a *AccountStore) checkSpend(ctx context.Context, spend *Spend) (*big.Int, int64, error) {
-	var account *Account
-	var err error
-	if a.gasEnabled && spend.Amount.Cmp(big.NewInt(0)) > 0 { // don't automatically create accounts when gas is required
-		account, err = a.getAccountSynchronous(ctx, spend.AccountID)
-	} else { // with no gas or a free transaction, we'll create the account if it doesn't exist
-		account, err = a.getOrCreateAccount(ctx, spend.AccountID)
-	}
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to get account: %w", err)
-	}
-
-	nonce := account.Nonce
-	if a.noncesEnabled {
-		err = account.validateNonce(spend.Nonce)
-		if err != nil {
-			return nil, 0, fmt.Errorf("failed to validate nonce: %w", err)
-		}
-
-		nonce = spend.Nonce
-	}
-
-	balance := account.Balance
-	if a.gasEnabled {
-		balance, err = account.validateSpend(spend.Amount)
-		if err != nil {
-			return nil, 0, fmt.Errorf("failed to subtract gas: %w", err)
-		}
-	}
-
-	return balance, nonce, nil
 }
