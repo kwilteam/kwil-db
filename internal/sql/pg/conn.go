@@ -251,6 +251,10 @@ func (ptx *poolTx) Query(ctx context.Context, stmt string, args ...any) (*sql.Re
 	return query(ctx, ptx.Tx.Query, stmt, args...)
 }
 
+func (ptx *poolTx) Precommit(context.Context) ([]byte, error) {
+	return nil, errors.New("prepared transactions are not supported in this context")
+}
+
 // Begin starts a read-write transaction on the writer connection.
 func (p *Pool) Begin(ctx context.Context) (sql.TxCloser, error) {
 	tx, err := p.writer.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})

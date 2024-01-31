@@ -3,9 +3,11 @@ package pg
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 
+	"github.com/kwilteam/kwil-db/core/utils/random"
 	"github.com/kwilteam/kwil-db/internal/sql/v2" // temporary v2 for refactoring
 
 	"github.com/jackc/pgx/v5"
@@ -48,6 +50,7 @@ type DB struct {
 	mtx        sync.Mutex
 	autoCommit bool   // skip the explicit transaction (begin/commit automatically)
 	tx         pgx.Tx // interface
+	txid       string // uid of the prepared transaction
 	commitID   []byte
 }
 
@@ -205,44 +208,83 @@ func (db *DB) beginTx(ctx context.Context) (pgx.Tx, error) {
 	return tx, nil
 }
 
-// commit is called from the Commit method of the sql.Tx (or sql.TxCloser)
-// returned from BeginTx (or Begin). See tx.go.
-func (db *DB) commit(ctx context.Context) error {
+// precommit finalizes the transaction with a prepared transaction and returns
+// the ID of the commit. The transaction is not yet committed.
+func (db *DB) precommit(ctx context.Context) ([]byte, error) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
-	if db.tx == nil && !db.autoCommit {
-		return errors.New("no tx exists")
+	if db.tx == nil {
+		return nil, errors.New("no tx exists")
 	}
-
-	defer db.tx.Rollback(ctx) // yes, safe even on non-error Commit!
 
 	// Do the seq update in sentry table. This ensures a replication message
 	// sequence is emitted from this transaction, and that the data returned
 	// from it includes the expected seq value.
 	seq, err := incrementSeq(ctx, db.tx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	logger.Debugf("updated seq to %d", seq)
+
 	resChan := db.repl.recvID(seq)
 
-	err = db.tx.Commit(ctx)
-	db.tx = nil
-	if err != nil {
-		return err
+	db.txid = random.String(10)
+	sqlPrepareTx := fmt.Sprintf(`PREPARE TRANSACTION '%s'`, db.txid)
+	if _, err = db.tx.Exec(ctx, sqlPrepareTx); err != nil {
+		return nil, err
 	}
 
-	// Get and store the "commit id". NOTE: could return the channel to the dbTx
-	// for it to receive async since the channel is linked to this seq.
+	logger.Debugf("prepared transaction %q", db.txid)
+
+	// Wait for the "commit id" from the replication monitor.
 	select {
-	case db.commitID = <-resChan:
-		logger.Infof("received commit ID %x", db.commitID)
+	case commitID := <-resChan:
+		logger.Infof("received commit ID %x", commitID)
+		// The transaction is ready to commit, stored in a file with postgres in
+		// the pg_twophase folder of the pg cluster data_directory.
+		return commitID, nil
 	case err = <-db.repl.errChan: // the replMon has died, so probably DB should close too...
+		return nil, err
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil, ctx.Err()
+	}
+}
+
+// commit is called from the Commit method of the sql.Tx (or sql.TxCloser)
+// returned from BeginTx (or Begin). See tx.go.
+func (db *DB) commit(ctx context.Context) error {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
+	if db.tx == nil {
+		return errors.New("no tx exists")
+	}
+	if db.txid == "" {
+		return errors.New("transaction not yet prepared")
 	}
 
+	// defer db.tx.Rollback(ctx) // yes, safe even on non-error Commit!
+	defer func() {
+		if db.tx == nil {
+			return
+		}
+		sqlRollback := fmt.Sprintf(`ROLLBACK PREPARED '%s'`, db.txid)
+		db.txid = ""
+		if _, err := db.tx.Exec(ctx, sqlRollback); err != nil {
+			logger.Warnf("ROLLBACK PREPARED failed: %v", err)
+		}
+		db.tx = nil
+	}()
+
+	sqlCommit := fmt.Sprintf(`COMMIT PREPARED '%s'`, db.txid)
+	if _, err := db.tx.Exec(ctx, sqlCommit); err != nil {
+		return fmt.Errorf("COMMIT PREPARED failed: %v", err)
+	}
+
+	// tx.Commit should be a no op, just emitting a warning notice, but no error
+	err := db.tx.Commit(ctx)
+	db.tx = nil
 	return err
 }
 
@@ -256,19 +298,22 @@ func (db *DB) rollback(ctx context.Context) error {
 		return errors.New("no tx exists")
 	}
 
-	err := db.tx.Rollback(ctx)
-	db.tx = nil
-	return err
-}
+	defer func() {
+		db.tx.Rollback(ctx)
+		db.tx = nil
+		db.txid = ""
+	}()
 
-// CommitID returns the commit ID from the last committed transaction.
-func (db *DB) CommitID() []byte {
-	db.mtx.Lock()
-	defer db.mtx.Unlock()
-	// if db.tx != nil { // remove
-	// 	panic("called commitID with uncommitted transaction")
-	// }
-	return db.commitID
+	if db.txid == "" {
+		return nil
+	}
+
+	sqlRollback := fmt.Sprintf(`ROLLBACK PREPARED '%s'`, db.txid)
+	if _, err := db.tx.Exec(ctx, sqlRollback); err != nil {
+		return fmt.Errorf("ROLLBACK PREPARED failed: %v", err)
+	}
+
+	return nil
 }
 
 // Query performs a read-only query on a read connection.
