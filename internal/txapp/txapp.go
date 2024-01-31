@@ -17,7 +17,7 @@ import (
 
 // NewTxApp creates a new router.
 func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, atomicCommitter AtomicCommitter,
-	voteStore VoteStore, signer *auth.Ed25519Signer, chainID string, eventStore EventStore, log log.Logger) *TxApp {
+	voteStore VoteStore, signer *auth.Ed25519Signer, chainID string, eventStore EventStore, GasEnabled bool, log log.Logger) *TxApp {
 	return &TxApp{
 		// TODO: set the eventstore and votestore dependencies
 		Database:   db,
@@ -33,8 +33,9 @@ func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, a
 			accounts:       make(map[string]*accounts.Account),
 			validatorStore: validators,
 		},
-		signer:  signer,
-		chainID: chainID,
+		signer:     signer,
+		chainID:    chainID,
+		GasEnabled: GasEnabled,
 	}
 }
 
@@ -48,6 +49,7 @@ type TxApp struct {
 	Validators ValidatorStore // validators
 	VoteStore  VoteStore      // tracks resolutions, their votes, manages expiration
 	EventStore EventStore     // tracks events, not part of consensus
+	GasEnabled bool
 
 	chainID string
 	signer  *auth.Ed25519Signer
@@ -238,6 +240,10 @@ type TxResponse struct {
 // Price estimates the price of a transaction.
 // It returns the estimated price in tokens.
 func (r *TxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+	if !r.GasEnabled {
+		return big.NewInt(0), nil
+	}
+
 	route, ok := routes[tx.Body.PayloadType.String()]
 	if !ok {
 		return nil, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
@@ -258,17 +264,29 @@ func (r *TxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.I
 // if we allow users to implement their own routes, this function will need to
 // be exported.
 func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, pricer Pricer) (*big.Int, transactions.TxCode, error) {
-	amt, err := pricer.Price(ctx.Ctx, r, tx)
-	if err != nil {
-		return nil, transactions.CodeUnknownError, err
-	}
+	amt := big.NewInt(0)
+	var err error
 
-	if amt.Cmp(tx.Body.Fee) < 0 {
-		return nil, transactions.CodeInsufficientFee, fmt.Errorf("transaction fee is too low: %s", amt.String())
+	if r.GasEnabled {
+		amt, err = pricer.Price(ctx.Ctx, r, tx)
+		if err != nil {
+			return nil, transactions.CodeUnknownError, err
+		}
 	}
 
 	// check if the transaction consented to spending enough tokens
 	if tx.Body.Fee.Cmp(amt) < 0 {
+		// If the transaction does not consent to spending required tokens for the transaction execution,
+		// spend the approved tx fee and terminate the transaction
+		err = r.Accounts.Spend(ctx.Ctx, &accounts.Spend{
+			AccountID: tx.Sender,
+			Amount:    tx.Body.Fee,
+			Nonce:     int64(tx.Body.Nonce),
+		})
+		if err != nil {
+			return nil, transactions.CodeUnknownError, err
+		}
+
 		return nil, transactions.CodeInsufficientFee, fmt.Errorf("transaction does not consent to spending enough tokens. transaction fee: %s, required fee: %s", tx.Body.Fee.String(), amt.String())
 	}
 
