@@ -23,8 +23,7 @@ func Test_Accounts(t *testing.T) {
 	type testCase struct {
 		name string
 
-		gasOn    bool
-		noncesOn bool
+		gasOn bool
 
 		credit             map[string]*big.Int // to test credit new/non-existent accounts
 		creditErr          error
@@ -49,26 +48,10 @@ func Test_Accounts(t *testing.T) {
 				newSpend(account1, 100, 2),
 				newSpend(account2, -100, 1),
 			},
-			gasOn:    false,
-			noncesOn: true,
+			gasOn: false,
 			finalBalances: map[string]*accounts.Account{
 				account1: newAccount(account1, 0, 2),
 				account2: newAccount(account2, 0, 1),
-			},
-			err: nil,
-		},
-		{
-			name: "gas and nonces off",
-			spends: []*accounts.Spend{
-				newSpend(account1, 100, 1),
-				newSpend(account1, 100, 2),
-				newSpend(account2, -100, 1),
-			},
-			gasOn:    false,
-			noncesOn: false,
-			finalBalances: map[string]*accounts.Account{
-				account1: newAccount(account1, 0, 0),
-				account2: newAccount(account2, 0, 0),
 			},
 			err: nil,
 		},
@@ -78,7 +61,6 @@ func Test_Accounts(t *testing.T) {
 				newSpend(account1, 100, 1),
 			},
 			gasOn:         true,
-			noncesOn:      true,
 			finalBalances: map[string]*accounts.Account{},
 			err:           accounts.ErrAccountNotFound,
 		},
@@ -92,7 +74,6 @@ func Test_Accounts(t *testing.T) {
 				newSpend(account1, 100, 1),
 			},
 			gasOn:         true,
-			noncesOn:      true,
 			finalBalances: map[string]*accounts.Account{},
 			err:           accounts.ErrInsufficientFunds,
 		},
@@ -109,8 +90,7 @@ func Test_Accounts(t *testing.T) {
 			spends: []*accounts.Spend{
 				newSpend(account1, 100, 1),
 			},
-			gasOn:    true,
-			noncesOn: true,
+			gasOn: true,
 			finalBalances: map[string]*accounts.Account{
 				account1: newAccount(account1, 23, 1),
 			},
@@ -126,10 +106,9 @@ func Test_Accounts(t *testing.T) {
 			},
 		},
 		{
-			name:     "no account, gas off",
-			spends:   []*accounts.Spend{},
-			gasOn:    false,
-			noncesOn: false,
+			name:   "no account, gas off",
+			spends: []*accounts.Spend{},
+			gasOn:  false,
 			finalBalances: map[string]*accounts.Account{
 				account1: newAccount(account1, 0, 0),
 			},
@@ -142,13 +121,28 @@ func Test_Accounts(t *testing.T) {
 				newSpend(account1, 100, 3),
 				newSpend(account2, -100, 1),
 			},
-			gasOn:    false,
-			noncesOn: true,
+			gasOn: false,
 			finalBalances: map[string]*accounts.Account{
 				account1: newAccount(account1, 0, 1),
 				account2: newAccount(account2, 0, 1),
 			},
 			err: accounts.ErrInvalidNonce,
+		},
+		{
+			name: "Insufficient funds",
+			credit: map[string]*big.Int{
+				account1: big.NewInt(120),
+			},
+			creditErr: nil,
+			spends: []*accounts.Spend{
+				newSpend(account1, 100, 1),
+				newSpend(account1, 100, 2),
+			},
+			gasOn: true,
+			finalBalances: map[string]*accounts.Account{
+				account1: newAccount(account1, 0, 2),
+			},
+			err: accounts.ErrInsufficientFunds,
 		},
 	}
 
@@ -167,9 +161,9 @@ func Test_Accounts(t *testing.T) {
 			if tc.gasOn {
 				opts = append(opts, accounts.WithGasCosts(true))
 			}
-			if tc.noncesOn {
-				opts = append(opts, accounts.WithNonces(true))
-			}
+			// if tc.noncesOn {
+			// 	opts = append(opts, accounts.WithNonces(true))
+			// }
 
 			ar, err := accounts.NewAccountStore(ctx, &adapter.PoolAdapater{Pool: pool}, &mockCommittable{skip: false}, opts...)
 			require.NoError(t, err)
