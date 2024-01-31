@@ -187,6 +187,17 @@ func TestNestedTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	err = tx.Commit(ctx)
+	if err == nil {
+		t.Fatalf("commit should have errored without precommit first")
+	}
+
+	id, err := tx.Precommit(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("commit id: %x", id)
+
 	// success on outer tx even though failure in a savepoint
 	err = tx.Commit(ctx)
 	if err != nil {
