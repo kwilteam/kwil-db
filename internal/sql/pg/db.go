@@ -349,7 +349,7 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 		if db.autoCommit {
 			return nil, errors.New("tx already created, cannot use auto commit")
 		}
-		return query(ctx, db.tx.Query, stmt, args...)
+		return query(ctx, db.tx, stmt, args...)
 	}
 	if !db.autoCommit {
 		return nil, sql.ErrNoTransaction
@@ -370,7 +370,7 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 				return err
 			}
 			resChan = db.repl.recvID(seq)
-			res, err = query(ctx, tx.Query, stmt, args...)
+			res, err = query(ctx, tx, stmt, args...)
 			return err
 		},
 	)
