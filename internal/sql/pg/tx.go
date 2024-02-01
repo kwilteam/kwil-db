@@ -31,13 +31,13 @@ func (tx *nestedTx) BeginTx(ctx context.Context) (sql.Tx, error) {
 }
 
 func (tx *nestedTx) Query(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
-	return query(ctx, tx.Tx.Query, stmt, args...)
+	return query(ctx, tx.Tx, stmt, args...)
 }
 
 // Execute is now literally identical to Query in both semantics and syntax. We
 // might remove one or the other in this context (transaction methods).
 func (tx *nestedTx) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
-	return query(ctx, tx.Tx.Query, stmt, args...)
+	return query(ctx, tx.Tx, stmt, args...)
 }
 
 func (tx *nestedTx) Precommit(context.Context) ([]byte, error) {

@@ -1,6 +1,7 @@
 package pg
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"time"
@@ -99,6 +100,10 @@ type PrepareMessageV3 struct {
 	UserGID string
 }
 
+func fromCString(b []byte) string {
+	return string(bytes.TrimRight(b, "\x00"))
+}
+
 func (m *PrepareMessageV3) Decode(src []byte) error {
 	if len(src) < 25 {
 		return errors.New("too short")
@@ -117,7 +122,7 @@ func (m *PrepareMessageV3) Decode(src []byte) error {
 	m.Xid, used = decodeUint32(src)
 	low += used
 
-	m.UserGID = string(src[low:])
+	m.UserGID = fromCString(src[low:])
 
 	return nil
 }
@@ -160,7 +165,7 @@ func (m *BeginPrepareMessageV3) Decode(src []byte) error {
 	m.Xid, used = decodeUint32(src)
 	low += used
 
-	m.UserGID = string(src[low:])
+	m.UserGID = fromCString(src[low:])
 
 	return nil
 }
@@ -203,7 +208,7 @@ func (m *CommitPreparedMessageV3) Decode(src []byte) error {
 	m.Xid, used = decodeUint32(src)
 	low += used
 
-	m.UserGID = string(src[low:])
+	m.UserGID = fromCString(src[low:])
 
 	return nil
 }
@@ -249,7 +254,7 @@ func (m *RollbackPreparedMessageV3) Decode(src []byte) error {
 	m.Xid, used = decodeUint32(src)
 	low += used
 
-	m.UserGID = string(src[low:])
+	m.UserGID = fromCString(src[low:])
 
 	return nil
 }

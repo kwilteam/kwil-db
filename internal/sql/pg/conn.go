@@ -139,7 +139,7 @@ func (p *Pool) Query(ctx context.Context, stmt string, args ...any) (*sql.Result
 // the Tx returned from BeginTx.
 
 func (p *Pool) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
-	return query(ctx, p.writer.Query, stmt, args...)
+	return query(ctx, &cqWrapper{p.writer}, stmt, args...)
 }
 
 func (p *Pool) Get(ctx context.Context, kvTable string, key []byte, pending bool) ([]byte, error) {
@@ -244,11 +244,11 @@ func (ptx *poolTx) Execute(ctx context.Context, stmt string, args ...any) (*sql.
 	// This method is now identical to Query, but we previously used pgx.Tx.Exec
 	// 	res,_ := ptx.Tx.Exec(ctx, stmt, args...)
 	// 	ptx.RowsAffected += res.RowsAffected()
-	return query(ctx, ptx.Tx.Query, stmt, args...)
+	return query(ctx, ptx.Tx, stmt, args...)
 }
 
 func (ptx *poolTx) Query(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
-	return query(ctx, ptx.Tx.Query, stmt, args...)
+	return query(ctx, ptx.Tx, stmt, args...)
 }
 
 func (ptx *poolTx) Precommit(context.Context) ([]byte, error) {
