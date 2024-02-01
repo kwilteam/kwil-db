@@ -51,8 +51,9 @@ func TestSelectLiteralType(t *testing.T) {
 	}
 	// pgCfg.DefaultQueryExecMode = pgx.QueryExecModeCacheStatement // default
 	// pgCfg.DefaultQueryExecMode = pgx.QueryExecModeCacheDescribe
+	// pgCfg.DefaultQueryExecMode = pgx.QueryExecModeDescribeExec
 	// pgCfg.DefaultQueryExecMode = pgx.QueryExecModeExec
-	pgCfg.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	// pgCfg.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 	conn, err := pgx.ConnectConfig(ctx, pgCfg)
 	if err != nil {
 		t.Fatal(err)
@@ -63,11 +64,29 @@ func TestSelectLiteralType(t *testing.T) {
 		}
 	})
 
-	var arg any = int64(1)
-	rows, err := conn.Query(ctx, `SELECT $1;`, arg)
+	// var arg any = int64(1)
+	// args := []any{arg, arg}
+	argMap := map[string]any{
+		"a": int64(1),
+		"b": int64(1),
+	}
+	var arg any = pgx.NamedArgs(argMap)
+	args := []any{arg}
+	stmt := `SELECT @a + @b;`
+
+	// args := []any{arg}
+	// stmt := `SELECT $1;`
+	// TODO: make more thorough in-line expression test cases
+
+	rows, err := queryImpliedArgTypes(ctx, conn, stmt, args...)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// rows, err := conn.Query(ctx, stmt, arg, arg)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 	// Tip: try the named argument rewriter as such:
 	// argMap := map[string]any{
 	// 	"a": int64(1),
@@ -98,6 +117,15 @@ func TestSelectLiteralType(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Now with our high level func and mode.
+	args2 := append([]any{QueryModeInferredArgTypes}, args...)
+	results, err := query(ctx, &cqWrapper{conn}, stmt, args2...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, val := range results.Rows[0] {
+		t.Logf("%v (%T)", val, val)
+	}
 }
 
 func TestNestedTx(t *testing.T) {
