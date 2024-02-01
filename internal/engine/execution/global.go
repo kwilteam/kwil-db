@@ -211,6 +211,8 @@ func (g *GlobalContext) Query(ctx context.Context, dbid string, query string) (*
 	return dataset.read(ctx, parsed.Statement(), nil)
 }
 
+const inferredModeKey = `^inferred_mode^` // not a valid SQL bind arg name
+
 type registryQueryFn func(ctx context.Context, dbid string, stmt string, args ...any) (*sql.ResultSet, error)
 
 // queryor converts a registry `Query` method into a sql.Queryor. It captures
@@ -218,13 +220,26 @@ type registryQueryFn func(ctx context.Context, dbid string, stmt string, args ..
 // with ReplaceNamedParameters (see prepNamedQueryParams).
 func queryor(dbid string, fn registryQueryFn) types.ResultSetFunc {
 	return func(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error) {
-		varArgs := []any{pg.QueryModeExec}
+		// NOTE: We only want inferred arg types for the inline expressions!
+		var varArgs []any
+		if _, infer := params[inferredModeKey]; infer {
+			delete(params, inferredModeKey)
+			varArgs = append(varArgs, pg.QueryModeInferredArgTypes)
+			// In this mode we do a prepare in which we assert OIDs *to* postgres.
+		} else {
+			// This is kinda unfortunate to use when table references would
+			// facilitate postgresql determining all arg types, but Kwil schema
+			// authors can have include statements like `SELECT $res`, which
+			// like in-line expressions used for call arguments convey no
+			// information to allow postgres to get the desired type.
+			varArgs = append(varArgs, pg.QueryModeExec)
+		}
+
 		if len(params) > 0 {
 			params = prepNamedQueryParams(params)
 			varArgs = append(varArgs, pg.NamedArgs(params))
-			// varArgs := []any{pg.QueryModeSimple, pg.NamedArgs(params)}
-			// return fn(ctx, dbid, stmt, pg.QueryModeSimple)
 		}
+
 		return fn(ctx, dbid, stmt, varArgs...)
 	}
 }

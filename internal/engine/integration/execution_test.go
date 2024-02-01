@@ -400,7 +400,7 @@ func Test_Engine(t *testing.T) {
 					Dataset:   schema.DBID(),
 					Procedure: "CREATE_USER",
 					Mutative:  true,
-					Args:      []any{"1", "satoshi"},
+					Args:      []any{1, "satoshi"},
 					Signer:    []byte(caller),
 					Caller:    string(signer),
 				})
@@ -430,13 +430,18 @@ func Test_Engine(t *testing.T) {
 					Dataset:   schema.DBID(),
 					Procedure: "USE_EXTENSION",
 					Mutative:  true,
-					Args:      []any{1, "2"}, // works with int 1 also when in simplified execution mode
+					Args:      []any{1, "2"}, // math_ext.add($arg1 + $arg2, 1)
 					Signer:    []byte(caller),
 					Caller:    string(signer),
 				})
 				require.NoError(t, err)
 
-				require.Equal(t, "3", res.Rows[0][0])
+				// "SELECT $rES as res;" will be a string because arg type
+				// inference based on Go variables is only used for inline
+				// expressions since postgres prepare/describe is desirable for
+				// statements that actually reference a table (but this one does
+				// not).
+				require.Equal(t, "4", res.Rows[0][0])
 				require.Equal(t, []string{"res"}, res.ReturnedColumns) // without the `AS res`, it would be `?column?`
 			},
 		},
@@ -619,7 +624,7 @@ var (
 				},
 				Public: true,
 				Statements: []string{
-					"$rEs = Math_Ext.AdD($VAl1, $VAl2);",
+					"$rEs = Math_Ext.AdD($VAl1 + $VAl2, 1);",
 					"SELECT $rES as res;", // type? procedure execution is not strongly typed...
 				},
 			},

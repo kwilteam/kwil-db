@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/internal/conv"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
@@ -434,7 +436,21 @@ func makeExecutables(exprs []tree.Expression, pgSchemaName string) ([]evaluatabl
 		execs = append(execs, func(ctx context.Context, exec types.ResultSetFunc, values map[string]any) (any, error) {
 			// exec must be created by queryor() to prepare the values map to
 			// match the rewritten statement from NamedParametersVisitor, and to
-			// make the query run in "simple" execution mode.
+			// recognize the injected mode key.
+
+			// Make a local copy of the map so the changes do not affect other
+			// instructions. Perhaps they should/could, but keep it local for now.
+			values = maps.Clone(values)
+
+			// Flag it to use inferred arg types mode, not for all dml
+			// statements. The queryor func will delete it from the map.
+			values[inferredModeKey] = struct{}{}
+
+			// Also coerce to int8 any values that can be.
+			cleanseIntValues(values) // consider this for all dml statements, not just inline?
+			// Note: this is processing all the values, not just the ones used
+			// by this in-line expression. The updates are also in the local copy.
+
 			result, err := exec(ctx, stmt, values) // more values than binds
 			if err != nil {
 				return nil, err
@@ -457,6 +473,27 @@ func makeExecutables(exprs []tree.Expression, pgSchemaName string) ([]evaluatabl
 	}
 
 	return execs, nil
+}
+
+// cleanseIntValues attempts to coerce any of the values to an int64.
+// bools are not converted.
+//
+// Client tooling sends everything as a string, and we don't have typing in any
+// action arguments or variables. So we have no choice but to attempt to coerce
+// a string or other value into an int so that the inline expression, which is
+// basically always expecting integer arguments, does not bomb. I don't like
+// this a lot, but it's essentially what SQLite did although maybe more
+// judiciously depending on the needs of the query?
+func cleanseIntValues(values map[string]any) {
+	for name, val := range values {
+		if _, isBool := val.(bool); isBool {
+			continue // otherwise it would become 0/1
+		}
+		intVal, err := conv.Int(val)
+		if err == nil {
+			values[name] = intVal
+		}
+	}
 }
 
 func concatKeys[T any](m map[string]T) string {

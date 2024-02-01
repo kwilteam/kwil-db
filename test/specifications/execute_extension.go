@@ -22,8 +22,6 @@ func ExecuteExtensionSpecification(ctx context.Context, t *testing.T, execute Ex
 	txHash, err := execute.ExecuteAction(ctx, dbID, divideActionName, []any{2, 1, 2})
 	assert.NoError(t, err)
 
-	// figure out: "ERROR: operator is not unique: unknown + unknown (SQLSTATE 42725)"
-
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
 	records, err := execute.Call(ctx, dbID, divideActionName, []any{2, 1, 2})

@@ -162,9 +162,7 @@ func TestKwildAcceptance(t *testing.T) {
 			specifications.ExecuteDBDeleteSpecification(ctx, t, creatorDriver)
 
 			// test that the loaded extensions works
-			// disabled until we completely solve the inline expression issues :
-			// 		"ERROR: operator is not unique: unknown + unknown (SQLSTATE 42725)"
-			// specifications.ExecuteExtensionSpecification(ctx, t, creatorDriver)
+			specifications.ExecuteExtensionSpecification(ctx, t, creatorDriver)
 
 			specifications.ExecutePrivateActionSpecification(ctx, t, creatorDriver)
 
