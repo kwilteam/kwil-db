@@ -5,11 +5,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
-
-	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
-
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
+	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
 )
 
 // KFSqliteVisitor is visitor that visit Antlr parsed tree and returns the AST.
@@ -121,13 +119,31 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 		return nil
 	}
 
+	typeHint := ""
+	if ctx.Type_cast() != nil {
+		typeHint = ctx.Type_cast().Cast_type().GetText()
+		if typeHint[0] == '`' || typeHint[0] == '"' || typeHint[0] == '[' {
+			// NOTE: typeHint is a IDENTIFIER, so it could be wrapped with ` or " or [ ]
+			// NOTE: should we just complain if it's wrapped?
+			//typeHint = typeHint[1 : len(typeHint)-1]
+			panic(fmt.Sprintf("type hint should not be wrapped in  %s", typeHint[0]))
+		}
+		// TODO: validate typeHint
+	}
+
 	// order is important, map to expr definition in Antlr sql-grammar(not exactly)
 	switch {
 	// primary expressions
 	case ctx.Literal_value() != nil:
-		return &tree.ExpressionLiteral{Value: ctx.Literal_value().GetText()}
+		return &tree.ExpressionLiteral{
+			Value:    ctx.Literal_value().GetText(),
+			TypeHint: typeHint,
+		}
 	case ctx.BIND_PARAMETER() != nil:
-		return &tree.ExpressionBindParameter{Parameter: ctx.BIND_PARAMETER().GetText()}
+		return &tree.ExpressionBindParameter{
+			Parameter: ctx.BIND_PARAMETER().GetText(),
+			TypeHint:  typeHint,
+		}
 	case ctx.Table_name() != nil || ctx.Column_name() != nil:
 		expr := &tree.ExpressionColumn{}
 		if ctx.Table_name() != nil {
@@ -136,6 +152,7 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 		if ctx.Column_name() != nil {
 			expr.Column = extractSQLName(ctx.Column_name().GetText())
 		}
+		expr.TypeHint = typeHint
 		return expr
 	case ctx.Select_stmt_core() != nil && ctx.IN_() == nil:
 		// select_stmt_core not in IN
@@ -157,32 +174,49 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 		switch t := expr.(type) {
 		case *tree.ExpressionLiteral:
 			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionBindParameter:
 			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionColumn:
 			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionUnary:
 			t.Wrapped = true
+			t.TypeHint = typeHint
+		case *tree.ExpressionArithmetic:
+			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionBinaryComparison:
 			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionFunction:
 			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionList:
 			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionCollate:
 			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionStringCompare:
 			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionIsNull:
 			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionDistinct:
 			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionBetween:
 			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionSelect:
 			t.Wrapped = true
+			t.TypeHint = typeHint
 		case *tree.ExpressionCase:
 			t.Wrapped = true
+			// typeHint does not apply
 		default:
 			panic(fmt.Sprintf("unknown expression type %T", expr))
 		}
@@ -474,6 +508,8 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 		for i, e := range ctx.AllExpr() {
 			expr.Inputs[i] = v.visitExpr(e)
 		}
+
+		expr.TypeHint = typeHint
 		return expr
 	case ctx.STAR() != nil:
 		return &tree.ExpressionArithmetic{

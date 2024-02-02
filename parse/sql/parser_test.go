@@ -2291,6 +2291,84 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			}},
 		{"function name with back tick quote", "select `abs`(1)",
 			genSimpleFunctionSelectTree(&tree.FunctionABS, genLiteralExpression("1"))},
+
+		//// type hint
+		{"type hint",
+			"select 1::int as x, @caller::string, t1.c1::string, (t1.c2::int * 3)::int, " +
+				"(t1.c3 isnull)::int, abs(2)::int from t1;",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionLiteral{
+										Value:    "1",
+										TypeHint: "int",
+									},
+									Alias: "x",
+								},
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionBindParameter{
+										Wrapped:   false,
+										Parameter: "@caller",
+										TypeHint:  "string",
+									},
+								},
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionColumn{
+										Table:    "t1",
+										Column:   "c1",
+										TypeHint: "string",
+									},
+								},
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionArithmetic{
+										Wrapped: true,
+										Left: &tree.ExpressionColumn{
+											Table:    "t1",
+											Column:   "c2",
+											TypeHint: "int",
+										},
+										Operator: tree.ArithmeticOperatorMultiply,
+										Right:    genLiteralExpression("3"),
+										TypeHint: "int",
+									},
+								},
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionIsNull{
+										IsNull:  true,
+										Wrapped: true,
+										Expression: &tree.ExpressionColumn{
+											Table:  "t1",
+											Column: "c3",
+										},
+										TypeHint: "int",
+									},
+								},
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionFunction{
+										Wrapped:  false,
+										Function: &tree.FunctionABS,
+										Inputs:   []tree.Expression{genLiteralExpression("2")},
+										Distinct: false,
+										TypeHint: "int",
+									},
+								},
+							},
+							From: &tree.FromClause{
+								JoinClause: &tree.JoinClause{
+									TableOrSubquery: &tree.TableOrSubqueryTable{
+										Name: "t1",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	// Replace multiple spaces with a single space
@@ -2321,7 +2399,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			}
 
 			singleSpaceSql := re.ReplaceAllString(sql, " ")
-			t.Logf("%s => %s\n", tt.input, singleSpaceSql)
+			t.Logf("%s \n=> %s\n", tt.input, singleSpaceSql)
 
 			// assert original sql and sql from ast are equal, WITHOUT format
 			assert.True(t,
