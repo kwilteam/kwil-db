@@ -18,7 +18,7 @@ services:
       -c max_prepared_transactions=2
     volumes: 
       - db:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/create_tables.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/create_user.sql
 
 volumes:
   db:

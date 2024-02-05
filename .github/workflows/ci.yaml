@@ -98,7 +98,6 @@ jobs:
       # unit test
       - name: Run unit test
         run: |
-          psql -U kwild -p kwild -d kwil_test_db -h 127.0.0.1 -p 5432 -c 'CREATE PUBLICATION kwild_repl FOR ALL TABLES;'
           task test:unit
 
       # integration test

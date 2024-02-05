@@ -25,7 +25,7 @@ services:
       -c max_prepared_transactions=2
     volumes: 
       - pgkwil:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/create_tables.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
       kwilnet0:
         ipv4_address: 172.5.100.3

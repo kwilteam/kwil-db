@@ -55,7 +55,7 @@ services:
       -c max_replication_slots=10
       -c max_prepared_transactions=2
     volumes: 
-      - ./pginit.sql:/docker-entrypoint-initdb.d/create_tables.sql
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
       kwil-int-testnet:
         ipv4_address: 172.10.101.2
@@ -118,7 +118,7 @@ services:
       -c max_replication_slots=10
       -c max_prepared_transactions=2
     volumes: 
-      - ./pginit.sql:/docker-entrypoint-initdb.d/create_tables.sql
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
       kwil-int-testnet:
         ipv4_address: 172.10.101.3
@@ -181,7 +181,7 @@ services:
       -c max_replication_slots=10
       -c max_prepared_transactions=2
     volumes: 
-      - ./pginit.sql:/docker-entrypoint-initdb.d/create_tables.sql
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
       kwil-int-testnet:
         ipv4_address: 172.10.101.4
@@ -247,7 +247,7 @@ services:
       -c max_replication_slots=10
       -c max_prepared_transactions=2
     volumes: 
-      - ./pginit.sql:/docker-entrypoint-initdb.d/create_tables.sql
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
       kwil-int-testnet:
         ipv4_address: 172.10.101.5

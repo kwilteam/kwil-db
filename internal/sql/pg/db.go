@@ -14,11 +14,10 @@ import (
 )
 
 // DB is a session-aware wrapper that creates and stores a write Tx on request,
-// and provides top level Exec/Set methods that error if no Tx exists. It also
-// implements a "QueryPending" method that uses tx.Query if such a Tx has been
-// created and stored for the lifetime of a session. This design prevents any
-// out-of-session write statements from executing, and makes uncommitted reads
-// explicit (and impossible in the absence of an active transaction).
+// and provides top level Exec/Set methods that error if no Tx exists. This
+// design prevents any out-of-session write statements from executing, and makes
+// uncommitted reads explicit (and impossible in the absence of an active
+// transaction).
 //
 // This type is tailored to use in kwild in the following ways:
 //
@@ -32,17 +31,9 @@ import (
 //     transaction.
 //
 //  3. Emulating SQLite changesets by collecting WAL data for updates from a
-//     dedicated logical replication connection and slot. When called after
-//     Commit, the CommitID method returns a digest of the updates in that
-//     transaction.
-//     NOTE: this may need to switch to lots of triggers on every table...
-//
-// IMPORTANT: This type must be the exclusive database user. If any other type
-// or even external process like psql changes the database, transactions with
-// this DB type may fail.
+//     dedicated logical replication connection and slot. The Precommit method
+//     is used to retrieve the commit ID prior to Commit.
 type DB struct {
-	// dev note: satisfies Datastore / poolAdapter and registry.DB
-
 	pool *Pool    // raw connection pool
 	repl *replMon // logical replication monitor for collecting commit IDs
 
@@ -60,7 +51,7 @@ type DB struct {
 type DBConfig struct {
 	PoolConfig
 
-	// SchemaFilter is used to include WAL data for certain *postgresq* schema
+	// SchemaFilter is used to include WAL data for certain *postgres* schema
 	// (not Kwil schema). If nil, the default is to include updates to tables in
 	// any schema prefixed by "ds_".
 	SchemaFilter func(string) bool
@@ -86,6 +77,8 @@ var defaultSchemaFilter = func(schema string) bool {
 // NewDB creates a new Kwil DB instance. On creation, it will connect to the
 // configured postgres process, creating as many connections as specified by the
 // PoolConfig plus a special connection for a logical replication slot receiver.
+// The database user (postgresql "role") must be a super user for several
+// reasons: creating triggers, collations, and the replication publication.
 func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 	// Create the unrestricted connection pool.
 	pool, err := NewPool(ctx, &cfg.PoolConfig)
@@ -93,14 +86,35 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		return nil, err
 	}
 
+	// Verify that the db user/role is superuser with replication privileges.
+	if err = checkSuperuser(ctx, pool.writer); err != nil {
+		return nil, err
+	}
+
+	// Clean up orphaned prepared transaction that may have been left over from
+	// an unclean shutdown. If we don't, postgres will hang on query.
+	if _, err = rollbackPreparedTxns(ctx, pool.writer); err != nil {
+		return nil, fmt.Errorf("failed to create publication: %w", err)
+	}
+
+	// Create the NOCASE collation to emulate SQLite's collation.
+	if err = ensureCollation(ctx, pool.writer); err != nil {
+		return nil, fmt.Errorf("failed to create custom collations: %w", err)
+	}
+
 	// Ensure all tables that are created with no primary key or unique index
 	// are altered to have "full replication identity" for UPDATE and DELETES.
 	if err = ensureTriggerReplIdentity(ctx, pool.writer); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create replication identity trigger: %w", err)
 	}
 
 	if err = ensureKvTable(ctx, pool.writer); err != nil {
 		return nil, err
+	}
+
+	// Create the publication that is required for logical replication.
+	if err = ensurePublication(ctx, pool.writer); err != nil {
+		return nil, fmt.Errorf("failed to create publication: %w", err)
 	}
 
 	okSchema := cfg.SchemaFilter
@@ -115,13 +129,13 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 
 	// Create the tx sequence table with single row if it doesn't exists.
 	if err = ensureSentryTable(ctx, pool.writer); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create transaction sequencing table: %w", err)
 	}
 
 	// Register the error function so a statement like `SELECT error('boom');`
 	// will raise an exception and cause the query to error.
-	if err = ensureErrorPLFunc(ctx, pool.writer); err != nil { // not sure this is the place to do this
-		return nil, err
+	if err = ensureErrorPLFunc(ctx, pool.writer); err != nil {
+		return nil, fmt.Errorf("failed to create ERROR function: %w", err)
 	}
 
 	return &DB{
@@ -240,7 +254,7 @@ func (db *DB) precommit(ctx context.Context) ([]byte, error) {
 	// Wait for the "commit id" from the replication monitor.
 	select {
 	case commitID := <-resChan:
-		logger.Infof("received commit ID %x", commitID)
+		logger.Debugf("received commit ID %x", commitID)
 		// The transaction is ready to commit, stored in a file with postgres in
 		// the pg_twophase folder of the pg cluster data_directory.
 		return commitID, nil
@@ -327,7 +341,7 @@ func (db *DB) Query(ctx context.Context, stmt string, args ...any) (*sql.ResultS
 func (db *DB) discardCommitID(ctx context.Context, resChan chan []byte) {
 	select {
 	case cid := <-resChan:
-		logger.Infof("discarding commit ID %x", cid)
+		logger.Debugf("discarding commit ID %x", cid)
 	case <-db.repl.done:
 	case <-ctx.Done():
 	}
