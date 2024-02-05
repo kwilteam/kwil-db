@@ -78,7 +78,7 @@ func hammer(ctx context.Context) error {
 	logger = *logger.WithOptions(zap.AddStacktrace(zap.FatalLevel))
 	trLogger := *logger.WithOptions(zap.AddCallerSkip(1))
 
-	var kwilClt clientType.Client // probably should be moved to core
+	var kwilClt clientType.Client
 	if gatewayProvider {
 		kwilClt, err = gatewayclient.NewClient(ctx, host, &gatewayclient.GatewayOptions{
 			Options: clientType.Options{

@@ -197,7 +197,7 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...client
 // ExecuteAction executes an action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
 // It can take any number of inputs, and if multiple tuples of inputs are passed,
-// it will execute them in separate transactions. // NOTE: IS THIS correct?
+// it will execute them in the same transaction.
 func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...clientType.TxOpt) (transactions.TxHash, error) {
 	stringTuples, err := convertTuples(tuples)
 	if err != nil {
