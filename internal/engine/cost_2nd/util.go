@@ -1,4 +1,4 @@
-package plan
+package cost_2nd
 
 import (
 	"strings"

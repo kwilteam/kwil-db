@@ -1,4 +1,4 @@
-package cost
+package cost_1st
 
 import (
 	"github.com/kwilteam/kwil-db/internal/engine/cost/plan"

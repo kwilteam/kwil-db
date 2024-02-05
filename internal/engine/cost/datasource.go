@@ -1,4 +1,4 @@
-package algebra
+package cost
 
 import (
 	"encoding/csv"

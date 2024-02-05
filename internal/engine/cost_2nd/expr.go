@@ -1,4 +1,4 @@
-package plan
+package cost_2nd
 
 type LogicalExprResolver interface {
 	ResolveExpr(LogicalPlan) *field
