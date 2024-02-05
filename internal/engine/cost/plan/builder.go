@@ -425,9 +425,9 @@ func (b *Builder) visitTableOrSubQueryTable(node *tree.TableOrSubqueryTable, col
 	//fq) name
 
 	// get table
-	//b.ctx.info.GetSchema(node.Name)
+	//b.ctx.info.GetSchema(node.name)
 
-	//tbl := b.tables[node.Name]
+	//tbl := b.tables[node.name]
 	//
 	//s := newSchema(tbl.Columns...)
 	//
@@ -436,9 +436,9 @@ func (b *Builder) visitTableOrSubQueryTable(node *tree.TableOrSubqueryTable, col
 	//var outCols []tree.ResultColumn
 	//for _, col := range tbl.Columns {
 	//	outputColumns = append(outputColumns, &OutputColumn{
-	//		OriginalTblName: tbl.Name,
-	//		OriginalColName: col.Name,
-	//		TblName:         node.Name,
+	//		OriginalTblName: tbl.name,
+	//		OriginalColName: col.name,
+	//		TblName:         node.name,
 	//		ColName:         col.ToSQL(),
 	//		DB:              "",
 	//	})

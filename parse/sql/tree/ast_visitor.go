@@ -3,13 +3,18 @@ package tree
 // AstVisitor defines visitor for AstNode.
 type AstVisitor interface {
 	Visit(AstNode) interface{}
-	VisitAggregateFunc(*AggregateFunc) any
-	VisitConflictTarget(*ConflictTarget) any
-	VisitCompoundOperator(*CompoundOperator) any
-	VisitCTE(*CTE) any
-	VisitDateTimeFunc(*DateTimeFunction) any
+	// statements
+	VisitInsert(*Insert) any
+	VisitSelect(*Select) any
 	VisitDelete(*Delete) any
-	VisitDeleteStmt(*DeleteStmt) any
+	VisitUpdate(*Update) any
+
+	// relation
+	VisitSelectStmt(*SelectStmt) any // set operation
+	VisitJoinClause(*JoinClause) any // join
+	VisitCTE(*CTE) any               // common table expression
+
+	// expressions
 	VisitExpressionLiteral(*ExpressionLiteral) any
 	VisitExpressionBindParameter(*ExpressionBindParameter) any
 	VisitExpressionColumn(*ExpressionColumn) any
@@ -25,12 +30,17 @@ type AstVisitor interface {
 	VisitExpressionSelect(*ExpressionSelect) any
 	VisitExpressionCase(*ExpressionCase) any
 	VisitExpressionArithmetic(*ExpressionArithmetic) any
+
+	VisitAggregateFunc(*AggregateFunc) any
+	VisitConflictTarget(*ConflictTarget) any
+	VisitCompoundOperator(*CompoundOperator) any
+	VisitDateTimeFunc(*DateTimeFunction) any
+	VisitDeleteStmt(*DeleteStmt) any
+
 	VisitFromClause(*FromClause) any
 	VisitScalarFunc(*ScalarFunction) any
 	VisitGroupBy(*GroupBy) any
-	VisitInsert(*Insert) any
 	VisitInsertStmt(*InsertStmt) any
-	VisitJoinClause(*JoinClause) any
 	VisitJoinPredicate(*JoinPredicate) any
 	VisitJoinOperator(*JoinOperator) any
 	VisitLimit(*Limit) any
@@ -42,16 +52,13 @@ type AstVisitor interface {
 	VisitResultColumnTable(*ResultColumnTable) any
 	VisitReturningClause(*ReturningClause) any
 	VisitReturningClauseColumn(*ReturningClauseColumn) any
-	VisitSelect(*Select) any
 	VisitSelectCore(*SelectCore) any
-	VisitSelectStmt(*SelectStmt) any
 	VisitTableOrSubquery(TableOrSubquery) any
 	VisitTableOrSubqueryTable(*TableOrSubqueryTable) any
 	VisitTableOrSubquerySelect(*TableOrSubquerySelect) any
 	VisitTableOrSubqueryList(*TableOrSubqueryList) any
 	VisitTableOrSubqueryJoin(*TableOrSubqueryJoin) any
 	VisitUpdateSetClause(*UpdateSetClause) any
-	VisitUpdate(*Update) any
 	VisitUpdateStmt(*UpdateStmt) any
 	VisitUpsert(*Upsert) any
 }

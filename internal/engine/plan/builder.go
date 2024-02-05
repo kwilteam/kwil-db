@@ -2,6 +2,7 @@ package plan
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
@@ -28,16 +29,12 @@ import (
 type CTEContext struct{}
 
 type BuilderContext struct {
-	// can get all schemas & related tables
-	info SchemaGetter
-
-	currentSchema *types.Schema
+	currentDBName string
 }
 
-func NewBuilderContext(info SchemaGetter, curSchema *types.Schema) *BuilderContext {
+func NewBuilderContext(currentDBName string) *BuilderContext {
 	return &BuilderContext{
-		info:          info,
-		currentSchema: curSchema,
+		currentDBName: currentDBName,
 	}
 }
 
@@ -47,6 +44,8 @@ type Builder struct {
 	*tree.BaseAstVisitor
 
 	scope *scope
+
+	catalog Catalog
 
 	ctx *BuilderContext
 
@@ -59,9 +58,10 @@ type Builder struct {
 	metaCollected bool
 }
 
-func NewBuilder(ctx *BuilderContext) *Builder {
+func NewBuilder(ctx *BuilderContext, catalog Catalog) *Builder {
 	return &Builder{
 		ctx:           ctx,
+		catalog:       catalog,
 		tables:        make(map[string]*types.Table),
 		usedTables:    make(map[string]*types.Table),
 		metaCollected: false,
@@ -80,7 +80,8 @@ func (b *Builder) collectTables(node tree.AstNode) {
 // build builds an OperationBuilder from a statement.
 func (b *Builder) build(node tree.AstNode) LogicalPlan {
 	if b.scope == nil {
-		b.scope = newScope()
+		//b.scope = newScope()
+		b.descendScope()
 	}
 
 	if !b.metaCollected {
@@ -127,19 +128,117 @@ func (b *Builder) buildDataSource(node tree.AstNode) LogicalPlan {
 
 	switch t := node.(type) {
 	case *tree.TableOrSubqueryTable: // simple table
-		return b.visitTableOrSubQueryTable(t, nil).(LogicalPlan)
-	case *tree.TableOrSubquerySelect: // subquery in Join
-		return b.visitTableOrSubQuerySelect(t).(LogicalPlan)
+		//return b.visitTableOrSubQueryTable(t, nil).(LogicalPlan)
+		plan := b.buildTableScan("", t.Name, t.Alias)
+		return plan
+	case *tree.TableOrSubquerySelect: // subquery
+		plan := b.VisitSelectStmt(t.Select).(LogicalPlan)
+		return NewLogicalSubquery(plan, t.Alias)
+	//	return b.visitTableOrSubQuerySelect(t).(LogicalPlan)
+	//case // values
+	//case // join
 	case *tree.SelectStmt: // select in CTE
-		b.VisitSelectStmt(t)
-		//case // values
-		//case // join
+		//b.VisitSelectStmt(t)
+
 		return b.VisitSelectStmt(t).(LogicalPlan)
 	default:
 		panic("unknown data source type")
 	}
 
 	return nil
+}
+
+func (b *Builder) buildTableScan(dbName string, tableName string, tableAlias string) LogicalPlan {
+	b.descendScope()
+
+	ctxTodo := context.TODO()
+	if dbName == "" {
+		dbName = b.ctx.currentDBName
+	}
+
+	schema, err := b.catalog.GetSchema(ctxTodo, dbName)
+	if err != nil {
+		// TODO: return error?
+		panic(fmt.Errorf("GetSchema %w", err))
+	}
+
+	tbl, err := b.catalog.TableByName(ctxTodo, schema, tableName)
+	if err != nil {
+		panic(fmt.Errorf("TableByName %W", err))
+	}
+
+	b.scope.addTable(tbl)
+	// 1. build output columns from original table columns
+	// 2. build temporary schema from output columns as well,
+	// 3. store the output temporary
+	// 4. unfold star(extend output columns), if is star, also resolve(replace) the column name to full qualified(
+	//fq) name
+
+	// get table
+	//b.ctx.catalog.GetSchema(node.name)
+
+	//tbl := b.tables[node.name]
+	//
+	//s := newSchema(tbl.Columns...)
+	//
+	//outputColumns := make([]*OutputColumn, 0, len(cols))
+	//
+	//var outCols []tree.ResultColumn
+	//for _, col := range tbl.Columns {
+	//	outputColumns = append(outputColumns, &OutputColumn{
+	//		OriginalTblName: tbl.name,
+	//		OriginalColName: col.name,
+	//		TblName:         node.name,
+	//		ColName:         col.ToSQL(),
+	//		DB:              "",
+	//	})
+	//}
+
+	//for _, col := range cols {
+	//	switch t := col.(type) {
+	//	case *tree.ResultColumnExpression:
+	//		outCols = append(outCols, t)
+	//	default:
+	//		// unfold star
+	//
+	//	}
+	//}
+
+	tblName := tbl.Name
+	if tableAlias != "" {
+		tblName = tableAlias
+	}
+
+	fields := make([]*field, len(tbl.Columns))
+	for i, col := range tbl.Columns {
+		fields[i] = &field{
+			OriginalTblName: tbl.Name,
+			OriginalColName: col.Name,
+			TblName:         tblName,
+			ColName:         col.Name,
+			DB:              dbName,
+		}
+
+		b.scope.addField(fields[i])
+	}
+
+	s := newSchema(fields...)
+	s.tblName = tbl.Name
+	s.tblAlias = tableAlias
+
+	b.scope.setSchema(s)
+
+	imDs := &memDataSource{
+		schema: s,
+	}
+
+	scanPlan := NewLogicalScan(imDs)
+	scanPlan.SetScope(b.scope)
+	return scanPlan
+
+	//return &OperationBuilder{
+	//	op: operator.NewLogicalScanOperator(node.name, node.Alias, cols),
+	//}
 }
 
 func (b *Builder) Visit(node tree.AstNode) any {
@@ -149,10 +248,7 @@ func (b *Builder) Visit(node tree.AstNode) any {
 // VisitSelect return a *OperationBuilder
 func (b *Builder) VisitSelect(node *tree.Select) any {
 	if node.CTE != nil {
-		//b.descendScope()
-		for _, cte := range node.CTE {
-			b.VisitCTE(cte)
-		}
+		b.buildCTEs(node.CTE)
 	}
 	return b.VisitSelectStmt(node.SelectStmt)
 }
@@ -165,12 +261,34 @@ func (b *Builder) ascendScope() {
 	b.scope = b.scope.ascend()
 }
 
-func (b *Builder) VisitCTE(node *tree.CTE) any {
+//func (b *Builder) VisitCTE(node *tree.CTE) any {
+//	//s := b.scope.descend()
+//	//name := node.Table
+//	//
+//	//b.buildDataSource(node.)
+//	return nil
+//}
+
+func (b *Builder) buildCTEs(ctes []*tree.CTE) {
+	b.descendScope()
+	for _, cte := range ctes {
+		b.buildCTE(cte)
+	}
 	//s := b.scope.descend()
 	//name := node.Table
 	//
 	//b.buildDataSource(node.)
-	return nil
+
+}
+
+func (b *Builder) buildCTE(node *tree.CTE) {
+	//plan := b.buildDataSource(node.Select)
+
+}
+
+func (b *Builder) renameDataSource(plan LogicalPlan, tableName string, columns []string) {
+	// change table name
+	// change column name
 }
 
 // VisitSelectStmt return a *LogicalPlan
@@ -220,7 +338,7 @@ func (b *Builder) visitSelectCore(node *tree.SelectCore, orderBy *tree.OrderBy) 
 
 	plan = b.buildDistinct(plan, node.SelectType, node.Columns) // distinct
 
-	plan = b.buildProject(plan, orderBy, node.Columns) // project
+	plan = b.buildProjection(plan, orderBy, node.Columns) // project
 
 	// done in VisitSelectStmt and VisitTableOrSubQuerySelect
 	//plan = b.buildSort()  // order by
@@ -251,7 +369,7 @@ func (b *Builder) visitSelectCore(node *tree.SelectCore, orderBy *tree.OrderBy) 
 //
 //	builder = b.buildDistinct(builder, node.SelectType, node.Columns) // distinct
 //
-//	builder = b.buildProject(builder, node.node.Columns) // project
+//	builder = b.buildProjection(builder, node.node.Columns) // project
 //
 //	// done in VisitSelectStmt and VisitTableOrSubQuerySelect
 //	//builder = b.buildSort()  // order by
@@ -270,8 +388,8 @@ func (b *Builder) buildFrom(node *tree.SelectCore) LogicalPlan {
 	// TODO: change SQL parse rule to make it simpler
 	// return b.Visit(node.TableOrSubquery)
 
-	left := b.visitTableOrSubquery(joinClause.TableOrSubquery, node.Columns).(LogicalPlan)
-	//left := b.buildDataSource(node)
+	//left := b.visitTableOrSubquery(joinClause.TableOrSubquery, node.Columns).(LogicalPlan)
+	left := b.buildDataSource(joinClause.TableOrSubquery)
 
 	if len(joinClause.Joins) > 0 {
 		var tmpPlan LogicalPlan
@@ -285,7 +403,9 @@ func (b *Builder) buildFrom(node *tree.SelectCore) LogicalPlan {
 			//	left = tmpBuilder
 			//}
 
-			right := b.visitTableOrSubquery(join.Table, node.Columns).(LogicalPlan)
+			//right := b.visitTableOrSubquery(join.Table, node.Columns).(LogicalPlan)
+			right := b.buildDataSource(node)
+
 			//right := b.visitTableOrSubquery(join.Table, node.Columns).(*OperationBuilder)
 
 			//leftBuilder := left
@@ -332,48 +452,29 @@ func (b *Builder) buildDistinct(plan LogicalPlan,
 	return plan
 }
 
-// buildProject add project operator to the OperationBuilder.
+// buildProjection add project operator to the OperationBuilder.
 // NOTE: project only operate on the columns in select list
-func (b *Builder) buildProject(plan LogicalPlan, orderby *tree.OrderBy,
+func (b *Builder) buildProjection(plan LogicalPlan, orderby *tree.OrderBy,
 	cols []tree.ResultColumn) LogicalPlan {
-	//var newCols []tree.ResultColumn
-	//
-	//for _, o := range orderby.OrderingTerms {
-	//	switch t := o.Expression.(type) {
-	//	case *tree.ExpressionColumn:
-	//		newCols = append(newCols,
-	//			&tree.ResultColumnExpression{Expression: t})
-	//	}
-	//}
-	//
-	//for _, col := range cols {
-	//	switch t := col.(type) {
-	//	case *tree.ResultColumnExpression:
-	//		switch et := t.Expression.(type) {
-	//		case *tree.ExpressionColumn:
-	//			if et.Table == "" {
-	//			}
-	//		}
-	//	}
-	//}
 
-	proj := b.unfoldStar(plan, cols)
+	newCols := b.unfoldStar(plan, cols)
 
-	plan = NewLogicalProjection(plan, proj)
+	plan = NewLogicalProjection(plan, newCols)
 
 	return plan
 }
 
 func (b *Builder) unfoldStar(plan LogicalPlan, cols []tree.ResultColumn) (
-	resultCols []tree.ResultColumnExpression) {
+	resultCols []*tree.ResultColumnExpression) {
+	//s := plan.Scope()
 	for _, col := range cols {
 		switch t := col.(type) {
 		case *tree.ResultColumnExpression:
-			resultCols = append(resultCols, *t)
+			resultCols = append(resultCols, t)
 		case *tree.ResultColumnStar, *tree.ResultColumnTable:
 			for _, field := range plan.Schema().fields {
 				resultCols = append(resultCols,
-					tree.ResultColumnExpression{
+					&tree.ResultColumnExpression{
 						Expression: &tree.ExpressionColumn{
 							Table:  field.TblName,
 							Column: field.ColName,
@@ -521,98 +622,101 @@ func (b *Builder) withOrderByLimit(plan LogicalPlan, node *tree.SelectStmt) Logi
 //		return left
 //	}
 //}
+//
 
-func (b *Builder) visitTableOrSubquery(node tree.TableOrSubquery, cols []tree.ResultColumn) any {
-	switch t := node.(type) {
-	case *tree.TableOrSubqueryTable:
-		return b.visitTableOrSubQueryTable(t, cols)
-	case *tree.TableOrSubquerySelect:
-		return b.visitTableOrSubQuerySelect(t)
-	default:
-		panic("unknown table or subquery type")
-	}
-}
+//func (b *Builder) visitTableOrSubquery(node tree.TableOrSubquery, cols []tree.ResultColumn) any {
+//	switch t := node.(type) {
+//	case *tree.TableOrSubqueryTable:
+//		return b.buildDataSource(t)
+//		//return b.visitTableOrSubQueryTable(t, cols)
+//	//case *tree.TableOrSubquerySelect:
+//	//	return b.visitTableOrSubQuerySelect(t)
+//	default:
+//		panic("unknown table or subquery type")
+//	}
+//}
 
-// visitTableOrSubQueryTable return an *OperationBuilder
-func (b *Builder) visitTableOrSubQueryTable(node *tree.TableOrSubqueryTable, cols []tree.ResultColumn) any {
-
-	// 1. build output columns from original table columns
-	// 2. build temporary schema from output columns as well,
-	// 3. store the output temporary
-	// 4. unfold star(extend output columns), if is star, also resolve(replace) the column name to full qualified(
-	//fq) name
-
-	// get table
-	//b.ctx.info.GetSchema(node.Name)
-
-	//tbl := b.tables[node.Name]
-	//
-	//s := newSchema(tbl.Columns...)
-	//
-	//outputColumns := make([]*OutputColumn, 0, len(cols))
-	//
-	//var outCols []tree.ResultColumn
-	//for _, col := range tbl.Columns {
-	//	outputColumns = append(outputColumns, &OutputColumn{
-	//		OriginalTblName: tbl.Name,
-	//		OriginalColName: col.Name,
-	//		TblName:         node.Name,
-	//		ColName:         col.ToSQL(),
-	//		DB:              "",
-	//	})
-	//}
-
-	//for _, col := range cols {
-	//	switch t := col.(type) {
-	//	case *tree.ResultColumnExpression:
-	//		outCols = append(outCols, t)
-	//	default:
-	//		// unfold star
-	//
-	//	}
-	//}
-
-	tb, err := b.ctx.info.TableByName(context.TODO(), b.ctx.currentSchema, node.Name)
-	if err != nil {
-		panic(err)
-	}
-
-	fields := make([]*field, len(tb.Columns))
-	for i, col := range tb.Columns {
-		fields[i] = &field{
-			OriginalTblName: tb.Name,
-			OriginalColName: col.Name,
-			TblName:         tb.Name,
-			ColName:         col.Name,
-			DB:              "",
-		}
-	}
-
-	s := newSchema(fields...)
-	s.tblName = tb.Name
-	s.tblAlias = node.Alias
-
-	imDs := &memDataSource{
-		schema: s,
-	}
-
-	return NewLogicalScan(imDs)
-
-	//return &OperationBuilder{
-	//	op: operator.NewLogicalScanOperator(node.Name, node.Alias, cols),
-	//}
-}
-
-// visitTableOrSubQuerySelect return a LogicalPlan
-func (b *Builder) visitTableOrSubQuerySelect(node *tree.TableOrSubquerySelect) any {
-	//root := b.build(node.Select)
-	//builder := NewOperationBuilder(
-	//	root.ctx,
-	//	root.op,
-	//	root.inputs...)
-	////builder = b.withOrderByLimit(builder, node.Select)
-	//return builder
-
-	p := b.VisitSelectStmt(node.Select).(LogicalPlan)
-	return p
-}
+//
+//// visitTableOrSubQueryTable return an *OperationBuilder
+//func (b *Builder) visitTableOrSubQueryTable(node *tree.TableOrSubqueryTable, cols []tree.ResultColumn) any {
+//
+//	// 1. build output columns from original table columns
+//	// 2. build temporary schema from output columns as well,
+//	// 3. store the output temporary
+//	// 4. unfold star(extend output columns), if is star, also resolve(replace) the column name to full qualified(
+//	//fq) name
+//
+//	// get table
+//	//b.ctx.catalog.GetSchema(node.name)
+//
+//	//tbl := b.tables[node.name]
+//	//
+//	//s := newSchema(tbl.Columns...)
+//	//
+//	//outputColumns := make([]*OutputColumn, 0, len(cols))
+//	//
+//	//var outCols []tree.ResultColumn
+//	//for _, col := range tbl.Columns {
+//	//	outputColumns = append(outputColumns, &OutputColumn{
+//	//		OriginalTblName: tbl.name,
+//	//		OriginalColName: col.name,
+//	//		TblName:         node.name,
+//	//		ColName:         col.ToSQL(),
+//	//		DB:              "",
+//	//	})
+//	//}
+//
+//	//for _, col := range cols {
+//	//	switch t := col.(type) {
+//	//	case *tree.ResultColumnExpression:
+//	//		outCols = append(outCols, t)
+//	//	default:
+//	//		// unfold star
+//	//
+//	//	}
+//	//}
+//
+//	tb, err := b.ctx.catalog.TableByName(context.TODO(), b.ctx.currentSchema, node.name)
+//	if err != nil {
+//		panic(err)
+//	}
+//
+//	fields := make([]*field, len(tb.Columns))
+//	for i, col := range tb.Columns {
+//		fields[i] = &field{
+//			OriginalTblName: tb.name,
+//			OriginalColName: col.name,
+//			TblName:         tb.name,
+//			ColName:         col.name,
+//			DB:              "",
+//		}
+//	}
+//
+//	s := newSchema(fields...)
+//	s.tblName = tb.name
+//	s.tblAlias = node.Alias
+//
+//	imDs := &memDataSource{
+//		schema: s,
+//	}
+//
+//	return NewLogicalScan(imDs)
+//
+//	//return &OperationBuilder{
+//	//	op: operator.NewLogicalScanOperator(node.name, node.Alias, cols),
+//	//}
+//}
+//
+//// visitTableOrSubQuerySelect return a LogicalPlan
+//func (b *Builder) visitTableOrSubQuerySelect(node *tree.TableOrSubquerySelect) any {
+//	//root := b.build(node.Select)
+//	//builder := NewOperationBuilder(
+//	//	root.ctx,
+//	//	root.op,
+//	//	root.inputs...)
+//	////builder = b.withOrderByLimit(builder, node.Select)
+//	//return builder
+//
+//	p := b.VisitSelectStmt(node.Select).(LogicalPlan)
+//	return p
+//}

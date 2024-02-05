@@ -310,10 +310,10 @@ func (c *Changeset) ID() ([]byte, error) {
 
 	for _, table := range order.OrderMap(c.Tables) {
 		// table.Key = table name
-		// table.Value = table changeset
+		// table.value = table changeset
 		for _, record := range order.OrderMap(table.Value.Records) {
 			// record.Key = hex hash of the primary keys
-			// record.Value = record changeset
+			// record.value = record changeset
 
 			for _, value := range record.Value.Values {
 				bts, err := value.Bytes()

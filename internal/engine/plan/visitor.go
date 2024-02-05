@@ -16,6 +16,10 @@ func (e *ExplainVisitor) VisitLogicalProjection(p *LogicalProjection) any {
 	return p.String()
 }
 
+func (e *ExplainVisitor) VisitLogicalSubquery(p *LogicalSubquery) any {
+	return p.String()
+}
+
 func (e *ExplainVisitor) VisitLogicalFilter(p *LogicalFilter) any {
 	return p.String()
 }

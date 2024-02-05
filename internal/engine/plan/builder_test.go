@@ -147,11 +147,11 @@ var mockSchemaRefer = &types.Schema{
 	},
 }
 
-type mockSchemaGetter struct {
+type mockCatalog struct {
 	schemas map[string]*types.Schema
 }
 
-func (m *mockSchemaGetter) GetSchema(ctx context.Context, dbid string) (*types.Schema, error) {
+func (m *mockCatalog) GetSchema(ctx context.Context, dbid string) (*types.Schema, error) {
 	if s, ok := m.schemas[dbid]; ok {
 		return s, nil
 	} else {
@@ -159,7 +159,7 @@ func (m *mockSchemaGetter) GetSchema(ctx context.Context, dbid string) (*types.S
 	}
 }
 
-func (m *mockSchemaGetter) TableByName(ctx context.Context, schema *types.Schema, tableName string) (*types.Table,
+func (m *mockCatalog) TableByName(ctx context.Context, schema *types.Schema, tableName string) (*types.Table,
 	error) {
 	for _, t := range schema.Tables {
 		if t.Name == tableName {
@@ -171,13 +171,13 @@ func (m *mockSchemaGetter) TableByName(ctx context.Context, schema *types.Schema
 }
 
 func TestBuilder_build(t *testing.T) {
-	sg := &mockSchemaGetter{
+	mcat := &mockCatalog{
 		schemas: map[string]*types.Schema{
 			"basedb":  mockSchemaBase,
 			"referdb": mockSchemaRefer,
 		},
 	}
-	ctx := NewBuilderContext(sg, mockSchemaBase)
+	ctx := NewBuilderContext(mockSchemaBase.Name)
 
 	////////
 
@@ -190,6 +190,14 @@ func TestBuilder_build(t *testing.T) {
 		{
 			name: "simple select",
 			args: "select * from users",
+		},
+		{
+			name: "nested select without alias",
+			args: "select username, age from (select * from users)",
+		},
+		{
+			name: "nested select with alias",
+			args: "select u.username + 2, u.age from (select * from users) as u",
 		},
 		{
 			name: "select limit",
@@ -238,7 +246,7 @@ func TestBuilder_build(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t1 *testing.T) {
-			b := NewBuilder(ctx)
+			b := NewBuilder(ctx, mcat)
 
 			ast, err := sqlparser.Parse(tt.args)
 			assert.NoError(t1, err)
@@ -253,6 +261,15 @@ func TestBuilder_build(t *testing.T) {
 			//}
 
 			fmt.Println(explain(got))
+			fmt.Println("===schema")
+			for _, field := range got.Schema().fields {
+				fmt.Println(field)
+			}
 		})
 	}
+}
+
+
+func TestDataFrame(t *testing.T) {
+
 }

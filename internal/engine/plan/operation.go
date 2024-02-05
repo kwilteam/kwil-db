@@ -1,6 +1,9 @@
 package plan
 
-import "github.com/kwilteam/kwil-db/parse/sql/tree"
+import (
+	"github.com/kwilteam/kwil-db/internal/engine/types"
+	"github.com/kwilteam/kwil-db/parse/sql/tree"
+)
 
 // //// RelationOperation is the interface for all relational operations.
 // //// It can be visited by a RelationOperationVisitor.
@@ -74,7 +77,26 @@ type scope struct {
 
 	ast tree.AstNode
 
-	mapping map[string]string //
+	mapping map[string]string       //
+	tables  map[string]*types.Table // NOTE could be
+	fields  []*field                // NOTE could be
+
+	schema *schema
+}
+
+func (s *scope) addTable(tbl *types.Table) {
+	if s.tables == nil {
+		s.tables = make(map[string]*types.Table)
+	}
+	s.tables[tbl.Name] = tbl
+}
+
+func (s *scope) addField(field *field) {
+	s.fields = append(s.fields, field)
+}
+
+func (s *scope) setSchema(schema *schema) {
+	s.schema = schema
 }
 
 func newScope() *scope {

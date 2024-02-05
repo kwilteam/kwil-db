@@ -9,9 +9,11 @@ import (
 //   - TableOrSubquerySelect
 //   - TableOrSubqueryList
 type TableOrSubquery interface {
-	ToSQL() string
+	//ToSQL() string
 	tableOrSubquery()
-	Walk(w AstWalker) error
+	//Walk(w AstWalker) error
+
+	AstNode
 }
 
 type TableOrSubqueryTable struct {

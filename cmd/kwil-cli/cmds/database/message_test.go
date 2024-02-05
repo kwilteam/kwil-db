@@ -37,10 +37,10 @@ func Example_respDBlist_text() {
 	// Output:
 	// Databases belonging to '6f776e6572':
 	//   DBID: xabc
-	//     Name: db_a
+	//     name: db_a
 	//     Owner: 6f776e6572
 	//   DBID: xdef
-	//     Name: db_b
+	//     name: db_b
 	//     Owner: 6f776e6572
 }
 

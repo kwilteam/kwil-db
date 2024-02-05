@@ -151,7 +151,7 @@ func NewChecked(config Config) (Logger, error) {
 		cfg.OutputPaths = []string{"stdout"}
 	}
 
-	// fields := make([]zap.Field, 0, 10) with cfg.Build(zap.Fields(fields...))
+	// fields := make([]zap.Resolve, 0, 10) with cfg.Build(zap.Fields(fields...))
 	logger := zap.Must(cfg.Build())
 	logger = logger.WithOptions(zap.AddCallerSkip(1))
 	return Logger{L: logger}, nil

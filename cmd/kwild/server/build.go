@@ -366,7 +366,7 @@ func loadTLSCertificate(keyFile, certFile, hostname string) (*tls.Certificate, e
 	}
 	if !keyExists {
 		// Auto-generate a new key/cert pair using any provided host name in the
-		// "Subject Alternate Name" section of the certificate (either IP or a
+		// "Subject Alternate name" section of the certificate (either IP or a
 		// hostname like kwild23.applicationX.org).
 		if err := genCertPair(certFile, keyFile, []string{hostname}); err != nil {
 			return nil, fmt.Errorf("failed to generate TLS key pair: %v", err)

@@ -8,7 +8,9 @@ import (
 )
 
 type LogicalScan struct {
-	ds DataSource
+	basePlan
+
+	ds DataSource // NOTE: maybe no need, just use schema a field to initialize LogicalScan
 	//projection []string
 	schema *schema
 }
@@ -56,11 +58,13 @@ func (p *LogicalScan) deriveSchema() *schema {
 }
 
 type LogicalProjection struct {
+	basePlan
+
 	input LogicalPlan
-	exprs []tree.ResultColumnExpression
+	exprs []*tree.ResultColumnExpression
 }
 
-func NewLogicalProjection(input LogicalPlan, exprs []tree.ResultColumnExpression) *LogicalProjection {
+func NewLogicalProjection(input LogicalPlan, exprs []*tree.ResultColumnExpression) *LogicalProjection {
 	return &LogicalProjection{
 		input: input,
 		exprs: exprs,
@@ -96,7 +100,54 @@ func (p *LogicalProjection) Accept(v LogicalVisitor) any {
 	return v.VisitLogicalProjection(p)
 }
 
+type LogicalSubquery struct {
+	basePlan
+
+	input  LogicalPlan
+	name   string
+	schema *schema // for rename
+}
+
+func NewLogicalSubquery(input LogicalPlan, name string) *LogicalSubquery {
+	plan := &LogicalSubquery{
+		input:  input,
+		name:   name,
+		schema: input.Schema(), // NOTE
+	}
+
+	//if name != "" {
+	//	plan.schema.tblAlias = name
+	//	for _, field := range plan.schema.fields {
+	//
+	//	}
+	//
+	//}
+
+	return plan
+}
+
+func (p *LogicalSubquery) Schema() *schema {
+	return p.schema
+}
+
+func (p *LogicalSubquery) String() string {
+	if p.name != "" {
+		return "Subquery: As " + p.name
+	}
+	return "Subquery"
+}
+
+func (p *LogicalSubquery) Inputs() []LogicalPlan {
+	return []LogicalPlan{p.input}
+}
+
+func (p *LogicalSubquery) Accept(v LogicalVisitor) any {
+	return v.VisitLogicalSubquery(p)
+}
+
 type LogicalFilter struct {
+	basePlan
+
 	input LogicalPlan
 	expr  tree.Expression
 }
@@ -126,6 +177,8 @@ func (p *LogicalFilter) Accept(v LogicalVisitor) any {
 }
 
 type LogicalAggregate struct {
+	basePlan
+
 	input LogicalPlan
 	// select a,b,agg(c) from t group by a,b;
 	// the output schema always contain all group by columns
@@ -191,6 +244,8 @@ func (p *LogicalAggregate) Accept(v LogicalVisitor) any {
 }
 
 type LogicalLimit struct {
+	basePlan
+
 	input  LogicalPlan
 	limit  tree.Expression
 	offset tree.Expression
@@ -225,6 +280,8 @@ func (p *LogicalLimit) Accept(v LogicalVisitor) any {
 }
 
 type LogicalSort struct {
+	basePlan
+
 	input   LogicalPlan
 	orderBy []*tree.OrderingTerm
 }
@@ -261,6 +318,8 @@ func (p *LogicalSort) Accept(v LogicalVisitor) any {
 }
 
 type LogicalJoin struct {
+	basePlan
+
 	inputL LogicalPlan
 	inputR LogicalPlan
 
@@ -308,6 +367,8 @@ func (p *LogicalJoin) Accept(v LogicalVisitor) any {
 }
 
 type LogicalSet struct {
+	basePlan
+
 	inputL LogicalPlan
 	inputR LogicalPlan
 
@@ -340,6 +401,8 @@ func (p *LogicalSet) Accept(v LogicalVisitor) any {
 }
 
 type LogicalDistinct struct {
+	basePlan
+
 	input LogicalPlan
 	//keys  []tree.Expression
 	keys []tree.ResultColumn

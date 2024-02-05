@@ -84,19 +84,21 @@ func (ds *memDataSource) Scan(projection []string) []any {
 type Plan interface {
 	Schema() *schema
 	//SetSchema(*schema)
+	Scope() *scope
+	SetScope(*scope)
 }
 
-//type basePlan struct {
-//	schema *schema
-//}
-//
-//func (p *basePlan) Schema() *schema {
-//	return p.schema
-//}
-//
-//func (p *basePlan) SetSchema(s *schema) {
-//	p.schema = s
-//}
+type basePlan struct {
+	scope *scope
+}
+
+func (p *basePlan) Scope() *scope {
+	return p.scope
+}
+
+func (p *basePlan) SetScope(scope *scope) {
+	p.scope = scope
+}
 
 type LogicalPlan interface {
 	Plan
@@ -146,6 +148,7 @@ type LogicalVisitor interface {
 	Visit(LogicalPlan) any
 	VisitLogicalScan(*LogicalScan) any
 	VisitLogicalProjection(*LogicalProjection) any
+	VisitLogicalSubquery(*LogicalSubquery) any
 	VisitLogicalFilter(*LogicalFilter) any
 	VisitLogicalJoin(*LogicalJoin) any
 	VisitLogicalLimit(*LogicalLimit) any

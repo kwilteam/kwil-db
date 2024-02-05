@@ -153,7 +153,7 @@ func containsValidAggregateFunction(expr tree.Expression) (*tree.ExpressionColum
 			}
 
 			if containsColumn(arg) {
-				return false, fmt.Errorf("aggregate function %s cannot contain a column in an argument that is not its first", e.Function.Name())
+				return false, fmt.Errorf("aggregate function %s cannot contain a column in an argument that is not its first", e.Function.name())
 			}
 		}
 

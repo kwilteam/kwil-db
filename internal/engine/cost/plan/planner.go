@@ -48,7 +48,7 @@ package plan
 //	//}
 //	var ts map[string]*types.Table
 //	for _, t := range ctx.currentSchema.Tables {
-//		ts[t.Name] = t
+//		ts[t.name] = t
 //	}
 //
 //	//transformer := NewRelationTransformer(ts)
