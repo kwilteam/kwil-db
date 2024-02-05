@@ -126,7 +126,7 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 			// NOTE: typeHint is a IDENTIFIER, so it could be wrapped with ` or " or [ ]
 			// NOTE: should we just complain if it's wrapped?
 			//typeHint = typeHint[1 : len(typeHint)-1]
-			panic(fmt.Sprintf("type hint should not be wrapped in  %s", typeHint[0]))
+			panic(fmt.Sprintf("type hint should not be wrapped in  %c", typeHint[0]))
 		}
 		// TODO: validate typeHint
 	}

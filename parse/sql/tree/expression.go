@@ -40,6 +40,15 @@ func (e *expressionBase) Accept(w Walker) error {
 	return fmt.Errorf("expressionBase: Accept() must be implemented by child")
 }
 
+// suffixTypeHint adds a type hint to `expression` if it is not empty
+// NOTE: `::` is used to indicate type hint in SQL
+func suffixTypeHint(expr string, typeHint string) string {
+	if typeHint != "" {
+		return fmt.Sprintf("%s ::%s", expr, typeHint)
+	}
+	return expr
+}
+
 type Wrapped bool
 
 type ExpressionLiteral struct {
@@ -59,15 +68,13 @@ func (e *ExpressionLiteral) Accept(w Walker) error {
 func (e *ExpressionLiteral) ToSQL() string {
 	validateIsNonStringLiteral(e.Value)
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
 	}
 
 	stmt.WriteString(e.Value)
-
-	return stmt.String()
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 func isStringLiteral(str string) bool {
@@ -121,14 +128,14 @@ func (e *ExpressionBindParameter) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
 	}
 
 	stmt.WriteString(e.Parameter)
-	return stmt.String()
+
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 type ExpressionColumn struct {
@@ -148,7 +155,6 @@ func (e *ExpressionColumn) Accept(w Walker) error {
 
 func (e *ExpressionColumn) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
@@ -165,7 +171,7 @@ func (e *ExpressionColumn) ToSQL() string {
 
 	stmt.WriteIdent(e.Column)
 
-	return stmt.String()
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 type ExpressionUnary struct {
@@ -185,7 +191,6 @@ func (e *ExpressionUnary) Accept(w Walker) error {
 
 func (e *ExpressionUnary) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
@@ -193,7 +198,8 @@ func (e *ExpressionUnary) ToSQL() string {
 
 	stmt.WriteString(e.Operator.String())
 	stmt.WriteString(e.Operand.ToSQL())
-	return stmt.String()
+
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 type ExpressionBinaryComparison struct {
@@ -221,7 +227,6 @@ func (e *ExpressionBinaryComparison) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
@@ -230,7 +235,8 @@ func (e *ExpressionBinaryComparison) ToSQL() string {
 	stmt.WriteString(e.Left.ToSQL())
 	stmt.WriteString(e.Operator.String())
 	stmt.WriteString(e.Right.ToSQL())
-	return stmt.String()
+
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 type ExpressionFunction struct {
@@ -252,7 +258,6 @@ func (e *ExpressionFunction) Accept(w Walker) error {
 
 func (e *ExpressionFunction) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
@@ -271,7 +276,8 @@ func (e *ExpressionFunction) ToSQL() string {
 	}
 
 	stmt.WriteString(stringToWrite)
-	return stmt.String()
+
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 type ExpressionList struct {
@@ -291,7 +297,6 @@ func (e *ExpressionList) Accept(w Walker) error {
 
 func (e *ExpressionList) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
@@ -305,7 +310,7 @@ func (e *ExpressionList) ToSQL() string {
 		stmt.WriteString(e.Expressions[i].ToSQL())
 	})
 
-	return stmt.String()
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 type ExpressionCollate struct {
@@ -337,7 +342,6 @@ func (e *ExpressionCollate) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
@@ -346,7 +350,8 @@ func (e *ExpressionCollate) ToSQL() string {
 	stmt.WriteString(e.Expression.ToSQL())
 	stmt.Token.Collate()
 	stmt.WriteString(e.Collation.String())
-	return stmt.String()
+
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 type ExpressionStringCompare struct {
@@ -376,7 +381,6 @@ func (e *ExpressionStringCompare) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
@@ -393,7 +397,8 @@ func (e *ExpressionStringCompare) ToSQL() string {
 		stmt.Token.Escape()
 		stmt.WriteString(e.Escape.ToSQL())
 	}
-	return stmt.String()
+
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 type ExpressionIsNull struct {
@@ -422,7 +427,6 @@ func (e *ExpressionIsNull) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
@@ -434,7 +438,8 @@ func (e *ExpressionIsNull) ToSQL() string {
 	} else {
 		stmt.Token.Not().Null()
 	}
-	return stmt.String()
+
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 type ExpressionDistinct struct {
@@ -469,7 +474,6 @@ func (e *ExpressionDistinct) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
@@ -482,7 +486,8 @@ func (e *ExpressionDistinct) ToSQL() string {
 	}
 	stmt.Token.Distinct().From()
 	stmt.WriteString(e.Right.ToSQL())
-	return stmt.String()
+
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 type ExpressionBetween struct {
@@ -522,7 +527,6 @@ func (e *ExpressionBetween) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
@@ -536,7 +540,8 @@ func (e *ExpressionBetween) ToSQL() string {
 	stmt.WriteString(e.Left.ToSQL())
 	stmt.Token.And()
 	stmt.WriteString(e.Right.ToSQL())
-	return stmt.String()
+
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 type ExpressionSelect struct {
@@ -561,7 +566,6 @@ func (e *ExpressionSelect) ToSQL() string {
 	e.check()
 
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
@@ -579,7 +583,8 @@ func (e *ExpressionSelect) ToSQL() string {
 
 	stmt.WriteString(selectSql)
 	stmt.Token.Rparen()
-	return stmt.String()
+
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }
 
 func (e *ExpressionSelect) check() {
@@ -686,7 +691,6 @@ func (e *ExpressionArithmetic) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
-	stmt.SetTypeHint(e.TypeHint)
 
 	if e.Wrapped {
 		stmt.WrapParen()
@@ -700,5 +704,5 @@ func (e *ExpressionArithmetic) ToSQL() string {
 	stmt.WriteString(e.Operator.String())
 	stmt.WriteString(e.Right.ToSQL())
 
-	return stmt.String()
+	return suffixTypeHint(stmt.String(), e.TypeHint)
 }

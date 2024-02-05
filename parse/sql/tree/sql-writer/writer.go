@@ -12,10 +12,9 @@ var (
 )
 
 type SqlWriter struct {
-	stmt     *strings.Builder
-	Token    *tokenWriter
-	wrap     bool
-	typeHint string
+	stmt  *strings.Builder
+	Token *tokenWriter
+	wrap  bool
 }
 
 func NewWriter() *SqlWriter {
@@ -25,11 +24,6 @@ func NewWriter() *SqlWriter {
 		Token: newTokenWriter(builder),
 		wrap:  false,
 	}
-}
-
-func (s *SqlWriter) SetTypeHint(hintType string) *SqlWriter {
-	s.typeHint = hintType
-	return s
 }
 
 func (s *SqlWriter) WrapParen() *SqlWriter {
@@ -42,11 +36,6 @@ func (s *SqlWriter) WrapParen() *SqlWriter {
 func (s *SqlWriter) String() string {
 	if s.wrap {
 		s.stmt.WriteString(")")
-	}
-
-	if s.typeHint != "" {
-		s.stmt.WriteString("::")
-		s.stmt.WriteString(s.typeHint)
 	}
 
 	return s.stmt.String()
