@@ -160,7 +160,7 @@ type boolBinaryExpr struct {
 }
 
 func (e *boolBinaryExpr) String() string {
-	return fmt.Sprintf("%s %s %s", e.l, e.name, e.r)
+	return fmt.Sprintf("%s %s %s", e.l, e.op, e.r)
 }
 
 func (e *boolBinaryExpr) Op() string {
@@ -337,6 +337,7 @@ type AggregateExpr interface {
 type aggregateExpr struct {
 	name string
 	expr LogicalExpr
+	//NOTE add alias??
 }
 
 func (a *aggregateExpr) String() string {
@@ -349,19 +350,19 @@ func (a *aggregateExpr) Resolve(plan LogicalPlan) Field {
 
 func (a *aggregateExpr) aggregate() {}
 
-func Max(expr LogicalExpr) LogicalExpr {
+func Max(expr LogicalExpr) AggregateExpr {
 	return &aggregateExpr{name: "MAX", expr: expr}
 }
 
-func Min(expr LogicalExpr) LogicalExpr {
+func Min(expr LogicalExpr) AggregateExpr {
 	return &aggregateExpr{name: "MIN", expr: expr}
 }
 
-func Avg(expr LogicalExpr) LogicalExpr {
+func Avg(expr LogicalExpr) AggregateExpr {
 	return &aggregateExpr{name: "AVG", expr: expr}
 }
 
-func Sum(expr LogicalExpr) LogicalExpr {
+func Sum(expr LogicalExpr) AggregateExpr {
 	return &aggregateExpr{name: "SUM", expr: expr}
 }
 
@@ -381,6 +382,74 @@ func (a *aggregateIntExpr) Resolve(LogicalPlan) Field {
 
 func (a *aggregateIntExpr) aggregate() {}
 
-func Count(expr LogicalExpr) LogicalExpr {
+func Count(expr LogicalExpr) AggregateExpr {
 	return &aggregateIntExpr{name: "COUNT", expr: expr}
+}
+
+type binaryExprBuilder interface {
+	And(r LogicalExpr) BinaryExpr
+	Or(r LogicalExpr) BinaryExpr
+	Eq(r LogicalExpr) BinaryExpr
+	Neq(r LogicalExpr) BinaryExpr
+	Gt(r LogicalExpr) BinaryExpr
+	Gte(r LogicalExpr) BinaryExpr
+	Lt(r LogicalExpr) BinaryExpr
+	Lte(r LogicalExpr) BinaryExpr
+
+	Add(r LogicalExpr) BinaryExpr
+	Sub(r LogicalExpr) BinaryExpr
+	Mul(r LogicalExpr) BinaryExpr
+	Div(r LogicalExpr) BinaryExpr
+}
+
+type binaryExprBuilderImpl struct {
+	l LogicalExpr
+}
+
+func (b *binaryExprBuilderImpl) And(r LogicalExpr) BinaryExpr {
+	return And(b.l, r)
+}
+
+func (b *binaryExprBuilderImpl) Or(r LogicalExpr) BinaryExpr {
+	return Or(b.l, r)
+}
+
+func (b *binaryExprBuilderImpl) Eq(r LogicalExpr) BinaryExpr {
+	return Eq(b.l, r)
+}
+
+func (b *binaryExprBuilderImpl) Neq(r LogicalExpr) BinaryExpr {
+	return Neq(b.l, r)
+}
+
+func (b *binaryExprBuilderImpl) Gt(r LogicalExpr) BinaryExpr {
+	return Gt(b.l, r)
+}
+
+func (b *binaryExprBuilderImpl) Gte(r LogicalExpr) BinaryExpr {
+	return Gte(b.l, r)
+}
+
+func (b *binaryExprBuilderImpl) Lt(r LogicalExpr) BinaryExpr {
+	return Lt(b.l, r)
+}
+
+func (b *binaryExprBuilderImpl) Lte(r LogicalExpr) BinaryExpr {
+	return Lte(b.l, r)
+}
+
+func (b *binaryExprBuilderImpl) Add(r LogicalExpr) BinaryExpr {
+	return Add(b.l, r)
+}
+
+func (b *binaryExprBuilderImpl) Sub(r LogicalExpr) BinaryExpr {
+	return Sub(b.l, r)
+}
+
+func (b *binaryExprBuilderImpl) Mul(r LogicalExpr) BinaryExpr {
+	return Mul(b.l, r)
+}
+
+func (b *binaryExprBuilderImpl) Div(r LogicalExpr) BinaryExpr {
+	return Div(b.l, r)
 }

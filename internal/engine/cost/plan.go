@@ -28,46 +28,52 @@ type LogicalPlan interface {
 	Inputs() []LogicalPlan
 }
 
-type DataFrame interface {
+type AlgebraOperation interface {
 	// Project applies a projection
-	Project(expr []LogicalExpr) DataFrame
+	Project(expr ...LogicalExpr) AlgebraOperation
 
 	// Filter applies a filter
-	Filter(expr LogicalExpr) DataFrame
+	Filter(expr LogicalExpr) AlgebraOperation
 
 	// Aggregate appliex an aggregation
-	Aggregate(groupBy []LogicalExpr, aggregateExpr []AggregateExpr) DataFrame
+	Aggregate(groupBy []LogicalExpr, aggregateExpr []AggregateExpr) AlgebraOperation
 
-	// Schema returns the schema of the data that will be produced by this DataFrame.
+	// Schema returns the schema of the data that will be produced by this AlgebraOperation.
 	Schema() *schema
 
 	// LogicalPlan returns the logical plan
 	LogicalPlan() LogicalPlan
 }
 
-type DataFrameImpl struct {
+type AlgebraOpBuilder struct {
 	plan LogicalPlan
 }
 
-func (df *DataFrameImpl) Project(expr []LogicalExpr) DataFrame {
-	return &DataFrameImpl{Projection(df.plan, expr)}
+func (df *AlgebraOpBuilder) Project(exprs ...LogicalExpr) AlgebraOperation {
+	return &AlgebraOpBuilder{Projection(df.plan, exprs...)}
 }
 
-func (df *DataFrameImpl) Filter(expr LogicalExpr) DataFrame {
-	return &DataFrameImpl{Selection(df.plan, expr)}
+func (df *AlgebraOpBuilder) Filter(expr LogicalExpr) AlgebraOperation {
+	return &AlgebraOpBuilder{Selection(df.plan, expr)}
 }
 
-func (df *DataFrameImpl) Aggregate(groupBy []LogicalExpr, aggregateExpr []AggregateExpr) DataFrame {
-	return &DataFrameImpl{Aggregate(df.plan, groupBy, aggregateExpr)}
+func (df *AlgebraOpBuilder) Aggregate(groupBy []LogicalExpr, aggregateExpr []AggregateExpr) AlgebraOperation {
+	return &AlgebraOpBuilder{Aggregate(df.plan, groupBy, aggregateExpr)}
 }
 
-func (df *DataFrameImpl) Schema() *schema {
+func (df *AlgebraOpBuilder) Schema() *schema {
 	return df.plan.Schema()
 }
 
-func (df *DataFrameImpl) LogicalPlan() LogicalPlan {
+func (df *AlgebraOpBuilder) LogicalPlan() LogicalPlan {
 	return df.plan
 }
+
+func NewAlgebraOpBuilder(plan LogicalPlan) *AlgebraOpBuilder {
+	return &AlgebraOpBuilder{plan: plan}
+}
+
+//var AOP :=
 
 func Format(plan LogicalPlan, indent int) string {
 	var msg bytes.Buffer

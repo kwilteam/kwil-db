@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 )
 
 type ColumnValue interface {
@@ -12,119 +13,91 @@ type ColumnValue interface {
 	Value() any
 }
 
-type literalColumnValue struct {
+type LiteralColumnValue struct {
 	value any
 }
 
-func (c *literalColumnValue) Type() string {
+func (c *LiteralColumnValue) Type() string {
 	return fmt.Sprintf("%T", c.value)
 }
 
-func (c *literalColumnValue) Value() any {
+func (c *LiteralColumnValue) Value() any {
 	return c.value
 }
 
+func NewLiteralColumnValue(v any) *LiteralColumnValue {
+	return &LiteralColumnValue{value: v}
+}
+
 type row []ColumnValue
+type rowIterator <-chan row
+
+func newRowIterator(rows []row) rowIterator {
+	ch := make(chan row)
+	go func() {
+		for _, r := range rows {
+			ch <- r
+		}
+		close(ch)
+	}()
+	return ch
+
+}
 
 type record struct {
 	schema *schema
-	rows   []row
+	rows   rowIterator
 
 	idx int
 }
 
 func Record(s *schema, rows []row) *record {
-	return &record{schema: s, rows: rows}
+	return &record{schema: s, rows: newRowIterator(rows)}
 }
 
 func (r *record) Schema() *schema {
 	return r.schema
 }
 
-func (r *record) Next() (row, bool) {
-	if r.idx < len(r.rows) {
-		row := r.rows[r.idx]
-		r.idx++
-		return row, true
-	}
-	return nil, false
-}
-
-func (r *record) Len() int {
-	return len(r.rows)
-}
-
-func (r *record) Left() int {
-	return len(r.rows) - r.idx
-}
+type DataSourceType string
 
 type DataSource interface {
+	// Schema returns the schema for the underlying data source
 	Schema() *schema
-	Scan(projection []string) *record
+	// Scan scans the data source, return selected columns.
+	// If projection field is not found in the schema, it will be ignored.
+	// NOTE: should panic?
+	Scan(projection ...string) *record
+	// SourceType returns the type of the data source.
+	SourceType() DataSourceType
+	// TODO
+	// Statistics returns the statistics of the data source.
+	//Statistics() *Statistics
 }
 
-//func filter(ds DataSource, projection []string) *record {
-//	if len(projection) == 0 {
-//		return Record(ds.Schema(), ds.records)
-//	}
-//
-//	fieldIndexMap := make(map[string]int)
-//	for i, field := range ds.schema.Fields {
-//		fieldIndexMap[field.Name] = i
-//	}
-//
-//	newFieldsIndex := make([]int, len(projection))
-//	for i, name := range projection {
-//		newFieldsIndex[i] = fieldIndexMap[name]
-//	}
-//
-//	newFields := make([]Field, len(projection))
-//	for i, idx := range newFieldsIndex {
-//		newFields[i] = ds.schema.Fields[idx]
-//	}
-//
-//	newschema := Schema(newFields...)
-//
-//	newRecords := make([]row, len(ds.records))
-//	for i, _row := range ds.records {
-//		newRow := make(row, len(projection))
-//		for j, idx := range newFieldsIndex {
-//			newRow[j] = _row[idx]
-//		}
-//		newRecords[i] = newRow
-//	}
-//
-//	return Record(newschema, newRecords)
-//}
-
-type memDataSource struct {
-	schema  *schema
-	records []row
-}
-
-func NewMemDataSource(s *schema, data [][]any) *memDataSource {
-	records := make([]row, len(data))
-	for i, _row := range data {
-		records[i] = make(row, len(_row))
-		for j, col := range _row {
-			records[i][j] = &literalColumnValue{col}
-		}
-	}
-
-	return &memDataSource{schema: s, records: records}
-}
-
-func (ds *memDataSource) Schema() *schema {
-	return ds.schema
-}
-
-func (ds *memDataSource) Scan(projection []string) *record {
+// dsScan read the data source, return selected columns.
+// TODO: use channel to return the result, e.g. iterator model.
+func dsScan(dsSchema *schema, dsRecords []row, projection []string) *record {
 	if len(projection) == 0 {
-		return Record(ds.schema, ds.records)
+		return Record(dsSchema, dsRecords)
 	}
+
+	// panic if projection field not found
+	//for _, name := range projection {
+	//	found := false
+	//	for _, field := range ds.schema.Fields {
+	//		if field.Name == name {
+	//			found = true
+	//			break
+	//		}
+	//	}
+	//	if !found {
+	//		panic(fmt.Sprintf("projection field %s not found", name))
+	//	}
+	//}
 
 	fieldIndexMap := make(map[string]int)
-	for i, field := range ds.schema.Fields {
+	for i, field := range dsSchema.Fields {
 		fieldIndexMap[field.Name] = i
 	}
 
@@ -135,13 +108,13 @@ func (ds *memDataSource) Scan(projection []string) *record {
 
 	newFields := make([]Field, len(projection))
 	for i, idx := range newFieldsIndex {
-		newFields[i] = ds.schema.Fields[idx]
+		newFields[i] = dsSchema.Fields[idx]
 	}
 
 	newschema := Schema(newFields...)
 
-	newRecords := make([]row, len(ds.records))
-	for i, _row := range ds.records {
+	newRecords := make([]row, len(dsRecords))
+	for i, _row := range dsRecords {
 		newRow := make(row, len(projection))
 		for j, idx := range newFieldsIndex {
 			newRow[j] = _row[idx]
@@ -152,6 +125,29 @@ func (ds *memDataSource) Scan(projection []string) *record {
 	return Record(newschema, newRecords)
 }
 
+// memDataSource is a data source that reads data from memory.
+type memDataSource struct {
+	schema  *schema
+	records []row
+}
+
+func NewMemDataSource(s *schema, data []row) *memDataSource {
+	return &memDataSource{schema: s, records: data}
+}
+
+func (ds *memDataSource) Schema() *schema {
+	return ds.schema
+}
+
+func (ds *memDataSource) Scan(projection ...string) *record {
+	return dsScan(ds.schema, ds.records, projection)
+}
+
+func (ds *memDataSource) SourceType() DataSourceType {
+	return "memory"
+}
+
+// csvDataSource is a data source that reads data from a CSV file.
 type csvDataSource struct {
 	path    string
 	records []row
@@ -167,6 +163,17 @@ func NewCSVDataSource(path string) (*csvDataSource, error) {
 	return ds, nil
 }
 
+// colTypeCast try to cast the raw column string to int, if failed, return the raw string.
+// NOTE: we only support int/string for simplicity.
+func colTypeCast(raw string) (kind string, value any) {
+	v, err := strconv.Atoi(raw)
+	if err == nil {
+		return "int", v
+	} else {
+		return "string", raw
+	}
+}
+
 func (ds *csvDataSource) load() error {
 	in, err := os.Open(ds.path)
 	if err != nil {
@@ -180,9 +187,11 @@ func (ds *csvDataSource) load() error {
 		return err
 	}
 
+	columnTypes := make([]string, len(header))
+	columnTypesInfered := false
+
 	for {
-		newRow := make(row, len(header))
-		_record, err := r.Read()
+		columns, err := r.Read()
 		if err == io.EOF {
 			break
 		}
@@ -190,17 +199,30 @@ func (ds *csvDataSource) load() error {
 			return err
 		}
 
-		for i, col := range _record {
-			// TODO: infer the type of the column
-			newRow[i] = &literalColumnValue{col}
+		newRow := make(row, len(header))
+		for i, col := range columns {
+			colType, colValue := colTypeCast(col)
+			if columnTypesInfered {
+				// check if the column type is consistent
+				if columnTypes[i] != colType {
+					return fmt.Errorf("inconsistent column type at column %d, got %s, want %s",
+						i, colType, columnTypes[i])
+				}
+			} else {
+				// NOTE: use the first row of 'data' to infer column types
+				columnTypes[i] = colType
+			}
+			newRow[i] = &LiteralColumnValue{colValue}
 		}
 
 		ds.records = append(ds.records, newRow)
+
+		columnTypesInfered = true
 	}
 
-	for _, name := range header {
-		// type?
-		ds.schema.Fields = append(ds.schema.Fields, Field{Name: name, Type: "string"})
+	for i, name := range header {
+		ds.schema.Fields = append(ds.schema.Fields,
+			Field{Name: name, Type: columnTypes[i]})
 	}
 
 	return nil
@@ -210,36 +232,10 @@ func (ds *csvDataSource) Schema() *schema {
 	return ds.schema
 }
 
-func (ds *csvDataSource) Scan(projection []string) *record {
-	if len(projection) == 0 {
-		return Record(ds.schema, ds.records)
-	}
+func (ds *csvDataSource) Scan(projection ...string) *record {
+	return dsScan(ds.schema, ds.records, projection)
+}
 
-	fieldIndexMap := make(map[string]int)
-	for i, field := range ds.schema.Fields {
-		fieldIndexMap[field.Name] = i
-	}
-
-	newFieldsIndex := make([]int, len(projection))
-	for i, name := range projection {
-		newFieldsIndex[i] = fieldIndexMap[name]
-	}
-
-	newFields := make([]Field, len(projection))
-	for i, idx := range newFieldsIndex {
-		newFields[i] = ds.schema.Fields[idx]
-	}
-
-	newschema := Schema(newFields...)
-
-	newRecords := make([]row, len(ds.records))
-	for i, _row := range ds.records {
-		newRow := make(row, len(projection))
-		for j, idx := range newFieldsIndex {
-			newRow[j] = _row[idx]
-		}
-		newRecords[i] = newRow
-	}
-
-	return Record(newschema, newRecords)
+func (ds *csvDataSource) SourceType() DataSourceType {
+	return "csv"
 }

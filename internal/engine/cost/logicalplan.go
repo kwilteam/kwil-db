@@ -24,8 +24,8 @@ func (s *scan) Inputs() []LogicalPlan {
 }
 
 // Scan creates a table scan.
-func Scan(ds DataSource) LogicalPlan {
-	return &scan{dataSource: ds}
+func Scan(table string, ds DataSource) LogicalPlan {
+	return &scan{table: table, dataSource: ds}
 }
 
 type projection struct {
@@ -38,7 +38,7 @@ func (p *projection) String() string {
 	for i, expr := range p.exprs {
 		fields[i] = expr.String()
 	}
-	return fmt.Sprintf("Projection: %s", strings.Join(fields, ","))
+	return fmt.Sprintf("Projection: %s", strings.Join(fields, ", p"))
 }
 
 func (p *projection) Schema() *schema {
@@ -54,7 +54,7 @@ func (p *projection) Inputs() []LogicalPlan {
 }
 
 // Projection creates a projection.
-func Projection(plan LogicalPlan, exprs []LogicalExpr) LogicalPlan {
+func Projection(plan LogicalPlan, exprs ...LogicalExpr) LogicalPlan {
 	return &projection{
 		input: plan,
 		exprs: exprs,
@@ -79,8 +79,11 @@ func (s *selection) Inputs() []LogicalPlan {
 }
 
 // Selection creates a selection.
-func Selection(plan LogicalPlan, expr LogicalExpr) LogicalPlan {
-	return nil
+func Selection(plan LogicalPlan, expr ...LogicalExpr) LogicalPlan {
+	return &selection{
+		input: plan,
+		expr:  expr,
+	}
 }
 
 type aggregate struct {
