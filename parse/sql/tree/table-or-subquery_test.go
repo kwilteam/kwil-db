@@ -9,6 +9,7 @@ import (
 func TestTableOrSubqueryTable_ToSQL(t *testing.T) {
 	type fields struct {
 		TableOrSubquery tree.TableOrSubquery
+		Schema          string // optional, only for TableOrSubqueryTable
 	}
 	tests := []struct {
 		name      string
@@ -122,6 +123,17 @@ func TestTableOrSubqueryTable_ToSQL(t *testing.T) {
 			},
 			want: `("foo" LEFT OUTER JOIN "bar" ON "foo" = "bar")`,
 		},
+		{
+			name: "schema namespace",
+			fields: fields{
+				TableOrSubquery: &tree.TableOrSubqueryTable{
+					Name:  "foo",
+					Alias: "f",
+				},
+				Schema: "baz",
+			},
+			want: `"baz"."foo" AS "f"`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -134,6 +146,11 @@ func TestTableOrSubqueryTable_ToSQL(t *testing.T) {
 			}
 
 			tr := tt.fields.TableOrSubquery
+
+			if tt.fields.Schema != "" {
+				trt := tr.(*tree.TableOrSubqueryTable)
+				trt.SetSchema(tt.fields.Schema)
+			}
 
 			got := tr.ToSQL()
 			if tt.wantPanic {

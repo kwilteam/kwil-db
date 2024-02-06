@@ -4,6 +4,15 @@ import (
 	"fmt"
 )
 
+// DBIDSchema applies the convention for deriving a PostgreSQL database schema
+// (differnet from a Kwil schema) from a DBID. This is a prefixing operation
+// used to keep user dataset schemas distinct from other data like kwild
+// internal database tables. It also facilitates listing datasets without having
+// to maintain a table of dataset names.
+func DBIDSchema(dbid string) string {
+	return "ds_" + dbid
+}
+
 type Table struct {
 	Name        string        `json:"name"`
 	Columns     []*Column     `json:"columns"`

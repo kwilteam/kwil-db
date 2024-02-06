@@ -15,8 +15,9 @@ type TableOrSubquery interface {
 }
 
 type TableOrSubqueryTable struct {
-	Name  string
-	Alias string
+	schema string
+	Name   string
+	Alias  string
 }
 
 func (t *TableOrSubqueryTable) Accept(w Walker) error {
@@ -32,7 +33,16 @@ func (t *TableOrSubqueryTable) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
-	stmt.WriteIdentNoSpace(t.Name)
+
+	if t.schema != "" {
+		stmt.Token.Space()
+		stmt.WriteIdentNoSpace(t.schema)
+		stmt.Token.Period()
+		stmt.WriteIdentNoSpace(t.Name)
+		stmt.Token.Space()
+	} else {
+		stmt.WriteIdentNoSpace(t.Name)
+	}
 
 	if t.Alias != "" {
 		stmt.Token.As()
@@ -43,6 +53,13 @@ func (t *TableOrSubqueryTable) ToSQL() string {
 	return stmt.String()
 }
 func (t *TableOrSubqueryTable) tableOrSubquery() {}
+
+// SetSchema sets the schema of the table.
+// It should not be called by the parser, and is meant to be called
+// by processes after parsing.
+func (t *TableOrSubqueryTable) SetSchema(schema string) {
+	t.schema = schema
+}
 
 type TableOrSubquerySelect struct {
 	Select *SelectStmt

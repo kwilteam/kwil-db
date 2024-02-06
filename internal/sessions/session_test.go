@@ -34,7 +34,10 @@ func Test_Sessions(t *testing.T) {
 				err := mc.Begin(ctx, key)
 				assert.NoError(t, err)
 
-				_, err = mc.Commit(ctx, key)
+				_, err = mc.Precommit(ctx)
+				assert.NoError(t, err)
+
+				err = mc.Commit(ctx)
 				assert.NoError(t, err)
 
 				key2 := []byte("test2")
@@ -42,7 +45,10 @@ func Test_Sessions(t *testing.T) {
 				err = mc.Begin(ctx, key2)
 				assert.NoError(t, err)
 
-				_, err = mc.Commit(ctx, key2)
+				_, err = mc.Precommit(ctx)
+				assert.NoError(t, err)
+
+				err = mc.Commit(ctx)
 				assert.NoError(t, err)
 
 				// IdempotentKey is never deleted, just updated with every block, so it should always be 1
@@ -61,35 +67,13 @@ func Test_Sessions(t *testing.T) {
 				err := mc.Begin(ctx, key)
 				assert.NoError(t, err)
 
-				_, err = mc.Commit(ctx, key)
+				_, err = mc.Precommit(ctx)
+				assert.NoError(t, err)
+
+				err = mc.Commit(ctx)
 				assert.Error(t, err)
 
 				assert.Equal(t, len(kv.vals), 1)
-			},
-		},
-		{
-			name: "recovery",
-			committable: &mockCommittable{
-				errOnCommit: true,
-			},
-			fn: func(t *testing.T, mc *sessions.MultiCommitter, kv *mockKV) {
-				ctx := context.Background()
-				key := []byte("test")
-
-				err := mc.Begin(ctx, key)
-				assert.NoError(t, err)
-
-				_, err = mc.Commit(ctx, key)
-				assert.Error(t, err)
-
-				err = mc.Begin(ctx, key)
-				assert.NoError(t, err)
-			},
-			result: &mockCommittable{
-				inSession:   true,
-				recovery:    true,
-				errOnCommit: true,
-				currentKey:  []byte("test"),
 			},
 		},
 	}
@@ -119,12 +103,10 @@ func Test_Sessions(t *testing.T) {
 
 type mockCommittable struct {
 	inSession  bool
-	recovery   bool
 	currentKey []byte
 
-	errOnBegin         bool
-	errOnBeginRecovery bool
-	errOnCommit        bool
+	errOnBegin  bool
+	errOnCommit bool
 }
 
 func (m *mockCommittable) Begin(ctx context.Context, idempotencyKey []byte) error {
@@ -143,48 +125,34 @@ func (m *mockCommittable) Begin(ctx context.Context, idempotencyKey []byte) erro
 	return nil
 }
 
-func (m *mockCommittable) BeginRecovery(ctx context.Context, idempotencyKey []byte) error {
-	if m.inSession {
-		return fmt.Errorf("already in session")
-	}
-
-	if m.errOnBeginRecovery {
-		return fmt.Errorf("intentional mock error on begin recovery")
-	}
-
-	m.inSession = true
-	m.recovery = true
-
-	m.currentKey = idempotencyKey
-
-	return nil
-}
-
 func (m *mockCommittable) Cancel(ctx context.Context) error {
 	m.inSession = false
-	m.recovery = false
 	m.currentKey = nil
 
 	return nil
 }
 
-func (m *mockCommittable) Commit(ctx context.Context, idempotencyKey []byte) ([]byte, error) {
+func (m *mockCommittable) Precommit(ctx context.Context) ([]byte, error) {
+	return []byte("id"), nil
+}
+
+func (m *mockCommittable) Commit(ctx context.Context, idempotencyKey []byte) error {
 	if !m.inSession {
-		return nil, fmt.Errorf("not in session")
+		return fmt.Errorf("not in session")
 	}
 
 	if m.errOnCommit {
-		return nil, fmt.Errorf("intentional mock error on commit")
+		return fmt.Errorf("intentional mock error on commit")
 	}
 
 	if !bytes.Equal(m.currentKey, idempotencyKey) {
-		return nil, fmt.Errorf("idempotency key mismatch")
+		return fmt.Errorf("idempotency key mismatch")
 	}
 
 	m.inSession = false
 	m.currentKey = nil
 
-	return []byte("id"), nil
+	return nil
 }
 
 type mockKV struct {

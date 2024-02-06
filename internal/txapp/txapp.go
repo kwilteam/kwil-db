@@ -150,15 +150,21 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 	}
 
 	// this would go in Commit
-	idempotencyKey := make([]byte, 8)
-	binary.LittleEndian.PutUint64(idempotencyKey, uint64(blockHeight))
+	// idempotencyKey := make([]byte, 8)
+	// binary.LittleEndian.PutUint64(idempotencyKey, uint64(blockHeight))
 
 	// appHash would go in GetEndResults,
-	// the commit would go in Commit
-	appHash, err := r.atomicCommitter.Commit(ctx, idempotencyKey)
+	appHash, err := r.atomicCommitter.Precommit(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// the commit would go in Commit
+	err = r.atomicCommitter.Commit(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	// what happened to the metadata store?
 
 	// this only updates an in-memory value. but it seems weird to me that the validator store needs to be aware
 	// of the current block height and "keep it"

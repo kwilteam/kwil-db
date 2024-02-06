@@ -25,7 +25,7 @@ func indexTypeToSQLiteString(indexType types.IndexType) (string, error) {
 	}
 }
 
-func GenerateCreateIndexStatements(tableName string, indexes []*types.Index) ([]string, error) {
+func GenerateCreateIndexStatements(pgSchema, tableName string, indexes []*types.Index) ([]string, error) {
 	var statements []string
 
 	for _, index := range indexes {
@@ -45,7 +45,8 @@ func GenerateCreateIndexStatements(tableName string, indexes []*types.Index) ([]
 		}
 		columns := strings.Join(cols, ", ")
 
-		statement := fmt.Sprintf("CREATE%s INDEX %s ON %s (%s);", indexType, wrapIdent(index.Name), wrapIdent(tableName), columns)
+		statement := fmt.Sprintf("CREATE%s INDEX %s ON %s.%s (%s);", indexType, wrapIdent(index.Name),
+			wrapIdent(pgSchema), wrapIdent(tableName), columns)
 		statements = append(statements, strings.TrimSpace(statement))
 	}
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/internal/engine/types"
-	sql "github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 // DeploymentContext is the context for a dataset deployment transaction.
@@ -22,10 +22,14 @@ type ProcedureContext struct {
 	Signer []byte
 	// Caller is the string identifier of the signer.
 	Caller string
+
+	// NOTE: may still need an uncommitted bool for actions executing from
+	// blockchain transactions!
+
 	// globalCtx is the global context of the current execution.
 	globalCtx *GlobalContext
 	// values are the variables that are available to the execution.
-	values map[string]any
+	values map[string]any // note: bind $args or @caller
 
 	// DBID is the database identifier for the current scope.
 	// if calling an extension instead of a procedure, it will be the last used DBID.

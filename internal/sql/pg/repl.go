@@ -94,11 +94,11 @@ func createRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotN
 		return 0, err
 	}
 	slotLSN, _ := pglogrepl.ParseLSN(slotRes.ConsistentPoint)
-	logger.Infof("Created logical replication slot %v at LSN %v (%d)\n",
+	logger.Infof("Created logical replication slot %v at LSN %v (%d)",
 		slotRes.SlotName, slotRes.ConsistentPoint, slotLSN)
 
 	pluginArgs := []string{
-		"proto_version '2'",
+		"proto_version '3'",
 		"publication_names '" + publicationName + "'",
 		"messages 'true'",
 		"streaming 'true'",

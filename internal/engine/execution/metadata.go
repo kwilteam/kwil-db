@@ -6,15 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/engine/metadata"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
-	sql "github.com/kwilteam/kwil-db/internal/sql"
 )
-
-// executor makes a registry `Execute` or `Query` method into a sql.Executor
-func executor(dbid string, fn func(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error)) sql.ResultSetFunc {
-	return func(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error) {
-		return fn(ctx, dbid, stmt, params)
-	}
-}
 
 // this file contains the metadata store for the execution engine
 // metadata is not synchronized as part of consensus, so it can be non-deterministic
@@ -49,9 +41,10 @@ var (
 
 // storeSchema stores a schema in the datastore.
 func storeSchema(ctx context.Context, schema *types.Schema, datastore Registry) error {
+	dbid := schema.DBID()
 	kv := &metadataKv{
 		registry: datastore,
-		dbid:     schema.DBID(),
+		dbid:     dbid,
 		sync:     true,
 	}
 
@@ -65,7 +58,18 @@ func storeSchema(ctx context.Context, schema *types.Schema, datastore Registry) 
 		return err
 	}
 
-	err = metadata.CreateTables(ctx, schema.Tables, kv, executor(schema.DBID(), datastore.Execute))
+	exec := func(ctx context.Context, stmt string, params map[string]any) error {
+		// NOTE: caller must have prefixed tables in stmt with pg schema!
+		var err error
+		if len(params) == 0 { // create tables always passes nil, maybe just discard the map input to this closure?
+			_, err = datastore.Execute(ctx, dbid, stmt)
+		} else {
+			fmt.Println("storeSchema: unexpected Execute with non-nil params: ", params)
+			_, err = datastore.Execute(ctx, dbid, stmt, params)
+		}
+		return err
+	}
+	err = metadata.CreateTables(ctx, dbid, schema.Tables, kv, exec)
 	if err != nil {
 		return err
 	}

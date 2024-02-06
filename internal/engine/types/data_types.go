@@ -7,12 +7,13 @@ import (
 
 type DataType string
 
-// Data Types
+// Data Types -- Kwil schema types not necessarily SQL types?
 const (
 	NULL DataType = "NULL"
 	TEXT DataType = "TEXT"
 	INT  DataType = "INT"
 	BLOB DataType = "BLOB"
+	BOOL DataType = "BOOLEAN"
 )
 
 func (d DataType) String() string {
@@ -29,6 +30,7 @@ func (d *DataType) IsValid() bool {
 	return upper == NULL.String() ||
 		upper == TEXT.String() ||
 		upper == INT.String() ||
+		upper == BOOL.String() ||
 		upper == BLOB.String()
 
 }

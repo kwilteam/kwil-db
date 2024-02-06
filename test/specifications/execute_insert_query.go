@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -123,7 +124,7 @@ func ExecuteDBBatchInsertSpecification(ctx context.Context, t *testing.T, execut
 
 	records, err = execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
 	assert.NoError(t, err)
-	assert.NotNil(t, records)
+	require.NotNil(t, records)
 
 	counter := len(records.Export())
 
@@ -142,7 +143,7 @@ func ExecuteDBRecordsVerifySpecification(ctx context.Context, t *testing.T, exec
 
 	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
 	assert.NoError(t, err)
-	assert.NotNil(t, records)
+	require.NotNil(t, records)
 
 	counter := 0
 	for records.Next() {

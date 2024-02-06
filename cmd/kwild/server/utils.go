@@ -225,6 +225,13 @@ func (e *engineAdapter) Call(ctx context.Context, dbid string, action string, ar
 		return nil, err
 	}
 
+	// Call supports the RPC service, (not part of block execution), and as such
+	// should read committed data only even if a write session is in progress.
+	// However, engine.Execute is also the entry point for executing procedures
+	// in block-tx execution, in which context it is required to return
+	// uncommitted data to support sensible execution of chained transactions
+	// and avoid exploits with multiple transactions running logic based on old
+	// state! non-mutative does not imply committed read (which db conn)
 	resultSet, err := e.Execute(ctx, &engineTypes.ExecutionData{
 		Dataset:   dbid,
 		Procedure: action,

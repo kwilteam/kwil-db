@@ -89,7 +89,7 @@ func (d *KwilCliDriver) account(ctx context.Context, acctID []byte) (*types.Acco
 	cmd := d.newKwilCliCmd("account", "balance", hex.EncodeToString(acctID))
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list databases: %w", err)
+		return nil, fmt.Errorf("failed to get account balance: %w", err)
 	}
 
 	d.logger.Debug("account balance result", zap.Any("result", out.Result))
@@ -114,7 +114,7 @@ func (d *KwilCliDriver) TransferAmt(ctx context.Context, to []byte, amt *big.Int
 	cmd := d.newKwilCliCmd("account", "transfer", hex.EncodeToString(to), amt.String())
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list databases: %w", err)
+		return nil, fmt.Errorf("failed to do acct transfer: %w", err)
 	}
 	txHash, err = parseRespTxHash(out.Result)
 	if err != nil {
