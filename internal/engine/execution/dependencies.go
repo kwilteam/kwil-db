@@ -22,14 +22,18 @@ type Registry interface {
 }
 
 // Databases is an interface for interacting with databases.
+//
+// The dbid string must already be in the stmt, but it is also as an arg so the
+// registry can check for existence prior. Rewriting the query behind the
+// interface seems to be more trouble than in the engine where we have the AST.
 type Databases interface {
 	// Query executes a query against a reader connection
 	// It will not read uncommitted data, and cannot be used to write data.
-	Query(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error)
+	Query(ctx context.Context, dbid string, stmt string, params ...any) (*sql.ResultSet, error)
 
 	// Execute executes a statement against the database.
 	// The statement can mutate state, and will read uncommitted data.
-	Execute(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error)
+	Execute(ctx context.Context, dbid string, stmt string, params ...any) (*sql.ResultSet, error)
 
 	// Set sets a key to a value.
 	Set(ctx context.Context, dbid string, key []byte, value []byte) error

@@ -2,7 +2,7 @@ package sqlanalyzer
 
 import "github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/mutative"
 
-func isMutative(stmt accepter) (bool, error) {
+func isMutative(stmt Accepter) (bool, error) {
 	mutativityWalker := mutative.NewMutativityWalker()
 
 	err := stmt.Accept(mutativityWalker)

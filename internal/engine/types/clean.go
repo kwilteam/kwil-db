@@ -84,6 +84,7 @@ func cleanActionParameters(inputs *[]string) error {
 	return nil
 }
 
+// cleanActionParameter applies only to the unparsed instructions/statements.
 func cleanActionParameter(input *string) error {
 	if len(*input) == 0 {
 		return fmt.Errorf("action parameter cannot be empty")

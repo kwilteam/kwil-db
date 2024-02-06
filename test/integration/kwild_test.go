@@ -16,11 +16,13 @@ var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
 
 // Here we make clear the services will be used in each stage
-var basicServices = []string{integration.ExtContainer, "node0", "node1", "node2"}
-var newServices = []string{integration.Ext3Container, "node3"}
+var basicServices = []string{integration.ExtContainer, "pg0", "pg1", "pg2", "node0", "node1", "node2"}
+var newServices = []string{integration.Ext3Container, "pg3", "node3"}
 
 // NOTE: allServices will be sorted by docker-compose(in setup), so the order is not reliable
-var allServices = []string{integration.ExtContainer, integration.Ext3Container, "node0", "node1", "node2", "node3"}
+var allServices = []string{integration.ExtContainer, integration.Ext3Container,
+	"pg0", "pg1", "pg2", "pg3", "node0", "node1", "node2", "node3",
+}
 
 func TestLocalDevSetup(t *testing.T) {
 	if !*dev {

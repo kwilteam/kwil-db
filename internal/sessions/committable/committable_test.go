@@ -15,20 +15,18 @@ func Test_Committable(t *testing.T) {
 	type testcase struct {
 		name    string
 		initial map[string][]byte
-		fn      func(t *testing.T, c *committable.SavepointCommittable)
+		fn      func(t *testing.T, c *committable.Committable)
 	}
 
 	tests := []testcase{
 		{
 			name: "proper usage",
-			fn: func(t *testing.T, c *committable.SavepointCommittable) {
+			fn: func(t *testing.T, c *committable.Committable) {
 				ctx := context.Background()
 				key := []byte("key")
 
 				err := c.Begin(ctx, key)
 				require.NoError(t, err)
-
-				require.False(t, c.Skip())
 
 				val := []byte("val")
 				err = c.Register(val)
@@ -41,17 +39,13 @@ func Test_Committable(t *testing.T) {
 				require.NoError(t, err)
 
 				require.Equal(t, hash.Sum(nil), id)
-
-				require.False(t, c.Skip())
 			},
 		},
 		{
 			name: "commit with no begin",
-			fn: func(t *testing.T, c *committable.SavepointCommittable) {
+			fn: func(t *testing.T, c *committable.Committable) {
 				ctx := context.Background()
 				key := []byte("key")
-
-				require.False(t, c.Skip())
 
 				_, err := c.Commit(ctx, key)
 				require.Error(t, err)
@@ -59,65 +53,14 @@ func Test_Committable(t *testing.T) {
 		},
 		{
 			name: "register during no session",
-			fn: func(t *testing.T, c *committable.SavepointCommittable) {
+			fn: func(t *testing.T, c *committable.Committable) {
 				err := c.Register([]byte("val"))
 				require.Error(t, err)
 			},
 		},
 		{
-			name: "recovery, already committed",
-			initial: map[string][]byte{
-				string(committable.IdempotencyKeyKey): []byte("key"),
-				string(committable.ApphashKey):        []byte("apphash"),
-			},
-			fn: func(t *testing.T, c *committable.SavepointCommittable) {
-				key := []byte("key")
-				ctx := context.Background()
-
-				err := c.BeginRecovery(ctx, key)
-				require.NoError(t, err)
-
-				require.True(t, c.Skip())
-
-				err = c.Register([]byte("val"))
-				require.NoError(t, err)
-
-				id, err := c.Commit(ctx, key)
-				require.NoError(t, err)
-
-				require.Equal(t, []byte("apphash"), id)
-			},
-		},
-		{
-			name: "recovery, not committed",
-			initial: map[string][]byte{
-				string(committable.IdempotencyKeyKey): []byte("oldKey"),
-				string(committable.ApphashKey):        []byte("apphash"),
-			},
-			fn: func(t *testing.T, c *committable.SavepointCommittable) {
-				key := []byte("key")
-				ctx := context.Background()
-
-				err := c.BeginRecovery(ctx, key)
-				require.NoError(t, err)
-
-				require.False(t, c.Skip())
-
-				err = c.Register([]byte("val"))
-				require.NoError(t, err)
-
-				hash := sha256.New()
-				hash.Write([]byte("val"))
-
-				id, err := c.Commit(ctx, key)
-				require.NoError(t, err)
-
-				require.Equal(t, hash.Sum(nil), id)
-			},
-		},
-		{
 			name: "id function instead of hash",
-			fn: func(t *testing.T, c *committable.SavepointCommittable) {
+			fn: func(t *testing.T, c *committable.Committable) {
 				fn := func() ([]byte, error) {
 					return []byte("apphash"), nil
 				}
@@ -128,8 +71,6 @@ func Test_Committable(t *testing.T) {
 
 				err := c.Begin(ctx, key)
 				require.NoError(t, err)
-
-				require.False(t, c.Skip())
 
 				val := []byte("val")
 				err = c.Register(val)
@@ -172,7 +113,7 @@ func (m *mockStore) Get(ctx context.Context, key []byte, sync bool) ([]byte, err
 	return m.values[string(key)], nil
 }
 
-func (m *mockStore) Savepoint() (sql.Savepoint, error) {
+func (m *mockStore) Begin(ctx context.Context) (sql.TxCloser, error) {
 	return &mockSavepoint{}, nil
 }
 
@@ -183,10 +124,14 @@ func (m *mockStore) Set(ctx context.Context, key []byte, value []byte) error {
 
 type mockSavepoint struct{}
 
-func (m *mockSavepoint) Commit() error {
+func (m *mockSavepoint) Commit(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockSavepoint) Rollback() error {
+func (m *mockSavepoint) Precommit(ctx context.Context) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *mockSavepoint) Rollback(ctx context.Context) error {
 	return nil
 }

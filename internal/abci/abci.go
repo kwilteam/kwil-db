@@ -43,11 +43,18 @@ type AbciConfig struct {
 	// GasEnabled bool // for mempool policy modification
 }
 
+type AtomicCommitter interface {
+	Begin(ctx context.Context, idempotencyKey []byte) error
+	Precommit(ctx context.Context) ([]byte, error)
+	Commit(ctx context.Context) error
+}
+
 func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, vldtrs ValidatorModule, kv KVStore,
-	snapshotter SnapshotModule, bootstrapper DBBootstrapModule, txRouter TxApp, consensusParams ConsensusParams, log log.Logger) *AbciApp {
+	committer AtomicCommitter, snapshotter SnapshotModule, bootstrapper DBBootstrapModule, txRouter TxApp, consensusParams ConsensusParams, log log.Logger) *AbciApp {
 	app := &AbciApp{
 		cfg:        *cfg,
 		validators: vldtrs,
+		committer:  committer,
 		metadataStore: &metadataStore{
 			kv: kv,
 		},
@@ -92,6 +99,9 @@ type AbciApp struct {
 	validators ValidatorModule
 	// comet punishes by address, so we maintain an address=>pubkey map.
 	valAddrToKey map[string][]byte // NOTE: includes candidates
+
+	// committer is the atomic committer that handles atomic commits across multiple stores
+	committer AtomicCommitter
 
 	// snapshotter is the snapshotter module that handles snapshotting
 	snapshotter SnapshotModule
@@ -229,6 +239,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 
 // FinalizeBlock is on the consensus connection
 func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinalizeBlock) (*abciTypes.ResponseFinalizeBlock, error) {
+	fmt.Printf("\n\n")
 	logger := a.log.With(zap.String("stage", "ABCI FinalizeBlock"), zap.Int("height", int(req.Height)))
 
 	res := &abciTypes.ResponseFinalizeBlock{}
@@ -416,6 +427,12 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 	logger.Debug("", zap.String("ChainId", req.ChainId))
 	// maybe verify a.cfg.ChainID against the one in the request
 
+	// Accounts and validators DB init in a transaction. Not part of consensus
+	// connection sequence.
+	if err := a.committer.Begin(ctx, []byte{1}); err != nil {
+		return nil, err
+	}
+
 	// Store the genesis account allocations to the datastore. These are
 	// reflected in the genesis app hash.
 	for acct, bal := range a.cfg.GenesisAllocs {
@@ -432,8 +449,6 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 	vldtrs := make([]*validators.Validator, len(req.Validators))
 	for i := range req.Validators {
 		vi := &req.Validators[i]
-		// pk := vi.PubKey.GetEd25519()
-		// if pk == nil { panic("only ed25519 validator keys are supported") }
 		pk := vi.PubKey.GetEd25519()
 		vldtrs[i] = &validators.Validator{
 			PubKey: pk,
@@ -461,9 +476,16 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 		valUpdates[i] = abciTypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
 	}
 
+	if _, err := a.committer.Precommit(ctx); err != nil {
+		return nil, err
+	} // maybe have that ^ be automatic if skipped
+	if err := a.committer.Commit(ctx); err != nil {
+		return nil, err
+	}
+
 	err := a.metadataStore.SetAppHash(ctx, a.cfg.GenesisAppHash)
 	if err != nil {
-		panic(fmt.Sprintf("failed to set app hash: %v", err))
+		return nil, fmt.Errorf("failed to set app hash: %v", err)
 	}
 
 	logger.Info("initialized chain", zap.String("app hash", fmt.Sprintf("%x", a.cfg.GenesisAppHash)))

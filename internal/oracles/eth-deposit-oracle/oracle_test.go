@@ -1,3 +1,5 @@
+//go:build pglive
+
 package deposit_oracle
 
 import (
@@ -7,16 +9,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/log"
 	ctypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/sql"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/stretchr/testify/require"
 )
 
@@ -129,10 +131,13 @@ func Test_UnpackEventLogs(t *testing.T) {
 
 func Test_AddEvent(t *testing.T) {
 	ctx := context.Background()
-	conn, err := sqlite.Open(ctx, ":memory:", sql.OpenCreate|sql.OpenMemory)
-	require.NoError(t, err)
 
-	es, err := events.NewEventStore(ctx, &db{conn})
+	// no MockEventStore (yet?)
+	db, cleanUp, err := dbtest.NewTestPool(ctx, []string{`kwild_events`}) // ugh, unexported literal
+	require.NoError(t, err)
+	defer cleanUp()
+
+	es, err := events.NewEventStore(ctx, db)
 	require.NoError(t, err)
 
 	vs := NewMockVoteStore()
@@ -249,7 +254,7 @@ func (m *MockEventStore) Store(ctx context.Context, data []byte, eventType strin
 	return nil
 }
 
-func (m *MockEventStore) KVStore() sql.KVStore {
+func (m *MockEventStore) KVStore() sql.KV {
 	return nil
 }
 
@@ -269,32 +274,4 @@ func (m *mockVoteStore) Processed(resolutionID ctypes.UUID) {
 
 func (m *mockVoteStore) IsProcessed(ctx context.Context, resolutionID ctypes.UUID) (bool, error) {
 	return m.processed[resolutionID], nil
-}
-
-type db struct {
-	*sqlite.Connection
-}
-
-func (d *db) Execute(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error) {
-	res, err := d.Connection.Execute(ctx, stmt, args)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Finish()
-
-	return res.ResultSet()
-}
-
-func (d *db) Query(ctx context.Context, query string, args map[string]any) (*sql.ResultSet, error) {
-	res, err := d.Connection.Execute(ctx, query, args)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Finish()
-
-	return res.ResultSet()
-}
-
-func (d *db) Get(ctx context.Context, key []byte, sync bool) ([]byte, error) {
-	return d.Connection.Get(ctx, key)
 }

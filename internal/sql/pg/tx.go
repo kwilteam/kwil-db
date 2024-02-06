@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/kwilteam/kwil-db/internal/sql/v2" // temporary v2 for refactoring
+	"github.com/kwilteam/kwil-db/internal/sql"
 
 	"github.com/jackc/pgx/v5"
 )

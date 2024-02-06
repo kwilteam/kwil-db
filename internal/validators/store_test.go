@@ -1,30 +1,42 @@
+//go:build pglive
+
 package validators
 
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"fmt"
-	"os"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/core/utils/random"
 	"github.com/kwilteam/kwil-db/internal/sql/adapter"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
 )
+
+// create user kwild with SUPERUSER replication;
+// create database kwil_test_db owner kwild;
+// create publication kwild_repl for all tables;
 
 func Test_validatorStore(t *testing.T) {
 	ctx := context.Background()
-	defer deleteTempDir()
 
-	pool, err := sqlite.NewPool(ctx, fmt.Sprintf("%s/test_validator_store.db", tempDir), 1, 1, true)
+	cfg := &pg.PoolConfig{
+		ConnConfig: pg.ConnConfig{
+			Host:   "127.0.0.1",
+			Port:   "5432",
+			User:   "kwild",
+			Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
+			DBName: "kwil_test_db",
+		},
+		MaxConns: 11,
+	}
+	db, err := pg.NewPool(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer pool.Close()
+	defer db.Close()
+	defer db.Execute(ctx, `DROP SCHEMA IF EXISTS `+schemaName+` CASCADE`)
 
-	ds := &adapter.PoolAdapater{Pool: pool}
+	ds := &adapter.DB{Datastore: db}
 
 	logger := log.NewStdOut(log.DebugLevel)
 	vs, err := newValidatorStore(ctx, ds, logger)
@@ -258,49 +270,4 @@ outer:
 	if findValidator(joiner.PubKey, valsOut) == -1 {
 		t.Errorf("new validator set did not include added validator")
 	}
-}
-
-func findValidator(pubkey []byte, vals []*Validator) int {
-	for i, v := range vals {
-		if bytes.Equal(v.PubKey, pubkey) {
-			return i
-		}
-	}
-	return -1
-}
-
-var rng = random.New()
-
-func randomBytes(l int) []byte {
-	b := make([]byte, l)
-	_, _ = rand.Read(b)
-	return b
-}
-
-func newValidator() *Validator {
-	return &Validator{
-		PubKey: randomBytes(32),
-		Power:  rng.Int63n(4) + 1, // in {1,2,3,4}
-	}
-}
-
-const tempDir = "./tmp"
-
-func deleteTempDir() {
-	err := os.RemoveAll(tempDir)
-	if err != nil {
-		panic(err)
-	}
-}
-
-type mockCommittable struct {
-	fn func() ([]byte, error)
-}
-
-func (m *mockCommittable) SetIDFunc(p0 func() ([]byte, error)) {
-	m.fn = p0
-}
-
-func (m *mockCommittable) Skip() bool {
-	return false
 }

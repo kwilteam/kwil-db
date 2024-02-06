@@ -1,3 +1,5 @@
+//go:build pglive
+
 package integration_test
 
 import (
@@ -9,6 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
 	"github.com/kwilteam/kwil-db/internal/sql/registry"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -135,7 +138,9 @@ func Test_Engine(t *testing.T) {
 				require.Equal(t, row1[3], "9/31/2008")
 				require.Equal(t, row1[4], "satoshi")
 
-				res2, err := global.Query(ctx, testdata.TestSchema.DBID(), `SELECT * from posts;`)
+				dbid := testdata.TestSchema.DBID()
+				// pgSchema := types.DBIDSchema(dbid)
+				res2, err := global.Query(ctx, dbid, `SELECT * from posts;`) // or do we require callers to set qualify schema like `SELECT * from `+pgSchema+`.posts;` ?
 				require.NoError(t, err)
 
 				require.Equal(t, res2.ReturnedColumns, []string{"id", "title", "content", "author_id", "post_date"})
@@ -405,7 +410,7 @@ func Test_Engine(t *testing.T) {
 					Dataset:   schema.DBID(),
 					Procedure: "CREATE_USER",
 					Mutative:  true,
-					Args:      []any{2, "vitalik"},
+					Args:      []any{"2", "vitalik"},
 					Signer:    []byte(caller),
 					Caller:    string(signer),
 				})
@@ -425,14 +430,19 @@ func Test_Engine(t *testing.T) {
 					Dataset:   schema.DBID(),
 					Procedure: "USE_EXTENSION",
 					Mutative:  true,
-					Args:      []any{1, 2},
+					Args:      []any{1, "2"}, // math_ext.add($arg1 + $arg2, 1)
 					Signer:    []byte(caller),
 					Caller:    string(signer),
 				})
 				require.NoError(t, err)
 
-				require.Equal(t, res.ReturnedColumns, []string{"$res"})
-				require.Equal(t, res.Rows[0][0], int64(3))
+				// "SELECT $rES as res;" will be a string because arg type
+				// inference based on Go variables is only used for inline
+				// expressions since postgres prepare/describe is desirable for
+				// statements that actually reference a table (but this one does
+				// not).
+				require.Equal(t, "4", res.Rows[0][0])
+				require.Equal(t, []string{"res"}, res.ReturnedColumns) // without the `AS res`, it would be `?column?`
 			},
 		},
 	}
@@ -449,7 +459,7 @@ func Test_Engine(t *testing.T) {
 				test.after = func(t *testing.T, global *execution.GlobalContext, reg *registry.Registry) {}
 			}
 
-			global, reg, err := setup(t)
+			global, reg, _, err := setup(t)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -461,9 +471,15 @@ func Test_Engine(t *testing.T) {
 			err = reg.Begin(ctx, idempotencyKey1)
 			require.NoError(t, err)
 
+			defer reg.Cancel(ctx)
+
 			test.ses1(t, global, reg)
 
-			_, err = reg.Commit(ctx, idempotencyKey1)
+			id, err := reg.Precommit(ctx)
+			require.NoError(t, err)
+			require.NotEmpty(t, id)
+
+			err = reg.Commit(ctx, idempotencyKey1)
 			require.NoError(t, err)
 
 			idempotencyKey2 := []byte("idempotencyKey2")
@@ -473,12 +489,16 @@ func Test_Engine(t *testing.T) {
 
 			test.ses2(t, global, reg)
 
-			_, err = reg.Commit(ctx, idempotencyKey2)
+			id, err = reg.Precommit(ctx)
+			require.NoError(t, err)
+			require.NotEmpty(t, id)
+
+			err = reg.Commit(ctx, idempotencyKey2)
 			require.NoError(t, err)
 
 			test.after(t, global, reg)
 
-			err = reg.Close()
+			err = reg.Close(ctx)
 			require.NoError(t, err)
 		})
 	}
@@ -604,8 +624,8 @@ var (
 				},
 				Public: true,
 				Statements: []string{
-					"$rEs = Math_Ext.AdD($VAl1, $VAl2);",
-					"SELECT $rES;",
+					"$rEs = Math_Ext.AdD($VAl1 + $VAl2, 1);",
+					"SELECT $rES as res;", // type? procedure execution is not strongly typed...
 				},
 			},
 		},

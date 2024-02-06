@@ -13,19 +13,14 @@ import (
 
 // CommitRegister is an interface for registering a commit.
 type CommitRegister interface {
-	// Skip returns true if the commit should be skipped.
-	// This signals that the account store should not be updated,
-	// and simply return nil.
-	Skip() bool
-
 	// Register registers a commit.
 	// This should be called when data is written to the database.
 	Register(value []byte) error
 }
 
 type Datastore interface {
-	Execute(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
-	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
+	Execute(ctx context.Context, stmt string, args ...any) ([]map[string]any, error)
+	Query(ctx context.Context, query string, args ...any) ([]map[string]any, error)
 }
 
 type AccountStore struct {
@@ -55,10 +50,6 @@ func NewAccountStore(ctx context.Context, datastore Datastore, committable Commi
 	}
 
 	return ar, nil
-}
-
-func (a *AccountStore) Close() error {
-	return nil
 }
 
 func (a *AccountStore) GetAccount(ctx context.Context, ident []byte) (*Account, error) {
@@ -156,10 +147,6 @@ func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 	a.rw.Lock()
 	defer a.rw.Unlock()
 
-	if a.committable.Skip() {
-		return nil
-	}
-
 	var account *Account
 	var err error
 	if a.gasEnabled && spend.Amount.Cmp(big.NewInt(0)) > 0 { // don't automatically create accounts when gas is required
@@ -207,10 +194,6 @@ func (a *AccountStore) spend(ctx context.Context, spend *Spend, account *Account
 func (a *AccountStore) Credit(ctx context.Context, acctID []byte, amt *big.Int) error {
 	a.rw.Lock()
 	defer a.rw.Unlock()
-
-	if a.committable.Skip() {
-		return nil
-	}
 
 	// If exists, add to balance; if not, insert this balance and zero nonce.
 	account, err := a.getAccountSynchronous(ctx, acctID)

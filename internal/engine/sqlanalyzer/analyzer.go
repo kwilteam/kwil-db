@@ -8,35 +8,41 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/join"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/order"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
+	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/schema"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
-type accepter interface {
+type Accepter interface {
 	Accept(walker tree.Walker) error
 }
 
-// acceptWrapper is a wrapper around a statement that implements the accepter interface
+// AcceptRecoverer is a wrapper around a statement that implements the accepter interface
 // it catches panics and returns them as errors
-type acceptWrapper struct {
-	inner accepter
+type AcceptRecoverer struct {
+	Accepter
 }
 
-func (a *acceptWrapper) Accept(walker tree.Walker) (err error) {
+func NewAcceptRecoverer(a Accepter) *AcceptRecoverer {
+	return &AcceptRecoverer{a}
+}
+
+func (a *AcceptRecoverer) Accept(walker tree.Walker) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic while walking statement: %v", r)
 		}
 	}()
 
-	return a.inner.Accept(walker)
+	return a.Accepter.Accept(walker)
 }
 
 // ApplyRules analyzes the given statement and returns the transformed statement.
 // It parses it, and then traverses the AST with the given flags.
 // It will alter the statement to make it conform to the given flags, or return an error if it cannot.
-func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table) (*AnalyzedStatement, error) {
+// All tables will target the pgSchemaName schema.
+func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table, pgSchemaName string) (*AnalyzedStatement, error) {
 	cleanedTables, err := cleanTables(tables)
 	if err != nil {
 		return nil, fmt.Errorf("error cleaning tables: %w", err)
@@ -47,12 +53,18 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table) (*Analyzed
 		return nil, fmt.Errorf("error parsing statement: %w", err)
 	}
 
-	accept := &acceptWrapper{inner: parsed}
+	accept := &AcceptRecoverer{parsed}
 
 	clnr := clean.NewStatementCleaner()
 	err = accept.Accept(clnr)
 	if err != nil {
 		return nil, fmt.Errorf("error cleaning statement: %w", err)
+	}
+
+	schemaWalker := schema.NewSchemaWalker(pgSchemaName)
+	err = accept.Accept(schemaWalker)
+	if err != nil {
+		return nil, fmt.Errorf("error applying schema rules: %w", err)
 	}
 
 	if flags&NoCartesianProduct != 0 {
@@ -76,15 +88,12 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table) (*Analyzed
 		}
 	}
 
-	orderedParams := []string{}
 	if flags&ReplaceNamedParameters != 0 {
-		paramVisitor := parameters.NewParametersVisitor()
+		paramVisitor := parameters.NewNamedParametersVisitor()
 		err := accept.Accept(paramVisitor)
 		if err != nil {
 			return nil, fmt.Errorf("error replacing named parameters: %w", err)
 		}
-
-		orderedParams = paramVisitor.NumberedParameters()
 	}
 
 	mutative, err := isMutative(parsed)
@@ -98,9 +107,9 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table) (*Analyzed
 	}
 
 	return &AnalyzedStatement{
-		stmt:          generated,
-		mutative:      mutative,
-		orderedParams: orderedParams,
+		stmt:         generated,
+		mutative:     mutative,
+		HasTableRefs: schemaWalker.SetCount > 0,
 	}, nil
 }
 
@@ -133,7 +142,7 @@ const (
 )
 
 const (
-	AllRules = NoCartesianProduct | GuaranteedOrder | DeterministicAggregates // TODO: once postgres is supported, add | ReplaceNamedParameters
+	AllRules = NoCartesianProduct | GuaranteedOrder | DeterministicAggregates | ReplaceNamedParameters
 )
 
 // AnalyzedStatement is a statement that has been analyzed by the analyzer
@@ -141,8 +150,12 @@ const (
 type AnalyzedStatement struct {
 	stmt     string
 	mutative bool
-	// if the statement replaces $id, $name with $1, $2, then this will be ["$id", "$name"]
-	orderedParams []string
+	// HasTableRefs indicates if the statement included tables IFF the
+	// NamedParametersVisitor was run on the AST after parsing. These tables
+	// would have had a schema prefixed by the walker. This can indicate if the
+	// statement alone is not likely to provide type (OID) information by
+	// preparing the statement with the database backend.
+	HasTableRefs bool
 }
 
 // Mutative returns true if the statement will mutate the database
@@ -154,14 +167,4 @@ func (a *AnalyzedStatement) Mutative() bool {
 // It may contains changes to the original statement, depending on the flags that were passed in
 func (a *AnalyzedStatement) Statement() string {
 	return a.stmt
-}
-
-// OrderedParameters returns the parameters in the order that they appeared in the statement
-// For example, if the statement was SELECT * FROM tbl WHERE a = $a AND b = $b, the query would be rewritten
-// as SELECT * FROM tbl WHERE a = $1 AND b = $2, and this function would return []string{"$a", "$b"}.
-// If ReplaceNamedParameters was not passed in, this will return an empty slice.
-func (a *AnalyzedStatement) OrderedParameters() []string {
-	vals := make([]string, len(a.orderedParams))
-	copy(vals, a.orderedParams)
-	return vals
 }
