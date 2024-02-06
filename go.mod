@@ -19,7 +19,6 @@ require (
 	github.com/jackc/pglogrepl v0.0.0-20231111135425-1627ab1b5780
 	github.com/jackc/pgx/v5 v5.5.2
 	github.com/jpillora/backoff v1.0.0
-	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
 	github.com/kwilteam/kuneiform v0.5.0-beta.0.20231127204550-1284c835497e
 	github.com/kwilteam/kwil-db/core v0.0.0
 	github.com/kwilteam/kwil-db/parse v0.0.0
@@ -98,7 +97,6 @@ require (
 	github.com/lib/pq v1.10.7 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
-	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/minio/highwayhash v1.0.2 // indirect
@@ -115,7 +113,6 @@ require (
 	github.com/prometheus/common v0.42.0 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
-	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rs/cors v1.8.3 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
@@ -149,9 +146,5 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20231106174013-bbf56f31fb17 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	modernc.org/libc v1.22.3 // indirect
-	modernc.org/mathutil v1.5.0 // indirect
-	modernc.org/memory v1.5.0 // indirect
-	modernc.org/sqlite v1.21.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )

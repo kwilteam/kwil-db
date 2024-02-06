@@ -10,6 +10,5 @@ var (
 	ErrStillDeploying         = errors.New("database has not finished deploying")
 	ErrRegistryNotWritable    = errors.New("registry is not writable")
 	ErrAlreadyInSession       = errors.New("already in session")
-	ErrWritable               = errors.New("registry is writable at an unexpected time")
 	ErrIdempotencyKeyMismatch = errors.New("idempotency key mismatch")
 )

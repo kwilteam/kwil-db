@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/voting"
+
 	"github.com/stretchr/testify/require"
 )
 

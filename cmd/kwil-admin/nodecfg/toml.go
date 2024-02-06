@@ -108,8 +108,20 @@ admin_listen_addr = "{{ .AppCfg.AdminListenAddress }}"
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = {{arrayFormatter .AppCfg.ExtensionEndpoints}}
 
-# KWILD Sqlite database file path
-sqlite_file_path = "{{ .AppCfg.SqliteFilePath }}"
+# KWILD PostgreSQL database host (UNIX socket path or IP address with no port)
+pg_db_host = "{{ .AppCfg.DBHost }}"
+
+# KWILD PostgreSQL database port (may be omitted for UNIX socket hosts)
+pg_db_port = "{{ .AppCfg.DBPort }}"
+
+# KWILD PostgreSQL database user (should be a "superuser")
+pg_db_user = "{{ .AppCfg.DBUser }}"
+
+# KWILD PostgreSQL database pass (may be omitted for some pg_hba.conf configurations)
+pg_db_pass = "{{ .AppCfg.DBPass }}"
+
+# KWILD PostgreSQL database name (override database name, default is "kwild")
+pg_db_name = "{{ .AppCfg.DBName }}"
 
 # The path to a file containing certificate that is used to create the HTTPS server.
 # Might be either absolute path or path related to the kwild root directory.

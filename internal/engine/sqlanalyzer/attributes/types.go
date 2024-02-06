@@ -123,6 +123,9 @@ func (r *returnTypeWalker) EnterExpressionDistinct(p0 *tree.ExpressionDistinct) 
 	r.set(types.INT)
 	return nil
 }
+
+// Boolean somewhere?
+
 func (r *returnTypeWalker) EnterExpressionFunction(p0 *tree.ExpressionFunction) error {
 	if r.detected {
 		return nil
@@ -222,10 +225,8 @@ func (r *returnTypeWalker) EnterExpressionLiteral(p0 *tree.ExpressionLiteral) er
 		return err
 	}
 	switch dataTypes {
-	case types.TEXT:
-		r.set(types.TEXT)
-	case types.INT:
-		r.set(types.INT)
+	case types.TEXT, types.BOOL, types.INT:
+		r.set(dataTypes)
 	default:
 		return fmt.Errorf("unknown literal type for analyzed relation attribute: %s", dataTypes)
 	}

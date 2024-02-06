@@ -15,7 +15,7 @@ const (
 	MIN         AttributeType = "MIN"
 	MAX         AttributeType = "MAX"
 	MIN_LENGTH  AttributeType = "MIN_LENGTH"
-	MAX_LENGTH  AttributeType = "MAX_LENGTH"
+	MAX_LENGTH  AttributeType = "MAX_LENGTH" // is this kwil custom?
 )
 
 func (a AttributeType) String() string {

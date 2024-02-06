@@ -11,6 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
 	sql "github.com/kwilteam/kwil-db/internal/sql"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -234,7 +235,7 @@ func (m *mockRegistry) Delete(ctx context.Context, dbid string) error {
 	return nil
 }
 
-func (m *mockRegistry) Execute(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error) {
+func (m *mockRegistry) Execute(ctx context.Context, dbid string, stmt string, params ...any) (*sql.ResultSet, error) {
 	_, ok := m.dbs[dbid]
 	if !ok {
 		return nil, fmt.Errorf(`database "%s" does not exist`, dbid)
@@ -255,7 +256,7 @@ func (m *mockRegistry) List(ctx context.Context) ([]string, error) {
 	return dbs, nil
 }
 
-func (m *mockRegistry) Query(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error) {
+func (m *mockRegistry) Query(ctx context.Context, dbid string, stmt string, params ...any) (*sql.ResultSet, error) {
 	_, ok := m.dbs[dbid]
 	if !ok {
 		return nil, fmt.Errorf(`database "%s" does not exist`, dbid)

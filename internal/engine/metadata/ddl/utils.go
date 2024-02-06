@@ -3,11 +3,11 @@ package ddl
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/internal/engine/conv"
+	"github.com/kwilteam/kwil-db/internal/conv"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 )
 
-func columnTypeToSQLiteType(columnType types.DataType) (string, error) {
+func columnTypeToSQLType(columnType types.DataType) (string, error) {
 	err := columnType.Clean()
 	if err != nil {
 		return "", err
@@ -18,11 +18,11 @@ func columnTypeToSQLiteType(columnType types.DataType) (string, error) {
 	case types.TEXT:
 		sqlType = "TEXT"
 	case types.INT:
-		sqlType = "INTEGER"
+		sqlType = "INT8"
 	case types.NULL:
 		sqlType = "NULL"
 	case types.BLOB:
-		sqlType = "BLOB"
+		sqlType = "BYTEA"
 	default:
 		return "", fmt.Errorf("unknown column type: %s", columnType)
 	}
@@ -30,7 +30,7 @@ func columnTypeToSQLiteType(columnType types.DataType) (string, error) {
 	return sqlType, nil
 }
 
-func attributeToSQLiteString(colName string, attr *types.Attribute) (string, error) {
+func attributeToSQLString(colName string, attr *types.Attribute) (string, error) {
 	err := attr.Clean()
 	if err != nil {
 		return "", err

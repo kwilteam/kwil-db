@@ -12,7 +12,7 @@ import (
 
 var registeredPayloads = make(map[string]ResolutionPayload)
 
-func RegisterPaylod(payload ResolutionPayload) error {
+func RegisterPayload(payload ResolutionPayload) error {
 	_, ok := registeredPayloads[payload.Type()]
 	if ok {
 		return fmt.Errorf("payload %s already registered", payload.Type())
@@ -22,7 +22,7 @@ func RegisterPaylod(payload ResolutionPayload) error {
 	return nil
 }
 
-// A ResolutionPayload is a payload that can be used as the body of a resolution
+// ResolutionPayload is a payload that can be used as the body of a resolution
 type ResolutionPayload interface {
 	// Type returns the type of the payload.
 	// This should be constant for a given payload implementation.
@@ -37,7 +37,7 @@ type ResolutionPayload interface {
 // to different datastore interfaces
 type Datastores struct {
 	Accounts  AccountStore
-	Databases Datastore
+	Databases Datasets
 }
 
 type AccountStore interface {
@@ -48,10 +48,12 @@ type AccountStore interface {
 	Credit(ctx context.Context, account []byte, amount *big.Int) error
 }
 
-type Datastore interface {
+type Datasets interface {
 	// Execute executes a statement with the given arguments.
-	Execute(ctx context.Context, dbid string, stmt string, args map[string]any) (*sql.ResultSet, error)
+	// Execute(ctx context.Context, dbid string, stmt string, args ...any) (*sql.ResultSet, error)
+	// NOT USE by VoteProcessor for now.
+
 	// Query executes a query with the given arguments.
 	// It will not read uncommitted data.
-	Query(ctx context.Context, dbid string, query string, args map[string]any) (*sql.ResultSet, error)
+	Query(ctx context.Context, dbid string, query string, args ...any) (*sql.ResultSet, error)
 }

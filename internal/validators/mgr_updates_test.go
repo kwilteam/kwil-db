@@ -115,22 +115,17 @@ func (vs *stubValStore) IsCurrent(_ context.Context, validator []byte) (bool, er
 	return findValidator(validator, vs.current) != -1, nil
 }
 
-func newTestValidatorMgr(t *testing.T, committable Committable, store ValidatorStore) *ValidatorMgr {
+func newTestValidatorMgr(t *testing.T, store ValidatorStore) *ValidatorMgr {
 	mgr := &ValidatorMgr{
-		current:     make(map[string]struct{}),
-		candidates:  make(map[string]*joinReq),
-		log:         log.NewStdOut(log.DebugLevel),
-		db:          store,
-		joinExpiry:  3,
-		committable: committable,
+		current:    make(map[string]struct{}),
+		candidates: make(map[string]*joinReq),
+		log:        log.NewStdOut(log.DebugLevel),
+		db:         store,
+		joinExpiry: 3,
 	}
-	if err := mgr.init(); err != nil {
+	if err := mgr.init(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-
-	mgr.committable.SetIDFunc(func() ([]byte, error) {
-		return mgr.validatorDbHash(), nil
-	})
 
 	return mgr
 }
@@ -149,7 +144,7 @@ func TestValidatorMgr_updates(t *testing.T) {
 	}
 
 	// Build a ValidatorMgr with the in-memory store.
-	mgr := newTestValidatorMgr(t, &mockCommittable{}, store)
+	mgr := newTestValidatorMgr(t, store)
 
 	vals, err := mgr.CurrentSet(ctx)
 	if err != nil {

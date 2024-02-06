@@ -7,12 +7,12 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 )
 
-func GenerateCreateTableStatement(table *types.Table) (string, error) {
+func GenerateCreateTableStatement(pgSchema string, table *types.Table) (string, error) {
 	var columnsAndKeys []string
 
 	for _, column := range table.Columns {
 		colName := wrapIdent(column.Name)
-		colType, err := columnTypeToSQLiteType(column.Type)
+		colType, err := columnTypeToSQLType(column.Type)
 		if err != nil {
 			return "", err
 		}
@@ -20,7 +20,7 @@ func GenerateCreateTableStatement(table *types.Table) (string, error) {
 		var colAttributes []string
 
 		for _, attr := range column.Attributes {
-			attrStr, err := attributeToSQLiteString(column.Name, attr)
+			attrStr, err := attributeToSQLString(column.Name, attr)
 			if err != nil {
 				return "", err
 			}
@@ -35,7 +35,7 @@ func GenerateCreateTableStatement(table *types.Table) (string, error) {
 
 	// now add foreign keys
 	for _, fk := range table.ForeignKeys {
-		fkStmt, err := generateForeignKeyStmt(fk)
+		fkStmt, err := generateForeignKeyStmt(pgSchema, fk) // for now assume that schema for all foreign key tables is same
 		if err != nil {
 			return "", err
 		}
@@ -50,7 +50,8 @@ func GenerateCreateTableStatement(table *types.Table) (string, error) {
 
 	columnsAndKeys = append(columnsAndKeys, fmt.Sprintf("PRIMARY KEY (%s)", strings.Join(wrapIdents(pkColumns), ", ")))
 
-	return fmt.Sprintf("CREATE TABLE %s (  %s) WITHOUT ROWID, STRICT;", wrapIdent(table.Name), strings.Join(columnsAndKeys, ",  ")), nil
+	return fmt.Sprintf("CREATE TABLE %s.%s (  %s) ;", wrapIdent(pgSchema),
+		wrapIdent(table.Name), strings.Join(columnsAndKeys, ",  ")), nil
 }
 
 func wrapIdents(idents []string) []string {
@@ -60,7 +61,7 @@ func wrapIdents(idents []string) []string {
 	return idents
 }
 
-func generateForeignKeyStmt(fk *types.ForeignKey) (string, error) {
+func generateForeignKeyStmt(pgSchema string, fk *types.ForeignKey) (string, error) {
 	err := fk.Clean()
 	if err != nil {
 		return "", err
@@ -70,6 +71,10 @@ func generateForeignKeyStmt(fk *types.ForeignKey) (string, error) {
 	stmt.WriteString(` FOREIGN KEY (`)
 	writeDelimitedStrings(&stmt, fk.ChildKeys)
 	stmt.WriteString(`) REFERENCES `)
+	if pgSchema != "" {
+		stmt.WriteString(wrapIdent(pgSchema)) // fk.ParentSchema maybe
+		stmt.WriteString(".")
+	}
 	stmt.WriteString(wrapIdent(fk.ParentTable))
 	stmt.WriteString("(")
 	writeDelimitedStrings(&stmt, fk.ParentKeys)

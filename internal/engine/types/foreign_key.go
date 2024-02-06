@@ -11,12 +11,16 @@ type ForeignKey struct {
 	ChildKeys []string `json:"child_keys"`
 
 	// ParentKeys are the columns that are being referred to.
-	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "tbl2.b" is the parent key
+	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "b" is the parent key
 	ParentKeys []string `json:"parent_keys"`
 
 	// ParentTable is the table that holds the parent columns.
-	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "tbl2.b" is the parent table
+	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "tbl2" is the parent table
 	ParentTable string `json:"parent_table"`
+
+	// Do we need parent schema stored with meta data or should assume and
+	// enforce same schema when creating the dataset with generated DDL.
+	// ParentSchema string `json:"parent_schema"`
 
 	// Action refers to what the foreign key should do when the parent is altered.
 	// This is NOT the same as a database action;
@@ -42,6 +46,7 @@ func (f *ForeignKey) Clean() error {
 	return runCleans(
 		cleanIdents(&f.ChildKeys),
 		cleanIdents(&f.ParentKeys),
+		// cleanIdent(&f.ParentSchema),
 		cleanIdent(&f.ParentTable),
 	)
 }
@@ -57,7 +62,8 @@ func (f *ForeignKey) Copy() *ForeignKey {
 		ChildKeys:   f.ChildKeys,
 		ParentKeys:  f.ParentKeys,
 		ParentTable: f.ParentTable,
-		Actions:     actions,
+		// ParentSchema: f.ParentSchema,
+		Actions: actions,
 	}
 }
 

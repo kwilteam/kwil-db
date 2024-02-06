@@ -20,16 +20,50 @@ services:
       kwil-int-testnet:
         ipv4_address: 172.10.100.2
     depends_on:
-      - ext1
+      ext1:
+        condition: service_started
+      pg0:
+        condition: service_healthy
     command: |
       --root-dir=/app/kwil
-      --log.level=${LOG_LEVEL:-debug}
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg_db_host=pg0
+      --app.pg_db_port=5432
+      --app.pg_db_user=kwild
+      --app.pg_db_pass=kwild
+
+  pg0:
+    container_name: pg0
+    image: postgres:16.1
+    ports:
+      - "5433:5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+    volumes: 
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
+    networks:
+      kwil-int-testnet:
+        ipv4_address: 172.10.101.2
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
 
   node1:
     container_name: node1
@@ -49,16 +83,50 @@ services:
       kwil-int-testnet:
         ipv4_address: 172.10.100.3
     depends_on:
-      - ext1
+      ext1:
+        condition: service_started
+      pg1:
+        condition: service_healthy
     command: |
       --root-dir=/app/kwil
-      --log.level=${LOG_LEVEL:-debug}
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg_db_host=pg1
+      --app.pg_db_port=5432
+      --app.pg_db_user=kwild
+      --app.pg_db_pass=kwild
+
+  pg1:
+    container_name: pg1
+    image: postgres:16.1
+    ports:
+      - "5434:5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+    volumes: 
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
+    networks:
+      kwil-int-testnet:
+        ipv4_address: 172.10.101.3
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
 
   node2:
     container_name: node2
@@ -78,16 +146,50 @@ services:
       kwil-int-testnet:
         ipv4_address: 172.10.100.4
     depends_on:
-      - ext1
+      ext1:
+        condition: service_started
+      pg2:
+        condition: service_healthy
     command: |
       --root-dir=/app/kwil
-      --log.level=${LOG_LEVEL:-debug}
+      --log.level=${LOG_LEVEL:-info}
+      --log.format=plain
+      --log.time-format=rfc3339milli
       --app.extension-endpoints=ext1:50051
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg_db_host=pg2
+      --app.pg_db_port=5432
+      --app.pg_db_user=kwild
+      --app.pg_db_pass=kwild
+
+  pg2:
+    container_name: pg2
+    image: postgres:16.1
+    ports:
+      - "5435:5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+    volumes: 
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
+    networks:
+      kwil-int-testnet:
+        ipv4_address: 172.10.101.4
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
 
   # This node is used to test the scenario where new node join the network & sync the blocks
   # Removing the ext dependency as test-container docker compose creates a new project everytime we run
@@ -110,16 +212,50 @@ services:
       kwil-int-testnet:
         ipv4_address: 172.10.100.5
     depends_on:
-      - ext3
+      ext3:
+        condition: service_started
+      pg3:
+        condition: service_healthy
     command: |
       --root-dir=/app/kwil
-      --log.level=${LOG_LEVEL:-debug}
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext3:50051
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg_db_host=pg3
+      --app.pg_db_port=5432
+      --app.pg_db_user=kwild
+      --app.pg_db_pass=kwild
+
+  pg3:
+    container_name: pg3
+    image: postgres:16.1
+    ports:
+      - "5436:5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+    volumes: 
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
+    networks:
+      kwil-int-testnet:
+        ipv4_address: 172.10.101.5
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
 
   # this ext is shared by all nodes
   # we can make a separate ext for each node if we want
@@ -164,7 +300,7 @@ services:
       kwil-int-testnet:
         ipv4_address: 172.10.100.10
     command: |
-      --log-level ${LOG_LEVEL:-debug}
+      --log-level ${LOG_LEVEL:-info}
       --cors-allow-origins *
       --backends node0:8080 node1:8080 node2:8080 node3:8080
       --domain http://localhost:8090
@@ -175,7 +311,7 @@ services:
       --allow-adhoc-query
       --devmode
       --schema-sync-interval 2
-    # domain should not be changed, and client should use 'doamin' value as the provider, otherwise the test will fail
+    # domain should not be changed, and client should use 'domain' value as the provider, otherwise the test will fail
 
 networks:
   kwil-int-testnet:
@@ -183,4 +319,4 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 172.10.100.0/16
+        - subnet: 172.10.0.0/16

@@ -53,7 +53,7 @@ func (e *EventMgr) GetEvents(ctx context.Context) ([]*types.VotableEvent, error)
 	return e.eventstore.GetEvents(ctx)
 }
 
-// KV returns a KVStore
-func (e *EventMgr) KV(prefix []byte) sql.KVStore {
+// KV returns a KV store
+func (e *EventMgr) KV(prefix []byte) sql.KV {
 	return e.eventstore.KV(prefix)
 }

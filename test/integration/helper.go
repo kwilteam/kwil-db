@@ -49,7 +49,7 @@ var (
 	envFile = getEnv("KIT_ENV_FILE", "./.env")
 )
 
-var defaultWaitStrategies = map[string]string{
+var logWaitStrategies = map[string]string{
 	ExtContainer:  "listening on",
 	Ext3Container: "listening on",
 	"node0":       "Starting Node service",
@@ -57,6 +57,13 @@ var defaultWaitStrategies = map[string]string{
 	"node2":       "Starting Node service",
 	"node3":       "Starting Node service",
 	"kgw":         "KGW Server started",
+}
+
+var healthWaitStrategies = map[string]bool{
+	"pg0": true,
+	"pg1": true,
+	"pg2": true,
+	"pg3": true,
 }
 
 const (
@@ -276,8 +283,16 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 
 	stack := dc.WithEnv(envs)
 	for _, service := range services {
-		waitMsg := defaultWaitStrategies[service]
-		stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
+		waitMsg, ok := logWaitStrategies[service]
+		if ok {
+			stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
+			continue
+		}
+
+		if healthWaitStrategies[service] {
+			stack = stack.WaitForService(service, wait.NewHealthStrategy().WithStartupTimeout(r.cfg.WaitTimeout))
+			continue
+		}
 	}
 	// Use compose.Wait to wait for containers to become "healthy" according to
 	// their defined healthchecks.
@@ -304,6 +319,7 @@ func (r *IntHelper) Setup(ctx context.Context, services []string) {
 }
 
 func (r *IntHelper) Teardown() {
+	// return // to not cleanup, which will break multiple tests and subtests
 	r.t.Log("teardown test environment")
 	for _, fn := range r.teardown {
 		fn()

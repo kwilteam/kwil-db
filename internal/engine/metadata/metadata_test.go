@@ -8,27 +8,26 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/metadata"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
-	sql "github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_MetadataStore(t *testing.T) {
 	type testCase struct {
 		name string
-		fn   func(t *testing.T, exec sql.ResultSetFunc, kv metadata.KV)
+		fn   func(t *testing.T, exec types.ExecFunc, kv metadata.KV)
 	}
 
 	tests := []testCase{
 		{
-			name: "store tables",
-			fn: func(t *testing.T, exec sql.ResultSetFunc, kv metadata.KV) {
+			name: "store tables", // dataset exec
+			fn: func(t *testing.T, exec types.ExecFunc, kv metadata.KV) {
 				tbls := []*types.Table{
 					testdata.TableUsers,
 					testdata.TablePosts,
 				}
 
 				ctx := context.Background()
-				err := metadata.CreateTables(ctx, tbls, kv, exec)
+				err := metadata.CreateTables(ctx, "dbiddbid", tbls, kv, exec)
 				require.NoError(t, err)
 
 				tables, err := metadata.ListTables(ctx, kv)
@@ -38,8 +37,8 @@ func Test_MetadataStore(t *testing.T) {
 			},
 		},
 		{
-			name: "store procedures",
-			fn: func(t *testing.T, exec sql.ResultSetFunc, kv metadata.KV) {
+			name: "store procedures", // kv
+			fn: func(t *testing.T, _ types.ExecFunc, kv metadata.KV) {
 				procs := []*types.Procedure{
 					testdata.ProcedureCreateUser,
 					testdata.ProcedureCreatePost,
@@ -57,8 +56,8 @@ func Test_MetadataStore(t *testing.T) {
 			},
 		},
 		{
-			name: "store extensions",
-			fn: func(t *testing.T, exec sql.ResultSetFunc, kv metadata.KV) {
+			name: "store extensions", // kv
+			fn: func(t *testing.T, _ types.ExecFunc, kv metadata.KV) {
 				exts := []*types.Extension{
 					testdata.ExtensionErc20,
 				}
@@ -86,8 +85,8 @@ func Test_MetadataStore(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tt.fn(t, func(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error) {
-			return nil, nil
+		tt.fn(t, func(ctx context.Context, stmt string, args map[string]any) error {
+			return nil
 		}, kv)
 	}
 }

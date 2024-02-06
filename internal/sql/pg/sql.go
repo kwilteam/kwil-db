@@ -3,7 +3,9 @@ package pg
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -41,15 +43,90 @@ var (
 		EXECUTE FUNCTION set_replica_identity_full();`
 	// TIP for node reset/cleanup: DROP EVENT TRIGGER IF EXISTS trg_set_replica_identity_full;
 
-	// TODO: I think we might advise or just support postgres "superuser" access
-	// in which case we can do ALL of the dba init tasks, including:
-	//
-	//  -- <while connected to system 'postgres' database>
-	//  CREATE USER kwild WITH SUPERUSER REPLICATION;
-	//  CREATE DATABASE kwild OWNER kwild;
-	//  -- <reconnect, to the new 'kwild' database>
-	//  CREATE PUBLICATION kwild_repl FOR ALL TABLES;
+	sqlCreatePublicationINE = `DO $$
+BEGIN
+	IF NOT EXISTS (
+		SELECT 1 FROM pg_publication WHERE pubname = '%[1]s'
+	) THEN
+		EXECUTE 'CREATE PUBLICATION %[1]s FOR ALL TABLES';
+		RAISE NOTICE 'Publication %[1]s created.';
+	ELSE
+		RAISE NOTICE 'Publication %[1]s already exists.';
+	END IF;
+END$$;`
+
+	// on startup, check for any prepared transactions and roll them back. The
+	// selected columns and their order in this query is explicit so it matches
+	// the preparedTxn struct.
+	sqlListPreparedTxns = `SELECT transaction, gid, prepared, owner, database FROM pg_prepared_xacts;`
+
+	sqlCreateCollationNOCASE = `CREATE COLLATION IF NOT EXISTS nocase (
+		provider = icu, locale = 'und-u-ks-level2', deterministic = false
+	);`
 )
+
+func checkSuperuser(ctx context.Context, conn *pgx.Conn) error {
+	user := conn.Config().User
+	// Verify that the db user/role is superuser with replication privileges.
+	var isSuper, isReplicator bool
+	err := conn.QueryRow(ctx, `SELECT rolsuper, rolreplication FROM pg_roles WHERE rolname = $1;`, user).
+		Scan(&isSuper, &isReplicator)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("postgres role does not exists: %v", user)
+		}
+		return fmt.Errorf("unable to verify superuser status of postgres role %v: %w", user, err)
+	}
+	if !isSuper || !isReplicator {
+		return fmt.Errorf("postgres role is not a superuser with replication: %v", user)
+	}
+	return nil
+}
+
+func ensureCollation(ctx context.Context, conn *pgx.Conn) error {
+	_, err := conn.Exec(ctx, sqlCreateCollationNOCASE)
+	return err
+}
+
+func ensurePublication(ctx context.Context, conn *pgx.Conn) error {
+	_, err := conn.Exec(ctx, fmt.Sprintf(sqlCreatePublicationINE, publicationName))
+	return err
+}
+
+type preparedTxn struct {
+	XID      uint32    `db:"transaction"` // type xid is a 32-bit integer
+	GID      string    `db:"gid"`
+	Time     time.Time `db:"prepared"`
+	Owner    string    `db:"owner"`
+	Database string    `db:"database"`
+}
+
+func rollbackPreparedTxns(ctx context.Context, conn *pgx.Conn) (int, error) {
+	rows, _ := conn.Query(ctx, sqlListPreparedTxns) // pgx ensures rows is readable and rows.Err contains any error
+	preparedTxns, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[preparedTxn])
+	if err != nil {
+		return 0, err
+	}
+	var closed int
+	connectedDB := conn.Config().Database
+	logger.Warnf("Found %d orphaned prepared transactions", len(preparedTxns))
+	for _, ptx := range preparedTxns {
+		if connectedDB != ptx.Database {
+			logger.Infof(`Not rolling back prepared transaction %v on foreign database %v. `+
+				`A manual rollback may be required to avoid the DB hanging.`,
+				ptx.GID, ptx.Database)
+			continue
+		}
+		logger.Infof("Rolling back prepared transaction %v (xid %d) created by %v at %v",
+			ptx.GID, ptx.XID, ptx.Owner, ptx.Time)
+		sqlRollback := fmt.Sprintf(`ROLLBACK PREPARED '%s'`, ptx.GID)
+		if _, err := conn.Exec(ctx, sqlRollback); err != nil {
+			return 0, fmt.Errorf("ROLLBACK PREPARED failed: %v", err)
+		}
+		closed++
+	}
+	return closed, err
+}
 
 const (
 	internalSchemaName = "kwild_internal"
@@ -81,7 +158,7 @@ func tableExists(ctx context.Context, schema, table string, conn *pgx.Conn) (boo
 }
 
 func ensureTriggerReplIdentity(ctx context.Context, conn *pgx.Conn) error {
-	// First crate the function if needed.
+	// First create the function if needed.
 	_, err := conn.Exec(ctx, sqlFuncReplIfNeeded)
 	if err != nil {
 		return err

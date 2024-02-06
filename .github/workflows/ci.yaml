@@ -14,6 +14,24 @@ jobs:
     #runs-on: ubuntu-latest
     runs-on: self-hosted
     if: ${{ !github.event.pull_request.draft }} # only run on non-draft PRs
+
+    services:
+      postgres:
+        image: jchappelow/kwil-postgres:latest
+        env:
+          POSTGRES_USER: kwild
+          POSTGRES_PASSWORD: kwild
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: kwil_test_db
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       # shared setup for all tests
       - name: Checkout

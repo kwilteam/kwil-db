@@ -10,9 +10,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/internal/sql/v2" // temporary v2 for refactoring
+	"github.com/kwilteam/kwil-db/internal/sql"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -109,6 +110,14 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	}
 	// NOTE: we can consider changing the default exec mode at construction e.g.:
 	// pCfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	pCfg.ConnConfig.OnNotice = func(_ *pgconn.PgConn, n *pgconn.Notice) {
+		logger.Infof("%v [%v]: %v / %v", n.Severity, n.Code, n.Message, n.Detail)
+	}
+	defaultOnPgError := pCfg.ConnConfig.OnPgError
+	pCfg.ConnConfig.OnPgError = func(c *pgconn.PgConn, n *pgconn.PgError) bool {
+		logger.Warnf("%v [%v]: %v / %v", n.Severity, n.Code, n.Message, n.Detail)
+		return defaultOnPgError(c, n) // automatically close any fatal errors (default we are overridding)
+	}
 	db, err := pgxpool.NewWithConfig(ctx, pCfg)
 	if err != nil {
 		return nil, err

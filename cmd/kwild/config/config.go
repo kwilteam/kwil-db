@@ -50,20 +50,39 @@ type Logging struct {
 }
 
 type AppConfig struct {
-	GrpcListenAddress  string   `mapstructure:"grpc_listen_addr"`
-	HTTPListenAddress  string   `mapstructure:"http_listen_addr"`
-	AdminListenAddress string   `mapstructure:"admin_listen_addr"`
-	PrivateKeyPath     string   `mapstructure:"private_key_path"`
-	SqliteFilePath     string   `mapstructure:"sqlite_file_path"`
-	ExtensionEndpoints []string `mapstructure:"extension_endpoints"`
-	//SnapshotConfig     SnapshotConfig `mapstructure:"snapshots"`
-	TLSCertFile  string                       `mapstructure:"tls_cert_file"`
-	TLSKeyFile   string                       `mapstructure:"tls_key_file"`
-	EnableRPCTLS bool                         `mapstructure:"rpctls"`
-	Hostname     string                       `mapstructure:"hostname"`
-	ProfileMode  string                       `mapstructure:"profile_mode"`
-	ProfileFile  string                       `mapstructure:"profile_file"`
-	Oracles      map[string]map[string]string `mapstructure:"oracles"`
+	GrpcListenAddress  string `mapstructure:"grpc_listen_addr"`
+	HTTPListenAddress  string `mapstructure:"http_listen_addr"`
+	AdminListenAddress string `mapstructure:"admin_listen_addr"`
+	PrivateKeyPath     string `mapstructure:"private_key_path"`
+
+	// PostgreSQL DB settings. DBName is the name if the PostgreSQL database to
+	// connect to. The different data stores (e.g. engine, acct store, event
+	// store, etc.) are all in the same database. Assuming "kwild" is the
+	// DBName, this would be created with psql with the commands:
+	//  CREATE USER kwild WITH SUPERUSER REPLICATION;
+	//  CREATE DATABASE kwild OWNER kwild;
+	//
+	// All of these settings are strings and separate, but it is possible to
+	// have a single DB "connection string" to pass to the PostgreSQL backend.
+	// However, this is less error prone, and prevents passing settings that
+	// would alter the functionality of the connection. An advanced option could
+	// be added to supplement the conn string if that seems useful.
+	DBHost string `mapstructure:"pg_db_host"`
+	DBPort string `mapstructure:"pg_db_port"`
+	DBUser string `mapstructure:"pg_db_user"`
+	DBPass string `mapstructure:"pg_db_pass"`
+	DBName string `mapstructure:"pg_db_name"`
+
+	ExtensionEndpoints []string                     `mapstructure:"extension_endpoints"`
+	TLSCertFile        string                       `mapstructure:"tls_cert_file"`
+	TLSKeyFile         string                       `mapstructure:"tls_key_file"`
+	EnableRPCTLS       bool                         `mapstructure:"rpctls"`
+	Hostname           string                       `mapstructure:"hostname"`
+	ProfileMode        string                       `mapstructure:"profile_mode"`
+	ProfileFile        string                       `mapstructure:"profile_file"`
+	Oracles            map[string]map[string]string `mapstructure:"oracles"`
+
+	// SnapshotConfig     SnapshotConfig `mapstructure:"snapshots"`
 }
 
 type SnapshotConfig struct {
@@ -421,7 +440,11 @@ func DefaultConfig() *KwildConfig {
 			GrpcListenAddress:  "localhost:50051",
 			HTTPListenAddress:  "localhost:8080",
 			AdminListenAddress: "unix:///tmp/kwil_admin.sock",
-			SqliteFilePath:     DefaultSQLitePath,
+			// SqliteFilePath:     DefaultSQLitePath,
+			DBHost: "/var/run/postgresql",
+			DBPort: "5432", // ignored with unix socket, but applies if IP used for DBHost
+			DBUser: "kwild",
+			DBName: "kwild",
 			// SnapshotConfig: SnapshotConfig{
 			// 	Enabled:         false,
 			// 	RecurringHeight: uint64(10000),
@@ -525,7 +548,6 @@ func (cfg *KwildConfig) configureCerts() {
 
 func (cfg *KwildConfig) sanitizeCfgPaths() {
 	rootDir := cfg.RootDir
-	cfg.AppCfg.SqliteFilePath = rootify(cfg.AppCfg.SqliteFilePath, rootDir)
 	//cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
 
 	if cfg.AppCfg.PrivateKeyPath != "" {

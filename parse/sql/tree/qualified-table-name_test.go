@@ -12,6 +12,7 @@ func TestQualifiedTableName_ToSQL(t *testing.T) {
 		TableAlias string
 		IndexedBy  string
 		NotIndexed bool
+		Schema     string // optional
 	}
 	tests := []struct {
 		name      string
@@ -59,6 +60,14 @@ func TestQualifiedTableName_ToSQL(t *testing.T) {
 			},
 			wantPanic: true,
 		},
+		{
+			name: "schema",
+			fields: fields{
+				TableName: "foo",
+				Schema:    "baz",
+			},
+			want: `"baz"."foo"`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -75,6 +84,10 @@ func TestQualifiedTableName_ToSQL(t *testing.T) {
 				TableAlias: tt.fields.TableAlias,
 				IndexedBy:  tt.fields.IndexedBy,
 				NotIndexed: tt.fields.NotIndexed,
+			}
+
+			if tt.fields.Schema != "" {
+				q.SetSchema(tt.fields.Schema)
 			}
 
 			got := q.ToSQL()
