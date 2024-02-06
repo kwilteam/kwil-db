@@ -53,6 +53,8 @@ func TestKwildTransferAcceptance(t *testing.T) {
 	senderIdentity := helper.GetConfig().CreatorIdent()
 	receiverIdentity := helper.GetConfig().VisitorIdent()
 
+	t.Log("creator private key: ", helper.GetConfig().CreatorRawPk)
+
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
 		// NOTE: those tests should not be run concurrently

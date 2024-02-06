@@ -10,6 +10,7 @@ func TestInsert_ToSQL(t *testing.T) {
 	type fields struct {
 		CTE        []*tree.CTE
 		InsertStmt *tree.InsertStmt
+		Schema     string
 	}
 	tests := []struct {
 		name    string
@@ -54,6 +55,23 @@ func TestInsert_ToSQL(t *testing.T) {
 			},
 			wantStr: `WITH ` + mockCTE.ToSQL() + ` INSERT INTO "foo" ("bar", "baz") VALUES ('barVal', $a), ('bazVal', $b) ON CONFLICT ("bar", "baz") DO NOTHING RETURNING *;`,
 		},
+		{
+			name: "insert to namespaced",
+			fields: fields{
+				InsertStmt: &tree.InsertStmt{
+					InsertType: tree.InsertTypeInsert,
+					Table:      "bar",
+					Columns:    []string{"baz"},
+					Values: [][]tree.Expression{
+						{
+							&tree.ExpressionLiteral{Value: "'bazVal'"},
+						},
+					},
+				},
+				Schema: "public",
+			},
+			wantStr: `INSERT INTO "public"."bar" ("baz") VALUES ('bazVal');`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -61,6 +79,11 @@ func TestInsert_ToSQL(t *testing.T) {
 				CTE:        tt.fields.CTE,
 				InsertStmt: tt.fields.InsertStmt,
 			}
+
+			if tt.fields.Schema != "" {
+				ins.InsertStmt.SetSchema(tt.fields.Schema)
+			}
+
 			gotStr, err := ins.ToSQL()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Insert.ToSQL() error = %v, wantErr %v", err, tt.wantErr)

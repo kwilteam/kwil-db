@@ -25,7 +25,7 @@ services:
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --chain.p2p.external-address=tcp://0.0.0.0:26656
-      --chain.rpc.laddr=tcp://0.0.0.0:26657
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 
   k2:
     container_name: k2

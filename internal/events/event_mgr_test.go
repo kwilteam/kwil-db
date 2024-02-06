@@ -1,3 +1,5 @@
+//go:build pglive
+
 package events
 
 import (
@@ -5,8 +7,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/sql"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -68,11 +69,14 @@ func Test_EventManager(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			conn, err := sqlite.Open(ctx, ":memory:", sql.OpenCreate|sql.OpenMemory)
+			db, cleanUp, err := dbtest.NewTestPool(ctx, []string{schemaName})
+			require.NoError(t, err)
+			defer cleanUp()
+
+			es, err := NewEventStore(ctx, db)
 			require.NoError(t, err)
 
-			es, err := NewEventStore(ctx, &db{conn})
-			require.NoError(t, err)
+			defer db.Execute(ctx, dropEventsTable)
 
 			vs := NewMockVoteStore()
 			em := NewEventMgr(es, vs)
@@ -98,32 +102,4 @@ func (m *mockVoteStore) Processed(resolutionID types.UUID) {
 
 func (m *mockVoteStore) IsProcessed(ctx context.Context, resolutionID types.UUID) (bool, error) {
 	return m.processed[resolutionID], nil
-}
-
-type db struct {
-	*sqlite.Connection
-}
-
-func (d *db) Execute(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error) {
-	res, err := d.Connection.Execute(ctx, stmt, args)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Finish()
-
-	return res.ResultSet()
-}
-
-func (d *db) Query(ctx context.Context, query string, args map[string]any) (*sql.ResultSet, error) {
-	res, err := d.Connection.Execute(ctx, query, args)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Finish()
-
-	return res.ResultSet()
-}
-
-func (d *db) Get(ctx context.Context, key []byte, sync bool) ([]byte, error) {
-	return d.Connection.Get(ctx, key)
 }

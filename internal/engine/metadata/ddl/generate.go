@@ -7,16 +7,19 @@ import (
 )
 
 // GenerateDDL generates the necessary table and index ddl statements for the given table
-func GenerateDDL(table *types.Table) ([]string, error) {
+func GenerateDDL(dbid string, table *types.Table) ([]string, error) {
+	// Derive the PostgreSQL "schema" (not a Kwil schema) from the dbid.
+	pgSchema := types.DBIDSchema(dbid)
+
 	var statements []string
 
-	createTableStatement, err := GenerateCreateTableStatement(table)
+	createTableStatement, err := GenerateCreateTableStatement(pgSchema, table)
 	if err != nil {
 		return nil, err
 	}
 	statements = append(statements, createTableStatement)
 
-	createIndexStatements, err := GenerateCreateIndexStatements(table.Name, table.Indexes)
+	createIndexStatements, err := GenerateCreateIndexStatements(pgSchema, table.Name, table.Indexes)
 	if err != nil {
 		return nil, err
 	}

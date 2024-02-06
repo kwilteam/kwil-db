@@ -19,6 +19,10 @@ import (
 	"github.com/kwilteam/kwil-db/core/utils/random"
 )
 
+// publicationName is the name of the publication required for logical
+// replication.
+const publicationName = "kwild_repl"
+
 // decodeCommitPayload extracts the seq value and commit hash from the data
 // received from the logical replication message stream (see captureRepl).
 func decodeCommitPayload(cid []byte) (int64, []byte, error) {
@@ -58,8 +62,6 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 		return nil, err
 	}
 
-	// todo: config publication name
-	const publicationName = "kwild_repl"
 	var slotName = publicationName + random.String(8) // arbitrary, so just avoid collisions
 	commitChan, errChan, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter)
 	if err != nil {

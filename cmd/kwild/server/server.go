@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"runtime"
 	"time"
 
@@ -21,7 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/oracles"
 	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
 	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
 
 	// internalize
 	"go.uber.org/zap"
@@ -76,12 +75,6 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.Genesi
 	}
 	logger = *logger.Named("kwild")
 
-	dbDir := cfg.AppCfg.SqliteFilePath
-	if dbDir == "" { // config parsing should have set it (sanitizeCfgPaths), but we can generate the default too
-		dbDir = filepath.Join(cfg.RootDir, config.DefaultSQLitePath)
-		logger.Warn("using fallback sqlite path", zap.String("sqlitePath", dbDir))
-	}
-
 	if cfg.AppCfg.TLSKeyFile == "" || cfg.AppCfg.TLSCertFile == "" {
 		return nil, errors.New("unspecified TLS key and/or certificate")
 	}
@@ -97,6 +90,10 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.Genesi
 		return nil, err
 	}
 
+	pg.UseLogger(*logger.Named("pg"))
+
+	host, port, user, pass := cfg.AppCfg.DBHost, cfg.AppCfg.DBPort, cfg.AppCfg.DBUser, cfg.AppCfg.DBPass
+
 	deps := &coreDependencies{
 		ctx:        ctx,
 		autogen:    autogen,
@@ -104,7 +101,8 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.Genesi
 		genesisCfg: genesisCfg,
 		privKey:    ed25519.PrivKey(nodeKey.Bytes()),
 		log:        logger,
-		opener:     sqlite.NewPool,
+		dbOpener:   newDBOpener(host, port, user, pass), // could make cfg.AppCfg.DBName baked into it this one too
+		poolOpener: newPoolBOpener(host, port, user, pass),
 		keypair:    keyPair,
 	}
 
@@ -184,8 +182,13 @@ func (s *Server) Start(ctx context.Context) error {
 	group.Go(func() error {
 		// The CometBFT services do not block on Start().
 		if err := s.cometBftNode.Start(); err != nil {
+
 			return err
 		}
+		// If you create DB errors from start, note that this is neds db writes
+		// in InitChain before transactional block processing begins! Further,
+		// it will immediately start replaying blocks if ABCI app indicates it
+		// is behind, causing FinalizeBlock+Commit calls right away.
 		s.log.Info("comet node is now started")
 
 		<-groupCtx.Done()

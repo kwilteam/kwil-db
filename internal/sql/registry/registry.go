@@ -1,122 +1,127 @@
 /*
-	Package registry is responsible for transactionally committing to databases.
+	Package registry abstracts multiple datasets via postgresql "schemata",
+	which are like namespaces to have multiple sets of tables in the same
+	database connection.
 
-	It can create and delete files, as well as execute DML.
+	This is potentially an engine package, but it could be applied for other
+	non-user datasets such as the accounts and validators stores.
 
-	It uses an idempotent key within each database to track the changes that have been made to the database.  On crash recovery,
-	it uses this key to determine whether or not the database has been committed to.
+	It implements Set/Get for sessions.Committable to store an idempotency key
+	within the registry to track what changes have been committed.
 
-	When a database is created, it is created in a temporary file.  When the commit is called, it is renamed to the correct file.
-	When a database is deleted, it is renamed to a deleted file.  When the commit is called, it is deleted.
-
-	When a database is opened, a savepoint is opened with it.  This savepoint is rolled back on rollback, and committed on commit.
-	When a database is opened, it is opened with a writer connection.  This connection is returned on rollback, and closed on commit.
-
-	If a database already contains the idempotent key, it will return nil for any incoming operation.
+	If a database already contains the idempotent key, it will return nil for
+	any incoming operation.
 */
+
+// NOTE: the requirements for Registry:
+//  1. satisfy sessions.Committable (Begin/Commit/Cancel) for the MultiCommitter
+//  2. satisfy engine/execution.Registry
+//	   a. dbid-specific Query/Execute/Set/Get
+//	   b. dataset Create/Delete/List (by dbid)
 
 package registry
 
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
-	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	sql "github.com/kwilteam/kwil-db/internal/sql"
-	"github.com/kwilteam/kwil-db/internal/utils/order"
-	syncmap "github.com/kwilteam/kwil-db/internal/utils/sync_map"
+	"github.com/kwilteam/kwil-db/internal/sql"
+
 	"go.uber.org/zap"
 )
 
-// Registry is used to register databases.
-// It manages connections, as well as atomicity.
-type Registry struct {
-	// mu is the mutex for the registry.
-	mu sync.RWMutex
+const (
+	sqlSchemaExists = `SELECT 1
+		FROM information_schema.schemata
+		WHERE schema_name = $1;` // for datasets: 'ds_' + dbid
 
-	log log.Logger
+	datasetSchemaPrefix = `ds_`
+	// dsspEscaped         = `ds\_` // underscore requires escaping in LIKE?
+	sqlListDatasets = `SELECT schema_name
+		FROM information_schema.schemata
+		WHERE schema_name LIKE '` + datasetSchemaPrefix + `%';`
 
-	// opener is the function to open a database.
-	opener PoolOpener
+	sqlCreateSchemaTmpl = `CREATE SCHEMA IF NOT EXISTS %s;`   // cant do $1
+	sqlDeleteSchemaTmpl = `DROP SCHEMA IF EXISTS %s CASCADE;` // and all objects (tables, indexes, etc.)
+)
 
-	// directory is the directory where the databases are stored.
-	directory string
-
-	// pools is a map of database ids to their connection pools.
-	// we use a sync map since pools is accessed in `Query`, which
-	// is not protected by the mutex.
-	pools syncmap.Map[string, Pool]
-
-	// session is the current session.
-	session *session
-
-	// readerCloseTime is the time the engine will wait before forcibly closing a reader when committing.
-	readerCloseTime time.Duration
-
-	// filesystem is the filesystem to use.
-	filesystem Filesystem
-
-	// openReaderChan is a channel that controls when readers can be opened
-	openReaderChan chan struct{}
+func datasetSchema(dbid string) string {
+	return datasetSchemaPrefix + dbid
 }
 
-// NewRegistry opens a registry.
-// It does not handle recovery, and it is up to the caller to determine if recovery is needed.
-// If there was a failure in between `Begin` and `Commit`, then NewRegistry will reset the state
-// of the registry to the state before `Begin` was called.
-func NewRegistry(ctx context.Context, opener PoolOpener, directory string, opts ...RegistryOpt) (*Registry, error) {
-	readerChan := make(chan struct{}, 1)
-	readerChan <- struct{}{}
+// DB is the main dependency of a Registry. It provides the query and kv
+// functions, and the ability to create transactions (and nested transactions).
+type DB interface {
+	sql.Queryer
+	sql.Executor
+	sql.KV
+	sql.TxMaker // the special kind that can make nested txns
+}
 
+// Registry is used to register databases.
+type Registry struct {
+	log log.Logger
+	db  DB
+
+	// Starting a session creates a transaction and stores a session key
+	// provided by the caller.
+	mu         sync.RWMutex
+	sessionKey []byte
+	tx         sql.Tx
+	commitID   []byte
+}
+
+// New opens a registry.
+func New(ctx context.Context, db DB, opts ...RegistryOpt) (*Registry, error) {
 	r := &Registry{
-		opener:          opener,
-		directory:       directory,
-		log:             log.NewNoOp(),
-		readerCloseTime: time.Duration(100) * time.Millisecond,
-		openReaderChan:  readerChan,
-		filesystem:      &defaultFilesystem{},
+		db:  db,
+		log: log.NewNoOp(),
 	}
 
 	for _, opt := range opts {
 		opt(r)
 	}
 
-	// create the directory if it does not exist
-	err := r.filesystem.MkdirAll(directory, 0755)
-	if err != nil {
-		return nil, err
-	}
-
-	err = r.cleanupInFlightDBs(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	dbs, err := r.listFromFiles(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, dbid := range dbs {
-		pool, err := r.opener(ctx, r.path(dbid), false)
-		if err != nil {
-			return nil, err
-		}
-		r.pools.Set(dbid, pool)
-	}
-	if err != nil {
-		return nil, err
-	}
-
 	return r, nil
+}
+
+func (r *Registry) schemaExists(ctx context.Context, schema string, sync bool) (bool, error) {
+	q := r.db.Query
+	if sync {
+		q = r.db.Execute
+	}
+	res, err := q(ctx, sqlSchemaExists, schema)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return len(res.Rows) > 0, nil
+}
+
+func (r *Registry) datasetExists(ctx context.Context, dbid string, sync bool) (bool, error) {
+	return r.schemaExists(ctx, datasetSchema(dbid), sync)
+}
+
+func (r *Registry) assertDatasetExists(ctx context.Context, dbid string, sync bool) error {
+	exists, err := r.datasetExists(ctx, dbid, sync)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrDatabaseNotFound
+	}
+	return nil
+}
+
+func (r *Registry) inSession() bool {
+	return len(r.sessionKey) > 0
 }
 
 // Create creates a new database.
@@ -125,658 +130,326 @@ func (r *Registry) Create(ctx context.Context, dbid string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.session == nil {
+	if !r.inSession() {
 		return ErrRegistryNotWritable
 	}
 
-	// if in recovery, the database might have already been created
-	if r.session.Recovery {
-		_, ok := r.pools.Get(dbid)
-		if ok {
-			return nil
-		}
+	// check if the dataset already exists
+	exists, err := r.datasetExists(ctx, dbid, true)
+	if err != nil {
+		return err
 	}
-
-	// check if the database already exists
-	_, ok := r.pools.Get(dbid)
-	if ok {
+	if exists {
 		return ErrDatabaseExists
 	}
 
-	// create the database
-	pool, err := r.opener(ctx, r.path(dbid)+newSuffix, true)
-	if err != nil {
-		return err
-	}
-
-	sp, err := pool.Savepoint()
-	if err != nil {
-		return err
-	}
-
-	session, err := pool.CreateSession()
-	if err != nil {
-		sp.Rollback()
-		return err
-	}
-
-	r.pools.Set(dbid, pool)
-
-	r.session.Open[dbid] = &openDB{
-		Pool:      pool,
-		Savepoint: sp,
-		Session:   session,
-		Status:    dbStatusNew,
-	}
-
-	return nil
+	// No need to isolate this in a nested tx as this just creates the dataset's
+	// postgres schema. The tables in the schema are created via Execute (see
+	// storeSchema in engine.).
+	_, err = r.tx.Execute(ctx, fmt.Sprintf(sqlCreateSchemaTmpl, datasetSchema(dbid)))
+	return err
 }
 
 // Delete deletes a database.
 // If the database does not exist, it returns an error.
-// If the database was created within the same session, it returns an error.
 func (r *Registry) Delete(ctx context.Context, dbid string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.session == nil {
+	if !r.inSession() {
 		return ErrRegistryNotWritable
 	}
 
-	// if in recovery, the database might have already been deleted
-	if r.session.Recovery {
-		_, ok := r.pools.Get(dbid)
-		if !ok {
-			return nil
-		}
-	}
-
 	// check if the database exists
-	pool, ok := r.pools.Get(dbid)
-	if !ok {
-		return ErrDatabaseNotFound
-	}
-
-	// by default, the file is called path/dbid
-	// if it is not committed, then it is called path/dbid.new
-	fileName := dbid
-
-	// check if the database was created in this session
-	openDb, ok := r.session.Open[dbid]
-	if ok {
-
-		// if already used in this session, make sure it was not created or deleted
-		if openDb.Status == dbStatusNew {
-			fileName += newSuffix
-		}
-
-		err := openDb.Savepoint.Rollback()
-		if err != nil {
-			return err
-		}
-
-		err = openDb.Session.Delete()
-		if err != nil {
-			return err
-		}
-
-		delete(r.session.Open, dbid)
-	}
-
-	err := pool.Close()
+	err := r.assertDatasetExists(ctx, dbid, true)
 	if err != nil {
 		return err
 	}
-
-	err = r.filesystem.Rename(r.path(fileName), r.path(fileName)+deletedSuffix)
-	if err != nil {
-		return err
-	}
-
-	r.pools.Delete(dbid)
-
-	return nil
+	_, err = r.tx.Execute(ctx, fmt.Sprintf(sqlDeleteSchemaTmpl, datasetSchema(dbid)))
+	return err
 }
 
-// Execute executes a statement on a database.
-// If the database does not exist, it returns an error.
-func (r *Registry) Execute(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if r.session == nil {
-		return nil, ErrRegistryNotWritable
-	}
-
-	conn, skip, err := r.getExistentWriter(ctx, dbid, r.session.IdempotencyKey)
-	if err != nil {
-		return nil, err
-	}
-
-	if skip {
-		return &sql.ResultSet{
-			ReturnedColumns: []string{},
-			Rows:            [][]any{},
-		}, nil
-	}
-
-	// execute the statement
-	// we do not return the connection, as it will be returned on rollback or closed on commit
-	return conn.Execute(ctx, stmt, params)
-}
-
-// Set sets the value for a key in a database's key value store.
-func (r *Registry) Set(ctx context.Context, dbid string, key, value []byte) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	// check if writable, since r.session will be nil if not writable
-	if r.session == nil {
-		return ErrRegistryNotWritable
-	}
-
-	conn, skip, err := r.getExistentWriter(ctx, dbid, r.session.IdempotencyKey)
-	if err != nil {
-		return err
-	}
-	if skip {
-		return nil
-	}
-
-	return conn.Set(ctx, key, value)
-}
-
-// getExistentWriter gets a writer for a database that already exists.
-// If the connection should be skipped due to the idempotency key, it returns shouldSkip as true.
-func (r *Registry) getExistentWriter(ctx context.Context, dbid string, idempotencyKey []byte) (conn Pool, shouldSkip bool, err error) {
-	// if recovery, check if the idempotency key matches
-	if r.session.Recovery {
-		pool, ok := r.pools.Get(dbid)
-		if !ok {
-			return nil, false, ErrDatabaseNotFound
-		}
-
-		openDb, ok := r.session.Open[dbid]
-		if ok {
-			conn = openDb.Pool
-		} else {
-			var err error
-			conn = pool
-
-			sp, err := conn.Savepoint()
-			if err != nil {
-				return nil, false, err
-			}
-
-			session, err := conn.CreateSession()
-			if err != nil {
-				sp.Rollback()
-				return nil, false, err
-			}
-
-			r.session.Open[dbid] = &openDB{
-				Pool:      conn,
-				Savepoint: sp,
-				Session:   session,
-				Status:    dbStatusExists,
-			}
-		}
-
-		idempotencyKey, err := getIdempotencyKey(ctx, conn)
-		if err != nil {
-			return nil, false, err
-		}
-
-		// if the idempotency key matches, this DB has already been executed
-		if bytes.Equal(idempotencyKey, r.session.IdempotencyKey) {
-			return conn, true, nil
-		}
-	}
-
-	// check if the database exists
-	pool, ok := r.pools.Get(dbid)
-	if !ok {
-		return nil, false, ErrDatabaseNotFound
-	}
-
-	// get the writer, either from the session or from the pool
-	openDb, ok := r.session.Open[dbid]
-	if ok {
-		conn = openDb.Pool
-	} else {
-		// if not yet used, open it and register it
-		var err error
-		conn = pool
-
-		sp, err := conn.Savepoint()
-		if err != nil {
-			return nil, false, err
-		}
-
-		session, err := conn.CreateSession()
-		if err != nil {
-			sp.Rollback()
-			return nil, false, err
-		}
-
-		r.session.Open[dbid] = &openDB{
-			Pool:      conn,
-			Savepoint: sp,
-			Session:   session,
-			Status:    dbStatusExists,
-		}
-	}
-
-	return conn, false, nil
-}
-
-// Query executes a query on a database.
-// If the database does not exist, it returns an error.
-func (r *Registry) Query(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error) {
-	pool, ok := r.pools.Get(dbid)
-	if !ok {
-		return nil, ErrDatabaseNotFound
-	}
-
-	// get the reader context
-	ctx2, cancel, err := r.getReaderCtx(ctx, dbid)
-	if err != nil {
-		return nil, err
-	}
-	defer cancel()
-
-	// execute the statement
-	return pool.Query(ctx2, stmt, params)
-}
-
-// Get gets the value for a key in a database's key value store.
-func (r *Registry) Get(ctx context.Context, dbid string, key []byte, sync bool) ([]byte, error) {
-
-	if sync {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-
-		// check if writable, since r.session will be nil if not writable
-		if r.session == nil {
-			return nil, ErrRegistryNotWritable
-		}
-
-		conn, skip, err := r.getExistentWriter(ctx, dbid, r.session.IdempotencyKey)
-		if err != nil {
-			return nil, err
-		}
-		if skip {
-			return nil, nil
-		}
-
-		return conn.Get(ctx, key, true)
-	}
-
-	// check if the database exists
-	pool, ok := r.pools.Get(dbid)
-	if !ok {
-		return nil, ErrDatabaseNotFound
-	}
-
-	ctx2, cancel, err := r.getReaderCtx(ctx, dbid)
-	if err != nil {
-		return nil, err
-	}
-	defer cancel()
-
-	// execute the statement
-	return pool.Get(ctx2, key, false)
-}
-
-// getReaderCtx gets a context for a reader.
-// it sets a timeout to prevent readers from being open for too long.
-func (r *Registry) getReaderCtx(ctx context.Context, dbid string) (context.Context, func(), error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if r.session != nil {
-		openDb, ok := r.session.Open[dbid]
-		if ok && (openDb.Status == dbStatusNew || openDb.Status == dbStatusDeleted) {
-			return nil, nil, ErrDatabaseNotFound
-		}
-	}
-
-	select {
-	case <-ctx.Done():
-		return nil, nil, ctx.Err()
-	case <-r.openReaderChan:
-		r.openReaderChan <- struct{}{}
-	}
-
-	ctx2, cancel := context.WithTimeout(ctx, r.readerCloseTime)
-
-	return ctx2, cancel, nil
-}
-
-// blockReaders cancels all readers.
-// it will wait for the configured time before forcibly closing them.
-// it returns a function that unblocks all readers.
-func (r *Registry) blockReaders() (unblock func()) {
-	<-r.openReaderChan
-	unblock = func() {
-		r.openReaderChan <- struct{}{}
-	}
-
-	return unblock
-}
-
-// List lists all databases.
+// List lists all databases. (committed only)
 func (r *Registry) List(ctx context.Context) ([]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	var dbs []string
+	// instead maintain a r.dbs map field that we update on create/delete? that
+	// would be easy and cheaper than this (but would include uncommitted):
 
-	r.pools.ExclusiveRead(func(m map[string]Pool) {
-		for dbid := range m {
-			dbs = append(dbs, dbid)
-		}
-	})
-
-	return dbs, nil
-}
-
-// listFromFiles lists all databases from the files.
-// this is very expensive, and should only be used during startup.
-func (r *Registry) listFromFiles(ctx context.Context) ([]string, error) {
-	var dbs []string
-
-	err := r.forEach(ctx, regexp.MustCompile(``), func(fileName string) error {
-		dbs = append(dbs, fileName)
-		return nil
-	})
+	res, err := r.db.Query(ctx, sqlListDatasets)
 	if err != nil {
 		return nil, err
 	}
 
-	return dbs, nil
+	dbids := make([]string, len(res.Rows))
+
+	for i, row := range res.Rows {
+		if len(row) != 1 {
+			return nil, errors.New("not one row")
+		}
+		dbid, ok := row[0].(string)
+		if !ok {
+			return nil, errors.New("dbid not a string")
+		}
+		dbids[i], ok = strings.CutPrefix(dbid, datasetSchemaPrefix)
+		if !ok {
+			return nil, fmt.Errorf("incorrect schema prefix for dataset %q", dbid)
+		}
+	}
+
+	return dbids, nil
 }
 
-// Close closes the registry.
-func (r *Registry) Close() error {
+func namespaceKey(dbid string, key []byte) []byte {
+	return append([]byte(dbid+";"), key...)
+}
+
+// Set sets the value for a key in a database's key value store.
+// NOTE: engine also uses this to store schema meta data... alternatives???
+func (r *Registry) Set(ctx context.Context, dbid string, key, value []byte) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	var errs []error
+	if !r.inSession() {
+		return ErrRegistryNotWritable
+	}
 
-	if r.session != nil {
-		for _, openDb := range r.session.Open {
-			err := openDb.Savepoint.Rollback()
-			if err != nil {
-				errs = append(errs, err)
-			}
+	// Check that the schema/namespace for dbid exists
+	err := r.assertDatasetExists(ctx, dbid, true)
+	if err != nil {
+		return err
+	}
 
-			err = openDb.Session.Delete()
-			if err != nil {
-				errs = append(errs, err)
-			}
+	// concat dbid and key for the actual db.Set call
+	key = namespaceKey(dbid, key)
+	return r.db.Set(ctx, key, value) // alt: consider making the statement and using a per-dataset kv table
+}
+
+// Get gets the value for a key in a database's key value store.
+func (r *Registry) Get(ctx context.Context, dbid string, key []byte, sync bool) ([]byte, error) {
+	err := r.assertDatasetExists(ctx, dbid, true)
+	if err != nil {
+		return nil, err
+	}
+	key = namespaceKey(dbid, key)
+	return r.db.Get(ctx, key, sync)
+}
+
+// Execute executes a statement on a database. The statement must already be
+// written with the dbid in the schema for the table. The dbid is only used to
+// check the existence of the schema before executing the query. If the database
+// does not exist, it returns an error. An DB session (outer transaction) must
+// already have been started with Begin. The statement is executed within a
+// nested transaction so that an error does no rollback the whole session.
+func (r *Registry) Execute(ctx context.Context, dbid, stmt string, args ...any) (*sql.ResultSet, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if !r.inSession() {
+		return nil, ErrRegistryNotWritable
+	}
+
+	if err := r.assertDatasetExists(ctx, dbid, true); err != nil {
+		return nil, err
+	}
+
+	// for i := range args {
+	// 	if named, isNamed := args[i].(map[string]any); isNamed {
+	// 		args[i] = pgx.NamedArgs(named)
+	// 		r.log.Infof("converting named args %v \n%v", args[0], stmt)
+	// 		break
+	// 	}
+	// }
+
+	if len(args) == 1 {
+		// if named, isNamed := args[0].(map[string]any); isNamed {
+		// 	args[0] = pgx.NamedArgs(named)
+		// 	r.log.Infof("converting named args %v \n%v", args[0], stmt)
+		// }
+		if args[0] == nil { // []any{[]any(nil)} indicates caller probably forgot the "..."
+			fmt.Println("**************** ALMOST CERTAINLY CALLER BUG (missing ...?)!!!!")
+			args = nil // to a nil []any
 		}
 	}
 
-	r.pools.ExclusiveRead(func(m map[string]Pool) {
-		for _, pool := range m {
-			err := pool.Close()
-			if err != nil {
-				errs = append(errs, err)
-			}
-		}
+	// Execute in a nested transaction a.k.a. savepoint.
+	var res *sql.ResultSet
+	err := txFn(ctx, r.tx, func(tx sql.Tx) error {
+		var err error
+		res, err = tx.Execute(ctx, stmt, args...)
+		return err
 	})
-
-	if len(errs) > 0 {
-		return errors.Join(errs...)
+	if err != nil {
+		return nil, err
 	}
+	return res, nil
+}
+
+func txFn(ctx context.Context, tm sql.TxMaker, fn func(tx sql.Tx) error) error {
+	tx, err := tm.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err = fn(tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx) // note: consumes and replaces CommitID
+}
+
+// Query executes a query on a database.
+// If the database does not exist, it returns an error.
+// If in a session, it will reflect uncommitted state.
+// ^^^^^ UNFORTUNATELY THAT DEPENDS ON CONTEXT IF DESIRABLE TO READ UNCOMMITTED
+func (r *Registry) Query(ctx context.Context, dbid, stmt string, args ...any) (*sql.ResultSet, error) {
+	err := r.assertDatasetExists(ctx, dbid, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(args) == 1 {
+		// if named, isNamed := args[0].(map[string]any); isNamed {
+		// 	args[0] = pgx.NamedArgs(named)
+		// 	r.log.Info("converting named args")
+		// }
+		if args[0] == nil { // []any{[]any(nil)} indicates caller probably forgot the "..."
+			fmt.Println("**************** ALMOST CERTAINLY CALLER BUG (missing ...?)!!!!")
+			args = nil // to a nil []any
+		}
+	}
+	if r.inSession() { // new behavior, but not always correct
+		// if in session, use a nested transaction
+		var res *sql.ResultSet
+		err := txFn(ctx, r.tx, func(tx sql.Tx) error {
+			res, err = tx.Query(ctx, stmt, args...)
+			return err
+		})
+		return res, err
+	}
+	return r.db.Query(ctx, stmt, args...)
+}
+
+// Close closes the registry.
+func (r *Registry) Close(ctx context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.inSession() {
+		return r.tx.Rollback(ctx) // would be done anyway on DB.Close?
+	} // maybe just call r.Cancel unconditionally?
 
 	return nil
 }
 
-// Begin signals the start of a session.
-// A session is simply a series of operations across many databases that are executed atomically.
+// Begin signals the start of a session. A session is a series of operations
+// across many datasets that are executed atomically with a transaction on the
+// parent database, where the individual datasets are in different postgresql
+// "schema".
 func (r *Registry) Begin(ctx context.Context, idempotencyKey []byte) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// if already in a session, return an error
-	if r.session != nil {
+	if r.inSession() {
 		return ErrAlreadyInSession
 	}
 
-	if r.session != nil {
-		return ErrWritable
+	// First check the latest idempotency key in the kv.  If it's the same,
+	// block stuff until commit (or next begin).
+
+	if lastKey, err := getIdempotencyKey(ctx, r.db); err != nil {
+		return err
+	} else if bytes.Equal(lastKey, idempotencyKey) {
+		return fmt.Errorf("registry received duplicate idempotency key, recovery not possible")
 	}
 
-	err := r.cleanupInFlightDBs(ctx)
+	tx, err := r.db.BeginTx(ctx)
 	if err != nil {
 		return err
 	}
 
-	r.session = newSession(idempotencyKey, false)
+	r.sessionKey = idempotencyKey
+	r.tx = tx
 
 	return nil
 }
 
-// BeginRecovery signals the start of a session recovery.
-// Session recovery occurs when a session is is interrupted during the commit.
-// It is the caller's responsibility to identify that a session recovery is needed.
-// Recovery is only needed if the session was interrupted during `Commit`.
-// If a failure occurs between `Begin` and `Commit`, then recovery is not needed.
-func (r *Registry) BeginRecovery(ctx context.Context, idempotencyKey []byte) error {
+func (r *Registry) Precommit(ctx context.Context) ([]byte, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// if already in a session, return an error
-	if r.session != nil {
-		return ErrAlreadyInSession
-	}
-
-	if r.session != nil {
-		return ErrWritable
-	}
-
-	err := r.cleanupInFlightDBs(ctx)
-	if err != nil {
-		return err
-	}
-
-	r.session = newSession(idempotencyKey, true)
-
-	return nil
-}
-
-// Commit signals the end of a session.
-// All databases will be committed, in order.
-func (r *Registry) Commit(ctx context.Context, idempotencyKey []byte) ([]byte, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if r.session == nil {
+	if !r.inSession() {
 		return nil, ErrRegistryNotWritable
 	}
 
-	// if the idempotency key does not match, return an error
-	if !bytes.Equal(r.session.IdempotencyKey, idempotencyKey) {
-		return nil, fmt.Errorf("%w: expected %x, got %x", ErrIdempotencyKeyMismatch, r.session.IdempotencyKey, idempotencyKey)
-	}
-
-	// cancel all readers
-	unblock := r.blockReaders()
-	defer unblock()
-
-	// maps dbid to app hash
-	appHashes := make(map[string][]byte)
-
-	var errs []error
-	r.pools.Exclusive(func(pools map[string]Pool) {
-		for dbid, pool := range pools {
-			openDb, ok := r.session.Open[dbid]
-			if !ok {
-				// if not ok, the database has been skipped this session
-				// we should check if it has the idempotency key
-				// if so, then we need to include its app hash in the commit
-
-				// get the idempotency key
-				idempotencyKey, err := getIdempotencyKey(ctx, pool)
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-				if !bytes.Equal(idempotencyKey, r.session.IdempotencyKey) {
-					// if the idempotency key does not match, we can skip this database
-					continue
-				}
-
-				// get the app hash
-				appHash, err := getAppHash(ctx, pool)
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				appHashes[dbid] = appHash
-				r.log.Debug("adding app hash", zap.String("dbid", dbid), zap.String("appHash", fmt.Sprintf("%x", appHash)), zap.Binary("idempotencyKey", idempotencyKey))
-
-				continue
-			}
-
-			switch openDb.Status {
-			default:
-				panic("invalid status")
-			case dbStatusNew:
-				appHash, err := openDb.Session.ChangesetID(ctx)
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				err = setAppHash(ctx, openDb.Pool, appHash)
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				err = setIdempotencyKey(ctx, openDb.Pool, r.session.IdempotencyKey)
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				err = openDb.Savepoint.Commit()
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				err = openDb.Session.Delete()
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				// close the pool to allow the rename
-				err = pool.Close()
-				if err != nil {
-					errs = append(errs, err)
-					r.log.Debug("failed to close pool", zap.String("dbid", dbid), zap.Error(err))
-					continue
-				}
-
-				err = r.filesystem.Rename(r.path(dbid)+newSuffix, r.path(dbid))
-				if err != nil {
-					errs = append(errs, err)
-					r.log.Debug("failed to rename db file", zap.String("from", dbid+newSuffix), zap.String("to", dbid), zap.Error(err))
-					continue
-				}
-
-				r.log.Debug("renamed db file", zap.String("from", dbid+newSuffix), zap.String("to", dbid))
-
-				delete(r.session.Open, dbid)
-				appHashes[dbid] = appHash
-
-				r.log.Debug("adding app hash", zap.String("dbid", dbid), zap.String("appHash", fmt.Sprintf("%x", appHash)), zap.Binary("idempotencyKey", idempotencyKey))
-
-				newPool, err := r.opener(ctx, r.path(dbid), false)
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				pools[dbid] = newPool
-			case dbStatusExists:
-				appHash, err := openDb.Session.ChangesetID(ctx)
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				err = setAppHash(ctx, openDb.Pool, appHash)
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				err = setIdempotencyKey(ctx, openDb.Pool, r.session.IdempotencyKey)
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				err = openDb.Savepoint.Commit()
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				err = openDb.Session.Delete()
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-
-				delete(r.session.Open, dbid)
-
-				appHashes[dbid] = appHash
-				r.log.Debug("adding app hash", zap.String("dbid", dbid), zap.String("appHash", fmt.Sprintf("%x", appHash)), zap.Binary("idempotencyKey", idempotencyKey))
-
-			}
-		}
-	})
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
-	}
-
-	// remove deleted databases
-	err := r.forEach(ctx, deletedSuffixRegex, func(fileName string) error {
-		dbid := removeDeletedSuffix(fileName)
-
-		// if deleted, delete
-		err := r.filesystem.Remove(r.path(dbid) + deletedSuffix)
-		if err != nil {
-			return err
-		}
-
-		r.session.Committed[dbid] = []byte{}
-
-		return nil
-	})
+	commitID, err := r.tx.Precommit(ctx)
 	if err != nil {
 		return nil, err
 	}
+	r.commitID = commitID // hang on to it to save it in Commit (if we even need to)
 
-	hasher := sha256.New()
-	for _, committed := range order.OrderMap(appHashes) {
-		_, err := hasher.Write(committed.Value)
-		if err != nil {
-			return nil, err
-		}
+	return commitID, nil
+}
+
+// Commit signals the end of a session. It returns the apphash.
+// All databases will be committed, in order.
+func (r *Registry) Commit(ctx context.Context, idempotencyKey []byte) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if !r.inSession() {
+		return ErrRegistryNotWritable
 	}
 
-	r.session = nil
+	// Ensure this is committing what was begun with begin.
+	if !bytes.Equal(r.sessionKey, idempotencyKey) {
+		return fmt.Errorf("%w: expected %x, got %x", ErrIdempotencyKeyMismatch,
+			r.sessionKey, idempotencyKey)
+	}
 
-	return hasher.Sum(nil), nil
+	err := setIdempotencyKey(ctx, r.db, idempotencyKey)
+	if err != nil {
+		return err
+	}
+
+	// commit the prepared transaction
+	if err := r.tx.Commit(ctx); err != nil {
+		return err // don't need to explicitly rollback, right? (check)
+	}
+	r.sessionKey = nil
+	r.tx = nil
+
+	// can't do this outside of a transaction, but can't do it after PREPARE
+	// TRANSACTION either. We will probably remove this since loading it was
+	// only needed to power the old recover mode
+	if err = r.adHocTx(ctx, func() error { return setAppHash(ctx, r.db, r.commitID) }); err != nil {
+		r.log.Error("couldn't save commit id to kv store", zap.Error(err))
+	}
+
+	r.commitID = nil
+
+	return nil
+}
+
+// adHocTx is a hack so we can store the apphash returned from the main tx
+// Commit (i.e. outside of Begin/Commit). This method must not be used while
+// there is already an active tx. It's also a problem if we crash before saving
+// the apphash with this.
+func (r *Registry) adHocTx(ctx context.Context, fn func() error) error {
+	if r.inSession() {
+		return ErrAlreadyInSession
+	}
+	tx, err := r.db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	if err = fn(); err != nil {
+		tx.Rollback(ctx)
+		return err
+	}
+	if _, err := tx.Precommit(ctx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // Cancel signals that the session should be cancelled.
@@ -785,161 +458,15 @@ func (r *Registry) Cancel(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.session == nil {
+	if !r.inSession() {
 		return nil
 	}
 
-	unblock := r.blockReaders()
-	defer unblock()
+	err := r.tx.Rollback(ctx)
 
-	clear(r.session.Committed)
+	r.sessionKey = nil
 
-	var errs []error
-	for dbid, openDb := range r.session.Open {
-		switch openDb.Status {
-		case dbStatusNew:
-			err := openDb.Savepoint.Rollback()
-			if err != nil {
-				errs = append(errs, err)
-			}
-
-			err = r.filesystem.Remove(r.path(dbid) + newSuffix)
-			if err != nil {
-				errs = append(errs, err)
-			}
-
-			r.pools.Delete(dbid)
-		case dbStatusDeleted:
-			err := r.filesystem.Rename(r.path(dbid)+deletedSuffix, r.path(dbid))
-			if err != nil {
-				errs = append(errs, err)
-			}
-
-			newPool, err := r.opener(ctx, r.path(dbid), false)
-			if err != nil {
-				errs = append(errs, err)
-			}
-
-			r.pools.Set(dbid, newPool)
-		case dbStatusExists:
-			err := openDb.Savepoint.Rollback()
-			if err != nil {
-				errs = append(errs, err)
-			}
-		default:
-			panic("invalid status")
-		}
-	}
-
-	clear(r.session.Open)
-	r.session = nil
-
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-
-	return nil
-}
-
-// cleanupInFlightDBs cleans up all databases in an uncommitted deploy or drop.
-// It will delete uncommitted new ones, or undelete uncommitted deleted ones.
-func (r *Registry) cleanupInFlightDBs(ctx context.Context) error {
-	// cleanup deleted databases by renaming them to their original names
-	if err := r.forEach(ctx, deletedSuffixRegex, func(fileName string) error {
-		r.log.Debug("recovering deleted database", zap.String("dbid", removeDeletedSuffix(fileName)))
-
-		err := r.filesystem.Rename(r.path(fileName), r.path(removeDeletedSuffix(fileName)))
-		if err != nil {
-			return err
-		}
-
-		dbid := removeDeletedSuffix(fileName)
-
-		pool, err := r.opener(ctx, r.path(dbid), false)
-		if err != nil {
-			return err
-		}
-
-		r.pools.Set(dbid, pool)
-
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	// cleanup new databases by deleting them
-	if err := r.forEach(ctx, newSuffixRegex, func(fileName string) error {
-		r.log.Debug("reverting creation of new database", zap.String("dbid", fileName))
-
-		r.pools.Delete(fileName)
-		return r.filesystem.Remove(r.path(fileName))
-	}); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// forEach iterates over all files in the registry directory that match the regex.
-// It calls the function for each file.
-// it will ignore -shm and -wal files.
-func (r *Registry) forEach(ctx context.Context, regex *regexp.Regexp, fn func(fileName string) error) error {
-	return r.filesystem.ForEachFile(r.directory, func(name string) error {
-		if regex.MatchString(name) && !strings.HasSuffix(name, "-shm") && !strings.HasSuffix(name, "-wal") {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-				return fn(name)
-			}
-		}
-		return nil
-	})
-}
-
-// path returns the path to the database.
-func (r *Registry) path(dbid string) string {
-	return filepath.Join(r.directory, dbid)
-}
-
-const (
-	// deletedSuffix is the suffix for deleted databases.
-	deletedSuffix = ".deleted"
-	// newSuffix is the suffix for new databases.
-	newSuffix = ".new"
-)
-
-// newSuffixRegex is the regex for new databases.
-// we intentionally do not enforce that the suffix is not at the end here, b/c we can
-// have a file called dbid.new.deleted, which is a deleted database that was never committed.
-var newSuffixRegex = regexp.MustCompile(`\.new`)
-
-// deletedSuffixRegex is the regex for deleted databases.
-var deletedSuffixRegex = regexp.MustCompile(`\.deleted$`)
-
-// removeDeletedSuffix removes the deleted suffix from a database name.
-func removeDeletedSuffix(s string) string {
-	return s[:len(s)-len(deletedSuffix)]
-}
-
-// getIdempotencyKey gets the most recently persisted idempotency key for a database.
-func getIdempotencyKey(ctx context.Context, conn KV) ([]byte, error) {
-	return conn.Get(ctx, idempotencyKeyKey, true)
-}
-
-// setIdempotencyKey sets the idempotency key for a database.
-func setIdempotencyKey(ctx context.Context, conn KV, idempotencyKey []byte) error {
-	return conn.Set(ctx, idempotencyKeyKey, idempotencyKey)
-}
-
-// getAppHash gets the most recently persisted app hash for a database.
-func getAppHash(ctx context.Context, conn KV) ([]byte, error) {
-	return conn.Get(ctx, appHashKey, true)
-}
-
-// setAppHash sets the app hash for a database.
-func setAppHash(ctx context.Context, conn KV, appHash []byte) error {
-	return conn.Set(ctx, appHashKey, appHash)
+	return err
 }
 
 var (
@@ -948,3 +475,23 @@ var (
 	// appHashKey is the key for the app hash.
 	appHashKey = []byte("app_hash")
 )
+
+// getIdempotencyKey gets the most recently persisted idempotency key for a database.
+func getIdempotencyKey(ctx context.Context, conn KVGetter) ([]byte, error) {
+	return conn.Get(ctx, idempotencyKeyKey, false)
+}
+
+// setIdempotencyKey sets the idempotency key for a database.
+func setIdempotencyKey(ctx context.Context, conn KV, idempotencyKey []byte) error {
+	return conn.Set(ctx, idempotencyKeyKey, idempotencyKey)
+}
+
+// getAppHash gets the most recently persisted app hash for a database.
+func getAppHash(ctx context.Context, conn KVGetter) ([]byte, error) { //nolint:unused
+	return conn.Get(ctx, appHashKey, false)
+}
+
+// setAppHash sets the app hash for a database.
+func setAppHash(ctx context.Context, conn KV, appHash []byte) error {
+	return conn.Set(ctx, appHashKey, appHash)
+}

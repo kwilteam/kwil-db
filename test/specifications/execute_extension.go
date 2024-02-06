@@ -13,7 +13,7 @@ const (
 )
 
 func ExecuteExtensionSpecification(ctx context.Context, t *testing.T, execute ExecuteExtensionDsl) {
-	t.Logf("Executing insert action specification")
+	t.Logf("Executing extension specification")
 
 	db := SchemaLoader.Load(t, SchemaTestDB)
 	dbID := execute.DBID(db.Name)

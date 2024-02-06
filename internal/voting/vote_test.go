@@ -1,3 +1,5 @@
+//go:build pglive
+
 package voting_test
 
 import (
@@ -12,15 +14,17 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/sql"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
+	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 	"github.com/kwilteam/kwil-db/internal/voting"
+
 	"github.com/stretchr/testify/require"
 )
 
 const examplePayloadType = "example"
 
 func init() {
-	err := voting.RegisterPaylod(&exampleResolutionPayload{})
+	err := voting.RegisterPayload(&exampleResolutionPayload{})
 	if err != nil {
 		panic(err)
 	}
@@ -594,11 +598,12 @@ func Test_Votes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			conn, err := sqlite.Open(ctx, ":memory:", sql.OpenCreate)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer conn.Close()
+			// Can't use votingSchemaName because this is `package voting_test`
+			// Either we convert this to `package voting`, use
+			// voting.DropAllTables, or use a literal here:
+			db, cleanUp, err := dbtest.NewTestPool(ctx, []string{`kwild_voting`})
+			require.NoError(t, err)
+			defer cleanUp()
 
 			ds := &voting.Datastores{
 				Accounts: &mockAccountStore{
@@ -607,10 +612,17 @@ func Test_Votes(t *testing.T) {
 				Databases: nil,
 			}
 
-			v, err := voting.NewVoteProcessor(ctx, &db{conn: conn}, ds.Accounts, ds.Databases, 500000, log.NewStdOut(log.DebugLevel))
+			// voting.DropAllTables(ctx, db)
+
+			v, err := voting.NewVoteProcessor(ctx, db, ds.Accounts, ds.Databases, 500000, log.NewStdOut(log.DebugLevel))
 			if err != nil {
 				t.Fatal(err)
 			}
+			// defer func() {
+			// 	if err := voting.DropAllTables(ctx, db); err != nil {
+			// 		t.Errorf("test table cleanup failed: %v", err)
+			// 	}
+			// }()
 
 			tt.fn(t, v, ds)
 		})
@@ -628,32 +640,59 @@ func requireEqualResolutions(t *testing.T, res1 *voting.Resolution, res2 *voting
 	require.Equal(t, res1.Expiration, res2.Expiration)
 }
 
+const (
+	testKvTableName = "votingtestkvtable"
+)
+
+// db is supposed to implement Datastore for test
 type db struct {
-	conn *sqlite.Connection
+	p *pg.Pool
 }
 
-func (d *db) Execute(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error) {
-	res, err := d.conn.Execute(ctx, stmt, args)
-	if err != nil {
-		return nil, err
+func newTestDB(t *testing.T) *db { // rm
+	ctx := context.Background()
+	// Use pg.Pool instead of the full pg.DB since we just need a database; we
+	// don't need or want the transaction or commit ID capabilities of pg.DB.
+	cfg := &pg.PoolConfig{
+		ConnConfig: pg.ConnConfig{
+			Host:   "127.0.0.1",
+			Port:   "5432",
+			User:   "kwild",
+			Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
+			DBName: "kwil_test_db",
+		},
+		MaxConns: 11,
 	}
-	defer res.Finish()
-
-	return res.ResultSet()
-}
-
-func (d *db) Query(ctx context.Context, query string, args map[string]any) (*sql.ResultSet, error) {
-	res, err := d.conn.Execute(ctx, query, args)
+	pool, err := pg.NewPool(ctx, cfg)
 	if err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
-	defer res.Finish()
 
-	return res.ResultSet()
+	err = pg.CreateKVTable(ctx, testKvTableName, pg.WrapQueryFun(pool.Execute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = pool.Execute(ctx, `TRUNCATE TABLE `+testKvTableName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &db{pool}
 }
 
-func (d *db) Savepoint() (sql.Savepoint, error) {
-	return d.conn.Savepoint()
+func (d *db) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
+	return d.p.Execute(ctx, stmt, args...)
+}
+
+func (d *db) Query(ctx context.Context, query string, args ...any) (*sql.ResultSet, error) {
+	return d.p.Query(ctx, query, args...)
+}
+
+func (d *db) Get(ctx context.Context, key []byte, sync bool) ([]byte, error) {
+	return d.p.Get(ctx, testKvTableName, key, sync)
+}
+
+func (d *db) Set(ctx context.Context, key, value []byte) error {
+	return d.p.Set(ctx, testKvTableName, key, value)
 }
 
 type mockAccountStore struct {

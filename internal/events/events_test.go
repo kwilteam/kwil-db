@@ -1,25 +1,26 @@
-package events_test
+//go:build pglive
+
+package events
 
 import (
 	"context"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/events"
-	"github.com/kwilteam/kwil-db/internal/sql"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
+
 	"github.com/stretchr/testify/require"
 )
 
 func Test_EventStore(t *testing.T) {
 	type testcase struct {
 		name string
-		fn   func(t *testing.T, e *events.EventStore)
+		fn   func(t *testing.T, e *EventStore)
 	}
 	tests := []testcase{
 		{
 			name: "standard storage and retrieval",
-			fn: func(t *testing.T, e *events.EventStore) {
+			fn: func(t *testing.T, e *EventStore) {
 				ctx := context.Background()
 
 				err := e.Store(ctx, []byte("hello"), "test")
@@ -43,7 +44,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "idempotent storage",
-			fn: func(t *testing.T, e *events.EventStore) {
+			fn: func(t *testing.T, e *EventStore) {
 				ctx := context.Background()
 
 				err := e.Store(ctx, []byte("hello"), "test")
@@ -60,7 +61,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "deleting non-existent event",
-			fn: func(t *testing.T, e *events.EventStore) {
+			fn: func(t *testing.T, e *EventStore) {
 				ctx := context.Background()
 
 				err := e.DeleteEvent(ctx, types.NewUUIDV5([]byte("hello")))
@@ -69,7 +70,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "using kv scoping",
-			fn: func(t *testing.T, e *events.EventStore) {
+			fn: func(t *testing.T, e *EventStore) {
 				ctx := context.Background()
 
 				kv := e.KV([]byte("hello"))
@@ -79,22 +80,23 @@ func Test_EventStore(t *testing.T) {
 				err := kv.Set(ctx, []byte("key"), []byte("value"))
 				require.NoError(t, err)
 
-				value, err := kv.Get(ctx, []byte("key"))
+				const sync = true
+				value, err := kv.Get(ctx, []byte("key"), sync)
 				require.NoError(t, err)
 				require.Equal(t, []byte("value"), value)
 
-				value, err = kvCopy.Get(ctx, []byte("key"))
+				value, err = kvCopy.Get(ctx, []byte("key"), sync)
 				require.NoError(t, err)
 				require.Equal(t, []byte("value"), value)
 
-				value, err = kv2.Get(ctx, []byte("key"))
+				value, err = kv2.Get(ctx, []byte("key"), sync)
 				require.NoError(t, err)
 				require.Nil(t, value)
 			},
 		},
 		{
 			name: "marking received",
-			fn: func(t *testing.T, e *events.EventStore) {
+			fn: func(t *testing.T, e *EventStore) {
 				ctx := context.Background()
 
 				event := &types.VotableEvent{
@@ -129,40 +131,16 @@ func Test_EventStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			conn, err := sqlite.Open(ctx, ":memory:", sql.OpenCreate|sql.OpenMemory)
+			db, cleanUp, err := dbtest.NewTestPool(ctx, []string{schemaName})
+			require.NoError(t, err)
+			defer cleanUp()
+
+			e, err := NewEventStore(ctx, db)
 			require.NoError(t, err)
 
-			e, err := events.NewEventStore(ctx, &db{conn})
-			require.NoError(t, err)
+			defer db.Execute(ctx, dropEventsTable)
+
 			tt.fn(t, e)
 		})
 	}
-}
-
-type db struct {
-	*sqlite.Connection
-}
-
-func (d *db) Execute(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error) {
-	res, err := d.Connection.Execute(ctx, stmt, args)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Finish()
-
-	return res.ResultSet()
-}
-
-func (d *db) Query(ctx context.Context, query string, args map[string]any) (*sql.ResultSet, error) {
-	res, err := d.Connection.Execute(ctx, query, args)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Finish()
-
-	return res.ResultSet()
-}
-
-func (d *db) Get(ctx context.Context, key []byte, sync bool) ([]byte, error) {
-	return d.Connection.Get(ctx, key)
 }

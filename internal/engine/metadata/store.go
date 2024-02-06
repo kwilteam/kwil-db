@@ -8,9 +8,8 @@ import (
 	"context"
 	"encoding/json"
 
-	ddl "github.com/kwilteam/kwil-db/internal/engine/metadata/ddl"
+	"github.com/kwilteam/kwil-db/internal/engine/metadata/ddl"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
-	sql "github.com/kwilteam/kwil-db/internal/sql"
 )
 
 // KV is a key/value store.
@@ -28,15 +27,15 @@ func RunMigration(ctx context.Context, kv KV) error {
 }
 
 // CreateTables creates tables and stores them
-func CreateTables(ctx context.Context, tables []*types.Table, kv KV, exec sql.ResultSetFunc) error {
+func CreateTables(ctx context.Context, dbid string, tables []*types.Table, kv KV, exec types.ExecFunc) error {
 	for _, table := range tables {
-		ddl, err := ddl.GenerateDDL(table)
+		ddl, err := ddl.GenerateDDL(dbid, table)
 		if err != nil {
 			return err
 		}
 
-		for _, stmt := range ddl {
-			_, err := exec(ctx, stmt, nil)
+		for _, stmt := range ddl { // these ddl have no args
+			err = exec(ctx, stmt, nil) // WARN: must rm the nil if this becomes variadic args...
 			if err != nil {
 				return err
 			}
@@ -49,15 +48,10 @@ func CreateTables(ctx context.Context, tables []*types.Table, kv KV, exec sql.Re
 		return err
 	}
 
-	err = storeMetadata(ctx, kv, &metadata{
+	return storeMetadata(ctx, kv, &metadata{
 		Type:    metadataTypeTable,
 		Content: bts,
 	})
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // ListTables lists all tables in the database.
@@ -80,15 +74,10 @@ func StoreProcedures(ctx context.Context, procedures []*types.Procedure, kv KV) 
 		return err
 	}
 
-	err = storeMetadata(ctx, kv, &metadata{
+	return storeMetadata(ctx, kv, &metadata{
 		Type:    metadataTypeProcedure,
 		Content: bts,
 	})
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // ListProcedures lists all procedures in the database.
