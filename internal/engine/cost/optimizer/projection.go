@@ -13,6 +13,7 @@ func (r *ProjectionRule) optimize(plan logical_plan.LogicalPlan) logical_plan.Lo
 // pushDown tries to push down projections to source plan asap after reading data
 // from the disk. It works by keeping track of the columns that have been seen,
 // and applying those columns to the ScanOp.
+// TODO: use index instead of name for the 'seen' map.
 func (r *ProjectionRule) pushDown(plan logical_plan.LogicalPlan,
 	seen map[string]bool) logical_plan.LogicalPlan {
 	// At each step, a new copied plan will be created, not mutating the
@@ -34,7 +35,7 @@ func (r *ProjectionRule) pushDown(plan logical_plan.LogicalPlan,
 		extractColumnsFromExprs(p.Exprs(), p.Inputs()[1], seen)
 		newLeft := r.pushDown(p.Inputs()[0], seen)
 		newRight := r.pushDown(p.Inputs()[1], seen)
-		return logical_plan.Join(newLeft, newRight, p.Kind, p.On)
+		return logical_plan.Join(newLeft, newRight, p.OpType(), p.On)
 	case *logical_plan.SortOp:
 		extractColumnsFromExprs(p.Exprs(), p.Inputs()[0], seen)
 		newInput := r.pushDown(p.Inputs()[0], seen)
