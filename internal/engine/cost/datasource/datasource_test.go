@@ -1,4 +1,4 @@
-package cost
+package datasource
 
 import (
 	"testing"
@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// testSchemaUsers is the same as first line of ./testdata/users.csv
-var testSchemaUsers = Schema(
+// testSchemaUsers is the same as first line of ../../testdata/users.csv
+var testSchemaUsers = NewSchema(
 	Field{
 		Name: "id",
 		Type: "int",
@@ -30,7 +30,7 @@ var testSchemaUsers = Schema(
 	},
 )
 
-// testDataUsers is the same as ./testdata/users.csv
+// testDataUsers is the same as ../../testdata/users.csv
 var testDataUsers = []row{
 	{
 		NewLiteralColumnValue(1),
@@ -69,7 +69,7 @@ var testDataUsers = []row{
 	},
 }
 
-func checkRecords(t *testing.T, result *record, expectedSchema *schema, expectedData []row) {
+func checkRecords(t *testing.T, result *record, expectedSchema *Schema, expectedData []row) {
 	t.Helper()
 
 	s := result.Schema()
@@ -99,7 +99,7 @@ func TestMemDataSource_scanWithProjection(t *testing.T) {
 	ds := NewMemDataSource(testSchemaUsers, testDataUsers)
 
 	// Test filtered result
-	expectedSchema := Schema(
+	expectedSchema := NewSchema(
 		Field{
 			Name: "username",
 			Type: "string",
@@ -137,7 +137,7 @@ func TestMemDataSource_scanWithProjection(t *testing.T) {
 }
 
 func TestCSVDataSource(t *testing.T) {
-	dataFilePath := "./testdata/users.csv"
+	dataFilePath := "../../testdata/users.csv"
 	ds, err := NewCSVDataSource(dataFilePath)
 	assert.NoError(t, err)
 
@@ -145,12 +145,12 @@ func TestCSVDataSource(t *testing.T) {
 }
 
 func TestCSVDataSource_scanWithProjection(t *testing.T) {
-	dataFilePath := "./testdata/users.csv"
+	dataFilePath := "../../testdata/users.csv"
 	ds, err := NewCSVDataSource(dataFilePath)
 	assert.NoError(t, err)
 
 	// Test filtered result
-	expectedSchema := Schema(
+	expectedSchema := NewSchema(
 		Field{
 			Name: "id",
 			Type: "int",

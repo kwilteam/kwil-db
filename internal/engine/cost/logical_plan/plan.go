@@ -1,31 +1,22 @@
-package cost
+package logical_plan
 
 import (
 	"bytes"
 	"fmt"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 )
-
-// Field represents a field in a schema.
-type Field struct {
-	Name string
-	Type string
-}
-
-type schema struct {
-	Fields []Field
-}
-
-func Schema(fields ...Field) *schema {
-	return &schema{Fields: fields}
-}
 
 type LogicalPlan interface {
 	fmt.Stringer
 
 	// Schema returns the schema of the data that will be produced by this LogicalPlan.
-	Schema() *schema
+	Schema() *datasource.Schema
 
 	Inputs() []LogicalPlan
+
+	// Exprs returns all expressions in the current logical plan node.
+	// This does not include expressions in plan's inputs
+	Exprs() []LogicalExpr
 }
 
 type AlgebraOperation interface {
@@ -39,7 +30,7 @@ type AlgebraOperation interface {
 	Aggregate(groupBy []LogicalExpr, aggregateExpr []AggregateExpr) AlgebraOperation
 
 	// Schema returns the schema of the data that will be produced by this AlgebraOperation.
-	Schema() *schema
+	Schema() *datasource.Schema
 
 	// LogicalPlan returns the logical plan
 	LogicalPlan() LogicalPlan
@@ -61,7 +52,7 @@ func (df *AlgebraOpBuilder) Aggregate(groupBy []LogicalExpr, aggregateExpr []Agg
 	return &AlgebraOpBuilder{Aggregate(df.plan, groupBy, aggregateExpr)}
 }
 
-func (df *AlgebraOpBuilder) Schema() *schema {
+func (df *AlgebraOpBuilder) Schema() *datasource.Schema {
 	return df.plan.Schema()
 }
 

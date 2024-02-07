@@ -1,6 +1,9 @@
-package cost
+package logical_plan
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+)
 
 // LogicalExpr represents the strategies to access the required data.
 // It's different from tree.Expression in that it will be used to access the data.
@@ -9,97 +12,97 @@ type LogicalExpr interface {
 
 	// Resolve returns the field that this expression represents from the input
 	// logical plan.
-	Resolve(LogicalPlan) Field
+	Resolve(LogicalPlan) datasource.Field
 }
 
-// columnExpr represents a column in a schema.
+// ColumnExpr represents a column in a schema.
 // NOTE: it will be transformed to columnIdxExpr in the logical plan.????
-type columnExpr struct {
+type ColumnExpr struct {
 	table string
-	name  string
+	Name  string
 }
 
-func (c *columnExpr) String() string {
-	return c.name
+func (c *ColumnExpr) String() string {
+	return c.Name
 }
 
-func (c *columnExpr) Resolve(plan LogicalPlan) Field {
+func (c *ColumnExpr) Resolve(plan LogicalPlan) datasource.Field {
 	for _, field := range plan.Schema().Fields {
-		if field.Name == c.name {
+		if field.Name == c.Name {
 			return field
 		}
 	}
-	panic(fmt.Sprintf("field %s not found", c.name))
+	panic(fmt.Sprintf("field %s not found", c.Name))
 }
 
 func Column(table, name string) LogicalExpr {
-	return &columnExpr{table: table, name: name}
+	return &ColumnExpr{table: table, Name: name}
 }
 
-// columnIdxExpr represents a column in a schema by its index.
-type columnIdxExpr struct {
-	idx int
+// ColumnIdxExpr represents a column in a schema by its index.
+type ColumnIdxExpr struct {
+	Idx int
 }
 
-func (c *columnIdxExpr) String() string {
-	return fmt.Sprintf("$%d", c.idx)
+func (c *ColumnIdxExpr) String() string {
+	return fmt.Sprintf("$%d", c.Idx)
 }
 
-func (c *columnIdxExpr) Resolve(plan LogicalPlan) Field {
-	return plan.Schema().Fields[c.idx]
+func (c *ColumnIdxExpr) Resolve(plan LogicalPlan) datasource.Field {
+	return plan.Schema().Fields[c.Idx]
 }
 
 func ColumnIdx(idx int) LogicalExpr {
-	return &columnIdxExpr{idx: idx}
+	return &ColumnIdxExpr{Idx: idx}
 }
 
-type aliasExpr struct {
-	expr  LogicalExpr
-	alias string
+type AliasExpr struct {
+	Expr  LogicalExpr
+	Alias string
 }
 
-func (a *aliasExpr) String() string {
-	return fmt.Sprintf("%s AS %s", a.expr, a.alias)
+func (a *AliasExpr) String() string {
+	return fmt.Sprintf("%s AS %s", a.Expr, a.Alias)
 }
 
-func (a *aliasExpr) Resolve(plan LogicalPlan) Field {
-	return Field{Name: a.alias, Type: a.expr.Resolve(plan).Type}
+func (a *AliasExpr) Resolve(plan LogicalPlan) datasource.Field {
+	return datasource.Field{Name: a.Alias, Type: a.Expr.Resolve(plan).Type}
 }
 
 func Alias(expr LogicalExpr, alias string) LogicalExpr {
-	return &aliasExpr{expr: expr, alias: alias}
+	return &AliasExpr{Expr: expr, Alias: alias}
 }
 
-type literalStringExpr struct {
+type LiteralStringExpr struct {
 	value string
 }
 
-func (l *literalStringExpr) String() string {
+func (l *LiteralStringExpr) String() string {
 	return l.value
 }
 
-func (l *literalStringExpr) Resolve(LogicalPlan) Field {
-	return Field{Name: l.value, Type: "text"}
+func (l *LiteralStringExpr) Resolve(LogicalPlan) datasource.Field {
+	return datasource.Field{Name: l.value, Type: "text"}
 }
 
 func LiteralString(value string) LogicalExpr {
-	return &literalStringExpr{value: value}
+	return &LiteralStringExpr{value: value}
 }
 
-type literalIntExpr struct {
+type LiteralIntExpr struct {
 	value int
 }
 
-func (l *literalIntExpr) String() string {
+func (l *LiteralIntExpr) String() string {
 	return fmt.Sprintf("%d", l.value)
 }
 
-func (l *literalIntExpr) Resolve(LogicalPlan) Field {
-	return Field{Name: fmt.Sprintf("%d", l.value), Type: "int"}
+func (l *LiteralIntExpr) Resolve(LogicalPlan) datasource.Field {
+	return datasource.Field{Name: fmt.Sprintf("%d", l.value), Type: "int"}
 }
 
 func LiteralInt(value int) LogicalExpr {
-	return &literalIntExpr{value: value}
+	return &LiteralIntExpr{value: value}
 }
 
 type OpExpr interface {
@@ -110,6 +113,8 @@ type OpExpr interface {
 
 type UnaryExpr interface {
 	OpExpr
+
+	E() LogicalExpr
 }
 
 type unaryExpr struct {
@@ -126,8 +131,12 @@ func (n *unaryExpr) Op() string {
 	return n.op
 }
 
-func (n *unaryExpr) Resolve(LogicalPlan) Field {
-	return Field{Name: n.name, Type: "bool"}
+func (n *unaryExpr) Resolve(LogicalPlan) datasource.Field {
+	return datasource.Field{Name: n.name, Type: "bool"}
+}
+
+func (n *unaryExpr) E() LogicalExpr {
+	return n.expr
 }
 
 func Not(expr LogicalExpr) UnaryExpr {
@@ -175,8 +184,8 @@ func (e *boolBinaryExpr) R() LogicalExpr {
 	return e.r
 }
 
-func (e *boolBinaryExpr) Resolve(LogicalPlan) Field {
-	return Field{Name: e.name, Type: "bool"}
+func (e *boolBinaryExpr) Resolve(LogicalPlan) datasource.Field {
+	return datasource.Field{Name: e.name, Type: "bool"}
 }
 
 func (e *boolBinaryExpr) returnBool() {}
@@ -284,8 +293,8 @@ func (e *arithmeticBinaryExpr) R() LogicalExpr {
 	return e.r
 }
 
-func (e *arithmeticBinaryExpr) Resolve(plan LogicalPlan) Field {
-	return Field{Name: e.name, Type: e.l.Resolve(plan).Type}
+func (e *arithmeticBinaryExpr) Resolve(plan LogicalPlan) datasource.Field {
+	return datasource.Field{Name: e.name, Type: e.l.Resolve(plan).Type}
 }
 
 func (e *arithmeticBinaryExpr) returnOperandType() {}
@@ -329,6 +338,7 @@ func Div(l, r LogicalExpr) BinaryExpr {
 type AggregateExpr interface {
 	LogicalExpr
 
+	E() LogicalExpr
 	aggregate()
 }
 
@@ -344,8 +354,12 @@ func (a *aggregateExpr) String() string {
 	return fmt.Sprintf("%s(%s)", a.name, a.expr)
 }
 
-func (a *aggregateExpr) Resolve(plan LogicalPlan) Field {
-	return Field{Name: a.name, Type: a.expr.Resolve(plan).Type}
+func (a *aggregateExpr) Resolve(plan LogicalPlan) datasource.Field {
+	return datasource.Field{Name: a.name, Type: a.expr.Resolve(plan).Type}
+}
+
+func (a *aggregateExpr) E() LogicalExpr {
+	return a.expr
 }
 
 func (a *aggregateExpr) aggregate() {}
@@ -376,8 +390,12 @@ func (a *aggregateIntExpr) String() string {
 	return fmt.Sprintf("%s(%s)", a.name, a.expr)
 }
 
-func (a *aggregateIntExpr) Resolve(LogicalPlan) Field {
-	return Field{Name: a.name, Type: "int"}
+func (a *aggregateIntExpr) Resolve(LogicalPlan) datasource.Field {
+	return datasource.Field{Name: a.name, Type: "int"}
+}
+
+func (a *aggregateIntExpr) E() LogicalExpr {
+	return a.expr
 }
 
 func (a *aggregateIntExpr) aggregate() {}
