@@ -6,41 +6,6 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
-// // NamedParametersVisitor visits the AST and changes all $var binds to @var_arg
-// // binds so that a uniform (with @caller etc.) numbered parameter rewriting can
-// // be done downstream.
-// type NamedParametersVisitor struct {
-// 	tree.Walker
-// 	Binds map[string]string // base => new param e.g. "id": "@id_arg"
-// }
-
-// func NewNamedParametersVisitor() *NamedParametersVisitor {
-// 	return &NamedParametersVisitor{
-// 		Walker: tree.NewBaseWalker(),
-// 		Binds:  make(map[string]string),
-// 	}
-// }
-
-// func (p *NamedParametersVisitor) EnterExpressionBindParameter(b *tree.ExpressionBindParameter) error {
-// 	// $id => @id_arg
-// 	if base, cut := strings.CutPrefix(b.Parameter, "$"); cut {
-// 		b.Parameter = "@" + base + "_arg"
-// 		p.Binds[base] = b.Parameter
-// 		return nil
-// 	}
-
-// 	if base, cut := strings.CutPrefix(b.Parameter, "@"); cut {
-// 		p.Binds[base] = b.Parameter
-// 		return nil
-// 	}
-
-// 	// shouldn't happen since parser says binds are prefixed by [$@]
-
-// 	p.Binds[b.Parameter] = b.Parameter
-
-// 	return nil
-// }
-
 // ParametersVisitor visits the AST and replaces all bind parameters with numbered parameters.
 type ParametersVisitor struct {
 	// OrderedParameters are the passed named identifiers in the order that they have become numbered.

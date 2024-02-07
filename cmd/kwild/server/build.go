@@ -134,16 +134,6 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	}
 }
 
-// db / committable names, to prevent breaking changes
-const (
-	// These "DB names" are used as labels in the atomic committer. Under the
-	// hood they are all part of the same PostgreSQL database, just with their
-	// tables in different PostgreSQL "schema".
-	accountsDBName  = "accounts"
-	validatorDBName = "validators"
-	engineName      = "engine"
-)
-
 // dbOpener opens a sessioned database connection.  Note that in this function the
 // dbName is not a Kwil dataset, but a database that can contain multiple
 // datasets in different postgresql "schema".
