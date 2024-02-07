@@ -1,4 +1,4 @@
-package cost
+package datasource
 
 import (
 	"encoding/csv"
@@ -8,6 +8,21 @@ import (
 	"strconv"
 )
 
+// Field represents a field in a schema.
+type Field struct {
+	Name string
+	Type string
+}
+
+type Schema struct {
+	Fields []Field
+}
+
+func NewSchema(fields ...Field) *Schema {
+	return &Schema{Fields: fields}
+}
+
+// ColumnValue
 type ColumnValue interface {
 	Type() string
 	Value() any
@@ -45,17 +60,18 @@ func newRowIterator(rows []row) rowIterator {
 }
 
 type record struct {
-	schema *schema
+	schema *Schema
 	rows   rowIterator
 
 	idx int
 }
 
-func Record(s *schema, rows []row) *record {
+func Record(s *Schema, rows []row) *record {
+	// TODO: use rowIterator all the way
 	return &record{schema: s, rows: newRowIterator(rows)}
 }
 
-func (r *record) Schema() *schema {
+func (r *record) Schema() *Schema {
 	return r.schema
 }
 
@@ -63,7 +79,7 @@ type DataSourceType string
 
 type DataSource interface {
 	// Schema returns the schema for the underlying data source
-	Schema() *schema
+	Schema() *Schema
 	// Scan scans the data source, return selected columns.
 	// If projection field is not found in the schema, it will be ignored.
 	// NOTE: should panic?
@@ -77,7 +93,7 @@ type DataSource interface {
 
 // dsScan read the data source, return selected columns.
 // TODO: use channel to return the result, e.g. iterator model.
-func dsScan(dsSchema *schema, dsRecords []row, projection []string) *record {
+func dsScan(dsSchema *Schema, dsRecords []row, projection []string) *record {
 	if len(projection) == 0 {
 		return Record(dsSchema, dsRecords)
 	}
@@ -111,7 +127,7 @@ func dsScan(dsSchema *schema, dsRecords []row, projection []string) *record {
 		newFields[i] = dsSchema.Fields[idx]
 	}
 
-	newschema := Schema(newFields...)
+	newschema := NewSchema(newFields...)
 
 	newRecords := make([]row, len(dsRecords))
 	for i, _row := range dsRecords {
@@ -127,15 +143,15 @@ func dsScan(dsSchema *schema, dsRecords []row, projection []string) *record {
 
 // memDataSource is a data source that reads data from memory.
 type memDataSource struct {
-	schema  *schema
+	schema  *Schema
 	records []row
 }
 
-func NewMemDataSource(s *schema, data []row) *memDataSource {
+func NewMemDataSource(s *Schema, data []row) *memDataSource {
 	return &memDataSource{schema: s, records: data}
 }
 
-func (ds *memDataSource) Schema() *schema {
+func (ds *memDataSource) Schema() *Schema {
 	return ds.schema
 }
 
@@ -151,11 +167,11 @@ func (ds *memDataSource) SourceType() DataSourceType {
 type csvDataSource struct {
 	path    string
 	records []row
-	schema  *schema
+	schema  *Schema
 }
 
 func NewCSVDataSource(path string) (*csvDataSource, error) {
-	ds := &csvDataSource{path: path, schema: &schema{}}
+	ds := &csvDataSource{path: path, schema: &Schema{}}
 	if err := ds.load(); err != nil {
 		return nil, err
 	}
@@ -228,7 +244,7 @@ func (ds *csvDataSource) load() error {
 	return nil
 }
 
-func (ds *csvDataSource) Schema() *schema {
+func (ds *csvDataSource) Schema() *Schema {
 	return ds.schema
 }
 
