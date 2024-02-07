@@ -6,7 +6,8 @@ import (
 	"strings"
 )
 
-// ScanOp represents a table scan operator.
+// ScanOp represents a table scan operator, which produces rows from a table.
+// It corresponds to `FROM` clause in SQL.
 type ScanOp struct {
 	table      string
 	dataSource datasource.DataSource
@@ -48,7 +49,9 @@ func Scan(table string, ds datasource.DataSource, projection ...string) LogicalP
 	return &ScanOp{table: table, dataSource: ds, projection: projection}
 }
 
-// ProjectionOp represents a projection operator.
+// ProjectionOp represents a projection operator, which produces new columns
+// from the input by evaluating given expressions.
+// It corresponds to `SELECT (expr...)` clause in SQL.
 type ProjectionOp struct {
 	input LogicalPlan
 	exprs []LogicalExpr
@@ -86,7 +89,9 @@ func Projection(plan LogicalPlan, exprs ...LogicalExpr) LogicalPlan {
 	}
 }
 
-// SelectionOp represents a selection/filter operator.
+// SelectionOp represents a selection operator, which filters out rows
+// from the input that the expr evaluates to false.
+// It corresponds to `WHERE expr` clause in SQL.
 type SelectionOp struct {
 	input LogicalPlan
 	exprs []LogicalExpr // here we break to individual filter
@@ -116,7 +121,9 @@ func Selection(plan LogicalPlan, exprs ...LogicalExpr) LogicalPlan {
 	}
 }
 
-// AggregateOp represents an aggregation operator.
+// AggregateOp represents an aggregation operator, which groups rows by
+// groupBy columns and evaluates aggregate expressions.
+// It corresponds to `GROUP BY` clause in SQL.
 type AggregateOp struct {
 	input     LogicalPlan
 	groupBy   []LogicalExpr
@@ -178,7 +185,9 @@ func Aggregate(plan LogicalPlan, groupBy []LogicalExpr,
 	}
 }
 
-// LimitOp represents a limit operator.
+// LimitOp represents a limit operator, which limits the number of rows
+// from the input.
+// It corresponds to `LIMIT` clause in SQL.
 type LimitOp struct {
 	input  LogicalPlan
 	limit  int
@@ -218,7 +227,9 @@ func Limit(plan LogicalPlan, limit int, offset int) LogicalPlan {
 	}
 }
 
-// SortOp represents a sort operator.
+// SortOp represents a sort operator, which sorts the rows from the input by
+// the given column and order.
+// It corresponds to `ORDER BY` clause in SQL.
 type SortOp struct {
 	input LogicalPlan
 	by    []LogicalExpr
@@ -254,16 +265,16 @@ func Sort(plan LogicalPlan, by []LogicalExpr, asc bool) LogicalPlan {
 	}
 }
 
-type JoinKind int
+type JoinType int
 
 const (
-	InnerJoin JoinKind = iota
+	InnerJoin JoinType = iota
 	LeftJoin
 	RightJoin
 	FullJoin
 )
 
-func (j JoinKind) String() string {
+func (j JoinType) String() string {
 	switch j {
 	case InnerJoin:
 		return "InnerJoin"
@@ -278,17 +289,24 @@ func (j JoinKind) String() string {
 	}
 }
 
+// JoinOp represents a join operator, which joins two inputs(combine columns).
+// It corresponds to `JOIN` clause in SQL.
 type JoinOp struct {
-	left  LogicalPlan
-	right LogicalPlan
-	Kind  JoinKind
-	On    LogicalExpr
+	left   LogicalPlan
+	right  LogicalPlan
+	opType JoinType
+	On     LogicalExpr
 }
 
 func (j *JoinOp) String() string {
-	return fmt.Sprintf("%s: %s", j.Kind, j.On)
+	return fmt.Sprintf("%s: %s", j.opType, j.On)
 }
 
+func (j *JoinOp) OpType() JoinType {
+	return j.opType
+}
+
+// Schema returns the combination of left and right schema
 func (j *JoinOp) Schema() *datasource.Schema {
 	leftFields := j.left.Schema().Fields
 	rightFields := j.right.Schema().Fields
@@ -307,12 +325,128 @@ func (j *JoinOp) Exprs() []LogicalExpr {
 }
 
 // Join creates a join logical plan.
-func Join(left LogicalPlan, right LogicalPlan, kind JoinKind,
+func Join(left LogicalPlan, right LogicalPlan, kind JoinType,
 	on LogicalExpr) LogicalPlan {
 	return &JoinOp{
-		left:  left,
-		right: right,
-		Kind:  kind,
-		On:    on,
+		left:   left,
+		right:  right,
+		opType: kind,
+		On:     on,
+	}
+}
+
+// BagOpType represents the opType of bag operator.
+type BagOpType int
+
+const (
+	BagUnion BagOpType = iota
+	BagUnionAll
+	BagIntersect
+)
+
+func (b BagOpType) String() string {
+	switch b {
+	case BagUnion:
+		return "Union"
+	case BagUnionAll:
+		return "UnionAll"
+	case BagIntersect:
+		return "Intersect"
+	default:
+		return "Unknown"
+	}
+
+}
+
+// BagOp represents a union(all) or intersect operator, which combines two
+// inputs(combine rows).
+// It corresponds to `UNION`, `UNION ALL` and `INTERSECT` clause in SQL.
+// NOTE: here we use 'bag' instead of 'set', since it allows duplicate rows for
+// BagUnionAll.
+type BagOp struct {
+	left   LogicalPlan
+	right  LogicalPlan
+	opType BagOpType
+}
+
+func (u *BagOp) WithDuplicate() bool {
+	return u.opType == BagUnionAll
+}
+
+func (u *BagOp) OpType() BagOpType {
+	return u.opType
+}
+
+func (u *BagOp) String() string {
+	return fmt.Sprintf("%s: %s, %s", u.opType, u.left, u.right)
+}
+
+// Schema returns the schema of the left plan, since they should be the same.
+func (u *BagOp) Schema() *datasource.Schema {
+	return u.left.Schema()
+}
+
+func (u *BagOp) Inputs() []LogicalPlan {
+	return []LogicalPlan{u.left, u.right}
+}
+
+func (u *BagOp) Exprs() []LogicalExpr {
+	return []LogicalExpr{}
+}
+
+// Union creates a union or union all logical plan.
+func Union(left LogicalPlan, right LogicalPlan, withDuplicate bool) LogicalPlan {
+	kind := BagUnion
+	if withDuplicate {
+		kind = BagUnionAll
+	}
+	return &BagOp{
+		left:   left,
+		right:  right,
+		opType: kind,
+	}
+}
+
+// Intersect creates an intersect logical plan.
+func Intersect(left LogicalPlan, right LogicalPlan) LogicalPlan {
+	return &BagOp{
+		left:   left,
+		right:  right,
+		opType: BagIntersect,
+	}
+}
+
+// SubqueryOp represents a subquery operator.
+// It corresponds to a subquery in SQL.
+type SubqueryOp struct {
+	input LogicalPlan
+	alias string
+}
+
+func (s *SubqueryOp) Alias() string {
+	return s.alias
+}
+
+func (s *SubqueryOp) String() string {
+	return fmt.Sprintf("Subquery: %s", s.alias)
+}
+
+func (s *SubqueryOp) Schema() *datasource.Schema {
+	return s.input.Schema()
+}
+
+func (s *SubqueryOp) Inputs() []LogicalPlan {
+	return []LogicalPlan{s.input}
+}
+
+func (s *SubqueryOp) Exprs() []LogicalExpr {
+	return s.input.Exprs()
+}
+
+// Subquery creates a subquery logical plan.
+func Subquery(plan LogicalPlan, alias string) LogicalPlan {
+	return &SubqueryOp{
+		input: plan,
+		alias: alias,
 	}
 }
