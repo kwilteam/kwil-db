@@ -16,18 +16,23 @@ import (
 // Commit and Rollback methods.
 type nestedTx struct {
 	pgx.Tx
+	accessMode sql.AccessMode
 }
 
-var _ sql.Tx = (*nestedTx)(nil)
+var _ sql.OuterTx = (*nestedTx)(nil)
 
-func (tx *nestedTx) BeginTx(ctx context.Context) (sql.Tx, error) {
+// TODO: switch this to be BeginTx
+func (tx *nestedTx) BeginSavepoint(ctx context.Context) (sql.Tx, error) {
 	// Make the nested transaction (savepoint)
 	pgtx, err := tx.Tx.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &nestedTx{pgtx}, nil
+	return &nestedTx{
+		Tx:         pgtx,
+		accessMode: tx.accessMode,
+	}, nil
 }
 
 func (tx *nestedTx) Query(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
@@ -45,6 +50,11 @@ func (tx *nestedTx) Precommit(context.Context) ([]byte, error) {
 	return nil, errors.New("cannot prepare transaction from a nested transaction")
 }
 
+// AccessMode returns the access mode of the transaction.
+func (tx *nestedTx) AccessMode() sql.AccessMode {
+	return tx.accessMode
+}
+
 // Commit is direct from embedded pgx.Tx.
 // func (tx *nestedTx) Commit(ctx context.Context) error { return tx.Tx.Commit(ctx) }
 
@@ -57,8 +67,9 @@ func (tx *nestedTx) Precommit(context.Context) ([]byte, error) {
 // and Rollback to allow the DB to begin a subsequent transaction, and to
 // coordinate the two-phase commit process using a "prepared transaction".
 type dbTx struct {
-	*nestedTx     // should embed pgx.Tx
-	db        *DB // for top level DB lifetime mgmt
+	*nestedTx      // should embed pgx.Tx
+	db         *DB // for top level DB lifetime mgmt
+	accessMode sql.AccessMode
 }
 
 // Precommit creates a prepared transaction for a two-phase commit. An ID
@@ -76,4 +87,21 @@ func (tx *dbTx) Commit(ctx context.Context) error {
 // Rollback rolls back the transaction. This partly satisfies sql.Tx.
 func (tx *dbTx) Rollback(ctx context.Context) error {
 	return tx.db.rollback(ctx)
+}
+
+// AccessMode returns the access mode of the transaction.
+func (tx *dbTx) AccessMode() sql.AccessMode {
+	return tx.accessMode
+}
+
+// pgxAccessLevel converts a sql.AccessMode to a pgx.TxAccessMode.
+func pgxAccessLevel(a sql.AccessMode) pgx.TxAccessMode {
+	switch a {
+	case sql.ReadOnly:
+		return pgx.ReadOnly
+	case sql.ReadWrite:
+		return pgx.ReadWrite
+	default:
+		panic("unknown access level")
+	}
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/kwilteam/kwil-db/internal/sql"
 	// "github.com/kwilteam/kwil-db/internal/conv"
 )
 
@@ -35,7 +36,7 @@ var (
 			MaxConns: 11,
 		},
 		SchemaFilter: func(s string) bool {
-			return strings.Contains(s, "ds_")
+			return strings.Contains(s, DefaultSchemaFilterPrefix)
 		},
 	}
 )
@@ -253,13 +254,13 @@ func TestNestedTx(t *testing.T) {
 	}
 
 	// Start the outer transaction.
-	tx, err := db.BeginTx(ctx)
+	tx, err := db.BeginTx(ctx, sql.ReadWrite)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(ctx)
 
-	_, err = tx.Query(ctx, pingStmt)
+	_, err = tx.Execute(ctx, pingStmt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,14 +272,14 @@ func TestNestedTx(t *testing.T) {
 	// tx.begintx below would then error with "tx is closed" (TODO: test that)
 
 	// Start savepoint 0
-	txNested, err := tx.BeginTx(ctx)
+	txNested, err := tx.BeginSavepoint(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer txNested.Rollback(ctx)
 
 	// OK query
-	_, err = txNested.Query(ctx, pingStmt)
+	_, err = txNested.Execute(ctx, pingStmt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,13 +291,13 @@ func TestNestedTx(t *testing.T) {
 	}
 
 	// Start savepoint 1
-	txNested2, err := tx.BeginTx(ctx)
+	txNested2, err := tx.BeginSavepoint(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Query error
-	_, err = txNested2.Query(ctx, `SELECT notathing;`)
+	_, err = txNested2.Execute(ctx, `SELECT notathing;`)
 	if err == nil {
 		t.Fatal("should have errored") // expect error
 	}
@@ -309,13 +310,13 @@ func TestNestedTx(t *testing.T) {
 	}
 
 	// Now we should be able to keep going.  Make savepoint 3:
-	txNested3, err := tx.BeginTx(ctx)
+	txNested3, err := tx.BeginSavepoint(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer txNested3.Rollback(ctx)
 
-	_, err = txNested3.Query(ctx, pingStmt)
+	_, err = txNested3.Execute(ctx, pingStmt)
 	if err != nil {
 		t.Fatal(err)
 	}

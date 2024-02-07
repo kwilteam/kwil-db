@@ -155,7 +155,7 @@ func (v *VoteProcessor) Expire(ctx context.Context, blockheight int64) error {
 		return err
 	}
 
-	if len(res.Columns()) != 1 {
+	if len(res.Columns) != 1 {
 		// this should never happen, just for safety
 		return fmt.Errorf("invalid number of columns returned. this is an internal bug")
 	}
@@ -382,7 +382,7 @@ func (v *VoteProcessor) GetVoterPower(ctx context.Context, identifier []byte) (p
 		return 0, err
 	}
 
-	if len(res.Columns()) != 1 {
+	if len(res.Columns) != 1 {
 		// this should never happen, just for safety
 		return 0, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 	}
@@ -456,7 +456,7 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 		return nil, nil // sp.Commit()
 	}
 
-	if len(res.ReturnedColumns) != 4 {
+	if len(res.Columns) != 4 {
 		// this should never happen, just for safety
 		return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 	}

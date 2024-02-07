@@ -57,8 +57,10 @@ type DBConfig struct {
 	SchemaFilter func(string) bool
 }
 
+const DefaultSchemaFilterPrefix = "ds_"
+
 var defaultSchemaFilter = func(schema string) bool {
-	return strings.HasPrefix(schema, "ds_")
+	return strings.HasPrefix(schema, DefaultSchemaFilterPrefix)
 }
 
 // [dev note] Transaction sequencing flow:
@@ -169,7 +171,7 @@ var _ sql.Executor = (*DB)(nil)
 var _ sql.Queryer = (*DB)(nil)
 var _ sql.KV = (*DB)(nil)
 
-var _ sql.TxMaker = (*DB)(nil) // for dataset Registry
+var _ sql.OuterTxMaker = (*DB)(nil) // for dataset Registry
 
 // BeginTx makes the DB's singular transaction, which is used automatically by
 // consumers of the Query and Execute methods. This is the mode of operation
@@ -179,14 +181,21 @@ var _ sql.TxMaker = (*DB)(nil) // for dataset Registry
 // The returned transaction is also capable of creating nested transactions.
 // This functionality is used to prevent user dataset query errors from rolling
 // back the outermost transaction.
-func (db *DB) BeginTx(ctx context.Context) (sql.Tx, error) {
-	tx, err := db.beginTx(ctx)
+func (db *DB) BeginTx(ctx context.Context, am sql.AccessMode) (sql.OuterTx, error) {
+	tx, err := db.beginTx(ctx, am)
 	if err != nil {
 		return nil, err
 	}
 
-	ntx := &nestedTx{tx}
-	return &dbTx{ntx, db}, nil
+	ntx := &nestedTx{
+		Tx:         tx,
+		accessMode: am,
+	}
+	return &dbTx{
+		nestedTx:   ntx,
+		db:         db,
+		accessMode: am,
+	}, nil
 }
 
 var _ sql.TxBeginner = (*DB)(nil) // for CommittableStore => MultiCommitter
@@ -195,11 +204,11 @@ var _ sql.TxBeginner = (*DB)(nil) // for CommittableStore => MultiCommitter
 // same instance of the concrete type, a case which annoyingly creates
 // incompatible interfaces in Go.
 func (db *DB) Begin(ctx context.Context) (sql.TxCloser, error) {
-	return db.BeginTx(ctx) // just slice down sql.Tx
+	return db.BeginTx(ctx, sql.ReadWrite) // just slice down sql.Tx
 }
 
 // beginTx is the critical section of BeginTx
-func (db *DB) beginTx(ctx context.Context) (pgx.Tx, error) {
+func (db *DB) beginTx(ctx context.Context, am sql.AccessMode) (pgx.Tx, error) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
@@ -208,7 +217,7 @@ func (db *DB) beginTx(ctx context.Context) (pgx.Tx, error) {
 	}
 
 	tx, err := db.pool.writer.BeginTx(ctx, pgx.TxOptions{
-		AccessMode: pgx.ReadWrite,
+		AccessMode: pgxAccessLevel(am),
 		IsoLevel:   pgx.RepeatableRead,
 	})
 	if err != nil {

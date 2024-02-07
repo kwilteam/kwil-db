@@ -84,8 +84,9 @@ type AccountsModule interface {
 type TxApp interface {
 	GenesisInit(ctx context.Context, validators []*types.Validator) error
 	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
-	Begin(ctx context.Context, blockHeight int64) error
-	Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)
+	Begin(ctx context.Context) error
+	Finalize(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)
+	Commit(ctx context.Context) error
 	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
 	ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error)
 }

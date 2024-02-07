@@ -8,12 +8,17 @@ import (
 )
 
 func (s *Service) Query(ctx context.Context, req *txpb.QueryRequest) (*txpb.QueryResponse, error) {
-	result, err := s.engine.Query(ctx, req.Dbid, req.Query)
+	tx, err := s.readTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	bts, err := json.Marshal(result)
+	result, err := s.engine.Query(ctx, tx, req.Dbid, req.Query)
+	if err != nil {
+		return nil, err
+	}
+
+	bts, err := json.Marshal(result.Map()) // marshalling the map is less efficient, but necessary for backwards compatibility
 	if err != nil {
 		return nil, err
 	}

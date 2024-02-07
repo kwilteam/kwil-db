@@ -32,11 +32,9 @@ import (
 	kwilgrpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 	healthcheck "github.com/kwilteam/kwil-db/internal/services/health"
 	simple_checker "github.com/kwilteam/kwil-db/internal/services/health/simple-checker"
-	"github.com/kwilteam/kwil-db/internal/sessions"
-	"github.com/kwilteam/kwil-db/internal/sessions/committable"
+	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/sql/adapter"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
-	"github.com/kwilteam/kwil-db/internal/sql/registry"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
 	"github.com/kwilteam/kwil-db/internal/voting"
@@ -60,11 +58,8 @@ import (
 )
 
 func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
-	// atomic committer
-	ac := buildCommitter(d, closers)
-
-	// registry
-	reg, db := buildRegistry(d, closers)
+	// main postgres db
+	db := buildDB(d, closers)
 
 	// Must of setup and initialization performs database writes outside of
 	// ABCI's DB sessions, so put the DB in auto-commit mode to allow writes
@@ -72,20 +67,20 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	db.AutoCommit(true) // alt: db.BeginTx ... defer tx.Rollback, etc.
 
 	// engine
-	e := buildEngine(d, closers, ac, reg)
+	e := buildEngine(d, closers, db)
 
 	// account store
-	accs := buildAccountRepository(d, db, ac)
+	accs := buildAccountRepository(d, db)
 
 	// validator updater and store
-	vstore := buildValidatorManager(d, db, ac)
+	vstore := buildValidatorManager(d, db)
 
 	snapshotModule := buildSnapshotter(d)
 
 	bootstrapperModule := buildBootstrapper(d)
 
 	// vote store
-	v := buildVoteStore(d, db, accs, reg)
+	v := buildVoteStore(d, db, accs)
 
 	// event store
 	ev := buildEventStore(d, closers)
@@ -98,10 +93,10 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// to get the comet node, we need the abci app
 	// to get the abci app, we need the tx router
 	// but the tx router needs the cometbft client
-	txApp := buildTxApp(d, accs, e, vstore, ac, v, ev)
+	txApp := buildTxApp(d, db, accs, e, vstore, v, ev)
 
 	abciApp := buildAbci(d, closers, accs, &validatorStoreAdapter{vstore},
-		txApp, ac, snapshotModule, bootstrapperModule)
+		txApp, snapshotModule, bootstrapperModule)
 
 	// buildCometNode immediately starts talking to the abciApp and replaying
 	// blocks (and using atomic db tx commits), i.e. calling
@@ -119,7 +114,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	om := buildOracleManager(d, closers, evm, cometBftNode, vstore)
 
 	// tx service and grpc server
-	txsvc := buildTxSvc(d, &engineAdapter{e},
+	txsvc := buildTxSvc(d, db, e,
 		&wrappedCometBFTClient{cometBftClient}, txApp)
 	grpcServer := buildGrpcServer(d, txsvc)
 
@@ -147,11 +142,6 @@ const (
 	accountsDBName  = "accounts"
 	validatorDBName = "validators"
 	engineName      = "engine"
-
-	// This is the postgresql schema prefix used for Kwil user datasets. We
-	// should probably get this from somewhere else, like the engine/types
-	// package since we're building the DB type to capture the registry's updates.
-	schemaDatasetPrefix = "ds_"
 )
 
 // dbOpener opens a sessioned database connection.  Note that in this function the
@@ -173,7 +163,7 @@ func newDBOpener(host, port, user, pass string) dbOpener {
 				MaxConns: maxConns,
 			},
 			SchemaFilter: func(s string) bool {
-				return strings.HasPrefix(s, schemaDatasetPrefix)
+				return strings.HasPrefix(s, pg.DefaultSchemaFilterPrefix)
 			},
 		}
 		return pg.NewDB(ctx, cfg)
@@ -232,14 +222,14 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
-func buildTxApp(d *coreDependencies, accs *accounts.AccountStore, db txapp.DatabaseEngine, validators txapp.ValidatorStore,
-	ac *sessions.MultiCommitter, voteStore txapp.VoteStore, eventStore txapp.EventStore) *txapp.TxApp {
-	return txapp.NewTxApp(db, accs, validators, ac, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore,
+func buildTxApp(d *coreDependencies, db *pg.DB, accs *accounts.AccountStore, engine txapp.ExecutionEngine, validators txapp.ValidatorStore,
+	voteStore txapp.VoteStore, eventStore txapp.EventStore) *txapp.TxApp {
+	return txapp.NewTxApp(db, engine, accs, validators, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore,
 		!d.genesisCfg.ConsensusParams.WithoutGasCosts, *d.log.Named("tx-router"))
 }
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule,
-	validatorModule abci.ValidatorModule, txApp abci.TxApp, ac *sessions.MultiCommitter,
+	validatorModule abci.ValidatorModule, txApp abci.TxApp,
 	snapshotter *snapshots.SnapshotStore, bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
 	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, config.ABCIInfoSubDirName)
 	badgerKv, err := badger.NewBadgerDB(d.ctx, badgerPath, &badger.Options{
@@ -267,7 +257,7 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		accountsModule,
 		validatorModule,
 		badgerKv,
-		ac, sh,
+		sh,
 		bootstrapper,
 		txApp,
 		&consensusParamAdapter{voteExpiry: d.genesisCfg.ConsensusParams.Votes.VoteExpiry},
@@ -279,12 +269,12 @@ func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broad
 	return broadcast.NewEventBroadcaster(ev, b, accs, v, buildSigner(d), d.genesisCfg.ChainID)
 }
 
-func buildVoteStore(d *coreDependencies, db *pg.DB, acc voting.AccountStore, reg *registry.Registry) *voting.VoteProcessor {
+func buildVoteStore(d *coreDependencies, db *pg.DB, acc voting.AccountStore) *voting.VoteProcessor {
 	// vote store operates on the sessioned write connection, but it does not
 	// register with the atomic committer as it does not affect the apphash,
 	// except via the transactions created from it.
-	v, err := voting.NewVoteProcessor(d.ctx, db,
-		acc, reg, 666667, *d.log.Named("vote-processor")) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
+	v, err := voting.NewVoteProcessor(d.ctx, db, // TODO: we need to replace this nil with a good replacement
+		acc, nil, 666667, *d.log.Named("vote-processor")) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
 	// yes, consensus parameters (threshold) shouldn't be here (or with that integer)
 	if err != nil {
 		failBuild(err, "failed to build vote store")
@@ -315,8 +305,8 @@ func buildEventMgr(es *events.EventStore, vs *voting.VoteProcessor) *events.Even
 	return events.NewEventMgr(es, vs)
 }
 
-func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication) *txSvc.Service {
-	return txSvc.NewService(txsvc, cometBftClient, nodeApp,
+func buildTxSvc(d *coreDependencies, db *pg.DB, txsvc txSvc.EngineReader, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication) *txSvc.Service {
+	return txSvc.NewService(db, txsvc, cometBftClient, nodeApp,
 		txSvc.WithLogger(*d.log.Named("tx-service")),
 	)
 }
@@ -336,21 +326,17 @@ func buildSigner(d *coreDependencies) *auth.Ed25519Signer {
 	return &auth.Ed25519Signer{Ed25519PrivateKey: *pk}
 }
 
-func buildRegistry(d *coreDependencies, closer *closeFuncs) (*registry.Registry, *pg.DB) {
-	engineDB, err := d.dbOpener(d.ctx, d.cfg.AppCfg.DBName, 11)
+func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
+	db, err := d.dbOpener(d.ctx, d.cfg.AppCfg.DBName, 11)
 	if err != nil {
 		failBuild(err, "kwild database open failed")
 	}
-	closer.addCloser(engineDB.Close)
-	reg, err := registry.New(d.ctx, engineDB, registry.WithLogger(*d.log.Named("registry")))
-	if err != nil {
-		failBuild(err, "failed to build registry")
-	}
+	closer.addCloser(db.Close)
 
-	return reg, engineDB
+	return db
 }
 
-func buildEngine(d *coreDependencies, closer *closeFuncs, ac *sessions.MultiCommitter, reg *registry.Registry) *execution.GlobalContext {
+func buildEngine(d *coreDependencies, closer *closeFuncs, db *pg.DB) *execution.GlobalContext {
 	extensions, err := getExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
 	if err != nil {
 		failBuild(err, "failed to get extensions")
@@ -360,37 +346,34 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, ac *sessions.MultiComm
 		d.log.Info("registered extension", zap.String("name", name))
 	}
 
-	eng, err := execution.NewGlobalContext(d.ctx, reg, extensions)
+	tx, err := db.BeginTx(d.ctx, sql.ReadWrite)
+	if err != nil {
+		failBuild(err, "failed to start transaction")
+	}
+	defer tx.Rollback(d.ctx)
+
+	eng, err := execution.NewGlobalContext(d.ctx, tx, extensions)
 	if err != nil {
 		failBuild(err, "failed to build engine")
 	}
 
-	// The Registry committable uses a filtered WAL digest from a logical
-	// replication slot. This committer is the one that actually begins and
-	// commits the one transaction on the *pg.DB. Other Committable's that use
-	// this DB must only be used to return the appropriate commit ID (apphash)
-	// from their Commit method, such as the Aggregator or Dummy types.
-	err = ac.Register(engineName, reg)
+	_, err = tx.Precommit(d.ctx)
 	if err != nil {
-		failBuild(err, "failed to register engine")
+		failBuild(err, "failed to precommit")
 	}
 
-	closer.addCloser(func() error { return reg.Close(d.ctx) })
+	err = tx.Commit(d.ctx)
+	if err != nil {
+		failBuild(err, "failed to commit")
+	}
 
 	return eng
 }
 
-func buildAccountRepository(d *coreDependencies, db *pg.DB, ac *sessions.MultiCommitter) *accounts.AccountStore {
-	// account store uses the Aggregator Committable's Register method to submit
-	// written data to be hashed into the commit ID returned to the
-	// MultiCommitter, and by piggybacking on a transaction created by the
-	// Registry committable on the same connection.
-	var com committable.Aggregator
-
+func buildAccountRepository(d *coreDependencies, db *pg.DB) *accounts.AccountStore {
 	genCfg := d.genesisCfg
 	as, err := accounts.NewAccountStore(d.ctx,
 		&adapter.DB{Datastore: db},
-		&com, // for Register
 		accounts.WithLogger(*d.log.Named("accountStore")),
 		accounts.WithNonces(!genCfg.ConsensusParams.WithoutNonces),
 		accounts.WithGasCosts(!genCfg.ConsensusParams.WithoutGasCosts),
@@ -399,15 +382,10 @@ func buildAccountRepository(d *coreDependencies, db *pg.DB, ac *sessions.MultiCo
 		failBuild(err, "failed to build account store")
 	}
 
-	err = ac.Register(accountsDBName, &com)
-	if err != nil {
-		failBuild(err, "failed to register account store")
-	}
-
 	return as
 }
 
-func buildValidatorManager(d *coreDependencies, db *pg.DB, ac *sessions.MultiCommitter) *vmgr.ValidatorMgr {
+func buildValidatorManager(d *coreDependencies, db *pg.DB) *vmgr.ValidatorMgr {
 	joinExpiry := d.genesisCfg.ConsensusParams.Validator.JoinExpiry
 	feeMultiplier := 1
 	if d.genesisCfg.ConsensusParams.WithoutGasCosts {
@@ -423,16 +401,6 @@ func buildValidatorManager(d *coreDependencies, db *pg.DB, ac *sessions.MultiCom
 	if err != nil {
 		failBuild(err, "failed to build validator store")
 	}
-
-	// validator dictates the commit ID that the Committable returns to the
-	// MultiCommitter, and without making a new transaction and instead using an
-	// transaction created on the same connection by the Registry's committable.
-	com := &committable.Dummy{ID: func() ([]byte, error) { return v.StateHash(), nil }}
-	err = ac.Register(validatorDBName, com)
-	if err != nil {
-		failBuild(err, "failed to register validator store")
-	}
-
 	return v
 }
 
@@ -696,27 +664,6 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 	}
 
 	return node
-}
-
-func buildCommitter(d *coreDependencies, closers *closeFuncs) *sessions.MultiCommitter {
-	// NOTE: possibly get rid of MultiCommitter since actual recovery with the
-	// skip mechanism does not seem to be practical (still read from future, and
-	// return nil error from all write requests).
-	kv, err := badger.NewBadgerDB(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, "committer"),
-		&badger.Options{
-			GuaranteeFSync:                true,
-			GarbageCollectionInterval:     5 * time.Minute,
-			Logger:                        *d.log.Named("atomic-committer-kv-store"),
-			GarbageCollectionDiscardRatio: 0.5,
-		},
-	)
-	if err != nil {
-		failBuild(err, "failed to open atomic committer kv")
-	}
-
-	closers.addCloser(kv.Close)
-
-	return sessions.NewCommitter(kv, make(map[string]sessions.Committable), sessions.WithLogger(*d.log.Named("atomic-committer")))
 }
 
 func failBuild(err error, msg string) {
