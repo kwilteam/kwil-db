@@ -24,10 +24,11 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 		args[i] = arg
 	}
 
-	tx, err := s.readTx(ctx)
+	tx, err := s.db.BeginReadTx(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer tx.Rollback(ctx)
 
 	signer := msg.Sender
 	caller := "" // string representation of sender, if signed.  Otherwise, empty string

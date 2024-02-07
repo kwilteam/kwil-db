@@ -4,7 +4,7 @@ package pg
 
 import (
 	"context"
-	"errors"
+	"sync"
 
 	"github.com/kwilteam/kwil-db/internal/sql"
 
@@ -19,10 +19,10 @@ type nestedTx struct {
 	accessMode sql.AccessMode
 }
 
-var _ sql.OuterTx = (*nestedTx)(nil)
+var _ sql.Tx = (*nestedTx)(nil)
 
 // TODO: switch this to be BeginTx
-func (tx *nestedTx) BeginSavepoint(ctx context.Context) (sql.Tx, error) {
+func (tx *nestedTx) BeginTx(ctx context.Context) (sql.Tx, error) {
 	// Make the nested transaction (savepoint)
 	pgtx, err := tx.Tx.Begin(ctx)
 	if err != nil {
@@ -43,11 +43,6 @@ func (tx *nestedTx) Query(ctx context.Context, stmt string, args ...any) (*sql.R
 // might remove one or the other in this context (transaction methods).
 func (tx *nestedTx) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
 	return query(ctx, tx.Tx, stmt, args...)
-}
-
-func (tx *nestedTx) Precommit(context.Context) ([]byte, error) {
-	// only the outer transaction does the prepared transaction
-	return nil, errors.New("cannot prepare transaction from a nested transaction")
 }
 
 // AccessMode returns the access mode of the transaction.
@@ -94,14 +89,34 @@ func (tx *dbTx) AccessMode() sql.AccessMode {
 	return tx.accessMode
 }
 
-// pgxAccessLevel converts a sql.AccessMode to a pgx.TxAccessMode.
-func pgxAccessLevel(a sql.AccessMode) pgx.TxAccessMode {
-	switch a {
-	case sql.ReadOnly:
-		return pgx.ReadOnly
-	case sql.ReadWrite:
-		return pgx.ReadWrite
-	default:
-		panic("unknown access level")
+// readTx is a tx that handles a read-only transaction.
+// It will release the connection back to the reader pool
+// when it is closed.
+type readTx struct {
+	*nestedTx
+	release func() // should only be run once
+	once    sync.Once
+}
+
+// Commit is a no-op for read-only transactions.
+// It will return the connection to the pool.
+func (tx *readTx) Commit(ctx context.Context) error {
+	err := tx.nestedTx.Commit(ctx)
+	if err != nil {
+		return err
 	}
+
+	tx.once.Do(tx.release)
+	return nil
+}
+
+// Rollback will return the connection to the pool.
+func (tx *readTx) Rollback(ctx context.Context) error {
+	err := tx.nestedTx.Rollback(ctx)
+	if err != nil {
+		return err
+	}
+
+	tx.once.Do(tx.release)
+	return nil
 }

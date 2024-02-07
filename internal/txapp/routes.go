@@ -87,7 +87,7 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	}
 
 	// creating a new nested tx, in case we need to rollback
-	dbTx, err := router.currentTx.BeginSavepoint(ctx.Ctx)
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -125,7 +125,7 @@ func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transaction
 	}
 
 	// creating a new nested tx, in case we need to rollback
-	dbTx, err := router.currentTx.BeginSavepoint(ctx.Ctx)
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -183,7 +183,7 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	}
 
 	// creating a new nested tx, in case we need to rollback
-	dbTx, err := router.currentTx.BeginSavepoint(ctx.Ctx)
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}

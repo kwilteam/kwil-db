@@ -93,7 +93,7 @@ func (r *TxApp) Begin(ctx context.Context) error {
 		return errors.New("txapp misuse: cannot begin a new block while a transaction is in progress")
 	}
 
-	tx, err := r.Database.BeginTx(ctx, sql.ReadWrite)
+	tx, err := r.Database.BeginTx(ctx)
 	if err != nil {
 		return err
 	}
@@ -162,97 +162,16 @@ func (r *TxApp) Commit(ctx context.Context) error {
 	if r.currentTx == nil {
 		return errors.New("txapp misuse: cannot commit a block without a transaction in progress")
 	}
-	defer func() {
-		r.mempool.reset()
-		r.currentTx = nil
-	}()
+	defer r.mempool.reset()
 
 	err := r.currentTx.Commit(ctx)
 	if err != nil {
 		return err
 	}
 
+	r.currentTx = nil
 	return nil
 }
-
-// // Commit signals that a block has been committed.
-// // TODO: once we use postgres, this will no longer be applicable
-// // we will need a separate function for getting end results and committing
-// // Right now, Commit is called in FinalizeBlock in abci. However, it should
-// // be called in Commit.  The reason we can get away with this is because
-// // we rely on idempotency keys to ensure we don't double execute to a datastore.
-// // With Postgres, we will simply rely on its cross-schema
-// // transaction support.  Therefore, we should have another method here called
-// // GetEndResults.
-// // Commit also clears the mempool.
-// // It takes a `syncMode` parameter, which signals whether or not the node is currently syncing data
-// func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
-// 	// this would go in Commit
-// 	defer r.mempool.reset()
-
-// 	r.log.Debug("committing block", zap.Int64("blockHeight", blockHeight))
-
-// 	// this would go in finalize block
-// 	// run all approved votes, and delete from local store
-// 	finalizedEvents, err := r.VoteStore.ProcessConfirmedResolutions(ctx)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-
-// 	// this would also go in finalize block
-// 	for _, eventID := range finalizedEvents {
-// 		err = r.EventStore.DeleteEvent(ctx, eventID)
-// 		if err != nil {
-// 			return nil, nil, err
-// 		}
-// 	}
-
-// 	// expire votes
-// 	// this would go in FinalizeBlock
-// 	err = r.VoteStore.Expire(ctx, blockHeight)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-
-// 	// this would go in GetEndResults
-// 	validatorUpdates, err := r.Validators.Finalize(ctx)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-
-// 	// we intentionally update the validators after processing confirmed resolutions
-// 	// if a vote passes and a validator is upgraded in the same block, it doesn't make sense
-// 	// for that new validator's votes to have an impact an the otherwise "confirmed" resolution
-// 	for _, validator := range validatorUpdates {
-// 		err = r.VoteStore.UpdateVoter(ctx, validator.PubKey, validator.Power)
-// 		if err != nil {
-// 			return nil, nil, err
-// 		}
-// 	}
-
-// 	// this would go in Commit
-// 	// idempotencyKey := make([]byte, 8)
-// 	// binary.LittleEndian.PutUint64(idempotencyKey, uint64(blockHeight))
-
-// 	// appHash would go in GetEndResults,
-// 	appHash, err := r.atomicCommitter.Precommit(ctx)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-
-// 	// the commit would go in Commit
-// 	err = r.atomicCommitter.Commit(ctx)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-// 	// what happened to the metadata store?
-
-// 	// this only updates an in-memory value. but it seems weird to me that the validator store needs to be aware
-// 	// of the current block height and "keep it"
-// 	// this would go in Commit
-// 	r.Validators.UpdateBlockHeight(blockHeight)
-// 	return appHash, validatorUpdates, nil
-// }
 
 // ApplyMempool applies the transactions in the mempool.
 // If it returns an error, then the transaction is invalid.

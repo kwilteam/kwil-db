@@ -1,3 +1,5 @@
+//go:build pglive
+
 package integration_test
 
 import (
@@ -440,7 +442,7 @@ func Test_Engine(t *testing.T) {
 
 			ctx := context.Background()
 
-			tx, err := db.BeginTx(ctx, sql.ReadWrite)
+			tx, err := db.BeginTx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback(ctx)
 
@@ -453,7 +455,7 @@ func Test_Engine(t *testing.T) {
 			err = tx.Commit(ctx)
 			require.NoError(t, err)
 
-			tx2, err := db.BeginTx(ctx, sql.ReadWrite)
+			tx2, err := db.BeginTx(ctx)
 			require.NoError(t, err)
 			defer tx2.Rollback(ctx)
 
@@ -466,7 +468,7 @@ func Test_Engine(t *testing.T) {
 			err = tx2.Commit(ctx)
 			require.NoError(t, err)
 
-			readOnly, err := db.BeginTx(ctx, sql.ReadOnly)
+			readOnly, err := db.BeginTx(ctx)
 			require.NoError(t, err)
 			defer readOnly.Rollback(ctx)
 

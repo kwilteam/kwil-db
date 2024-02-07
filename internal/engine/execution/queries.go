@@ -45,7 +45,7 @@ func createSchemasTableIfNotExists(ctx context.Context, tx sql.DB) error {
 func createSchema(ctx context.Context, tx sql.DB, schema *types.Schema) error {
 	schemaName := dbidSchema(schema.DBID())
 
-	sp, err := tx.BeginSavepoint(ctx)
+	sp, err := tx.BeginTx(ctx)
 	if err != nil {
 		return err
 	}
@@ -122,10 +122,11 @@ func getSchemas(ctx context.Context, tx sql.DB) ([]*types.Schema, error) {
 func deleteSchema(ctx context.Context, tx sql.DB, dbid string) error {
 	schemaName := dbidSchema(dbid)
 
-	sp, err := tx.BeginSavepoint(ctx)
+	sp, err := tx.BeginTx(ctx)
 	if err != nil {
 		return err
 	}
+	defer sp.Rollback(ctx)
 
 	_, err = sp.Execute(ctx, fmt.Sprintf(sqlDropSchema, schemaName))
 	if err != nil {

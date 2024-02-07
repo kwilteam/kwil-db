@@ -53,13 +53,19 @@ type TxBeginner interface {
 // OuterTxMaker is the special kind of transaction beginner that can make nested
 // transactions, and that explicitly scopes Query/Execute to the tx.
 type OuterTxMaker interface {
-	BeginTx(ctx context.Context, accessLevel AccessMode) (OuterTx, error)
+	BeginTx(ctx context.Context) (OuterTx, error)
+}
+
+// ReadTxMaker can make read-only transactions.
+// Many read-only transactions can be made at once.
+type ReadTxMaker interface {
+	BeginReadTx(ctx context.Context) (Tx, error)
 }
 
 // TxMaker is the special kind of transaction beginner that can make nested
 // transactions, and that explicitly scopes Query/Execute to the tx.
 type TxMaker interface {
-	BeginSavepoint(ctx context.Context) (Tx, error)
+	BeginTx(ctx context.Context) (Tx, error)
 }
 
 // OuterTx is a database transaction. It is the outermost transaction type.

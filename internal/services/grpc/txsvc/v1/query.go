@@ -8,10 +8,11 @@ import (
 )
 
 func (s *Service) Query(ctx context.Context, req *txpb.QueryRequest) (*txpb.QueryResponse, error) {
-	tx, err := s.readTx(ctx)
+	tx, err := s.db.BeginReadTx(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer tx.Rollback(ctx)
 
 	result, err := s.engine.Query(ctx, tx, req.Dbid, req.Query)
 	if err != nil {

@@ -10,7 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/stretchr/testify/require"
 	// "github.com/kwilteam/kwil-db/internal/conv"
 )
 
@@ -254,7 +254,7 @@ func TestNestedTx(t *testing.T) {
 	}
 
 	// Start the outer transaction.
-	tx, err := db.BeginTx(ctx, sql.ReadWrite)
+	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestNestedTx(t *testing.T) {
 	// tx.begintx below would then error with "tx is closed" (TODO: test that)
 
 	// Start savepoint 0
-	txNested, err := tx.BeginSavepoint(ctx)
+	txNested, err := tx.BeginTx(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +291,7 @@ func TestNestedTx(t *testing.T) {
 	}
 
 	// Start savepoint 1
-	txNested2, err := tx.BeginSavepoint(ctx)
+	txNested2, err := tx.BeginTx(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +310,7 @@ func TestNestedTx(t *testing.T) {
 	}
 
 	// Now we should be able to keep going.  Make savepoint 3:
-	txNested3, err := tx.BeginSavepoint(ctx)
+	txNested3, err := tx.BeginTx(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,4 +344,30 @@ func TestNestedTx(t *testing.T) {
 	}
 
 	// TODO: enure updates in other non-failed savepoints take
+}
+
+// tests that a read tx can be created and used
+// while another tx is in progress
+func TestReadTxs(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewDB(ctx, cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	_, err = db.Query(ctx, pingStmt)
+	require.NoError(t, err)
+
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+
+	tx2, err := db.BeginReadTx(ctx)
+	require.NoError(t, err)
+	defer tx2.Rollback(ctx)
+
+	err = tx.Rollback(ctx)
+	require.NoError(t, err)
+
+	err = tx2.Commit(ctx)
+	require.NoError(t, err)
 }

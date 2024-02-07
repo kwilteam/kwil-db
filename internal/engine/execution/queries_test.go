@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
-	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,7 +34,7 @@ func Test_StoringSchemas(t *testing.T) {
 	db, err := pg.NewDB(ctx, cfg)
 	require.NoError(t, err)
 
-	tx, err := db.BeginTx(ctx, sql.ReadWrite)
+	tx, err := db.BeginTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx) // we always want to rollback, never commit
 

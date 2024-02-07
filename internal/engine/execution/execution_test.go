@@ -238,7 +238,7 @@ func (m *mockDB) AccessMode() sql.AccessMode {
 	return m.accessMode
 }
 
-func (m *mockDB) BeginSavepoint(ctx context.Context) (sql.Tx, error) {
+func (m *mockDB) BeginTx(ctx context.Context) (sql.Tx, error) {
 	return &mockTx{
 		m,
 	}, nil

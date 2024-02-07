@@ -32,7 +32,6 @@ import (
 	kwilgrpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 	healthcheck "github.com/kwilteam/kwil-db/internal/services/health"
 	simple_checker "github.com/kwilteam/kwil-db/internal/services/health/simple-checker"
-	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/sql/adapter"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/txapp"
@@ -336,7 +335,7 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, db *pg.DB) *execution.
 		d.log.Info("registered extension", zap.String("name", name))
 	}
 
-	tx, err := db.BeginTx(d.ctx, sql.ReadWrite)
+	tx, err := db.BeginTx(d.ctx)
 	if err != nil {
 		failBuild(err, "failed to start transaction")
 	}

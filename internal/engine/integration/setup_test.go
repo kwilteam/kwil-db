@@ -1,3 +1,5 @@
+//go:build pglive
+
 // package integration_test contains full engine integration tests
 package integration_test
 
@@ -9,7 +11,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/conv"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
-	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/stretchr/testify/require"
 )
@@ -65,7 +66,7 @@ func setup(t *testing.T) (global *execution.GlobalContext, db *pg.DB, err error)
 		return nil, nil, err
 	}
 
-	tx, err := db.BeginTx(ctx, sql.ReadWrite)
+	tx, err := db.BeginTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 

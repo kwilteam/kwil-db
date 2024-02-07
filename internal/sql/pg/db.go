@@ -42,7 +42,6 @@ type DB struct {
 	autoCommit bool   // skip the explicit transaction (begin/commit automatically)
 	tx         pgx.Tx // interface
 	txid       string // uid of the prepared transaction
-	commitID   []byte
 }
 
 // DBConfig is the configuration for the Kwil DB backend, which includes the
@@ -181,20 +180,49 @@ var _ sql.OuterTxMaker = (*DB)(nil) // for dataset Registry
 // The returned transaction is also capable of creating nested transactions.
 // This functionality is used to prevent user dataset query errors from rolling
 // back the outermost transaction.
-func (db *DB) BeginTx(ctx context.Context, am sql.AccessMode) (sql.OuterTx, error) {
-	tx, err := db.beginTx(ctx, am)
+func (db *DB) BeginTx(ctx context.Context) (sql.OuterTx, error) {
+	tx, err := db.beginWriterTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	ntx := &nestedTx{
 		Tx:         tx,
-		accessMode: am,
+		accessMode: sql.ReadWrite,
 	}
 	return &dbTx{
 		nestedTx:   ntx,
 		db:         db,
-		accessMode: am,
+		accessMode: sql.ReadWrite,
+	}, nil
+}
+
+// ReadTx creates a read-only transaction for the database.
+// It obtains a read connection from the pool, which will be returned
+// to the pool when the transaction is closed.
+func (db *DB) BeginReadTx(ctx context.Context) (sql.Tx, error) {
+	conn, err := db.pool.pgxp.Acquire(ctx) // ensure we have a connection
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := conn.BeginTx(ctx, pgx.TxOptions{
+		AccessMode: pgx.ReadOnly,
+		IsoLevel:   pgx.RepeatableRead,
+	})
+	if err != nil {
+		conn.Release()
+		return nil, err
+	}
+
+	ntx := &nestedTx{
+		Tx:         tx,
+		accessMode: sql.ReadOnly,
+	}
+
+	return &readTx{
+		nestedTx: ntx,
+		release:  conn.Release,
 	}, nil
 }
 
@@ -204,20 +232,22 @@ var _ sql.TxBeginner = (*DB)(nil) // for CommittableStore => MultiCommitter
 // same instance of the concrete type, a case which annoyingly creates
 // incompatible interfaces in Go.
 func (db *DB) Begin(ctx context.Context) (sql.TxCloser, error) {
-	return db.BeginTx(ctx, sql.ReadWrite) // just slice down sql.Tx
+	return db.BeginTx(ctx) // just slice down sql.Tx
 }
 
-// beginTx is the critical section of BeginTx
-func (db *DB) beginTx(ctx context.Context, am sql.AccessMode) (pgx.Tx, error) {
+// beginWriterTx is the critical section of BeginTx.
+// It creates a new transaction on the write connection, and stores it in the
+// DB's tx field. It is not exported, and is only called from BeginTx.
+func (db *DB) beginWriterTx(ctx context.Context) (pgx.Tx, error) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
 	if db.tx != nil {
-		return nil, errors.New("tx exists")
+		return nil, errors.New("writer tx exists")
 	}
 
 	tx, err := db.pool.writer.BeginTx(ctx, pgx.TxOptions{
-		AccessMode: pgxAccessLevel(am),
+		AccessMode: pgx.ReadWrite,
 		IsoLevel:   pgx.RepeatableRead,
 	})
 	if err != nil {
@@ -226,7 +256,6 @@ func (db *DB) beginTx(ctx context.Context, am sql.AccessMode) (pgx.Tx, error) {
 
 	// Make the tx available to Execute and QueryPending.
 	db.tx = tx
-	db.commitID = nil
 
 	return tx, nil
 }
@@ -305,10 +334,8 @@ func (db *DB) commit(ctx context.Context) error {
 		return fmt.Errorf("COMMIT PREPARED failed: %v", err)
 	}
 
-	// tx.Commit should be a no op, just emitting a warning notice, but no error
-	err := db.tx.Commit(ctx)
 	db.tx = nil
-	return err
+	return nil
 }
 
 // rollback is called from the Rollback method of the sql.Tx (or sql.TxCloser)

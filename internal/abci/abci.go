@@ -243,7 +243,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	// BeginBlock was this part
 	err := a.txApp.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("begin atomic commit failed: %w", err)
+		return nil, fmt.Errorf("begin tx commit failed: %w", err)
 	}
 
 	// Punish bad validators.
