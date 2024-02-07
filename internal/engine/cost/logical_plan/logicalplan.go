@@ -2,18 +2,33 @@ package logical_plan
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/datasource"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	"strings"
 )
 
+// ScanOp represents a table scan operator.
 type ScanOp struct {
 	table      string
 	dataSource datasource.DataSource
-	//projection []string
+
+	// used for projection push down optimization
+	projection []string
+}
+
+func (s *ScanOp) Table() string {
+	return s.table
+}
+
+func (s *ScanOp) DataSource() datasource.DataSource {
+	return s.dataSource
+}
+
+func (s *ScanOp) Projection() []string {
+	return s.projection
 }
 
 func (s *ScanOp) String() string {
-	return fmt.Sprintf("Scan: %s", s.table)
+	return fmt.Sprintf("Scan: %s, Projection: %s", s.table, s.projection)
 }
 
 func (s *ScanOp) Schema() *datasource.Schema {
@@ -29,10 +44,11 @@ func (s *ScanOp) Exprs() []LogicalExpr {
 }
 
 // Scan creates a table scan logical plan.
-func Scan(table string, ds datasource.DataSource) LogicalPlan {
-	return &ScanOp{table: table, dataSource: ds}
+func Scan(table string, ds datasource.DataSource, projection ...string) LogicalPlan {
+	return &ScanOp{table: table, dataSource: ds, projection: projection}
 }
 
+// ProjectionOp represents a projection operator.
 type ProjectionOp struct {
 	input LogicalPlan
 	exprs []LogicalExpr
@@ -43,7 +59,7 @@ func (p *ProjectionOp) String() string {
 	for i, expr := range p.exprs {
 		fields[i] = expr.String()
 	}
-	return fmt.Sprintf("Projection: %s", strings.Join(fields, ", p"))
+	return fmt.Sprintf("Projection: %s", strings.Join(fields, ", "))
 }
 
 func (p *ProjectionOp) Schema() *datasource.Schema {
@@ -70,6 +86,7 @@ func Projection(plan LogicalPlan, exprs ...LogicalExpr) LogicalPlan {
 	}
 }
 
+// SelectionOp represents a selection/filter operator.
 type SelectionOp struct {
 	input LogicalPlan
 	exprs []LogicalExpr // here we break to individual filter
@@ -99,26 +116,35 @@ func Selection(plan LogicalPlan, exprs ...LogicalExpr) LogicalPlan {
 	}
 }
 
+// AggregateOp represents an aggregation operator.
 type AggregateOp struct {
-	input         LogicalPlan
-	groupBy       []LogicalExpr
-	aggregateExpr []AggregateExpr
+	input     LogicalPlan
+	groupBy   []LogicalExpr
+	aggregate []AggregateExpr
+}
+
+func (a *AggregateOp) GroupBy() []LogicalExpr {
+	return a.groupBy
+}
+
+func (a *AggregateOp) Aggregate() []AggregateExpr {
+	return a.aggregate
 }
 
 func (a *AggregateOp) String() string {
-	return fmt.Sprintf("Aggregate: %s, %s", a.groupBy, a.aggregateExpr)
+	return fmt.Sprintf("Aggregate: %s, %s", a.groupBy, a.aggregate)
 }
 
 // Schema returns groupBy fields and aggregate fields
 func (a *AggregateOp) Schema() *datasource.Schema {
 	groupByLen := len(a.groupBy)
-	fs := make([]datasource.Field, len(a.aggregateExpr)+groupByLen)
+	fs := make([]datasource.Field, len(a.aggregate)+groupByLen)
 
 	for i, expr := range a.groupBy {
 		fs[i] = expr.Resolve(a.input)
 	}
 
-	for i, expr := range a.aggregateExpr {
+	for i, expr := range a.aggregate {
 		fs[i+groupByLen] = expr.Resolve(a.input)
 	}
 
@@ -132,11 +158,11 @@ func (a *AggregateOp) Inputs() []LogicalPlan {
 func (a *AggregateOp) Exprs() []LogicalExpr {
 	// NOTE: should copy
 	lenGroup := len(a.groupBy)
-	es := make([]LogicalExpr, lenGroup+len(a.aggregateExpr))
+	es := make([]LogicalExpr, lenGroup+len(a.aggregate))
 	for i, e := range a.groupBy {
 		es[i] = e
 	}
-	for i, e := range a.aggregateExpr {
+	for i, e := range a.aggregate {
 		es[i+lenGroup] = e
 	}
 	return es
@@ -146,16 +172,25 @@ func (a *AggregateOp) Exprs() []LogicalExpr {
 func Aggregate(plan LogicalPlan, groupBy []LogicalExpr,
 	aggregateExpr []AggregateExpr) LogicalPlan {
 	return &AggregateOp{
-		input:         plan,
-		groupBy:       groupBy,
-		aggregateExpr: aggregateExpr,
+		input:     plan,
+		groupBy:   groupBy,
+		aggregate: aggregateExpr,
 	}
 }
 
+// LimitOp represents a limit operator.
 type LimitOp struct {
 	input  LogicalPlan
 	limit  int
 	offset int
+}
+
+func (l *LimitOp) Limit() int {
+	return l.limit
+}
+
+func (l *LimitOp) Offset() int {
+	return l.offset
 }
 
 func (l *LimitOp) String() string {
@@ -175,18 +210,23 @@ func (a *LimitOp) Exprs() []LogicalExpr {
 }
 
 // Limit creates a limit logical plan.
-func Limit(plan LogicalPlan, _limit int, offset int) LogicalPlan {
+func Limit(plan LogicalPlan, limit int, offset int) LogicalPlan {
 	return &LimitOp{
 		input:  plan,
-		limit:  _limit,
+		limit:  limit,
 		offset: offset,
 	}
 }
 
+// SortOp represents a sort operator.
 type SortOp struct {
 	input LogicalPlan
 	by    []LogicalExpr
 	asc   bool
+}
+
+func (s *SortOp) IsAsc() bool {
+	return s.asc
 }
 
 func (s *SortOp) String() string {
@@ -202,7 +242,7 @@ func (s *SortOp) Inputs() []LogicalPlan {
 }
 
 func (s *SortOp) Exprs() []LogicalExpr {
-	return []LogicalExpr{}
+	return s.by
 }
 
 // Sort creates a sort logical plan.
@@ -241,12 +281,12 @@ func (j JoinKind) String() string {
 type JoinOp struct {
 	left  LogicalPlan
 	right LogicalPlan
-	kind  JoinKind
-	on    LogicalExpr
+	Kind  JoinKind
+	On    LogicalExpr
 }
 
 func (j *JoinOp) String() string {
-	return fmt.Sprintf("%s: %s", j.kind, j.on)
+	return fmt.Sprintf("%s: %s", j.Kind, j.On)
 }
 
 func (j *JoinOp) Schema() *datasource.Schema {
@@ -263,7 +303,7 @@ func (j *JoinOp) Inputs() []LogicalPlan {
 }
 
 func (j *JoinOp) Exprs() []LogicalExpr {
-	return []LogicalExpr{j.on}
+	return []LogicalExpr{j.On}
 }
 
 // Join creates a join logical plan.
@@ -272,7 +312,7 @@ func Join(left LogicalPlan, right LogicalPlan, kind JoinKind,
 	return &JoinOp{
 		left:  left,
 		right: right,
-		kind:  kind,
-		on:    on,
+		Kind:  kind,
+		On:    on,
 	}
 }

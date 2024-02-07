@@ -2,7 +2,7 @@ package logical_plan
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/datasource"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 )
 
 // LogicalExpr represents the strategies to access the required data.

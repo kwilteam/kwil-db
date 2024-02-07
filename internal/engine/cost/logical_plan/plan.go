@@ -3,8 +3,7 @@ package logical_plan
 import (
 	"bytes"
 	"fmt"
-
-	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/datasource"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 )
 
 type LogicalPlan interface {
