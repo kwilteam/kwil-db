@@ -17,6 +17,8 @@ type LogicalPlan interface {
 	// Exprs returns all expressions in the current logical plan node.
 	// This does not include expressions in plan's inputs
 	Exprs() []LogicalExpr
+
+	//Accept(visitor LogicalOperatorVisitor) any
 }
 
 type AlgebraOperation interface {
@@ -64,8 +66,6 @@ func NewAlgebraOpBuilder(plan LogicalPlan) *AlgebraOpBuilder {
 	return &AlgebraOpBuilder{plan: plan}
 }
 
-//var AOP :=
-
 func Format(plan LogicalPlan, indent int) string {
 	var msg bytes.Buffer
 	for i := 0; i < indent; i++ {
@@ -79,20 +79,56 @@ func Format(plan LogicalPlan, indent int) string {
 	return msg.String()
 }
 
-// use visitor to explain
-//type LogicalVisitor interface {
-//	Visit(LogicalPlan) any
-//	VisitLogicalScan(*LogicalScan) any
-//	VisitLogicalProjection(*LogicalProjection) any
-//	VisitLogicalSubquery(*LogicalSubquery) any
-//	VisitLogicalFilter(*LogicalFilter) any
-//	VisitLogicalJoin(*LogicalJoin) any
-//	VisitLogicalLimit(*LogicalLimit) any
-//	VisitLogicalAggregate(*LogicalAggregate) any
-//	VisitLogicalSort(*LogicalSort) any
-//	VisitLogicalDistinct(*LogicalDistinct) any
-//	VisitLogicalSet(*LogicalSet) any
-//}
+type LogicalOperatorVisitor interface {
+	Visit(LogicalPlan) any
+	VisitScanOp(*ScanOp) any
+	VisitProjectionOp(*ProjectionOp) any
+	//VisitLogicalSubquery(*LogicalSubquery) any
+	VisitSelectionOp(*SelectionOp) any
+	VisitJoinOp(*JoinOp) any
+	VisitLimitOp(*LimitOp) any
+	VisitAggregate(*AggregateOp) any
+	VisitSort(*SortOp) any
+	//VisitLogicalDistinct(*LogicalDistinct) any
+	//VisitLogicalSet(*LogicalSet) any
+}
+
+type baseLogicalOperatorVisitor struct{}
+
+func (v *baseLogicalOperatorVisitor) Visit(plan LogicalPlan) any {
+	//return plan.Accept(v)
+	return nil
+}
+
+func (v *baseLogicalOperatorVisitor) VisitScanOp(op *ScanOp) any {
+	return nil
+}
+
+func (v *baseLogicalOperatorVisitor) VisitProjectionOp(op *ProjectionOp) any {
+	return nil
+}
+
+func (v *baseLogicalOperatorVisitor) VisitSelectionOp(op *SelectionOp) any {
+	return nil
+}
+
+func (v *baseLogicalOperatorVisitor) VisitJoinOp(op *JoinOp) any {
+	return nil
+}
+
+func (v *baseLogicalOperatorVisitor) VisitLimitOp(op *LimitOp) any {
+	return nil
+}
+
+func (v *baseLogicalOperatorVisitor) VisitAggregate(op *AggregateOp) any {
+	return nil
+}
+
+func (v *baseLogicalOperatorVisitor) VisitSort(op *SortOp) any {
+	return nil
+}
+
+var _ LogicalOperatorVisitor = &baseLogicalOperatorVisitor{}
 
 //func Explain(p LogicalPlan) string {
 //	return explainWithPrefix(p, "", "")
