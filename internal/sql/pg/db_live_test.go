@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/stretchr/testify/require"
 	// "github.com/kwilteam/kwil-db/internal/conv"
 )
 
@@ -35,7 +36,7 @@ var (
 			MaxConns: 11,
 		},
 		SchemaFilter: func(s string) bool {
-			return strings.Contains(s, "ds_")
+			return strings.Contains(s, DefaultSchemaFilterPrefix)
 		},
 	}
 )
@@ -259,7 +260,7 @@ func TestNestedTx(t *testing.T) {
 	}
 	defer tx.Rollback(ctx)
 
-	_, err = tx.Query(ctx, pingStmt)
+	_, err = tx.Execute(ctx, pingStmt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +279,7 @@ func TestNestedTx(t *testing.T) {
 	defer txNested.Rollback(ctx)
 
 	// OK query
-	_, err = txNested.Query(ctx, pingStmt)
+	_, err = txNested.Execute(ctx, pingStmt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +297,7 @@ func TestNestedTx(t *testing.T) {
 	}
 
 	// Query error
-	_, err = txNested2.Query(ctx, `SELECT notathing;`)
+	_, err = txNested2.Execute(ctx, `SELECT notathing;`)
 	if err == nil {
 		t.Fatal("should have errored") // expect error
 	}
@@ -315,7 +316,7 @@ func TestNestedTx(t *testing.T) {
 	}
 	defer txNested3.Rollback(ctx)
 
-	_, err = txNested3.Query(ctx, pingStmt)
+	_, err = txNested3.Execute(ctx, pingStmt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,4 +344,30 @@ func TestNestedTx(t *testing.T) {
 	}
 
 	// TODO: enure updates in other non-failed savepoints take
+}
+
+// tests that a read tx can be created and used
+// while another tx is in progress
+func TestReadTxs(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewDB(ctx, cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	_, err = db.Query(ctx, pingStmt)
+	require.NoError(t, err)
+
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+
+	tx2, err := db.BeginReadTx(ctx)
+	require.NoError(t, err)
+	defer tx2.Rollback(ctx)
+
+	err = tx.Rollback(ctx)
+	require.NoError(t, err)
+
+	err = tx2.Commit(ctx)
+	require.NoError(t, err)
 }

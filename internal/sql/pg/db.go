@@ -42,7 +42,6 @@ type DB struct {
 	autoCommit bool   // skip the explicit transaction (begin/commit automatically)
 	tx         pgx.Tx // interface
 	txid       string // uid of the prepared transaction
-	commitID   []byte
 }
 
 // DBConfig is the configuration for the Kwil DB backend, which includes the
@@ -57,8 +56,10 @@ type DBConfig struct {
 	SchemaFilter func(string) bool
 }
 
+const DefaultSchemaFilterPrefix = "ds_"
+
 var defaultSchemaFilter = func(schema string) bool {
-	return strings.HasPrefix(schema, "ds_")
+	return strings.HasPrefix(schema, DefaultSchemaFilterPrefix)
 }
 
 // [dev note] Transaction sequencing flow:
@@ -169,7 +170,7 @@ var _ sql.Executor = (*DB)(nil)
 var _ sql.Queryer = (*DB)(nil)
 var _ sql.KV = (*DB)(nil)
 
-var _ sql.TxMaker = (*DB)(nil) // for dataset Registry
+var _ sql.OuterTxMaker = (*DB)(nil) // for dataset Registry
 
 // BeginTx makes the DB's singular transaction, which is used automatically by
 // consumers of the Query and Execute methods. This is the mode of operation
@@ -179,14 +180,50 @@ var _ sql.TxMaker = (*DB)(nil) // for dataset Registry
 // The returned transaction is also capable of creating nested transactions.
 // This functionality is used to prevent user dataset query errors from rolling
 // back the outermost transaction.
-func (db *DB) BeginTx(ctx context.Context) (sql.Tx, error) {
-	tx, err := db.beginTx(ctx)
+func (db *DB) BeginTx(ctx context.Context) (sql.OuterTx, error) {
+	tx, err := db.beginWriterTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	ntx := &nestedTx{tx}
-	return &dbTx{ntx, db}, nil
+	ntx := &nestedTx{
+		Tx:         tx,
+		accessMode: sql.ReadWrite,
+	}
+	return &dbTx{
+		nestedTx:   ntx,
+		db:         db,
+		accessMode: sql.ReadWrite,
+	}, nil
+}
+
+// ReadTx creates a read-only transaction for the database.
+// It obtains a read connection from the pool, which will be returned
+// to the pool when the transaction is closed.
+func (db *DB) BeginReadTx(ctx context.Context) (sql.Tx, error) {
+	conn, err := db.pool.pgxp.Acquire(ctx) // ensure we have a connection
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := conn.BeginTx(ctx, pgx.TxOptions{
+		AccessMode: pgx.ReadOnly,
+		IsoLevel:   pgx.RepeatableRead,
+	})
+	if err != nil {
+		conn.Release()
+		return nil, err
+	}
+
+	ntx := &nestedTx{
+		Tx:         tx,
+		accessMode: sql.ReadOnly,
+	}
+
+	return &readTx{
+		nestedTx: ntx,
+		release:  conn.Release,
+	}, nil
 }
 
 var _ sql.TxBeginner = (*DB)(nil) // for CommittableStore => MultiCommitter
@@ -198,13 +235,15 @@ func (db *DB) Begin(ctx context.Context) (sql.TxCloser, error) {
 	return db.BeginTx(ctx) // just slice down sql.Tx
 }
 
-// beginTx is the critical section of BeginTx
-func (db *DB) beginTx(ctx context.Context) (pgx.Tx, error) {
+// beginWriterTx is the critical section of BeginTx.
+// It creates a new transaction on the write connection, and stores it in the
+// DB's tx field. It is not exported, and is only called from BeginTx.
+func (db *DB) beginWriterTx(ctx context.Context) (pgx.Tx, error) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
 	if db.tx != nil {
-		return nil, errors.New("tx exists")
+		return nil, errors.New("writer tx exists")
 	}
 
 	tx, err := db.pool.writer.BeginTx(ctx, pgx.TxOptions{
@@ -217,7 +256,6 @@ func (db *DB) beginTx(ctx context.Context) (pgx.Tx, error) {
 
 	// Make the tx available to Execute and QueryPending.
 	db.tx = tx
-	db.commitID = nil
 
 	return tx, nil
 }
@@ -296,10 +334,8 @@ func (db *DB) commit(ctx context.Context) error {
 		return fmt.Errorf("COMMIT PREPARED failed: %v", err)
 	}
 
-	// tx.Commit should be a no op, just emitting a warning notice, but no error
-	err := db.tx.Commit(ctx)
 	db.tx = nil
-	return err
+	return nil
 }
 
 // rollback is called from the Rollback method of the sql.Tx (or sql.TxCloser)

@@ -86,7 +86,19 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
-	err = router.Database.CreateDataset(ctx.Ctx, schema, tx.Sender)
+	// creating a new nested tx, in case we need to rollback
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
+	err = router.Engine.CreateDataset(ctx.Ctx, dbTx, schema, tx.Sender)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
+	err = dbTx.Commit(ctx.Ctx)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -112,7 +124,19 @@ func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transaction
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	err = router.Database.DeleteDataset(ctx.Ctx, drop.DBID, tx.Sender)
+	// creating a new nested tx, in case we need to rollback
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
+	err = router.Engine.DeleteDataset(ctx.Ctx, dbTx, drop.DBID, tx.Sender)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
+	err = dbTx.Commit(ctx.Ctx)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -158,11 +182,17 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		args = make([][]any, 1)
 	}
 
+	// creating a new nested tx, in case we need to rollback
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
 	for i := range action.Arguments {
-		_, err = router.Database.Execute(ctx.Ctx, &engineTypes.ExecutionData{
+		_, err = router.Engine.Execute(ctx.Ctx, dbTx, &engineTypes.ExecutionData{
 			Dataset:   action.DBID,
 			Procedure: action.Action,
-			Mutative:  true, // transaction execution is always mutative
 			Args:      args[i],
 			Signer:    tx.Sender,
 			Caller:    identifier,
@@ -170,6 +200,11 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
+	}
+
+	err = dbTx.Commit(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)

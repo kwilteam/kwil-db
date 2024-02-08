@@ -43,11 +43,11 @@ func Test_Analyze(t *testing.T) {
 			INNER JOIN "ds_dbid"."followers" AS "f" ON "p"."user_id" = "f"."user_id"
 			INNER JOIN "ds_dbid"."users" AS "u" ON "u"."id" = "f"."user_id"
 			WHERE "f"."follower_id" = (
-				SELECT "id" FROM "ds_dbid"."users" WHERE "username" = @username_arg ORDER BY "users"."id" ASC NULLS LAST
+				SELECT "id" FROM "ds_dbid"."users" WHERE "username" = $1 ORDER BY "users"."id" ASC NULLS LAST
 			)
 			ORDER BY date ("p"."post_date") DESC NULLS LAST,
 			"f"."follower_id" ASC NULLS LAST, "f"."user_id" ASC NULLS LAST, "p"."id" ASC NULLS LAST, "u"."id" ASC NULLS LAST
-			LIMIT 20 OFFSET @offset_arg;`,
+			LIMIT 20 OFFSET $2;`,
 			tables: []*types.Table{
 				tblUsers,
 				tblPosts,
@@ -101,7 +101,7 @@ func Test_Analyze(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, removeSpaces(tt.want), removeSpaces(got.Statement()))
+			assert.Equal(t, removeSpaces(tt.want), removeSpaces(got.Statement))
 		})
 	}
 }

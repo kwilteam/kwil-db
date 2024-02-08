@@ -4,17 +4,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"maps"
-	"slices"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/internal/conv"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
-	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/schema"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
-	sql "github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	actparser "github.com/kwilteam/kwil-db/parse/action"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
@@ -28,7 +26,7 @@ var (
 // instruction is an instruction that can be executed.
 // It is used to define the behavior of a procedure.
 type instruction interface { // i.e. dmlStmt, callMethod, or instructionFunc
-	execute(scope *ProcedureContext, dataset *baseDataset) error
+	execute(scope *ProcedureContext) error
 }
 
 // procedure is a predefined procedure that can be executed.
@@ -44,51 +42,175 @@ type procedure struct {
 	// parameters are the parameters of the procedure.
 	parameters []string
 
-	// mutable indicates whether the procedure is mutable.
-	mutable bool
+	// view indicates whether the procedure has a `view` tag.
+	view bool
 
 	// instructions are the instructions that the procedure executes when called.
 	instructions []instruction
-
-	// dataset is the dataset that the procedure is defined in.
-	dataset *baseDataset
 }
 
 // prepareProcedure parses a procedure from a types.Procedure.
-func prepareProcedure(unparsed *types.Procedure, datasetCtx *baseDataset) (*procedure, error) {
+// It converts all procedure modifiers and statements into instructions.
+// these instructions are then used to execute the procedure.
+// It will convert modifiers first, since these should be checked immediately
+// when the procedure is called. It will then convert the statements into
+// instructions.
+func prepareProcedure(unparsed *types.Procedure, global *GlobalContext, schema *types.Schema) (*procedure, error) {
 	instructions := make([]instruction, 0)
+	owner := make([]byte, len(schema.Owner))
+	copy(owner, schema.Owner) // copy this here since caller may modify the passed schema. maybe not necessary
 
+	// converting modifiers
+	isViewProcedure := false // isViewAction tracks whether this procedure is a view
 	for _, mod := range unparsed.Modifiers {
-		instr, err := convertModifier(mod)
-		if err != nil {
-			return nil, err
-		}
+		switch mod {
+		case types.ModifierOwner:
+			instructions = append(instructions, instructionFunc(func(scope *ProcedureContext) error {
 
-		instructions = append(instructions, instr)
+				if !bytes.Equal(scope.Signer, owner) {
+					return fmt.Errorf("cannot call owner procedure, not owner")
+				}
+
+				return nil
+			}))
+		case types.ModifierView:
+			isViewProcedure = true
+		}
+	}
+	// if not a view action, then the action can only be called from a blockchain tx.
+	// This means that the DB connection needs to be readwrite. If not readwrite, we
+	// need to return an error
+	if !isViewProcedure {
+		instructions = append(instructions, instructionFunc(func(scope *ProcedureContext) error {
+			if scope.DB.AccessMode() != sql.ReadWrite {
+				return fmt.Errorf("cannot call non-view procedure, not in a chain transaction")
+			}
+
+			return nil
+		}))
 	}
 
+	// converting statements
+	// we need to parse each statement with the action parser
+	// based on the type of statement, we will convert it into an instruction.
+	// If the procedure is a view, then it can neither contain mutative statements
+	// nor call non-view procedures.
 	for _, stmt := range unparsed.Statements {
-		// pass datasetCtx.schema.DBID() to be used in sql rewrite with dbid as
-		// schema.table
-		//
-		// also, future support for cross dataset queries might require more
-		// context, unless such queries would explicitly specify the schema of
-		// the other dataset in the SQL statement
-		instr, err := prepareStmt(stmt, !unparsed.IsMutative(), datasetCtx.schema.Tables, datasetCtx.schema.DBID())
+		parsedStmt, err := actparser.Parse(stmt)
 		if err != nil {
 			return nil, err
 		}
 
-		instructions = append(instructions, instr)
+		switch stmt := parsedStmt.(type) {
+		default:
+			return nil, fmt.Errorf("unknown statement type %T", stmt)
+		case *actparser.ExtensionCallStmt:
+			args, err := makeExecutables(stmt.Args)
+			if err != nil {
+				return nil, err
+			}
+
+			receivers := make([]string, len(stmt.Receivers))
+			for i, receiver := range stmt.Receivers {
+				receivers[i] = strings.ToLower(receiver)
+			}
+
+			i := &callMethod{
+				Namespace: strings.ToLower(stmt.Extension),
+				Method:    strings.ToLower(stmt.Method),
+				Args:      args,
+				Receivers: receivers,
+			}
+			instructions = append(instructions, i)
+		case *actparser.DMLStmt:
+			// apply schema to db name in statement
+			deterministic, err := sqlanalyzer.ApplyRules(stmt.Statement, sqlanalyzer.AllRules,
+				schema.Tables, dbidSchema(schema.DBID()))
+			if err != nil {
+				return nil, err
+			}
+
+			if deterministic.Mutative && isViewProcedure {
+				return nil, fmt.Errorf("view procedure cannot contain mutative statements")
+			}
+
+			i := &dmlStmt{
+				SQLStatement:      deterministic.Statement,
+				OrderedParameters: deterministic.ParameterOrder,
+			}
+			instructions = append(instructions, i)
+		case *actparser.ActionCallStmt:
+			args, err := makeExecutables(stmt.Args)
+			if err != nil {
+				return nil, err
+			}
+
+			receivers := make([]string, len(stmt.Receivers))
+			for i, receiver := range stmt.Receivers {
+				receivers[i] = strings.ToLower(receiver)
+			}
+
+			// if calling external procedure, the procedure must be public and view.
+			// if calling internal procedure, the procedure must be view.
+			callingViewProcedure := false // callingViewProcedure tracks whether the called procedure is a view
+			if stmt.Database == schema.DBID() || stmt.Database == "" {
+				// internal
+				var procedure *types.Procedure
+				for _, p := range schema.Procedures {
+					if p.Name == stmt.Method {
+						procedure = p
+						break
+					}
+				}
+				if procedure == nil {
+					return nil, fmt.Errorf(`procedure "%s" not found`, stmt.Method)
+				}
+
+				for _, mod := range procedure.Modifiers {
+					if mod == types.ModifierView {
+						callingViewProcedure = true
+						break
+					}
+				}
+
+			} else {
+				// external
+				dataset, ok := global.datasets[stmt.Database]
+				if !ok {
+					return nil, fmt.Errorf(`dataset "%s" not found`, stmt.Database)
+				}
+
+				proc, ok := dataset.procedures[stmt.Method]
+				if !ok {
+					return nil, fmt.Errorf(`procedure "%s" not found`, stmt.Method)
+				}
+
+				if !proc.public {
+					return nil, fmt.Errorf(`%w: procedure "%s" is not public`, ErrPrivateProcedure, stmt.Method)
+				}
+
+				callingViewProcedure = proc.view
+			}
+			if isViewProcedure && !callingViewProcedure {
+				return nil, fmt.Errorf("view procedures cannot call non-view procedures")
+			}
+
+			i := &callMethod{
+				Namespace: strings.ToLower(stmt.Database),
+				Method:    strings.ToLower(stmt.Method),
+				Args:      args,
+				Receivers: receivers,
+			}
+			instructions = append(instructions, i)
+		}
 	}
 
 	return &procedure{
 		name:         unparsed.Name,
 		public:       unparsed.Public,
 		parameters:   unparsed.Args, // map with $ bind names, no @caller etc. yet
-		mutable:      unparsed.IsMutative(),
+		view:         unparsed.IsView(),
 		instructions: instructions,
-		dataset:      datasetCtx,
 	}, nil
 }
 
@@ -98,7 +220,9 @@ func (p *procedure) call(scope *ProcedureContext, inputs []any) error {
 		return fmt.Errorf(`%w: procedure "%s" requires %d arguments, but %d were provided`, ErrIncorrectNumberOfArguments, p.name, len(p.parameters), len(inputs))
 	}
 
-	if p.mutable && !scope.Mutative {
+	// if procedure does not have view tag, then it can mutate state
+	// this means that we must have a readwrite connection
+	if !p.view && scope.DB.AccessMode() != sql.ReadWrite {
 		return fmt.Errorf(`%w: mutable procedure "%s" called with non-mutative scope`, ErrMutativeProcedure, p.name)
 	}
 
@@ -107,112 +231,12 @@ func (p *procedure) call(scope *ProcedureContext, inputs []any) error {
 	}
 
 	for _, inst := range p.instructions {
-		if err := inst.execute(scope, p.dataset); err != nil {
+		if err := inst.execute(scope); err != nil {
 			return err
 		}
 	}
 
 	return nil
-}
-
-// covertModifier converts a types.Modifier to an instruction.
-func convertModifier(mod types.Modifier) (instruction, error) {
-	switch mod {
-	case types.ModifierOwner:
-		return instructionFunc(func(scope *ProcedureContext, dataset *baseDataset) error {
-			if !bytes.Equal(scope.Signer, dataset.schema.Owner) {
-				return fmt.Errorf("cannot call owner procedure, not owner")
-			}
-
-			return nil
-		}), nil
-	}
-
-	// we do not necessarily have an instruction for every modifier type, but we do not want to return an error
-	return instructionFunc(func(scope *ProcedureContext, dataset *baseDataset) error {
-		return nil
-	}), nil
-}
-
-// prepareStmt parses a statement into an instruction.
-// if immutable (aka a VIEW procedure), then the function will
-// return an error if the statement is attempting to mutate state.
-func prepareStmt(stmt string, immutable bool, tables []*types.Table, dbid string) (instruction, error) {
-	parsedStmt, err := actparser.Parse(stmt)
-	if err != nil {
-		return nil, err
-	}
-
-	var instr instruction
-
-	switch stmt := parsedStmt.(type) {
-	case *actparser.ExtensionCallStmt:
-		args, err := makeExecutables(stmt.Args, types.DBIDSchema(dbid))
-		if err != nil {
-			return nil, err
-		}
-
-		receivers := make([]string, len(stmt.Receivers))
-		for i, receiver := range stmt.Receivers {
-			receivers[i] = strings.ToLower(receiver)
-		}
-
-		i := &callMethod{
-			Namespace: strings.ToLower(stmt.Extension),
-			Method:    strings.ToLower(stmt.Method),
-			Args:      args,
-			Receivers: receivers,
-		}
-		instr = i
-	case *actparser.DMLStmt:
-		// apply schema to db name in statement
-		deterministic, err := sqlanalyzer.ApplyRules(stmt.Statement, sqlanalyzer.AllRules,
-			tables, types.DBIDSchema(dbid))
-		if err != nil {
-			return nil, err
-		}
-
-		nonDeterministic, err := sqlanalyzer.ApplyRules(stmt.Statement,
-			sqlanalyzer.NoCartesianProduct|sqlanalyzer.ReplaceNamedParameters,
-			tables, types.DBIDSchema(dbid))
-		if err != nil {
-			return nil, err
-		}
-
-		i := &dmlStmt{
-			DeterministicStatement:    deterministic.Statement(),
-			NonDeterministicStatement: nonDeterministic.Statement(),
-			Mutative:                  deterministic.Mutative(),
-		}
-		instr = i
-
-		if immutable && i.Mutative {
-			return nil, fmt.Errorf("cannot mutate state in immutable procedure")
-		}
-
-	case *actparser.ActionCallStmt:
-		args, err := makeExecutables(stmt.Args, types.DBIDSchema(dbid))
-		if err != nil {
-			return nil, err
-		}
-
-		receivers := make([]string, len(stmt.Receivers))
-		for i, receiver := range stmt.Receivers {
-			receivers[i] = strings.ToLower(receiver)
-		}
-
-		i := &callMethod{
-			Namespace: strings.ToLower(stmt.Database),
-			Method:    strings.ToLower(stmt.Method),
-			Args:      args,
-			Receivers: receivers,
-		}
-		instr = i
-	default:
-		return nil, fmt.Errorf("unknown statement type %T", stmt)
-	}
-
-	return instr, nil
 }
 
 // callMethod is a statement that calls a method.
@@ -238,19 +262,10 @@ type callMethod struct {
 // Execute calls a method from a namespace that is accessible within this dataset.
 // If no namespace is specified, the local namespace is used.
 // It will pass all arguments to the method, and assign the return values to the receivers.
-func (e *callMethod) execute(scope *ProcedureContext, dataset *baseDataset) error {
-	var exec types.ResultSetFunc
-	if scope.Mutative {
-		exec = dataset.readWriter
-		// how do we know we are in a db transaction / session and that this is
-		// ok? This scope/context seems to have mutative set according to the statement.
-	} else {
-		exec = dataset.read
-		// what if we are in a session and want uncommitted data for this procedure exec?
-
-		// only acct and val stores use the QueryPending method (previously,
-		// used Execute to get results).  I think it also matters for engine
-		// procedure execution, and it depends on call context (rpc call vs. block-tx)
+func (e *callMethod) execute(scope *ProcedureContext) error {
+	dataset, ok := scope.globalCtx.datasets[scope.DBID]
+	if !ok {
+		return fmt.Errorf(`dataset "%s" not found`, scope.DBID)
 	}
 
 	// getting these types to match the type required by the the ultimate DML
@@ -263,7 +278,7 @@ func (e *callMethod) execute(scope *ProcedureContext, dataset *baseDataset) erro
 	var inputs []any
 	vals := scope.Values() // declare here since scope.Values() is expensive
 	for _, arg := range e.Args {
-		val, err := arg(scope.Ctx, exec, vals)
+		val, err := arg(scope.Ctx, scope.DB.Execute, vals)
 		if err != nil {
 			return err
 		}
@@ -319,32 +334,27 @@ func (e *callMethod) execute(scope *ProcedureContext, dataset *baseDataset) erro
 
 // dmlStmt is a DML statement, we leave the parsing to sqlparser
 type dmlStmt struct {
-	// DeterministicStatement is the deterministic version of the statement.
-	// This is almost always more expensive to execute, but it is guaranteed to return the same results.
-	DeterministicStatement string
+	// SQLStatement is the transformed, deterministic, Postgres compatible SQL statement.
+	SQLStatement string
 
-	// NonDeterministicStatement is the non-deterministic version of the statement.
-	// This is almost always cheaper to execute, but it is not guaranteed to return the same results.
-	NonDeterministicStatement string
-
-	// Mutative is whether the statement mutates state.
-	Mutative bool
+	// OrderedParameters is the named parameters in the order they need to be passed to the database.
+	// Since Postgres doesn't support named parameters, we parse them to positional params, and then
+	// pass them to the database in the order they are expected.
+	OrderedParameters []string
 }
 
-func (e *dmlStmt) execute(scope *ProcedureContext, dataset *baseDataset) error {
-	// this might be redundant
-	if !scope.Mutative && e.Mutative {
-		return fmt.Errorf("cannot mutate state in immutable procedure")
+func (e *dmlStmt) execute(scope *ProcedureContext) error {
+	args := []any{pg.QueryModeExec}
+
+	params, err := orderAndCleanValueMap(scope.Values(), e.OrderedParameters)
+	if err != nil {
+		return err
 	}
 
-	// Inject environment variables like @caller into args with scope.Values()
-	var results *sql.ResultSet
-	var err error
-	if scope.Mutative {
-		results, err = dataset.readWriter(scope.Ctx, e.DeterministicStatement, scope.Values())
-	} else {
-		results, err = dataset.read(scope.Ctx, e.NonDeterministicStatement, scope.Values())
-	}
+	args = append(args, params...)
+
+	// we need to expand this based on the ordered parameters. This should be stored in the DML statement.
+	results, err := scope.DB.Execute(scope.Ctx, e.SQLStatement, args...)
 	if err != nil {
 		return err
 	}
@@ -354,16 +364,16 @@ func (e *dmlStmt) execute(scope *ProcedureContext, dataset *baseDataset) error {
 	return nil
 }
 
-type instructionFunc func(scope *ProcedureContext, dataset *baseDataset) error
+type instructionFunc func(scope *ProcedureContext) error
 
 // implement instruction
-func (f instructionFunc) execute(scope *ProcedureContext, dataset *baseDataset) error {
-	return f(scope, dataset)
+func (f instructionFunc) execute(scope *ProcedureContext) error {
+	return f(scope)
 }
 
 // evaluatable is an expression that can be evaluated to a scalar value.
 // It is used to handle inline expressions, such as within action calls.
-type evaluatable func(ctx context.Context, exec types.ResultSetFunc, values map[string]any) (any, error)
+type evaluatable func(ctx context.Context, exec dbQueryFn, values map[string]any) (any, error)
 
 // makeExecutables converts a set of tree.Expression into a set of evaluatables.
 // These are SQL statements that executed with arguments from previously bound
@@ -374,7 +384,7 @@ type evaluatable func(ctx context.Context, exec types.ResultSetFunc, values map[
 // See their execution in (*callMethod).execute inside the `range e.Args` to
 // collect the `inputs` passed to the call of a dataset method or other
 // "namespace" method, such as an extension method.
-func makeExecutables(exprs []tree.Expression, pgSchemaName string) ([]evaluatable, error) {
+func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 	execs := make([]evaluatable, 0, len(exprs))
 
 	for _, expr := range exprs {
@@ -394,18 +404,29 @@ func makeExecutables(exprs []tree.Expression, pgSchemaName string) ([]evaluatabl
 			return nil, err
 		}
 
+		// @brennan: commenting out the named param analyzer and schema walker
+		// I am trying my own implementation trying to make things simpler
+		// This involves the normal numbered param walker.
+		// I don't think schema walker is not necessary for inline expressions, since
+		// we do not support table references in inline expressions.
 		accept := sqlanalyzer.NewAcceptRecoverer(expr)
-		paramVisitor := parameters.NewNamedParametersVisitor()
+		paramVisitor := parameters.NewParametersVisitor()
 		err = accept.Accept(paramVisitor)
 		if err != nil {
-			return nil, fmt.Errorf("error replacing named parameters: %w", err)
+			return nil, fmt.Errorf("error replacing parameters: %w", err)
 		}
-		// Is the schema walker necessary too? Yes, if any of these action/extension
-		// call argument expressions reference a table column...
-		err = accept.Accept(schema.NewSchemaWalker(pgSchemaName))
-		if err != nil {
-			return nil, fmt.Errorf("error applying schema rules: %w", err)
-		}
+
+		// namedParamVisitor := parameters.NewNamedParametersVisitor()
+		// err = accept.Accept(namedParamVisitor)
+		// if err != nil {
+		// 	return nil, fmt.Errorf("error replacing named parameters: %w", err)
+		// }
+		// // Is the schema walker necessary too? Yes, if any of these action/extension
+		// // call argument expressions reference a table column...
+		// err = accept.Accept(schema.NewSchemaWalker(pgSchemaName))
+		// if err != nil {
+		// 	return nil, fmt.Errorf("error applying schema rules: %w", err)
+		// }
 
 		// SELECT expr;  -- prepare new value in receivers for subsequent
 		// statements This query needs to be run in "simple" execution mode
@@ -419,7 +440,6 @@ func makeExecutables(exprs []tree.Expression, pgSchemaName string) ([]evaluatabl
 						Columns: []tree.ResultColumn{
 							&tree.ResultColumnExpression{
 								Expression: expr,
-								Alias:      concatKeys(paramVisitor.Binds), // not critical, just for column name other than ?column?
 							},
 						},
 					},
@@ -431,27 +451,23 @@ func makeExecutables(exprs []tree.Expression, pgSchemaName string) ([]evaluatabl
 		if err != nil {
 			return nil, err
 		}
-		// fmt.Println("selectTree.ToSQL(): ", stmt)
 
-		execs = append(execs, func(ctx context.Context, exec types.ResultSetFunc, values map[string]any) (any, error) {
-			// exec must be created by queryor() to prepare the values map to
-			// match the rewritten statement from NamedParametersVisitor, and to
-			// recognize the injected mode key.
+		// here, we need to prepare the passed values and order them according to the bind names
+		// We also must indicate to the database that we are in inferred arg types mode.
+		// This allows inline expressions, such as SELECT $1 + $2.
+		execs = append(execs, func(ctx context.Context, exec dbQueryFn, values map[string]any) (any, error) {
+			// we need to start with a slice of the mode key
+			// for in-line expressions, we need to use the inferred arg types
+			valSlice := []any{pg.QueryModeInferredArgTypes}
 
-			// Make a local copy of the map so the changes do not affect other
-			// instructions. Perhaps they should/could, but keep it local for now.
-			values = maps.Clone(values)
+			// ordering the map values according to the bind names
+			valSlice2, err := orderAndCleanValueMap(values, paramVisitor.OrderedParameters)
+			if err != nil {
+				return nil, err
+			}
+			valSlice = append(valSlice, valSlice2...)
 
-			// Flag it to use inferred arg types mode, not for all dml
-			// statements. The queryor func will delete it from the map.
-			values[inferredModeKey] = struct{}{}
-
-			// Also coerce to int8 any values that can be.
-			cleanseIntValues(values) // consider this for all dml statements, not just inline?
-			// Note: this is processing all the values, not just the ones used
-			// by this in-line expression. The updates are also in the local copy.
-
-			result, err := exec(ctx, stmt, values) // more values than binds
+			result, err := exec(ctx, stmt, valSlice...) // more values than binds
 			if err != nil {
 				return nil, err
 			}
@@ -475,7 +491,25 @@ func makeExecutables(exprs []tree.Expression, pgSchemaName string) ([]evaluatabl
 	return execs, nil
 }
 
-// cleanseIntValues attempts to coerce any of the values to an int64.
+// orderAndCleanValueMap takes a map of values and a slice of keys, and returns a slice of values in the order of the keys.
+// If a value can be converted to an int, it will be. If a value does not exist, it will be set to nil.
+func orderAndCleanValueMap(values map[string]any, keys []string) ([]any, error) {
+	ordered := make([]any, 0, len(keys))
+	for _, key := range keys {
+		val, ok := values[key]
+		if !ok {
+			val = nil // set val to nil if it doesn't exist
+		} else {
+			val = cleanseIntValue(val)
+		}
+
+		ordered = append(ordered, val)
+	}
+
+	return ordered, nil
+}
+
+// cleanseIntValue attempts to coerce a value to an int64.
 // bools are not converted.
 //
 // Client tooling sends everything as a string, and we don't have typing in any
@@ -484,26 +518,14 @@ func makeExecutables(exprs []tree.Expression, pgSchemaName string) ([]evaluatabl
 // basically always expecting integer arguments, does not bomb. I don't like
 // this a lot, but it's essentially what SQLite did although maybe more
 // judiciously depending on the needs of the query?
-func cleanseIntValues(values map[string]any) {
-	for name, val := range values {
-		if _, isBool := val.(bool); isBool {
-			continue // otherwise it would become 0/1
-		}
-		intVal, err := conv.Int(val)
-		if err == nil {
-			values[name] = intVal
-		}
+func cleanseIntValue(val any) any {
+	if _, isBool := val.(bool); isBool {
+		return val
 	}
-}
+	intVal, err := conv.Int(val)
+	if err == nil {
+		return intVal
+	}
 
-func concatKeys[T any](m map[string]T) string {
-	if len(m) == 0 {
-		return "unnamed"
-	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	return strings.Join(keys, "_")
+	return val
 }

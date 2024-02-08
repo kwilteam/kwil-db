@@ -11,9 +11,6 @@ type ExecutionData struct {
 	// Even if a nested procedure is called, this will always be the original procedure.
 	Procedure string
 
-	// Mutative indicates whether the execution can mutate state.
-	Mutative bool
-
 	// ReadUncommitted bool
 	// ^ as mentioned in other comments, I think blockchain transaction
 	// execution may involve action execution that is not mutative, but also

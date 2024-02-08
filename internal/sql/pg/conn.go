@@ -266,7 +266,10 @@ func (ptx *poolTx) Precommit(context.Context) ([]byte, error) {
 
 // Begin starts a read-write transaction on the writer connection.
 func (p *Pool) Begin(ctx context.Context) (sql.TxCloser, error) {
-	tx, err := p.writer.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := p.writer.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel:   pgx.RepeatableRead,
+		AccessMode: pgx.ReadWrite,
+	})
 	if err != nil {
 		return nil, err
 	}

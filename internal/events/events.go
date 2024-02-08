@@ -110,33 +110,25 @@ func (e *EventStore) GetEvents(ctx context.Context) ([]*types.VotableEvent, erro
 	}
 
 	var events []*types.VotableEvent
-	if len(res.Columns()) != 2 {
+	if len(res.Columns) != 2 {
 		return nil, fmt.Errorf("expected 2 columns getting events. this is an internal bug")
 	}
-	for res.Next() {
-		// res.Rows[0] is the raw data of the event
-		// res.Rows[1] is the event type
-		values, err := res.Values()
-		if err != nil {
-			return nil, err
-		}
-
-		data, ok := values[0].([]byte)
+	for _, row := range res.Rows {
+		// rows[0] is the raw data of the event
+		// rows[1] is the event type
+		data, ok := row[0].([]byte)
 		if !ok {
-			return nil, fmt.Errorf("expected data to be []byte, got %T", values[0])
+			return nil, fmt.Errorf("expected data to be []byte, got %T", row[0])
 		}
-		eventType, ok := values[1].(string)
+		eventType, ok := row[1].(string)
 		if !ok {
-			return nil, fmt.Errorf("expected event type to be string, got %T", values[1])
+			return nil, fmt.Errorf("expected event type to be string, got %T", row[1])
 		}
 
 		events = append(events, &types.VotableEvent{
 			Body: data,
 			Type: eventType,
 		})
-	}
-	if err := res.Err(); err != nil {
-		return nil, err
 	}
 
 	return events, nil
@@ -160,33 +152,26 @@ func (e *EventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.VotableE
 	}
 
 	var events []*types.VotableEvent
-	if len(res.Columns()) != 2 {
+	if len(res.Columns) != 2 {
 		return nil, fmt.Errorf("expected 2 columns getting events. this is an internal bug")
 	}
-	for res.Next() {
-		// res.Rows[0] is the raw data of the event
-		// res.Rows[1] is the event type
-		values, err := res.Values()
-		if err != nil {
-			return nil, err
-		}
+	for _, row := range res.Rows {
+		// row[0] is the raw data of the event
+		// row[1] is the event type
 
-		data, ok := values[0].([]byte)
+		data, ok := row[0].([]byte)
 		if !ok {
-			return nil, fmt.Errorf("expected data to be []byte, got %T", values[0])
+			return nil, fmt.Errorf("expected data to be []byte, got %T", row[0])
 		}
-		eventType, ok := values[1].(string)
+		eventType, ok := row[1].(string)
 		if !ok {
-			return nil, fmt.Errorf("expected event type to be string, got %T", values[1])
+			return nil, fmt.Errorf("expected event type to be string, got %T", row[1])
 		}
 
 		events = append(events, &types.VotableEvent{
 			Body: data,
 			Type: eventType,
 		})
-	}
-	if err := res.Err(); err != nil {
-		return nil, err
 	}
 
 	return events, nil

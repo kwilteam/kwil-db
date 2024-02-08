@@ -50,11 +50,10 @@ type AtomicCommitter interface {
 }
 
 func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, vldtrs ValidatorModule, kv KVStore,
-	committer AtomicCommitter, snapshotter SnapshotModule, bootstrapper DBBootstrapModule, txRouter TxApp, consensusParams ConsensusParams, log log.Logger) *AbciApp {
+	snapshotter SnapshotModule, bootstrapper DBBootstrapModule, txRouter TxApp, consensusParams ConsensusParams, log log.Logger) *AbciApp {
 	app := &AbciApp{
 		cfg:        *cfg,
 		validators: vldtrs,
-		committer:  committer,
 		metadataStore: &metadataStore{
 			kv: kv,
 		},
@@ -99,9 +98,6 @@ type AbciApp struct {
 	validators ValidatorModule
 	// comet punishes by address, so we maintain an address=>pubkey map.
 	valAddrToKey map[string][]byte // NOTE: includes candidates
-
-	// committer is the atomic committer that handles atomic commits across multiple stores
-	committer AtomicCommitter
 
 	// snapshotter is the snapshotter module that handles snapshotting
 	snapshotter SnapshotModule
@@ -245,9 +241,9 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	res := &abciTypes.ResponseFinalizeBlock{}
 
 	// BeginBlock was this part
-	err := a.txApp.Begin(ctx, req.Height)
+	err := a.txApp.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("begin atomic commit failed: %w", err)
+		return nil, fmt.Errorf("begin tx commit failed: %w", err)
 	}
 
 	// Punish bad validators.
@@ -328,7 +324,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	// TODO: some of this commit logic would actually go in Commit, but we need
 	// to reconcile some issues with our idempotent commit process first.
 	// while we have idempotent commits, it is ok to have this here.
-	newAppHash, validatorUpdates, err := a.txApp.Commit(ctx, req.Height)
+	newAppHash, validatorUpdates, err := a.txApp.Finalize(ctx, req.Height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction router: %w", err)
 	}
@@ -359,7 +355,12 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 }
 
 func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abciTypes.ResponseCommit, error) {
-	err := a.metadataStore.IncrementBlockHeight(ctx)
+	err := a.txApp.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction router: %w", err)
+	}
+
+	err = a.metadataStore.IncrementBlockHeight(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to increment block height: %w", err)
 	}
@@ -429,7 +430,7 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 
 	// Accounts and validators DB init in a transaction. Not part of consensus
 	// connection sequence.
-	if err := a.committer.Begin(ctx, []byte{1}); err != nil {
+	if err := a.txApp.Begin(ctx); err != nil {
 		return nil, err
 	}
 
@@ -476,10 +477,10 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 		valUpdates[i] = abciTypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
 	}
 
-	if _, err := a.committer.Precommit(ctx); err != nil {
+	if _, _, err := a.txApp.Finalize(ctx, 0); err != nil {
 		return nil, err
 	} // maybe have that ^ be automatic if skipped
-	if err := a.committer.Commit(ctx); err != nil {
+	if err := a.txApp.Commit(ctx); err != nil {
 		return nil, err
 	}
 
