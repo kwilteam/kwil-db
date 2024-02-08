@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
-	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/types"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
@@ -97,7 +97,7 @@ func Example_respDBlist_json() {
 
 func Example_respRelations_text() {
 	display.Print(&respRelations{
-		Data: client.NewRecordsFromMaps([]map[string]any{{"a": "1", "b": "2"}, {"a": "3", "b": "4"}})},
+		Data: clientType.NewRecordsFromMaps([]map[string]any{{"a": "1", "b": "2"}, {"a": "3", "b": "4"}})},
 		nil, "text")
 	// Output:
 	// | a | b |
@@ -108,7 +108,7 @@ func Example_respRelations_text() {
 
 func Example_respRelations_json() {
 	display.Print(&respRelations{
-		Data: client.NewRecordsFromMaps([]map[string]any{{"a": "1", "b": "2"}, {"a": "3", "b": "4"}})},
+		Data: clientType.NewRecordsFromMaps([]map[string]any{{"a": "1", "b": "2"}, {"a": "3", "b": "4"}})},
 		nil, "json")
 	// Output:
 	// {

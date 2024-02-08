@@ -10,6 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/spf13/cobra"
 )
 
@@ -41,7 +42,7 @@ func listCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), cmd, common.WithoutPrivateKey, func(ctx context.Context, client common.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), cmd, common.WithoutPrivateKey, func(ctx context.Context, client clientType.Client, conf *config.KwilCliConfig) error {
 				if owner != "" && self {
 					return display.PrintErr(cmd, errors.New("cannot specify both --owner and --self"))
 				}
