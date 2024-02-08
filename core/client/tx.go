@@ -5,21 +5,22 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 // newTx creates a new Transaction signed by the Client's Signer
-func (c *Client) newTx(ctx context.Context, data transactions.Payload, txOpts *txOptions) (*transactions.Transaction, error) {
+func (c *Client) newTx(ctx context.Context, data transactions.Payload, txOpts *clientType.TxOptions) (*transactions.Transaction, error) {
 	if c.Signer == nil {
 		return nil, fmt.Errorf("signer must be set to create a transaction")
 	}
 	if txOpts == nil {
-		txOpts = &txOptions{}
+		txOpts = &clientType.TxOptions{}
 	}
 
 	var nonce uint64
-	if txOpts.nonce > 0 {
-		nonce = uint64(txOpts.nonce)
+	if txOpts.Nonce > 0 {
+		nonce = uint64(txOpts.Nonce)
 	} else {
 		// Get the latest nonce for the account, if it exists.
 		acc, err := c.txClient.GetAccount(ctx, c.Signer.Identity(), types.AccountStatusPending)
@@ -48,8 +49,6 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, txOpts *t
 		return nil, fmt.Errorf("failed to estimate price: %w", err)
 	}
 
-	// c.logger.Info("cost estimate", zap.String("fee", price.String()), zap.Uint64("nonce", nonce))
-
 	// set fee
 	tx.Body.Fee = price
 
@@ -58,9 +57,6 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, txOpts *t
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
-
-	// b, _ := tx.MarshalBinary()
-	// c.logger.Info(fmt.Sprintf("tx hash %x", sha256.Sum256(b)))
 
 	return tx, nil
 }

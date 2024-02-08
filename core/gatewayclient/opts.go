@@ -3,12 +3,12 @@ package gatewayclient
 import (
 	"net/http"
 
-	"github.com/kwilteam/kwil-db/core/client"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 )
 
 // GatewayOptions are options that can be set for the gateway client
 type GatewayOptions struct {
-	client.ClientOptions
+	clientType.Options
 
 	// AuthSignFunc is a function that will be used to sign gateway authentication messages.
 	AuthSignFunc GatewayAuthSignFunc
@@ -19,7 +19,7 @@ type GatewayOptions struct {
 // DefaultOptions returns the default options for the gateway client.
 func DefaultOptions() *GatewayOptions {
 	return &GatewayOptions{
-		ClientOptions: *client.DefaultOptions(),
+		Options: *clientType.DefaultOptions(),
 
 		AuthSignFunc: defaultGatewayAuthSignFunc,
 	}
@@ -31,7 +31,7 @@ func (c *GatewayOptions) Apply(opt *GatewayOptions) {
 		return
 	}
 
-	c.ClientOptions.Apply(&opt.ClientOptions)
+	c.Options.Apply(&opt.Options)
 
 	if opt.AuthSignFunc != nil {
 		c.AuthSignFunc = opt.AuthSignFunc

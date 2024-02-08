@@ -6,17 +6,16 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/types"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-
 	"github.com/olekukonko/tablewriter"
 )
 
-// NOTE: I feel those types are better to be defined in the client package
+// NOTE: I feel those types are better to be defined in the core/client package
 // but also not sure, because how to display the response is a cli thing
 //
-// A possible way to do this is define actual response types in client package
+// A possible way to do this is to define actual response types in core/client package
 // and wrap them in cli package?
 
 // respDBList represent databases belong to an owner in cli
@@ -57,7 +56,7 @@ func (d *respDBList) MarshalText() ([]byte, error) {
 // of a database in cli
 type respRelations struct {
 	// to avoid recursive call of MarshalJSON
-	Data *client.Records
+	Data *clientType.Records
 }
 
 func (r *respRelations) MarshalJSON() ([]byte, error) {

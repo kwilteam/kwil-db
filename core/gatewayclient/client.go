@@ -15,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/rpc/client/gateway"
 	httpGateway "github.com/kwilteam/kwil-db/core/rpc/client/gateway/http"
 	httpTx "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	gatewayTypes "github.com/kwilteam/kwil-db/core/types/gateway"
 )
 
@@ -34,6 +35,8 @@ type GatewayClient struct {
 
 	authCookie *http.Cookie // might need a mutex
 }
+
+var _ clientType.Client = (*GatewayClient)(nil)
 
 // customAuthCookieJar implements the http.CookieJar interface used by an
 // http.Client. It uses a net/http/cookiejar.Jar to manage retrieval and
@@ -86,7 +89,7 @@ func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*Gatew
 
 	txClient := httpTx.NewClient(parsedTarget, httpTx.WithHTTPClient(httpClient))
 
-	coreClient, err := client.WrapClient(ctx, txClient, &options.ClientOptions)
+	coreClient, err := client.WrapClient(ctx, txClient, &options.Options)
 	if err != nil {
 		return nil, fmt.Errorf("wrap client: %w", err)
 	}
@@ -118,7 +121,7 @@ func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*Gatew
 
 // CallAction call an action. It returns the result records.  If authentication is needed,
 // it will call the gatewaySigner to sign the authentication message.
-func (c *GatewayClient) CallAction(ctx context.Context, dbid string, action string, inputs []any) (*client.Records, error) {
+func (c *GatewayClient) CallAction(ctx context.Context, dbid string, action string, inputs []any) (*clientType.Records, error) {
 	// we will try to call with the current cookies set.  If we receive an error and it is an auth error,
 	// we will re-auth and retry.  We will only retry once.
 	res, err := c.Client.CallAction(ctx, dbid, action, inputs)

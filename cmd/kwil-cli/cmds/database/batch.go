@@ -11,9 +11,8 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/csv"
-	"github.com/kwilteam/kwil-db/core/client"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-
 	"github.com/spf13/cobra"
 )
 
@@ -27,11 +26,11 @@ var (
 To map a CSV column name to an action input, use the ` + "`" + `--map-inputs` + "`" + ` flag.
 The format is ` + "`" + `--map-inputs "<csv_column_1>:<action_input_1>,<csv_column_2>:<action_input_2>"` + "`" + `.  If the ` + "`" + `--map-inputs` + "`" + ` flag is not passed,
 the CSV column name will be used as the action input name.
-	
+
 You can also specify the input values directly using the ` + "`" + `--values` + "`" + ` flag, delimited by a colon.
 These values will apply to all inserted rows, and will override the CSV column mappings.
 
-You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + ` 
+You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + `
 flags, or you can specify the database by passing the database id with the ` + "`" + `--dbid` + "`" + ` flag.  If a ` + "`" + `--name` + "`" + `
 flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner will be inferred from your configured wallet.`
 
@@ -59,7 +58,7 @@ func batchCmd() *cobra.Command {
 		Example: batchExample,
 		Args:    cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return display.PrintErr(cmd, err)
@@ -95,7 +94,7 @@ func batchCmd() *cobra.Command {
 				}
 
 				txHash, err := cl.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples,
-					client.WithNonce(nonceOverride), client.WithSyncBroadcast(syncBcast))
+					clientType.WithNonce(nonceOverride), clientType.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error executing action: %w", err))
 				}
@@ -126,7 +125,7 @@ func batchCmd() *cobra.Command {
 	return cmd
 }
 
-func getAction(ctx context.Context, c common.Client, dbid, action string) (*transactions.Action, error) {
+func getAction(ctx context.Context, c clientType.Client, dbid, action string) (*transactions.Action, error) {
 	schema, err := c.GetSchema(context.Background(), dbid)
 	if err != nil {
 		return nil, fmt.Errorf("error getting schema: %w", err)
