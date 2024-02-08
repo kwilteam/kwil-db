@@ -133,35 +133,41 @@ func Test_AddEvent(t *testing.T) {
 	ctx := context.Background()
 
 	// no MockEventStore (yet?)
-	db, cleanUp, err := dbtest.NewTestPool(ctx, []string{`kwild_events`}) // ugh, unexported literal
+	eventDb, err := dbtest.NewTestDB(t)
 	require.NoError(t, err)
-	defer cleanUp()
-
-	es, err := events.NewEventStore(ctx, db)
-	require.NoError(t, err)
+	defer eventDb.Close()
 
 	vs := NewMockVoteStore()
-	em := events.NewEventMgr(es, vs)
+	es, err := events.NewEventStore(ctx, eventDb, vs)
+	require.NoError(t, err)
+
+	// cleanup
+	defer func() {
+		eventDb.AutoCommit(true)
+
+		_, err := eventDb.Execute(ctx, "DROP SCHEMA "+events.SchemaName+" CASCADE;")
+		require.NoError(t, err)
+	}()
 
 	oracle := &EthDepositOracle{
 		logger:     log.NewStdOut(log.InfoLevel),
-		eventstore: em,
+		eventstore: es,
 	}
 
 	type testcase struct {
 		name string
 		ac   *AccountCredit
-		fn   func(*testing.T, *AccountCredit)
+		fn   func(*testing.T, *AccountCredit, sql.DB)
 	}
 	testcases := []testcase{
 		{
 			name: "nil account credit",
 			ac:   nil,
-			fn: func(t *testing.T, ac *AccountCredit) {
+			fn: func(t *testing.T, ac *AccountCredit, consensusDb sql.DB) {
 				err := oracle.addEvent(ctx, ac)
 				require.NoError(t, err)
 
-				evts, err := em.GetEvents(ctx)
+				evts, err := es.GetEvents(ctx, consensusDb)
 				require.NoError(t, err)
 
 				require.Len(t, evts, 0)
@@ -175,11 +181,11 @@ func Test_AddEvent(t *testing.T) {
 				TxHash:    "0x71b25cc6cfb0738e4eeca169bf49a26f1d3f918dd7ddc70cd2b9ae1e865e5d3b",
 				BlockHash: "0x4eb64902935943ac7b748ec732559e5c610f0d1068ff15605c1d96adabd6c5f8",
 			},
-			fn: func(t *testing.T, ac *AccountCredit) {
+			fn: func(t *testing.T, ac *AccountCredit, consensusDb sql.DB) {
 				err := oracle.addEvent(ctx, ac)
 				require.NoError(t, err)
 
-				evts, err := em.GetEvents(ctx)
+				evts, err := es.GetEvents(ctx, consensusDb)
 				require.NoError(t, err)
 
 				require.Len(t, evts, 1)
@@ -198,11 +204,11 @@ func Test_AddEvent(t *testing.T) {
 				TxHash:    "0x71b25cc6cfb0738e4eeca169bf49a26f1d3f918dd7ddc70cd2b9ae1e865e5d3b",
 				BlockHash: "0x4eb64902935943ac7b748ec732559e5c610f0d1068ff15605c1d96adabd6c5f8",
 			},
-			fn: func(t *testing.T, ac *AccountCredit) {
+			fn: func(t *testing.T, ac *AccountCredit, consensusDb sql.DB) {
 				err := oracle.addEvent(ctx, ac)
 				require.NoError(t, err)
 
-				evts, err := em.GetEvents(ctx)
+				evts, err := es.GetEvents(ctx, consensusDb)
 				require.NoError(t, err)
 
 				require.Len(t, evts, 1)
@@ -213,7 +219,7 @@ func Test_AddEvent(t *testing.T) {
 				err = oracle.addEvent(ctx, ac)
 				require.NoError(t, err)
 
-				evts, err = em.GetEvents(ctx)
+				evts, err = es.GetEvents(ctx, consensusDb)
 				require.NoError(t, err)
 
 				require.Len(t, evts, 1)
@@ -222,8 +228,15 @@ func Test_AddEvent(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
+			consensusDb, err := dbtest.NewTestDB(t)
+			require.NoError(t, err)
+			defer consensusDb.Close()
 
-			tc.fn(t, tc.ac)
+			consensusTx, err := consensusDb.BeginTx(ctx)
+			require.NoError(t, err)
+			defer consensusTx.Rollback(ctx) // always rollback to avoid cleanup
+
+			tc.fn(t, tc.ac, consensusTx)
 		})
 	}
 }
@@ -268,10 +281,6 @@ func NewMockVoteStore() *mockVoteStore {
 	}
 }
 
-func (m *mockVoteStore) Processed(resolutionID ctypes.UUID) {
-	m.processed[resolutionID] = true
-}
-
-func (m *mockVoteStore) IsProcessed(ctx context.Context, resolutionID ctypes.UUID) (bool, error) {
+func (m *mockVoteStore) IsProcessed(ctx context.Context, db sql.DB, resolutionID ctypes.UUID) (bool, error) {
 	return m.processed[resolutionID], nil
 }

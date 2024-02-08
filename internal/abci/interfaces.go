@@ -12,33 +12,8 @@ import (
 	// backwards, but it at least allows us to stub out for testing.
 
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
-	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/txapp"
-	"github.com/kwilteam/kwil-db/internal/validators"
 )
-
-// ValidatorModule handles the processing of validator approve/join/leave
-// transactions, punishment, preparation of validator updates to be applied when
-// a block is finalized, and performing transaction accounting (e.g. fee and
-// nonce checks).
-//
-// NOTE: this may be premature abstraction since we are designing this function
-// for the needs for an abci/types.Application, yet using standard or Kwil
-// types. But if a different blockchain package is used, this is unlikely to be
-// what it needs, but it is as generic as possible.
-type ValidatorModule interface {
-	// GenesisInit configures the initial set of validators for the genesis
-	// block. This is only called once for a new chain.
-	GenesisInit(ctx context.Context, vals []*validators.Validator, blockHeight int64) error
-
-	// CurrentSet returns the current validator set. This is used on app
-	// construction to initialize the addr=>pubkey mapping.
-	CurrentSet(ctx context.Context) ([]*validators.Validator, error)
-
-	// Punish may be used at the start of block processing when byzantine
-	// validators are listed by the consensus client (no transaction).
-	Punish(ctx context.Context, validator []byte, power int64) error
-}
 
 // KVStore is an interface for a basic key-value store
 type KVStore interface {
@@ -73,22 +48,22 @@ type DBBootstrapModule interface {
 	IsDBRestored() bool
 }
 
-type AccountsModule interface {
-	GetAccount(ctx context.Context, acctID []byte) (*accounts.Account, error)
-	Credit(ctx context.Context, acctID []byte, amt *big.Int) error
-}
-
 // TxApp is an application that can process transactions.
 // It has methods for beginning and ending blocks, applying transactions,
 // and managing a mempool
 type TxApp interface {
-	GenesisInit(ctx context.Context, validators []*types.Validator) error
+	// accounts -> string([]accound_identifier) : *big.Int(balance)
+	GenesisInit(ctx context.Context, validators []*types.Validator, accounts map[string]*big.Int, initialHeight int64) error
 	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
+	// Begin signals that a new block has begun.
 	Begin(ctx context.Context) error
 	Finalize(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)
 	Commit(ctx context.Context) error
 	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
 	ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error)
+	UpdateValidator(ctx context.Context, validator []byte, power int64) error
+	GetValidators(ctx context.Context) ([]*types.Validator, error)
+	AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
 }
 
 // ConsensusParams returns kwil specific consensus parameters.

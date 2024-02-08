@@ -32,7 +32,6 @@ import (
 	kwilgrpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 	healthcheck "github.com/kwilteam/kwil-db/internal/services/health"
 	simple_checker "github.com/kwilteam/kwil-db/internal/services/health/simple-checker"
-	"github.com/kwilteam/kwil-db/internal/sql/adapter"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
@@ -82,9 +81,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	v := buildVoteStore(d, db, accs)
 
 	// event store
-	ev := buildEventStore(d, closers)
-
-	evm := buildEventMgr(ev, v)
+	ev := buildEventStore(d, closers, v)
 
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
@@ -94,7 +91,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// but the tx router needs the cometbft client
 	txApp := buildTxApp(d, db, accs, e, vstore, v, ev)
 
-	abciApp := buildAbci(d, closers, accs, &validatorStoreAdapter{vstore},
+	abciApp := buildAbci(d, closers,
 		txApp, snapshotModule, bootstrapperModule)
 
 	// buildCometNode immediately starts talking to the abciApp and replaying
@@ -106,11 +103,11 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 
-	eventBroadcaster := buildEventBroadcaster(d, ev, &wrappedCometBFTClient{cometBftClient}, txApp, vstore)
+	eventBroadcaster := buildEventBroadcaster(d, ev, &wrappedCometBFTClient{cometBftClient}, txApp)
 	abciApp.AddEventBroadcaster(eventBroadcaster.RunBroadcast)
 
 	// oracle manager
-	om := buildOracleManager(d, closers, evm, cometBftNode, vstore)
+	om := buildOracleManager(d, closers, ev, cometBftNode, txApp)
 
 	// tx service and grpc server
 	txsvc := buildTxSvc(d, db, e,
@@ -212,13 +209,12 @@ func (c *closeFuncs) closeAll() error {
 }
 
 func buildTxApp(d *coreDependencies, db *pg.DB, accs *accounts.AccountStore, engine txapp.ExecutionEngine, validators txapp.ValidatorStore,
-	voteStore txapp.VoteStore, eventStore txapp.EventStore) *txapp.TxApp {
+	voteStore *voting.VoteProcessor, eventStore txapp.EventStore) *txapp.TxApp {
 	return txapp.NewTxApp(db, engine, accs, validators, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore,
 		!d.genesisCfg.ConsensusParams.WithoutGasCosts, *d.log.Named("tx-router"))
 }
 
-func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule,
-	validatorModule abci.ValidatorModule, txApp abci.TxApp,
+func buildAbci(d *coreDependencies, closer *closeFuncs, txApp abci.TxApp,
 	snapshotter *snapshots.SnapshotStore, bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
 	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, config.ABCIInfoSubDirName)
 	badgerKv, err := badger.NewBadgerDB(d.ctx, badgerPath, &badger.Options{
@@ -243,8 +239,6 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		GenesisAllocs:      d.genesisCfg.Alloc,
 	}
 	return abci.NewAbciApp(cfg,
-		accountsModule,
-		validatorModule,
 		badgerKv,
 		sh,
 		bootstrapper,
@@ -254,44 +248,57 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 	)
 }
 
-func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broadcast.Broadcaster, accs broadcast.AccountInfoer, v broadcast.ValidatorStore) *broadcast.EventBroadcaster {
-	return broadcast.NewEventBroadcaster(ev, b, accs, v, buildSigner(d), d.genesisCfg.ChainID)
+func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broadcast.Broadcaster, txapp *txapp.TxApp) *broadcast.EventBroadcaster {
+	return broadcast.NewEventBroadcaster(ev, b, txapp, txapp, buildSigner(d), d.genesisCfg.ChainID)
 }
 
 func buildVoteStore(d *coreDependencies, db *pg.DB, acc voting.AccountStore) *voting.VoteProcessor {
 	// vote store operates on the sessioned write connection, but it does not
 	// register with the atomic committer as it does not affect the apphash,
 	// except via the transactions created from it.
-	v, err := voting.NewVoteProcessor(d.ctx, db, // TODO: we need to replace this nil with a good replacement
+	tx, err := db.BeginTx(d.ctx)
+	if err != nil {
+		failBuild(err, "failed to start transaction")
+	}
+	defer tx.Rollback(d.ctx)
+
+	v, err := voting.NewVoteProcessor(d.ctx, tx, // TODO: we need to replace this nil with a good replacement
 		acc, nil, 666667, *d.log.Named("vote-processor")) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
 	// yes, consensus parameters (threshold) shouldn't be here (or with that integer)
 	if err != nil {
 		failBuild(err, "failed to build vote store")
 	}
 
+	_, err = tx.Precommit(d.ctx)
+	if err != nil {
+		failBuild(err, "failed to precommit")
+	}
+
+	err = tx.Commit(d.ctx)
+	if err != nil {
+		failBuild(err, "failed to commit")
+	}
+
 	return v
 }
 
-func buildEventStore(d *coreDependencies, closers *closeFuncs) *events.EventStore {
+func buildEventStore(d *coreDependencies, closers *closeFuncs, voteStore *voting.VoteProcessor) *events.EventStore {
 	// NOTE: we're using the same postgresql database, but isolated pg schema,
-	// however we could have an entirely separate database too:
+	// however we could have an entirely separate database too: @brennan: we cannot have a separate db here, because eventstore deletes need to be atomic with consensus
 	//   -- maybe run in this (if superuser, which we seem to need to make triggers anyway)?
 	//   CREATE DATABASE kwild_events OWNER kwild; -- adjacent to the main "kwild" database
-	db, err := d.poolOpener(d.ctx, d.cfg.AppCfg.DBName, 10)
+	db, err := d.dbOpener(d.ctx, d.cfg.AppCfg.DBName, 10)
 	if err != nil {
 		failBuild(err, "failed to build event store")
 	}
+
 	closers.addCloser(db.Close)
-	e, err := events.NewEventStore(d.ctx, db)
+	e, err := events.NewEventStore(d.ctx, db, voteStore)
 	if err != nil {
 		failBuild(err, "failed to build event store")
 	}
 
 	return e
-}
-
-func buildEventMgr(es *events.EventStore, vs *voting.VoteProcessor) *events.EventMgr {
-	return events.NewEventMgr(es, vs)
 }
 
 func buildTxSvc(d *coreDependencies, db *pg.DB, txsvc txSvc.EngineReader, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication) *txSvc.Service {
@@ -361,14 +368,30 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, db *pg.DB) *execution.
 
 func buildAccountRepository(d *coreDependencies, db *pg.DB) *accounts.AccountStore {
 	genCfg := d.genesisCfg
+
+	tx, err := db.BeginTx(d.ctx)
+	if err != nil {
+		failBuild(err, "failed to start transaction")
+	}
+	defer tx.Rollback(d.ctx)
+
 	as, err := accounts.NewAccountStore(d.ctx,
-		&adapter.DB{Datastore: db},
+		tx,
 		accounts.WithLogger(*d.log.Named("accountStore")),
-		accounts.WithNonces(!genCfg.ConsensusParams.WithoutNonces),
 		accounts.WithGasCosts(!genCfg.ConsensusParams.WithoutGasCosts),
 	)
 	if err != nil {
 		failBuild(err, "failed to build account store")
+	}
+
+	_, err = tx.Precommit(d.ctx)
+	if err != nil {
+		failBuild(err, "failed to precommit")
+	}
+
+	err = tx.Commit(d.ctx)
+	if err != nil {
+		failBuild(err, "failed to commit")
 	}
 
 	return as
@@ -381,8 +404,14 @@ func buildValidatorManager(d *coreDependencies, db *pg.DB) *vmgr.ValidatorMgr {
 		feeMultiplier = 0
 	}
 
+	tx, err := db.BeginTx(d.ctx)
+	if err != nil {
+		failBuild(err, "failed to start transaction")
+	}
+	defer tx.Rollback(d.ctx)
+
 	v, err := vmgr.NewValidatorMgr(d.ctx,
-		&adapter.DB{Datastore: db},
+		tx,
 		vmgr.WithLogger(*d.log.Named("validatorStore")),
 		vmgr.WithJoinExpiry(joinExpiry),
 		vmgr.WithFeeMultiplier(int64(feeMultiplier)),
@@ -390,6 +419,17 @@ func buildValidatorManager(d *coreDependencies, db *pg.DB) *vmgr.ValidatorMgr {
 	if err != nil {
 		failBuild(err, "failed to build validator store")
 	}
+
+	_, err = tx.Precommit(d.ctx)
+	if err != nil {
+		failBuild(err, "failed to precommit")
+	}
+
+	err = tx.Commit(d.ctx)
+	if err != nil {
+		failBuild(err, "failed to commit")
+	}
+
 	return v
 }
 
@@ -661,6 +701,6 @@ func failBuild(err error, msg string) {
 	}
 }
 
-func buildOracleManager(d *coreDependencies, closer *closeFuncs, evm *events.EventMgr, node *cometbft.CometBftNode, vm *vmgr.ValidatorMgr) *oracles.OracleMgr {
-	return oracles.NewOracleMgr(d.ctx, d.cfg.AppCfg.Oracles, evm, node, d.privKey.PubKey().Bytes(), vm, *d.log.Named("oracle-manager"))
+func buildOracleManager(d *coreDependencies, closer *closeFuncs, ev *events.EventStore, node *cometbft.CometBftNode, txapp *txapp.TxApp) *oracles.OracleMgr {
+	return oracles.NewOracleMgr(d.ctx, d.cfg.AppCfg.Oracles, ev, node, d.privKey.PubKey().Bytes(), txapp, *d.log.Named("oracle-manager"))
 }

@@ -68,6 +68,8 @@ func Test_Broadcaster(t *testing.T) {
 			v := tc.v
 			if v == nil {
 				v = &mockValidatorStore{}
+			} else {
+				v.pubkey = validatorSigner().Identity()
 			}
 
 			ai := tc.ai
@@ -154,8 +156,17 @@ func validatorSigner() *auth.Ed25519Signer {
 
 type mockValidatorStore struct {
 	isValidator bool
+	pubkey      []byte
 }
 
-func (m *mockValidatorStore) IsCurrent(ctx context.Context, validator []byte) (bool, error) {
-	return m.isValidator, nil
+func (m *mockValidatorStore) GetValidators(ctx context.Context) ([]*types.Validator, error) {
+	if m.isValidator {
+		return []*types.Validator{
+			{
+				PubKey: m.pubkey,
+				Power:  1,
+			},
+		}, nil
+	}
+	return nil, nil
 }

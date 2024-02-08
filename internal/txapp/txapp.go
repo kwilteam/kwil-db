@@ -18,7 +18,7 @@ import (
 )
 
 // NewTxApp creates a new router.
-func NewTxApp(db sql.OuterTxMaker, engine ExecutionEngine, acc AccountsStore, validators ValidatorStore,
+func NewTxApp(db DB, engine ExecutionEngine, acc AccountsStore, validators ValidatorStore,
 	voteStore VoteStore, signer *auth.Ed25519Signer, chainID string, eventStore EventStore, GasEnabled bool, log log.Logger) *TxApp {
 	return &TxApp{
 		Database:   db,
@@ -40,16 +40,16 @@ func NewTxApp(db sql.OuterTxMaker, engine ExecutionEngine, acc AccountsStore, va
 }
 
 // TxApp maintains the state for Kwil's ABCI application.
-// It is responsible for interpreting payload bodies and routing them properly.
-// It also contains a mempool for uncommitted accounts, as well as pricing
-// for transactions
+// It is responsible for interpreting payload bodies and routing them properly,
+// maintaining a mempool for uncommitted accounts, pricing transactions,
+// managing atomicity of the database, and managing the validator set.
 type TxApp struct {
-	Database   sql.OuterTxMaker // postgres database
-	Engine     ExecutionEngine  // tracks deployed schemas
-	Accounts   AccountsStore    // accounts
-	Validators ValidatorStore   // validators
-	VoteStore  VoteStore        // tracks resolutions, their votes, manages expiration
-	EventStore EventStore       // tracks events, not part of consensus
+	Database   DB              // postgres database
+	Engine     ExecutionEngine // tracks deployed schemas
+	Accounts   AccountsStore   // accounts
+	Validators ValidatorStore  // validators
+	VoteStore  VoteStore       // tracks resolutions, their votes, manages expiration
+	EventStore EventStore      // tracks events, not part of consensus
 	GasEnabled bool
 
 	chainID string
@@ -63,15 +63,82 @@ type TxApp struct {
 	currentTx sql.OuterTx
 }
 
-// GenesisInit initializes the VoteStore with the genesis validators.
-func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator) error {
+// GenesisInit initializes the TxApp. It must be called outside of a session,
+// and before any session is started.
+// It can assign the initial validator set and initial account balances.
+// It is only called once for a new chain.
+func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, accounts map[string]*big.Int, initialHeight int64) error {
+	tx, err := r.Database.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	err = r.Validators.GenesisInit(ctx, tx, validators, initialHeight)
+	if err != nil {
+		return err
+	}
+
 	for _, validator := range validators {
-		err := r.VoteStore.UpdateVoter(ctx, validator.PubKey, validator.Power)
+		err := r.VoteStore.UpdateVoter(ctx, tx, validator.PubKey, validator.Power)
 		if err != nil {
 			return err
 		}
 	}
-	return nil
+
+	for acctID, balance := range accounts {
+		err := r.Accounts.Credit(ctx, tx, []byte(acctID), balance)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = tx.Precommit(ctx) // is this technically the genesis hash?
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+// UpdateValidator updates a validator's power.
+// It can only be called in between Begin and Finalize.
+func (r *TxApp) UpdateValidator(ctx context.Context, validator []byte, power int64) error {
+	if r.currentTx == nil {
+		return errors.New("txapp misuse: cannot update a validator without a transaction in progress")
+	}
+
+	// since validators are used for voting, we also must update the vote store. this should be atomic.
+
+	sp, err := r.currentTx.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer sp.Rollback(ctx)
+
+	err = r.Validators.Update(ctx, r.currentTx, validator, power)
+	if err != nil {
+		return err
+	}
+
+	err = r.VoteStore.UpdateVoter(ctx, r.currentTx, validator, power)
+	if err != nil {
+		return err
+	}
+
+	return sp.Commit(ctx)
+}
+
+// GetValidators returns the current validator set.
+// It will not return uncommitted changes.
+func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
+	readTx, err := r.Database.BeginReadTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer readTx.Rollback(ctx) // always rollback read tx
+
+	return r.Validators.CurrentSet(ctx, readTx)
 }
 
 // Execute executes a transaction.  It will route the transaction to the
@@ -84,10 +151,28 @@ func (r *TxApp) Execute(ctx TxContext, tx *transactions.Transaction) *TxResponse
 
 	r.log.Debug("executing transaction", zap.Any("tx", tx))
 
-	return route.Execute(ctx, r, tx)
+	if r.currentTx == nil {
+		return txRes(nil, transactions.CodeUnknownError, errors.New("txapp misuse: cannot execute a blockchain transaction without a db transaction in progress"))
+	}
+	dbTx, err := r.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(nil, transactions.CodeUnknownError, err)
+	}
+
+	res := route.Execute(ctx, r, tx, dbTx)
+
+	// commit regardless of error
+	// errors can simply be not having enough tokens
+	err = dbTx.Commit(ctx.Ctx)
+	if err != nil {
+		return txRes(nil, transactions.CodeUnknownError, err)
+	}
+
+	return res
 }
 
 // Begin signals that a new block has begun.
+// It contains information on any validators whos power should be updated.
 func (r *TxApp) Begin(ctx context.Context) error {
 	if r.currentTx != nil {
 		return errors.New("txapp misuse: cannot begin a new block while a transaction is in progress")
@@ -99,6 +184,7 @@ func (r *TxApp) Begin(ctx context.Context) error {
 	}
 
 	r.currentTx = tx
+
 	return nil
 }
 
@@ -110,19 +196,19 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte
 		return nil, nil, errors.New("txapp misuse: cannot finalize a block without a transaction in progress")
 	}
 
-	finalizedEvents, err := r.VoteStore.ProcessConfirmedResolutions(ctx)
+	finalizedEvents, err := r.VoteStore.ProcessConfirmedResolutions(ctx, r.currentTx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	for _, eventID := range finalizedEvents {
-		err = r.EventStore.DeleteEvent(ctx, eventID)
+		err = r.EventStore.DeleteEvent(ctx, r.currentTx, eventID)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
-	err = r.VoteStore.Expire(ctx, blockHeight)
+	err = r.VoteStore.Expire(ctx, r.currentTx, blockHeight)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -131,7 +217,7 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte
 	// so that pending requests expire on Finalize()
 	r.Validators.UpdateBlockHeight(blockHeight)
 
-	validatorUpdates, err := r.Validators.Finalize(ctx)
+	validatorUpdates, err := r.Validators.Finalize(ctx, r.currentTx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -139,7 +225,7 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte
 	// we intentionally update the validators after processing confirmed resolutions
 	// if a vote passes and a validator is upgraded in the same block.
 	for _, validator := range validatorUpdates {
-		err = r.VoteStore.UpdateVoter(ctx, validator.PubKey, validator.Power)
+		err = r.VoteStore.UpdateVoter(ctx, r.currentTx, validator.PubKey, validator.Power)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -181,18 +267,29 @@ func (r *TxApp) ApplyMempool(ctx context.Context, tx *transactions.Transaction) 
 	if !ok {
 		return fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
 	}
+	readTx, err := r.Database.BeginReadTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer readTx.Rollback(ctx) // always rollback read tx
 
-	return r.mempool.applyTransaction(ctx, tx)
+	return r.mempool.applyTransaction(ctx, tx, readTx)
 }
 
-// GetAccount gets account info from either the mempool or the account store.
+// AccountInfo gets account info from either the mempool or the account store.
 // It takes a flag to indicate whether it should check the mempool first.
 func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
+	readTx, err := r.Database.BeginReadTx(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer readTx.Rollback(ctx) // always rollback read tx
+
 	var a *accounts.Account
 	if getUncommitted {
-		a, err = r.mempool.accountInfoSafe(ctx, acctID)
+		a, err = r.mempool.accountInfoSafe(ctx, readTx, acctID)
 	} else {
-		a, err = r.Accounts.GetAccount(ctx, acctID)
+		a, err = r.Accounts.GetAccount(ctx, readTx, acctID)
 	}
 	if err != nil {
 		return nil, 0, err
@@ -207,7 +304,13 @@ func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted b
 // in the mempool that are included in the current block. Therefore, we need to know the
 // largest nonce of the transactions included in the block that are authored by the proposer.
 func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error) {
-	events, err := r.EventStore.GetEvents(ctx)
+	readTx, err := r.Database.BeginReadTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer readTx.Rollback(ctx) // always rollback read tx
+
+	events, err := r.EventStore.GetEvents(ctx, readTx)
 	if err != nil {
 		return nil, err
 	}
@@ -259,6 +362,7 @@ func (r *TxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.I
 }
 
 // checkAndSpend checks the price of a transaction.
+// It requires a tx, so that spends can be made transactional with other database interactions.
 // it returns the price it will cost to execute the transaction.
 // if the transaction does not have enough tokens to pay for the transaction,
 // it will return an error.
@@ -269,7 +373,7 @@ func (r *TxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.I
 // It also returns an error code.
 // if we allow users to implement their own routes, this function will need to
 // be exported.
-func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, pricer Pricer) (*big.Int, transactions.TxCode, error) {
+func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, pricer Pricer, dbTx sql.DB) (*big.Int, transactions.TxCode, error) {
 	amt := big.NewInt(0)
 	var err error
 
@@ -284,7 +388,7 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 	if tx.Body.Fee.Cmp(amt) < 0 {
 		// If the transaction does not consent to spending required tokens for the transaction execution,
 		// spend the approved tx fee and terminate the transaction
-		err = r.Accounts.Spend(ctx.Ctx, &accounts.Spend{
+		err = r.Accounts.Spend(ctx.Ctx, dbTx, &accounts.Spend{
 			AccountID: tx.Sender,
 			Amount:    tx.Body.Fee,
 			Nonce:     int64(tx.Body.Nonce),
@@ -297,7 +401,7 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 	}
 
 	// spend the tokens
-	err = r.Accounts.Spend(ctx.Ctx, &accounts.Spend{
+	err = r.Accounts.Spend(ctx.Ctx, dbTx, &accounts.Spend{
 		AccountID: tx.Sender,
 		Amount:    amt,
 		Nonce:     int64(tx.Body.Nonce),

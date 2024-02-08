@@ -10,8 +10,9 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/accounts"
 
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -41,21 +42,6 @@ func cloneTx(tx *transactions.Transaction) *transactions.Transaction {
 		Serialization: tx.Serialization,
 		Sender:        sender,
 	}
-}
-
-type MockAccountsModule struct {
-}
-
-func (m *MockAccountsModule) Credit(ctx context.Context, pubKey []byte, amt *big.Int) error {
-	return nil
-}
-
-func (m *MockAccountsModule) GetAccount(ctx context.Context, pubKey []byte) (*accounts.Account, error) {
-	return &accounts.Account{
-		Identifier: nil,
-		Balance:    big.NewInt(0),
-		Nonce:      0,
-	}, nil
 }
 
 func newTxBts(t *testing.T, nonce uint64, signer auth.Signer) []byte {
@@ -224,7 +210,7 @@ func Test_prepareMempoolTxns(t *testing.T) {
 func Test_ProcessProposal_TxValidation(t *testing.T) {
 	ctx := context.Background()
 	abciApp := &AbciApp{
-		accounts: &MockAccountsModule{},
+		txApp: &mockTxApp{},
 	}
 	logger := log.NewStdOut(log.DebugLevel)
 
@@ -349,4 +335,46 @@ func Test_ProcessProposal_TxValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+type mockTxApp struct{}
+
+func (m *mockTxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
+	return nil, 0, nil
+}
+
+func (m *mockTxApp) ApplyMempool(ctx context.Context, tx *transactions.Transaction) error {
+	return nil
+}
+
+func (m *mockTxApp) Begin(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockTxApp) Commit(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockTxApp) Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse {
+	return nil
+}
+
+func (m *mockTxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
+	return nil, nil, nil
+}
+
+func (m *mockTxApp) GenesisInit(ctx context.Context, validators []*types.Validator, accounts map[string]*big.Int, initialHeight int64) error {
+	return nil
+}
+
+func (m *mockTxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
+	return nil, nil
+}
+
+func (m *mockTxApp) ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error) {
+	return nil, nil
+}
+
+func (m *mockTxApp) UpdateValidator(ctx context.Context, validator []byte, power int64) error {
+	return nil
 }

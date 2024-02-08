@@ -14,7 +14,7 @@ import (
 	ethereumClient "github.com/ethereum/go-ethereum/ethclient"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/extensions/oracles"
-	"github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
@@ -51,7 +51,7 @@ func init() {
 type EthDepositOracle struct {
 	cfg                  EthDepositOracleConfig
 	eventstore           oracles.EventStore
-	kvstore              sql.KV
+	kvstore              *events.KV
 	creditEventSignature common.Hash
 	eventABI             abi.ABI
 	ethclient            *ethereumClient.Client

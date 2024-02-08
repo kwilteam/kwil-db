@@ -49,7 +49,7 @@ type AccountInfoer interface {
 
 // ValidatorStore gets data about the local validators.
 type ValidatorStore interface {
-	IsCurrent(ctx context.Context, validator []byte) (bool, error)
+	GetValidators(ctx context.Context) ([]*types.Validator, error)
 }
 
 func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, accountInfo AccountInfoer, validatorStore ValidatorStore, signer *auth.Ed25519Signer, chainID string) *EventBroadcaster {
@@ -77,11 +77,20 @@ type EventBroadcaster struct {
 // It implements Kwil's abci.CommitHook function signature.
 // If the node is not a validator, it will do nothing.
 func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) error {
-	// Only validators are allowed to broadcast events.
-	isCurrent, err := e.validatorStore.IsCurrent(ctx, e.signer.Identity())
+
+	isCurrent := false
+	validators, err := e.validatorStore.GetValidators(ctx)
 	if err != nil {
 		return err
 	}
+
+	for _, v := range validators {
+		if bytes.Equal(v.PubKey, e.signer.Identity()) {
+			isCurrent = true
+			break
+		}
+	}
+
 	if !isCurrent {
 		return nil
 	}

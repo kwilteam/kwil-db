@@ -30,7 +30,7 @@ type ResolutionPayload interface {
 	// UnmarshalBinary unmarshals the payload from binary data.
 	UnmarshalBinary(data []byte) error
 	// Apply is called when a resolution is approved.
-	Apply(ctx context.Context, datastores Datastores, logger log.Logger) error
+	Apply(ctx context.Context, db sql.DB, datastores Datastores, logger log.Logger) error
 }
 
 // Datastores provides implementers of ResolutionPayload with access
@@ -42,12 +42,13 @@ type Datastores struct {
 
 type AccountStore interface {
 	// Account gets an account by its identifier
-	GetAccount(ctx context.Context, identifier []byte) (*accounts.Account, error)
+	GetAccount(ctx context.Context, db sql.DB, identifier []byte) (*accounts.Account, error)
 
 	// Credit credits an account with a given amount
-	Credit(ctx context.Context, account []byte, amount *big.Int) error
+	Credit(ctx context.Context, db sql.DB, account []byte, amount *big.Int) error
 }
 
+// TODO: we still need to remove this and replace it with the engine.
 type Datasets interface {
 	// Execute executes a statement with the given arguments.
 	// Execute(ctx context.Context, dbid string, stmt string, args ...any) (*sql.ResultSet, error)

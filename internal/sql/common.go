@@ -95,6 +95,14 @@ type DB interface {
 	AccessMode() AccessMode
 }
 
+// Conn is a connection to a database.
+// It is the outermost type for database access.
+type Conn interface {
+	OuterTxMaker
+	ReadTxMaker
+	Executor
+}
+
 type ExecResult interface {
 	RowsAffected() (int64, error)
 }

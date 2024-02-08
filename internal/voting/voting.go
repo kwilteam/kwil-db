@@ -10,22 +10,23 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
-// VoteStore is a connection to a database with read-write access.
-type VoteStore interface {
-	Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error)
-	Query(ctx context.Context, query string, args ...any) (*sql.ResultSet, error)
-}
-
 // NewVoteProcessor creates a new vote processor.
 // It initializes the database with the required tables.
 // The threshold is the percentThreshold of votes required to approve a resolution
 // It must be an integer between 0 and 1000000.  This defines the percentage
-func NewVoteProcessor(ctx context.Context, db VoteStore, accounts AccountStore,
+func NewVoteProcessor(ctx context.Context, db sql.DB, accounts AccountStore,
 	reg Datasets, threshold int64, logger log.Logger) (*VoteProcessor, error) {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	initStmts := []string{createVotingSchema, tableResolutionTypes, tableResolutions,
 		resolutionsTypeIndex, tableProcessed, tableVoters, tableVotes} // order important
+
 	for _, stmt := range initStmts {
-		_, err := db.Execute(ctx, stmt)
+		_, err := tx.Execute(ctx, stmt)
 		if err != nil {
 			return nil, err
 		}
@@ -33,15 +34,18 @@ func NewVoteProcessor(ctx context.Context, db VoteStore, accounts AccountStore,
 
 	for name := range registeredPayloads {
 		uuid := types.NewUUIDV5([]byte(name))
-		_, err := db.Execute(ctx, createResolutionType, uuid[:], name)
+		_, err := tx.Execute(ctx, createResolutionType, uuid[:], name)
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return &VoteProcessor{
 		percentThreshold: threshold,
-		db:               db,
 		accounts:         accounts,
 		registry:         reg,
 		logger:           logger,
@@ -57,7 +61,6 @@ type VoteProcessor struct {
 	// of total voting power required to approve a resolution (e.g. 500000 = 50%)
 	percentThreshold int64
 
-	db       VoteStore // the lower level DB
 	accounts AccountStore
 	registry Datasets // dataset registry with dbid args on methods
 
@@ -99,8 +102,14 @@ type Resolution struct {
 // If the voter does not exist, an error will be returned.
 // If the voter has already approved the resolution, no error will be returned.
 // If the resolution has already been processed, no error will be returned.
-func (v *VoteProcessor) Approve(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
-	alreadyProcessed, err := v.IsProcessed(ctx, resolutionID)
+func (v *VoteProcessor) Approve(ctx context.Context, db sql.DB, resolutionID types.UUID, expiration int64, from []byte) error {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	alreadyProcessed, err := v.IsProcessed(ctx, tx, resolutionID)
 	if err != nil {
 		return err
 	}
@@ -109,7 +118,7 @@ func (v *VoteProcessor) Approve(ctx context.Context, resolutionID types.UUID, ex
 	}
 
 	// we need to ensure that the resolution ID exists
-	_, err = v.db.Execute(ctx, resolutionIDExists, resolutionID[:], expiration)
+	_, err = tx.Execute(ctx, resolutionIDExists, resolutionID[:], expiration)
 	if err != nil {
 		return err
 	}
@@ -118,16 +127,26 @@ func (v *VoteProcessor) Approve(ctx context.Context, resolutionID types.UUID, ex
 
 	// if the voter does not exist, the following will error
 	// if the vote from the voter already exists, the following will error
-	_, err = v.db.Execute(ctx, addVote, resolutionID[:], userId[:])
-	return err
+	_, err = tx.Execute(ctx, addVote, resolutionID[:], userId[:])
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 // CreateResolution creates a vote, by submitting a body of a vote, a topic
 // and an expiration.  The expiration should be a blockheight.
 // If the resolution already exists, it will not be changed.
 // If the resolution was already processed, nothing will happen.
-func (v *VoteProcessor) CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64) error {
-	alreadyProcessed, err := v.IsProcessed(ctx, event.ID())
+func (v *VoteProcessor) CreateResolution(ctx context.Context, db sql.DB, event *types.VotableEvent, expiration int64) error {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	alreadyProcessed, err := v.IsProcessed(ctx, tx, event.ID())
 	if err != nil {
 		return err
 	}
@@ -143,14 +162,24 @@ func (v *VoteProcessor) CreateResolution(ctx context.Context, event *types.Votab
 
 	id := event.ID()
 
-	_, err = v.db.Execute(ctx, upsertResolution, id[:], event.Body, event.Type, expiration)
-	return err
+	_, err = tx.Execute(ctx, upsertResolution, id[:], event.Body, event.Type, expiration)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 // Expire expires all votes at or before a given blockheight.
 // All expired votes will be removed from the system.
-func (v *VoteProcessor) Expire(ctx context.Context, blockheight int64) error {
-	res, err := v.db.Execute(ctx, expireResolutions, blockheight)
+func (v *VoteProcessor) Expire(ctx context.Context, db sql.DB, blockheight int64) error {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	res, err := tx.Execute(ctx, expireResolutions, blockheight)
 	if err != nil {
 		return err
 	}
@@ -166,26 +195,32 @@ func (v *VoteProcessor) Expire(ctx context.Context, blockheight int64) error {
 			return fmt.Errorf("invalid type for id (%T). this is an internal bug", row[0])
 		}
 
-		_, err = v.db.Execute(ctx, markProcessed, id)
+		_, err = tx.Execute(ctx, markProcessed, id)
 		if err != nil {
 			return err
 		}
 	}
 
-	return nil
+	return tx.Commit(ctx)
 }
 
 // GetResolutionVoteInfo gets a resolution, identified by the ID.
 // It does not read uncommitted data.
-func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, id types.UUID) (info *ResolutionVoteInfo, err error) {
-	res, err := v.db.Query(ctx, getResolutionVoteInfo, id[:]) // TODO: register our UUID with scanner's type map?
+func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, db sql.DB, id types.UUID) (info *ResolutionVoteInfo, err error) {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	res, err := tx.Execute(ctx, getResolutionVoteInfo, id[:]) // TODO: register our UUID with scanner's type map?
 	if err != nil {
 		return nil, err
 	}
 
 	// if no rows, then the resolution may still exist, but does not have a body
 	if len(res.Rows) == 0 {
-		res, err = v.db.Query(ctx, getUnfilledResolutionVoteInfo, id[:])
+		res, err = tx.Execute(ctx, getUnfilledResolutionVoteInfo, id[:])
 		if err != nil {
 			return nil, err
 		}
@@ -249,7 +284,7 @@ func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, id types.UUID
 			Expiration: resolution.Expiration,
 		},
 		ApprovedPower: approvedPower,
-	}, nil
+	}, tx.Commit(ctx)
 }
 
 // ContainsBodyOrFinished returns true if (any of the following are true):
@@ -257,12 +292,18 @@ func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, id types.UUID
 // 2. the resolution has expired
 // 3. the resolution has been approved
 // TODO: should be uncommitted data query
-func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, id types.UUID) (bool, error) {
+func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, db sql.DB, id types.UUID) (bool, error) {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+
 	// we check for existence of body in resolutions table before checking
 	// for the resolution ID in the processed table, since it is a faster lookup.
 	// furthermore, we are more likely to hit the resolutions table during consensus,
 	// and processed table during catchup. consensus speed is more important.
-	res, err := v.db.Execute(ctx, getResolutionBody, id[:])
+	res, err := tx.Execute(ctx, getResolutionBody, id[:])
 	if err != nil {
 		return false, err
 	}
@@ -278,17 +319,23 @@ func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, id types.UUI
 		}
 	}
 
-	processed, err := v.IsProcessed(ctx, id)
+	processed, err := v.IsProcessed(ctx, tx, id)
 	if err != nil {
 		return false, err
 	}
-	return processed, nil
+	return processed, tx.Commit(ctx)
 }
 
 // GetVotesByCategory gets all votes of a specific category.
 // It does not read uncommitted data. (what is the indented consumer?)
-func (v *VoteProcessor) GetVotesByCategory(ctx context.Context, category string) (votes []*Resolution, err error) {
-	res, err := v.db.Query(ctx, resolutionsByType, category)
+func (v *VoteProcessor) GetVotesByCategory(ctx context.Context, db sql.DB, category string) (votes []*Resolution, err error) {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	res, err := tx.Execute(ctx, resolutionsByType, category)
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +363,7 @@ func (v *VoteProcessor) GetVotesByCategory(ctx context.Context, category string)
 		votes[i] = resolution
 	}
 
-	return votes, nil
+	return votes, tx.Commit(ctx)
 }
 
 // getResolutionFromRow gets a resolution from a SQL result.
@@ -355,29 +402,41 @@ func getResolutionFromRow(rows []any) (*Resolution, error) {
 // If the voter already exists, it will add the power to the existing power.
 // If the power is 0, it will remove the voter from the system.
 // If negative power is given, it will subtract the power from the existing power.
-func (v *VoteProcessor) UpdateVoter(ctx context.Context, identifier []byte, power int64) error {
+func (v *VoteProcessor) UpdateVoter(ctx context.Context, db sql.DB, identifier []byte, power int64) error {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
 	uuid := types.NewUUIDV5(identifier)
 
 	if power == 0 {
-		_, err := v.db.Execute(ctx, removeVoter, uuid[:])
-		return err
+		_, err = tx.Execute(ctx, removeVoter, uuid[:])
+	} else if power < 0 {
+		_, err = tx.Execute(ctx, decreaseVoterPower, uuid[:], -power)
+	} else {
+		_, err = tx.Execute(ctx, upsertVoter, uuid[:], identifier, power)
 	}
-	if power < 0 {
-		_, err := v.db.Execute(ctx, decreaseVoterPower, uuid[:], -power)
+	if err != nil {
 		return err
 	}
 
-	_, err := v.db.Execute(ctx, upsertVoter, uuid[:], identifier, power)
-	return err
+	return tx.Commit(ctx)
 }
 
 // GetVoterPower gets the power of a voter.
 // If the voter does not exist, it will return 0.
-// TODO: committed or uncommitted? who's the consumer?
-func (v *VoteProcessor) GetVoterPower(ctx context.Context, identifier []byte) (power int64, err error) {
+func (v *VoteProcessor) GetVoterPower(ctx context.Context, db sql.DB, identifier []byte) (power int64, err error) {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+
 	uuid := types.NewUUIDV5(identifier)
 
-	res, err := v.db.Query(ctx, getVoterPower, uuid[:])
+	res, err := tx.Execute(ctx, getVoterPower, uuid[:])
 	if err != nil {
 		return 0, err
 	}
@@ -397,18 +456,20 @@ func (v *VoteProcessor) GetVoterPower(ctx context.Context, identifier []byte) (p
 		return 0, fmt.Errorf("invalid type for power (%T). this is an internal bug", powerIface)
 	}
 
-	return power, nil
+	return power, tx.Commit(ctx)
 }
 
 // ProcessConfirmedResolutions processes all resolutions that have exceeded
 // the threshold of votes, and have a non-nil body.
 // It sorts them lexicographically by ID, and processes them in that order.
-func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]types.UUID, error) {
-	// Read uncommitted data.
-	//
-	// NOTE: but if we really want error isolation the db.BeginTx() can return a
-	// tx (or nested tx) with Query/Exec methods so this is not so black magicy.
-	powerRes, err := v.db.Execute(ctx, totalPower)
+func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context, db sql.DB) ([]types.UUID, error) {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	powerRes, err := tx.Execute(ctx, totalPower)
 	if err != nil {
 		return nil, err
 	}
@@ -447,7 +508,7 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 	result := new(big.Int).Div(scaled, big.NewInt(1000000))
 	// intDivUp(2*int64(totalPower), 3)
 
-	res, err := v.db.Execute(ctx, getConfirmedResolutions, result.Int64())
+	res, err := tx.Execute(ctx, getConfirmedResolutions, result.Int64())
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +540,7 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 			return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
 		}
 
-		err = payload.Apply(ctx, Datastores{
+		err = payload.Apply(ctx, tx, Datastores{
 			Accounts:  v.accounts,
 			Databases: v.registry,
 		}, v.logger)
@@ -495,25 +556,25 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 
 		usedDBIDs[i] = vote.ID
 
-		_, err = v.db.Execute(ctx, markProcessed, vote.ID[:])
+		_, err = tx.Execute(ctx, markProcessed, vote.ID[:])
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// delete
-	_, err = v.db.Execute(ctx, deleteResolutions, types.UUIDArray(usedDBIDs))
+	_, err = tx.Execute(ctx, deleteResolutions, types.UUIDArray(usedDBIDs))
 	if err != nil {
 		return nil, err
 	}
 
-	return usedDBIDs, nil // sp.Commit()
+	return usedDBIDs, tx.Commit(ctx)
 }
 
 // alreadyProcessed checks if a vote has either already succeeded, or expired.
 // TODO: need committed or uncommitted data? This method is used in many different contexts.
-func (v *VoteProcessor) IsProcessed(ctx context.Context, resolutionID types.UUID) (bool, error) {
-	res, err := v.db.Query(ctx, alreadyProcessed, resolutionID[:])
+func (v *VoteProcessor) IsProcessed(ctx context.Context, db sql.DB, resolutionID types.UUID) (bool, error) {
+	res, err := db.Execute(ctx, alreadyProcessed, resolutionID[:])
 	if err != nil {
 		return false, err
 	}
@@ -523,26 +584,13 @@ func (v *VoteProcessor) IsProcessed(ctx context.Context, resolutionID types.UUID
 
 // HasVoted checks if a voter has voted on a resolution.
 // NOTE: reads uncommitted/pending data
-func (v *VoteProcessor) HasVoted(ctx context.Context, resolutionID types.UUID, from []byte) (bool, error) {
+func (v *VoteProcessor) HasVoted(ctx context.Context, db sql.DB, resolutionID types.UUID, from []byte) (bool, error) {
 	userId := types.NewUUIDV5(from)
 
-	res, err := v.db.Execute(ctx, hasVoted, resolutionID[:], userId[:])
+	res, err := db.Execute(ctx, hasVoted, resolutionID[:], userId[:])
 	if err != nil {
 		return false, err
 	}
 
 	return len(res.Rows) != 0, nil
-}
-
-// DropAllTables is used to drop all the known tables in the voting store
-// postgresql scheme.
-func DropAllTables(ctx context.Context, db VoteStore) error {
-	const dropTableTmpl = `DROP TABLE IF EXISTS ` + votingSchemaName + `.%s CASCADE;`
-	for _, tableName := range []string{"resolutions", "resolution_types", "voters", "votes", "processed"} {
-		_, err := db.Execute(ctx, fmt.Sprintf(dropTableTmpl, tableName))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }

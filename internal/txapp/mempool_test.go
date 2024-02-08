@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
+	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,40 +18,43 @@ func Test_Mempool(t *testing.T) {
 		accounts:     make(map[string]*accounts.Account),
 	}
 	ctx := context.Background()
+	db := &mockDb{}
 
 	// Successful transaction A: 1
-	err := m.applyTransaction(ctx, newTx(t, 1, "A"))
+	err := m.applyTransaction(ctx, newTx(t, 1, "A"), db)
 	assert.NoError(t, err)
 	assert.EqualValues(t, m.accounts["A"].Nonce, 1)
 
 	// Successful transaction A: 2
-	err = m.applyTransaction(ctx, newTx(t, 2, "A"))
+	err = m.applyTransaction(ctx, newTx(t, 2, "A"), db)
 	assert.NoError(t, err)
 	assert.EqualValues(t, m.accounts["A"].Nonce, 2)
 
 	// Duplicate nonce failure
-	err = m.applyTransaction(ctx, newTx(t, 2, "A"))
+	err = m.applyTransaction(ctx, newTx(t, 2, "A"), db)
 	assert.Error(t, err)
 	assert.EqualValues(t, m.accounts["A"].Nonce, 2)
 
 	// Invalid order
-	err = m.applyTransaction(ctx, newTx(t, 4, "A"))
+	err = m.applyTransaction(ctx, newTx(t, 4, "A"), db)
 	assert.Error(t, err)
 	assert.EqualValues(t, m.accounts["A"].Nonce, 2)
 
-	err = m.applyTransaction(ctx, newTx(t, 3, "A"))
+	err = m.applyTransaction(ctx, newTx(t, 3, "A"), db)
 	assert.NoError(t, err)
 	assert.EqualValues(t, m.accounts["A"].Nonce, 3)
 
 	// Recheck nonce 4 transaction
-	err = m.applyTransaction(ctx, newTx(t, 4, "A"))
+	err = m.applyTransaction(ctx, newTx(t, 4, "A"), db)
 	assert.NoError(t, err)
 	assert.EqualValues(t, m.accounts["A"].Nonce, 4)
 }
 
 type mockAccountsModule struct{}
 
-func (m *mockAccountsModule) GetAccount(ctx context.Context, acctID []byte) (*accounts.Account, error) {
+var _ AccountReader = (*mockAccountsModule)(nil)
+
+func (m *mockAccountsModule) GetAccount(ctx context.Context, _ sql.DB, acctID []byte) (*accounts.Account, error) {
 	return &accounts.Account{
 		Nonce:      0,
 		Balance:    big.NewInt(0),
@@ -69,4 +73,38 @@ func newTx(t *testing.T, nonce uint64, sender string) *transactions.Transaction 
 		},
 		Sender: []byte(sender),
 	}
+}
+
+type mockDb struct{}
+
+func (m *mockDb) AccessMode() sql.AccessMode {
+	return sql.ReadOnly
+}
+
+func (m *mockDb) BeginTx(ctx context.Context) (sql.Tx, error) {
+	return &mockTx{m}, nil
+}
+
+func (m *mockDb) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
+	return nil, nil
+}
+
+type mockTx struct {
+	*mockDb
+}
+
+func (m *mockTx) Commit(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockTx) Rollback(ctx context.Context) error {
+	return nil
+}
+
+type mockOuterTx struct {
+	*mockTx
+}
+
+func (m *mockOuterTx) Precommit(ctx context.Context) ([]byte, error) {
+	return nil, nil
 }

@@ -49,17 +49,15 @@ type AtomicCommitter interface {
 	Commit(ctx context.Context) error
 }
 
-func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, vldtrs ValidatorModule, kv KVStore,
-	snapshotter SnapshotModule, bootstrapper DBBootstrapModule, txRouter TxApp, consensusParams ConsensusParams, log log.Logger) *AbciApp {
+func NewAbciApp(cfg *AbciConfig, kv KVStore, snapshotter SnapshotModule,
+	bootstrapper DBBootstrapModule, txRouter TxApp, consensusParams ConsensusParams, log log.Logger) *AbciApp {
 	app := &AbciApp{
-		cfg:        *cfg,
-		validators: vldtrs,
+		cfg: *cfg,
 		metadataStore: &metadataStore{
 			kv: kv,
 		},
 		bootstrapper:    bootstrapper,
 		snapshotter:     snapshotter,
-		accounts:        accounts,
 		txApp:           txRouter,
 		consensusParams: consensusParams,
 
@@ -94,8 +92,6 @@ func proposerAddrToString(addr []byte) string {
 type AbciApp struct {
 	cfg AbciConfig
 
-	// validators is the validators module that handles joining and approving validators
-	validators ValidatorModule
 	// comet punishes by address, so we maintain an address=>pubkey map.
 	valAddrToKey map[string][]byte // NOTE: includes candidates
 
@@ -107,9 +103,6 @@ type AbciApp struct {
 
 	// metadataStore to track the app hash and block height
 	metadataStore *metadataStore
-
-	// accountStore is the store that maintains the account state
-	accounts AccountsModule
 
 	log log.Logger
 
@@ -262,7 +255,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 		const punishDelta = 1
 		newPower := ev.Validator.Power - punishDelta
-		if err = a.validators.Punish(ctx, pubkey, newPower); err != nil {
+		if err = a.txApp.UpdateValidator(ctx, pubkey, newPower); err != nil {
 			return nil, fmt.Errorf("failed to punish validator: %w", err)
 		}
 	}
@@ -386,8 +379,8 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 // Info is part of the Info/Query connection.
 func (a *AbciApp) Info(ctx context.Context, req *abciTypes.RequestInfo) (*abciTypes.ResponseInfo, error) {
 	// Load the current validator set from our store.
-	vals, err := a.validators.CurrentSet(ctx)
-	if err != nil { // TODO error return
+	vals, err := a.txApp.GetValidators(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("failed to load current validators: %w", err)
 	}
 	// NOTE: We can check against cometbft/rpc/core.Validators(), but that only
@@ -428,23 +421,17 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 	logger.Debug("", zap.String("ChainId", req.ChainId))
 	// maybe verify a.cfg.ChainID against the one in the request
 
-	// Accounts and validators DB init in a transaction. Not part of consensus
-	// connection sequence.
-	if err := a.txApp.Begin(ctx); err != nil {
-		return nil, err
-	}
-
 	// Store the genesis account allocations to the datastore. These are
 	// reflected in the genesis app hash.
+	genesisAllocs := make(map[string]*big.Int, len(a.cfg.GenesisAllocs)) // converting the hexadecimal keys to binary
 	for acct, bal := range a.cfg.GenesisAllocs {
 		acct, _ := strings.CutPrefix(acct, "0x") // special case for ethereum addresses
 		identifier, err := hex.DecodeString(acct)
 		if err != nil {
 			return nil, fmt.Errorf("invalid hex pubkey: %w", err)
 		}
-		if err = a.accounts.Credit(ctx, identifier, bal); err != nil {
-			return nil, fmt.Errorf("failed to credit genesis account: %w", err)
-		}
+
+		genesisAllocs[string(identifier)] = bal
 	}
 	// Initialize the validator module with the genesis validators.
 	vldtrs := make([]*validators.Validator, len(req.Validators))
@@ -464,24 +451,13 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 		a.valAddrToKey[addr] = pk
 	}
 
-	if err := a.validators.GenesisInit(ctx, vldtrs, req.InitialHeight); err != nil {
-		return nil, fmt.Errorf("validators.GenesisInit failed: %w", err)
-	}
-
-	if err := a.txApp.GenesisInit(ctx, vldtrs); err != nil {
+	if err := a.txApp.GenesisInit(ctx, vldtrs, genesisAllocs, 0); err != nil {
 		return nil, fmt.Errorf("txApp.GenesisInit failed: %w", err)
 	}
 
 	valUpdates := make([]abciTypes.ValidatorUpdate, len(vldtrs))
 	for i, validator := range vldtrs {
 		valUpdates[i] = abciTypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
-	}
-
-	if _, _, err := a.txApp.Finalize(ctx, 0); err != nil {
-		return nil, err
-	} // maybe have that ^ be automatic if skipped
-	if err := a.txApp.Commit(ctx); err != nil {
-		return nil, err
 	}
 
 	err := a.metadataStore.SetAppHash(ctx, a.cfg.GenesisAppHash)
@@ -726,11 +702,11 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 	}
 
 	if proposerNonce == 0 {
-		acct, err := a.accounts.GetAccount(ctx, addr)
+		_, nonce, err := a.txApp.AccountInfo(ctx, addr, false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get proposer account: %w", err)
 		}
-		proposerNonce = uint64(acct.Nonce) + 1
+		proposerNonce = uint64(nonce) + 1
 	}
 
 	proposerTxs, err := a.txApp.ProposerTxs(ctx, proposerNonce)
@@ -766,11 +742,11 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 	// execution does not update an accounts nonce in state unless it is the
 	// next nonce. Delivering transactions to a block in that way cannot happen.
 	for sender, txs := range grouped {
-		acct, err := a.accounts.GetAccount(ctx, []byte(sender))
+		_, nonce, err := a.txApp.AccountInfo(ctx, []byte(sender), false)
 		if err != nil {
 			return fmt.Errorf("failed to get account: %w", err)
 		}
-		expectedNonce := uint64(acct.Nonce) + 1
+		expectedNonce := uint64(nonce) + 1
 
 		for _, tx := range txs {
 			if tx.Body.Nonce != expectedNonce {

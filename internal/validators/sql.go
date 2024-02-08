@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 var errUnknownValidator = errors.New("unknown validator")
@@ -123,22 +125,32 @@ const (
 // 	return nil
 // }
 
-func (vs *validatorStore) currentVersion(ctx context.Context) (int, error) {
-	results, err := vs.db.Query(ctx, sqlGetVersion)
+func (vs *validatorStore) currentVersion(ctx context.Context, db sql.DB) (int, error) {
+	// we need a tx because a postgres query against non-existent relation will fail the whole tx
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) // since we are reading, we can just rollback
+
+	results, err := tx.Execute(ctx, sqlGetVersion)
 	if err != nil {
 		return 0, err
 	}
-	if len(results) == 0 {
+	if len(results.Rows) == 0 {
 		return 0, nil
 	}
-	vi, ok := results[0]["version"]
-	if !ok {
-		return 0, errors.New("no version in schema_version record")
+	if len(results.Rows) > 1 {
+		return 0, fmt.Errorf("expected 1 row, got %d", len(results.Rows))
 	}
-	version, ok := vi.(int64)
+
+	// rows[0][0] == version
+
+	version, ok := results.Rows[0][0].(int64)
 	if !ok {
-		return 0, fmt.Errorf("invalid version value (%T)", vi)
+		return 0, fmt.Errorf("invalid version value (%T)", version)
 	}
+
 	return int(version), nil
 }
 
@@ -149,34 +161,45 @@ func getTableInits() []string {
 
 // initTables initializes the validator store tables. This is not an upgrade
 // action and is only used on a fresh DB being created at the latest version.
-func (vs *validatorStore) initTables(ctx context.Context) error {
-	if _, err := vs.db.Execute(ctx, sqlCreateSchema); err != nil {
+func (vs *validatorStore) initTables(ctx context.Context, db sql.DB) error {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Execute(ctx, sqlCreateSchema); err != nil {
 		return err
 	}
 
 	inits := getTableInits()
 	for _, init := range inits {
-		if _, err := vs.db.Execute(ctx, init); err != nil {
-			fmt.Println(init)
+		if _, err := tx.Execute(ctx, init); err != nil {
 			return fmt.Errorf("failed to initialize tables: %w", err)
 		}
 	}
 
-	if _, err := vs.db.Execute(ctx, sqlInitVersionTable); err != nil {
+	if _, err := tx.Execute(ctx, sqlInitVersionTable); err != nil {
 		return fmt.Errorf("failed to initialize schema version table: %w", err)
 	}
 
-	_, err := vs.db.Execute(ctx, sqlInitVersionRow, valStoreVersion)
+	_, err = tx.Execute(ctx, sqlInitVersionRow, valStoreVersion)
 	if err != nil {
 		return fmt.Errorf("failed to set schema version: %w", err)
 	}
 
-	return nil
+	return tx.Commit(ctx)
 }
 
-func (vs *validatorStore) startJoinRequest(ctx context.Context, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error {
+func (vs *validatorStore) startJoinRequest(ctx context.Context, tx sql.DB, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error {
+	sp, err := tx.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer sp.Rollback(ctx)
+
 	// Insert into join_reqs.
-	_, err := vs.db.Execute(ctx, sqlNewJoinReq, joiner, power, expiresAt)
+	_, err = sp.Execute(ctx, sqlNewJoinReq, joiner, power, expiresAt)
 	if err != nil {
 		return fmt.Errorf("failed to insert new join request: %w", err)
 	}
@@ -189,57 +212,58 @@ func (vs *validatorStore) startJoinRequest(ctx context.Context, joiner []byte, a
 	// 	return fmt.Errorf("failed to prepare get account statement: %w", err)
 	// }
 	for i := range approvers {
-		_, err = vs.db.Execute(ctx, sqlAddToJoinBoard, joiner, approvers[i], 0)
+		_, err = sp.Execute(ctx, sqlAddToJoinBoard, joiner, approvers[i], 0)
 		if err != nil {
 			return fmt.Errorf("failed to insert new join request: %w", err)
 		}
 	}
-	return nil
+	return sp.Commit(ctx)
 }
 
-func (vs *validatorStore) addApproval(ctx context.Context, joiner, approver []byte) error {
+func (vs *validatorStore) addApproval(ctx context.Context, tx sql.DB, joiner, approver []byte) error {
 	// We could just YOLO update, potentially updating zero rows if there's no
 	// join request for this candidate or if approver is not an eligible voting
 	// validator, but let's go the extra mile.
-	res, err := vs.db.Execute(ctx, sqlEligibleApprove, joiner, approver)
+	res, err := tx.Execute(ctx, sqlEligibleApprove, joiner, approver)
 	if err != nil {
 		return err
 	}
-	if len(res) != 1 {
-		return fmt.Errorf("%d eligible join requests to approve", len(res))
+	if len(res.Rows) != 1 {
+		return fmt.Errorf("%d eligible join requests to approve", len(res.Rows))
 	}
 
 	// Update the approval column of join_board row.
-	_, err = vs.db.Execute(ctx, sqlSetApproval, 1, approver, joiner)
+	_, err = tx.Execute(ctx, sqlSetApproval, 1, approver, joiner)
 	return err
 }
 
-func (vs *validatorStore) addRemoval(ctx context.Context, target, validator []byte) error {
-	_, err := vs.db.Execute(ctx, sqlAddRemoval, validator, target)
+func (vs *validatorStore) addRemoval(ctx context.Context, tx sql.DB, target, validator []byte) error {
+	_, err := tx.Execute(ctx, sqlAddRemoval, validator, target)
 	return err
 }
 
 // deleteRemoval and deleteRemovals should not be required with ON DELETE
 // CASCADE on both the remover and target columns of the removals table...
-func (vs *validatorStore) deleteRemoval(ctx context.Context, target, validator []byte) error {
-	_, err := vs.db.Execute(ctx, sqlDeleteRemoval, validator, target)
+func (vs *validatorStore) deleteRemoval(ctx context.Context, tx sql.DB, target, validator []byte) error {
+	_, err := tx.Execute(ctx, sqlDeleteRemoval, validator, target)
 	return err
 }
 
-func (vs *validatorStore) deleteRemovals(ctx context.Context, target []byte) error {
-	_, err := vs.db.Execute(ctx, sqlDeleteRemovals, target)
+func (vs *validatorStore) deleteJoinRequest(ctx context.Context, tx sql.DB, joiner []byte) error {
+	_, err := tx.Execute(ctx, sqlDeleteJoinReq, joiner)
 	return err
 }
 
-func (vs *validatorStore) deleteJoinRequest(ctx context.Context, joiner []byte) error {
-	_, err := vs.db.Execute(ctx, sqlDeleteJoinReq, joiner)
-	return err
-}
+func (vs *validatorStore) addValidator(ctx context.Context, tx sql.DB, joiner []byte, power int64) error {
+	sp, err := tx.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer sp.Rollback(ctx)
 
-func (vs *validatorStore) addValidator(ctx context.Context, joiner []byte, power int64) error {
 	// Only permit this for first time validators (unknown) or validators with
 	// power zero (not active, but in our tables).
-	power0, err := vs.validatorPower(ctx, joiner)
+	power0, err := vs.validatorPower(ctx, sp, joiner)
 	if err != nil && !errors.Is(err, errUnknownValidator) {
 		return err
 	}
@@ -247,50 +271,56 @@ func (vs *validatorStore) addValidator(ctx context.Context, joiner []byte, power
 		return errors.New("validator with power already exists")
 	}
 	// Either a new validator, or we are doing a power upsert.
-	_, err = vs.db.Execute(ctx, sqlNewValidator, joiner, power)
+	_, err = sp.Execute(ctx, sqlNewValidator, joiner, power)
 	if err != nil {
 		return fmt.Errorf("failed to add validator: %w", err)
 	}
-	err = vs.deleteJoinRequest(ctx, joiner)
+	err = vs.deleteJoinRequest(ctx, sp, joiner)
 	if err != nil {
 		return fmt.Errorf("failed to delete join request: %w", err)
 	}
 
-	return nil
+	return sp.Commit(ctx)
 }
 
-func (vs *validatorStore) removeValidator(ctx context.Context, validator []byte) error {
-	err := vs.deleteRemovals(ctx, validator)
+func (vs *validatorStore) removeValidator(ctx context.Context, tx sql.DB, validator []byte) error {
+	sp, err := tx.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer sp.Rollback(ctx)
+
+	_, err = sp.Execute(ctx, sqlDeleteRemovals, validator)
 	if err != nil {
 		return fmt.Errorf("failed to delete removals: %w", err)
 	}
-	_, err = vs.db.Execute(ctx, sqlDeleteValidator, validator)
+	_, err = sp.Execute(ctx, sqlDeleteValidator, validator)
 	if err != nil {
 		return fmt.Errorf("failed to remove validator: %w", err)
 	}
-	return nil
+	return sp.Commit(ctx)
 }
 
-func (vs *validatorStore) updateValidatorPower(ctx context.Context, validator []byte, power int64) error {
-	_, err := vs.db.Execute(ctx, sqlUpdateValidatorPower, power, validator)
+func (vs *validatorStore) updateValidatorPower(ctx context.Context, tx sql.DB, validator []byte, power int64) error {
+	_, err := tx.Execute(ctx, sqlUpdateValidatorPower, power, validator)
 	if err != nil {
 		return fmt.Errorf("failed to update validator power: %w", err)
 	}
 	return nil
 }
 
-func (vs *validatorStore) init(ctx context.Context, vals []*Validator) error {
-	_, err := vs.db.Execute(ctx, sqlDeleteAllValidators)
+func (vs *validatorStore) init(ctx context.Context, tx sql.DB, vals []*Validator) error {
+	_, err := tx.Execute(ctx, sqlDeleteAllValidators)
 	if err != nil {
 		return fmt.Errorf("failed to delete all previous validators: %w", err)
 	}
-	_, err = vs.db.Execute(ctx, sqlDeleteAllJoins)
+	_, err = tx.Execute(ctx, sqlDeleteAllJoins)
 	if err != nil {
 		return fmt.Errorf("failed to delete all previous join requests: %w", err)
 	}
 
 	for _, vi := range vals {
-		_, err = vs.db.Execute(ctx, sqlNewValidator, vi.PubKey, vi.Power)
+		_, err = tx.Execute(ctx, sqlNewValidator, vi.PubKey, vi.Power)
 		if err != nil {
 			return fmt.Errorf("failed to insert validator: %w", err)
 		}
@@ -299,85 +329,78 @@ func (vs *validatorStore) init(ctx context.Context, vals []*Validator) error {
 	return nil
 }
 
-func (vs *validatorStore) validatorPower(ctx context.Context, validator []byte) (int64, error) {
-	results, err := vs.db.Query(ctx, sqlGetValidatorPower, validator)
+func (vs *validatorStore) validatorPower(ctx context.Context, tx sql.DB, validator []byte) (int64, error) {
+	results, err := tx.Execute(ctx, sqlGetValidatorPower, validator)
 	if err != nil {
 		return 0, err
 	}
-	if len(results) == 0 {
+	if len(results.Rows) == 0 {
 		return 0, errUnknownValidator
 	}
+	if len(results.Rows[0]) != 1 {
+		return 0, fmt.Errorf("expected 1 column getting validator power. this is an internal bug")
+	}
 
-	pwri, ok := results[0]["power"]
+	power, ok := results.Rows[0][0].(int64)
 	if !ok {
-		return 0, errors.New("no power in validator record")
+		return 0, fmt.Errorf("invalid power value (%T)", power)
 	}
-	power, ok := pwri.(int64)
-	if !ok {
-		return 0, fmt.Errorf("invalid power value (%T)", pwri)
-	}
+
 	return power, nil
 }
 
-func (vs *validatorStore) currentValidators(ctx context.Context) ([]*Validator, error) {
-	results, err := vs.db.Query(ctx, sqlActiveValidators)
+func (vs *validatorStore) currentValidators(ctx context.Context, tx sql.DB) ([]*Validator, error) {
+	results, err := tx.Execute(ctx, sqlActiveValidators)
 	if err != nil {
 		return nil, err
 	}
-	if len(results) == 0 {
+	if len(results.Rows) == 0 {
 		return nil, nil // no validators, ok, skip the slice alloc
 	}
 
-	vals := make([]*Validator, len(results))
-	for i, res := range results {
-		pki, ok := res["pubkey"]
+	vals := make([]*Validator, len(results.Rows))
+	for i, row := range results.Rows {
+		if len(row) != 2 {
+			return nil, fmt.Errorf("expected 2 columns getting validators. this is an internal bug")
+		}
+
+		// row[0] is the pubkey, row[1] is the power
+		pub, ok := row[0].([]byte)
 		if !ok {
 			return nil, errors.New("no pubkey in validator record")
 		}
-		pubkey, ok := pki.([]byte)
-		if !ok {
-			return nil, fmt.Errorf("invalid pubkey value (%T)", pki)
-		}
-		pwri, ok := res["power"]
+
+		power, ok := row[1].(int64)
 		if !ok {
 			return nil, errors.New("no power in validator record")
 		}
-		power, ok := pwri.(int64)
-		if !ok {
-			return nil, fmt.Errorf("invalid power value (%T)", pwri)
-		}
 		vals[i] = &Validator{
-			PubKey: pubkey,
+			PubKey: pub,
 			Power:  power,
 		}
 	}
 	return vals, nil
 }
 
-func (vs *validatorStore) allActiveRemoveReqs(ctx context.Context) ([]*ValidatorRemoveProposal, error) {
-	results, err := vs.db.Query(ctx, sqlListAllRemovals)
+func (vs *validatorStore) allActiveRemoveReqs(ctx context.Context, tx sql.DB) ([]*ValidatorRemoveProposal, error) {
+	results, err := tx.Execute(ctx, sqlListAllRemovals)
 	if err != nil {
 		return nil, err
 	}
 
-	removals := make([]*ValidatorRemoveProposal, len(results))
-	for i, res := range results {
-		pki, ok := res["target"]
+	removals := make([]*ValidatorRemoveProposal, len(results.Rows))
+	for i, row := range results.Rows {
+		// row[0] is the target, row[1] is the remover
+		target, ok := row[0].([]byte)
 		if !ok {
-			return nil, errors.New("no target in removals record")
+			return nil, fmt.Errorf("invalid target pubkey value (%T)", target)
 		}
-		target, ok := pki.([]byte)
+
+		remover, ok := row[1].([]byte)
 		if !ok {
-			return nil, fmt.Errorf("invalid target pubkey value (%T)", pki)
+			return nil, fmt.Errorf("invalid remover pubkey value (%T)", remover)
 		}
-		rem, ok := res["remover"]
-		if !ok {
-			return nil, errors.New("no remover in removals record")
-		}
-		remover, ok := rem.([]byte)
-		if !ok {
-			return nil, fmt.Errorf("invalid remover pubkey value (%T)", rem)
-		}
+
 		removals[i] = &ValidatorRemoveProposal{
 			Target:  target,
 			Remover: remover,
@@ -387,8 +410,8 @@ func (vs *validatorStore) allActiveRemoveReqs(ctx context.Context) ([]*Validator
 	return removals, nil
 }
 
-func (vs *validatorStore) loadJoinVotes(ctx context.Context, jr *JoinRequest) error {
-	results, err := vs.db.Query(ctx, sqlVoteStatus, jr.Candidate)
+func (vs *validatorStore) loadJoinVotes(ctx context.Context, tx sql.DB, jr *JoinRequest) error {
+	results, err := tx.Execute(ctx, sqlVoteStatus, jr.Candidate)
 	if err != nil {
 		return err
 	}
@@ -404,12 +427,12 @@ func (vs *validatorStore) loadJoinVotes(ctx context.Context, jr *JoinRequest) er
 	return nil
 }
 
-func (vs *validatorStore) allActiveJoinReqs(ctx context.Context) ([]*JoinRequest, error) {
-	results, err := vs.db.Query(ctx, sqlGetOngoingVotes)
+func (vs *validatorStore) allActiveJoinReqs(ctx context.Context, tx sql.DB) ([]*JoinRequest, error) {
+	results, err := tx.Execute(ctx, sqlGetOngoingVotes)
 	if err != nil {
 		return nil, err
 	}
-	if len(results) == 0 {
+	if len(results.Rows) == 0 {
 		return nil, nil
 	}
 	candidates, err := activeVotesFromRecords(results)
@@ -425,7 +448,7 @@ func (vs *validatorStore) allActiveJoinReqs(ctx context.Context) ([]*JoinRequest
 			Power:     cv.pwr,
 			ExpiresAt: cv.expiresAt,
 		}
-		err = vs.loadJoinVotes(ctx, jr)
+		err = vs.loadJoinVotes(ctx, tx, jr)
 		if err != nil {
 			return nil, err
 		}
@@ -441,32 +464,27 @@ type candidate struct {
 	expiresAt int64
 }
 
-func activeVotesFromRecords(results []map[string]interface{}) ([]*candidate, error) {
-	vals := make([]*candidate, len(results))
-	for i, res := range results {
-		pki, ok := res["candidate"]
-		if !ok {
-			return nil, errors.New("no candidate in join_reqs record")
+func activeVotesFromRecords(results *sql.ResultSet) ([]*candidate, error) {
+	vals := make([]*candidate, len(results.Rows))
+	for i, row := range results.Rows {
+		// row[0] is the pubkey, row[1] is the power wanted, row[2] is the expiresAt
+		if len(row) != 3 {
+			return nil, fmt.Errorf("expected 3 columns getting join requests. this is an internal bug")
 		}
-		pubkey, ok := pki.([]byte)
+
+		pubkey, ok := row[0].([]byte)
 		if !ok {
-			return nil, fmt.Errorf("invalid pubkey value (%T)", pki)
+			return nil, fmt.Errorf("invalid pubkey value (%T)", row[0])
 		}
-		pwri, ok := res["power_wanted"]
+
+		power, ok := row[1].(int64)
 		if !ok {
-			return nil, errors.New("no power_wanted in join_reqs record")
+			return nil, fmt.Errorf("invalid power value (%T)", row[1])
 		}
-		power, ok := pwri.(int64)
+
+		expiresAt, ok := row[2].(int64)
 		if !ok {
-			return nil, fmt.Errorf("invalid power value (%T)", pwri)
-		}
-		expiresAti, ok := res["expiresat"]
-		if !ok {
-			return nil, errors.New("no expiresAt in join_reqs record")
-		}
-		expiresAt, ok := expiresAti.(int64)
-		if !ok {
-			return nil, fmt.Errorf("invalid expiresAt value (%T)", expiresAti)
+			return nil, fmt.Errorf("invalid expiresAt value (%T)", row[2])
 		}
 
 		vals[i] = &candidate{
@@ -484,29 +502,28 @@ type approver struct {
 	approval int64
 }
 
-func voteStatusFromRecords(results []map[string]interface{}) ([]*approver, error) {
-	if len(results) == 0 {
+func voteStatusFromRecords(results *sql.ResultSet) ([]*approver, error) {
+	if len(results.Rows) == 0 {
 		return nil, errors.New("no results")
 	}
 
-	board := make([]*approver, len(results))
-	for i, res := range results {
-		pki, ok := res["validator"]
-		if !ok {
-			return nil, errors.New("no pubkey in joins_board record")
+	board := make([]*approver, len(results.Rows))
+	for i, row := range results.Rows {
+		// row[0] is the validator, row[1] is the approval
+		if len(row) != 2 {
+			return nil, fmt.Errorf("expected 2 columns getting join requests. this is an internal bug")
 		}
-		pubkey, ok := pki.([]byte)
+
+		pubkey, ok := row[0].([]byte)
 		if !ok {
-			return nil, fmt.Errorf("invalid pubkey value (%T)", pki)
+			return nil, fmt.Errorf("invalid pubkey value (%T)", row[0])
 		}
-		appr, ok := res["approval"]
+
+		approval, ok := row[1].(int64)
 		if !ok {
-			return nil, errors.New("no approval in joins_board record")
+			return nil, fmt.Errorf("invalid approval value (%T)", row[1])
 		}
-		approval, ok := appr.(int64)
-		if !ok {
-			return nil, fmt.Errorf("invalid approval value (%T)", appr)
-		}
+
 		board[i] = &approver{
 			pubkey:   pubkey,
 			approval: approval,
