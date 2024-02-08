@@ -35,7 +35,7 @@ jobs:
     steps:
       # shared setup for all tests
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
           token: ${{ secrets.KWIL_MACH_SECRET }}
@@ -55,9 +55,9 @@ jobs:
       #self-hosted also has go 1.21 installed
       #the default behavior here will load pre-installed go version
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.21.x'
+          go-version: '1.22.x'
           check-latest: true
           cache: false
 
@@ -88,11 +88,11 @@ jobs:
           go build -mod=readonly ./... ./parse/... ./core/... ./test/specifications/
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v3.7.0
         with:
           install-mode: "binary"
           version: "latest"
-          skip-pkg-cache: true
+          skip-cache: true
           args: ./... ./core/... ./test/... ./parse/... --timeout=10m --config=.golangci.yml --skip-dirs ./core/rpc/protobuf
 
       # unit test
@@ -107,10 +107,10 @@ jobs:
           task vendor
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Cache Docker layers for kwild
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache-kwild
           #key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
@@ -142,6 +142,7 @@ jobs:
         # we only pull the repo, not build the image, because we want to use the cache
         # provided by the docker/build-push-action
         # vendor is used to bypass private repo issues
+        # TODO: in go 1.22, there is a "go work vendor" that we can try instead of GOWORK=off
         run: |
           rm -rf /tmp/kgw
           git clone https://github.com/kwilteam/kgw.git /tmp/kgw
@@ -151,7 +152,7 @@ jobs:
 
       - name: Build kgw image
         id: docker_build_kgw
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: /tmp/kgw
           load: true
@@ -164,7 +165,7 @@ jobs:
 
       - name: Build kwild image
         id: docker_build_kwild
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           load: true
