@@ -10,21 +10,30 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
+// type Dataset interface {
+// 	Call(caller *ProcedureContext, method string, inputs []any) ([]any, error)
+// 	Execute(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error)
+// 	Query(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error)
+// 	Schema() *types.Schema
+// }
+
+// This is a conceptual interface for something I am trying
 type Dataset interface {
+	// Call calls an action from the dataset.
+	// If the action is not public, it will return an error.
 	Call(caller *ProcedureContext, method string, inputs []any) ([]any, error)
-	Execute(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error)
-	Query(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error)
+	// Execute executes a statement on the dataset.
+	// It understands Kwil's SQL syntax, and gives the same determinism guarantees
+	// as any SQL written in Kuneiform.
+	// It will use the exec interface to execute the statement.
+	Execute(ctx context.Context, exec sql.Executor, stmt string, params map[string]any) (*sql.ResultSet, error)
+	// Schema returns the schema of the dataset.
 	Schema() *types.Schema
 }
 
 // baseDataset is a deployed database schema.
 // It implements the Dataset interface.
 type baseDataset struct {
-	// readWrite is a readWriter connection to the dataset.
-	readWriter types.ResultSetFunc
-	// read is a read connection to the dataset.
-	read types.ResultSetFunc
-
 	// schema is the schema of the dataset.
 	schema *types.Schema
 
@@ -64,54 +73,21 @@ func (d *baseDataset) Call(caller *ProcedureContext, method string, inputs []any
 	return nil, nil
 }
 
-func (d *baseDataset) Execute(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error) {
-	return d.readWriter(ctx, stmt, params)
-}
+func (d *baseDataset) Execute(ctx context.Context, exec sql.Executor, stmt string, params map[string]any) (*sql.ResultSet, error) {
+	analyzed, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, d.schema.Tables,
+		dbidSchema(d.schema.DBID()))
+	if err != nil {
+		return nil, fmt.Errorf("error analyzing statement: %w", err)
+	}
 
-func (d *baseDataset) Query(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error) {
-	return d.read(ctx, stmt, params)
+	orderedParams, err := orderAndCleanValueMap(params, analyzed.ParameterOrder)
+	if err != nil {
+		return nil, fmt.Errorf("error ordering parameters: %w", err)
+	}
+
+	return exec.Execute(ctx, analyzed.Statement, orderedParams)
 }
 
 func (d *baseDataset) Schema() *types.Schema {
 	return d.schema
-}
-
-// protectedDataset is a deployed database schema.
-// It parses incoming queries to ensure they are deterministic.
-// It implements the Dataset interface.
-type protectedDataset struct {
-	*baseDataset
-}
-
-var _ Dataset = (*protectedDataset)(nil)
-
-// Execute executes a statement on the dataset.
-func (d *protectedDataset) Execute(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error) {
-	// TODO: once we switch to postgres, we will have to switch the named parameters to positional parameters
-	analyzed, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, d.schema.Tables,
-		types.DBIDSchema(d.schema.DBID()))
-	if err != nil {
-		return nil, fmt.Errorf("error analyzing statement: %w", err)
-	}
-
-	return d.readWriter(ctx, analyzed.Statement(), params)
-}
-
-// Query executes a read-only query on the dataset.
-func (d *protectedDataset) Query(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error) {
-	// TODO: once we switch to postgres, we will have to switch the named parameters to positional parameters
-	// usually, we do not need to guarantee determinism for read-only queries.
-	// however, we don't actually know if this is being called from a non-mutative context.
-	// It is very possible that this is being called from an action that later mutates the database,
-	// so we need to guarantee determinism here.
-	analyzed, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, d.schema.Tables,
-		types.DBIDSchema(d.schema.DBID()))
-	if err != nil {
-		return nil, fmt.Errorf("error analyzing statement: %w", err)
-	}
-	if analyzed.Mutative() {
-		return nil, fmt.Errorf("extension uses mutative statement in read-only query")
-	}
-
-	return d.read(ctx, analyzed.Statement(), params)
 }

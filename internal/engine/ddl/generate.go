@@ -7,10 +7,7 @@ import (
 )
 
 // GenerateDDL generates the necessary table and index ddl statements for the given table
-func GenerateDDL(dbid string, table *types.Table) ([]string, error) {
-	// Derive the PostgreSQL "schema" (not a Kwil schema) from the dbid.
-	pgSchema := types.DBIDSchema(dbid)
-
+func GenerateDDL(pgSchema string, table *types.Table) ([]string, error) {
 	var statements []string
 
 	createTableStatement, err := GenerateCreateTableStatement(pgSchema, table)

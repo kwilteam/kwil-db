@@ -299,7 +299,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 		}
 
 		// capture the seq value, before target schema filter
-		if rel.Namespace == internalSchemaName && rel.RelationName == sentryTableName {
+		if rel.Namespace == InternalSchemaName && rel.RelationName == sentryTableName {
 			cols := logicalMsg.NewTuple.Columns
 			if len(cols) != 1 {
 				logger.Warnf("not one column in sentry table update (%d)", len(cols))

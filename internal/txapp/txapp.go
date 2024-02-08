@@ -3,7 +3,8 @@ package txapp
 
 import (
 	"context"
-	"encoding/binary"
+	"crypto/sha256"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -12,22 +13,21 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
+	"github.com/kwilteam/kwil-db/internal/sql"
 	"go.uber.org/zap"
 )
 
 // NewTxApp creates a new router.
-func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, atomicCommitter AtomicCommitter,
+func NewTxApp(db sql.OuterTxMaker, engine ExecutionEngine, acc AccountsStore, validators ValidatorStore,
 	voteStore VoteStore, signer *auth.Ed25519Signer, chainID string, eventStore EventStore, GasEnabled bool, log log.Logger) *TxApp {
 	return &TxApp{
-		// TODO: set the eventstore and votestore dependencies
 		Database:   db,
+		Engine:     engine,
 		Accounts:   acc,
 		Validators: validators,
 		VoteStore:  voteStore,
 		EventStore: eventStore,
-
-		atomicCommitter: atomicCommitter,
-		log:             log,
+		log:        log,
 		mempool: &mempool{
 			accountStore:   acc,
 			accounts:       make(map[string]*accounts.Account),
@@ -44,11 +44,12 @@ func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, a
 // It also contains a mempool for uncommitted accounts, as well as pricing
 // for transactions
 type TxApp struct {
-	Database   DatabaseEngine // tracks deployed schemas
-	Accounts   AccountsStore  // accounts
-	Validators ValidatorStore // validators
-	VoteStore  VoteStore      // tracks resolutions, their votes, manages expiration
-	EventStore EventStore     // tracks events, not part of consensus
+	Database   sql.OuterTxMaker // postgres database
+	Engine     ExecutionEngine  // tracks deployed schemas
+	Accounts   AccountsStore    // accounts
+	Validators ValidatorStore   // validators
+	VoteStore  VoteStore        // tracks resolutions, their votes, manages expiration
+	EventStore EventStore       // tracks events, not part of consensus
 	GasEnabled bool
 
 	chainID string
@@ -56,8 +57,10 @@ type TxApp struct {
 
 	log log.Logger
 
-	atomicCommitter AtomicCommitter
-	mempool         *mempool
+	mempool *mempool
+
+	// transaction that exists between Begin and Commit
+	currentTx sql.OuterTx
 }
 
 // GenesisInit initializes the VoteStore with the genesis validators.
@@ -85,40 +88,33 @@ func (r *TxApp) Execute(ctx TxContext, tx *transactions.Transaction) *TxResponse
 }
 
 // Begin signals that a new block has begun.
-func (r *TxApp) Begin(ctx context.Context, blockHeight int64) error {
-	idempotencyKey := make([]byte, 8)
-	binary.LittleEndian.PutUint64(idempotencyKey, uint64(blockHeight))
+func (r *TxApp) Begin(ctx context.Context) error {
+	if r.currentTx != nil {
+		return errors.New("txapp misuse: cannot begin a new block while a transaction is in progress")
+	}
 
-	r.log.Debug("beginning block", zap.Int64("blockHeight", blockHeight))
+	tx, err := r.Database.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
 
-	return r.atomicCommitter.Begin(ctx, idempotencyKey)
+	r.currentTx = tx
+	return nil
 }
 
-// Commit signals that a block has been committed.
-// TODO: once we use postgres, this will no longer be applicable
-// we will need a separate function for getting end results and committing
-// Right now, Commit is called in FinalizeBlock in abci. However, it should
-// be called in Commit.  The reason we can get away with this is because
-// we rely on idempotency keys to ensure we don't double execute to a datastore.
-// With Postgres, we will simply rely on its cross-schema
-// transaction support.  Therefore, we should have another method here called
-// GetEndResults.
-// Commit also clears the mempool.
-// It takes a `syncMode` parameter, which signals whether or not the node is currently syncing data
-func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
-	// this would go in Commit
-	defer r.mempool.reset()
+// Finalize signals that a block has been finalized.
+// No more changes can be applied to the database, and TxApp should return
+// information on the apphash and validator updates.
+func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
+	if r.currentTx == nil {
+		return nil, nil, errors.New("txapp misuse: cannot finalize a block without a transaction in progress")
+	}
 
-	r.log.Debug("committing block", zap.Int64("blockHeight", blockHeight))
-
-	// this would go in finalize block
-	// run all approved votes, and delete from local store
 	finalizedEvents, err := r.VoteStore.ProcessConfirmedResolutions(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// this would also go in finalize block
 	for _, eventID := range finalizedEvents {
 		err = r.EventStore.DeleteEvent(ctx, eventID)
 		if err != nil {
@@ -126,22 +122,22 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 		}
 	}
 
-	// expire votes
-	// this would go in FinalizeBlock
 	err = r.VoteStore.Expire(ctx, blockHeight)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// this would go in GetEndResults
+	// we need to set this before we finalize validators,
+	// so that pending requests expire on Finalize()
+	r.Validators.UpdateBlockHeight(blockHeight)
+
 	validatorUpdates, err := r.Validators.Finalize(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// we intentionally update the validators after processing confirmed resolutions
-	// if a vote passes and a validator is upgraded in the same block, it doesn't make sense
-	// for that new validator's votes to have an impact an the otherwise "confirmed" resolution
+	// if a vote passes and a validator is upgraded in the same block.
 	for _, validator := range validatorUpdates {
 		err = r.VoteStore.UpdateVoter(ctx, validator.PubKey, validator.Power)
 		if err != nil {
@@ -149,28 +145,32 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 		}
 	}
 
-	// this would go in Commit
-	// idempotencyKey := make([]byte, 8)
-	// binary.LittleEndian.PutUint64(idempotencyKey, uint64(blockHeight))
-
-	// appHash would go in GetEndResults,
-	appHash, err := r.atomicCommitter.Precommit(ctx)
+	engineHash, err := r.currentTx.Precommit(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// the commit would go in Commit
-	err = r.atomicCommitter.Commit(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	// what happened to the metadata store?
+	validatorHash := r.Validators.StateHash()
 
-	// this only updates an in-memory value. but it seems weird to me that the validator store needs to be aware
-	// of the current block height and "keep it"
-	// this would go in Commit
-	r.Validators.UpdateBlockHeight(blockHeight)
-	return appHash, validatorUpdates, nil
+	appHash := sha256.Sum256(append(engineHash, validatorHash...))
+
+	return appHash[:], validatorUpdates, nil
+}
+
+// Commit signals that a block has been committed.
+func (r *TxApp) Commit(ctx context.Context) error {
+	if r.currentTx == nil {
+		return errors.New("txapp misuse: cannot commit a block without a transaction in progress")
+	}
+	defer r.mempool.reset()
+
+	err := r.currentTx.Commit(ctx)
+	if err != nil {
+		return err
+	}
+
+	r.currentTx = nil
+	return nil
 }
 
 // ApplyMempool applies the transactions in the mempool.
