@@ -14,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/kv"
 	"github.com/kwilteam/kwil-db/internal/txapp"
@@ -423,7 +424,7 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 
 	// Store the genesis account allocations to the datastore. These are
 	// reflected in the genesis app hash.
-	genesisAllocs := make(map[string]*big.Int, len(a.cfg.GenesisAllocs)) // converting the hexadecimal keys to binary
+	genesisAllocs := make([]*accounts.Account, 0, len(a.cfg.GenesisAllocs))
 	for acct, bal := range a.cfg.GenesisAllocs {
 		acct, _ := strings.CutPrefix(acct, "0x") // special case for ethereum addresses
 		identifier, err := hex.DecodeString(acct)
@@ -431,7 +432,10 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 			return nil, fmt.Errorf("invalid hex pubkey: %w", err)
 		}
 
-		genesisAllocs[string(identifier)] = bal
+		genesisAllocs = append(genesisAllocs, &accounts.Account{
+			Identifier: identifier,
+			Balance:    bal,
+		})
 	}
 	// Initialize the validator module with the genesis validators.
 	vldtrs := make([]*validators.Validator, len(req.Validators))

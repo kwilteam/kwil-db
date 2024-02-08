@@ -67,7 +67,7 @@ type TxApp struct {
 // and before any session is started.
 // It can assign the initial validator set and initial account balances.
 // It is only called once for a new chain.
-func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, accounts map[string]*big.Int, initialHeight int64) error {
+func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*accounts.Account, initialHeight int64) error {
 	tx, err := r.Database.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -86,8 +86,8 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 		}
 	}
 
-	for acctID, balance := range accounts {
-		err := r.Accounts.Credit(ctx, tx, []byte(acctID), balance)
+	for _, account := range accounts {
+		err := r.Accounts.Credit(ctx, tx, account.Identifier, account.Balance)
 		if err != nil {
 			return err
 		}

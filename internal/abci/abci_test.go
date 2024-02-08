@@ -12,6 +12,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/stretchr/testify/assert"
 )
@@ -363,7 +364,7 @@ func (m *mockTxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []
 	return nil, nil, nil
 }
 
-func (m *mockTxApp) GenesisInit(ctx context.Context, validators []*types.Validator, accounts map[string]*big.Int, initialHeight int64) error {
+func (m *mockTxApp) GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*accounts.Account, initialHeight int64) error {
 	return nil
 }
 

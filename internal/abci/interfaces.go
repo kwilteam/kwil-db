@@ -12,6 +12,7 @@ import (
 	// backwards, but it at least allows us to stub out for testing.
 
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
+	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 )
 
@@ -53,7 +54,7 @@ type DBBootstrapModule interface {
 // and managing a mempool
 type TxApp interface {
 	// accounts -> string([]accound_identifier) : *big.Int(balance)
-	GenesisInit(ctx context.Context, validators []*types.Validator, accounts map[string]*big.Int, initialHeight int64) error
+	GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*accounts.Account, initialHeight int64) error
 	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
 	// Begin signals that a new block has begun.
 	Begin(ctx context.Context) error
