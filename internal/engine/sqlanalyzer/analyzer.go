@@ -88,12 +88,14 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table, pgSchemaNa
 		}
 	}
 
+	orderedParams := make([]string, 0)
 	if flags&ReplaceNamedParameters != 0 {
-		paramVisitor := parameters.NewNamedParametersVisitor()
+		paramVisitor := parameters.NewParametersVisitor()
 		err := accept.Accept(paramVisitor)
 		if err != nil {
 			return nil, fmt.Errorf("error replacing named parameters: %w", err)
 		}
+		orderedParams = paramVisitor.OrderedParameters
 	}
 
 	mutative, err := isMutative(parsed)
@@ -107,9 +109,10 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table, pgSchemaNa
 	}
 
 	return &AnalyzedStatement{
-		stmt:         generated,
-		mutative:     mutative,
-		HasTableRefs: schemaWalker.SetCount > 0,
+		Statement:      generated,
+		Mutative:       mutative,
+		HasTableRefs:   schemaWalker.SetCount > 0,
+		ParameterOrder: orderedParams,
 	}, nil
 }
 
@@ -148,23 +151,20 @@ const (
 // AnalyzedStatement is a statement that has been analyzed by the analyzer
 // As we progressively add more types of analysis (e.g. query pricing), we will add more fields to this struct
 type AnalyzedStatement struct {
-	stmt     string
-	mutative bool
+	// Statement is the rewritten SQL statement, with the correct rules applied
+	Statement string
+	// Mutative indicates if the statement mutates state.
+	// If true, then the statement cannot run in a read-only transaction.
+	Mutative bool
 	// HasTableRefs indicates if the statement included tables IFF the
 	// NamedParametersVisitor was run on the AST after parsing. These tables
 	// would have had a schema prefixed by the walker. This can indicate if the
 	// statement alone is not likely to provide type (OID) information by
 	// preparing the statement with the database backend.
 	HasTableRefs bool
-}
-
-// Mutative returns true if the statement will mutate the database
-func (a *AnalyzedStatement) Mutative() bool {
-	return a.mutative
-}
-
-// Statements returns a new statement that is the result of the analysis
-// It may contains changes to the original statement, depending on the flags that were passed in
-func (a *AnalyzedStatement) Statement() string {
-	return a.stmt
+	// ParameterOrder is a list of the parameters in the order they appear in the statement.
+	// This is set if the ReplaceNamedParameters flag is set.
+	// For example, if the statement is "SELECT * FROM table WHERE id = $id AND name = @caller",
+	// then the parameter order would be ["$id", "@caller"]
+	ParameterOrder []string
 }

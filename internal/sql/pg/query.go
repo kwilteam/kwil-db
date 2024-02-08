@@ -182,7 +182,7 @@ func query(ctx context.Context, cq connQueryer, stmt string, args ...any) (*sql.
 		// probably zero, meaning not a column of a table, e.g. the result of an
 		// aggregate function, or just returning the a bound argument directly.
 		// AND no AS was used.
-		resSet.ReturnedColumns = append(resSet.ReturnedColumns, colInfo.Name)
+		resSet.Columns = append(resSet.Columns, colInfo.Name)
 	}
 
 	resSet.Rows, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) ([]any, error) {

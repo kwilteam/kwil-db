@@ -16,10 +16,9 @@ import (
 	This works both in regular and view actions, however view actions will not be able to
 	modify data.  It is expected that query strings are passed as arguments in the action.
 
-	It has two methods: Execute and Query.
-	They both do the exact same thing, except that
-		- Execute can read uncommitted data, while Query cannot
-		- Execute can modify data, while Query cannot
+	It has one method, "Execute", which takes a string as an argument.
+	When executed, it will execute the query against the dataset, and return the result.
+	If called during a blockchain tx, the query can modify the underlying dataset.
 
 	While it is mostly meant to be an example, it likely has some practical use cases.
 	Some examples include:
@@ -45,7 +44,7 @@ func init() {
 // It will return results to the engine.
 type adhocExtension struct{}
 
-// Has two methods: Execute and Query.
+// Has one method: Execute
 // We check that only one argument is passed, and that it is a string.
 // We then execute the query against the datastore.
 func (a *adhocExtension) Execute(scope *execution.ProcedureContext, metadata map[string]string, method string, args ...any) ([]any, error) {
@@ -63,16 +62,14 @@ func (a *adhocExtension) Execute(scope *execution.ProcedureContext, metadata map
 		return nil, err
 	}
 
-	// for either execution, we will pass the scope.Values() as the arguments.
+	// we will pass the scope.Values() as the arguments.
 	// this makes it possible to use @caller, etc in the ad-hoc statement.
 	var res *sql.ResultSet
 	switch lowerMethod {
 	default:
 		return nil, fmt.Errorf(`unknown method "%s"`, method)
 	case "execute":
-		res, err = dataset.Execute(scope.Ctx, stmt, scope.Values())
-	case "query":
-		res, err = dataset.Query(scope.Ctx, stmt, scope.Values())
+		res, err = dataset.Execute(scope.Ctx, scope.DB, stmt, scope.Values())
 	}
 	if err != nil {
 		return nil, err

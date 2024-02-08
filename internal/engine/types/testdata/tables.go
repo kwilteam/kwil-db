@@ -147,6 +147,14 @@ var (
 				},
 				Type: types.BTREE,
 			},
+			{ // author post names must be unique
+				Name: "author_title_idx",
+				Columns: []string{
+					"author_id",
+					"title",
+				},
+				Type: types.UNIQUE_BTREE,
+			},
 		},
 		ForeignKeys: []*types.ForeignKey{
 			{

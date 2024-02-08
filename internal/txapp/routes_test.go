@@ -508,3 +508,7 @@ func (m *mockValidatorStore) UpdateBlockHeight(blockHeight int64) {
 		m.updateBlockHeight(blockHeight)
 	}
 }
+
+func (m *mockValidatorStore) StateHash() []byte {
+	return nil
+}

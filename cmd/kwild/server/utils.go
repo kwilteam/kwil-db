@@ -13,11 +13,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft/privval"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
-	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/extensions"
-	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/kv"
-	txsvc "github.com/kwilteam/kwil-db/internal/services/grpc/txsvc/v1"
 	"github.com/kwilteam/kwil-db/internal/validators"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
@@ -25,7 +22,6 @@ import (
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 // getExtensions returns both the local and remote extensions. Remote extensions are identified by
@@ -209,55 +205,6 @@ func (a *atomicReadWriter) Read() ([]byte, error) {
 
 func (a *atomicReadWriter) Write(val []byte) error {
 	return a.kv.Set(a.key, val)
-}
-
-// engineAdapter adapts the engine to provide a Call method, that
-// is not allowed to write to the database.
-type engineAdapter struct {
-	*execution.GlobalContext
-}
-
-var _ txsvc.EngineReader = (*engineAdapter)(nil)
-
-func (e *engineAdapter) Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.CallMessage) ([]map[string]any, error) {
-	stringIdent, err := ident.Identifier(msg.AuthType, msg.Sender)
-	if err != nil {
-		return nil, err
-	}
-
-	// Call supports the RPC service, (not part of block execution), and as such
-	// should read committed data only even if a write session is in progress.
-	// However, engine.Execute is also the entry point for executing procedures
-	// in block-tx execution, in which context it is required to return
-	// uncommitted data to support sensible execution of chained transactions
-	// and avoid exploits with multiple transactions running logic based on old
-	// state! non-mutative does not imply committed read (which db conn)
-	resultSet, err := e.Execute(ctx, &engineTypes.ExecutionData{
-		Dataset:   dbid,
-		Procedure: action,
-		Mutative:  false,
-		Args:      args,
-		Signer:    msg.Sender,
-		Caller:    stringIdent,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if resultSet == nil {
-		return nil, nil
-	}
-
-	return resultSet.Map(), nil
-}
-
-func (e *engineAdapter) Query(ctx context.Context, dbid string, query string) ([]map[string]any, error) {
-	res, err := e.GlobalContext.Query(ctx, dbid, query)
-	if err != nil {
-		return nil, err
-	}
-
-	return res.Map(), nil
 }
 
 // validatorStoreAdapater adapts the validator store to add
