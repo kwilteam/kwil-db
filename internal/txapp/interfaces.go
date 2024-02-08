@@ -14,11 +14,11 @@ import (
 
 // file defines interface dependencies for the txapp package.
 
-// DatabaseEngine is a database that can handle deployments, executions, etc.
-type DatabaseEngine interface {
-	CreateDataset(ctx context.Context, schema *engineTypes.Schema, caller []byte) (err error)
-	DeleteDataset(ctx context.Context, dbid string, caller []byte) error
-	Execute(ctx context.Context, data *engineTypes.ExecutionData) (*sql.ResultSet, error)
+// ExecutionEngine is a database that can handle deployments, executions, etc.
+type ExecutionEngine interface {
+	CreateDataset(ctx context.Context, db sql.DB, schema *engineTypes.Schema, caller []byte) (err error)
+	DeleteDataset(ctx context.Context, db sql.DB, dbid string, caller []byte) error
+	Execute(ctx context.Context, db sql.DB, data *engineTypes.ExecutionData) (*sql.ResultSet, error)
 }
 
 // AccountsStore is a datastore that can handle accounts.
@@ -54,6 +54,9 @@ type ValidatorStore interface {
 
 	// Updates block height stored by the validator manager. Called in the abci Commit
 	UpdateBlockHeight(blockHeight int64)
+
+	// StateHash returns a hash representing the current state of the validator store
+	StateHash() []byte
 }
 
 // part of the validator store, but split up to delineate between TxApp and
@@ -108,11 +111,4 @@ type EventStore interface {
 	// but also to not delete it, as it may need to get the event
 	// body in case it is a future block proposer.
 	MarkReceived(ctx context.Context, id types.UUID) error
-}
-
-// AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores
-type AtomicCommitter interface {
-	Begin(ctx context.Context, idempotencyKey []byte) error
-	Precommit(ctx context.Context) ([]byte, error)
-	Commit(ctx context.Context) error
 }

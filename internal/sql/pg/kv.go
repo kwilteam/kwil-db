@@ -17,7 +17,7 @@ import (
 
 const (
 	kvTableName     = "kv"
-	kvTableNameFull = internalSchemaName + "." + kvTableName
+	kvTableNameFull = InternalSchemaName + "." + kvTableName
 
 	createKvStmt = `
 		CREATE TABLE IF NOT EXISTS ` + kvTableNameFull + ` (
@@ -50,7 +50,7 @@ const (
 )
 
 func ensureKvTable(ctx context.Context, conn *pgx.Conn) error {
-	exists, err := tableExists(ctx, internalSchemaName, kvTableName, conn)
+	exists, err := tableExists(ctx, InternalSchemaName, kvTableName, conn)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func ensureKvTable(ctx context.Context, conn *pgx.Conn) error {
 		return nil
 	}
 
-	createStmt := fmt.Sprintf(sqlCreateSchemaTemplate, internalSchemaName)
+	createStmt := fmt.Sprintf(sqlCreateSchemaTemplate, InternalSchemaName)
 	_, err = conn.Exec(ctx, createStmt)
 	if err != nil {
 		return err

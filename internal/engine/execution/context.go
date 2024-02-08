@@ -39,8 +39,8 @@ type ProcedureContext struct {
 	Procedure string
 	// Result is the result of the most recent SQL query.
 	Result *sql.ResultSet
-	// Mutative is whether the execution can mutate state.
-	Mutative bool
+	// tx is the current transaction.
+	DB sql.DB
 }
 
 // SetValue sets a value in the scope.
@@ -73,7 +73,7 @@ func (p *ProcedureContext) Dataset(dbid string) (Dataset, error) {
 		return nil, types.ErrDatasetNotFound
 	}
 
-	return &protectedDataset{baseDataset: dataset}, nil
+	return dataset, nil
 }
 
 // NewScope creates a new procedure context for a child procedure.
@@ -88,6 +88,6 @@ func (p *ProcedureContext) NewScope() *ProcedureContext {
 		values:    make(map[string]any),
 		DBID:      p.DBID,
 		Procedure: p.Procedure,
-		Mutative:  p.Mutative,
+		DB:        p.DB,
 	}
 }

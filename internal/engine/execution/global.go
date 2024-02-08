@@ -3,20 +3,18 @@ package execution
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"sort"
-	"strings"
 
 	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sql "github.com/kwilteam/kwil-db/internal/sql"
-	"github.com/kwilteam/kwil-db/internal/sql/pg"
 )
 
 // GlobalContext is the context for the entire execution.
 // It exists for the lifetime of the server.
+// It stores information about deployed datasets in-memory, and provides methods to interact with them.
 type GlobalContext struct {
 	// initializers are the namespaces that are available to datasets.
 	// This includes other datasets, or loaded extensions.
@@ -25,53 +23,30 @@ type GlobalContext struct {
 	// datasets are the top level namespaces that are available to engine callers.
 	// These only include datasets, and do not include extensions.
 	datasets map[string]*baseDataset
-
-	// datastore is the datastore that the engine is using.
-	datastore Registry
 }
 
 // NewGlobalContext creates a new global context.
-func NewGlobalContext(ctx context.Context, registry Registry, extensionInitializers map[string]ExtensionInitializer) (*GlobalContext, error) {
-	dbids, err := registry.List(ctx)
+// It will load any persisted datasets from the datastore.
+func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[string]ExtensionInitializer) (*GlobalContext, error) {
+	g := &GlobalContext{
+		initializers: extensionInitializers,
+		datasets:     make(map[string]*baseDataset),
+	}
+
+	err := createSchemasTableIfNotExists(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 
-	g := &GlobalContext{
-		initializers: make(map[string]ExtensionInitializer),
-		datasets:     make(map[string]*baseDataset),
-		datastore:    registry,
-	}
-
-	for name, initializer := range extensionInitializers {
-		_, ok := g.initializers[name]
-		if ok {
-			return nil, fmt.Errorf(`duplicate extension name: "%s"`, name)
-		}
-
-		g.initializers[name] = initializer
-	}
-
-	var schemaList []*types.Schema
-	for _, dbid := range dbids {
-
-		err = runMigration(ctx, dbid, registry)
-		if err != nil {
-			return nil, err
-		}
-
-		schema, err := getSchema(ctx, dbid, registry)
-		if err != nil {
-			return nil, err
-		}
-
-		schemaList = append(schemaList, schema)
+	schemas, err := getSchemas(ctx, tx)
+	if err != nil {
+		return nil, err
 	}
 
 	// we need to make sure schemas are ordered by their dependencies
 	// if one schema is dependent on another, it must be loaded after the other
-
-	for _, schema := range orderSchemas(schemaList) {
+	// this is handled by the orderSchemas function
+	for _, schema := range orderSchemas(schemas) {
 		err := g.loadDataset(ctx, schema)
 		if err != nil {
 			return nil, err
@@ -83,7 +58,7 @@ func NewGlobalContext(ctx context.Context, registry Registry, extensionInitializ
 
 // CreateDataset deploys a schema.
 // It will create the requisite tables, and perform the required initializations.
-func (g *GlobalContext) CreateDataset(ctx context.Context, schema *types.Schema, caller []byte) (err error) {
+func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, caller []byte) (err error) {
 	err = schema.Clean()
 	if err != nil {
 		return err
@@ -95,26 +70,18 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, schema *types.Schema,
 		return err
 	}
 
-	err = g.datastore.Create(ctx, schema.DBID())
+	err = createSchema(ctx, tx, schema)
 	if err != nil {
+		g.unloadDataset(schema.DBID())
 		return err
 	}
 
-	defer func() {
-		if err != nil {
-			err2 := g.datastore.Delete(ctx, schema.DBID())
-			if err2 != nil {
-				err = errors.Join(err, err2)
-			}
-		}
-	}()
-
-	return storeSchema(ctx, schema, g.datastore)
+	return nil
 }
 
 // DeleteDataset deletes a dataset.
 // It will ensure that the caller is the owner of the dataset.
-func (g *GlobalContext) DeleteDataset(ctx context.Context, dbid string, caller []byte) error {
+func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid string, caller []byte) error {
 	dataset, ok := g.datasets[dbid]
 	if !ok {
 		return types.ErrDatasetNotFound
@@ -124,7 +91,7 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, dbid string, caller [
 		return fmt.Errorf(`cannot delete dataset "%s", not owner`, dbid)
 	}
 
-	err := g.datastore.Delete(ctx, dbid)
+	err := deleteSchema(ctx, tx, dbid)
 	if err != nil {
 		return err
 	}
@@ -137,7 +104,7 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, dbid string, caller [
 // Execute executes a procedure.
 // It has the ability to mutate state, including uncommitted state. <=== UNCOMMITTED STATE, but caller is in various contexts (e.g. tx exec vs. RPC call)
 // once we fix auth, signer should get removed, as they would be the same.
-func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionData) (*sql.ResultSet, error) {
+func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, options *types.ExecutionData) (*sql.ResultSet, error) {
 	err := options.Clean()
 	if err != nil {
 		return nil, err
@@ -156,7 +123,7 @@ func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionDat
 		values:    make(map[string]any),
 		DBID:      options.Dataset,
 		Procedure: options.Procedure,
-		Mutative:  options.Mutative,
+		DB:        tx,
 	}
 
 	_, err = dataset.Call(procedureCtx, options.Procedure, options.Args)
@@ -192,7 +159,7 @@ func (g *GlobalContext) GetSchema(ctx context.Context, dbid string) (*types.Sche
 }
 
 // Query executes a read-only query.
-func (g *GlobalContext) Query(ctx context.Context, dbid string, query string) (*sql.ResultSet, error) {
+func (g *GlobalContext) Query(ctx context.Context, tx sql.DB, dbid string, query string) (*sql.ResultSet, error) {
 	dataset, ok := g.datasets[dbid] // data race with txsvc hitting this freely?
 	if !ok {
 		return nil, types.ErrDatasetNotFound
@@ -202,79 +169,20 @@ func (g *GlobalContext) Query(ctx context.Context, dbid string, query string) (*
 	// OR do we permit (or require) the schema to be specified in the query? It
 	// could go either way, but this ad hoc query function is questionable anyway.
 	parsed, err := sqlanalyzer.ApplyRules(query,
-		sqlanalyzer.NoCartesianProduct|sqlanalyzer.ReplaceNamedParameters,
-		dataset.schema.Tables, types.DBIDSchema(dbid))
+		sqlanalyzer.NoCartesianProduct,
+		dataset.schema.Tables, dbidSchema(dbid))
 	if err != nil {
 		return nil, err
 	}
 
-	return dataset.read(ctx, parsed.Statement(), nil)
+	if parsed.Mutative {
+		return nil, fmt.Errorf("query is mutative")
+	}
+
+	return tx.Execute(ctx, parsed.Statement)
 }
 
-const inferredModeKey = `^inferred_mode^` // not a valid SQL bind arg name
-
-type registryQueryFn func(ctx context.Context, dbid string, stmt string, args ...any) (*sql.ResultSet, error)
-
-// queryor converts a registry `Query` method into a sql.Queryor. It captures
-// dbid, and does a params map rewrite (copy) to work with statements processed
-// with ReplaceNamedParameters (see prepNamedQueryParams).
-func queryor(dbid string, fn registryQueryFn) types.ResultSetFunc {
-	return func(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error) {
-		// NOTE: We only want inferred arg types for the inline expressions!
-		var varArgs []any
-		if _, infer := params[inferredModeKey]; infer {
-			delete(params, inferredModeKey)
-			varArgs = append(varArgs, pg.QueryModeInferredArgTypes)
-			// In this mode we do a prepare in which we assert OIDs *to* postgres.
-		} else {
-			// This is kinda unfortunate to use when table references would
-			// facilitate postgresql determining all arg types, but Kwil schema
-			// authors can have include statements like `SELECT $res`, which
-			// like in-line expressions used for call arguments convey no
-			// information to allow postgres to get the desired type.
-			varArgs = append(varArgs, pg.QueryModeExec)
-		}
-
-		if len(params) > 0 {
-			params = prepNamedQueryParams(params)
-			varArgs = append(varArgs, pg.NamedArgs(params))
-		}
-
-		return fn(ctx, dbid, stmt, varArgs...)
-	}
-}
-
-// prepNamedQueryParams is used with the sqlanalyzer.ReplaceNamedParameters
-// cleaner that rewrites the statement. The purpose of this function is to
-// rewrite the parameter strings in the values map to work with the named
-// parameter mapping that registry and pgx can do. Rewrite the map keys as such,
-// by example:
-//
-//   - $id => id_arg (strip $ and append "_arg")
-//   - @caller => caller (strip @)
-//
-// The returned map is suitable for the Registry's on-the-fly rewriting of the
-// statement from named to positional arguments, which requires all arguments
-// that should be rewritten to begin with "@" and be followed by one [a-zA-Z]
-// and zero or more [a-zA-Z0-9_]
-func prepNamedQueryParams(values map[string]any) map[string]any {
-	if values == nil {
-		return nil
-	}
-	namedQueryParams := make(map[string]any)
-	for argOrEnv, v := range values {
-		if argOrEnv, cut := strings.CutPrefix(argOrEnv, "$"); cut {
-			namedQueryParams[argOrEnv+"_arg"] = v
-			continue
-		}
-		if argOrEnv, cut := strings.CutPrefix(argOrEnv, "@"); cut {
-			namedQueryParams[argOrEnv] = v
-			continue
-		}
-		fmt.Println("unexpected parameter name: ", argOrEnv)
-	}
-	return namedQueryParams
-}
+type dbQueryFn func(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error)
 
 // loadDataset loads a dataset into the global context.
 // It does not create the dataset in the datastore.
@@ -286,15 +194,13 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 	}
 
 	datasetCtx := &baseDataset{
-		readWriter: queryor(dbid, g.datastore.Execute),
-		read:       queryor(dbid, g.datastore.Query),
 		schema:     schema,
 		namespaces: make(map[string]ExtensionNamespace),
 		procedures: make(map[string]*procedure),
 	}
 
 	for _, unprepared := range schema.Procedures {
-		prepared, err := prepareProcedure(unprepared, datasetCtx)
+		prepared, err := prepareProcedure(unprepared, g, schema)
 		if err != nil {
 			return err
 		}

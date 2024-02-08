@@ -2,7 +2,6 @@ package accounts
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -10,13 +9,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 )
-
-// CommitRegister is an interface for registering a commit.
-type CommitRegister interface {
-	// Register registers a commit.
-	// This should be called when data is written to the database.
-	Register(value []byte) error
-}
 
 type Datastore interface {
 	Execute(ctx context.Context, stmt string, args ...any) ([]map[string]any, error)
@@ -29,15 +21,12 @@ type AccountStore struct {
 	rw            sync.RWMutex
 	gasEnabled    bool
 	noncesEnabled bool
-
-	committable CommitRegister
 }
 
-func NewAccountStore(ctx context.Context, datastore Datastore, committable CommitRegister, opts ...AccountStoreOpts) (*AccountStore, error) {
+func NewAccountStore(ctx context.Context, datastore Datastore, opts ...AccountStoreOpts) (*AccountStore, error) {
 	ar := &AccountStore{
-		log:         log.NewNoOp(),
-		db:          datastore,
-		committable: committable,
+		log: log.NewNoOp(),
+		db:  datastore,
 	}
 
 	for _, opt := range opts {
@@ -84,18 +73,7 @@ func (a *AccountStore) Transfer(ctx context.Context, to, from []byte, amt *big.I
 		return err
 	}
 	toBal := big.NewInt(0).Add(toAcct.Balance, amt)
-	err = a.updateAccount(ctx, to, toBal, toAcct.Nonce)
-	if err != nil {
-		return err
-	}
-	return a.committable.Register(transferBytes(to, from, amt))
-}
-
-func transferBytes(to, from []byte, amt *big.Int) []byte {
-	var b []byte
-	b = append(b, to...)
-	b = append(b, from...)
-	return append(b, amt.Bytes()...)
+	return a.updateAccount(ctx, to, toBal, toAcct.Nonce)
 }
 
 // Spend specifies a the fee and nonce of a transaction for an account. The
@@ -106,27 +84,6 @@ type Spend struct {
 	Amount    *big.Int
 	Nonce     int64
 }
-
-func (s *Spend) bytes() []byte {
-	bts := s.AccountID
-	bts = append(bts, s.Amount.Bytes()...)
-
-	binary.LittleEndian.AppendUint64(bts, uint64(s.Nonce))
-
-	return bts
-}
-
-// Send might be used to have the value transfer be atomic with the sender's
-// transaction related updates (pay fee and update nonce). But I think these
-// operations are distinct since the transaction is in a block if we're doing
-// this operation, so they pay gas and update their nonce.
-/*zzz
-type Send struct {
-	From  Spend
-	To    []byte
-	Value *big.Int
-}
-*/
 
 // Spend spends an amount from an account and records nonces. It blocks until the spend is written to the database.
 // The following scenarios are possible when spending from an account:
@@ -187,7 +144,7 @@ func (a *AccountStore) spend(ctx context.Context, spend *Spend, account *Account
 		return fmt.Errorf("failed to update account: %w", err)
 	}
 
-	return a.committable.Register(spend.bytes())
+	return nil
 }
 
 // Credit credits an account. If the account does not exist, it will be created.
@@ -210,6 +167,5 @@ func (a *AccountStore) Credit(ctx context.Context, acctID []byte, amt *big.Int) 
 		return fmt.Errorf("failed to update account: %w", err)
 	}
 
-	b := append(acctID, amt.Bytes()...)
-	return a.committable.Register(b)
+	return nil
 }

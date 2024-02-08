@@ -129,10 +129,10 @@ func rollbackPreparedTxns(ctx context.Context, conn *pgx.Conn) (int, error) {
 }
 
 const (
-	internalSchemaName = "kwild_internal"
+	InternalSchemaName = "kwild_internal"
 
 	sentryTableName      = `sentry`
-	sentryTableNameFull  = internalSchemaName + "." + sentryTableName
+	sentryTableNameFull  = InternalSchemaName + "." + sentryTableName
 	sqlCreateSentryTable = `CREATE TABLE IF NOT EXISTS ` + sentryTableNameFull + ` (seq INT8);`
 
 	sqlInsertSentryRow = `INSERT INTO ` + sentryTableNameFull + ` (seq) VALUES ($1);`
@@ -178,7 +178,7 @@ func ensureTriggerReplIdentity(ctx context.Context, conn *pgx.Conn) error {
 }
 
 func ensureSentryTable(ctx context.Context, conn *pgx.Conn) error {
-	exists, err := tableExists(ctx, internalSchemaName, sentryTableName, conn)
+	exists, err := tableExists(ctx, InternalSchemaName, sentryTableName, conn)
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func ensureSentryTable(ctx context.Context, conn *pgx.Conn) error {
 		return nil
 	}
 
-	createStmt := fmt.Sprintf(sqlCreateSchemaTemplate, internalSchemaName)
+	createStmt := fmt.Sprintf(sqlCreateSchemaTemplate, InternalSchemaName)
 	_, err = conn.Exec(ctx, createStmt)
 	if err != nil {
 		return err

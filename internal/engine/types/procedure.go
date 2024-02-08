@@ -23,15 +23,15 @@ func (p *Procedure) Clean() error {
 	)
 }
 
-// IsMutative returns true if the procedure is mutative.
-func (p *Procedure) IsMutative() bool {
+// IsView returns true if the procedure has a view modifier.
+func (p *Procedure) IsView() bool {
 	for _, m := range p.Modifiers {
 		if m == ModifierView {
-			return false
+			return true
 		}
 	}
 
-	return true
+	return false
 }
 
 func (p *Procedure) RequiresAuthentication() bool {

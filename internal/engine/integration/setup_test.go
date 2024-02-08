@@ -5,16 +5,14 @@ package integration_test
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/conv"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
-	"github.com/kwilteam/kwil-db/internal/sql/registry"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
@@ -22,8 +20,30 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
+// cleanup deletes all schemas and closes the database
+func cleanup(t *testing.T, db *pg.DB) {
+	db.AutoCommit(true)
+	defer db.AutoCommit(false)
+	defer db.Close()
+	ctx := context.Background()
+
+	_, err := db.Execute(ctx, `DO $$
+	DECLARE
+		sn text;
+	BEGIN
+		FOR sn IN SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'ds_%'
+		LOOP
+			EXECUTE 'DROP SCHEMA ' || quote_ident(sn) || ' CASCADE';
+		END LOOP;
+	END $$;`)
+	require.NoError(t, err)
+
+	_, err = db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE`)
+	require.NoError(t, err)
+}
+
 // setup sets up the global context and registry for the tests
-func setup(t *testing.T) (global *execution.GlobalContext, reg *registry.Registry, db *pg.DB, err error) {
+func setup(t *testing.T) (global *execution.GlobalContext, db *pg.DB, err error) {
 	ctx := context.Background()
 
 	cfg := &pg.DBConfig{
@@ -38,99 +58,30 @@ func setup(t *testing.T) (global *execution.GlobalContext, reg *registry.Registr
 			MaxConns: 11,
 		},
 		SchemaFilter: func(s string) bool {
-			return strings.Contains(s, "ds_")
+			return strings.Contains(s, pg.DefaultSchemaFilterPrefix)
 		},
 	}
 	db, err = pg.NewDB(ctx, cfg)
 	if err != nil {
-		return nil, nil, nil, err
-	}
-	db.AutoCommit(true)        // init and loading writes out-of-session
-	defer db.AutoCommit(false) // tests use sessions
-
-	t.Cleanup(func() {
-		p := db.Pool()
-		_, err := p.Execute(ctx, `DO $$
-		DECLARE
-			sn text;
-		BEGIN
-			FOR sn IN SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'ds_%'
-			LOOP
-				EXECUTE 'DROP SCHEMA ' || quote_ident(sn) || ' CASCADE';
-			END LOOP;
-		END $$;`)
-		if err != nil {
-			t.Error(err)
-		}
-		_, err = p.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE`)
-		if err != nil {
-			t.Error(err)
-		}
-
-		err = db.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-	})
-
-	reg, err = registry.New(ctx, db, registry.WithLogger(log.NewStdOut(log.InfoLevel)))
-	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
-	t.Cleanup(func() {
-		skey := randomBytes(32)
-		err := reg.Begin(ctx, skey)
-		if err != nil {
-			t.Fatal(err)
-		}
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
 
-		dbids, err := reg.List(ctx)
-		if err != nil {
-			t.Error(err)
-		} else {
-			// t.Logf("Removing DBIDs: %v", dbids)
-			for _, dbid := range dbids {
-				err = reg.Delete(ctx, dbid)
-				if err != nil {
-					t.Error(err)
-				}
-			}
-		}
-
-		id, err := reg.Precommit(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(id) == 0 {
-			t.Error("expected a non-empty commit id")
-		}
-
-		err = reg.Commit(ctx, skey)
-		if err != nil {
-			t.Error(err)
-		}
-
-		err = reg.Close(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-	})
-
-	global, err = execution.NewGlobalContext(ctx, reg, map[string]execution.ExtensionInitializer{
+	global, err = execution.NewGlobalContext(ctx, tx, map[string]execution.ExtensionInitializer{
 		"math": (&mathInitializer{}).initialize,
 	})
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	require.NoError(t, err)
 
-	return global, reg, db, nil
-}
+	_, err = tx.Precommit(ctx)
+	require.NoError(t, err)
 
-func randomBytes(l int) []byte {
-	b := make([]byte, l)
-	_, _ = rand.Read(b)
-	return b
+	err = tx.Commit(ctx)
+	require.NoError(t, err)
+
+	return global, db, nil
 }
 
 // mocks a namespace initializer

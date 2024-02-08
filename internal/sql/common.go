@@ -3,23 +3,12 @@ package sql
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
 )
 
 var (
 	ErrNoTransaction = errors.New("no transaction")
 	ErrNoRows        = errors.New("no rows in result set")
 )
-
-func CleanStmt(stmt string) string {
-	trimmed := strings.TrimSpace(stmt)
-	// Ensure it ends with a semicolon.
-	if !strings.HasSuffix(trimmed, ";") {
-		return trimmed + ";"
-	}
-	return trimmed
-}
 
 type Queryer interface {
 	Query(ctx context.Context, stmt string, args ...any) (*ResultSet, error)
@@ -47,12 +36,30 @@ type KV interface {
 // started with BeginTx.
 type TxCloser interface {
 	Rollback(ctx context.Context) error
-	Precommit(ctx context.Context) ([]byte, error)
 	Commit(ctx context.Context) error
+}
+
+// TxPrecommitter is the special kind of transaction that can prepare a
+// transaction for commit.
+// It is only available on the outermost transaction.
+type TxPrecommitter interface {
+	Precommit(ctx context.Context) ([]byte, error)
 }
 
 type TxBeginner interface {
 	Begin(ctx context.Context) (TxCloser, error)
+}
+
+// OuterTxMaker is the special kind of transaction beginner that can make nested
+// transactions, and that explicitly scopes Query/Execute to the tx.
+type OuterTxMaker interface {
+	BeginTx(ctx context.Context) (OuterTx, error)
+}
+
+// ReadTxMaker can make read-only transactions.
+// Many read-only transactions can be made at once.
+type ReadTxMaker interface {
+	BeginReadTx(ctx context.Context) (Tx, error)
 }
 
 // TxMaker is the special kind of transaction beginner that can make nested
@@ -61,53 +68,68 @@ type TxMaker interface {
 	BeginTx(ctx context.Context) (Tx, error)
 }
 
-// Tx can do it all, including start nested transactions.
+// OuterTx is a database transaction. It is the outermost transaction type.
+// "nested transactions" are called savepoints, and can be created with
+// BeginSavepoint. Savepoints can be nested, and are rolled back to the
+// innermost savepoint on Rollback.
 //
 // Anything using implicit tx/session management should use TxCloser.
+type OuterTx interface {
+	Tx
+	TxPrecommitter
+}
+
+// Tx is like a transaction, but it can be nested.
 type Tx interface {
-	Queryer
+	TxCloser
+	DB
+}
+
+// DB is an interface that can execute queries and make
+// nested transactions (savepoints).
+type DB interface {
 	Executor
-	TxCloser // just Commit and Rollback
-	TxMaker  // for nested transactions to isolate failures
+	TxMaker
+	// AccessMode gets the access mode of the database.
+	// It can be either read-write or read-only.
+	AccessMode() AccessMode
 }
 
 type ExecResult interface {
 	RowsAffected() (int64, error)
 }
 
-// Result is the result of a query. TODO: this is detail, not needed outside of sqlite impl
-type Result interface {
-	Close() error
-	// Columns gets the columns of the result.
-	Columns() []string
-	// Finish finishes any execution that is in progress and closes the result.
-	Finish() error
-
-	// Next gets the next row of the result.
-	Next() (rowReturned bool)
-
-	// Err gets any error that occurred during iteration.
-	Err() error
-
-	// Values gets the values of the current row.
-	Values() ([]any, error)
-
-	// A ResultSet() (*ResultSet, error) method is a red flag for me. Something
-	// should not be returning a sql.Result (or the caller should assert to a
-	// *sql.ResultSet). If an interface has a method to return the concrete type
-	// that's actually implementing the interface, then the interface is
-	// pointless.
-
-	ResultSet() (*ResultSet, error)
-}
-
+// ResultSet is the result of a query or execution.
+// It contains the returned columns and the rows.
 type ResultSet struct {
-	ReturnedColumns []string
-	Rows            [][]any
-
-	i int // starts at 0
+	Columns []string
+	Rows    [][]any
 
 	Status CommandTag
+}
+
+// Map returns the result set as a slice of maps.
+// For example, if the result set has two columns, "name" and "age",
+// and two rows, "alice" and 30, and "bob" and 40, the result would be:
+//
+//	[]map[string]any{
+//		{"name": "alice", "age": 30},
+//		{"name": "bob", "age": 40},
+//	}
+//
+// It is not recommended to use this method for large result sets.
+func (r *ResultSet) Map() []map[string]any {
+	m := make([]map[string]any, len(r.Rows))
+	for i, row := range r.Rows {
+		m2 := make(map[string]any)
+		for j, col := range row {
+			m2[r.Columns[j]] = col
+		}
+
+		m[i] = m2
+	}
+
+	return m
 }
 
 type CommandTag struct {
@@ -119,126 +141,14 @@ func (ct *CommandTag) String() string {
 	return ct.Text // tip: prefix will be select, insert, etc.
 }
 
-var _ Result = (*ResultSet)(nil)
-
-func (r *ResultSet) Columns() []string {
-	v := make([]string, len(r.ReturnedColumns))
-	copy(v, r.ReturnedColumns)
-
-	return v
-}
-
-func (r *ResultSet) Next() (rowReturned bool) {
-	if r.i >= len(r.Rows) {
-		return false
-	}
-
-	r.i++
-	return true
-}
-
-func (r *ResultSet) Values() ([]any, error) {
-	if r.i > len(r.Rows) {
-		return nil, fmt.Errorf("result set has no more rows")
-	}
-
-	v := make([]any, len(r.Rows[r.i-1]))
-	copy(v, r.Rows[r.i-1])
-
-	return v, nil
-}
-
-func (r *ResultSet) Map() []map[string]any {
-	m := make([]map[string]any, len(r.Rows))
-	for i, row := range r.Rows {
-		m2 := make(map[string]any)
-		for j, col := range row {
-			m2[r.ReturnedColumns[j]] = col
-		}
-
-		m[i] = m2
-	}
-
-	return m
-}
-
-// implements Result
-func (r *ResultSet) Close() error {
-	return nil
-}
-
-// implements Result
-func (r *ResultSet) Err() error {
-	return nil
-}
-
-// implements Result
-func (r *ResultSet) Finish() error {
-	return nil
-}
-
-// implements Result
-func (r *ResultSet) ResultSet() (*ResultSet, error) {
-	copiedColumns := make([]string, len(r.ReturnedColumns))
-	copy(copiedColumns, r.ReturnedColumns)
-
-	copiedRows := make([][]any, len(r.Rows))
-	for i, row := range r.Rows {
-		copiedRows[i] = make([]any, len(row))
-		copy(copiedRows[i], row)
-	}
-
-	return &ResultSet{
-		ReturnedColumns: copiedColumns,
-		Rows:            copiedRows,
-	}, nil
-}
-
-type ConnectionFlag int
+// AccessMode is the type of access to a database.
+// It can be read-write or read-only.
+type AccessMode uint8
 
 const (
-	// OpenNone indicates that the connection should be read-write and not created if it does not exist.
-	OpenNone ConnectionFlag = 1 << iota
-	// OpenReadOnly indicates that the connection should be read-only.
-	OpenReadOnly
-	// OpenCreate indicates that the connection should be created if it does not exist.
-	OpenCreate
-	// OpenMemory indicates that the connection should be in-memory.
-	OpenMemory
+	// ReadWrite is the default access mode.
+	// It allows for reading and writing to the database.
+	ReadWrite AccessMode = iota
+	// ReadOnly allows for reading from the database, but not writing.
+	ReadOnly
 )
-
-// EmptyResult is a result that has no rows.
-type EmptyResult struct{}
-
-var _ Result = (*EmptyResult)(nil)
-
-func (e *EmptyResult) Close() error {
-	return nil
-}
-
-func (e *EmptyResult) Columns() []string {
-	return nil
-}
-
-func (e *EmptyResult) Finish() error {
-	return nil
-}
-
-func (e *EmptyResult) Next() (rowReturned bool) {
-	return false
-}
-
-func (e *EmptyResult) Err() error {
-	return nil
-}
-
-func (e *EmptyResult) Values() ([]any, error) {
-	return nil, nil
-}
-
-func (e *EmptyResult) ResultSet() (*ResultSet, error) {
-	return &ResultSet{
-		ReturnedColumns: []string{},
-		Rows:            [][]any{},
-	}, nil
-}

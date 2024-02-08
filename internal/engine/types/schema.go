@@ -7,12 +7,12 @@ import (
 )
 
 type Schema struct {
-	Name string
+	Name string `json:"name"`
 	// Owner is the identifier (generally an address in bytes or public key) of the owner of the schema
-	Owner      []byte
-	Extensions []*Extension
-	Tables     []*Table
-	Procedures []*Procedure
+	Owner      []byte       `json:"owner"`
+	Extensions []*Extension `json:"extensions"`
+	Tables     []*Table     `json:"tables"`
+	Procedures []*Procedure `json:"procedures"`
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"unicode"
 
-	"github.com/kwilteam/kwil-db/internal/engine/metadata/ddl"
+	"github.com/kwilteam/kwil-db/internal/engine/ddl"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 )
 
@@ -61,8 +61,8 @@ func TestGenerateDDL(t *testing.T) {
 				},
 			},
 			want: []string{
-				`CREATE TABLE "ds_dbid"."test" ("id" INT8 NOT NULL, "name" TEXT NOT NULL DEFAULT 'foo', PRIMARY KEY ("id"));`,
-				`CREATE UNIQUE INDEX "test_index" ON "ds_dbid"."test" ("id", "name");`,
+				`CREATE TABLE "dbid"."test" ("id" INT8 NOT NULL, "name" TEXT NOT NULL DEFAULT 'foo', PRIMARY KEY ("id"));`,
+				`CREATE UNIQUE INDEX "test_index" ON "dbid"."test" ("id", "name");`,
 			},
 		},
 		{
@@ -109,8 +109,8 @@ func TestGenerateDDL(t *testing.T) {
 				},
 			},
 			want: []string{
-				`CREATE TABLE "ds_dbid"."test" ("id" INT8 NOT NULL, "name" TEXT NOT NULL DEFAULT 'foo', PRIMARY KEY ("id", "name"));`,
-				`CREATE UNIQUE INDEX "test_index" ON "ds_dbid"."test" ("id", "name");`,
+				`CREATE TABLE "dbid"."test" ("id" INT8 NOT NULL, "name" TEXT NOT NULL DEFAULT 'foo', PRIMARY KEY ("id", "name"));`,
+				`CREATE UNIQUE INDEX "test_index" ON "dbid"."test" ("id", "name");`,
 			},
 		},
 		{
@@ -243,7 +243,7 @@ func TestGenerateDDL(t *testing.T) {
 					},
 				},
 			},
-			want: []string{`CREATE TABLE "ds_dbid"."test" ("id" INT8, "name" TEXT DEFAULT 'foo', FOREIGN KEY ("name") REFERENCES "ds_dbid"."users"("username") ON UPDATE CASCADE, PRIMARY KEY ("id"));`},
+			want: []string{`CREATE TABLE "dbid"."test" ("id" INT8, "name" TEXT DEFAULT 'foo', FOREIGN KEY ("name") REFERENCES "dbid"."users"("username") ON UPDATE CASCADE, PRIMARY KEY ("id"));`},
 		},
 		{
 			name: "table with multiple foreign keys and multiple actions per foreign key",
@@ -305,7 +305,7 @@ func TestGenerateDDL(t *testing.T) {
 					},
 				},
 			},
-			want: []string{`CREATE TABLE "ds_dbid"."table1" ("id" INT8, "name" TEXT DEFAULT 'foo', FOREIGN KEY ("name") REFERENCES "ds_dbid"."users"("username") ON UPDATE CASCADE ON DELETE SET DEFAULT, FOREIGN KEY ("id", "name") REFERENCES "ds_dbid"."table2"("id", "username") ON UPDATE SET NULL ON DELETE SET NULL, PRIMARY KEY ("id"));`},
+			want: []string{`CREATE TABLE "dbid"."table1" ("id" INT8, "name" TEXT DEFAULT 'foo', FOREIGN KEY ("name") REFERENCES "dbid"."users"("username") ON UPDATE CASCADE ON DELETE SET DEFAULT, FOREIGN KEY ("id", "name") REFERENCES "dbid"."table2"("id", "username") ON UPDATE SET NULL ON DELETE SET NULL, PRIMARY KEY ("id"));`},
 		},
 	}
 	for _, tt := range tests {

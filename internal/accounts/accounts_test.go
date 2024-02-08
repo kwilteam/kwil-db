@@ -179,7 +179,7 @@ func Test_Accounts(t *testing.T) {
 			// 	opts = append(opts, accounts.WithNonces(true))
 			// }
 
-			ar, err := accounts.NewAccountStore(ctx, &adapter.DB{Datastore: db}, &mockCommittable{}, opts...)
+			ar, err := accounts.NewAccountStore(ctx, &adapter.DB{Datastore: db}, opts...)
 			require.NoError(t, err)
 
 			for acct, amt := range tc.credit {
@@ -266,10 +266,4 @@ func assertErr(t *testing.T, errs []error, target error) {
 	if !contains {
 		t.Fatalf("expected error %s, got %s", target, errs)
 	}
-}
-
-type mockCommittable struct{}
-
-func (m *mockCommittable) Register(value []byte) error {
-	return nil
 }
