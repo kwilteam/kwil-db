@@ -36,7 +36,7 @@ func Test_Analyze(t *testing.T) {
 			WHERE f.follower_id = (
 				SELECT id FROM users WHERE username = $username
 			)
-			ORDER BY date(p.post_date) DESC NULLS LAST
+			ORDER BY p.post_date DESC NULLS LAST
 			LIMIT 20 OFFSET $offset;`,
 			want: `SELECT "p"."id", "p"."title"
 			FROM "ds_dbid"."posts" AS "p"
@@ -45,7 +45,7 @@ func Test_Analyze(t *testing.T) {
 			WHERE "f"."follower_id" = (
 				SELECT "id" FROM "ds_dbid"."users" WHERE "username" = $1 ORDER BY "users"."id" ASC NULLS LAST
 			)
-			ORDER BY date ("p"."post_date") DESC NULLS LAST,
+			ORDER BY "p"."post_date" DESC NULLS LAST,
 			"f"."follower_id" ASC NULLS LAST, "f"."user_id" ASC NULLS LAST, "p"."id" ASC NULLS LAST, "u"."id" ASC NULLS LAST
 			LIMIT 20 OFFSET $2;`,
 			tables: []*types.Table{
