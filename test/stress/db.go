@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kwilteam/kwil-db/core/client"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
 	"github.com/kwilteam/kwil-db/core/utils/random"
@@ -37,7 +37,7 @@ func (h *harness) dropDB(ctx context.Context, dbid string) error {
 	var txHash transactions.TxHash
 	err := h.underNonceLock(ctx, func(nonce int64) error {
 		var err error
-		txHash, err = h.DropDatabaseID(ctx, dbid, client.WithNonce(nonce))
+		txHash, err = h.DropDatabaseID(ctx, dbid, clientType.WithNonce(nonce))
 		return err
 	})
 	if err != nil {
@@ -66,7 +66,7 @@ func (h *harness) deployDBAsync(ctx context.Context) (string, <-chan asyncResp, 
 	var txHash transactions.TxHash
 	err = h.underNonceLock(ctx, func(nonce int64) error {
 		var err error
-		txHash, err = h.DeployDatabase(ctx, schema, client.WithNonce(nonce))
+		txHash, err = h.DeployDatabase(ctx, schema, clientType.WithNonce(nonce))
 		return err
 	})
 	if err != nil {

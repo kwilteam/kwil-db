@@ -21,6 +21,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/test/driver"
 
 	"github.com/stretchr/testify/require"
@@ -316,7 +317,7 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 func (r *ActHelper) getHTTPClientDriver(signer auth.Signer) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
-	kwilClt, err := client.NewClient(context.TODO(), r.cfg.HTTPEndpoint, &client.ClientOptions{
+	kwilClt, err := client.NewClient(context.TODO(), r.cfg.HTTPEndpoint, &clientType.Options{
 		Signer:  signer,
 		ChainID: TestChainID,
 		Logger:  logger,
@@ -333,7 +334,7 @@ func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver
 	gt, err := gRPC.New(context.Background(), r.cfg.GrpcEndpoint, gtOptions...)
 	require.NoError(r.t, err, "failed to create grpc transport")
 
-	kwilClt, err := client.WrapClient(context.TODO(), gt, &client.ClientOptions{
+	kwilClt, err := client.WrapClient(context.TODO(), gt, &clientType.Options{
 		Signer: signer,
 		Logger: logger,
 		// we dont care about chain id here

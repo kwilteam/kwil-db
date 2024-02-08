@@ -7,8 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 )
 
-// ClientOptions are options that can be set for the client
-type ClientOptions struct {
+// Options are options that can be set for the client
+type Options struct {
 	// Logger is the logger to use for the client.
 	Logger log.Logger
 
@@ -28,7 +28,7 @@ type ClientOptions struct {
 }
 
 // Apply applies the passed options to the receiver.
-func (c *ClientOptions) Apply(opts *ClientOptions) {
+func (c *Options) Apply(opts *Options) {
 	if opts == nil {
 		return
 	}
@@ -49,23 +49,23 @@ func (c *ClientOptions) Apply(opts *ClientOptions) {
 }
 
 // DefaultOptions returns the default options for the client.
-func DefaultOptions() *ClientOptions {
-	return &ClientOptions{
+func DefaultOptions() *Options {
+	return &Options{
 		Logger: log.NewNoOp(),
 	}
 }
 
-type Option func(*ClientOptions)
+type Option func(*Options)
 
 func WithLogger(logger log.Logger) Option {
-	return func(c *ClientOptions) {
+	return func(c *Options) {
 		c.Logger = logger
 	}
 }
 
 // WithSigner sets a signer to use when authoring transactions.
 func WithSigner(signer auth.Signer) Option {
-	return func(c *ClientOptions) {
+	return func(c *Options) {
 		c.Signer = signer
 	}
 }
@@ -78,27 +78,27 @@ func WithSigner(signer auth.Signer) Option {
 // remote node claims, which should only be done for testing or when in secure
 // communication with a trusted node (using TLS or Unix sockets).
 func WithChainID(chainID string) Option {
-	return func(c *ClientOptions) {
+	return func(c *Options) {
 		c.ChainID = chainID
 	}
 }
 
 // SilenceWarnings silences warnings from the client.
 func SilenceWarnings() Option {
-	return func(c *ClientOptions) {
+	return func(c *Options) {
 		c.Silence = true
 	}
 }
 
-type txOptions struct {
-	nonce int64
-	fee   *big.Int
+type TxOptions struct {
+	Nonce int64
+	Fee   *big.Int
 
-	syncBcast bool // wait for mining on broadcast
+	SyncBcast bool // wait for mining on broadcast
 }
 
-func getTxOpts(opts []TxOpt) *txOptions {
-	txOpts := &txOptions{}
+func GetTxOpts(opts []TxOpt) *TxOptions {
+	txOpts := &TxOptions{}
 	for _, opt := range opts {
 		opt(txOpts)
 	}
@@ -106,27 +106,27 @@ func getTxOpts(opts []TxOpt) *txOptions {
 }
 
 // TxOpt sets an option used when making and broadcasting a transaction.
-type TxOpt func(*txOptions)
+type TxOpt func(*TxOptions)
 
 // WithNonce sets the nonce to use for the transaction.
 func WithNonce(nonce int64) TxOpt {
-	return func(o *txOptions) {
-		o.nonce = nonce
+	return func(o *TxOptions) {
+		o.Nonce = nonce
 	}
 }
 
-// WithFee sets the fee to use on the transaction, otherwise an EstimateCode RPC
+// WithFee sets the Fee to use on the transaction, otherwise an EstimateCode RPC
 // will be performed for the action.
 func WithFee(fee *big.Int) TxOpt {
-	return func(o *txOptions) {
-		o.fee = fee
+	return func(o *TxOptions) {
+		o.Fee = fee
 	}
 }
 
 // WithSyncBroadcast indicates that broadcast should wait for the transaction to
 // be included in a block, not merely accepted into mempool.
 func WithSyncBroadcast(wait bool) TxOpt {
-	return func(o *txOptions) {
-		o.syncBcast = wait
+	return func(o *TxOptions) {
+		o.SyncBcast = wait
 	}
 }
