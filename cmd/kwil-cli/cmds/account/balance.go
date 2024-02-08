@@ -11,7 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/types"
-
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +34,7 @@ func balanceCmd() *cobra.Command {
 				}
 			} // else use our account from the signer
 
-			return common.DialClient(cmd.Context(), cmd, clientFlags, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), cmd, clientFlags, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
 				if len(acctID) == 0 {
 					acctID = conf.Identity()
 					if len(acctID) == 0 {

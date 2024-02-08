@@ -14,12 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
-
 	"go.uber.org/zap"
 )
 
@@ -312,7 +311,7 @@ func (d *KwilCliDriver) ExecuteAction(_ context.Context, dbid string, action str
 	return txHash, nil
 }
 
-func (d *KwilCliDriver) QueryDatabase(_ context.Context, dbid, query string) (*client.Records, error) {
+func (d *KwilCliDriver) QueryDatabase(_ context.Context, dbid, query string) (*clientType.Records, error) {
 	cmd := d.newKwilCliCmd("database", "query", "--dbid", dbid, query)
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
@@ -327,7 +326,7 @@ func (d *KwilCliDriver) QueryDatabase(_ context.Context, dbid, query string) (*c
 	return records, nil
 }
 
-func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []any) (*client.Records, error) {
+func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []any) (*clientType.Records, error) {
 	// NOTE: kwil-cli does not support batched inputs
 	actionInputs, err := d.prepareCliActionParams(dbid, action, inputs)
 	if err != nil {
@@ -524,7 +523,7 @@ func parseRespGetSchema(data any) (*transactions.Schema, error) {
 // respQueryDb represents the query db response(json) from the cli response
 type respQueryDb []map[string]any
 
-func parseRespQueryDb(data any) (*client.Records, error) {
+func parseRespQueryDb(data any) (*clientType.Records, error) {
 	bts, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal query db resp: %w", err)
@@ -536,7 +535,7 @@ func parseRespQueryDb(data any) (*client.Records, error) {
 		return nil, fmt.Errorf("failed to unmarshal query db: %w", err)
 	}
 
-	return client.NewRecordsFromMaps(resp), nil
+	return clientType.NewRecordsFromMaps(resp), nil
 }
 
 func parseRespListDatabases(data any) ([]*types.DatasetIdentifier, error) {

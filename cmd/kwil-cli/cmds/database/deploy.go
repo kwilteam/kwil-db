@@ -12,7 +12,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/core/client"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/spf13/cobra"
 )
@@ -38,7 +38,7 @@ func deployCmd() *cobra.Command {
 		Example: deployExample,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
 				// read in the file
 				file, err := os.Open(filePath)
 				if err != nil {
@@ -65,8 +65,8 @@ func deployCmd() *cobra.Command {
 					db.Name = overrideName
 				}
 
-				txHash, err := cl.DeployDatabase(ctx, db, client.WithNonce(nonceOverride),
-					client.WithSyncBroadcast(syncBcast))
+				txHash, err := cl.DeployDatabase(ctx, db, clientType.WithNonce(nonceOverride),
+					clientType.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("failed to deploy database: %w", err))
 				}

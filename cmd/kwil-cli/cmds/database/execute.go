@@ -9,7 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/core/client"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +23,7 @@ In order to specify an action parameter, you first need to specify the parameter
 For example, for action ` + "`" + `get_user($username)` + "`" + `, you would specify the action as follows:
 ` + "`" + `username:satoshi` + "`" + ` --action=get_user
 
-You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + ` 
+You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + `
 flags, or you can specify the database by passing the database id with the ` + "`" + `--dbid` + "`" + ` flag.  If a ` + "`" + `--name` + "`" + `
 flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner will be inferred from your configured wallet.`
 
@@ -43,7 +43,7 @@ func executeCmd() *cobra.Command {
 		Long:    executeLong,
 		Example: executeExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
 				dbId, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("target database not properly specified: %w", err))
@@ -64,7 +64,7 @@ func executeCmd() *cobra.Command {
 				// Could actually just directly pass nonce to the client method,
 				// but those methods don't need tx details in the inputs.
 				txHash, err := cl.ExecuteAction(ctx, dbId, lowerName, inputs,
-					client.WithNonce(nonceOverride), client.WithSyncBroadcast(syncBcast))
+					clientType.WithNonce(nonceOverride), clientType.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error executing database: %w", err))
 				}

@@ -8,13 +8,13 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/core/client"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/spf13/cobra"
 )
 
 var (
 	callLong = `Call a ` + "`" + `view` + "`" + ` action, returning the result.
-	
+
 ` + "`" + `view` + "`" + ` actions are read-only actions that do not require gas to execute.  They are
 the primary way to query the state of a database. The ` + "`" + `call` + "`" + ` command is used to call
 a ` + "`" + `view` + "`" + ` action on a database.  It takes the action name as a required flag, and the
@@ -25,7 +25,7 @@ For example, for action ` + "`" + `get_user($username)` + "`" + `, you would spe
 
 ` + "`" + `username:satoshi` + "`" + ` --action=get_user
 
-You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + ` 
+You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + `
 flags, or you can specify the database by passing the database id with the ` + "`" + `--dbid` + "`" + ` flag.  If a ` + "`" + `--name` + "`" + `
 flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner will be inferred from your configured wallet.
 
@@ -54,7 +54,7 @@ func callCmd() *cobra.Command {
 				dialFlags = common.UsingGateway
 			}
 
-			return common.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, clnt common.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, clnt clientType.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("target database not properly specified: %w", err))
@@ -87,7 +87,7 @@ func callCmd() *cobra.Command {
 				}
 
 				if data == nil {
-					data = &client.Records{}
+					data = &clientType.Records{}
 				}
 
 				return display.PrintCmd(cmd, &respRelations{Data: data})

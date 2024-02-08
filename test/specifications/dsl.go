@@ -4,8 +4,8 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/types"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
@@ -59,7 +59,7 @@ type DatabaseDropDsl interface {
 // ExecuteCallDsl is dsl for call specification
 type ExecuteCallDsl interface {
 	DatabaseIdentifier
-	Call(ctx context.Context, dbid, action string, inputs []any) (*client.Records, error)
+	Call(ctx context.Context, dbid, action string, inputs []any) (*clientType.Records, error)
 }
 
 // ExecuteExtensionDsl is dsl for extension specification
@@ -76,7 +76,7 @@ type ExecuteQueryDsl interface {
 	TxQueryDsl
 	// ExecuteAction executes QUERY to a database
 	ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
-	QueryDatabase(ctx context.Context, dbid, query string) (*client.Records, error)
+	QueryDatabase(ctx context.Context, dbid, query string) (*clientType.Records, error)
 	SupportBatch() bool
 }
 

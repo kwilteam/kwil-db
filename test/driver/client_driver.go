@@ -8,12 +8,11 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
-	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/types"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
 	"go.uber.org/zap"
@@ -29,12 +28,12 @@ func GetEnv(key, defaultValue string) string {
 
 // KwildClientDriver is driver for tests using the `client` package
 type KwildClientDriver struct {
-	clt    common.Client
+	clt    clientType.Client
 	signer auth.Signer
 	logger log.Logger
 }
 
-func NewKwildClientDriver(clt common.Client, signer auth.Signer, logger log.Logger) *KwildClientDriver {
+func NewKwildClientDriver(clt clientType.Client, signer auth.Signer, logger log.Logger) *KwildClientDriver {
 	driver := &KwildClientDriver{
 		clt:    clt,
 		signer: signer,
@@ -157,11 +156,11 @@ func (d *KwildClientDriver) DropDatabase(ctx context.Context, dbName string) ([]
 	return rec, nil
 }
 
-func (d *KwildClientDriver) QueryDatabase(ctx context.Context, dbid, query string) (*client.Records, error) {
+func (d *KwildClientDriver) QueryDatabase(ctx context.Context, dbid, query string) (*clientType.Records, error) {
 	return d.clt.Query(ctx, dbid, query)
 }
 
-func (d *KwildClientDriver) Call(ctx context.Context, dbid, action string, inputs []any) (*client.Records, error) {
+func (d *KwildClientDriver) Call(ctx context.Context, dbid, action string, inputs []any) (*clientType.Records, error) {
 	return d.clt.CallAction(ctx, dbid, action, inputs)
 }
 

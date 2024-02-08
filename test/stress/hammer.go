@@ -11,13 +11,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/gatewayclient"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
+	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"go.uber.org/zap"
 )
 
@@ -78,17 +78,17 @@ func hammer(ctx context.Context) error {
 	logger = *logger.WithOptions(zap.AddStacktrace(zap.FatalLevel))
 	trLogger := *logger.WithOptions(zap.AddCallerSkip(1))
 
-	var kwilClt common.Client // probably should be moved to core
+	var kwilClt clientType.Client
 	if gatewayProvider {
 		kwilClt, err = gatewayclient.NewClient(ctx, host, &gatewayclient.GatewayOptions{
-			ClientOptions: client.ClientOptions{
+			Options: clientType.Options{
 				Signer:  signer,
 				ChainID: chainId,
 				Logger:  trLogger,
 			},
 		})
 	} else {
-		kwilClt, err = client.NewClient(ctx, host, &client.ClientOptions{
+		kwilClt, err = client.NewClient(ctx, host, &clientType.Options{
 			Signer:  signer,
 			ChainID: chainId,
 			Logger:  trLogger,
