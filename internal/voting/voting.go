@@ -205,7 +205,6 @@ func (v *VoteProcessor) Expire(ctx context.Context, db sql.DB, blockheight int64
 }
 
 // GetResolutionVoteInfo gets a resolution, identified by the ID.
-// It does not read uncommitted data.
 func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, db sql.DB, id types.UUID) (info *ResolutionVoteInfo, err error) {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
@@ -291,7 +290,6 @@ func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, db sql.DB, id
 // 1. the resolution has a body
 // 2. the resolution has expired
 // 3. the resolution has been approved
-// TODO: should be uncommitted data query
 func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, db sql.DB, id types.UUID) (bool, error) {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {

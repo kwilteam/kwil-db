@@ -597,9 +597,6 @@ func Test_Votes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			// Can't use votingSchemaName because this is `package voting_test`
-			// Either we convert this to `package voting`, use
-			// voting.DropAllTables, or use a literal here:
 			db, err := dbtest.NewTestDB(t)
 			require.NoError(t, err)
 			defer db.Close()
@@ -612,21 +609,12 @@ func Test_Votes(t *testing.T) {
 				Accounts: &mockAccountStore{
 					accounts: map[string]*accounts.Account{},
 				},
-				Databases: nil,
 			}
 
-			// voting.DropAllTables(ctx, db)
-
-			v, err := voting.NewVoteProcessor(ctx, dbTx, ds.Accounts, ds.Databases, 500000, log.NewStdOut(log.DebugLevel))
+			v, err := voting.NewVoteProcessor(ctx, dbTx, ds.Accounts, ds.Engine, 500000, log.NewStdOut(log.DebugLevel))
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			// defer func() {
-			// 	if err := voting.DropAllTables(ctx, db); err != nil {
-			// 		t.Errorf("test table cleanup failed: %v", err)
-			// 	}
-			// }()
 
 			tt.fn(t, v, ds, dbTx)
 		})
