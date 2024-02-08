@@ -7,12 +7,16 @@ package events
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/sql"
-	"github.com/kwilteam/kwil-db/internal/sql/pg"
 )
+
+// DB is a database connection.
+type DB interface {
+	sql.TxMaker
+	sql.ReadTxMaker
+}
 
 // VoteStore is a store that tracks votes.
 type VoteStore interface {
@@ -28,18 +32,13 @@ type VoteStore interface {
 // been stored or processed will incur some computational overhead, but will not
 // cause any issues.
 type EventStore struct {
-	//eventWriterMu is a mutex to ensure that the eventWriter is not used concurrently.
-	// Since the kv uses the autocommit mode, we need to ensure that this does not conflict
-	// with transactions, since these cannot be used concurrently.
-	eventWriterMu sync.Mutex
-
 	// eventWriter is a database used for writing events.
 	// It holds a separate connection to the database, since
 	// events are written outside of the consensus process.
 	// Events are deleted during consensus and need to be atomic
 	// with consensus, so these two cannot be managed with the same
 	// connection.
-	eventWriter *pg.DB
+	eventWriter DB
 
 	// voteStore is a store that tracks votes.
 	votestore VoteStore
@@ -49,7 +48,7 @@ type EventStore struct {
 // It takes a database connection to write events to.
 // WARNING: This connection cannot be the same connection
 // used during consensus / in txapp.
-func NewEventStore(ctx context.Context, writerDB *pg.DB, voteStore VoteStore) (*EventStore, error) {
+func NewEventStore(ctx context.Context, writerDB DB, voteStore VoteStore) (*EventStore, error) {
 	tx, err := writerDB.BeginTx(ctx)
 	if err != nil {
 		return nil, err
@@ -66,11 +65,6 @@ func NewEventStore(ctx context.Context, writerDB *pg.DB, voteStore VoteStore) (*
 		return nil, err
 	}
 
-	_, err = tx.Precommit(ctx) // outermost txs need to be precommitted
-	if err != nil {
-		return nil, err
-	}
-
 	return &EventStore{
 		eventWriter: writerDB,
 		votestore:   voteStore,
@@ -81,10 +75,6 @@ func NewEventStore(ctx context.Context, writerDB *pg.DB, voteStore VoteStore) (*
 // It uses the local connection to the event store,
 // instead of the consensus connection.
 func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) error {
-	// tx guarantees that we are reading the same state of the database for both votestore and eventstore
-	e.eventWriterMu.Lock()
-	defer e.eventWriterMu.Unlock()
-
 	tx, err := e.eventWriter.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -107,12 +97,6 @@ func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) e
 	}
 
 	_, err = tx.Execute(ctx, insertEventIdempotent, id[:], data, eventType)
-	if err != nil {
-		return err
-	}
-
-	// we need to precommit then commit, since this is an outermost tx
-	_, err = tx.Precommit(ctx)
 	if err != nil {
 		return err
 	}
@@ -228,13 +212,13 @@ type KV struct {
 }
 
 func (s *KV) Get(ctx context.Context, key []byte) ([]byte, error) {
-	s.es.eventWriterMu.Lock()
-	defer s.es.eventWriterMu.Unlock()
+	tx, err := s.es.eventWriter.BeginReadTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) // only reading, so we can always rollback
 
-	s.es.eventWriter.AutoCommit(true)
-	defer s.es.eventWriter.AutoCommit(false)
-
-	res, err := s.es.eventWriter.Execute(ctx, selectKvStmt, append(s.prefix, key...))
+	res, err := tx.Execute(ctx, selectKvStmt, append(s.prefix, key...))
 	if err != nil {
 		return nil, err
 	}
@@ -256,23 +240,31 @@ func (s *KV) Get(ctx context.Context, key []byte) ([]byte, error) {
 }
 
 func (s *KV) Set(ctx context.Context, key []byte, value []byte) error {
-	s.es.eventWriterMu.Lock()
-	defer s.es.eventWriterMu.Unlock()
+	tx, err := s.es.eventWriter.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
 
-	s.es.eventWriter.AutoCommit(true)
-	defer s.es.eventWriter.AutoCommit(false)
+	_, err = tx.Execute(ctx, upsertKvStmt, append(s.prefix, key...), value)
+	if err != nil {
+		return err
+	}
 
-	_, err := s.es.eventWriter.Execute(ctx, upsertKvStmt, append(s.prefix, key...), value)
-	return err
+	return tx.Commit(ctx)
 }
 
 func (s *KV) Delete(ctx context.Context, key []byte) error {
-	s.es.eventWriterMu.Lock()
-	defer s.es.eventWriterMu.Unlock()
+	tx, err := s.es.eventWriter.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
 
-	s.es.eventWriter.AutoCommit(true)
-	defer s.es.eventWriter.AutoCommit(false)
+	_, err = tx.Execute(ctx, deleteKvStmt, append(s.prefix, key...))
+	if err != nil {
+		return err
+	}
 
-	_, err := s.es.eventWriter.Execute(ctx, deleteKvStmt, append(s.prefix, key...))
-	return err
+	return tx.Commit(ctx)
 }

@@ -133,21 +133,13 @@ func Test_AddEvent(t *testing.T) {
 	ctx := context.Background()
 
 	// no MockEventStore (yet?)
-	eventDb, err := dbtest.NewTestDB(t)
+	eventDb, cleanup, err := dbtest.NewTestPool(ctx, []string{events.SchemaName})
 	require.NoError(t, err)
-	defer eventDb.Close()
+	defer cleanup()
 
 	vs := NewMockVoteStore()
 	es, err := events.NewEventStore(ctx, eventDb, vs)
 	require.NoError(t, err)
-
-	// cleanup
-	defer func() {
-		eventDb.AutoCommit(true)
-
-		_, err := eventDb.Execute(ctx, "DROP SCHEMA "+events.SchemaName+" CASCADE;")
-		require.NoError(t, err)
-	}()
 
 	oracle := &EthDepositOracle{
 		logger:     log.NewStdOut(log.InfoLevel),

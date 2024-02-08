@@ -275,3 +275,30 @@ func (p *Pool) Begin(ctx context.Context) (sql.TxCloser, error) {
 	}
 	return &poolTx{tx, 0}, nil
 }
+
+// BeginTx starts a read-write transaction.
+func (p *Pool) BeginTx(ctx context.Context) (sql.Tx, error) {
+	tx, err := p.writer.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel:   pgx.RepeatableRead,
+		AccessMode: pgx.ReadWrite,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &nestedTx{
+		Tx:         tx,
+		accessMode: sql.ReadWrite,
+	}, nil
+}
+
+// BeginReadTx starts a read-only transaction.
+func (p *Pool) BeginReadTx(ctx context.Context) (sql.Tx, error) {
+	tx, err := p.pgxp.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &nestedTx{
+		Tx:         tx,
+		accessMode: sql.ReadOnly,
+	}, nil
+}

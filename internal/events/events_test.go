@@ -18,12 +18,12 @@ func Test_EventStore(t *testing.T) {
 		name string
 		// we have to use an outerTx here because we are testing commits from different connections
 		// to the event store
-		fn func(t *testing.T, e *EventStore, consensusTx sql.OuterTx)
+		fn func(t *testing.T, e *EventStore, consensusTx sql.Tx)
 	}
 	tests := []testcase{
 		{
 			name: "standard storage and retrieval",
-			fn: func(t *testing.T, e *EventStore, consensusTx sql.OuterTx) {
+			fn: func(t *testing.T, e *EventStore, consensusTx sql.Tx) {
 				ctx := context.Background()
 
 				err := e.Store(ctx, []byte("hello"), "test")
@@ -47,7 +47,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "idempotent storage",
-			fn: func(t *testing.T, e *EventStore, consensusTx sql.OuterTx) {
+			fn: func(t *testing.T, e *EventStore, consensusTx sql.Tx) {
 				ctx := context.Background()
 
 				err := e.Store(ctx, []byte("hello"), "test")
@@ -64,7 +64,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "deleting non-existent event",
-			fn: func(t *testing.T, e *EventStore, consensusTx sql.OuterTx) {
+			fn: func(t *testing.T, e *EventStore, consensusTx sql.Tx) {
 				ctx := context.Background()
 
 				err := e.DeleteEvent(ctx, consensusTx, types.NewUUIDV5([]byte("hello")))
@@ -73,7 +73,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "using kv scoping",
-			fn: func(t *testing.T, e *EventStore, consensusTx sql.OuterTx) {
+			fn: func(t *testing.T, e *EventStore, consensusTx sql.Tx) {
 				ctx := context.Background()
 
 				kv := e.KV([]byte("hello"))
@@ -98,7 +98,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "marking received",
-			fn: func(t *testing.T, e *EventStore, consensusTx sql.OuterTx) {
+			fn: func(t *testing.T, e *EventStore, consensusTx sql.Tx) {
 				ctx := context.Background()
 
 				event := &types.VotableEvent{
@@ -122,10 +122,6 @@ func Test_EventStore(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, events, 1)
 
-				// commit, so other store can see the changes
-				_, err = consensusTx.Precommit(ctx)
-				require.NoError(t, err)
-
 				err = consensusTx.Commit(ctx)
 				require.NoError(t, err)
 
@@ -140,32 +136,21 @@ func Test_EventStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			db, err := dbtest.NewTestDB(t) // db is the event store specific connection
+			db, cleanup, err := dbtest.NewTestPool(ctx, []string{SchemaName}) // db is the event store specific connection
 			require.NoError(t, err)
-			defer db.Close()
+			defer cleanup()
 
 			e, err := NewEventStore(ctx, db, &mockVoteStore{})
 			require.NoError(t, err)
 
-			// we can't simply rollback the eventstore db, since it needs to commit
-			// for the consensus db to see the changes
-			// we need to defer dropping the tables
-			defer func() {
-				db.AutoCommit(true)
-				_, err = db.Execute(ctx, "DROP SCHEMA "+SchemaName+" CASCADE;")
-				require.NoError(t, err)
-			}()
-
 			// create a second db connection to emulate the consensus db
-			consensusDB, err := dbtest.NewTestDB(t)
+			consensusDB, cleanup2, err := dbtest.NewTestPool(ctx, nil) // don't need to delete schema since we will never commit
 			require.NoError(t, err)
-			defer consensusDB.Close()
+			defer cleanup2()
 
 			consensusTx, err := consensusDB.BeginTx(ctx)
 			require.NoError(t, err)
 			defer consensusTx.Rollback(ctx) // always rollback, to clean up
-
-			defer db.Execute(ctx, dropEventsTable)
 
 			tt.fn(t, e, consensusTx)
 		})
