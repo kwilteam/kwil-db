@@ -15,7 +15,7 @@ import (
 // The threshold is the percentThreshold of votes required to approve a resolution
 // It must be an integer between 0 and 1000000.  This defines the percentage
 func NewVoteProcessor(ctx context.Context, db sql.DB, accounts AccountStore,
-	reg Datasets, threshold int64, logger log.Logger) (*VoteProcessor, error) {
+	engine Engine, threshold int64, logger log.Logger) (*VoteProcessor, error) {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -47,7 +47,7 @@ func NewVoteProcessor(ctx context.Context, db sql.DB, accounts AccountStore,
 	return &VoteProcessor{
 		percentThreshold: threshold,
 		accounts:         accounts,
-		registry:         reg,
+		engine:           engine,
 		logger:           logger,
 	}, nil
 }
@@ -62,7 +62,7 @@ type VoteProcessor struct {
 	percentThreshold int64
 
 	accounts AccountStore
-	registry Datasets // dataset registry with dbid args on methods
+	engine   Engine
 
 	logger log.Logger
 }
@@ -541,8 +541,8 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context, db sql.
 		}
 
 		err = payload.Apply(ctx, tx, Datastores{
-			Accounts:  v.accounts,
-			Databases: v.registry,
+			Accounts: v.accounts,
+			Engine:   v.engine,
 		}, v.logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply payload: %w", err)

@@ -74,7 +74,7 @@ type Service struct {
 var _ admpb.AdminServiceServer = (*Service)(nil)
 
 // NewService constructs a new Service.
-func NewService(blockchain BlockchainTransactor, txApp TxApp, validators ValidatorReader, signer auth.Signer, cfg *config.KwildConfig, chainId string, opts ...AdminSvcOpt) *Service {
+func NewService(db sql.ReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, validators ValidatorReader, signer auth.Signer, cfg *config.KwildConfig, chainId string, opts ...AdminSvcOpt) *Service {
 	s := &Service{
 		blockchain: blockchain,
 		TxApp:      txApp,
@@ -83,6 +83,7 @@ func NewService(blockchain BlockchainTransactor, txApp TxApp, validators Validat
 		chainId:    chainId,
 		cfg:        cfg,
 		log:        log.NewNoOp(),
+		db:         db,
 	}
 
 	for _, opt := range opts {

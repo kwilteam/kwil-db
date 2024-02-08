@@ -93,7 +93,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 		}
 	}
 
-	_, err = tx.Precommit(ctx) // is this technically the genesis hash?
+	_, err = tx.Precommit(ctx)
 	if err != nil {
 		return err
 	}
@@ -195,6 +195,18 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte
 	if r.currentTx == nil {
 		return nil, nil, errors.New("txapp misuse: cannot finalize a block without a transaction in progress")
 	}
+
+	defer func() {
+		if err != nil {
+			err2 := r.currentTx.Rollback(ctx)
+			r.currentTx = nil
+			if err2 != nil {
+				err = fmt.Errorf("error rolling back transaction: %s, error: %s", err.Error(), err2.Error())
+			}
+
+			return
+		}
+	}()
 
 	finalizedEvents, err := r.VoteStore.ProcessConfirmedResolutions(ctx, r.currentTx)
 	if err != nil {

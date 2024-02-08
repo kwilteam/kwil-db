@@ -34,7 +34,6 @@ func Test_ValidPayload(t *testing.T) {
 		Accounts: &mockAccountStore{
 			accounts: make(map[string]*accounts.Account),
 		},
-		Databases: nil,
 	}
 
 	ac := validAC

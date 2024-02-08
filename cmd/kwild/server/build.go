@@ -78,7 +78,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	bootstrapperModule := buildBootstrapper(d)
 
 	// vote store
-	v := buildVoteStore(d, db, accs)
+	v := buildVoteStore(d, db, accs, e)
 
 	// event store
 	ev := buildEventStore(d, closers, v)
@@ -115,7 +115,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	grpcServer := buildGrpcServer(d, txsvc)
 
 	// admin service and server
-	admsvc := buildAdminSvc(d, &wrappedCometBFTClient{cometBftClient}, txApp, vstore, abciApp.ChainID())
+	admsvc := buildAdminSvc(d, db, &wrappedCometBFTClient{cometBftClient}, txApp, vstore, abciApp.ChainID())
 	adminTCPServer := buildAdminService(d, closers, admsvc, txsvc)
 
 	return &Server{
@@ -252,7 +252,7 @@ func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broad
 	return broadcast.NewEventBroadcaster(ev, b, txapp, txapp, buildSigner(d), d.genesisCfg.ChainID)
 }
 
-func buildVoteStore(d *coreDependencies, db *pg.DB, acc voting.AccountStore) *voting.VoteProcessor {
+func buildVoteStore(d *coreDependencies, db *pg.DB, acc voting.AccountStore, engine *execution.GlobalContext) *voting.VoteProcessor {
 	// vote store operates on the sessioned write connection, but it does not
 	// register with the atomic committer as it does not affect the apphash,
 	// except via the transactions created from it.
@@ -262,8 +262,8 @@ func buildVoteStore(d *coreDependencies, db *pg.DB, acc voting.AccountStore) *vo
 	}
 	defer tx.Rollback(d.ctx)
 
-	v, err := voting.NewVoteProcessor(d.ctx, tx, // TODO: we need to replace this nil with a good replacement
-		acc, nil, 666667, *d.log.Named("vote-processor")) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
+	v, err := voting.NewVoteProcessor(d.ctx, tx,
+		acc, engine, 666667, *d.log.Named("vote-processor")) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
 	// yes, consensus parameters (threshold) shouldn't be here (or with that integer)
 	if err != nil {
 		failBuild(err, "failed to build vote store")
@@ -307,8 +307,8 @@ func buildTxSvc(d *coreDependencies, db *pg.DB, txsvc txSvc.EngineReader, cometB
 	)
 }
 
-func buildAdminSvc(d *coreDependencies, transactor admSvc.BlockchainTransactor, txApp admSvc.TxApp, validatorStore admSvc.ValidatorReader, chainID string) *admSvc.Service {
-	return admSvc.NewService(transactor, txApp, validatorStore, buildSigner(d), d.cfg, chainID,
+func buildAdminSvc(d *coreDependencies, db *pg.DB, transactor admSvc.BlockchainTransactor, txApp admSvc.TxApp, validatorStore admSvc.ValidatorReader, chainID string) *admSvc.Service {
+	return admSvc.NewService(db, transactor, txApp, validatorStore, buildSigner(d), d.cfg, chainID,
 		admSvc.WithLogger(*d.log.Named("admin-service")),
 	)
 }
