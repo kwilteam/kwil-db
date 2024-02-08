@@ -267,11 +267,44 @@ func (ptx *poolTx) Precommit(context.Context) ([]byte, error) {
 // Begin starts a read-write transaction on the writer connection.
 func (p *Pool) Begin(ctx context.Context) (sql.TxCloser, error) {
 	tx, err := p.writer.BeginTx(ctx, pgx.TxOptions{
-		IsoLevel:   pgx.RepeatableRead,
+		IsoLevel:   pgx.ReadCommitted,
 		AccessMode: pgx.ReadWrite,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &poolTx{tx, 0}, nil
+}
+
+// BeginTx starts a read-write transaction.
+func (p *Pool) BeginTx(ctx context.Context) (sql.Tx, error) {
+	tx, err := p.writer.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel:   pgx.ReadCommitted,
+		AccessMode: pgx.ReadWrite,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &nestedTx{
+		Tx:         tx,
+		accessMode: sql.ReadWrite,
+	}, nil
+}
+
+// BeginReadTx starts a read-only transaction.
+func (p *Pool) BeginReadTx(ctx context.Context) (sql.Tx, error) {
+	tx, err := p.pgxp.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &nestedTx{
+		Tx:         tx,
+		accessMode: sql.ReadOnly,
+	}, nil
+}
+
+// AccessMode implements the sql.DB interface.
+// It is always ReadWrite for the pool.
+func (p *Pool) AccessMode() sql.AccessMode {
+	return sql.ReadWrite
 }

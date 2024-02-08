@@ -102,8 +102,8 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid strin
 }
 
 // Execute executes a procedure.
-// It has the ability to mutate state, including uncommitted state. <=== UNCOMMITTED STATE, but caller is in various contexts (e.g. tx exec vs. RPC call)
-// once we fix auth, signer should get removed, as they would be the same.
+// It can be given either a readwrite or readonly transaction.
+// If it is given a read-only transaction, it will not be able to execute any procedures that are not `view`.
 func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, options *types.ExecutionData) (*sql.ResultSet, error) {
 	err := options.Clean()
 	if err != nil {

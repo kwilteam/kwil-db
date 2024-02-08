@@ -10,6 +10,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 type mempool struct {
@@ -18,17 +19,16 @@ type mempool struct {
 
 	accountStore   AccountReader
 	validatorStore IsValidatorChecker
-	eventStore     EventStore
 }
 
 // accountInfo retrieves the account info from the mempool state or the account store.
-func (m *mempool) accountInfo(ctx context.Context, acctID []byte) (*accounts.Account, error) {
+func (m *mempool) accountInfo(ctx context.Context, tx sql.DB, acctID []byte) (*accounts.Account, error) {
 	if acctInfo, ok := m.accounts[string(acctID)]; ok {
 		return acctInfo, nil // there is an unconfirmed tx for this account
 	}
 
 	// get account from account store
-	acct, err := m.accountStore.GetAccount(ctx, acctID)
+	acct, err := m.accountStore.GetAccount(ctx, tx, acctID)
 	if err != nil {
 		return nil, err
 	}
@@ -39,22 +39,22 @@ func (m *mempool) accountInfo(ctx context.Context, acctID []byte) (*accounts.Acc
 }
 
 // accountInfoSafe is wraps accountInfo in a mutex lock.
-func (m *mempool) accountInfoSafe(ctx context.Context, acctID []byte) (*accounts.Account, error) {
+func (m *mempool) accountInfoSafe(ctx context.Context, tx sql.DB, acctID []byte) (*accounts.Account, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return m.accountInfo(ctx, acctID)
+	return m.accountInfo(ctx, tx, acctID)
 }
 
 // applyTransaction validates account specific info and applies valid transactions to the mempool state.
-func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transaction) error {
+func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transaction, dbTx sql.DB, rebroadcaster Rebroadcaster) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// seems like maybe this should go in the switch statement below,
 	// but I put it here to avoid extra db call for account info
 	if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteIDs {
-		isValidator, err := m.validatorStore.IsCurrent(ctx, tx.Sender)
+		isValidator, err := m.validatorStore.IsCurrent(ctx, dbTx, tx.Sender)
 		if err != nil {
 			return err
 		}
@@ -69,7 +69,7 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 	}
 
 	// get account info from mempool state or account store
-	acct, err := m.accountInfo(ctx, tx.Sender)
+	acct, err := m.accountInfo(ctx, dbTx, tx.Sender)
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 			if err != nil {
 				return err
 			}
-			err = m.eventStore.MarkRebroadcast(ctx, voteID.ResolutionIDs)
+			err = rebroadcaster.MarkRebroadcast(ctx, voteID.ResolutionIDs)
 			if err != nil {
 				return err
 			}

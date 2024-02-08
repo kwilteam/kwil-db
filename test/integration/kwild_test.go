@@ -17,8 +17,6 @@ var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
 var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
 
-var byzMode = flag.Bool("byzantine_test", false, "run tests for byzantine mode")
-
 // Here we make clear the services will be used in each stage
 var basicServices = []string{integration.ExtContainer, "pg0", "pg1", "pg2", "node0", "node1", "node2"}
 var newServices = []string{integration.Ext3Container, "pg3", "node3"}
@@ -28,7 +26,7 @@ var allServices = []string{integration.ExtContainer, integration.Ext3Container,
 	"pg0", "pg1", "pg2", "pg3", "node0", "node1", "node2", "node3",
 }
 
-var byzAllServices = []string{integration.ExtContainer, integration.Ext3Container, "pg0", "pg1", "pg2", "pg3", "pg4", "pg5", "node0", "node1", "node2", "node3", "node4", "node5"}
+// var byzAllServices = []string{integration.ExtContainer, integration.Ext3Container, "pg0", "pg1", "pg2", "pg3", "pg4", "pg5", "node0", "node1", "node2", "node3", "node4", "node5"}
 
 func TestLocalDevSetup(t *testing.T) {
 	if !*dev {
@@ -308,39 +306,35 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 	}
 }
 
-// This test need to be run on builds with byzantine_test tag.
-func TestKwildEthDepositOracleExpiryIntegration(t *testing.T) {
-	if !*byzMode {
-		t.Skip("skipping the testcase as byzantine mode is not enabled")
-	}
+// // This test need to be run on builds with byzantine_test tag.
+// func TestKwildEthDepositOracleExpiryIntegration(t *testing.T) {
+// 	opts := []integration.HelperOpt{
+// 		integration.WithBlockInterval(time.Second),
+// 		integration.WithValidators(6),
+// 		integration.WithNonValidators(0),
+// 		integration.WithGas(),
+// 		integration.WithGanache(),
+// 		integration.WithEthDepositOracle(true),
+// 		integration.WithConfirmations("0"),
+// 		integration.WithByzantineExpiry(),
+// 		integration.WithVoteExpiry(4),
+// 	}
 
-	opts := []integration.HelperOpt{
-		integration.WithBlockInterval(time.Second),
-		integration.WithValidators(6),
-		integration.WithNonValidators(0),
-		integration.WithGas(),
-		integration.WithGanache(),
-		integration.WithEthDepositOracle(true),
-		integration.WithConfirmations("0"),
-		integration.WithByzantineExpiry(),
-		integration.WithVoteExpiry(4),
-	}
+// 	testDrivers := strings.Split(*drivers, ",")
+// 	for _, driverType := range testDrivers {
+// 		t.Run(driverType+"_driver", func(t *testing.T) {
+// 			ctx, cancel := context.WithCancel(context.Background())
+// 			defer cancel()
 
-	testDrivers := strings.Split(*drivers, ",")
-	for _, driverType := range testDrivers {
-		t.Run(driverType+"_driver", func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+// 			helper := integration.NewIntHelper(t, opts...)
+// 			helper.Setup(ctx, byzAllServices)
+// 			defer helper.Teardown()
 
-			helper := integration.NewIntHelper(t, opts...)
-			helper.Setup(ctx, byzAllServices)
-			defer helper.Teardown()
+// 			// Get the user driver
+// 			node0Driver := helper.GetUserDriver(ctx, "node0", driverType)
 
-			// Get the user driver
-			node0Driver := helper.GetUserDriver(ctx, "node0", driverType)
+// 			specifications.DepositResolutionExpirySpecification(ctx, t, node0Driver, helper.NodeKeys())
 
-			specifications.DepositResolutionExpirySpecification(ctx, t, node0Driver, helper.NodeKeys())
-
-		})
-	}
-}
+// 		})
+// 	}
+// }

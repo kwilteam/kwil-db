@@ -15,9 +15,3 @@ func WithGasCosts(gas_enabled bool) AccountStoreOpts {
 		ar.gasEnabled = gas_enabled
 	}
 }
-
-func WithNonces(nonces_enabled bool) AccountStoreOpts {
-	return func(ar *AccountStore) {
-		ar.noncesEnabled = nonces_enabled
-	}
-}

@@ -26,7 +26,7 @@ func Test_Broadcaster(t *testing.T) {
 		balance       *big.Int
 
 		broadcaster *broadcaster        // optional
-		ai          *mockAccountInfoer  // optional
+		txapp       *mockTxApp          // optional
 		v           *mockValidatorStore // optional
 		err         error               // optional
 	}
@@ -72,11 +72,13 @@ func Test_Broadcaster(t *testing.T) {
 			v := tc.v
 			if v == nil {
 				v = &mockValidatorStore{}
+			} else {
+				v.pubkey = validatorSigner().Identity()
 			}
 
-			ai := tc.ai
-			if ai == nil {
-				ai = &mockAccountInfoer{
+			txapp := tc.txapp
+			if txapp == nil {
+				txapp = &mockTxApp{
 					balance: tc.balance,
 				}
 			}
@@ -107,9 +109,9 @@ func Test_Broadcaster(t *testing.T) {
 				}
 			}
 
-			bc := broadcast.NewEventBroadcaster(e, b, ai, v, validatorSigner(), "test-chain")
-			estimator := &feeEstimator{}
-			err := bc.RunBroadcast(context.Background(), estimator, []byte("proposer"))
+			bc := broadcast.NewEventBroadcaster(e, b, txapp, v, validatorSigner(), "test-chain")
+
+			err := bc.RunBroadcast(context.Background(), []byte("proposer"))
 			if tc.err != nil {
 				require.Equal(t, tc.err, err)
 				return
@@ -142,13 +144,22 @@ func (b *broadcaster) BroadcastTx(ctx context.Context, tx []byte, sync uint8) (r
 	return b.broadcastFn(ctx, tx, sync)
 }
 
-type mockAccountInfoer struct {
-	balance *big.Int
-	nonce   int64
+type mockTxApp struct {
+	balance *big.Int // the balance to return for AccountInfo
+	nonce   int64    // the nonce to return for AccountInfo
+
+	price *big.Int // the price to return for Price
 }
 
-func (m *mockAccountInfoer) AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
+func (m *mockTxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
 	return m.balance, m.nonce, nil
+}
+
+func (m *mockTxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+	if m.price == nil {
+		return big.NewInt(0), nil
+	}
+	return m.price, nil
 }
 
 func validatorSigner() *auth.Ed25519Signer {
@@ -164,14 +175,17 @@ func validatorSigner() *auth.Ed25519Signer {
 
 type mockValidatorStore struct {
 	isValidator bool
+	pubkey      []byte
 }
 
-func (m *mockValidatorStore) IsCurrent(ctx context.Context, validator []byte) (bool, error) {
-	return m.isValidator, nil
-}
-
-type feeEstimator struct{}
-
-func (f *feeEstimator) Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
-	return big.NewInt(0), nil
+func (m *mockValidatorStore) GetValidators(ctx context.Context) ([]*types.Validator, error) {
+	if m.isValidator {
+		return []*types.Validator{
+			{
+				PubKey: m.pubkey,
+				Power:  1,
+			},
+		}, nil
+	}
+	return nil, nil
 }
