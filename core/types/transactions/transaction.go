@@ -73,8 +73,8 @@ const (
 var EIP712TypedDomain = []gethTypes.Type{
 	{Name: "name", Type: "string"},
 	{Name: "version", Type: "string"},
-	//{name: "chainId", Type: "uint256"},
-	//{name: "verifyingContract", Type: "address"},
+	//{Name: "chainId", Type: "uint256"},
+	//{Name: "verifyingContract", Type: "address"},
 	// NOTE: Domain.Salt is different from TransactionBody.Salt,
 	// Domain.Salt is last resort to distinguish different Dapp
 	{Name: "salt", Type: "string"},
@@ -234,7 +234,7 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 		//		},
 		//		PrimaryType: "Message",
 		//		Domain: gethTypes.TypedDataDomain{
-		//			name:    "Kwil", // TODO: should this be the name of the Dapp?
+		//			Name:    "Kwil", // TODO: should this be the name of the Dapp?
 		//			Version: "1",
 		//			// NOTE: not sure what should be treated as the Dapp on kwil
 		//			// either kwil itself or the Kuneiform

@@ -133,7 +133,7 @@ func (s *Spend) bytes() []byte {
 type Send struct {
 	From  Spend
 	To    []byte
-	value *big.Int
+	Value *big.Int
 }
 */
 

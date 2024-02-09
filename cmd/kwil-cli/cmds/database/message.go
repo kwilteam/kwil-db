@@ -43,7 +43,7 @@ func (d *respDBList) MarshalText() ([]byte, error) {
 	}
 	for i, db := range d.Info {
 		msg.WriteString(fmt.Sprintf("  DBID: %s\n", db.DBID))
-		msg.WriteString(fmt.Sprintf("    name: %s\n", db.Name))
+		msg.WriteString(fmt.Sprintf("    Name: %s\n", db.Name))
 		msg.WriteString(fmt.Sprintf("    Owner: %x", db.Owner))
 		if i != len(d.Info)-1 {
 			msg.WriteString("\n")

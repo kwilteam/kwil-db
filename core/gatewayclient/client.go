@@ -38,7 +38,7 @@ type GatewayClient struct {
 // customAuthCookieJar implements the http.CookieJar interface used by an
 // http.Client. It uses a net/http/cookiejar.Jar to manage retrieval and
 // expiration of cookies for the http.Client requests, and a provided function
-// that is called when SetCookies receives a cookie with name set to
+// that is called when SetCookies receives a cookie with Name set to
 // kgwAuthCookieName ("kgw_session"). This function can be anything, from
 // storing the cookie in a struct field or writing it to disk.
 type customAuthCookieJar struct {
