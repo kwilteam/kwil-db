@@ -136,70 +136,22 @@ func (r *returnTypeWalker) EnterExpressionFunction(p0 *tree.ExpressionFunction) 
 	// scalars
 	case &tree.FunctionABS:
 		r.set(types.INT)
-	case &tree.FunctionCOALESCE:
-		// ambiguous
-		r.set(types.TEXT)
 	case &tree.FunctionERROR:
 		return fmt.Errorf("%w: using function %s", ErrInvalidReturnExpression, p0.Function.Name())
 	case &tree.FunctionFORMAT:
 		r.set(types.TEXT)
-	case &tree.FunctionGLOB:
-		r.set(types.INT)
-	case &tree.FunctionHEX:
-		r.set(types.TEXT)
-	case &tree.FunctionIFNULL:
-		// ambiguous
-		r.set(types.TEXT)
-	case &tree.FunctionIIF:
-		// ambiguous
-		r.set(types.TEXT)
-	case &tree.FunctionINSTR:
-		r.set(types.INT)
 	case &tree.FunctionLENGTH:
-		r.set(types.INT)
-	case &tree.FunctionLIKE:
 		r.set(types.INT)
 	case &tree.FunctionLOWER:
 		r.set(types.TEXT)
-	case &tree.FunctionLTRIM:
-		r.set(types.TEXT)
-	case &tree.FunctionNULLIF:
-		// ambiguous
-		r.set(types.TEXT)
-	case &tree.FunctionQUOTE:
-		r.set(types.TEXT)
-	case &tree.FunctionREPLACE:
-		r.set(types.TEXT)
-	case &tree.FunctionRTRIM:
-		r.set(types.TEXT)
-	case &tree.FunctionSIGN:
-		r.set(types.INT)
-	case &tree.FunctionSUBSTR:
-		r.set(types.TEXT)
-	case &tree.FunctionTRIM:
-		r.set(types.TEXT)
-	case &tree.FunctionTYPEOF:
-		r.set(types.TEXT)
-	case &tree.FunctionUNHEX:
-		r.set(types.TEXT)
-	case &tree.FunctionUNICODE:
-		r.set(types.INT)
 	case &tree.FunctionUPPER:
 		r.set(types.TEXT)
 
 		// aggregates
 	case &tree.FunctionCOUNT:
 		r.set(types.INT)
-	case &tree.FunctionGROUPCONCAT:
-		r.set(types.TEXT)
-	case &tree.FunctionMAX:
+	case &tree.FunctionSUM:
 		r.set(types.INT)
-	case &tree.FunctionMIN:
-		r.set(types.INT)
-
-		// datetime (all return text)
-	case &tree.FunctionDATE, &tree.FunctionTIME, &tree.FunctionDATETIME, &tree.FunctionUNIXEPOCH, &tree.FunctionSTRFTIME:
-		r.set(types.TEXT)
 	default:
 		return fmt.Errorf("unknown function: %s", p0.Function)
 	}

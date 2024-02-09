@@ -21,7 +21,7 @@ func TestParseActionStmt(t *testing.T) {
 		{
 			name: "action_call",
 			// both `-2` and `- 2` will be parsed as ExpressionUnary
-			input: `action_xx(2, '3', $a, @b, -2, 1 + - 2, (1 * 2) + 3, 1 <= 2, 1 and $c, address($c), address(upper($c)));`,
+			input: `action_xx(2, '3', $a, @b, -2, 1 + - 2, (1 * 2) + 3, 1 <= 2, 1 and $c, abs($c), abs(upper($c)));`,
 			expect: &actparser.ActionCallStmt{
 				Method: "action_xx",
 				Args: []tree.Expression{
@@ -62,11 +62,11 @@ func TestParseActionStmt(t *testing.T) {
 						Right:    &tree.ExpressionBindParameter{Parameter: "$c"},
 					},
 					&tree.ExpressionFunction{
-						Function: &tree.FunctionAddress,
+						Function: &tree.FunctionABS,
 						Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
 					},
 					&tree.ExpressionFunction{
-						Function: &tree.FunctionAddress,
+						Function: &tree.FunctionABS,
 						Inputs: []tree.Expression{
 							&tree.ExpressionFunction{
 								Function: &tree.FunctionUPPER,
@@ -80,7 +80,7 @@ func TestParseActionStmt(t *testing.T) {
 		{
 			name: "extension_call",
 			// both `-2` and `- 2` will be parsed as ExpressionUnary
-			input: `$a, $b = erc20.transfer(2, '3', $a, @b, -2, 1 + - 2, (1 * 2) + 3, 1 <= 2, 1 and $c, address($c), address(upper($c)));`,
+			input: `$a, $b = erc20.transfer(2, '3', $a, @b, -2, 1 + - 2, (1 * 2) + 3, 1 <= 2, 1 and $c, abs($c), abs(upper($c)));`,
 			expect: &actparser.ExtensionCallStmt{
 				Extension: "erc20",
 				Method:    "transfer",
@@ -123,11 +123,11 @@ func TestParseActionStmt(t *testing.T) {
 						Right:    &tree.ExpressionBindParameter{Parameter: "$c"},
 					},
 					&tree.ExpressionFunction{
-						Function: &tree.FunctionAddress,
+						Function: &tree.FunctionABS,
 						Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
 					},
 					&tree.ExpressionFunction{
-						Function: &tree.FunctionAddress,
+						Function: &tree.FunctionABS,
 						Inputs: []tree.Expression{
 							&tree.ExpressionFunction{
 								Function: &tree.FunctionUPPER,
@@ -201,11 +201,7 @@ func TestParseActionStmt_scalar_function(t *testing.T) {
 	}
 
 	fns := []string{
-		"unicode", "min", "coalesce", "instr", "nullif", "replace", "sign", "ltrim",
-		"substr", "time", "format", "trim", "unhex", "unixepoch", "count", "hex",
-		"lower", "quote", "rtrim", "strftime", "datetime", "max", "ifnull", "like",
-		"upper", "address", "date", "abs", "error", "public_key", "iif", "length",
-		"glob", "typeof", "group_concat",
+		"format", "count", "lower", "upper", "abs", "error", "length", "sum",
 	}
 
 	// existing scalar functions

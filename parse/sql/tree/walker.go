@@ -52,8 +52,6 @@ type Walker interface {
 	ExitConflictTarget(*ConflictTarget) error
 	EnterCTE(*CTE) error
 	ExitCTE(*CTE) error
-	EnterDateTimeFunc(*DateTimeFunction) error
-	ExitDateTimeFunc(*DateTimeFunction) error
 	EnterDelete(*Delete) error
 	ExitDelete(*Delete) error
 	EnterDeleteStmt(*DeleteStmt) error
@@ -185,14 +183,6 @@ func (b *BaseWalker) EnterConflictTarget(p0 *ConflictTarget) error {
 }
 
 func (b *BaseWalker) ExitConflictTarget(p0 *ConflictTarget) error {
-	return nil
-}
-
-func (b *BaseWalker) EnterDateTimeFunc(p0 *DateTimeFunction) error {
-	return nil
-}
-
-func (b *BaseWalker) ExitDateTimeFunc(p0 *DateTimeFunction) error {
 	return nil
 }
 
@@ -571,8 +561,6 @@ type ImplementedWalker struct {
 	FuncExitCompoundOperator            func(p0 *CompoundOperator) error
 	FuncEnterConflictTarget             func(p0 *ConflictTarget) error
 	FuncExitConflictTarget              func(p0 *ConflictTarget) error
-	FuncEnterDateTimeFunc               func(p0 *DateTimeFunction) error
-	FuncExitDateTimeFunc                func(p0 *DateTimeFunction) error
 	FuncEnterDelete                     func(p0 *Delete) error
 	FuncExitDelete                      func(p0 *Delete) error
 	FuncEnterDeleteStmt                 func(p0 *DeleteStmt) error
@@ -729,22 +717,6 @@ func (b *ImplementedWalker) ExitConflictTarget(p0 *ConflictTarget) error {
 	}
 
 	return b.FuncExitConflictTarget(p0)
-}
-
-func (b *ImplementedWalker) EnterDateTimeFunc(p0 *DateTimeFunction) error {
-	if b.FuncEnterDateTimeFunc == nil {
-		return nil
-	}
-
-	return b.FuncEnterDateTimeFunc(p0)
-}
-
-func (b *ImplementedWalker) ExitDateTimeFunc(p0 *DateTimeFunction) error {
-	if b.FuncExitDateTimeFunc == nil {
-		return nil
-	}
-
-	return b.FuncExitDateTimeFunc(p0)
 }
 
 func (b *ImplementedWalker) EnterDelete(p0 *Delete) error {

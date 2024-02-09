@@ -196,6 +196,7 @@ func query(ctx context.Context, cq connQueryer, stmt string, args ...any) (*sql.
 		Text:         ctag.String(),
 		RowsAffected: ctag.RowsAffected(),
 	}
+
 	// if err != nil { fmt.Printf("**** query error\n\n%v\n\n%v\n", stmt, err) }
 	return resSet, err
 }

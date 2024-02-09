@@ -268,13 +268,6 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			wantPanic: true,
 		},
 		{
-			name: "expression date function with no inputs (uses current date)",
-			fields: &tree.ExpressionFunction{
-				Function: &tree.FunctionDATE,
-			},
-			wantPanic: true,
-		},
-		{
 			name: "expression list",
 			fields: &tree.ExpressionList{
 				Expressions: []tree.Expression{
