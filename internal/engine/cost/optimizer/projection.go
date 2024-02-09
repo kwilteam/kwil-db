@@ -1,11 +1,16 @@
 package optimizer
 
-import "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
+import (
+	"fmt"
+	"slices"
+
+	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
+)
 
 type ProjectionRule struct {
 }
 
-func (r *ProjectionRule) optimize(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
+func (r *ProjectionRule) Optimize(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
 	// TODO: seen map key shuold be a combination of dbName and tableName
 	return r.pushDown(plan, make(map[string]bool))
 }
@@ -54,6 +59,8 @@ func (r *ProjectionRule) pushDown(plan logical_plan.LogicalPlan,
 		for k := range seen {
 			columns = append(columns, k)
 		}
+
+		slices.Sort(columns)
 		// NOTE: what about *?
 		// NOTE: what about dbName, tableName?
 		return logical_plan.Scan(p.Table(), p.DataSource(), columns...)
@@ -92,6 +99,6 @@ func extractColumns(expr logical_plan.LogicalExpr,
 	case *logical_plan.ColumnIdxExpr:
 		seen[input.Schema().Fields[e.Idx].Name] = true
 	default:
-		panic("unknown expression type")
+		panic(fmt.Sprintf("unknown expression type %T", e))
 	}
 }

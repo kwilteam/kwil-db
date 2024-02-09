@@ -2,6 +2,7 @@ package logical_plan
 
 import (
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 )
 
@@ -74,35 +75,35 @@ func Alias(expr LogicalExpr, alias string) LogicalExpr {
 }
 
 type LiteralStringExpr struct {
-	value string
+	Value string
 }
 
 func (l *LiteralStringExpr) String() string {
-	return l.value
+	return l.Value
 }
 
 func (l *LiteralStringExpr) Resolve(LogicalPlan) datasource.Field {
-	return datasource.Field{Name: l.value, Type: "text"}
+	return datasource.Field{Name: l.Value, Type: "text"}
 }
 
 func LiteralString(value string) LogicalExpr {
-	return &LiteralStringExpr{value: value}
+	return &LiteralStringExpr{Value: value}
 }
 
 type LiteralIntExpr struct {
-	value int
+	Value int
 }
 
 func (l *LiteralIntExpr) String() string {
-	return fmt.Sprintf("%d", l.value)
+	return fmt.Sprintf("%d", l.Value)
 }
 
 func (l *LiteralIntExpr) Resolve(LogicalPlan) datasource.Field {
-	return datasource.Field{Name: fmt.Sprintf("%d", l.value), Type: "int"}
+	return datasource.Field{Name: fmt.Sprintf("%d", l.Value), Type: "int"}
 }
 
 func LiteralInt(value int) LogicalExpr {
-	return &LiteralIntExpr{value: value}
+	return &LiteralIntExpr{Value: value}
 }
 
 type OpExpr interface {
