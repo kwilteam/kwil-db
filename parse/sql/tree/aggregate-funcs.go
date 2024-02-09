@@ -51,30 +51,15 @@ func (s *AggregateFunc) String(exprs ...Expression) string {
 var (
 	FunctionCOUNT = AggregateFunc{AnySQLFunction: AnySQLFunction{
 		FunctionName: "count",
+		Min:          0,
 		Max:          1,
 	},
 	}
 
-	FunctionGROUPCONCAT = AggregateFunc{AnySQLFunction: AnySQLFunction{
-		FunctionName: "group_concat",
+	FunctionSUM = AggregateFunc{AnySQLFunction: AnySQLFunction{
+		FunctionName: "sum",
 		Min:          1,
-		Max:          2,
-	},
-	}
-
-	// If MAX/MIN has a single argument, it returns the maximum/minimum value
-	// of all values in the group. If it has two arguments, it returns the
-	// maximum/minimum value of the set of arguments.
-	// The first one is an aggregate function, the second one is a scalar function
-	FunctionMAX = AggregateFunc{AnySQLFunction: AnySQLFunction{
-		FunctionName: "max",
-		Min:          1,
-	},
-	}
-
-	FunctionMIN = AggregateFunc{AnySQLFunction: AnySQLFunction{
-		FunctionName: "min",
-		Min:          1,
+		Max:          1,
 	},
 	}
 )

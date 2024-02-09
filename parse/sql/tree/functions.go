@@ -89,111 +89,18 @@ var (
 		Min:          1,
 		Max:          1,
 	}}
-	FunctionCOALESCE = ScalarFunction{AnySQLFunction{
-		FunctionName: "coalesce",
-		Min:          2,
-	}}
 	FunctionERROR = ScalarFunction{AnySQLFunction{
 		FunctionName: "error",
 		Min:          1,
 		Max:          1,
-	}}
-	FunctionFORMAT = ScalarFunction{AnySQLFunction{
-		FunctionName: "format",
-		Min:          1,
-	}}
-	FunctionGLOB = ScalarFunction{AnySQLFunction{
-		FunctionName: "glob",
-		Min:          2,
-		Max:          2,
-	}}
-	FunctionHEX = ScalarFunction{AnySQLFunction{
-		FunctionName: "hex",
-		Min:          1,
-		Max:          1,
-	}}
-	FunctionIFNULL = ScalarFunction{AnySQLFunction{
-		FunctionName: "ifnull",
-		Min:          2,
-		Max:          2,
-	}}
-	FunctionIIF = ScalarFunction{AnySQLFunction{
-		FunctionName: "iif",
-		Min:          3,
-		Max:          3,
-	}}
-	FunctionINSTR = ScalarFunction{AnySQLFunction{
-		FunctionName: "instr",
-		Min:          2,
-		Max:          2,
 	}}
 	FunctionLENGTH = ScalarFunction{AnySQLFunction{
 		FunctionName: "length",
 		Min:          1,
 		Max:          1,
 	}}
-	FunctionLIKE = ScalarFunction{AnySQLFunction{
-		FunctionName: "like",
-		Min:          2,
-		Max:          3,
-	}}
 	FunctionLOWER = ScalarFunction{AnySQLFunction{
 		FunctionName: "lower",
-		Min:          1,
-		Max:          1,
-	}}
-	FunctionLTRIM = ScalarFunction{AnySQLFunction{
-		FunctionName: "ltrim",
-		Min:          1,
-		Max:          2,
-	}}
-	FunctionNULLIF = ScalarFunction{AnySQLFunction{
-		FunctionName: "nullif",
-		Min:          2,
-		Max:          2,
-	}}
-	FunctionQUOTE = ScalarFunction{AnySQLFunction{
-		FunctionName: "quote",
-		Min:          1,
-		Max:          1,
-	}}
-	FunctionREPLACE = ScalarFunction{AnySQLFunction{
-		FunctionName: "replace",
-		Min:          3,
-		Max:          3,
-	}}
-	FunctionRTRIM = ScalarFunction{AnySQLFunction{
-		FunctionName: "rtrim",
-		Min:          1,
-		Max:          2,
-	}}
-	FunctionSIGN = ScalarFunction{AnySQLFunction{
-		FunctionName: "sign",
-		Min:          1,
-		Max:          1,
-	}}
-	FunctionSUBSTR = ScalarFunction{AnySQLFunction{
-		FunctionName: "substr",
-		Min:          2,
-		Max:          3,
-	}}
-	FunctionTRIM = ScalarFunction{AnySQLFunction{
-		FunctionName: "trim",
-		Min:          1,
-		Max:          2,
-	}}
-	FunctionTYPEOF = ScalarFunction{AnySQLFunction{
-		FunctionName: "typeof",
-		Min:          1,
-		Max:          1,
-	}}
-	FunctionUNHEX = ScalarFunction{AnySQLFunction{
-		FunctionName: "unhex",
-		Min:          1,
-		Max:          2,
-	}}
-	FunctionUNICODE = ScalarFunction{AnySQLFunction{
-		FunctionName: "unicode",
 		Min:          1,
 		Max:          1,
 	}}
@@ -202,58 +109,25 @@ var (
 		Min:          1,
 		Max:          1,
 	}}
-	FunctionAddress = ScalarFunction{AnySQLFunction{
-		FunctionName: "address",
+	FunctionFORMAT = ScalarFunction{AnySQLFunction{
+		FunctionName: "format",
 		Min:          1,
-		Max:          1,
-	}}
-	FunctionPublicKey = ScalarFunction{AnySQLFunction{
-		FunctionName: "public_key",
-		Min:          1,
-		Max:          2,
 	}}
 )
 
 // SQLFunctions is a map of all functions of all types
 var SQLFunctions = map[string]SQLFunction{
-	// Scalar functions
-	"abs":      &FunctionABS,
-	"coalesce": &FunctionCOALESCE,
-	"error":    &FunctionERROR,
-	"format":   &FunctionFORMAT,
-	"glob":     &FunctionGLOB,
-	"hex":      &FunctionHEX,
-	"ifnull":   &FunctionIFNULL,
-	"iif":      &FunctionIIF,
-	"instr":    &FunctionINSTR,
-	"length":   &FunctionLENGTH,
-	"like":     &FunctionLIKE,
-	"lower":    &FunctionLOWER,
-	"ltrim":    &FunctionLTRIM,
-	"nullif":   &FunctionNULLIF,
-	"quote":    &FunctionQUOTE,
-	"replace":  &FunctionREPLACE,
-	"rtrim":    &FunctionRTRIM,
-	"sign":     &FunctionSIGN,
-	"substr":   &FunctionSUBSTR,
-	"trim":     &FunctionTRIM,
-	"typeof":   &FunctionTYPEOF,
-	"unhex":    &FunctionUNHEX,
-	"unicode":  &FunctionUNICODE,
-	"upper":    &FunctionUPPER,
+	// Built-In Scalar functions
+	"abs":    &FunctionABS,
+	"length": &FunctionLENGTH,
+	"lower":  &FunctionLOWER,
+	"upper":  &FunctionUPPER,
+	"format": &FunctionFORMAT,
 
-	// @caller functions
-	"address":    &FunctionAddress,
-	"public_key": &FunctionPublicKey,
-	// DateTime functions
-	"date":      &FunctionDATE,
-	"time":      &FunctionTIME,
-	"datetime":  &FunctionDATETIME,
-	"unixepoch": &FunctionUNIXEPOCH,
-	"strftime":  &FunctionSTRFTIME,
 	// Aggregate functions
-	"count":        &FunctionCOUNT,
-	"min":          &FunctionMIN,
-	"max":          &FunctionMAX,
-	"group_concat": &FunctionGROUPCONCAT,
+	"count": &FunctionCOUNT,
+	"sum":   &FunctionSUM,
+
+	// custom
+	"error": &FunctionERROR,
 }
