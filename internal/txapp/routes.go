@@ -10,6 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/ident"
+	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 func init() {
@@ -358,11 +359,6 @@ func (v *validatorLeaveRoute) Price(ctx context.Context, router *TxApp, tx *tran
 	return big.NewInt(10000000000000), nil
 }
 
-const (
-	ValidatorVoteBodyBytePrice = 1000      // Per byte cost
-	ValidatorVoteIDPrice       = 1000 * 16 // 16 bytes for the UUID
-)
-
 // validatorVoteIDsRoute is a route for approving a set of votes based on their IDs.
 type validatorVoteIDsRoute struct{}
 
@@ -435,7 +431,7 @@ func (v *validatorVoteIDsRoute) Price(ctx context.Context, router *TxApp, tx *tr
 		return nil, fmt.Errorf("failed to unmarshal vote IDs: %w", err)
 	}
 
-	return big.NewInt(int64(len(ids.ResolutionIDs)) * ValidatorVoteIDPrice), nil
+	return big.NewInt(int64(len(ids.ResolutionIDs)) * voting.ValidatorVoteIDPrice), nil
 }
 
 // validatorVoteBodiesRoute is a route for handling votes for a set of vote bodies.
@@ -508,5 +504,5 @@ func (v *validatorVoteBodiesRoute) Price(ctx context.Context, router *TxApp, tx 
 		totalSize += int64(len(event.Body))
 	}
 
-	return big.NewInt(totalSize * ValidatorVoteBodyBytePrice), nil
+	return big.NewInt(totalSize * voting.ValidatorVoteBodyBytePrice), nil
 }
