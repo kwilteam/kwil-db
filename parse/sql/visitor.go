@@ -102,14 +102,12 @@ func (v *KFSqliteVisitor) VisitExpr(ctx *sqlgrammar.ExprContext) interface{} {
 }
 
 func (v *KFSqliteVisitor) getCollateType(collationName string) tree.CollationType {
+	// case insensitive
 	switch strings.ToLower(collationName) {
-	case "binary":
-		return tree.CollationTypeBinary
 	case "nocase":
 		return tree.CollationTypeNoCase
-	case "rtrim":
-		return tree.CollationTypeRTrim
 	default:
+		// NOTE: this is a semantic error
 		panic(fmt.Sprintf("unknown collation type %s", collationName))
 	}
 }
