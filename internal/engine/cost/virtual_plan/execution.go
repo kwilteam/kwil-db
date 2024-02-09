@@ -19,7 +19,7 @@ func (e *ExecutionContext) csv(table string, filepath string) *logical_plan.Data
 	if err != nil {
 		panic(err)
 	}
-	return logical_plan.NewDataFrame(logical_plan.Scan(table, datasource))
+	return logical_plan.NewDataFrame(logical_plan.Scan(table, datasource, nil))
 }
 
 func (e *ExecutionContext) registerBuilder(name string, builder *logical_plan.DataFrame) {
@@ -27,7 +27,7 @@ func (e *ExecutionContext) registerBuilder(name string, builder *logical_plan.Da
 }
 
 func (e *ExecutionContext) registerDataSource(name string, ds datasource.DataSource) {
-	e.tables[name] = logical_plan.NewDataFrame(logical_plan.Scan(name, ds))
+	e.tables[name] = logical_plan.NewDataFrame(logical_plan.Scan(name, ds, nil))
 }
 
 func (e *ExecutionContext) registerCsv(name string, filepath string) {

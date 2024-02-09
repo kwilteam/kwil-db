@@ -2,6 +2,7 @@ package logical_plan
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 )
@@ -14,6 +15,16 @@ type LogicalExpr interface {
 	// Resolve returns the field that this expression represents from the input
 	// logical plan.
 	Resolve(LogicalPlan) datasource.Field
+}
+
+type LogicalExprList []LogicalExpr
+
+func (e LogicalExprList) String() string {
+	fields := make([]string, len(e))
+	for i, expr := range e {
+		fields[i] = expr.String()
+	}
+	return strings.Join(fields, ", ")
 }
 
 // ColumnExpr represents a column in a schema.
