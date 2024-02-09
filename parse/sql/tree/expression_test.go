@@ -332,9 +332,9 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 						Value: "'bar'",
 					},
 				},
-				Collation: tree.CollationTypeBinary,
+				Collation: tree.CollationTypeNoCase,
 			},
-			want: `"foo" = 'bar' COLLATE BINARY`,
+			want: `"foo" = 'bar' COLLATE NOCASE`,
 		},
 		{
 			name: "collate with type cast",
@@ -348,17 +348,17 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 						Value: "'bar'",
 					},
 				},
-				Collation: tree.CollationTypeBinary,
+				Collation: tree.CollationTypeNoCase,
 				Wrapped:   true,
 				TypeCast:  tree.TypeCastInt,
 			},
-			want: `("foo" = 'bar' COLLATE BINARY) ::int`,
+			want: `("foo" = 'bar' COLLATE NOCASE) ::int`,
 		},
 		{
 			name: "collate with type cast without wrapped",
 			fields: &tree.ExpressionCollate{
 				Expression: &tree.ExpressionBinaryComparison{},
-				Collation:  tree.CollationTypeBinary,
+				Collation:  tree.CollationTypeNoCase,
 				TypeCast:   tree.TypeCastText,
 			},
 			wantPanic: true,
@@ -366,7 +366,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 		{
 			name: "collate with no expression",
 			fields: &tree.ExpressionCollate{
-				Collation: tree.CollationTypeBinary,
+				Collation: tree.CollationTypeNoCase,
 			},
 			wantPanic: true,
 		},
