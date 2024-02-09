@@ -1,6 +1,7 @@
 package datasource
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,7 +32,7 @@ var testSchemaUsers = NewSchema(
 )
 
 // testDataUsers is the same as ../../testdata/users.csv
-var testDataUsers = []row{
+var testDataUsers = []Row{
 	{
 		NewLiteralColumnValue(1),
 		NewLiteralColumnValue("Adam"),
@@ -69,14 +70,14 @@ var testDataUsers = []row{
 	},
 }
 
-func checkRecords(t *testing.T, result *record, expectedSchema *Schema, expectedData []row) {
+func checkRecords(t *testing.T, result *Result, expectedSchema *Schema, expectedData []Row) {
 	t.Helper()
 
 	s := result.Schema()
 	assert.EqualValues(t, expectedSchema, s)
 
 	idx := 0
-	for r := range result.rows {
+	for r := range result.stream {
 		assert.Len(t, r, len(expectedSchema.Fields))
 
 		for i, c := range r {
@@ -95,6 +96,19 @@ func TestMemDataSource(t *testing.T) {
 	checkRecords(t, result, testSchemaUsers, testDataUsers)
 }
 
+func Example_MemDataSource_ToCsv() {
+	ds := NewMemDataSource(testSchemaUsers, testDataUsers)
+	result := ds.Scan()
+	fmt.Println(result.ToCsv())
+	//Output:
+	// id,username,age,state,wallet
+	// 1,Adam,20,CA,x001
+	// 2,Bob,24,CA,x002
+	// 3,Cat,27,CA,x003
+	// 4,Doe,26,IL,x004
+	// 5,Eve,29,TX,x005
+}
+
 func TestMemDataSource_scanWithProjection(t *testing.T) {
 	ds := NewMemDataSource(testSchemaUsers, testDataUsers)
 
@@ -108,7 +122,7 @@ func TestMemDataSource_scanWithProjection(t *testing.T) {
 			Name: "age",
 			Type: "int",
 		})
-	expectedData := []row{
+	expectedData := []Row{
 		{
 			NewLiteralColumnValue("Adam"),
 			NewLiteralColumnValue(20),
@@ -136,16 +150,43 @@ func TestMemDataSource_scanWithProjection(t *testing.T) {
 	checkRecords(t, filteredResult, expectedSchema, expectedData)
 }
 
+func Example_MemDataSource_scanWithProjection_ToCsv() {
+	ds := NewMemDataSource(testSchemaUsers, testDataUsers)
+	result := ds.Scan("username", "age")
+	fmt.Println(result.ToCsv())
+	//Output:
+	// username,age
+	// Adam,20
+	// Bob,24
+	// Cat,27
+	// Doe,26
+	// Eve,29
+}
+
 func TestCSVDataSource(t *testing.T) {
-	dataFilePath := "../../testdata/users.csv"
+	dataFilePath := "../testdata/users.csv"
 	ds, err := NewCSVDataSource(dataFilePath)
 	assert.NoError(t, err)
 
 	checkRecords(t, ds.Scan(), testSchemaUsers, testDataUsers)
 }
 
+func Example_CSVDataSource_ToCsv() {
+	dataFilePath := "../testdata/users.csv"
+	ds, _ := NewCSVDataSource(dataFilePath)
+	result := ds.Scan()
+	fmt.Println(result.ToCsv())
+	//Output:
+	// id,username,age,state,wallet
+	// 1,Adam,20,CA,x001
+	// 2,Bob,24,CA,x002
+	// 3,Cat,27,CA,x003
+	// 4,Doe,26,IL,x004
+	// 5,Eve,29,TX,x005
+}
+
 func TestCSVDataSource_scanWithProjection(t *testing.T) {
-	dataFilePath := "../../testdata/users.csv"
+	dataFilePath := "../testdata/users.csv"
 	ds, err := NewCSVDataSource(dataFilePath)
 	assert.NoError(t, err)
 
@@ -164,7 +205,7 @@ func TestCSVDataSource_scanWithProjection(t *testing.T) {
 			Type: "string",
 		},
 	)
-	expectedData := []row{
+	expectedData := []Row{
 		{
 			NewLiteralColumnValue(1),
 			NewLiteralColumnValue("Adam"),
@@ -194,4 +235,18 @@ func TestCSVDataSource_scanWithProjection(t *testing.T) {
 
 	filteredResult := ds.Scan("id", "username", "state")
 	checkRecords(t, filteredResult, expectedSchema, expectedData)
+}
+
+func Example_CSVDataSource_scanWithProjection_ToCsv() {
+	dataFilePath := "../testdata/users.csv"
+	ds, _ := NewCSVDataSource(dataFilePath)
+	result := ds.Scan("id", "username", "state")
+	fmt.Println(result.ToCsv())
+	//Output:
+	// id,username,state
+	// 1,Adam,CA
+	// 2,Bob,CA
+	// 3,Cat,CA
+	// 4,Doe,IL
+	// 5,Eve,TX
 }
