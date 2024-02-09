@@ -3,11 +3,9 @@ package sqlparser
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
-
-	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
-
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
+	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
 )
 
 // Parse parses a raw sql string and returns a tree.Ast
