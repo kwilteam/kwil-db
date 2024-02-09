@@ -2,8 +2,9 @@ package logical_plan
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 )
 
 // ScanOp represents a table scan operator, which produces rows from a table.
@@ -29,11 +30,11 @@ func (s *ScanOp) Projection() []string {
 }
 
 func (s *ScanOp) String() string {
-	return fmt.Sprintf("Scan: %s, Projection: %s", s.table, s.projection)
+	return fmt.Sprintf("Scan: %s; projection=%s", s.table, s.projection)
 }
 
 func (s *ScanOp) Schema() *datasource.Schema {
-	return s.dataSource.Schema()
+	return s.dataSource.Schema().Select(s.projection...)
 }
 
 func (s *ScanOp) Inputs() []LogicalPlan {

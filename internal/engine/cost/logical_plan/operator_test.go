@@ -2,6 +2,7 @@ package logical_plan_test
 
 import (
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 )
@@ -13,12 +14,12 @@ func ExampleLogicalPlan_String_selection() {
 	fmt.Println(logical_plan.Format(plan, 0))
 	// Output:
 	// Projection: username, age
-	//   Scan: users, Projection: []
+	//   Scan: users; projection=[]
 }
 
 func ExampleLogicalPlan_DataFrame() {
 	ds := datasource.NewMemDataSource(nil, nil)
-	aop := logical_plan.NewAlgebraOpBuilder(logical_plan.Scan("users", ds))
+	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds))
 	plan := aop.Filter(logical_plan.Eq(logical_plan.Column("", "age"), logical_plan.LiteralInt(20))).
 		Aggregate([]logical_plan.LogicalExpr{logical_plan.Column("", "state")},
 			[]logical_plan.AggregateExpr{logical_plan.Count(logical_plan.Column("", "username"))}).
@@ -31,5 +32,5 @@ func ExampleLogicalPlan_DataFrame() {
 	// Projection: state, COUNT(username) AS num
 	//   Aggregate: [state], [COUNT(username)]
 	//     Selection: [age = 20]
-	//       Scan: users, Projection: []
+	//       Scan: users; projection=[]
 }

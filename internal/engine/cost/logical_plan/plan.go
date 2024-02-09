@@ -3,6 +3,7 @@ package logical_plan
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 )
 
@@ -21,49 +22,49 @@ type LogicalPlan interface {
 	//Accept(visitor LogicalOperatorVisitor) any
 }
 
-type AlgebraOperation interface {
+type DataFrameAPI interface {
 	// Project applies a projection
-	Project(expr ...LogicalExpr) AlgebraOperation
+	Project(expr ...LogicalExpr) DataFrameAPI
 
 	// Filter applies a filter
-	Filter(expr LogicalExpr) AlgebraOperation
+	Filter(expr LogicalExpr) DataFrameAPI
 
 	// Aggregate appliex an aggregation
-	Aggregate(groupBy []LogicalExpr, aggregateExpr []AggregateExpr) AlgebraOperation
+	Aggregate(groupBy []LogicalExpr, aggregateExpr []AggregateExpr) DataFrameAPI
 
-	// Schema returns the schema of the data that will be produced by this AlgebraOperation.
+	// Schema returns the schema of the data that will be produced by this DataFrameAPI.
 	Schema() *datasource.Schema
 
 	// LogicalPlan returns the logical plan
 	LogicalPlan() LogicalPlan
 }
 
-type AlgebraOpBuilder struct {
+type DataFrame struct {
 	plan LogicalPlan
 }
 
-func (df *AlgebraOpBuilder) Project(exprs ...LogicalExpr) AlgebraOperation {
-	return &AlgebraOpBuilder{Projection(df.plan, exprs...)}
+func (df *DataFrame) Project(exprs ...LogicalExpr) DataFrameAPI {
+	return &DataFrame{Projection(df.plan, exprs...)}
 }
 
-func (df *AlgebraOpBuilder) Filter(expr LogicalExpr) AlgebraOperation {
-	return &AlgebraOpBuilder{Selection(df.plan, expr)}
+func (df *DataFrame) Filter(expr LogicalExpr) DataFrameAPI {
+	return &DataFrame{Selection(df.plan, expr)}
 }
 
-func (df *AlgebraOpBuilder) Aggregate(groupBy []LogicalExpr, aggregateExpr []AggregateExpr) AlgebraOperation {
-	return &AlgebraOpBuilder{Aggregate(df.plan, groupBy, aggregateExpr)}
+func (df *DataFrame) Aggregate(groupBy []LogicalExpr, aggregateExpr []AggregateExpr) DataFrameAPI {
+	return &DataFrame{Aggregate(df.plan, groupBy, aggregateExpr)}
 }
 
-func (df *AlgebraOpBuilder) Schema() *datasource.Schema {
+func (df *DataFrame) Schema() *datasource.Schema {
 	return df.plan.Schema()
 }
 
-func (df *AlgebraOpBuilder) LogicalPlan() LogicalPlan {
+func (df *DataFrame) LogicalPlan() LogicalPlan {
 	return df.plan
 }
 
-func NewAlgebraOpBuilder(plan LogicalPlan) *AlgebraOpBuilder {
-	return &AlgebraOpBuilder{plan: plan}
+func NewDataFrame(plan LogicalPlan) *DataFrame {
+	return &DataFrame{plan: plan}
 }
 
 func Format(plan LogicalPlan, indent int) string {
