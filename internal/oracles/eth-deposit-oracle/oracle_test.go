@@ -159,7 +159,7 @@ func Test_AddEvent(t *testing.T) {
 				err := oracle.addEvent(ctx, ac)
 				require.NoError(t, err)
 
-				evts, err := es.GetEvents(ctx, consensusDb)
+				evts, err := events.GetEvents(ctx, consensusDb)
 				require.NoError(t, err)
 
 				require.Len(t, evts, 0)
@@ -177,7 +177,7 @@ func Test_AddEvent(t *testing.T) {
 				err := oracle.addEvent(ctx, ac)
 				require.NoError(t, err)
 
-				evts, err := es.GetEvents(ctx, consensusDb)
+				evts, err := events.GetEvents(ctx, consensusDb)
 				require.NoError(t, err)
 
 				require.Len(t, evts, 1)
@@ -200,7 +200,7 @@ func Test_AddEvent(t *testing.T) {
 				err := oracle.addEvent(ctx, ac)
 				require.NoError(t, err)
 
-				evts, err := es.GetEvents(ctx, consensusDb)
+				evts, err := events.GetEvents(ctx, consensusDb)
 				require.NoError(t, err)
 
 				require.Len(t, evts, 1)
@@ -211,7 +211,7 @@ func Test_AddEvent(t *testing.T) {
 				err = oracle.addEvent(ctx, ac)
 				require.NoError(t, err)
 
-				evts, err = es.GetEvents(ctx, consensusDb)
+				evts, err = events.GetEvents(ctx, consensusDb)
 				require.NoError(t, err)
 
 				require.Len(t, evts, 1)
