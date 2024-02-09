@@ -42,12 +42,6 @@ func (s *StatementCleaner) EnterCTE(node *tree.CTE) (err error) {
 	return wrapErr(ErrInvalidIdentifier, err)
 }
 
-// EnterDateTimeFunc checks that the function name is a valid identifier
-func (s *StatementCleaner) EnterDateTimeFunc(node *tree.DateTimeFunction) (err error) {
-	node.FunctionName, err = cleanIdentifier(node.FunctionName)
-	return wrapErr(ErrInvalidIdentifier, err)
-}
-
 // EnterDelete does nothing
 func (s *StatementCleaner) EnterDelete(node *tree.Delete) (err error) {
 	return nil
