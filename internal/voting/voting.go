@@ -9,7 +9,11 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/sql"
-	"github.com/kwilteam/kwil-db/internal/txapp"
+)
+
+const (
+	ValidatorVoteBodyBytePrice = 1000      // Per byte cost
+	ValidatorVoteIDPrice       = 1000 * 16 // 16 bytes for the UUID
 )
 
 // VoteStore is a connection to a database with read-write access.
@@ -227,8 +231,8 @@ func (v *VoteProcessor) Expire(ctx context.Context, blockHeight int64) error {
 		// If the approved power is atleast 1/3rd of the total voting power, refund the voters
 		if resolution.ApprovedPower >= totalVotingPower {
 			// Refund the voters
-			ProposerFee := big.NewInt(int64(len(resolution.Body)) * txapp.ValidatorVoteBodyBytePrice)
-			VoterFee := big.NewInt(txapp.ValidatorVoteIDPrice)
+			ProposerFee := big.NewInt(int64(len(resolution.Body)) * ValidatorVoteBodyBytePrice)
+			VoterFee := big.NewInt(ValidatorVoteIDPrice)
 
 			for _, voter := range resolution.Voters {
 				// check if the voter is the proposer
@@ -308,8 +312,8 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 			return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
 		}
 
-		Proposerfee := big.NewInt(int64(len(vote.Body)) * txapp.ValidatorVoteBodyBytePrice)
-		VoterFee := big.NewInt(txapp.ValidatorVoteIDPrice)
+		Proposerfee := big.NewInt(int64(len(vote.Body)) * ValidatorVoteBodyBytePrice)
+		VoterFee := big.NewInt(ValidatorVoteIDPrice)
 
 		// Refund Voters the Tx cost.
 		for _, voter := range voteInfo.Voters {
