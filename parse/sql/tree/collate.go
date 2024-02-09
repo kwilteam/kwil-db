@@ -8,9 +8,7 @@ import (
 type CollationType string
 
 const (
-	CollationTypeBinary CollationType = "BINARY"
 	CollationTypeNoCase CollationType = "NOCASE"
-	CollationTypeRTrim  CollationType = "RTRIM"
 )
 
 func (c CollationType) String() string {
@@ -27,7 +25,7 @@ func (c *CollationType) Valid() error {
 	newC := CollationType(strings.ToUpper(string(*c)))
 
 	switch newC {
-	case CollationTypeBinary, CollationTypeNoCase, CollationTypeRTrim:
+	case CollationTypeNoCase:
 	default:
 		return fmt.Errorf("invalid collation type: %s", c)
 	}
