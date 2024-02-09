@@ -34,7 +34,7 @@ func (r *ProjectionRule) pushDown(plan logical_plan.LogicalPlan,
 	case *logical_plan.SelectionOp:
 		extractColumnsFromExprs(p.Exprs(), p.Inputs()[0], seen)
 		newInput := r.pushDown(p.Inputs()[0], seen)
-		return logical_plan.Selection(newInput, p.Exprs()...)
+		return logical_plan.Selection(newInput, p.Exprs()[0])
 	case *logical_plan.JoinOp:
 		extractColumnsFromExprs(p.Exprs(), p.Inputs()[0], seen)
 		extractColumnsFromExprs(p.Exprs(), p.Inputs()[1], seen)
@@ -63,7 +63,7 @@ func (r *ProjectionRule) pushDown(plan logical_plan.LogicalPlan,
 		slices.Sort(columns)
 		// NOTE: what about *?
 		// NOTE: what about dbName, tableName?
-		return logical_plan.Scan(p.Table(), p.DataSource(), columns...)
+		return logical_plan.Scan(p.Table(), p.DataSource(), nil, columns...)
 	default:
 		panic("unknown logical operator")
 	}

@@ -9,7 +9,7 @@ import (
 
 func ExampleProjectionRule_optimize_pushDown() {
 	ds := datasource.NewMemDataSource(nil, nil)
-	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds))
+	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds, nil))
 	plan := aop.
 		Project(logical_plan.Column("", "state"),
 			logical_plan.Alias(logical_plan.Column("", "username"), "name")).
@@ -36,12 +36,12 @@ func ExampleProjectionRule_optimize_pushDown() {
 
 func ExampleProjectionRule_optimize_pushDown_with_selection() {
 	ds := datasource.NewMemDataSource(nil, nil)
-	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds))
+	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds, nil))
 	plan := aop.
-		Project(logical_plan.Column("", "state"),
-			logical_plan.Alias(logical_plan.Column("", "username"), "name")).
 		Filter(logical_plan.Eq(logical_plan.Column("", "age"),
 			logical_plan.LiteralInt(20))).
+		Project(logical_plan.Column("", "state"),
+			logical_plan.Alias(logical_plan.Column("", "username"), "name")).
 		LogicalPlan()
 
 	fmt.Println(logical_plan.Format(plan, 0))
@@ -53,21 +53,20 @@ func ExampleProjectionRule_optimize_pushDown_with_selection() {
 	fmt.Println(logical_plan.Format(got, 0))
 
 	// Output:
-	// Selection: [age = 20]
-	//   Projection: state, username AS name
+	// Projection: state, username AS name
+	//   Selection: age = 20
 	//     Scan: users; projection=[]
 	//
 	// ---After optimization---
 	//
-	// Selection: [age = 20]
-	//   Projection: state, username AS name
+	// Projection: state, username AS name
+	//   Selection: age = 20
 	//     Scan: users; projection=[age state username]
-	//
 }
 
 func ExampleProjectionRule_optimize_pushDown_with_aggregate() {
 	ds := datasource.NewMemDataSource(nil, nil)
-	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds))
+	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds, nil))
 	plan := aop.
 		Aggregate(
 			[]logical_plan.LogicalExpr{logical_plan.Column("", "state")},
@@ -100,7 +99,7 @@ func ExampleProjectionRule_optimize_pushDown_with_aggregate() {
 
 func ExampleProjectionRule_optimize_pushDown_all_operators() {
 	ds := datasource.NewMemDataSource(nil, nil)
-	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds))
+	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds, nil))
 	plan := aop.
 		Filter(logical_plan.Eq(logical_plan.Column("", "age"),
 			logical_plan.LiteralInt(20))).

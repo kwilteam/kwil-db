@@ -9,7 +9,7 @@ import (
 
 func ExampleLogicalPlan_String_selection() {
 	ds := datasource.NewMemDataSource(nil, nil)
-	plan := logical_plan.Scan("users", ds)
+	plan := logical_plan.Scan("users", ds, nil)
 	plan = logical_plan.Projection(plan, logical_plan.Column("", "username"), logical_plan.Column("", "age"))
 	fmt.Println(logical_plan.Format(plan, 0))
 	// Output:
@@ -19,7 +19,7 @@ func ExampleLogicalPlan_String_selection() {
 
 func ExampleLogicalPlan_DataFrame() {
 	ds := datasource.NewMemDataSource(nil, nil)
-	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds))
+	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds, nil))
 	plan := aop.Filter(logical_plan.Eq(logical_plan.Column("", "age"), logical_plan.LiteralInt(20))).
 		Aggregate([]logical_plan.LogicalExpr{logical_plan.Column("", "state")},
 			[]logical_plan.AggregateExpr{logical_plan.Count(logical_plan.Column("", "username"))}).

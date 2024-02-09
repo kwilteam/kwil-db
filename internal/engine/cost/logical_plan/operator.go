@@ -2,8 +2,6 @@ package logical_plan
 
 import (
 	"fmt"
-	"strings"
-
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 )
 
@@ -15,6 +13,8 @@ type ScanOp struct {
 
 	// used for projection push down optimization
 	projection []string
+	// used for selection push down optimization
+	selection LogicalExprList
 }
 
 func (s *ScanOp) Table() string {
@@ -29,7 +29,17 @@ func (s *ScanOp) Projection() []string {
 	return s.projection
 }
 
+func (s *ScanOp) Selection() []LogicalExpr {
+	if len(s.selection) == 0 {
+		return []LogicalExpr{}
+	}
+	return s.selection
+}
+
 func (s *ScanOp) String() string {
+	if len(s.selection) > 0 {
+		return fmt.Sprintf("Scan: %s; selection=%s; projection=%s", s.table, s.selection, s.projection)
+	}
 	return fmt.Sprintf("Scan: %s; projection=%s", s.table, s.projection)
 }
 
@@ -46,8 +56,8 @@ func (s *ScanOp) Exprs() []LogicalExpr {
 }
 
 // Scan creates a table scan logical plan.
-func Scan(table string, ds datasource.DataSource, projection ...string) LogicalPlan {
-	return &ScanOp{table: table, dataSource: ds, projection: projection}
+func Scan(table string, ds datasource.DataSource, selection []LogicalExpr, projection ...string) LogicalPlan {
+	return &ScanOp{table: table, dataSource: ds, projection: projection, selection: selection}
 }
 
 // ProjectionOp represents a projection operator, which produces new columns
@@ -55,15 +65,11 @@ func Scan(table string, ds datasource.DataSource, projection ...string) LogicalP
 // It corresponds to `SELECT (expr...)` clause in SQL.
 type ProjectionOp struct {
 	input LogicalPlan
-	exprs []LogicalExpr
+	exprs LogicalExprList
 }
 
 func (p *ProjectionOp) String() string {
-	fields := make([]string, len(p.exprs))
-	for i, expr := range p.exprs {
-		fields[i] = expr.String()
-	}
-	return fmt.Sprintf("Projection: %s", strings.Join(fields, ", "))
+	return fmt.Sprintf("Projection: %s", p.exprs)
 }
 
 func (p *ProjectionOp) Schema() *datasource.Schema {
@@ -95,11 +101,11 @@ func Projection(plan LogicalPlan, exprs ...LogicalExpr) LogicalPlan {
 // It corresponds to `WHERE expr` clause in SQL.
 type SelectionOp struct {
 	input LogicalPlan
-	exprs []LogicalExpr // here we break to individual filter
+	expr  LogicalExpr
 }
 
 func (s *SelectionOp) String() string {
-	return fmt.Sprintf("Selection: %s", s.exprs)
+	return fmt.Sprintf("Selection: %s", s.expr)
 }
 
 func (s *SelectionOp) Schema() *datasource.Schema {
@@ -111,14 +117,14 @@ func (s *SelectionOp) Inputs() []LogicalPlan {
 }
 
 func (s *SelectionOp) Exprs() []LogicalExpr {
-	return s.exprs
+	return []LogicalExpr{s.expr}
 }
 
 // Selection creates a selection logical plan.
-func Selection(plan LogicalPlan, exprs ...LogicalExpr) LogicalPlan {
+func Selection(plan LogicalPlan, expr LogicalExpr) LogicalPlan {
 	return &SelectionOp{
 		input: plan,
-		exprs: exprs,
+		expr:  expr,
 	}
 }
 
