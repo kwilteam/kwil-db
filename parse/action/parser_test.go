@@ -201,7 +201,7 @@ func TestParseActionStmt_scalar_function(t *testing.T) {
 	}
 
 	fns := []string{
-		"format", "count", "lower", "upper", "abs", "error", "length",
+		"format", "count", "lower", "upper", "abs", "error", "length", "sum",
 	}
 
 	// existing scalar functions
