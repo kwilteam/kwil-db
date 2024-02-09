@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
+	"github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/validators"
 )
@@ -106,24 +107,25 @@ type VoteStore interface {
 	HasVoted(ctx context.Context, tx sql.DB, resolutionID types.UUID, voter []byte) (bool, error)
 }
 
-// EventStore is a datastore that tracks events.
-type EventStore interface {
-	// DeleteEvent deletes an event. It will not longer
-	// be broadcasted
-	DeleteEvent(ctx context.Context, db sql.DB, id types.UUID) error
-	// GetEvents gets all events, even if they have been
-	// marked received
-	GetEvents(ctx context.Context, db sql.DB) ([]*types.VotableEvent, error)
-	// MarkReceived marks that an event from the local
-	// validator has been received by the network.
-	// This tells the event store to not re-broadcast the event,
-	// but also to not delete it, as it may need to get the event
-	// body in case it is a future block proposer.
-	MarkReceived(ctx context.Context, db sql.DB, id types.UUID) error
-}
-
 // DB is the interface for the main SQL database.
 type DB interface {
 	sql.OuterTxMaker
 	sql.ReadTxMaker
 }
+
+// event query funcs
+// they are delinated here so that they can be mocked easily
+var (
+	// getEvents gets all events, even if they have been
+	// marked received
+	getEvents = events.GetEvents
+	// markReceived marks that an event from the local
+	// validator has been received by the network.
+	// This tells the event store to not re-broadcast the event,
+	// but also to not delete it, as it may need to get the event
+	// body in case it is a future block proposer.
+	markReceived = events.MarkReceived
+	// deleteEvent deletes an event. It will no longer
+	// be broadcasted.
+	deleteEvent = events.DeleteEvent
+)

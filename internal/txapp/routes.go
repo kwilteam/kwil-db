@@ -369,12 +369,12 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 			}
 
 			if containsBody {
-				err = router.EventStore.DeleteEvent(ctx.Ctx, dbTx, voteID)
+				err = deleteEvent(ctx.Ctx, dbTx, voteID)
 				if err != nil {
 					return txRes(spend, transactions.CodeUnknownError, err)
 				}
 			} else {
-				err = router.EventStore.MarkReceived(ctx.Ctx, dbTx, voteID)
+				err = markReceived(ctx.Ctx, dbTx, voteID)
 				if err != nil {
 					return txRes(spend, transactions.CodeUnknownError, err)
 				}
@@ -432,7 +432,7 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 		if hasVoted {
-			err = router.EventStore.DeleteEvent(ctx.Ctx, dbTx, event.ID())
+			err = deleteEvent(ctx.Ctx, dbTx, event.ID())
 			if err != nil {
 				return txRes(spend, transactions.CodeUnknownError, err)
 			}

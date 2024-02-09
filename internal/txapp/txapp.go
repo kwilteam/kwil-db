@@ -19,14 +19,13 @@ import (
 
 // NewTxApp creates a new router.
 func NewTxApp(db DB, engine ExecutionEngine, acc AccountsStore, validators ValidatorStore,
-	voteStore VoteStore, signer *auth.Ed25519Signer, chainID string, eventStore EventStore, GasEnabled bool, log log.Logger) *TxApp {
+	voteStore VoteStore, signer *auth.Ed25519Signer, chainID string, GasEnabled bool, log log.Logger) *TxApp {
 	return &TxApp{
 		Database:   db,
 		Engine:     engine,
 		Accounts:   acc,
 		Validators: validators,
 		VoteStore:  voteStore,
-		EventStore: eventStore,
 		log:        log,
 		mempool: &mempool{
 			accountStore:   acc,
@@ -49,7 +48,6 @@ type TxApp struct {
 	Accounts   AccountsStore   // accounts
 	Validators ValidatorStore  // validators
 	VoteStore  VoteStore       // tracks resolutions, their votes, manages expiration
-	EventStore EventStore      // tracks events, not part of consensus
 	GasEnabled bool
 
 	chainID string
@@ -214,7 +212,7 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte
 	}
 
 	for _, eventID := range finalizedEvents {
-		err = r.EventStore.DeleteEvent(ctx, r.currentTx, eventID)
+		err = deleteEvent(ctx, r.currentTx, eventID)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -322,7 +320,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64) ([]*transaction
 	}
 	defer readTx.Rollback(ctx) // always rollback read tx
 
-	events, err := r.EventStore.GetEvents(ctx, readTx)
+	events, err := getEvents(ctx, readTx)
 	if err != nil {
 		return nil, err
 	}

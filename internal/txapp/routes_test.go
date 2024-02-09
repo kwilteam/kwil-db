@@ -66,6 +66,13 @@ func Test_Routes(t *testing.T) {
 				approveCount := 0
 				deleteCount := 0
 
+				// override the global deleteEvent function with a mock
+				deleteEvent = func(ctx context.Context, db sql.DB, id types.UUID) error {
+					deleteCount++
+
+					return nil
+				}
+
 				callback(&TxApp{
 					VoteStore: &mockVoteStore{
 						approve: func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
@@ -75,13 +82,6 @@ func Test_Routes(t *testing.T) {
 						},
 						containsBodyOrFinished: func(ctx context.Context, resolutionID types.UUID) (bool, error) {
 							return true, nil
-						},
-					},
-					EventStore: &mockEventStore{
-						deleteEvent: func(ctx context.Context, id types.UUID) error {
-							deleteCount++
-
-							return nil
 						},
 					},
 					Validators: &mockValidatorStore{
@@ -108,6 +108,13 @@ func Test_Routes(t *testing.T) {
 				approveCount := 0
 				deleteCount := 0
 
+				// override the global deleteEvent function with a mock
+				deleteEvent = func(ctx context.Context, db sql.DB, id types.UUID) error {
+					deleteCount++
+
+					return nil
+				}
+
 				callback(&TxApp{
 					VoteStore: &mockVoteStore{
 						approve: func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
@@ -117,13 +124,6 @@ func Test_Routes(t *testing.T) {
 						},
 						containsBodyOrFinished: func(ctx context.Context, resolutionID types.UUID) (bool, error) {
 							return true, nil
-						},
-					},
-					EventStore: &mockEventStore{
-						deleteEvent: func(ctx context.Context, id types.UUID) error {
-							deleteCount++
-
-							return nil
 						},
 					},
 					Validators: &mockValidatorStore{
@@ -170,17 +170,17 @@ func Test_Routes(t *testing.T) {
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				deleteCount := 0
 
+				// override the global deleteEvent function with a mock
+				deleteEvent = func(ctx context.Context, db sql.DB, id types.UUID) error {
+					deleteCount++
+
+					return nil
+				}
+
 				callback(&TxApp{
 					VoteStore: &mockVoteStore{
 						hasVoted: func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error) {
 							return true, nil
-						},
-					},
-					EventStore: &mockEventStore{
-						deleteEvent: func(ctx context.Context, id types.UUID) error {
-							deleteCount++
-
-							return nil
 						},
 					},
 					Validators: &mockValidatorStore{
@@ -211,17 +211,17 @@ func Test_Routes(t *testing.T) {
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				deleteCount := 0
 
+				// override the global deleteEvent function with a mock
+				deleteEvent = func(ctx context.Context, db sql.DB, id types.UUID) error {
+					deleteCount++
+
+					return nil
+				}
+
 				callback(&TxApp{
 					VoteStore: &mockVoteStore{
 						hasVoted: func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error) {
 							return true, nil
-						},
-					},
-					EventStore: &mockEventStore{
-						deleteEvent: func(ctx context.Context, id types.UUID) error {
-							deleteCount++
-
-							return nil
 						},
 					},
 					Validators: &mockValidatorStore{
@@ -413,36 +413,6 @@ func (m *mockVoteStore) ProcessConfirmedResolutions(ctx context.Context, _ sql.D
 func (m *mockVoteStore) UpdateVoter(ctx context.Context, _ sql.DB, identifier []byte, power int64) error {
 	if m.updateVoter != nil {
 		return m.updateVoter(ctx, identifier, power)
-	}
-
-	return nil
-}
-
-type mockEventStore struct {
-	deleteEvent  func(ctx context.Context, id types.UUID) error
-	getEvents    func(ctx context.Context) ([]*types.VotableEvent, error)
-	markReceived func(ctx context.Context, id types.UUID) error
-}
-
-func (m *mockEventStore) DeleteEvent(ctx context.Context, _ sql.DB, id types.UUID) error {
-	if m.deleteEvent != nil {
-		return m.deleteEvent(ctx, id)
-	}
-
-	return nil
-}
-
-func (m *mockEventStore) GetEvents(ctx context.Context, _ sql.DB) ([]*types.VotableEvent, error) {
-	if m.getEvents != nil {
-		return m.getEvents(ctx)
-	}
-
-	return nil, nil
-}
-
-func (m *mockEventStore) MarkReceived(ctx context.Context, _ sql.DB, id types.UUID) error {
-	if m.markReceived != nil {
-		return m.markReceived(ctx, id)
 	}
 
 	return nil

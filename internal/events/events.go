@@ -105,7 +105,7 @@ func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) e
 }
 
 // GetEvents gets all events in the event store.
-func (e *EventStore) GetEvents(ctx context.Context, db sql.DB) ([]*types.VotableEvent, error) {
+func GetEvents(ctx context.Context, db sql.DB) ([]*types.VotableEvent, error) {
 	res, err := db.Execute(ctx, getEvents)
 	if err != nil {
 		return nil, err
@@ -138,7 +138,7 @@ func (e *EventStore) GetEvents(ctx context.Context, db sql.DB) ([]*types.Votable
 
 // DeleteEvent deletes an event from the event store.
 // It is idempotent. If the event does not exist, it will not return an error.
-func (e *EventStore) DeleteEvent(ctx context.Context, db sql.DB, id types.UUID) error {
+func DeleteEvent(ctx context.Context, db sql.DB, id types.UUID) error {
 	_, err := db.Execute(ctx, deleteEvent, id[:])
 	return err
 }
@@ -185,7 +185,7 @@ func (e *EventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.VotableE
 }
 
 // MarkReceived marks that an event has been received by the network, and should not be re-broadcasted.
-func (e *EventStore) MarkReceived(ctx context.Context, db sql.DB, id types.UUID) error {
+func MarkReceived(ctx context.Context, db sql.DB, id types.UUID) error {
 	_, err := db.Execute(ctx, markReceived, id[:])
 	return err
 }

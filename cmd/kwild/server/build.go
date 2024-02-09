@@ -89,7 +89,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// to get the comet node, we need the abci app
 	// to get the abci app, we need the tx router
 	// but the tx router needs the cometbft client
-	txApp := buildTxApp(d, db, accs, e, vstore, v, ev)
+	txApp := buildTxApp(d, db, accs, e, vstore, v)
 
 	abciApp := buildAbci(d, closers,
 		txApp, snapshotModule, bootstrapperModule)
@@ -209,8 +209,8 @@ func (c *closeFuncs) closeAll() error {
 }
 
 func buildTxApp(d *coreDependencies, db *pg.DB, accs *accounts.AccountStore, engine txapp.ExecutionEngine, validators txapp.ValidatorStore,
-	voteStore *voting.VoteProcessor, eventStore txapp.EventStore) *txapp.TxApp {
-	return txapp.NewTxApp(db, engine, accs, validators, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore,
+	voteStore *voting.VoteProcessor) *txapp.TxApp {
+	return txapp.NewTxApp(db, engine, accs, validators, voteStore, buildSigner(d), d.genesisCfg.ChainID,
 		!d.genesisCfg.ConsensusParams.WithoutGasCosts, *d.log.Named("tx-router"))
 }
 

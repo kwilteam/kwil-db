@@ -1,4 +1,4 @@
-//go:build pglive
+// go:build pglive
 
 package events
 
@@ -29,17 +29,17 @@ func Test_EventStore(t *testing.T) {
 				err := e.Store(ctx, []byte("hello"), "test")
 				require.NoError(t, err)
 
-				events, err := e.GetEvents(ctx, consensusTx)
+				events, err := GetEvents(ctx, consensusTx)
 				require.NoError(t, err)
 
 				require.Len(t, events, 1)
 				require.Equal(t, []byte("hello"), events[0].Body)
 				require.Equal(t, "test", events[0].Type)
 
-				err = e.DeleteEvent(ctx, consensusTx, events[0].ID())
+				err = DeleteEvent(ctx, consensusTx, events[0].ID())
 				require.NoError(t, err)
 
-				events, err = e.GetEvents(ctx, consensusTx)
+				events, err = GetEvents(ctx, consensusTx)
 				require.NoError(t, err)
 
 				require.Len(t, events, 0)
@@ -56,7 +56,7 @@ func Test_EventStore(t *testing.T) {
 				err = e.Store(ctx, []byte("hello"), "test")
 				require.NoError(t, err)
 
-				events, err := e.GetEvents(ctx, consensusTx)
+				events, err := GetEvents(ctx, consensusTx)
 				require.NoError(t, err)
 
 				require.Len(t, events, 1)
@@ -67,7 +67,7 @@ func Test_EventStore(t *testing.T) {
 			fn: func(t *testing.T, e *EventStore, consensusTx sql.Tx) {
 				ctx := context.Background()
 
-				err := e.DeleteEvent(ctx, consensusTx, types.NewUUIDV5([]byte("hello")))
+				err := DeleteEvent(ctx, consensusTx, types.NewUUIDV5([]byte("hello")))
 				require.NoError(t, err)
 			},
 		},
@@ -114,11 +114,11 @@ func Test_EventStore(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, events, 1)
 
-				err = e.MarkReceived(ctx, consensusTx, event.ID())
+				err = MarkReceived(ctx, consensusTx, event.ID())
 				require.NoError(t, err)
 
 				// GetEvents should still return the event
-				events, err = e.GetEvents(ctx, consensusTx)
+				events, err = GetEvents(ctx, consensusTx)
 				require.NoError(t, err)
 				require.Len(t, events, 1)
 
