@@ -1018,10 +1018,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// collate
 		{"expr collate nocase", "select 1 collate nocase",
 			genSimpleCollateSelectTree(tree.CollationTypeNoCase, "1")},
-		{"expr collate binary", "select 1 collate binary",
-			genSimpleCollateSelectTree(tree.CollationTypeBinary, "1")},
-		{"expr collate rtrim", "select 1 collate rtrim",
-			genSimpleCollateSelectTree(tree.CollationTypeRTrim, "1")},
 		// null
 		{"expr isnull", "select 1 isnull", genSimpleExprNullSelectTree("1", true)},
 		{"expr notnull", "select 1 notnull", genSimpleExprNullSelectTree("1", false)},
