@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230512164433-5d1fd1a340c9
 	github.com/kwilteam/action-grammar-go v0.0.1-0.20230926160920-472768e1186c
-	github.com/kwilteam/sql-grammar-go v0.0.3-0.20230925230724-00685e1bac32
+	github.com/kwilteam/sql-grammar-go v0.0.3-0.20240202213606-3f118696cec5
 	github.com/stretchr/testify v1.8.4
 )
 
