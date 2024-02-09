@@ -359,6 +359,16 @@ func (e *dmlStmt) execute(scope *ProcedureContext) error {
 		return err
 	}
 
+	// we need to check for any pg numeric types returned, and convert them to int64
+	for i, row := range results.Rows {
+		for j, val := range row {
+			int64Val, ok := sql.Int64(val)
+			if ok {
+				results.Rows[i][j] = int64Val
+			}
+		}
+	}
+
 	scope.Result = results
 
 	return nil
