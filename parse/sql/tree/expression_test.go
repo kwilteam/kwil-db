@@ -1,18 +1,9 @@
 package tree_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
-)
-
-var (
-	// TODO: use real types
-	typeString    = "string"
-	typeStringSql = " ::string"
-	typeInt       = "int"
-	typeIntSql    = " ::int"
 )
 
 func TestExpressionLiteral_ToSQL(t *testing.T) {
@@ -31,12 +22,12 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: "'foo'",
 		},
 		{
-			name: "expression literal with type hint",
+			name: "expression literal with type cast",
 			fields: &tree.ExpressionLiteral{
 				Value:    "'foo'",
-				TypeHint: typeString,
+				TypeCast: tree.TypeCastText,
 			},
-			want: "'foo'" + typeStringSql, // TODO: replace with just string,
+			want: "'foo' ::text",
 			// not variable. this should be the result string, no interpolation
 		},
 		{
@@ -48,13 +39,13 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: "( 'foo' )",
 		},
 		{
-			name: "expression literal with wrapped paren and type hint",
+			name: "expression literal with wrapped paren and type cast",
 			fields: &tree.ExpressionLiteral{
 				Value:    "'foo'",
 				Wrapped:  true,
-				TypeHint: typeString,
+				TypeCast: tree.TypeCastText,
 			},
-			want: "( 'foo' )" + typeStringSql,
+			want: "( 'foo' ) ::text",
 		},
 		{
 			name: "expression literal with int",
@@ -64,12 +55,12 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: "1",
 		},
 		{
-			name: "expression literal witth int and type hint",
+			name: "expression literal with int and type cast",
 			fields: &tree.ExpressionLiteral{
 				Value:    "1",
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 			},
-			want: "1" + typeIntSql,
+			want: "1 ::int",
 		},
 		{
 			name: "expression literal with float",
@@ -86,12 +77,12 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: "$foo",
 		},
 		{
-			name: "expression $ bind parameter with type hint",
+			name: "expression $ bind parameter with type cast",
 			fields: &tree.ExpressionBindParameter{
 				Parameter: "$foo",
-				TypeHint:  typeString,
+				TypeCast:  tree.TypeCastText,
 			},
-			want: "$foo" + typeStringSql,
+			want: "$foo ::text",
 		},
 		{
 			name: "expression @ bind parameter",
@@ -101,12 +92,12 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: "@foo",
 		},
 		{
-			name: "expression @ bind parameter with type hint",
+			name: "expression @ bind parameter with type cast",
 			fields: &tree.ExpressionBindParameter{
 				Parameter: "@foo",
-				TypeHint:  typeString,
+				TypeCast:  tree.TypeCastText,
 			},
-			want: "@foo" + typeStringSql,
+			want: "@foo ::text",
 		},
 		{
 			name: "expression parameter without $ or @",
@@ -130,12 +121,12 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: `"foo"`,
 		},
 		{
-			name: "expression column with type hint",
+			name: "expression column with type cast",
 			fields: &tree.ExpressionColumn{
 				Column:   "foo",
-				TypeHint: typeString,
+				TypeCast: tree.TypeCastText,
 			},
-			want: `"foo"` + typeStringSql,
+			want: `"foo" ::text`,
 		},
 		{
 			name: "expression column with table",
@@ -146,13 +137,13 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: `"bar"."foo"`,
 		},
 		{
-			name: "expression column with table and type hint",
+			name: "expression column with table and type cast",
 			fields: &tree.ExpressionColumn{
 				Table:    "bar",
 				Column:   "foo",
-				TypeHint: typeString,
+				TypeCast: tree.TypeCastText,
 			},
-			want: `"bar"."foo"` + typeStringSql,
+			want: `"bar"."foo" ::text`,
 		},
 		{
 			name: "expression column with only table",
@@ -172,15 +163,27 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: `NOT "foo"`,
 		},
 		{
-			name: "expression unary operator with type hint",
+			name: "expression unary operator with type cast",
 			fields: &tree.ExpressionUnary{
 				Operator: tree.UnaryOperatorNot,
 				Operand: &tree.ExpressionColumn{
-					Column:   "foo",
-					TypeHint: typeInt,
+					Column: "foo",
 				},
+				TypeCast: tree.TypeCastInt,
+				Wrapped:  true,
 			},
-			want: `NOT "foo"` + typeIntSql,
+			want: `(NOT "foo") ::int`,
+		},
+		{
+			name: "expression unary operator with type cast without wrapped",
+			fields: &tree.ExpressionUnary{
+				Operator: tree.UnaryOperatorNot,
+				Operand: &tree.ExpressionColumn{
+					Column: "foo",
+				},
+				TypeCast: tree.TypeCastInt,
+			},
+			wantPanic: true,
 		},
 		{
 			name: "expression binary comparison",
@@ -196,7 +199,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: `"foo" = 'bar'`,
 		},
 		{
-			name: "expression binary comparison with type hint",
+			name: "expression binary comparison with type cast",
 			fields: &tree.ExpressionBinaryComparison{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
@@ -205,13 +208,13 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionLiteral{
 					Value: "'bar'",
 				},
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 				Wrapped:  true,
 			},
-			want: `("foo" = 'bar')` + typeIntSql,
+			want: `("foo" = 'bar') ::int`,
 		},
 		{
-			name: "expression binary comparison with type hint without wrapped",
+			name: "expression binary comparison with type cast without wrapped",
 			fields: &tree.ExpressionBinaryComparison{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
@@ -220,7 +223,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionLiteral{
 					Value: "'bar'",
 				},
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 			},
 			wantPanic: true,
 		},
@@ -237,7 +240,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: "abs(\"foo\")",
 		},
 		{
-			name: "expression abs function with type hint",
+			name: "expression abs function with type cast",
 			fields: &tree.ExpressionFunction{
 				Function: &tree.FunctionABS,
 				Inputs: []tree.Expression{
@@ -245,9 +248,9 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 						Column: "foo",
 					},
 				},
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 			},
-			want: "abs(\"foo\")" + typeIntSql,
+			want: "abs(\"foo\") ::int",
 		},
 		{
 			name: "expression abs function with multiple inputs",
@@ -286,24 +289,24 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: "(\"foo\", \"bar\")",
 		},
 		{
-			name: "expression list with element type hint",
+			name: "expression list with element type cast",
 			fields: &tree.ExpressionList{
 				Expressions: []tree.Expression{
 					&tree.ExpressionColumn{
 						Column:   "foo",
-						TypeHint: typeString,
+						TypeCast: tree.TypeCastText,
 					},
 					&tree.ExpressionColumn{
 						Column:   "bar",
-						TypeHint: typeInt,
+						TypeCast: tree.TypeCastInt,
 					},
 				},
 			},
-			want: fmt.Sprintf(`("foo"%s, "bar"%s)`, typeStringSql, typeIntSql),
+			want: `("foo" ::text, "bar" ::int)`,
 		},
 		{
-			name: "expression list with type hint",
-			// NOTE Seems no point in having a type hint for a list?? as we can't have a list types?
+			name: "expression list with type cast",
+			// NOTE Seems no point in having a type cast for a list?? as we can't have a list types?
 			fields: &tree.ExpressionList{
 				Expressions: []tree.Expression{
 					&tree.ExpressionColumn{
@@ -313,9 +316,9 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 						Column: "bar",
 					},
 				},
-				TypeHint: typeString,
+				TypeCast: tree.TypeCastText,
 			},
-			want: "(\"foo\", \"bar\")" + typeStringSql,
+			want: "(\"foo\", \"bar\") ::text",
 		},
 		{
 			name: "collate",
@@ -334,7 +337,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: `"foo" = 'bar' COLLATE BINARY`,
 		},
 		{
-			name: "collate with type hint",
+			name: "collate with type cast",
 			fields: &tree.ExpressionCollate{
 				Expression: &tree.ExpressionBinaryComparison{
 					Left: &tree.ExpressionColumn{
@@ -347,16 +350,16 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				},
 				Collation: tree.CollationTypeBinary,
 				Wrapped:   true,
-				TypeHint:  typeInt,
+				TypeCast:  tree.TypeCastInt,
 			},
-			want: `("foo" = 'bar' COLLATE BINARY)` + typeIntSql,
+			want: `("foo" = 'bar' COLLATE BINARY) ::int`,
 		},
 		{
-			name: "collate with type hint without wrapped",
+			name: "collate with type cast without wrapped",
 			fields: &tree.ExpressionCollate{
 				Expression: &tree.ExpressionBinaryComparison{},
 				Collation:  tree.CollationTypeBinary,
-				TypeHint:   typeString,
+				TypeCast:   tree.TypeCastText,
 			},
 			wantPanic: true,
 		},
@@ -399,7 +402,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: `"foo" NOT LIKE 'bar' ESCAPE 'baz'`,
 		},
 		{
-			name: "string compare with escape and type hint",
+			name: "string compare with escape and type cast",
 			fields: &tree.ExpressionStringCompare{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
@@ -411,15 +414,15 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				Escape: &tree.ExpressionLiteral{
 					Value: "'baz'",
 				},
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 				Wrapped:  true,
 			},
-			want: `("foo" NOT LIKE 'bar' ESCAPE 'baz')` + typeIntSql,
+			want: `("foo" NOT LIKE 'bar' ESCAPE 'baz') ::int`,
 		},
 		{
-			name: "string compare with escape and type hint without wrapped",
+			name: "string compare with escape and type cast without wrapped",
 			fields: &tree.ExpressionStringCompare{
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 			},
 			wantPanic: true,
 		},
@@ -463,25 +466,25 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: `"foo" IS NULL`,
 		},
 		{
-			name: "IsNull with type hint",
+			name: "IsNull with type cast",
 			fields: &tree.ExpressionIsNull{
 				Expression: &tree.ExpressionColumn{
 					Column: "foo",
 				},
 				IsNull:   true,
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 				Wrapped:  true,
 			},
-			want: `("foo" IS NULL)` + typeIntSql,
+			want: `("foo" IS NULL) ::int`,
 		},
 		{
-			name: "IsNull with type hint without wrapped",
+			name: "IsNull with type cast without wrapped",
 			fields: &tree.ExpressionIsNull{
 				Expression: &tree.ExpressionColumn{
 					Column: "foo",
 				},
 				IsNull:   true,
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 			},
 			wantPanic: true,
 		},
@@ -502,15 +505,15 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: `"foo" NOT NULL`,
 		},
 		{
-			name: "Is Not Null with type hint",
+			name: "Is Not Null with type cast",
 			fields: &tree.ExpressionIsNull{
 				Expression: &tree.ExpressionColumn{
 					Column: "foo",
 				},
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 				Wrapped:  true,
 			},
-			want: `("foo" NOT NULL)` + typeIntSql,
+			want: `("foo" NOT NULL) ::int`,
 		},
 		{
 			name: "is not distinct from",
@@ -526,7 +529,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: `"foo" IS NOT DISTINCT FROM 'bar'`,
 		},
 		{
-			name: "is not distinct from with type hint",
+			name: "is not distinct from with type cast",
 			fields: &tree.ExpressionDistinct{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
@@ -535,13 +538,13 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 					Value: "'bar'",
 				},
 				IsNot:    true,
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 				Wrapped:  true,
 			},
-			want: `("foo" IS NOT DISTINCT FROM 'bar')` + typeIntSql,
+			want: `("foo" IS NOT DISTINCT FROM 'bar') ::int`,
 		},
 		{
-			name: "is not distinct from with type hint without wrapped",
+			name: "is not distinct from with type cast without wrapped",
 			fields: &tree.ExpressionDistinct{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
@@ -550,7 +553,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 					Value: "'bar'",
 				},
 				IsNot:    true,
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 			},
 			wantPanic: true,
 		},
@@ -602,7 +605,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: `"foo" NOT BETWEEN 'bar' AND 'baz'`,
 		},
 		{
-			name: "valid between with type hint",
+			name: "valid between with type cast",
 			fields: &tree.ExpressionBetween{
 				Expression: &tree.ExpressionColumn{
 					Column: "foo",
@@ -614,13 +617,13 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionLiteral{
 					Value: "'baz'",
 				},
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 				Wrapped:  true,
 			},
-			want: `("foo" NOT BETWEEN 'bar' AND 'baz')` + typeIntSql,
+			want: `("foo" NOT BETWEEN 'bar' AND 'baz') ::int`,
 		},
 		{
-			name: "valid between with type hint without wrapped",
+			name: "valid between with type cast without wrapped",
 			fields: &tree.ExpressionBetween{
 				Expression: &tree.ExpressionColumn{
 					Column: "foo",
@@ -632,7 +635,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionLiteral{
 					Value: "'baz'",
 				},
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 			},
 			wantPanic: true,
 		},
@@ -706,7 +709,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: `NOT EXISTS (SELECT * FROM "foo" AS "f" WHERE "f"."foo" = $a)`,
 		},
 		{
-			name: "select subquery with type hint",
+			name: "select subquery with type cast",
 			fields: &tree.ExpressionSelect{
 				IsNot:    true,
 				IsExists: true,
@@ -735,10 +738,10 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 						},
 					},
 				},
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 				Wrapped:  true,
 			},
-			want: `(NOT EXISTS (SELECT * FROM "foo" AS "f" WHERE "f"."foo" = $a))` + typeIntSql,
+			want: `(NOT EXISTS (SELECT * FROM "foo" AS "f" WHERE "f"."foo" = $a)) ::int`,
 		},
 		{
 			name: "case expression",
@@ -826,7 +829,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: `"foo" + 1`,
 		},
 		{
-			name: "arithmetic expression with type hint",
+			name: "arithmetic expression with type cast",
 			fields: &tree.ExpressionArithmetic{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
@@ -835,13 +838,13 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionLiteral{
 					Value: "1",
 				},
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 				Wrapped:  true,
 			},
-			want: `("foo" + 1)` + typeIntSql,
+			want: `("foo" + 1) ::int`,
 		},
 		{
-			name: "arithmetic expression with type hint without wrapped",
+			name: "arithmetic expression with type cast without wrapped",
 			fields: &tree.ExpressionArithmetic{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
@@ -850,7 +853,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionLiteral{
 					Value: "1",
 				},
-				TypeHint: typeInt,
+				TypeCast: tree.TypeCastInt,
 			},
 			wantPanic: true,
 		},

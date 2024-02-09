@@ -119,16 +119,24 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 		return nil
 	}
 
-	typeHint := ""
+	var typeCast tree.TypeCastType
 	if ctx.Type_cast() != nil {
-		typeHint = ctx.Type_cast().Cast_type().GetText()
-		if typeHint[0] == '`' || typeHint[0] == '"' || typeHint[0] == '[' {
-			// NOTE: typeHint is a IDENTIFIER, so it could be wrapped with ` or " or [ ]
-			// NOTE: should we just complain if it's wrapped?
-			//typeHint = typeHint[1 : len(typeHint)-1]
-			panic(fmt.Sprintf("type hint should not be wrapped in  %c", typeHint[0]))
+		typeCastRaw := ctx.Type_cast().Cast_type().GetText()
+		if typeCastRaw[0] == '`' || typeCastRaw[0] == '"' || typeCastRaw[0] == '[' {
+			// NOTE: typeCast is an IDENTIFIER, so it could be wrapped with ` or " or [ ]
+			panic(fmt.Sprintf("type cast should not be wrapped in  %c", typeCastRaw[0]))
 		}
-		// TODO: validate typeHint
+
+		// NOTE: typeCast is case-insensitive
+		switch strings.ToLower(typeCastRaw) {
+		case "int":
+			typeCast = tree.TypeCastInt
+		case "text":
+			typeCast = tree.TypeCastText
+		default:
+			// NOTE: we probably should move all semantic checks to analysis phase
+			panic(fmt.Sprintf("unknown type cast %s", typeCastRaw))
+		}
 	}
 
 	// order is important, map to expr definition in Antlr sql-grammar(not exactly)
@@ -137,12 +145,12 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 	case ctx.Literal_value() != nil:
 		return &tree.ExpressionLiteral{
 			Value:    ctx.Literal_value().GetText(),
-			TypeHint: typeHint,
+			TypeCast: typeCast,
 		}
 	case ctx.BIND_PARAMETER() != nil:
 		return &tree.ExpressionBindParameter{
 			Parameter: ctx.BIND_PARAMETER().GetText(),
-			TypeHint:  typeHint,
+			TypeCast:  typeCast,
 		}
 	case ctx.Table_name() != nil || ctx.Column_name() != nil:
 		expr := &tree.ExpressionColumn{}
@@ -152,7 +160,7 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 		if ctx.Column_name() != nil {
 			expr.Column = extractSQLName(ctx.Column_name().GetText())
 		}
-		expr.TypeHint = typeHint
+		expr.TypeCast = typeCast
 		return expr
 	case ctx.Select_stmt_core() != nil && ctx.IN_() == nil:
 		// select_stmt_core not in IN
@@ -174,49 +182,49 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 		switch t := expr.(type) {
 		case *tree.ExpressionLiteral:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionBindParameter:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionColumn:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionUnary:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionArithmetic:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionBinaryComparison:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionFunction:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionList:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionCollate:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionStringCompare:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionIsNull:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionDistinct:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionBetween:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionSelect:
 			t.Wrapped = true
-			t.TypeHint = typeHint
+			t.TypeCast = typeCast
 		case *tree.ExpressionCase:
 			t.Wrapped = true
-			// typeHint does not apply
+			// typeCast does not apply
 		default:
 			panic(fmt.Sprintf("unknown expression type %T", expr))
 		}
@@ -509,7 +517,7 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 			expr.Inputs[i] = v.visitExpr(e)
 		}
 
-		expr.TypeHint = typeHint
+		expr.TypeCast = typeCast
 		return expr
 	case ctx.STAR() != nil:
 		return &tree.ExpressionArithmetic{
