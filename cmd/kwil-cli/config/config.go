@@ -52,9 +52,9 @@ func DefaultKwilCliPersistedConfig() *kwilCliPersistedConfig {
 // and also to work with viper(flags)
 type kwilCliPersistedConfig struct {
 	// NOTE: `mapstructure` is used by viper, name is same as the viper key name
-	PrivateKey string `mapstructure:"private_key" json:"private_key"`
-	GrpcURL    string `mapstructure:"grpc_url" json:"grpc_url"`
-	ChainID    string `mapstructure:"chain_id" json:"chain_id"`
+	PrivateKey string `mapstructure:"private_key" json:"private_key,omitempty"`
+	GrpcURL    string `mapstructure:"grpc_url" json:"grpc_url,omitempty"`
+	ChainID    string `mapstructure:"chain_id" json:"chain_id,omitempty"`
 }
 
 func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
