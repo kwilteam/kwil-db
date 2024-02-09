@@ -14,7 +14,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
-	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/voting"
 
 	"github.com/stretchr/testify/require"
@@ -777,12 +776,12 @@ func Test_Votes(t *testing.T) {
 				require.NoError(t, err)
 
 				// check that the proposer was not refunded as resolution didnt receive 1/3rd votes.
-				voterFee := big.NewInt(txapp.ValidatorVoteIDPrice)
+				voterFee := big.NewInt(voting.ValidatorVoteIDPrice)
 				acc, err := ds.Accounts.GetAccount(ctx, []byte("voter2"))
 				require.NoError(t, err)
 				require.Equal(t, voterFee, acc.Balance)
 
-				proposerFee := big.NewInt(int64(len(bts)) * txapp.ValidatorVoteBodyBytePrice)
+				proposerFee := big.NewInt(int64(len(bts)) * voting.ValidatorVoteBodyBytePrice)
 				acc, err = ds.Accounts.GetAccount(ctx, []byte("voter1"))
 				require.NoError(t, err)
 				require.Equal(t, proposerFee, acc.Balance)
@@ -828,12 +827,12 @@ func Test_Votes(t *testing.T) {
 				require.NoError(t, err)
 
 				// check that the proposer was not refunded as resolution didnt receive 1/3rd votes.
-				voterFee := big.NewInt(txapp.ValidatorVoteIDPrice)
+				voterFee := big.NewInt(voting.ValidatorVoteIDPrice)
 				acc, err := ds.Accounts.GetAccount(ctx, []byte("voter2"))
 				require.NoError(t, err)
 				require.Equal(t, voterFee, acc.Balance)
 
-				proposerFee := big.NewInt(int64(len(bts))*txapp.ValidatorVoteBodyBytePrice + txapp.ValidatorVoteIDPrice)
+				proposerFee := big.NewInt(int64(len(bts))*voting.ValidatorVoteBodyBytePrice + voting.ValidatorVoteIDPrice)
 				acc, err = ds.Accounts.GetAccount(ctx, []byte("voter1"))
 				require.NoError(t, err)
 				require.Equal(t, proposerFee, acc.Balance)
@@ -880,12 +879,12 @@ func Test_Votes(t *testing.T) {
 				require.Len(t, ids, 1)
 
 				// check that the proposer was not refunded as resolution didnt receive 1/3rd votes.
-				voterFee := big.NewInt(txapp.ValidatorVoteIDPrice)
+				voterFee := big.NewInt(voting.ValidatorVoteIDPrice)
 				acc, err := ds.Accounts.GetAccount(ctx, []byte("voter2"))
 				require.NoError(t, err)
 				require.Equal(t, voterFee, acc.Balance)
 
-				proposerFee := big.NewInt(int64(len(bts))*txapp.ValidatorVoteBodyBytePrice + txapp.ValidatorVoteIDPrice)
+				proposerFee := big.NewInt(int64(len(bts))*voting.ValidatorVoteBodyBytePrice + voting.ValidatorVoteIDPrice)
 				acc, err = ds.Accounts.GetAccount(ctx, []byte("voter1"))
 				require.NoError(t, err)
 				require.Equal(t, proposerFee, acc.Balance)

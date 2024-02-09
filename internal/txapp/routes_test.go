@@ -14,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/validators"
+	"github.com/kwilteam/kwil-db/internal/voting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -61,7 +62,7 @@ func Test_Routes(t *testing.T) {
 			// this test tests vote_id, as a local validator
 			// we expect that it will approve and then attempt to delete the event
 			name: "validator_vote_id, as local validator",
-			fee:  ValidatorVoteIDPrice,
+			fee:  voting.ValidatorVoteIDPrice,
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				approveCount := 0
 				deleteCount := 0
@@ -105,7 +106,7 @@ func Test_Routes(t *testing.T) {
 			// this test tests vote_id, as a non-local validator
 			// we expect that it will approve and not attempt to delete the event
 			name: "validator_vote_id, as non-local validator",
-			fee:  ValidatorVoteIDPrice,
+			fee:  voting.ValidatorVoteIDPrice,
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				approveCount := 0
 				deleteCount := 0
@@ -150,7 +151,7 @@ func Test_Routes(t *testing.T) {
 			// this test tests vote_id, from a non-validator
 			// we expect that it will fail
 			name: "validator_vote_id, as non-validator",
-			fee:  ValidatorVoteIDPrice,
+			fee:  voting.ValidatorVoteIDPrice,
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				callback(&TxApp{
 					Validators: &mockValidatorStore{
@@ -172,7 +173,7 @@ func Test_Routes(t *testing.T) {
 		{
 			// testing validator_vote_bodies, as the proposer
 			name: "validator_vote_bodies, as proposer",
-			fee:  ValidatorVoteIDPrice,
+			fee:  voting.ValidatorVoteIDPrice,
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				deleteCount := 0
 
@@ -215,7 +216,7 @@ func Test_Routes(t *testing.T) {
 			// testing validator_vote_bodies, as a non-proposer
 			// should fail
 			name: "validator_vote_bodies, as non-proposer",
-			fee:  ValidatorVoteIDPrice,
+			fee:  voting.ValidatorVoteIDPrice,
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				deleteCount := 0
 

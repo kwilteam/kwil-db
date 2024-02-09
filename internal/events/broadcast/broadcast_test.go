@@ -14,7 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/events/broadcast"
-	"github.com/kwilteam/kwil-db/internal/txapp"
+	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 func Test_Broadcaster(t *testing.T) {
@@ -51,7 +51,7 @@ func Test_Broadcaster(t *testing.T) {
 			events:        []string{"hello"},
 			expectedNonce: 1,
 			didBroadcast:  true,
-			balance:       big.NewInt(txapp.ValidatorVoteIDPrice),
+			balance:       big.NewInt(voting.ValidatorVoteIDPrice),
 			v:             &mockValidatorStore{isValidator: true},
 		},
 		{
@@ -60,7 +60,7 @@ func Test_Broadcaster(t *testing.T) {
 				"hello",
 				"world",
 			},
-			balance:       big.NewInt(txapp.ValidatorVoteIDPrice * 2),
+			balance:       big.NewInt(voting.ValidatorVoteIDPrice * 2),
 			expectedNonce: 1, // should broadcast all of them at once
 			didBroadcast:  true,
 			v:             &mockValidatorStore{isValidator: true},
