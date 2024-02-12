@@ -10,8 +10,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/ident"
-	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/voting"
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -34,7 +34,9 @@ func init() {
 
 type Route interface {
 	Pricer
-	Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction, dbTx sql.DB) *TxResponse
+	// Execute executes the transaction and returns the result.
+	// If any error is returned, it will rollback the transaction.
+	Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse
 }
 
 // TxContext is the context for transaction execution.
@@ -70,9 +72,23 @@ func registerRoute(payloadType string, route Route) error {
 
 type deployDatasetRoute struct{}
 
-func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction, dbTx sql.DB) *TxResponse {
+func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(nil, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
 	spend, code, err := router.checkAndSpend(ctx, tx, d, dbTx)
 	if err != nil {
+		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
+			// if insufficient balance or fee, we want to still spend, so we commit here
+			err2 := dbTx.Commit(ctx.Ctx)
+			if err2 != nil {
+				// internal db error, this will almost certainly halt chain
+				router.log.Error("failed to commit dbTx", zap.Error(err2))
+			}
+		}
 		return txRes(spend, code, err)
 	}
 
@@ -93,6 +109,12 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
+	err = dbTx.Commit(ctx.Ctx)
+	if err != nil {
+		// internal db error, this will almost certainly halt chain
+		router.log.Error("failed to commit dbTx", zap.Error(err))
+	}
+
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
@@ -102,9 +124,23 @@ func (d *deployDatasetRoute) Price(ctx context.Context, router *TxApp, tx *trans
 
 type dropDatasetRoute struct{}
 
-func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction, dbTx sql.DB) *TxResponse {
+func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(nil, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
 	spend, code, err := router.checkAndSpend(ctx, tx, d, dbTx)
 	if err != nil {
+		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
+			// if insufficient balance or fee, we want to still spend, so we commit here
+			err2 := dbTx.Commit(ctx.Ctx)
+			if err2 != nil {
+				// internal db error, this will almost certainly halt chain
+				router.log.Error("failed to commit dbTx", zap.Error(err2))
+			}
+		}
 		return txRes(spend, code, err)
 	}
 
@@ -119,6 +155,12 @@ func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transaction
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
+	err = dbTx.Commit(ctx.Ctx)
+	if err != nil {
+		// internal db error, this will almost certainly halt chain
+		router.log.Error("failed to commit dbTx", zap.Error(err))
+	}
+
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
@@ -128,9 +170,23 @@ func (d *dropDatasetRoute) Price(ctx context.Context, router *TxApp, tx *transac
 
 type executeActionRoute struct{}
 
-func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction, dbTx sql.DB) *TxResponse {
+func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(nil, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
 	spend, code, err := router.checkAndSpend(ctx, tx, e, dbTx)
 	if err != nil {
+		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
+			// if insufficient balance or fee, we want to still spend, so we commit here
+			err2 := dbTx.Commit(ctx.Ctx)
+			if err2 != nil {
+				// internal db error, this will almost certainly halt chain
+				router.log.Error("failed to commit dbTx", zap.Error(err2))
+			}
+		}
 		return txRes(spend, code, err)
 	}
 
@@ -160,8 +216,13 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		args = make([][]any, 1)
 	}
 
+	engineTx, err := dbTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
 	for i := range action.Arguments {
-		_, err = router.Engine.Execute(ctx.Ctx, dbTx, &engineTypes.ExecutionData{
+		_, err = router.Engine.Execute(ctx.Ctx, engineTx, &engineTypes.ExecutionData{
 			Dataset:   action.DBID,
 			Procedure: action.Action,
 			Args:      args[i],
@@ -169,8 +230,31 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 			Caller:    identifier,
 		})
 		if err != nil {
+			err2 := engineTx.Rollback(ctx.Ctx)
+			if err2 != nil {
+				// internal db error, this will almost certainly halt chain
+				router.log.Error("failed to rollback engineTx", zap.Error(err2))
+			}
+
+			err3 := dbTx.Commit(ctx.Ctx)
+			if err3 != nil {
+				// internal db error, this will almost certainly halt chain
+				router.log.Error("failed to commit dbTx", zap.Error(err3))
+			}
+
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
+	}
+
+	err = engineTx.Commit(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
+	err = dbTx.Commit(ctx.Ctx)
+	if err != nil {
+		// internal db error, this will almost certainly halt chain
+		router.log.Error("failed to commit dbTx", zap.Error(err))
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
@@ -184,9 +268,23 @@ type transferRoute struct{}
 
 var bigZero = big.NewInt(0)
 
-func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction, dbTx sql.DB) *TxResponse {
+func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(nil, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
 	spend, code, err := router.checkAndSpend(ctx, tx, t, dbTx)
 	if err != nil {
+		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
+			// if insufficient balance or fee, we want to still spend, so we commit here
+			err2 := dbTx.Commit(ctx.Ctx)
+			if err2 != nil {
+				// internal db error, this will almost certainly halt chain
+				router.log.Error("failed to commit dbTx", zap.Error(err2))
+			}
+		}
 		return txRes(spend, code, err)
 	}
 
@@ -212,6 +310,12 @@ func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.T
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
+	err = dbTx.Commit(ctx.Ctx)
+	if err != nil {
+		// internal db error, this will almost certainly halt chain
+		router.log.Error("failed to commit dbTx", zap.Error(err))
+	}
+
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
@@ -221,9 +325,23 @@ func (t *transferRoute) Price(ctx context.Context, router *TxApp, tx *transactio
 
 type validatorJoinRoute struct{}
 
-func (v *validatorJoinRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction, dbTx sql.DB) *TxResponse {
+func (v *validatorJoinRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(nil, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
 	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
 	if err != nil {
+		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
+			// if insufficient balance or fee, we want to still spend, so we commit here
+			err2 := dbTx.Commit(ctx.Ctx)
+			if err2 != nil {
+				// internal db error, this will almost certainly halt chain
+				router.log.Error("failed to commit dbTx", zap.Error(err2))
+			}
+		}
 		return txRes(spend, code, err)
 	}
 
@@ -238,6 +356,12 @@ func (v *validatorJoinRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
+	err = dbTx.Commit(ctx.Ctx)
+	if err != nil {
+		// internal db error, this will almost certainly halt chain
+		router.log.Error("failed to commit dbTx", zap.Error(err))
+	}
+
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
@@ -247,9 +371,23 @@ func (v *validatorJoinRoute) Price(ctx context.Context, router *TxApp, tx *trans
 
 type validatorApproveRoute struct{}
 
-func (v *validatorApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction, dbTx sql.DB) *TxResponse {
+func (v *validatorApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(nil, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
 	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
 	if err != nil {
+		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
+			// if insufficient balance or fee, we want to still spend, so we commit here
+			err2 := dbTx.Commit(ctx.Ctx)
+			if err2 != nil {
+				// internal db error, this will almost certainly halt chain
+				router.log.Error("failed to commit dbTx", zap.Error(err2))
+			}
+		}
 		return txRes(spend, code, err)
 	}
 
@@ -264,6 +402,12 @@ func (v *validatorApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
+	err = dbTx.Commit(ctx.Ctx)
+	if err != nil {
+		// internal db error, this will almost certainly halt chain
+		router.log.Error("failed to commit dbTx", zap.Error(err))
+	}
+
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
@@ -273,9 +417,23 @@ func (v *validatorApproveRoute) Price(ctx context.Context, router *TxApp, tx *tr
 
 type validatorRemoveRoute struct{}
 
-func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction, dbTx sql.DB) *TxResponse {
+func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(nil, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
 	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
 	if err != nil {
+		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
+			// if insufficient balance or fee, we want to still spend, so we commit here
+			err2 := dbTx.Commit(ctx.Ctx)
+			if err2 != nil {
+				// internal db error, this will almost certainly halt chain
+				router.log.Error("failed to commit dbTx", zap.Error(err2))
+			}
+		}
 		return txRes(spend, code, err)
 	}
 
@@ -290,6 +448,12 @@ func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transac
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
+	err = dbTx.Commit(ctx.Ctx)
+	if err != nil {
+		// internal db error, this will almost certainly halt chain
+		router.log.Error("failed to commit dbTx", zap.Error(err))
+	}
+
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
@@ -299,9 +463,23 @@ func (v *validatorRemoveRoute) Price(ctx context.Context, router *TxApp, tx *tra
 
 type validatorLeaveRoute struct{}
 
-func (v *validatorLeaveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction, dbTx sql.DB) *TxResponse {
+func (v *validatorLeaveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(nil, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
 	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
 	if err != nil {
+		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
+			// if insufficient balance or fee, we want to still spend, so we commit here
+			err2 := dbTx.Commit(ctx.Ctx)
+			if err2 != nil {
+				// internal db error, this will almost certainly halt chain
+				router.log.Error("failed to commit dbTx", zap.Error(err2))
+			}
+		}
 		return txRes(spend, code, err)
 	}
 
@@ -317,6 +495,12 @@ func (v *validatorLeaveRoute) Execute(ctx TxContext, router *TxApp, tx *transact
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
+	err = dbTx.Commit(ctx.Ctx)
+	if err != nil {
+		// internal db error, this will almost certainly halt chain
+		router.log.Error("failed to commit dbTx", zap.Error(err))
+	}
+
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
@@ -330,9 +514,23 @@ type validatorVoteIDsRoute struct{}
 // Execute will approve the votes for the given IDs.
 // If the event already has a body in the event store, and the vote
 // is from the local validator, the event will be deleted from the event store.
-func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction, dbTx sql.DB) *TxResponse {
+func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(nil, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
 	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
 	if err != nil {
+		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
+			// if insufficient balance or fee, we want to still spend, so we commit here
+			err2 := dbTx.Commit(ctx.Ctx)
+			if err2 != nil {
+				// internal db error, this will almost certainly halt chain
+				router.log.Error("failed to commit dbTx", zap.Error(err2))
+			}
+		}
 		return txRes(spend, code, err)
 	}
 
@@ -383,6 +581,12 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 		}
 	}
 
+	err = dbTx.Commit(ctx.Ctx)
+	if err != nil {
+		// internal db error, this will almost certainly halt chain
+		router.log.Error("failed to commit dbTx", zap.Error(err))
+	}
+
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
@@ -405,9 +609,23 @@ type validatorVoteBodiesRoute struct{}
 // Execute will add the event bodies to the event store.
 // For each event, if the local validator has already voted on the event,
 // the event will be deleted from the event store.
-func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction, dbTx sql.DB) *TxResponse {
+func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(nil, transactions.CodeUnknownError, err)
+	}
+	defer dbTx.Rollback(ctx.Ctx)
+
 	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
 	if err != nil {
+		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
+			// if insufficient balance or fee, we want to still spend, so we commit here
+			err2 := dbTx.Commit(ctx.Ctx)
+			if err2 != nil {
+				// internal db error, this will almost certainly halt chain
+				router.log.Error("failed to commit dbTx", zap.Error(err2))
+			}
+		}
 		return txRes(spend, code, err)
 	}
 
@@ -448,6 +666,12 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 				return txRes(spend, transactions.CodeUnknownError, err)
 			}
 		}
+	}
+
+	err = dbTx.Commit(ctx.Ctx)
+	if err != nil {
+		// internal db error, this will almost certainly halt chain
+		router.log.Error("failed to commit dbTx", zap.Error(err))
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
