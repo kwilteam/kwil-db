@@ -2,6 +2,8 @@ package test
 
 import (
 	"context"
+	"strings"
+	"testing"
 
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 )
@@ -70,4 +72,27 @@ func NewTestPool(ctx context.Context, dropSchemas []string, dropTables ...string
 	}
 
 	return pool, cleanUp, nil
+}
+
+// NewTestDB creates a new test database.
+// The caller is responsible for cleaning up.
+// The suggested method for cleanup is simply to have
+// an outermost Tx that is rolled back at the end of the test.
+func NewTestDB(t *testing.T) (db *pg.DB, err error) {
+	cfg := &pg.DBConfig{
+		PoolConfig: pg.PoolConfig{
+			ConnConfig: pg.ConnConfig{
+				Host:   "127.0.0.1",
+				Port:   "5432",
+				User:   "kwild",
+				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
+				DBName: "kwil_test_db",
+			},
+			MaxConns: 11,
+		},
+		SchemaFilter: func(s string) bool {
+			return strings.Contains(s, pg.DefaultSchemaFilterPrefix)
+		},
+	}
+	return pg.NewDB(context.Background(), cfg)
 }

@@ -13,6 +13,7 @@ import (
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/validators"
 	"github.com/kwilteam/kwil-db/internal/version"
 
@@ -42,8 +43,8 @@ type TxApp interface {
 
 // ValidatorReader reads data about the validator store.
 type ValidatorReader interface {
-	CurrentValidators(ctx context.Context) ([]*validators.Validator, error)
-	ActiveVotes(ctx context.Context) ([]*validators.JoinRequest, []*validators.ValidatorRemoveProposal, error)
+	CurrentValidators(ctx context.Context, tx sql.DB) ([]*validators.Validator, error)
+	ActiveVotes(ctx context.Context, tx sql.DB) ([]*validators.JoinRequest, []*validators.ValidatorRemoveProposal, error)
 }
 
 type AdminSvcOpt func(*Service)
@@ -60,6 +61,7 @@ type Service struct {
 	blockchain BlockchainTransactor // node is the local node that can accept transactions.
 	TxApp      TxApp
 	validators ValidatorReader
+	db         sql.ReadTxMaker
 
 	cfg *config.KwildConfig
 
@@ -72,7 +74,7 @@ type Service struct {
 var _ admpb.AdminServiceServer = (*Service)(nil)
 
 // NewService constructs a new Service.
-func NewService(blockchain BlockchainTransactor, txApp TxApp, validators ValidatorReader, signer auth.Signer, cfg *config.KwildConfig, chainId string, opts ...AdminSvcOpt) *Service {
+func NewService(db sql.ReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, validators ValidatorReader, signer auth.Signer, cfg *config.KwildConfig, chainId string, opts ...AdminSvcOpt) *Service {
 	s := &Service{
 		blockchain: blockchain,
 		TxApp:      txApp,
@@ -81,6 +83,7 @@ func NewService(blockchain BlockchainTransactor, txApp TxApp, validators Validat
 		chainId:    chainId,
 		cfg:        cfg,
 		log:        log.NewNoOp(),
+		db:         db,
 	}
 
 	for _, opt := range opts {
@@ -238,8 +241,15 @@ func (s *Service) Remove(ctx context.Context, req *admpb.RemoveRequest) (*txpb.B
 }
 
 func (s *Service) JoinStatus(ctx context.Context, req *admpb.JoinStatusRequest) (*admpb.JoinStatusResponse, error) {
+	readTx, err := s.db.BeginReadTx(ctx)
+	if err != nil {
+		s.log.Error("failed to start read transaction", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to start read transaction")
+	}
+	defer readTx.Rollback(ctx) // always rollback, the readTx is read-only
+
 	joiner := req.Pubkey
-	allJoins, _, err := s.validators.ActiveVotes(ctx)
+	allJoins, _, err := s.validators.ActiveVotes(ctx, readTx)
 	if err != nil {
 		s.log.Error("failed to retrieve active join requests", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to retrieve active join requests")
@@ -252,7 +262,7 @@ func (s *Service) JoinStatus(ctx context.Context, req *admpb.JoinStatusRequest) 
 		}
 	}
 
-	vals, err := s.validators.CurrentValidators(ctx)
+	vals, err := s.validators.CurrentValidators(ctx, readTx)
 	if err != nil {
 		s.log.Error("failed to retrieve current validators", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to retrieve current validators")
@@ -282,7 +292,14 @@ func (s *Service) Leave(ctx context.Context, req *admpb.LeaveRequest) (*txpb.Bro
 }
 
 func (s *Service) ListValidators(ctx context.Context, req *admpb.ListValidatorsRequest) (*admpb.ListValidatorsResponse, error) {
-	vals, err := s.validators.CurrentValidators(ctx)
+	readTx, err := s.db.BeginReadTx(ctx)
+	if err != nil {
+		s.log.Error("failed to start read transaction", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to start read transaction")
+	}
+	defer readTx.Rollback(ctx) // always rollback, the readTx is read-only
+
+	vals, err := s.validators.CurrentValidators(ctx, readTx)
 	if err != nil {
 		s.log.Error("failed to retrieve current validators", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to retrieve current validators")
@@ -302,7 +319,14 @@ func (s *Service) ListValidators(ctx context.Context, req *admpb.ListValidatorsR
 }
 
 func (s *Service) ListPendingJoins(ctx context.Context, req *admpb.ListJoinRequestsRequest) (*admpb.ListJoinRequestsResponse, error) {
-	joins, _, err := s.validators.ActiveVotes(ctx)
+	readTx, err := s.db.BeginReadTx(ctx)
+	if err != nil {
+		s.log.Error("failed to start read transaction", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to start read transaction")
+	}
+	defer readTx.Rollback(ctx) // always rollback, the readTx is read-only
+
+	joins, _, err := s.validators.ActiveVotes(ctx, readTx)
 	if err != nil {
 		s.log.Error("failed to retrieve active join requests", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to retrieve active join requests")

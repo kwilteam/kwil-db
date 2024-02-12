@@ -17,7 +17,8 @@ import (
 // 	Schema() *types.Schema
 // }
 
-// This is a conceptual interface for something I am trying
+// Dataset is a deployed database schema.
+// It has a schema, procedures that are ready to be called, and can execute statements.
 type Dataset interface {
 	// Call calls an action from the dataset.
 	// If the action is not public, it will return an error.

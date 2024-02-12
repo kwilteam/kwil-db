@@ -15,6 +15,9 @@ type Queryer interface {
 }
 
 type Executor interface {
+	// Execute executexs a statement.
+	// It speaks directly to Postgres, and therefore can be used for
+	// DDL and DML statements.
 	Execute(ctx context.Context, stmt string, args ...any) (*ResultSet, error)
 }
 

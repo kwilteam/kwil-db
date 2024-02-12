@@ -227,8 +227,7 @@ func (do *EthDepositOracle) addEvent(ctx context.Context, credit *AccountCredit)
 }
 
 func (do *EthDepositOracle) getBlockHeight(ctx context.Context) (int64, error) {
-	const sync = true
-	blockBytes, err := do.kvstore.Get(ctx, []byte(lastProcessedBlock), sync)
+	blockBytes, err := do.kvstore.Get(ctx, []byte(lastProcessedBlock))
 	if err == kv.ErrKeyNotFound || blockBytes == nil {
 		do.setBlockHeight(ctx, 0)
 		return 0, nil

@@ -8,6 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
+	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/voting"
 	"go.uber.org/zap"
 )
@@ -39,7 +40,7 @@ func (ac *AccountCredit) Type() string {
 	return "AccountCredit"
 }
 
-func (ac *AccountCredit) Apply(ctx context.Context, datastores voting.Datastores, proposer []byte, voters []voting.Voter, logger log.Logger) error {
+func (ac *AccountCredit) Apply(ctx context.Context, db sql.DB, datastores voting.Datastores, proposer []byte, voters []voting.Voter, logger log.Logger) error {
 	// trim the 0x prefix
 	if len(ac.Account) > 2 && ac.Account[:2] == "0x" {
 		ac.Account = ac.Account[2:]
@@ -53,7 +54,7 @@ func (ac *AccountCredit) Apply(ctx context.Context, datastores voting.Datastores
 		return err
 	}
 
-	err = datastores.Accounts.Credit(ctx, bts, ac.Amount)
+	err = datastores.Accounts.Credit(ctx, db, bts, ac.Amount)
 	if err != nil {
 		return err
 	}
@@ -61,7 +62,7 @@ func (ac *AccountCredit) Apply(ctx context.Context, datastores voting.Datastores
 
 	for _, voter := range voters {
 		// credit the voter
-		err = datastores.Accounts.Credit(ctx, voter.PubKey, big.NewInt(AccountCreditResolutionReward))
+		err = datastores.Accounts.Credit(ctx, db, voter.PubKey, big.NewInt(AccountCreditResolutionReward))
 		if err != nil {
 			return err
 		}

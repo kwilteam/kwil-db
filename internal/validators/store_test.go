@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/internal/sql/adapter"
-	"github.com/kwilteam/kwil-db/internal/sql/pg"
+	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
+	"github.com/stretchr/testify/require"
 )
 
 // create user kwild with SUPERUSER replication;
@@ -19,27 +19,16 @@ import (
 func Test_validatorStore(t *testing.T) {
 	ctx := context.Background()
 
-	cfg := &pg.PoolConfig{
-		ConnConfig: pg.ConnConfig{
-			Host:   "127.0.0.1",
-			Port:   "5432",
-			User:   "kwild",
-			Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
-			DBName: "kwil_test_db",
-		},
-		MaxConns: 11,
-	}
-	db, err := pg.NewPool(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db, err := dbtest.NewTestDB(t)
+	require.NoError(t, err)
 	defer db.Close()
-	defer db.Execute(ctx, `DROP SCHEMA IF EXISTS `+schemaName+` CASCADE`)
 
-	ds := &adapter.DB{Datastore: db}
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback to cleanup
 
 	logger := log.NewStdOut(log.DebugLevel)
-	vs, err := newValidatorStore(ctx, ds, logger)
+	vs, err := newValidatorStore(ctx, tx, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +36,7 @@ func Test_validatorStore(t *testing.T) {
 	// This "test" steps through a positive use case while testing negative paths.
 
 	// Ensure fresh store is usable
-	vals, err := vs.CurrentValidators(ctx)
+	vals, err := vs.CurrentValidators(ctx, tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +44,7 @@ func Test_validatorStore(t *testing.T) {
 		t.Fatalf("Starting validator set not empty (%d)", len(vals))
 	}
 
-	votes, removals, err := vs.ActiveVotes(ctx)
+	votes, removals, err := vs.ActiveVotes(ctx, tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,12 +63,12 @@ func Test_validatorStore(t *testing.T) {
 		vals[i] = newValidator()
 	}
 
-	err = vs.Init(ctx, vals)
+	err = vs.Init(ctx, tx, vals)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	valsOut, err := vs.CurrentValidators(ctx)
+	valsOut, err := vs.CurrentValidators(ctx, tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,11 +89,11 @@ func Test_validatorStore(t *testing.T) {
 	// Update power
 	const newPower = 8
 	v0Key := vals[0].PubKey
-	err = vs.UpdateValidatorPower(ctx, v0Key, newPower)
+	err = vs.UpdateValidatorPower(ctx, tx, v0Key, newPower)
 	if err != nil {
 		t.Fatal(err)
 	}
-	valsOut, err = vs.CurrentValidators(ctx)
+	valsOut, err = vs.CurrentValidators(ctx, tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,11 +108,11 @@ func Test_validatorStore(t *testing.T) {
 	// Add a new validator (but no join or approves)
 	vX := newValidator()
 	numValidators++
-	err = vs.AddValidator(ctx, vX.PubKey, vX.Power)
+	err = vs.AddValidator(ctx, tx, vX.PubKey, vX.Power)
 	if err != nil {
 		t.Fatal(err)
 	}
-	valsOut, err = vs.CurrentValidators(ctx)
+	valsOut, err = vs.CurrentValidators(ctx, tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +123,7 @@ func Test_validatorStore(t *testing.T) {
 	if numValidators != len(valsOut) {
 		t.Fatalf("wanted %d validators, got %d", numValidators, len(valsOut))
 	}
-	err = vs.AddValidator(ctx, vX.PubKey, vX.Power)
+	err = vs.AddValidator(ctx, tx, vX.PubKey, vX.Power)
 	if err == nil {
 		t.Fatal("expected an error re-adding an existing and empowered validator")
 	}
@@ -143,7 +132,7 @@ func Test_validatorStore(t *testing.T) {
 	joiner := newValidator()
 
 	// Add approval for non-existent join request
-	err = vs.AddApproval(ctx, joiner.PubKey, v0Key)
+	err = vs.AddApproval(ctx, tx, joiner.PubKey, v0Key)
 	if err == nil {
 		t.Fatalf("no error approving non-existent join requests")
 	}
@@ -154,24 +143,24 @@ func Test_validatorStore(t *testing.T) {
 		approvers[i] = vi.PubKey
 	}
 	expiresAt := int64(3)
-	err = vs.StartJoinRequest(ctx, joiner.PubKey, approvers, wantPower, expiresAt)
+	err = vs.StartJoinRequest(ctx, tx, joiner.PubKey, approvers, wantPower, expiresAt)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Expire the join request & delete it
-	err = vs.DeleteJoinRequest(ctx, joiner.PubKey)
+	err = vs.DeleteJoinRequest(ctx, tx, joiner.PubKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Add approval for expired join request
-	err = vs.AddApproval(ctx, joiner.PubKey, v0Key)
+	err = vs.AddApproval(ctx, tx, joiner.PubKey, v0Key)
 	if err == nil {
 		t.Fatalf("no error approving expired join requests")
 	}
 
-	joins, removals, err := vs.ActiveVotes(ctx)
+	joins, removals, err := vs.ActiveVotes(ctx, tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,12 +172,12 @@ func Test_validatorStore(t *testing.T) {
 	}
 
 	// Start a new join request
-	err = vs.StartJoinRequest(ctx, joiner.PubKey, approvers, wantPower, expiresAt)
+	err = vs.StartJoinRequest(ctx, tx, joiner.PubKey, approvers, wantPower, expiresAt)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	joins, removals, err = vs.ActiveVotes(ctx)
+	joins, removals, err = vs.ActiveVotes(ctx, tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,11 +206,11 @@ outer:
 		t.Errorf("approver not found")
 	}
 
-	err = vs.AddApproval(ctx, joiner.PubKey, v0Key)
+	err = vs.AddApproval(ctx, tx, joiner.PubKey, v0Key)
 	if err != nil {
 		t.Fatalf("unable to add approval")
 	}
-	joins, removals, err = vs.ActiveVotes(ctx)
+	joins, removals, err = vs.ActiveVotes(ctx, tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,13 +232,13 @@ outer:
 	}
 
 	// Let's say one vote is good enough.
-	err = vs.AddValidator(ctx, joiner.PubKey, wantPower)
+	err = vs.AddValidator(ctx, tx, joiner.PubKey, wantPower)
 	if err != nil {
 		t.Fatal(err)
 	}
 	numValidators++
 	// the join request should be removed
-	joins, removals, err = vs.ActiveVotes(ctx)
+	joins, removals, err = vs.ActiveVotes(ctx, tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +249,7 @@ outer:
 		t.Error("inactive join request not removed on validator add")
 	}
 
-	valsOut, err = vs.CurrentValidators(ctx)
+	valsOut, err = vs.CurrentValidators(ctx, tx)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/accounts"
+	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
@@ -36,7 +37,7 @@ type ResolutionPayload interface {
 
 	// Apply is called when a resolution is approved. Voters is the list of all voters voted for the resolution, including the proposer.
 	// Ensure that all changes to the datastores should be deterministic, else it will lead to consensus failures.
-	Apply(ctx context.Context, datastores Datastores, proposer []byte, voters []Voter, logger log.Logger) error
+	Apply(ctx context.Context, db sql.DB, datastores Datastores, proposer []byte, voters []Voter, logger log.Logger) error
 }
 
 type Voter struct {
@@ -47,26 +48,33 @@ type Voter struct {
 // Datastores provides implementers of ResolutionPayload with access
 // to different datastore interfaces
 type Datastores struct {
-	Accounts  AccountStore
-	Databases Datasets
+	Accounts AccountStore
+	Engine   Engine
 }
 
 type AccountStore interface {
 	// Account gets an account by its identifier
-	GetAccount(ctx context.Context, identifier []byte) (*accounts.Account, error)
+	GetAccount(ctx context.Context, db sql.DB, identifier []byte) (*accounts.Account, error)
 
 	// Credit credits an account with a given amount
-	Credit(ctx context.Context, account []byte, amount *big.Int) error
+	Credit(ctx context.Context, db sql.DB, account []byte, amount *big.Int) error
 }
 
-type Datasets interface {
-	// Execute executes a statement with the given arguments.
-	// Execute(ctx context.Context, dbid string, stmt string, args ...any) (*sql.ResultSet, error)
-	// NOT USE by VoteProcessor for now.
-
-	// Query executes a query with the given arguments.
-	// It will not read uncommitted data.
-	Query(ctx context.Context, dbid string, query string, args ...any) (*sql.ResultSet, error)
+// Engine is the Kwil database engine.
+// It is capable of deploying datasets, executing actions, and reading data.
+type Engine interface {
+	// CreateDataset creates a new dataset.
+	// The passed caller will be the owner of the dataset.
+	CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, caller []byte) (err error)
+	// DeleteDataset deletes a dataset.
+	// The passed caller must be the owner of the dataset.
+	DeleteDataset(ctx context.Context, tx sql.DB, dbid string, caller []byte) error
+	// Execute executes a procedure (aka action) that exists in a dataset's schema.
+	Execute(ctx context.Context, tx sql.DB, options *types.ExecutionData) (*sql.ResultSet, error)
+	// GetSchema returns the schema of a dataset.
+	GetSchema(ctx context.Context, dbid string) (*types.Schema, error)
+	// Query executes a read-only query on a dataset.
+	Query(ctx context.Context, tx sql.DB, dbid string, query string) (*sql.ResultSet, error)
 }
 
 func OrderedListOfVoters(voters map[string]int64) []string {
