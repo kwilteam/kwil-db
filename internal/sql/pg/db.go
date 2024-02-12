@@ -248,7 +248,7 @@ func (db *DB) beginWriterTx(ctx context.Context) (pgx.Tx, error) {
 
 	tx, err := db.pool.writer.BeginTx(ctx, pgx.TxOptions{
 		AccessMode: pgx.ReadWrite,
-		IsoLevel:   pgx.RepeatableRead,
+		IsoLevel:   pgx.ReadUncommitted,
 	})
 	if err != nil {
 		return nil, err
@@ -412,7 +412,7 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 	err := pgx.BeginTxFunc(ctx, db.pool.writer,
 		pgx.TxOptions{
 			AccessMode: pgx.ReadWrite,
-			IsoLevel:   pgx.RepeatableRead,
+			IsoLevel:   pgx.ReadCommitted,
 		},
 		func(tx pgx.Tx) error {
 			seq, err := incrementSeq(ctx, tx)

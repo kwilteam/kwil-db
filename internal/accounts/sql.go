@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 const (
@@ -24,73 +26,49 @@ const (
 	sqlGetAccount = `SELECT balance, nonce FROM ` + schemaName + `.accounts WHERE identifier = $1`
 )
 
-func (a *AccountStore) initTables(ctx context.Context) error {
-	if _, err := a.db.Execute(ctx, sqlCreateSchema); err != nil {
+func initTables(ctx context.Context, tx sql.DB) error {
+	if _, err := tx.Execute(ctx, sqlCreateSchema); err != nil {
 		return err
 	}
-	_, err := a.db.Execute(ctx, sqlInitTables)
+	_, err := tx.Execute(ctx, sqlInitTables)
 	if err != nil {
 		return fmt.Errorf("failed to initialize tables: %w", err)
 	}
 	return nil
 }
 
-func (a *AccountStore) updateAccount(ctx context.Context, ident []byte, amount *big.Int, nonce int64) error {
-	_, err := a.db.Execute(ctx, sqlUpdateAccount, amount.String(), nonce, ident)
+// updateAccount updates the balance and nonce of an account.
+func updateAccount(ctx context.Context, db sql.DB, ident []byte, amount *big.Int, nonce int64) error {
+	_, err := db.Execute(ctx, sqlUpdateAccount, amount.String(), nonce, ident)
 	return err
 }
 
-// createAccountWithBalance creates an account with the given identifier and
-// initial balance.
-func (a *AccountStore) createAccountWithBalance(ctx context.Context, ident []byte, amt *big.Int) error {
-	_, err := a.db.Execute(ctx, sqlCreateAccount, ident, amt.String(), 0)
+// createAccount creates an account with the given identifier and
+// initial balance. The nonce will be set to 0.
+func createAccount(ctx context.Context, db sql.DB, ident []byte, amt *big.Int) error {
+	_, err := db.Execute(ctx, sqlCreateAccount, ident, amt.String(), 0)
 	return err
 }
 
-// createAccount creates an account with the given identifier.
-func (a *AccountStore) createAccount(ctx context.Context, ident []byte) error {
-	return a.createAccountWithBalance(ctx, ident, big.NewInt(0))
-}
-
-// getAccountReadOnly gets an account using a read-only connection. it will not
-// show uncommitted changes. If the account does not exist, no error is
-// returned, but an account with a nil identifier is returned.
-func (a *AccountStore) getAccountReadOnly(ctx context.Context, ident []byte) (*Account, error) {
-	results, err := a.db.Query(ctx, sqlGetAccount, ident)
+// getAccount retrieves an account from the database.
+// if the account is not found, it returns nil, ErrAccountNotFound.
+func getAccount(ctx context.Context, db sql.DB, ident []byte) (*Account, error) {
+	results, err := db.Execute(ctx, sqlGetAccount, ident)
 	if err != nil {
 		return nil, err
 	}
 
-	acc, err := accountFromRecords(ident, results)
-	if err == ErrAccountNotFound {
-		return emptyAccount(), nil
-	}
-	return acc, err
-}
-
-// getAccountSynchronous gets an account using a read-write transaction, if in
-// one. It will show uncommitted changes. It also is different from
-// getAccountReadOnly in that a nil account is returned if none exists. This
-// should ONLY be used from calls where a write transaction exists (in session).
-func (a *AccountStore) getAccountSynchronous(ctx context.Context, ident []byte) (*Account, error) {
-	results, err := a.db.Execute(ctx, sqlGetAccount, ident)
-	// if errors.Is(err, sql.ErrNoTransaction) { // if this is needed, it's a sign of bad design elsewhere
-	// 	results, err = a.db.Query(ctx, sqlGetAccount, ident)
-	// }
-	if err != nil {
-		return nil, err
-	}
-
-	return accountFromRecords(ident, results)
-}
-
-// accountFromRecords gets the first account from a list of records.
-func accountFromRecords(identifier []byte, results []map[string]interface{}) (*Account, error) {
-	if len(results) == 0 {
+	if len(results.Rows) == 0 {
 		return nil, ErrAccountNotFound
 	}
+	if len(results.Rows) > 1 {
+		return nil, fmt.Errorf("expected 1 row, got %d", len(results.Rows))
+	}
 
-	stringBal, ok := results[0]["balance"].(string)
+	// rows[0][0] == balance
+	// rows[0][1] == nonce
+
+	stringBal, ok := results.Rows[0][0].(string)
 	if !ok {
 		return nil, fmt.Errorf("failed to convert stored string balance to big int")
 	}
@@ -100,23 +78,23 @@ func accountFromRecords(identifier []byte, results []map[string]interface{}) (*A
 		return nil, ErrConvertToBigInt
 	}
 
-	nonce, ok := results[0]["nonce"].(int64)
+	nonce, ok := results.Rows[0][1].(int64)
 	if !ok {
 		return nil, fmt.Errorf("failed to convert stored nonce to int64")
 	}
 
 	return &Account{
-		Identifier: identifier,
+		Identifier: ident,
 		Balance:    balance,
 		Nonce:      nonce,
 	}, nil
 }
 
 // getOrCreateAccount gets an account, creating it if it doesn't exist.
-func (a *AccountStore) getOrCreateAccount(ctx context.Context, ident []byte) (*Account, error) {
-	account, err := a.getAccountSynchronous(ctx, ident)
+func getOrCreateAccount(ctx context.Context, tx sql.DB, ident []byte) (*Account, error) {
+	account, err := getAccount(ctx, tx, ident)
 	if account == nil && err == ErrAccountNotFound {
-		err = a.createAccount(ctx, ident)
+		err = createAccount(ctx, tx, ident, big.NewInt(0)) // create account with 0 balance
 		if err != nil {
 			return nil, fmt.Errorf("failed to create account: %w", err)
 		}

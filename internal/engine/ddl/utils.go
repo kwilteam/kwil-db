@@ -24,7 +24,7 @@ func columnTypeToSQLType(columnType types.DataType) (string, error) {
 	case types.BLOB:
 		sqlType = "BYTEA"
 	case types.BOOL:
-		sqlType = "BOOL"
+		sqlType = "BOOLEAN"
 	default:
 		return "", fmt.Errorf("unknown column type: %s", columnType)
 	}

@@ -1,10 +1,12 @@
 package oracles
 
 import (
+	"bytes"
 	"context"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/oracles"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"go.uber.org/zap"
@@ -18,7 +20,7 @@ type OracleMgr struct {
 	ctx        context.Context
 	config     map[string]map[string]string
 	eventStore oracles.EventStore
-	vstore     ValidatorStore
+	vstore     ValidatorGetter
 	cometNode  *cometbft.CometBftNode
 	// pubKey is the public key of the node
 	pubKey []byte
@@ -30,13 +32,12 @@ type OracleMgr struct {
 	logger log.Logger
 }
 
-type ValidatorStore interface {
-	// IsCurrent returns true if the validator is currently a validator.
-	// It does not take into account uncommitted changes, but is thread-safe.
-	IsCurrent(ctx context.Context, validator []byte) (bool, error)
+// ValidatorGetter is able to read the current validator set.
+type ValidatorGetter interface {
+	GetValidators(ctx context.Context) ([]*types.Validator, error)
 }
 
-func NewOracleMgr(ctx context.Context, config map[string]map[string]string, eventStore oracles.EventStore, node *cometbft.CometBftNode, nodePubKey []byte, vstore ValidatorStore, logger log.Logger) *OracleMgr {
+func NewOracleMgr(ctx context.Context, config map[string]map[string]string, eventStore oracles.EventStore, node *cometbft.CometBftNode, nodePubKey []byte, vstore ValidatorGetter, logger log.Logger) *OracleMgr {
 	return &OracleMgr{
 		ctx:        ctx,
 		config:     config,
@@ -74,19 +75,27 @@ func (omgr *OracleMgr) listenForValidatorStatusChanges() {
 					continue
 				}
 
-				// check if the node is a validator
-				isVal, err := omgr.vstore.IsCurrent(omgr.ctx, omgr.pubKey)
+				validators, err := omgr.vstore.GetValidators(omgr.ctx)
 				if err != nil {
-					omgr.logger.Warn("failed to get validator status", zap.Error(err))
+					omgr.logger.Warn("failed to get validators", zap.Error(err))
+					// panic?
 					continue
 				}
 
-				if !omgr.oraclesUp && isVal {
+				isValidator := false
+				for _, val := range validators {
+					if bytes.Equal(val.PubKey, omgr.pubKey) {
+						isValidator = true
+						break
+					}
+				}
+
+				if !omgr.oraclesUp && isValidator {
 					// Start the oracles if they are not running
 					omgr.oraclesUp = true
 					omgr.logger.Info("Node's a validator and caught up with the network, starting oracles")
 					omgr.startOracles()
-				} else if omgr.oraclesUp && !isVal {
+				} else if omgr.oraclesUp && !isValidator {
 					// Stop the oracles if they are running
 					omgr.logger.Info("Node's no longer the validator, stopping oracles")
 					omgr.oraclesUp = false

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 // These tests are internal, designed to isolate the core ValidatorMgr logic
@@ -20,18 +21,18 @@ type stubValStore struct {
 	removes []*ValidatorRemoveProposal
 }
 
-func (vs *stubValStore) Init(_ context.Context, vals []*Validator) error {
+func (vs *stubValStore) Init(_ context.Context, _ sql.DB, vals []*Validator) error {
 	vs.current = vals
 	vs.joins = nil
 	vs.removes = nil
 	return nil
 }
 
-func (vs *stubValStore) CurrentValidators(context.Context) ([]*Validator, error) {
+func (vs *stubValStore) CurrentValidators(context.Context, sql.DB) ([]*Validator, error) {
 	return vs.current, nil
 }
 
-func (vs *stubValStore) RemoveValidator(_ context.Context, validator []byte) error {
+func (vs *stubValStore) RemoveValidator(_ context.Context, _ sql.DB, validator []byte) error {
 	i := findValidator(validator, vs.current)
 	if i == -1 {
 		return errors.New("not present")
@@ -40,7 +41,7 @@ func (vs *stubValStore) RemoveValidator(_ context.Context, validator []byte) err
 	return nil
 }
 
-func (vs *stubValStore) UpdateValidatorPower(_ context.Context, validator []byte, power int64) error {
+func (vs *stubValStore) UpdateValidatorPower(_ context.Context, _ sql.DB, validator []byte, power int64) error {
 	i := findValidator(validator, vs.current)
 	if i == -1 {
 		return errors.New("not present")
@@ -49,11 +50,11 @@ func (vs *stubValStore) UpdateValidatorPower(_ context.Context, validator []byte
 	return nil
 }
 
-func (vs *stubValStore) ActiveVotes(context.Context) ([]*JoinRequest, []*ValidatorRemoveProposal, error) {
+func (vs *stubValStore) ActiveVotes(context.Context, sql.DB) ([]*JoinRequest, []*ValidatorRemoveProposal, error) {
 	return vs.joins, nil, nil
 }
 
-func (vs *stubValStore) StartJoinRequest(_ context.Context, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error {
+func (vs *stubValStore) StartJoinRequest(_ context.Context, _ sql.DB, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error {
 	vs.joins = append(vs.joins, &JoinRequest{
 		Candidate: joiner,
 		Power:     power,
@@ -64,7 +65,7 @@ func (vs *stubValStore) StartJoinRequest(_ context.Context, joiner []byte, appro
 	return nil
 }
 
-func (vs *stubValStore) DeleteJoinRequest(_ context.Context, joiner []byte) error {
+func (vs *stubValStore) DeleteJoinRequest(_ context.Context, _ sql.DB, joiner []byte) error {
 	for i, ji := range vs.joins {
 		if bytes.Equal(ji.Candidate, joiner) {
 			vs.joins = append(vs.joins[:i], vs.joins[i+1:]...)
@@ -74,15 +75,15 @@ func (vs *stubValStore) DeleteJoinRequest(_ context.Context, joiner []byte) erro
 	return errors.New("unknown candidate")
 }
 
-func (vs *stubValStore) AddRemoval(_ context.Context, target, validator []byte) error {
+func (vs *stubValStore) AddRemoval(_ context.Context, _ sql.DB, target, validator []byte) error {
 	return nil
 }
 
-func (vs *stubValStore) DeleteRemoval(ctx context.Context, target, validator []byte) error {
+func (vs *stubValStore) DeleteRemoval(ctx context.Context, _ sql.DB, target, validator []byte) error {
 	return nil
 }
 
-func (vs *stubValStore) AddApproval(_ context.Context, joiner []byte, approver []byte) error {
+func (vs *stubValStore) AddApproval(_ context.Context, _ sql.DB, joiner []byte, approver []byte) error {
 	for _, ji := range vs.joins {
 		if bytes.Equal(ji.Candidate, joiner) {
 			for i, ai := range ji.Board {
@@ -97,7 +98,7 @@ func (vs *stubValStore) AddApproval(_ context.Context, joiner []byte, approver [
 	return errors.New("unknown candidate")
 }
 
-func (vs *stubValStore) AddValidator(_ context.Context, joiner []byte, power int64) error {
+func (vs *stubValStore) AddValidator(_ context.Context, _ sql.DB, joiner []byte, power int64) error {
 	vs.current = append(vs.current, &Validator{
 		PubKey: joiner,
 		Power:  power,
@@ -111,11 +112,11 @@ func (vs *stubValStore) AddValidator(_ context.Context, joiner []byte, power int
 	return nil
 }
 
-func (vs *stubValStore) IsCurrent(_ context.Context, validator []byte) (bool, error) {
+func (vs *stubValStore) IsCurrent(_ context.Context, _ sql.DB, validator []byte) (bool, error) {
 	return findValidator(validator, vs.current) != -1, nil
 }
 
-func newTestValidatorMgr(t *testing.T, store ValidatorStore) *ValidatorMgr {
+func newTestValidatorMgr(t *testing.T, store ValidatorStore, tx sql.DB) *ValidatorMgr {
 	mgr := &ValidatorMgr{
 		current:    make(map[string]struct{}),
 		candidates: make(map[string]*joinReq),
@@ -123,7 +124,7 @@ func newTestValidatorMgr(t *testing.T, store ValidatorStore) *ValidatorMgr {
 		db:         store,
 		joinExpiry: 3,
 	}
-	if err := mgr.init(context.Background()); err != nil {
+	if err := mgr.init(context.Background(), tx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -142,11 +143,12 @@ func TestValidatorMgr_updates(t *testing.T) {
 	store := &stubValStore{
 		current: resumeSet,
 	}
+	db := &mockDB{}
 
 	// Build a ValidatorMgr with the in-memory store.
-	mgr := newTestValidatorMgr(t, store)
+	mgr := newTestValidatorMgr(t, store, db)
 
-	vals, err := mgr.CurrentSet(ctx)
+	vals, err := mgr.CurrentSet(ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,11 +160,11 @@ func TestValidatorMgr_updates(t *testing.T) {
 	numVals = 3
 	genesisSet := make([]*Validator, numVals)
 	copy(genesisSet, resumeSet)
-	err = mgr.GenesisInit(ctx, genesisSet, 1)
+	err = mgr.GenesisInit(ctx, db, genesisSet, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	vals, err = mgr.CurrentSet(ctx)
+	vals, err = mgr.CurrentSet(ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,14 +176,14 @@ func TestValidatorMgr_updates(t *testing.T) {
 	// thresh := threshold(numVals) // i.e. 2
 
 	// existing, Join fail
-	err = mgr.Join(ctx, genesisSet[0].PubKey, genesisSet[0].Power)
+	err = mgr.Join(ctx, db, genesisSet[0].PubKey, genesisSet[0].Power)
 	if err == nil {
 		t.Errorf("no error for exiting validator trying to join")
 	}
 	// new, Join success
 	joiner := newValidator()
 	joiner.Power = 1
-	err = mgr.Join(ctx, joiner.PubKey, joiner.Power)
+	err = mgr.Join(ctx, db, joiner.PubKey, joiner.Power)
 	if err != nil {
 		t.Errorf("new validator failed to make a join request")
 	}
@@ -189,48 +191,48 @@ func TestValidatorMgr_updates(t *testing.T) {
 	// Approve non-existent candidate, fail
 	noone := newValidator()
 	val0 := genesisSet[0].PubKey
-	err = mgr.Approve(ctx, noone.PubKey, val0)
+	err = mgr.Approve(ctx, db, noone.PubKey, val0)
 	if err == nil {
 		t.Errorf("no error approving with non-existent join request")
 	}
 
 	// Approve existing candidate, invalid approver
-	err = mgr.Approve(ctx, joiner.PubKey, noone.PubKey)
+	err = mgr.Approve(ctx, db, joiner.PubKey, noone.PubKey)
 	if err == nil {
 		t.Errorf("no error approval from non-validator")
 	}
 
 	// Approve existing candidate, self-approve
-	err = mgr.Approve(ctx, joiner.PubKey, joiner.PubKey)
+	err = mgr.Approve(ctx, db, joiner.PubKey, joiner.PubKey)
 	if err == nil {
 		t.Errorf("no error approval from non-validator")
 	}
 
 	// Approve existing candidate, self-approve
-	err = mgr.Approve(ctx, joiner.PubKey, val0)
+	err = mgr.Approve(ctx, db, joiner.PubKey, val0)
 	if err != nil {
 		t.Errorf("valid approval failed: %v", err)
 	}
 
 	// Approving twice, no error, but not counted
-	err = mgr.Approve(ctx, joiner.PubKey, val0)
+	err = mgr.Approve(ctx, db, joiner.PubKey, val0)
 	if err != nil {
 		t.Errorf("valid approval failed: %v", err)
 	}
 
 	// Should be no validator updates yet (subthresh at 1 of 2 required)
-	updates, _ := mgr.Finalize(ctx)
+	updates, _ := mgr.Finalize(ctx, db)
 	if len(updates) != 0 {
 		t.Fatalf("wanted no validator updates, got %d", len(updates))
 	}
 
 	// Second of two required approves
 	val1 := genesisSet[1].PubKey
-	err = mgr.Approve(ctx, joiner.PubKey, val1)
+	err = mgr.Approve(ctx, db, joiner.PubKey, val1)
 	if err != nil {
 		t.Errorf("valid approval failed: %v", err)
 	}
-	updates, _ = mgr.Finalize(ctx)
+	updates, _ = mgr.Finalize(ctx, db)
 	if len(updates) != 1 {
 		t.Fatalf("wanted a validator update, got %d", len(updates))
 	}
@@ -242,8 +244,34 @@ func TestValidatorMgr_updates(t *testing.T) {
 	}
 
 	// Finalize again (another block), should be empty updates
-	updates, _ = mgr.Finalize(ctx)
+	updates, _ = mgr.Finalize(ctx, db)
 	if len(updates) != 0 {
 		t.Fatalf("wanted no validator updates, got %d", len(updates))
 	}
+}
+
+type mockDB struct{}
+
+func (m *mockDB) AccessMode() sql.AccessMode {
+	return sql.ReadWrite
+}
+
+func (m *mockDB) BeginTx(ctx context.Context) (sql.Tx, error) {
+	return &mockTx{m}, nil
+}
+
+func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
+	return nil, nil
+}
+
+type mockTx struct {
+	*mockDB
+}
+
+func (m *mockTx) Commit(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockTx) Rollback(ctx context.Context) error {
+	return nil
 }
