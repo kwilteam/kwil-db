@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/internal/events"
 )
 
 var registeredOracles = make(map[string]Oracle)
@@ -35,7 +35,7 @@ func GetOracle(name string) (Oracle, bool) {
 
 type EventStore interface {
 	// KV returns a KV store to store metadata locally
-	KV(prefix []byte) sql.KV
+	KV(prefix []byte) *events.KV
 
 	// Store stores an event in the event store
 	Store(ctx context.Context, data []byte, eventType string) error

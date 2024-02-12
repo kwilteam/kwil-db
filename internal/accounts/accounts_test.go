@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	"github.com/kwilteam/kwil-db/internal/sql/adapter"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 
 	"github.com/stretchr/testify/assert"
@@ -24,16 +23,28 @@ const (
 )
 
 func Test_Accounts(t *testing.T) {
-	cfg := &pg.PoolConfig{
-		ConnConfig: pg.ConnConfig{
-			Host:   "127.0.0.1",
-			Port:   "5432",
-			User:   "kwild",
-			Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
-			DBName: "kwil_test_db",
+	cfg := &pg.DBConfig{
+		PoolConfig: pg.PoolConfig{
+			ConnConfig: pg.ConnConfig{
+				Host:   "127.0.0.1",
+				Port:   "5432",
+				User:   "kwild",
+				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
+				DBName: "kwil_test_db",
+			},
+			MaxConns: 11,
 		},
-		MaxConns: 11,
 	}
+
+	/*
+		The order of operations for each testcase is:
+		- `credit`: credits the accounts with the given amount
+		- `balanceAfterCredit`: checks that the accounts have the expected balance after the credit
+		- `spend`: spends the amount from each account
+		- `balanceAfterSpend`: checks that the accounts have the expected balance after the spend
+		- `secondCredit`: credits the accounts with the given amount
+		- `balanceAfterSecondCredit`: checks that the accounts have the expected balance after the second credit
+	*/
 
 	type testCase struct {
 		name string
@@ -42,15 +53,15 @@ func Test_Accounts(t *testing.T) {
 
 		credit             map[string]*big.Int // to test credit new/non-existent accounts
 		creditErr          error
-		afterCreditBalance map[string]*big.Int
+		balanceAfterCredit map[string]*big.Int
 
-		spends        []*accounts.Spend
-		finalBalances map[string]*accounts.Account
-		err           error // the error must be triggered once
+		spends            []*accounts.Spend
+		spendErr          error // the error must be triggered once
+		balanceAfterSpend map[string]*accounts.Account
 
-		postCredit             map[string]*big.Int // to test credit existing accounts
-		postCreditErr          error
-		afterPostCreditBalance map[string]*big.Int
+		secondCredit             map[string]*big.Int // to test credit existing accounts
+		secondCreditErr          error
+		balanceAfterSecondCredit map[string]*big.Int
 	}
 
 	// once we have a way to increase balances in accounts, we will have to add tests
@@ -64,20 +75,20 @@ func Test_Accounts(t *testing.T) {
 				newSpend(account2, -100, 1),
 			},
 			gasOn: false,
-			finalBalances: map[string]*accounts.Account{
+			balanceAfterSpend: map[string]*accounts.Account{
 				account1: newAccount(account1, 0, 2),
 				account2: newAccount(account2, 0, 1),
 			},
-			err: nil,
+			spendErr: nil,
 		},
 		{
 			name: "gas and nonces on, no account",
 			spends: []*accounts.Spend{
 				newSpend(account1, 100, 1),
 			},
-			gasOn:         true,
-			finalBalances: map[string]*accounts.Account{},
-			err:           accounts.ErrAccountNotFound,
+			gasOn:             true,
+			balanceAfterSpend: map[string]*accounts.Account{},
+			spendErr:          accounts.ErrAccountNotFound,
 		},
 		{
 			name: "gas and nonces on, no funds",
@@ -88,9 +99,9 @@ func Test_Accounts(t *testing.T) {
 			spends: []*accounts.Spend{
 				newSpend(account1, 100, 1),
 			},
-			gasOn:         true,
-			finalBalances: map[string]*accounts.Account{},
-			err:           accounts.ErrInsufficientFunds,
+			gasOn:             true,
+			balanceAfterSpend: map[string]*accounts.Account{},
+			spendErr:          accounts.ErrInsufficientFunds,
 		},
 		{
 			name: "gas and nonces on, credits",
@@ -98,24 +109,24 @@ func Test_Accounts(t *testing.T) {
 				account1: big.NewInt(123),
 			},
 			creditErr: nil,
-			afterCreditBalance: map[string]*big.Int{
+			balanceAfterCredit: map[string]*big.Int{
 				account1: big.NewInt(123),
-				account2: big.NewInt(0), // same
+				account2: big.NewInt(0), // getting a non-existent account should return 0
 			},
 			spends: []*accounts.Spend{
 				newSpend(account1, 100, 1),
 			},
 			gasOn: true,
-			finalBalances: map[string]*accounts.Account{
+			balanceAfterSpend: map[string]*accounts.Account{
 				account1: newAccount(account1, 23, 1),
 			},
-			err: nil,
-			postCredit: map[string]*big.Int{
+			spendErr: nil,
+			secondCredit: map[string]*big.Int{
 				account1: big.NewInt(27),
 				account2: big.NewInt(42),
 			},
-			postCreditErr: nil,
-			afterPostCreditBalance: map[string]*big.Int{
+			secondCreditErr: nil,
+			balanceAfterSecondCredit: map[string]*big.Int{
 				account1: big.NewInt(50),
 				account2: big.NewInt(42),
 			},
@@ -124,10 +135,10 @@ func Test_Accounts(t *testing.T) {
 			name:   "no account, gas off",
 			spends: []*accounts.Spend{},
 			gasOn:  false,
-			finalBalances: map[string]*accounts.Account{
+			balanceAfterSpend: map[string]*accounts.Account{
 				account1: newAccount(account1, 0, 0),
 			},
-			err: nil,
+			spendErr: nil,
 		},
 		{
 			name: "invalid nonce",
@@ -137,11 +148,11 @@ func Test_Accounts(t *testing.T) {
 				newSpend(account2, -100, 1),
 			},
 			gasOn: false,
-			finalBalances: map[string]*accounts.Account{
+			balanceAfterSpend: map[string]*accounts.Account{
 				account1: newAccount(account1, 0, 1),
 				account2: newAccount(account2, 0, 1),
 			},
-			err: accounts.ErrInvalidNonce,
+			spendErr: accounts.ErrInvalidNonce,
 		},
 		{
 			name: "Insufficient funds",
@@ -154,10 +165,10 @@ func Test_Accounts(t *testing.T) {
 				newSpend(account1, 100, 2),
 			},
 			gasOn: true,
-			finalBalances: map[string]*accounts.Account{
+			balanceAfterSpend: map[string]*accounts.Account{
 				account1: newAccount(account1, 0, 2),
 			},
-			err: accounts.ErrInsufficientFunds,
+			spendErr: accounts.ErrInsufficientFunds,
 		},
 	}
 
@@ -165,9 +176,13 @@ func Test_Accounts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			db, err := pg.NewPool(ctx, cfg)
+			db, err := pg.NewDB(ctx, cfg)
 			require.NoError(t, err)
 			defer db.Close()
+			tx, err := db.BeginTx(ctx)
+
+			require.NoError(t, err)
+			defer tx.Rollback(ctx) // always rollback to avoid cleanup
 
 			defer db.Execute(ctx, `DROP SCHEMA IF EXISTS `+schemaName+` CASCADE;`)
 
@@ -179,17 +194,17 @@ func Test_Accounts(t *testing.T) {
 			// 	opts = append(opts, accounts.WithNonces(true))
 			// }
 
-			ar, err := accounts.NewAccountStore(ctx, &adapter.DB{Datastore: db}, opts...)
+			ar, err := accounts.NewAccountStore(ctx, tx, opts...)
 			require.NoError(t, err)
 
 			for acct, amt := range tc.credit {
-				err := ar.Credit(ctx, []byte(acct), amt)
+				err := ar.Credit(ctx, tx, []byte(acct), amt)
 				assert.ErrorIs(t, err, tc.creditErr)
 			}
 
-			for acct, amt := range tc.afterCreditBalance {
-				account, err := ar.GetAccount(ctx, []byte(acct))
-				assert.NoError(t, err)
+			for acct, amt := range tc.balanceAfterCredit {
+				account, err := ar.GetAccount(ctx, tx, []byte(acct))
+				require.NoError(t, err) // require to avoid panic
 				if account.Balance.Cmp(amt) != 0 {
 					t.Fatalf("expected balance %s, got %s", amt, account.Balance)
 				}
@@ -197,15 +212,15 @@ func Test_Accounts(t *testing.T) {
 
 			errs := []error{}
 			for _, spend := range tc.spends {
-				err := ar.Spend(ctx, spend)
+				err := ar.Spend(ctx, tx, spend)
 				if err != nil {
 					errs = append(errs, err)
 				}
 			}
-			assertErr(t, errs, tc.err)
+			assertErr(t, errs, tc.spendErr)
 
-			for address, expectedBalance := range tc.finalBalances {
-				account, err := ar.GetAccount(ctx, []byte(address))
+			for address, expectedBalance := range tc.balanceAfterSpend {
+				account, err := ar.GetAccount(ctx, tx, []byte(address))
 				if err != nil {
 					t.Fatalf("unexpected error: %s", err)
 				}
@@ -214,14 +229,14 @@ func Test_Accounts(t *testing.T) {
 				assert.Equal(t, expectedBalance.Nonce, account.Nonce, "expected nonce %d, got %d", expectedBalance.Nonce, account.Nonce)
 			}
 
-			for acct, amt := range tc.postCredit {
-				err := ar.Credit(ctx, []byte(acct), amt)
+			for acct, amt := range tc.secondCredit {
+				err := ar.Credit(ctx, tx, []byte(acct), amt)
 				// assertErr(t, []error{err}, tc.creditErr)
-				assert.ErrorIs(t, err, tc.postCreditErr)
+				assert.ErrorIs(t, err, tc.secondCreditErr)
 			}
 
-			for acct, amt := range tc.afterPostCreditBalance {
-				account, err := ar.GetAccount(ctx, []byte(acct))
+			for acct, amt := range tc.balanceAfterSecondCredit {
+				account, err := ar.GetAccount(ctx, tx, []byte(acct))
 				assert.NoError(t, err)
 				if account.Balance.Cmp(amt) != 0 {
 					t.Fatalf("expected balance %s, got %s", amt, account.Balance)

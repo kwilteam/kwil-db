@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/internal/sql"
 
 	"go.uber.org/zap"
 )
@@ -86,20 +87,19 @@ func (vm *ValidatorMgr) StateHash() []byte {
 // store is unexported to minimize our API, and a concrete instance is assembled
 // in NewValidatorMgr. If we decide that this can be used outside of
 // ValidatorMgr (and thus constructed by the caller) it should accept this:
-
 type ValidatorStore interface {
-	Init(ctx context.Context, vals []*Validator) error
-	CurrentValidators(ctx context.Context) ([]*Validator, error)
-	UpdateValidatorPower(ctx context.Context, validator []byte, power int64) error
-	ActiveVotes(ctx context.Context) ([]*JoinRequest, []*ValidatorRemoveProposal, error)
-	StartJoinRequest(ctx context.Context, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error
-	DeleteJoinRequest(ctx context.Context, joiner []byte) error
-	AddApproval(ctx context.Context, joiner, approver []byte) error
-	AddRemoval(ctx context.Context, target, validator []byte) error
-	DeleteRemoval(ctx context.Context, target, validator []byte) error
-	AddValidator(ctx context.Context, joiner []byte, power int64) error
-	RemoveValidator(ctx context.Context, validator []byte) error
-	IsCurrent(ctx context.Context, validator []byte) (bool, error)
+	ActiveVotes(ctx context.Context, tx sql.DB) ([]*JoinRequest, []*ValidatorRemoveProposal, error)
+	AddApproval(ctx context.Context, tx sql.DB, joiner, approver []byte) error
+	AddRemoval(ctx context.Context, tx sql.DB, target, validator []byte) error
+	AddValidator(ctx context.Context, tx sql.DB, joiner []byte, power int64) error
+	CurrentValidators(ctx context.Context, tx sql.DB) ([]*Validator, error)
+	DeleteJoinRequest(ctx context.Context, tx sql.DB, joiner []byte) error
+	DeleteRemoval(ctx context.Context, tx sql.DB, target, validator []byte) error
+	Init(ctx context.Context, tx sql.DB, vals []*Validator) error
+	IsCurrent(ctx context.Context, tx sql.DB, validator []byte) (bool, error)
+	RemoveValidator(ctx context.Context, tx sql.DB, validator []byte) error
+	StartJoinRequest(ctx context.Context, tx sql.DB, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error
+	UpdateValidatorPower(ctx context.Context, tx sql.DB, validator []byte, power int64) error
 }
 
 // ValidatorDB state includes:
@@ -159,7 +159,7 @@ func (vm *ValidatorMgr) candidate(val []byte) *joinReq {
 	return vm.candidates[string(val)]
 }
 
-func NewValidatorMgr(ctx context.Context, datastore Datastore, opts ...ValidatorMgrOpt) (*ValidatorMgr, error) {
+func NewValidatorMgr(ctx context.Context, tx sql.DB, opts ...ValidatorMgrOpt) (*ValidatorMgr, error) {
 	vm := &ValidatorMgr{
 		current:    make(map[string]struct{}),
 		candidates: make(map[string]*joinReq),
@@ -172,20 +172,20 @@ func NewValidatorMgr(ctx context.Context, datastore Datastore, opts ...Validator
 	}
 
 	var err error
-	vm.db, err = newValidatorStore(ctx, datastore, vm.log)
+	vm.db, err = newValidatorStore(ctx, tx, vm.log)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = vm.init(ctx); err != nil {
+	if err = vm.init(ctx, tx); err != nil {
 		return nil, err
 	}
 	return vm, nil
 }
 
-func (vm *ValidatorMgr) init(ctx context.Context) error {
+func (vm *ValidatorMgr) init(ctx context.Context, tx sql.DB) error {
 	// Restore state: current validators
-	current, err := vm.db.CurrentValidators(ctx)
+	current, err := vm.db.CurrentValidators(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -195,7 +195,7 @@ func (vm *ValidatorMgr) init(ctx context.Context) error {
 	}
 
 	// Restore state: active join requests
-	joinReqs, removals, err := vm.db.ActiveVotes(ctx)
+	joinReqs, removals, err := vm.db.ActiveVotes(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -228,7 +228,7 @@ func (vm *ValidatorMgr) init(ctx context.Context) error {
 }
 
 // CurrentValidators returns the current validator set.
-func (vm *ValidatorMgr) CurrentValidators(ctx context.Context) ([]*Validator, error) {
+func (vm *ValidatorMgr) CurrentValidators(ctx context.Context, tx sql.DB) ([]*Validator, error) {
 	// NOTE: the DB is the simplest approach, but since this method may be
 	// called on-demand method (e.g. by an RPC client), it is not synchronized
 	// with the other methods that are intended to be utilized by the blockchain
@@ -239,17 +239,17 @@ func (vm *ValidatorMgr) CurrentValidators(ctx context.Context) ([]*Validator, er
 	//
 	// Alternatively, we can rig a mutex on the `current` map field, using that
 	// throughout the ValidatorMgr methods. That's not attractive.
-	return vm.db.CurrentValidators(ctx)
+	return vm.db.CurrentValidators(ctx, tx)
 }
 
 // ActiveVotes returns the current committed validator join requests.
-func (vm *ValidatorMgr) ActiveVotes(ctx context.Context) ([]*JoinRequest, []*ValidatorRemoveProposal, error) {
-	return vm.db.ActiveVotes(ctx)
+func (vm *ValidatorMgr) ActiveVotes(ctx context.Context, tx sql.DB) ([]*JoinRequest, []*ValidatorRemoveProposal, error) {
+	return vm.db.ActiveVotes(ctx, tx)
 }
 
 // GenesisInit is called at the genesis block to set an initial list of
 // validators.
-func (vm *ValidatorMgr) GenesisInit(ctx context.Context, vals []*Validator, blockHeight int64) error {
+func (vm *ValidatorMgr) GenesisInit(ctx context.Context, tx sql.DB, vals []*Validator, startingBlockHeight int64) error {
 	// Initialize the current validator map.
 	vm.current = make(map[string]struct{}, len(vals))
 	for _, vi := range vals {
@@ -258,23 +258,23 @@ func (vm *ValidatorMgr) GenesisInit(ctx context.Context, vals []*Validator, bloc
 	vm.candidates = make(map[string]*joinReq)
 	vm.removals = make(map[string]map[string]bool)
 	vm.updates = nil
-	vm.lastBlockHeight = blockHeight
+	vm.lastBlockHeight = startingBlockHeight
 
 	vm.log.Warn("Resetting validator store with genesis validators.")
 
 	// Wipe DB (!) and store the provided set.
-	return vm.db.Init(ctx, vals)
+	return vm.db.Init(ctx, tx, vals)
 }
 
 // CurrentSet returns the current validator list. This may be used on
 // construction of a resuming application.
-func (vm *ValidatorMgr) CurrentSet(ctx context.Context) ([]*Validator, error) {
-	return vm.db.CurrentValidators(ctx)
+func (vm *ValidatorMgr) CurrentSet(ctx context.Context, tx sql.DB) ([]*Validator, error) {
+	return vm.db.CurrentValidators(ctx, tx)
 }
 
 // Update may be used at the start of block processing when byzantine validators
 // are listed by the consensus client, or to process a leave request.
-func (vm *ValidatorMgr) Update(ctx context.Context, validator []byte, newPower int64) error {
+func (vm *ValidatorMgr) Update(ctx context.Context, tx sql.DB, validator []byte, newPower int64) error {
 	if !vm.isCurrent(validator) {
 		return errors.New("not a current validator")
 	}
@@ -285,7 +285,7 @@ func (vm *ValidatorMgr) Update(ctx context.Context, validator []byte, newPower i
 	// delete(vm.current, ..) // in Finalize
 
 	// Record new validator power.
-	return vm.db.UpdateValidatorPower(ctx, validator, newPower)
+	return vm.db.UpdateValidatorPower(ctx, tx, validator, newPower)
 }
 
 // BIG Q: in all of these methods, if spend worked, do we have to return the
@@ -293,7 +293,7 @@ func (vm *ValidatorMgr) Update(ctx context.Context, validator []byte, newPower i
 // struct for
 
 // Join creates a join request for a prospective validator.
-func (vm *ValidatorMgr) Join(ctx context.Context, joiner []byte, power int64) error {
+func (vm *ValidatorMgr) Join(ctx context.Context, tx sql.DB, joiner []byte, power int64) error {
 	if vm.isCurrent(joiner) {
 		return errors.New("already a validator")
 	}
@@ -318,21 +318,21 @@ func (vm *ValidatorMgr) Join(ctx context.Context, joiner []byte, power int64) er
 		expiresAt:  expiresAt,
 	}
 
-	return vm.db.StartJoinRequest(ctx, joiner, approvers, power, expiresAt)
+	return vm.db.StartJoinRequest(ctx, tx, joiner, approvers, power, expiresAt)
 }
 
 // Leave processes a leave request for a current validator.
-func (vm *ValidatorMgr) Leave(ctx context.Context, leaver []byte) error {
+func (vm *ValidatorMgr) Leave(ctx context.Context, tx sql.DB, leaver []byte) error {
 	// TODO: decide if leave should be a hard removal from the database or just
 	// set power to zero. Punish does update even to zero power, so probably
 	// Leave should too.
 	const leavePower = 0 // leave the entry, set power to zero
-	return vm.Update(ctx, leaver, leavePower)
+	return vm.Update(ctx, tx, leaver, leavePower)
 	// return vm.db.RemoveValidator(ctx, leaver)
 }
 
 // Approve records an approval transaction from a current validator.
-func (vm *ValidatorMgr) Approve(ctx context.Context, joiner, approver []byte) error {
+func (vm *ValidatorMgr) Approve(ctx context.Context, tx sql.DB, joiner, approver []byte) error {
 	candidate := vm.candidate(joiner)
 	if candidate == nil {
 		return errors.New("not a validator candidate")
@@ -345,7 +345,7 @@ func (vm *ValidatorMgr) Approve(ctx context.Context, joiner, approver []byte) er
 		vm.log.Info("already voted") // fine, but don't touch our state... or error? errors.New("already voted")
 	} else {
 		// Record the vote. Check threshold in Finalize.
-		if err := vm.db.AddApproval(ctx, joiner, approver); err != nil {
+		if err := vm.db.AddApproval(ctx, tx, joiner, approver); err != nil {
 			candidate.validators[string(approver)] = false
 			return fmt.Errorf("failed to record approval: %v", err)
 		}
@@ -360,7 +360,7 @@ func (vm *ValidatorMgr) Approve(ctx context.Context, joiner, approver []byte) er
 // into the removals table. Finalize should do the removal counting and if the
 // threshold is reached, the target validator should be removed and all the
 // entries in the removals table for this target validator deleted.
-func (vm *ValidatorMgr) Remove(ctx context.Context, target, remover []byte) error {
+func (vm *ValidatorMgr) Remove(ctx context.Context, tx sql.DB, target, remover []byte) error {
 	if !vm.isCurrent(target) {
 		return errors.New("target is not a current validator")
 	}
@@ -382,7 +382,7 @@ func (vm *ValidatorMgr) Remove(ctx context.Context, target, remover []byte) erro
 		removals[rKey] = true
 	}
 
-	return vm.db.AddRemoval(ctx, target, remover)
+	return vm.db.AddRemoval(ctx, tx, target, remover)
 }
 
 // Finalize is used at the end of block processing to retrieve the validator
@@ -390,14 +390,20 @@ func (vm *ValidatorMgr) Remove(ctx context.Context, target, remover []byte) erro
 // not idempotent. The modules working list of updates is reset until subsequent
 // join/approves are processed for the next block. end of block processing
 // requires providing list of updates to the node's consensus client
-func (vm *ValidatorMgr) Finalize(ctx context.Context) ([]*Validator, error) {
+func (vm *ValidatorMgr) Finalize(ctx context.Context, tx sql.DB) ([]*Validator, error) {
+	sp, err := tx.BeginTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer sp.Rollback(ctx)
+
 	// Updates for approved (joining) validators.
 	for candidate, join := range vm.candidates {
 		if join.votes() < join.requiredVotes() {
 			if isJoinExpired(join, vm.lastBlockHeight) {
 				// Join request expired
 				delete(vm.candidates, candidate)
-				if err := vm.db.DeleteJoinRequest(ctx, join.pubkey); err != nil {
+				if err := vm.db.DeleteJoinRequest(ctx, sp, join.pubkey); err != nil {
 					return nil, fmt.Errorf("failed to delete expired join request: %v", err)
 				}
 			}
@@ -409,7 +415,7 @@ func (vm *ValidatorMgr) Finalize(ctx context.Context) ([]*Validator, error) {
 		// Candidate is above vote threshold
 		delete(vm.candidates, candidate) // further votes are not recorded!
 
-		if err := vm.db.AddValidator(ctx, join.pubkey, join.power); err != nil {
+		if err := vm.db.AddValidator(ctx, sp, join.pubkey, join.power); err != nil {
 			return nil, fmt.Errorf("failed to record approval: %v", err)
 		}
 
@@ -436,7 +442,7 @@ func (vm *ValidatorMgr) Finalize(ctx context.Context) ([]*Validator, error) {
 			PubKey: targetPubKey,
 			Power:  0,
 		})
-		if err := vm.db.RemoveValidator(ctx, targetPubKey); err != nil {
+		if err := vm.db.RemoveValidator(ctx, sp, targetPubKey); err != nil {
 			return nil, fmt.Errorf("failed to record removal: %v", err)
 		}
 	}
@@ -460,7 +466,7 @@ func (vm *ValidatorMgr) Finalize(ctx context.Context) ([]*Validator, error) {
 			for target, r := range vm.removals {
 				if r[pk] { // the removal from this validator no longer counts (after this block)
 					delete(r, pk)
-					if err := vm.db.DeleteRemoval(ctx, []byte(target), up.PubKey); err != nil {
+					if err := vm.db.DeleteRemoval(ctx, sp, []byte(target), up.PubKey); err != nil {
 						return nil, fmt.Errorf("failed to delete removal: %v", err)
 					}
 				}
@@ -469,7 +475,7 @@ func (vm *ValidatorMgr) Finalize(ctx context.Context) ([]*Validator, error) {
 	}
 	vm.updates = nil
 
-	return updates, nil
+	return updates, sp.Commit(ctx)
 }
 
 func (mgr *ValidatorMgr) UpdateBlockHeight(height int64) {
@@ -482,6 +488,6 @@ func isJoinExpired(join *joinReq, blockHeight int64) bool {
 
 // IsCurrent returns true if the given validator is in the current validator set.
 // It reads directly from the DB, and does not consider pending updates.
-func (mgr *ValidatorMgr) IsCurrent(ctx context.Context, validator []byte) (bool, error) {
-	return mgr.db.IsCurrent(ctx, validator)
+func (mgr *ValidatorMgr) IsCurrent(ctx context.Context, tx sql.DB, validator []byte) (bool, error) {
+	return mgr.db.IsCurrent(ctx, tx, validator)
 }
