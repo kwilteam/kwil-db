@@ -344,6 +344,10 @@ func (r *IntHelper) RunGanache(ctx context.Context) {
 	})
 
 	r.t.Cleanup(func() { // redundant if test defers Teardown()
+		// NOTE: Cleanup functions will be called in last added, first called order.
+		// but here we call Teardown(), will will call all the teardown fns, maybe
+		// not the behavior we want.
+		// this should call newly added teardown fns?
 		r.Teardown()
 	})
 

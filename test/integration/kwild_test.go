@@ -64,7 +64,8 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, basicServices)
-			defer helper.Teardown()
+			defer helper.Teardown() // NOTE: maybe not defer it,
+			// since Cleanup will be called after the test and all it's subtests complete.
 
 			node0Driver := helper.GetUserDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetUserDriver(ctx, "node1", driverType)
