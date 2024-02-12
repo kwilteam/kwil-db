@@ -70,6 +70,7 @@ type TestnetGenerateConfig struct {
 	HostnamePrefix          string
 	HostnameSuffix          string
 	StartingIPAddress       string
+	DnsNamePrefix           string
 	Hostnames               []string
 	P2pPort                 int
 	JoinExpiry              int64
@@ -94,6 +95,12 @@ type ConfigOpts struct {
 	// a network that already has a genesis file.
 	// If used with creating a testnet, it will result in an error.
 	NoGenesis bool
+
+	// DnsHost is a flag to use DNS hostname as host in the config
+	// instead of ip. It will be used together with DnsNamePrefix to generate
+	// hostnames.
+	// This is useful for testing nodes inside docker containers.
+	DnsHost bool
 }
 
 // GenerateNodeConfig is used to generate configuration required for running a
@@ -320,7 +327,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	// Gather persistent peers addresses
 	var persistentPeers string
 	if genCfg.PopulatePersistentPeers {
-		persistentPeers = persistentPeersString(genCfg, privateKeys, opts.UniquePorts)
+		persistentPeers = persistentPeersString(genCfg, privateKeys, opts.UniquePorts, opts.DnsHost)
 	}
 
 	// Overwrite default config
@@ -386,9 +393,12 @@ func (genCfg *TestnetGenerateConfig) applyGenesisParams(genesisCfg *config.Genes
 	}
 }
 
-func hostnameOrIP(genCfg *TestnetGenerateConfig, i int) string {
+func hostnameOrIP(genCfg *TestnetGenerateConfig, i int, useDnsHost bool) string {
 	if len(genCfg.Hostnames) > 0 && i < len(genCfg.Hostnames) {
 		return genCfg.Hostnames[i]
+	}
+	if useDnsHost {
+		return fmt.Sprintf("%s%d", genCfg.DnsNamePrefix, i)
 	}
 	if genCfg.StartingIPAddress == "" {
 		return fmt.Sprintf("%s%d%s", genCfg.HostnamePrefix, i, genCfg.HostnameSuffix)
@@ -406,7 +416,8 @@ func hostnameOrIP(genCfg *TestnetGenerateConfig, i int) string {
 // persistentPeersString returns a comma-separated list of persistent peers
 // if decrementingPorts is true, it will begin at the default port and
 // decrement by 1 for each node.
-func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivKey, decrementingPorts bool) string {
+func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivKey, decrementingPorts bool,
+	useDnsHost bool) string {
 	persistentPeers := make([]string, genCfg.NValidators+genCfg.NNonValidators)
 	for i := range persistentPeers {
 		pubKey := privKeys[i].PubKey().(cmtEd.PubKey)
@@ -416,7 +427,7 @@ func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivK
 			port -= i
 		}
 
-		hostPort := fmt.Sprintf("%s:%d", hostnameOrIP(genCfg, i), port)
+		hostPort := fmt.Sprintf("%s:%d", hostnameOrIP(genCfg, i, useDnsHost), port)
 		persistentPeers[i] = cometbft.NodeIDAddressString(pubKey, hostPort)
 	}
 	return strings.Join(persistentPeers, ",")

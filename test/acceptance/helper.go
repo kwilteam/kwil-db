@@ -103,6 +103,7 @@ type ActHelper struct {
 	cfg *ActTestCfg
 
 	container *testcontainers.DockerContainer // kwild node container
+	network   *testcontainers.DockerNetwork
 
 	// envs is used to store dynamically generated envs later used in docker-compose
 	// e.g. `dc.WithEnv(r.envs)`

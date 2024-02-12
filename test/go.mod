@@ -19,8 +19,8 @@ require (
 	github.com/kwilteam/kwil-db v0.5.1-0.20230927233025-c3e8ef579ade
 	github.com/kwilteam/kwil-db/core v0.0.0
 	github.com/stretchr/testify v1.8.4
-	github.com/testcontainers/testcontainers-go v0.24.1
-	github.com/testcontainers/testcontainers-go/modules/compose v0.24.1
+	github.com/testcontainers/testcontainers-go v0.27.0
+	github.com/testcontainers/testcontainers-go/modules/compose v0.27.0
 	go.uber.org/zap v1.26.0
 	google.golang.org/grpc v1.60.0
 )

@@ -20,6 +20,9 @@ import (
 //
 // By default, we will skip kgw tests, so it's not a concern for local development.
 
+// NOTE: KGW tests cannot be run in parallel, since the `domain` need to be
+// preset, which require kgw always running(exposed) on `localhost:8090`.
+
 func TestKGWAPIs(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping kgw test in short mode")
@@ -38,7 +41,6 @@ func TestKGWAPIs(t *testing.T) {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, basicServices)
-			defer helper.Teardown()
 
 			helper.RunDockerComposeWithServices(ctx, []string{"kgw"})
 			// ensure kgw have upstream checked
@@ -87,7 +89,6 @@ func TestKGWAuthn(t *testing.T) {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, basicServices)
-			defer helper.Teardown()
 
 			helper.RunDockerComposeWithServices(ctx, []string{"kgw"})
 			// ensure kgw have upstream checked

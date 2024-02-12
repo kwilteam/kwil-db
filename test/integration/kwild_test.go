@@ -17,6 +17,9 @@ var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
 var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
 
+// NOTE: `-parallel` is a flag that is already used by `go test`
+var parallelMode = flag.Bool("parallel-mode", false, "run tests in parallel mode")
+
 // Here we make clear the services will be used in each stage
 var basicServices = []string{integration.ExtContainer, "pg0", "pg1", "pg2", "node0", "node1", "node2"}
 var newServices = []string{integration.Ext3Container, "pg3", "node3"}
@@ -26,7 +29,8 @@ var allServices = []string{integration.ExtContainer, integration.Ext3Container,
 	"pg0", "pg1", "pg2", "pg3", "node0", "node1", "node2", "node3",
 }
 
-// var byzAllServices = []string{integration.ExtContainer, integration.Ext3Container, "pg0", "pg1", "pg2", "pg3", "pg4", "pg5", "node0", "node1", "node2", "node3", "node4", "node5"}
+//var byzAllServices = []string{integration.ExtContainer, integration.Ext3Container,
+//	"pg0", "pg1", "pg2", "pg3", "pg4", "pg5", "node0", "node1", "node2", "node3", "node4", "node5"}
 
 func TestLocalDevSetup(t *testing.T) {
 	if !*dev {
@@ -45,12 +49,15 @@ func TestLocalDevSetup(t *testing.T) {
 
 	helper := integration.NewIntHelper(t, opts...)
 	helper.Setup(ctx, allServices)
-	defer helper.Teardown()
 
 	helper.WaitForSignals(t)
 }
 
 func TestKwildDatabaseIntegration(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
 	ctx := context.Background()
 
 	opts := []integration.HelperOpt{
@@ -64,8 +71,6 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, basicServices)
-			defer helper.Teardown() // NOTE: maybe not defer it,
-			// since Cleanup will be called after the test and all it's subtests complete.
 
 			node0Driver := helper.GetUserDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetUserDriver(ctx, "node1", driverType)
@@ -88,6 +93,10 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 }
 
 func TestKwildValidatorRemoval(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
 	ctx := context.Background()
 
 	// In this test, we will have a set of 4 validators, where 3 of the
@@ -107,7 +116,7 @@ func TestKwildValidatorRemoval(t *testing.T) {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, allServices)
-			defer helper.Teardown()
+			//defer helper.Teardown()
 
 			node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetOperatorDriver(ctx, "node1", driverType)
@@ -128,6 +137,10 @@ func TestKwildValidatorRemoval(t *testing.T) {
 }
 
 func TestKwildValidatorUpdatesIntegration(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
 	ctx := context.Background()
 
 	const expiryBlocks = 10
@@ -152,7 +165,6 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, allServices)
-			defer helper.Teardown()
 
 			node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetOperatorDriver(ctx, "node1", driverType)
@@ -203,6 +215,10 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 }
 
 func TestKwildNetworkSyncIntegration(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
 	ctx := context.Background()
 
 	opts := []integration.HelperOpt{
@@ -215,7 +231,6 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, basicServices)
-			defer helper.Teardown()
 
 			node0Driver := helper.GetUserDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetUserDriver(ctx, "node1", driverType)
@@ -257,6 +272,12 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 }
 
 func TestKwildEthDepositOracleIntegration(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	ctx := context.Background()
+
 	opts := []integration.HelperOpt{
 		integration.WithBlockInterval(time.Second),
 		integration.WithValidators(4),
@@ -270,12 +291,8 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
 		t.Run(driverType+"_driver", func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, allServices)
-			defer helper.Teardown()
 
 			// get deployer
 			deployer := helper.EthDeployer()
@@ -326,13 +343,14 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 // 		t.Run(driverType+"_driver", func(t *testing.T) {
 // 			ctx, cancel := context.WithCancel(context.Background())
 // 			defer cancel()
-
 // 			helper := integration.NewIntHelper(t, opts...)
 // 			helper.Setup(ctx, byzAllServices)
 // 			defer helper.Teardown()
 
 // 			// Get the user driver
 // 			node0Driver := helper.GetUserDriver(ctx, "node0", driverType)
+
+//defer helper.Teardown()
 
 // 			specifications.DepositResolutionExpirySpecification(ctx, t, node0Driver, helper.NodeKeys())
 
