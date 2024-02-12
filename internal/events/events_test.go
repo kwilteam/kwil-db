@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 
 	"github.com/stretchr/testify/require"
@@ -15,28 +17,30 @@ import (
 func Test_EventStore(t *testing.T) {
 	type testcase struct {
 		name string
-		fn   func(t *testing.T, e *EventStore)
+		// we have to use an outerTx here because we are testing commits from different connections
+		// to the event store
+		fn func(t *testing.T, e *EventStore, consensusTx *pg.Pool)
 	}
 	tests := []testcase{
 		{
 			name: "standard storage and retrieval",
-			fn: func(t *testing.T, e *EventStore) {
+			fn: func(t *testing.T, e *EventStore, db *pg.Pool) {
 				ctx := context.Background()
 
 				err := e.Store(ctx, []byte("hello"), "test")
 				require.NoError(t, err)
 
-				events, err := e.GetEvents(ctx)
+				events, err := GetEvents(ctx, db)
 				require.NoError(t, err)
 
 				require.Len(t, events, 1)
 				require.Equal(t, []byte("hello"), events[0].Body)
 				require.Equal(t, "test", events[0].Type)
 
-				err = e.DeleteEvent(ctx, events[0].ID())
+				err = DeleteEvent(ctx, db, events[0].ID())
 				require.NoError(t, err)
 
-				events, err = e.GetEvents(ctx)
+				events, err = GetEvents(ctx, db)
 				require.NoError(t, err)
 
 				require.Len(t, events, 0)
@@ -44,7 +48,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "idempotent storage",
-			fn: func(t *testing.T, e *EventStore) {
+			fn: func(t *testing.T, e *EventStore, db *pg.Pool) {
 				ctx := context.Background()
 
 				err := e.Store(ctx, []byte("hello"), "test")
@@ -53,7 +57,7 @@ func Test_EventStore(t *testing.T) {
 				err = e.Store(ctx, []byte("hello"), "test")
 				require.NoError(t, err)
 
-				events, err := e.GetEvents(ctx)
+				events, err := GetEvents(ctx, db)
 				require.NoError(t, err)
 
 				require.Len(t, events, 1)
@@ -61,16 +65,16 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "deleting non-existent event",
-			fn: func(t *testing.T, e *EventStore) {
+			fn: func(t *testing.T, e *EventStore, db *pg.Pool) {
 				ctx := context.Background()
 
-				err := e.DeleteEvent(ctx, types.NewUUIDV5([]byte("hello")))
+				err := DeleteEvent(ctx, db, types.NewUUIDV5([]byte("hello")))
 				require.NoError(t, err)
 			},
 		},
 		{
 			name: "using kv scoping",
-			fn: func(t *testing.T, e *EventStore) {
+			fn: func(t *testing.T, e *EventStore, db *pg.Pool) {
 				ctx := context.Background()
 
 				kv := e.KV([]byte("hello"))
@@ -80,24 +84,27 @@ func Test_EventStore(t *testing.T) {
 				err := kv.Set(ctx, []byte("key"), []byte("value"))
 				require.NoError(t, err)
 
-				const sync = true
-				value, err := kv.Get(ctx, []byte("key"), sync)
+				value, err := kv.Get(ctx, []byte("key"))
 				require.NoError(t, err)
 				require.Equal(t, []byte("value"), value)
 
-				value, err = kvCopy.Get(ctx, []byte("key"), sync)
+				value, err = kvCopy.Get(ctx, []byte("key"))
 				require.NoError(t, err)
 				require.Equal(t, []byte("value"), value)
 
-				value, err = kv2.Get(ctx, []byte("key"), sync)
+				value, err = kv2.Get(ctx, []byte("key"))
 				require.NoError(t, err)
 				require.Nil(t, value)
 			},
 		},
 		{
 			name: "marking received",
-			fn: func(t *testing.T, e *EventStore) {
+			fn: func(t *testing.T, e *EventStore, db *pg.Pool) {
 				ctx := context.Background()
+
+				tx, err := db.BeginTx(ctx)
+				require.NoError(t, err)
+				defer tx.Rollback(ctx)
 
 				event := &types.VotableEvent{
 					Body: []byte("hello"),
@@ -105,7 +112,7 @@ func Test_EventStore(t *testing.T) {
 				}
 				id := event.ID()
 
-				err := e.Store(ctx, event.Body, event.Type)
+				err = e.Store(ctx, event.Body, event.Type)
 				require.NoError(t, err)
 
 				// GetUnreceivedEvents should return the event
@@ -114,13 +121,16 @@ func Test_EventStore(t *testing.T) {
 				require.Len(t, events, 1)
 
 				// Mark event as received
-				err = e.MarkReceived(ctx, id)
+				err = MarkReceived(ctx, tx, id)
 				require.NoError(t, err)
 
 				// GetEvents should still return the event
-				events, err = e.GetEvents(ctx)
+				events, err = GetEvents(ctx, tx)
 				require.NoError(t, err)
 				require.Len(t, events, 1)
+
+				err = tx.Commit(ctx)
+				require.NoError(t, err)
 
 				// GetUnreceivedEvents should not return the event
 				events, err = e.GetUnreceivedEvents(ctx)
@@ -130,8 +140,12 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "marking broadcasted",
-			fn: func(t *testing.T, e *EventStore) {
+			fn: func(t *testing.T, e *EventStore, db *pg.Pool) {
 				ctx := context.Background()
+
+				tx, err := db.BeginTx(ctx)
+				require.NoError(t, err)
+				defer tx.Rollback(ctx)
 
 				event := &types.VotableEvent{
 					Body: []byte("hello"),
@@ -139,7 +153,7 @@ func Test_EventStore(t *testing.T) {
 				}
 				id := event.ID()
 
-				err := e.Store(ctx, event.Body, event.Type)
+				err = e.Store(ctx, event.Body, event.Type)
 				require.NoError(t, err)
 
 				// GetUnreceivedEvents should return the event
@@ -151,8 +165,15 @@ func Test_EventStore(t *testing.T) {
 				err = e.MarkBroadcasted(ctx, []types.UUID{id})
 				require.NoError(t, err)
 
+				err = tx.Commit(ctx)
+				require.NoError(t, err)
+
+				tx2, err := db.BeginTx(ctx)
+				require.NoError(t, err)
+				defer tx2.Rollback(ctx)
+
 				// GetEvents should still return the event
-				events, err = e.GetEvents(ctx)
+				events, err = GetEvents(ctx, tx2)
 				require.NoError(t, err)
 				require.Len(t, events, 1)
 
@@ -161,12 +182,14 @@ func Test_EventStore(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, events, 0)
 
-				// Mark event as received
 				err = e.MarkRebroadcast(ctx, []types.UUID{id})
 				require.NoError(t, err)
 
+				err = tx2.Commit(ctx)
+				require.NoError(t, err)
+
 				// GetEvents should still return the event
-				events, err = e.GetEvents(ctx)
+				events, err = GetEvents(ctx, db)
 				require.NoError(t, err)
 				require.Len(t, events, 1)
 
@@ -181,16 +204,30 @@ func Test_EventStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			db, cleanUp, err := dbtest.NewTestPool(ctx, []string{schemaName})
+			db, cleanup, err := dbtest.NewTestPool(ctx, []string{SchemaName}) // db is the event store specific connection
 			require.NoError(t, err)
-			defer cleanUp()
+			defer cleanup()
 
-			e, err := NewEventStore(ctx, db)
+			e, err := NewEventStore(ctx, db, &mockVoteStore{})
 			require.NoError(t, err)
 
-			defer db.Execute(ctx, dropEventsTable)
+			// create a second db connection to emulate the consensus db
+			consensusDB, cleanup2, err := dbtest.NewTestPool(ctx, nil) // don't need to delete schema since we will never commit
+			require.NoError(t, err)
+			defer cleanup2()
 
-			tt.fn(t, e)
+			consensusTx, err := consensusDB.BeginTx(ctx)
+			require.NoError(t, err)
+			defer consensusTx.Rollback(ctx) // always rollback, to clean up
+
+			tt.fn(t, e, consensusDB)
 		})
 	}
+}
+
+type mockVoteStore struct {
+}
+
+func (m *mockVoteStore) IsProcessed(ctx context.Context, db sql.DB, resolutionID types.UUID) (bool, error) {
+	return false, nil
 }

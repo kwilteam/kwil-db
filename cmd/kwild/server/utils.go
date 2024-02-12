@@ -15,7 +15,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/extensions"
 	"github.com/kwilteam/kwil-db/internal/kv"
-	"github.com/kwilteam/kwil-db/internal/validators"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/p2p"
@@ -205,18 +204,6 @@ func (a *atomicReadWriter) Read() ([]byte, error) {
 
 func (a *atomicReadWriter) Write(val []byte) error {
 	return a.kv.Set(a.key, val)
-}
-
-// validatorStoreAdapater adapts the validator store to add
-// a "Punish" method.
-type validatorStoreAdapter struct {
-	*validators.ValidatorMgr
-}
-
-var _ abci.ValidatorModule = (*validatorStoreAdapter)(nil)
-
-func (v *validatorStoreAdapter) Punish(ctx context.Context, validator []byte, newPower int64) error {
-	return v.ValidatorMgr.Update(ctx, validator, newPower)
 }
 
 // once we have consensus param voting, we should remove this adapter

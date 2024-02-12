@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/internal/sql"
 	"go.uber.org/zap"
 )
 
@@ -28,14 +29,22 @@ func upgradeActionString(action upgradeAction) string {
 
 // checkVersion checks the current version of the validator store and decides
 // whether to run any db migrations.
-func (vs *validatorStore) checkVersion(ctx context.Context) (int, upgradeAction, error) {
+func (vs *validatorStore) checkVersion(ctx context.Context, db sql.DB) (int, upgradeAction, error) {
+	// we need a tx because a postgres query against non-existent relation will fail the whole tx
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) // since we are reading, we can just rollback
+
 	// Check if schema version exists
-	version, versionErr := vs.currentVersion(ctx)
+	version, versionErr := vs.currentVersion(ctx, tx)
 	// On error, infer that schema_version table doesn't exist (just assuming this
 	// since we'd need to query sqlite_master table to be certain that was the error)
 	if versionErr != nil {
+
 		// Check if validators db exists (again only infers and this isn't robust because it could fail for other reasons)
-		_, valErr := vs.currentValidators(ctx)
+		_, valErr := vs.currentValidators(ctx, tx)
 		if valErr != nil {
 			// Fresh db, do regular initialization at valStoreVersion
 			return valStoreVersion, upgradeActionInit, nil
@@ -60,8 +69,8 @@ func (vs *validatorStore) checkVersion(ctx context.Context) (int, upgradeAction,
 }
 
 // databaseUpgrade runs the database upgrade based on the current version.
-func (vs *validatorStore) initOrUpgradeDatabase(ctx context.Context) error {
-	version, action, err := vs.checkVersion(ctx)
+func (vs *validatorStore) initOrUpgradeDatabase(ctx context.Context, tx sql.DB) error {
+	version, action, err := vs.checkVersion(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -72,16 +81,16 @@ func (vs *validatorStore) initOrUpgradeDatabase(ctx context.Context) error {
 	case upgradeActionNone:
 		return nil
 	case upgradeActionInit:
-		return vs.initTables(ctx)
+		return vs.initTables(ctx, tx)
 	case upgradeActionRunMigrations:
-		return vs.runMigrations(ctx, version)
+		return vs.runMigrations(ctx, tx, version)
 	default:
 		return fmt.Errorf("unknown upgrade action: %d", action)
 	}
 }
 
 // runMigrations runs incremental db upgrades from current version to the latest version.
-func (vs *validatorStore) runMigrations(ctx context.Context, version int) error {
+func (vs *validatorStore) runMigrations(ctx context.Context, tx sql.DB, version int) error {
 	switch version {
 	case 0:
 		// if err := vs.upgradeValidatorsDBfrom0To1(ctx); err != nil {

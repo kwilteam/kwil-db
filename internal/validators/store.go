@@ -6,33 +6,27 @@ import (
 	"sync"
 
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
-
-type Datastore interface {
-	Execute(ctx context.Context, stmt string, args ...any) ([]map[string]any, error)
-	Query(ctx context.Context, query string, args ...any) ([]map[string]any, error)
-}
 
 // validatorStore provides persistent storage for validators and ongoing
 // validator join votes/approval.
 type validatorStore struct {
 	// what's the caller's concurrency w.r.t. this store? is wrapping every method with this needed?
-	rw sync.RWMutex
+	rw sync.RWMutex // TODO: I don't think we need this anymore
 
-	db  Datastore
 	log log.Logger
 	// stmts *preparedStatements // may be useful, otherwise remove
 }
 
 // newValidatorStore constructs the validator storage with the provided
 // SQL datastore.
-func newValidatorStore(ctx context.Context, datastore Datastore, log log.Logger) (*validatorStore, error) {
+func newValidatorStore(ctx context.Context, tx sql.DB, log log.Logger) (*validatorStore, error) {
 	ar := &validatorStore{
-		db:  datastore,
 		log: log,
 	}
 
-	err := ar.initOrUpgradeDatabase(ctx)
+	err := ar.initOrUpgradeDatabase(ctx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database at version %d due to error: %w", valStoreVersion, err)
 	}
@@ -46,26 +40,26 @@ func newValidatorStore(ctx context.Context, datastore Datastore, log log.Logger)
 }
 
 // CurrentValidators returns the current set of active validators.
-func (vs *validatorStore) CurrentValidators(ctx context.Context) ([]*Validator, error) {
+func (vs *validatorStore) CurrentValidators(ctx context.Context, tx sql.DB) ([]*Validator, error) {
 	vs.rw.RLock()
 	defer vs.rw.RUnlock()
 
-	return vs.currentValidators(ctx)
+	return vs.currentValidators(ctx, tx)
 }
 
 // ActiveVotes returns the currently ongoing join and removal requests. For join
 // requests, this includes the candidate validator, the desired power, the set
 // of validators who may approve the request, and if they did approve yet.
-func (vs *validatorStore) ActiveVotes(ctx context.Context) ([]*JoinRequest, []*ValidatorRemoveProposal, error) {
+func (vs *validatorStore) ActiveVotes(ctx context.Context, tx sql.DB) ([]*JoinRequest, []*ValidatorRemoveProposal, error) {
 	vs.rw.RLock()
 	defer vs.rw.RUnlock()
 
-	joins, err := vs.allActiveJoinReqs(ctx)
+	joins, err := vs.allActiveJoinReqs(ctx, tx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	removals, err := vs.allActiveRemoveReqs(ctx)
+	removals, err := vs.allActiveRemoveReqs(ctx, tx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -75,17 +69,17 @@ func (vs *validatorStore) ActiveVotes(ctx context.Context) ([]*JoinRequest, []*V
 
 // Init deletes all existing validator and join requests data, and inserts the
 // provided validators as the initial set. This would be used at genesis.
-func (vs *validatorStore) Init(ctx context.Context, vals []*Validator) error {
+func (vs *validatorStore) Init(ctx context.Context, tx sql.DB, vals []*Validator) error {
 	vs.rw.Lock()
 	defer vs.rw.Unlock()
 
-	return vs.init(ctx, vals)
+	return vs.init(ctx, tx, vals)
 }
 
 // UpdateValidatorPower modifies the power of an existing validator. This is
 // typically done to punish a byzantine validator by reducing their power. This
 // will not error if the validator does not exists, but it will not be added.
-func (vs *validatorStore) UpdateValidatorPower(ctx context.Context, validator []byte, power int64) error {
+func (vs *validatorStore) UpdateValidatorPower(ctx context.Context, tx sql.DB, validator []byte, power int64) error {
 	vs.rw.Lock()
 	defer vs.rw.Unlock()
 
@@ -93,7 +87,7 @@ func (vs *validatorStore) UpdateValidatorPower(ctx context.Context, validator []
 	// exist for other reasons, like if they should still be allowed to approve
 	// join requests created when they were empowered. TODO: set the rules!
 
-	return vs.updateValidatorPower(ctx, validator, power)
+	return vs.updateValidatorPower(ctx, tx, validator, power)
 }
 
 // RemoveValidator deletes a validator. NOTE: Both leave request handling and
@@ -102,71 +96,71 @@ func (vs *validatorStore) UpdateValidatorPower(ctx context.Context, validator []
 // validators set returned by CurrentValidators. To support this, AddValidator
 // performs an upsert operation to avoid a UNIQUE constraint violation if
 // re-adding the validator later.
-func (vs *validatorStore) RemoveValidator(ctx context.Context, validator []byte) error {
+func (vs *validatorStore) RemoveValidator(ctx context.Context, tx sql.DB, validator []byte) error {
 	vs.rw.Lock()
 	defer vs.rw.Unlock()
 
-	return vs.removeValidator(ctx, validator)
+	return vs.removeValidator(ctx, tx, validator)
 }
 
 // AddValidator adds a new key to the validator set. This will also remove any
 // join_requests that may have just finished.
-func (vs *validatorStore) AddValidator(ctx context.Context, joiner []byte, power int64) error {
+func (vs *validatorStore) AddValidator(ctx context.Context, tx sql.DB, joiner []byte, power int64) error {
 	vs.rw.Lock()
 	defer vs.rw.Unlock()
 
-	return vs.addValidator(ctx, joiner, power)
+	return vs.addValidator(ctx, tx, joiner, power)
 }
 
-func (vs *validatorStore) StartJoinRequest(ctx context.Context, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error {
+func (vs *validatorStore) StartJoinRequest(ctx context.Context, tx sql.DB, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error {
 	vs.rw.Lock()
 	defer vs.rw.Unlock()
 
-	return vs.startJoinRequest(ctx, joiner, approvers, power, expiresAt)
+	return vs.startJoinRequest(ctx, tx, joiner, approvers, power, expiresAt)
 }
 
 // AddApproval records that a certain validator has approved the join request
 // for a candidate validator.
-func (vs *validatorStore) AddApproval(ctx context.Context, joiner, approver []byte) error {
+func (vs *validatorStore) AddApproval(ctx context.Context, tx sql.DB, joiner, approver []byte) error {
 	vs.rw.Lock()
 	defer vs.rw.Unlock()
 
-	return vs.addApproval(ctx, joiner, approver)
+	return vs.addApproval(ctx, tx, joiner, approver)
 }
 
 // AddApproval records that a certain validator has requested removal of a
 // validator from the validator set.
-func (vs *validatorStore) AddRemoval(ctx context.Context, target, validator []byte) error {
+func (vs *validatorStore) AddRemoval(ctx context.Context, tx sql.DB, target, validator []byte) error {
 	vs.rw.Lock()
 	defer vs.rw.Unlock()
 
-	return vs.addRemoval(ctx, target, validator)
+	return vs.addRemoval(ctx, tx, target, validator)
 }
 
 // DeleteRemoval deletes a removal request. Note that when removing a validator
 // with RemoveValidator, any and all removal requests for removed validator are
 // deleted, so it is not necessary to use this method in that case.
-func (vs *validatorStore) DeleteRemoval(ctx context.Context, target, validator []byte) error {
+func (vs *validatorStore) DeleteRemoval(ctx context.Context, tx sql.DB, target, validator []byte) error {
 	vs.rw.Lock()
 	defer vs.rw.Unlock()
 
-	return vs.deleteRemoval(ctx, target, validator)
+	return vs.deleteRemoval(ctx, tx, target, validator)
 }
 
 // Delete a join request
-func (vs *validatorStore) DeleteJoinRequest(ctx context.Context, joiner []byte) error {
+func (vs *validatorStore) DeleteJoinRequest(ctx context.Context, tx sql.DB, joiner []byte) error {
 	vs.rw.Lock()
 	defer vs.rw.Unlock()
 
-	return vs.deleteJoinRequest(ctx, joiner)
+	return vs.deleteJoinRequest(ctx, tx, joiner)
 }
 
 // IsCurrent returns true if the validator is in the current validator set.
-func (vs *validatorStore) IsCurrent(ctx context.Context, validator []byte) (bool, error) {
+func (vs *validatorStore) IsCurrent(ctx context.Context, tx sql.DB, validator []byte) (bool, error) {
 	vs.rw.RLock()
 	defer vs.rw.RUnlock()
 
-	power, err := vs.validatorPower(ctx, validator)
+	power, err := vs.validatorPower(ctx, tx, validator)
 	if err == errUnknownValidator {
 		return false, nil
 	}

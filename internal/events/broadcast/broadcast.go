@@ -38,37 +38,32 @@ type EventStore interface {
 	MarkBroadcasted(ctx context.Context, ids []types.UUID) error
 }
 
-// FeeEstimator estimates the fee for the VoteID transaction.
-// Fee is estimated currently based on the number of voteIDs in the transaction.
-type FeeEstimator interface {
-	Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
-}
-
 // Broadcaster is an interface for broadcasting to the Kwil network.
 type Broadcaster interface {
 	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (res *cmtCoreTypes.ResultBroadcastTx, err error)
 }
 
-// AccountInfoer gets uncommitted information about an account.
-// It can be used for building transactions.
-type AccountInfoer interface {
+// TxApp is the main Kwil application.
+type TxApp interface {
 	// AccountInfo gets uncommitted information about an account.
 	AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
+	// Price gets the estimated fee for a transaction.
+	Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
 }
 
 // ValidatorStore gets data about the local validators.
 type ValidatorStore interface {
-	IsCurrent(ctx context.Context, validator []byte) (bool, error)
+	GetValidators(ctx context.Context) ([]*types.Validator, error)
 }
 
-func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, accountInfo AccountInfoer, validatorStore ValidatorStore, signer *auth.Ed25519Signer, chainID string) *EventBroadcaster {
+func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, app TxApp, validatorStore ValidatorStore, signer *auth.Ed25519Signer, chainID string) *EventBroadcaster {
 	return &EventBroadcaster{
 		store:          store,
 		broadcaster:    broadcaster,
-		accountInfo:    accountInfo,
 		validatorStore: validatorStore,
 		signer:         signer,
 		chainID:        chainID,
+		app:            app,
 	}
 }
 
@@ -76,21 +71,29 @@ func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, accountInfo 
 type EventBroadcaster struct {
 	store          EventStore
 	broadcaster    Broadcaster
-	accountInfo    AccountInfoer
 	validatorStore ValidatorStore
 	signer         *auth.Ed25519Signer
 	chainID        string
+	app            TxApp
 }
 
 // RunBroadcast tells the EventBroadcaster to broadcast any events it wishes.
 // It implements Kwil's abci.CommitHook function signature.
 // If the node is not a validator, it will do nothing.
-func (e *EventBroadcaster) RunBroadcast(ctx context.Context, feeEstimator FeeEstimator, Proposer []byte) error {
-	// Only validators are allowed to broadcast events.
-	isCurrent, err := e.validatorStore.IsCurrent(ctx, e.signer.Identity())
+func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) error {
+	validators, err := e.validatorStore.GetValidators(ctx)
 	if err != nil {
 		return err
 	}
+
+	var isCurrent bool
+	for _, v := range validators {
+		if bytes.Equal(v.PubKey, e.signer.Identity()) {
+			isCurrent = true
+			break
+		}
+	}
+
 	if !isCurrent {
 		return nil
 	}
@@ -121,7 +124,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, feeEstimator FeeEst
 		ids[i] = event.ID()
 	}
 
-	bal, nonce, err := e.accountInfo.AccountInfo(ctx, e.signer.Identity(), true)
+	bal, nonce, err := e.app.AccountInfo(ctx, e.signer.Identity(), true)
 	if err != nil {
 		return err
 	}
@@ -132,7 +135,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, feeEstimator FeeEst
 	}
 
 	// Get the fee estimate
-	fee, err := feeEstimator.Price(ctx, tx)
+	fee, err := e.app.Price(ctx, tx)
 	if err != nil {
 		return err
 	}
