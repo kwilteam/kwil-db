@@ -87,8 +87,30 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		return nil, err
 	}
 
+	// Ensure that the postgres host is running with an acceptable version.
+	pgVer, pgVerNum, err := pgVersion(ctx, pool.writer)
+	if err != nil {
+		return nil, err
+	}
+	logger.Infof("Connected to %v", pgVer) // Connected to PostgreSQL 16.1 (Ubuntu 16.1-1.pgdg22.04+1) on ...
+
+	major, minor, okVer := validateVersion(pgVerNum, verMajorRequired, verMinorRequired)
+	if !okVer {
+		return nil, fmt.Errorf("Required PostgreSQL version not satisfied. Required %d.%d but connected to %d.%d",
+			verMajorRequired, verMinorRequired, major, minor)
+	}
+
+	// Now check system settings, including logical replication and prepared transactions.
+	if err = verifySettings(ctx, pool.writer); err != nil {
+		return nil, err
+	}
+
 	// Verify that the db user/role is superuser with replication privileges.
 	if err = checkSuperuser(ctx, pool.writer); err != nil {
+		return nil, err
+	}
+
+	if err = setTimezoneUTC(ctx, pool.writer); err != nil {
 		return nil, err
 	}
 
