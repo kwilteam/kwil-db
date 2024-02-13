@@ -4,9 +4,51 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/attributes"
+	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/utils"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
+
+// EnterExpressionFunction adds aggregate function columns to the list of aggregated columns.
+func (o *orderAnalyzer) EnterExpressionFunction(node *tree.ExpressionFunction) error {
+	switch node.Function.(type) {
+	default:
+		return nil
+	case *tree.AggregateFunc:
+		for _, arg := range node.Inputs {
+			cols := utils.SearchResultColumns(arg)
+			switch len(cols) {
+			case 0:
+				continue
+			case 1:
+				o.context.AggregatedColumns[orderableTerm{
+					Table:  cols[0].Table,
+					Column: cols[0].Column,
+				}] = struct{}{}
+			default:
+				return fmt.Errorf("aggregate function with multiple columns not supported")
+			}
+		}
+	}
+
+	return nil
+}
+
+// EnterGroupBy will remove the columns from the list of aggregated columns.
+func (o *orderAnalyzer) EnterGroupBy(node *tree.GroupBy) error {
+	for _, expr := range node.Expressions {
+		cols := utils.SearchResultColumns(expr)
+		for _, col := range cols {
+			delete(o.context.AggregatedColumns, orderableTerm{
+				Table:  col.Table,
+				Column: col.Column,
+			})
+		}
+	}
+
+	return nil
+
+}
 
 // ExitOrderBy adds the required ordering terms to the statement.
 func (o *orderAnalyzer) ExitOrderBy(node *tree.OrderBy) error {

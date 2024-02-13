@@ -21,7 +21,8 @@ type selectBuilder struct {
 		right string
 		alias string
 	}
-	union *tree.CompoundOperatorType
+	groupBys []string
+	union    *tree.CompoundOperatorType
 }
 
 func Select() SelectBuilder {
@@ -46,6 +47,7 @@ type SelectBuilder interface {
 	From(table string, alias ...string) SelectBuilder
 	Join(table string, onLeft string, onRight string, alias ...string) SelectBuilder
 	Compound(operator tree.CompoundOperatorType) SelectBuilder
+	GroupBy(columns ...string) SelectBuilder
 	Build() *tree.SelectCore
 }
 
@@ -84,6 +86,11 @@ func (s *selectBuilder) Join(table string, onLeft string, onRight string, alias 
 
 func (s *selectBuilder) Compound(operator tree.CompoundOperatorType) SelectBuilder {
 	s.union = &operator
+	return s
+}
+
+func (s *selectBuilder) GroupBy(columns ...string) SelectBuilder {
+	s.groupBys = columns
 	return s
 }
 
@@ -163,6 +170,16 @@ func (s *selectBuilder) Build() *tree.SelectCore {
 		})
 	}
 
+	groupByExprs := []tree.Expression{}
+	for _, gb := range s.groupBys {
+		splitCol := strings.Split(gb, ".")
+		groupByExprs = append(groupByExprs,
+			&tree.ExpressionColumn{
+				Table:  splitCol[0],
+				Column: splitCol[1],
+			})
+	}
+
 	sel := &tree.SelectCore{
 		Columns: cols,
 		From: &tree.FromClause{
@@ -173,6 +190,9 @@ func (s *selectBuilder) Build() *tree.SelectCore {
 				},
 				Joins: joins,
 			},
+		},
+		GroupBy: &tree.GroupBy{
+			Expressions: groupByExprs,
 		},
 	}
 

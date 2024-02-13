@@ -20,6 +20,7 @@ import (
 	- User provided ordering is given precedence over default ordering
 	- If the user orders a primary key column, it will override the default ordering for that column
 	- If the query is a compound select, then all of the returned terms are ordered, instead of the primary keys.
+	- Any columns in an aggregate function THAT ARE NOT in a group by do not need to be ordered, as they are not returned in the result set
 	The returned terms are ordered in the order that they are passed
 
 	* From the SQLite docs (https://www.sqlite.org/lang_select.html#orderby)):
@@ -92,6 +93,9 @@ type orderContext struct {
 	currentSelectPosition uint8
 
 	Parent *orderContext
+
+	// All columns aggregated in a group by clause
+	AggregatedColumns map[orderableTerm]struct{}
 }
 
 func newOrderContext(oldContext *orderContext) *orderContext {
@@ -99,6 +103,7 @@ func newOrderContext(oldContext *orderContext) *orderContext {
 		PrimaryUsedTables: []*types.Table{},
 		ResultColumns:     []tree.ResultColumn{},
 		Parent:            oldContext,
+		AggregatedColumns: map[orderableTerm]struct{}{},
 	}
 }
 
@@ -124,7 +129,6 @@ func (o *orderContext) generateOrder(term *orderableTerm) (*tree.OrderingTerm, e
 }
 
 func (o *orderContext) GetTable(name string) (*types.Table, error) {
-
 	for _, tbl := range o.PrimaryUsedTables {
 		if tbl.Name == name {
 			return tbl, nil
@@ -143,7 +147,14 @@ func (o *orderContext) requiredOrderingTerms() ([]*orderableTerm, error) {
 			return nil, err
 		}
 
-		orderingTerms = append(orderingTerms, required...)
+		notAggregated := []*orderableTerm{}
+		for _, term := range required {
+			if _, ok := o.AggregatedColumns[*term]; !ok {
+				notAggregated = append(notAggregated, term)
+			}
+		}
+
+		orderingTerms = append(orderingTerms, notAggregated...)
 	}
 
 	return orderingTerms, nil

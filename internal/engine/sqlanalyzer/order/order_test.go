@@ -265,6 +265,159 @@ func Test_Ordering(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:   "select with aggregate and group by",
+			tables: defaultTables,
+			selectCores: []*tree.SelectCore{
+				{
+					Columns: []tree.ResultColumn{
+						&tree.ResultColumnExpression{
+							Expression: &tree.ExpressionColumn{
+								Table:  "users",
+								Column: "id",
+							},
+						},
+						&tree.ResultColumnExpression{
+							Expression: &tree.ExpressionFunction{
+								Function: &tree.FunctionCOUNT,
+								Inputs: []tree.Expression{
+									&tree.ExpressionColumn{
+										Table:  "posts",
+										Column: "id",
+									},
+								},
+							},
+						},
+					},
+					From: &tree.FromClause{
+						JoinClause: &tree.JoinClause{
+							TableOrSubquery: &tree.TableOrSubqueryTable{
+								Name: "users",
+							},
+							Joins: []*tree.JoinPredicate{
+								{
+									JoinOperator: &tree.JoinOperator{
+										JoinType: tree.JoinTypeJoin,
+									},
+									Table: &tree.TableOrSubqueryTable{
+										Name: "posts",
+									},
+									Constraint: &tree.ExpressionBinaryComparison{
+										Left: &tree.ExpressionColumn{
+											Table:  "posts",
+											Column: "user_id",
+										},
+										Operator: tree.ComparisonOperatorEqual,
+										Right: &tree.ExpressionColumn{
+											Table:  "users",
+											Column: "id",
+										},
+									},
+								},
+							},
+						},
+					},
+					GroupBy: &tree.GroupBy{
+						Expressions: []tree.Expression{
+							&tree.ExpressionColumn{
+								Table:  "users",
+								Column: "name",
+							},
+							&tree.ExpressionColumn{
+								Table:  "posts",
+								Column: "id",
+							},
+						},
+					},
+				},
+			},
+			originalOrderingTerms: []*tree.OrderingTerm{},
+			expectedOrderingTerms: []*tree.OrderingTerm{
+				{
+					Expression: &tree.ExpressionColumn{ // since posts.id is included in the group by, it should be included in the ordering
+						Table:  "posts",
+						Column: "id",
+					},
+					OrderType:    tree.OrderTypeAsc,
+					NullOrdering: tree.NullOrderingTypeLast,
+				},
+				{
+					Expression: &tree.ExpressionColumn{
+						Table:  "users",
+						Column: "id",
+					},
+					OrderType:    tree.OrderTypeAsc,
+					NullOrdering: tree.NullOrderingTypeLast,
+				},
+			},
+		},
+		{
+			name:   "select with aggregate and NO group by",
+			tables: defaultTables,
+			selectCores: []*tree.SelectCore{
+				{
+					Columns: []tree.ResultColumn{
+						&tree.ResultColumnExpression{
+							Expression: &tree.ExpressionColumn{
+								Table:  "users",
+								Column: "id",
+							},
+						},
+						&tree.ResultColumnExpression{
+							Expression: &tree.ExpressionFunction{
+								Function: &tree.FunctionCOUNT,
+								Inputs: []tree.Expression{
+									&tree.ExpressionColumn{
+										Table:  "posts",
+										Column: "id",
+									},
+								},
+							},
+						},
+					},
+					From: &tree.FromClause{
+						JoinClause: &tree.JoinClause{
+							TableOrSubquery: &tree.TableOrSubqueryTable{
+								Name: "users",
+							},
+							Joins: []*tree.JoinPredicate{
+								{
+									JoinOperator: &tree.JoinOperator{
+										JoinType: tree.JoinTypeJoin,
+									},
+									Table: &tree.TableOrSubqueryTable{
+										Name: "posts",
+									},
+									Constraint: &tree.ExpressionBinaryComparison{
+										Left: &tree.ExpressionColumn{
+											Table:  "posts",
+											Column: "user_id",
+										},
+										Operator: tree.ComparisonOperatorEqual,
+										Right: &tree.ExpressionColumn{
+											Table:  "users",
+											Column: "id",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			originalOrderingTerms: []*tree.OrderingTerm{},
+			expectedOrderingTerms: []*tree.OrderingTerm{
+				// since posts.id is in the aggregate and not group by, it should not be included in the ordering
+				{
+					Expression: &tree.ExpressionColumn{
+						Table:  "users",
+						Column: "id",
+					},
+					OrderType:    tree.OrderTypeAsc,
+					NullOrdering: tree.NullOrderingTypeLast,
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
