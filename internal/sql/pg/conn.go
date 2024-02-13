@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/kwilteam/kwil-db/internal/sql"
 
@@ -71,8 +70,7 @@ type ConnConfig struct {
 // session.
 type Pool struct {
 	pgxp   *pgxpool.Pool
-	writer *pgx.Conn  // hijacked from the pool
-	mtx    sync.Mutex // protects writer
+	writer *pgx.Conn // hijacked from the pool
 }
 
 var _ sql.Queryer = (*Pool)(nil)
@@ -150,16 +148,10 @@ func (p *Pool) Query(ctx context.Context, stmt string, args ...any) (*sql.Result
 // the Tx returned from BeginTx.
 
 func (p *Pool) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
 	return query(ctx, &cqWrapper{p.writer}, stmt, args...)
 }
 
 func (p *Pool) Close() error {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
 	p.pgxp.Close()
 	return p.writer.Close(context.TODO())
 }
@@ -197,9 +189,6 @@ func (p *Pool) Begin(ctx context.Context) (sql.TxCloser, error) {
 
 // BeginTx starts a read-write transaction.
 func (p *Pool) BeginTx(ctx context.Context) (sql.Tx, error) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
 	tx, err := p.writer.BeginTx(ctx, pgx.TxOptions{
 		IsoLevel:   pgx.ReadCommitted,
 		AccessMode: pgx.ReadWrite,
