@@ -259,10 +259,6 @@ func (m *MockEventStore) Store(ctx context.Context, data []byte, eventType strin
 	return nil
 }
 
-func (m *MockEventStore) KVStore() sql.KV {
-	return nil
-}
-
 type mockVoteStore struct {
 	processed map[ctypes.UUID]bool
 }
