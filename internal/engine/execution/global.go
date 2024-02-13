@@ -17,6 +17,9 @@ import (
 // It exists for the lifetime of the server.
 // It stores information about deployed datasets in-memory, and provides methods to interact with them.
 type GlobalContext struct {
+	// mu protects the datasets maps, which is written to during block execution
+	// and read from during calls / queries.
+	// It also implicitly protects maps held in the *baseDataset struct.
 	mu sync.RWMutex
 
 	// initializers are the namespaces that are available to datasets.
@@ -114,13 +117,8 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid strin
 // It can be given either a readwrite or readonly transaction.
 // If it is given a read-only transaction, it will not be able to execute any procedures that are not `view`.
 func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, options *types.ExecutionData) (*sql.ResultSet, error) {
-	if tx.AccessMode() == sql.ReadOnly {
-		g.mu.RLock()
-		defer g.mu.RUnlock()
-	} else {
-		g.mu.Lock()
-		defer g.mu.Unlock()
-	}
+	g.mu.RLock() // even if tx is readwrite, we will not change GlobalContext state, so we can use RLock
+	defer g.mu.RUnlock()
 
 	err := options.Clean()
 	if err != nil {
@@ -186,7 +184,7 @@ func (g *GlobalContext) Query(ctx context.Context, tx sql.DB, dbid string, query
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
-	dataset, ok := g.datasets[dbid] // data race with txsvc hitting this freely?
+	dataset, ok := g.datasets[dbid]
 	if !ok {
 		return nil, types.ErrDatasetNotFound
 	}
