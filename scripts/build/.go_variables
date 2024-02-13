@@ -5,7 +5,7 @@ set -eu
 
 : "${CGO_ENABLED=}"
 : "${GO_LINKMODE=static}"
-: "${GO_BUILDMODE=}"
+: "${GO_RACEFLAG=}"
 : "${GO_BUILDTAGS=}"
 : "${GO_STRIP=}"
 : "${GO_GCFLAGS=}"
@@ -21,6 +21,11 @@ BINARY=${1:-}
 TARGET=${TARGET:-".build"}
 TARGET="$TARGET/${BINARY}"
 export TARGET
+
+if [ -n "$GO_RACEFLAG" ]; then
+    echo "Building with race detector enabled. Enabling CGO."
+    CGO_ENABLED=1
+fi
 
 if [ -z "$CGO_ENABLED" ]; then
     case "$(go env GOOS)" in
