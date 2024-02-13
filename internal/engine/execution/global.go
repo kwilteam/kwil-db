@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 
 	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
@@ -16,6 +17,11 @@ import (
 // It exists for the lifetime of the server.
 // It stores information about deployed datasets in-memory, and provides methods to interact with them.
 type GlobalContext struct {
+	// mu protects the datasets maps, which is written to during block execution
+	// and read from during calls / queries.
+	// It also implicitly protects maps held in the *baseDataset struct.
+	mu sync.RWMutex
+
 	// initializers are the namespaces that are available to datasets.
 	// This includes other datasets, or loaded extensions.
 	initializers map[string]ExtensionInitializer
@@ -59,6 +65,9 @@ func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[
 // CreateDataset deploys a schema.
 // It will create the requisite tables, and perform the required initializations.
 func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, caller []byte) (err error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
 	err = schema.Clean()
 	if err != nil {
 		return err
@@ -82,6 +91,9 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *ty
 // DeleteDataset deletes a dataset.
 // It will ensure that the caller is the owner of the dataset.
 func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid string, caller []byte) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
 	dataset, ok := g.datasets[dbid]
 	if !ok {
 		return types.ErrDatasetNotFound
@@ -105,6 +117,9 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid strin
 // It can be given either a readwrite or readonly transaction.
 // If it is given a read-only transaction, it will not be able to execute any procedures that are not `view`.
 func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, options *types.ExecutionData) (*sql.ResultSet, error) {
+	g.mu.RLock() // even if tx is readwrite, we will not change GlobalContext state, so we can use RLock
+	defer g.mu.RUnlock()
+
 	err := options.Clean()
 	if err != nil {
 		return nil, err
@@ -134,6 +149,9 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, options *types.E
 // ListDatasets list datasets deployed by a specific caller.
 // If caller is empty, it will list all datasets.
 func (g *GlobalContext) ListDatasets(ctx context.Context, caller []byte) ([]*coreTypes.DatasetIdentifier, error) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
 	datasets := make([]*coreTypes.DatasetIdentifier, 0, len(g.datasets))
 	for dbid, dataset := range g.datasets {
 		if len(caller) == 0 || bytes.Equal(dataset.schema.Owner, caller) {
@@ -150,6 +168,9 @@ func (g *GlobalContext) ListDatasets(ctx context.Context, caller []byte) ([]*cor
 
 // GetSchema gets a schema from a deployed dataset.
 func (g *GlobalContext) GetSchema(ctx context.Context, dbid string) (*types.Schema, error) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
 	dataset, ok := g.datasets[dbid]
 	if !ok {
 		return nil, types.ErrDatasetNotFound
@@ -160,7 +181,10 @@ func (g *GlobalContext) GetSchema(ctx context.Context, dbid string) (*types.Sche
 
 // Query executes a read-only query.
 func (g *GlobalContext) Query(ctx context.Context, tx sql.DB, dbid string, query string) (*sql.ResultSet, error) {
-	dataset, ok := g.datasets[dbid] // data race with txsvc hitting this freely?
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	dataset, ok := g.datasets[dbid]
 	if !ok {
 		return nil, types.ErrDatasetNotFound
 	}
