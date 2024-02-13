@@ -113,24 +113,37 @@ func (omgr *OracleMgr) Stop() {
 }
 
 func (omgr *OracleMgr) stopOracles() {
-	oracles := oracles.RegisteredOracles()
-	for name, oracle := range oracles {
-		omgr.logger.Info("stopping oracle", zap.String("name", name))
-		oracle.Stop()
+	// stop configured oracles
+	for oracleName := range omgr.config {
+		omgr.logger.Info("stopping oracle", zap.String("name", oracleName))
+		//check if oracle is registered
+		oracleInst, ok := oracles.GetOracle(oracleName)
+		if !ok {
+			omgr.logger.Warn("Trying to stop unregistered oracle", zap.String("Oracle Name", oracleName), zap.Any("Config", omgr.config[oracleName]))
+			return
+		}
+
+		// stop the oracle
+		oracleInst.Stop()
 	}
 }
 
 func (omgr *OracleMgr) startOracles() {
-	oracles := oracles.RegisteredOracles()
-	for name, oracle := range oracles {
-		oracleName := name
-		oracleInst := oracle
+	// start configured oracles
+	for oracleName := range omgr.config {
+		//check if oracle is registered
+		oracleInst, ok := oracles.GetOracle(oracleName)
+		if !ok {
+			omgr.logger.Warn("Trying to start unregistered oracle", zap.String("Oracle Name", oracleName), zap.Any("Config", omgr.config[oracleName]))
+			return
+		}
 
 		omgr.logger.Info("starting oracle", zap.String("name", oracleName))
-		go func() {
-			if err := oracleInst.Start(omgr.ctx, omgr.eventStore, omgr.config[oracleName], *omgr.logger.Named(oracleName)); err != nil {
-				omgr.logger.Warn("failed to start oracle", zap.String("name", oracleName), zap.Error(err))
+		go func(name string, inst oracles.Oracle) {
+			if err := inst.Start(omgr.ctx, omgr.eventStore, omgr.config[name], *omgr.logger.Named(name)); err != nil {
+				omgr.logger.Warn("failed to start oracle", zap.String("name", name), zap.Error(err))
 			}
-		}()
+		}(oracleName, oracleInst)
+
 	}
 }
