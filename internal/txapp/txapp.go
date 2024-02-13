@@ -154,18 +154,10 @@ func (r *TxApp) Execute(ctx TxContext, tx *transactions.Transaction) *TxResponse
 	if r.currentTx == nil {
 		return txRes(nil, transactions.CodeUnknownError, errors.New("txapp misuse: cannot execute a blockchain transaction without a db transaction in progress"))
 	}
-	dbTx, err := r.currentTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(nil, transactions.CodeUnknownError, err)
-	}
 
-	res := route.Execute(ctx, r, tx, dbTx)
-
-	// commit regardless of error
-	// errors can simply be not having enough tokens
-	err = dbTx.Commit(ctx.Ctx)
-	if err != nil {
-		return txRes(nil, transactions.CodeUnknownError, err)
+	res := route.Execute(ctx, r, tx)
+	if res.Error != nil {
+		return res
 	}
 
 	return res
@@ -428,6 +420,9 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 			Amount:    tx.Body.Fee,
 			Nonce:     int64(tx.Body.Nonce),
 		})
+		if errors.Is(err, accounts.ErrInsufficientFunds) {
+			return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
+		}
 		if err != nil {
 			return nil, transactions.CodeUnknownError, err
 		}
@@ -441,6 +436,9 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 		Amount:    amt,
 		Nonce:     int64(tx.Body.Nonce),
 	})
+	if errors.Is(err, accounts.ErrInsufficientFunds) {
+		return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
+	}
 	if err != nil {
 		return nil, transactions.CodeUnknownError, err
 	}
@@ -460,5 +458,13 @@ func txRes(spend *big.Int, code transactions.TxCode, err error) *TxResponse {
 		ResponseCode: code,
 		Spend:        spend.Int64(),
 		Error:        err,
+	}
+}
+
+// lofIfErr logs an error to TxApp if it is not nil.
+// it should be used when committing or rolling back a transaction.
+func logErr(l log.Logger, err error) {
+	if err != nil {
+		l.Error("error committing/rolling back transaction", zap.Error(err))
 	}
 }

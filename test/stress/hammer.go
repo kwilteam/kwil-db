@@ -18,6 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
+	"github.com/kwilteam/kwil-db/core/utils/random"
 	"go.uber.org/zap"
 )
 
@@ -236,7 +237,7 @@ func hammer(ctx context.Context) error {
 		// Content length is limited by multiple things: message size, max transaction size, block size e.g.:
 		//  - "rpc error: code = ResourceExhausted desc = grpc: received message larger than max (5000168 vs. 4194304)"
 		//  - "Tx too large. Max size is 1048576, but got 4192304" a little less than 1MiB would be 1<<20 - 1e3
-		bigData := randomBytes(maxContentLen) // pregenerate some random data for post content
+		bigData := random.String(maxContentLen) // pregenerate some random data for post content
 
 		posters := make(chan struct{}, maxPosters)
 		wg.Add(1)
@@ -253,7 +254,9 @@ func hammer(ctx context.Context) error {
 				h.printf("new post id = %d, took %vms%s", next, float64(since.Microseconds())/1e3, slow)
 			}()
 
-			content := string(bigData[:rand.Intn(maxContentLen)+1]) // random.String(rand.Intn(maxContentLen) + 1) // randomBytes(maxContentLen)
+			random.String(maxContentLen)
+
+			content := bigData[:rand.Intn(maxContentLen)+1] // random.String(rand.Intn(maxContentLen) + 1) // randomBytes(maxContentLen)
 			h.printf("beginning createPostAsync id = %d, content len = %d (concurrent with %d others)",
 				next, len(content), len(posters)-1)
 			promise, err := h.createPostAsync(ctx, dbid, next, "title_"+strconv.Itoa(next), content)

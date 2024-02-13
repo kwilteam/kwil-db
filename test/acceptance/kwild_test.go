@@ -178,6 +178,9 @@ func TestKwildAcceptance(t *testing.T) {
 			//specifications.CurrentValidatorsSpecification(ctx, t, creatorDriver, 1)
 
 			// The other network/validator specs require multiple nodes in a network
+
+			// TODO: test inputting invalid utf-8 into action that needs string (should fail)
+			// this previously crashed the node
 		})
 	}
 }
