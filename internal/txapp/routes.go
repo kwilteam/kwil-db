@@ -11,7 +11,6 @@ import (
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/voting"
-	"go.uber.org/zap"
 )
 
 func init() {
@@ -34,8 +33,10 @@ func init() {
 
 type Route interface {
 	Pricer
-	// Execute executes the transaction and returns the result.
-	// If any error is returned, it will rollback the transaction.
+	// Execute is responsible for committing or rolling back transactions.
+	// All transactions should spend, regardless of success or failure.
+	// Therefore, a nested transaction should be used for all database
+	// operations after the initial checkAndSpend.
 	Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse
 }
 
@@ -77,20 +78,20 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
 	}
-	defer dbTx.Rollback(ctx.Ctx)
 
 	spend, code, err := router.checkAndSpend(ctx, tx, d, dbTx)
 	if err != nil {
-		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
-			// if insufficient balance or fee, we want to still spend, so we commit here
-			err2 := dbTx.Commit(ctx.Ctx)
-			if err2 != nil {
-				// internal db error, this will almost certainly halt chain
-				router.log.Error("failed to commit dbTx", zap.Error(err2))
-			}
+		// if insufficient balance / spend amount, still commit the tx
+		// otherwise, it is some internal database error, and should fail.
+		switch code {
+		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
+			logErr(router.log, dbTx.Commit(ctx.Ctx))
+		default:
+			logErr(router.log, dbTx.Rollback(ctx.Ctx))
 		}
 		return txRes(spend, code, err)
 	}
+	defer dbTx.Commit(ctx.Ctx)
 
 	schemaPayload := &transactions.Schema{}
 	err = schemaPayload.UnmarshalBinary(tx.Body.Payload)
@@ -104,15 +105,20 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
-	err = router.Engine.CreateDataset(ctx.Ctx, dbTx, schema, tx.Sender)
+	tx2, err := dbTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	defer tx2.Rollback(ctx.Ctx)
+
+	err = router.Engine.CreateDataset(ctx.Ctx, tx2, schema, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
-	err = dbTx.Commit(ctx.Ctx)
+	err = tx2.Commit(ctx.Ctx)
 	if err != nil {
-		// internal db error, this will almost certainly halt chain
-		router.log.Error("failed to commit dbTx", zap.Error(err))
+		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
@@ -129,20 +135,18 @@ func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transaction
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
 	}
-	defer dbTx.Rollback(ctx.Ctx)
 
 	spend, code, err := router.checkAndSpend(ctx, tx, d, dbTx)
 	if err != nil {
-		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
-			// if insufficient balance or fee, we want to still spend, so we commit here
-			err2 := dbTx.Commit(ctx.Ctx)
-			if err2 != nil {
-				// internal db error, this will almost certainly halt chain
-				router.log.Error("failed to commit dbTx", zap.Error(err2))
-			}
+		switch code {
+		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
+			logErr(router.log, dbTx.Commit(ctx.Ctx))
+		default:
+			logErr(router.log, dbTx.Rollback(ctx.Ctx))
 		}
 		return txRes(spend, code, err)
 	}
+	defer dbTx.Commit(ctx.Ctx)
 
 	drop := &transactions.DropSchema{}
 	err = drop.UnmarshalBinary(tx.Body.Payload)
@@ -150,15 +154,20 @@ func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transaction
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	err = router.Engine.DeleteDataset(ctx.Ctx, dbTx, drop.DBID, tx.Sender)
+	tx2, err := dbTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	defer tx2.Rollback(ctx.Ctx)
+
+	err = router.Engine.DeleteDataset(ctx.Ctx, tx2, drop.DBID, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
-	err = dbTx.Commit(ctx.Ctx)
+	err = tx2.Commit(ctx.Ctx)
 	if err != nil {
-		// internal db error, this will almost certainly halt chain
-		router.log.Error("failed to commit dbTx", zap.Error(err))
+		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
@@ -175,20 +184,18 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
 	}
-	defer dbTx.Rollback(ctx.Ctx)
 
 	spend, code, err := router.checkAndSpend(ctx, tx, e, dbTx)
 	if err != nil {
-		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
-			// if insufficient balance or fee, we want to still spend, so we commit here
-			err2 := dbTx.Commit(ctx.Ctx)
-			if err2 != nil {
-				// internal db error, this will almost certainly halt chain
-				router.log.Error("failed to commit dbTx", zap.Error(err2))
-			}
+		switch code {
+		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
+			logErr(router.log, dbTx.Commit(ctx.Ctx))
+		default:
+			logErr(router.log, dbTx.Rollback(ctx.Ctx))
 		}
 		return txRes(spend, code, err)
 	}
+	defer dbTx.Commit(ctx.Ctx)
 
 	action := &transactions.ActionExecution{}
 	err = action.UnmarshalBinary(tx.Body.Payload)
@@ -216,13 +223,14 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		args = make([][]any, 1)
 	}
 
-	engineTx, err := dbTx.BeginTx(ctx.Ctx)
+	tx2, err := dbTx.BeginTx(ctx.Ctx)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
+	defer tx2.Rollback(ctx.Ctx)
 
 	for i := range action.Arguments {
-		_, err = router.Engine.Execute(ctx.Ctx, engineTx, &engineTypes.ExecutionData{
+		_, err = router.Engine.Execute(ctx.Ctx, tx2, &engineTypes.ExecutionData{
 			Dataset:   action.DBID,
 			Procedure: action.Action,
 			Args:      args[i],
@@ -230,31 +238,13 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 			Caller:    identifier,
 		})
 		if err != nil {
-			err2 := engineTx.Rollback(ctx.Ctx)
-			if err2 != nil {
-				// internal db error, this will almost certainly halt chain
-				router.log.Error("failed to rollback engineTx", zap.Error(err2))
-			}
-
-			err3 := dbTx.Commit(ctx.Ctx)
-			if err3 != nil {
-				// internal db error, this will almost certainly halt chain
-				router.log.Error("failed to commit dbTx", zap.Error(err3))
-			}
-
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 	}
 
-	err = engineTx.Commit(ctx.Ctx)
+	err = tx2.Commit(ctx.Ctx)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	err = dbTx.Commit(ctx.Ctx)
-	if err != nil {
-		// internal db error, this will almost certainly halt chain
-		router.log.Error("failed to commit dbTx", zap.Error(err))
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
@@ -273,20 +263,18 @@ func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.T
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
 	}
-	defer dbTx.Rollback(ctx.Ctx)
 
 	spend, code, err := router.checkAndSpend(ctx, tx, t, dbTx)
 	if err != nil {
-		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
-			// if insufficient balance or fee, we want to still spend, so we commit here
-			err2 := dbTx.Commit(ctx.Ctx)
-			if err2 != nil {
-				// internal db error, this will almost certainly halt chain
-				router.log.Error("failed to commit dbTx", zap.Error(err2))
-			}
+		switch code {
+		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
+			logErr(router.log, dbTx.Commit(ctx.Ctx))
+		default:
+			logErr(router.log, dbTx.Rollback(ctx.Ctx))
 		}
 		return txRes(spend, code, err)
 	}
+	defer dbTx.Commit(ctx.Ctx)
 
 	transfer := &transactions.Transfer{}
 	err = transfer.UnmarshalBinary(tx.Body.Payload)
@@ -305,15 +293,20 @@ func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.T
 		return txRes(spend, transactions.CodeInvalidAmount, fmt.Errorf("invalid transfer amount: %s", transfer.Amount))
 	}
 
-	err = router.Accounts.Transfer(ctx.Ctx, dbTx, transfer.To, tx.Sender, bigAmt)
+	tx2, err := dbTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	defer tx2.Rollback(ctx.Ctx)
+
+	err = router.Accounts.Transfer(ctx.Ctx, tx2, transfer.To, tx.Sender, bigAmt)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
-	err = dbTx.Commit(ctx.Ctx)
+	err = tx2.Commit(ctx.Ctx)
 	if err != nil {
-		// internal db error, this will almost certainly halt chain
-		router.log.Error("failed to commit dbTx", zap.Error(err))
+		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
@@ -330,20 +323,18 @@ func (v *validatorJoinRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
 	}
-	defer dbTx.Rollback(ctx.Ctx)
 
 	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
 	if err != nil {
-		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
-			// if insufficient balance or fee, we want to still spend, so we commit here
-			err2 := dbTx.Commit(ctx.Ctx)
-			if err2 != nil {
-				// internal db error, this will almost certainly halt chain
-				router.log.Error("failed to commit dbTx", zap.Error(err2))
-			}
+		switch code {
+		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
+			logErr(router.log, dbTx.Commit(ctx.Ctx))
+		default:
+			logErr(router.log, dbTx.Rollback(ctx.Ctx))
 		}
 		return txRes(spend, code, err)
 	}
+	defer dbTx.Commit(ctx.Ctx)
 
 	join := &transactions.ValidatorJoin{}
 	err = join.UnmarshalBinary(tx.Body.Payload)
@@ -351,15 +342,20 @@ func (v *validatorJoinRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	err = router.Validators.Join(ctx.Ctx, dbTx, tx.Sender, int64(join.Power))
+	tx2, err := dbTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	defer tx2.Rollback(ctx.Ctx)
+
+	err = router.Validators.Join(ctx.Ctx, tx2, tx.Sender, int64(join.Power))
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
-	err = dbTx.Commit(ctx.Ctx)
+	err = tx2.Commit(ctx.Ctx)
 	if err != nil {
-		// internal db error, this will almost certainly halt chain
-		router.log.Error("failed to commit dbTx", zap.Error(err))
+		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
@@ -376,20 +372,18 @@ func (v *validatorApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
 	}
-	defer dbTx.Rollback(ctx.Ctx)
 
 	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
 	if err != nil {
-		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
-			// if insufficient balance or fee, we want to still spend, so we commit here
-			err2 := dbTx.Commit(ctx.Ctx)
-			if err2 != nil {
-				// internal db error, this will almost certainly halt chain
-				router.log.Error("failed to commit dbTx", zap.Error(err2))
-			}
+		switch code {
+		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
+			logErr(router.log, dbTx.Commit(ctx.Ctx))
+		default:
+			logErr(router.log, dbTx.Rollback(ctx.Ctx))
 		}
 		return txRes(spend, code, err)
 	}
+	defer dbTx.Commit(ctx.Ctx)
 
 	approve := &transactions.ValidatorApprove{}
 	err = approve.UnmarshalBinary(tx.Body.Payload)
@@ -397,15 +391,20 @@ func (v *validatorApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	err = router.Validators.Approve(ctx.Ctx, dbTx, approve.Candidate, tx.Sender)
+	tx2, err := dbTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	defer tx2.Rollback(ctx.Ctx)
+
+	err = router.Validators.Approve(ctx.Ctx, tx2, approve.Candidate, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
-	err = dbTx.Commit(ctx.Ctx)
+	err = tx2.Commit(ctx.Ctx)
 	if err != nil {
-		// internal db error, this will almost certainly halt chain
-		router.log.Error("failed to commit dbTx", zap.Error(err))
+		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
@@ -422,20 +421,18 @@ func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transac
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
 	}
-	defer dbTx.Rollback(ctx.Ctx)
 
 	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
 	if err != nil {
-		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
-			// if insufficient balance or fee, we want to still spend, so we commit here
-			err2 := dbTx.Commit(ctx.Ctx)
-			if err2 != nil {
-				// internal db error, this will almost certainly halt chain
-				router.log.Error("failed to commit dbTx", zap.Error(err2))
-			}
+		switch code {
+		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
+			logErr(router.log, dbTx.Commit(ctx.Ctx))
+		default:
+			logErr(router.log, dbTx.Rollback(ctx.Ctx))
 		}
 		return txRes(spend, code, err)
 	}
+	defer dbTx.Commit(ctx.Ctx)
 
 	remove := &transactions.ValidatorRemove{}
 	err = remove.UnmarshalBinary(tx.Body.Payload)
@@ -443,15 +440,20 @@ func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transac
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	err = router.Validators.Remove(ctx.Ctx, dbTx, remove.Validator, tx.Sender)
+	tx2, err := dbTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	defer tx2.Rollback(ctx.Ctx)
+
+	err = router.Validators.Remove(ctx.Ctx, tx2, remove.Validator, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
-	err = dbTx.Commit(ctx.Ctx)
+	err = tx2.Commit(ctx.Ctx)
 	if err != nil {
-		// internal db error, this will almost certainly halt chain
-		router.log.Error("failed to commit dbTx", zap.Error(err))
+		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
@@ -468,20 +470,18 @@ func (v *validatorLeaveRoute) Execute(ctx TxContext, router *TxApp, tx *transact
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
 	}
-	defer dbTx.Rollback(ctx.Ctx)
 
 	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
 	if err != nil {
-		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
-			// if insufficient balance or fee, we want to still spend, so we commit here
-			err2 := dbTx.Commit(ctx.Ctx)
-			if err2 != nil {
-				// internal db error, this will almost certainly halt chain
-				router.log.Error("failed to commit dbTx", zap.Error(err2))
-			}
+		switch code {
+		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
+			logErr(router.log, dbTx.Commit(ctx.Ctx))
+		default:
+			logErr(router.log, dbTx.Rollback(ctx.Ctx))
 		}
 		return txRes(spend, code, err)
 	}
+	defer dbTx.Commit(ctx.Ctx)
 
 	// doing this b/c the old version did, but it seems there is no reason to do this
 	leave := &transactions.ValidatorLeave{}
@@ -490,15 +490,20 @@ func (v *validatorLeaveRoute) Execute(ctx TxContext, router *TxApp, tx *transact
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	err = router.Validators.Leave(ctx.Ctx, dbTx, tx.Sender)
+	tx2, err := dbTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	defer tx2.Rollback(ctx.Ctx)
+
+	err = router.Validators.Leave(ctx.Ctx, tx2, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
-	err = dbTx.Commit(ctx.Ctx)
+	err = tx2.Commit(ctx.Ctx)
 	if err != nil {
-		// internal db error, this will almost certainly halt chain
-		router.log.Error("failed to commit dbTx", zap.Error(err))
+		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
@@ -519,22 +524,26 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
 	}
-	defer dbTx.Rollback(ctx.Ctx)
 
 	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
 	if err != nil {
-		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
-			// if insufficient balance or fee, we want to still spend, so we commit here
-			err2 := dbTx.Commit(ctx.Ctx)
-			if err2 != nil {
-				// internal db error, this will almost certainly halt chain
-				router.log.Error("failed to commit dbTx", zap.Error(err2))
-			}
+		switch code {
+		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
+			logErr(router.log, dbTx.Commit(ctx.Ctx))
+		default:
+			logErr(router.log, dbTx.Rollback(ctx.Ctx))
 		}
 		return txRes(spend, code, err)
 	}
+	defer dbTx.Commit(ctx.Ctx)
 
-	isValidator, err := router.Validators.IsCurrent(ctx.Ctx, dbTx, tx.Sender)
+	tx2, err := dbTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	defer tx2.Rollback(ctx.Ctx)
+
+	isValidator, err := router.Validators.IsCurrent(ctx.Ctx, tx2, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -552,7 +561,7 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	expiryHeight := ctx.BlockHeight + ctx.VotingPeriod
 
 	for _, voteID := range approve.ResolutionIDs {
-		err = router.VoteStore.Approve(ctx.Ctx, dbTx, voteID, expiryHeight, tx.Sender)
+		err = router.VoteStore.Approve(ctx.Ctx, tx2, voteID, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
@@ -562,18 +571,18 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 		// since we may be the proposer later, and will need the body
 		// If the network already has the body, then we can just delete.
 		if fromLocalValidator {
-			containsBody, err := router.VoteStore.ContainsBodyOrFinished(ctx.Ctx, dbTx, voteID) // should be uncommitted queries internally?
+			containsBody, err := router.VoteStore.ContainsBodyOrFinished(ctx.Ctx, tx2, voteID) // should be uncommitted queries internally?
 			if err != nil {
 				return txRes(spend, transactions.CodeUnknownError, err)
 			}
 
 			if containsBody {
-				err = deleteEvent(ctx.Ctx, dbTx, voteID)
+				err = deleteEvent(ctx.Ctx, tx2, voteID)
 				if err != nil {
 					return txRes(spend, transactions.CodeUnknownError, err)
 				}
 			} else {
-				err = markReceived(ctx.Ctx, dbTx, voteID)
+				err = markReceived(ctx.Ctx, tx2, voteID)
 				if err != nil {
 					return txRes(spend, transactions.CodeUnknownError, err)
 				}
@@ -581,10 +590,9 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 		}
 	}
 
-	err = dbTx.Commit(ctx.Ctx)
+	err = tx2.Commit(ctx.Ctx)
 	if err != nil {
-		// internal db error, this will almost certainly halt chain
-		router.log.Error("failed to commit dbTx", zap.Error(err))
+		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
@@ -614,20 +622,18 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
 	}
-	defer dbTx.Rollback(ctx.Ctx)
 
 	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
 	if err != nil {
-		if code == transactions.CodeInsufficientFee || code == transactions.CodeInsufficientBalance {
-			// if insufficient balance or fee, we want to still spend, so we commit here
-			err2 := dbTx.Commit(ctx.Ctx)
-			if err2 != nil {
-				// internal db error, this will almost certainly halt chain
-				router.log.Error("failed to commit dbTx", zap.Error(err2))
-			}
+		switch code {
+		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
+			logErr(router.log, dbTx.Commit(ctx.Ctx))
+		default:
+			logErr(router.log, dbTx.Rollback(ctx.Ctx))
 		}
 		return txRes(spend, code, err)
 	}
+	defer dbTx.Commit(ctx.Ctx)
 
 	if !bytes.Equal(tx.Sender, ctx.Proposer) {
 		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotProposer)
@@ -642,41 +648,44 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	localValidator := router.signer.Identity()
 	expiryHeight := ctx.BlockHeight + ctx.VotingPeriod
 
+	tx2, err := dbTx.BeginTx(ctx.Ctx)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	defer tx2.Rollback(ctx.Ctx)
+
 	for _, event := range vote.Events {
-		err = router.VoteStore.CreateResolution(ctx.Ctx, dbTx, event, expiryHeight, tx.Sender)
+		err = router.VoteStore.CreateResolution(ctx.Ctx, tx2, event, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
 		// since the vote body proposer is implicitly voting for the event,
 		// we need to approve the newly created vote body here
-		err = router.VoteStore.Approve(ctx.Ctx, dbTx, event.ID(), expiryHeight, tx.Sender)
+		err = router.VoteStore.Approve(ctx.Ctx, tx2, event.ID(), expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
 		// If the local validator has already voted on the event, then we should delete the event.
-		hasVoted, err := router.VoteStore.HasVoted(ctx.Ctx, dbTx, event.ID(), localValidator)
+		hasVoted, err := router.VoteStore.HasVoted(ctx.Ctx, tx2, event.ID(), localValidator)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 		if hasVoted {
-			err = deleteEvent(ctx.Ctx, dbTx, event.ID())
+			err = deleteEvent(ctx.Ctx, tx2, event.ID())
 			if err != nil {
 				return txRes(spend, transactions.CodeUnknownError, err)
 			}
 		}
 	}
 
-	err = dbTx.Commit(ctx.Ctx)
-	if err != nil {
-		// internal db error, this will almost certainly halt chain
-		router.log.Error("failed to commit dbTx", zap.Error(err))
+	if err = tx2.Commit(ctx.Ctx); err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
 }
-
 func (v *validatorVoteBodiesRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	// Check if gas costs are enabled
 

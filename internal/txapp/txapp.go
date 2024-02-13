@@ -420,8 +420,8 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 			Amount:    tx.Body.Fee,
 			Nonce:     int64(tx.Body.Nonce),
 		})
-		if err == accounts.ErrInsufficientFunds {
-			return nil, transactions.CodeInsufficientFee, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
+		if errors.Is(err, accounts.ErrInsufficientFunds) {
+			return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
 		}
 		if err != nil {
 			return nil, transactions.CodeUnknownError, err
@@ -436,6 +436,9 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 		Amount:    amt,
 		Nonce:     int64(tx.Body.Nonce),
 	})
+	if errors.Is(err, accounts.ErrInsufficientFunds) {
+		return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
+	}
 	if err != nil {
 		return nil, transactions.CodeUnknownError, err
 	}
@@ -455,5 +458,13 @@ func txRes(spend *big.Int, code transactions.TxCode, err error) *TxResponse {
 		ResponseCode: code,
 		Spend:        spend.Int64(),
 		Error:        err,
+	}
+}
+
+// lofIfErr logs an error to TxApp if it is not nil.
+// it should be used when committing or rolling back a transaction.
+func logErr(l log.Logger, err error) {
+	if err != nil {
+		l.Error("error committing/rolling back transaction", zap.Error(err))
 	}
 }
