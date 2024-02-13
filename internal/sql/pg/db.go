@@ -96,7 +96,7 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 
 	major, minor, okVer := validateVersion(pgVerNum, verMajorRequired, verMinorRequired)
 	if !okVer {
-		return nil, fmt.Errorf("Required PostgreSQL version not satisfied. Required %d.%d but connected to %d.%d",
+		return nil, fmt.Errorf("required PostgreSQL version not satisfied. Required %d.%d but connected to %d.%d",
 			verMajorRequired, verMinorRequired, major, minor)
 	}
 
@@ -129,10 +129,6 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 	// are altered to have "full replication identity" for UPDATE and DELETES.
 	if err = ensureTriggerReplIdentity(ctx, pool.writer); err != nil {
 		return nil, fmt.Errorf("failed to create replication identity trigger: %w", err)
-	}
-
-	if err = ensureKvTable(ctx, pool.writer); err != nil {
-		return nil, err
 	}
 
 	// Create the publication that is required for logical replication.
@@ -190,7 +186,6 @@ func (db *DB) AutoCommit(auto bool) {
 // For {accounts,validators}.Datasets / registry.DB
 var _ sql.Executor = (*DB)(nil)
 var _ sql.Queryer = (*DB)(nil)
-var _ sql.KV = (*DB)(nil)
 
 var _ sql.OuterTxMaker = (*DB)(nil) // for dataset Registry
 
@@ -451,32 +446,6 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 	}
 	db.discardCommitID(ctx, resChan)
 	return res, nil
-}
-
-// Get retrieves the value for a key using Query (read-only), optionally using
-// QueryPending if the write connection should be used to get uncommitted
-// (pending) data if currently in a transaction. If there is no stored value for
-// the key, both the returned slice and error are nil.
-//
-// NOTE: This DB type is not aware of a user dataset "dbid", so there is just
-// one global kv table. It might be preferable to implement Get/Set via the
-// other methods using statements crafted at a higher level, which would
-// facilitate separate kv tables for different Kwil user datasets.
-func (db *DB) Get(ctx context.Context, key []byte, pending bool) ([]byte, error) {
-	queryFun := db.Query
-	if pending {
-		queryFun = db.Execute
-	}
-	return Get(ctx, kvTableNameFull, key, queryFun) // not db.pool.Get because we DB has session mgmt
-}
-
-func (db *DB) Set(ctx context.Context, key []byte, value []byte) error {
-	// db.Execute(ctx, insertKvStmt, key, value) // slightly efficient with no sprintf, but less consistent with Get
-	return Set(ctx, kvTableNameFull, key, value, WrapQueryFun(db.Execute))
-}
-
-func (db *DB) Delete(ctx context.Context, key []byte) error {
-	return Delete(ctx, kvTableNameFull, key, WrapQueryFun(db.Execute))
 }
 
 // TODO: require rw with target_session_attrs=read-write ?

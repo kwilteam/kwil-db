@@ -246,7 +246,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 	inStream *bool, stats *walStats, okSchema func(schema string) bool) (bool, int64, error) {
 	logicalMsg, err := parseV3(walData, *inStream)
 	if err != nil {
-		return false, 0, fmt.Errorf("Parse logical replication message: %w", err)
+		return false, 0, fmt.Errorf("parse logical replication message: %w", err)
 	}
 
 	var seq int64 = -1

@@ -7,6 +7,7 @@ package events
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/sql"
@@ -40,6 +41,8 @@ type EventStore struct {
 	// with consensus, so these two cannot be managed with the same
 	// connection.
 	eventWriter DB
+
+	writerMtx sync.Mutex // protects eventWriter, not applicable to read-only operations
 
 	// voteStore is a store that tracks votes.
 	votestore VoteStore
@@ -76,6 +79,9 @@ func NewEventStore(ctx context.Context, writerDB DB, voteStore VoteStore) (*Even
 // It uses the local connection to the event store,
 // instead of the consensus connection.
 func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) error {
+	e.writerMtx.Lock()
+	defer e.writerMtx.Unlock()
+
 	tx, err := e.eventWriter.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -188,6 +194,9 @@ func (e *EventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.VotableE
 
 // MarkBroadcasted marks the event as broadcasted.
 func (e *EventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) error {
+	e.writerMtx.Lock()
+	defer e.writerMtx.Unlock()
+
 	_, err := e.eventWriter.Execute(ctx, markBroadcasted, types.UUIDArray(ids))
 	return err
 }
@@ -201,6 +210,9 @@ func MarkReceived(ctx context.Context, db sql.DB, id types.UUID) error {
 // MarkRebroadcast marks the event to be rebroadcasted. Usually in scenarios where
 // the transaction was rejected by mempool due to invalid nonces.
 func (e *EventStore) MarkRebroadcast(ctx context.Context, ids []types.UUID) error {
+	e.writerMtx.Lock()
+	defer e.writerMtx.Unlock()
+
 	_, err := e.eventWriter.Execute(ctx, markRebroadcast, types.UUIDArray(ids))
 	return err
 }
@@ -255,6 +267,9 @@ func (s *KV) Get(ctx context.Context, key []byte) ([]byte, error) {
 }
 
 func (s *KV) Set(ctx context.Context, key []byte, value []byte) error {
+	s.es.writerMtx.Lock()
+	defer s.es.writerMtx.Unlock()
+
 	tx, err := s.es.eventWriter.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -270,6 +285,9 @@ func (s *KV) Set(ctx context.Context, key []byte, value []byte) error {
 }
 
 func (s *KV) Delete(ctx context.Context, key []byte) error {
+	s.es.writerMtx.Lock()
+	defer s.es.writerMtx.Unlock()
+
 	tx, err := s.es.eventWriter.BeginTx(ctx)
 	if err != nil {
 		return err
