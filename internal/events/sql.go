@@ -3,7 +3,6 @@ package events
 const (
 	SchemaName      = `kwild_events` // exported because oracles depends on it. this is an issue with how oracles are unit tested
 	sqlCreateSchema = `CREATE SCHEMA IF NOT EXISTS ` + SchemaName
-	kvTableName     = SchemaName + `.kv`
 
 	// eventsTable is the SQL table definition for the events table.
 	// All the events in this table exist in one of the below states.
@@ -32,24 +31,24 @@ const (
 	markRebroadcast = `UPDATE ` + SchemaName + `.events SET broadcasted = FALSE WHERE id =ANY($1);`
 
 	// KV sql
-	kvTableNameFull = SchemaName + "_kv"
+	kvTableName     = SchemaName + `.kv`
 	createKvTblStmt = `
-	CREATE TABLE IF NOT EXISTS ` + kvTableNameFull + ` (
+	CREATE TABLE IF NOT EXISTS ` + kvTableName + ` (
 		key BYTEA PRIMARY KEY,
 		value BYTEA NOT NULL
 	);`
 	upsertKvStmt = `
-		INSERT INTO ` + kvTableNameFull + ` (key, value)
+		INSERT INTO ` + kvTableName + ` (key, value)
 		VALUES ($1, $2)
 		ON CONFLICT (key) DO UPDATE SET value = $2;
 	`
 	selectKvStmt = `
 		SELECT value
-		FROM ` + kvTableNameFull + `
+		FROM ` + kvTableName + `
 		WHERE key = $1;
 	`
 	deleteKvStmt = `
-		DELETE FROM ` + kvTableNameFull + `
+		DELETE FROM ` + kvTableName + `
 		WHERE key = $1;
 	`
 )

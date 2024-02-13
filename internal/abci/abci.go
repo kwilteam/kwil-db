@@ -311,7 +311,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	// while we have idempotent commits, it is ok to have this here.
 	newAppHash, validatorUpdates, err := a.txApp.Finalize(ctx, req.Height)
 	if err != nil {
-		return nil, fmt.Errorf("failed to commit transaction router: %w", err)
+		return nil, fmt.Errorf("failed to finalize transaction app: %w", err)
 	}
 
 	res.ValidatorUpdates = make([]abciTypes.ValidatorUpdate, len(validatorUpdates))
@@ -342,7 +342,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abciTypes.ResponseCommit, error) {
 	err := a.txApp.Commit(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to commit transaction router: %w", err)
+		return nil, fmt.Errorf("failed to commit transaction app: %w", err)
 	}
 
 	err = a.metadataStore.IncrementBlockHeight(ctx)
