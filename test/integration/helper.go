@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -420,9 +421,10 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 
 	stack := dc.WithEnv(envs)
 	for _, service := range services {
-		if r.ethDeposit.Enabled {
+		if r.ethDeposit.Enabled && strings.HasPrefix(service, "node") {
 			waitMsg := "Started listening for new blocks on ethereum"
 			stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
+			continue
 		}
 
 		waitMsg, ok := logWaitStrategies[service]
