@@ -4,19 +4,21 @@ ARG version
 ARG build_time
 ARG git_commit
 ARG go_build_tags
+ARG go_race
 
 WORKDIR /app
 RUN mkdir -p /var/run/kwil
 RUN chmod 777 /var/run/kwil
 RUN apk update && apk add git ca-certificates-bundle
+RUN if [ -n "$go_race" ]; then apk add --no-cache gcc g++; fi
 
 COPY . .
 RUN test -f go.work && rm go.work || true
 
-RUN GOWORK=off GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" GO_BUILDTAGS=$go_build_tags ./scripts/build/binary kwild
+RUN GOWORK=off GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" GO_BUILDTAGS=$go_build_tags GO_RACEFLAG=$go_race ./scripts/build/binary kwild
 
-RUN GOWORK=off GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" ./scripts/build/binary kwil-admin
-RUN GOWORK=off GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" ./scripts/build/binary kwil-cli
+RUN GOWORK=off GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" GO_RACEFLAG=$go_race ./scripts/build/binary kwil-admin
+RUN GOWORK=off GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" GO_RACEFLAG=$go_race ./scripts/build/binary kwil-cli
 RUN chmod +x /app/dist/kwild /app/dist/kwil-admin /app/dist/kwil-cli
 
 FROM alpine:3.17
