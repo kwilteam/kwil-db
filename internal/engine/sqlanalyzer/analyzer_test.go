@@ -91,6 +91,14 @@ func Test_Analyze(t *testing.T) {
 				tblUsers,
 			},
 		},
+		{
+			name: "select with count",
+			stmt: `SELECT COUNT(*) FROM users`,
+			want: `SELECT count(*) FROM "ds_dbid"."users";`,
+			tables: []*types.Table{
+				tblUsers,
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -15,6 +15,10 @@ func (o *orderAnalyzer) EnterExpressionFunction(node *tree.ExpressionFunction) e
 	default:
 		return nil
 	case *tree.AggregateFunc:
+		if len(node.Inputs) == 0 {
+			o.context.aggregatesAll = true
+		}
+
 		for _, arg := range node.Inputs {
 			cols := utils.SearchResultColumns(arg)
 			switch len(cols) {
@@ -139,6 +143,15 @@ func (o *orderAnalyzer) EnterTableOrSubqueryTable(node *tree.TableOrSubqueryTabl
 		Indexes:     tbl.Indexes,
 		ForeignKeys: tbl.ForeignKeys,
 	})
+
+	if o.context.aggregatesAll {
+		for _, col := range tbl.Columns {
+			o.context.AggregatedColumns[orderableTerm{
+				Table:  identifier,
+				Column: col.Name,
+			}] = struct{}{}
+		}
+	}
 
 	return nil
 }

@@ -96,6 +96,9 @@ type orderContext struct {
 
 	// All columns aggregated in a group by clause
 	AggregatedColumns map[orderableTerm]struct{}
+
+	// aggregatesAll is true if there is an AGGREGRATE(*) in the select clause
+	aggregatesAll bool
 }
 
 func newOrderContext(oldContext *orderContext) *orderContext {
