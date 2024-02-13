@@ -151,91 +151,6 @@ func (p *Pool) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resu
 	return query(ctx, &cqWrapper{p.writer}, stmt, args...)
 }
 
-func (p *Pool) Get(ctx context.Context, kvTable string, key []byte, pending bool) ([]byte, error) {
-	q := p.Query
-	if pending {
-		q = p.Execute
-	}
-	return Get(ctx, kvTable, key, q)
-}
-
-func (p *Pool) Set(ctx context.Context, kvTable string, key, value []byte) error {
-	return Set(ctx, kvTable, key, value, WrapQueryFun(p.Execute))
-}
-
-func (p *Pool) Delete(ctx context.Context, kvTable string, key []byte) error {
-	return Delete(ctx, kvTable, key, WrapQueryFun(p.Execute))
-}
-
-type QueryFn func(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error)
-
-// Get is a plain function for kv table access using any QueryFn, such as a
-// method from a DB or Pool, dealers choice.
-func Get(ctx context.Context, kvTable string, key []byte, q QueryFn) ([]byte, error) {
-	stmt := fmt.Sprintf(selectKvStmtTmpl, kvTable)
-	res, err := q(ctx, stmt, key)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	switch len(res.Rows) {
-	case 0: // this is fine
-		return nil, nil
-	case 1:
-	default:
-		return nil, errors.New("exactly one row not returned")
-	}
-
-	row := res.Rows[0]
-	if len(row) != 1 {
-		return nil, errors.New("exactly one value not in row")
-	}
-	val, ok := row[0].([]byte)
-	if !ok {
-		return nil, errors.New("value not a bytea")
-	}
-	return val, nil
-}
-
-// ExecFn is a function that executes a query without returning any results.
-// Although most other methods require a trivial adaptor to satisfy this, it is
-// easier to implement in general, such as from third party methods that cannot
-// trivially create a ResultSet. See WrapQueryFun.
-type ExecFn func(ctx context.Context, stmt string, args ...any) error
-
-// WrapQueryFun adapts a QueryFn to an ExecFn for functions that require no
-// results.
-func WrapQueryFun(q QueryFn) ExecFn {
-	return func(ctx context.Context, stmt string, args ...any) error {
-		_, err := q(ctx, stmt, args...)
-		return err
-	}
-}
-
-// Set is a plain function for setting values in a kv using any ExecFn, such as
-// the method from a DB or Pool.
-func Set(ctx context.Context, kvTable string, key, value []byte, e ExecFn) error {
-	stmt := fmt.Sprintf(insertKvStmtTmpl, kvTable)
-	return e(ctx, stmt, key, value)
-}
-
-// Delete is a plain function for deleting values from a kv table using any
-// ExecFn, such as the method from a DB or Pool.
-func Delete(ctx context.Context, kvTable string, key []byte, e ExecFn) error {
-	stmt := fmt.Sprintf(deleteKvStmtTmpl, kvTable)
-	return e(ctx, stmt, key)
-}
-
-// CreateKVTable is a helper to create a table compatible with the Get and Set
-// functions.
-func CreateKVTable(ctx context.Context, tableName string, e ExecFn) error {
-	createStmt := fmt.Sprintf(createKvStmtTmpl, tableName)
-	return e(ctx, createStmt)
-}
-
 func (p *Pool) Close() error {
 	p.pgxp.Close()
 	return p.writer.Close(context.TODO())
@@ -258,10 +173,6 @@ func (ptx *poolTx) Execute(ctx context.Context, stmt string, args ...any) (*sql.
 
 func (ptx *poolTx) Query(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
 	return query(ctx, ptx.Tx, stmt, args...)
-}
-
-func (ptx *poolTx) Precommit(context.Context) ([]byte, error) {
-	return nil, errors.New("prepared transactions are not supported in this context")
 }
 
 // Begin starts a read-write transaction on the writer connection.

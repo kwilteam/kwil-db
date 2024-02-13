@@ -21,18 +21,6 @@ type Executor interface {
 	Execute(ctx context.Context, stmt string, args ...any) (*ResultSet, error)
 }
 
-type KVGetter interface {
-	// Get gets a value for a key.
-	Get(ctx context.Context, key []byte, sync bool) ([]byte, error)
-}
-
-type KV interface {
-	KVGetter
-
-	// Set sets a key to a value.
-	Set(ctx context.Context, key []byte, value []byte) error
-}
-
 // TxCloser terminates a transaction by committing or rolling it back. A method
 // that returns this alone would keep the tx under the hood of the parent type,
 // directing queries internally through the scope of a transaction/session
