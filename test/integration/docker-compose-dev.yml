@@ -381,7 +381,7 @@ services:
   kgw:
     image: kgw:latest
     ports:
-      - "8090:8090"
+      - "8090:8090" # this is required for the test to pass, as the `domain` value is set to `http://localhost:8090`
     networks:
       - ${KWIL_NETWORK:-kwil-int-testnet}
     command: |

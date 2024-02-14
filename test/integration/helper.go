@@ -472,6 +472,17 @@ func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 	pgInitFile := filepath.Join(tmpDir, "pginit.sql")
 	err = os.WriteFile(pgInitFile, pgInitSQL, 0644)
 	require.NoError(r.t, err, "failed to write pginit.sql")
+
+	// copy docker-compose.override.yml if exists
+	if fileExists(r.cfg.DockerComposeOverrideFile) {
+		overrideCompose, err := os.ReadFile(r.cfg.DockerComposeOverrideFile)
+		require.NoError(r.t, err, "failed to read docker-compose.override.yml")
+		overrideFile := filepath.Join(tmpDir, "docker-compose.override.yml")
+		err = os.WriteFile(overrideFile, overrideCompose, 0644)
+		require.NoError(r.t, err, "failed to write docker-compose.override.yml")
+		r.cfg.DockerComposeOverrideFile = overrideFile
+	}
+
 	//config to use generated compose file
 	r.cfg.DockerComposeFile = composeFile
 }
