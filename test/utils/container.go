@@ -5,71 +5,26 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/go-connections/nat"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
 )
 
-func EnsureNetworkExist(ctx context.Context, networkName string) (
+func EnsureNetworkExist(ctx context.Context, testName string) (
 	*testcontainers.DockerNetwork, error) {
-	net, err := newNetwork(ctx,
-		networkName,
+	net, err := network.New(ctx,
 		network.WithCheckDuplicate(),
 		network.WithAttachable(),
-		network.WithInternal(),
+		//network.WithInternal(), // we need to expose the network to the host
 		network.WithLabels(map[string]string{"test": "integration"}),
 	)
 
 	if err != nil {
-		if strings.Contains(err.Error(), "already exists") {
-			fmt.Printf("docker network %s already exists\n", networkName)
-			return nil, nil
-		} else {
-			return nil, fmt.Errorf("failed to create docker network %s: %w", networkName, err)
-		}
+		return nil, fmt.Errorf("failed to create docker network for %s: %w", testName, err)
 	} else {
-		fmt.Printf("docker network created: %s(%s)\n", net.Name, net.ID)
+		fmt.Printf("docker network created: %s(%s) for %s\n", net.Name, net.ID, testName)
 		return net, nil
 	}
-}
-
-// newNetwork is basically the same as network.New, but it supports create with
-// a specific name. No idea why the original network.New doesn't support this.
-func newNetwork(ctx context.Context, name string,
-	opts ...network.NetworkCustomizer) (*testcontainers.DockerNetwork, error) {
-	nc := types.NetworkCreate{
-		Driver: "bridge",
-		Labels: testcontainers.GenericLabels(),
-	}
-
-	for _, opt := range opts {
-		opt.Customize(&nc)
-	}
-
-	//nolint:staticcheck
-	netReq := testcontainers.NetworkRequest{
-		Driver:         nc.Driver,
-		CheckDuplicate: nc.CheckDuplicate,
-		Internal:       false,
-		EnableIPv6:     nc.EnableIPv6,
-		Name:           name,
-		Labels:         nc.Labels,
-		Attachable:     nc.Attachable,
-		IPAM:           nc.IPAM,
-	}
-
-	//nolint:staticcheck
-	n, err := testcontainers.GenericNetwork(ctx, testcontainers.GenericNetworkRequest{
-		NetworkRequest: netReq,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Return a DockerNetwork struct instead of the Network interface,
-	// following the "accept interface, return struct" pattern.
-	return n.(*testcontainers.DockerNetwork), nil
 }
 
 // getEndpoints returns proto://host:port exposed/unexposed string for given exposed port.

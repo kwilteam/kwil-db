@@ -439,12 +439,13 @@ func (r *IntHelper) Setup(ctx context.Context, services []string) {
 func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 	// create a new network for each test to avoid container DNS name conflicts
 	// for parallel running
-	localNetworkName := r.t.Name()
-	localNetwork, err := utils.EnsureNetworkExist(context.Background(), localNetworkName)
+	testName := r.t.Name()
+	localNetwork, err := utils.EnsureNetworkExist(context.Background(), testName)
 	require.NoError(r.t, err, "failed to create network")
+	localNetworkName := localNetwork.Name
 
 	r.t.Cleanup(func() {
-		r.t.Logf("teardown docker network: %s", localNetworkName)
+		r.t.Logf("teardown docker network %s from %s", localNetworkName, testName)
 		if localNetwork != nil {
 			err := localNetwork.Remove(ctx)
 			require.NoError(r.t, err, "failed to remove network")
@@ -463,7 +464,8 @@ func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 		})
 	require.NoError(r.t, err, "failed to create docker compose file")
 
-	r.t.Logf("generated compose file: %s, network: %s", composeFile, localNetworkName)
+	r.t.Logf("generated compose file: %s, network: %s, test: %s",
+		composeFile, localNetworkName, testName)
 
 	// copy pginit.sql to same directory as docker-compose.yml
 	// so it can be mounted into the pg containers
