@@ -46,7 +46,9 @@ type ActTestCfg struct {
 	SchemaFile                string
 	DockerComposeFile         string
 	DockerComposeOverrideFile string
-	NoCleanup                 bool
+	// NoCleanup is used to keep the test environment from being cleaned up
+	// i.e. config files, logs, containers
+	NoCleanup bool
 
 	WaitTimeout time.Duration
 	LogLevel    string
@@ -227,11 +229,13 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 	dc, err := compose.NewDockerCompose(composeFiles...)
 	require.NoError(r.t, err, "failed to create docker compose object for single kwild node")
 
-	r.t.Cleanup(func() {
-		r.t.Logf("teardown docker compose")
-		err := dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal, compose.RemoveVolumes(true))
-		require.NoErrorf(r.t, err, "failed to teardown %s", dc.Services())
-	})
+	if !r.cfg.NoCleanup {
+		r.t.Cleanup(func() {
+			r.t.Logf("teardown docker compose")
+			err := dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal, compose.RemoveVolumes(true))
+			require.NoErrorf(r.t, err, "failed to teardown %s", dc.Services())
+		})
+	}
 
 	// NOTE: if you run with debugger image, you need to attach to the debugger
 	// before the timeout

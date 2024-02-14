@@ -167,6 +167,8 @@ func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silenc
 		return nil, fmt.Errorf("failed to get absolute path for output directory: %w", err)
 	}
 	cfg.RootDir = rootDir
+	// output logs to file, this will be located in given root dir
+	cfg.Logging.OutputPaths = append(cfg.Logging.OutputPaths, "kwild.log")
 
 	cometbftRoot := filepath.Join(outputDir, abciDir)
 
