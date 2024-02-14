@@ -242,6 +242,10 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 	err = dc.
 		WithEnv(r.envs).
 		WaitForService(
+			"pg",
+			wait.NewLogStrategy(`listening on IPv4 address "0.0.0.0", port 5432`).
+				WithStartupTimeout(r.cfg.WaitTimeout)).
+		WaitForService(
 			"ext",
 			wait.NewLogStrategy("listening on").WithStartupTimeout(r.cfg.WaitTimeout)).
 		WaitForService(

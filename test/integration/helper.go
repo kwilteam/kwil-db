@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	"github.com/kwilteam/kwil-db/core/adminclient"
 	"github.com/kwilteam/kwil-db/core/client"
@@ -37,6 +36,8 @@ import (
 	"github.com/kwilteam/kwil-db/test/driver/operator"
 	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
 	"github.com/kwilteam/kwil-db/test/utils"
+
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
@@ -56,13 +57,10 @@ var logWaitStrategies = map[string]string{
 	"node3":       "Starting Node service",
 	"kgw":         "KGW Server started",
 	"ganache":     "RPC Listening on 0.0.0.0:8545",
-}
-
-var healthWaitStrategies = map[string]bool{
-	"pg0": true,
-	"pg1": true,
-	"pg2": true,
-	"pg3": true,
+	"pg0":         `listening on IPv4 address "0.0.0.0", port 5432`,
+	"pg1":         `listening on IPv4 address "0.0.0.0", port 5432`,
+	"pg2":         `listening on IPv4 address "0.0.0.0", port 5432`,
+	"pg3":         `listening on IPv4 address "0.0.0.0", port 5432`,
 }
 
 const (
@@ -380,12 +378,6 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 			stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
 			continue
 		}
-
-		if healthWaitStrategies[service] {
-			stack = stack.WaitForService(service, wait.NewHealthStrategy().WithStartupTimeout(r.cfg.WaitTimeout))
-			continue
-		}
-
 	}
 	// Use compose.Wait to wait for containers to become "healthy" according to
 	// their defined healthchecks.
