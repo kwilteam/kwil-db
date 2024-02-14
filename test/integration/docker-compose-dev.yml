@@ -3,22 +3,20 @@ version: "3"
 services:
   # TODO: generate correspond number of nodes and exts by configuration
   node0:
-    container_name: node0
     image: kwild:latest
     ports:
-      - "8080:8080"
-      - "50051:50051"
-      - "26656:26656"
-      - "26657:26657"
-    env_file:
-      - .env # docker compose by default will use this file if presented, here just make it explicit
+      - "8080"
+      - "50051"
+      - "26656"
+      - "26657"
+    #env_file:
+      # NOTE: docker compose by default will use `.env` file if presented
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node0
         target: /app/kwil
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.100.2
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     depends_on:
       ext1:
         condition: service_started
@@ -41,10 +39,9 @@ services:
       --app.pg_db_pass=kwild
 
   pg0:
-    container_name: pg0
     image: postgres:16.1
     ports:
-      - "5433:5432"
+      - "5432"
     restart: always
     user: postgres
     environment:
@@ -54,11 +51,10 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
-    volumes: 
+    volumes:
       - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.101.2
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready"]
       interval: 2s
@@ -66,22 +62,18 @@ services:
       retries: 10
 
   node1:
-    container_name: node1
     image: kwild:latest
     ports:
-      - "8081:8080"
-      - "50052:50051"
-      - "26666:26656"
-      - "26667:26657"
-    env_file:
-      - .env
+      - "8080"
+      - "50051"
+      - "26656"
+      - "26657"
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node1
         target: /app/kwil
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.100.3
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     depends_on:
       ext1:
         condition: service_started
@@ -104,10 +96,9 @@ services:
       --app.pg_db_pass=kwild
 
   pg1:
-    container_name: pg1
     image: postgres:16.1
     ports:
-      - "5434:5432"
+      - "5432"
     restart: always
     user: postgres
     environment:
@@ -117,11 +108,10 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
-    volumes: 
+    volumes:
       - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.101.3
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready"]
       interval: 2s
@@ -129,22 +119,19 @@ services:
       retries: 10
 
   node2:
-    container_name: node2
+#    container_name: node2
     image: kwild:latest
     ports:
-      - "8082:8080"
-      - "50053:50051"
-      - "26676:26656"
-      - "26677:26657"
-    env_file:
-      - .env
+      - "8080"
+      - "50051"
+      - "26656"
+      - "26657"
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node2
         target: /app/kwil
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.100.4
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     depends_on:
       ext1:
         condition: service_started
@@ -167,10 +154,9 @@ services:
       --app.pg_db_pass=kwild
 
   pg2:
-    container_name: pg2
     image: postgres:16.1
     ports:
-      - "5435:5432"
+      - "5432"
     restart: always
     user: postgres
     environment:
@@ -180,11 +166,10 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
-    volumes: 
+    volumes:
       - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.101.4
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready"]
       interval: 2s
@@ -195,22 +180,18 @@ services:
   # Removing the ext dependency as test-container docker compose creates a new project everytime we run
   # docker compose, and the ext is defined in a seperate project, so service lookup is hard.
   node3:
-    container_name: node3
     image: kwild:latest
     ports:
-      - "8083:8080"
-      - "50054:50051"
-      - "26686:26656"
-      - "26687:26657"
-    env_file:
-      - .env
+      - "8080"
+      - "50051"
+      - "26656"
+      - "26657"
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node3
         target: /app/kwil
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.100.5
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     depends_on:
       ext3:
         condition: service_started
@@ -233,10 +214,9 @@ services:
       --app.pg_db_pass=kwild
 
   pg3:
-    container_name: pg3
     image: postgres:16.1
     ports:
-      - "5436:5432"
+      - "5432"
     restart: always
     user: postgres
     environment:
@@ -246,11 +226,10 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
-    volumes: 
+    volumes:
       - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.101.5
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready"]
       interval: 2s
@@ -258,22 +237,18 @@ services:
       retries: 10
 
   node4:
-    container_name: node4
     image: kwild:latest
     ports:
-      - "8084:8080"
-      - "50055:50051"
-      - "26696:26656"
-      - "26697:26657"
-    env_file:
-      - .env
+      - "8080"
+      - "50051"
+      - "26656"
+      - "26657"
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node4
         target: /app/kwil
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.100.6
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     depends_on:
       ext1:
         condition: service_started
@@ -296,10 +271,9 @@ services:
       --app.pg_db_pass=kwild
 
   pg4:
-    container_name: pg4
     image: postgres:16.1
     ports:
-      - "5437:5432"
+      - "5432"
     restart: always
     user: postgres
     environment:
@@ -309,11 +283,10 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
-    volumes: 
+    volumes:
       - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.101.6
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready"]
       interval: 2s
@@ -321,22 +294,18 @@ services:
       retries: 10
 
   node5:
-    container_name: node5
     image: kwild:latest
     ports:
-      - "8085:8080"
-      - "50056:50051"
-      - "26706:26656"
-      - "26707:26657"
-    env_file:
-      - .env
+      - "8080"
+      - "50051"
+      - "26656"
+      - "26657"
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node5
         target: /app/kwil
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.100.7
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     depends_on:
         ext1:
           condition: service_started
@@ -359,10 +328,9 @@ services:
       --app.pg_db_pass=kwild
 
   pg5:
-    container_name: pg5
     image: postgres:16.1
     ports:
-      - "5438:5432"
+      - "5432"
     restart: always
     user: postgres
     environment:
@@ -372,11 +340,10 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
-    volumes: 
+    volumes:
       - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.101.7
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready"]
       interval: 2s
@@ -386,13 +353,11 @@ services:
   # this ext is shared by all nodes
   # we can make a separate ext for each node if we want
   ext1:
-    container_name: math_ext1
     image: kwilbrennan/extensions-math:multi-arch
     ports:
-      - "50061:50051"
+      - "50051"
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.100.101
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     healthcheck:
       test: [ "CMD", "nc", "-vz", "localhost", "50051" ]
       interval: 1s
@@ -401,13 +366,11 @@ services:
 
   # this one is just for node3, which is started in a separate compose project in some tests
   ext3:
-    container_name: math_ext3
     image: kwilbrennan/extensions-math:multi-arch
     ports:
-      - "50071:50051"
+      - "50051"
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.100.102
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     healthcheck:
       test: [ "CMD", "nc", "-vz", "localhost", "50051" ]
       interval: 1s
@@ -416,15 +379,11 @@ services:
 
   # for kgw tests, to run locally, you need to build this image in kgw repo
   kgw:
-    container_name: kgw
     image: kgw:latest
     ports:
-      - "8090:8090"
-    env_file:
-      - .env
+      - "8090:8090" # this is required for the test to pass, as the `domain` value is set to `http://localhost:8090`
     networks:
-      kwil-int-testnet:
-        ipv4_address: 172.10.100.10
+      - ${KWIL_NETWORK:-kwil-int-testnet}
     command: |
       --log-level ${LOG_LEVEL:-info}
       --cors-allow-origins *
@@ -440,9 +399,5 @@ services:
     # domain should not be changed, and client should use 'domain' value as the provider, otherwise the test will fail
 
 networks:
-  kwil-int-testnet:
-    name: kwil-int-testnet
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.10.0.0/16
+  ${KWIL_NETWORK:-kwil-int-testnet}:
+    external: true

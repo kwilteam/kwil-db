@@ -20,7 +20,10 @@ import (
 //
 // By default, we will skip kgw tests, so it's not a concern for local development.
 
-func TestKGWAPIs(t *testing.T) {
+// NOTE: KGW tests cannot be run in parallel, since the `domain` need to be
+// preset, which require kgw always running(exposed) on `localhost:8090`.
+
+func TestKGW(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping kgw test in short mode")
 	}
@@ -38,7 +41,6 @@ func TestKGWAPIs(t *testing.T) {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, basicServices)
-			defer helper.Teardown()
 
 			helper.RunDockerComposeWithServices(ctx, []string{"kgw"})
 			// ensure kgw have upstream checked
@@ -47,62 +49,23 @@ func TestKGWAPIs(t *testing.T) {
 			creatorDriver := helper.GetUserGatewayDriver(ctx, driverType, "creator")
 
 			// When user deployed a database
+			// invalid kuneiform
 			specifications.DatabaseDeployInvalidSql1Specification(ctx, t, creatorDriver)
 			specifications.DatabaseDeployInvalidExtensionSpecification(ctx, t, creatorDriver)
+			// valid
 			specifications.DatabaseDeploySpecification(ctx, t, creatorDriver)
 
 			// Then user should be able to execute database actions
 			visitorDriver := helper.GetUserGatewayDriver(ctx, driverType, "visitor")
-			// creator should be able to execute all actions
+			// creator should be able to execute all normal actions
 			specifications.ExecuteOwnerActionSpecification(ctx, t, creatorDriver)
 			specifications.ExecuteDBInsertSpecification(ctx, t, creatorDriver)
 			specifications.ExecuteCallSpecification(ctx, t, creatorDriver, visitorDriver)
 			specifications.ExecuteDBUpdateSpecification(ctx, t, creatorDriver)
 			specifications.ExecuteDBDeleteSpecification(ctx, t, creatorDriver)
-
-			// test that the loaded extensions works
-			specifications.ExecuteExtensionSpecification(ctx, t, creatorDriver)
-
-			// and user should be able to drop database
-			specifications.DatabaseDropSpecification(ctx, t, creatorDriver)
-		})
-	}
-}
-
-func TestKGWAuthn(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping kgw test in short mode")
-	}
-
-	ctx := context.Background()
-
-	opts := []integration.HelperOpt{
-		integration.WithBlockInterval(time.Second),
-		integration.WithValidators(4),
-		integration.WithNonValidators(0),
-	}
-
-	testDrivers := strings.Split(*drivers, ",")
-	for _, driverType := range testDrivers {
-		t.Run(driverType+"_driver", func(t *testing.T) {
-			helper := integration.NewIntHelper(t, opts...)
-			helper.Setup(ctx, basicServices)
-			defer helper.Teardown()
-
-			helper.RunDockerComposeWithServices(ctx, []string{"kgw"})
-			// ensure kgw have upstream checked
-			time.Sleep(time.Millisecond * 200)
-
-			creatorDriver := helper.GetUserGatewayDriver(ctx, driverType, "creator")
-
-			// When user deployed a database
-			specifications.DatabaseDeploySpecification(ctx, t, creatorDriver)
-
-			// Then user should be able to call authn action after authentication
+			// Also user should be able to call authn action after authentication
 			db := specifications.SchemaLoader.Load(t, specifications.SchemaTestDB)
 			dbid := creatorDriver.DBID(db.Name)
-			visitorDriver := helper.GetUserGatewayDriver(ctx, driverType, "visitor")
-
 			// visitor can execute authn action
 			// NOTE: due to the way we implemented client/cli for kgw authn, we cannot
 			// test that authn action fails without authentication, e.g. the behavior
@@ -116,6 +79,12 @@ func TestKGWAuthn(t *testing.T) {
 			specifications.ExecuteAuthnCallSpecification(ctx, t, visitorDriver, dbid)
 			// successful call, cookie from last call should be reused
 			specifications.ExecuteAuthnCallSpecification(ctx, t, visitorDriver, dbid)
+
+			// test that the loaded extensions works
+			specifications.ExecuteExtensionSpecification(ctx, t, creatorDriver)
+
+			// and user should be able to drop database
+			specifications.DatabaseDropSpecification(ctx, t, creatorDriver)
 		})
 	}
 }
