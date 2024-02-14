@@ -4,10 +4,6 @@ on:
   pull_request:
     types: [ opened, synchronize, reopened, ready_for_review ]
   workflow_dispatch:
-  push:
-    branches:
-      - dev
-      - main
 
 jobs:
   test:
@@ -187,7 +183,7 @@ jobs:
           echo "GID=$(id -g)" >> test/acceptance/.env
           cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
           echo "KACT_DOCKER_COMPOSE_OVERRIDE_FILE=docker-compose.override.yml" >> test/acceptance/.env
-          task test:act:nb
+          task test:act:nb -- -parallel-mode
 
       - name: Run integration test
         run: |
@@ -195,7 +191,7 @@ jobs:
           echo "GID=$(id -g)" >> test/integration/.env
           cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
           echo "KIT_DOCKER_COMPOSE_OVERRIDE_FILE=docker-compose.override.yml" >> test/integration/.env
-          task test:it:nb:all
+          task test:it:nb:all -- -parallel-mode
 
       - name: Move cache
         run: |
