@@ -55,6 +55,8 @@ var logWaitStrategies = map[string]string{
 	"node1":       "Starting Node service",
 	"node2":       "Starting Node service",
 	"node3":       "Starting Node service",
+	"node4":       "Starting Node service",
+	"node5":       "Starting Node service",
 	"kgw":         "KGW Server started",
 	"ganache":     "RPC Listening on 0.0.0.0:8545",
 	"pg0":         `listening on IPv4 address "0.0.0.0", port 5432`,
@@ -123,12 +125,13 @@ type EthDepositOracle struct {
 	UnexposedChainRPC string
 	ExposedChainRPC   string
 	Deployer          *ethdeployer.Deployer
+	ByzDeployer       *ethdeployer.Deployer
 	EscrowAddress     string
 
 	confirmations string
 
-	byzantine_expiry string
-	byzantine_spam   string
+	NumByzantineExpiryNodes int
+	ByzantineEscrowAddr     string
 }
 
 func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
@@ -137,9 +140,7 @@ func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 		privateKeys: make(map[string]ed25519.PrivKey),
 		containers:  make(map[string]*testcontainers.DockerContainer),
 		cfg: &IntTestConfig{
-			JoinExpiry: 14400,
-			VoteExpiry: 14400,
-			Allocs:     make(map[string]*big.Int),
+			Allocs: make(map[string]*big.Int),
 		},
 		envs: make(map[string]string),
 	}
@@ -209,15 +210,9 @@ func WithGenesisAlloc(allocs map[string]*big.Int) HelperOpt {
 	}
 }
 
-func WithByzantineExpiry() HelperOpt {
+func WithNumByzantineExpiryNodes(n int) HelperOpt {
 	return func(r *IntHelper) {
-		r.ethDeposit.byzantine_expiry = "true"
-	}
-}
-
-func WithByzantineSpam() HelperOpt {
-	return func(r *IntHelper) {
-		r.ethDeposit.byzantine_spam = "true"
+		r.ethDeposit.NumByzantineExpiryNodes = n
 	}
 }
 
@@ -259,6 +254,10 @@ func (r *IntHelper) LoadConfig() {
 	bobPk, err := crypto.Secp256k1PrivateKeyFromHex(r.cfg.VisitorRawPK)
 	require.NoError(r.t, err, "invalid visitor private key")
 	r.cfg.VisitorSigner = &auth.EthPersonalSigner{Key: *bobPk}
+
+	// Overwritten using helperOpts
+	r.cfg.VoteExpiry = 14400
+	r.cfg.JoinExpiry = 14400
 }
 
 func (r *IntHelper) updateEnv(k, v string) {
@@ -267,6 +266,26 @@ func (r *IntHelper) updateEnv(k, v string) {
 
 func (r *IntHelper) generateNodeConfig(homeDir string) {
 	r.t.Logf("generate testnet config at %s", homeDir)
+
+	// Oracle config for nodes.
+	ethDeposits := make([]nodecfg.EthDepositOracle, r.cfg.NValidator)
+	if r.ethDeposit.Enabled {
+		for i := 0; i < r.cfg.NValidator; i++ {
+			cfg := nodecfg.EthDepositOracle{
+				Enabled:               true,
+				Endpoint:              r.ethDeposit.UnexposedChainRPC,
+				RequiredConfirmations: r.ethDeposit.confirmations,
+				EscrowAddress:         r.ethDeposit.EscrowAddress,
+				ChainID:               "5",
+			}
+			// makes the first r.ethDeposit.NumByzantineExpiryNodes nodes Byzantine
+			if i < r.ethDeposit.NumByzantineExpiryNodes {
+				cfg.EscrowAddress = r.ethDeposit.ByzantineEscrowAddr
+			}
+			ethDeposits[i] = cfg
+		}
+	}
+
 	err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
 		ChainID:       testChainID,
 		BlockInterval: r.cfg.BlockInterval,
@@ -289,16 +308,7 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 		WithoutNonces:     false,
 		Allocs:            r.cfg.Allocs,
 		FundNonValidators: r.cfg.WithGas, // when gas is required, also give the non-validators some for tests
-		EthDeposits: nodecfg.EthDepositOracle{
-			Enabled:               r.ethDeposit.Enabled,
-			Endpoint:              r.ethDeposit.UnexposedChainRPC,
-			RequiredConfirmations: r.ethDeposit.confirmations,
-			EscrowAddress:         r.ethDeposit.EscrowAddress,
-			ChainID:               "5",
-
-			// ByzantineExpiry: r.ethDeposit.byzantine_expiry,
-			// ByzantineSpam:   r.ethDeposit.byzantine_spam,
-		},
+		EthDeposits:       ethDeposits,
 	}, &nodecfg.ConfigOpts{
 		DnsHost: true,
 	})
@@ -341,9 +351,23 @@ func (r *IntHelper) RunGanache(ctx context.Context) {
 
 	time.Sleep(5 * time.Second) // wait for contracts to be deployed
 	// Probably start mining here
+	if r.ethDeposit.NumByzantineExpiryNodes > 0 {
+		// Deploy Byzantine contracts
+		byzantineDeployer, err := ethdeployer.NewDeployer(exposedChainRPC, r.cfg.CreatorRawPk, 5)
+		require.NoError(r.t, err, "failed to get deployer")
+		r.ethDeposit.ByzDeployer = byzantineDeployer
+
+		err = byzantineDeployer.Deploy()
+		require.NoError(r.t, err, "failed to deploy contracts")
+
+		r.ethDeposit.ByzantineEscrowAddr = byzantineDeployer.EscrowAddress()
+	}
 }
 
-func (r *IntHelper) EthDeployer() *ethdeployer.Deployer {
+func (r *IntHelper) EthDeployer(byzMode bool) *ethdeployer.Deployer {
+	if byzMode {
+		return r.ethDeposit.ByzDeployer
+	}
 	return r.ethDeposit.Deployer
 }
 
@@ -538,9 +562,9 @@ func (r *IntHelper) GetUserGatewayDriver(ctx context.Context, driverType string,
 
 	switch driverType {
 	case "http":
-		return r.getHTTPClientDriver(signer, gatewayURL, gatewayProvider)
+		return r.getHTTPClientDriver(signer, gatewayURL, gatewayProvider, nil)
 	case "cli":
-		return r.getCliDriver(gatewayURL, pk, signer.Identity(), gatewayProvider)
+		return r.getCliDriver(gatewayURL, pk, signer.Identity(), gatewayProvider, nil)
 	default:
 		panic("unsupported driver type")
 	}
@@ -548,7 +572,7 @@ func (r *IntHelper) GetUserGatewayDriver(ctx context.Context, driverType string,
 
 // GetUserDriver returns an integration driver connected to the given rpc node
 // using the private key
-func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverType string) KwilIntDriver {
+func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverType string, deployer *ethdeployer.Deployer) KwilIntDriver {
 	gatewayProvider := false
 
 	ctr := r.containers[nodeName]
@@ -565,13 +589,13 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverTy
 
 	switch driverType {
 	case "http":
-		return r.getHTTPClientDriver(signer, httpURL, gatewayProvider)
+		return r.getHTTPClientDriver(signer, httpURL, gatewayProvider, deployer)
 	case "grpc":
 		// should use grpcURL, r.cfg.GrpcEndpoint is not correct(it's intended
 		// to be used for `remote` test mode, but integation tests don't use it)
-		return r.getGRPCClientDriver(signer)
+		return r.getGRPCClientDriver(signer, deployer)
 	case "cli":
-		return r.getCliDriver(httpURL, pk, signer.Identity(), gatewayProvider)
+		return r.getCliDriver(httpURL, pk, signer.Identity(), gatewayProvider, deployer)
 	default:
 		panic("unsupported driver type")
 	}
@@ -614,7 +638,7 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driv
 	}
 }
 
-func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gatewayProvider bool) *driver.KwildClientDriver {
+func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gatewayProvider bool, deployer *ethdeployer.Deployer) *driver.KwildClientDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 	logger = *logger.With(log.String("testCase", r.t.Name()))
 
@@ -639,10 +663,10 @@ func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gat
 
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return driver.NewKwildClientDriver(kwilClt, signer, r.ethDeposit.Deployer, logger)
+	return driver.NewKwildClientDriver(kwilClt, signer, deployer, logger)
 }
 
-func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) *driver.KwildClientDriver {
+func (r *IntHelper) getGRPCClientDriver(signer auth.Signer, deployer *ethdeployer.Deployer) *driver.KwildClientDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 	logger = *logger.With(log.String("testCase", r.t.Name()))
 
@@ -657,7 +681,7 @@ func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) *driver.KwildClientD
 	})
 	require.NoError(r.t, err, "failed to create grpc client")
 
-	return driver.NewKwildClientDriver(kwilClt, signer, r.ethDeposit.Deployer, logger)
+	return driver.NewKwildClientDriver(kwilClt, signer, deployer, logger)
 }
 
 // getCLIAdminClientDriver returns a kwil-admin client driver connected to the given kwil node.
@@ -687,7 +711,7 @@ func (r *IntHelper) getCLIAdminClientDriver(adminSvcServer string, c *testcontai
 	}
 }
 
-func (r *IntHelper) getCliDriver(endpoint string, privKey string, identity []byte, gatewayProvider bool) *driver.KwilCliDriver {
+func (r *IntHelper) getCliDriver(endpoint string, privKey string, identity []byte, gatewayProvider bool, deployer *ethdeployer.Deployer) *driver.KwilCliDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 	logger = *logger.With(log.String("testCase", r.t.Name()))
 
@@ -695,7 +719,7 @@ func (r *IntHelper) getCliDriver(endpoint string, privKey string, identity []byt
 	cliBinPath := path.Join(path.Dir(currentFilePath),
 		"../../.build/kwil-cli")
 
-	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, testChainID, identity, gatewayProvider, r.ethDeposit.Deployer, logger)
+	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, testChainID, identity, gatewayProvider, deployer, logger)
 }
 
 func (r *IntHelper) NodePrivateKey(name string) ed25519.PrivKey {
