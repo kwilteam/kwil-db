@@ -43,8 +43,6 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-const testNetworkName = "kwil-int-testnet"
-
 var (
 	getEnv = driver.GetEnv
 )

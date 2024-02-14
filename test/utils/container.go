@@ -86,9 +86,7 @@ func getEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context,
 	}
 
 	// NOTE: sometime the container name is returned with leading slash
-	if strings.HasPrefix(ctrName, "/") {
-		ctrName = strings.TrimPrefix(ctrName, "/")
-	}
+	ctrName = strings.TrimPrefix(ctrName, "/")
 	unexposed = fmt.Sprintf("%s://%s:%s", proto, ctrName, port.Port())
 	return
 }

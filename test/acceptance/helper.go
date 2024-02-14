@@ -103,7 +103,6 @@ type ActHelper struct {
 	cfg *ActTestCfg
 
 	container *testcontainers.DockerContainer // kwild node container
-	network   *testcontainers.DockerNetwork
 
 	// envs is used to store dynamically generated envs later used in docker-compose
 	// e.g. `dc.WithEnv(r.envs)`
@@ -252,6 +251,7 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 	// NOTE: not sure how to get a container if we have multiple services with
 	// same image
 	container, err := dc.ServiceContainer(ctx, "kwild")
+	require.NoError(r.t, err, "failed to get kwild node container")
 	r.container = container
 }
 
