@@ -9,7 +9,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/test/acceptance"
 	"github.com/kwilteam/kwil-db/test/specifications"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,48 +17,62 @@ var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 var remote = flag.Bool("remote", false, "test against remote node")
 var noCleanup = flag.Bool("messy", false, "do not cleanup test directories or stop the docker compose when done")
 
+// NOTE: `-parallel` is a flag that is already used by `go test`
+var parallelMode = flag.Bool("parallel-mode", false, "run tests in parallelMode mode")
 var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
 
-func TestKwildTransferAcceptance(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
+func TestLocalDevSetup(t *testing.T) {
+	if !*dev {
+		t.Skip("skipping local dev setup")
 	}
 
-	ctx := context.Background()
+	// running forever for local development
 
+	ctx := context.Background()
 	helper := acceptance.NewActHelper(t)
 	cfg := helper.LoadConfig()
-
-	// This acceptance test assumes gas is in use
+	cfg.DockerComposeFile = "./docker-compose-dev.yml" // use the dev compose file
 	cfg.GasEnabled = true
 
 	if *noCleanup {
 		cfg.NoCleanup = true
 	}
 
-	if !*remote {
-		helper.Setup(ctx)
+	helper.Setup(ctx)
+	helper.WaitUntilInterrupt()
+}
+
+func TestKwildTransferAcceptance(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
 	}
 
-	// running forever for local development
-	if *dev {
-		helper.WaitUntilInterrupt()
-		return
+	if *parallelMode {
+		t.Parallel()
 	}
 
-	// Ensure that the fee for a transfer transaction is as expected.
-	var transferPrice = big.NewInt(210_000)
-
-	senderIdentity := helper.GetConfig().CreatorIdent()
-	receiverIdentity := helper.GetConfig().VisitorIdent()
-
-	t.Log("creator private key: ", helper.GetConfig().CreatorRawPk)
-
+	ctx := context.Background()
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
 		// NOTE: those tests should not be run concurrently
-
 		t.Run(driverType+"_driver", func(t *testing.T) {
+			// setup for each driver
+			helper := acceptance.NewActHelper(t)
+			cfg := helper.LoadConfig()
+			cfg.GasEnabled = true
+			if *noCleanup {
+				cfg.NoCleanup = true
+			}
+			if !*remote {
+				helper.Setup(ctx)
+			}
+			// Ensure that the fee for a transfer transaction is as expected.
+			var transferPrice = big.NewInt(210_000)
+			senderIdentity := helper.GetConfig().CreatorIdent()
+			receiverIdentity := helper.GetConfig().VisitorIdent()
+			t.Log("creator private key: ", helper.GetConfig().CreatorRawPk)
+
+			// =================
 			senderDriver := helper.GetDriver(driverType, "creator")
 			sender := specifications.TransferAmountDsl(senderDriver)
 
@@ -118,27 +131,23 @@ func TestKwildAcceptance(t *testing.T) {
 		t.Skip()
 	}
 
+	if *parallelMode {
+		t.Parallel()
+	}
+
 	ctx := context.Background()
-
-	helper := acceptance.NewActHelper(t)
-	helper.LoadConfig()
-
-	if !*remote {
-		helper.Setup(ctx)
-	}
-
-	// running forever for local development
-	if *dev {
-		helper.WaitUntilInterrupt()
-	}
-
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
-		// NOTE: those tests should not be run concurrently
-
 		t.Run(driverType+"_driver", func(t *testing.T) {
+			// setup for each driver
+			helper := acceptance.NewActHelper(t)
+			helper.LoadConfig()
+			if !*remote {
+				helper.Setup(ctx)
+			}
 			creatorDriver := helper.GetDriver(driverType, "creator")
 
+			// ================
 			// When user deployed database
 			//specifications.DatabaseDeployInvalidSql1Specification(ctx, t, creatorDriver)
 			specifications.DatabaseDeployInvalidExtensionSpecification(ctx, t, creatorDriver)
