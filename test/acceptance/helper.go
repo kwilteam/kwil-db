@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joho/godotenv"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -23,18 +22,16 @@ import (
 	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/test/driver"
+	"github.com/kwilteam/kwil-db/test/utils"
 
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 var (
 	getEnv = driver.GetEnv
-
-	// envFile is the default env file path
-	// it will pass values among different stages of the test setup
-	envFile = getEnv("KACT_ENV_FILE", "./.env")
 )
 
 const TestChainID = "kwil-test-chain"
@@ -49,7 +46,9 @@ type ActTestCfg struct {
 	SchemaFile                string
 	DockerComposeFile         string
 	DockerComposeOverrideFile string
-	NoCleanup                 bool
+	// NoCleanup is used to keep the test environment from being cleaned up
+	// i.e. config files, logs, containers
+	NoCleanup bool
 
 	WaitTimeout time.Duration
 	LogLevel    string
@@ -102,14 +101,22 @@ VISITOR_PUBLIC_KEY=%x
 }
 
 type ActHelper struct {
-	t        *testing.T
-	cfg      *ActTestCfg
-	teardown []func()
+	t   *testing.T
+	cfg *ActTestCfg
+
+	container *testcontainers.DockerContainer // kwild node container
+
+	// envs is used to store dynamically generated envs later used in docker-compose
+	// e.g. `dc.WithEnv(r.envs)`
+	// for now one env are used:
+	// - KWIL_HOME: the home directory for the test
+	envs map[string]string
 }
 
 func NewActHelper(t *testing.T) *ActHelper {
 	return &ActHelper{
-		t: t,
+		t:    t,
+		envs: make(map[string]string),
 	}
 }
 
@@ -120,22 +127,18 @@ func (r *ActHelper) GetConfig() *ActTestCfg {
 // LoadConfig loads config from system env and env file.
 // Envs defined in envFile will not overwrite existing env vars.
 func (r *ActHelper) LoadConfig() *ActTestCfg {
-	ef, err := os.OpenFile(envFile, os.O_RDWR|os.O_CREATE, 0666)
-	require.NoError(r.t, err, "failed to open env file")
-	defer ef.Close()
-
-	err = godotenv.Load(envFile)
-	require.NoError(r.t, err, "failed to parse env file")
+	var err error
 
 	// default wallet mnemonic: test test test test test test test test test test test junk
 	// default wallet hd path : m/44'/60'/0'
 	cfg := &ActTestCfg{
+		// NOTE: these ENVs are used to test remote services
 		CreatorRawPk:              getEnv("KACT_CREATOR_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
 		VisitorRawPK:              getEnv("KACT_VISITOR_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
 		SchemaFile:                getEnv("KACT_SCHEMA", "./test-data/test_db.kf"),
 		LogLevel:                  getEnv("KACT_LOG_LEVEL", "info"),
 		HTTPEndpoint:              getEnv("KACT_HTTP_ENDPOINT", "http://localhost:8080"),
-		GrpcEndpoint:              getEnv("KACT_GRPC_ENDPOINT", "localhost:50051"),
+		GrpcEndpoint:              getEnv("KACT_GRPC_ENDPOINT", "localhost:50051"), // NOTE: no longer used
 		P2PAddress:                getEnv("KACT_CHAIN_ENDPOINT", "tcp://0.0.0.0:26656"),
 		AdminRPC:                  getEnv("KACT_ADMIN_RPC", "unix:///tmp/admin.sock"),
 		DockerComposeFile:         getEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
@@ -162,23 +165,13 @@ func (r *ActHelper) LoadConfig() *ActTestCfg {
 	cfg.VisitorSigner = &auth.EthPersonalSigner{Key: *bobPk}
 
 	r.cfg = cfg
-	cfg.DumpToEnv()
+	//cfg.DumpToEnv()
 
 	return cfg
 }
 
-func (r *ActHelper) updateGeneratedConfig(ks, vs []string) {
-	require.Equal(r.t, len(ks), len(vs), "length of keys and values should be equal")
-
-	envs, err := godotenv.Read(envFile)
-	require.NoError(r.t, err, "failed to read env file")
-
-	for i := range ks {
-		envs[ks[i]] = vs[i]
-	}
-
-	err = godotenv.Write(envs, envFile)
-	require.NoError(r.t, err, "failed to write env vars to file")
+func (r *ActHelper) updateEnv(k, v string) {
+	r.envs[k] = v
 }
 
 func (r *ActHelper) generateNodeConfig() {
@@ -216,9 +209,7 @@ func (r *ActHelper) generateNodeConfig() {
 	})
 	require.NoError(r.t, err, "failed to generate node config")
 
-	r.updateGeneratedConfig(
-		[]string{"KWIL_HOME"},
-		[]string{tmpPath})
+	r.updateEnv("KWIL_HOME", tmpPath)
 }
 
 func fileExists(path string) bool {
@@ -229,31 +220,31 @@ func fileExists(path string) bool {
 func (r *ActHelper) runDockerCompose(ctx context.Context) {
 	r.t.Logf("setup test environment")
 
-	//setSchemaLoader(r.cfg.CreatorAddr())
-
-	envs, err := godotenv.Read(envFile)
-	require.NoError(r.t, err, "failed to parse .env file")
-
 	composeFiles := []string{r.cfg.DockerComposeFile}
 	if r.cfg.DockerComposeOverrideFile != "" && fileExists(r.cfg.DockerComposeOverrideFile) {
 		composeFiles = append(composeFiles, r.cfg.DockerComposeOverrideFile)
 	}
+
+	r.t.Logf("use compose files: %v", composeFiles)
 	dc, err := compose.NewDockerCompose(composeFiles...)
 	require.NoError(r.t, err, "failed to create docker compose object for single kwild node")
 
-	r.teardown = append(r.teardown, func() {
-		r.t.Logf("teardown docker compose")
-		dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal)
-	})
-
-	r.t.Cleanup(func() {
-		r.Teardown()
-	})
+	if !r.cfg.NoCleanup {
+		r.t.Cleanup(func() {
+			r.t.Logf("teardown docker compose")
+			err := dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal, compose.RemoveVolumes(true))
+			require.NoErrorf(r.t, err, "failed to teardown %s", dc.Services())
+		})
+	}
 
 	// NOTE: if you run with debugger image, you need to attach to the debugger
 	// before the timeout
 	err = dc.
-		WithEnv(envs).
+		WithEnv(r.envs).
+		WaitForService(
+			"pg",
+			wait.NewLogStrategy(`listening on IPv4 address "0.0.0.0", port 5432`).
+				WithStartupTimeout(r.cfg.WaitTimeout)).
 		WaitForService(
 			"ext",
 			wait.NewLogStrategy("listening on").WithStartupTimeout(r.cfg.WaitTimeout)).
@@ -264,21 +255,25 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 	r.t.Log("docker compose up")
 
 	require.NoError(r.t, err, "failed to start kwild node")
+
+	// NOTE: not sure how to get a container if we have multiple services with
+	// same image
+	container, err := dc.ServiceContainer(ctx, "kwild")
+	require.NoError(r.t, err, "failed to get kwild node container")
+	r.container = container
 }
 
 func (r *ActHelper) Setup(ctx context.Context) {
 	r.generateNodeConfig()
 	r.runDockerCompose(ctx)
-}
 
-func (r *ActHelper) Teardown() {
-	if r.cfg.NoCleanup {
-		return
-	}
-	r.t.Log("teardown test environment")
-	for _, fn := range r.teardown {
-		fn()
-	}
+	// update configured endpoints, so that we can still test against remote services
+	httpEndpoint, _, err := utils.KwildHTTPEndpoints(r.container, ctx)
+	require.NoError(r.t, err, "failed to get http endpoint")
+	grpcEndpoint, _, err := utils.KwildGRPCEndpoints(r.container, ctx)
+	require.NoError(r.t, err, "failed to get grpc endpoint")
+	r.cfg.HTTPEndpoint = httpEndpoint
+	r.cfg.GrpcEndpoint = grpcEndpoint
 }
 
 func (r *ActHelper) WaitUntilInterrupt() {
@@ -287,9 +282,7 @@ func (r *ActHelper) WaitUntilInterrupt() {
 
 	// block waiting for a signal
 	s := <-done
-	r.t.Logf("Got signal: %v\n", s)
-	r.Teardown()
-	r.t.Logf("Teardown done\n")
+	r.t.Logf("Got signal: %v, teardown\n", s)
 }
 
 // GetDriver returns a concrete driver for acceptance test, based on the driver
@@ -304,20 +297,20 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 
 	switch driveType {
 	case "http":
-		return r.getHTTPClientDriver(signer)
+		return r.getHTTPClientDriver(signer, r.cfg.HTTPEndpoint)
 	case "grpc":
-		return r.getGRPCClientDriver(signer)
+		return r.getGRPCClientDriver(signer, r.cfg.GrpcEndpoint)
 	case "cli":
-		return r.getCliDriver(pk, signer.Identity())
+		return r.getCliDriver(pk, signer.Identity(), r.cfg.HTTPEndpoint)
 	default:
 		panic("unsupported driver type")
 	}
 }
 
-func (r *ActHelper) getHTTPClientDriver(signer auth.Signer) KwilAcceptanceDriver {
+func (r *ActHelper) getHTTPClientDriver(signer auth.Signer, endpoint string) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
-	kwilClt, err := client.NewClient(context.TODO(), r.cfg.HTTPEndpoint, &clientType.Options{
+	kwilClt, err := client.NewClient(context.TODO(), endpoint, &clientType.Options{
 		Signer:  signer,
 		ChainID: TestChainID,
 		Logger:  logger,
@@ -327,11 +320,11 @@ func (r *ActHelper) getHTTPClientDriver(signer auth.Signer) KwilAcceptanceDriver
 	return driver.NewKwildClientDriver(kwilClt, signer, nil, logger)
 }
 
-func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver {
+func (r *ActHelper) getGRPCClientDriver(signer auth.Signer, endpoint string) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	gtOptions := []gRPC.Option{gRPC.WithTlsCert("")}
-	gt, err := gRPC.New(context.Background(), r.cfg.GrpcEndpoint, gtOptions...)
+	gt, err := gRPC.New(context.Background(), endpoint, gtOptions...)
 	require.NoError(r.t, err, "failed to create grpc transport")
 
 	kwilClt, err := client.WrapClient(context.TODO(), gt, &clientType.Options{
@@ -344,12 +337,12 @@ func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver
 	return driver.NewKwildClientDriver(kwilClt, signer, nil, logger)
 }
 
-func (r *ActHelper) getCliDriver(privKey string, identifier []byte) KwilAcceptanceDriver {
+func (r *ActHelper) getCliDriver(privKey string, identifier []byte, endpoint string) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	_, currentFilePath, _, _ := runtime.Caller(1)
 	cliBinPath := path.Join(path.Dir(currentFilePath),
 		"../../.build/kwil-cli")
 
-	return driver.NewKwilCliDriver(cliBinPath, r.cfg.HTTPEndpoint, privKey, TestChainID, identifier, false, nil, logger)
+	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, TestChainID, identifier, false, nil, logger)
 }

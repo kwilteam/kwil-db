@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"net"
 	"os"
 	"os/signal"
 	"path"
@@ -24,8 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cometbft/cometbft/crypto/ed25519"
-	"github.com/joho/godotenv"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	"github.com/kwilteam/kwil-db/core/adminclient"
 	"github.com/kwilteam/kwil-db/core/client"
@@ -38,6 +35,9 @@ import (
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/kwilteam/kwil-db/test/driver/operator"
 	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
+	"github.com/kwilteam/kwil-db/test/utils"
+
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
@@ -46,10 +46,6 @@ import (
 
 var (
 	getEnv = driver.GetEnv
-
-	// envFile is the default env file path
-	// it will pass values among different stages of the test setup
-	envFile = getEnv("KIT_ENV_FILE", "./.env")
 )
 
 var logWaitStrategies = map[string]string{
@@ -60,13 +56,11 @@ var logWaitStrategies = map[string]string{
 	"node2":       "Starting Node service",
 	"node3":       "Starting Node service",
 	"kgw":         "KGW Server started",
-}
-
-var healthWaitStrategies = map[string]bool{
-	"pg0": true,
-	"pg1": true,
-	"pg2": true,
-	"pg3": true,
+	"ganache":     "RPC Listening on 0.0.0.0:8545",
+	"pg0":         `listening on IPv4 address "0.0.0.0", port 5432`,
+	"pg1":         `listening on IPv4 address "0.0.0.0", port 5432`,
+	"pg2":         `listening on IPv4 address "0.0.0.0", port 5432`,
+	"pg3":         `listening on IPv4 address "0.0.0.0", port 5432`,
 }
 
 const (
@@ -111,10 +105,14 @@ type IntTestConfig struct {
 type IntHelper struct {
 	t           *testing.T
 	cfg         *IntTestConfig
-	home        string
-	teardown    []func()
 	containers  map[string]*testcontainers.DockerContainer
 	privateKeys map[string]ed25519.PrivKey
+	// envs is used to store dynamically generated envs later used in docker-compose
+	// e.g. `dc.WithEnv(r.envs)`
+	// for now two envs are used:
+	// - KWIL_HOME: the home directory for the test
+	// - KWIL_NETWORK: the network name for the test
+	envs map[string]string
 
 	// Oracles
 	ethDeposit EthDepositOracle
@@ -143,6 +141,7 @@ func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 			VoteExpiry: 14400,
 			Allocs:     make(map[string]*big.Int),
 		},
+		envs: make(map[string]string),
 	}
 
 	helper.LoadConfig()
@@ -231,16 +230,10 @@ func WithGanache() HelperOpt {
 // LoadConfig loads config from system env and .env file.
 // Envs defined in envFile will not overwrite existing env vars.
 func (r *IntHelper) LoadConfig() {
-	ef, err := os.OpenFile(envFile, os.O_RDWR|os.O_CREATE, 0666)
-	require.NoError(r.t, err, "failed to open env file")
-	defer ef.Close()
-
-	err = godotenv.Load(envFile)
-	require.NoError(r.t, err, "failed to parse env file")
+	var err error
 
 	// default wallet mnemonic: test test test test test test test test test test test junk
 	// default wallet hd path : m/44'/60'/0'
-
 	r.cfg = &IntTestConfig{
 		CreatorRawPk:              getEnv("KIT_CREATOR_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
 		VisitorRawPK:              getEnv("KIT_VISITOR_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
@@ -268,26 +261,12 @@ func (r *IntHelper) LoadConfig() {
 	r.cfg.VisitorSigner = &auth.EthPersonalSigner{Key: *bobPk}
 }
 
-func (r *IntHelper) updateGeneratedConfigHome(home string) {
-	envs, err := godotenv.Read(envFile)
-	require.NoError(r.t, err, "failed to read env file")
-
-	envs["KWIL_HOME"] = home
-
-	err = godotenv.Write(envs, envFile)
-	require.NoError(r.t, err, "failed to write env vars to file")
+func (r *IntHelper) updateEnv(k, v string) {
+	r.envs[k] = v
 }
 
-func (r *IntHelper) generateNodeConfig() {
-	r.t.Logf("generate testnet config")
-	tmpPath := r.t.TempDir()
-	// To prevent go test from cleaning up (TODO: consider making this an option):
-	// tmpPath, err := os.MkdirTemp("", "TestKwilInt")
-	// if err != nil {
-	// 	r.t.Fatal(err)
-	// }
-	r.t.Logf("create test temp directory: %s", tmpPath)
-
+func (r *IntHelper) generateNodeConfig(homeDir string) {
+	r.t.Logf("generate testnet config at %s", homeDir)
 	err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
 		ChainID:       testChainID,
 		BlockInterval: r.cfg.BlockInterval,
@@ -295,19 +274,21 @@ func (r *IntHelper) generateNodeConfig() {
 		NValidators:             r.cfg.NValidator,
 		NNonValidators:          r.cfg.NNonValidator,
 		ConfigFile:              "",
-		OutputDir:               tmpPath,
+		OutputDir:               homeDir,
 		NodeDirPrefix:           "node",
 		PopulatePersistentPeers: true,
 		HostnamePrefix:          "kwil-",
 		HostnameSuffix:          "",
-		StartingIPAddress:       "172.10.100.2",
-		P2pPort:                 26656,
-		JoinExpiry:              r.cfg.JoinExpiry,
-		WithoutGasCosts:         !r.cfg.WithGas,
-		VoteExpiry:              r.cfg.VoteExpiry,
-		WithoutNonces:           false,
-		Allocs:                  r.cfg.Allocs,
-		FundNonValidators:       r.cfg.WithGas, // when gas is required, also give the non-validators some for tests
+		// use this to ease the process running test parallel
+		// NOTE: need to match docker-compose kwild service name
+		DnsNamePrefix:     "node",
+		P2pPort:           26656,
+		JoinExpiry:        r.cfg.JoinExpiry,
+		WithoutGasCosts:   !r.cfg.WithGas,
+		VoteExpiry:        r.cfg.VoteExpiry,
+		WithoutNonces:     false,
+		Allocs:            r.cfg.Allocs,
+		FundNonValidators: r.cfg.WithGas, // when gas is required, also give the non-validators some for tests
 		EthDeposits: nodecfg.EthDepositOracle{
 			Enabled:               r.ethDeposit.Enabled,
 			Endpoint:              r.ethDeposit.UnexposedChainRPC,
@@ -318,11 +299,12 @@ func (r *IntHelper) generateNodeConfig() {
 			// ByzantineExpiry: r.ethDeposit.byzantine_expiry,
 			// ByzantineSpam:   r.ethDeposit.byzantine_spam,
 		},
-	}, nil)
+	}, &nodecfg.ConfigOpts{
+		DnsHost: true,
+	})
 	require.NoError(r.t, err, "failed to generate testnet config")
-	r.home = tmpPath
-	r.ExtractPrivateKeys()
-	r.updateGeneratedConfigHome(tmpPath)
+	r.ExtractPrivateKeys(homeDir)
+	r.updateEnv("KWIL_HOME", homeDir)
 }
 
 func fileExists(path string) bool {
@@ -331,46 +313,13 @@ func fileExists(path string) bool {
 }
 
 func (r *IntHelper) RunGanache(ctx context.Context) {
-	r.t.Logf("run ganache")
-	time.Sleep(time.Second) // sometimes docker compose fails if previous test had some slow async clean up (no idea)
-
-	composeFiles := []string{r.cfg.GanacheComposeFile}
-	dc, err := compose.NewDockerCompose(composeFiles...)
-	require.NoError(r.t, err, "failed to create docker compose object for ganache")
-
-	r.teardown = append(r.teardown, func() {
-		r.t.Log("teardown ganache")
-		dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal)
-	})
-
-	r.t.Cleanup(func() { // redundant if test defers Teardown()
-		r.Teardown()
-	})
-
-	// Use compose.Wait to wait for containers to become "healthy" according to
-	// their defined healthchecks.
-	dockerComposeId := fmt.Sprintf("%d", time.Now().Unix())
-	stack := dc.WithEnv(map[string]string{
-		"uid": dockerComposeId,
-	})
-	stack = stack.WaitForService("ganache",
-		wait.NewLogStrategy("RPC Listening on 0.0.0.0:8545").WithStartupTimeout(r.cfg.WaitTimeout))
-
-	err = stack.Up(ctx, compose.Wait(true))
-	r.t.Log("ganache up")
-	require.NoError(r.t, err, "failed to start ganache")
-
+	r.RunDockerComposeWithServices(ctx, []string{"ganache"})
 	// Get the Escrow address and the ChainRPCURL
-	ctr, err := dc.ServiceContainer(ctx, "ganache")
-	require.NoError(r.t, err, "failed to get container for service ganache")
+	ctr, ok := r.containers["ganache"]
+	require.True(r.t, ok, "failed to get container for service ganache")
 
-	exposedChainRPC, err := ctr.PortEndpoint(ctx, "8545", "ws")
-	r.t.Log("exposedChainRPC", exposedChainRPC)
-	require.NoError(r.t, err, "failed to get exposed endpoint")
-	ganacheIp, err := ctr.ContainerIP(ctx)
-	require.NoError(r.t, err, "failed to get ganache container ip")
-	unexposedChainRPC := fmt.Sprintf("ws://%s", net.JoinHostPort(ganacheIp, "8545"))
-	r.t.Log("unexposedChainRPC", unexposedChainRPC)
+	exposedChainRPC, unexposedChainRPC, err := utils.GanacheWSEndpoints(ctr, ctx)
+	require.NoError(r.t, err, "failed to get ganache endpoints")
 
 	// Deploy contracts
 	ethDeployer, err := ethdeployer.NewDeployer(exposedChainRPC, r.cfg.CreatorRawPk, 5)
@@ -385,7 +334,10 @@ func (r *IntHelper) RunGanache(ctx context.Context) {
 	r.ethDeposit.Deployer = ethDeployer
 	r.ethDeposit.EscrowAddress = ethDeployer.EscrowAddress()
 
-	fmt.Println("Endpoint info: ", r.ethDeposit.ExposedChainRPC, " \n Unexposed: ", r.ethDeposit.UnexposedChainRPC, "\n EscrowAddr: ", r.ethDeposit.EscrowAddress)
+	r.t.Logf("Endpoint info: %s \n\tUnexposed: %s \n\tEscrowAddr: %s",
+		r.ethDeposit.ExposedChainRPC,
+		r.ethDeposit.UnexposedChainRPC,
+		r.ethDeposit.EscrowAddress)
 
 	time.Sleep(5 * time.Second) // wait for contracts to be deployed
 	// Probably start mining here
@@ -399,27 +351,21 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 	r.t.Logf("run in docker compose")
 	time.Sleep(time.Second) // sometimes docker compose fails if previous test had some slow async clean up (no idea)
 
-	envs, err := godotenv.Read(envFile)
-	require.NoError(r.t, err, "failed to parse .env file")
-
 	composeFiles := []string{r.cfg.DockerComposeFile}
 	if r.cfg.DockerComposeOverrideFile != "" && fileExists(r.cfg.DockerComposeOverrideFile) {
 		composeFiles = append(composeFiles, r.cfg.DockerComposeOverrideFile)
 	}
+	r.t.Logf("use compose files: %v", composeFiles)
 	dc, err := compose.NewDockerCompose(composeFiles...)
 	require.NoError(r.t, err, "failed to create docker compose object for kwild cluster")
 
-	r.teardown = append(r.teardown, func() {
-
-		r.t.Log("teardown docker compose")
-		dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal)
+	r.t.Cleanup(func() {
+		r.t.Logf("teardown %s", dc.Services())
+		err := dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal, compose.RemoveVolumes(true))
+		require.NoErrorf(r.t, err, "failed to teardown %s", dc.Services())
 	})
 
-	r.t.Cleanup(func() { // redundant if test defers Teardown()
-		r.Teardown()
-	})
-
-	stack := dc.WithEnv(envs)
+	stack := dc.WithEnv(r.envs)
 	for _, service := range services {
 		if r.ethDeposit.Enabled && strings.HasPrefix(service, "node") {
 			waitMsg := "Started listening for new blocks on ethereum"
@@ -432,12 +378,6 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 			stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
 			continue
 		}
-
-		if healthWaitStrategies[service] {
-			stack = stack.WaitForService(service, wait.NewHealthStrategy().WithStartupTimeout(r.cfg.WaitTimeout))
-			continue
-		}
-
 	}
 	// Use compose.Wait to wait for containers to become "healthy" according to
 	// their defined healthchecks.
@@ -445,7 +385,8 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 	// NOTE: services will be sorted by docker-compose here.
 	err = stack.Up(ctx, compose.Wait(true), compose.RunServices(services...))
 	r.t.Log("docker compose up")
-	require.NoError(r.t, err, "failed to start kwild cluster")
+
+	require.NoError(r.t, err, "failed to start kwild cluster services %v", services)
 
 	for _, name := range services {
 		// skip ext containers
@@ -458,21 +399,86 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 	}
 }
 
+// Setup sets up the test environment
+// Following steps are done:
+// 1. Create a temporary directory for the test
+// 2. Prepare files for docker-compose to run
+// 3. Run Ganache ahead if required(for the purpose to populate config for eth-deposit)
+// 4. Generate node configuration files
+// 5. Run docker-compose with the given services
 func (r *IntHelper) Setup(ctx context.Context, services []string) {
+	tmpDir := r.t.TempDir()
+	r.t.Logf("create test directory: %s", tmpDir)
+
+	r.prepareDockerCompose(ctx, tmpDir)
+
 	if r.cfg.WithGanache {
+		// NOTE: it's more natural and easier if able to configure oracle
+		// through kwild cli flags
 		r.RunGanache(ctx)
 	}
 
-	r.generateNodeConfig()
+	r.generateNodeConfig(tmpDir)
+
 	r.RunDockerComposeWithServices(ctx, services)
 }
 
-func (r *IntHelper) Teardown() {
-	// return // to not cleanup, which will break multiple tests and subtests
-	r.t.Log("teardown test environment")
-	for _, fn := range r.teardown {
-		fn()
+// prepareDockerCompose prepares the docker-compose.yml file for the test.
+// It does the following:
+// 1. Create a new network for the test
+// 2. Generate new docker-compose.yml using newly generated network
+// 3. Copy pginit.sql to the same directory as docker-compose.yml
+func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
+	// create a new network for each test to avoid container DNS name conflicts
+	// for parallel running
+	testName := r.t.Name()
+	localNetwork, err := utils.EnsureNetworkExist(context.Background(), testName)
+	require.NoError(r.t, err, "failed to create network")
+	localNetworkName := localNetwork.Name
+
+	r.t.Cleanup(func() {
+		r.t.Logf("teardown docker network %s from %s", localNetworkName, testName)
+		if localNetwork != nil {
+			err := localNetwork.Remove(ctx)
+			require.NoError(r.t, err, "failed to remove network")
+		}
+	})
+
+	// another seemingly possible way to do this is instead of using template
+	// docker-compose file is to use envs in docker-compose.yml, but it doesn't work
+	//r.updateEnv("KWIL_NETWORK", localNetworkName)
+
+	// here we generate a new docker-compose.yml file with the new network from template
+	composeFile := filepath.Join(tmpDir, "docker-compose.yml")
+	err = utils.CreateComposeFile(composeFile, "./docker-compose.yml.template",
+		utils.ComposeConfig{
+			Network: localNetworkName,
+		})
+	require.NoError(r.t, err, "failed to create docker compose file")
+
+	r.t.Logf("generated compose file: %s, network: %s, test: %s",
+		composeFile, localNetworkName, testName)
+
+	// copy pginit.sql to same directory as docker-compose.yml
+	// so it can be mounted into the pg containers
+	pgInitSQL, err := os.ReadFile("./pginit.sql")
+	require.NoError(r.t, err, "failed to read pginit.sql")
+	pgInitFile := filepath.Join(tmpDir, "pginit.sql")
+	err = os.WriteFile(pgInitFile, pgInitSQL, 0644)
+	require.NoError(r.t, err, "failed to write pginit.sql")
+
+	// copy docker-compose.override.yml if exists
+	if fileExists(r.cfg.DockerComposeOverrideFile) {
+		overrideCompose, err := os.ReadFile(r.cfg.DockerComposeOverrideFile)
+		require.NoError(r.t, err, "failed to read docker-compose.override.yml")
+		overrideFile := filepath.Join(tmpDir, "docker-compose.override.yml")
+		err = os.WriteFile(overrideFile, overrideCompose, 0644)
+		require.NoError(r.t, err, "failed to write docker-compose.override.yml")
+		r.cfg.DockerComposeOverrideFile = overrideFile
 	}
+
+	//config to use generated compose file
+	r.cfg.DockerComposeFile = composeFile
 }
 
 func (r *IntHelper) WaitForSignals(t *testing.T) {
@@ -481,13 +487,11 @@ func (r *IntHelper) WaitForSignals(t *testing.T) {
 
 	// block waiting for a signal
 	s := <-done
-	t.Logf("Got signal: %v\n", s)
-	r.Teardown()
-	t.Logf("Teardown done\n")
+	t.Logf("Got signal: %v, teardown\n", s)
 }
 
-func (r *IntHelper) ExtractPrivateKeys() {
-	regexPath := filepath.Join(r.home, "*", "private_key")
+func (r *IntHelper) ExtractPrivateKeys(home string) {
+	regexPath := filepath.Join(home, "*", "private_key")
 
 	files, err := filepath.Glob(regexPath)
 	require.NoError(r.t, err, "failed to get private key files")
@@ -548,12 +552,11 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverTy
 	gatewayProvider := false
 
 	ctr := r.containers[nodeName]
-	// NOTE: maybe get from docker-compose.yml ? the port mapping is already there
-	grpcURL, err := ctr.PortEndpoint(ctx, "50051", "tcp")
-	require.NoError(r.t, err, "failed to get node url")
-	httpURL, err := ctr.PortEndpoint(ctx, "8080", "http")
-	require.NoError(r.t, err, "failed to get gateway url")
-	cometBftURL, err := ctr.PortEndpoint(ctx, "26657", "tcp")
+	grpcURL, _, err := utils.KwildGRPCEndpoints(ctr, ctx)
+	require.NoError(r.t, err, "failed to get grpc url")
+	httpURL, _, err := utils.KwildHTTPEndpoints(ctr, ctx)
+	require.NoError(r.t, err, "failed to get http url")
+	cometBftURL, _, err := utils.KwildRpcEndpoints(ctr, ctx)
 	require.NoError(r.t, err, "failed to get cometBft url")
 	r.t.Logf("grpcURL: %s httpURL: %s cometBftURL: %s for container: %s", grpcURL, httpURL, cometBftURL, nodeName)
 
@@ -613,6 +616,7 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driv
 
 func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gatewayProvider bool) *driver.KwildClientDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
+	logger = *logger.With(log.String("testCase", r.t.Name()))
 
 	var kwilClt clientType.Client
 	var err error
@@ -640,6 +644,7 @@ func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gat
 
 func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) *driver.KwildClientDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
+	logger = *logger.With(log.String("testCase", r.t.Name()))
 
 	gtOptions := []gRPC.Option{gRPC.WithTlsCert("")}
 	gt, err := gRPC.New(context.Background(), r.cfg.GrpcEndpoint, gtOptions...)
@@ -684,6 +689,7 @@ func (r *IntHelper) getCLIAdminClientDriver(adminSvcServer string, c *testcontai
 
 func (r *IntHelper) getCliDriver(endpoint string, privKey string, identity []byte, gatewayProvider bool) *driver.KwilCliDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
+	logger = *logger.With(log.String("testCase", r.t.Name()))
 
 	_, currentFilePath, _, _ := runtime.Caller(1)
 	cliBinPath := path.Join(path.Dir(currentFilePath),

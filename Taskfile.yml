@@ -157,14 +157,14 @@ tasks:
     cmds:
       - task: dev:up:nb
 
-  dev:up:nb:
+  dev:up:nb: # run `task dev:up:nb -- -messy` if you don't want cleanup
     desc: Start the dev environment without rebuilding docker image
     env:
       # NOTE: this timeout should be long enough to attach to debugger
       KACT_WAIT_TIMEOUT: 20s
     dir: test # different module
     cmds:
-      - go test ./acceptance -run ^TestKwildAcceptance$ -timeout 12h -dev -v
+      - go test ./acceptance -run ^TestLocalDevSetup -timeout 12h -dev -v {{.CLI_ARGS}}
 
   dev:testnet:up:
     desc: Start the dev environment(with testnet)
@@ -196,6 +196,8 @@ tasks:
   # e.g.
   # - task test:act:nb -- -remote
   # - task test:act:nb -- -drivers grpc
+  # - task test:act:nb -- -messy
+  # - task test:act:nb -- -parallel-mode
   test:act:nb:
     desc: Run acceptance tests without building docker image
     dir: test # different module

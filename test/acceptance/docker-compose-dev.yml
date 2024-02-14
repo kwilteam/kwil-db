@@ -1,15 +1,17 @@
 version: "3"
 
+# NOTE: this is used for local development, not used in CI/CD/testing
+
 services:
   kwild:
     image: kwild:latest
     ports:
-      - "8080"
-      - "50051"
-      - "50151"
-      - "26656"
-      - "26657"
-      - "40000" # debugger, if build with debug dockerfile
+      - "8080:8080"
+      - "50051:50051"
+      - "50151:50151"
+      - "26656:26656"
+      - "26657:26657"
+      - "40000:40000" # debugger, if build with debug dockerfile
     #env_file:
       # NOTE: docker compose by default will use `.env` file if presented
     volumes:
@@ -43,7 +45,7 @@ services:
   pg:
     image: postgres:16.1
     ports:
-      - "5432"
+      - "5454:5432"
     restart: always
     user: postgres
     environment:
