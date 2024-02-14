@@ -3,7 +3,6 @@ package sqlanalyzer
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/aggregate"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/join"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/order"
@@ -14,17 +13,13 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
-type Accepter interface {
-	Accept(walker tree.Walker) error
-}
-
 // AcceptRecoverer is a wrapper around a statement that implements the accepter interface
 // it catches panics and returns them as errors
 type AcceptRecoverer struct {
-	Accepter
+	tree.Accepter
 }
 
-func NewAcceptRecoverer(a Accepter) *AcceptRecoverer {
+func NewAcceptRecoverer(a tree.Accepter) *AcceptRecoverer {
 	return &AcceptRecoverer{a}
 }
 
@@ -81,13 +76,6 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table, pgSchemaNa
 		}
 	}
 
-	if flags&DeterministicAggregates != 0 {
-		err := accept.Accept(aggregate.NewGroupByWalker())
-		if err != nil {
-			return nil, fmt.Errorf("error enforcing aggregate determinism: %w", err)
-		}
-	}
-
 	orderedParams := make([]string, 0)
 	if flags&ReplaceNamedParameters != 0 {
 		paramVisitor := parameters.NewParametersVisitor()
@@ -138,14 +126,12 @@ const (
 	NoCartesianProduct VerifyFlag = 1 << iota
 	// GuaranteedOrder provides a guarantee of deterministic ordering of the results (even if it is not explicitly specified in the query)
 	GuaranteedOrder
-	// DeterministicAggregates enforces that aggregates are deterministic
-	DeterministicAggregates
 	// ReplaceNamedParameters replaces named parameters with numbered parameters
 	ReplaceNamedParameters
 )
 
 const (
-	AllRules = NoCartesianProduct | GuaranteedOrder | DeterministicAggregates | ReplaceNamedParameters
+	AllRules = NoCartesianProduct | GuaranteedOrder | ReplaceNamedParameters
 )
 
 // AnalyzedStatement is a statement that has been analyzed by the analyzer

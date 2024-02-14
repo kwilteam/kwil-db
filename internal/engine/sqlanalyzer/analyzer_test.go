@@ -22,7 +22,7 @@ func Test_Analyze(t *testing.T) {
 		{
 			name: "simple select",
 			stmt: "SELECT * FROM users",
-			want: `SELECT * FROM "ds_dbid"."users" ORDER BY "users"."id" ASC NULLS LAST;`,
+			want: `SELECT * FROM "ds_dbid"."users" ORDER BY "users"."id";`,
 			tables: []*types.Table{
 				tblUsers,
 			},
@@ -43,10 +43,10 @@ func Test_Analyze(t *testing.T) {
 			INNER JOIN "ds_dbid"."followers" AS "f" ON "p"."user_id" = "f"."user_id"
 			INNER JOIN "ds_dbid"."users" AS "u" ON "u"."id" = "f"."user_id"
 			WHERE "f"."follower_id" = (
-				SELECT "id" FROM "ds_dbid"."users" WHERE "username" = $1 ORDER BY "users"."id" ASC NULLS LAST
+				SELECT "id" FROM "ds_dbid"."users" WHERE "username" = $1 ORDER BY "users"."id"
 			)
 			ORDER BY "p"."post_date" DESC NULLS LAST,
-			"f"."follower_id" ASC NULLS LAST, "f"."user_id" ASC NULLS LAST, "p"."id" ASC NULLS LAST, "u"."id" ASC NULLS LAST
+			"f"."follower_id" , "f"."user_id" , "p"."id" , "u"."id"
 			LIMIT 20 OFFSET $2;`,
 			tables: []*types.Table{
 				tblUsers,
@@ -62,7 +62,7 @@ func Test_Analyze(t *testing.T) {
 			want: `SELECT "u1"."id", "u1"."name", "u2"."name"
 			FROM "ds_dbid"."users" AS "u1"
 			INNER JOIN "ds_dbid"."users" AS "u2" ON "u1"."id" = "u2"."id"
-			ORDER BY "u1"."id" ASC NULLS LAST, "u2"."id" ASC NULLS LAST;`,
+			ORDER BY "u1"."id" , "u2"."id";`,
 			tables: []*types.Table{
 				tblUsers,
 			},
@@ -76,9 +76,9 @@ func Test_Analyze(t *testing.T) {
 			SELECT * FROM users_aged_20`,
 			want: `WITH
 			"users_aged_20" AS (
-				SELECT "users"."id", "users"."username" FROM "ds_dbid"."users" WHERE "age" = 20 ORDER BY "users"."id" ASC NULLS LAST
+				SELECT "users"."id", "users"."username" FROM "ds_dbid"."users" WHERE "age" = 20 ORDER BY "users"."id"
 			)
-			SELECT * FROM "users_aged_20" ORDER BY "users_aged_20"."id" ASC NULLS LAST, "users_aged_20"."username" ASC NULLS LAST;`,
+			SELECT * FROM "users_aged_20" ORDER BY "users_aged_20"."id" , "users_aged_20"."username";`,
 			tables: []*types.Table{
 				tblUsers,
 			},
@@ -95,6 +95,14 @@ func Test_Analyze(t *testing.T) {
 			name: "select with count",
 			stmt: `SELECT COUNT(*) FROM users`,
 			want: `SELECT count(*) FROM "ds_dbid"."users";`,
+			tables: []*types.Table{
+				tblUsers,
+			},
+		},
+		{
+			name: "select with aggregate and group by",
+			stmt: `SELECT sum(age) FROM users GROUP BY username;`,
+			want: `SELECT sum("age") FROM "ds_dbid"."users" GROUP BY "username" ORDER BY "username";`,
 			tables: []*types.Table{
 				tblUsers,
 			},
