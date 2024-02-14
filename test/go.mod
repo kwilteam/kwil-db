@@ -13,7 +13,6 @@ replace (
 require (
 	github.com/cometbft/cometbft v0.38.3-0.20240108012115-1e434f11faa2
 	github.com/cstockton/go-conv v1.0.0
-	github.com/docker/docker v24.0.7+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/ethereum/go-ethereum v1.13.8
 	github.com/kwilteam/kuneiform v0.5.0-beta.0.20231127204550-1284c835497e
@@ -80,6 +79,7 @@ require (
 	github.com/docker/cli v24.0.7+incompatible // indirect
 	github.com/docker/compose/v2 v2.23.3 // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
+	github.com/docker/docker v24.0.7+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.7.0 // indirect
 	github.com/docker/go v1.5.1-1.0.20160303222718-d30aec9fd63c // indirect
 	github.com/docker/go-metrics v0.0.1 // indirect
