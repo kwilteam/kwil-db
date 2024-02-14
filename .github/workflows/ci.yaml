@@ -183,7 +183,7 @@ jobs:
           testGroupID=$(id -g)
           cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/acceptance/docker-compose.override.yml
-          task test:act:nb -- -parallel-mode
+          KACT_LOG_LEVEL=warn task test:act:nb -- -parallel-mode
 
       - name: Run integration test
         run: |
@@ -191,7 +191,7 @@ jobs:
           testGroupID=$(id -g)
           cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
-          task test:it:nb:all -- -parallel-mode
+          KIT_LOG_LEVEL=warn task test:it:nb:all -- -parallel-mode
 
       - name: Move cache
         run: |
