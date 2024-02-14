@@ -172,6 +172,60 @@ func DeployDbInsufficientFundsSpecification(ctx context.Context, t *testing.T, d
 	require.Equal(t, big.NewInt(0), postDeployBalance)
 }
 
+func FundValidatorSpecification(ctx context.Context, t *testing.T, sender DeployerDsl, receiverId ed25519.PrivKey) {
+	t.Logf("Executing fund validator specification")
+
+	senderPrivKey, err := ec.HexToECDSA(senderPk)
+	require.NoError(t, err)
+	senderAddr := ec.PubkeyToAddress(senderPrivKey.PublicKey).Bytes()
+
+	// Ensure that the fee for a transfer transaction is as expected.
+	var transferPrice = big.NewInt(210_000)
+	var transferAmt = big.NewInt(1000000000000000000)
+
+	// Get funds to senders address
+	// amount := transferPrice + transferAmt
+	amt := big.NewInt(0).Add(transferPrice, transferAmt)
+	err = sender.Approve(ctx, senderPrivKey, amt)
+	require.NoError(t, err)
+
+	bal1, err := sender.AccountBalance(ctx, senderAddr)
+	require.NoError(t, err)
+
+	// deposit amount into escrow
+	err = sender.Deposit(ctx, senderPrivKey, amt)
+	require.NoError(t, err)
+
+	// Ensure that the sender account is credited with the amount on kwild
+	var bal2 *big.Int
+	require.Eventually(t, func() bool {
+		bal2, err = sender.AccountBalance(ctx, senderAddr)
+		require.NoError(t, err)
+		return bal2.Cmp(big.NewInt(0).Add(bal1, amt)) == 0
+	}, 5*time.Minute, 5*time.Second)
+
+	preValBal, err := sender.AccountBalance(ctx, receiverId)
+	require.NoError(t, err)
+
+	// Transfer transferAmt to the Validator
+	txHash, err := sender.TransferAmt(ctx, receiverId, transferAmt)
+	require.NoError(t, err, "failed to send transfer tx")
+
+	// I expect success
+	expectTxSuccess(t, sender, ctx, txHash, defaultTxQueryTimeout)()
+
+	// Check the validator account balance
+	postBal, err := sender.AccountBalance(ctx, receiverId)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(0).Add(preValBal, transferAmt), postBal)
+
+	// Check the sender account balance
+	postBal, err = sender.AccountBalance(ctx, senderAddr)
+	require.NoError(t, err)
+	expected := big.NewInt(0).Sub(bal2, big.NewInt(0).Add(transferAmt, transferPrice))
+	require.Zero(t, expected.Cmp(postBal), "Incorrect balance in the sender account after the transfer")
+}
+
 func DeployDbSuccessSpecification(ctx context.Context, t *testing.T, deployer DeployerDsl) {
 	t.Logf("Executing deposit deploy db success specification")
 

@@ -300,26 +300,26 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 			require.NoError(t, err)
 
 			// Get the user driver
-			node0Driver := helper.GetUserDriver(ctx, "node0", driverType, deployer)
+			userDriver := helper.GetUserDriver(ctx, "node0", driverType, deployer)
+
+			// Node0 Driver
+			// node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
 
 			// Approve the deposit
-			specifications.ApproveSpecification(ctx, t, node0Driver)
+			specifications.ApproveSpecification(ctx, t, userDriver)
 
 			// Deposit the amount to the escrow
 			amount := big.NewInt(10)
-			specifications.DepositSuccessSpecification(ctx, t, node0Driver, amount)
+			specifications.DepositSuccessSpecification(ctx, t, userDriver, amount)
 
 			// Deposit Failure
-			specifications.DepositFailSpecification(ctx, t, node0Driver)
+			specifications.DepositFailSpecification(ctx, t, userDriver)
 
 			// Deploy DB without enough funds
-			specifications.DeployDbInsufficientFundsSpecification(ctx, t, node0Driver)
+			specifications.DeployDbInsufficientFundsSpecification(ctx, t, userDriver)
 
 			// Deploy DB with enough funds
-			specifications.DeployDbSuccessSpecification(ctx, t, node0Driver)
-
-			// Bulk deposits
-			// specifications.BulkDepositsSpecification(ctx, t, node0Driver)
+			specifications.DeployDbSuccessSpecification(ctx, t, userDriver)
 		})
 	}
 }
@@ -442,6 +442,46 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 			user0Driver := helper.GetUserDriver(ctx, "node1", driverType, deployer)
 
 			specifications.EthDepositValidatorUpdatesSpecification(ctx, t, nodeDrivers, user0Driver, helper.NodeKeys())
+
+		})
+	}
+}
+
+func TestKwilEthDepositFundTransfer(t *testing.T) {
+	opts := []integration.HelperOpt{
+		integration.WithBlockInterval(time.Second),
+		integration.WithValidators(4),
+		integration.WithNonValidators(0),
+		integration.WithGas(),
+		integration.WithGanache(),
+		integration.WithEthDepositOracle(true),
+		integration.WithConfirmations("0"),
+	}
+
+	testDrivers := strings.Split(*drivers, ",")
+	for _, driverType := range testDrivers {
+		t.Run(driverType+"_driver", func(t *testing.T) {
+			ctx := context.Background()
+
+			helper := integration.NewIntHelper(t, opts...)
+			helper.Setup(ctx, allServices)
+			// defer helper.Teardown()
+
+			// This tests out the ways in which the validator accounts can be funded
+			// One way is during network bootstrapping using allocs in the genesis file
+			// Other, is through transfer from one kwil account to another
+
+			// Get deposits credited into user account from escrow (or) using alloc in the genesis file
+			// Transfer from user account to validator account
+			// validate that the validator account has the funds
+
+			ethdeployer := helper.EthDeployer(false)
+			senderDriver := helper.GetUserDriver(ctx, "node0", driverType, ethdeployer)
+
+			// node0 key
+			valIdentity := helper.NodePrivateKey("node0").PubKey().Bytes()
+
+			specifications.FundValidatorSpecification(ctx, t, senderDriver, valIdentity)
 
 		})
 	}
