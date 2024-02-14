@@ -179,18 +179,18 @@ jobs:
       # maybe no need
       - name: Run acceptance test
         run: |
-          echo "UID=$(id -u)" >> test/acceptance/.env
-          echo "GID=$(id -g)" >> test/acceptance/.env
+          testUserID=$(id -u)
+          testGroupID=$(id -g)
           cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
-          echo "KACT_DOCKER_COMPOSE_OVERRIDE_FILE=docker-compose.override.yml" >> test/acceptance/.env
+          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/acceptance/docker-compose.override.yml
           task test:act:nb -- -parallel-mode
 
       - name: Run integration test
         run: |
-          echo "UID=$(id -u)" >> test/integration/.env
-          echo "GID=$(id -g)" >> test/integration/.env
+          testUserID=$(id -u)
+          testGroupID=$(id -g)
           cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
-          echo "KIT_DOCKER_COMPOSE_OVERRIDE_FILE=docker-compose.override.yml" >> test/integration/.env
+          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
           task test:it:nb:all -- -parallel-mode
 
       - name: Move cache
