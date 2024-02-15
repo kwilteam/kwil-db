@@ -1,4 +1,4 @@
-// go:build pglive
+//go:build pglive
 
 // package integration_test contains full engine integration tests
 package integration_test
