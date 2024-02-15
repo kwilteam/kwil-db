@@ -326,6 +326,10 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 
 // This test need to be run on builds with byzantine_test tag.
 func TestKwildEthDepositOracleExpiryIntegration(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
 	opts := []integration.HelperOpt{
 		integration.WithBlockInterval(time.Second),
 		integration.WithValidators(5),
@@ -365,6 +369,10 @@ func TestKwildEthDepositOracleExpiryIntegration(t *testing.T) {
 }
 
 func TestKwildEthDepositOracleExpiryRefundIntegration(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
 	opts := []integration.HelperOpt{
 		integration.WithBlockInterval(time.Second),
 		integration.WithValidators(5),
@@ -404,6 +412,10 @@ func TestKwildEthDepositOracleExpiryRefundIntegration(t *testing.T) {
 }
 
 func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
 	opts := []integration.HelperOpt{
 		integration.WithBlockInterval(time.Second),
 		integration.WithValidators(6),
@@ -448,6 +460,10 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 }
 
 func TestKwilEthDepositFundTransfer(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
 	opts := []integration.HelperOpt{
 		integration.WithBlockInterval(time.Second),
 		integration.WithValidators(4),

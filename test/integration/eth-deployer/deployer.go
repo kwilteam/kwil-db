@@ -75,8 +75,6 @@ func (d *Deployer) Deploy() error {
 		return err
 	}
 
-	time.Sleep(5 * time.Second)
-
 	d.escrowAddr = escrowAddr
 	d.escrowInst = escrowInst
 	d.tokenInst = tokenInst

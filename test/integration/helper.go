@@ -63,6 +63,8 @@ var logWaitStrategies = map[string]string{
 	"pg1":         `listening on IPv4 address "0.0.0.0", port 5432`,
 	"pg2":         `listening on IPv4 address "0.0.0.0", port 5432`,
 	"pg3":         `listening on IPv4 address "0.0.0.0", port 5432`,
+	"pg4":         `listening on IPv4 address "0.0.0.0", port 5432`,
+	"pg5":         `listening on IPv4 address "0.0.0.0", port 5432`,
 }
 
 const (
@@ -270,7 +272,7 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 	// Oracle config for nodes.
 	ethDeposits := make([]nodecfg.EthDepositOracle, r.cfg.NValidator)
 	if r.ethDeposit.Enabled {
-		for i := 0; i < r.cfg.NValidator; i++ {
+		for i := range ethDeposits {
 			cfg := nodecfg.EthDepositOracle{
 				Enabled:               true,
 				Endpoint:              r.ethDeposit.UnexposedChainRPC,
