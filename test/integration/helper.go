@@ -427,7 +427,7 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 
 // Setup sets up the test environment
 // Following steps are done:
-// 1. Create a temporary directory for the test
+// 1. Create a temporary directory for current test
 // 2. Prepare files for docker-compose to run
 // 3. Run Ganache ahead if required(for the purpose to populate config for eth-deposit)
 // 4. Generate node configuration files
@@ -451,9 +451,27 @@ func (r *IntHelper) Setup(ctx context.Context, services []string) {
 
 // prepareDockerCompose prepares the docker-compose.yml file for the test.
 // It does the following:
-// 1. Create a new network for the test
+// 1. Create a new network for current test
 // 2. Generate new docker-compose.yml using newly generated network
 // 3. Copy pginit.sql to the same directory as docker-compose.yml
+//
+// NOTE:
+// By default, the subnet pool assigned by docker is too big. Since we create
+// a new network for each test, docker may complain not be able to create a new
+// network. If ever this happens, a different setting `default-address-pools`
+// for docker daemon should be used. For example, CI server is using the following
+// setting in /etc/docker/daemon.json:
+//
+//	"default-address-pools": [
+//	  {
+//	    "base": "10.10.0.0/16",
+//	    "size": 24
+//	  }
+//	]
+//
+// Another approach to make parallel tests work is using the same network for all tests,
+// assuming the subnet pool is big enough for all containers at a time. It's still
+// relevant to `default-address-pools` setting, so I'll leave it as is for now.
 func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 	// create a new network for each test to avoid container DNS name conflicts
 	// for parallel running
