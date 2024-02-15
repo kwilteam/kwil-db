@@ -42,21 +42,39 @@ func GetUsedTables(join *tree.JoinClause) ([]*tree.TableOrSubqueryTable, error) 
 	err := join.Accept(&tree.ImplementedWalker{
 		FuncEnterExpressionSelect: func(p0 *tree.ExpressionSelect) error {
 			depth++
+
 			return nil
 		},
 		FuncExitExpressionSelect: func(p0 *tree.ExpressionSelect) error {
 			depth--
 			return nil
 		},
-		// this is the only TableOrSubquery implementation that we care about
-		// the others are either join predicates, subqueries, or lists of TableOrSubquery interfaces
-		// join predicates also specify the tables joined using TableOrSubquery, so we don't need to
-		// worry about them.
 		FuncEnterTableOrSubqueryTable: func(p0 *tree.TableOrSubqueryTable) error {
+			if depth != 0 {
+				return nil
+			}
+
 			tables = append(tables, &tree.TableOrSubqueryTable{
 				Name:  p0.Name,
 				Alias: p0.Alias,
 			})
+			return nil
+		},
+		FuncEnterTableOrSubquerySelect: func(p0 *tree.TableOrSubquerySelect) error {
+			if depth != 0 {
+				return nil
+			}
+			depth++ // we add depth since we do not want to index extra information from the subquery
+
+			// simply call the name and alias the alias of the subquery
+			tables = append(tables, &tree.TableOrSubqueryTable{
+				Name:  p0.Alias,
+				Alias: p0.Alias,
+			})
+			return nil
+		},
+		FuncExitTableOrSubquerySelect: func(p0 *tree.TableOrSubquerySelect) error {
+			depth--
 			return nil
 		},
 	})

@@ -109,6 +109,19 @@ func Test_Order(t *testing.T) {
 			stmt: `SELECT $id AS result`,
 			want: `SELECT $id AS "result";`,
 		},
+		{
+			name: "joined subquery",
+			stmt: `SELECT u.id, subq.total_likes
+			FROM users AS u
+			INNER JOIN (
+				SELECT post_id, COUNT(*) AS total_likes FROM likes GROUP BY post_id
+			) AS subq ON u.id = subq.post_id;`,
+			want: `SELECT "u"."id", "subq"."total_likes"
+			FROM "users" AS "u"
+			INNER JOIN (
+				SELECT "likes"."post_id", count(*) AS "total_likes" FROM "likes" GROUP BY "post_id" ORDER BY "post_id"
+			) AS "subq" ON "u"."id" = "subq"."post_id" ORDER BY "subq"."post_id", "subq"."total_likes", "u"."id";`,
+		},
 	}
 
 	for _, tt := range tests {

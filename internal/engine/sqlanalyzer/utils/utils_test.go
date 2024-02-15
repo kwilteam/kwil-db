@@ -34,12 +34,12 @@ func Test_JoinSearch(t *testing.T) {
 			FROM posts AS p
 			INNER JOIN followers AS f ON p.user_id = f.user_id
 			INNER JOIN users ON users.id = f.user_id
-			WHERE f.follower_id = (
-				SELECT liker_id from likes WHERE post_id = p.id
-			)
+			INNER JOIN (
+				SELECT * FROM SOME_OTHER_TABLE
+			) AS l ON l.post_id = p.id
 			ORDER BY p.post_date DESC NULLS LAST
 			LIMIT 20 OFFSET $offset;`,
-			tables: tbls("posts p", "followers f", "users"),
+			tables: tbls("posts p", "followers f", "users", "l l"),
 		},
 	}
 

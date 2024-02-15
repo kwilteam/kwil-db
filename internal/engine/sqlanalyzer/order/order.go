@@ -50,7 +50,38 @@ func (o *orderingWalker) EnterCTE(node *tree.CTE) error {
 	return nil
 }
 
-func (o *orderingWalker) EnterSelectStmt(node *tree.SelectStmt) error {
+// Register TableOrSubquerySelects as tables, so that we can order them.
+func (o *orderingWalker) EnterTableOrSubquerySelect(node *tree.TableOrSubquerySelect) error {
+	if node.Select == nil {
+		return fmt.Errorf("subquery select is nil")
+	}
+	if len(node.Select.SelectCores) == 0 {
+		return fmt.Errorf("subquery select has no select cores")
+	}
+
+	relationAttributes, err := attributes.GetSelectCoreRelationAttributes(node.Select.SelectCores[0], o.tables)
+	if err != nil {
+		return err
+	}
+
+	table, err := attributes.TableFromAttributes(node.Alias, relationAttributes, true)
+	if err != nil {
+		return err
+	}
+
+	// make sure this does not have a conflicting name with another table
+	_, err = findTable(o.tables, table.Name)
+	if err == nil {
+		return fmt.Errorf(`table or subquery with name or alias "%s" already exists`, table.Name)
+	}
+
+	o.tables = append(o.tables, table)
+
+	return nil
+}
+
+// put this on exit so we can search the whole statement for used tables
+func (o *orderingWalker) ExitSelectStmt(node *tree.SelectStmt) error {
 	var terms []*tree.OrderingTerm
 	var err error
 	switch len(node.SelectCores) {
