@@ -103,7 +103,7 @@ func orderSimpleStatement(stmt *tree.SelectCore, tables []*types.Table) ([]*tree
 						Column: cols[0].Column,
 					},
 				}
-			case 2:
+			default:
 				return nil, fmt.Errorf("multiple columns in a simple grouped term in a group by expression not supported")
 			}
 		}
