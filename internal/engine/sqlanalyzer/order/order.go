@@ -82,6 +82,12 @@ func (o *orderingWalker) EnterSelectStmt(node *tree.SelectStmt) error {
 
 // orderSimpleStatement will return the ordering required for a simple statement.
 func orderSimpleStatement(stmt *tree.SelectCore, tables []*types.Table) ([]*tree.OrderingTerm, error) {
+	// it is possible to not have any tables in a select
+	// if so, no ordering is required
+	if stmt.From == nil {
+		return nil, nil
+	}
+
 	// if there is a group by clause, then we order by each term in the group by clause
 	// if there is no group by clause, then we order by primary keys.
 	// if there is no group by and an aggregate function is used, all other columns returned must
@@ -130,11 +136,6 @@ func orderSimpleStatement(stmt *tree.SelectCore, tables []*types.Table) ([]*tree
 			return nil, fmt.Errorf("all columns must be aggregates if an aggregate function is used without a group by")
 		}
 		return nil, nil // order nothing in this case
-	}
-
-	// it is possible to not have any tables in a select
-	if stmt.From == nil {
-		return nil, nil
 	}
 
 	// if we reach here, there is no group by clause.
