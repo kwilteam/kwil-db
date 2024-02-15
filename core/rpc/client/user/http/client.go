@@ -2,30 +2,24 @@
 package http
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
-	"context"
-	"math/big"
-
-	"github.com/antihax/optional"
 	"github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
 	httpTx "github.com/kwilteam/kwil-db/core/rpc/http/tx"
-	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
-	"google.golang.org/genproto/googleapis/rpc/status"
-	"google.golang.org/grpc/codes"
-	grpcStatus "google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
+	"github.com/antihax/optional"
 )
 
 type Client struct {
@@ -77,14 +71,11 @@ func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, sy
 		Sync: &bcastSync,
 	})
 	if err != nil {
-		// we're in trouble here because we need to return ErrInvalidNonce,
-		// ErrInsufficientBalance, ErrWrongChain, etc. but how? the response
-		// body had better have retained the response error details!
 		if res != nil {
 			if swaggerErr, ok := err.(httpTx.GenericSwaggerError); ok {
-				body := swaggerErr.Body() // fmt.Println(string(body))
-				if ok, _err := parseBroadcastError(body); ok {
-					return nil, _err
+				body := swaggerErr.Body()
+				if ok, errBcast := parseBroadcastError(body); ok {
+					return nil, errBcast
 				} else {
 					return nil, err // return the original error(unparsed)
 				}
@@ -112,15 +103,7 @@ func (c *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts .
 		},
 	})
 	if err != nil {
-		// we need to account for a 401 Unauthorized error in this function,
-		// but the codegen will return 400 responses as an err, causing this
-		// to return. We need to check for this error here and wrap it in
-		// our own error type.
-		if res != nil && res.StatusCode == http.StatusUnauthorized {
-			err = errors.Join(err, client.ErrUnauthorized)
-		}
-
-		return nil, err
+		return nil, wrapResponseError(err, res)
 	}
 	defer res.Body.Close()
 
@@ -136,7 +119,7 @@ func (c *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts .
 func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 	result, res, err := c.conn.TxServiceApi.TxServiceChainInfo(ctx)
 	if err != nil {
-		return nil, err
+		return nil, wrapResponseError(err, res)
 	}
 	defer res.Body.Close()
 
@@ -157,7 +140,7 @@ func (c *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction)
 		Tx: convertTx(tx),
 	})
 	if err != nil {
-		return nil, err
+		return nil, wrapResponseError(err, res)
 	}
 	defer res.Body.Close()
 
@@ -176,7 +159,7 @@ func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.Acc
 		Status: optional.NewString(strconv.FormatUint(uint64(status), 10)), // does not seem to properly handle optional enum properly. This could cause a bug, will need to investigate
 	})
 	if err != nil {
-		return nil, err
+		return nil, wrapResponseError(err, res)
 	}
 	defer res.Body.Close()
 
@@ -201,7 +184,7 @@ func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.Acc
 func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
 	result, res, err := c.conn.TxServiceApi.TxServiceGetSchema(ctx, dbid)
 	if err != nil {
-		return nil, err
+		return nil, wrapResponseError(err, res)
 	}
 	defer res.Body.Close()
 
@@ -217,7 +200,7 @@ func (c *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]*type
 	// we need to use b64url since this method uses a query string
 	result, res, err := c.conn.TxServiceApi.TxServiceListDatabases(ctx, base64.URLEncoding.EncodeToString(ownerPubKey))
 	if err != nil {
-		return nil, err
+		return nil, wrapResponseError(err, res)
 	}
 	defer res.Body.Close()
 
@@ -243,7 +226,7 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 		Message: optional.NewString("ping"), // we don't really need this I believe?
 	})
 	if err != nil {
-		return "", err
+		return "", wrapResponseError(err, res)
 	}
 	defer res.Body.Close()
 
@@ -256,7 +239,7 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 		Query: query,
 	})
 	if err != nil {
-		return nil, err
+		return nil, wrapResponseError(err, res)
 	}
 	defer res.Body.Close()
 
@@ -269,92 +252,12 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 	return unmarshalMapResults(decodedResult)
 }
 
-// parseBroadcastError parses the response body from a broadcast error.
-// It returns true if the error was parsed successfully, false otherwise.
-func parseBroadcastError(respTxt []byte) (bool, error) {
-	var protoStatus status.Status
-	err := protojson.Unmarshal(respTxt, &protoStatus) // jsonpb is deprecated, otherwise we could use the resp.Body directly
-	if err != nil {
-		if err = json.Unmarshal(respTxt, &protoStatus); err != nil {
-			return false, err
-		}
-	}
-	stat := grpcStatus.FromProto(&protoStatus)
-	code, message := stat.Code(), stat.Message()
-	rpcErr := &client.RPCError{
-		Msg:  message,
-		Code: int32(code),
-	}
-	err = rpcErr
-
-	for _, detail := range stat.Details() {
-		if bcastErr, ok := detail.(*txpb.BroadcastErrorDetails); ok {
-			txCode := transactions.TxCode(bcastErr.Code)
-			switch txCode {
-			case transactions.CodeWrongChain:
-				err = errors.Join(err, transactions.ErrWrongChain)
-			case transactions.CodeInvalidNonce:
-				err = errors.Join(err, transactions.ErrInvalidNonce)
-			case transactions.CodeInvalidAmount:
-				err = errors.Join(err, transactions.ErrInvalidAmount)
-			case transactions.CodeInsufficientBalance:
-				err = errors.Join(err, transactions.ErrInsufficientBalance)
-			}
-
-			// Reset the generic code and message in the RPCError with the
-			// broadcast-specific details. NOTE: this will overwrite if there
-			// are more than one details object, which is not expected.
-			rpcErr.Code = int32(txCode)
-			rpcErr.Msg = bcastErr.Message
-			if bcastErr.Hash != "" { // if there is a tx hash, include it (possibly just executed it)
-				rpcErr.Msg += "\nTxHash: " + bcastErr.Hash
-			}
-		} else { // else unknown details type
-			err = errors.Join(err, fmt.Errorf("unrecognized status error detail type %T", detail))
-		}
-	}
-
-	return true, err
-}
-
-func parseErrorResponse(respTxt []byte) error {
-	// NOTE: here directly use status.Status from googleapis/rpc/status
-	var res status.Status
-	err := json.Unmarshal(respTxt, &res)
-	if err != nil {
-		return err
-	}
-
-	rpcErr := &client.RPCError{
-		Msg:  res.GetMessage(),
-		Code: res.GetCode(),
-	}
-
-	switch res.Code {
-	case int32(codes.NotFound):
-		return errors.Join(client.ErrNotFound, rpcErr)
-	default:
-	}
-
-	return rpcErr
-}
-
 func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
 	result, res, err := c.conn.TxServiceApi.TxServiceTxQuery(ctx, httpTx.TxTxQueryRequest{
 		TxHash: base64.StdEncoding.EncodeToString(txHash),
 	})
 	if err != nil {
-		if res != nil {
-			// fmt.Println("txQuery", res.StatusCode, res.Status)
-			if swaggerErr, ok := err.(httpTx.GenericSwaggerError); ok {
-				body := swaggerErr.Body() // fmt.Println(string(body))
-				return nil, parseErrorResponse(body)
-			}
-		}
-		if res != nil && res.StatusCode == http.StatusNotFound { // this is kinda wrong, before we had codes we set
-			return nil, client.ErrNotFound
-		}
-		return nil, err
+		return nil, wrapResponseError(err, res)
 	}
 	defer res.Body.Close()
 
