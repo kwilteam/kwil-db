@@ -124,6 +124,7 @@ type ValidatorOpsDsl interface {
 type DeployerDsl interface {
 	AccountBalanceDsl
 	DatabaseDeployDsl
+	TransferAmountDsl
 
 	Approve(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error
 	Deposit(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error

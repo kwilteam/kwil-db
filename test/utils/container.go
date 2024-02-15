@@ -10,6 +10,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/network"
 )
 
+// EnsureNetworkExist creates a new docker network with a random UUID name.
 func EnsureNetworkExist(ctx context.Context, testName string) (
 	*testcontainers.DockerNetwork, error) {
 	net, err := network.New(ctx,
@@ -17,6 +18,7 @@ func EnsureNetworkExist(ctx context.Context, testName string) (
 		network.WithAttachable(),
 		//network.WithInternal(), // we need to expose the network to the host
 		network.WithLabels(map[string]string{"test": "integration"}),
+		network.WithDriver("bridge"),
 	)
 
 	if err != nil {
