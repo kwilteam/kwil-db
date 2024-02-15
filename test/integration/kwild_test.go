@@ -3,6 +3,7 @@ package integration_test
 import (
 	"context"
 	"flag"
+	"fmt"
 	"math/big"
 	"strings"
 	"testing"
@@ -29,8 +30,7 @@ var allServices = []string{integration.ExtContainer, integration.Ext3Container,
 	"pg0", "pg1", "pg2", "pg3", "node0", "node1", "node2", "node3",
 }
 
-//var byzAllServices = []string{integration.ExtContainer, integration.Ext3Container,
-//	"pg0", "pg1", "pg2", "pg3", "pg4", "pg5", "node0", "node1", "node2", "node3", "node4", "node5"}
+var byzAllServices = []string{integration.ExtContainer, integration.Ext3Container, "pg0", "pg1", "pg2", "pg3", "pg4", "pg5", "node0", "node1", "node2", "node3", "node4", "node5"}
 
 func TestLocalDevSetup(t *testing.T) {
 	if !*dev {
@@ -72,9 +72,9 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, basicServices)
 
-			node0Driver := helper.GetUserDriver(ctx, "node0", driverType)
-			node1Driver := helper.GetUserDriver(ctx, "node1", driverType)
-			node2Driver := helper.GetUserDriver(ctx, "node2", driverType)
+			node0Driver := helper.GetUserDriver(ctx, "node0", driverType, nil)
+			node1Driver := helper.GetUserDriver(ctx, "node1", driverType, nil)
+			node2Driver := helper.GetUserDriver(ctx, "node2", driverType, nil)
 
 			// Create a new database and verify that the database exists on other nodes
 			specifications.DatabaseDeploySpecification(ctx, t, node0Driver)
@@ -232,9 +232,9 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, basicServices)
 
-			node0Driver := helper.GetUserDriver(ctx, "node0", driverType)
-			node1Driver := helper.GetUserDriver(ctx, "node1", driverType)
-			node2Driver := helper.GetUserDriver(ctx, "node2", driverType)
+			node0Driver := helper.GetUserDriver(ctx, "node0", driverType, nil)
+			node1Driver := helper.GetUserDriver(ctx, "node1", driverType, nil)
+			node2Driver := helper.GetUserDriver(ctx, "node2", driverType, nil)
 
 			// Create a new database and verify that the database exists on other nodes
 			specifications.DatabaseDeploySpecification(ctx, t, node0Driver)
@@ -253,7 +253,7 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 				4. Verify that the database exists on the new node
 			*/
 			helper.RunDockerComposeWithServices(ctx, newServices)
-			node3Driver := helper.GetUserDriver(ctx, "node3", driverType)
+			node3Driver := helper.GetUserDriver(ctx, "node3", driverType, nil)
 
 			/*
 			   1. This checks if the database exists on the new node
@@ -295,65 +295,210 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 			helper.Setup(ctx, allServices)
 
 			// get deployer
-			deployer := helper.EthDeployer()
+			deployer := helper.EthDeployer(false)
 			err := deployer.KeepMining(ctx)
 			require.NoError(t, err)
 
 			// Get the user driver
-			node0Driver := helper.GetUserDriver(ctx, "node0", driverType)
+			userDriver := helper.GetUserDriver(ctx, "node0", driverType, deployer)
+
+			// Node0 Driver
+			// node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
 
 			// Approve the deposit
-			specifications.ApproveSpecification(ctx, t, node0Driver)
+			specifications.ApproveSpecification(ctx, t, userDriver)
 
 			// Deposit the amount to the escrow
 			amount := big.NewInt(10)
-			specifications.DepositSuccessSpecification(ctx, t, node0Driver, amount)
+			specifications.DepositSuccessSpecification(ctx, t, userDriver, amount)
 
 			// Deposit Failure
-			specifications.DepositFailSpecification(ctx, t, node0Driver)
+			specifications.DepositFailSpecification(ctx, t, userDriver)
 
 			// Deploy DB without enough funds
-			specifications.DeployDbInsufficientFundsSpecification(ctx, t, node0Driver)
+			specifications.DeployDbInsufficientFundsSpecification(ctx, t, userDriver)
 
 			// Deploy DB with enough funds
-			specifications.DeployDbSuccessSpecification(ctx, t, node0Driver)
-
-			// Bulk deposits
-			// specifications.BulkDepositsSpecification(ctx, t, node0Driver)
+			specifications.DeployDbSuccessSpecification(ctx, t, userDriver)
 		})
 	}
 }
 
-// // This test need to be run on builds with byzantine_test tag.
-// func TestKwildEthDepositOracleExpiryIntegration(t *testing.T) {
-// 	opts := []integration.HelperOpt{
-// 		integration.WithBlockInterval(time.Second),
-// 		integration.WithValidators(6),
-// 		integration.WithNonValidators(0),
-// 		integration.WithGas(),
-// 		integration.WithGanache(),
-// 		integration.WithEthDepositOracle(true),
-// 		integration.WithConfirmations("0"),
-// 		integration.WithByzantineExpiry(),
-// 		integration.WithVoteExpiry(4),
-// 	}
+// This test need to be run on builds with byzantine_test tag.
+func TestKwildEthDepositOracleExpiryIntegration(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
 
-// 	testDrivers := strings.Split(*drivers, ",")
-// 	for _, driverType := range testDrivers {
-// 		t.Run(driverType+"_driver", func(t *testing.T) {
-// 			ctx, cancel := context.WithCancel(context.Background())
-// 			defer cancel()
-// 			helper := integration.NewIntHelper(t, opts...)
-// 			helper.Setup(ctx, byzAllServices)
-// 			defer helper.Teardown()
+	opts := []integration.HelperOpt{
+		integration.WithBlockInterval(time.Second),
+		integration.WithValidators(5),
+		integration.WithNonValidators(0),
+		integration.WithGas(),
+		integration.WithGanache(),
+		integration.WithEthDepositOracle(true),
+		integration.WithConfirmations("0"), // 2 nodes listen on different escrow contracts and submits votes for events on the byz contract which never gets approved.
+		integration.WithNumByzantineExpiryNodes(1),
+		integration.WithVoteExpiry(4),
+	}
 
-// 			// Get the user driver
-// 			node0Driver := helper.GetUserDriver(ctx, "node0", driverType)
+	ctx := context.Background()
 
-//defer helper.Teardown()
+	testDrivers := strings.Split(*drivers, ",")
+	for _, driverType := range testDrivers {
+		t.Run(driverType+"_driver", func(t *testing.T) {
 
-// 			specifications.DepositResolutionExpirySpecification(ctx, t, node0Driver, helper.NodeKeys())
+			helper := integration.NewIntHelper(t, opts...)
+			helper.Setup(ctx, append(allServices, "pg4", "node4"))
 
-// 		})
-// 	}
-// }
+			byzDeployer := helper.EthDeployer(true)
+			err := byzDeployer.KeepMining(ctx)
+			require.NoError(t, err)
+
+			// Get the user driver
+			node0Driver := helper.GetUserDriver(ctx, "node0", driverType, byzDeployer)
+
+			// Nodes: 5
+			// Threshold approvals: 5 * 2/3 = 4
+			// Expiry refund threshold: 5 * 1/3 = 2
+			// Now that we have only 1 byz node, tx fees are never refunded for votes submitted.
+			specifications.DepositResolutionExpirySpecification(ctx, t, node0Driver, helper.NodeKeys())
+
+		})
+	}
+}
+
+func TestKwildEthDepositOracleExpiryRefundIntegration(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	opts := []integration.HelperOpt{
+		integration.WithBlockInterval(time.Second),
+		integration.WithValidators(5),
+		integration.WithNonValidators(0),
+		integration.WithGas(),
+		integration.WithGanache(),
+		integration.WithEthDepositOracle(true),
+		integration.WithConfirmations("0"), // 2 nodes listen on different escrow contracts and submits votes for events on the byz contract which never gets approved.
+		integration.WithNumByzantineExpiryNodes(2),
+		integration.WithVoteExpiry(4),
+	}
+
+	ctx := context.Background()
+
+	testDrivers := strings.Split(*drivers, ",")
+	for _, driverType := range testDrivers {
+		t.Run(driverType+"_driver", func(t *testing.T) {
+
+			helper := integration.NewIntHelper(t, opts...)
+			helper.Setup(ctx, append(allServices, "pg4", "node4"))
+
+			byzDeployer := helper.EthDeployer(true)
+			err := byzDeployer.KeepMining(ctx)
+			require.NoError(t, err)
+
+			// Get the user driver
+			node0Driver := helper.GetUserDriver(ctx, "node0", driverType, byzDeployer)
+
+			// Nodes: 5
+			// Threshold approvals: 5 * 2/3 = 4
+			// Expiry refund threshold: 5 * 1/3 = 2
+			// As minimun threshold is met for the expiry refund, the tx fees for the byz nodes is refunded.
+			specifications.DepositResolutionExpiryRefundSpecification(ctx, t, node0Driver, helper.NodeKeys())
+
+		})
+	}
+}
+
+func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	opts := []integration.HelperOpt{
+		integration.WithBlockInterval(time.Second),
+		integration.WithValidators(6),
+		integration.WithNonValidators(0),
+		integration.WithGas(),
+		integration.WithGanache(),
+		integration.WithEthDepositOracle(true),
+		integration.WithConfirmations("0"), // 2 nodes listen on different escrow contracts and submits votes for events on the byz contract which never gets approved.
+		integration.WithNumByzantineExpiryNodes(2),
+	}
+
+	testDrivers := strings.Split(*drivers, ",")
+	for _, driverType := range testDrivers {
+		if driverType == "http" {
+			continue // admin service cannot use http
+		}
+
+		ctx := context.Background()
+		t.Run(driverType+"_driver", func(t *testing.T) {
+
+			helper := integration.NewIntHelper(t, opts...)
+			helper.Setup(ctx, byzAllServices)
+
+			// get deployer
+			deployer := helper.EthDeployer(false)
+			err := deployer.KeepMining(ctx)
+			require.NoError(t, err)
+
+			// Get node drivers
+			nodeDrivers := make(map[string]specifications.ValidatorOpsDsl, 6)
+			for i := 0; i <= 5; i++ {
+				node := fmt.Sprintf("node%d", i)
+				nodeDrivers[node] = helper.GetOperatorDriver(ctx, node, driverType)
+			}
+
+			user0Driver := helper.GetUserDriver(ctx, "node1", driverType, deployer)
+
+			specifications.EthDepositValidatorUpdatesSpecification(ctx, t, nodeDrivers, user0Driver, helper.NodeKeys())
+
+		})
+	}
+}
+
+func TestKwilEthDepositFundTransfer(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	opts := []integration.HelperOpt{
+		integration.WithBlockInterval(time.Second),
+		integration.WithValidators(4),
+		integration.WithNonValidators(0),
+		integration.WithGas(),
+		integration.WithGanache(),
+		integration.WithEthDepositOracle(true),
+		integration.WithConfirmations("0"),
+	}
+
+	testDrivers := strings.Split(*drivers, ",")
+	for _, driverType := range testDrivers {
+		t.Run(driverType+"_driver", func(t *testing.T) {
+			ctx := context.Background()
+
+			helper := integration.NewIntHelper(t, opts...)
+			helper.Setup(ctx, allServices)
+			// defer helper.Teardown()
+
+			// This tests out the ways in which the validator accounts can be funded
+			// One way is during network bootstrapping using allocs in the genesis file
+			// Other, is through transfer from one kwil account to another
+
+			// Get deposits credited into user account from escrow (or) using alloc in the genesis file
+			// Transfer from user account to validator account
+			// validate that the validator account has the funds
+
+			ethdeployer := helper.EthDeployer(false)
+			senderDriver := helper.GetUserDriver(ctx, "node0", driverType, ethdeployer)
+
+			// node0 key
+			valIdentity := helper.NodePrivateKey("node0").PubKey().Bytes()
+
+			specifications.FundValidatorSpecification(ctx, t, senderDriver, valIdentity)
+
+		})
+	}
+}

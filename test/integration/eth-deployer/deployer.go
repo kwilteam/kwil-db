@@ -199,7 +199,7 @@ func (d *Deployer) Allowance(ctx context.Context, owner common.Address) (*big.In
 // Keep Mining
 func (d *Deployer) KeepMining(ctx context.Context) error {
 	// go routine to keep triggering dummy transactions
-	senderPk := "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
+	senderPk := "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"
 	sender, err := ec.HexToECDSA(senderPk)
 	if err != nil {
 		return err

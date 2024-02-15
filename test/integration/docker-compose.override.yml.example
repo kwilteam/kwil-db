@@ -9,9 +9,14 @@ services:
     user: "${UID}:${GID}"
   node3:
     user: "${UID}:${GID}"
+  node4:
+    user: "${UID}:${GID}"
+  node5:
+    user: "${UID}:${GID}"
   ext1:
     user: "${UID}:${GID}"
   ext3:
     user: "${UID}:${GID}"
   kgw:
     user: "${UID}:${GID}"
+  
