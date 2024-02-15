@@ -117,13 +117,13 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid strin
 // It can be given either a readwrite or readonly transaction.
 // If it is given a read-only transaction, it will not be able to execute any procedures that are not `view`.
 func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, options *types.ExecutionData) (*sql.ResultSet, error) {
-	g.mu.RLock() // even if tx is readwrite, we will not change GlobalContext state, so we can use RLock
-	defer g.mu.RUnlock()
-
 	err := options.Clean()
 	if err != nil {
 		return nil, err
 	}
+
+	g.mu.RLock() // even if tx is readwrite, we will not change GlobalContext state, so we can use RLock
+	defer g.mu.RUnlock()
 
 	dataset, ok := g.datasets[options.Dataset]
 	if !ok {
@@ -152,7 +152,10 @@ func (g *GlobalContext) ListDatasets(ctx context.Context, caller []byte) ([]*cor
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
-	datasets := make([]*coreTypes.DatasetIdentifier, 0, len(g.datasets))
+	var datasets []*coreTypes.DatasetIdentifier
+	if len(caller) == 0 { // prealloc only for all users' dataset
+		datasets = make([]*coreTypes.DatasetIdentifier, 0, len(g.datasets))
+	}
 	for dbid, dataset := range g.datasets {
 		if len(caller) == 0 || bytes.Equal(dataset.schema.Owner, caller) {
 			datasets = append(datasets, &coreTypes.DatasetIdentifier{
@@ -180,10 +183,9 @@ func (g *GlobalContext) GetSchema(ctx context.Context, dbid string) (*types.Sche
 }
 
 // Query executes a read-only query.
-func (g *GlobalContext) Query(ctx context.Context, tx sql.DB, dbid string, query string) (*sql.ResultSet, error) {
+func (g *GlobalContext) Query(ctx context.Context, tx sql.DB, dbid, query string) (*sql.ResultSet, error) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
-
 	dataset, ok := g.datasets[dbid]
 	if !ok {
 		return nil, types.ErrDatasetNotFound

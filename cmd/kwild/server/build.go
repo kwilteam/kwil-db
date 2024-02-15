@@ -283,10 +283,8 @@ func buildVoteStore(d *coreDependencies, db *pg.DB, acc voting.AccountStore, eng
 }
 
 func buildEventStore(d *coreDependencies, closers *closeFuncs, voteStore *voting.VoteProcessor) *events.EventStore {
-	// NOTE: we're using the same postgresql database, but isolated pg schema,
-	// however we could have an entirely separate database too: @brennan: we cannot have a separate db here, because eventstore deletes need to be atomic with consensus
-	//   -- maybe run in this (if superuser, which we seem to need to make triggers anyway)?
-	//   CREATE DATABASE kwild_events OWNER kwild; -- adjacent to the main "kwild" database
+	// NOTE: we're using the same postgresql database, but isolated pg schema.
+	// We cannot have a separate db here, because eventstore deletes need to be atomic with consensus
 	db, err := d.poolOpener(d.ctx, d.cfg.AppCfg.DBName, 10)
 	if err != nil {
 		failBuild(err, "failed to build event store")
