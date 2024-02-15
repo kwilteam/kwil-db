@@ -7,13 +7,13 @@ This package includes a default implementation of CheckSyntax that does nothing,
 and a cgo implementation that uses the pg_query_go library to check the syntax
 of the query.
 
-This cgo implementation is only built when the `enablecgo` build tag is set.
+This cgo implementation is only built when the CGO_ENABLED=1.
 By doing this, we keep pg_query_go as a cgo dependency, which is not required in
 the default build.
 
 pg_query_go is a cgo wrapper around the libpg_query C library, which is used in
 kwil-db to simply check the syntax of SQL queries we generated.
 
-TO run tests using pg_query_go, run `go test -tags enablecgo ./...`
+TO run tests using pg_query_go, run `CGO_ENABLED=1 go test ./...`
 */
 package postgres

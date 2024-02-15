@@ -8,6 +8,6 @@ import (
 )
 
 func TestCheckSyntax(t *testing.T) {
-	//run `go test -tags enablecgo ./...` to test against checkSyntaxCgo
-	assert.NoError(t, postgres.CheckSyntax("select 1;"))
+	//run `CGO_ENABLED=1 go test ./parse/sql/postgres -v` to test against checkSyntaxCgo
+	assert.NoError(t, postgres.CheckSyntax("select 'printme';"))
 }
