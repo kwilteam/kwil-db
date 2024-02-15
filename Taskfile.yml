@@ -221,8 +221,8 @@ tasks:
     desc: Run unit tests
     cmds:
       - go test ./core/... -tags=ext_test -count=1
-      - go test ./parse/... -tags=ext_test -count=1
-      - go test ./... -tags=ext_test,pglive -count=1 -p=1 # no parallel for now because several try to use one pg database
+      - go test ./parse/... -tags=ext_test,enablecgo -count=1
+      - go test ./... -tags=ext_test,pglive,enablecgo -count=1 -p=1 # no parallel for now because several try to use one pg database
 
   test:unit:race:
     desc: Run unit tests with the race detector

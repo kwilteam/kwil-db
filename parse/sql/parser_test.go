@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/parse/sql/postgres"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -2267,6 +2267,9 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			assert.True(t,
 				strings.EqualFold(unFormatSql(sql), unFormatSql(tt.input)),
 				"ParseRawSQL() got %s, origin %s", sql, tt.input)
+
+			err = postgres.CheckSyntaxReplaceDollar(sql)
+			assert.NoErrorf(t, err, "postgres syntax check failed: %s", err)
 		})
 	}
 }

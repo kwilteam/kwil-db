@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
+	"github.com/kwilteam/kwil-db/parse/sql/postgres"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 	"github.com/stretchr/testify/assert"
 )
@@ -209,6 +210,12 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 			assert.Equal(t, len(tt.want), len(genTable.Indexes[0].Columns))
 
 			assert.ElementsMatch(t, tt.resultTableCols, genTable.Columns, "GetSelectCoreRelationAttributes() got = %v, want %v", got, tt.want)
+
+			sql, err := selectStmt.ToSQL()
+			assert.NoErrorf(t, err, "error converting query to SQL: %s", err)
+
+			err = postgres.CheckSyntaxReplaceDollar(sql)
+			assert.NoErrorf(t, err, "postgres syntax check failed: %s", err)
 		})
 	}
 }
