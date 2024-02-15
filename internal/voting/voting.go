@@ -3,6 +3,7 @@ package voting
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -12,12 +13,26 @@ import (
 )
 
 const (
-	ValidatorVoteBodyBytePrice = 1000      // Per byte cost
-	ValidatorVoteIDPrice       = 1000 * 16 // 16 bytes for the UUID
+	// ValidatorVoteBodyBytePrice is the per byte cost of a vote resolution body.
+	ValidatorVoteBodyBytePrice = 1000
+	// ValidatorVoteIDPrice is the absolute fee for a vote approval, per
+	// resolution approved in the transaction, which may batch them.
+	ValidatorVoteIDPrice = 1000 * 16 // 16 bytes for the UUID
 )
 
-// Threshold is a struct that contains the numerator and denominator of a fraction
-// It is used to define the percentage of total voting power required for taking a specific action
+var (
+	// expiryRefundThreshold is the threshold on the number of validators that
+	// must have also approved an event for a refund to be credited to those
+	// validators if the resolution expires.
+	expiryRefundThreshold = Threshold{
+		Num:   1,
+		Denom: 3,
+	}
+)
+
+// Threshold is a struct that contains the numerator and denominator of a
+// fraction. It is used to define the percentage of total voting power required
+// for taking a specific action.
 type Threshold struct {
 	Num   int64
 	Denom int64
@@ -25,8 +40,7 @@ type Threshold struct {
 
 // NewVoteProcessor creates a new vote processor.
 // It initializes the database with the required tables.
-// The threshold is the percentThreshold of votes required to approve a resolution
-// It must be an integer between 0 and 1000000.  This defines the percentage
+// The threshold is the ratio of validators required to approve a resolution.
 func NewVoteProcessor(ctx context.Context, db sql.DB, accounts AccountStore,
 	engine Engine, threshold Threshold, logger log.Logger) (*VoteProcessor, error) {
 	tx, err := db.BeginTx(ctx)
@@ -58,14 +72,11 @@ func NewVoteProcessor(ctx context.Context, db sql.DB, accounts AccountStore,
 	}
 
 	return &VoteProcessor{
-		percentThreshold: threshold,
-		expiryRefundThreshold: Threshold{
-			Num:   1,
-			Denom: 3,
-		}, // 33.3333%
-		accounts: accounts,
-		logger:   logger,
-		engine:   engine,
+		percentThreshold:      threshold,
+		expiryRefundThreshold: expiryRefundThreshold,
+		accounts:              accounts,
+		logger:                logger,
+		engine:                engine,
 	}, nil
 }
 
@@ -87,7 +98,7 @@ type VoteProcessor struct {
 	logger log.Logger
 }
 
-// ResolutionVoteInfo is a struct that contains information about the status of a resolution
+// ResolutionVoteInfo contains information about the status of a resolution.
 type ResolutionVoteInfo struct {
 	Resolution
 
@@ -95,31 +106,31 @@ type ResolutionVoteInfo struct {
 	// the vote.
 	ApprovedPower int64
 
-	// Proposer
+	// VoteBodyProposer is the identity of the proposer.
 	VoteBodyProposer []byte
 
 	// Voters
 	Voters []Voter
 
-	// used to indicate if proposer has submitted both the Body and ID transactions
+	// SubmittedBodyAndID indicates if proposer has submitted both the Body and ID transactions
 	SubmittedBodyAndID bool
 }
 
 // Resolution is a struct that contains information about a resolution
 type Resolution struct {
-	// ID is the unique identifier of the vote
+	// ID is the unique identifier of the resolution.
 	ID types.UUID
 
 	// Type is a string to identify the type of a vote.
 	// This can be nil, if no body has been added yet.
 	Type string
 
-	// Body is the actual vote
+	// Body is the actual vote.
 	// This can be nil, if the vote was began before a
 	// body was added.
 	Body []byte
 
-	// Expiration is the blockheight at which the vote expires
+	// Expiration is the block height at which the vote expires.
 	Expiration int64
 }
 
@@ -152,11 +163,11 @@ func (v *VoteProcessor) Approve(ctx context.Context, db sql.DB, resolutionID typ
 		return err
 	}
 
-	userId := types.NewUUIDV5(from)
+	userID := types.NewUUIDV5(from)
 
 	// if the voter does not exist, the following will error
 	// if the vote from the voter already exists, the following will error
-	_, err = tx.Execute(ctx, addVote, resolutionID[:], userId[:])
+	_, err = tx.Execute(ctx, addVote, resolutionID[:], userID[:])
 	if err != nil {
 		return err
 	}
@@ -165,7 +176,7 @@ func (v *VoteProcessor) Approve(ctx context.Context, db sql.DB, resolutionID typ
 }
 
 // CreateResolution creates a vote, by submitting a body of a vote, a topic
-// and an expiration.  The expiration should be a blockheight.
+// and an expiration.  The expiration should be a block height.
 // If the resolution already exists, it will not be changed.
 // If the resolution was already processed, nothing will happen.
 func (v *VoteProcessor) CreateResolution(ctx context.Context, db sql.DB, event *types.VotableEvent, expiration int64, voteBodyProposer []byte) error {
@@ -189,23 +200,23 @@ func (v *VoteProcessor) CreateResolution(ctx context.Context, db sql.DB, event *
 		return fmt.Errorf("payload not registered for type %s", event.Type)
 	}
 
-	proposerId := types.NewUUIDV5(voteBodyProposer)
+	proposerID := types.NewUUIDV5(voteBodyProposer)
 	// ensure that the proposer exists
-	_, err = tx.Execute(ctx, getVoterPower, proposerId[:])
+	_, err = tx.Execute(ctx, getVoterPower, proposerID[:])
 	if err != nil {
 		return fmt.Errorf("proposer does not exist: %w", err)
 	}
 
 	id := event.ID()
 
-	// Check if the proposer has already submitted the VoteID transaction
-	// if yes, update the extraVoteID in the resolutions table so that the node can be refunded correctly.
+	// Check if the proposer has already submitted the VoteID transaction.
+	// If yes, update the extraVoteID in the resolutions table so that the node can be refunded correctly.
 	voted, err := v.HasVoted(ctx, tx, id, voteBodyProposer)
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Execute(ctx, upsertResolution, id[:], event.Body, event.Type, expiration, proposerId[:], voted)
+	_, err = tx.Execute(ctx, upsertResolution, id[:], event.Body, event.Type, expiration, proposerID[:], voted)
 	if err != nil {
 		return err
 	}
@@ -213,9 +224,9 @@ func (v *VoteProcessor) CreateResolution(ctx context.Context, db sql.DB, event *
 	return tx.Commit(ctx)
 }
 
-// Expire expires all votes at or before a given blockheight.
+// Expire expires all votes at or before a given block height.
 // All expired votes will be removed from the system.
-func (v *VoteProcessor) Expire(ctx context.Context, db sql.DB, blockheight int64) error {
+func (v *VoteProcessor) Expire(ctx context.Context, db sql.DB, blockHeight int64) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -232,7 +243,7 @@ func (v *VoteProcessor) Expire(ctx context.Context, db sql.DB, blockheight int64
 	}
 
 	// get all expired resolutions
-	res, err := tx.Execute(ctx, expiredResolutions, blockheight)
+	res, err := tx.Execute(ctx, expiredResolutions, blockHeight)
 	if err != nil {
 		return err
 	}
@@ -248,32 +259,32 @@ func (v *VoteProcessor) Expire(ctx context.Context, db sql.DB, blockheight int64
 
 	ids := make([]types.UUID, len(res.Rows))
 	for i, row := range res.Rows {
-		// Refund the voters the Tx costs if they have atleast 1/3rd of the total voting power
+		// Refund the voters the Tx costs if they have at least 1/3rd of the total voting power
 		resolution, err := getResolutionVoteInfoFromRow(ctx, tx, row)
 		if err != nil {
-			return fmt.Errorf("internal bug: %w", err)
+			return fmt.Errorf("getResolutionVoteInfoFromRow failure: %w", err)
 		}
 		ids[i] = resolution.ID
 
-		// If the approved power is atleast 1/3rd of the total voting power, refund the voters
+		// If the approved power is at least 1/3rd of the total voting power, refund the voters
 		if resolution.ApprovedPower >= totalVotingPower {
 			// Refund the voters
-			ProposerFee := big.NewInt(int64(len(resolution.Body)) * ValidatorVoteBodyBytePrice)
-			VoterFee := big.NewInt(ValidatorVoteIDPrice)
+			proposerFee := big.NewInt(int64(len(resolution.Body)) * ValidatorVoteBodyBytePrice)
+			voterFee := big.NewInt(ValidatorVoteIDPrice)
 
 			for _, voter := range resolution.Voters {
 				// check if the voter is the proposer
 				if bytes.Equal(voter.PubKey, resolution.VoteBodyProposer) {
-					credit := ProposerFee
+					credit := proposerFee
 					if resolution.SubmittedBodyAndID {
-						credit = credit.Add(credit, VoterFee)
+						credit = credit.Add(credit, voterFee)
 					}
 					err = v.accounts.Credit(ctx, tx, voter.PubKey, credit)
 					if err != nil {
 						return err
 					}
 				} else {
-					err = v.accounts.Credit(ctx, tx, voter.PubKey, VoterFee)
+					err = v.accounts.Credit(ctx, tx, voter.PubKey, voterFee)
 					if err != nil {
 						return err
 					}
@@ -312,12 +323,16 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context, db sql.
 		return nil, err
 	}
 	if thresholdPower == 0 {
-		return nil, nil
+		return nil, nil // OK to rollback since this is still RO
 	}
 
 	res, err := tx.Execute(ctx, getConfirmedResolutions, thresholdPower)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(res.Rows) == 0 {
+		return nil, nil // nothing to process
 	}
 
 	if len(res.Columns) != 7 {
@@ -345,24 +360,24 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context, db sql.
 			return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
 		}
 
-		Proposerfee := big.NewInt(int64(len(vote.Body)) * ValidatorVoteBodyBytePrice)
-		VoterFee := big.NewInt(ValidatorVoteIDPrice)
+		proposerFee := big.NewInt(int64(len(vote.Body)) * ValidatorVoteBodyBytePrice)
+		voterFee := big.NewInt(ValidatorVoteIDPrice)
 
 		// Refund Voters the Tx cost.
 		for _, voter := range voteInfo.Voters {
 			// mint()
 			if bytes.Equal(voter.PubKey, voteInfo.VoteBodyProposer) {
-				refund := Proposerfee
+				refund := proposerFee
 				if voteInfo.SubmittedBodyAndID {
 					// If the proposer has submitted both the body and ID transactions, refund the proposer the ID fee as well
-					refund = new(big.Int).Add(refund, VoterFee)
+					refund = new(big.Int).Add(refund, voterFee)
 				}
 				err = v.accounts.Credit(ctx, tx, voter.PubKey, refund)
 				if err != nil {
 					return nil, fmt.Errorf("failed to credit proposer: %w", err)
 				}
 			} else {
-				err = v.accounts.Credit(ctx, tx, voter.PubKey, VoterFee)
+				err = v.accounts.Credit(ctx, tx, voter.PubKey, voterFee)
 				if err != nil {
 					return nil, fmt.Errorf("failed to credit voter: %w", err)
 				}
@@ -378,9 +393,8 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context, db sql.
 			return nil, fmt.Errorf("failed to apply payload: %w", err)
 		}
 
-		// id needs to be 16 bytes
-		// this should never happen, just for safety
-		if len(vote.ID) != 16 { // ???? type UUID [16]byte
+		// ID needs to be 16 bytes since it's a UUID. This should never happen.
+		if len(vote.ID) != 16 {
 			return nil, fmt.Errorf("invalid id length for UUID. required 16 bytes, got %d. this is a bug", len(vote.ID))
 		}
 
@@ -392,9 +406,6 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context, db sql.
 		}
 	}
 
-	if len(usedDBIDs) == 0 {
-		return nil, nil //sp.Commit()
-	}
 	// delete
 	_, err = tx.Execute(ctx, deleteResolutions, types.UUIDArray(usedDBIDs))
 	if err != nil {
@@ -451,19 +462,10 @@ func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, db sql.DB, i
 		return true, nil
 	}
 
-	processed, err := v.IsProcessed(ctx, tx, id)
-	if err != nil {
-		return false, err
-	}
-
-	if processed {
-		return true, nil
-	}
-
-	return false, nil
+	return v.IsProcessed(ctx, tx, id)
 }
 
-// alreadyProcessed checks if a vote has either already succeeded, or expired.
+// IsProcessed checks if a vote has either already succeeded, or expired.
 func (v *VoteProcessor) IsProcessed(ctx context.Context, tx sql.DB, resolutionID types.UUID) (bool, error) {
 	res, err := tx.Execute(ctx, alreadyProcessed, resolutionID[:])
 	if err != nil {
@@ -475,9 +477,9 @@ func (v *VoteProcessor) IsProcessed(ctx context.Context, tx sql.DB, resolutionID
 
 // HasVoted checks if a voter has voted on a resolution.
 func (v *VoteProcessor) HasVoted(ctx context.Context, tx sql.DB, resolutionID types.UUID, from []byte) (bool, error) {
-	userId := types.NewUUIDV5(from)
+	userID := types.NewUUIDV5(from)
 
-	res, err := tx.Execute(ctx, hasVoted, resolutionID[:], userId[:])
+	res, err := tx.Execute(ctx, hasVoted, resolutionID[:], userID[:])
 	if err != nil {
 		return false, err
 	}
@@ -518,7 +520,7 @@ func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, db sql.DB, id
 		}
 
 		expIface := res.Rows[0][0]
-		expiration, ok := expIface.(int64)
+		expiration, ok := sql.Int64(expIface)
 		if !ok {
 			return nil, fmt.Errorf("invalid type for expiration (%T). this is an internal bug", expIface)
 		}
@@ -579,7 +581,7 @@ func (v *VoteProcessor) GetVotesByCategory(ctx context.Context, db sql.DB, categ
 	for i, row := range res.Rows {
 		resolution, err := getResolutionFromRow(row)
 		if err != nil {
-			return nil, fmt.Errorf("internal bug: %w", err)
+			return nil, fmt.Errorf("getResolutionFromRow failure: %w", err)
 		}
 
 		votes[i] = resolution
@@ -619,7 +621,7 @@ func getResolutionFromRow(rows []any) (*Resolution, error) {
 		resolution.Type = category
 	}
 
-	expiration, ok := rows[3].(int64)
+	expiration, ok := sql.Int64(rows[3])
 	if !ok {
 		return nil, fmt.Errorf("invalid type for expiration (%T)", rows[3])
 	}
@@ -718,13 +720,16 @@ func getVoters(ctx context.Context, db sql.DB, resolutionID types.UUID) ([]Voter
 
 	voters := make([]Voter, len(res.Rows))
 	for i, row := range res.Rows {
+		if len(row) != 2 {
+			return nil, errors.New("too few columns returned for voter power")
+		}
 		voterBts, ok := row[0].([]byte)
 		if !ok {
 			return nil, fmt.Errorf("invalid type for voter")
 		}
 		power, ok := sql.Int64(row[1])
 		if !ok {
-			return nil, fmt.Errorf("invalid type for power")
+			return nil, fmt.Errorf("invalid type for power (%T)", row[1])
 		}
 		voters[i] = Voter{
 			PubKey: voterBts,
@@ -794,10 +799,9 @@ func (v *VoteProcessor) GetVoterPower(ctx context.Context, db sql.DB, identifier
 	return power, tx.Commit(ctx)
 }
 
-// requiredPower gets the required power to meet the threshold requirements.
+// RequiredPower gets the required power to meet the threshold requirements.
 func (v *VoteProcessor) RequiredPower(ctx context.Context, db sql.DB, num, denom int64) (int64, error) {
 	powerRes, err := db.Execute(ctx, totalPower)
-
 	if err != nil {
 		return 0, err
 	}
@@ -811,11 +815,11 @@ func (v *VoteProcessor) RequiredPower(ctx context.Context, db sql.DB, num, denom
 		return 0, fmt.Errorf("invalid number of columns returned while querying total Power. this is an internal bug")
 	}
 
-	powerIface := powerRes.Rows[0][0]       // `numeric` => pgtype.Numeric
-	totalPower, ok := sql.Int64(powerIface) // powerIface.(int64)
+	powerIface := powerRes.Rows[0][0] // `numeric` => pgtype.Numeric
+	totalPower, ok := sql.Int64(powerIface)
 	if !ok {
-		// if it is nil, then no validators have been added yet
-		if powerRes.Rows[0][0] == nil {
+		// If the result is nil (NULL in table), then no validators have been added yet.
+		if powerIface == nil {
 			return 0, nil
 		}
 
