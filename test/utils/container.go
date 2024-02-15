@@ -17,6 +17,7 @@ func EnsureNetworkExist(ctx context.Context, testName string) (
 		network.WithAttachable(),
 		//network.WithInternal(), // we need to expose the network to the host
 		network.WithLabels(map[string]string{"test": "integration"}),
+		network.WithDriver("bridge"),
 	)
 
 	if err != nil {
