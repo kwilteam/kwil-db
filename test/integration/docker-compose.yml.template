@@ -308,7 +308,7 @@ services:
     depends_on:
         ext1:
           condition: service_started
-        pg4:
+        pg5:
           condition: service_healthy
     command: |
       --root-dir=/app/kwil

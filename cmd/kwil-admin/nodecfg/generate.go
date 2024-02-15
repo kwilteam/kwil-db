@@ -79,7 +79,7 @@ type TestnetGenerateConfig struct {
 	VoteExpiry              int64
 	Allocs                  map[string]*big.Int
 	FundNonValidators       bool
-	EthDeposits             EthDepositOracle
+	EthDeposits             []EthDepositOracle
 }
 
 // ConfigOpts is a struct to alter the generation of the node config.
@@ -235,6 +235,10 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		return fmt.Errorf("cannot use NoGenesis opt with testnet")
 	}
 
+	if genCfg.EthDeposits != nil && len(genCfg.EthDeposits) != genCfg.NValidators {
+		return fmt.Errorf("eth deposits must be nil or have the same length as the number of validators")
+	}
+
 	var err error
 	genCfg.OutputDir, err = config.ExpandPath(genCfg.OutputDir)
 	if err != nil {
@@ -261,15 +265,6 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		err = cfg.Merge(configFile)
 		if err != nil {
 			return fmt.Errorf("failed to merge config file %s: %w", genCfg.ConfigFile, err)
-		}
-	}
-
-	if genCfg.EthDeposits.Enabled {
-		cfg.AppCfg.Oracles[ethDepOracle.OracleName] = map[string]string{
-			ethDepOracle.EthDepositEndpoint:              genCfg.EthDeposits.Endpoint,
-			ethDepOracle.EthDepositEscrowAddress:         genCfg.EthDeposits.EscrowAddress,
-			ethDepOracle.EthDepositRequiredConfirmations: genCfg.EthDeposits.RequiredConfirmations,
-			ethDepOracle.EthDepositChainID:               genCfg.EthDeposits.ChainID,
 		}
 	}
 
@@ -364,6 +359,19 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 
 		cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName // not abs/rooted because this might be run in a container
 
+		// oracle config
+		if i < genCfg.NValidators {
+			// validators
+			if genCfg.EthDeposits != nil && genCfg.EthDeposits[i].Enabled {
+				cfg.AppCfg.Oracles[ethDepOracle.OracleName] = map[string]string{
+					ethDepOracle.EthDepositEndpoint:              genCfg.EthDeposits[i].Endpoint,
+					ethDepOracle.EthDepositEscrowAddress:         genCfg.EthDeposits[i].EscrowAddress,
+					ethDepOracle.EthDepositRequiredConfirmations: genCfg.EthDeposits[i].RequiredConfirmations,
+					ethDepOracle.EthDepositChainID:               genCfg.EthDeposits[i].ChainID,
+				}
+			}
+		}
+
 		writeConfigFile(filepath.Join(nodeDir, config.ConfigFileName), cfg)
 	}
 
@@ -378,6 +386,7 @@ func (genCfg *TestnetGenerateConfig) applyGenesisParams(genesisCfg *config.Genes
 		genesisCfg.ChainID = genCfg.ChainID
 	}
 	genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
+	genesisCfg.ConsensusParams.Votes.VoteExpiry = genCfg.VoteExpiry
 	genesisCfg.ConsensusParams.WithoutGasCosts = genCfg.WithoutGasCosts
 	genesisCfg.ConsensusParams.WithoutNonces = genCfg.WithoutNonces
 	numAllocs := len(genCfg.Allocs)

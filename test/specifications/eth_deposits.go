@@ -172,6 +172,60 @@ func DeployDbInsufficientFundsSpecification(ctx context.Context, t *testing.T, d
 	require.Equal(t, big.NewInt(0), postDeployBalance)
 }
 
+func FundValidatorSpecification(ctx context.Context, t *testing.T, sender DeployerDsl, receiverId ed25519.PrivKey) {
+	t.Logf("Executing fund validator specification")
+
+	senderPrivKey, err := ec.HexToECDSA(senderPk)
+	require.NoError(t, err)
+	senderAddr := ec.PubkeyToAddress(senderPrivKey.PublicKey).Bytes()
+
+	// Ensure that the fee for a transfer transaction is as expected.
+	var transferPrice = big.NewInt(210_000)
+	var transferAmt = big.NewInt(1000000000000000000)
+
+	// Get funds to senders address
+	// amount := transferPrice + transferAmt
+	amt := big.NewInt(0).Add(transferPrice, transferAmt)
+	err = sender.Approve(ctx, senderPrivKey, amt)
+	require.NoError(t, err)
+
+	bal1, err := sender.AccountBalance(ctx, senderAddr)
+	require.NoError(t, err)
+
+	// deposit amount into escrow
+	err = sender.Deposit(ctx, senderPrivKey, amt)
+	require.NoError(t, err)
+
+	// Ensure that the sender account is credited with the amount on kwild
+	var bal2 *big.Int
+	require.Eventually(t, func() bool {
+		bal2, err = sender.AccountBalance(ctx, senderAddr)
+		require.NoError(t, err)
+		return bal2.Cmp(big.NewInt(0).Add(bal1, amt)) == 0
+	}, 5*time.Minute, 5*time.Second)
+
+	preValBal, err := sender.AccountBalance(ctx, receiverId)
+	require.NoError(t, err)
+
+	// Transfer transferAmt to the Validator
+	txHash, err := sender.TransferAmt(ctx, receiverId, transferAmt)
+	require.NoError(t, err, "failed to send transfer tx")
+
+	// I expect success
+	expectTxSuccess(t, sender, ctx, txHash, defaultTxQueryTimeout)()
+
+	// Check the validator account balance
+	postBal, err := sender.AccountBalance(ctx, receiverId)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(0).Add(preValBal, transferAmt), postBal)
+
+	// Check the sender account balance
+	postBal, err = sender.AccountBalance(ctx, senderAddr)
+	require.NoError(t, err)
+	expected := big.NewInt(0).Sub(bal2, big.NewInt(0).Add(transferAmt, transferPrice))
+	require.Zero(t, expected.Cmp(postBal), "Incorrect balance in the sender account after the transfer")
+}
+
 func DeployDbSuccessSpecification(ctx context.Context, t *testing.T, deployer DeployerDsl) {
 	t.Logf("Executing deposit deploy db success specification")
 
@@ -237,7 +291,6 @@ func DepositResolutionExpirySpecification(ctx context.Context, t *testing.T, dep
 	// get user balance
 	preUserBalance, err := deployer.AccountBalance(ctx, senderAddr)
 	require.NoError(t, err)
-	fmt.Println("User Balance: ", preUserBalance.String())
 
 	// node0, node1, node2, node3 account balances
 	preNodeBalances := make(map[string]*big.Int)
@@ -247,8 +300,17 @@ func DepositResolutionExpirySpecification(ctx context.Context, t *testing.T, dep
 		preNodeBalances[key] = balance
 	}
 
+	// approve 10 tokens
+	err = deployer.Approve(ctx, sender, big.NewInt(10))
+	require.NoError(t, err)
+
+	// I deposit amount into the escrow
+	err = deployer.Deposit(ctx, sender, big.NewInt(10))
+	require.NoError(t, err)
+
 	// can we get the block number? The event should have expired by block height = 3/4
-	time.Sleep(20 * time.Second)
+	// only 1 node hears and votes on this event.
+	time.Sleep(30 * time.Second)
 
 	// Check that the user balance is not updated
 	postUserBalance, err := deployer.AccountBalance(ctx, senderAddr)
@@ -271,4 +333,145 @@ func DepositResolutionExpirySpecification(ctx context.Context, t *testing.T, dep
 			require.Equal(t, preNodeBalances[key], postNodeBalances[key])
 		}
 	}
+}
+
+func DepositResolutionExpiryRefundSpecification(ctx context.Context, t *testing.T, deployer DeployerDsl, privKeys map[string]ed25519.PrivKey) {
+	t.Logf("Executing deposit resolution expiry specification")
+
+	sender, err := ec.HexToECDSA(senderPk)
+	require.NoError(t, err)
+	senderAddr := ec.PubkeyToAddress(sender.PublicKey).Bytes()
+
+	addresses := make(map[string][]byte)
+	for key := range privKeys {
+		addresses[key] = privKeys[key].PubKey().Bytes()
+	}
+
+	// get user balance
+	preUserBalance, err := deployer.AccountBalance(ctx, senderAddr)
+	require.NoError(t, err)
+
+	// node0, node1, node2, node3 account balances
+	preNodeBalances := make(map[string]*big.Int)
+	for key := range addresses {
+		balance, err := deployer.AccountBalance(ctx, addresses[key])
+		require.NoError(t, err)
+		preNodeBalances[key] = balance
+	}
+
+	// approve 10 tokens
+	err = deployer.Approve(ctx, sender, big.NewInt(10))
+	require.NoError(t, err)
+
+	// I deposit amount into the escrow
+	err = deployer.Deposit(ctx, sender, big.NewInt(10))
+	require.NoError(t, err)
+
+	// can we get the block number? The event should have expired by block height = 3/4
+	time.Sleep(30 * time.Second)
+
+	// Check that the user balance is not updated
+	postUserBalance, err := deployer.AccountBalance(ctx, senderAddr)
+	require.NoError(t, err)
+	require.Equal(t, preUserBalance, postUserBalance)
+
+	postNodeBalances := make(map[string]*big.Int)
+	for key := range addresses {
+		balance, err := deployer.AccountBalance(ctx, addresses[key])
+		require.NoError(t, err)
+		postNodeBalances[key] = balance
+	}
+
+	for key := range addresses {
+		// Check that the node0,1 issued a vote but got refunded as minthreshold for expiry refund met.
+		// Check that the node2,3,4 didn't issue any Votes, thus no tx fee lost
+		require.Equal(t, preNodeBalances[key], postNodeBalances[key])
+	}
+}
+
+func EthDepositValidatorUpdatesSpecification(ctx context.Context, t *testing.T, valDsl map[string]ValidatorOpsDsl, deployer DeployerDsl, privKeys map[string]ed25519.PrivKey) {
+	t.Logf("Executing validator updates specification")
+
+	sender, err := ec.HexToECDSA(senderPk)
+	require.NoError(t, err)
+	senderAddr := ec.PubkeyToAddress(sender.PublicKey).Bytes()
+
+	// Start the test with 6 nodes with eth deposit oracle enabled
+	// out of which 2 nodes are in byzantine mode [node0, node1]
+	// Make a Deposit and ensure that its credited to the account
+
+	// get user balance
+	bal1, err := deployer.AccountBalance(ctx, senderAddr)
+	require.NoError(t, err)
+
+	// approve 10 tokens
+	err = deployer.Approve(ctx, sender, big.NewInt(10))
+	require.NoError(t, err)
+
+	// I deposit amount into the escrow
+	err = deployer.Deposit(ctx, sender, big.NewInt(10))
+	require.NoError(t, err)
+
+	var bal2 *big.Int
+	// Check that the user balance is updated
+	require.Eventually(t, func() bool {
+		bal2, err = deployer.AccountBalance(ctx, senderAddr)
+		require.NoError(t, err)
+		return bal2.Cmp(big.NewInt(0).Add(bal1, big.NewInt(10))) == 0
+	}, 5*time.Minute, 5*time.Second)
+
+	// Node5 leaves its validator status
+	ValidatorNodeLeaveSpecification(ctx, t, valDsl["node5"])
+
+	// Make a deposit
+	err = deployer.Approve(ctx, sender, big.NewInt(10))
+	require.NoError(t, err)
+
+	err = deployer.Deposit(ctx, sender, big.NewInt(10))
+	require.NoError(t, err)
+
+	// total 5 validators and 3 listening to the deposit event
+	// 5 * 2/3 = 3.33 => required 4 validators to vote for deposit to get credited
+	// Check that the user balance is not updated
+	time.Sleep(15 * time.Second)
+	bal3, err := deployer.AccountBalance(ctx, senderAddr)
+	require.NoError(t, err)
+	require.Equal(t, bal2, bal3)
+
+	// Node5 rejoins the network as a validator
+	// And catches up with all the events it missed and votes for the observed events
+	// The last deposit should now get approved and credited to the account
+	joinerPubKey := privKeys["node5"].PubKey().Bytes()
+	ValidatorNodeJoinSpecification(ctx, t, valDsl["node5"], joinerPubKey, 5)
+	// needs 4 approvals
+	for i := 0; i < 3; i++ {
+		node := fmt.Sprintf("node%d", i)
+		ValidatorNodeApproveSpecification(ctx, t, valDsl[node], joinerPubKey, 5, 5, false)
+	}
+	ValidatorNodeApproveSpecification(ctx, t, valDsl["node3"], joinerPubKey, 5, 6, true)
+
+	// Check that the node5 became a Validator
+	CurrentValidatorsSpecification(ctx, t, valDsl["node5"], 6)
+
+	// Ensure that the previous unapproved deposits are now approved
+	// Check that the user balance is updated
+	var bal4 *big.Int
+	require.Eventually(t, func() bool {
+		bal4, err = deployer.AccountBalance(ctx, senderAddr)
+		require.NoError(t, err)
+		return bal4.Cmp(big.NewInt(0).Add(bal3, big.NewInt(10))) == 0
+	}, 5*time.Minute, 5*time.Second)
+
+	// Make one more deposit and ensure that it gets credited
+	err = deployer.Approve(ctx, sender, big.NewInt(10))
+	require.NoError(t, err)
+
+	err = deployer.Deposit(ctx, sender, big.NewInt(10))
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		bal5, err := deployer.AccountBalance(ctx, senderAddr)
+		require.NoError(t, err)
+		return bal5.Cmp(big.NewInt(0).Add(bal4, big.NewInt(10))) == 0
+	}, 5*time.Minute, 5*time.Second)
 }
