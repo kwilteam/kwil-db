@@ -15,7 +15,6 @@ import (
 
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 var remote = flag.Bool("remote", false, "test against remote node")
-var noCleanup = flag.Bool("messy", false, "do not cleanup test directories or stop the docker compose when done")
 
 // NOTE: `-parallel` is a flag that is already used by `go test`
 var parallelMode = flag.Bool("parallel-mode", false, "run tests in parallelMode mode")
@@ -33,10 +32,6 @@ func TestLocalDevSetup(t *testing.T) {
 	cfg := helper.LoadConfig()
 	cfg.DockerComposeFile = "./docker-compose-dev.yml" // use the dev compose file
 	cfg.GasEnabled = true
-
-	if *noCleanup {
-		cfg.NoCleanup = true
-	}
 
 	helper.Setup(ctx)
 	helper.WaitUntilInterrupt()
@@ -60,9 +55,6 @@ func TestKwildTransferAcceptance(t *testing.T) {
 			helper := acceptance.NewActHelper(t)
 			cfg := helper.LoadConfig()
 			cfg.GasEnabled = true
-			if *noCleanup {
-				cfg.NoCleanup = true
-			}
 			if !*remote {
 				helper.Setup(ctx)
 			}

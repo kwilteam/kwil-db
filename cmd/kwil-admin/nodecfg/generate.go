@@ -267,6 +267,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 			return fmt.Errorf("failed to merge config file %s: %w", genCfg.ConfigFile, err)
 		}
 	}
+	cfg.Logging.OutputPaths = append(cfg.Logging.OutputPaths, "kwild.log")
 
 	privateKeys := make([]cmtEd.PrivKey, nNodes)
 	for i := range privateKeys {

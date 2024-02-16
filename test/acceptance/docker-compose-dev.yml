@@ -14,6 +14,8 @@ services:
       - "40000:40000" # debugger, if build with debug dockerfile
     #env_file:
       # NOTE: docker compose by default will use `.env` file if presented
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnode}
