@@ -80,7 +80,7 @@ func Test_GroupBy(t *testing.T) {
 						Expression: &tree.ExpressionColumn{
 							Column: "a",
 						},
-						Collation: "collation",
+						Collation: tree.CollationTypeNoCase,
 					},
 				).
 				Build(),
@@ -106,7 +106,7 @@ func Test_GroupBy(t *testing.T) {
 					Expression: &tree.ExpressionColumn{
 						Column: "a",
 					},
-					Collation: "collation",
+					Collation: tree.CollationTypeNoCase,
 				}).
 				Build(),
 			wantErr: nil,
@@ -121,7 +121,7 @@ func Test_GroupBy(t *testing.T) {
 					Expression: &tree.ExpressionColumn{
 						Column: "b",
 					},
-					Collation: "collation",
+					Collation: tree.CollationTypeNoCase,
 				}).
 				Build(),
 			wantErr: aggregate.ErrHavingClauseContainsUngroupedColumn,
