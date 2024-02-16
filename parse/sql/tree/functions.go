@@ -15,6 +15,7 @@ type AnySQLFunction struct {
 
 // types of functions (like scalar, aggregate, window, etc) are extenstions of sqlFunction; this is an interface to accept any of them
 type SQLFunction interface {
+	Accepter
 	Name() string
 	String(...Expression) string
 	SetDistinct(bool)

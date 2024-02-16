@@ -88,7 +88,7 @@ func (t *TableOrSubquerySelect) ToSQL() string {
 
 	if t.Alias != "" {
 		stmt.Token.As()
-		stmt.WriteString(t.Alias)
+		stmt.WriteIdent(t.Alias)
 
 	}
 
