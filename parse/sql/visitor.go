@@ -70,21 +70,7 @@ func (v *KFSqliteVisitor) VisitCommon_table_stmt(ctx *sqlgrammar.Common_table_st
 }
 
 func getInsertType(ctx *sqlgrammar.Insert_stmtContext) tree.InsertType {
-	var insertType tree.InsertType
-	if ctx.OR_() != nil {
-		switch {
-		case ctx.REPLACE_() != nil:
-			insertType = tree.InsertTypeInsertOrReplace
-		}
-	} else {
-		if ctx.REPLACE_() != nil {
-			insertType = tree.InsertTypeReplace
-		} else {
-			insertType = tree.InsertTypeInsert
-		}
-	}
-
-	return insertType
+	return tree.InsertTypeInsert
 }
 
 func (v *KFSqliteVisitor) visitExprList(exprList []sqlgrammar.IExprContext) *tree.ExpressionList {
