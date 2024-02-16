@@ -16,6 +16,10 @@ Simple SELECTs have the following rules applied:
 
 If a simple SELECT has a GROUP BY clause, none of these rules apply, and instead it will simply order by all columns includes in the group by.
 
+If a simple SELECT is a SELECT DISTINCT, then it will order by every returned column, in the order which it appears. The reasoning for this can be found here: <https://stackoverflow.com/questions/9795660/postgresql-distinct-on-with-different-order-by>
+
+Statement cannot be both SELECT DISTINCT and contain GROUP BY
+
 ## Compound SELECTs
 
 Compound SELECTs will be ordered by each returned column, in the order they appear. For the time being, compound selects with group bys will be rejected.

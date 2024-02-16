@@ -51,6 +51,31 @@ func Test_Order(t *testing.T) {
 			want: `SELECT * FROM "users" AS "u" INNER JOIN "posts" AS "p" ON "u"."id" = "p"."user_id" ORDER BY "p"."id", "u"."id";`,
 		},
 		{
+			name: "select distinct",
+			stmt: `SELECT DISTINCT id, name FROM users;`,
+			want: `SELECT DISTINCT "id", "name" FROM "users" ORDER BY "id", "name";`,
+		},
+		{
+			name: "select distinct with join",
+			stmt: `SELECT DISTINCT u.id, p.title FROM users AS u INNER JOIN posts AS p ON u.id = p.user_id;`,
+			want: `SELECT DISTINCT "u"."id", "p"."title" FROM "users" AS "u" INNER JOIN "posts" AS "p" ON "u"."id" = "p"."user_id" ORDER BY "u"."id", "p"."title";`,
+		},
+		{
+			name: "SELECT DISTINCT with group by",
+			stmt: `SELECT DISTINCT id, name FROM users GROUP BY id;`,
+			err:  order.ErrDistinctWithGroupBy,
+		},
+		{
+			name: "select distinct with self join and aliases",
+			stmt: `SELECT DISTINCT u1.* FROM users AS u1 INNER JOIN users AS u2 ON u1.id = u2.id;`,
+			want: `SELECT DISTINCT "u1".* FROM "users" AS "u1" INNER JOIN "users" AS "u2" ON "u1"."id" = "u2"."id" ORDER BY "u1"."id", "u1"."name";`,
+		},
+		{
+			name: "select distinct * with self join and aliases",
+			stmt: `SELECT DISTINCT * FROM users AS u1 INNER JOIN users AS u2 ON u1.id = u2.id;`,
+			want: `SELECT DISTINCT * FROM "users" AS "u1" INNER JOIN "users" AS "u2" ON "u1"."id" = "u2"."id" ORDER BY "u1"."id", "u1"."name", "u2"."id", "u2"."name";`,
+		},
+		{
 			name: "select with joins and subqueries", // it should not register the subquery as a table
 			stmt: `SELECT p.id, p.title, (SELECT COUNT(*) FROM likes WHERE likes.post_id = p.id) AS total_likes
 			FROM posts AS p

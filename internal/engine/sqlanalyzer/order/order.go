@@ -111,6 +111,8 @@ func (o *orderingWalker) ExitSelectStmt(node *tree.SelectStmt) error {
 	return nil
 }
 
+var ErrDistinctWithGroupBy = fmt.Errorf("select distinct with group by not supported")
+
 // orderSimpleStatement will return the ordering required for a simple statement.
 func orderSimpleStatement(stmt *tree.SelectCore, tables []*types.Table) ([]*tree.OrderingTerm, error) {
 	// it is possible to not have any tables in a select
@@ -126,6 +128,11 @@ func orderSimpleStatement(stmt *tree.SelectCore, tables []*types.Table) ([]*tree
 	// aggregate with no group by will always return a simple row.
 
 	if stmt.GroupBy != nil && len(stmt.GroupBy.Expressions) > 0 {
+		// if it has a distinct, error as this is not allowed. We do not know how to order this.
+		if stmt.SelectType == tree.SelectTypeDistinct {
+			return nil, ErrDistinctWithGroupBy
+		}
+
 		// it has a group by, order by each of them
 		columns := make([]*tree.OrderingTerm, len(stmt.GroupBy.Expressions))
 		for i, expr := range stmt.GroupBy.Expressions {
@@ -148,28 +155,10 @@ func orderSimpleStatement(stmt *tree.SelectCore, tables []*types.Table) ([]*tree
 		return columns, nil
 	}
 
-	// we first must check if there are any aggregate functions in the result columns.
-	// if so, then all other columns must be aggregates, or else we throw an error.
-	numberOfAggregates := 0
-	for _, ret := range stmt.Columns {
-		containsAggregate, err := containsAggregateFunc(ret)
-		if err != nil {
-			return nil, fmt.Errorf("error checking for aggregate function: %w", err)
-		}
-
-		if containsAggregate {
-			numberOfAggregates++
-		}
-	}
-
-	if numberOfAggregates > 0 {
-		if numberOfAggregates != len(stmt.Columns) {
-			return nil, fmt.Errorf("all columns must be aggregates if an aggregate function is used without a group by")
-		}
-		return nil, nil // order nothing in this case
-	}
-
 	// if we reach here, there is no group by clause.
+
+	// we will now get a list of all tables that are renamed to the used aliases
+	// this allows us to search for them by their alias, and not their real name.
 	usedTables, err := utils.GetUsedTables(stmt.From.JoinClause)
 	if err != nil {
 		return nil, fmt.Errorf("error getting used tables: %w", err)
@@ -192,9 +181,34 @@ func orderSimpleStatement(stmt *tree.SelectCore, tables []*types.Table) ([]*tree
 		usedTblsFull[i] = copied
 	}
 
+	if stmt.SelectType == tree.SelectTypeDistinct {
+		return getReturnedColumnOrderingTerms(stmt.Columns, usedTblsFull)
+	}
+
 	sort.Slice(usedTblsFull, func(i, j int) bool {
 		return usedTblsFull[i].Name < usedTblsFull[j].Name
 	})
+
+	// we first must check if there are any aggregate functions in the result columns.
+	// if so, then all other columns must be aggregates, or else we throw an error.
+	numberOfAggregates := 0
+	for _, ret := range stmt.Columns {
+		containsAggregate, err := containsAggregateFunc(ret)
+		if err != nil {
+			return nil, fmt.Errorf("error checking for aggregate function: %w", err)
+		}
+
+		if containsAggregate {
+			numberOfAggregates++
+		}
+	}
+
+	if numberOfAggregates > 0 {
+		if numberOfAggregates != len(stmt.Columns) {
+			return nil, fmt.Errorf("all columns must be aggregates if an aggregate function is used without a group by")
+		}
+		return nil, nil // order nothing in this case
+	}
 
 	orderingTerms := make([]*tree.OrderingTerm, 0)
 	for _, tbl := range usedTblsFull {
@@ -285,7 +299,7 @@ func orderCompoundStatement(stmt []*tree.SelectCore, tables []*types.Table) ([]*
 	}
 
 	// we will order the first select core, and then return.
-	return getReturnedColumnOrderingTerms(stmt[0].Columns, tables), nil
+	return getReturnedColumnOrderingTerms(stmt[0].Columns, tables)
 }
 
 // containsGroupBy will return true if the select core contains a group by clause.
@@ -316,48 +330,60 @@ func containsGroupBy(stmt *tree.SelectCore) (bool, error) {
 }
 
 // getReturnedColumnOrderingTerms gets the ordering terms for the returned columns.
-// it is used to order result columns for compound select statements.
-func getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*types.Table) []*tree.OrderingTerm {
+// it is used to order result columns for compound select statements or distinct statements.
+func getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*types.Table) ([]*tree.OrderingTerm, error) {
 	terms := []*tree.OrderingTerm{}
 
 	for _, col := range resultCols {
 		switch c := col.(type) {
+		default:
+			panic(fmt.Sprintf("unexpected result column type: %T", c))
 		case *tree.ResultColumnExpression:
-			var orderingExpr tree.Expression // if aliased, we need to use the alias instead of the expression
-			if c.Alias != "" {
-				orderingExpr = &tree.ExpressionColumn{
-					Column: c.Alias,
-				}
-			} else {
-				orderingExpr = c.Expression
+			// we simply use the expression as the ordering term
+			// this works even for complex expressions, such as
+			terms = append(terms, &tree.OrderingTerm{
+				Expression: c.Expression,
+			})
+		case *tree.ResultColumnTable:
+			tbl, err := findTable(tables, c.TableName)
+			if err != nil {
+				return nil, fmt.Errorf("error finding table: %w", err)
 			}
 
-			terms = append(terms, &tree.OrderingTerm{
-				Expression: orderingExpr,
-			})
-		case *tree.ResultColumnStar, *tree.ResultColumnTable:
+			terms = append(terms, getTableOrderTerms(tbl)...)
+		case *tree.ResultColumnStar:
 			sort.Slice(tables, func(i, j int) bool {
 				return tables[i].Name < tables[j].Name
 			})
 
+			// TODO: if we have a select *, do we still want to include table names?
+
 			for _, tbl := range tables {
-
-				columns := tbl.Columns
-				sort.Slice(columns, func(i, j int) bool {
-					return columns[i].Name < columns[j].Name
-				})
-
-				for _, col := range columns {
-					terms = append(terms, &tree.OrderingTerm{
-						Expression: &tree.ExpressionColumn{
-							// intentionally leaving out "Table" here
-							// sqlite searches across compounded selects for matching columns
-							Column: col.Name,
-						},
-					})
-				}
+				terms = append(terms, getTableOrderTerms(tbl)...)
 			}
 		}
+	}
+
+	return terms, nil
+}
+
+// getTableOrderTerms returns the ordering terms for a table.
+// It is used to order result columns for compound select statements or distinct statements.
+func getTableOrderTerms(tbl *types.Table) []*tree.OrderingTerm {
+	terms := []*tree.OrderingTerm{}
+
+	columns := tbl.Columns
+	sort.Slice(columns, func(i, j int) bool {
+		return columns[i].Name < columns[j].Name
+	})
+
+	for _, col := range columns {
+		terms = append(terms, &tree.OrderingTerm{
+			Expression: &tree.ExpressionColumn{
+				Table:  tbl.Name,
+				Column: col.Name,
+			},
+		})
 	}
 
 	return terms
