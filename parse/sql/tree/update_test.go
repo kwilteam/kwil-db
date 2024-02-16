@@ -28,7 +28,6 @@ func TestUpdate_ToSQL(t *testing.T) {
 					QualifiedTableName: &tree.QualifiedTableName{
 						TableName:  "foo",
 						TableAlias: "f",
-						NotIndexed: true,
 					},
 					UpdateSetClause: []*tree.UpdateSetClause{
 						{
@@ -76,7 +75,7 @@ func TestUpdate_ToSQL(t *testing.T) {
 					},
 				},
 			},
-			wantStr: `WITH ` + mockCTE.ToSQL() + ` UPDATE OR ABORT "foo" AS "f" NOT INDEXED SET ("bar", "baz") = NOT EXISTS (SELECT "foo", "bar" FROM "foo") WHERE "foo" = $a RETURNING "foo" AS "fu";`,
+			wantStr: `WITH ` + mockCTE.ToSQL() + ` UPDATE OR ABORT "foo" AS "f" SET ("bar", "baz") = NOT EXISTS (SELECT "foo", "bar" FROM "foo") WHERE "foo" = $a RETURNING "foo" AS "fu";`,
 		},
 	}
 	for _, tt := range tests {

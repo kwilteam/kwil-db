@@ -683,14 +683,6 @@ func (v *KFSqliteVisitor) VisitQualified_table_name(ctx *sqlgrammar.Qualified_ta
 		result.TableAlias = extractSQLName(ctx.Table_alias().GetText())
 	}
 
-	if ctx.INDEXED_() != nil {
-		if ctx.NOT_() != nil {
-			result.NotIndexed = true
-		} else {
-			result.IndexedBy = extractSQLName(ctx.Index_name().GetText())
-		}
-	}
-
 	return &result
 }
 
