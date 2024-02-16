@@ -46,9 +46,6 @@ type ActTestCfg struct {
 	SchemaFile                string
 	DockerComposeFile         string
 	DockerComposeOverrideFile string
-	// NoCleanup is used to keep the test environment from being cleaned up
-	// i.e. config files, logs, containers
-	NoCleanup bool
 
 	WaitTimeout time.Duration
 	LogLevel    string
@@ -148,9 +145,6 @@ func (r *ActHelper) LoadConfig() *ActTestCfg {
 	cfg.GasEnabled, err = strconv.ParseBool(getEnv("KACT_GAS_ENABLED", "false"))
 	require.NoError(r.t, err, "invalid gasEnabled bool")
 
-	cfg.NoCleanup, err = strconv.ParseBool(getEnv("KACT_NO_CLEANUP", "false"))
-	require.NoError(r.t, err, "invalid noCleanup bool")
-
 	// value is in format of "10s" or "1m"
 	waitTimeout := getEnv("KACT_WAIT_TIMEOUT", "10s")
 	cfg.WaitTimeout, err = time.ParseDuration(waitTimeout)
@@ -176,16 +170,17 @@ func (r *ActHelper) updateEnv(k, v string) {
 
 func (r *ActHelper) generateNodeConfig() {
 	r.t.Logf("generate node config")
-	var tmpPath string
-	if r.cfg.NoCleanup {
-		var err error
-		tmpPath, err = os.MkdirTemp("", "TestKwilAct")
-		if err != nil {
-			r.t.Fatal(err)
-		}
-	} else {
-		tmpPath = r.t.TempDir() // automatically removed by testing.T.Cleanup
+	tmpPath, err := os.MkdirTemp("", "TestKwilAct")
+	if err != nil {
+		r.t.Fatal(err)
 	}
+	r.t.Cleanup(func() {
+		if r.t.Failed() {
+			r.t.Logf("Retaining data for failed test at path %v", tmpPath)
+			return
+		}
+		os.RemoveAll(tmpPath)
+	})
 
 	r.t.Logf("created test temp directory: %s", tmpPath)
 
@@ -195,7 +190,7 @@ func (r *ActHelper) generateNodeConfig() {
 	}
 	creatorIdent := hex.EncodeToString(r.cfg.CreatorSigner.Identity())
 
-	err := nodecfg.GenerateNodeConfig(&nodecfg.NodeGenerateConfig{
+	err = nodecfg.GenerateNodeConfig(&nodecfg.NodeGenerateConfig{
 		ChainID:       TestChainID,
 		BlockInterval: time.Second,
 		// InitialHeight: 0,
@@ -229,13 +224,11 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 	dc, err := compose.NewDockerCompose(composeFiles...)
 	require.NoError(r.t, err, "failed to create docker compose object for single kwild node")
 
-	if !r.cfg.NoCleanup {
-		r.t.Cleanup(func() {
-			r.t.Logf("teardown docker compose")
-			err := dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal, compose.RemoveVolumes(true))
-			require.NoErrorf(r.t, err, "failed to teardown %s", dc.Services())
-		})
-	}
+	r.t.Cleanup(func() {
+		r.t.Logf("teardown docker compose")
+		err := dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal, compose.RemoveVolumes(true))
+		require.NoErrorf(r.t, err, "failed to teardown %s", dc.Services())
+	})
 
 	// NOTE: if you run with debugger image, you need to attach to the debugger
 	// before the timeout

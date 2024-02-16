@@ -84,7 +84,7 @@ jobs:
           go build -mod=readonly ./... ./parse/... ./core/... ./test/specifications/
 
       - name: Lint
-        uses: golangci/golangci-lint-action@3cfe3a4abbb849e10058ce4af15d205b6da42804
+        uses: golangci/golangci-lint-action@v4.0.0
         with:
           install-mode: "binary"
           version: "latest"
@@ -170,6 +170,7 @@ jobs:
             git_commit=${{ github.sha }}
             version=${{ env.GIT_TAG }}
             build_time=${{ env.BUILD_TIME }}
+          #  go_race=-race
           file: ./build/package/docker/kwild.dockerfile
           push: false
           tags: kwild:latest

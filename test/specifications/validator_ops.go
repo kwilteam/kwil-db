@@ -2,7 +2,6 @@ package specifications
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -10,8 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func CurrentValidatorsSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, count int) {
@@ -30,14 +27,14 @@ func ValidatorNodeJoinSpecification(ctx context.Context, t *testing.T, netops Va
 
 	// Validator issues a Join request
 	rec, err := netops.ValidatorNodeJoin(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Ensure that the Tx is mined.
 	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)()
 
 	// Get Request status, #approvals = 0, #board = valCount
 	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, valCount, len(joinStatus.Board))
 	assert.Equal(t, 0, approvalCount(joinStatus))
 
@@ -64,7 +61,7 @@ func ValidatorNodeRemoveSpecificationV4R1(ctx context.Context, t *testing.T, n0,
 
 	// node 0 sends remove tx targeting node 3
 	rec, err := n0.ValidatorNodeRemove(ctx, target)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)()
 
@@ -114,18 +111,18 @@ func ValidatorNodeApproveSpecification(ctx context.Context, t *testing.T, netops
 
 	// Get current validator count, should be equal to preCnt
 	vals, err := netops.ValidatorsList(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, preCnt, len(vals))
 
 	// Get Join Request status, #board = preCnt
 	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, preCnt, len(joinStatus.Board))
 	preApprovalCnt := approvalCount(joinStatus)
 
 	// Approval Request
 	rec, err := netops.ValidatorNodeApprove(ctx, joiner)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Ensure that the Tx is mined.
 	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)()
@@ -140,7 +137,7 @@ func ValidatorNodeApproveSpecification(ctx context.Context, t *testing.T, netops
 		assert.Error(t, err)
 		assert.Nil(t, joinStatus)
 	} else {
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		postApprovalCnt := approvalCount(joinStatus)
 		assert.Equal(t, preApprovalCnt+1, postApprovalCnt)
 	}
@@ -161,7 +158,7 @@ func ValidatorNodeLeaveSpecification(ctx context.Context, t *testing.T, netops V
 
 	// Validator issues a Leave request
 	rec, err := netops.ValidatorNodeLeave(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Ensure that the Validator Leave Tx is mined.
 	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)()
@@ -177,7 +174,7 @@ func approvalCount(joinStatus *types.JoinRequest) int {
 	cnt := 0
 	for _, vote := range joinStatus.Approved {
 		if vote {
-			cnt += 1
+			cnt++
 		}
 	}
 	return cnt
@@ -195,7 +192,7 @@ func ValidatorJoinExpirySpecification(ctx context.Context, t *testing.T, netops 
 
 	// Get Request status, #approvals = 0
 	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 0, approvalCount(joinStatus))
 
 	// Wait for the join request to expire
@@ -204,6 +201,6 @@ func ValidatorJoinExpirySpecification(ctx context.Context, t *testing.T, netops 
 
 	// join request should be expired and removed
 	joinStatus, err = netops.ValidatorJoinStatus(ctx, joiner)
-	errors.Is(err, status.Error(codes.NotFound, "no active join request"))
+	assert.Equal(t, err.Error(), "no active join request for that validator")
 	assert.Nil(t, joinStatus)
 }
