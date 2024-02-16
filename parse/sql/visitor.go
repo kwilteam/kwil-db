@@ -832,10 +832,6 @@ func (v *KFSqliteVisitor) VisitJoin_operator(ctx *sqlgrammar.Join_operatorContex
 		JoinType: tree.JoinTypeJoin,
 	}
 
-	if ctx.NATURAL_() != nil {
-		jp.Natural = true
-	}
-
 	if ctx.INNER_() != nil {
 		jp.JoinType = tree.JoinTypeInner
 		return &jp

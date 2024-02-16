@@ -431,7 +431,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 									Joins: []*tree.JoinPredicate{
 										{
 											JoinOperator: &tree.JoinOperator{
-												Natural:  false,
 												JoinType: tree.JoinTypeJoin,
 												Outer:    false,
 											},
