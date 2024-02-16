@@ -420,35 +420,6 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			wantPanic: true,
 		},
 		{
-			name: "string compare with escape and GLOB operator",
-			fields: &tree.ExpressionStringCompare{
-				Left: &tree.ExpressionColumn{
-					Column: "foo",
-				},
-				Operator: tree.StringOperatorGlob,
-				Right: &tree.ExpressionLiteral{
-					Value: "'bar'",
-				},
-				Escape: &tree.ExpressionLiteral{
-					Value: "'baz'",
-				},
-			},
-			wantPanic: true,
-		},
-		{
-			name: "string compare without escape and NOT GLOB operator",
-			fields: &tree.ExpressionStringCompare{
-				Left: &tree.ExpressionColumn{
-					Column: "foo",
-				},
-				Operator: tree.StringOperatorNotGlob,
-				Right: &tree.ExpressionLiteral{
-					Value: "'bar'",
-				},
-			},
-			want: `"foo" NOT GLOB 'bar'`,
-		},
-		{
 			name: "IsNull",
 			fields: &tree.ExpressionIsNull{
 				Expression: &tree.ExpressionColumn{

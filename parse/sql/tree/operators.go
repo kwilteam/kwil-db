@@ -93,14 +93,8 @@ func (l LogicalOperator) Valid() error {
 type StringOperator string
 
 const (
-	StringOperatorLike      StringOperator = "LIKE"
-	StringOperatorNotLike   StringOperator = "NOT LIKE"
-	StringOperatorGlob      StringOperator = "GLOB"
-	StringOperatorNotGlob   StringOperator = "NOT GLOB"
-	StringOperatorRegexp    StringOperator = "REGEXP"
-	StringOperatorNotRegexp StringOperator = "NOT REGEXP"
-	StringOperatorMatch     StringOperator = "MATCH"
-	StringOperatorNotMatch  StringOperator = "NOT MATCH"
+	StringOperatorLike    StringOperator = "LIKE"
+	StringOperatorNotLike StringOperator = "NOT LIKE"
 )
 
 func (s StringOperator) binary() {}
@@ -109,7 +103,7 @@ func (s StringOperator) String() string {
 }
 func (s StringOperator) Valid() error {
 	switch s {
-	case StringOperatorLike, StringOperatorNotLike, StringOperatorGlob, StringOperatorNotGlob, StringOperatorRegexp, StringOperatorNotRegexp, StringOperatorMatch, StringOperatorNotMatch:
+	case StringOperatorLike, StringOperatorNotLike:
 		return nil
 	default:
 		return fmt.Errorf("invalid string operator: %s", s)

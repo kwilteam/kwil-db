@@ -405,36 +405,6 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 			expr.Escape = v.visitExpr(ctx.Expr(2))
 		}
 		return expr
-	case ctx.REGEXP_() != nil:
-		expr := &tree.ExpressionStringCompare{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Operator: tree.StringOperatorRegexp,
-			Right:    v.visitExpr(ctx.Expr(1)),
-		}
-		if ctx.NOT_() != nil {
-			expr.Operator = tree.StringOperatorNotRegexp
-		}
-		return expr
-	case ctx.MATCH_() != nil:
-		expr := &tree.ExpressionStringCompare{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Operator: tree.StringOperatorMatch,
-			Right:    v.visitExpr(ctx.Expr(1)),
-		}
-		if ctx.NOT_() != nil {
-			expr.Operator = tree.StringOperatorNotMatch
-		}
-		return expr
-	case ctx.GLOB_() != nil:
-		expr := &tree.ExpressionStringCompare{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Operator: tree.StringOperatorGlob,
-			Right:    v.visitExpr(ctx.Expr(1)),
-		}
-		if ctx.NOT_() != nil {
-			expr.Operator = tree.StringOperatorNotGlob
-		}
-		return expr
 	case ctx.BETWEEN_() != nil:
 		expr := &tree.ExpressionBetween{
 			Expression: v.visitExpr(ctx.Expr(0)),
@@ -679,21 +649,6 @@ func (v *KFSqliteVisitor) VisitUpdate_stmt(ctx *sqlgrammar.Update_stmtContext) i
 
 	if ctx.Common_table_stmt() != nil {
 		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
-	}
-
-	if ctx.OR_() != nil {
-		switch {
-		case ctx.ROLLBACK_() != nil:
-			updateStmt.Or = tree.UpdateOrRollback
-		case ctx.ABORT_() != nil:
-			updateStmt.Or = tree.UpdateOrAbort
-		case ctx.REPLACE_() != nil:
-			updateStmt.Or = tree.UpdateOrReplace
-		case ctx.FAIL_() != nil:
-			updateStmt.Or = tree.UpdateOrFail
-		case ctx.IGNORE_() != nil:
-			updateStmt.Or = tree.UpdateOrIgnore
-		}
 	}
 
 	updateStmt.QualifiedTableName = v.Visit(ctx.Qualified_table_name()).(*tree.QualifiedTableName)
