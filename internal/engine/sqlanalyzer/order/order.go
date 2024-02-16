@@ -341,6 +341,7 @@ func getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*ty
 		case *tree.ResultColumnExpression:
 			// we simply use the expression as the ordering term
 			// this works even for complex expressions, such as
+			// "SELECT sum(a%4/(b+2)) FROM table"
 			terms = append(terms, &tree.OrderingTerm{
 				Expression: c.Expression,
 			})
@@ -355,8 +356,6 @@ func getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*ty
 			sort.Slice(tables, func(i, j int) bool {
 				return tables[i].Name < tables[j].Name
 			})
-
-			// TODO: if we have a select *, do we still want to include table names?
 
 			for _, tbl := range tables {
 				terms = append(terms, getTableOrderTerms(tbl)...)
