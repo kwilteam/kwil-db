@@ -414,10 +414,7 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 			return nil, err
 		}
 
-		// @brennan: commenting out the named param analyzer and schema walker
-		// I am trying my own implementation trying to make things simpler
-		// This involves the normal numbered param walker.
-		// I don't think schema walker is not necessary for inline expressions, since
+		// The schema walker is not necessary for inline expressions, since
 		// we do not support table references in inline expressions.
 		accept := sqlanalyzer.NewAcceptRecoverer(expr)
 		paramVisitor := parameters.NewParametersVisitor()
@@ -425,18 +422,6 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error replacing parameters: %w", err)
 		}
-
-		// namedParamVisitor := parameters.NewNamedParametersVisitor()
-		// err = accept.Accept(namedParamVisitor)
-		// if err != nil {
-		// 	return nil, fmt.Errorf("error replacing named parameters: %w", err)
-		// }
-		// // Is the schema walker necessary too? Yes, if any of these action/extension
-		// // call argument expressions reference a table column...
-		// err = accept.Accept(schema.NewSchemaWalker(pgSchemaName))
-		// if err != nil {
-		// 	return nil, fmt.Errorf("error applying schema rules: %w", err)
-		// }
 
 		// SELECT expr;  -- prepare new value in receivers for subsequent
 		// statements This query needs to be run in "simple" execution mode
