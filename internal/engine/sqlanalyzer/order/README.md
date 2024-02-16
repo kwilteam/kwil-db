@@ -1,11 +1,28 @@
-# Kwil Default Ordering
+# Ordering
 
-To guarantee determinism, Kwil has a default ordering that can be used for selects.  The default ordering rules are as follows:
+To enforce guaranteed ordering, we enforce default ordering rules. Statements are broken down into their `*tree.SelectStmt` structs,
+including nested statements (in the case of CTEs or subqueries).
 
-- Each primary key column FOR EACH TABLE JOINED is ordered in ascending order
-- Columns from all used tables are ordered alphabetically (first by table name, then by column name)
-- Primary keys are given precedence alphabetically (e.g. column "age" will be ordered before column "name")
-- User provided ordering is given precedence over default ordering
-- If the user orders a primary key column, it will override the default ordering for that column
-- If the query is a compound select, then all of the returned terms are ordered, instead of the primary keys.
-The returned terms are ordered in the order that they are passed
+Each `*tree.SelectStmt` is categorized as either being simple or compound. A compound is a SELECT that uses a compound operator,
+such as UNION. A simple SELECT is a select that does not have any compound operator.
+
+## Simple SELECTs
+
+Simple SELECTs have the following rules applied:
+
+- Each primary key column FOR EACH TABLE JOINED is ordered in ascending order. Table aliases will be ordered instead of name, if used.
+- Primary keys from all used tables are ordered alphabetically (first by table name, then by column name) Primary keys are given precedence alphabetically (e.g. column "age" will be ordered before column "name")
+- User provided ordering is given precedence over default ordering, and will therefore appear first in the statement.
+
+If a simple SELECT has a GROUP BY clause, none of these rules apply, and instead it will simply order by all columns includes in the group by.
+
+If a simple SELECT is a SELECT DISTINCT, then it will order by every returned column, in the order which it appears. The reasoning for this can be found here: <https://stackoverflow.com/questions/9795660/postgresql-distinct-on-with-different-order-by>
+
+Statement cannot be both SELECT DISTINCT and contain GROUP BY
+
+## Compound SELECTs
+
+Compound SELECTs will be ordered by each returned column, in the order they appear. For the time being, compound selects with group bys will be rejected.
+This is a remnant of a restriction imposed by SQLite's relatively rudimentary referencing, where it cannot order table aliases in a compound select.
+If we wish to support GROUP BYs in compound selects in the future, we will need to dig deeper on Postgres's referencing. Since group bys in compounds are not
+very common statements, we have decided to not support them for now.
