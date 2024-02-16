@@ -796,10 +796,6 @@ func (v *KFSqliteVisitor) VisitLimit_stmt(ctx *sqlgrammar.Limit_stmtContext) int
 		result.Offset = v.Visit(ctx.Expr(1)).(tree.Expression)
 	}
 
-	if ctx.COMMA() != nil {
-		result.SecondExpression = v.Visit(ctx.Expr(1)).(tree.Expression)
-	}
-
 	return &result
 }
 
