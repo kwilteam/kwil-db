@@ -78,6 +78,8 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 
 			// Create a new database and verify that the database exists on other nodes
 			specifications.DatabaseDeploySpecification(ctx, t, node0Driver)
+			// TODO: wait for node 1 and 2 to hit whatever height 0 is at
+			time.Sleep(2 * time.Second)
 			specifications.DatabaseVerifySpecification(ctx, t, node1Driver, true)
 			specifications.DatabaseVerifySpecification(ctx, t, node2Driver, true)
 
@@ -143,7 +145,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 
 	ctx := context.Background()
 
-	const expiryBlocks = 10
+	const expiryBlocks = 20
 	const blockInterval = time.Second
 	const numVals, numNonVals = 3, 1
 	opts := []integration.HelperOpt{
@@ -154,7 +156,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 		integration.WithGas(), // must give the joining node some gas too
 	}
 
-	expiryWait := 2 * expiryBlocks * blockInterval
+	const expiryWait = 3 * expiryBlocks * blockInterval / 2
 
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
@@ -190,6 +192,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			 - Consensus reached, Node3 is a Validator
 			*/
 			specifications.ValidatorNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
+			time.Sleep(2 * time.Second)
 			// Node 0,1 approves
 			specifications.ValidatorNodeApproveSpecification(ctx, t, node0Driver, joinerPubKey, 3, 3, false)
 			specifications.ValidatorNodeApproveSpecification(ctx, t, node1Driver, joinerPubKey, 3, 4, true)
@@ -206,6 +209,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			 Rejoin: (same as join process)
 			*/
 			specifications.ValidatorNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
+			time.Sleep(2 * time.Second)
 			// Node 0, 1 approves
 			specifications.ValidatorNodeApproveSpecification(ctx, t, node0Driver, joinerPubKey, 3, 3, false)
 			specifications.ValidatorNodeApproveSpecification(ctx, t, node1Driver, joinerPubKey, 3, 4, true)

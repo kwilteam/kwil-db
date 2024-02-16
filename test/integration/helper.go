@@ -433,7 +433,18 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 // 4. Generate node configuration files
 // 5. Run docker-compose with the given services
 func (r *IntHelper) Setup(ctx context.Context, services []string) {
-	tmpDir := r.t.TempDir()
+	tmpDir, err := os.MkdirTemp("", "TestKwilInt")
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	r.t.Cleanup(func() {
+		if r.t.Failed() {
+			r.t.Logf("Retaining data for failed test at path %v", tmpDir)
+			return
+		}
+		os.RemoveAll(tmpDir)
+	})
+
 	r.t.Logf("create test directory: %s", tmpDir)
 
 	r.prepareDockerCompose(ctx, tmpDir)
