@@ -10,13 +10,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
-// type Dataset interface {
-// 	Call(caller *ProcedureContext, method string, inputs []any) ([]any, error)
-// 	Execute(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error)
-// 	Query(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error)
-// 	Schema() *types.Schema
-// }
-
 // Dataset is a deployed database schema.
 // It has a schema, procedures that are ready to be called, and can execute statements.
 type Dataset interface {

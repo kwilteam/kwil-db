@@ -50,9 +50,9 @@ func (p *ProcedureContext) SetValue(key string, value any) {
 	p.values[strings.ToLower(key)] = value
 }
 
-// Values copies the values from the scope into a map.
-// It will also include contextual variables, such as the caller.
-// If a context variable has the same name as a scope variable, the scope variable will be overwritten.
+// Values copies the values from the scope into a map. It will also include
+// contextual variables, such as the caller. If a context variable has the same
+// name as a scope variable, the scope variable will be overwritten.
 func (p *ProcedureContext) Values() map[string]any {
 	values := make(map[string]any)
 	for k, v := range p.values {

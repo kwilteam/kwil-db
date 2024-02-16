@@ -329,11 +329,10 @@ func (db *DB) commit(ctx context.Context) error {
 	if db.tx == nil {
 		return errors.New("no tx exists")
 	}
-	if db.txid == "" {
+	if db.txid == "" { // NOTE: we could consider doing a regular commit if not using prepared, but for now we that flow
 		return errors.New("transaction not yet prepared")
 	}
 
-	// defer db.tx.Rollback(ctx) // yes, safe even on non-error Commit!
 	defer func() {
 		if db.tx == nil {
 			return
@@ -351,7 +350,12 @@ func (db *DB) commit(ctx context.Context) error {
 		return fmt.Errorf("COMMIT PREPARED failed: %v", err)
 	}
 
+	// Success, the defer should not try to rollback, and we should forget about
+	// this prepared transaction's name, otherwise a future tx rollback prior to
+	// prepare will try to rollback this old prepared txn.
 	db.tx = nil
+	db.txid = ""
+
 	return nil
 }
 
@@ -366,15 +370,19 @@ func (db *DB) rollback(ctx context.Context) error {
 	}
 
 	defer func() {
-		db.tx.Rollback(ctx)
 		db.tx = nil
 		db.txid = ""
 	}()
 
+	// If precommit not yet done, do a regular rollback.
 	if db.txid == "" {
+		db.tx.Rollback(ctx)
 		return nil
 	}
 
+	// With precommit already done, rollback the prepared transaction, and do
+	// not do the regular rollback, which is a no-op that emits a warning
+	// notice: "WARNING:  there is no transaction in progress".
 	sqlRollback := fmt.Sprintf(`ROLLBACK PREPARED '%s'`, db.txid)
 	if _, err := db.tx.Exec(ctx, sqlRollback); err != nil {
 		return fmt.Errorf("ROLLBACK PREPARED failed: %v", err)
