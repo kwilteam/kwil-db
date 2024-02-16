@@ -11,6 +11,8 @@ services:
       - "26657"
     #env_file:
       # NOTE: docker compose by default will use `.env` file if presented
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node0
@@ -68,6 +70,8 @@ services:
       - "50051"
       - "26656"
       - "26657"
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node1
@@ -125,6 +129,8 @@ services:
       - "50051"
       - "26656"
       - "26657"
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node2
@@ -185,6 +191,8 @@ services:
       - "50051"
       - "26656"
       - "26657"
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node3
@@ -242,6 +250,8 @@ services:
       - "50051"
       - "26656"
       - "26657"
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node4
@@ -299,6 +309,8 @@ services:
       - "50051"
       - "26656"
       - "26657"
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node5

@@ -157,7 +157,7 @@ tasks:
     cmds:
       - task: dev:up:nb
 
-  dev:up:nb: # run `task dev:up:nb -- -messy` if you don't want cleanup
+  dev:up:nb:
     desc: Start the dev environment without rebuilding docker image
     env:
       # NOTE: this timeout should be long enough to attach to debugger
@@ -196,7 +196,6 @@ tasks:
   # e.g.
   # - task test:act:nb -- -remote
   # - task test:act:nb -- -drivers grpc
-  # - task test:act:nb -- -messy
   # - task test:act:nb -- -parallel-mode
   test:act:nb:
     desc: Run acceptance tests without building docker image
