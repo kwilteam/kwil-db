@@ -319,21 +319,6 @@ func genSimpleUpdateTree(qt *tree.QualifiedTableName, column, value string) *tre
 	}
 }
 
-func genSimpleUpdateOrTree(qt *tree.QualifiedTableName, uo tree.UpdateOr, column, value string) *tree.Update {
-	return &tree.Update{
-		UpdateStmt: &tree.UpdateStmt{
-			Or:                 uo,
-			QualifiedTableName: qt,
-			UpdateSetClause: []*tree.UpdateSetClause{
-				{
-					Columns:    []string{column},
-					Expression: genLiteralExpression(value),
-				},
-			},
-		},
-	}
-}
-
 func TestParseRawSQL_syntax_valid(t *testing.T) {
 	tests := []struct {
 		name   string
