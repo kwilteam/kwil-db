@@ -238,6 +238,7 @@ type ExpressionFunction struct {
 func (e *ExpressionFunction) Accept(w Walker) error {
 	return run(
 		w.EnterExpressionFunction(e),
+		accept(w, e.Function),
 		acceptMany(w, e.Inputs),
 		w.ExitExpressionFunction(e),
 	)
