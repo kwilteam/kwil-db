@@ -225,7 +225,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	res := &abciTypes.ResponseFinalizeBlock{}
 
-	// BeginBlock was this part
 	err := a.txApp.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx commit failed: %w", err)
@@ -255,12 +254,10 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	addr := proposerAddrToString(req.ProposerAddress)
 	proposerPubKey, ok := a.valAddrToKey[addr]
 	if !ok {
-		a.log.Warn("received block proposal from unknown validator", zap.String("addr", addr))
 		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to address %v", addr)
 	}
 
 	for _, tx := range req.Txs {
-		// DeliverTx was the part in this loop.
 		decoded := &transactions.Transaction{}
 		err := decoded.UnmarshalBinary(tx)
 		if err != nil {
@@ -287,7 +284,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		res.TxResults = append(res.TxResults, abciRes)
 	}
 
-	// EndBlock was this part
 	res.ConsensusParamUpdates = &tendermintTypes.ConsensusParams{ // why are we "updating" these on every block? Should be nil for no update.
 		// we can include evidence in here for malicious actors, but this is not important this release
 		Version: &tendermintTypes.VersionParams{
@@ -306,9 +302,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 	}
 
-	// TODO: some of this commit logic would actually go in Commit, but we need
-	// to reconcile some issues with our idempotent commit process first.
-	// while we have idempotent commits, it is ok to have this here.
 	newAppHash, validatorUpdates, err := a.txApp.Finalize(ctx, req.Height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to finalize transaction app: %w", err)
@@ -339,6 +332,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	return res, nil
 }
 
+// Commit persists the state changes. This is called under mempool lock in
+// cometbft, unlike FinalizeBlock.
 func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abciTypes.ResponseCommit, error) {
 	err := a.txApp.Commit(ctx)
 	if err != nil {
@@ -369,7 +364,7 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 }
 
 // Info is part of the Info/Query connection.
-func (a *AbciApp) Info(ctx context.Context, req *abciTypes.RequestInfo) (*abciTypes.ResponseInfo, error) {
+func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciTypes.ResponseInfo, error) {
 	// Load the current validator set from our store.
 	vals, err := a.txApp.GetValidators(ctx)
 	if err != nil {
@@ -446,7 +441,7 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 		a.valAddrToKey[addr] = pk
 	}
 
-	if err := a.txApp.GenesisInit(ctx, vldtrs, genesisAllocs, 0); err != nil {
+	if err := a.txApp.GenesisInit(ctx, vldtrs, genesisAllocs, req.InitialHeight); err != nil {
 		return nil, fmt.Errorf("txApp.GenesisInit failed: %w", err)
 	}
 
@@ -709,7 +704,7 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		return nil, fmt.Errorf("failed to get proposer transactions: %w", err)
 	}
 
-	proposerTxBts := make([][]byte, 0)
+	proposerTxBts := make([][]byte, 0, len(proposerTxs))
 	for _, tx := range proposerTxs {
 		bts, err := tx.MarshalBinary()
 		if err != nil {
@@ -806,8 +801,8 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 	return &abciTypes.ResponseQuery{}, nil
 }
 
-// updateAppHash updates the app hash with the given app hash.
-// It persists the app hash to the metadata store.
+// createNewAppHash updates the app hash by combining the previous app hash with
+// the provided bytes. It persists the app hash to the metadata store.
 func (a *AbciApp) createNewAppHash(ctx context.Context, addition []byte) ([]byte, error) {
 	oldHash, err := a.metadataStore.GetAppHash(ctx)
 	if err != nil {

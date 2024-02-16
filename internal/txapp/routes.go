@@ -229,7 +229,7 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
-	for i := range action.Arguments {
+	for i := range args {
 		_, err = router.Engine.Execute(ctx.Ctx, tx2, &engineTypes.ExecutionData{
 			Dataset:   action.DBID,
 			Procedure: action.Action,
@@ -255,8 +255,6 @@ func (e *executeActionRoute) Price(ctx context.Context, router *TxApp, tx *trans
 }
 
 type transferRoute struct{}
-
-var bigZero = big.NewInt(0)
 
 func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
@@ -289,7 +287,7 @@ func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.T
 
 	// Negative send amounts should be blocked at various levels, so we should
 	// never get this, but be extra defensive since we cannot allow thievery.
-	if bigAmt.Cmp(bigZero) < 0 {
+	if bigAmt.Sign() < 0 {
 		return txRes(spend, transactions.CodeInvalidAmount, fmt.Errorf("invalid transfer amount: %s", transfer.Amount))
 	}
 
@@ -460,7 +458,7 @@ func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transac
 }
 
 func (v *validatorRemoveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
-	return bigZero, nil
+	return big.NewInt(100_000), nil
 }
 
 type validatorLeaveRoute struct{}
@@ -599,8 +597,6 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 }
 
 func (v *validatorVoteIDsRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
-	// Check if gas costs are enabled
-
 	// VoteID pricing is based on the number of vote IDs.
 	ids := &transactions.ValidatorVoteIDs{}
 	err := ids.UnmarshalBinary(tx.Body.Payload)
@@ -687,8 +683,6 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	return txRes(spend, transactions.CodeOk, nil)
 }
 func (v *validatorVoteBodiesRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
-	// Check if gas costs are enabled
-
 	// VoteBody pricing is based on the size of the vote bodies of all the events in the tx payload.
 	votes := &transactions.ValidatorVoteBodies{}
 	err := votes.UnmarshalBinary(tx.Body.Payload)
@@ -697,7 +691,6 @@ func (v *validatorVoteBodiesRoute) Price(ctx context.Context, router *TxApp, tx 
 	}
 
 	var totalSize int64
-
 	for _, event := range votes.Events {
 		totalSize += int64(len(event.Body))
 	}
