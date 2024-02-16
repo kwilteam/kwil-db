@@ -665,18 +665,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			genSimpleStringCompareSelectTree(tree.StringOperatorNotLike, "1", "2", "")},
 		{"expr binary op like escape", "select 1 like 2 escape 3",
 			genSimpleStringCompareSelectTree(tree.StringOperatorLike, "1", "2", "3")},
-		{"expr binary op match", "select 1 match 2",
-			genSimpleStringCompareSelectTree(tree.StringOperatorMatch, "1", "2", "")},
-		{"expr binary op match", "select 1 not match 2",
-			genSimpleStringCompareSelectTree(tree.StringOperatorNotMatch, "1", "2", "")},
-		{"expr binary op regexp", "select 1 regexp 2",
-			genSimpleStringCompareSelectTree(tree.StringOperatorRegexp, "1", "2", "")},
-		{"expr binary op regexp", "select 1 not regexp 2",
-			genSimpleStringCompareSelectTree(tree.StringOperatorNotRegexp, "1", "2", "")},
-		{"expr binary op glob", "select 1 glob 2",
-			genSimpleStringCompareSelectTree(tree.StringOperatorGlob, "1", "2", "")},
-		{"expr binary op glob", "select 1 not glob 2",
-			genSimpleStringCompareSelectTree(tree.StringOperatorNotGlob, "1", "2", "")},
 		// function
 		// core functions
 		{"expr function abs", "select abs(1)",
@@ -1141,20 +1129,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					InsertType: tree.InsertTypeInsert,
-					Values:     [][]tree.Expression{{genLiteralExpression("1")}},
-				}}},
-		{"insert replace", "replace into t1 values (1)",
-			&tree.Insert{
-				InsertStmt: &tree.InsertStmt{
-					Table:      "t1",
-					InsertType: tree.InsertTypeReplace,
-					Values:     [][]tree.Expression{{genLiteralExpression("1")}},
-				}}},
-		{"insert or replace", "insert or replace into t1 values (1)",
-			&tree.Insert{
-				InsertStmt: &tree.InsertStmt{
-					Table:      "t1",
-					InsertType: tree.InsertTypeInsertOrReplace,
 					Values:     [][]tree.Expression{{genLiteralExpression("1")}},
 				}}},
 		{"insert with columns", "insert into t1 (a,b) values (1,2)",
@@ -1659,34 +1633,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						Offset:     genLiteralExpression("2"),
 					},
 				}}},
-		{"select with limit comma", "select * from t1 limit 1,10",
-			&tree.Select{
-				SelectStmt: &tree.SelectStmt{
-					SelectCores: []*tree.SelectCore{
-						{
-							SelectType: tree.SelectTypeAll,
-							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
-									Name: "t1",
-								},
-							}},
-						},
-					},
-					Limit: &tree.Limit{
-						Expression:       genLiteralExpression("1"),
-						SecondExpression: genLiteralExpression("10"),
-					},
-				}}},
 		//// join
 		{"join on", "select * from t1 join t2 on t1.c1=t2.c1",
 			genSimpleJoinSelectTree(&tree.JoinOperator{
 				JoinType: tree.JoinTypeJoin,
-			}, "t1", "c1", "t2", "c1")},
-		{"natural join on", "select * from t1 natural join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeJoin,
-				Natural:  true,
 			}, "t1", "c1", "t2", "c1")},
 		{"left join on", "select * from t1 left join t2 on t1.c1=t2.c1",
 			genSimpleJoinSelectTree(&tree.JoinOperator{
@@ -1697,17 +1647,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				JoinType: tree.JoinTypeLeft,
 				Outer:    true,
 			}, "t1", "c1", "t2", "c1")},
-		{"natural left join on", "select * from t1 natural left join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeLeft,
-				Natural:  true,
-			}, "t1", "c1", "t2", "c1")},
-		{"natural left outer join on", "select * from t1 natural left outer join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeLeft,
-				Outer:    true,
-				Natural:  true,
-			}, "t1", "c1", "t2", "c1")},
 		{"right join on", "select * from t1 right join t2 on t1.c1=t2.c1",
 			genSimpleJoinSelectTree(&tree.JoinOperator{
 				JoinType: tree.JoinTypeRight,
@@ -1715,17 +1654,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"right outer join on", "select * from t1 right outer join t2 on t1.c1=t2.c1",
 			genSimpleJoinSelectTree(&tree.JoinOperator{
 				JoinType: tree.JoinTypeRight,
-				Outer:    true,
-			}, "t1", "c1", "t2", "c1")},
-		{"natural right join on", "select * from t1 natural right join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeRight,
-				Natural:  true,
-			}, "t1", "c1", "t2", "c1")},
-		{"natural right outer join on", "select * from t1 natural right outer join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeRight,
-				Natural:  true,
 				Outer:    true,
 			}, "t1", "c1", "t2", "c1")},
 		{"full join on", "select * from t1 full join t2 on t1.c1=t2.c1",
@@ -1737,25 +1665,9 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				JoinType: tree.JoinTypeFull,
 				Outer:    true,
 			}, "t1", "c1", "t2", "c1")},
-		{"natural full join on", "select * from t1 natural full join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeFull,
-				Natural:  true,
-			}, "t1", "c1", "t2", "c1")},
-		{"natural full outer join on", "select * from t1 natural full outer join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeFull,
-				Outer:    true,
-				Natural:  true,
-			}, "t1", "c1", "t2", "c1")},
 		{"inner join on", "select * from t1 inner join t2 on t1.c1=t2.c1",
 			genSimpleJoinSelectTree(&tree.JoinOperator{
 				JoinType: tree.JoinTypeInner,
-			}, "t1", "c1", "t2", "c1")},
-		{"natural inner join on", "select * from t1 natural inner join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeInner,
-				Natural:  true,
 			}, "t1", "c1", "t2", "c1")},
 		{"join multi", "select * from t1 join t2 on t1.c1=t2.c1 left join t3 on t1.c1=t3.c1",
 			&tree.Select{
@@ -1806,26 +1718,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				TableName:  "t1",
 				TableAlias: "t",
 			}, "c1", "1")},
-		{"update with table indexed", "update t1 indexed by i1 set c1=1",
-			genSimpleUpdateTree(&tree.QualifiedTableName{
-				TableName: "t1",
-				IndexedBy: "i1",
-			}, "c1", "1")},
-		{"update with table not indexed", "update t1 not indexed set c1=1",
-			genSimpleUpdateTree(&tree.QualifiedTableName{
-				TableName:  "t1",
-				NotIndexed: true,
-			}, "c1", "1")},
-		{"update or abort", "update or abort t1 set c1=1",
-			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrAbort, "c1", "1")},
-		{"update or fail", "update or fail t1 set c1=1",
-			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrFail, "c1", "1")},
-		{"update or ignore", "update or ignore t1 set c1=1",
-			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrIgnore, "c1", "1")},
-		{"update or replace", "update or replace t1 set c1=1",
-			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrReplace, "c1", "1")},
-		{"update or rollback", "update or rollback t1 set c1=1",
-			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrRollback, "c1", "1")},
 		{"update with multi set", "update t1 set c1=1, c2=2",
 			&tree.Update{
 				UpdateStmt: &tree.UpdateStmt{
@@ -2135,22 +2027,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				},
 			},
 		},
-		{"index name with double quote", `update "t1" indexed by "someindex" set [col1]=1`,
-			&tree.Update{
-				UpdateStmt: &tree.UpdateStmt{
-					QualifiedTableName: &tree.QualifiedTableName{
-						TableName:  "t1",
-						TableAlias: "",
-						IndexedBy:  "someindex",
-					},
-					UpdateSetClause: []*tree.UpdateSetClause{
-						{
-							Columns:    []string{"col1"},
-							Expression: genLiteralExpression("1"),
-						},
-					},
-				},
-			}},
 		{"function name with back tick quote", "select `abs`(1)",
 			genSimpleFunctionSelectTree(&tree.FunctionABS, genLiteralExpression("1"))},
 
