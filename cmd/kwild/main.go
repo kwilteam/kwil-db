@@ -20,7 +20,6 @@ import (
 
 	_ "github.com/kwilteam/kwil-db/extensions" // a base location where all extensions can be registered
 	_ "github.com/kwilteam/kwil-db/extensions/auth"
-	_ "github.com/kwilteam/kwil-db/internal/oracles/eth-deposit-oracle"
 )
 
 var (

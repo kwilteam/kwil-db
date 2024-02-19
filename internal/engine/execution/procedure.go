@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/common"
+	sql "github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/conv"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
-	"github.com/kwilteam/kwil-db/internal/engine/types"
-	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	actparser "github.com/kwilteam/kwil-db/parse/action"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
@@ -26,7 +27,7 @@ var (
 // instruction is an instruction that can be executed.
 // It is used to define the behavior of a procedure.
 type instruction interface { // i.e. dmlStmt, callMethod, or instructionFunc
-	execute(scope *ProcedureContext) error
+	execute(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error
 }
 
 // procedure is a predefined procedure that can be executed.
@@ -55,7 +56,7 @@ type procedure struct {
 // It will convert modifiers first, since these should be checked immediately
 // when the procedure is called. It will then convert the statements into
 // instructions.
-func prepareProcedure(unparsed *types.Procedure, global *GlobalContext, schema *types.Schema) (*procedure, error) {
+func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema *common.Schema) (*procedure, error) {
 	instructions := make([]instruction, 0)
 	owner := make([]byte, len(schema.Owner))
 	copy(owner, schema.Owner) // copy this here since caller may modify the passed schema. maybe not necessary
@@ -64,8 +65,8 @@ func prepareProcedure(unparsed *types.Procedure, global *GlobalContext, schema *
 	isViewProcedure := false // isViewAction tracks whether this procedure is a view
 	for _, mod := range unparsed.Modifiers {
 		switch mod {
-		case types.ModifierOwner:
-			instructions = append(instructions, instructionFunc(func(scope *ProcedureContext) error {
+		case common.ModifierOwner:
+			instructions = append(instructions, instructionFunc(func(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error {
 
 				if !bytes.Equal(scope.Signer, owner) {
 					return fmt.Errorf("cannot call owner procedure, not owner")
@@ -73,7 +74,7 @@ func prepareProcedure(unparsed *types.Procedure, global *GlobalContext, schema *
 
 				return nil
 			}))
-		case types.ModifierView:
+		case common.ModifierView:
 			isViewProcedure = true
 		}
 	}
@@ -81,8 +82,8 @@ func prepareProcedure(unparsed *types.Procedure, global *GlobalContext, schema *
 	// This means that the DB connection needs to be readwrite. If not readwrite, we
 	// need to return an error
 	if !isViewProcedure {
-		instructions = append(instructions, instructionFunc(func(scope *ProcedureContext) error {
-			if scope.DB.AccessMode() != sql.ReadWrite {
+		instructions = append(instructions, instructionFunc(func(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error {
+			if db.AccessMode() != sql.ReadWrite {
 				return fmt.Errorf("cannot call non-view procedure, not in a chain transaction")
 			}
 
@@ -155,7 +156,7 @@ func prepareProcedure(unparsed *types.Procedure, global *GlobalContext, schema *
 			callingViewProcedure := false // callingViewProcedure tracks whether the called procedure is a view
 			if stmt.Database == schema.DBID() || stmt.Database == "" {
 				// internal
-				var procedure *types.Procedure
+				var procedure *common.Procedure
 				for _, p := range schema.Procedures {
 					if p.Name == stmt.Method {
 						procedure = p
@@ -167,7 +168,7 @@ func prepareProcedure(unparsed *types.Procedure, global *GlobalContext, schema *
 				}
 
 				for _, mod := range procedure.Modifiers {
-					if mod == types.ModifierView {
+					if mod == common.ModifierView {
 						callingViewProcedure = true
 						break
 					}
@@ -215,23 +216,23 @@ func prepareProcedure(unparsed *types.Procedure, global *GlobalContext, schema *
 }
 
 // Call executes a procedure.
-func (p *procedure) call(scope *ProcedureContext, inputs []any) error {
+func (p *procedure) call(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB, inputs []any) error {
 	if len(inputs) != len(p.parameters) {
 		return fmt.Errorf(`%w: procedure "%s" requires %d arguments, but %d were provided`, ErrIncorrectNumberOfArguments, p.name, len(p.parameters), len(inputs))
 	}
 
 	// if procedure does not have view tag, then it can mutate state
 	// this means that we must have a readwrite connection
-	if !p.view && scope.DB.AccessMode() != sql.ReadWrite {
+	if !p.view && db.AccessMode() != sql.ReadWrite {
 		return fmt.Errorf(`%w: mutable procedure "%s" called with non-mutative scope`, ErrMutativeProcedure, p.name)
 	}
 
 	for i, param := range p.parameters {
-		scope.values[param] = inputs[i]
+		scope.SetValue(param, inputs[i])
 	}
 
 	for _, inst := range p.instructions {
-		if err := inst.execute(scope); err != nil {
+		if err := inst.execute(scope, global, db); err != nil {
 			return err
 		}
 	}
@@ -262,8 +263,8 @@ type callMethod struct {
 // Execute calls a method from a namespace that is accessible within this dataset.
 // If no namespace is specified, the local namespace is used.
 // It will pass all arguments to the method, and assign the return values to the receivers.
-func (e *callMethod) execute(scope *ProcedureContext) error {
-	dataset, ok := scope.globalCtx.datasets[scope.DBID]
+func (e *callMethod) execute(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error {
+	dataset, ok := global.datasets[scope.DBID]
 	if !ok {
 		return fmt.Errorf(`dataset "%s" not found`, scope.DBID)
 	}
@@ -278,7 +279,7 @@ func (e *callMethod) execute(scope *ProcedureContext) error {
 	var inputs []any
 	vals := scope.Values() // declare here since scope.Values() is expensive
 	for _, arg := range e.Args {
-		val, err := arg(scope.Ctx, scope.DB.Execute, vals)
+		val, err := arg(scope.Ctx, db.Execute, vals)
 		if err != nil {
 			return err
 		}
@@ -299,7 +300,7 @@ func (e *callMethod) execute(scope *ProcedureContext) error {
 			return fmt.Errorf(`procedure "%s" not found`, e.Method)
 		}
 
-		err = procedure.call(newScope, inputs)
+		err = procedure.call(newScope, global, db, inputs)
 	} else {
 		namespace, ok := dataset.namespaces[e.Namespace]
 		if !ok {
@@ -307,7 +308,11 @@ func (e *callMethod) execute(scope *ProcedureContext) error {
 		}
 
 		// new scope since we are calling a namespace
-		results, err = namespace.Call(newScope, e.Method, inputs)
+		results, err = namespace.Call(newScope, &common.App{
+			Service: global.service,
+			DB:      db,
+			Engine:  global,
+		}, e.Method, inputs)
 	}
 	if err != nil {
 		return err
@@ -326,7 +331,7 @@ func (e *callMethod) execute(scope *ProcedureContext) error {
 			break
 		}
 
-		scope.values[e.Receivers[i]] = result
+		scope.SetValue(e.Receivers[i], result)
 	}
 
 	return nil
@@ -343,7 +348,7 @@ type dmlStmt struct {
 	OrderedParameters []string
 }
 
-func (e *dmlStmt) execute(scope *ProcedureContext) error {
+func (e *dmlStmt) execute(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error {
 	args := []any{pg.QueryModeExec}
 
 	params, err := orderAndCleanValueMap(scope.Values(), e.OrderedParameters)
@@ -354,7 +359,7 @@ func (e *dmlStmt) execute(scope *ProcedureContext) error {
 	args = append(args, params...)
 
 	// we need to expand this based on the ordered parameters. This should be stored in the DML statement.
-	results, err := scope.DB.Execute(scope.Ctx, e.SQLStatement, args...)
+	results, err := db.Execute(scope.Ctx, e.SQLStatement, args...)
 	if err != nil {
 		return err
 	}
@@ -374,11 +379,11 @@ func (e *dmlStmt) execute(scope *ProcedureContext) error {
 	return nil
 }
 
-type instructionFunc func(scope *ProcedureContext) error
+type instructionFunc func(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error
 
 // implement instruction
-func (f instructionFunc) execute(scope *ProcedureContext) error {
-	return f(scope)
+func (f instructionFunc) execute(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error {
+	return f(scope, global, db)
 }
 
 // evaluatable is an expression that can be evaluated to a scalar value.

@@ -143,10 +143,10 @@ hostname = "{{ .AppCfg.Hostname }}"
 
 
 #######################################################################
-###                       Oracles Configuration                     ###
+###                       Extension Configuration                     ###
 #######################################################################
-{{- range $oracleName, $configs := .AppCfg.Oracles }}
-[app.oracles.{{$oracleName}}]
+{{- range $extensionName, $configs := .AppCfg.Extensions }}
+[app.extensions.{{$extensionName}}]
 {{- range $key, $value := $configs }}
 {{$key}} = "{{$value}}"
 {{- end }}

@@ -6,43 +6,61 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/internal/sql"
+	sql "github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
-type AccountStore struct {
-	log        log.Logger
-	gasEnabled bool
-}
-
-func NewAccountStore(ctx context.Context, db sql.DB, opts ...AccountStoreOpts) (*AccountStore, error) {
-	ar := &AccountStore{
-		log: log.NewNoOp(),
-	}
-
+// InitializeAccountStore initializes the account store schema and tables.
+func InitializeAccountStore(ctx context.Context, db sql.DB) error {
 	sp, err := db.BeginTx(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer sp.Rollback(ctx)
 
-	for _, opt := range opts {
-		opt(ar)
-	}
-
 	err = initTables(ctx, sp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize tables: %w", err)
+		return fmt.Errorf("failed to initialize tables: %w", err)
 	}
 
-	return ar, sp.Commit(ctx)
+	return sp.Commit(ctx)
 }
 
-func (a *AccountStore) GetAccount(ctx context.Context, tx sql.DB, ident []byte) (*Account, error) {
-	acct, err := getAccount(ctx, tx, ident)
+// Credit credits an account with the given amount. If the account does not exist, it will be created.
+// A negative amount will be treated as a debit. Accounts cannot have negative balances, and will
+// return an error if the amount would cause the balance to go negative.
+func Credit(ctx context.Context, tx sql.DB, account []byte, amt *big.Int) error {
+	acct, err := getAccount(ctx, tx, account)
+	if err != nil {
+		if errors.Is(err, ErrAccountNotFound) {
+			// if account does not exist, we should create it with a balance,
+			// as long as the credit amount is not negative
+			if amt.Sign() < 0 {
+				return ErrNegativeBalance
+			}
+
+			return createAccount(ctx, tx, account, amt)
+		}
+		return err
+	}
+
+	newBal := new(big.Int).Add(acct.Balance, amt)
+
+	// if the new balance is negative (which is possible with a debit), we should fail
+	if newBal.Sign() < 0 {
+		return ErrNegativeBalance
+	}
+
+	return updateAccount(ctx, tx, account, newBal, acct.Nonce)
+}
+
+// GetAccount retrieves the account with the given identifier. If the account does not exist, it will
+// return an account with a balance of 0 and a nonce of 0.
+func GetAccount(ctx context.Context, tx sql.DB, account []byte) (*types.Account, error) {
+	acct, err := getAccount(ctx, tx, account)
 	if err == ErrAccountNotFound {
-		return &Account{
-			Identifier: ident,
+		return &types.Account{
+			Identifier: account,
 			Balance:    big.NewInt(0),
 			Nonce:      0,
 		}, nil
@@ -50,137 +68,82 @@ func (a *AccountStore) GetAccount(ctx context.Context, tx sql.DB, ident []byte) 
 	return acct, err
 }
 
-// Transfer sends an amount from the sender's balance to another account. The
-// amount sent is given by the amount. This does not affect the sending
-// account's nonce; a Spend should precede this to pay for required transaction
-// gas and validate/advance the nonce.
-func (a *AccountStore) Transfer(ctx context.Context, tx sql.DB, to, from []byte, amt *big.Int) error {
-	sp, err := tx.BeginTx(ctx)
+// Spend spends an amount from an account and records nonces. It blocks until the spend is written to the database.
+// The nonce passed must be exactly one greater than the account's nonce. If the nonce is not valid, the spend will fail.
+// If the account does not have enough funds to spend the amount, an ErrInsufficientFunds error will be returned.
+func Spend(ctx context.Context, tx sql.DB, account []byte, amount *big.Int, nonce int64) error {
+	acct, err := getAccount(ctx, tx, account)
+	if err != nil {
+		// if amount is 0 and account not found, create the account
+		// we check that nonce is 1, since this is the first tx
+		if errors.Is(err, ErrAccountNotFound) && amount.Sign() == 0 && nonce == 1 {
+			return createAccountWithNonce(ctx, tx, account, amount, nonce)
+		}
+
+		return err
+	}
+
+	if nonce != acct.Nonce+1 {
+		return fmt.Errorf("%w: expected %d, got %d", ErrInvalidNonce, acct.Nonce+1, nonce)
+	}
+
+	newBal := new(big.Int).Sub(acct.Balance, amount)
+	// if negative, spend the entire balance and increment the nonce
+	if newBal.Sign() < 0 {
+		return errInsufficientFunds(account, amount, acct.Balance)
+	}
+
+	return updateAccount(ctx, tx, account, newBal, nonce)
+}
+
+// Transfer transfers an amount from one account to another. If the from account does not have enough funds to transfer the amount,
+// it will fail. If the to account does not exist, it will be created. The amount must be greater than 0.
+func Transfer(ctx context.Context, db sql.DB, from, to []byte, amt *big.Int) error {
+	if amt.Sign() < 0 {
+		return ErrNegativeTransfer
+	}
+
+	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
 	}
-	defer sp.Rollback(ctx)
+	defer tx.Rollback(ctx)
 
 	// Ensure that the from account balance is sufficient.
-	account, err := getAccount(ctx, sp, from)
-	if err != nil {
-		return err
-	}
-	newBal, err := account.validateSpend(amt)
-	if err != nil {
-		return err
-	}
-	// Update or create the to account with the transferred amount.
-	toAcct, err := getOrCreateAccount(ctx, sp, to)
-	if err != nil {
-		return err
-	}
-	// Decrement the from account balance first.
-	err = updateAccount(ctx, sp, from, newBal, account.Nonce)
-	if err != nil {
-		return err
-	}
-	toBal := big.NewInt(0).Add(toAcct.Balance, amt)
-	err = updateAccount(ctx, sp, to, toBal, toAcct.Nonce)
+	account, err := getAccount(ctx, tx, from)
 	if err != nil {
 		return err
 	}
 
-	return sp.Commit(ctx)
-}
+	newFromBal := new(big.Int).Sub(account.Balance, amt)
+	if newFromBal.Sign() < 0 {
+		return errInsufficientFunds(from, amt, account.Balance)
+	}
 
-// Spend specifies a the fee and nonce of a transaction for an account. The
-// amount has historically been associated with the transaction's fee (to pay
-// for gas) i.e. the price of a certain transaction type.
-type Spend struct {
-	AccountID []byte
-	Amount    *big.Int
-	Nonce     int64
-}
-
-// Spend spends an amount from an account and records nonces. It blocks until the spend is written to the database.
-// The following scenarios are possible when spending from an account:
-// InvalidNonce:
-//
-//	If the nonce validation fails, no updates are made to the account and transaction is aborted.
-//
-// InsufficientFunds:
-//
-//	If GasCosts are enabled and the account doesn't have enough balance to pay for the transaction,
-//	the entire balance is spent and records the nonce for the account and transaction is aborted.
-//
-// ValidSpend:
-//
-//	If account has enough funds, the amount is spent and the nonce is updated.
-//	If GasCosts are disabled, only the nonces are updated for the account.
-func (a *AccountStore) Spend(ctx context.Context, tx sql.DB, spend *Spend) error {
-	sp, err := tx.BeginTx(ctx) // using a tx in case we make an account but spend fails for some reason
+	// add the balance to the to new account
+	receiver, err := getAccount(ctx, tx, to)
 	if err != nil {
-		return fmt.Errorf("Spend: failed to begin transaction: %w", err)
-	}
-	defer sp.Rollback(ctx)
-
-	var account *Account
-	if a.gasEnabled && spend.Amount.Cmp(big.NewInt(0)) > 0 { // don't automatically create accounts when gas is required
-		account, err = getAccount(ctx, sp, spend.AccountID)
-	} else { // with no gas or a free transaction, we'll create the account if it doesn't exist
-		account, err = getOrCreateAccount(ctx, sp, spend.AccountID)
-	}
-	if err != nil {
-		return fmt.Errorf("Spend: failed to get account: %w", err)
-	}
-
-	// Invalid Nonce: No updates to the account
-	err = account.validateNonce(spend.Nonce)
-	if err != nil {
-		return fmt.Errorf("Spend: failed to validate nonce: %w", err)
-	}
-
-	// Spend only if the GasCosts are enabled.
-	if a.gasEnabled {
-		_, err = account.validateSpend(spend.Amount)
-		if err != nil {
-			// Insufficient Funds: spend the entire balance in the account and increment the nonce
-			err2 := updateAccount(ctx, sp, spend.AccountID, big.NewInt(0), spend.Nonce)
+		if errors.Is(err, ErrAccountNotFound) {
+			err2 := createAccount(ctx, tx, to, amt)
 			if err2 != nil {
-				return errors.Join(err, fmt.Errorf("Spend: failed to update account: %w", err2))
+				return err2
 			}
-			err2 = sp.Commit(ctx)
-			if err2 != nil {
-				return errors.Join(err, fmt.Errorf("Spend: failed to commit transaction: %w", err2))
-			}
-
-			return fmt.Errorf("Spend: failed to spend: %w", err)
-		}
-	} else {
-		spend.Amount = big.NewInt(0)
-	}
-
-	newBal := new(big.Int).Sub(account.Balance, spend.Amount)
-	err = updateAccount(ctx, sp, spend.AccountID, newBal, spend.Nonce)
-	if err != nil {
-		return fmt.Errorf("Spend: failed to update account: %w", err)
-	}
-
-	return sp.Commit(ctx)
-}
-
-// Credit credits an account. If the account does not exist, it will be created.
-func (a *AccountStore) Credit(ctx context.Context, tx sql.DB, acctID []byte, amt *big.Int) error {
-	// If exists, add to balance; if not, insert this balance and zero nonce.
-	account, err := getAccount(ctx, tx, acctID)
-	if err != nil {
-		if !errors.Is(err, ErrAccountNotFound) {
+		} else {
 			return err
 		}
-		return createAccount(ctx, tx, acctID, amt)
+	} else {
+		newToBal := new(big.Int).Add(receiver.Balance, amt)
+		err = updateAccount(ctx, tx, to, newToBal, receiver.Nonce)
+		if err != nil {
+			return err
+		}
 	}
 
-	bal := new(big.Int).Add(account.Balance, amt)
-	err = updateAccount(ctx, tx, account.Identifier, bal, account.Nonce) // same nonce
+	// decrement the balance from the from account
+	err = updateAccount(ctx, tx, from, newFromBal, account.Nonce)
 	if err != nil {
-		return fmt.Errorf("failed to update account: %w", err)
+		return err
 	}
 
-	return nil
+	return tx.Commit(ctx)
 }

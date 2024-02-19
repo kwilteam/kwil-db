@@ -6,9 +6,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kwilteam/kwil-db/internal/sql"
-
 	"github.com/jackc/pgx/v5"
+	common "github.com/kwilteam/kwil-db/common/sql"
 )
 
 // nestedTx is returned from the BeginTx method of both dbTx or another
@@ -16,13 +15,13 @@ import (
 // Commit and Rollback methods.
 type nestedTx struct {
 	pgx.Tx
-	accessMode sql.AccessMode
+	accessMode common.AccessMode
 }
 
-var _ sql.Tx = (*nestedTx)(nil)
+var _ common.Tx = (*nestedTx)(nil)
 
 // TODO: switch this to be BeginTx
-func (tx *nestedTx) BeginTx(ctx context.Context) (sql.Tx, error) {
+func (tx *nestedTx) BeginTx(ctx context.Context) (common.Tx, error) {
 	// Make the nested transaction (savepoint)
 	pgtx, err := tx.Tx.Begin(ctx)
 	if err != nil {
@@ -35,18 +34,18 @@ func (tx *nestedTx) BeginTx(ctx context.Context) (sql.Tx, error) {
 	}, nil
 }
 
-func (tx *nestedTx) Query(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
+func (tx *nestedTx) Query(ctx context.Context, stmt string, args ...any) (*common.ResultSet, error) {
 	return query(ctx, tx.Tx, stmt, args...)
 }
 
 // Execute is now literally identical to Query in both semantics and syntax. We
 // might remove one or the other in this context (transaction methods).
-func (tx *nestedTx) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
+func (tx *nestedTx) Execute(ctx context.Context, stmt string, args ...any) (*common.ResultSet, error) {
 	return query(ctx, tx.Tx, stmt, args...)
 }
 
 // AccessMode returns the access mode of the transaction.
-func (tx *nestedTx) AccessMode() sql.AccessMode {
+func (tx *nestedTx) AccessMode() common.AccessMode {
 	return tx.accessMode
 }
 
@@ -64,7 +63,7 @@ func (tx *nestedTx) AccessMode() sql.AccessMode {
 type dbTx struct {
 	*nestedTx      // should embed pgx.Tx
 	db         *DB // for top level DB lifetime mgmt
-	accessMode sql.AccessMode
+	accessMode common.AccessMode
 }
 
 // Precommit creates a prepared transaction for a two-phase commit. An ID
@@ -85,7 +84,7 @@ func (tx *dbTx) Rollback(ctx context.Context) error {
 }
 
 // AccessMode returns the access mode of the transaction.
-func (tx *dbTx) AccessMode() sql.AccessMode {
+func (tx *dbTx) AccessMode() common.AccessMode {
 	return tx.accessMode
 }
 

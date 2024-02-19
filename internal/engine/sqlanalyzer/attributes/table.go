@@ -3,7 +3,7 @@ package attributes
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/internal/engine/types"
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
@@ -16,12 +16,12 @@ import (
 // It takes a boolean to determine if a primary key should be added to the table.
 // If true, the primary key is simply a composite key of all of the columns in the table.
 // If it will return two columns of the same name, it will add a suffix of ":1", ":2", etc.
-func TableFromAttributes(tableName string, attrs []*RelationAttribute, withPrimaryKey bool) (*types.Table, error) {
-	cols := []*types.Column{}
+func TableFromAttributes(tableName string, attrs []*RelationAttribute, withPrimaryKey bool) (*common.Table, error) {
+	cols := []*common.Column{}
 	nameCounts := map[string]int{}
 
 	for _, attr := range attrs {
-		var colToAdd *types.Column
+		var colToAdd *common.Column
 
 		// if it's a column, then we can just use that
 		exprColumn, ok := attr.ResultExpression.Expression.(*tree.ExpressionColumn)
@@ -31,7 +31,7 @@ func TableFromAttributes(tableName string, attrs []*RelationAttribute, withPrima
 				colName = attr.ResultExpression.Alias
 			}
 
-			colToAdd = &types.Column{
+			colToAdd = &common.Column{
 				Name: colName,
 				Type: attr.Type,
 			}
@@ -41,7 +41,7 @@ func TableFromAttributes(tableName string, attrs []*RelationAttribute, withPrima
 				return nil, fmt.Errorf("%w: result columns that contain complex statements must have an alias", ErrInvalidReturnExpression)
 			}
 
-			colToAdd = &types.Column{
+			colToAdd = &common.Column{
 				Name: attr.ResultExpression.Alias,
 				Type: attr.Type,
 			}
@@ -58,7 +58,7 @@ func TableFromAttributes(tableName string, attrs []*RelationAttribute, withPrima
 		cols = append(cols, colToAdd)
 	}
 
-	table := &types.Table{
+	table := &common.Table{
 		Name:    tableName,
 		Columns: cols,
 	}
@@ -69,11 +69,11 @@ func TableFromAttributes(tableName string, attrs []*RelationAttribute, withPrima
 			colNames = append(colNames, col.Name)
 		}
 
-		table.Indexes = []*types.Index{
+		table.Indexes = []*common.Index{
 			{
 				Name:    fmt.Sprintf("%s_pk", tableName),
 				Columns: colNames,
-				Type:    types.PRIMARY,
+				Type:    common.PRIMARY,
 			},
 		}
 	}
