@@ -4,8 +4,9 @@ import (
 	"encoding/hex"
 	"os"
 
-	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/kwilteam/kwil-db/cmd/common/display"
+
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/spf13/cobra"
 )
 
