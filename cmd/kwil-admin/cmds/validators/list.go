@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/internal/validators"
+
 	"github.com/spf13/cobra"
 )
 
@@ -16,12 +17,13 @@ var (
 	listLong = `List the current validator set of the network.`
 
 	listExample = `# List the current validator set of the network
-kwild validators list-validators`
+kwild validators list`
 )
 
 func listCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "list-validators",
+		Use:     "list-validators", // validators list-validators
+		Aliases: []string{"list"},  // validators list
 		Short:   "List the current validator set of the network.",
 		Long:    listLong,
 		Example: listExample,
