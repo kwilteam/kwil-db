@@ -170,7 +170,7 @@ jobs:
             git_commit=${{ github.sha }}
             version=${{ env.GIT_TAG }}
             build_time=${{ env.BUILD_TIME }}
-          #  go_race=-race
+            go_race=-race
           file: ./build/package/docker/kwild.dockerfile
           push: false
           tags: kwild:latest
