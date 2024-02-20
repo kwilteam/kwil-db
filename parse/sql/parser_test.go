@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var trace = flag.Bool("trace", false, "run tests with tracing")
+var traceMode = flag.Bool("trace-mode", false, "run tests with tracing")
 
 var columnStar = []tree.ResultColumn{
 	&tree.ResultColumnStar{},
@@ -2102,7 +2102,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				tt.expect = nil
 			}()
 
-			astTree, err := ParseSql(tt.input, 1, nil, *trace)
+			astTree, err := ParseSql(tt.input, 1, nil, *traceMode)
 			if err != nil {
 				t.Errorf("ParseRawSQL() got %s", err)
 				return
@@ -2116,7 +2116,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				t.Errorf("ParseRawSQL() got %s", err)
 			}
 
-			if *trace {
+			if *traceMode {
 				fmt.Println("SQL from AST: ", sql)
 			}
 
@@ -2221,7 +2221,7 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			//eh := NewErrorHandler(1)
 			//el := newSqliteErrorListener(eh)
-			_, err := ParseSql(tt.input, 1, nil, *trace)
+			_, err := ParseSql(tt.input, 1, nil, *traceMode)
 			assert.Errorf(t, err, "Parser should complain abould invalid syntax")
 
 			if !errors.Is(err, ErrInvalidSyntax) {
@@ -2250,7 +2250,7 @@ func TestParseRawSQL_semantic_invalid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseSql(tt.input, 1, nil, *trace)
+			_, err := ParseSql(tt.input, 1, nil, *traceMode)
 			assert.Errorf(t, err, "Parser should complain abould invalid syntax")
 
 			// should panic, which is caught by ParseRawSQL
