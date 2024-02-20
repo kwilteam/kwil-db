@@ -113,6 +113,10 @@ type Spend struct {
 //
 //	If account has enough funds, the amount is spent and the nonce is updated.
 //	If GasCosts are disabled, only the nonces are updated for the account.
+//
+// The error may be one of the defined values such as ErrInsufficientFunds. In
+// certain case, a *SpendError instance may wrap one of these values with the
+// account's initial balance and nonce.
 func (a *AccountStore) Spend(ctx context.Context, tx sql.DB, spend *Spend) error {
 	sp, err := tx.BeginTx(ctx) // using a tx in case we make an account but spend fails for some reason
 	if err != nil {
@@ -133,6 +137,7 @@ func (a *AccountStore) Spend(ctx context.Context, tx sql.DB, spend *Spend) error
 	// Invalid Nonce: No updates to the account
 	err = account.validateNonce(spend.Nonce)
 	if err != nil {
+		err = NewSpendError(err, account.Balance, account.Nonce)
 		return fmt.Errorf("Spend: failed to validate nonce: %w", err)
 	}
 
@@ -140,6 +145,9 @@ func (a *AccountStore) Spend(ctx context.Context, tx sql.DB, spend *Spend) error
 	if a.gasEnabled {
 		_, err = account.validateSpend(spend.Amount)
 		if err != nil {
+			// Wrap in a SpendError with the initial balance and nonce since we
+			// are about to zero out their balance and increment nonce.
+			err = NewSpendError(err, account.Balance, account.Nonce)
 			// Insufficient Funds: spend the entire balance in the account and increment the nonce
 			err2 := updateAccount(ctx, sp, spend.AccountID, big.NewInt(0), spend.Nonce)
 			if err2 != nil {
@@ -149,7 +157,6 @@ func (a *AccountStore) Spend(ctx context.Context, tx sql.DB, spend *Spend) error
 			if err2 != nil {
 				return errors.Join(err, fmt.Errorf("Spend: failed to commit transaction: %w", err2))
 			}
-
 			return fmt.Errorf("Spend: failed to spend: %w", err)
 		}
 	} else {

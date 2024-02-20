@@ -422,7 +422,12 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 			Nonce:     int64(tx.Body.Nonce),
 		})
 		if errors.Is(err, accounts.ErrInsufficientFunds) {
-			return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
+			spendErr := new(accounts.SpendError)
+			if errors.As(err, &spendErr) {
+				err = fmt.Errorf("transaction tries to spend %s, but account only had %s",
+					amt.String(), spendErr.Balance)
+			}
+			return nil, transactions.CodeInsufficientBalance, err
 		}
 		if err != nil {
 			return nil, transactions.CodeUnknownError, err
@@ -438,7 +443,12 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 		Nonce:     int64(tx.Body.Nonce),
 	})
 	if errors.Is(err, accounts.ErrInsufficientFunds) {
-		return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
+		spendErr := new(accounts.SpendError)
+		if errors.As(err, &spendErr) {
+			err = fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens",
+				amt.String(), spendErr.Balance)
+		}
+		return nil, transactions.CodeInsufficientBalance, err
 	}
 	if err != nil {
 		return nil, transactions.CodeUnknownError, err

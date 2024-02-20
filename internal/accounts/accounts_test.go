@@ -57,6 +57,7 @@ func Test_Accounts(t *testing.T) {
 
 		spends            []*accounts.Spend
 		spendErr          error // the error must be triggered once
+		spendErrOuter     *accounts.SpendError
 		balanceAfterSpend map[string]*accounts.Account
 
 		secondCredit             map[string]*big.Int // to test credit existing accounts
@@ -89,6 +90,7 @@ func Test_Accounts(t *testing.T) {
 			gasOn:             true,
 			balanceAfterSpend: map[string]*accounts.Account{},
 			spendErr:          accounts.ErrAccountNotFound,
+			spendErrOuter:     nil, // not for account not found
 		},
 		{
 			name: "gas and nonces on, no funds",
@@ -102,6 +104,7 @@ func Test_Accounts(t *testing.T) {
 			gasOn:             true,
 			balanceAfterSpend: map[string]*accounts.Account{},
 			spendErr:          accounts.ErrInsufficientFunds,
+			spendErrOuter:     accounts.NewSpendError(accounts.ErrInsufficientFunds, big.NewInt(1), 0),
 		},
 		{
 			name: "gas and nonces on, credits",
@@ -152,7 +155,8 @@ func Test_Accounts(t *testing.T) {
 				account1: newAccount(account1, 0, 1),
 				account2: newAccount(account2, 0, 1),
 			},
-			spendErr: accounts.ErrInvalidNonce,
+			spendErr:      accounts.ErrInvalidNonce,
+			spendErrOuter: accounts.NewSpendError(accounts.ErrInvalidNonce, big.NewInt(0), 1),
 		},
 		{
 			name: "Insufficient funds",
@@ -210,14 +214,23 @@ func Test_Accounts(t *testing.T) {
 				}
 			}
 
-			errs := []error{}
+			var errs error
 			for _, spend := range tc.spends {
 				err := ar.Spend(ctx, tx, spend)
 				if err != nil {
-					errs = append(errs, err)
+					errs = errors.Join(errs, err)
 				}
 			}
-			assertErr(t, errs, tc.spendErr)
+			assert.ErrorIs(t, errs, tc.spendErr)
+			if tc.spendErrOuter != nil {
+				serr := new(accounts.SpendError)
+				if !errors.As(errs, &serr) {
+					t.Fatal("not a spend error")
+				}
+				assert.ErrorIs(t, tc.spendErrOuter.Err, tc.spendErr)
+				assert.Equal(t, tc.spendErrOuter.Balance, serr.Balance)
+				assert.Equal(t, tc.spendErrOuter.Nonce, serr.Nonce)
+			}
 
 			for address, expectedBalance := range tc.balanceAfterSpend {
 				account, err := ar.GetAccount(ctx, tx, []byte(address))
@@ -231,7 +244,6 @@ func Test_Accounts(t *testing.T) {
 
 			for acct, amt := range tc.secondCredit {
 				err := ar.Credit(ctx, tx, []byte(acct), amt)
-				// assertErr(t, []error{err}, tc.creditErr)
 				assert.ErrorIs(t, err, tc.secondCreditErr)
 			}
 
@@ -259,26 +271,5 @@ func newAccount(address string, balance int64, nonce int64) *accounts.Account {
 		Identifier: []byte(address),
 		Balance:    big.NewInt(balance),
 		Nonce:      nonce,
-	}
-}
-
-func assertErr(t *testing.T, errs []error, target error) {
-	t.Helper()
-	if target == nil {
-		if len(errs) > 0 {
-			t.Fatalf("expected no error, got %s", errs)
-		}
-		return
-	}
-
-	contains := false
-	for _, err := range errs {
-		if errors.Is(err, target) {
-			contains = true
-		}
-	}
-
-	if !contains {
-		t.Fatalf("expected error %s, got %s", target, errs)
 	}
 }

@@ -25,7 +25,7 @@ type Account struct {
 func (a *Account) validateSpend(amount *big.Int) (*big.Int, error) {
 	newBal := new(big.Int).Sub(a.Balance, amount)
 	if newBal.Cmp(big.NewInt(0)) < 0 {
-		return nil, ErrInsufficientFunds
+		return nil, fmt.Errorf("%w: needed %v, had %v", ErrInsufficientFunds, amount, a.Balance)
 	}
 	return newBal, nil
 }
