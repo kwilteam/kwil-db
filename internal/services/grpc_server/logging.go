@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
+	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -15,10 +16,23 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func codeToLevel(code codes.Code) log.Level {
+// loudMethods are some RPC methods to log at info level (instead of debug).
+// These are the methods that either directly interact with the engine and
+// datasets, or indirectly in the case of broadcast. Any methods that may
+// consume node resources are helpful to log at info level.
+var loudMethods = map[string]bool{
+	strings.Trim(txpb.TxService_Broadcast_FullMethodName, "/"): true,
+	strings.Trim(txpb.TxService_Query_FullMethodName, "/"):     true,
+	strings.Trim(txpb.TxService_Call_FullMethodName, "/"):      true,
+}
+
+func codeToLevel(code codes.Code, fullMethod string) log.Level {
 	switch code {
 	case codes.OK:
-		return log.InfoLevel // log.DebugLevel
+		if loudMethods[strings.Trim(fullMethod, "/")] {
+			return log.InfoLevel
+		}
+		return log.DebugLevel
 	case codes.NotFound, codes.Canceled, codes.AlreadyExists, codes.InvalidArgument, codes.Unauthenticated:
 		return log.InfoLevel
 
@@ -46,8 +60,9 @@ func SimpleInterceptorLogger(l *log.Logger) grpc.UnaryServerInterceptor {
 		tStart := time.Now()
 		resp, err := handler(ctx, req)
 		elapsedMs := float64(time.Since(tStart).Microseconds()) / 1e3
+		fullMethod := strings.Trim(info.FullMethod, "/")
 		fields := []zap.Field{
-			zap.String("method", strings.Trim(info.FullMethod, "/")),
+			zap.String("method", fullMethod),
 			zap.String("elapsed", fmt.Sprintf("%.3fms", elapsedMs)),
 		}
 		if peer, ok := peer.FromContext(ctx); ok {
@@ -65,7 +80,7 @@ func SimpleInterceptorLogger(l *log.Logger) grpc.UnaryServerInterceptor {
 		if errDesc := stat.Message(); errDesc != "" {
 			fields = append(fields, zap.String("err", errDesc))
 		}
-		l.Log(codeToLevel(code), msg, fields...)
+		l.Log(codeToLevel(code, fullMethod), msg, fields...)
 		return resp, err
 	}
 }
