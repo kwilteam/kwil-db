@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
+
 	"github.com/spf13/cobra"
 )
 
@@ -36,17 +37,21 @@ func infoCmd() *cobra.Command {
 			// if len(args) == 1, then the private key is passed as a hex string
 			// otherwise, it is passed as a file path
 			if len(args) == 1 {
-				return display.PrintCmd(cmd, privKeyInfo([]byte(args[0])))
+				key, err := hex.DecodeString(args[0])
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("private key not valid hex: %w", err))
+				}
+				return display.PrintCmd(cmd, privKeyInfo(key))
 			} else if privkeyFile != "" {
 				key, err := readKeyFile(privkeyFile)
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
-
 				return display.PrintCmd(cmd, privKeyInfo(key))
-			} else {
-				return display.PrintErr(cmd, errors.New("must provide with the private key file or hex string"))
 			}
+
+			cmd.Usage()
+			return errors.New("must provide with the private key file or hex string")
 		},
 	}
 

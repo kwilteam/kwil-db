@@ -126,7 +126,7 @@ func (o *OperatorCLIDriver) ValidatorNodeRemove(ctx context.Context, target []by
 
 func (o *OperatorCLIDriver) ValidatorsList(ctx context.Context) ([]*types.Validator, error) {
 	var res []*types.Validator
-	err := o.runCommand(ctx, &res, "validators", "list-validators")
+	err := o.runCommand(ctx, &res, "validators", "list")
 	if err != nil {
 		return nil, err
 	}
