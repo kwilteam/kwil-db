@@ -6,6 +6,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -102,7 +104,28 @@ func Test_Types(t *testing.T) {
 			},
 		},
 		{
-			name: "action_call",
+			name: "action_execution with nils",
+			obj: &transactions.ActionExecution{
+				DBID:   "db_id",
+				Action: "action",
+				Arguments: [][]string{
+					{
+						"",
+						"arg2",
+					},
+					{
+						"arg3",
+						"",
+					},
+				},
+				NilArg: [][]bool{
+					{true, false},
+					{false, true},
+				},
+			},
+		},
+		{
+			name: "action_call no nils",
 			obj: &transactions.ActionCall{
 				DBID:   "db_id",
 				Action: "action",
@@ -110,6 +133,18 @@ func Test_Types(t *testing.T) {
 					"arg1",
 					"arg2",
 				},
+			},
+		},
+		{
+			name: "action_call with nil",
+			obj: &transactions.ActionCall{
+				DBID:   "db_id",
+				Action: "action",
+				Arguments: []string{
+					"",
+					"arg2",
+				},
+				NilArg: []bool{true, false},
 			},
 		},
 		{
@@ -212,8 +247,11 @@ func Test_Types(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// reflect
-			assert.EqualValuesf(t, tc.obj, obj, "objects are not equal")
+			// compare, considering empty and nil slices the same
+			if !cmp.Equal(tc.obj, obj, cmpopts.EquateEmpty()) {
+				t.Error("objects are not equal")
+				assert.EqualValuesf(t, tc.obj, obj, "objects are not equal") // for the diff
+			}
 		})
 	}
 }

@@ -7,6 +7,7 @@ require (
 	github.com/cstockton/go-conv v1.0.0
 	github.com/decred/dcrd/certgen v1.1.2
 	github.com/ethereum/go-ethereum v1.13.2
+	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.5.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.18.0
 	github.com/stretchr/testify v1.8.4
