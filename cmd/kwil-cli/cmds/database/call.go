@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
+
 	"github.com/spf13/cobra"
 )
 
@@ -72,7 +73,7 @@ func callCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error getting action: %w", err))
 				}
 
-				tuples, err := createActionInputs(inputs, actionStructure)
+				tuples, err := createActionInputs(inputs, actionStructure.Inputs)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
 				}

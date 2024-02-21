@@ -222,12 +222,28 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
+	if len(action.NilArg) > len(action.Arguments) {
+		return txRes(nil, transactions.CodeEncodingError, errors.New("too many NilArgs"))
+	}
+
+	// [][]string => [][]any
 	args := make([][]any, len(action.Arguments))
 	for i, arg := range action.Arguments {
 		args[i] = make([]any, len(arg))
-
 		for j, val := range arg {
 			args[i][j] = val
+		}
+	}
+
+	// Set args to nil as specified.
+	for i, nils := range action.NilArg {
+		if len(nils) > len(args[i]) {
+			return txRes(nil, transactions.CodeEncodingError, errors.New("too many NilArgs"))
+		}
+		for j, isNil := range nils {
+			if isNil {
+				args[i][j] = nil
+			}
 		}
 	}
 

@@ -11,6 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+
 	"github.com/spf13/cobra"
 )
 
@@ -95,7 +96,7 @@ func executeCmd() *cobra.Command {
 // inputs will be received as args.  The args will be in the form of
 // $argname:value.  Example $username:satoshi $age:32
 func parseInputs(args []string) ([]map[string]any, error) {
-	inputs := make(map[string]any)
+	inputs := make(map[string]any, len(args))
 
 	for _, arg := range args {
 		ensureInputFormat(&arg)
@@ -118,21 +119,18 @@ func GetInputs(args []string, action *transactions.Action) ([][]any, error) {
 		return nil, fmt.Errorf("error getting inputs: %w", err)
 	}
 
-	return createActionInputs(inputs, action)
+	return createActionInputs(inputs, action.Inputs)
 }
 
-// createActionInputs takes a []map[string]any and an action, and converts it to [][]any
-func createActionInputs(inputs []map[string]any, action *transactions.Action) ([][]any, error) {
+// createActionInputs takes a []map[string]any and an action, and converts it to [][]any.
+// This is to support batch.
+func createActionInputs(inputs []map[string]any, actionInputs []string) ([][]any, error) {
 	tuples := [][]any{}
 	for _, input := range inputs {
 		newTuple := []any{}
-		for _, inputField := range action.Inputs {
-			value, ok := input[inputField]
-			if !ok {
-				return nil, fmt.Errorf("missing input: %s", inputField)
-			}
-
-			newTuple = append(newTuple, value)
+		for _, inputField := range actionInputs {
+			// If the inputField is not in the input map, we append nil.
+			newTuple = append(newTuple, input[inputField])
 		}
 
 		tuples = append(tuples, newTuple)
