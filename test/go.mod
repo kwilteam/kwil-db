@@ -14,6 +14,7 @@ require (
 	github.com/cometbft/cometbft v0.38.3-0.20240108012115-1e434f11faa2
 	github.com/cstockton/go-conv v1.0.0
 	github.com/docker/go-connections v0.4.0
+	github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246
 	github.com/ethereum/go-ethereum v1.13.8
 	github.com/kwilteam/kuneiform v0.6.0-alpha
 	github.com/kwilteam/kwil-db v0.5.1-0.20230927233025-c3e8ef579ade
