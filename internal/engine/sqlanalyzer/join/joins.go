@@ -90,9 +90,7 @@ func validateJoinStatus(joinConstraint tree.Expression) joinableStatus {
 		}
 
 		return joinableStatusInvalid
-	case *tree.ExpressionIsNull:
-		return validateJoinStatus(j.Expression)
-	case *tree.ExpressionDistinct:
+	case *tree.ExpressionIs:
 		if validateJoinStatus(j.Left) == joinableStatusContainsColumn || validateJoinStatus(j.Right) == joinableStatusContainsColumn {
 			return joinableStatusContainsColumn
 		}

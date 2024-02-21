@@ -119,13 +119,8 @@ func (s *StatementCleaner) EnterExpressionStringCompare(node *tree.ExpressionStr
 	return wrapErr(ErrInvalidStringComparisonOperator, node.Operator.Valid())
 }
 
-// EnterExpressionIsNull does nothing
-func (s *StatementCleaner) EnterExpressionIsNull(node *tree.ExpressionIsNull) (err error) {
-	return nil
-}
-
-// EnterExpressionDistinct does nothing
-func (s *StatementCleaner) EnterExpressionDistinct(node *tree.ExpressionDistinct) (err error) {
+// EnterExpressionIs does nothing
+func (s *StatementCleaner) EnterExpressionIs(node *tree.ExpressionIs) (err error) {
 	return nil
 }
 
@@ -219,10 +214,6 @@ func (s *StatementCleaner) EnterOrderBy(node *tree.OrderBy) (err error) {
 
 // EnterOrderingTerm validates the order type and null order type
 func (s *StatementCleaner) EnterOrderingTerm(node *tree.OrderingTerm) (err error) {
-	if err = node.Collation.Valid(); err != nil {
-		return wrapErr(ErrInvalidCollation, err)
-	}
-
 	// ordertype and nullorderingtype are both valid as empty, so we don't need to check for that
 	if err = node.OrderType.Valid(); err != nil {
 		return wrapErr(ErrInvalidOrderType, err)
@@ -244,13 +235,6 @@ func (s *StatementCleaner) EnterQualifiedTableName(node *tree.QualifiedTableName
 
 	if node.TableAlias != "" {
 		node.TableAlias, err = cleanIdentifier(node.TableAlias)
-		if err != nil {
-			return wrapErr(ErrInvalidIdentifier, err)
-		}
-	}
-
-	if node.IndexedBy != "" {
-		node.IndexedBy, err = cleanIdentifier(node.IndexedBy)
 		if err != nil {
 			return wrapErr(ErrInvalidIdentifier, err)
 		}
@@ -394,7 +378,7 @@ func (s *StatementCleaner) EnterUpdate(node *tree.Update) (err error) {
 
 // EnterUpdateStmt validates the update type
 func (s *StatementCleaner) EnterUpdateStmt(node *tree.UpdateStmt) (err error) {
-	return wrapErr(ErrInvalidUpdateType, node.Or.Valid())
+	return ErrInvalidUpdateType
 }
 
 // EnterUpsert validates the upsert type
