@@ -4,8 +4,8 @@ go 1.21
 
 require (
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230512164433-5d1fd1a340c9
-	github.com/kwilteam/action-grammar-go v0.0.1-0.20230926160920-472768e1186c
-	github.com/kwilteam/sql-grammar-go v0.0.3-0.20240209181022-1e69719b1754
+	github.com/kwilteam/action-grammar-go v0.0.1-0.20240221235853-2b171733810e
+	github.com/kwilteam/sql-grammar-go v0.0.3-0.20240222213209-52b51de2eaf8
 	github.com/pganalyze/pg_query_go/v5 v5.1.0 // This is only for unit testing
 	github.com/stretchr/testify v1.8.4
 )
