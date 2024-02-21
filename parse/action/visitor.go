@@ -209,19 +209,8 @@ func (v *kfActionVisitor) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) t
 			Operator: tree.UnaryOperatorPlus,
 			Operand:  v.visitFn_arg_expr(ctx.GetUnary_expr()),
 		}
-	case ctx.TILDE() != nil && ctx.GetUnary_expr() != nil:
-		return &tree.ExpressionUnary{
-			Operator: tree.UnaryOperatorBitNot,
-			Operand:  v.visitFn_arg_expr(ctx.GetUnary_expr()),
-		}
 	// binary opertors
 	// artithmetic operators
-	case ctx.PIPE2() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitFn_arg_expr(ctx.Fn_arg_expr(0)),
-			Right:    v.visitFn_arg_expr(ctx.Fn_arg_expr(1)),
-			Operator: tree.ArithmeticConcat,
-		}
 	// TODO: this was where ctx.STAR() != nil was
 	case ctx.STAR() != nil:
 		return &tree.ExpressionArithmetic{
@@ -253,30 +242,6 @@ func (v *kfActionVisitor) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) t
 			Right:    v.visitFn_arg_expr(ctx.Fn_arg_expr(1)),
 			Operator: tree.ArithmeticOperatorSubtract,
 		}
-	case ctx.LT2() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitFn_arg_expr(ctx.Fn_arg_expr(0)),
-			Right:    v.visitFn_arg_expr(ctx.Fn_arg_expr(1)),
-			Operator: tree.ArithmeticOperatorBitwiseLeftShift,
-		}
-	case ctx.GT2() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitFn_arg_expr(ctx.Fn_arg_expr(0)),
-			Right:    v.visitFn_arg_expr(ctx.Fn_arg_expr(1)),
-			Operator: tree.ArithmeticOperatorBitwiseRightShift,
-		}
-	case ctx.AMP() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitFn_arg_expr(ctx.Fn_arg_expr(0)),
-			Right:    v.visitFn_arg_expr(ctx.Fn_arg_expr(1)),
-			Operator: tree.ArithmeticOperatorBitwiseAnd,
-		}
-	case ctx.PIPE() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitFn_arg_expr(ctx.Fn_arg_expr(0)),
-			Right:    v.visitFn_arg_expr(ctx.Fn_arg_expr(1)),
-			Operator: tree.ArithmeticOperatorBitwiseOr,
-		}
 	// compare operators
 	case ctx.LT() != nil:
 		return &tree.ExpressionBinaryComparison{
@@ -307,12 +272,6 @@ func (v *kfActionVisitor) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) t
 			Left:     v.visitFn_arg_expr(ctx.Fn_arg_expr(0)),
 			Right:    v.visitFn_arg_expr(ctx.Fn_arg_expr(1)),
 			Operator: tree.ComparisonOperatorEqual,
-		}
-	case ctx.EQ() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitFn_arg_expr(ctx.Fn_arg_expr(0)),
-			Right:    v.visitFn_arg_expr(ctx.Fn_arg_expr(1)),
-			Operator: tree.ComparisonOperatorDoubleEqual,
 		}
 	case ctx.SQL_NOT_EQ1() != nil:
 		return &tree.ExpressionBinaryComparison{
