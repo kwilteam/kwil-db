@@ -12,7 +12,7 @@ import (
 
 // KFSqliteVisitor is visitor that visit Antlr parsed tree and returns the AST.
 type KFSqliteVisitor struct {
-	sqlgrammar.BaseSQLiteParserVisitor
+	sqlgrammar.BaseSQLParserVisitor
 
 	trace bool
 }
@@ -25,7 +25,7 @@ func KFVisitorWithTrace(on bool) KFSqliteVisitorOption {
 	}
 }
 
-var _ sqlgrammar.SQLiteParserVisitor = &KFSqliteVisitor{}
+var _ sqlgrammar.SQLParserVisitor = &KFSqliteVisitor{}
 
 func NewKFSqliteVisitor(opts ...KFSqliteVisitorOption) *KFSqliteVisitor {
 	k := &KFSqliteVisitor{}
@@ -73,18 +73,103 @@ func getInsertType(ctx *sqlgrammar.Insert_stmtContext) tree.InsertType {
 	return tree.InsertTypeInsert
 }
 
-func (v *KFSqliteVisitor) visitExprList(exprList []sqlgrammar.IExprContext) *tree.ExpressionList {
-	exprCount := len(exprList)
-	exprs := make([]tree.Expression, exprCount)
-	for i, exprCtx := range exprList {
-		exprs[i] = v.visitExpr(exprCtx)
+// NOTE: VisitExpr() is dispatched in various VisitXXX_expr methods.
+// Calling `v.Visit(ctx.Expr()).(tree.Expression)` will dispatch to the correct
+// VisitXXX_expr method.
+// func (v *KFSqliteVisitor) VisitExpr(ctx *sqlgrammar.ExprContext) interface{} {
+// 	//return v.visitExpr(ctx)
+// }
+
+// VisitType_cast is called when visiting a type_cast, return tree.TypeCastType
+func (v *KFSqliteVisitor) VisitType_cast(ctx *sqlgrammar.Type_castContext) interface{} {
+	if ctx != nil {
+		typeCastRaw := ctx.Cast_type().GetText()
+		if typeCastRaw[0] == '`' || typeCastRaw[0] == '"' || typeCastRaw[0] == '[' {
+			// NOTE: typeCast is an IDENTIFIER, so it could be wrapped with ` or " or [ ]
+			panic(fmt.Sprintf("type cast should not be wrapped in  %c", typeCastRaw[0]))
+		}
+
+		// NOTE: typeCast is case-insensitive
+		switch strings.ToLower(typeCastRaw) {
+		case "int":
+			return tree.TypeCastInt
+		case "text":
+			return tree.TypeCastText
+		default:
+			// NOTE: we probably should move all semantic checks to analysis phase
+			panic(fmt.Sprintf("unknown type cast %s", typeCastRaw))
+		}
+	} else {
+		return ""
 	}
-	return &tree.ExpressionList{Expressions: exprs}
 }
 
-// VisitExpr is called when visiting an expression, return tree.Expression.
-func (v *KFSqliteVisitor) VisitExpr(ctx *sqlgrammar.ExprContext) interface{} {
-	return v.visitExpr(ctx)
+// VisitLiteral is called when visiting a literal, return *tree.ExpressionLiteral
+func (v *KFSqliteVisitor) VisitLiteral(ctx *sqlgrammar.LiteralContext) interface{} {
+	// all literal values are string
+	text := ctx.GetText()
+	if strings.EqualFold(text, "null") {
+		text = "NULL"
+	}
+	return text
+}
+
+// VisitLiteral_expr is called when visiting a literal_expr, return *tree.ExpressionLiteral
+func (v *KFSqliteVisitor) VisitLiteral_expr(ctx *sqlgrammar.Literal_exprContext) interface{} {
+	// all literal values are string
+	expr := &tree.ExpressionLiteral{
+		Value: v.Visit(ctx.Literal()).(string),
+	}
+	if ctx.Type_cast() != nil {
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+	}
+	return expr
+}
+
+// VisitVariable_expr is called when visiting a variable_expr, return *tree.ExpressionBindParameter
+func (v *KFSqliteVisitor) VisitVariable_expr(ctx *sqlgrammar.Variable_exprContext) interface{} {
+	expr := &tree.ExpressionBindParameter{
+		Parameter: ctx.Variable().GetText(),
+	}
+	if ctx.Type_cast() != nil {
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+	}
+	return expr
+}
+
+// VisitColumn_ref is called when visiting a column_ref, return *tree.ExpressionColumn, without
+// type cast info.
+func (v *KFSqliteVisitor) VisitColumn_ref(ctx *sqlgrammar.Column_refContext) interface{} {
+	expr := &tree.ExpressionColumn{}
+	if ctx.Table_name() != nil {
+		expr.Table = extractSQLName(ctx.Table_name().GetText())
+	}
+	expr.Column = extractSQLName(ctx.Column_name().GetText())
+	return expr
+}
+
+// VisitColumn_expr is called when visiting a column_expr, return *tree.ExpressionColumn
+func (v *KFSqliteVisitor) VisitColumn_expr(ctx *sqlgrammar.Column_exprContext) interface{} {
+	expr := v.Visit(ctx.Column_ref()).(*tree.ExpressionColumn)
+	if ctx.Type_cast() != nil {
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+	}
+	return expr
+}
+
+// VistUnary_expr is called when visiting a unary_expr, return *tree.ExpressionUnary
+func (v *KFSqliteVisitor) VisitUnary_expr(ctx *sqlgrammar.Unary_exprContext) interface{} {
+	expr := &tree.ExpressionUnary{}
+	switch {
+	case ctx.MINUS() != nil:
+		expr.Operator = tree.UnaryOperatorMinus
+	case ctx.PLUS() != nil:
+		expr.Operator = tree.UnaryOperatorPlus
+	default:
+		panic(fmt.Sprintf("unknown unary operator %s", ctx.GetText()))
+	}
+	expr.Operand = v.Visit(ctx.Expr()).(tree.Expression)
+	return expr
 }
 
 func (v *KFSqliteVisitor) getCollateType(collationName string) tree.CollationType {
@@ -98,408 +183,344 @@ func (v *KFSqliteVisitor) getCollateType(collationName string) tree.CollationTyp
 	}
 }
 
-func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression {
-	if ctx == nil {
-		return nil
+// VisitCollate_expr is called when visiting a collate_expr, return *tree.ExpressionCollate
+func (v *KFSqliteVisitor) VisitCollate_expr(ctx *sqlgrammar.Collate_exprContext) interface{} {
+	expr := v.Visit(ctx.Expr()).(tree.Expression)
+	collationName := extractSQLName(ctx.Collation_name().GetText())
+	return &tree.ExpressionCollate{
+		Expression: expr,
+		Collation:  v.getCollateType(collationName),
 	}
+}
 
+// VisitParenthesized_expr is called when visiting a parenthesized_expr, return *tree.Expression
+func (v *KFSqliteVisitor) VisitParenthesized_expr(ctx *sqlgrammar.Parenthesized_exprContext) interface{} {
 	var typeCast tree.TypeCastType
 	if ctx.Type_cast() != nil {
-		typeCastRaw := ctx.Type_cast().Cast_type().GetText()
-		if typeCastRaw[0] == '`' || typeCastRaw[0] == '"' || typeCastRaw[0] == '[' {
-			// NOTE: typeCast is an IDENTIFIER, so it could be wrapped with ` or " or [ ]
-			panic(fmt.Sprintf("type cast should not be wrapped in  %c", typeCastRaw[0]))
-		}
-
-		// NOTE: typeCast is case-insensitive
-		switch strings.ToLower(typeCastRaw) {
-		case "int":
-			typeCast = tree.TypeCastInt
-		case "text":
-			typeCast = tree.TypeCastText
-		default:
-			// NOTE: we probably should move all semantic checks to analysis phase
-			panic(fmt.Sprintf("unknown type cast %s", typeCastRaw))
-		}
+		typeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
 	}
 
-	// order is important, map to expr definition in Antlr sql-grammar(not exactly)
+	expr := v.Visit(ctx.Expr()).(tree.Expression)
+	switch e := expr.(type) {
+	case *tree.ExpressionLiteral:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionBindParameter:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionColumn:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionUnary:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionArithmetic:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionBinaryComparison:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionFunction:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionList:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionCollate:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionStringCompare:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionIs:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionBetween:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionSelect:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionCase:
+		e.Wrapped = true
+		// typeCast does not apply on case expression
+	}
+	return expr
+}
+
+func (v *KFSqliteVisitor) VisitSubquery(ctx *sqlgrammar.SubqueryContext) interface{} {
+	return v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt)
+}
+
+// VisitSubquery_expr is called when visiting a subquery_expr, return *tree.ExpressionSelect
+func (v *KFSqliteVisitor) VisitSubquery_expr(ctx *sqlgrammar.Subquery_exprContext) interface{} {
+	stmt := v.Visit(ctx.Subquery()).(*tree.SelectStmt)
+	expr := &tree.ExpressionSelect{
+		Select: stmt,
+	}
+	if ctx.EXISTS_() != nil {
+		expr.IsExists = true
+	}
+	if ctx.NOT_() != nil {
+		expr.IsNot = true
+	}
+	return expr
+}
+
+// VisitWhen_clause is called when visiting a when_clause, return [2]*tree.Expression
+func (v *KFSqliteVisitor) VisitWhen_clause(ctx *sqlgrammar.When_clauseContext) interface{} {
+	var when = [2]tree.Expression{}
+	when[0] = v.Visit(ctx.GetCondition()).(tree.Expression)
+	when[1] = v.Visit(ctx.GetResult()).(tree.Expression)
+	return when
+}
+
+// VisitCase_expr is called when visiting a case_expr, return *tree.ExpressionCase
+func (v *KFSqliteVisitor) VisitCase_expr(ctx *sqlgrammar.Case_exprContext) interface{} {
+	expr := &tree.ExpressionCase{}
+	if ctx.GetCase_clause() != nil {
+		expr.CaseExpression = v.Visit(ctx.GetCase_clause()).(tree.Expression)
+	}
+	if ctx.GetElse_clause() != nil {
+		expr.ElseExpression = v.Visit(ctx.GetElse_clause()).(tree.Expression)
+	}
+
+	for _, whenCtx := range ctx.AllWhen_clause() {
+		expr.WhenThenPairs = append(expr.WhenThenPairs,
+			v.Visit(whenCtx).([2]tree.Expression))
+	}
+
+	return expr
+}
+
+// VisitFunction_call is called when visiting a function_call, return *tree.ExpressionFunction
+func (v *KFSqliteVisitor) VisitFunction_call(ctx *sqlgrammar.Function_callContext) interface{} {
+	expr := &tree.ExpressionFunction{
+		Inputs: make([]tree.Expression, len(ctx.AllExpr())),
+	}
+	funcName := extractSQLName(ctx.Function_name().GetText())
+
+	f, ok := tree.SQLFunctions[strings.ToLower(funcName)]
+	if !ok {
+		panic(fmt.Sprintf("unsupported function '%s'", funcName))
+	}
+	expr.Function = f
+
+	if ctx.DISTINCT_() != nil {
+		expr.Distinct = true
+	}
+
+	for i, e := range ctx.AllExpr() {
+		expr.Inputs[i] = v.Visit(e).(tree.Expression)
+	}
+
+	return expr
+}
+
+// VisitFunction_expr is called when visiting a function_expr, return *tree.ExpressionFunction
+func (v *KFSqliteVisitor) VisitFunction_expr(ctx *sqlgrammar.Function_exprContext) interface{} {
+	expr := v.Visit(ctx.Function_call()).(*tree.ExpressionFunction)
+	if ctx.Type_cast() != nil {
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+	}
+	return expr
+}
+
+// VisitExpr_list_expr is called when visiting a expr_list_expr, return *tree.ExpressionList
+func (v *KFSqliteVisitor) VisitExpr_list_expr(ctx *sqlgrammar.Expr_list_exprContext) interface{} {
+	return v.Visit(ctx.Expr_list()).(*tree.ExpressionList)
+}
+
+// VisitArithmetic_expr is called when visiting a arithmetic_expr, return *tree.ExpressionArithmetic
+func (v *KFSqliteVisitor) VisitArithmetic_expr(ctx *sqlgrammar.Arithmetic_exprContext) interface{} {
+	expr := &tree.ExpressionArithmetic{}
+	expr.Left = v.Visit(ctx.GetLeft()).(tree.Expression)
+	expr.Right = v.Visit(ctx.GetRight()).(tree.Expression)
+
 	switch {
-	// primary expressions
-	case ctx.Literal_value() != nil:
-		return &tree.ExpressionLiteral{
-			Value:    ctx.Literal_value().GetText(),
-			TypeCast: typeCast,
-		}
-	case ctx.BIND_PARAMETER() != nil:
-		return &tree.ExpressionBindParameter{
-			Parameter: ctx.BIND_PARAMETER().GetText(),
-			TypeCast:  typeCast,
-		}
-	case ctx.Table_name() != nil || ctx.Column_name() != nil:
-		expr := &tree.ExpressionColumn{}
-		if ctx.Table_name() != nil {
-			expr.Table = extractSQLName(ctx.Table_name().GetText())
-		}
-		if ctx.Column_name() != nil {
-			expr.Column = extractSQLName(ctx.Column_name().GetText())
-		}
-		expr.TypeCast = typeCast
-		return expr
-	case ctx.Select_stmt_core() != nil && ctx.IN_() == nil:
-		// select_stmt_core not in IN
-		stmt := v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt)
-		expr := &tree.ExpressionSelect{
-			IsNot:    false,
-			IsExists: false,
-			Select:   stmt,
-		}
-		if ctx.NOT_() != nil {
-			expr.IsNot = true
-		}
-		if ctx.EXISTS_() != nil {
-			expr.IsExists = true
-		}
-		return expr
-	case ctx.GetElevate_expr() != nil:
-		expr := v.visitExpr(ctx.GetElevate_expr())
-		switch t := expr.(type) {
-		case *tree.ExpressionLiteral:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionBindParameter:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionColumn:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionUnary:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionArithmetic:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionBinaryComparison:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionFunction:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionList:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionCollate:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionStringCompare:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionIsNull:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionDistinct:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionBetween:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionSelect:
-			t.Wrapped = true
-			t.TypeCast = typeCast
-		case *tree.ExpressionCase:
-			t.Wrapped = true
-			// typeCast does not apply
-		default:
-			panic(fmt.Sprintf("unknown expression type %T", expr))
-		}
-		return expr
-	// unary operators
-	case ctx.MINUS() != nil && ctx.GetUnary_expr() != nil:
-		return &tree.ExpressionUnary{
-			Operator: tree.UnaryOperatorMinus,
-			Operand:  v.visitExpr(ctx.GetUnary_expr()),
-		}
-	case ctx.PLUS() != nil && ctx.GetUnary_expr() != nil:
-		return &tree.ExpressionUnary{
-			Operator: tree.UnaryOperatorPlus,
-			Operand:  v.visitExpr(ctx.GetUnary_expr()),
-		}
-	case ctx.TILDE() != nil && ctx.GetUnary_expr() != nil:
-		return &tree.ExpressionUnary{
-			Operator: tree.UnaryOperatorBitNot,
-			Operand:  v.visitExpr(ctx.GetUnary_expr()),
-		}
-	// collate
-	case ctx.COLLATE_() != nil:
-		// collation_name is any_name
-		collationName := extractSQLName(ctx.Collation_name().GetText())
-		return &tree.ExpressionCollate{
-			Expression: v.visitExpr(ctx.Expr(0)),
-			Collation:  v.getCollateType(collationName),
-		}
-	// binary opertors
-	// artithmetic operators
-	case ctx.PIPE2() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ArithmeticConcat,
-		}
-		// TODO: this was where ctx.STAR() != nil was
-	case ctx.DIV() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ArithmeticOperatorDivide,
-		}
-	case ctx.MOD() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ArithmeticOperatorModulus,
-		}
 	case ctx.PLUS() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ArithmeticOperatorAdd,
-		}
+		expr.Operator = tree.ArithmeticOperatorAdd
 	case ctx.MINUS() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ArithmeticOperatorSubtract,
-		}
-	case ctx.LT2() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ArithmeticOperatorBitwiseLeftShift,
-		}
-	case ctx.GT2() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ArithmeticOperatorBitwiseRightShift,
-		}
-	case ctx.AMP() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ArithmeticOperatorBitwiseAnd,
-		}
-	case ctx.PIPE() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ArithmeticOperatorBitwiseOr,
-		}
-	// compare operators
-	case ctx.LT() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ComparisonOperatorLessThan,
-		}
-	case ctx.LT_EQ() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ComparisonOperatorLessThanOrEqual,
-		}
-	case ctx.GT() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ComparisonOperatorGreaterThan,
-		}
-	case ctx.GT_EQ() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ComparisonOperatorGreaterThanOrEqual,
-		}
-	case ctx.ASSIGN() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ComparisonOperatorEqual,
-		}
-	case ctx.EQ() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ComparisonOperatorDoubleEqual,
-		}
-	case ctx.NOT_EQ1() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ComparisonOperatorNotEqual,
-		}
-	case ctx.NOT_EQ2() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ComparisonOperatorNotEqualDiamond,
-		}
-	case ctx.IS_() != nil:
-		if ctx.DISTINCT_() == nil {
-			// binary comparison
-			expr := &tree.ExpressionBinaryComparison{
-				Left:     v.visitExpr(ctx.Expr(0)),
-				Right:    v.visitExpr(ctx.Expr(1)),
-				Operator: tree.ComparisonOperatorIs,
-			}
-			if ctx.NOT_() != nil {
-				expr.Operator = tree.ComparisonOperatorIsNot
-			}
-			return expr
-		}
-
-		// distinct comparison
-		expr := &tree.ExpressionDistinct{
-			Left:  v.visitExpr(ctx.Expr(0)),
-			Right: v.visitExpr(ctx.Expr(1)),
-		}
-		if ctx.NOT_() != nil {
-			expr.IsNot = true
-		}
-		return expr
-	case ctx.IN_() != nil:
-		expr := &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Operator: tree.ComparisonOperatorIn,
-		}
-
-		if ctx.NOT_() != nil {
-			expr.Operator = tree.ComparisonOperatorNotIn
-		}
-
-		if ctx.OPEN_PAR() != nil {
-			// in follows by expr list
-			exprCount := len(ctx.AllExpr())
-			exprs := make([]tree.Expression, exprCount-1)
-			for i, e := range ctx.AllExpr()[1:] {
-				exprs[i] = v.visitExpr(e)
-			}
-			expr.Right = &tree.ExpressionList{
-				Expressions: exprs,
-			}
-		} else {
-			// in follows by expr(potentially expr list)
-			expr.Right = v.visitExpr(ctx.Expr(1))
-		}
-		return expr
-	// string comparison
-	case ctx.LIKE_() != nil:
-		expr := &tree.ExpressionStringCompare{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Operator: tree.StringOperatorLike,
-			Right:    v.visitExpr(ctx.Expr(1)),
-		}
-		if ctx.NOT_() != nil {
-			expr.Operator = tree.StringOperatorNotLike
-		}
-		if ctx.ESCAPE_() != nil {
-			expr.Escape = v.visitExpr(ctx.Expr(2))
-		}
-		return expr
-	case ctx.BETWEEN_() != nil:
-		expr := &tree.ExpressionBetween{
-			Expression: v.visitExpr(ctx.Expr(0)),
-			Left:       v.visitExpr(ctx.Expr(1)),
-			Right:      v.visitExpr(ctx.Expr(2)),
-		}
-		if ctx.NOT_() != nil {
-			expr.NotBetween = true
-		}
-		return expr
-	// null
-	case ctx.ISNULL_() != nil:
-		return &tree.ExpressionIsNull{
-			Expression: v.visitExpr(ctx.Expr(0)),
-			IsNull:     true,
-		}
-	case ctx.NOTNULL_() != nil:
-		return &tree.ExpressionIsNull{
-			Expression: v.visitExpr(ctx.Expr(0)),
-			IsNull:     false,
-		}
-	case ctx.NULL_() != nil && ctx.NOT_() != nil:
-		return &tree.ExpressionIsNull{
-			Expression: v.visitExpr(ctx.Expr(0)),
-			IsNull:     false,
-		}
-	// unary op NOT
-	case ctx.NOT_() != nil && ctx.GetUnary_expr() != nil:
-		return &tree.ExpressionUnary{
-			Operator: tree.UnaryOperatorNot,
-			Operand:  v.visitExpr(ctx.GetUnary_expr()),
-		}
-	case ctx.AND_() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Operator: tree.LogicalOperatorAnd,
-			Right:    v.visitExpr(ctx.Expr(1)),
-		}
-	case ctx.OR_() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Operator: tree.LogicalOperatorOr,
-			Right:    v.visitExpr(ctx.Expr(1)),
-		}
-	case ctx.GetExpr_list() != nil:
-		return v.visitExprList(ctx.AllExpr())
-	case ctx.Function_name() != nil:
-		expr := &tree.ExpressionFunction{
-			Inputs: make([]tree.Expression, len(ctx.AllExpr())),
-		}
-		funcName := extractSQLName(ctx.Function_name().GetText())
-
-		f, ok := tree.SQLFunctions[strings.ToLower(funcName)]
-		if !ok {
-			panic(fmt.Sprintf("unsupported function '%s'", funcName))
-		}
-		expr.Function = f
-
-		if ctx.DISTINCT_() != nil {
-			expr.Distinct = true
-		}
-
-		for i, e := range ctx.AllExpr() {
-			expr.Inputs[i] = v.visitExpr(e)
-		}
-
-		expr.TypeCast = typeCast
-		return expr
+		expr.Operator = tree.ArithmeticOperatorSubtract
 	case ctx.STAR() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ArithmeticOperatorMultiply,
-		}
-	case ctx.CASE_() != nil:
-		whenExprCount := len(ctx.GetWhen_expr())
-		expr := &tree.ExpressionCase{
-			WhenThenPairs: make([][2]tree.Expression, whenExprCount),
-		}
-		for i := 0; i < whenExprCount; i++ {
-			expr.WhenThenPairs[i][0] = v.visitExpr(ctx.GetWhen_expr()[i])
-			expr.WhenThenPairs[i][1] = v.visitExpr(ctx.GetThen_expr()[i])
-		}
-
-		if ctx.GetCase_expr() != nil {
-			expr.CaseExpression = v.visitExpr(ctx.GetCase_expr())
-		}
-
-		if ctx.GetElse_expr() != nil {
-			expr.ElseExpression = v.visitExpr(ctx.GetElse_expr())
-		}
-		return expr
+		expr.Operator = tree.ArithmeticOperatorMultiply
+	case ctx.DIV() != nil:
+		expr.Operator = tree.ArithmeticOperatorDivide
+	case ctx.MOD() != nil:
+		expr.Operator = tree.ArithmeticOperatorModulus
 	default:
-		panic(fmt.Sprintf("cannot recognize expr '%s'", ctx.GetText()))
+		panic(fmt.Sprintf("unknown arithmetic operator %s", ctx.GetText()))
 	}
+
+	return expr
+}
+
+// VisitIn_subquery_expr is called when visiting a in_suquery_expr, return *tree.ExpressionBinaryComparison
+func (v *KFSqliteVisitor) VisitIn_subquery_expr(ctx *sqlgrammar.In_subquery_exprContext) interface{} {
+	expr := &tree.ExpressionBinaryComparison{
+		Left:     v.Visit(ctx.GetElem()).(tree.Expression),
+		Operator: tree.ComparisonOperatorIn,
+	}
+	if ctx.NOT_() != nil {
+		expr.Operator = tree.ComparisonOperatorNotIn
+	}
+	sub := v.Visit(ctx.Subquery()).(*tree.SelectStmt)
+	expr.Right = &tree.ExpressionSelect{Select: sub}
+	return expr
+}
+
+// VisitExpr_list is called when visiting a expr_list, return *tree.ExpressionList
+func (v *KFSqliteVisitor) VisitExpr_list(ctx *sqlgrammar.Expr_listContext) interface{} {
+	exprCount := len(ctx.AllExpr())
+	exprs := make([]tree.Expression, exprCount)
+	for i, exprCtx := range ctx.AllExpr() {
+		exprs[i] = v.Visit(exprCtx).(tree.Expression)
+	}
+	return &tree.ExpressionList{Expressions: exprs}
+}
+
+// VisitIn_list_expr is called when visiting a in_list_expr, return *tree.ExpressionBinaryComparison
+func (v *KFSqliteVisitor) VisitIn_list_expr(ctx *sqlgrammar.In_list_exprContext) interface{} {
+	expr := &tree.ExpressionBinaryComparison{
+		Left:     v.Visit(ctx.GetElem()).(tree.Expression),
+		Operator: tree.ComparisonOperatorIn,
+	}
+	if ctx.NOT_() != nil {
+		expr.Operator = tree.ComparisonOperatorNotIn
+	}
+	expr.Right = v.Visit(ctx.Expr_list()).(*tree.ExpressionList)
+	return expr
+}
+
+// VisitBetween_expr is called when visiting a between_expr, return *tree.ExpressionBetween
+func (v *KFSqliteVisitor) VisitBetween_expr(ctx *sqlgrammar.Between_exprContext) interface{} {
+	expr := &tree.ExpressionBetween{
+		Expression: v.Visit(ctx.GetElem()).(tree.Expression),
+		Left:       v.Visit(ctx.GetLow()).(tree.Expression),
+		Right:      v.Visit(ctx.GetHigh()).(tree.Expression),
+	}
+	if ctx.NOT_() != nil {
+		expr.NotBetween = true
+	}
+	return expr
+}
+
+// VisitLike_expr is called when visiting a like_expr, return *tree.ExpressionStringCompare
+func (v *KFSqliteVisitor) VisitLike_expr(ctx *sqlgrammar.Like_exprContext) interface{} {
+	expr := &tree.ExpressionStringCompare{
+		Left:     v.Visit(ctx.GetElem()).(tree.Expression),
+		Operator: tree.StringOperatorLike,
+		Right:    v.Visit(ctx.GetPattern()).(tree.Expression),
+	}
+	if ctx.NOT_() != nil {
+		expr.Operator = tree.StringOperatorNotLike
+	}
+	if ctx.ESCAPE_() != nil {
+		expr.Escape = v.Visit(ctx.GetEscape()).(tree.Expression)
+	}
+	return expr
+}
+
+// VisitComparisonOperator is called when visiting a comparisonOpertor, return tree.ComparisonOperator
+func (v *KFSqliteVisitor) VisitComparisonOperator(ctx *sqlgrammar.ComparisonOperatorContext) interface{} {
+	switch {
+	case ctx.LT() != nil:
+		return tree.ComparisonOperatorLessThan
+	case ctx.LT_EQ() != nil:
+		return tree.ComparisonOperatorLessThanOrEqual
+	case ctx.GT() != nil:
+		return tree.ComparisonOperatorGreaterThan
+	case ctx.GT_EQ() != nil:
+		return tree.ComparisonOperatorGreaterThanOrEqual
+	case ctx.ASSIGN() != nil:
+		return tree.ComparisonOperatorEqual
+	case ctx.NOT_EQ1() != nil:
+		return tree.ComparisonOperatorNotEqual
+	case ctx.NOT_EQ2() != nil:
+		return tree.ComparisonOperatorNotEqualDiamond
+	default:
+		panic(fmt.Sprintf("unknown comparison operator %s", ctx.GetText()))
+	}
+}
+
+// VisitComparison_expr is called when visiting a comparison_expr, return *tree.ExpressionBinaryComparison
+func (v *KFSqliteVisitor) VisitComparison_expr(ctx *sqlgrammar.Comparison_exprContext) interface{} {
+	expr := &tree.ExpressionBinaryComparison{
+		Left:     v.Visit(ctx.GetLeft()).(tree.Expression),
+		Operator: v.Visit(ctx.ComparisonOperator()).(tree.ComparisonOperator),
+		Right:    v.Visit(ctx.GetRight()).(tree.Expression),
+	}
+
+	return expr
+}
+
+// VisitBollean_value is called when visiting a boolean_value, return *tree.ExpressionLiteral
+func (v *KFSqliteVisitor) VisitBoolean_value(ctx *sqlgrammar.Boolean_valueContext) interface{} {
+	return &tree.ExpressionLiteral{
+		Value: ctx.GetText(),
+	}
+}
+
+// VisitIs_expr is called when visiting a is_expr, return *tree.ExpressionIs
+func (v *KFSqliteVisitor) VisitIs_expr(ctx *sqlgrammar.Is_exprContext) interface{} {
+	expr := &tree.ExpressionIs{
+		Left: v.Visit(ctx.Expr(0)).(tree.Expression),
+	}
+	if ctx.NOT_() != nil {
+		expr.Not = true
+	}
+
+	switch {
+	case ctx.NULL_() != nil:
+		expr.Right = &tree.ExpressionLiteral{Value: "NULL"}
+	case ctx.Boolean_value() != nil:
+		expr.Right = v.Visit(ctx.Boolean_value()).(tree.Expression)
+	case ctx.DISTINCT_() != nil:
+		expr.Right = v.Visit(ctx.Expr(1)).(tree.Expression)
+		expr.Distinct = true
+	default:
+		panic(fmt.Sprintf("unknown IS expression %s", ctx.GetText()))
+	}
+	return expr
+}
+
+// VisitNull_expr is called when visiting a null_expr, return *tree.ExpressionIs
+func (v *KFSqliteVisitor) VisitNull_expr(ctx *sqlgrammar.Null_exprContext) interface{} {
+	expr := &tree.ExpressionIs{
+		Left:  v.Visit(ctx.Expr()).(tree.Expression),
+		Right: &tree.ExpressionLiteral{Value: "NULL"},
+	}
+	if ctx.NOTNULL_() != nil {
+		expr.Not = true
+	}
+	return expr
+}
+
+// VisitLogical_not_expr is called when visiting a logical_not_expr, return *tree.ExpressionUnary
+func (v *KFSqliteVisitor) VisitLogical_not_expr(ctx *sqlgrammar.Logical_not_exprContext) interface{} {
+	return &tree.ExpressionUnary{
+		Operator: tree.UnaryOperatorNot,
+		Operand:  v.Visit(ctx.Expr()).(tree.Expression),
+	}
+}
+
+// VisitLogical_binary_expr is called when visiting a logical_binary_expr, return *tree.ExpressionBinaryLogical
+func (v *KFSqliteVisitor) VisitLogical_binary_expr(ctx *sqlgrammar.Logical_binary_exprContext) interface{} {
+	expr := &tree.ExpressionBinaryComparison{
+		Left:  v.Visit(ctx.GetLeft()).(tree.Expression),
+		Right: v.Visit(ctx.GetRight()).(tree.Expression),
+	}
+
+	switch {
+	case ctx.AND_() != nil:
+		expr.Operator = tree.LogicalOperatorAnd
+	case ctx.OR_() != nil:
+		expr.Operator = tree.LogicalOperatorOr
+	default:
+		panic(fmt.Sprintf("unknown logical operator %s", ctx.GetText()))
+	}
+
+	return expr
 }
 
 // VisitValues_clause is called when visiting a values_clause, return [][]tree.Expression
@@ -537,7 +558,7 @@ func (v *KFSqliteVisitor) VisitUpsert_clause(ctx *sqlgrammar.Upsert_clauseContex
 	conflictTarget.IndexedColumns = indexedColumns
 
 	if ctx.GetTarget_expr() != nil {
-		conflictTarget.Where = v.visitExpr(ctx.GetTarget_expr())
+		conflictTarget.Where = v.Visit(ctx.GetTarget_expr()).(tree.Expression)
 	}
 
 	if len(allIndexedColumnCtx) != 0 {
@@ -559,7 +580,7 @@ func (v *KFSqliteVisitor) VisitUpsert_clause(ctx *sqlgrammar.Upsert_clauseContex
 	clause.Updates = updates
 
 	if ctx.GetUpdate_expr() != nil {
-		clause.Where = v.visitExpr(ctx.GetUpdate_expr())
+		clause.Where = v.Visit(ctx.GetUpdate_expr()).(tree.Expression)
 	}
 	return &clause
 }
@@ -738,22 +759,7 @@ func (v *KFSqliteVisitor) VisitCompound_operator(ctx *sqlgrammar.Compound_operat
 // VisitOrdering_term is called when visiting a ordering_term, return *tree.OrderingTerm
 func (v *KFSqliteVisitor) VisitOrdering_term(ctx *sqlgrammar.Ordering_termContext) interface{} {
 	result := tree.OrderingTerm{}
-
-	// @yaiba NOTE: antlr will treat expr as a `expr collate collation_name` expression if COLLATE is present
-	// then `COLLATE_()` will be in ctx.Expr() ctx
-	// then the returned expression will be tree.ExpressionCollate
-	if ctx.Expr().COLLATE_() != nil {
-		collateExpr := v.Visit(ctx.Expr()).(tree.Expression)
-		e, ok := collateExpr.(*tree.ExpressionCollate)
-		if ok {
-			result.Expression = e.Expression
-			result.Collation = e.Collation
-		} else {
-			panic("parse COLLATE failed in ordering_term")
-		}
-	} else {
-		result.Expression = v.Visit(ctx.Expr()).(tree.Expression)
-	}
+	result.Expression = v.Visit(ctx.Expr()).(tree.Expression)
 
 	if ctx.Asc_desc() != nil {
 		if ctx.Asc_desc().DESC_() != nil {
@@ -1041,8 +1047,8 @@ func (v *KFSqliteVisitor) VisitSql_stmt(ctx *sqlgrammar.Sql_stmtContext) interfa
 	return v.VisitChildren(ctx).([]tree.Ast)[0]
 }
 
-// VisitParse is called first by Visitor.Visit
-func (v *KFSqliteVisitor) VisitParse(ctx *sqlgrammar.ParseContext) interface{} {
+// VisitStatements is called first by Visitor.Visit
+func (v *KFSqliteVisitor) VisitStatements(ctx *sqlgrammar.StatementsContext) interface{} {
 	// ParseContext will only have one Sql_stmt_listContext
 	sqlStmtListContext := ctx.Sql_stmt_list(0)
 	return v.VisitChildren(sqlStmtListContext).([]tree.Ast)
@@ -1053,9 +1059,6 @@ func (v *KFSqliteVisitor) VisitParse(ctx *sqlgrammar.ParseContext) interface{} {
 // Overwrite is needed,
 // refer to https://github.com/antlr/antlr4/pull/1841#issuecomment-576791512
 func (v *KFSqliteVisitor) Visit(parseTree antlr.ParseTree) interface{} {
-	//if tree == nil {
-	//	return nil
-	//}
 	if v.trace {
 		fmt.Printf("visit tree: %v, %s\n", reflect.TypeOf(parseTree), parseTree.GetText())
 	}
