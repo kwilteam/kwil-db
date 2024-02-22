@@ -524,8 +524,52 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// unary op
 		{"expr unary op +", "select +1", genSelectUnaryExprTree(tree.UnaryOperatorPlus, "1")},
 		{"expr unary op -", "select -1", genSelectUnaryExprTree(tree.UnaryOperatorMinus, "1")},
+		{"expr unary op - twice, right associative", "select - -1",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionUnary{
+										Operator: tree.UnaryOperatorMinus,
+										Operand: &tree.ExpressionUnary{
+											Operator: tree.UnaryOperatorMinus,
+											Operand:  genLiteralExpression("1"),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		//{"expr unary op ~", "select ~1", genSelectUnaryExprTree(tree.UnaryOperatorBitNot, "1")},
 		{"expr unary op not", "select not 1", genSelectUnaryExprTree(tree.UnaryOperatorNot, "1")},
+		{"expr unary op not twice, right associative", "select not not true",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionUnary{
+										Operator: tree.UnaryOperatorNot,
+										Operand: &tree.ExpressionUnary{
+											Operator: tree.UnaryOperatorNot,
+											Operand:  genLiteralExpression("true"),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		// binary op
 		//{"expr binary op ||", "select 1 || 2",
 		//	genSimplyArithmeticSelectTree(tree.ArithmeticConcat, "1", "2")},
