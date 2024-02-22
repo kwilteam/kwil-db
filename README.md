@@ -25,7 +25,7 @@
     </a>
 </div>
 
-Kwil-db is the execution layer (node software) for Kwil Networks. Built with [PostgreSQL](https://www.postgresql.org/) and [CometBFT](https://github.com/cometbft/cometbft), Kwil Networks extend the functionality of traditional relational databases to enable secure, byzantine fault tolerant, relational data-driven replicated state machines.
+Kwil-db is the execution layer (node software) for Kwil Networks. Built with [PostgreSQL](https://www.postgresql.org/) and [CometBFT](https://github.com/cometbft/cometbft), Kwil-db extend the functionality of traditional relational databases to enable secure, byzantine fault tolerant, relational data-driven replicated state machines.
 
 ## Overview
 
