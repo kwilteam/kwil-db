@@ -15,7 +15,7 @@
         <img src="https://goreportcard.com/badge/github.com/kwilteam/kwil-db" alt="Go Report Card">
     </a>
     <a href="https://github.com/kwilteam/kwil-db/actions">
-        <img src="https://github.com/kwilteam/kwil-db/workflows/Go/badge.svg" alt="Build Status">
+        <img src="https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg" alt="Build Status">
     </a>
     <a href="https://github.com/kwilteam/kwil-db/releases">
         <img src="https://img.shields.io/github/v/release/kwilteam/kwil-db" alt="Release">
