@@ -627,7 +627,7 @@ func ReadOrCreatePrivateKeyFile(keyPath string, autogen bool) (priv, pub []byte,
 	}
 
 	if !autogen {
-		return nil, nil, false, fmt.Errorf("private key not found")
+		return nil, nil, false, fmt.Errorf("failed to load private key: %w", err)
 	}
 
 	priv, pub, err = newNodeKey()
