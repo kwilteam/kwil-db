@@ -98,7 +98,13 @@ git pull
 git checkout -b <branch-name>
 ```
 
-3. Ensure that your PR is ready to be merged and all unit and acceptance tests pass:
+3. Start local Postgres before running tests:
+
+```bash
+docker compose -f ./deployments/compose/postgres/docker-compose.yml up
+```
+
+4. Ensure that your PR is ready to be merged and all unit and acceptance tests pass:
 
 ```bash
 task install:deps # If first time contributing
@@ -109,7 +115,7 @@ task test:unit
 task test:act 
 ```
 
-4. Push your branch to github.
+5. Push your branch to github.
 
 ```bash
 git add -u # Add all changes
@@ -120,9 +126,9 @@ git push -u <your-origin-name> <branch-name>
 
 Please ensure that all the commits in your git history match the commit message [guidelines](#commit-messages) above. You can use `git rebase -i` to edit your commit history.
 
-5. Open a pull request to the `main` branch of the kwil-db repository. Please follow the PR template. If `main` updates while the PR is open, please update the branch with latest `main` (rebase or merge).
+6. Open a pull request to the `main` branch of the kwil-db repository. Please follow the PR template. If `main` updates while the PR is open, please update the branch with latest `main` (rebase or merge).
 
-6. Wait for a maintainer to review your PR. If there are any issues, you will be notified and you can make the necessary changes.
+7. Wait for a maintainer to review your PR. If there are any issues, you will be notified and you can make the necessary changes.
 
 ## License
 
