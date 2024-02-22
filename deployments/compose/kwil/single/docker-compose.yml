@@ -14,6 +14,7 @@ services:
     user: postgres
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
       # Setting user/pass/db works, but we use docker-entrypoint-initdb.d instead for more control
       # POSTGRES_USER: kwild
       # POSTGRES_PASSWORD: kwild

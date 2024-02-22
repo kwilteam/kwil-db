@@ -7,6 +7,7 @@ services:
     restart: always
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
       # Setting user/pass/db works, but we use docker-entrypoint-initdb.d instead for more control
       # POSTGRES_USER: kwild
       # POSTGRES_PASSWORD: kwild
@@ -17,9 +18,9 @@ services:
       -c max_replication_slots=10
       -c max_prepared_transactions=2
     volumes: 
-      - db:/var/lib/postgresql/data
+      - kwildb:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/create_user.sql
 
 volumes:
-  db:
+  kwildb:
     driver: local

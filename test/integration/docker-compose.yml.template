@@ -48,6 +48,7 @@ services:
     user: postgres
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
     command: |
       -c wal_level=logical
       -c max_wal_senders=10
@@ -107,6 +108,7 @@ services:
     user: postgres
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
     command: |
       -c wal_level=logical
       -c max_wal_senders=10
@@ -166,6 +168,7 @@ services:
     user: postgres
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
     command: |
       -c wal_level=logical
       -c max_wal_senders=10
@@ -228,6 +231,7 @@ services:
     user: postgres
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
     command: |
       -c wal_level=logical
       -c max_wal_senders=10
@@ -287,6 +291,7 @@ services:
     user: postgres
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
     command: |
       -c wal_level=logical
       -c max_wal_senders=10
@@ -346,6 +351,7 @@ services:
     user: postgres
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
     command: |
       -c wal_level=logical
       -c max_wal_senders=10
