@@ -20,12 +20,20 @@ type URL struct {
 	Target string
 	// Port is the port number, or 0 if not specified.
 	Port int
+
+	// the parsed url.URL. Not exported for test simplicity (comparing exported values).
+	u *url.URL
+}
+
+// URL returns the parsed url.URL.
+func (u *URL) URL() *url.URL {
+	return u.u
 }
 
 // Scheme is a protocol scheme, such as http or tcp.
 type Scheme string
 
-func (s Scheme) valid() bool {
+func (s Scheme) Valid() bool {
 	switch s {
 	case HTTP, HTTPS, TCP, UNIX:
 		return true
@@ -53,9 +61,11 @@ const (
 // - localhost
 // - unix:///var/run/kwil.sock
 // If the URL does not have a scheme, it is assumed to be a tcp address.
+// If it does not have a port, it is set to 0. This is only appropriate for
+// listen addresses.
 func ParseURL(u string) (*URL, error) {
 	original := u
-	// if the url does not have a scheme, assume it's a tcp address
+	// If the url does not have a scheme, assume it's a tcp address, rewrite and reparse.
 	hasScheme, err := hasScheme(u)
 	if err != nil {
 		return nil, err
@@ -69,45 +79,41 @@ func ParseURL(u string) (*URL, error) {
 		return nil, err
 	}
 
-	scheme := Scheme(parsed.Scheme)
-	if !scheme.valid() { // I don't think this can error, but just in case
-		return nil, fmt.Errorf("%w: %s", ErrUnknownScheme, scheme)
-	}
-
-	var target string
-	switch scheme {
+	switch Scheme(parsed.Scheme) {
+	case TCP, HTTP, HTTPS:
 	case UNIX:
-		target, err = expandPath(parsed.Path)
+		target, err := expandPath(parsed.Path)
 		if err != nil {
 			return nil, err
 		}
+		parsed.Host = target
 	default:
-		target = parsed.Host
+		return nil, fmt.Errorf("%w: %s", ErrUnknownScheme, parsed.Scheme)
 	}
 
-	portString := parsed.Port()
-	if portString == "" {
-		portString = "0"
-	}
-	port, err := strconv.ParseInt(portString, 10, 32)
-	if err != nil {
-		return nil, err
+	var port uint64
+	if portString := parsed.Port(); portString != "" {
+		port, err = strconv.ParseUint(portString, 10, 16)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &URL{
 		Original: original,
-		Scheme:   scheme,
-		Target:   target,
+		Scheme:   Scheme(parsed.Scheme),
+		Target:   parsed.Host,
 		Port:     int(port),
+		u:        parsed,
 	}, nil
 }
 
 // hasScheme returns true if the url has a known scheme.
 func hasScheme(u string) (bool, error) {
 	parsed, err := url.Parse(u)
-	if err != nil {
-		return false, err
-	}
+	if err != nil { // errors on 127.0.0.1:8080 so return false with no error
+		return false, nil
+	} // no error for localhost:8080, just empty parsed.Scheme string
 
 	switch parsed.Scheme {
 	case "tcp", "unix", "http", "https":

@@ -671,7 +671,7 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 		Logger:         *d.log.Named("private-validator-signature-store"),
 	})
 	if err != nil {
-		failBuild(err, "failed to build comet node")
+		failBuild(err, "failed to open comet node KV store")
 	}
 	closer.addCloser(db.Close, "closing signing store")
 
