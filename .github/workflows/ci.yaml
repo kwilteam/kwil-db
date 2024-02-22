@@ -202,4 +202,5 @@ jobs:
             mv /tmp/.buildx-cache-kgw-new /tmp/.buildx-cache-kgw
 
       - name: Prune Docker
+        if: ${{ always() }}
         run: docker rm $(docker ps -a -q) -f && docker network prune -f || true
