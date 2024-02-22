@@ -376,11 +376,6 @@ func (s *StatementCleaner) EnterUpdate(node *tree.Update) (err error) {
 	return nil
 }
 
-// EnterUpdateStmt validates the update type
-func (s *StatementCleaner) EnterUpdateStmt(node *tree.UpdateStmt) (err error) {
-	return ErrInvalidUpdateType
-}
-
 // EnterUpsert validates the upsert type
 func (s *StatementCleaner) EnterUpsert(node *tree.Upsert) (err error) {
 	return wrapErr(ErrInvalidUpsertType, node.Type.Valid())
