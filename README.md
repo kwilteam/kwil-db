@@ -5,6 +5,12 @@
     <a href="https://github.com/kwilteam/kwil-db/blob/main/LICENSE.md">
         <img alt="GitHub License" src="https://img.shields.io/github/license/kwilteam/kwil-db">
     </a>
+     <a href="https://github.com/kwilteam/kwil-db/releases">
+        <img src="https://img.shields.io/github/v/release/kwilteam/kwil-db" alt="Release">
+    </a>
+    <a href="https://github.com/kwilteam/kwil-db/actions">
+        <img src="https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg" alt="Build Status">
+    </a>
     <a href="https://github.com/kwilteam/kwil-db/blob/main/go.mod">
         <img src="https://img.shields.io/github/go-mod/go-version/kwilteam/kwil-db" alt="Go Version">
     </a>
@@ -14,11 +20,8 @@
     <a href="https://goreportcard.com/report/github.com/kwilteam/kwil-db">
         <img src="https://goreportcard.com/badge/github.com/kwilteam/kwil-db" alt="Go Report Card">
     </a>
-    <a href="https://github.com/kwilteam/kwil-db/actions">
-        <img src="https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg" alt="Build Status">
-    </a>
-    <a href="https://github.com/kwilteam/kwil-db/releases">
-        <img src="https://img.shields.io/github/v/release/kwilteam/kwil-db" alt="Release">
+    <a href="https://discord.com/invite/HzRPZ59Kay">
+        <img alt="Discord" src="https://img.shields.io/discord/819855804554543114?logo=discord">
     </a>
 </div>
 
