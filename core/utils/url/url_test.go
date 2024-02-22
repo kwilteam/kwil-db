@@ -54,6 +54,56 @@ func TestParseURL(t *testing.T) {
 			},
 		},
 		{
+			name: "no scheme (IP)",
+			url:  "127.0.0.1:8080",
+			want: &url.URL{
+				Original: "127.0.0.1:8080",
+				Scheme:   url.TCP,
+				Target:   "127.0.0.1:8080",
+				Port:     8080,
+			},
+		},
+		{
+			name: "no scheme or port (IP)",
+			url:  "127.0.0.1",
+			want: &url.URL{
+				Original: "127.0.0.1",
+				Scheme:   url.TCP,
+				Target:   "127.0.0.1",
+				Port:     0,
+			},
+		},
+		{
+			name: "no scheme or port",
+			url:  "localhost",
+			want: &url.URL{
+				Original: "localhost",
+				Scheme:   url.TCP,
+				Target:   "localhost",
+				Port:     0,
+			},
+		},
+		{
+			name: "no scheme",
+			url:  "localhost:8080",
+			want: &url.URL{
+				Original: "localhost:8080",
+				Scheme:   url.TCP,
+				Target:   "localhost:8080",
+				Port:     8080,
+			},
+		},
+		{
+			name: "IPv6 with scheme",
+			url:  "tcp://[d4:93::1]:22",
+			want: &url.URL{
+				Original: "tcp://[d4:93::1]:22",
+				Scheme:   url.TCP,
+				Target:   "[d4:93::1]:22",
+				Port:     22,
+			},
+		},
+		{
 			name:    "unknown scheme",
 			url:     "foo://localhost:8080",
 			wantErr: url.ErrUnknownScheme,
@@ -83,7 +133,7 @@ func TestParseURL(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, *got, *tt.want)
+			assert.EqualExportedValues(t, *got, *tt.want)
 		})
 	}
 }

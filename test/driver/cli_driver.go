@@ -193,7 +193,7 @@ func (d *KwilCliDriver) DeployDatabase(_ context.Context, db *transactions.Schem
 	cmd := d.newKwilCliCmd("database", "deploy", "-p", schemaFile, "-t", "json")
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deploy databse: %w", err)
+		return nil, fmt.Errorf("failed to deploy database: %w", err)
 	}
 
 	txHash, err = parseRespTxHash(out.Result)
