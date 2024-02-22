@@ -200,3 +200,7 @@ jobs:
           mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
           rm -rf /tmp/.buildx-cache-kgw
             mv /tmp/.buildx-cache-kgw-new /tmp/.buildx-cache-kgw
+
+      - name: Prune Docker
+        if: ${{ failure() || cancelled() }}
+        run: docker rm $(docker ps -a -q) -f && docker network prune -f
