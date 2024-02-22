@@ -7,7 +7,9 @@ import (
 	"encoding"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -266,6 +268,9 @@ func GetCfg(flagCfg *KwildConfig) (*KwildConfig, error) {
 	// 1. identify the root dir
 	cfg := DefaultConfig()
 	rootDir := cfg.RootDir
+	// Remember the default listen addresses in case we need to apply the
+	// default port to a user override.
+	defaultListenRPC, defaultListenHTTP := cfg.AppCfg.GrpcListenAddress, cfg.AppCfg.HTTPListenAddress
 
 	// read in env config
 	envCfg, err := LoadEnvConfig()
@@ -329,7 +334,42 @@ func GetCfg(flagCfg *KwildConfig) (*KwildConfig, error) {
 		cfg.ChainCfg.Moniker = defaultMoniker()
 	}
 
+	cfg.AppCfg.GrpcListenAddress = cleanListenAddr(cfg.AppCfg.GrpcListenAddress, defaultListenRPC)
+	cfg.AppCfg.HTTPListenAddress = cleanListenAddr(cfg.AppCfg.HTTPListenAddress, defaultListenHTTP)
+
 	return cfg, nil
+}
+
+// cleanListenAddr ensures that the provided listen includes both a host and
+// port, using the host and port from defaultListen as needed.
+func cleanListenAddr(listen, defaultListen string) string {
+	defaultHost, defaultPort, _ := net.SplitHostPort(defaultListen) // empty if invalid default
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		var msg string
+		addrErr := new(net.AddrError)
+		if errors.As(err, &addrErr) {
+			host = addrErr.Addr
+			msg = addrErr.Err
+		} else { // may be incorrect if host couldn't parse, but try
+			host = listen
+			msg = err.Error()
+		}
+		if strings.Contains(msg, "missing port") { // they really didn't export this :/
+			return net.JoinHostPort(host, defaultPort) // no change if default had none
+		}
+		return listen // let the listener try
+	}
+	if host != "" && port != "" { // nothing missing
+		return listen
+	}
+	if port == "" {
+		port = defaultPort // no change if default had none
+	}
+	if host == "" {
+		host = defaultHost // no change if default had none
+	}
+	return net.JoinHostPort(host, port)
 }
 
 // LoadConfig reads a config.toml at the given path and returns a KwilConfig.
