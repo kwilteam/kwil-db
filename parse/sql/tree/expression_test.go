@@ -420,51 +420,26 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			wantPanic: true,
 		},
 		{
-			name: "string compare with escape and GLOB operator",
-			fields: &tree.ExpressionStringCompare{
-				Left: &tree.ExpressionColumn{
-					Column: "foo",
-				},
-				Operator: tree.StringOperatorGlob,
-				Right: &tree.ExpressionLiteral{
-					Value: "'bar'",
-				},
-				Escape: &tree.ExpressionLiteral{
-					Value: "'baz'",
-				},
-			},
-			wantPanic: true,
-		},
-		{
-			name: "string compare without escape and NOT GLOB operator",
-			fields: &tree.ExpressionStringCompare{
-				Left: &tree.ExpressionColumn{
-					Column: "foo",
-				},
-				Operator: tree.StringOperatorNotGlob,
-				Right: &tree.ExpressionLiteral{
-					Value: "'bar'",
-				},
-			},
-			want: `"foo" NOT GLOB 'bar'`,
-		},
-		{
 			name: "IsNull",
-			fields: &tree.ExpressionIsNull{
-				Expression: &tree.ExpressionColumn{
+			fields: &tree.ExpressionIs{
+				Left: &tree.ExpressionColumn{
 					Column: "foo",
 				},
-				IsNull: true,
+				Right: &tree.ExpressionLiteral{
+					Value: "NULL",
+				},
 			},
 			want: `"foo" IS NULL`,
 		},
 		{
 			name: "IsNull with type cast",
-			fields: &tree.ExpressionIsNull{
-				Expression: &tree.ExpressionColumn{
+			fields: &tree.ExpressionIs{
+				Left: &tree.ExpressionColumn{
 					Column: "foo",
 				},
-				IsNull:   true,
+				Right: &tree.ExpressionLiteral{
+					Value: "NULL",
+				},
 				TypeCast: tree.TypeCastInt,
 				Wrapped:  true,
 			},
@@ -472,65 +447,75 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 		},
 		{
 			name: "IsNull with type cast without wrapped",
-			fields: &tree.ExpressionIsNull{
-				Expression: &tree.ExpressionColumn{
+			fields: &tree.ExpressionIs{
+				Left: &tree.ExpressionColumn{
 					Column: "foo",
 				},
-				IsNull:   true,
+				Right: &tree.ExpressionLiteral{
+					Value: "NULL",
+				},
 				TypeCast: tree.TypeCastInt,
 			},
 			wantPanic: true,
 		},
 		{
-			name: "IsNull with no expression",
-			fields: &tree.ExpressionIsNull{
-				IsNull: true,
-			},
+			name:      "IsNull with no expression",
+			fields:    &tree.ExpressionIs{},
 			wantPanic: true,
 		},
 		{
 			name: "Is Not Null",
-			fields: &tree.ExpressionIsNull{
-				Expression: &tree.ExpressionColumn{
+			fields: &tree.ExpressionIs{
+				Left: &tree.ExpressionColumn{
 					Column: "foo",
 				},
+				Right: &tree.ExpressionLiteral{
+					Value: "NULL",
+				},
+				Not: true,
 			},
-			want: `"foo" NOT NULL`,
+			want: `"foo" IS NOT NULL`,
 		},
 		{
 			name: "Is Not Null with type cast",
-			fields: &tree.ExpressionIsNull{
-				Expression: &tree.ExpressionColumn{
+			fields: &tree.ExpressionIs{
+				Left: &tree.ExpressionColumn{
 					Column: "foo",
 				},
+				Right: &tree.ExpressionLiteral{
+					Value: "NULL",
+				},
+				Not:      true,
 				TypeCast: tree.TypeCastInt,
 				Wrapped:  true,
 			},
-			want: `("foo" NOT NULL) ::int`,
+			want: `("foo" IS NOT NULL) ::int`,
 		},
 		{
 			name: "is not distinct from",
-			fields: &tree.ExpressionDistinct{
+			fields: &tree.ExpressionIs{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
 				},
 				Right: &tree.ExpressionLiteral{
 					Value: "'bar'",
 				},
-				IsNot: true,
+				Distinct: true,
+				Not:      true,
 			},
 			want: `"foo" IS NOT DISTINCT FROM 'bar'`,
 		},
 		{
 			name: "is not distinct from with type cast",
-			fields: &tree.ExpressionDistinct{
+			fields: &tree.ExpressionIs{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
 				},
 				Right: &tree.ExpressionLiteral{
 					Value: "'bar'",
 				},
-				IsNot:    true,
+				Distinct: true,
+				Not:      true,
 				TypeCast: tree.TypeCastInt,
 				Wrapped:  true,
 			},
@@ -538,34 +523,34 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 		},
 		{
 			name: "is not distinct from with type cast without wrapped",
-			fields: &tree.ExpressionDistinct{
+			fields: &tree.ExpressionIs{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
 				},
 				Right: &tree.ExpressionLiteral{
 					Value: "'bar'",
 				},
-				IsNot:    true,
+				Distinct: true,
+				Not:      true,
 				TypeCast: tree.TypeCastInt,
 			},
 			wantPanic: true,
 		},
 		{
 			name: "expr is expr",
-			fields: &tree.ExpressionBinaryComparison{
+			fields: &tree.ExpressionIs{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
 				},
 				Right: &tree.ExpressionLiteral{
 					Value: "'bar'",
 				},
-				Operator: tree.ComparisonOperatorIs,
 			},
 			want: `"foo" IS 'bar'`,
 		},
 		{
 			name: "distinct with no left",
-			fields: &tree.ExpressionDistinct{
+			fields: &tree.ExpressionIs{
 				Right: &tree.ExpressionLiteral{
 					Value: "'bar'",
 				},
@@ -574,7 +559,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 		},
 		{
 			name: "distinct with no right",
-			fields: &tree.ExpressionDistinct{
+			fields: &tree.ExpressionIs{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
 				},

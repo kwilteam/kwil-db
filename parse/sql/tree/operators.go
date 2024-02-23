@@ -11,18 +11,11 @@ type BinaryOperator interface {
 type ArithmeticOperator string
 
 const (
-	ArithmeticOperatorAdd               ArithmeticOperator = "+"
-	ArithmeticOperatorSubtract          ArithmeticOperator = "-"
-	ArithmeticOperatorMultiply          ArithmeticOperator = "*"
-	ArithmeticOperatorDivide            ArithmeticOperator = "/"
-	ArithmeticOperatorModulus           ArithmeticOperator = "%"
-	ArithmeticOperatorBitwiseAnd        ArithmeticOperator = "&"
-	ArithmeticOperatorBitwiseOr         ArithmeticOperator = "|"
-	ArithmeticOperatorBitwiseLeftShift  ArithmeticOperator = "<<"
-	ArithmeticOperatorBitwiseRightShift ArithmeticOperator = ">>"
-	// treat ~ as unary operator
-	// this is not technically an arithmetic operator, but it is used in arithmetic expressions
-	ArithmeticConcat ArithmeticOperator = "||"
+	ArithmeticOperatorAdd      ArithmeticOperator = "+"
+	ArithmeticOperatorSubtract ArithmeticOperator = "-"
+	ArithmeticOperatorMultiply ArithmeticOperator = "*"
+	ArithmeticOperatorDivide   ArithmeticOperator = "/"
+	ArithmeticOperatorModulus  ArithmeticOperator = "%"
 )
 
 func (a ArithmeticOperator) String() string {
@@ -31,7 +24,7 @@ func (a ArithmeticOperator) String() string {
 
 func (a ArithmeticOperator) Valid() error {
 	switch a {
-	case ArithmeticOperatorAdd, ArithmeticOperatorSubtract, ArithmeticOperatorMultiply, ArithmeticOperatorDivide, ArithmeticOperatorModulus, ArithmeticOperatorBitwiseAnd, ArithmeticOperatorBitwiseOr, ArithmeticOperatorBitwiseLeftShift, ArithmeticOperatorBitwiseRightShift, ArithmeticConcat:
+	case ArithmeticOperatorAdd, ArithmeticOperatorSubtract, ArithmeticOperatorMultiply, ArithmeticOperatorDivide, ArithmeticOperatorModulus:
 		return nil
 	default:
 		return fmt.Errorf("invalid arithmetic operator: %s", a)
@@ -41,7 +34,6 @@ func (a ArithmeticOperator) Valid() error {
 type ComparisonOperator string
 
 const (
-	ComparisonOperatorDoubleEqual        ComparisonOperator = "=="
 	ComparisonOperatorEqual              ComparisonOperator = "="
 	ComparisonOperatorNotEqualDiamond    ComparisonOperator = "<>"
 	ComparisonOperatorNotEqual           ComparisonOperator = "!="
@@ -49,8 +41,6 @@ const (
 	ComparisonOperatorLessThan           ComparisonOperator = "<"
 	ComparisonOperatorGreaterThanOrEqual ComparisonOperator = ">="
 	ComparisonOperatorLessThanOrEqual    ComparisonOperator = "<="
-	ComparisonOperatorIs                 ComparisonOperator = "IS"
-	ComparisonOperatorIsNot              ComparisonOperator = "IS NOT"
 	ComparisonOperatorIn                 ComparisonOperator = "IN"
 	ComparisonOperatorNotIn              ComparisonOperator = "NOT IN"
 )
@@ -62,7 +52,7 @@ func (c ComparisonOperator) String() string {
 
 func (c ComparisonOperator) Valid() error {
 	switch c {
-	case ComparisonOperatorDoubleEqual, ComparisonOperatorEqual, ComparisonOperatorNotEqualDiamond, ComparisonOperatorNotEqual, ComparisonOperatorGreaterThan, ComparisonOperatorLessThan, ComparisonOperatorGreaterThanOrEqual, ComparisonOperatorLessThanOrEqual, ComparisonOperatorIs, ComparisonOperatorIsNot, ComparisonOperatorIn, ComparisonOperatorNotIn:
+	case ComparisonOperatorEqual, ComparisonOperatorNotEqualDiamond, ComparisonOperatorNotEqual, ComparisonOperatorGreaterThan, ComparisonOperatorLessThan, ComparisonOperatorGreaterThanOrEqual, ComparisonOperatorLessThanOrEqual, ComparisonOperatorIn, ComparisonOperatorNotIn:
 		return nil
 	default:
 		return fmt.Errorf("invalid comparison operator: %s", c)
@@ -93,14 +83,8 @@ func (l LogicalOperator) Valid() error {
 type StringOperator string
 
 const (
-	StringOperatorLike      StringOperator = "LIKE"
-	StringOperatorNotLike   StringOperator = "NOT LIKE"
-	StringOperatorGlob      StringOperator = "GLOB"
-	StringOperatorNotGlob   StringOperator = "NOT GLOB"
-	StringOperatorRegexp    StringOperator = "REGEXP"
-	StringOperatorNotRegexp StringOperator = "NOT REGEXP"
-	StringOperatorMatch     StringOperator = "MATCH"
-	StringOperatorNotMatch  StringOperator = "NOT MATCH"
+	StringOperatorLike    StringOperator = "LIKE"
+	StringOperatorNotLike StringOperator = "NOT LIKE"
 )
 
 func (s StringOperator) binary() {}
@@ -109,7 +93,7 @@ func (s StringOperator) String() string {
 }
 func (s StringOperator) Valid() error {
 	switch s {
-	case StringOperatorLike, StringOperatorNotLike, StringOperatorGlob, StringOperatorNotGlob, StringOperatorRegexp, StringOperatorNotRegexp, StringOperatorMatch, StringOperatorNotMatch:
+	case StringOperatorLike, StringOperatorNotLike:
 		return nil
 	default:
 		return fmt.Errorf("invalid string operator: %s", s)
@@ -127,10 +111,10 @@ func (s StringOperator) Escapable() bool {
 type UnaryOperator string
 
 const (
-	UnaryOperatorPlus   UnaryOperator = "+"
-	UnaryOperatorMinus  UnaryOperator = "-"
-	UnaryOperatorNot    UnaryOperator = "NOT"
-	UnaryOperatorBitNot UnaryOperator = "~"
+	UnaryOperatorPlus  UnaryOperator = "+"
+	UnaryOperatorMinus UnaryOperator = "-"
+	UnaryOperatorNot   UnaryOperator = "NOT"
+	//UnaryOperatorBitNot UnaryOperator = "~"
 )
 
 func (u UnaryOperator) String() string {
@@ -139,7 +123,7 @@ func (u UnaryOperator) String() string {
 
 func (u UnaryOperator) Valid() error {
 	switch u {
-	case UnaryOperatorPlus, UnaryOperatorMinus, UnaryOperatorNot, UnaryOperatorBitNot:
+	case UnaryOperatorPlus, UnaryOperatorMinus, UnaryOperatorNot:
 		return nil
 	default:
 		return fmt.Errorf("invalid unary operator: %s", u)
