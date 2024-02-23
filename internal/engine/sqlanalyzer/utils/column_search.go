@@ -43,9 +43,7 @@ func SearchResultColumns(expr tree.Expression) []*tree.ExpressionColumn {
 		return SearchResultColumns(e.Expression)
 	case *tree.ExpressionStringCompare:
 		return append(SearchResultColumns(e.Left), SearchResultColumns(e.Right)...)
-	case *tree.ExpressionIsNull:
-		return SearchResultColumns(e.Expression)
-	case *tree.ExpressionDistinct:
+	case *tree.ExpressionIs:
 		return append(SearchResultColumns(e.Left), SearchResultColumns(e.Right)...)
 	case *tree.ExpressionBetween:
 		return SearchResultColumns(e.Expression)

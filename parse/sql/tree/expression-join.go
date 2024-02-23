@@ -106,11 +106,7 @@ func (e *ExpressionStringCompare) joinable() joinableStatus {
 	return joinableStatusInvalid
 }
 
-func (e *ExpressionIsNull) joinable() joinableStatus {
-	return e.Expression.joinable()
-}
-
-func (e *ExpressionDistinct) joinable() joinableStatus {
+func (e *ExpressionIs) joinable() joinableStatus {
 	if e.Left.joinable() == joinableStatusContainsColumn || e.Right.joinable() == joinableStatusContainsColumn {
 		return joinableStatusContainsColumn
 	}

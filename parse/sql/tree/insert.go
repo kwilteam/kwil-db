@@ -88,13 +88,11 @@ type InsertType uint8
 
 const (
 	InsertTypeInsert InsertType = iota
-	InsertTypeReplace
-	InsertTypeInsertOrReplace
 )
 
 func (i InsertType) Valid() error {
 	switch i {
-	case InsertTypeInsert, InsertTypeReplace, InsertTypeInsertOrReplace:
+	case InsertTypeInsert:
 		return nil
 	default:
 		return fmt.Errorf("invalid insert type: %d", i)
@@ -105,10 +103,6 @@ func (i *InsertType) String() string {
 	switch *i {
 	case InsertTypeInsert:
 		return "INSERT"
-	case InsertTypeReplace:
-		return "REPLACE"
-	case InsertTypeInsertOrReplace:
-		return "INSERT OR REPLACE"
 	default:
 		panic(fmt.Errorf("unknown InsertType: %d", *i))
 	}

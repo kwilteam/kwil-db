@@ -6,6 +6,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
+	"github.com/kwilteam/kwil-db/parse/sql/postgres"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -118,6 +119,9 @@ func Test_Analyze(t *testing.T) {
 			}
 
 			assert.Equal(t, removeSpaces(tt.want), removeSpaces(got.Statement))
+
+			err = postgres.CheckSyntaxReplaceDollar(got.Statement)
+			assert.NoErrorf(t, err, "postgres syntax check failed: %s", err)
 		})
 	}
 }

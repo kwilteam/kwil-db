@@ -52,7 +52,6 @@ func (u *Update) ToSQL() (str string, err error) {
 // UpdateStmt is a statement that represents an UPDATE statement.
 // USE Update INSTEAD OF THIS
 type UpdateStmt struct {
-	Or                 UpdateOr
 	QualifiedTableName *QualifiedTableName
 	UpdateSetClause    []*UpdateSetClause
 	From               *FromClause
@@ -72,62 +71,11 @@ func (u *UpdateStmt) Accept(w Walker) error {
 	)
 }
 
-type UpdateOr string
-
-const (
-	UpdateOrAbort    UpdateOr = "ABORT"
-	UpdateOrFail     UpdateOr = "FAIL"
-	UpdateOrIgnore   UpdateOr = "IGNORE"
-	UpdateOrReplace  UpdateOr = "REPLACE"
-	UpdateOrRollback UpdateOr = "ROLLBACK"
-)
-
-func (u *UpdateOr) Valid() error {
-	if u.Empty() {
-		return nil
-	}
-
-	switch *u {
-	case UpdateOrAbort, UpdateOrFail, UpdateOrIgnore, UpdateOrReplace, UpdateOrRollback:
-		return nil
-	default:
-		return fmt.Errorf("unknown UpdateOr: %s", *u)
-	}
-}
-
-func (u UpdateOr) Empty() bool {
-	return u == ""
-}
-
-func (u UpdateOr) check() {
-	if u.Empty() {
-		return
-	}
-	if err := u.Valid(); err != nil {
-		panic(err)
-	}
-}
-
-func (u *UpdateOr) ToSQL() string {
-	u.check()
-	if u.Empty() {
-		return ""
-	}
-
-	stmt := sqlwriter.NewWriter()
-	stmt.Token.Or()
-	stmt.WriteString(string(*u))
-	return stmt.String()
-}
-
 func (u *UpdateStmt) ToSQL() string {
 	u.check()
 
 	stmt := sqlwriter.NewWriter()
 	stmt.Token.Update()
-	if !u.Or.Empty() {
-		stmt.WriteString(u.Or.ToSQL())
-	}
 	stmt.WriteString(u.QualifiedTableName.ToSQL())
 	stmt.Token.Set()
 	stmt.WriteList(len(u.UpdateSetClause), func(i int) {
