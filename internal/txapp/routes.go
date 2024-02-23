@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"math/big"
 
+	types1 "github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/voting"
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -47,11 +49,23 @@ type TxContext struct {
 	BlockHeight int64
 	// Proposer gets the proposer public key of the current block.
 	Proposer []byte
+	// ConsensusParams holds network level parameters that can be evolved
+	// over the lifetime of a network.
+	ConsensusParams ConsensusParams
+}
+
+// ConsensusParams holds network level parameters that may evolve over time.
+type ConsensusParams struct {
 	// VotingPeriod is the maximum length of a voting period.
 	// It is measured in blocks, and is applied additively.
 	// e.g. if the current block is 50, and VotingPeriod is 100,
 	// then the current voting period ends at block 150.
 	VotingPeriod int64
+	// JoinVoteExpiration is the voting period for any validator
+	// join or removal vote. It is measured in blocks, and is applied additively.
+	// e.g. if the current block is 50, and JoinVoteExpiration is 100,
+	// then the current voting period ends at block 150.
+	JoinVoteExpiration int64
 }
 
 type Pricer interface {
@@ -99,8 +113,7 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	var schema *engineTypes.Schema
-	schema, err = convertSchemaToEngine(schemaPayload)
+	schema, err := convertSchemaToEngine(schemaPayload)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -230,7 +243,7 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	defer tx2.Rollback(ctx.Ctx)
 
 	for i := range args {
-		_, err = router.Engine.Execute(ctx.Ctx, tx2, &engineTypes.ExecutionData{
+		_, err = router.Engine.Call(ctx.Ctx, tx2, &types1.ExecutionData{
 			Dataset:   action.DBID,
 			Procedure: action.Action,
 			Args:      args[i],
@@ -274,21 +287,21 @@ func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.T
 	}
 	defer dbTx.Commit(ctx.Ctx)
 
-	transfer := &transactions.Transfer{}
-	err = transfer.UnmarshalBinary(tx.Body.Payload)
+	transferBody := &transactions.Transfer{}
+	err = transferBody.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	bigAmt, ok := new(big.Int).SetString(transfer.Amount, 10)
+	bigAmt, ok := new(big.Int).SetString(transferBody.Amount, 10)
 	if !ok {
-		return txRes(spend, transactions.CodeInvalidAmount, fmt.Errorf("failed to parse amount: %s", transfer.Amount))
+		return txRes(spend, transactions.CodeInvalidAmount, fmt.Errorf("failed to parse amount: %s", transferBody.Amount))
 	}
 
 	// Negative send amounts should be blocked at various levels, so we should
 	// never get this, but be extra defensive since we cannot allow thievery.
 	if bigAmt.Sign() < 0 {
-		return txRes(spend, transactions.CodeInvalidAmount, fmt.Errorf("invalid transfer amount: %s", transfer.Amount))
+		return txRes(spend, transactions.CodeInvalidAmount, fmt.Errorf("invalid transfer amount: %s", transferBody.Amount))
 	}
 
 	tx2, err := dbTx.BeginTx(ctx.Ctx)
@@ -297,7 +310,7 @@ func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.T
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
-	err = router.Accounts.Transfer(ctx.Ctx, tx2, transfer.To, tx.Sender, bigAmt)
+	err = transfer(ctx.Ctx, tx2, tx.Sender, transferBody.To, bigAmt)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -346,10 +359,36 @@ func (v *validatorJoinRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
-	err = router.Validators.Join(ctx.Ctx, tx2, tx.Sender, int64(join.Power))
+	// we first need to ensure that this validator does not have a pending join request
+	// if it does, we should not allow it to join again
+	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, tx2, voting.ValidatorJoinEventType, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
+	if len(pending) > 0 {
+		return txRes(spend, transactions.CodeInvalidSender, fmt.Errorf("validator already has a pending join request"))
+	}
+
+	// there are no pending join requests, so we can create a new one
+	joinReq := &voting.UpdatePowerRequest{
+		PubKey: tx.Sender,
+		Power:  int64(join.Power),
+	}
+	bts, err := joinReq.MarshalBinary()
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
+	event := &types.VotableEvent{
+		Body: bts,
+		Type: voting.ValidatorJoinEventType,
+	}
+
+	err = createResolution(ctx.Ctx, tx2, event, ctx.BlockHeight+ctx.ConsensusParams.JoinVoteExpiration, tx.Sender)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	// we do not approve, because a joiner is presumably not a voter
 
 	err = tx2.Commit(ctx.Ctx)
 	if err != nil {
@@ -395,7 +434,21 @@ func (v *validatorApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
-	err = router.Validators.Approve(ctx.Ctx, tx2, approve.Candidate, tx.Sender)
+	// each pending validator can only have one active join request at a time
+	// we need to retrieve the join request and ensure that it is still pending
+	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, tx2, voting.ValidatorJoinEventType, approve.Candidate)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	if len(pending) == 0 {
+		return txRes(spend, transactions.CodeInvalidSender, fmt.Errorf("validator does not have a pending join request"))
+	}
+	if len(pending) > 1 {
+		// this should never happen, but if it does, we should not allow it
+		return txRes(spend, transactions.CodeUnknownError, fmt.Errorf("validator has more than one pending join request. this is an internal bug"))
+	}
+
+	err = approveResolution(ctx.Ctx, tx2, pending[0], ctx.ConsensusParams.JoinVoteExpiration, tx.Sender) // I don't think we need the expiration here, but just in case
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -444,7 +497,33 @@ func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transac
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
-	err = router.Validators.Remove(ctx.Ctx, tx2, remove.Validator, tx.Sender)
+	removeReq := &voting.UpdatePowerRequest{
+		PubKey: remove.Validator,
+		Power:  0,
+	}
+	bts, err := removeReq.MarshalBinary()
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
+	event := &types.VotableEvent{
+		Body: bts,
+		Type: voting.ValidatorRemoveEventType,
+	}
+
+	// we should try to create the resolution, since validator removals are never
+	// officially "started" by the user. If it fails because it already exists,
+	// then we should do nothing
+
+	err = createResolution(ctx.Ctx, tx2, event, ctx.BlockHeight+ctx.ConsensusParams.JoinVoteExpiration, tx.Sender)
+	if errors.Is(err, voting.ErrResolutionAlreadyHasBody) {
+		router.log.Debug("validator removal resolution already exists")
+	} else if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
+	// we need to approve the resolution as well
+	err = approveResolution(ctx.Ctx, tx2, event.ID(), ctx.BlockHeight+ctx.ConsensusParams.JoinVoteExpiration, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -481,20 +560,13 @@ func (v *validatorLeaveRoute) Execute(ctx TxContext, router *TxApp, tx *transact
 	}
 	defer dbTx.Commit(ctx.Ctx)
 
-	// doing this b/c the old version did, but it seems there is no reason to do this
-	leave := &transactions.ValidatorLeave{}
-	err = leave.UnmarshalBinary(tx.Body.Payload)
-	if err != nil {
-		return txRes(spend, transactions.CodeEncodingError, err)
-	}
-
 	tx2, err := dbTx.BeginTx(ctx.Ctx)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
-	err = router.Validators.Leave(ctx.Ctx, tx2, tx.Sender)
+	err = setVoterPower(ctx.Ctx, tx2, tx.Sender, 0)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -541,11 +613,12 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
-	isValidator, err := router.Validators.IsCurrent(ctx.Ctx, tx2, tx.Sender)
+	// if the caller has 0 power, they are not a validator, and should not be able to vote
+	power, err := getVoterPower(ctx.Ctx, tx2, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
-	if !isValidator {
+	if power == 0 {
 		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotValidator)
 	}
 
@@ -556,10 +629,10 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	}
 
 	fromLocalValidator := bytes.Equal(tx.Sender, router.signer.Identity())
-	expiryHeight := ctx.BlockHeight + ctx.VotingPeriod
+	expiryHeight := ctx.BlockHeight + ctx.ConsensusParams.VotingPeriod
 
 	for _, voteID := range approve.ResolutionIDs {
-		err = router.VoteStore.Approve(ctx.Ctx, tx2, voteID, expiryHeight, tx.Sender)
+		err = approveResolution(ctx.Ctx, tx2, voteID, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
@@ -569,12 +642,17 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 		// since we may be the proposer later, and will need the body
 		// If the network already has the body, then we can just delete.
 		if fromLocalValidator {
-			containsBody, err := router.VoteStore.ContainsBodyOrFinished(ctx.Ctx, tx2, voteID) // should be uncommitted queries internally?
+			containsBody, err := resolutionContainsBody(ctx.Ctx, tx2, voteID) // should be uncommitted queries internally?
 			if err != nil {
 				return txRes(spend, transactions.CodeUnknownError, err)
 			}
 
-			if containsBody {
+			finished, err := isProcessed(ctx.Ctx, tx2, voteID)
+			if err != nil {
+				return txRes(spend, transactions.CodeUnknownError, err)
+			}
+
+			if containsBody || finished {
 				err = deleteEvent(ctx.Ctx, tx2, voteID)
 				if err != nil {
 					return txRes(spend, transactions.CodeUnknownError, err)
@@ -603,8 +681,8 @@ func (v *validatorVoteIDsRoute) Price(ctx context.Context, router *TxApp, tx *tr
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal vote IDs: %w", err)
 	}
-
-	return big.NewInt(int64(len(ids.ResolutionIDs)) * voting.ValidatorVoteIDPrice), nil
+	router.log.Info("num votes", zap.Int("num", len(ids.ResolutionIDs)))
+	return big.NewInt(int64(len(ids.ResolutionIDs)) * ValidatorVoteIDPrice.Int64()), nil
 }
 
 // validatorVoteBodiesRoute is a route for handling votes for a set of vote bodies.
@@ -642,7 +720,7 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	}
 
 	localValidator := router.signer.Identity()
-	expiryHeight := ctx.BlockHeight + ctx.VotingPeriod
+	expiryHeight := ctx.BlockHeight + ctx.ConsensusParams.VotingPeriod
 
 	tx2, err := dbTx.BeginTx(ctx.Ctx)
 	if err != nil {
@@ -651,20 +729,20 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	defer tx2.Rollback(ctx.Ctx)
 
 	for _, event := range vote.Events {
-		err = router.VoteStore.CreateResolution(ctx.Ctx, tx2, event, expiryHeight, tx.Sender)
+		err = createResolution(ctx.Ctx, tx2, event, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
 		// since the vote body proposer is implicitly voting for the event,
 		// we need to approve the newly created vote body here
-		err = router.VoteStore.Approve(ctx.Ctx, tx2, event.ID(), expiryHeight, tx.Sender)
+		err = approveResolution(ctx.Ctx, tx2, event.ID(), expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
 		// If the local validator has already voted on the event, then we should delete the event.
-		hasVoted, err := router.VoteStore.HasVoted(ctx.Ctx, tx2, event.ID(), localValidator)
+		hasVoted, err := hasVoted(ctx.Ctx, tx2, event.ID(), localValidator)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
@@ -695,5 +773,5 @@ func (v *validatorVoteBodiesRoute) Price(ctx context.Context, router *TxApp, tx 
 		totalSize += int64(len(event.Body))
 	}
 
-	return big.NewInt(totalSize * voting.ValidatorVoteBodyBytePrice), nil
+	return big.NewInt(totalSize * ValidatorVoteBodyBytePrice), nil
 }

@@ -3,9 +3,9 @@ package sqlanalyzer_test
 import (
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/testdata"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
-	"github.com/kwilteam/kwil-db/internal/engine/types"
-	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
 	"github.com/kwilteam/kwil-db/parse/sql/postgres"
 	"github.com/stretchr/testify/assert"
 )
@@ -15,7 +15,7 @@ func Test_Analyze(t *testing.T) {
 		name    string
 		stmt    string
 		want    string
-		tables  []*types.Table
+		tables  []*common.Table
 		wantErr bool
 	}
 
@@ -24,7 +24,7 @@ func Test_Analyze(t *testing.T) {
 			name: "simple select",
 			stmt: "SELECT * FROM users",
 			want: `SELECT * FROM "ds_dbid"."users" ORDER BY "users"."id";`,
-			tables: []*types.Table{
+			tables: []*common.Table{
 				tblUsers,
 			},
 		},
@@ -49,7 +49,7 @@ func Test_Analyze(t *testing.T) {
 			ORDER BY "p"."post_date" DESC NULLS LAST,
 			"f"."follower_id" , "f"."user_id" , "p"."id" , "u"."id"
 			LIMIT 20 OFFSET $2;`,
-			tables: []*types.Table{
+			tables: []*common.Table{
 				tblUsers,
 				tblPosts,
 				tblFollowers,
@@ -64,7 +64,7 @@ func Test_Analyze(t *testing.T) {
 			FROM "ds_dbid"."users" AS "u1"
 			INNER JOIN "ds_dbid"."users" AS "u2" ON "u1"."id" = "u2"."id"
 			ORDER BY "u1"."id" , "u2"."id";`,
-			tables: []*types.Table{
+			tables: []*common.Table{
 				tblUsers,
 			},
 		},
@@ -80,7 +80,7 @@ func Test_Analyze(t *testing.T) {
 				SELECT "users"."id", "users"."username" FROM "ds_dbid"."users" WHERE "age" = 20 ORDER BY "users"."id"
 			)
 			SELECT * FROM "users_aged_20" ORDER BY "users_aged_20"."id" , "users_aged_20"."username";`,
-			tables: []*types.Table{
+			tables: []*common.Table{
 				tblUsers,
 			},
 		},
@@ -88,7 +88,7 @@ func Test_Analyze(t *testing.T) {
 			name: "basic insert",
 			stmt: `INSERT INTO users (id, username, age) VALUES (1, 'user1', 20)`,
 			want: `INSERT INTO "ds_dbid"."users" ("id", "username", "age") VALUES (1, 'user1', 20);`,
-			tables: []*types.Table{
+			tables: []*common.Table{
 				tblUsers,
 			},
 		},
@@ -96,7 +96,7 @@ func Test_Analyze(t *testing.T) {
 			name: "select with count",
 			stmt: `SELECT COUNT(*) FROM users`,
 			want: `SELECT count(*) FROM "ds_dbid"."users";`,
-			tables: []*types.Table{
+			tables: []*common.Table{
 				tblUsers,
 			},
 		},
@@ -104,7 +104,7 @@ func Test_Analyze(t *testing.T) {
 			name: "select with aggregate and group by",
 			stmt: `SELECT sum(age) FROM users GROUP BY username;`,
 			want: `SELECT sum("age") FROM "ds_dbid"."users" GROUP BY "username" ORDER BY "username";`,
-			tables: []*types.Table{
+			tables: []*common.Table{
 				tblUsers,
 			},
 		},
@@ -129,63 +129,63 @@ func Test_Analyze(t *testing.T) {
 var (
 	tblUsers = testdata.TableUsers
 
-	tblPosts = &types.Table{
+	tblPosts = &common.Table{
 		Name: "posts",
-		Columns: []*types.Column{
+		Columns: []*common.Column{
 			{
 				Name: "id",
-				Type: types.INT,
-				Attributes: []*types.Attribute{
+				Type: common.INT,
+				Attributes: []*common.Attribute{
 					{
-						Type: types.PRIMARY_KEY,
+						Type: common.PRIMARY_KEY,
 					},
 				},
 			},
 			{
 				Name: "user_id",
-				Type: types.INT,
-				Attributes: []*types.Attribute{
+				Type: common.INT,
+				Attributes: []*common.Attribute{
 					{
-						Type: types.NOT_NULL,
+						Type: common.NOT_NULL,
 					},
 				},
 			},
 			{
 				Name: "title",
-				Type: types.TEXT,
+				Type: common.TEXT,
 			},
 			{
 				Name: "post_date",
-				Type: types.INT,
-				Attributes: []*types.Attribute{
+				Type: common.INT,
+				Attributes: []*common.Attribute{
 					{
-						Type: types.NOT_NULL,
+						Type: common.NOT_NULL,
 					},
 				},
 			},
 		},
 	}
 
-	tblFollowers = &types.Table{
+	tblFollowers = &common.Table{
 		Name: "followers",
-		Columns: []*types.Column{
+		Columns: []*common.Column{
 			{
 				Name: "user_id",
-				Type: types.INT,
+				Type: common.INT,
 			},
 			{
 				Name: "follower_id",
-				Type: types.INT,
+				Type: common.INT,
 			},
 		},
-		Indexes: []*types.Index{
+		Indexes: []*common.Index{
 			{
 				Name: "primary_key",
 				Columns: []string{
 					"user_id",
 					"follower_id",
 				},
-				Type: types.PRIMARY,
+				Type: common.PRIMARY,
 			},
 		},
 	}

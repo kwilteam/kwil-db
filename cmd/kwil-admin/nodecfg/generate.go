@@ -20,7 +20,6 @@ import (
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
-	ethDepOracle "github.com/kwilteam/kwil-db/internal/oracles/eth-deposit-oracle"
 )
 
 const (
@@ -40,7 +39,6 @@ type EthDepositOracle struct {
 	Endpoint              string
 	EscrowAddress         string
 	RequiredConfirmations string
-	ChainID               string
 }
 
 type NodeGenerateConfig struct {
@@ -53,8 +51,7 @@ type NodeGenerateConfig struct {
 	WithoutNonces   bool
 	Allocs          map[string]*big.Int
 	VoteExpiry      int64
-	// Eth deposit oracle
-	EthDeposits EthDepositOracle
+	Extensions      map[string]map[string]string
 }
 
 type TestnetGenerateConfig struct {
@@ -79,7 +76,7 @@ type TestnetGenerateConfig struct {
 	VoteExpiry              int64
 	Allocs                  map[string]*big.Int
 	FundNonValidators       bool
-	EthDeposits             []EthDepositOracle
+	Extensions              []map[string]map[string]string // for each node
 }
 
 // ConfigOpts is a struct to alter the generation of the node config.
@@ -122,13 +119,10 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 		cfg.ChainCfg.Consensus.TimeoutCommit = config.Duration(genCfg.BlockInterval)
 	}
 
-	if genCfg.EthDeposits.Enabled {
-		cfg.AppCfg.Oracles[ethDepOracle.OracleName] = map[string]string{
-			ethDepOracle.EthDepositEndpoint:              genCfg.EthDeposits.Endpoint,
-			ethDepOracle.EthDepositEscrowAddress:         genCfg.EthDeposits.EscrowAddress,
-			ethDepOracle.EthDepositRequiredConfirmations: genCfg.EthDeposits.RequiredConfirmations,
-			ethDepOracle.EthDepositChainID:               genCfg.EthDeposits.ChainID,
-		}
+	if genCfg.Extensions != nil {
+		cfg.AppCfg.Extensions = genCfg.Extensions
+	} else {
+		cfg.AppCfg.Extensions = make(map[string]map[string]string)
 	}
 
 	pub, err := GenerateNodeFiles(rootDir, cfg, false)
@@ -233,10 +227,6 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	}
 	if opts.NoGenesis {
 		return fmt.Errorf("cannot use NoGenesis opt with testnet")
-	}
-
-	if genCfg.EthDeposits != nil && len(genCfg.EthDeposits) != genCfg.NValidators {
-		return fmt.Errorf("eth deposits must be nil or have the same length as the number of validators")
 	}
 
 	var err error
@@ -362,14 +352,13 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 
 		// oracle config
 		if i < genCfg.NValidators {
-			// validators
-			if genCfg.EthDeposits != nil && genCfg.EthDeposits[i].Enabled {
-				cfg.AppCfg.Oracles[ethDepOracle.OracleName] = map[string]string{
-					ethDepOracle.EthDepositEndpoint:              genCfg.EthDeposits[i].Endpoint,
-					ethDepOracle.EthDepositEscrowAddress:         genCfg.EthDeposits[i].EscrowAddress,
-					ethDepOracle.EthDepositRequiredConfirmations: genCfg.EthDeposits[i].RequiredConfirmations,
-					ethDepOracle.EthDepositChainID:               genCfg.EthDeposits[i].ChainID,
+			if genCfg.Extensions != nil {
+				if len(genCfg.Extensions) != genCfg.NValidators {
+					return fmt.Errorf("extensions must be nil or have the same length as the number of validators")
 				}
+				cfg.AppCfg.Extensions = genCfg.Extensions[i]
+			} else {
+				cfg.AppCfg.Extensions = make(map[string]map[string]string)
 			}
 		}
 

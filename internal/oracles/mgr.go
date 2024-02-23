@@ -5,10 +5,12 @@ import (
 	"context"
 	"time"
 
+	types1 "github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/oracles"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
+	"github.com/kwilteam/kwil-db/internal/events"
 	"go.uber.org/zap"
 )
 
@@ -17,19 +19,16 @@ import (
 // It starts the oracles only when the node is a validator and is caught up
 // It stops the running oracles when the node loses its validator status
 type OracleMgr struct {
-	ctx        context.Context
 	config     map[string]map[string]string
-	eventStore oracles.EventStore
+	eventStore *events.EventStore
 	vstore     ValidatorGetter
 	cometNode  *cometbft.CometBftNode
 	// pubKey is the public key of the node
 	pubKey []byte
 
-	// oraclesUp specifies whether the oracles are running currently or not
-	oraclesUp bool
-	done      chan bool
-
 	logger log.Logger
+
+	cancel context.CancelFunc // cancels the context for the oracle manager
 }
 
 // ValidatorGetter is able to read the current validator set.
@@ -37,113 +36,97 @@ type ValidatorGetter interface {
 	GetValidators(ctx context.Context) ([]*types.Validator, error)
 }
 
-func NewOracleMgr(ctx context.Context, config map[string]map[string]string, eventStore oracles.EventStore, node *cometbft.CometBftNode, nodePubKey []byte, vstore ValidatorGetter, logger log.Logger) *OracleMgr {
+func NewOracleMgr(config map[string]map[string]string, eventStore *events.EventStore, node *cometbft.CometBftNode, nodePubKey []byte, vstore ValidatorGetter, logger log.Logger) *OracleMgr {
 	return &OracleMgr{
-		ctx:        ctx,
 		config:     config,
 		eventStore: eventStore,
 		vstore:     vstore,
 		cometNode:  node,
 		pubKey:     nodePubKey,
-		oraclesUp:  false,
-		done:       make(chan bool),
 		logger:     logger,
 	}
 }
 
+// Start starts the oracle manager.
+// It will block until Stop is called.
 func (omgr *OracleMgr) Start() {
-	omgr.listenForValidatorStatusChanges()
-}
-
-func (omgr *OracleMgr) listenForValidatorStatusChanges() {
+	ctx, cancel := context.WithCancel(context.Background()) // context that will be canceled when the manager shuts down
+	omgr.cancel = cancel
 	// Listen for status changes
 	// Start oracles if the node is a validator and is caught up
 	// Stop the oracles, if the node is not a validator
 	go func() {
-		omgr.logger.Info("starting oracle manager")
+		// cancel function for the oracle instance
+		// if it is nil, then the oracle is not running
+		var oracleInstanceCancel context.CancelFunc
+
 		for {
-			select {
-			// case status := <-omgr.valStatus:
-			case <-omgr.ctx.Done():
-				return
-			case <-omgr.done:
-				omgr.logger.Info("stopping oracle manager")
-				return
-			default:
-				// still in the catch up mode, do nothing
-				if omgr.cometNode.IsCatchup() {
-					continue
-				}
+			// still in the catch up mode, do nothing
+			if omgr.cometNode.IsCatchup() {
+				continue
+			}
 
-				validators, err := omgr.vstore.GetValidators(omgr.ctx)
-				if err != nil {
-					omgr.logger.Warn("failed to get validators", zap.Error(err))
-					// panic?
-					continue
-				}
+			validators, err := omgr.vstore.GetValidators(ctx)
+			if err != nil {
+				omgr.logger.Warn("failed to get validators", zap.Error(err))
+				break
+			}
 
-				isValidator := false
-				for _, val := range validators {
-					if bytes.Equal(val.PubKey, omgr.pubKey) {
-						isValidator = true
-						break
+			isValidator := false
+			for _, val := range validators {
+				if bytes.Equal(val.PubKey, omgr.pubKey) {
+					isValidator = true
+					break
+				}
+			}
+
+			if oracleInstanceCancel == nil && isValidator {
+				// inner context to manage the oracles
+				// this context will be cancelled when the node loses its validator status
+				// it will also be cancelled when the oracle manager is stopped
+				ctx2, cancel2 := context.WithCancel(ctx)
+				oracleInstanceCancel = cancel2
+
+				omgr.logger.Info("Node is a validator and caught up with the network, starting oracles")
+
+				for name, start := range oracles.RegisteredOracles() {
+					go start(ctx2, &types1.Service{
+						Logger:           *omgr.logger.Named(name),
+						ExtensionConfigs: omgr.config,
+					}, &scopedKVEventStore{
+						ev: omgr.eventStore,
+						// we add a space to prevent collisions in the KV
+						// oracle names cannot have spaces
+						KV: omgr.eventStore.KV([]byte(name + " ")),
+					})
+					if err != nil {
+						omgr.logger.Error("failed to start oracle", zap.String("name", name), zap.Error(err))
 					}
 				}
-
-				if !omgr.oraclesUp && isValidator {
-					// Start the oracles if they are not running
-					omgr.oraclesUp = true
-					omgr.logger.Info("Node's a validator and caught up with the network, starting oracles")
-					omgr.startOracles()
-				} else if omgr.oraclesUp && !isValidator {
-					// Stop the oracles if they are running
-					omgr.logger.Info("Node's no longer the validator, stopping oracles")
-					omgr.oraclesUp = false
-					omgr.stopOracles()
-				}
-				time.Sleep(1 * time.Second)
+			} else if oracleInstanceCancel != nil && !isValidator {
+				// Stop the oracles if they are running
+				omgr.logger.Info("Node is no longer a validator, stopping oracles")
+				oracleInstanceCancel()
+				oracleInstanceCancel = nil
 			}
+			time.Sleep(1 * time.Second)
 		}
 	}()
+
+	<-ctx.Done()
 }
 
 func (omgr *OracleMgr) Stop() {
-	// Stop the oracles
-	omgr.stopOracles()
+	omgr.cancel()
 }
 
-func (omgr *OracleMgr) stopOracles() {
-	// stop configured oracles
-	for oracleName := range omgr.config {
-		omgr.logger.Info("stopping oracle", zap.String("name", oracleName))
-		//check if oracle is registered
-		oracleInst, ok := oracles.GetOracle(oracleName)
-		if !ok {
-			omgr.logger.Warn("Trying to stop unregistered oracle", zap.String("Oracle Name", oracleName), zap.Any("Config", omgr.config[oracleName]))
-			return
-		}
-
-		// stop the oracle
-		oracleInst.Stop()
-	}
+// scopedKVEventStore scopes the event store's kv store to the oracle's name
+type scopedKVEventStore struct {
+	ev *events.EventStore
+	*events.KV
 }
 
-func (omgr *OracleMgr) startOracles() {
-	// start configured oracles
-	for oracleName := range omgr.config {
-		//check if oracle is registered
-		oracleInst, ok := oracles.GetOracle(oracleName)
-		if !ok {
-			omgr.logger.Warn("Trying to start unregistered oracle", zap.String("Oracle Name", oracleName), zap.Any("Config", omgr.config[oracleName]))
-			return
-		}
-
-		omgr.logger.Info("starting oracle", zap.String("name", oracleName))
-		go func(name string, inst oracles.Oracle) {
-			if err := inst.Start(omgr.ctx, omgr.eventStore, omgr.config[name], *omgr.logger.Named(name)); err != nil {
-				omgr.logger.Warn("failed to start oracle", zap.String("name", name), zap.Error(err))
-			}
-		}(oracleName, oracleInst)
-
-	}
+// Broadcast broadcasts an event to the event store.
+func (e *scopedKVEventStore) Broadcast(ctx context.Context, eventType string, data []byte) error {
+	return e.ev.Store(ctx, data, eventType)
 }

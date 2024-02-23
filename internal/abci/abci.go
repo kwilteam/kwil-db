@@ -13,12 +13,11 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/kv"
 	"github.com/kwilteam/kwil-db/internal/txapp"
-	"github.com/kwilteam/kwil-db/internal/validators"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
@@ -40,6 +39,7 @@ type AbciConfig struct {
 	ChainID            string
 	ApplicationVersion uint64
 	GenesisAllocs      map[string]*big.Int
+	GasEnabled         bool
 }
 
 type AtomicCommitter interface {
@@ -49,7 +49,7 @@ type AtomicCommitter interface {
 }
 
 func NewAbciApp(cfg *AbciConfig, kv KVStore, snapshotter SnapshotModule,
-	bootstrapper DBBootstrapModule, txRouter TxApp, consensusParams ConsensusParams, log log.Logger) *AbciApp {
+	bootstrapper DBBootstrapModule, txRouter TxApp, consensusParams *txapp.ConsensusParams, log log.Logger) *AbciApp {
 	app := &AbciApp{
 		cfg: *cfg,
 		metadataStore: &metadataStore{
@@ -111,7 +111,7 @@ type AbciApp struct {
 
 	txApp TxApp
 
-	consensusParams ConsensusParams
+	consensusParams *txapp.ConsensusParams
 
 	broadcastFn EventBroadcaster
 }
@@ -251,6 +251,11 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 	}
 
+	initialValidators, err := a.txApp.GetValidators(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current validators: %w", err)
+	}
+
 	addr := proposerAddrToString(req.ProposerAddress)
 	proposerPubKey, ok := a.valAddrToKey[addr]
 	if !ok {
@@ -265,10 +270,10 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 
 		txRes := a.txApp.Execute(txapp.TxContext{
-			BlockHeight:  req.Height,
-			Proposer:     proposerPubKey,
-			VotingPeriod: a.consensusParams.VotingPeriod(),
-			Ctx:          ctx,
+			BlockHeight:     req.Height,
+			Proposer:        proposerPubKey,
+			ConsensusParams: *a.consensusParams,
+			Ctx:             ctx,
 		}, decoded)
 
 		abciRes := &abciTypes.ExecTxResult{}
@@ -302,13 +307,15 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 	}
 
-	newAppHash, validatorUpdates, err := a.txApp.Finalize(ctx, req.Height)
+	newAppHash, finalValidators, err := a.txApp.Finalize(ctx, req.Height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to finalize transaction app: %w", err)
 	}
 
-	res.ValidatorUpdates = make([]abciTypes.ValidatorUpdate, len(validatorUpdates))
-	for i, up := range validatorUpdates {
+	valUpdates := validatorUpdates(initialValidators, finalValidators)
+
+	res.ValidatorUpdates = make([]abciTypes.ValidatorUpdate, len(valUpdates))
+	for i, up := range valUpdates {
 		res.ValidatorUpdates[i] = abciTypes.Ed25519ValidatorUpdate(up.PubKey, up.Power)
 
 		addr, err := pubkeyToAddr(up.PubKey)
@@ -330,6 +337,46 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	res.AppHash = appHash
 
 	return res, nil
+}
+
+// validatorUpdates returns the added, removed, and updated validators in the given block.
+func validatorUpdates(initial, final []*types.Validator) []*types.Validator {
+	initialVals := make(map[string]*types.Validator)
+	for _, val := range initial {
+		initialVals[hex.EncodeToString(val.PubKey)] = val
+	}
+
+	finalVals := make(map[string]*types.Validator)
+	for _, val := range final {
+		finalVals[hex.EncodeToString(val.PubKey)] = val
+	}
+
+	var updates []*types.Validator
+	// check for newly added and updated validators
+	for key, val := range finalVals {
+		if initialVal, ok := initialVals[key]; ok {
+			if initialVal.Power != val.Power {
+				// Validator is in the initial set, but has updated power
+				updates = append(updates, val)
+			}
+		} else {
+			// Validator is not in the initial set, so it must be new
+			updates = append(updates, val)
+		}
+	}
+
+	// check for removed validators
+	for key, val := range initialVals {
+		if _, ok := finalVals[key]; !ok {
+			// Validator is in the initial set, but not in the final set
+			updates = append(updates, &types.Validator{
+				PubKey: val.PubKey,
+				Power:  0,
+			})
+		}
+	}
+
+	return updates
 }
 
 // Commit persists the state changes. This is called under mempool lock in
@@ -410,7 +457,7 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 
 	// Store the genesis account allocations to the datastore. These are
 	// reflected in the genesis app hash.
-	genesisAllocs := make([]*accounts.Account, 0, len(a.cfg.GenesisAllocs))
+	genesisAllocs := make([]*types.Account, 0, len(a.cfg.GenesisAllocs))
 	for acct, bal := range a.cfg.GenesisAllocs {
 		acct, _ := strings.CutPrefix(acct, "0x") // special case for ethereum addresses
 		identifier, err := hex.DecodeString(acct)
@@ -418,17 +465,17 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 			return nil, fmt.Errorf("invalid hex pubkey: %w", err)
 		}
 
-		genesisAllocs = append(genesisAllocs, &accounts.Account{
+		genesisAllocs = append(genesisAllocs, &types.Account{
 			Identifier: identifier,
 			Balance:    bal,
 		})
 	}
 	// Initialize the validator module with the genesis validators.
-	vldtrs := make([]*validators.Validator, len(req.Validators))
+	vldtrs := make([]*types.Validator, len(req.Validators))
 	for i := range req.Validators {
 		vi := &req.Validators[i]
 		pk := vi.PubKey.GetEd25519()
-		vldtrs[i] = &validators.Validator{
+		vldtrs[i] = &types.Validator{
 			PubKey: pk,
 			Power:  vi.Power,
 		}
@@ -610,7 +657,7 @@ type indexedTxn struct {
 //
 // NOTE: This is a plain function instead of an AbciApplication method so that
 // it may be directly tested.
-func prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger, proposerAddr []byte) ([][]byte, uint64) {
+func (a *AbciApp) prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger, proposerAddr []byte) ([][]byte, uint64) {
 	// Unmarshal and index the transactions.
 	var okTxns []*indexedTxn
 	var i int
@@ -657,6 +704,19 @@ func prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger, proposerAdd
 			continue // mempool recheck should have removed this
 		}
 
+		// Drop transactions from unfunded accounts in gasEnabled mode
+		if a.cfg.GasEnabled {
+			balance, nonce, err := a.txApp.AccountInfo(context.Background(), tx.Sender, false)
+			if err != nil {
+				log.Error("failed to get account info", zap.Error(err))
+				continue
+			}
+			if nonce == 0 && balance.Sign() == 0 {
+				log.Warn("Dropping tx from unfunded account while preparing the block", zap.String("sender", hex.EncodeToString(tx.Sender)))
+				continue
+			}
+		}
+
 		if bytes.Equal(tx.Sender, proposerAddr) {
 			proposerNonce = tx.Body.Nonce + 1
 		}
@@ -679,7 +739,7 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to %s", proposerAddrToString(req.ProposerAddress))
 	}
 
-	okTxns, proposerNonce := prepareMempoolTxns(req.Txs, int(req.MaxTxBytes), &a.log, addr)
+	okTxns, proposerNonce := a.prepareMempoolTxns(req.Txs, int(req.MaxTxBytes), &a.log, addr)
 	if len(okTxns) != len(req.Txs) {
 		logger.Info("PrepareProposal: number of transactions in proposed block has changed!",
 			zap.Int("in", len(req.Txs)), zap.Int("out", len(okTxns)))
@@ -691,32 +751,40 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		}
 	}
 
-	if proposerNonce == 0 {
-		_, nonce, err := a.txApp.AccountInfo(ctx, addr, false)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get proposer account: %w", err)
-		}
-		proposerNonce = uint64(nonce) + 1
-	}
-
-	proposerTxs, err := a.txApp.ProposerTxs(ctx, proposerNonce)
+	bal, nonce, err := a.txApp.AccountInfo(ctx, addr, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get proposer transactions: %w", err)
+		return nil, fmt.Errorf("failed to get proposer account: %w", err)
 	}
 
-	proposerTxBts := make([][]byte, 0, len(proposerTxs))
-	for _, tx := range proposerTxs {
-		bts, err := tx.MarshalBinary()
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal proposer transaction: %w", err)
+	if a.cfg.GasEnabled && nonce == 0 && bal.Sign() == 0 {
+		logger.Debug("proposer account has no balance, not allowed to propose any new transactions")
+	} else {
+		// If proposer has any existing transactions in the mempool, consider these nonces as well.
+		if proposerNonce == 0 {
+			// Proposer has no transactions in mempool, use nonce from proposers account.
+			proposerNonce = uint64(nonce) + 1
 		}
-		proposerTxBts = append(proposerTxBts, bts)
-	}
 
-	txs := append(req.Txs, proposerTxBts...)
+		proposerTxs, err := a.txApp.ProposerTxs(ctx, proposerNonce)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get proposer transactions: %w", err)
+		}
+
+		proposerTxBts := make([][]byte, 0, len(proposerTxs))
+		for _, tx := range proposerTxs {
+			bts, err := tx.MarshalBinary()
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal proposer transaction: %w", err)
+			}
+			proposerTxBts = append(proposerTxBts, bts)
+		}
+
+		// Append proposer's transactions to the block.
+		okTxns = append(okTxns, proposerTxBts...)
+	}
 
 	return &abciTypes.ResponsePrepareProposal{
-		Txs: txs,
+		Txs: okTxns,
 	}, nil
 }
 

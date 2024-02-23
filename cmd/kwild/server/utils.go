@@ -9,10 +9,9 @@ import (
 	"strings"
 
 	types "github.com/kwilteam/kwil-db/core/types/admin"
-	extActions "github.com/kwilteam/kwil-db/extensions/actions"
+	"github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft/privval"
-	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/extensions"
 	"github.com/kwilteam/kwil-db/internal/kv"
 
@@ -25,10 +24,10 @@ import (
 
 // getExtensions returns both the local and remote extensions. Remote extensions are identified by
 // connecting to the specified extension URLs.
-func getExtensions(ctx context.Context, urls []string) (map[string]execution.ExtensionInitializer, error) {
-	exts := make(map[string]execution.ExtensionInitializer)
+func getExtensions(ctx context.Context, urls []string) (map[string]actions.ExtensionInitializer, error) {
+	exts := make(map[string]actions.ExtensionInitializer)
 
-	for name, ext := range extActions.RegisteredExtensions() {
+	for name, ext := range actions.RegisteredExtensions() {
 		_, ok := exts[name]
 		if ok {
 			return nil, fmt.Errorf("duplicate extension name: %s", name)
@@ -204,13 +203,4 @@ func (a *atomicReadWriter) Read() ([]byte, error) {
 
 func (a *atomicReadWriter) Write(val []byte) error {
 	return a.kv.Set(a.key, val)
-}
-
-// once we have consensus param voting, we should remove this adapter
-type consensusParamAdapter struct {
-	voteExpiry int64
-}
-
-func (c *consensusParamAdapter) VotingPeriod() int64 {
-	return c.voteExpiry
 }

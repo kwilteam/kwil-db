@@ -5,13 +5,13 @@ import (
 	"math/big"
 
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
+	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
-	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 type Service struct {
@@ -45,10 +45,10 @@ func NewService(db sql.ReadTxMaker, engine EngineReader,
 }
 
 type EngineReader interface {
-	Execute(ctx context.Context, tx sql.DB, options *engineTypes.ExecutionData) (*sql.ResultSet, error)
-	GetSchema(ctx context.Context, dbid string) (*engineTypes.Schema, error)
+	Call(ctx context.Context, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error)
+	GetSchema(ctx context.Context, dbid string) (*common.Schema, error)
 	ListDatasets(ctx context.Context, owner []byte) ([]*coreTypes.DatasetIdentifier, error)
-	Query(ctx context.Context, tx sql.DB, dbid string, query string) (*sql.ResultSet, error)
+	Execute(ctx context.Context, tx sql.DB, dbid string, query string, values map[string]any) (*sql.ResultSet, error)
 }
 
 type BlockchainTransactor interface {

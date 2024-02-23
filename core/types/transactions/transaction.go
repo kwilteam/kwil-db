@@ -131,7 +131,7 @@ type Transaction struct { // TODO: json tags with lower case, technically a brea
 
 	// Sender is the user identifier, which is generally an address but may be
 	// a public key of the sender.
-	Sender []byte
+	Sender []byte // TODO: this field isn't actually used. internally, we always use the signer's identity
 }
 
 // SerializeMsg produces the serialization of the transaction that is to be used

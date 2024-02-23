@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/internal/engine/types"
+	types "github.com/kwilteam/kwil-db/common"
 )
 
 func indexTypeToSQLiteString(indexType types.IndexType) (string, error) {
