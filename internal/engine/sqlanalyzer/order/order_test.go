@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/order"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
+	"github.com/kwilteam/kwil-db/parse/sql/postgres"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -166,6 +167,9 @@ func Test_Order(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, removeSpaces(tt.want), removeSpaces(sql))
+
+			err = postgres.CheckSyntaxReplaceDollar(sql)
+			assert.NoErrorf(t, err, "postgres syntax check failed: %s", err)
 		})
 	}
 }

@@ -161,8 +161,9 @@ type ExpressionUnary struct {
 	Wrapped
 	Operator UnaryOperator
 	Operand  Expression
-	// NOTE: type cast only makes sense when wrapped,
+
 	TypeCast TypeCastType
+	// NOTE: type cast only makes sense when wrapped,
 }
 
 func (e *ExpressionUnary) Accept(w Walker) error {
@@ -195,8 +196,9 @@ type ExpressionBinaryComparison struct {
 	Left     Expression
 	Operator BinaryOperator
 	Right    Expression
-	// NOTE: type cast only makes sense when wrapped,
+
 	TypeCast TypeCastType
+	// NOTE: type cast only makes sense when wrapped,
 }
 
 func (e *ExpressionBinaryComparison) Accept(w Walker) error {
@@ -232,6 +234,7 @@ type ExpressionFunction struct {
 	Function SQLFunction
 	Inputs   []Expression
 	Distinct bool
+
 	TypeCast TypeCastType
 }
 
@@ -272,7 +275,8 @@ type ExpressionList struct {
 	expressionBase
 	Wrapped
 	Expressions []Expression
-	TypeCast    TypeCastType
+
+	TypeCast TypeCastType
 }
 
 func (e *ExpressionList) Accept(w Walker) error {
@@ -306,8 +310,9 @@ type ExpressionCollate struct {
 	Wrapped
 	Expression Expression
 	Collation  CollationType
-	// NOTE: type cast only makes sense when wrapped,
+
 	TypeCast TypeCastType
+	// NOTE: type cast only makes sense when wrapped
 }
 
 func (e *ExpressionCollate) Accept(w Walker) error {
@@ -349,8 +354,9 @@ type ExpressionStringCompare struct {
 	Operator StringOperator
 	Right    Expression
 	Escape   Expression // can only be used with LIKE or NOT LIKE
-	// NOTE: type cast only makes sense when wrapped,
+
 	TypeCast TypeCastType
+	// NOTE: type cast only makes sense when wrapped
 }
 
 func (e *ExpressionStringCompare) Accept(w Walker) error {
@@ -364,6 +370,12 @@ func (e *ExpressionStringCompare) Accept(w Walker) error {
 }
 
 func (e *ExpressionStringCompare) ToSQL() string {
+	if e.Left == nil {
+		panic("ExpressionStringCompare: left expression cannot be nil")
+	}
+	if e.Right == nil {
+		panic("ExpressionStringCompare: right expression cannot be nil")
+	}
 	if e.TypeCast != "" && !e.Wrapped {
 		panic("ExpressionStringCompare: type cast need wrapped")
 	}
@@ -389,76 +401,36 @@ func (e *ExpressionStringCompare) ToSQL() string {
 	return suffixTypeCast(stmt.String(), e.TypeCast)
 }
 
-type ExpressionIsNull struct {
+type ExpressionIs struct {
 	expressionBase
 	Wrapped
-	Expression Expression
-	IsNull     bool
-	// NOTE: type cast only makes sense when wrapped,
+	Left     Expression
+	Distinct bool
+	Not      bool
+	Right    Expression
+
 	TypeCast TypeCastType
+	// NOTE: type cast only makes sense when wrapped
 }
 
-func (e *ExpressionIsNull) Accept(w Walker) error {
+func (e *ExpressionIs) Accept(w Walker) error {
 	return run(
-		w.EnterExpressionIsNull(e),
-		accept(w, e.Expression),
-		w.ExitExpressionIsNull(e),
-	)
-}
-
-func (e *ExpressionIsNull) ToSQL() string {
-	if e.Expression == nil {
-		panic("ExpressionIsNull: expression cannot be nil")
-	}
-	if e.TypeCast != "" && !e.Wrapped {
-		panic("ExpressionIsNull: type cast need wrapped")
-	}
-
-	stmt := sqlwriter.NewWriter()
-
-	if e.Wrapped {
-		stmt.WrapParen()
-	}
-
-	stmt.WriteString(e.Expression.ToSQL())
-	if e.IsNull {
-		stmt.Token.Is().Null()
-	} else {
-		stmt.Token.Not().Null()
-	}
-
-	return suffixTypeCast(stmt.String(), e.TypeCast)
-}
-
-type ExpressionDistinct struct {
-	expressionBase
-	Wrapped
-	Left  Expression
-	Right Expression
-	IsNot bool
-	// NOTE: type cast only makes sense when wrapped,
-	TypeCast TypeCastType
-}
-
-func (e *ExpressionDistinct) Accept(w Walker) error {
-	return run(
-		w.EnterExpressionDistinct(e),
+		w.EnterExpressionIs(e),
 		accept(w, e.Left),
 		accept(w, e.Right),
-		w.ExitExpressionDistinct(e),
+		w.ExitExpressionIs(e),
 	)
 }
 
-func (e *ExpressionDistinct) ToSQL() string {
-	// TODO: those validation should be done in analyzer
+func (e *ExpressionIs) ToSQL() string {
 	if e.Left == nil {
-		panic("ExpressionDistinct: left expression cannot be nil")
+		panic("ExpressionIs: left expression cannot be nil")
 	}
 	if e.Right == nil {
-		panic("ExpressionDistinct: right expression cannot be nil")
+		panic("ExpressionIs: right expression cannot be nil")
 	}
 	if e.TypeCast != "" && !e.Wrapped {
-		panic("ExpressionDistinct: type cast need wrapped")
+		panic("ExpressionStringCompare: type cast need wrapped")
 	}
 
 	stmt := sqlwriter.NewWriter()
@@ -469,12 +441,13 @@ func (e *ExpressionDistinct) ToSQL() string {
 
 	stmt.WriteString(e.Left.ToSQL())
 	stmt.Token.Is()
-	if e.IsNot {
+	if e.Not {
 		stmt.Token.Not()
 	}
-	stmt.Token.Distinct().From()
+	if e.Distinct {
+		stmt.Token.Distinct().From()
+	}
 	stmt.WriteString(e.Right.ToSQL())
-
 	return suffixTypeCast(stmt.String(), e.TypeCast)
 }
 
@@ -485,8 +458,9 @@ type ExpressionBetween struct {
 	NotBetween bool
 	Left       Expression
 	Right      Expression
-	// NOTE: type cast only makes sense when wrapped,
+
 	TypeCast TypeCastType
+	// NOTE: type cast only makes sense when wrapped
 }
 
 func (e *ExpressionBetween) Accept(w Walker) error {
@@ -538,8 +512,9 @@ type ExpressionSelect struct {
 	IsNot    bool
 	IsExists bool
 	Select   *SelectStmt
-	// NOTE: type cast only makes sense when wrapped,
+
 	TypeCast TypeCastType
+	// NOTE: type cast only makes sense when wrapped
 }
 
 func (e *ExpressionSelect) Accept(w Walker) error {
@@ -597,6 +572,8 @@ type ExpressionCase struct {
 	CaseExpression Expression
 	WhenThenPairs  [][2]Expression
 	ElseExpression Expression
+
+	TypeCast TypeCastType
 	// NOTE: type cast does not apply to the whole case expression
 }
 
@@ -660,8 +637,9 @@ type ExpressionArithmetic struct {
 	Left     Expression
 	Operator ArithmeticOperator
 	Right    Expression
-	// NOTE: type cast only makes sense when wrapped,
+
 	TypeCast TypeCastType
+	// NOTE: type cast only makes sense when wrapped
 }
 
 func (e *ExpressionArithmetic) Accept(w Walker) error {

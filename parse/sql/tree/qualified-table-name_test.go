@@ -10,8 +10,6 @@ func TestQualifiedTableName_ToSQL(t *testing.T) {
 	type fields struct {
 		TableName  string
 		TableAlias string
-		IndexedBy  string
-		NotIndexed bool
 		Schema     string // optional
 	}
 	tests := []struct {
@@ -32,31 +30,6 @@ func TestQualifiedTableName_ToSQL(t *testing.T) {
 			name: "no table name",
 			fields: fields{
 				TableAlias: "f",
-			},
-			wantPanic: true,
-		},
-		{
-			name: "indexed by",
-			fields: fields{
-				TableName: "foo",
-				IndexedBy: "bar",
-			},
-			want: `"foo" INDEXED BY "bar"`,
-		},
-		{
-			name: "not indexed",
-			fields: fields{
-				TableName:  "foo",
-				NotIndexed: true,
-			},
-			want: `"foo" NOT INDEXED`,
-		},
-		{
-			name: "indexed by and not indexed",
-			fields: fields{
-				TableName:  "foo",
-				IndexedBy:  "bar",
-				NotIndexed: true,
 			},
 			wantPanic: true,
 		},
@@ -82,8 +55,6 @@ func TestQualifiedTableName_ToSQL(t *testing.T) {
 			q := &tree.QualifiedTableName{
 				TableName:  tt.fields.TableName,
 				TableAlias: tt.fields.TableAlias,
-				IndexedBy:  tt.fields.IndexedBy,
-				NotIndexed: tt.fields.NotIndexed,
 			}
 
 			if tt.fields.Schema != "" {

@@ -119,11 +119,6 @@ func (r *returnTypeWalker) EnterExpressionColumn(p0 *tree.ExpressionColumn) erro
 
 }
 
-func (r *returnTypeWalker) EnterExpressionDistinct(p0 *tree.ExpressionDistinct) error {
-	r.set(types.INT)
-	return nil
-}
-
 // Boolean somewhere?
 
 func (r *returnTypeWalker) EnterExpressionFunction(p0 *tree.ExpressionFunction) error {
@@ -158,7 +153,7 @@ func (r *returnTypeWalker) EnterExpressionFunction(p0 *tree.ExpressionFunction) 
 
 	return nil
 }
-func (r *returnTypeWalker) EnterExpressionIsNull(p0 *tree.ExpressionIsNull) error {
+func (r *returnTypeWalker) EnterExpressionIs(p0 *tree.ExpressionIs) error {
 	r.set(types.INT)
 	return nil
 }

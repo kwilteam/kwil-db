@@ -8,9 +8,8 @@ import (
 
 func TestLimit_ToSQL(t *testing.T) {
 	type fields struct {
-		Expression       tree.Expression
-		Offset           tree.Expression
-		SecondExpression tree.Expression
+		Expression tree.Expression
+		Offset     tree.Expression
 	}
 	tests := []struct {
 		name      string
@@ -34,42 +33,16 @@ func TestLimit_ToSQL(t *testing.T) {
 			want: ` LIMIT $a OFFSET $b`,
 		},
 		{
-			name: "valid limit with second expression",
-			fields: fields{
-				Expression: &tree.ExpressionBindParameter{Parameter: "$a"},
-				SecondExpression: &tree.ExpressionBinaryComparison{
-					Left:     &tree.ExpressionColumn{Column: "foo"},
-					Operator: tree.ComparisonOperatorEqual,
-					Right:    &tree.ExpressionBindParameter{Parameter: "$b"},
-				},
-			},
-			want: ` LIMIT $a, "foo" = $b`,
-		},
-		{
 			name:      "no expression",
 			fields:    fields{},
-			wantPanic: true,
-		},
-		{
-			name: "offset and second expression",
-			fields: fields{
-				Expression: &tree.ExpressionBindParameter{Parameter: "$a"},
-				Offset:     &tree.ExpressionBindParameter{Parameter: "$b"},
-				SecondExpression: &tree.ExpressionBinaryComparison{
-					Left:     &tree.ExpressionColumn{Column: "foo"},
-					Operator: tree.ComparisonOperatorEqual,
-					Right:    &tree.ExpressionBindParameter{Parameter: "$c"},
-				},
-			},
 			wantPanic: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			l := &tree.Limit{
-				Expression:       tt.fields.Expression,
-				Offset:           tt.fields.Offset,
-				SecondExpression: tt.fields.SecondExpression,
+				Expression: tt.fields.Expression,
+				Offset:     tt.fields.Offset,
 			}
 
 			if tt.wantPanic {

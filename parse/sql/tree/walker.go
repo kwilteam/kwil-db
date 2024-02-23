@@ -74,10 +74,8 @@ type Walker interface {
 	ExitExpressionCollate(*ExpressionCollate) error
 	EnterExpressionStringCompare(*ExpressionStringCompare) error
 	ExitExpressionStringCompare(*ExpressionStringCompare) error
-	EnterExpressionIsNull(*ExpressionIsNull) error
-	ExitExpressionIsNull(*ExpressionIsNull) error
-	EnterExpressionDistinct(*ExpressionDistinct) error
-	ExitExpressionDistinct(*ExpressionDistinct) error
+	EnterExpressionIs(*ExpressionIs) error
+	ExitExpressionIs(*ExpressionIs) error
 	EnterExpressionBetween(*ExpressionBetween) error
 	ExitExpressionBetween(*ExpressionBetween) error
 	EnterExpressionSelect(*ExpressionSelect) error
@@ -258,14 +256,6 @@ func (b *BaseWalker) ExitExpressionColumn(p0 *ExpressionColumn) error {
 	return nil
 }
 
-func (b *BaseWalker) EnterExpressionDistinct(p0 *ExpressionDistinct) error {
-	return nil
-}
-
-func (b *BaseWalker) ExitExpressionDistinct(p0 *ExpressionDistinct) error {
-	return nil
-}
-
 func (b *BaseWalker) EnterExpressionFunction(p0 *ExpressionFunction) error {
 	return nil
 }
@@ -274,11 +264,11 @@ func (b *BaseWalker) ExitExpressionFunction(p0 *ExpressionFunction) error {
 	return nil
 }
 
-func (b *BaseWalker) EnterExpressionIsNull(p0 *ExpressionIsNull) error {
+func (b *BaseWalker) EnterExpressionIs(p0 *ExpressionIs) error {
 	return nil
 }
 
-func (b *BaseWalker) ExitExpressionIsNull(p0 *ExpressionIsNull) error {
+func (b *BaseWalker) ExitExpressionIs(p0 *ExpressionIs) error {
 	return nil
 }
 
@@ -579,12 +569,10 @@ type ImplementedWalker struct {
 	FuncExitExpressionCollate           func(p0 *ExpressionCollate) error
 	FuncEnterExpressionColumn           func(p0 *ExpressionColumn) error
 	FuncExitExpressionColumn            func(p0 *ExpressionColumn) error
-	FuncEnterExpressionDistinct         func(p0 *ExpressionDistinct) error
-	FuncExitExpressionDistinct          func(p0 *ExpressionDistinct) error
 	FuncEnterExpressionFunction         func(p0 *ExpressionFunction) error
 	FuncExitExpressionFunction          func(p0 *ExpressionFunction) error
-	FuncEnterExpressionIsNull           func(p0 *ExpressionIsNull) error
-	FuncExitExpressionIsNull            func(p0 *ExpressionIsNull) error
+	FuncEnterExpressionIs               func(p0 *ExpressionIs) error
+	FuncExitExpressionIs                func(p0 *ExpressionIs) error
 	FuncEnterExpressionList             func(p0 *ExpressionList) error
 	FuncExitExpressionList              func(p0 *ExpressionList) error
 	FuncEnterExpressionLiteral          func(p0 *ExpressionLiteral) error
@@ -863,22 +851,6 @@ func (b *ImplementedWalker) ExitExpressionColumn(p0 *ExpressionColumn) error {
 	return b.FuncExitExpressionColumn(p0)
 }
 
-func (b *ImplementedWalker) EnterExpressionDistinct(p0 *ExpressionDistinct) error {
-	if b.FuncEnterExpressionDistinct == nil {
-		return nil
-	}
-
-	return b.FuncEnterExpressionDistinct(p0)
-}
-
-func (b *ImplementedWalker) ExitExpressionDistinct(p0 *ExpressionDistinct) error {
-	if b.FuncExitExpressionDistinct == nil {
-		return nil
-	}
-
-	return b.FuncExitExpressionDistinct(p0)
-}
-
 func (b *ImplementedWalker) EnterExpressionFunction(p0 *ExpressionFunction) error {
 	if b.FuncEnterExpressionFunction == nil {
 		return nil
@@ -895,20 +867,20 @@ func (b *ImplementedWalker) ExitExpressionFunction(p0 *ExpressionFunction) error
 	return b.FuncExitExpressionFunction(p0)
 }
 
-func (b *ImplementedWalker) EnterExpressionIsNull(p0 *ExpressionIsNull) error {
-	if b.FuncEnterExpressionIsNull == nil {
+func (b *ImplementedWalker) EnterExpressionIs(p0 *ExpressionIs) error {
+	if b.FuncEnterExpressionIs == nil {
 		return nil
 	}
 
-	return b.FuncEnterExpressionIsNull(p0)
+	return b.FuncEnterExpressionIs(p0)
 }
 
-func (b *ImplementedWalker) ExitExpressionIsNull(p0 *ExpressionIsNull) error {
-	if b.FuncExitExpressionIsNull == nil {
+func (b *ImplementedWalker) ExitExpressionIs(p0 *ExpressionIs) error {
+	if b.FuncExitExpressionIs == nil {
 		return nil
 	}
 
-	return b.FuncExitExpressionIsNull(p0)
+	return b.FuncExitExpressionIs(p0)
 }
 
 func (b *ImplementedWalker) EnterExpressionList(p0 *ExpressionList) error {

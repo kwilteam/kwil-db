@@ -6,8 +6,6 @@ type QualifiedTableName struct {
 	schema     string
 	TableName  string
 	TableAlias string
-	IndexedBy  string
-	NotIndexed bool
 }
 
 func (q *QualifiedTableName) Accept(w Walker) error {
@@ -37,25 +35,12 @@ func (q *QualifiedTableName) ToSQL() string {
 		stmt.WriteIdent(q.TableAlias)
 	}
 
-	if q.IndexedBy != "" {
-		stmt.Token.Indexed().By()
-		stmt.WriteIdent(q.IndexedBy)
-	}
-
-	if q.NotIndexed {
-		stmt.Token.Not().Indexed()
-	}
-
 	return stmt.String()
 }
 
 func (q *QualifiedTableName) check() {
 	if q.TableName == "" {
 		panic("table name is empty")
-	}
-
-	if q.IndexedBy != "" && q.NotIndexed {
-		panic("indexed by and not indexed cannot be set at the same time")
 	}
 }
 

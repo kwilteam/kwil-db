@@ -27,9 +27,11 @@ func TestOrderBy_ToSQL(t *testing.T) {
 						Expression: &tree.ExpressionBinaryComparison{
 							Left:     &tree.ExpressionColumn{Column: "bar"},
 							Operator: tree.ComparisonOperatorEqual,
-							Right:    &tree.ExpressionBindParameter{Parameter: "$a"},
+							Right: &tree.ExpressionCollate{
+								Expression: &tree.ExpressionBindParameter{Parameter: "$a"},
+								Collation:  tree.CollationTypeNoCase,
+							},
 						},
-						Collation:    tree.CollationTypeNoCase,
 						OrderType:    tree.OrderTypeDesc,
 						NullOrdering: tree.NullOrderingTypeFirst,
 					},
