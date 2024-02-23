@@ -15,7 +15,7 @@ require (
 	github.com/cstockton/go-conv v1.0.0
 	github.com/docker/go-connections v0.4.0
 	github.com/ethereum/go-ethereum v1.13.8
-	github.com/kwilteam/kuneiform v0.5.0-beta.0.20231127204550-1284c835497e
+	github.com/kwilteam/kuneiform v0.6.0-alpha
 	github.com/kwilteam/kwil-db v0.5.1-0.20230927233025-c3e8ef579ade
 	github.com/kwilteam/kwil-db/core v0.0.0
 	github.com/stretchr/testify v1.8.4
@@ -135,7 +135,7 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/kwilteam/action-grammar-go v0.0.1-0.20240223175558-46afbf6169f2 // indirect
-	github.com/kwilteam/kwil-db/parse v0.0.0 // indirect
+	github.com/kwilteam/kwil-db/parse v0.1.0 // indirect
 	github.com/kwilteam/sql-grammar-go v0.0.3-0.20240223175539-c7cfe24d9dc1 // indirect
 	github.com/lib/pq v1.10.7 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
