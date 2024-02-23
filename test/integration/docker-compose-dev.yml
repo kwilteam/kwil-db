@@ -390,8 +390,11 @@ services:
       - "8090:8090" # this is required for the test to pass, as the `domain` value is set to `http://localhost:8090`
     networks:
       - ${KWIL_NETWORK:-kwil-int-testnet}
+    volumes:
+      - ${KWIL_HOME:-/tmp}:/app/kgwlog
     command: |
       --log-level ${LOG_LEVEL:-info}
+      --log-outputs stdout /app/kgwlog/kgw.log
       --cors-allow-origins *
       --backends node0:8080 node1:8080 node2:8080 node3:8080
       --domain http://localhost:8090

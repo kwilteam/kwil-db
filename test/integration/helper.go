@@ -445,7 +445,7 @@ func (r *IntHelper) Setup(ctx context.Context, services []string) {
 		os.RemoveAll(tmpDir)
 	})
 
-	r.t.Logf("create test directory: %s", tmpDir)
+	r.t.Logf("create test directory: %s for %s", tmpDir, r.t.Name())
 
 	r.prepareDockerCompose(ctx, tmpDir)
 
