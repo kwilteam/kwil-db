@@ -89,7 +89,7 @@ func DepositSuccessSpecification(ctx context.Context, t *testing.T, deployer Dep
 		postUserBalance, err := deployer.AccountBalance(ctx, senderAddr)
 		require.NoError(t, err)
 		return postUserBalance.Cmp(big.NewInt(0).Add(preUserBalance, amount)) == 0
-	}, 5*time.Minute, 5*time.Second)
+	}, 1*time.Minute, 5*time.Second)
 }
 
 func DepositFailSpecification(ctx context.Context, t *testing.T, deployer DeployerDsl) {
@@ -422,6 +422,9 @@ func EthDepositValidatorUpdatesSpecification(ctx context.Context, t *testing.T, 
 
 	// Node5 leaves its validator status
 	ValidatorNodeLeaveSpecification(ctx, t, valDsl["node5"])
+
+	// Check that the node5 is no more a Validator
+	CurrentValidatorsSpecification(ctx, t, valDsl["node5"], 5)
 
 	// Make a deposit
 	err = deployer.Approve(ctx, sender, big.NewInt(10))

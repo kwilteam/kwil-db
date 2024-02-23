@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
+	"github.com/kwilteam/kwil-db/internal/voting"
 
 	"github.com/stretchr/testify/require"
 )
@@ -208,7 +208,10 @@ func Test_EventStore(t *testing.T) {
 			require.NoError(t, err)
 			defer cleanup()
 
-			e, err := NewEventStore(ctx, db, &mockVoteStore{})
+			e, err := NewEventStore(ctx, db)
+			require.NoError(t, err)
+
+			err = voting.InitializeVoteStore(ctx, db)
 			require.NoError(t, err)
 
 			// create a second db connection to emulate the consensus db
@@ -223,11 +226,4 @@ func Test_EventStore(t *testing.T) {
 			tt.fn(t, e, consensusDB)
 		})
 	}
-}
-
-type mockVoteStore struct {
-}
-
-func (m *mockVoteStore) IsProcessed(ctx context.Context, db sql.DB, resolutionID types.UUID) (bool, error) {
-	return false, nil
 }

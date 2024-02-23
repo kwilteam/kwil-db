@@ -12,7 +12,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/stretchr/testify/assert"
 )
@@ -82,6 +81,14 @@ func Test_prepareMempoolTxns(t *testing.T) {
 
 	// tA is the template transaction. Several fields may not be nil because of
 	// a legacy RLP issue where objects may be encoded that cannot be decoded.
+
+	abciApp := &AbciApp{
+		txApp: &mockTxApp{},
+	}
+	logger := log.NewStdOut(log.DebugLevel)
+
+	abciApp.log = logger
+
 	tA := &transactions.Transaction{
 		Signature: &auth.Signature{
 			Signature: []byte{},
@@ -126,7 +133,6 @@ func Test_prepareMempoolTxns(t *testing.T) {
 
 	invalid := []byte{9, 90, 22}
 
-	logger := log.NewStdOut(log.DebugLevel)
 	tests := []struct {
 		name string
 		txs  [][]byte
@@ -195,7 +201,7 @@ func Test_prepareMempoolTxns(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _ := prepareMempoolTxns(tt.txs, 1e6, &logger, []byte("proposer"))
+			got, _ := abciApp.prepareMempoolTxns(tt.txs, 1e6, &logger, []byte("proposer"))
 			if len(got) != len(tt.want) {
 				t.Errorf("got %d txns, expected %d", len(got), len(tt.want))
 			}
@@ -206,6 +212,28 @@ func Test_prepareMempoolTxns(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_ProcessProposal_UnfundedAccount(t *testing.T) {
+	abciApp := &AbciApp{
+		txApp: &mockTxApp{},
+		cfg: AbciConfig{
+			GasEnabled: true,
+		},
+	}
+	logger := log.NewStdOut(log.DebugLevel)
+
+	abciApp.log = logger
+
+	keyA, _ := crypto.GenerateSecp256k1Key()
+	signerA := &auth.EthPersonalSigner{Key: *keyA}
+
+	txA1 := newTxBts(t, 1, signerA)
+
+	// Unfunded account
+	txs, _ := abciApp.prepareMempoolTxns([][]byte{txA1}, 1e6, &logger, []byte("proposer"))
+	assert.Len(t, txs, 0)
+
 }
 
 func Test_ProcessProposal_TxValidation(t *testing.T) {
@@ -345,7 +373,7 @@ func (m *mockTxApp) MarkBroadcasted(ctx context.Context, ids []types.UUID) error
 }
 
 func (m *mockTxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
-	return nil, 0, nil
+	return big.NewInt(0), 0, nil
 }
 
 func (m *mockTxApp) ApplyMempool(ctx context.Context, tx *transactions.Transaction) error {
@@ -368,7 +396,7 @@ func (m *mockTxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []
 	return nil, nil, nil
 }
 
-func (m *mockTxApp) GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*accounts.Account, initialHeight int64) error {
+func (m *mockTxApp) GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*types.Account, initialHeight int64) error {
 	return nil
 }
 

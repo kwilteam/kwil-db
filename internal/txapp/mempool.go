@@ -8,27 +8,27 @@ import (
 	"math/big"
 	"sync"
 
+	sql "github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/accounts"
-	"github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 type mempool struct {
-	accounts map[string]*accounts.Account
-	mu       sync.Mutex
-
-	accountStore   AccountReader
-	validatorStore IsValidatorChecker
+	accounts   map[string]*types.Account
+	gasEnabled bool
+	mu         sync.Mutex
 }
 
 // accountInfo retrieves the account info from the mempool state or the account store.
-func (m *mempool) accountInfo(ctx context.Context, tx sql.DB, acctID []byte) (*accounts.Account, error) {
+func (m *mempool) accountInfo(ctx context.Context, tx sql.DB, acctID []byte) (*types.Account, error) {
 	if acctInfo, ok := m.accounts[string(acctID)]; ok {
 		return acctInfo, nil // there is an unconfirmed tx for this account
 	}
 
 	// get account from account store
-	acct, err := m.accountStore.GetAccount(ctx, tx, acctID)
+
+	acct, err := getAccount(ctx, tx, acctID)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (m *mempool) accountInfo(ctx context.Context, tx sql.DB, acctID []byte) (*a
 }
 
 // accountInfoSafe is wraps accountInfo in a mutex lock.
-func (m *mempool) accountInfoSafe(ctx context.Context, tx sql.DB, acctID []byte) (*accounts.Account, error) {
+func (m *mempool) accountInfoSafe(ctx context.Context, tx sql.DB, acctID []byte) (*types.Account, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -54,12 +54,12 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 	// seems like maybe this should go in the switch statement below,
 	// but I put it here to avoid extra db call for account info
 	if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteIDs {
-		isValidator, err := m.validatorStore.IsCurrent(ctx, dbTx, tx.Sender)
+		power, err := voting.GetValidatorPower(ctx, dbTx, tx.Sender)
 		if err != nil {
 			return err
 		}
 
-		if !isValidator {
+		if power == 0 {
 			return fmt.Errorf("only validators can submit validator vote transactions")
 		}
 	}
@@ -72,6 +72,12 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 	acct, err := m.accountInfo(ctx, dbTx, tx.Sender)
 	if err != nil {
 		return err
+	}
+
+	// reject the transactions from unfunded user accounts in gasEnabled mode
+	if m.gasEnabled && acct.Nonce == 0 && acct.Balance.Sign() == 0 {
+		delete(m.accounts, string(tx.Sender))
+		return fmt.Errorf("account %s does not exist", hex.EncodeToString(tx.Sender))
 	}
 
 	// It is normally permissible to accept a transaction with the same nonce as
@@ -157,5 +163,5 @@ func (m *mempool) reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.accounts = make(map[string]*accounts.Account)
+	m.accounts = make(map[string]*types.Account)
 }

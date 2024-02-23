@@ -3,7 +3,8 @@ package extensions
 import (
 	"context"
 
-	"github.com/kwilteam/kwil-db/internal/engine/execution"
+	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/extensions/actions"
 )
 
 // LegacyEngineExtension is an extension that can be loaded into the engine.
@@ -20,12 +21,12 @@ type LegacyEngineExtension interface {
 	Initialize(ctx context.Context, metadata map[string]string) (map[string]string, error)
 	// Execute executes the requested method of the extension.
 	// It includes the metadata that was returned from the `Initialize` method.
-	Execute(scope *execution.ProcedureContext, metadata map[string]string, method string, args ...any) ([]any, error)
+	Execute(scope *actions.ProcedureContext, metadata map[string]string, method string, args ...any) ([]any, error)
 }
 
 // AdapterFunc is a function that adapts a LegacyEngineExtension to an InitializeFunc.
-func AdaptLegacyExtension(ext LegacyEngineExtension) execution.ExtensionInitializer {
-	return func(ctx *execution.DeploymentContext, metadata map[string]string) (execution.ExtensionNamespace, error) {
+func AdaptLegacyExtension(ext LegacyEngineExtension) actions.ExtensionInitializer {
+	return func(ctx *actions.DeploymentContext, service *common.Service, metadata map[string]string) (actions.ExtensionNamespace, error) {
 
 		m, err := ext.Initialize(ctx.Ctx, metadata)
 		if err != nil {
@@ -45,8 +46,8 @@ type legacyExtensionAdapter struct {
 	metadata map[string]string
 }
 
-var _ execution.ExtensionNamespace = (*legacyExtensionAdapter)(nil)
+var _ actions.ExtensionNamespace = (*legacyExtensionAdapter)(nil)
 
-func (l *legacyExtensionAdapter) Call(scope *execution.ProcedureContext, method string, args []any) ([]any, error) {
+func (l *legacyExtensionAdapter) Call(scope *actions.ProcedureContext, app *common.App, method string, args []any) ([]any, error) {
 	return l.ext.Execute(scope, l.metadata, method, args...)
 }

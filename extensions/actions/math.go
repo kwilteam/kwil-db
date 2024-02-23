@@ -3,29 +3,25 @@
 package actions
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 
-	"github.com/kwilteam/kwil-db/internal/engine/execution"
+	"github.com/kwilteam/kwil-db/common"
 )
 
 func init() {
-	mathExt := &MathExtension{}
-	err := RegisterLegacyExtension("math", mathExt)
+	err := RegisterExtension("math", InitializeMath)
 	if err != nil {
 		panic(err)
 	}
 }
 
-type MathExtension struct{}
-
-func (e *MathExtension) Name() string {
-	return "math"
+type MathExtension struct {
+	roundUp bool // if true, round up.  If false, round down.
 }
 
 // this initialize function checks if round is set.  If not, it sets it to "up"
-func (e *MathExtension) Initialize(ctx context.Context, metadata map[string]string) (map[string]string, error) {
+func InitializeMath(ctx *DeploymentContext, service *common.Service, metadata map[string]string) (ExtensionNamespace, error) {
 	_, ok := metadata["round"]
 	if !ok {
 		metadata["round"] = "up"
@@ -36,19 +32,21 @@ func (e *MathExtension) Initialize(ctx context.Context, metadata map[string]stri
 		return nil, fmt.Errorf("round must be either 'up' or 'down'. default is 'up'")
 	}
 
-	return metadata, nil
+	roundUp := roundVal == "up"
+
+	return &MathExtension{roundUp: roundUp}, nil
 }
 
-func (e *MathExtension) Execute(ctx *execution.ProcedureContext, metadata map[string]string, method string, args ...any) ([]any, error) {
+func (e *MathExtension) Call(ctx *ProcedureContext, app *common.App, method string, inputs []any) ([]any, error) {
 	switch method {
 	case "add":
-		return e.add(args...)
+		return e.add(inputs...)
 	case "subtract":
-		return e.subtract(args...)
+		return e.subtract(inputs...)
 	case "multiply":
-		return e.multiply(args...)
+		return e.multiply(inputs...)
 	case "divide":
-		return e.divide(metadata, args...)
+		return e.divide(inputs...)
 	default:
 		return nil, fmt.Errorf("method %s not found", method)
 	}
@@ -118,7 +116,7 @@ func (e *MathExtension) multiply(values ...any) ([]any, error) {
 }
 
 // divide takes two integers and returns their quotient rounded up or down depending on how the extension was initialized
-func (e *MathExtension) divide(metadata map[string]string, values ...any) ([]any, error) {
+func (e *MathExtension) divide(values ...any) ([]any, error) {
 	if len(values) != 2 {
 		return nil, fmt.Errorf("expected 2 values for method Divide, got %d", len(values))
 	}
@@ -141,7 +139,7 @@ func (e *MathExtension) divide(metadata map[string]string, values ...any) ([]any
 
 	var IntResult *big.Int
 	var results []any
-	if metadata["round"] == "up" {
+	if e.roundUp {
 		IntResult = roundUp(result)
 	} else {
 		IntResult = roundDown(result)

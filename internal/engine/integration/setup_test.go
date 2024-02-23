@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/conv"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
@@ -70,8 +73,11 @@ func setup(t *testing.T) (global *execution.GlobalContext, db *pg.DB, err error)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
-	global, err = execution.NewGlobalContext(ctx, tx, map[string]execution.ExtensionInitializer{
+	global, err = execution.NewGlobalContext(ctx, tx, map[string]actions.ExtensionInitializer{
 		"math": (&mathInitializer{}).initialize,
+	}, &common.Service{
+		Logger:           log.NewNoOp(),
+		ExtensionConfigs: map[string]map[string]string{},
 	})
 	require.NoError(t, err)
 
@@ -89,7 +95,7 @@ type mathInitializer struct {
 	vals map[string]string
 }
 
-func (m *mathInitializer) initialize(_ *execution.DeploymentContext, mp map[string]string) (execution.ExtensionNamespace, error) {
+func (m *mathInitializer) initialize(_ *actions.DeploymentContext, _ *common.Service, mp map[string]string) (actions.ExtensionNamespace, error) {
 	m.vals = mp
 
 	_, ok := m.vals["fail"]
@@ -102,9 +108,9 @@ func (m *mathInitializer) initialize(_ *execution.DeploymentContext, mp map[stri
 
 type mathExt struct{}
 
-var _ execution.ExtensionNamespace = &mathExt{}
+var _ actions.ExtensionNamespace = &mathExt{}
 
-func (m *mathExt) Call(caller *execution.ProcedureContext, method string, inputs []any) ([]any, error) {
+func (m *mathExt) Call(caller *actions.ProcedureContext, _ *common.App, method string, inputs []any) ([]any, error) {
 	if method != "add" {
 		return nil, fmt.Errorf("unknown method: %s", method)
 	}

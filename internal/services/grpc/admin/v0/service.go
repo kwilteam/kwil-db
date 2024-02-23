@@ -1,21 +1,22 @@
 package admin
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	admpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/admin/v0"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/sql"
-	"github.com/kwilteam/kwil-db/internal/validators"
+	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/version"
+	"github.com/kwilteam/kwil-db/internal/voting"
 
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	"go.uber.org/zap"
@@ -41,12 +42,6 @@ type TxApp interface {
 	AccountInfo(ctx context.Context, identifier []byte, unconfirmed bool) (balance *big.Int, nonce int64, err error)
 }
 
-// ValidatorReader reads data about the validator store.
-type ValidatorReader interface {
-	CurrentValidators(ctx context.Context, tx sql.DB) ([]*validators.Validator, error)
-	ActiveVotes(ctx context.Context, tx sql.DB) ([]*validators.JoinRequest, []*validators.ValidatorRemoveProposal, error)
-}
-
 type AdminSvcOpt func(*Service)
 
 func WithLogger(logger log.Logger) AdminSvcOpt {
@@ -60,7 +55,6 @@ type Service struct {
 	admpb.UnimplementedAdminServiceServer
 	blockchain BlockchainTransactor // node is the local node that can accept transactions.
 	TxApp      TxApp
-	validators ValidatorReader
 	db         sql.ReadTxMaker
 
 	cfg *config.KwildConfig
@@ -74,11 +68,10 @@ type Service struct {
 var _ admpb.AdminServiceServer = (*Service)(nil)
 
 // NewService constructs a new Service.
-func NewService(db sql.ReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, validators ValidatorReader, signer auth.Signer, cfg *config.KwildConfig, chainId string, opts ...AdminSvcOpt) *Service {
+func NewService(db sql.ReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, signer auth.Signer, cfg *config.KwildConfig, chainId string, opts ...AdminSvcOpt) *Service {
 	s := &Service{
 		blockchain: blockchain,
 		TxApp:      txApp,
-		validators: validators,
 		signer:     signer,
 		chainId:    chainId,
 		cfg:        cfg,
@@ -248,43 +241,30 @@ func (s *Service) JoinStatus(ctx context.Context, req *admpb.JoinStatusRequest) 
 	}
 	defer readTx.Rollback(ctx) // always rollback, the readTx is read-only
 
-	joiner := req.Pubkey
-	allJoins, _, err := s.validators.ActiveVotes(ctx, readTx)
+	ids, err := voting.GetResolutionIDsByTypeAndProposer(ctx, readTx, voting.ValidatorJoinEventType, req.Pubkey)
 	if err != nil {
-		s.log.Error("failed to retrieve active join requests", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to retrieve active join requests")
+		s.log.Error("failed to retrieve join request", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to retrieve join request")
 	}
-	for _, ji := range allJoins {
-		if bytes.Equal(ji.Candidate, joiner) {
-			return &admpb.JoinStatusResponse{
-				JoinRequest: convertJoinRequest(ji),
-			}, nil
-		}
+	if len(ids) == 0 {
+		return nil, status.Errorf(codes.NotFound, "no active join request")
 	}
 
-	vals, err := s.validators.CurrentValidators(ctx, readTx)
+	resolution, err := voting.GetResolutionInfo(ctx, readTx, ids[0])
 	if err != nil {
-		s.log.Error("failed to retrieve current validators", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to retrieve current validators")
-	}
-	for _, vi := range vals {
-		if bytes.Equal(vi.PubKey, joiner) {
-			return nil, status.Errorf(codes.NotFound, "already a validator") // maybe FailedPrecondition?
-		}
+		s.log.Error("failed to retrieve join request", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to retrieve join request")
 	}
 
-	return nil, status.Errorf(codes.NotFound, "no active join request")
-}
-
-func convertJoinRequest(join *validators.JoinRequest) *admpb.PendingJoin {
-	resp := &admpb.PendingJoin{
-		Candidate: join.Candidate,
-		Power:     join.Power,
-		ExpiresAt: join.ExpiresAt,
-		Board:     join.Board,
-		Approved:  join.Approved,
+	pendingJoin, err := toPendingInfo(ctx, readTx, resolution)
+	if err != nil {
+		s.log.Error("failed to convert join request", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to convert join request")
 	}
-	return resp
+
+	return &admpb.JoinStatusResponse{
+		JoinRequest: pendingJoin,
+	}, nil
 }
 
 func (s *Service) Leave(ctx context.Context, req *admpb.LeaveRequest) (*txpb.BroadcastResponse, error) {
@@ -299,10 +279,10 @@ func (s *Service) ListValidators(ctx context.Context, req *admpb.ListValidatorsR
 	}
 	defer readTx.Rollback(ctx) // always rollback, the readTx is read-only
 
-	vals, err := s.validators.CurrentValidators(ctx, readTx)
+	vals, err := voting.GetValidators(ctx, readTx)
 	if err != nil {
-		s.log.Error("failed to retrieve current validators", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to retrieve current validators")
+		s.log.Error("failed to retrieve voters", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, "failed to retrieve voters")
 	}
 
 	pbValidators := make([]*admpb.Validator, len(vals))
@@ -326,19 +306,69 @@ func (s *Service) ListPendingJoins(ctx context.Context, req *admpb.ListJoinReque
 	}
 	defer readTx.Rollback(ctx) // always rollback, the readTx is read-only
 
-	joins, _, err := s.validators.ActiveVotes(ctx, readTx)
+	activeJoins, err := voting.GetResolutionsByType(ctx, readTx, voting.ValidatorJoinEventType)
 	if err != nil {
 		s.log.Error("failed to retrieve active join requests", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to retrieve active join requests")
 	}
 
-	pbJoins := make([]*admpb.PendingJoin, len(joins))
-	for i, ji := range joins {
-		pbJoins[i] = convertJoinRequest(ji)
+	pbJoins := make([]*admpb.PendingJoin, len(activeJoins))
+	for i, ji := range activeJoins {
+		pbJoins[i], err = toPendingInfo(ctx, readTx, ji)
+		if err != nil {
+			s.log.Error("failed to convert join request", zap.Error(err))
+			return nil, status.Errorf(codes.Internal, "failed to convert join request")
+		}
 	}
 
 	return &admpb.ListJoinRequestsResponse{
 		JoinRequests: pbJoins,
+	}, nil
+}
+
+// toPendingInfo gets the pending information for an active join from a resolution
+func toPendingInfo(ctx context.Context, db sql.DB, resolution *resolutions.Resolution) (*admpb.PendingJoin, error) {
+	resolutionBody := &voting.UpdatePowerRequest{}
+	if err := resolutionBody.UnmarshalBinary(resolution.Body); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal join request")
+	}
+
+	allVoters, err := voting.GetValidators(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve voters")
+	}
+
+	// to create the board, we will take a list of all approvers and append the voters.
+	// we will then remove any duplicates the second time we see them.
+	// this will result with all approvers at the start of the list, and all voters at the end.
+	// finally, the approvals will be true for the length of the approvers, and false for found.length - voters.length
+	board := make([][]byte, 0, len(allVoters))
+	approvals := make([]bool, len(allVoters))
+	for i, v := range resolution.Voters {
+		board = append(board, v.PubKey)
+		approvals[i] = true
+	}
+	for _, v := range allVoters {
+		board = append(board, v.PubKey)
+	}
+
+	// we will now remove duplicates from the board.
+	found := make(map[string]struct{})
+	for i := 0; i < len(board); i++ {
+		if _, ok := found[string(board[i])]; ok {
+			board = append(board[:i], board[i+1:]...)
+			i--
+			continue
+		}
+		found[string(board[i])] = struct{}{}
+	}
+
+	return &admpb.PendingJoin{
+		Candidate: resolution.Proposer,
+		Power:     resolutionBody.Power,
+		ExpiresAt: resolution.ExpirationHeight,
+		Board:     board,
+		Approved:  approvals,
 	}, nil
 }
 

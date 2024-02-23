@@ -9,15 +9,15 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 // DB is a database connection.
 type DB interface {
-	sql.TxMaker
 	sql.ReadTxMaker
-	sql.Executor
+	sql.DB
 }
 
 // VoteStore is a store that tracks votes.
@@ -43,16 +43,13 @@ type EventStore struct {
 	eventWriter DB
 
 	writerMtx sync.Mutex // protects eventWriter, not applicable to read-only operations
-
-	// voteStore is a store that tracks votes.
-	votestore VoteStore
 }
 
 // NewEventStore creates a new event store.
 // It takes a database connection to write events to.
 // WARNING: This connection cannot be the same connection
 // used during consensus / in txapp.
-func NewEventStore(ctx context.Context, writerDB DB, voteStore VoteStore) (*EventStore, error) {
+func NewEventStore(ctx context.Context, writerDB DB) (*EventStore, error) {
 	tx, err := writerDB.BeginTx(ctx)
 	if err != nil {
 		return nil, err
@@ -71,7 +68,6 @@ func NewEventStore(ctx context.Context, writerDB DB, voteStore VoteStore) (*Even
 
 	return &EventStore{
 		eventWriter: writerDB,
-		votestore:   voteStore,
 	}, tx.Commit(ctx)
 }
 
@@ -95,7 +91,7 @@ func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) e
 	id := event.ID()
 
 	// is this event already processed?
-	processed, err := e.votestore.IsProcessed(ctx, tx, id)
+	processed, err := voting.IsProcessed(ctx, tx, id)
 	if err != nil {
 		return err
 	}

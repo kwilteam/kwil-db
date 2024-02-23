@@ -188,7 +188,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			/*
 			 Join Process:
 			 - Node3 requests to join
-			 - Requires at least 2 nodes to approve
+			 - Requires at least 2 nodes to approvee
 			 - Consensus reached, Node3 is a Validator
 			*/
 			specifications.ValidatorNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)

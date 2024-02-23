@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 )
 
-func convertSchemaToEngine(old *transactions.Schema) (*engineTypes.Schema, error) {
+func convertSchemaToEngine(old *transactions.Schema) (*common.Schema, error) {
 	procedures, err := convertActionsToEngine(old.Actions)
 	if err != nil {
 		return nil, err
@@ -24,7 +24,7 @@ func convertSchemaToEngine(old *transactions.Schema) (*engineTypes.Schema, error
 		return nil, err
 	}
 
-	return &engineTypes.Schema{
+	return &common.Schema{
 		Name:       old.Name,
 		Tables:     tables,
 		Procedures: procedures,
@@ -32,8 +32,8 @@ func convertSchemaToEngine(old *transactions.Schema) (*engineTypes.Schema, error
 	}, nil
 }
 
-func convertTablesToEngine(tables []*transactions.Table) ([]*engineTypes.Table, error) {
-	convTables := make([]*engineTypes.Table, len(tables))
+func convertTablesToEngine(tables []*transactions.Table) ([]*common.Table, error) {
+	convTables := make([]*common.Table, len(tables))
 	for i, table := range tables {
 		columns, err := convertColumnsToEngine(table.Columns)
 		if err != nil {
@@ -50,7 +50,7 @@ func convertTablesToEngine(tables []*transactions.Table) ([]*engineTypes.Table, 
 			return nil, err
 		}
 
-		convTables[i] = &engineTypes.Table{
+		convTables[i] = &common.Table{
 			Name:        table.Name,
 			Columns:     columns,
 			Indexes:     indexes,
@@ -61,10 +61,10 @@ func convertTablesToEngine(tables []*transactions.Table) ([]*engineTypes.Table, 
 	return convTables, nil
 }
 
-func convertColumnsToEngine(columns []*transactions.Column) ([]*engineTypes.Column, error) {
-	convColumns := make([]*engineTypes.Column, len(columns))
+func convertColumnsToEngine(columns []*transactions.Column) ([]*common.Column, error) {
+	convColumns := make([]*common.Column, len(columns))
 	for i, column := range columns {
-		colType := engineTypes.DataType(column.Type)
+		colType := common.DataType(column.Type)
 		if err := colType.Clean(); err != nil {
 			return nil, err
 		}
@@ -74,7 +74,7 @@ func convertColumnsToEngine(columns []*transactions.Column) ([]*engineTypes.Colu
 			return nil, err
 		}
 
-		convColumns[i] = &engineTypes.Column{
+		convColumns[i] = &common.Column{
 			Name:       column.Name,
 			Type:       colType,
 			Attributes: attributes,
@@ -84,15 +84,15 @@ func convertColumnsToEngine(columns []*transactions.Column) ([]*engineTypes.Colu
 	return convColumns, nil
 }
 
-func convertAttributesToEngine(attributes []*transactions.Attribute) ([]*engineTypes.Attribute, error) {
-	convAttributes := make([]*engineTypes.Attribute, len(attributes))
+func convertAttributesToEngine(attributes []*transactions.Attribute) ([]*common.Attribute, error) {
+	convAttributes := make([]*common.Attribute, len(attributes))
 	for i, attribute := range attributes {
-		attrType := engineTypes.AttributeType(attribute.Type)
+		attrType := common.AttributeType(attribute.Type)
 		if err := attrType.Clean(); err != nil {
 			return nil, err
 		}
 
-		convAttributes[i] = &engineTypes.Attribute{
+		convAttributes[i] = &common.Attribute{
 			Type:  attrType,
 			Value: attribute.Value, // Assuming you have a function to parse the value based on its type
 		}
@@ -101,15 +101,15 @@ func convertAttributesToEngine(attributes []*transactions.Attribute) ([]*engineT
 	return convAttributes, nil
 }
 
-func convertIndexesToEngine(indexes []*transactions.Index) ([]*engineTypes.Index, error) {
-	convIndexes := make([]*engineTypes.Index, len(indexes))
+func convertIndexesToEngine(indexes []*transactions.Index) ([]*common.Index, error) {
+	convIndexes := make([]*common.Index, len(indexes))
 	for i, index := range indexes {
-		indexType := engineTypes.IndexType(index.Type)
+		indexType := common.IndexType(index.Type)
 		if err := indexType.Clean(); err != nil {
 			return nil, err
 		}
 
-		convIndexes[i] = &engineTypes.Index{
+		convIndexes[i] = &common.Index{
 			Name:    index.Name,
 			Columns: index.Columns,
 			Type:    indexType,
@@ -119,15 +119,15 @@ func convertIndexesToEngine(indexes []*transactions.Index) ([]*engineTypes.Index
 	return convIndexes, nil
 }
 
-func convertActionsToEngine(actions []*transactions.Action) ([]*engineTypes.Procedure, error) {
-	convActions := make([]*engineTypes.Procedure, len(actions))
+func convertActionsToEngine(actions []*transactions.Action) ([]*common.Procedure, error) {
+	convActions := make([]*common.Procedure, len(actions))
 	for i, action := range actions {
 		mods, err := convertModifiersToEngine(action.Mutability, action.Auxiliaries)
 		if err != nil {
 			return nil, err
 		}
 
-		convActions[i] = &engineTypes.Procedure{
+		convActions[i] = &common.Procedure{
 			Name:        action.Name,
 			Annotations: action.Annotations,
 			Public:      action.Public,
@@ -140,13 +140,13 @@ func convertActionsToEngine(actions []*transactions.Action) ([]*engineTypes.Proc
 	return convActions, nil
 }
 
-func convertModifiersToEngine(mutability string, auxiliaries []string) ([]engineTypes.Modifier, error) {
-	mods := make([]engineTypes.Modifier, 0)
+func convertModifiersToEngine(mutability string, auxiliaries []string) ([]common.Modifier, error) {
+	mods := make([]common.Modifier, 0)
 	switch strings.ToLower(mutability) {
 	case transactions.MutabilityUpdate.String():
 		break
 	case transactions.MutabilityView.String():
-		mods = append(mods, engineTypes.ModifierView)
+		mods = append(mods, common.ModifierView)
 	default:
 		return nil, fmt.Errorf("unknown mutability type: %v", mutability)
 	}
@@ -154,9 +154,9 @@ func convertModifiersToEngine(mutability string, auxiliaries []string) ([]engine
 	for _, aux := range auxiliaries {
 		switch strings.ToLower(aux) {
 		case transactions.AuxiliaryTypeMustSign.String():
-			mods = append(mods, engineTypes.ModifierAuthenticated)
+			mods = append(mods, common.ModifierAuthenticated)
 		case transactions.AuxiliaryTypeOwner.String():
-			mods = append(mods, engineTypes.ModifierOwner)
+			mods = append(mods, common.ModifierOwner)
 		default:
 			return nil, fmt.Errorf("unknown auxiliary type: %v", aux)
 		}
@@ -165,10 +165,10 @@ func convertModifiersToEngine(mutability string, auxiliaries []string) ([]engine
 	return mods, nil
 }
 
-func convertExtensionsToEngine(extensions []*transactions.Extension) ([]*engineTypes.Extension, error) {
-	convExtensions := make([]*engineTypes.Extension, len(extensions))
+func convertExtensionsToEngine(extensions []*transactions.Extension) ([]*common.Extension, error) {
+	convExtensions := make([]*common.Extension, len(extensions))
 	for i, extension := range extensions {
-		convExtensions[i] = &engineTypes.Extension{
+		convExtensions[i] = &common.Extension{
 			Name:           extension.Name,
 			Initialization: convertExtensionConfigToEngine(extension.Config),
 			Alias:          extension.Alias,
@@ -178,10 +178,10 @@ func convertExtensionsToEngine(extensions []*transactions.Extension) ([]*engineT
 	return convExtensions, nil
 }
 
-func convertExtensionConfigToEngine(configs []*transactions.ExtensionConfig) []*engineTypes.ExtensionConfig {
-	convConfigs := make([]*engineTypes.ExtensionConfig, len(configs))
+func convertExtensionConfigToEngine(configs []*transactions.ExtensionConfig) []*common.ExtensionConfig {
+	convConfigs := make([]*common.ExtensionConfig, len(configs))
 	for i, config := range configs {
-		convConfigs[i] = &engineTypes.ExtensionConfig{
+		convConfigs[i] = &common.ExtensionConfig{
 			Key:   config.Argument,
 			Value: config.Value,
 		}
@@ -190,14 +190,14 @@ func convertExtensionConfigToEngine(configs []*transactions.ExtensionConfig) []*
 	return convConfigs
 }
 
-func convertForeignKeysToEngine(fks []*transactions.ForeignKey) ([]*engineTypes.ForeignKey, error) {
-	results := make([]*engineTypes.ForeignKey, len(fks))
+func convertForeignKeysToEngine(fks []*transactions.ForeignKey) ([]*common.ForeignKey, error) {
+	results := make([]*common.ForeignKey, len(fks))
 	for i, fk := range fks {
-		actions := make([]*engineTypes.ForeignKeyAction, len(fk.Actions))
+		actions := make([]*common.ForeignKeyAction, len(fk.Actions))
 		for j, action := range fk.Actions {
-			newAction := &engineTypes.ForeignKeyAction{
-				On: engineTypes.ForeignKeyActionOn(action.On),
-				Do: engineTypes.ForeignKeyActionDo(action.Do),
+			newAction := &common.ForeignKeyAction{
+				On: common.ForeignKeyActionOn(action.On),
+				Do: common.ForeignKeyActionDo(action.Do),
 			}
 			err := newAction.Clean()
 			if err != nil {
@@ -207,7 +207,7 @@ func convertForeignKeysToEngine(fks []*transactions.ForeignKey) ([]*engineTypes.
 			actions[j] = newAction
 		}
 
-		results[i] = &engineTypes.ForeignKey{
+		results[i] = &common.ForeignKey{
 			ChildKeys:   fk.ChildKeys,
 			ParentKeys:  fk.ParentKeys,
 			ParentTable: fk.ParentTable,

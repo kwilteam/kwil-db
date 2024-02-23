@@ -5,8 +5,8 @@ import (
 	"testing"
 	"unicode"
 
+	types "github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/internal/engine/ddl"
-	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/parse/sql/postgres"
 	"github.com/stretchr/testify/assert"
 )

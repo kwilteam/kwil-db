@@ -12,7 +12,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/core/rpc/client"
-	"github.com/kwilteam/kwil-db/internal/validators"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/spf13/cobra"
 )
 
@@ -59,7 +59,7 @@ func joinStatusCmd() *cobra.Command {
 
 // respValJoinStatus represent the status of a validator join request in cli
 type respValJoinStatus struct {
-	Data *validators.JoinRequest
+	Data *types.JoinRequest
 }
 
 // respValJoinRequest is customized json format for respValJoinStatus

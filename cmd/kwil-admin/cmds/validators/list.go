@@ -8,8 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
-	"github.com/kwilteam/kwil-db/internal/validators"
-
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +49,7 @@ func listCmd() *cobra.Command {
 
 // respValSets represent current validator set in cli
 type respValSets struct {
-	Data []*validators.Validator
+	Data []*types.Validator
 }
 
 type valInfo struct {

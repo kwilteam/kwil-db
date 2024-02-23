@@ -3,12 +3,12 @@ package sqlanalyzer
 import (
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/join"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/order"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/schema"
-	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
@@ -37,7 +37,7 @@ func (a *AcceptRecoverer) Accept(walker tree.Walker) (err error) {
 // It parses it, and then traverses the AST with the given flags.
 // It will alter the statement to make it conform to the given flags, or return an error if it cannot.
 // All tables will target the pgSchemaName schema.
-func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table, pgSchemaName string) (*AnalyzedStatement, error) {
+func ApplyRules(stmt string, flags VerifyFlag, tables []*common.Table, pgSchemaName string) (*AnalyzedStatement, error) {
 	cleanedTables, err := cleanTables(tables)
 	if err != nil {
 		return nil, fmt.Errorf("error cleaning tables: %w", err)
@@ -104,8 +104,8 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table, pgSchemaNa
 	}, nil
 }
 
-func cleanTables(tables []*types.Table) ([]*types.Table, error) {
-	cleaned := make([]*types.Table, len(tables))
+func cleanTables(tables []*common.Table) ([]*common.Table, error) {
+	cleaned := make([]*common.Table, len(tables))
 
 	for i, tbl := range tables {
 		err := tbl.Clean()
