@@ -3,9 +3,9 @@ module github.com/kwilteam/kwil-db/parse
 go 1.21
 
 require (
-	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230512164433-5d1fd1a340c9
-	github.com/kwilteam/action-grammar-go v0.0.1-0.20240223175558-46afbf6169f2
-	github.com/kwilteam/sql-grammar-go v0.0.3-0.20240223175539-c7cfe24d9dc1
+	github.com/antlr4-go/antlr/v4 v4.13.0
+	github.com/kwilteam/action-grammar-go v0.1.0
+	github.com/kwilteam/sql-grammar-go v0.1.0
 	github.com/pganalyze/pg_query_go/v5 v5.1.0 // This is only for unit testing
 	github.com/stretchr/testify v1.8.4
 )
