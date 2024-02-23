@@ -1,8 +1,43 @@
-version: "4"
+version: "3"
+
+volumes:
+  pgkwil:
+    driver: local
 
 services:
-  k1:
-    container_name: k1
+  pg:
+    container_name: postgres-kwild-single
+    image: postgres:16.1
+    ports:
+      - "15432:5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+      # Setting user/pass/db works, but we use docker-entrypoint-initdb.d instead for more control
+      # POSTGRES_USER: kwild
+      # POSTGRES_PASSWORD: kwild
+      # POSTGRES_DB: kwild
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+    volumes:
+      - pgkwil:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/create_user.sql
+    networks:
+      kwilnet0:
+        ipv4_address: 172.5.100.3
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  kwild:
+    container_name: kwild-single
     image: kwild:latest
     ports:
       - "8080:8080"
@@ -14,76 +49,31 @@ services:
       - LOG=${LOG:-cometbft.log}
       - KWILD_HOME=/app/.kwild
     volumes:
-      - ./testnet/node0/:/app/.kwild/
+      - ./testnode/:/app/.kwild/
+    depends_on:
+      pg:
+        condition: service_healthy
     networks:
-      kwilnet:
-        ipv4_address: 172.10.100.2
+      kwilnet0:
+        ipv4_address: 172.5.100.2
     command: |
+      --autogen
       --root-dir=/app/.kwild
       --log.level=debug
-      --app.admin-listen-addr=:50151
+      --app.admin-listen-addr=tcp://127.0.0.1:50151
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --chain.p2p.external-address=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-
-  k2:
-    container_name: k2
-    image: kwild:latest
-    ports:
-      - "8081:8080"
-      - "50052:50051"
-      - "50152:50151"
-      - "26666:26656"
-      - "26667:26657"
-    environment:
-      - LOG=${LOG:-cometbft.log}
-      - KWILD_HOME=/app/.kwild
-    volumes:
-      - ./testnet/node1/:/app/.kwild/
-    networks:
-      kwilnet:
-        ipv4_address: 172.10.100.3
-    command: |
-      --root-dir=/app/.kwild
-      --log.level=debug
-      --app.admin-listen-addr=:50151
-      --app.grpc-listen-addr=:50051
-      --app.http-listen-addr=:8080
-      --chain.p2p.external-address=tcp://0.0.0.0:26656
-      --chain.rpc.laddr=tcp://0.0.0.0:26657
-
-  k3:
-    container_name: k3
-    image: kwild:latest
-    ports:
-      - "8082:8080"
-      - "50053:50051"
-      - "50153:50151"
-      - "26676:26656"
-      - "26677:26657"
-    environment:
-      - LOG=${LOG:-cometbft.log}
-      - KWILD_HOME=/app/.kwild
-    volumes:
-      - ./testnet/node2/:/app/.kwild/
-    networks:
-      kwilnet:
-        ipv4_address: 172.10.100.4
-    command: |
-      --root-dir=/app/.kwild
-      --log.level=debug
-      --app.admin-listen-addr=:50151
-      --app.grpc-listen-addr=:50051
-      --app.http-listen-addr=:8080
-      --chain.p2p.external-address=tcp://0.0.0.0:26656
-      --chain.rpc.laddr=tcp://0.0.0.0:26657
-
+      --app.pg_db_host=172.5.100.3
+      --app.pg_db_port=5432
+      --app.pg_db_user=kwild
+      --app.pg_db_pass=kwild
 
 networks:
-  kwilnet:
+  kwilnet0:
     driver: bridge
     ipam:
       driver: default
       config:
-        - subnet: 172.10.100.0/16
+        - subnet: 172.5.100.0/23
