@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/kwilteam/kwil-db/common"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -39,7 +39,7 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 		}
 	}
 
-	executeResult, err := s.engine.Execute(ctx, tx, &types.ExecutionData{
+	executeResult, err := s.engine.Call(ctx, tx, &common.ExecutionData{
 		Dataset:   body.DBID,
 		Procedure: body.Action,
 		Args:      args,
@@ -52,7 +52,7 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 
 	// marshalling the map is less efficient, but necessary for backwards compatibility
 
-	btsResult, err := json.Marshal(executeResult.Map())
+	btsResult, err := json.Marshal(ResultMap(executeResult))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to marshal call result")
 	}

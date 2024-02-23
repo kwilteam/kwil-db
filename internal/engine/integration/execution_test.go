@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/common/testdata"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
-	"github.com/kwilteam/kwil-db/internal/engine/types"
-	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
-	"github.com/kwilteam/kwil-db/internal/sql"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -83,7 +83,7 @@ func Test_Engine(t *testing.T) {
 				signer := "signer"
 
 				ctx := context.Background()
-				_, err := global.Execute(ctx, tx, &types.ExecutionData{
+				_, err := global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
@@ -92,7 +92,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				_, err = global.Execute(ctx, tx, &types.ExecutionData{
+				_, err = global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCreatePost.Name,
 					Args:      []any{1, "Bitcoin!", "The Bitcoin Whitepaper", "9/31/2008"},
@@ -104,7 +104,7 @@ func Test_Engine(t *testing.T) {
 			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
 				ctx := context.Background()
 
-				res, err := global.Execute(ctx, tx, &types.ExecutionData{
+				res, err := global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureGetPosts.Name,
 					Args:      []any{"satoshi"},
@@ -125,8 +125,8 @@ func Test_Engine(t *testing.T) {
 				require.Equal(t, row1[4], "satoshi")
 
 				dbid := testdata.TestSchema.DBID()
-				// pgSchema := types.DBIDSchema(dbid)
-				res2, err := global.Query(ctx, tx, dbid, `SELECT * from posts;`) // or do we require callers to set qualify schema like `SELECT * from `+pgSchema+`.posts;` ?
+				// pgSchema := common.DBIDSchema(dbid)
+				res2, err := global.Execute(ctx, tx, dbid, `SELECT * from posts;`, nil) // or do we require callers to set qualify schema like `SELECT * from `+pgSchema+`.posts;` ?
 				require.NoError(t, err)
 
 				require.Equal(t, res2.Columns, []string{"id", "title", "content", "author_id", "post_date"})
@@ -144,7 +144,7 @@ func Test_Engine(t *testing.T) {
 			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
 				ctx := context.Background()
 
-				_, err := global.Execute(ctx, tx, &types.ExecutionData{
+				_, err := global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCreatePost.Name,
 					Args:      []any{1, "Bitcoin!", "The Bitcoin Whitepaper", "9/31/2008"},
@@ -161,7 +161,7 @@ func Test_Engine(t *testing.T) {
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
-				_, err = global.Execute(ctx, tx, &types.ExecutionData{
+				_, err = global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
@@ -173,7 +173,7 @@ func Test_Engine(t *testing.T) {
 			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
 				ctx := context.Background()
 
-				users, err := global.Execute(ctx, tx, &types.ExecutionData{
+				users, err := global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureGetUserByAddress.Name,
 					Args:      []any{"signer"},
@@ -194,7 +194,7 @@ func Test_Engine(t *testing.T) {
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
-				_, err = global.Execute(ctx, tx, &types.ExecutionData{
+				_, err = global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
@@ -206,7 +206,7 @@ func Test_Engine(t *testing.T) {
 			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
 				ctx := context.Background()
 
-				users, err := global.Execute(ctx, tx, &types.ExecutionData{
+				users, err := global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureGetUserByAddress.Name,
 					Args:      []any{"signer"},
@@ -224,13 +224,13 @@ func Test_Engine(t *testing.T) {
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
 				ctx := context.Background()
 
-				oldExtensions := []*types.Extension{}
+				oldExtensions := []*common.Extension{}
 				copy(oldExtensions, testdata.TestSchema.Extensions)
 
 				testdata.TestSchema.Extensions = append(testdata.TestSchema.Extensions,
-					&types.Extension{
+					&common.Extension{
 						Name: "math",
-						Initialization: []*types.ExtensionConfig{
+						Initialization: []*common.ExtensionConfig{
 							{
 								Key:   "fail",
 								Value: "true",
@@ -257,7 +257,7 @@ func Test_Engine(t *testing.T) {
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
-				_, err = global.Execute(ctx, tx, &types.ExecutionData{
+				_, err = global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureAdminDeleteUser.Name,
 					Args:      []any{1},
@@ -266,7 +266,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.Error(t, err)
 
-				_, err = global.Execute(ctx, tx, &types.ExecutionData{
+				_, err = global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureAdminDeleteUser.Name,
 					Args:      []any{1},
@@ -285,7 +285,7 @@ func Test_Engine(t *testing.T) {
 				require.NoError(t, err)
 
 				// calling private fails
-				_, err = global.Execute(ctx, tx, &types.ExecutionData{
+				_, err = global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedurePrivate.Name,
 					Args:      []any{},
@@ -295,7 +295,7 @@ func Test_Engine(t *testing.T) {
 				require.Error(t, err)
 
 				// calling a public which calls private succeeds
-				_, err = global.Execute(ctx, tx, &types.ExecutionData{
+				_, err = global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCallsPrivate.Name,
 					Args:      []any{},
@@ -317,7 +317,7 @@ func Test_Engine(t *testing.T) {
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
-				_, err = global.Execute(ctx, tx, &types.ExecutionData{
+				_, err = global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
@@ -326,7 +326,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				_, err = global.Execute(ctx, tx, &types.ExecutionData{
+				_, err = global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureGetUserByAddress.Name,
 					Args:      []any{"signer"},
@@ -375,7 +375,7 @@ func Test_Engine(t *testing.T) {
 				caller := "signer"
 				signer := []byte("signer")
 
-				_, err = global.Execute(ctx, tx, &types.ExecutionData{
+				_, err = global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   schema.DBID(),
 					Procedure: "CREATE_USER",
 					Args:      []any{1, "satoshi"},
@@ -384,7 +384,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				_, err = global.Execute(ctx, tx, &types.ExecutionData{
+				_, err = global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   schema.DBID(),
 					Procedure: "CREATE_USER",
 					Args:      []any{"2", "vitalik"},
@@ -393,7 +393,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				_, err = global.Execute(ctx, tx, &types.ExecutionData{
+				_, err = global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   schema.DBID(),
 					Procedure: "CREATE_FOLLOWER",
 					Args:      []any{"satoshi", "vitalik"},
@@ -402,7 +402,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				res, err := global.Execute(ctx, tx, &types.ExecutionData{
+				res, err := global.Call(ctx, tx, &common.ExecutionData{
 					Dataset:   schema.DBID(),
 					Procedure: "USE_EXTENSION",
 					Args:      []any{1, "2"}, // math_ext.add($arg1 + $arg2, 1)
@@ -478,69 +478,69 @@ func Test_Engine(t *testing.T) {
 }
 
 var (
-	caseSchema = &types.Schema{
+	caseSchema = &common.Schema{
 		Name: "case_insensITive",
-		Tables: []*types.Table{
+		Tables: []*common.Table{
 			{
 				Name: "usErs",
-				Columns: []*types.Column{
+				Columns: []*common.Column{
 					{
 						Name: "id",
-						Type: types.INT,
-						Attributes: []*types.Attribute{
+						Type: common.INT,
+						Attributes: []*common.Attribute{
 							{
-								Type: types.PRIMARY_KEY,
+								Type: common.PRIMARY_KEY,
 							},
 						},
 					},
 					{
 						Name: "nAMe",
-						Type: types.TEXT,
+						Type: common.TEXT,
 					},
 				},
-				Indexes: []*types.Index{
+				Indexes: []*common.Index{
 					{
 						Name: "usErs_name",
 						Columns: []string{
 							"nAmE",
 						},
-						Type: types.BTREE,
+						Type: common.BTREE,
 					},
 				},
 			},
 			{
 				Name: "fOllOwers",
-				Columns: []*types.Column{
+				Columns: []*common.Column{
 					{
 						Name: "foLlOwer_id",
-						Type: types.INT,
-						Attributes: []*types.Attribute{
+						Type: common.INT,
+						Attributes: []*common.Attribute{
 							{
-								Type: types.NOT_NULL,
+								Type: common.NOT_NULL,
 							},
 						},
 					},
 					{
 						Name: "fOllOwee_id",
-						Type: types.INT,
-						Attributes: []*types.Attribute{
+						Type: common.INT,
+						Attributes: []*common.Attribute{
 							{
-								Type: types.NOT_NULL,
+								Type: common.NOT_NULL,
 							},
 						},
 					},
 				},
-				Indexes: []*types.Index{
+				Indexes: []*common.Index{
 					{
 						Name: "fOllOwers_pk",
 						Columns: []string{
 							"foLlowEr_id",
 							"fOllOwee_Id",
 						},
-						Type: types.PRIMARY,
+						Type: common.PRIMARY,
 					},
 				},
-				ForeignKeys: []*types.ForeignKey{
+				ForeignKeys: []*common.ForeignKey{
 					{
 						ChildKeys: []string{
 							"FoLlOwer_id",
@@ -562,7 +562,7 @@ var (
 				},
 			},
 		},
-		Procedures: []*types.Procedure{
+		Procedures: []*common.Procedure{
 			{
 				Name: "CrEaTe_UsEr",
 				Args: []string{
@@ -602,7 +602,7 @@ var (
 				},
 			},
 		},
-		Extensions: []*types.Extension{
+		Extensions: []*common.Extension{
 			{
 				Name:  "maTh",
 				Alias: "Math_Ext",

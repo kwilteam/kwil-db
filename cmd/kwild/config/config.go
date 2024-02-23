@@ -80,7 +80,7 @@ type AppConfig struct {
 	Hostname           string                       `mapstructure:"hostname"`
 	ProfileMode        string                       `mapstructure:"profile_mode"`
 	ProfileFile        string                       `mapstructure:"profile_file"`
-	Oracles            map[string]map[string]string `mapstructure:"oracles"`
+	Extensions         map[string]map[string]string `mapstructure:"extensions"`
 
 	// SnapshotConfig     SnapshotConfig `mapstructure:"snapshots"`
 }
@@ -451,7 +451,7 @@ func DefaultConfig() *KwildConfig {
 			// 	MaxSnapshots:    3,
 			// 	SnapshotDir:     DefaultSnapshotsDir,
 			// },
-			Oracles: make(map[string]map[string]string),
+			Extensions: make(map[string]map[string]string),
 		},
 		Logging: &Logging{
 			Level:        "info",

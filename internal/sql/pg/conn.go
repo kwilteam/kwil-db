@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/common/sql"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -72,8 +72,6 @@ type Pool struct {
 	pgxp   *pgxpool.Pool
 	writer *pgx.Conn // hijacked from the pool
 }
-
-var _ sql.Queryer = (*Pool)(nil)
 
 // PoolConfig combines a connection config with additional options for a pool of
 // read connections and a single write connection, as required for kwild.MaxConns

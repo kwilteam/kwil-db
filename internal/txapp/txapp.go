@@ -2,41 +2,41 @@
 package txapp
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 
+	types1 "github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	"github.com/kwilteam/kwil-db/internal/sql"
-
+	"github.com/kwilteam/kwil-db/internal/voting"
 	"go.uber.org/zap"
 )
 
 // NewTxApp creates a new router.
-func NewTxApp(db DB, engine ExecutionEngine, acc AccountsStore, validators ValidatorStore,
-	voteStore VoteStore, signer *auth.Ed25519Signer, events Rebroadcaster, chainID string, GasEnabled bool, log log.Logger) *TxApp {
+func NewTxApp(db DB, engine types1.Engine,
+	signer *auth.Ed25519Signer, events Rebroadcaster, chainID string, GasEnabled bool, extensionConfigs map[string]map[string]string, log log.Logger) *TxApp {
 	return &TxApp{
-		Database:   db,
-		Engine:     engine,
-		Accounts:   acc,
-		Validators: validators,
-		VoteStore:  voteStore,
-		events:     events,
-		log:        log,
+		Database: db,
+		Engine:   engine,
+		events:   events,
+		log:      log,
 		mempool: &mempool{
-			accountStore:   acc,
-			accounts:       make(map[string]*accounts.Account),
-			validatorStore: validators,
+			accounts:   make(map[string]*types.Account),
+			gasEnabled: GasEnabled,
 		},
-		signer:     signer,
-		chainID:    chainID,
-		GasEnabled: GasEnabled,
+		signer:           signer,
+		chainID:          chainID,
+		GasEnabled:       GasEnabled,
+		extensionConfigs: extensionConfigs,
 	}
 }
 
@@ -45,11 +45,11 @@ func NewTxApp(db DB, engine ExecutionEngine, acc AccountsStore, validators Valid
 // maintaining a mempool for uncommitted accounts, pricing transactions,
 // managing atomicity of the database, and managing the validator set.
 type TxApp struct {
-	Database   DB              // postgres database
-	Engine     ExecutionEngine // tracks deployed schemas
-	Accounts   AccountsStore   // accounts
-	Validators ValidatorStore  // validators
-	VoteStore  VoteStore       // tracks resolutions, their votes, manages expiration
+	Database DB            // postgres database
+	Engine   types1.Engine // tracks deployed schemas
+	// Accounts AccountsStore   // accounts
+	// Validators ValidatorStore  // validators
+	// VoteStore  VoteStore       // tracks resolutions, their votes, manages expiration
 	GasEnabled bool
 	events     Rebroadcaster
 
@@ -61,34 +61,30 @@ type TxApp struct {
 	mempool *mempool
 
 	// transaction that exists between Begin and Commit
-	currentTx sql.OuterTx
+	currentTx        sql.OuterTx
+	extensionConfigs map[string]map[string]string
 }
 
 // GenesisInit initializes the TxApp. It must be called outside of a session,
 // and before any session is started.
 // It can assign the initial validator set and initial account balances.
 // It is only called once for a new chain.
-func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*accounts.Account, initialHeight int64) error {
+func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, genesisAccounts []*types.Account, initialHeight int64) error {
 	tx, err := r.Database.BeginTx(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
 
-	err = r.Validators.GenesisInit(ctx, tx, validators, initialHeight)
-	if err != nil {
-		return err
-	}
-
 	for _, validator := range validators {
-		err := r.VoteStore.UpdateVoter(ctx, tx, validator.PubKey, validator.Power)
+		err := setVoterPower(ctx, tx, validator.PubKey, validator.Power)
 		if err != nil {
 			return err
 		}
 	}
 
-	for _, account := range accounts {
-		err := r.Accounts.Credit(ctx, tx, account.Identifier, account.Balance)
+	for _, account := range genesisAccounts {
+		err := credit(ctx, tx, account.Identifier, account.Balance)
 		if err != nil {
 			return err
 		}
@@ -104,6 +100,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 
 // UpdateValidator updates a validator's power.
 // It can only be called in between Begin and Finalize.
+// The value passed as power will simply replace the current power.
 func (r *TxApp) UpdateValidator(ctx context.Context, validator []byte, power int64) error {
 	if r.currentTx == nil {
 		return errors.New("txapp misuse: cannot update a validator without a transaction in progress")
@@ -117,12 +114,7 @@ func (r *TxApp) UpdateValidator(ctx context.Context, validator []byte, power int
 	}
 	defer sp.Rollback(ctx)
 
-	err = r.Validators.Update(ctx, r.currentTx, validator, power)
-	if err != nil {
-		return err
-	}
-
-	err = r.VoteStore.UpdateVoter(ctx, r.currentTx, validator, power)
+	err = setVoterPower(ctx, r.currentTx, validator, power)
 	if err != nil {
 		return err
 	}
@@ -139,7 +131,21 @@ func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
 	}
 	defer readTx.Rollback(ctx) // always rollback read tx
 
-	return r.Validators.CurrentSet(ctx, readTx)
+	validators := make([]*types.Validator, 0)
+	voters, err := getAllVoters(ctx, readTx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, voter := range voters {
+		validators = append(validators, &types.Validator{
+			PubKey: voter.PubKey,
+			Power:  voter.Power,
+		})
+
+	}
+
+	return validators, nil
 }
 
 // Execute executes a transaction.  It will route the transaction to the
@@ -201,39 +207,14 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte
 		}
 	}()
 
-	finalizedEvents, err := r.VoteStore.ProcessConfirmedResolutions(ctx, r.currentTx)
+	err = r.processVotes(ctx, blockHeight)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	for _, eventID := range finalizedEvents {
-		err = deleteEvent(ctx, r.currentTx, eventID)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	err = r.VoteStore.Expire(ctx, r.currentTx, blockHeight)
+	finalValidators, err := getAllVoters(ctx, r.currentTx)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	// we need to set this before we finalize validators,
-	// so that pending requests expire on Finalize()
-	r.Validators.UpdateBlockHeight(blockHeight)
-
-	validatorUpdates, err := r.Validators.Finalize(ctx, r.currentTx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// we intentionally update the validators after processing confirmed resolutions
-	// if a vote passes and a validator is upgraded in the same block.
-	for _, validator := range validatorUpdates {
-		err = r.VoteStore.UpdateVoter(ctx, r.currentTx, validator.PubKey, validator.Power)
-		if err != nil {
-			return nil, nil, err
-		}
 	}
 
 	engineHash, err := r.currentTx.Precommit(ctx)
@@ -241,11 +222,193 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte
 		return nil, nil, err
 	}
 
-	validatorHash := r.Validators.StateHash()
+	return engineHash, finalValidators, nil
+}
 
-	appHash := sha256.Sum256(append(engineHash, validatorHash...))
+// processVotes confirms resolutions that have been approved by the network,
+// expires resolutions that have expired, and properly credits proposers and voters.
+func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
+	credits := make(creditMap)
 
-	return appHash[:], validatorUpdates, nil
+	resolutionTypes := resolutions.ListResolutions()
+	sort.Strings(resolutionTypes) // for deterministic order
+
+	var finalizedIds []types.UUID
+	// markedProcessedIds is a separate list for marking processed, since we do not want to process validator resolutions
+	// validator vote IDs are not unique, so we cannot mark them as processed, in case a validator leaves and joins again
+	var markProcessedIds []types.UUID
+	// resolveFuncs tracks the resolve function for each resolution, in the order they are queried.
+	// we track this and execute all of these functions after we have found all confirmed resolutions
+	// because a resolve function can change a validator's power. This would then change the required power
+	// for subsequent resolutions in the same block, which should not happen.
+	var resolveFuncs []*struct {
+		Resolution  *resolutions.Resolution
+		ResolveFunc func(ctx context.Context, app *types1.App, resolution *resolutions.Resolution) error
+	}
+	for _, resolutionType := range resolutionTypes {
+		cfg, err := resolutions.GetResolution(resolutionType)
+		if err != nil {
+			return err
+		}
+
+		finalized, err := getResolutionsByThresholdAndType(ctx, r.currentTx, cfg.ConfirmationThreshold, resolutionType)
+		if err != nil {
+			return err
+		}
+
+		for _, resolution := range finalized {
+			credits.applyResolution(resolution)
+			finalizedIds = append(finalizedIds, resolution.ID)
+
+			// we do not want to mark processed for validator join and remove events, as they can occur again
+			if resolution.Type != voting.ValidatorJoinEventType && resolution.Type != voting.ValidatorRemoveEventType {
+				markProcessedIds = append(markProcessedIds, resolution.ID)
+			}
+
+			resolveFuncs = append(resolveFuncs, &struct {
+				Resolution  *resolutions.Resolution
+				ResolveFunc func(ctx context.Context, app *types1.App, resolution *resolutions.Resolution) error
+			}{
+				Resolution:  resolution,
+				ResolveFunc: cfg.ResolveFunc,
+			})
+		}
+	}
+
+	// apply all resolutions
+	for _, resolveFunc := range resolveFuncs {
+		r.log.Debug("resolving resolution", zap.String("type", resolveFunc.Resolution.Type), zap.String("id", resolveFunc.Resolution.ID.String()))
+
+		tx, err := r.currentTx.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+
+		err = resolveFunc.ResolveFunc(ctx, &types1.App{
+			Service: &types1.Service{
+				Logger:           *r.log.Named("resolution_" + resolveFunc.Resolution.Type),
+				ExtensionConfigs: r.extensionConfigs,
+			},
+			DB:     tx,
+			Engine: r.Engine,
+		}, resolveFunc.Resolution)
+		if err != nil {
+			err2 := tx.Rollback(ctx)
+			if err2 != nil {
+				return fmt.Errorf("error rolling back transaction: %s, error: %s", err.Error(), err2.Error())
+			}
+			return err
+		}
+
+		err = tx.Commit(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	err := deleteResolutions(ctx, r.currentTx, finalizedIds...)
+	if err != nil {
+		return err
+	}
+
+	// now we will expire resolutions
+	expired, err := getExpired(ctx, r.currentTx, blockheight)
+	if err != nil {
+		return err
+	}
+
+	expiredIds := make([]types.UUID, 0, len(expired))
+	requiredPowerMap := make(map[string]int64) // map of resolution type to required power
+	for _, resolution := range expired {
+		expiredIds = append(expiredIds, resolution.ID)
+		if resolution.Type != voting.ValidatorJoinEventType && resolution.Type != voting.ValidatorRemoveEventType {
+			markProcessedIds = append(markProcessedIds, resolution.ID)
+		}
+
+		threshold, ok := requiredPowerMap[resolution.Type]
+		if !ok {
+			cfg, err := resolutions.GetResolution(resolution.Type)
+			if err != nil {
+				return err
+			}
+
+			// we need to use each configured resolutions refund threshold
+			threshold, err = requiredPower(ctx, r.currentTx, cfg.RefundThreshold)
+			if err != nil {
+				return err
+			}
+
+			requiredPowerMap[resolution.Type] = threshold
+		}
+		// if it has enough power, we will still refund
+		if resolution.ApprovedPower >= threshold {
+			credits.applyResolution(resolution)
+		}
+	}
+
+	err = deleteResolutions(ctx, r.currentTx, expiredIds...)
+	if err != nil {
+		return err
+	}
+
+	err = markProcessed(ctx, r.currentTx, markProcessedIds...)
+	if err != nil {
+		return err
+	}
+
+	// now we will apply credits if gas is enabled
+	if r.GasEnabled {
+		for pubKey, amount := range credits {
+			err = credit(ctx, r.currentTx, []byte(pubKey), amount)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+var (
+	ValidatorVoteBodyBytePrice int64 = 1000                  // Per byte cost
+	ValidatorVoteIDPrice             = big.NewInt(1000 * 16) // 16 bytes for the UUID
+)
+
+// creditMap maps string(public_keys) to big.Int amounts that should be credited
+type creditMap map[string]*big.Int
+
+// applyResolution will calculate the rewards for the proposer and voters of a resolution.
+// it will add the rewards to the credit map.
+func (c creditMap) applyResolution(res *resolutions.Resolution) {
+	// reward voters.
+	// this will include the proposer, even if they did not submit a vote id
+	for _, voter := range res.Voters {
+		// if the voter is the proposer, then we will reward them below,
+		// since extra logic is required if they did not submit a vote id
+		if bytes.Equal(voter.PubKey, res.Proposer) {
+			continue
+		}
+
+		currentBalance, ok := c[string(voter.PubKey)]
+		if !ok {
+			currentBalance = big.NewInt(0)
+		}
+
+		c[string(voter.PubKey)] = big.NewInt(0).Add(currentBalance, ValidatorVoteIDPrice)
+	}
+
+	bodyCost := big.NewInt(ValidatorVoteBodyBytePrice * int64(len(res.Body)))
+	if res.DoubleProposerVote { // if the proposer ALSO submitted a vote id, refund that as well
+		bodyCost.Add(bodyCost, ValidatorVoteIDPrice)
+	}
+
+	currentBalance, ok := c[string(res.Proposer)]
+	if !ok {
+		currentBalance = big.NewInt(0)
+	}
+
+	// reward proposer
+	c[string(res.Proposer)] = big.NewInt(0).Add(currentBalance, bodyCost)
 }
 
 // Commit signals that a block has been committed.
@@ -290,11 +453,11 @@ func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted b
 	}
 	defer readTx.Rollback(ctx) // always rollback read tx
 
-	var a *accounts.Account
+	var a *types.Account
 	if getUncommitted {
 		a, err = r.mempool.accountInfoSafe(ctx, readTx, acctID)
 	} else {
-		a, err = r.Accounts.GetAccount(ctx, readTx, acctID)
+		a, err = getAccount(ctx, readTx, acctID)
 	}
 	if err != nil {
 		return nil, 0, err
@@ -326,13 +489,23 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64) ([]*transaction
 	var finalEvents []*types.VotableEvent
 	for _, event := range events {
 		// Check if the event body is already received by the network
-		containsBody, err := r.VoteStore.ContainsBodyOrFinished(ctx, readTx, event.ID())
+		containsBody, err := resolutionContainsBody(ctx, readTx, event.ID())
 		if err != nil {
 			return nil, err
 		}
-		if !containsBody {
-			finalEvents = append(finalEvents, event)
+		if containsBody {
+			continue
 		}
+
+		finished, err := isProcessed(ctx, readTx, event.ID())
+		if err != nil {
+			return nil, err
+		}
+		if finished {
+			continue
+		}
+
+		finalEvents = append(finalEvents, event)
 	}
 
 	if len(finalEvents) == 0 {
@@ -416,12 +589,19 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 	if tx.Body.Fee.Cmp(amt) < 0 {
 		// If the transaction does not consent to spending required tokens for the transaction execution,
 		// spend the approved tx fee and terminate the transaction
-		err = r.Accounts.Spend(ctx.Ctx, dbTx, &accounts.Spend{
-			AccountID: tx.Sender,
-			Amount:    tx.Body.Fee,
-			Nonce:     int64(tx.Body.Nonce),
-		})
+		err = spend(ctx.Ctx, dbTx, tx.Sender, tx.Body.Fee, int64(tx.Body.Nonce))
 		if errors.Is(err, accounts.ErrInsufficientFunds) {
+			// spend as much as possible
+			account, err := getAccount(ctx.Ctx, dbTx, tx.Sender)
+			if err != nil {
+				return nil, transactions.CodeUnknownError, err
+			}
+
+			err2 := spend(ctx.Ctx, dbTx, tx.Sender, account.Balance, int64(tx.Body.Nonce))
+			if err2 != nil {
+				return nil, transactions.CodeUnknownError, err2
+			}
+
 			return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
 		}
 		if err != nil {
@@ -432,13 +612,19 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 	}
 
 	// spend the tokens
-	err = r.Accounts.Spend(ctx.Ctx, dbTx, &accounts.Spend{
-		AccountID: tx.Sender,
-		Amount:    amt,
-		Nonce:     int64(tx.Body.Nonce),
-	})
+	err = spend(ctx.Ctx, dbTx, tx.Sender, amt, int64(tx.Body.Nonce))
 	if errors.Is(err, accounts.ErrInsufficientFunds) {
-		return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
+		// spend as much as possible
+		account, err := getAccount(ctx.Ctx, dbTx, tx.Sender)
+		if err != nil {
+			return nil, transactions.CodeUnknownError, err
+		}
+
+		err2 := spend(ctx.Ctx, dbTx, tx.Sender, account.Balance, int64(tx.Body.Nonce))
+		if err2 != nil {
+			return nil, transactions.CodeUnknownError, err2
+		}
+		return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account has %s tokens", amt.String(), account.Balance.String())
 	}
 	if err != nil {
 		return nil, transactions.CodeUnknownError, err

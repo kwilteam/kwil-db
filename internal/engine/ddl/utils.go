@@ -3,8 +3,8 @@ package ddl
 import (
 	"fmt"
 
+	types "github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/internal/conv"
-	"github.com/kwilteam/kwil-db/internal/engine/types"
 )
 
 func columnTypeToSQLType(columnType types.DataType) (string, error) {

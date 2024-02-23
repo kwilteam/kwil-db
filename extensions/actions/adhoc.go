@@ -3,12 +3,10 @@
 package actions
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/internal/engine/execution"
-	"github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/common"
 )
 
 /*
@@ -32,11 +30,15 @@ import (
 const adhocName = "adhoc"
 
 func init() {
-	a := &adhocExtension{}
-	err := RegisterLegacyExtension(adhocName, a)
+	err := RegisterExtension(adhocName, InitializeAdhoc)
 	if err != nil {
 		panic(err)
 	}
+}
+
+// Takes no initialization parameters.
+func InitializeAdhoc(ctx *DeploymentContext, service *common.Service, metadata map[string]string) (ExtensionNamespace, error) {
+	return &adhocExtension{}, nil
 }
 
 // adhocExtension is an extension that is not registered with the extension registry.
@@ -47,30 +49,22 @@ type adhocExtension struct{}
 // Has one method: Execute
 // We check that only one argument is passed, and that it is a string.
 // We then execute the query against the datastore.
-func (a *adhocExtension) Execute(scope *execution.ProcedureContext, metadata map[string]string, method string, args ...any) ([]any, error) {
-	lowerMethod := strings.ToLower(method)
-	if len(args) != 1 {
-		return nil, fmt.Errorf("adhoc: expected 1 string argument, got %d", len(args))
+func (adhocExtension) Call(scope *ProcedureContext, app *common.App, method string, inputs []any) ([]any, error) {
+	if len(inputs) != 1 {
+		return nil, fmt.Errorf("adhoc: expected 1 string argument, got %d", len(inputs))
 	}
-	stmt, ok := args[0].(string)
+	stmt, ok := inputs[0].(string)
 	if !ok {
-		return nil, fmt.Errorf("adhoc: expected string argument, got %T", args[0])
-	}
-
-	dataset, err := scope.Dataset(scope.DBID)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("adhoc: expected string argument, got %T", inputs[0])
 	}
 
 	// we will pass the scope.Values() as the arguments.
 	// this makes it possible to use @caller, etc in the ad-hoc statement.
-	var res *sql.ResultSet
-	switch lowerMethod {
-	default:
-		return nil, fmt.Errorf(`unknown method "%s"`, method)
-	case "execute":
-		res, err = dataset.Execute(scope.Ctx, scope.DB, stmt, scope.Values())
+	if strings.ToLower(method) != "execute" {
+		return nil, fmt.Errorf(`adhoc: unknown method "%s"`, method)
 	}
+
+	res, err := app.Engine.Execute(scope.Ctx, app.DB, scope.DBID, stmt, scope.Values())
 	if err != nil {
 		return nil, err
 	}
@@ -79,10 +73,5 @@ func (a *adhocExtension) Execute(scope *execution.ProcedureContext, metadata map
 	// the result will be returned to the engine.
 	scope.Result = res
 
-	return nil, nil
-}
-
-// Takes no initialization parameters.
-func (a *adhocExtension) Initialize(ctx context.Context, metadata map[string]string) (map[string]string, error) {
 	return nil, nil
 }

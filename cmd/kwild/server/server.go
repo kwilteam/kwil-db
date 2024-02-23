@@ -173,7 +173,6 @@ func (s *Server) Start(ctx context.Context) error {
 			s.log.Info("stop oracle manager")
 			s.oracleMgr.Stop()
 		}()
-
 		s.oracleMgr.Start()
 		return nil
 	})

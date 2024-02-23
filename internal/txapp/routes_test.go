@@ -7,14 +7,12 @@ import (
 
 	"math/big"
 
+	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/accounts"
-	"github.com/kwilteam/kwil-db/internal/sql"
-	"github.com/kwilteam/kwil-db/internal/validators"
 	"github.com/kwilteam/kwil-db/internal/voting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,29 +66,29 @@ func Test_Routes(t *testing.T) {
 				approveCount := 0
 				deleteCount := 0
 
-				// override the global deleteEvent function with a mock
+				// override the functions with mocks
 				deleteEvent = func(ctx context.Context, db sql.DB, id types.UUID) error {
 					deleteCount++
 
 					return nil
 				}
 
-				callback(&TxApp{
-					VoteStore: &mockVoteStore{
-						approve: func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
-							approveCount++
+				approveResolution = func(ctx context.Context, db sql.DB, resolutionID types.UUID, expiration int64, from []byte) error {
+					approveCount++
 
-							return nil
-						},
-						containsBodyOrFinished: func(ctx context.Context, resolutionID types.UUID) (bool, error) {
-							return true, nil
-						},
-					},
-					Validators: &mockValidatorStore{
-						isCurrent: func(ctx context.Context, validator []byte) (bool, error) {
-							return true, nil
-						},
-					},
+					return nil
+				}
+				resolutionContainsBody = func(ctx context.Context, db sql.DB, id types.UUID) (bool, error) {
+					return true, nil
+				}
+				isProcessed = func(ctx context.Context, db sql.DB, id types.UUID) (bool, error) {
+					return true, nil
+				}
+				getVoterPower = func(ctx context.Context, db sql.DB, identifier []byte) (int64, error) {
+					return 1, nil
+				}
+
+				callback(&TxApp{
 					GasEnabled: true,
 				})
 
@@ -112,29 +110,28 @@ func Test_Routes(t *testing.T) {
 				approveCount := 0
 				deleteCount := 0
 
-				// override the global deleteEvent function with a mock
+				// override the functions with mocks
 				deleteEvent = func(ctx context.Context, db sql.DB, id types.UUID) error {
 					deleteCount++
 
 					return nil
 				}
+				approveResolution = func(ctx context.Context, db sql.DB, resolutionID types.UUID, expiration int64, from []byte) error {
+					approveCount++
+
+					return nil
+				}
+				resolutionContainsBody = func(ctx context.Context, db sql.DB, id types.UUID) (bool, error) {
+					return true, nil
+				}
+				isProcessed = func(ctx context.Context, db sql.DB, id types.UUID) (bool, error) {
+					return true, nil
+				}
+				getVoterPower = func(ctx context.Context, db sql.DB, identifier []byte) (int64, error) {
+					return 1, nil
+				}
 
 				callback(&TxApp{
-					VoteStore: &mockVoteStore{
-						approve: func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
-							approveCount++
-
-							return nil
-						},
-						containsBodyOrFinished: func(ctx context.Context, resolutionID types.UUID) (bool, error) {
-							return true, nil
-						},
-					},
-					Validators: &mockValidatorStore{
-						isCurrent: func(ctx context.Context, validator []byte) (bool, error) {
-							return true, nil
-						},
-					},
 					GasEnabled: true,
 				})
 
@@ -154,12 +151,11 @@ func Test_Routes(t *testing.T) {
 			name: "validator_vote_id, as non-validator",
 			fee:  voting.ValidatorVoteIDPrice,
 			fn: func(t *testing.T, callback func(*TxApp)) {
+				getVoterPower = func(ctx context.Context, db sql.DB, identifier []byte) (int64, error) {
+					return 0, nil
+				}
+
 				callback(&TxApp{
-					Validators: &mockValidatorStore{
-						isCurrent: func(ctx context.Context, validator []byte) (bool, error) {
-							return false, nil
-						},
-					},
 					GasEnabled: true,
 				})
 			},
@@ -170,7 +166,6 @@ func Test_Routes(t *testing.T) {
 			},
 			err: ErrCallerNotValidator,
 		},
-		// TODO: we should test that we properly hit eventstore.MarkReceived
 		{
 			// testing validator_vote_bodies, as the proposer
 			name: "validator_vote_bodies, as proposer",
@@ -178,24 +173,24 @@ func Test_Routes(t *testing.T) {
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				deleteCount := 0
 
-				// override the global deleteEvent function with a mock
+				// override the functions with mocks
 				deleteEvent = func(ctx context.Context, db sql.DB, id types.UUID) error {
 					deleteCount++
 
 					return nil
 				}
+				createResolution = func(ctx context.Context, db sql.DB, event *types.VotableEvent, expiration int64, proposer []byte) error {
+					return nil
+				}
+
+				hasVoted = func(ctx context.Context, db sql.DB, resolutionID types.UUID, voter []byte) (bool, error) {
+					return true, nil
+				}
+				getVoterPower = func(ctx context.Context, db sql.DB, identifier []byte) (int64, error) {
+					return 1, nil
+				}
 
 				callback(&TxApp{
-					VoteStore: &mockVoteStore{
-						hasVoted: func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error) {
-							return true, nil
-						},
-					},
-					Validators: &mockValidatorStore{
-						isCurrent: func(ctx context.Context, validator []byte) (bool, error) {
-							return true, nil
-						},
-					},
 					GasEnabled: true,
 				})
 				assert.Equal(t, 1, deleteCount)
@@ -221,24 +216,21 @@ func Test_Routes(t *testing.T) {
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				deleteCount := 0
 
-				// override the global deleteEvent function with a mock
 				deleteEvent = func(ctx context.Context, db sql.DB, id types.UUID) error {
 					deleteCount++
 
 					return nil
 				}
 
+				hasVoted = func(ctx context.Context, db sql.DB, resolutionID types.UUID, voter []byte) (bool, error) {
+					return true, nil
+				}
+
+				getVoterPower = func(ctx context.Context, db sql.DB, identifier []byte) (int64, error) {
+					return 1, nil
+				}
+
 				callback(&TxApp{
-					VoteStore: &mockVoteStore{
-						hasVoted: func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error) {
-							return true, nil
-						},
-					},
-					Validators: &mockValidatorStore{
-						isCurrent: func(ctx context.Context, validator []byte) (bool, error) {
-							return true, nil
-						},
-					},
 					GasEnabled: true,
 				})
 				assert.Equal(t, 0, deleteCount) // 0, since this does not go through
@@ -265,6 +257,18 @@ func Test_Routes(t *testing.T) {
 				tc.from = validatorSigner1()
 			}
 
+			// mock getAccount, which is func declared in interfaces.go
+			getAccount = func(ctx context.Context, tx sql.DB, acctID []byte) (*types.Account, error) {
+				return &types.Account{
+					Identifier: acctID,
+					Balance:    big.NewInt(0),
+					Nonce:      0,
+				}, nil
+			}
+			spend = func(ctx context.Context, tx sql.DB, account []byte, amount *big.Int, nonce int64) error {
+				return nil
+			}
+
 			// build tx
 			tx, err := transactions.CreateTransaction(tc.payload, "chainid", 1)
 			require.NoError(t, err)
@@ -286,9 +290,6 @@ func Test_Routes(t *testing.T) {
 
 				// since every test case needs an account store, we'll just create a mock one here
 				// if one isn't provided
-				if app.Accounts == nil {
-					app.Accounts = &mockAccountStore{}
-				}
 				if app.log.L == nil {
 					app.log = log.NewNoOp()
 				}
@@ -306,214 +307,4 @@ func Test_Routes(t *testing.T) {
 
 		})
 	}
-}
-
-type mockAccountStore struct {
-	getAccount func(ctx context.Context, acctID []byte) (*accounts.Account, error)
-	credit     func(ctx context.Context, acctID []byte, amt *big.Int) error
-	spend      func(ctx context.Context, spend *accounts.Spend) error
-	transfer   func(ctx context.Context, to []byte, from []byte, amt *big.Int) error
-}
-
-func (m *mockAccountStore) GetAccount(ctx context.Context, _ sql.DB, acctID []byte) (*accounts.Account, error) {
-	if m.getAccount != nil {
-		return m.getAccount(ctx, acctID)
-	}
-
-	return &accounts.Account{
-		Identifier: acctID,
-		Balance:    big.NewInt(0),
-		Nonce:      0,
-	}, nil
-}
-
-func (m *mockAccountStore) Credit(ctx context.Context, _ sql.DB, acctID []byte, amt *big.Int) error {
-	if m.credit != nil {
-		return m.credit(ctx, acctID, amt)
-	}
-	return nil
-}
-
-func (m *mockAccountStore) Spend(ctx context.Context, _ sql.DB, spend *accounts.Spend) error {
-	if m.spend != nil {
-		return m.spend(ctx, spend)
-	}
-	return nil
-}
-
-func (m *mockAccountStore) Transfer(ctx context.Context, _ sql.DB, to []byte, from []byte, amt *big.Int) error {
-	if m.transfer != nil {
-		return m.transfer(ctx, to, from, amt)
-	}
-	return nil
-}
-
-type mockVoteStore struct {
-	alreadyProcessed            func(ctx context.Context, resolutionID types.UUID) (bool, error)
-	approve                     func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error
-	containsBodyOrFinished      func(ctx context.Context, resolutionID types.UUID) (bool, error)
-	createResolution            func(ctx context.Context, event *types.VotableEvent, expiration int64, proposer []byte) error
-	expire                      func(ctx context.Context, blockheight int64) error
-	hasVoted                    func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error)
-	processConfirmedResolutions func(ctx context.Context) ([]types.UUID, error)
-	updateVoter                 func(ctx context.Context, identifier []byte, power int64) error
-}
-
-func (m *mockVoteStore) IsProcessed(ctx context.Context, _ sql.DB, resolutionID types.UUID) (bool, error) {
-	if m.alreadyProcessed != nil {
-		return m.alreadyProcessed(ctx, resolutionID)
-	}
-
-	return false, nil
-}
-
-func (m *mockVoteStore) Approve(ctx context.Context, _ sql.DB, resolutionID types.UUID, expiration int64, from []byte) error {
-	if m.approve != nil {
-		return m.approve(ctx, resolutionID, expiration, from)
-	}
-
-	return nil
-}
-
-func (m *mockVoteStore) ContainsBodyOrFinished(ctx context.Context, _ sql.DB, resolutionID types.UUID) (bool, error) {
-	if m.containsBodyOrFinished != nil {
-		return m.containsBodyOrFinished(ctx, resolutionID)
-	}
-
-	return false, nil
-}
-
-func (m *mockVoteStore) CreateResolution(ctx context.Context, _ sql.DB, event *types.VotableEvent, expiration int64, proposer []byte) error {
-	if m.createResolution != nil {
-		return m.createResolution(ctx, event, expiration, proposer)
-	}
-
-	return nil
-}
-
-func (m *mockVoteStore) Expire(ctx context.Context, _ sql.DB, blockheight int64) error {
-	if m.expire != nil {
-		return m.expire(ctx, blockheight)
-	}
-
-	return nil
-}
-
-func (m *mockVoteStore) HasVoted(ctx context.Context, _ sql.DB, resolutionID types.UUID, voter []byte) (bool, error) {
-	if m.hasVoted != nil {
-		return m.hasVoted(ctx, resolutionID, voter)
-	}
-
-	return false, nil
-}
-
-func (m *mockVoteStore) ProcessConfirmedResolutions(ctx context.Context, _ sql.DB) ([]types.UUID, error) {
-	if m.processConfirmedResolutions != nil {
-		return m.processConfirmedResolutions(ctx)
-	}
-
-	return nil, nil
-}
-
-func (m *mockVoteStore) UpdateVoter(ctx context.Context, _ sql.DB, identifier []byte, power int64) error {
-	if m.updateVoter != nil {
-		return m.updateVoter(ctx, identifier, power)
-	}
-
-	return nil
-}
-
-type mockValidatorStore struct {
-	approve           func(ctx context.Context, joiner []byte, approver []byte) error
-	finalize          func(ctx context.Context) ([]*validators.Validator, error)
-	isCurrent         func(ctx context.Context, validator []byte) (bool, error)
-	join              func(ctx context.Context, joiner []byte, power int64) error
-	leave             func(ctx context.Context, joiner []byte) error
-	remove            func(ctx context.Context, target []byte, validator []byte) error
-	updateBlockHeight func(blockHeight int64)
-	currentSet        func(ctx context.Context) ([]*validators.Validator, error)
-	genesisInit       func(ctx context.Context, vals []*validators.Validator, blockHeight int64) error
-	update            func(ctx context.Context, validator []byte, newPower int64) error
-}
-
-func (m *mockValidatorStore) Approve(ctx context.Context, _ sql.DB, joiner []byte, approver []byte) error {
-	if m.approve != nil {
-		return m.approve(ctx, joiner, approver)
-	}
-
-	return nil
-}
-
-func (m *mockValidatorStore) Finalize(ctx context.Context, _ sql.DB) ([]*validators.Validator, error) {
-	if m.finalize != nil {
-		return m.finalize(ctx)
-	}
-
-	return nil, nil
-}
-
-func (m *mockValidatorStore) IsCurrent(ctx context.Context, _ sql.DB, validator []byte) (bool, error) {
-	if m.isCurrent != nil {
-		return m.isCurrent(ctx, validator)
-	}
-
-	return false, nil
-}
-
-func (m *mockValidatorStore) Join(ctx context.Context, _ sql.DB, joiner []byte, power int64) error {
-	if m.join != nil {
-		return m.join(ctx, joiner, power)
-	}
-
-	return nil
-}
-
-func (m *mockValidatorStore) Leave(ctx context.Context, _ sql.DB, joiner []byte) error {
-	if m.leave != nil {
-		return m.leave(ctx, joiner)
-	}
-
-	return nil
-}
-
-func (m *mockValidatorStore) Remove(ctx context.Context, _ sql.DB, target []byte, validator []byte) error {
-	if m.remove != nil {
-		return m.remove(ctx, target, validator)
-	}
-
-	return nil
-}
-
-func (m *mockValidatorStore) UpdateBlockHeight(blockHeight int64) {
-	if m.updateBlockHeight != nil {
-		m.updateBlockHeight(blockHeight)
-	}
-}
-
-func (m *mockValidatorStore) StateHash() []byte {
-	return nil
-}
-
-func (m *mockValidatorStore) CurrentSet(ctx context.Context, tx sql.DB) ([]*validators.Validator, error) {
-	if m.currentSet != nil {
-		return m.currentSet(ctx)
-	}
-
-	return nil, nil
-}
-
-func (m *mockValidatorStore) GenesisInit(ctx context.Context, tx sql.DB, vals []*validators.Validator, blockHeight int64) error {
-	if m.genesisInit != nil {
-		return m.genesisInit(ctx, vals, blockHeight)
-	}
-
-	return nil
-}
-
-func (m *mockValidatorStore) Update(ctx context.Context, tx sql.DB, validator []byte, newPower int64) error {
-	if m.update != nil {
-		return m.update(ctx, validator, newPower)
-	}
-
-	return nil
 }

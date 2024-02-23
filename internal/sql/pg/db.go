@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/utils/random"
-	"github.com/kwilteam/kwil-db/internal/sql"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -185,7 +185,6 @@ func (db *DB) AutoCommit(auto bool) {
 
 // For {accounts,validators}.Datasets / registry.DB
 var _ sql.Executor = (*DB)(nil)
-var _ sql.Queryer = (*DB)(nil)
 
 var _ sql.OuterTxMaker = (*DB)(nil) // for dataset Registry
 
