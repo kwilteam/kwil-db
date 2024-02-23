@@ -19,9 +19,9 @@ require (
 	github.com/jackc/pglogrepl v0.0.0-20231111135425-1627ab1b5780
 	github.com/jackc/pgx/v5 v5.5.2
 	github.com/jpillora/backoff v1.0.0
-	github.com/kwilteam/kuneiform v0.5.0-beta.0.20231127204550-1284c835497e
+	github.com/kwilteam/kuneiform v0.6.0-alpha
 	github.com/kwilteam/kwil-db/core v0.0.0
-	github.com/kwilteam/kwil-db/parse v0.0.0
+	github.com/kwilteam/kwil-db/parse v0.1.0
 	github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/mapstructure v1.5.0
