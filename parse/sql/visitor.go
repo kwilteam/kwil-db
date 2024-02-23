@@ -5,7 +5,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
+	"github.com/antlr4-go/antlr/v4"
+
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
 )

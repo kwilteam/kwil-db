@@ -36,6 +36,7 @@ require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/antihax/optional v1.0.0 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230512164433-5d1fd1a340c9 // indirect
+	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.21.2 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.18.45 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.13.43 // indirect
@@ -135,9 +136,9 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
-	github.com/kwilteam/action-grammar-go v0.0.1-0.20240223175558-46afbf6169f2 // indirect
+	github.com/kwilteam/action-grammar-go v0.0.1-0.20240223223553-06cc155ff15a // indirect
 	github.com/kwilteam/kwil-db/parse v0.1.0 // indirect
-	github.com/kwilteam/sql-grammar-go v0.0.3-0.20240223175539-c7cfe24d9dc1 // indirect
+	github.com/kwilteam/sql-grammar-go v0.0.3-0.20240223223614-ea432d95ecc7 // indirect
 	github.com/lib/pq v1.10.7 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
