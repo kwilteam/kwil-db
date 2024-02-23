@@ -7,9 +7,9 @@ import (
 
 	_ "embed"
 
+	"github.com/kwilteam/kwil-db/common"
+	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/internal/engine/ddl"
-	"github.com/kwilteam/kwil-db/internal/engine/types"
-	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 )
 
@@ -42,7 +42,7 @@ func createSchemasTableIfNotExists(ctx context.Context, tx sql.DB) error {
 // It will also store the schema in the kwil_schemas table.
 // It also creates the relevant tables, indexes, etc.
 // If the schema already exists in the Kwil schemas table, it will be updated.
-func createSchema(ctx context.Context, tx sql.DB, schema *types.Schema) error {
+func createSchema(ctx context.Context, tx sql.DB, schema *common.Schema) error {
 	schemaName := dbidSchema(schema.DBID())
 
 	sp, err := tx.BeginTx(ctx)
@@ -88,13 +88,13 @@ func createSchema(ctx context.Context, tx sql.DB, schema *types.Schema) error {
 }
 
 // getSchemas returns all schemas in the kwil_schemas table
-func getSchemas(ctx context.Context, tx sql.DB) ([]*types.Schema, error) {
+func getSchemas(ctx context.Context, tx sql.DB) ([]*common.Schema, error) {
 	res, err := tx.Execute(ctx, sqlListSchemaContent)
 	if err != nil {
 		return nil, err
 	}
 
-	schemas := make([]*types.Schema, len(res.Rows))
+	schemas := make([]*common.Schema, len(res.Rows))
 	for i, row := range res.Rows {
 		if len(row) != 1 {
 			return nil, fmt.Errorf("expected 1 column, got %d", len(row))
@@ -105,7 +105,7 @@ func getSchemas(ctx context.Context, tx sql.DB) ([]*types.Schema, error) {
 			return nil, fmt.Errorf("expected []byte, got %T", row[0])
 		}
 
-		schema := &types.Schema{}
+		schema := &common.Schema{}
 		err := json.Unmarshal(bts, schema)
 		if err != nil {
 			return nil, fmt.Errorf("unmarshaling schema: %w", err)

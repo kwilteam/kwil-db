@@ -4,11 +4,11 @@ package extensions_test
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/extensions/actions"
-	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	extensions "github.com/kwilteam/kwil-db/internal/extensions"
 	"github.com/kwilteam/kwil-extensions/client"
 	"github.com/kwilteam/kwil-extensions/types"
@@ -55,7 +55,7 @@ func (m *mockClient) Initialize(ctx context.Context, metadata map[string]string)
 
 func Test_LocalExtension(t *testing.T) {
 	ctx := context.Background()
-	callCtx := &execution.ProcedureContext{
+	callCtx := &actions.ProcedureContext{
 		Ctx: ctx,
 	}
 
@@ -66,10 +66,10 @@ func Test_LocalExtension(t *testing.T) {
 		"roundoff": "down",
 	}
 
-	ext := &actions.MathExtension{}
-
 	initializer := &extensions.ExtensionInitializer{
-		Extension: ext,
+		Extension: &legacyAdapter{
+			init: actions.InitializeMath,
+		},
 	}
 
 	// Create instance with correct metadata
@@ -98,10 +98,41 @@ func Test_LocalExtension(t *testing.T) {
 	assert.Equal(t, big.NewInt(1), result[0]) // 1/2 rounded up -> 1
 }
 
+// this only works specifically for this test, and should not be used generally.
+// legacy extensions are forwards compatible, but current extensions are not backwards compatible,
+// and the extension tested here is not a legacy extension.
+type legacyAdapter struct {
+	init        actions.ExtensionInitializer
+	ext         actions.ExtensionNamespace
+	initialized bool
+}
+
+func (l *legacyAdapter) Execute(scope *actions.ProcedureContext, metadata map[string]string, method string, args ...any) ([]any, error) {
+	if !l.initialized {
+		return nil, errors.New("not initialized")
+	}
+
+	return l.ext.Call(scope, nil, method, args)
+}
+
+func (l *legacyAdapter) Initialize(ctx context.Context, metadata map[string]string) (map[string]string, error) {
+	ext, err := l.init(&actions.DeploymentContext{
+		Ctx: ctx,
+	}, nil, metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	l.ext = ext
+	l.initialized = true
+
+	return metadata, nil
+}
+
 func Test_RemoteExtension(t *testing.T) {
 	ctx := context.Background()
 	ext := extensions.New("local:8080")
-	callCtx := &execution.ProcedureContext{
+	callCtx := &actions.ProcedureContext{
 		Ctx: ctx,
 	}
 

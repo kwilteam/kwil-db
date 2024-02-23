@@ -18,7 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strings"
+	"strconv"
 	"syscall"
 	"testing"
 	"time"
@@ -32,6 +32,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
+	ethdeposits "github.com/kwilteam/kwil-db/extensions/oracles/eth_deposits"
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/kwilteam/kwil-db/test/driver/operator"
 	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
@@ -130,7 +131,7 @@ type EthDepositOracle struct {
 	ByzDeployer       *ethdeployer.Deployer
 	EscrowAddress     string
 
-	confirmations string
+	confirmations int64
 
 	NumByzantineExpiryNodes int
 	ByzantineEscrowAddr     string
@@ -202,7 +203,10 @@ func WithEthDepositOracle(enabled bool) HelperOpt {
 
 func WithConfirmations(n string) HelperOpt {
 	return func(r *IntHelper) {
-		r.ethDeposit.confirmations = n
+		intN, err := strconv.ParseInt(n, 10, 64)
+		require.NoError(r.t, err, "invalid confirmations")
+
+		r.ethDeposit.confirmations = intN
 	}
 }
 
@@ -269,22 +273,27 @@ func (r *IntHelper) updateEnv(k, v string) {
 func (r *IntHelper) generateNodeConfig(homeDir string) {
 	r.t.Logf("generate testnet config at %s", homeDir)
 
-	// Oracle config for nodes.
-	ethDeposits := make([]nodecfg.EthDepositOracle, r.cfg.NValidator)
-	if r.ethDeposit.Enabled {
-		for i := range ethDeposits {
-			cfg := nodecfg.EthDepositOracle{
-				Enabled:               true,
-				Endpoint:              r.ethDeposit.UnexposedChainRPC,
-				RequiredConfirmations: r.ethDeposit.confirmations,
-				EscrowAddress:         r.ethDeposit.EscrowAddress,
-				ChainID:               "5",
-			}
-			// makes the first r.ethDeposit.NumByzantineExpiryNodes nodes Byzantine
+	extensionConfigs := make([]map[string]map[string]string, r.cfg.NValidator)
+	for i := range extensionConfigs {
+		if r.ethDeposit.Enabled {
+			address := r.ethDeposit.EscrowAddress
 			if i < r.ethDeposit.NumByzantineExpiryNodes {
-				cfg.EscrowAddress = r.ethDeposit.ByzantineEscrowAddr
+				address = r.ethDeposit.ByzantineEscrowAddr
 			}
-			ethDeposits[i] = cfg
+
+			extensionConfigs[i] = map[string]map[string]string{
+				ethdeposits.OracleName: (&ethdeposits.EthDepositConfig{
+					RPCProvider:     r.ethDeposit.UnexposedChainRPC,
+					ContractAddress: address,
+					// setting values here since we cannot have the defaults, since
+					// local ganache is a new network
+					StartingHeight:        0,
+					RequiredConfirmations: 0, // TODO: remove this from the r.ethDeposit struct. it is not needed
+					ReconnectionInterval:  30,
+					MaxRetries:            2,
+					BlockSyncChunkSize:    1000,
+				}).Map(),
+			}
 		}
 	}
 
@@ -310,7 +319,7 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 		WithoutNonces:     false,
 		Allocs:            r.cfg.Allocs,
 		FundNonValidators: r.cfg.WithGas, // when gas is required, also give the non-validators some for tests
-		EthDeposits:       ethDeposits,
+		Extensions:        extensionConfigs,
 	}, &nodecfg.ConfigOpts{
 		DnsHost: true,
 	})
@@ -393,11 +402,11 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 
 	stack := dc.WithEnv(r.envs)
 	for _, service := range services {
-		if r.ethDeposit.Enabled && strings.HasPrefix(service, "node") {
-			waitMsg := "Started listening for new blocks on ethereum"
-			stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
-			continue
-		}
+		// if r.ethDeposit.Enabled && strings.HasPrefix(service, "node") {
+		// 	waitMsg := "Started listening for new blocks on ethereum"
+		// 	stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
+		// 	continue
+		// }
 
 		waitMsg, ok := logWaitStrategies[service]
 		if ok {

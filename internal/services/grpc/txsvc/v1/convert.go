@@ -3,12 +3,12 @@ package txsvc
 import (
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/common"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 )
 
-func convertSchemaFromEngine(schema *engineTypes.Schema) (*txpb.Schema, error) {
+func convertSchemaFromEngine(schema *common.Schema) (*txpb.Schema, error) {
 	actions, err := convertActionsFromEngine(schema.Procedures)
 	if err != nil {
 		return nil, err
@@ -21,7 +21,7 @@ func convertSchemaFromEngine(schema *engineTypes.Schema) (*txpb.Schema, error) {
 	}, nil
 }
 
-func convertTablesFromEngine(tables []*engineTypes.Table) []*txpb.Table {
+func convertTablesFromEngine(tables []*common.Table) []*txpb.Table {
 	convTables := make([]*txpb.Table, len(tables))
 	for i, table := range tables {
 		convTable := &txpb.Table{
@@ -36,7 +36,7 @@ func convertTablesFromEngine(tables []*engineTypes.Table) []*txpb.Table {
 	return convTables
 }
 
-func convertColumnsFromEngine(columns []*engineTypes.Column) []*txpb.Column {
+func convertColumnsFromEngine(columns []*common.Column) []*txpb.Column {
 	convColumns := make([]*txpb.Column, len(columns))
 	for i, column := range columns {
 		convColumn := &txpb.Column{
@@ -50,7 +50,7 @@ func convertColumnsFromEngine(columns []*engineTypes.Column) []*txpb.Column {
 	return convColumns
 }
 
-func convertAttributesFromEngine(attributes []*engineTypes.Attribute) []*txpb.Attribute {
+func convertAttributesFromEngine(attributes []*common.Attribute) []*txpb.Attribute {
 	convAttributes := make([]*txpb.Attribute, len(attributes))
 	for i, attribute := range attributes {
 		convAttribute := &txpb.Attribute{
@@ -63,7 +63,7 @@ func convertAttributesFromEngine(attributes []*engineTypes.Attribute) []*txpb.At
 	return convAttributes
 }
 
-func convertIndexesFromEngine(indexes []*engineTypes.Index) []*txpb.Index {
+func convertIndexesFromEngine(indexes []*common.Index) []*txpb.Index {
 	convIndexes := make([]*txpb.Index, len(indexes))
 	for i, index := range indexes {
 		convIndexes[i] = &txpb.Index{
@@ -76,7 +76,7 @@ func convertIndexesFromEngine(indexes []*engineTypes.Index) []*txpb.Index {
 	return convIndexes
 }
 
-func convertActionsFromEngine(actions []*engineTypes.Procedure) ([]*txpb.Action, error) {
+func convertActionsFromEngine(actions []*common.Procedure) ([]*txpb.Action, error) {
 
 	convActions := make([]*txpb.Action, len(actions))
 	for i, action := range actions {
@@ -99,16 +99,16 @@ func convertActionsFromEngine(actions []*engineTypes.Procedure) ([]*txpb.Action,
 	return convActions, nil
 }
 
-func convertModifiersFromEngine(mods []engineTypes.Modifier) (mutability string, auxiliaries []string, err error) {
+func convertModifiersFromEngine(mods []common.Modifier) (mutability string, auxiliaries []string, err error) {
 	auxiliaries = make([]string, 0)
 	mutability = transactions.MutabilityUpdate.String()
 	for _, mod := range mods {
 		switch mod {
-		case engineTypes.ModifierAuthenticated:
+		case common.ModifierAuthenticated:
 			auxiliaries = append(auxiliaries, transactions.AuxiliaryTypeMustSign.String())
-		case engineTypes.ModifierView:
+		case common.ModifierView:
 			mutability = transactions.MutabilityView.String()
-		case engineTypes.ModifierOwner:
+		case common.ModifierOwner:
 			auxiliaries = append(auxiliaries, transactions.AuxiliaryTypeOwner.String())
 		default:
 			return "", nil, fmt.Errorf("unknown modifier type: %v", mod)
@@ -118,7 +118,7 @@ func convertModifiersFromEngine(mods []engineTypes.Modifier) (mutability string,
 	return mutability, auxiliaries, nil
 }
 
-func convertForeignKeysFromEngine(foreignKeys []*engineTypes.ForeignKey) []*txpb.ForeignKey {
+func convertForeignKeysFromEngine(foreignKeys []*common.ForeignKey) []*txpb.ForeignKey {
 
 	convForeignKeys := make([]*txpb.ForeignKey, len(foreignKeys))
 	for i, foreignKey := range foreignKeys {

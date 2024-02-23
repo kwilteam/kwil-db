@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
+	"github.com/kwilteam/kwil-db/common/testdata"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

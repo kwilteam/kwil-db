@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/internal/engine/types"
+	types "github.com/kwilteam/kwil-db/common"
 )
 
 func GenerateCreateTableStatement(pgSchema string, table *types.Table) (string, error) {

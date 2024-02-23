@@ -5,19 +5,18 @@ import (
 	"math/big"
 	"testing"
 
+	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/accounts"
-	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_Mempool(t *testing.T) {
+func Test_MempoolWithoutGas(t *testing.T) {
 	m := &mempool{
-		accountStore: &mockAccountsModule{},
-		accounts:     make(map[string]*accounts.Account),
+		accounts: make(map[string]*types.Account),
 	}
+
 	ctx := context.Background()
 	db := &mockDb{}
 	rebroadcast := &mockRebroadcast{}
@@ -52,16 +51,35 @@ func Test_Mempool(t *testing.T) {
 	assert.EqualValues(t, m.accounts["A"].Nonce, 4)
 }
 
-type mockAccountsModule struct{}
+func Test_MempoolWithGas(t *testing.T) {
+	m := &mempool{
+		accounts:   make(map[string]*types.Account),
+		gasEnabled: true,
+	}
 
-var _ AccountReader = (*mockAccountsModule)(nil)
+	ctx := context.Background()
+	db := &mockDb{}
+	rebroadcast := &mockRebroadcast{}
 
-func (m *mockAccountsModule) GetAccount(ctx context.Context, _ sql.DB, acctID []byte) (*accounts.Account, error) {
-	return &accounts.Account{
+	// Transaction from Unknown sender should fail
+	tx := newTx(t, 1, "A")
+	err := m.applyTransaction(ctx, tx, db, rebroadcast)
+	assert.Error(t, err)
+
+	// Resubmitting the same transaction should fail
+	err = m.applyTransaction(ctx, tx, db, rebroadcast)
+	assert.Error(t, err)
+
+	// Credit account A
+	m.accounts["A"] = &types.Account{
+		Identifier: []byte("A"),
+		Balance:    big.NewInt(100),
 		Nonce:      0,
-		Balance:    big.NewInt(0),
-		Identifier: acctID,
-	}, nil
+	}
+
+	// Successful transaction A: 1
+	err = m.applyTransaction(ctx, tx, db, rebroadcast)
+	assert.NoError(t, err)
 }
 
 func newTx(t *testing.T, nonce uint64, sender string) *transactions.Transaction {
@@ -88,7 +106,7 @@ func (m *mockDb) BeginTx(ctx context.Context) (sql.Tx, error) {
 }
 
 func (m *mockDb) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
-	return nil, nil
+	return &sql.ResultSet{}, nil
 }
 
 type mockTx struct {

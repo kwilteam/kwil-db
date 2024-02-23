@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/kwilteam/kwil-db/internal/sql"
+	sql "github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 const (
@@ -50,9 +51,14 @@ func createAccount(ctx context.Context, db sql.DB, ident []byte, amt *big.Int) e
 	return err
 }
 
+func createAccountWithNonce(ctx context.Context, db sql.DB, ident []byte, amt *big.Int, nonce int64) error {
+	_, err := db.Execute(ctx, sqlCreateAccount, ident, amt.String(), nonce)
+	return err
+}
+
 // getAccount retrieves an account from the database.
 // if the account is not found, it returns nil, ErrAccountNotFound.
-func getAccount(ctx context.Context, db sql.DB, ident []byte) (*Account, error) {
+func getAccount(ctx context.Context, db sql.DB, ident []byte) (*types.Account, error) {
 	results, err := db.Execute(ctx, sqlGetAccount, ident)
 	if err != nil {
 		return nil, err
@@ -83,22 +89,9 @@ func getAccount(ctx context.Context, db sql.DB, ident []byte) (*Account, error) 
 		return nil, fmt.Errorf("failed to convert stored nonce to int64")
 	}
 
-	return &Account{
+	return &types.Account{
 		Identifier: ident,
 		Balance:    balance,
 		Nonce:      nonce,
 	}, nil
-}
-
-// getOrCreateAccount gets an account, creating it if it doesn't exist.
-func getOrCreateAccount(ctx context.Context, tx sql.DB, ident []byte) (*Account, error) {
-	account, err := getAccount(ctx, tx, ident)
-	if account == nil && err == ErrAccountNotFound {
-		err = createAccount(ctx, tx, ident, big.NewInt(0)) // create account with 0 balance
-		if err != nil {
-			return nil, fmt.Errorf("failed to create account: %w", err)
-		}
-		return emptyAccount(), nil
-	}
-	return account, err
 }
