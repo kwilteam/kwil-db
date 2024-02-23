@@ -57,8 +57,10 @@ func TestSelect_ToSQL(t *testing.T) {
 					OrderBy: &tree.OrderBy{
 						OrderingTerms: []*tree.OrderingTerm{
 							{
-								Expression: &tree.ExpressionColumn{Column: "foo"},
-								Collation:  tree.CollationTypeNoCase,
+								Expression: &tree.ExpressionCollate{
+									Expression: &tree.ExpressionColumn{Column: "foo"},
+									Collation:  tree.CollationTypeNoCase,
+								},
 							},
 						},
 					},

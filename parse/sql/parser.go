@@ -23,9 +23,9 @@ func ParseSql(sql string, currentLine int, errorListener *ErrorListener, trace b
 	}
 
 	stream := antlr.NewInputStream(sql)
-	lexer := sqlgrammar.NewSQLiteLexer(stream)
+	lexer := sqlgrammar.NewSQLLexer(stream)
 	tokenStream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-	p := sqlgrammar.NewSQLiteParser(tokenStream)
+	p := sqlgrammar.NewSQLParser(tokenStream)
 
 	// remove default error visitor
 	p.RemoveErrorListeners()
@@ -47,8 +47,8 @@ func ParseSql(sql string, currentLine int, errorListener *ErrorListener, trace b
 
 	visitor = NewKFSqliteVisitor(KFVisitorWithTrace(trace))
 
-	parseTree := p.Parse()
-	result := visitor.Visit(parseTree)
+	stmts := p.Statements()
+	result := visitor.Visit(stmts)
 	// since we only expect a single statement
 	return result.([]tree.Ast)[0], err
 }

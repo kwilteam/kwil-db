@@ -92,8 +92,8 @@ require (
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
-	github.com/kwilteam/action-grammar-go v0.0.1-0.20230926160920-472768e1186c // indirect
-	github.com/kwilteam/sql-grammar-go v0.0.3-0.20240209181022-1e69719b1754 // indirect
+	github.com/kwilteam/action-grammar-go v0.0.1-0.20240221235853-2b171733810e // indirect
+	github.com/kwilteam/sql-grammar-go v0.0.3-0.20240222213209-52b51de2eaf8 // indirect
 	github.com/lib/pq v1.10.7 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
@@ -106,6 +106,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.0-rc4 // indirect
 	github.com/opencontainers/runc v1.1.7 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
+	github.com/pganalyze/pg_query_go/v5 v5.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.14.0 // indirect

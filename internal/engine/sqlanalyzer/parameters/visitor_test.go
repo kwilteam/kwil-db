@@ -7,6 +7,8 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
+	"github.com/kwilteam/kwil-db/parse/sql/postgres"
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_NumberedParameters(t *testing.T) {
@@ -85,6 +87,9 @@ func Test_NumberedParameters(t *testing.T) {
 			if trimmedRes != trimmedWant {
 				t.Errorf("Parameters() = %v, want %v", trimmedRes, trimmedWant)
 			}
+
+			err = postgres.CheckSyntaxReplaceDollar(str)
+			assert.NoErrorf(t, err, "postgres syntax check failed: %s", err)
 		})
 	}
 }

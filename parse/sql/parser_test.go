@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/parse/sql/postgres"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
-
 	"github.com/stretchr/testify/assert"
 )
 
-var trace = flag.Bool("trace", false, "run tests with tracing")
+var traceMode = flag.Bool("trace-mode", false, "run tests with tracing")
 
 var columnStar = []tree.ResultColumn{
 	&tree.ResultColumnStar{},
@@ -213,7 +213,7 @@ func genSimpleCTETree(table, value string) *tree.CTE {
 	}
 }
 
-func genSimpleExprNullSelectTree(value string, isNull bool) *tree.Select {
+func genSimpleExprNullSelectTree(value string, not bool) *tree.Select {
 	return &tree.Select{
 		SelectStmt: &tree.SelectStmt{
 			SelectCores: []*tree.SelectCore{
@@ -221,9 +221,33 @@ func genSimpleExprNullSelectTree(value string, isNull bool) *tree.Select {
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
-							Expression: &tree.ExpressionIsNull{
-								Expression: &tree.ExpressionLiteral{Value: value},
-								IsNull:     isNull,
+							Expression: &tree.ExpressionIs{
+								Left:     &tree.ExpressionLiteral{Value: value},
+								Distinct: false,
+								Not:      not,
+								Right:    &tree.ExpressionLiteral{Value: "NULL"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func genSimpleExprIsSelectTree(left string, right string, not bool) *tree.Select {
+	return &tree.Select{
+		SelectStmt: &tree.SelectStmt{
+			SelectCores: []*tree.SelectCore{
+				{
+					SelectType: tree.SelectTypeAll,
+					Columns: []tree.ResultColumn{
+						&tree.ResultColumnExpression{
+							Expression: &tree.ExpressionIs{
+								Left:     &tree.ExpressionLiteral{Value: left},
+								Distinct: false,
+								Not:      not,
+								Right:    &tree.ExpressionLiteral{Value: right},
 							},
 						},
 					},
@@ -319,21 +343,6 @@ func genSimpleUpdateTree(qt *tree.QualifiedTableName, column, value string) *tre
 	}
 }
 
-func genSimpleUpdateOrTree(qt *tree.QualifiedTableName, uo tree.UpdateOr, column, value string) *tree.Update {
-	return &tree.Update{
-		UpdateStmt: &tree.UpdateStmt{
-			Or:                 uo,
-			QualifiedTableName: qt,
-			UpdateSetClause: []*tree.UpdateSetClause{
-				{
-					Columns:    []string{column},
-					Expression: genLiteralExpression(value),
-				},
-			},
-		},
-	}
-}
-
 func TestParseRawSQL_syntax_valid(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -341,7 +350,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		expect tree.Ast
 	}{
 		// with semicolon at the end
-		{"*", "select *;", genSelectColumnStarTree()},
+		{"with semicolon", "select *;", genSelectColumnStarTree()},
 		// common table stmt
 		{"cte", "with t as (select 1) select *",
 			&tree.Select{
@@ -431,7 +440,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 									Joins: []*tree.JoinPredicate{
 										{
 											JoinOperator: &tree.JoinOperator{
-												Natural:  false,
 												JoinType: tree.JoinTypeJoin,
 												Outer:    false,
 											},
@@ -460,7 +468,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// literal value,,
 		{"number", "select 1", genSelectColumnLiteralTree("1")},
 		{"string", "select 'a'", genSelectColumnLiteralTree("'a'")},
-		{"null", "select null", genSelectColumnLiteralTree("null")},
+		{"null", "select null", genSelectColumnLiteralTree("NULL")},
 		{"true", "select true", genSelectColumnLiteralTree("true")},
 		{"false", "select false", genSelectColumnLiteralTree("false")},
 		// bind parameter
@@ -516,11 +524,55 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// unary op
 		{"expr unary op +", "select +1", genSelectUnaryExprTree(tree.UnaryOperatorPlus, "1")},
 		{"expr unary op -", "select -1", genSelectUnaryExprTree(tree.UnaryOperatorMinus, "1")},
-		{"expr unary op ~", "select ~1", genSelectUnaryExprTree(tree.UnaryOperatorBitNot, "1")},
+		{"expr unary op - twice, right associative", "select - -1",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionUnary{
+										Operator: tree.UnaryOperatorMinus,
+										Operand: &tree.ExpressionUnary{
+											Operator: tree.UnaryOperatorMinus,
+											Operand:  genLiteralExpression("1"),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		//{"expr unary op ~", "select ~1", genSelectUnaryExprTree(tree.UnaryOperatorBitNot, "1")},
 		{"expr unary op not", "select not 1", genSelectUnaryExprTree(tree.UnaryOperatorNot, "1")},
+		{"expr unary op not twice, right associative", "select not not true",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionUnary{
+										Operator: tree.UnaryOperatorNot,
+										Operand: &tree.ExpressionUnary{
+											Operator: tree.UnaryOperatorNot,
+											Operand:  genLiteralExpression("true"),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		// binary op
-		{"expr binary op ||", "select 1 || 2",
-			genSimplyArithmeticSelectTree(tree.ArithmeticConcat, "1", "2")},
+		//{"expr binary op ||", "select 1 || 2",
+		//	genSimplyArithmeticSelectTree(tree.ArithmeticConcat, "1", "2")},
 		{"expr binary op *", "select 1 * 2",
 			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorMultiply, "1", "2")},
 		{"expr binary op /", "select 1 / 2",
@@ -531,14 +583,14 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorAdd, "1", "2")},
 		{"expr binary op -", "select 1 - 2",
 			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorSubtract, "1", "2")},
-		{"expr binary op <<", "select 1 << 2",
-			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorBitwiseLeftShift, "1", "2")},
-		{"expr binary op >>", "select 1 >> 2",
-			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorBitwiseRightShift, "1", "2")},
-		{"expr binary op &", "select 1 & 2",
-			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorBitwiseAnd, "1", "2")},
-		{"expr binary op |", "select 1 | 2",
-			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorBitwiseOr, "1", "2")},
+		//{"expr binary op <<", "select 1 << 2",
+		//	genSimplyArithmeticSelectTree(tree.ArithmeticOperatorBitwiseLeftShift, "1", "2")},
+		//{"expr binary op >>", "select 1 >> 2",
+		//	genSimplyArithmeticSelectTree(tree.ArithmeticOperatorBitwiseRightShift, "1", "2")},
+		//{"expr binary op &", "select 1 & 2",
+		//	genSimplyArithmeticSelectTree(tree.ArithmeticOperatorBitwiseAnd, "1", "2")},
+		//{"expr binary op |", "select 1 | 2",
+		//	genSimplyArithmeticSelectTree(tree.ArithmeticOperatorBitwiseOr, "1", "2")},
 		{"expr binary op <", "select 1 < 2",
 			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorLessThan, "1", "2")},
 		{"expr binary op <=", "select 1 <= 2",
@@ -549,16 +601,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorGreaterThanOrEqual, "1", "2")},
 		{"expr binary op =", "select 1 = 2",
 			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorEqual, "1", "2")},
-		{"expr binary op =", "select 1 == 2",
-			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorDoubleEqual, "1", "2")},
 		{"expr binary op !=", "select 1 != 2",
 			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorNotEqual, "1", "2")},
 		{"expr binary op <>", "select 1 <> 2",
 			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorNotEqualDiamond, "1", "2")},
-		{"expr binary op is", "select 1 is 2",
-			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorIs, "1", "2")},
-		{"expr binary op is not", "select 1 is not 2",
-			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorIsNot, "1", "2")},
 		{"expr binary op and", "select 1 and 2",
 			genSimpleBinaryCompareSelectTree(tree.LogicalOperatorAnd, "1", "2")},
 		{"expr binary op or", "select 1 or 2",
@@ -665,18 +711,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			genSimpleStringCompareSelectTree(tree.StringOperatorNotLike, "1", "2", "")},
 		{"expr binary op like escape", "select 1 like 2 escape 3",
 			genSimpleStringCompareSelectTree(tree.StringOperatorLike, "1", "2", "3")},
-		{"expr binary op match", "select 1 match 2",
-			genSimpleStringCompareSelectTree(tree.StringOperatorMatch, "1", "2", "")},
-		{"expr binary op match", "select 1 not match 2",
-			genSimpleStringCompareSelectTree(tree.StringOperatorNotMatch, "1", "2", "")},
-		{"expr binary op regexp", "select 1 regexp 2",
-			genSimpleStringCompareSelectTree(tree.StringOperatorRegexp, "1", "2", "")},
-		{"expr binary op regexp", "select 1 not regexp 2",
-			genSimpleStringCompareSelectTree(tree.StringOperatorNotRegexp, "1", "2", "")},
-		{"expr binary op glob", "select 1 glob 2",
-			genSimpleStringCompareSelectTree(tree.StringOperatorGlob, "1", "2", "")},
-		{"expr binary op glob", "select 1 not glob 2",
-			genSimpleStringCompareSelectTree(tree.StringOperatorNotGlob, "1", "2", "")},
 		// function
 		// core functions
 		{"expr function abs", "select abs(1)",
@@ -773,9 +807,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 													Right: genLiteralExpression("1"),
 												},
 											},
-											Right: &tree.ExpressionIsNull{
-												Expression: genLiteralExpression("1"),
-												IsNull:     false,
+											Right: &tree.ExpressionIs{
+												Left:  genLiteralExpression("1"),
+												Not:   true,
+												Right: genLiteralExpression("NULL"),
 											},
 										},
 										Right: &tree.ExpressionBinaryComparison{
@@ -804,21 +839,22 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 										Left: &tree.ExpressionUnary{
 											Operator: tree.UnaryOperatorNot,
 											Operand: &tree.ExpressionBinaryComparison{
-												Wrapped:  true,
 												Operator: tree.ComparisonOperatorEqual,
 												Left: &tree.ExpressionUnary{
 													Operator: tree.UnaryOperatorMinus,
 													Operand:  genLiteralExpression("1"),
 												},
-												Right: genLiteralExpression("1"),
+												Right:   genLiteralExpression("1"),
+												Wrapped: true,
 											},
 										},
 										Right: &tree.ExpressionBinaryComparison{
 											Wrapped:  true,
 											Operator: tree.LogicalOperatorOr,
-											Left: &tree.ExpressionIsNull{
-												Expression: genLiteralExpression("1"),
-												IsNull:     false,
+											Left: &tree.ExpressionIs{
+												Left:  genLiteralExpression("1"),
+												Not:   true,
+												Right: genLiteralExpression("NULL"),
 											},
 											Right: &tree.ExpressionBinaryComparison{
 												Operator: tree.ComparisonOperatorLessThan,
@@ -834,7 +870,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				},
 			},
 		},
-		{"expr precedence 4", "select not 3 + 4 * 5 - 2 = 2 + -1 & 7",
+		{"expr precedence 4", "select not 3 + 4 * 5 - 2 = 2 + -1",
 			&tree.Select{
 				SelectStmt: &tree.SelectStmt{
 					SelectCores: []*tree.SelectCore{
@@ -860,16 +896,12 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 												Right: genLiteralExpression("2"),
 											},
 											Right: &tree.ExpressionArithmetic{
-												Left: &tree.ExpressionArithmetic{
-													Left:     genLiteralExpression("2"),
-													Operator: tree.ArithmeticOperatorAdd,
-													Right: &tree.ExpressionUnary{
-														Operator: tree.UnaryOperatorMinus,
-														Operand:  genLiteralExpression("1"),
-													},
+												Left:     genLiteralExpression("2"),
+												Operator: tree.ArithmeticOperatorAdd,
+												Right: &tree.ExpressionUnary{
+													Operator: tree.UnaryOperatorMinus,
+													Operand:  genLiteralExpression("1"),
 												},
-												Operator: tree.ArithmeticOperatorBitwiseAnd,
-												Right:    genLiteralExpression("7"),
 											},
 										},
 									},
@@ -884,15 +916,14 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// collate
 		{"expr collate nocase", "select 1 collate nocase",
 			genSimpleCollateSelectTree(tree.CollationTypeNoCase, "1")},
-		// null
-		{"expr isnull", "select 1 isnull", genSimpleExprNullSelectTree("1", true)},
-		{"expr notnull", "select 1 notnull", genSimpleExprNullSelectTree("1", false)},
-		{"expr not null", "select 1 not null", genSimpleExprNullSelectTree("1", false)},
 		// is
-		{"expr is", "select 1 is 2",
-			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorIs, "1", "2")},
-		{"expr is not", "select 1 is not 2",
-			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorIsNot, "1", "2")},
+		{"expr isnull", "select 1 isnull", genSimpleExprNullSelectTree("1", false)},
+		{"expr notnull", "select 1 notnull", genSimpleExprNullSelectTree("1", true)},
+		{"expr not null", "select 1 is not null", genSimpleExprNullSelectTree("1", true)},
+		{"expr is", "select true is true",
+			genSimpleExprIsSelectTree("true", "true", false)},
+		{"expr is not", "select true is not true",
+			genSimpleExprIsSelectTree("true", "true", true)},
 		{"expr is distinct from", "select 1 is distinct from 2",
 			&tree.Select{
 				SelectStmt: &tree.SelectStmt{
@@ -901,10 +932,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
 								&tree.ResultColumnExpression{
-									Expression: &tree.ExpressionDistinct{
-										Left:  genLiteralExpression("1"),
-										Right: genLiteralExpression("2"),
-										IsNot: false,
+									Expression: &tree.ExpressionIs{
+										Left:     genLiteralExpression("1"),
+										Right:    genLiteralExpression("2"),
+										Distinct: true,
 									},
 								},
 							},
@@ -921,10 +952,11 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
 								&tree.ResultColumnExpression{
-									Expression: &tree.ExpressionDistinct{
-										Left:  genLiteralExpression("1"),
-										Right: genLiteralExpression("2"),
-										IsNot: true,
+									Expression: &tree.ExpressionIs{
+										Left:     genLiteralExpression("1"),
+										Right:    genLiteralExpression("2"),
+										Distinct: true,
+										Not:      true,
 									},
 								},
 							},
@@ -1141,20 +1173,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					InsertType: tree.InsertTypeInsert,
-					Values:     [][]tree.Expression{{genLiteralExpression("1")}},
-				}}},
-		{"insert replace", "replace into t1 values (1)",
-			&tree.Insert{
-				InsertStmt: &tree.InsertStmt{
-					Table:      "t1",
-					InsertType: tree.InsertTypeReplace,
-					Values:     [][]tree.Expression{{genLiteralExpression("1")}},
-				}}},
-		{"insert or replace", "insert or replace into t1 values (1)",
-			&tree.Insert{
-				InsertStmt: &tree.InsertStmt{
-					Table:      "t1",
-					InsertType: tree.InsertTypeInsertOrReplace,
 					Values:     [][]tree.Expression{{genLiteralExpression("1")}},
 				}}},
 		{"insert with columns", "insert into t1 (a,b) values (1,2)",
@@ -1616,8 +1634,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 					OrderBy: &tree.OrderBy{
 						OrderingTerms: []*tree.OrderingTerm{
 							{
-								Expression:   &tree.ExpressionColumn{Column: "c1"},
-								Collation:    tree.CollationTypeNoCase,
+								Expression: &tree.ExpressionCollate{
+									Expression: &tree.ExpressionColumn{Column: "c1"},
+									Collation:  tree.CollationTypeNoCase,
+								},
 								OrderType:    tree.OrderTypeAsc,
 								NullOrdering: tree.NullOrderingTypeFirst,
 							},
@@ -1659,34 +1679,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						Offset:     genLiteralExpression("2"),
 					},
 				}}},
-		{"select with limit comma", "select * from t1 limit 1,10",
-			&tree.Select{
-				SelectStmt: &tree.SelectStmt{
-					SelectCores: []*tree.SelectCore{
-						{
-							SelectType: tree.SelectTypeAll,
-							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
-									Name: "t1",
-								},
-							}},
-						},
-					},
-					Limit: &tree.Limit{
-						Expression:       genLiteralExpression("1"),
-						SecondExpression: genLiteralExpression("10"),
-					},
-				}}},
 		//// join
 		{"join on", "select * from t1 join t2 on t1.c1=t2.c1",
 			genSimpleJoinSelectTree(&tree.JoinOperator{
 				JoinType: tree.JoinTypeJoin,
-			}, "t1", "c1", "t2", "c1")},
-		{"natural join on", "select * from t1 natural join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeJoin,
-				Natural:  true,
 			}, "t1", "c1", "t2", "c1")},
 		{"left join on", "select * from t1 left join t2 on t1.c1=t2.c1",
 			genSimpleJoinSelectTree(&tree.JoinOperator{
@@ -1697,17 +1693,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				JoinType: tree.JoinTypeLeft,
 				Outer:    true,
 			}, "t1", "c1", "t2", "c1")},
-		{"natural left join on", "select * from t1 natural left join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeLeft,
-				Natural:  true,
-			}, "t1", "c1", "t2", "c1")},
-		{"natural left outer join on", "select * from t1 natural left outer join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeLeft,
-				Outer:    true,
-				Natural:  true,
-			}, "t1", "c1", "t2", "c1")},
 		{"right join on", "select * from t1 right join t2 on t1.c1=t2.c1",
 			genSimpleJoinSelectTree(&tree.JoinOperator{
 				JoinType: tree.JoinTypeRight,
@@ -1715,17 +1700,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"right outer join on", "select * from t1 right outer join t2 on t1.c1=t2.c1",
 			genSimpleJoinSelectTree(&tree.JoinOperator{
 				JoinType: tree.JoinTypeRight,
-				Outer:    true,
-			}, "t1", "c1", "t2", "c1")},
-		{"natural right join on", "select * from t1 natural right join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeRight,
-				Natural:  true,
-			}, "t1", "c1", "t2", "c1")},
-		{"natural right outer join on", "select * from t1 natural right outer join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeRight,
-				Natural:  true,
 				Outer:    true,
 			}, "t1", "c1", "t2", "c1")},
 		{"full join on", "select * from t1 full join t2 on t1.c1=t2.c1",
@@ -1737,25 +1711,9 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				JoinType: tree.JoinTypeFull,
 				Outer:    true,
 			}, "t1", "c1", "t2", "c1")},
-		{"natural full join on", "select * from t1 natural full join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeFull,
-				Natural:  true,
-			}, "t1", "c1", "t2", "c1")},
-		{"natural full outer join on", "select * from t1 natural full outer join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeFull,
-				Outer:    true,
-				Natural:  true,
-			}, "t1", "c1", "t2", "c1")},
 		{"inner join on", "select * from t1 inner join t2 on t1.c1=t2.c1",
 			genSimpleJoinSelectTree(&tree.JoinOperator{
 				JoinType: tree.JoinTypeInner,
-			}, "t1", "c1", "t2", "c1")},
-		{"natural inner join on", "select * from t1 natural inner join t2 on t1.c1=t2.c1",
-			genSimpleJoinSelectTree(&tree.JoinOperator{
-				JoinType: tree.JoinTypeInner,
-				Natural:  true,
 			}, "t1", "c1", "t2", "c1")},
 		{"join multi", "select * from t1 join t2 on t1.c1=t2.c1 left join t3 on t1.c1=t3.c1",
 			&tree.Select{
@@ -1806,26 +1764,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				TableName:  "t1",
 				TableAlias: "t",
 			}, "c1", "1")},
-		{"update with table indexed", "update t1 indexed by i1 set c1=1",
-			genSimpleUpdateTree(&tree.QualifiedTableName{
-				TableName: "t1",
-				IndexedBy: "i1",
-			}, "c1", "1")},
-		{"update with table not indexed", "update t1 not indexed set c1=1",
-			genSimpleUpdateTree(&tree.QualifiedTableName{
-				TableName:  "t1",
-				NotIndexed: true,
-			}, "c1", "1")},
-		{"update or abort", "update or abort t1 set c1=1",
-			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrAbort, "c1", "1")},
-		{"update or fail", "update or fail t1 set c1=1",
-			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrFail, "c1", "1")},
-		{"update or ignore", "update or ignore t1 set c1=1",
-			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrIgnore, "c1", "1")},
-		{"update or replace", "update or replace t1 set c1=1",
-			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrReplace, "c1", "1")},
-		{"update or rollback", "update or rollback t1 set c1=1",
-			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrRollback, "c1", "1")},
 		{"update with multi set", "update t1 set c1=1, c2=2",
 			&tree.Update{
 				UpdateStmt: &tree.UpdateStmt{
@@ -2135,22 +2073,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				},
 			},
 		},
-		{"index name with double quote", `update "t1" indexed by "someindex" set [col1]=1`,
-			&tree.Update{
-				UpdateStmt: &tree.UpdateStmt{
-					QualifiedTableName: &tree.QualifiedTableName{
-						TableName:  "t1",
-						TableAlias: "",
-						IndexedBy:  "someindex",
-					},
-					UpdateSetClause: []*tree.UpdateSetClause{
-						{
-							Columns:    []string{"col1"},
-							Expression: genLiteralExpression("1"),
-						},
-					},
-				},
-			}},
 		{"function name with back tick quote", "select `abs`(1)",
 			genSimpleFunctionSelectTree(&tree.FunctionABS, genLiteralExpression("1"))},
 
@@ -2167,55 +2089,53 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionLiteral{
 										Value:    "1",
-										TypeCast: "int",
+										TypeCast: tree.TypeCastInt,
 									},
 									Alias: "x",
 								},
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionBindParameter{
-										Wrapped:   false,
 										Parameter: "@caller",
-										TypeCast:  "text",
+										TypeCast:  tree.TypeCastText,
 									},
 								},
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionColumn{
 										Table:    "t1",
 										Column:   "c1",
-										TypeCast: "text",
+										TypeCast: tree.TypeCastText,
 									},
 								},
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionArithmetic{
-										Wrapped: true,
+										Wrapped:  true,
+										TypeCast: tree.TypeCastInt,
 										Left: &tree.ExpressionColumn{
 											Table:    "t1",
 											Column:   "c2",
-											TypeCast: "int",
+											TypeCast: tree.TypeCastInt,
 										},
 										Operator: tree.ArithmeticOperatorMultiply,
 										Right:    genLiteralExpression("3"),
-										TypeCast: "int",
 									},
 								},
 								&tree.ResultColumnExpression{
-									Expression: &tree.ExpressionIsNull{
-										IsNull:  true,
-										Wrapped: true,
-										Expression: &tree.ExpressionColumn{
+									Expression: &tree.ExpressionIs{
+										Left: &tree.ExpressionColumn{
 											Table:  "t1",
 											Column: "c3",
 										},
-										TypeCast: "int",
+										Right:    genLiteralExpression("NULL"),
+										Wrapped:  true,
+										TypeCast: tree.TypeCastInt,
 									},
 								},
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionFunction{
-										Wrapped:  false,
 										Function: &tree.FunctionABS,
 										Inputs:   []tree.Expression{genLiteralExpression("2")},
 										Distinct: false,
-										TypeCast: "int",
+										TypeCast: tree.TypeCastInt,
 									},
 								},
 							},
@@ -2242,7 +2162,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				tt.expect = nil
 			}()
 
-			astTree, err := ParseSql(tt.input, 1, nil, *trace)
+			astTree, err := ParseSql(tt.input, 1, nil, *traceMode)
 			if err != nil {
 				t.Errorf("ParseRawSQL() got %s", err)
 				return
@@ -2256,17 +2176,22 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				t.Errorf("ParseRawSQL() got %s", err)
 			}
 
-			if *trace {
+			if *traceMode {
 				fmt.Println("SQL from AST: ", sql)
 			}
 
 			singleSpaceSql := re.ReplaceAllString(sql, " ")
 			t.Logf("%s \n=> %s\n", tt.input, singleSpaceSql)
 
-			// assert original sql and sql from ast are equal, WITHOUT format
-			assert.True(t,
-				strings.EqualFold(unFormatSql(sql), unFormatSql(tt.input)),
-				"ParseRawSQL() got %s, origin %s", sql, tt.input)
+			if !(strings.Contains(tt.input, "isnull") || strings.Contains(tt.input, "notnull")) {
+				// assert original sql and sql from ast are equal, WITHOUT format
+				assert.True(t,
+					strings.EqualFold(unFormatSql(sql), unFormatSql(tt.input)),
+					"ParseRawSQL() got %s, origin %s", sql, tt.input)
+			}
+
+			err = postgres.CheckSyntaxReplaceDollar(sql)
+			assert.NoErrorf(t, err, "postgres syntax check failed: %s", err)
 		})
 	}
 }
@@ -2358,7 +2283,7 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			//eh := NewErrorHandler(1)
 			//el := newSqliteErrorListener(eh)
-			_, err := ParseSql(tt.input, 1, nil, *trace)
+			_, err := ParseSql(tt.input, 1, nil, *traceMode)
 			assert.Errorf(t, err, "Parser should complain abould invalid syntax")
 
 			if !errors.Is(err, ErrInvalidSyntax) {
@@ -2387,7 +2312,7 @@ func TestParseRawSQL_semantic_invalid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseSql(tt.input, 1, nil, *trace)
+			_, err := ParseSql(tt.input, 1, nil, *traceMode)
 			assert.Errorf(t, err, "Parser should complain abould invalid syntax")
 
 			// should panic, which is caught by ParseRawSQL

@@ -115,7 +115,6 @@ func (j *JoinPredicate) ToSQL() string {
 }
 
 type JoinOperator struct {
-	Natural  bool
 	JoinType JoinType
 	Outer    bool
 }
@@ -139,10 +138,6 @@ const (
 
 func (j *JoinOperator) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
-
-	if j.Natural {
-		stmt.Token.Natural()
-	}
 
 	switch j.JoinType {
 	case JoinTypeJoin:

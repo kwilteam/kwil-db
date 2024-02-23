@@ -7,6 +7,8 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/engine/ddl"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
+	"github.com/kwilteam/kwil-db/parse/sql/postgres"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerateDDL(t *testing.T) {
@@ -325,6 +327,9 @@ func TestGenerateDDL(t *testing.T) {
 				if !compareIgnoringWhitespace(statement, want) {
 					t.Errorf("GenerateDDL() got = %v, want %v", got, tt.want)
 				}
+
+				err = postgres.CheckSyntaxReplaceDollar(statement)
+				assert.NoErrorf(t, err, "postgres syntax check failed: %s", err)
 			}
 		})
 	}

@@ -37,7 +37,6 @@ func (o *OrderBy) ToSQL() string {
 
 type OrderingTerm struct {
 	Expression   Expression
-	Collation    CollationType
 	OrderType    OrderType
 	NullOrdering NullOrderingType
 }
@@ -54,14 +53,6 @@ func (o *OrderingTerm) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	stmt.WriteString(o.Expression.ToSQL())
-
-	err := o.Collation.Valid()
-	if !o.Collation.Empty() && err == nil {
-		stmt.Token.Collate()
-		stmt.WriteString(o.Collation.String())
-	} else if !o.Collation.Empty() && err != nil {
-		panic(err)
-	}
 
 	if o.OrderType != OrderTypeNone {
 		stmt.WriteString(o.OrderType.String())
