@@ -244,10 +244,10 @@ tasks:
     desc: Run integration tests ('short' mode)
     dir: test # different module
     cmds:
-      - go test -short -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
+      - go test -short -count=1 -timeout 0 ./integration -v -p 4 {{.CLI_ARGS}}
 
   test:it:nb:all:
     desc: Run integration tests
     dir: test # different module
     cmds:
-      - go test -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
+      - go test -count=1 -timeout 0 ./integration -v -p 4 {{.CLI_ARGS}}
