@@ -149,20 +149,20 @@ func (h *harness) getOrCreateUser(ctx context.Context, dbid string) (int, string
 	return userID, userName, nil
 }
 
-func (h *harness) nextPostId(ctx context.Context, dbid string, userID int) (int, error) {
+func (h *harness) nextPostID(ctx context.Context, dbid string, userID int) (int, error) {
 	recs, err := h.CallAction(ctx, dbid, actGetUserPosts, []any{userID}) // tuples for the Schema.Actions[i].Inputs
 	if err != nil {
 		return 0, fmt.Errorf("get_user_posts_by_userid: %w", err)
 	}
 	h.printRecs(ctx, recs)
-	var nextPostId int
+	var nextPostID int
 	for recs.Next() {
 		rec := *recs.Record()
-		if postID := rec["id"].(int); postID >= nextPostId {
-			nextPostId = postID + 1
+		if postID := rec["id"].(int); postID >= nextPostID {
+			nextPostID = postID + 1
 		}
 	}
-	return nextPostId, nil
+	return nextPostID, nil
 }
 
 // createPost is the synchronous version of createPostAsync.  It's unused
