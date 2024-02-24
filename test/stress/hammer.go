@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -18,7 +19,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/utils/random"
+
+	lorem "github.com/drhodes/golorem"
 	"go.uber.org/zap"
 )
 
@@ -122,8 +124,7 @@ func hammer(ctx context.Context) error {
 
 	if acct, err := kwilClt.GetAccount(ctx, acctID, types.AccountStatusPending); err != nil {
 		return err
-	} else { // scoping acct
-		fmt.Println(acct)
+	} else { //nolint (scoping acct var)
 		h.nonce = acct.Nonce
 	}
 
@@ -137,7 +138,7 @@ func hammer(ctx context.Context) error {
 	// bother the account store
 	wg.Add(1)
 	go runLooped(ctx, func() error {
-		_, err := h.GetAccount(ctx, acctID, types.AccountStatus(rand.Intn(3)))
+		_, err := h.GetAccount(ctx, acctID, types.AccountStatus(rand.Intn(2)))
 		return err
 	}, "GetAccount", badgerInterval, &logger)
 
@@ -214,12 +215,12 @@ func hammer(ctx context.Context) error {
 	}
 	h.printf("user ID = %d / user name = %v", userID, userName)
 
-	nextPostId, err := h.nextPostId(ctx, dbid, userID)
+	nextPostID, err := h.nextPostID(ctx, dbid, userID)
 	if err != nil {
-		return fmt.Errorf("nextPostId: %w", err)
+		return fmt.Errorf("nextPostID: %w", err)
 	}
-	h.printf("next post ID = %d", nextPostId)
-	pid.Store(int64(nextPostId))
+	h.printf("next post ID = %d", nextPostID)
+	pid.Store(int64(nextPostID))
 
 	wg.Add(1)
 	go runLooped(ctx, func() error {
@@ -237,7 +238,17 @@ func hammer(ctx context.Context) error {
 		// Content length is limited by multiple things: message size, max transaction size, block size e.g.:
 		//  - "rpc error: code = ResourceExhausted desc = grpc: received message larger than max (5000168 vs. 4194304)"
 		//  - "Tx too large. Max size is 1048576, but got 4192304" a little less than 1MiB would be 1<<20 - 1e3
-		bigData := random.String(maxContentLen) // pregenerate some random data for post content
+		// bigData := random.String(maxContentLen) // pregenerate some random data for post content
+		var bigDataBuilder strings.Builder
+		var sentences int
+		for bigDataBuilder.Len() < maxContentLen {
+			words := min(16, maxContentLen/16+1)
+			bigDataBuilder.WriteString(lorem.Sentence(words, words)) // this may be far considerably than needed because words vary in length, but that's fine
+			bigDataBuilder.WriteString(" ")
+			sentences++
+		}
+		h.printf("Generated post content from %d lorem ipsum sentences.", sentences)
+		bigData := bigDataBuilder.String()
 
 		posters := make(chan struct{}, maxPosters)
 		wg.Add(1)
@@ -254,13 +265,17 @@ func hammer(ctx context.Context) error {
 				h.printf("new post id = %d, took %vms%s", next, float64(since.Microseconds())/1e3, slow)
 			}()
 
-			random.String(maxContentLen)
-
 			content := bigData[:rand.Intn(maxContentLen)+1] // random.String(rand.Intn(maxContentLen) + 1) // randomBytes(maxContentLen)
 			h.printf("beginning createPostAsync id = %d, content len = %d (concurrent with %d others)",
 				next, len(content), len(posters)-1)
 			promise, err := h.createPostAsync(ctx, dbid, next, "title_"+strconv.Itoa(next), content)
 			if err != nil {
+				// Continue runLooped if it was a timeout as these are typically
+				// transient and we don't want to let up.
+				if errors.Is(err, context.DeadlineExceeded) {
+					h.printf("Timeout creating post!")
+					err = nil // just keep trying
+				}
 				<-posters
 				return err
 			}
