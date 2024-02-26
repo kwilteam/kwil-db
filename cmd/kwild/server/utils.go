@@ -181,8 +181,10 @@ func (wc *wrappedCometBFTClient) TxQuery(ctx context.Context, hash []byte, prove
 	return nil, abci.ErrTxNotFound
 }
 
-func (wc *wrappedCometBFTClient) GetValidators(ctx context.Context) ([]*ctypes.Validator, error) {
-	res, err := wc.cl.Validators(ctx, nil, nil, nil)
+// GetValidators returns the current validator set at the given height by the CometBFT.
+// If height is nil, it returns the validator set at the last committed height.
+func (wc *wrappedCometBFTClient) GetValidators(ctx context.Context, height *int64) ([]*ctypes.Validator, error) {
+	res, err := wc.cl.Validators(ctx, height, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -194,6 +196,7 @@ func (wc *wrappedCometBFTClient) GetValidators(ctx context.Context) ([]*ctypes.V
 			Power:  v.VotingPower,
 		}
 	}
+
 	return vals, nil
 }
 
