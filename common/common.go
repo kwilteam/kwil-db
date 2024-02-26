@@ -11,7 +11,7 @@ import (
 // Service provides access to general application information to extensions.
 type Service struct {
 	// Logger is a logger for the application
-	Logger log.Logger
+	Logger log.SugaredLogger
 	// ExtensionConfigs is a map of the nodes extensions and local configurations. It maps:
 	// extension_name -> config_key -> config_value
 	ExtensionConfigs map[string]map[string]string
