@@ -1,6 +1,0 @@
-dependencies:
-- name: kwild
-  repository: file://../kwild
-  version: 0.1.0
-digest: sha256:56184659ed6c445580c57c16bb7f60932303d2b016c66a5698d874ae77efc88a
-generated: "2023-01-17T11:13:07.113332-06:00"
