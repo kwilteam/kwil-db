@@ -210,7 +210,7 @@ func Test_Execution(t *testing.T) {
 				newDB(false), map[string]actions.ExtensionInitializer{
 					"math": mth.initialize,
 				}, &common.Service{
-					Logger:           log.NewNoOp(),
+					Logger:           log.NewNoOp().Sugar(),
 					ExtensionConfigs: map[string]map[string]string{},
 				},
 			)
@@ -416,7 +416,7 @@ func Test_OrderSchemas(t *testing.T) {
 		newDB(false), map[string]actions.ExtensionInitializer{
 			"math": mth.initialize,
 		}, &common.Service{
-			Logger:           log.NewNoOp(),
+			Logger:           log.NewNoOp().Sugar(),
 			ExtensionConfigs: map[string]map[string]string{},
 		},
 	)

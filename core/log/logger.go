@@ -99,6 +99,10 @@ func (l *Logger) Sync() error {
 	return l.L.Sync()
 }
 
+func (l Logger) Sugar() SugaredLogger {
+	return SugaredLogger{S: l.L.Sugar()}
+}
+
 const (
 	FormatJSON  = "json"
 	FormatPlain = "plain"
@@ -209,4 +213,36 @@ func NewStdOut(level Level) Logger {
 // have logging configurable.
 func NewNoOp() Logger {
 	return Logger{L: zap.NewNop()}
+}
+
+type SugaredLogger struct {
+	S *zap.SugaredLogger
+}
+
+func (s *SugaredLogger) Level() Level {
+	return s.S.Level()
+}
+
+func (s *SugaredLogger) Debug(msg string, fields ...any) {
+	s.S.Debugf(msg, fields...)
+}
+
+func (s *SugaredLogger) Info(msg string, fields ...any) {
+	s.S.Infow(msg, fields...)
+}
+
+func (s *SugaredLogger) Warn(msg string, fields ...any) {
+	s.S.Warnw(msg, fields...)
+}
+
+func (s *SugaredLogger) Error(msg string, fields ...any) {
+	s.S.Errorw(msg, fields...)
+}
+
+func (s *SugaredLogger) Named(name string) *SugaredLogger {
+	return &SugaredLogger{S: s.S.Named(name)}
+}
+
+func (s *SugaredLogger) Sync() error {
+	return s.S.Sync()
 }
