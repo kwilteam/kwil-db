@@ -22,11 +22,11 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	flagSet.BoolVar(&cfg.AppCfg.EnableRPCTLS, "app.rpctls", cfg.AppCfg.EnableRPCTLS, "Use TLS on the user gRPC server")
 	flagSet.StringVar(&cfg.AppCfg.Hostname, "app.hostname", cfg.AppCfg.Hostname, "kwild Server hostname")
 
-	flagSet.StringVar(&cfg.AppCfg.DBHost, "app.pg_db_host", cfg.AppCfg.DBHost, "PostgreSQL host address (no port)")
-	flagSet.StringVar(&cfg.AppCfg.DBPort, "app.pg_db_port", cfg.AppCfg.DBPort, "PostgreSQL port")
-	flagSet.StringVar(&cfg.AppCfg.DBUser, "app.pg_db_user", cfg.AppCfg.DBUser, "PostgreSQL user name")
-	flagSet.StringVar(&cfg.AppCfg.DBPass, "app.pg_db_pass", cfg.AppCfg.DBPass, "PostgreSQL password name")
-	flagSet.StringVar(&cfg.AppCfg.DBName, "app.pg_db_name", cfg.AppCfg.DBName, "PostgreSQL database name")
+	flagSet.StringVar(&cfg.AppCfg.DBHost, "app.pg-db-host", cfg.AppCfg.DBHost, "PostgreSQL host address (no port)")
+	flagSet.StringVar(&cfg.AppCfg.DBPort, "app.pg-db-port", cfg.AppCfg.DBPort, "PostgreSQL port")
+	flagSet.StringVar(&cfg.AppCfg.DBUser, "app.pg-db-user", cfg.AppCfg.DBUser, "PostgreSQL user name")
+	flagSet.StringVar(&cfg.AppCfg.DBPass, "app.pg-db-pass", cfg.AppCfg.DBPass, "PostgreSQL password name")
+	flagSet.StringVar(&cfg.AppCfg.DBName, "app.pg-db-name", cfg.AppCfg.DBName, "PostgreSQL database name")
 
 	flagSet.StringVar(&cfg.AppCfg.ProfileMode, "app.profile-mode", cfg.AppCfg.ProfileMode, "kwild profile mode (http, cpu, mem, mutex, or block)")
 	flagSet.StringVar(&cfg.AppCfg.ProfileFile, "app.profile-file", cfg.AppCfg.ProfileFile, "kwild profile output file path (e.g. cpu.pprof)")

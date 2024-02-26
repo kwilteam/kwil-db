@@ -35,10 +35,10 @@ services:
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg_db_host=pg0
-      --app.pg_db_port=5432
-      --app.pg_db_user=kwild
-      --app.pg_db_pass=kwild
+      --app.pg-db-host=pg0
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
 
   pg0:
     image: postgres:16.1
@@ -95,10 +95,10 @@ services:
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg_db_host=pg1
-      --app.pg_db_port=5432
-      --app.pg_db_user=kwild
-      --app.pg_db_pass=kwild
+      --app.pg-db-host=pg1
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
 
   pg1:
     image: postgres:16.1
@@ -155,10 +155,10 @@ services:
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg_db_host=pg2
-      --app.pg_db_port=5432
-      --app.pg_db_user=kwild
-      --app.pg_db_pass=kwild
+      --app.pg-db-host=pg2
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
 
   pg2:
     image: postgres:16.1
@@ -218,10 +218,10 @@ services:
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg_db_host=pg3
-      --app.pg_db_port=5432
-      --app.pg_db_user=kwild
-      --app.pg_db_pass=kwild
+      --app.pg-db-host=pg3
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
 
   pg3:
     image: postgres:16.1
@@ -278,10 +278,10 @@ services:
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg_db_host=pg4
-      --app.pg_db_port=5432
-      --app.pg_db_user=kwild
-      --app.pg_db_pass=kwild
+      --app.pg-db-host=pg4
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
 
   pg4:
     image: postgres:16.1
@@ -338,10 +338,10 @@ services:
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg_db_host=pg5
-      --app.pg_db_port=5432
-      --app.pg_db_user=kwild
-      --app.pg_db_pass=kwild
+      --app.pg-db-host=pg5
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
 
   pg5:
     image: postgres:16.1
