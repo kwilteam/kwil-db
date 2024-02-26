@@ -230,6 +230,11 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("begin tx commit failed: %w", err)
 	}
 
+	initialValidators, err := a.txApp.GetValidators(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current validators: %w", err)
+	}
+
 	// Punish bad validators.
 	for _, ev := range req.Misbehavior {
 		addr := proposerAddrToString(ev.Validator.Address) // comet example app confirms this conversion... weird
@@ -249,11 +254,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		if err = a.txApp.UpdateValidator(ctx, pubkey, newPower); err != nil {
 			return nil, fmt.Errorf("failed to punish validator: %w", err)
 		}
-	}
-
-	initialValidators, err := a.txApp.GetValidators(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current validators: %w", err)
 	}
 
 	addr := proposerAddrToString(req.ProposerAddress)
@@ -323,9 +323,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
 		}
 
-		if up.Power < 1 { // leave or punish
-			delete(a.valAddrToKey, addr)
-		} else { // add or update without remove
+		if up.Power > 0 { // add or update validator
 			a.valAddrToKey[addr] = up.PubKey
 		}
 	}
