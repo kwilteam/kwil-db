@@ -7,7 +7,7 @@ import (
 	"math/big"
 	"strings"
 
-	types1 "github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -86,7 +86,7 @@ type ResolutionConfig struct {
 	// for the resolution that has been confirmed. All nodes will call this function as a part of block
 	// execution. It is therefore expected that the function is deterministic, regardless of a node's
 	// local configuration.
-	ResolveFunc func(ctx context.Context, app *types1.App, resolution *Resolution) error
+	ResolveFunc func(ctx context.Context, app *common.App, resolution *Resolution) error
 }
 
 // Resolution contains information for a resolution that can be voted on.
@@ -118,17 +118,4 @@ type Resolution struct {
 	// counted twice in the resolution's ApprovedPower.
 	// Most applications can ignore this field.
 	DoubleProposerVote bool
-}
-
-// Voter is an entity that can vote on resolutions.
-// It has an identifier, which is used to uniquely identify the voter,
-// and a power, which is the weight held by the voter in the resolution.
-type Voter struct {
-	// Identifier is the unique identifier for the voter.
-	// The identifier directly corresponds to the auth.Authenticator's identifier field.
-	// A node's identifier will be its public key.
-	Identifier []byte
-	// Power is the weight held by the voter in the resolution.
-	// The power is used to determine the weight of the voter's vote.
-	Power int64
 }
