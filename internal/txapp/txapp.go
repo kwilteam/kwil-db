@@ -9,7 +9,9 @@ import (
 	"math/big"
 	"sort"
 
-	types1 "github.com/kwilteam/kwil-db/common"
+	"go.uber.org/zap"
+
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -18,11 +20,10 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/voting"
-	"go.uber.org/zap"
 )
 
 // NewTxApp creates a new router.
-func NewTxApp(db DB, engine types1.Engine,
+func NewTxApp(db DB, engine common.Engine,
 	signer *auth.Ed25519Signer, events Rebroadcaster, chainID string, GasEnabled bool, extensionConfigs map[string]map[string]string, log log.Logger) *TxApp {
 	return &TxApp{
 		Database: db,
@@ -46,7 +47,7 @@ func NewTxApp(db DB, engine types1.Engine,
 // managing atomicity of the database, and managing the validator set.
 type TxApp struct {
 	Database DB            // postgres database
-	Engine   types1.Engine // tracks deployed schemas
+	Engine   common.Engine // tracks deployed schemas
 	// Accounts AccountsStore   // accounts
 	// Validators ValidatorStore  // validators
 	// VoteStore  VoteStore       // tracks resolutions, their votes, manages expiration
@@ -243,7 +244,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 	// for subsequent resolutions in the same block, which should not happen.
 	var resolveFuncs []*struct {
 		Resolution  *resolutions.Resolution
-		ResolveFunc func(ctx context.Context, app *types1.App, resolution *resolutions.Resolution) error
+		ResolveFunc func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error
 	}
 	for _, resolutionType := range resolutionTypes {
 		cfg, err := resolutions.GetResolution(resolutionType)
@@ -267,7 +268,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 
 			resolveFuncs = append(resolveFuncs, &struct {
 				Resolution  *resolutions.Resolution
-				ResolveFunc func(ctx context.Context, app *types1.App, resolution *resolutions.Resolution) error
+				ResolveFunc func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error
 			}{
 				Resolution:  resolution,
 				ResolveFunc: cfg.ResolveFunc,
@@ -284,8 +285,8 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 			return err
 		}
 
-		err = resolveFunc.ResolveFunc(ctx, &types1.App{
-			Service: &types1.Service{
+		err = resolveFunc.ResolveFunc(ctx, &common.App{
+			Service: &common.Service{
 				Logger:           *r.log.Named("resolution_" + resolveFunc.Resolution.Type),
 				ExtensionConfigs: r.extensionConfigs,
 			},

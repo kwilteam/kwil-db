@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"math/big"
 
-	types1 "github.com/kwilteam/kwil-db/common"
+	"go.uber.org/zap"
+
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/voting"
-	"go.uber.org/zap"
 )
 
 func init() {
@@ -243,7 +244,7 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	defer tx2.Rollback(ctx.Ctx)
 
 	for i := range args {
-		_, err = router.Engine.Call(ctx.Ctx, tx2, &types1.ExecutionData{
+		_, err = router.Engine.Call(ctx.Ctx, tx2, &common.ExecutionData{
 			Dataset:   action.DBID,
 			Procedure: action.Action,
 			Args:      args[i],
