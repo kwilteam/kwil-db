@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"go.uber.org/zap"
-
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -682,7 +680,6 @@ func (v *validatorVoteIDsRoute) Price(ctx context.Context, router *TxApp, tx *tr
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal vote IDs: %w", err)
 	}
-	router.log.Info("num votes", zap.Int("num", len(ids.ResolutionIDs)))
 	return big.NewInt(int64(len(ids.ResolutionIDs)) * ValidatorVoteIDPrice.Int64()), nil
 }
 
