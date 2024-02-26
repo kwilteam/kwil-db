@@ -119,16 +119,3 @@ type Resolution struct {
 	// Most applications can ignore this field.
 	DoubleProposerVote bool
 }
-
-// Voter is an entity that can vote on resolutions.
-// It has an identifier, which is used to uniquely identify the voter,
-// and a power, which is the weight held by the voter in the resolution.
-type Voter struct {
-	// Identifier is the unique identifier for the voter.
-	// The identifier directly corresponds to the auth.Authenticator's identifier field.
-	// A node's identifier will be its public key.
-	Identifier []byte
-	// Power is the weight held by the voter in the resolution.
-	// The power is used to determine the weight of the voter's vote.
-	Power int64
-}
