@@ -344,7 +344,7 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, db *pg.DB) *execution.
 	defer tx.Rollback(d.ctx)
 
 	eng, err := execution.NewGlobalContext(d.ctx, tx, extensions, &common.Service{
-		Logger:           *d.log.Named("engine"),
+		Logger:           d.log.Named("engine").Sugar(),
 		ExtensionConfigs: d.cfg.AppCfg.Extensions,
 	})
 	if err != nil {
