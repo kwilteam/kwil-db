@@ -18,42 +18,7 @@ const CreditAccountEventType = "credit_account"
 // see more here: https://www.digitalocean.com/community/tutorials/understanding-init-in-go
 func init() {
 	// calling RegisterResolution will make the resolution available on startup
-	err := resolutions.RegisterResolution(CreditAccountEventType, resolutions.ResolutionConfig{
-		// Setting the refund resolution to 1/3 will refund all validators who spent gas voting on
-		// the resolution if the resolution does not pass, but receives at least 1/3 of the total
-		// network voting power. This is useful for accounting for soft forks on chains like Ethereum;
-		// if 1/3 of the Kwil validators vote on a resolution due to data in a soft fork, they can
-		// still get refunded. This does not cover all edge cases, but helps to minimize the risk of
-		// validators losing money when acting in good faith.
-		RefundThreshold: big.NewRat(1, 3),
-		// Setting the confirmation threshold to 2/3 will require 2/3 of the total network voting
-		// power to vote on the resolution in order for it to pass. If 2/3 of the network votes on
-		// a resolution of this type, then it will be applied. If less than 2/3 of the network votes
-		// have voted on this resolution by expiration, the resolution will fail.
-		ConfirmationThreshold: big.NewRat(2, 3),
-		// Setting the expiration height to 600 gives the validators approximately 1 hour to vote
-		// on the resolution after it has been created (assuming 6s block times). If the resolution
-		// has not received enough votes by the expiration height, it will fail.
-		ExpirationPeriod: 600,
-		// ResolveFunc defines what will happen if the resolution is approved by the network.
-		// For the credit account oracle, we will credit the account with the given amount.
-		// The amount cannot be negative.
-		ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error {
-			// Unmarshal the resolution payload into an AccountCreditResolution
-			var credit AccountCreditResolution
-			err := credit.UnmarshalBinary(resolution.Body)
-			if err != nil {
-				return err
-			}
-
-			if credit.Amount.Sign() < 0 {
-				return errors.New("credit amount cannot be negative")
-			}
-
-			// Credit the account with the given amount
-			return functions.Accounts.Credit(ctx, app.DB, credit.Account, credit.Amount)
-		},
-	})
+	err := resolutions.RegisterResolution(CreditAccountEventType, resolutionConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -91,4 +56,42 @@ func (a *AccountCreditResolution) MarshalBinary() ([]byte, error) {
 // It is the inverse of MarshalBinary, and uses the same serialization library.
 func (a *AccountCreditResolution) UnmarshalBinary(data []byte) error {
 	return serialize.DecodeInto(data, a)
+}
+
+// resolutionConfig defines the rules for the credit_account resolution.
+var resolutionConfig = resolutions.ResolutionConfig{
+	// Setting the refund resolution to 1/3 will refund all validators who spent gas voting on
+	// the resolution if the resolution does not pass, but receives at least 1/3 of the total
+	// network voting power. This is useful for accounting for soft forks on chains like Ethereum;
+	// if 1/3 of the Kwil validators vote on a resolution due to data in a soft fork, they can
+	// still get refunded. This does not cover all edge cases, but helps to minimize the risk of
+	// validators losing money when acting in good faith.
+	RefundThreshold: big.NewRat(1, 3),
+	// Setting the confirmation threshold to 2/3 will require 2/3 of the total network voting
+	// power to vote on the resolution in order for it to pass. If 2/3 of the network votes on
+	// a resolution of this type, then it will be applied. If less than 2/3 of the network votes
+	// have voted on this resolution by expiration, the resolution will fail.
+	ConfirmationThreshold: big.NewRat(2, 3),
+	// Setting the expiration height to 600 gives the validators approximately 1 hour to vote
+	// on the resolution after it has been created (assuming 6s block times). If the resolution
+	// has not received enough votes by the expiration height, it will fail.
+	ExpirationPeriod: 600,
+	// ResolveFunc defines what will happen if the resolution is approved by the network.
+	// For the credit account oracle, we will credit the account with the given amount.
+	// The amount cannot be negative.
+	ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error {
+		// Unmarshal the resolution payload into an AccountCreditResolution
+		var credit AccountCreditResolution
+		err := credit.UnmarshalBinary(resolution.Body)
+		if err != nil {
+			return err
+		}
+
+		if credit.Amount.Sign() < 0 {
+			return errors.New("credit amount cannot be negative")
+		}
+
+		// Credit the account with the given amount
+		return functions.Accounts.Credit(ctx, app.DB, credit.Account, credit.Amount)
+	},
 }
