@@ -15,7 +15,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/extensions/oracles"
 	"github.com/kwilteam/kwil-db/extensions/resolutions/credit"
-	"go.uber.org/zap"
 )
 
 const OracleName = "eth_deposits"
@@ -44,7 +43,7 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 	}
 	err := config.setConfig(oracleConfig)
 	if err != nil {
-		service.Logger.Error("failed to set eth_deposit configuration", zap.Error(err))
+		service.Logger.Error("failed to set eth_deposit configuration", "error", err)
 	}
 
 	// we need to catch up with the ethereum chain.
@@ -53,7 +52,7 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 	// whichever is greater
 	lastHeight, err := getLastStoredHeight(ctx, eventstore)
 	if err != nil {
-		service.Logger.Error("failed to get last stored height", zap.Error(err))
+		service.Logger.Error("failed to get last stored height", "error", err)
 		return
 	}
 
@@ -63,7 +62,7 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 
 	client, err := newEthClient(ctx, config.RPCProvider, config.MaxRetries, ethcommon.HexToAddress(config.ContractAddress), service.Logger)
 	if err != nil {
-		service.Logger.Error("failed to create ethereum client", zap.Error(err))
+		service.Logger.Error("failed to create ethereum client", "error", err)
 		return
 	}
 	defer client.Close()
@@ -71,7 +70,7 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 	// get the current block height from the Ethereum client
 	currentHeight, err := client.GetLatestBlock(ctx)
 	if err != nil {
-		service.Logger.Error("failed to get current block height", zap.Error(err))
+		service.Logger.Error("failed to get current block height", "error", err)
 		return
 	}
 
@@ -96,7 +95,7 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 
 		err = processEvents(ctx, lastHeight, toBlock, client, eventstore, service.Logger)
 		if err != nil {
-			service.Logger.Error("failed to process events", zap.Error(err))
+			service.Logger.Error("failed to process events", "error", err)
 			return
 		}
 
@@ -111,11 +110,11 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 
 		// it is possible to receive the same height twice
 		if newHeight <= lastHeight {
-			service.Logger.Info("received duplicate block height", zap.Int64("height", newHeight))
+			service.Logger.Info("received duplicate block height", "height", newHeight)
 			return nil
 		}
 
-		service.Logger.Info("received new block height", zap.Int64("height", newHeight))
+		service.Logger.Info("received new block height", "height", newHeight)
 
 		// lastheight + 1 because we have already processed the last height
 		err = processEvents(ctx, lastHeight+1, newHeight, client, eventstore, service.Logger)
@@ -128,12 +127,12 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 		return nil
 	})
 	if outerErr != nil {
-		service.Logger.Error("failed to listen to blocks", zap.Error(err))
+		service.Logger.Error("failed to listen to blocks", "error", err)
 	}
 }
 
 // processEvents will process all events from the Ethereum client from the given height range.
-func processEvents(ctx context.Context, from, to int64, client *ethClient, eventstore oracles.EventStore, logger log.Logger) error {
+func processEvents(ctx context.Context, from, to int64, client *ethClient, eventstore oracles.EventStore, logger log.SugaredLogger) error {
 	logs, err := client.GetCreditEventLogs(ctx, from, to)
 	if err != nil {
 		return fmt.Errorf("failed to get credit event logs: %w", err)
@@ -156,7 +155,7 @@ func processEvents(ctx context.Context, from, to int64, client *ethClient, event
 		}
 	}
 
-	logger.Info("processed events", zap.Int64("from", from), zap.Int64("to", to), zap.Int("number_of_events", len(logs)))
+	logger.Info("processed events", "from", from, "to", to, "events", len(logs))
 
 	return setLastStoredHeight(ctx, eventstore, to)
 }

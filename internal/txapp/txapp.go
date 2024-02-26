@@ -287,7 +287,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 
 		err = resolveFunc.ResolveFunc(ctx, &common.App{
 			Service: &common.Service{
-				Logger:           *r.log.Named("resolution_" + resolveFunc.Resolution.Type),
+				Logger:           r.log.Named("resolution_" + resolveFunc.Resolution.Type).Sugar(),
 				ExtensionConfigs: r.extensionConfigs,
 			},
 			DB:     tx,
