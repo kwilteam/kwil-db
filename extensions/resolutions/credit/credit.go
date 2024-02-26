@@ -3,6 +3,7 @@ package credit
 
 import (
 	"context"
+	"errors"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -43,6 +44,10 @@ func init() {
 			err := credit.UnmarshalBinary(resolution.Body)
 			if err != nil {
 				return err
+			}
+
+			if credit.Amount.Sign() < 0 {
+				return errors.New("credit amount cannot be negative")
 			}
 
 			// Credit the account with the given amount
