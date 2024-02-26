@@ -46,7 +46,8 @@ To build Kwil, you will need to install:
 1. [Go](https://golang.org/doc/install)
 2. [Protocol Buffers](https://protobuf.dev/downloads/) (optional), with the `protoc` executable binary on your `PATH`.
 3. [Taskfile](https://taskfile.dev/installation)
-4. Miscellaneous go plugins and other command line tools. The `tool` task will install the required versions of the tools into your `GOPATH`, so be sure to include `GOPATH/bin` on your `PATH`.
+4. [Docker](https://docs.docker.com/get-docker/) to run a PostgreSQL database.
+5. Miscellaneous go plugins and other command line tools. The `tool` task will install the required versions of the tools into your `GOPATH`, so be sure to include `GOPATH/bin` on your `PATH`.
 
     ```shell
     task tools
@@ -60,11 +61,7 @@ Invoke `task` command to see all available tasks. The `build` task will compile 
 task build
 ```
 
-### Start Postgres
-
-#### Prerequisites
-
--   [Docker](https://docs.docker.com/get-docker/) to run a PostgreSQL database.
+### Local Deployment
 
 #### Start PostgreSQL
 
@@ -74,7 +71,7 @@ Each Kwil node requires a PostgreSQL instance to run. You can start a PostgreSQL
 docker compose -f ./deployments/compose/postgres/docker-compose.yml up
 ```
 
-### Local deployment
+### Start kwild
 
 You can start a single node network using the `kwild` binary built in the step above:
 
@@ -92,19 +89,9 @@ By default, `kwild` stores all data in `~/.kwild`. To reset the data on a deploy
 rm -r ~/.kwild
 ```
 
-## Building Extensions
+## Extensions
 
 Kwil offers an extension system that allows you to extend the functionality of your network (e.g. building network oracles, customizing authentication, creating network deterministic compute, etc.). To learn more about the types of extensions and how to build them, refer to the extensions directory [README](extensions/README.md).
-
-To include an extension in a build, import the extension in `extensions` package in [extensions/register.go](extensions/register.go) or use build tags to include the extension in a build.
-
-```go
-package extensions
-
-import _ "github.com/my_org/kwil-db/path/to/extension"
-```
-
-Then complete the [build instructions](#build-instructions).
 
 ## Contributing
 
