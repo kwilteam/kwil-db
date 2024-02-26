@@ -5,13 +5,14 @@ import (
 	"context"
 	"time"
 
-	types1 "github.com/kwilteam/kwil-db/common"
+	"go.uber.org/zap"
+
+	common "github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/oracles"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/events"
-	"go.uber.org/zap"
 )
 
 // OracleMgr listens for any Validator state changes and node catch up status
@@ -90,7 +91,7 @@ func (omgr *OracleMgr) Start() {
 				omgr.logger.Info("Node is a validator and caught up with the network, starting oracles")
 
 				for name, start := range oracles.RegisteredOracles() {
-					go start(ctx2, &types1.Service{
+					go start(ctx2, &common.Service{
 						Logger:           *omgr.logger.Named(name),
 						ExtensionConfigs: omgr.config,
 					}, &scopedKVEventStore{
