@@ -224,7 +224,7 @@ func (s *SugaredLogger) Level() Level {
 }
 
 func (s *SugaredLogger) Debug(msg string, fields ...any) {
-	s.S.Debugf(msg, fields...)
+	s.S.Debugw(msg, fields...)
 }
 
 func (s *SugaredLogger) Info(msg string, fields ...any) {
