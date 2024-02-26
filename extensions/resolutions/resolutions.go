@@ -7,7 +7,7 @@ import (
 	"math/big"
 	"strings"
 
-	types1 "github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -86,7 +86,7 @@ type ResolutionConfig struct {
 	// for the resolution that has been confirmed. All nodes will call this function as a part of block
 	// execution. It is therefore expected that the function is deterministic, regardless of a node's
 	// local configuration.
-	ResolveFunc func(ctx context.Context, app *types1.App, resolution *Resolution) error
+	ResolveFunc func(ctx context.Context, app *common.App, resolution *Resolution) error
 }
 
 // Resolution contains information for a resolution that can be voted on.
