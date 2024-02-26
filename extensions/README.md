@@ -1,7 +1,17 @@
 # Extensions
-<!-- TODO: Add Extension Taxonomy information. Remove go build instructions (including build tags documentation)? -->
 
 Extensions are compile-time-loaded pieces of code that impact core `kwild` functionality. Typically, extensions impact core consensus code, and therefore great care should be taken when implementing and choosing to use certain extensions.
+
+## Extension Types
+
+There are four types of extensions that can be implemented:
+
+- Actions
+- Authentication
+- Oracles
+- Resolution
+
+Learn more about each type of extension in the [Kwil Extension Docs](https://docs.kwil.com/docs/category/extensions).
 
 ## Interfaces and Drivers
 
@@ -27,6 +37,8 @@ import _ "github.com/my_org/kwil-db/path/to/extension"
 
 Any other directory this imports will be included in during compilation.
 
+Then, complete the [build instructions](../README.md#quickstart).
+
 ### Build Tags
 
 To include an extension in a build, users should use [Go's build tags](https://pkg.go.dev/cmd/go#hdr-Build_constraints). Users can specify what extensions they include by including their respective tags:
@@ -45,4 +57,16 @@ In the above example, the source file that either implements or imports the exte
 
 ```go
 //go:build auth_rsa
+
+package rsa_extension
+
+... // rest of the file
 ```
+
+And the extension would be built by running:
+
+```bash
+GO_BUILDTAGS=auth_rsa task build
+```
+
+You can then start the node with the [local deployment instructions](../README.md#local-deployment).
