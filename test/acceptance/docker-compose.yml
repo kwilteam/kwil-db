@@ -37,10 +37,10 @@ services:
       --app.http-listen-addr=:8080
       --chain.p2p.external-address=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg_db_host=pg
-      --app.pg_db_port=5432
-      --app.pg_db_user=kwild
-      --app.pg_db_pass=kwild
+      --app.pg-db-host=pg
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
 
   pg:
     image: postgres:16.1
