@@ -7,8 +7,8 @@ import (
 	"sort"
 	"sync"
 
-	types1 "github.com/kwilteam/kwil-db/common"
-	sql "github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
@@ -31,17 +31,19 @@ type GlobalContext struct {
 	// These only include datasets, and do not include extensions.
 	datasets map[string]*baseDataset
 
-	service *types1.Service
+	service *common.Service
 }
 
 var ErrDatasetNotFound = fmt.Errorf("dataset not found")
 
 // NewGlobalContext creates a new global context.
 // It will load any persisted datasets from the datastore.
-func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[string]actions.ExtensionInitializer, service *types1.Service) (*GlobalContext, error) {
+func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[string]actions.ExtensionInitializer,
+	service *common.Service) (*GlobalContext, error) {
 	g := &GlobalContext{
 		initializers: extensionInitializers,
 		datasets:     make(map[string]*baseDataset),
+		service:      service,
 	}
 
 	err := createSchemasTableIfNotExists(ctx, tx)
@@ -69,7 +71,7 @@ func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[
 
 // CreateDataset deploys a schema.
 // It will create the requisite tables, and perform the required initializations.
-func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *types1.Schema, caller []byte) (err error) {
+func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *common.Schema, caller []byte) (err error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -121,7 +123,7 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid strin
 // Call calles a procedure on a dataset.
 // It can be given either a readwrite or readonly transaction.
 // If it is given a read-only transaction, it will not be able to execute any procedures that are not `view`.
-func (g *GlobalContext) Call(ctx context.Context, tx sql.DB, options *types1.ExecutionData) (*sql.ResultSet, error) {
+func (g *GlobalContext) Call(ctx context.Context, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error) {
 	err := options.Clean()
 	if err != nil {
 		return nil, err
@@ -143,7 +145,7 @@ func (g *GlobalContext) Call(ctx context.Context, tx sql.DB, options *types1.Exe
 		Procedure: options.Procedure,
 	}
 
-	_, err = dataset.Call(procedureCtx, &types1.App{
+	_, err = dataset.Call(procedureCtx, &common.App{
 		Service: g.service,
 		DB:      tx,
 		Engine:  g,
@@ -176,7 +178,7 @@ func (g *GlobalContext) ListDatasets(ctx context.Context, caller []byte) ([]*typ
 }
 
 // GetSchema gets a schema from a deployed dataset.
-func (g *GlobalContext) GetSchema(ctx context.Context, dbid string) (*types1.Schema, error) {
+func (g *GlobalContext) GetSchema(_ context.Context, dbid string) (*common.Schema, error) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
@@ -224,7 +226,7 @@ type dbQueryFn func(ctx context.Context, stmt string, args ...any) (*sql.ResultS
 
 // loadDataset loads a dataset into the global context.
 // It does not create the dataset in the datastore.
-func (g *GlobalContext) loadDataset(ctx context.Context, schema *types1.Schema) error {
+func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) error {
 	dbid := schema.DBID()
 	_, ok := g.initializers[dbid]
 	if ok {
@@ -274,7 +276,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types1.Schema) 
 		datasetCtx.namespaces[ext.Alias] = namespace
 	}
 
-	g.initializers[dbid] = func(_ *actions.DeploymentContext, _ *types1.Service, _ map[string]string) (actions.ExtensionNamespace, error) {
+	g.initializers[dbid] = func(_ *actions.DeploymentContext, _ *common.Service, _ map[string]string) (actions.ExtensionNamespace, error) {
 		return datasetCtx, nil
 	}
 	g.datasets[dbid] = datasetCtx
@@ -290,7 +292,7 @@ func (g *GlobalContext) unloadDataset(dbid string) {
 }
 
 // orderSchemas orders schemas based on their dependencies to other schemas.
-func orderSchemas(schemas []*types1.Schema) []*types1.Schema {
+func orderSchemas(schemas []*common.Schema) []*common.Schema {
 	// Mapping from schema DBID to its extensions
 	schemaMap := make(map[string][]string)
 	for _, schema := range schemas {
@@ -324,7 +326,7 @@ func orderSchemas(schemas []*types1.Schema) []*types1.Schema {
 	visitAll(keys)
 
 	// Reorder schemas based on result
-	var orderedSchemas []*types1.Schema
+	var orderedSchemas []*common.Schema
 	for _, dbid := range result {
 		for _, schema := range schemas {
 			if schema.DBID() == dbid {
