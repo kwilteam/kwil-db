@@ -2,7 +2,43 @@
 **/vue/dist
 **/release/
 **/.idea/
-#.vscode/
+.vscode/
 **/.DS_Store
 **/tmp/
 **/finished_logs/
+**/.kwal/
+cmd/kwil-cosmos/cmd/kwild/kwild
+cmd/kwil-cosmos/cmd/kwild/exe
+keys/cosmos
+keys/ethereum.pem
+.kwilbadger/
+.testkwilbadger/
+.wal/
+cmd/cmd
+.lck
+.data/
+.build/
+.task/
+**/__debug_bin.exe
+**/__debug_bin
+.pgdata/
+.DS_Store
+**/**/node_modules
+_ignore
+.env
+.local_env
+api/protobuf
+api/openapi-spec/api/v0/api.swagger.json
+.goreleaser.yaml
+
+gen/
+# helm charts deps
+deployments/helm/*/charts/
+
+dist/*
+
+# IDE
+.run
+
+# go
+vendor/

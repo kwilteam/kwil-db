@@ -1,0 +1,16 @@
+database invalid_extensions;
+
+use math {
+    round: "invalid!!!"
+} as math_ext;
+
+table users {
+    id int primary notnull,
+    username text default("sds"),
+    age int min(0),
+    wallet text unique
+}
+
+action divide($numerator, $denominator) public {
+    $res = math_ext.div($numerator, $denominator);
+}

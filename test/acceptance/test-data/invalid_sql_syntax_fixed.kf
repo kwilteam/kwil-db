@@ -1,0 +1,15 @@
+database invalid_sql_syntax;
+
+table users {
+    id int primary notnull,
+    username text default("sds"),
+    age int min(0),
+    dob text,
+    wallet text unique
+}
+
+action invalid_sql() public {
+    SELECT *
+    FROM users AS u1
+    INNER JOIN users AS u2 ON u1.id = u2.id;
+}

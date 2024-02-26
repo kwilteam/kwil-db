@@ -1,0 +1,6 @@
+dependencies:
+- name: hasura
+  repository: file://../hasura
+  version: 0.1.0
+digest: sha256:6451f4d2ed83644919488d52b14d0ec14865577084a8426c4f53c1f0ad11ce1e
+generated: "2023-01-20T14:24:25.501665-06:00"

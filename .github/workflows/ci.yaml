@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  pull_request:
+    types: [ opened, synchronize, reopened ]
+  workflow_dispatch:
+  push:
+    branches:
+      - "dev"
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          version: '3.x'
+          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Install Taskfile
+        uses: arduino/setup-task@v1
+        with:
+          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20.0'
+          cache: true
+
+      - name: Install dependencies
+        env:
+          GH_ACCESS_TOKEN: ${{ secrets.KWIL_MACH_SECRET }}
+        run: |
+          go version
+          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
+          task install:deps
+          go mod download
+
+      - name: Compile Protobuf
+        run: |
+          task pb:compile:v1
+
+      - name: Generate go vendor
+        #for faster builds and private repos, need to run this after pb:compile:v1
+        run: |
+          task vendor
+
+      - name: Run unit test
+        run: |
+          task test:unit
+
+  acceptance-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          version: '3.x'
+          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Install Taskfile
+        uses: arduino/setup-task@v1
+        with:
+          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20.0'
+          cache: true
+
+      - name: Install dependencies
+        env:
+          GH_ACCESS_TOKEN: ${{ secrets.KWIL_MACH_SECRET }}
+        run: |
+          go version
+          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
+          task install:deps
+          go mod download
+
+      - name: Compile Protobuf
+        run: |
+          task pb:compile:v1
+
+      - name: Generate go vendor
+        #for faster builds and private repos, need to run this after pb:compile:v1
+        run: |
+          task vendor
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Cache Docker layers for kwild
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache-kwild
+          #key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-kwild
+          restore-keys: |
+            ${{ runner.os }}-buildx-kwild
+
+      - name: manual git tag
+        run: |
+          version=`echo ${{ github.sha }} | cut -c 1-7`
+          echo "GIT_TAG=$version" >> $GITHUB_ENV
+        #run: echo "GIT_TAG=`git describe --match 'v[0-9]*' --dirty --always --tags | sed 's/^v//'`" >> $GITHUB_ENV
+
+      - name: manual build time
+        run: |
+          build_time=`TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ"`
+          echo "BUILD_TIME=$build_time" >> $GITHUB_ENV
+
+      - name: Pull Docker image
+        run: |
+          docker pull kwilbrennan/extensions-math:multi-arch --platform linux/amd64
+
+      - name: Build kwild image
+        id: docker_build_kwild
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          load: true
+          builder: ${{ steps.buildx.outputs.name }}
+          build-args: |
+            git_commit=${{ github.sha }}
+            version=${{ env.GIT_TAG }}
+            build_time=${{ env.BUILD_TIME }}
+          file: ./build/package/docker/kwild.dockerfile
+          push: false
+          tags: kwild:latest
+          cache-from: type=local,src=/tmp/.buildx-cache-kwild
+          cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
+
+      - name: Run acceptance test
+        run: |
+          task test:act:no-build
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache-kwild
+          mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
