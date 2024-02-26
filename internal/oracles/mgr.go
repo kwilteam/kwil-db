@@ -92,7 +92,7 @@ func (omgr *OracleMgr) Start() {
 
 				for name, start := range oracles.RegisteredOracles() {
 					go start(ctx2, &common.Service{
-						Logger:           *omgr.logger.Named(name),
+						Logger:           omgr.logger.Named(name).Sugar(),
 						ExtensionConfigs: omgr.config,
 					}, &scopedKVEventStore{
 						ev: omgr.eventStore,

@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/jpillora/backoff"
-	"go.uber.org/zap"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/extensions/resolutions/credit"
@@ -49,12 +48,12 @@ type ethClient struct {
 	rpcurl        string
 	targetAddress ethcommon.Address
 	maxRetries    int64
-	logger        log.Logger
+	logger        log.SugaredLogger
 	client        *ethclient.Client
 }
 
 // newEthClient creates a new ethereum client
-func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, targetAddress ethcommon.Address, logger log.Logger) (*ethClient, error) {
+func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, targetAddress ethcommon.Address, logger log.SugaredLogger) (*ethClient, error) {
 	var client *ethclient.Client
 
 	// I don't set the max retries here because this only gets run on startup
@@ -86,7 +85,7 @@ func (ec *ethClient) GetLatestBlock(ctx context.Context) (int64, error) {
 		header, err := ec.client.HeaderByNumber(ctx, nil)
 		if err != nil {
 			// if error, then reconnect client
-			ec.logger.Error("Failed to get latest block", zap.Error(err))
+			ec.logger.Error("Failed to get latest block", "error", err)
 			ec.client.Close()
 			client, innerErr := ethclient.Dial(ec.rpcurl)
 			if innerErr != nil {
@@ -116,7 +115,7 @@ func (ec *ethClient) GetCreditEventLogs(ctx context.Context, fromBlock, toBlock 
 		})
 		if err != nil {
 			// if error, then reconnect client
-			ec.logger.Error("Failed to get credit event logs", zap.Error(err))
+			ec.logger.Error("Failed to get credit event logs", "error", err)
 			ec.client.Close()
 			client, innerErr := ethclient.Dial(ec.rpcurl)
 			if innerErr != nil {
@@ -171,7 +170,7 @@ func (ec *ethClient) ListenToBlocks(ctx context.Context, reconnectInterval time.
 
 	resubscribe := func() error {
 		retryCount := 0
-		ec.logger.Debug("Resubscribing to the Ethereum node", zap.Int("attempt", retryCount))
+		ec.logger.Debug("Resubscribing to the Ethereum node", "attempt", retryCount)
 		ec.client.Close()
 		sub.Unsubscribe()
 
@@ -196,13 +195,13 @@ func (ec *ethClient) ListenToBlocks(ctx context.Context, reconnectInterval time.
 			ec.logger.Debug("Context cancelled, stopping ethereum client")
 			return nil
 		case header := <-headers:
-			ec.logger.Debug("New block", zap.Int64("height", header.Number.Int64()))
+			ec.logger.Debug("New block", "height", header.Number.Int64())
 			err := cb(header.Number.Int64())
 			if err != nil {
 				return err
 			}
 		case err := <-sub.Err():
-			ec.logger.Error("Ethereum subscription error", zap.Error(err))
+			ec.logger.Error("Ethereum subscription error", "error", err)
 			err = resubscribe()
 			if err != nil {
 				return err
