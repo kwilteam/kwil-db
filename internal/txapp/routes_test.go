@@ -13,10 +13,20 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/voting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const testType = "test"
+
+func init() {
+	err := resolutions.RegisterResolution(testType, resolutions.ResolutionConfig{})
+	if err != nil {
+		panic(err)
+	}
+}
 
 func validatorSigner1() *auth.Ed25519Signer {
 	pk, err := crypto.Ed25519PrivateKeyFromHex("7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842")
@@ -198,7 +208,7 @@ func Test_Routes(t *testing.T) {
 			payload: &transactions.ValidatorVoteBodies{
 				Events: []*types.VotableEvent{
 					{
-						Type: "asdfadsf",
+						Type: testType,
 						Body: []byte("asdfadsf"),
 					},
 				},
@@ -238,7 +248,7 @@ func Test_Routes(t *testing.T) {
 			payload: &transactions.ValidatorVoteBodies{
 				Events: []*types.VotableEvent{
 					{
-						Type: "asdfadsf",
+						Type: testType,
 						Body: []byte("asdfadsf"),
 					},
 				},

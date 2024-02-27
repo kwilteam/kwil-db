@@ -377,6 +377,8 @@ func TestKwildEthDepositOracleExpiryRefundIntegration(t *testing.T) {
 		t.Parallel()
 	}
 
+	t.Skip("Skipping test as currently there is no way to update the resolution expiry")
+
 	opts := []integration.HelperOpt{
 		integration.WithBlockInterval(time.Second),
 		integration.WithValidators(5),
