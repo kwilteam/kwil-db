@@ -7,11 +7,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"go.uber.org/zap"
-
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
@@ -630,6 +629,8 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	}
 
 	fromLocalValidator := bytes.Equal(tx.Sender, router.signer.Identity())
+	// As event type is unknown, we use the default voting period defined in the genesis config.
+	// This gets updated when vote body for this resolution is received.
 	expiryHeight := ctx.BlockHeight + ctx.ConsensusParams.VotingPeriod
 
 	for _, voteID := range approve.ResolutionIDs {
@@ -682,7 +683,6 @@ func (v *validatorVoteIDsRoute) Price(ctx context.Context, router *TxApp, tx *tr
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal vote IDs: %w", err)
 	}
-	router.log.Info("num votes", zap.Int("num", len(ids.ResolutionIDs)))
 	return big.NewInt(int64(len(ids.ResolutionIDs)) * ValidatorVoteIDPrice.Int64()), nil
 }
 
@@ -721,7 +721,6 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	}
 
 	localValidator := router.signer.Identity()
-	expiryHeight := ctx.BlockHeight + ctx.ConsensusParams.VotingPeriod
 
 	tx2, err := dbTx.BeginTx(ctx.Ctx)
 	if err != nil {
@@ -730,6 +729,12 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	defer tx2.Rollback(ctx.Ctx)
 
 	for _, event := range vote.Events {
+		resCfg, err := resolutions.GetResolution(event.Type)
+		if err != nil {
+			return txRes(spend, transactions.CodeUnknownError, err)
+		}
+		expiryHeight := ctx.BlockHeight + resCfg.ExpirationPeriod
+
 		err = createResolution(ctx.Ctx, tx2, event, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)

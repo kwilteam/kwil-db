@@ -60,8 +60,6 @@ func NewAbciApp(cfg *AbciConfig, kv KVStore, snapshotter SnapshotModule,
 		txApp:           txRouter,
 		consensusParams: consensusParams,
 
-		valAddrToKey: make(map[string][]byte),
-
 		log: log,
 	}
 
@@ -91,9 +89,6 @@ func proposerAddrToString(addr []byte) string {
 type AbciApp struct {
 	cfg AbciConfig
 
-	// comet punishes by address, so we maintain an address=>pubkey map.
-	valAddrToKey map[string][]byte // NOTE: includes candidates
-
 	// snapshotter is the snapshotter module that handles snapshotting
 	snapshotter SnapshotModule
 
@@ -114,6 +109,7 @@ type AbciApp struct {
 	consensusParams *txapp.ConsensusParams
 
 	broadcastFn EventBroadcaster
+	validatorFn ValidatorGetter
 }
 
 func (a *AbciApp) ChainID() string {
@@ -230,6 +226,11 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("begin tx commit failed: %w", err)
 	}
 
+	valAddrMap, err := a.getValidatorPubKeyAddrMap(ctx, &req.Height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validator address map: %w", err)
+	}
+
 	initialValidators, err := a.txApp.GetValidators(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current validators: %w", err)
@@ -245,10 +246,11 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		logger.Info("punish validator", zap.String("addr", addr))
 
 		// This is why we need the addr=>pubkey map. Why, comet, why?
-		pubkey, ok := a.valAddrToKey[addr]
+		pubkey, ok := valAddrMap[addr]
 		if !ok {
 			return nil, fmt.Errorf("unknown validator address %v", addr)
 		}
+
 		const punishDelta = 1
 		newPower := ev.Validator.Power - punishDelta
 		if err = a.txApp.UpdateValidator(ctx, pubkey, newPower); err != nil {
@@ -257,7 +259,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	addr := proposerAddrToString(req.ProposerAddress)
-	proposerPubKey, ok := a.valAddrToKey[addr]
+	proposerPubKey, ok := valAddrMap[addr]
 	if !ok {
 		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to address %v", addr)
 	}
@@ -317,15 +319,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	res.ValidatorUpdates = make([]abciTypes.ValidatorUpdate, len(valUpdates))
 	for i, up := range valUpdates {
 		res.ValidatorUpdates[i] = abciTypes.Ed25519ValidatorUpdate(up.PubKey, up.Power)
-
-		addr, err := pubkeyToAddr(up.PubKey)
-		if err != nil {
-			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
-		}
-
-		if up.Power > 0 { // add or update validator
-			a.valAddrToKey[addr] = up.PubKey
-		}
 	}
 
 	appHash, err := a.createNewAppHash(ctx, newAppHash)
@@ -410,24 +403,6 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 
 // Info is part of the Info/Query connection.
 func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciTypes.ResponseInfo, error) {
-	// Load the current validator set from our store.
-	vals, err := a.txApp.GetValidators(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load current validators: %w", err)
-	}
-	// NOTE: We can check against cometbft/rpc/core.Validators(), but that only
-	// works with an *in-process* node and after the node is started.
-
-	// Prepare the validator addr=>pubkey map.
-	a.valAddrToKey = make(map[string][]byte, len(vals))
-	for _, vi := range vals {
-		addr, err := pubkeyToAddr(vi.PubKey)
-		if err != nil {
-			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
-		}
-		a.valAddrToKey[addr] = vi.PubKey
-	}
-
 	height, err := a.metadataStore.GetBlockHeight(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block height: %w", err)
@@ -477,13 +452,6 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 			PubKey: pk,
 			Power:  vi.Power,
 		}
-
-		addr, err := pubkeyToAddr(pk)
-		if err != nil {
-			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
-		}
-
-		a.valAddrToKey[addr] = pk
 	}
 
 	if err := a.txApp.GenesisInit(ctx, vldtrs, genesisAllocs, req.InitialHeight); err != nil {
@@ -732,8 +700,8 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	addr, ok := a.valAddrToKey[proposerAddrToString(req.ProposerAddress)]
-	if !ok {
+	addr, err := a.getValidatorPubKeyByAddr(ctx, proposerAddrToString(req.ProposerAddress), &req.Height)
+	if err != nil {
 		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to %s", proposerAddrToString(req.ProposerAddress))
 	}
 
@@ -848,8 +816,8 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 		zap.Int("txs", len(req.Txs)))
 
 	addr := proposerAddrToString(req.ProposerAddress)
-	proposerPubKey, ok := a.valAddrToKey[addr]
-	if !ok {
+	proposerPubKey, err := a.getValidatorPubKeyByAddr(ctx, addr, &req.Height)
+	if err != nil {
 		a.log.Warn("received block proposal from unknown validator", zap.String("addr", addr))
 		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
 	}
@@ -879,6 +847,42 @@ func (a *AbciApp) createNewAppHash(ctx context.Context, addition []byte) ([]byte
 
 	err = a.metadataStore.SetAppHash(ctx, newHash)
 	return newHash, err
+}
+
+func (a *AbciApp) getValidatorPubKeyByAddr(ctx context.Context, addr string, height *int64) ([]byte, error) {
+	vals, err := a.validatorFn(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, val := range vals {
+		valAddr, err := pubkeyToAddr(val.PubKey)
+		if err != nil {
+			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
+		}
+
+		if addr == valAddr {
+			return val.PubKey, nil
+		}
+	}
+	return nil, fmt.Errorf("validator not found for address %s", addr)
+}
+
+func (a *AbciApp) getValidatorPubKeyAddrMap(ctx context.Context, height *int64) (map[string][]byte, error) {
+	vals, err := a.validatorFn(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	addrMap := make(map[string][]byte)
+	for _, val := range vals {
+		addr, err := pubkeyToAddr(val.PubKey)
+		if err != nil {
+			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
+		}
+		addrMap[addr] = val.PubKey
+	}
+	return addrMap, nil
 }
 
 // TODO: here should probably be other apphash computations such as the genesis
@@ -938,4 +942,10 @@ type EventBroadcaster func(ctx context.Context, proposer []byte) error
 
 func (a *AbciApp) SetEventBroadcaster(fn EventBroadcaster) {
 	a.broadcastFn = fn
+}
+
+type ValidatorGetter func(ctx context.Context, height *int64) ([]*types.Validator, error)
+
+func (a *AbciApp) SetValidatorGetter(fn ValidatorGetter) {
+	a.validatorFn = fn
 }

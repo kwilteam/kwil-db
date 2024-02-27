@@ -57,7 +57,7 @@ const (
 
 	// upsertResolution is the sql statement used to ensure a resolution is
 	// present in the resolutions table. In scenarios where VoteID is received
-	// before VoteBody, the body and type will be updated in the existing
+	// before VoteBody, the body, type and expiration will be updated in the existing
 	// resolution entry.
 	upsertResolution = `INSERT INTO ` + votingSchemaName + `.resolutions (id, body, type, expiration, vote_body_proposer, extra_vote_id)
 	VALUES ($1, $2, (
@@ -72,6 +72,7 @@ const (
 			FROM ` + votingSchemaName + `.resolution_types
 			WHERE name = $3
 		),
+		expiration = $4,
 		vote_body_proposer = $5,
 		extra_vote_id = $6;`
 

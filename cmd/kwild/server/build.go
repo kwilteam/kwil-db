@@ -103,20 +103,20 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
 	cometBftClient := buildCometBftClient(cometBftNode)
+	wrappedCmtClient := &wrappedCometBFTClient{cometBftClient}
 
-	eventBroadcaster := buildEventBroadcaster(d, ev, &wrappedCometBFTClient{cometBftClient}, txApp)
+	eventBroadcaster := buildEventBroadcaster(d, ev, wrappedCmtClient, txApp)
 	abciApp.SetEventBroadcaster(eventBroadcaster.RunBroadcast)
-
+	abciApp.SetValidatorGetter(wrappedCmtClient.GetValidators)
 	// oracle manager
 	om := buildOracleManager(d, closers, ev, cometBftNode, txApp)
 
 	// tx service and grpc server
-	txsvc := buildTxSvc(d, db, e,
-		&wrappedCometBFTClient{cometBftClient}, txApp)
+	txsvc := buildTxSvc(d, db, e, wrappedCmtClient, txApp)
 	grpcServer := buildGrpcServer(d, txsvc)
 
 	// admin service and server
-	admsvc := buildAdminSvc(d, db, &wrappedCometBFTClient{cometBftClient}, txApp, abciApp.ChainID())
+	admsvc := buildAdminSvc(d, db, wrappedCmtClient, txApp, abciApp.ChainID())
 	adminTCPServer := buildAdminService(d, closers, admsvc, txsvc)
 
 	return &Server{
