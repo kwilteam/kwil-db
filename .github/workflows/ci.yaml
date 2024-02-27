@@ -16,7 +16,6 @@ jobs:
         image: jchappelow/kwil-postgres:latest
         env:
           POSTGRES_PORT: 5432
-          POSTGRES_DB: kwil_test_db
           POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
           --health-cmd pg_isready
