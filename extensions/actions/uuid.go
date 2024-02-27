@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/common"
 	uuid "github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/engine/execution"
 )
 
 const uuidName = "uuid"
@@ -22,7 +22,7 @@ func init() {
 }
 
 // InitializeUUID requires no initialize parameters.
-func InitializeUUID(ctx *execution.DeploymentContext, metadata map[string]string) (execution.ExtensionNamespace, error) {
+func InitializeUUID(ctx *DeploymentContext, service *common.Service, metadata map[string]string) (ExtensionNamespace, error) {
 	// if there are any parameters, throw an error
 	if len(metadata) > 0 {
 		return nil, fmt.Errorf("uuid: expected 0 parameters, got %d", len(metadata))
@@ -33,7 +33,7 @@ func InitializeUUID(ctx *execution.DeploymentContext, metadata map[string]string
 
 type uuidExtension struct{}
 
-func (u *uuidExtension) Call(scope *execution.ProcedureContext, method string, args []any) ([]any, error) {
+func (u *uuidExtension) Call(scope *ProcedureContext, app *common.App, method string, args []any) ([]any, error) {
 	// if no args are provided, throw error
 	if len(args) == 0 {
 		return nil, fmt.Errorf("uuid: expected at least 1 argument, got 0")
