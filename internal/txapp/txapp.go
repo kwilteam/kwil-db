@@ -77,6 +77,16 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 	}
 	defer tx.Rollback(ctx)
 
+	// Sanity Check: Verify that there is no data from previous instance
+	vals, err := getAllVoters(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if len(vals) > 0 {
+		return errors.New("genesisInit: cannot initialize genesis state: database has data from previous reset instance")
+	}
+
+	// Add Genesis Validators
 	for _, validator := range validators {
 		err := setVoterPower(ctx, tx, validator.PubKey, validator.Power)
 		if err != nil {
@@ -84,6 +94,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 		}
 	}
 
+	// Fund Genesis Accounts
 	for _, account := range genesisAccounts {
 		err := credit(ctx, tx, account.Identifier, account.Balance)
 		if err != nil {
