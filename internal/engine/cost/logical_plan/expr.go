@@ -30,7 +30,7 @@ func (e LogicalExprList) String() string {
 // ColumnExpr represents a column in a schema.
 // NOTE: it will be transformed to columnIdxExpr in the logical plan.????
 type ColumnExpr struct {
-	table string
+	Table string
 	Name  string
 }
 
@@ -48,7 +48,7 @@ func (c *ColumnExpr) Resolve(plan LogicalPlan) datasource.Field {
 }
 
 func Column(table, name string) LogicalExpr {
-	return &ColumnExpr{table: table, Name: name}
+	return &ColumnExpr{Table: table, Name: name}
 }
 
 // ColumnIdxExpr represents a column in a schema by its index.

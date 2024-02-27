@@ -14,7 +14,10 @@ func (r *PredicateRule) Optimize(plan logical_plan.LogicalPlan) logical_plan.Log
 // pushDown pushes down the predicate to applicable point asap, hence close to
 // scan operation. It's applicable if the predicate can be evaluated at one
 // LogicalPlan node.
-// In general it's more important than projection push down.
+// In row based storage, it's more important than projection push down
+// optimization, because it can reduce the number of rows to be processed.
+// In column based storage, it's less important than projection push down
+// optimization, because it can reduce the number of columns to be processed.
 func (r *PredicateRule) pushDown(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
 	// when the predicate can be evaluated?
 	// - if both arms of the predicate are literals
@@ -30,6 +33,8 @@ func (r *PredicateRule) pushDown(plan logical_plan.LogicalPlan) logical_plan.Log
 			preds := logical_plan.SplitConjunction(p.Exprs()[0])
 			newScan := logical_plan.Scan(input.Table(), input.DataSource(), preds, input.Projection()...)
 			// NOTE: should keep the original selection? e.g. return a new selection, not a scan
+			// we return a selection in case some of the datasource doesn't
+			// support predicate push down in scan
 			return logical_plan.Selection(newScan, logical_plan.Conjunction(preds...))
 		//case *logical_plan.JoinOp:
 		//case *logical_plan.BagOp:
