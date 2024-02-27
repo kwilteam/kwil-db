@@ -226,7 +226,7 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 
 	r.t.Cleanup(func() {
 		r.t.Logf("teardown docker compose")
-		err := dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal, compose.RemoveVolumes(true))
+		err := dc.Down(ctx)
 		require.NoErrorf(r.t, err, "failed to teardown %s", dc.Services())
 	})
 
