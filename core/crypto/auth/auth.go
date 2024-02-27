@@ -21,18 +21,11 @@ signing.
 */
 package auth
 
-// Verifier is satisfied by types that can verify a signature against a public
-// key and message. A Verifier implementation will generally pertain to a
-// certain message serialization scheme and key type.
-type Verifier interface {
-	// Verify verifies the signature against the given public key and data.
-	Verify(sender, msg, signature []byte) error
-}
-
 // Authenticator is an interface for authenticating a message and deriving a
 // string identifier from the sender bytes.
 type Authenticator interface {
-	Verifier
+	// Verify verifies the signature against the given sender and data.
+	Verify(sender, msg, signature []byte) error
 
 	// Identifier returns the string identifier for a message sender
 	Identifier(sender []byte) (string, error)
