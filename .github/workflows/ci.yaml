@@ -15,10 +15,7 @@ jobs:
       postgres:
         image: jchappelow/kwil-postgres:latest
         env:
-          POSTGRES_USER: kwild
-          POSTGRES_PASSWORD: kwild
           POSTGRES_PORT: 5432
-          POSTGRES_DB: kwil_test_db
           POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
           --health-cmd pg_isready
@@ -203,4 +200,4 @@ jobs:
 
       - name: Prune Docker
         if: ${{ always() }}
-        run: docker rm $(docker ps -a -q) -f && docker network prune -f || true
+        run: docker rm $(docker ps -a -q) -f ; docker network prune -f ; docker volume prune -f || true

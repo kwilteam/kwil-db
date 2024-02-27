@@ -441,7 +441,7 @@ func DefaultConfig() *KwildConfig {
 			HTTPListenAddress:  "localhost:8080",
 			AdminListenAddress: "unix:///tmp/kwil_admin.sock",
 			// SqliteFilePath:     DefaultSQLitePath,
-			DBHost: "/var/run/postgresql",
+			DBHost: "127.0.0.1",
 			DBPort: "5432", // ignored with unix socket, but applies if IP used for DBHost
 			DBUser: "kwild",
 			DBName: "kwild",
