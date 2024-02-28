@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
@@ -64,14 +63,6 @@ type actionExecutionV0 struct {
 	// No other optional or tail fields defined.
 }
 
-type actionExecutionV99 struct {
-	DBID        string
-	Action      string
-	Arguments   [][]string
-	NilArg      [][]bool `rlp:"optional"`
-	FutureField string   `rlp:"optional"`
-}
-
 // TestActionExecution_Marshal ensures that the optional NilArg and tail Rest
 // fields marshal as expected.
 func TestActionExecution_Marshal(t *testing.T) {
@@ -101,7 +92,6 @@ func TestActionExecution_Marshal(t *testing.T) {
 			{true, false},
 			{false, false}, // this one is an empty string, not nil
 		},
-		Rest: []transactions.RawValue{}, // non-nil so we don't have to consider nil and zero len equal below
 	}
 
 	testRoundTrip(nil, ae)
@@ -121,30 +111,9 @@ func TestActionExecution_Marshal(t *testing.T) {
 
 	// expect to unmarshal to nil in forward compat scenario
 	ae.NilArg = nil
-	ae.Rest = nil
 
 	dat, err := serialize.Encode(aeOld)
 	require.NoError(t, err)
-
-	testRoundTrip(dat, ae)
-
-	ae.NilArg = [][]bool{{true, false}, {false, false}} // original
-
-	// Payload from the future with extra optional fields can be decoded with
-	// current payload because of the tail field.
-	aeFuture := actionExecutionV99{
-		DBID:        ae.DBID,
-		Action:      ae.Action,
-		Arguments:   ae.Arguments,
-		NilArg:      ae.NilArg,
-		FutureField: "whoa",
-	}
-	dat, err = serialize.Encode(aeFuture)
-	require.NoError(t, err)
-
-	// expect to swallow
-	// ae.NilArg = [][]bool{{true, false}, {false, false}} // original
-	ae.Rest = []rlp.RawValue{append([]byte{84}, []byte("whoa")...)} // just how tail and RawValue works...
 
 	testRoundTrip(dat, ae)
 }

@@ -228,9 +228,6 @@ type ActionExecution struct {
 	// NilArg indicates for each of the elements in Arguments if the value is
 	// nil rather than just empty.
 	NilArg [][]bool `rlp:"optional"`
-
-	// Ignore additional fields (for forward compatibility).
-	Rest []RawValue `rlp:"tail"` // []rlp.RawValue
 }
 
 var _ Payload = (*ActionExecution)(nil)
@@ -261,10 +258,6 @@ type ActionCall struct {
 	// NilArg indicates for each of the elements in Arguments if the value is
 	// nil rather than just empty.
 	NilArg []bool `rlp:"optional"`
-
-	// Rest ignore additional fields when decoding (for forward compatibility).
-	// Do not set this field.
-	Rest []rlp.RawValue `rlp:"tail"`
 }
 
 var _ Payload = (*ActionCall)(nil)
