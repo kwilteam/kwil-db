@@ -21,7 +21,7 @@ func ResetChainState(rootDir string) error {
 }
 
 // ResetAll removes all data.
-func ResetAll(rootDir, sqlitePath, snapshotDir string) error {
+func ResetAll(rootDir, snapshotDir string) error {
 	// Remove CometBFT's stuff first.
 	chainRoot := filepath.Join(rootDir, ABCIDirName)
 
@@ -77,11 +77,12 @@ func ResetAll(rootDir, sqlitePath, snapshotDir string) error {
 
 	// The user-configurable paths
 
-	if err := os.RemoveAll(rootify(sqlitePath, rootDir)); err == nil {
-		fmt.Println("Removed all sqlite files", "dir", sqlitePath)
-	} else {
-		fmt.Println("Error removing all sqlite files", "dir", sqlitePath, "err", err)
-	}
+	// TODO: support postgres
+	// if err := os.RemoveAll(rootify(sqlitePath, rootDir)); err == nil {
+	// 	fmt.Println("Removed all sqlite files", "dir", sqlitePath)
+	// } else {
+	// 	fmt.Println("Error removing all sqlite files", "dir", sqlitePath, "err", err)
+	// }
 
 	if err := os.RemoveAll(rootify(snapshotDir, rootDir)); err == nil {
 		fmt.Println("Removed all snapshots", "dir", snapshotDir)

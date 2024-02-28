@@ -1,6 +1,6 @@
 # Kuneiform SQL
 
-Kuneiform SQL is a subset of SQL(SQLite), some features are eliminated to:
+Kuneiform SQL is a subset of SQL, some features are eliminated to:
 * keep it simple while still useful
 * keep it deterministic
 * restrict resource usage

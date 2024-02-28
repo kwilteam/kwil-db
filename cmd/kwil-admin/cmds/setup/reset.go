@@ -19,7 +19,7 @@ kwil-admin setup reset --root-dir "~/.kwild" --sqlpath "~/.kwild/data/kwil.db"`
 )
 
 func resetCmd() *cobra.Command {
-	var rootDir, sqlPath, snapPath string
+	var rootDir, snapPath string
 	var force bool
 
 	cmd := &cobra.Command{
@@ -35,9 +35,6 @@ func resetCmd() *cobra.Command {
 				rootDir = common.DefaultKwildRoot()
 			}
 
-			if sqlPath == "" {
-				sqlPath = config.DefaultSQLitePath
-			}
 			if snapPath == "" {
 				snapPath = config.DefaultSnapshotsDir
 			}
@@ -47,17 +44,12 @@ func resetCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			expandedSQL, err := expandPath(sqlPath)
-			if err != nil {
-				return display.PrintErr(cmd, err)
-			}
-
 			expandedSnap, err := expandPath(snapPath)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
 
-			err = config.ResetAll(expandedRoot, expandedSQL, expandedSnap)
+			err = config.ResetAll(expandedRoot, expandedSnap)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -67,7 +59,7 @@ func resetCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&rootDir, "root-dir", "r", "", "root directory of the kwild node")
-	cmd.Flags().StringVarP(&sqlPath, "sqlpath", "s", "", "path to the SQLite database")
+	// cmd.Flags().StringVarP(&sqlPath, "sqlpath", "s", "", "path to the SQLite database") // TODO: postgres config
 	cmd.Flags().StringVarP(&snapPath, "snappath", "p", "", "path to the snapshot directory")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "force removal of default home directory")
 

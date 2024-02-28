@@ -17,9 +17,7 @@
 #   |   |- data/
 #   |   |   |- blockchain db files/dir (blockstore.db, state.db, etc)
 #   |   |- info/            
-#   |- application/wal      
-#   |- data
-#   |   |- kwild.db/    
+#   |- application/wal         
 #   |- snapshots/
 #   |- signing/
 #   |- rcvdSnaps/   (includes the chunks rcvd from the state sync module during db restoration process, its a temp dir)
@@ -51,8 +49,20 @@ without_gas_costs = true
 # Toggle to disable nonces for transactions and queries
 without_nonces = false
 
-# KWILD Sqlite database file path
-sqlite_file_path = "data/kwil.db"
+# PostgreSQL database host (UNIX socket path or IP address with no port)
+pg_db_host = "127.0.0.1"
+
+# PostgreSQL database port (may be omitted for UNIX socket hosts)
+pg_db_port = "5432"
+
+# PostgreSQL database user (should be a "superuser")
+pg_db_user = "kwild"
+
+# PostgreSQL database pass (may be omitted for some pg_hba.conf configurations)
+pg_db_pass = ""
+
+# PostgreSQL database name (override database name, default is "kwild")
+pg_db_name = "kwild"
 
 # The path to a file containing certificate that is used to create the HTTPS server.
 # Might be either absolute path or path related to the kwild root directory.
