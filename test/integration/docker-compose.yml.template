@@ -5,7 +5,7 @@ services:
   node0:
     image: kwild:latest
     ports:
-      - "8080"
+      - "{{with .ExposedHTTPPorts}}{{index . 0}}:{{end}}8080"
       - "50051"
       - "26656"
       - "26657"
@@ -67,7 +67,7 @@ services:
   node1:
     image: kwild:latest
     ports:
-      - "8080"
+      - "{{with .ExposedHTTPPorts}}{{index . 1}}:{{end}}8080"
       - "50051"
       - "26656"
       - "26657"
@@ -127,7 +127,7 @@ services:
   node2:
     image: kwild:latest
     ports:
-      - "8080"
+      - "{{with .ExposedHTTPPorts}}{{index . 2}}:{{end}}8080"
       - "50051"
       - "26656"
       - "26657"
@@ -190,7 +190,7 @@ services:
   node3:
     image: kwild:latest
     ports:
-      - "8080"
+      - "{{with .ExposedHTTPPorts}}{{index . 3}}:{{end}}8080"
       - "50051"
       - "26656"
       - "26657"
@@ -250,7 +250,7 @@ services:
   node4:
     image: kwild:latest
     ports:
-      - "8080"
+      - "{{with .ExposedHTTPPorts}}{{index . 4}}:{{end}}8080"
       - "50051"
       - "26656"
       - "26657"
@@ -310,7 +310,7 @@ services:
   node5:
     image: kwild:latest
     ports:
-      - "8080"
+      - "{{with .ExposedHTTPPorts}}{{index . 5}}:{{end}}8080"
       - "50051"
       - "26656"
       - "26657"

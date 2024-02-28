@@ -45,6 +45,7 @@ func TestLocalDevSetup(t *testing.T) {
 		integration.WithBlockInterval(time.Second),
 		integration.WithValidators(4),
 		integration.WithNonValidators(0),
+		integration.WithExposedHTTPPorts(),
 	}
 
 	helper := integration.NewIntHelper(t, opts...)

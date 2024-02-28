@@ -8,6 +8,10 @@ import (
 
 type ComposeConfig struct {
 	Network string
+	// ExposedHTTPPorts can be left empty to not expose any ports to the host,
+	// or set to the host ports to expose the http interface for each node. e.g.
+	// []int{8081, 8082, ...}
+	ExposedHTTPPorts []int
 }
 
 func genCompose(templateFile string, config ComposeConfig) (string, error) {
