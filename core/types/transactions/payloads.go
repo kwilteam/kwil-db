@@ -225,7 +225,9 @@ type ActionExecution struct {
 	DBID      string
 	Action    string
 	Arguments [][]string
-	NilArg    [][]bool `rlp:"optional"`
+	// NilArg indicates for each of the elements in Arguments if the value is
+	// nil rather than just empty.
+	NilArg [][]bool `rlp:"optional"`
 
 	// Ignore additional fields (for forward compatibility).
 	Rest []RawValue `rlp:"tail"` // []rlp.RawValue
@@ -256,7 +258,9 @@ type ActionCall struct {
 	DBID      string
 	Action    string
 	Arguments []string
-	NilArg    []bool `rlp:"optional"`
+	// NilArg indicates for each of the elements in Arguments if the value is
+	// nil rather than just empty.
+	NilArg []bool `rlp:"optional"`
 
 	// Rest ignore additional fields when decoding (for forward compatibility).
 	// Do not set this field.

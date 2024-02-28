@@ -311,8 +311,9 @@ func convertTuple(tuple []any) ([]string, []bool, error) {
 			stringTuple = append(stringTuple, "")
 			isNil = append(isNil, true)
 			continue
-		} // conv.String would make it "<null>", which could very well be an intended string
+		}
 
+		// conv.String would make it "<null>", which could very well be an intended string
 		stringVal, err := conv.String(val)
 		if err != nil {
 			return nil, nil, err
