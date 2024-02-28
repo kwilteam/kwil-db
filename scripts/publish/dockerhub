@@ -7,4 +7,5 @@ set -eu
 
 echo Building kwild for multiarch and pushing to dockerhub, tag: ${TAG}
 
-docker buildx build --platform linux/amd64,linux/arm64/v8 -t kwildb/kwil:${TAG} --build-arg go_build_tags=${GO_BUILDTAGS} --push -f ./build/package/docker/kwild.dockerfile .
+docker buildx build --platform linux/amd64,linux/arm64/v8 -t kwildb/kwil:${TAG} \
+    --build-arg go_build_tags=${GO_BUILDTAGS} --push -f ./build/package/docker/kwild.dockerfile .

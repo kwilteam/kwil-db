@@ -1,4 +1,4 @@
-FROM golang:alpine AS stage
+FROM golang:1.22 AS stage
 
 # Build Delve
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
@@ -11,7 +11,6 @@ ARG go_build_tags
 WORKDIR /app
 RUN mkdir -p /var/run/kwil
 RUN chmod 777 /var/run/kwil
-RUN apk update && apk add git ca-certificates-bundle
 
 COPY . .
 RUN test -f go.work && rm go.work || true
@@ -20,7 +19,7 @@ RUN GOWORK=off GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_tim
 RUN GOWORK=off GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" ./scripts/build/binary kwil-admin
 RUN chmod +x /app/dist/kwild /app/dist/kwil-admin
 
-FROM alpine:3.17
+FROM alpine:3.19
 COPY --from=stage /go/bin/dlv /dlv
 WORKDIR /app
 COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
