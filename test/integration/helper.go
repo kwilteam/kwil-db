@@ -87,6 +87,7 @@ type IntTestConfig struct {
 	DockerComposeOverrideFile string
 	GanacheComposeFile        string
 	WithGanache               bool
+	ExposedHTTPPorts          bool
 
 	WaitTimeout time.Duration
 	LogLevel    string
@@ -174,6 +175,12 @@ func WithValidators(n int) HelperOpt {
 func WithNonValidators(n int) HelperOpt {
 	return func(r *IntHelper) {
 		r.cfg.NNonValidator = n
+	}
+}
+
+func WithExposedHTTPPorts() HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.ExposedHTTPPorts = true
 	}
 }
 
@@ -512,11 +519,22 @@ func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 	// docker-compose file is to use envs in docker-compose.yml, but it doesn't work
 	//r.updateEnv("KWIL_NETWORK", localNetworkName)
 
+	var exposedHTTPPorts []int
+	if r.cfg.ExposedHTTPPorts {
+		// Actually only need this as long as the number of nodes defined in
+		// the docker-compose.yml.template file. This is not related to
+		// NValidators and NNValidators.
+		for i := 0; i < 20; i++ { // more than enough, which is 6 presently
+			exposedHTTPPorts = append(exposedHTTPPorts, i+8080+1)
+		}
+	}
+
 	// here we generate a new docker-compose.yml file with the new network from template
 	composeFile := filepath.Join(tmpDir, "docker-compose.yml")
 	err = utils.CreateComposeFile(composeFile, "./docker-compose.yml.template",
 		utils.ComposeConfig{
-			Network: localNetworkName,
+			Network:          localNetworkName,
+			ExposedHTTPPorts: exposedHTTPPorts,
 		})
 	require.NoError(r.t, err, "failed to create docker compose file")
 
