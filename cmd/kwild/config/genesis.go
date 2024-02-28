@@ -5,12 +5,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"hash"
-	"io"
 	"math/big"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"time"
 
@@ -308,26 +305,7 @@ func NewGenesisWithValidator(pubKey []byte) *GenesisConfig {
 	return genesisCfg
 }
 
-func listFilesAlphabetically(filePath string) ([]string, error) {
-	files, err := filepath.Glob(filePath)
-	if err != nil {
-		return nil, err
-	}
-	slices.Sort(files)
-	return files, nil
-}
-
-func hashFile(filePath string, hasher hash.Hash) error {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	_, err = io.Copy(hasher, file)
-	return err
-}
-
+/* TODO: restore when we figure out how to compute appHash with postgres
 func setGenesisAppHash(appHash []byte, genesisFile string) error {
 	genesisConf, err := LoadGenesisConfig(genesisFile)
 	if err != nil {
@@ -340,6 +318,7 @@ func setGenesisAppHash(appHash []byte, genesisFile string) error {
 	}
 	return nil
 }
+*/
 
 // PatchGenesisAppHash computes the apphash from a full contents of all sqlite
 // files in the provided folder, and if genesis file is provided, updates the

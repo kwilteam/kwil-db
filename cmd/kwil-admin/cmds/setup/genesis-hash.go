@@ -1,13 +1,13 @@
 package setup
 
 import (
-	"encoding/hex"
+	"errors"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
-	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/spf13/cobra"
 )
 
+//nolint:unused
 var (
 	genesisHashLong = `Compute genesis hash from existing PostgreSQL datasets, and optionally update ` + "`" + `genesis.json` + "`" + `.
 It takes up to 4 arguments, which are the postgres DB name, host, port, user, and password to access the datasets to be included in the genesis hash.
@@ -18,7 +18,7 @@ By default, it will print the genesis hash to stdout. To specify a genesis file 
 kwil-admin setup genesis-hash "kwild" "127.0.0.1" "5432" "kwild" "" --genesis "~/.kwild/abci/config/genesis.json"`
 )
 
-func genesisHashCmd() *cobra.Command {
+func genesisHashCmd() *cobra.Command { //nolint:unused
 
 	var genesisFile string
 
@@ -30,7 +30,8 @@ func genesisHashCmd() *cobra.Command {
 		Hidden:  true, // also not listed added, but this is going to be experimental even when implement properly
 		Args:    cobra.RangeArgs(0, 4),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			panic("not implemented")
+			return display.PrintErr(cmd, errors.New("not implemented"))
+			/* TODO: make this work with postgres
 			dbCfg := &pg.ConnConfig{ // defaults
 				Host:   "127.0.0.1",
 				Port:   "5432",
@@ -54,15 +55,13 @@ func genesisHashCmd() *cobra.Command {
 				dbCfg.Pass = args[4]
 			}
 
-			// TODO:
-			// appHash, err := config.PatchGenesisAppHash(cmd.Context(), dbCfg, genesisFile)
-			// if err != nil {
-			// 	return display.PrintErr(cmd, err)
-			// }
-
-			var appHash []byte
+			appHash, err := config.PatchGenesisAppHash(cmd.Context(), dbCfg, genesisFile)
+			if err != nil {
+				return display.PrintErr(cmd, err)
+			}
 
 			return display.PrintCmd(cmd, display.RespString(hex.EncodeToString(appHash)))
+			*/
 		},
 	}
 
