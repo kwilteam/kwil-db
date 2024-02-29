@@ -7,7 +7,7 @@ on:
 
 jobs:
   test:
-    #runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
     runs-on: self-hosted
     if: ${{ !github.event.pull_request.draft }} # only run on non-draft PRs
 
@@ -31,18 +31,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
-          token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
           version: '23.4'
-          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Install Taskfile
         uses: arduino/setup-task@v2
-        with:
-          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
 
       #ubuntu-latest has go 1.21 installed https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2204-Readme.md#go
       #self-hosted also has go 1.21 installed
@@ -55,11 +51,8 @@ jobs:
           cache: false
 
       - name: Install dependencies
-        env:
-          GH_ACCESS_TOKEN: ${{ secrets.KWIL_MACH_SECRET }}
         run: |
           go version
-          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
           task install:deps
 
       # checks
@@ -132,17 +125,23 @@ jobs:
           docker pull kwilbrennan/extensions-math:multi-arch --platform linux/amd64
 
       - name: Pull kgw repo & create vendor
+        env:
+          GH_ACCESS_TOKEN: ${{ secrets.KWIL_MACH_SECRET }}
         # we only pull the repo, not build the image, because we want to use the cache
         # provided by the docker/build-push-action
         # vendor is used to bypass private repo issues
         # TODO: in go 1.22, there is a "go work vendor" that we can try instead of GOWORK=off
         run: |
+          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf
+          "https://github.com/kwilteam/"
           rm -rf /tmp/kgw
           git clone https://github.com/kwilteam/kgw.git /tmp/kgw
           cd /tmp/kgw
           git checkout action-call-workaround # REMOVE!
           GOWORK=off go mod vendor
           cd -
+          git config --global unset url
+
 
       - name: Build kgw image
         id: docker_build_kgw
@@ -182,7 +181,7 @@ jobs:
           testGroupID=$(id -g)
           cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/acceptance/docker-compose.override.yml
-          KACT_LOG_LEVEL=warn task test:act:nb -- -parallel-mode
+          KACT_LOG_LEVEL=warn task test:act:nb -parallel-mode -parallel 2
 
       - name: Run integration test
         # CI machine is more powerful, no need to set parallel limit
@@ -191,7 +190,7 @@ jobs:
           testGroupID=$(id -g)
           cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
-          KIT_LOG_LEVEL=warn go test -count=1 -timeout 0 ./test/integration -v -parallel-mode
+          KIT_LOG_LEVEL=warn go test -count=1 -timeout 0 ./test/integration -v -parallel-mode -parallel 2
 
       - name: Move cache
         run: |
