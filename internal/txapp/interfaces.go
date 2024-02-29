@@ -53,6 +53,8 @@ var (
 	approveResolution                = voting.ApproveResolution
 	getVoterPower                    = voting.GetValidatorPower
 	hasVoted                         = voting.HasVoted
+	getDBHeight                      = voting.GetHeight
+	updateDBHeight                   = voting.SetHeight
 
 	// account functions
 	getAccount = accounts.GetAccount

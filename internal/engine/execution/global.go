@@ -12,6 +12,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
+	"github.com/kwilteam/kwil-db/internal/sql/versioning"
 )
 
 // GlobalContext is the context for the entire execution.
@@ -36,6 +38,19 @@ type GlobalContext struct {
 
 var ErrDatasetNotFound = fmt.Errorf("dataset not found")
 
+func InitializeEngine(ctx context.Context, tx sql.DB) error {
+	upgradeFns := map[int64]versioning.UpgradeFunc{
+		0: initTables,
+	}
+
+	err := versioning.Upgrade(ctx, tx, pg.InternalSchemaName, upgradeFns, engineVersion)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // NewGlobalContext creates a new global context.
 // It will load any persisted datasets from the datastore.
 func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[string]actions.ExtensionInitializer,
@@ -44,11 +59,6 @@ func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[
 		initializers: extensionInitializers,
 		datasets:     make(map[string]*baseDataset),
 		service:      service,
-	}
-
-	err := createSchemasTableIfNotExists(ctx, tx)
-	if err != nil {
-		return nil, err
 	}
 
 	schemas, err := getSchemas(ctx, tx)

@@ -14,6 +14,9 @@ import (
 )
 
 var (
+	// engineVersion is the version of the 'kwild_internal' schema
+	engineVersion int64 = 0
+
 	schemaVersion        = 0 // schema version allows upgrading schemas in the future
 	sqlCreateSchemaTable = fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s.kwil_schemas (
 	dbid TEXT PRIMARY KEY,
@@ -27,6 +30,13 @@ var (
 	sqlDropSchema        = `DROP SCHEMA "%s" CASCADE;`
 	sqlDeleteKwilSchema  = fmt.Sprintf(`DELETE FROM %s.kwil_schemas WHERE dbid = $1;`, pg.InternalSchemaName)
 )
+
+func initTables(ctx context.Context, db sql.DB) error {
+	if err := createSchemasTableIfNotExists(ctx, db); err != nil {
+		return err
+	}
+	return nil
+}
 
 func dbidSchema(dbid string) string {
 	return pg.DefaultSchemaFilterPrefix + dbid
