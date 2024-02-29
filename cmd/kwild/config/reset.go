@@ -54,13 +54,6 @@ func ResetAll(rootDir, snapshotDir string) error {
 		fmt.Println("Error removing all info", "dir", infoDir, "err", err)
 	}
 
-	appDir := filepath.Join(rootDir, ApplicationDirName)
-	if err := os.RemoveAll(appDir); err == nil {
-		fmt.Println("Removed all application", "dir", appDir)
-	} else {
-		fmt.Println("Error removing all application", "dir", appDir, "err", err)
-	}
-
 	sigDir := filepath.Join(rootDir, SigningDirName)
 	if err := os.RemoveAll(sigDir); err == nil {
 		fmt.Println("Removed all signing", "dir", sigDir)
@@ -77,12 +70,7 @@ func ResetAll(rootDir, snapshotDir string) error {
 
 	// The user-configurable paths
 
-	// TODO: support postgres
-	// if err := os.RemoveAll(rootify(sqlitePath, rootDir)); err == nil {
-	// 	fmt.Println("Removed all sqlite files", "dir", sqlitePath)
-	// } else {
-	// 	fmt.Println("Error removing all sqlite files", "dir", sqlitePath, "err", err)
-	// }
+	// TODO: support postgres database drop or schema drops
 
 	if err := os.RemoveAll(rootify(snapshotDir, rootDir)); err == nil {
 		fmt.Println("Removed all snapshots", "dir", snapshotDir)

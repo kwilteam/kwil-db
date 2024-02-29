@@ -5,7 +5,6 @@ package config
 const (
 	ABCIDirName          = "abci" // cometBFT node's root folder
 	ABCIInfoSubDirName   = "info" // e.g. abci/info for kv state data
-	ApplicationDirName   = "application"
 	ReceivedSnapsDirName = "rcvdSnaps"
 	SigningDirName       = "signing"
 
