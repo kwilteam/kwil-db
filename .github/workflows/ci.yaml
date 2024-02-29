@@ -7,8 +7,8 @@ on:
 
 jobs:
   test:
-#    runs-on: ubuntu-latest
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+#    runs-on: self-hosted
     if: ${{ !github.event.pull_request.draft }} # only run on non-draft PRs
 
     services:
