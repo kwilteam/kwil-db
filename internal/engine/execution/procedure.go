@@ -348,17 +348,10 @@ type dmlStmt struct {
 	OrderedParameters []string
 }
 
-func (e *dmlStmt) execute(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error {
-	args := []any{pg.QueryModeExec}
-
-	params, err := orderAndCleanValueMap(scope.Values(), e.OrderedParameters)
-	if err != nil {
-		return err
-	}
-
-	args = append(args, params...)
-
-	// we need to expand this based on the ordered parameters. This should be stored in the DML statement.
+func (e *dmlStmt) execute(scope *actions.ProcedureContext, _ *GlobalContext, db sql.DB) error {
+	// Expend the arguments based on the ordered parameters for the DML statement.
+	params := orderAndCleanValueMap(scope.Values(), e.OrderedParameters)
+	args := append([]any{pg.QueryModeExec}, params...)
 	results, err := db.Execute(scope.Ctx, e.SQLStatement, args...)
 	if err != nil {
 		return err
@@ -461,11 +454,7 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 			valSlice := []any{pg.QueryModeInferredArgTypes}
 
 			// ordering the map values according to the bind names
-			valSlice2, err := orderAndCleanValueMap(values, paramVisitor.OrderedParameters)
-			if err != nil {
-				return nil, err
-			}
-			valSlice = append(valSlice, valSlice2...)
+			valSlice = append(valSlice, orderAndCleanValueMap(values, paramVisitor.OrderedParameters)...)
 
 			result, err := exec(ctx, stmt, valSlice...) // more values than binds
 			if err != nil {
@@ -491,22 +480,21 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 	return execs, nil
 }
 
-// orderAndCleanValueMap takes a map of values and a slice of keys, and returns a slice of values in the order of the keys.
-// If a value can be converted to an int, it will be. If a value does not exist, it will be set to nil.
-func orderAndCleanValueMap(values map[string]any, keys []string) ([]any, error) {
+// orderAndCleanValueMap takes a map of values and a slice of keys, and returns
+// a slice of values in the order of the keys. If a value can be converted to an
+// int, it will be. If a value does not exist, it will be set to nil.
+func orderAndCleanValueMap(values map[string]any, keys []string) []any {
 	ordered := make([]any, 0, len(keys))
 	for _, key := range keys {
 		val, ok := values[key]
-		if !ok {
-			val = nil // set val to nil if it doesn't exist
-		} else {
+		if ok {
 			val = cleanseIntValue(val)
-		}
+		} // leave nil if it doesn't exist, still append
 
 		ordered = append(ordered, val)
 	}
 
-	return ordered, nil
+	return ordered
 }
 
 // cleanseIntValue attempts to coerce a value to an int64.

@@ -120,9 +120,9 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid strin
 	return nil
 }
 
-// Call calles a procedure on a dataset.
-// It can be given either a readwrite or readonly transaction.
-// If it is given a read-only transaction, it will not be able to execute any procedures that are not `view`.
+// Call calls a procedure on a dataset. It can be given either a readwrite or
+// readonly transaction. If it is given a read-only transaction, it will not be
+// able to execute any procedures that are not `view`.
 func (g *GlobalContext) Call(ctx context.Context, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error) {
 	err := options.Clean()
 	if err != nil {
@@ -156,7 +156,7 @@ func (g *GlobalContext) Call(ctx context.Context, tx sql.DB, options *common.Exe
 
 // ListDatasets list datasets deployed by a specific caller.
 // If caller is empty, it will list all datasets.
-func (g *GlobalContext) ListDatasets(ctx context.Context, caller []byte) ([]*types.DatasetIdentifier, error) {
+func (g *GlobalContext) ListDatasets(_ context.Context, caller []byte) ([]*types.DatasetIdentifier, error) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
@@ -214,10 +214,7 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 		return nil, fmt.Errorf("cannot execute a mutative query in a read-only transaction")
 	}
 
-	args, err := orderAndCleanValueMap(values, parsed.ParameterOrder)
-	if err != nil {
-		return nil, err
-	}
+	args := orderAndCleanValueMap(values, parsed.ParameterOrder)
 
 	return tx.Execute(ctx, parsed.Statement, args...)
 }

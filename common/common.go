@@ -60,7 +60,8 @@ type ExecutionData struct {
 	// Even if a nested procedure is called, this will always be the original procedure.
 	Procedure string
 
-	// Args are the arguments that were passed to the procedure.
+	// Args are the arguments that were passed to the procedure. Currently these
+	// are all string or untyped nil values.
 	Args []any
 
 	// Signer is the address of public key that signed the incoming transaction.

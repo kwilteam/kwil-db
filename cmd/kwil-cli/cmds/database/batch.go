@@ -13,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/csv"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+
 	"github.com/spf13/cobra"
 )
 
@@ -88,7 +89,7 @@ func batchCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error getting action: %w", err))
 				}
 
-				tuples, err := createActionInputs(inputs, actionStructure)
+				tuples, err := createActionInputs(inputs, actionStructure.Inputs)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
 				}

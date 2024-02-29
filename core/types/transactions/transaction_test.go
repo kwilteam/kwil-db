@@ -8,6 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	"github.com/stretchr/testify/assert"
@@ -55,6 +56,68 @@ func Test_TransactionMarshal(t *testing.T) {
 	require.Equal(t, tx, tx2)
 }
 
+type actionExecutionV0 struct {
+	DBID      string
+	Action    string
+	Arguments [][]string
+	// No other optional or tail fields defined.
+}
+
+// TestActionExecution_Marshal ensures that the optional NilArg and tail Rest
+// fields marshal as expected.
+func TestActionExecution_Marshal(t *testing.T) {
+	testRoundTrip := func(dat []byte, ae *transactions.ActionExecution) {
+		var err error
+		if len(dat) == 0 {
+			dat, err = ae.MarshalBinary()
+			require.NoError(t, err)
+		}
+
+		var ae2 transactions.ActionExecution
+		err = ae2.UnmarshalBinary(dat)
+		require.NoError(t, err)
+
+		assert.EqualValues(t, ae, &ae2)
+	}
+
+	// All fields set, including optional NilArg
+	ae := &transactions.ActionExecution{
+		DBID:   "dbid",
+		Action: "insert_thing",
+		Arguments: [][]string{
+			{"", "b"},
+			{"c", ""},
+		},
+		NilArg: [][]bool{
+			{true, false},
+			{false, false}, // this one is an empty string, not nil
+		},
+	}
+
+	testRoundTrip(nil, ae)
+
+	// NilArg empty, unmarshals empty but no nil
+	ae.NilArg = [][]bool{}
+	testRoundTrip(nil, ae)
+
+	// Forward compat without the NilArg field at all. This is the main benefit
+	// of optional and nil.
+	aeOld := actionExecutionV0{
+		DBID:      ae.DBID,
+		Action:    ae.Action,
+		Arguments: ae.Arguments,
+		// NilArg not a field
+	}
+
+	// expect to unmarshal to nil in forward compat scenario
+	ae.NilArg = nil
+
+	dat, err := serialize.Encode(aeOld)
+	require.NoError(t, err)
+
+	testRoundTrip(dat, ae)
+}
+
 func TestTransaction_Sign(t *testing.T) {
 	// secp256k1
 	secp2561k1PvKeyHex := "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
@@ -76,8 +139,9 @@ func TestTransaction_Sign(t *testing.T) {
 		Arguments: [][]string{
 			{"foo", "32"},
 		},
+		// NOTE: With NilArg unset (and optional), the expectPersonalSignConcatSigHex
+		// is the same as if it were not a defined field at all.
 	}
-
 	payloadRLP, err := rawPayload.MarshalBinary()
 	require.NoError(t, err)
 

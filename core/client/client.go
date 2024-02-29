@@ -199,7 +199,7 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...client
 // It can take any number of inputs, and if multiple tuples of inputs are passed,
 // it will execute them in the same transaction.
 func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...clientType.TxOpt) (transactions.TxHash, error) {
-	stringTuples, err := convertTuples(tuples)
+	stringTuples, isNil, err := convertTuples(tuples)
 	if err != nil {
 		return nil, err
 	}
@@ -208,6 +208,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		Action:    action,
 		DBID:      dbid,
 		Arguments: stringTuples,
+		NilArg:    isNil,
 	}
 
 	txOpts := clientType.GetTxOpts(opts)
@@ -227,7 +228,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 
 // CallAction call an action. It returns the result records.
 func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any) (*clientType.Records, error) {
-	stringInputs, err := convertTuple(inputs)
+	stringInputs, isNil, err := convertTuple(inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -236,6 +237,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		DBID:      dbid,
 		Action:    action,
 		Arguments: stringInputs,
+		NilArg:    isNil,
 	}
 
 	msg, err := transactions.CreateCallMessage(payload)
@@ -285,33 +287,43 @@ func (c *Client) GetAccount(ctx context.Context, acctID []byte, status types.Acc
 
 // convertTuples converts user passed tuples to strings.
 // this is necessary for RLP encoding
-func convertTuples(tuples [][]any) ([][]string, error) {
-	ins := [][]string{}
+func convertTuples(tuples [][]any) ([][]string, [][]bool, error) {
+	ins := make([][]string, 0, len(tuples))
+	nils := make([][]bool, 0, len(tuples))
 	for _, tuple := range tuples {
-		stringTuple, err := convertTuple(tuple)
+		stringTuple, isNil, err := convertTuple(tuple)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		ins = append(ins, stringTuple)
+		nils = append(nils, isNil)
 	}
 
-	return ins, nil
+	return ins, nils, nil
 }
 
 // convertTuple converts user passed tuple to strings.
-func convertTuple(tuple []any) ([]string, error) {
-	stringTuple := []string{}
+func convertTuple(tuple []any) ([]string, []bool, error) {
+	stringTuple := make([]string, 0, len(tuple))
+	isNil := make([]bool, 0, len(tuple))
 	for _, val := range tuple {
+		if val == nil {
+			stringTuple = append(stringTuple, "")
+			isNil = append(isNil, true)
+			continue
+		}
 
+		// conv.String would make it "<null>", which could very well be an intended string
 		stringVal, err := conv.String(val)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		stringTuple = append(stringTuple, stringVal)
+		isNil = append(isNil, false)
 	}
 
-	return stringTuple, nil
+	return stringTuple, isNil, nil
 }
 
 // TxQuery get transaction by hash.

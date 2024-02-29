@@ -140,6 +140,7 @@ jobs:
           rm -rf /tmp/kgw
           git clone https://github.com/kwilteam/kgw.git /tmp/kgw
           cd /tmp/kgw
+          git checkout action-call-workaround # REMOVE!
           GOWORK=off go mod vendor
           cd -
 
