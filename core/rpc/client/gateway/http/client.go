@@ -78,14 +78,13 @@ func (g *GatewayHttpClient) Auth(ctx context.Context, auth *types.GatewayAuth) e
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
-		return errors.Join(rpcClient.ErrNotFound, errors.New(res.Status))
-	}
+	// standard http error(not from the gateway)
+	fallbackErr := errors.New(res.Status)
 
 	var r gatewayAuthPostResponse
 	err = json.NewDecoder(res.Body).Decode(&r)
 	if err != nil {
-		return err
+		return errors.Join(fallbackErr, err)
 	}
 
 	if r.Error != "" {

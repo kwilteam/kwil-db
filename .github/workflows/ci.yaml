@@ -4,10 +4,6 @@ on:
   pull_request:
     types: [ opened, synchronize, reopened, ready_for_review ]
   workflow_dispatch:
-  push:
-    branches:
-      - dev
-      - main
 
 jobs:
   unit-test:
@@ -18,21 +14,15 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: true
-          token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v2
         with:
           version: '23.4'
-          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
-
-#      - name: Install swagger-codegen
-#        uses: swagger-api/swagger-codegen/.github/actions/generate/action.yml@main
 
       - name: Install Taskfile
         uses: arduino/setup-task@v1
-        with:
-          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
+
 
       - name: Setup Go
         uses: actions/setup-go@v4
@@ -41,11 +31,8 @@ jobs:
           check-latest: true
 
       - name: Install dependencies
-        env:
-          GH_ACCESS_TOKEN: ${{ secrets.KWIL_MACH_SECRET }}
         run: |
           go version
-          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
           task install:deps
 
       - name: Check tidiness of go.mod and go.sum
@@ -85,18 +72,14 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: true
-          token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v2
         with:
           version: '23.4'
-          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Install Taskfile
         uses: arduino/setup-task@v1
-        with:
-          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Setup Go
         uses: actions/setup-go@v4
@@ -105,11 +88,8 @@ jobs:
           check-latest: true
 
       - name: Install dependencies
-        env:
-          GH_ACCESS_TOKEN: ${{ secrets.KWIL_MACH_SECRET }}
         run: |
           go version
-          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
           task install:deps
           go mod download
 
