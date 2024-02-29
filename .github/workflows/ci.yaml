@@ -185,12 +185,13 @@ jobs:
           KACT_LOG_LEVEL=warn task test:act:nb -- -parallel-mode
 
       - name: Run integration test
+        # CI machine is more powerful, no need to set parallel limit
         run: |
           testUserID=$(id -u)
           testGroupID=$(id -g)
           cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
-          KIT_LOG_LEVEL=warn task test:it:nb:all -- -parallel-mode
+          KIT_LOG_LEVEL=warn go test -count=1 -timeout 0 ./test/integration -v -parallel-mode
 
       - name: Move cache
         run: |

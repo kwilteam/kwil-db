@@ -243,11 +243,11 @@ tasks:
   test:it:nb:
     desc: Run integration tests ('short' mode)
     dir: test # different module
-    cmds:
-      - go test -short -count=1 -timeout 0 ./integration -v -p 4 {{.CLI_ARGS}}
+    cmds: # parallel limit(-parallel 5) is needed in local dev workflow
+      - go test -short -count=1 -timeout 0 ./integration -v -parallel 5 {{.CLI_ARGS}}
 
   test:it:nb:all:
     desc: Run integration tests
     dir: test # different module
     cmds:
-      - go test -count=1 -timeout 0 ./integration -v -p 4 {{.CLI_ARGS}}
+      - go test -count=1 -timeout 0 ./integration -v -parallel 5 {{.CLI_ARGS}}

@@ -255,7 +255,7 @@ func (r *IntHelper) LoadConfig() {
 		GanacheComposeFile:        getEnv("KIT_GANACHE_COMPOSE_FILE", "./ganache-docker-compose.yml"),
 	}
 
-	waitTimeout := getEnv("KIT_WAIT_TIMEOUT", "10s")
+	waitTimeout := getEnv("KIT_WAIT_TIMEOUT", "20s")
 	r.cfg.WaitTimeout, err = time.ParseDuration(waitTimeout)
 	require.NoError(r.t, err, "invalid wait timeout")
 
