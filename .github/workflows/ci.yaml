@@ -77,7 +77,7 @@ jobs:
         with:
           install-mode: "binary"
           version: "latest"
-          #skip-cache: true
+          skip-pkg-cache: true
           args: ./... ./core/... ./test/... ./parse/... --timeout=10m --config=.golangci.yml --skip-dirs ./core/rpc/protobuf
 
       # unit test
