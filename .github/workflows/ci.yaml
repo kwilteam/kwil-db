@@ -8,7 +8,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-#    runs-on: self-hosted
     if: ${{ !github.event.pull_request.draft }} # only run on non-draft PRs
 
     services:
@@ -124,38 +123,6 @@ jobs:
         run: |
           docker pull kwilbrennan/extensions-math:multi-arch --platform linux/amd64
 
-      - name: Pull kgw repo & create vendor
-        env:
-          GH_ACCESS_TOKEN: ${{ secrets.KWIL_MACH_SECRET }}
-        # we only pull the repo, not build the image, because we want to use the cache
-        # provided by the docker/build-push-action
-        # vendor is used to bypass private repo issues
-        # TODO: in go 1.22, there is a "go work vendor" that we can try instead of GOWORK=off
-        run: |
-          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf
-          "https://github.com/kwilteam/"
-          rm -rf /tmp/kgw
-          git clone https://github.com/kwilteam/kgw.git /tmp/kgw
-          cd /tmp/kgw
-          git checkout action-call-workaround # REMOVE!
-          GOWORK=off go mod vendor
-          cd -
-          git config --global unset url
-
-
-      - name: Build kgw image
-        id: docker_build_kgw
-        uses: docker/build-push-action@v5
-        with:
-          context: /tmp/kgw
-          load: true
-          builder: ${{ steps.buildx.outputs.name }}
-          file: /tmp/kgw/Dockerfile
-          push: false
-          tags: kgw:latest
-          cache-from: type=local,src=/tmp/.buildx-cache-kgw
-          cache-to: type=local,dest=/tmp/.buildx-cache-kgw-new
-
       - name: Build kwild image
         id: docker_build_kwild
         uses: docker/build-push-action@v5
@@ -184,13 +151,13 @@ jobs:
           KACT_LOG_LEVEL=warn task test:act:nb -parallel-mode -parallel 2
 
       - name: Run integration test
-        # CI machine is more powerful, no need to set parallel limit
+        # without kgw test, probably should disable this ?
         run: |
           testUserID=$(id -u)
           testGroupID=$(id -g)
           cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
-          KIT_LOG_LEVEL=warn go test -count=1 -timeout 0 ./test/integration -v -parallel-mode -parallel 2
+          KIT_LOG_LEVEL=warn task test:it:nb -- -parallel-mode -parallel 2
 
       - name: Move cache
         run: |
