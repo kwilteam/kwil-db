@@ -10,7 +10,6 @@ import (
 
 const setupLong = `The ` + "`" + `setup` + "`" + ` command provides functions for creating and managing node configuration and data, including:
 	- performing quick setup of a standalone Kwil node (init) and Kwil test networks (testnet)
-	- updating genesis config with initial SQLite files (genesis-hash)
 	- resetting node state and all data files (reset)`
 
 var setupCmd = &cobra.Command{
@@ -24,7 +23,7 @@ func NewSetupCmd() *cobra.Command {
 		initCmd(),
 		resetCmd(),
 		testnetCmd(),
-		genesisHashCmd(),
+		// genesisHashCmd(), // TODO: add back once we've figured out what this means for postgres
 		resetStateCmd(),
 		peerCmd(),
 	)

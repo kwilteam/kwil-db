@@ -7,7 +7,7 @@ import (
 	types "github.com/kwilteam/kwil-db/common"
 )
 
-func indexTypeToSQLiteString(indexType types.IndexType) (string, error) {
+func indexTypeToSQLString(indexType types.IndexType) (string, error) {
 	err := indexType.Clean()
 	if err != nil {
 		return "", err
@@ -29,7 +29,7 @@ func GenerateCreateIndexStatements(pgSchema, tableName string, indexes []*types.
 	var statements []string
 
 	for _, index := range indexes {
-		indexType, err := indexTypeToSQLiteString(index.Type)
+		indexType, err := indexTypeToSQLString(index.Type)
 		if err != nil {
 			return nil, err
 		}

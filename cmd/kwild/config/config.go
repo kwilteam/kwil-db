@@ -32,8 +32,6 @@ const (
 	defaultAdminClients = "clients.pem"
 )
 
-var DefaultSQLitePath = filepath.Join("data", "kwild.db") // a folder, not a file
-
 type KwildConfig struct {
 	RootDir string
 
@@ -440,11 +438,10 @@ func DefaultConfig() *KwildConfig {
 			GrpcListenAddress:  "localhost:50051",
 			HTTPListenAddress:  "localhost:8080",
 			AdminListenAddress: "unix:///tmp/kwil_admin.sock",
-			// SqliteFilePath:     DefaultSQLitePath,
-			DBHost: "127.0.0.1",
-			DBPort: "5432", // ignored with unix socket, but applies if IP used for DBHost
-			DBUser: "kwild",
-			DBName: "kwild",
+			DBHost:             "127.0.0.1",
+			DBPort:             "5432", // ignored with unix socket, but applies if IP used for DBHost
+			DBUser:             "kwild",
+			DBName:             "kwild",
 			// SnapshotConfig: SnapshotConfig{
 			// 	Enabled:         false,
 			// 	RecurringHeight: uint64(10000),

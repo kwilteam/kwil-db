@@ -44,10 +44,9 @@ type Server struct {
 
 const (
 	// Top-level directory structure for the Server's systems
-	abciDirName        = config.ABCIDirName
-	applicationDirName = config.ApplicationDirName
-	rcvdSnapsDirName   = config.ReceivedSnapsDirName
-	signingDirName     = config.SigningDirName
+	abciDirName      = config.ABCIDirName
+	rcvdSnapsDirName = config.ReceivedSnapsDirName
+	signingDirName   = config.SigningDirName
 
 	// Note that the sqlLite file path is user-configurable
 	// e.g. "data/kwil.db"

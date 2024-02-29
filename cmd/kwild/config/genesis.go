@@ -5,12 +5,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"hash"
-	"io"
 	"math/big"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"time"
 
@@ -308,26 +305,7 @@ func NewGenesisWithValidator(pubKey []byte) *GenesisConfig {
 	return genesisCfg
 }
 
-func listFilesAlphabetically(filePath string) ([]string, error) {
-	files, err := filepath.Glob(filePath)
-	if err != nil {
-		return nil, err
-	}
-	slices.Sort(files)
-	return files, nil
-}
-
-func hashFile(filePath string, hasher hash.Hash) error {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	_, err = io.Copy(hasher, file)
-	return err
-}
-
+/* TODO: restore when we figure out how to compute appHash with postgres
 func setGenesisAppHash(appHash []byte, genesisFile string) error {
 	genesisConf, err := LoadGenesisConfig(genesisFile)
 	if err != nil {
@@ -340,35 +318,55 @@ func setGenesisAppHash(appHash []byte, genesisFile string) error {
 	}
 	return nil
 }
+*/
 
 // PatchGenesisAppHash computes the apphash from a full contents of all sqlite
 // files in the provided folder, and if genesis file is provided, updates the
 // app_hash in the file.
-func PatchGenesisAppHash(sqliteDbDir, genesisFile string) ([]byte, error) {
-	di, err := os.Stat(sqliteDbDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read sqlite path: %v", err)
-	}
-	if !di.IsDir() {
-		return nil, fmt.Errorf("sqlite path is not a directory: %v", sqliteDbDir)
-	}
-	// List all sqlite files in the given dir in lexicographical order
-	files, err := listFilesAlphabetically(filepath.Join(sqliteDbDir, "*.sqlite"))
+/* WARNING: this is not complete, only a concept.  We
+   don't have SQLite anymore, so the file hashing is replaced with a suggestion
+   of what we might do when this is implemented.
+
+func PatchGenesisAppHash(ctx context.Context, cfg *pg.ConnConfig, genesisFile string) ([]byte, error) {
+	conns, err := pg.NewPool(ctx, &pg.PoolConfig{
+		ConnConfig: *cfg,
+		MaxConns:   2,
+	})
 	if err != nil {
 		return nil, err
 	}
-	// Allow len(files) == 0 ?
 
-	// Generate DB Hash
+	engineCtx, err := execution.NewGlobalContext(ctx, conns, map[string]actions.ExtensionInitializer{}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	datasets, err := engineCtx.ListDatasets(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	hasher := sha256.New()
-	for _, file := range files {
-		if err = hashFile(file, hasher); err != nil {
+
+	for _, dataset := range datasets {
+		schema, err := engineCtx.GetSchema(ctx, dataset.DBID)
+		if err != nil {
 			return nil, err
 		}
+		pgSchema := execution.DBIDSchema(dataset.DBID)
+		for _, table := range schema.Tables {
+			qualifiedTableName := pgSchema + "." + table.Name
+			// HERE we need to iterate over all the columns in a deterministic way to form a digest of all the data.
+			fmt.Println(qualifiedTableName)
+			// ...
+		}
 	}
-	genesisHash := hasher.Sum(nil)
+
+	// ALSO, we should probably migrate and digest the accounts table.
+	// ...
 
 	// Optionally update the app_hash in the genesis file.
+	genesisHash := hasher.Sum(nil)
 	if genesisFile != "" {
 		err = setGenesisAppHash(genesisHash, genesisFile)
 		if err != nil {
@@ -378,3 +376,4 @@ func PatchGenesisAppHash(sqliteDbDir, genesisFile string) ([]byte, error) {
 
 	return genesisHash, nil
 }
+*/
