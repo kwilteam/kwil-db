@@ -98,8 +98,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache-kwild
-          #key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
-          key: ${{ runner.os }}-buildx-kwild
+          key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-kwild
 
@@ -148,7 +147,7 @@ jobs:
           testGroupID=$(id -g)
           cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/acceptance/docker-compose.override.yml
-          KACT_LOG_LEVEL=warn task test:act:nb -parallel-mode -parallel 2
+          KACT_LOG_LEVEL=warn task test:act:nb -- -parallel-mode -parallel 2
 
       - name: Run integration test
         # without kgw test, probably should disable this ?
@@ -163,8 +162,6 @@ jobs:
         run: |
           rm -rf /tmp/.buildx-cache-kwild
           mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
-          rm -rf /tmp/.buildx-cache-kgw
-            mv /tmp/.buildx-cache-kgw-new /tmp/.buildx-cache-kgw
 
       - name: Prune Docker
         if: ${{ always() }}
