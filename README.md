@@ -1,29 +1,16 @@
-<div align="center">
-    <h1>Kwil DB</h1>
-    <p><strong>The database for Web3.</strong></p>
-    <img src="https://github.com/kwilteam/docs/blob/main/static/img/kwil%20social-card.jpg" alt="banner" /><br/>
-    <a href="https://github.com/kwilteam/kwil-db/blob/main/LICENSE.md">
-        <img alt="GitHub License" src="https://img.shields.io/github/license/kwilteam/kwil-db">
-    </a>
-     <a href="https://github.com/kwilteam/kwil-db/releases">
-        <img src="https://img.shields.io/github/v/release/kwilteam/kwil-db" alt="Release">
-    </a>
-    <a href="https://github.com/kwilteam/kwil-db/actions">
-        <img src="https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg" alt="Build Status">
-    </a>
-    <a href="https://github.com/kwilteam/kwil-db/blob/main/go.mod">
-        <img src="https://img.shields.io/github/go-mod/go-version/kwilteam/kwil-db" alt="Go Version">
-    </a>
-    <a href="https://godoc.org/github.com/kwilteam/kwil-db">
-        <img src="https://godoc.org/github.com/kwilteam/kwil-db?status.svg" alt="GoDoc">
-    </a>
-    <a href="https://goreportcard.com/report/github.com/kwilteam/kwil-db">
-        <img src="https://goreportcard.com/badge/github.com/kwilteam/kwil-db" alt="Go Report Card">
-    </a>
-    <a href="https://discord.com/invite/HzRPZ59Kay">
-        <img alt="Discord" src="https://img.shields.io/discord/819855804554543114?logo=discord">
-    </a>
-</div>
+# Kwil DB
+
+The database for Web3.
+
+[!banner](./assets/kwil-banner.jpeg)
+
+[!Github-License](https://img.shields.io/github/license/kwilteam/kwil-db)
+[!Release](https://img.shields.io/github/v/release/kwilteam/kwil-db)
+[!Build-Status](https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg)
+[!Go-Version](https://img.shields.io/github/go-mod/go-version/kwilteam/kwil-db)
+[!GoDoc](https://godoc.org/github.com/kwilteam/kwil-db?status.svg)
+[!Go-Report-Card](https://goreportcard.com/badge/github.com/kwilteam/kwil-db)
+[!Discord](https://img.shields.io/discord/819855804554543114?logo=discord)
 
 Kwil-db is the execution layer (node software) for Kwil Networks. Built with [PostgreSQL](https://www.postgresql.org/) and [CometBFT](https://github.com/cometbft/cometbft), Kwil-db extend the functionality of traditional relational databases to enable secure, byzantine fault tolerant, relational data-driven replicated state machines.
 
@@ -47,7 +34,7 @@ To build Kwil, you will need to install:
 2. [Protocol Buffers](https://protobuf.dev/downloads/) (optional), with the `protoc` executable binary on your `PATH`.
 3. [Taskfile](https://taskfile.dev/installation)
 4. [Docker](https://docs.docker.com/get-docker/) to run a PostgreSQL database.
-5. Miscellaneous go plugins and other command line tools. The `tool` task will install the required versions of the tools into your `GOPATH`, so be sure to include `GOPATH/bin` on your `PATH`.
+5. Miscellaneous go plugins and other command line tools. The `tools` task will install the required versions of the tools into your `GOPATH`, so be sure to include `GOPATH/bin` on your `PATH`.
 
     ```shell
     task tools
@@ -76,7 +63,7 @@ docker compose -f ./deployments/compose/postgres/docker-compose.yml up
 You can start a single node network using the `kwild` binary built in the step above:
 
 ```shell
-.build/kwild --autogen --app.pg_db_host localhost
+.build/kwild
 ```
 
 For more information on running nodes, and how to run a multi-node network, refer to the Kwil [documentation](https://docs.kwil.com/docs/node/quickstart).
@@ -101,4 +88,4 @@ We welcome contributions to kwil-db. To contribute, please read our [contributin
 
 The kwil-db repository (i.e. everything outside of the `core` directory) is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for more details.
 
-The kwil Golang SDK (i.e. everything inside of the `core` directory) is licensed under the MIT License. See [core/LICENSE.md](core/LICENSE.md) for more details.
+The kwil Go SDK (i.e. everything inside of the `core` directory) is licensed under the MIT License. See [core/LICENSE.md](core/LICENSE.md) for more details.
