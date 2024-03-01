@@ -68,17 +68,28 @@ jobs:
           ./scripts/swagger/check_up
 
       - name: Compile packages, apps, and specs
-        run: | # enter workspace mode to do this on one line
-          go work init && go work use . ./parse ./test ./core
-          go build -mod=readonly ./... ./parse/... ./core/... ./test/specifications/
+        run: |
+          go build -mod=readonly ./...
+          (cd parse; go build -mod=readonly ./...)
+          (cd core; go build -mod=readonly ./...)
 
-      - name: Lint
+      - name: Install Linter
         uses: golangci/golangci-lint-action@v4.0.0
         with:
           install-mode: "binary"
           version: "latest"
           skip-pkg-cache: true
-          args: ./... ./core/... ./test/... ./parse/... --timeout=10m --config=.golangci.yml --skip-dirs ./core/rpc/protobuf
+          # golangci-lint needs to be run separately for every Go module, and
+          # its GitHub Action doesn't provide any way to do that. Have it fetch
+          # the golangci-lint binary, trick it into not running by sending only
+          # `--help`, then run the full set of lints below. DO NOT run separate
+          # modules as separate golangci-lint-action steps. Its post run caching
+          # can be extremely slow, and that's amplified in a very painful way if
+          # it needs to be run multiple times.
+          args: --help
+
+      - name: Lint
+        run: task lint
 
       # unit test
       - name: Run unit test
