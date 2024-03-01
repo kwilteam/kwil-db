@@ -2,14 +2,6 @@ module github.com/kwilteam/kwil-db/test
 
 go 1.21
 
-// During development cycle, use the workspace kwil-db module. Remove this after
-// tagging kwil-db module.
-replace (
-	github.com/kwilteam/kwil-db => ../
-	github.com/kwilteam/kwil-db/core => ../core
-	github.com/kwilteam/kwil-db/parse => ../parse
-)
-
 require (
 	github.com/cometbft/cometbft v0.38.5
 	github.com/cstockton/go-conv v1.0.0
