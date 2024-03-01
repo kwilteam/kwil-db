@@ -2,10 +2,15 @@
 
 The database for Web3.
 
-![banner](./assets/kwil-banner.jpeg) 
+![banner](./assets/kwil-banner.jpeg)
 
-![Github-License](https://img.shields.io/badge/license-Apache%202.0-green) ![Release](https://img.shields.io/github/v/release/kwilteam/kwil-db) ![Build-Status](https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg) ![Go-Version](https://img.shields.io/github/go-mod/go-version/kwilteam/kwil-db) ![GoDoc](https://godoc.org/github.com/kwilteam/kwil-db?status.svg)
-![Go-Report-Card](https://goreportcard.com/badge/github.com/kwilteam/kwil-db) ![Discord](https://img.shields.io/discord/819855804554543114?logo=discord)
+![Github-License](https://img.shields.io/badge/license-Apache%202.0-green)
+![Release](https://img.shields.io/github/v/release/kwilteam/kwil-db)
+![Build-Status](https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg)
+![Go-Version](https://img.shields.io/github/go-mod/go-version/kwilteam/kwil-db)
+![GoDoc](https://godoc.org/github.com/kwilteam/kwil-db?status.svg)
+![Go-Report-Card](https://goreportcard.com/badge/github.com/kwilteam/kwil-db)
+![Discord](https://img.shields.io/discord/819855804554543114?logo=discord)
 
 Kwil is the node software for Kwil Networks. Built with [PostgreSQL](https://www.postgresql.org/) and [CometBFT](https://github.com/cometbft/cometbft), Kwil enables byzantine fault tolerant networks to be built on top of relational databases.
 
@@ -25,53 +30,122 @@ For more information on kwil-db, check out the [Kwil node documentation](https:/
 
 To build Kwil, you will need to install:
 
-1. [Go](https://golang.org/doc/install)
-2. [Protocol Buffers](https://protobuf.dev/downloads/) (optional), with the `protoc` executable binary on your `PATH`.
-3. [Taskfile](https://taskfile.dev/installation)
-4. [Docker](https://docs.docker.com/get-docker/) to run a PostgreSQL database.
-5. Miscellaneous go plugins and other command line tools. The `tools` task will install the required versions of the tools into your `GOPATH`, so be sure to include `GOPATH/bin` on your `PATH`.
+1. [Go](https://golang.org/doc/install) 1.21 or 1.22
+2. (optional) [Protocol Buffers](https://protobuf.dev/downloads/), with the `protoc` executable binary on your `PATH`.
+3. (optional) [Taskfile](https://taskfile.dev/installation)
+4. (optional) Protocol buffers go plugins and other command line tools. The `tool` task will install the required versions of the tools into your `GOPATH`, so be sure to include `GOPATH/bin` on your `PATH`.
 
     ```shell
     task tools
     ```
 
+Only Go is required to build directly from the `cmd/kwild` folder or via `go install`, although developers may require the other tools.
+
+To *run* Kwil, PostgreSQL is also required. See the [documentation](<https://docs.kwil.com/docs/daemon/installation>) for more information.
+
 #### Build
 
-Invoke `task` command to see all available tasks. The `build` task will compile `kwild`, `kwil-cli`, and `kwil-admin` binaries. They will be generated in `.build/`:
+The `build` [task](https://taskfile.dev/) will compile `kwild`, `kwil-cli`, and `kwil-admin` binaries. They will be generated in `.build/`:
 
 ```shell
 task build
 ```
 
-### Local Deployment
+You may also build the individual applications manually:
 
-#### Start PostgreSQL
+```shell
+cd cmd/kwild
+go build
+```
 
-Each Kwil node requires a PostgreSQL instance to run. You can start a PostgreSQL database using Docker Compose:
+Or without even cloning the source repository:
+
+```shell
+go install github.com/kwilteam/kwil-db/cmd/kwild@v0.7.0
+```
+
+Just replace `v0.7.0` with the desired version or `latest`.
+
+### Running `kwild`
+
+Running `kwild` requires a PostgreSQL host running. Since the default
+configuration of most PostgreSQL packages requires changes for `kwild`, the
+easiest is to run our pre-configured Docker image:
 
 ```shell
 docker run -p 5432:5432 -v kwil-pg-demo:/var/lib/postgresql/data \
     --shm-size 256m -e "POSTGRES_HOST_AUTH_METHOD=trust" \
-    --name kwil-pg-demo Kwil/postgres:latest
+    --name kwil-pg-demo kwildb/postgres:latest
 ```
 
-### Start kwild
+The first time this is run, it will pull the `kwildb/postgres` image from Docker
+Hub and create a new persistent Docker volume named `kwil-pg-demo`. NOTE: This
+command requires no authentication with `postgres`, and should not be used in
+production.
 
-You can start a single node network using the `kwild` binary built in the step above:
+`task pg` may be used to run the above command.
+
+You can then start a single node network using the `kwild` binary built in the previous section:
 
 ```shell
-.build/kwild --autogen
+# Use the full path to kwild if it is not on your PATH.
+kwild --autogen
 ```
+
+With the `--autogen` flag, the node automatically creates a new random network
+and validator key, and the node will begin producing blocks.
 
 For more information on running nodes, and how to run a multi-node network, refer to the Kwil [documentation](https://docs.kwil.com/docs/node/quickstart).
 
-### Resetting local deployments
+### Resetting node data
 
 By default, `kwild` stores all data in `~/.kwild`. To reset the data on a deployment, remove the data directory while the node is stopped:
 
 ```shell
 rm -r ~/.kwild
 ```
+
+Then delete the PostgreSQL database. If using the Docker image or service, delete the container and it's volume:
+
+```shell
+docker container rm -f kwil-pg-demo
+docker volume rm -f kwil-pg-demo
+```
+
+`task pg:clean` may be used to run the above commands.
+
+If using a system install of `postgres`, recreate the database with `psql`:
+
+```shell
+psql -U postgres -h 127.0.0.1 -d postgres \
+    -c "DROP DATABASE IF EXISTS kwild" \
+    -c "CREATE DATABASE kwild OWNER kwild"
+```
+
+### Unified `kwild` + `postgres` Quickstart Docker Service
+
+For development purposes, the `deployments/compose/kwil` folder contains a
+Docker Compose service definition that starts both `kwild` and `postgres`,
+configured so that they will work together out-of-the-box with no additional
+configuration changes. Start it by running the following from the
+`deployments/compose/kwil` folder in the repository:
+
+```sh
+cd deployments/compose/kwil
+docker compose up -d
+```
+
+With the `-d` option, the service(s) will be started as background processes. To
+stop them or view logs, use the `docker container` commands or the Docker
+Desktop dashboard.
+
+On start, this service definition will create a `testnode` folder in the same
+location as the `docker-compose.yml` file, and a persistent Docker volume called
+`kwil_pgkwil` for the `postgres` database cluster files.
+
+This also runs with the `--autogen` flag, creating a new randomly generated
+chain, and is not intended for production use. However, the service definition
+may be used as a basis for a customized deployment.
 
 ## Extensions
 
