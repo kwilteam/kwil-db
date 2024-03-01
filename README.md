@@ -1,4 +1,4 @@
-# Kwil DB
+# KwilDB
 
 The database for Web3.
 
@@ -7,13 +7,13 @@ The database for Web3.
 ![Github-License](https://img.shields.io/badge/license-Apache%202.0-green) ![Release](https://img.shields.io/github/v/release/kwilteam/kwil-db) ![Build-Status](https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg) ![Go-Version](https://img.shields.io/github/go-mod/go-version/kwilteam/kwil-db) ![GoDoc](https://godoc.org/github.com/kwilteam/kwil-db?status.svg)
 ![Go-Report-Card](https://goreportcard.com/badge/github.com/kwilteam/kwil-db) ![Discord](https://img.shields.io/discord/819855804554543114?logo=discord)
 
-Kwil-db is the execution layer (node software) for Kwil Networks. Built with [PostgreSQL](https://www.postgresql.org/) and [CometBFT](https://github.com/cometbft/cometbft), Kwil-db extend the functionality of traditional relational databases to enable secure, byzantine fault tolerant, relational data-driven replicated state machines.
+KwilDB is the node software for Kwil Networks. Built with [PostgreSQL](https://www.postgresql.org/) and [CometBFT](https://github.com/cometbft/cometbft), KwilDB enables byzantine fault tolerant networks to be built on top of relational databases.
 
 ## Overview
 
 To learn more about high-level Kwil concepts, refer to the [Kwil documentation](https://docs.kwil.com/docs/concepts).
 
-To test deploying and using a decentralized database on the Kwil testnet, refer to the [Kwil testnet tutorial](https://docs.kwil.com/docs/testnet/quickstart).
+To test deploying and using a Kuneiform schema (Kwil's smart contract language) on the Kwil testnet, refer to the [Kwil testnet tutorial](https://docs.kwil.com/docs/getting-started/create-a-database).
 
 For more information on kwil-db, check out the [Kwil node documentation](https://docs.kwil.com/docs/node/quickstart).
 
@@ -50,7 +50,9 @@ task build
 Each Kwil node requires a PostgreSQL instance to run. You can start a PostgreSQL database using Docker Compose:
 
 ```shell
-docker compose -f ./deployments/compose/postgres/docker-compose.yml up
+docker run -p 5432:5432 -v kwil-pg-demo:/var/lib/postgresql/data \
+    --shm-size 256m -e "POSTGRES_HOST_AUTH_METHOD=trust" \
+    --name kwil-pg-demo kwildb/postgres:latest
 ```
 
 ### Start kwild
@@ -58,7 +60,7 @@ docker compose -f ./deployments/compose/postgres/docker-compose.yml up
 You can start a single node network using the `kwild` binary built in the step above:
 
 ```shell
-.build/kwild
+.build/kwild --autogen
 ```
 
 For more information on running nodes, and how to run a multi-node network, refer to the Kwil [documentation](https://docs.kwil.com/docs/node/quickstart).
@@ -73,7 +75,7 @@ rm -r ~/.kwild
 
 ## Extensions
 
-Kwil offers an extension system that allows you to extend the functionality of your network (e.g. building network oracles, customizing authentication, creating network deterministic compute, etc.). To learn more about the types of extensions and how to build them, refer to the extensions directory [README](extensions/README.md).
+Kwil offers an extension system that allows you to extend the functionality of your network (e.g. building network oracles, customizing authentication, running deterministic compute, etc.). To learn more about the types of extensions and how to build them, refer to the extensions directory [README](extensions/README.md).
 
 ## Contributing
 
