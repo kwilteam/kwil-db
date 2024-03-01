@@ -2,15 +2,10 @@
 
 The database for Web3.
 
-[!banner](./assets/kwil-banner.jpeg)
+![banner](./assets/kwil-banner.jpeg) 
 
-[!Github-License](https://img.shields.io/github/license/kwilteam/kwil-db)
-[!Release](https://img.shields.io/github/v/release/kwilteam/kwil-db)
-[!Build-Status](https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg)
-[!Go-Version](https://img.shields.io/github/go-mod/go-version/kwilteam/kwil-db)
-[!GoDoc](https://godoc.org/github.com/kwilteam/kwil-db?status.svg)
-[!Go-Report-Card](https://goreportcard.com/badge/github.com/kwilteam/kwil-db)
-[!Discord](https://img.shields.io/discord/819855804554543114?logo=discord)
+![Github-License](https://img.shields.io/badge/license-Apache%202.0-green) ![Release](https://img.shields.io/github/v/release/kwilteam/kwil-db) ![Build-Status](https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg) ![Go-Version](https://img.shields.io/github/go-mod/go-version/kwilteam/kwil-db) ![GoDoc](https://godoc.org/github.com/kwilteam/kwil-db?status.svg)
+![Go-Report-Card](https://goreportcard.com/badge/github.com/kwilteam/kwil-db) ![Discord](https://img.shields.io/discord/819855804554543114?logo=discord)
 
 Kwil-db is the execution layer (node software) for Kwil Networks. Built with [PostgreSQL](https://www.postgresql.org/) and [CometBFT](https://github.com/cometbft/cometbft), Kwil-db extend the functionality of traditional relational databases to enable secure, byzantine fault tolerant, relational data-driven replicated state machines.
 
