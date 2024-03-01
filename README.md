@@ -1,4 +1,4 @@
-# KwilDB
+# Kwil
 
 The database for Web3.
 
@@ -7,7 +7,7 @@ The database for Web3.
 ![Github-License](https://img.shields.io/badge/license-Apache%202.0-green) ![Release](https://img.shields.io/github/v/release/kwilteam/kwil-db) ![Build-Status](https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg) ![Go-Version](https://img.shields.io/github/go-mod/go-version/kwilteam/kwil-db) ![GoDoc](https://godoc.org/github.com/kwilteam/kwil-db?status.svg)
 ![Go-Report-Card](https://goreportcard.com/badge/github.com/kwilteam/kwil-db) ![Discord](https://img.shields.io/discord/819855804554543114?logo=discord)
 
-KwilDB is the node software for Kwil Networks. Built with [PostgreSQL](https://www.postgresql.org/) and [CometBFT](https://github.com/cometbft/cometbft), KwilDB enables byzantine fault tolerant networks to be built on top of relational databases.
+Kwil is the node software for Kwil Networks. Built with [PostgreSQL](https://www.postgresql.org/) and [CometBFT](https://github.com/cometbft/cometbft), Kwil enables byzantine fault tolerant networks to be built on top of relational databases.
 
 ## Overview
 
@@ -52,7 +52,7 @@ Each Kwil node requires a PostgreSQL instance to run. You can start a PostgreSQL
 ```shell
 docker run -p 5432:5432 -v kwil-pg-demo:/var/lib/postgresql/data \
     --shm-size 256m -e "POSTGRES_HOST_AUTH_METHOD=trust" \
-    --name kwil-pg-demo kwildb/postgres:latest
+    --name kwil-pg-demo Kwil/postgres:latest
 ```
 
 ### Start kwild
