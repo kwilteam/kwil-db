@@ -11,6 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	_ "net/http/pprof"
+
+	_ "github.com/kwilteam/kwil-db/extensions" // a base location where all extensions can be registered
+	_ "github.com/kwilteam/kwil-db/extensions/auth"
+
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/cmd/kwild/server"
 	"github.com/kwilteam/kwil-db/internal/version"
