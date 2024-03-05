@@ -24,8 +24,9 @@ import (
 //    authentication required endpoints.
 
 const (
-	kgwAuthVersion    = "1"
-	kgwAuthCookieName = "kgw_session"
+	kgwAuthVersion          = "1"
+	kgwAuthCookieName       = "kgw_session"
+	kgwAuthCookieNameSecure = "__Host-" + kgwAuthCookieName
 )
 
 // GatewayAuthSignFunc is the function that signs the authentication message.
