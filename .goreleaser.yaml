@@ -86,15 +86,5 @@ checksum:
   name_template: 'checksums.txt'
 
 release:
-  prerelease: auto
-  github:
-    owner: kwilteam
-    name: kwil-cli
+  draft: true
   replace_existing_draft: true
-  ids:
-    - kwil-cli
-    - kwild
-    - kwil-admin
-
-universal_binaries:
-  - replace: true
