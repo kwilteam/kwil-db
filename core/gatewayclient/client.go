@@ -57,7 +57,7 @@ func (acj *customAuthCookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 		return
 	}
 	for _, c := range cookies {
-		if c.Name == kgwAuthCookieName {
+		if c.Name == kgwAuthCookieName || c.Name == kgwAuthCookieNameSecure {
 			acj.handleAuthCookie(c)
 		}
 	}
@@ -192,7 +192,7 @@ func (c *GatewayClient) SetAuthCookie(cookie *http.Cookie) error {
 	if cookie.Domain != "" && cookie.Domain != c.target.Host {
 		return fmt.Errorf("cookie domain %s not valid for host %s", cookie.Domain, c.target.Host)
 	}
-	if cookie.Name != kgwAuthCookieName {
+	if cookie.Name != kgwAuthCookieName && cookie.Name != kgwAuthCookieNameSecure {
 		return fmt.Errorf("cookie name %s not valid", cookie.Name)
 	}
 
