@@ -9,54 +9,6 @@ import (
 	"strings"
 )
 
-// Field represents a field in a schema.
-type Field struct {
-	Name string
-	Type string
-}
-
-type Schema struct {
-	Fields []Field
-}
-
-func (s *Schema) String() string {
-	var fields []string
-	for _, f := range s.Fields {
-		fields = append(fields, fmt.Sprintf("%s/%s", f.Name, f.Type))
-	}
-	return fmt.Sprintf("[%s]", strings.Join(fields, ", "))
-}
-
-func (s *Schema) Select(projection ...string) *Schema {
-	fieldIndex := s.mapProjection(projection)
-
-	newFields := make([]Field, len(projection))
-	for i, idx := range fieldIndex {
-		newFields[i] = s.Fields[idx]
-	}
-
-	return NewSchema(newFields...)
-}
-
-// mapProjection maps the projection to the index of the fields in the schema.
-func (s *Schema) mapProjection(projection []string) []int {
-	fieldIndexMap := make(map[string]int)
-	for i, field := range s.Fields {
-		fieldIndexMap[field.Name] = i
-	}
-
-	newFieldsIndex := make([]int, len(projection))
-	for i, name := range projection {
-		newFieldsIndex[i] = fieldIndexMap[name]
-	}
-
-	return newFieldsIndex
-}
-
-func NewSchema(fields ...Field) *Schema {
-	return &Schema{Fields: fields}
-}
-
 // ColumnValue
 type ColumnValue interface {
 	Type() string
@@ -154,18 +106,23 @@ func (r *Result) Next() (Row, bool) {
 	return row, ok
 }
 
-type DataSourceType string
+type SourceType string
 
+// DataSource represents a data source.
 type DataSource interface {
 	// Schema returns the schema for the underlying data source
 	Schema() *Schema
+
+	// SourceType returns the type of the data source.
+	SourceType() SourceType
+
 	// Scan scans the data source, return selected columns.
 	// If projection field is not found in the schema, it will be ignored.
 	// NOTE: should panic?
 	Scan(projection ...string) *Result
-	// SourceType returns the type of the data source.
-	SourceType() DataSourceType
+
 	// TODO
+	// Should this in DataSource?
 	// Statistics returns the statistics of the data source.
 	//Statistics() *Statistics
 }
@@ -234,7 +191,7 @@ func (ds *memDataSource) Scan(projection ...string) *Result {
 	return dsScan(ds.schema, ds.records, projection)
 }
 
-func (ds *memDataSource) SourceType() DataSourceType {
+func (ds *memDataSource) SourceType() SourceType {
 	return "memory"
 }
 
@@ -327,6 +284,6 @@ func (ds *csvDataSource) Scan(projection ...string) *Result {
 	return dsScan(ds.schema, ds.records, projection)
 }
 
-func (ds *csvDataSource) SourceType() DataSourceType {
+func (ds *csvDataSource) SourceType() SourceType {
 	return "csv"
 }
