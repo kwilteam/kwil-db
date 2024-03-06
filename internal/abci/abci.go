@@ -943,5 +943,3 @@ type EventBroadcaster func(ctx context.Context, proposer []byte) error
 func (a *AbciApp) SetEventBroadcaster(fn EventBroadcaster) {
 	a.broadcastFn = fn
 }
-
-type ValidatorGetter func(ctx context.Context, height *int64) ([]*types.Validator, error)
