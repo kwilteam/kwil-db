@@ -8,7 +8,6 @@ import (
 	"math"
 	"strings"
 
-	ctypes "github.com/kwilteam/kwil-db/core/types"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/abci"
@@ -179,25 +178,6 @@ func (wc *wrappedCometBFTClient) TxQuery(ctx context.Context, hash []byte, prove
 		}
 	}
 	return nil, abci.ErrTxNotFound
-}
-
-// GetValidators returns the current validator set at the given height by the CometBFT.
-// If height is nil, it returns the validator set at the last committed height.
-func (wc *wrappedCometBFTClient) GetValidators(ctx context.Context, height *int64) ([]*ctypes.Validator, error) {
-	res, err := wc.cl.Validators(ctx, height, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	vals := make([]*ctypes.Validator, len(res.Validators))
-	for i, v := range res.Validators {
-		vals[i] = &ctypes.Validator{
-			PubKey: v.PubKey.Bytes(),
-			Power:  v.VotingPower,
-		}
-	}
-
-	return vals, nil
 }
 
 // atomicReadWriter implements the CometBFT AtomicReadWriter interface.
