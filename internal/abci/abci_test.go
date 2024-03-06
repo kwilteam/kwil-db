@@ -131,6 +131,11 @@ func Test_prepareMempoolTxns(t *testing.T) {
 	tOtherSenderC := nextTx(tOtherSenderB)
 	tOtherSenderCb := marshalTx(t, tOtherSenderC)
 
+	// proposer party
+	tProposer := cloneTx(tA)
+	tProposer.Sender = []byte(`proposer`)
+	tProposerb := marshalTx(t, tProposer)
+
 	invalid := []byte{9, 90, 22}
 
 	tests := []struct {
@@ -198,10 +203,20 @@ func Test_prepareMempoolTxns(t *testing.T) {
 			[][]byte{tOtherSenderAb, tAb, tOtherSenderBb, tOtherSenderCb, tBb},
 			[][]byte{tOtherSenderAb, tAb, tOtherSenderBb, tOtherSenderCb, tBb},
 		},
+		{
+			"multi-party,proposer in the last, reorder",
+			[][]byte{tOtherSenderAb, tAb, tOtherSenderBb, tOtherSenderCb, tBb, tProposerb},
+			[][]byte{tProposerb, tOtherSenderAb, tAb, tOtherSenderBb, tOtherSenderCb, tBb},
+		},
+		{
+			"multi-party,proposer in the middle, reorder",
+			[][]byte{tOtherSenderAb, tAb, tOtherSenderBb, tProposerb, tOtherSenderCb, tBb},
+			[][]byte{tProposerb, tOtherSenderAb, tAb, tOtherSenderBb, tOtherSenderCb, tBb},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _ := abciApp.prepareMempoolTxns(tt.txs, 1e6, &logger, []byte("proposer"))
+			got := abciApp.prepareBlockTransactions(tt.txs, &logger, 1e6, []byte("proposer"))
 			if len(got) != len(tt.want) {
 				t.Errorf("got %d txns, expected %d", len(got), len(tt.want))
 			}
@@ -231,7 +246,7 @@ func Test_ProcessProposal_UnfundedAccount(t *testing.T) {
 	txA1 := newTxBts(t, 1, signerA)
 
 	// Unfunded account
-	txs, _ := abciApp.prepareMempoolTxns([][]byte{txA1}, 1e6, &logger, []byte("proposer"))
+	txs := abciApp.prepareBlockTransactions([][]byte{txA1}, &logger, 1e6, []byte("proposer"))
 	assert.Len(t, txs, 0)
 
 }
@@ -404,7 +419,7 @@ func (m *mockTxApp) GetValidators(ctx context.Context) ([]*types.Validator, erro
 	return nil, nil
 }
 
-func (m *mockTxApp) ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error) {
+func (m *mockTxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxSz int64, proposerAddr []byte) ([][]byte, error) {
 	return nil, nil
 }
 
