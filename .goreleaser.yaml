@@ -31,7 +31,6 @@ builds:
     tags:
       - osusergo
       - netgo
-      - auth_nep413
     env:
       - CGO_ENABLED=0
 
