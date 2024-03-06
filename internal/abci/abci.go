@@ -734,9 +734,9 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 	if !ok {
 		// there is an edge case where cometbft will allow a node to PrepareProposal
 		// even if it is not a validator, if it was a validator in the most recent block
-		// we check for this here and do not propose if the node is not a validator
-		// we will also need to check for this in ProcessProposal, in case of byzantine behavior
-		return nil, fmt.Errorf("unknown proposer: failed to find proposer pubkey corresponding to address %v", req.ProposerAddress)
+		// we check for this here and simply propose an empty block, since it will be rejected
+		a.log.Warn("local node was made proposer, but is no longer a validator")
+		return &abciTypes.ResponsePrepareProposal{}, nil
 	}
 
 	okTxns, proposerNonce := a.prepareMempoolTxns(req.Txs, int(req.MaxTxBytes), &a.log, pubKey)
@@ -854,7 +854,8 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 		// there is an edge case where cometbft will allow a node to PrepareProposal
 		// even if it is not a validator, if it was a validator in the most recent block.
 		// we should therefore reject the proposal if the proposer is not a validator.
-		return nil, fmt.Errorf("unknown proposer: failed to find proposer pubkey corresponding to address %v", req.ProposerAddress)
+		a.log.Warn("proposer is not a validator, rejecting proposal", zap.String("proposer", proposerAddrToString(req.ProposerAddress)))
+		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
 	}
 
 	if err := a.validateProposalTransactions(ctx, req.Txs, proposerPubKey); err != nil {
