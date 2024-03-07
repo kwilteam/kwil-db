@@ -268,14 +268,14 @@ func Test_Routes(t *testing.T) {
 			}
 
 			// mock getAccount, which is func declared in interfaces.go
-			getAccount = func(ctx context.Context, tx sql.DB, acctID []byte) (*types.Account, error) {
+			getAccount = func(ctx context.Context, tx sql.Executor, acctID []byte) (*types.Account, error) {
 				return &types.Account{
 					Identifier: acctID,
 					Balance:    big.NewInt(0),
 					Nonce:      0,
 				}, nil
 			}
-			spend = func(ctx context.Context, tx sql.DB, account []byte, amount *big.Int, nonce int64) error {
+			spend = func(ctx context.Context, tx sql.Executor, account []byte, amount *big.Int, nonce int64) error {
 				return nil
 			}
 

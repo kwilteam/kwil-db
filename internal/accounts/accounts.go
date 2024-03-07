@@ -11,7 +11,7 @@ import (
 )
 
 // InitializeAccountStore initializes the account store schema and tables.
-func InitializeAccountStore(ctx context.Context, db sql.DB) error {
+func InitializeAccountStore(ctx context.Context, db sql.TxMaker) error {
 	sp, err := db.BeginTx(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -29,7 +29,7 @@ func InitializeAccountStore(ctx context.Context, db sql.DB) error {
 // Credit credits an account with the given amount. If the account does not exist, it will be created.
 // A negative amount will be treated as a debit. Accounts cannot have negative balances, and will
 // return an error if the amount would cause the balance to go negative.
-func Credit(ctx context.Context, tx sql.DB, account []byte, amt *big.Int) error {
+func Credit(ctx context.Context, tx sql.Executor, account []byte, amt *big.Int) error {
 	acct, err := getAccount(ctx, tx, account)
 	if err != nil {
 		if errors.Is(err, ErrAccountNotFound) {
@@ -56,7 +56,7 @@ func Credit(ctx context.Context, tx sql.DB, account []byte, amt *big.Int) error 
 
 // GetAccount retrieves the account with the given identifier. If the account does not exist, it will
 // return an account with a balance of 0 and a nonce of 0.
-func GetAccount(ctx context.Context, tx sql.DB, account []byte) (*types.Account, error) {
+func GetAccount(ctx context.Context, tx sql.Executor, account []byte) (*types.Account, error) {
 	acct, err := getAccount(ctx, tx, account)
 	if err == ErrAccountNotFound {
 		return &types.Account{
@@ -71,7 +71,7 @@ func GetAccount(ctx context.Context, tx sql.DB, account []byte) (*types.Account,
 // Spend spends an amount from an account and records nonces. It blocks until the spend is written to the database.
 // The nonce passed must be exactly one greater than the account's nonce. If the nonce is not valid, the spend will fail.
 // If the account does not have enough funds to spend the amount, an ErrInsufficientFunds error will be returned.
-func Spend(ctx context.Context, tx sql.DB, account []byte, amount *big.Int, nonce int64) error {
+func Spend(ctx context.Context, tx sql.Executor, account []byte, amount *big.Int, nonce int64) error {
 	acct, err := getAccount(ctx, tx, account)
 	if err != nil {
 		// if amount is 0 and account not found, create the account
@@ -98,7 +98,7 @@ func Spend(ctx context.Context, tx sql.DB, account []byte, amount *big.Int, nonc
 
 // Transfer transfers an amount from one account to another. If the from account does not have enough funds to transfer the amount,
 // it will fail. If the to account does not exist, it will be created. The amount must be greater than 0.
-func Transfer(ctx context.Context, db sql.DB, from, to []byte, amt *big.Int) error {
+func Transfer(ctx context.Context, db sql.TxMaker, from, to []byte, amt *big.Int) error {
 	if amt.Sign() < 0 {
 		return ErrNegativeTransfer
 	}
