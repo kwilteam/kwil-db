@@ -27,6 +27,13 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
+var (
+	// Until the votestore is properly optimized, we limit the number of voteIDs that can be included in a single transaction.
+	// This is to limit the long external roundtrips to the postgres database
+	// 10k voteIDs in a block takes around 30s to process, which is too long.
+	maxVoteIDsPerTx = 100
+)
+
 // EventStore allows the EventBroadcaster to read events
 // from the event store.
 type EventStore interface {
@@ -122,6 +129,11 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) er
 	ids := make([]types.UUID, len(events))
 	for i, event := range events {
 		ids[i] = event.ID()
+	}
+
+	// consider only the first maxVoteIDsPerTx events, to limit the postgres access roundtrips per block execution.
+	if len(ids) > maxVoteIDsPerTx {
+		ids = ids[:maxVoteIDsPerTx]
 	}
 
 	bal, nonce, err := e.app.AccountInfo(ctx, e.signer.Identity(), true)

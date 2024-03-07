@@ -22,9 +22,19 @@ import (
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
+var (
+	// rough estimatation of rlp overhead size
+	rlpEncodingOverheadSize int64 = 1000
+)
+
 // NewTxApp creates a new router.
 func NewTxApp(db DB, engine common.Engine,
 	signer *auth.Ed25519Signer, events Rebroadcaster, chainID string, GasEnabled bool, extensionConfigs map[string]map[string]string, log log.Logger) *TxApp {
+	voteBodyTxSize, err := computeEmptyVoteBodyTxSize(chainID)
+	if err != nil {
+		log.Error("failed to compute empty vote body tx size", zap.Error(err))
+	}
+
 	return &TxApp{
 		Database: db,
 		Engine:   engine,
@@ -34,10 +44,11 @@ func NewTxApp(db DB, engine common.Engine,
 			accounts:   make(map[string]*types.Account),
 			gasEnabled: GasEnabled,
 		},
-		signer:           signer,
-		chainID:          chainID,
-		GasEnabled:       GasEnabled,
-		extensionConfigs: extensionConfigs,
+		signer:              signer,
+		chainID:             chainID,
+		GasEnabled:          GasEnabled,
+		extensionConfigs:    extensionConfigs,
+		emptyVoteBodyTxSize: voteBodyTxSize,
 	}
 }
 
@@ -64,6 +75,9 @@ type TxApp struct {
 	// transaction that exists between Begin and Commit
 	currentTx        sql.OuterTx
 	extensionConfigs map[string]map[string]string
+
+	// precomputed variables
+	emptyVoteBodyTxSize int64
 }
 
 // GenesisInit initializes the TxApp. It must be called outside of a session,
@@ -485,16 +499,36 @@ func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted b
 // largest nonce of the transactions included in the block that are authored by the proposer.
 // This transaction only includes voteBodies for events whose bodies have not been received by the network.
 // Therefore, there won't be more than 1 VoteBody transaction per event.
-func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error) {
+func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int64, proposerAddr []byte) ([][]byte, error) {
+	bal, nonce, err := r.AccountInfo(ctx, proposerAddr, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get proposer account: %w", err)
+	}
+
+	if r.GasEnabled && nonce == 0 && bal.Sign() == 0 {
+		r.log.Debug("proposer account has no balance, not allowed to propose any new transactions")
+		return nil, nil
+	}
+
+	if txNonce == 0 {
+		txNonce = uint64(nonce) + 1
+	}
+
 	readTx, err := r.Database.BeginReadTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer readTx.Rollback(ctx) // always rollback read tx
 
+	// Consider empty vote body tx and the rlp encoding overhead size(safety buffer)
+	maxTxsSize -= r.emptyVoteBodyTxSize + rlpEncodingOverheadSize
 	events, err := getEvents(ctx, readTx)
 	if err != nil {
 		return nil, err
+	}
+	// Limit upto only 50 VoteBodies per block
+	if len(events) > 50 {
+		events = events[:50]
 	}
 
 	// Final events are the events whose bodies have not been received by the network
@@ -517,7 +551,14 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64) ([]*transaction
 			continue
 		}
 
+		// MaxTxBytes restrictions per block are enforced here
+		// As the rlp encoded size is almost always smaller, enforcing it on the unencoded data for ease of use
+		evtSz := int64(len(event.Type)) + int64(len(event.Body))
+		if evtSz > maxTxsSize {
+			break
+		}
 		finalEvents = append(finalEvents, event)
+		maxTxsSize -= evtSz
 	}
 
 	if len(finalEvents) == 0 {
@@ -543,7 +584,12 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64) ([]*transaction
 		return nil, err
 	}
 
-	return []*transactions.Transaction{tx}, nil
+	bts, err := tx.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	return [][]byte{bts}, nil
 }
 
 // TxResponse is the response from a transaction.
@@ -666,4 +712,20 @@ func logErr(l log.Logger, err error) {
 	if err != nil {
 		l.Error("error committing/rolling back transaction", zap.Error(err))
 	}
+}
+
+func computeEmptyVoteBodyTxSize(chainID string) (int64, error) {
+	// Create a transaction with an empty payload to measure the fixed size without the payload.
+	tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteBodies{
+		Events: []*types.VotableEvent{},
+	}, chainID, 1<<63) // large nonce using all 8 bytes of the uint64
+	if err != nil {
+		return 0, err
+	}
+	tx.Body.Fee, _ = big.NewInt(0).SetString("987654000000000000000000000000000", 10)
+	sz, err := tx.MarshalBinary()
+	if err != nil {
+		return 0, err
+	}
+	return int64(len(sz)), nil
 }
