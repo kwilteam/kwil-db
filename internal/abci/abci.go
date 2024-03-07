@@ -61,6 +61,8 @@ func NewAbciApp(cfg *AbciConfig, kv KVStore, snapshotter SnapshotModule,
 		consensusParams: consensusParams,
 
 		log: log,
+
+		validatorAddressToPubKey: make(map[string][]byte),
 	}
 
 	return app
@@ -109,7 +111,9 @@ type AbciApp struct {
 	consensusParams *txapp.ConsensusParams
 
 	broadcastFn EventBroadcaster
-	validatorFn ValidatorGetter
+
+	// validatorAddressToPubKey is a map of validator addresses to their public keys
+	validatorAddressToPubKey map[string][]byte
 }
 
 func (a *AbciApp) ChainID() string {
@@ -217,18 +221,13 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 // FinalizeBlock is on the consensus connection
 func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinalizeBlock) (*abciTypes.ResponseFinalizeBlock, error) {
 	fmt.Printf("\n\n")
-	logger := a.log.With(zap.String("stage", "ABCI FinalizeBlock"), zap.Int("height", int(req.Height)))
+	logger := a.log.With(zap.String("stage", "ABCI FinalizeBlock"), zap.Int64("height", req.Height))
 
 	res := &abciTypes.ResponseFinalizeBlock{}
 
 	err := a.txApp.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx commit failed: %w", err)
-	}
-
-	valAddrMap, err := a.getValidatorPubKeyAddrMap(ctx, &req.Height)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get validator address map: %w", err)
 	}
 
 	initialValidators, err := a.txApp.GetValidators(ctx)
@@ -246,7 +245,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		logger.Info("punish validator", zap.String("addr", addr))
 
 		// This is why we need the addr=>pubkey map. Why, comet, why?
-		pubkey, ok := valAddrMap[addr]
+		pubkey, ok := a.validatorAddressToPubKey[addr]
 		if !ok {
 			return nil, fmt.Errorf("unknown validator address %v", addr)
 		}
@@ -259,7 +258,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	addr := proposerAddrToString(req.ProposerAddress)
-	proposerPubKey, ok := valAddrMap[addr]
+	proposerPubKey, ok := a.validatorAddressToPubKey[addr]
 	if !ok {
 		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to address %v", addr)
 	}
@@ -318,6 +317,16 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	res.ValidatorUpdates = make([]abciTypes.ValidatorUpdate, len(valUpdates))
 	for i, up := range valUpdates {
+		addr, err := pubkeyToAddr(up.PubKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert pubkey to address: %w", err)
+		}
+		if up.Power == 0 {
+			delete(a.validatorAddressToPubKey, addr)
+		} else {
+			a.validatorAddressToPubKey[addr] = up.PubKey // there may be new validators we need to add
+		}
+
 		res.ValidatorUpdates[i] = abciTypes.Ed25519ValidatorUpdate(up.PubKey, up.Power)
 	}
 
@@ -408,6 +417,20 @@ func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciType
 		return nil, fmt.Errorf("failed to get block height: %w", err)
 	}
 
+	validators, err := a.txApp.GetValidators(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validators: %w", err)
+	}
+
+	for _, val := range validators {
+		addr, err := pubkeyToAddr(val.PubKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert pubkey to address: %w", err)
+		}
+
+		a.validatorAddressToPubKey[addr] = val.PubKey
+	}
+
 	appHash, err := a.metadataStore.GetAppHash(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get app hash: %w", err)
@@ -452,6 +475,13 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 			PubKey: pk,
 			Power:  vi.Power,
 		}
+
+		addr, err := pubkeyToAddr(pk)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert pubkey to address: %w", err)
+		}
+
+		a.validatorAddressToPubKey[addr] = pk
 	}
 
 	if err := a.txApp.GenesisInit(ctx, vldtrs, genesisAllocs, req.InitialHeight); err != nil {
@@ -700,12 +730,16 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	addr, err := a.getValidatorPubKeyByAddr(ctx, proposerAddrToString(req.ProposerAddress), &req.Height)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to %s", proposerAddrToString(req.ProposerAddress))
+	pubKey, ok := a.validatorAddressToPubKey[proposerAddrToString(req.ProposerAddress)]
+	if !ok {
+		// there is an edge case where cometbft will allow a node to PrepareProposal
+		// even if it is not a validator, if it was a validator in the most recent block
+		// we check for this here and simply propose an empty block, since it will be rejected
+		a.log.Warn("local node was made proposer, but is no longer a validator")
+		return &abciTypes.ResponsePrepareProposal{}, nil
 	}
 
-	okTxns, proposerNonce := a.prepareMempoolTxns(req.Txs, int(req.MaxTxBytes), &a.log, addr)
+	okTxns, proposerNonce := a.prepareMempoolTxns(req.Txs, int(req.MaxTxBytes), &a.log, pubKey)
 	if len(okTxns) != len(req.Txs) {
 		logger.Info("PrepareProposal: number of transactions in proposed block has changed!",
 			zap.Int("in", len(req.Txs)), zap.Int("out", len(okTxns)))
@@ -717,7 +751,7 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		}
 	}
 
-	bal, nonce, err := a.txApp.AccountInfo(ctx, addr, false)
+	bal, nonce, err := a.txApp.AccountInfo(ctx, pubKey, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get proposer account: %w", err)
 	}
@@ -815,10 +849,19 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	addr := proposerAddrToString(req.ProposerAddress)
-	proposerPubKey, err := a.getValidatorPubKeyByAddr(ctx, addr, &req.Height)
-	if err != nil {
-		a.log.Warn("received block proposal from unknown validator", zap.String("addr", addr))
+	proposerPubKey, ok := a.validatorAddressToPubKey[proposerAddrToString(req.ProposerAddress)]
+	if !ok {
+		// there is an edge case where cometbft will allow a node to PrepareProposal
+		// even if it is not a validator, if it was a validator in the most recent block.
+		// a well behaved validator will submit an empty block here, which we will accept.
+		// if not an empty block, we will reject it.
+
+		if len(req.Txs) == 0 {
+			a.log.Info("proposer is not a validator and submitted an empty block, accepting proposal")
+			return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_ACCEPT}, nil
+		}
+
+		a.log.Warn("proposer is not a validator and submitted a non-empty block, rejecting proposal", zap.String("proposer", proposerAddrToString(req.ProposerAddress)))
 		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
 	}
 
@@ -847,42 +890,6 @@ func (a *AbciApp) createNewAppHash(ctx context.Context, addition []byte) ([]byte
 
 	err = a.metadataStore.SetAppHash(ctx, newHash)
 	return newHash, err
-}
-
-func (a *AbciApp) getValidatorPubKeyByAddr(ctx context.Context, addr string, height *int64) ([]byte, error) {
-	vals, err := a.validatorFn(ctx, height)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, val := range vals {
-		valAddr, err := pubkeyToAddr(val.PubKey)
-		if err != nil {
-			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
-		}
-
-		if addr == valAddr {
-			return val.PubKey, nil
-		}
-	}
-	return nil, fmt.Errorf("validator not found for address %s", addr)
-}
-
-func (a *AbciApp) getValidatorPubKeyAddrMap(ctx context.Context, height *int64) (map[string][]byte, error) {
-	vals, err := a.validatorFn(ctx, height)
-	if err != nil {
-		return nil, err
-	}
-
-	addrMap := make(map[string][]byte)
-	for _, val := range vals {
-		addr, err := pubkeyToAddr(val.PubKey)
-		if err != nil {
-			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
-		}
-		addrMap[addr] = val.PubKey
-	}
-	return addrMap, nil
 }
 
 // TODO: here should probably be other apphash computations such as the genesis
@@ -942,10 +949,4 @@ type EventBroadcaster func(ctx context.Context, proposer []byte) error
 
 func (a *AbciApp) SetEventBroadcaster(fn EventBroadcaster) {
 	a.broadcastFn = fn
-}
-
-type ValidatorGetter func(ctx context.Context, height *int64) ([]*types.Validator, error)
-
-func (a *AbciApp) SetValidatorGetter(fn ValidatorGetter) {
-	a.validatorFn = fn
 }
