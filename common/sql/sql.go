@@ -14,8 +14,7 @@ var (
 // It has root user access, and can execute any Postgres command.
 type DB interface {
 	Executor
-	// BeginTx starts a new transaction.
-	BeginTx(ctx context.Context) (Tx, error)
+	TxMaker
 	// AccessMode gets the access mode of the database.
 	// It can be either read-write or read-only.
 	AccessMode() AccessMode
