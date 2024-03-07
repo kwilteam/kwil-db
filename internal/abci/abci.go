@@ -646,14 +646,14 @@ type indexedTxn struct {
 	is int // not used for sorting, only referencing the marshalled txn slice
 }
 
-// prepareMempoolTxns prepares the transactions for the block we are proposing.
+// prepareBlockTransactions prepares the transactions for the block we are proposing.
 // The input transactions are from mempool direct from cometbft, and we modify
 // the list for our purposes. This includes ensuring transactions from the same
 // sender in ascending nonce-order, enforcing the max bytes limit, etc.
-//
-// NOTE: This is a plain function instead of an AbciApplication method so that
-// it may be directly tested.
-func (a *AbciApp) prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger, proposerAddr []byte) ([][]byte, uint64) {
+// This also includes the proposer's transactions, which are not in the mempool.
+// The transaction ordering is as follows:
+// MempoolProposerTxns, ProposerInjectedTxns, MempoolTxns by other senders
+func (a *AbciApp) prepareBlockTransactions(txs [][]byte, log *log.Logger, maxTxBytes int64, proposerAddr []byte) [][]byte {
 	// Unmarshal and index the transactions.
 	var okTxns []*indexedTxn
 	var i int
@@ -681,19 +681,14 @@ func (a *AbciApp) prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger
 		})
 	}
 
-	// TODO: truncate based on our max block size since we'll have to set
-	// ConsensusParams.Block.MaxBytes to -1 so that we get ALL transactions even
-	// if it goes beyond max_tx_bytes.  See:
-	// https://github.com/cometbft/cometbft/pull/1003
-	// https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#prepareproposal
-	// https://github.com/cometbft/cometbft/issues/980
-
 	// Grab the bytes rather than re-marshalling.
 	nonces := make([]uint64, 0, len(okTxns))
-	finalTxns := make([][]byte, 0, len(okTxns))
+	var propTxs, otherTxns []*indexedTxn
+	// otherTxns := make(map[string][]*indexedTxn)
 	i = 0
 	proposerNonce := uint64(0)
 
+	// Enforce nonce ordering and remove transactions from unfunded accounts.
 	for _, tx := range okTxns {
 		if i > 0 && tx.Body.Nonce == nonces[i-1] && bytes.Equal(tx.Sender, okTxns[i-1].Sender) {
 			log.Warn(fmt.Sprintf("Dropping tx with re-used nonce %d from block proposal", tx.Body.Nonce))
@@ -715,14 +710,76 @@ func (a *AbciApp) prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger
 
 		if bytes.Equal(tx.Sender, proposerAddr) {
 			proposerNonce = tx.Body.Nonce + 1
+			propTxs = append(propTxs, tx)
+		} else {
+			// Append the transaction to the final list.
+			// sender := string(tx.Sender)
+			otherTxns = append(otherTxns, tx)
+			// otherTxns[sender] = append(otherTxns[sender], tx)
 		}
-
-		finalTxns = append(finalTxns, txs[tx.is])
 		nonces = append(nonces, tx.Body.Nonce)
 		i++
 	}
 
-	return finalTxns, proposerNonce
+	// TODO: truncate based on our max block size since we'll have to set
+	// ConsensusParams.Block.MaxBytes to -1 so that we get ALL transactions even
+	// if it goes beyond max_tx_bytes.  See:
+	// https://github.com/cometbft/cometbft/pull/1003
+	// https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#prepareproposal
+	// https://github.com/cometbft/cometbft/issues/980
+
+	// Enforce block size limits
+	// Txs order: MempoolProposerTxns, ProposerInjectedTxns, MempoolTxns
+	var finalTxs [][]byte
+
+	for _, tx := range propTxs {
+		txBts := txs[tx.is]
+		txSize := int64(len(txBts))
+		if maxTxBytes < txSize {
+			break
+		}
+		maxTxBytes -= txSize
+		finalTxs = append(finalTxs, txBts)
+	}
+
+	proposerTxs, err := a.txApp.ProposerTxs(context.Background(), proposerNonce, maxTxBytes, proposerAddr)
+	if err != nil {
+		log.Error("failed to get proposer transactions", zap.Error(err))
+	}
+
+	for _, tx := range proposerTxs {
+		txSize := int64(len(tx))
+		if maxTxBytes < txSize {
+			break
+		}
+		maxTxBytes -= txSize
+		finalTxs = append(finalTxs, tx)
+	}
+
+	// senders tracks the sender of transactions that has pushed over the bytes limit for the block.
+	// If a sender is in the senders, skip all subsequent transactions from the sender
+	// because nonces need to be sequential.
+	// Keep checking transactions for other senders that may be smaller and fit in the remaining space.
+	senders := make(map[string]bool)
+
+	for _, tx := range otherTxns {
+		sender := string(tx.Sender)
+		// If we have already added a transaction from this sender, skip it.
+		if _, ok := senders[sender]; ok {
+			continue
+		}
+
+		txSize := int64(len(txs[tx.is]))
+		if maxTxBytes < txSize {
+			// Ignore the rest of the transactions by this sender
+			senders[sender] = true
+			break
+		}
+		maxTxBytes -= txSize
+		finalTxs = append(finalTxs, txs[tx.is])
+	}
+
+	return finalTxs
 }
 
 func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPrepareProposal) (*abciTypes.ResponsePrepareProposal, error) {
@@ -739,7 +796,7 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		return &abciTypes.ResponsePrepareProposal{}, nil
 	}
 
-	okTxns, proposerNonce := a.prepareMempoolTxns(req.Txs, int(req.MaxTxBytes), &a.log, pubKey)
+	okTxns := a.prepareBlockTransactions(req.Txs, &a.log, req.MaxTxBytes, pubKey)
 	if len(okTxns) != len(req.Txs) {
 		logger.Info("PrepareProposal: number of transactions in proposed block has changed!",
 			zap.Int("in", len(req.Txs)), zap.Int("out", len(okTxns)))
@@ -749,38 +806,6 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 				logger.Debug("transaction was moved or mutated", zap.Int("idx", i))
 			}
 		}
-	}
-
-	bal, nonce, err := a.txApp.AccountInfo(ctx, pubKey, false)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get proposer account: %w", err)
-	}
-
-	if a.cfg.GasEnabled && nonce == 0 && bal.Sign() == 0 {
-		logger.Debug("proposer account has no balance, not allowed to propose any new transactions")
-	} else {
-		// If proposer has any existing transactions in the mempool, consider these nonces as well.
-		if proposerNonce == 0 {
-			// Proposer has no transactions in mempool, use nonce from proposers account.
-			proposerNonce = uint64(nonce) + 1
-		}
-
-		proposerTxs, err := a.txApp.ProposerTxs(ctx, proposerNonce)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get proposer transactions: %w", err)
-		}
-
-		proposerTxBts := make([][]byte, 0, len(proposerTxs))
-		for _, tx := range proposerTxs {
-			bts, err := tx.MarshalBinary()
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal proposer transaction: %w", err)
-			}
-			proposerTxBts = append(proposerTxBts, bts)
-		}
-
-		// Append proposer's transactions to the block.
-		okTxns = append(okTxns, proposerTxBts...)
 	}
 
 	return &abciTypes.ResponsePrepareProposal{
