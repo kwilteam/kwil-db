@@ -1,9 +1,10 @@
-//go:build pglive
+// go:build pglive
 
 package voting_test
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -196,6 +197,81 @@ func Test_Voting(t *testing.T) {
 				require.NoError(t, err)
 
 				require.EqualValues(t, resolutionInfo, expired[0])
+			},
+		},
+		{
+			name: "many resolutions test",
+			startingPower: map[string]int64{
+				"a": 100,
+			},
+			fn: func(t *testing.T, db sql.DB) {
+				ctx := context.Background()
+
+				events := make([]*types.VotableEvent, 3)
+				ids := make([]types.UUID, 3)
+				for i := 0; i < 3; i++ {
+					events[i] = &types.VotableEvent{
+						Body: []byte("test" + fmt.Sprint(i)),
+						Type: testType,
+					}
+
+					ids[i] = events[i].ID()
+				}
+
+				// we will create and approve 1,
+				// create 2,
+				// and only approve 3
+
+				err := voting.CreateResolution(ctx, db, events[0], 10, []byte("a"))
+				require.NoError(t, err)
+				err = voting.ApproveResolution(ctx, db, events[0].ID(), 10, []byte("a"))
+				require.NoError(t, err)
+
+				err = voting.CreateResolution(ctx, db, events[1], 10, []byte("a"))
+				require.NoError(t, err)
+
+				err = voting.ApproveResolution(ctx, db, events[2].ID(), 10, []byte("a"))
+				require.NoError(t, err)
+
+				containsBody, err := voting.ResolutionsContainBody(ctx, db, ids...)
+				require.NoError(t, err)
+
+				require.True(t, containsBody[0])
+				require.True(t, containsBody[1])
+				require.False(t, containsBody[2])
+
+				// delete and process all
+				err = voting.DeleteResolutions(ctx, db, ids...)
+				require.NoError(t, err)
+				err = voting.MarkProcessed(ctx, db, ids...)
+				require.NoError(t, err)
+
+				// check that they are all processed
+				processed, err := voting.ManyAreProcessed(ctx, db, ids...)
+				require.NoError(t, err)
+
+				for _, p := range processed {
+					require.True(t, p)
+				}
+			},
+		},
+		{
+			name: "no resolutions",
+			startingPower: map[string]int64{
+				"a": 100,
+			},
+			fn: func(t *testing.T, db sql.DB) {
+				ctx := context.Background()
+
+				containsBody, err := voting.ResolutionsContainBody(ctx, db, types.NewUUIDV5([]byte("ss")))
+				require.NoError(t, err)
+
+				require.False(t, containsBody[0])
+
+				processed, err := voting.ManyAreProcessed(ctx, db, types.NewUUIDV5([]byte("ss")))
+				require.NoError(t, err)
+
+				require.False(t, processed[0])
 			},
 		},
 	}

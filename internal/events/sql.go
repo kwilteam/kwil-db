@@ -30,6 +30,7 @@ const (
 	insertEventIdempotent  = `INSERT INTO ` + SchemaName + `.events (id, data, event_type) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING;`
 	deleteEvent            = `DELETE FROM ` + SchemaName + `.events WHERE id = $1;`
 	getEvents              = `SELECT data, event_type FROM ` + SchemaName + `.events;`
+	getEventsLimit         = `SELECT data, event_type FROM ` + SchemaName + `.events LIMIT $1;`
 	getUnbroadcastedEvents = `SELECT data, event_type FROM ` + SchemaName + `.events WHERE NOT received AND NOT broadcasted;`
 	markReceived           = `UPDATE ` + SchemaName + `.events SET received = TRUE WHERE id = $1;`
 

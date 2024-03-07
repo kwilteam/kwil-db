@@ -367,6 +367,31 @@ func ResolutionContainsBody(ctx context.Context, db sql.DB, id types.UUID) (bool
 	return containsBody, nil
 }
 
+// ResolutionsContainBody returns an array of booleans, indicating if the resolutions have a body.
+func ResolutionsContainBody(ctx context.Context, db sql.DB, ids ...types.UUID) ([]bool, error) {
+	idArray := types.UUIDArray(ids)
+	res, err := db.Execute(ctx, containsBodyArray, idArray)
+	if err != nil {
+		return nil, err
+	}
+
+	containsBody := make([]bool, len(res.Rows))
+	var ok bool
+	for i, row := range res.Rows {
+		if len(row) != 2 {
+			// this should never happen, just for safety
+			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+		}
+		// we can ignore the first column, we just need this for non-existent ids to be false
+		containsBody[i], ok = row[1].(bool)
+		if !ok {
+			return nil, fmt.Errorf("invalid type for containsBody (%T). this is an internal bug", row[0])
+		}
+	}
+
+	return containsBody, nil
+}
+
 // IsProcessed checks if a vote has been marked as processed.
 func IsProcessed(ctx context.Context, tx sql.DB, resolutionID types.UUID) (bool, error) {
 	res, err := tx.Execute(ctx, alreadyProcessed, resolutionID[:])
@@ -375,6 +400,25 @@ func IsProcessed(ctx context.Context, tx sql.DB, resolutionID types.UUID) (bool,
 	}
 
 	return len(res.Rows) != 0, nil
+}
+
+// ManyAreProcessed checks if a set of votes have been marked as processed.
+func ManyAreProcessed(ctx context.Context, tx sql.DB, ids ...types.UUID) ([]bool, error) {
+	res, err := tx.Execute(ctx, manyProcessed, types.UUIDArray(ids))
+	if err != nil {
+		return nil, err
+	}
+
+	processed := make([]bool, len(res.Rows))
+	for i, row := range res.Rows {
+		if len(row) != 2 {
+			// this should never happen, just for safety
+			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+		} // we can ignore the first column, we just need this for non-existent ids to be false
+		processed[i], _ = row[1].(bool)
+	}
+
+	return processed, nil
 }
 
 // HasVoted checks if a voter has voted on a resolution.

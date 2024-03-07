@@ -560,34 +560,43 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 		events = events[:50]
 	}
 
+	ids := make([]types.UUID, 0, len(events))
+	for _, event := range events {
+		ids = append(ids, event.ID())
+	}
+
+	containsBody, err := voting.ResolutionsContainBody(ctx, readTx, ids...)
+	if err != nil {
+		return nil, err
+	}
+
+	doesNotHaveBody := make([]types.UUID, 0)
+	for i, id := range ids {
+		if !containsBody[i] {
+			doesNotHaveBody = append(doesNotHaveBody, id)
+		}
+	}
+
+	processed, err := voting.ManyAreProcessed(ctx, readTx, doesNotHaveBody...)
+	if err != nil {
+		return nil, err
+	}
+
 	// Final events are the events whose bodies have not been received by the network
 	var finalEvents []*types.VotableEvent
-	for _, event := range events {
-		// Check if the event body is already received by the network
-		containsBody, err := resolutionContainsBody(ctx, readTx, event.ID())
-		if err != nil {
-			return nil, err
-		}
-		if containsBody {
-			continue
-		}
+	for i, isProcessed := range processed {
+		if !isProcessed {
+			finalEvents = append(finalEvents, events[i])
 
-		finished, err := isProcessed(ctx, readTx, event.ID())
-		if err != nil {
-			return nil, err
+			// MaxTxBytes restrictions per block are enforced here
+			// As the rlp encoded size is almost always smaller, enforcing it on the unencoded data for ease of use
+			evtSz := int64(len(events[i].Type)) + int64(len(events[i].Body))
+			if evtSz > maxTxsSize {
+				break
+			}
+			finalEvents = append(finalEvents, events[i])
+			maxTxsSize -= evtSz
 		}
-		if finished {
-			continue
-		}
-
-		// MaxTxBytes restrictions per block are enforced here
-		// As the rlp encoded size is almost always smaller, enforcing it on the unencoded data for ease of use
-		evtSz := int64(len(event.Type)) + int64(len(event.Body))
-		if evtSz > maxTxsSize {
-			break
-		}
-		finalEvents = append(finalEvents, event)
-		maxTxsSize -= evtSz
 	}
 
 	if len(finalEvents) == 0 {

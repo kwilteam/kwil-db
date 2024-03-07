@@ -105,6 +105,12 @@ const (
 
 	// containsBody checks if a resolution has a body
 	containsBody = `SELECT body is not null FROM ` + votingSchemaName + `.resolutions WHERE id = $1;`
+	// containsBodyArray checks if a set of resolutions have bodies.
+	// it will return as many rows as the input array has elements, with a boolean for each.
+	containsBodyArray = `WITH input AS (SELECT unnest($1::BYTEA[]) AS id)
+	SELECT i.id, r.body IS NOT NULL AS contains_body
+	FROM input AS i
+	LEFT JOIN ` + votingSchemaName + `.resolutions AS r ON i.id = r.id;`
 
 	// deleteResolutions deletes a set of resolutions
 	// it is meant to be used in formatResolutionList
@@ -124,6 +130,13 @@ const (
 
 	// alreadyProcessed checks if a resolution has already been processed
 	alreadyProcessed = `SELECT id FROM ` + votingSchemaName + `.processed WHERE id = $1;`
+
+	// manyProcessed checks if many resolutions have already been processed
+	// it will return a boolean for each resolution in the input array
+	manyProcessed = `WITH input AS (SELECT unnest($1::BYTEA[]) AS id)
+	SELECT i.id, p.id IS NOT NULL AS processed
+	FROM input AS i
+	LEFT JOIN ` + votingSchemaName + `.processed AS p ON i.id = p.id;`
 
 	// getResolutionsFullInfoByPower and getResolutionsFullInfoByExpiration are used to get the full info of a set of resolutions
 	// they should be updated together if their return values change
