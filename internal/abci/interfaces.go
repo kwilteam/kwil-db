@@ -60,7 +60,7 @@ type TxApp interface {
 	Finalize(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)
 	Commit(ctx context.Context) error
 	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
-	ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error)
+	ProposerTxs(ctx context.Context, txNonce uint64, maxTxSize int64, proposerAddr []byte) ([][]byte, error)
 	UpdateValidator(ctx context.Context, validator []byte, power int64) error
 	GetValidators(ctx context.Context) ([]*types.Validator, error)
 	AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
