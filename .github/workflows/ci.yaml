@@ -177,3 +177,7 @@ jobs:
       - name: Prune Docker
         if: ${{ always() }}
         run: docker rm $(docker ps -a -q) -f ; docker network prune -f ; docker volume prune -f || true
+
+      - name: Show error log
+        if: ${{ failure() }}
+        run: grep -i -r -e 'error' -e 'warn'  /tmp/TestKwilAct*/*.log  /tmp/TestKwilInt*/*.log /tmp/TestKwilInt*/*/*.log
