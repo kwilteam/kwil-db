@@ -853,8 +853,15 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 	if !ok {
 		// there is an edge case where cometbft will allow a node to PrepareProposal
 		// even if it is not a validator, if it was a validator in the most recent block.
-		// we should therefore reject the proposal if the proposer is not a validator.
-		a.log.Warn("proposer is not a validator, rejecting proposal", zap.String("proposer", proposerAddrToString(req.ProposerAddress)))
+		// a well behaved validator will submit an empty block here, which we will accept.
+		// if not an empty block, we will reject it.
+
+		if len(req.Txs) == 0 {
+			a.log.Info("proposer is not a validator and submitted an empty block, accepting proposal")
+			return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_ACCEPT}, nil
+		}
+
+		a.log.Warn("proposer is not a validator and submitted a non-empty block, rejecting proposal", zap.String("proposer", proposerAddrToString(req.ProposerAddress)))
 		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
 	}
 
