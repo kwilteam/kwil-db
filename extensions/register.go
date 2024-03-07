@@ -6,5 +6,4 @@ package extensions
 
 import (
 	_ "github.com/kwilteam/kwil-db/extensions/oracles/eth_deposits"
-	_ "github.com/kwilteam/kwil-db/extensions/oracles/spam"
 )
