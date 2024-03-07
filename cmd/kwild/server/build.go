@@ -107,7 +107,6 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	eventBroadcaster := buildEventBroadcaster(d, ev, wrappedCmtClient, txApp)
 	abciApp.SetEventBroadcaster(eventBroadcaster.RunBroadcast)
-	abciApp.SetValidatorGetter(wrappedCmtClient.GetValidators)
 	// oracle manager
 	om := buildOracleManager(d, closers, ev, cometBftNode, txApp)
 
