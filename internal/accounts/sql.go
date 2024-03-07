@@ -27,7 +27,7 @@ const (
 	sqlGetAccount = `SELECT balance, nonce FROM ` + schemaName + `.accounts WHERE identifier = $1`
 )
 
-func initTables(ctx context.Context, tx sql.DB) error {
+func initTables(ctx context.Context, tx sql.Executor) error {
 	if _, err := tx.Execute(ctx, sqlCreateSchema); err != nil {
 		return err
 	}
@@ -39,26 +39,26 @@ func initTables(ctx context.Context, tx sql.DB) error {
 }
 
 // updateAccount updates the balance and nonce of an account.
-func updateAccount(ctx context.Context, db sql.DB, ident []byte, amount *big.Int, nonce int64) error {
+func updateAccount(ctx context.Context, db sql.Executor, ident []byte, amount *big.Int, nonce int64) error {
 	_, err := db.Execute(ctx, sqlUpdateAccount, amount.String(), nonce, ident)
 	return err
 }
 
 // createAccount creates an account with the given identifier and
 // initial balance. The nonce will be set to 0.
-func createAccount(ctx context.Context, db sql.DB, ident []byte, amt *big.Int) error {
-	_, err := db.Execute(ctx, sqlCreateAccount, ident, amt.String(), 0)
+func createAccount(ctx context.Context, db sql.Executor, ident []byte, amt *big.Int) error {
+	_, err := db.Execute(ctx, sqlCreateAccount, ident, amt.String(), int64(0))
 	return err
 }
 
-func createAccountWithNonce(ctx context.Context, db sql.DB, ident []byte, amt *big.Int, nonce int64) error {
+func createAccountWithNonce(ctx context.Context, db sql.Executor, ident []byte, amt *big.Int, nonce int64) error {
 	_, err := db.Execute(ctx, sqlCreateAccount, ident, amt.String(), nonce)
 	return err
 }
 
 // getAccount retrieves an account from the database.
 // if the account is not found, it returns nil, ErrAccountNotFound.
-func getAccount(ctx context.Context, db sql.DB, ident []byte) (*types.Account, error) {
+func getAccount(ctx context.Context, db sql.Executor, ident []byte) (*types.Account, error) {
 	results, err := db.Execute(ctx, sqlGetAccount, ident)
 	if err != nil {
 		return nil, err
