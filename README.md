@@ -132,7 +132,7 @@ configuration changes. Start it by running the following from the
 
 ```sh
 cd deployments/compose/kwil
-docker compose up -d
+docker compose up --build -d
 ```
 
 With the `-d` option, the service(s) will be started as background processes. To
