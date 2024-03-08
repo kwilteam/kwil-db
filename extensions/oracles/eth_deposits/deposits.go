@@ -125,7 +125,6 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 		return fmt.Errorf("ethereum client error: %w", outerErr)
 	}
 
-	<-ctx.Done() // wait for the context to be cancelled
 	return nil
 }
 
