@@ -11,6 +11,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/sql/versioning"
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
@@ -56,13 +57,12 @@ func NewEventStore(ctx context.Context, writerDB DB) (*EventStore, error) {
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Execute(ctx, sqlCreateSchema); err != nil {
-		return nil, err
+	upgradeFns := map[int64]versioning.UpgradeFunc{
+		0: initTables,
 	}
-	if _, err := tx.Execute(ctx, eventsTable); err != nil {
-		return nil, err
-	}
-	if _, err := tx.Execute(ctx, createKvTblStmt); err != nil {
+
+	err = versioning.Upgrade(ctx, tx, SchemaName, upgradeFns, eventStoreVersion)
+	if err != nil {
 		return nil, err
 	}
 

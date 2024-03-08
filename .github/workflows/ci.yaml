@@ -147,7 +147,7 @@ jobs:
           testGroupID=$(id -g)
           cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/acceptance/docker-compose.override.yml
-          KACT_LOG_LEVEL=warn task test:act:nb -- -parallel-mode -parallel 2
+          KACT_LOG_LEVEL=warn task test:act:nb
 
       - name: Run integration test
         # without kgw test, probably should disable this ?
@@ -156,7 +156,7 @@ jobs:
           testGroupID=$(id -g)
           cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
-          KIT_LOG_LEVEL=warn task test:it:nb -- -parallel-mode -parallel 2
+          KIT_LOG_LEVEL=warn task test:it:nb
 
       - name: Move cache
         run: |

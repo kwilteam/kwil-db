@@ -243,8 +243,8 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 			wait.NewLogStrategy("listening on").WithStartupTimeout(r.cfg.WaitTimeout)).
 		WaitForService(
 			"kwild",
-			wait.NewLogStrategy("Starting Node service").WithStartupTimeout(r.cfg.WaitTimeout)).
-		Up(ctx)
+			wait.NewLogStrategy("finalized block").WithStartupTimeout(r.cfg.WaitTimeout)).
+		Up(ctx, compose.Wait(true))
 	r.t.Log("docker compose up")
 
 	require.NoError(r.t, err, "failed to start kwild node")

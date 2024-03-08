@@ -206,6 +206,7 @@ func Test_Execution(t *testing.T) {
 			mth := &mathInitializer{}
 
 			ctx := context.Background()
+
 			engine, err := NewGlobalContext(ctx,
 				newDB(false), map[string]actions.ExtensionInitializer{
 					"math": mth.initialize,
