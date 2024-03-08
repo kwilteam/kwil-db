@@ -243,7 +243,7 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 			wait.NewLogStrategy("listening on").WithStartupTimeout(r.cfg.WaitTimeout)).
 		WaitForService(
 			"kwild",
-			wait.NewLogStrategy("comet node is now started").WithStartupTimeout(r.cfg.WaitTimeout)).
+			wait.NewLogStrategy("finalized block").WithStartupTimeout(r.cfg.WaitTimeout)).
 		Up(ctx)
 	r.t.Log("docker compose up")
 
