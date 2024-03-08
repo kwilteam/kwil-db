@@ -44,6 +44,7 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 	err := config.setConfig(oracleConfig)
 	if err != nil {
 		service.Logger.Error("failed to set eth_deposit configuration", "error", err)
+		return
 	}
 
 	// we need to catch up with the ethereum chain.

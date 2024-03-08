@@ -100,9 +100,6 @@ func (omgr *OracleMgr) Start() {
 						// oracle names cannot have spaces
 						KV: omgr.eventStore.KV([]byte(name + " ")),
 					})
-					if err != nil {
-						omgr.logger.Error("failed to start oracle", zap.String("name", name), zap.Error(err))
-					}
 				}
 			} else if oracleInstanceCancel != nil && !isValidator {
 				// Stop the oracles if they are running
