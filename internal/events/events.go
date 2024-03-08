@@ -114,8 +114,6 @@ func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) e
 }
 
 // GetEvents gets all events in the event store.
-// It can be given a maximum number of events to retrieve.
-// If 0 is given, it will retrieve all events.
 func GetEvents(ctx context.Context, db sql.DB) ([]*types.VotableEvent, error) {
 	res, err := db.Execute(ctx, getEvents)
 	if err != nil {

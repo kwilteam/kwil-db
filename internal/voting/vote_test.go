@@ -13,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,7 +40,7 @@ func Test_Voting(t *testing.T) {
 
 	tests := []testcase{
 		{
-			name: "successful creationg and voting",
+			name: "successful creating and voting",
 			startingPower: map[string]int64{
 				"a": 100,
 				"b": 100,
@@ -233,12 +234,10 @@ func Test_Voting(t *testing.T) {
 				err = voting.ApproveResolution(ctx, db, events[2].ID(), 10, []byte("a"))
 				require.NoError(t, err)
 
-				containsBody, err := voting.ResolutionsContainBody(ctx, db, ids...)
+				containsBody, err := voting.FilterExistsNoBody(ctx, db, ids...)
 				require.NoError(t, err)
 
-				require.True(t, containsBody[0])
-				require.True(t, containsBody[1])
-				require.False(t, containsBody[2])
+				assert.Equal(t, len(containsBody), 1)
 
 				// delete and process all
 				err = voting.DeleteResolutions(ctx, db, ids...)
@@ -247,12 +246,10 @@ func Test_Voting(t *testing.T) {
 				require.NoError(t, err)
 
 				// check that they are all processed
-				processed, err := voting.ManyAreProcessed(ctx, db, ids...)
+				processed, err := voting.FilterNotProcessed(ctx, db, ids...)
 				require.NoError(t, err)
 
-				for _, p := range processed {
-					require.True(t, p)
-				}
+				assert.Equal(t, len(processed), 0)
 			},
 		},
 		{
@@ -263,15 +260,14 @@ func Test_Voting(t *testing.T) {
 			fn: func(t *testing.T, db sql.DB) {
 				ctx := context.Background()
 
-				containsBody, err := voting.ResolutionsContainBody(ctx, db, types.NewUUIDV5([]byte("ss")))
+				containsBody, err := voting.FilterExistsNoBody(ctx, db, types.NewUUIDV5([]byte("ss")))
+				require.NoError(t, err)
+				require.Empty(t, containsBody)
+
+				processed, err := voting.FilterNotProcessed(ctx, db, types.NewUUIDV5([]byte("ss")))
 				require.NoError(t, err)
 
-				require.False(t, containsBody[0])
-
-				processed, err := voting.ManyAreProcessed(ctx, db, types.NewUUIDV5([]byte("ss")))
-				require.NoError(t, err)
-
-				require.False(t, processed[0])
+				require.Equal(t, len(processed), 1)
 			},
 		},
 	}

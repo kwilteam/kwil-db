@@ -565,38 +565,36 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 		ids = append(ids, event.ID())
 	}
 
-	containsBody, err := voting.ResolutionsContainBody(ctx, readTx, ids...)
+	doesNotHaveBody, err := voting.FilterExistsNoBody(ctx, readTx, ids...)
 	if err != nil {
 		return nil, err
 	}
 
-	doesNotHaveBody := make([]types.UUID, 0)
-	for i, id := range ids {
-		if !containsBody[i] {
-			doesNotHaveBody = append(doesNotHaveBody, id)
-		}
-	}
-
-	processed, err := voting.ManyAreProcessed(ctx, readTx, doesNotHaveBody...)
+	notProcessed, err := voting.FilterNotProcessed(ctx, readTx, doesNotHaveBody...)
 	if err != nil {
 		return nil, err
 	}
 
-	// Final events are the events whose bodies have not been received by the network
-	var finalEvents []*types.VotableEvent
-	for i, isProcessed := range processed {
-		if !isProcessed {
-			finalEvents = append(finalEvents, events[i])
+	eventMap := make(map[types.UUID]*types.VotableEvent)
+	for _, evt := range events {
+		eventMap[evt.ID()] = evt
+	}
 
-			// MaxTxBytes restrictions per block are enforced here
-			// As the rlp encoded size is almost always smaller, enforcing it on the unencoded data for ease of use
-			evtSz := int64(len(events[i].Type)) + int64(len(events[i].Body))
-			if evtSz > maxTxsSize {
-				break
-			}
-			finalEvents = append(finalEvents, events[i])
-			maxTxsSize -= evtSz
+	finalEvents := make([]*types.VotableEvent, 0)
+	for _, id := range notProcessed {
+		event, ok := eventMap[id]
+		if !ok {
+			// this should never happen
+			return nil, fmt.Errorf("internal bug: event with id %s not found", id.String())
 		}
+
+		evtSz := int64(len(event.Type)) + int64(len(event.Body))
+		if evtSz > maxTxsSize {
+			break
+		}
+		maxTxsSize -= evtSz
+		maxTxsSize -= rlpEncodingOverheadSize
+		finalEvents = append(finalEvents, event)
 	}
 
 	if len(finalEvents) == 0 {
