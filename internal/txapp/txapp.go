@@ -545,8 +545,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 	}
 	defer readTx.Rollback(ctx) // always rollback read tx
 
-	// Consider empty vote body tx and the rlp encoding overhead size(safety buffer)
-	maxTxsSize -= r.emptyVoteBodyTxSize + eventSliceRLPSize
+	maxTxsSize -= r.emptyVoteBodyTxSize + eventSliceRLPSize + 1000 // empty payload size + RLP slice encoding overhead + 1000 safety buffer
 	events, err := getEvents(ctx, readTx)
 	if err != nil {
 		return nil, err
