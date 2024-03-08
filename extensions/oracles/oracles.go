@@ -25,7 +25,7 @@ var registeredOracles = make(map[string]OracleFunc)
 // removed as a validator, then becomes a validator again).
 // The function can block indefinitely, but all resources should be cleaned up when the context is canceled
 // to prevent memory leaks.
-type OracleFunc func(ctx context.Context, service *common.Service, eventstore EventStore)
+type OracleFunc func(ctx context.Context, service *common.Service, eventstore EventStore) error
 
 // RegisterOracle registers an oracle with the Kwil network.
 // It should be called in the init function of the oracle's package.
