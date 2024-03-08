@@ -68,7 +68,7 @@ func (omgr *OracleMgr) Start() error {
 			return nil
 		case err := <-errChan:
 			return err
-		default:
+		case <-time.After(1 * time.Second):
 			// still in the catch up mode, do nothing
 			if omgr.cometNode.IsCatchup() {
 				continue
@@ -122,7 +122,6 @@ func (omgr *OracleMgr) Start() error {
 				oracleInstanceCancel()
 				oracleInstanceCancel = nil
 			}
-			time.Sleep(1 * time.Second)
 		}
 	}
 }
