@@ -259,7 +259,9 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	addr := proposerAddrToString(req.ProposerAddress)
 	proposerPubKey, ok := a.validatorAddressToPubKey[addr]
-	if !ok {
+	if !ok && len(req.Txs) > 0 {
+		// ProcessProposal allows block proposals for untracked validators, but
+		// only if the block has no transactions.
 		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to address %v", addr)
 	}
 
@@ -301,7 +303,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// Broadcast any events that have not been broadcasted yet
-	if a.broadcastFn != nil {
+	if a.broadcastFn != nil && len(proposerPubKey) > 0 {
 		err := a.broadcastFn(ctx, proposerPubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to broadcast events: %w", err)
