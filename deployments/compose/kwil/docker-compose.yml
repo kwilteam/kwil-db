@@ -39,6 +39,9 @@ services:
   kwild:
     container_name: kwild-single
     image: kwild:latest
+    build:
+      context: ../../../
+      dockerfile: ./build/package/docker/kwild.dockerfile
     ports:
       - "8080:8080"
       - "50051:50051"
