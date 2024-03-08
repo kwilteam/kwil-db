@@ -545,7 +545,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 	}
 	defer readTx.Rollback(ctx) // always rollback read tx
 
-	maxTxsSize -= r.emptyVoteBodyTxSize + eventSliceRLPSize + 1000 // empty payload size + RLP slice encoding overhead + 1000 safety buffer
+	maxTxsSize -= r.emptyVoteBodyTxSize + 1000 // empty payload size + 1000 safety buffer
 	events, err := getEvents(ctx, readTx)
 	if err != nil {
 		return nil, err
@@ -583,12 +583,11 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 			return nil, fmt.Errorf("internal bug: event with id %s not found", id.String())
 		}
 
-		evtSz := int64(len(event.Type)) + int64(len(event.Body))
+		evtSz := int64(len(event.Type)) + int64(len(event.Body)) + eventRLPSize
 		if evtSz > maxTxsSize {
 			break
 		}
 		maxTxsSize -= evtSz
-		maxTxsSize -= eventRLPSize
 		finalEvents = append(finalEvents, event)
 	}
 
@@ -646,37 +645,6 @@ var eventRLPSize int64 = func() int64 {
 	}
 
 	return int64(len(bts)) - eventSize
-}()
-
-// eventSliceRLPSize is the extra size added to RLP encode a slice
-// of events vs having all events as RLP encoded.
-var eventSliceRLPSize int64 = func() int64 {
-	event1 := &types.VotableEvent{
-		Body: []byte("body1"),
-		Type: "type",
-	}
-	event2 := &types.VotableEvent{
-		Body: []byte("body2"),
-		Type: "type",
-	}
-
-	bts1, err := serialize.Encode(event1)
-	if err != nil {
-		panic(err)
-	}
-
-	bts2, err := serialize.Encode(event2)
-	if err != nil {
-		panic(err)
-	}
-
-	eventArr := []*types.VotableEvent{event1, event2}
-	btsArr, err := serialize.Encode(eventArr)
-	if err != nil {
-		panic(err)
-	}
-
-	return int64(len(btsArr)) - (int64(len(bts1)) + int64(len(bts2)))
 }()
 
 // TxResponse is the response from a transaction.
