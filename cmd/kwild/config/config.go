@@ -249,8 +249,11 @@ func defaultMoniker() string {
 // 2. Config file
 // 3. Env vars
 // 4. Command line flags
-// It takes one argument, which is the config generated from the command line flags.
-func GetCfg(flagCfg *KwildConfig) (*KwildConfig, error) {
+// It takes the config generated from the command line flags to override default.
+// It also takes a flag to indicate if the caller wants to modify the defaults
+// for "quickstart" mode. Presently this just makes the HTTP RPC service listen
+// on all interfaces instead of the default of localhost.
+func GetCfg(flagCfg *KwildConfig, quickStart bool) (*KwildConfig, bool, error) {
 	/*
 		the process here is:
 		1. identify the root dir.  This requires reading in the env and command line flags
@@ -265,10 +268,17 @@ func GetCfg(flagCfg *KwildConfig) (*KwildConfig, error) {
 	cfg := DefaultConfig()
 	rootDir := cfg.RootDir
 
+	// If doing a quickstart (autogen mode in caller), change the default HTTP
+	// listen address to use all interfaces. We do this here so that the user
+	// can still override it if they want.
+	if quickStart {
+		cfg.AppCfg.HTTPListenAddress = "0.0.0.0:8080"
+	}
+
 	// read in env config
 	envCfg, err := LoadEnvConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load env config: %w", err)
+		return nil, false, fmt.Errorf("failed to load env config: %w", err)
 	}
 	if envCfg.RootDir != "" {
 		rootDir = envCfg.RootDir
@@ -281,7 +291,7 @@ func GetCfg(flagCfg *KwildConfig) (*KwildConfig, error) {
 	// expand the root dir
 	rootDir, err = ExpandPath(rootDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to expand root directory \"%v\": %v", rootDir, err)
+		return nil, false, fmt.Errorf("failed to expand root directory \"%v\": %v", rootDir, err)
 	}
 
 	fmt.Printf("Root directory \"%v\"\n", rootDir)
@@ -289,34 +299,36 @@ func GetCfg(flagCfg *KwildConfig) (*KwildConfig, error) {
 	// make sure the root dir exists
 	err = os.MkdirAll(rootDir, 0755)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create root directory \"%v\": %v", rootDir, err)
+		return nil, false, fmt.Errorf("failed to create root directory \"%v\": %v", rootDir, err)
 	}
 
 	// 2. Read in the config file
 	// read in config file and merge into default config
+	var configFileExists bool
 	fileCfg, err := LoadConfigFile(filepath.Join(rootDir, ConfigFileName))
 	if err == nil {
+		configFileExists = true
 		// merge in config file
 		err2 := cfg.Merge(fileCfg)
 		if err2 != nil {
-			return nil, fmt.Errorf("failed to merge config file: %w", err2)
+			return nil, false, fmt.Errorf("failed to merge config file: %w", err2)
 		}
 	} else if err != ErrConfigFileNotFound {
-		return nil, fmt.Errorf("failed to load config file: %w", err)
+		return nil, false, fmt.Errorf("failed to load config file: %w", err)
 	}
 
 	// 3. Merge in the env config
 	// merge in env config
 	err = cfg.Merge(envCfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to merge env config: %w", err)
+		return nil, false, fmt.Errorf("failed to merge env config: %w", err)
 	}
 
 	// 4. Merge in the flag config
 	// merge in flag config
 	err = cfg.Merge(flagCfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to merge flag config: %w", err)
+		return nil, false, fmt.Errorf("failed to merge flag config: %w", err)
 	}
 
 	cfg.RootDir = rootDir
@@ -327,7 +339,7 @@ func GetCfg(flagCfg *KwildConfig) (*KwildConfig, error) {
 		cfg.ChainCfg.Moniker = defaultMoniker()
 	}
 
-	return cfg, nil
+	return cfg, configFileExists, nil
 }
 
 // LoadConfig reads a config.toml at the given path and returns a KwilConfig.
