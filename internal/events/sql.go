@@ -1,8 +1,16 @@
 package events
 
+import (
+	"context"
+	"fmt"
+
+	"github.com/kwilteam/kwil-db/common/sql"
+)
+
 const (
-	SchemaName      = `kwild_events` // exported because oracles depends on it. this is an issue with how oracles are unit tested
-	sqlCreateSchema = `CREATE SCHEMA IF NOT EXISTS ` + SchemaName
+	SchemaName = `kwild_events` // exported because oracles depends on it. this is an issue with how oracles are unit tested
+
+	eventStoreVersion = 0
 
 	// eventsTable is the SQL table definition for the events table.
 	// All the events in this table exist in one of the below states.
@@ -52,3 +60,21 @@ const (
 		WHERE key = $1;
 	`
 )
+
+func initTables(ctx context.Context, db sql.DB) error {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Create the events and kv table if it does not exist.
+	if _, err := tx.Execute(ctx, eventsTable); err != nil {
+		return err
+	}
+	if _, err := tx.Execute(ctx, createKvTblStmt); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}

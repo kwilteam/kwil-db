@@ -8,22 +8,21 @@ import (
 
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/sql/versioning"
 )
 
 // InitializeAccountStore initializes the account store schema and tables.
-func InitializeAccountStore(ctx context.Context, db sql.TxMaker) error {
-	sp, err := db.BeginTx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer sp.Rollback(ctx)
-
-	err = initTables(ctx, sp)
-	if err != nil {
-		return fmt.Errorf("failed to initialize tables: %w", err)
+func InitializeAccountStore(ctx context.Context, db sql.DB) error {
+	upgradeFns := map[int64]versioning.UpgradeFunc{
+		0: initTables,
 	}
 
-	return sp.Commit(ctx)
+	err := versioning.Upgrade(ctx, db, schemaName, upgradeFns, accountStoreVersion)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Credit credits an account with the given amount. If the account does not exist, it will be created.

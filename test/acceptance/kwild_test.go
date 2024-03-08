@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kwilteam/kwil-db/test/acceptance"
 	"github.com/kwilteam/kwil-db/test/specifications"
@@ -65,6 +66,10 @@ func TestKwildTransferAcceptance(t *testing.T) {
 			t.Log("creator private key: ", helper.GetConfig().CreatorRawPk)
 
 			// =================
+
+			// Wait for Genesis allocs to get credited at the end of 1st block, before issuing any transactions.
+			time.Sleep(2 * time.Second)
+
 			senderDriver := helper.GetDriver(driverType, "creator")
 			sender := specifications.TransferAmountDsl(senderDriver)
 

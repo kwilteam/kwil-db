@@ -65,17 +65,14 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	db.AutoCommit(true) // alt: db.BeginTx ... defer tx.Rollback, etc.
 
 	// engine
-	e := buildEngine(d, closers, db)
+	e := buildEngine(d, db)
 
 	// account store
 	initAccountRepository(d, db)
 
-	// validator updater and store
-	//vstore := buildValidatorManager(d, db) // TODO: get rid of dis
+	snapshotModule := buildSnapshotter()
 
-	snapshotModule := buildSnapshotter(d)
-
-	bootstrapperModule := buildBootstrapper(d)
+	bootstrapperModule := buildBootstrapper()
 
 	// vote store
 	// v := buildVoteStore(d, db, accs, e)
@@ -108,7 +105,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	eventBroadcaster := buildEventBroadcaster(d, ev, wrappedCmtClient, txApp)
 	abciApp.SetEventBroadcaster(eventBroadcaster.RunBroadcast)
 	// oracle manager
-	om := buildOracleManager(d, closers, ev, cometBftNode, txApp)
+	om := buildOracleManager(d, ev, cometBftNode, txApp)
 
 	// tx service and grpc server
 	txsvc := buildTxSvc(d, db, e, wrappedCmtClient, txApp)
@@ -326,7 +323,7 @@ func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 	return db
 }
 
-func buildEngine(d *coreDependencies, closer *closeFuncs, db *pg.DB) *execution.GlobalContext {
+func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
 	extensions, err := getExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
 	if err != nil {
 		failBuild(err, "failed to get extensions")
@@ -341,6 +338,11 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, db *pg.DB) *execution.
 		failBuild(err, "failed to start transaction")
 	}
 	defer tx.Rollback(d.ctx)
+
+	err = execution.InitializeEngine(d.ctx, tx)
+	if err != nil {
+		failBuild(err, "failed to initialize engine")
+	}
 
 	eng, err := execution.NewGlobalContext(d.ctx, tx, extensions, &common.Service{
 		Logger:           d.log.Named("engine").Sugar(),
@@ -386,7 +388,7 @@ func initAccountRepository(d *coreDependencies, db *pg.DB) {
 	}
 }
 
-func buildSnapshotter(d *coreDependencies) *snapshots.SnapshotStore {
+func buildSnapshotter() *snapshots.SnapshotStore {
 	return nil
 	// TODO: Uncomment when we have statesync ready
 	// cfg := d.cfg.AppCfg
@@ -402,7 +404,7 @@ func buildSnapshotter(d *coreDependencies) *snapshots.SnapshotStore {
 	// )
 }
 
-func buildBootstrapper(d *coreDependencies) *snapshots.Bootstrapper {
+func buildBootstrapper() *snapshots.Bootstrapper {
 	return nil
 	// TODO: Uncomment when we have statesync ready
 	// rcvdSnapsDir := filepath.Join(d.cfg.RootDir, rcvdSnapsDirName)
@@ -654,6 +656,6 @@ func failBuild(err error, msg string) {
 	}
 }
 
-func buildOracleManager(d *coreDependencies, closer *closeFuncs, ev *events.EventStore, node *cometbft.CometBftNode, txapp *txapp.TxApp) *oracles.OracleMgr {
+func buildOracleManager(d *coreDependencies, ev *events.EventStore, node *cometbft.CometBftNode, txapp *txapp.TxApp) *oracles.OracleMgr {
 	return oracles.NewOracleMgr(d.cfg.AppCfg.Extensions, ev, node, d.privKey.PubKey().Bytes(), txapp, *d.log.Named("oracle-manager"))
 }

@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	schemaName      = `kwild_accts`
-	sqlCreateSchema = `CREATE SCHEMA IF NOT EXISTS ` + schemaName
+	schemaName = `kwild_accts`
+
+	accountStoreVersion = 0
 
 	sqlInitTables = `CREATE TABLE IF NOT EXISTS ` + schemaName + `.accounts (
 		identifier BYTEA PRIMARY KEY,
@@ -27,14 +28,12 @@ const (
 	sqlGetAccount = `SELECT balance, nonce FROM ` + schemaName + `.accounts WHERE identifier = $1`
 )
 
-func initTables(ctx context.Context, tx sql.Executor) error {
-	if _, err := tx.Execute(ctx, sqlCreateSchema); err != nil {
-		return err
-	}
+func initTables(ctx context.Context, tx sql.DB) error {
 	_, err := tx.Execute(ctx, sqlInitTables)
 	if err != nil {
 		return fmt.Errorf("failed to initialize tables: %w", err)
 	}
+
 	return nil
 }
 

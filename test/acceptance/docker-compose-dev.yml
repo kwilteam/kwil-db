@@ -43,6 +43,11 @@ services:
       --app.pg-db-port=5432
       --app.pg-db-user=kwild
       --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD-SHELL", "/app/kwil-cli utils chain-info"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
 
   pg:
     image: postgres:16.1
