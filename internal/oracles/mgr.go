@@ -50,18 +50,25 @@ func NewOracleMgr(config map[string]map[string]string, eventStore *events.EventS
 
 // Start starts the oracle manager.
 // It will block until Stop is called.
-func (omgr *OracleMgr) Start() {
+func (omgr *OracleMgr) Start() error {
 	ctx, cancel := context.WithCancel(context.Background()) // context that will be canceled when the manager shuts down
 	omgr.cancel = cancel
 	// Listen for status changes
 	// Start oracles if the node is a validator and is caught up
 	// Stop the oracles, if the node is not a validator
-	go func() {
-		// cancel function for the oracle instance
-		// if it is nil, then the oracle is not running
-		var oracleInstanceCancel context.CancelFunc
+	// cancel function for the oracle instance
+	// if it is nil, then the oracle is not running
+	var oracleInstanceCancel context.CancelFunc
 
-		for {
+	var errChan = make(chan error, 1)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case err := <-errChan:
+			return err
+		default:
 			// still in the catch up mode, do nothing
 			if omgr.cometNode.IsCatchup() {
 				continue
@@ -91,15 +98,23 @@ func (omgr *OracleMgr) Start() {
 				omgr.logger.Info("Node is a validator and caught up with the network, starting oracles")
 
 				for name, start := range oracles.RegisteredOracles() {
-					go start(ctx2, &common.Service{
-						Logger:           omgr.logger.Named(name).Sugar(),
-						ExtensionConfigs: omgr.config,
-					}, &scopedKVEventStore{
-						ev: omgr.eventStore,
-						// we add a space to prevent collisions in the KV
-						// oracle names cannot have spaces
-						KV: omgr.eventStore.KV([]byte(name + " ")),
-					})
+					go func(ctx context.Context, start oracles.OracleFunc, name string) {
+						err := start(ctx2, &common.Service{
+							Logger:           omgr.logger.Named(name).Sugar(),
+							ExtensionConfigs: omgr.config,
+						}, &scopedKVEventStore{
+							ev: omgr.eventStore,
+							// we add a space to prevent collisions in the KV
+							// oracle names cannot have spaces
+							KV: omgr.eventStore.KV([]byte(name + " ")),
+						})
+						if err != nil {
+							// if error is returned, shutdown manager
+							omgr.logger.Error("Oracle failed", zap.String("oracle", name), zap.Error(err))
+							errChan <- err
+						}
+					}(ctx2, start, name)
+
 				}
 			} else if oracleInstanceCancel != nil && !isValidator {
 				// Stop the oracles if they are running
@@ -109,9 +124,7 @@ func (omgr *OracleMgr) Start() {
 			}
 			time.Sleep(1 * time.Second)
 		}
-	}()
-
-	<-ctx.Done()
+	}
 }
 
 func (omgr *OracleMgr) Stop() {
