@@ -77,7 +77,7 @@ func (omgr *OracleMgr) Start() error {
 			validators, err := omgr.vstore.GetValidators(ctx)
 			if err != nil {
 				omgr.logger.Warn("failed to get validators", zap.Error(err))
-				break
+				return err
 			}
 
 			isValidator := false
@@ -98,7 +98,7 @@ func (omgr *OracleMgr) Start() error {
 				omgr.logger.Info("Node is a validator and caught up with the network, starting oracles")
 
 				for name, start := range oracles.RegisteredOracles() {
-					go func(ctx context.Context, start oracles.OracleFunc, name string) {
+					go func(start oracles.OracleFunc, name string) {
 						err := start(ctx2, &common.Service{
 							Logger:           omgr.logger.Named(name).Sugar(),
 							ExtensionConfigs: omgr.config,
@@ -113,7 +113,7 @@ func (omgr *OracleMgr) Start() error {
 							omgr.logger.Error("Oracle failed", zap.String("oracle", name), zap.Error(err))
 							errChan <- err
 						}
-					}(ctx2, start, name)
+					}(start, name)
 
 				}
 			} else if oracleInstanceCancel != nil && !isValidator {
