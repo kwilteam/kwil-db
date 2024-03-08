@@ -34,16 +34,16 @@ func init() {
 // "Credit(address,uint256)" and create a deposit event in Kwil when it sees a matching event. It uses the
 // "credit_account" resolution, defined in extensions/resolutions/credit/credit.go, to create the deposit event.
 // It will search for a local extension configuration named "eth_deposit".
-func Start(ctx context.Context, service *common.Service, eventstore oracles.EventStore) {
+func Start(ctx context.Context, service *common.Service, eventstore oracles.EventStore) error {
 	config := &EthDepositConfig{}
 	oracleConfig, ok := service.ExtensionConfigs[OracleName]
 	if !ok {
 		service.Logger.Info("no eth_deposit configuration found, eth_deposit oracle will not start")
-		return
+		return nil // no configuration, so we don't start the oracle
 	}
 	err := config.setConfig(oracleConfig)
 	if err != nil {
-		service.Logger.Error("failed to set eth_deposit configuration", "error", err)
+		return fmt.Errorf("failed to set eth_deposit configuration: %w", err)
 	}
 
 	// we need to catch up with the ethereum chain.
@@ -52,8 +52,7 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 	// whichever is greater
 	lastHeight, err := getLastStoredHeight(ctx, eventstore)
 	if err != nil {
-		service.Logger.Error("failed to get last stored height", "error", err)
-		return
+		return fmt.Errorf("failed to get last stored height: %w", err)
 	}
 
 	if config.StartingHeight > lastHeight {
@@ -62,21 +61,18 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 
 	client, err := newEthClient(ctx, config.RPCProvider, config.MaxRetries, ethcommon.HexToAddress(config.ContractAddress), service.Logger)
 	if err != nil {
-		service.Logger.Error("failed to create ethereum client", "error", err)
-		return
+		return fmt.Errorf("failed to create ethereum client: %w", err)
 	}
 	defer client.Close()
 
 	// get the current block height from the Ethereum client
 	currentHeight, err := client.GetLatestBlock(ctx)
 	if err != nil {
-		service.Logger.Error("failed to get current block height", "error", err)
-		return
+		return fmt.Errorf("failed to get current block height: %w", err)
 	}
 
 	if lastHeight > currentHeight-config.RequiredConfirmations {
-		service.Logger.Error("starting height is greater than the last confirmed eth block height")
-		return
+		return fmt.Errorf("starting height is greater than the last confirmed eth block height")
 	}
 
 	// we will now sync all logs from the starting height to the current height,
@@ -95,8 +91,7 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 
 		err = processEvents(ctx, lastHeight, toBlock, client, eventstore, service.Logger)
 		if err != nil {
-			service.Logger.Error("failed to process events", "error", err)
-			return
+			return fmt.Errorf("failed to process events: %w", err)
 		}
 
 		lastHeight = toBlock
@@ -127,8 +122,10 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 		return nil
 	})
 	if outerErr != nil {
-		service.Logger.Error("failed to listen to blocks", "error", err)
+		return fmt.Errorf("ethereum client error: %w", outerErr)
 	}
+
+	return nil
 }
 
 // processEvents will process all events from the Ethereum client from the given height range.
