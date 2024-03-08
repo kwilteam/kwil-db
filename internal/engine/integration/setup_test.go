@@ -73,6 +73,9 @@ func setup(t *testing.T) (global *execution.GlobalContext, db *pg.DB, err error)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
+	err = execution.InitializeEngine(ctx, tx)
+	require.NoError(t, err)
+
 	global, err = execution.NewGlobalContext(ctx, tx, map[string]actions.ExtensionInitializer{
 		"math": (&mathInitializer{}).initialize,
 	}, &common.Service{

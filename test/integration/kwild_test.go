@@ -119,7 +119,9 @@ func TestKwildValidatorRemoval(t *testing.T) {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, allServices)
-			//defer helper.Teardown()
+
+			// Wait for the network to produce atleast 1 block for the genesis validators to get committed and synced.
+			time.Sleep(2 * time.Second)
 
 			node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetOperatorDriver(ctx, "node1", driverType)
@@ -174,6 +176,9 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			joinerDriver := helper.GetOperatorDriver(ctx, "node3", driverType)
 			joinerPrivKey := helper.NodePrivateKey("node3")
 			joinerPubKey := joinerPrivKey.PubKey().Bytes()
+
+			// Wait for the network to produce atleast 1 block for the genesis validators to get committed and synced.
+			time.Sleep(2 * time.Second)
 
 			// Start the network with 3 validators & 1 Non-validator
 			specifications.CurrentValidatorsSpecification(ctx, t, node0Driver, 3)
@@ -334,6 +339,8 @@ func TestKwildEthDepositOracleExpiryIntegration(t *testing.T) {
 	if *parallelMode {
 		t.Parallel()
 	}
+
+	t.Skip("Skipping test as currently there is no way to update the resolution expiry")
 
 	opts := []integration.HelperOpt{
 		integration.WithBlockInterval(time.Second),

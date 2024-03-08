@@ -10,6 +10,7 @@ import (
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/internal/sql/versioning"
 )
 
 const (
@@ -20,17 +21,25 @@ const (
 // InitializeVoteStore initializes the vote store with the required tables.
 // It will also create any resolution types that have been registered.
 func InitializeVoteStore(ctx context.Context, db sql.DB) error {
-	tx, err := db.BeginTx(ctx)
-	if err != nil {
-		return err
+	upgradeFns := map[int64]versioning.UpgradeFunc{
+		0: initTables,
 	}
-	defer tx.Rollback(ctx)
 
-	initStmts := []string{createVotingSchema, tableVoters, tableResolutionTypes, tableResolutions,
-		resolutionsTypeIndex, tableProcessed, tableVotes} // order important
+	err := versioning.Upgrade(ctx, db, votingSchemaName, upgradeFns, voteStoreVersion)
+	if err != nil {
+		return fmt.Errorf("failed to initialize or upgrade vote store: %w", err)
+	}
+
+	return nil
+}
+
+func initTables(ctx context.Context, db sql.DB) error {
+	initStmts := []string{ //createVotingSchema,
+		tableVoters, tableResolutionTypes, tableResolutions,
+		resolutionsTypeIndex, tableProcessed, tableVotes, tableHeight} // order important
 
 	for _, stmt := range initStmts {
-		_, err := tx.Execute(ctx, stmt)
+		_, err := db.Execute(ctx, stmt)
 		if err != nil {
 			return err
 		}
@@ -39,18 +48,13 @@ func InitializeVoteStore(ctx context.Context, db sql.DB) error {
 	resolutions := resolutions.ListResolutions()
 	for _, name := range resolutions {
 		uuid := types.NewUUIDV5([]byte(name))
-		_, err := tx.Execute(ctx, createResolutionType, uuid[:], name)
+		_, err := db.Execute(ctx, createResolutionType, uuid[:], name)
 		if err != nil {
 			return err
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
 	return nil
-
 }
 
 // Approve approves a resolution from a voter.
@@ -551,4 +555,31 @@ func intDivUpFraction(val, numerator, divisor int64) int64 {
 	tempNumerator := new(big.Int).Mul(numerBig, valBig)
 	tempNumerator.Add(tempNumerator, new(big.Int).Sub(divBig, big.NewInt(1)))
 	return new(big.Int).Div(tempNumerator, divBig).Int64()
+}
+
+func GetHeight(ctx context.Context, db sql.DB) (int64, error) {
+	res, err := db.Execute(ctx, getHeight)
+	if err != nil {
+		return 0, err
+	}
+
+	// Fresh database
+	if len(res.Rows) != 1 {
+		return -1, nil
+	}
+
+	height, ok := sql.Int64(res.Rows[0][0])
+	if !ok {
+		return 0, fmt.Errorf("invalid type for height (%T)", res.Rows[0][0])
+	}
+
+	return height, nil
+}
+
+func SetHeight(ctx context.Context, db sql.DB, height int64) error {
+	if _, err := db.Execute(ctx, updateHeight, height); err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -73,7 +73,16 @@ type TxApp struct {
 	mempool *mempool
 
 	// transaction that exists between Begin and Commit
-	currentTx        sql.OuterTx
+	currentTx sql.OuterTx
+
+	// Abci.InitChain can be called multiple times from comet when the node fails
+	// before the first block is committed.
+	// Therefore any changes in the Genesis must be committed only
+	// upon calling Commit at the end of the first block.
+	// For more information, see: https://github.com/cometbft/cometbft/issues/203
+	// genesisTx is the transaction that is used to apply the genesis state changes
+	// along with the updates by the transactions in the first block.
+	genesisTx        sql.OuterTx
 	extensionConfigs map[string]map[string]string
 
 	// precomputed variables
@@ -89,21 +98,31 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	r.genesisTx = tx
 
-	// Sanity Check: Verify that there is no data from previous instance
-	vals, err := getAllVoters(ctx, tx)
+	height, err := getDBHeight(ctx, tx)
 	if err != nil {
-		return err
+		err2 := tx.Rollback(ctx)
+		if err2 != nil {
+			return fmt.Errorf("error rolling back transaction: %s, error: %s", err.Error(), err2.Error())
+		}
+		return fmt.Errorf("error getting database height: %s", err.Error())
 	}
-	if len(vals) > 0 {
-		return errors.New("genesisInit: cannot initialize genesis state: database has data from previous reset instance")
+
+	if height == -1 {
+		r.log.Info("GenesisInit: starting with empty database")
+	} else if initialHeight-1 != height {
+		return fmt.Errorf("genesisInit: expected database to be at height %d, got %d", initialHeight-1, height)
 	}
 
 	// Add Genesis Validators
 	for _, validator := range validators {
 		err := setVoterPower(ctx, tx, validator.PubKey, validator.Power)
 		if err != nil {
+			err2 := tx.Rollback(ctx)
+			if err2 != nil {
+				return fmt.Errorf("error rolling back transaction: %s, error: %s", err.Error(), err2.Error())
+			}
 			return err
 		}
 	}
@@ -112,16 +131,14 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 	for _, account := range genesisAccounts {
 		err := credit(ctx, tx, account.Identifier, account.Balance)
 		if err != nil {
+			err2 := tx.Rollback(ctx)
+			if err2 != nil {
+				return fmt.Errorf("error rolling back transaction: %s, error: %s", err.Error(), err2.Error())
+			}
 			return err
 		}
 	}
-
-	_, err = tx.Precommit(ctx)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
+	return nil
 }
 
 // UpdateValidator updates a validator's power.
@@ -203,6 +220,11 @@ func (r *TxApp) Begin(ctx context.Context) error {
 		return errors.New("txapp misuse: cannot begin a new block while a transaction is in progress")
 	}
 
+	if r.genesisTx != nil {
+		r.currentTx = r.genesisTx
+		return nil
+	}
+
 	tx, err := r.Database.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -239,6 +261,12 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte
 	}
 
 	finalValidators, err := getAllVoters(ctx, r.currentTx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Update Height
+	err = updateDBHeight(ctx, r.currentTx, blockHeight)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -450,6 +478,7 @@ func (r *TxApp) Commit(ctx context.Context) error {
 	}
 
 	r.currentTx = nil
+	r.genesisTx = nil
 	return nil
 }
 

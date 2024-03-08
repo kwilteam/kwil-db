@@ -60,7 +60,7 @@ services:
       --autogen
       --root-dir=/app/.kwild
       --log.level=debug
-      --app.admin-listen-addr=tcp://127.0.0.1:50151
+      --app.admin-listen-addr=unix:///tmp/admin.sock
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --chain.p2p.external-address=tcp://0.0.0.0:26656
@@ -69,6 +69,11 @@ services:
       --app.pg-db-port=5432
       --app.pg-db-user=kwild
       --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD-SHELL", "/app/kwil-cli utils chain-info"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
 
 networks:
   kwilnet0:

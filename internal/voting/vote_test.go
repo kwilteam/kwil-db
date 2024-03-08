@@ -24,6 +24,11 @@ func init() {
 	}
 }
 
+func TestMain(m *testing.M) {
+	// pg.UseLogger(log.NewStdOut(log.InfoLevel))
+	m.Run()
+}
+
 func Test_Voting(t *testing.T) {
 	type testcase struct {
 		name          string
