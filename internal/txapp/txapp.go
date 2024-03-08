@@ -16,15 +16,11 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/voting"
-)
-
-var (
-	// rough estimatation of rlp overhead size
-	rlpEncodingOverheadSize int64 = 1000
 )
 
 // NewTxApp creates a new router.
@@ -550,7 +546,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 	defer readTx.Rollback(ctx) // always rollback read tx
 
 	// Consider empty vote body tx and the rlp encoding overhead size(safety buffer)
-	maxTxsSize -= r.emptyVoteBodyTxSize + rlpEncodingOverheadSize
+	maxTxsSize -= r.emptyVoteBodyTxSize + eventSliceRLPSize
 	events, err := getEvents(ctx, readTx)
 	if err != nil {
 		return nil, err
@@ -593,7 +589,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 			break
 		}
 		maxTxsSize -= evtSz
-		maxTxsSize -= rlpEncodingOverheadSize
+		maxTxsSize -= eventRLPSize
 		finalEvents = append(finalEvents, event)
 	}
 
@@ -627,6 +623,62 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 
 	return [][]byte{bts}, nil
 }
+
+/*
+	In the two functions below, I am calculating the constants for overheads on RLP encoding.
+	The overhead is simply the amount of extra bytes added to an event's size when it is RLP encoded.
+	The first function calculates the overhead per event, while the second calculates the overhead
+	of encoding a slice of events.
+*/
+
+// eventRLPSize is the extra size added to an event from RLP
+// encoding. It is the same regardless of event data.
+var eventRLPSize int64 = func() int64 {
+	event := &types.VotableEvent{
+		Body: []byte("body"),
+		Type: "type",
+	}
+
+	eventSize := int64(len(event.Type)) + int64(len(event.Body))
+
+	bts, err := serialize.Encode(event)
+	if err != nil {
+		panic(err)
+	}
+
+	return int64(len(bts)) - eventSize
+}()
+
+// eventSliceRLPSize is the extra size added to RLP encode a slice
+// of events vs having all events as RLP encoded.
+var eventSliceRLPSize int64 = func() int64 {
+	event1 := &types.VotableEvent{
+		Body: []byte("body1"),
+		Type: "type",
+	}
+	event2 := &types.VotableEvent{
+		Body: []byte("body2"),
+		Type: "type",
+	}
+
+	bts1, err := serialize.Encode(event1)
+	if err != nil {
+		panic(err)
+	}
+
+	bts2, err := serialize.Encode(event2)
+	if err != nil {
+		panic(err)
+	}
+
+	eventArr := []*types.VotableEvent{event1, event2}
+	btsArr, err := serialize.Encode(eventArr)
+	if err != nil {
+		panic(err)
+	}
+
+	return int64(len(btsArr)) - (int64(len(bts1)) + int64(len(bts2)))
+}()
 
 // TxResponse is the response from a transaction.
 // It contains information about the transaction, such as the amount spent.
