@@ -375,6 +375,15 @@ func (v *validatorJoinRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
+	// ensure this candidate is not already a validator
+	power, err := getVoterPower(ctx.Ctx, tx2, tx.Sender)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	if power > 0 {
+		return txRes(spend, transactions.CodeInvalidSender, ErrCallerIsValidator)
+	}
+
 	// we first need to ensure that this validator does not have a pending join request
 	// if it does, we should not allow it to join again
 	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, tx2, voting.ValidatorJoinEventType, tx.Sender)
@@ -450,6 +459,10 @@ func (v *validatorApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
+	if bytes.Equal(approve.Candidate, tx.Sender) {
+		return txRes(spend, transactions.CodeInvalidSender, errors.New("cannot approve own join request"))
+	}
+
 	// each pending validator can only have one active join request at a time
 	// we need to retrieve the join request and ensure that it is still pending
 	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, tx2, voting.ValidatorJoinEventType, approve.Candidate)
@@ -462,6 +475,15 @@ func (v *validatorApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	if len(pending) > 1 {
 		// this should never happen, but if it does, we should not allow it
 		return txRes(spend, transactions.CodeUnknownError, fmt.Errorf("validator has more than one pending join request. this is an internal bug"))
+	}
+
+	// ensure that sender is a validator
+	power, err := getVoterPower(ctx.Ctx, tx2, tx.Sender)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	if power <= 0 {
+		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotValidator)
 	}
 
 	err = approveResolution(ctx.Ctx, tx2, pending[0], ctx.ConsensusParams.JoinVoteExpiration, tx.Sender) // I don't think we need the expiration here, but just in case
@@ -527,6 +549,15 @@ func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transac
 		Type: voting.ValidatorRemoveEventType,
 	}
 
+	// ensure the sender is a validator
+	power, err := getVoterPower(ctx.Ctx, tx2, tx.Sender)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	if power <= 0 {
+		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotValidator)
+	}
+
 	// we should try to create the resolution, since validator removals are never
 	// officially "started" by the user. If it fails because it already exists,
 	// then we should do nothing
@@ -575,6 +606,15 @@ func (v *validatorLeaveRoute) Execute(ctx TxContext, router *TxApp, tx *transact
 		return txRes(spend, code, err)
 	}
 	defer dbTx.Commit(ctx.Ctx)
+
+	// don't touch the DB or start another RW tx is sender isn't a validator
+	power, err := getVoterPower(ctx.Ctx, dbTx, tx.Sender)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	if power <= 0 {
+		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotValidator)
+	}
 
 	tx2, err := dbTx.BeginTx(ctx.Ctx)
 	if err != nil {
