@@ -35,8 +35,8 @@ func arrayFormatter(items []string) string {
 	return "[" + strings.Join(formattedStrings, ", ") + "]"
 }
 
-// writeConfigFile writes the config to a file.
-func writeConfigFile(configFilePath string, cfg *config.KwildConfig) error {
+// WriteConfigFile writes the config to a file.
+func WriteConfigFile(configFilePath string, cfg *config.KwildConfig) error {
 	var buffer bytes.Buffer
 
 	if err := configTemplate.Execute(&buffer, cfg); err != nil {
@@ -47,15 +47,12 @@ func writeConfigFile(configFilePath string, cfg *config.KwildConfig) error {
 }
 
 const defaultConfigTemplate = `
-# This is a TOML config file.
-# For more information, see https://github.com/toml-lang/toml
-
 # NOTE: Any path below can be absolute (e.g. "/var/myawesomeapp/data") or
 # relative to the home directory (e.g. "data")
 
 # Root Directory Structure:
 # RootDir/
-#   |- config.toml    (app and chain configuration for running the kwild node)
+#   |- config.toml   (app and chain configuration for running the kwild node)
 #   |- private_key   (node's private key)
 #   |- abci/
 #   |   |- config/
@@ -64,7 +61,6 @@ const defaultConfigTemplate = `
 #   |   |- data/
 #   |   |   |- blockchain db files/dir (blockstore.db, state.db, etc)
 #   |   |- info/
-#   |- application/wal
 #   |- signing/
 
 # Only the config.toml and genesis file are required to run the kwild node

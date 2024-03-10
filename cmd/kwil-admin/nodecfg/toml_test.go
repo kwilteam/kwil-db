@@ -16,7 +16,7 @@ func Test_Generate_TOML(t *testing.T) {
 	cfg.AppCfg.GrpcListenAddress = "localhost:9000"
 	cfg.AppCfg.ExtensionEndpoints = []string{"localhost:9001", "localhost:9002"}
 	cfg.Logging.OutputPaths = []string{"stdout", "file"}
-	err := writeConfigFile("test.toml", cfg)
+	err := WriteConfigFile("test.toml", cfg)
 	assert.NoError(t, err)
 	defer os.Remove("test.toml")
 
