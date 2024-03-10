@@ -16,15 +16,11 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/voting"
-)
-
-var (
-	// rough estimatation of rlp overhead size
-	rlpEncodingOverheadSize int64 = 1000
 )
 
 // NewTxApp creates a new router.
@@ -549,8 +545,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 	}
 	defer readTx.Rollback(ctx) // always rollback read tx
 
-	// Consider empty vote body tx and the rlp encoding overhead size(safety buffer)
-	maxTxsSize -= r.emptyVoteBodyTxSize + rlpEncodingOverheadSize
+	maxTxsSize -= r.emptyVoteBodyTxSize + 1000 // empty payload size + 1000 safety buffer
 	events, err := getEvents(ctx, readTx)
 	if err != nil {
 		return nil, err
@@ -560,34 +555,40 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 		events = events[:50]
 	}
 
-	// Final events are the events whose bodies have not been received by the network
-	var finalEvents []*types.VotableEvent
+	ids := make([]types.UUID, 0, len(events))
 	for _, event := range events {
-		// Check if the event body is already received by the network
-		containsBody, err := resolutionContainsBody(ctx, readTx, event.ID())
-		if err != nil {
-			return nil, err
-		}
-		if containsBody {
-			continue
+		ids = append(ids, event.ID())
+	}
+
+	doesNotHaveBody, err := voting.FilterExistsNoBody(ctx, readTx, ids...)
+	if err != nil {
+		return nil, err
+	}
+
+	notProcessed, err := voting.FilterNotProcessed(ctx, readTx, doesNotHaveBody...)
+	if err != nil {
+		return nil, err
+	}
+
+	eventMap := make(map[types.UUID]*types.VotableEvent)
+	for _, evt := range events {
+		eventMap[evt.ID()] = evt
+	}
+
+	finalEvents := make([]*types.VotableEvent, 0)
+	for _, id := range notProcessed {
+		event, ok := eventMap[id]
+		if !ok {
+			// this should never happen
+			return nil, fmt.Errorf("internal bug: event with id %s not found", id.String())
 		}
 
-		finished, err := isProcessed(ctx, readTx, event.ID())
-		if err != nil {
-			return nil, err
-		}
-		if finished {
-			continue
-		}
-
-		// MaxTxBytes restrictions per block are enforced here
-		// As the rlp encoded size is almost always smaller, enforcing it on the unencoded data for ease of use
-		evtSz := int64(len(event.Type)) + int64(len(event.Body))
+		evtSz := int64(len(event.Type)) + int64(len(event.Body)) + eventRLPSize
 		if evtSz > maxTxsSize {
 			break
 		}
-		finalEvents = append(finalEvents, event)
 		maxTxsSize -= evtSz
+		finalEvents = append(finalEvents, event)
 	}
 
 	if len(finalEvents) == 0 {
@@ -620,6 +621,31 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 
 	return [][]byte{bts}, nil
 }
+
+/*
+	In the two functions below, I am calculating the constants for overheads on RLP encoding.
+	The overhead is simply the amount of extra bytes added to an event's size when it is RLP encoded.
+	The first function calculates the overhead per event, while the second calculates the overhead
+	of encoding a slice of events.
+*/
+
+// eventRLPSize is the extra size added to an event from RLP
+// encoding. It is the same regardless of event data.
+var eventRLPSize int64 = func() int64 {
+	event := &types.VotableEvent{
+		Body: []byte("body"),
+		Type: "type",
+	}
+
+	eventSize := int64(len(event.Type)) + int64(len(event.Body))
+
+	bts, err := serialize.Encode(event)
+	if err != nil {
+		panic(err)
+	}
+
+	return int64(len(bts)) - eventSize
+}()
 
 // TxResponse is the response from a transaction.
 // It contains information about the transaction, such as the amount spent.

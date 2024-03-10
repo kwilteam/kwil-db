@@ -7,12 +7,20 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 	"github.com/kwilteam/kwil-db/internal/voting"
 
 	"github.com/stretchr/testify/require"
 )
+
+func init() {
+	err := resolutions.RegisterResolution("test", resolutions.ResolutionConfig{})
+	if err != nil {
+		panic(err)
+	}
+}
 
 func Test_EventStore(t *testing.T) {
 	type testcase struct {

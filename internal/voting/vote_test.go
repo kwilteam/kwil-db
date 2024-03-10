@@ -4,6 +4,7 @@ package voting_test
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,7 +40,7 @@ func Test_Voting(t *testing.T) {
 
 	tests := []testcase{
 		{
-			name: "successful creationg and voting",
+			name: "successful creating and voting",
 			startingPower: map[string]int64{
 				"a": 100,
 				"b": 100,
@@ -196,6 +198,76 @@ func Test_Voting(t *testing.T) {
 				require.NoError(t, err)
 
 				require.EqualValues(t, resolutionInfo, expired[0])
+			},
+		},
+		{
+			name: "many resolutions test",
+			startingPower: map[string]int64{
+				"a": 100,
+			},
+			fn: func(t *testing.T, db sql.DB) {
+				ctx := context.Background()
+
+				events := make([]*types.VotableEvent, 3)
+				ids := make([]types.UUID, 3)
+				for i := 0; i < 3; i++ {
+					events[i] = &types.VotableEvent{
+						Body: []byte("test" + fmt.Sprint(i)),
+						Type: testType,
+					}
+
+					ids[i] = events[i].ID()
+				}
+
+				// we will create and approve 1,
+				// create 2,
+				// and only approve 3
+
+				err := voting.CreateResolution(ctx, db, events[0], 10, []byte("a"))
+				require.NoError(t, err)
+				err = voting.ApproveResolution(ctx, db, events[0].ID(), 10, []byte("a"))
+				require.NoError(t, err)
+
+				err = voting.CreateResolution(ctx, db, events[1], 10, []byte("a"))
+				require.NoError(t, err)
+
+				err = voting.ApproveResolution(ctx, db, events[2].ID(), 10, []byte("a"))
+				require.NoError(t, err)
+
+				containsBody, err := voting.FilterExistsNoBody(ctx, db, ids...)
+				require.NoError(t, err)
+
+				assert.Equal(t, len(containsBody), 1)
+
+				// delete and process all
+				err = voting.DeleteResolutions(ctx, db, ids...)
+				require.NoError(t, err)
+				err = voting.MarkProcessed(ctx, db, ids...)
+				require.NoError(t, err)
+
+				// check that they are all processed
+				processed, err := voting.FilterNotProcessed(ctx, db, ids...)
+				require.NoError(t, err)
+
+				assert.Equal(t, len(processed), 0)
+			},
+		},
+		{
+			name: "no resolutions",
+			startingPower: map[string]int64{
+				"a": 100,
+			},
+			fn: func(t *testing.T, db sql.DB) {
+				ctx := context.Background()
+
+				containsBody, err := voting.FilterExistsNoBody(ctx, db, types.NewUUIDV5([]byte("ss")))
+				require.NoError(t, err)
+				require.Empty(t, containsBody)
+
+				processed, err := voting.FilterNotProcessed(ctx, db, types.NewUUIDV5([]byte("ss")))
+				require.NoError(t, err)
+
+				require.Equal(t, len(processed), 1)
 			},
 		},
 	}

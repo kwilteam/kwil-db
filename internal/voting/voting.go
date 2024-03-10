@@ -377,6 +377,45 @@ func IsProcessed(ctx context.Context, tx sql.DB, resolutionID types.UUID) (bool,
 	return len(res.Rows) != 0, nil
 }
 
+// FilterNotProcessed takes a set of resolutions and returns the ones that have not been processed.
+// If a resolution does not exist, it WILL be included in the result.
+func FilterNotProcessed(ctx context.Context, db sql.DB, ids ...types.UUID) ([]types.UUID, error) {
+	res, err := db.Execute(ctx, returnNotProcessed, types.UUIDArray(ids))
+	if err != nil {
+		return nil, err
+	}
+
+	processed := make([]types.UUID, len(res.Rows))
+	for i, row := range res.Rows {
+		if len(row) != 1 {
+			// this should never happen, just for safety
+			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+		}
+		processed[i] = types.UUID(row[0].([]byte))
+	}
+
+	return processed, nil
+}
+
+// FilterExistsNoBody takes a set of resolutions and returns the ones that do exist but do not have a body.
+func FilterExistsNoBody(ctx context.Context, db sql.DB, ids ...types.UUID) ([]types.UUID, error) {
+	res, err := db.Execute(ctx, returnNoBody, types.UUIDArray(ids))
+	if err != nil {
+		return nil, err
+	}
+
+	processed := make([]types.UUID, len(res.Rows))
+	for i, row := range res.Rows {
+		if len(row) != 1 {
+			// this should never happen, just for safety
+			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+		}
+		processed[i] = types.UUID(row[0].([]byte))
+	}
+
+	return processed, nil
+}
+
 // HasVoted checks if a voter has voted on a resolution.
 func HasVoted(ctx context.Context, tx sql.DB, resolutionID types.UUID, from []byte) (bool, error) {
 	userId := types.NewUUIDV5(from)
