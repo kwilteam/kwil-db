@@ -125,6 +125,15 @@ const (
 	// alreadyProcessed checks if a resolution has already been processed
 	alreadyProcessed = `SELECT id FROM ` + votingSchemaName + `.processed WHERE id = $1;`
 
+	// returnNotProcessed returns all resolutions in the input array that do not exist in the processed table
+	returnNotProcessed = `SELECT unnested.id
+	FROM unnest($1::BYTEA[]) AS unnested(id)
+	LEFT JOIN ` + votingSchemaName + `.processed AS p ON unnested.id = p.id
+	WHERE p.id IS NULL;`
+
+	// returnNoBody returns all resolutions that do not have a body passed in the input array
+	returnNoBody = `SELECT id FROM ` + votingSchemaName + `.resolutions WHERE id =ANY($1) AND body IS NULL;`
+
 	// getResolutionsFullInfoByPower and getResolutionsFullInfoByExpiration are used to get the full info of a set of resolutions
 	// they should be updated together if their return values change
 
