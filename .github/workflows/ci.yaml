@@ -180,4 +180,4 @@ jobs:
 
       - name: Show error log
         if: ${{ failure() }}
-        run: grep -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwilAct*/*.log  /tmp/TestKwilInt*/*.log /tmp/TestKwilInt*/*/*.log
+        run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwilAct*/*.log  /tmp/TestKwilInt*/*.log /tmp/TestKwilInt*/*/*.log

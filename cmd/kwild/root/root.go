@@ -4,21 +4,23 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"syscall"
 	"time"
 
-	_ "net/http/pprof"
-
 	_ "github.com/kwilteam/kwil-db/extensions" // a base location where all extensions can be registered
 	_ "github.com/kwilteam/kwil-db/extensions/auth"
 
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/cmd/kwild/server"
 	"github.com/kwilteam/kwil-db/internal/version"
+
 	"github.com/spf13/cobra"
 )
 
@@ -37,8 +39,7 @@ func RootCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf("kwild version %v (Go version %s)\n", version.KwilVersion, runtime.Version())
 
-			var err error
-			kwildCfg, err := config.GetCfg(flagCfg)
+			kwildCfg, configFileExists, err := config.GetCfg(flagCfg, autoGen)
 			if err != nil {
 				return err
 			}
@@ -46,6 +47,15 @@ func RootCmd() *cobra.Command {
 			nodeKey, genesisConfig, err := kwildCfg.InitPrivateKeyAndGenesis(autoGen)
 			if err != nil {
 				return fmt.Errorf("failed to initialize private key and genesis: %w", err)
+			}
+
+			if autoGen && !configFileExists { // write config.toml if it didn't exist, and doing autogen
+				cfgPath := filepath.Join(kwildCfg.RootDir, config.ConfigFileName)
+				fmt.Printf("Writing config file to %v\n", cfgPath)
+				err = nodecfg.WriteConfigFile(cfgPath, kwildCfg)
+				if err != nil {
+					return err
+				}
 			}
 
 			stopProfiler, err := startProfilers(kwildCfg)
@@ -77,7 +87,7 @@ func RootCmd() *cobra.Command {
 	config.AddConfigFlags(flagSet, flagCfg)
 
 	flagSet.BoolVarP(&autoGen, "autogen", "a", false,
-		"auto generate private key and genesis file if not exist")
+		"auto generate private key, genesis file, and config file if not exist")
 
 	return cmd
 }

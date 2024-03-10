@@ -177,7 +177,7 @@ func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silenc
 	}
 
 	cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName
-	err = writeConfigFile(filepath.Join(rootDir, config.ConfigFileName), cfg)
+	err = WriteConfigFile(filepath.Join(rootDir, config.ConfigFileName), cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +362,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 			}
 		}
 
-		writeConfigFile(filepath.Join(nodeDir, config.ConfigFileName), cfg)
+		WriteConfigFile(filepath.Join(nodeDir, config.ConfigFileName), cfg)
 	}
 
 	fmt.Printf("Successfully initialized %d node directories: %s\n",
