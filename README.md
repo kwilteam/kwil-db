@@ -4,13 +4,13 @@ The database for Web3.
 
 ![banner](./assets/kwil-banner.jpeg)
 
-![Github-License](https://img.shields.io/badge/license-Apache%202.0-green)
-![Release](https://img.shields.io/github/v/release/kwilteam/kwil-db)
-![Build-Status](https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg)
-![Go-Version](https://img.shields.io/github/go-mod/go-version/kwilteam/kwil-db)
-![GoDoc](https://godoc.org/github.com/kwilteam/kwil-db?status.svg)
-![Go-Report-Card](https://goreportcard.com/badge/github.com/kwilteam/kwil-db)
-![Discord](https://img.shields.io/discord/819855804554543114?logo=discord)
+[![Github-License](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE.md)
+[![Release](https://img.shields.io/github/v/release/kwilteam/kwil-db)](https://github.com/kwilteam/kwil-db/releases)
+[![Build-Status](https://github.com/kwilteam/kwil-db/actions/workflows/ci.yaml/badge.svg)](https://github.com/kwilteam/kwil-db/actions)
+[![Go-Version](https://img.shields.io/github/go-mod/go-version/kwilteam/kwil-db)](./go.mod)
+[![GoDoc](https://godoc.org/github.com/kwilteam/kwil-db?status.svg)](https://pkg.go.dev/github.com/kwilteam/kwil-db)
+[![Go-Report-Card](https://goreportcard.com/badge/github.com/kwilteam/kwil-db)](https://goreportcard.com/report/github.com/kwilteam/kwil-db)
+[![Discord](https://img.shields.io/discord/819855804554543114?logo=discord)](https://discord.com/invite/HzRPZ59Kay)
 
 Kwil is the node software for Kwil Networks. Built with [PostgreSQL](https://www.postgresql.org/) and [CometBFT](https://github.com/cometbft/cometbft), Kwil enables byzantine fault tolerant networks to be built on top of relational databases.
 
