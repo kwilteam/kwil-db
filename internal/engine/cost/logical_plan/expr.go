@@ -483,3 +483,25 @@ func (b *binaryExprBuilderImpl) Mul(r LogicalExpr) BinaryExpr {
 func (b *binaryExprBuilderImpl) Div(r LogicalExpr) BinaryExpr {
 	return Div(b.l, r)
 }
+
+type sortExpr struct {
+	expr       LogicalExpr
+	asc        bool
+	nullsFirst bool
+}
+
+func (s *sortExpr) String() string {
+	return fmt.Sprintf("%s %s", s.expr, s.asc)
+}
+
+func (s *sortExpr) Resolve(plan LogicalPlan) datasource.Field {
+	return s.expr.Resolve(plan)
+}
+
+func SortExpr(expr LogicalExpr, asc, nullsFirst bool) *sortExpr {
+	return &sortExpr{
+		expr:       expr,
+		asc:        asc,
+		nullsFirst: nullsFirst,
+	}
+}

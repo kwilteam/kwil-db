@@ -240,12 +240,12 @@ func Limit(plan LogicalPlan, limit int, offset int) LogicalPlan {
 type SortOp struct {
 	input LogicalPlan
 	by    []LogicalExpr
-	asc   bool
+	//asc   bool
 }
 
-func (s *SortOp) IsAsc() bool {
-	return s.asc
-}
+//func (s *SortOp) IsAsc() bool {
+//	return s.asc
+//}
 
 func (s *SortOp) String() string {
 	return fmt.Sprintf("Sort: %s", s.by)
@@ -264,11 +264,12 @@ func (s *SortOp) Exprs() []LogicalExpr {
 }
 
 // Sort creates a sort logical plan.
-func Sort(plan LogicalPlan, by []LogicalExpr, asc bool) LogicalPlan {
+// func Sort(plan LogicalPlan, by []LogicalExpr, asc bool) LogicalPlan {
+func Sort(plan LogicalPlan, by []LogicalExpr) LogicalPlan {
 	return &SortOp{
 		input: plan,
 		by:    by,
-		asc:   asc,
+		//asc:   asc,
 	}
 }
 
@@ -343,26 +344,26 @@ func Join(left LogicalPlan, right LogicalPlan, kind JoinType,
 }
 
 // BagOpType represents the opType of bag operator.
+// deduplicate is handled by DistinctOp.
 type BagOpType int
 
 const (
 	BagUnion BagOpType = iota
-	BagUnionAll
 	BagIntersect
+	BagExcept
 )
 
 func (b BagOpType) String() string {
 	switch b {
 	case BagUnion:
-		return "Union"
-	case BagUnionAll:
-		return "UnionAll"
+		return "UNION"
 	case BagIntersect:
-		return "Intersect"
+		return "INTERSECT"
+	case BagExcept:
+		return "EXCEPT"
 	default:
-		return "Unknown"
+		panic("unknown bag op type")
 	}
-
 }
 
 // BagOp represents a union(all) or intersect operator, which combines two
@@ -374,10 +375,6 @@ type BagOp struct {
 	left   LogicalPlan
 	right  LogicalPlan
 	opType BagOpType
-}
-
-func (u *BagOp) WithDuplicate() bool {
-	return u.opType == BagUnionAll
 }
 
 func (u *BagOp) OpType() BagOpType {
@@ -402,15 +399,11 @@ func (u *BagOp) Exprs() []LogicalExpr {
 }
 
 // Union creates a union or union all logical plan.
-func Union(left LogicalPlan, right LogicalPlan, withDuplicate bool) LogicalPlan {
-	kind := BagUnion
-	if withDuplicate {
-		kind = BagUnionAll
-	}
+func Union(left LogicalPlan, right LogicalPlan) LogicalPlan {
 	return &BagOp{
 		left:   left,
 		right:  right,
-		opType: kind,
+		opType: BagUnion,
 	}
 }
 
@@ -420,6 +413,15 @@ func Intersect(left LogicalPlan, right LogicalPlan) LogicalPlan {
 		left:   left,
 		right:  right,
 		opType: BagIntersect,
+	}
+}
+
+// Except creates an except logical plan.
+func Except(left LogicalPlan, right LogicalPlan) LogicalPlan {
+	return &BagOp{
+		left:   left,
+		right:  right,
+		opType: BagExcept,
 	}
 }
 
@@ -456,4 +458,29 @@ func Subquery(plan LogicalPlan, alias string) LogicalPlan {
 		input: plan,
 		alias: alias,
 	}
+}
+
+type DistinctOp struct {
+	input LogicalPlan
+}
+
+func (d *DistinctOp) String() string {
+	return "Distinct"
+}
+
+func (d *DistinctOp) Schema() *datasource.Schema {
+	return d.input.Schema()
+}
+
+func (d *DistinctOp) Inputs() []LogicalPlan {
+	return []LogicalPlan{d.input}
+}
+
+func (d *DistinctOp) Exprs() []LogicalExpr {
+	return []LogicalExpr{}
+}
+
+// DistinctAll creates a distinct logical plan, on all selections.
+func DistinctAll(plan LogicalPlan) *DistinctOp {
+	return &DistinctOp{input: plan}
 }
