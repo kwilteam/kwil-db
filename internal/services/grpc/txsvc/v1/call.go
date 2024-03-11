@@ -45,7 +45,7 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 		}
 	}
 
-	executeResult, err := s.engine.Call(ctx, tx, &common.ExecutionData{
+	executeResult, err := s.engine.Procedure(ctx, tx, &common.ExecutionData{
 		Dataset:   body.DBID,
 		Procedure: body.Action,
 		Args:      args,

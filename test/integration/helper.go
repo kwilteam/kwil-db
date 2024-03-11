@@ -32,7 +32,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	ethdeposits "github.com/kwilteam/kwil-db/extensions/oracles/eth_deposits"
+	ethdeposits "github.com/kwilteam/kwil-db/extensions/listeners/eth_deposits"
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/kwilteam/kwil-db/test/driver/operator"
 	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
@@ -289,7 +289,7 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 			}
 
 			extensionConfigs[i] = map[string]map[string]string{
-				ethdeposits.OracleName: (&ethdeposits.EthDepositConfig{
+				ethdeposits.ListenerName: (&ethdeposits.EthDepositConfig{
 					RPCProvider:     r.ethDeposit.UnexposedChainRPC,
 					ContractAddress: address,
 					// setting values here since we cannot have the defaults, since

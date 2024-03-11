@@ -6,10 +6,10 @@ Extensions are compile-time-loaded pieces of code that impact core `kwild` funct
 
 There are four types of extensions that can be implemented:
 
-- Actions
-- Authentication
-- Oracles
-- Resolution
+- Precompiles
+- Authenticators
+- Listeners
+- Resolutions
 
 Learn more about each type of extension in the [Kwil Extension Docs](https://docs.kwil.com/docs/category/extensions).
 

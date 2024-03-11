@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/extensions/actions"
+	"github.com/kwilteam/kwil-db/extensions/precompiles"
 )
 
 // baseDataset is a deployed database schema.
@@ -14,7 +14,7 @@ type baseDataset struct {
 	schema *common.Schema
 
 	// namespaces are the namespaces available for use in the dataset.
-	namespaces map[string]actions.ExtensionNamespace
+	namespaces map[string]precompiles.Instance
 
 	// procedures are the procedures that are available for use in the dataset.
 	procedures map[string]*procedure
@@ -26,7 +26,7 @@ type baseDataset struct {
 // Call calls a procedure from the dataset.
 // If the procedure is not public, it will return an error.
 // It implements the Namespace interface.
-func (d *baseDataset) Call(caller *actions.ProcedureContext, app *common.App, method string, inputs []any) ([]any, error) {
+func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App, method string, inputs []any) ([]any, error) {
 	proc, ok := d.procedures[method]
 	if !ok {
 		return nil, fmt.Errorf(`procedure "%s" not found`, method)

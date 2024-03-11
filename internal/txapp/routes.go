@@ -259,7 +259,7 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	defer tx2.Rollback(ctx.Ctx)
 
 	for i := range args {
-		_, err = router.Engine.Call(ctx.Ctx, tx2, &common.ExecutionData{
+		_, err = router.Engine.Procedure(ctx.Ctx, tx2, &common.ExecutionData{
 			Dataset:   action.DBID,
 			Procedure: action.Action,
 			Args:      args[i],
