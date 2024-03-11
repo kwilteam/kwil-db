@@ -139,6 +139,16 @@ func TestParseActionStmt(t *testing.T) {
 			},
 		},
 		{
+			name:  "action_call with sql keyword prefix",
+			input: `update_xx(1);`,
+			expect: &actparser.ActionCallStmt{
+				Method: "update_xx",
+				Args: []tree.Expression{
+					&tree.ExpressionLiteral{Value: "1"},
+				},
+			},
+		},
+		{
 			name:  "dml select",
 			input: `SELECT * FROM users;`,
 			expect: &actparser.DMLStmt{
