@@ -7,7 +7,6 @@ build/package/docker/
 .gitattributes
 .gitignore
 .DS_Store
-test/
 proto/
 deployments/
 .editorconfig
