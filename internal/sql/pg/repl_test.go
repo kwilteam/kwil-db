@@ -44,6 +44,14 @@ func Test_repl(t *testing.T) {
 
 	ctx, cancel := context.WithDeadline(ctx, deadline.Add(-time.Second*5))
 	defer cancel()
+	connQ, err := pgx.Connect(ctx, connString(host, port, user, pass, dbName, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = connQ.Exec(ctx, sqlUpdateSentrySeq, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	schemaFilter := func(string) bool { return true } // capture changes from all namespaces
 
@@ -56,11 +64,6 @@ func Test_repl(t *testing.T) {
 
 	t.Log("replication slot started and listening")
 
-	connQ, err := pgx.Connect(ctx, connString(host, port, user, pass, dbName, false))
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	_, err = connQ.Exec(ctx, `DROP TABLE IF EXISTS blah`)
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +74,7 @@ func Test_repl(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wantCommitHash, _ := hex.DecodeString("9710a1c3b624c5a929425963c7441b0d8cf7d2bcf98aaaf8bc61519543aed1bc")
+	wantCommitHash, _ := hex.DecodeString("cb390afbf808256307ee0927999805ee3d5af193772e2c9b71823fbc1fe8867f")
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -91,7 +94,11 @@ func Test_repl(t *testing.T) {
 				}
 				cancel()
 			case err := <-errChan:
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				if errors.Is(err, context.Canceled) {
+					return
+				}
+				if errors.Is(err, context.DeadlineExceeded) {
+					t.Error("timeout")
 					return
 				}
 				if err != nil {
@@ -112,6 +119,12 @@ func Test_repl(t *testing.T) {
 	tx.Exec(ctx, `update blah SET stuff = 6, id = '{13}', val=41 where id = '{10}';`)
 	tx.Exec(ctx, `update blah SET stuff = 33;`)
 	tx.Exec(ctx, `delete FROM blah where id = '{11}';`)
+	// sends on commitChan are only expected from sequenced transactions.
+	// Bump seq in the sentry table!
+	_, err = tx.Exec(ctx, sqlUpdateSentrySeq, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	err = tx.Commit(ctx) // this triggers the send
 	if err != nil {
