@@ -29,7 +29,7 @@ type Deployer struct {
 
 	ethClient *ethclient.Client
 
-	mu sync.Mutex
+	mu sync.Mutex // what is this guarding? maybe remove
 }
 
 // NewDeployer("ws://localhost:8545","dd23ca549a97cb330b011aebb674730df8b14acaee42d211ab45692699ab8ba5")
@@ -98,11 +98,7 @@ func (d *Deployer) Approve(ctx context.Context, sender *ecdsa.PrivateKey, amount
 	}
 
 	_, err = d.tokenInst.Approve(auth, d.escrowAddr, amount)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // sender deposits given amount of tokens to the escrow contract
@@ -140,11 +136,7 @@ func (d *Deployer) DummyTx(ctx context.Context, sender *ecdsa.PrivateKey) error 
 	}
 
 	_, err = d.escrowInst.Test(auth)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (d *Deployer) VerifyDeposit(t *testing.T, ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) {
@@ -213,10 +205,16 @@ func (d *Deployer) KeepMining(ctx context.Context) error {
 	}
 
 	go func() {
+		defer d.ethClient.Close()
 		for {
 			d.DummyTx(ctx, sender)
-			time.Sleep(5 * time.Second)
+			select {
+			case <-time.After(5 * time.Second):
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
+
 	return nil
 }

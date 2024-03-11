@@ -1,0 +1,20 @@
+FROM golang:1.22 AS build
+
+WORKDIR /app
+RUN mkdir -p /var/run/kwil
+RUN chmod 777 /var/run/kwil
+
+COPY . .
+RUN rm go.work
+
+WORKDIR /app/test/nodes/spamd
+RUN GOWORK=off CGO_ENABLED=0 go build -v  -ldflags -extldflags=-static -o /app/dist/spamd
+RUN chmod +x /app/dist/spamd 
+RUN /app/dist/spamd -v
+
+FROM kwild:latest
+WORKDIR /app
+COPY --from=build /app/dist/spamd ./kwild
+RUN chmod +x ./kwild 
+EXPOSE 50051 50151 8080 26656 26657
+ENTRYPOINT ["/app/kwild"]
