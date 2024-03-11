@@ -107,6 +107,8 @@ type IntTestConfig struct {
 	JoinExpiry    int64
 	VoteExpiry    int64
 	WithGas       bool
+
+	SpamOracleEnabled bool
 }
 
 type IntHelper struct {
@@ -121,7 +123,7 @@ type IntHelper struct {
 	// - KWIL_NETWORK: the network name for the test
 	envs map[string]string
 
-	// Oracles
+	// Extensions
 	ethDeposit EthDepositOracle
 }
 
@@ -133,7 +135,7 @@ type EthDepositOracle struct {
 	ByzDeployer       *ethdeployer.Deployer
 	EscrowAddress     string
 
-	confirmations int64
+	confirmations int64 // we always use 0, so not very useful at present
 
 	NumByzantineExpiryNodes int
 	ByzantineEscrowAddr     string
@@ -209,12 +211,10 @@ func WithEthDepositOracle(enabled bool) HelperOpt {
 	}
 }
 
-func WithConfirmations(n string) HelperOpt {
+// WithConfirmations overrides the default required confirmations (0).
+func WithConfirmations(n int64) HelperOpt {
 	return func(r *IntHelper) {
-		intN, err := strconv.ParseInt(n, 10, 64)
-		require.NoError(r.t, err, "invalid confirmations")
-
-		r.ethDeposit.confirmations = intN
+		r.ethDeposit.confirmations = n // note: only useful for for non-zero confs
 	}
 }
 
@@ -233,6 +233,12 @@ func WithNumByzantineExpiryNodes(n int) HelperOpt {
 func WithGanache() HelperOpt {
 	return func(r *IntHelper) {
 		r.cfg.WithGanache = true
+	}
+}
+
+func WithSpamOracle() HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.SpamOracleEnabled = true
 	}
 }
 
@@ -283,25 +289,41 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 
 	extensionConfigs := make([]map[string]map[string]string, r.cfg.NValidator)
 	for i := range extensionConfigs {
+		extensionConfigs[i] = make(map[string]map[string]string)
 		if r.ethDeposit.Enabled {
 			address := r.ethDeposit.EscrowAddress
 			if i < r.ethDeposit.NumByzantineExpiryNodes {
 				address = r.ethDeposit.ByzantineEscrowAddr
 			}
 
-			extensionConfigs[i] = map[string]map[string]string{
-				ethdeposits.ListenerName: (&ethdeposits.EthDepositConfig{
-					RPCProvider:     r.ethDeposit.UnexposedChainRPC,
-					ContractAddress: address,
-					// setting values here since we cannot have the defaults, since
-					// local ganache is a new network
-					StartingHeight:        0,
-					RequiredConfirmations: 0, // TODO: remove this from the r.ethDeposit struct. it is not needed
-					ReconnectionInterval:  30,
-					MaxRetries:            2,
-					BlockSyncChunkSize:    1000,
-				}).Map(),
+			cfg := ethdeposits.EthDepositConfig{
+				RPCProvider:     r.ethDeposit.UnexposedChainRPC,
+				ContractAddress: address,
+				// setting values here since we cannot have the defaults, since
+				// local ganache is a new network
+				StartingHeight:        0,
+				RequiredConfirmations: r.ethDeposit.confirmations, // TODO: remove this from the r.ethDeposit struct. it is not needed
+				ReconnectionInterval:  30,
+				MaxRetries:            2,
+				BlockSyncChunkSize:    1000,
 			}
+
+			extensionConfigs[i][ethdeposits.ListenerName] = cfg.Map()
+		}
+		extensionConfigs[i]["spammer"] = map[string]string{
+			"enabled": strconv.FormatBool(r.cfg.SpamOracleEnabled),
+		}
+	}
+
+	var allocs map[string]*big.Int
+	if r.cfg.SpamOracleEnabled {
+		bal, ok := big.NewInt(0).SetString("100000000000000000000000000000000", 10)
+		if !ok {
+			r.t.Fatal("failed to parse balance")
+		}
+		creatorIdent := hex.EncodeToString(r.cfg.CreatorSigner.Identity())
+		allocs = map[string]*big.Int{
+			creatorIdent: bal,
 		}
 	}
 
@@ -325,7 +347,7 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 		WithoutGasCosts:   !r.cfg.WithGas,
 		VoteExpiry:        r.cfg.VoteExpiry,
 		WithoutNonces:     false,
-		Allocs:            r.cfg.Allocs,
+		Allocs:            allocs,
 		FundNonValidators: r.cfg.WithGas, // when gas is required, also give the non-validators some for tests
 		Extensions:        extensionConfigs,
 	}, &nodecfg.ConfigOpts{
@@ -434,12 +456,6 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 
 	stack := dc.WithEnv(r.envs)
 	for _, service := range services {
-		// if r.ethDeposit.Enabled && strings.HasPrefix(service, "node") {
-		// 	waitMsg := "Started listening for new blocks on ethereum"
-		// 	stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
-		// 	continue
-		// }
-
 		waitMsg, ok := logWaitStrategies[service]
 		if ok {
 			stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
@@ -558,10 +574,15 @@ func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 
 	// here we generate a new docker-compose.yml file with the new network from template
 	composeFile := filepath.Join(tmpDir, "docker-compose.yml")
+	dockerImageName := utils.DefaultDockerImage
+	if r.cfg.SpamOracleEnabled {
+		dockerImageName = "kwild-spammer:latest"
+	}
 	err = utils.CreateComposeFile(composeFile, "./docker-compose.yml.template",
 		utils.ComposeConfig{
 			Network:          localNetworkName,
 			ExposedHTTPPorts: exposedHTTPPorts,
+			DockerImage:      dockerImageName,
 		})
 	require.NoError(r.t, err, "failed to create docker compose file")
 

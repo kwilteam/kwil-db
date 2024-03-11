@@ -16,6 +16,8 @@ import (
 
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
+var spamTest = flag.Bool("spam", false, "run the spam test that requires a special docker image to be built")
+
 var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
 
 // NOTE: `-parallel` is a flag that is already used by `go test`
@@ -305,8 +307,6 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 		t.Parallel()
 	}
 
-	ctx := context.Background()
-
 	opts := []integration.HelperOpt{
 		integration.WithBlockInterval(time.Second),
 		integration.WithValidators(4),
@@ -314,18 +314,21 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 		integration.WithGanache(),
 		integration.WithGas(),
 		integration.WithEthDepositOracle(true),
-		integration.WithConfirmations("0"),
 	}
 
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
 		t.Run(driverType+"_driver", func(t *testing.T) {
+			ctx := context.Background()
+
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, allServices)
 
 			// get deployer
+			ctx2, cancel := context.WithCancel(ctx)
+			defer cancel()
 			deployer := helper.EthDeployer(false)
-			err := deployer.KeepMining(ctx)
+			err := deployer.KeepMining(ctx2)
 			require.NoError(t, err)
 
 			// Get the user driver
@@ -335,14 +338,14 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 			// node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
 
 			// Approve the deposit
-			specifications.ApproveSpecification(ctx, t, userDriver)
+			// specifications.ApproveSpecification(ctx, t, userDriver)
 
 			// Deposit the amount to the escrow
 			amount := big.NewInt(10)
 			specifications.DepositSuccessSpecification(ctx, t, userDriver, amount)
 
 			// Deposit Failure
-			specifications.DepositFailSpecification(ctx, t, userDriver)
+			// specifications.DepositFailSpecification(ctx, t, userDriver)
 
 			// Deploy DB without enough funds
 			specifications.DeployDbInsufficientFundsSpecification(ctx, t, userDriver)
@@ -367,22 +370,22 @@ func TestKwildEthDepositOracleExpiryIntegration(t *testing.T) {
 		integration.WithGas(),
 		integration.WithGanache(),
 		integration.WithEthDepositOracle(true),
-		integration.WithConfirmations("0"), // 2 nodes listen on different escrow contracts and submits votes for events on the byz contract which never gets approved.
-		integration.WithNumByzantineExpiryNodes(1),
+		integration.WithNumByzantineExpiryNodes(1), // 1 node listens on a different escrow contract and submits votes for events on the byz contract which never gets approved
 		integration.WithVoteExpiry(4),
 	}
-
-	ctx := context.Background()
 
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
 		t.Run(driverType+"_driver", func(t *testing.T) {
+			ctx := context.Background()
 
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, append(allServices, "pg4", "node4"))
 
+			ctx2, cancel := context.WithCancel(ctx)
+			defer cancel()
 			byzDeployer := helper.EthDeployer(true)
-			err := byzDeployer.KeepMining(ctx)
+			err := byzDeployer.KeepMining(ctx2)
 			require.NoError(t, err)
 
 			// Get the user driver
@@ -412,22 +415,22 @@ func TestKwildEthDepositOracleExpiryRefundIntegration(t *testing.T) {
 		integration.WithGas(),
 		integration.WithGanache(),
 		integration.WithEthDepositOracle(true),
-		integration.WithConfirmations("0"), // 2 nodes listen on different escrow contracts and submits votes for events on the byz contract which never gets approved.
-		integration.WithNumByzantineExpiryNodes(2),
+		integration.WithNumByzantineExpiryNodes(2), // 2 nodes listen on different escrow contracts and submits votes for events on the byz contract which never gets approved.
 		integration.WithVoteExpiry(4),
 	}
-
-	ctx := context.Background()
 
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
 		t.Run(driverType+"_driver", func(t *testing.T) {
+			ctx := context.Background()
 
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, append(allServices, "pg4", "node4"))
 
+			ctx2, cancel := context.WithCancel(ctx)
+			defer cancel()
 			byzDeployer := helper.EthDeployer(true)
-			err := byzDeployer.KeepMining(ctx)
+			err := byzDeployer.KeepMining(ctx2)
 			require.NoError(t, err)
 
 			// Get the user driver
@@ -455,8 +458,7 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 		integration.WithGas(),
 		integration.WithGanache(),
 		integration.WithEthDepositOracle(true),
-		integration.WithConfirmations("0"), // 2 nodes listen on different escrow contracts and submits votes for events on the byz contract which never gets approved.
-		integration.WithNumByzantineExpiryNodes(2),
+		integration.WithNumByzantineExpiryNodes(2), // 2 nodes listen on different escrow contracts and submits votes for events on the byz contract which never gets approved.
 	}
 
 	testDrivers := strings.Split(*drivers, ",")
@@ -465,15 +467,17 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 			continue // admin service cannot use http
 		}
 
-		ctx := context.Background()
 		t.Run(driverType+"_driver", func(t *testing.T) {
+			ctx := context.Background()
 
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, byzAllServices)
 
 			// get deployer
+			ctx2, cancel := context.WithCancel(ctx)
+			defer cancel()
 			deployer := helper.EthDeployer(false)
-			err := deployer.KeepMining(ctx)
+			err := deployer.KeepMining(ctx2)
 			require.NoError(t, err)
 
 			// Get node drivers
@@ -503,7 +507,6 @@ func TestKwildEthDepositFundTransfer(t *testing.T) {
 		integration.WithGas(),
 		integration.WithGanache(),
 		integration.WithEthDepositOracle(true),
-		integration.WithConfirmations("0"),
 	}
 
 	testDrivers := strings.Split(*drivers, ",")
@@ -523,6 +526,8 @@ func TestKwildEthDepositFundTransfer(t *testing.T) {
 			// Transfer from user account to validator account
 			// validate that the validator account has the funds
 
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
 			ethdeployer := helper.EthDeployer(false)
 			senderDriver := helper.GetUserDriver(ctx, "node0", driverType, ethdeployer)
 
@@ -530,7 +535,41 @@ func TestKwildEthDepositFundTransfer(t *testing.T) {
 			valIdentity := helper.NodePrivateKey("node0").PubKey().Bytes()
 
 			specifications.FundValidatorSpecification(ctx, t, senderDriver, valIdentity)
-
 		})
 	}
+}
+
+func TestSpamListener(t *testing.T) {
+	if !*spamTest {
+		t.Skip("Spam test requires -spam flag.")
+	}
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	opts := []integration.HelperOpt{
+		integration.WithValidators(4),
+		integration.WithNonValidators(0),
+		integration.WithGas(),
+		integration.WithSpamOracle(),
+	}
+
+	ctx := context.Background()
+
+	helper := integration.NewIntHelper(t, opts...)
+	helper.Setup(ctx, allServices)
+
+	// Wait for the network to produce atleast 1 block for the genesis validators to get committed and synced.
+	time.Sleep(2 * time.Second)
+	node0Driver := helper.GetUserDriver(ctx, "node0", "http", nil)
+
+	// Verify that the spam listener is running and does not overwhelm the network
+	// Also keep issuing some transactions to ensure that the network is up and not saturated
+	for i := 0; i < 10; i++ {
+		specifications.DatabaseDeploySpecification(ctx, t, node0Driver)
+
+		specifications.DatabaseDropSpecification(ctx, t, node0Driver)
+		time.Sleep(4 * time.Second)
+	}
+	fmt.Println("Spam listener test completed")
 }

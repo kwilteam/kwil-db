@@ -3,7 +3,7 @@ version: "3"
 services:
   # TODO: generate correspond number of nodes and exts by configuration
   node0:
-    image: kwild:latest
+    image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 0}}:{{end}}8080"
       - "50051"
@@ -70,7 +70,7 @@ services:
       retries: 10
 
   node1:
-    image: kwild:latest
+    image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 1}}:{{end}}8080"
       - "50051"
@@ -135,7 +135,7 @@ services:
       retries: 10
 
   node2:
-    image: kwild:latest
+    image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 2}}:{{end}}8080"
       - "50051"
@@ -203,7 +203,7 @@ services:
   # Removing the ext dependency as test-container docker compose creates a new project everytime we run
   # docker compose, and the ext is defined in a seperate project, so service lookup is hard.
   node3:
-    image: kwild:latest
+    image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 3}}:{{end}}8080"
       - "50051"
@@ -268,7 +268,7 @@ services:
       retries: 10
 
   node4:
-    image: kwild:latest
+    image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 4}}:{{end}}8080"
       - "50051"
@@ -333,7 +333,7 @@ services:
       retries: 10
 
   node5:
-    image: kwild:latest
+    image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 5}}:{{end}}8080"
       - "50051"
