@@ -70,6 +70,7 @@ const defaultConfigTemplate = `
 ###                    Logging Config Options                       ###
 #######################################################################
 [log]
+
 # Output level for logging, default is "info". Other options are "debug", "error", "warn", "trace"
 level = "{{ .Logging.Level }}"
 
@@ -85,8 +86,8 @@ time_format = "{{ .Logging.TimeEncoding }}"
 #######################################################################
 ###                      App Config Options                         ###
 #######################################################################
-
 [app]
+
 # Node's Private key
 private_key_path = "{{ .AppCfg.PrivateKeyPath }}"
 
@@ -137,8 +138,10 @@ hostname = "{{ .AppCfg.Hostname }}"
 
 
 #######################################################################
-###                       Extension Configuration                     ###
+###                     Extension Configuration                     ###
 #######################################################################
+[app.extensions]
+
 {{- range $extensionName, $configs := .AppCfg.Extensions }}
 [app.extensions.{{$extensionName}}]
 {{- range $key, $value := $configs }}
