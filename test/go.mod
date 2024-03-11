@@ -9,7 +9,7 @@ require (
 	github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246
 	github.com/ethereum/go-ethereum v1.13.8
 	github.com/kwilteam/kuneiform v0.6.0
-	github.com/kwilteam/kwil-db v0.7.0-beta.0.20240301172606-26b70b87eba0
+	github.com/kwilteam/kwil-db v0.7.0-rc.1.0.20240311155630-103c88635f49
 	github.com/kwilteam/kwil-db/core v0.1.0
 	github.com/stretchr/testify v1.8.4
 	github.com/testcontainers/testcontainers-go v0.27.0
