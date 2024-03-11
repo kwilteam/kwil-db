@@ -46,7 +46,7 @@ type replMon struct {
 	done    chan struct{}
 
 	mtx      sync.Mutex
-	results  map[int64][]byte
+	results  map[int64][]byte // results should generally be unused as pg.DB will request a promise before commit
 	promises map[int64]chan []byte
 }
 
@@ -97,6 +97,9 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 				p <- cHash
 				delete(rm.promises, seq)
 			} else {
+				// This is unexpected since pg.DB will call recvID first. If we are
+				// in this `else`, it is to be discarded, from another connection.
+				logger.Warnf("Received commit ID for seq %d BEFORE recvID", seq)
 				rm.results[seq] = cHash
 			}
 			rm.mtx.Unlock()
@@ -124,11 +127,16 @@ func (rm *replMon) recvID(seq int64) chan []byte {
 	rm.mtx.Lock()
 	defer rm.mtx.Unlock()
 	if cHash, ok := rm.results[seq]; ok {
+		// The intended use is to do recvID BEFORE
+		logger.Warnf("recvID with EXISTING result for sequence %d", seq)
 		delete(rm.results, seq)
 		c <- cHash
 		return c
 	}
 
+	if _, have := rm.promises[seq]; have {
+		logger.Errorf("Commit ID promise for sequence %d ALREADY EXISTS", seq)
+	}
 	rm.promises[seq] = c // maybe panic if one already exists, indicating program logic error
 
 	return c
