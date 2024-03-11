@@ -10,7 +10,7 @@ import (
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/common/testdata"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/extensions/actions"
+	"github.com/kwilteam/kwil-db/extensions/precompiles"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -89,7 +89,7 @@ func Test_Execution(t *testing.T) {
 				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
 				assert.NoError(t, err)
 
-				_, err = eng.Call(ctx, db, &common.ExecutionData{
+				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: "create_user",
 					Args:      []any{1, "brennan", 22},
@@ -108,7 +108,7 @@ func Test_Execution(t *testing.T) {
 				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
 				assert.NoError(t, err)
 
-				_, err = eng.Call(ctx, db, &common.ExecutionData{
+				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: "create_user",
 					Args:      []any{1, "brennan"}, // missing age
@@ -129,7 +129,7 @@ func Test_Execution(t *testing.T) {
 
 				db2 := newDB(true)
 
-				_, err = eng.Call(ctx, db2, &common.ExecutionData{
+				_, err = eng.Procedure(ctx, db2, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: "create_user",
 					Args:      []any{1, "brennan", 22},
@@ -139,7 +139,7 @@ func Test_Execution(t *testing.T) {
 				assert.Error(t, err)
 				assert.ErrorIs(t, err, ErrMutativeProcedure)
 
-				_, err = eng.Call(ctx, db2, &common.ExecutionData{
+				_, err = eng.Procedure(ctx, db2, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: "get_user_by_address",
 					Args:      []any{"address"},
@@ -158,7 +158,7 @@ func Test_Execution(t *testing.T) {
 				err := eng.CreateDataset(ctx, db, testSchema, testSchema.Owner)
 				assert.NoError(t, err)
 
-				_, err = eng.Call(ctx, db, &common.ExecutionData{
+				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:   testSchema.DBID(),
 					Procedure: "use_math",
 					Args:      []any{1, 2},
@@ -169,7 +169,7 @@ func Test_Execution(t *testing.T) {
 
 				// call non-mutative
 				// since we do not have a sql connection, we cannot evaluate the result
-				_, err = eng.Call(ctx, db, &common.ExecutionData{
+				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:   testSchema.DBID(),
 					Procedure: "use_math",
 					Args:      []any{1, 2},
@@ -208,7 +208,7 @@ func Test_Execution(t *testing.T) {
 			ctx := context.Background()
 
 			engine, err := NewGlobalContext(ctx,
-				newDB(false), map[string]actions.ExtensionInitializer{
+				newDB(false), map[string]precompiles.Initializer{
 					"math": mth.initialize,
 				}, &common.Service{
 					Logger:           log.NewNoOp().Sugar(),
@@ -363,7 +363,7 @@ type mathInitializer struct {
 	vals map[string]string
 }
 
-func (m *mathInitializer) initialize(_ *actions.DeploymentContext, _ *common.Service, mp map[string]string) (actions.ExtensionNamespace, error) {
+func (m *mathInitializer) initialize(_ *precompiles.DeploymentContext, _ *common.Service, mp map[string]string) (precompiles.Instance, error) {
 	m.vals = mp
 
 	return &mathExt{}, nil
@@ -371,9 +371,9 @@ func (m *mathInitializer) initialize(_ *actions.DeploymentContext, _ *common.Ser
 
 type mathExt struct{}
 
-var _ actions.ExtensionNamespace = &mathExt{}
+var _ precompiles.Instance = &mathExt{}
 
-func (m *mathExt) Call(caller *actions.ProcedureContext, app *common.App, method string, inputs []any) ([]any, error) {
+func (m *mathExt) Call(caller *precompiles.ProcedureContext, app *common.App, method string, inputs []any) ([]any, error) {
 	return nil, nil
 }
 
@@ -414,7 +414,7 @@ func Test_OrderSchemas(t *testing.T) {
 	ctx := context.Background()
 	mth := &mathInitializer{}
 	_, err := NewGlobalContext(ctx,
-		newDB(false), map[string]actions.ExtensionInitializer{
+		newDB(false), map[string]precompiles.Initializer{
 			"math": mth.initialize,
 		}, &common.Service{
 			Logger:           log.NewNoOp().Sugar(),

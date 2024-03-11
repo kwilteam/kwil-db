@@ -1,4 +1,4 @@
-package oracles
+package listeners
 
 import (
 	"bytes"
@@ -10,16 +10,16 @@ import (
 	common "github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/extensions/oracles"
+	"github.com/kwilteam/kwil-db/extensions/listeners"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/events"
 )
 
-// OracleMgr listens for any Validator state changes and node catch up status
-// and starts or stops the oracles accordingly
-// It starts the oracles only when the node is a validator and is caught up
-// It stops the running oracles when the node loses its validator status
-type OracleMgr struct {
+// ListenerManager listens for any Validator state changes and node catch up status
+// and starts or stops the listeners accordingly
+// It starts the listeners only when the node is a validator and is caught up
+// It stops the running listeners when the node loses its validator status
+type ListenerManager struct {
 	config     map[string]map[string]string
 	eventStore *events.EventStore
 	vstore     ValidatorGetter
@@ -29,7 +29,7 @@ type OracleMgr struct {
 
 	logger log.Logger
 
-	cancel context.CancelFunc // cancels the context for the oracle manager
+	cancel context.CancelFunc // cancels the context for the listener manager
 }
 
 // ValidatorGetter is able to read the current validator set.
@@ -37,8 +37,8 @@ type ValidatorGetter interface {
 	GetValidators(ctx context.Context) ([]*types.Validator, error)
 }
 
-func NewOracleMgr(config map[string]map[string]string, eventStore *events.EventStore, node *cometbft.CometBftNode, nodePubKey []byte, vstore ValidatorGetter, logger log.Logger) *OracleMgr {
-	return &OracleMgr{
+func NewListenerManager(config map[string]map[string]string, eventStore *events.EventStore, node *cometbft.CometBftNode, nodePubKey []byte, vstore ValidatorGetter, logger log.Logger) *ListenerManager {
+	return &ListenerManager{
 		config:     config,
 		eventStore: eventStore,
 		vstore:     vstore,
@@ -48,9 +48,9 @@ func NewOracleMgr(config map[string]map[string]string, eventStore *events.EventS
 	}
 }
 
-// Start starts the oracle manager.
+// Start starts the listener manager.
 // It will block until Stop is called.
-func (omgr *OracleMgr) Start() error {
+func (omgr *ListenerManager) Start() error {
 	ctx, cancel := context.WithCancel(context.Background()) // context that will be canceled when the manager shuts down
 	omgr.cancel = cancel
 	// Listen for status changes
@@ -58,7 +58,7 @@ func (omgr *OracleMgr) Start() error {
 	// Stop the oracles, if the node is not a validator
 	// cancel function for the oracle instance
 	// if it is nil, then the oracle is not running
-	var oracleInstanceCancel context.CancelFunc
+	var listenerInstanceCancel context.CancelFunc
 
 	var errChan = make(chan error, 1)
 
@@ -88,17 +88,17 @@ func (omgr *OracleMgr) Start() error {
 				}
 			}
 
-			if oracleInstanceCancel == nil && isValidator {
-				// inner context to manage the oracles
+			if listenerInstanceCancel == nil && isValidator {
+				// inner context to manage the listeners
 				// this context will be cancelled when the node loses its validator status
-				// it will also be cancelled when the oracle manager is stopped
+				// it will also be cancelled when the listener manager is stopped
 				ctx2, cancel2 := context.WithCancel(ctx)
-				oracleInstanceCancel = cancel2
+				listenerInstanceCancel = cancel2
 
-				omgr.logger.Info("Node is a validator and caught up with the network, starting oracles")
+				omgr.logger.Info("Node is a validator and caught up with the network, starting listeners")
 
-				for name, start := range oracles.RegisteredOracles() {
-					go func(start oracles.OracleFunc, name string) {
+				for name, start := range listeners.RegisteredListeners() {
+					go func(start listeners.ListenFunc, name string) {
 						err := start(ctx2, &common.Service{
 							Logger:           omgr.logger.Named(name).Sugar(),
 							ExtensionConfigs: omgr.config,
@@ -116,21 +116,21 @@ func (omgr *OracleMgr) Start() error {
 					}(start, name)
 
 				}
-			} else if oracleInstanceCancel != nil && !isValidator {
-				// Stop the oracles if they are running
-				omgr.logger.Info("Node is no longer a validator, stopping oracles")
-				oracleInstanceCancel()
-				oracleInstanceCancel = nil
+			} else if listenerInstanceCancel != nil && !isValidator {
+				// Stop the listeners if they are running
+				omgr.logger.Info("Node is no longer a validator, stopping listeners")
+				listenerInstanceCancel()
+				listenerInstanceCancel = nil
 			}
 		}
 	}
 }
 
-func (omgr *OracleMgr) Stop() {
+func (omgr *ListenerManager) Stop() {
 	omgr.cancel()
 }
 
-// scopedKVEventStore scopes the event store's kv store to the oracle's name
+// scopedKVEventStore scopes the event store's kv store to the listener's name
 type scopedKVEventStore struct {
 	ev *events.EventStore
 	*events.KV

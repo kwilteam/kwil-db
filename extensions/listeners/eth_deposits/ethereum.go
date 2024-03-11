@@ -30,14 +30,14 @@ func init() {
 	}
 }
 
-// contractABIStr is the ABI of the smart contract the oracle listens to.
+// contractABIStr is the ABI of the smart contract the listener listens to.
 // It follows the Ethereum ABI JSON format, and matches the `Credit(address,uint256)` event signature.
 const contractABIStr = `[{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"_from","type":"address"},{"indexed":false,"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"Credit","type":"event"}]`
 
 // eventABI is the abi for the Credit event
 var eventABI abi.ABI
 
-// creditEventSignature is the EVM event signature the oracle listens to.
+// creditEventSignature is the EVM event signature the listener listens to.
 var creditEventSignature ethcommon.Hash = crypto.Keccak256Hash([]byte("Credit(address,uint256)"))
 
 // ethClient is a client for interacting with the ethereum blockchain

@@ -1,6 +1,6 @@
-//go:build actions_math || ext_test
+//go:build precompiles_math || ext_test
 
-package actions
+package precompiles
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	err := RegisterExtension("math", InitializeMath)
+	err := RegisterPrecompile("math", InitializeMath)
 	if err != nil {
 		panic(err)
 	}
@@ -21,7 +21,7 @@ type MathExtension struct {
 }
 
 // this initialize function checks if round is set.  If not, it sets it to "up"
-func InitializeMath(ctx *DeploymentContext, service *common.Service, metadata map[string]string) (ExtensionNamespace, error) {
+func InitializeMath(ctx *DeploymentContext, service *common.Service, metadata map[string]string) (Instance, error) {
 	_, ok := metadata["round"]
 	if !ok {
 		metadata["round"] = "up"

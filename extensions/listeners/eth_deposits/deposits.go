@@ -1,4 +1,4 @@
-// package ethdeposits implements an oracle that listens to Ethereum events
+// package ethdeposits implements an listener that listens to Ethereum events
 // and triggers the creation of deposit events in Kwil.
 package ethdeposits
 
@@ -13,35 +13,35 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/extensions/oracles"
+	"github.com/kwilteam/kwil-db/extensions/listeners"
 	"github.com/kwilteam/kwil-db/extensions/resolutions/credit"
 )
 
-const OracleName = "eth_deposits"
+const ListenerName = "eth_deposits"
 
 // use golang's init function, which runs before main, to register the extension
 // see more here: https://www.digitalocean.com/community/tutorials/understanding-init-in-go
 func init() {
-	// register the oracle with the name "eth_deposit"
-	err := oracles.RegisterOracle(OracleName, Start)
+	// register the listener with the name "eth_deposit"
+	err := listeners.RegisterListener(ListenerName, Start)
 	if err != nil {
 		panic(err)
 	}
 }
 
-// Start starts the eth_deposit oracle, which triggers the creation of deposit events in Kwil.
+// Start starts the eth_deposit listener, which triggers the creation of deposit events in Kwil.
 // It can be configured to listen to a certain smart contract address. It will listen for the EVM event signature
 // "Credit(address,uint256)" and create a deposit event in Kwil when it sees a matching event. It uses the
 // "credit_account" resolution, defined in extensions/resolutions/credit/credit.go, to create the deposit event.
 // It will search for a local extension configuration named "eth_deposit".
-func Start(ctx context.Context, service *common.Service, eventstore oracles.EventStore) error {
+func Start(ctx context.Context, service *common.Service, eventstore listeners.EventStore) error {
 	config := &EthDepositConfig{}
-	oracleConfig, ok := service.ExtensionConfigs[OracleName]
+	listenerConfig, ok := service.ExtensionConfigs[ListenerName]
 	if !ok {
 		service.Logger.Info("no eth_deposit configuration found, eth_deposit oracle will not start")
 		return nil // no configuration, so we don't start the oracle
 	}
-	err := config.setConfig(oracleConfig)
+	err := config.setConfig(listenerConfig)
 	if err != nil {
 		return fmt.Errorf("failed to set eth_deposit configuration: %w", err)
 	}
@@ -129,7 +129,7 @@ func Start(ctx context.Context, service *common.Service, eventstore oracles.Even
 }
 
 // processEvents will process all events from the Ethereum client from the given height range.
-func processEvents(ctx context.Context, from, to int64, client *ethClient, eventstore oracles.EventStore, logger log.SugaredLogger) error {
+func processEvents(ctx context.Context, from, to int64, client *ethClient, eventstore listeners.EventStore, logger log.SugaredLogger) error {
 	logs, err := client.GetCreditEventLogs(ctx, from, to)
 	if err != nil {
 		return fmt.Errorf("failed to get credit event logs: %w", err)
@@ -157,7 +157,7 @@ func processEvents(ctx context.Context, from, to int64, client *ethClient, event
 	return setLastStoredHeight(ctx, eventstore, to)
 }
 
-// EthDepositConfig is the configuration for the eth_deposit oracle.
+// EthDepositConfig is the configuration for the eth_deposit listener.
 // It can be read in from a map[string]string, which is passed from
 // the node's local configuration.
 type EthDepositConfig struct {
@@ -169,7 +169,7 @@ type EthDepositConfig struct {
 	// It is a required configuration.
 	ContractAddress string
 	// RequiredConfirmations is the number of Ethereum blocks that must be mined before
-	// the oracle will create a deposit event in Kwil. This is to protect against Ethereum
+	// the listener will create a deposit event in Kwil. This is to protect against Ethereum
 	// network reorgs / soft forks. If not configured, it will default to 12.
 	// https://www.alchemy.com/overviews/what-is-a-reorg
 	RequiredConfirmations int64
@@ -177,23 +177,23 @@ type EthDepositConfig struct {
 	// This would likely be an Infura / Alchemy endpoint.
 	// It is a required configuration.
 	RPCProvider string
-	// ReconnectionInterval is the amount of time in seconds that the oracle will wait
+	// ReconnectionInterval is the amount of time in seconds that the listener will wait
 	// before reconnecting to the Ethereum RPC endpoint if it is disconnected. Long-running
 	// RPC subscriptions are prone to being reset by the Ethereum RPC endpoint, so this
-	// will allow the oracle to reconnect. If not configured, it will default to 60s.
+	// will allow the listener to reconnect. If not configured, it will default to 60s.
 	ReconnectionInterval int64
-	// MaxRetries is the total number of times the oracle will attempt to reconnect to the
+	// MaxRetries is the total number of times the listener will attempt to reconnect to the
 	// Ethereum RPC endpoint before giving up. It will exponentially back off after each try,
 	// starting at 1 second and doubling each time.
 	// If not configured, it will default to 10.
 	MaxRetries int64
-	// BlockSyncChunkSize is the number of Ethereum blocks the oracle will request from the
+	// BlockSyncChunkSize is the number of Ethereum blocks the listener will request from the
 	// Ethereum RPC endpoint at a time while catching up to the network. If not configured,
 	// it will default to 1,000,000.
 	BlockSyncChunkSize int64
 }
 
-// setConfig sets the configuration for the eth_deposit oracle.
+// setConfig sets the configuration for the eth_deposit listener.
 // If it doesn't find a required configuration, or if it finds an invalid
 // configuration, it returns an error
 func (e *EthDepositConfig) setConfig(m map[string]string) error {
@@ -294,13 +294,13 @@ func (e *EthDepositConfig) Map() map[string]string {
 }
 
 var (
-	// lastHeightKey is the key used to store the last height processed by the oracle
+	// lastHeightKey is the key used to store the last height processed by the listener
 	lastHeightKey = []byte("lh")
 )
 
 // getLastStoredHeight gets the last height stored by the KV store
-func getLastStoredHeight(ctx context.Context, eventstore oracles.EventStore) (int64, error) {
-	// get the last confirmed block height processed by the oracle
+func getLastStoredHeight(ctx context.Context, eventstore listeners.EventStore) (int64, error) {
+	// get the last confirmed block height processed by the listener
 	lastHeight, err := eventstore.Get(ctx, lastHeightKey)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get last block height: %w", err)
@@ -314,11 +314,11 @@ func getLastStoredHeight(ctx context.Context, eventstore oracles.EventStore) (in
 }
 
 // setLastStoredHeight sets the last height stored by the KV store
-func setLastStoredHeight(ctx context.Context, eventstore oracles.EventStore, height int64) error {
+func setLastStoredHeight(ctx context.Context, eventstore listeners.EventStore, height int64) error {
 	heightBts := make([]byte, 8)
 	binary.LittleEndian.PutUint64(heightBts, uint64(height))
 
-	// set the last confirmed block height processed by the oracle
+	// set the last confirmed block height processed by the listener
 	err := eventstore.Set(ctx, lastHeightKey, heightBts)
 	if err != nil {
 		return fmt.Errorf("failed to set last block height: %w", err)

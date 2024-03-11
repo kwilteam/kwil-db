@@ -23,7 +23,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/events/broadcast"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
-	"github.com/kwilteam/kwil-db/internal/oracles"
+	"github.com/kwilteam/kwil-db/internal/listeners"
 	admSvc "github.com/kwilteam/kwil-db/internal/services/grpc/admin/v0"
 	functionSvc "github.com/kwilteam/kwil-db/internal/services/grpc/function/v0"
 	"github.com/kwilteam/kwil-db/internal/services/grpc/healthsvc/v0"
@@ -104,8 +104,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	eventBroadcaster := buildEventBroadcaster(d, ev, wrappedCmtClient, txApp)
 	abciApp.SetEventBroadcaster(eventBroadcaster.RunBroadcast)
-	// oracle manager
-	om := buildOracleManager(d, ev, cometBftNode, txApp)
+
+	// listener manager
+	listeners := buildListenerManager(d, ev, cometBftNode, txApp)
 
 	// tx service and grpc server
 	txsvc := buildTxSvc(d, db, e, wrappedCmtClient, txApp)
@@ -116,14 +117,14 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	adminTCPServer := buildAdminService(d, closers, admsvc, txsvc)
 
 	return &Server{
-		grpcServer:     grpcServer,
-		adminTPCServer: adminTCPServer,
-		gateway:        buildGatewayServer(d),
-		cometBftNode:   cometBftNode,
-		oracleMgr:      om,
-		log:            *d.log.Named("server"),
-		closers:        closers,
-		cfg:            d.cfg,
+		grpcServer:      grpcServer,
+		adminTPCServer:  adminTCPServer,
+		gateway:         buildGatewayServer(d),
+		cometBftNode:    cometBftNode,
+		listenerManager: listeners,
+		log:             *d.log.Named("server"),
+		closers:         closers,
+		cfg:             d.cfg,
 	}
 }
 
@@ -656,6 +657,6 @@ func failBuild(err error, msg string) {
 	}
 }
 
-func buildOracleManager(d *coreDependencies, ev *events.EventStore, node *cometbft.CometBftNode, txapp *txapp.TxApp) *oracles.OracleMgr {
-	return oracles.NewOracleMgr(d.cfg.AppCfg.Extensions, ev, node, d.privKey.PubKey().Bytes(), txapp, *d.log.Named("oracle-manager"))
+func buildListenerManager(d *coreDependencies, ev *events.EventStore, node *cometbft.CometBftNode, txapp *txapp.TxApp) *listeners.ListenerManager {
+	return listeners.NewListenerManager(d.cfg.AppCfg.Extensions, ev, node, d.privKey.PubKey().Bytes(), txapp, *d.log.Named("listener-manager"))
 }

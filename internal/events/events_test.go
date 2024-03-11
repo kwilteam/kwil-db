@@ -226,7 +226,7 @@ func Test_EventStore(t *testing.T) {
 				dbVoting.Execute(ctx, `drop schema if exists kwild_voting cascade;`)
 			}()
 
-			db, cleanup, err := dbtest.NewTestPool(ctx, []string{SchemaName}) // db is the event store specific connection
+			db, cleanup, err := dbtest.NewTestPool(ctx, []string{schemaName}) // db is the event store specific connection
 			require.NoError(t, err)
 			defer cleanup()
 

@@ -27,7 +27,8 @@ type Executor interface {
 	Execute(ctx context.Context, stmt string, args ...any) (*ResultSet, error)
 }
 
-// Tx is a database transaction. It can be nested within other transactions.
+// Tx is a database transaction. It can be nested within other
+// transactions.
 type Tx interface {
 	DB
 	// Rollback rolls back the transaction.
@@ -60,22 +61,23 @@ const (
 	// ReadWrite is the default access mode.
 	// It allows for reading and writing to the database.
 	ReadWrite AccessMode = iota
-	// ReadOnly allows for reading from the database, but not writing.
+	// ReadOnly allows for reading from the database, but not
+	// writing.
 	ReadOnly
 )
 
-// TxCloser terminates a transaction by committing or rolling it back. A method
-// that returns this alone would keep the tx under the hood of the parent type,
-// directing queries internally through the scope of a transaction/session
-// started with BeginTx.
+// TxCloser terminates a transaction by committing or rolling it
+// back. A method that returns this alone would keep the tx under the
+// hood of the parent type, directing queries internally through the
+// scope of a transaction/session started with BeginTx.
 type TxCloser interface {
 	Rollback(ctx context.Context) error
 	Commit(ctx context.Context) error
 }
 
-// TxPrecommitter is the special kind of transaction that can prepare a
-// transaction for commit.
-// It is only available on the outermost transaction.
+// TxPrecommitter is the special kind of transaction that can prepare
+// a transaction for commit. It is only available on the outermost
+// transaction.
 type TxPrecommitter interface {
 	Precommit(ctx context.Context) ([]byte, error)
 }
@@ -84,8 +86,9 @@ type TxBeginner interface {
 	Begin(ctx context.Context) (TxCloser, error)
 }
 
-// OuterTxMaker is the special kind of transaction beginner that can make nested
-// transactions, and that explicitly scopes Query/Execute to the tx.
+// OuterTxMaker is the special kind of transaction beginner that can
+// make nested transactions, and that explicitly scopes Query/Execute
+// to the tx.
 type OuterTxMaker interface {
 	BeginTx(ctx context.Context) (OuterTx, error)
 }
@@ -96,16 +99,17 @@ type ReadTxMaker interface {
 	BeginReadTx(ctx context.Context) (Tx, error)
 }
 
-// TxMaker is the special kind of transaction beginner that can make nested
+// TxMaker is the special kind of transaction beginner that can make
+// nested
 // transactions, and that explicitly scopes Query/Execute to the tx.
 type TxMaker interface {
 	BeginTx(ctx context.Context) (Tx, error)
 }
 
-// OuterTx is a database transaction. It is the outermost transaction type.
-// "nested transactions" are called savepoints, and can be created with
-// BeginSavepoint. Savepoints can be nested, and are rolled back to the
-// innermost savepoint on Rollback.
+// OuterTx is a database transaction. It is the outermost transaction
+// type. "nested transactions" are called savepoints, and can be
+// created with BeginSavepoint. Savepoints can be nested, and are
+// rolled back to the innermost savepoint on Rollback.
 //
 // Anything using implicit tx/session management should use TxCloser.
 type OuterTx interface {

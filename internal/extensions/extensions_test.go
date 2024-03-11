@@ -1,4 +1,4 @@
-//go:build actions_math || ext_test
+//go:build precompiles_math || ext_test
 
 package extensions_test
 
@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/extensions/actions"
+	actions "github.com/kwilteam/kwil-db/extensions/precompiles"
 	extensions "github.com/kwilteam/kwil-db/internal/extensions"
 	"github.com/kwilteam/kwil-extensions/client"
 	"github.com/kwilteam/kwil-extensions/types"
@@ -102,8 +102,8 @@ func Test_LocalExtension(t *testing.T) {
 // legacy extensions are forwards compatible, but current extensions are not backwards compatible,
 // and the extension tested here is not a legacy extension.
 type legacyAdapter struct {
-	init        actions.ExtensionInitializer
-	ext         actions.ExtensionNamespace
+	init        actions.Initializer
+	ext         actions.Instance
 	initialized bool
 }
 

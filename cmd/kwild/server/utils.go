@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	types "github.com/kwilteam/kwil-db/core/types/admin"
-	"github.com/kwilteam/kwil-db/extensions/actions"
+	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft/privval"
 	"github.com/kwilteam/kwil-db/internal/extensions"
@@ -24,10 +24,10 @@ import (
 
 // getExtensions returns both the local and remote extensions. Remote extensions are identified by
 // connecting to the specified extension URLs.
-func getExtensions(ctx context.Context, urls []string) (map[string]actions.ExtensionInitializer, error) {
-	exts := make(map[string]actions.ExtensionInitializer)
+func getExtensions(ctx context.Context, urls []string) (map[string]precompiles.Initializer, error) {
+	exts := make(map[string]precompiles.Initializer)
 
-	for name, ext := range actions.RegisteredExtensions() {
+	for name, ext := range precompiles.RegisteredPrecompiles() {
 		_, ok := exts[name]
 		if ok {
 			return nil, fmt.Errorf("duplicate extension name: %s", name)
