@@ -106,6 +106,8 @@ type IntTestConfig struct {
 	JoinExpiry    int64
 	VoteExpiry    int64
 	WithGas       bool
+
+	SpamOracleEnabled bool
 }
 
 type IntHelper struct {
@@ -120,7 +122,7 @@ type IntHelper struct {
 	// - KWIL_NETWORK: the network name for the test
 	envs map[string]string
 
-	// Oracles
+	// Extensions
 	ethDeposit EthDepositOracle
 }
 
@@ -235,6 +237,12 @@ func WithGanache() HelperOpt {
 	}
 }
 
+func WithSpamOracle() HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.SpamOracleEnabled = true
+	}
+}
+
 // LoadConfig loads config from system env and .env file.
 // Envs defined in envFile will not overwrite existing env vars.
 func (r *IntHelper) LoadConfig() {
@@ -282,27 +290,39 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 
 	extensionConfigs := make([]map[string]map[string]string, r.cfg.NValidator)
 	for i := range extensionConfigs {
+		extensionConfigs[i] = make(map[string]map[string]string)
 		if r.ethDeposit.Enabled {
 			address := r.ethDeposit.EscrowAddress
 			if i < r.ethDeposit.NumByzantineExpiryNodes {
 				address = r.ethDeposit.ByzantineEscrowAddr
 			}
 
-			extensionConfigs[i] = map[string]map[string]string{
-				ethdeposits.ListenerName: (&ethdeposits.EthDepositConfig{
-					RPCProvider:     r.ethDeposit.UnexposedChainRPC,
-					ContractAddress: address,
-					// setting values here since we cannot have the defaults, since
-					// local ganache is a new network
-					StartingHeight:        0,
-					RequiredConfirmations: 0, // TODO: remove this from the r.ethDeposit struct. it is not needed
-					ReconnectionInterval:  30,
-					MaxRetries:            2,
-					BlockSyncChunkSize:    1000,
-				}).Map(),
+			cfg := ethdeposits.EthDepositConfig{
+				RPCProvider:     r.ethDeposit.UnexposedChainRPC,
+				ContractAddress: address,
+				// setting values here since we cannot have the defaults, since
+				// local ganache is a new network
+				StartingHeight:        0,
+				RequiredConfirmations: 0, // TODO: remove this from the r.ethDeposit struct. it is not needed
+				ReconnectionInterval:  30,
+				MaxRetries:            2,
+				BlockSyncChunkSize:    1000,
+			}
+
+			extensionConfigs[i][ethdeposits.ListenerName] = cfg.Map()
+		}
+		if r.cfg.SpamOracleEnabled {
+			extensionConfigs[i]["spammer"] = map[string]string{
+				"enabled": "true",
 			}
 		}
 	}
+
+	bal, ok := big.NewInt(0).SetString("100000000000000000000000000000000", 10)
+	if !ok {
+		r.t.Fatal("failed to parse balance")
+	}
+	creatorIdent := hex.EncodeToString(r.cfg.CreatorSigner.Identity())
 
 	err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
 		ChainID:       testChainID,
@@ -318,13 +338,15 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 		HostnameSuffix:          "",
 		// use this to ease the process running test parallel
 		// NOTE: need to match docker-compose kwild service name
-		DnsNamePrefix:     "node",
-		P2pPort:           26656,
-		JoinExpiry:        r.cfg.JoinExpiry,
-		WithoutGasCosts:   !r.cfg.WithGas,
-		VoteExpiry:        r.cfg.VoteExpiry,
-		WithoutNonces:     false,
-		Allocs:            r.cfg.Allocs,
+		DnsNamePrefix:   "node",
+		P2pPort:         26656,
+		JoinExpiry:      r.cfg.JoinExpiry,
+		WithoutGasCosts: !r.cfg.WithGas,
+		VoteExpiry:      r.cfg.VoteExpiry,
+		WithoutNonces:   false,
+		Allocs: map[string]*big.Int{
+			creatorIdent: bal,
+		},
 		FundNonValidators: r.cfg.WithGas, // when gas is required, also give the non-validators some for tests
 		Extensions:        extensionConfigs,
 	}, &nodecfg.ConfigOpts{
@@ -401,20 +423,14 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 	dc, err := compose.NewDockerCompose(composeFiles...)
 	require.NoError(r.t, err, "failed to create docker compose object for kwild cluster")
 
-	r.t.Cleanup(func() {
-		r.t.Logf("teardown %s", dc.Services())
-		err := dc.Down(ctx)
-		require.NoErrorf(r.t, err, "failed to teardown %s", dc.Services())
-	})
+	// r.t.Cleanup(func() {
+	// 	r.t.Logf("teardown %s", dc.Services())
+	// 	err := dc.Down(ctx)
+	// 	require.NoErrorf(r.t, err, "failed to teardown %s", dc.Services())
+	// })
 
 	stack := dc.WithEnv(r.envs)
 	for _, service := range services {
-		// if r.ethDeposit.Enabled && strings.HasPrefix(service, "node") {
-		// 	waitMsg := "Started listening for new blocks on ethereum"
-		// 	stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
-		// 	continue
-		// }
-
 		waitMsg, ok := logWaitStrategies[service]
 		if ok {
 			stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))

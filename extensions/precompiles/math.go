@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	err := RegisterPrecompile("math", InitializeMath)
+	err := RegisterPrecompile("math-precompile", InitializeMath)
 	if err != nil {
 		panic(err)
 	}

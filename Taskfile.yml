@@ -266,3 +266,18 @@ tasks:
     dir: test # different module
     cmds:
       - go test -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
+
+  test:it:ext:
+    desc: Run integration tests ('ext' and 'short' mode)
+    deps:
+      - task: build:cli
+      - task: build:admin
+      - task: GO_BUILDTAGS="ext_test" build:docker
+    cmds:
+      - task: test:it:nb
+
+  test:it:ext:nb:
+    desc: Run integration tests ('ext' and 'short' mode)
+    dir: test # different module
+    cmds:
+      - go test -short -ext -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}

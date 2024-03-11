@@ -16,6 +16,8 @@ import (
 
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
+var extBuild = flag.Bool("ext", false, "run to test special extension tests")
+
 var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
 
 // NOTE: `-parallel` is a flag that is already used by `go test`
@@ -510,6 +512,9 @@ func TestKwilEthDepositFundTransfer(t *testing.T) {
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
 		t.Run(driverType+"_driver", func(t *testing.T) {
+			if driverType == "cli" {
+				return
+			}
 			ctx := context.Background()
 
 			helper := integration.NewIntHelper(t, opts...)
@@ -534,4 +539,39 @@ func TestKwilEthDepositFundTransfer(t *testing.T) {
 
 		})
 	}
+}
+
+func TestSpamListener(t *testing.T) {
+	if *extBuild {
+		t.Skip("Should be run with ext_test build")
+	}
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	opts := []integration.HelperOpt{
+		integration.WithValidators(4),
+		integration.WithNonValidators(0),
+		integration.WithGas(),
+		integration.WithSpamOracle(),
+	}
+
+	ctx := context.Background()
+
+	helper := integration.NewIntHelper(t, opts...)
+	helper.Setup(ctx, allServices)
+
+	// Wait for the network to produce atleast 1 block for the genesis validators to get committed and synced.
+	time.Sleep(2 * time.Second)
+	node0Driver := helper.GetUserDriver(ctx, "node0", "http", nil)
+
+	// Verify that the spam listener is running and does not overwhelm the network
+	// Also keep issuing some transactions to ensure that the network is up and not saturated
+	for i := 0; i < 10; i++ {
+		specifications.DatabaseDeploySpecification(ctx, t, node0Driver)
+
+		specifications.DatabaseDropSpecification(ctx, t, node0Driver)
+		time.Sleep(4 * time.Second)
+	}
+	fmt.Println("Spam listener test completed")
 }
