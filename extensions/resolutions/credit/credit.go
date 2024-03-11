@@ -77,7 +77,7 @@ var resolutionConfig = resolutions.ResolutionConfig{
 	// has not received enough votes by the expiration height, it will fail.
 	ExpirationPeriod: 600,
 	// ResolveFunc defines what will happen if the resolution is approved by the network.
-	// For the credit account oracle, we will credit the account with the given amount.
+	// For the credit_account resolution, we will credit the account with the given amount.
 	// The amount cannot be negative.
 	ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error {
 		// Unmarshal the resolution payload into an AccountCreditResolution

@@ -62,7 +62,7 @@ func NewEventStore(ctx context.Context, writerDB DB) (*EventStore, error) {
 		0: initTables,
 	}
 
-	err = versioning.Upgrade(ctx, tx, SchemaName, upgradeFns, eventStoreVersion)
+	err = versioning.Upgrade(ctx, tx, schemaName, upgradeFns, eventStoreVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +226,6 @@ func (e *EventStore) MarkRebroadcast(ctx context.Context, ids []types.UUID) erro
 // This allows users to implement complex logic for efficient
 // restart, to avoid re-processing events. Key uniqueness is
 // scoped to the event type.
-// It is up to each oracle to define their own sufficiently unique prefix(es).
 func (e *EventStore) KV(prefix []byte) *KV {
 	return &KV{
 		prefix: prefix,

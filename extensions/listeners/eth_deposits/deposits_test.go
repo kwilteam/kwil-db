@@ -8,7 +8,7 @@ import (
 
 // we could use better tests for this package.
 // this would require more abstractions, which would then
-// take away from this being an example of a simple oracle
+// take away from this being an example of a simple event listener.
 func Test_Config(t *testing.T) {
 	cfg := &EthDepositConfig{
 		StartingHeight:        45,

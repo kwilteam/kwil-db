@@ -8,22 +8,26 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
-// Service provides access to general application information to extensions.
+// Service provides access to general application information to
+// extensions.
 type Service struct {
 	// Logger is a logger for the application
 	Logger log.SugaredLogger
-	// ExtensionConfigs is a map of the nodes extensions and local configurations. It maps:
-	// extension_name -> config_key -> config_value
+	// ExtensionConfigs is a map of the nodes extensions and local
+	// configurations.
+	// It maps: extension_name -> config_key -> config_value
 	ExtensionConfigs map[string]map[string]string
 }
 
-// App is an application that can modify and query the local database instance.
+// App is an application that can modify and query the local database
+// instance.
 type App struct {
 	// Service is the base application
 	Service *Service
 	// DB is a connection to the underlying Postgres database
 	DB sql.DB
-	// Engine is the underlying KwilDB engine, capable of storing and executing against
+	// Engine is the underlying KwilDB engine, capable of storing and
+	// executing against
 	// Kuneiform schemas
 	Engine Engine
 }
@@ -35,10 +39,11 @@ type Engine interface {
 	// DeleteDataset deletes a dataset.
 	// The caller must be the owner of the dataset.
 	DeleteDataset(ctx context.Context, tx sql.DB, dbid string, caller []byte) error
-	// Execute executes a procedure in a dataset.
-	// It can be given either a readwrite or readonly database transaction.
-	// If it is given a read-only transaction, it will not be able to execute any procedures that are not `view`.
-	Call(ctx context.Context, tx sql.DB, options *ExecutionData) (*sql.ResultSet, error)
+	// Procedure executes a procedure in a dataset. It can be given
+	// either a readwrite or readonly database transaction. If it is
+	// given a read-only transaction, it will not be able to execute
+	// any procedures that are not `view`.
+	Procedure(ctx context.Context, tx sql.DB, options *ExecutionData) (*sql.ResultSet, error)
 	// GetSchema returns the schema of a dataset.
 	// It will return an error if the dataset does not exist.
 	GetSchema(ctx context.Context, dbid string) (*Schema, error)
@@ -49,22 +54,26 @@ type Engine interface {
 	Execute(ctx context.Context, tx sql.DB, dbid, query string, values map[string]any) (*sql.ResultSet, error)
 }
 
-// ExecutionOptions is contextual data that is passed to a procedure during call / execution.
-// It is scoped to the lifetime of a single execution.
+// ExecutionOptions is contextual data that is passed to a procedure
+// during call / execution. It is scoped to the lifetime of a single
+// execution.
 type ExecutionData struct {
 	// Dataset is the DBID of the dataset that was called.
-	// Even if a procedure in another dataset is called, this will always be the original dataset.
+	// Even if a procedure in another dataset is called, this will
+	// always be the original dataset.
 	Dataset string
 
 	// Procedure is the original procedure that was called.
-	// Even if a nested procedure is called, this will always be the original procedure.
+	// Even if a nested procedure is called, this will always be the
+	// original procedure.
 	Procedure string
 
-	// Args are the arguments that were passed to the procedure. Currently these
-	// are all string or untyped nil values.
+	// Args are the arguments that were passed to the procedure.
+	// Currently these are all string or untyped nil values.
 	Args []any
 
-	// Signer is the address of public key that signed the incoming transaction.
+	// Signer is the address of public key that signed the incoming
+	// transaction.
 	Signer []byte
 
 	// Caller is a string identifier for the signer.

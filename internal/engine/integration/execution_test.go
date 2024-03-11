@@ -83,7 +83,7 @@ func Test_Engine(t *testing.T) {
 				signer := "signer"
 
 				ctx := context.Background()
-				_, err := global.Call(ctx, tx, &common.ExecutionData{
+				_, err := global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
@@ -92,7 +92,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				_, err = global.Call(ctx, tx, &common.ExecutionData{
+				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCreatePost.Name,
 					Args:      []any{1, "Bitcoin!", "The Bitcoin Whitepaper", "9/31/2008"},
@@ -104,7 +104,7 @@ func Test_Engine(t *testing.T) {
 			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
 				ctx := context.Background()
 
-				res, err := global.Call(ctx, tx, &common.ExecutionData{
+				res, err := global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureGetPosts.Name,
 					Args:      []any{"satoshi"},
@@ -144,7 +144,7 @@ func Test_Engine(t *testing.T) {
 			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
 				ctx := context.Background()
 
-				_, err := global.Call(ctx, tx, &common.ExecutionData{
+				_, err := global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCreatePost.Name,
 					Args:      []any{1, "Bitcoin!", "The Bitcoin Whitepaper", "9/31/2008"},
@@ -161,7 +161,7 @@ func Test_Engine(t *testing.T) {
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
-				_, err = global.Call(ctx, tx, &common.ExecutionData{
+				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
@@ -173,7 +173,7 @@ func Test_Engine(t *testing.T) {
 			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
 				ctx := context.Background()
 
-				users, err := global.Call(ctx, tx, &common.ExecutionData{
+				users, err := global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureGetUserByAddress.Name,
 					Args:      []any{"signer"},
@@ -194,7 +194,7 @@ func Test_Engine(t *testing.T) {
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
-				_, err = global.Call(ctx, tx, &common.ExecutionData{
+				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
@@ -206,7 +206,7 @@ func Test_Engine(t *testing.T) {
 			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
 				ctx := context.Background()
 
-				users, err := global.Call(ctx, tx, &common.ExecutionData{
+				users, err := global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureGetUserByAddress.Name,
 					Args:      []any{"signer"},
@@ -257,7 +257,7 @@ func Test_Engine(t *testing.T) {
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
-				_, err = global.Call(ctx, tx, &common.ExecutionData{
+				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureAdminDeleteUser.Name,
 					Args:      []any{1},
@@ -266,7 +266,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.Error(t, err)
 
-				_, err = global.Call(ctx, tx, &common.ExecutionData{
+				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureAdminDeleteUser.Name,
 					Args:      []any{1},
@@ -285,7 +285,7 @@ func Test_Engine(t *testing.T) {
 				require.NoError(t, err)
 
 				// calling private fails
-				_, err = global.Call(ctx, tx, &common.ExecutionData{
+				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedurePrivate.Name,
 					Args:      []any{},
@@ -295,7 +295,7 @@ func Test_Engine(t *testing.T) {
 				require.Error(t, err)
 
 				// calling a public which calls private succeeds
-				_, err = global.Call(ctx, tx, &common.ExecutionData{
+				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCallsPrivate.Name,
 					Args:      []any{},
@@ -317,7 +317,7 @@ func Test_Engine(t *testing.T) {
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
-				_, err = global.Call(ctx, tx, &common.ExecutionData{
+				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
@@ -326,7 +326,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				_, err = global.Call(ctx, tx, &common.ExecutionData{
+				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcedureGetUserByAddress.Name,
 					Args:      []any{"signer"},
@@ -375,7 +375,7 @@ func Test_Engine(t *testing.T) {
 				caller := "signer"
 				signer := []byte("signer")
 
-				_, err = global.Call(ctx, tx, &common.ExecutionData{
+				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   schema.DBID(),
 					Procedure: "CREATE_USER",
 					Args:      []any{1, "satoshi"},
@@ -384,7 +384,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				_, err = global.Call(ctx, tx, &common.ExecutionData{
+				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   schema.DBID(),
 					Procedure: "CREATE_USER",
 					Args:      []any{"2", "vitalik"},
@@ -393,7 +393,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				_, err = global.Call(ctx, tx, &common.ExecutionData{
+				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   schema.DBID(),
 					Procedure: "CREATE_FOLLOWER",
 					Args:      []any{"satoshi", "vitalik"},
@@ -402,7 +402,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				res, err := global.Call(ctx, tx, &common.ExecutionData{
+				res, err := global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   schema.DBID(),
 					Procedure: "USE_EXTENSION",
 					Args:      []any{1, "2"}, // math_ext.add($arg1 + $arg2, 1)
