@@ -44,6 +44,63 @@ func ValidatorNodeJoinSpecification(ctx context.Context, t *testing.T, netops Va
 	assert.Equal(t, valCount, len(vals))
 }
 
+func JoinExistingValidatorSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte) {
+	t.Log("Executing existing validator join specification")
+
+	// Validator issues a Join request
+	rec, err := netops.ValidatorNodeJoin(ctx)
+	require.NoError(t, err)
+
+	// Ensure that the Tx is mined.
+	expectTxFail(t, netops, ctx, rec, defaultTxQueryTimeout)()
+
+	// Get Request status, #approvals = 0, #board = valCount
+	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner)
+	require.Error(t, err)
+	require.Nil(t, joinStatus)
+}
+
+// NonValidatorLeaveSpecification tests the validator remove process on a non-validator node
+func NonValidatorLeaveSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, target []byte) {
+	t.Log("Executing non validator leave specification")
+
+	// Ensure that the validator set precondition for this spec test is met.
+	preVals, err := netops.ValidatorsList(ctx)
+	require.NoError(t, err)
+
+	// non validator node tries to leave
+	rec, err := netops.ValidatorNodeLeave(ctx)
+	require.NoError(t, err)
+
+	// Ensure that the Validator Leave Tx is mined.
+	expectTxFail(t, netops, ctx, rec, defaultTxQueryTimeout)()
+
+	// ValidatorSet count should remain same
+	postVals, err := netops.ValidatorsList(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, len(preVals), len(postVals))
+}
+
+func RemoveNonValidatorSpecification(ctx context.Context, t *testing.T, netops ValidatorRemoveDsl, target []byte) {
+	t.Log("Executing remove non-validator specification")
+
+	// Ensure that the validator set precondition for this spec test is met.
+	preVals, err := netops.ValidatorsList(ctx)
+	require.NoError(t, err)
+
+	// non validator node tries to remove a validator
+	rec, err := netops.ValidatorNodeRemove(ctx, target)
+	require.NoError(t, err)
+
+	// Ensure that the Validator Remove Tx is mined.
+	expectTxFail(t, netops, ctx, rec, defaultTxQueryTimeout)()
+
+	// ValidatorSet count should remain same
+	postVals, err := netops.ValidatorsList(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, len(preVals), len(postVals))
+}
+
 // ValidatorNodeRemoveSpecificationN4R1 tests the validator remove process on a
 // network with 4 validators, where 3 nodes target the last.
 func ValidatorNodeRemoveSpecificationV4R1(ctx context.Context, t *testing.T, n0, n1, n2 ValidatorRemoveDsl, target []byte) {
@@ -146,6 +203,26 @@ func ValidatorNodeApproveSpecification(ctx context.Context, t *testing.T, netops
 	vals, err = netops.ValidatorsList(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, postCnt, len(vals))
+}
+
+func ValidatorNodeSelfApproveSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte) {
+	// Get Join Request status, #board = preCnt
+	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner)
+	require.NoError(t, err)
+	preApprovalCnt := approvalCount(joinStatus)
+
+	// Approval Request
+	rec, err := netops.ValidatorNodeApprove(ctx, joiner)
+	require.NoError(t, err)
+
+	// TX should fail as validator cannot approve its own join request
+	expectTxFail(t, netops, ctx, rec, defaultTxQueryTimeout)()
+
+	// Check Join Request Status: #approvals = preApprovalCnt
+	joinStatus, err = netops.ValidatorJoinStatus(ctx, joiner)
+	require.NoError(t, err)
+	postApprovalCnt := approvalCount(joinStatus)
+	assert.Equal(t, preApprovalCnt, postApprovalCnt)
 }
 
 func ValidatorNodeLeaveSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl) {

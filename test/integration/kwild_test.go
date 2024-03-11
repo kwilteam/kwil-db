@@ -105,9 +105,12 @@ func TestKwildValidatorRemoval(t *testing.T) {
 	// In this test, we will have a set of 4 validators, where 3 of the
 	// validators are required to remove one.
 	const numVals, numNonVals = 4, 0
+	const blockInterval = time.Second
+
 	opts := []integration.HelperOpt{
 		integration.WithValidators(numVals),
 		integration.WithNonValidators(numNonVals),
+		integration.WithBlockInterval(blockInterval),
 	}
 
 	testDrivers := strings.Split(*drivers, ",")
@@ -126,6 +129,7 @@ func TestKwildValidatorRemoval(t *testing.T) {
 			node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetOperatorDriver(ctx, "node1", driverType)
 			node2Driver := helper.GetOperatorDriver(ctx, "node2", driverType)
+			node3Driver := helper.GetOperatorDriver(ctx, "node3", driverType)
 			targetPubKey := helper.NodePrivateKey("node3").PubKey().Bytes()
 
 			/* Remove node 3 (4 validators, nodes 0, 1, and 2 remove node 3)
@@ -137,6 +141,10 @@ func TestKwildValidatorRemoval(t *testing.T) {
 			- node 3 is no longer a validator
 			*/
 			specifications.ValidatorNodeRemoveSpecificationV4R1(ctx, t, node0Driver, node1Driver, node2Driver, targetPubKey) // joiner is a validator at node
+
+			//
+			// Node 3 is no longer a validator, removal should fail
+			specifications.RemoveNonValidatorSpecification(ctx, t, node3Driver, targetPubKey)
 		})
 	}
 }
@@ -172,6 +180,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			helper.Setup(ctx, allServices)
 
 			node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
+			node0PubKey := helper.NodePrivateKey("node0").PubKey().Bytes()
 			node1Driver := helper.GetOperatorDriver(ctx, "node1", driverType)
 			joinerDriver := helper.GetOperatorDriver(ctx, "node3", driverType)
 			joinerPrivKey := helper.NodePrivateKey("node3")
@@ -182,6 +191,12 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 
 			// Start the network with 3 validators & 1 Non-validator
 			specifications.CurrentValidatorsSpecification(ctx, t, node0Driver, 3)
+
+			// Reject Joins from existing validators
+			specifications.JoinExistingValidatorSpecification(ctx, t, node0Driver, node0PubKey)
+
+			// Reject leaves from non-validators
+			specifications.NonValidatorLeaveSpecification(ctx, t, joinerDriver, joinerPubKey)
 
 			/*
 				Join Expiry:
@@ -199,6 +214,10 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			*/
 			specifications.ValidatorNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
 			time.Sleep(2 * time.Second)
+
+			// Node3 cant self approve
+			specifications.ValidatorNodeSelfApproveSpecification(ctx, t, joinerDriver, joinerPubKey)
+
 			// Node 0,1 approves
 			specifications.ValidatorNodeApproveSpecification(ctx, t, node0Driver, joinerPubKey, 3, 3, false)
 			specifications.ValidatorNodeApproveSpecification(ctx, t, node1Driver, joinerPubKey, 3, 4, true)
