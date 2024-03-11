@@ -10,7 +10,7 @@ import (
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/common/testdata"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/extensions/actions"
+	"github.com/kwilteam/kwil-db/extensions/precompiles"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -208,7 +208,7 @@ func Test_Execution(t *testing.T) {
 			ctx := context.Background()
 
 			engine, err := NewGlobalContext(ctx,
-				newDB(false), map[string]actions.Initializer{
+				newDB(false), map[string]precompiles.Initializer{
 					"math": mth.initialize,
 				}, &common.Service{
 					Logger:           log.NewNoOp().Sugar(),
@@ -363,7 +363,7 @@ type mathInitializer struct {
 	vals map[string]string
 }
 
-func (m *mathInitializer) initialize(_ *actions.DeploymentContext, _ *common.Service, mp map[string]string) (actions.Instance, error) {
+func (m *mathInitializer) initialize(_ *precompiles.DeploymentContext, _ *common.Service, mp map[string]string) (precompiles.Instance, error) {
 	m.vals = mp
 
 	return &mathExt{}, nil
@@ -371,9 +371,9 @@ func (m *mathInitializer) initialize(_ *actions.DeploymentContext, _ *common.Ser
 
 type mathExt struct{}
 
-var _ actions.Instance = &mathExt{}
+var _ precompiles.Instance = &mathExt{}
 
-func (m *mathExt) Call(caller *actions.ProcedureContext, app *common.App, method string, inputs []any) ([]any, error) {
+func (m *mathExt) Call(caller *precompiles.ProcedureContext, app *common.App, method string, inputs []any) ([]any, error) {
 	return nil, nil
 }
 
@@ -414,7 +414,7 @@ func Test_OrderSchemas(t *testing.T) {
 	ctx := context.Background()
 	mth := &mathInitializer{}
 	_, err := NewGlobalContext(ctx,
-		newDB(false), map[string]actions.Initializer{
+		newDB(false), map[string]precompiles.Initializer{
 			"math": mth.initialize,
 		}, &common.Service{
 			Logger:           log.NewNoOp().Sugar(),

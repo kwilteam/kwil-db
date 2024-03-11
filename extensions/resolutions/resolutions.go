@@ -76,7 +76,7 @@ type ResolutionConfig struct {
 	// threshold, >=2/3rds of the voters must vote for the resolution
 	// for it to be confirmed. Voters will also be refunded if this
 	// threshold is met, regardless of the refund threshold. The
-	//  number must be a fraction between 0 and 1. If this field is
+	// number must be a fraction between 0 and 1. If this field is
 	// nil, it will default to 2/3.
 	ConfirmationThreshold *big.Rat
 	// ExpirationPeriod is the amount of blocks that the resolution

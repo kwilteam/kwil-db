@@ -1,6 +1,6 @@
 // package actions allows custom actions to be registered with the
 // engine.
-package actions
+package precompiles
 
 import (
 	"context"

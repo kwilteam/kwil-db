@@ -10,7 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/extensions/actions"
+	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
@@ -27,7 +27,7 @@ type GlobalContext struct {
 
 	// initializers are the namespaces that are available to datasets.
 	// This includes other datasets, or loaded extensions.
-	initializers map[string]actions.Initializer
+	initializers map[string]precompiles.Initializer
 
 	// datasets are the top level namespaces that are available to engine callers.
 	// These only include datasets, and do not include extensions.
@@ -53,7 +53,7 @@ func InitializeEngine(ctx context.Context, tx sql.DB) error {
 
 // NewGlobalContext creates a new global context.
 // It will load any persisted datasets from the datastore.
-func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[string]actions.Initializer,
+func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[string]precompiles.Initializer,
 	service *common.Service) (*GlobalContext, error) {
 	g := &GlobalContext{
 		initializers: extensionInitializers,
@@ -147,7 +147,7 @@ func (g *GlobalContext) Procedure(ctx context.Context, tx sql.DB, options *commo
 		return nil, ErrDatasetNotFound
 	}
 
-	procedureCtx := &actions.ProcedureContext{
+	procedureCtx := &precompiles.ProcedureContext{
 		Ctx:       ctx,
 		Signer:    options.Signer,
 		Caller:    options.Caller,
@@ -242,7 +242,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 
 	datasetCtx := &baseDataset{
 		schema:     schema,
-		namespaces: make(map[string]actions.Instance),
+		namespaces: make(map[string]precompiles.Instance),
 		procedures: make(map[string]*procedure),
 		global:     g,
 	}
@@ -272,7 +272,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 			return fmt.Errorf(`namespace "%s" not found`, ext.Name)
 		}
 
-		namespace, err := initializer(&actions.DeploymentContext{
+		namespace, err := initializer(&precompiles.DeploymentContext{
 			Ctx:    ctx,
 			Schema: schema,
 		}, g.service, ext.CleanMap())
@@ -283,7 +283,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 		datasetCtx.namespaces[ext.Alias] = namespace
 	}
 
-	g.initializers[dbid] = func(_ *actions.DeploymentContext, _ *common.Service, _ map[string]string) (actions.Instance, error) {
+	g.initializers[dbid] = func(_ *precompiles.DeploymentContext, _ *common.Service, _ map[string]string) (precompiles.Instance, error) {
 		return datasetCtx, nil
 	}
 	g.datasets[dbid] = datasetCtx

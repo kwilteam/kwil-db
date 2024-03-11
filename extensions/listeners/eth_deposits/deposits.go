@@ -23,7 +23,7 @@ const ListenerName = "eth_deposits"
 // see more here: https://www.digitalocean.com/community/tutorials/understanding-init-in-go
 func init() {
 	// register the listener with the name "eth_deposit"
-	err := listeners.RegisterLister(ListenerName, Start)
+	err := listeners.RegisterListener(ListenerName, Start)
 	if err != nil {
 		panic(err)
 	}

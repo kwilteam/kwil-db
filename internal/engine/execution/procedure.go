@@ -8,7 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
-	"github.com/kwilteam/kwil-db/extensions/actions"
+	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/internal/conv"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
@@ -27,7 +27,7 @@ var (
 // instruction is an instruction that can be executed.
 // It is used to define the behavior of a procedure.
 type instruction interface { // i.e. dmlStmt, callMethod, or instructionFunc
-	execute(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error
+	execute(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error
 }
 
 // procedure is a predefined procedure that can be executed.
@@ -66,7 +66,7 @@ func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema 
 	for _, mod := range unparsed.Modifiers {
 		switch mod {
 		case common.ModifierOwner:
-			instructions = append(instructions, instructionFunc(func(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error {
+			instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
 
 				if !bytes.Equal(scope.Signer, owner) {
 					return fmt.Errorf("cannot call owner procedure, not owner")
@@ -82,7 +82,7 @@ func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema 
 	// This means that the DB connection needs to be readwrite. If not readwrite, we
 	// need to return an error
 	if !isViewProcedure {
-		instructions = append(instructions, instructionFunc(func(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error {
+		instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
 			if db.AccessMode() != sql.ReadWrite {
 				return fmt.Errorf("cannot call non-view procedure, not in a chain transaction")
 			}
@@ -216,7 +216,7 @@ func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema 
 }
 
 // Call executes a procedure.
-func (p *procedure) call(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB, inputs []any) error {
+func (p *procedure) call(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB, inputs []any) error {
 	if len(inputs) != len(p.parameters) {
 		return fmt.Errorf(`%w: procedure "%s" requires %d arguments, but %d were provided`, ErrIncorrectNumberOfArguments, p.name, len(p.parameters), len(inputs))
 	}
@@ -263,7 +263,7 @@ type callMethod struct {
 // Execute calls a method from a namespace that is accessible within this dataset.
 // If no namespace is specified, the local namespace is used.
 // It will pass all arguments to the method, and assign the return values to the receivers.
-func (e *callMethod) execute(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error {
+func (e *callMethod) execute(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
 	dataset, ok := global.datasets[scope.DBID]
 	if !ok {
 		return fmt.Errorf(`dataset "%s" not found`, scope.DBID)
@@ -348,7 +348,7 @@ type dmlStmt struct {
 	OrderedParameters []string
 }
 
-func (e *dmlStmt) execute(scope *actions.ProcedureContext, _ *GlobalContext, db sql.DB) error {
+func (e *dmlStmt) execute(scope *precompiles.ProcedureContext, _ *GlobalContext, db sql.DB) error {
 	// Expend the arguments based on the ordered parameters for the DML statement.
 	params := orderAndCleanValueMap(scope.Values(), e.OrderedParameters)
 	args := append([]any{pg.QueryModeExec}, params...)
@@ -372,10 +372,10 @@ func (e *dmlStmt) execute(scope *actions.ProcedureContext, _ *GlobalContext, db 
 	return nil
 }
 
-type instructionFunc func(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error
+type instructionFunc func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error
 
 // implement instruction
-func (f instructionFunc) execute(scope *actions.ProcedureContext, global *GlobalContext, db sql.DB) error {
+func (f instructionFunc) execute(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
 	return f(scope, global, db)
 }
 

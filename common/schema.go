@@ -9,7 +9,9 @@ import (
 	"github.com/kwilteam/kwil-db/core/utils"
 )
 
+// Schema is a database schema that contains tables, procedures, and extensions.
 type Schema struct {
+	// Name is the name of the schema given by the deployer.
 	Name string `json:"name"`
 	// Owner is the identifier (generally an address in bytes or public key) of the owner of the schema
 	Owner      []byte       `json:"owner"`
@@ -77,6 +79,7 @@ func (s *Schema) DBID() string {
 	return utils.GenerateDBID(s.Name, s.Owner)
 }
 
+// Table is a table in a database schema.
 type Table struct {
 	Name        string        `json:"name"`
 	Columns     []*Column     `json:"columns"`
@@ -196,6 +199,7 @@ func (t *Table) Copy() *Table {
 	return res
 }
 
+// Column is a column in a table.
 type Column struct {
 	Name       string       `json:"name"`
 	Type       DataType     `json:"type"`
@@ -238,6 +242,8 @@ func (c *Column) hasPrimary() bool {
 	return false
 }
 
+// Attribute is a column attribute.
+// These are constraints and default values.
 type Attribute struct {
 	Type  AttributeType `json:"type"`
 	Value string        `json:"value,omitempty"`
@@ -257,8 +263,10 @@ func (a *Attribute) Copy() *Attribute {
 	}
 }
 
+// IndexType is a type of index (e.g. BTREE, UNIQUE_BTREE, PRIMARY)
 type IndexType string
 
+// Index is an index on a table.
 type Index struct {
 	Name    string    `json:"name"`
 	Columns []string  `json:"columns"`
@@ -283,10 +291,16 @@ func (i *Index) Copy() *Index {
 	}
 }
 
+// index types
 const (
-	BTREE        IndexType = "BTREE"
+	// BTREE is the default index type.
+	BTREE IndexType = "BTREE"
+	// UNIQUE_BTREE is a unique BTREE index.
 	UNIQUE_BTREE IndexType = "UNIQUE_BTREE"
-	PRIMARY      IndexType = "PRIMARY"
+	// PRIMARY is a primary index.
+	// Only one primary index is allowed per table.
+	// A primary index cannot exist on a table that also has a primary key.
+	PRIMARY IndexType = "PRIMARY"
 )
 
 func (i IndexType) String() string {
@@ -311,6 +325,7 @@ func (i *IndexType) Clean() error {
 	return nil
 }
 
+// ForeignKey is a foreign key in a table.
 type ForeignKey struct {
 	// ChildKeys are the columns that are referencing another.
 	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "a" is the child key
@@ -403,6 +418,7 @@ func (f *ForeignKeyAction) Copy() *ForeignKeyAction {
 // It can be either "UPDATE" or "DELETE".
 type ForeignKeyActionOn string
 
+// ForeignKeyActionOn types
 const (
 	// ON_UPDATE is used to specify an action should occur when a parent key is updated
 	ON_UPDATE ForeignKeyActionOn = "UPDATE"
@@ -438,6 +454,7 @@ func (f ForeignKeyActionOn) String() string {
 // ForeignKeyActionDo specifies what should be done when a foreign key action is triggered.
 type ForeignKeyActionDo string
 
+// ForeignKeyActionDo types
 const (
 	// DO_NO_ACTION does nothing when a parent key is altered
 	DO_NO_ACTION ForeignKeyActionDo = "NO ACTION"
@@ -484,10 +501,14 @@ func (f *ForeignKeyActionDo) Clean() error {
 	return nil
 }
 
+// Extension defines what extensions the schema uses, and how they are initialized.
 type Extension struct {
-	Name           string             `json:"name"`
+	// Name is the name of the extension registered in the node
+	Name string `json:"name"`
+	// Initialization is a list of key value pairs that are used to initialize the extension
 	Initialization []*ExtensionConfig `json:"initialization"`
-	Alias          string             `json:"alias"`
+	// Alias is the alias of the extension, which is how its instance is referred to in the schema
+	Alias string `json:"alias"`
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
@@ -621,8 +642,10 @@ func cleanActionParameter(input *string) error {
 	return nil
 }
 
+// AttributeType is a type of attribute (e.g. PRIMARY_KEY, UNIQUE, NOT_NULL, DEFAULT, MIN, MAX, MIN_LENGTH, MAX_LENGTH)
 type AttributeType string
 
+// Attribute Types
 const (
 	PRIMARY_KEY AttributeType = "PRIMARY_KEY"
 	UNIQUE      AttributeType = "UNIQUE"
@@ -662,9 +685,10 @@ func (a *AttributeType) Clean() error {
 	return nil
 }
 
+// DataType is a type of data (e.g. NULL, TEXT, INT, BLOB, BOOLEAN)
 type DataType string
 
-// Data Types -- Kwil schema types not necessarily SQL types?
+// Data types
 const (
 	NULL DataType = "NULL"
 	TEXT DataType = "TEXT"
@@ -708,6 +732,8 @@ func (d *DataType) Clean() error {
 	return nil
 }
 
+// Procedure is a procedure in a database schema.
+// These are defined by Kuneiform's `action` keyword.
 type Procedure struct {
 	Name        string     `json:"name"`
 	Annotations []string   `json:"annotations,omitempty"`
@@ -742,6 +768,7 @@ func (p *Procedure) IsView() bool {
 	return false
 }
 
+// Modifier modifies the access to a procedure.
 type Modifier string
 
 const (

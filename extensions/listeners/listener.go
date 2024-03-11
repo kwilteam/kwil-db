@@ -31,10 +31,10 @@ var registeredListeners = make(map[string]ListenFunc)
 // canceled to prevent memory leaks.
 type ListenFunc func(ctx context.Context, service *common.Service, eventstore EventStore) error
 
-// RegisterLister registers a listener with the Kwil network.
+// RegisterListener registers a listener with the Kwil network.
 // It should be called in the init function of the listener's package.
 // The name cannot have spaces in it.
-func RegisterLister(name string, listener ListenFunc) error {
+func RegisterListener(name string, listener ListenFunc) error {
 	name = strings.ToLower(name)
 
 	// we protect against spaces in the name, because the KV

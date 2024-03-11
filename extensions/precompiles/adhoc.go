@@ -1,6 +1,6 @@
-//go:build actions_adhoc || ext_test
+//go:build precompiles_adhoc || ext_test
 
-package actions
+package precompiles
 
 import (
 	"fmt"

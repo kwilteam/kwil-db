@@ -1,6 +1,6 @@
-//go:build actions_math || ext_test
+//go:build precompiles_math || ext_test
 
-package actions
+package precompiles
 
 import (
 	"fmt"
