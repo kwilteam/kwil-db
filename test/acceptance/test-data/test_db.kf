@@ -59,6 +59,10 @@ action create_post($id, $title, $content) public {
     ), $title, $content);
 }
 
+action delete_nested() public {
+    delete_user(); // ensure it parses as an action call, not a SQL statement (DELETE)
+}
+
 action delete_post($id) public {
     DELETE FROM posts
     WHERE id = $id AND user_id = (
