@@ -45,7 +45,7 @@ func NewService(db sql.ReadTxMaker, engine EngineReader,
 }
 
 type EngineReader interface {
-	Call(ctx context.Context, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error)
+	Procedure(ctx context.Context, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error)
 	GetSchema(ctx context.Context, dbid string) (*common.Schema, error)
 	ListDatasets(ctx context.Context, owner []byte) ([]*coreTypes.DatasetIdentifier, error)
 	Execute(ctx context.Context, tx sql.DB, dbid string, query string, values map[string]any) (*sql.ResultSet, error)

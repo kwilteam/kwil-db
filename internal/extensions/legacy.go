@@ -25,8 +25,8 @@ type LegacyEngineExtension interface {
 }
 
 // AdapterFunc is a function that adapts a LegacyEngineExtension to an InitializeFunc.
-func AdaptLegacyExtension(ext LegacyEngineExtension) actions.ExtensionInitializer {
-	return func(ctx *actions.DeploymentContext, service *common.Service, metadata map[string]string) (actions.ExtensionNamespace, error) {
+func AdaptLegacyExtension(ext LegacyEngineExtension) actions.Initializer {
+	return func(ctx *actions.DeploymentContext, service *common.Service, metadata map[string]string) (actions.Instance, error) {
 
 		m, err := ext.Initialize(ctx.Ctx, metadata)
 		if err != nil {
@@ -46,7 +46,7 @@ type legacyExtensionAdapter struct {
 	metadata map[string]string
 }
 
-var _ actions.ExtensionNamespace = (*legacyExtensionAdapter)(nil)
+var _ actions.Instance = (*legacyExtensionAdapter)(nil)
 
 func (l *legacyExtensionAdapter) Call(scope *actions.ProcedureContext, app *common.App, method string, args []any) ([]any, error) {
 	return l.ext.Execute(scope, l.metadata, method, args...)

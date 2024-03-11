@@ -21,12 +21,21 @@ signing.
 */
 package auth
 
-// Authenticator is an interface for authenticating a message and deriving a
-// string identifier from the sender bytes.
+// Authenticator is an interface for verifying signatures and
+// deriving a string identifier from the sender bytes. Custom
+// asymmetric signature algorithms may be implemented by developers
+// by implementing this interface.
 type Authenticator interface {
-	// Verify verifies the signature against the given sender and data.
+	// Verify verifies whether a signature is valid for a given
+	// message and sender. It is meant to be used with asymmetric
+	// signature algorithms such as ECDSA, Ed25519 RSA, etc. If the
+	// signature is invalid, the method should return an error. If
+	// the signature is valid, the method should return nil.
 	Verify(sender, msg, signature []byte) error
 
-	// Identifier returns the string identifier for a message sender
+	// Identifier returns a string identifier for a given sender.
+	// This string identifier is used to identify the sender when
+	// interacting with the Kuneiform engine, and will be used as
+	// the `@caller` variable in the engine.
 	Identifier(sender []byte) (string, error)
 }

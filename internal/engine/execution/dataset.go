@@ -14,7 +14,7 @@ type baseDataset struct {
 	schema *common.Schema
 
 	// namespaces are the namespaces available for use in the dataset.
-	namespaces map[string]actions.ExtensionNamespace
+	namespaces map[string]actions.Instance
 
 	// procedures are the procedures that are available for use in the dataset.
 	procedures map[string]*procedure

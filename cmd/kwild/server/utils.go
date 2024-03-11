@@ -24,10 +24,10 @@ import (
 
 // getExtensions returns both the local and remote extensions. Remote extensions are identified by
 // connecting to the specified extension URLs.
-func getExtensions(ctx context.Context, urls []string) (map[string]actions.ExtensionInitializer, error) {
-	exts := make(map[string]actions.ExtensionInitializer)
+func getExtensions(ctx context.Context, urls []string) (map[string]actions.Initializer, error) {
+	exts := make(map[string]actions.Initializer)
 
-	for name, ext := range actions.RegisteredExtensions() {
+	for name, ext := range actions.RegisteredPrecompiles() {
 		_, ok := exts[name]
 		if ok {
 			return nil, fmt.Errorf("duplicate extension name: %s", name)

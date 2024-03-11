@@ -34,13 +34,6 @@ var (
 	genesisValidatorGas, _ = big.NewInt(0).SetString("10000000000000000000000", 10)
 )
 
-type EthDepositOracle struct {
-	Enabled               bool
-	Endpoint              string
-	EscrowAddress         string
-	RequiredConfirmations string
-}
-
 type NodeGenerateConfig struct {
 	ChainID       string
 	BlockInterval time.Duration
@@ -350,7 +343,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 
 		cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName // not abs/rooted because this might be run in a container
 
-		// oracle config
+		// extension config
 		if i < genCfg.NValidators {
 			if genCfg.Extensions != nil {
 				if len(genCfg.Extensions) != genCfg.NValidators {

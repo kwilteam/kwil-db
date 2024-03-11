@@ -27,7 +27,7 @@ type GlobalContext struct {
 
 	// initializers are the namespaces that are available to datasets.
 	// This includes other datasets, or loaded extensions.
-	initializers map[string]actions.ExtensionInitializer
+	initializers map[string]actions.Initializer
 
 	// datasets are the top level namespaces that are available to engine callers.
 	// These only include datasets, and do not include extensions.
@@ -53,7 +53,7 @@ func InitializeEngine(ctx context.Context, tx sql.DB) error {
 
 // NewGlobalContext creates a new global context.
 // It will load any persisted datasets from the datastore.
-func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[string]actions.ExtensionInitializer,
+func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[string]actions.Initializer,
 	service *common.Service) (*GlobalContext, error) {
 	g := &GlobalContext{
 		initializers: extensionInitializers,
@@ -130,10 +130,10 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid strin
 	return nil
 }
 
-// Call calls a procedure on a dataset. It can be given either a readwrite or
+// Procedure calls a procedure on a dataset. It can be given either a readwrite or
 // readonly transaction. If it is given a read-only transaction, it will not be
 // able to execute any procedures that are not `view`.
-func (g *GlobalContext) Call(ctx context.Context, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error) {
+func (g *GlobalContext) Procedure(ctx context.Context, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error) {
 	err := options.Clean()
 	if err != nil {
 		return nil, err
@@ -242,7 +242,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 
 	datasetCtx := &baseDataset{
 		schema:     schema,
-		namespaces: make(map[string]actions.ExtensionNamespace),
+		namespaces: make(map[string]actions.Instance),
 		procedures: make(map[string]*procedure),
 		global:     g,
 	}
@@ -283,7 +283,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 		datasetCtx.namespaces[ext.Alias] = namespace
 	}
 
-	g.initializers[dbid] = func(_ *actions.DeploymentContext, _ *common.Service, _ map[string]string) (actions.ExtensionNamespace, error) {
+	g.initializers[dbid] = func(_ *actions.DeploymentContext, _ *common.Service, _ map[string]string) (actions.Instance, error) {
 		return datasetCtx, nil
 	}
 	g.datasets[dbid] = datasetCtx

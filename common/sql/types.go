@@ -8,14 +8,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// int64Valuer is for internal use so a pgtype.Numeric can be recognized by our
-// Int64 helper below.
+// int64Valuer is for internal use so a pgtype.Numeric can be
+// recognized by our Int64 helper below.
 type int64Valuer interface {
 	Int64Value() (pgtype.Int8, error)
 }
 
-// int64errer is for internal use so our Numeric type can be recognized by the
-// Int64 function in addition to a pgtype.Numeric.
+// int64errer is for internal use so our Numeric type can be
+// recognized by the Int64 function in addition to a pgtype.Numeric.
 type int64errer interface {
 	Int64() (int64, error)
 }
@@ -70,8 +70,8 @@ func Int64(val interface{}) (int64, bool) {
 // TODO: register our Numeric with pgx's TypeMap so it scans into it (embedding
 // pgtype.Numeric) instead of a pgtype.Numeric.
 
-// numeric provides access to the `numeric` values. This type should implement
-// the Int64er, BigInter, and Float64er interfaces.
+// numeric provides access to the `numeric` values. This type should
+// implement the Int64er, BigInter, and Float64er interfaces.
 type numeric struct {
 	num pgtype.Numeric
 }
@@ -79,12 +79,12 @@ type numeric struct {
 var _ int64errer = (*numeric)(nil)
 var _ int64errer = numeric{}
 
-// NOTE: The Int64 and Float64 methods must have value receivers so their values
-// satisfy the int64errer interface.
+// NOTE: The Int64 and Float64 methods must have value receivers so
+// their values satisfy the int64errer interface.
 
 func (n numeric) Int64() (int64, error) {
-	// It could represent a float64, so we use Int64Value instead of just
-	// checking if n.num.Valid && n.num.Int != nil.
+	// It could represent a float64, so we use Int64Value instead of
+	// just checking if n.num.Valid && n.num.Int != nil.
 	pgInt8, err := n.num.Int64Value()
 	if err != nil {
 		return 0, err
@@ -113,8 +113,9 @@ func (n numeric) BigInt() (*big.Int, error) {
 		return n.num.Int, nil
 	}
 
-	// The rest of this function is the logic used by Int64Value => toBigInt
-	// (unexported) to get an int for a convertible float.
+	// The rest of this function is the logic used by
+	// Int64Value => toBigInt (unexported) to get an int for a
+	// convertible float.
 	num := &big.Int{}
 	num.Set(n.num.Int)
 	if n.num.Exp > 0 {
