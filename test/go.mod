@@ -127,7 +127,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
-	github.com/kwilteam/action-grammar-go v0.1.0 // indirect
+	github.com/kwilteam/action-grammar-go v0.1.1 // indirect
 	github.com/kwilteam/kwil-db/parse v0.1.1 // indirect
 	github.com/kwilteam/sql-grammar-go v0.1.0 // indirect
 	github.com/lib/pq v1.10.7 // indirect
