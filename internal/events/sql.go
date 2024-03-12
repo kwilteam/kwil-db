@@ -5,12 +5,13 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 const (
 	schemaName = `kwild_events` // exported because oracles depends on it. this is an issue with how oracles are unit tested
 
-	eventStoreVersion = 0
+	eventStoreVersion = 1
 
 	// eventsTable is the SQL table definition for the events table.
 	// All the events in this table exist in one of the below states.
@@ -27,11 +28,24 @@ const (
 	);`
 	dropEventsTable = `DROP TABLE IF EXISTS ` + schemaName + `.events;`
 
-	insertEventIdempotent  = `INSERT INTO ` + schemaName + `.events (id, data, event_type) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING;`
-	deleteEvent            = `DELETE FROM ` + schemaName + `.events WHERE id = $1;`
-	getEvents              = `SELECT data, event_type FROM ` + schemaName + `.events;`
-	getUnbroadcastedEvents = `SELECT data, event_type FROM ` + schemaName + `.events WHERE NOT received AND NOT broadcasted;`
-	markReceived           = `UPDATE ` + schemaName + `.events SET received = TRUE WHERE id = $1;`
+	insertEventIdempotent = `INSERT INTO ` + schemaName + `.events (id, data, event_type) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING;`
+	deleteEvent           = `DELETE FROM ` + schemaName + `.events WHERE id = $1;`
+
+	deleteEvents = `DELETE FROM ` + schemaName + `.events WHERE id =ANY($1);`
+	getEvents    = `SELECT data, event_type FROM ` + schemaName + `.events;`
+
+	getNewEvents = `SELECT e.data, e.event_type
+	FROM ` + schemaName + `.events AS e
+	LEFT JOIN ` + voting.VotingSchemaName + `.resolutions AS r ON e.id = r.id
+	WHERE r.id IS NULL;`
+
+	getUnbroadcastedEvents = `SELECT data, event_type FROM ` + schemaName + `.events WHERE NOT broadcasted;`
+
+	// FilterObservedEvents returns the list of events that are observed by the node and not yet broadcasted.
+	filterObservedEvents = `SELECT unnested.id
+	FROM unnest($1::BYTEA[]) AS unnested(id)
+	LEFT JOIN ` + schemaName + `.events AS res ON unnested.id = res.id
+	WHERE res.id IS NOT NULL AND res.broadcasted = FALSE;`
 
 	// mark list of events as broadcasted.
 	markBroadcasted = `UPDATE ` + schemaName + `.events SET broadcasted = TRUE WHERE id =ANY($1);`
@@ -59,6 +73,9 @@ const (
 		DELETE FROM ` + kvTableName + `
 		WHERE key = $1;
 	`
+
+	// V0 to V1 migration
+	dropReceivedColumn = `ALTER TABLE ` + schemaName + `.events DROP COLUMN received;`
 )
 
 func initTables(ctx context.Context, db sql.DB) error {
@@ -76,5 +93,19 @@ func initTables(ctx context.Context, db sql.DB) error {
 		return err
 	}
 
+	return tx.Commit(ctx)
+}
+
+func upgradeV0ToV1(ctx context.Context, db sql.DB) error {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Drop the received column from the events table.
+	if _, err := tx.Execute(ctx, dropReceivedColumn); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }

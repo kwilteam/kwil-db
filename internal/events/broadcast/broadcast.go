@@ -22,9 +22,11 @@ import (
 	"math/big"
 
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
+	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 var (
@@ -39,7 +41,7 @@ var (
 type EventStore interface {
 	// GetUnreceivedEvents gets events that this node has not yet broadcasted.
 	// Events are only marked as "broadcasted" when they have been included in a block.
-	GetUnreceivedEvents(ctx context.Context) ([]*types.VotableEvent, error)
+	FilterObservedEvents(ctx context.Context, ids []types.UUID) ([]types.UUID, error)
 
 	// MarkBroadcasted marks list of events as broadcasted.
 	MarkBroadcasted(ctx context.Context, ids []types.UUID) error
@@ -87,7 +89,8 @@ type EventBroadcaster struct {
 // RunBroadcast tells the EventBroadcaster to broadcast any events it wishes.
 // It implements Kwil's abci.CommitHook function signature.
 // If the node is not a validator, it will do nothing.
-func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) error {
+// It broadcasts votes for the existing resolutions.
+func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte, db sql.DB) error {
 	validators, err := e.validatorStore.GetValidators(ctx)
 	if err != nil {
 		return err
@@ -117,18 +120,19 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) er
 		return nil
 	}
 
-	events, err := e.store.GetUnreceivedEvents(ctx)
+	outstandingResolutionIDs, err := voting.OutstandingResolutions(ctx, db)
 	if err != nil {
 		return err
 	}
 
-	if len(events) == 0 {
-		return nil
+	// Vote only if the note observed the event corresponding to the resolution.
+	ids, err := e.store.FilterObservedEvents(ctx, outstandingResolutionIDs)
+	if err != nil {
+		return err
 	}
 
-	ids := make([]types.UUID, len(events))
-	for i, event := range events {
-		ids[i] = event.ID()
+	if len(ids) == 0 {
+		return nil
 	}
 
 	// consider only the first maxVoteIDsPerTx events, to limit the postgres access roundtrips per block execution.

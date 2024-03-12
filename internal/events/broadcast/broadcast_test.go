@@ -14,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/events/broadcast"
+	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
@@ -75,6 +76,18 @@ func Test_Broadcaster(t *testing.T) {
 			} else {
 				v.pubkey = validatorSigner().Identity()
 			}
+			ctx := context.Background()
+
+			db, err := dbtest.NewTestDB(t)
+			require.NoError(t, err)
+			defer db.Close()
+
+			dbTx, err := db.BeginTx(ctx)
+			require.NoError(t, err)
+			defer dbTx.Rollback(ctx) // always rollback to ensure cleanup
+
+			err = voting.InitializeVoteStore(ctx, dbTx)
+			require.NoError(t, err)
 
 			txapp := tc.txapp
 			if txapp == nil {
@@ -111,7 +124,13 @@ func Test_Broadcaster(t *testing.T) {
 
 			bc := broadcast.NewEventBroadcaster(e, b, txapp, v, validatorSigner(), "test-chain")
 
-			err := bc.RunBroadcast(context.Background(), []byte("proposer"))
+			// create resolutions for the events
+			for _, event := range e.events {
+				err = voting.CreateResolution(ctx, dbTx, event, 10000, []byte("proposer"))
+				require.NoError(t, err)
+			}
+
+			err = bc.RunBroadcast(ctx, []byte("proposer"), dbTx)
 			if tc.err != nil {
 				require.Equal(t, tc.err, err)
 				return
@@ -134,6 +153,10 @@ func (m *mockEventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.Vota
 
 func (m *mockEventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) error {
 	return nil
+}
+
+func (m *mockEventStore) FilterObservedEvents(ctx context.Context, ids []types.UUID) ([]types.UUID, error) {
+	return ids, nil
 }
 
 type broadcaster struct {

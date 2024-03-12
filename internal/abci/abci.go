@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -216,7 +217,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	res := &abciTypes.ResponseFinalizeBlock{}
 
-	err := a.txApp.Begin(ctx)
+	db, err := a.txApp.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx commit failed: %w", err)
 	}
@@ -295,7 +296,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	// Broadcast any events that have not been broadcasted yet
 	if a.broadcastFn != nil && len(proposerPubKey) > 0 {
-		err := a.broadcastFn(ctx, proposerPubKey)
+		err := a.broadcastFn(ctx, proposerPubKey, db)
 		if err != nil {
 			return nil, fmt.Errorf("failed to broadcast events: %w", err)
 		}
@@ -881,7 +882,7 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 	return &abciTypes.ResponseQuery{}, nil
 }
 
-type EventBroadcaster func(ctx context.Context, proposer []byte) error
+type EventBroadcaster func(ctx context.Context, proposer []byte, db sql.DB) error
 
 func (a *AbciApp) SetEventBroadcaster(fn EventBroadcaster) {
 	a.broadcastFn = fn
