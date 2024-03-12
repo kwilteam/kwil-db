@@ -212,25 +212,14 @@ func Test_EventStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			dbVoting, err := dbtest.NewTestDB(t)
-			txVoting, _ := dbVoting.BeginTx(ctx)
-			err = voting.InitializeVoteStore(ctx, txVoting)
-			require.NoError(t, err)
-			_, err = txVoting.Precommit(ctx)
-			require.NoError(t, err)
-			err = txVoting.Commit(ctx)
-			require.NoError(t, err)
-			// defer // drop kwild_voting
-			defer func() {
-				dbVoting.AutoCommit(true)
-				dbVoting.Execute(ctx, `drop schema if exists kwild_voting cascade;`)
-			}()
-
-			db, cleanup, err := dbtest.NewTestPool(ctx, []string{schemaName}) // db is the event store specific connection
+			db, cleanup, err := dbtest.NewTestPool(ctx, []string{schemaName, "kwild_voting"}) // db is the event store specific connection
 			require.NoError(t, err)
 			defer cleanup()
 
-			e, err := NewEventStore(ctx, db)
+			err = voting.InitializeVoteStore(ctx, db)
+			require.NoError(t, err)
+
+			e, err := NewEventStore(ctx, db) // needs BeginReadTx
 			require.NoError(t, err)
 
 			// create a second db connection to emulate the consensus db

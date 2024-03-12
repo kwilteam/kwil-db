@@ -20,24 +20,24 @@ func Test_Engine(t *testing.T) {
 	type testCase struct {
 		name string
 		// ses1 is the first round of execution
-		ses1 func(t *testing.T, global *execution.GlobalContext, tx sql.Tx)
+		ses1 func(t *testing.T, global *execution.GlobalContext, tx sql.DB)
 
 		// ses2 is the second round of execution
-		ses2 func(t *testing.T, global *execution.GlobalContext, tx sql.Tx)
+		ses2 func(t *testing.T, global *execution.GlobalContext, tx sql.DB)
 		// after is called after the second round
 		// It is not called in a session, and therefore can only read from the database.
-		after func(t *testing.T, global *execution.GlobalContext, tx sql.Tx)
+		after func(t *testing.T, global *execution.GlobalContext, tx sql.DB)
 	}
 
 	tests := []testCase{
 		{
 			name: "create database",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 			},
-			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			after: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 				schema, err := global.GetSchema(ctx, testdata.TestSchema.DBID())
 				require.NoError(t, err)
@@ -53,18 +53,18 @@ func Test_Engine(t *testing.T) {
 		},
 		{
 			name: "drop database",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
 			},
-			ses2: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses2: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 				err := global.DeleteDataset(ctx, tx, testdata.TestSchema.DBID(), testdata.TestSchema.Owner)
 				require.NoError(t, err)
 			},
-			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			after: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 				dbs, err := global.ListDatasets(ctx, testdata.TestSchema.Owner)
 				require.NoError(t, err)
@@ -74,12 +74,12 @@ func Test_Engine(t *testing.T) {
 		},
 		{
 			name: "execute procedures",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 			},
-			ses2: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses2: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				signer := "signer"
 
 				ctx := context.Background()
@@ -101,7 +101,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			after: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
 				res, err := global.Procedure(ctx, tx, &common.ExecutionData{
@@ -136,12 +136,12 @@ func Test_Engine(t *testing.T) {
 		},
 		{
 			name: "executing outside of a commit",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 			},
-			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			after: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
 				_, err := global.Procedure(ctx, tx, &common.ExecutionData{
@@ -156,7 +156,7 @@ func Test_Engine(t *testing.T) {
 		},
 		{
 			name: "calling outside of a commit",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
@@ -170,7 +170,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			after: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
 				users, err := global.Procedure(ctx, tx, &common.ExecutionData{
@@ -188,7 +188,7 @@ func Test_Engine(t *testing.T) {
 		},
 		{
 			name: "deploying database and immediately calling procedure",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
@@ -203,7 +203,7 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			after: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			after: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
 				users, err := global.Procedure(ctx, tx, &common.ExecutionData{
@@ -221,7 +221,7 @@ func Test_Engine(t *testing.T) {
 		},
 		{
 			name: "test failed extension init",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
 				oldExtensions := []*common.Extension{}
@@ -251,7 +251,7 @@ func Test_Engine(t *testing.T) {
 		},
 		{
 			name: "owner only action",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
@@ -278,7 +278,7 @@ func Test_Engine(t *testing.T) {
 		},
 		{
 			name: "private action",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
@@ -311,7 +311,7 @@ func Test_Engine(t *testing.T) {
 			// and it's actually preferable that we can support this. Logically, it makes sense
 			// that a deploy tx followed by an execute tx in the same block should work.
 			name: "deploy and call at the same time",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
@@ -338,7 +338,7 @@ func Test_Engine(t *testing.T) {
 		},
 		{
 			name: "deploy many databases",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
 				for i := 0; i < 10; i++ {
@@ -352,7 +352,7 @@ func Test_Engine(t *testing.T) {
 		},
 		{
 			name: "deploying and immediately dropping",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
 				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
@@ -364,7 +364,7 @@ func Test_Engine(t *testing.T) {
 		},
 		{
 			name: "case insensitive",
-			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
 				schema := *caseSchema
@@ -425,13 +425,13 @@ func Test_Engine(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if test.ses1 == nil {
-				test.ses1 = func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {}
+				test.ses1 = func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {}
 			}
 			if test.ses2 == nil {
-				test.ses2 = func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {}
+				test.ses2 = func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {}
 			}
 			if test.after == nil {
-				test.after = func(t *testing.T, global *execution.GlobalContext, tx sql.Tx) {}
+				test.after = func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {}
 			}
 
 			global, db, err := setup(t)
@@ -442,13 +442,13 @@ func Test_Engine(t *testing.T) {
 
 			ctx := context.Background()
 
-			tx, err := db.BeginTx(ctx)
+			tx, err := db.BeginOuterTx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback(ctx)
 
 			test.ses1(t, global, tx)
 
-			id, err := tx.Precommit(ctx)
+			id, err := tx.Precommit(ctx) // not needed, but test how txApp would use the engine
 			require.NoError(t, err)
 			require.NotEmpty(t, id)
 
@@ -461,9 +461,8 @@ func Test_Engine(t *testing.T) {
 
 			test.ses2(t, global, tx2)
 
-			id, err = tx2.Precommit(ctx)
-			require.NoError(t, err)
-			require.NotEmpty(t, id)
+			// Omit Precommit here, just to test that it's allowed even though
+			// txApp would want the commit ID.
 
 			err = tx2.Commit(ctx)
 			require.NoError(t, err)

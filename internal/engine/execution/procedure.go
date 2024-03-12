@@ -3,6 +3,7 @@ package execution
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -101,7 +102,11 @@ func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema 
 	// need to return an error
 	if !isViewProcedure {
 		instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
-			if db.AccessMode() != sql.ReadWrite {
+			tx, ok := db.(sql.AccessModer)
+			if !ok {
+				return errors.New("DB does not provide access mode needed for mutative action")
+			}
+			if tx.AccessMode() != sql.ReadWrite {
 				return fmt.Errorf("cannot call non-view procedure, not in a chain transaction")
 			}
 
@@ -241,8 +246,14 @@ func (p *procedure) call(scope *precompiles.ProcedureContext, global *GlobalCont
 
 	// if procedure does not have view tag, then it can mutate state
 	// this means that we must have a readwrite connection
-	if !p.view && db.AccessMode() != sql.ReadWrite {
-		return fmt.Errorf(`%w: mutable procedure "%s" called with non-mutative scope`, ErrMutativeProcedure, p.name)
+	if !p.view {
+		tx, ok := db.(sql.AccessModer)
+		if !ok {
+			return errors.New("DB does not provide access mode needed for mutative action")
+		}
+		if tx.AccessMode() != sql.ReadWrite {
+			return fmt.Errorf(`%w: mutable procedure "%s" called with non-mutative scope`, ErrMutativeProcedure, p.name)
+		}
 	}
 
 	for i, param := range p.parameters {
@@ -277,6 +288,8 @@ type callMethod struct {
 	// Receivers are the variables that the return values are assigned to.
 	Receivers []string
 }
+
+var _ instructionFunc = (&callMethod{}).execute
 
 // Execute calls a method from a namespace that is accessible within this dataset.
 // If no namespace is specified, the local namespace is used.
@@ -378,6 +391,8 @@ type dmlStmt struct {
 	// pass them to the database in the order they are expected.
 	OrderedParameters []string
 }
+
+var _ instructionFunc = (&dmlStmt{}).execute
 
 func (e *dmlStmt) execute(scope *precompiles.ProcedureContext, _ *GlobalContext, db sql.DB) error {
 	// Expend the arguments based on the ordered parameters for the DML statement.

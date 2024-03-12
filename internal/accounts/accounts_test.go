@@ -34,10 +34,6 @@ func newDB() *mockDB {
 	}
 }
 
-func (m *mockDB) AccessMode() sql.AccessMode {
-	return sql.ReadWrite // not use in these tests
-}
-
 func (m *mockDB) BeginTx(ctx context.Context) (sql.Tx, error) {
 	return &mockTx{m}, nil
 }

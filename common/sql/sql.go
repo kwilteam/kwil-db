@@ -1,3 +1,5 @@
+// Package sql defines common type required by SQL database implementations and
+// consumers.
 package sql
 
 import (
@@ -9,33 +11,6 @@ var (
 	ErrNoTransaction = errors.New("no transaction")
 	ErrNoRows        = errors.New("no rows in result set")
 )
-
-// DB is a connection to a Postgres database.
-// It has root user access, and can execute any Postgres command.
-type DB interface {
-	Executor
-	TxMaker
-	// AccessMode gets the access mode of the database.
-	// It can be either read-write or read-only.
-	AccessMode() AccessMode
-}
-
-// Executor is an interface that can execute queries.
-type Executor interface {
-	// Execute executes a query or command.
-	// The stmt should be a valid Postgres statement.
-	Execute(ctx context.Context, stmt string, args ...any) (*ResultSet, error)
-}
-
-// Tx is a database transaction. It can be nested within other
-// transactions.
-type Tx interface {
-	DB
-	// Rollback rolls back the transaction.
-	Rollback(ctx context.Context) error
-	// Commit commits the transaction.
-	Commit(ctx context.Context) error
-}
 
 // ResultSet is the result of a query or execution.
 // It contains the returned columns and the rows.
@@ -53,44 +28,45 @@ type CommandTag struct {
 	RowsAffected int64
 }
 
-// AccessMode is the type of access to a database.
-// It can be read-write or read-only.
-type AccessMode uint8
+// Executor is an interface that can execute queries.
+type Executor interface {
+	// Execute executes a query or command.
+	Execute(ctx context.Context, stmt string, args ...any) (*ResultSet, error)
+}
 
-const (
-	// ReadWrite is the default access mode.
-	// It allows for reading and writing to the database.
-	ReadWrite AccessMode = iota
-	// ReadOnly allows for reading from the database, but not
-	// writing.
-	ReadOnly
-)
+// TxMaker is an interface that creates a new transaction. In the context of the
+// recursive Tx interface, is creates a nested transaction.
+type TxMaker interface {
+	BeginTx(ctx context.Context) (Tx, error)
+}
 
-// TxCloser terminates a transaction by committing or rolling it
-// back. A method that returns this alone would keep the tx under the
-// hood of the parent type, directing queries internally through the
-// scope of a transaction/session started with BeginTx.
+// TxCloser terminates a transaction by committing or rolling it back.
 type TxCloser interface {
+	// Rollback rolls back the transaction.
 	Rollback(ctx context.Context) error
+	// Commit commits the transaction.
 	Commit(ctx context.Context) error
 }
 
-// TxPrecommitter is the special kind of transaction that can prepare
-// a transaction for commit. It is only available on the outermost
-// transaction.
-type TxPrecommitter interface {
-	Precommit(ctx context.Context) ([]byte, error)
+// Tx represents a database transaction. It can be nested within other
+// transactions, and create new nested transactions. An implementation of Tx may
+// also be an AccessModer, but it is not required.
+type Tx interface {
+	Executor
+	TxCloser
+	TxMaker // recursive interface
+	// note: does not embed DB for clear semantics (DB makes a Tx, not the reverse)
 }
 
-type TxBeginner interface {
-	Begin(ctx context.Context) (TxCloser, error)
-}
-
-// OuterTxMaker is the special kind of transaction beginner that can
-// make nested transactions, and that explicitly scopes Query/Execute
-// to the tx.
-type OuterTxMaker interface {
-	BeginTx(ctx context.Context) (OuterTx, error)
+// DB is a top level database interface, which may directly execute queries or
+// create transactions, which may be closed or create additional nested
+// transactions.
+//
+// Some implementations may also be an OuterTxMaker and/or a ReadTxMaker. Embed
+// with those interfaces to compose the minimal interface required.
+type DB interface {
+	Executor
+	TxMaker
 }
 
 // ReadTxMaker can make read-only transactions.
@@ -99,20 +75,39 @@ type ReadTxMaker interface {
 	BeginReadTx(ctx context.Context) (Tx, error)
 }
 
-// TxMaker is the special kind of transaction beginner that can make
-// nested
-// transactions, and that explicitly scopes Query/Execute to the tx.
-type TxMaker interface {
-	BeginTx(ctx context.Context) (Tx, error)
-}
-
-// OuterTx is a database transaction. It is the outermost transaction
-// type. "nested transactions" are called savepoints, and can be
-// created with BeginSavepoint. Savepoints can be nested, and are
-// rolled back to the innermost savepoint on Rollback.
+// OuterTx is the outermost database transaction.
 //
-// Anything using implicit tx/session management should use TxCloser.
+// NOTE: An OuterTx may be used where only a Tx or DB is required since those
+// interfaces are a subset of the OuterTx method set.
 type OuterTx interface {
 	Tx
-	TxPrecommitter
+	Precommit(ctx context.Context) ([]byte, error)
+}
+
+// OuterTxMaker is the special kind of transaction that creates a transaction
+// that has a Precommit method (see OuterTx), which supports obtaining a commit
+// ID using a (two-phase) prepared transaction prior to Commit. This is a
+// different method name so that an implementation may satisfy both OuterTxMaker
+// and TxMaker.
+type OuterTxMaker interface {
+	BeginOuterTx(ctx context.Context) (OuterTx, error)
+}
+
+// AccessMode is the type of access to a database.
+// It can be read-write or read-only.
+type AccessMode uint8
+
+const (
+	// ReadWrite is the default access mode.
+	// It allows for reading and writing to the database.
+	ReadWrite AccessMode = iota
+	// ReadOnly allows for reading from the database, but not writing.
+	ReadOnly
+)
+
+// AccessModer may be satisfied by implementations of Tx and DB, but is not
+// universally required for those interfaces (type assert as needed).
+type AccessModer interface {
+	// AccessMode gets the access mode of the database or transaction.
+	AccessMode() AccessMode
 }
