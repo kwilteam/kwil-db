@@ -29,7 +29,7 @@ var (
 )
 
 // getCurrentVersion returns the current version of the database.
-func getCurrentVersion(ctx context.Context, db sql.DB, schema string) (int64, error) {
+func getCurrentVersion(ctx context.Context, db sql.Executor, schema string) (int64, error) {
 	res, err := db.Execute(ctx, fmt.Sprintf(sqlCurrentVersion, schema))
 	if err != nil {
 		return 0, err

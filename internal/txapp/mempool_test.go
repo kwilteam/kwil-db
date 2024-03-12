@@ -97,10 +97,6 @@ func newTx(t *testing.T, nonce uint64, sender string) *transactions.Transaction 
 
 type mockDb struct{}
 
-func (m *mockDb) AccessMode() sql.AccessMode {
-	return sql.ReadOnly
-}
-
 func (m *mockDb) BeginTx(ctx context.Context) (sql.Tx, error) {
 	return &mockTx{m}, nil
 }

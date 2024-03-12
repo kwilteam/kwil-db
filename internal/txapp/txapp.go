@@ -90,7 +90,7 @@ type TxApp struct {
 // It can assign the initial validator set and initial account balances.
 // It is only called once for a new chain.
 func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, genesisAccounts []*types.Account, initialHeight int64) error {
-	tx, err := r.Database.BeginTx(ctx)
+	tx, err := r.Database.BeginOuterTx(ctx)
 	if err != nil {
 		return err
 	}
@@ -221,7 +221,7 @@ func (r *TxApp) Begin(ctx context.Context) error {
 		return nil
 	}
 
-	tx, err := r.Database.BeginTx(ctx)
+	tx, err := r.Database.BeginOuterTx(ctx)
 	if err != nil {
 		return err
 	}
@@ -687,7 +687,7 @@ func (r *TxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.I
 // It also returns an error code.
 // if we allow users to implement their own routes, this function will need to
 // be exported.
-func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, pricer Pricer, dbTx sql.DB) (*big.Int, transactions.TxCode, error) {
+func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, pricer Pricer, dbTx sql.Executor) (*big.Int, transactions.TxCode, error) {
 	amt := big.NewInt(0)
 	var err error
 

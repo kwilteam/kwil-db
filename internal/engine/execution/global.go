@@ -3,6 +3,7 @@ package execution
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -51,9 +52,10 @@ func InitializeEngine(ctx context.Context, tx sql.DB) error {
 	return nil
 }
 
-// NewGlobalContext creates a new global context.
-// It will load any persisted datasets from the datastore.
-func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[string]precompiles.Initializer,
+// NewGlobalContext creates a new global context. It will load any persisted
+// datasets from the datastore. The provided database is only used for
+// construction.
+func NewGlobalContext(ctx context.Context, db sql.Executor, extensionInitializers map[string]precompiles.Initializer,
 	service *common.Service) (*GlobalContext, error) {
 	g := &GlobalContext{
 		initializers: extensionInitializers,
@@ -61,7 +63,7 @@ func NewGlobalContext(ctx context.Context, tx sql.DB, extensionInitializers map[
 		service:      service,
 	}
 
-	schemas, err := getSchemas(ctx, tx)
+	schemas, err := getSchemas(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -201,8 +203,8 @@ func (g *GlobalContext) GetSchema(_ context.Context, dbid string) (*common.Schem
 	return dataset.schema, nil
 }
 
-// Execute executes a SQL statement on a dataset.
-// It uses Kwil's SQL dialect.
+// Execute executes a SQL statement on a dataset. If the statement is mutative,
+// the tx must also be a sql.AccessModer. It uses Kwil's SQL dialect.
 func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query string, values map[string]any) (*sql.ResultSet, error) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -221,8 +223,14 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 		return nil, err
 	}
 
-	if parsed.Mutative && tx.AccessMode() == sql.ReadOnly {
-		return nil, fmt.Errorf("cannot execute a mutative query in a read-only transaction")
+	if parsed.Mutative {
+		txm, ok := tx.(sql.AccessModer)
+		if !ok {
+			return nil, errors.New("DB does not provide access mode needed for mutative statement")
+		}
+		if txm.AccessMode() == sql.ReadOnly {
+			return nil, fmt.Errorf("cannot execute a mutative query in a read-only transaction")
+		}
 	}
 
 	args := orderAndCleanValueMap(values, parsed.ParameterOrder)

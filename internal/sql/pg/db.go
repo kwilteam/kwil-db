@@ -33,6 +33,9 @@ import (
 //  3. Emulating SQLite changesets by collecting WAL data for updates from a
 //     dedicated logical replication connection and slot. The Precommit method
 //     is used to retrieve the commit ID prior to Commit.
+//
+// DB requires a superuser connection to a Postgres database that can perform
+// administrative actions on the database.
 type DB struct {
 	pool *Pool    // raw connection pool
 	repl *replMon // logical replication monitor for collecting commit IDs
@@ -80,6 +83,10 @@ var defaultSchemaFilter = func(schema string) bool {
 // PoolConfig plus a special connection for a logical replication slot receiver.
 // The database user (postgresql "role") must be a super user for several
 // reasons: creating triggers, collations, and the replication publication.
+//
+// WARNING: There must only be ONE instance of a DB for a given postgres
+// database. Transactions that use the Precommit method update an internal table
+// used to sequence transactions.
 func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 	// Create the unrestricted connection pool.
 	pool, err := NewPool(ctx, &cfg.PoolConfig)
@@ -196,7 +203,7 @@ var _ sql.OuterTxMaker = (*DB)(nil) // for dataset Registry
 // The returned transaction is also capable of creating nested transactions.
 // This functionality is used to prevent user dataset query errors from rolling
 // back the outermost transaction.
-func (db *DB) BeginTx(ctx context.Context) (sql.OuterTx, error) {
+func (db *DB) BeginOuterTx(ctx context.Context) (sql.OuterTx, error) {
 	tx, err := db.beginWriterTx(ctx)
 	if err != nil {
 		return nil, err
@@ -213,6 +220,13 @@ func (db *DB) BeginTx(ctx context.Context) (sql.OuterTx, error) {
 	}, nil
 }
 
+var _ sql.TxMaker = (*DB)(nil)
+var _ sql.DB = (*DB)(nil)
+
+func (db *DB) BeginTx(ctx context.Context) (sql.Tx, error) {
+	return db.BeginOuterTx(ctx) // slice off the Precommit method from sql.OuterTx
+}
+
 // ReadTx creates a read-only transaction for the database.
 // It obtains a read connection from the pool, which will be returned
 // to the pool when the transaction is closed.
@@ -224,7 +238,7 @@ func (db *DB) BeginReadTx(ctx context.Context) (sql.Tx, error) {
 
 	tx, err := conn.BeginTx(ctx, pgx.TxOptions{
 		AccessMode: pgx.ReadOnly,
-		IsoLevel:   pgx.RepeatableRead,
+		IsoLevel:   pgx.RepeatableRead, // only for read-only as repeatable ready can fail a write tx commit
 	})
 	if err != nil {
 		conn.Release()
@@ -238,17 +252,8 @@ func (db *DB) BeginReadTx(ctx context.Context) (sql.Tx, error) {
 
 	return &readTx{
 		nestedTx: ntx,
-		release:  conn.Release,
+		release:  sync.OnceFunc(conn.Release),
 	}, nil
-}
-
-var _ sql.TxBeginner = (*DB)(nil) // for CommittableStore => MultiCommitter
-
-// Begin is for consumers that require a smaller interface on the return but
-// same instance of the concrete type, a case which annoyingly creates
-// incompatible interfaces in Go.
-func (db *DB) Begin(ctx context.Context) (sql.TxCloser, error) {
-	return db.BeginTx(ctx) // just slice down sql.Tx
 }
 
 // beginWriterTx is the critical section of BeginTx.
@@ -264,7 +269,7 @@ func (db *DB) beginWriterTx(ctx context.Context) (pgx.Tx, error) {
 
 	tx, err := db.pool.writer.BeginTx(ctx, pgx.TxOptions{
 		AccessMode: pgx.ReadWrite,
-		IsoLevel:   pgx.ReadUncommitted,
+		IsoLevel:   pgx.ReadUncommitted, // consider if ReadCommitted would be fine. uncommitted refers to other transactions, not needed
 	})
 	if err != nil {
 		return nil, err
@@ -328,8 +333,11 @@ func (db *DB) commit(ctx context.Context) error {
 	if db.tx == nil {
 		return errors.New("no tx exists")
 	}
-	if db.txid == "" { // NOTE: we could consider doing a regular commit if not using prepared, but for now we that flow
-		return errors.New("transaction not yet prepared")
+	if db.txid == "" {
+		// Allow commit without two-phase prepare
+		err := db.tx.Commit(ctx)
+		db.tx = nil
+		return err
 	}
 
 	defer func() {

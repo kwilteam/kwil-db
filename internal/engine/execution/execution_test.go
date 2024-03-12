@@ -278,6 +278,8 @@ type mockDB struct {
 	executedStmts []string
 }
 
+var _ sql.AccessModer = (*mockDB)(nil)
+
 func (m *mockDB) AccessMode() sql.AccessMode {
 	return m.accessMode
 }

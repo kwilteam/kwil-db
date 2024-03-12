@@ -4,7 +4,6 @@ package pg
 
 import (
 	"context"
-	"sync"
 
 	"github.com/jackc/pgx/v5"
 	common "github.com/kwilteam/kwil-db/common/sql"
@@ -20,7 +19,9 @@ type nestedTx struct {
 
 var _ common.Tx = (*nestedTx)(nil)
 
-// TODO: switch this to be BeginTx
+// BeginTx creates a new transaction with the same access mode as the parent.
+// Internally this is savepoint, which allows rollback to the innermost
+// savepoint rather than the entire outer transaction.
 func (tx *nestedTx) BeginTx(ctx context.Context) (common.Tx, error) {
 	// Make the nested transaction (savepoint)
 	pgtx, err := tx.Tx.Begin(ctx)
@@ -48,13 +49,6 @@ func (tx *nestedTx) Execute(ctx context.Context, stmt string, args ...any) (*com
 func (tx *nestedTx) AccessMode() common.AccessMode {
 	return tx.accessMode
 }
-
-// Commit is direct from embedded pgx.Tx.
-// func (tx *nestedTx) Commit(ctx context.Context) error { return tx.Tx.Commit(ctx) }
-
-// Rollback is direct from embedded pgx.Tx. It is ok to call Rollback repeatedly
-// and even after Commit with no error.
-// func (tx *nestedTx) Rollback(ctx context.Context) error { return tx.Tx.Rollback(ctx) }
 
 // dbTx is the type returned by (*DB).BeginTx. It embeds all the nestedTx
 // methods (thus returning a *nestedTx from it's BeginTx), but shadows Commit
@@ -93,8 +87,7 @@ func (tx *dbTx) AccessMode() common.AccessMode {
 // when it is closed.
 type readTx struct {
 	*nestedTx
-	release func() // should only be run once
-	once    sync.Once
+	release func()
 }
 
 // Commit is a no-op for read-only transactions.
@@ -105,7 +98,7 @@ func (tx *readTx) Commit(ctx context.Context) error {
 		return err
 	}
 
-	tx.once.Do(tx.release)
+	tx.release()
 	return nil
 }
 
@@ -116,6 +109,6 @@ func (tx *readTx) Rollback(ctx context.Context) error {
 		return err
 	}
 
-	tx.once.Do(tx.release)
+	tx.release()
 	return nil
 }

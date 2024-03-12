@@ -52,7 +52,7 @@ func createSchemasTableIfNotExists(ctx context.Context, tx sql.DB) error {
 // It will also store the schema in the kwil_schemas table.
 // It also creates the relevant tables, indexes, etc.
 // If the schema already exists in the Kwil schemas table, it will be updated.
-func createSchema(ctx context.Context, tx sql.DB, schema *common.Schema) error {
+func createSchema(ctx context.Context, tx sql.TxMaker, schema *common.Schema) error {
 	schemaName := dbidSchema(schema.DBID())
 
 	sp, err := tx.BeginTx(ctx)
@@ -98,7 +98,7 @@ func createSchema(ctx context.Context, tx sql.DB, schema *common.Schema) error {
 }
 
 // getSchemas returns all schemas in the kwil_schemas table
-func getSchemas(ctx context.Context, tx sql.DB) ([]*common.Schema, error) {
+func getSchemas(ctx context.Context, tx sql.Executor) ([]*common.Schema, error) {
 	res, err := tx.Execute(ctx, sqlListSchemaContent)
 	if err != nil {
 		return nil, err
@@ -129,7 +129,7 @@ func getSchemas(ctx context.Context, tx sql.DB) ([]*common.Schema, error) {
 
 // deleteSchema deletes a schema from the database.
 // It will also delete the schema from the kwil_schemas table.
-func deleteSchema(ctx context.Context, tx sql.DB, dbid string) error {
+func deleteSchema(ctx context.Context, tx sql.TxMaker, dbid string) error {
 	schemaName := dbidSchema(dbid)
 
 	sp, err := tx.BeginTx(ctx)
