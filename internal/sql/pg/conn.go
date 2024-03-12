@@ -145,6 +145,7 @@ func (p *Pool) Query(ctx context.Context, stmt string, args ...any) (*sql.Result
 // intended to be used with the DB type, which performs all such operations via
 // the Tx returned from BeginTx.
 
+// Execute performs a read-write query on the writer connection.
 func (p *Pool) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
 	return query(ctx, &cqWrapper{p.writer}, stmt, args...)
 }
@@ -154,42 +155,12 @@ func (p *Pool) Close() error {
 	return p.writer.Close(context.TODO())
 }
 
-type poolTx struct {
-	pgx.Tx
-	RowsAffected int64 // for debugging and testing
-}
-
-// Execute is now identical to Query. We should consider removing Query as a
-// transaction method since their is no semantic or syntactic difference
-// (transactions generated from DB or Pool use the write connection).
-func (ptx *poolTx) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
-	// This method is now identical to Query, but we previously used pgx.Tx.Exec
-	// 	res,_ := ptx.Tx.Exec(ctx, stmt, args...)
-	// 	ptx.RowsAffected += res.RowsAffected()
-	return query(ctx, ptx.Tx, stmt, args...)
-}
-
-func (ptx *poolTx) Query(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
-	return query(ctx, ptx.Tx, stmt, args...)
-}
-
-// Begin starts a read-write transaction on the writer connection.
-func (p *Pool) Begin(ctx context.Context) (sql.TxCloser, error) {
-	tx, err := p.writer.BeginTx(ctx, pgx.TxOptions{
-		IsoLevel:   pgx.ReadCommitted,
-		AccessMode: pgx.ReadWrite,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &poolTx{tx, 0}, nil
-}
-
-// BeginTx starts a read-write transaction.
+// BeginTx starts a read-write transaction. It is an error to call this twice
+// without first closing the initial transaction.
 func (p *Pool) BeginTx(ctx context.Context) (sql.Tx, error) {
 	tx, err := p.writer.BeginTx(ctx, pgx.TxOptions{
-		IsoLevel:   pgx.ReadCommitted,
 		AccessMode: pgx.ReadWrite,
+		IsoLevel:   pgx.ReadCommitted,
 	})
 	if err != nil {
 		return nil, err
@@ -202,7 +173,10 @@ func (p *Pool) BeginTx(ctx context.Context) (sql.Tx, error) {
 
 // BeginReadTx starts a read-only transaction.
 func (p *Pool) BeginReadTx(ctx context.Context) (sql.Tx, error) {
-	tx, err := p.pgxp.Begin(ctx)
+	tx, err := p.pgxp.BeginTx(ctx, pgx.TxOptions{
+		AccessMode: pgx.ReadOnly,
+		IsoLevel:   pgx.RepeatableRead,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -210,10 +184,4 @@ func (p *Pool) BeginReadTx(ctx context.Context) (sql.Tx, error) {
 		Tx:         tx,
 		accessMode: sql.ReadOnly,
 	}, nil
-}
-
-// AccessMode implements the sql.DB interface.
-// It is always ReadWrite for the pool.
-func (p *Pool) AccessMode() sql.AccessMode {
-	return sql.ReadWrite
 }

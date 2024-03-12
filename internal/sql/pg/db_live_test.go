@@ -254,7 +254,7 @@ func TestNestedTx(t *testing.T) {
 	}
 
 	// Start the outer transaction.
-	tx, err := db.BeginTx(ctx)
+	tx, err := db.BeginOuterTx(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,11 +326,6 @@ func TestNestedTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = tx.Commit(ctx)
-	if err == nil {
-		t.Fatalf("commit should have errored without precommit first")
-	}
-
 	id, err := tx.Precommit(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -345,6 +340,8 @@ func TestNestedTx(t *testing.T) {
 
 	// TODO: enure updates in other non-failed savepoints take
 }
+
+// func TestCommitWithoutPrecommit
 
 // tests that a read tx can be created and used
 // while another tx is in progress

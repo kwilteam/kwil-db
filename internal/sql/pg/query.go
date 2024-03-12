@@ -158,7 +158,7 @@ func query(ctx context.Context, cq connQueryer, stmt string, args ...any) (*sql.
 	if mustInferArgs(args) {
 		// return nil, errors.New("cannot use QueryModeInferredArgTypes with query")
 		args = args[1:] // args[0] was QueryModeInferredArgTypes
-		q = func(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+		q = func(ctx context.Context, stmt string, args ...any) (pgx.Rows, error) {
 			return queryImpliedArgTypes(ctx, cq.Conn(), stmt, args...)
 		}
 	}

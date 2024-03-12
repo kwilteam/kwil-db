@@ -84,9 +84,6 @@ func setup(t *testing.T) (global *execution.GlobalContext, db *pg.DB, err error)
 	})
 	require.NoError(t, err)
 
-	_, err = tx.Precommit(ctx)
-	require.NoError(t, err)
-
 	err = tx.Commit(ctx)
 	require.NoError(t, err)
 

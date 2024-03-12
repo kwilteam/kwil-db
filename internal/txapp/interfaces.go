@@ -16,7 +16,9 @@ type Rebroadcaster interface {
 	MarkRebroadcast(ctx context.Context, ids []types.UUID) error
 }
 
-// DB is the interface for the main SQL database.
+// DB is the interface for the main SQL database. All queries must be executed
+// from within a transaction. A DB can create read transactions or the special
+// two-phase outer write transaction.
 type DB interface {
 	sql.OuterTxMaker
 	sql.ReadTxMaker

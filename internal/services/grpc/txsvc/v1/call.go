@@ -58,7 +58,7 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 
 	// marshalling the map is less efficient, but necessary for backwards compatibility
 
-	btsResult, err := json.Marshal(ResultMap(executeResult))
+	btsResult, err := json.Marshal(resultMap(executeResult))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to marshal call result")
 	}
