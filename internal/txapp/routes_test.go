@@ -77,24 +77,24 @@ func Test_Routes(t *testing.T) {
 				deleteCount := 0
 
 				// override the functions with mocks
-				deleteEvent = func(ctx context.Context, db sql.DB, id types.UUID) error {
+				deleteEvent = func(ctx context.Context, db sql.Executor, id types.UUID) error {
 					deleteCount++
 
 					return nil
 				}
 
-				approveResolution = func(ctx context.Context, db sql.DB, resolutionID types.UUID, expiration int64, from []byte) error {
+				approveResolution = func(ctx context.Context, db sql.TxMaker, resolutionID types.UUID, expiration int64, from []byte) error {
 					approveCount++
 
 					return nil
 				}
-				resolutionContainsBody = func(ctx context.Context, db sql.DB, id types.UUID) (bool, error) {
+				resolutionContainsBody = func(ctx context.Context, db sql.Executor, id types.UUID) (bool, error) {
 					return true, nil
 				}
-				isProcessed = func(ctx context.Context, db sql.DB, id types.UUID) (bool, error) {
+				isProcessed = func(ctx context.Context, db sql.Executor, id types.UUID) (bool, error) {
 					return true, nil
 				}
-				getVoterPower = func(ctx context.Context, db sql.DB, identifier []byte) (int64, error) {
+				getVoterPower = func(ctx context.Context, db sql.Executor, identifier []byte) (int64, error) {
 					return 1, nil
 				}
 
@@ -121,23 +121,23 @@ func Test_Routes(t *testing.T) {
 				deleteCount := 0
 
 				// override the functions with mocks
-				deleteEvent = func(ctx context.Context, db sql.DB, id types.UUID) error {
+				deleteEvent = func(ctx context.Context, db sql.Executor, id types.UUID) error {
 					deleteCount++
 
 					return nil
 				}
-				approveResolution = func(ctx context.Context, db sql.DB, resolutionID types.UUID, expiration int64, from []byte) error {
+				approveResolution = func(ctx context.Context, db sql.TxMaker, resolutionID types.UUID, expiration int64, from []byte) error {
 					approveCount++
 
 					return nil
 				}
-				resolutionContainsBody = func(ctx context.Context, db sql.DB, id types.UUID) (bool, error) {
+				resolutionContainsBody = func(ctx context.Context, db sql.Executor, id types.UUID) (bool, error) {
 					return true, nil
 				}
-				isProcessed = func(ctx context.Context, db sql.DB, id types.UUID) (bool, error) {
+				isProcessed = func(ctx context.Context, db sql.Executor, id types.UUID) (bool, error) {
 					return true, nil
 				}
-				getVoterPower = func(ctx context.Context, db sql.DB, identifier []byte) (int64, error) {
+				getVoterPower = func(ctx context.Context, db sql.Executor, identifier []byte) (int64, error) {
 					return 1, nil
 				}
 
@@ -161,7 +161,7 @@ func Test_Routes(t *testing.T) {
 			name: "validator_vote_id, as non-validator",
 			fee:  voting.ValidatorVoteIDPrice,
 			fn: func(t *testing.T, callback func(*TxApp)) {
-				getVoterPower = func(ctx context.Context, db sql.DB, identifier []byte) (int64, error) {
+				getVoterPower = func(ctx context.Context, db sql.Executor, identifier []byte) (int64, error) {
 					return 0, nil
 				}
 
@@ -184,19 +184,19 @@ func Test_Routes(t *testing.T) {
 				deleteCount := 0
 
 				// override the functions with mocks
-				deleteEvent = func(ctx context.Context, db sql.DB, id types.UUID) error {
+				deleteEvent = func(ctx context.Context, db sql.Executor, id types.UUID) error {
 					deleteCount++
 
 					return nil
 				}
-				createResolution = func(ctx context.Context, db sql.DB, event *types.VotableEvent, expiration int64, proposer []byte) error {
+				createResolution = func(ctx context.Context, db sql.TxMaker, event *types.VotableEvent, expiration int64, proposer []byte) error {
 					return nil
 				}
 
-				hasVoted = func(ctx context.Context, db sql.DB, resolutionID types.UUID, voter []byte) (bool, error) {
+				hasVoted = func(ctx context.Context, db sql.Executor, resolutionID types.UUID, voter []byte) (bool, error) {
 					return true, nil
 				}
-				getVoterPower = func(ctx context.Context, db sql.DB, identifier []byte) (int64, error) {
+				getVoterPower = func(ctx context.Context, db sql.Executor, identifier []byte) (int64, error) {
 					return 1, nil
 				}
 
@@ -226,17 +226,17 @@ func Test_Routes(t *testing.T) {
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				deleteCount := 0
 
-				deleteEvent = func(ctx context.Context, db sql.DB, id types.UUID) error {
+				deleteEvent = func(ctx context.Context, db sql.Executor, id types.UUID) error {
 					deleteCount++
 
 					return nil
 				}
 
-				hasVoted = func(ctx context.Context, db sql.DB, resolutionID types.UUID, voter []byte) (bool, error) {
+				hasVoted = func(ctx context.Context, db sql.Executor, resolutionID types.UUID, voter []byte) (bool, error) {
 					return true, nil
 				}
 
-				getVoterPower = func(ctx context.Context, db sql.DB, identifier []byte) (int64, error) {
+				getVoterPower = func(ctx context.Context, db sql.Executor, identifier []byte) (int64, error) {
 					return 1, nil
 				}
 

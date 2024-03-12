@@ -265,11 +265,6 @@ func initVoteStore(d *coreDependencies, db *pg.DB) {
 		failBuild(err, "failed to initialize vote store")
 	}
 
-	_, err = tx.Precommit(d.ctx)
-	if err != nil {
-		failBuild(err, "failed to precommit")
-	}
-
 	err = tx.Commit(d.ctx)
 	if err != nil {
 		failBuild(err, "failed to commit")
@@ -353,11 +348,6 @@ func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
 		failBuild(err, "failed to build engine")
 	}
 
-	_, err = tx.Precommit(d.ctx)
-	if err != nil {
-		failBuild(err, "failed to precommit")
-	}
-
 	err = tx.Commit(d.ctx)
 	if err != nil {
 		failBuild(err, "failed to commit")
@@ -376,11 +366,6 @@ func initAccountRepository(d *coreDependencies, db *pg.DB) {
 	err = accounts.InitializeAccountStore(d.ctx, tx)
 	if err != nil {
 		failBuild(err, "failed to initialize account store")
-	}
-
-	_, err = tx.Precommit(d.ctx)
-	if err != nil {
-		failBuild(err, "failed to precommit")
 	}
 
 	err = tx.Commit(d.ctx)

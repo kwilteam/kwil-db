@@ -14,7 +14,7 @@ var (
 
 // EnsureVersionTableExists ensures that the version table exists in the database.
 // If the table does not exist, it will be created, and the first version will be set to version specified.
-func ensureVersionTableExists(ctx context.Context, db sql.DB, schema string) error {
+func ensureVersionTableExists(ctx context.Context, db sql.TxMaker, schema string) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -48,7 +48,7 @@ func ensureVersionTableExists(ctx context.Context, db sql.DB, schema string) err
 // All versions should start at 0.
 // If the database is fresh, the schema will be initialized to the target version.
 // Raw initialization at the target version can be done by providing a function for versions -1.
-func Upgrade(ctx context.Context, db sql.DB, schema string, versions map[int64]UpgradeFunc, targetVersion int64) error {
+func Upgrade(ctx context.Context, db sql.TxMaker, schema string, versions map[int64]UpgradeFunc, targetVersion int64) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
