@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
@@ -178,7 +179,20 @@ func (h *harness) createPost(ctx context.Context, dbid string, postID int, title
 */
 
 func (h *harness) createPostAsync(ctx context.Context, dbid string, postID int, title, content string) (<-chan asyncResp, error) {
-	txHash, err := h.executeActionAsync(ctx, dbid, actCreatePost, [][]any{{postID, title, content}})
+	args := [][]any{{postID, title, content}}
+	// Randomly fail execution. TODO: make frequency flag, like execFailRate,
+	// but we really don't need it to succeed, only be mined. The failures
+	// ensure expected nonce and balance updates regardless.
+	if rand.Intn(6) == 0 {
+		if rand.Intn(2) == 0 {
+			// kwild.abci: "msg":"failed to execute transaction","error":"ERROR: invalid input syntax for type bigint: \"not integer\" (SQLSTATE 22P02)"
+			args = [][]any{{"not integer", title, content}} // id not integer (SQL exec error)
+		} else {
+			// kwild.abci: "msg":"failed to execute transaction","error":"incorrect number of arguments: procedure \"create_post\" requires 3 arguments, but 2 were provided"
+			args = [][]any{{postID, title}} // too few args (engine procedure call error)
+		}
+	}
+	txHash, err := h.executeActionAsync(ctx, dbid, actCreatePost, args)
 	if err != nil {
 		return nil, err
 	}
