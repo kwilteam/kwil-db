@@ -39,9 +39,8 @@ var (
 	txPollInterval time.Duration
 
 	sequentialBroadcast bool
+	nonceChaos          int
 	rpcTiming           bool
-
-	// badNonces bool
 
 	wg sync.WaitGroup
 )
@@ -69,6 +68,7 @@ func main() {
 	flag.IntVar(&maxContentLen, "el", 50_000, "maximum content length in an executed post action")
 
 	flag.BoolVar(&sequentialBroadcast, "sb", false, "sequential broadcast (disallow concurrent broadcast, waiting for broadcast result before releasing nonce lock)")
+	flag.IntVar(&nonceChaos, "nc", 0, "nonce chaos rate (apply nonce jitter every 1/nc times)")
 	flag.BoolVar(&rpcTiming, "v", false, "print RPC durations")
 
 	flag.DurationVar(&txPollInterval, "pollint", 200*time.Millisecond, "polling interval when waiting for tx confirmation")
