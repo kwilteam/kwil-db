@@ -50,8 +50,8 @@ func (o *orderingWalker) EnterCTE(node *tree.CTE) error {
 	return nil
 }
 
-// Register TableOrSubquerySelects as tables, so that we can order them.
-func (o *orderingWalker) EnterTableOrSubquerySelect(node *tree.TableOrSubquerySelect) error {
+// Register RelationSubquerys as tables, so that we can order them.
+func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) error {
 	if node.Select == nil {
 		return fmt.Errorf("subquery select is nil")
 	}
@@ -159,7 +159,7 @@ func orderSimpleStatement(stmt *tree.SelectCore, tables []*common.Table) ([]*tre
 
 	// we will now get a list of all tables that are renamed to the used aliases
 	// this allows us to search for them by their alias, and not their real name.
-	usedTables, err := utils.GetUsedTables(stmt.From.JoinClause)
+	usedTables, err := utils.GetUsedTables(stmt.From.Relation)
 	if err != nil {
 		return nil, fmt.Errorf("error getting used tables: %w", err)
 	}

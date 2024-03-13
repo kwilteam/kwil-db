@@ -28,10 +28,8 @@ func TestCTE_ToSQL(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name: "foo",
-									},
+								Relation: &tree.RelationTable{
+									Name: "foo",
 								},
 							},
 						},
@@ -76,10 +74,8 @@ var mockCTE = &tree.CTE{
 		SelectCores: []*tree.SelectCore{
 			{
 				From: &tree.FromClause{
-					JoinClause: &tree.JoinClause{
-						TableOrSubquery: &tree.TableOrSubqueryTable{
-							Name: "foo",
-						},
+					Relation: &tree.RelationTable{
+						Name: "foo",
 					},
 				},
 			},

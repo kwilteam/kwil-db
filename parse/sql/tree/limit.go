@@ -17,7 +17,6 @@ func (l *Limit) Accept(v AstVisitor) any {
 	return v.VisitLimit(l)
 }
 
-// Accept implements the Visitor interface.
 func (l *Limit) Walk(w AstListener) error {
 	return run(
 		w.EnterLimit(l),

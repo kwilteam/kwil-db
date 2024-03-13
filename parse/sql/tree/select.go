@@ -162,7 +162,7 @@ func (s SelectType) Valid() error {
 type FromClause struct {
 	node
 
-	JoinClause *JoinClause // the relation
+	Relation Relation
 }
 
 func (f *FromClause) Accept(v AstVisitor) any {
@@ -172,7 +172,7 @@ func (f *FromClause) Accept(v AstVisitor) any {
 func (f *FromClause) Walk(w AstListener) error {
 	return run(
 		w.EnterFromClause(f),
-		walk(w, f.JoinClause),
+		walk(w, f.Relation),
 		w.ExitFromClause(f),
 	)
 }
@@ -180,7 +180,7 @@ func (f *FromClause) Walk(w AstListener) error {
 func (f *FromClause) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 	stmt.Token.From()
-	stmt.WriteString(f.JoinClause.ToSQL())
+	stmt.WriteString(f.Relation.ToSQL())
 	return stmt.String()
 }
 

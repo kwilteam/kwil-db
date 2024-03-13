@@ -307,14 +307,14 @@ func genSimpleJoinSelectTree(joinOP *tree.JoinOperator, t1, t1Column, t2, t2Colu
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnStar{},
 					},
-					From: &tree.FromClause{JoinClause: &tree.JoinClause{
-						TableOrSubquery: &tree.TableOrSubqueryTable{
+					From: &tree.FromClause{Relation: &tree.RelationJoin{
+						Relation: &tree.RelationTable{
 							Name: t1,
 						},
 						Joins: []*tree.JoinPredicate{
 							{
 								JoinOperator: joinOP,
-								Table:        &tree.TableOrSubqueryTable{Name: t2},
+								Table:        &tree.RelationTable{Name: t2},
 								Constraint: &tree.ExpressionBinaryComparison{
 									Operator: tree.ComparisonOperatorEqual,
 									Left:     &tree.ExpressionColumn{Table: t1, Column: t1Column},
@@ -395,11 +395,9 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
 							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name:  "t1",
-										Alias: "tt",
-									},
+								Relation: &tree.RelationTable{
+									Name:  "t1",
+									Alias: "tt",
 								},
 							},
 						},
@@ -415,11 +413,9 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
 							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubquerySelect{
-										Select: genSelectColumnLiteralTree("1").SelectStmt,
-										Alias:  "tt",
-									},
+								Relation: &tree.RelationSubquery{
+									Select: genSelectColumnLiteralTree("1").SelectStmt,
+									Alias:  "tt",
 								},
 							},
 						},
@@ -435,15 +431,15 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
 							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{Name: "t1", Alias: "tt"},
+								Relation: &tree.RelationJoin{
+									Relation: &tree.RelationTable{Name: "t1", Alias: "tt"},
 									Joins: []*tree.JoinPredicate{
 										{
 											JoinOperator: &tree.JoinOperator{
 												JoinType: tree.JoinTypeJoin,
 												Outer:    false,
 											},
-											Table: &tree.TableOrSubqueryTable{Name: "t2", Alias: "ttt"},
+											Table: &tree.RelationTable{Name: "t2", Alias: "ttt"},
 											Constraint: &tree.ExpressionBinaryComparison{
 												Left: &tree.ExpressionColumn{
 													Table:  "tt",
@@ -1438,11 +1434,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
+							From: &tree.FromClause{
+								Relation: &tree.RelationTable{
 									Name: "t1",
-								},
-							}},
+								}},
 						},
 					},
 				}}},
@@ -1454,11 +1449,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
+							From: &tree.FromClause{
+								Relation: &tree.RelationTable{
 									Name: "t1",
-								},
-							}},
+								}},
 						},
 					},
 				}}},
@@ -1469,11 +1463,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeDistinct,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
+							From: &tree.FromClause{
+								Relation: &tree.RelationTable{
 									Name: "t1",
-								},
-							}},
+								}},
 						},
 					},
 				}}},
@@ -1484,11 +1477,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
+							From: &tree.FromClause{
+								Relation: &tree.RelationTable{
 									Name: "t1",
-								},
-							}},
+								}},
 							Where: &tree.ExpressionBinaryComparison{
 								Left:     &tree.ExpressionColumn{Column: "c1"},
 								Operator: tree.ComparisonOperatorEqual,
@@ -1504,11 +1496,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
+							From: &tree.FromClause{
+								Relation: &tree.RelationTable{
 									Name: "t1",
-								},
-							}},
+								}},
 							Where: &tree.ExpressionBinaryComparison{
 								Left: &tree.ExpressionBinaryComparison{
 									Left:     &tree.ExpressionColumn{Column: "c1"},
@@ -1532,11 +1523,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
+							From: &tree.FromClause{
+								Relation: &tree.RelationTable{
 									Name: "t1",
-								},
-							}},
+								}},
 							Where: &tree.ExpressionBinaryComparison{
 								Left: &tree.ExpressionBinaryComparison{
 									Left:     &tree.ExpressionColumn{Column: "c1"},
@@ -1560,11 +1550,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
+							From: &tree.FromClause{
+								Relation: &tree.RelationTable{
 									Name: "t1",
-								},
-							}},
+								}},
 							GroupBy: &tree.GroupBy{
 								Expressions: []tree.Expression{
 									&tree.ExpressionColumn{Column: "c1"},
@@ -1580,11 +1569,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
+							From: &tree.FromClause{
+								Relation: &tree.RelationTable{
 									Name: "t1",
-								},
-							}},
+								}},
 							GroupBy: &tree.GroupBy{
 								Expressions: []tree.Expression{
 									&tree.ExpressionColumn{Column: "c1"},
@@ -1601,11 +1589,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
+							From: &tree.FromClause{
+								Relation: &tree.RelationTable{
 									Name: "t1",
-								},
-							}},
+								}},
 						},
 					},
 					OrderBy: &tree.OrderBy{
@@ -1624,11 +1611,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
+							From: &tree.FromClause{
+								Relation: &tree.RelationTable{
 									Name: "t1",
-								},
-							}},
+								}},
 						},
 					},
 					OrderBy: &tree.OrderBy{
@@ -1651,11 +1637,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
+							From: &tree.FromClause{
+								Relation: &tree.RelationTable{
 									Name: "t1",
-								},
-							}},
+								}},
 						},
 					},
 					Limit: &tree.Limit{Expression: genLiteralExpression("1")},
@@ -1667,11 +1652,10 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
+							From: &tree.FromClause{
+								Relation: &tree.RelationTable{
 									Name: "t1",
-								},
-							}},
+								}},
 						},
 					},
 					Limit: &tree.Limit{
@@ -1722,35 +1706,36 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
-							From: &tree.FromClause{JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
-									Name: "t1",
-								},
-								Joins: []*tree.JoinPredicate{
-									{
-										JoinOperator: &tree.JoinOperator{
-											JoinType: tree.JoinTypeJoin,
+							From: &tree.FromClause{
+								Relation: &tree.RelationJoin{
+									Relation: &tree.RelationTable{
+										Name: "t1",
+									},
+									Joins: []*tree.JoinPredicate{
+										{
+											JoinOperator: &tree.JoinOperator{
+												JoinType: tree.JoinTypeJoin,
+											},
+											Table: &tree.RelationTable{Name: "t2"},
+											Constraint: &tree.ExpressionBinaryComparison{
+												Operator: tree.ComparisonOperatorEqual,
+												Left:     &tree.ExpressionColumn{Table: "t1", Column: "c1"},
+												Right:    &tree.ExpressionColumn{Table: "t2", Column: "c1"},
+											},
 										},
-										Table: &tree.TableOrSubqueryTable{Name: "t2"},
-										Constraint: &tree.ExpressionBinaryComparison{
-											Operator: tree.ComparisonOperatorEqual,
-											Left:     &tree.ExpressionColumn{Table: "t1", Column: "c1"},
-											Right:    &tree.ExpressionColumn{Table: "t2", Column: "c1"},
+										{
+											JoinOperator: &tree.JoinOperator{
+												JoinType: tree.JoinTypeLeft,
+											},
+											Table: &tree.RelationTable{Name: "t3"},
+											Constraint: &tree.ExpressionBinaryComparison{
+												Operator: tree.ComparisonOperatorEqual,
+												Left:     &tree.ExpressionColumn{Table: "t1", Column: "c1"},
+												Right:    &tree.ExpressionColumn{Table: "t3", Column: "c1"},
+											},
 										},
 									},
-									{
-										JoinOperator: &tree.JoinOperator{
-											JoinType: tree.JoinTypeLeft,
-										},
-										Table: &tree.TableOrSubqueryTable{Name: "t3"},
-										Constraint: &tree.ExpressionBinaryComparison{
-											Operator: tree.ComparisonOperatorEqual,
-											Left:     &tree.ExpressionColumn{Table: "t1", Column: "c1"},
-											Right:    &tree.ExpressionColumn{Table: "t3", Column: "c1"},
-										},
-									},
 								},
-							},
 							},
 						},
 					},
@@ -1809,9 +1794,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 							Expression: genLiteralExpression("1"),
 						},
 					},
-					From: &tree.FromClause{JoinClause: &tree.JoinClause{
-						TableOrSubquery: &tree.TableOrSubqueryTable{Name: "t2"},
-					}},
+					From: &tree.FromClause{Relation: &tree.RelationTable{Name: "t2"}},
 				},
 			},
 		},
@@ -1826,14 +1809,14 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						},
 					},
 					From: &tree.FromClause{
-						JoinClause: &tree.JoinClause{
-							TableOrSubquery: &tree.TableOrSubqueryTable{Name: "t2"},
+						Relation: &tree.RelationJoin{
+							Relation: &tree.RelationTable{Name: "t2"},
 							Joins: []*tree.JoinPredicate{
 								{
 									JoinOperator: &tree.JoinOperator{
 										JoinType: tree.JoinTypeJoin,
 									},
-									Table: &tree.TableOrSubqueryTable{Name: "t3"},
+									Table: &tree.RelationTable{Name: "t3"},
 									Constraint: &tree.ExpressionBinaryComparison{
 										Operator: tree.ComparisonOperatorEqual,
 										Left:     &tree.ExpressionColumn{Table: "t2", Column: "c1"},
@@ -1962,10 +1945,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
 							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name: "t1",
-									},
+								Relation: &tree.RelationTable{
+									Name: "t1",
 								},
 							},
 						},
@@ -1981,11 +1962,9 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
 							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name:  "t1",
-										Alias: "t",
-									},
+								Relation: &tree.RelationTable{
+									Name:  "t1",
+									Alias: "t",
 								},
 							},
 						},
@@ -2007,10 +1986,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 								},
 							},
 							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name: "t1",
-									},
+								Relation: &tree.RelationTable{
+									Name: "t1",
 								},
 							},
 						},
@@ -2033,10 +2010,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 									Alias: "col",
 								},
 							}, From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name: "t1",
-									},
+								Relation: &tree.RelationTable{
+									Name: "t1",
 								},
 							},
 						},
@@ -2062,10 +2037,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 								},
 							},
 							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name: "t1",
-									},
+								Relation: &tree.RelationTable{
+									Name: "t1",
 								},
 							},
 						},
@@ -2140,10 +2113,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 								},
 							},
 							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name: "t1",
-									},
+								Relation: &tree.RelationTable{
+									Name: "t1",
 								},
 							},
 						},

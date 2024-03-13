@@ -28,13 +28,16 @@ type AstVisitor interface {
 	VisitGroupBy(*GroupBy) any
 	VisitInsert(*Insert) any
 	VisitInsertStmt(*InsertStmt) any
-	VisitJoinClause(*JoinClause) any
 	VisitJoinPredicate(*JoinPredicate) any
 	VisitJoinOperator(*JoinOperator) any
 	VisitLimit(*Limit) any
 	VisitOrderBy(*OrderBy) any
 	VisitOrderingTerm(*OrderingTerm) any
 	VisitQualifiedTableName(*QualifiedTableName) any
+	VisitRelation(Relation) any
+	VisitRelationTable(*RelationTable) any
+	VisitRelationSubquery(*RelationSubquery) any
+	VisitRelationJoin(*RelationJoin) any
 	VisitResultColumnStar(*ResultColumnStar) any
 	VisitResultColumnExpression(*ResultColumnExpression) any
 	VisitResultColumnTable(*ResultColumnTable) any
@@ -43,11 +46,6 @@ type AstVisitor interface {
 	VisitSelect(*Select) any
 	VisitSelectCore(*SelectCore) any
 	VisitSelectStmt(*SelectStmt) any
-	VisitTableOrSubquery(TableOrSubquery) any
-	VisitTableOrSubqueryTable(*TableOrSubqueryTable) any
-	VisitTableOrSubquerySelect(*TableOrSubquerySelect) any
-	VisitTableOrSubqueryList(*TableOrSubqueryList) any
-	VisitTableOrSubqueryJoin(*TableOrSubqueryJoin) any
 	VisitUpdateSetClause(*UpdateSetClause) any
 	VisitUpdate(*Update) any
 	VisitUpdateStmt(*UpdateStmt) any
@@ -160,10 +158,6 @@ func (v *BaseAstVisitor) VisitInsertStmt(node *InsertStmt) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitJoinClause(node *JoinClause) any {
-	return nil
-}
-
 func (v *BaseAstVisitor) VisitJoinPredicate(node *JoinPredicate) any {
 	return nil
 }
@@ -224,31 +218,29 @@ func (v *BaseAstVisitor) VisitFromClause(node *FromClause) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitTableOrSubquery(node TableOrSubquery) any {
+func (v *BaseAstVisitor) VisitRelation(node Relation) any {
 	// TODO delete?
 	switch t := node.(type) {
-	case *TableOrSubqueryTable:
+	case *RelationTable:
 		return v.Visit(t)
-	case *TableOrSubquerySelect:
+	case *RelationSubquery:
+		return v.Visit(t)
+	case *RelationJoin:
 		return v.Visit(t)
 	default:
 		panic("unknown table or subquery type")
 	}
 }
 
-func (v *BaseAstVisitor) VisitTableOrSubqueryTable(node *TableOrSubqueryTable) any {
+func (v *BaseAstVisitor) VisitRelationTable(node *RelationTable) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitTableOrSubquerySelect(node *TableOrSubquerySelect) any {
+func (v *BaseAstVisitor) VisitRelationSubquery(node *RelationSubquery) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitTableOrSubqueryList(node *TableOrSubqueryList) any {
-	return nil
-}
-
-func (v *BaseAstVisitor) VisitTableOrSubqueryJoin(node *TableOrSubqueryJoin) any {
+func (v *BaseAstVisitor) VisitRelationJoin(node *RelationJoin) any {
 	return nil
 }
 

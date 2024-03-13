@@ -215,8 +215,8 @@ func (s *selectCoreAnalyzer) ExitSelectCore(node *tree.SelectCore) error {
 	return nil
 }
 
-// EnterTableOrSubqueryTable adds the table to the list of used tables.
-func (s *selectCoreAnalyzer) EnterTableOrSubqueryTable(node *tree.TableOrSubqueryTable) error {
+// EnterRelationTable adds the table to the list of used tables.
+func (s *selectCoreAnalyzer) EnterRelationTable(node *tree.RelationTable) error {
 	tbl, err := findTable(s.schemaTables, node.Name)
 	if err != nil {
 		return err

@@ -704,18 +704,9 @@ func (v *astBuilder) VisitUpdate_stmt(ctx *sqlgrammar.Update_stmtContext) interf
 	}
 
 	if ctx.FROM_() != nil {
-		fromClause := tree.FromClause{
-			JoinClause: &tree.JoinClause{},
+		updateStmt.From = &tree.FromClause{
+			Relation: v.Visit(ctx.Relation()).(tree.Relation),
 		}
-
-		if ctx.Join_clause() != nil {
-			fromClause.JoinClause = v.Visit(ctx.Join_clause()).(*tree.JoinClause)
-		} else {
-			// table_or_subquery
-			fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery()).(tree.TableOrSubquery)
-		}
-
-		updateStmt.From = &fromClause
 	}
 
 	if ctx.WHERE_() != nil {
@@ -838,7 +829,7 @@ func (v *astBuilder) VisitLimit_stmt(ctx *sqlgrammar.Limit_stmtContext) interfac
 func (v *astBuilder) VisitTable_or_subquery(ctx *sqlgrammar.Table_or_subqueryContext) interface{} {
 	switch {
 	case ctx.Table_name() != nil:
-		t := tree.TableOrSubqueryTable{
+		t := tree.RelationTable{
 			Name: util.ExtractSQLName(ctx.Table_name().GetText()),
 		}
 		if ctx.Table_alias() != nil {
@@ -846,15 +837,16 @@ func (v *astBuilder) VisitTable_or_subquery(ctx *sqlgrammar.Table_or_subqueryCon
 		}
 		return &t
 	case ctx.Select_stmt_core() != nil:
-		t := tree.TableOrSubquerySelect{
+		t := tree.RelationSubquery{
 			Select: v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt),
 		}
 		if ctx.Table_alias() != nil {
 			t.Alias = util.ExtractSQLName(ctx.Table_alias().GetText())
 		}
 		return &t
+	default:
+		panic("unsupported table_or_subquery type")
 	}
-	return nil
 }
 
 // VisitJoin_operator is called when visiting a join_operator, return *tree.JoinOperator
@@ -884,28 +876,13 @@ func (v *astBuilder) VisitJoin_operator(ctx *sqlgrammar.Join_operatorContext) in
 	return &jp
 }
 
-// VisitJoin_clause is called when visiting a join_clause, return *tree.JoinClause
-func (v *astBuilder) VisitJoin_clause(ctx *sqlgrammar.Join_clauseContext) interface{} {
-	clause := tree.JoinClause{}
-
-	// just table_or_subquery
-	clause.TableOrSubquery = v.Visit(ctx.Table_or_subquery(0)).(tree.TableOrSubquery)
-	if len(ctx.AllTable_or_subquery()) == 1 {
-		return &clause
-	}
-
-	// with joins
-	joins := make([]*tree.JoinPredicate, len(ctx.AllJoin_operator()))
-	for i, subCtx := range ctx.AllJoin_operator() {
-		jp := tree.JoinPredicate{}
-		jp.JoinOperator = v.Visit(subCtx).(*tree.JoinOperator)
-		jp.Table = v.Visit(ctx.Table_or_subquery(i + 1)).(tree.TableOrSubquery)
-		jp.Constraint = v.Visit(ctx.Join_constraint(i).Expr()).(tree.Expression)
-		joins[i] = &jp
-	}
-	clause.Joins = joins
-
-	return &clause
+// VisitJoin_relation is called when visiting a join_relation, return *tree.JoinPredicate
+func (v *astBuilder) VisitJoin_relation(ctx *sqlgrammar.Join_relationContext) interface{} {
+	jp := tree.JoinPredicate{}
+	jp.JoinOperator = v.Visit(ctx.Join_operator()).(*tree.JoinOperator)
+	jp.Table = v.Visit(ctx.GetRight_relation()).(tree.Relation)
+	jp.Constraint = v.Visit(ctx.Join_constraint().Expr()).(tree.Expression)
+	return &jp
 }
 
 // VisitResult_column is called when visiting a result_column, return tree.ResultColumn
@@ -972,34 +949,9 @@ func (v *astBuilder) VisitSelect_core(ctx *sqlgrammar.Select_coreContext) interf
 	}
 
 	if ctx.FROM_() != nil {
-		fromClause := tree.FromClause{
-			JoinClause: &tree.JoinClause{},
+		t.From = &tree.FromClause{
+			Relation: v.Visit(ctx.Relation()).(tree.Relation),
 		}
-
-		if ctx.Join_clause() != nil {
-			fromClause.JoinClause = v.Visit(ctx.Join_clause()).(*tree.JoinClause)
-		} else {
-			// table_or_subquery
-			fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery()).(tree.TableOrSubquery)
-
-			// with comma(cartesian) join
-			//if len(ctx.AllTable_or_subquery()) == 1 {
-			//	fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery(0)).(tree.TableOrSubquery)
-			//} else {
-			//	//tos := make([]tree.TableOrSubquery, len(ctx.AllTable_or_subquery()))
-			//	//
-			//	//for i, tableOrSubqueryCtx := range ctx.AllTable_or_subquery() {
-			//	//	tos[i] = v.Visit(tableOrSubqueryCtx).(tree.TableOrSubquery)
-			//	//}
-			//	//
-			//	//fromClause.JoinClause.TableOrSubquery = &tree.TableOrSubqueryList{
-			//	//	TableOrSubqueries: tos,
-			//	//}
-			//	panic("not support comma(cartesian) join")
-			//}
-		}
-
-		t.From = &fromClause
 	}
 
 	if ctx.GetWhereExpr() != nil {
@@ -1024,6 +976,26 @@ func (v *astBuilder) VisitSelect_core(ctx *sqlgrammar.Select_coreContext) interf
 	}
 
 	return &t
+}
+
+// VisitRelation is called when visiting a relation, return tree.Relation
+func (v *astBuilder) VisitRelation(ctx *sqlgrammar.RelationContext) interface{} {
+	left := v.Visit(ctx.Table_or_subquery()).(tree.Relation)
+
+	if len(ctx.AllJoin_relation()) > 0 {
+		rel := tree.RelationJoin{
+			Relation: left,
+			Joins:    make([]*tree.JoinPredicate, len(ctx.AllJoin_relation())),
+		}
+		// join relations
+		for i, joinRelationCtx := range ctx.AllJoin_relation() {
+			rel.Joins[i] = v.Visit(joinRelationCtx).(*tree.JoinPredicate)
+		}
+		return &rel
+	} else {
+		// table or subquery relation
+		return left
+	}
 }
 
 // VisitSelect_stmt_core is called when visiting a select_stmt_core, return *tree.SelectStmt

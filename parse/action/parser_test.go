@@ -61,19 +61,19 @@ func TestParseActionStmt(t *testing.T) {
 						Operator: tree.LogicalOperatorAnd,
 						Right:    &tree.ExpressionBindParameter{Parameter: "$c"},
 					},
-					//&tree.ExpressionFunction{
-					//	Function: tree.FunctionAddressGetter(nil),
-					//	Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
-					//},
-					//&tree.ExpressionFunction{
-					//	Function: tree.FunctionAddressGetter(nil),
-					//	Inputs: []tree.Expression{
-					//		&tree.ExpressionFunction{
-					//			Function: tree.FunctionUPPERGetter(nil),
-					//			Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
-					//		},
-					//	},
-					//},
+					&tree.ExpressionFunction{
+						Function: &tree.FunctionABS,
+						Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
+					},
+					&tree.ExpressionFunction{
+						Function: &tree.FunctionABS,
+						Inputs: []tree.Expression{
+							&tree.ExpressionFunction{
+								Function: &tree.FunctionUPPER,
+								Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -122,19 +122,19 @@ func TestParseActionStmt(t *testing.T) {
 						Operator: tree.LogicalOperatorAnd,
 						Right:    &tree.ExpressionBindParameter{Parameter: "$c"},
 					},
-					//&tree.ExpressionFunction{
-					//	Function: tree.FunctionAddressGetter(nil),
-					//	Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
-					//},
-					//&tree.ExpressionFunction{
-					//	Function: tree.FunctionAddressGetter(nil),
-					//	Inputs: []tree.Expression{
-					//		&tree.ExpressionFunction{
-					//			Function: tree.FunctionUPPERGetter(nil),
-					//			Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
-					//		},
-					//	},
-					//},
+					&tree.ExpressionFunction{
+						Function: &tree.FunctionABS,
+						Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
+					},
+					&tree.ExpressionFunction{
+						Function: &tree.FunctionABS,
+						Inputs: []tree.Expression{
+							&tree.ExpressionFunction{
+								Function: &tree.FunctionUPPER,
+								Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
+							},
+						},
+					},
 				},
 			},
 		},

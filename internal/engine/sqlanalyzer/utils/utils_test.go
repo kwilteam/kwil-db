@@ -14,7 +14,7 @@ func Test_JoinSearch(t *testing.T) {
 	type testcase struct {
 		name   string
 		stmt   string // must be a select statement
-		tables []*tree.TableOrSubqueryTable
+		tables []*tree.RelationTable
 	}
 
 	tests := []testcase{
@@ -52,7 +52,7 @@ func Test_JoinSearch(t *testing.T) {
 			require.True(t, ok)
 			require.Equal(t, len(topSelect.SelectStmt.SelectCores), 1)
 
-			tbls, err := utils.GetUsedTables(topSelect.SelectStmt.SelectCores[0].From.JoinClause)
+			tbls, err := utils.GetUsedTables(topSelect.SelectStmt.SelectCores[0].From.Relation)
 			require.NoError(t, err)
 
 			require.EqualValues(t, tt.tables, tbls)
@@ -60,9 +60,9 @@ func Test_JoinSearch(t *testing.T) {
 	}
 }
 
-func tbls(tables ...string) []*tree.TableOrSubqueryTable {
+func tbls(tables ...string) []*tree.RelationTable {
 	// should either be "tablename" OR "tablename alias"
-	tbls := make([]*tree.TableOrSubqueryTable, len(tables))
+	tbls := make([]*tree.RelationTable, len(tables))
 	for i, t := range tables {
 		split := strings.Split(t, " ")
 		switch len(split) {
@@ -79,9 +79,9 @@ func tbls(tables ...string) []*tree.TableOrSubqueryTable {
 }
 
 // if alias is empty, the table name is used as the alias
-func tbl(name string, alias ...string) *tree.TableOrSubqueryTable {
+func tbl(name string, alias ...string) *tree.RelationTable {
 	if len(alias) == 0 {
-		return &tree.TableOrSubqueryTable{
+		return &tree.RelationTable{
 			Name: name,
 		}
 	}
@@ -89,7 +89,7 @@ func tbl(name string, alias ...string) *tree.TableOrSubqueryTable {
 		panic("too many aliases")
 	}
 
-	return &tree.TableOrSubqueryTable{
+	return &tree.RelationTable{
 		Name:  name,
 		Alias: alias[0],
 	}

@@ -10,6 +10,7 @@ type ResultColumn interface {
 	Walk(w AstListener) error
 }
 
+// ResultColumnStar represents a wildcard column, i.e. `*`.
 type ResultColumnStar struct {
 	node
 }
@@ -29,6 +30,7 @@ func (r *ResultColumnStar) Walk(w AstListener) error {
 	)
 }
 
+// ResultColumnExpression represents a result column with an expression and an optional alias.
 type ResultColumnExpression struct {
 	node
 
@@ -58,6 +60,8 @@ func (r *ResultColumnExpression) Walk(w AstListener) error {
 	)
 }
 
+// ResultColumnTable represents a table name with a star, i.e. `table.*`.
+// Or qualified star?
 type ResultColumnTable struct {
 	node
 

@@ -44,7 +44,7 @@ func (w *SchemaWalker) EnterQualifiedTableName(q *tree.QualifiedTableName) error
 	return nil
 }
 
-func (w *SchemaWalker) EnterTableOrSubqueryTable(t *tree.TableOrSubqueryTable) error {
+func (w *SchemaWalker) EnterRelationTable(t *tree.RelationTable) error {
 	w.set(t.Name, t)
 	return nil
 }

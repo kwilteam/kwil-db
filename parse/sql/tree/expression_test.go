@@ -663,11 +663,9 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name:  "foo",
-										Alias: "f",
-									},
+								Relation: &tree.RelationTable{
+									Name:  "foo",
+									Alias: "f",
 								},
 							},
 							Where: &tree.ExpressionBinaryComparison{
@@ -696,11 +694,9 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 						{
 							SelectType: tree.SelectTypeAll,
 							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name:  "foo",
-										Alias: "f",
-									},
+								Relation: &tree.RelationTable{
+									Name:  "foo",
+									Alias: "f",
 								},
 							},
 							Where: &tree.ExpressionBinaryComparison{

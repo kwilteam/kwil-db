@@ -48,8 +48,6 @@ type AstListener interface {
 	ExitInsert(*Insert) error
 	EnterInsertStmt(*InsertStmt) error
 	ExitInsertStmt(*InsertStmt) error
-	EnterJoinClause(*JoinClause) error
-	ExitJoinClause(*JoinClause) error
 	EnterJoinPredicate(*JoinPredicate) error
 	ExitJoinPredicate(*JoinPredicate) error
 	EnterJoinOperator(*JoinOperator) error
@@ -62,6 +60,14 @@ type AstListener interface {
 	ExitOrderingTerm(*OrderingTerm) error
 	EnterQualifiedTableName(*QualifiedTableName) error
 	ExitQualifiedTableName(*QualifiedTableName) error
+	EnterRelation(Relation) error
+	ExitRelation(Relation) error
+	EnterRelationTable(*RelationTable) error
+	ExitRelationTable(*RelationTable) error
+	EnterRelationSubquery(*RelationSubquery) error
+	ExitRelationSubquery(*RelationSubquery) error
+	EnterRelationJoin(*RelationJoin) error
+	ExitRelationJoin(*RelationJoin) error
 	EnterResultColumnStar(*ResultColumnStar) error
 	ExitResultColumnStar(*ResultColumnStar) error
 	EnterResultColumnExpression(*ResultColumnExpression) error
@@ -82,14 +88,6 @@ type AstListener interface {
 	ExitFromClause(*FromClause) error
 	EnterCompoundOperator(*CompoundOperator) error
 	ExitCompoundOperator(*CompoundOperator) error
-	EnterTableOrSubqueryTable(*TableOrSubqueryTable) error
-	ExitTableOrSubqueryTable(*TableOrSubqueryTable) error
-	EnterTableOrSubquerySelect(*TableOrSubquerySelect) error
-	ExitTableOrSubquerySelect(*TableOrSubquerySelect) error
-	EnterTableOrSubqueryList(*TableOrSubqueryList) error
-	ExitTableOrSubqueryList(*TableOrSubqueryList) error
-	EnterTableOrSubqueryJoin(*TableOrSubqueryJoin) error
-	ExitTableOrSubqueryJoin(*TableOrSubqueryJoin) error
 	EnterUpdateSetClause(*UpdateSetClause) error
 	ExitUpdateSetClause(*UpdateSetClause) error
 	EnterUpdate(*Update) error
@@ -300,14 +298,6 @@ func (b *BaseListener) ExitInsertStmt(p0 *InsertStmt) error {
 	return nil
 }
 
-func (b *BaseListener) EnterJoinClause(p0 *JoinClause) error {
-	return nil
-}
-
-func (b *BaseListener) ExitJoinClause(p0 *JoinClause) error {
-	return nil
-}
-
 func (b *BaseListener) EnterJoinOperator(p0 *JoinOperator) error {
 	return nil
 }
@@ -353,6 +343,38 @@ func (b *BaseListener) EnterQualifiedTableName(p0 *QualifiedTableName) error {
 }
 
 func (b *BaseListener) ExitQualifiedTableName(p0 *QualifiedTableName) error {
+	return nil
+}
+
+func (b *BaseListener) EnterRelation(p0 Relation) error {
+	return nil
+}
+
+func (b *BaseListener) ExitRelation(p0 Relation) error {
+	return nil
+}
+
+func (b *BaseListener) EnterRelationJoin(p0 *RelationJoin) error {
+	return nil
+}
+
+func (b *BaseListener) ExitRelationJoin(p0 *RelationJoin) error {
+	return nil
+}
+
+func (b *BaseListener) EnterRelationSubquery(p0 *RelationSubquery) error {
+	return nil
+}
+
+func (b *BaseListener) ExitRelationSubquery(p0 *RelationSubquery) error {
+	return nil
+}
+
+func (b *BaseListener) EnterRelationTable(p0 *RelationTable) error {
+	return nil
+}
+
+func (b *BaseListener) ExitRelationTable(p0 *RelationTable) error {
 	return nil
 }
 
@@ -425,38 +447,6 @@ func (b *BaseListener) EnterSelectStmt(p0 *SelectStmt) error {
 }
 
 func (b *BaseListener) ExitSelectStmt(p0 *SelectStmt) error {
-	return nil
-}
-
-func (b *BaseListener) EnterTableOrSubqueryJoin(p0 *TableOrSubqueryJoin) error {
-	return nil
-}
-
-func (b *BaseListener) ExitTableOrSubqueryJoin(p0 *TableOrSubqueryJoin) error {
-	return nil
-}
-
-func (b *BaseListener) EnterTableOrSubqueryList(p0 *TableOrSubqueryList) error {
-	return nil
-}
-
-func (b *BaseListener) ExitTableOrSubqueryList(p0 *TableOrSubqueryList) error {
-	return nil
-}
-
-func (b *BaseListener) EnterTableOrSubquerySelect(p0 *TableOrSubquerySelect) error {
-	return nil
-}
-
-func (b *BaseListener) ExitTableOrSubquerySelect(p0 *TableOrSubquerySelect) error {
-	return nil
-}
-
-func (b *BaseListener) EnterTableOrSubqueryTable(p0 *TableOrSubqueryTable) error {
-	return nil
-}
-
-func (b *BaseListener) ExitTableOrSubqueryTable(p0 *TableOrSubqueryTable) error {
 	return nil
 }
 
@@ -545,8 +535,6 @@ type ImplementedListener struct {
 	FuncExitInsert                      func(p0 *Insert) error
 	FuncEnterInsertStmt                 func(p0 *InsertStmt) error
 	FuncExitInsertStmt                  func(p0 *InsertStmt) error
-	FuncEnterJoinClause                 func(p0 *JoinClause) error
-	FuncExitJoinClause                  func(p0 *JoinClause) error
 	FuncEnterJoinOperator               func(p0 *JoinOperator) error
 	FuncExitJoinOperator                func(p0 *JoinOperator) error
 	FuncEnterJoinPredicate              func(p0 *JoinPredicate) error
@@ -559,6 +547,14 @@ type ImplementedListener struct {
 	FuncExitOrderingTerm                func(p0 *OrderingTerm) error
 	FuncEnterQualifiedTableName         func(p0 *QualifiedTableName) error
 	FuncExitQualifiedTableName          func(p0 *QualifiedTableName) error
+	FuncEnterRelation                   func(p0 Relation) error
+	FuncExitRelation                    func(p0 Relation) error
+	FuncEnterRelationJoin               func(p0 *RelationJoin) error
+	FuncExitRelationJoin                func(p0 *RelationJoin) error
+	FuncEnterRelationSubquery           func(p0 *RelationSubquery) error
+	FuncExitRelationSubquery            func(p0 *RelationSubquery) error
+	FuncEnterRelationTable              func(p0 *RelationTable) error
+	FuncExitRelationTable               func(p0 *RelationTable) error
 	FuncEnterResultColumnExpression     func(p0 *ResultColumnExpression) error
 	FuncExitResultColumnExpression      func(p0 *ResultColumnExpression) error
 	FuncEnterResultColumnStar           func(p0 *ResultColumnStar) error
@@ -577,14 +573,6 @@ type ImplementedListener struct {
 	FuncExitSelectCore                  func(p0 *SelectCore) error
 	FuncEnterSelectStmt                 func(p0 *SelectStmt) error
 	FuncExitSelectStmt                  func(p0 *SelectStmt) error
-	FuncEnterTableOrSubqueryJoin        func(p0 *TableOrSubqueryJoin) error
-	FuncExitTableOrSubqueryJoin         func(p0 *TableOrSubqueryJoin) error
-	FuncEnterTableOrSubqueryList        func(p0 *TableOrSubqueryList) error
-	FuncExitTableOrSubqueryList         func(p0 *TableOrSubqueryList) error
-	FuncEnterTableOrSubquerySelect      func(p0 *TableOrSubquerySelect) error
-	FuncExitTableOrSubquerySelect       func(p0 *TableOrSubquerySelect) error
-	FuncEnterTableOrSubqueryTable       func(p0 *TableOrSubqueryTable) error
-	FuncExitTableOrSubqueryTable        func(p0 *TableOrSubqueryTable) error
 	FuncEnterUpdate                     func(p0 *Update) error
 	FuncExitUpdate                      func(p0 *Update) error
 	FuncEnterUpdateSetClause            func(p0 *UpdateSetClause) error
@@ -981,22 +969,6 @@ func (b *ImplementedListener) ExitInsertStmt(p0 *InsertStmt) error {
 	return b.FuncExitInsertStmt(p0)
 }
 
-func (b *ImplementedListener) EnterJoinClause(p0 *JoinClause) error {
-	if b.FuncEnterJoinClause == nil {
-		return nil
-	}
-
-	return b.FuncEnterJoinClause(p0)
-}
-
-func (b *ImplementedListener) ExitJoinClause(p0 *JoinClause) error {
-	if b.FuncExitJoinClause == nil {
-		return nil
-	}
-
-	return b.FuncExitJoinClause(p0)
-}
-
 func (b *ImplementedListener) EnterJoinOperator(p0 *JoinOperator) error {
 	if b.FuncEnterJoinOperator == nil {
 		return nil
@@ -1091,6 +1063,70 @@ func (b *ImplementedListener) ExitQualifiedTableName(p0 *QualifiedTableName) err
 	}
 
 	return b.FuncExitQualifiedTableName(p0)
+}
+
+func (b *ImplementedListener) EnterRelation(p0 Relation) error {
+	if b.FuncEnterRelation == nil {
+		return nil
+	}
+
+	return b.FuncEnterRelation(p0)
+}
+
+func (b *ImplementedListener) ExitRelation(p0 Relation) error {
+	if b.FuncExitRelation == nil {
+		return nil
+	}
+
+	return b.FuncExitRelation(p0)
+}
+
+func (b *ImplementedListener) EnterRelationJoin(p0 *RelationJoin) error {
+	if b.FuncEnterRelationJoin == nil {
+		return nil
+	}
+
+	return b.FuncEnterRelationJoin(p0)
+}
+
+func (b *ImplementedListener) ExitRelationJoin(p0 *RelationJoin) error {
+	if b.FuncExitRelationJoin == nil {
+		return nil
+	}
+
+	return b.FuncExitRelationJoin(p0)
+}
+
+func (b *ImplementedListener) EnterRelationSubquery(p0 *RelationSubquery) error {
+	if b.FuncEnterRelationSubquery == nil {
+		return nil
+	}
+
+	return b.FuncEnterRelationSubquery(p0)
+}
+
+func (b *ImplementedListener) ExitRelationSubquery(p0 *RelationSubquery) error {
+	if b.FuncExitRelationSubquery == nil {
+		return nil
+	}
+
+	return b.FuncExitRelationSubquery(p0)
+}
+
+func (b *ImplementedListener) EnterRelationTable(p0 *RelationTable) error {
+	if b.FuncEnterRelationTable == nil {
+		return nil
+	}
+
+	return b.FuncEnterRelationTable(p0)
+}
+
+func (b *ImplementedListener) ExitRelationTable(p0 *RelationTable) error {
+	if b.FuncExitRelationTable == nil {
+		return nil
+	}
+
+	return b.FuncExitRelationTable(p0)
 }
 
 func (b *ImplementedListener) EnterResultColumnExpression(p0 *ResultColumnExpression) error {
@@ -1235,70 +1271,6 @@ func (b *ImplementedListener) ExitSelectStmt(p0 *SelectStmt) error {
 	}
 
 	return b.FuncExitSelectStmt(p0)
-}
-
-func (b *ImplementedListener) EnterTableOrSubqueryJoin(p0 *TableOrSubqueryJoin) error {
-	if b.FuncEnterTableOrSubqueryJoin == nil {
-		return nil
-	}
-
-	return b.FuncEnterTableOrSubqueryJoin(p0)
-}
-
-func (b *ImplementedListener) ExitTableOrSubqueryJoin(p0 *TableOrSubqueryJoin) error {
-	if b.FuncExitTableOrSubqueryJoin == nil {
-		return nil
-	}
-
-	return b.FuncExitTableOrSubqueryJoin(p0)
-}
-
-func (b *ImplementedListener) EnterTableOrSubqueryList(p0 *TableOrSubqueryList) error {
-	if b.FuncEnterTableOrSubqueryList == nil {
-		return nil
-	}
-
-	return b.FuncEnterTableOrSubqueryList(p0)
-}
-
-func (b *ImplementedListener) ExitTableOrSubqueryList(p0 *TableOrSubqueryList) error {
-	if b.FuncExitTableOrSubqueryList == nil {
-		return nil
-	}
-
-	return b.FuncExitTableOrSubqueryList(p0)
-}
-
-func (b *ImplementedListener) EnterTableOrSubquerySelect(p0 *TableOrSubquerySelect) error {
-	if b.FuncEnterTableOrSubquerySelect == nil {
-		return nil
-	}
-
-	return b.FuncEnterTableOrSubquerySelect(p0)
-}
-
-func (b *ImplementedListener) ExitTableOrSubquerySelect(p0 *TableOrSubquerySelect) error {
-	if b.FuncExitTableOrSubquerySelect == nil {
-		return nil
-	}
-
-	return b.FuncExitTableOrSubquerySelect(p0)
-}
-
-func (b *ImplementedListener) EnterTableOrSubqueryTable(p0 *TableOrSubqueryTable) error {
-	if b.FuncEnterTableOrSubqueryTable == nil {
-		return nil
-	}
-
-	return b.FuncEnterTableOrSubqueryTable(p0)
-}
-
-func (b *ImplementedListener) ExitTableOrSubqueryTable(p0 *TableOrSubqueryTable) error {
-	if b.FuncExitTableOrSubqueryTable == nil {
-		return nil
-	}
-
-	return b.FuncExitTableOrSubqueryTable(p0)
 }
 
 func (b *ImplementedListener) EnterUpdate(p0 *Update) error {

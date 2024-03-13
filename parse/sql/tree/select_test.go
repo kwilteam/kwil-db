@@ -31,10 +31,8 @@ func TestSelect_ToSQL(t *testing.T) {
 							&tree.ResultColumnExpression{Expression: &tree.ExpressionColumn{Column: "bar"}},
 						},
 						From: &tree.FromClause{
-							JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
-									Name: "foo",
-								},
+							Relation: &tree.RelationTable{
+								Name: "foo",
 							},
 						},
 						Where: &tree.ExpressionBinaryComparison{

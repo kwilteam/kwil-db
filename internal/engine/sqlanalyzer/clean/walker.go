@@ -188,7 +188,7 @@ func (s *StatementCleaner) EnterInsertStmt(node *tree.InsertStmt) (err error) {
 }
 
 // EnterJoinClause does nothing
-func (s *StatementCleaner) EnterJoinClause(node *tree.JoinClause) (err error) {
+func (s *StatementCleaner) EnterRelation(node tree.Relation) (err error) {
 	return nil
 }
 
@@ -320,8 +320,8 @@ func (s *StatementCleaner) EnterCompoundOperator(node *tree.CompoundOperator) (e
 	return wrapErr(ErrInvalidCompoundOperator, node.Operator.Valid())
 }
 
-// EnterTableOrSubquery checks the table name and alias
-func (s *StatementCleaner) EnterTableOrSubqueryTable(node *tree.TableOrSubqueryTable) (err error) {
+// EnterRelationTable checks the table name and alias
+func (s *StatementCleaner) EnterRelationTable(node *tree.RelationTable) (err error) {
 	node.Name, err = cleanIdentifier(node.Name)
 	if err != nil {
 		return wrapErr(ErrInvalidIdentifier, err)
@@ -337,8 +337,8 @@ func (s *StatementCleaner) EnterTableOrSubqueryTable(node *tree.TableOrSubqueryT
 	return nil
 }
 
-// EnterTableOrSubquerySelect checks the alias
-func (s *StatementCleaner) EnterTableOrSubquerySelect(node *tree.TableOrSubquerySelect) (err error) {
+// EnterRelationSubquery checks the alias
+func (s *StatementCleaner) EnterRelationSubquery(node *tree.RelationSubquery) (err error) {
 	if node.Alias != "" {
 		node.Alias, err = cleanIdentifier(node.Alias)
 		if err != nil {
@@ -349,13 +349,8 @@ func (s *StatementCleaner) EnterTableOrSubquerySelect(node *tree.TableOrSubquery
 	return nil
 }
 
-// EnterTableOrSubqueryList does nothing
-func (s *StatementCleaner) EnterTableOrSubqueryList(node *tree.TableOrSubqueryList) (err error) {
-	return nil
-}
-
-// EnterTableOrSubqueryJoin does nothing
-func (s *StatementCleaner) EnterTableOrSubqueryJoin(node *tree.TableOrSubqueryJoin) (err error) {
+// EnterRelationJoin does nothing
+func (s *StatementCleaner) EnterRelationJoin(node *tree.RelationJoin) (err error) {
 	return nil
 }
 
