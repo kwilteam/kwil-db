@@ -5,13 +5,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
 type LogicalPlanner interface {
-	ToExpr(expr tree.Expression, input lp.LogicalPlan) lp.LogicalExpr
+	ToExpr(expr tree.Expression, schema *ds.Schema) lp.LogicalExpr
 	ToPlan(node tree.Ast) lp.LogicalPlan
 }
 
@@ -21,7 +21,7 @@ func NewPlanner() *queryPlanner {
 	return &queryPlanner{}
 }
 
-func (q *queryPlanner) ToExpr(expr tree.Expression, input lp.LogicalPlan) lp.LogicalExpr {
+func (q *queryPlanner) ToExpr(expr tree.Expression, schema *ds.Schema) lp.LogicalExpr {
 	switch e := expr.(type) {
 	case *tree.ExpressionLiteral:
 		if strings.HasPrefix(e.Value, "'") {
@@ -45,13 +45,13 @@ func (q *queryPlanner) ToExpr(expr tree.Expression, input lp.LogicalPlan) lp.Log
 		//case tree.UnaryOperatorMinus:
 		//case tree.UnaryOperatorPlus:
 		case tree.UnaryOperatorNot:
-			return lp.Not(q.ToExpr(e.Operand, input))
+			return lp.Not(q.ToExpr(e.Operand, schema))
 		default:
 			panic("unknown unary operator")
 		}
 	case *tree.ExpressionArithmetic:
-		l := q.ToExpr(e.Left, input)
-		r := q.ToExpr(e.Right, input)
+		l := q.ToExpr(e.Left, schema)
+		r := q.ToExpr(e.Right, schema)
 		switch e.Operator {
 		case tree.ArithmeticOperatorAdd:
 			return lp.Add(l, r)
@@ -66,8 +66,8 @@ func (q *queryPlanner) ToExpr(expr tree.Expression, input lp.LogicalPlan) lp.Log
 			panic("unknown arithmetic operator")
 		}
 	case *tree.ExpressionBinaryComparison:
-		l := q.ToExpr(e.Left, input)
-		r := q.ToExpr(e.Right, input)
+		l := q.ToExpr(e.Left, schema)
+		r := q.ToExpr(e.Right, schema)
 		switch e.Operator {
 		case tree.ComparisonOperatorEqual:
 			return lp.Eq(l, r)
@@ -173,7 +173,7 @@ func (q *queryPlanner) buildOrderBy(plan lp.LogicalPlan, node *tree.OrderBy, ctx
 }
 
 // buildProjection converts tree.OrderBy to []logical_plan.LogicalExpr
-func (q *queryPlanner) orderByToExprs(node *tree.OrderBy, schema *datasource.Schema, ctx *PlannerContext) []lp.LogicalExpr {
+func (q *queryPlanner) orderByToExprs(node *tree.OrderBy, schema *ds.Schema, ctx *PlannerContext) []lp.LogicalExpr {
 	if node == nil {
 		return []lp.LogicalExpr{}
 	}
@@ -201,7 +201,7 @@ func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.Logi
 	if node.Offset != nil {
 		switch t := node.Offset.(type) {
 		case *tree.ExpressionLiteral:
-			offsetExpr := q.ToExpr(t, plan)
+			offsetExpr := q.ToExpr(t, plan.Schema())
 			e, ok := offsetExpr.(*lp.LiteralIntExpr)
 			if !ok {
 				panic(fmt.Sprintf("unexpected offset value %s", t.Value))
@@ -223,7 +223,7 @@ func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.Logi
 
 	switch t := node.Expression.(type) {
 	case *tree.ExpressionLiteral:
-		limitExpr := q.ToExpr(t, plan)
+		limitExpr := q.ToExpr(t, plan.Schema())
 		e, ok := limitExpr.(*lp.LiteralIntExpr)
 		if !ok {
 			panic(fmt.Sprintf("unexpected limit value %s", t.Value))
@@ -269,42 +269,31 @@ func (q *queryPlanner) buildFrom(node *tree.FromClause, ctx *PlannerContext) lp.
 		return lp.Builder.NoRelation().Build()
 	}
 
-	return q.buildJoins(node.JoinClause, ctx)
+	return q.buildRelation(node.Relation, ctx)
 }
 
-func (q *queryPlanner) buildJoins(joins *tree.JoinClause, ctx *PlannerContext) lp.LogicalPlan {
-	left := q.buildDataSource(joins.TableOrSubquery, ctx)
+func (q *queryPlanner) buildRelation(relation tree.Relation, ctx *PlannerContext) lp.LogicalPlan {
+	var left lp.LogicalPlan
 
-	if len(joins.Joins) > 0 {
-		var tmpPlan lp.LogicalPlan
-		for _, join := range joins.Joins {
-			if tmpPlan == nil {
-				left = tmpPlan
-			}
-			right := q.buildDataSource(join.Table, ctx)
-			tmpPlan = lp.Builder.JoinOn(
-				join.JoinOperator.ToSQL(), right, q.ToExpr(join.Constraint, nil)).Build()
+	switch t := relation.(type) {
+	case *tree.RelationTable:
+		left = q.buildTableSource(t, ctx)
+	case *tree.RelationSubquery:
+		left = q.buildSelect(t.Select, ctx)
+	case *tree.RelationJoin:
+		left = q.buildRelation(t.Relation, ctx)
+		for _, join := range t.Joins {
+			right := q.buildRelation(join.Table, ctx)
+			joinSchema := left.Schema().Join(right.Schema())
+			expr := q.ToExpr(join.Constraint, joinSchema)
+			left = lp.Builder.JoinOn(
+				join.JoinOperator.ToSQL(), left, expr).Build()
 		}
-		return tmpPlan
-	} else {
-		return left
-	}
-}
-
-func (q *queryPlanner) relationFromTableOrSubquery(t tree.TableOrSubquery, ctx *PlannerContext) lp.LogicalPlan {
-	switch tt := t.(type) {
-	case *tree.TableOrSubqueryTable:
-		return q.buildDataSource(tt, ctx)
-	case *tree.TableOrSubquerySelect:
-		return q.buildSelect(tt.Select, ctx)
-	case *tree.TableOrSubqueryJoin:
-		return q.buildJoin(tt, ctx)
-	case *tree.TableOrSubqueryList:
-		return q.buildTableOrSubqueryList(tt, ctx)
 	default:
-		panic(fmt.Sprintf("unknown table or subquery type %T", tt))
+		panic(fmt.Sprintf("unknown relation type %T", t))
 	}
-	//return nil
+
+	return left
 }
 
 func (q *queryPlanner) buildCTEs(ctes []*tree.CTE, ctx *PlannerContext) lp.LogicalPlan {
@@ -318,23 +307,40 @@ func (q *queryPlanner) buildCTE(cte *tree.CTE, ctx *PlannerContext) lp.LogicalPl
 	return nil
 }
 
-func (q *queryPlanner) buildDataSource(node tree.Ast, ctx *PlannerContext) lp.LogicalPlan {
-	switch t := node.(type) {
-	case tree.TableOrSubquery:
-		switch tt := t.(type) {
-		case *tree.TableOrSubqueryTable: // simple table
-		case *tree.TableOrSubquerySelect: // subquery
-		case *tree.TableOrSubqueryJoin: // join
-		case *tree.TableOrSubqueryList: // values
-		default:
-			panic(fmt.Sprintf("unknown table or subquery type %T", tt))
-		}
-	// TODO: make SelectStmt a AST node
-	//case *tree.SelectStmt: // select in CTE
-	default:
-		panic(fmt.Sprintf("unknown data source type %T", t))
-	}
+func (q *queryPlanner) buildTableSource(node *tree.RelationTable, ctx *PlannerContext) lp.LogicalPlan {
+	//switch t := node.(type) {
+	//case tree.RelationTable:
+	//	switch tt := t.(type) {
+	//	case *tree.TableOrSubqueryTable: // simple table
+	//	case *tree.TableOrSubquerySelect: // subquery
+	//	case *tree.TableOrSubqueryJoin: // join
+	//	case *tree.TableOrSubqueryList: // values
+	//	default:
+	//		panic(fmt.Sprintf("unknown table or subquery type %T", tt))
+	//	}
+	//// TODO: make SelectStmt a AST node
+	////case *tree.SelectStmt: // select in CTE
+	//default:
+	//	panic(fmt.Sprintf("unknown data source type %T", t))
+	//}
+	//return nil
+
+	//return lp.Builder.From(node.Table).Build()
 	return nil
+}
+
+func (q *queryPlanner) buildFilter(plan lp.LogicalPlan, node tree.Expression, ctx *PlannerContext) lp.LogicalPlan {
+	if node == nil {
+		return plan
+	}
+
+	// TODO: handle parent schema
+
+	expr := q.ToExpr(node, plan.Schema())
+	seen := make(map[string]bool)
+	extractColumnsFromFilterExpr(expr, seen)
+
+	return lp.Builder.From(plan).Filter(expr).Build()
 }
 
 // extractColumnsFromFilterExpr extracts the columns are references by the filter expression.

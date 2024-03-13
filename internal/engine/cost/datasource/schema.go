@@ -49,6 +49,13 @@ func (s *Schema) mapProjection(projection []string) []int {
 	return newFieldsIndex
 }
 
+func (s *Schema) Join(other *Schema) *Schema {
+	fields := make([]Field, len(s.Fields)+len(other.Fields))
+	copy(fields, s.Fields)
+	copy(fields[len(s.Fields):], other.Fields)
+	return NewSchema(fields...)
+}
+
 func NewSchema(fields ...Field) *Schema {
 	return &Schema{Fields: fields}
 }

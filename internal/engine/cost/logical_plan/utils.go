@@ -1,5 +1,10 @@
 package logical_plan
 
+import (
+	"fmt"
+	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+)
+
 // SplitConjunction splits the given expression into a list of expressions.
 // A conjunction is an expression connected by AND operators.
 // If the given expression is not a conjunction, it returns a list with the
@@ -35,4 +40,29 @@ func Conjunction(exprs ...LogicalExpr) (expr LogicalExpr) {
 		expr = And(expr, exprs[i])
 	}
 	return
+}
+
+// ExtractColumns extracts the columns from the expression.
+// It keeps track of the columns that have been seen in the 'seen' map.
+func ExtractColumns(expr LogicalExpr,
+	schema *ds.Schema, seen map[string]bool) {
+	switch e := expr.(type) {
+	case *LiteralStringExpr:
+	case *LiteralIntExpr:
+	case *AliasExpr:
+		ExtractColumns(e.Expr, schema, seen)
+	case UnaryExpr:
+		ExtractColumns(e.E(), schema, seen)
+	case AggregateExpr:
+		ExtractColumns(e.E(), schema, seen)
+	case BinaryExpr:
+		ExtractColumns(e.L(), schema, seen)
+		ExtractColumns(e.R(), schema, seen)
+	case *ColumnExpr:
+		seen[e.Name] = true
+	case *ColumnIdxExpr:
+		seen[schema.Fields[e.Idx].Name] = true
+	default:
+		panic(fmt.Sprintf("unknown expression type %T", e))
+	}
 }
