@@ -3,6 +3,8 @@ package cometbft
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft/privval"
@@ -128,8 +130,43 @@ func genesisDocProvider(genDoc *types.GenesisDoc) cometNodes.GenesisDocProvider 
 	}
 }
 
+func writeCometBFTConfigs(conf *cometConfig.Config, genDoc *types.GenesisDoc) error {
+	// Save a copy the cometbft genesis and config files in the "abci/config"
+	// folder expected by the `cometbft` cli app, used for inspect, etc.
+	cometConfigPath := filepath.Join(conf.RootDir, "config")
+	os.MkdirAll(cometConfigPath, 0755)
+	cmtGenesisFile := filepath.Join(cometConfigPath, GenesisJSONName)
+	if err := genDoc.SaveAs(cmtGenesisFile); err != nil {
+		return fmt.Errorf("failed to write cometbft genesis.json formatted file to %v: %w", cmtGenesisFile, err)
+	}
+
+	// Now "abci/config/config.toml"
+	conf.RPC.TLSCertFile, conf.RPC.TLSKeyFile = "", "" // not needed for debugging and recovery
+	cmtConfigFile := filepath.Join(cometConfigPath, "config.toml")
+	cometConfig.WriteConfigFile(cmtConfigFile, conf)
+
+	cfgREADME := `This config folder is used to echo the in-memory CometBFT configuration
+that is generated from kwild's config and genesis files. This folder and the files
+within are useful for running certain debugging commands with the official cometbft
+command line application (github.com/cometbft/cometbft/cmd/cometbft).
+
+WARNING: These files are overwritten on kwild startup.`
+	cmtREADMEFile := filepath.Join(cometConfigPath, "README")
+	if _, err := os.Stat(cmtREADMEFile); errors.Is(err, os.ErrNotExist) {
+		err = os.WriteFile(cmtREADMEFile, []byte(cfgREADME), 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to write cometbft config folder README: %v", err)
+		}
+	}
+
+	return nil
+}
+
 // NewCometBftNode creates a new CometBFT node.
 func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, genDoc *types.GenesisDoc, privateKey cometEd25519.PrivKey, atomicStore privval.AtomicReadWriter, log *log.Logger) (*CometBftNode, error) {
+	if err := writeCometBFTConfigs(conf, genDoc); err != nil {
+		return nil, fmt.Errorf("failed to write the effective cometbft config files: %w", err)
+	}
 
 	err := conf.ValidateBasic()
 	if err != nil {
