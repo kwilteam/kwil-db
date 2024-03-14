@@ -12,6 +12,7 @@ import (
 const (
 	DataDir          = "data"
 	GenesisJSONName  = "genesis.json"
+	ConfigTOMLName   = "config.toml"
 	AddrBookFileName = "addrbook.json"
 )
 

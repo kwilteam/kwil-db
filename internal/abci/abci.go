@@ -414,6 +414,7 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 
 // Info is part of the Info/Query connection.
 func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciTypes.ResponseInfo, error) {
+	// TODO: check kwild_voting.height!!!!!!!!!!!!!!
 	height, err := a.metadataStore.GetBlockHeight(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block height: %w", err)
