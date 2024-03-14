@@ -75,8 +75,19 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 
 	chainRoot := filepath.Join(cfg.RootDir, abciDirName)
 	nodeCfg.SetRoot(chainRoot)
-	nodeCfg.Genesis = filepath.Join(cfg.RootDir, cometbft.GenesisJSONName)
+	// NOTE: The Genesis field is the one in cometbft's GenesisDoc, which is
+	// different from kwild's, which contains more fields (and not string
+	// int64). The documented genesis.json in kwild's root directory is:
+	//   filepath.Join(cfg.RootDir, cometbft.GenesisJSONName)
+	// This file is only used to reflect the in-memory genesis config provided
+	// to cometbft via a GenesisDocProvider. It it is not used by cometbft.
+	nodeCfg.Genesis = filepath.Join(chainRoot, "config", cometbft.GenesisJSONName)
 	nodeCfg.P2P.AddrBook = cometbft.AddrBookPath(chainRoot)
+	// For the same reasons described for the genesis.json path above, clear the
+	// node and validator file fields since they are provided in-memory.
+	nodeCfg.PrivValidatorKey = ""
+	nodeCfg.PrivValidatorState = ""
+	nodeCfg.NodeKey = ""
 
 	return nodeCfg
 }
