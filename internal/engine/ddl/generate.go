@@ -3,7 +3,7 @@ package ddl
 import (
 	"fmt"
 
-	types "github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 // GenerateDDL generates the necessary table and index ddl statements for the given table

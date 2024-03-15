@@ -4,11 +4,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/order"
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
-	"github.com/kwilteam/kwil-db/parse/sql/postgres"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	sqlparser "github.com/kwilteam/kwil-db/internal/parse/sql"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/postgres"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -175,98 +175,98 @@ func Test_Order(t *testing.T) {
 	}
 }
 
-var defaultTables = []*common.Table{
+var defaultTables = []*types.Table{
 	{
 		Name: "users",
-		Columns: []*common.Column{
+		Columns: []*types.Column{
 			{
 				Name: "id",
-				Type: common.INT,
-				Attributes: []*common.Attribute{
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
 					{
-						Type: common.PRIMARY_KEY,
+						Type: types.PRIMARY_KEY,
 					},
 				},
 			},
 			{
 				Name: "name",
-				Type: common.TEXT,
+				Type: types.TextType,
 			},
 		},
-		Indexes:     []*common.Index{},
-		ForeignKeys: []*common.ForeignKey{},
+		Indexes:     []*types.Index{},
+		ForeignKeys: []*types.ForeignKey{},
 	},
 	{
 		Name: "posts",
-		Columns: []*common.Column{
+		Columns: []*types.Column{
 			{
 				Name: "id",
-				Type: common.INT,
-				Attributes: []*common.Attribute{
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
 					{
-						Type: common.PRIMARY_KEY,
+						Type: types.PRIMARY_KEY,
 					},
 				},
 			},
 			{
 				Name: "user_id",
-				Type: common.INT,
-				Attributes: []*common.Attribute{
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
 					{
-						Type: common.NOT_NULL,
+						Type: types.NOT_NULL,
 					},
 				},
 			},
 			{
 				Name: "title",
-				Type: common.TEXT,
+				Type: types.TextType,
 			},
 		},
 	},
 	{
 		Name: "followers",
-		Columns: []*common.Column{
+		Columns: []*types.Column{
 			{
 				Name: "user_id",
-				Type: common.INT,
+				Type: types.IntType,
 			},
 			{
 				Name: "follower_id",
-				Type: common.INT,
+				Type: types.IntType,
 			},
 		},
-		Indexes: []*common.Index{
+		Indexes: []*types.Index{
 			{
 				Name: "primary_key",
 				Columns: []string{
 					"user_id",
 					"follower_id",
 				},
-				Type: common.PRIMARY,
+				Type: types.PRIMARY,
 			},
 		},
 	},
 	{
 		// likes is a join table for liker id and post id
 		Name: "likes",
-		Columns: []*common.Column{
+		Columns: []*types.Column{
 			{
 				Name: "liker_id",
-				Type: common.INT,
+				Type: types.IntType,
 			},
 			{
 				Name: "post_id",
-				Type: common.INT,
+				Type: types.IntType,
 			},
 		},
-		Indexes: []*common.Index{
+		Indexes: []*types.Index{
 			{
 				Name: "primary_key",
 				Columns: []string{
 					"liker_id",
 					"post_id",
 				},
-				Type: common.PRIMARY,
+				Type: types.PRIMARY,
 			},
 		},
 	},

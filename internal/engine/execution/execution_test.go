@@ -10,6 +10,7 @@ import (
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/common/testdata"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 
 	"github.com/stretchr/testify/assert"
@@ -32,7 +33,7 @@ func Test_Execution(t *testing.T) {
 				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
 				assert.NoError(t, err)
 
-				schema, err := eng.GetSchema(ctx, testdata.TestSchema.DBID())
+				schema, err := eng.GetSchema(testdata.TestSchema.DBID())
 				assert.NoError(t, err)
 
 				assert.EqualValues(t, testdata.TestSchema, schema)
@@ -129,7 +130,7 @@ func Test_Execution(t *testing.T) {
 
 				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureRecursive.Name,
+					Procedure: testdata.ActionRecursive.Name,
 					Args:      []any{"id000000", "asdfasdfasdfasdf", "bigbigbigbigbigbigbigbigbigbig"},
 					Signer:    testdata.TestSchema.Owner,
 					Caller:    string(testdata.TestSchema.Owner),
@@ -148,7 +149,7 @@ func Test_Execution(t *testing.T) {
 
 				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureRecursiveSneakyA.Name,
+					Procedure: testdata.ActionRecursiveSneakyA.Name,
 					Args:      []any{},
 					Signer:    testdata.TestSchema.Owner,
 					Caller:    string(testdata.TestSchema.Owner),
@@ -228,7 +229,7 @@ func Test_Execution(t *testing.T) {
 				err := eng.CreateDataset(ctx, db, testdata.TestSchema, []byte(owner))
 				assert.NoError(t, err)
 
-				datasets, err := eng.ListDatasets(ctx, []byte(owner))
+				datasets, err := eng.ListDatasets([]byte(owner))
 				assert.NoError(t, err)
 
 				assert.Equal(t, 1, len(datasets))
@@ -332,62 +333,60 @@ func (m *mockTx) Rollback(ctx context.Context) error {
 
 // identitySchema is a schema that relies on the testdata user's schema
 // it creates an example credential application
-var testSchema = &common.Schema{
+var testSchema = &types.Schema{
 	Name:  "identity_db",
 	Owner: []byte(`owner`),
-	Tables: []*common.Table{
+	Tables: []*types.Table{
 		{
 			Name: "credentials",
-			Columns: []*common.Column{
+			Columns: []*types.Column{
 				{
 					Name: "id",
-					Type: common.INT,
-					Attributes: []*common.Attribute{
+					Type: types.IntType,
+					Attributes: []*types.Attribute{
 						{
-							Type: common.PRIMARY_KEY,
+							Type: types.PRIMARY_KEY,
 						},
 					},
 				},
 				{
 					Name: "user_id",
-					Type: common.INT,
-					Attributes: []*common.Attribute{
+					Type: types.IntType,
+					Attributes: []*types.Attribute{
 						{
-							Type: common.NOT_NULL,
+							Type: types.NOT_NULL,
 						},
 					},
 				},
 				{
 					Name: "credential",
-					Type: common.TEXT,
+					Type: types.TextType,
 				},
 			},
-			Indexes: []*common.Index{
+			Indexes: []*types.Index{
 				{
 					Name:    "user_id",
 					Columns: []string{"user_id"},
-					Type:    common.BTREE,
+					Type:    types.BTREE,
 				},
 			},
 		},
 	},
-	Procedures: []*common.Procedure{
+	Actions: []*types.Action{
 		{
-			Name:   "use_math",
-			Args:   []string{"$a", "$b"},
-			Public: true,
-			Modifiers: []common.Modifier{
-				common.ModifierView,
+			Name:       "use_math",
+			Parameters: []string{"$a", "$b"},
+			Public:     true,
+			Modifiers: []types.Modifier{
+				types.ModifierView,
 			},
-			Statements: []string{
-				`math.add($a, $b);`,
-			},
+			Body: `math.add($a, $b);`,
 		},
 	},
-	Extensions: []*common.Extension{
+	Extensions: []*types.Extension{
 		{
 			Name: "math",
-			Initialization: []*common.ExtensionConfig{
+			Initialization: []*types.ExtensionConfig{
 				{
 					Key:   "math_key",
 					Value: "math_val",
@@ -420,13 +419,13 @@ func (m *mathExt) Call(caller *precompiles.ProcedureContext, app *common.App, me
 // Test_OrderSchemas tests that schemas are ordered correctly when importing with dependencies
 func Test_OrderSchemas(t *testing.T) {
 	// create random schemas, and randomly add others as dependencies
-	schemas := make([]*common.Schema, 0)
+	schemas := make([]*types.Schema, 0)
 
 	for i := 0; i < 100; i++ {
 		schema := randomSchema()
 
 		for _, schema2 := range schemas {
-			schema2.Extensions = append(schema.Extensions, &common.Extension{
+			schema2.Extensions = append(schema.Extensions, &types.Extension{
 				Name:  schema.DBID(),
 				Alias: schema.Name,
 			})
@@ -439,7 +438,7 @@ func Test_OrderSchemas(t *testing.T) {
 	for _, schema := range schemas {
 		for i := 0; i < 10; i++ {
 			dep := randomSchema()
-			schema.Extensions = append(schema.Extensions, &common.Extension{
+			schema.Extensions = append(schema.Extensions, &types.Extension{
 				Name:  dep.DBID(),
 				Alias: dep.Name,
 			})
@@ -479,8 +478,8 @@ func randomString(length int) string {
 	return string(b)
 }
 
-func randomSchema() *common.Schema {
-	return &common.Schema{
+func randomSchema() *types.Schema {
+	return &types.Schema{
 		Name:  randomString(10),
 		Owner: []byte(randomString(10)),
 	}

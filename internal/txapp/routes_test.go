@@ -191,7 +191,7 @@ func Test_Routes(t *testing.T) {
 				assert.Equal(t, 1, deleteCount)
 			},
 			payload: &transactions.ValidatorVoteBodies{
-				Events: []*types.VotableEvent{
+				Events: []*transactions.VotableEvent{
 					{
 						Type: testType,
 						Body: []byte("asdfadsf"),
@@ -227,7 +227,7 @@ func Test_Routes(t *testing.T) {
 				assert.Equal(t, 0, deleteCount) // 0, since this does not go through
 			},
 			payload: &transactions.ValidatorVoteBodies{
-				Events: []*types.VotableEvent{
+				Events: []*transactions.VotableEvent{
 					{
 						Type: testType,
 						Body: []byte("asdfadsf"),

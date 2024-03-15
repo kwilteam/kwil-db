@@ -9,7 +9,9 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/ddl"
+	"github.com/kwilteam/kwil-db/internal/engine/procedural"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 )
 
@@ -52,7 +54,7 @@ func createSchemasTableIfNotExists(ctx context.Context, tx sql.DB) error {
 // It will also store the schema in the kwil_schemas table.
 // It also creates the relevant tables, indexes, etc.
 // If the schema already exists in the Kwil schemas table, it will be updated.
-func createSchema(ctx context.Context, tx sql.TxMaker, schema *common.Schema) error {
+func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema) error {
 	schemaName := dbidSchema(schema.DBID())
 
 	sp, err := tx.BeginTx(ctx)
@@ -94,17 +96,31 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *common.Schema) er
 		}
 	}
 
+	// for each procedure, we will sanitize it,
+	// type check, generate the PLPGSQL code,
+	// and then execute the generated code.
+	stmts, err := procedural.GeneratePLPGSQL(schema, schemaName, pgSessionPrefix, pgSessionVars)
+	if err != nil {
+		return err
+	}
+	for _, stmt := range stmts {
+		_, err = sp.Execute(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+
 	return sp.Commit(ctx)
 }
 
 // getSchemas returns all schemas in the kwil_schemas table
-func getSchemas(ctx context.Context, tx sql.Executor) ([]*common.Schema, error) {
+func getSchemas(ctx context.Context, tx sql.Executor) ([]*types.Schema, error) {
 	res, err := tx.Execute(ctx, sqlListSchemaContent)
 	if err != nil {
 		return nil, err
 	}
 
-	schemas := make([]*common.Schema, len(res.Rows))
+	schemas := make([]*types.Schema, len(res.Rows))
 	for i, row := range res.Rows {
 		if len(row) != 1 {
 			return nil, fmt.Errorf("expected 1 column, got %d", len(row))
@@ -115,7 +131,7 @@ func getSchemas(ctx context.Context, tx sql.Executor) ([]*common.Schema, error) 
 			return nil, fmt.Errorf("expected []byte, got %T", row[0])
 		}
 
-		schema := &common.Schema{}
+		schema := &types.Schema{}
 		err := json.Unmarshal(bts, schema)
 		if err != nil {
 			return nil, fmt.Errorf("unmarshaling schema: %w", err)
@@ -150,3 +166,21 @@ func deleteSchema(ctx context.Context, tx sql.TxMaker, dbid string) error {
 
 	return sp.Commit(ctx)
 }
+
+// setContextualVars sets the contextual variables for the given postgres session.
+func setContextualVars(ctx context.Context, db sql.DB, data *common.ExecutionData) error {
+	_, err := db.Execute(ctx, fmt.Sprintf(`SET %s.%s = '%s';`, pgSessionPrefix, callerVar, data.Caller))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+var (
+	pgSessionPrefix = "ctx"
+	callerVar       = "caller"
+	pgSessionVars   = map[string]*types.DataType{
+		callerVar: types.TextType,
+	}
+)

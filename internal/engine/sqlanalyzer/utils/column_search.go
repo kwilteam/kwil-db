@@ -3,7 +3,7 @@ package utils
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 
 // TODO: test this

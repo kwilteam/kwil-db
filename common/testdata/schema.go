@@ -1,7 +1,7 @@
 package testdata
 
 import (
-	types "github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 // TestSchema is a test schema that mocks a social media application
@@ -12,17 +12,21 @@ var TestSchema = &types.Schema{
 		TableUsers,
 		TablePosts,
 	},
+	Actions: []*types.Action{
+		ActionCreateUser,
+		ActionCreatePost,
+		ActionGetUserByAddress,
+		ActionGetPosts,
+		ActionAdminDeleteUser,
+		ActionCallsPrivate,
+		ActionPrivate,
+		ActionRecursive,
+		ActionRecursiveSneakyA,
+		ActionRecursiveSneakyB,
+	},
 	Procedures: []*types.Procedure{
-		ProcedureCreateUser,
-		ProcedureCreatePost,
-		ProcedureGetUserByAddress,
-		ProcedureGetPosts,
-		ProcedureAdminDeleteUser,
-		ProcedureCallsPrivate,
-		ProcedurePrivate,
-		ProcedureRecursive,
-		ProcedureRecursiveSneakyA,
-		ProcedureRecursiveSneakyB,
+		ProcCreateUser,
+		ProcGetUserByAddress,
 	},
 	Extensions: []*types.Extension{},
 }

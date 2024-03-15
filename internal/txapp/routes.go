@@ -132,7 +132,7 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	schema, err := convertSchemaToEngine(schemaPayload)
+	schema, err := schemaPayload.ToTypes()
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -801,27 +801,32 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	// 1. VoteBody should only include the events for which the resolutions are not yet created. Maybe filter out the events for which the resolutions are already created and ignore them.
 	// 2. If the node is the proposer, delete the event from the event store
 	for _, event := range vote.Events {
+		ev := &types.VotableEvent{
+			Type: event.Type,
+			Body: event.Body,
+		}
+
 		resCfg, err := resolutions.GetResolution(event.Type)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
 		expiryHeight := ctx.BlockHeight + resCfg.ExpirationPeriod
-		err = createResolution(ctx.Ctx, tx2, event, expiryHeight, tx.Sender)
+		err = createResolution(ctx.Ctx, tx2, ev, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
 		// since the vote body proposer is implicitly voting for the event,
 		// we need to approve the newly created vote body here
-		err = approveResolution(ctx.Ctx, tx2, event.ID(), tx.Sender)
+		err = approveResolution(ctx.Ctx, tx2, ev.ID(), tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
 		// If the local validator is the proposer, then we should delete the event from the event store.
 		if fromLocalValidator {
-			err = deleteEvent(ctx.Ctx, tx2, event.ID())
+			err = deleteEvent(ctx.Ctx, tx2, ev.ID())
 			if err != nil {
 				return txRes(spend, transactions.CodeUnknownError, err)
 			}

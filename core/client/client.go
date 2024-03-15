@@ -138,7 +138,7 @@ func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 }
 
 // GetSchema gets a schema by dbid.
-func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
+func (c *Client) GetSchema(ctx context.Context, dbid string) (*types.Schema, error) {
 	ds, err := c.txClient.GetSchema(ctx, dbid)
 	if err != nil {
 		return nil, err
@@ -148,9 +148,11 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Sche
 }
 
 // DeployDatabase deploys a database.
-func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schema, opts ...clientType.TxOpt) (transactions.TxHash, error) {
+func (c *Client) DeployDatabase(ctx context.Context, payload *types.Schema, opts ...clientType.TxOpt) (transactions.TxHash, error) {
 	txOpts := clientType.GetTxOpts(opts)
-	tx, err := c.newTx(ctx, payload, txOpts)
+	s2 := &transactions.Schema{}
+	s2.FromTypes(payload)
+	tx, err := c.newTx(ctx, s2, txOpts)
 	if err != nil {
 		return nil, err
 	}

@@ -73,7 +73,7 @@ func callCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error getting action: %w", err))
 				}
 
-				tuples, err := createActionInputs(inputs, actionStructure.Inputs)
+				tuples, err := createActionInputs(inputs, actionStructure.Parameters)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
 				}

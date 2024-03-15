@@ -7,7 +7,7 @@ import (
 )
 
 func (s *Service) ListDatabases(ctx context.Context, req *txpb.ListDatabasesRequest) (*txpb.ListDatabasesResponse, error) {
-	dbs, err := s.engine.ListDatasets(ctx, req.Owner)
+	dbs, err := s.engine.ListDatasets(req.Owner)
 	if err != nil {
 		return nil, err
 	}

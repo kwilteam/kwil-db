@@ -9,6 +9,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 // Initializer initializes a new instance of a precompile.
@@ -37,7 +38,7 @@ type Instance interface {
 // transaction.
 type DeploymentContext struct {
 	Ctx    context.Context
-	Schema *common.Schema
+	Schema *types.Schema
 }
 
 // ProcedureContext is the context for a procedure execution.
@@ -66,6 +67,8 @@ type ProcedureContext struct {
 	// StackDepth tracks the current depth of the procedure call stack. It is
 	// incremented each time a procedure calls another procedure.
 	StackDepth int
+	// UsedGas is the amount of gas used in the current execution.
+	UsedGas uint64
 }
 
 // SetValue sets a value in the scope.
@@ -110,6 +113,7 @@ func (p *ProcedureContext) NewScope() *ProcedureContext {
 		DBID:       p.DBID,
 		Procedure:  p.Procedure,
 		StackDepth: p.StackDepth,
+		UsedGas:    p.UsedGas,
 	}
 }
 

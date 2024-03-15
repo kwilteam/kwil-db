@@ -10,6 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/common/testdata"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 
 	"github.com/stretchr/testify/assert"
@@ -38,13 +39,12 @@ func Test_Engine(t *testing.T) {
 				require.NoError(t, err)
 			},
 			after: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
-				ctx := context.Background()
-				schema, err := global.GetSchema(ctx, testdata.TestSchema.DBID())
+				schema, err := global.GetSchema(testdata.TestSchema.DBID())
 				require.NoError(t, err)
 
 				require.EqualValues(t, testdata.TestSchema, schema)
 
-				dbs, err := global.ListDatasets(ctx, testdata.TestSchema.Owner)
+				dbs, err := global.ListDatasets(testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
 				require.Equal(t, 1, len(dbs))
@@ -65,8 +65,7 @@ func Test_Engine(t *testing.T) {
 				require.NoError(t, err)
 			},
 			after: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
-				ctx := context.Background()
-				dbs, err := global.ListDatasets(ctx, testdata.TestSchema.Owner)
+				dbs, err := global.ListDatasets(testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
 				require.Equal(t, 0, len(dbs))
@@ -85,7 +84,7 @@ func Test_Engine(t *testing.T) {
 				ctx := context.Background()
 				_, err := global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureCreateUser.Name,
+					Procedure: testdata.ActionCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
 					Signer:    []byte(signer),
 					Caller:    signer,
@@ -94,7 +93,7 @@ func Test_Engine(t *testing.T) {
 
 				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureCreatePost.Name,
+					Procedure: testdata.ActionCreatePost.Name,
 					Args:      []any{1, "Bitcoin!", "The Bitcoin Whitepaper", "9/31/2008"},
 					Signer:    []byte(signer),
 					Caller:    signer,
@@ -106,7 +105,7 @@ func Test_Engine(t *testing.T) {
 
 				res, err := global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureGetPosts.Name,
+					Procedure: testdata.ActionGetPosts.Name,
 					Args:      []any{"satoshi"},
 					Signer:    []byte("signer"),
 					Caller:    "signer",
@@ -146,7 +145,7 @@ func Test_Engine(t *testing.T) {
 
 				_, err := global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureCreatePost.Name,
+					Procedure: testdata.ActionCreatePost.Name,
 					Args:      []any{1, "Bitcoin!", "The Bitcoin Whitepaper", "9/31/2008"},
 					Signer:    []byte("signer"),
 					Caller:    "signer",
@@ -163,7 +162,7 @@ func Test_Engine(t *testing.T) {
 
 				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureCreateUser.Name,
+					Procedure: testdata.ActionCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
 					Signer:    []byte("signer"),
 					Caller:    "signer",
@@ -175,7 +174,7 @@ func Test_Engine(t *testing.T) {
 
 				users, err := global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureGetUserByAddress.Name,
+					Procedure: testdata.ActionGetUserByAddress.Name,
 					Args:      []any{"signer"},
 					Signer:    []byte("signer"),
 					Caller:    "signer",
@@ -196,7 +195,7 @@ func Test_Engine(t *testing.T) {
 
 				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureCreateUser.Name,
+					Procedure: testdata.ActionCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
 					Signer:    []byte("signer"),
 					Caller:    "signer",
@@ -208,7 +207,7 @@ func Test_Engine(t *testing.T) {
 
 				users, err := global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureGetUserByAddress.Name,
+					Procedure: testdata.ActionGetUserByAddress.Name,
 					Args:      []any{"signer"},
 					Signer:    []byte("signer"),
 					Caller:    "signer",
@@ -224,13 +223,13 @@ func Test_Engine(t *testing.T) {
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
-				oldExtensions := []*common.Extension{}
+				oldExtensions := []*types.Extension{}
 				copy(oldExtensions, testdata.TestSchema.Extensions)
 
 				testdata.TestSchema.Extensions = append(testdata.TestSchema.Extensions,
-					&common.Extension{
+					&types.Extension{
 						Name: "math",
-						Initialization: []*common.ExtensionConfig{
+						Initialization: []*types.ExtensionConfig{
 							{
 								Key:   "fail",
 								Value: "true",
@@ -259,7 +258,7 @@ func Test_Engine(t *testing.T) {
 
 				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureAdminDeleteUser.Name,
+					Procedure: testdata.ActionAdminDeleteUser.Name,
 					Args:      []any{1},
 					Signer:    []byte("signer"),
 					Caller:    "signer",
@@ -268,7 +267,7 @@ func Test_Engine(t *testing.T) {
 
 				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureAdminDeleteUser.Name,
+					Procedure: testdata.ActionAdminDeleteUser.Name,
 					Args:      []any{1},
 					Signer:    testdata.TestSchema.Owner,
 					Caller:    string(testdata.TestSchema.Owner),
@@ -287,7 +286,7 @@ func Test_Engine(t *testing.T) {
 				// calling private fails
 				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedurePrivate.Name,
+					Procedure: testdata.ActionPrivate.Name,
 					Args:      []any{},
 					Signer:    []byte("signer"),
 					Caller:    "signer",
@@ -297,7 +296,7 @@ func Test_Engine(t *testing.T) {
 				// calling a public which calls private succeeds
 				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureCallsPrivate.Name,
+					Procedure: testdata.ActionCallsPrivate.Name,
 					Args:      []any{},
 					Signer:    []byte("signer"),
 					Caller:    "signer",
@@ -319,7 +318,7 @@ func Test_Engine(t *testing.T) {
 
 				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureCreateUser.Name,
+					Procedure: testdata.ActionCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
 					Signer:    []byte("signer"),
 					Caller:    "signer",
@@ -328,7 +327,7 @@ func Test_Engine(t *testing.T) {
 
 				_, err = global.Procedure(ctx, tx, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureGetUserByAddress.Name,
+					Procedure: testdata.ActionGetUserByAddress.Name,
 					Args:      []any{"signer"},
 					Signer:    []byte("signer"),
 					Caller:    "signer",
@@ -477,69 +476,69 @@ func Test_Engine(t *testing.T) {
 }
 
 var (
-	caseSchema = &common.Schema{
+	caseSchema = &types.Schema{
 		Name: "case_insensITive",
-		Tables: []*common.Table{
+		Tables: []*types.Table{
 			{
 				Name: "usErs",
-				Columns: []*common.Column{
+				Columns: []*types.Column{
 					{
 						Name: "id",
-						Type: common.INT,
-						Attributes: []*common.Attribute{
+						Type: types.IntType,
+						Attributes: []*types.Attribute{
 							{
-								Type: common.PRIMARY_KEY,
+								Type: types.PRIMARY_KEY,
 							},
 						},
 					},
 					{
 						Name: "nAMe",
-						Type: common.TEXT,
+						Type: types.TextType,
 					},
 				},
-				Indexes: []*common.Index{
+				Indexes: []*types.Index{
 					{
 						Name: "usErs_name",
 						Columns: []string{
 							"nAmE",
 						},
-						Type: common.BTREE,
+						Type: types.BTREE,
 					},
 				},
 			},
 			{
 				Name: "fOllOwers",
-				Columns: []*common.Column{
+				Columns: []*types.Column{
 					{
 						Name: "foLlOwer_id",
-						Type: common.INT,
-						Attributes: []*common.Attribute{
+						Type: types.IntType,
+						Attributes: []*types.Attribute{
 							{
-								Type: common.NOT_NULL,
+								Type: types.NOT_NULL,
 							},
 						},
 					},
 					{
 						Name: "fOllOwee_id",
-						Type: common.INT,
-						Attributes: []*common.Attribute{
+						Type: types.IntType,
+						Attributes: []*types.Attribute{
 							{
-								Type: common.NOT_NULL,
+								Type: types.NOT_NULL,
 							},
 						},
 					},
 				},
-				Indexes: []*common.Index{
+				Indexes: []*types.Index{
 					{
 						Name: "fOllOwers_pk",
 						Columns: []string{
 							"foLlowEr_id",
 							"fOllOwee_Id",
 						},
-						Type: common.PRIMARY,
+						Type: types.PRIMARY,
 					},
 				},
-				ForeignKeys: []*common.ForeignKey{
+				ForeignKeys: []*types.ForeignKey{
 					{
 						ChildKeys: []string{
 							"FoLlOwer_id",
@@ -561,47 +560,41 @@ var (
 				},
 			},
 		},
-		Procedures: []*common.Procedure{
+		Actions: []*types.Action{
 			{
 				Name: "CrEaTe_UsEr",
-				Args: []string{
+				Parameters: []string{
 					"$Id",
 					"$nAmE",
 				},
 				Public: true,
-				Statements: []string{
-					"INSERT INTO UseRs (ID, nAme) VALUES ($iD, $nAME);",
-				},
+				Body:   "INSERT INTO UseRs (ID, nAme) VALUES ($iD, $nAME);",
 			},
 			{
 				Name: "CrEaTe_FoLlOwEr",
-				Args: []string{
+				Parameters: []string{
 					"$FoLlOwer_nAme",
 					"$FoLlOwee_nAme",
 				},
 				Public: true,
-				Statements: []string{
-					`INSERT INTO FollOweRS (FOLlOwer_id, FOLlOwee_id)
+				Body: `INSERT INTO FollOweRS (FOLlOwer_id, FOLlOwee_id)
 					VALUES (
 						(SELECT ID FROM USErs WHERE NAmE = $FoLlOwer_nAME),
 						(SELECT ID FROM UsErS WHERE nAME = $FoLlOwee_nAME)
 					);`,
-				},
 			},
 			{
 				Name: "use_ExTension",
-				Args: []string{
+				Parameters: []string{
 					"$vAl1",
 					"$vAl2",
 				},
 				Public: true,
-				Statements: []string{
-					"$rEs = Math_Ext.AdD($VAl1 + $VAl2, 1);",
-					"SELECT $rES as res;", // type? procedure execution is not strongly typed...
-				},
+				Body:   "$rEs = Math_Ext.AdD($VAl1 + $VAl2, 1); SELECT $rES as res;", // type? procedure execution is not strongly typed...
+
 			},
 		},
-		Extensions: []*common.Extension{
+		Extensions: []*types.Extension{
 			{
 				Name:  "maTh",
 				Alias: "Math_Ext",

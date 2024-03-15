@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
-	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -66,7 +65,7 @@ func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTx
 		return nil, convertError(err)
 	}
 
-	return conversion.ConvertFromPBTxQueryResp(res)
+	return convertFromPBTxQueryResp(res)
 }
 
 // ChainInfo gets information on the blockchain of the remote host.
@@ -219,7 +218,7 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 	return unmarshalMapResults(res.Result)
 }
 
-func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
+func (c *Client) GetSchema(ctx context.Context, dbid string) (*types.Schema, error) {
 	res, err := c.TxClient.GetSchema(ctx, &txpb.GetSchemaRequest{
 		Dbid: dbid,
 	})
@@ -227,7 +226,7 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Sche
 		return nil, err
 	}
 
-	return conversion.ConvertFromPBSchema(res.Schema), nil
+	return convertPBToSchema(res.Schema)
 }
 
 func unmarshalMapResults(b []byte) ([]map[string]any, error) {

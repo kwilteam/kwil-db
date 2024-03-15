@@ -1,6 +1,6 @@
 package schema
 
-import "github.com/kwilteam/kwil-db/parse/sql/tree"
+import "github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 
 // SchemaWalker walks statements and ensures that their statements are targeting a postgres schema / namespace.
 type SchemaWalker struct {

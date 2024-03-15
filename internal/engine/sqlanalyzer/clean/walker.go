@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 
 // TODO: the statement cleaner should also check for table / column existence
@@ -22,8 +22,8 @@ type StatementCleaner struct {
 
 // EnterAggregateFunc checks that the function name is a valid identifier
 func (s *StatementCleaner) EnterAggregateFunc(node *tree.AggregateFunc) (err error) {
-	node.FunctionName, err = cleanIdentifier(node.FunctionName)
-	return wrapErr(ErrInvalidIdentifier, err)
+	node.FunctionName = strings.ToLower(node.FunctionName)
+	return nil
 }
 
 // EnterConflictTarget checks that the indexed column names are valid identifiers
@@ -145,8 +145,8 @@ func (s *StatementCleaner) EnterExpressionArithmetic(node *tree.ExpressionArithm
 
 // EnterScalarFunc checks that the function name is a valid identifier and is a scalar function
 func (s *StatementCleaner) EnterScalarFunc(node *tree.ScalarFunction) (err error) {
-	node.FunctionName, err = cleanIdentifier(node.FunctionName)
-	return wrapErr(ErrInvalidIdentifier, err)
+	node.FunctionName = strings.ToLower(node.FunctionName)
+	return nil
 }
 
 // EnterGroupBy does nothing

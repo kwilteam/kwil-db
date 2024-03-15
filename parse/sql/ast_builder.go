@@ -9,9 +9,9 @@ import (
 
 	"github.com/antlr4-go/antlr/v4"
 
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 	"github.com/kwilteam/kwil-db/parse/internal/util"
 	"github.com/kwilteam/kwil-db/parse/sql/grammar"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
 // astBuilder is a visitor that visits Antlr parsed tree and builds sql AST.
@@ -1127,19 +1127,42 @@ func (v *astBuilder) VisitSelect_stmt(ctx *grammar.Select_stmtContext) interface
 }
 
 func (v *astBuilder) VisitSql_stmt_list(ctx *grammar.Sql_stmt_listContext) interface{} {
+
+	res := make([]tree.AstNode, len(ctx.AllSql_stmt()))
+	for i, stmtCtx := range ctx.AllSql_stmt() {
+		res[i] = stmtCtx.Accept(v).(tree.AstNode)
+	}
+
 	return v.VisitChildren(ctx)
 }
 
 func (v *astBuilder) VisitSql_stmt(ctx *grammar.Sql_stmtContext) interface{} {
-	// Sql_stmtContext will only have one stmt
-	return v.VisitChildren(ctx).([]tree.AstNode)[0]
+	switch {
+	case ctx.Delete_stmt() != nil:
+		return ctx.Delete_stmt().Accept(v)
+	case ctx.Insert_stmt() != nil:
+		return ctx.Insert_stmt().Accept(v)
+	case ctx.Select_stmt() != nil:
+		return ctx.Select_stmt().Accept(v)
+	case ctx.Update_stmt() != nil:
+		return ctx.Update_stmt().Accept(v)
+	default:
+		panic("unsupported sql statement")
+	}
 }
 
 // VisitStatements is called when visiting a statements, return []tree.AstNode
 func (v *astBuilder) VisitStatements(ctx *grammar.StatementsContext) interface{} {
 	// ParseContext will only have one Sql_stmt_listContext
 	sqlStmtListContext := ctx.Sql_stmt_list(0)
-	return v.VisitChildren(sqlStmtListContext).([]tree.AstNode)
+
+	results := make([]tree.AstNode, len(sqlStmtListContext.AllSql_stmt()))
+
+	for i, stmtCtx := range sqlStmtListContext.AllSql_stmt() {
+		results[i] = stmtCtx.Accept(v).(tree.AstNode)
+	}
+
+	return results
 }
 
 // Visit dispatch to the visit method of the ctx

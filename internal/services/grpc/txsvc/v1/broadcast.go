@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 
-	"github.com/kwilteam/kwil-db/core/rpc/conversion"
+	"github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
@@ -32,7 +32,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		zap.String("PayloadType", req.Tx.Body.PayloadType))
 	logger.Debug("incoming transaction")
 
-	tx, err := conversion.ConvertFromPBTx(req.Tx)
+	tx, err := grpc.ConvertFromPBTx(req.Tx)
 	if err != nil {
 		logger.Error("failed to convert transaction", zap.Error(err))
 		// NOTE: for internal error, we should not expose the error message to the client

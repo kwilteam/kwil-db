@@ -428,26 +428,20 @@
         "public": {
           "type": "boolean"
         },
-        "inputs": {
+        "parameters": {
           "type": "array",
           "items": {
             "type": "string"
           }
         },
-        "statements": {
+        "modifiers": {
           "type": "array",
           "items": {
             "type": "string"
           }
         },
-        "mutability": {
+        "body": {
           "type": "string"
-        },
-        "auxiliaries": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         },
         "annotations": {
           "type": "array",
@@ -554,7 +548,7 @@
           "type": "string"
         },
         "type": {
-          "type": "string"
+          "$ref": "#/definitions/txDataType"
         },
         "attributes": {
           "type": "array",
@@ -562,6 +556,17 @@
             "type": "object",
             "$ref": "#/definitions/txAttribute"
           }
+        }
+      }
+    },
+    "txDataType": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "isArray": {
+          "type": "boolean"
         }
       }
     },
@@ -720,6 +725,54 @@
         }
       }
     },
+    "txProcedure": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txTypedVariable"
+          }
+        },
+        "public": {
+          "type": "boolean"
+        },
+        "modifiers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "type": "string"
+        },
+        "returnTypes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txDataType"
+          },
+          "title": "either return_types or return_table should be set"
+        },
+        "returnTable": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txTypedVariable"
+          }
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "txQueryRequest": {
       "type": "object",
       "properties": {
@@ -769,6 +822,13 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/txExtensions"
+          }
+        },
+        "procedures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txProcedure"
           }
         }
       }
@@ -914,6 +974,17 @@
         },
         "tx_result": {
           "$ref": "#/definitions/txTransactionResult"
+        }
+      }
+    },
+    "txTypedVariable": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/txDataType"
         }
       }
     }

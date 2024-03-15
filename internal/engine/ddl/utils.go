@@ -3,11 +3,11 @@ package ddl
 import (
 	"fmt"
 
-	types "github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/conv"
 )
 
-func columnTypeToSQLType(columnType types.DataType) (string, error) {
+func columnTypeToSQLType(columnType *types.DataType) (string, error) {
 	err := columnType.Clean()
 	if err != nil {
 		return "", err
@@ -15,18 +15,21 @@ func columnTypeToSQLType(columnType types.DataType) (string, error) {
 
 	var sqlType string
 	switch columnType {
-	case types.TEXT:
+	case types.TextType:
 		sqlType = "TEXT"
-	case types.INT:
+	case types.IntType:
 		sqlType = "INT8"
-	case types.NULL:
-		sqlType = "NULL"
-	case types.BLOB:
+	case types.NullType:
+		return "", fmt.Errorf("cannot have null column type")
+	case types.BlobType:
 		sqlType = "BYTEA"
-	case types.BOOL:
+	case types.BoolType:
 		sqlType = "BOOLEAN"
+	case types.UUIDType:
+		sqlType = "UUID"
 	default:
-		return "", fmt.Errorf("unknown column type: %s", columnType)
+		// based on an alias
+		sqlType = columnType.String()
 	}
 
 	return sqlType, nil

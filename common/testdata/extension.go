@@ -1,6 +1,6 @@
 package testdata
 
-import types "github.com/kwilteam/kwil-db/common"
+import "github.com/kwilteam/kwil-db/core/types"
 
 var (
 	ExtensionErc20 = &types.Extension{

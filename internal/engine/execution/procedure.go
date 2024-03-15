@@ -5,18 +5,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/internal/conv"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	actparser "github.com/kwilteam/kwil-db/parse/action"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
 // MaxStackDepth is the limit on the number of nested procedure calls allowed.
@@ -49,10 +51,10 @@ type instruction interface { // i.e. dmlStmt, callMethod, or instructionFunc
 	execute(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error
 }
 
-// procedure is a predefined procedure that can be executed.
-// Unlike the procedure declared in the shared types, this
-// procedure's statements are parsed into a set of instructions.
-type procedure struct {
+// preparedAction is a predefined preparedAction that can be executed.
+// Unlike the preparedAction declared in the shared types, this
+// preparedAction's statements are parsed into a set of instructions.
+type preparedAction struct {
 	// name is the name of the procedure.
 	name string
 
@@ -69,13 +71,13 @@ type procedure struct {
 	instructions []instruction
 }
 
-// prepareProcedure parses a procedure from a types.Procedure.
-// It converts all procedure modifiers and statements into instructions.
-// these instructions are then used to execute the procedure.
+// prepareAction parses an action from a types.Action.
+// It converts all modifiers and statements into instructions.
+// these instructions are then used to execute the action.
 // It will convert modifiers first, since these should be checked immediately
-// when the procedure is called. It will then convert the statements into
+// when the action is called. It will then convert the statements into
 // instructions.
-func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema *common.Schema) (*procedure, error) {
+func prepareAction(unparsed *types.Action, global *GlobalContext, schema *types.Schema) (*preparedAction, error) {
 	instructions := make([]instruction, 0)
 	owner := make([]byte, len(schema.Owner))
 	copy(owner, schema.Owner) // copy this here since caller may modify the passed schema. maybe not necessary
@@ -84,7 +86,7 @@ func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema 
 	isViewProcedure := false // isViewAction tracks whether this procedure is a view
 	for _, mod := range unparsed.Modifiers {
 		switch mod {
-		case common.ModifierOwner:
+		case types.ModifierOwner:
 			instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
 
 				if !bytes.Equal(scope.Signer, owner) {
@@ -93,7 +95,7 @@ func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema 
 
 				return nil
 			}))
-		case common.ModifierView:
+		case types.ModifierView:
 			isViewProcedure = true
 		}
 	}
@@ -119,12 +121,12 @@ func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema 
 	// based on the type of statement, we will convert it into an instruction.
 	// If the procedure is a view, then it can neither contain mutative statements
 	// nor call non-view procedures.
-	for _, stmt := range unparsed.Statements {
-		parsedStmt, err := actparser.Parse(stmt)
-		if err != nil {
-			return nil, err
-		}
+	parsedStmts, err := actparser.ParseMany(unparsed.Body)
+	if err != nil {
+		return nil, err
+	}
 
+	for _, parsedStmt := range parsedStmts {
 		switch stmt := parsedStmt.(type) {
 		default:
 			return nil, fmt.Errorf("unknown statement type %T", stmt)
@@ -179,19 +181,19 @@ func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema 
 			callingViewProcedure := false // callingViewProcedure tracks whether the called procedure is a view
 			if stmt.Database == schema.DBID() || stmt.Database == "" {
 				// internal
-				var procedure *common.Procedure
-				for _, p := range schema.Procedures {
+				var action *types.Action
+				for _, p := range schema.Actions {
 					if p.Name == stmt.Method {
-						procedure = p
+						action = p
 						break
 					}
 				}
-				if procedure == nil {
+				if action == nil {
 					return nil, fmt.Errorf(`procedure "%s" not found`, stmt.Method)
 				}
 
-				for _, mod := range procedure.Modifiers {
-					if mod == common.ModifierView {
+				for _, mod := range action.Modifiers {
+					if mod == types.ModifierView {
 						callingViewProcedure = true
 						break
 					}
@@ -204,7 +206,7 @@ func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema 
 					return nil, fmt.Errorf(`dataset "%s" not found`, stmt.Database)
 				}
 
-				proc, ok := dataset.procedures[stmt.Method]
+				proc, ok := dataset.actions[stmt.Method]
 				if !ok {
 					return nil, fmt.Errorf(`procedure "%s" not found`, stmt.Method)
 				}
@@ -229,17 +231,17 @@ func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema 
 		}
 	}
 
-	return &procedure{
+	return &preparedAction{
 		name:         unparsed.Name,
 		public:       unparsed.Public,
-		parameters:   unparsed.Args, // map with $ bind names, no @caller etc. yet
+		parameters:   unparsed.Parameters, // map with $ bind names, no @caller etc. yet
 		view:         unparsed.IsView(),
 		instructions: instructions,
 	}, nil
 }
 
-// Call executes a procedure.
-func (p *procedure) call(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB, inputs []any) error {
+// Call executes an action.
+func (p *preparedAction) call(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB, inputs []any) error {
 	if len(inputs) != len(p.parameters) {
 		return fmt.Errorf(`%w: procedure "%s" requires %d arguments, but %d were provided`, ErrIncorrectNumberOfArguments, p.name, len(p.parameters), len(inputs))
 	}
@@ -333,20 +335,25 @@ func (e *callMethod) execute(scope *precompiles.ProcedureContext, global *Global
 	var results []any
 	var err error
 
+	scope.UsedGas += 10
+	if scope.UsedGas >= 10000000 {
+		return fmt.Errorf("out of gas")
+	}
+
 	newScope := scope.NewScope()
 	newScope.StackDepth++ // not done by NewScope since (*baseDataset).Call would do it again
 
 	// if no namespace is specified, we call a local procedure.
 	// this can access public and private procedures.
 	if e.Namespace == "" {
-		procedure, ok := dataset.procedures[e.Method]
+		procedure, ok := dataset.actions[e.Method]
 		if !ok {
 			return fmt.Errorf(`procedure "%s" not found`, e.Method)
 		}
 
 		err = procedure.call(newScope, global, db, inputs)
 	} else {
-		namespace, ok := dataset.namespaces[e.Namespace]
+		namespace, ok := dataset.extensions[e.Namespace]
 		if !ok {
 			return fmt.Errorf(`namespace "%s" not found`, e.Namespace)
 		}
@@ -564,4 +571,131 @@ func cleanseIntValue(val any) any {
 	}
 
 	return val
+}
+
+// // TODO: this function signature will likely need to change
+// func generateProcedures(targetSchema *common.Schema, schemaGetter common.SchemaGetter) ([]string, error) {
+// 	results := make([]string, len(targetSchema.Procedures))
+// 	for i, proc := range targetSchema.Procedures {
+// 		parsed, err := parser.Parse(proc.Body)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+
+// 		generatedBody, err := generate.GenerateProcedure(parsed, schemaGetter, targetSchema)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+
+// 		procedure, err := ddl.GenerateProcedure(proc.Parameters, proc.Returns, generatedBody.DeclaredVariables, dbidSchema(targetSchema.DBID()), proc.Name, generatedBody.Body)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+
+// 		results[i] = procedure
+// 	}
+
+// 	panic("not implemented")
+// }
+
+func prepareProcedure(proc *types.Procedure) (*preparedProcedure, error) {
+	return &preparedProcedure{
+		name:       proc.Name,
+		public:     proc.Public,
+		parameters: proc.Parameters,
+		view:       proc.IsView(),
+	}, nil
+}
+
+// preparedProcedure is a predefined procedure that can be executed.
+type preparedProcedure struct {
+	// name is the name of the procedure.
+	name string
+
+	// public indicates whether the procedure is public or privately scoped.
+	public bool
+
+	// parameters are the parameters of the procedure.
+	parameters []*types.ProcedureParameter
+
+	// view indicates whether the procedure has a `view` tag.
+	view bool
+}
+
+func (p *preparedProcedure) callString(schema string) string {
+	str := strings.Builder{}
+	str.WriteString("SELECT * FROM")
+	str.WriteString(schema)
+	str.WriteString(".")
+	str.WriteString(p.name)
+	str.WriteString("(")
+	for i := range p.parameters {
+		if i != 0 {
+			str.WriteString(", ")
+		}
+		str.WriteString(fmt.Sprintf("$%d", i+1))
+	}
+	str.WriteString(");")
+
+	return str.String()
+}
+
+// coerceInputs takes an array of any type, and attempts to coerce
+// them to the types specified in the procedure's parameters.
+func (p *preparedProcedure) coerceInputs(inputs []any) ([]any, error) {
+	outs := make([]any, len(p.parameters))
+
+	// coerceScalar is a helper function that coerces a scalar value to the
+	// type specified in the procedure's parameters.
+	coerceScalar := func(typ *types.DataType, val any) (any, error) {
+		if typ.IsArray {
+			panic("passed array to coerceScalar")
+		}
+
+		switch typ {
+		case types.IntType:
+			return conv.Int(val)
+		case types.TextType:
+			return conv.String(val)
+		case types.BoolType:
+			return conv.Bool(val)
+		case types.BlobType:
+			return conv.Blob(val)
+		case types.UUIDType:
+			return conv.UUID(val)
+		default:
+			return nil, fmt.Errorf("unsupported type %s", typ)
+		}
+	}
+
+	for i, param := range p.parameters {
+		if !param.Type.IsArray {
+			coerced, err := coerceScalar(param.Type, inputs[i])
+			if err != nil {
+				return nil, err
+			}
+
+			outs[i] = coerced
+			continue
+		}
+
+		// if we reach here the parameter is an array, we need to coerce each element
+		val := reflect.ValueOf(inputs[i])
+		if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
+			return nil, fmt.Errorf("expected array for parameter %s, got %T", param.Name, inputs[i])
+		}
+
+		coerced := make([]any, val.Len())
+		for j := 0; j < val.Len(); j++ {
+			var err error
+			coerced[j], err = coerceScalar(param.Type, val.Index(j).Interface())
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		outs[i] = coerced
+	}
+
+	return outs, nil
 }

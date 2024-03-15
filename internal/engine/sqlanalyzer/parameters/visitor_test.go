@@ -6,9 +6,9 @@ import (
 	"unicode"
 
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
-	"github.com/kwilteam/kwil-db/parse/sql/postgres"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	sqlparser "github.com/kwilteam/kwil-db/internal/parse/sql"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/postgres"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 	"github.com/stretchr/testify/assert"
 )
 

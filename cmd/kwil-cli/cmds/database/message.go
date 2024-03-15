@@ -8,7 +8,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/olekukonko/tablewriter"
 )
 
@@ -100,7 +99,7 @@ func (r *respRelations) MarshalText() ([]byte, error) {
 
 // respSchema is used to represent a database schema in cli
 type respSchema struct {
-	Schema *transactions.Schema
+	Schema *types.Schema
 }
 
 func (s *respSchema) MarshalJSON() ([]byte, error) {
@@ -118,7 +117,7 @@ func (s *respSchema) MarshalText() ([]byte, error) {
 		msg.WriteString("    Columns:\n")
 		for _, c := range t.Columns {
 			msg.WriteString(fmt.Sprintf("    %s\n", c.Name))
-			msg.WriteString(fmt.Sprintf("      Type: %s\n", c.Type))
+			msg.WriteString(fmt.Sprintf("      Type: %s\n", c.Type.String()))
 
 			for _, a := range c.Attributes {
 				msg.WriteString(fmt.Sprintf("      %s\n", a.Type))
@@ -138,7 +137,7 @@ func (s *respSchema) MarshalText() ([]byte, error) {
 		}
 
 		msg.WriteString(fmt.Sprintf("  %s (%s)\n", q.Name, public))
-		msg.WriteString(fmt.Sprintf("    Inputs: %s\n", q.Inputs))
+		msg.WriteString(fmt.Sprintf("    Inputs: %s\n", q.Parameters))
 	}
 
 	return msg.Bytes(), nil

@@ -281,12 +281,12 @@ func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, a
 		}
 	}
 
-	if len(action.Inputs) != len(actionInputs) {
-		return nil, fmt.Errorf("invalid number of inputs, expected %d, got %d", len(action.Inputs), len(actionInputs))
+	if len(action.Parameters) != len(actionInputs) {
+		return nil, fmt.Errorf("invalid number of inputs, expected %d, got %d", len(action.Parameters), len(actionInputs))
 	}
 
 	args := []string{}
-	for i, input := range action.Inputs {
+	for i, input := range action.Parameters {
 		input = input[1:] // remove the leading $
 		args = append(args, fmt.Sprintf("%s:%v", input, actionInputs[i]))
 	}

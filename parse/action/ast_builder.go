@@ -9,8 +9,8 @@ import (
 	"github.com/antlr4-go/antlr/v4"
 
 	"github.com/kwilteam/action-grammar-go/actgrammar"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 	"github.com/kwilteam/kwil-db/parse/internal/util"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
 // astBuilder is the visitor to build the ast from the parse tree

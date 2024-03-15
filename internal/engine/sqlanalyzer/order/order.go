@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/attributes"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/utils"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 
-func NewOrderWalker(tables []*common.Table) tree.AstListener {
+func NewOrderWalker(tables []*types.Table) tree.AstListener {
 	// copy tables, since we will be modifying the tables slice to register CTEs
-	tbls := make([]*common.Table, len(tables))
+	tbls := make([]*types.Table, len(tables))
 	copy(tbls, tables)
 
 	return &orderingWalker{
@@ -24,7 +24,7 @@ func NewOrderWalker(tables []*common.Table) tree.AstListener {
 type orderingWalker struct {
 	tree.BaseListener
 
-	tables []*common.Table // all tables in the schema
+	tables []*types.Table // all tables in the schema
 }
 
 var _ tree.AstListener = &orderingWalker{}
@@ -114,7 +114,7 @@ func (o *orderingWalker) ExitSelectCore(node *tree.SelectCore) error {
 var ErrDistinctWithGroupBy = fmt.Errorf("select distinct with group by not supported")
 
 // orderSimpleStatement will return the ordering required for a simple statement.
-func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*common.Table) ([]*tree.OrderingTerm, error) {
+func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*types.Table) ([]*tree.OrderingTerm, error) {
 	// it is possible to not have any tables in a select
 	// if so, no ordering is required
 	if stmt.From == nil {
@@ -164,7 +164,7 @@ func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*common.Table) ([]*t
 		return nil, fmt.Errorf("error getting used tables: %w", err)
 	}
 
-	usedTblsFull := make([]*common.Table, len(usedTables))
+	usedTblsFull := make([]*types.Table, len(usedTables))
 	for i, tbl := range usedTables {
 		newTable, err := findTable(tables, tbl.Name)
 		if err != nil {
@@ -273,7 +273,7 @@ var ErrCompoundStatementDifferentNumberOfColumns = fmt.Errorf("select cores have
 // if there is a group by clause in any of the select cores, we will return an error.
 // using a group by with a compound statement is not yet supported because idk how
 // to make it deterministic with postgres's ordering, and it is not a common use case.
-func orderCompoundStatement(stmt []*tree.SimpleSelect, tables []*common.Table) ([]*tree.OrderingTerm, error) {
+func orderCompoundStatement(stmt []*tree.SimpleSelect, tables []*types.Table) ([]*tree.OrderingTerm, error) {
 	if len(stmt) == 0 {
 		return nil, fmt.Errorf("no select cores in compound statement")
 	}
@@ -331,7 +331,7 @@ func containsGroupBy(stmt *tree.SimpleSelect) (bool, error) {
 
 // getReturnedColumnOrderingTerms gets the ordering terms for the returned columns.
 // it is used to order result columns for compound select statements or distinct statements.
-func getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*common.Table) ([]*tree.OrderingTerm, error) {
+func getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*types.Table) ([]*tree.OrderingTerm, error) {
 	terms := []*tree.OrderingTerm{}
 
 	for _, col := range resultCols {
@@ -368,7 +368,7 @@ func getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*co
 
 // getTableOrderTerms returns the ordering terms for a table.
 // It is used to order result columns for compound select statements or distinct statements.
-func getTableOrderTerms(tbl *common.Table) []*tree.OrderingTerm {
+func getTableOrderTerms(tbl *types.Table) []*tree.OrderingTerm {
 	terms := []*tree.OrderingTerm{}
 
 	columns := tbl.Columns
@@ -389,7 +389,7 @@ func getTableOrderTerms(tbl *common.Table) []*tree.OrderingTerm {
 }
 
 // findTable will return the table with the given name, or an error if it does not exist.
-func findTable(tables []*common.Table, name string) (*common.Table, error) {
+func findTable(tables []*types.Table, name string) (*types.Table, error) {
 	for _, tbl := range tables {
 		if tbl.Name == name {
 			return tbl, nil

@@ -21,8 +21,8 @@ package attributes
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 
 // A RelationAttribute is a column or expression that is part of a relation.
@@ -34,7 +34,7 @@ type RelationAttribute struct {
 	ResultExpression *tree.ResultColumnExpression
 
 	// Type is the data type of the attribute
-	Type common.DataType
+	Type *types.DataType
 }
 
 // GetSelectCoreRelationAttributes will analyze the select core and return the
@@ -43,7 +43,7 @@ type RelationAttribute struct {
 // tbl1.col, col, col AS alias, col*5 AS alias, etc.
 // If a statement has "SELECT * FROM tbl",
 // then the result column expressions will be tbl.col_1, tbl.col_2, etc.
-func GetSelectCoreRelationAttributes(selectCore *tree.SimpleSelect, tables []*common.Table) ([]*RelationAttribute, error) {
+func GetSelectCoreRelationAttributes(selectCore *tree.SimpleSelect, tables []*types.Table) ([]*RelationAttribute, error) {
 	walker := newSelectCoreWalker(tables)
 	err := selectCore.Walk(walker)
 	if err != nil {
@@ -53,7 +53,7 @@ func GetSelectCoreRelationAttributes(selectCore *tree.SimpleSelect, tables []*co
 	return walker.detectedAttributes, nil
 }
 
-func newSelectCoreWalker(tables []*common.Table) *selectCoreAnalyzer {
+func newSelectCoreWalker(tables []*types.Table) *selectCoreAnalyzer {
 	return &selectCoreAnalyzer{
 		AstListener:        tree.NewBaseListener(),
 		context:            newSelectCoreContext(nil),
@@ -66,7 +66,7 @@ func newSelectCoreWalker(tables []*common.Table) *selectCoreAnalyzer {
 type selectCoreAnalyzer struct {
 	tree.AstListener
 	context      *selectCoreContext
-	schemaTables []*common.Table
+	schemaTables []*types.Table
 
 	// detectedAttributes is a list of the detected attributes
 	// from the scope
@@ -102,7 +102,7 @@ type selectCoreContext struct {
 	results []tree.ResultColumn
 
 	// usedTables is a list of tables used in the select core
-	usedTables []*common.Table
+	usedTables []*types.Table
 }
 
 // relations returns the identified relations
@@ -227,7 +227,7 @@ func (s *selectCoreAnalyzer) EnterRelationTable(node *tree.RelationTable) error 
 		identifier = node.Alias
 	}
 
-	s.context.usedTables = append(s.context.usedTables, &common.Table{
+	s.context.usedTables = append(s.context.usedTables, &types.Table{
 		Name:        identifier,
 		Columns:     tbl.Columns,
 		Indexes:     tbl.Indexes,
@@ -256,7 +256,7 @@ func (s *selectCoreAnalyzer) EnterResultColumnTable(node *tree.ResultColumnTable
 }
 
 // findTable finds a table by name
-func findTable(tables []*common.Table, name string) (*common.Table, error) {
+func findTable(tables []*types.Table, name string) (*types.Table, error) {
 	for _, t := range tables {
 		if t.Name == name {
 			return t, nil
@@ -267,7 +267,7 @@ func findTable(tables []*common.Table, name string) (*common.Table, error) {
 }
 
 // findColumn finds a column by name
-func findColumn(columns []*common.Column, name string) (*common.Column, error) {
+func findColumn(columns []*types.Column, name string) (*types.Column, error) {
 	for _, c := range columns {
 		if c.Name == name {
 			return c, nil

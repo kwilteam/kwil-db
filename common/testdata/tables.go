@@ -1,6 +1,8 @@
 package testdata
 
-import types "github.com/kwilteam/kwil-db/common"
+import (
+	"github.com/kwilteam/kwil-db/core/types"
+)
 
 var (
 	TableUsers = &types.Table{
@@ -8,7 +10,7 @@ var (
 		Columns: []*types.Column{
 			{
 				Name: "id",
-				Type: types.INT,
+				Type: types.IntType,
 				Attributes: []*types.Attribute{
 					{
 						Type: types.PRIMARY_KEY,
@@ -20,7 +22,7 @@ var (
 			},
 			{
 				Name: "username",
-				Type: types.TEXT,
+				Type: types.TextType,
 				Attributes: []*types.Attribute{
 					{
 						Type: types.NOT_NULL,
@@ -40,7 +42,7 @@ var (
 			},
 			{
 				Name: "age",
-				Type: types.INT,
+				Type: types.IntType,
 				Attributes: []*types.Attribute{
 					{
 						Type: types.NOT_NULL,
@@ -57,7 +59,7 @@ var (
 			},
 			{
 				Name: "address",
-				Type: types.TEXT,
+				Type: types.TextType,
 				Attributes: []*types.Attribute{
 					{
 						Type: types.NOT_NULL,
@@ -84,7 +86,7 @@ var (
 		Columns: []*types.Column{
 			{
 				Name: "id",
-				Type: types.INT,
+				Type: types.IntType,
 				Attributes: []*types.Attribute{
 					{
 						Type: types.PRIMARY_KEY,
@@ -96,7 +98,7 @@ var (
 			},
 			{
 				Name: "title",
-				Type: types.TEXT,
+				Type: types.TextType,
 				Attributes: []*types.Attribute{
 					{
 						Type: types.NOT_NULL,
@@ -109,7 +111,7 @@ var (
 			},
 			{
 				Name: "content",
-				Type: types.TEXT,
+				Type: types.TextType,
 				Attributes: []*types.Attribute{
 					{
 						Type: types.NOT_NULL,
@@ -122,7 +124,7 @@ var (
 			},
 			{
 				Name: "author_id",
-				Type: types.INT,
+				Type: types.IntType,
 				Attributes: []*types.Attribute{
 					{
 						Type: types.NOT_NULL,
@@ -131,7 +133,7 @@ var (
 			},
 			{
 				Name: "post_date",
-				Type: types.TEXT,
+				Type: types.TextType,
 				Attributes: []*types.Attribute{
 					{
 						Type: types.NOT_NULL,

@@ -87,7 +87,7 @@ func NewGlobalContext(ctx context.Context, db sql.Executor, extensionInitializer
 
 // CreateDataset deploys a schema.
 // It will create the requisite tables, and perform the required initializations.
-func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *common.Schema, caller []byte) (err error) {
+func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, caller []byte) (err error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -102,6 +102,8 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *co
 		return err
 	}
 
+	// it is critical that the schema is loaded before being created.
+	// the engine will not be able to parse the schema if it is not loaded.
 	err = createSchema(ctx, tx, schema)
 	if err != nil {
 		g.unloadDataset(schema.DBID())
@@ -162,18 +164,32 @@ func (g *GlobalContext) Procedure(ctx context.Context, tx sql.DB, options *commo
 		// starting with stack depth 0, increment in each action call
 	}
 
+	tx2, err := tx.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx2.Rollback(ctx)
+
+	err = setContextualVars(ctx, tx2, options)
+	if err != nil {
+		return nil, err
+	}
+
 	_, err = dataset.Call(procedureCtx, &common.App{
 		Service: g.service,
-		DB:      tx,
+		DB:      tx2,
 		Engine:  g,
 	}, options.Procedure, options.Args)
+	if err != nil {
+		return nil, err
+	}
 
-	return procedureCtx.Result, err
+	return procedureCtx.Result, tx2.Commit(ctx)
 }
 
 // ListDatasets list datasets deployed by a specific caller.
 // If caller is empty, it will list all datasets.
-func (g *GlobalContext) ListDatasets(_ context.Context, caller []byte) ([]*types.DatasetIdentifier, error) {
+func (g *GlobalContext) ListDatasets(caller []byte) ([]*types.DatasetIdentifier, error) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
@@ -195,7 +211,7 @@ func (g *GlobalContext) ListDatasets(_ context.Context, caller []byte) ([]*types
 }
 
 // GetSchema gets a schema from a deployed dataset.
-func (g *GlobalContext) GetSchema(_ context.Context, dbid string) (*common.Schema, error) {
+func (g *GlobalContext) GetSchema(dbid string) (*types.Schema, error) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
@@ -246,7 +262,7 @@ type dbQueryFn func(ctx context.Context, stmt string, args ...any) (*sql.ResultS
 
 // loadDataset loads a dataset into the global context.
 // It does not create the dataset in the datastore.
-func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) error {
+func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) error {
 	dbid := schema.DBID()
 	_, ok := g.initializers[dbid]
 	if ok {
@@ -255,13 +271,28 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 
 	datasetCtx := &baseDataset{
 		schema:     schema,
-		namespaces: make(map[string]precompiles.Instance),
-		procedures: make(map[string]*procedure),
+		extensions: make(map[string]precompiles.Instance),
+		actions:    make(map[string]*preparedAction),
+		procedures: make(map[string]*preparedProcedure),
 		global:     g,
 	}
 
+	for _, unprepared := range schema.Actions {
+		prepared, err := prepareAction(unprepared, g, schema)
+		if err != nil {
+			return err
+		}
+
+		_, ok := datasetCtx.actions[prepared.name]
+		if ok {
+			return fmt.Errorf(`duplicate procedure name: "%s"`, prepared.name)
+		}
+
+		datasetCtx.actions[prepared.name] = prepared
+	}
+
 	for _, unprepared := range schema.Procedures {
-		prepared, err := prepareProcedure(unprepared, g, schema)
+		prepared, err := prepareProcedure(unprepared)
 		if err != nil {
 			return errors.Join(err, ErrInvalidSchema)
 		}
@@ -275,7 +306,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 	}
 
 	for _, ext := range schema.Extensions {
-		_, ok := datasetCtx.namespaces[ext.Alias]
+		_, ok := datasetCtx.extensions[ext.Alias]
 		if ok {
 			return fmt.Errorf(`%w duplicate namespace assignment: "%s"`, ErrInvalidSchema, ext.Alias)
 		}
@@ -293,7 +324,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 			return err
 		}
 
-		datasetCtx.namespaces[ext.Alias] = namespace
+		datasetCtx.extensions[ext.Alias] = namespace
 	}
 
 	g.initializers[dbid] = func(_ *precompiles.DeploymentContext, _ *common.Service, _ map[string]string) (precompiles.Instance, error) {
@@ -312,7 +343,7 @@ func (g *GlobalContext) unloadDataset(dbid string) {
 }
 
 // orderSchemas orders schemas based on their dependencies to other schemas.
-func orderSchemas(schemas []*common.Schema) []*common.Schema {
+func orderSchemas(schemas []*types.Schema) []*types.Schema {
 	// Mapping from schema DBID to its extensions
 	schemaMap := make(map[string][]string)
 	for _, schema := range schemas {
@@ -346,7 +377,7 @@ func orderSchemas(schemas []*common.Schema) []*common.Schema {
 	visitAll(keys)
 
 	// Reorder schemas based on result
-	var orderedSchemas []*common.Schema
+	var orderedSchemas []*types.Schema
 	for _, dbid := range result {
 		for _, schema := range schemas {
 			if schema.DBID() == dbid {

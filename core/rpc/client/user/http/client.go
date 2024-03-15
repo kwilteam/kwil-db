@@ -181,14 +181,14 @@ func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.Acc
 	}, nil
 }
 
-func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
+func (c *Client) GetSchema(ctx context.Context, dbid string) (*types.Schema, error) {
 	result, res, err := c.conn.TxServiceApi.TxServiceGetSchema(ctx, dbid)
 	if err != nil {
 		return nil, wrapResponseError(err, res)
 	}
 	defer res.Body.Close()
 
-	convertedSchema, err := convertHttpSchema(result.Schema)
+	convertedSchema, err := ConvertToSchema(result.Schema)
 	if err != nil {
 		return nil, err
 	}

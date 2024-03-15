@@ -3,123 +3,123 @@ package attributes_test
 import (
 	"testing"
 
-	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/testdata"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/attributes"
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
-	"github.com/kwilteam/kwil-db/parse/sql/postgres"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	sqlparser "github.com/kwilteam/kwil-db/internal/parse/sql"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/postgres"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetSelectCoreRelationAttributes(t *testing.T) {
 	tests := []struct {
 		name            string
-		tables          []*common.Table
+		tables          []*types.Table
 		stmt            string
 		want            []*attributes.RelationAttribute
-		resultTableCols []*common.Column
+		resultTableCols []*types.Column
 		wantErr         bool
 	}{
 		{
 			name: "simple select",
-			tables: []*common.Table{
+			tables: []*types.Table{
 				testdata.TableUsers,
 			},
 			stmt: "SELECT id FROM users",
 			want: []*attributes.RelationAttribute{
-				tblCol(common.INT, "users", "id"),
+				tblCol(types.IntType, "users", "id"),
 			},
-			resultTableCols: []*common.Column{
-				col("id", common.INT),
+			resultTableCols: []*types.Column{
+				col("id", types.IntType),
 			},
 		},
 		{
 			name: "simple select with alias",
-			tables: []*common.Table{
+			tables: []*types.Table{
 				testdata.TableUsers,
 			},
 			stmt: "SELECT id AS user_id FROM users",
 			want: []*attributes.RelationAttribute{
-				tblColAlias(common.INT, "users", "id", "user_id"),
+				tblColAlias(types.IntType, "users", "id", "user_id"),
 			},
-			resultTableCols: []*common.Column{
-				col("user_id", common.INT),
+			resultTableCols: []*types.Column{
+				col("user_id", types.IntType),
 			},
 		},
 		{
 			name: "test subquery is ignored",
-			tables: []*common.Table{
+			tables: []*types.Table{
 				testdata.TableUsers,
 				testdata.TablePosts,
 			},
 			stmt: "SELECT id FROM users WHERE id IN (SELECT author_id FROM posts)",
 			want: []*attributes.RelationAttribute{
-				tblCol(common.INT, "users", "id"),
+				tblCol(types.IntType, "users", "id"),
 			},
-			resultTableCols: []*common.Column{
-				col("id", common.INT),
+			resultTableCols: []*types.Column{
+				col("id", types.IntType),
 			},
 		},
 		{
 			name: "test star, table star works",
-			tables: []*common.Table{
+			tables: []*types.Table{
 				testdata.TableUsers,
 			},
 			stmt: "SELECT users.*, * FROM users",
 			want: []*attributes.RelationAttribute{
-				tblCol(common.INT, "users", "id"), // we expect them twice since it is defined twice
-				tblCol(common.TEXT, "users", "username"),
-				tblCol(common.INT, "users", "age"),
-				tblCol(common.TEXT, "users", "address"),
-				tblCol(common.INT, "users", "id"),
-				tblCol(common.TEXT, "users", "username"),
-				tblCol(common.INT, "users", "age"),
-				tblCol(common.TEXT, "users", "address"),
+				tblCol(types.IntType, "users", "id"), // we expect them twice since it is defined twice
+				tblCol(types.TextType, "users", "username"),
+				tblCol(types.IntType, "users", "age"),
+				tblCol(types.TextType, "users", "address"),
+				tblCol(types.IntType, "users", "id"),
+				tblCol(types.TextType, "users", "username"),
+				tblCol(types.IntType, "users", "age"),
+				tblCol(types.TextType, "users", "address"),
 			},
-			resultTableCols: []*common.Column{
-				col("id", common.INT),
-				col("username", common.TEXT),
-				col("age", common.INT),
-				col("address", common.TEXT),
-				col("id:1", common.INT),
-				col("username:1", common.TEXT),
-				col("age:1", common.INT),
-				col("address:1", common.TEXT),
+			resultTableCols: []*types.Column{
+				col("id", types.IntType),
+				col("username", types.TextType),
+				col("age", types.IntType),
+				col("address", types.TextType),
+				col("id:1", types.IntType),
+				col("username:1", types.TextType),
+				col("age:1", types.IntType),
+				col("address:1", types.TextType),
 			},
 		},
 		{
 			name: "test star, table star, literal, untabled column, and tabled column with alias work and join",
-			tables: []*common.Table{
+			tables: []*types.Table{
 				testdata.TableUsers,
 				testdata.TablePosts,
 			},
 			stmt: "SELECT users.*, *, age, users.age AS the_age, 5 as the_literal_5 FROM users INNER JOIN posts ON users.id = posts.author_id",
 			want: []*attributes.RelationAttribute{
 				// all user columns from users.*
-				tblCol(common.INT, "users", "id"),
-				tblCol(common.TEXT, "users", "username"),
-				tblCol(common.INT, "users", "age"),
-				tblCol(common.TEXT, "users", "address"),
+				tblCol(types.IntType, "users", "id"),
+				tblCol(types.TextType, "users", "username"),
+				tblCol(types.IntType, "users", "age"),
+				tblCol(types.TextType, "users", "address"),
 
 				// all user columns from *
-				tblCol(common.INT, "users", "id"),
-				tblCol(common.TEXT, "users", "username"),
-				tblCol(common.INT, "users", "age"),
-				tblCol(common.TEXT, "users", "address"),
+				tblCol(types.IntType, "users", "id"),
+				tblCol(types.TextType, "users", "username"),
+				tblCol(types.IntType, "users", "age"),
+				tblCol(types.TextType, "users", "address"),
 
 				// all post columns from *
-				tblCol(common.INT, "posts", "id"),
-				tblCol(common.TEXT, "posts", "title"),
-				tblCol(common.TEXT, "posts", "content"),
-				tblCol(common.INT, "posts", "author_id"),
-				tblCol(common.TEXT, "posts", "post_date"),
+				tblCol(types.IntType, "posts", "id"),
+				tblCol(types.TextType, "posts", "title"),
+				tblCol(types.TextType, "posts", "content"),
+				tblCol(types.IntType, "posts", "author_id"),
+				tblCol(types.TextType, "posts", "post_date"),
 
 				// age
-				tblCol(common.INT, "users", "age"),
+				tblCol(types.IntType, "users", "age"),
 
 				// users.age AS the_age
-				tblColAlias(common.INT, "users", "age", "the_age"),
+				tblColAlias(types.IntType, "users", "age", "the_age"),
 
 				// 5
 				{
@@ -129,38 +129,38 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 						},
 						Alias: "the_literal_5",
 					},
-					Type: common.INT,
+					Type: types.IntType,
 				},
 			},
-			resultTableCols: []*common.Column{
-				col("id", common.INT),
-				col("username", common.TEXT),
-				col("age", common.INT),
-				col("address", common.TEXT),
-				col("id:1", common.INT),
-				col("username:1", common.TEXT),
-				col("age:1", common.INT),
-				col("address:1", common.TEXT),
-				col("id:2", common.INT),
-				col("title", common.TEXT),
-				col("content", common.TEXT),
-				col("author_id", common.INT),
-				col("post_date", common.TEXT),
-				col("age:2", common.INT),
-				col("the_age", common.INT),
-				col("the_literal_5", common.INT),
+			resultTableCols: []*types.Column{
+				col("id", types.IntType),
+				col("username", types.TextType),
+				col("age", types.IntType),
+				col("address", types.TextType),
+				col("id:1", types.IntType),
+				col("username:1", types.TextType),
+				col("age:1", types.IntType),
+				col("address:1", types.TextType),
+				col("id:2", types.IntType),
+				col("title", types.TextType),
+				col("content", types.TextType),
+				col("author_id", types.IntType),
+				col("post_date", types.TextType),
+				col("age:2", types.IntType),
+				col("the_age", types.IntType),
+				col("the_literal_5", types.IntType),
 			},
 		},
 		{
 			name: "join with aliases",
-			tables: []*common.Table{
+			tables: []*types.Table{
 				testdata.TableUsers,
 				testdata.TablePosts,
 			},
 			stmt: "SELECT u.id AS user_id, u.username AS username, count(p.id) AS post_count FROM users AS u LEFT JOIN posts AS p ON u.id = p.author_id GROUP BY u.id",
 			want: []*attributes.RelationAttribute{
-				tblColAlias(common.INT, "u", "id", "user_id"),
-				tblColAlias(common.TEXT, "u", "username", "username"),
+				tblColAlias(types.IntType, "u", "id", "user_id"),
+				tblColAlias(types.TextType, "u", "username", "username"),
 				{
 					ResultExpression: &tree.ResultColumnExpression{
 						Expression: &tree.ExpressionFunction{
@@ -174,13 +174,13 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 						},
 						Alias: "post_count",
 					},
-					Type: common.INT,
+					Type: types.IntType,
 				},
 			},
-			resultTableCols: []*common.Column{
-				col("user_id", common.INT),
-				col("username", common.TEXT),
-				col("post_count", common.INT),
+			resultTableCols: []*types.Column{
+				col("user_id", types.IntType),
+				col("username", types.TextType),
+				col("post_count", types.IntType),
 			},
 		},
 	}
@@ -228,7 +228,7 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 	}
 }
 
-func tblCol(dataType common.DataType, tbl, column string) *attributes.RelationAttribute {
+func tblCol(dataType *types.DataType, tbl, column string) *attributes.RelationAttribute {
 	return &attributes.RelationAttribute{
 		ResultExpression: &tree.ResultColumnExpression{
 			Expression: &tree.ExpressionColumn{
@@ -240,7 +240,7 @@ func tblCol(dataType common.DataType, tbl, column string) *attributes.RelationAt
 	}
 }
 
-func tblColAlias(dataType common.DataType, tbl, column, alias string) *attributes.RelationAttribute {
+func tblColAlias(dataType *types.DataType, tbl, column, alias string) *attributes.RelationAttribute {
 	return &attributes.RelationAttribute{
 		ResultExpression: &tree.ResultColumnExpression{
 			Expression: &tree.ExpressionColumn{
@@ -253,8 +253,8 @@ func tblColAlias(dataType common.DataType, tbl, column, alias string) *attribute
 	}
 }
 
-func col(name string, datatype common.DataType) *common.Column {
-	return &common.Column{
+func col(name string, datatype *types.DataType) *types.Column {
+	return &types.Column{
 		Name: name,
 		Type: datatype,
 	}

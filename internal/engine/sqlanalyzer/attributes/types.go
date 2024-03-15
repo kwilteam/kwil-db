@@ -3,14 +3,14 @@ package attributes
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 
 // predictReturnType will attempt to predict the return type of an expression.
-// If it is ambiguous but is a valid return expression, it will return common.TEXT.
+// If it is ambiguous but is a valid return expression, it will return types.TextType.
 // If it is invalid, it will return an error.
-func predictReturnType(expr tree.Expression, tables []*common.Table) (common.DataType, error) {
+func predictReturnType(expr tree.Expression, tables []*types.Table) (*types.DataType, error) {
 	w := &returnTypeWalker{
 		AstListener: tree.NewBaseListener(),
 		tables:      tables,
@@ -18,11 +18,11 @@ func predictReturnType(expr tree.Expression, tables []*common.Table) (common.Dat
 
 	err := expr.Walk(w)
 	if err != nil {
-		return common.TEXT, fmt.Errorf("error predicting return type: %w", err)
+		return types.TextType, fmt.Errorf("error predicting return type: %w", err)
 	}
 
 	if !w.detected {
-		return common.TEXT, fmt.Errorf("could not detect return type for expression: %s", expr)
+		return types.IntType, fmt.Errorf("could not detect return type for expression: %s", expr)
 	}
 
 	return w.detectedType, nil
@@ -39,34 +39,34 @@ func errReturnExpr(expr tree.Expression) error {
 type returnTypeWalker struct {
 	tree.AstListener
 	detected     bool
-	detectedType common.DataType
-	tables       []*common.Table
+	detectedType *types.DataType
+	tables       []*types.Table
 }
 
 var _ tree.AstListener = &returnTypeWalker{}
 
 func (r *returnTypeWalker) EnterExpressionArithmetic(p0 *tree.ExpressionArithmetic) error {
-	r.set(common.INT)
+	r.set(types.IntType)
 	return nil
 }
 func (r *returnTypeWalker) EnterExpressionBetween(p0 *tree.ExpressionBetween) error {
-	r.set(common.INT)
+	r.set(types.IntType)
 	return nil
 }
 func (r *returnTypeWalker) EnterExpressionBinaryComparison(p0 *tree.ExpressionBinaryComparison) error {
-	r.set(common.INT)
+	r.set(types.IntType)
 	return nil
 }
 func (r *returnTypeWalker) EnterExpressionBindParameter(p0 *tree.ExpressionBindParameter) error {
-	r.set(common.TEXT)
+	r.set(types.TextType)
 	return nil
 }
 func (r *returnTypeWalker) EnterExpressionCase(p0 *tree.ExpressionCase) error {
-	r.set(common.TEXT)
+	r.set(types.TextType)
 	return nil
 }
 func (r *returnTypeWalker) EnterExpressionCollate(p0 *tree.ExpressionCollate) error {
-	r.set(common.TEXT)
+	r.set(types.TextType)
 	return nil
 }
 
@@ -129,23 +129,23 @@ func (r *returnTypeWalker) EnterExpressionFunction(p0 *tree.ExpressionFunction) 
 
 	// scalars
 	case &tree.FunctionABS:
-		r.set(common.INT)
+		r.set(types.IntType)
 	case &tree.FunctionERROR:
 		return fmt.Errorf("%w: using function %s", ErrInvalidReturnExpression, p0.Function.Name())
 	case &tree.FunctionFORMAT:
-		r.set(common.TEXT)
+		r.set(types.TextType)
 	case &tree.FunctionLENGTH:
-		r.set(common.INT)
+		r.set(types.IntType)
 	case &tree.FunctionLOWER:
-		r.set(common.TEXT)
+		r.set(types.TextType)
 	case &tree.FunctionUPPER:
-		r.set(common.TEXT)
+		r.set(types.TextType)
 
 		// aggregates
 	case &tree.FunctionCOUNT:
-		r.set(common.INT)
+		r.set(types.IntType)
 	case &tree.FunctionSUM:
-		r.set(common.INT)
+		r.set(types.IntType)
 	default:
 		return fmt.Errorf("unknown function: %s", p0.Function)
 	}
@@ -153,7 +153,7 @@ func (r *returnTypeWalker) EnterExpressionFunction(p0 *tree.ExpressionFunction) 
 	return nil
 }
 func (r *returnTypeWalker) EnterExpressionIs(p0 *tree.ExpressionIs) error {
-	r.set(common.INT)
+	r.set(types.IntType)
 	return nil
 }
 func (r *returnTypeWalker) EnterExpressionList(p0 *tree.ExpressionList) error {
@@ -161,27 +161,27 @@ func (r *returnTypeWalker) EnterExpressionList(p0 *tree.ExpressionList) error {
 }
 
 func (r *returnTypeWalker) EnterExpressionTextLiteral(p0 *tree.ExpressionTextLiteral) error {
-	r.set(common.TEXT)
+	r.set(types.TextType)
 	return nil
 }
 
 func (r *returnTypeWalker) EnterExpressionNumericLiteral(p0 *tree.ExpressionNumericLiteral) error {
-	r.set(common.INT)
+	r.set(types.IntType)
 	return nil
 }
 
 func (r *returnTypeWalker) EnterExpressionBooleanLiteral(p0 *tree.ExpressionBooleanLiteral) error {
-	r.set(common.BOOL)
+	r.set(types.BoolType)
 	return nil
 }
 
 func (r *returnTypeWalker) EnterExpressionNullLiteral(p0 *tree.ExpressionNullLiteral) error {
-	r.set(common.TEXT)
+	r.set(types.TextType)
 	return nil
 }
 
 func (r *returnTypeWalker) EnterExpressionBlobLiteral(p0 *tree.ExpressionBlobLiteral) error {
-	r.set(common.BLOB)
+	r.set(types.BlobType)
 	return nil
 }
 
@@ -189,17 +189,17 @@ func (r *returnTypeWalker) EnterExpressionSelect(p0 *tree.ExpressionSelect) erro
 	return errReturnExpr(p0)
 }
 func (r *returnTypeWalker) EnterExpressionStringCompare(p0 *tree.ExpressionStringCompare) error {
-	r.set(common.INT)
+	r.set(types.IntType)
 	return nil
 }
 func (r *returnTypeWalker) EnterExpressionUnary(p0 *tree.ExpressionUnary) error {
-	r.set(common.INT)
+	r.set(types.IntType)
 	return nil
 }
 
 // set sets the detected type if it has not already been set
 // since we only want the first detected type
-func (r *returnTypeWalker) set(t common.DataType) {
+func (r *returnTypeWalker) set(t *types.DataType) {
 	if r.detected {
 		return
 	}

@@ -20,6 +20,16 @@ func NewUUIDV5(from []byte) UUID {
 	return UUID(u)
 }
 
+// ParseUUID parses a uuid from a string
+func ParseUUID(s string) (*UUID, error) {
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return &UUID{}, err
+	}
+	u2 := UUID(u)
+	return &u2, nil
+}
+
 // String returns the string representation of the uuid
 func (u UUID) String() string {
 	return uuid.UUID(u).String()
@@ -27,6 +37,10 @@ func (u UUID) String() string {
 
 func (u UUID) Value() (driver.Value, error) {
 	return u[:], nil // []byte works for sql
+}
+
+func (u UUID) Bytes() []byte {
+	return u[:]
 }
 
 var _ driver.Valuer = UUID{}

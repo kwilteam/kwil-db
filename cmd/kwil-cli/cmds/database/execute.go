@@ -9,8 +9,8 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	"github.com/spf13/cobra"
 )
@@ -113,13 +113,13 @@ func parseInputs(args []string) ([]map[string]any, error) {
 	return []map[string]any{inputs}, nil
 }
 
-func GetInputs(args []string, action *transactions.Action) ([][]any, error) {
+func GetInputs(args []string, action *types.Action) ([][]any, error) {
 	inputs, err := parseInputs(args)
 	if err != nil {
 		return nil, fmt.Errorf("error getting inputs: %w", err)
 	}
 
-	return createActionInputs(inputs, action.Inputs)
+	return createActionInputs(inputs, action.Parameters)
 }
 
 // createActionInputs takes a []map[string]any and an action, and converts it to [][]any.

@@ -49,6 +49,7 @@ Class | Method | HTTP request | Description
  - [TxCallResponse](docs/TxCallResponse.md)
  - [TxChainInfoResponse](docs/TxChainInfoResponse.md)
  - [TxColumn](docs/TxColumn.md)
+ - [TxDataType](docs/TxDataType.md)
  - [TxDatasetInfo](docs/TxDatasetInfo.md)
  - [TxEstimatePriceRequest](docs/TxEstimatePriceRequest.md)
  - [TxEstimatePriceResponse](docs/TxEstimatePriceResponse.md)
@@ -61,6 +62,7 @@ Class | Method | HTTP request | Description
  - [TxIndex](docs/TxIndex.md)
  - [TxListDatabasesResponse](docs/TxListDatabasesResponse.md)
  - [TxPingResponse](docs/TxPingResponse.md)
+ - [TxProcedure](docs/TxProcedure.md)
  - [TxQueryRequest](docs/TxQueryRequest.md)
  - [TxQueryResponse](docs/TxQueryResponse.md)
  - [TxSchema](docs/TxSchema.md)
@@ -71,6 +73,7 @@ Class | Method | HTTP request | Description
  - [TxTransactionResult](docs/TxTransactionResult.md)
  - [TxTxQueryRequest](docs/TxTxQueryRequest.md)
  - [TxTxQueryResponse](docs/TxTxQueryResponse.md)
+ - [TxTypedVariable](docs/TxTypedVariable.md)
 
 ## Documentation For Authorization
  Endpoints do not require authorization.

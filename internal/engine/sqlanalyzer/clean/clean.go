@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/common/validation"
 )
 
 // checks that the string only contains alphanumeric characters and underscores
@@ -28,6 +30,10 @@ func cleanIdentifier(identifier string) (string, error) {
 
 	if !identifierRegexp.MatchString(res) {
 		return "", wrapErr(ErrInvalidIdentifier, fmt.Errorf(`identifier must start with letter and only contain alphanumeric characters or underscores, received: "%s"`, identifier))
+	}
+
+	if validation.IsKeyword(res) {
+		return "", wrapErr(ErrInvalidIdentifier, fmt.Errorf(`identifier must not be a keyword, received: "%s"`, identifier))
 	}
 
 	return res, nil
