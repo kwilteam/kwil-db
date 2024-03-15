@@ -133,6 +133,14 @@ func hammer(ctx context.Context) error {
 		return err
 	}
 
+	userID, userName, err := h.getOrCreateUser(ctx, dbid)
+	if err != nil {
+		return fmt.Errorf("getOrCreateUser: %w", err)
+	}
+	h.printf("user ID = %d / user name = %v", userID, userName)
+
+	h.nonceChaos = nonceChaos // after successfully deploying the test db and creating a user in it
+
 	// ## badgering read-only requests to various systems
 
 	// bother the account store
@@ -208,12 +216,6 @@ func hammer(ctx context.Context) error {
 	// concurrently posting and retrieving random posts.
 
 	var pid atomic.Int64 // post ID accessed by separate goroutines
-
-	userID, userName, err := h.getOrCreateUser(ctx, dbid)
-	if err != nil {
-		return fmt.Errorf("getOrCreateUser: %w", err)
-	}
-	h.printf("user ID = %d / user name = %v", userID, userName)
 
 	nextPostID, err := h.nextPostID(ctx, dbid, userID)
 	if err != nil {

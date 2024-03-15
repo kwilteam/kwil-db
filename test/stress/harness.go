@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
+	"math/rand"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -28,9 +28,26 @@ type harness struct {
 	nonceMtx sync.Mutex
 	nonce    int64 // atomic.Int64
 
-	concurrentBroadcast bool // be wreckless with nonces
+	concurrentBroadcast bool // broadcast many before confirm, still coordinate nonces
+	nonceChaos          int  // apply random nonce-jitter every 1/n times
 
 	nestedLogger *log.Logger
+}
+
+// for about 1 in every f times, produce a non-zero nonce jitter:
+// {-2, 1, 1, 2, 3, 4}
+func randNonceJitter(f int) int64 {
+	if f == 0 {
+		return 0
+	}
+	if rand.Intn(f) > 0 {
+		return 0
+	}
+	n := rand.Int63n(6) - 2
+	if n >= 0 { // 0-3 => 1-4
+		return n + 1
+	}
+	return n
 }
 
 func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) error {
@@ -40,13 +57,13 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 		// there will be more chaos with concurrent broadcasting.
 		h.nonceMtx.Lock()
 		h.nonce++
-		nonce := h.nonce // chaos: + int64(rand.Intn(2))
+		nonce := h.nonce + randNonceJitter(h.nonceChaos)
 		h.nonceMtx.Unlock()
 		if err := fn(nonce); err != nil {
 			if errors.Is(err, transactions.ErrInvalidNonce) {
 				// Note: several goroutines may all try to do this if they all hit the nonce error
 				h.recoverNonce(ctx)
-				h.printf("error, nonce reverting to %d\n", h.nonce)
+				h.printf("error, nonce %d was wrong, reverting to %d\n", nonce, h.nonce)
 			}
 			return err
 		}
@@ -100,13 +117,13 @@ func (h *harness) printRecs(ctx context.Context, recs *clientType.Records) {
 	}
 }
 
-func (h *harness) executeActionAsync(ctx context.Context, dbid string, action string,
+func (h *harness) executeActionAsync(ctx context.Context, dbid, action string,
 	inputs [][]any) (transactions.TxHash, error) {
 	var txHash transactions.TxHash
 	err := h.underNonceLock(ctx, func(nonce int64) error {
 		var err error
 		txHash, err = h.ExecuteAction(ctx, dbid, action, inputs,
-			clientType.WithNonce(nonce), clientType.WithFee(&big.Int{}))
+			clientType.WithNonce(nonce) /*, clientType.WithFee(&big.Int{})*/) // TODO: badFee mode
 		return err
 	})
 	if err != nil {

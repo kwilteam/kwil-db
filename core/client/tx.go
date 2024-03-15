@@ -44,9 +44,12 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, txOpts *c
 	}
 
 	// estimate price
-	price, err := c.txClient.EstimateCost(ctx, tx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to estimate price: %w", err)
+	price := txOpts.Fee
+	if price == nil {
+		price, err = c.txClient.EstimateCost(ctx, tx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to estimate price: %w", err)
+		}
 	}
 
 	// set fee
