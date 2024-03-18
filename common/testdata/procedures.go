@@ -82,4 +82,37 @@ var (
 			"SELECT * FROM users;",
 		},
 	}
+
+	// ProcedureRecursive is a recursive procedure that should hit a max stack
+	// depth error before using the system's max stack memory, which is fatal.
+	ProcedureRecursive = &types.Procedure{
+		Name:   "recursive_procedure",
+		Args:   []string{"$id", "$a", "$b"},
+		Public: true,
+		Statements: []string{
+			"recursive_procedure($id, $a, $b);",
+		},
+	}
+
+	// ProcedureRecursiveSneakyA is procedure that calls
+	// ProcedureRecursiveSneakyB, which calls ProcedureRecursiveSneakyA, which
+	// calls ProcedureRecursiveSneakyB, which calls...
+	ProcedureRecursiveSneakyA = &types.Procedure{
+		Name:   "recursive_procedure_a",
+		Args:   []string{},
+		Public: true,
+		Statements: []string{
+			"recursive_procedure_b();",
+		},
+	}
+
+	// ProcedureRecursiveSneakyB is procedure that calls ProcedureRecursiveSneakyA.
+	ProcedureRecursiveSneakyB = &types.Procedure{
+		Name:   "recursive_procedure_b",
+		Args:   []string{},
+		Public: true,
+		Statements: []string{
+			"recursive_procedure_a();",
+		},
+	}
 )

@@ -119,6 +119,44 @@ func Test_Execution(t *testing.T) {
 			},
 		},
 		{
+			name: "call a recursive procedure",
+			fn: func(t *testing.T, eng *GlobalContext) {
+				ctx := context.Background()
+				db := newDB(false)
+
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
+				assert.NoError(t, err)
+
+				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureRecursive.Name,
+					Args:      []any{"id000000", "asdfasdfasdfasdf", "bigbigbigbigbigbigbigbigbigbig"},
+					Signer:    testdata.TestSchema.Owner,
+					Caller:    string(testdata.TestSchema.Owner),
+				})
+				assert.ErrorIs(t, err, ErrMaxStackDepth)
+			},
+		},
+		{
+			name: "call a procedure that hits max call stack depth less directly",
+			fn: func(t *testing.T, eng *GlobalContext) {
+				ctx := context.Background()
+				db := newDB(false)
+
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
+				assert.NoError(t, err)
+
+				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureRecursiveSneakyA.Name,
+					Args:      []any{},
+					Signer:    testdata.TestSchema.Owner,
+					Caller:    string(testdata.TestSchema.Owner),
+				})
+				assert.ErrorIs(t, err, ErrMaxStackDepth)
+			},
+		},
+		{
 			name: "call a non-view action fails if not mutative; view action succeeds",
 			fn: func(t *testing.T, eng *GlobalContext) {
 				ctx := context.Background()

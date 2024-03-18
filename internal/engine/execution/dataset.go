@@ -8,7 +8,7 @@ import (
 )
 
 // baseDataset is a deployed database schema.
-// It implements the Dataset interface.
+// It implements the precompiles.Instance interface.
 type baseDataset struct {
 	// schema is the schema of the dataset.
 	schema *common.Schema
@@ -23,9 +23,11 @@ type baseDataset struct {
 	global *GlobalContext
 }
 
+var _ precompiles.Instance = (*baseDataset)(nil)
+
 // Call calls a procedure from the dataset.
 // If the procedure is not public, it will return an error.
-// It implements the Namespace interface.
+// It satisfies precompiles.Instance.
 func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App, method string, inputs []any) ([]any, error) {
 	proc, ok := d.procedures[method]
 	if !ok {
