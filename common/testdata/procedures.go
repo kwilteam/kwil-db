@@ -3,7 +3,7 @@ package testdata
 import types "github.com/kwilteam/kwil-db/common"
 
 var (
-	ProcedureCreateUser = &types.Procedure{
+	ProcedureCreateUser = &types.Action{
 		Name:   "create_user",
 		Args:   []string{"$id", "$username", "$age"},
 		Public: true,
@@ -12,7 +12,7 @@ var (
 		},
 	}
 
-	ProcedureGetUserByAddress = &types.Procedure{
+	ProcedureGetUserByAddress = &types.Action{
 		Name:   "get_user_by_address",
 		Args:   []string{"$address"},
 		Public: true,
@@ -24,7 +24,7 @@ var (
 		},
 	}
 
-	ProcedureCreatePost = &types.Procedure{
+	ProcedureCreatePost = &types.Action{
 		Name:   "create_post",
 		Args:   []string{"$id", "$title", "$content", "$post_date"},
 		Public: true,
@@ -36,7 +36,7 @@ var (
 		},
 	}
 
-	ProcedureGetPosts = &types.Procedure{
+	ProcedureGetPosts = &types.Action{
 		Name:   "get_posts",
 		Args:   []string{"$username"},
 		Public: true,
@@ -51,7 +51,7 @@ var (
 	}
 
 	// ProcedureAdminDeleteUser is a procedure that can only be called by the owner of the schema
-	ProcedureAdminDeleteUser = &types.Procedure{
+	ProcedureAdminDeleteUser = &types.Action{
 		Name:   "admin_delete_user",
 		Args:   []string{"$id"},
 		Public: true,
@@ -64,7 +64,7 @@ var (
 	}
 
 	// ProcedureCallsPrivate is a procedure that calls a private procedure
-	ProcedureCallsPrivate = &types.Procedure{
+	ProcedureCallsPrivate = &types.Action{
 		Name:   "calls_private",
 		Args:   []string{},
 		Public: true,
@@ -74,7 +74,7 @@ var (
 	}
 
 	// ProcedurePrivate is a private procedure
-	ProcedurePrivate = &types.Procedure{
+	ProcedurePrivate = &types.Action{
 		Name:   "private_procedure",
 		Args:   []string{},
 		Public: false,

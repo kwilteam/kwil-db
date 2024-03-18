@@ -76,7 +76,7 @@ func convertIndexesFromEngine(indexes []*common.Index) []*txpb.Index {
 	return convIndexes
 }
 
-func convertActionsFromEngine(actions []*common.Procedure) ([]*txpb.Action, error) {
+func convertActionsFromEngine(actions []*common.Action) ([]*txpb.Action, error) {
 
 	convActions := make([]*txpb.Action, len(actions))
 	for i, action := range actions {

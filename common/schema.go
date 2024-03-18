@@ -17,7 +17,7 @@ type Schema struct {
 	Owner      []byte       `json:"owner"`
 	Extensions []*Extension `json:"extensions"`
 	Tables     []*Table     `json:"tables"`
-	Procedures []*Procedure `json:"procedures"`
+	Procedures []*Action    `json:"procedures"`
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
@@ -732,9 +732,9 @@ func (d *DataType) Clean() error {
 	return nil
 }
 
-// Procedure is a procedure in a database schema.
+// Action is a procedure in a database schema.
 // These are defined by Kuneiform's `action` keyword.
-type Procedure struct {
+type Action struct {
 	Name        string     `json:"name"`
 	Annotations []string   `json:"annotations,omitempty"`
 	Args        []string   `json:"inputs"`
@@ -744,7 +744,7 @@ type Procedure struct {
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
-func (p *Procedure) Clean() error {
+func (p *Action) Clean() error {
 	for _, m := range p.Modifiers {
 		if err := m.Clean(); err != nil {
 			return err
@@ -758,7 +758,7 @@ func (p *Procedure) Clean() error {
 }
 
 // IsView returns true if the procedure has a view modifier.
-func (p *Procedure) IsView() bool {
+func (p *Action) IsView() bool {
 	for _, m := range p.Modifiers {
 		if m == ModifierView {
 			return true

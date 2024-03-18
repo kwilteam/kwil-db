@@ -57,7 +57,7 @@ type procedure struct {
 // It will convert modifiers first, since these should be checked immediately
 // when the procedure is called. It will then convert the statements into
 // instructions.
-func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema *common.Schema) (*procedure, error) {
+func prepareProcedure(unparsed *common.Action, global *GlobalContext, schema *common.Schema) (*procedure, error) {
 	instructions := make([]instruction, 0)
 	owner := make([]byte, len(schema.Owner))
 	copy(owner, schema.Owner) // copy this here since caller may modify the passed schema. maybe not necessary
@@ -161,7 +161,7 @@ func prepareProcedure(unparsed *common.Procedure, global *GlobalContext, schema 
 			callingViewProcedure := false // callingViewProcedure tracks whether the called procedure is a view
 			if stmt.Database == schema.DBID() || stmt.Database == "" {
 				// internal
-				var procedure *common.Procedure
+				var procedure *common.Action
 				for _, p := range schema.Procedures {
 					if p.Name == stmt.Method {
 						procedure = p
@@ -302,6 +302,11 @@ func (e *callMethod) execute(scope *precompiles.ProcedureContext, global *Global
 
 	var results []any
 	var err error
+
+	scope.UsedGas += 10
+	if scope.UsedGas >= 10000000 {
+		return fmt.Errorf("out of gas")
+	}
 
 	newScope := scope.NewScope()
 

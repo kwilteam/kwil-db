@@ -12,7 +12,7 @@ var TestSchema = &types.Schema{
 		TableUsers,
 		TablePosts,
 	},
-	Procedures: []*types.Procedure{
+	Procedures: []*types.Action{
 		ProcedureCreateUser,
 		ProcedureCreatePost,
 		ProcedureGetUserByAddress,

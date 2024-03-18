@@ -62,6 +62,9 @@ type ProcedureContext struct {
 	Procedure string
 	// Result is the result of the most recent SQL query.
 	Result *sql.ResultSet
+
+	// UsedGas is the amount of gas used in the current execution.
+	UsedGas uint64
 }
 
 // SetValue sets a value in the scope.
@@ -105,6 +108,7 @@ func (p *ProcedureContext) NewScope() *ProcedureContext {
 		values:    make(map[string]any),
 		DBID:      p.DBID,
 		Procedure: p.Procedure,
+		UsedGas:   p.UsedGas,
 	}
 }
 

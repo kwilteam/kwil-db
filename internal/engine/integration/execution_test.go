@@ -561,7 +561,7 @@ var (
 				},
 			},
 		},
-		Procedures: []*common.Procedure{
+		Procedures: []*common.Action{
 			{
 				Name: "CrEaTe_UsEr",
 				Args: []string{

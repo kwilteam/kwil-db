@@ -333,7 +333,7 @@ var testSchema = &common.Schema{
 			},
 		},
 	},
-	Procedures: []*common.Procedure{
+	Procedures: []*common.Action{
 		{
 			Name:   "use_math",
 			Args:   []string{"$a", "$b"},

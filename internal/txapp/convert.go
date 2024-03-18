@@ -119,15 +119,15 @@ func convertIndexesToEngine(indexes []*transactions.Index) ([]*common.Index, err
 	return convIndexes, nil
 }
 
-func convertActionsToEngine(actions []*transactions.Action) ([]*common.Procedure, error) {
-	convActions := make([]*common.Procedure, len(actions))
+func convertActionsToEngine(actions []*transactions.Action) ([]*common.Action, error) {
+	convActions := make([]*common.Action, len(actions))
 	for i, action := range actions {
 		mods, err := convertModifiersToEngine(action.Mutability, action.Auxiliaries)
 		if err != nil {
 			return nil, err
 		}
 
-		convActions[i] = &common.Procedure{
+		convActions[i] = &common.Action{
 			Name:        action.Name,
 			Annotations: action.Annotations,
 			Public:      action.Public,
