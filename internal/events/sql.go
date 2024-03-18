@@ -39,8 +39,6 @@ const (
 	LEFT JOIN ` + voting.VotingSchemaName + `.resolutions AS r ON e.id = r.id
 	WHERE r.id IS NULL;`
 
-	getUnbroadcastedEvents = `SELECT data, event_type FROM ` + schemaName + `.events WHERE NOT broadcasted;`
-
 	// FilterObservedEvents returns the list of events that are observed by the node and not yet broadcasted.
 	filterObservedEvents = `SELECT unnested.id
 	FROM unnest($1::BYTEA[]) AS unnested(id)

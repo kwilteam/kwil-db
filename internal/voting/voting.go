@@ -23,7 +23,8 @@ const (
 func InitializeVoteStore(ctx context.Context, db sql.DB) error {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initTables,
-		1: upgradeV0ToV1,
+		1: dropHeight,
+		2: dropExtraVoteIDColumn,
 	}
 
 	err := versioning.Upgrade(ctx, db, VotingSchemaName, upgradeFns, voteStoreVersion)
@@ -37,7 +38,7 @@ func InitializeVoteStore(ctx context.Context, db sql.DB) error {
 func initTables(ctx context.Context, db sql.DB) error {
 	initStmts := []string{ //createVotingSchema,
 		tableVoters, tableResolutionTypes, tableResolutions,
-		resolutionsTypeIndex, tableProcessed, tableVotes} // order important
+		resolutionsTypeIndex, tableProcessed, tableVotes, tableHeight} // order important
 
 	for _, stmt := range initStmts {
 		_, err := db.Execute(ctx, stmt)
@@ -58,13 +59,13 @@ func initTables(ctx context.Context, db sql.DB) error {
 	return nil
 }
 
-func upgradeV0ToV1(ctx context.Context, db sql.DB) error {
-	_, err := db.Execute(ctx, dropExtraVoteID)
-	if err != nil {
-		return err
-	}
+func dropHeight(ctx context.Context, db sql.DB) error {
+	_, err := db.Execute(ctx, dropHeightTable)
+	return err
+}
 
-	_, err = db.Execute(ctx, dropHeightTable)
+func dropExtraVoteIDColumn(ctx context.Context, db sql.DB) error {
+	_, err := db.Execute(ctx, dropExtraVoteID)
 	return err
 }
 
@@ -106,7 +107,7 @@ func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID types.U
 
 // CreateResolution creates a resolution and subm vote
 // The expiration should be a blockheight.
-// If the resolution already exists: // TODO: should we error out or do nothing?.
+// If the resolution already exists do nothing.
 // If the resolution was already processed, nothing will happen.
 func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableEvent, expiration int64, voteBodyProposer []byte) error {
 	tx, err := db.BeginTx(ctx)
@@ -267,14 +268,14 @@ func GetExpired(ctx context.Context, db sql.Executor, blockheight int64) ([]*res
 }
 
 // GetResolutionsByThresholdAndType gets all resolutions that have reached the threshold of votes and are of a specific type.
-func GetResolutionsByThresholdAndType(ctx context.Context, db sql.TxMaker, threshold *big.Rat, resType string) ([]*resolutions.Resolution, error) {
+func GetResolutionsByThresholdAndType(ctx context.Context, db sql.TxMaker, threshold *big.Rat, resType string, totalPower int64) ([]*resolutions.Resolution, error) {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx) // we can always rollback, since we are only reading
 
-	thresholdPower, err := RequiredPower(ctx, tx, threshold)
+	thresholdPower, err := RequiredPower(ctx, tx, threshold, totalPower)
 	if err != nil {
 		return nil, err
 	}
@@ -361,25 +362,6 @@ func FilterNotProcessed(ctx context.Context, db sql.Executor, ids ...types.UUID)
 	}
 
 	return processed, nil
-}
-
-// FilterNonExistingResolutions takes a set of resolution ids and returns the ones for which resolutions does not already exist.
-func FilterNonExistingResolutions(ctx context.Context, db sql.DB, ids ...types.UUID) ([]types.UUID, error) {
-	res, err := db.Execute(ctx, filterNonExistingResolutions, types.UUIDArray(ids))
-	if err != nil {
-		return nil, err
-	}
-
-	resolutions := make([]types.UUID, len(res.Rows))
-	for i, row := range res.Rows {
-		if len(row) != 1 {
-			// this should never happen, just for safety
-			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
-		}
-		resolutions[i] = types.UUID(row[0].([]byte))
-	}
-
-	return resolutions, nil
 }
 
 // OutstandingResolutions returns all resolutions that have not been approved yet.
@@ -490,34 +472,9 @@ func SetValidatorPower(ctx context.Context, db sql.Executor, recipient []byte, p
 }
 
 // RequiredPower gets the required power to meet the threshold requirements.
-func RequiredPower(ctx context.Context, db sql.Executor, threshold *big.Rat) (int64, error) {
+func RequiredPower(ctx context.Context, db sql.Executor, threshold *big.Rat, totalPower int64) (int64, error) {
 	numerator := threshold.Num().Int64()
 	denominator := threshold.Denom().Int64()
-
-	powerRes, err := db.Execute(ctx, totalPower)
-	if err != nil {
-		return 0, err
-	}
-
-	if len(powerRes.Rows) == 0 {
-		return 0, nil // cannot process any resolutions
-	}
-
-	if len(powerRes.Rows[0]) != 1 {
-		// this should never happen, just for safety
-		return 0, fmt.Errorf("invalid number of columns returned while querying total Power. this is an internal bug")
-	}
-
-	powerIface := powerRes.Rows[0][0]       // `numeric` => pgtype.Numeric
-	totalPower, ok := sql.Int64(powerIface) // powerIface.(int64)
-	if !ok {
-		// if it is nil, then no validators have been added yet
-		if powerRes.Rows[0][0] == nil {
-			return 0, nil
-		}
-
-		return 0, fmt.Errorf("invalid type for power needed (%T)", powerIface)
-	}
 
 	result := intDivUpFraction(totalPower, numerator, denominator)
 	return result, nil

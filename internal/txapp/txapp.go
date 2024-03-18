@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
+	"sync"
 
 	"go.uber.org/zap"
 
@@ -51,6 +52,7 @@ func NewTxApp(db DB, engine common.Engine, signer *auth.Ed25519Signer,
 		extensionConfigs:    extensionConfigs,
 		emptyVoteBodyTxSize: voteBodyTxSize,
 		resTypes:            resTypes,
+		validators:          nil,
 	}
 	t.height, t.appHash, err = t.ChainInfo(context.TODO())
 	if err != nil {
@@ -83,6 +85,9 @@ type TxApp struct {
 	// updated in FinalizeBlock by combining with new engine hash.
 	appHash []byte
 	height  int64
+
+	validators []*types.Validator // used to optimize reads, gets updated at the block boundaries
+	mu         sync.RWMutex       // protects validators access
 
 	// transaction that exists between Begin and Commit
 	currentTx sql.OuterTx
@@ -137,6 +142,10 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 	r.appHash = genesisAppHash // combined with first block's apphash and stored in FinalizeBlock
 
 	// Add Genesis Validators
+	var voters []*types.Validator
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	for _, validator := range validators {
 		err := setVoterPower(ctx, tx, validator.PubKey, validator.Power)
 		if err != nil {
@@ -146,7 +155,9 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 			}
 			return err
 		}
+		voters = append(voters, validator)
 	}
+	r.validators = voters
 
 	// Fund Genesis Accounts
 	for _, account := range genesisAccounts {
@@ -216,6 +227,16 @@ func (r *TxApp) UpdateValidator(ctx context.Context, validator []byte, power int
 // GetValidators returns the current validator set.
 // It will not return uncommitted changes.
 func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// if we have a cached validator set, return it
+	if r.validators != nil {
+		return r.validators, nil
+	}
+
+	// otherwise, we need to get the validator set from the database
+	// This is done especially when a node restarts
 	readTx, err := r.Database.BeginReadTx(ctx)
 	if err != nil {
 		return nil, err
@@ -237,6 +258,21 @@ func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
 	}
 
 	return validators, nil
+}
+
+// GetValidatorsPower returns the total power of the current validator set.
+func (r *TxApp) GetValidatorSetPower(ctx context.Context) (int64, error) {
+	validators, err := r.GetValidators(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	var totalPower int64
+	for _, v := range validators {
+		totalPower += v.Power
+	}
+
+	return totalPower, nil
 }
 
 // Execute executes a transaction.  It will route the transaction to the
@@ -337,6 +373,10 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (appHash []byte
 	r.appHash = crypto.Sha256(append(r.appHash, engineHash...))
 	r.height = blockHeight
 
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.validators = finalValidators
+
 	r.log.Debug("Finalize(end)", log.Int("height", r.height), log.String("appHash", hex.EncodeToString(r.appHash)))
 
 	// I'd really like to setChainState here with appHash, but we can't use
@@ -362,13 +402,19 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 		Resolution  *resolutions.Resolution
 		ResolveFunc func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error
 	}
+
+	totalPower, err := r.GetValidatorSetPower(ctx)
+	if err != nil {
+		return err
+	}
+
 	for _, resolutionType := range r.resTypes {
 		cfg, err := resolutions.GetResolution(resolutionType)
 		if err != nil {
 			return err
 		}
 
-		finalized, err := getResolutionsByThresholdAndType(ctx, r.currentTx, cfg.ConfirmationThreshold, resolutionType)
+		finalized, err := getResolutionsByThresholdAndType(ctx, r.currentTx, cfg.ConfirmationThreshold, resolutionType, totalPower)
 		if err != nil {
 			return err
 		}
@@ -423,11 +469,6 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 		}
 	}
 
-	err := deleteResolutions(ctx, r.currentTx, finalizedIds...)
-	if err != nil {
-		return err
-	}
-
 	// now we will expire resolutions
 	expired, err := getExpired(ctx, r.currentTx, blockheight)
 	if err != nil {
@@ -450,7 +491,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 			}
 
 			// we need to use each configured resolutions refund threshold
-			threshold, err = requiredPower(ctx, r.currentTx, cfg.RefundThreshold)
+			threshold, err = requiredPower(ctx, r.currentTx, cfg.RefundThreshold, totalPower)
 			if err != nil {
 				return err
 			}
@@ -463,7 +504,8 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 		}
 	}
 
-	err = deleteResolutions(ctx, r.currentTx, expiredIds...)
+	allIds := append(finalizedIds, expiredIds...)
+	err = deleteResolutions(ctx, r.currentTx, allIds...)
 	if err != nil {
 		return err
 	}

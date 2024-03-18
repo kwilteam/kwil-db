@@ -124,11 +124,6 @@ func Test_EventStore(t *testing.T) {
 				err = e.Store(ctx, event.Body, event.Type)
 				require.NoError(t, err)
 
-				// GetUnreceivedEvents should return the event
-				events, err := e.GetUnreceivedEvents(ctx)
-				require.NoError(t, err)
-				require.Len(t, events, 1)
-
 				// Mark event as broadcasted
 				err = e.MarkBroadcasted(ctx, []types.UUID{id})
 				require.NoError(t, err)
@@ -141,14 +136,9 @@ func Test_EventStore(t *testing.T) {
 				defer tx2.Rollback(ctx)
 
 				// GetEvents should still return the event
-				events, err = GetEvents(ctx, tx2)
+				events, err := GetEvents(ctx, tx2)
 				require.NoError(t, err)
 				require.Len(t, events, 1)
-
-				// GetUnreceivedEvents should not return the event
-				events, err = e.GetUnreceivedEvents(ctx)
-				require.NoError(t, err)
-				require.Len(t, events, 0)
 
 				err = e.MarkRebroadcast(ctx, []types.UUID{id})
 				require.NoError(t, err)
@@ -158,11 +148,6 @@ func Test_EventStore(t *testing.T) {
 
 				// GetEvents should still return the event
 				events, err = GetEvents(ctx, db)
-				require.NoError(t, err)
-				require.Len(t, events, 1)
-
-				// GetUnreceivedEvents should not return the event
-				events, err = e.GetUnreceivedEvents(ctx)
 				require.NoError(t, err)
 				require.Len(t, events, 1)
 			},

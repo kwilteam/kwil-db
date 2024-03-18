@@ -61,7 +61,7 @@ func Test_Voting(t *testing.T) {
 				err = voting.ApproveResolution(ctx, db, testEvent.ID(), 10, []byte("b"))
 				require.NoError(t, err)
 
-				events, err := voting.GetResolutionsByThresholdAndType(ctx, db, testConfirmationThreshold, testType)
+				events, err := voting.GetResolutionsByThresholdAndType(ctx, db, testConfirmationThreshold, testType, 200)
 				require.NoError(t, err)
 
 				require.Len(t, events, 1)

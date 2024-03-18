@@ -4,10 +4,35 @@ package voting
 	sql.go contains information about the sql tables used by the voting system.
 */
 
+/*
+	Final schema after all the upgrades:
+	resolutions:
+		- id: uuid
+		- body: bytea
+		- type: bytea
+		- vote_body_proposer: bytea
+		- expiration: int8
+
+	resolution_types:
+		- id: uuid
+
+	voters:
+		- id: uuid
+		- name: bytea
+		- power: int8
+
+	votes:
+		- resolution_id: uuid
+		- voter_id: uuid
+
+	processed:
+		- id: uuid
+*/
+
 const (
 	VotingSchemaName = `kwild_voting`
 
-	voteStoreVersion = 1
+	voteStoreVersion = 2
 
 	// tableResolutions is the sql table used to store resolutions that can be voted on.
 	// the vote_body_proposer is the BYTEA of the public key of the submitter, NOT the UUID
@@ -51,7 +76,10 @@ const (
 		id BYTEA PRIMARY KEY
 	);`
 
-	dropHeightTable = `DROP TABLE IF EXISTS ` + VotingSchemaName + `.height`
+	tableHeight = `CREATE TABLE IF NOT EXISTS ` + VotingSchemaName + `.height (
+		name TEXT PRIMARY KEY, -- name is 'height'
+		height INT NOT NULL
+	);`
 
 	// upsertResolution is the sql statement used to ensure a resolution is
 	// present in the resolutions table. In scenarios where VoteID is received
@@ -85,7 +113,7 @@ const (
 	outstandingResolutions = `SELECT id FROM ` + VotingSchemaName + `.resolutions;`
 
 	// totalPower gets the total power of all voters
-	totalPower = `SELECT SUM(power) AS required_power FROM ` + VotingSchemaName + `.voters;` // note: sum ( bigint ) → numeric
+	// totalPower = `SELECT SUM(power) AS required_power FROM ` + VotingSchemaName + `.voters;` // note: sum ( bigint ) → numeric
 	// https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-AGGREGATE
 	// The returned value will be a `numeric` and will scan as a pgtypes.Numeric (with pgx)
 
@@ -98,11 +126,6 @@ const (
 
 	// alreadyProcessed checks if a resolution has already been processed
 	alreadyProcessed = `SELECT id FROM ` + VotingSchemaName + `.processed WHERE id = $1;`
-
-	filterNonExistingResolutions = `SELECT unnested.id
-	FROM unnest($1::BYTEA[]) AS unnested(id)
-	LEFT JOIN ` + VotingSchemaName + `.resolutions AS res ON unnested.id = res.id
-	WHERE res.id IS NULL;`
 
 	// returnNotProcessed returns all resolutions in the input array that do not exist in the processed table
 	returnNotProcessed = `SELECT unnested.id
@@ -179,6 +202,11 @@ const (
 )
 
 // upgrades V0 -> V1
+const (
+	dropHeightTable = `DROP TABLE IF EXISTS ` + VotingSchemaName + `.height`
+)
+
+// upgrades V1 -> V2
 const (
 	dropExtraVoteID = `ALTER TABLE ` + VotingSchemaName + `.resolutions DROP COLUMN extra_vote_id;`
 )

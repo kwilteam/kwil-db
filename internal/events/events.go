@@ -76,6 +76,7 @@ func NewEventStore(ctx context.Context, writerDB DB) (*EventStore, error) {
 // Store stores an event in the event store.
 // It uses the local connection to the event store,
 // instead of the consensus connection.
+// It only stores unprocessed events. If an event is already processed, it's ignored.
 func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) error {
 	e.writerMtx.Lock()
 	defer e.writerMtx.Unlock()
@@ -160,49 +161,8 @@ func DeleteEvents(ctx context.Context, db sql.DB, ids ...types.UUID) error {
 	return err
 }
 
-// GetUnreceivedEvents retrieves events that are neither received by the network nor previously broadcasted.
-// An event is considered "received" only after its inclusion in a block.
-// The function excludes events that have been broadcasted but are still pending in the mempool, awaiting block inclusion.
-// It uses the local connection to the event store, instead of the consensus connection.
-func (e *EventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.VotableEvent, error) {
-	readTx, err := e.eventWriter.BeginReadTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer readTx.Rollback(ctx) // only reading, so we can always rollback
-
-	res, err := readTx.Execute(ctx, getUnbroadcastedEvents)
-	if err != nil {
-		return nil, err
-	}
-
-	var events []*types.VotableEvent
-	if len(res.Columns) != 2 {
-		return nil, fmt.Errorf("expected 2 columns getting events. this is an internal bug")
-	}
-	for _, row := range res.Rows {
-		// row[0] is the raw data of the event
-		// row[1] is the event type
-
-		data, ok := row[0].([]byte)
-		if !ok {
-			return nil, fmt.Errorf("expected data to be []byte, got %T", row[0])
-		}
-		eventType, ok := row[1].(string)
-		if !ok {
-			return nil, fmt.Errorf("expected event type to be string, got %T", row[1])
-		}
-
-		events = append(events, &types.VotableEvent{
-			Body: data,
-			Type: eventType,
-		})
-	}
-
-	return events, nil
-}
-
-func (e *EventStore) FilterObservedEvents(ctx context.Context, observedIDs []types.UUID) ([]types.UUID, error) {
+// GetObservedEvents filters out the events observed by the validator that are not previously broadcasted.
+func (e *EventStore) GetObservedEvents(ctx context.Context, observedIDs []types.UUID) ([]types.UUID, error) {
 	readTx, err := e.eventWriter.BeginReadTx(ctx)
 	if err != nil {
 		return nil, err

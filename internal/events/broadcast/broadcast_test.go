@@ -147,15 +147,11 @@ type mockEventStore struct {
 	events []*types.VotableEvent
 }
 
-func (m *mockEventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.VotableEvent, error) {
-	return m.events, nil
-}
-
 func (m *mockEventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) error {
 	return nil
 }
 
-func (m *mockEventStore) FilterObservedEvents(ctx context.Context, ids []types.UUID) ([]types.UUID, error) {
+func (m *mockEventStore) GetObservedEvents(ctx context.Context, ids []types.UUID) ([]types.UUID, error) {
 	return ids, nil
 }
 

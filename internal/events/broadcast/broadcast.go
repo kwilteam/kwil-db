@@ -39,9 +39,9 @@ var (
 // EventStore allows the EventBroadcaster to read events
 // from the event store.
 type EventStore interface {
-	// GetUnreceivedEvents gets events that this node has not yet broadcasted.
-	// Events are only marked as "broadcasted" when they have been included in a block.
-	FilterObservedEvents(ctx context.Context, ids []types.UUID) ([]types.UUID, error)
+	// GetObservedEvents filters out the events observed by the validator
+	// that are not previously broadcasted.
+	GetObservedEvents(ctx context.Context, ids []types.UUID) ([]types.UUID, error)
 
 	// MarkBroadcasted marks list of events as broadcasted.
 	MarkBroadcasted(ctx context.Context, ids []types.UUID) error
@@ -126,7 +126,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte, db
 	}
 
 	// Vote only if the note observed the event corresponding to the resolution.
-	ids, err := e.store.FilterObservedEvents(ctx, outstandingResolutionIDs)
+	ids, err := e.store.GetObservedEvents(ctx, outstandingResolutionIDs)
 	if err != nil {
 		return err
 	}
