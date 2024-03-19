@@ -153,6 +153,7 @@ func (g *GlobalContext) Procedure(ctx context.Context, tx sql.DB, options *commo
 		Caller:    options.Caller,
 		DBID:      options.Dataset,
 		Procedure: options.Procedure,
+		// starting with stack depth 0, increment in each action call
 	}
 
 	_, err = dataset.Call(procedureCtx, &common.App{

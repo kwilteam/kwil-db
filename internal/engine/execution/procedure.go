@@ -18,10 +18,28 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
+// MaxStackDepth is the limit on the number of nested procedure calls allowed.
+// This is different from the Go call stack depth, which may be much higher as
+// it depends on the program design. The value 1,000 was empirically selected to
+// be a call stack size of about 1MB and to provide a very high limit that no
+// reasonable schema would exceed (even 100 would suggest a poorly designed
+// schema).
+//
+// In addition to exorbitant memory required to support a call stack 1 million
+// deep (>1GB), the execution of that many calls can take seconds, even if they
+// do nothing else.
+//
+// Progressive gas metering may be used in the future to limit resources used by
+// abusive recursive calls, but a hard upper limit will likely be necessary
+// unless the price of an action call is extremely expensive or rises
+// exponentially at each level of the call stack.
+const MaxStackDepth = 1000
+
 var (
-	ErrIncorrectNumberOfArguments = fmt.Errorf("incorrect number of arguments")
-	ErrPrivateProcedure           = fmt.Errorf("procedure is private")
-	ErrMutativeProcedure          = fmt.Errorf("procedure is mutative")
+	ErrIncorrectNumberOfArguments = errors.New("incorrect number of arguments")
+	ErrPrivateProcedure           = errors.New("procedure is private")
+	ErrMutativeProcedure          = errors.New("procedure is mutative")
+	ErrMaxStackDepth              = errors.New("max call stack depth reached")
 )
 
 // instruction is an instruction that can be executed.
@@ -264,9 +282,21 @@ type callMethod struct {
 // If no namespace is specified, the local namespace is used.
 // It will pass all arguments to the method, and assign the return values to the receivers.
 func (e *callMethod) execute(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
+	// This instruction is about to call into another procedure in this dataset
+	// or another baseDataset. Check current call stack depth first.
+	if scope.StackDepth >= MaxStackDepth {
+		// NOTE: the actual Go call stack depth can be much more (e.g. more than
+		// double) the procedure call depth depending on program design and the
+		// number of Go function calls for each procedure. As of writing, it is
+		// approximately double plus a handful from the caller:
+		//
+		// var pcs [4096]uintptr; fmt.Println("call stack depth", runtime.Callers(0, pcs[:]))
+		return ErrMaxStackDepth
+	}
+
 	dataset, ok := global.datasets[scope.DBID]
 	if !ok {
-		return fmt.Errorf(`dataset "%s" not found`, scope.DBID)
+		return fmt.Errorf("%w: %s", ErrDatasetNotFound, scope.DBID)
 	}
 
 	// getting these types to match the type required by the the ultimate DML
@@ -291,6 +321,7 @@ func (e *callMethod) execute(scope *precompiles.ProcedureContext, global *Global
 	var err error
 
 	newScope := scope.NewScope()
+	newScope.StackDepth++ // not done by NewScope since (*baseDataset).Call would do it again
 
 	// if no namespace is specified, we call a local procedure.
 	// this can access public and private procedures.
