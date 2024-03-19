@@ -2,8 +2,8 @@ package virtual_plan
 
 import (
 	"fmt"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 )
 
@@ -32,11 +32,11 @@ func (q *defaultVirtualPlanner) ToPlan(logicalPlan logical_plan.LogicalPlan) Vir
 		for _, expr := range p.Exprs() {
 			selectExprs = append(selectExprs, q.ToExpr(expr, p.Inputs()[0]))
 		}
-		projectedFields := make([]datasource.Field, 0, len(selectExprs))
+		projectedFields := make([]datatypes.Field, 0, len(selectExprs))
 		for _, expr := range p.Exprs() {
 			projectedFields = append(projectedFields, expr.Resolve(p.Inputs()[0]))
 		}
-		projectedSchema := datasource.NewSchema(projectedFields...)
+		projectedSchema := datatypes.NewSchema(projectedFields...)
 		return VProjection(input, projectedSchema, selectExprs...)
 	case *logical_plan.SelectionOp:
 		input := q.ToPlan(p.Inputs()[0])

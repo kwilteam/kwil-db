@@ -15,7 +15,7 @@ func newLogicalPlanBuilder() *logicalPlanBuilder {
 
 // NoRelation creates a new logicalPlanBuilder with no relation(from).
 func (b *logicalPlanBuilder) NoRelation() *logicalPlanBuilder {
-	return &logicalPlanBuilder{}
+	return &logicalPlanBuilder{plan: NoSource()}
 }
 
 // From creates a new logicalPlanBuilder with a logical plan.
@@ -27,11 +27,13 @@ func (b *logicalPlanBuilder) JoinOn(_type string, right LogicalPlan, on LogicalE
 	return b
 }
 
+// Select applies a projection to the logical plan.
 func (b *logicalPlanBuilder) Select(exprs ...LogicalExpr) *logicalPlanBuilder {
 	b.plan = Projection(b.plan, exprs...)
 	return b
 }
 
+// Limit applies LIMIT clause to the logical plan.
 func (b *logicalPlanBuilder) Limit(offset, limit int) *logicalPlanBuilder {
 	b.plan = Limit(b.plan, offset, limit)
 	return b
@@ -62,6 +64,13 @@ func (b *logicalPlanBuilder) Intersect(right LogicalPlan) *logicalPlanBuilder {
 
 func (b *logicalPlanBuilder) Except(right LogicalPlan) *logicalPlanBuilder {
 	b.plan = Except(b.plan, right)
+	return b
+}
+
+func (b *logicalPlanBuilder) Aggregate(keys []LogicalExpr, aggregates []LogicalExpr) *logicalPlanBuilder {
+	keys = NormalizeExprs(keys, b.plan)
+	aggregates = NormalizeExprs(aggregates, b.plan)
+	b.plan = Aggregate(b.plan, keys, aggregates)
 	return b
 }
 

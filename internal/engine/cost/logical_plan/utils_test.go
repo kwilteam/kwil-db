@@ -1,6 +1,7 @@
 package logical_plan
 
 import (
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
@@ -10,6 +11,9 @@ func TestSplitConjunction(t *testing.T) {
 	type args struct {
 		expr LogicalExpr
 	}
+
+	t1 := datatypes.TableRefFromTable("t1")
+
 	tests := []struct {
 		name string
 		args args
@@ -19,74 +23,74 @@ func TestSplitConjunction(t *testing.T) {
 			name: "1 level AND",
 			args: args{
 				expr: And(
-					Column("t1", "a"),
-					Column("t1", "b"),
+					Column(t1, "a"),
+					Column(t1, "b"),
 				),
 			},
 			want: []LogicalExpr{
-				Column("t1", "a"),
-				Column("t1", "b"),
+				Column(t1, "a"),
+				Column(t1, "b"),
 			},
 		},
 		{
 			name: "2 level AND",
 			args: args{
 				expr: And(
-					Column("t1", "a"),
+					Column(t1, "a"),
 					And(
-						Column("t1", "b"),
-						Column("t1", "c"),
+						Column(t1, "b"),
+						Column(t1, "c"),
 					),
 				),
 			},
 			want: []LogicalExpr{
-				Column("t1", "a"),
-				Column("t1", "b"),
-				Column("t1", "c"),
+				Column(t1, "a"),
+				Column(t1, "b"),
+				Column(t1, "c"),
 			},
 		},
 		{
 			name: "with alias",
 			args: args{
 				expr: And(
-					Alias(Column("t1", "a"), "a"),
-					Alias(Column("t1", "b"), "b"),
+					Alias(Column(t1, "a"), "a"),
+					Alias(Column(t1, "b"), "b"),
 				),
 			},
 			want: []LogicalExpr{
-				Column("t1", "a"),
-				Column("t1", "b"),
+				Column(t1, "a"),
+				Column(t1, "b"),
 			},
 		},
 		{
 			name: "with binary expr",
 			args: args{
 				expr: And(
-					Column("t1", "a"),
-					Eq(Column("t1", "b"), LiteralInt(1)),
+					Column(t1, "a"),
+					Eq(Column(t1, "b"), LiteralInt(1)),
 				),
 			},
 			want: []LogicalExpr{
-				Column("t1", "a"),
-				Eq(Column("t1", "b"), LiteralInt(1)),
+				Column(t1, "a"),
+				Eq(Column(t1, "b"), LiteralInt(1)),
 			},
 		},
 		{
 			name: "no conjunction",
 			args: args{
-				expr: Eq(Column("t1", "a"), LiteralInt(1)),
+				expr: Eq(Column(t1, "a"), LiteralInt(1)),
 			},
 			want: []LogicalExpr{
-				Eq(Column("t1", "a"), LiteralInt(1)),
+				Eq(Column(t1, "a"), LiteralInt(1)),
 			},
 		},
 		{
 			name: "no conjunction with alias",
 			args: args{
-				expr: Alias(Eq(Column("t1", "a"), LiteralInt(1)), "a"),
+				expr: Alias(Eq(Column(t1, "a"), LiteralInt(1)), "a"),
 			},
 			want: []LogicalExpr{
-				Eq(Column("t1", "a"), LiteralInt(1)),
+				Eq(Column(t1, "a"), LiteralInt(1)),
 			},
 		},
 	}
@@ -103,6 +107,8 @@ func TestConjunction(t *testing.T) {
 	type args struct {
 		exprs []LogicalExpr
 	}
+	t1 := datatypes.TableRefFromTable("t1")
+
 	tests := []struct {
 		name     string
 		args     args
@@ -112,28 +118,28 @@ func TestConjunction(t *testing.T) {
 			name: "1 level AND",
 			args: args{
 				exprs: []LogicalExpr{
-					Column("t1", "a"),
-					Column("t1", "b"),
+					Column(t1, "a"),
+					Column(t1, "b"),
 				},
 			},
 			wantExpr: And(
-				Column("t1", "a"),
-				Column("t1", "b"),
+				Column(t1, "a"),
+				Column(t1, "b"),
 			),
 		},
 		{
 			name: "2 level AND",
 			args: args{
 				exprs: []LogicalExpr{
-					Column("t1", "a"),
-					Column("t1", "b"),
-					Column("t1", "c"),
+					Column(t1, "a"),
+					Column(t1, "b"),
+					Column(t1, "c"),
 				},
 			},
 			wantExpr: And(
-				And(Column("t1", "a"),
-					Column("t1", "b")),
-				Column("t1", "c"),
+				And(Column(t1, "a"),
+					Column(t1, "b")),
+				Column(t1, "c"),
 			),
 		},
 	}

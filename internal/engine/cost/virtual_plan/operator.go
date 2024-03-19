@@ -2,6 +2,7 @@ package virtual_plan
 
 import (
 	"fmt"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 )
@@ -16,7 +17,7 @@ func (s *VScanOp) String() string {
 		s.ds.Schema(), s.projection)
 }
 
-func (s *VScanOp) Schema() *ds.Schema {
+func (s *VScanOp) Schema() *datatypes.Schema {
 	return s.ds.Schema().Select(s.projection...)
 }
 
@@ -35,7 +36,7 @@ func VScan(ds ds.DataSource, projection ...string) VirtualPlan {
 type VProjectionOp struct {
 	input  VirtualPlan
 	exprs  []VirtualExpr
-	schema *ds.Schema
+	schema *datatypes.Schema
 }
 
 func (p *VProjectionOp) String() string {
@@ -48,7 +49,7 @@ func (p *VProjectionOp) String() string {
 	//return fmt.Sprintf("VProjection: %s", p.exprs)
 }
 
-func (p *VProjectionOp) Schema() *ds.Schema {
+func (p *VProjectionOp) Schema() *datatypes.Schema {
 	return p.schema
 }
 
@@ -80,7 +81,7 @@ func (p *VProjectionOp) Execute() *ds.Result {
 	return ds.ResultFromStream(p.schema, out)
 }
 
-func VProjection(input VirtualPlan, schema *ds.Schema, exprs ...VirtualExpr) VirtualPlan {
+func VProjection(input VirtualPlan, schema *datatypes.Schema, exprs ...VirtualExpr) VirtualPlan {
 	return &VProjectionOp{input: input, exprs: exprs, schema: schema}
 }
 
@@ -94,7 +95,7 @@ func (s *VSelectionOp) String() string {
 	//return fmt.Sprintf("VSelection: %s", s.expr)
 }
 
-func (s *VSelectionOp) Schema() *ds.Schema {
+func (s *VSelectionOp) Schema() *datatypes.Schema {
 	return s.input.Schema()
 }
 

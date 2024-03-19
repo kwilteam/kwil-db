@@ -3,6 +3,7 @@ package virtual_plan
 import (
 	"bytes"
 	"fmt"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 )
@@ -11,7 +12,7 @@ type VirtualPlan interface {
 	fmt.Stringer
 
 	// Schema returns the schema of the data that will be produced by this VirtualPlan.
-	Schema() *datasource.Schema
+	Schema() *datatypes.Schema
 	Inputs() []VirtualPlan
 
 	Execute() *datasource.Result

@@ -2,7 +2,8 @@ package logical_plan
 
 import (
 	"fmt"
-	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
+	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
 )
 
 // SplitConjunction splits the given expression into a list of expressions.
@@ -64,5 +65,50 @@ func ExtractColumns(expr LogicalExpr,
 		seen[schema.Fields[e.Idx].Name] = true
 	default:
 		panic(fmt.Sprintf("unknown expression type %T", e))
+	}
+}
+
+// NormalizeColumn qualifies a column with gaven logical plan.
+func NormalizeColumn(plan LogicalPlan, column *ColumnExpr) *ColumnExpr {
+	return column.QualifyWithSchemas(plan.Schema())
+}
+
+// NormalizeExpr normalizes the given expression with the given logical plan.
+func NormalizeExpr(expr LogicalExpr, plan LogicalPlan) LogicalExpr {
+	e := expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
+		if c, ok := n.(*ColumnExpr); ok {
+			return NormalizeColumn(plan, c)
+		}
+		return n
+	})
+
+	return e.(LogicalExpr)
+}
+
+func NormalizeExprs(exprs []LogicalExpr, plan LogicalPlan) []LogicalExpr {
+	normalized := make([]LogicalExpr, len(exprs))
+	for i, e := range exprs {
+		normalized[i] = NormalizeExpr(e, plan)
+	}
+	return normalized
+}
+
+func ResolveColumns(expr LogicalExpr, plan LogicalPlan) LogicalExpr {
+	return expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
+		if c, ok := n.(*ColumnExpr); ok {
+			c.QualifyWithSchemas(plan.Schema())
+		}
+		return n
+	}).(LogicalExpr)
+}
+
+func ColumnFromDefToExpr(column *ds.ColumnDef) *ColumnExpr {
+	return Column(column.Relation, column.Name)
+}
+
+func ColumnFromExprToDef(column *ColumnExpr) *ds.ColumnDef {
+	return &ds.ColumnDef{
+		Relation: column.Relation,
+		Name:     column.Name,
 	}
 }

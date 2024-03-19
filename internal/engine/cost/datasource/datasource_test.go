@@ -2,30 +2,31 @@ package datasource
 
 import (
 	"fmt"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 // testSchemaUsers is the same as first line of ../../testdata/users.csv
-var testSchemaUsers = NewSchema(
-	Field{
+var testSchemaUsers = datatypes.NewSchema(
+	datatypes.Field{
 		Name: "id",
 		Type: "int",
 	},
-	Field{
+	datatypes.Field{
 		Name: "username",
 		Type: "string",
 	},
-	Field{
+	datatypes.Field{
 		Name: "age",
 		Type: "int",
 	},
-	Field{
+	datatypes.Field{
 		Name: "state",
 		Type: "string",
 	},
-	Field{
+	datatypes.Field{
 		Name: "wallet",
 		Type: "string",
 	},
@@ -70,7 +71,7 @@ var testDataUsers = []Row{
 	},
 }
 
-func checkRecords(t *testing.T, result *Result, expectedSchema *Schema, expectedData []Row) {
+func checkRecords(t *testing.T, result *Result, expectedSchema *datatypes.Schema, expectedData []Row) {
 	t.Helper()
 
 	s := result.Schema()
@@ -113,12 +114,12 @@ func TestMemDataSource_scanWithProjection(t *testing.T) {
 	ds := NewMemDataSource(testSchemaUsers, testDataUsers)
 
 	// Test filtered result
-	expectedSchema := NewSchema(
-		Field{
+	expectedSchema := datatypes.NewSchema(
+		datatypes.Field{
 			Name: "username",
 			Type: "string",
 		},
-		Field{
+		datatypes.Field{
 			Name: "age",
 			Type: "int",
 		})
@@ -191,16 +192,16 @@ func TestCSVDataSource_scanWithProjection(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test filtered result
-	expectedSchema := NewSchema(
-		Field{
+	expectedSchema := datatypes.NewSchema(
+		datatypes.Field{
 			Name: "id",
 			Type: "int",
 		},
-		Field{
+		datatypes.Field{
 			Name: "username",
 			Type: "string",
 		},
-		Field{
+		datatypes.Field{
 			Name: "state",
 			Type: "string",
 		},

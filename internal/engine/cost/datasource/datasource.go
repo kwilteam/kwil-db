@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
 // ColumnValue
@@ -57,7 +59,7 @@ func newRowPipeline(rows []Row) RowPipeline {
 }
 
 type Result struct {
-	schema *Schema
+	schema *datatypes.Schema
 	stream RowPipeline
 }
 
@@ -88,16 +90,16 @@ func (r *Result) ToCsv() string {
 	return sb.String()
 }
 
-func ResultFromStream(s *Schema, rows RowPipeline) *Result {
+func ResultFromStream(s *datatypes.Schema, rows RowPipeline) *Result {
 	return &Result{schema: s, stream: rows}
 }
 
-func ResultFromRaw(s *Schema, rows []Row) *Result {
+func ResultFromRaw(s *datatypes.Schema, rows []Row) *Result {
 	// TODO: use RowPipeline all the way
 	return &Result{schema: s, stream: newRowPipeline(rows)}
 }
 
-func (r *Result) Schema() *Schema {
+func (r *Result) Schema() *datatypes.Schema {
 	return r.schema
 }
 
@@ -111,7 +113,7 @@ type SourceType string
 // DataSource represents a data source.
 type DataSource interface {
 	// Schema returns the schema for the underlying data source
-	Schema() *Schema
+	Schema() *datatypes.Schema
 
 	// SourceType returns the type of the data source.
 	SourceType() SourceType
@@ -129,7 +131,7 @@ type DataSource interface {
 
 // dsScan read the data source, return selected columns.
 // TODO: use channel to return the result, e.g. iterator model.
-func dsScan(dsSchema *Schema, dsRecords []Row, projection []string) *Result {
+func dsScan(dsSchema *datatypes.Schema, dsRecords []Row, projection []string) *Result {
 	if len(projection) == 0 {
 		return ResultFromRaw(dsSchema, dsRecords)
 	}
@@ -148,14 +150,14 @@ func dsScan(dsSchema *Schema, dsRecords []Row, projection []string) *Result {
 	//	}
 	//}
 
-	fieldIndex := dsSchema.mapProjection(projection)
+	fieldIndex := dsSchema.MapProjection(projection)
 
-	newFields := make([]Field, len(projection))
+	newFields := make([]datatypes.Field, len(projection))
 	for i, idx := range fieldIndex {
 		newFields[i] = dsSchema.Fields[idx]
 	}
 
-	newSchema := NewSchema(newFields...)
+	newSchema := datatypes.NewSchema(newFields...)
 
 	out := make(RowPipeline)
 	go func() {
@@ -175,15 +177,15 @@ func dsScan(dsSchema *Schema, dsRecords []Row, projection []string) *Result {
 
 // memDataSource is a data source that reads data from memory.
 type memDataSource struct {
-	schema  *Schema
+	schema  *datatypes.Schema
 	records []Row
 }
 
-func NewMemDataSource(s *Schema, data []Row) *memDataSource {
+func NewMemDataSource(s *datatypes.Schema, data []Row) *memDataSource {
 	return &memDataSource{schema: s, records: data}
 }
 
-func (ds *memDataSource) Schema() *Schema {
+func (ds *memDataSource) Schema() *datatypes.Schema {
 	return ds.schema
 }
 
@@ -199,11 +201,11 @@ func (ds *memDataSource) SourceType() SourceType {
 type csvDataSource struct {
 	path    string
 	records []Row
-	schema  *Schema
+	schema  *datatypes.Schema
 }
 
 func NewCSVDataSource(path string) (*csvDataSource, error) {
-	ds := &csvDataSource{path: path, schema: &Schema{}}
+	ds := &csvDataSource{path: path, schema: &datatypes.Schema{}}
 	if err := ds.load(); err != nil {
 		return nil, err
 	}
@@ -270,13 +272,13 @@ func (ds *csvDataSource) load() error {
 
 	for i, name := range header {
 		ds.schema.Fields = append(ds.schema.Fields,
-			Field{Name: name, Type: columnTypes[i]})
+			datatypes.Field{Name: name, Type: columnTypes[i]})
 	}
 
 	return nil
 }
 
-func (ds *csvDataSource) Schema() *Schema {
+func (ds *csvDataSource) Schema() *datatypes.Schema {
 	return ds.schema
 }
 

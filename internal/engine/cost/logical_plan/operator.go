@@ -3,7 +3,32 @@ package logical_plan
 import (
 	"fmt"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
+
+// NoFrom represents a no from operator.
+// It corresponds to select without any from clause in SQL.
+type NoFrom struct{}
+
+func (n *NoFrom) String() string {
+	return "NoFrom"
+}
+
+func (n *NoFrom) Schema() *datatypes.Schema {
+	return datatypes.NewSchema()
+}
+
+func (n *NoFrom) Inputs() []LogicalPlan {
+	return []LogicalPlan{}
+}
+
+func (n *NoFrom) Exprs() []LogicalExpr {
+	return []LogicalExpr{}
+}
+
+func NoSource() LogicalPlan {
+	return &NoFrom{}
+}
 
 // ScanOp represents a table scan operator, which produces rows from a table.
 // It corresponds to `FROM` clause in SQL.
@@ -43,7 +68,7 @@ func (s *ScanOp) String() string {
 	return fmt.Sprintf("Scan: %s; projection=%s", s.table, s.projection)
 }
 
-func (s *ScanOp) Schema() *datasource.Schema {
+func (s *ScanOp) Schema() *datatypes.Schema {
 	return s.dataSource.Schema().Select(s.projection...)
 }
 
@@ -72,12 +97,12 @@ func (p *ProjectionOp) String() string {
 	return fmt.Sprintf("Projection: %s", p.exprs)
 }
 
-func (p *ProjectionOp) Schema() *datasource.Schema {
-	fs := make([]datasource.Field, len(p.exprs))
+func (p *ProjectionOp) Schema() *datatypes.Schema {
+	fs := make([]datatypes.Field, len(p.exprs))
 	for i, expr := range p.exprs {
-		fs[i] = expr.Resolve(p.input)
+		fs[i] = expr.Resolve(p.input.Schema())
 	}
-	return datasource.NewSchema(fs...)
+	return datatypes.NewSchema(fs...)
 }
 
 func (p *ProjectionOp) Inputs() []LogicalPlan {
@@ -108,7 +133,7 @@ func (s *SelectionOp) String() string {
 	return fmt.Sprintf("Selection: %s", s.expr)
 }
 
-func (s *SelectionOp) Schema() *datasource.Schema {
+func (s *SelectionOp) Schema() *datatypes.Schema {
 	return s.input.Schema()
 }
 
@@ -134,14 +159,14 @@ func Selection(plan LogicalPlan, expr LogicalExpr) LogicalPlan {
 type AggregateOp struct {
 	input     LogicalPlan
 	groupBy   []LogicalExpr
-	aggregate []AggregateExpr
+	aggregate []LogicalExpr
 }
 
 func (a *AggregateOp) GroupBy() []LogicalExpr {
 	return a.groupBy
 }
 
-func (a *AggregateOp) Aggregate() []AggregateExpr {
+func (a *AggregateOp) Aggregate() []LogicalExpr {
 	return a.aggregate
 }
 
@@ -150,19 +175,19 @@ func (a *AggregateOp) String() string {
 }
 
 // Schema returns groupBy fields and aggregate fields
-func (a *AggregateOp) Schema() *datasource.Schema {
+func (a *AggregateOp) Schema() *datatypes.Schema {
 	groupByLen := len(a.groupBy)
-	fs := make([]datasource.Field, len(a.aggregate)+groupByLen)
+	fs := make([]datatypes.Field, len(a.aggregate)+groupByLen)
 
 	for i, expr := range a.groupBy {
-		fs[i] = expr.Resolve(a.input)
+		fs[i] = expr.Resolve(a.input.Schema())
 	}
 
 	for i, expr := range a.aggregate {
-		fs[i+groupByLen] = expr.Resolve(a.input)
+		fs[i+groupByLen] = expr.Resolve(a.input.Schema())
 	}
 
-	return datasource.NewSchema(fs...)
+	return datatypes.NewSchema(fs...)
 }
 
 func (a *AggregateOp) Inputs() []LogicalPlan {
@@ -184,7 +209,7 @@ func (a *AggregateOp) Exprs() []LogicalExpr {
 
 // Aggregate creates an aggregation logical plan.
 func Aggregate(plan LogicalPlan, groupBy []LogicalExpr,
-	aggregateExpr []AggregateExpr) LogicalPlan {
+	aggregateExpr []LogicalExpr) LogicalPlan {
 	return &AggregateOp{
 		input:     plan,
 		groupBy:   groupBy,
@@ -213,7 +238,7 @@ func (l *LimitOp) String() string {
 	return fmt.Sprintf("Limit: %d, offset %d", l.limit, l.offset)
 }
 
-func (l *LimitOp) Schema() *datasource.Schema {
+func (l *LimitOp) Schema() *datatypes.Schema {
 	return l.input.Schema()
 }
 
@@ -251,7 +276,7 @@ func (s *SortOp) String() string {
 	return fmt.Sprintf("Sort: %s", s.by)
 }
 
-func (s *SortOp) Schema() *datasource.Schema {
+func (s *SortOp) Schema() *datatypes.Schema {
 	return s.input.Schema()
 }
 
@@ -315,13 +340,13 @@ func (j *JoinOp) OpType() JoinType {
 }
 
 // Schema returns the combination of left and right schema
-func (j *JoinOp) Schema() *datasource.Schema {
+func (j *JoinOp) Schema() *datatypes.Schema {
 	leftFields := j.left.Schema().Fields
 	rightFields := j.right.Schema().Fields
-	fields := make([]datasource.Field, len(leftFields)+len(rightFields))
+	fields := make([]datatypes.Field, len(leftFields)+len(rightFields))
 	copy(fields, leftFields)
 	copy(fields[len(leftFields):], rightFields)
-	return datasource.NewSchema(fields...)
+	return datatypes.NewSchema(fields...)
 }
 
 func (j *JoinOp) Inputs() []LogicalPlan {
@@ -386,7 +411,7 @@ func (u *BagOp) String() string {
 }
 
 // Schema returns the schema of the left plan, since they should be the same.
-func (u *BagOp) Schema() *datasource.Schema {
+func (u *BagOp) Schema() *datatypes.Schema {
 	return u.left.Schema()
 }
 
@@ -440,7 +465,7 @@ func (s *SubqueryOp) String() string {
 	return fmt.Sprintf("Subquery: %s", s.alias)
 }
 
-func (s *SubqueryOp) Schema() *datasource.Schema {
+func (s *SubqueryOp) Schema() *datatypes.Schema {
 	return s.input.Schema()
 }
 
@@ -468,7 +493,7 @@ func (d *DistinctOp) String() string {
 	return "Distinct"
 }
 
-func (d *DistinctOp) Schema() *datasource.Schema {
+func (d *DistinctOp) Schema() *datatypes.Schema {
 	return d.input.Schema()
 }
 

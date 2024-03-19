@@ -3,15 +3,14 @@ package logical_plan
 import (
 	"bytes"
 	"fmt"
-
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
 type LogicalPlan interface {
 	fmt.Stringer
 
 	// Schema returns the schema of the data that will be produced by this LogicalPlan.
-	Schema() *datasource.Schema
+	Schema() *datatypes.Schema
 
 	Inputs() []LogicalPlan
 
@@ -30,10 +29,10 @@ type DataFrameAPI interface {
 	Filter(expr LogicalExpr) DataFrameAPI
 
 	// Aggregate appliex an aggregation
-	Aggregate(groupBy []LogicalExpr, aggregateExpr []AggregateExpr) DataFrameAPI
+	Aggregate(groupBy []LogicalExpr, aggregateExpr []LogicalExpr) DataFrameAPI
 
 	// Schema returns the schema of the data that will be produced by this DataFrameAPI.
-	Schema() *datasource.Schema
+	Schema() *datatypes.Schema
 
 	// LogicalPlan returns the logical plan
 	LogicalPlan() LogicalPlan
@@ -51,11 +50,11 @@ func (df *DataFrame) Filter(expr LogicalExpr) DataFrameAPI {
 	return &DataFrame{Selection(df.plan, expr)}
 }
 
-func (df *DataFrame) Aggregate(groupBy []LogicalExpr, aggregateExpr []AggregateExpr) DataFrameAPI {
+func (df *DataFrame) Aggregate(groupBy []LogicalExpr, aggregateExpr []LogicalExpr) DataFrameAPI {
 	return &DataFrame{Aggregate(df.plan, groupBy, aggregateExpr)}
 }
 
-func (df *DataFrame) Schema() *datasource.Schema {
+func (df *DataFrame) Schema() *datatypes.Schema {
 	return df.plan.Schema()
 }
 

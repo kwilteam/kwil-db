@@ -2,11 +2,13 @@ package query_planner
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
-	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
+	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
@@ -21,6 +23,8 @@ func NewPlanner() *queryPlanner {
 	return &queryPlanner{}
 }
 
+// ToExpr converts a tree.Expression to a logical expression.
+// TODO: use iterator or stack to traverse the tree, instead of recursive, to avoid stack overflow.
 func (q *queryPlanner) ToExpr(expr tree.Expression, schema *ds.Schema) lp.LogicalExpr {
 	switch e := expr.(type) {
 	case *tree.ExpressionLiteral:
@@ -35,10 +39,8 @@ func (q *queryPlanner) ToExpr(expr tree.Expression, schema *ds.Schema) lp.Logica
 			return &lp.LiteralIntExpr{Value: i}
 		}
 	case *tree.ExpressionColumn:
-		return &lp.ColumnExpr{
-			Table: e.Table,
-			Name:  e.Column,
-		}
+		// TODO: handle relation
+		return lp.ColumnUnqualified(e.Column)
 	//case *tree.ExpressionFunction:
 	case *tree.ExpressionUnary:
 		switch e.Operator {
@@ -147,7 +149,7 @@ func (q *queryPlanner) buildSelect(node *tree.SelectStmt, ctx *PlannerContext) l
 			case tree.CompoundOperatorTypeExcept:
 				plan = lp.Builder.From(left).Except(right).Build()
 			default:
-				panic(fmt.Sprintf("unknown set operation %s", setOp))
+				panic(fmt.Sprintf("unknown set operation %s", setOp.ToSQL()))
 			}
 			left = plan
 		}
@@ -237,25 +239,111 @@ func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.Logi
 	return lp.Builder.From(plan).Limit(offset, limit).Build()
 }
 
+// buildSelectPlan builds a logical plan for a select statement.
+// The order of building is:
+// 1. from
+// 2. where
+// 3. group by(can use reference from select)
+// 4. having(can use reference from select)
+// 5. select
+// 6. distinct
+// 7. order by
+// 8. limit
 func (q *queryPlanner) buildSelectPlan(node *tree.SelectCore, ctx *PlannerContext) lp.LogicalPlan {
 	var plan lp.LogicalPlan
 
+	// from clause
 	plan = q.buildFrom(node.From, ctx)
 
-	plan = q.buildFilter(plan, node.Where) // where
-
-	// expand * in select list
-
-	if node.GroupBy != nil {
-		plan = b.buildAggregate(plan, node.GroupBy, node.Columns) // group by
-		plan = b.buildFilter(plan, node.GroupBy.Having)           // having
+	noFrom := false
+	if _, ok := plan.(*lp.NoFrom); ok {
+		noFrom = true
 	}
 
-	// if orderBy , project for order
+	// where clause
+	// after this step, we got a schema(maybe combined from different tables) to work with
+	sourcePlan := q.buildFilter(plan, node.Where, ctx)
 
-	plan = b.buildDistinct(plan, node.SelectType, node.Columns) // distinct
+	// try qualify expr, also expand `*`
+	projectExprs := q.prepareProjectionExprs(sourcePlan, node.Columns, noFrom, ctx)
 
-	plan = b.buildProjection(plan, orderBy, node.Columns) // project
+	// for having/group_by exprs
+	aliasMap := extractAliases(projectExprs)
+
+	projectedPlan := q.buildProjection(sourcePlan, projectExprs)
+
+	combinedSchema := sourcePlan.Schema().Clone().Merge(projectedPlan.Schema())
+
+	/////////////
+	// THIS IS WHERE I LEFT!!!!!!!!
+	var havingExpr lp.LogicalExpr
+	if node.GroupBy != nil {
+		havingExpr = q.buildHaving(node.GroupBy.Having, combinedSchema, aliasMap, ctx)
+	}
+
+	aggrExprs := slices.Clone(projectExprs) // shallow copy
+	if havingExpr != nil {
+		aggrExprs = append(aggrExprs, havingExpr)
+	}
+	aggrExprs = extractAggrExprs(aggrExprs)
+
+	var groupByExprs []lp.LogicalExpr
+	if node.GroupBy != nil {
+		for _, gbExpr := range node.GroupBy.Expressions {
+			groupByExpr := q.ToExpr(gbExpr, combinedSchema)
+
+			// avoid conflict
+			aliasMapClone := cloneAliases(aliasMap)
+			for _, f := range sourcePlan.Schema().Fields {
+				delete(aliasMapClone, f.Name)
+			}
+
+			groupByExpr = resolveAlias(groupByExpr, aliasMapClone)
+			if err := ensureSchemaSatifiesExprs(combinedSchema, []lp.LogicalExpr{groupByExpr}); err != nil {
+				panic(err)
+			}
+
+			groupByExprs = append(groupByExprs, groupByExpr)
+		}
+	}
+
+	var planAfterAggr lp.LogicalPlan
+	var projectedExpsAfterAggr []lp.LogicalExpr
+
+	if len(groupByExprs) > 0 || len(aggrExprs) > 0 {
+		planAfterAggr, projectedExpsAfterAggr = q.buildAggregate(
+			sourcePlan, projectExprs, havingExpr, groupByExprs, aggrExprs)
+	} else {
+		if havingExpr != nil {
+			panic("having expression without group by")
+		}
+	}
+
+	////////////
+
+	// another projection
+	plan = q.buildProjection(planAfterAggr, projectedExpsAfterAggr)
+
+	// distinct
+	if node.SelectType == tree.SelectTypeDistinct {
+		plan = lp.Builder.From(plan).Distinct().Build()
+	}
+
+	//////////
+
+	//if node.GroupBy != nil {
+	//	plan = b.buildAggregate(plan, node.GroupBy, node.Columns) // group by
+	//	plan = b.buildFilter(plan, node.GroupBy.Having)           // having
+	//}
+	//
+	//// if orderBy , project for order
+	//
+	//plan = b.buildDistinct(plan, node.SelectType, node.Columns) // distinct
+
+	//// TODO: handle group by,distinct, order by, limit
+	//newPlan := projectedPlan
+	//var projectExprAfterAggr []lp.LogicalExpr
+	//plan = q.buildProjection(newPlan, projectExprAfterAggr) // final project
 
 	// done in VisitSelectStmt and VisitTableOrSubQuerySelect
 	//plan = b.buildSort()  // order by
@@ -325,7 +413,12 @@ func (q *queryPlanner) buildTableSource(node *tree.RelationTable, ctx *PlannerCo
 	//}
 	//return nil
 
-	//return lp.Builder.From(node.Table).Build()
+	//tableRef, err := relationNameToTableRef(node.Name)
+	//if err != nil {
+	//	panic(err)
+	//}
+	//
+	//return lp.Builder.From(node.Relation).Build()
 	return nil
 }
 
@@ -337,32 +430,123 @@ func (q *queryPlanner) buildFilter(plan lp.LogicalPlan, node tree.Expression, ct
 	// TODO: handle parent schema
 
 	expr := q.ToExpr(node, plan.Schema())
-	seen := make(map[string]bool)
-	extractColumnsFromFilterExpr(expr, seen)
-
-	return lp.Builder.From(plan).Filter(expr).Build()
+	//seen := make(map[*lp.ColumnExpr]bool)
+	//extractColumnsFromFilterExpr(expr, seen)
+	//expr = qualifyExpr(expr, seen, plan.Schema())
+	expr = qualifyExpr(expr, plan.Schema())
+	return lp.Builder.From(plan).Select(expr).Build()
 }
 
-// extractColumnsFromFilterExpr extracts the columns are references by the filter expression.
-// It keeps track of the columns that have been seen in the 'seen' map.
-func extractColumnsFromFilterExpr(expr lp.LogicalExpr, seen map[string]bool) {
-	switch e := expr.(type) {
-	case *lp.LiteralStringExpr:
-	case *lp.LiteralIntExpr:
-	case *lp.AliasExpr:
-		extractColumnsFromFilterExpr(e.Expr, seen)
-	case lp.UnaryExpr:
-		extractColumnsFromFilterExpr(e.E(), seen)
-	case lp.AggregateExpr:
-		extractColumnsFromFilterExpr(e.E(), seen)
-	case lp.BinaryExpr:
-		extractColumnsFromFilterExpr(e.L(), seen)
-		extractColumnsFromFilterExpr(e.R(), seen)
-	case *lp.ColumnExpr:
-		seen[e.Name] = true
-	//case *.ColumnIdxExpr:
-	//	seen[input.Schema().Fields[e.Idx].Name] = true
+func (q *queryPlanner) buildProjection(plan lp.LogicalPlan, exprs []lp.LogicalExpr) lp.LogicalPlan {
+	return lp.Builder.From(plan).Select(exprs...).Build()
+}
+
+func (q *queryPlanner) buildHaving(node tree.Expression, schema *ds.Schema,
+	aliasMap map[string]lp.LogicalExpr, ctx *PlannerContext) lp.LogicalExpr {
+	if node == nil {
+		return nil
+	}
+
+	expr := q.ToExpr(node, schema)
+	expr = resolveAlias(expr, aliasMap)
+	expr = qualifyExpr(expr, schema)
+	return expr
+}
+
+// buildAggregate builds a logical plan for an aggregate.
+// A typical aggregate plan has group by, having, and aggregate expressions.
+func (q *queryPlanner) buildAggregate(input lp.LogicalPlan,
+	projectedExprs []lp.LogicalExpr, havingExpr lp.LogicalExpr,
+	groupByExprs, aggrExprs []lp.LogicalExpr) (lp.LogicalPlan, []lp.LogicalExpr) {
+	plan := lp.Builder.From(input).Aggregate(groupByExprs, aggrExprs).Build()
+	if p, ok := plan.(*lp.AggregateOp); ok {
+		// rewrite projection to refer to columns that are output of aggregate plan.
+		plan = p
+		groupByExprs = p.GroupBy()
+	} else {
+		panic(fmt.Sprintf("unexpected plan type %T", plan))
+	}
+
+	// rewrite projection to refer to columns that are output of aggregate plan.
+	//
+	aggrProjectionExprs := slices.Clone(groupByExprs)
+	aggrProjectionExprs = append(aggrProjectionExprs, aggrExprs...)
+	// resolve the columns in projection
+	resolvedAggrProjectionExprs := make([]lp.LogicalExpr, len(aggrProjectionExprs))
+	for i, expr := range aggrProjectionExprs {
+		e := expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
+			if c, ok := n.(*lp.ColumnExpr); ok {
+				field := c.Resolve(plan.Schema())
+				return lp.ColumnFromDefToExpr(field.QualifiedColumn())
+			}
+			return n
+		})
+
+		resolvedAggrProjectionExprs[i] = e.(lp.LogicalExpr)
+	}
+	// replace any expressions that are not a column with a column
+	// like `1+2` or `group by a+b`(a,b are alias)
+	var columnsAfterAggr []lp.LogicalExpr
+	for _, expr := range resolvedAggrProjectionExprs {
+		columnsAfterAggr = append(columnsAfterAggr, exprAsColumn(expr, plan))
+	}
+	//
+	// rewrite projection
+	var projectedExprsAfterAggr []lp.LogicalExpr
+	for _, expr := range projectedExprs {
+		projectedExprsAfterAggr = append(projectedExprsAfterAggr,
+			rebaseExprs(expr, resolvedAggrProjectionExprs, plan))
+	}
+	// make sure projection exprs can be resolved from columns
+
+	if err := checkExprsProjectFromColumns(projectedExprsAfterAggr,
+		columnsAfterAggr); err != nil {
+		panic(fmt.Sprintf("build aggregation: %s", err))
+	}
+
+	if havingExpr != nil {
+		havingExpr = rebaseExprs(havingExpr, resolvedAggrProjectionExprs, plan)
+		if err := checkExprsProjectFromColumns(
+			[]lp.LogicalExpr{havingExpr}, columnsAfterAggr); err != nil {
+			panic(fmt.Sprintf("build aggregation: %s", err))
+		}
+
+		plan = lp.Builder.From(plan).Select(havingExpr).Build()
+	}
+
+	return plan, projectedExprsAfterAggr
+}
+
+func (q *queryPlanner) prepareProjectionExprs(plan lp.LogicalPlan, node []tree.ResultColumn, noFrom bool, ctx *PlannerContext) []lp.LogicalExpr {
+	var exprs []lp.LogicalExpr
+	for _, col := range node {
+		exprs = append(exprs, q.projectColumnToExpr(col, plan, noFrom, ctx)...)
+	}
+	return exprs
+}
+
+func (q *queryPlanner) projectColumnToExpr(col tree.ResultColumn, plan lp.LogicalPlan, noFrom bool, ctx *PlannerContext) []lp.LogicalExpr {
+	switch t := col.(type) {
+	case *tree.ResultColumnExpression: // single column
+		expr := q.ToExpr(t.Expression, plan.Schema())
+		column := qualifyExpr(expr, nil, plan.Schema())
+		if t.Alias != "" { // only add alias if it's not the same as column name
+			if c, ok := column.(*lp.ColumnExpr); ok {
+				if c.Name != t.Alias {
+					column = lp.Alias(column, t.Alias)
+				}
+			}
+		}
+		return []lp.LogicalExpr{column}
+	case *tree.ResultColumnStar: // expand *
+		if noFrom {
+			panic("cannot use * in select list without FROM clause")
+		}
+
+		return expandStar(plan.Schema())
+	case *tree.ResultColumnTable: // expand table.*
+		return expandQualifiedStar(plan.Schema(), t.TableName)
 	default:
-		panic(fmt.Sprintf("unknown expression type %T", e))
+		panic(fmt.Sprintf("unknown result column type %T", t))
 	}
 }
