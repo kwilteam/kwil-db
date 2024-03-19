@@ -15,12 +15,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/txapp"
 )
 
-// KVStore is an interface for a basic key-value store
-type KVStore interface {
-	Get(key []byte) ([]byte, error)
-	Set(key []byte, value []byte) error
-}
-
 // SnapshotModule is an interface for a struct that implements snapshotting
 type SnapshotModule interface {
 	// Checks if databases are to be snapshotted at a particular height
@@ -52,12 +46,12 @@ type DBBootstrapModule interface {
 // It has methods for beginning and ending blocks, applying transactions,
 // and managing a mempool
 type TxApp interface {
-	// accounts -> string([]accound_identifier) : *big.Int(balance)
-	GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*types.Account, initialHeight int64) error
+	GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*types.Account, initialHeight int64, appHash []byte) error
+	ChainInfo(ctx context.Context) (int64, []byte, error)
 	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
 	// Begin signals that a new block has begun.
 	Begin(ctx context.Context) error
-	Finalize(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)
+	Finalize(ctx context.Context, blockHeight int64) (appHash []byte, validatorUpgrades []*types.Validator, err error)
 	Commit(ctx context.Context) error
 	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
 	ProposerTxs(ctx context.Context, txNonce uint64, maxTxSize int64, proposerAddr []byte) ([][]byte, error)

@@ -12,8 +12,17 @@ var (
 	ErrTargetVersionTooLow = fmt.Errorf("target version is lower than current version")
 )
 
-// EnsureVersionTableExists ensures that the version table exists in the database.
-// If the table does not exist, it will be created, and the first version will be set to version specified.
+const (
+	// preVersion is the value inserted into a fresh version table with
+	// sqlEnsureVersionExists. This is used to ensure that the "upgrade" to
+	// version 0, which is usually just schema table initialization, defined
+	// per-store is executed.
+	preVersion = -1
+)
+
+// ensureVersionTableExists ensures that the version table exists in the
+// database. If the table does not exist, it will be created, and the first
+// version will be set to -1.
 func ensureVersionTableExists(ctx context.Context, db sql.TxMaker, schema string) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
@@ -32,7 +41,7 @@ func ensureVersionTableExists(ctx context.Context, db sql.TxMaker, schema string
 	}
 
 	// Ensure that the version exists. If it does not, insert it with the target version.
-	if _, err = tx.Execute(ctx, fmt.Sprintf(sqlEnsureVersionExists, schema), -1); err != nil {
+	if _, err = tx.Execute(ctx, fmt.Sprintf(sqlEnsureVersionExists, schema), preVersion); err != nil {
 		return err
 	}
 

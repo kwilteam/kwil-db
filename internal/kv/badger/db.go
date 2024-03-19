@@ -6,10 +6,11 @@ import (
 	"sync"
 	"time"
 
-	badger "github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3"
+	"go.uber.org/zap"
+
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/kv"
-	"go.uber.org/zap"
 )
 
 // NewBadgerDB creates a new BadgerDB.
