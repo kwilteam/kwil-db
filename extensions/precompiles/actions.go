@@ -62,6 +62,10 @@ type ProcedureContext struct {
 	Procedure string
 	// Result is the result of the most recent SQL query.
 	Result *sql.ResultSet
+
+	// StackDepth tracks the current depth of the procedure call stack. It is
+	// incremented each time a procedure calls another procedure.
+	StackDepth int
 }
 
 // SetValue sets a value in the scope.
@@ -96,15 +100,16 @@ func (p *ProcedureContext) Values() map[string]any {
 
 // NewScope creates a new procedure context for a child procedure.
 // It will not inherit the values or last result from the parent.
-// It will inherit the dbid and procedure from the parent.
+// It will inherit the dbid, procedure, and stack depth from the parent.
 func (p *ProcedureContext) NewScope() *ProcedureContext {
 	return &ProcedureContext{
-		Ctx:       p.Ctx,
-		Signer:    p.Signer,
-		Caller:    p.Caller,
-		values:    make(map[string]any),
-		DBID:      p.DBID,
-		Procedure: p.Procedure,
+		Ctx:        p.Ctx,
+		Signer:     p.Signer,
+		Caller:     p.Caller,
+		values:     make(map[string]any),
+		DBID:       p.DBID,
+		Procedure:  p.Procedure,
+		StackDepth: p.StackDepth,
 	}
 }
 
