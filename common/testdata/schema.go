@@ -20,6 +20,9 @@ var TestSchema = &types.Schema{
 		ProcedureAdminDeleteUser,
 		ProcedureCallsPrivate,
 		ProcedurePrivate,
+		ProcedureRecursive,
+		ProcedureRecursiveSneakyA,
+		ProcedureRecursiveSneakyB,
 	},
 	Extensions: []*types.Extension{},
 }
