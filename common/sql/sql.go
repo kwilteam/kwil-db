@@ -40,22 +40,18 @@ type TxMaker interface {
 	BeginTx(ctx context.Context) (Tx, error)
 }
 
-// TxCloser terminates a transaction by committing or rolling it back.
-type TxCloser interface {
-	// Rollback rolls back the transaction.
-	Rollback(ctx context.Context) error
-	// Commit commits the transaction.
-	Commit(ctx context.Context) error
-}
-
 // Tx represents a database transaction. It can be nested within other
 // transactions, and create new nested transactions. An implementation of Tx may
 // also be an AccessModer, but it is not required.
 type Tx interface {
 	Executor
-	TxCloser
 	TxMaker // recursive interface
 	// note: does not embed DB for clear semantics (DB makes a Tx, not the reverse)
+
+	// Rollback rolls back the transaction.
+	Rollback(ctx context.Context) error
+	// Commit commits the transaction.
+	Commit(ctx context.Context) error
 }
 
 // DB is a top level database interface, which may directly execute queries or
