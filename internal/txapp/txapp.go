@@ -4,15 +4,17 @@ package txapp
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
-	"sort"
+	"slices"
 
 	"go.uber.org/zap"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -24,14 +26,17 @@ import (
 )
 
 // NewTxApp creates a new router.
-func NewTxApp(db DB, engine common.Engine,
-	signer *auth.Ed25519Signer, events Rebroadcaster, chainID string, GasEnabled bool, extensionConfigs map[string]map[string]string, log log.Logger) *TxApp {
+func NewTxApp(db DB, engine common.Engine, signer *auth.Ed25519Signer,
+	events Rebroadcaster, chainID string, GasEnabled bool, extensionConfigs map[string]map[string]string, log log.Logger) (*TxApp, error) {
 	voteBodyTxSize, err := computeEmptyVoteBodyTxSize(chainID)
 	if err != nil {
-		log.Error("failed to compute empty vote body tx size", zap.Error(err))
+		return nil, fmt.Errorf("failed to compute empty vote body tx size: %w", err)
 	}
 
-	return &TxApp{
+	resTypes := resolutions.ListResolutions()
+	slices.Sort(resTypes)
+
+	t := &TxApp{
 		Database: db,
 		Engine:   engine,
 		events:   events,
@@ -45,7 +50,13 @@ func NewTxApp(db DB, engine common.Engine,
 		GasEnabled:          GasEnabled,
 		extensionConfigs:    extensionConfigs,
 		emptyVoteBodyTxSize: voteBodyTxSize,
+		resTypes:            resTypes,
 	}
+	t.height, t.appHash, err = t.ChainInfo(context.TODO())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain info: %w", err)
+	}
+	return t, nil
 }
 
 // TxApp maintains the state for Kwil's ABCI application.
@@ -55,9 +66,9 @@ func NewTxApp(db DB, engine common.Engine,
 type TxApp struct {
 	Database DB            // postgres database
 	Engine   common.Engine // tracks deployed schemas
-	// Accounts AccountsStore   // accounts
-	// Validators ValidatorStore  // validators
-	// VoteStore  VoteStore       // tracks resolutions, their votes, manages expiration
+	// The various internal stores (accounts, votes, etc.) are accessed through
+	// the Database via the functions defined in relevant packages.
+
 	GasEnabled bool
 	events     Rebroadcaster
 
@@ -67,6 +78,11 @@ type TxApp struct {
 	log log.Logger
 
 	mempool *mempool
+
+	// appHash is the last block's apphash, set for genesis in GenesisInit
+	// updated in FinalizeBlock by combining with new engine hash.
+	appHash []byte
+	height  int64
 
 	// transaction that exists between Begin and Commit
 	currentTx sql.OuterTx
@@ -78,25 +94,30 @@ type TxApp struct {
 	// For more information, see: https://github.com/cometbft/cometbft/issues/203
 	// genesisTx is the transaction that is used to apply the genesis state changes
 	// along with the updates by the transactions in the first block.
-	genesisTx        sql.OuterTx
+	genesisTx sql.OuterTx
+
 	extensionConfigs map[string]map[string]string
 
 	// precomputed variables
 	emptyVoteBodyTxSize int64
+	resTypes            []string
 }
 
 // GenesisInit initializes the TxApp. It must be called outside of a session,
 // and before any session is started.
 // It can assign the initial validator set and initial account balances.
 // It is only called once for a new chain.
-func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, genesisAccounts []*types.Account, initialHeight int64) error {
+func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, genesisAccounts []*types.Account,
+	initialHeight int64, genesisAppHash []byte) error {
 	tx, err := r.Database.BeginOuterTx(ctx)
 	if err != nil {
 		return err
 	}
 	r.genesisTx = tx
 
-	height, err := getDBHeight(ctx, tx)
+	// With the genesisTx not being committed until the first FinalizeBlock, we
+	// expect no existing chain state in the application (postgres).
+	height, appHash, err := getChainState(ctx, tx)
 	if err != nil {
 		err2 := tx.Rollback(ctx)
 		if err2 != nil {
@@ -105,11 +126,15 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 		return fmt.Errorf("error getting database height: %s", err.Error())
 	}
 
-	if height == -1 {
-		r.log.Info("GenesisInit: starting with empty database")
-	} else if initialHeight-1 != height {
-		return fmt.Errorf("genesisInit: expected database to be at height %d, got %d", initialHeight-1, height)
+	// First app hash and height are stored in FinalizeBlock for first block.
+	if height != -1 {
+		return fmt.Errorf("expected database to be uninitialized, but had height %d", height)
 	}
+	if len(appHash) != 0 {
+		return fmt.Errorf("expected NULL app hash, got %x", appHash)
+	}
+
+	r.appHash = genesisAppHash // combined with first block's apphash and stored in FinalizeBlock
 
 	// Add Genesis Validators
 	for _, validator := range validators {
@@ -135,6 +160,33 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 		}
 	}
 	return nil
+}
+
+// ChainInfo is called be the ABCI applications' Info method, which is called
+// once on startup except when the node is at genesis, in which case GenesisInit
+// is called by the application's ChainInit method.
+func (r *TxApp) ChainInfo(ctx context.Context) (int64, []byte, error) {
+	tx, err := r.Database.BeginReadTx(ctx)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	// MAYBE: return r.height, r.appHash from the exported method and only query
+	// the DB from an unexported method that c'tor uses. Needs mutex. Hitting DB
+	// always may also be good to ensure the exported method gets committed.
+
+	// return getChainState(ctx, tx)
+	height, appHash, err := getChainState(ctx, tx)
+	if err != nil {
+		return 0, nil, err
+	}
+	// r.log.Debug("ChainInfo", log.Int("height", height), log.String("appHash", hex.EncodeToString(appHash)),
+	// 	log.Int("height_x", r.height), log.String("appHash_x", hex.EncodeToString(r.appHash)))
+	if height == -1 {
+		height = 0 // for ChainInfo caller, non-negative is expected for genesis
+	}
+	return height, appHash, nil
 }
 
 // UpdateValidator updates a validator's power.
@@ -210,7 +262,7 @@ func (r *TxApp) Execute(ctx TxContext, tx *transactions.Transaction) *TxResponse
 }
 
 // Begin signals that a new block has begun.
-// It contains information on any validators whos power should be updated.
+// It contains information on any validators whose power should be updated.
 func (r *TxApp) Begin(ctx context.Context) error {
 	if r.currentTx != nil {
 		return errors.New("txapp misuse: cannot begin a new block while a transaction is in progress")
@@ -231,10 +283,9 @@ func (r *TxApp) Begin(ctx context.Context) error {
 	return nil
 }
 
-// Finalize signals that a block has been finalized.
-// No more changes can be applied to the database, and TxApp should return
-// information on the apphash and validator updates.
-func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
+// Finalize signals that a block has been finalized. No more changes can be
+// applied to the database. It returns the apphash and the validator set.
+func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (appHash []byte, finalValidators []*types.Validator, err error) {
 	if r.currentTx == nil {
 		return nil, nil, errors.New("txapp misuse: cannot finalize a block without a transaction in progress")
 	}
@@ -251,18 +302,29 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte
 		}
 	}()
 
+	r.log.Debug("Finalize(start)", log.Int("height", r.height), log.String("appHash", hex.EncodeToString(r.appHash)))
+
+	if blockHeight != r.height+1 {
+		return nil, nil, fmt.Errorf("Finalize was expecting height %d, got %d", r.height+1, blockHeight)
+	}
+
 	err = r.processVotes(ctx, blockHeight)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	finalValidators, err := getAllVoters(ctx, r.currentTx)
+	finalValidators, err = getAllVoters(ctx, r.currentTx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Update Height
-	err = updateDBHeight(ctx, r.currentTx, blockHeight)
+	// While still in the DB transaction, update to this next height but dummy
+	// app hash. If we crash before Commit can store the next app hash that we
+	// get after Precommit, the startup handshake's call to Info will detect the
+	// mismatch. That requires manual recovery (drop state and reapply), but it
+	// at least detects this recorded height rather than not recognizing that we
+	// have committed the data for this block at all.
+	err = setChainState(ctx, r.currentTx, blockHeight, []byte{0x42})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -272,16 +334,21 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte
 		return nil, nil, err
 	}
 
-	return engineHash, finalValidators, nil
+	r.appHash = crypto.Sha256(append(r.appHash, engineHash...))
+	r.height = blockHeight
+
+	r.log.Debug("Finalize(end)", log.Int("height", r.height), log.String("appHash", hex.EncodeToString(r.appHash)))
+
+	// I'd really like to setChainState here with appHash, but we can't use
+	// currentTx for anything now except Commit.
+
+	return r.appHash, finalValidators, nil
 }
 
 // processVotes confirms resolutions that have been approved by the network,
 // expires resolutions that have expired, and properly credits proposers and voters.
 func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 	credits := make(creditMap)
-
-	resolutionTypes := resolutions.ListResolutions()
-	sort.Strings(resolutionTypes) // for deterministic order
 
 	var finalizedIds []types.UUID
 	// markedProcessedIds is a separate list for marking processed, since we do not want to process validator resolutions
@@ -295,7 +362,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 		Resolution  *resolutions.Resolution
 		ResolveFunc func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error
 	}
-	for _, resolutionType := range resolutionTypes {
+	for _, resolutionType := range r.resTypes {
 		cfg, err := resolutions.GetResolution(resolutionType)
 		if err != nil {
 			return err
@@ -461,12 +528,14 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) {
 	c[string(res.Proposer)] = big.NewInt(0).Add(currentBalance, bodyCost)
 }
 
-// Commit signals that a block has been committed.
+// Commit signals that a block's state changes should be committed.
 func (r *TxApp) Commit(ctx context.Context) error {
 	if r.currentTx == nil {
 		return errors.New("txapp misuse: cannot commit a block without a transaction in progress")
 	}
 	defer r.mempool.reset()
+
+	// r.log.Debug("Commit(start)", log.Int("height", r.height), log.String("appHash", hex.EncodeToString(r.appHash)))
 
 	err := r.currentTx.Commit(ctx)
 	if err != nil {
@@ -475,7 +544,28 @@ func (r *TxApp) Commit(ctx context.Context) error {
 
 	r.currentTx = nil
 	r.genesisTx = nil
-	return nil
+
+	// Now we can store the app hash computed in FinalizeBlock after Precommit.
+	// Note that if we crash here, Info on startup will immediately detect an
+	// unexpected app hash since we've saved this height in the Commit above.
+	// While this takes manual recovery, it does not go undetected as if we had
+	// not updated to the new height in that Commit. We could improve this with
+	// some refactoring to pg.DB to allow multiple simultaneous uncommitted
+	// prepared transactions to make this an actual two-phase commit, but it is
+	// just a single row so the difference is minor.
+	ctx = context.Background() // don't let them cancel us now, we need consistency with consensus tx commit
+	tx, err := r.Database.BeginOuterTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	err = setChainState(ctx, tx, r.height, r.appHash) // unchanged height, known appHash
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx) // no Precommit for this one
 }
 
 // ApplyMempool applies the transactions in the mempool.

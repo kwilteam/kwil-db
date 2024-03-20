@@ -411,8 +411,13 @@ func (m *mockTxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []
 	return nil, nil, nil
 }
 
-func (m *mockTxApp) GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*types.Account, initialHeight int64) error {
+func (m *mockTxApp) GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*types.Account,
+	initialHeight int64, appHash []byte) error {
 	return nil
+}
+
+func (m *mockTxApp) ChainInfo(ctx context.Context) (height int64, appHash []byte, err error) {
+	return 1, nil, nil
 }
 
 func (m *mockTxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
