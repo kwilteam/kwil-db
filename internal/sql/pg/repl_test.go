@@ -57,7 +57,7 @@ func Test_repl(t *testing.T) {
 
 	const publicationName = "kwild_repl"
 	var slotName = publicationName + random.String(8)
-	commitChan, errChan, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter)
+	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func Test_repl(t *testing.T) {
 				if !bytes.Equal(commitHash, wantCommitHash) {
 					t.Errorf("commit hash mismatch, got %x, wanted %x", commitHash, wantCommitHash)
 				}
-				cancel()
+				quit()
 			case err := <-errChan:
 				if errors.Is(err, context.Canceled) {
 					return
@@ -103,7 +103,7 @@ func Test_repl(t *testing.T) {
 				}
 				if err != nil {
 					t.Error(err)
-					cancel()
+					quit()
 				}
 				return
 			}
@@ -132,4 +132,5 @@ func Test_repl(t *testing.T) {
 	}
 
 	wg.Wait()
+	connQ.Close(ctx)
 }

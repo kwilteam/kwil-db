@@ -54,8 +54,15 @@ const (
 
 // New builds the kwild server.
 func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.GenesisConfig, nodeKey *crypto.Ed25519PrivateKey, autogen bool) (svr *Server, err error) {
+	logger, err := log.NewChecked(*cfg.LogConfig())
+	if err != nil {
+		return nil, fmt.Errorf("invalid logger config: %w", err)
+	}
+	logger = *logger.Named("kwild")
+
 	closers := &closeFuncs{
 		closers: make([]func() error, 0),
+		logger:  logger,
 	}
 
 	defer func() {
@@ -67,12 +74,6 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.Genesi
 			closers.closeAll()
 		}
 	}()
-
-	logger, err := log.NewChecked(*cfg.LogConfig())
-	if err != nil {
-		return nil, fmt.Errorf("invalid logger config: %w", err)
-	}
-	logger = *logger.Named("kwild")
 
 	if cfg.AppCfg.TLSKeyFile == "" || cfg.AppCfg.TLSCertFile == "" {
 		return nil, errors.New("unspecified TLS key and/or certificate")

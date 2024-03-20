@@ -1,6 +1,7 @@
 package cometbft
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -163,7 +164,7 @@ WARNING: These files are overwritten on kwild startup.`
 }
 
 // NewCometBftNode creates a new CometBFT node.
-func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, genDoc *types.GenesisDoc, privateKey cometEd25519.PrivKey, atomicStore privval.AtomicReadWriter, log *log.Logger) (*CometBftNode, error) {
+func NewCometBftNode(ctx context.Context, app abciTypes.Application, conf *cometConfig.Config, genDoc *types.GenesisDoc, privateKey cometEd25519.PrivKey, atomicStore privval.AtomicReadWriter, log *log.Logger) (*CometBftNode, error) {
 	if err := writeCometBFTConfigs(conf, genDoc); err != nil {
 		return nil, fmt.Errorf("failed to write the effective cometbft config files: %w", err)
 	}
@@ -180,7 +181,8 @@ func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, genDoc
 		return nil, fmt.Errorf("failed to create private validator: %v", err)
 	}
 
-	node, err := cometNodes.NewNode(
+	node, err := cometNodes.NewNodeWithContext(
+		ctx,
 		conf,
 		privateValidator,
 		&p2p.NodeKey{
