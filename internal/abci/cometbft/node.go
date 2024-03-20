@@ -196,7 +196,7 @@ func NewCometBftNode(ctx context.Context, app abciTypes.Application, conf *comet
 	)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
-			err = context.Canceled // canceled and comet forgot to use %w in doHandshake and elsehwere
+			err = context.Canceled // canceled and comet forgot to use %w in doHandshake and elsewhere
 		}
 		return nil, fmt.Errorf("failed to create CometBFT node: %w", err)
 	}
