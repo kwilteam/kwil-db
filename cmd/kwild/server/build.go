@@ -714,9 +714,31 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 	return node
 }
 
+// panicErr is the type given to panic from failBuild so that the wrapped error
+// may be type-inspected.
+type panicErr struct {
+	err error
+	msg string
+}
+
+func (pe panicErr) String() string {
+	return pe.msg
+}
+
+func (pe panicErr) Error() string { // error interface
+	return pe.msg
+}
+
+func (pe panicErr) Unwrap() error {
+	return pe.err
+}
+
 func failBuild(err error, msg string) {
 	if err != nil {
-		panic(fmt.Sprintf("%s: %s", msg, err.Error()))
+		panic(panicErr{
+			err: err,
+			msg: fmt.Sprintf("%s: %s", msg, err),
+		})
 	}
 }
 
