@@ -7,7 +7,7 @@ package voting
 const (
 	votingSchemaName = `kwild_voting`
 
-	voteStoreVersion = 0
+	voteStoreVersion = 1
 
 	// tableResolutions is the sql table used to store resolutions that can be voted on.
 	// the vote_body_proposer is the BYTEA of the public key of the submitter, NOT the UUID
@@ -51,15 +51,7 @@ const (
 		id BYTEA PRIMARY KEY
 	);`
 
-	tableHeight = `CREATE TABLE IF NOT EXISTS ` + votingSchemaName + `.height (
-		name TEXT PRIMARY KEY, -- name is 'height'
-		height INT NOT NULL
-	);`
-
-	getHeight = `SELECT height FROM ` + votingSchemaName + `.height WHERE name = 'height';`
-
-	updateHeight = `INSERT INTO ` + votingSchemaName + `.height  (name, height) VALUES ('height', $1) 
-		ON CONFLICT (name) DO UPDATE SET height = $1;`
+	dropHeightTable = `DROP TABLE IF EXISTS ` + votingSchemaName + `.height`
 
 	// ensureResolutionIDExists is the sql statement used to ensure a resolution ID is present in the resolutions table
 	ensureResolutionIDExists = `INSERT INTO ` + votingSchemaName + `.resolutions (id, expiration) VALUES ($1, $2)

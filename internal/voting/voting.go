@@ -23,6 +23,7 @@ const (
 func InitializeVoteStore(ctx context.Context, db sql.DB) error {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initTables,
+		1: dropHeight,
 	}
 
 	err := versioning.Upgrade(ctx, db, votingSchemaName, upgradeFns, voteStoreVersion)
@@ -33,10 +34,15 @@ func InitializeVoteStore(ctx context.Context, db sql.DB) error {
 	return nil
 }
 
+func dropHeight(ctx context.Context, db sql.DB) error {
+	_, err := db.Execute(ctx, dropHeightTable)
+	return err
+}
+
 func initTables(ctx context.Context, db sql.DB) error {
 	initStmts := []string{ //createVotingSchema,
 		tableVoters, tableResolutionTypes, tableResolutions,
-		resolutionsTypeIndex, tableProcessed, tableVotes, tableHeight} // order important
+		resolutionsTypeIndex, tableProcessed, tableVotes} // order important
 
 	for _, stmt := range initStmts {
 		_, err := db.Execute(ctx, stmt)
@@ -334,12 +340,18 @@ func GetResolutionsByType(ctx context.Context, db sql.Executor, resType string) 
 // DeleteResolutions deletes a slice of resolution IDs from the database.
 // It will mark the resolutions as processed in the processed table.
 func DeleteResolutions(ctx context.Context, db sql.Executor, ids ...types.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
 	_, err := db.Execute(ctx, deleteResolutions, types.UUIDArray(ids))
 	return err
 }
 
 // MarkProcessed marks a set of resolutions as processed.
 func MarkProcessed(ctx context.Context, db sql.Executor, ids ...types.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
 	_, err := db.Execute(ctx, markManyProcessed, types.UUIDArray(ids))
 	return err
 }
@@ -588,28 +600,4 @@ func intDivUpFraction(val, numerator, divisor int64) int64 {
 	tempNumerator := new(big.Int).Mul(numerBig, valBig)
 	tempNumerator.Add(tempNumerator, new(big.Int).Sub(divBig, big.NewInt(1)))
 	return new(big.Int).Div(tempNumerator, divBig).Int64()
-}
-
-func GetHeight(ctx context.Context, db sql.Executor) (int64, error) {
-	res, err := db.Execute(ctx, getHeight)
-	if err != nil {
-		return 0, err
-	}
-
-	// Fresh database
-	if len(res.Rows) != 1 {
-		return -1, nil
-	}
-
-	height, ok := sql.Int64(res.Rows[0][0])
-	if !ok {
-		return 0, fmt.Errorf("invalid type for height (%T)", res.Rows[0][0])
-	}
-
-	return height, nil
-}
-
-func SetHeight(ctx context.Context, db sql.Executor, height int64) error {
-	_, err := db.Execute(ctx, updateHeight, height)
-	return err
 }

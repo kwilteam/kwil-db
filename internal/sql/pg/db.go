@@ -45,6 +45,14 @@ type DB struct {
 	autoCommit bool   // skip the explicit transaction (begin/commit automatically)
 	tx         pgx.Tx // interface
 	txid       string // uid of the prepared transaction
+
+	// NOTE: this was initially designed for a single ongoing write transaction,
+	// held in the tx field, and the (*DB).Execute method using it *implicitly*.
+	// We have moved toward using the Execute method of the transaction returned
+	// by BeginTx/BeginOuterTx/BeginReadTx, and we can potentially allow
+	// multiple uncommitted write transactions to support a 2 phase commit of
+	// different stores using the same pg.DB instance. This will take refactoring
+	// of the DB and concrete transaction type methods.
 }
 
 // DBConfig is the configuration for the Kwil DB backend, which includes the
@@ -324,7 +332,7 @@ func (db *DB) precommit(ctx context.Context) ([]byte, error) {
 	}
 }
 
-// commit is called from the Commit method of the sql.Tx (or sql.TxCloser)
+// commit is called from the Commit method of the sql.Tx
 // returned from BeginTx (or Begin). See tx.go.
 func (db *DB) commit(ctx context.Context) error {
 	db.mtx.Lock()
@@ -366,7 +374,7 @@ func (db *DB) commit(ctx context.Context) error {
 	return nil
 }
 
-// rollback is called from the Rollback method of the sql.Tx (or sql.TxCloser)
+// rollback is called from the Rollback method of the sql.Tx
 // returned from BeginTx (or Begin). See tx.go.
 func (db *DB) rollback(ctx context.Context) error {
 	db.mtx.Lock()
@@ -427,6 +435,8 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
+	// NOTE: if we remove the db.tx field, we'd have this top level method
+	// always function in "autoCommit" mode, with an ephemeral transaction.
 	if db.tx != nil {
 		if db.autoCommit {
 			return nil, errors.New("tx already created, cannot use auto commit")

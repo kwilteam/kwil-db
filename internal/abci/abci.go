@@ -3,7 +3,6 @@ package abci
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -11,12 +10,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/ident"
-	"github.com/kwilteam/kwil-db/internal/kv"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
@@ -42,19 +39,10 @@ type AbciConfig struct {
 	GasEnabled         bool
 }
 
-type AtomicCommitter interface {
-	Begin(ctx context.Context, idempotencyKey []byte) error
-	Precommit(ctx context.Context) ([]byte, error)
-	Commit(ctx context.Context) error
-}
-
-func NewAbciApp(cfg *AbciConfig, kv KVStore, snapshotter SnapshotModule,
-	bootstrapper DBBootstrapModule, txRouter TxApp, consensusParams *txapp.ConsensusParams, log log.Logger) *AbciApp {
+func NewAbciApp(cfg *AbciConfig, snapshotter SnapshotModule, bootstrapper DBBootstrapModule,
+	txRouter TxApp, consensusParams *txapp.ConsensusParams, log log.Logger) *AbciApp {
 	app := &AbciApp{
-		cfg: *cfg,
-		metadataStore: &metadataStore{
-			kv: kv,
-		},
+		cfg:             *cfg,
 		bootstrapper:    bootstrapper,
 		snapshotter:     snapshotter,
 		txApp:           txRouter,
@@ -97,9 +85,6 @@ type AbciApp struct {
 	// bootstrapper is the bootstrapper module that handles bootstrapping the database
 	bootstrapper DBBootstrapModule
 
-	// metadataStore to track the app hash and block height
-	metadataStore *metadataStore
-
 	log log.Logger
 
 	// Expected AppState after bootstrapping the node with a given snapshot,
@@ -109,6 +94,10 @@ type AbciApp struct {
 	txApp TxApp
 
 	consensusParams *txapp.ConsensusParams
+
+	// height carries the height from FinalizeBlock to Commit for the snapshotter.
+	// Ultimately this may not be required, or TxApp could provide the info.
+	height uint64
 
 	broadcastFn EventBroadcaster
 
@@ -218,7 +207,9 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	return &abciTypes.ResponseCheckTx{Code: code.Uint32()}, nil
 }
 
-// FinalizeBlock is on the consensus connection
+// FinalizeBlock is on the consensus connection. Note that according to CometBFT
+// docs, "ResponseFinalizeBlock.app_hash is included as the Header.AppHash in
+// the next block."
 func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinalizeBlock) (*abciTypes.ResponseFinalizeBlock, error) {
 	fmt.Printf("\n\n")
 	logger := a.log.With(zap.String("stage", "ABCI FinalizeBlock"), zap.Int64("height", req.Height))
@@ -310,10 +301,13 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 	}
 
-	newAppHash, finalValidators, err := a.txApp.Finalize(ctx, req.Height)
+	// Get the new validator set and apphash from txApp.
+	appHash, finalValidators, err := a.txApp.Finalize(ctx, req.Height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to finalize transaction app: %w", err)
 	}
+	res.AppHash = appHash
+	a.height = uint64(req.Height) // remember for Commit
 
 	valUpdates := validatorUpdates(initialValidators, finalValidators)
 
@@ -331,12 +325,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 		res.ValidatorUpdates[i] = abciTypes.Ed25519ValidatorUpdate(up.PubKey, up.Power)
 	}
-
-	appHash, err := a.createNewAppHash(ctx, newAppHash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create new app hash: %w", err)
-	}
-	res.AppHash = appHash
 
 	return res, nil
 }
@@ -389,20 +377,10 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		return nil, fmt.Errorf("failed to commit transaction app: %w", err)
 	}
 
-	err = a.metadataStore.IncrementBlockHeight(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to increment block height: %w", err)
-	}
-
-	height, err := a.metadataStore.GetBlockHeight(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get block height: %w", err)
-	}
-
 	// snapshotting
-	if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(uint64(height)) {
+	if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(a.height) {
 		// TODO: Lock all DBs
-		err = a.snapshotter.CreateSnapshot(uint64(height))
+		err = a.snapshotter.CreateSnapshot(a.height)
 		if err != nil {
 			a.log.Error("snapshot creation failed", zap.Error(err))
 		}
@@ -412,12 +390,26 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 	return &abciTypes.ResponseCommit{}, nil // RetainHeight stays 0 to not prune any blocks
 }
 
-// Info is part of the Info/Query connection.
+// Info is part of the Info/Query connection. CometBFT will call this during
+// it's handshake, and if height 0 is returned it will then use InitChain. This
+// method should also be usable at any time (and read only) as it is used for
+// cometbft's /abci_info RPC endpoint.
+//
+// CometBFT docs say:
+//   - LastBlockHeight is the "Latest height for which the app persisted its state"
+//   - LastBlockAppHash is the "Latest AppHash returned by FinalizeBlock"
+//   - "ResponseFinalizeBlock.app_hash is included as the Header.AppHash in the
+//     next block." Notably, the *next* block's header. This is verifiable with
+//     the /block RPC endpoint.
+//
+// Thus, LastBlockAppHash is not NOT AppHash in the header of the block at the
+// returned height. Our meta data store has to track the above values, where the
+// stored app hash corresponds to the block at height+1. This is simple, but the
+// discrepancy is worth noting.
 func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciTypes.ResponseInfo, error) {
-	// TODO: check kwild_voting.height!!!!!!!!!!!!!!
-	height, err := a.metadataStore.GetBlockHeight(ctx)
+	height, appHash, err := a.txApp.ChainInfo(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get block height: %w", err)
+		return nil, fmt.Errorf("chainInfo: %w", err)
 	}
 
 	validators, err := a.txApp.GetValidators(ctx)
@@ -432,11 +424,6 @@ func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciType
 		}
 
 		a.validatorAddressToPubKey[addr] = val.PubKey
-	}
-
-	appHash, err := a.metadataStore.GetAppHash(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get app hash: %w", err)
 	}
 
 	a.log.Info("ABCI application is ready", zap.Int64("height", height))
@@ -487,7 +474,8 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 		a.validatorAddressToPubKey[addr] = pk
 	}
 
-	if err := a.txApp.GenesisInit(ctx, vldtrs, genesisAllocs, req.InitialHeight); err != nil {
+	if err := a.txApp.GenesisInit(ctx, vldtrs, genesisAllocs, req.InitialHeight,
+		a.cfg.GenesisAppHash); err != nil {
 		return nil, fmt.Errorf("txApp.GenesisInit failed: %w", err)
 	}
 
@@ -496,16 +484,11 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 		valUpdates[i] = abciTypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
 	}
 
-	err := a.metadataStore.SetAppHash(ctx, a.cfg.GenesisAppHash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set app hash: %v", err)
-	}
-
 	logger.Info("initialized chain", zap.String("app hash", fmt.Sprintf("%x", a.cfg.GenesisAppHash)))
 
 	return &abciTypes.ResponseInitChain{
 		Validators: valUpdates,
-		AppHash:    a.cfg.GenesisAppHash,
+		AppHash:    a.cfg.GenesisAppHash, // doesn't matter what we gave the node in GenesisDoc, this is it
 	}, nil
 }
 
@@ -517,16 +500,8 @@ func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.Request
 	}
 
 	if a.bootstrapper.IsDBRestored() {
-		err = a.metadataStore.SetAppHash(ctx, a.bootupState.appHash)
-		if err != nil {
-			return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ABORT, RefetchChunks: nil}, nil
-		}
-
-		err = a.metadataStore.SetBlockHeight(ctx, a.bootupState.height)
-		if err != nil {
-			return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ABORT, RefetchChunks: nil}, nil
-		}
-
+		// NOTE: when snapshot is implemented, the bootstrapper should be able
+		// to meta.SetChainState.
 		a.log.Info("Bootstrapped database successfully")
 	}
 	return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ACCEPT, RefetchChunks: nil}, nil
@@ -904,73 +879,6 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 
 func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abciTypes.ResponseQuery, error) {
 	return &abciTypes.ResponseQuery{}, nil
-}
-
-// createNewAppHash updates the app hash by combining the previous app hash with
-// the provided bytes. It persists the app hash to the metadata store.
-func (a *AbciApp) createNewAppHash(ctx context.Context, addition []byte) ([]byte, error) {
-	oldHash, err := a.metadataStore.GetAppHash(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	newHash := crypto.Sha256(append(oldHash, addition...))
-
-	err = a.metadataStore.SetAppHash(ctx, newHash)
-	return newHash, err
-}
-
-// TODO: here should probably be other apphash computations such as the genesis
-// config digest. The cmd/kwild/config package should probably not
-// contain consensus-critical computations.
-
-var (
-	appHashKey     = []byte("a")
-	blockHeightKey = []byte("b")
-)
-
-type metadataStore struct {
-	kv KVStore
-}
-
-func (m *metadataStore) GetAppHash(ctx context.Context) ([]byte, error) {
-	res, err := m.kv.Get(appHashKey)
-	if err == kv.ErrKeyNotFound {
-		return nil, nil
-	}
-	return res, err
-}
-
-func (m *metadataStore) SetAppHash(ctx context.Context, appHash []byte) error {
-	return m.kv.Set(appHashKey, appHash)
-}
-
-func (m *metadataStore) GetBlockHeight(ctx context.Context) (int64, error) {
-	height, err := m.kv.Get(blockHeightKey)
-	if err == kv.ErrKeyNotFound {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, err
-	}
-
-	return int64(binary.BigEndian.Uint64(height)), nil
-}
-
-func (m *metadataStore) SetBlockHeight(ctx context.Context, height int64) error {
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, uint64(height))
-
-	return m.kv.Set(blockHeightKey, buf)
-}
-
-func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
-	height, err := m.GetBlockHeight(ctx)
-	if err != nil {
-		return err
-	}
-
-	return m.SetBlockHeight(ctx, height+1)
 }
 
 type EventBroadcaster func(ctx context.Context, proposer []byte) error
