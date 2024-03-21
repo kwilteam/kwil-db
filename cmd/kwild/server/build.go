@@ -289,10 +289,15 @@ type coreDependencies struct {
 // it is used to close all resources on shutdown
 type closeFuncs struct {
 	closers []func() error
+	logger  log.Logger
 }
 
-func (c *closeFuncs) addCloser(f func() error) {
-	c.closers = append([]func() error{f}, c.closers...) // slices.Insert(c.closers, 0, f)
+func (c *closeFuncs) addCloser(f func() error, msg string) {
+	// push to top of stack
+	c.closers = slices.Insert(c.closers, 0, func() error {
+		c.logger.Info(msg)
+		return f()
+	})
 }
 
 // closeAll closes all closers
@@ -355,7 +360,7 @@ func buildEventStore(d *coreDependencies, closers *closeFuncs) *events.EventStor
 	if err != nil {
 		failBuild(err, "failed to build event store")
 	}
-	closers.addCloser(db.Close)
+	closers.addCloser(db.Close, "closing event store")
 
 	e, err := events.NewEventStore(d.ctx, db)
 	if err != nil {
@@ -391,7 +396,7 @@ func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 	if err != nil {
 		failBuild(err, "kwild database open failed")
 	}
-	closer.addCloser(db.Close)
+	closer.addCloser(db.Close, "closing main DB")
 
 	return db
 }
@@ -560,7 +565,7 @@ func buildAdminService(d *coreDependencies, closer *closeFuncs, admsvc admpb.Adm
 		if err != nil {
 			failBuild(err, "failed to build grpc server")
 		}
-		closer.addCloser(lis.Close)
+		closer.addCloser(lis.Close, "stopping admin service")
 
 		// client certs
 		caCertPool := x509.NewCertPool()
@@ -632,7 +637,7 @@ func buildAdminService(d *coreDependencies, closer *closeFuncs, admsvc admpb.Adm
 			failBuild(err, "failed to listen to unix socket")
 		}
 
-		closer.addCloser(lis.Close)
+		closer.addCloser(lis.Close, "stopping admin service")
 
 		err = os.Chmod(u.Target, 0777) // TODO: probably want this to be more restrictive
 		if err != nil {
@@ -679,7 +684,7 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 	if err != nil {
 		failBuild(err, "failed to build comet node")
 	}
-	closer.addCloser(db.Close)
+	closer.addCloser(db.Close, "closing signing store")
 
 	readWriter := &atomicReadWriter{
 		kv:  db,
@@ -700,7 +705,7 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 		}
 	}
 
-	node, err := cometbft.NewCometBftNode(abciApp, nodeCfg, genDoc, d.privKey,
+	node, err := cometbft.NewCometBftNode(d.ctx, abciApp, nodeCfg, genDoc, d.privKey,
 		readWriter, &d.log)
 	if err != nil {
 		failBuild(err, "failed to build comet node")
@@ -709,9 +714,31 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 	return node
 }
 
+// panicErr is the type given to panic from failBuild so that the wrapped error
+// may be type-inspected.
+type panicErr struct {
+	err error
+	msg string
+}
+
+func (pe panicErr) String() string {
+	return pe.msg
+}
+
+func (pe panicErr) Error() string { // error interface
+	return pe.msg
+}
+
+func (pe panicErr) Unwrap() error {
+	return pe.err
+}
+
 func failBuild(err error, msg string) {
 	if err != nil {
-		panic(fmt.Sprintf("%s: %s", msg, err.Error()))
+		panic(panicErr{
+			err: err,
+			msg: fmt.Sprintf("%s: %s", msg, err),
+		})
 	}
 }
 

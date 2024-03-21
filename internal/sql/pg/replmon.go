@@ -55,15 +55,13 @@ type replMon struct {
 // request a commit ID promise using the recvID method prior to committing a
 // transaction.
 func newReplMon(ctx context.Context, host, port, user, pass, dbName string, schemaFilter func(string) bool) (*replMon, error) {
-	ctx, quit := context.WithCancel(ctx)
 	conn, err := replConn(ctx, host, port, user, pass, dbName)
 	if err != nil {
-		quit()
 		return nil, err
 	}
 
 	var slotName = publicationName + random.String(8) // arbitrary, so just avoid collisions
-	commitChan, errChan, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter)
+	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter)
 	if err != nil {
 		quit()
 		conn.Close(ctx)

@@ -320,7 +320,10 @@ func (db *DB) precommit(ctx context.Context) ([]byte, error) {
 
 	// Wait for the "commit id" from the replication monitor.
 	select {
-	case commitID := <-resChan:
+	case commitID, ok := <-resChan:
+		if !ok {
+			return nil, errors.New("resChan unexpectedly closed")
+		}
 		logger.Debugf("received commit ID %x", commitID)
 		// The transaction is ready to commit, stored in a file with postgres in
 		// the pg_twophase folder of the pg cluster data_directory.
