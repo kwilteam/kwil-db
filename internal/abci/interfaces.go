@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
@@ -51,8 +50,8 @@ type TxApp interface {
 	ChainInfo(ctx context.Context) (int64, []byte, error)
 	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
 	// Begin signals that a new block has begun.
-	Begin(ctx context.Context) (sql.OuterTx, error)
-	Finalize(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)
+	Begin(ctx context.Context) error
+	Finalize(ctx context.Context, blockHeight int64) (appHash []byte, validatorUpgrades []*types.Validator, err error)
 	Commit(ctx context.Context) error
 	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
 	ProposerTxs(ctx context.Context, txNonce uint64, maxTxSize int64, proposerAddr []byte) ([][]byte, error)

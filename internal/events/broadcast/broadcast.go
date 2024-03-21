@@ -22,11 +22,9 @@ import (
 	"math/big"
 
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
-	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 var (
@@ -39,9 +37,9 @@ var (
 // EventStore allows the EventBroadcaster to read events
 // from the event store.
 type EventStore interface {
-	// GetObservedEvents filters out the events observed by the validator
+	// GetUnbroadcastedEvents filters out the events observed by the validator
 	// that are not previously broadcasted.
-	GetObservedEvents(ctx context.Context, ids []types.UUID) ([]types.UUID, error)
+	GetUnbroadcastedEvents(ctx context.Context) ([]types.UUID, error)
 
 	// MarkBroadcasted marks list of events as broadcasted.
 	MarkBroadcasted(ctx context.Context, ids []types.UUID) error
@@ -90,7 +88,7 @@ type EventBroadcaster struct {
 // It implements Kwil's abci.CommitHook function signature.
 // If the node is not a validator, it will do nothing.
 // It broadcasts votes for the existing resolutions.
-func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte, db sql.DB) error {
+func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) error {
 	validators, err := e.validatorStore.GetValidators(ctx)
 	if err != nil {
 		return err
@@ -120,13 +118,8 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte, db
 		return nil
 	}
 
-	outstandingResolutionIDs, err := voting.OutstandingResolutions(ctx, db)
-	if err != nil {
-		return err
-	}
-
 	// Vote only if the note observed the event corresponding to the resolution.
-	ids, err := e.store.GetObservedEvents(ctx, outstandingResolutionIDs)
+	ids, err := e.store.GetUnbroadcastedEvents(ctx)
 	if err != nil {
 		return err
 	}

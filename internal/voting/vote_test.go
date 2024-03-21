@@ -238,6 +238,11 @@ func Test_Voting(t *testing.T) {
 				err = voting.ApproveResolution(ctx, db, events[2].ID(), 10, []byte("a"))
 				require.Error(t, err)
 
+				// check that none are processed
+				notProcessed, err := voting.FilterNotProcessed(ctx, db, ids)
+				require.NoError(t, err)
+				assert.Equal(t, len(notProcessed), 3)
+
 				// delete and process all
 				err = voting.DeleteResolutions(ctx, db, ids...)
 				require.NoError(t, err)
@@ -245,10 +250,10 @@ func Test_Voting(t *testing.T) {
 				require.NoError(t, err)
 
 				// check that they are all processed
-				processed, err := voting.FilterNotProcessed(ctx, db, ids...)
+				notProcessed, err = voting.FilterNotProcessed(ctx, db, ids)
 				require.NoError(t, err)
 
-				assert.Equal(t, len(processed), 0)
+				assert.Equal(t, len(notProcessed), 0)
 			},
 		},
 		{
@@ -259,10 +264,11 @@ func Test_Voting(t *testing.T) {
 			fn: func(t *testing.T, db sql.DB) {
 				ctx := context.Background()
 
-				processed, err := voting.FilterNotProcessed(ctx, db, types.NewUUIDV5([]byte("ss")))
+				processed, err := voting.FilterNotProcessed(ctx, db, []types.UUID{types.NewUUIDV5([]byte("ss"))})
 				require.NoError(t, err)
 
 				require.Equal(t, len(processed), 1)
+
 			},
 		},
 	}

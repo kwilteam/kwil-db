@@ -157,19 +157,23 @@ func DeleteEvent(ctx context.Context, db sql.Executor, id types.UUID) error {
 // DeleteEvents deletes a list of events from the event store.
 // It is idempotent. If the event does not exist, it will not return an error.
 func DeleteEvents(ctx context.Context, db sql.DB, ids ...types.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
 	_, err := db.Execute(ctx, deleteEvents, types.UUIDArray(ids))
 	return err
 }
 
-// GetObservedEvents filters out the events observed by the validator that are not previously broadcasted.
-func (e *EventStore) GetObservedEvents(ctx context.Context, observedIDs []types.UUID) ([]types.UUID, error) {
+// GetUnbroadcastedEvents filters out the events observed by the validator that are not previously broadcasted.
+func (e *EventStore) GetUnbroadcastedEvents(ctx context.Context) ([]types.UUID, error) {
 	readTx, err := e.eventWriter.BeginReadTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer readTx.Rollback(ctx) // only reading, so we can always rollback
 
-	res, err := readTx.Execute(ctx, filterObservedEvents, types.UUIDArray(observedIDs))
+	res, err := readTx.Execute(ctx, eventsToBroadcast)
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +196,10 @@ func (e *EventStore) GetObservedEvents(ctx context.Context, observedIDs []types.
 
 // MarkBroadcasted marks the event as broadcasted.
 func (e *EventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
 	e.writerMtx.Lock()
 	defer e.writerMtx.Unlock()
 
@@ -202,6 +210,10 @@ func (e *EventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) erro
 // MarkRebroadcast marks the event to be rebroadcasted. Usually in scenarios where
 // the transaction was rejected by mempool due to invalid nonces.
 func (e *EventStore) MarkRebroadcast(ctx context.Context, ids []types.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
 	e.writerMtx.Lock()
 	defer e.writerMtx.Unlock()
 

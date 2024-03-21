@@ -34,16 +34,17 @@ const (
 	deleteEvents = `DELETE FROM ` + schemaName + `.events WHERE id =ANY($1);`
 	getEvents    = `SELECT data, event_type FROM ` + schemaName + `.events;`
 
+	// getNewEvents returns the list of events observed by the validator to which resolutions does not exist.
 	getNewEvents = `SELECT e.data, e.event_type
 	FROM ` + schemaName + `.events AS e
 	LEFT JOIN ` + voting.VotingSchemaName + `.resolutions AS r ON e.id = r.id
 	WHERE r.id IS NULL;`
 
-	// FilterObservedEvents returns the list of events that are observed by the node and not yet broadcasted.
-	filterObservedEvents = `SELECT unnested.id
-	FROM unnest($1::BYTEA[]) AS unnested(id)
-	LEFT JOIN ` + schemaName + `.events AS res ON unnested.id = res.id
-	WHERE res.id IS NOT NULL AND res.broadcasted = FALSE;`
+	// eventsToBroadcast returns the list of the resolutionIDs observed by the validator that are not previously broadcasted
+	eventsToBroadcast = `SELECT e.id
+	FROM ` + voting.VotingSchemaName + `.resolutions AS r
+	INNER JOIN ` + schemaName + `.events AS e ON r.id = e.id
+	WHERE  e.broadcasted = FALSE;`
 
 	// mark list of events as broadcasted.
 	markBroadcasted = `UPDATE ` + schemaName + `.events SET broadcasted = TRUE WHERE id =ANY($1);`

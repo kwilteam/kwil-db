@@ -52,7 +52,6 @@ func NewTxApp(db DB, engine common.Engine, signer *auth.Ed25519Signer,
 		extensionConfigs:    extensionConfigs,
 		emptyVoteBodyTxSize: voteBodyTxSize,
 		resTypes:            resTypes,
-		validators:          nil,
 	}
 	t.height, t.appHash, err = t.ChainInfo(context.TODO())
 	if err != nil {
@@ -87,7 +86,7 @@ type TxApp struct {
 	height  int64
 
 	validators []*types.Validator // used to optimize reads, gets updated at the block boundaries
-	mu         sync.RWMutex       // protects validators access
+	valMtx     sync.RWMutex       // protects validators access
 
 	// transaction that exists between Begin and Commit
 	currentTx sql.OuterTx
@@ -143,8 +142,8 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 
 	// Add Genesis Validators
 	var voters []*types.Validator
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.valMtx.Lock()
+	defer r.valMtx.Unlock()
 
 	for _, validator := range validators {
 		err := setVoterPower(ctx, tx, validator.PubKey, validator.Power)
@@ -227,12 +226,22 @@ func (r *TxApp) UpdateValidator(ctx context.Context, validator []byte, power int
 // GetValidators returns the current validator set.
 // It will not return uncommitted changes.
 func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.valMtx.Lock()
+	defer r.valMtx.Unlock()
 
 	// if we have a cached validator set, return it
 	if r.validators != nil {
-		return r.validators, nil
+		vals := make([]*types.Validator, len(r.validators))
+		for i, v := range r.validators {
+			val := &types.Validator{
+				PubKey: make([]byte, len(v.PubKey)),
+				Power:  v.Power,
+			}
+			copy(val.PubKey, v.PubKey)
+			vals[i] = val
+		}
+
+		return vals, nil
 	}
 
 	// otherwise, we need to get the validator set from the database
@@ -298,25 +307,25 @@ func (r *TxApp) Execute(ctx TxContext, tx *transactions.Transaction) *TxResponse
 }
 
 // Begin signals that a new block has begun.
-// It contains information on any validators whos power should be updated.
-func (r *TxApp) Begin(ctx context.Context) (sql.OuterTx, error) {
+// It contains information on any validators whose power should be updated.
+func (r *TxApp) Begin(ctx context.Context) error {
 	if r.currentTx != nil {
-		return nil, errors.New("txapp misuse: cannot begin a new block while a transaction is in progress")
+		return errors.New("txapp misuse: cannot begin a new block while a transaction is in progress")
 	}
 
 	if r.genesisTx != nil {
 		r.currentTx = r.genesisTx
-		return r.currentTx, nil
+		return nil
 	}
 
 	tx, err := r.Database.BeginOuterTx(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	r.currentTx = tx
 
-	return r.currentTx, nil
+	return nil
 }
 
 // Finalize signals that a block has been finalized. No more changes can be
@@ -373,9 +382,9 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (appHash []byte
 	r.appHash = crypto.Sha256(append(r.appHash, engineHash...))
 	r.height = blockHeight
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.valMtx.Lock()
 	r.validators = finalValidators
+	r.valMtx.Unlock()
 
 	r.log.Debug("Finalize(end)", log.Int("height", r.height), log.String("appHash", hex.EncodeToString(r.appHash)))
 

@@ -689,7 +689,13 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	// This gets updated when vote body for this resolution is received.
 	expiryHeight := ctx.BlockHeight + ctx.ConsensusParams.VotingPeriod
 
-	for _, voteID := range approve.ResolutionIDs {
+	// filter out the vote IDs that have already been processed
+	ids, err := voting.FilterNotProcessed(ctx.Ctx, tx2, approve.ResolutionIDs)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
+	for _, voteID := range ids {
 		err = approveResolution(ctx.Ctx, tx2, voteID, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)

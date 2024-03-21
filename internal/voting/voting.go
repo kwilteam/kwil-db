@@ -82,15 +82,6 @@ func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID types.U
 	}
 	defer tx.Rollback(ctx)
 
-	// TODO: Do we need this check???
-	// alreadyProcessed, err := IsProcessed(ctx, tx, resolutionID)
-	// if err != nil {
-	// 		return err
-	// }
-	// if alreadyProcessed {
-	// 		return nil
-	// }
-
 	// Expectation is that the resolution is already created when the voteBody is submitted. and nodes wont submit the voteIDs for events which doesn't have resolutions.
 	userId := types.NewUUIDV5(from)
 
@@ -115,15 +106,6 @@ func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableE
 		return err
 	}
 	defer tx.Rollback(ctx)
-
-	// TODO: Do we need this check??? Probably not, as only non processed events exist in the event store and when processed the events are deleted from the event store.
-	// alreadyProcessed, err := IsProcessed(ctx, tx, resolutionID)
-	// if err != nil {
-	// 		return err
-	// }
-	// if alreadyProcessed {
-	// 		return nil
-	// }
 
 	id := event.ID()
 
@@ -346,41 +328,32 @@ func IsProcessed(ctx context.Context, tx sql.Executor, resolutionID types.UUID) 
 
 // FilterNotProcessed takes a set of resolutions and returns the ones that have not been processed.
 // If a resolution does not exist, it WILL be included in the result.
-func FilterNotProcessed(ctx context.Context, db sql.Executor, ids ...types.UUID) ([]types.UUID, error) {
-	res, err := db.Execute(ctx, returnNotProcessed, types.UUIDArray(ids))
+func FilterNotProcessed(ctx context.Context, db sql.Executor, ids []types.UUID) ([]types.UUID, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	res, err := db.Execute(ctx, returnProcessed, types.UUIDArray(ids))
 	if err != nil {
 		return nil, err
 	}
 
-	processed := make([]types.UUID, len(res.Rows))
-	for i, row := range res.Rows {
+	processed := make(map[types.UUID]bool, len(res.Rows))
+	for _, row := range res.Rows {
 		if len(row) != 1 {
 			// this should never happen, just for safety
 			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 		}
-		processed[i] = types.UUID(row[0].([]byte))
+		processed[types.UUID(row[0].([]byte))] = true
 	}
 
-	return processed, nil
-}
-
-// OutstandingResolutions returns all resolutions that have not been approved yet.
-func OutstandingResolutions(ctx context.Context, db sql.DB) ([]types.UUID, error) {
-	res, err := db.Execute(ctx, outstandingResolutions)
-	if err != nil {
-		return nil, err
-	}
-
-	resolutions := make([]types.UUID, len(res.Rows))
-	for i, row := range res.Rows {
-		if len(row) != 1 {
-			// this should never happen, just for safety
-			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+	var notProcessed []types.UUID
+	for _, id := range ids {
+		if _, ok := processed[id]; !ok {
+			notProcessed = append(notProcessed, id)
 		}
-		resolutions[i] = types.UUID(row[0].([]byte))
 	}
-
-	return resolutions, nil
+	return notProcessed, nil
 }
 
 // GetValidatorPower gets the power of a voter.

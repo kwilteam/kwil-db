@@ -110,13 +110,6 @@ const (
 	// it is meant to be used in formatResolutionList
 	deleteResolutions = `DELETE FROM ` + VotingSchemaName + `.resolutions WHERE id =ANY($1);` // $1 is a BYTEA[], unlike when using IN where you need a *list/set*
 
-	outstandingResolutions = `SELECT id FROM ` + VotingSchemaName + `.resolutions;`
-
-	// totalPower gets the total power of all voters
-	// totalPower = `SELECT SUM(power) AS required_power FROM ` + VotingSchemaName + `.voters;` // note: sum ( bigint ) → numeric
-	// https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-AGGREGATE
-	// The returned value will be a `numeric` and will scan as a pgtypes.Numeric (with pgx)
-
 	// createResolutionType creates a resolution type
 	createResolutionType = `INSERT INTO ` + VotingSchemaName + `.resolution_types (id, name) VALUES ($1, $2)
 		ON CONFLICT(id) DO NOTHING;`
@@ -128,14 +121,10 @@ const (
 	alreadyProcessed = `SELECT id FROM ` + VotingSchemaName + `.processed WHERE id = $1;`
 
 	// returnNotProcessed returns all resolutions in the input array that do not exist in the processed table
-	returnNotProcessed = `SELECT unnested.id
-	FROM unnest($1::BYTEA[]) AS unnested(id)
-	LEFT JOIN ` + VotingSchemaName + `.processed AS p ON unnested.id = p.id
-	WHERE p.id IS NULL;`
+	returnProcessed = `SELECT id FROM ` + VotingSchemaName + `.processed WHERE id =ANY($1);`
 
 	// getResolutionsFullInfoByPower and getResolutionsFullInfoByExpiration are used to get the full info of a set of resolutions
 	// they should be updated together if their return values change
-
 	// gets the following info for a set of resolutions:
 	// id, body, type, expiration, approved_power, voters (power concatted with name), vote_body_proposer
 	// it is filtered by the approved power

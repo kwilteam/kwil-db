@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -396,8 +395,8 @@ func (m *mockTxApp) ApplyMempool(ctx context.Context, tx *transactions.Transacti
 	return nil
 }
 
-func (m *mockTxApp) Begin(ctx context.Context) (sql.OuterTx, error) {
-	return nil, nil
+func (m *mockTxApp) Begin(ctx context.Context) error {
+	return nil
 }
 
 func (m *mockTxApp) Commit(ctx context.Context) error {
