@@ -2,6 +2,7 @@ package root
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
@@ -75,6 +76,9 @@ func RootCmd() *cobra.Command {
 
 			svr, err := server.New(ctx, kwildCfg, genesisConfig, nodeKey, autoGen)
 			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					return nil // clean shutdown
+				}
 				return err
 			}
 
