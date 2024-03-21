@@ -40,12 +40,15 @@ func replConn(ctx context.Context, host, port, user, pass, dbName string) (*pgco
 	return pgconn.Connect(ctx, connStr)
 }
 
+// startRepl creates a replication slot and begins receiving data. Cancelling
+// the context only cancels creation of the connection. Use the quit function to
+// terminate the monitoring goroutine.
 func startRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotName string,
-	schemaFilter func(string) bool) (chan []byte, chan error, error) {
+	schemaFilter func(string) bool) (chan []byte, chan error, context.CancelFunc, error) {
 	// Create the replication slot and start postgres sending WAL data.
 	startLSN, err := createRepl(ctx, conn, publicationName, slotName)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Launch the receiver goroutine, which will send commit digests and an
@@ -60,12 +63,14 @@ func startRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotNa
 	// to the sentry table that would cause a send with no receiver.
 	commitHash := make(chan []byte, 1)
 
+	// Tie captureRepl goroutine to a new context now that connections are established.
+	ctx2, cancel := context.WithCancel(context.Background())
 	go func() {
 		defer close(commitHash)
-		done <- captureRepl(ctx, conn, uint64(startLSN), commitHash, schemaFilter)
+		done <- captureRepl(ctx2, conn, uint64(startLSN), commitHash, schemaFilter)
 	}()
 
-	return commitHash, done, nil
+	return commitHash, done, cancel, nil
 }
 
 func createRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotName string) (pglogrepl.LSN, error) {

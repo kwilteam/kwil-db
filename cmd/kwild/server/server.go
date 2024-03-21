@@ -54,25 +54,31 @@ const (
 
 // New builds the kwild server.
 func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.GenesisConfig, nodeKey *crypto.Ed25519PrivateKey, autogen bool) (svr *Server, err error) {
-	closers := &closeFuncs{
-		closers: make([]func() error, 0),
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			svr = nil
-			stack := make([]byte, 8192)
-			length := runtime.Stack(stack, false)
-			err = fmt.Errorf("panic while building kwild: %v\n\nstack:\n\n%v", r, string(stack[:length]))
-			closers.closeAll()
-		}
-	}()
-
 	logger, err := log.NewChecked(*cfg.LogConfig())
 	if err != nil {
 		return nil, fmt.Errorf("invalid logger config: %w", err)
 	}
 	logger = *logger.Named("kwild")
+
+	closers := &closeFuncs{
+		closers: make([]func() error, 0),
+		logger:  logger,
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			svr = nil
+			if pe, ok := r.(panicErr); ok && errors.Is(pe.err, context.Canceled) {
+				logger.Warnf("Shutdown signaled: %v", pe.msg)
+				err = pe // interrupt request (shutdown) during bringup, not a crash
+			} else {
+				stack := make([]byte, 8192)
+				length := runtime.Stack(stack, false)
+				err = fmt.Errorf("panic while building kwild: %v\n\nstack:\n\n%v", r, string(stack[:length]))
+			}
+			closers.closeAll()
+		}
+	}()
 
 	if cfg.AppCfg.TLSKeyFile == "" || cfg.AppCfg.TLSCertFile == "" {
 		return nil, errors.New("unspecified TLS key and/or certificate")
