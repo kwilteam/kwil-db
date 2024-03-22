@@ -54,13 +54,13 @@ func ExampleProjectionRule_optimize_pushDown_with_selection() {
 
 	// Output:
 	// Projection: state, username AS name
-	//   Selection: age = 20
+	//   Filter: age = 20
 	//     Scan: users; projection=[]
 	//
 	// ---After optimization---
 	//
 	// Projection: state, username AS name
-	//   Selection: age = 20
+	//   Filter: age = 20
 	//     Scan: users; projection=[age state username]
 }
 
@@ -122,14 +122,14 @@ func ExampleProjectionRule_optimize_pushDown_all_operators() {
 	// Output:
 	// Projection: state, COUNT(username) AS num
 	//   Aggregate: [state], [COUNT(username)]
-	//     Selection: [age = 20]
+	//     Filter: [age = 20]
 	//       Scan: users; projection=[]
 	//
 	// ---After optimization---
 	//
 	// Projection: state, COUNT(username) AS num
 	//   Aggregate: [state], [COUNT(username)]
-	//     Selection: [age = 20]
+	//     Filter: [age = 20]
 	//       Scan: users; projection=[age state username]
 	//
 }

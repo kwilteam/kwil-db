@@ -29,7 +29,8 @@ func (s *VScanOp) Execute() *ds.Result {
 	return s.ds.Scan(s.projection...)
 }
 
-func VScan(ds ds.DataSource, projection ...string) VirtualPlan {
+func VScan(datasource ds.SchemaSource, projection ...string) VirtualPlan {
+	ds := ds.SchemaSourceToDataSource(datasource)
 	return &VScanOp{ds: ds, projection: projection}
 }
 

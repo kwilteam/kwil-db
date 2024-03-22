@@ -1,5 +1,10 @@
 package logical_plan
 
+import (
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
+)
+
 var Builder = newLogicalPlanBuilder()
 
 // logicalPlanBuilder is a helper to build logical plans.
@@ -23,13 +28,25 @@ func (b *logicalPlanBuilder) From(plan LogicalPlan) *logicalPlanBuilder {
 	return &logicalPlanBuilder{plan: plan}
 }
 
+func (b *logicalPlanBuilder) Scan(relation *datatypes.TableRef,
+	source datasource.SchemaSource, projection ...string) *logicalPlanBuilder {
+	b.plan = Scan(relation, source, []LogicalExpr{}, projection...)
+	return b
+}
+
 func (b *logicalPlanBuilder) JoinOn(_type string, right LogicalPlan, on LogicalExpr) *logicalPlanBuilder {
 	return b
 }
 
-// Select applies a projection to the logical plan.
-func (b *logicalPlanBuilder) Select(exprs ...LogicalExpr) *logicalPlanBuilder {
+// Project applies a projection to the logical plan.
+func (b *logicalPlanBuilder) Project(exprs ...LogicalExpr) *logicalPlanBuilder {
 	b.plan = Projection(b.plan, exprs...)
+	return b
+}
+
+// Filter applies a selection to the logical plan.
+func (b *logicalPlanBuilder) Filter(expr LogicalExpr) *logicalPlanBuilder {
+	b.plan = Filter(b.plan, expr)
 	return b
 }
 

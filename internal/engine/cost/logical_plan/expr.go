@@ -39,6 +39,9 @@ type ColumnExpr struct {
 var _ LogicalExpr = &ColumnExpr{}
 
 func (e *ColumnExpr) String() string {
+	if e.Relation != nil {
+		return fmt.Sprintf("%s.%s", e.Relation.String(), e.Name)
+	}
 	return e.Name
 }
 
@@ -46,7 +49,7 @@ func (e *ColumnExpr) Resolve(schema *dt.Schema) dt.Field {
 	// TODO: use just one Column definition, right now we have:
 	// - ColumnExpr
 	// - dt.ColumnDef, to avoid circular import
-	return *schema.FieldFromColumn(dt.Column(e.Relation, e.Name))
+	return schema.FieldFromColumn(dt.Column(e.Relation, e.Name))
 }
 
 // QualifyWithSchemas returns a new ColumnExpr with the relation set, i.e. qualified.
@@ -362,7 +365,7 @@ type arithmeticBinaryExpr struct {
 }
 
 func (e *arithmeticBinaryExpr) String() string {
-	return fmt.Sprintf("%s %s %s", e.l, e.name, e.r)
+	return fmt.Sprintf("%s %s %s", e.l, e.op, e.r)
 }
 
 func (e *arithmeticBinaryExpr) Op() string {

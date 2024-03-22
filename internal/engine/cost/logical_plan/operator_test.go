@@ -32,6 +32,6 @@ func ExampleLogicalPlan_DataFrame() {
 	// Output:
 	// Projection: state, COUNT(username) AS num
 	//   Aggregate: [state], [COUNT(username)]
-	//     Selection: age = 20
+	//     Filter: age = 20
 	//       Scan: users; projection=[]
 }

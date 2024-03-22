@@ -33,13 +33,13 @@ func Example_QueryPlanner_CreateVirtualPlan() {
 
 	// Output:
 	// Projection: state, username
-	//   Selection: [age = 20]
+	//   Filter: [age = 20]
 	//     Scan: users; projection=[]
 	//
 	// ---After optimization---
 	//
 	// Projection: state, username
-	//   Selection: [age = 20]
+	//   Filter: [age = 20]
 	//     Scan: users; projection=[age state username]
 	//
 	// ---Got virtual plan---

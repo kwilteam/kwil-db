@@ -2,15 +2,14 @@ package query_planner
 
 import (
 	"fmt"
+	"slices"
+
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
-	"slices"
-	"strings"
 )
 
 func expandStar(schema *dt.Schema) []lp.LogicalExpr {
-	fmt.Println("=-------", schema)
 	// is there columns to skip?
 	var exprs []lp.LogicalExpr
 	for _, field := range schema.Fields {
@@ -27,22 +26,43 @@ func expandQualifiedStar(schema *dt.Schema, table string) []lp.LogicalExpr {
 // qualifyExpr returns a new expression qualified with the given relation.
 // It won't change the original expression if it's not ColumnExpr.
 // func qualifyExpr(expr lp.LogicalExpr, seen map[string] lp.LogicalExpr, schemas ...*dt.Schema) lp.LogicalExpr {
+// It's the same as logical_plan.NormalizeExpr.
 func qualifyExpr(expr lp.LogicalExpr, schemas ...*dt.Schema) lp.LogicalExpr {
-	c, ok := expr.(*lp.ColumnExpr)
-	if !ok {
-		return expr
-	}
+	return pt.TransformPostOrder(expr, func(n pt.TreeNode) pt.TreeNode {
+		c, ok := n.(*lp.ColumnExpr)
+		if !ok {
+			return n
+		} else {
+			newNode := c.QualifyWithSchemas(schemas...)
+			return newNode
 
-	//// TODO: make all lp.LogicalExpr to implement pt.Node ?
-	//return c.TransformUp(func(n pt.Node) pt.Node {
-	//	if c, ok := n.(*lp.ColumnExpr); ok {
-	//		c.QualifyWithSchema(seen, schemas...)
-	//	}
-	//	return n
+		}
+	}).(lp.LogicalExpr)
+	//return expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
+	//	c, ok := expr.(*lp.ColumnExpr)
+	//	if !ok {
+	//		return expr
+	//	} else {
+	//		return c.QualifyWithSchemas(schemas...)
 	//
-	//}).(*lp.ColumnExpr)
+	//	}
+	//}).(lp.LogicalExpr)
 
-	return c.QualifyWithSchemas(schemas...)
+	//c, ok := expr.(*lp.ColumnExpr)
+	//if !ok {
+	//	return expr
+	//}
+	//
+	////// TODO: make all lp.LogicalExpr to implement pt.Node ?
+	////return c.TransformUp(func(n pt.Node) pt.Node {
+	////	if c, ok := n.(*lp.ColumnExpr); ok {
+	////		c.QualifyWithSchema(seen, schemas...)
+	////	}
+	////	return n
+	////
+	////}).(*lp.ColumnExpr)
+	//
+	//return c.QualifyWithSchemas(schemas...)
 }
 
 // extractColumnsFromFilterExpr extracts the columns are references by the filter expression.
@@ -92,7 +112,7 @@ func cloneAliases(aliases map[string]lp.LogicalExpr) map[string]lp.LogicalExpr {
 // resolveAliases resolves the expr to its un-aliased expression.
 // It's used to resolve the alias in the select list to the actual expression.
 func resolveAlias(expr lp.LogicalExpr, aliases map[string]lp.LogicalExpr) lp.LogicalExpr {
-	e := expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
+	return pt.TransformPostOrder(expr, func(n pt.TreeNode) pt.TreeNode {
 		if c, ok := n.(*lp.ColumnExpr); ok {
 			if e, ok := aliases[c.Name]; ok {
 				return e
@@ -102,7 +122,18 @@ func resolveAlias(expr lp.LogicalExpr, aliases map[string]lp.LogicalExpr) lp.Log
 		}
 		// otherwise, return the original node
 		return n
-	})
+	}).(lp.LogicalExpr)
+	//return expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
+	//	if c, ok := n.(*lp.ColumnExpr); ok {
+	//		if e, ok := aliases[c.Name]; ok {
+	//			return e
+	//		} else {
+	//			return c
+	//		}
+	//	}
+	//	// otherwise, return the original node
+	//	return n
+	//}).(lp.LogicalExpr)
 
 	//_, e := pt.PostOrderApply(expr, func(n pt.TreeNode) (bool, any) {
 	//	if e, ok := n.(*lp.ColumnExpr); ok {
@@ -120,7 +151,7 @@ func resolveAlias(expr lp.LogicalExpr, aliases map[string]lp.LogicalExpr) lp.Log
 	//	}
 	//})
 
-	return e.(lp.LogicalExpr)
+	//return e.(lp.LogicalExpr)
 }
 
 func extractAggrExprs(exprs []lp.LogicalExpr) []lp.LogicalExpr {
@@ -165,7 +196,7 @@ func ensureSchemaSatifiesExprs(schema *dt.Schema, exprs []lp.LogicalExpr) error 
 // This is useful in the context of a query like:
 // SELECT a + b < 1 ... GROUP BY a + b
 func rebaseExprs(expr lp.LogicalExpr, baseExprs []lp.LogicalExpr, plan lp.LogicalPlan) lp.LogicalExpr {
-	return expr.TransformDown(func(n pt.TreeNode) pt.TreeNode {
+	return pt.TransformPreOrder(expr, func(n pt.TreeNode) pt.TreeNode {
 		contains := slices.ContainsFunc(baseExprs, func(e lp.LogicalExpr) bool {
 			// TODO: String() may not work
 			return e.String() == n.String()
@@ -177,6 +208,19 @@ func rebaseExprs(expr lp.LogicalExpr, baseExprs []lp.LogicalExpr, plan lp.Logica
 			return n
 		}
 	}).(lp.LogicalExpr)
+
+	//return expr.TransformDown(func(n pt.TreeNode) pt.TreeNode {
+	//	contains := slices.ContainsFunc(baseExprs, func(e lp.LogicalExpr) bool {
+	//		// TODO: String() may not work
+	//		return e.String() == n.String()
+	//	})
+	//
+	//	if contains {
+	//		return exprAsColumn(n.(lp.LogicalExpr), plan)
+	//	} else {
+	//		return n
+	//	}
+	//}).(lp.LogicalExpr)
 }
 
 // checkExprsProjectFromColumns checks if the expression can be projected from the columns.
@@ -219,28 +263,5 @@ func exprAsColumn(expr lp.LogicalExpr, plan lp.LogicalPlan) *lp.ColumnExpr {
 		// use the expression as the column name
 		// TODO: String() may not work
 		return lp.ColumnUnqualified(expr.String())
-	}
-}
-
-type TableRefName string
-
-func (t TableRefName) String() string {
-	return string(t)
-}
-
-func (t TableRefName) Segments() []string {
-	return strings.Split(string(t), ".")
-}
-
-func relationNameToTableRef(relationName string) (*dt.TableRef, error) {
-	tr := TableRefName(relationName)
-	segments := tr.Segments()
-	switch len(segments) {
-	case 1:
-		return &dt.TableRef{Table: segments[0]}, nil
-	case 2:
-		return &dt.TableRef{Schema: segments[0], Table: segments[1]}, nil
-	default:
-		return nil, fmt.Errorf("invalid relation name: %s", relationName)
 	}
 }

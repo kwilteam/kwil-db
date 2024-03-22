@@ -2,51 +2,54 @@ package logical_plan
 
 import (
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
-// NoFrom represents a no from operator.
+// NoRelation represents a no from operator.
 // It corresponds to select without any from clause in SQL.
-type NoFrom struct{}
+type NoRelation struct{}
 
-func (n *NoFrom) String() string {
-	return "NoFrom"
+func (n *NoRelation) String() string {
+	return "NoRelation"
 }
 
-func (n *NoFrom) Schema() *datatypes.Schema {
+func (n *NoRelation) Schema() *datatypes.Schema {
 	return datatypes.NewSchema()
 }
 
-func (n *NoFrom) Inputs() []LogicalPlan {
+func (n *NoRelation) Inputs() []LogicalPlan {
 	return []LogicalPlan{}
 }
 
-func (n *NoFrom) Exprs() []LogicalExpr {
+func (n *NoRelation) Exprs() []LogicalExpr {
 	return []LogicalExpr{}
 }
 
 func NoSource() LogicalPlan {
-	return &NoFrom{}
+	return &NoRelation{}
 }
 
 // ScanOp represents a table scan operator, which produces rows from a table.
 // It corresponds to `FROM` clause in SQL.
 type ScanOp struct {
-	table      string
-	dataSource datasource.DataSource
+	table      *datatypes.TableRef
+	dataSource datasource.SchemaSource
 
 	// used for projection push down optimization
-	projection []string
+	projection []string // TODO: use index?
+	// schema after projection(i.e. only keep the projected columns in the schema)
+	projectedSchema *datatypes.Schema
 	// used for selection push down optimization
 	selection LogicalExprList
 }
 
-func (s *ScanOp) Table() string {
+func (s *ScanOp) Table() *datatypes.TableRef {
 	return s.table
 }
 
-func (s *ScanOp) DataSource() datasource.DataSource {
+func (s *ScanOp) DataSource() datasource.SchemaSource {
 	return s.dataSource
 }
 
@@ -69,7 +72,8 @@ func (s *ScanOp) String() string {
 }
 
 func (s *ScanOp) Schema() *datatypes.Schema {
-	return s.dataSource.Schema().Select(s.projection...)
+	//return s.dataSource.Schema().Select(s.projection...)
+	return s.projectedSchema
 }
 
 func (s *ScanOp) Inputs() []LogicalPlan {
@@ -81,8 +85,12 @@ func (s *ScanOp) Exprs() []LogicalExpr {
 }
 
 // Scan creates a table scan logical plan.
-func Scan(table string, ds datasource.DataSource, selection []LogicalExpr, projection ...string) LogicalPlan {
-	return &ScanOp{table: table, dataSource: ds, projection: projection, selection: selection}
+func Scan(table *datatypes.TableRef, ds datasource.SchemaSource,
+	selection []LogicalExpr, projection ...string) LogicalPlan {
+	projectedSchema := ds.Schema().Select(projection...)
+	qualifiedSchema := datatypes.NewSchemaQualified(table, projectedSchema.Fields...)
+	return &ScanOp{table: table, dataSource: ds, projection: projection,
+		selection: selection, projectedSchema: qualifiedSchema}
 }
 
 // ProjectionOp represents a projection operator, which produces new columns
@@ -99,8 +107,9 @@ func (p *ProjectionOp) String() string {
 
 func (p *ProjectionOp) Schema() *datatypes.Schema {
 	fs := make([]datatypes.Field, len(p.exprs))
+	schema := p.input.Schema()
 	for i, expr := range p.exprs {
-		fs[i] = expr.Resolve(p.input.Schema())
+		fs[i] = expr.Resolve(schema)
 	}
 	return datatypes.NewSchema(fs...)
 }
@@ -121,33 +130,33 @@ func Projection(plan LogicalPlan, exprs ...LogicalExpr) LogicalPlan {
 	}
 }
 
-// SelectionOp represents a selection operator, which filters out rows
+// FilterOp represents a filter operator, which filters out rows
 // from the input that the expr evaluates to false.
 // It corresponds to `WHERE expr` clause in SQL.
-type SelectionOp struct {
+type FilterOp struct {
 	input LogicalPlan
 	expr  LogicalExpr
 }
 
-func (s *SelectionOp) String() string {
-	return fmt.Sprintf("Selection: %s", s.expr)
+func (s *FilterOp) String() string {
+	return fmt.Sprintf("Filter: %s", s.expr)
 }
 
-func (s *SelectionOp) Schema() *datatypes.Schema {
+func (s *FilterOp) Schema() *datatypes.Schema {
 	return s.input.Schema()
 }
 
-func (s *SelectionOp) Inputs() []LogicalPlan {
+func (s *FilterOp) Inputs() []LogicalPlan {
 	return []LogicalPlan{s.input}
 }
 
-func (s *SelectionOp) Exprs() []LogicalExpr {
+func (s *FilterOp) Exprs() []LogicalExpr {
 	return []LogicalExpr{s.expr}
 }
 
-// Selection creates a selection logical plan.
-func Selection(plan LogicalPlan, expr LogicalExpr) LogicalPlan {
-	return &SelectionOp{
+// Filter creates a selection logical plan.
+func Filter(plan LogicalPlan, expr LogicalExpr) LogicalPlan {
+	return &FilterOp{
 		input: plan,
 		expr:  expr,
 	}

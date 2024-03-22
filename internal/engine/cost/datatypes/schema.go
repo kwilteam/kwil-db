@@ -6,26 +6,47 @@ import (
 	"strings"
 )
 
-
 type TableRef struct {
-	//DB string
-	Schema string
-	Table  string
+	// NOTE: Does the comment clearly explain the purpose of the struct?
+	//
+	// In Kwil, the database name user specifies in Kuneiform is mapped to
+	// underlying database/schema(dbid) in Postgres.
+	// So the schema is transparent to the user, to avoid confusion (the term
+	// schema is used mostly for the schema of the table, in the context of
+	// cost model.), we use the term db.
+	DB    string // e.g. schema in Postgres. All schemas are in same database.
+	Table string
 }
 
-func TableRefFromTable(table string) *TableRef {
+func (t *TableRef) String() string {
+	if t.DB != "" {
+		return fmt.Sprintf("%s.%s", t.DB, t.Table)
+	}
+	return t.Table
+}
+
+// Resolve resolves the table reference to a fully qualified table name.
+func (t *TableRef) Resolve(defaultDB string) string {
+	db := t.DB
+	if db == "" {
+		db = defaultDB
+	}
+	return fmt.Sprintf("%s.%s", db, t.Table)
+}
+
+func TableRefUnqualified(table string) *TableRef {
 	return &TableRef{Table: table}
 }
 
-func TableRefFromSchemaAndTable(schema, table string) *TableRef {
-	return &TableRef{Schema: schema, Table: table}
+func TableRefQualified(db, table string) *TableRef {
+	return &TableRef{DB: db, Table: table}
 }
 
 // Match checks if the given table reference matches the current table reference.
 // Not set fields are ignored, meaning it's optimistic to assume equal.
 func (t *TableRef) Match(other *TableRef) bool {
-	if t.Schema != "" {
-		return t.Schema == other.Schema && t.Table == other.Table
+	if t.DB != "" {
+		return t.DB == other.DB && t.Table == other.Table
 	} else {
 		return t.Table == other.Table
 	}
@@ -78,6 +99,13 @@ func NewSchema(fields ...Field) *Schema {
 	return &Schema{Fields: fields}
 }
 
+func NewSchemaQualified(relation *TableRef, fields ...Field) *Schema {
+	for i := range fields {
+		fields[i].relation = relation
+	}
+	return &Schema{Fields: fields}
+}
+
 func (s *Schema) String() string {
 	var fields []string
 	for _, f := range s.Fields {
@@ -87,6 +115,10 @@ func (s *Schema) String() string {
 }
 
 func (s *Schema) Select(projection ...string) *Schema {
+	if len(projection) == 0 {
+		return NewSchema(s.Fields...)
+	}
+
 	fieldIndex := s.MapProjection(projection)
 
 	newFields := make([]Field, len(projection))
@@ -95,6 +127,10 @@ func (s *Schema) Select(projection ...string) *Schema {
 	}
 
 	return NewSchema(newFields...)
+}
+
+func (s *Schema) Field(i int) Field {
+	return s.Fields[i]
 }
 
 // MapProjection maps the projection to the index of the fields in the schema.
@@ -143,20 +179,20 @@ func (s *Schema) indexOfField(relation *TableRef, name string) int {
 	return -1
 }
 
-func (s *Schema) fieldByQualifiedName(relation *TableRef, name string) *Field {
+func (s *Schema) fieldByQualifiedName(relation *TableRef, name string) Field {
 	idx := s.indexOfField(relation, name)
 	if idx == -1 {
 		panic(fmt.Sprintf("field %s.%s not found", relation.Table, name))
 		//return nil
 	}
-	return &s.Fields[idx]
+	return s.Fields[idx]
 }
 
-func (s *Schema) fieldByUnqualifiedName(name string) *Field {
-	var found []*Field
+func (s *Schema) fieldByUnqualifiedName(name string) Field {
+	var found []Field
 	for _, f := range s.Fields {
 		if f.Name == name {
-			found = append(found, &f)
+			found = append(found, f)
 		}
 	}
 
@@ -176,7 +212,7 @@ func (s *Schema) fieldByUnqualifiedName(name string) *Field {
 	}
 }
 
-func (s *Schema) FieldFromColumn(column *ColumnDef) *Field {
+func (s *Schema) FieldFromColumn(column *ColumnDef) Field {
 	if column.Relation == nil {
 		return s.fieldByUnqualifiedName(column.Name)
 	}

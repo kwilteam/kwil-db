@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -112,8 +113,7 @@ type SourceType string
 
 // DataSource represents a data source.
 type DataSource interface {
-	// Schema returns the schema for the underlying data source
-	Schema() *datatypes.Schema
+	SchemaSource
 
 	// SourceType returns the type of the data source.
 	SourceType() SourceType
@@ -151,13 +151,12 @@ func dsScan(dsSchema *datatypes.Schema, dsRecords []Row, projection []string) *R
 	//}
 
 	fieldIndex := dsSchema.MapProjection(projection)
-
-	newFields := make([]datatypes.Field, len(projection))
-	for i, idx := range fieldIndex {
-		newFields[i] = dsSchema.Fields[idx]
-	}
-
-	newSchema := datatypes.NewSchema(newFields...)
+	newSchema := dsSchema.Select(projection...)
+	//newFields := make([]datatypes.Field, len(projection))
+	//for i, idx := range fieldIndex {
+	//	newFields[i] = dsSchema.Fields[idx]
+	//}
+	//newSchema := datatypes.NewSchema(newFields...)
 
 	out := make(RowPipeline)
 	go func() {
@@ -274,6 +273,8 @@ func (ds *csvDataSource) load() error {
 		ds.schema.Fields = append(ds.schema.Fields,
 			datatypes.Field{Name: name, Type: columnTypes[i]})
 	}
+
+	slices.Clip(ds.schema.Fields)
 
 	return nil
 }

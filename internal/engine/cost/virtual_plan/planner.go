@@ -34,11 +34,11 @@ func (q *defaultVirtualPlanner) ToPlan(logicalPlan logical_plan.LogicalPlan) Vir
 		}
 		projectedFields := make([]datatypes.Field, 0, len(selectExprs))
 		for _, expr := range p.Exprs() {
-			projectedFields = append(projectedFields, expr.Resolve(p.Inputs()[0]))
+			projectedFields = append(projectedFields, expr.Resolve(p.Inputs()[0].Schema()))
 		}
 		projectedSchema := datatypes.NewSchema(projectedFields...)
 		return VProjection(input, projectedSchema, selectExprs...)
-	case *logical_plan.SelectionOp:
+	case *logical_plan.FilterOp:
 		input := q.ToPlan(p.Inputs()[0])
 		// NOTE: we break the predicates into individual filters
 		// TODO: p.Exprs()[0] is not correct,

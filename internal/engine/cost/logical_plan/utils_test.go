@@ -12,7 +12,7 @@ func TestSplitConjunction(t *testing.T) {
 		expr LogicalExpr
 	}
 
-	t1 := datatypes.TableRefFromTable("t1")
+	t1 := datatypes.TableRefUnqualified("t1")
 
 	tests := []struct {
 		name string
@@ -107,7 +107,7 @@ func TestConjunction(t *testing.T) {
 	type args struct {
 		exprs []LogicalExpr
 	}
-	t1 := datatypes.TableRefFromTable("t1")
+	t1 := datatypes.TableRefUnqualified("t1")
 
 	tests := []struct {
 		name     string

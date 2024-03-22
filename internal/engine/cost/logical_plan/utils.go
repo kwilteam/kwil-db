@@ -75,14 +75,19 @@ func NormalizeColumn(plan LogicalPlan, column *ColumnExpr) *ColumnExpr {
 
 // NormalizeExpr normalizes the given expression with the given logical plan.
 func NormalizeExpr(expr LogicalExpr, plan LogicalPlan) LogicalExpr {
-	e := expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
+	return pt.TransformPostOrder(expr, func(n pt.TreeNode) pt.TreeNode {
 		if c, ok := n.(*ColumnExpr); ok {
 			return NormalizeColumn(plan, c)
 		}
 		return n
-	})
+	}).(LogicalExpr)
 
-	return e.(LogicalExpr)
+	//return expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
+	//	if c, ok := n.(*ColumnExpr); ok {
+	//		return NormalizeColumn(plan, c)
+	//	}
+	//	return n
+	//}).(LogicalExpr)
 }
 
 func NormalizeExprs(exprs []LogicalExpr, plan LogicalPlan) []LogicalExpr {
@@ -94,12 +99,19 @@ func NormalizeExprs(exprs []LogicalExpr, plan LogicalPlan) []LogicalExpr {
 }
 
 func ResolveColumns(expr LogicalExpr, plan LogicalPlan) LogicalExpr {
-	return expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
+	return pt.TransformPostOrder(expr, func(n pt.TreeNode) pt.TreeNode {
 		if c, ok := n.(*ColumnExpr); ok {
 			c.QualifyWithSchemas(plan.Schema())
 		}
 		return n
 	}).(LogicalExpr)
+
+	//return expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
+	//	if c, ok := n.(*ColumnExpr); ok {
+	//		c.QualifyWithSchemas(plan.Schema())
+	//	}
+	//	return n
+	//}).(LogicalExpr)
 }
 
 func ColumnFromDefToExpr(column *ds.ColumnDef) *ColumnExpr {

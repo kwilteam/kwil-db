@@ -25,7 +25,7 @@ func (r *PredicateRule) pushDown(plan logical_plan.LogicalPlan) logical_plan.Log
 	//   from the same table as the scan
 
 	switch p := plan.(type) {
-	case *logical_plan.SelectionOp:
+	case *logical_plan.FilterOp:
 		input := p.Inputs()[0]
 		switch input := input.(type) {
 		case *logical_plan.ScanOp:
@@ -35,12 +35,12 @@ func (r *PredicateRule) pushDown(plan logical_plan.LogicalPlan) logical_plan.Log
 			// NOTE: should keep the original selection? e.g. return a new selection, not a scan
 			// we return a selection in case some of the datasource doesn't
 			// support predicate push down in scan
-			return logical_plan.Selection(newScan, logical_plan.Conjunction(preds...))
+			return logical_plan.Filter(newScan, logical_plan.Conjunction(preds...))
 		//case *logical_plan.JoinOp:
 		//case *logical_plan.BagOp:
 		//case *logical_plan.AggregateOp:
 		//case *logical_plan.ProjectionOp:
-		case *logical_plan.SelectionOp:
+		case *logical_plan.FilterOp:
 			// nested selection, then merge the predicates
 			outerPreds := logical_plan.SplitConjunction(p.Exprs()[0])
 			innerPreds := logical_plan.SplitConjunction(input.Exprs()[0])
@@ -51,7 +51,7 @@ func (r *PredicateRule) pushDown(plan logical_plan.LogicalPlan) logical_plan.Log
 				}
 			}
 			newPred := logical_plan.Conjunction(newPreds...)
-			newSelection := logical_plan.Selection(input.Inputs()[0], newPred)
+			newSelection := logical_plan.Filter(input.Inputs()[0], newPred)
 			return r.pushDown(newSelection)
 		default:
 			// NOTE: this is just placeholder

@@ -23,13 +23,8 @@ type TreeNode interface {
 	//// It's a light version of Accept.
 	//Apply(NodeFunc) (bool, any)
 
-	// TransformUp applies the provided TransformFunc to copied node, and apply
-	// it to its children by calling TransformChildren, returns transformed node.
-	// It traverses the tree in DFS post-order.
-	TransformUp(TransformFunc) TreeNode
-	// TransformDown is like TransformUp, but it traverses the tree in DFS pre-order.
-	TransformDown(TransformFunc) TreeNode
-	// TransformChildren applies the provided TransformFunc to copied children.
+	// TransformChildren applies the provided TransformFunc to children node,
+	// returns current node (with children node transformed).
 	TransformChildren(TransformFunc) TreeNode
 }
 
@@ -197,26 +192,6 @@ func PostOrderApply(node TreeNode, fn NodeFunc) (bool, any) {
 	return fn(node)
 }
 
-// NodeTransformFunc is a function that transforms a node and its children using
-// the provided TransformFunc.
-type NodeTransformFunc func(node TreeNode, transformFunc TransformFunc) TreeNode
-
-func PostOrderTransform(node TreeNode, fn TransformFunc, nodeFn NodeTransformFunc) TreeNode {
-	newChildren := nodeFn(node, func(n TreeNode) TreeNode {
-		return PostOrderTransform(n, fn, nodeFn)
-	})
-
-	return fn(newChildren)
-}
-
-func PreOrderTransform(node TreeNode, fn TransformFunc, nodeFn NodeTransformFunc) TreeNode {
-	newNode := fn(node)
-
-	return nodeFn(newNode, func(n TreeNode) TreeNode {
-		return fn(n)
-	})
-}
-
 type TreeNodeVisitor interface {
 	Visit(TreeNode) (bool, any)
 	PreVisit(TreeNode) (bool, any)
@@ -266,22 +241,79 @@ func (n *BaseTreeNode) Apply(fn NodeFunc) (bool, any) {
 	return PreOrderApply(n, fn)
 }
 
-// Transform applies the provided TransformFunc to copied node in post-order.
-// NOTE: this should be implemented by the concrete node, otherwise it won't
-// call concrete node's TransformChildren.
-func (n *BaseTreeNode) TransformUp(fn TransformFunc) TreeNode {
-	newChildren := n.TransformChildren(func(node TreeNode) TreeNode {
-		return n.TransformUp(fn)
-	})
+//
+//// Transform applies the provided TransformFunc to copied node in post-order.
+//// NOTE: this should be implemented by the concrete node, otherwise it won't
+//// call concrete node's TransformChildren.
+//func (n *BaseTreeNode) TransformUp(fn TransformFunc) TreeNode {
+//	//	newChildren := n.TransformChildren(func(node TreeNode) TreeNode {
+//	//		return n.TransformUp(fn)
+//	//	})
+//	//
+//	//	return fn(newChildren)
+//	panic("implement me")
+//}
 
-	return fn(newChildren)
+//// NodeTransformFunc is a function that transforms a node and its children using
+//// the provided TransformFunc.
+//type NodeTransformFunc func(node TreeNode, transformFunc TransformFunc) TreeNode
+//
+//func PostOrderTransform(node TreeNode, fn TransformFunc, nodeFn NodeTransformFunc) TreeNode {
+//	newChildren := nodeFn(node, func(n TreeNode) TreeNode {
+//		return PostOrderTransform(n, fn, nodeFn)
+//	})
+//
+//	return fn(newChildren)
+//}
+//
+//func PreOrderTransform(node TreeNode, fn TransformFunc, nodeFn NodeTransformFunc) TreeNode {
+//	newNode := fn(node)
+//
+//	return nodeFn(newNode, func(n TreeNode) TreeNode {
+//		return fn(n)
+//	})
+//}
+
+// TransformPostOrder applies the provided TransformFunc to copied node in post-order.
+// and apply it to its children by calling TransformChildren, returns transformed node.
+// It traverses the tree in DFS post-order.
+// NOTE: Since Go using composition instead of inheritance, we can't define
+// a default implementation for TransformPostOrder in the BaseTreeNode.
+// So use this function when you want to apply TransformFunc to a node in post-order.
+func TransformPostOrder(node TreeNode, fn TransformFunc) TreeNode {
+
+	cfn := func(n TreeNode) TreeNode {
+		return TransformPostOrder(n, fn)
+	}
+
+	//newChildren := node.TransformChildren(func(n TreeNode) TreeNode {
+	//	return TransformPostOrder(n, fn)
+	//})
+
+	newNode := node.TransformChildren(cfn)
+	return fn(newNode)
 }
 
-func (n *BaseTreeNode) TransformDown(fn TransformFunc) TreeNode {
-	newNode := fn(n)
+//func (n *BaseTreeNode) TransformDown(fn TransformFunc) TreeNode {
+//	//newNode := fn(n)
+//	//
+//	//return newNode.TransformChildren(func(node TreeNode) TreeNode {
+//	//	return node.TransformDown(fn)
+//	//})
+//	panic("implement me")
+//}
 
-	return newNode.TransformChildren(func(node TreeNode) TreeNode {
-		return node.TransformDown(fn)
+// TransformPreOrder applies the provided TransformFunc to copied node in pre-order.
+// and apply it to its children by calling TransformChildren, returns transformed node.
+// It traverses the tree in DFS pre-order.
+// NOTE: Since Go using composition instead of inheritance, we can't define
+// a default implementation for TransformPreOrder in the BaseTreeNode.
+// So use this function when you want to apply TransformFunc to a node in pre-order.
+func TransformPreOrder(node TreeNode, fn TransformFunc) TreeNode {
+	newNode := fn(node)
+
+	return newNode.TransformChildren(func(n TreeNode) TreeNode {
+		return TransformPreOrder(n, fn)
 	})
 }
 

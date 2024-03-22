@@ -28,7 +28,7 @@ type DataFrameAPI interface {
 	// Filter applies a filter
 	Filter(expr LogicalExpr) DataFrameAPI
 
-	// Aggregate appliex an aggregation
+	// Aggregate applies an aggregation
 	Aggregate(groupBy []LogicalExpr, aggregateExpr []LogicalExpr) DataFrameAPI
 
 	// Schema returns the schema of the data that will be produced by this DataFrameAPI.
@@ -47,7 +47,7 @@ func (df *DataFrame) Project(exprs ...LogicalExpr) DataFrameAPI {
 }
 
 func (df *DataFrame) Filter(expr LogicalExpr) DataFrameAPI {
-	return &DataFrame{Selection(df.plan, expr)}
+	return &DataFrame{Filter(df.plan, expr)}
 }
 
 func (df *DataFrame) Aggregate(groupBy []LogicalExpr, aggregateExpr []LogicalExpr) DataFrameAPI {
@@ -84,7 +84,7 @@ type LogicalOperatorVisitor interface {
 	VisitScanOp(*ScanOp) any
 	VisitProjectionOp(*ProjectionOp) any
 	//VisitLogicalSubquery(*LogicalSubquery) any
-	VisitSelectionOp(*SelectionOp) any
+	VisitSelectionOp(*FilterOp) any
 	VisitJoinOp(*JoinOp) any
 	VisitLimitOp(*LimitOp) any
 	VisitAggregate(*AggregateOp) any
@@ -108,7 +108,7 @@ func (v *baseLogicalOperatorVisitor) VisitProjectionOp(op *ProjectionOp) any {
 	return nil
 }
 
-func (v *baseLogicalOperatorVisitor) VisitSelectionOp(op *SelectionOp) any {
+func (v *baseLogicalOperatorVisitor) VisitSelectionOp(op *FilterOp) any {
 	return nil
 }
 

@@ -25,12 +25,12 @@ func ExamplePredicateRule_optimize_pushDown() {
 	fmt.Println(logical_plan.Format(got, 0))
 
 	// Output:
-	// Selection: age = 20
+	// Filter: age = 20
 	//   Scan: users; projection=[]
 	//
 	// ---After optimization---
 	//
-	// Selection: age = 20
+	// Filter: age = 20
 	//   Scan: users; selection=[age = 20]; projection=[]
 }
 
@@ -53,12 +53,12 @@ func ExamplePredicateRule_optimize_pushDown_with_nested_selection() {
 	fmt.Println(logical_plan.Format(got, 0))
 
 	// Output:
-	// Selection: age < 30
-	//   Selection: age > 20
+	// Filter: age < 30
+	//   Filter: age > 20
 	//     Scan: users; projection=[]
 	//
 	// ---After optimization---
 	//
-	// Selection: age < 30 AND age > 20
+	// Filter: age < 30 AND age > 20
 	//   Scan: users; selection=age < 30, age > 20; projection=[]
 }

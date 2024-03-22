@@ -30,10 +30,10 @@ func (r *ProjectionRule) pushDown(plan logical_plan.LogicalPlan,
 		extractColumnsFromExprs(p.Exprs(), p.Inputs()[0], seen)
 		newInput := r.pushDown(p.Inputs()[0], seen)
 		return logical_plan.Projection(newInput, p.Exprs()...)
-	case *logical_plan.SelectionOp:
+	case *logical_plan.FilterOp:
 		extractColumnsFromExprs(p.Exprs(), p.Inputs()[0], seen)
 		newInput := r.pushDown(p.Inputs()[0], seen)
-		return logical_plan.Selection(newInput, p.Exprs()[0])
+		return logical_plan.Filter(newInput, p.Exprs()[0])
 	case *logical_plan.JoinOp:
 		extractColumnsFromExprs(p.Exprs(), p.Inputs()[0], seen)
 		extractColumnsFromExprs(p.Exprs(), p.Inputs()[1], seen)
