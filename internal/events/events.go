@@ -60,6 +60,7 @@ func NewEventStore(ctx context.Context, writerDB DB) (*EventStore, error) {
 
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initTables,
+		1: upgradeV0ToV1,
 	}
 
 	err = versioning.Upgrade(ctx, tx, schemaName, upgradeFns, eventStoreVersion)
@@ -75,6 +76,7 @@ func NewEventStore(ctx context.Context, writerDB DB) (*EventStore, error) {
 // Store stores an event in the event store.
 // It uses the local connection to the event store,
 // instead of the consensus connection.
+// It only stores unprocessed events. If an event is already processed, it's ignored.
 func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) error {
 	e.writerMtx.Lock()
 	defer e.writerMtx.Unlock()
@@ -113,9 +115,9 @@ func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) e
 	return tx.Commit(ctx)
 }
 
-// GetEvents gets all events in the event store.
+// GetEvents gets all events in the event store to which resolutions have not yet been created.
 func GetEvents(ctx context.Context, db sql.Executor) ([]*types.VotableEvent, error) {
-	res, err := db.Execute(ctx, getEvents)
+	res, err := db.Execute(ctx, getNewEvents)
 	if err != nil {
 		return nil, err
 	}
@@ -152,50 +154,52 @@ func DeleteEvent(ctx context.Context, db sql.Executor, id types.UUID) error {
 	return err
 }
 
-// GetUnreceivedEvents retrieves events that are neither received by the network nor previously broadcasted.
-// An event is considered "received" only after its inclusion in a block.
-// The function excludes events that have been broadcasted but are still pending in the mempool, awaiting block inclusion.
-// It uses the local connection to the event store, instead of the consensus connection.
-func (e *EventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.VotableEvent, error) {
+// DeleteEvents deletes a list of events from the event store.
+// It is idempotent. If the event does not exist, it will not return an error.
+func DeleteEvents(ctx context.Context, db sql.DB, ids ...types.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	_, err := db.Execute(ctx, deleteEvents, types.UUIDArray(ids))
+	return err
+}
+
+// GetUnbroadcastedEvents filters out the events observed by the validator that are not previously broadcasted.
+func (e *EventStore) GetUnbroadcastedEvents(ctx context.Context) ([]types.UUID, error) {
 	readTx, err := e.eventWriter.BeginReadTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer readTx.Rollback(ctx) // only reading, so we can always rollback
 
-	res, err := readTx.Execute(ctx, getUnbroadcastedEvents)
+	res, err := readTx.Execute(ctx, eventsToBroadcast)
 	if err != nil {
 		return nil, err
 	}
 
-	var events []*types.VotableEvent
-	if len(res.Columns) != 2 {
-		return nil, fmt.Errorf("expected 2 columns getting events. this is an internal bug")
-	}
+	var ids []types.UUID
 	for _, row := range res.Rows {
-		// row[0] is the raw data of the event
-		// row[1] is the event type
-
-		data, ok := row[0].([]byte)
-		if !ok {
-			return nil, fmt.Errorf("expected data to be []byte, got %T", row[0])
-		}
-		eventType, ok := row[1].(string)
-		if !ok {
-			return nil, fmt.Errorf("expected event type to be string, got %T", row[1])
+		if len(row) != 1 {
+			return nil, fmt.Errorf("expected 1 column, got %d", len(row))
 		}
 
-		events = append(events, &types.VotableEvent{
-			Body: data,
-			Type: eventType,
-		})
+		id, ok := row[0].([]byte)
+		if !ok {
+			return nil, fmt.Errorf("expected id to be types.UUID, got %T", row[0])
+		}
+		ids = append(ids, types.UUID(id))
 	}
 
-	return events, nil
+	return ids, nil
 }
 
 // MarkBroadcasted marks the event as broadcasted.
 func (e *EventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
 	e.writerMtx.Lock()
 	defer e.writerMtx.Unlock()
 
@@ -203,15 +207,13 @@ func (e *EventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) erro
 	return err
 }
 
-// MarkReceived marks that an event has been received by the network, and should not be re-broadcasted.
-func MarkReceived(ctx context.Context, db sql.Executor, id types.UUID) error {
-	_, err := db.Execute(ctx, markReceived, id[:])
-	return err
-}
-
 // MarkRebroadcast marks the event to be rebroadcasted. Usually in scenarios where
 // the transaction was rejected by mempool due to invalid nonces.
 func (e *EventStore) MarkRebroadcast(ctx context.Context, ids []types.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
 	e.writerMtx.Lock()
 	defer e.writerMtx.Unlock()
 

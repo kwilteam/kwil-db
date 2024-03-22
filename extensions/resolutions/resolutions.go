@@ -123,13 +123,4 @@ type Resolution struct {
 	// Proposer is the voter that proposed the resolution body.
 	// The power of the proposer can be found in the Voters list.
 	Proposer []byte
-	// DoubleProposerVote indicates whether or not the proposer voted
-	// twice on the resolution. This tracks a special case in the
-	// Kwil voting process where a resolution can be voted on before
-	// it has been officially proposed. If a validator votes on a
-	// resolution and later proposes the same resolution, this will
-	// be true. The proposer's power is not counted twice in the
-	// resolution's ApprovedPower. Most applications can ignore this
-	// field.
-	DoubleProposerVote bool
 }

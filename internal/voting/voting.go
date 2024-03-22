@@ -24,9 +24,10 @@ func InitializeVoteStore(ctx context.Context, db sql.DB) error {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initTables,
 		1: dropHeight,
+		2: dropExtraVoteIDColumn,
 	}
 
-	err := versioning.Upgrade(ctx, db, votingSchemaName, upgradeFns, voteStoreVersion)
+	err := versioning.Upgrade(ctx, db, VotingSchemaName, upgradeFns, voteStoreVersion)
 	if err != nil {
 		return fmt.Errorf("failed to initialize or upgrade vote store: %w", err)
 	}
@@ -34,15 +35,10 @@ func InitializeVoteStore(ctx context.Context, db sql.DB) error {
 	return nil
 }
 
-func dropHeight(ctx context.Context, db sql.DB) error {
-	_, err := db.Execute(ctx, dropHeightTable)
-	return err
-}
-
 func initTables(ctx context.Context, db sql.DB) error {
 	initStmts := []string{ //createVotingSchema,
 		tableVoters, tableResolutionTypes, tableResolutions,
-		resolutionsTypeIndex, tableProcessed, tableVotes} // order important
+		resolutionsTypeIndex, tableProcessed, tableVotes, tableHeight} // order important
 
 	for _, stmt := range initStmts {
 		_, err := db.Execute(ctx, stmt)
@@ -63,11 +59,19 @@ func initTables(ctx context.Context, db sql.DB) error {
 	return nil
 }
 
+func dropHeight(ctx context.Context, db sql.DB) error {
+	_, err := db.Execute(ctx, dropHeightTable)
+	return err
+}
+
+func dropExtraVoteIDColumn(ctx context.Context, db sql.DB) error {
+	_, err := db.Execute(ctx, dropExtraVoteID)
+	return err
+}
+
 // Approve approves a resolution from a voter.
-// If the resolution does not yet exist, it will be created.
-// If created, it will not be given a body, and can be given a body later.
-// If the resolution already exists, it will simply track that the voter
-// has approved the resolution, and will not change the body or expiration.
+// If the resolution does not yet exist, it will be errored,
+// Validators should only vote on existing resolutions.
 // If the voter does not exist, an error will be returned.
 // If the voter has already approved the resolution, no error will be returned.
 // If the resolution has already been processed, no error will be returned.
@@ -78,24 +82,12 @@ func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID types.U
 	}
 	defer tx.Rollback(ctx)
 
-	alreadyProcessed, err := IsProcessed(ctx, tx, resolutionID)
-	if err != nil {
-		return err
-	}
-	if alreadyProcessed {
-		return nil
-	}
-
-	// we need to ensure that the resolution ID exists
-	_, err = tx.Execute(ctx, ensureResolutionIDExists, resolutionID[:], expiration)
-	if err != nil {
-		return err
-	}
-
+	// Expectation is that the resolution is already created when the voteBody is submitted. and nodes wont submit the voteIDs for events which doesn't have resolutions.
 	userId := types.NewUUIDV5(from)
 
 	// if the voter does not exist, the following will error
 	// if the vote from the voter already exists, nothing will happen
+	// if the resolution doesn't exist, the following would error
 	_, err = tx.Execute(ctx, addVote, resolutionID[:], userId[:])
 	if err != nil {
 		return err
@@ -104,9 +96,9 @@ func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID types.U
 	return tx.Commit(ctx)
 }
 
-// CreateResolution creates a vote, by submitting a body of a vote, a topic
-// and an expiration.  The expiration should be a blockheight.
-// If the resolution already exists, it will not be changed.
+// CreateResolution creates a resolution and subm vote
+// The expiration should be a blockheight.
+// If the resolution already exists do nothing.
 // If the resolution was already processed, nothing will happen.
 func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableEvent, expiration int64, voteBodyProposer []byte) error {
 	tx, err := db.BeginTx(ctx)
@@ -115,36 +107,9 @@ func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableE
 	}
 	defer tx.Rollback(ctx)
 
-	alreadyProcessed, err := IsProcessed(ctx, tx, event.ID())
-	if err != nil {
-		return err
-	}
-	if alreadyProcessed {
-		return fmt.Errorf(`%w: resolution id: "%s"`, ErrAlreadyProcessed, event.ID().String())
-	}
-
-	// if it already contains a body, we want to return.
-	// this avoids a bug where a second body proposer can steal
-	// the proposer reward, due to the upsert executed at the end
-	// of this function.
-	containsBody, err := ResolutionContainsBody(ctx, tx, event.ID())
-	if err != nil {
-		return err
-	}
-	if containsBody {
-		return fmt.Errorf(`%w: resolution id: "%s"`, ErrResolutionAlreadyHasBody, event.ID().String())
-	}
-
 	id := event.ID()
 
-	// Check if the proposer has already submitted the VoteID transaction
-	// if yes, update the extraVoteID in the resolutions table so that the node can be refunded correctly.
-	voted, err := HasVoted(ctx, tx, id, voteBodyProposer)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Execute(ctx, upsertResolution, id[:], event.Body, event.Type, expiration, voteBodyProposer, voted)
+	_, err = tx.Execute(ctx, insertResolution, id[:], event.Body, event.Type, expiration, voteBodyProposer)
 	if err != nil {
 		return err
 	}
@@ -153,11 +118,11 @@ func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableE
 }
 
 // fromRow converts a row from the database into a resolutions.Resolution
-// It expects there to be 8 columns in the row, in the following order:
-// id, body, type, expiration, approved_power, voters, voteBodyProposer, extraVoteID
+// It expects there to be 7 columns in the row, in the following order:
+// id, body, type, expiration, approved_power, voters, voteBodyProposer
 func fromRow(row []any) (*resolutions.Resolution, error) {
-	if len(row) != 8 {
-		return nil, fmt.Errorf("expected 8 columns, got %d", len(row))
+	if len(row) != 7 {
+		return nil, fmt.Errorf("expected 7 columns, got %d", len(row))
 	}
 
 	v := &resolutions.Resolution{}
@@ -244,11 +209,6 @@ func fromRow(row []any) (*resolutions.Resolution, error) {
 		}
 	}
 
-	v.DoubleProposerVote, ok = row[7].(bool)
-	if !ok {
-		return nil, fmt.Errorf("invalid type for extraVoteID (%T)", row[7])
-	}
-
 	return v, nil
 }
 
@@ -263,8 +223,8 @@ func GetResolutionInfo(ctx context.Context, db sql.Executor, id types.UUID) (*re
 		return nil, fmt.Errorf("expected 1 row, got %d", len(res.Rows))
 	}
 
-	if len(res.Rows[0]) != 8 {
-		return nil, fmt.Errorf("expected 8 columns, got %d", len(res.Rows[0]))
+	if len(res.Rows[0]) != 7 {
+		return nil, fmt.Errorf("expected 7 columns, got %d", len(res.Rows[0]))
 	}
 
 	return fromRow(res.Rows[0])
@@ -290,14 +250,14 @@ func GetExpired(ctx context.Context, db sql.Executor, blockheight int64) ([]*res
 }
 
 // GetResolutionsByThresholdAndType gets all resolutions that have reached the threshold of votes and are of a specific type.
-func GetResolutionsByThresholdAndType(ctx context.Context, db sql.TxMaker, threshold *big.Rat, resType string) ([]*resolutions.Resolution, error) {
+func GetResolutionsByThresholdAndType(ctx context.Context, db sql.TxMaker, threshold *big.Rat, resType string, totalPower int64) ([]*resolutions.Resolution, error) {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx) // we can always rollback, since we are only reading
 
-	thresholdPower, err := RequiredPower(ctx, tx, threshold)
+	thresholdPower, err := RequiredPower(ctx, tx, threshold, totalPower)
 	if err != nil {
 		return nil, err
 	}
@@ -356,29 +316,6 @@ func MarkProcessed(ctx context.Context, db sql.Executor, ids ...types.UUID) erro
 	return err
 }
 
-// ResolutionContainsBody returns true if the resolution has a body.
-func ResolutionContainsBody(ctx context.Context, db sql.Executor, id types.UUID) (bool, error) {
-	res, err := db.Execute(ctx, containsBody, id[:])
-	if err != nil {
-		return false, err
-	}
-
-	if len(res.Rows) == 0 {
-		return false, nil
-	}
-
-	if len(res.Rows[0]) != 1 {
-		// this should never happen, just for safety
-		return false, fmt.Errorf("invalid number of columns returned. this is an internal bug")
-	}
-	containsBody, ok := res.Rows[0][0].(bool)
-	if !ok {
-		return false, fmt.Errorf("invalid type for containsBody (%T). this is an internal bug", res.Rows[0][0])
-	}
-
-	return containsBody, nil
-}
-
 // IsProcessed checks if a vote has been marked as processed.
 func IsProcessed(ctx context.Context, tx sql.Executor, resolutionID types.UUID) (bool, error) {
 	res, err := tx.Execute(ctx, alreadyProcessed, resolutionID[:])
@@ -391,53 +328,32 @@ func IsProcessed(ctx context.Context, tx sql.Executor, resolutionID types.UUID) 
 
 // FilterNotProcessed takes a set of resolutions and returns the ones that have not been processed.
 // If a resolution does not exist, it WILL be included in the result.
-func FilterNotProcessed(ctx context.Context, db sql.Executor, ids ...types.UUID) ([]types.UUID, error) {
-	res, err := db.Execute(ctx, returnNotProcessed, types.UUIDArray(ids))
+func FilterNotProcessed(ctx context.Context, db sql.Executor, ids []types.UUID) ([]types.UUID, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	res, err := db.Execute(ctx, returnProcessed, types.UUIDArray(ids))
 	if err != nil {
 		return nil, err
 	}
 
-	processed := make([]types.UUID, len(res.Rows))
-	for i, row := range res.Rows {
+	processed := make(map[types.UUID]bool, len(res.Rows))
+	for _, row := range res.Rows {
 		if len(row) != 1 {
 			// this should never happen, just for safety
 			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 		}
-		processed[i] = types.UUID(row[0].([]byte))
+		processed[types.UUID(row[0].([]byte))] = true
 	}
 
-	return processed, nil
-}
-
-// FilterExistsNoBody takes a set of resolutions and returns the ones that do exist but do not have a body.
-func FilterExistsNoBody(ctx context.Context, db sql.Executor, ids ...types.UUID) ([]types.UUID, error) {
-	res, err := db.Execute(ctx, returnNoBody, types.UUIDArray(ids))
-	if err != nil {
-		return nil, err
-	}
-
-	processed := make([]types.UUID, len(res.Rows))
-	for i, row := range res.Rows {
-		if len(row) != 1 {
-			// this should never happen, just for safety
-			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+	var notProcessed []types.UUID
+	for _, id := range ids {
+		if _, ok := processed[id]; !ok {
+			notProcessed = append(notProcessed, id)
 		}
-		processed[i] = types.UUID(row[0].([]byte))
 	}
-
-	return processed, nil
-}
-
-// HasVoted checks if a voter has voted on a resolution.
-func HasVoted(ctx context.Context, tx sql.Executor, resolutionID types.UUID, from []byte) (bool, error) {
-	userId := types.NewUUIDV5(from)
-
-	res, err := tx.Execute(ctx, hasVoted, resolutionID[:], userId[:])
-	if err != nil {
-		return false, err
-	}
-
-	return len(res.Rows) != 0, nil
+	return notProcessed, nil
 }
 
 // GetValidatorPower gets the power of a voter.
@@ -529,34 +445,9 @@ func SetValidatorPower(ctx context.Context, db sql.Executor, recipient []byte, p
 }
 
 // RequiredPower gets the required power to meet the threshold requirements.
-func RequiredPower(ctx context.Context, db sql.Executor, threshold *big.Rat) (int64, error) {
+func RequiredPower(ctx context.Context, db sql.Executor, threshold *big.Rat, totalPower int64) (int64, error) {
 	numerator := threshold.Num().Int64()
 	denominator := threshold.Denom().Int64()
-
-	powerRes, err := db.Execute(ctx, totalPower)
-	if err != nil {
-		return 0, err
-	}
-
-	if len(powerRes.Rows) == 0 {
-		return 0, nil // cannot process any resolutions
-	}
-
-	if len(powerRes.Rows[0]) != 1 {
-		// this should never happen, just for safety
-		return 0, fmt.Errorf("invalid number of columns returned while querying total Power. this is an internal bug")
-	}
-
-	powerIface := powerRes.Rows[0][0]       // `numeric` => pgtype.Numeric
-	totalPower, ok := sql.Int64(powerIface) // powerIface.(int64)
-	if !ok {
-		// if it is nil, then no validators have been added yet
-		if powerRes.Rows[0][0] == nil {
-			return 0, nil
-		}
-
-		return 0, fmt.Errorf("invalid type for power needed (%T)", powerIface)
-	}
 
 	result := intDivUpFraction(totalPower, numerator, denominator)
 	return result, nil

@@ -37,9 +37,9 @@ var (
 // EventStore allows the EventBroadcaster to read events
 // from the event store.
 type EventStore interface {
-	// GetUnreceivedEvents gets events that this node has not yet broadcasted.
-	// Events are only marked as "broadcasted" when they have been included in a block.
-	GetUnreceivedEvents(ctx context.Context) ([]*types.VotableEvent, error)
+	// GetUnbroadcastedEvents filters out the events observed by the validator
+	// that are not previously broadcasted.
+	GetUnbroadcastedEvents(ctx context.Context) ([]types.UUID, error)
 
 	// MarkBroadcasted marks list of events as broadcasted.
 	MarkBroadcasted(ctx context.Context, ids []types.UUID) error
@@ -87,6 +87,7 @@ type EventBroadcaster struct {
 // RunBroadcast tells the EventBroadcaster to broadcast any events it wishes.
 // It implements Kwil's abci.CommitHook function signature.
 // If the node is not a validator, it will do nothing.
+// It broadcasts votes for the existing resolutions.
 func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) error {
 	validators, err := e.validatorStore.GetValidators(ctx)
 	if err != nil {
@@ -117,18 +118,14 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) er
 		return nil
 	}
 
-	events, err := e.store.GetUnreceivedEvents(ctx)
+	// Vote only if the note observed the event corresponding to the resolution.
+	ids, err := e.store.GetUnbroadcastedEvents(ctx)
 	if err != nil {
 		return err
 	}
 
-	if len(events) == 0 {
+	if len(ids) == 0 {
 		return nil
-	}
-
-	ids := make([]types.UUID, len(events))
-	for i, event := range events {
-		ids[i] = event.ID()
 	}
 
 	// consider only the first maxVoteIDsPerTx events, to limit the postgres access roundtrips per block execution.

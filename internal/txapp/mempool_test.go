@@ -82,7 +82,7 @@ func Test_MempoolWithGas(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func newTx(t *testing.T, nonce uint64, sender string) *transactions.Transaction {
+func newTx(_ *testing.T, nonce uint64, sender string) *transactions.Transaction {
 	return &transactions.Transaction{
 		Signature: &auth.Signature{},
 		Body: &transactions.TransactionBody{

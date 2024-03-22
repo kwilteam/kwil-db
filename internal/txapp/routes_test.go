@@ -88,12 +88,6 @@ func Test_Routes(t *testing.T) {
 
 					return nil
 				}
-				resolutionContainsBody = func(ctx context.Context, db sql.Executor, id types.UUID) (bool, error) {
-					return true, nil
-				}
-				isProcessed = func(ctx context.Context, db sql.Executor, id types.UUID) (bool, error) {
-					return true, nil
-				}
 				getVoterPower = func(ctx context.Context, db sql.Executor, identifier []byte) (int64, error) {
 					return 1, nil
 				}
@@ -126,17 +120,12 @@ func Test_Routes(t *testing.T) {
 
 					return nil
 				}
-				approveResolution = func(ctx context.Context, db sql.TxMaker, resolutionID types.UUID, expiration int64, from []byte) error {
+				approveResolution = func(_ context.Context, _ sql.TxMaker, _ types.UUID, _ int64, _ []byte) error {
 					approveCount++
 
 					return nil
 				}
-				resolutionContainsBody = func(ctx context.Context, db sql.Executor, id types.UUID) (bool, error) {
-					return true, nil
-				}
-				isProcessed = func(ctx context.Context, db sql.Executor, id types.UUID) (bool, error) {
-					return true, nil
-				}
+
 				getVoterPower = func(ctx context.Context, db sql.Executor, identifier []byte) (int64, error) {
 					return 1, nil
 				}
@@ -189,12 +178,8 @@ func Test_Routes(t *testing.T) {
 
 					return nil
 				}
-				createResolution = func(ctx context.Context, db sql.TxMaker, event *types.VotableEvent, expiration int64, proposer []byte) error {
+				createResolution = func(_ context.Context, _ sql.TxMaker, _ *types.VotableEvent, _ int64, _ []byte) error {
 					return nil
-				}
-
-				hasVoted = func(ctx context.Context, db sql.Executor, resolutionID types.UUID, voter []byte) (bool, error) {
-					return true, nil
 				}
 				getVoterPower = func(ctx context.Context, db sql.Executor, identifier []byte) (int64, error) {
 					return 1, nil
@@ -226,17 +211,13 @@ func Test_Routes(t *testing.T) {
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				deleteCount := 0
 
-				deleteEvent = func(ctx context.Context, db sql.Executor, id types.UUID) error {
+				deleteEvent = func(_ context.Context, _ sql.Executor, _ types.UUID) error {
 					deleteCount++
 
 					return nil
 				}
 
-				hasVoted = func(ctx context.Context, db sql.Executor, resolutionID types.UUID, voter []byte) (bool, error) {
-					return true, nil
-				}
-
-				getVoterPower = func(ctx context.Context, db sql.Executor, identifier []byte) (int64, error) {
+				getVoterPower = func(_ context.Context, _ sql.Executor, _ []byte) (int64, error) {
 					return 1, nil
 				}
 
@@ -268,14 +249,14 @@ func Test_Routes(t *testing.T) {
 			}
 
 			// mock getAccount, which is func declared in interfaces.go
-			getAccount = func(ctx context.Context, tx sql.Executor, acctID []byte) (*types.Account, error) {
+			getAccount = func(_ context.Context, _ sql.Executor, acctID []byte) (*types.Account, error) {
 				return &types.Account{
 					Identifier: acctID,
 					Balance:    big.NewInt(0),
 					Nonce:      0,
 				}, nil
 			}
-			spend = func(ctx context.Context, tx sql.Executor, account []byte, amount *big.Int, nonce int64) error {
+			spend = func(_ context.Context, _ sql.Executor, _ []byte, _ *big.Int, _ int64) error {
 				return nil
 			}
 

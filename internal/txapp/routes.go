@@ -689,37 +689,23 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	// This gets updated when vote body for this resolution is received.
 	expiryHeight := ctx.BlockHeight + ctx.ConsensusParams.VotingPeriod
 
-	for _, voteID := range approve.ResolutionIDs {
+	// filter out the vote IDs that have already been processed
+	ids, err := voting.FilterNotProcessed(ctx.Ctx, tx2, approve.ResolutionIDs)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
+	for _, voteID := range ids {
 		err = approveResolution(ctx.Ctx, tx2, voteID, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
-		// if from local validator, we should mark that it is committed,
-		// so that we do not rebroadcast. We do not want to delete,
-		// since we may be the proposer later, and will need the body
-		// If the network already has the body, then we can just delete.
+		// if from local validator, delete the event now that we have voted on it and network already has the event body
 		if fromLocalValidator {
-			containsBody, err := resolutionContainsBody(ctx.Ctx, tx2, voteID) // should be uncommitted queries internally?
+			err = deleteEvent(ctx.Ctx, tx2, voteID)
 			if err != nil {
 				return txRes(spend, transactions.CodeUnknownError, err)
-			}
-
-			finished, err := isProcessed(ctx.Ctx, tx2, voteID)
-			if err != nil {
-				return txRes(spend, transactions.CodeUnknownError, err)
-			}
-
-			if containsBody || finished {
-				err = deleteEvent(ctx.Ctx, tx2, voteID)
-				if err != nil {
-					return txRes(spend, transactions.CodeUnknownError, err)
-				}
-			} else {
-				err = markReceived(ctx.Ctx, tx2, voteID)
-				if err != nil {
-					return txRes(spend, transactions.CodeUnknownError, err)
-				}
 			}
 		}
 	}
@@ -766,6 +752,7 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	}
 	defer dbTx.Commit(ctx.Ctx)
 
+	// Only proposer can issue a VoteBody transaction.
 	if !bytes.Equal(tx.Sender, ctx.Proposer) {
 		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotProposer)
 	}
@@ -776,7 +763,7 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	localValidator := router.signer.Identity()
+	fromLocalValidator := bytes.Equal(tx.Sender, router.signer.Identity())
 
 	tx2, err := dbTx.BeginTx(ctx.Ctx)
 	if err != nil {
@@ -784,6 +771,9 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
+	// Expectation:
+	// 1. VoteBody should only include the events for which the resolutions are not yet created. Maybe filter out the events for which the resolutions are already created and ignore them.
+	// 2. If the node is the proposer, delete the event from the event store
 	for _, event := range vote.Events {
 		resCfg, err := resolutions.GetResolution(event.Type)
 		if err != nil {
@@ -803,12 +793,8 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
-		// If the local validator has already voted on the event, then we should delete the event.
-		hasVoted, err := hasVoted(ctx.Ctx, tx2, event.ID(), localValidator)
-		if err != nil {
-			return txRes(spend, transactions.CodeUnknownError, err)
-		}
-		if hasVoted {
+		// If the local validator is the proposer, then we should delete the event from the event store.
+		if fromLocalValidator {
 			err = deleteEvent(ctx.Ctx, tx2, event.ID())
 			if err != nil {
 				return txRes(spend, transactions.CodeUnknownError, err)
@@ -822,6 +808,7 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 
 	return txRes(spend, transactions.CodeOk, nil)
 }
+
 func (v *validatorVoteBodiesRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	// VoteBody pricing is based on the size of the vote bodies of all the events in the tx payload.
 	votes := &transactions.ValidatorVoteBodies{}

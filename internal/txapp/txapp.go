@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
+	"sync"
 
 	"go.uber.org/zap"
 
@@ -84,6 +85,9 @@ type TxApp struct {
 	appHash []byte
 	height  int64
 
+	validators []*types.Validator // used to optimize reads, gets updated at the block boundaries
+	valMtx     sync.RWMutex       // protects validators access
+
 	// transaction that exists between Begin and Commit
 	currentTx sql.OuterTx
 
@@ -137,6 +141,10 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 	r.appHash = genesisAppHash // combined with first block's apphash and stored in FinalizeBlock
 
 	// Add Genesis Validators
+	var voters []*types.Validator
+	r.valMtx.Lock()
+	defer r.valMtx.Unlock()
+
 	for _, validator := range validators {
 		err := setVoterPower(ctx, tx, validator.PubKey, validator.Power)
 		if err != nil {
@@ -146,7 +154,9 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 			}
 			return err
 		}
+		voters = append(voters, validator)
 	}
+	r.validators = voters
 
 	// Fund Genesis Accounts
 	for _, account := range genesisAccounts {
@@ -216,6 +226,26 @@ func (r *TxApp) UpdateValidator(ctx context.Context, validator []byte, power int
 // GetValidators returns the current validator set.
 // It will not return uncommitted changes.
 func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
+	r.valMtx.Lock()
+	defer r.valMtx.Unlock()
+
+	// if we have a cached validator set, return it
+	if r.validators != nil {
+		vals := make([]*types.Validator, len(r.validators))
+		for i, v := range r.validators {
+			val := &types.Validator{
+				PubKey: make([]byte, len(v.PubKey)),
+				Power:  v.Power,
+			}
+			copy(val.PubKey, v.PubKey)
+			vals[i] = val
+		}
+
+		return vals, nil
+	}
+
+	// otherwise, we need to get the validator set from the database
+	// This is done especially when a node restarts
 	readTx, err := r.Database.BeginReadTx(ctx)
 	if err != nil {
 		return nil, err
@@ -237,6 +267,21 @@ func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
 	}
 
 	return validators, nil
+}
+
+// GetValidatorsPower returns the total power of the current validator set.
+func (r *TxApp) GetValidatorSetPower(ctx context.Context) (int64, error) {
+	validators, err := r.GetValidators(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	var totalPower int64
+	for _, v := range validators {
+		totalPower += v.Power
+	}
+
+	return totalPower, nil
 }
 
 // Execute executes a transaction.  It will route the transaction to the
@@ -337,6 +382,10 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (appHash []byte
 	r.appHash = crypto.Sha256(append(r.appHash, engineHash...))
 	r.height = blockHeight
 
+	r.valMtx.Lock()
+	r.validators = finalValidators
+	r.valMtx.Unlock()
+
 	r.log.Debug("Finalize(end)", log.Int("height", r.height), log.String("appHash", hex.EncodeToString(r.appHash)))
 
 	// I'd really like to setChainState here with appHash, but we can't use
@@ -362,13 +411,19 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 		Resolution  *resolutions.Resolution
 		ResolveFunc func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error
 	}
+
+	totalPower, err := r.GetValidatorSetPower(ctx)
+	if err != nil {
+		return err
+	}
+
 	for _, resolutionType := range r.resTypes {
 		cfg, err := resolutions.GetResolution(resolutionType)
 		if err != nil {
 			return err
 		}
 
-		finalized, err := getResolutionsByThresholdAndType(ctx, r.currentTx, cfg.ConfirmationThreshold, resolutionType)
+		finalized, err := getResolutionsByThresholdAndType(ctx, r.currentTx, cfg.ConfirmationThreshold, resolutionType, totalPower)
 		if err != nil {
 			return err
 		}
@@ -423,11 +478,6 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 		}
 	}
 
-	err := deleteResolutions(ctx, r.currentTx, finalizedIds...)
-	if err != nil {
-		return err
-	}
-
 	// now we will expire resolutions
 	expired, err := getExpired(ctx, r.currentTx, blockheight)
 	if err != nil {
@@ -450,7 +500,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 			}
 
 			// we need to use each configured resolutions refund threshold
-			threshold, err = requiredPower(ctx, r.currentTx, cfg.RefundThreshold)
+			threshold, err = requiredPower(ctx, r.currentTx, cfg.RefundThreshold, totalPower)
 			if err != nil {
 				return err
 			}
@@ -463,12 +513,22 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 		}
 	}
 
-	err = deleteResolutions(ctx, r.currentTx, expiredIds...)
+	allIds := append(finalizedIds, expiredIds...)
+	err = deleteResolutions(ctx, r.currentTx, allIds...)
 	if err != nil {
 		return err
 	}
 
 	err = markProcessed(ctx, r.currentTx, markProcessedIds...)
+	if err != nil {
+		return err
+	}
+
+	// This is to ensure that the nodes that never get to vote on this event due to limitation
+	// per block vote sizes, they never get to vote and essentially delete the event
+	// So this is handled instead when the nodes are approved.
+	// TODO: We need to figure out the consequences of resolutions getting expired due to the vote limits set per block. There can be scenarios where the events are observed by the nodes, but before they can vote, the event gets expired. rare but possible in the situations with higher event traffic.
+	err = deleteEvents(ctx, r.currentTx, markProcessedIds...)
 	if err != nil {
 		return err
 	}
@@ -515,10 +575,6 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) {
 	}
 
 	bodyCost := big.NewInt(ValidatorVoteBodyBytePrice * int64(len(res.Body)))
-	if res.DoubleProposerVote { // if the proposer ALSO submitted a vote id, refund that as well
-		bodyCost.Add(bodyCost, ValidatorVoteIDPrice)
-	}
-
 	currentBalance, ok := c[string(res.Proposer)]
 	if !ok {
 		currentBalance = big.NewInt(0)
@@ -640,24 +696,17 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 	if err != nil {
 		return nil, err
 	}
-	// Limit upto only 50 VoteBodies per block
-	if len(events) > 50 {
-		events = events[:50]
-	}
 
 	ids := make([]types.UUID, 0, len(events))
 	for _, event := range events {
 		ids = append(ids, event.ID())
 	}
 
-	doesNotHaveBody, err := voting.FilterExistsNoBody(ctx, readTx, ids...)
-	if err != nil {
-		return nil, err
-	}
+	// Is thre any reason to check for notProcessed events here? Becase event store will never have events that are already processed.
 
-	notProcessed, err := voting.FilterNotProcessed(ctx, readTx, doesNotHaveBody...)
-	if err != nil {
-		return nil, err
+	// Limit upto only 50 VoteBodies per block
+	if len(ids) > 50 {
+		ids = ids[:50]
 	}
 
 	eventMap := make(map[types.UUID]*types.VotableEvent)
@@ -666,7 +715,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 	}
 
 	finalEvents := make([]*types.VotableEvent, 0)
-	for _, id := range notProcessed {
+	for _, id := range ids {
 		event, ok := eventMap[id]
 		if !ok {
 			// this should never happen

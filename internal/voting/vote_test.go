@@ -48,7 +48,11 @@ func Test_Voting(t *testing.T) {
 			fn: func(t *testing.T, db sql.DB) {
 				ctx := context.Background()
 
-				err := voting.CreateResolution(ctx, db, testEvent, 10, []byte("a"))
+				// Can't approve non-existent resolutions
+				err := voting.ApproveResolution(ctx, db, testEvent.ID(), 10, []byte("a"))
+				require.Error(t, err)
+
+				err = voting.CreateResolution(ctx, db, testEvent, 10, []byte("a"))
 				require.NoError(t, err)
 
 				err = voting.ApproveResolution(ctx, db, testEvent.ID(), 10, []byte("a"))
@@ -57,7 +61,7 @@ func Test_Voting(t *testing.T) {
 				err = voting.ApproveResolution(ctx, db, testEvent.ID(), 10, []byte("b"))
 				require.NoError(t, err)
 
-				events, err := voting.GetResolutionsByThresholdAndType(ctx, db, testConfirmationThreshold, testType)
+				events, err := voting.GetResolutionsByThresholdAndType(ctx, db, testConfirmationThreshold, testType, 200)
 				require.NoError(t, err)
 
 				require.Len(t, events, 1)
@@ -66,7 +70,6 @@ func Test_Voting(t *testing.T) {
 				require.Equal(t, testEvent.Type, events[0].Type)
 				require.Equal(t, testEvent.ID(), events[0].ID)
 				require.Equal(t, int64(10), events[0].ExpirationHeight)
-				require.False(t, events[0].DoubleProposerVote)
 				require.Equal(t, int64(200), events[0].ApprovedPower)
 			},
 		},
@@ -129,12 +132,14 @@ func Test_Voting(t *testing.T) {
 			fn: func(t *testing.T, db sql.DB) {
 				ctx := context.Background()
 
-				// validator 1 will approve first here, to test that it is properly ordered
-
+				// Voters can't approve non-existent resolutions
 				err := voting.ApproveResolution(ctx, db, testEvent.ID(), 10, []byte("a"))
-				require.NoError(t, err)
+				require.Error(t, err)
 
 				err = voting.CreateResolution(ctx, db, testEvent, 10, []byte("a"))
+				require.NoError(t, err)
+
+				err = voting.ApproveResolution(ctx, db, testEvent.ID(), 10, []byte("a"))
 				require.NoError(t, err)
 
 				err = voting.ApproveResolution(ctx, db, testEvent.ID(), 10, []byte("b"))
@@ -159,7 +164,6 @@ func Test_Voting(t *testing.T) {
 				require.Equal(t, testEvent.Type, info.Type)
 				require.Equal(t, testEvent.ID(), info.ID)
 				require.Equal(t, int64(10), info.ExpirationHeight)
-				require.True(t, info.DoubleProposerVote)
 				require.Equal(t, int64(200), info.ApprovedPower)
 
 				hasValidator1Info := false
@@ -232,12 +236,12 @@ func Test_Voting(t *testing.T) {
 				require.NoError(t, err)
 
 				err = voting.ApproveResolution(ctx, db, events[2].ID(), 10, []byte("a"))
-				require.NoError(t, err)
+				require.Error(t, err)
 
-				containsBody, err := voting.FilterExistsNoBody(ctx, db, ids...)
+				// check that none are processed
+				notProcessed, err := voting.FilterNotProcessed(ctx, db, ids)
 				require.NoError(t, err)
-
-				assert.Equal(t, len(containsBody), 1)
+				assert.Equal(t, len(notProcessed), 3)
 
 				// delete and process all
 				err = voting.DeleteResolutions(ctx, db, ids...)
@@ -246,10 +250,10 @@ func Test_Voting(t *testing.T) {
 				require.NoError(t, err)
 
 				// check that they are all processed
-				processed, err := voting.FilterNotProcessed(ctx, db, ids...)
+				notProcessed, err = voting.FilterNotProcessed(ctx, db, ids)
 				require.NoError(t, err)
 
-				assert.Equal(t, len(processed), 0)
+				assert.Equal(t, len(notProcessed), 0)
 			},
 		},
 		{
@@ -260,14 +264,11 @@ func Test_Voting(t *testing.T) {
 			fn: func(t *testing.T, db sql.DB) {
 				ctx := context.Background()
 
-				containsBody, err := voting.FilterExistsNoBody(ctx, db, types.NewUUIDV5([]byte("ss")))
-				require.NoError(t, err)
-				require.Empty(t, containsBody)
-
-				processed, err := voting.FilterNotProcessed(ctx, db, types.NewUUIDV5([]byte("ss")))
+				processed, err := voting.FilterNotProcessed(ctx, db, []types.UUID{types.NewUUIDV5([]byte("ss"))})
 				require.NoError(t, err)
 
 				require.Equal(t, len(processed), 1)
+
 			},
 		},
 	}

@@ -31,15 +31,11 @@ var (
 	// getEvents gets all events, even if they have been
 	// marked received
 	getEvents = events.GetEvents
-	// markReceived marks that an event from the local
-	// validator has been received by the network.
-	// This tells the event store to not re-broadcast the event,
-	// but also to not delete it, as it may need to get the event
-	// body in case it is a future block proposer.
-	markReceived = events.MarkReceived
+
 	// deleteEvent deletes an event. It will no longer
 	// be broadcasted.
-	deleteEvent = events.DeleteEvent
+	deleteEvent  = events.DeleteEvent
+	deleteEvents = events.DeleteEvents
 
 	// voting
 	setVoterPower                    = voting.SetValidatorPower
@@ -49,13 +45,10 @@ var (
 	markProcessed                    = voting.MarkProcessed
 	getExpired                       = voting.GetExpired
 	requiredPower                    = voting.RequiredPower
-	isProcessed                      = voting.IsProcessed
-	resolutionContainsBody           = voting.ResolutionContainsBody
 	getResolutionsByTypeAndProposer  = voting.GetResolutionIDsByTypeAndProposer
 	createResolution                 = voting.CreateResolution
 	approveResolution                = voting.ApproveResolution
 	getVoterPower                    = voting.GetValidatorPower
-	hasVoted                         = voting.HasVoted
 
 	// chain metadata
 	getChainState = meta.GetChainState
