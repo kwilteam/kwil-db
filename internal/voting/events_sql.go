@@ -1,11 +1,10 @@
-package events
+package voting
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/common/sql"
-	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 const (
@@ -37,12 +36,12 @@ const (
 	// getNewEvents returns the list of events observed by the validator to which resolutions does not exist.
 	getNewEvents = `SELECT e.data, e.event_type
 	FROM ` + schemaName + `.events AS e
-	LEFT JOIN ` + voting.VotingSchemaName + `.resolutions AS r ON e.id = r.id
+	LEFT JOIN ` + votingSchemaName + `.resolutions AS r ON e.id = r.id
 	WHERE r.id IS NULL;`
 
 	// eventsToBroadcast returns the list of the resolutionIDs observed by the validator that are not previously broadcasted
 	eventsToBroadcast = `SELECT e.id
-	FROM ` + voting.VotingSchemaName + `.resolutions AS r
+	FROM ` + votingSchemaName + `.resolutions AS r
 	INNER JOIN ` + schemaName + `.events AS e ON r.id = e.id
 	WHERE  e.broadcasted = FALSE;`
 

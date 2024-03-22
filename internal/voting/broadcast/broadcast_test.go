@@ -13,9 +13,9 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/events/broadcast"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/kwilteam/kwil-db/internal/voting/broadcast"
 )
 
 func Test_Broadcaster(t *testing.T) {

@@ -1,8 +1,8 @@
-// package events is used to track events that need to be included in a Kwil block.
+// events.go is used to track events that need to be included in a Kwil block.
 // It contains an event store that is outside of consensus.  The event store's primary
 // purpose is to store events that are heard from other chains, and delete them once the
 // node can verify that their event vote has been included in a block.
-package events
+package voting
 
 import (
 	"context"
@@ -13,19 +13,12 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
-	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 // DB is a database connection.
 type DB interface {
 	sql.ReadTxMaker
 	sql.DB
-}
-
-// VoteStore is a store that tracks votes.
-type VoteStore interface {
-	// IsProcessed checks if a resolution has been processed.
-	IsProcessed(ctx context.Context, db sql.DB, resolutionID types.UUID) (bool, error)
 }
 
 // EventStore stores events from external sources.
@@ -50,27 +43,21 @@ type EventStore struct {
 // NewEventStore creates a new event store.
 // It takes a database connection to write events to.
 // WARNING: This connection cannot be the same connection
-// used during consensus / in txapp.
+// used during consensus or in txapp.
 func NewEventStore(ctx context.Context, writerDB DB) (*EventStore, error) {
-	tx, err := writerDB.BeginTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initTables,
 		1: upgradeV0ToV1,
 	}
 
-	err = versioning.Upgrade(ctx, tx, schemaName, upgradeFns, eventStoreVersion)
+	err := versioning.Upgrade(ctx, writerDB, schemaName, upgradeFns, eventStoreVersion)
 	if err != nil {
 		return nil, err
 	}
 
 	return &EventStore{
 		eventWriter: writerDB,
-	}, tx.Commit(ctx)
+	}, nil
 }
 
 // Store stores an event in the event store.
@@ -99,7 +86,7 @@ func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) e
 	id := event.ID()
 
 	// is this event already processed?
-	processed, err := voting.IsProcessed(ctx, tx, id)
+	processed, err := IsProcessed(ctx, tx, id)
 	if err != nil {
 		return err
 	}

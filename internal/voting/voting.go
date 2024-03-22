@@ -22,51 +22,17 @@ const (
 // It will also create any resolution types that have been registered.
 func InitializeVoteStore(ctx context.Context, db sql.DB) error {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
-		0: initTables,
+		0: initVotingTables,
 		1: dropHeight,
 		2: dropExtraVoteIDColumn,
 	}
 
-	err := versioning.Upgrade(ctx, db, VotingSchemaName, upgradeFns, voteStoreVersion)
+	err := versioning.Upgrade(ctx, db, votingSchemaName, upgradeFns, voteStoreVersion)
 	if err != nil {
 		return fmt.Errorf("failed to initialize or upgrade vote store: %w", err)
 	}
 
 	return nil
-}
-
-func initTables(ctx context.Context, db sql.DB) error {
-	initStmts := []string{ //createVotingSchema,
-		tableVoters, tableResolutionTypes, tableResolutions,
-		resolutionsTypeIndex, tableProcessed, tableVotes, tableHeight} // order important
-
-	for _, stmt := range initStmts {
-		_, err := db.Execute(ctx, stmt)
-		if err != nil {
-			return err
-		}
-	}
-
-	resolutions := resolutions.ListResolutions()
-	for _, name := range resolutions {
-		uuid := types.NewUUIDV5([]byte(name))
-		_, err := db.Execute(ctx, createResolutionType, uuid[:], name)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func dropHeight(ctx context.Context, db sql.DB) error {
-	_, err := db.Execute(ctx, dropHeightTable)
-	return err
-}
-
-func dropExtraVoteIDColumn(ctx context.Context, db sql.DB) error {
-	_, err := db.Execute(ctx, dropExtraVoteID)
-	return err
 }
 
 // Approve approves a resolution from a voter.
