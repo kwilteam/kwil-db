@@ -51,6 +51,11 @@ const (
 		id BYTEA PRIMARY KEY
 	);`
 
+	tableHeight = `CREATE TABLE IF NOT EXISTS ` + votingSchemaName + `.height (
+		name TEXT PRIMARY KEY, -- name is 'height'
+		height INT NOT NULL
+	);`
+
 	dropHeightTable = `DROP TABLE IF EXISTS ` + votingSchemaName + `.height`
 
 	// ensureResolutionIDExists is the sql statement used to ensure a resolution ID is present in the resolutions table
