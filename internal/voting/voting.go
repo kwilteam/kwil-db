@@ -42,7 +42,7 @@ func dropHeight(ctx context.Context, db sql.DB) error {
 func initTables(ctx context.Context, db sql.DB) error {
 	initStmts := []string{ //createVotingSchema,
 		tableVoters, tableResolutionTypes, tableResolutions,
-		resolutionsTypeIndex, tableProcessed, tableVotes} // order important
+		resolutionsTypeIndex, tableProcessed, tableVotes, tableHeight} // order important
 
 	for _, stmt := range initStmts {
 		_, err := db.Execute(ctx, stmt)
