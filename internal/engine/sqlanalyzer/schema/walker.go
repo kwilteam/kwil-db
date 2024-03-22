@@ -34,7 +34,7 @@ func (s *SchemaWalker) set(table string, st settable) {
 	st.SetSchema(s.schema)
 }
 
-func (w *SchemaWalker) EnterInsertStmt(stmt *tree.InsertStmt) error {
+func (w *SchemaWalker) EnterInsertCore(stmt *tree.InsertCore) error {
 	w.set(stmt.Table, stmt)
 	return nil
 }

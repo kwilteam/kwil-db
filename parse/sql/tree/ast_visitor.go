@@ -7,8 +7,9 @@ type AstVisitor interface {
 	VisitConflictTarget(*ConflictTarget) any
 	VisitCompoundOperator(*CompoundOperator) any
 	VisitCTE(*CTE) any
-	VisitDelete(*Delete) any
 	VisitDeleteStmt(*DeleteStmt) any
+	VisitDeleteCore(*DeleteCore) any
+	VisitExpression(Expression) any
 	VisitExpressionLiteral(*ExpressionLiteral) any
 	VisitExpressionBindParameter(*ExpressionBindParameter) any
 	VisitExpressionColumn(*ExpressionColumn) any
@@ -23,11 +24,10 @@ type AstVisitor interface {
 	VisitExpressionSelect(*ExpressionSelect) any
 	VisitExpressionCase(*ExpressionCase) any
 	VisitExpressionArithmetic(*ExpressionArithmetic) any
-	VisitFromClause(*FromClause) any
 	VisitScalarFunc(*ScalarFunction) any
 	VisitGroupBy(*GroupBy) any
-	VisitInsert(*Insert) any
 	VisitInsertStmt(*InsertStmt) any
+	VisitInsertCore(*InsertCore) any
 	VisitJoinPredicate(*JoinPredicate) any
 	VisitJoinOperator(*JoinOperator) any
 	VisitLimit(*Limit) any
@@ -43,12 +43,12 @@ type AstVisitor interface {
 	VisitResultColumnTable(*ResultColumnTable) any
 	VisitReturningClause(*ReturningClause) any
 	VisitReturningClauseColumn(*ReturningClauseColumn) any
-	VisitSelect(*Select) any
-	VisitSelectCore(*SelectCore) any
 	VisitSelectStmt(*SelectStmt) any
+	VisitSelectCore(*SelectCore) any
+	VisitSelectNoCte(*SelectStmtNoCte) any
 	VisitUpdateSetClause(*UpdateSetClause) any
-	VisitUpdate(*Update) any
 	VisitUpdateStmt(*UpdateStmt) any
+	VisitUpdateCore(*UpdateCore) any
 	VisitUpsert(*Upsert) any
 }
 
@@ -78,12 +78,16 @@ func (v *BaseAstVisitor) VisitCTE(node *CTE) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitDelete(node *Delete) any {
+func (v *BaseAstVisitor) VisitDeleteStmt(node *DeleteStmt) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitDeleteStmt(node *DeleteStmt) any {
+func (v *BaseAstVisitor) VisitDeleteCore(node *DeleteCore) any {
 	return nil
+}
+
+func (v *BaseAstVisitor) VisitExpression(node Expression) any {
+	return v.Visit(node)
 }
 
 func (v *BaseAstVisitor) VisitExpressionLiteral(node *ExpressionLiteral) any {
@@ -150,11 +154,11 @@ func (v *BaseAstVisitor) VisitGroupBy(node *GroupBy) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitInsert(node *Insert) any {
+func (v *BaseAstVisitor) VisitInsertStmt(node *InsertStmt) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitInsertStmt(node *InsertStmt) any {
+func (v *BaseAstVisitor) VisitInsertCore(node *InsertCore) any {
 	return nil
 }
 
@@ -202,7 +206,7 @@ func (v *BaseAstVisitor) VisitReturningClauseColumn(node *ReturningClauseColumn)
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitSelect(node *Select) any {
+func (v *BaseAstVisitor) VisitSelectStmt(node *SelectStmt) any {
 	return nil
 }
 
@@ -210,26 +214,12 @@ func (v *BaseAstVisitor) VisitSelectCore(node *SelectCore) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitSelectStmt(node *SelectStmt) any {
-	return nil
-}
-
-func (v *BaseAstVisitor) VisitFromClause(node *FromClause) any {
+func (v *BaseAstVisitor) VisitSelectNoCte(node *SelectStmtNoCte) any {
 	return nil
 }
 
 func (v *BaseAstVisitor) VisitRelation(node Relation) any {
-	// TODO delete?
-	switch t := node.(type) {
-	case *RelationTable:
-		return v.Visit(t)
-	case *RelationSubquery:
-		return v.Visit(t)
-	case *RelationJoin:
-		return v.Visit(t)
-	default:
-		panic("unknown table or subquery type")
-	}
+	return v.Visit(node)
 }
 
 func (v *BaseAstVisitor) VisitRelationTable(node *RelationTable) any {
@@ -248,11 +238,11 @@ func (v *BaseAstVisitor) VisitUpdateSetClause(node *UpdateSetClause) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitUpdate(node *Update) any {
+func (v *BaseAstVisitor) VisitUpdateStmt(node *UpdateStmt) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitUpdateStmt(node *UpdateStmt) any {
+func (v *BaseAstVisitor) VisitUpdateCore(node *UpdateCore) any {
 	return nil
 }
 

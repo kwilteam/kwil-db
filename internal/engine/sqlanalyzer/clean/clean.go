@@ -7,7 +7,7 @@ The walker in this package implements all the tree.Walker methods, even if it
 doesn't do anything. This is to ensure that if we need to add more cleaning / validation
 rules, we know that we've covered all the nodes.
 
-For example, EnterDelete does nothing, but if we later set a limit on the amount of
+For example, EnterDeleteStmt does nothing, but if we later set a limit on the amount of
 CTEs allowed, then we would add it there.
 */
 package clean

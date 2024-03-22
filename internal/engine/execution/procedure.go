@@ -471,8 +471,8 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 		// statements This query needs to be run in "simple" execution mode
 		// rather than "extended" execution mode, which asks the database for
 		// OID (placeholder types) that it can't know since there's no FOR table.
-		selectTree := &tree.Select{
-			SelectStmt: &tree.SelectStmt{
+		selectTree := &tree.SelectStmt{
+			Stmt: &tree.SelectStmtNoCte{
 				SelectCores: []*tree.SelectCore{
 					{
 						SelectType: tree.SelectTypeAll,

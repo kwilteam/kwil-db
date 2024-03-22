@@ -43,12 +43,12 @@ func (s *StatementCleaner) EnterCTE(node *tree.CTE) (err error) {
 }
 
 // EnterDelete does nothing
-func (s *StatementCleaner) EnterDelete(node *tree.Delete) (err error) {
+func (s *StatementCleaner) EnterDeleteStmt(node *tree.DeleteStmt) (err error) {
 	return nil
 }
 
 // EnterDeleteStmt does nothing
-func (s *StatementCleaner) EnterDeleteStmt(node *tree.DeleteStmt) (err error) {
+func (s *StatementCleaner) EnterDeleteCore(node *tree.DeleteCore) (err error) {
 	return nil
 }
 
@@ -160,12 +160,12 @@ func (s *StatementCleaner) EnterGroupBy(node *tree.GroupBy) (err error) {
 }
 
 // EnterInsert does nothing
-func (s *StatementCleaner) EnterInsert(node *tree.Insert) (err error) {
+func (s *StatementCleaner) EnterInsertStmt(node *tree.InsertStmt) (err error) {
 	return nil
 }
 
 // EnterInsertStmt cleans the insert type, table, table alias, and columns
-func (s *StatementCleaner) EnterInsertStmt(node *tree.InsertStmt) (err error) {
+func (s *StatementCleaner) EnterInsertCore(node *tree.InsertCore) (err error) {
 	err = node.InsertType.Valid()
 	if err != nil {
 		return wrapErr(ErrInvalidInsertType, err)
@@ -290,7 +290,7 @@ func (s *StatementCleaner) EnterReturningClauseColumn(node *tree.ReturningClause
 }
 
 // EnterSelect does nothing
-func (s *StatementCleaner) EnterSelect(node *tree.Select) (err error) {
+func (s *StatementCleaner) EnterSelectStmt(node *tree.SelectStmt) (err error) {
 	return nil
 }
 
@@ -300,18 +300,13 @@ func (s *StatementCleaner) EnterSelectCore(node *tree.SelectCore) (err error) {
 }
 
 // EnterSelectStmt checks that, for each SelectCore besides the last, a compound operator is provided
-func (s *StatementCleaner) EnterSelectStmt(node *tree.SelectStmt) (err error) {
+func (s *StatementCleaner) EnterSelectStmtNoCte(node *tree.SelectStmtNoCte) (err error) {
 	for _, core := range node.SelectCores[:len(node.SelectCores)-1] {
 		if core.Compound == nil {
 			return wrapErr(ErrInvalidCompoundOperator, errors.New("compound operator must be provided for all SelectCores except the last"))
 		}
 	}
 
-	return nil
-}
-
-// EnterFromClause does nothing
-func (s *StatementCleaner) EnterFromClause(node *tree.FromClause) (err error) {
 	return nil
 }
 
@@ -367,7 +362,7 @@ func (s *StatementCleaner) EnterUpdateSetClause(node *tree.UpdateSetClause) (err
 }
 
 // EnterUpdate does nothing
-func (s *StatementCleaner) EnterUpdate(node *tree.Update) (err error) {
+func (s *StatementCleaner) EnterUpdateStmt(node *tree.UpdateStmt) (err error) {
 	return nil
 }
 

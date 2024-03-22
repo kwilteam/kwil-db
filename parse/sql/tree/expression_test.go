@@ -658,15 +658,13 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			fields: &tree.ExpressionSelect{
 				IsNot:    true,
 				IsExists: true,
-				Select: &tree.SelectStmt{
+				Select: &tree.SelectStmtNoCte{
 					SelectCores: []*tree.SelectCore{
 						{
 							SelectType: tree.SelectTypeAll,
-							From: &tree.FromClause{
-								Relation: &tree.RelationTable{
-									Name:  "foo",
-									Alias: "f",
-								},
+							From: &tree.RelationTable{
+								Name:  "foo",
+								Alias: "f",
 							},
 							Where: &tree.ExpressionBinaryComparison{
 								Left: &tree.ExpressionColumn{
@@ -689,15 +687,13 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			fields: &tree.ExpressionSelect{
 				IsNot:    true,
 				IsExists: true,
-				Select: &tree.SelectStmt{
+				Select: &tree.SelectStmtNoCte{
 					SelectCores: []*tree.SelectCore{
 						{
 							SelectType: tree.SelectTypeAll,
-							From: &tree.FromClause{
-								Relation: &tree.RelationTable{
-									Name:  "foo",
-									Alias: "f",
-								},
+							From: &tree.RelationTable{
+								Name:  "foo",
+								Alias: "f",
 							},
 							Where: &tree.ExpressionBinaryComparison{
 								Left: &tree.ExpressionColumn{

@@ -4,49 +4,11 @@ import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 )
 
-type Delete struct {
-	node
-
-	CTE        []*CTE
-	DeleteStmt *DeleteStmt
-}
-
-func (d *Delete) Accept(v AstVisitor) any {
-	return v.VisitDelete(d)
-}
-
-func (d *Delete) Walk(w AstListener) error {
-	return run(
-		w.EnterDelete(d),
-		walkMany(w, d.CTE),
-		walk(w, d.DeleteStmt),
-		w.ExitDelete(d),
-	)
-}
-
-func (d *Delete) ToSQL() string {
-	stmt := sqlwriter.NewWriter()
-
-	if len(d.CTE) > 0 {
-		stmt.Token.With()
-		stmt.WriteList(len(d.CTE), func(i int) {
-			stmt.WriteString(d.CTE[i].ToSQL())
-		})
-	}
-
-	stmt.WriteString(d.DeleteStmt.ToSQL())
-
-	stmt.Token.Semicolon()
-
-	return stmt.String()
-}
-
 type DeleteStmt struct {
 	node
 
-	QualifiedTableName *QualifiedTableName
-	Where              Expression
-	Returning          *ReturningClause
+	CTE  []*CTE
+	Core *DeleteCore
 }
 
 func (d *DeleteStmt) Accept(v AstVisitor) any {
@@ -56,14 +18,54 @@ func (d *DeleteStmt) Accept(v AstVisitor) any {
 func (d *DeleteStmt) Walk(w AstListener) error {
 	return run(
 		w.EnterDeleteStmt(d),
-		walk(w, d.QualifiedTableName),
-		walk(w, d.Where),
-		walk(w, d.Returning),
+		walkMany(w, d.CTE),
+		walk(w, d.Core),
 		w.ExitDeleteStmt(d),
 	)
 }
 
 func (d *DeleteStmt) ToSQL() string {
+	stmt := sqlwriter.NewWriter()
+
+	if len(d.CTE) > 0 {
+		stmt.Token.With()
+		stmt.WriteList(len(d.CTE), func(i int) {
+			stmt.WriteString(d.CTE[i].ToSQL())
+		})
+	}
+
+	stmt.WriteString(d.Core.ToSQL())
+
+	stmt.Token.Semicolon()
+
+	return stmt.String()
+}
+
+func (d *DeleteStmt) statement() {}
+
+type DeleteCore struct {
+	node
+
+	QualifiedTableName *QualifiedTableName
+	Where              Expression
+	Returning          *ReturningClause
+}
+
+func (d *DeleteCore) Accept(v AstVisitor) any {
+	return v.VisitDeleteCore(d)
+}
+
+func (d *DeleteCore) Walk(w AstListener) error {
+	return run(
+		w.EnterDeleteCore(d),
+		walk(w, d.QualifiedTableName),
+		walk(w, d.Where),
+		walk(w, d.Returning),
+		w.ExitDeleteCore(d),
+	)
+}
+
+func (d *DeleteCore) ToSQL() string {
 	d.check()
 
 	stmt := sqlwriter.NewWriter()
@@ -80,7 +82,7 @@ func (d *DeleteStmt) ToSQL() string {
 	return stmt.String()
 }
 
-func (d *DeleteStmt) check() {
+func (d *DeleteCore) check() {
 	if d.QualifiedTableName == nil {
 		panic("qualified table name is nil")
 	}

@@ -73,8 +73,7 @@ func (v *astBuilder) VisitCommon_table_expression(ctx *sqlgrammar.Common_table_e
 		}
 	}
 
-	selectStmtCoreCtx := ctx.Select_stmt_core()
-	cte.Select = v.Visit(selectStmtCoreCtx).(*tree.SelectStmt)
+	cte.Select = v.Visit(ctx.Select_stmt_no_cte()).(*tree.SelectStmtNoCte)
 	return &cte
 }
 
@@ -93,7 +92,7 @@ func (v *astBuilder) VisitCommon_table_stmt(ctx *sqlgrammar.Common_table_stmtCon
 	return ctes
 }
 
-func getInsertType(ctx *sqlgrammar.Insert_stmtContext) tree.InsertType {
+func getInsertType(ctx *sqlgrammar.Insert_coreContext) tree.InsertType {
 	return tree.InsertTypeInsert
 }
 
@@ -273,12 +272,12 @@ func (v *astBuilder) VisitParenthesized_expr(ctx *sqlgrammar.Parenthesized_exprC
 }
 
 func (v *astBuilder) VisitSubquery(ctx *sqlgrammar.SubqueryContext) interface{} {
-	return v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt)
+	return v.Visit(ctx.Select_stmt_no_cte()).(*tree.SelectStmtNoCte)
 }
 
 // VisitSubquery_expr is called when visiting a subquery_expr, return *tree.ExpressionSelect
 func (v *astBuilder) VisitSubquery_expr(ctx *sqlgrammar.Subquery_exprContext) interface{} {
-	stmt := v.Visit(ctx.Subquery()).(*tree.SelectStmt)
+	stmt := v.Visit(ctx.Subquery()).(*tree.SelectStmtNoCte)
 	expr := &tree.ExpressionSelect{
 		Select: stmt,
 	}
@@ -388,7 +387,7 @@ func (v *astBuilder) VisitIn_subquery_expr(ctx *sqlgrammar.In_subquery_exprConte
 	if ctx.NOT_() != nil {
 		expr.Operator = tree.ComparisonOperatorNotIn
 	}
-	sub := v.Visit(ctx.Subquery()).(*tree.SelectStmt)
+	sub := v.Visit(ctx.Subquery()).(*tree.SelectStmtNoCte)
 	expr.Right = &tree.ExpressionSelect{Select: sub}
 	return expr
 }
@@ -687,14 +686,9 @@ func (v *astBuilder) VisitQualified_table_name(ctx *sqlgrammar.Qualified_table_n
 	return &result
 }
 
-// VisitUpdate_stmt is called when visiting a update_stmt, return *tree.Update
-func (v *astBuilder) VisitUpdate_stmt(ctx *sqlgrammar.Update_stmtContext) interface{} {
-	t := tree.Update{}
-	var updateStmt tree.UpdateStmt
-
-	if ctx.Common_table_stmt() != nil {
-		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
-	}
+// VisitUpdate_core is called when visiting a update_core, return *tree.UpdateCore
+func (v *astBuilder) VisitUpdate_core(ctx *sqlgrammar.Update_coreContext) interface{} {
+	var updateStmt tree.UpdateCore
 
 	updateStmt.QualifiedTableName = v.Visit(ctx.Qualified_table_name()).(*tree.QualifiedTableName)
 
@@ -704,9 +698,7 @@ func (v *astBuilder) VisitUpdate_stmt(ctx *sqlgrammar.Update_stmtContext) interf
 	}
 
 	if ctx.FROM_() != nil {
-		updateStmt.From = &tree.FromClause{
-			Relation: v.Visit(ctx.Relation()).(tree.Relation),
-		}
+		updateStmt.From = v.Visit(ctx.Relation()).(tree.Relation)
 	}
 
 	if ctx.WHERE_() != nil {
@@ -717,17 +709,23 @@ func (v *astBuilder) VisitUpdate_stmt(ctx *sqlgrammar.Update_stmtContext) interf
 		updateStmt.Returning = v.Visit(ctx.Returning_clause()).(*tree.ReturningClause)
 	}
 
-	t.UpdateStmt = &updateStmt
-	return &t
+	return &updateStmt
 }
 
-func (v *astBuilder) VisitInsert_stmt(ctx *sqlgrammar.Insert_stmtContext) interface{} {
-	t := tree.Insert{}
-	var insertStmt tree.InsertStmt
+// VisitUpdate_stmt is called when visiting a update_stmt, return *tree.UpdateStmt
+func (v *astBuilder) VisitUpdate_stmt(ctx *sqlgrammar.Update_stmtContext) interface{} {
+	t := tree.UpdateStmt{}
 
 	if ctx.Common_table_stmt() != nil {
 		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
 	}
+
+	t.Core = v.Visit(ctx.Update_core()).(*tree.UpdateCore)
+	return &t
+}
+
+func (v *astBuilder) VisitInsert_core(ctx *sqlgrammar.Insert_coreContext) interface{} {
+	var insertStmt tree.InsertCore
 
 	insertStmt.InsertType = getInsertType(ctx)
 	insertStmt.Table = util.ExtractSQLName(ctx.Table_name().GetText())
@@ -751,7 +749,17 @@ func (v *astBuilder) VisitInsert_stmt(ctx *sqlgrammar.Insert_stmtContext) interf
 		insertStmt.ReturningClause = v.Visit(ctx.Returning_clause()).(*tree.ReturningClause)
 	}
 
-	t.InsertStmt = &insertStmt
+	return &insertStmt
+}
+
+func (v *astBuilder) VisitInsert_stmt(ctx *sqlgrammar.Insert_stmtContext) interface{} {
+	t := tree.InsertStmt{}
+
+	if ctx.Common_table_stmt() != nil {
+		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
+	}
+
+	t.Core = v.Visit(ctx.Insert_core()).(*tree.InsertCore)
 	return &t
 }
 
@@ -836,9 +844,9 @@ func (v *astBuilder) VisitTable_or_subquery(ctx *sqlgrammar.Table_or_subqueryCon
 			t.Alias = util.ExtractSQLName(ctx.Table_alias().GetText())
 		}
 		return &t
-	case ctx.Select_stmt_core() != nil:
+	case ctx.Select_stmt_no_cte() != nil:
 		t := tree.RelationSubquery{
-			Select: v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt),
+			Select: v.Visit(ctx.Select_stmt_no_cte()).(*tree.SelectStmtNoCte),
 		}
 		if ctx.Table_alias() != nil {
 			t.Alias = util.ExtractSQLName(ctx.Table_alias().GetText())
@@ -908,26 +916,30 @@ func (v *astBuilder) VisitResult_column(ctx *sqlgrammar.Result_columnContext) in
 	return nil
 }
 
-// VisitDelete_stmt is called when visiting a delete_stmt, return *tree.Delete
+func (v *astBuilder) VisitDelete_core(ctx *sqlgrammar.Delete_coreContext) interface{} {
+	var deleteStmt tree.DeleteCore
+	deleteStmt.QualifiedTableName = v.Visit(ctx.Qualified_table_name()).(*tree.QualifiedTableName)
+
+	if ctx.WHERE_() != nil {
+		deleteStmt.Where = v.Visit(ctx.Expr()).(tree.Expression)
+	}
+
+	if ctx.Returning_clause() != nil {
+		deleteStmt.Returning = v.Visit(ctx.Returning_clause()).(*tree.ReturningClause)
+	}
+
+	return &deleteStmt
+}
+
+// VisitDelete_stmt is called when visiting a delete_stmt, return *tree.DeleteStmt
 func (v *astBuilder) VisitDelete_stmt(ctx *sqlgrammar.Delete_stmtContext) interface{} {
-	t := tree.Delete{}
+	t := tree.DeleteStmt{}
 
 	if ctx.Common_table_stmt() != nil {
 		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
 	}
 
-	stmt := tree.DeleteStmt{}
-	stmt.QualifiedTableName = v.Visit(ctx.Qualified_table_name()).(*tree.QualifiedTableName)
-
-	if ctx.WHERE_() != nil {
-		stmt.Where = v.Visit(ctx.Expr()).(tree.Expression)
-	}
-
-	if ctx.Returning_clause() != nil {
-		stmt.Returning = v.Visit(ctx.Returning_clause()).(*tree.ReturningClause)
-	}
-
-	t.DeleteStmt = &stmt
+	t.Core = v.Visit(ctx.Delete_core()).(*tree.DeleteCore)
 	return &t
 }
 
@@ -949,9 +961,7 @@ func (v *astBuilder) VisitSelect_core(ctx *sqlgrammar.Select_coreContext) interf
 	}
 
 	if ctx.FROM_() != nil {
-		t.From = &tree.FromClause{
-			Relation: v.Visit(ctx.Relation()).(tree.Relation),
-		}
+		t.From = v.Visit(ctx.Relation()).(tree.Relation)
 	}
 
 	if ctx.GetWhereExpr() != nil {
@@ -998,9 +1008,9 @@ func (v *astBuilder) VisitRelation(ctx *sqlgrammar.RelationContext) interface{} 
 	}
 }
 
-// VisitSelect_stmt_core is called when visiting a select_stmt_core, return *tree.SelectStmt
-func (v *astBuilder) VisitSelect_stmt_core(ctx *sqlgrammar.Select_stmt_coreContext) interface{} {
-	t := tree.SelectStmt{}
+// VisitSelect_stmt_no_cte is called when visiting a select_stmt_core, return *tree.SelectStmtNoCte
+func (v *astBuilder) VisitSelect_stmt_no_cte(ctx *sqlgrammar.Select_stmt_no_cteContext) interface{} {
+	t := tree.SelectStmtNoCte{}
 	selectCores := make([]*tree.SelectCore, len(ctx.AllSelect_core()))
 
 	// first select_core
@@ -1027,15 +1037,15 @@ func (v *astBuilder) VisitSelect_stmt_core(ctx *sqlgrammar.Select_stmt_coreConte
 	return &t
 }
 
-// VisitSelect_stmt is called when visiting a select_stmt, return *tree.Select
+// VisitSelect_stmt is called when visiting a select_stmt, return *tree.SelectStmt
 func (v *astBuilder) VisitSelect_stmt(ctx *sqlgrammar.Select_stmtContext) interface{} {
-	t := tree.Select{}
+	t := tree.SelectStmt{}
 
 	if ctx.Common_table_stmt() != nil {
 		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
 	}
 
-	t.SelectStmt = v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt)
+	t.Stmt = v.Visit(ctx.Select_stmt_no_cte()).(*tree.SelectStmtNoCte)
 	return &t
 }
 
@@ -1048,7 +1058,7 @@ func (v *astBuilder) VisitSql_stmt(ctx *sqlgrammar.Sql_stmtContext) interface{} 
 	return v.VisitChildren(ctx).([]tree.AstNode)[0]
 }
 
-// VisitStatements is called first by Visitor.Visit
+// VisitStatements is called when visiting a statements, return []tree.AstNode
 func (v *astBuilder) VisitStatements(ctx *sqlgrammar.StatementsContext) interface{} {
 	// ParseContext will only have one Sql_stmt_listContext
 	sqlStmtListContext := ctx.Sql_stmt_list(0)

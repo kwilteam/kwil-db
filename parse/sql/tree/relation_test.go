@@ -40,14 +40,12 @@ func TestRelation_ToSQL(t *testing.T) {
 			name: "subquery",
 			fields: fields{
 				Relation: &tree.RelationSubquery{
-					Select: &tree.SelectStmt{
+					Select: &tree.SelectStmtNoCte{
 						SelectCores: []*tree.SelectCore{
 							{
 								SelectType: tree.SelectTypeAll,
-								From: &tree.FromClause{
-									Relation: &tree.RelationTable{
-										Name: "foo",
-									},
+								From: &tree.RelationTable{
+									Name: "foo",
 								},
 							},
 						},

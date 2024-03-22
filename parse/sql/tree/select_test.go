@@ -9,7 +9,7 @@ import (
 func TestSelect_ToSQL(t *testing.T) {
 	type fields struct {
 		CTE        []*tree.CTE
-		SelectStmt *tree.SelectStmt
+		SelectStmt *tree.SelectStmtNoCte
 	}
 	tests := []struct {
 		name    string
@@ -23,17 +23,15 @@ func TestSelect_ToSQL(t *testing.T) {
 				CTE: []*tree.CTE{
 					mockCTE,
 				},
-				SelectStmt: &tree.SelectStmt{
+				SelectStmt: &tree.SelectStmtNoCte{
 					SelectCores: []*tree.SelectCore{{
 						SelectType: tree.SelectTypeAll,
 						Columns: []tree.ResultColumn{
 							&tree.ResultColumnExpression{Expression: &tree.ExpressionColumn{Column: "foo"}},
 							&tree.ResultColumnExpression{Expression: &tree.ExpressionColumn{Column: "bar"}},
 						},
-						From: &tree.FromClause{
-							Relation: &tree.RelationTable{
-								Name: "foo",
-							},
+						From: &tree.RelationTable{
+							Name: "foo",
 						},
 						Where: &tree.ExpressionBinaryComparison{
 							Left:     &tree.ExpressionColumn{Column: "foo"},
@@ -73,17 +71,17 @@ func TestSelect_ToSQL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &tree.Select{
-				CTE:        tt.fields.CTE,
-				SelectStmt: tt.fields.SelectStmt,
+			s := &tree.SelectStmt{
+				CTE:  tt.fields.CTE,
+				Stmt: tt.fields.SelectStmt,
 			}
 			gotStr, err := tree.SafeToSQL(s)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Select.ToSQL() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("SelectStmt.ToSQL() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !compareIgnoringWhitespace(gotStr, tt.wantStr) {
-				t.Errorf("Select.ToSQL() = %v, want %v", gotStr, tt.wantStr)
+				t.Errorf("SelectStmt.ToSQL() = %v, want %v", gotStr, tt.wantStr)
 			}
 		})
 	}

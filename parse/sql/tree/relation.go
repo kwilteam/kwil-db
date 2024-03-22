@@ -70,7 +70,7 @@ func (t *RelationTable) SetSchema(schema string) {
 type RelationSubquery struct {
 	node
 
-	Select *SelectStmt
+	Select *SelectStmtNoCte
 	Alias  string
 }
 
@@ -92,6 +92,7 @@ func (t *RelationSubquery) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
+
 	stmt.Token.Lparen()
 
 	selectString := t.Select.ToSQL()
@@ -136,6 +137,7 @@ func (t *RelationJoin) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
+
 	stmt.WriteString(t.Relation.ToSQL())
 	for _, join := range t.Joins {
 		stmt.WriteString(join.ToSQL())

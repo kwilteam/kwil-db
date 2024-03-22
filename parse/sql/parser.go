@@ -9,15 +9,15 @@ import (
 	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
 )
 
-// Parse parses a raw sql string and returns a tree.ParseNode
-func Parse(sql string) (ast tree.AstNode, err error) {
+// Parse parses a raw sql string and returns a tree.Statement
+func Parse(sql string) (ast tree.Statement, err error) {
 	currentLine := 1
 	return ParseSql(sql, currentLine, nil, false, false)
 }
 
-// ParseSql parses a single raw sql statement and returns tree.ParseNode
+// ParseSql parses a single raw sql statement and returns tree.Statement
 func ParseSql(sql string, currentLine int, errorListener *ErrorListener,
-	trace bool, withPos bool) (ast tree.AstNode, err error) {
+	trace bool, withPos bool) (ast tree.Statement, err error) {
 	var visitor *astBuilder
 
 	if errorListener == nil {
@@ -48,9 +48,7 @@ func ParseSql(sql string, currentLine int, errorListener *ErrorListener,
 	}()
 
 	visitor = newAstBuilder(astBuilderWithTrace(trace), astBuilderWithPos(withPos))
-
-	stmts := p.Statements()
-	result := visitor.Visit(stmts)
+	stmts := p.Statements().Accept(visitor).([]tree.AstNode)
 	// since we only expect a single statement
-	return result.([]tree.AstNode)[0], err
+	return stmts[0].(tree.Statement), err
 }

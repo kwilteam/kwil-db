@@ -8,16 +8,9 @@ import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 )
 
-type Expression interface {
-	isExpression() // private function to prevent external packages from implementing this interface
-	ToSQL() string
-	Walk(w AstListener) error
-	joinable
-}
-
 type expressionBase struct{}
 
-func (e *expressionBase) isExpression() {}
+func (e *expressionBase) expression() {}
 
 func (e *expressionBase) joinable() joinableStatus {
 	return joinableStatusInvalid
@@ -469,7 +462,11 @@ type ExpressionIs struct {
 	// NOTE: type cast only makes sense when wrapped
 }
 
-func (e *ExpressionIs) Accept(w AstListener) error {
+func (e *ExpressionIs) Accept(v AstVisitor) any {
+	return v.VisitExpressionIs(e)
+}
+
+func (e *ExpressionIs) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionIs(e),
 		walk(w, e.Left),
@@ -575,7 +572,7 @@ type ExpressionSelect struct {
 	Wrapped
 	IsNot    bool
 	IsExists bool
-	Select   *SelectStmt
+	Select   *SelectStmtNoCte
 
 	TypeCast TypeCastType
 	// NOTE: type cast only makes sense when wrapped

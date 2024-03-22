@@ -45,14 +45,14 @@ func Test_JoinSearch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tt.stmt)
+			stmt, err := sqlparser.Parse(tt.stmt)
 			require.NoError(t, err)
 
-			topSelect, ok := ast.(*tree.Select)
+			topSelect, ok := stmt.(*tree.SelectStmt)
 			require.True(t, ok)
-			require.Equal(t, len(topSelect.SelectStmt.SelectCores), 1)
+			require.Equal(t, len(topSelect.Stmt.SelectCores), 1)
 
-			tbls, err := utils.GetUsedTables(topSelect.SelectStmt.SelectCores[0].From.Relation)
+			tbls, err := utils.GetUsedTables(topSelect.Stmt.SelectCores[0].From)
 			require.NoError(t, err)
 
 			require.EqualValues(t, tt.tables, tbls)

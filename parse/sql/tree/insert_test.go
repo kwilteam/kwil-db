@@ -9,7 +9,7 @@ import (
 func TestInsert_ToSQL(t *testing.T) {
 	type fields struct {
 		CTE        []*tree.CTE
-		InsertStmt *tree.InsertStmt
+		InsertStmt *tree.InsertCore
 		Schema     string
 	}
 	tests := []struct {
@@ -24,7 +24,7 @@ func TestInsert_ToSQL(t *testing.T) {
 				CTE: []*tree.CTE{
 					mockCTE,
 				},
-				InsertStmt: &tree.InsertStmt{
+				InsertStmt: &tree.InsertCore{
 					InsertType: tree.InsertTypeInsert,
 					Table:      "foo",
 					Columns:    []string{"bar", "baz"},
@@ -58,7 +58,7 @@ func TestInsert_ToSQL(t *testing.T) {
 		{
 			name: "insert to namespaced",
 			fields: fields{
-				InsertStmt: &tree.InsertStmt{
+				InsertStmt: &tree.InsertCore{
 					InsertType: tree.InsertTypeInsert,
 					Table:      "bar",
 					Columns:    []string{"baz"},
@@ -75,22 +75,22 @@ func TestInsert_ToSQL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ins := &tree.Insert{
-				CTE:        tt.fields.CTE,
-				InsertStmt: tt.fields.InsertStmt,
+			ins := &tree.InsertStmt{
+				CTE:  tt.fields.CTE,
+				Core: tt.fields.InsertStmt,
 			}
 
 			if tt.fields.Schema != "" {
-				ins.InsertStmt.SetSchema(tt.fields.Schema)
+				ins.Core.SetSchema(tt.fields.Schema)
 			}
 
 			gotStr, err := tree.SafeToSQL(ins)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Insert.ToSQL() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("InsertStmt.ToSQL() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !compareIgnoringWhitespace(gotStr, tt.wantStr) {
-				t.Errorf("Insert.ToSQL() = %v, want %v", gotStr, tt.wantStr)
+				t.Errorf("InsertStmt.ToSQL() = %v, want %v", gotStr, tt.wantStr)
 			}
 		})
 	}
@@ -219,7 +219,7 @@ func TestInsertStatement_ToSql(t *testing.T) {
 				}()
 			}
 
-			i := &tree.InsertStmt{
+			i := &tree.InsertCore{
 				InsertType:      tt.fields.InsertType,
 				Table:           tt.fields.Table,
 				TableAlias:      tt.fields.TableAlias,

@@ -81,7 +81,7 @@ func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) erro
 }
 
 // put this on exit so we can search the whole statement for used tables
-func (o *orderingWalker) ExitSelectStmt(node *tree.SelectStmt) error {
+func (o *orderingWalker) ExitSelectStmtNoCte(node *tree.SelectStmtNoCte) error {
 	var terms []*tree.OrderingTerm
 	var err error
 	switch len(node.SelectCores) {
@@ -159,7 +159,7 @@ func orderSimpleStatement(stmt *tree.SelectCore, tables []*common.Table) ([]*tre
 
 	// we will now get a list of all tables that are renamed to the used aliases
 	// this allows us to search for them by their alias, and not their real name.
-	usedTables, err := utils.GetUsedTables(stmt.From.Relation)
+	usedTables, err := utils.GetUsedTables(stmt.From)
 	if err != nil {
 		return nil, fmt.Errorf("error getting used tables: %w", err)
 	}
@@ -252,11 +252,11 @@ func containsAggregateFunc(ret tree.ResultColumn) (bool, error) {
 			}
 			return nil
 		},
-		FuncEnterSelectStmt: func(p0 *tree.SelectStmt) error {
+		FuncEnterSelectStmtNoCte: func(p0 *tree.SelectStmtNoCte) error {
 			depth++
 			return nil
 		},
-		FuncExitSelectStmt: func(p0 *tree.SelectStmt) error {
+		FuncExitSelectStmtNoCte: func(p0 *tree.SelectStmtNoCte) error {
 			depth--
 			return nil
 		},
@@ -316,11 +316,11 @@ func containsGroupBy(stmt *tree.SelectCore) (bool, error) {
 			}
 			return nil
 		},
-		FuncEnterSelectStmt: func(p0 *tree.SelectStmt) error {
+		FuncEnterSelectStmtNoCte: func(p0 *tree.SelectStmtNoCte) error {
 			depth++
 			return nil
 		},
-		FuncExitSelectStmt: func(p0 *tree.SelectStmt) error {
+		FuncExitSelectStmtNoCte: func(p0 *tree.SelectStmtNoCte) error {
 			depth--
 			return nil
 		},

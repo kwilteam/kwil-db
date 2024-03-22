@@ -278,8 +278,8 @@ github.com/kwilteam/kuneiform v0.6.1-0.20240313204201-b1d7646afc2a h1:5JYY37OG7j
 github.com/kwilteam/kuneiform v0.6.1-0.20240313204201-b1d7646afc2a/go.mod h1:LrwGyaTqTZY1Mcv4hXIJ9t8IfdOf+ZowRdCDXHtiIqU=
 github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7 h1:YiPBu0pOeYOtOVfwKQqdWB07SUef9LvngF4bVFD+x34=
 github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7/go.mod h1:+BrFrV+3qcdYIfptqjwatE5gT19azuRHJzw77wMPY8c=
-github.com/kwilteam/sql-grammar-go v0.1.0 h1:rSS7DER9PWVDmFwNyoInG5oXrn+E9UrZkjref84L4Qk=
-github.com/kwilteam/sql-grammar-go v0.1.0/go.mod h1:A9AXaH5Vl/uPsY88fWqvU9O7z7P4YfvndaGyc8s//2s=
+github.com/kwilteam/sql-grammar-go v0.1.1-0.20240322195734-92fa1ff3df1e h1:N7/8ZzPZ5QopHx1ZfPluA5nFNPqbc+LDpuyblptFlWk=
+github.com/kwilteam/sql-grammar-go v0.1.1-0.20240322195734-92fa1ff3df1e/go.mod h1:A9AXaH5Vl/uPsY88fWqvU9O7z7P4YfvndaGyc8s//2s=
 github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0SNc=
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/leanovate/gopter v0.2.9 h1:fQjYxZaynp97ozCzfOyOuAGOU4aU/z37zf/tOujFk7c=

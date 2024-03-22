@@ -14,17 +14,17 @@ type MutativityWalker struct {
 	tree.AstListener
 }
 
-func (m *MutativityWalker) EnterDeleteStmt(node *tree.DeleteStmt) error {
+func (m *MutativityWalker) EnterDeleteCore(node *tree.DeleteCore) error {
 	m.Mutative = true
 	return nil
 }
 
-func (m *MutativityWalker) EnterInsertStmt(node *tree.InsertStmt) error {
+func (m *MutativityWalker) EnterInsertCore(node *tree.InsertCore) error {
 	m.Mutative = true
 	return nil
 }
 
-func (m *MutativityWalker) EnterUpdateStmt(node *tree.UpdateStmt) error {
+func (m *MutativityWalker) EnterUpdateCore(node *tree.UpdateCore) error {
 	m.Mutative = true
 	return nil
 }

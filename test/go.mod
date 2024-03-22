@@ -137,7 +137,7 @@ require (
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/kwilteam/action-grammar-go v0.1.1 // indirect
 	github.com/kwilteam/kwil-db/parse v0.1.2 // indirect
-	github.com/kwilteam/sql-grammar-go v0.1.1-0.20240304224347-03ce05ecd4f7 // indirect
+	github.com/kwilteam/sql-grammar-go v0.1.1-0.20240322195734-92fa1ff3df1e // indirect
 	github.com/lib/pq v1.10.7 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect

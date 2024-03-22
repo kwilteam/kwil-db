@@ -6,49 +6,11 @@ import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 )
 
-type Select struct {
-	node
-
-	CTE        []*CTE
-	SelectStmt *SelectStmt
-}
-
-func (s *Select) Accept(v AstVisitor) any {
-	return v.VisitSelect(s)
-}
-
-func (s *Select) Walk(w AstListener) error {
-	return run(
-		w.EnterSelect(s),
-		walkMany(w, s.CTE),
-		walk(w, s.SelectStmt),
-		w.ExitSelect(s),
-	)
-}
-
-func (s *Select) ToSQL() string {
-	stmt := sqlwriter.NewWriter()
-
-	if len(s.CTE) > 0 {
-		stmt.Token.With()
-		stmt.WriteList(len(s.CTE), func(i int) {
-			stmt.WriteString(s.CTE[i].ToSQL())
-		})
-	}
-
-	stmt.WriteString(s.SelectStmt.ToSQL())
-
-	stmt.Token.Semicolon()
-
-	return stmt.String()
-}
-
 type SelectStmt struct {
 	node
 
-	SelectCores []*SelectCore
-	OrderBy     *OrderBy
-	Limit       *Limit
+	CTE  []*CTE
+	Stmt *SelectStmtNoCte
 }
 
 func (s *SelectStmt) Accept(v AstVisitor) any {
@@ -58,14 +20,54 @@ func (s *SelectStmt) Accept(v AstVisitor) any {
 func (s *SelectStmt) Walk(w AstListener) error {
 	return run(
 		w.EnterSelectStmt(s),
-		walkMany(w, s.SelectCores),
-		walk(w, s.OrderBy),
-		walk(w, s.Limit),
+		walkMany(w, s.CTE),
+		walk(w, s.Stmt),
 		w.ExitSelectStmt(s),
 	)
 }
 
-func (s *SelectStmt) ToSQL() (res string) {
+func (s *SelectStmt) ToSQL() string {
+	stmt := sqlwriter.NewWriter()
+
+	if len(s.CTE) > 0 {
+		stmt.Token.With()
+		stmt.WriteList(len(s.CTE), func(i int) {
+			stmt.WriteString(s.CTE[i].ToSQL())
+		})
+	}
+
+	stmt.WriteString(s.Stmt.ToSQL())
+
+	stmt.Token.Semicolon()
+
+	return stmt.String()
+}
+
+func (s *SelectStmt) statement() {}
+
+type SelectStmtNoCte struct {
+	node
+
+	SelectCores []*SelectCore
+	OrderBy     *OrderBy
+	Limit       *Limit
+}
+
+func (s *SelectStmtNoCte) Accept(v AstVisitor) any {
+	return v.VisitSelectNoCte(s)
+}
+
+func (s *SelectStmtNoCte) Walk(w AstListener) error {
+	return run(
+		w.EnterSelectStmtNoCte(s),
+		walkMany(w, s.SelectCores),
+		walk(w, s.OrderBy),
+		walk(w, s.Limit),
+		w.ExitSelectStmtNoCte(s),
+	)
+}
+
+func (s *SelectStmtNoCte) ToSQL() (res string) {
 	stmt := sqlwriter.NewWriter()
 	for _, core := range s.SelectCores {
 		stmt.WriteString(core.ToSQL())
@@ -85,7 +87,7 @@ type SelectCore struct {
 
 	SelectType SelectType
 	Columns    []ResultColumn
-	From       *FromClause
+	From       Relation
 	Where      Expression
 	GroupBy    *GroupBy
 	Compound   *CompoundOperator
@@ -131,6 +133,7 @@ func (s *SelectCore) ToSQL() string {
 	}
 
 	if s.From != nil {
+		stmt.Token.From()
 		stmt.WriteString(s.From.ToSQL())
 	}
 	if s.Where != nil {
@@ -157,31 +160,6 @@ func (s SelectType) Valid() error {
 	default:
 		return fmt.Errorf("invalid select type: %d", s)
 	}
-}
-
-type FromClause struct {
-	node
-
-	Relation Relation
-}
-
-func (f *FromClause) Accept(v AstVisitor) any {
-	return v.VisitFromClause(f)
-}
-
-func (f *FromClause) Walk(w AstListener) error {
-	return run(
-		w.EnterFromClause(f),
-		walk(w, f.Relation),
-		w.ExitFromClause(f),
-	)
-}
-
-func (f *FromClause) ToSQL() string {
-	stmt := sqlwriter.NewWriter()
-	stmt.Token.From()
-	stmt.WriteString(f.Relation.ToSQL())
-	return stmt.String()
 }
 
 type CompoundOperatorType uint8

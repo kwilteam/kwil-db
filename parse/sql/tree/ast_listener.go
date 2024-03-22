@@ -8,10 +8,10 @@ type AstListener interface {
 	ExitConflictTarget(*ConflictTarget) error
 	EnterCTE(*CTE) error
 	ExitCTE(*CTE) error
-	EnterDelete(*Delete) error
-	ExitDelete(*Delete) error
 	EnterDeleteStmt(*DeleteStmt) error
 	ExitDeleteStmt(*DeleteStmt) error
+	EnterDeleteCore(*DeleteCore) error
+	ExitDeleteCore(*DeleteCore) error
 	EnterExpressionLiteral(*ExpressionLiteral) error
 	ExitExpressionLiteral(*ExpressionLiteral) error
 	EnterExpressionBindParameter(*ExpressionBindParameter) error
@@ -44,10 +44,10 @@ type AstListener interface {
 	ExitScalarFunc(*ScalarFunction) error
 	EnterGroupBy(*GroupBy) error
 	ExitGroupBy(*GroupBy) error
-	EnterInsert(*Insert) error
-	ExitInsert(*Insert) error
 	EnterInsertStmt(*InsertStmt) error
 	ExitInsertStmt(*InsertStmt) error
+	EnterInsertCore(*InsertCore) error
+	ExitInsertCore(*InsertCore) error
 	EnterJoinPredicate(*JoinPredicate) error
 	ExitJoinPredicate(*JoinPredicate) error
 	EnterJoinOperator(*JoinOperator) error
@@ -78,22 +78,20 @@ type AstListener interface {
 	ExitReturningClause(*ReturningClause) error
 	EnterReturningClauseColumn(*ReturningClauseColumn) error
 	ExitReturningClauseColumn(*ReturningClauseColumn) error
-	EnterSelect(*Select) error
-	ExitSelect(*Select) error
-	EnterSelectCore(*SelectCore) error
-	ExitSelectCore(*SelectCore) error
 	EnterSelectStmt(*SelectStmt) error
 	ExitSelectStmt(*SelectStmt) error
-	EnterFromClause(*FromClause) error
-	ExitFromClause(*FromClause) error
+	EnterSelectCore(*SelectCore) error
+	ExitSelectCore(*SelectCore) error
+	EnterSelectStmtNoCte(*SelectStmtNoCte) error
+	ExitSelectStmtNoCte(*SelectStmtNoCte) error
 	EnterCompoundOperator(*CompoundOperator) error
 	ExitCompoundOperator(*CompoundOperator) error
 	EnterUpdateSetClause(*UpdateSetClause) error
 	ExitUpdateSetClause(*UpdateSetClause) error
-	EnterUpdate(*Update) error
-	ExitUpdate(*Update) error
 	EnterUpdateStmt(*UpdateStmt) error
 	ExitUpdateStmt(*UpdateStmt) error
+	EnterUpdateCore(*UpdateCore) error
+	ExitUpdateCore(*UpdateCore) error
 	EnterUpsert(*Upsert) error
 	ExitUpsert(*Upsert) error
 }
@@ -138,19 +136,19 @@ func (b *BaseListener) ExitConflictTarget(p0 *ConflictTarget) error {
 	return nil
 }
 
-func (b *BaseListener) EnterDelete(p0 *Delete) error {
-	return nil
-}
-
-func (b *BaseListener) ExitDelete(p0 *Delete) error {
-	return nil
-}
-
 func (b *BaseListener) EnterDeleteStmt(p0 *DeleteStmt) error {
 	return nil
 }
 
 func (b *BaseListener) ExitDeleteStmt(p0 *DeleteStmt) error {
+	return nil
+}
+
+func (b *BaseListener) EnterDeleteCore(p0 *DeleteCore) error {
+	return nil
+}
+
+func (b *BaseListener) ExitDeleteCore(p0 *DeleteCore) error {
 	return nil
 }
 
@@ -266,14 +264,6 @@ func (b *BaseListener) ExitExpressionUnary(p0 *ExpressionUnary) error {
 	return nil
 }
 
-func (b *BaseListener) EnterFromClause(p0 *FromClause) error {
-	return nil
-}
-
-func (b *BaseListener) ExitFromClause(p0 *FromClause) error {
-	return nil
-}
-
 func (b *BaseListener) EnterGroupBy(p0 *GroupBy) error {
 	return nil
 }
@@ -282,19 +272,19 @@ func (b *BaseListener) ExitGroupBy(p0 *GroupBy) error {
 	return nil
 }
 
-func (b *BaseListener) EnterInsert(p0 *Insert) error {
-	return nil
-}
-
-func (b *BaseListener) ExitInsert(p0 *Insert) error {
-	return nil
-}
-
 func (b *BaseListener) EnterInsertStmt(p0 *InsertStmt) error {
 	return nil
 }
 
 func (b *BaseListener) ExitInsertStmt(p0 *InsertStmt) error {
+	return nil
+}
+
+func (b *BaseListener) EnterInsertCore(p0 *InsertCore) error {
+	return nil
+}
+
+func (b *BaseListener) ExitInsertCore(p0 *InsertCore) error {
 	return nil
 }
 
@@ -426,11 +416,11 @@ func (b *BaseListener) ExitScalarFunc(p0 *ScalarFunction) error {
 	return nil
 }
 
-func (b *BaseListener) EnterSelect(p0 *Select) error {
+func (b *BaseListener) EnterSelectStmt(p0 *SelectStmt) error {
 	return nil
 }
 
-func (b *BaseListener) ExitSelect(p0 *Select) error {
+func (b *BaseListener) ExitSelectStmt(p0 *SelectStmt) error {
 	return nil
 }
 
@@ -442,19 +432,19 @@ func (b *BaseListener) ExitSelectCore(p0 *SelectCore) error {
 	return nil
 }
 
-func (b *BaseListener) EnterSelectStmt(p0 *SelectStmt) error {
+func (b *BaseListener) EnterSelectStmtNoCte(p0 *SelectStmtNoCte) error {
 	return nil
 }
 
-func (b *BaseListener) ExitSelectStmt(p0 *SelectStmt) error {
+func (b *BaseListener) ExitSelectStmtNoCte(p0 *SelectStmtNoCte) error {
 	return nil
 }
 
-func (b *BaseListener) EnterUpdate(p0 *Update) error {
+func (b *BaseListener) EnterUpdateStmt(p0 *UpdateStmt) error {
 	return nil
 }
 
-func (b *BaseListener) ExitUpdate(p0 *Update) error {
+func (b *BaseListener) ExitUpdateStmt(p0 *UpdateStmt) error {
 	return nil
 }
 
@@ -466,11 +456,11 @@ func (b *BaseListener) ExitUpdateSetClause(p0 *UpdateSetClause) error {
 	return nil
 }
 
-func (b *BaseListener) EnterUpdateStmt(p0 *UpdateStmt) error {
+func (b *BaseListener) EnterUpdateCore(p0 *UpdateCore) error {
 	return nil
 }
 
-func (b *BaseListener) ExitUpdateStmt(p0 *UpdateStmt) error {
+func (b *BaseListener) ExitUpdateCore(p0 *UpdateCore) error {
 	return nil
 }
 
@@ -495,10 +485,10 @@ type ImplementedListener struct {
 	FuncExitCompoundOperator            func(p0 *CompoundOperator) error
 	FuncEnterConflictTarget             func(p0 *ConflictTarget) error
 	FuncExitConflictTarget              func(p0 *ConflictTarget) error
-	FuncEnterDelete                     func(p0 *Delete) error
-	FuncExitDelete                      func(p0 *Delete) error
 	FuncEnterDeleteStmt                 func(p0 *DeleteStmt) error
 	FuncExitDeleteStmt                  func(p0 *DeleteStmt) error
+	FuncEnterDeleteCore                 func(p0 *DeleteCore) error
+	FuncExitDeleteCore                  func(p0 *DeleteCore) error
 	FuncEnterExpressionArithmetic       func(p0 *ExpressionArithmetic) error
 	FuncExitExpressionArithmetic        func(p0 *ExpressionArithmetic) error
 	FuncEnterExpressionBetween          func(p0 *ExpressionBetween) error
@@ -527,14 +517,12 @@ type ImplementedListener struct {
 	FuncExitExpressionStringCompare     func(p0 *ExpressionStringCompare) error
 	FuncEnterExpressionUnary            func(p0 *ExpressionUnary) error
 	FuncExitExpressionUnary             func(p0 *ExpressionUnary) error
-	FuncEnterFromClause                 func(p0 *FromClause) error
-	FuncExitFromClause                  func(p0 *FromClause) error
 	FuncEnterGroupBy                    func(p0 *GroupBy) error
 	FuncExitGroupBy                     func(p0 *GroupBy) error
-	FuncEnterInsert                     func(p0 *Insert) error
-	FuncExitInsert                      func(p0 *Insert) error
 	FuncEnterInsertStmt                 func(p0 *InsertStmt) error
 	FuncExitInsertStmt                  func(p0 *InsertStmt) error
+	FuncEnterInsertCore                 func(p0 *InsertCore) error
+	FuncExitInsertCore                  func(p0 *InsertCore) error
 	FuncEnterJoinOperator               func(p0 *JoinOperator) error
 	FuncExitJoinOperator                func(p0 *JoinOperator) error
 	FuncEnterJoinPredicate              func(p0 *JoinPredicate) error
@@ -567,18 +555,18 @@ type ImplementedListener struct {
 	FuncExitReturningClauseColumn       func(p0 *ReturningClauseColumn) error
 	FuncEnterScalarFunc                 func(p0 *ScalarFunction) error
 	FuncExitScalarFunc                  func(p0 *ScalarFunction) error
-	FuncEnterSelect                     func(p0 *Select) error
-	FuncExitSelect                      func(p0 *Select) error
-	FuncEnterSelectCore                 func(p0 *SelectCore) error
-	FuncExitSelectCore                  func(p0 *SelectCore) error
 	FuncEnterSelectStmt                 func(p0 *SelectStmt) error
 	FuncExitSelectStmt                  func(p0 *SelectStmt) error
-	FuncEnterUpdate                     func(p0 *Update) error
-	FuncExitUpdate                      func(p0 *Update) error
-	FuncEnterUpdateSetClause            func(p0 *UpdateSetClause) error
-	FuncExitUpdateSetClause             func(p0 *UpdateSetClause) error
+	FuncEnterSelectCore                 func(p0 *SelectCore) error
+	FuncExitSelectCore                  func(p0 *SelectCore) error
+	FuncEnterSelectStmtNoCte            func(p0 *SelectStmtNoCte) error
+	FuncExitSelectStmtNoCte             func(p0 *SelectStmtNoCte) error
 	FuncEnterUpdateStmt                 func(p0 *UpdateStmt) error
 	FuncExitUpdateStmt                  func(p0 *UpdateStmt) error
+	FuncEnterUpdateSetClause            func(p0 *UpdateSetClause) error
+	FuncExitUpdateSetClause             func(p0 *UpdateSetClause) error
+	FuncEnterUpdateCore                 func(p0 *UpdateCore) error
+	FuncExitUpdateCore                  func(p0 *UpdateCore) error
 	FuncEnterUpsert                     func(p0 *Upsert) error
 	FuncExitUpsert                      func(p0 *Upsert) error
 }
@@ -649,22 +637,6 @@ func (b *ImplementedListener) ExitConflictTarget(p0 *ConflictTarget) error {
 	return b.FuncExitConflictTarget(p0)
 }
 
-func (b *ImplementedListener) EnterDelete(p0 *Delete) error {
-	if b.FuncEnterDelete == nil {
-		return nil
-	}
-
-	return b.FuncEnterDelete(p0)
-}
-
-func (b *ImplementedListener) ExitDelete(p0 *Delete) error {
-	if b.FuncExitDelete == nil {
-		return nil
-	}
-
-	return b.FuncExitDelete(p0)
-}
-
 func (b *ImplementedListener) EnterDeleteStmt(p0 *DeleteStmt) error {
 	if b.FuncEnterDeleteStmt == nil {
 		return nil
@@ -679,6 +651,22 @@ func (b *ImplementedListener) ExitDeleteStmt(p0 *DeleteStmt) error {
 	}
 
 	return b.FuncExitDeleteStmt(p0)
+}
+
+func (b *ImplementedListener) EnterDeleteCore(p0 *DeleteCore) error {
+	if b.FuncEnterDeleteCore == nil {
+		return nil
+	}
+
+	return b.FuncEnterDeleteCore(p0)
+}
+
+func (b *ImplementedListener) ExitDeleteCore(p0 *DeleteCore) error {
+	if b.FuncExitDeleteCore == nil {
+		return nil
+	}
+
+	return b.FuncExitDeleteCore(p0)
 }
 
 func (b *ImplementedListener) EnterExpressionArithmetic(p0 *ExpressionArithmetic) error {
@@ -905,22 +893,6 @@ func (b *ImplementedListener) ExitExpressionUnary(p0 *ExpressionUnary) error {
 	return b.FuncExitExpressionUnary(p0)
 }
 
-func (b *ImplementedListener) EnterFromClause(p0 *FromClause) error {
-	if b.FuncEnterFromClause == nil {
-		return nil
-	}
-
-	return b.FuncEnterFromClause(p0)
-}
-
-func (b *ImplementedListener) ExitFromClause(p0 *FromClause) error {
-	if b.FuncExitFromClause == nil {
-		return nil
-	}
-
-	return b.FuncExitFromClause(p0)
-}
-
 func (b *ImplementedListener) EnterGroupBy(p0 *GroupBy) error {
 	if b.FuncEnterGroupBy == nil {
 		return nil
@@ -937,22 +909,6 @@ func (b *ImplementedListener) ExitGroupBy(p0 *GroupBy) error {
 	return b.FuncExitGroupBy(p0)
 }
 
-func (b *ImplementedListener) EnterInsert(p0 *Insert) error {
-	if b.FuncEnterInsert == nil {
-		return nil
-	}
-
-	return b.FuncEnterInsert(p0)
-}
-
-func (b *ImplementedListener) ExitInsert(p0 *Insert) error {
-	if b.FuncExitInsert == nil {
-		return nil
-	}
-
-	return b.FuncExitInsert(p0)
-}
-
 func (b *ImplementedListener) EnterInsertStmt(p0 *InsertStmt) error {
 	if b.FuncEnterInsertStmt == nil {
 		return nil
@@ -967,6 +923,22 @@ func (b *ImplementedListener) ExitInsertStmt(p0 *InsertStmt) error {
 	}
 
 	return b.FuncExitInsertStmt(p0)
+}
+
+func (b *ImplementedListener) EnterInsertCore(p0 *InsertCore) error {
+	if b.FuncEnterInsertCore == nil {
+		return nil
+	}
+
+	return b.FuncEnterInsertCore(p0)
+}
+
+func (b *ImplementedListener) ExitInsertCore(p0 *InsertCore) error {
+	if b.FuncExitInsertCore == nil {
+		return nil
+	}
+
+	return b.FuncExitInsertCore(p0)
 }
 
 func (b *ImplementedListener) EnterJoinOperator(p0 *JoinOperator) error {
@@ -1225,20 +1197,20 @@ func (b *ImplementedListener) ExitScalarFunc(p0 *ScalarFunction) error {
 	return b.FuncExitScalarFunc(p0)
 }
 
-func (b *ImplementedListener) EnterSelect(p0 *Select) error {
-	if b.FuncEnterSelect == nil {
+func (b *ImplementedListener) EnterSelectStmt(p0 *SelectStmt) error {
+	if b.FuncEnterSelectStmt == nil {
 		return nil
 	}
 
-	return b.FuncEnterSelect(p0)
+	return b.FuncEnterSelectStmt(p0)
 }
 
-func (b *ImplementedListener) ExitSelect(p0 *Select) error {
-	if b.FuncExitSelect == nil {
+func (b *ImplementedListener) ExitSelectStmt(p0 *SelectStmt) error {
+	if b.FuncExitSelectStmt == nil {
 		return nil
 	}
 
-	return b.FuncExitSelect(p0)
+	return b.FuncExitSelectStmt(p0)
 }
 
 func (b *ImplementedListener) EnterSelectCore(p0 *SelectCore) error {
@@ -1257,36 +1229,36 @@ func (b *ImplementedListener) ExitSelectCore(p0 *SelectCore) error {
 	return b.FuncExitSelectCore(p0)
 }
 
-func (b *ImplementedListener) EnterSelectStmt(p0 *SelectStmt) error {
-	if b.FuncEnterSelectStmt == nil {
+func (b *ImplementedListener) EnterSelectStmtNoCte(p0 *SelectStmtNoCte) error {
+	if b.FuncEnterSelectStmtNoCte == nil {
 		return nil
 	}
 
-	return b.FuncEnterSelectStmt(p0)
+	return b.FuncEnterSelectStmtNoCte(p0)
 }
 
-func (b *ImplementedListener) ExitSelectStmt(p0 *SelectStmt) error {
-	if b.FuncExitSelectStmt == nil {
+func (b *ImplementedListener) ExitSelectStmtNoCte(p0 *SelectStmtNoCte) error {
+	if b.FuncExitSelectStmtNoCte == nil {
 		return nil
 	}
 
-	return b.FuncExitSelectStmt(p0)
+	return b.FuncExitSelectStmtNoCte(p0)
 }
 
-func (b *ImplementedListener) EnterUpdate(p0 *Update) error {
-	if b.FuncEnterUpdate == nil {
+func (b *ImplementedListener) EnterUpdateStmt(p0 *UpdateStmt) error {
+	if b.FuncEnterUpdateStmt == nil {
 		return nil
 	}
 
-	return b.FuncEnterUpdate(p0)
+	return b.FuncEnterUpdateStmt(p0)
 }
 
-func (b *ImplementedListener) ExitUpdate(p0 *Update) error {
-	if b.FuncExitUpdate == nil {
+func (b *ImplementedListener) ExitUpdateStmt(p0 *UpdateStmt) error {
+	if b.FuncExitUpdateStmt == nil {
 		return nil
 	}
 
-	return b.FuncExitUpdate(p0)
+	return b.FuncExitUpdateStmt(p0)
 }
 
 func (b *ImplementedListener) EnterUpdateSetClause(p0 *UpdateSetClause) error {
@@ -1305,20 +1277,20 @@ func (b *ImplementedListener) ExitUpdateSetClause(p0 *UpdateSetClause) error {
 	return b.FuncExitUpdateSetClause(p0)
 }
 
-func (b *ImplementedListener) EnterUpdateStmt(p0 *UpdateStmt) error {
-	if b.FuncEnterUpdateStmt == nil {
+func (b *ImplementedListener) EnterUpdateCore(p0 *UpdateCore) error {
+	if b.FuncEnterUpdateCore == nil {
 		return nil
 	}
 
-	return b.FuncEnterUpdateStmt(p0)
+	return b.FuncEnterUpdateCore(p0)
 }
 
-func (b *ImplementedListener) ExitUpdateStmt(p0 *UpdateStmt) error {
-	if b.FuncExitUpdateStmt == nil {
+func (b *ImplementedListener) ExitUpdateCore(p0 *UpdateCore) error {
+	if b.FuncExitUpdateCore == nil {
 		return nil
 	}
 
-	return b.FuncExitUpdateStmt(p0)
+	return b.FuncExitUpdateCore(p0)
 }
 
 func (b *ImplementedListener) EnterUpsert(p0 *Upsert) error {

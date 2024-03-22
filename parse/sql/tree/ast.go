@@ -22,3 +22,22 @@ type AstNode interface {
 	// Accept accepts an AstVisitor to visit itself.
 	Accept(AstVisitor) any
 }
+
+type Statement interface {
+	AstNode
+
+	statement()
+}
+
+type Expression interface {
+	AstNode
+
+	expression() // private function to prevent external packages from implementing this interface
+	joinable
+}
+
+type ResultColumn interface {
+	AstNode
+
+	resultColumn()
+}

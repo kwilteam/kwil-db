@@ -10,7 +10,7 @@ func TestCTE_ToSQL(t *testing.T) {
 	type fields struct {
 		Table   string
 		Columns []string
-		Select  *tree.SelectStmt
+		Select  *tree.SelectStmtNoCte
 	}
 	tests := []struct {
 		name      string
@@ -23,14 +23,12 @@ func TestCTE_ToSQL(t *testing.T) {
 			fields: fields{
 				Table:   "foo",
 				Columns: []string{"bar", "baz"},
-				Select: &tree.SelectStmt{
+				Select: &tree.SelectStmtNoCte{
 					SelectCores: []*tree.SelectCore{
 						{
 							SelectType: tree.SelectTypeAll,
-							From: &tree.FromClause{
-								Relation: &tree.RelationTable{
-									Name: "foo",
-								},
+							From: &tree.RelationTable{
+								Name: "foo",
 							},
 						},
 					},
@@ -70,13 +68,11 @@ func TestCTE_ToSQL(t *testing.T) {
 var mockCTE = &tree.CTE{
 	Table:   "foo",
 	Columns: []string{"bar", "baz"},
-	Select: &tree.SelectStmt{
+	Select: &tree.SelectStmtNoCte{
 		SelectCores: []*tree.SelectCore{
 			{
-				From: &tree.FromClause{
-					Relation: &tree.RelationTable{
-						Name: "foo",
-					},
+				From: &tree.RelationTable{
+					Name: "foo",
 				},
 			},
 		},

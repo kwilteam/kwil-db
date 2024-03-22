@@ -9,7 +9,7 @@ import (
 func TestUpdate_ToSQL(t *testing.T) {
 	type fields struct {
 		CTE       []*tree.CTE
-		Statement *tree.UpdateStmt
+		Statement *tree.UpdateCore
 	}
 	tests := []struct {
 		name    string
@@ -23,7 +23,7 @@ func TestUpdate_ToSQL(t *testing.T) {
 				CTE: []*tree.CTE{
 					mockCTE,
 				},
-				Statement: &tree.UpdateStmt{
+				Statement: &tree.UpdateCore{
 					QualifiedTableName: &tree.QualifiedTableName{
 						TableName:  "foo",
 						TableAlias: "f",
@@ -34,7 +34,7 @@ func TestUpdate_ToSQL(t *testing.T) {
 							Expression: &tree.ExpressionSelect{
 								IsNot:    true,
 								IsExists: true,
-								Select: &tree.SelectStmt{
+								Select: &tree.SelectStmtNoCte{
 									SelectCores: []*tree.SelectCore{
 										{
 											SelectType: tree.SelectTypeAll,
@@ -42,10 +42,8 @@ func TestUpdate_ToSQL(t *testing.T) {
 												&tree.ResultColumnExpression{Expression: &tree.ExpressionColumn{Column: "foo"}},
 												&tree.ResultColumnExpression{Expression: &tree.ExpressionColumn{Column: "bar"}},
 											},
-											From: &tree.FromClause{
-												Relation: &tree.RelationTable{
-													Name: "foo",
-												},
+											From: &tree.RelationTable{
+												Name: "foo",
 											},
 										},
 									},
@@ -77,17 +75,17 @@ func TestUpdate_ToSQL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := &tree.Update{
-				CTE:        tt.fields.CTE,
-				UpdateStmt: tt.fields.Statement,
+			u := &tree.UpdateStmt{
+				CTE:  tt.fields.CTE,
+				Core: tt.fields.Statement,
 			}
 			gotStr, err := tree.SafeToSQL(u)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Update.ToSQL() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("UpdateStmt.ToSQL() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !compareIgnoringWhitespace(gotStr, tt.wantStr) {
-				t.Errorf("Update.ToSQL() = %v, want %v", gotStr, tt.wantStr)
+				t.Errorf("UpdateStmt.ToSQL() = %v, want %v", gotStr, tt.wantStr)
 			}
 		})
 	}

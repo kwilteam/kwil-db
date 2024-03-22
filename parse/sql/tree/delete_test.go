@@ -9,7 +9,7 @@ import (
 func TestDelete_ToSQL(t *testing.T) {
 	type fields struct {
 		CTE        []*tree.CTE
-		DeleteStmt *tree.DeleteStmt
+		DeleteStmt *tree.DeleteCore
 	}
 	tests := []struct {
 		name    string
@@ -23,7 +23,7 @@ func TestDelete_ToSQL(t *testing.T) {
 				CTE: []*tree.CTE{
 					mockCTE,
 				},
-				DeleteStmt: &tree.DeleteStmt{
+				DeleteStmt: &tree.DeleteCore{
 					QualifiedTableName: &tree.QualifiedTableName{
 						TableName: "foo",
 					},
@@ -46,17 +46,17 @@ func TestDelete_ToSQL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := &tree.Delete{
-				CTE:        tt.fields.CTE,
-				DeleteStmt: tt.fields.DeleteStmt,
+			d := &tree.DeleteStmt{
+				CTE:  tt.fields.CTE,
+				Core: tt.fields.DeleteStmt,
 			}
 			gotStr, err := tree.SafeToSQL(d)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Delete.ToSQL() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DeleteStmt.ToSQL() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !compareIgnoringWhitespace(gotStr, tt.wantStr) {
-				t.Errorf("Delete.ToSQL() = %v, want %v", gotStr, tt.wantStr)
+				t.Errorf("DeleteStmt.ToSQL() = %v, want %v", gotStr, tt.wantStr)
 			}
 		})
 	}

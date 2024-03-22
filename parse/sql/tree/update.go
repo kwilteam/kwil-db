@@ -4,54 +4,11 @@ import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 )
 
-// Update Statement with CTEs
-type Update struct {
-	node
-
-	CTE        []*CTE
-	UpdateStmt *UpdateStmt
-}
-
-func (u *Update) Accept(v AstVisitor) any {
-	return v.VisitUpdate(u)
-}
-
-func (u *Update) Walk(w AstListener) error {
-	return run(
-		w.EnterUpdate(u),
-		walkMany(w, u.CTE),
-		walk(w, u.UpdateStmt),
-		w.ExitUpdate(u),
-	)
-}
-
-func (u *Update) ToSQL() string {
-	stmt := sqlwriter.NewWriter()
-
-	if len(u.CTE) > 0 {
-		stmt.Token.With()
-		stmt.WriteList(len(u.CTE), func(i int) {
-			stmt.WriteString(u.CTE[i].ToSQL())
-		})
-	}
-
-	stmt.WriteString(u.UpdateStmt.ToSQL())
-
-	stmt.Token.Semicolon()
-
-	return stmt.String()
-}
-
-// UpdateStmt is a statement that represents an UPDATE statement.
-// USE Update INSTEAD OF THIS
 type UpdateStmt struct {
 	node
 
-	QualifiedTableName *QualifiedTableName
-	UpdateSetClause    []*UpdateSetClause
-	From               *FromClause
-	Where              Expression
-	Returning          *ReturningClause
+	CTE  []*CTE
+	Core *UpdateCore
 }
 
 func (u *UpdateStmt) Accept(v AstVisitor) any {
@@ -61,16 +18,58 @@ func (u *UpdateStmt) Accept(v AstVisitor) any {
 func (u *UpdateStmt) Walk(w AstListener) error {
 	return run(
 		w.EnterUpdateStmt(u),
-		walk(w, u.QualifiedTableName),
-		walkMany(w, u.UpdateSetClause),
-		walk(w, u.From),
-		walk(w, u.Where),
-		walk(w, u.Returning),
+		walkMany(w, u.CTE),
+		walk(w, u.Core),
 		w.ExitUpdateStmt(u),
 	)
 }
 
 func (u *UpdateStmt) ToSQL() string {
+	stmt := sqlwriter.NewWriter()
+
+	if len(u.CTE) > 0 {
+		stmt.Token.With()
+		stmt.WriteList(len(u.CTE), func(i int) {
+			stmt.WriteString(u.CTE[i].ToSQL())
+		})
+	}
+
+	stmt.WriteString(u.Core.ToSQL())
+
+	stmt.Token.Semicolon()
+
+	return stmt.String()
+}
+
+func (u *UpdateStmt) statement() {}
+
+type UpdateCore struct {
+	node
+
+	QualifiedTableName *QualifiedTableName
+	UpdateSetClause    []*UpdateSetClause
+	From               Relation
+	Where              Expression
+	Returning          *ReturningClause
+}
+
+func (u *UpdateCore) Accept(v AstVisitor) any {
+	return v.VisitUpdateCore(u)
+}
+
+func (u *UpdateCore) Walk(w AstListener) error {
+	return run(
+		w.EnterUpdateCore(u),
+		walk(w, u.QualifiedTableName),
+		walkMany(w, u.UpdateSetClause),
+		walk(w, u.From),
+		walk(w, u.Where),
+		walk(w, u.Returning),
+		w.ExitUpdateCore(u),
+	)
+}
+
+func (u *UpdateCore) ToSQL() string {
 	u.check()
 
 	stmt := sqlwriter.NewWriter()
@@ -82,6 +81,7 @@ func (u *UpdateStmt) ToSQL() string {
 	})
 
 	if u.From != nil {
+		stmt.Token.From()
 		stmt.WriteString(u.From.ToSQL())
 	}
 
@@ -97,7 +97,7 @@ func (u *UpdateStmt) ToSQL() string {
 	return stmt.String()
 }
 
-func (u *UpdateStmt) check() {
+func (u *UpdateCore) check() {
 	if u.QualifiedTableName == nil {
 		panic("qualified table name is required")
 	}

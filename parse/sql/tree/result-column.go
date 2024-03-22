@@ -4,12 +4,6 @@ import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 )
 
-type ResultColumn interface {
-	resultColumn()
-	ToSQL() string
-	Walk(w AstListener) error
-}
-
 // ResultColumnStar represents a wildcard column, i.e. `*`.
 type ResultColumnStar struct {
 	node
