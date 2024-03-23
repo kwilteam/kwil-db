@@ -12,7 +12,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/listeners"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
-	"github.com/kwilteam/kwil-db/internal/events"
+	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 // ListenerManager listens for any Validator state changes and node catch up status
@@ -21,7 +21,7 @@ import (
 // It stops the running listeners when the node loses its validator status
 type ListenerManager struct {
 	config     map[string]map[string]string
-	eventStore *events.EventStore
+	eventStore *voting.EventStore
 	vstore     ValidatorGetter
 	cometNode  *cometbft.CometBftNode
 	// pubKey is the public key of the node
@@ -37,7 +37,7 @@ type ValidatorGetter interface {
 	GetValidators(ctx context.Context) ([]*types.Validator, error)
 }
 
-func NewListenerManager(config map[string]map[string]string, eventStore *events.EventStore, node *cometbft.CometBftNode, nodePubKey []byte, vstore ValidatorGetter, logger log.Logger) *ListenerManager {
+func NewListenerManager(config map[string]map[string]string, eventStore *voting.EventStore, node *cometbft.CometBftNode, nodePubKey []byte, vstore ValidatorGetter, logger log.Logger) *ListenerManager {
 	return &ListenerManager{
 		config:     config,
 		eventStore: eventStore,
@@ -132,8 +132,8 @@ func (omgr *ListenerManager) Stop() {
 
 // scopedKVEventStore scopes the event store's kv store to the listener's name
 type scopedKVEventStore struct {
-	ev *events.EventStore
-	*events.KV
+	ev *voting.EventStore
+	*voting.KV
 }
 
 // Broadcast broadcasts an event to the event store.

@@ -277,23 +277,28 @@ func Test_Voting(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			db, err := dbtest.NewTestDB(t)
+			db, cleanup, err := dbtest.NewTestPool(ctx, []string{"kwild_events", "kwild_voting"}) // db is the event store specific connection
 			require.NoError(t, err)
-			defer db.Close()
+			defer cleanup()
 
-			dbTx, err := db.BeginTx(ctx)
+			_, err = voting.NewEventStore(ctx, db, db)
 			require.NoError(t, err)
-			defer dbTx.Rollback(ctx) // always rollback to ensure cleanup
 
-			err = voting.InitializeVoteStore(ctx, dbTx)
+			// create a second db connection to emulate the consensus db
+			consensusDB, cleanup2, err := dbtest.NewTestPool(ctx, nil) // don't need to delete schema since we will never commit
 			require.NoError(t, err)
+			defer cleanup2()
+
+			consensusTx, err := consensusDB.BeginTx(ctx)
+			require.NoError(t, err)
+			defer consensusTx.Rollback(ctx) // always rollback, to clean up
 
 			for addr, power := range tt.startingPower {
-				err = voting.SetValidatorPower(ctx, dbTx, []byte(addr), power)
+				err = voting.SetValidatorPower(ctx, consensusTx, []byte(addr), power)
 				require.NoError(t, err)
 			}
 
-			tt.fn(t, dbTx)
+			tt.fn(t, consensusTx)
 		})
 	}
 }
