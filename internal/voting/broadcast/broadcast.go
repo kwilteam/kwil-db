@@ -6,8 +6,8 @@ package broadcast
 	is to implement the abci.CommitHook function signature, and broadcast events to the network.
 
 	It seems like it could be
-	in the events package, however this then creates a circular dependency, since
-	- txapp needs events
+	in the voting package, however this then creates a circular dependency, since
+	- txapp needs voting
 	- abci needs txapp
 	- cometbft node needs abci
 	- cometbft client needs cometbft node
@@ -118,7 +118,8 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) er
 		return nil
 	}
 
-	// Vote only if the note observed the event corresponding to the resolution.
+	// Vote only if the voter observed the event corresponding to the resolution.
+	// ids are the resolution ids that the validator witnessed the events for and can vote on.
 	ids, err := e.store.GetUnbroadcastedEvents(ctx)
 	if err != nil {
 		return err

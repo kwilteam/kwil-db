@@ -1,6 +1,6 @@
 //go:build pglive
 
-package events
+package voting_test
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 	"github.com/kwilteam/kwil-db/internal/voting"
@@ -16,40 +15,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func init() {
-	err := resolutions.RegisterResolution("test", resolutions.ResolutionConfig{})
-	if err != nil {
-		panic(err)
-	}
-}
-
 func Test_EventStore(t *testing.T) {
 	type testcase struct {
 		name string
 		// we have to use an outerTx here because we are testing commits from different connections
 		// to the event store
-		fn func(t *testing.T, e *EventStore, consensusTx *pg.Pool)
+		fn func(t *testing.T, e *voting.EventStore, consensusTx *pg.Pool)
 	}
 	tests := []testcase{
 		{
 			name: "standard storage and retrieval",
-			fn: func(t *testing.T, e *EventStore, db *pg.Pool) {
+			fn: func(t *testing.T, e *voting.EventStore, db *pg.Pool) {
 				ctx := context.Background()
 
 				err := e.Store(ctx, []byte("hello"), "test")
 				require.NoError(t, err)
 
-				events, err := GetEvents(ctx, db)
+				events, err := voting.GetEvents(ctx, db)
 				require.NoError(t, err)
 
 				require.Len(t, events, 1)
 				require.Equal(t, []byte("hello"), events[0].Body)
 				require.Equal(t, "test", events[0].Type)
 
-				err = DeleteEvent(ctx, db, events[0].ID())
+				err = voting.DeleteEvent(ctx, db, events[0].ID())
 				require.NoError(t, err)
 
-				events, err = GetEvents(ctx, db)
+				events, err = voting.GetEvents(ctx, db)
 				require.NoError(t, err)
 
 				require.Len(t, events, 0)
@@ -57,7 +49,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "idempotent storage",
-			fn: func(t *testing.T, e *EventStore, db *pg.Pool) {
+			fn: func(t *testing.T, e *voting.EventStore, db *pg.Pool) {
 				ctx := context.Background()
 
 				err := e.Store(ctx, []byte("hello"), "test")
@@ -66,7 +58,7 @@ func Test_EventStore(t *testing.T) {
 				err = e.Store(ctx, []byte("hello"), "test")
 				require.NoError(t, err)
 
-				events, err := GetEvents(ctx, db)
+				events, err := voting.GetEvents(ctx, db)
 				require.NoError(t, err)
 
 				require.Len(t, events, 1)
@@ -74,16 +66,16 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "deleting non-existent event",
-			fn: func(t *testing.T, e *EventStore, db *pg.Pool) {
+			fn: func(t *testing.T, e *voting.EventStore, db *pg.Pool) {
 				ctx := context.Background()
 
-				err := DeleteEvent(ctx, db, types.NewUUIDV5([]byte("hello")))
+				err := voting.DeleteEvent(ctx, db, types.NewUUIDV5([]byte("hello")))
 				require.NoError(t, err)
 			},
 		},
 		{
 			name: "using kv scoping",
-			fn: func(t *testing.T, e *EventStore, db *pg.Pool) {
+			fn: func(t *testing.T, e *voting.EventStore, db *pg.Pool) {
 				ctx := context.Background()
 
 				kv := e.KV([]byte("hello"))
@@ -108,7 +100,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "marking broadcasted",
-			fn: func(t *testing.T, e *EventStore, db *pg.Pool) {
+			fn: func(t *testing.T, e *voting.EventStore, db *pg.Pool) {
 				ctx := context.Background()
 
 				tx, err := db.BeginTx(ctx)
@@ -136,7 +128,7 @@ func Test_EventStore(t *testing.T) {
 				defer tx2.Rollback(ctx)
 
 				// GetEvents should still return the event
-				events, err := GetEvents(ctx, tx2)
+				events, err := voting.GetEvents(ctx, tx2)
 				require.NoError(t, err)
 				require.Len(t, events, 1)
 
@@ -147,14 +139,14 @@ func Test_EventStore(t *testing.T) {
 				require.NoError(t, err)
 
 				// GetEvents should still return the event
-				events, err = GetEvents(ctx, db)
+				events, err = voting.GetEvents(ctx, db)
 				require.NoError(t, err)
 				require.Len(t, events, 1)
 			},
 		},
 		{
 			name: "get events which has no resolutions",
-			fn: func(t *testing.T, e *EventStore, db *pg.Pool) {
+			fn: func(t *testing.T, e *voting.EventStore, db *pg.Pool) {
 				ctx := context.Background()
 
 				// create 3 events
@@ -165,7 +157,7 @@ func Test_EventStore(t *testing.T) {
 				}
 
 				// Get events which have no resolutions
-				events, err := GetEvents(ctx, db)
+				events, err := voting.GetEvents(ctx, db)
 				require.NoError(t, err)
 				require.Len(t, events, 3)
 
@@ -174,7 +166,7 @@ func Test_EventStore(t *testing.T) {
 				require.NoError(t, err)
 
 				// Get events which have no resolutions
-				events, err = GetEvents(ctx, db)
+				events, err = voting.GetEvents(ctx, db)
 				require.NoError(t, err)
 				require.Len(t, events, 2)
 			},
@@ -184,14 +176,11 @@ func Test_EventStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			db, cleanup, err := dbtest.NewTestPool(ctx, []string{schemaName, "kwild_voting"}) // db is the event store specific connection
+			db, cleanup, err := dbtest.NewTestPool(ctx, []string{"kwild_events", "kwild_voting"}) // db is the event store specific connection
 			require.NoError(t, err)
 			defer cleanup()
 
-			err = voting.InitializeVoteStore(ctx, db)
-			require.NoError(t, err)
-
-			e, err := NewEventStore(ctx, db) // needs BeginReadTx
+			e, err := voting.NewEventStore(ctx, db, db)
 			require.NoError(t, err)
 
 			// create a second db connection to emulate the consensus db
