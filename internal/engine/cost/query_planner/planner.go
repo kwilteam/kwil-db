@@ -157,7 +157,7 @@ func (q *queryPlanner) planSelect(node *tree.SelectStmt, ctx *PlannerContext) lp
 	return q.buildSelect(node.Stmt, ctx)
 }
 
-func (q *queryPlanner) buildSelect(node *tree.SelectStmtNoCte, ctx *PlannerContext) lp.LogicalPlan {
+func (q *queryPlanner) buildSelect(node *tree.SelectCore, ctx *PlannerContext) lp.LogicalPlan {
 	var plan lp.LogicalPlan
 	if len(node.SelectCores) > 1 { // set operation
 		left := q.buildSelectPlan(node.SelectCores[0], ctx)
@@ -293,7 +293,7 @@ func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.Logi
 // 6. distinct
 // 7. order by
 // 8. limit
-func (q *queryPlanner) buildSelectPlan(node *tree.SelectCore, ctx *PlannerContext) lp.LogicalPlan {
+func (q *queryPlanner) buildSelectPlan(node *tree.SimpleSelect, ctx *PlannerContext) lp.LogicalPlan {
 	var plan lp.LogicalPlan
 
 	// from clause
