@@ -8,13 +8,19 @@ import (
 )
 
 type OrderBy struct {
+	node
+
 	OrderingTerms []*OrderingTerm
 }
 
-func (o *OrderBy) Accept(w Walker) error {
+func (o *OrderBy) Accept(v AstVisitor) any {
+	return v.VisitOrderBy(o)
+}
+
+func (o *OrderBy) Walk(w AstListener) error {
 	return run(
 		w.EnterOrderBy(o),
-		acceptMany(w, o.OrderingTerms),
+		walkMany(w, o.OrderingTerms),
 		w.ExitOrderBy(o),
 	)
 }
@@ -36,15 +42,21 @@ func (o *OrderBy) ToSQL() string {
 }
 
 type OrderingTerm struct {
+	node
+
 	Expression   Expression
 	OrderType    OrderType
 	NullOrdering NullOrderingType
 }
 
-func (o *OrderingTerm) Accept(w Walker) error {
+func (o *OrderingTerm) Accept(v AstVisitor) any {
+	return v.VisitOrderingTerm(o)
+}
+
+func (o *OrderingTerm) Walk(w AstListener) error {
 	return run(
 		w.EnterOrderingTerm(o),
-		accept(w, o.Expression),
+		walk(w, o.Expression),
 		w.ExitOrderingTerm(o),
 	)
 }

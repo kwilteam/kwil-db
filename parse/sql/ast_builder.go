@@ -7,56 +7,78 @@ import (
 
 	"github.com/antlr4-go/antlr/v4"
 
+	"github.com/kwilteam/kwil-db/parse/internal/util"
+	"github.com/kwilteam/kwil-db/parse/sql/grammar"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
-	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
 )
 
-// KFSqliteVisitor is visitor that visit Antlr parsed tree and returns the AST.
-type KFSqliteVisitor struct {
-	sqlgrammar.BaseSQLParserVisitor
+// astBuilder is a visitor that visits Antlr parsed tree and builds sql AST.
+type astBuilder struct {
+	*grammar.BaseSQLParserVisitor
 
-	trace bool
+	trace    bool
+	trackPos bool
 }
 
-type KFSqliteVisitorOption func(*KFSqliteVisitor)
+type astBuilderOption func(*astBuilder)
 
-func KFVisitorWithTrace(on bool) KFSqliteVisitorOption {
-	return func(l *KFSqliteVisitor) {
+func astBuilderWithTrace(on bool) astBuilderOption {
+	return func(l *astBuilder) {
 		l.trace = on
 	}
 }
 
-var _ sqlgrammar.SQLParserVisitor = &KFSqliteVisitor{}
+func astBuilderWithPos(on bool) astBuilderOption {
+	return func(l *astBuilder) {
+		l.trackPos = on
+	}
+}
 
-func NewKFSqliteVisitor(opts ...KFSqliteVisitorOption) *KFSqliteVisitor {
-	k := &KFSqliteVisitor{}
+var _ grammar.SQLParserVisitor = &astBuilder{}
+
+func newAstBuilder(opts ...astBuilderOption) *astBuilder {
+	k := &astBuilder{}
+
 	for _, opt := range opts {
 		opt(k)
 	}
+
 	return k
 }
 
+func (v *astBuilder) getPos(ctx antlr.ParserRuleContext) *tree.Position {
+	if !v.trackPos {
+		return nil
+	}
+
+	return &tree.Position{
+		StartLine:   ctx.GetStart().GetLine(),
+		StartColumn: ctx.GetStart().GetColumn(),
+		EndLine:     ctx.GetStop().GetLine(),
+		EndColumn:   ctx.GetStop().GetColumn(),
+	}
+}
+
 // VisitCommon_table_expression is called when visiting a common_table_expression, return *tree.CTE
-func (v *KFSqliteVisitor) VisitCommon_table_expression(ctx *sqlgrammar.Common_table_expressionContext) interface{} {
+func (v *astBuilder) VisitCommon_table_expression(ctx *grammar.Common_table_expressionContext) interface{} {
 	cte := tree.CTE{}
 
 	// cte_table_name
 	cteTableCtx := ctx.Cte_table_name()
-	cte.Table = extractSQLName(cteTableCtx.Table_name().GetText())
+	cte.Table = util.ExtractSQLName(cteTableCtx.Table_name().GetText())
 	if len(cteTableCtx.AllColumn_name()) > 0 {
 		cte.Columns = make([]string, len(cteTableCtx.AllColumn_name()))
 		for i, colNameCtx := range cteTableCtx.AllColumn_name() {
-			cte.Columns[i] = extractSQLName(colNameCtx.GetText())
+			cte.Columns[i] = util.ExtractSQLName(colNameCtx.GetText())
 		}
 	}
 
-	selectStmtCoreCtx := ctx.Select_stmt_core()
-	cte.Select = v.Visit(selectStmtCoreCtx).(*tree.SelectStmt)
+	cte.Select = v.Visit(ctx.Select_core()).(*tree.SelectCore)
 	return &cte
 }
 
 // VisitCommon_table_stmt is called when visiting a common_table_stmt, return []*tree.CTE.
-func (v *KFSqliteVisitor) VisitCommon_table_stmt(ctx *sqlgrammar.Common_table_stmtContext) interface{} {
+func (v *astBuilder) VisitCommon_table_stmt(ctx *grammar.Common_table_stmtContext) interface{} {
 	if ctx == nil {
 		return nil
 	}
@@ -70,19 +92,19 @@ func (v *KFSqliteVisitor) VisitCommon_table_stmt(ctx *sqlgrammar.Common_table_st
 	return ctes
 }
 
-func getInsertType(ctx *sqlgrammar.Insert_stmtContext) tree.InsertType {
+func getInsertType(ctx *grammar.Insert_coreContext) tree.InsertType {
 	return tree.InsertTypeInsert
 }
 
 // NOTE: VisitExpr() is dispatched in various VisitXXX_expr methods.
 // Calling `v.Visit(ctx.Expr()).(tree.Expression)` will dispatch to the correct
 // VisitXXX_expr method.
-// func (v *KFSqliteVisitor) VisitExpr(ctx *sqlgrammar.ExprContext) interface{} {
+// func (v *KFSqliteVisitor) VisitExpr(ctx *grammar.ExprContext) interface{} {
 // 	//return v.visitExpr(ctx)
 // }
 
 // VisitType_cast is called when visiting a type_cast, return tree.TypeCastType
-func (v *KFSqliteVisitor) VisitType_cast(ctx *sqlgrammar.Type_castContext) interface{} {
+func (v *astBuilder) VisitType_cast(ctx *grammar.Type_castContext) interface{} {
 	if ctx != nil {
 		typeCastRaw := ctx.Cast_type().GetText()
 		if typeCastRaw[0] == '`' || typeCastRaw[0] == '"' || typeCastRaw[0] == '[' {
@@ -106,7 +128,7 @@ func (v *KFSqliteVisitor) VisitType_cast(ctx *sqlgrammar.Type_castContext) inter
 }
 
 // VisitLiteral is called when visiting a literal, return *tree.ExpressionLiteral
-func (v *KFSqliteVisitor) VisitLiteral(ctx *sqlgrammar.LiteralContext) interface{} {
+func (v *astBuilder) VisitLiteral(ctx *grammar.LiteralContext) interface{} {
 	// all literal values are string
 	text := ctx.GetText()
 	if strings.EqualFold(text, "null") {
@@ -116,7 +138,7 @@ func (v *KFSqliteVisitor) VisitLiteral(ctx *sqlgrammar.LiteralContext) interface
 }
 
 // VisitLiteral_expr is called when visiting a literal_expr, return *tree.ExpressionLiteral
-func (v *KFSqliteVisitor) VisitLiteral_expr(ctx *sqlgrammar.Literal_exprContext) interface{} {
+func (v *astBuilder) VisitLiteral_expr(ctx *grammar.Literal_exprContext) interface{} {
 	// all literal values are string
 	expr := &tree.ExpressionLiteral{
 		Value: v.Visit(ctx.Literal()).(string),
@@ -128,7 +150,7 @@ func (v *KFSqliteVisitor) VisitLiteral_expr(ctx *sqlgrammar.Literal_exprContext)
 }
 
 // VisitVariable_expr is called when visiting a variable_expr, return *tree.ExpressionBindParameter
-func (v *KFSqliteVisitor) VisitVariable_expr(ctx *sqlgrammar.Variable_exprContext) interface{} {
+func (v *astBuilder) VisitVariable_expr(ctx *grammar.Variable_exprContext) interface{} {
 	expr := &tree.ExpressionBindParameter{
 		Parameter: ctx.Variable().GetText(),
 	}
@@ -140,17 +162,17 @@ func (v *KFSqliteVisitor) VisitVariable_expr(ctx *sqlgrammar.Variable_exprContex
 
 // VisitColumn_ref is called when visiting a column_ref, return *tree.ExpressionColumn, without
 // type cast info.
-func (v *KFSqliteVisitor) VisitColumn_ref(ctx *sqlgrammar.Column_refContext) interface{} {
+func (v *astBuilder) VisitColumn_ref(ctx *grammar.Column_refContext) interface{} {
 	expr := &tree.ExpressionColumn{}
 	if ctx.Table_name() != nil {
-		expr.Table = extractSQLName(ctx.Table_name().GetText())
+		expr.Table = util.ExtractSQLName(ctx.Table_name().GetText())
 	}
-	expr.Column = extractSQLName(ctx.Column_name().GetText())
+	expr.Column = util.ExtractSQLName(ctx.Column_name().GetText())
 	return expr
 }
 
 // VisitColumn_expr is called when visiting a column_expr, return *tree.ExpressionColumn
-func (v *KFSqliteVisitor) VisitColumn_expr(ctx *sqlgrammar.Column_exprContext) interface{} {
+func (v *astBuilder) VisitColumn_expr(ctx *grammar.Column_exprContext) interface{} {
 	expr := v.Visit(ctx.Column_ref()).(*tree.ExpressionColumn)
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
@@ -159,7 +181,7 @@ func (v *KFSqliteVisitor) VisitColumn_expr(ctx *sqlgrammar.Column_exprContext) i
 }
 
 // VistUnary_expr is called when visiting a unary_expr, return *tree.ExpressionUnary
-func (v *KFSqliteVisitor) VisitUnary_expr(ctx *sqlgrammar.Unary_exprContext) interface{} {
+func (v *astBuilder) VisitUnary_expr(ctx *grammar.Unary_exprContext) interface{} {
 	expr := &tree.ExpressionUnary{}
 	switch {
 	case ctx.MINUS() != nil:
@@ -173,7 +195,7 @@ func (v *KFSqliteVisitor) VisitUnary_expr(ctx *sqlgrammar.Unary_exprContext) int
 	return expr
 }
 
-func (v *KFSqliteVisitor) getCollateType(collationName string) tree.CollationType {
+func (v *astBuilder) getCollateType(collationName string) tree.CollationType {
 	// case insensitive
 	switch strings.ToLower(collationName) {
 	case "nocase":
@@ -185,9 +207,9 @@ func (v *KFSqliteVisitor) getCollateType(collationName string) tree.CollationTyp
 }
 
 // VisitCollate_expr is called when visiting a collate_expr, return *tree.ExpressionCollate
-func (v *KFSqliteVisitor) VisitCollate_expr(ctx *sqlgrammar.Collate_exprContext) interface{} {
+func (v *astBuilder) VisitCollate_expr(ctx *grammar.Collate_exprContext) interface{} {
 	expr := v.Visit(ctx.Expr()).(tree.Expression)
-	collationName := extractSQLName(ctx.Collation_name().GetText())
+	collationName := util.ExtractSQLName(ctx.Collation_name().GetText())
 	return &tree.ExpressionCollate{
 		Expression: expr,
 		Collation:  v.getCollateType(collationName),
@@ -195,7 +217,7 @@ func (v *KFSqliteVisitor) VisitCollate_expr(ctx *sqlgrammar.Collate_exprContext)
 }
 
 // VisitParenthesized_expr is called when visiting a parenthesized_expr, return *tree.Expression
-func (v *KFSqliteVisitor) VisitParenthesized_expr(ctx *sqlgrammar.Parenthesized_exprContext) interface{} {
+func (v *astBuilder) VisitParenthesized_expr(ctx *grammar.Parenthesized_exprContext) interface{} {
 	var typeCast tree.TypeCastType
 	if ctx.Type_cast() != nil {
 		typeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
@@ -249,13 +271,13 @@ func (v *KFSqliteVisitor) VisitParenthesized_expr(ctx *sqlgrammar.Parenthesized_
 	return expr
 }
 
-func (v *KFSqliteVisitor) VisitSubquery(ctx *sqlgrammar.SubqueryContext) interface{} {
-	return v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt)
+func (v *astBuilder) VisitSubquery(ctx *grammar.SubqueryContext) interface{} {
+	return v.Visit(ctx.Select_core()).(*tree.SelectCore)
 }
 
 // VisitSubquery_expr is called when visiting a subquery_expr, return *tree.ExpressionSelect
-func (v *KFSqliteVisitor) VisitSubquery_expr(ctx *sqlgrammar.Subquery_exprContext) interface{} {
-	stmt := v.Visit(ctx.Subquery()).(*tree.SelectStmt)
+func (v *astBuilder) VisitSubquery_expr(ctx *grammar.Subquery_exprContext) interface{} {
+	stmt := v.Visit(ctx.Subquery()).(*tree.SelectCore)
 	expr := &tree.ExpressionSelect{
 		Select: stmt,
 	}
@@ -269,7 +291,7 @@ func (v *KFSqliteVisitor) VisitSubquery_expr(ctx *sqlgrammar.Subquery_exprContex
 }
 
 // VisitWhen_clause is called when visiting a when_clause, return [2]*tree.Expression
-func (v *KFSqliteVisitor) VisitWhen_clause(ctx *sqlgrammar.When_clauseContext) interface{} {
+func (v *astBuilder) VisitWhen_clause(ctx *grammar.When_clauseContext) interface{} {
 	var when = [2]tree.Expression{}
 	when[0] = v.Visit(ctx.GetCondition()).(tree.Expression)
 	when[1] = v.Visit(ctx.GetResult()).(tree.Expression)
@@ -277,7 +299,7 @@ func (v *KFSqliteVisitor) VisitWhen_clause(ctx *sqlgrammar.When_clauseContext) i
 }
 
 // VisitCase_expr is called when visiting a case_expr, return *tree.ExpressionCase
-func (v *KFSqliteVisitor) VisitCase_expr(ctx *sqlgrammar.Case_exprContext) interface{} {
+func (v *astBuilder) VisitCase_expr(ctx *grammar.Case_exprContext) interface{} {
 	expr := &tree.ExpressionCase{}
 	if ctx.GetCase_clause() != nil {
 		expr.CaseExpression = v.Visit(ctx.GetCase_clause()).(tree.Expression)
@@ -295,11 +317,11 @@ func (v *KFSqliteVisitor) VisitCase_expr(ctx *sqlgrammar.Case_exprContext) inter
 }
 
 // VisitFunction_call is called when visiting a function_call, return *tree.ExpressionFunction
-func (v *KFSqliteVisitor) VisitFunction_call(ctx *sqlgrammar.Function_callContext) interface{} {
+func (v *astBuilder) VisitFunction_call(ctx *grammar.Function_callContext) interface{} {
 	expr := &tree.ExpressionFunction{
 		Inputs: make([]tree.Expression, len(ctx.AllExpr())),
 	}
-	funcName := extractSQLName(ctx.Function_name().GetText())
+	funcName := util.ExtractSQLName(ctx.Function_name().GetText())
 
 	f, ok := tree.SQLFunctions[strings.ToLower(funcName)]
 	if !ok {
@@ -319,7 +341,7 @@ func (v *KFSqliteVisitor) VisitFunction_call(ctx *sqlgrammar.Function_callContex
 }
 
 // VisitFunction_expr is called when visiting a function_expr, return *tree.ExpressionFunction
-func (v *KFSqliteVisitor) VisitFunction_expr(ctx *sqlgrammar.Function_exprContext) interface{} {
+func (v *astBuilder) VisitFunction_expr(ctx *grammar.Function_exprContext) interface{} {
 	expr := v.Visit(ctx.Function_call()).(*tree.ExpressionFunction)
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
@@ -328,27 +350,27 @@ func (v *KFSqliteVisitor) VisitFunction_expr(ctx *sqlgrammar.Function_exprContex
 }
 
 // VisitExpr_list_expr is called when visiting a expr_list_expr, return *tree.ExpressionList
-func (v *KFSqliteVisitor) VisitExpr_list_expr(ctx *sqlgrammar.Expr_list_exprContext) interface{} {
+func (v *astBuilder) VisitExpr_list_expr(ctx *grammar.Expr_list_exprContext) interface{} {
 	return v.Visit(ctx.Expr_list()).(*tree.ExpressionList)
 }
 
 // VisitArithmetic_expr is called when visiting a arithmetic_expr, return *tree.ExpressionArithmetic
-func (v *KFSqliteVisitor) VisitArithmetic_expr(ctx *sqlgrammar.Arithmetic_exprContext) interface{} {
+func (v *astBuilder) VisitArithmetic_expr(ctx *grammar.Arithmetic_exprContext) interface{} {
 	expr := &tree.ExpressionArithmetic{}
 	expr.Left = v.Visit(ctx.GetLeft()).(tree.Expression)
 	expr.Right = v.Visit(ctx.GetRight()).(tree.Expression)
 
 	switch {
-	case ctx.PLUS() != nil:
-		expr.Operator = tree.ArithmeticOperatorAdd
-	case ctx.MINUS() != nil:
-		expr.Operator = tree.ArithmeticOperatorSubtract
 	case ctx.STAR() != nil:
 		expr.Operator = tree.ArithmeticOperatorMultiply
 	case ctx.DIV() != nil:
 		expr.Operator = tree.ArithmeticOperatorDivide
 	case ctx.MOD() != nil:
 		expr.Operator = tree.ArithmeticOperatorModulus
+	case ctx.PLUS() != nil:
+		expr.Operator = tree.ArithmeticOperatorAdd
+	case ctx.MINUS() != nil:
+		expr.Operator = tree.ArithmeticOperatorSubtract
 	default:
 		panic(fmt.Sprintf("unknown arithmetic operator %s", ctx.GetText()))
 	}
@@ -357,7 +379,7 @@ func (v *KFSqliteVisitor) VisitArithmetic_expr(ctx *sqlgrammar.Arithmetic_exprCo
 }
 
 // VisitIn_subquery_expr is called when visiting a in_suquery_expr, return *tree.ExpressionBinaryComparison
-func (v *KFSqliteVisitor) VisitIn_subquery_expr(ctx *sqlgrammar.In_subquery_exprContext) interface{} {
+func (v *astBuilder) VisitIn_subquery_expr(ctx *grammar.In_subquery_exprContext) interface{} {
 	expr := &tree.ExpressionBinaryComparison{
 		Left:     v.Visit(ctx.GetElem()).(tree.Expression),
 		Operator: tree.ComparisonOperatorIn,
@@ -365,13 +387,13 @@ func (v *KFSqliteVisitor) VisitIn_subquery_expr(ctx *sqlgrammar.In_subquery_expr
 	if ctx.NOT_() != nil {
 		expr.Operator = tree.ComparisonOperatorNotIn
 	}
-	sub := v.Visit(ctx.Subquery()).(*tree.SelectStmt)
+	sub := v.Visit(ctx.Subquery()).(*tree.SelectCore)
 	expr.Right = &tree.ExpressionSelect{Select: sub}
 	return expr
 }
 
 // VisitExpr_list is called when visiting a expr_list, return *tree.ExpressionList
-func (v *KFSqliteVisitor) VisitExpr_list(ctx *sqlgrammar.Expr_listContext) interface{} {
+func (v *astBuilder) VisitExpr_list(ctx *grammar.Expr_listContext) interface{} {
 	exprCount := len(ctx.AllExpr())
 	exprs := make([]tree.Expression, exprCount)
 	for i, exprCtx := range ctx.AllExpr() {
@@ -381,7 +403,7 @@ func (v *KFSqliteVisitor) VisitExpr_list(ctx *sqlgrammar.Expr_listContext) inter
 }
 
 // VisitIn_list_expr is called when visiting a in_list_expr, return *tree.ExpressionBinaryComparison
-func (v *KFSqliteVisitor) VisitIn_list_expr(ctx *sqlgrammar.In_list_exprContext) interface{} {
+func (v *astBuilder) VisitIn_list_expr(ctx *grammar.In_list_exprContext) interface{} {
 	expr := &tree.ExpressionBinaryComparison{
 		Left:     v.Visit(ctx.GetElem()).(tree.Expression),
 		Operator: tree.ComparisonOperatorIn,
@@ -394,7 +416,7 @@ func (v *KFSqliteVisitor) VisitIn_list_expr(ctx *sqlgrammar.In_list_exprContext)
 }
 
 // VisitBetween_expr is called when visiting a between_expr, return *tree.ExpressionBetween
-func (v *KFSqliteVisitor) VisitBetween_expr(ctx *sqlgrammar.Between_exprContext) interface{} {
+func (v *astBuilder) VisitBetween_expr(ctx *grammar.Between_exprContext) interface{} {
 	expr := &tree.ExpressionBetween{
 		Expression: v.Visit(ctx.GetElem()).(tree.Expression),
 		Left:       v.Visit(ctx.GetLow()).(tree.Expression),
@@ -407,7 +429,7 @@ func (v *KFSqliteVisitor) VisitBetween_expr(ctx *sqlgrammar.Between_exprContext)
 }
 
 // VisitLike_expr is called when visiting a like_expr, return *tree.ExpressionStringCompare
-func (v *KFSqliteVisitor) VisitLike_expr(ctx *sqlgrammar.Like_exprContext) interface{} {
+func (v *astBuilder) VisitLike_expr(ctx *grammar.Like_exprContext) interface{} {
 	expr := &tree.ExpressionStringCompare{
 		Left:     v.Visit(ctx.GetElem()).(tree.Expression),
 		Operator: tree.StringOperatorLike,
@@ -423,7 +445,7 @@ func (v *KFSqliteVisitor) VisitLike_expr(ctx *sqlgrammar.Like_exprContext) inter
 }
 
 // VisitComparisonOperator is called when visiting a comparisonOpertor, return tree.ComparisonOperator
-func (v *KFSqliteVisitor) VisitComparisonOperator(ctx *sqlgrammar.ComparisonOperatorContext) interface{} {
+func (v *astBuilder) VisitComparisonOperator(ctx *grammar.ComparisonOperatorContext) interface{} {
 	switch {
 	case ctx.LT() != nil:
 		return tree.ComparisonOperatorLessThan
@@ -445,7 +467,7 @@ func (v *KFSqliteVisitor) VisitComparisonOperator(ctx *sqlgrammar.ComparisonOper
 }
 
 // VisitComparison_expr is called when visiting a comparison_expr, return *tree.ExpressionBinaryComparison
-func (v *KFSqliteVisitor) VisitComparison_expr(ctx *sqlgrammar.Comparison_exprContext) interface{} {
+func (v *astBuilder) VisitComparison_expr(ctx *grammar.Comparison_exprContext) interface{} {
 	expr := &tree.ExpressionBinaryComparison{
 		Left:     v.Visit(ctx.GetLeft()).(tree.Expression),
 		Operator: v.Visit(ctx.ComparisonOperator()).(tree.ComparisonOperator),
@@ -456,14 +478,14 @@ func (v *KFSqliteVisitor) VisitComparison_expr(ctx *sqlgrammar.Comparison_exprCo
 }
 
 // VisitBollean_value is called when visiting a boolean_value, return *tree.ExpressionLiteral
-func (v *KFSqliteVisitor) VisitBoolean_value(ctx *sqlgrammar.Boolean_valueContext) interface{} {
+func (v *astBuilder) VisitBoolean_value(ctx *grammar.Boolean_valueContext) interface{} {
 	return &tree.ExpressionLiteral{
 		Value: ctx.GetText(),
 	}
 }
 
 // VisitIs_expr is called when visiting a is_expr, return *tree.ExpressionIs
-func (v *KFSqliteVisitor) VisitIs_expr(ctx *sqlgrammar.Is_exprContext) interface{} {
+func (v *astBuilder) VisitIs_expr(ctx *grammar.Is_exprContext) interface{} {
 	expr := &tree.ExpressionIs{
 		Left: v.Visit(ctx.Expr(0)).(tree.Expression),
 	}
@@ -486,7 +508,7 @@ func (v *KFSqliteVisitor) VisitIs_expr(ctx *sqlgrammar.Is_exprContext) interface
 }
 
 // VisitNull_expr is called when visiting a null_expr, return *tree.ExpressionIs
-func (v *KFSqliteVisitor) VisitNull_expr(ctx *sqlgrammar.Null_exprContext) interface{} {
+func (v *astBuilder) VisitNull_expr(ctx *grammar.Null_exprContext) interface{} {
 	expr := &tree.ExpressionIs{
 		Left:  v.Visit(ctx.Expr()).(tree.Expression),
 		Right: &tree.ExpressionLiteral{Value: "NULL"},
@@ -498,7 +520,7 @@ func (v *KFSqliteVisitor) VisitNull_expr(ctx *sqlgrammar.Null_exprContext) inter
 }
 
 // VisitLogical_not_expr is called when visiting a logical_not_expr, return *tree.ExpressionUnary
-func (v *KFSqliteVisitor) VisitLogical_not_expr(ctx *sqlgrammar.Logical_not_exprContext) interface{} {
+func (v *astBuilder) VisitLogical_not_expr(ctx *grammar.Logical_not_exprContext) interface{} {
 	return &tree.ExpressionUnary{
 		Operator: tree.UnaryOperatorNot,
 		Operand:  v.Visit(ctx.Expr()).(tree.Expression),
@@ -506,7 +528,7 @@ func (v *KFSqliteVisitor) VisitLogical_not_expr(ctx *sqlgrammar.Logical_not_expr
 }
 
 // VisitLogical_binary_expr is called when visiting a logical_binary_expr, return *tree.ExpressionBinaryLogical
-func (v *KFSqliteVisitor) VisitLogical_binary_expr(ctx *sqlgrammar.Logical_binary_exprContext) interface{} {
+func (v *astBuilder) VisitLogical_binary_expr(ctx *grammar.Logical_binary_exprContext) interface{} {
 	expr := &tree.ExpressionBinaryComparison{
 		Left:  v.Visit(ctx.GetLeft()).(tree.Expression),
 		Right: v.Visit(ctx.GetRight()).(tree.Expression),
@@ -525,7 +547,7 @@ func (v *KFSqliteVisitor) VisitLogical_binary_expr(ctx *sqlgrammar.Logical_binar
 }
 
 // VisitValues_clause is called when visiting a values_clause, return [][]tree.Expression
-func (v *KFSqliteVisitor) VisitValues_clause(ctx *sqlgrammar.Values_clauseContext) interface{} {
+func (v *astBuilder) VisitValues_clause(ctx *grammar.Values_clauseContext) interface{} {
 	if ctx == nil {
 		return nil
 	}
@@ -544,7 +566,7 @@ func (v *KFSqliteVisitor) VisitValues_clause(ctx *sqlgrammar.Values_clauseContex
 }
 
 // VisitUpsert_clause is called when visiting a upsert_clause, return *tree.Upsert
-func (v *KFSqliteVisitor) VisitUpsert_clause(ctx *sqlgrammar.Upsert_clauseContext) interface{} {
+func (v *astBuilder) VisitUpsert_clause(ctx *grammar.Upsert_clauseContext) interface{} {
 	clause := tree.Upsert{
 		Type: tree.UpsertTypeDoNothing,
 	}
@@ -554,7 +576,7 @@ func (v *KFSqliteVisitor) VisitUpsert_clause(ctx *sqlgrammar.Upsert_clauseContex
 	allIndexedColumnCtx := ctx.AllIndexed_column()
 	indexedColumns := make([]string, len(allIndexedColumnCtx))
 	for i, indexedColumnCtx := range allIndexedColumnCtx {
-		indexedColumns[i] = extractSQLName(indexedColumnCtx.Column_name().GetText())
+		indexedColumns[i] = util.ExtractSQLName(indexedColumnCtx.Column_name().GetText())
 	}
 	conflictTarget.IndexedColumns = indexedColumns
 
@@ -587,12 +609,12 @@ func (v *KFSqliteVisitor) VisitUpsert_clause(ctx *sqlgrammar.Upsert_clauseContex
 }
 
 // VisitUpsert_update is called when visiting a upsert_update, return *tree.UpdateSetClause
-func (v *KFSqliteVisitor) VisitUpsert_update(ctx *sqlgrammar.Upsert_updateContext) interface{} {
+func (v *astBuilder) VisitUpsert_update(ctx *grammar.Upsert_updateContext) interface{} {
 	clause := tree.UpdateSetClause{}
 	if ctx.Column_name_list() != nil {
 		clause.Columns = v.Visit(ctx.Column_name_list()).([]string)
 	} else {
-		clause.Columns = []string{extractSQLName(ctx.Column_name().GetText())}
+		clause.Columns = []string{util.ExtractSQLName(ctx.Column_name().GetText())}
 	}
 
 	clause.Expression = v.Visit(ctx.Expr()).(tree.Expression)
@@ -600,21 +622,21 @@ func (v *KFSqliteVisitor) VisitUpsert_update(ctx *sqlgrammar.Upsert_updateContex
 }
 
 // VisitColumn_name_list is called when visiting a column_name_list, return []string
-func (v *KFSqliteVisitor) VisitColumn_name_list(ctx *sqlgrammar.Column_name_listContext) interface{} {
+func (v *astBuilder) VisitColumn_name_list(ctx *grammar.Column_name_listContext) interface{} {
 	names := make([]string, len(ctx.AllColumn_name()))
 	for i, nameCtx := range ctx.AllColumn_name() {
-		names[i] = extractSQLName(nameCtx.GetText())
+		names[i] = util.ExtractSQLName(nameCtx.GetText())
 	}
 	return names
 }
 
 // VisitColumn_name is called when visiting a column_name, return string
-func (v *KFSqliteVisitor) VisitColumn_name(ctx *sqlgrammar.Column_nameContext) interface{} {
-	return extractSQLName(ctx.GetText())
+func (v *astBuilder) VisitColumn_name(ctx *grammar.Column_nameContext) interface{} {
+	return util.ExtractSQLName(ctx.GetText())
 }
 
 // VisitReturning_clause is called when visiting a returning_clause, return *tree.ReturningClause
-func (v *KFSqliteVisitor) VisitReturning_clause(ctx *sqlgrammar.Returning_clauseContext) interface{} {
+func (v *astBuilder) VisitReturning_clause(ctx *grammar.Returning_clauseContext) interface{} {
 	clause := tree.ReturningClause{}
 	clause.Returned = make([]*tree.ReturningClauseColumn, len(ctx.AllReturning_clause_result_column()))
 	for i, columnCtx := range ctx.AllReturning_clause_result_column() {
@@ -630,7 +652,7 @@ func (v *KFSqliteVisitor) VisitReturning_clause(ctx *sqlgrammar.Returning_clause
 		}
 
 		if columnCtx.Column_alias() != nil {
-			clause.Returned[i].Alias = extractSQLName(columnCtx.Column_alias().GetText())
+			clause.Returned[i].Alias = util.ExtractSQLName(columnCtx.Column_alias().GetText())
 		}
 
 	}
@@ -638,13 +660,13 @@ func (v *KFSqliteVisitor) VisitReturning_clause(ctx *sqlgrammar.Returning_clause
 }
 
 // VisitUpdate_set_subclause is called when visiting a column_assign_subclause, return *tree.UpdateSetClause
-func (v *KFSqliteVisitor) VisitUpdate_set_subclause(ctx *sqlgrammar.Update_set_subclauseContext) interface{} {
+func (v *astBuilder) VisitUpdate_set_subclause(ctx *grammar.Update_set_subclauseContext) interface{} {
 	result := tree.UpdateSetClause{}
 
 	if ctx.Column_name_list() != nil {
 		result.Columns = v.Visit(ctx.Column_name_list()).([]string)
 	} else {
-		result.Columns = []string{extractSQLName(ctx.Column_name().GetText())}
+		result.Columns = []string{util.ExtractSQLName(ctx.Column_name().GetText())}
 	}
 
 	result.Expression = v.Visit(ctx.Expr()).(tree.Expression)
@@ -652,26 +674,21 @@ func (v *KFSqliteVisitor) VisitUpdate_set_subclause(ctx *sqlgrammar.Update_set_s
 }
 
 // VisitQualified_table_name is called when visiting a qualified_table_name, return *tree.QualifiedTableName
-func (v *KFSqliteVisitor) VisitQualified_table_name(ctx *sqlgrammar.Qualified_table_nameContext) interface{} {
+func (v *astBuilder) VisitQualified_table_name(ctx *grammar.Qualified_table_nameContext) interface{} {
 	result := tree.QualifiedTableName{}
 
-	result.TableName = extractSQLName(ctx.Table_name().GetText())
+	result.TableName = util.ExtractSQLName(ctx.Table_name().GetText())
 
 	if ctx.Table_alias() != nil {
-		result.TableAlias = extractSQLName(ctx.Table_alias().GetText())
+		result.TableAlias = util.ExtractSQLName(ctx.Table_alias().GetText())
 	}
 
 	return &result
 }
 
-// VisitUpdate_stmt is called when visiting a update_stmt, return *tree.Update
-func (v *KFSqliteVisitor) VisitUpdate_stmt(ctx *sqlgrammar.Update_stmtContext) interface{} {
-	t := tree.Update{}
-	var updateStmt tree.UpdateStmt
-
-	if ctx.Common_table_stmt() != nil {
-		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
-	}
+// VisitUpdate_core is called when visiting a update_core, return *tree.UpdateCore
+func (v *astBuilder) VisitUpdate_core(ctx *grammar.Update_coreContext) interface{} {
+	var updateStmt tree.UpdateCore
 
 	updateStmt.QualifiedTableName = v.Visit(ctx.Qualified_table_name()).(*tree.QualifiedTableName)
 
@@ -681,18 +698,7 @@ func (v *KFSqliteVisitor) VisitUpdate_stmt(ctx *sqlgrammar.Update_stmtContext) i
 	}
 
 	if ctx.FROM_() != nil {
-		fromClause := tree.FromClause{
-			JoinClause: &tree.JoinClause{},
-		}
-
-		if ctx.Join_clause() != nil {
-			fromClause.JoinClause = v.Visit(ctx.Join_clause()).(*tree.JoinClause)
-		} else {
-			// table_or_subquery
-			fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery()).(tree.TableOrSubquery)
-		}
-
-		updateStmt.From = &fromClause
+		updateStmt.From = v.Visit(ctx.Relation()).(tree.Relation)
 	}
 
 	if ctx.WHERE_() != nil {
@@ -703,29 +709,35 @@ func (v *KFSqliteVisitor) VisitUpdate_stmt(ctx *sqlgrammar.Update_stmtContext) i
 		updateStmt.Returning = v.Visit(ctx.Returning_clause()).(*tree.ReturningClause)
 	}
 
-	t.UpdateStmt = &updateStmt
-	return &t
+	return &updateStmt
 }
 
-func (v *KFSqliteVisitor) VisitInsert_stmt(ctx *sqlgrammar.Insert_stmtContext) interface{} {
-	t := tree.Insert{}
-	var insertStmt tree.InsertStmt
+// VisitUpdate_stmt is called when visiting a update_stmt, return *tree.UpdateStmt
+func (v *astBuilder) VisitUpdate_stmt(ctx *grammar.Update_stmtContext) interface{} {
+	t := tree.UpdateStmt{}
 
 	if ctx.Common_table_stmt() != nil {
 		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
 	}
 
+	t.Core = v.Visit(ctx.Update_core()).(*tree.UpdateCore)
+	return &t
+}
+
+func (v *astBuilder) VisitInsert_core(ctx *grammar.Insert_coreContext) interface{} {
+	var insertStmt tree.InsertCore
+
 	insertStmt.InsertType = getInsertType(ctx)
-	insertStmt.Table = extractSQLName(ctx.Table_name().GetText())
+	insertStmt.Table = util.ExtractSQLName(ctx.Table_name().GetText())
 	if ctx.Table_alias() != nil {
-		insertStmt.TableAlias = extractSQLName(ctx.Table_alias().GetText())
+		insertStmt.TableAlias = util.ExtractSQLName(ctx.Table_alias().GetText())
 	}
 
 	allColumnNameCtx := ctx.AllColumn_name()
 	if len(allColumnNameCtx) > 0 {
 		insertStmt.Columns = make([]string, len(allColumnNameCtx))
 		for i, nc := range allColumnNameCtx {
-			insertStmt.Columns[i] = extractSQLName(nc.GetText())
+			insertStmt.Columns[i] = util.ExtractSQLName(nc.GetText())
 		}
 	}
 
@@ -737,12 +749,22 @@ func (v *KFSqliteVisitor) VisitInsert_stmt(ctx *sqlgrammar.Insert_stmtContext) i
 		insertStmt.ReturningClause = v.Visit(ctx.Returning_clause()).(*tree.ReturningClause)
 	}
 
-	t.InsertStmt = &insertStmt
+	return &insertStmt
+}
+
+func (v *astBuilder) VisitInsert_stmt(ctx *grammar.Insert_stmtContext) interface{} {
+	t := tree.InsertStmt{}
+
+	if ctx.Common_table_stmt() != nil {
+		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
+	}
+
+	t.Core = v.Visit(ctx.Insert_core()).(*tree.InsertCore)
 	return &t
 }
 
 // VisitCompound_operator is called when visiting a compound_operator, return *tree.CompoundOperator
-func (v *KFSqliteVisitor) VisitCompound_operator(ctx *sqlgrammar.Compound_operatorContext) interface{} {
+func (v *astBuilder) VisitCompound_operator(ctx *grammar.Compound_operatorContext) interface{} {
 	switch {
 	case ctx.UNION_() != nil:
 		if ctx.ALL_() != nil {
@@ -758,7 +780,7 @@ func (v *KFSqliteVisitor) VisitCompound_operator(ctx *sqlgrammar.Compound_operat
 }
 
 // VisitOrdering_term is called when visiting a ordering_term, return *tree.OrderingTerm
-func (v *KFSqliteVisitor) VisitOrdering_term(ctx *sqlgrammar.Ordering_termContext) interface{} {
+func (v *astBuilder) VisitOrdering_term(ctx *grammar.Ordering_termContext) interface{} {
 	result := tree.OrderingTerm{}
 	result.Expression = v.Visit(ctx.Expr()).(tree.Expression)
 
@@ -782,7 +804,7 @@ func (v *KFSqliteVisitor) VisitOrdering_term(ctx *sqlgrammar.Ordering_termContex
 }
 
 // VisitOrder_by_stmt is called when visiting a order_by_stmt, return *tree.OrderBy
-func (v *KFSqliteVisitor) VisitOrder_by_stmt(ctx *sqlgrammar.Order_by_stmtContext) interface{} {
+func (v *astBuilder) VisitOrder_by_stmt(ctx *grammar.Order_by_stmtContext) interface{} {
 	count := len(ctx.AllOrdering_term())
 	result := tree.OrderBy{OrderingTerms: make([]*tree.OrderingTerm, count)}
 
@@ -794,10 +816,15 @@ func (v *KFSqliteVisitor) VisitOrder_by_stmt(ctx *sqlgrammar.Order_by_stmtContex
 }
 
 // VisitLimit_stmt is called when visiting a limit_stmt, return *tree.Limit
-func (v *KFSqliteVisitor) VisitLimit_stmt(ctx *sqlgrammar.Limit_stmtContext) interface{} {
+func (v *astBuilder) VisitLimit_stmt(ctx *grammar.Limit_stmtContext) interface{} {
 	result := tree.Limit{
 		Expression: v.Visit(ctx.Expr(0)).(tree.Expression),
 	}
+
+	// LIMIT row_count OFFSET offset;
+	// IS SAME AS
+	// LIMIT offset, row_count;
+	// TODO: in the tree we should just use one or the other, not both.
 
 	if ctx.OFFSET_() != nil {
 		result.Offset = v.Visit(ctx.Expr(1)).(tree.Expression)
@@ -807,30 +834,31 @@ func (v *KFSqliteVisitor) VisitLimit_stmt(ctx *sqlgrammar.Limit_stmtContext) int
 }
 
 // VisitTable_or_subquery is called when visiting a table_or_subquery, return tree.TableOrSubquery
-func (v *KFSqliteVisitor) VisitTable_or_subquery(ctx *sqlgrammar.Table_or_subqueryContext) interface{} {
+func (v *astBuilder) VisitTable_or_subquery(ctx *grammar.Table_or_subqueryContext) interface{} {
 	switch {
 	case ctx.Table_name() != nil:
-		t := tree.TableOrSubqueryTable{
-			Name: extractSQLName(ctx.Table_name().GetText()),
+		t := tree.RelationTable{
+			Name: util.ExtractSQLName(ctx.Table_name().GetText()),
 		}
 		if ctx.Table_alias() != nil {
-			t.Alias = extractSQLName(ctx.Table_alias().GetText())
+			t.Alias = util.ExtractSQLName(ctx.Table_alias().GetText())
 		}
 		return &t
-	case ctx.Select_stmt_core() != nil:
-		t := tree.TableOrSubquerySelect{
-			Select: v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt),
+	case ctx.Select_core() != nil:
+		t := tree.RelationSubquery{
+			Select: v.Visit(ctx.Select_core()).(*tree.SelectCore),
 		}
 		if ctx.Table_alias() != nil {
-			t.Alias = extractSQLName(ctx.Table_alias().GetText())
+			t.Alias = util.ExtractSQLName(ctx.Table_alias().GetText())
 		}
 		return &t
+	default:
+		panic("unsupported table_or_subquery type")
 	}
-	return nil
 }
 
 // VisitJoin_operator is called when visiting a join_operator, return *tree.JoinOperator
-func (v *KFSqliteVisitor) VisitJoin_operator(ctx *sqlgrammar.Join_operatorContext) interface{} {
+func (v *astBuilder) VisitJoin_operator(ctx *grammar.Join_operatorContext) interface{} {
 	jp := tree.JoinOperator{
 		JoinType: tree.JoinTypeJoin,
 	}
@@ -856,37 +884,22 @@ func (v *KFSqliteVisitor) VisitJoin_operator(ctx *sqlgrammar.Join_operatorContex
 	return &jp
 }
 
-// VisitJoin_clause is called when visiting a join_clause, return *tree.JoinClause
-func (v *KFSqliteVisitor) VisitJoin_clause(ctx *sqlgrammar.Join_clauseContext) interface{} {
-	clause := tree.JoinClause{}
-
-	// just table_or_subquery
-	clause.TableOrSubquery = v.Visit(ctx.Table_or_subquery(0)).(tree.TableOrSubquery)
-	if len(ctx.AllTable_or_subquery()) == 1 {
-		return &clause
-	}
-
-	// with joins
-	joins := make([]*tree.JoinPredicate, len(ctx.AllJoin_operator()))
-	for i, subCtx := range ctx.AllJoin_operator() {
-		jp := tree.JoinPredicate{}
-		jp.JoinOperator = v.Visit(subCtx).(*tree.JoinOperator)
-		jp.Table = v.Visit(ctx.Table_or_subquery(i + 1)).(tree.TableOrSubquery)
-		jp.Constraint = v.Visit(ctx.Join_constraint(i).Expr()).(tree.Expression)
-		joins[i] = &jp
-	}
-	clause.Joins = joins
-
-	return &clause
+// VisitJoin_relation is called when visiting a join_relation, return *tree.JoinPredicate
+func (v *astBuilder) VisitJoin_relation(ctx *grammar.Join_relationContext) interface{} {
+	jp := tree.JoinPredicate{}
+	jp.JoinOperator = v.Visit(ctx.Join_operator()).(*tree.JoinOperator)
+	jp.Table = v.Visit(ctx.GetRight_relation()).(tree.Relation)
+	jp.Constraint = v.Visit(ctx.Join_constraint().Expr()).(tree.Expression)
+	return &jp
 }
 
 // VisitResult_column is called when visiting a result_column, return tree.ResultColumn
-func (v *KFSqliteVisitor) VisitResult_column(ctx *sqlgrammar.Result_columnContext) interface{} {
+func (v *astBuilder) VisitResult_column(ctx *grammar.Result_columnContext) interface{} {
 	switch {
 	// table_name need to be checked first
 	case ctx.Table_name() != nil:
 		return &tree.ResultColumnTable{
-			TableName: extractSQLName(ctx.Table_name().GetText()),
+			TableName: util.ExtractSQLName(ctx.Table_name().GetText()),
 		}
 	case ctx.STAR() != nil:
 		return &tree.ResultColumnStar{}
@@ -895,7 +908,7 @@ func (v *KFSqliteVisitor) VisitResult_column(ctx *sqlgrammar.Result_columnContex
 			Expression: v.Visit(ctx.Expr()).(tree.Expression),
 		}
 		if ctx.Column_alias() != nil {
-			r.Alias = extractSQLName(ctx.Column_alias().GetText())
+			r.Alias = util.ExtractSQLName(ctx.Column_alias().GetText())
 		}
 		return r
 	}
@@ -903,32 +916,36 @@ func (v *KFSqliteVisitor) VisitResult_column(ctx *sqlgrammar.Result_columnContex
 	return nil
 }
 
-// VisitDelete_stmt is called when visiting a delete_stmt, return *tree.Delete
-func (v *KFSqliteVisitor) VisitDelete_stmt(ctx *sqlgrammar.Delete_stmtContext) interface{} {
-	t := tree.Delete{}
+func (v *astBuilder) VisitDelete_core(ctx *grammar.Delete_coreContext) interface{} {
+	var deleteStmt tree.DeleteCore
+	deleteStmt.QualifiedTableName = v.Visit(ctx.Qualified_table_name()).(*tree.QualifiedTableName)
+
+	if ctx.WHERE_() != nil {
+		deleteStmt.Where = v.Visit(ctx.Expr()).(tree.Expression)
+	}
+
+	if ctx.Returning_clause() != nil {
+		deleteStmt.Returning = v.Visit(ctx.Returning_clause()).(*tree.ReturningClause)
+	}
+
+	return &deleteStmt
+}
+
+// VisitDelete_stmt is called when visiting a delete_stmt, return *tree.DeleteStmt
+func (v *astBuilder) VisitDelete_stmt(ctx *grammar.Delete_stmtContext) interface{} {
+	t := tree.DeleteStmt{}
 
 	if ctx.Common_table_stmt() != nil {
 		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
 	}
 
-	stmt := tree.DeleteStmt{}
-	stmt.QualifiedTableName = v.Visit(ctx.Qualified_table_name()).(*tree.QualifiedTableName)
-
-	if ctx.WHERE_() != nil {
-		stmt.Where = v.Visit(ctx.Expr()).(tree.Expression)
-	}
-
-	if ctx.Returning_clause() != nil {
-		stmt.Returning = v.Visit(ctx.Returning_clause()).(*tree.ReturningClause)
-	}
-
-	t.DeleteStmt = &stmt
+	t.Core = v.Visit(ctx.Delete_core()).(*tree.DeleteCore)
 	return &t
 }
 
-// VisitSelect_core is called when visiting a select_core, return *tree.SelectCore
-func (v *KFSqliteVisitor) VisitSelect_core(ctx *sqlgrammar.Select_coreContext) interface{} {
-	t := tree.SelectCore{
+// VisitSimple_select is called when visiting a Simple_select, return *tree.SelectCore
+func (v *astBuilder) VisitSimple_select(ctx *grammar.Simple_selectContext) interface{} {
+	t := tree.SimpleSelect{
 		SelectType: tree.SelectTypeAll,
 	}
 
@@ -944,34 +961,7 @@ func (v *KFSqliteVisitor) VisitSelect_core(ctx *sqlgrammar.Select_coreContext) i
 	}
 
 	if ctx.FROM_() != nil {
-		fromClause := tree.FromClause{
-			JoinClause: &tree.JoinClause{},
-		}
-
-		if ctx.Join_clause() != nil {
-			fromClause.JoinClause = v.Visit(ctx.Join_clause()).(*tree.JoinClause)
-		} else {
-			// table_or_subquery
-			fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery()).(tree.TableOrSubquery)
-
-			// with comma(cartesian) join
-			//if len(ctx.AllTable_or_subquery()) == 1 {
-			//	fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery(0)).(tree.TableOrSubquery)
-			//} else {
-			//	//tos := make([]tree.TableOrSubquery, len(ctx.AllTable_or_subquery()))
-			//	//
-			//	//for i, tableOrSubqueryCtx := range ctx.AllTable_or_subquery() {
-			//	//	tos[i] = v.Visit(tableOrSubqueryCtx).(tree.TableOrSubquery)
-			//	//}
-			//	//
-			//	//fromClause.JoinClause.TableOrSubquery = &tree.TableOrSubqueryList{
-			//	//	TableOrSubqueries: tos,
-			//	//}
-			//	panic("not support comma(cartesian) join")
-			//}
-		}
-
-		t.From = &fromClause
+		t.From = v.Visit(ctx.Relation()).(tree.Relation)
 	}
 
 	if ctx.GetWhereExpr() != nil {
@@ -998,18 +988,38 @@ func (v *KFSqliteVisitor) VisitSelect_core(ctx *sqlgrammar.Select_coreContext) i
 	return &t
 }
 
-// VisitSelect_stmt_core is called when visiting a select_stmt_core, return *tree.SelectStmt
-func (v *KFSqliteVisitor) VisitSelect_stmt_core(ctx *sqlgrammar.Select_stmt_coreContext) interface{} {
-	t := tree.SelectStmt{}
-	selectCores := make([]*tree.SelectCore, len(ctx.AllSelect_core()))
+// VisitRelation is called when visiting a relation, return tree.Relation
+func (v *astBuilder) VisitRelation(ctx *grammar.RelationContext) interface{} {
+	left := v.Visit(ctx.Table_or_subquery()).(tree.Relation)
 
-	// first select_core
-	selectCores[0] = v.Visit(ctx.Select_core(0)).(*tree.SelectCore)
+	if len(ctx.AllJoin_relation()) > 0 {
+		rel := tree.RelationJoin{
+			Relation: left,
+			Joins:    make([]*tree.JoinPredicate, len(ctx.AllJoin_relation())),
+		}
+		// join relations
+		for i, joinRelationCtx := range ctx.AllJoin_relation() {
+			rel.Joins[i] = v.Visit(joinRelationCtx).(*tree.JoinPredicate)
+		}
+		return &rel
+	} else {
+		// table or subquery relation
+		return left
+	}
+}
 
-	// rest select_core
-	for i, selectCoreCtx := range ctx.AllSelect_core()[1:] {
+// VisitSelect_core is called when visiting a select_stmt_core, return *tree.SelectStmtNoCte
+func (v *astBuilder) VisitSelect_core(ctx *grammar.Select_coreContext) interface{} {
+	t := tree.SelectCore{}
+	selectCores := make([]*tree.SimpleSelect, len(ctx.AllSimple_select()))
+
+	// first Simple_select
+	selectCores[0] = v.Visit(ctx.Simple_select(0)).(*tree.SimpleSelect)
+
+	// rest Simple_select
+	for i, selectCoreCtx := range ctx.AllSimple_select()[1:] {
 		compoundOperator := v.Visit(ctx.Compound_operator(i)).(*tree.CompoundOperator)
-		core := v.Visit(selectCoreCtx).(*tree.SelectCore)
+		core := v.Visit(selectCoreCtx).(*tree.SimpleSelect)
 		core.Compound = compoundOperator
 		selectCores[i+1] = core
 	}
@@ -1027,39 +1037,39 @@ func (v *KFSqliteVisitor) VisitSelect_stmt_core(ctx *sqlgrammar.Select_stmt_core
 	return &t
 }
 
-// VisitSelect_stmt is called when visiting a select_stmt, return *tree.Select
-func (v *KFSqliteVisitor) VisitSelect_stmt(ctx *sqlgrammar.Select_stmtContext) interface{} {
-	t := tree.Select{}
+// VisitSelect_stmt is called when visiting a select_stmt, return *tree.SelectStmt
+func (v *astBuilder) VisitSelect_stmt(ctx *grammar.Select_stmtContext) interface{} {
+	t := tree.SelectStmt{}
 
 	if ctx.Common_table_stmt() != nil {
 		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
 	}
 
-	t.SelectStmt = v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt)
+	t.Stmt = v.Visit(ctx.Select_core()).(*tree.SelectCore)
 	return &t
 }
 
-func (v *KFSqliteVisitor) VisitSql_stmt_list(ctx *sqlgrammar.Sql_stmt_listContext) interface{} {
+func (v *astBuilder) VisitSql_stmt_list(ctx *grammar.Sql_stmt_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *KFSqliteVisitor) VisitSql_stmt(ctx *sqlgrammar.Sql_stmtContext) interface{} {
+func (v *astBuilder) VisitSql_stmt(ctx *grammar.Sql_stmtContext) interface{} {
 	// Sql_stmtContext will only have one stmt
-	return v.VisitChildren(ctx).([]tree.Ast)[0]
+	return v.VisitChildren(ctx).([]tree.AstNode)[0]
 }
 
-// VisitStatements is called first by Visitor.Visit
-func (v *KFSqliteVisitor) VisitStatements(ctx *sqlgrammar.StatementsContext) interface{} {
+// VisitStatements is called when visiting a statements, return []tree.AstNode
+func (v *astBuilder) VisitStatements(ctx *grammar.StatementsContext) interface{} {
 	// ParseContext will only have one Sql_stmt_listContext
 	sqlStmtListContext := ctx.Sql_stmt_list(0)
-	return v.VisitChildren(sqlStmtListContext).([]tree.Ast)
+	return v.VisitChildren(sqlStmtListContext).([]tree.AstNode)
 }
 
 // Visit dispatch to the visit method of the ctx
 // e.g. if the tree is a ParseContext, then dispatch call VisitParse.
 // Overwrite is needed,
 // refer to https://github.com/antlr/antlr4/pull/1841#issuecomment-576791512
-func (v *KFSqliteVisitor) Visit(parseTree antlr.ParseTree) interface{} {
+func (v *astBuilder) Visit(parseTree antlr.ParseTree) interface{} {
 	if v.trace {
 		fmt.Printf("visit tree: %v, %s\n", reflect.TypeOf(parseTree), parseTree.GetText())
 	}
@@ -1070,8 +1080,8 @@ func (v *KFSqliteVisitor) Visit(parseTree antlr.ParseTree) interface{} {
 // Overwrite is needed,
 // refer to https://github.com/antlr/antlr4/pull/1841#issuecomment-576791512
 // calling function need to convert the result to asts
-func (v *KFSqliteVisitor) VisitChildren(node antlr.RuleNode) interface{} {
-	var result []tree.Ast
+func (v *astBuilder) VisitChildren(node antlr.RuleNode) interface{} {
+	var result []tree.AstNode
 	n := node.GetChildCount()
 	for i := 0; i < n; i++ {
 		child := node.GetChild(i)
@@ -1082,39 +1092,16 @@ func (v *KFSqliteVisitor) VisitChildren(node antlr.RuleNode) interface{} {
 			break
 		}
 		c := child.(antlr.ParseTree)
-		childResult := v.Visit(c).(tree.Ast)
+		childResult := v.Visit(c).(tree.AstNode)
 		result = append(result, childResult)
 	}
 	return result
 }
 
-func (v *KFSqliteVisitor) shouldVisitNextChild(node antlr.Tree, currentResult interface{}) bool {
+func (v *astBuilder) shouldVisitNextChild(node antlr.Tree, currentResult interface{}) bool {
 	if _, ok := node.(antlr.TerminalNode); ok {
 		return false
 	}
 
 	return true
-}
-
-// extractSQLName remove surrounding lexical token(pair) of an identifier(name).
-// Those tokens are: `"` and `[` `]` and "`".
-// In sqlparser identifiers are used for: table name, table alias name, column name,
-// column alias name, collation name, index name, function name.
-func extractSQLName(name string) string {
-	// remove surrounding token pairs
-	if len(name) > 1 {
-		if name[0] == '"' && name[len(name)-1] == '"' {
-			name = name[1 : len(name)-1]
-		}
-
-		if name[0] == '[' && name[len(name)-1] == ']' {
-			name = name[1 : len(name)-1]
-		}
-
-		if name[0] == '`' && name[len(name)-1] == '`' {
-			name = name[1 : len(name)-1]
-		}
-	}
-
-	return name
 }

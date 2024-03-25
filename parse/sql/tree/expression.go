@@ -8,16 +8,9 @@ import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 )
 
-type Expression interface {
-	isExpression() // private function to prevent external packages from implementing this interface
-	ToSQL() string
-	Accept(w Walker) error
-	joinable
-}
-
 type expressionBase struct{}
 
-func (e *expressionBase) isExpression() {}
+func (e *expressionBase) expression() {}
 
 func (e *expressionBase) joinable() joinableStatus {
 	return joinableStatusInvalid
@@ -27,20 +20,26 @@ func (e *expressionBase) ToSQL() string {
 	panic("expressionBase: ToSQL() must be implemented by child")
 }
 
-func (e *expressionBase) Accept(w Walker) error {
-	return fmt.Errorf("expressionBase: Accept() must be implemented by child")
+func (e *expressionBase) Walk(w AstListener) error {
+	return fmt.Errorf("expressionBase: Walk() must be implemented by child")
 }
 
 type Wrapped bool
 
 type ExpressionLiteral struct {
+	node
+
 	expressionBase
 	Wrapped
 	Value    string
 	TypeCast TypeCastType
 }
 
-func (e *ExpressionLiteral) Accept(w Walker) error {
+func (e *ExpressionLiteral) Accept(v AstVisitor) any {
+	return v.VisitExpressionLiteral(e)
+}
+
+func (e *ExpressionLiteral) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionLiteral(e),
 		w.ExitExpressionLiteral(e),
@@ -88,13 +87,19 @@ func validateIsNonStringLiteral(str string) {
 }
 
 type ExpressionBindParameter struct {
+	node
+
 	expressionBase
 	Wrapped
 	Parameter string
 	TypeCast  TypeCastType
 }
 
-func (e *ExpressionBindParameter) Accept(w Walker) error {
+func (e *ExpressionBindParameter) Accept(v AstVisitor) any {
+	return v.VisitExpressionBindParameter(e)
+}
+
+func (e *ExpressionBindParameter) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionBindParameter(e),
 		w.ExitExpressionBindParameter(e),
@@ -121,6 +126,8 @@ func (e *ExpressionBindParameter) ToSQL() string {
 }
 
 type ExpressionColumn struct {
+	node
+
 	expressionBase
 	Wrapped
 	Table    string
@@ -128,7 +135,11 @@ type ExpressionColumn struct {
 	TypeCast TypeCastType
 }
 
-func (e *ExpressionColumn) Accept(w Walker) error {
+func (e *ExpressionColumn) Accept(v AstVisitor) any {
+	return v.VisitExpressionColumn(e)
+}
+
+func (e *ExpressionColumn) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionColumn(e),
 		w.ExitExpressionColumn(e),
@@ -157,6 +168,8 @@ func (e *ExpressionColumn) ToSQL() string {
 }
 
 type ExpressionUnary struct {
+	node
+
 	expressionBase
 	Wrapped
 	Operator UnaryOperator
@@ -166,7 +179,11 @@ type ExpressionUnary struct {
 	// NOTE: type cast only makes sense when wrapped,
 }
 
-func (e *ExpressionUnary) Accept(w Walker) error {
+func (e *ExpressionUnary) Accept(v AstVisitor) any {
+	return v.VisitExpressionUnary(e)
+}
+
+func (e *ExpressionUnary) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionUnary(e),
 		w.ExitExpressionUnary(e),
@@ -191,6 +208,8 @@ func (e *ExpressionUnary) ToSQL() string {
 }
 
 type ExpressionBinaryComparison struct {
+	node
+
 	expressionBase
 	Wrapped
 	Left     Expression
@@ -201,11 +220,15 @@ type ExpressionBinaryComparison struct {
 	// NOTE: type cast only makes sense when wrapped,
 }
 
-func (e *ExpressionBinaryComparison) Accept(w Walker) error {
+func (e *ExpressionBinaryComparison) Accept(v AstVisitor) any {
+	return v.VisitExpressionBinaryComparison(e)
+}
+
+func (e *ExpressionBinaryComparison) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionBinaryComparison(e),
-		accept(w, e.Left),
-		accept(w, e.Right),
+		walk(w, e.Left),
+		walk(w, e.Right),
 		w.ExitExpressionBinaryComparison(e),
 	)
 }
@@ -229,6 +252,8 @@ func (e *ExpressionBinaryComparison) ToSQL() string {
 }
 
 type ExpressionFunction struct {
+	node
+
 	expressionBase
 	Wrapped
 	Function SQLFunction
@@ -238,11 +263,15 @@ type ExpressionFunction struct {
 	TypeCast TypeCastType
 }
 
-func (e *ExpressionFunction) Accept(w Walker) error {
+func (e *ExpressionFunction) Accept(v AstVisitor) any {
+	return v.VisitExpressionFunction(e)
+}
+
+func (e *ExpressionFunction) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionFunction(e),
-		accept(w, e.Function),
-		acceptMany(w, e.Inputs),
+		walk(w, e.Function),
+		walkMany(w, e.Inputs),
 		w.ExitExpressionFunction(e),
 	)
 }
@@ -263,7 +292,7 @@ func (e *ExpressionFunction) ToSQL() string {
 		}
 		stringToWrite = exprFunc.stringDistinct(e.Inputs...)
 	} else {
-		stringToWrite = e.Function.String(e.Inputs...)
+		stringToWrite = e.Function.ToString(e.Inputs...)
 	}
 
 	stmt.WriteString(stringToWrite)
@@ -272,6 +301,8 @@ func (e *ExpressionFunction) ToSQL() string {
 }
 
 type ExpressionList struct {
+	node
+
 	expressionBase
 	Wrapped
 	Expressions []Expression
@@ -279,10 +310,14 @@ type ExpressionList struct {
 	TypeCast TypeCastType
 }
 
-func (e *ExpressionList) Accept(w Walker) error {
+func (e *ExpressionList) Accept(v AstVisitor) any {
+	return v.VisitExpressionList(e)
+}
+
+func (e *ExpressionList) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionList(e),
-		acceptMany(w, e.Expressions),
+		walkMany(w, e.Expressions),
 		w.ExitExpressionList(e),
 	)
 }
@@ -306,6 +341,8 @@ func (e *ExpressionList) ToSQL() string {
 }
 
 type ExpressionCollate struct {
+	node
+
 	expressionBase
 	Wrapped
 	Expression Expression
@@ -315,10 +352,14 @@ type ExpressionCollate struct {
 	// NOTE: type cast only makes sense when wrapped
 }
 
-func (e *ExpressionCollate) Accept(w Walker) error {
+func (e *ExpressionCollate) Accept(v AstVisitor) any {
+	return v.VisitExpressionCollate(e)
+}
+
+func (e *ExpressionCollate) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionCollate(e),
-		accept(w, e.Expression),
+		walk(w, e.Expression),
 		w.ExitExpressionCollate(e),
 	)
 }
@@ -348,6 +389,8 @@ func (e *ExpressionCollate) ToSQL() string {
 }
 
 type ExpressionStringCompare struct {
+	node
+
 	expressionBase
 	Wrapped
 	Left     Expression
@@ -359,12 +402,16 @@ type ExpressionStringCompare struct {
 	// NOTE: type cast only makes sense when wrapped
 }
 
-func (e *ExpressionStringCompare) Accept(w Walker) error {
+func (e *ExpressionStringCompare) Accept(v AstVisitor) any {
+	return v.VisitExpressionStringCompare(e)
+}
+
+func (e *ExpressionStringCompare) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionStringCompare(e),
-		accept(w, e.Left),
-		accept(w, e.Right),
-		accept(w, e.Escape),
+		walk(w, e.Left),
+		walk(w, e.Right),
+		walk(w, e.Escape),
 		w.ExitExpressionStringCompare(e),
 	)
 }
@@ -402,6 +449,8 @@ func (e *ExpressionStringCompare) ToSQL() string {
 }
 
 type ExpressionIs struct {
+	node
+
 	expressionBase
 	Wrapped
 	Left     Expression
@@ -413,11 +462,15 @@ type ExpressionIs struct {
 	// NOTE: type cast only makes sense when wrapped
 }
 
-func (e *ExpressionIs) Accept(w Walker) error {
+func (e *ExpressionIs) Accept(v AstVisitor) any {
+	return v.VisitExpressionIs(e)
+}
+
+func (e *ExpressionIs) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionIs(e),
-		accept(w, e.Left),
-		accept(w, e.Right),
+		walk(w, e.Left),
+		walk(w, e.Right),
 		w.ExitExpressionIs(e),
 	)
 }
@@ -452,6 +505,8 @@ func (e *ExpressionIs) ToSQL() string {
 }
 
 type ExpressionBetween struct {
+	node
+
 	expressionBase
 	Wrapped
 	Expression Expression
@@ -463,12 +518,16 @@ type ExpressionBetween struct {
 	// NOTE: type cast only makes sense when wrapped
 }
 
-func (e *ExpressionBetween) Accept(w Walker) error {
+func (e *ExpressionBetween) Accept(v AstVisitor) any {
+	return v.VisitExpressionBetween(e)
+}
+
+func (e *ExpressionBetween) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionBetween(e),
-		accept(w, e.Expression),
-		accept(w, e.Left),
-		accept(w, e.Right),
+		walk(w, e.Expression),
+		walk(w, e.Left),
+		walk(w, e.Right),
 		w.ExitExpressionBetween(e),
 	)
 }
@@ -507,20 +566,26 @@ func (e *ExpressionBetween) ToSQL() string {
 }
 
 type ExpressionSelect struct {
+	node
+
 	expressionBase
 	Wrapped
 	IsNot    bool
 	IsExists bool
-	Select   *SelectStmt
+	Select   *SelectCore
 
 	TypeCast TypeCastType
 	// NOTE: type cast only makes sense when wrapped
 }
 
-func (e *ExpressionSelect) Accept(w Walker) error {
+func (e *ExpressionSelect) Accept(v AstVisitor) any {
+	return v.VisitExpressionSelect(e)
+}
+
+func (e *ExpressionSelect) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionSelect(e),
-		accept(w, e.Select),
+		walk(w, e.Select),
 		w.ExitExpressionSelect(e),
 	)
 }
@@ -567,6 +632,8 @@ func (e *ExpressionSelect) check() {
 }
 
 type ExpressionCase struct {
+	node
+
 	expressionBase
 	Wrapped
 	CaseExpression Expression
@@ -577,24 +644,28 @@ type ExpressionCase struct {
 	// NOTE: type cast does not apply to the whole case expression
 }
 
-func (e *ExpressionCase) Accept(w Walker) error {
+func (e *ExpressionCase) Accept(v AstVisitor) any {
+	return v.VisitExpressionCase(e)
+}
+
+func (e *ExpressionCase) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionCase(e),
-		accept(w, e.CaseExpression),
+		walk(w, e.CaseExpression),
 		func() error {
 			for _, whenThen := range e.WhenThenPairs {
-				err := accept(w, whenThen[0])
+				err := walk(w, whenThen[0])
 				if err != nil {
 					return err
 				}
-				err = accept(w, whenThen[1])
+				err = walk(w, whenThen[1])
 				if err != nil {
 					return err
 				}
 			}
 			return nil
 		}(),
-		accept(w, e.ElseExpression),
+		walk(w, e.ElseExpression),
 		w.ExitExpressionCase(e),
 	)
 }
@@ -632,6 +703,8 @@ func (e *ExpressionCase) ToSQL() string {
 }
 
 type ExpressionArithmetic struct {
+	node
+
 	expressionBase
 	Wrapped
 	Left     Expression
@@ -642,11 +715,15 @@ type ExpressionArithmetic struct {
 	// NOTE: type cast only makes sense when wrapped
 }
 
-func (e *ExpressionArithmetic) Accept(w Walker) error {
+func (e *ExpressionArithmetic) Accept(v AstVisitor) any {
+	return v.VisitExpressionArithmetic(e)
+}
+
+func (e *ExpressionArithmetic) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionArithmetic(e),
-		accept(w, e.Left),
-		accept(w, e.Right),
+		walk(w, e.Left),
+		walk(w, e.Right),
 		w.ExitExpressionArithmetic(e),
 	)
 }

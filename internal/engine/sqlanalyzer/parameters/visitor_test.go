@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 	"github.com/kwilteam/kwil-db/parse/sql/postgres"
+	"github.com/kwilteam/kwil-db/parse/sql/tree"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -54,14 +55,14 @@ func Test_NumberedParameters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tt.stmt)
+			stmt, err := sqlparser.Parse(tt.stmt)
 			if err != nil {
 				t.Errorf("Parameters() = %v, want %v", err, tt.wantParams)
 			}
 
-			v := parameters.NewParametersVisitor()
+			v := parameters.NewParametersWalker()
 
-			if err := ast.Accept(v); err != nil {
+			if err := stmt.Walk(v); err != nil {
 				t.Errorf("Parameters() = %v, want %v", err, tt.wantParams)
 			}
 
@@ -77,7 +78,7 @@ func Test_NumberedParameters(t *testing.T) {
 				}
 			}
 
-			str, err := ast.ToSQL()
+			str, err := tree.SafeToSQL(stmt)
 			if err != nil {
 				t.Errorf("Parameters() = %v, want %v", err, tt.wantParams)
 			}

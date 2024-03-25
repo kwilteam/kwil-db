@@ -1,3 +1,6 @@
 [submodule "proto"]
 	path = proto
 	url = https://github.com/kwilteam/proto
+[submodule "parse/sql/antlr-grammar"]
+	path = parse/sql/antlr-grammar
+	url = https://github.com/kwilteam/sql-grammar

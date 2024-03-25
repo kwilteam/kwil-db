@@ -230,7 +230,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 		{
 			name: "expression abs function",
 			fields: &tree.ExpressionFunction{
-				Function: &tree.FunctionABS,
+				Function: tree.FunctionABSGetter(nil),
 				Inputs: []tree.Expression{
 					&tree.ExpressionColumn{
 						Column: "foo",
@@ -255,7 +255,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 		{
 			name: "expression abs function with multiple inputs",
 			fields: &tree.ExpressionFunction{
-				Function: &tree.FunctionABS,
+				Function: tree.FunctionABSGetter(nil),
 				Inputs: []tree.Expression{
 					&tree.ExpressionColumn{
 						Column: "foo",
@@ -658,17 +658,13 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			fields: &tree.ExpressionSelect{
 				IsNot:    true,
 				IsExists: true,
-				Select: &tree.SelectStmt{
-					SelectCores: []*tree.SelectCore{
+				Select: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
-							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name:  "foo",
-										Alias: "f",
-									},
-								},
+							From: &tree.RelationTable{
+								Name:  "foo",
+								Alias: "f",
 							},
 							Where: &tree.ExpressionBinaryComparison{
 								Left: &tree.ExpressionColumn{
@@ -691,17 +687,13 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			fields: &tree.ExpressionSelect{
 				IsNot:    true,
 				IsExists: true,
-				Select: &tree.SelectStmt{
-					SelectCores: []*tree.SelectCore{
+				Select: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
-							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name:  "foo",
-										Alias: "f",
-									},
-								},
+							From: &tree.RelationTable{
+								Name:  "foo",
+								Alias: "f",
 							},
 							Where: &tree.ExpressionBinaryComparison{
 								Left: &tree.ExpressionColumn{

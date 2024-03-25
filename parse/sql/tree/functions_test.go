@@ -100,7 +100,7 @@ func Test_sqlFunction_String(t *testing.T) {
 					}
 				}()
 			}
-			got := s.String(tt.args.exprs...)
+			got := s.ToString(tt.args.exprs...)
 			if tt.wantPanic {
 				return
 			}
@@ -114,7 +114,7 @@ func Test_sqlFunction_String(t *testing.T) {
 
 func Test_ScalarFunction_String(t *testing.T) {
 	type fields struct {
-		Function tree.ScalarFunction
+		Function *tree.ScalarFunction
 	}
 	type args struct {
 		exprs []tree.Expression
@@ -129,7 +129,7 @@ func Test_ScalarFunction_String(t *testing.T) {
 		{
 			name: "format function",
 			fields: fields{
-				Function: tree.FunctionFORMAT,
+				Function: tree.FunctionFORMATGetter(nil).(*tree.ScalarFunction),
 			},
 			args: args{
 				exprs: []tree.Expression{
@@ -155,7 +155,7 @@ func Test_ScalarFunction_String(t *testing.T) {
 					}
 				}()
 			}
-			got := s.String(tt.args.exprs...)
+			got := s.ToString(tt.args.exprs...)
 			if tt.wantPanic {
 				return
 			}

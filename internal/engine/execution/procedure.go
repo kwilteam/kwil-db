@@ -453,16 +453,16 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 		}
 
 		// clean expression, since it is submitted by the user
-		err := expr.Accept(clean.NewStatementCleaner())
+		err := expr.Walk(clean.NewStatementCleaner())
 		if err != nil {
 			return nil, err
 		}
 
 		// The schema walker is not necessary for inline expressions, since
 		// we do not support table references in inline expressions.
-		accept := sqlanalyzer.NewAcceptRecoverer(expr)
-		paramVisitor := parameters.NewParametersVisitor()
-		err = accept.Accept(paramVisitor)
+		walker := sqlanalyzer.NewWalkerRecoverer(expr)
+		paramVisitor := parameters.NewParametersWalker()
+		err = walker.Walk(paramVisitor)
 		if err != nil {
 			return nil, fmt.Errorf("error replacing parameters: %w", err)
 		}
@@ -471,9 +471,9 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 		// statements This query needs to be run in "simple" execution mode
 		// rather than "extended" execution mode, which asks the database for
 		// OID (placeholder types) that it can't know since there's no FOR table.
-		selectTree := &tree.Select{
-			SelectStmt: &tree.SelectStmt{
-				SelectCores: []*tree.SelectCore{
+		selectTree := &tree.SelectStmt{
+			Stmt: &tree.SelectCore{
+				SelectCores: []*tree.SimpleSelect{
 					{
 						SelectType: tree.SelectTypeAll,
 						Columns: []tree.ResultColumn{
@@ -486,7 +486,7 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 			},
 		}
 
-		stmt, err := selectTree.ToSQL()
+		stmt, err := tree.SafeToSQL(selectTree)
 		if err != nil {
 			return nil, err
 		}

@@ -10,14 +10,14 @@ import (
 // TODO: the statement cleaner should also check for table / column existence
 func NewStatementCleaner() *StatementCleaner {
 	return &StatementCleaner{
-		Walker: tree.NewBaseWalker(),
+		AstListener: tree.NewBaseListener(),
 	}
 }
 
-var _ tree.Walker = &StatementCleaner{}
+var _ tree.AstListener = &StatementCleaner{}
 
 type StatementCleaner struct {
-	tree.Walker
+	tree.AstListener
 }
 
 // EnterAggregateFunc checks that the function name is a valid identifier
@@ -43,12 +43,12 @@ func (s *StatementCleaner) EnterCTE(node *tree.CTE) (err error) {
 }
 
 // EnterDelete does nothing
-func (s *StatementCleaner) EnterDelete(node *tree.Delete) (err error) {
+func (s *StatementCleaner) EnterDeleteStmt(node *tree.DeleteStmt) (err error) {
 	return nil
 }
 
 // EnterDeleteStmt does nothing
-func (s *StatementCleaner) EnterDeleteStmt(node *tree.DeleteStmt) (err error) {
+func (s *StatementCleaner) EnterDeleteCore(node *tree.DeleteCore) (err error) {
 	return nil
 }
 
@@ -160,12 +160,12 @@ func (s *StatementCleaner) EnterGroupBy(node *tree.GroupBy) (err error) {
 }
 
 // EnterInsert does nothing
-func (s *StatementCleaner) EnterInsert(node *tree.Insert) (err error) {
+func (s *StatementCleaner) EnterInsertStmt(node *tree.InsertStmt) (err error) {
 	return nil
 }
 
 // EnterInsertStmt cleans the insert type, table, table alias, and columns
-func (s *StatementCleaner) EnterInsertStmt(node *tree.InsertStmt) (err error) {
+func (s *StatementCleaner) EnterInsertCore(node *tree.InsertCore) (err error) {
 	err = node.InsertType.Valid()
 	if err != nil {
 		return wrapErr(ErrInvalidInsertType, err)
@@ -188,7 +188,7 @@ func (s *StatementCleaner) EnterInsertStmt(node *tree.InsertStmt) (err error) {
 }
 
 // EnterJoinClause does nothing
-func (s *StatementCleaner) EnterJoinClause(node *tree.JoinClause) (err error) {
+func (s *StatementCleaner) EnterRelation(node tree.Relation) (err error) {
 	return nil
 }
 
@@ -290,17 +290,17 @@ func (s *StatementCleaner) EnterReturningClauseColumn(node *tree.ReturningClause
 }
 
 // EnterSelect does nothing
-func (s *StatementCleaner) EnterSelect(node *tree.Select) (err error) {
+func (s *StatementCleaner) EnterSelectStmt(node *tree.SelectStmt) (err error) {
 	return nil
 }
 
 // EnterSelectCore validates the select type
-func (s *StatementCleaner) EnterSelectCore(node *tree.SelectCore) (err error) {
+func (s *StatementCleaner) EnterSelectCore(node *tree.SimpleSelect) (err error) {
 	return wrapErr(ErrInvalidSelectType, node.SelectType.Valid())
 }
 
 // EnterSelectStmt checks that, for each SelectCore besides the last, a compound operator is provided
-func (s *StatementCleaner) EnterSelectStmt(node *tree.SelectStmt) (err error) {
+func (s *StatementCleaner) EnterSelectStmtNoCte(node *tree.SelectCore) (err error) {
 	for _, core := range node.SelectCores[:len(node.SelectCores)-1] {
 		if core.Compound == nil {
 			return wrapErr(ErrInvalidCompoundOperator, errors.New("compound operator must be provided for all SelectCores except the last"))
@@ -310,18 +310,13 @@ func (s *StatementCleaner) EnterSelectStmt(node *tree.SelectStmt) (err error) {
 	return nil
 }
 
-// EnterFromClause does nothing
-func (s *StatementCleaner) EnterFromClause(node *tree.FromClause) (err error) {
-	return nil
-}
-
 // EnterCompoundOperator validates the compound operator
 func (s *StatementCleaner) EnterCompoundOperator(node *tree.CompoundOperator) (err error) {
 	return wrapErr(ErrInvalidCompoundOperator, node.Operator.Valid())
 }
 
-// EnterTableOrSubquery checks the table name and alias
-func (s *StatementCleaner) EnterTableOrSubqueryTable(node *tree.TableOrSubqueryTable) (err error) {
+// EnterRelationTable checks the table name and alias
+func (s *StatementCleaner) EnterRelationTable(node *tree.RelationTable) (err error) {
 	node.Name, err = cleanIdentifier(node.Name)
 	if err != nil {
 		return wrapErr(ErrInvalidIdentifier, err)
@@ -337,8 +332,8 @@ func (s *StatementCleaner) EnterTableOrSubqueryTable(node *tree.TableOrSubqueryT
 	return nil
 }
 
-// EnterTableOrSubquerySelect checks the alias
-func (s *StatementCleaner) EnterTableOrSubquerySelect(node *tree.TableOrSubquerySelect) (err error) {
+// EnterRelationSubquery checks the alias
+func (s *StatementCleaner) EnterRelationSubquery(node *tree.RelationSubquery) (err error) {
 	if node.Alias != "" {
 		node.Alias, err = cleanIdentifier(node.Alias)
 		if err != nil {
@@ -349,13 +344,8 @@ func (s *StatementCleaner) EnterTableOrSubquerySelect(node *tree.TableOrSubquery
 	return nil
 }
 
-// EnterTableOrSubqueryList does nothing
-func (s *StatementCleaner) EnterTableOrSubqueryList(node *tree.TableOrSubqueryList) (err error) {
-	return nil
-}
-
-// EnterTableOrSubqueryJoin does nothing
-func (s *StatementCleaner) EnterTableOrSubqueryJoin(node *tree.TableOrSubqueryJoin) (err error) {
+// EnterRelationJoin does nothing
+func (s *StatementCleaner) EnterRelationJoin(node *tree.RelationJoin) (err error) {
 	return nil
 }
 
@@ -372,7 +362,7 @@ func (s *StatementCleaner) EnterUpdateSetClause(node *tree.UpdateSetClause) (err
 }
 
 // EnterUpdate does nothing
-func (s *StatementCleaner) EnterUpdate(node *tree.Update) (err error) {
+func (s *StatementCleaner) EnterUpdateStmt(node *tree.UpdateStmt) (err error) {
 	return nil
 }
 

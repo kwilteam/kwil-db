@@ -6,6 +6,7 @@ import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 )
 
+// TODO: update this docs to reflect the current state of the code
 /*
 From the SQLite documentation:
 	If the join-operator is "CROSS JOIN", "INNER JOIN", "JOIN" or a comma (",") and there is no ON or USING clause,
@@ -47,46 +48,20 @@ From the SQLite documentation:
 	In other words, the FROM clause (A join-op-1 B join-op-2 C) is computed as ((A join-op-1 B) join-op-2 C).
 */
 
-type JoinClause struct {
-	TableOrSubquery TableOrSubquery
-	Joins           []*JoinPredicate
-}
-
-func (j *JoinClause) Accept(w Walker) error {
-	return run(
-		w.EnterJoinClause(j),
-		accept(w, j.TableOrSubquery),
-		acceptMany(w, j.Joins),
-		w.ExitJoinClause(j),
-	)
-}
-
-func (j *JoinClause) ToSQL() string {
-	if j.TableOrSubquery == nil {
-		panic("join table or subquery cannot be nil")
-	}
-
-	stmt := sqlwriter.NewWriter()
-	stmt.WriteString(j.TableOrSubquery.ToSQL())
-	for _, join := range j.Joins {
-		stmt.WriteString(join.ToSQL())
-	}
-
-	return stmt.String()
-}
-
 type JoinPredicate struct {
+	node
+
 	JoinOperator *JoinOperator
-	Table        TableOrSubquery
+	Table        Relation
 	Constraint   Expression
 }
 
-func (j *JoinPredicate) Accept(w Walker) error {
+func (j *JoinPredicate) Walk(w AstListener) error {
 	return run(
 		w.EnterJoinPredicate(j),
-		accept(w, j.JoinOperator),
-		accept(w, j.Table),
-		accept(w, j.Constraint),
+		walk(w, j.JoinOperator),
+		walk(w, j.Table),
+		walk(w, j.Constraint),
 		w.ExitJoinPredicate(j),
 	)
 }
@@ -115,11 +90,17 @@ func (j *JoinPredicate) ToSQL() string {
 }
 
 type JoinOperator struct {
+	node
+
 	JoinType JoinType
 	Outer    bool
 }
 
-func (j *JoinOperator) Accept(w Walker) error {
+func (j *JoinOperator) Accept(v AstVisitor) any {
+	return v.VisitJoinOperator(j)
+}
+
+func (j *JoinOperator) Walk(w AstListener) error {
 	return run(
 		w.EnterJoinOperator(j),
 		w.ExitJoinOperator(j),

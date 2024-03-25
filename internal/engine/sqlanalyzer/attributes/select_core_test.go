@@ -178,18 +178,18 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tt.stmt)
+			stmt, err := sqlparser.Parse(tt.stmt)
 			if err != nil {
 				t.Errorf("GetSelectCoreRelationAttributes() error = %v", err)
 				return
 			}
-			selectStmt, okj := ast.(*tree.Select)
+			selectStmt, okj := stmt.(*tree.SelectStmt)
 			if !okj {
 				t.Errorf("test case %s is not a select statement", tt.name)
 				return
 			}
 
-			got, err := attributes.GetSelectCoreRelationAttributes(selectStmt.SelectStmt.SelectCores[0], tt.tables)
+			got, err := attributes.GetSelectCoreRelationAttributes(selectStmt.Stmt.SelectCores[0], tt.tables)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetSelectCoreRelationAttributes() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -211,7 +211,7 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 
 			assert.ElementsMatch(t, tt.resultTableCols, genTable.Columns, "GetSelectCoreRelationAttributes() got = %v, want %v", got, tt.want)
 
-			sql, err := selectStmt.ToSQL()
+			sql, err := tree.SafeToSQL(selectStmt)
 			assert.NoErrorf(t, err, "error converting query to SQL: %s", err)
 
 			err = postgres.CheckSyntaxReplaceDollar(sql)

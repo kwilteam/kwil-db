@@ -10,7 +10,7 @@ func TestCTE_ToSQL(t *testing.T) {
 	type fields struct {
 		Table   string
 		Columns []string
-		Select  *tree.SelectStmt
+		Select  *tree.SelectCore
 	}
 	tests := []struct {
 		name      string
@@ -23,16 +23,12 @@ func TestCTE_ToSQL(t *testing.T) {
 			fields: fields{
 				Table:   "foo",
 				Columns: []string{"bar", "baz"},
-				Select: &tree.SelectStmt{
-					SelectCores: []*tree.SelectCore{
+				Select: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
-							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name: "foo",
-									},
-								},
+							From: &tree.RelationTable{
+								Name: "foo",
 							},
 						},
 					},
@@ -72,15 +68,11 @@ func TestCTE_ToSQL(t *testing.T) {
 var mockCTE = &tree.CTE{
 	Table:   "foo",
 	Columns: []string{"bar", "baz"},
-	Select: &tree.SelectStmt{
-		SelectCores: []*tree.SelectCore{
+	Select: &tree.SelectCore{
+		SelectCores: []*tree.SimpleSelect{
 			{
-				From: &tree.FromClause{
-					JoinClause: &tree.JoinClause{
-						TableOrSubquery: &tree.TableOrSubqueryTable{
-							Name: "foo",
-						},
-					},
+				From: &tree.RelationTable{
+					Name: "foo",
 				},
 			},
 		},

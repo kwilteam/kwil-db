@@ -5,15 +5,21 @@ import (
 )
 
 type GroupBy struct {
+	node
+
 	Expressions []Expression
 	Having      Expression
 }
 
-func (g *GroupBy) Accept(w Walker) error {
+func (g *GroupBy) Accept(v AstVisitor) any {
+	return v.VisitGroupBy(g)
+}
+
+func (g *GroupBy) Walk(w AstListener) error {
 	return run(
 		w.EnterGroupBy(g),
-		acceptMany(w, g.Expressions),
-		accept(w, g.Having),
+		walkMany(w, g.Expressions),
+		walk(w, g.Having),
 		w.ExitGroupBy(g),
 	)
 }

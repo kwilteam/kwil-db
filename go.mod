@@ -19,9 +19,9 @@ require (
 	github.com/jackc/pglogrepl v0.0.0-20231111135425-1627ab1b5780
 	github.com/jackc/pgx/v5 v5.5.2
 	github.com/jpillora/backoff v1.0.0
-	github.com/kwilteam/kuneiform v0.6.0
+	github.com/kwilteam/kuneiform v0.6.1-0.20240325162722-e0e0101eca92
 	github.com/kwilteam/kwil-db/core v0.1.0
-	github.com/kwilteam/kwil-db/parse v0.1.1
+	github.com/kwilteam/kwil-db/parse v0.1.2
 	github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/mapstructure v1.5.0
@@ -93,7 +93,6 @@ require (
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/kwilteam/action-grammar-go v0.1.1 // indirect
-	github.com/kwilteam/sql-grammar-go v0.1.0 // indirect
 	github.com/lib/pq v1.10.7 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect

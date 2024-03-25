@@ -10,7 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
-func NewOrderWalker(tables []*common.Table) tree.Walker {
+func NewOrderWalker(tables []*common.Table) tree.AstListener {
 	// copy tables, since we will be modifying the tables slice to register CTEs
 	tbls := make([]*common.Table, len(tables))
 	copy(tbls, tables)
@@ -22,12 +22,12 @@ func NewOrderWalker(tables []*common.Table) tree.Walker {
 
 // orderingWalker is the highest level walker to order a statement
 type orderingWalker struct {
-	tree.BaseWalker
+	tree.BaseListener
 
 	tables []*common.Table // all tables in the schema
 }
 
-var _ tree.Walker = &orderingWalker{}
+var _ tree.AstListener = &orderingWalker{}
 
 // we need to register common table expressions as tables, so that we can order them.
 func (o *orderingWalker) EnterCTE(node *tree.CTE) error {
@@ -50,8 +50,8 @@ func (o *orderingWalker) EnterCTE(node *tree.CTE) error {
 	return nil
 }
 
-// Register TableOrSubquerySelects as tables, so that we can order them.
-func (o *orderingWalker) EnterTableOrSubquerySelect(node *tree.TableOrSubquerySelect) error {
+// Register RelationSubquerys as tables, so that we can order them.
+func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) error {
 	if node.Select == nil {
 		return fmt.Errorf("subquery select is nil")
 	}
@@ -81,7 +81,7 @@ func (o *orderingWalker) EnterTableOrSubquerySelect(node *tree.TableOrSubquerySe
 }
 
 // put this on exit so we can search the whole statement for used tables
-func (o *orderingWalker) ExitSelectStmt(node *tree.SelectStmt) error {
+func (o *orderingWalker) ExitSelectStmtNoCte(node *tree.SelectCore) error {
 	var terms []*tree.OrderingTerm
 	var err error
 	switch len(node.SelectCores) {
@@ -114,7 +114,7 @@ func (o *orderingWalker) ExitSelectStmt(node *tree.SelectStmt) error {
 var ErrDistinctWithGroupBy = fmt.Errorf("select distinct with group by not supported")
 
 // orderSimpleStatement will return the ordering required for a simple statement.
-func orderSimpleStatement(stmt *tree.SelectCore, tables []*common.Table) ([]*tree.OrderingTerm, error) {
+func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*common.Table) ([]*tree.OrderingTerm, error) {
 	// it is possible to not have any tables in a select
 	// if so, no ordering is required
 	if stmt.From == nil {
@@ -159,7 +159,7 @@ func orderSimpleStatement(stmt *tree.SelectCore, tables []*common.Table) ([]*tre
 
 	// we will now get a list of all tables that are renamed to the used aliases
 	// this allows us to search for them by their alias, and not their real name.
-	usedTables, err := utils.GetUsedTables(stmt.From.JoinClause)
+	usedTables, err := utils.GetUsedTables(stmt.From)
 	if err != nil {
 		return nil, fmt.Errorf("error getting used tables: %w", err)
 	}
@@ -245,18 +245,18 @@ func containsAggregateFunc(ret tree.ResultColumn) (bool, error) {
 	containsAggregateFunc := false
 	depth := 0 // depth tracks if we are in a subquery or not
 
-	err := ret.Accept(&tree.ImplementedWalker{
+	err := ret.Walk(&tree.ImplementedListener{
 		FuncEnterAggregateFunc: func(p0 *tree.AggregateFunc) error {
 			if depth == 0 {
 				containsAggregateFunc = true
 			}
 			return nil
 		},
-		FuncEnterSelectStmt: func(p0 *tree.SelectStmt) error {
+		FuncEnterSelectStmtNoCte: func(p0 *tree.SelectCore) error {
 			depth++
 			return nil
 		},
-		FuncExitSelectStmt: func(p0 *tree.SelectStmt) error {
+		FuncExitSelectStmtNoCte: func(p0 *tree.SelectCore) error {
 			depth--
 			return nil
 		},
@@ -273,7 +273,7 @@ var ErrCompoundStatementDifferentNumberOfColumns = fmt.Errorf("select cores have
 // if there is a group by clause in any of the select cores, we will return an error.
 // using a group by with a compound statement is not yet supported because idk how
 // to make it deterministic with postgres's ordering, and it is not a common use case.
-func orderCompoundStatement(stmt []*tree.SelectCore, tables []*common.Table) ([]*tree.OrderingTerm, error) {
+func orderCompoundStatement(stmt []*tree.SimpleSelect, tables []*common.Table) ([]*tree.OrderingTerm, error) {
 	if len(stmt) == 0 {
 		return nil, fmt.Errorf("no select cores in compound statement")
 	}
@@ -303,11 +303,11 @@ func orderCompoundStatement(stmt []*tree.SelectCore, tables []*common.Table) ([]
 }
 
 // containsGroupBy will return true if the select core contains a group by clause.
-func containsGroupBy(stmt *tree.SelectCore) (bool, error) {
+func containsGroupBy(stmt *tree.SimpleSelect) (bool, error) {
 	contains := false
 	depth := 0
 
-	err := stmt.Accept(&tree.ImplementedWalker{
+	err := stmt.Walk(&tree.ImplementedListener{
 		FuncEnterGroupBy: func(p0 *tree.GroupBy) error {
 			if depth == 0 {
 				if len(p0.Expressions) > 0 {
@@ -316,11 +316,11 @@ func containsGroupBy(stmt *tree.SelectCore) (bool, error) {
 			}
 			return nil
 		},
-		FuncEnterSelectStmt: func(p0 *tree.SelectStmt) error {
+		FuncEnterSelectStmtNoCte: func(p0 *tree.SelectCore) error {
 			depth++
 			return nil
 		},
-		FuncExitSelectStmt: func(p0 *tree.SelectStmt) error {
+		FuncExitSelectStmtNoCte: func(p0 *tree.SelectCore) error {
 			depth--
 			return nil
 		},

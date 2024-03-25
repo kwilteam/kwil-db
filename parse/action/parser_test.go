@@ -186,7 +186,7 @@ func TestParseActionStmt(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotAst, err := actparser.ParseActionStmt(tt.input, nil, *trace)
+			gotAst, err := actparser.ParseActionStmt(tt.input, nil, *trace, false)
 			if err != nil {
 				t.Errorf("ParseActionStmt() error = %v", err)
 				return
@@ -228,7 +228,7 @@ func TestParseActionStmt_scalar_function(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := actparser.ParseActionStmt(tt.input, nil, *trace)
+			_, err := actparser.ParseActionStmt(tt.input, nil, *trace, false)
 			if tt.wantErr {
 				assert.Error(t, err, "ParseActionStmt(%v)", tt.input)
 			} else {

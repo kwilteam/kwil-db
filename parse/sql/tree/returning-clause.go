@@ -5,13 +5,19 @@ import (
 )
 
 type ReturningClause struct {
+	node
+
 	Returned []*ReturningClauseColumn
 }
 
-func (r *ReturningClause) Accept(w Walker) error {
+func (r *ReturningClause) Accept(v AstVisitor) any {
+	return v.VisitReturningClause(r)
+}
+
+func (r *ReturningClause) Walk(w AstListener) error {
 	return run(
 		w.EnterReturningClause(r),
-		acceptMany(w, r.Returned),
+		walkMany(w, r.Returned),
 		w.ExitReturningClause(r),
 	)
 }
@@ -50,15 +56,21 @@ func (r *ReturningClause) check() {
 }
 
 type ReturningClauseColumn struct {
+	node
+
 	All        bool
 	Expression Expression
 	Alias      string
 }
 
-func (r *ReturningClauseColumn) Accept(w Walker) error {
+func (r *ReturningClauseColumn) Accept(v AstVisitor) any {
+	return v.VisitReturningClauseColumn(r)
+}
+
+func (r *ReturningClauseColumn) Walk(w AstListener) error {
 	return run(
 		w.EnterReturningClauseColumn(r),
-		accept(w, r.Expression),
+		walk(w, r.Expression),
 		w.ExitReturningClauseColumn(r),
 	)
 }

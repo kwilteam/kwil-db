@@ -6,25 +6,25 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
-// ParametersVisitor visits the AST and replaces all bind parameters with numbered parameters.
-type ParametersVisitor struct {
+// ParametersWalker walks the AST and replaces all bind parameters with numbered parameters.
+type ParametersWalker struct {
 	// OrderedParameters are the passed named identifiers in the order that they have become numbered.
 	// For example, if a query was SELECT * FROM tbl WHERE a = $a AND b = $b, the query would be rewritten
 	// as SELECT * FROM tbl WHERE a = $1 AND b = $2, and OrderedParameters would be []string{"$a", "$b"}.
 	OrderedParameters []string
 	renamedParams     map[string]string // maps $bindParam to $1
-	tree.Walker
+	tree.AstListener
 }
 
-func NewParametersVisitor() *ParametersVisitor {
-	return &ParametersVisitor{
+func NewParametersWalker() *ParametersWalker {
+	return &ParametersWalker{
 		OrderedParameters: []string{},
 		renamedParams:     map[string]string{},
-		Walker:            tree.NewBaseWalker(),
+		AstListener:       tree.NewBaseListener(),
 	}
 }
 
-func (p *ParametersVisitor) EnterExpressionBindParameter(b *tree.ExpressionBindParameter) error {
+func (p *ParametersWalker) EnterExpressionBindParameter(b *tree.ExpressionBindParameter) error {
 	// check if the parameter has already been numbered
 	// if not, then we will number it
 	if param, ok := p.renamedParams[b.Parameter]; ok {

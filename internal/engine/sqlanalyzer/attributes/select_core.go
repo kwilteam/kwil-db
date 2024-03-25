@@ -43,9 +43,9 @@ type RelationAttribute struct {
 // tbl1.col, col, col AS alias, col*5 AS alias, etc.
 // If a statement has "SELECT * FROM tbl",
 // then the result column expressions will be tbl.col_1, tbl.col_2, etc.
-func GetSelectCoreRelationAttributes(selectCore *tree.SelectCore, tables []*common.Table) ([]*RelationAttribute, error) {
+func GetSelectCoreRelationAttributes(selectCore *tree.SimpleSelect, tables []*common.Table) ([]*RelationAttribute, error) {
 	walker := newSelectCoreWalker(tables)
-	err := selectCore.Accept(walker)
+	err := selectCore.Walk(walker)
 	if err != nil {
 		return nil, fmt.Errorf("error analyzing select core: %w", err)
 	}
@@ -55,7 +55,7 @@ func GetSelectCoreRelationAttributes(selectCore *tree.SelectCore, tables []*comm
 
 func newSelectCoreWalker(tables []*common.Table) *selectCoreAnalyzer {
 	return &selectCoreAnalyzer{
-		Walker:             tree.NewBaseWalker(),
+		AstListener:        tree.NewBaseListener(),
 		context:            newSelectCoreContext(nil),
 		schemaTables:       tables,
 		detectedAttributes: []*RelationAttribute{},
@@ -64,7 +64,7 @@ func newSelectCoreWalker(tables []*common.Table) *selectCoreAnalyzer {
 
 // selectCoreAnalyzer will walk the tree and identify the returned attributes for the select core
 type selectCoreAnalyzer struct {
-	tree.Walker
+	tree.AstListener
 	context      *selectCoreContext
 	schemaTables []*common.Table
 
@@ -197,14 +197,14 @@ func newSelectCoreContext(parent *selectCoreContext) *selectCoreContext {
 }
 
 // EnterSelectCore creates a new scope.
-func (s *selectCoreAnalyzer) EnterSelectCore(node *tree.SelectCore) error {
+func (s *selectCoreAnalyzer) EnterSelectCore(node *tree.SimpleSelect) error {
 	s.newScope()
 
 	return nil
 }
 
 // ExitSelectCore pops the current scope.
-func (s *selectCoreAnalyzer) ExitSelectCore(node *tree.SelectCore) error {
+func (s *selectCoreAnalyzer) ExitSelectCore(node *tree.SimpleSelect) error {
 	var err error
 	s.detectedAttributes, err = s.context.relations()
 	if err != nil {
@@ -215,8 +215,8 @@ func (s *selectCoreAnalyzer) ExitSelectCore(node *tree.SelectCore) error {
 	return nil
 }
 
-// EnterTableOrSubqueryTable adds the table to the list of used tables.
-func (s *selectCoreAnalyzer) EnterTableOrSubqueryTable(node *tree.TableOrSubqueryTable) error {
+// EnterRelationTable adds the table to the list of used tables.
+func (s *selectCoreAnalyzer) EnterRelationTable(node *tree.RelationTable) error {
 	tbl, err := findTable(s.schemaTables, node.Name)
 	if err != nil {
 		return err
@@ -278,8 +278,8 @@ func findColumn(columns []*common.Column, name string) (*common.Column, error) {
 }
 
 // addTableIfNotPresent adds the table name to the column if it is not already present.
-func addTableIfNotPresent(tableName string, expr tree.Accepter) error {
-	return expr.Accept(&tree.ImplementedWalker{
+func addTableIfNotPresent(tableName string, expr tree.AstWalker) error {
+	return expr.Walk(&tree.ImplementedListener{
 		FuncEnterExpressionColumn: func(col *tree.ExpressionColumn) error {
 			if col.Table == "" {
 				col.Table = tableName

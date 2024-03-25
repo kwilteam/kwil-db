@@ -13,24 +13,24 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
-// AcceptRecoverer is a wrapper around a statement that implements the accepter interface
-// it catches panics and returns them as errors
-type AcceptRecoverer struct {
-	tree.Accepter
+// WalkerRecoverer is a wrapper around a statement that implements the AstWalker
+// interface, it catches panics and returns them as errors
+type WalkerRecoverer struct {
+	inner tree.AstWalker
 }
 
-func NewAcceptRecoverer(a tree.Accepter) *AcceptRecoverer {
-	return &AcceptRecoverer{a}
+func NewWalkerRecoverer(a tree.AstWalker) *WalkerRecoverer {
+	return &WalkerRecoverer{a}
 }
 
-func (a *AcceptRecoverer) Accept(walker tree.Walker) (err error) {
+func (a *WalkerRecoverer) Walk(walker tree.AstListener) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic while walking statement: %v", r)
 		}
 	}()
 
-	return a.Accepter.Accept(walker)
+	return a.inner.Walk(walker)
 }
 
 // ApplyRules analyzes the given statement and returns the transformed statement.
@@ -48,29 +48,29 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*common.Table, pgSchemaN
 		return nil, fmt.Errorf("error parsing statement: %w", err)
 	}
 
-	accept := &AcceptRecoverer{parsed}
+	walker := &WalkerRecoverer{parsed}
 
 	clnr := clean.NewStatementCleaner()
-	err = accept.Accept(clnr)
+	err = walker.Walk(clnr)
 	if err != nil {
 		return nil, fmt.Errorf("error cleaning statement: %w", err)
 	}
 
 	schemaWalker := schema.NewSchemaWalker(pgSchemaName)
-	err = accept.Accept(schemaWalker)
+	err = walker.Walk(schemaWalker)
 	if err != nil {
 		return nil, fmt.Errorf("error applying schema rules: %w", err)
 	}
 
 	if flags&NoCartesianProduct != 0 {
-		err := accept.Accept(join.NewJoinWalker())
+		err := walker.Walk(join.NewJoinWalker())
 		if err != nil {
 			return nil, fmt.Errorf("error applying join rules: %w", err)
 		}
 	}
 
 	if flags&GuaranteedOrder != 0 {
-		err := accept.Accept(order.NewOrderWalker(cleanedTables))
+		err := walker.Walk(order.NewOrderWalker(cleanedTables))
 		if err != nil {
 			return nil, fmt.Errorf("error enforcing guaranteed order: %w", err)
 		}
@@ -78,8 +78,8 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*common.Table, pgSchemaN
 
 	orderedParams := make([]string, 0)
 	if flags&ReplaceNamedParameters != 0 {
-		paramVisitor := parameters.NewParametersVisitor()
-		err := accept.Accept(paramVisitor)
+		paramVisitor := parameters.NewParametersWalker()
+		err := walker.Walk(paramVisitor)
 		if err != nil {
 			return nil, fmt.Errorf("error replacing named parameters: %w", err)
 		}
@@ -91,7 +91,7 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*common.Table, pgSchemaN
 		return nil, fmt.Errorf("error determining mutativity: %w", err)
 	}
 
-	generated, err := parsed.ToSQL()
+	generated, err := tree.SafeToSQL(parsed)
 	if err != nil {
 		return nil, fmt.Errorf("error generating SQL: %w", err)
 	}

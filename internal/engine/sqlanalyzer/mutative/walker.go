@@ -4,27 +4,27 @@ import "github.com/kwilteam/kwil-db/parse/sql/tree"
 
 func NewMutativityWalker() *MutativityWalker {
 	return &MutativityWalker{
-		Walker:   tree.NewBaseWalker(),
-		Mutative: false,
+		AstListener: tree.NewBaseListener(),
+		Mutative:    false,
 	}
 }
 
 type MutativityWalker struct {
 	Mutative bool
-	tree.Walker
+	tree.AstListener
 }
 
-func (m *MutativityWalker) EnterDeleteStmt(node *tree.DeleteStmt) error {
+func (m *MutativityWalker) EnterDeleteCore(node *tree.DeleteCore) error {
 	m.Mutative = true
 	return nil
 }
 
-func (m *MutativityWalker) EnterInsertStmt(node *tree.InsertStmt) error {
+func (m *MutativityWalker) EnterInsertCore(node *tree.InsertCore) error {
 	m.Mutative = true
 	return nil
 }
 
-func (m *MutativityWalker) EnterUpdateStmt(node *tree.UpdateStmt) error {
+func (m *MutativityWalker) EnterUpdateCore(node *tree.UpdateCore) error {
 	m.Mutative = true
 	return nil
 }

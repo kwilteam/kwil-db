@@ -1,37 +1,30 @@
 package tree
 
 import (
-	"fmt"
-
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 )
 
-type Delete struct {
-	CTE        []*CTE
-	DeleteStmt *DeleteStmt
+type DeleteStmt struct {
+	node
+
+	CTE  []*CTE
+	Core *DeleteCore
 }
 
-func (d *Delete) Accept(w Walker) error {
+func (d *DeleteStmt) Accept(v AstVisitor) any {
+	return v.VisitDeleteStmt(d)
+}
+
+func (d *DeleteStmt) Walk(w AstListener) error {
 	return run(
-		w.EnterDelete(d),
-		acceptMany(w, d.CTE),
-		accept(w, d.DeleteStmt),
-		w.ExitDelete(d),
+		w.EnterDeleteStmt(d),
+		walkMany(w, d.CTE),
+		walk(w, d.Core),
+		w.ExitDeleteStmt(d),
 	)
 }
 
-func (d *Delete) ToSQL() (str string, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err2, ok := r.(error)
-			if !ok {
-				err2 = fmt.Errorf("%v", r)
-			}
-
-			err = err2
-		}
-	}()
-
+func (d *DeleteStmt) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if len(d.CTE) > 0 {
@@ -41,30 +34,38 @@ func (d *Delete) ToSQL() (str string, err error) {
 		})
 	}
 
-	stmt.WriteString(d.DeleteStmt.ToSQL())
+	stmt.WriteString(d.Core.ToSQL())
 
 	stmt.Token.Semicolon()
 
-	return stmt.String(), nil
+	return stmt.String()
 }
 
-type DeleteStmt struct {
+func (d *DeleteStmt) statement() {}
+
+type DeleteCore struct {
+	node
+
 	QualifiedTableName *QualifiedTableName
 	Where              Expression
 	Returning          *ReturningClause
 }
 
-func (d *DeleteStmt) Accept(w Walker) error {
+func (d *DeleteCore) Accept(v AstVisitor) any {
+	return v.VisitDeleteCore(d)
+}
+
+func (d *DeleteCore) Walk(w AstListener) error {
 	return run(
-		w.EnterDeleteStmt(d),
-		accept(w, d.QualifiedTableName),
-		accept(w, d.Where),
-		accept(w, d.Returning),
-		w.ExitDeleteStmt(d),
+		w.EnterDeleteCore(d),
+		walk(w, d.QualifiedTableName),
+		walk(w, d.Where),
+		walk(w, d.Returning),
+		w.ExitDeleteCore(d),
 	)
 }
 
-func (d *DeleteStmt) ToSQL() string {
+func (d *DeleteCore) ToSQL() string {
 	d.check()
 
 	stmt := sqlwriter.NewWriter()
@@ -81,7 +82,7 @@ func (d *DeleteStmt) ToSQL() string {
 	return stmt.String()
 }
 
-func (d *DeleteStmt) check() {
+func (d *DeleteCore) check() {
 	if d.QualifiedTableName == nil {
 		panic("qualified table name is nil")
 	}

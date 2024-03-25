@@ -6,32 +6,27 @@ import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 )
 
-type Insert struct {
-	CTE        []*CTE
-	InsertStmt *InsertStmt
+type InsertStmt struct {
+	node
+
+	CTE  []*CTE
+	Core *InsertCore
 }
 
-func (ins *Insert) Accept(w Walker) error {
+func (ins *InsertStmt) Accept(v AstVisitor) any {
+	return v.VisitInsertStmt(ins)
+}
+
+func (ins *InsertStmt) Walk(w AstListener) error {
 	return run(
-		w.EnterInsert(ins),
-		acceptMany(w, ins.CTE),
-		accept(w, ins.InsertStmt),
-		w.ExitInsert(ins),
+		w.EnterInsertStmt(ins),
+		walkMany(w, ins.CTE),
+		walk(w, ins.Core),
+		w.ExitInsertStmt(ins),
 	)
 }
 
-func (ins *Insert) ToSQL() (str string, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err2, ok := r.(error)
-			if !ok {
-				err2 = fmt.Errorf("%v", r)
-			}
-
-			err = err2
-		}
-	}()
-
+func (ins *InsertStmt) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if len(ins.CTE) > 0 {
@@ -41,14 +36,18 @@ func (ins *Insert) ToSQL() (str string, err error) {
 		})
 	}
 
-	stmt.WriteString(ins.InsertStmt.ToSQL())
+	stmt.WriteString(ins.Core.ToSQL())
 
 	stmt.Token.Semicolon()
 
-	return stmt.String(), nil
+	return stmt.String()
 }
 
-type InsertStmt struct {
+func (ins *InsertStmt) statement() {}
+
+type InsertCore struct {
+	node
+
 	schema          string
 	InsertType      InsertType
 	Table           string
@@ -59,28 +58,32 @@ type InsertStmt struct {
 	ReturningClause *ReturningClause
 }
 
-func (ins *InsertStmt) Accept(w Walker) error {
+func (ins *InsertCore) Accept(v AstVisitor) any {
+	return v.VisitInsertCore(ins)
+}
+
+func (ins *InsertCore) Walk(w AstListener) error {
 	return run(
-		w.EnterInsertStmt(ins),
+		w.EnterInsertCore(ins),
 		func() error {
 			for _, v := range ins.Values {
-				err := acceptMany(w, v)
+				err := walkMany(w, v)
 				if err != nil {
 					return err
 				}
 			}
 			return nil
 		}(),
-		accept(w, ins.Upsert),
-		accept(w, ins.ReturningClause),
-		w.ExitInsertStmt(ins),
+		walk(w, ins.Upsert),
+		walk(w, ins.ReturningClause),
+		w.ExitInsertCore(ins),
 	)
 }
 
 // SetSchema sets the schema of the table.
 // It should not be called by the parser, and is meant to be called
 // by processes after parsing.
-func (ins *InsertStmt) SetSchema(schema string) {
+func (ins *InsertCore) SetSchema(schema string) {
 	ins.schema = schema
 }
 
@@ -108,7 +111,7 @@ func (i *InsertType) String() string {
 	}
 }
 
-func (ins *InsertStmt) ToSQL() string {
+func (ins *InsertCore) ToSQL() string {
 	ins.check()
 
 	stmt := sqlwriter.NewWriter()
@@ -157,7 +160,7 @@ func (ins *InsertStmt) ToSQL() string {
 	return stmt.String()
 }
 
-func (ins *InsertStmt) check() {
+func (ins *InsertCore) check() {
 	if ins.Table == "" {
 		panic("InsertStatement: table name is empty")
 	}

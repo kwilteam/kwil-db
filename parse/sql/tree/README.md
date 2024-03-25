@@ -268,13 +268,64 @@ INSERT OR REPLACE /*End InsertType*/ INTO users (username, age)
 VALUES ('satoshi', 42)
 ```
 
-#### JoinClause
+#### Relation
+A Relation is used to specify the table(s) that should be used in a SELECT statement.
+It can be a table, a subquery, or joined tables.
 
-A join clause is used to specify the table(s) that should be used in a SELECT statement.  Despite the name, it is not actually necessary to specify a JOIN in the JoinClause; the name has been left to maintain compatibility with SQLite's syntax (which functions the same).
+#### RelationTable
+
+A RelationTable is used to specify a table that should be used in a SELECT statement.
 
 ```go
-type JoinClause struct {
-    TableOrSubquery TableOrSubquery
+type RelationTable struct {
+    Name  string
+    Alias string
+}
+
+```
+
+_In SQL:_
+
+```sql
+SELECT *
+# Start of RelationTable
+FROM users AS u
+# End of RelationTable
+WHERE username = 'satoshi';
+```
+
+#### RelationSubquery
+
+A RelationSubquery is used to specify a subquery that should be used in a SELECT statement.
+
+```go
+type RelationSubquery struct {
+    Select *SelectStmt
+    Alias  string
+}
+```
+
+_In SQL:_
+
+```sql
+SELECT *
+# Start of RelationSubquery
+FROM (
+    SELECT *
+    FROM users
+    WHERE age > 18
+) AS u
+# End of RelationSubquery
+WHERE username = 'satoshi';
+```
+
+#### RelationJoin
+
+A RelationJoin is used to specify joined tables that should be used in a SELECT statement.
+
+```go
+type RelationJoin struct {
+    Relation        Relation
     Joins           []*JoinPredicate
 }
 ```
@@ -283,7 +334,7 @@ _In SQL:_
 
 ```sql
 SELECT p.title, p.content
-# Start of JoinClause
+# Start of RelationJoin
 FROM posts AS p
 INNER JOIN users as u
     ON p.author_id = u.id
@@ -297,7 +348,7 @@ A join predicate contains the type of join, the subject / target table of the jo
 ```go
 type JoinPredicate struct {
     JoinOperator *JoinOperator
-    Table        TableOrSubquery
+    Table        Relation
     Constraint   Expression
 }
 ```
@@ -468,7 +519,7 @@ type QualifiedTableName struct {
 _In SQL:_
 
 ```sql
-DELETE FROM 
+DELETE FROM
 # Start of qualified table name
 comments INDEXED BY comment_index
 # End of qualified table name
@@ -577,11 +628,12 @@ const (
 
 #### FromClause
 
-The FROM clause is a wrapper around JoinClause.  The differentiation is necessary to make future features easier to implement.
+The FROM clause is a wrapper around Relation.  The differentiation is necessary to make future features easier to
+implement.
 
 ```go
 type FromClause struct {
-    JoinClause *JoinClause
+    Relation Relation
 }
 ```
 
@@ -640,27 +692,26 @@ const (
 )
 ```
 
-#### TableOrSubquery
+#### Relation
 
-The table or subquery clause is used to specify a value that can be either a table or a subquery clause.  There are several different types, which are displayed below:
+The Relation is used to specify a value that can be either a table or a subquery or a join clause.  There are several
+different types,
+which are displayed below:
 
 ```go
-type TableOrSubqueryTable struct {
+type RelationTable struct {
     Name  string
     Alias string
 }
 
-type TableOrSubquerySelect struct {
+type RelationSubquery struct {
     Select *SelectStmt
     Alias  string
 }
 
-type TableOrSubqueryList struct {
-    TableOrSubqueries []TableOrSubquery
-}
-
-type TableOrSubqueryJoin struct {
-    JoinClause *JoinClause
+type RelationJoin struct {
+    Relation Relation
+    Joins    []*JoinPredicate
 }
 ```
 
@@ -668,9 +719,9 @@ _In SQL:_
 
 ```sql
 SELECT u.username, COUNT(f.follower_id)
-# Start TableOrSubquery
+# Start
 FROM users AS u
-# End TableOrSubquery
+# End
 LEFT JOIN followers AS f
     ON u.id = f.followed_id
 GROUP BY f.followed_id, u.id

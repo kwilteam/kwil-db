@@ -8,14 +8,20 @@ import (
 // This does NOT include the SET keyword.
 // e.g. column1 = expression, column2 = expression, ...
 type UpdateSetClause struct {
+	node
+
 	Columns    []string
 	Expression Expression
 }
 
-func (u *UpdateSetClause) Accept(w Walker) error {
+func (u *UpdateSetClause) Accept(v AstVisitor) any {
+	return v.VisitUpdateSetClause(u)
+}
+
+func (u *UpdateSetClause) Walk(w AstListener) error {
 	return run(
 		w.EnterUpdateSetClause(u),
-		accept(w, u.Expression),
+		walk(w, u.Expression),
 		w.ExitUpdateSetClause(u),
 	)
 }

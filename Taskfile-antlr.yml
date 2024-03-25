@@ -1,0 +1,13 @@
+version: '3'
+
+tasks:
+  sql:
+    desc: Generate sql grammar go code.
+    cmds:
+      - rm -rf parse/sql/grammar/*
+      - rm -rf parse/sql/antlr-grammar/{gen,.antlr}/*
+      - cd parse/sql/antlr-grammar/ && ./generate.sh Go grammar ../grammar
+    sources:
+      - parse/sql/antlr-grammar/*.g4
+    generates:
+      - parse/sql/grammar/*.{go,interp,tokens}

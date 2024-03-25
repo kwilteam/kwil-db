@@ -5,28 +5,29 @@ import (
 
 	"github.com/antlr4-go/antlr/v4"
 
+	"github.com/kwilteam/kwil-db/parse/sql/grammar"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
-	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
 )
 
-// Parse parses a raw sql string and returns a tree.Ast
-func Parse(sql string) (ast tree.Ast, err error) {
+// Parse parses a raw sql string and returns a tree.Statement
+func Parse(sql string) (ast tree.Statement, err error) {
 	currentLine := 1
-	return ParseSql(sql, currentLine, nil, false)
+	return ParseSql(sql, currentLine, nil, false, false)
 }
 
-// ParseSql parses a single raw sql statement and returns tree.Ast
-func ParseSql(sql string, currentLine int, errorListener *ErrorListener, trace bool) (ast tree.Ast, err error) {
-	var visitor *KFSqliteVisitor
+// ParseSql parses a single raw sql statement and returns tree.Statement
+func ParseSql(sql string, currentLine int, errorListener *ErrorListener,
+	trace bool, withPos bool) (ast tree.Statement, err error) {
+	var visitor *astBuilder
 
 	if errorListener == nil {
 		errorListener = NewErrorListener()
 	}
 
 	stream := antlr.NewInputStream(sql)
-	lexer := sqlgrammar.NewSQLLexer(stream)
+	lexer := grammar.NewSQLLexer(stream)
 	tokenStream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-	p := sqlgrammar.NewSQLParser(tokenStream)
+	p := grammar.NewSQLParser(tokenStream)
 
 	// remove default error visitor
 	p.RemoveErrorListeners()
@@ -46,10 +47,8 @@ func ParseSql(sql string, currentLine int, errorListener *ErrorListener, trace b
 		err = errorListener.Err()
 	}()
 
-	visitor = NewKFSqliteVisitor(KFVisitorWithTrace(trace))
-
-	stmts := p.Statements()
-	result := visitor.Visit(stmts)
+	visitor = newAstBuilder(astBuilderWithTrace(trace), astBuilderWithPos(withPos))
+	stmts := p.Statements().Accept(visitor).([]tree.AstNode)
 	// since we only expect a single statement
-	return result.([]tree.Ast)[0], err
+	return stmts[0].(tree.Statement), err
 }

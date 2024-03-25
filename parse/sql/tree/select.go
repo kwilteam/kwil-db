@@ -6,32 +6,27 @@ import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 )
 
-type Select struct {
-	CTE        []*CTE
-	SelectStmt *SelectStmt
+type SelectStmt struct {
+	node
+
+	CTE  []*CTE
+	Stmt *SelectCore
 }
 
-func (s *Select) Accept(w Walker) error {
+func (s *SelectStmt) Accept(v AstVisitor) any {
+	return v.VisitSelectStmt(s)
+}
+
+func (s *SelectStmt) Walk(w AstListener) error {
 	return run(
-		w.EnterSelect(s),
-		acceptMany(w, s.CTE),
-		accept(w, s.SelectStmt),
-		w.ExitSelect(s),
+		w.EnterSelectStmt(s),
+		walkMany(w, s.CTE),
+		walk(w, s.Stmt),
+		w.ExitSelectStmt(s),
 	)
 }
 
-func (s *Select) ToSQL() (str string, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err2, ok := r.(error)
-			if !ok {
-				err2 = fmt.Errorf("%v", r)
-			}
-
-			err = err2
-		}
-	}()
-
+func (s *SelectStmt) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if len(s.CTE) > 0 {
@@ -41,30 +36,38 @@ func (s *Select) ToSQL() (str string, err error) {
 		})
 	}
 
-	stmt.WriteString(s.SelectStmt.ToSQL())
+	stmt.WriteString(s.Stmt.ToSQL())
 
 	stmt.Token.Semicolon()
 
-	return stmt.String(), nil
+	return stmt.String()
 }
 
-type SelectStmt struct {
-	SelectCores []*SelectCore
+func (s *SelectStmt) statement() {}
+
+type SelectCore struct {
+	node
+
+	SelectCores []*SimpleSelect
 	OrderBy     *OrderBy
 	Limit       *Limit
 }
 
-func (s *SelectStmt) Accept(w Walker) error {
+func (s *SelectCore) Accept(v AstVisitor) any {
+	return v.VisitSelectCore(s)
+}
+
+func (s *SelectCore) Walk(w AstListener) error {
 	return run(
-		w.EnterSelectStmt(s),
-		acceptMany(w, s.SelectCores),
-		accept(w, s.OrderBy),
-		accept(w, s.Limit),
-		w.ExitSelectStmt(s),
+		w.EnterSelectStmtNoCte(s),
+		walkMany(w, s.SelectCores),
+		walk(w, s.OrderBy),
+		walk(w, s.Limit),
+		w.ExitSelectStmtNoCte(s),
 	)
 }
 
-func (s *SelectStmt) ToSQL() (res string) {
+func (s *SelectCore) ToSQL() (res string) {
 	stmt := sqlwriter.NewWriter()
 	for _, core := range s.SelectCores {
 		stmt.WriteString(core.ToSQL())
@@ -79,28 +82,34 @@ func (s *SelectStmt) ToSQL() (res string) {
 	return stmt.String()
 }
 
-type SelectCore struct {
+type SimpleSelect struct {
+	node
+
 	SelectType SelectType
 	Columns    []ResultColumn
-	From       *FromClause
+	From       Relation
 	Where      Expression
 	GroupBy    *GroupBy
 	Compound   *CompoundOperator
 }
 
-func (s *SelectCore) Accept(w Walker) error {
+func (s *SimpleSelect) Accept(v AstVisitor) any {
+	return v.VisitSimpleSelect(s)
+}
+
+func (s *SimpleSelect) Walk(w AstListener) error {
 	return run(
 		w.EnterSelectCore(s),
-		acceptMany(w, s.Columns),
-		accept(w, s.From),
-		accept(w, s.Where),
-		accept(w, s.GroupBy),
-		accept(w, s.Compound),
+		walkMany(w, s.Columns),
+		walk(w, s.From),
+		walk(w, s.Where),
+		walk(w, s.GroupBy),
+		walk(w, s.Compound),
 		w.ExitSelectCore(s),
 	)
 }
 
-func (s *SelectCore) ToSQL() string {
+func (s *SimpleSelect) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if s.Compound != nil {
@@ -124,6 +133,7 @@ func (s *SelectCore) ToSQL() string {
 	}
 
 	if s.From != nil {
+		stmt.Token.From()
 		stmt.WriteString(s.From.ToSQL())
 	}
 	if s.Where != nil {
@@ -150,25 +160,6 @@ func (s SelectType) Valid() error {
 	default:
 		return fmt.Errorf("invalid select type: %d", s)
 	}
-}
-
-type FromClause struct {
-	JoinClause *JoinClause
-}
-
-func (f *FromClause) Accept(w Walker) error {
-	return run(
-		w.EnterFromClause(f),
-		accept(w, f.JoinClause),
-		w.ExitFromClause(f),
-	)
-}
-
-func (f *FromClause) ToSQL() string {
-	stmt := sqlwriter.NewWriter()
-	stmt.Token.From()
-	stmt.WriteString(f.JoinClause.ToSQL())
-	return stmt.String()
 }
 
 type CompoundOperatorType uint8
@@ -205,10 +196,20 @@ func (c *CompoundOperatorType) ToSQL() string {
 }
 
 type CompoundOperator struct {
+	node
+
 	Operator CompoundOperatorType
 }
 
-func (c *CompoundOperator) Accept(w Walker) error {
+func (c *CompoundOperator) Accept(v AstVisitor) any {
+	return v.VisitCompoundOperator(c)
+}
+
+func (c *CompoundOperator) AcceptVisitor(v AstVisitor) any {
+	return v.VisitCompoundOperator(c)
+}
+
+func (c *CompoundOperator) Walk(w AstListener) error {
 	return run(
 		w.EnterCompoundOperator(c),
 		w.ExitCompoundOperator(c),
