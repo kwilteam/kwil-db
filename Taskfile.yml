@@ -2,6 +2,7 @@ version: "3"
 
 includes:
   pb: ./Taskfile-pb.yml
+  antlr: ./Taskfile-antlr.yml
 
 tasks:
   default:

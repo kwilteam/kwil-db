@@ -5,8 +5,8 @@ import (
 
 	"github.com/antlr4-go/antlr/v4"
 
+	"github.com/kwilteam/kwil-db/parse/sql/grammar"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
-	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
 )
 
 // Parse parses a raw sql string and returns a tree.Statement
@@ -25,9 +25,9 @@ func ParseSql(sql string, currentLine int, errorListener *ErrorListener,
 	}
 
 	stream := antlr.NewInputStream(sql)
-	lexer := sqlgrammar.NewSQLLexer(stream)
+	lexer := grammar.NewSQLLexer(stream)
 	tokenStream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-	p := sqlgrammar.NewSQLParser(tokenStream)
+	p := grammar.NewSQLParser(tokenStream)
 
 	// remove default error visitor
 	p.RemoveErrorListeners()
