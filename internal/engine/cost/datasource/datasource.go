@@ -151,7 +151,7 @@ func dsScan(dsSchema *datatypes.Schema, dsRecords []Row, projection []string) *R
 	//}
 
 	fieldIndex := dsSchema.MapProjection(projection)
-	newSchema := dsSchema.Select(projection...)
+	newSchema := dsSchema.Project(projection...)
 	//newFields := make([]datatypes.Field, len(projection))
 	//for i, idx := range fieldIndex {
 	//	newFields[i] = dsSchema.Fields[idx]
@@ -289,4 +289,20 @@ func (ds *csvDataSource) Scan(projection ...string) *Result {
 
 func (ds *csvDataSource) SourceType() SourceType {
 	return "csv"
+}
+
+type DefaultSchemaSource struct {
+	datasource DataSource
+}
+
+func (s *DefaultSchemaSource) Schema() *datatypes.Schema {
+	return s.datasource.Schema()
+}
+
+func (s *DefaultSchemaSource) Scan(projection ...string) *Result {
+	return s.datasource.Scan(projection...)
+}
+
+func DataAsSchemaSource(ds DataSource) SchemaSource {
+	return &DefaultSchemaSource{datasource: ds}
 }

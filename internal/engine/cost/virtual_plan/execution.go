@@ -2,6 +2,7 @@ package virtual_plan
 
 import (
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/optimizer"
 )
@@ -19,7 +20,9 @@ func (e *ExecutionContext) csv(table string, filepath string) *logical_plan.Data
 	if err != nil {
 		panic(err)
 	}
-	return logical_plan.NewDataFrame(logical_plan.Scan(table, datasource, nil))
+
+	return logical_plan.NewDataFrame(
+		logical_plan.Scan(&dt.TableRef{Table: table}, datasource, nil))
 }
 
 func (e *ExecutionContext) registerBuilder(name string, builder *logical_plan.DataFrame) {
@@ -27,7 +30,8 @@ func (e *ExecutionContext) registerBuilder(name string, builder *logical_plan.Da
 }
 
 func (e *ExecutionContext) registerDataSource(name string, ds datasource.DataSource) {
-	e.tables[name] = logical_plan.NewDataFrame(logical_plan.Scan(name, ds, nil))
+	e.tables[name] = logical_plan.NewDataFrame(
+		logical_plan.Scan(&dt.TableRef{Table: name}, ds, nil))
 }
 
 func (e *ExecutionContext) registerCsv(name string, filepath string) {

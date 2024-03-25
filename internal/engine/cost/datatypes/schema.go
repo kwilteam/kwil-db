@@ -105,7 +105,7 @@ func (s *Schema) String() string {
 	return fmt.Sprintf("[%s]", strings.Join(fields, ", "))
 }
 
-func (s *Schema) Select(projection ...string) *Schema {
+func (s *Schema) Project(projection ...string) *Schema {
 	if len(projection) == 0 {
 		return NewSchema(s.Fields...)
 	}

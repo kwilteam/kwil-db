@@ -7,12 +7,11 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 )
 
-func ExamplePredicateRule_optimize_pushDown() {
-	stubUserData, _ := datasource.NewCSVDataSource("../testdata/users.csv")
+var stubDS, _ = datasource.NewCSVDataSource("../testdata/users.csv")
+var stubTable = &dt.TableRef{Table: "users"}
 
-	//ds := datasource.NewMemDataSource(nil, nil)
-	tUser := &dt.TableRef{Table: "users"}
-	aop := logical_plan.NewDataFrame(logical_plan.Scan(tUser, stubUserData, nil))
+func ExamplePredicateRule_optimize_pushDown() {
+	aop := logical_plan.NewDataFrame(logical_plan.Scan(stubTable, stubDS, nil))
 	plan := aop.
 		Filter(logical_plan.Eq(logical_plan.ColumnUnqualified("age"),
 			logical_plan.LiteralInt(20))).
@@ -30,18 +29,16 @@ func ExamplePredicateRule_optimize_pushDown() {
 
 	// Output:
 	// Filter: age = 20
-	//   Scan: users; projection=[]
+	//   Scan: users
 	//
 	// ---After optimization---
 	//
 	// Filter: age = 20
-	//   Scan: users; filter=[age = 20]; projection=[]
+	//   Scan: users; filter=[age = 20]
 }
 
-func ExamplePredicateRule_optimize_pushDown_with_nested_selection() {
-	stubUserData, _ := datasource.NewCSVDataSource("../testdata/users.csv")
-	tUser := &dt.TableRef{Table: "users"}
-	aop := logical_plan.NewDataFrame(logical_plan.Scan(tUser, stubUserData, nil))
+func ExamplePredicateRule_optimize_pushDown_with_nested_filter() {
+	aop := logical_plan.NewDataFrame(logical_plan.Scan(stubTable, stubDS, nil))
 	plan := aop.
 		Filter(logical_plan.Gt(logical_plan.ColumnUnqualified("age"),
 			logical_plan.LiteralInt(20))).
@@ -60,10 +57,10 @@ func ExamplePredicateRule_optimize_pushDown_with_nested_selection() {
 	// Output:
 	// Filter: age < 30
 	//   Filter: age > 20
-	//     Scan: users; projection=[]
+	//     Scan: users
 	//
 	// ---After optimization---
 	//
 	// Filter: age < 30 AND age > 20
-	//   Scan: users; selection=age < 30, age > 20; projection=[]
+	//   Scan: users; filter=[age < 30, age > 20]
 }

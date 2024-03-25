@@ -18,7 +18,7 @@ func (s *VScanOp) String() string {
 }
 
 func (s *VScanOp) Schema() *datatypes.Schema {
-	return s.ds.Schema().Select(s.projection...)
+	return s.ds.Schema().Project(s.projection...)
 }
 
 func (s *VScanOp) Inputs() []VirtualPlan {

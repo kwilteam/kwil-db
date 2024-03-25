@@ -183,3 +183,19 @@ func inferNullable(expr LogicalExpr, schema *ds.Schema) bool {
 		panic(fmt.Sprintf("unknown expression type %T", e))
 	}
 }
+
+// ppList returns a string representation of the given list.
+func ppList[T any](l []T) string {
+	if len(l) == 0 {
+		return ""
+	}
+
+	str := ""
+	for i, e := range l {
+		str += fmt.Sprintf("%v", e)
+		if i < len(l)-1 {
+			str += ", "
+		}
+	}
+	return str
+}

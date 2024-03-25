@@ -2,16 +2,11 @@ package optimizer
 
 import (
 	"fmt"
-	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
-
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 )
 
 func ExampleProjectionRule_optimize_pushDown() {
-	ds := datasource.NewMemDataSource(nil, nil)
-	tUser := &dt.TableRef{Table: "users"}
-	aop := logical_plan.NewDataFrame(logical_plan.Scan(tUser, ds, nil))
+	aop := logical_plan.NewDataFrame(logical_plan.Scan(stubTable, stubDS, nil))
 	plan := aop.
 		Project(logical_plan.ColumnUnqualified("state"),
 			logical_plan.Alias(logical_plan.ColumnUnqualified("username"), "name")).
@@ -27,19 +22,17 @@ func ExampleProjectionRule_optimize_pushDown() {
 
 	// Output:
 	// Projection: state, username AS name
-	//   Scan: users; projection=[]
+	//   Scan: users
 	//
 	// ---After optimization---
 	//
 	// Projection: state, username AS name
-	//   Scan: users; projection=[state username]
+	//   Scan: users; projection=[state, username]
 	//
 }
 
 func ExampleProjectionRule_optimize_pushDown_with_selection() {
-	ds := datasource.NewMemDataSource(nil, nil)
-	tUser := &dt.TableRef{Table: "users"}
-	aop := logical_plan.NewDataFrame(logical_plan.Scan(tUser, ds, nil))
+	aop := logical_plan.NewDataFrame(logical_plan.Scan(stubTable, stubDS, nil))
 	plan := aop.
 		Filter(logical_plan.Eq(logical_plan.ColumnUnqualified("age"),
 			logical_plan.LiteralInt(20))).
@@ -58,19 +51,17 @@ func ExampleProjectionRule_optimize_pushDown_with_selection() {
 	// Output:
 	// Projection: state, username AS name
 	//   Filter: age = 20
-	//     Scan: users; projection=[]
+	//     Scan: users
 	//
 	// ---After optimization---
 	//
 	// Projection: state, username AS name
 	//   Filter: age = 20
-	//     Scan: users; projection=[age state username]
+	//     Scan: users; projection=[age, state, username]
 }
 
 func ExampleProjectionRule_optimize_pushDown_with_aggregate() {
-	ds := datasource.NewMemDataSource(nil, nil)
-	tUser := &dt.TableRef{Table: "users"}
-	aop := logical_plan.NewDataFrame(logical_plan.Scan(tUser, ds, nil))
+	aop := logical_plan.NewDataFrame(logical_plan.Scan(stubTable, stubDS, nil))
 	plan := aop.
 		Aggregate(
 			[]logical_plan.LogicalExpr{logical_plan.ColumnUnqualified("state")},
@@ -90,21 +81,19 @@ func ExampleProjectionRule_optimize_pushDown_with_aggregate() {
 
 	// Output:
 	// Projection: state, COUNT(username) AS num
-	//   Aggregate: [state], [COUNT(username)]
-	//     Scan: users; projection=[]
+	//   Aggregate: groupBy=[state]; aggr=[COUNT(username)]
+	//     Scan: users
 	//
 	// ---After optimization---
 	//
 	// Projection: state, COUNT(username) AS num
-	//   Aggregate: [state], [COUNT(username)]
-	//     Scan: users; projection=[state username]
+	//   Aggregate: groupBy=[state]; aggr=[COUNT(username)]
+	//     Scan: users; projection=[state, username]
 	//
 }
 
 func ExampleProjectionRule_optimize_pushDown_all_operators() {
-	ds := datasource.NewMemDataSource(nil, nil)
-	tUser := &dt.TableRef{Table: "users"}
-	aop := logical_plan.NewDataFrame(logical_plan.Scan(tUser, ds, nil))
+	aop := logical_plan.NewDataFrame(logical_plan.Scan(stubTable, stubDS, nil))
 	plan := aop.
 		Filter(logical_plan.Eq(logical_plan.ColumnUnqualified("age"),
 			logical_plan.LiteralInt(20))).
@@ -126,15 +115,15 @@ func ExampleProjectionRule_optimize_pushDown_all_operators() {
 
 	// Output:
 	// Projection: state, COUNT(username) AS num
-	//   Aggregate: [state], [COUNT(username)]
-	//     Filter: [age = 20]
-	//       Scan: users; projection=[]
+	//   Aggregate: groupBy=[state]; aggr=[COUNT(username)]
+	//     Filter: age = 20
+	//       Scan: users
 	//
 	// ---After optimization---
 	//
 	// Projection: state, COUNT(username) AS num
-	//   Aggregate: [state], [COUNT(username)]
-	//     Filter: [age = 20]
-	//       Scan: users; projection=[age state username]
+	//   Aggregate: groupBy=[state]; aggr=[COUNT(username)]
+	//     Filter: age = 20
+	//       Scan: users; projection=[age, state, username]
 	//
 }

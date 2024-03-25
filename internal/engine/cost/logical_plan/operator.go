@@ -42,7 +42,7 @@ type ScanOp struct {
 	// schema after projection(i.e. only keep the projected columns in the schema)
 	projectedSchema *dt.Schema
 	// used for selection push down optimization
-	filter LogicalExprList
+	filter []LogicalExpr
 }
 
 func (s *ScanOp) Table() *dt.TableRef {
@@ -57,7 +57,7 @@ func (s *ScanOp) Projection() []string {
 	return s.projection
 }
 
-func (s *ScanOp) Selection() []LogicalExpr {
+func (s *ScanOp) Filter() []LogicalExpr {
 	if len(s.filter) == 0 {
 		return []LogicalExpr{}
 	}
@@ -65,14 +65,18 @@ func (s *ScanOp) Selection() []LogicalExpr {
 }
 
 func (s *ScanOp) String() string {
+	output := fmt.Sprintf("Scan: %s", s.table)
 	if len(s.filter) > 0 {
-		return fmt.Sprintf("Scan: %s; filter=%s; projection=%s", s.table, s.filter, s.projection)
+		output += fmt.Sprintf("; filter=[%s]", ppList(s.filter))
 	}
-	return fmt.Sprintf("Scan: %s; projection=%s", s.table, s.projection)
+	if len(s.projection) > 0 {
+		output += fmt.Sprintf("; projection=[%s]", ppList(s.projection))
+	}
+	return output
 }
 
 func (s *ScanOp) Schema() *dt.Schema {
-	//return s.dataSource.Schema().Select(s.projection...)
+	//return s.dataSource.Schema().Project(s.projection...)
 	return s.projectedSchema
 }
 
@@ -86,11 +90,11 @@ func (s *ScanOp) Exprs() []LogicalExpr {
 
 // Scan creates a table scan logical plan.
 func Scan(table *dt.TableRef, ds ds.SchemaSource,
-	selection []LogicalExpr, projection ...string) LogicalPlan {
-	projectedSchema := ds.Schema().Select(projection...)
+	filter []LogicalExpr, projection ...string) LogicalPlan {
+	projectedSchema := ds.Schema().Project(projection...)
 	qualifiedSchema := dt.NewSchemaQualified(table, projectedSchema.Fields...)
 	return &ScanOp{table: table, dataSource: ds, projection: projection,
-		filter: selection, projectedSchema: qualifiedSchema}
+		filter: filter, projectedSchema: qualifiedSchema}
 }
 
 // ProjectionOp represents a projection operator, which produces new columns
@@ -98,11 +102,11 @@ func Scan(table *dt.TableRef, ds ds.SchemaSource,
 // It corresponds to `SELECT (expr...)` clause in SQL.
 type ProjectionOp struct {
 	input LogicalPlan
-	exprs LogicalExprList
+	exprs []LogicalExpr
 }
 
 func (p *ProjectionOp) String() string {
-	return fmt.Sprintf("Projection: %s", p.exprs)
+	return fmt.Sprintf("Projection: %s", ppList(p.exprs))
 }
 
 func (p *ProjectionOp) Schema() *dt.Schema {
@@ -182,7 +186,16 @@ func (a *AggregateOp) Aggregate() []LogicalExpr {
 }
 
 func (a *AggregateOp) String() string {
-	return fmt.Sprintf("Aggregate: %s, %s", a.groupBy, a.aggregate)
+	output := "Aggregate: "
+	if len(a.groupBy) > 0 {
+		output += fmt.Sprintf("groupBy=[%s]", ppList(a.groupBy))
+	}
+	if len(a.aggregate) > 0 {
+		output += fmt.Sprintf("; aggr=[%s]", ppList(a.aggregate))
+
+	}
+
+	return output
 }
 
 // Schema returns groupBy fields and aggregate fields
@@ -285,15 +298,10 @@ func Limit(plan LogicalPlan, skip int, fetch int) LogicalPlan {
 type SortOp struct {
 	input LogicalPlan
 	by    []LogicalExpr
-	//asc   bool
 }
 
-//func (s *SortOp) IsAsc() bool {
-//	return s.asc
-//}
-
 func (s *SortOp) String() string {
-	return fmt.Sprintf("Sort: %s", s.by)
+	return fmt.Sprintf("Sort: %s", ppList(s.by))
 }
 
 func (s *SortOp) Schema() *dt.Schema {
@@ -309,12 +317,10 @@ func (s *SortOp) Exprs() []LogicalExpr {
 }
 
 // Sort creates a sort logical plan.
-// func Sort(plan LogicalPlan, by []LogicalExpr, asc bool) LogicalPlan {
 func Sort(plan LogicalPlan, by []LogicalExpr) LogicalPlan {
 	return &SortOp{
 		input: plan,
 		by:    by,
-		//asc:   asc,
 	}
 }
 

@@ -2,11 +2,9 @@ package logical_plan
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
-	"strings"
-
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
+	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
 //
@@ -27,16 +25,6 @@ type LogicalExpr interface {
 
 	// Resolve returns the field that this expression represents from the schema
 	Resolve(*dt.Schema) dt.Field
-}
-
-type LogicalExprList []LogicalExpr
-
-func (e LogicalExprList) String() string {
-	fields := make([]string, len(e))
-	for i, expr := range e {
-		fields[i] = expr.String()
-	}
-	return strings.Join(fields, ", ")
 }
 
 // ColumnExpr represents a column in a schema.
@@ -512,6 +500,7 @@ func (a *aggregateIntExpr) E() LogicalExpr {
 func (a *aggregateIntExpr) aggregate() {}
 
 func Count(expr LogicalExpr) *aggregateIntExpr {
+	// TODO: Count should be an sql function expression
 	return &aggregateIntExpr{BaseTreeNode: pt.NewBaseTreeNode(), name: "COUNT", expr: expr}
 }
 
@@ -642,7 +631,7 @@ type scalarFuncExpr struct {
 }
 
 func (e *scalarFuncExpr) String() string {
-	return fmt.Sprintf("%s(%s)", e.fn.Name(), LogicalExprList(e.args))
+	return fmt.Sprintf("%s(%s)", e.fn.Name(), ppList(e.args))
 }
 
 func (e *scalarFuncExpr) Resolve(schema *dt.Schema) dt.Field {
@@ -672,7 +661,7 @@ type aggregateFuncExpr struct {
 }
 
 func (e *aggregateFuncExpr) String() string {
-	return fmt.Sprintf("%s(%s)", e.fn.Name(), LogicalExprList(e.args))
+	return fmt.Sprintf("%s(%s)", e.fn.Name(), ppList(e.args))
 }
 
 func (e *aggregateFuncExpr) Resolve(schema *dt.Schema) dt.Field {

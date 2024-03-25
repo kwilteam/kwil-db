@@ -10,12 +10,12 @@ explain
 SELECT * from users
 ------
 Projection: users.id, users.username, users.age, users.state, users.wallet
-  Scan: users; projection=[]
+  Scan: users
 
 select columns
 explain
 select username, age from users
 ------
 Projection: users.username, users.age
-  Scan: users; projection=[]
+  Scan: users
 
