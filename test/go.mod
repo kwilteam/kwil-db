@@ -16,7 +16,7 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246
 	github.com/ethereum/go-ethereum v1.13.8
-	github.com/kwilteam/kuneiform v0.6.1-0.20240313204201-b1d7646afc2a
+	github.com/kwilteam/kuneiform v0.6.1-0.20240325162722-e0e0101eca92
 	github.com/kwilteam/kwil-db v0.7.0-beta.0.20240301172606-26b70b87eba0
 	github.com/kwilteam/kwil-db/core v0.1.0
 	github.com/stretchr/testify v1.8.4

@@ -19,7 +19,7 @@ require (
 	github.com/jackc/pglogrepl v0.0.0-20231111135425-1627ab1b5780
 	github.com/jackc/pgx/v5 v5.5.2
 	github.com/jpillora/backoff v1.0.0
-	github.com/kwilteam/kuneiform v0.6.1-0.20240313204201-b1d7646afc2a
+	github.com/kwilteam/kuneiform v0.6.1-0.20240325162722-e0e0101eca92
 	github.com/kwilteam/kwil-db/core v0.1.0
 	github.com/kwilteam/kwil-db/parse v0.1.2
 	github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7
