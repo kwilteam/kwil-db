@@ -70,7 +70,7 @@ func (t *RelationTable) SetSchema(schema string) {
 type RelationSubquery struct {
 	node
 
-	Select *SelectStmtNoCte
+	Select *SelectCore
 	Alias  string
 }
 

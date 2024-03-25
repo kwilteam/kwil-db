@@ -9,7 +9,7 @@ import (
 func TestSelect_ToSQL(t *testing.T) {
 	type fields struct {
 		CTE        []*tree.CTE
-		SelectStmt *tree.SelectStmtNoCte
+		SelectStmt *tree.SelectCore
 	}
 	tests := []struct {
 		name    string
@@ -23,8 +23,8 @@ func TestSelect_ToSQL(t *testing.T) {
 				CTE: []*tree.CTE{
 					mockCTE,
 				},
-				SelectStmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{{
+				SelectStmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{{
 						SelectType: tree.SelectTypeAll,
 						Columns: []tree.ResultColumn{
 							&tree.ResultColumnExpression{Expression: &tree.ExpressionColumn{Column: "foo"}},

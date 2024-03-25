@@ -295,12 +295,12 @@ func (s *StatementCleaner) EnterSelectStmt(node *tree.SelectStmt) (err error) {
 }
 
 // EnterSelectCore validates the select type
-func (s *StatementCleaner) EnterSelectCore(node *tree.SelectCore) (err error) {
+func (s *StatementCleaner) EnterSelectCore(node *tree.SimpleSelect) (err error) {
 	return wrapErr(ErrInvalidSelectType, node.SelectType.Valid())
 }
 
 // EnterSelectStmt checks that, for each SelectCore besides the last, a compound operator is provided
-func (s *StatementCleaner) EnterSelectStmtNoCte(node *tree.SelectStmtNoCte) (err error) {
+func (s *StatementCleaner) EnterSelectStmtNoCte(node *tree.SelectCore) (err error) {
 	for _, core := range node.SelectCores[:len(node.SelectCores)-1] {
 		if core.Compound == nil {
 			return wrapErr(ErrInvalidCompoundOperator, errors.New("compound operator must be provided for all SelectCores except the last"))

@@ -9,7 +9,7 @@ type CTE struct {
 
 	Table   string
 	Columns []string
-	Select  *SelectStmtNoCte
+	Select  *SelectCore
 }
 
 func (c *CTE) Accept(v AstVisitor) any {

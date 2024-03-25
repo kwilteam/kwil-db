@@ -34,8 +34,8 @@ func TestUpdate_ToSQL(t *testing.T) {
 							Expression: &tree.ExpressionSelect{
 								IsNot:    true,
 								IsExists: true,
-								Select: &tree.SelectStmtNoCte{
-									SelectCores: []*tree.SelectCore{
+								Select: &tree.SelectCore{
+									SelectCores: []*tree.SimpleSelect{
 										{
 											SelectType: tree.SelectTypeAll,
 											Columns: []tree.ResultColumn{

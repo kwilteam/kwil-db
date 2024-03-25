@@ -80,10 +80,10 @@ type AstListener interface {
 	ExitReturningClauseColumn(*ReturningClauseColumn) error
 	EnterSelectStmt(*SelectStmt) error
 	ExitSelectStmt(*SelectStmt) error
-	EnterSelectCore(*SelectCore) error
-	ExitSelectCore(*SelectCore) error
-	EnterSelectStmtNoCte(*SelectStmtNoCte) error
-	ExitSelectStmtNoCte(*SelectStmtNoCte) error
+	EnterSelectCore(*SimpleSelect) error
+	ExitSelectCore(*SimpleSelect) error
+	EnterSelectStmtNoCte(*SelectCore) error
+	ExitSelectStmtNoCte(*SelectCore) error
 	EnterCompoundOperator(*CompoundOperator) error
 	ExitCompoundOperator(*CompoundOperator) error
 	EnterUpdateSetClause(*UpdateSetClause) error
@@ -424,19 +424,19 @@ func (b *BaseListener) ExitSelectStmt(p0 *SelectStmt) error {
 	return nil
 }
 
-func (b *BaseListener) EnterSelectCore(p0 *SelectCore) error {
+func (b *BaseListener) EnterSelectCore(p0 *SimpleSelect) error {
 	return nil
 }
 
-func (b *BaseListener) ExitSelectCore(p0 *SelectCore) error {
+func (b *BaseListener) ExitSelectCore(p0 *SimpleSelect) error {
 	return nil
 }
 
-func (b *BaseListener) EnterSelectStmtNoCte(p0 *SelectStmtNoCte) error {
+func (b *BaseListener) EnterSelectStmtNoCte(p0 *SelectCore) error {
 	return nil
 }
 
-func (b *BaseListener) ExitSelectStmtNoCte(p0 *SelectStmtNoCte) error {
+func (b *BaseListener) ExitSelectStmtNoCte(p0 *SelectCore) error {
 	return nil
 }
 
@@ -557,10 +557,10 @@ type ImplementedListener struct {
 	FuncExitScalarFunc                  func(p0 *ScalarFunction) error
 	FuncEnterSelectStmt                 func(p0 *SelectStmt) error
 	FuncExitSelectStmt                  func(p0 *SelectStmt) error
-	FuncEnterSelectCore                 func(p0 *SelectCore) error
-	FuncExitSelectCore                  func(p0 *SelectCore) error
-	FuncEnterSelectStmtNoCte            func(p0 *SelectStmtNoCte) error
-	FuncExitSelectStmtNoCte             func(p0 *SelectStmtNoCte) error
+	FuncEnterSelectCore                 func(p0 *SimpleSelect) error
+	FuncExitSelectCore                  func(p0 *SimpleSelect) error
+	FuncEnterSelectStmtNoCte            func(p0 *SelectCore) error
+	FuncExitSelectStmtNoCte             func(p0 *SelectCore) error
 	FuncEnterUpdateStmt                 func(p0 *UpdateStmt) error
 	FuncExitUpdateStmt                  func(p0 *UpdateStmt) error
 	FuncEnterUpdateSetClause            func(p0 *UpdateSetClause) error
@@ -1213,7 +1213,7 @@ func (b *ImplementedListener) ExitSelectStmt(p0 *SelectStmt) error {
 	return b.FuncExitSelectStmt(p0)
 }
 
-func (b *ImplementedListener) EnterSelectCore(p0 *SelectCore) error {
+func (b *ImplementedListener) EnterSelectCore(p0 *SimpleSelect) error {
 	if b.FuncEnterSelectCore == nil {
 		return nil
 	}
@@ -1221,7 +1221,7 @@ func (b *ImplementedListener) EnterSelectCore(p0 *SelectCore) error {
 	return b.FuncEnterSelectCore(p0)
 }
 
-func (b *ImplementedListener) ExitSelectCore(p0 *SelectCore) error {
+func (b *ImplementedListener) ExitSelectCore(p0 *SimpleSelect) error {
 	if b.FuncExitSelectCore == nil {
 		return nil
 	}
@@ -1229,7 +1229,7 @@ func (b *ImplementedListener) ExitSelectCore(p0 *SelectCore) error {
 	return b.FuncExitSelectCore(p0)
 }
 
-func (b *ImplementedListener) EnterSelectStmtNoCte(p0 *SelectStmtNoCte) error {
+func (b *ImplementedListener) EnterSelectStmtNoCte(p0 *SelectCore) error {
 	if b.FuncEnterSelectStmtNoCte == nil {
 		return nil
 	}
@@ -1237,7 +1237,7 @@ func (b *ImplementedListener) EnterSelectStmtNoCte(p0 *SelectStmtNoCte) error {
 	return b.FuncEnterSelectStmtNoCte(p0)
 }
 
-func (b *ImplementedListener) ExitSelectStmtNoCte(p0 *SelectStmtNoCte) error {
+func (b *ImplementedListener) ExitSelectStmtNoCte(p0 *SelectCore) error {
 	if b.FuncExitSelectStmtNoCte == nil {
 		return nil
 	}

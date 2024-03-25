@@ -35,8 +35,8 @@ func getResultColumnExprs(values ...string) []tree.ResultColumn {
 
 func genSelectUnaryExprTree(op tree.UnaryOperator, value string) *tree.SelectStmt {
 	return &tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -55,8 +55,8 @@ func genSelectUnaryExprTree(op tree.UnaryOperator, value string) *tree.SelectStm
 
 func genSelectColumnLiteralTree(value string) *tree.SelectStmt {
 	t := tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -72,8 +72,8 @@ func genSelectColumnLiteralTree(value string) *tree.SelectStmt {
 
 func genSelectColumnStarTree() *tree.SelectStmt {
 	t := tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -87,8 +87,8 @@ func genSelectColumnStarTree() *tree.SelectStmt {
 
 func genSelectColumnTableTree(table string) *tree.SelectStmt {
 	t := tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -102,8 +102,8 @@ func genSelectColumnTableTree(table string) *tree.SelectStmt {
 
 func genSimpleCompoundSelectTree(op tree.CompoundOperatorType) *tree.SelectStmt {
 	return &tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns:    getResultColumnExprs("1"),
@@ -120,8 +120,8 @@ func genSimpleCompoundSelectTree(op tree.CompoundOperatorType) *tree.SelectStmt 
 
 func genSimpleCollateSelectTree(collateType tree.CollationType, value string) *tree.SelectStmt {
 	return &tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -140,8 +140,8 @@ func genSimpleCollateSelectTree(collateType tree.CollationType, value string) *t
 
 func genSimpleBinaryCompareSelectTree(op tree.BinaryOperator, leftValue, rightValue string) *tree.SelectStmt {
 	return &tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -161,8 +161,8 @@ func genSimpleBinaryCompareSelectTree(op tree.BinaryOperator, leftValue, rightVa
 
 func genSimplyArithmeticSelectTree(op tree.ArithmeticOperator, leftValue, rightValue string) *tree.SelectStmt {
 	return &tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -186,8 +186,8 @@ func genSimpleStringCompareSelectTree(op tree.StringOperator, leftValue, rightVa
 		escapeExpr = nil
 	}
 	return &tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -215,8 +215,8 @@ func genSimpleCTETree(table, value string) *tree.CTE {
 
 func genSimpleExprNullSelectTree(value string, not bool) *tree.SelectStmt {
 	return &tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -237,8 +237,8 @@ func genSimpleExprNullSelectTree(value string, not bool) *tree.SelectStmt {
 
 func genSimpleExprIsSelectTree(left string, right string, not bool) *tree.SelectStmt {
 	return &tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -259,8 +259,8 @@ func genSimpleExprIsSelectTree(left string, right string, not bool) *tree.Select
 
 func genSimpleFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) *tree.SelectStmt {
 	return &tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -279,8 +279,8 @@ func genSimpleFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) 
 
 func genDistinctFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) *tree.SelectStmt {
 	return &tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -300,8 +300,8 @@ func genDistinctFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression
 
 func genSimpleJoinSelectTree(joinOP *tree.JoinOperator, t1, t1Column, t2, t2Column string) *tree.SelectStmt {
 	return &tree.SelectStmt{
-		Stmt: &tree.SelectStmtNoCte{
-			SelectCores: []*tree.SelectCore{
+		Stmt: &tree.SelectCore{
+			SelectCores: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -389,8 +389,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		//// table or subquery
 		{"table or subquery", "select * from t1 as tt",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -405,8 +405,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"table or subquery nest select", "select * from (select 1) as tt",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -421,8 +421,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"table or subquery join", "select * from t1 as tt join t2 as ttt on tt.a = ttt.a",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -464,8 +464,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// bind parameter
 		{"expr bind parameter $", "select $a",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -480,8 +480,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				}}},
 		{"expr bind parameter @", "select @a",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -496,8 +496,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				}}},
 		{"expr names", "select t1.c1",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -516,8 +516,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr unary op -", "select -1", genSelectUnaryExprTree(tree.UnaryOperatorMinus, "1")},
 		{"expr unary op - twice, right associative", "select - -1",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -540,8 +540,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr unary op not", "select not 1", genSelectUnaryExprTree(tree.UnaryOperatorNot, "1")},
 		{"expr unary op not twice, right associative", "select not not true",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -602,8 +602,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// in
 		{"expr binary op in", "select 1 in (1,2)",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -627,8 +627,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr binary op not in", "select 1 not in (1,2)",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -652,8 +652,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr binary op in with select", "select 1 in (select 1)",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -674,8 +674,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr binary op not in with select", "select 1 not in (select 1)",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -730,8 +730,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// expr list
 		{"expr list", "select (1,2)",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -752,8 +752,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// expr precedence
 		{"expr precedence 1", "select -1 > 2",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -775,8 +775,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr precedence 2", "SELECT NOT (-1 = 1) AND 1 notnull OR 3 < 2",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -818,8 +818,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr precedence 3", "SELECT NOT (-1 = 1) AND (1 notnull OR 3 < 2)",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -862,8 +862,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr precedence 4", "select not 3 + 4 * 5 - 2 = 2 + -1",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -916,8 +916,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			genSimpleExprIsSelectTree("true", "true", true)},
 		{"expr is distinct from", "select 1 is distinct from 2",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -936,8 +936,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr is not distinct from", "select 1 is not distinct from 2",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -958,8 +958,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// between
 		{"expr between", "select 1 between 2 and 3",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -978,8 +978,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr not between", "select 1 not between 2 and 3",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1000,8 +1000,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		//
 		{"expr exists", "select (select 1)",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1020,8 +1020,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr exists", "select exists (select 1)",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1040,8 +1040,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr not exists", "select not exists (select 1)",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1061,8 +1061,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// case
 		{"expr case", "select case when 1 then 2 end",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1084,8 +1084,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr case else", "select case when 1 then 2 else 3 end",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1108,8 +1108,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr case multi when", "select case when 1 then 2 when 3 then 4 end",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1135,8 +1135,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"expr case expr", "select case 1 when 2 then 3 end",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1423,8 +1423,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		//// select
 		{"select *", "select * from t1",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1437,8 +1437,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"select with cte", "with t as (select 1) select * from t1",
 			&tree.SelectStmt{
 				CTE: []*tree.CTE{genSimpleCTETree("t", "1")},
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1450,8 +1450,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				}}},
 		{"select distinct", "select distinct * from t1",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeDistinct,
 							Columns:    columnStar,
@@ -1463,8 +1463,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				}}},
 		{"select with where", "select * from t1 where c1=1",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1481,8 +1481,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				}}},
 		{"select with where and", "select * from t1 where c1=1 and c2=2",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1507,8 +1507,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				}}},
 		{"select with where or", "select * from t1 where c1=1 or c2=2",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1533,8 +1533,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				}}},
 		{"select with group by", "select * from t1 group by c1",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1551,8 +1551,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				}}},
 		{"select with group by and having", "select * from t1 group by c1 having 1",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1570,8 +1570,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				}}},
 		{"select with order by", "select * from t1 order by c1",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1591,8 +1591,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 
 		{"select with order by all", "select * from t1 order by c1 collate nocase asc nulls first",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1616,8 +1616,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				}}},
 		{"select with limit", "select * from t1 limit 1",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1630,8 +1630,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				}}},
 		{"select with limit offset", "select * from t1 limit 1 offset 2",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1683,8 +1683,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			}, "t1", "c1", "t2", "c1")},
 		{"join multi", "select * from t1 join t2 on t1.c1=t2.c1 left join t3 on t1.c1=t3.c1",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1917,8 +1917,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		//// identifier quotes, `"` and `[]` and "`"
 		{"table name with double quote", `select * from "t1"`,
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1932,8 +1932,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"table name alias with double quote", `select * from "t1" as "t"`,
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1948,8 +1948,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"column name with bracket quote", `select [col1] from "t1"`,
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1969,8 +1969,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"column name alias with bracket quote", `select [col1] as [col] from t1`,
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1992,8 +1992,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		},
 		{"collation name with back tick quote", "select `col1` COLLATE `nocase` from `t1`; ",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -2023,8 +2023,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			"select 1::int as x, @caller::text, t1.c1::text, (t1.c2::int * 3)::int, " +
 				"(t1.c3 isnull)::int, abs(2)::int from t1;",
 			&tree.SelectStmt{
-				Stmt: &tree.SelectStmtNoCte{
-					SelectCores: []*tree.SelectCore{
+				Stmt: &tree.SelectCore{
+					SelectCores: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{

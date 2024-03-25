@@ -44,8 +44,8 @@ type AstVisitor interface {
 	VisitReturningClause(*ReturningClause) any
 	VisitReturningClauseColumn(*ReturningClauseColumn) any
 	VisitSelectStmt(*SelectStmt) any
+	VisitSimpleSelect(*SimpleSelect) any
 	VisitSelectCore(*SelectCore) any
-	VisitSelectNoCte(*SelectStmtNoCte) any
 	VisitUpdateSetClause(*UpdateSetClause) any
 	VisitUpdateStmt(*UpdateStmt) any
 	VisitUpdateCore(*UpdateCore) any
@@ -210,11 +210,11 @@ func (v *BaseAstVisitor) VisitSelectStmt(node *SelectStmt) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitSelectCore(node *SelectCore) any {
+func (v *BaseAstVisitor) VisitSimpleSelect(node *SimpleSelect) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitSelectNoCte(node *SelectStmtNoCte) any {
+func (v *BaseAstVisitor) VisitSelectCore(node *SelectCore) any {
 	return nil
 }
 

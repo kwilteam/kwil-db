@@ -43,7 +43,7 @@ type RelationAttribute struct {
 // tbl1.col, col, col AS alias, col*5 AS alias, etc.
 // If a statement has "SELECT * FROM tbl",
 // then the result column expressions will be tbl.col_1, tbl.col_2, etc.
-func GetSelectCoreRelationAttributes(selectCore *tree.SelectCore, tables []*common.Table) ([]*RelationAttribute, error) {
+func GetSelectCoreRelationAttributes(selectCore *tree.SimpleSelect, tables []*common.Table) ([]*RelationAttribute, error) {
 	walker := newSelectCoreWalker(tables)
 	err := selectCore.Walk(walker)
 	if err != nil {
@@ -197,14 +197,14 @@ func newSelectCoreContext(parent *selectCoreContext) *selectCoreContext {
 }
 
 // EnterSelectCore creates a new scope.
-func (s *selectCoreAnalyzer) EnterSelectCore(node *tree.SelectCore) error {
+func (s *selectCoreAnalyzer) EnterSelectCore(node *tree.SimpleSelect) error {
 	s.newScope()
 
 	return nil
 }
 
 // ExitSelectCore pops the current scope.
-func (s *selectCoreAnalyzer) ExitSelectCore(node *tree.SelectCore) error {
+func (s *selectCoreAnalyzer) ExitSelectCore(node *tree.SimpleSelect) error {
 	var err error
 	s.detectedAttributes, err = s.context.relations()
 	if err != nil {

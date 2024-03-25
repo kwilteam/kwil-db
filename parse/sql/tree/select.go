@@ -10,7 +10,7 @@ type SelectStmt struct {
 	node
 
 	CTE  []*CTE
-	Stmt *SelectStmtNoCte
+	Stmt *SelectCore
 }
 
 func (s *SelectStmt) Accept(v AstVisitor) any {
@@ -45,19 +45,19 @@ func (s *SelectStmt) ToSQL() string {
 
 func (s *SelectStmt) statement() {}
 
-type SelectStmtNoCte struct {
+type SelectCore struct {
 	node
 
-	SelectCores []*SelectCore
+	SelectCores []*SimpleSelect
 	OrderBy     *OrderBy
 	Limit       *Limit
 }
 
-func (s *SelectStmtNoCte) Accept(v AstVisitor) any {
-	return v.VisitSelectNoCte(s)
+func (s *SelectCore) Accept(v AstVisitor) any {
+	return v.VisitSelectCore(s)
 }
 
-func (s *SelectStmtNoCte) Walk(w AstListener) error {
+func (s *SelectCore) Walk(w AstListener) error {
 	return run(
 		w.EnterSelectStmtNoCte(s),
 		walkMany(w, s.SelectCores),
@@ -67,7 +67,7 @@ func (s *SelectStmtNoCte) Walk(w AstListener) error {
 	)
 }
 
-func (s *SelectStmtNoCte) ToSQL() (res string) {
+func (s *SelectCore) ToSQL() (res string) {
 	stmt := sqlwriter.NewWriter()
 	for _, core := range s.SelectCores {
 		stmt.WriteString(core.ToSQL())
@@ -82,7 +82,7 @@ func (s *SelectStmtNoCte) ToSQL() (res string) {
 	return stmt.String()
 }
 
-type SelectCore struct {
+type SimpleSelect struct {
 	node
 
 	SelectType SelectType
@@ -93,11 +93,11 @@ type SelectCore struct {
 	Compound   *CompoundOperator
 }
 
-func (s *SelectCore) Accept(v AstVisitor) any {
-	return v.VisitSelectCore(s)
+func (s *SimpleSelect) Accept(v AstVisitor) any {
+	return v.VisitSimpleSelect(s)
 }
 
-func (s *SelectCore) Walk(w AstListener) error {
+func (s *SimpleSelect) Walk(w AstListener) error {
 	return run(
 		w.EnterSelectCore(s),
 		walkMany(w, s.Columns),
@@ -109,7 +109,7 @@ func (s *SelectCore) Walk(w AstListener) error {
 	)
 }
 
-func (s *SelectCore) ToSQL() string {
+func (s *SimpleSelect) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if s.Compound != nil {

@@ -572,7 +572,7 @@ type ExpressionSelect struct {
 	Wrapped
 	IsNot    bool
 	IsExists bool
-	Select   *SelectStmtNoCte
+	Select   *SelectCore
 
 	TypeCast TypeCastType
 	// NOTE: type cast only makes sense when wrapped
