@@ -154,8 +154,8 @@ type SQLParserVisitor interface {
 	// Visit a parse tree produced by SQLParser#upsert_clause.
 	VisitUpsert_clause(ctx *Upsert_clauseContext) interface{}
 
-	// Visit a parse tree produced by SQLParser#select_stmt_no_cte.
-	VisitSelect_stmt_no_cte(ctx *Select_stmt_no_cteContext) interface{}
+	// Visit a parse tree produced by SQLParser#select_core.
+	VisitSelect_core(ctx *Select_coreContext) interface{}
 
 	// Visit a parse tree produced by SQLParser#select_stmt.
 	VisitSelect_stmt(ctx *Select_stmtContext) interface{}
@@ -166,8 +166,8 @@ type SQLParserVisitor interface {
 	// Visit a parse tree produced by SQLParser#relation.
 	VisitRelation(ctx *RelationContext) interface{}
 
-	// Visit a parse tree produced by SQLParser#select_core.
-	VisitSelect_core(ctx *Select_coreContext) interface{}
+	// Visit a parse tree produced by SQLParser#simple_select.
+	VisitSimple_select(ctx *Simple_selectContext) interface{}
 
 	// Visit a parse tree produced by SQLParser#table_or_subquery.
 	VisitTable_or_subquery(ctx *Table_or_subqueryContext) interface{}

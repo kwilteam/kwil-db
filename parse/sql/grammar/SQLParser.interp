@@ -225,11 +225,11 @@ insert_stmt
 returning_clause
 upsert_update
 upsert_clause
-select_stmt_no_cte
+select_core
 select_stmt
 join_relation
 relation
-select_core
+simple_select
 table_or_subquery
 result_column
 returning_clause_result_column

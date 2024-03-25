@@ -73,7 +73,7 @@ func (v *astBuilder) VisitCommon_table_expression(ctx *grammar.Common_table_expr
 		}
 	}
 
-	cte.Select = v.Visit(ctx.Select_stmt_no_cte()).(*tree.SelectCore)
+	cte.Select = v.Visit(ctx.Select_core()).(*tree.SelectCore)
 	return &cte
 }
 
@@ -272,7 +272,7 @@ func (v *astBuilder) VisitParenthesized_expr(ctx *grammar.Parenthesized_exprCont
 }
 
 func (v *astBuilder) VisitSubquery(ctx *grammar.SubqueryContext) interface{} {
-	return v.Visit(ctx.Select_stmt_no_cte()).(*tree.SelectCore)
+	return v.Visit(ctx.Select_core()).(*tree.SelectCore)
 }
 
 // VisitSubquery_expr is called when visiting a subquery_expr, return *tree.ExpressionSelect
@@ -844,9 +844,9 @@ func (v *astBuilder) VisitTable_or_subquery(ctx *grammar.Table_or_subqueryContex
 			t.Alias = util.ExtractSQLName(ctx.Table_alias().GetText())
 		}
 		return &t
-	case ctx.Select_stmt_no_cte() != nil:
+	case ctx.Select_core() != nil:
 		t := tree.RelationSubquery{
-			Select: v.Visit(ctx.Select_stmt_no_cte()).(*tree.SelectCore),
+			Select: v.Visit(ctx.Select_core()).(*tree.SelectCore),
 		}
 		if ctx.Table_alias() != nil {
 			t.Alias = util.ExtractSQLName(ctx.Table_alias().GetText())
@@ -943,8 +943,8 @@ func (v *astBuilder) VisitDelete_stmt(ctx *grammar.Delete_stmtContext) interface
 	return &t
 }
 
-// VisitSelect_core is called when visiting a select_core, return *tree.SelectCore
-func (v *astBuilder) VisitSelect_core(ctx *grammar.Select_coreContext) interface{} {
+// VisitSimple_select is called when visiting a Simple_select, return *tree.SelectCore
+func (v *astBuilder) VisitSimple_select(ctx *grammar.Simple_selectContext) interface{} {
 	t := tree.SimpleSelect{
 		SelectType: tree.SelectTypeAll,
 	}
@@ -1008,16 +1008,16 @@ func (v *astBuilder) VisitRelation(ctx *grammar.RelationContext) interface{} {
 	}
 }
 
-// VisitSelect_stmt_no_cte is called when visiting a select_stmt_core, return *tree.SelectStmtNoCte
-func (v *astBuilder) VisitSelect_stmt_no_cte(ctx *grammar.Select_stmt_no_cteContext) interface{} {
+// VisitSelect_core is called when visiting a select_stmt_core, return *tree.SelectStmtNoCte
+func (v *astBuilder) VisitSelect_core(ctx *grammar.Select_coreContext) interface{} {
 	t := tree.SelectCore{}
-	selectCores := make([]*tree.SimpleSelect, len(ctx.AllSelect_core()))
+	selectCores := make([]*tree.SimpleSelect, len(ctx.AllSimple_select()))
 
-	// first select_core
-	selectCores[0] = v.Visit(ctx.Select_core(0)).(*tree.SimpleSelect)
+	// first Simple_select
+	selectCores[0] = v.Visit(ctx.Simple_select(0)).(*tree.SimpleSelect)
 
-	// rest select_core
-	for i, selectCoreCtx := range ctx.AllSelect_core()[1:] {
+	// rest Simple_select
+	for i, selectCoreCtx := range ctx.AllSimple_select()[1:] {
 		compoundOperator := v.Visit(ctx.Compound_operator(i)).(*tree.CompoundOperator)
 		core := v.Visit(selectCoreCtx).(*tree.SimpleSelect)
 		core.Compound = compoundOperator
@@ -1045,7 +1045,7 @@ func (v *astBuilder) VisitSelect_stmt(ctx *grammar.Select_stmtContext) interface
 		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
 	}
 
-	t.Stmt = v.Visit(ctx.Select_stmt_no_cte()).(*tree.SelectCore)
+	t.Stmt = v.Visit(ctx.Select_core()).(*tree.SelectCore)
 	return &t
 }
 

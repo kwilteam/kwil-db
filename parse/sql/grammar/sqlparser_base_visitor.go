@@ -203,7 +203,7 @@ func (v *BaseSQLParserVisitor) VisitUpsert_clause(ctx *Upsert_clauseContext) int
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSQLParserVisitor) VisitSelect_stmt_no_cte(ctx *Select_stmt_no_cteContext) interface{} {
+func (v *BaseSQLParserVisitor) VisitSelect_core(ctx *Select_coreContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -219,7 +219,7 @@ func (v *BaseSQLParserVisitor) VisitRelation(ctx *RelationContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSQLParserVisitor) VisitSelect_core(ctx *Select_coreContext) interface{} {
+func (v *BaseSQLParserVisitor) VisitSimple_select(ctx *Simple_selectContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

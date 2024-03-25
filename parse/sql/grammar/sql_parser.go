@@ -68,7 +68,7 @@ func sqlparserParserInit() {
 		"expr_list", "comparisonOperator", "cast_type", "type_cast", "boolean_value",
 		"string_value", "numeric_value", "literal", "value_row", "values_clause",
 		"insert_core", "insert_stmt", "returning_clause", "upsert_update", "upsert_clause",
-		"select_stmt_no_cte", "select_stmt", "join_relation", "relation", "select_core",
+		"select_core", "select_stmt", "join_relation", "relation", "simple_select",
 		"table_or_subquery", "result_column", "returning_clause_result_column",
 		"join_operator", "join_constraint", "compound_operator", "update_set_subclause",
 		"update_core", "update_stmt", "column_name_list", "qualified_table_name",
@@ -573,11 +573,11 @@ const (
 	SQLParserRULE_returning_clause               = 27
 	SQLParserRULE_upsert_update                  = 28
 	SQLParserRULE_upsert_clause                  = 29
-	SQLParserRULE_select_stmt_no_cte             = 30
+	SQLParserRULE_select_core                    = 30
 	SQLParserRULE_select_stmt                    = 31
 	SQLParserRULE_join_relation                  = 32
 	SQLParserRULE_relation                       = 33
-	SQLParserRULE_select_core                    = 34
+	SQLParserRULE_simple_select                  = 34
 	SQLParserRULE_table_or_subquery              = 35
 	SQLParserRULE_result_column                  = 36
 	SQLParserRULE_returning_clause_result_column = 37
@@ -1531,7 +1531,7 @@ type ICommon_table_expressionContext interface {
 	Cte_table_name() ICte_table_nameContext
 	AS_() antlr.TerminalNode
 	OPEN_PAR() antlr.TerminalNode
-	Select_stmt_no_cte() ISelect_stmt_no_cteContext
+	Select_core() ISelect_coreContext
 	CLOSE_PAR() antlr.TerminalNode
 
 	// IsCommon_table_expressionContext differentiates from other interfaces.
@@ -1594,10 +1594,10 @@ func (s *Common_table_expressionContext) OPEN_PAR() antlr.TerminalNode {
 	return s.GetToken(SQLParserOPEN_PAR, 0)
 }
 
-func (s *Common_table_expressionContext) Select_stmt_no_cte() ISelect_stmt_no_cteContext {
+func (s *Common_table_expressionContext) Select_core() ISelect_coreContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(ISelect_stmt_no_cteContext); ok {
+		if _, ok := ctx.(ISelect_coreContext); ok {
 			t = ctx.(antlr.RuleContext)
 			break
 		}
@@ -1607,7 +1607,7 @@ func (s *Common_table_expressionContext) Select_stmt_no_cte() ISelect_stmt_no_ct
 		return nil
 	}
 
-	return t.(ISelect_stmt_no_cteContext)
+	return t.(ISelect_coreContext)
 }
 
 func (s *Common_table_expressionContext) CLOSE_PAR() antlr.TerminalNode {
@@ -1658,7 +1658,7 @@ func (p *SQLParser) Common_table_expression() (localctx ICommon_table_expression
 	}
 	{
 		p.SetState(173)
-		p.Select_stmt_no_cte()
+		p.Select_core()
 	}
 	{
 		p.SetState(174)
@@ -5406,7 +5406,7 @@ type ISubqueryContext interface {
 
 	// Getter signatures
 	OPEN_PAR() antlr.TerminalNode
-	Select_stmt_no_cte() ISelect_stmt_no_cteContext
+	Select_core() ISelect_coreContext
 	CLOSE_PAR() antlr.TerminalNode
 
 	// IsSubqueryContext differentiates from other interfaces.
@@ -5449,10 +5449,10 @@ func (s *SubqueryContext) OPEN_PAR() antlr.TerminalNode {
 	return s.GetToken(SQLParserOPEN_PAR, 0)
 }
 
-func (s *SubqueryContext) Select_stmt_no_cte() ISelect_stmt_no_cteContext {
+func (s *SubqueryContext) Select_core() ISelect_coreContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(ISelect_stmt_no_cteContext); ok {
+		if _, ok := ctx.(ISelect_coreContext); ok {
 			t = ctx.(antlr.RuleContext)
 			break
 		}
@@ -5462,7 +5462,7 @@ func (s *SubqueryContext) Select_stmt_no_cte() ISelect_stmt_no_cteContext {
 		return nil
 	}
 
-	return t.(ISelect_stmt_no_cteContext)
+	return t.(ISelect_coreContext)
 }
 
 func (s *SubqueryContext) CLOSE_PAR() antlr.TerminalNode {
@@ -5501,7 +5501,7 @@ func (p *SQLParser) Subquery() (localctx ISubqueryContext) {
 	}
 	{
 		p.SetState(360)
-		p.Select_stmt_no_cte()
+		p.Select_core()
 	}
 	{
 		p.SetState(361)
@@ -8241,71 +8241,71 @@ errorExit:
 	goto errorExit // Trick to prevent compiler error if the label is not used
 }
 
-// ISelect_stmt_no_cteContext is an interface to support dynamic dispatch.
-type ISelect_stmt_no_cteContext interface {
+// ISelect_coreContext is an interface to support dynamic dispatch.
+type ISelect_coreContext interface {
 	antlr.ParserRuleContext
 
 	// GetParser returns the parser.
 	GetParser() antlr.Parser
 
 	// Getter signatures
-	AllSelect_core() []ISelect_coreContext
-	Select_core(i int) ISelect_coreContext
+	AllSimple_select() []ISimple_selectContext
+	Simple_select(i int) ISimple_selectContext
 	AllCompound_operator() []ICompound_operatorContext
 	Compound_operator(i int) ICompound_operatorContext
 	Order_by_stmt() IOrder_by_stmtContext
 	Limit_stmt() ILimit_stmtContext
 
-	// IsSelect_stmt_no_cteContext differentiates from other interfaces.
-	IsSelect_stmt_no_cteContext()
+	// IsSelect_coreContext differentiates from other interfaces.
+	IsSelect_coreContext()
 }
 
-type Select_stmt_no_cteContext struct {
+type Select_coreContext struct {
 	antlr.BaseParserRuleContext
 	parser antlr.Parser
 }
 
-func NewEmptySelect_stmt_no_cteContext() *Select_stmt_no_cteContext {
-	var p = new(Select_stmt_no_cteContext)
+func NewEmptySelect_coreContext() *Select_coreContext {
+	var p = new(Select_coreContext)
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = SQLParserRULE_select_stmt_no_cte
+	p.RuleIndex = SQLParserRULE_select_core
 	return p
 }
 
-func InitEmptySelect_stmt_no_cteContext(p *Select_stmt_no_cteContext) {
+func InitEmptySelect_coreContext(p *Select_coreContext) {
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = SQLParserRULE_select_stmt_no_cte
+	p.RuleIndex = SQLParserRULE_select_core
 }
 
-func (*Select_stmt_no_cteContext) IsSelect_stmt_no_cteContext() {}
+func (*Select_coreContext) IsSelect_coreContext() {}
 
-func NewSelect_stmt_no_cteContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Select_stmt_no_cteContext {
-	var p = new(Select_stmt_no_cteContext)
+func NewSelect_coreContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Select_coreContext {
+	var p = new(Select_coreContext)
 
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = SQLParserRULE_select_stmt_no_cte
+	p.RuleIndex = SQLParserRULE_select_core
 
 	return p
 }
 
-func (s *Select_stmt_no_cteContext) GetParser() antlr.Parser { return s.parser }
+func (s *Select_coreContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *Select_stmt_no_cteContext) AllSelect_core() []ISelect_coreContext {
+func (s *Select_coreContext) AllSimple_select() []ISimple_selectContext {
 	children := s.GetChildren()
 	len := 0
 	for _, ctx := range children {
-		if _, ok := ctx.(ISelect_coreContext); ok {
+		if _, ok := ctx.(ISimple_selectContext); ok {
 			len++
 		}
 	}
 
-	tst := make([]ISelect_coreContext, len)
+	tst := make([]ISimple_selectContext, len)
 	i := 0
 	for _, ctx := range children {
-		if t, ok := ctx.(ISelect_coreContext); ok {
-			tst[i] = t.(ISelect_coreContext)
+		if t, ok := ctx.(ISimple_selectContext); ok {
+			tst[i] = t.(ISimple_selectContext)
 			i++
 		}
 	}
@@ -8313,11 +8313,11 @@ func (s *Select_stmt_no_cteContext) AllSelect_core() []ISelect_coreContext {
 	return tst
 }
 
-func (s *Select_stmt_no_cteContext) Select_core(i int) ISelect_coreContext {
+func (s *Select_coreContext) Simple_select(i int) ISimple_selectContext {
 	var t antlr.RuleContext
 	j := 0
 	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(ISelect_coreContext); ok {
+		if _, ok := ctx.(ISimple_selectContext); ok {
 			if j == i {
 				t = ctx.(antlr.RuleContext)
 				break
@@ -8330,10 +8330,10 @@ func (s *Select_stmt_no_cteContext) Select_core(i int) ISelect_coreContext {
 		return nil
 	}
 
-	return t.(ISelect_coreContext)
+	return t.(ISimple_selectContext)
 }
 
-func (s *Select_stmt_no_cteContext) AllCompound_operator() []ICompound_operatorContext {
+func (s *Select_coreContext) AllCompound_operator() []ICompound_operatorContext {
 	children := s.GetChildren()
 	len := 0
 	for _, ctx := range children {
@@ -8354,7 +8354,7 @@ func (s *Select_stmt_no_cteContext) AllCompound_operator() []ICompound_operatorC
 	return tst
 }
 
-func (s *Select_stmt_no_cteContext) Compound_operator(i int) ICompound_operatorContext {
+func (s *Select_coreContext) Compound_operator(i int) ICompound_operatorContext {
 	var t antlr.RuleContext
 	j := 0
 	for _, ctx := range s.GetChildren() {
@@ -8374,7 +8374,7 @@ func (s *Select_stmt_no_cteContext) Compound_operator(i int) ICompound_operatorC
 	return t.(ICompound_operatorContext)
 }
 
-func (s *Select_stmt_no_cteContext) Order_by_stmt() IOrder_by_stmtContext {
+func (s *Select_coreContext) Order_by_stmt() IOrder_by_stmtContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(IOrder_by_stmtContext); ok {
@@ -8390,7 +8390,7 @@ func (s *Select_stmt_no_cteContext) Order_by_stmt() IOrder_by_stmtContext {
 	return t.(IOrder_by_stmtContext)
 }
 
-func (s *Select_stmt_no_cteContext) Limit_stmt() ILimit_stmtContext {
+func (s *Select_coreContext) Limit_stmt() ILimit_stmtContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(ILimit_stmtContext); ok {
@@ -8406,33 +8406,33 @@ func (s *Select_stmt_no_cteContext) Limit_stmt() ILimit_stmtContext {
 	return t.(ILimit_stmtContext)
 }
 
-func (s *Select_stmt_no_cteContext) GetRuleContext() antlr.RuleContext {
+func (s *Select_coreContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
 
-func (s *Select_stmt_no_cteContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+func (s *Select_coreContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
-func (s *Select_stmt_no_cteContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+func (s *Select_coreContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case SQLParserVisitor:
-		return t.VisitSelect_stmt_no_cte(s)
+		return t.VisitSelect_core(s)
 
 	default:
 		return t.VisitChildren(s)
 	}
 }
 
-func (p *SQLParser) Select_stmt_no_cte() (localctx ISelect_stmt_no_cteContext) {
-	localctx = NewSelect_stmt_no_cteContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 60, SQLParserRULE_select_stmt_no_cte)
+func (p *SQLParser) Select_core() (localctx ISelect_coreContext) {
+	localctx = NewSelect_coreContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 60, SQLParserRULE_select_core)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
 		p.SetState(494)
-		p.Select_core()
+		p.Simple_select()
 	}
 	p.SetState(500)
 	p.GetErrorHandler().Sync(p)
@@ -8448,7 +8448,7 @@ func (p *SQLParser) Select_stmt_no_cte() (localctx ISelect_stmt_no_cteContext) {
 		}
 		{
 			p.SetState(496)
-			p.Select_core()
+			p.Simple_select()
 		}
 
 		p.SetState(502)
@@ -8508,7 +8508,7 @@ type ISelect_stmtContext interface {
 	GetParser() antlr.Parser
 
 	// Getter signatures
-	Select_stmt_no_cte() ISelect_stmt_no_cteContext
+	Select_core() ISelect_coreContext
 	Common_table_stmt() ICommon_table_stmtContext
 
 	// IsSelect_stmtContext differentiates from other interfaces.
@@ -8547,10 +8547,10 @@ func NewSelect_stmtContext(parser antlr.Parser, parent antlr.ParserRuleContext, 
 
 func (s *Select_stmtContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *Select_stmtContext) Select_stmt_no_cte() ISelect_stmt_no_cteContext {
+func (s *Select_stmtContext) Select_core() ISelect_coreContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(ISelect_stmt_no_cteContext); ok {
+		if _, ok := ctx.(ISelect_coreContext); ok {
 			t = ctx.(antlr.RuleContext)
 			break
 		}
@@ -8560,7 +8560,7 @@ func (s *Select_stmtContext) Select_stmt_no_cte() ISelect_stmt_no_cteContext {
 		return nil
 	}
 
-	return t.(ISelect_stmt_no_cteContext)
+	return t.(ISelect_coreContext)
 }
 
 func (s *Select_stmtContext) Common_table_stmt() ICommon_table_stmtContext {
@@ -8619,7 +8619,7 @@ func (p *SQLParser) Select_stmt() (localctx ISelect_stmtContext) {
 	}
 	{
 		p.SetState(512)
-		p.Select_stmt_no_cte()
+		p.Select_core()
 	}
 
 errorExit:
@@ -8960,8 +8960,8 @@ errorExit:
 	goto errorExit // Trick to prevent compiler error if the label is not used
 }
 
-// ISelect_coreContext is an interface to support dynamic dispatch.
-type ISelect_coreContext interface {
+// ISimple_selectContext is an interface to support dynamic dispatch.
+type ISimple_selectContext interface {
 	antlr.ParserRuleContext
 
 	// GetParser returns the parser.
@@ -9007,11 +9007,11 @@ type ISelect_coreContext interface {
 	Expr(i int) IExprContext
 	HAVING_() antlr.TerminalNode
 
-	// IsSelect_coreContext differentiates from other interfaces.
-	IsSelect_coreContext()
+	// IsSimple_selectContext differentiates from other interfaces.
+	IsSimple_selectContext()
 }
 
-type Select_coreContext struct {
+type Simple_selectContext struct {
 	antlr.BaseParserRuleContext
 	parser      antlr.Parser
 	whereExpr   IExprContext
@@ -9020,54 +9020,54 @@ type Select_coreContext struct {
 	havingExpr  IExprContext
 }
 
-func NewEmptySelect_coreContext() *Select_coreContext {
-	var p = new(Select_coreContext)
+func NewEmptySimple_selectContext() *Simple_selectContext {
+	var p = new(Simple_selectContext)
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = SQLParserRULE_select_core
+	p.RuleIndex = SQLParserRULE_simple_select
 	return p
 }
 
-func InitEmptySelect_coreContext(p *Select_coreContext) {
+func InitEmptySimple_selectContext(p *Simple_selectContext) {
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = SQLParserRULE_select_core
+	p.RuleIndex = SQLParserRULE_simple_select
 }
 
-func (*Select_coreContext) IsSelect_coreContext() {}
+func (*Simple_selectContext) IsSimple_selectContext() {}
 
-func NewSelect_coreContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Select_coreContext {
-	var p = new(Select_coreContext)
+func NewSimple_selectContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Simple_selectContext {
+	var p = new(Simple_selectContext)
 
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = SQLParserRULE_select_core
+	p.RuleIndex = SQLParserRULE_simple_select
 
 	return p
 }
 
-func (s *Select_coreContext) GetParser() antlr.Parser { return s.parser }
+func (s *Simple_selectContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *Select_coreContext) GetWhereExpr() IExprContext { return s.whereExpr }
+func (s *Simple_selectContext) GetWhereExpr() IExprContext { return s.whereExpr }
 
-func (s *Select_coreContext) Get_expr() IExprContext { return s._expr }
+func (s *Simple_selectContext) Get_expr() IExprContext { return s._expr }
 
-func (s *Select_coreContext) GetHavingExpr() IExprContext { return s.havingExpr }
+func (s *Simple_selectContext) GetHavingExpr() IExprContext { return s.havingExpr }
 
-func (s *Select_coreContext) SetWhereExpr(v IExprContext) { s.whereExpr = v }
+func (s *Simple_selectContext) SetWhereExpr(v IExprContext) { s.whereExpr = v }
 
-func (s *Select_coreContext) Set_expr(v IExprContext) { s._expr = v }
+func (s *Simple_selectContext) Set_expr(v IExprContext) { s._expr = v }
 
-func (s *Select_coreContext) SetHavingExpr(v IExprContext) { s.havingExpr = v }
+func (s *Simple_selectContext) SetHavingExpr(v IExprContext) { s.havingExpr = v }
 
-func (s *Select_coreContext) GetGroupByExpr() []IExprContext { return s.groupByExpr }
+func (s *Simple_selectContext) GetGroupByExpr() []IExprContext { return s.groupByExpr }
 
-func (s *Select_coreContext) SetGroupByExpr(v []IExprContext) { s.groupByExpr = v }
+func (s *Simple_selectContext) SetGroupByExpr(v []IExprContext) { s.groupByExpr = v }
 
-func (s *Select_coreContext) SELECT_() antlr.TerminalNode {
+func (s *Simple_selectContext) SELECT_() antlr.TerminalNode {
 	return s.GetToken(SQLParserSELECT_, 0)
 }
 
-func (s *Select_coreContext) AllResult_column() []IResult_columnContext {
+func (s *Simple_selectContext) AllResult_column() []IResult_columnContext {
 	children := s.GetChildren()
 	len := 0
 	for _, ctx := range children {
@@ -9088,7 +9088,7 @@ func (s *Select_coreContext) AllResult_column() []IResult_columnContext {
 	return tst
 }
 
-func (s *Select_coreContext) Result_column(i int) IResult_columnContext {
+func (s *Simple_selectContext) Result_column(i int) IResult_columnContext {
 	var t antlr.RuleContext
 	j := 0
 	for _, ctx := range s.GetChildren() {
@@ -9108,23 +9108,23 @@ func (s *Select_coreContext) Result_column(i int) IResult_columnContext {
 	return t.(IResult_columnContext)
 }
 
-func (s *Select_coreContext) DISTINCT_() antlr.TerminalNode {
+func (s *Simple_selectContext) DISTINCT_() antlr.TerminalNode {
 	return s.GetToken(SQLParserDISTINCT_, 0)
 }
 
-func (s *Select_coreContext) AllCOMMA() []antlr.TerminalNode {
+func (s *Simple_selectContext) AllCOMMA() []antlr.TerminalNode {
 	return s.GetTokens(SQLParserCOMMA)
 }
 
-func (s *Select_coreContext) COMMA(i int) antlr.TerminalNode {
+func (s *Simple_selectContext) COMMA(i int) antlr.TerminalNode {
 	return s.GetToken(SQLParserCOMMA, i)
 }
 
-func (s *Select_coreContext) FROM_() antlr.TerminalNode {
+func (s *Simple_selectContext) FROM_() antlr.TerminalNode {
 	return s.GetToken(SQLParserFROM_, 0)
 }
 
-func (s *Select_coreContext) Relation() IRelationContext {
+func (s *Simple_selectContext) Relation() IRelationContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(IRelationContext); ok {
@@ -9140,19 +9140,19 @@ func (s *Select_coreContext) Relation() IRelationContext {
 	return t.(IRelationContext)
 }
 
-func (s *Select_coreContext) WHERE_() antlr.TerminalNode {
+func (s *Simple_selectContext) WHERE_() antlr.TerminalNode {
 	return s.GetToken(SQLParserWHERE_, 0)
 }
 
-func (s *Select_coreContext) GROUP_() antlr.TerminalNode {
+func (s *Simple_selectContext) GROUP_() antlr.TerminalNode {
 	return s.GetToken(SQLParserGROUP_, 0)
 }
 
-func (s *Select_coreContext) BY_() antlr.TerminalNode {
+func (s *Simple_selectContext) BY_() antlr.TerminalNode {
 	return s.GetToken(SQLParserBY_, 0)
 }
 
-func (s *Select_coreContext) AllExpr() []IExprContext {
+func (s *Simple_selectContext) AllExpr() []IExprContext {
 	children := s.GetChildren()
 	len := 0
 	for _, ctx := range children {
@@ -9173,7 +9173,7 @@ func (s *Select_coreContext) AllExpr() []IExprContext {
 	return tst
 }
 
-func (s *Select_coreContext) Expr(i int) IExprContext {
+func (s *Simple_selectContext) Expr(i int) IExprContext {
 	var t antlr.RuleContext
 	j := 0
 	for _, ctx := range s.GetChildren() {
@@ -9193,31 +9193,31 @@ func (s *Select_coreContext) Expr(i int) IExprContext {
 	return t.(IExprContext)
 }
 
-func (s *Select_coreContext) HAVING_() antlr.TerminalNode {
+func (s *Simple_selectContext) HAVING_() antlr.TerminalNode {
 	return s.GetToken(SQLParserHAVING_, 0)
 }
 
-func (s *Select_coreContext) GetRuleContext() antlr.RuleContext {
+func (s *Simple_selectContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
 
-func (s *Select_coreContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+func (s *Simple_selectContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
-func (s *Select_coreContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+func (s *Simple_selectContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case SQLParserVisitor:
-		return t.VisitSelect_core(s)
+		return t.VisitSimple_select(s)
 
 	default:
 		return t.VisitChildren(s)
 	}
 }
 
-func (p *SQLParser) Select_core() (localctx ISelect_coreContext) {
-	localctx = NewSelect_coreContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 68, SQLParserRULE_select_core)
+func (p *SQLParser) Simple_select() (localctx ISimple_selectContext) {
+	localctx = NewSimple_selectContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 68, SQLParserRULE_simple_select)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
@@ -9322,7 +9322,7 @@ func (p *SQLParser) Select_core() (localctx ISelect_coreContext) {
 
 			var _x = p.expr(0)
 
-			localctx.(*Select_coreContext).whereExpr = _x
+			localctx.(*Simple_selectContext).whereExpr = _x
 		}
 
 	}
@@ -9355,9 +9355,9 @@ func (p *SQLParser) Select_core() (localctx ISelect_coreContext) {
 
 			var _x = p.expr(0)
 
-			localctx.(*Select_coreContext)._expr = _x
+			localctx.(*Simple_selectContext)._expr = _x
 		}
-		localctx.(*Select_coreContext).groupByExpr = append(localctx.(*Select_coreContext).groupByExpr, localctx.(*Select_coreContext)._expr)
+		localctx.(*Simple_selectContext).groupByExpr = append(localctx.(*Simple_selectContext).groupByExpr, localctx.(*Simple_selectContext)._expr)
 		p.SetState(552)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
@@ -9379,9 +9379,9 @@ func (p *SQLParser) Select_core() (localctx ISelect_coreContext) {
 
 				var _x = p.expr(0)
 
-				localctx.(*Select_coreContext)._expr = _x
+				localctx.(*Simple_selectContext)._expr = _x
 			}
-			localctx.(*Select_coreContext).groupByExpr = append(localctx.(*Select_coreContext).groupByExpr, localctx.(*Select_coreContext)._expr)
+			localctx.(*Simple_selectContext).groupByExpr = append(localctx.(*Simple_selectContext).groupByExpr, localctx.(*Simple_selectContext)._expr)
 
 			p.SetState(554)
 			p.GetErrorHandler().Sync(p)
@@ -9411,7 +9411,7 @@ func (p *SQLParser) Select_core() (localctx ISelect_coreContext) {
 
 				var _x = p.expr(0)
 
-				localctx.(*Select_coreContext).havingExpr = _x
+				localctx.(*Simple_selectContext).havingExpr = _x
 			}
 
 		}
@@ -9443,7 +9443,7 @@ type ITable_or_subqueryContext interface {
 	AS_() antlr.TerminalNode
 	Table_alias() ITable_aliasContext
 	OPEN_PAR() antlr.TerminalNode
-	Select_stmt_no_cte() ISelect_stmt_no_cteContext
+	Select_core() ISelect_coreContext
 	CLOSE_PAR() antlr.TerminalNode
 
 	// IsTable_or_subqueryContext differentiates from other interfaces.
@@ -9522,10 +9522,10 @@ func (s *Table_or_subqueryContext) OPEN_PAR() antlr.TerminalNode {
 	return s.GetToken(SQLParserOPEN_PAR, 0)
 }
 
-func (s *Table_or_subqueryContext) Select_stmt_no_cte() ISelect_stmt_no_cteContext {
+func (s *Table_or_subqueryContext) Select_core() ISelect_coreContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(ISelect_stmt_no_cteContext); ok {
+		if _, ok := ctx.(ISelect_coreContext); ok {
 			t = ctx.(antlr.RuleContext)
 			break
 		}
@@ -9535,7 +9535,7 @@ func (s *Table_or_subqueryContext) Select_stmt_no_cte() ISelect_stmt_no_cteConte
 		return nil
 	}
 
-	return t.(ISelect_stmt_no_cteContext)
+	return t.(ISelect_coreContext)
 }
 
 func (s *Table_or_subqueryContext) CLOSE_PAR() antlr.TerminalNode {
@@ -9613,7 +9613,7 @@ func (p *SQLParser) Table_or_subquery() (localctx ITable_or_subqueryContext) {
 		}
 		{
 			p.SetState(567)
-			p.Select_stmt_no_cte()
+			p.Select_core()
 		}
 		{
 			p.SetState(568)
