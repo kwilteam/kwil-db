@@ -136,6 +136,12 @@ func Test_queryPlanner_ToPlan(t *testing.T) {
 			wt: "Projection: users.id, users.username, users.age, users.state, users.wallet\n" +
 				"  Scan: users; projection=[]\n",
 		},
+		//{ // TODO?
+		//	name: "select wildcard, deduplication",
+		//	sql:  "SELECT *, age FROM users",
+		//	wt: "Projection: users.id, users.username, users.age, users.state, users.wallet\n" +
+		//		"  Scan: users; projection=[]\n",
+		//},
 		{
 			name: "select columns",
 			sql:  "select username, age from users",
@@ -166,6 +172,47 @@ func Test_queryPlanner_ToPlan(t *testing.T) {
 			sql:  "select username, age from users where age > 20 and state = 'CA'",
 			wt: "Projection: users.username, users.age\n" +
 				"  Filter: users.age > 20 AND users.state = 'CA'\n" +
+				"    Scan: users; projection=[]\n",
+		},
+		//{
+		//	name: "select with group by",
+		//	sql:  "select username, count(*) from users group by username",
+		//	wt:   "GroupBy: users.username\n",
+		//},
+		{
+			name: "select with limit, without offset",
+			sql:  "select username, age from users limit 10",
+			wt: "Limit: skip=0, fetch=10\n" +
+				"  Projection: users.username, users.age\n" +
+				"    Scan: users; projection=[]\n",
+		},
+		{
+			name: "select with limit and offset",
+			sql:  "select username, age from users limit 10 offset 5",
+			wt: "Limit: skip=5, fetch=10\n" +
+				"  Projection: users.username, users.age\n" +
+				"    Scan: users; projection=[]\n",
+		},
+		{
+			name: "select with order by default",
+			sql:  "select username, age from users order by age",
+			wt: "Sort: [age ASC NULLS LAST]\n" +
+				"  Projection: users.username, users.age\n" +
+				"    Scan: users; projection=[]\n",
+		},
+		{
+			name: "select with order by desc",
+			sql:  "select username, age from users order by age desc",
+			wt: "Sort: [age DESC NULLS FIRST]\n" +
+				"  Projection: users.username, users.age\n" +
+				"    Scan: users; projection=[]\n",
+		},
+		/////////////////////// subquery
+		{
+			name: "select with subquery",
+			sql:  "select username, age from (select * from users) as u",
+			wt: "Projection: users.username, users.age\n" +
+				"  Projection: users.id, users.username, users.age, users.state, users.wallet\n" +
 				"    Scan: users; projection=[]\n",
 		},
 		/////////////////////// two relations

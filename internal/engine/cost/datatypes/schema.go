@@ -57,38 +57,29 @@ type OfRelation interface {
 	Relation() *TableRef
 }
 
-//type ofRelationBase struct {
-//	Relation *TableRef
-//}
-//
-//func (o *ofRelationBase) Relation() *TableRef {
-//	return o.Relation
-//}
-
 // Field represents a field in a schema.
 type Field struct {
-	// ofRelationBase is used to implement the OfRelation interface.
-	//ofRelationBase
-	relation *TableRef
+	Rel *TableRef // relation, maybe not pointer?
 
-	Name string
-	Type string
+	Name     string
+	Type     string
+	Nullable bool
 }
 
-func NewField(name, typ string) Field {
-	return Field{Name: name, Type: typ}
+func NewField(name string, dataType string, nullable bool) Field {
+	return Field{Name: name, Type: dataType, Nullable: nullable}
 }
 
-func NewFieldWithRelation(name, typ string, relation *TableRef) Field {
-	return Field{Name: name, Type: typ, relation: relation}
+func NewFieldWithRelation(name string, dataType string, nullable bool, relation *TableRef) Field {
+	return Field{Name: name, Type: dataType, Nullable: nullable, Rel: relation}
 }
 
 func (f *Field) Relation() *TableRef {
-	return f.relation
+	return f.Rel
 }
 
 func (f *Field) QualifiedColumn() *ColumnDef {
-	return Column(f.relation, f.Name)
+	return Column(f.Rel, f.Name)
 }
 
 type Schema struct {
@@ -101,7 +92,7 @@ func NewSchema(fields ...Field) *Schema {
 
 func NewSchemaQualified(relation *TableRef, fields ...Field) *Schema {
 	for i := range fields {
-		fields[i].relation = relation
+		fields[i].Rel = relation
 	}
 	return &Schema{Fields: fields}
 }

@@ -124,3 +124,62 @@ func ColumnFromExprToDef(column *ColumnExpr) *ds.ColumnDef {
 		Name:     column.Name,
 	}
 }
+
+func exprListToNodeList(exprs []LogicalExpr) []pt.TreeNode {
+	nodes := make([]pt.TreeNode, len(exprs))
+	for i, e := range exprs {
+		nodes[i] = e
+	}
+	return nodes
+}
+
+func exprListToFields(exprs []LogicalExpr, schema *ds.Schema) []ds.Field {
+	fields := make([]ds.Field, len(exprs))
+	for i, e := range exprs {
+		switch t := e.(type) {
+		case *ColumnExpr:
+			fields[i] = ds.Field{
+				Name:     t.Name,
+				Type:     inferExprType(t, schema),
+				Nullable: inferNullable(t, schema),
+				Rel:      t.Relation,
+			}
+		case *AliasExpr:
+			fields[i] = ds.Field{
+				Name:     t.Alias,
+				Type:     inferExprType(t, schema),
+				Nullable: inferNullable(t, schema),
+				Rel:      t.Relation,
+			}
+		default:
+			fields[i] = ds.Field{
+				Name:     t.String(),
+				Type:     inferExprType(t, schema),
+				Nullable: inferNullable(t, schema),
+			}
+		}
+	}
+	return fields
+}
+
+// inferExprType returns the type of the expression, based on the schema.
+// For example, if `col + 1` should return int
+func inferExprType(expr LogicalExpr, schema *ds.Schema) string {
+	switch e := expr.(type) {
+	case *ColumnExpr:
+		return schema.FieldFromColumn(ColumnFromExprToDef(e)).Type
+	case *AliasExpr:
+		panic("implement me")
+	default:
+		panic(fmt.Sprintf("unknown expression type %T", e))
+	}
+}
+
+func inferNullable(expr LogicalExpr, schema *ds.Schema) bool {
+	switch e := expr.(type) {
+	case *ColumnExpr:
+		panic("implement me")
+	default:
+		panic(fmt.Sprintf("unknown expression type %T", e))
+	}
+}

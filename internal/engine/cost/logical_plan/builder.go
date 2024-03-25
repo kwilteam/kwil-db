@@ -51,8 +51,8 @@ func (b *logicalPlanBuilder) Filter(expr LogicalExpr) *logicalPlanBuilder {
 }
 
 // Limit applies LIMIT clause to the logical plan.
-func (b *logicalPlanBuilder) Limit(offset, limit int) *logicalPlanBuilder {
-	b.plan = Limit(b.plan, offset, limit)
+func (b *logicalPlanBuilder) Limit(skip, fetch int) *logicalPlanBuilder {
+	b.plan = Limit(b.plan, skip, fetch)
 	return b
 }
 
@@ -60,7 +60,6 @@ func (b *logicalPlanBuilder) Limit(offset, limit int) *logicalPlanBuilder {
 func (b *logicalPlanBuilder) Sort(exprs ...LogicalExpr) *logicalPlanBuilder {
 	// TODO: remove pushed down columns
 	b.plan = Sort(b.plan, exprs)
-	b.plan = Projection(b.plan, exprs...)
 	return b
 }
 

@@ -28,17 +28,17 @@ type TreeNode interface {
 	TransformChildren(TransformFunc) TreeNode
 }
 
-type ExprNode interface {
-	TreeNode
+//type ExprNode interface {
+//	TreeNode
+//
+//	ExprNode()
+//}
 
-	ExprNode()
-}
-
-type PlanNode interface {
-	TreeNode
-
-	PlanNode()
-}
+//type PlanNode interface {
+//	TreeNode
+//
+//	PlanNode()
+//}
 
 //type BaseNode struct {
 //	children []Tree

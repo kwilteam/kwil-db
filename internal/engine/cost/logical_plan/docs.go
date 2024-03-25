@@ -5,7 +5,7 @@ A LogicalPlan is a tree of operators that represents the logical steps to
 execute a query.
 
 The hierarchy of the logical operators is:
-limit
+fetch
   - project
   - sort
   - aggregate/distinct

@@ -2,16 +2,28 @@ package logical_plan
 
 import (
 	"fmt"
+	"github.com/kwilteam/kwil-db/parse/sql/tree"
 	"strings"
 
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
 )
 
+//
+//type baseExprNode struct {
+//	*pt.BaseTreeNode
+//}
+//
+//func (e *baseExprNode) ExprNode() {}
+//
+//func newExprNode() *baseExprNode {
+//	return &baseExprNode{BaseTreeNode: pt.NewBaseTreeNode()}
+//}
+
 // LogicalExpr represents the strategies to access the required data.
 // It's different from tree.Expression in that it will be used to access the data.
 type LogicalExpr interface {
-	pt.ExprNode
+	pt.TreeNode
 
 	// Resolve returns the field that this expression represents from the schema
 	Resolve(*dt.Schema) dt.Field
@@ -126,9 +138,9 @@ func ColumnIdx(idx int) LogicalExpr {
 type AliasExpr struct {
 	*pt.BaseTreeNode
 
-	// RELATION
-	Expr  LogicalExpr
-	Alias string
+	Relation *dt.TableRef
+	Expr     LogicalExpr
+	Alias    string
 }
 
 func (e *AliasExpr) String() string {
@@ -137,6 +149,10 @@ func (e *AliasExpr) String() string {
 
 func (e *AliasExpr) Resolve(schema *dt.Schema) dt.Field {
 	return dt.Field{Name: e.Alias, Type: e.Expr.Resolve(schema).Type}
+}
+
+func (e *AliasExpr) SetRelation(relation *dt.TableRef) {
+	e.Relation = relation
 }
 
 func Alias(expr LogicalExpr, alias string) *AliasExpr {
@@ -576,7 +592,15 @@ type sortExpr struct {
 }
 
 func (e *sortExpr) String() string {
-	return fmt.Sprintf("%s %v", e.expr, e.asc)
+	order := "DESC"
+	if e.asc {
+		order = "ASC"
+	}
+	nullsOrder := "NULLS LAST"
+	if e.nullsFirst {
+		nullsOrder = "NULLS FIRST"
+	}
+	return fmt.Sprintf("%s %s %s", e.expr, order, nullsOrder)
 }
 
 func (e *sortExpr) Resolve(schema *dt.Schema) dt.Field {
@@ -591,6 +615,89 @@ func SortExpr(expr LogicalExpr, asc, nullsFirst bool) *sortExpr {
 		nullsFirst:   nullsFirst,
 	}
 }
+
+type FuncExpr interface {
+	LogicalExpr
+
+	FuncName() string
+}
+
+type ScalarFuncExpr interface {
+	FuncExpr
+
+	scalarFn()
+}
+
+type AggregateFuncExpr interface {
+	FuncExpr
+
+	aggregateFn()
+}
+
+type scalarFuncExpr struct {
+	*pt.BaseTreeNode
+
+	fn   tree.SQLFunction // could be built-in or user-defined
+	args []LogicalExpr
+}
+
+func (e *scalarFuncExpr) String() string {
+	return fmt.Sprintf("%s(%s)", e.fn.Name(), LogicalExprList(e.args))
+}
+
+func (e *scalarFuncExpr) Resolve(schema *dt.Schema) dt.Field {
+	panic("implement me")
+}
+
+func (e *scalarFuncExpr) FuncName() string {
+	return e.fn.Name()
+}
+
+func (e *scalarFuncExpr) scalarFn() {}
+
+func ScalarFunc(fn tree.SQLFunction, args ...LogicalExpr) *scalarFuncExpr {
+	return &scalarFuncExpr{BaseTreeNode: pt.NewBaseTreeNode(), fn: fn, args: args}
+}
+
+type aggregateFuncExpr struct {
+	*pt.BaseTreeNode
+
+	fn       tree.SQLFunction // could be built-in or user-defined
+	args     []LogicalExpr
+	distinct bool
+
+	// TODO?
+	filter  LogicalExpr   // optional: having
+	orderBy []LogicalExpr // optional: optimization
+}
+
+func (e *aggregateFuncExpr) String() string {
+	return fmt.Sprintf("%s(%s)", e.fn.Name(), LogicalExprList(e.args))
+}
+
+func (e *aggregateFuncExpr) Resolve(schema *dt.Schema) dt.Field {
+	panic("implement me")
+}
+
+func (e *aggregateFuncExpr) FuncName() string {
+	return e.fn.Name()
+}
+
+func (e *aggregateFuncExpr) aggregateFn() {}
+
+func AggregateFunc(fn tree.SQLFunction, args []LogicalExpr, distinct bool,
+	filter LogicalExpr, orderBy ...LogicalExpr) *aggregateFuncExpr {
+	return &aggregateFuncExpr{
+		BaseTreeNode: pt.NewBaseTreeNode(),
+		fn:           fn,
+		args:         args,
+		distinct:     distinct,
+		filter:       filter,
+		orderBy:      orderBy,
+	}
+}
+
+//type CaseExpr struct
 
 //// pt.TreeNode implementation
 // Children() implementation
@@ -637,6 +744,14 @@ func (e *aggregateIntExpr) Children() []pt.TreeNode {
 
 func (e *sortExpr) Children() []pt.TreeNode {
 	return []pt.TreeNode{e.expr}
+}
+
+func (e *scalarFuncExpr) Children() []pt.TreeNode {
+	return exprListToNodeList(e.args)
+}
+
+func (e *aggregateFuncExpr) Children() []pt.TreeNode {
+	return exprListToNodeList(e.args)
 }
 
 // TransformChildren() implementation
@@ -717,6 +832,35 @@ func (e *sortExpr) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
 		expr:         fn(e.expr).(LogicalExpr),
 		asc:          e.asc,
 		nullsFirst:   e.nullsFirst,
+	}
+}
+
+func (e *scalarFuncExpr) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
+	var newArgs []LogicalExpr
+	for _, arg := range e.args {
+		newArgs = append(newArgs, fn(arg).(LogicalExpr))
+	}
+
+	return &scalarFuncExpr{
+		BaseTreeNode: pt.NewBaseTreeNode(),
+		fn:           e.fn,
+		args:         newArgs,
+	}
+}
+
+func (e *aggregateFuncExpr) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
+	var newArgs []LogicalExpr
+	for _, arg := range e.args {
+		newArgs = append(newArgs, fn(arg).(LogicalExpr))
+	}
+
+	return &aggregateFuncExpr{
+		BaseTreeNode: pt.NewBaseTreeNode(),
+		fn:           e.fn,
+		args:         newArgs,
+		distinct:     e.distinct,
+		//filter:       fn(e.filter).(LogicalExpr),
+		//orderBy:      ,
 	}
 }
 
