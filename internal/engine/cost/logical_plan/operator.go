@@ -42,7 +42,7 @@ type ScanOp struct {
 	// schema after projection(i.e. only keep the projected columns in the schema)
 	projectedSchema *dt.Schema
 	// used for selection push down optimization
-	selection LogicalExprList
+	filter LogicalExprList
 }
 
 func (s *ScanOp) Table() *dt.TableRef {
@@ -58,15 +58,15 @@ func (s *ScanOp) Projection() []string {
 }
 
 func (s *ScanOp) Selection() []LogicalExpr {
-	if len(s.selection) == 0 {
+	if len(s.filter) == 0 {
 		return []LogicalExpr{}
 	}
-	return s.selection
+	return s.filter
 }
 
 func (s *ScanOp) String() string {
-	if len(s.selection) > 0 {
-		return fmt.Sprintf("Scan: %s; selection=%s; projection=%s", s.table, s.selection, s.projection)
+	if len(s.filter) > 0 {
+		return fmt.Sprintf("Scan: %s; filter=%s; projection=%s", s.table, s.filter, s.projection)
 	}
 	return fmt.Sprintf("Scan: %s; projection=%s", s.table, s.projection)
 }
@@ -90,7 +90,7 @@ func Scan(table *dt.TableRef, ds ds.SchemaSource,
 	projectedSchema := ds.Schema().Select(projection...)
 	qualifiedSchema := dt.NewSchemaQualified(table, projectedSchema.Fields...)
 	return &ScanOp{table: table, dataSource: ds, projection: projection,
-		selection: selection, projectedSchema: qualifiedSchema}
+		filter: selection, projectedSchema: qualifiedSchema}
 }
 
 // ProjectionOp represents a projection operator, which produces new columns

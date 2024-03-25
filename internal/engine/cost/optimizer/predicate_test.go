@@ -3,14 +3,18 @@ package optimizer
 import (
 	"fmt"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 )
 
 func ExamplePredicateRule_optimize_pushDown() {
-	ds := datasource.NewMemDataSource(nil, nil)
-	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds, nil))
+	stubUserData, _ := datasource.NewCSVDataSource("../testdata/users.csv")
+
+	//ds := datasource.NewMemDataSource(nil, nil)
+	tUser := &dt.TableRef{Table: "users"}
+	aop := logical_plan.NewDataFrame(logical_plan.Scan(tUser, stubUserData, nil))
 	plan := aop.
-		Filter(logical_plan.Eq(logical_plan.Column("", "age"),
+		Filter(logical_plan.Eq(logical_plan.ColumnUnqualified("age"),
 			logical_plan.LiteralInt(20))).
 		//Project(logical_plan.Column("", "state"),
 		//	logical_plan.Alias(logical_plan.Column("", "username"), "name")).
@@ -31,16 +35,17 @@ func ExamplePredicateRule_optimize_pushDown() {
 	// ---After optimization---
 	//
 	// Filter: age = 20
-	//   Scan: users; selection=[age = 20]; projection=[]
+	//   Scan: users; filter=[age = 20]; projection=[]
 }
 
 func ExamplePredicateRule_optimize_pushDown_with_nested_selection() {
-	ds := datasource.NewMemDataSource(nil, nil)
-	aop := logical_plan.NewDataFrame(logical_plan.Scan("users", ds, nil))
+	stubUserData, _ := datasource.NewCSVDataSource("../testdata/users.csv")
+	tUser := &dt.TableRef{Table: "users"}
+	aop := logical_plan.NewDataFrame(logical_plan.Scan(tUser, stubUserData, nil))
 	plan := aop.
-		Filter(logical_plan.Gt(logical_plan.Column("", "age"),
+		Filter(logical_plan.Gt(logical_plan.ColumnUnqualified("age"),
 			logical_plan.LiteralInt(20))).
-		Filter(logical_plan.Lt(logical_plan.Column("", "age"),
+		Filter(logical_plan.Lt(logical_plan.ColumnUnqualified("age"),
 			logical_plan.LiteralInt(30))).
 		LogicalPlan()
 
