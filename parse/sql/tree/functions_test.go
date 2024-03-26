@@ -133,8 +133,8 @@ func Test_ScalarFunction_String(t *testing.T) {
 			},
 			args: args{
 				exprs: []tree.Expression{
-					&tree.ExpressionLiteral{Value: "'Hello, %s'"},
-					&tree.ExpressionLiteral{Value: "'World'"},
+					&tree.ExpressionTextLiteral{Value: "Hello, %s"},
+					&tree.ExpressionTextLiteral{Value: "World"},
 				},
 			},
 			want: "format('Hello, %s', 'World')",

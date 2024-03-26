@@ -172,8 +172,8 @@ func TestRelation_ToSQL(t *testing.T) {
 									Column: "col1",
 								},
 								Operator: tree.ComparisonOperatorEqual,
-								Right: &tree.ExpressionLiteral{
-									Value: "'value'",
+								Right: &tree.ExpressionTextLiteral{
+									Value: "value",
 								},
 							},
 						},

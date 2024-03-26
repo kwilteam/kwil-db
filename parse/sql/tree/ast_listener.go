@@ -12,8 +12,16 @@ type AstListener interface {
 	ExitDeleteStmt(*DeleteStmt) error
 	EnterDeleteCore(*DeleteCore) error
 	ExitDeleteCore(*DeleteCore) error
-	EnterExpressionLiteral(*ExpressionLiteral) error
-	ExitExpressionLiteral(*ExpressionLiteral) error
+	EnterExpressionTextLiteral(*ExpressionTextLiteral) error
+	ExitExpressionTextLiteral(*ExpressionTextLiteral) error
+	EnterExpressionNumericLiteral(*ExpressionNumericLiteral) error
+	ExitExpressionNumericLiteral(*ExpressionNumericLiteral) error
+	EnterExpressionBooleanLiteral(*ExpressionBooleanLiteral) error
+	ExitExpressionBooleanLiteral(*ExpressionBooleanLiteral) error
+	EnterExpressionNullLiteral(*ExpressionNullLiteral) error
+	ExitExpressionNullLiteral(*ExpressionNullLiteral) error
+	EnterExpressionBlobLiteral(*ExpressionBlobLiteral) error
+	ExitExpressionBlobLiteral(*ExpressionBlobLiteral) error
 	EnterExpressionBindParameter(*ExpressionBindParameter) error
 	ExitExpressionBindParameter(*ExpressionBindParameter) error
 	EnterExpressionColumn(*ExpressionColumn) error
@@ -80,10 +88,10 @@ type AstListener interface {
 	ExitReturningClauseColumn(*ReturningClauseColumn) error
 	EnterSelectStmt(*SelectStmt) error
 	ExitSelectStmt(*SelectStmt) error
-	EnterSelectCore(*SimpleSelect) error
-	ExitSelectCore(*SimpleSelect) error
-	EnterSelectStmtNoCte(*SelectCore) error
-	ExitSelectStmtNoCte(*SelectCore) error
+	EnterSimpleSelect(*SimpleSelect) error
+	ExitSimpleSelect(*SimpleSelect) error
+	EnterSelectCore(*SelectCore) error
+	ExitSelectCore(*SelectCore) error
 	EnterCompoundOperator(*CompoundOperator) error
 	ExitCompoundOperator(*CompoundOperator) error
 	EnterUpdateSetClause(*UpdateSetClause) error
@@ -232,11 +240,43 @@ func (b *BaseListener) ExitExpressionList(p0 *ExpressionList) error {
 	return nil
 }
 
-func (b *BaseListener) EnterExpressionLiteral(p0 *ExpressionLiteral) error {
+func (b *BaseListener) EnterExpressionTextLiteral(p0 *ExpressionTextLiteral) error {
 	return nil
 }
 
-func (b *BaseListener) ExitExpressionLiteral(p0 *ExpressionLiteral) error {
+func (b *BaseListener) ExitExpressionTextLiteral(p0 *ExpressionTextLiteral) error {
+	return nil
+}
+
+func (b *BaseListener) EnterExpressionNumericLiteral(p0 *ExpressionNumericLiteral) error {
+	return nil
+}
+
+func (b *BaseListener) ExitExpressionNumericLiteral(p0 *ExpressionNumericLiteral) error {
+	return nil
+}
+
+func (b *BaseListener) EnterExpressionBooleanLiteral(p0 *ExpressionBooleanLiteral) error {
+	return nil
+}
+
+func (b *BaseListener) ExitExpressionBooleanLiteral(p0 *ExpressionBooleanLiteral) error {
+	return nil
+}
+
+func (b *BaseListener) EnterExpressionNullLiteral(p0 *ExpressionNullLiteral) error {
+	return nil
+}
+
+func (b *BaseListener) ExitExpressionNullLiteral(p0 *ExpressionNullLiteral) error {
+	return nil
+}
+
+func (b *BaseListener) EnterExpressionBlobLiteral(p0 *ExpressionBlobLiteral) error {
+	return nil
+}
+
+func (b *BaseListener) ExitExpressionBlobLiteral(p0 *ExpressionBlobLiteral) error {
 	return nil
 }
 
@@ -424,19 +464,19 @@ func (b *BaseListener) ExitSelectStmt(p0 *SelectStmt) error {
 	return nil
 }
 
-func (b *BaseListener) EnterSelectCore(p0 *SimpleSelect) error {
+func (b *BaseListener) EnterSimpleSelect(p0 *SimpleSelect) error {
 	return nil
 }
 
-func (b *BaseListener) ExitSelectCore(p0 *SimpleSelect) error {
+func (b *BaseListener) ExitSimpleSelect(p0 *SimpleSelect) error {
 	return nil
 }
 
-func (b *BaseListener) EnterSelectStmtNoCte(p0 *SelectCore) error {
+func (b *BaseListener) EnterSelectCore(p0 *SelectCore) error {
 	return nil
 }
 
-func (b *BaseListener) ExitSelectStmtNoCte(p0 *SelectCore) error {
+func (b *BaseListener) ExitSelectCore(p0 *SelectCore) error {
 	return nil
 }
 
@@ -509,8 +549,16 @@ type ImplementedListener struct {
 	FuncExitExpressionIs                func(p0 *ExpressionIs) error
 	FuncEnterExpressionList             func(p0 *ExpressionList) error
 	FuncExitExpressionList              func(p0 *ExpressionList) error
-	FuncEnterExpressionLiteral          func(p0 *ExpressionLiteral) error
-	FuncExitExpressionLiteral           func(p0 *ExpressionLiteral) error
+	FuncEnterExpressionTextLiteral      func(p0 *ExpressionTextLiteral) error
+	FuncExitExpressionTextLiteral       func(p0 *ExpressionTextLiteral) error
+	FuncEnterExpressionNumericLiteral   func(p0 *ExpressionNumericLiteral) error
+	FuncExitExpressionNumericLiteral    func(p0 *ExpressionNumericLiteral) error
+	FuncEnterExpressionBooleanLiteral   func(p0 *ExpressionBooleanLiteral) error
+	FuncExitExpressionBooleanLiteral    func(p0 *ExpressionBooleanLiteral) error
+	FuncEnterExpressionNullLiteral      func(p0 *ExpressionNullLiteral) error
+	FuncExitExpressionNullLiteral       func(p0 *ExpressionNullLiteral) error
+	FuncEnterExpressionBlobLiteral      func(p0 *ExpressionBlobLiteral) error
+	FuncExitExpressionBlobLiteral       func(p0 *ExpressionBlobLiteral) error
 	FuncEnterExpressionSelect           func(p0 *ExpressionSelect) error
 	FuncExitExpressionSelect            func(p0 *ExpressionSelect) error
 	FuncEnterExpressionStringCompare    func(p0 *ExpressionStringCompare) error
@@ -557,10 +605,10 @@ type ImplementedListener struct {
 	FuncExitScalarFunc                  func(p0 *ScalarFunction) error
 	FuncEnterSelectStmt                 func(p0 *SelectStmt) error
 	FuncExitSelectStmt                  func(p0 *SelectStmt) error
-	FuncEnterSelectCore                 func(p0 *SimpleSelect) error
-	FuncExitSelectCore                  func(p0 *SimpleSelect) error
-	FuncEnterSelectStmtNoCte            func(p0 *SelectCore) error
-	FuncExitSelectStmtNoCte             func(p0 *SelectCore) error
+	FuncEnterSimpleSelect               func(p0 *SimpleSelect) error
+	FuncExitSimpleSelect                func(p0 *SimpleSelect) error
+	FuncEnterSelectCore                 func(p0 *SelectCore) error
+	FuncExitSelectCore                  func(p0 *SelectCore) error
 	FuncEnterUpdateStmt                 func(p0 *UpdateStmt) error
 	FuncExitUpdateStmt                  func(p0 *UpdateStmt) error
 	FuncEnterUpdateSetClause            func(p0 *UpdateSetClause) error
@@ -829,20 +877,84 @@ func (b *ImplementedListener) ExitExpressionList(p0 *ExpressionList) error {
 	return b.FuncExitExpressionList(p0)
 }
 
-func (b *ImplementedListener) EnterExpressionLiteral(p0 *ExpressionLiteral) error {
-	if b.FuncEnterExpressionLiteral == nil {
+func (b *ImplementedListener) EnterExpressionTextLiteral(p0 *ExpressionTextLiteral) error {
+	if b.FuncEnterExpressionTextLiteral == nil {
 		return nil
 	}
 
-	return b.FuncEnterExpressionLiteral(p0)
+	return b.FuncEnterExpressionTextLiteral(p0)
 }
 
-func (b *ImplementedListener) ExitExpressionLiteral(p0 *ExpressionLiteral) error {
-	if b.FuncExitExpressionLiteral == nil {
+func (b *ImplementedListener) ExitExpressionTextLiteral(p0 *ExpressionTextLiteral) error {
+	if b.FuncExitExpressionTextLiteral == nil {
 		return nil
 	}
 
-	return b.FuncExitExpressionLiteral(p0)
+	return b.FuncExitExpressionTextLiteral(p0)
+}
+
+func (b *ImplementedListener) EnterExpressionNumericLiteral(p0 *ExpressionNumericLiteral) error {
+	if b.FuncEnterExpressionNumericLiteral == nil {
+		return nil
+	}
+
+	return b.FuncEnterExpressionNumericLiteral(p0)
+}
+
+func (b *ImplementedListener) ExitExpressionNumericLiteral(p0 *ExpressionNumericLiteral) error {
+	if b.FuncExitExpressionNumericLiteral == nil {
+		return nil
+	}
+
+	return b.FuncExitExpressionNumericLiteral(p0)
+}
+
+func (b *ImplementedListener) EnterExpressionBooleanLiteral(p0 *ExpressionBooleanLiteral) error {
+	if b.FuncEnterExpressionBooleanLiteral == nil {
+		return nil
+	}
+
+	return b.FuncEnterExpressionBooleanLiteral(p0)
+}
+
+func (b *ImplementedListener) ExitExpressionBooleanLiteral(p0 *ExpressionBooleanLiteral) error {
+	if b.FuncExitExpressionBooleanLiteral == nil {
+		return nil
+	}
+
+	return b.FuncExitExpressionBooleanLiteral(p0)
+}
+
+func (b *ImplementedListener) EnterExpressionNullLiteral(p0 *ExpressionNullLiteral) error {
+	if b.FuncEnterExpressionNullLiteral == nil {
+		return nil
+	}
+
+	return b.FuncEnterExpressionNullLiteral(p0)
+}
+
+func (b *ImplementedListener) ExitExpressionNullLiteral(p0 *ExpressionNullLiteral) error {
+	if b.FuncExitExpressionNullLiteral == nil {
+		return nil
+	}
+
+	return b.FuncExitExpressionNullLiteral(p0)
+}
+
+func (b *ImplementedListener) EnterExpressionBlobLiteral(p0 *ExpressionBlobLiteral) error {
+	if b.FuncEnterExpressionBlobLiteral == nil {
+		return nil
+	}
+
+	return b.FuncEnterExpressionBlobLiteral(p0)
+}
+
+func (b *ImplementedListener) ExitExpressionBlobLiteral(p0 *ExpressionBlobLiteral) error {
+	if b.FuncExitExpressionBlobLiteral == nil {
+		return nil
+	}
+
+	return b.FuncExitExpressionBlobLiteral(p0)
 }
 
 func (b *ImplementedListener) EnterExpressionSelect(p0 *ExpressionSelect) error {
@@ -1213,7 +1325,23 @@ func (b *ImplementedListener) ExitSelectStmt(p0 *SelectStmt) error {
 	return b.FuncExitSelectStmt(p0)
 }
 
-func (b *ImplementedListener) EnterSelectCore(p0 *SimpleSelect) error {
+func (b *ImplementedListener) EnterSimpleSelect(p0 *SimpleSelect) error {
+	if b.FuncEnterSimpleSelect == nil {
+		return nil
+	}
+
+	return b.FuncEnterSimpleSelect(p0)
+}
+
+func (b *ImplementedListener) ExitSimpleSelect(p0 *SimpleSelect) error {
+	if b.FuncExitSimpleSelect == nil {
+		return nil
+	}
+
+	return b.FuncExitSimpleSelect(p0)
+}
+
+func (b *ImplementedListener) EnterSelectCore(p0 *SelectCore) error {
 	if b.FuncEnterSelectCore == nil {
 		return nil
 	}
@@ -1221,28 +1349,12 @@ func (b *ImplementedListener) EnterSelectCore(p0 *SimpleSelect) error {
 	return b.FuncEnterSelectCore(p0)
 }
 
-func (b *ImplementedListener) ExitSelectCore(p0 *SimpleSelect) error {
+func (b *ImplementedListener) ExitSelectCore(p0 *SelectCore) error {
 	if b.FuncExitSelectCore == nil {
 		return nil
 	}
 
 	return b.FuncExitSelectCore(p0)
-}
-
-func (b *ImplementedListener) EnterSelectStmtNoCte(p0 *SelectCore) error {
-	if b.FuncEnterSelectStmtNoCte == nil {
-		return nil
-	}
-
-	return b.FuncEnterSelectStmtNoCte(p0)
-}
-
-func (b *ImplementedListener) ExitSelectStmtNoCte(p0 *SelectCore) error {
-	if b.FuncExitSelectStmtNoCte == nil {
-		return nil
-	}
-
-	return b.FuncExitSelectStmtNoCte(p0)
 }
 
 func (b *ImplementedListener) EnterUpdateStmt(p0 *UpdateStmt) error {

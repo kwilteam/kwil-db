@@ -252,11 +252,11 @@ func containsAggregateFunc(ret tree.ResultColumn) (bool, error) {
 			}
 			return nil
 		},
-		FuncEnterSelectStmtNoCte: func(p0 *tree.SelectCore) error {
+		FuncEnterSelectCore: func(p0 *tree.SelectCore) error {
 			depth++
 			return nil
 		},
-		FuncExitSelectStmtNoCte: func(p0 *tree.SelectCore) error {
+		FuncExitSelectCore: func(p0 *tree.SelectCore) error {
 			depth--
 			return nil
 		},
@@ -316,11 +316,11 @@ func containsGroupBy(stmt *tree.SimpleSelect) (bool, error) {
 			}
 			return nil
 		},
-		FuncEnterSelectStmtNoCte: func(p0 *tree.SelectCore) error {
+		FuncEnterSelectCore: func(p0 *tree.SelectCore) error {
 			depth++
 			return nil
 		},
-		FuncExitSelectStmtNoCte: func(p0 *tree.SelectCore) error {
+		FuncExitSelectCore: func(p0 *tree.SelectCore) error {
 			depth--
 			return nil
 		},

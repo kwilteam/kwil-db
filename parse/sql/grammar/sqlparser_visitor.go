@@ -52,6 +52,9 @@ type SQLParserVisitor interface {
 	// Visit a parse tree produced by SQLParser#logical_not_expr.
 	VisitLogical_not_expr(ctx *Logical_not_exprContext) interface{}
 
+	// Visit a parse tree produced by SQLParser#boolean_literal_expr.
+	VisitBoolean_literal_expr(ctx *Boolean_literal_exprContext) interface{}
+
 	// Visit a parse tree produced by SQLParser#comparison_expr.
 	VisitComparison_expr(ctx *Comparison_exprContext) interface{}
 
@@ -76,6 +79,9 @@ type SQLParserVisitor interface {
 	// Visit a parse tree produced by SQLParser#variable_expr.
 	VisitVariable_expr(ctx *Variable_exprContext) interface{}
 
+	// Visit a parse tree produced by SQLParser#text_literal_expr.
+	VisitText_literal_expr(ctx *Text_literal_exprContext) interface{}
+
 	// Visit a parse tree produced by SQLParser#unary_expr.
 	VisitUnary_expr(ctx *Unary_exprContext) interface{}
 
@@ -91,11 +97,14 @@ type SQLParserVisitor interface {
 	// Visit a parse tree produced by SQLParser#expr_list_expr.
 	VisitExpr_list_expr(ctx *Expr_list_exprContext) interface{}
 
+	// Visit a parse tree produced by SQLParser#numeric_literal_expr.
+	VisitNumeric_literal_expr(ctx *Numeric_literal_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#null_literal_expr.
+	VisitNull_literal_expr(ctx *Null_literal_exprContext) interface{}
+
 	// Visit a parse tree produced by SQLParser#in_list_expr.
 	VisitIn_list_expr(ctx *In_list_exprContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#literal_expr.
-	VisitLiteral_expr(ctx *Literal_exprContext) interface{}
 
 	// Visit a parse tree produced by SQLParser#is_expr.
 	VisitIs_expr(ctx *Is_exprContext) interface{}
@@ -105,6 +114,9 @@ type SQLParserVisitor interface {
 
 	// Visit a parse tree produced by SQLParser#function_expr.
 	VisitFunction_expr(ctx *Function_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#blob_literal_expr.
+	VisitBlob_literal_expr(ctx *Blob_literal_exprContext) interface{}
 
 	// Visit a parse tree produced by SQLParser#subquery.
 	VisitSubquery(ctx *SubqueryContext) interface{}
@@ -120,18 +132,6 @@ type SQLParserVisitor interface {
 
 	// Visit a parse tree produced by SQLParser#type_cast.
 	VisitType_cast(ctx *Type_castContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#boolean_value.
-	VisitBoolean_value(ctx *Boolean_valueContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#string_value.
-	VisitString_value(ctx *String_valueContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#numeric_value.
-	VisitNumeric_value(ctx *Numeric_valueContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#literal.
-	VisitLiteral(ctx *LiteralContext) interface{}
 
 	// Visit a parse tree produced by SQLParser#value_row.
 	VisitValue_row(ctx *Value_rowContext) interface{}

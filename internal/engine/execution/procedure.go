@@ -446,7 +446,9 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 		case *tree.ExpressionBindParameter:
 			// This could be a special one that returns an evaluatable that
 			// ignores the passed ResultSetFunc since the value is
-		case *tree.ExpressionLiteral, *tree.ExpressionUnary, *tree.ExpressionBinaryComparison, *tree.ExpressionFunction, *tree.ExpressionArithmetic:
+		case *tree.ExpressionTextLiteral, *tree.ExpressionNumericLiteral, *tree.ExpressionBooleanLiteral,
+			*tree.ExpressionNullLiteral, *tree.ExpressionBlobLiteral, *tree.ExpressionUnary,
+			*tree.ExpressionBinaryComparison, *tree.ExpressionFunction, *tree.ExpressionArithmetic:
 			// Acceptable expression type.
 		default:
 			return nil, fmt.Errorf("unsupported expression type: %T", e)

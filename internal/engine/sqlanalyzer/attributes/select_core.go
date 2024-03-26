@@ -197,14 +197,14 @@ func newSelectCoreContext(parent *selectCoreContext) *selectCoreContext {
 }
 
 // EnterSelectCore creates a new scope.
-func (s *selectCoreAnalyzer) EnterSelectCore(node *tree.SimpleSelect) error {
+func (s *selectCoreAnalyzer) EnterSimpleSelect(node *tree.SimpleSelect) error {
 	s.newScope()
 
 	return nil
 }
 
 // ExitSelectCore pops the current scope.
-func (s *selectCoreAnalyzer) ExitSelectCore(node *tree.SimpleSelect) error {
+func (s *selectCoreAnalyzer) ExitSimpleSelect(node *tree.SimpleSelect) error {
 	var err error
 	s.detectedAttributes, err = s.context.relations()
 	if err != nil {

@@ -30,11 +30,11 @@ func TestInsert_ToSQL(t *testing.T) {
 					Columns:    []string{"bar", "baz"},
 					Values: [][]tree.Expression{
 						{
-							&tree.ExpressionLiteral{Value: "'barVal'"},
+							&tree.ExpressionTextLiteral{Value: "barVal"},
 							&tree.ExpressionBindParameter{Parameter: "$a"},
 						},
 						{
-							&tree.ExpressionLiteral{Value: "'bazVal'"},
+							&tree.ExpressionTextLiteral{Value: "bazVal"},
 							&tree.ExpressionBindParameter{Parameter: "$b"},
 						},
 					},
@@ -64,7 +64,7 @@ func TestInsert_ToSQL(t *testing.T) {
 					Columns:    []string{"baz"},
 					Values: [][]tree.Expression{
 						{
-							&tree.ExpressionLiteral{Value: "'bazVal'"},
+							&tree.ExpressionTextLiteral{Value: "bazVal"},
 						},
 					},
 				},
@@ -124,11 +124,11 @@ func TestInsertStatement_ToSql(t *testing.T) {
 				},
 				Values: [][]tree.Expression{
 					{
-						&tree.ExpressionLiteral{Value: "'barVal'"},
+						&tree.ExpressionTextLiteral{Value: "barVal"},
 						&tree.ExpressionBindParameter{Parameter: "$a"},
 					},
 					{
-						&tree.ExpressionLiteral{Value: "'bazVal'"},
+						&tree.ExpressionTextLiteral{Value: "bazVal"},
 						&tree.ExpressionBindParameter{Parameter: "$b"},
 					},
 				},
@@ -136,8 +136,8 @@ func TestInsertStatement_ToSql(t *testing.T) {
 					ConflictTarget: &tree.ConflictTarget{
 						IndexedColumns: []string{"barCol", "bazCol"},
 						Where: &tree.ExpressionBinaryComparison{
-							Left: &tree.ExpressionLiteral{
-								Value: "'barVal'",
+							Left: &tree.ExpressionTextLiteral{
+								Value: "barVal",
 							},
 							Operator: tree.ComparisonOperatorEqual,
 							Right: &tree.ExpressionBindParameter{
@@ -155,8 +155,8 @@ func TestInsertStatement_ToSql(t *testing.T) {
 						},
 					},
 					Where: &tree.ExpressionBinaryComparison{
-						Left: &tree.ExpressionLiteral{
-							Value: "'barVal'",
+						Left: &tree.ExpressionTextLiteral{
+							Value: "barVal",
 						},
 						Operator: tree.ComparisonOperatorEqual,
 						Right: &tree.ExpressionBindParameter{
@@ -185,11 +185,11 @@ func TestInsertStatement_ToSql(t *testing.T) {
 				},
 				Values: [][]tree.Expression{
 					{
-						&tree.ExpressionLiteral{Value: "'barVal'"},
+						&tree.ExpressionTextLiteral{Value: "barVal"},
 						&tree.ExpressionBindParameter{Parameter: "$a"},
 					},
 					{
-						&tree.ExpressionLiteral{Value: "'bazVal'"},
+						&tree.ExpressionTextLiteral{Value: "bazVal"},
 						&tree.ExpressionBindParameter{Parameter: "$b"},
 					},
 				},

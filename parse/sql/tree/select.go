@@ -59,11 +59,11 @@ func (s *SelectCore) Accept(v AstVisitor) any {
 
 func (s *SelectCore) Walk(w AstListener) error {
 	return run(
-		w.EnterSelectStmtNoCte(s),
+		w.EnterSelectCore(s),
 		walkMany(w, s.SimpleSelects),
 		walk(w, s.OrderBy),
 		walk(w, s.Limit),
-		w.ExitSelectStmtNoCte(s),
+		w.ExitSelectCore(s),
 	)
 }
 
@@ -99,13 +99,13 @@ func (s *SimpleSelect) Accept(v AstVisitor) any {
 
 func (s *SimpleSelect) Walk(w AstListener) error {
 	return run(
-		w.EnterSelectCore(s),
+		w.EnterSimpleSelect(s),
 		walkMany(w, s.Columns),
 		walk(w, s.From),
 		walk(w, s.Where),
 		walk(w, s.GroupBy),
 		walk(w, s.Compound),
-		w.ExitSelectCore(s),
+		w.ExitSimpleSelect(s),
 	)
 }
 

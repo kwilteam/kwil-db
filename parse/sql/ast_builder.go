@@ -1,8 +1,10 @@
 package sqlparser
 
 import (
+	"encoding/hex"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
@@ -127,21 +129,79 @@ func (v *astBuilder) VisitType_cast(ctx *grammar.Type_castContext) interface{} {
 	}
 }
 
-// VisitLiteral is called when visiting a literal, return *tree.ExpressionLiteral
-func (v *astBuilder) VisitLiteral(ctx *grammar.LiteralContext) interface{} {
+// VisitLiteral_expr is called when visiting a literal_expr, return *tree.ExpressionLiteral
+func (v *astBuilder) VisitText_literal_expr(ctx *grammar.Text_literal_exprContext) interface{} {
 	// all literal values are string
-	text := ctx.GetText()
-	if strings.EqualFold(text, "null") {
-		text = "NULL"
+	val := ctx.TEXT_LITERAL().GetText()
+	if !strings.HasPrefix(val, "'") || !strings.HasSuffix(val, "'") {
+		panic(fmt.Sprintf("invalid text literal %s", val))
 	}
-	return text
+
+	expr := &tree.ExpressionTextLiteral{
+		Value: val[1 : len(val)-1],
+	}
+	if ctx.Type_cast() != nil {
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+	}
+	return expr
 }
 
-// VisitLiteral_expr is called when visiting a literal_expr, return *tree.ExpressionLiteral
-func (v *astBuilder) VisitLiteral_expr(ctx *grammar.Literal_exprContext) interface{} {
-	// all literal values are string
-	expr := &tree.ExpressionLiteral{
-		Value: v.Visit(ctx.Literal()).(string),
+func (v *astBuilder) VisitNumeric_literal_expr(ctx *grammar.Numeric_literal_exprContext) interface{} {
+	t := ctx.NUMERIC_LITERAL().GetText()
+	val, err := strconv.ParseInt(t, 10, 64)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse numeric literal %s: %v", t, err))
+	}
+
+	expr := &tree.ExpressionNumericLiteral{
+		Value: val,
+	}
+	if ctx.Type_cast() != nil {
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+	}
+	return expr
+}
+
+func (v *astBuilder) VisitBoolean_literal_expr(ctx *grammar.Boolean_literal_exprContext) interface{} {
+	b := ctx.BOOLEAN_LITERAL().GetText()
+	boolVal, err := strconv.ParseBool(b)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse boolean literal %s: %v", b, err))
+	}
+
+	expr := &tree.ExpressionBooleanLiteral{
+		Value: boolVal,
+	}
+	if ctx.Type_cast() != nil {
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+	}
+	return expr
+}
+
+func (v *astBuilder) VisitNull_literal_expr(ctx *grammar.Null_literal_exprContext) interface{} {
+	expr := &tree.ExpressionNullLiteral{}
+	if ctx.Type_cast() != nil {
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+	}
+	return expr
+}
+
+func (v *astBuilder) VisitBlob_literal_expr(ctx *grammar.Blob_literal_exprContext) interface{} {
+	t := ctx.BLOB_LITERAL().GetText()
+
+	// trim 0x prefix
+	if !strings.HasPrefix(t, "0x") {
+		panic(fmt.Sprintf("invalid blob literal %s", t))
+	}
+	t = t[2:]
+
+	decoded, err := hex.DecodeString(t)
+	if err != nil {
+		panic(fmt.Sprintf("failed to decode blob literal %s: %v", t, err))
+	}
+
+	expr := &tree.ExpressionBlobLiteral{
+		Value: decoded,
 	}
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
@@ -225,7 +285,19 @@ func (v *astBuilder) VisitParenthesized_expr(ctx *grammar.Parenthesized_exprCont
 
 	expr := v.Visit(ctx.Expr()).(tree.Expression)
 	switch e := expr.(type) {
-	case *tree.ExpressionLiteral:
+	case *tree.ExpressionTextLiteral:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionNumericLiteral:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionBooleanLiteral:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionNullLiteral:
+		e.Wrapped = true
+		e.TypeCast = typeCast
+	case *tree.ExpressionBlobLiteral:
 		e.Wrapped = true
 		e.TypeCast = typeCast
 	case *tree.ExpressionBindParameter:
@@ -477,13 +549,6 @@ func (v *astBuilder) VisitComparison_expr(ctx *grammar.Comparison_exprContext) i
 	return expr
 }
 
-// VisitBollean_value is called when visiting a boolean_value, return *tree.ExpressionLiteral
-func (v *astBuilder) VisitBoolean_value(ctx *grammar.Boolean_valueContext) interface{} {
-	return &tree.ExpressionLiteral{
-		Value: ctx.GetText(),
-	}
-}
-
 // VisitIs_expr is called when visiting a is_expr, return *tree.ExpressionIs
 func (v *astBuilder) VisitIs_expr(ctx *grammar.Is_exprContext) interface{} {
 	expr := &tree.ExpressionIs{
@@ -494,10 +559,22 @@ func (v *astBuilder) VisitIs_expr(ctx *grammar.Is_exprContext) interface{} {
 	}
 
 	switch {
-	case ctx.NULL_() != nil:
-		expr.Right = &tree.ExpressionLiteral{Value: "NULL"}
-	case ctx.Boolean_value() != nil:
-		expr.Right = v.Visit(ctx.Boolean_value()).(tree.Expression)
+	case ctx.NULL_LITERAL() != nil:
+		expr.Right = &tree.ExpressionNullLiteral{}
+	case ctx.BOOLEAN_LITERAL() != nil:
+		tf := ctx.BOOLEAN_LITERAL().GetText()
+		var b bool
+		if strings.EqualFold(tf, "true") {
+			b = true
+		} else if strings.EqualFold(tf, "false") {
+			b = false
+		} else {
+			panic(fmt.Sprintf("unknown boolean literal %s", tf))
+		}
+
+		expr.Right = &tree.ExpressionBooleanLiteral{
+			Value: b,
+		}
 	case ctx.DISTINCT_() != nil:
 		expr.Right = v.Visit(ctx.Expr(1)).(tree.Expression)
 		expr.Distinct = true
@@ -511,7 +588,7 @@ func (v *astBuilder) VisitIs_expr(ctx *grammar.Is_exprContext) interface{} {
 func (v *astBuilder) VisitNull_expr(ctx *grammar.Null_exprContext) interface{} {
 	expr := &tree.ExpressionIs{
 		Left:  v.Visit(ctx.Expr()).(tree.Expression),
-		Right: &tree.ExpressionLiteral{Value: "NULL"},
+		Right: &tree.ExpressionNullLiteral{},
 	}
 	if ctx.NOTNULL_() != nil {
 		expr.Not = true

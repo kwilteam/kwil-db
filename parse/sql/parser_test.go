@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -20,7 +21,26 @@ var columnStar = []tree.ResultColumn{
 }
 
 func genLiteralExpression(value string) tree.Expression {
-	return &tree.ExpressionLiteral{Value: value}
+	// if it has single quote, it is a string literal
+	// otherwise, we will try to make it a number
+	if strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'") {
+		return &tree.ExpressionTextLiteral{Value: value[1 : len(value)-1]}
+	}
+
+	s, err := strconv.ParseInt(value, 10, 64)
+	if err == nil {
+		return &tree.ExpressionNumericLiteral{Value: s}
+	}
+
+	if strings.EqualFold(value, "true") {
+		return &tree.ExpressionBooleanLiteral{Value: true}
+	} else if strings.EqualFold(value, "false") {
+		return &tree.ExpressionBooleanLiteral{Value: false}
+	} else if strings.EqualFold(value, "null") {
+		return &tree.ExpressionNullLiteral{}
+	}
+
+	panic(fmt.Sprintf("unsupported literal value: %s", value))
 }
 
 func getResultColumnExprs(values ...string) []tree.ResultColumn {
@@ -127,7 +147,7 @@ func genSimpleCollateSelectTree(collateType tree.CollationType, value string) *t
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionCollate{
-								Expression: &tree.ExpressionLiteral{Value: value},
+								Expression: genLiteralExpression(value),
 								Collation:  collateType,
 							},
 						},
@@ -147,9 +167,9 @@ func genSimpleBinaryCompareSelectTree(op tree.BinaryOperator, leftValue, rightVa
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionBinaryComparison{
-								Left:     &tree.ExpressionLiteral{Value: leftValue},
+								Left:     genLiteralExpression(leftValue),
 								Operator: op,
-								Right:    &tree.ExpressionLiteral{Value: rightValue},
+								Right:    genLiteralExpression(rightValue),
 							},
 						},
 					},
@@ -168,9 +188,9 @@ func genSimplyArithmeticSelectTree(op tree.ArithmeticOperator, leftValue, rightV
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionArithmetic{
-								Left:     &tree.ExpressionLiteral{Value: leftValue},
+								Left:     genLiteralExpression(leftValue),
 								Operator: op,
-								Right:    &tree.ExpressionLiteral{Value: rightValue},
+								Right:    genLiteralExpression(rightValue),
 							},
 						},
 					},
@@ -181,9 +201,10 @@ func genSimplyArithmeticSelectTree(op tree.ArithmeticOperator, leftValue, rightV
 }
 
 func genSimpleStringCompareSelectTree(op tree.StringOperator, leftValue, rightValue, escape string) *tree.SelectStmt {
-	escapeExpr := tree.Expression(&tree.ExpressionLiteral{Value: escape})
-	if escape == "" {
-		escapeExpr = nil
+
+	var escapeExpr tree.Expression
+	if escape != "" {
+		escapeExpr = tree.Expression(genLiteralExpression(escape))
 	}
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
@@ -193,9 +214,9 @@ func genSimpleStringCompareSelectTree(op tree.StringOperator, leftValue, rightVa
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionStringCompare{
-								Left:     tree.Expression(&tree.ExpressionLiteral{Value: leftValue}),
+								Left:     tree.Expression(genLiteralExpression(leftValue)),
 								Operator: op,
-								Right:    tree.Expression(&tree.ExpressionLiteral{Value: rightValue}),
+								Right:    tree.Expression(genLiteralExpression(rightValue)),
 								Escape:   escapeExpr,
 							},
 						},
@@ -222,10 +243,10 @@ func genSimpleExprNullSelectTree(value string, not bool) *tree.SelectStmt {
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionIs{
-								Left:     &tree.ExpressionLiteral{Value: value},
+								Left:     genLiteralExpression(value),
 								Distinct: false,
 								Not:      not,
-								Right:    &tree.ExpressionLiteral{Value: "NULL"},
+								Right:    genLiteralExpression("NULL"),
 							},
 						},
 					},
@@ -244,10 +265,10 @@ func genSimpleExprIsSelectTree(left string, right string, not bool) *tree.Select
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionIs{
-								Left:     &tree.ExpressionLiteral{Value: left},
+								Left:     genLiteralExpression(left),
 								Distinct: false,
 								Not:      not,
-								Right:    &tree.ExpressionLiteral{Value: right},
+								Right:    genLiteralExpression(right),
 							},
 						},
 					},
@@ -458,7 +479,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// literal value,,
 		{"number", "select 1", genSelectColumnLiteralTree("1")},
 		{"string", "select 'a'", genSelectColumnLiteralTree("'a'")},
-		{"null", "select null", genSelectColumnLiteralTree("NULL")},
+		{"null", "select NULL", genSelectColumnLiteralTree("NULL")},
 		{"true", "select true", genSelectColumnLiteralTree("true")},
 		{"false", "select false", genSelectColumnLiteralTree("false")},
 		// bind parameter
@@ -967,7 +988,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 									Expression: &tree.ExpressionBetween{
 										Expression: genLiteralExpression("1"),
 										Left:       genLiteralExpression("2"),
-										Right:      &tree.ExpressionLiteral{Value: "3"},
+										Right:      genLiteralExpression("3"),
 									},
 								},
 							},
@@ -987,7 +1008,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 									Expression: &tree.ExpressionBetween{
 										Expression: genLiteralExpression("1"),
 										Left:       genLiteralExpression("2"),
-										Right:      &tree.ExpressionLiteral{Value: "3"},
+										Right:      genLiteralExpression("3"),
 										NotBetween: true,
 									},
 								},
@@ -1097,7 +1118,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 												genLiteralExpression("2"),
 											},
 										},
-										ElseExpression: &tree.ExpressionLiteral{Value: "3"},
+										ElseExpression: genLiteralExpression("3"),
 									},
 								},
 							},
@@ -1121,8 +1142,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 												genLiteralExpression("2"),
 											},
 											{
-												&tree.ExpressionLiteral{Value: "3"},
-												&tree.ExpressionLiteral{Value: "4"},
+												genLiteralExpression("3"),
+												genLiteralExpression("4"),
 											},
 										},
 									},
@@ -1146,7 +1167,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 										WhenThenPairs: [][2]tree.Expression{
 											{
 												genLiteralExpression("2"),
-												&tree.ExpressionLiteral{Value: "3"},
+												genLiteralExpression("3"),
 											},
 										},
 									},
@@ -1301,7 +1322,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 					Upsert: &tree.Upsert{
 						ConflictTarget: &tree.ConflictTarget{
 							IndexedColumns: []string{"c1", "c2"},
-							Where:          &tree.ExpressionLiteral{Value: "1"},
+							Where:          genLiteralExpression("1"),
 						},
 						Type: tree.UpsertTypeDoNothing,
 					},
@@ -1393,8 +1414,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 								Columns: []string{"d", "e"},
 								Expression: &tree.ExpressionList{
 									Expressions: []tree.Expression{
-										&tree.ExpressionLiteral{Value: "3"},
-										&tree.ExpressionLiteral{Value: "4"},
+										genLiteralExpression("3"),
+										genLiteralExpression("4"),
 									}},
 							},
 						},
@@ -2029,8 +2050,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
 								&tree.ResultColumnExpression{
-									Expression: &tree.ExpressionLiteral{
-										Value:    "1",
+									Expression: &tree.ExpressionNumericLiteral{
+										Value:    1,
 										TypeCast: tree.TypeCastInt,
 									},
 									Alias: "x",

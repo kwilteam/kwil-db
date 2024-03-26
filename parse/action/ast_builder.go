@@ -3,6 +3,7 @@ package actparser
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
@@ -181,7 +182,20 @@ func (v *astBuilder) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) tree.E
 	switch {
 	// primary expressions
 	case ctx.Literal_value() != nil:
-		return &tree.ExpressionLiteral{Value: ctx.Literal_value().GetText()}
+		// a bit of a hack, but this is to work around the act parser being separate from the sql parser
+		// if it has single quotes, it's a string literal
+		// if it has no quotes, we will attempt to convert it to a number
+		// if neither of these work, we will panic
+		literal := ctx.Literal_value().GetText()
+		if strings.HasPrefix(literal, "'") && strings.HasSuffix(literal, "'") {
+			return &tree.ExpressionTextLiteral{Value: literal[1 : len(literal)-1]}
+		} else {
+			i, err := strconv.ParseInt(literal, 10, 64)
+			if err == nil {
+				return &tree.ExpressionNumericLiteral{Value: i}
+			}
+		}
+		panic(fmt.Sprintf("cannot recognize literal '%s'", literal))
 	// sql bind parameter
 	case ctx.Variable() != nil:
 		return &tree.ExpressionBindParameter{Parameter: ctx.Variable().GetText()}
@@ -190,7 +204,9 @@ func (v *astBuilder) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) tree.E
 	case ctx.GetElevate_expr() != nil:
 		expr := v.visitFn_arg_expr(ctx.GetElevate_expr())
 		switch t := expr.(type) {
-		case *tree.ExpressionLiteral:
+		case *tree.ExpressionTextLiteral:
+			t.Wrapped = true
+		case *tree.ExpressionNumericLiteral:
 			t.Wrapped = true
 		case *tree.ExpressionBindParameter:
 			t.Wrapped = true

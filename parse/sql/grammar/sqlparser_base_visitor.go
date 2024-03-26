@@ -67,6 +67,10 @@ func (v *BaseSQLParserVisitor) VisitLogical_not_expr(ctx *Logical_not_exprContex
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseSQLParserVisitor) VisitBoolean_literal_expr(ctx *Boolean_literal_exprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseSQLParserVisitor) VisitComparison_expr(ctx *Comparison_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -99,6 +103,10 @@ func (v *BaseSQLParserVisitor) VisitVariable_expr(ctx *Variable_exprContext) int
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseSQLParserVisitor) VisitText_literal_expr(ctx *Text_literal_exprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseSQLParserVisitor) VisitUnary_expr(ctx *Unary_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -119,11 +127,15 @@ func (v *BaseSQLParserVisitor) VisitExpr_list_expr(ctx *Expr_list_exprContext) i
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSQLParserVisitor) VisitIn_list_expr(ctx *In_list_exprContext) interface{} {
+func (v *BaseSQLParserVisitor) VisitNumeric_literal_expr(ctx *Numeric_literal_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSQLParserVisitor) VisitLiteral_expr(ctx *Literal_exprContext) interface{} {
+func (v *BaseSQLParserVisitor) VisitNull_literal_expr(ctx *Null_literal_exprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSQLParserVisitor) VisitIn_list_expr(ctx *In_list_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -136,6 +148,10 @@ func (v *BaseSQLParserVisitor) VisitCase_expr(ctx *Case_exprContext) interface{}
 }
 
 func (v *BaseSQLParserVisitor) VisitFunction_expr(ctx *Function_exprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSQLParserVisitor) VisitBlob_literal_expr(ctx *Blob_literal_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -156,22 +172,6 @@ func (v *BaseSQLParserVisitor) VisitCast_type(ctx *Cast_typeContext) interface{}
 }
 
 func (v *BaseSQLParserVisitor) VisitType_cast(ctx *Type_castContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseSQLParserVisitor) VisitBoolean_value(ctx *Boolean_valueContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseSQLParserVisitor) VisitString_value(ctx *String_valueContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseSQLParserVisitor) VisitNumeric_value(ctx *Numeric_valueContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseSQLParserVisitor) VisitLiteral(ctx *LiteralContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

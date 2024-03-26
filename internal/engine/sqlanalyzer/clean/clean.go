@@ -16,8 +16,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/utils"
 )
 
 // checks that the string only contains alphanumeric characters and underscores
@@ -48,11 +46,4 @@ func cleanIdentifiers(identifiers []string) ([]string, error) {
 	}
 
 	return res, nil
-}
-
-// checkLiteral checks that the literal is a valid literal.
-// It either must be guarded with single quotes, or it must be a number.
-func checkLiteral(literal string) error {
-	_, err := utils.IsLiteral(literal)
-	return wrapErr(ErrInvalidLiteral, err)
 }
