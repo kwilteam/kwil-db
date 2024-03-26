@@ -2180,7 +2180,7 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 
 		// bind parameter
 		{"expr bind parameter ?", "select ?", "?"},
-		{"expr bind parameter ?1", "select ?1", "?"},
+		{"expr bind parameter ?1", "SELECT ?1", "?"},
 		{"expr bind parameter :a", "select :a", ":"},
 
 		// common table stmt
@@ -2242,9 +2242,9 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			//eh := NewErrorHandler(1)
 			//el := newSqliteErrorListener(eh)
-			_, err := ParseSql(tt.input, 1, nil, *traceMode, false)
+			res, err := ParseSql(tt.input, 1, nil, *traceMode, false)
 			assert.Errorf(t, err, "Parser should complain abould invalid syntax")
-
+			_ = res
 			if !errors.Is(err, ErrInvalidSyntax) {
 				t.Fatalf("ParseRawSQL() expected error: %s, got %s", ErrInvalidSyntax, err)
 			}
