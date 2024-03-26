@@ -35,7 +35,7 @@ func TestUpdate_ToSQL(t *testing.T) {
 								IsNot:    true,
 								IsExists: true,
 								Select: &tree.SelectCore{
-									SelectCores: []*tree.SimpleSelect{
+									SimpleSelects: []*tree.SimpleSelect{
 										{
 											SelectType: tree.SelectTypeAll,
 											Columns: []tree.ResultColumn{

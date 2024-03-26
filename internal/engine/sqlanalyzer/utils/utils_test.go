@@ -50,9 +50,9 @@ func Test_JoinSearch(t *testing.T) {
 
 			topSelect, ok := stmt.(*tree.SelectStmt)
 			require.True(t, ok)
-			require.Equal(t, len(topSelect.Stmt.SelectCores), 1)
+			require.Equal(t, len(topSelect.Stmt.SimpleSelects), 1)
 
-			tbls, err := utils.GetUsedTables(topSelect.Stmt.SelectCores[0].From)
+			tbls, err := utils.GetUsedTables(topSelect.Stmt.SimpleSelects[0].From)
 			require.NoError(t, err)
 
 			require.EqualValues(t, tt.tables, tbls)

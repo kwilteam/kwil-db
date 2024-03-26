@@ -58,7 +58,23 @@ const (
 	joinableStatusValid
 )
 
-func (e *ExpressionLiteral) joinable() joinableStatus {
+func (e *ExpressionTextLiteral) joinable() joinableStatus {
+	return joinableStatusInvalid
+}
+
+func (e *ExpressionNumericLiteral) joinable() joinableStatus {
+	return joinableStatusInvalid
+}
+
+func (e *ExpressionBlobLiteral) joinable() joinableStatus {
+	return joinableStatusInvalid
+}
+
+func (e *ExpressionNullLiteral) joinable() joinableStatus {
+	return joinableStatusInvalid
+}
+
+func (e *ExpressionBooleanLiteral) joinable() joinableStatus {
 	return joinableStatusInvalid
 }
 

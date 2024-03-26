@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/utils"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
@@ -161,25 +160,31 @@ func (r *returnTypeWalker) EnterExpressionList(p0 *tree.ExpressionList) error {
 	return errReturnExpr(p0)
 }
 
-// EnterExpressionLiteral will attempt to detect the type of the literal
-func (r *returnTypeWalker) EnterExpressionLiteral(p0 *tree.ExpressionLiteral) error {
-	if r.detected {
-		return nil
-	}
-
-	dataTypes, err := utils.IsLiteral(p0.Value)
-	if err != nil {
-		return err
-	}
-	switch dataTypes {
-	case common.TEXT, common.BOOL, common.INT:
-		r.set(dataTypes)
-	default:
-		return fmt.Errorf("unknown literal type for analyzed relation attribute: %s", dataTypes)
-	}
-
+func (r *returnTypeWalker) EnterExpressionTextLiteral(p0 *tree.ExpressionTextLiteral) error {
+	r.set(common.TEXT)
 	return nil
 }
+
+func (r *returnTypeWalker) EnterExpressionNumericLiteral(p0 *tree.ExpressionNumericLiteral) error {
+	r.set(common.INT)
+	return nil
+}
+
+func (r *returnTypeWalker) EnterExpressionBooleanLiteral(p0 *tree.ExpressionBooleanLiteral) error {
+	r.set(common.BOOL)
+	return nil
+}
+
+func (r *returnTypeWalker) EnterExpressionNullLiteral(p0 *tree.ExpressionNullLiteral) error {
+	r.set(common.TEXT)
+	return nil
+}
+
+func (r *returnTypeWalker) EnterExpressionBlobLiteral(p0 *tree.ExpressionBlobLiteral) error {
+	r.set(common.BLOB)
+	return nil
+}
+
 func (r *returnTypeWalker) EnterExpressionSelect(p0 *tree.ExpressionSelect) error {
 	return errReturnExpr(p0)
 }

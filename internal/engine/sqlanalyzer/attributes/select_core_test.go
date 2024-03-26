@@ -122,7 +122,15 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				tblColAlias(common.INT, "users", "age", "the_age"),
 
 				// 5
-				literal(common.INT, "5", "the_literal_5"),
+				{
+					ResultExpression: &tree.ResultColumnExpression{
+						Expression: &tree.ExpressionNumericLiteral{
+							Value: 5,
+						},
+						Alias: "the_literal_5",
+					},
+					Type: common.INT,
+				},
 			},
 			resultTableCols: []*common.Column{
 				col("id", common.INT),
@@ -189,7 +197,7 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				return
 			}
 
-			got, err := attributes.GetSelectCoreRelationAttributes(selectStmt.Stmt.SelectCores[0], tt.tables)
+			got, err := attributes.GetSelectCoreRelationAttributes(selectStmt.Stmt.SimpleSelects[0], tt.tables)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetSelectCoreRelationAttributes() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -238,18 +246,6 @@ func tblColAlias(dataType common.DataType, tbl, column, alias string) *attribute
 			Expression: &tree.ExpressionColumn{
 				Table:  tbl,
 				Column: column,
-			},
-			Alias: alias,
-		},
-		Type: dataType,
-	}
-}
-
-func literal(dataType common.DataType, lit string, alias string) *attributes.RelationAttribute {
-	return &attributes.RelationAttribute{
-		ResultExpression: &tree.ResultColumnExpression{
-			Expression: &tree.ExpressionLiteral{
-				Value: lit,
 			},
 			Alias: alias,
 		},

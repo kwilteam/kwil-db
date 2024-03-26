@@ -41,7 +41,7 @@ func TestRelation_ToSQL(t *testing.T) {
 			fields: fields{
 				Relation: &tree.RelationSubquery{
 					Select: &tree.SelectCore{
-						SelectCores: []*tree.SimpleSelect{
+						SimpleSelects: []*tree.SimpleSelect{
 							{
 								SelectType: tree.SelectTypeAll,
 								From: &tree.RelationTable{
@@ -172,8 +172,8 @@ func TestRelation_ToSQL(t *testing.T) {
 									Column: "col1",
 								},
 								Operator: tree.ComparisonOperatorEqual,
-								Right: &tree.ExpressionLiteral{
-									Value: "'value'",
+								Right: &tree.ExpressionTextLiteral{
+									Value: "value",
 								},
 							},
 						},

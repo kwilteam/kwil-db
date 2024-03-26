@@ -9,8 +9,11 @@ type AstVisitor interface {
 	VisitCTE(*CTE) any
 	VisitDeleteStmt(*DeleteStmt) any
 	VisitDeleteCore(*DeleteCore) any
-	VisitExpression(Expression) any
-	VisitExpressionLiteral(*ExpressionLiteral) any
+	VisitExpressionTextLiteral(*ExpressionTextLiteral) any
+	VisitExpressionNumericLiteral(*ExpressionNumericLiteral) any
+	VisitExpressionBooleanLiteral(*ExpressionBooleanLiteral) any
+	VisitExpressionNullLiteral(*ExpressionNullLiteral) any
+	VisitExpressionBlobLiteral(*ExpressionBlobLiteral) any
 	VisitExpressionBindParameter(*ExpressionBindParameter) any
 	VisitExpressionColumn(*ExpressionColumn) any
 	VisitExpressionUnary(*ExpressionUnary) any
@@ -34,7 +37,6 @@ type AstVisitor interface {
 	VisitOrderBy(*OrderBy) any
 	VisitOrderingTerm(*OrderingTerm) any
 	VisitQualifiedTableName(*QualifiedTableName) any
-	VisitRelation(Relation) any
 	VisitRelationTable(*RelationTable) any
 	VisitRelationSubquery(*RelationSubquery) any
 	VisitRelationJoin(*RelationJoin) any
@@ -86,11 +88,23 @@ func (v *BaseAstVisitor) VisitDeleteCore(node *DeleteCore) any {
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitExpression(node Expression) any {
-	return v.Visit(node)
+func (v *BaseAstVisitor) VisitExpressionTextLiteral(node *ExpressionTextLiteral) any {
+	return nil
 }
 
-func (v *BaseAstVisitor) VisitExpressionLiteral(node *ExpressionLiteral) any {
+func (v *BaseAstVisitor) VisitExpressionNumericLiteral(node *ExpressionNumericLiteral) any {
+	return nil
+}
+
+func (v *BaseAstVisitor) VisitExpressionBooleanLiteral(node *ExpressionBooleanLiteral) any {
+	return nil
+}
+
+func (v *BaseAstVisitor) VisitExpressionNullLiteral(node *ExpressionNullLiteral) any {
+	return nil
+}
+
+func (v *BaseAstVisitor) VisitExpressionBlobLiteral(node *ExpressionBlobLiteral) any {
 	return nil
 }
 
@@ -216,10 +230,6 @@ func (v *BaseAstVisitor) VisitSimpleSelect(node *SimpleSelect) any {
 
 func (v *BaseAstVisitor) VisitSelectCore(node *SelectCore) any {
 	return nil
-}
-
-func (v *BaseAstVisitor) VisitRelation(node Relation) any {
-	return v.Visit(node)
 }
 
 func (v *BaseAstVisitor) VisitRelationTable(node *RelationTable) any {

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -20,7 +21,26 @@ var columnStar = []tree.ResultColumn{
 }
 
 func genLiteralExpression(value string) tree.Expression {
-	return &tree.ExpressionLiteral{Value: value}
+	// if it has single quote, it is a string literal
+	// otherwise, we will try to make it a number
+	if strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'") {
+		return &tree.ExpressionTextLiteral{Value: value[1 : len(value)-1]}
+	}
+
+	s, err := strconv.ParseInt(value, 10, 64)
+	if err == nil {
+		return &tree.ExpressionNumericLiteral{Value: s}
+	}
+
+	if strings.EqualFold(value, "true") {
+		return &tree.ExpressionBooleanLiteral{Value: true}
+	} else if strings.EqualFold(value, "false") {
+		return &tree.ExpressionBooleanLiteral{Value: false}
+	} else if strings.EqualFold(value, "null") {
+		return &tree.ExpressionNullLiteral{}
+	}
+
+	panic(fmt.Sprintf("unsupported literal value: %s", value))
 }
 
 func getResultColumnExprs(values ...string) []tree.ResultColumn {
@@ -36,7 +56,7 @@ func getResultColumnExprs(values ...string) []tree.ResultColumn {
 func genSelectUnaryExprTree(op tree.UnaryOperator, value string) *tree.SelectStmt {
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -56,7 +76,7 @@ func genSelectUnaryExprTree(op tree.UnaryOperator, value string) *tree.SelectStm
 func genSelectColumnLiteralTree(value string) *tree.SelectStmt {
 	t := tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -73,7 +93,7 @@ func genSelectColumnLiteralTree(value string) *tree.SelectStmt {
 func genSelectColumnStarTree() *tree.SelectStmt {
 	t := tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -88,7 +108,7 @@ func genSelectColumnStarTree() *tree.SelectStmt {
 func genSelectColumnTableTree(table string) *tree.SelectStmt {
 	t := tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -103,7 +123,7 @@ func genSelectColumnTableTree(table string) *tree.SelectStmt {
 func genSimpleCompoundSelectTree(op tree.CompoundOperatorType) *tree.SelectStmt {
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns:    getResultColumnExprs("1"),
@@ -121,13 +141,13 @@ func genSimpleCompoundSelectTree(op tree.CompoundOperatorType) *tree.SelectStmt 
 func genSimpleCollateSelectTree(collateType tree.CollationType, value string) *tree.SelectStmt {
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionCollate{
-								Expression: &tree.ExpressionLiteral{Value: value},
+								Expression: genLiteralExpression(value),
 								Collation:  collateType,
 							},
 						},
@@ -141,15 +161,15 @@ func genSimpleCollateSelectTree(collateType tree.CollationType, value string) *t
 func genSimpleBinaryCompareSelectTree(op tree.BinaryOperator, leftValue, rightValue string) *tree.SelectStmt {
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionBinaryComparison{
-								Left:     &tree.ExpressionLiteral{Value: leftValue},
+								Left:     genLiteralExpression(leftValue),
 								Operator: op,
-								Right:    &tree.ExpressionLiteral{Value: rightValue},
+								Right:    genLiteralExpression(rightValue),
 							},
 						},
 					},
@@ -162,15 +182,15 @@ func genSimpleBinaryCompareSelectTree(op tree.BinaryOperator, leftValue, rightVa
 func genSimplyArithmeticSelectTree(op tree.ArithmeticOperator, leftValue, rightValue string) *tree.SelectStmt {
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionArithmetic{
-								Left:     &tree.ExpressionLiteral{Value: leftValue},
+								Left:     genLiteralExpression(leftValue),
 								Operator: op,
-								Right:    &tree.ExpressionLiteral{Value: rightValue},
+								Right:    genLiteralExpression(rightValue),
 							},
 						},
 					},
@@ -181,21 +201,22 @@ func genSimplyArithmeticSelectTree(op tree.ArithmeticOperator, leftValue, rightV
 }
 
 func genSimpleStringCompareSelectTree(op tree.StringOperator, leftValue, rightValue, escape string) *tree.SelectStmt {
-	escapeExpr := tree.Expression(&tree.ExpressionLiteral{Value: escape})
-	if escape == "" {
-		escapeExpr = nil
+
+	var escapeExpr tree.Expression
+	if escape != "" {
+		escapeExpr = genLiteralExpression(escape)
 	}
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionStringCompare{
-								Left:     tree.Expression(&tree.ExpressionLiteral{Value: leftValue}),
+								Left:     genLiteralExpression(leftValue),
 								Operator: op,
-								Right:    tree.Expression(&tree.ExpressionLiteral{Value: rightValue}),
+								Right:    genLiteralExpression(rightValue),
 								Escape:   escapeExpr,
 							},
 						},
@@ -216,16 +237,16 @@ func genSimpleCTETree(table, value string) *tree.CTE {
 func genSimpleExprNullSelectTree(value string, not bool) *tree.SelectStmt {
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionIs{
-								Left:     &tree.ExpressionLiteral{Value: value},
+								Left:     genLiteralExpression(value),
 								Distinct: false,
 								Not:      not,
-								Right:    &tree.ExpressionLiteral{Value: "NULL"},
+								Right:    genLiteralExpression("NULL"),
 							},
 						},
 					},
@@ -238,16 +259,16 @@ func genSimpleExprNullSelectTree(value string, not bool) *tree.SelectStmt {
 func genSimpleExprIsSelectTree(left string, right string, not bool) *tree.SelectStmt {
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionIs{
-								Left:     &tree.ExpressionLiteral{Value: left},
+								Left:     genLiteralExpression(left),
 								Distinct: false,
 								Not:      not,
-								Right:    &tree.ExpressionLiteral{Value: right},
+								Right:    genLiteralExpression(right),
 							},
 						},
 					},
@@ -260,7 +281,7 @@ func genSimpleExprIsSelectTree(left string, right string, not bool) *tree.Select
 func genSimpleFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) *tree.SelectStmt {
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -280,7 +301,7 @@ func genSimpleFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) 
 func genDistinctFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) *tree.SelectStmt {
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -301,7 +322,7 @@ func genDistinctFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression
 func genSimpleJoinSelectTree(joinOP *tree.JoinOperator, t1, t1Column, t2, t2Column string) *tree.SelectStmt {
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
-			SelectCores: []*tree.SimpleSelect{
+			SimpleSelects: []*tree.SimpleSelect{
 				{
 					SelectType: tree.SelectTypeAll,
 					Columns: []tree.ResultColumn{
@@ -390,7 +411,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"table or subquery", "select * from t1 as tt",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -406,7 +427,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"table or subquery nest select", "select * from (select 1) as tt",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -422,7 +443,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"table or subquery join", "select * from t1 as tt join t2 as ttt on tt.a = ttt.a",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -458,14 +479,14 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// literal value,,
 		{"number", "select 1", genSelectColumnLiteralTree("1")},
 		{"string", "select 'a'", genSelectColumnLiteralTree("'a'")},
-		{"null", "select null", genSelectColumnLiteralTree("NULL")},
+		{"null", "select NULL", genSelectColumnLiteralTree("NULL")},
 		{"true", "select true", genSelectColumnLiteralTree("true")},
 		{"false", "select false", genSelectColumnLiteralTree("false")},
 		// bind parameter
 		{"expr bind parameter $", "select $a",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -481,7 +502,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr bind parameter @", "select @a",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -497,7 +518,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr names", "select t1.c1",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -517,7 +538,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr unary op - twice, right associative", "select - -1",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -541,7 +562,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr unary op not twice, right associative", "select not not true",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -603,7 +624,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr binary op in", "select 1 in (1,2)",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -628,7 +649,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr binary op not in", "select 1 not in (1,2)",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -653,7 +674,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr binary op in with select", "select 1 in (select 1)",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -675,7 +696,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr binary op not in with select", "select 1 not in (select 1)",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -731,7 +752,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr list", "select (1,2)",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -753,7 +774,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr precedence 1", "select -1 > 2",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -776,7 +797,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr precedence 2", "SELECT NOT (-1 = 1) AND 1 notnull OR 3 < 2",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -819,7 +840,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr precedence 3", "SELECT NOT (-1 = 1) AND (1 notnull OR 3 < 2)",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -863,7 +884,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr precedence 4", "select not 3 + 4 * 5 - 2 = 2 + -1",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -917,7 +938,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr is distinct from", "select 1 is distinct from 2",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -937,7 +958,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr is not distinct from", "select 1 is not distinct from 2",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -959,7 +980,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr between", "select 1 between 2 and 3",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -967,7 +988,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 									Expression: &tree.ExpressionBetween{
 										Expression: genLiteralExpression("1"),
 										Left:       genLiteralExpression("2"),
-										Right:      &tree.ExpressionLiteral{Value: "3"},
+										Right:      genLiteralExpression("3"),
 									},
 								},
 							},
@@ -979,7 +1000,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr not between", "select 1 not between 2 and 3",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -987,7 +1008,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 									Expression: &tree.ExpressionBetween{
 										Expression: genLiteralExpression("1"),
 										Left:       genLiteralExpression("2"),
-										Right:      &tree.ExpressionLiteral{Value: "3"},
+										Right:      genLiteralExpression("3"),
 										NotBetween: true,
 									},
 								},
@@ -1001,7 +1022,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr exists", "select (select 1)",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1021,7 +1042,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr exists", "select exists (select 1)",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1041,7 +1062,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr not exists", "select not exists (select 1)",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1062,7 +1083,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr case", "select case when 1 then 2 end",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1085,7 +1106,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr case else", "select case when 1 then 2 else 3 end",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1097,7 +1118,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 												genLiteralExpression("2"),
 											},
 										},
-										ElseExpression: &tree.ExpressionLiteral{Value: "3"},
+										ElseExpression: genLiteralExpression("3"),
 									},
 								},
 							},
@@ -1109,7 +1130,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr case multi when", "select case when 1 then 2 when 3 then 4 end",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1121,8 +1142,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 												genLiteralExpression("2"),
 											},
 											{
-												&tree.ExpressionLiteral{Value: "3"},
-												&tree.ExpressionLiteral{Value: "4"},
+												genLiteralExpression("3"),
+												genLiteralExpression("4"),
 											},
 										},
 									},
@@ -1136,7 +1157,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr case expr", "select case 1 when 2 then 3 end",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1146,7 +1167,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 										WhenThenPairs: [][2]tree.Expression{
 											{
 												genLiteralExpression("2"),
-												&tree.ExpressionLiteral{Value: "3"},
+												genLiteralExpression("3"),
 											},
 										},
 									},
@@ -1301,7 +1322,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 					Upsert: &tree.Upsert{
 						ConflictTarget: &tree.ConflictTarget{
 							IndexedColumns: []string{"c1", "c2"},
-							Where:          &tree.ExpressionLiteral{Value: "1"},
+							Where:          genLiteralExpression("1"),
 						},
 						Type: tree.UpsertTypeDoNothing,
 					},
@@ -1393,8 +1414,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 								Columns: []string{"d", "e"},
 								Expression: &tree.ExpressionList{
 									Expressions: []tree.Expression{
-										&tree.ExpressionLiteral{Value: "3"},
-										&tree.ExpressionLiteral{Value: "4"},
+										genLiteralExpression("3"),
+										genLiteralExpression("4"),
 									}},
 							},
 						},
@@ -1424,7 +1445,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"select *", "select * from t1",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1438,7 +1459,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			&tree.SelectStmt{
 				CTE: []*tree.CTE{genSimpleCTETree("t", "1")},
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1451,7 +1472,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"select distinct", "select distinct * from t1",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeDistinct,
 							Columns:    columnStar,
@@ -1464,7 +1485,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"select with where", "select * from t1 where c1=1",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1482,7 +1503,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"select with where and", "select * from t1 where c1=1 and c2=2",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1508,7 +1529,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"select with where or", "select * from t1 where c1=1 or c2=2",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1534,7 +1555,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"select with group by", "select * from t1 group by c1",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1552,7 +1573,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"select with group by and having", "select * from t1 group by c1 having 1",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1571,7 +1592,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"select with order by", "select * from t1 order by c1",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1592,7 +1613,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"select with order by all", "select * from t1 order by c1 collate nocase asc nulls first",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1617,7 +1638,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"select with limit", "select * from t1 limit 1",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1631,7 +1652,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"select with limit offset", "select * from t1 limit 1 offset 2",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1684,7 +1705,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"join multi", "select * from t1 join t2 on t1.c1=t2.c1 left join t3 on t1.c1=t3.c1",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1918,7 +1939,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"table name with double quote", `select * from "t1"`,
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1933,7 +1954,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"table name alias with double quote", `select * from "t1" as "t"`,
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns:    columnStar,
@@ -1949,7 +1970,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"column name with bracket quote", `select [col1] from "t1"`,
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1970,7 +1991,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"column name alias with bracket quote", `select [col1] as [col] from t1`,
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -1993,7 +2014,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"collation name with back tick quote", "select `col1` COLLATE `nocase` from `t1`; ",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
@@ -2024,13 +2045,13 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				"(t1.c3 isnull)::int, abs(2)::int from t1;",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
 								&tree.ResultColumnExpression{
-									Expression: &tree.ExpressionLiteral{
-										Value:    "1",
+									Expression: &tree.ExpressionNumericLiteral{
+										Value:    1,
 										TypeCast: tree.TypeCastInt,
 									},
 									Alias: "x",
@@ -2159,7 +2180,7 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 
 		// bind parameter
 		{"expr bind parameter ?", "select ?", "?"},
-		{"expr bind parameter ?1", "select ?1", "?"},
+		{"expr bind parameter ?1", "SELECT ?1", "?"},
 		{"expr bind parameter :a", "select :a", ":"},
 
 		// common table stmt
@@ -2221,9 +2242,9 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			//eh := NewErrorHandler(1)
 			//el := newSqliteErrorListener(eh)
-			_, err := ParseSql(tt.input, 1, nil, *traceMode, false)
+			res, err := ParseSql(tt.input, 1, nil, *traceMode, false)
 			assert.Errorf(t, err, "Parser should complain abould invalid syntax")
-
+			_ = res
 			if !errors.Is(err, ErrInvalidSyntax) {
 				t.Fatalf("ParseRawSQL() expected error: %s, got %s", ErrInvalidSyntax, err)
 			}

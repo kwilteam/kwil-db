@@ -24,7 +24,7 @@ func TestSelect_ToSQL(t *testing.T) {
 					mockCTE,
 				},
 				SelectStmt: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{{
+					SimpleSelects: []*tree.SimpleSelect{{
 						SelectType: tree.SelectTypeAll,
 						Columns: []tree.ResultColumn{
 							&tree.ResultColumnExpression{Expression: &tree.ExpressionColumn{Column: "foo"}},

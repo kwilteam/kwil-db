@@ -1,9 +1,9 @@
 package tree
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strconv"
-	"strings"
 
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 )
@@ -26,64 +26,154 @@ func (e *expressionBase) Walk(w AstListener) error {
 
 type Wrapped bool
 
-type ExpressionLiteral struct {
+type ExpressionTextLiteral struct {
 	node
-
 	expressionBase
 	Wrapped
 	Value    string
 	TypeCast TypeCastType
 }
 
-func (e *ExpressionLiteral) Accept(v AstVisitor) any {
-	return v.VisitExpressionLiteral(e)
+func (e *ExpressionTextLiteral) Accept(v AstVisitor) any {
+	return v.VisitExpressionTextLiteral(e)
 }
 
-func (e *ExpressionLiteral) Walk(w AstListener) error {
+func (e *ExpressionTextLiteral) Walk(w AstListener) error {
 	return run(
-		w.EnterExpressionLiteral(e),
-		w.ExitExpressionLiteral(e),
+		w.EnterExpressionTextLiteral(e),
+		w.ExitExpressionTextLiteral(e),
 	)
 }
 
-func (e *ExpressionLiteral) ToSQL() string {
-	validateIsNonStringLiteral(e.Value)
+func (e *ExpressionTextLiteral) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if e.Wrapped {
 		stmt.WrapParen()
 	}
 
-	stmt.WriteString(e.Value)
+	stmt.WriteString(fmt.Sprintf("'%s'", e.Value))
 	return suffixTypeCast(stmt.String(), e.TypeCast)
 }
 
-func isStringLiteral(str string) bool {
-	return str[0] == '\'' && str[len(str)-1] == '\''
+type ExpressionNumericLiteral struct {
+	node
+	expressionBase
+	Wrapped
+	Value    int64
+	TypeCast TypeCastType
 }
 
-func validateIsNonStringLiteral(str string) {
-	if isStringLiteral(str) {
-		return
+func (e *ExpressionNumericLiteral) Accept(v AstVisitor) any {
+	return v.VisitExpressionNumericLiteral(e)
+}
+
+func (e *ExpressionNumericLiteral) Walk(w AstListener) error {
+	return run(
+		w.EnterExpressionNumericLiteral(e),
+		w.ExitExpressionNumericLiteral(e),
+	)
+}
+
+func (e *ExpressionNumericLiteral) ToSQL() string {
+	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
 	}
 
-	if strings.EqualFold(str, "null") {
-		return
-	}
-	if strings.EqualFold(str, "true") || strings.EqualFold(str, "false") {
-		return
+	stmt.WriteString(strconv.FormatInt(e.Value, 10))
+	return suffixTypeCast(stmt.String(), e.TypeCast)
+}
+
+type ExpressionBooleanLiteral struct {
+	node
+	expressionBase
+	Wrapped
+	Value    bool
+	TypeCast TypeCastType
+}
+
+func (e *ExpressionBooleanLiteral) Accept(v AstVisitor) any {
+	return v.VisitExpressionBooleanLiteral(e)
+}
+
+func (e *ExpressionBooleanLiteral) Walk(w AstListener) error {
+	return run(
+		w.EnterExpressionBooleanLiteral(e),
+		w.ExitExpressionBooleanLiteral(e),
+	)
+}
+
+func (e *ExpressionBooleanLiteral) ToSQL() string {
+	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
 	}
 
-	if len(strings.Split(str, ".")) > 1 {
-		panic(fmt.Errorf("literal cannot be float.  received: %s", str))
+	stmt.WriteString(strconv.FormatBool(e.Value))
+	return suffixTypeCast(stmt.String(), e.TypeCast)
+}
+
+type ExpressionNullLiteral struct {
+	node
+	expressionBase
+	Wrapped
+	TypeCast TypeCastType
+}
+
+func (e *ExpressionNullLiteral) Accept(v AstVisitor) any {
+	return v.VisitExpressionNullLiteral(e)
+}
+
+func (e *ExpressionNullLiteral) Walk(w AstListener) error {
+	return run(
+		w.EnterExpressionNullLiteral(e),
+		w.ExitExpressionNullLiteral(e),
+	)
+}
+
+func (e *ExpressionNullLiteral) ToSQL() string {
+	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
 	}
 
-	_, err := strconv.ParseInt(str, 10, 64) // go-conv: conv.Int64(str)
-	if err == nil {
-		return
+	stmt.WriteString("NULL")
+	return suffixTypeCast(stmt.String(), e.TypeCast)
+}
+
+type ExpressionBlobLiteral struct {
+	node
+	expressionBase
+	Wrapped
+	Value    []byte
+	TypeCast TypeCastType
+}
+
+func (e *ExpressionBlobLiteral) Accept(v AstVisitor) any {
+	return v.VisitExpressionBlobLiteral(e)
+}
+
+func (e *ExpressionBlobLiteral) Walk(w AstListener) error {
+	return run(
+		w.EnterExpressionBlobLiteral(e),
+		w.ExitExpressionBlobLiteral(e),
+	)
+}
+
+func (e *ExpressionBlobLiteral) ToSQL() string {
+	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
 	}
 
-	panic(fmt.Errorf("invalid literal: %s", str))
+	stmt.WriteString(fmt.Sprintf("'\\%s'", hex.EncodeToString(e.Value)))
+
+	return suffixTypeCast(stmt.String(), e.TypeCast)
 }
 
 type ExpressionBindParameter struct {

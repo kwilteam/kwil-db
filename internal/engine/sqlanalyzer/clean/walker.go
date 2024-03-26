@@ -52,11 +52,6 @@ func (s *StatementCleaner) EnterDeleteCore(node *tree.DeleteCore) (err error) {
 	return nil
 }
 
-// EnterExpressionLiteral checks that the literal is a valid literal
-func (s *StatementCleaner) EnterExpressionLiteral(node *tree.ExpressionLiteral) (err error) {
-	return wrapErr(ErrInvalidLiteral, checkLiteral(node.Value))
-}
-
 // EnterExpressionBindParameter checks that the bind parameter is a valid bind parameter
 func (s *StatementCleaner) EnterExpressionBindParameter(node *tree.ExpressionBindParameter) (err error) {
 	if !strings.HasPrefix(node.Parameter, "$") && !strings.HasPrefix(node.Parameter, "@") {
@@ -295,13 +290,13 @@ func (s *StatementCleaner) EnterSelectStmt(node *tree.SelectStmt) (err error) {
 }
 
 // EnterSelectCore validates the select type
-func (s *StatementCleaner) EnterSelectCore(node *tree.SimpleSelect) (err error) {
+func (s *StatementCleaner) EnterSimpleSelect(node *tree.SimpleSelect) (err error) {
 	return wrapErr(ErrInvalidSelectType, node.SelectType.Valid())
 }
 
 // EnterSelectStmt checks that, for each SelectCore besides the last, a compound operator is provided
-func (s *StatementCleaner) EnterSelectStmtNoCte(node *tree.SelectCore) (err error) {
-	for _, core := range node.SelectCores[:len(node.SelectCores)-1] {
+func (s *StatementCleaner) EnterSelectCore(node *tree.SelectCore) (err error) {
+	for _, core := range node.SimpleSelects[:len(node.SimpleSelects)-1] {
 		if core.Compound == nil {
 			return wrapErr(ErrInvalidCompoundOperator, errors.New("compound operator must be provided for all SelectCores except the last"))
 		}

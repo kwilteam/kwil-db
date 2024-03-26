@@ -158,7 +158,6 @@ func Test_Order(t *testing.T) {
 
 			walker := order.NewOrderWalker(defaultTables)
 			err = stmt.Walk(walker)
-
 			if err != nil {
 				require.True(t, errors.Is(err, tt.err))
 				return

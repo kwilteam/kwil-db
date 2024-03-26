@@ -25,39 +25,39 @@ func TestParseActionStmt(t *testing.T) {
 			expect: &actparser.ActionCallStmt{
 				Method: "action_xx",
 				Args: []tree.Expression{
-					&tree.ExpressionLiteral{Value: "2"},
-					&tree.ExpressionLiteral{Value: `'3'`},
+					&tree.ExpressionNumericLiteral{Value: 2},
+					&tree.ExpressionTextLiteral{Value: `3`},
 					&tree.ExpressionBindParameter{Parameter: "$a"},
 					&tree.ExpressionBindParameter{Parameter: "@b"},
 					&tree.ExpressionUnary{
 						Operator: tree.UnaryOperatorMinus,
-						Operand:  &tree.ExpressionLiteral{Value: "2"},
+						Operand:  &tree.ExpressionNumericLiteral{Value: 2},
 					},
 					&tree.ExpressionArithmetic{
-						Left:     &tree.ExpressionLiteral{Value: "1"},
+						Left:     &tree.ExpressionNumericLiteral{Value: 1},
 						Operator: tree.ArithmeticOperatorAdd,
 						Right: &tree.ExpressionUnary{
 							Operator: tree.UnaryOperatorMinus,
-							Operand:  &tree.ExpressionLiteral{Value: "2"},
+							Operand:  &tree.ExpressionNumericLiteral{Value: 2},
 						},
 					},
 					&tree.ExpressionArithmetic{
 						Left: &tree.ExpressionArithmetic{
 							Wrapped:  true,
-							Left:     &tree.ExpressionLiteral{Value: "1"},
+							Left:     &tree.ExpressionNumericLiteral{Value: 1},
 							Operator: tree.ArithmeticOperatorMultiply,
-							Right:    &tree.ExpressionLiteral{Value: "2"},
+							Right:    &tree.ExpressionNumericLiteral{Value: 2},
 						},
 						Operator: tree.ArithmeticOperatorAdd,
-						Right:    &tree.ExpressionLiteral{Value: "3"},
+						Right:    &tree.ExpressionNumericLiteral{Value: 3},
 					},
 					&tree.ExpressionBinaryComparison{
-						Left:     &tree.ExpressionLiteral{Value: "1"},
+						Left:     &tree.ExpressionNumericLiteral{Value: 1},
 						Operator: tree.ComparisonOperatorLessThanOrEqual,
-						Right:    &tree.ExpressionLiteral{Value: "2"},
+						Right:    &tree.ExpressionNumericLiteral{Value: 2},
 					},
 					&tree.ExpressionBinaryComparison{
-						Left:     &tree.ExpressionLiteral{Value: "1"},
+						Left:     &tree.ExpressionNumericLiteral{Value: 1},
 						Operator: tree.LogicalOperatorAnd,
 						Right:    &tree.ExpressionBindParameter{Parameter: "$c"},
 					},
@@ -86,39 +86,39 @@ func TestParseActionStmt(t *testing.T) {
 				Method:    "transfer",
 				Receivers: []string{"$a", "$b"},
 				Args: []tree.Expression{
-					&tree.ExpressionLiteral{Value: "2"},
-					&tree.ExpressionLiteral{Value: `'3'`},
+					&tree.ExpressionNumericLiteral{Value: 2},
+					&tree.ExpressionTextLiteral{Value: "3"},
 					&tree.ExpressionBindParameter{Parameter: "$a"},
 					&tree.ExpressionBindParameter{Parameter: "@b"},
 					&tree.ExpressionUnary{
 						Operator: tree.UnaryOperatorMinus,
-						Operand:  &tree.ExpressionLiteral{Value: "2"},
+						Operand:  &tree.ExpressionNumericLiteral{Value: 2},
 					},
 					&tree.ExpressionArithmetic{
-						Left:     &tree.ExpressionLiteral{Value: "1"},
+						Left:     &tree.ExpressionNumericLiteral{Value: 1},
 						Operator: tree.ArithmeticOperatorAdd,
 						Right: &tree.ExpressionUnary{
 							Operator: tree.UnaryOperatorMinus,
-							Operand:  &tree.ExpressionLiteral{Value: "2"},
+							Operand:  &tree.ExpressionNumericLiteral{Value: 2},
 						},
 					},
 					&tree.ExpressionArithmetic{
 						Left: &tree.ExpressionArithmetic{
 							Wrapped:  true,
-							Left:     &tree.ExpressionLiteral{Value: "1"},
+							Left:     &tree.ExpressionNumericLiteral{Value: 1},
 							Operator: tree.ArithmeticOperatorMultiply,
-							Right:    &tree.ExpressionLiteral{Value: "2"},
+							Right:    &tree.ExpressionNumericLiteral{Value: 2},
 						},
 						Operator: tree.ArithmeticOperatorAdd,
-						Right:    &tree.ExpressionLiteral{Value: "3"},
+						Right:    &tree.ExpressionNumericLiteral{Value: 3},
 					},
 					&tree.ExpressionBinaryComparison{
-						Left:     &tree.ExpressionLiteral{Value: "1"},
+						Left:     &tree.ExpressionNumericLiteral{Value: 1},
 						Operator: tree.ComparisonOperatorLessThanOrEqual,
-						Right:    &tree.ExpressionLiteral{Value: "2"},
+						Right:    &tree.ExpressionNumericLiteral{Value: 2},
 					},
 					&tree.ExpressionBinaryComparison{
-						Left:     &tree.ExpressionLiteral{Value: "1"},
+						Left:     &tree.ExpressionNumericLiteral{Value: 1},
 						Operator: tree.LogicalOperatorAnd,
 						Right:    &tree.ExpressionBindParameter{Parameter: "$c"},
 					},
@@ -144,7 +144,7 @@ func TestParseActionStmt(t *testing.T) {
 			expect: &actparser.ActionCallStmt{
 				Method: "update_xx",
 				Args: []tree.Expression{
-					&tree.ExpressionLiteral{Value: "1"},
+					&tree.ExpressionNumericLiteral{Value: 1},
 				},
 			},
 		},
