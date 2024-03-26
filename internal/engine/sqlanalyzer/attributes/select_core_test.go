@@ -122,7 +122,7 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				tblColAlias(common.INT, "users", "age", "the_age"),
 
 				// 5
-				&attributes.RelationAttribute{
+				{
 					ResultExpression: &tree.ResultColumnExpression{
 						Expression: &tree.ExpressionNumericLiteral{
 							Value: 5,

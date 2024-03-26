@@ -204,7 +204,7 @@ func genSimpleStringCompareSelectTree(op tree.StringOperator, leftValue, rightVa
 
 	var escapeExpr tree.Expression
 	if escape != "" {
-		escapeExpr = tree.Expression(genLiteralExpression(escape))
+		escapeExpr = genLiteralExpression(escape)
 	}
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
@@ -214,9 +214,9 @@ func genSimpleStringCompareSelectTree(op tree.StringOperator, leftValue, rightVa
 					Columns: []tree.ResultColumn{
 						&tree.ResultColumnExpression{
 							Expression: &tree.ExpressionStringCompare{
-								Left:     tree.Expression(genLiteralExpression(leftValue)),
+								Left:     genLiteralExpression(leftValue),
 								Operator: op,
-								Right:    tree.Expression(genLiteralExpression(rightValue)),
+								Right:    genLiteralExpression(rightValue),
 								Escape:   escapeExpr,
 							},
 						},
