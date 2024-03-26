@@ -24,7 +24,7 @@ func TestCTE_ToSQL(t *testing.T) {
 				Table:   "foo",
 				Columns: []string{"bar", "baz"},
 				Select: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							From: &tree.RelationTable{
@@ -69,7 +69,7 @@ var mockCTE = &tree.CTE{
 	Table:   "foo",
 	Columns: []string{"bar", "baz"},
 	Select: &tree.SelectCore{
-		SelectCores: []*tree.SimpleSelect{
+		SimpleSelects: []*tree.SimpleSelect{
 			{
 				From: &tree.RelationTable{
 					Name: "foo",

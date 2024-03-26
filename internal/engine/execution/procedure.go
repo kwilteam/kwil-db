@@ -473,7 +473,7 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 		// OID (placeholder types) that it can't know since there's no FOR table.
 		selectTree := &tree.SelectStmt{
 			Stmt: &tree.SelectCore{
-				SelectCores: []*tree.SimpleSelect{
+				SimpleSelects: []*tree.SimpleSelect{
 					{
 						SelectType: tree.SelectTypeAll,
 						Columns: []tree.ResultColumn{

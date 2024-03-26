@@ -31,11 +31,11 @@ var _ tree.AstListener = &orderingWalker{}
 
 // we need to register common table expressions as tables, so that we can order them.
 func (o *orderingWalker) EnterCTE(node *tree.CTE) error {
-	if len(node.Select.SelectCores) == 0 {
+	if len(node.Select.SimpleSelects) == 0 {
 		return nil
 	}
 
-	cteAttributes, err := attributes.GetSelectCoreRelationAttributes(node.Select.SelectCores[0], o.tables)
+	cteAttributes, err := attributes.GetSelectCoreRelationAttributes(node.Select.SimpleSelects[0], o.tables)
 	if err != nil {
 		return err
 	}
@@ -55,11 +55,11 @@ func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) erro
 	if node.Select == nil {
 		return fmt.Errorf("subquery select is nil")
 	}
-	if len(node.Select.SelectCores) == 0 {
+	if len(node.Select.SimpleSelects) == 0 {
 		return fmt.Errorf("subquery select has no select cores")
 	}
 
-	relationAttributes, err := attributes.GetSelectCoreRelationAttributes(node.Select.SelectCores[0], o.tables)
+	relationAttributes, err := attributes.GetSelectCoreRelationAttributes(node.Select.SimpleSelects[0], o.tables)
 	if err != nil {
 		return err
 	}
@@ -84,13 +84,13 @@ func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) erro
 func (o *orderingWalker) ExitSelectStmtNoCte(node *tree.SelectCore) error {
 	var terms []*tree.OrderingTerm
 	var err error
-	switch len(node.SelectCores) {
+	switch len(node.SimpleSelects) {
 	case 0:
 		return fmt.Errorf("no select cores in select statement")
 	case 1:
-		terms, err = orderSimpleStatement(node.SelectCores[0], o.tables)
+		terms, err = orderSimpleStatement(node.SimpleSelects[0], o.tables)
 	default:
-		terms, err = orderCompoundStatement(node.SelectCores, o.tables)
+		terms, err = orderCompoundStatement(node.SimpleSelects, o.tables)
 	}
 	if err != nil {
 		return fmt.Errorf("error ordering statement: %w", err)

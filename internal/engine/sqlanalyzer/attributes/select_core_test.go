@@ -189,7 +189,7 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				return
 			}
 
-			got, err := attributes.GetSelectCoreRelationAttributes(selectStmt.Stmt.SelectCores[0], tt.tables)
+			got, err := attributes.GetSelectCoreRelationAttributes(selectStmt.Stmt.SimpleSelects[0], tt.tables)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetSelectCoreRelationAttributes() error = %v, wantErr %v", err, tt.wantErr)
 				return

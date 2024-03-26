@@ -1024,7 +1024,7 @@ func (v *astBuilder) VisitSelect_core(ctx *grammar.Select_coreContext) interface
 		selectCores[i+1] = core
 	}
 
-	t.SelectCores = selectCores
+	t.SimpleSelects = selectCores
 
 	if ctx.Order_by_stmt() != nil {
 		t.OrderBy = v.Visit(ctx.Order_by_stmt()).(*tree.OrderBy)

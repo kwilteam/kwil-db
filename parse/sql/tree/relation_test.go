@@ -41,7 +41,7 @@ func TestRelation_ToSQL(t *testing.T) {
 			fields: fields{
 				Relation: &tree.RelationSubquery{
 					Select: &tree.SelectCore{
-						SelectCores: []*tree.SimpleSelect{
+						SimpleSelects: []*tree.SimpleSelect{
 							{
 								SelectType: tree.SelectTypeAll,
 								From: &tree.RelationTable{

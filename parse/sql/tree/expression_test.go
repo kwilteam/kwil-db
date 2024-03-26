@@ -659,7 +659,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				IsNot:    true,
 				IsExists: true,
 				Select: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							From: &tree.RelationTable{
@@ -688,7 +688,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				IsNot:    true,
 				IsExists: true,
 				Select: &tree.SelectCore{
-					SelectCores: []*tree.SimpleSelect{
+					SimpleSelects: []*tree.SimpleSelect{
 						{
 							SelectType: tree.SelectTypeAll,
 							From: &tree.RelationTable{

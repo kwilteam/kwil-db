@@ -9,7 +9,6 @@ type AstVisitor interface {
 	VisitCTE(*CTE) any
 	VisitDeleteStmt(*DeleteStmt) any
 	VisitDeleteCore(*DeleteCore) any
-	VisitExpression(Expression) any
 	VisitExpressionLiteral(*ExpressionLiteral) any
 	VisitExpressionBindParameter(*ExpressionBindParameter) any
 	VisitExpressionColumn(*ExpressionColumn) any
@@ -34,7 +33,6 @@ type AstVisitor interface {
 	VisitOrderBy(*OrderBy) any
 	VisitOrderingTerm(*OrderingTerm) any
 	VisitQualifiedTableName(*QualifiedTableName) any
-	VisitRelation(Relation) any
 	VisitRelationTable(*RelationTable) any
 	VisitRelationSubquery(*RelationSubquery) any
 	VisitRelationJoin(*RelationJoin) any
@@ -84,10 +82,6 @@ func (v *BaseAstVisitor) VisitDeleteStmt(node *DeleteStmt) any {
 
 func (v *BaseAstVisitor) VisitDeleteCore(node *DeleteCore) any {
 	return nil
-}
-
-func (v *BaseAstVisitor) VisitExpression(node Expression) any {
-	return v.Visit(node)
 }
 
 func (v *BaseAstVisitor) VisitExpressionLiteral(node *ExpressionLiteral) any {
@@ -216,10 +210,6 @@ func (v *BaseAstVisitor) VisitSimpleSelect(node *SimpleSelect) any {
 
 func (v *BaseAstVisitor) VisitSelectCore(node *SelectCore) any {
 	return nil
-}
-
-func (v *BaseAstVisitor) VisitRelation(node Relation) any {
-	return v.Visit(node)
 }
 
 func (v *BaseAstVisitor) VisitRelationTable(node *RelationTable) any {

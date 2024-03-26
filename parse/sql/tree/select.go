@@ -48,9 +48,9 @@ func (s *SelectStmt) statement() {}
 type SelectCore struct {
 	node
 
-	SelectCores []*SimpleSelect
-	OrderBy     *OrderBy
-	Limit       *Limit
+	SimpleSelects []*SimpleSelect
+	OrderBy       *OrderBy
+	Limit         *Limit
 }
 
 func (s *SelectCore) Accept(v AstVisitor) any {
@@ -60,7 +60,7 @@ func (s *SelectCore) Accept(v AstVisitor) any {
 func (s *SelectCore) Walk(w AstListener) error {
 	return run(
 		w.EnterSelectStmtNoCte(s),
-		walkMany(w, s.SelectCores),
+		walkMany(w, s.SimpleSelects),
 		walk(w, s.OrderBy),
 		walk(w, s.Limit),
 		w.ExitSelectStmtNoCte(s),
@@ -69,7 +69,7 @@ func (s *SelectCore) Walk(w AstListener) error {
 
 func (s *SelectCore) ToSQL() (res string) {
 	stmt := sqlwriter.NewWriter()
-	for _, core := range s.SelectCores {
+	for _, core := range s.SimpleSelects {
 		stmt.WriteString(core.ToSQL())
 	}
 	if s.OrderBy != nil {
