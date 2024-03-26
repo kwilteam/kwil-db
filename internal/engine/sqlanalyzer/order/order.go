@@ -81,7 +81,7 @@ func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) erro
 }
 
 // put this on exit so we can search the whole statement for used tables
-func (o *orderingWalker) ExitSelectStmtNoCte(node *tree.SelectCore) error {
+func (o *orderingWalker) ExitSelectCore(node *tree.SelectCore) error {
 	var terms []*tree.OrderingTerm
 	var err error
 	switch len(node.SimpleSelects) {

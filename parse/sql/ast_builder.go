@@ -1085,7 +1085,7 @@ func (v *astBuilder) VisitRelation(ctx *grammar.RelationContext) interface{} {
 	}
 }
 
-// VisitSelect_core is called when visiting a select_stmt_core, return *tree.SelectStmtNoCte
+// VisitSelect_core is called when visiting a select_stmt_core, return *tree.SelectCore
 func (v *astBuilder) VisitSelect_core(ctx *grammar.Select_coreContext) interface{} {
 	t := tree.SelectCore{}
 	selectCores := make([]*tree.SimpleSelect, len(ctx.AllSimple_select()))
