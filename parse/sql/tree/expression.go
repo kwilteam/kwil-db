@@ -26,66 +26,6 @@ func (e *expressionBase) Walk(w AstListener) error {
 
 type Wrapped bool
 
-// type ExpressionLiteral struct {
-// 	node
-
-// 	expressionBase
-// 	Wrapped
-// 	Value    string
-// 	TypeCast TypeCastType
-// }
-
-// func (e *ExpressionLiteral) Accept(v AstVisitor) any {
-// 	return v.VisitExpressionLiteral(e)
-// }
-
-// func (e *ExpressionLiteral) Walk(w AstListener) error {
-// 	return run(
-// 		w.EnterExpressionLiteral(e),
-// 		w.ExitExpressionLiteral(e),
-// 	)
-// }
-
-// func (e *ExpressionLiteral) ToSQL() string {
-// 	validateIsNonStringLiteral(e.Value)
-// 	stmt := sqlwriter.NewWriter()
-
-// 	if e.Wrapped {
-// 		stmt.WrapParen()
-// 	}
-
-// 	stmt.WriteString(e.Value)
-// 	return suffixTypeCast(stmt.String(), e.TypeCast)
-// }
-
-// func isStringLiteral(str string) bool {
-// 	return str[0] == '\'' && str[len(str)-1] == '\''
-// }
-
-// func validateIsNonStringLiteral(str string) {
-// 	if isStringLiteral(str) {
-// 		return
-// 	}
-
-// 	if strings.EqualFold(str, "null") {
-// 		return
-// 	}
-// 	if strings.EqualFold(str, "true") || strings.EqualFold(str, "false") {
-// 		return
-// 	}
-
-// 	if len(strings.Split(str, ".")) > 1 {
-// 		panic(fmt.Errorf("literal cannot be float.  received: %s", str))
-// 	}
-
-// 	_, err := strconv.ParseInt(str, 10, 64) // go-conv: conv.Int64(str)
-// 	if err == nil {
-// 		return
-// 	}
-
-// 	panic(fmt.Errorf("invalid literal: %s", str))
-// }
-
 type ExpressionTextLiteral struct {
 	node
 	expressionBase
