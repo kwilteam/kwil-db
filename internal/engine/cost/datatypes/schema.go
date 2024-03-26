@@ -84,6 +84,7 @@ func (f *Field) QualifiedColumn() *ColumnDef {
 
 type Schema struct {
 	Fields []Field
+	// index
 }
 
 func NewSchema(fields ...Field) *Schema {

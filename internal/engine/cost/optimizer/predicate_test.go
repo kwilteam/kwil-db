@@ -2,12 +2,12 @@ package optimizer
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource/source"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 )
 
-var stubDS, _ = datasource.NewCSVDataSource("../testdata/users.csv")
+var stubDS, _ = source.NewCSVDataSource("../testdata/users.csv")
 var stubTable = &dt.TableRef{Table: "users"}
 
 func ExamplePredicateRule_optimize_pushDown() {

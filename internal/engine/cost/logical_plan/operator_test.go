@@ -2,8 +2,8 @@ package logical_plan_test
 
 import (
 	"fmt"
+	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource/source"
 
-	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 )

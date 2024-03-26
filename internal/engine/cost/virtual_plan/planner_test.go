@@ -2,6 +2,7 @@ package virtual_plan
 
 import (
 	"fmt"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource/source"
 
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
@@ -19,14 +20,14 @@ func (m *mockCatalog) GetSchemaSource(tableRef *dt.TableRef) (ds.SchemaSource, e
 	if !ok {
 		return nil, fmt.Errorf("table %s not found", relName)
 	}
-	return ds.NewExampleSchemaSource(schema), nil
+	return source.NewExampleSchemaSource(schema), nil
 }
 
 func initMockCatalog() *mockCatalog {
-	stubUserData, _ := ds.NewCSVDataSource("../testdata/users.csv")
-	stubPostData, _ := ds.NewCSVDataSource("../testdata/posts.csv")
-	commentsData, _ := ds.NewCSVDataSource("../testdata/comments.csv")
-	commentRelData, _ := ds.NewCSVDataSource("../testdata/comment_rel.csv")
+	stubUserData, _ := source.NewCSVDataSource("../testdata/users.csv")
+	stubPostData, _ := source.NewCSVDataSource("../testdata/posts.csv")
+	commentsData, _ := source.NewCSVDataSource("../testdata/comments.csv")
+	commentRelData, _ := source.NewCSVDataSource("../testdata/comment_rel.csv")
 
 	return &mockCatalog{
 		tables: map[string]*dt.Schema{
@@ -78,5 +79,5 @@ func Example_QueryPlanner_CreateVirtualPlan() {
 	//
 	// VProjection: [state@1 username@2]
 	//   VSelection: age@0 = 20
-	//     VScan: schema=[id/int, username/string, age/int, state/string, wallet/string], projection=[age state username]
+	//     VTableScan: schema=[id/int, username/string, age/int, state/string, wallet/string], projection=[age state username]
 }

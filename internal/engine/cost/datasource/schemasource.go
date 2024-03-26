@@ -1,6 +1,7 @@
 package datasource
 
 import (
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource/source"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
@@ -17,7 +18,7 @@ func SchemaSourceToDataSource(ss SchemaSource) DataSource {
 	switch t := ss.(type) {
 	case *DefaultSchemaSource:
 		return t.datasource
-	case *csvDataSource:
+	case *source.CsvDataSource:
 		return t
 	default:
 		panic("SchemaSourceToDataSource: SchemaSource cannot be converted to DataSource")

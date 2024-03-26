@@ -15,7 +15,11 @@ type VirtualPlan interface {
 	Schema() *datatypes.Schema
 	Inputs() []VirtualPlan
 
+	// Execute executes the plan and returns the result
+	// This for testing purposes
 	Execute() *datasource.Result
+	Statistics() *datatypes.Statistics
+	Cost() int64
 }
 
 func Format(plan VirtualPlan, indent int) string {

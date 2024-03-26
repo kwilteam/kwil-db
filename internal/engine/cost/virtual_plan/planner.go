@@ -25,7 +25,7 @@ func NewPlanner() *defaultVirtualPlanner {
 func (q *defaultVirtualPlanner) ToPlan(logicalPlan logical_plan.LogicalPlan) VirtualPlan {
 	switch p := logicalPlan.(type) {
 	case *logical_plan.ScanOp:
-		return VScan(p.DataSource(), p.Projection()...)
+		return VTableScan(p.DataSource(), p.Projection()...)
 	case *logical_plan.ProjectionOp:
 		input := q.ToPlan(p.Inputs()[0])
 		selectExprs := make([]VirtualExpr, 0, len(p.Exprs()))

@@ -3,6 +3,7 @@ package query_planner
 import (
 	"flag"
 	"fmt"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource/source"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/testkit"
 	"path/filepath"
 	"testing"
@@ -31,14 +32,14 @@ func (m *mockCatalog) GetSchemaSource(tableRef *dt.TableRef) (ds.SchemaSource, e
 	if !ok {
 		return nil, fmt.Errorf("table %s not found", relName)
 	}
-	return ds.NewExampleSchemaSource(schema), nil
+	return source.NewExampleSchemaSource(schema), nil
 }
 
 func initMockCatalog() *mockCatalog {
-	stubUserData, _ := ds.NewCSVDataSource("../testdata/users.csv")
-	stubPostData, _ := ds.NewCSVDataSource("../testdata/posts.csv")
-	commentsData, _ := ds.NewCSVDataSource("../testdata/comments.csv")
-	commentRelData, _ := ds.NewCSVDataSource("../testdata/comment_rel.csv")
+	stubUserData, _ := source.NewCSVDataSource("../testdata/users.csv")
+	stubPostData, _ := source.NewCSVDataSource("../testdata/posts.csv")
+	commentsData, _ := source.NewCSVDataSource("../testdata/comments.csv")
+	commentRelData, _ := source.NewCSVDataSource("../testdata/comment_rel.csv")
 
 	return &mockCatalog{
 		tables: map[string]*dt.Schema{

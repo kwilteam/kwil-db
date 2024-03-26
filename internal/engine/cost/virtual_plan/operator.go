@@ -7,31 +7,74 @@ import (
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 )
 
-type VScanOp struct {
+type VTableScanOp struct {
 	ds         ds.DataSource
 	projection []string
 }
 
-func (s *VScanOp) String() string {
-	return fmt.Sprintf("VScan: schema=%s, projection=%s",
+func (s *VTableScanOp) String() string {
+	return fmt.Sprintf("VTableScan: schema=%s, projection=%s",
 		s.ds.Schema(), s.projection)
 }
 
-func (s *VScanOp) Schema() *datatypes.Schema {
+func (s *VTableScanOp) Schema() *datatypes.Schema {
 	return s.ds.Schema().Project(s.projection...)
 }
 
-func (s *VScanOp) Inputs() []VirtualPlan {
+func (s *VTableScanOp) Inputs() []VirtualPlan {
 	return []VirtualPlan{}
 }
 
-func (s *VScanOp) Execute() *ds.Result {
+func (s *VTableScanOp) Execute() *ds.Result {
 	return s.ds.Scan(s.projection...)
 }
 
-func VScan(datasource ds.SchemaSource, projection ...string) VirtualPlan {
+func (s *VTableScanOp) Statistics() *datatypes.Statistics {
+	return &datatypes.Statistics{}
+}
+
+func (s *VTableScanOp) Cost() int64 {
+	return 0
+}
+
+func VTableScan(datasource ds.SchemaSource, projection ...string) VirtualPlan {
 	ds := ds.SchemaSourceToDataSource(datasource)
-	return &VScanOp{ds: ds, projection: projection}
+	return &VTableScanOp{ds: ds, projection: projection}
+}
+
+type VIndexScanOp struct {
+	ds         ds.DataSource
+	projection []string
+}
+
+func (s *VIndexScanOp) String() string {
+	return fmt.Sprintf("VIndexScan: schema=%s, projection=%s",
+		s.ds.Schema(), s.projection)
+}
+
+func (s *VIndexScanOp) Schema() *datatypes.Schema {
+	return s.ds.Schema().Project(s.projection...)
+}
+
+func (s *VIndexScanOp) Inputs() []VirtualPlan {
+	return []VirtualPlan{}
+}
+
+func (s *VIndexScanOp) Execute() *ds.Result {
+	return s.ds.Scan(s.projection...)
+}
+
+func (s *VIndexScanOp) Statistics() *datatypes.Statistics {
+	return &datatypes.Statistics{}
+}
+
+func (s *VIndexScanOp) Cost() int64 {
+	return 0
+}
+
+func VIndexScan(datasource ds.SchemaSource, projection ...string) VirtualPlan {
+	ds := ds.SchemaSourceToDataSource(datasource)
+	return &VIndexScanOp{ds: ds, projection: projection}
 }
 
 type VProjectionOp struct {
@@ -82,6 +125,14 @@ func (p *VProjectionOp) Execute() *ds.Result {
 	return ds.ResultFromStream(p.schema, out)
 }
 
+func (p *VProjectionOp) Statistics() *datatypes.Statistics {
+	return p.input.Statistics()
+}
+
+func (p *VProjectionOp) Cost() int64 {
+	return p.input.Cost()
+}
+
 func VProjection(input VirtualPlan, schema *datatypes.Schema, exprs ...VirtualExpr) VirtualPlan {
 	return &VProjectionOp{input: input, exprs: exprs, schema: schema}
 }
@@ -125,6 +176,14 @@ func (s *VSelectionOp) Execute() *ds.Result {
 	}()
 
 	return ds.ResultFromStream(s.input.Schema(), out)
+}
+
+func (s *VSelectionOp) Statistics() *datatypes.Statistics {
+	return s.input.Statistics()
+}
+
+func (s *VSelectionOp) Cost() int64 {
+	return s.input.Cost()
 }
 
 func VSelection(input VirtualPlan, expr VirtualExpr) VirtualPlan {

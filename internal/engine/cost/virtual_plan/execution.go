@@ -2,6 +2,7 @@ package virtual_plan
 
 import (
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource/source"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/optimizer"
@@ -16,7 +17,7 @@ func NewExecutionContext() *ExecutionContext {
 }
 
 func (e *ExecutionContext) csv(table string, filepath string) *logical_plan.DataFrame {
-	datasource, err := datasource.NewCSVDataSource(filepath)
+	datasource, err := source.NewCSVDataSource(filepath)
 	if err != nil {
 		panic(err)
 	}
@@ -38,8 +39,12 @@ func (e *ExecutionContext) registerCsv(name string, filepath string) {
 	e.tables[name] = e.csv(name, filepath)
 }
 
-func (e *ExecutionContext) execute(df logical_plan.DataFrameAPI) *datasource.Result {
-	return execute(df.LogicalPlan())
+func (e *ExecutionContext) execute(plan logical_plan.LogicalPlan) *datasource.Result {
+	return execute(plan)
+}
+
+func (e *ExecutionContext) estimate(plan logical_plan.LogicalPlan) int64 {
+	return estimate(plan)
 }
 
 func execute(plan logical_plan.LogicalPlan) *datasource.Result {
@@ -60,4 +65,12 @@ func execute(plan logical_plan.LogicalPlan) *datasource.Result {
 	//fmt.Println(Format(vp, 0))
 	//
 	return vp.Execute()
+}
+
+func estimate(plan logical_plan.LogicalPlan) int64 {
+	r := &optimizer.ProjectionRule{}
+	optPlan := r.Optimize(plan)
+	qp := NewPlanner()
+	vp := qp.ToPlan(optPlan)
+	return vp.Cost()
 }

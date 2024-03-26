@@ -18,7 +18,7 @@ func Example_ExecutionContext_execute() {
 			logical_plan.Column(stubTable, "username"),
 		)
 
-	res := ctx.execute(df)
+	res := ctx.execute(df.LogicalPlan())
 	fmt.Println(res.ToCsv())
 	// Output:
 	// state,username
