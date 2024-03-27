@@ -54,7 +54,7 @@ func (s *AggregateFunc) stringDistinct(exprs ...Expression) string {
 }
 
 func (s *AggregateFunc) ToString(exprs ...Expression) string {
-	if s.distinct {
+	if s.Distinct {
 		return s.stringDistinct(exprs...)
 	}
 	return s.string(exprs...)
@@ -67,7 +67,7 @@ func NewAggregateFunctionWithGetter(name string, min uint8, max uint8, distinct 
 				FunctionName: name,
 				Min:          min,
 				Max:          max,
-				distinct:     distinct,
+				Distinct:     distinct,
 			},
 		}
 	}

@@ -9,7 +9,7 @@ import (
 // ex: func(args []Expression) string { return "ABS(" + args[0].ToSQL() + ")" }
 // There is one generic String method for AnySQLFunction, and each type (i.e. scalar, aggregate, window, etc) will have its own StringAll method
 type AnySQLFunction struct {
-	distinct     bool
+	Distinct     bool
 	FunctionName string
 	Min          uint8 // Optional min length of arguments
 	Max          uint8 // Optional max length of arguments
@@ -26,7 +26,7 @@ type SQLFunction interface {
 
 // SetDistinct sets the distinct flag on the function
 func (s *AnySQLFunction) SetDistinct(distinct bool) {
-	s.distinct = distinct
+	s.Distinct = distinct
 }
 
 // buildFunctionString is a helper function to build a function string
@@ -100,7 +100,7 @@ func NewScalarFunctionWithGetter(name string, min uint8, max uint8, distinct boo
 				FunctionName: name,
 				Min:          min,
 				Max:          max,
-				distinct:     distinct,
+				Distinct:     distinct,
 			},
 		}
 	}
