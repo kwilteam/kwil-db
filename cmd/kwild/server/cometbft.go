@@ -2,16 +2,47 @@ package server
 
 import (
 	"fmt"
+	"net"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"github.com/kwilteam/kwil-db/core/utils/url"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 
 	cmtCfg "github.com/cometbft/cometbft/config"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmttypes "github.com/cometbft/cometbft/types"
 )
+
+// cleanListenAddr tries to ensure the address has a scheme and port, as
+// required by cometbft for its listen address settings. If it cannot parse, it
+// is returned as-is so cometbft can try it (this is a best effort helper).
+func cleanListenAddr(addr, defaultPort string) string {
+	u, err := url.ParseURL(addr)
+	if err != nil { // just see if cometbft takes it
+		return addr
+	}
+
+	parsed := u.URL()
+	if u.Port == 0 {
+		// If port not included or explicitly set to 0, use the default.
+		_, port, _ := net.SplitHostPort(u.Target)
+		if port == "" {
+			parsed.Host = net.JoinHostPort(u.Target, defaultPort)
+		}
+	}
+	return parsed.String()
+}
+
+func portFromURL(u string) string {
+	rpcAddress, err := url.ParseURL(u)
+	if err != nil {
+		return "0"
+	}
+	return strconv.Itoa(rpcAddress.Port)
+}
 
 // newCometConfig creates a new CometBFT config for use with NewCometBftNode.
 // This applies The operator's settings from the Kwil config as well as applying
@@ -35,11 +66,13 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 		nodeCfg.Moniker = userChainCfg.Moniker
 	}
 
-	nodeCfg.RPC.ListenAddress = userChainCfg.RPC.ListenAddress
+	nodeCfg.RPC.ListenAddress = cleanListenAddr(userChainCfg.RPC.ListenAddress,
+		portFromURL(nodeCfg.RPC.ListenAddress))
 	nodeCfg.RPC.TLSCertFile = cfg.AppCfg.TLSCertFile
 	nodeCfg.RPC.TLSKeyFile = cfg.AppCfg.TLSKeyFile
 
-	nodeCfg.P2P.ListenAddress = userChainCfg.P2P.ListenAddress
+	nodeCfg.P2P.ListenAddress = cleanListenAddr(userChainCfg.P2P.ListenAddress,
+		portFromURL(nodeCfg.P2P.ListenAddress))
 	nodeCfg.P2P.ExternalAddress = userChainCfg.P2P.ExternalAddress
 	nodeCfg.P2P.PersistentPeers = userChainCfg.P2P.PersistentPeers
 	nodeCfg.P2P.AddrBookStrict = userChainCfg.P2P.AddrBookStrict

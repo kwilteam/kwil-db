@@ -7,7 +7,9 @@ import (
 	"encoding"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -268,12 +270,9 @@ func GetCfg(flagCfg *KwildConfig, quickStart bool) (*KwildConfig, bool, error) {
 	cfg := DefaultConfig()
 	rootDir := cfg.RootDir
 
-	// If doing a quickstart (autogen mode in caller), change the default HTTP
-	// listen address to use all interfaces. We do this here so that the user
-	// can still override it if they want.
-	if quickStart {
-		cfg.AppCfg.HTTPListenAddress = "0.0.0.0:8080"
-	}
+	// Remember the default listen addresses in case we need to apply the
+	// default port to a user override.
+	defaultListenRPC, defaultListenHTTP := cfg.AppCfg.GrpcListenAddress, cfg.AppCfg.HTTPListenAddress
 
 	// read in env config
 	envCfg, err := LoadEnvConfig()
@@ -339,7 +338,43 @@ func GetCfg(flagCfg *KwildConfig, quickStart bool) (*KwildConfig, bool, error) {
 		cfg.ChainCfg.Moniker = defaultMoniker()
 	}
 
+	cfg.AppCfg.GrpcListenAddress = cleanListenAddr(cfg.AppCfg.GrpcListenAddress, defaultListenRPC)
+	cfg.AppCfg.HTTPListenAddress = cleanListenAddr(cfg.AppCfg.HTTPListenAddress, defaultListenHTTP)
+
 	return cfg, configFileExists, nil
+}
+
+// cleanListenAddr ensures that the provided listen includes both a host and
+// port, using the host and port from defaultListen as needed.
+func cleanListenAddr(listen, defaultListen string) string {
+	defaultHost, defaultPort, _ := net.SplitHostPort(defaultListen) // empty if invalid default
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		var msg string
+		addrErr := new(net.AddrError)
+		if errors.As(err, &addrErr) {
+			host = addrErr.Addr
+			msg = addrErr.Err
+		} else { // may be incorrect if host couldn't parse, but try
+			host = listen
+			msg = err.Error()
+		}
+		if strings.Contains(msg, "missing port") { // they really didn't export this :/
+			host = strings.Trim(host, "[]")            // cut off brackets of an ipv6 addr
+			return net.JoinHostPort(host, defaultPort) // no change if default had none
+		}
+		return listen // let the listener try
+	}
+	if host != "" && port != "" { // nothing missing
+		return listen
+	}
+	if port == "" { // should be the "missing port" case above
+		port = defaultPort // no change if default had none
+	}
+	if host == "" {
+		host = defaultHost // no change if default had none
+	}
+	return net.JoinHostPort(host, port)
 }
 
 // LoadConfig reads a config.toml at the given path and returns a KwilConfig.
@@ -448,7 +483,7 @@ func DefaultConfig() *KwildConfig {
 	return &KwildConfig{
 		AppCfg: &AppConfig{
 			GrpcListenAddress:  "localhost:50051",
-			HTTPListenAddress:  "localhost:8080",
+			HTTPListenAddress:  "0.0.0.0:8080",
 			AdminListenAddress: "unix:///tmp/kwil_admin.sock",
 			DBHost:             "127.0.0.1",
 			DBPort:             "5432", // ignored with unix socket, but applies if IP used for DBHost
