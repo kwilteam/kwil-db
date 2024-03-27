@@ -2,7 +2,6 @@ package virtual_plan
 
 import (
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource/source"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/optimizer"
@@ -17,7 +16,7 @@ func NewExecutionContext() *ExecutionContext {
 }
 
 func (e *ExecutionContext) csv(table string, filepath string) *logical_plan.DataFrame {
-	datasource, err := source.NewCSVDataSource(filepath)
+	datasource, err := datasource.NewCSVDataSource(filepath)
 	if err != nil {
 		panic(err)
 	}

@@ -1,4 +1,4 @@
-package source
+package datasource
 
 import (
 	"encoding/csv"
@@ -7,14 +7,13 @@ import (
 	"os"
 	"slices"
 
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
 // CsvDataSource is a data source that reads data from a CSV file.
 type CsvDataSource struct {
 	path    string
-	records []datasource.Row
+	records []Row
 	schema  *datatypes.Schema
 }
 
@@ -52,7 +51,7 @@ func (ds *CsvDataSource) load() error {
 			return err
 		}
 
-		newRow := make(datasource.Row, len(header))
+		newRow := make(Row, len(header))
 		for i, col := range columns {
 			colType, colValue := colTypeCast(col)
 			if columnTypesInfered {
@@ -65,7 +64,7 @@ func (ds *CsvDataSource) load() error {
 				// NOTE: use the first row of 'data' to infer column types
 				columnTypes[i] = colType
 			}
-			newRow[i] = datasource.NewLiteralColumnValue(colValue)
+			newRow[i] = NewLiteralColumnValue(colValue)
 		}
 
 		ds.records = append(ds.records, newRow)
@@ -91,10 +90,10 @@ func (ds *CsvDataSource) Statistics() *datatypes.Statistics {
 	panic("not implemented")
 }
 
-func (ds *CsvDataSource) Scan(projection ...string) *datasource.Result {
+func (ds *CsvDataSource) Scan(projection ...string) *Result {
 	return dsScan(ds.schema, ds.records, projection)
 }
 
-func (ds *CsvDataSource) SourceType() datasource.SourceType {
+func (ds *CsvDataSource) SourceType() SourceType {
 	return "csv"
 }

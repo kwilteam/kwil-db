@@ -147,40 +147,108 @@ func Alias(expr LogicalExpr, alias string) *AliasExpr {
 	return &AliasExpr{BaseTreeNode: pt.NewBaseTreeNode(), Expr: expr, Alias: alias}
 }
 
-type LiteralStringExpr struct {
+type LiteralExpr interface {
+	LogicalExpr
+
+	literal()
+}
+
+type LiteralTextExpr struct {
 	*pt.BaseTreeNode
 
 	Value string
 }
 
-func (e *LiteralStringExpr) String() string {
+func (e *LiteralTextExpr) String() string {
 	return e.Value
 }
 
-func (e *LiteralStringExpr) Resolve(*dt.Schema) dt.Field {
+func (e *LiteralTextExpr) Resolve(*dt.Schema) dt.Field {
 	return dt.Field{Name: e.Value, Type: "text"}
 }
 
-func LiteralString(value string) *LiteralStringExpr {
-	return &LiteralStringExpr{BaseTreeNode: pt.NewBaseTreeNode(), Value: value}
+func (e *LiteralTextExpr) literal() {}
+
+func LiteralText(value string) *LiteralTextExpr {
+	return &LiteralTextExpr{BaseTreeNode: pt.NewBaseTreeNode(), Value: value}
 }
 
-type LiteralIntExpr struct {
+type LiteralNumericExpr struct {
 	*pt.BaseTreeNode
 
-	Value int
+	Value int64
 }
 
-func (e *LiteralIntExpr) String() string {
+func (e *LiteralNumericExpr) String() string {
 	return fmt.Sprintf("%d", e.Value)
 }
 
-func (e *LiteralIntExpr) Resolve(*dt.Schema) dt.Field {
-	return dt.Field{Name: fmt.Sprintf("%d", e.Value), Type: "int"}
+func (e *LiteralNumericExpr) Resolve(*dt.Schema) dt.Field {
+	return dt.Field{Name: fmt.Sprintf("%d", e.Value), Type: "numeric"}
 }
 
-func LiteralInt(value int) *LiteralIntExpr {
-	return &LiteralIntExpr{BaseTreeNode: pt.NewBaseTreeNode(), Value: value}
+func (e *LiteralNumericExpr) literal() {}
+
+func LiteralNumeric(value int64) *LiteralNumericExpr {
+	return &LiteralNumericExpr{BaseTreeNode: pt.NewBaseTreeNode(), Value: value}
+}
+
+type LiteralBoolExpr struct {
+	*pt.BaseTreeNode
+
+	Value bool
+}
+
+func (e *LiteralBoolExpr) String() string {
+	return fmt.Sprintf("%t", e.Value)
+}
+
+func (e *LiteralBoolExpr) Resolve(*dt.Schema) dt.Field {
+	return dt.Field{Name: fmt.Sprintf("%t", e.Value), Type: "bool"}
+}
+
+func (e *LiteralBoolExpr) literal() {}
+
+func LiteralBool(value bool) *LiteralBoolExpr {
+	return &LiteralBoolExpr{BaseTreeNode: pt.NewBaseTreeNode(), Value: value}
+}
+
+type LiteralNullExpr struct {
+	*pt.BaseTreeNode
+}
+
+func (e *LiteralNullExpr) String() string {
+	return "NULL"
+}
+
+func (e *LiteralNullExpr) Resolve(*dt.Schema) dt.Field {
+	return dt.Field{Name: "NULL", Type: "null"}
+}
+
+func (e *LiteralNullExpr) literal() {}
+
+func LiteralNull() *LiteralNullExpr {
+	return &LiteralNullExpr{BaseTreeNode: pt.NewBaseTreeNode()}
+}
+
+type LiteralBlobExpr struct {
+	*pt.BaseTreeNode
+
+	Value []byte
+}
+
+func (e *LiteralBlobExpr) String() string {
+	return fmt.Sprintf("%x", e.Value)
+}
+
+func (e *LiteralBlobExpr) Resolve(*dt.Schema) dt.Field {
+	return dt.Field{Name: fmt.Sprintf("%x", e.Value), Type: "blob"}
+}
+
+func (e *LiteralBlobExpr) literal() {}
+
+func LiteralBlob(value []byte) *LiteralBlobExpr {
+	return &LiteralBlobExpr{BaseTreeNode: pt.NewBaseTreeNode(), Value: value}
 }
 
 type OpExpr interface {
@@ -703,11 +771,11 @@ func (e *AliasExpr) Children() []pt.TreeNode {
 	return []pt.TreeNode{e.Expr}
 }
 
-func (e *LiteralStringExpr) Children() []pt.TreeNode {
+func (e *LiteralTextExpr) Children() []pt.TreeNode {
 	return []pt.TreeNode{}
 }
 
-func (e *LiteralIntExpr) Children() []pt.TreeNode {
+func (e *LiteralNumericExpr) Children() []pt.TreeNode {
 	return []pt.TreeNode{}
 }
 
@@ -761,11 +829,11 @@ func (e *AliasExpr) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
 	}
 }
 
-func (e *LiteralStringExpr) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
+func (e *LiteralTextExpr) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
 	return e
 }
 
-func (e *LiteralIntExpr) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
+func (e *LiteralNumericExpr) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
 	return e
 }
 
@@ -858,8 +926,8 @@ func (e *aggregateFuncExpr) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
 func (e *ColumnExpr) ExprNode()           {}
 func (e *ColumnIdxExpr) ExprNode()        {}
 func (e *AliasExpr) ExprNode()            {}
-func (e *LiteralStringExpr) ExprNode()    {}
-func (e *LiteralIntExpr) ExprNode()       {}
+func (e *LiteralTextExpr) ExprNode()      {}
+func (e *LiteralNumericExpr) ExprNode()   {}
 func (e *unaryExpr) ExprNode()            {}
 func (e *boolBinaryExpr) ExprNode()       {}
 func (e *arithmeticBinaryExpr) ExprNode() {}

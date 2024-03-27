@@ -255,15 +255,15 @@ func Aggregate(plan LogicalPlan, groupBy []LogicalExpr,
 // It corresponds to `LIMIT` clause in SQL.
 type LimitOp struct {
 	input LogicalPlan
-	fetch int
-	skip  int
+	fetch int64
+	skip  int64
 }
 
-func (l *LimitOp) Limit() int {
+func (l *LimitOp) Limit() int64 {
 	return l.fetch
 }
 
-func (l *LimitOp) Offset() int {
+func (l *LimitOp) Offset() int64 {
 	return l.skip
 }
 
@@ -284,7 +284,7 @@ func (a *LimitOp) Exprs() []LogicalExpr {
 }
 
 // Limit creates a limit logical plan.
-func Limit(plan LogicalPlan, skip int, fetch int) LogicalPlan {
+func Limit(plan LogicalPlan, skip int64, fetch int64) LogicalPlan {
 	return &LimitOp{
 		input: plan,
 		fetch: fetch,

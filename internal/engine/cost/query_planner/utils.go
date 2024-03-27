@@ -70,8 +70,8 @@ func qualifyExpr(expr lp.LogicalExpr, schemas ...*dt.Schema) lp.LogicalExpr {
 // TODO: use visitor
 func extractColumnsFromFilterExpr(expr lp.LogicalExpr, seen map[*lp.ColumnExpr]bool) {
 	switch e := expr.(type) {
-	case *lp.LiteralStringExpr:
-	case *lp.LiteralIntExpr:
+	case *lp.LiteralTextExpr:
+	case *lp.LiteralNumericExpr:
 	case *lp.AliasExpr:
 		extractColumnsFromFilterExpr(e.Expr, seen)
 	case lp.UnaryExpr:

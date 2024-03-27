@@ -1,16 +1,15 @@
-package source
+package datasource
 
 import (
 	"strconv"
 
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
 // dsScan read the data source, return selected columns.
-func dsScan(dsSchema *datatypes.Schema, dsRecords []datasource.Row, projection []string) *datasource.Result {
+func dsScan(dsSchema *datatypes.Schema, dsRecords []Row, projection []string) *Result {
 	if len(projection) == 0 {
-		return datasource.ResultFromRaw(dsSchema, dsRecords)
+		return ResultFromRaw(dsSchema, dsRecords)
 	}
 
 	// panic if projection field not found
@@ -35,12 +34,12 @@ func dsScan(dsSchema *datatypes.Schema, dsRecords []datasource.Row, projection [
 	//}
 	//newSchema := datatypes.NewSchema(newFields...)
 
-	out := make(datasource.RowPipeline)
+	out := make(RowPipeline)
 	go func() {
 		defer close(out)
 
 		for _, _row := range dsRecords {
-			newRow := make(datasource.Row, len(projection))
+			newRow := make(Row, len(projection))
 			for j, idx := range fieldIndex {
 				newRow[j] = _row[idx]
 			}
@@ -48,7 +47,7 @@ func dsScan(dsSchema *datatypes.Schema, dsRecords []datasource.Row, projection [
 		}
 	}()
 
-	return datasource.ResultFromStream(newSchema, out)
+	return ResultFromStream(newSchema, out)
 }
 
 // colTypeCast try to cast the raw column string to int, if failed, return the raw string.

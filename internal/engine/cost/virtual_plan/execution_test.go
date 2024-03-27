@@ -13,7 +13,7 @@ func Example_ExecutionContext_execute() {
 	ctx := NewExecutionContext()
 	df := ctx.csv("users", "../testdata/users.csv").
 		Filter(logical_plan.Eq(logical_plan.Column(stubTable, "age"),
-			logical_plan.LiteralInt(20))).
+			logical_plan.LiteralNumeric(20))).
 		Project(logical_plan.Column(stubTable, "state"),
 			logical_plan.Column(stubTable, "username"),
 		)

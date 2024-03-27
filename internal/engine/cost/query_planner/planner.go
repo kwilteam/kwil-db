@@ -2,15 +2,12 @@ package query_planner
 
 import (
 	"fmt"
-	"slices"
-	"strconv"
-	"strings"
-
 	"github.com/kwilteam/kwil-db/internal/engine/cost/catalog"
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"slices"
 )
 
 type LogicalPlanner interface {
@@ -32,17 +29,16 @@ func NewPlanner(catalog catalog.Catalog) *queryPlanner {
 // TODO: use iterator or stack to traverse the tree, instead of recursive, to avoid stack overflow.
 func (q *queryPlanner) ToExpr(expr tree.Expression, schema *ds.Schema) lp.LogicalExpr {
 	switch e := expr.(type) {
-	case *tree.ExpressionLiteral:
-		if strings.HasPrefix(e.Value, "'") {
-			return &lp.LiteralStringExpr{Value: e.Value}
-		} else {
-			// convert to int
-			i, err := strconv.Atoi(e.Value)
-			if err != nil {
-				panic(fmt.Sprintf("unexpected literal value %s", e.Value))
-			}
-			return &lp.LiteralIntExpr{Value: i}
-		}
+	case *tree.ExpressionBlobLiteral:
+		return lp.LiteralBlob(e.Value)
+	case *tree.ExpressionBooleanLiteral:
+		return lp.LiteralBool(e.Value)
+	case *tree.ExpressionNumericLiteral:
+		return lp.LiteralNumeric(e.Value)
+	case *tree.ExpressionTextLiteral:
+		return lp.LiteralText(e.Value)
+	case *tree.ExpressionNullLiteral:
+		return lp.LiteralNull()
 	case *tree.ExpressionColumn:
 		// TODO: handle relation
 		return lp.ColumnUnqualified(e.Column)
@@ -139,7 +135,7 @@ func (q *queryPlanner) planStatement(node tree.Statement) lp.LogicalPlan {
 func (q *queryPlanner) planStatementWithContext(node tree.Statement, ctx *PlannerContext) lp.LogicalPlan {
 	switch n := node.(type) {
 	case *tree.SelectStmt:
-		return q.planSelect(n, ctx)
+		return q.planSelectStmt(n, ctx)
 		//case *tree.Insert:
 		//case *tree.Update:
 		//case *tree.Delete:
@@ -147,9 +143,9 @@ func (q *queryPlanner) planStatementWithContext(node tree.Statement, ctx *Planne
 	return nil
 }
 
-// planSelect plans a select statement.
+// planSelectStmt plans a select statement.
 // NOTE: we don't support nested select with CTE.
-func (q *queryPlanner) planSelect(node *tree.SelectStmt, ctx *PlannerContext) lp.LogicalPlan {
+func (q *queryPlanner) planSelectStmt(node *tree.SelectStmt, ctx *PlannerContext) lp.LogicalPlan {
 	if len(node.CTE) > 0 {
 		q.buildCTEs(node.CTE, ctx)
 	}
@@ -159,12 +155,12 @@ func (q *queryPlanner) planSelect(node *tree.SelectStmt, ctx *PlannerContext) lp
 
 func (q *queryPlanner) buildSelect(node *tree.SelectCore, ctx *PlannerContext) lp.LogicalPlan {
 	var plan lp.LogicalPlan
-	if len(node.SelectCores) > 1 { // set operation
-		left := q.buildSelectPlan(node.SelectCores[0], ctx)
-		for _, rSelect := range node.SelectCores[1:] {
+	if len(node.SimpleSelects) > 1 { // set operation
+		left := q.buildSimpleSelect(node.SimpleSelects[0], ctx)
+		for _, rSelect := range node.SimpleSelects[1:] {
 			// TODO: change AST tree to represent as left and right?
 			setOp := rSelect.Compound.Operator
-			right := q.buildSelectPlan(rSelect, ctx)
+			right := q.buildSimpleSelect(rSelect, ctx)
 			switch setOp {
 			case tree.CompoundOperatorTypeUnion:
 				plan = lp.Builder.From(left).Union(right).Distinct().Build()
@@ -180,7 +176,7 @@ func (q *queryPlanner) buildSelect(node *tree.SelectCore, ctx *PlannerContext) l
 			left = plan
 		}
 	} else { // plain select
-		plan = q.buildSelectPlan(node.SelectCores[0], ctx)
+		plan = q.buildSimpleSelect(node.SimpleSelects[0], ctx)
 	}
 
 	// NOTE: we don't support use index of an output column as sort_expression
@@ -242,21 +238,21 @@ func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.Logi
 
 	// TODO: change tree.Limit, use skip and fetch?
 
-	var skip, fetch int
+	var skip, fetch int64
 
 	if node.Offset != nil {
 		switch t := node.Offset.(type) {
-		case *tree.ExpressionLiteral:
+		case *tree.ExpressionNumericLiteral:
 			offsetExpr := q.ToExpr(t, plan.Schema())
-			e, ok := offsetExpr.(*lp.LiteralIntExpr)
+			e, ok := offsetExpr.(*lp.LiteralNumericExpr)
 			if !ok {
-				panic(fmt.Sprintf("unexpected offset value %s", t.Value))
+				panic(fmt.Sprintf("unexpected offset expr %T", offsetExpr))
 			}
 
 			skip = e.Value
 
 			if skip < 0 {
-				panic(fmt.Sprintf("invalid offset value %d", skip))
+				panic(fmt.Sprintf("invalid offset value %v", skip))
 			}
 		default:
 			panic(fmt.Sprintf("unexpected skip type %T", t))
@@ -268,11 +264,11 @@ func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.Logi
 	}
 
 	switch t := node.Expression.(type) {
-	case *tree.ExpressionLiteral:
+	case *tree.ExpressionNumericLiteral:
 		limitExpr := q.ToExpr(t, plan.Schema())
-		e, ok := limitExpr.(*lp.LiteralIntExpr)
+		e, ok := limitExpr.(*lp.LiteralNumericExpr)
 		if !ok {
-			panic(fmt.Sprintf("unexpected limit value %s", t.Value))
+			panic(fmt.Sprintf("unexpected limit expr %T", limitExpr))
 		}
 
 		fetch = e.Value
@@ -283,7 +279,7 @@ func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.Logi
 	return lp.Builder.From(plan).Limit(skip, fetch).Build()
 }
 
-// buildSelectPlan builds a logical plan for a select statement.
+// buildSimpleSelect builds a logical plan for a simple select statement.
 // The order of building is:
 // 1. from
 // 2. where
@@ -291,9 +287,9 @@ func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.Logi
 // 4. having(can use reference from select)
 // 5. select
 // 6. distinct
-// 7. order by
-// 8. limit
-func (q *queryPlanner) buildSelectPlan(node *tree.SimpleSelect, ctx *PlannerContext) lp.LogicalPlan {
+// 7. order by, done in buildSelect
+// 8. limit, done in buildSelect
+func (q *queryPlanner) buildSimpleSelect(node *tree.SimpleSelect, ctx *PlannerContext) lp.LogicalPlan {
 	var plan lp.LogicalPlan
 
 	// from clause

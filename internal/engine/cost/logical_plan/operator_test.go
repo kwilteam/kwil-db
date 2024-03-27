@@ -2,8 +2,7 @@ package logical_plan_test
 
 import (
 	"fmt"
-	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource/source"
-
+	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 )
@@ -22,9 +21,9 @@ func ExampleScanOp_String_with_filter() {
 	op := lp.Scan(stubTable, stubDS,
 		[]lp.LogicalExpr{
 			lp.Gt(lp.ColumnUnqualified("age"),
-				lp.LiteralInt(20)),
+				lp.LiteralNumeric(20)),
 			lp.Lt(lp.ColumnUnqualified("age"),
-				lp.LiteralInt(30)),
+				lp.LiteralNumeric(30)),
 		}, "username", "age")
 	fmt.Println(op.String())
 	// Output:
@@ -45,7 +44,7 @@ func ExampleFilterOp_String() {
 	op := lp.Filter(nil,
 		lp.Eq(
 			lp.ColumnUnqualified("age"),
-			lp.LiteralInt(20)))
+			lp.LiteralNumeric(20)))
 	fmt.Println(op.String())
 	// Output:
 	// Filter: age = 20
@@ -110,7 +109,7 @@ func ExampleLogicalPlan_Projection() {
 
 func ExampleLogicalPlan_DataFrame() {
 	aop := lp.NewDataFrame(lp.Scan(stubTable, stubDS, nil))
-	plan := aop.Filter(lp.Eq(lp.ColumnUnqualified("age"), lp.LiteralInt(20))).
+	plan := aop.Filter(lp.Eq(lp.ColumnUnqualified("age"), lp.LiteralNumeric(20))).
 		Aggregate([]lp.LogicalExpr{lp.ColumnUnqualified("state")},
 			[]lp.LogicalExpr{lp.Count(lp.ColumnUnqualified("username"))}).
 		// the alias for aggregate result is bit weird

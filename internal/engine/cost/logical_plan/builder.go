@@ -51,7 +51,7 @@ func (b *logicalPlanBuilder) Filter(expr LogicalExpr) *logicalPlanBuilder {
 }
 
 // Limit applies LIMIT clause to the logical plan.
-func (b *logicalPlanBuilder) Limit(skip, fetch int) *logicalPlanBuilder {
+func (b *logicalPlanBuilder) Limit(skip, fetch int64) *logicalPlanBuilder {
 	b.plan = Limit(b.plan, skip, fetch)
 	return b
 }

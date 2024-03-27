@@ -2,7 +2,6 @@ package datasource
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource/source"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"testing"
 
@@ -92,14 +91,14 @@ func checkRecords(t *testing.T, result *Result, expectedSchema *datatypes.Schema
 }
 
 func TestMemDataSource(t *testing.T) {
-	ds := source.NewMemDataSource(testSchemaUsers, testDataUsers)
+	ds := NewMemDataSource(testSchemaUsers, testDataUsers)
 	result := ds.Scan()
 
 	checkRecords(t, result, testSchemaUsers, testDataUsers)
 }
 
 func Example_MemDataSource_ToCsv() {
-	ds := source.NewMemDataSource(testSchemaUsers, testDataUsers)
+	ds := NewMemDataSource(testSchemaUsers, testDataUsers)
 	result := ds.Scan()
 	fmt.Println(result.ToCsv())
 	//Output:
@@ -112,7 +111,7 @@ func Example_MemDataSource_ToCsv() {
 }
 
 func TestMemDataSource_scanWithProjection(t *testing.T) {
-	ds := source.NewMemDataSource(testSchemaUsers, testDataUsers)
+	ds := NewMemDataSource(testSchemaUsers, testDataUsers)
 
 	// Test filtered result
 	expectedSchema := datatypes.NewSchema(
@@ -153,7 +152,7 @@ func TestMemDataSource_scanWithProjection(t *testing.T) {
 }
 
 func Example_MemDataSource_scanWithProjection_ToCsv() {
-	ds := source.NewMemDataSource(testSchemaUsers, testDataUsers)
+	ds := NewMemDataSource(testSchemaUsers, testDataUsers)
 	result := ds.Scan("username", "age")
 	fmt.Println(result.ToCsv())
 	//Output:
@@ -167,7 +166,7 @@ func Example_MemDataSource_scanWithProjection_ToCsv() {
 
 func TestCSVDataSource(t *testing.T) {
 	dataFilePath := "../testdata/users.csv"
-	ds, err := source.NewCSVDataSource(dataFilePath)
+	ds, err := NewCSVDataSource(dataFilePath)
 	assert.NoError(t, err)
 
 	checkRecords(t, ds.Scan(), testSchemaUsers, testDataUsers)
@@ -175,7 +174,7 @@ func TestCSVDataSource(t *testing.T) {
 
 func Example_CSVDataSource_ToCsv() {
 	dataFilePath := "../testdata/users.csv"
-	ds, _ := source.NewCSVDataSource(dataFilePath)
+	ds, _ := NewCSVDataSource(dataFilePath)
 	result := ds.Scan()
 	fmt.Println(result.ToCsv())
 	//Output:
@@ -189,7 +188,7 @@ func Example_CSVDataSource_ToCsv() {
 
 func TestCSVDataSource_scanWithProjection(t *testing.T) {
 	dataFilePath := "../testdata/users.csv"
-	ds, err := source.NewCSVDataSource(dataFilePath)
+	ds, err := NewCSVDataSource(dataFilePath)
 	assert.NoError(t, err)
 
 	// Test filtered result
@@ -241,7 +240,7 @@ func TestCSVDataSource_scanWithProjection(t *testing.T) {
 
 func Example_CSVDataSource_scanWithProjection_ToCsv() {
 	dataFilePath := "../testdata/users.csv"
-	ds, _ := source.NewCSVDataSource(dataFilePath)
+	ds, _ := NewCSVDataSource(dataFilePath)
 	result := ds.Scan("id", "username", "state")
 	fmt.Println(result.ToCsv())
 	//Output:

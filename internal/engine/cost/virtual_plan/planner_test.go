@@ -2,8 +2,6 @@ package virtual_plan
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource/source"
-
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
@@ -20,14 +18,14 @@ func (m *mockCatalog) GetSchemaSource(tableRef *dt.TableRef) (ds.SchemaSource, e
 	if !ok {
 		return nil, fmt.Errorf("table %s not found", relName)
 	}
-	return source.NewExampleSchemaSource(schema), nil
+	return ds.NewExampleSchemaSource(schema), nil
 }
 
 func initMockCatalog() *mockCatalog {
-	stubUserData, _ := source.NewCSVDataSource("../testdata/users.csv")
-	stubPostData, _ := source.NewCSVDataSource("../testdata/posts.csv")
-	commentsData, _ := source.NewCSVDataSource("../testdata/comments.csv")
-	commentRelData, _ := source.NewCSVDataSource("../testdata/comment_rel.csv")
+	stubUserData, _ := ds.NewCSVDataSource("../testdata/users.csv")
+	stubPostData, _ := ds.NewCSVDataSource("../testdata/posts.csv")
+	commentsData, _ := ds.NewCSVDataSource("../testdata/comments.csv")
+	commentRelData, _ := ds.NewCSVDataSource("../testdata/comment_rel.csv")
 
 	return &mockCatalog{
 		tables: map[string]*dt.Schema{
@@ -45,7 +43,7 @@ func Example_QueryPlanner_CreateVirtualPlan() {
 	df := ctx.csv("users", "../testdata/users.csv")
 	plan := df.
 		Filter(lp.Eq(lp.Column(stubTable, "age"),
-			lp.LiteralInt(20))).
+			lp.LiteralNumeric(20))).
 		Project(lp.Column(stubTable, "state"),
 			lp.Column(stubTable, "username"),
 		).

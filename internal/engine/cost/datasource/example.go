@@ -1,4 +1,4 @@
-package source
+package datasource
 
 import "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 

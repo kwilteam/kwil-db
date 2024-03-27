@@ -48,8 +48,8 @@ func Conjunction(exprs ...LogicalExpr) (expr LogicalExpr) {
 func ExtractColumns(expr LogicalExpr,
 	schema *ds.Schema, seen map[string]bool) {
 	switch e := expr.(type) {
-	case *LiteralStringExpr:
-	case *LiteralIntExpr:
+	case *LiteralTextExpr:
+	case *LiteralNumericExpr:
 	case *AliasExpr:
 		ExtractColumns(e.Expr, schema, seen)
 	case UnaryExpr:

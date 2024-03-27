@@ -67,30 +67,30 @@ func TestSplitConjunction(t *testing.T) {
 			args: args{
 				expr: And(
 					Column(t1, "a"),
-					Eq(Column(t1, "b"), LiteralInt(1)),
+					Eq(Column(t1, "b"), LiteralNumeric(1)),
 				),
 			},
 			want: []LogicalExpr{
 				Column(t1, "a"),
-				Eq(Column(t1, "b"), LiteralInt(1)),
+				Eq(Column(t1, "b"), LiteralNumeric(1)),
 			},
 		},
 		{
 			name: "no conjunction",
 			args: args{
-				expr: Eq(Column(t1, "a"), LiteralInt(1)),
+				expr: Eq(Column(t1, "a"), LiteralNumeric(1)),
 			},
 			want: []LogicalExpr{
-				Eq(Column(t1, "a"), LiteralInt(1)),
+				Eq(Column(t1, "a"), LiteralNumeric(1)),
 			},
 		},
 		{
 			name: "no conjunction with alias",
 			args: args{
-				expr: Alias(Eq(Column(t1, "a"), LiteralInt(1)), "a"),
+				expr: Alias(Eq(Column(t1, "a"), LiteralNumeric(1)), "a"),
 			},
 			want: []LogicalExpr{
-				Eq(Column(t1, "a"), LiteralInt(1)),
+				Eq(Column(t1, "a"), LiteralNumeric(1)),
 			},
 		},
 	}

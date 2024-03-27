@@ -12,3 +12,5 @@ func ColumnUnqualified(name string) *ColumnDef {
 func Column(table *TableRef, name string) *ColumnDef {
 	return &ColumnDef{Relation: table, Name: name}
 }
+
+type Numeric int64
