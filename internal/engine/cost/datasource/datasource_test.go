@@ -1,18 +1,20 @@
 package datasource
 
 import (
+	"context"
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
 // testSchemaUsers is the same as first line of ../../testdata/users.csv
 var testSchemaUsers = datatypes.NewSchema(
 	datatypes.Field{
 		Name: "id",
-		Type: "int",
+		Type: "int64",
 	},
 	datatypes.Field{
 		Name: "username",
@@ -20,7 +22,7 @@ var testSchemaUsers = datatypes.NewSchema(
 	},
 	datatypes.Field{
 		Name: "age",
-		Type: "int",
+		Type: "int64",
 	},
 	datatypes.Field{
 		Name: "state",
@@ -35,37 +37,37 @@ var testSchemaUsers = datatypes.NewSchema(
 // testDataUsers is the same as ../../testdata/users.csv
 var testDataUsers = []Row{
 	{
-		NewLiteralColumnValue(1),
+		NewLiteralColumnValue(int64(1)),
 		NewLiteralColumnValue("Adam"),
-		NewLiteralColumnValue(20),
+		NewLiteralColumnValue(int64(20)),
 		NewLiteralColumnValue("CA"),
 		NewLiteralColumnValue("x001"),
 	},
 	{
-		NewLiteralColumnValue(2),
+		NewLiteralColumnValue(int64(2)),
 		NewLiteralColumnValue("Bob"),
-		NewLiteralColumnValue(24),
+		NewLiteralColumnValue(int64(24)),
 		NewLiteralColumnValue("CA"),
 		NewLiteralColumnValue("x002"),
 	},
 	{
-		NewLiteralColumnValue(3),
+		NewLiteralColumnValue(int64(3)),
 		NewLiteralColumnValue("Cat"),
-		NewLiteralColumnValue(27),
+		NewLiteralColumnValue(int64(27)),
 		NewLiteralColumnValue("CA"),
 		NewLiteralColumnValue("x003"),
 	},
 	{
-		NewLiteralColumnValue(4),
+		NewLiteralColumnValue(int64(4)),
 		NewLiteralColumnValue("Doe"),
-		NewLiteralColumnValue(26),
+		NewLiteralColumnValue(int64(26)),
 		NewLiteralColumnValue("IL"),
 		NewLiteralColumnValue("x004"),
 	},
 	{
-		NewLiteralColumnValue(5),
+		NewLiteralColumnValue(int64(5)),
 		NewLiteralColumnValue("Eve"),
-		NewLiteralColumnValue(29),
+		NewLiteralColumnValue(int64(29)),
 		NewLiteralColumnValue("TX"),
 		NewLiteralColumnValue("x005"),
 	},
@@ -74,11 +76,11 @@ var testDataUsers = []Row{
 func checkRecords(t *testing.T, result *Result, expectedSchema *datatypes.Schema, expectedData []Row) {
 	t.Helper()
 
-	s := result.Schema()
+	s := result.Schema
 	assert.EqualValues(t, expectedSchema, s)
 
 	idx := 0
-	for r := range result.stream {
+	for r := range result.Stream {
 		assert.Len(t, r, len(expectedSchema.Fields))
 
 		for i, c := range r {
@@ -92,14 +94,14 @@ func checkRecords(t *testing.T, result *Result, expectedSchema *datatypes.Schema
 
 func TestMemDataSource(t *testing.T) {
 	ds := NewMemDataSource(testSchemaUsers, testDataUsers)
-	result := ds.Scan()
+	result := ds.Scan(context.TODO())
 
 	checkRecords(t, result, testSchemaUsers, testDataUsers)
 }
 
 func Example_MemDataSource_ToCsv() {
 	ds := NewMemDataSource(testSchemaUsers, testDataUsers)
-	result := ds.Scan()
+	result := ds.Scan(context.TODO())
 	fmt.Println(result.ToCsv())
 	//Output:
 	// id,username,age,state,wallet
@@ -121,39 +123,39 @@ func TestMemDataSource_scanWithProjection(t *testing.T) {
 		},
 		datatypes.Field{
 			Name: "age",
-			Type: "int",
+			Type: "int64",
 		})
 	expectedData := []Row{
 		{
 			NewLiteralColumnValue("Adam"),
-			NewLiteralColumnValue(20),
+			NewLiteralColumnValue(int64(20)),
 		},
 		{
 			NewLiteralColumnValue("Bob"),
-			NewLiteralColumnValue(24),
+			NewLiteralColumnValue(int64(24)),
 		},
 		{
 			NewLiteralColumnValue("Cat"),
-			NewLiteralColumnValue(27),
+			NewLiteralColumnValue(int64(27)),
 		},
 		{
 			NewLiteralColumnValue("Doe"),
-			NewLiteralColumnValue(26),
+			NewLiteralColumnValue(int64(26)),
 		},
 		{
 			NewLiteralColumnValue("Eve"),
-			NewLiteralColumnValue(29),
+			NewLiteralColumnValue(int64(29)),
 		},
 	}
 
-	filteredResult := ds.Scan("username", "age")
+	filteredResult := ds.Scan(context.TODO(), "username", "age")
 
 	checkRecords(t, filteredResult, expectedSchema, expectedData)
 }
 
 func Example_MemDataSource_scanWithProjection_ToCsv() {
 	ds := NewMemDataSource(testSchemaUsers, testDataUsers)
-	result := ds.Scan("username", "age")
+	result := ds.Scan(context.TODO(), "username", "age")
 	fmt.Println(result.ToCsv())
 	//Output:
 	// username,age
@@ -169,13 +171,13 @@ func TestCSVDataSource(t *testing.T) {
 	ds, err := NewCSVDataSource(dataFilePath)
 	assert.NoError(t, err)
 
-	checkRecords(t, ds.Scan(), testSchemaUsers, testDataUsers)
+	checkRecords(t, ds.Scan(context.TODO()), testSchemaUsers, testDataUsers)
 }
 
 func Example_CSVDataSource_ToCsv() {
 	dataFilePath := "../testdata/users.csv"
 	ds, _ := NewCSVDataSource(dataFilePath)
-	result := ds.Scan()
+	result := ds.Scan(context.TODO())
 	fmt.Println(result.ToCsv())
 	//Output:
 	// id,username,age,state,wallet
@@ -195,7 +197,7 @@ func TestCSVDataSource_scanWithProjection(t *testing.T) {
 	expectedSchema := datatypes.NewSchema(
 		datatypes.Field{
 			Name: "id",
-			Type: "int",
+			Type: "int64",
 		},
 		datatypes.Field{
 			Name: "username",
@@ -208,40 +210,40 @@ func TestCSVDataSource_scanWithProjection(t *testing.T) {
 	)
 	expectedData := []Row{
 		{
-			NewLiteralColumnValue(1),
+			NewLiteralColumnValue(int64(1)),
 			NewLiteralColumnValue("Adam"),
 			NewLiteralColumnValue("CA"),
 		},
 		{
-			NewLiteralColumnValue(2),
+			NewLiteralColumnValue(int64(2)),
 			NewLiteralColumnValue("Bob"),
 			NewLiteralColumnValue("CA"),
 		},
 		{
-			NewLiteralColumnValue(3),
+			NewLiteralColumnValue(int64(3)),
 			NewLiteralColumnValue("Cat"),
 			NewLiteralColumnValue("CA"),
 		},
 		{
-			NewLiteralColumnValue(4),
+			NewLiteralColumnValue(int64(4)),
 			NewLiteralColumnValue("Doe"),
 			NewLiteralColumnValue("IL"),
 		},
 		{
-			NewLiteralColumnValue(5),
+			NewLiteralColumnValue(int64(5)),
 			NewLiteralColumnValue("Eve"),
 			NewLiteralColumnValue("TX"),
 		},
 	}
 
-	filteredResult := ds.Scan("id", "username", "state")
+	filteredResult := ds.Scan(context.TODO(), "id", "username", "state")
 	checkRecords(t, filteredResult, expectedSchema, expectedData)
 }
 
 func Example_CSVDataSource_scanWithProjection_ToCsv() {
 	dataFilePath := "../testdata/users.csv"
 	ds, _ := NewCSVDataSource(dataFilePath)
-	result := ds.Scan("id", "username", "state")
+	result := ds.Scan(context.TODO(), "id", "username", "state")
 	fmt.Println(result.ToCsv())
 	//Output:
 	// id,username,state

@@ -1,9 +1,10 @@
 package virtual_plan
 
 import (
+	"context"
 	"fmt"
-	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 
+	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 )
 
@@ -18,8 +19,9 @@ func Example_ExecutionContext_execute() {
 			logical_plan.Column(stubTable, "username"),
 		)
 
-	res := ctx.execute(df.LogicalPlan())
+	res := ctx.execute(context.TODO(), df.LogicalPlan())
 	fmt.Println(res.ToCsv())
+
 	// Output:
 	// state,username
 	// CA,Adam

@@ -1,6 +1,8 @@
 package datasource
 
 import (
+	"context"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
@@ -16,7 +18,7 @@ type DataSource interface {
 	// Scan scans the data source, return selected columns.
 	// If projection field is not found in the schema, it will be ignored.
 	// NOTE: should panic?
-	Scan(projection ...string) *Result
+	Scan(ctx context.Context, projection ...string) *Result
 
 	// Statistics returns the statistics of the data source.
 	Statistics() *datatypes.Statistics
@@ -30,8 +32,8 @@ func (s *DefaultSchemaSource) Schema() *datatypes.Schema {
 	return s.datasource.Schema()
 }
 
-func (s *DefaultSchemaSource) Scan(projection ...string) *Result {
-	return s.datasource.Scan(projection...)
+func (s *DefaultSchemaSource) Scan(ctx context.Context, projection ...string) *Result {
+	return s.datasource.Scan(ctx, projection...)
 }
 
 func DataAsSchemaSource(ds DataSource) SchemaSource {

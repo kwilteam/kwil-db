@@ -1,6 +1,8 @@
 package virtual_plan
 
 import (
+	"context"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
@@ -38,15 +40,15 @@ func (e *ExecutionContext) registerCsv(name string, filepath string) {
 	e.tables[name] = e.csv(name, filepath)
 }
 
-func (e *ExecutionContext) execute(plan logical_plan.LogicalPlan) *datasource.Result {
-	return execute(plan)
+func (e *ExecutionContext) execute(ctx context.Context, plan logical_plan.LogicalPlan) *datasource.Result {
+	return execute(ctx, plan)
 }
 
 func (e *ExecutionContext) estimate(plan logical_plan.LogicalPlan) int64 {
 	return estimate(plan)
 }
 
-func execute(plan logical_plan.LogicalPlan) *datasource.Result {
+func execute(ctx context.Context, plan logical_plan.LogicalPlan) *datasource.Result {
 	//
 	//fmt.Printf("---Original plan---\n\n")
 	//fmt.Println(logical_plan.Format(plan, 0))
@@ -63,7 +65,7 @@ func execute(plan logical_plan.LogicalPlan) *datasource.Result {
 	//fmt.Printf("---Got virtual plan---\n\n")
 	//fmt.Println(Format(vp, 0))
 	//
-	return vp.Execute()
+	return vp.Execute(ctx)
 }
 
 func estimate(plan logical_plan.LogicalPlan) int64 {

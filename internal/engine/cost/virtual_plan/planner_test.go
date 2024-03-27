@@ -76,6 +76,6 @@ func Example_QueryPlanner_CreateVirtualPlan() {
 	// ---Got virtual plan---
 	//
 	// VProjection: [state@1 username@2]
-	//   VSelection: age@0 = 20
-	//     VTableScan: schema=[id/int, username/string, age/int, state/string, wallet/string], projection=[age state username]
+	//   VFilter: age@0 = 20
+	//     VTableScan: schema=[id/int64, username/string, age/int64, state/string, wallet/string], projection=[age state username]
 }

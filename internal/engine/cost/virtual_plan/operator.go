@@ -1,10 +1,11 @@
 package virtual_plan
 
 import (
+	"context"
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
 type VTableScanOp struct {
@@ -25,8 +26,8 @@ func (s *VTableScanOp) Inputs() []VirtualPlan {
 	return []VirtualPlan{}
 }
 
-func (s *VTableScanOp) Execute() *ds.Result {
-	return s.ds.Scan(s.projection...)
+func (s *VTableScanOp) Execute(ctx context.Context) *ds.Result {
+	return s.ds.Scan(ctx, s.projection...)
 }
 
 func (s *VTableScanOp) Statistics() *datatypes.Statistics {
@@ -60,8 +61,8 @@ func (s *VIndexScanOp) Inputs() []VirtualPlan {
 	return []VirtualPlan{}
 }
 
-func (s *VIndexScanOp) Execute() *ds.Result {
-	return s.ds.Scan(s.projection...)
+func (s *VIndexScanOp) Execute(ctx context.Context) *ds.Result {
+	return s.ds.Scan(ctx, s.projection...)
 }
 
 func (s *VIndexScanOp) Statistics() *datatypes.Statistics {
@@ -101,27 +102,17 @@ func (p *VProjectionOp) Inputs() []VirtualPlan {
 	return []VirtualPlan{p.input}
 }
 
-func (p *VProjectionOp) Execute() *ds.Result {
-	input := p.input.Execute()
-	out := make(ds.RowPipeline)
+func (p *VProjectionOp) Execute(ctx context.Context) *ds.Result {
+	input := p.input.Execute(ctx)
 
-	go func() {
-		defer close(out)
-
-		for {
-			row, ok := input.Next()
-			if !ok {
-				break
-			}
-
-			cols := make(ds.Row, 0, len(row))
-			for _, expr := range p.exprs {
-				cols = append(cols, expr.evaluate(row))
-			}
-
-			out <- cols
+	out := ds.StreamMap(ctx, input.Stream, func(row ds.Row) ds.Row {
+		cols := make(ds.Row, 0, len(row))
+		for _, expr := range p.exprs {
+			cols = append(cols, expr.evaluate(row))
 		}
-	}()
+		return cols
+	})
+
 	return ds.ResultFromStream(p.schema, out)
 }
 
@@ -137,55 +128,43 @@ func VProjection(input VirtualPlan, schema *datatypes.Schema, exprs ...VirtualEx
 	return &VProjectionOp{input: input, exprs: exprs, schema: schema}
 }
 
-type VSelectionOp struct {
+type VFilterOp struct {
 	input VirtualPlan
 	expr  VirtualExpr
 }
 
-func (s *VSelectionOp) String() string {
-	return fmt.Sprintf("VSelection: %s", s.expr.Resolve(s.input))
+func (s *VFilterOp) String() string {
+	return fmt.Sprintf("VFilter: %s", s.expr.Resolve(s.input))
 	//return fmt.Sprintf("VSelection: %s", s.expr)
 }
 
-func (s *VSelectionOp) Schema() *datatypes.Schema {
+func (s *VFilterOp) Schema() *datatypes.Schema {
 	return s.input.Schema()
 }
 
-func (s *VSelectionOp) Inputs() []VirtualPlan {
+func (s *VFilterOp) Inputs() []VirtualPlan {
 	return []VirtualPlan{s.input}
 }
 
-func (s *VSelectionOp) Execute() *ds.Result {
-	input := s.input.Execute()
+func (s *VFilterOp) Execute(ctx context.Context) *ds.Result {
+	input := s.input.Execute(ctx)
 
-	out := make(ds.RowPipeline)
-
-	go func() {
-		defer close(out)
-
-		for {
-			row, ok := input.Next()
-			if !ok {
-				break
-			}
-
-			if s.expr.evaluate(row).Value().(bool) {
-				out <- row
-			}
-		}
-	}()
+	out := ds.StreamFilter(ctx, input.Stream, func(row ds.Row) bool {
+		res := s.expr.evaluate(row).Value()
+		return res.(bool)
+	})
 
 	return ds.ResultFromStream(s.input.Schema(), out)
 }
 
-func (s *VSelectionOp) Statistics() *datatypes.Statistics {
+func (s *VFilterOp) Statistics() *datatypes.Statistics {
 	return s.input.Statistics()
 }
 
-func (s *VSelectionOp) Cost() int64 {
+func (s *VFilterOp) Cost() int64 {
 	return s.input.Cost()
 }
 
 func VSelection(input VirtualPlan, expr VirtualExpr) VirtualPlan {
-	return &VSelectionOp{input: input, expr: expr}
+	return &VFilterOp{input: input, expr: expr}
 }

@@ -54,7 +54,7 @@ func (q *defaultVirtualPlanner) ToExpr(expr logical_plan.LogicalExpr,
 	input logical_plan.LogicalPlan) VirtualExpr {
 	switch e := expr.(type) {
 	case *logical_plan.LiteralNumericExpr:
-		return &VLiteralNumericxpr{e.Value}
+		return &VLiteralNumericExpr{e.Value}
 	case *logical_plan.LiteralTextExpr:
 		return &VLiteralStringExpr{e.Value}
 	case *logical_plan.AliasExpr:

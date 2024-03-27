@@ -1,6 +1,8 @@
 package datasource
 
 import (
+	"context"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
@@ -18,8 +20,8 @@ func (ds *memDataSource) Schema() *datatypes.Schema {
 	return ds.schema
 }
 
-func (ds *memDataSource) Scan(projection ...string) *Result {
-	return dsScan(ds.schema, ds.records, projection)
+func (ds *memDataSource) Scan(ctx context.Context, projection ...string) *Result {
+	return dsScan(ctx, ds.schema, ds.records, projection)
 }
 
 func (ds *memDataSource) SourceType() SourceType {

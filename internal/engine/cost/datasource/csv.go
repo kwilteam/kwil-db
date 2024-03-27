@@ -1,6 +1,7 @@
 package datasource
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 )
 
 // CsvDataSource is a data source that reads data from a CSV file.
+// NOTE: This is for internal use only, mostly for testing.
 type CsvDataSource struct {
 	path    string
 	records []Row
@@ -40,7 +42,7 @@ func (ds *CsvDataSource) load() error {
 	}
 
 	columnTypes := make([]string, len(header))
-	columnTypesInfered := false
+	columnTypesInferred := false
 
 	for {
 		columns, err := r.Read()
@@ -54,7 +56,7 @@ func (ds *CsvDataSource) load() error {
 		newRow := make(Row, len(header))
 		for i, col := range columns {
 			colType, colValue := colTypeCast(col)
-			if columnTypesInfered {
+			if columnTypesInferred {
 				// check if the column type is consistent
 				if columnTypes[i] != colType {
 					return fmt.Errorf("inconsistent column type at column %d, got %s, want %s",
@@ -69,7 +71,7 @@ func (ds *CsvDataSource) load() error {
 
 		ds.records = append(ds.records, newRow)
 
-		columnTypesInfered = true
+		columnTypesInferred = true
 	}
 
 	for i, name := range header {
@@ -77,7 +79,8 @@ func (ds *CsvDataSource) load() error {
 			datatypes.Field{Name: name, Type: columnTypes[i]})
 	}
 
-	slices.Clip(ds.schema.Fields)
+	ds.records = slices.Clip(ds.records)
+	ds.schema.Fields = slices.Clip(ds.schema.Fields)
 
 	return nil
 }
@@ -90,8 +93,8 @@ func (ds *CsvDataSource) Statistics() *datatypes.Statistics {
 	panic("not implemented")
 }
 
-func (ds *CsvDataSource) Scan(projection ...string) *Result {
-	return dsScan(ds.schema, ds.records, projection)
+func (ds *CsvDataSource) Scan(ctx context.Context, projection ...string) *Result {
+	return dsScan(ctx, ds.schema, ds.records, projection)
 }
 
 func (ds *CsvDataSource) SourceType() SourceType {

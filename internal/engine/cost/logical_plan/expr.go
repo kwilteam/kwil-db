@@ -160,7 +160,7 @@ type LiteralTextExpr struct {
 }
 
 func (e *LiteralTextExpr) String() string {
-	return e.Value
+	return fmt.Sprintf("'%s'", e.Value)
 }
 
 func (e *LiteralTextExpr) Resolve(*dt.Schema) dt.Field {

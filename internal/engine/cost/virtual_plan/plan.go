@@ -2,10 +2,11 @@ package virtual_plan
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
 type VirtualPlan interface {
@@ -17,7 +18,7 @@ type VirtualPlan interface {
 
 	// Execute executes the plan and returns the result
 	// This for testing purposes
-	Execute() *datasource.Result
+	Execute(context.Context) *datasource.Result
 	Statistics() *datatypes.Statistics
 	Cost() int64
 }

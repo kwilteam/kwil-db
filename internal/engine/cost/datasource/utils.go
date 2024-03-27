@@ -1,13 +1,14 @@
 package datasource
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
 // dsScan read the data source, return selected columns.
-func dsScan(dsSchema *datatypes.Schema, dsRecords []Row, projection []string) *Result {
+func dsScan(ctx context.Context, dsSchema *datatypes.Schema, dsRecords []Row, projection []string) *Result {
 	if len(projection) == 0 {
 		return ResultFromRaw(dsSchema, dsRecords)
 	}
@@ -28,34 +29,27 @@ func dsScan(dsSchema *datatypes.Schema, dsRecords []Row, projection []string) *R
 
 	fieldIndex := dsSchema.MapProjection(projection)
 	newSchema := dsSchema.Project(projection...)
-	//newFields := make([]datatypes.Field, len(projection))
-	//for i, idx := range fieldIndex {
-	//	newFields[i] = dsSchema.Fields[idx]
-	//}
-	//newSchema := datatypes.NewSchema(newFields...)
 
-	out := make(RowPipeline)
-	go func() {
-		defer close(out)
-
-		for _, _row := range dsRecords {
-			newRow := make(Row, len(projection))
-			for j, idx := range fieldIndex {
-				newRow[j] = _row[idx]
-			}
-			out <- newRow
+	// adjust column order based on projection
+	projectedRecords := make([]Row, 0, len(dsRecords))
+	for _, _row := range dsRecords {
+		newRow := make(Row, len(projection))
+		for j, idx := range fieldIndex {
+			newRow[j] = _row[idx]
 		}
-	}()
+		projectedRecords = append(projectedRecords, newRow)
+	}
 
+	out := StreamTap(ctx, projectedRecords)
 	return ResultFromStream(newSchema, out)
 }
 
 // colTypeCast try to cast the raw column string to int, if failed, return the raw string.
 // NOTE: we only support int/string for simplicity.
 func colTypeCast(raw string) (kind string, value any) {
-	v, err := strconv.Atoi(raw)
+	v, err := strconv.ParseInt(raw, 10, 64)
 	if err == nil {
-		return "int", v
+		return "int64", v
 	} else {
 		return "string", raw
 	}

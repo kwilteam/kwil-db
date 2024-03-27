@@ -21,19 +21,19 @@ func (e *VLiteralStringExpr) Resolve(_ VirtualPlan) string {
 	return e.value
 }
 
-func (e *VLiteralStringExpr) evaluate(_ datasource.Row) datasource.ColumnValue {
+func (e *VLiteralStringExpr) evaluate(row datasource.Row) datasource.ColumnValue {
 	return datasource.NewLiteralColumnValue(e.value)
 }
 
-type VLiteralNumericxpr struct {
+type VLiteralNumericExpr struct {
 	value int64
 }
 
-func (e *VLiteralNumericxpr) Resolve(_ VirtualPlan) string {
+func (e *VLiteralNumericExpr) Resolve(_ VirtualPlan) string {
 	return fmt.Sprintf("%d", e.value)
 }
 
-func (e *VLiteralNumericxpr) evaluate(_ datasource.Row) datasource.ColumnValue {
+func (e *VLiteralNumericExpr) evaluate(row datasource.Row) datasource.ColumnValue {
 	return datasource.NewLiteralColumnValue(e.value)
 }
 
@@ -51,7 +51,7 @@ func (e *VColumnExpr) evaluate(row datasource.Row) datasource.ColumnValue {
 
 func compare(op string, a datasource.ColumnValue, b datasource.ColumnValue) bool {
 	if a.Type() != b.Type() {
-		return false
+		panic(fmt.Sprintf("cannot compare %s and %s", a.Type(), b.Type()))
 	}
 
 	switch op {
