@@ -36,7 +36,7 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 			if err != nil {
 				return err
 			}
-			if maxSpams == 10000 {
+			if count == maxSpams {
 				return nil
 			}
 			count++
