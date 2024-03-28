@@ -45,6 +45,7 @@ func NewTxApp(db DB, engine common.Engine, signer *auth.Ed25519Signer,
 		mempool: &mempool{
 			accounts:   make(map[string]*types.Account),
 			gasEnabled: GasEnabled,
+			nodeAddr:   signer.Identity(),
 		},
 		signer:              signer,
 		chainID:             chainID,

@@ -1,6 +1,7 @@
 package txapp
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -18,6 +19,7 @@ type mempool struct {
 	accounts   map[string]*types.Account
 	gasEnabled bool
 	mu         sync.Mutex
+	nodeAddr   []byte
 }
 
 // accountInfo retrieves the account info from the mempool state or the account store.
@@ -88,7 +90,10 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 		// If the transaction with invalid nonce is a ValidatorVoteIDs transaction,
 		// then mark the events for rebroadcast before discarding the transaction
 		// as the votes for these events are not yet received by the network.
-		if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteIDs {
+
+		fromLocalValidator := bytes.Equal(tx.Sender, m.nodeAddr) // Check if the transaction is from the local node
+
+		if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteIDs && fromLocalValidator {
 			// Mark these ids for rebroadcast
 			voteID := &transactions.ValidatorVoteIDs{}
 			err = voteID.UnmarshalBinary(tx.Body.Payload)
