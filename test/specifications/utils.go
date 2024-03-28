@@ -117,12 +117,13 @@ func expectTxFail(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []b
 			// prevent appending to the prior invocation(s)
 			status.Reset()
 			if err := spec.TxSuccess(ctx, txHash); err == nil {
+				status.WriteString("success")
 				return false
 			} else {
 				status.WriteString(err.Error())
 				// NOTE: ErrTxNotConfirmed is not considered a failure, should retry
 				return !errors.Is(err, driver.ErrTxNotConfirmed)
 			}
-		}, waitFor, time.Second*1, "tx should fail - status: %v", status.String())
+		}, waitFor, time.Second*1, "tx should fail - status: %v, hash %x", status.String(), txHash)
 	}
 }

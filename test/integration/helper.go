@@ -428,6 +428,8 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 	err = stack.Up(ctx, compose.Wait(true), compose.RunServices(services...))
 	r.t.Log("docker compose up")
 
+	time.Sleep(3 * time.Second) // RPC errors with chain_info and other stuff... trying anything now
+
 	require.NoError(r.t, err, "failed to start kwild cluster services %v", services)
 
 	for _, name := range services {
