@@ -90,6 +90,8 @@ func DepositSuccessSpecification(ctx context.Context, t *testing.T, deployer Dep
 		require.NoError(t, err)
 		return postUserBalance.Cmp(big.NewInt(0).Add(preUserBalance, amount)) == 0
 	}, 1*time.Minute, 5*time.Second)
+
+	time.Sleep(2 * time.Second)
 }
 
 func DepositFailSpecification(ctx context.Context, t *testing.T, deployer DeployerDsl) {
@@ -150,6 +152,8 @@ func DeployDbInsufficientFundsSpecification(ctx context.Context, t *testing.T, d
 		return postUserBalance.Cmp(big.NewInt(0).Add(preUserBalance, amount)) == 0
 	}, 5*time.Minute, 5*time.Second)
 
+	time.Sleep(2 * time.Second)
+
 	// Should be able to deploy database
 	db := SchemaLoader.Load(t, SchemaTestDB)
 
@@ -202,7 +206,9 @@ func FundValidatorSpecification(ctx context.Context, t *testing.T, sender Deploy
 		bal2, err = sender.AccountBalance(ctx, senderAddr)
 		require.NoError(t, err)
 		return bal2.Cmp(big.NewInt(0).Add(bal1, amt)) == 0
-	}, 5*time.Minute, 5*time.Second)
+	}, 5*time.Minute, 5*time.Second) // if receiver voted, they'd get the refund here, at same time as dep
+
+	time.Sleep(2 * time.Second) // wait for receiver to vote if they were too late for resoln
 
 	preValBal, err := sender.AccountBalance(ctx, receiverId)
 	require.NoError(t, err)
@@ -213,6 +219,8 @@ func FundValidatorSpecification(ctx context.Context, t *testing.T, sender Deploy
 
 	// I expect success
 	expectTxSuccess(t, sender, ctx, txHash, defaultTxQueryTimeout)()
+
+	time.Sleep(2 * time.Second) // it reports the old state very briefly, wait a sec
 
 	// Check the validator account balance
 	postBal, err := sender.AccountBalance(ctx, receiverId)
@@ -261,6 +269,8 @@ func DeployDbSuccessSpecification(ctx context.Context, t *testing.T, deployer De
 
 	// Then i expect success
 	expectTxSuccess(t, deployer, ctx, txHash, defaultTxQueryTimeout)()
+
+	time.Sleep(2 * time.Second)
 
 	// And i expect database should exist
 	err = deployer.DatabaseExists(ctx, deployer.DBID(db.Name))
