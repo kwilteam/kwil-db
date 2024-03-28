@@ -267,3 +267,10 @@ tasks:
     dir: test # different module
     cmds:
       - go test -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
+
+  test:it:spam:
+    desc: Run integration test with oracle spammer nodes
+    dir: test # different module
+    cmds:
+      - (cd nodes/spamd; ./build.sh)
+      - go test -count=1 -timeout 0 -run TestSpamListener ./integration -v -spam {{.CLI_ARGS}}
