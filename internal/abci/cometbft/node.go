@@ -216,7 +216,7 @@ func (n *CometBftNode) Stop() error {
 	return n.Node.Stop()
 }
 
-// IsCatchup returns true if the node is operating in ccatchup / blocksync
+// IsCatchup returns true if the node is operating in catchup / blocksync
 // mode.  If the node is caught up with the network, it returns false.
 func (n *CometBftNode) IsCatchup() bool {
 	return n.Node.ConsensusReactor().WaitSync()
