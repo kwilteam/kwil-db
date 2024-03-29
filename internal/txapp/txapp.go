@@ -501,12 +501,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 			}
 
 			// we need to use each configured resolutions refund threshold
-			threshold, err = requiredPower(ctx, r.currentTx, cfg.RefundThreshold, totalPower)
-			if err != nil {
-				return err
-			}
-
-			requiredPowerMap[resolution.Type] = threshold
+			requiredPowerMap[resolution.Type] = requiredPower(ctx, r.currentTx, cfg.RefundThreshold, totalPower)
 		}
 		// if it has enough power, we will still refund
 		if resolution.ApprovedPower >= threshold {
@@ -697,6 +692,9 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 	if err != nil {
 		return nil, err
 	}
+	if len(events) == 0 {
+		return nil, nil
+	}
 
 	ids := make([]types.UUID, 0, len(events))
 	for _, event := range events {
@@ -735,6 +733,8 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 		return nil, nil
 	}
 
+	r.log.Info("Creating new ValidatorVoteBodies transaction", log.Int("events", len(finalEvents)))
+
 	tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteBodies{
 		Events: finalEvents,
 	}, r.chainID, txNonce)
@@ -759,7 +759,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 		return nil, err
 	}
 
-	return [][]byte{bts}, nil
+	return [][]byte{bts}, nil // NOTE: may return more than one in the future.
 }
 
 /*

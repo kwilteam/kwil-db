@@ -39,7 +39,7 @@ func RegisterResolution(name string, resolution ResolutionConfig) error {
 func GetResolution(name string) (ResolutionConfig, error) {
 	resolution, ok := registeredResolutions[strings.ToLower(name)]
 	if !ok {
-		return resolution, fmt.Errorf("resolution with name %s not found", name)
+		return ResolutionConfig{}, fmt.Errorf("resolution with name %s not found", name)
 	}
 
 	return resolution, nil

@@ -5,6 +5,7 @@ package ethdeposits
 import (
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -38,7 +39,7 @@ func Start(ctx context.Context, service *common.Service, eventstore listeners.Ev
 	config := &EthDepositConfig{}
 	listenerConfig, ok := service.ExtensionConfigs[ListenerName]
 	if !ok {
-		service.Logger.Info("no eth_deposit configuration found, eth_deposit oracle will not start")
+		service.Logger.Warn("no eth_deposit configuration found, eth_deposit oracle will not start")
 		return nil // no configuration, so we don't start the oracle
 	}
 	err := config.setConfig(listenerConfig)
@@ -128,8 +129,11 @@ func Start(ctx context.Context, service *common.Service, eventstore listeners.Ev
 	return nil
 }
 
-// processEvents will process all events from the Ethereum client from the given height range.
-func processEvents(ctx context.Context, from, to int64, client *ethClient, eventstore listeners.EventStore, logger log.SugaredLogger) error {
+// processEvents will process all events from the Ethereum client from the given
+// height range. This means inserting any that have not already been processed
+// for broadcast in a Kwil vote ID / approval transaction, and then storing the
+// processed height.
+func processEvents(ctx context.Context, from, to int64, client *ethClient, eventStore listeners.EventStore, logger log.SugaredLogger) error {
 	logs, err := client.GetCreditEventLogs(ctx, from, to)
 	if err != nil {
 		return fmt.Errorf("failed to get credit event logs: %w", err)
@@ -146,15 +150,17 @@ func processEvents(ctx context.Context, from, to int64, client *ethClient, event
 			return fmt.Errorf("failed to marshal event: %w", err)
 		}
 
-		err = eventstore.Broadcast(ctx, credit.CreditAccountEventType, bts)
+		logger.Info("Flagging new account credit event for approval (to broadcast)",
+			"account", hex.EncodeToString(event.Account), "amount", event.Amount, "txHash", hex.EncodeToString(event.TxHash))
+		err = eventStore.Broadcast(ctx, credit.CreditAccountEventType, bts)
 		if err != nil {
-			return fmt.Errorf("failed to broadcast event: %w", err)
+			return fmt.Errorf("failed to mark new event for broadcast: %w", err)
 		}
 	}
 
 	logger.Info("processed events", "from", from, "to", to, "events", len(logs))
 
-	return setLastStoredHeight(ctx, eventstore, to)
+	return setLastStoredHeight(ctx, eventStore, to)
 }
 
 // EthDepositConfig is the configuration for the eth_deposit listener.

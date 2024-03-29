@@ -60,7 +60,8 @@ import (
 )
 
 // initStores prepares the datastores with an atomic DB transaction. These
-// actions are performed outside of ABCI's DB sessions.
+// actions are performed outside of ABCI's DB sessions. The stores should not
+// keep the db after initialization. Their functions accept a DB connection.
 func initStores(d *coreDependencies, db *pg.DB) error {
 	initTx, err := db.BeginTx(d.ctx)
 	if err != nil {
@@ -173,7 +174,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	e := buildEngine(d, db)
 
 	// Initialize the events and voting data stores
-	ev := buildEventStore(d, db, closers) // makes own DB connection
+	ev := buildEventStore(d, closers) // makes own DB connection
 
 	// these are dummies, but they might need init in the future.
 	snapshotModule := buildSnapshotter()
@@ -342,16 +343,15 @@ func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broad
 	return broadcast.NewEventBroadcaster(ev, b, txapp, txapp, buildSigner(d), d.genesisCfg.ChainID)
 }
 
-func buildEventStore(d *coreDependencies, tx *pg.DB, closers *closeFuncs) *voting.EventStore {
+func buildEventStore(d *coreDependencies, closers *closeFuncs) *voting.EventStore {
 	// NOTE: we're using the same postgresql database, but isolated pg schema.
-	// We cannot have a separate db here, because eventstore deletes need to be atomic with consensus
 	db, err := d.poolOpener(d.ctx, d.cfg.AppCfg.DBName, 10)
 	if err != nil {
 		failBuild(err, "failed to build event store")
 	}
 	closers.addCloser(db.Close, "closing event store")
 
-	e, err := voting.NewEventStore(d.ctx, tx, db)
+	e, err := voting.NewEventStore(d.ctx, db)
 	if err != nil {
 		failBuild(err, "failed to build event store")
 	}
@@ -421,7 +421,7 @@ func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
 
 	err = tx.Commit(d.ctx)
 	if err != nil {
-		failBuild(err, "failed to commit")
+		failBuild(err, "failed to commit engine init db txn")
 	}
 
 	return eng

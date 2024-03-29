@@ -39,7 +39,7 @@ var (
 	// voting
 	setVoterPower                    = voting.SetValidatorPower
 	getAllVoters                     = voting.GetValidators
-	getResolutionsByThresholdAndType = voting.GetResolutionsByThresholdAndType
+	getResolutionsByThresholdAndType = voting.GetResolutionsByThresholdAndType // called from RW consensus tx
 	deleteResolutions                = voting.DeleteResolutions
 	markProcessed                    = voting.MarkProcessed
 	getExpired                       = voting.GetExpired

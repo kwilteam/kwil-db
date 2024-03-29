@@ -3,6 +3,7 @@ package ethdeployer
 import (
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"math/big"
 	"sync"
 	"testing"
@@ -114,10 +115,16 @@ func (d *Deployer) Deposit(ctx context.Context, sender *ecdsa.PrivateKey, amount
 		return err
 	}
 
-	_, err = d.escrowInst.Deposit(auth, amount)
+	tx, err := d.escrowInst.Deposit(auth, amount)
 	if err != nil {
 		return err
 	}
+
+	receipt, err := d.ethClient.TransactionReceipt(ctx, tx.Hash())
+	if err != nil {
+		return err
+	}
+	fmt.Printf("ETH tx %x, status code %d (1 means success)\n", receipt.TxHash, receipt.Status)
 
 	return nil
 }

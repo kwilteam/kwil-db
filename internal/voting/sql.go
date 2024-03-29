@@ -120,8 +120,6 @@ const (
 	// alreadyProcessed checks if a resolution has already been processed
 	alreadyProcessed = `SELECT id FROM ` + votingSchemaName + `.processed WHERE id = $1;`
 
-	resolutionExists = `SELECT id FROM ` + votingSchemaName + `.resolutions WHERE id = $1;`
-
 	// returnNotProcessed returns all resolutions in the input array that do not exist in the processed table
 	returnProcessed = `SELECT id FROM ` + votingSchemaName + `.processed WHERE id =ANY($1);`
 

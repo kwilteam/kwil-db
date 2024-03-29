@@ -173,10 +173,5 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) er
 	}
 
 	// mark these events as broadcasted
-	err = e.store.MarkBroadcasted(ctx, ids)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return e.store.MarkBroadcasted(ctx, ids)
 }

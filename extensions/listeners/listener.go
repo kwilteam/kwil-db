@@ -74,8 +74,8 @@ func GetListener(name string) (ListenFunc, bool) {
 // network, and is simply for the convenience of the listener
 // implementer to persist metadata about the data source.
 type EventStore interface {
-	// Broadcast broadcasts an event seen by the local node to the
-	// network. The eventType is a string that identifies the network
+	// Broadcast stores a newly observed event for broadcast to the network.
+	// The eventType is a string that identifies the network
 	// should interpret the data. The eventType should directly
 	// correspond to a "resolution" type, implemented in the
 	// resolutions package. The data argument will be passed to the
@@ -89,6 +89,6 @@ type EventStore interface {
 	Get(ctx context.Context, key []byte) ([]byte, error)
 	// Delete deletes a value from the local node's KV store. The
 	// data is scoped to the local node, and is not broadcast to the
-	// network.
+	// network. NOTE: never used (remove or figure out where we wanted to use it)
 	Delete(ctx context.Context, key []byte) error
 }

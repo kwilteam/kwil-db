@@ -150,7 +150,7 @@ func DeployDbInsufficientFundsSpecification(ctx context.Context, t *testing.T, d
 		postUserBalance, err := deployer.AccountBalance(ctx, senderAddr)
 		require.NoError(t, err)
 		return postUserBalance.Cmp(big.NewInt(0).Add(preUserBalance, amount)) == 0
-	}, 5*time.Minute, 5*time.Second)
+	}, 90*time.Second, 5*time.Second)
 
 	time.Sleep(2 * time.Second)
 
@@ -206,7 +206,7 @@ func FundValidatorSpecification(ctx context.Context, t *testing.T, sender Deploy
 		bal2, err = sender.AccountBalance(ctx, senderAddr)
 		require.NoError(t, err)
 		return bal2.Cmp(big.NewInt(0).Add(bal1, amt)) == 0
-	}, 5*time.Minute, 5*time.Second) // if receiver voted, they'd get the refund here, at same time as dep
+	}, 90*time.Second, 5*time.Second) // if receiver voted, they'd get the refund here, at same time as dep
 
 	time.Sleep(2 * time.Second) // wait for receiver to vote if they were too late for resoln
 
@@ -258,7 +258,7 @@ func DeployDbSuccessSpecification(ctx context.Context, t *testing.T, deployer De
 		postUserBalance, err := deployer.AccountBalance(ctx, senderAddr)
 		require.NoError(t, err)
 		return postUserBalance.Cmp(big.NewInt(0).Add(preUserBalance, amount)) == 0
-	}, 5*time.Minute, 5*time.Second)
+	}, 90*time.Second, 5*time.Second)
 
 	// Should be able to deploy database
 	db := SchemaLoader.Load(t, SchemaTestDB)
@@ -413,6 +413,7 @@ func EthDepositValidatorUpdatesSpecification(ctx context.Context, t *testing.T, 
 	// get user balance
 	bal1, err := deployer.AccountBalance(ctx, senderAddr)
 	require.NoError(t, err)
+	// t.Logf("bal1 (start) = %v", bal1)
 
 	// approve 10 tokens
 	err = deployer.Approve(ctx, sender, big.NewInt(10))
@@ -428,7 +429,9 @@ func EthDepositValidatorUpdatesSpecification(ctx context.Context, t *testing.T, 
 		bal2, err = deployer.AccountBalance(ctx, senderAddr)
 		require.NoError(t, err)
 		return bal2.Cmp(big.NewInt(0).Add(bal1, big.NewInt(10))) == 0
-	}, 5*time.Minute, 5*time.Second)
+	}, 90*time.Second, 5*time.Second)
+
+	// time.Sleep(3 * time.Second)
 
 	// Node5 leaves its validator status
 	ValidatorNodeLeaveSpecification(ctx, t, valDsl["node5"])
@@ -443,7 +446,7 @@ func EthDepositValidatorUpdatesSpecification(ctx context.Context, t *testing.T, 
 	err = deployer.Deposit(ctx, sender, big.NewInt(10))
 	require.NoError(t, err)
 
-	// total 5 validators and 3 listening to the deposit event
+	// total 5 validators: 2 byzantine and 3 listening to the deposit event
 	// 5 * 2/3 = 3.33 => required 4 validators to vote for deposit to get credited
 	// Check that the user balance is not updated
 	time.Sleep(15 * time.Second)
@@ -461,6 +464,9 @@ func EthDepositValidatorUpdatesSpecification(ctx context.Context, t *testing.T, 
 		node := fmt.Sprintf("node%d", i)
 		ValidatorNodeApproveSpecification(ctx, t, valDsl[node], joinerPubKey, 5, 5, false)
 	}
+	bal3x, err := deployer.AccountBalance(ctx, senderAddr)
+	require.NoError(t, err)
+	require.Equal(t, bal3, bal3x)
 	ValidatorNodeApproveSpecification(ctx, t, valDsl["node3"], joinerPubKey, 5, 6, true)
 
 	// Check that the node5 became a Validator
@@ -472,8 +478,9 @@ func EthDepositValidatorUpdatesSpecification(ctx context.Context, t *testing.T, 
 	require.Eventually(t, func() bool {
 		bal4, err = deployer.AccountBalance(ctx, senderAddr)
 		require.NoError(t, err)
+		// t.Logf("bal3 = %v / bal4 = %v", bal3, bal4)
 		return bal4.Cmp(big.NewInt(0).Add(bal3, big.NewInt(10))) == 0
-	}, 5*time.Minute, 5*time.Second)
+	}, 90*time.Second, 5*time.Second)
 
 	// Make one more deposit and ensure that it gets credited
 	err = deployer.Approve(ctx, sender, big.NewInt(10))
@@ -486,5 +493,5 @@ func EthDepositValidatorUpdatesSpecification(ctx context.Context, t *testing.T, 
 		bal5, err := deployer.AccountBalance(ctx, senderAddr)
 		require.NoError(t, err)
 		return bal5.Cmp(big.NewInt(0).Add(bal4, big.NewInt(10))) == 0
-	}, 5*time.Minute, 5*time.Second)
+	}, 90*time.Second, 5*time.Second)
 }

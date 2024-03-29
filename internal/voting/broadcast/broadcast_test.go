@@ -82,7 +82,7 @@ func Test_Broadcaster(t *testing.T) {
 			require.NoError(t, err)
 			defer cleanup()
 
-			_, err = voting.NewEventStore(ctx, db, db)
+			_, err = voting.NewEventStore(ctx, db)
 			require.NoError(t, err)
 
 			// create a second db connection to emulate the consensus db

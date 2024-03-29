@@ -7,6 +7,7 @@ package voting
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/common/sql"
@@ -111,8 +112,8 @@ const (
 
 // DB is a database connection.
 type DB interface {
-	sql.ReadTxMaker
-	sql.DB
+	sql.ReadTxMaker // i.e. outer! cannot be the consensus connection
+	sql.DB          // make txns, and run bare execute
 }
 
 // EventStore stores events from external sources.
@@ -135,87 +136,61 @@ type EventStore struct {
 	writerMtx sync.Mutex // protects eventWriter, not applicable to read-only operations
 }
 
-// NewEventStore will initialize the vote store with the consensus database connection.
-// It will also initialize the event store with the events database connection.
-func NewEventStore(ctx context.Context, consensusDB sql.DB, eventWriterDB DB) (*EventStore, error) {
+// NewEventStore will initialize the event and vote store with the provided DB
+// connection, which is retained by the EventStore. This must not be the writer
+// connection used to update state by the consensus application. Updates that
+// are to be performed in the same transaction that updates state are done in
+// functions that are passed the consensus DB connection.
+func NewEventStore(ctx context.Context, eventWriterDB DB) (*EventStore, error) {
 	// Initialize the vote store with the consensus database connection.
-	err := initializeVoteStore(ctx, consensusDB)
+	err := initializeVoteStore(ctx, eventWriterDB) // doesn't keep the db instance
 	if err != nil {
 		return nil, err
 	}
 
 	// Initialize the event store with the events database connection.
-	ev, err := initializeEventStore(ctx, eventWriterDB)
-	if err != nil {
-		return nil, err
-	}
-
-	return ev, nil
+	return initializeEventStore(ctx, eventWriterDB)
 }
 
-// NewEventStore creates a new event store.
-// It takes a database connection to write events to.
-// WARNING: This connection cannot be the same connection
-// used during consensus / in txapp.
+// NewEventStore creates a new event store. It takes a database connection to
+// write events to. WARNING: This DB type is capable of creating read-only
+// (outer) transactions, thus this connection cannot be the same connection used
+// for consensus updates by txapp.
 func initializeEventStore(ctx context.Context, writerDB DB) (*EventStore, error) {
-	tx, err := writerDB.BeginTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initEventsTables,
 		1: upgradeV0ToV1,
 	}
 
-	err = versioning.Upgrade(ctx, tx, schemaName, upgradeFns, eventStoreVersion)
+	// NOTE: Upgrade runs the upgrades in a transaction (atomic)
+	err := versioning.Upgrade(ctx, writerDB, schemaName, upgradeFns, eventStoreVersion)
 	if err != nil {
 		return nil, err
 	}
 
 	return &EventStore{
 		eventWriter: writerDB,
-	}, tx.Commit(ctx)
+	}, nil
 }
 
-func initEventsTables(ctx context.Context, db sql.DB) error {
-	tx, err := db.BeginTx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
+func initEventsTables(ctx context.Context, tx sql.DB) error {
 	// Create the events and kv table if it does not exist.
 	if _, err := tx.Execute(ctx, eventsTable); err != nil {
 		return err
 	}
-	if _, err := tx.Execute(ctx, createKvTblStmt); err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
+	_, err := tx.Execute(ctx, createKvTblStmt)
+	return err
 }
 
 func upgradeV0ToV1(ctx context.Context, db sql.DB) error {
-	tx, err := db.BeginTx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
 	// Drop the received column from the events table.
-	if _, err := tx.Execute(ctx, dropReceivedColumn); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	_, err := db.Execute(ctx, dropReceivedColumn)
+	return err
 }
 
-// Store stores an event in the event store.
-// It uses the local connection to the event store,
-// instead of the consensus connection.
-// It only stores unprocessed events.
-// If an event is already processed or if a resolution already exists, it's ignored.
+// Store stores an event in the event store. It uses the local connection to the
+// event store, instead of the consensus connection. It only stores unprocessed
+// events. If an event is already processed.
 func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) error {
 	e.writerMtx.Lock()
 	defer e.writerMtx.Unlock()
@@ -231,26 +206,27 @@ func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) e
 	}
 	defer tx.Rollback(ctx)
 
-	event := &types.VotableEvent{
+	id := (&types.VotableEvent{
 		Body: data,
 		Type: eventType,
-	}
-	id := event.ID()
+	}).ID()
 
-	// is this event already processed? (or)
-	// is there an existing resolution corresponding to the event?
-	processed, err := ResolutionExistsOrProcessed(ctx, tx, id)
+	// If event already processed do not insert the event since we do not want
+	// to broadcast a vote transaction.
+	processed, err := IsProcessed(ctx, tx, id)
 	if err != nil {
 		return err
 	}
 	if processed {
-		return nil
+		// fmt.Printf("existing or already-processed event NOT INSERTED: %v\n", id)
+		return nil // on changes, just rollback
 	}
 
 	_, err = tx.Execute(ctx, insertEventIdempotent, id[:], data, eventType)
 	if err != nil {
 		return err
 	}
+	// fmt.Printf("inserted event new event: type %v, id %v\n", eventType, id)
 
 	return tx.Commit(ctx)
 }
@@ -278,7 +254,7 @@ func (e *EventStore) GetUnbroadcastedEvents(ctx context.Context) ([]types.UUID, 
 		if !ok {
 			return nil, fmt.Errorf("expected id to be types.UUID, got %T", row[0])
 		}
-		ids = append(ids, types.UUID(id))
+		ids = append(ids, types.UUID(slices.Clone(id)))
 	}
 
 	return ids, nil
@@ -335,7 +311,7 @@ func GetEvents(ctx context.Context, db sql.Executor) ([]*types.VotableEvent, err
 		}
 
 		events = append(events, &types.VotableEvent{
-			Body: data,
+			Body: slices.Clone(data),
 			Type: eventType,
 		})
 	}
@@ -406,10 +382,10 @@ func (s *KV) Get(ctx context.Context, key []byte) ([]byte, error) {
 		return nil, fmt.Errorf("expected data to be []byte, got %T", res.Rows[0][0])
 	}
 
-	return data, nil
+	return slices.Clone(data), nil
 }
 
-func (s *KV) Set(ctx context.Context, key []byte, value []byte) error {
+func (s *KV) Set(ctx context.Context, key, value []byte) error {
 	s.es.writerMtx.Lock()
 	defer s.es.writerMtx.Unlock()
 

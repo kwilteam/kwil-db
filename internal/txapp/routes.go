@@ -486,7 +486,7 @@ func (v *validatorApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotValidator)
 	}
 
-	err = approveResolution(ctx.Ctx, tx2, pending[0], ctx.ConsensusParams.JoinVoteExpiration, tx.Sender) // I don't think we need the expiration here, but just in case
+	err = approveResolution(ctx.Ctx, tx2, pending[0], tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -570,7 +570,7 @@ func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transac
 	}
 
 	// we need to approve the resolution as well
-	err = approveResolution(ctx.Ctx, tx2, event.ID(), ctx.BlockHeight+ctx.ConsensusParams.JoinVoteExpiration, tx.Sender)
+	err = approveResolution(ctx.Ctx, tx2, event.ID(), tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -684,19 +684,16 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	fromLocalValidator := bytes.Equal(tx.Sender, router.signer.Identity())
-	// As event type is unknown, we use the default voting period defined in the genesis config.
-	// This gets updated when vote body for this resolution is received.
-	expiryHeight := ctx.BlockHeight + ctx.ConsensusParams.VotingPeriod
-
 	// filter out the vote IDs that have already been processed
 	ids, err := voting.FilterNotProcessed(ctx.Ctx, tx2, approve.ResolutionIDs)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
+	fromLocalValidator := bytes.Equal(tx.Sender, router.signer.Identity())
+
 	for _, voteID := range ids {
-		err = approveResolution(ctx.Ctx, tx2, voteID, expiryHeight, tx.Sender)
+		err = approveResolution(ctx.Ctx, tx2, voteID, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
@@ -779,8 +776,8 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
-		expiryHeight := ctx.BlockHeight + resCfg.ExpirationPeriod
 
+		expiryHeight := ctx.BlockHeight + resCfg.ExpirationPeriod
 		err = createResolution(ctx.Ctx, tx2, event, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
@@ -788,7 +785,7 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 
 		// since the vote body proposer is implicitly voting for the event,
 		// we need to approve the newly created vote body here
-		err = approveResolution(ctx.Ctx, tx2, event.ID(), expiryHeight, tx.Sender)
+		err = approveResolution(ctx.Ctx, tx2, event.ID(), tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}

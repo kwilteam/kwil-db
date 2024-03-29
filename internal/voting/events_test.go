@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 	"github.com/kwilteam/kwil-db/internal/voting"
 
@@ -18,14 +18,14 @@ import (
 func Test_EventStore(t *testing.T) {
 	type testcase struct {
 		name string
-		// we have to use an outerTx here because we are testing commits from different connections
-		// to the event store
-		fn func(t *testing.T, e *voting.EventStore, consensusTx *pg.Pool)
+		// We are testing event store methods that use a dedicated DB
+		// connection, and package-level functions that use the consensus conn.
+		fn func(t *testing.T, e *voting.EventStore, consensusTx sql.DB)
 	}
 	tests := []testcase{
 		{
 			name: "standard storage and retrieval",
-			fn: func(t *testing.T, e *voting.EventStore, db *pg.Pool) {
+			fn: func(t *testing.T, e *voting.EventStore, db sql.DB) {
 				ctx := context.Background()
 
 				err := e.Store(ctx, []byte("hello"), "test")
@@ -49,7 +49,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "idempotent storage",
-			fn: func(t *testing.T, e *voting.EventStore, db *pg.Pool) {
+			fn: func(t *testing.T, e *voting.EventStore, db sql.DB) {
 				ctx := context.Background()
 
 				err := e.Store(ctx, []byte("hello"), "test")
@@ -66,7 +66,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "deleting non-existent event",
-			fn: func(t *testing.T, e *voting.EventStore, db *pg.Pool) {
+			fn: func(t *testing.T, e *voting.EventStore, db sql.DB) {
 				ctx := context.Background()
 
 				err := voting.DeleteEvent(ctx, db, types.NewUUIDV5([]byte("hello")))
@@ -75,7 +75,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "using kv scoping",
-			fn: func(t *testing.T, e *voting.EventStore, db *pg.Pool) {
+			fn: func(t *testing.T, e *voting.EventStore, db sql.DB) {
 				ctx := context.Background()
 
 				kv := e.KV([]byte("hello"))
@@ -100,7 +100,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "marking broadcasted",
-			fn: func(t *testing.T, e *voting.EventStore, db *pg.Pool) {
+			fn: func(t *testing.T, e *voting.EventStore, db sql.DB) {
 				ctx := context.Background()
 
 				tx, err := db.BeginTx(ctx)
@@ -146,7 +146,7 @@ func Test_EventStore(t *testing.T) {
 		},
 		{
 			name: "get events which has no resolutions",
-			fn: func(t *testing.T, e *voting.EventStore, db *pg.Pool) {
+			fn: func(t *testing.T, e *voting.EventStore, db sql.DB) {
 				ctx := context.Background()
 
 				// create 3 events
@@ -180,7 +180,7 @@ func Test_EventStore(t *testing.T) {
 			require.NoError(t, err)
 			defer cleanup()
 
-			e, err := voting.NewEventStore(ctx, db, db)
+			e, err := voting.NewEventStore(ctx, db)
 			require.NoError(t, err)
 
 			// create a second db connection to emulate the consensus db

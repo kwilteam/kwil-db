@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"slices"
 
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -18,27 +19,23 @@ const (
 	ValidatorVoteIDPrice       = 1000 * 16 // 16 bytes for the UUID
 )
 
-// initializeVoteStore initializes the vote store with the required tables.
-// It will also create any resolution types that have been registered.
-func initializeVoteStore(ctx context.Context, consensusDB sql.DB) error {
-	tx, err := consensusDB.BeginTx(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
+// initializeVoteStore initializes the vote store with the required tables. It
+// will also create any resolution types that have been registered. NOTE: the
+// provided DB is used only for initialization. The store is stateless in the
+// application, and this DB connection is not assumed as a dependency.
+func initializeVoteStore(ctx context.Context, db sql.TxMaker) error {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initVotingTables,
 		1: dropHeight,
 		2: dropExtraVoteIDColumn,
 	}
 
-	err = versioning.Upgrade(ctx, tx, votingSchemaName, upgradeFns, voteStoreVersion)
+	err := versioning.Upgrade(ctx, db, votingSchemaName, upgradeFns, voteStoreVersion)
 	if err != nil {
 		return fmt.Errorf("failed to initialize or upgrade vote store: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	return nil
 }
 
 func initVotingTables(ctx context.Context, db sql.DB) error {
@@ -75,20 +72,29 @@ func dropExtraVoteIDColumn(ctx context.Context, db sql.DB) error {
 	return err
 }
 
-// CreateResolution creates a resolution and submit vote
-// The expiration should be a blockheight.
-// If the resolution already exists do nothing.
-// If the resolution was already processed, nothing will happen.
-func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableEvent, expiration int64, voteBodyProposer []byte) error {
+// ApproveResolution approves a resolution from a voter.
+// If the resolution does not yet exist, it will be errored,
+// Validators should only vote on existing resolutions.
+// If the voter does not exist, an error will be returned.
+// If the voter has already approved the resolution, no error will be returned.
+// This should not be used if the resolution has already been processed
+// (see FilterNotProcessed)
+func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID types.UUID, from []byte) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
 
-	id := event.ID()
+	// Expectation is that the resolution is already created when the voteBody
+	// is submitted. Nodes won't submit the voteIDs for events which don't have
+	// resolutions.
 
-	_, err = tx.Execute(ctx, insertResolution, id[:], event.Body, event.Type, expiration, voteBodyProposer)
+	// if the voter does not exist, the following will error
+	// if the vote from the voter already exists, nothing will happen
+	// if the resolution doesn't exist, the following would error
+	userID := types.NewUUIDV5(from)
+	_, err = tx.Execute(ctx, addVote, resolutionID[:], userID[:])
 	if err != nil {
 		return err
 	}
@@ -96,26 +102,21 @@ func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableE
 	return tx.Commit(ctx)
 }
 
-// Approve approves a resolution from a voter.
-// If the resolution does not yet exist, it will be errored,
-// Validators should only vote on existing resolutions.
-// If the voter does not exist, an error will be returned.
-// If the voter has already approved the resolution, no error will be returned.
-// If the resolution has already been processed, no error will be returned.
-func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID types.UUID, expiration int64, from []byte) error {
+// CreateResolution creates a resolution for a votable event. The expiration
+// should be a block height. If the resolution already exists do nothing. We
+// should not add resolutions that have been processed, but we will because it
+// will be cleaned out after they reach expiry without being processed.
+func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableEvent, expiration int64, voteBodyProposer []byte) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
 
-	// Expectation is that the resolution is already created when the voteBody is submitted. and nodes wont submit the voteIDs for events which doesn't have resolutions.
-	userId := types.NewUUIDV5(from)
+	// NOTE: could check IsProcessed() here and skip the insert.
 
-	// if the voter does not exist, the following will error
-	// if the vote from the voter already exists, nothing will happen
-	// if the resolution doesn't exist, the following would error
-	_, err = tx.Execute(ctx, addVote, resolutionID[:], userId[:])
+	id := event.ID()
+	_, err = tx.Execute(ctx, insertResolution, id[:], event.Body, event.Type, expiration, voteBodyProposer)
 	if err != nil {
 		return err
 	}
@@ -141,15 +142,16 @@ func fromRow(row []any) (*resolutions.Resolution, error) {
 		// this should never happen, just for safety
 		return nil, fmt.Errorf("invalid length for id. required 16 bytes, got %d", len(bts))
 	}
-	v.ID = types.UUID(bts)
+	v.ID = types.UUID(slices.Clone(bts))
 
 	if row[1] == nil {
 		v.Body = nil
 	} else {
-		v.Body, ok = row[1].([]byte)
+		vBody, ok := row[1].([]byte)
 		if !ok {
 			return nil, fmt.Errorf("invalid type for body (%T)", row[1])
 		}
+		v.Body = slices.Clone(vBody)
 	}
 
 	v.Type, ok = row[2].(string)
@@ -202,17 +204,18 @@ func fromRow(row []any) (*resolutions.Resolution, error) {
 
 		v.Voters = append(v.Voters, &types.Validator{
 			Power:  int64(num),
-			PubKey: voterBts[8:],
+			PubKey: slices.Clone(voterBts[8:]),
 		})
 	}
 
 	if row[6] == nil {
 		v.Proposer = nil
 	} else {
-		v.Proposer, ok = row[6].([]byte)
+		vProposer, ok := row[6].([]byte)
 		if !ok {
 			return nil, fmt.Errorf("invalid type for voteBodyProposer (%T)", row[6])
 		}
+		v.Proposer = slices.Clone(vProposer)
 	}
 
 	return v, nil
@@ -237,9 +240,9 @@ func GetResolutionInfo(ctx context.Context, db sql.Executor, id types.UUID) (*re
 }
 
 // GetExpired returns all resolutions with an expiration
-// less than or equal to the given blockheight.
-func GetExpired(ctx context.Context, db sql.Executor, blockheight int64) ([]*resolutions.Resolution, error) {
-	res, err := db.Execute(ctx, getResolutionsFullInfoByExpiration, blockheight)
+// less than or equal to the given block height.
+func GetExpired(ctx context.Context, db sql.Executor, blockHeight int64) ([]*resolutions.Resolution, error) {
+	res, err := db.Execute(ctx, getResolutionsFullInfoByExpiration, blockHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -257,27 +260,25 @@ func GetExpired(ctx context.Context, db sql.Executor, blockheight int64) ([]*res
 
 // GetResolutionsByThresholdAndType gets all resolutions that have reached the threshold of votes and are of a specific type.
 func GetResolutionsByThresholdAndType(ctx context.Context, db sql.TxMaker, threshold *big.Rat, resType string, totalPower int64) ([]*resolutions.Resolution, error) {
+	// This is the consensus conn's write txn, so we can't make a RO tx. We
+	// create a transaction here in case a query here fails we don't break abci.
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx) // we can always rollback, since we are only reading
 
-	thresholdPower, err := RequiredPower(ctx, tx, threshold, totalPower)
-	if err != nil {
-		return nil, err
-	}
-
+	thresholdPower := RequiredPower(ctx, tx, threshold, totalPower)
 	res, err := tx.Execute(ctx, getResolutionsFullInfoByPower, resType, thresholdPower)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getResolutionsFullInfoByPower: %w", err)
 	}
 
 	results := make([]*resolutions.Resolution, len(res.Rows))
 	for i, row := range res.Rows {
 		results[i], err = fromRow(row)
 		if err != nil {
-			return nil, fmt.Errorf("internal bug: %w", err)
+			return nil, fmt.Errorf("fromRow: %w", err)
 		}
 	}
 
@@ -326,7 +327,7 @@ func GetResolutionIDsByTypeAndProposer(ctx context.Context, db sql.Executor, res
 			return nil, fmt.Errorf("internal bug: invalid length for id. required 16 bytes, got %d", len(id))
 		}
 
-		ids[i] = types.UUID(id)
+		ids[i] = types.UUID(slices.Clone(id))
 	}
 
 	return ids, nil
@@ -361,28 +362,6 @@ func IsProcessed(ctx context.Context, tx sql.Executor, resolutionID types.UUID) 
 	return len(res.Rows) != 0, nil
 }
 
-// ResolutionExistsOrProcessed checks if a resolution exists or has been processed.
-func ResolutionExistsOrProcessed(ctx context.Context, tx sql.Executor, resolutionID types.UUID) (bool, error) {
-	res, err := tx.Execute(ctx, resolutionExists, resolutionID[:])
-	if err != nil {
-		return false, err
-	}
-
-	resExists := len(res.Rows) != 0
-
-	// resolution exists, no need to check if processed
-	if resExists {
-		return true, nil
-	}
-
-	res, err = tx.Execute(ctx, resolutionExists, resolutionID[:])
-	if err != nil {
-		return false, err
-	}
-
-	return len(res.Rows) != 0, nil
-}
-
 // FilterNotProcessed takes a set of resolutions and returns the ones that have not been processed.
 // If a resolution does not exist, it WILL be included in the result.
 func FilterNotProcessed(ctx context.Context, db sql.Executor, ids []types.UUID) ([]types.UUID, error) {
@@ -401,7 +380,8 @@ func FilterNotProcessed(ctx context.Context, db sql.Executor, ids []types.UUID) 
 			// this should never happen, just for safety
 			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 		}
-		processed[types.UUID(row[0].([]byte))] = true
+		idBts := slices.Clone(row[0].([]byte))
+		processed[types.UUID(idBts)] = true
 	}
 
 	var notProcessed []types.UUID
@@ -473,7 +453,7 @@ func GetValidators(ctx context.Context, db sql.Executor) ([]*types.Validator, er
 			return nil, fmt.Errorf("invalid type for power")
 		}
 		voters[i] = &types.Validator{
-			PubKey: voterBts,
+			PubKey: slices.Clone(voterBts),
 			Power:  power,
 		}
 	}
@@ -502,12 +482,10 @@ func SetValidatorPower(ctx context.Context, db sql.Executor, recipient []byte, p
 }
 
 // RequiredPower gets the required power to meet the threshold requirements.
-func RequiredPower(ctx context.Context, db sql.Executor, threshold *big.Rat, totalPower int64) (int64, error) {
+func RequiredPower(ctx context.Context, db sql.Executor, threshold *big.Rat, totalPower int64) int64 {
 	numerator := threshold.Num().Int64()
 	denominator := threshold.Denom().Int64()
-
-	result := intDivUpFraction(totalPower, numerator, denominator)
-	return result, nil
+	return intDivUpFraction(totalPower, numerator, denominator)
 }
 
 // intDivUpFraction performs an integer division of (numerator * multiplier /
