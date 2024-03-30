@@ -35,7 +35,7 @@ func init() {
 // "Credit(address,uint256)" and create a deposit event in Kwil when it sees a matching event. It uses the
 // "credit_account" resolution, defined in extensions/resolutions/credit/credit.go, to create the deposit event.
 // It will search for a local extension configuration named "eth_deposit".
-func Start(ctx context.Context, service *common.Service, eventstore listeners.EventStore) error {
+func Start(ctx context.Context, service *common.Service, eventStore listeners.EventStore) error {
 	config := &EthDepositConfig{}
 	listenerConfig, ok := service.ExtensionConfigs[ListenerName]
 	if !ok {
@@ -51,7 +51,7 @@ func Start(ctx context.Context, service *common.Service, eventstore listeners.Ev
 	// we will get the last seen height from the kv store
 	// we will either start from the last seen height, or from the configured starting height,
 	// whichever is greater
-	lastHeight, err := getLastStoredHeight(ctx, eventstore)
+	lastHeight, err := getLastStoredHeight(ctx, eventStore)
 	if err != nil {
 		return fmt.Errorf("failed to get last stored height: %w", err)
 	}
@@ -60,7 +60,8 @@ func Start(ctx context.Context, service *common.Service, eventstore listeners.Ev
 		lastHeight = config.StartingHeight
 	}
 
-	client, err := newEthClient(ctx, config.RPCProvider, config.MaxRetries, ethcommon.HexToAddress(config.ContractAddress), service.Logger)
+	client, err := newEthClient(ctx, config.RPCProvider, config.MaxRetries,
+		ethcommon.HexToAddress(config.ContractAddress), service.Logger)
 	if err != nil {
 		return fmt.Errorf("failed to create ethereum client: %w", err)
 	}
@@ -71,6 +72,7 @@ func Start(ctx context.Context, service *common.Service, eventstore listeners.Ev
 	if err != nil {
 		return fmt.Errorf("failed to get current block height: %w", err)
 	}
+	service.Logger.S.Infof("ETH best block: %v", currentHeight)
 
 	if lastHeight > currentHeight-config.RequiredConfirmations {
 		return fmt.Errorf("starting height is greater than the last confirmed eth block height")
@@ -90,7 +92,7 @@ func Start(ctx context.Context, service *common.Service, eventstore listeners.Ev
 			toBlock = currentHeight - config.RequiredConfirmations
 		}
 
-		err = processEvents(ctx, lastHeight, toBlock, client, eventstore, service.Logger)
+		err = processEvents(ctx, lastHeight, toBlock, client, eventStore, service.Logger)
 		if err != nil {
 			return fmt.Errorf("failed to process events: %w", err)
 		}
@@ -113,7 +115,7 @@ func Start(ctx context.Context, service *common.Service, eventstore listeners.Ev
 		service.Logger.Info("received new block height", "height", newHeight)
 
 		// lastheight + 1 because we have already processed the last height
-		err = processEvents(ctx, lastHeight+1, newHeight, client, eventstore, service.Logger)
+		err = processEvents(ctx, lastHeight+1, newHeight, client, eventStore, service.Logger)
 		if err != nil {
 			return fmt.Errorf("failed to process events: %w", err)
 		}
@@ -123,7 +125,7 @@ func Start(ctx context.Context, service *common.Service, eventstore listeners.Ev
 		return nil
 	})
 	if outerErr != nil {
-		return fmt.Errorf("ethereum client error: %w", outerErr)
+		return fmt.Errorf("ListenToBlocks failure: %w", outerErr)
 	}
 
 	return nil
@@ -183,15 +185,18 @@ type EthDepositConfig struct {
 	// This would likely be an Infura / Alchemy endpoint.
 	// It is a required configuration.
 	RPCProvider string
-	// ReconnectionInterval is the amount of time in seconds that the listener will wait
-	// before reconnecting to the Ethereum RPC endpoint if it is disconnected. Long-running
-	// RPC subscriptions are prone to being reset by the Ethereum RPC endpoint, so this
-	// will allow the listener to reconnect. If not configured, it will default to 60s.
+	// ReconnectionInterval is the amount of time in seconds that the listener
+	// will wait before resubscribing for new Ethereum Blocks. Reconnects are
+	// automatically handled, but a subscription may stall, in which case we
+	// will make a new subscription. If the write or read on the connection to
+	// the RPC provider errors, the RPC client will reconnect, and we will
+	// continue to reestablish a new block subscription. If not configured, it
+	// will default to 60s.
 	ReconnectionInterval int64
-	// MaxRetries is the total number of times the listener will attempt to reconnect to the
-	// Ethereum RPC endpoint before giving up. It will exponentially back off after each try,
-	// starting at 1 second and doubling each time.
-	// If not configured, it will default to 10.
+	// MaxRetries is the total number of times the listener will attempt an RPC
+	// with the provider before giving up. It will exponentially back off after
+	// each try, starting at 1 second and doubling each time. If not configured,
+	// it will default to 10.
 	MaxRetries int64
 	// BlockSyncChunkSize is the number of Ethereum blocks the listener will request from the
 	// Ethereum RPC endpoint at a time while catching up to the network. If not configured,
@@ -271,7 +276,7 @@ func (e *EthDepositConfig) setConfig(m map[string]string) error {
 
 	blockSyncChunkSize, ok := m["block_sync_chunk_size"]
 	if !ok {
-		blockSyncChunkSize = "1000000"
+		blockSyncChunkSize = "1000000" // check this on goerli, it's big
 	}
 	e.BlockSyncChunkSize, err = strconv.ParseInt(blockSyncChunkSize, 10, 64)
 	if err != nil {
@@ -305,9 +310,9 @@ var (
 )
 
 // getLastStoredHeight gets the last height stored by the KV store
-func getLastStoredHeight(ctx context.Context, eventstore listeners.EventStore) (int64, error) {
+func getLastStoredHeight(ctx context.Context, eventStore listeners.EventStore) (int64, error) {
 	// get the last confirmed block height processed by the listener
-	lastHeight, err := eventstore.Get(ctx, lastHeightKey)
+	lastHeight, err := eventStore.Get(ctx, lastHeightKey)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get last block height: %w", err)
 	}
@@ -320,12 +325,12 @@ func getLastStoredHeight(ctx context.Context, eventstore listeners.EventStore) (
 }
 
 // setLastStoredHeight sets the last height stored by the KV store
-func setLastStoredHeight(ctx context.Context, eventstore listeners.EventStore, height int64) error {
+func setLastStoredHeight(ctx context.Context, eventStore listeners.EventStore, height int64) error {
 	heightBts := make([]byte, 8)
 	binary.LittleEndian.PutUint64(heightBts, uint64(height))
 
 	// set the last confirmed block height processed by the listener
-	err := eventstore.Set(ctx, lastHeightKey, heightBts)
+	err := eventStore.Set(ctx, lastHeightKey, heightBts)
 	if err != nil {
 		return fmt.Errorf("failed to set last block height: %w", err)
 	}

@@ -33,14 +33,14 @@ type Deployer struct {
 }
 
 // NewDeployer("ws://localhost:8545","dd23ca549a97cb330b011aebb674730df8b14acaee42d211ab45692699ab8ba5")
-func NewDeployer(endpoint string, pKey string, chainID int64) (*Deployer, error) {
+func NewDeployer(endpoint, secp256k1PrivKey string, chainID int64) (*Deployer, error) {
 	ctx := context.Background()
 	ethClient, err := ethclient.DialContext(ctx, endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	privKey, err := ec.HexToECDSA(pKey)
+	privKey, err := ec.HexToECDSA(secp256k1PrivKey)
 	if err != nil {
 		return nil, err
 	}

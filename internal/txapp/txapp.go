@@ -88,6 +88,7 @@ type TxApp struct {
 
 	validators []*types.Validator // used to optimize reads, gets updated at the block boundaries
 	valMtx     sync.RWMutex       // protects validators access
+	valChans   []chan []*types.Validator
 
 	// transaction that exists between Begin and Commit
 	currentTx sql.OuterTx
@@ -228,7 +229,46 @@ func (r *TxApp) UpdateValidator(ctx context.Context, validator []byte, power int
 	return sp.Commit(ctx)
 }
 
-// GetValidators returns the current validator set.
+// SubscribeValidators creates and returns a new channel on which the current
+// validator set will be sent for each block Commit. The receiver will miss
+// updates if they are unable to receive fast enough. This should generally
+// be used after catch-up is complete, and only called once by the receiving
+// goroutine rather than repeatedly in a loop, for instance. The slice should
+// not be modified by the receiver.
+func (r *TxApp) SubscribeValidators() <-chan []*types.Validator {
+	// There's only supposed to be one user of this method, and they should
+	// only get one channel and listen, but play it safe and use a slice.
+	r.valMtx.Lock()
+	defer r.valMtx.Unlock()
+	c := make(chan []*types.Validator, 1)
+	r.valChans = append(r.valChans, c)
+	return c
+}
+
+// announceValidators sends the current validator list to subscribers from
+// ReceiveValidators.
+func (r *TxApp) announceValidators() {
+	// dev note: this method should not be blocked by receivers. Keep a default
+	// case and create buffered channels.
+	r.valMtx.RLock()
+	defer r.valMtx.RUnlock()
+
+	if len(r.valChans) == 0 {
+		return // no subscribers, skip the slice clone
+	}
+
+	vals := slices.Clone(r.validators)
+
+	for _, c := range r.valChans {
+		select {
+		case c <- vals:
+		default: // they'll get the next one... this is just supposed to be better than polling
+			r.log.Warn("Validator update channel is blocking")
+		}
+	}
+}
+
+// GetValidators returns a shallow copy of the current validator set.
 // It will not return uncommitted changes.
 func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
 	r.valMtx.Lock()
@@ -236,17 +276,7 @@ func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
 
 	// if we have a cached validator set, return it
 	if r.validators != nil {
-		vals := make([]*types.Validator, len(r.validators))
-		for i, v := range r.validators {
-			val := &types.Validator{
-				PubKey: make([]byte, len(v.PubKey)),
-				Power:  v.Power,
-			}
-			copy(val.PubKey, v.PubKey)
-			vals[i] = val
-		}
-
-		return vals, nil
+		return slices.Clone(r.validators), nil
 	}
 
 	// otherwise, we need to get the validator set from the database
@@ -256,22 +286,8 @@ func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
 		return nil, err
 	}
 	defer readTx.Rollback(ctx) // always rollback read tx
-
-	validators := make([]*types.Validator, 0)
-	voters, err := getAllVoters(ctx, readTx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, voter := range voters {
-		validators = append(validators, &types.Validator{
-			PubKey: voter.PubKey,
-			Power:  voter.Power,
-		})
-
-	}
-
-	return validators, nil
+	// NOTE: we aren't saving this to r.validators, leaving that to next FinalizeBlock. We could though...
+	return getAllVoters(ctx, readTx)
 }
 
 // GetValidatorsPower returns the total power of the current validator set.
@@ -621,7 +637,14 @@ func (r *TxApp) Commit(ctx context.Context) error {
 		return err
 	}
 
-	return tx.Commit(ctx) // no Precommit for this one
+	err = tx.Commit(ctx) // no Precommit for this one
+	if err != nil {
+		return err
+	}
+
+	r.announceValidators()
+
+	return nil
 }
 
 // ApplyMempool applies the transactions in the mempool.

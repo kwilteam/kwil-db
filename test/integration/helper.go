@@ -304,7 +304,7 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 				StartingHeight:        0,
 				RequiredConfirmations: r.ethDeposit.confirmations, // TODO: remove this from the r.ethDeposit struct. it is not needed
 				ReconnectionInterval:  30,
-				MaxRetries:            2,
+				MaxRetries:            20,
 				BlockSyncChunkSize:    1000,
 			}
 
