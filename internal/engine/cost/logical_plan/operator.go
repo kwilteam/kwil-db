@@ -35,7 +35,7 @@ func NoSource() LogicalPlan {
 // It corresponds to `FROM` clause in SQL.
 type ScanOp struct {
 	table      *dt.TableRef
-	dataSource ds.SchemaSource
+	dataSource ds.DataSource
 
 	// used for projection push down optimization
 	projection []string // TODO: use index?
@@ -49,7 +49,7 @@ func (s *ScanOp) Table() *dt.TableRef {
 	return s.table
 }
 
-func (s *ScanOp) DataSource() ds.SchemaSource {
+func (s *ScanOp) DataSource() ds.DataSource {
 	return s.dataSource
 }
 
@@ -67,10 +67,10 @@ func (s *ScanOp) Filter() []LogicalExpr {
 func (s *ScanOp) String() string {
 	output := fmt.Sprintf("Scan: %s", s.table)
 	if len(s.filter) > 0 {
-		output += fmt.Sprintf("; filter=[%s]", ppList(s.filter))
+		output += fmt.Sprintf("; filter=[%s]", PpList(s.filter))
 	}
 	if len(s.projection) > 0 {
-		output += fmt.Sprintf("; projection=[%s]", ppList(s.projection))
+		output += fmt.Sprintf("; projection=[%s]", PpList(s.projection))
 	}
 	return output
 }
@@ -89,7 +89,7 @@ func (s *ScanOp) Exprs() []LogicalExpr {
 }
 
 // Scan creates a table scan logical plan.
-func Scan(table *dt.TableRef, ds ds.SchemaSource,
+func Scan(table *dt.TableRef, ds ds.DataSource,
 	filter []LogicalExpr, projection ...string) LogicalPlan {
 	projectedSchema := ds.Schema().Project(projection...)
 	qualifiedSchema := dt.NewSchemaQualified(table, projectedSchema.Fields...)
@@ -106,7 +106,7 @@ type ProjectionOp struct {
 }
 
 func (p *ProjectionOp) String() string {
-	return fmt.Sprintf("Projection: %s", ppList(p.exprs))
+	return fmt.Sprintf("Projection: %s", PpList(p.exprs))
 }
 
 func (p *ProjectionOp) Schema() *dt.Schema {
@@ -188,10 +188,10 @@ func (a *AggregateOp) Aggregate() []LogicalExpr {
 func (a *AggregateOp) String() string {
 	output := "Aggregate: "
 	if len(a.groupBy) > 0 {
-		output += fmt.Sprintf("groupBy=[%s]", ppList(a.groupBy))
+		output += fmt.Sprintf("groupBy=[%s]", PpList(a.groupBy))
 	}
 	if len(a.aggregate) > 0 {
-		output += fmt.Sprintf("; aggr=[%s]", ppList(a.aggregate))
+		output += fmt.Sprintf("; aggr=[%s]", PpList(a.aggregate))
 
 	}
 
@@ -301,7 +301,7 @@ type SortOp struct {
 }
 
 func (s *SortOp) String() string {
-	return fmt.Sprintf("Sort: %s", ppList(s.by))
+	return fmt.Sprintf("Sort: %s", PpList(s.by))
 }
 
 func (s *SortOp) Schema() *dt.Schema {

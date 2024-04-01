@@ -29,7 +29,7 @@ func (b *logicalPlanBuilder) From(plan LogicalPlan) *logicalPlanBuilder {
 }
 
 func (b *logicalPlanBuilder) Scan(relation *datatypes.TableRef,
-	source datasource.SchemaSource, projection ...string) *logicalPlanBuilder {
+	source datasource.DataSource, projection ...string) *logicalPlanBuilder {
 	b.plan = Scan(relation, source, []LogicalExpr{}, projection...)
 	return b
 }

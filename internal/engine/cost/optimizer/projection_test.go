@@ -15,7 +15,7 @@ func ExampleProjectionRule_optimize_pushDown() {
 	fmt.Println(logical_plan.Format(plan, 0))
 
 	r := &ProjectionRule{}
-	got := r.Optimize(plan)
+	got := r.Transform(plan)
 
 	fmt.Printf("---After optimization---\n\n")
 	fmt.Println(logical_plan.Format(got, 0))
@@ -43,7 +43,7 @@ func ExampleProjectionRule_optimize_pushDown_with_selection() {
 	fmt.Println(logical_plan.Format(plan, 0))
 
 	r := &ProjectionRule{}
-	got := r.Optimize(plan)
+	got := r.Transform(plan)
 
 	fmt.Printf("---After optimization---\n\n")
 	fmt.Println(logical_plan.Format(got, 0))
@@ -74,7 +74,7 @@ func ExampleProjectionRule_optimize_pushDown_with_aggregate() {
 	fmt.Println(logical_plan.Format(plan, 0))
 
 	r := &ProjectionRule{}
-	got := r.Optimize(plan)
+	got := r.Transform(plan)
 
 	fmt.Printf("---After optimization---\n\n")
 	fmt.Println(logical_plan.Format(got, 0))
@@ -108,7 +108,7 @@ func ExampleProjectionRule_optimize_pushDown_all_operators() {
 	fmt.Println(logical_plan.Format(plan, 0))
 
 	r := &ProjectionRule{}
-	got := r.Optimize(plan)
+	got := r.Transform(plan)
 
 	fmt.Printf("---After optimization---\n\n")
 	fmt.Println(logical_plan.Format(got, 0))

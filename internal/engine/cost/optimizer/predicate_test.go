@@ -21,8 +21,8 @@ func ExamplePredicateRule_optimize_pushDown() {
 
 	fmt.Println(logical_plan.Format(plan, 0))
 
-	r := &PredicateRule{}
-	got := r.Optimize(plan)
+	r := &PredicatePushDownRule{}
+	got := r.Transform(plan)
 
 	fmt.Printf("---After optimization---\n\n")
 	fmt.Println(logical_plan.Format(got, 0))
@@ -48,8 +48,8 @@ func ExamplePredicateRule_optimize_pushDown_with_nested_filter() {
 
 	fmt.Println(logical_plan.Format(plan, 0))
 
-	r := &PredicateRule{}
-	got := r.Optimize(plan)
+	r := &PredicatePushDownRule{}
+	got := r.Transform(plan)
 
 	fmt.Printf("---After optimization---\n\n")
 	fmt.Println(logical_plan.Format(got, 0))

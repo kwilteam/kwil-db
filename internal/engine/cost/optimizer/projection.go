@@ -9,7 +9,7 @@ import (
 type ProjectionRule struct {
 }
 
-func (r *ProjectionRule) Optimize(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
+func (r *ProjectionRule) Transform(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
 	// TODO: seen map key shuold be a combination of dbName and tableName
 	return r.pushDown(plan, make(map[string]bool))
 }

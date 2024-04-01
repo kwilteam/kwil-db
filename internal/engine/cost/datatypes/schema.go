@@ -64,6 +64,8 @@ type Field struct {
 	Name     string
 	Type     string
 	Nullable bool
+
+	HasIndex bool
 }
 
 func NewField(name string, dataType string, nullable bool) Field {
@@ -85,6 +87,7 @@ func (f *Field) QualifiedColumn() *ColumnDef {
 type Schema struct {
 	Fields []Field
 	// index
+	//Indexes map[]
 }
 
 func NewSchema(fields ...Field) *Schema {

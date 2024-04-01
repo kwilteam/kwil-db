@@ -10,7 +10,8 @@ type SourceType string
 
 // DataSource represents a data source.
 type DataSource interface {
-	SchemaSource
+	// Schema returns the schema for the underlying data source
+	Schema() *datatypes.Schema
 
 	// SourceType returns the type of the data source.
 	SourceType() SourceType
@@ -22,20 +23,4 @@ type DataSource interface {
 
 	// Statistics returns the statistics of the data source.
 	Statistics() *datatypes.Statistics
-}
-
-type DefaultSchemaSource struct {
-	datasource DataSource
-}
-
-func (s *DefaultSchemaSource) Schema() *datatypes.Schema {
-	return s.datasource.Schema()
-}
-
-func (s *DefaultSchemaSource) Scan(ctx context.Context, projection ...string) *Result {
-	return s.datasource.Scan(ctx, projection...)
-}
-
-func DataAsSchemaSource(ds DataSource) SchemaSource {
-	return &DefaultSchemaSource{datasource: ds}
 }

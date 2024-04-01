@@ -6,10 +6,10 @@ import (
 )
 
 type Catalog interface {
-	GetSchemaSource(tableRef *dt.TableRef) (ds.SchemaSource, error)
+	GetDataSource(tableRef *dt.TableRef) (ds.DataSource, error)
 }
 
 type defaultCatalogProvider struct {
 	dbidAliases map[string]string // alias -> dbid
-	schemas     map[string]ds.SchemaSource
+	srcs map[string]ds.DataSource
 }

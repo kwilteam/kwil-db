@@ -699,7 +699,7 @@ type scalarFuncExpr struct {
 }
 
 func (e *scalarFuncExpr) String() string {
-	return fmt.Sprintf("%s(%s)", e.fn.Name(), ppList(e.args))
+	return fmt.Sprintf("%s(%s)", e.fn.Name(), PpList(e.args))
 }
 
 func (e *scalarFuncExpr) Resolve(schema *dt.Schema) dt.Field {
@@ -729,7 +729,7 @@ type aggregateFuncExpr struct {
 }
 
 func (e *aggregateFuncExpr) String() string {
-	return fmt.Sprintf("%s(%s)", e.fn.Name(), ppList(e.args))
+	return fmt.Sprintf("%s(%s)", e.fn.Name(), PpList(e.args))
 }
 
 func (e *aggregateFuncExpr) Resolve(schema *dt.Schema) dt.Field {
@@ -934,48 +934,3 @@ func (e *arithmeticBinaryExpr) ExprNode() {}
 func (e *aggregateExpr) ExprNode()        {}
 func (e *aggregateIntExpr) ExprNode()     {}
 func (e *sortExpr) ExprNode()             {}
-
-/////////////////////////////////
-
-type OnionOrderVisitor struct{}
-
-func (v *OnionOrderVisitor) Visit(n pt.TreeNode) (bool, interface{}) {
-	return pt.OnionOrderVisit(v, n)
-}
-
-func (v *OnionOrderVisitor) PreVisit(n pt.TreeNode) (bool, interface{}) {
-	panic("implement me")
-}
-
-func (v *OnionOrderVisitor) VisitChildren(n pt.TreeNode) (bool, interface{}) {
-	return pt.ApplyNodeFuncToChildren(n, v.Visit)
-}
-
-func (v *OnionOrderVisitor) PostVisit(n pt.TreeNode) (bool, interface{}) {
-	panic("implement me")
-}
-
-func VisitLogicalExpr(expr LogicalExpr, visitor pt.TreeNodeVisitor) (bool, LogicalExpr) {
-	switch e := expr.(type) {
-	case pt.TreeNode:
-		//return visitor.Visit(e)
-	default:
-		return true, e.(LogicalExpr)
-	}
-	return true, expr
-}
-
-//// exprNodeTransform transforms the expression node using the given function.
-//// This is an alternative to the TransformUp method of the expression node.
-//func exprNodeTransform(node pt.TreeNode, fn pt.TransformFunc) pt.TreeNode {
-//	switch e := node.(type) {
-//	case *ColumnExpr:
-//		return Column(e.Relation, e.Name)
-//	case *ColumnIdxExpr:
-//		return ColumnIdx(e.Idx)
-//	case *AliasExpr:
-//		return Alias(fn(e.Expr).(LogicalExpr), e.Alias)
-//	default:
-//		panic(fmt.Sprintf("unknown expression type %T", e))
-//	}
-//}

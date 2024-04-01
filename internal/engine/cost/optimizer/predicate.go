@@ -5,9 +5,9 @@ import (
 	"slices"
 )
 
-type PredicateRule struct{}
+type PredicatePushDownRule struct{}
 
-func (r *PredicateRule) Optimize(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
+func (r *PredicatePushDownRule) Transform(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
 	return r.pushDown(plan)
 }
 
@@ -18,7 +18,7 @@ func (r *PredicateRule) Optimize(plan logical_plan.LogicalPlan) logical_plan.Log
 // optimization, because it can reduce the number of rows to be processed.
 // In column based storage, it's less important than projection push down
 // optimization, because it can reduce the number of columns to be processed.
-func (r *PredicateRule) pushDown(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
+func (r *PredicatePushDownRule) pushDown(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
 	// when the predicate can be evaluated?
 	// - if both arms of the predicate are literals
 	// - if one arm is a column and the other is a literal, and the column is
@@ -59,8 +59,8 @@ func (r *PredicateRule) pushDown(plan logical_plan.LogicalPlan) logical_plan.Log
 		}
 	case *logical_plan.JoinOp:
 		// TODO: implement
-		return plan
+		panic("not implemented")
 	default:
-		return plan
+		panic("logical plan type not supported")
 	}
 }

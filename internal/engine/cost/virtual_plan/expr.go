@@ -2,7 +2,6 @@ package virtual_plan
 
 import (
 	"fmt"
-
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 )
 
@@ -14,27 +13,27 @@ type VirtualExpr interface {
 }
 
 type VLiteralStringExpr struct {
-	value string
+	Value string
 }
 
 func (e *VLiteralStringExpr) Resolve(_ VirtualPlan) string {
-	return e.value
+	return e.Value
 }
 
 func (e *VLiteralStringExpr) evaluate(row datasource.Row) datasource.ColumnValue {
-	return datasource.NewLiteralColumnValue(e.value)
+	return datasource.NewLiteralColumnValue(e.Value)
 }
 
 type VLiteralNumericExpr struct {
-	value int64
+	Value int64
 }
 
 func (e *VLiteralNumericExpr) Resolve(_ VirtualPlan) string {
-	return fmt.Sprintf("%d", e.value)
+	return fmt.Sprintf("%d", e.Value)
 }
 
 func (e *VLiteralNumericExpr) evaluate(row datasource.Row) datasource.ColumnValue {
-	return datasource.NewLiteralColumnValue(e.value)
+	return datasource.NewLiteralColumnValue(e.Value)
 }
 
 type VColumnExpr struct {

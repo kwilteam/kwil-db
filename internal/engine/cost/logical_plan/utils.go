@@ -184,8 +184,8 @@ func inferNullable(expr LogicalExpr, schema *ds.Schema) bool {
 	}
 }
 
-// ppList returns a string representation of the given list.
-func ppList[T any](l []T) string {
+// PpList returns a string representation of the given list.
+func PpList[T any](l []T) string {
 	if len(l) == 0 {
 		return ""
 	}

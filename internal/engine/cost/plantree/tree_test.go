@@ -1,7 +1,7 @@
 package plantree_test
 
 import (
-	"fmt"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,149 +9,77 @@ import (
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
 )
 
-type mockValueNode struct {
+type mockTreeNode struct {
 	*pt.BaseTreeNode
+
+	children []pt.TreeNode
 
 	value any
 }
 
-func (n *mockValueNode) Children() []pt.TreeNode {
-	return []pt.TreeNode{}
+func (n *mockTreeNode) Children() []pt.TreeNode {
+	return n.children
 }
 
-func (n *mockValueNode) Accept(v pt.TreeNodeVisitor) (bool, any) {
+func (n *mockTreeNode) Accept(v pt.TreeNodeVisitor) (bool, any) {
 	return v.Visit(n)
 }
 
-//func (n *mockValueNode) TransformUp(fn pt.TransformFunc) pt.TreeNode {
-//	newChildren := n.TransformChildren(func(node pt.TreeNode) pt.TreeNode {
-//		return node.TransformUp(fn)
-//	})
-//
-//	return fn(newChildren)
-//}
-//
-//func (n *mockValueNode) TransformDown(fn pt.TransformFunc) pt.TreeNode {
-//	newNode := fn(n)
-//
-//	return newNode.TransformChildren(func(node pt.TreeNode) pt.TreeNode {
-//		return node.TransformDown(fn)
-//	})
-//}
-
-func (n *mockValueNode) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
-	return &mockValueNode{
+func (n *mockTreeNode) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
+	newChildren := make([]pt.TreeNode, 0, len(n.children))
+	for _, child := range n.children {
+		newChildren = append(newChildren, fn(child))
+	}
+	return &mockTreeNode{
 		BaseTreeNode: pt.NewBaseTreeNode(),
 		value:        n.value,
+		children:     newChildren,
 	}
 }
 
-func (n *mockValueNode) String() string {
-	return fmt.Sprintf("%v", n.value)
+func (n *mockTreeNode) String() string {
+	return logical_plan.PpList(n.children)
 }
 
-type mockBinaryTreeNode struct {
-	*pt.BaseTreeNode
-
-	left  pt.TreeNode
-	right pt.TreeNode
-}
-
-func (n *mockBinaryTreeNode) Children() []pt.TreeNode {
-	return []pt.TreeNode{n.left, n.right}
-}
-
-func (n *mockBinaryTreeNode) Accept(v pt.TreeNodeVisitor) (bool, any) {
-	return v.Visit(n)
-}
-
-//func (n *mockBinaryTreeNode) TransformUp(fn pt.TransformFunc) pt.TreeNode {
-//	newChildren := n.TransformChildren(func(node pt.TreeNode) pt.TreeNode {
-//		return node.TransformUp(fn)
-//	})
-//
-//	return fn(newChildren)
-//}
-//
-//func (n *mockBinaryTreeNode) TransformDown(fn pt.TransformFunc) pt.TreeNode {
-//	newNode := fn(n)
-//
-//	return newNode.TransformChildren(func(node pt.TreeNode) pt.TreeNode {
-//		return node.TransformDown(fn)
-//	})
-//}
-
-func (n *mockBinaryTreeNode) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
-	return &mockBinaryTreeNode{
+func mockLeftTree() *mockTreeNode {
+	//      0
+	//    /   \
+	//   1     2
+	//  / \   / \
+	// 3   4 5   6
+	//
+	// preorder: 0 1 3 4 2 5 6
+	// postorder: 3 4 1 5 6 2 0
+	return &mockTreeNode{
 		BaseTreeNode: pt.NewBaseTreeNode(),
-
-		left:  fn(n.left),
-		right: fn(n.right),
-	}
-}
-
-func (n *mockBinaryTreeNode) String() string {
-	return fmt.Sprintf("(%v, %v)", n.left, n.right)
-}
-
-func mockLeftTree() *mockBinaryTreeNode {
-	//    /\
-	//   /\ 4
-	//  /\ 3
-	// 1  2
-	return &mockBinaryTreeNode{
-		BaseTreeNode: pt.NewBaseTreeNode(),
-		left: &mockBinaryTreeNode{
-			BaseTreeNode: pt.NewBaseTreeNode(),
-			left: &mockBinaryTreeNode{
+		value:        0,
+		children: []pt.TreeNode{
+			&mockTreeNode{
 				BaseTreeNode: pt.NewBaseTreeNode(),
-				left: &mockValueNode{
-					BaseTreeNode: pt.NewBaseTreeNode(),
-					value:        1,
-				},
-				right: &mockValueNode{
-					BaseTreeNode: pt.NewBaseTreeNode(),
-					value:        2,
+				value:        1,
+				children: []pt.TreeNode{
+					&mockTreeNode{
+						BaseTreeNode: pt.NewBaseTreeNode(),
+						value:        3,
+					},
+					&mockTreeNode{
+						BaseTreeNode: pt.NewBaseTreeNode(),
+						value:        4,
+					},
 				},
 			},
-			right: &mockValueNode{
+			&mockTreeNode{
 				BaseTreeNode: pt.NewBaseTreeNode(),
-				value:        3,
-			},
-		},
-		right: &mockValueNode{
-			BaseTreeNode: pt.NewBaseTreeNode(),
-			value:        4,
-		},
-	}
-}
-
-func mockRightTree() *mockBinaryTreeNode {
-	//   /\
-	//  4 /\
-	//   3 /\
-	//    1  2
-	return &mockBinaryTreeNode{
-		BaseTreeNode: pt.NewBaseTreeNode(),
-		left: &mockValueNode{
-			BaseTreeNode: pt.NewBaseTreeNode(),
-			value:        4,
-		},
-		right: &mockBinaryTreeNode{
-			BaseTreeNode: pt.NewBaseTreeNode(),
-			left: &mockValueNode{
-				BaseTreeNode: pt.NewBaseTreeNode(),
-				value:        3,
-			},
-			right: &mockBinaryTreeNode{
-				BaseTreeNode: pt.NewBaseTreeNode(),
-				left: &mockValueNode{
-					BaseTreeNode: pt.NewBaseTreeNode(),
-					value:        1,
-				},
-				right: &mockValueNode{
-					BaseTreeNode: pt.NewBaseTreeNode(),
-					value:        2,
+				value:        2,
+				children: []pt.TreeNode{
+					&mockTreeNode{
+						BaseTreeNode: pt.NewBaseTreeNode(),
+						value:        5,
+					},
+					&mockTreeNode{
+						BaseTreeNode: pt.NewBaseTreeNode(),
+						value:        6,
+					},
 				},
 			},
 		},
@@ -162,10 +90,11 @@ func mockApplyFuncPreOrderCollect(n pt.TreeNode) []any {
 	collected := []any{}
 
 	pt.PreOrderApply(n, func(n pt.TreeNode) (bool, any) {
-		if v, ok := n.(*mockValueNode); ok {
+		if v, ok := n.(*mockTreeNode); ok {
 			collected = append(collected, v.value)
 			return true, v.value
 		}
+
 		return true, n
 	})
 
@@ -176,7 +105,7 @@ func mockApplyFuncPostOrderCollect(n pt.TreeNode) []any {
 	collected := []any{}
 
 	pt.PostOrderApply(n, func(n pt.TreeNode) (bool, any) {
-		if v, ok := n.(*mockValueNode); ok {
+		if v, ok := n.(*mockTreeNode); ok {
 			collected = append(collected, v.value)
 			return true, v.value
 		}
@@ -186,25 +115,20 @@ func mockApplyFuncPostOrderCollect(n pt.TreeNode) []any {
 	return collected
 }
 
-func TestOrderApply_left_tree(t *testing.T) {
+func TestOrderApply(t *testing.T) {
 	node := mockLeftTree()
 
-	assert.Equal(t, []any{1, 2, 3, 4}, mockApplyFuncPreOrderCollect(node))
-	assert.Equal(t, []any{1, 2, 3, 4}, mockApplyFuncPostOrderCollect(node))
-}
-
-func TestOrderApply_right_tree(t *testing.T) {
-	node := mockRightTree()
-
-	assert.Equal(t, []any{4, 3, 1, 2}, mockApplyFuncPreOrderCollect(node))
-	assert.Equal(t, []any{4, 3, 1, 2}, mockApplyFuncPostOrderCollect(node))
+	assert.Equal(t, []any{0, 1, 3, 4, 2, 5, 6}, mockApplyFuncPreOrderCollect(node))
+	assert.Equal(t, []any{3, 4, 1, 5, 6, 2, 0}, mockApplyFuncPostOrderCollect(node))
 }
 
 func mockTransform(node pt.TreeNode) pt.TreeNode {
 	return pt.TransformPostOrder(node, func(n pt.TreeNode) pt.TreeNode {
-		if v, ok := n.(*mockValueNode); ok {
-			return &mockValueNode{
-				value: v.value.(int) * 2,
+		if v, ok := n.(*mockTreeNode); ok {
+			return &mockTreeNode{
+				BaseTreeNode: v.BaseTreeNode,
+				value:        v.value.(int) * 2,
+				children:     v.children,
 			}
 		}
 		// otherwise, return the original node
@@ -212,150 +136,26 @@ func mockTransform(node pt.TreeNode) pt.TreeNode {
 	})
 }
 
-func TestTransform_left_tree(t *testing.T) {
+func TestTransform(t *testing.T) {
 	node := mockLeftTree()
+
+	originPreOrder := []any{0, 1, 3, 4, 2, 5, 6}
+	originPostOrder := []any{3, 4, 1, 5, 6, 2, 0}
 
 	transformed := mockTransform(node)
 	// new tree's nodes have been transformed
-	assert.Equal(t, []any{2, 4, 6, 8}, mockApplyFuncPreOrderCollect(transformed))
+	assert.Equal(t, []any{0, 2, 6, 8, 4, 10, 12}, mockApplyFuncPreOrderCollect(transformed))
 	// original tree's nodes are not changed
-	assert.Equal(t, []any{1, 2, 3, 4}, mockApplyFuncPreOrderCollect(node))
+	assert.Equal(t, originPreOrder, mockApplyFuncPreOrderCollect(node))
+	assert.Equal(t, originPostOrder, mockApplyFuncPostOrderCollect(node))
 
-	leftNode := node.left
+	leftNode := node.children[0]
 	leftTransformed := mockTransform(leftNode)
 	// new left tree's nodes have been transformed
-	assert.Equal(t, []any{2, 4, 6}, mockApplyFuncPreOrderCollect(leftTransformed))
+	assert.Equal(t, []any{2, 6, 8}, mockApplyFuncPreOrderCollect(leftTransformed))
 	// original left tree's nodes are not changed
-	assert.Equal(t, []any{1, 2, 3}, mockApplyFuncPreOrderCollect(leftNode))
+	assert.Equal(t, []any{1, 3, 4}, mockApplyFuncPreOrderCollect(leftNode))
 	// original parent tree's nodes are not changed
-	assert.Equal(t, []any{1, 2, 3, 4}, mockApplyFuncPreOrderCollect(node))
-}
-
-func mockNodeTransformFunc(node pt.TreeNode, transformFunc pt.TransformFunc) pt.TreeNode {
-	switch t := node.(type) {
-	case *mockValueNode:
-		return &mockValueNode{
-			BaseTreeNode: pt.NewBaseTreeNode(),
-			value:        t.value,
-		}
-	case *mockBinaryTreeNode:
-		return &mockBinaryTreeNode{
-			BaseTreeNode: pt.NewBaseTreeNode(),
-			left:         transformFunc(t.left),
-			right:        transformFunc(t.right),
-		}
-	default:
-		panic("unknown node type")
-	}
-}
-
-func TestTransform_left_tree_using_fn(t *testing.T) {
-
-	node := mockLeftTree()
-
-	transformed := mockTransform(node)
-
-	// new tree's nodes have been transformed
-	assert.Equal(t, []any{2, 4, 6, 8}, mockApplyFuncPreOrderCollect(transformed))
-	// original tree's nodes are not changed
-	assert.Equal(t, []any{1, 2, 3, 4}, mockApplyFuncPreOrderCollect(node))
-
-	leftNode := node.left
-	leftTransformed := mockTransform(leftNode)
-
-	// new left tree's nodes have been transformed
-	assert.Equal(t, []any{2, 4, 6}, mockApplyFuncPreOrderCollect(leftTransformed))
-	// original left tree's nodes are not changed
-	assert.Equal(t, []any{1, 2, 3}, mockApplyFuncPreOrderCollect(leftNode))
-	// original parent tree's nodes are not changed
-	assert.Equal(t, []any{1, 2, 3, 4}, mockApplyFuncPreOrderCollect(node))
-}
-
-type cloneB struct {
-	a int
-}
-
-type cloneA struct {
-	b *cloneB
-}
-
-func (c *cloneA) Clone1() *cloneA {
-	bb := *c.b
-	return &cloneA{b: &bb}
-}
-
-func (c *cloneA) Clone2() *cloneA {
-	cc := *c
-	return &cc
-}
-
-func TestClone(t *testing.T) {
-	a := &cloneA{b: &cloneB{a: 1}}
-	b := a.Clone1()
-	assert.Equal(t, 1, b.b.a)
-
-	c := a.Clone2()
-	assert.Equal(t, 1, c.b.a)
-
-	fmt.Printf("a: %p, a.b: %p\n", a, a.b)
-	fmt.Printf("b: %p, b.b: %p\n", b, b.b)
-	fmt.Printf("c: %p, c.b: %p\n", c, c.b)
-}
-
-type baseI interface {
-	foo()
-	bar()
-}
-
-type baseA struct {
-}
-
-func (a *baseA) foo() {
-	fmt.Println("baseA foo")
-	a.bar()
-}
-
-func (a *baseA) bar() {
-	fmt.Println("baseA bar")
-}
-
-//type baseB struct {
-//}
-//
-//func (a *baseB) foo() {}
-//
-//func (a *baseB) bar() {
-// 	switch a.(type) {
-//
-//	}
-//}
-
-type derivedA struct {
-	*baseA
-}
-
-//func (a *derivedA) foo() {
-//	fmt.Println("derivedA foo")
-//	//a.baseA.foo()
-//}
-
-func (a *derivedA) bar() {
-	fmt.Println("derivedA bar")
-}
-
-type derivedB struct {
-	*baseA
-}
-
-//func (a *derivedB) foo() {
-//
-//}
-
-func (a *derivedB) bar() {
-	fmt.Println("derivedB bar")
-}
-
-func TestInheritance(t *testing.T) {
-	a := &derivedA{&baseA{}}
-	a.foo()
+	assert.Equal(t, originPreOrder, mockApplyFuncPreOrderCollect(node))
+	assert.Equal(t, originPostOrder, mockApplyFuncPostOrderCollect(node))
 }

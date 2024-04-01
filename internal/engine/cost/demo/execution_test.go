@@ -1,9 +1,8 @@
-package virtual_plan
+package demo
 
 import (
 	"context"
 	"fmt"
-
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 )
@@ -12,14 +11,14 @@ var stubTable = &dt.TableRef{Table: "users"}
 
 func Example_ExecutionContext_execute() {
 	ctx := NewExecutionContext()
-	df := ctx.csv("users", "../testdata/users.csv").
+	df := ctx.Csv("users", "../testdata/users.csv").
 		Filter(logical_plan.Eq(logical_plan.Column(stubTable, "age"),
 			logical_plan.LiteralNumeric(20))).
 		Project(logical_plan.Column(stubTable, "state"),
 			logical_plan.Column(stubTable, "username"),
 		)
 
-	res := ctx.execute(context.TODO(), df.LogicalPlan())
+	res := ctx.Execute(context.TODO(), df.LogicalPlan())
 	fmt.Println(res.ToCsv())
 
 	// Output:

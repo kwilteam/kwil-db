@@ -1,4 +1,4 @@
-package virtual_plan
+package demo
 
 import (
 	"context"
@@ -17,7 +17,7 @@ func NewExecutionContext() *ExecutionContext {
 	return &ExecutionContext{}
 }
 
-func (e *ExecutionContext) csv(table string, filepath string) *logical_plan.DataFrame {
+func (e *ExecutionContext) Csv(table string, filepath string) *logical_plan.DataFrame {
 	datasource, err := datasource.NewCSVDataSource(filepath)
 	if err != nil {
 		panic(err)
@@ -37,16 +37,16 @@ func (e *ExecutionContext) registerDataSource(name string, ds datasource.DataSou
 }
 
 func (e *ExecutionContext) registerCsv(name string, filepath string) {
-	e.tables[name] = e.csv(name, filepath)
+	e.tables[name] = e.Csv(name, filepath)
 }
 
-func (e *ExecutionContext) execute(ctx context.Context, plan logical_plan.LogicalPlan) *datasource.Result {
+func (e *ExecutionContext) Execute(ctx context.Context, plan logical_plan.LogicalPlan) *datasource.Result {
 	return execute(ctx, plan)
 }
 
-func (e *ExecutionContext) estimate(plan logical_plan.LogicalPlan) int64 {
-	return estimate(plan)
-}
+//func (e *ExecutionContext) estimate(plan logical_plan.LogicalPlan) int64 {
+//	return estimate(plan)
+//}
 
 func execute(ctx context.Context, plan logical_plan.LogicalPlan) *datasource.Result {
 	//
@@ -54,12 +54,12 @@ func execute(ctx context.Context, plan logical_plan.LogicalPlan) *datasource.Res
 	//fmt.Println(logical_plan.Format(plan, 0))
 	//
 	r := &optimizer.ProjectionRule{}
-	optPlan := r.Optimize(plan)
+	optPlan := r.Transform(plan)
 	//
 	//fmt.Printf("---After optimization---\n\n")
 	//fmt.Println(logical_plan.Format(optPlan, 0))
 	//
-	qp := NewPlanner()
+	qp := optimizer.NewPlanner()
 	vp := qp.ToPlan(optPlan)
 	//
 	//fmt.Printf("---Got virtual plan---\n\n")
@@ -70,8 +70,8 @@ func execute(ctx context.Context, plan logical_plan.LogicalPlan) *datasource.Res
 
 func estimate(plan logical_plan.LogicalPlan) int64 {
 	r := &optimizer.ProjectionRule{}
-	optPlan := r.Optimize(plan)
-	qp := NewPlanner()
+	optPlan := r.Transform(plan)
+	qp := optimizer.NewPlanner()
 	vp := qp.ToPlan(optPlan)
 	return vp.Cost()
 }

@@ -31,7 +31,7 @@ func (m *mockCatalog) GetSchemaSource(tableRef *dt.TableRef) (ds.SchemaSource, e
 	if !ok {
 		return nil, fmt.Errorf("table %s not found", relName)
 	}
-	return ds.NewExampleSchemaSource(schema), nil
+	return ds.NewExampleDataSource(schema), nil
 }
 
 func initMockCatalog() *mockCatalog {

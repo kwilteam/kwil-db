@@ -377,7 +377,7 @@ func (q *queryPlanner) buildTableSource(node *tree.RelationTable, ctx *PlannerCo
 	//cte := ctx.GetCTE(relName)
 	// return ctePlan
 
-	schemaProvider, err := q.catalog.GetSchemaSource(tableRef)
+	schemaProvider, err := q.catalog.GetDataSource(tableRef)
 	if err != nil {
 		panic(err)
 	}

@@ -24,6 +24,10 @@ func (ds *memDataSource) Scan(ctx context.Context, projection ...string) *Result
 	return dsScan(ctx, ds.schema, ds.records, projection)
 }
 
+func (ds *memDataSource) Statistics() *datatypes.Statistics {
+	panic("not implemented")
+}
+
 func (ds *memDataSource) SourceType() SourceType {
 	return "memory"
 }

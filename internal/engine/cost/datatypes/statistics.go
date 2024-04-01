@@ -1,10 +1,14 @@
 package datatypes
 
-// Statistics contains statistics about a table.
+// Statistics contains statistics about a table or a Plan.
+// Statistics for table are derived directly from the underlying database.
+// Statistics for plan are derived from the statistics of its children.
 type Statistics struct {
 	RowCount int64
 
 	ColumnStatistics []ColumnStatistic
+
+	//Selectivity, for plan statistics
 }
 
 // ColumnStatistic contains statistics about a column.

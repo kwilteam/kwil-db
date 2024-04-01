@@ -3,6 +3,7 @@ package logical_plan
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
@@ -39,7 +40,7 @@ type LogicalOperatorVisitor interface {
 	VisitScanOp(*ScanOp) any
 	VisitProjectionOp(*ProjectionOp) any
 	//VisitLogicalSubquery(*LogicalSubquery) any
-	VisitSelectionOp(*FilterOp) any
+	VisitFilterOp(*FilterOp) any
 	VisitJoinOp(*JoinOp) any
 	VisitLimitOp(*LimitOp) any
 	VisitAggregate(*AggregateOp) any
@@ -63,7 +64,7 @@ func (v *baseLogicalOperatorVisitor) VisitProjectionOp(op *ProjectionOp) any {
 	return nil
 }
 
-func (v *baseLogicalOperatorVisitor) VisitSelectionOp(op *FilterOp) any {
+func (v *baseLogicalOperatorVisitor) VisitFilterOp(op *FilterOp) any {
 	return nil
 }
 

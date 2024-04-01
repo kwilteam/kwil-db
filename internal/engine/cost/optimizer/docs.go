@@ -1,5 +1,5 @@
 /*
-Package optimizer provides xxx.
+Package optimizer optimizes a logical plan and generates a virtual plan.
 
 LogicalOptimizeRules:
   - projection pushdown
