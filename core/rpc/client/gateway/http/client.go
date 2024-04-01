@@ -81,14 +81,14 @@ func (g *GatewayHttpClient) Auth(ctx context.Context, auth *types.GatewayAuth) e
 	// standard http error(not from the gateway)
 	fallbackErr := errors.New(res.Status)
 
-	var r gatewayAuthPostResponse
+	var r gatewayErrResponse
 	err = json.NewDecoder(res.Body).Decode(&r)
 	if err != nil {
 		return errors.Join(fallbackErr, err)
 	}
 
-	if r.Error != "" {
-		return errors.New(r.Error)
+	if r.Message != "" {
+		return errors.New(r.Message)
 	}
 
 	return nil
@@ -120,20 +120,16 @@ func (g *GatewayHttpClient) GetAuthParameter(ctx context.Context) (*types.Gatewa
 		return nil, err
 	}
 
-	if r.Error != "" {
-		return nil, errors.New(r.Error)
-	}
-
 	return r.Result, nil
 }
 
-// gatewayAuthPostResponse defines the response of POST request for /auth
-type gatewayAuthPostResponse struct {
-	Error string `json:"error"`
+// gatewayErrResponse defines the response of gateway error.
+type gatewayErrResponse struct {
+	// to be compatible with google.golang.org/genproto/googleapis/rpc/status.Status
+	Message string `json:"message"`
 }
 
 // gatewayAuthGetResponse defines the response of GET request for /auth
 type gatewayAuthGetResponse struct {
 	Result *types.GatewayAuthParameter `json:"result"`
-	Error  string                      `json:"error"`
 }
