@@ -17,12 +17,27 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+type gatewayErrResponse struct {
+	Error string `json:"error"`
+}
+
 func parseErrorResponse(respTxt []byte) error {
 	// NOTE: here directly use status.Status from googleapis/rpc/status
 	var res status.Status
 	err := json.Unmarshal(respTxt, &res)
 	if err != nil {
 		return err
+	}
+
+	// for kgw error response
+	if res.GetCode() == 0 { // if it's grpc status, it should have a code, code 0 is not error code
+		// NOTE: this could be removed once #623 is merged
+		// try to parse kgw error first
+		var kgwErr gatewayErrResponse
+		err := json.Unmarshal(respTxt, &kgwErr)
+		if err == nil {
+			return errors.Join(errors.New(kgwErr.Error))
+		}
 	}
 
 	rpcErr := &client.RPCError{
@@ -53,6 +68,8 @@ func wrapResponseError(err error, res *http.Response) error {
 		// Continue to attempt decoding swagger error's response body.
 	}
 
+	// NOTE: for kgw error response, it happens to have `error` field in the response body
+	// it's also recognized as a httpTx.GenericSwaggerError
 	if swaggerErr, ok := err.(httpTx.GenericSwaggerError); ok {
 		body := swaggerErr.Body()
 		if body != nil {
