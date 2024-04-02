@@ -33,16 +33,14 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	// Extension endpoints flags
 	flagSet.StringSliceVar(&cfg.AppCfg.ExtensionEndpoints, "app.extension-endpoints", cfg.AppCfg.ExtensionEndpoints, "kwild extension endpoints")
 
-	// TODO: Snapshots are not supported yet
-	// // Snapshot Config flags
-	// flagSet.BoolVar(&cfg.AppCfg.SnapshotConfig.Enabled, "app.snapshots.enabled", cfg.AppCfg.SnapshotConfig.Enabled, "Enable snapshots")
-	// flagSet.Uint64Var(&cfg.AppCfg.SnapshotConfig.RecurringHeight, "app.snapshots.recurring-height", cfg.AppCfg.SnapshotConfig.RecurringHeight, "Recurring snapshot height")
-	// flagSet.Uint64Var(&cfg.AppCfg.SnapshotConfig.MaxSnapshots, "app.snapshots.max-snapshots", cfg.AppCfg.SnapshotConfig.MaxSnapshots, "Maximum snapshots")
-	// flagSet.StringVar(&cfg.AppCfg.SnapshotConfig.SnapshotDir, "app.snapshots.snapshot-dir", cfg.AppCfg.SnapshotConfig.SnapshotDir, "Snapshot directory path")
+	// Snapshot Config flags
+	flagSet.BoolVar(&cfg.AppCfg.Snapshots.Enabled, "app.snapshots.enabled", cfg.AppCfg.Snapshots.Enabled, "Enable snapshots")
+	flagSet.Uint64Var(&cfg.AppCfg.Snapshots.RecurringHeight, "app.snapshots.recurring-height", cfg.AppCfg.Snapshots.RecurringHeight, "Recurring heights to create snapshots")
+	flagSet.Uint64Var(&cfg.AppCfg.Snapshots.MaxSnapshots, "app.snapshots.max-snapshots", cfg.AppCfg.Snapshots.MaxSnapshots, "Maximum snapshots to store on disk. Default is 3. If max snapshots is reached, the oldest snapshot is deleted.")
+	flagSet.StringVar(&cfg.AppCfg.Snapshots.SnapshotDir, "app.snapshots.snapshot-dir", cfg.AppCfg.Snapshots.SnapshotDir, "Snapshot directory path")
 
 	// Basic Chain Config flags
 	flagSet.StringVar(&cfg.ChainCfg.Moniker, "chain.moniker", cfg.ChainCfg.Moniker, "Node moniker")
-	// flagSet.StringVar(&cfg.ChainCfg.DBPath, "chain.db-dir", cfg.ChainCfg.DBPath, "Chain database directory path") // rm?
 
 	// Chain RPC flags
 	flagSet.StringVar(&cfg.ChainCfg.RPC.ListenAddress, "chain.rpc.listen-addr", cfg.ChainCfg.RPC.ListenAddress, "Chain RPC listen address")
@@ -76,12 +74,9 @@ to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.`)
 	flagSet.Var(&cfg.ChainCfg.Consensus.TimeoutCommit, "chain.consensus.timeout-commit", "Chain consensus timeout commit")
 
 	// State Sync flags
-	// TODO: Bring these flags back when we support state sync
-	// flagSet.BoolVar(&cfg.ChainCfg.StateSync.Enable, "chain.state-sync.enable", cfg.ChainCfg.StateSync.Enable, "Chain state sync enable")
-	// flagSet.StringVar(&cfg.ChainCfg.StateSync.TempDir, "chain.state-sync.temp-dir", cfg.ChainCfg.StateSync.TempDir, "Chain state sync temp dir")
-	// flagSet.StringSliceVar(&cfg.ChainCfg.StateSync.RPCServers, "chain.state-sync.rpc-servers", cfg.ChainCfg.StateSync.RPCServers, "Chain state sync rpc servers")
-	// flagSet.DurationVar(&cfg.ChainCfg.StateSync.DiscoveryTime, "chain.state-sync.discovery-time", cfg.ChainCfg.StateSync.DiscoveryTime, "Chain state sync discovery time")
-	// flagSet.DurationVar(&cfg.ChainCfg.StateSync.ChunkRequestTimeout, "chain.state-sync.chunk-request-timeout", cfg.ChainCfg.StateSync.ChunkRequestTimeout, "Chain state sync chunk request timeout")
-
-	// Block sync can be added later (when they have more version of it)
+	flagSet.BoolVar(&cfg.ChainCfg.StateSync.Enable, "chain.statesync.enable", cfg.ChainCfg.StateSync.Enable, "Chain state sync enable")
+	flagSet.StringVar(&cfg.ChainCfg.StateSync.SnapshotDir, "chain.statesync.snapshot-dir", cfg.ChainCfg.StateSync.SnapshotDir, "Chain state sync snapshot directory")
+	flagSet.StringVar(&cfg.ChainCfg.StateSync.RPCServers, "chain.statesync.rpc-servers", cfg.ChainCfg.StateSync.RPCServers, "Chain state sync rpc servers")
+	flagSet.Var(&cfg.ChainCfg.StateSync.DiscoveryTime, "chain.statesync.discovery-time", "Chain state sync discovery time")
+	flagSet.Var(&cfg.ChainCfg.StateSync.ChunkRequestTimeout, "chain.statesync.chunk-request-timeout", "Chain state sync chunk request timeout")
 }

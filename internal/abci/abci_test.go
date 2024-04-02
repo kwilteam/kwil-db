@@ -435,3 +435,7 @@ func (m *mockTxApp) Price(ctx context.Context, tx *transactions.Transaction) (*b
 func (m *mockTxApp) UpdateValidator(ctx context.Context, validator []byte, power int64) error {
 	return nil
 }
+
+func (m *mockTxApp) ReloadCache(ctx context.Context) error {
+	return nil
+}

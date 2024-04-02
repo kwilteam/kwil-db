@@ -89,7 +89,7 @@ func (d *KwilCliDriver) SupportBatch() bool {
 	return false
 }
 
-func (d *KwilCliDriver) account(ctx context.Context, acctID []byte) (*types.Account, error) {
+func (d *KwilCliDriver) account(_ context.Context, acctID []byte) (*types.Account, error) {
 	cmd := d.newKwilCliCmd("account", "balance", hex.EncodeToString(acctID))
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {

@@ -27,8 +27,6 @@ import (
 )
 
 const (
-	DefaultSnapshotsDir = "snapshots"
-
 	DefaultTLSCertFile  = "rpc.cert"
 	defaultTLSKeyFile   = "rpc.key"
 	defaultAdminClients = "clients.pem"
@@ -81,12 +79,17 @@ type AppConfig struct {
 	ProfileFile        string                       `mapstructure:"profile_file"`
 	Extensions         map[string]map[string]string `mapstructure:"extensions"`
 
-	// SnapshotConfig     SnapshotConfig `mapstructure:"snapshots"`
+	Snapshots SnapshotConfig `mapstructure:"snapshots"`
+
+	// SnapshotFile is the path to the snapshot file to load on startup
+	// during network initialization. If genesis app_hash is not provided,
+	// this snapshot file is not used.
+	SnapshotFile string `mapstructure:"snapshot_file"`
 }
 
 type SnapshotConfig struct {
 	Enabled         bool   `mapstructure:"enabled"`
-	RecurringHeight uint64 `mapstructure:"snapshot_heights"`
+	RecurringHeight uint64 `mapstructure:"recurring_height"`
 	MaxSnapshots    uint64 `mapstructure:"max_snapshots"`
 	SnapshotDir     string `mapstructure:"snapshot_dir"`
 }
@@ -167,11 +170,28 @@ type ConsensusConfig struct {
 }
 
 type StateSyncConfig struct {
-	Enable              bool     `mapstructure:"enable"`
-	TempDir             string   `mapstructure:"temp_dir"`
-	RPCServers          []string `mapstructure:"rpc_servers"`
-	DiscoveryTime       Duration `mapstructure:"discovery_time"`
+	Enable bool `mapstructure:"enable"`
+
+	// SnapshotDir is the directory to store the received snapshot chunks.
+	SnapshotDir string `mapstructure:"snapshot_dir"`
+
+	// Trusted snapshot servers to fetch/validate the snapshots from.
+	// Atleast 2 servers are required for the state sync to work.
+	RPCServers string `mapstructure:"rpc_servers"`
+
+	// Time to spend discovering snapshots before initiating starting
+	// the db restoration using snapshot.
+	DiscoveryTime Duration `mapstructure:"discovery_time"`
+
+	// The timeout duration before re-requesting a chunk, possibly from a different
+	// peer (default: 1 minute).
 	ChunkRequestTimeout Duration `mapstructure:"chunk_request_timeout"`
+
+	// Light client verification options, Automatically fetched from the RPC Servers
+	// during the node initialization.
+	TrustHeight int64    `mapstructure:"trust_height"`
+	TrustHash   string   `mapstructure:"trust_hash"`
+	TrustPeriod Duration `mapstructure:"trust_period"`
 }
 
 type ChainConfig struct {
@@ -334,7 +354,11 @@ func GetCfg(flagCfg *KwildConfig, quickStart bool) (*KwildConfig, bool, error) {
 
 	cfg.RootDir = rootDir
 
-	cfg.sanitizeCfgPaths()
+	err = cfg.sanitizeCfgPaths()
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to sanitize config paths: %w", err)
+	}
+
 	cfg.configureCerts()
 	if cfg.ChainCfg.Moniker == "" {
 		cfg.ChainCfg.Moniker = defaultMoniker()
@@ -523,13 +547,14 @@ func DefaultConfig() *KwildConfig {
 			DBPort:               "5432", // ignored with unix socket, but applies if IP used for DBHost
 			DBUser:               "kwild",
 			DBName:               "kwild",
-			// SnapshotConfig: SnapshotConfig{
-			// 	Enabled:         false,
-			// 	RecurringHeight: uint64(10000),
-			// 	MaxSnapshots:    3,
-			// 	SnapshotDir:     DefaultSnapshotsDir,
-			// },
-			Extensions: make(map[string]map[string]string),
+			Extensions:           make(map[string]map[string]string),
+			Snapshots: SnapshotConfig{
+				Enabled:         false,
+				RecurringHeight: 14400, // 1 day at 6s block time
+				MaxSnapshots:    3,
+				SnapshotDir:     SnapshotDirName,
+			},
+			SnapshotFile: "",
 		},
 		Logging: &Logging{
 			Level:        "info",
@@ -537,6 +562,7 @@ func DefaultConfig() *KwildConfig {
 			TimeEncoding: log.TimeEncodingEpochFloat,
 			OutputPaths:  []string{"stdout"},
 		},
+
 		ChainCfg: &ChainConfig{
 			P2P: &P2PConfig{
 				ListenAddress:       "tcp://0.0.0.0:26656",
@@ -561,8 +587,10 @@ func DefaultConfig() *KwildConfig {
 			},
 			StateSync: &StateSyncConfig{
 				Enable:              false,
+				SnapshotDir:         ReceivedSnapsDirName,
 				DiscoveryTime:       Duration(15 * time.Second),
 				ChunkRequestTimeout: Duration(10 * time.Second),
+				TrustPeriod:         Duration(36000 * time.Second),
 			},
 			Consensus: &ConsensusConfig{
 				TimeoutPropose:   Duration(3 * time.Second),
@@ -586,7 +614,7 @@ func EmptyConfig() *KwildConfig {
 			RPC:     &ChainRPCConfig{},
 			Mempool: &MempoolConfig{},
 			StateSync: &StateSyncConfig{
-				RPCServers: []string{},
+				RPCServers: "",
 			},
 			Consensus: &ConsensusConfig{},
 		},
@@ -626,17 +654,47 @@ func (cfg *KwildConfig) configureCerts() {
 	cfg.AppCfg.TLSKeyFile = rootify(cfg.AppCfg.TLSKeyFile, cfg.RootDir)
 }
 
-func (cfg *KwildConfig) sanitizeCfgPaths() {
+func (cfg *KwildConfig) sanitizeCfgPaths() error {
 	rootDir := cfg.RootDir
-	//cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
 
 	if cfg.AppCfg.PrivateKeyPath != "" {
 		cfg.AppCfg.PrivateKeyPath = rootify(cfg.AppCfg.PrivateKeyPath, rootDir)
 	} else {
 		cfg.AppCfg.PrivateKeyPath = filepath.Join(rootDir, PrivateKeyFileName)
 	}
-
 	fmt.Println("Private key path:", cfg.AppCfg.PrivateKeyPath)
+
+	if cfg.AppCfg.Snapshots.Enabled {
+		if cfg.AppCfg.Snapshots.SnapshotDir == "" {
+			cfg.AppCfg.Snapshots.SnapshotDir = filepath.Join(rootDir, SnapshotDirName)
+		} else {
+			dir, err := ExpandPath(cfg.AppCfg.Snapshots.SnapshotDir)
+			if err != nil {
+				return fmt.Errorf("failed to expand snapshot directory \"%v\": %v", cfg.AppCfg.Snapshots.SnapshotDir, err)
+			}
+			cfg.AppCfg.Snapshots.SnapshotDir = dir
+		}
+		fmt.Println("Snapshot directory:", cfg.AppCfg.Snapshots.SnapshotDir)
+	}
+
+	if cfg.ChainCfg.StateSync.Enable {
+		if cfg.ChainCfg.StateSync.SnapshotDir == "" {
+			cfg.ChainCfg.StateSync.SnapshotDir = filepath.Join(rootDir, ReceivedSnapsDirName)
+		} else {
+			dir, err := ExpandPath(cfg.ChainCfg.StateSync.SnapshotDir)
+			if err != nil {
+				return fmt.Errorf("failed to expand snapshot directory \"%v\": %v", cfg.ChainCfg.StateSync.SnapshotDir, err)
+			}
+			cfg.ChainCfg.StateSync.SnapshotDir = dir
+		}
+		fmt.Println("State sync received snapshots directory:", cfg.ChainCfg.StateSync.SnapshotDir)
+	}
+
+	if cfg.AppCfg.SnapshotFile != "" {
+		cfg.AppCfg.SnapshotFile = rootify(cfg.AppCfg.SnapshotFile, rootDir)
+		fmt.Println("Snapshot file to initialize database from:", cfg.AppCfg.SnapshotFile)
+	}
+	return nil
 }
 
 func (cfg *KwildConfig) InitPrivateKeyAndGenesis(autogen bool) (privateKey *crypto.Ed25519PrivateKey, genConfig *GenesisConfig, err error) {

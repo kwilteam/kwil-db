@@ -556,6 +556,8 @@ func TestSpamListener(t *testing.T) {
 		integration.WithNonValidators(0),
 		integration.WithGas(),
 		integration.WithSpamOracle(),
+		integration.WithSnapshots(),
+		integration.WithRecurringHeight(10),
 	}
 
 	ctx := context.Background()

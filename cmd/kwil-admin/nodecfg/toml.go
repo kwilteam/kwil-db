@@ -62,6 +62,8 @@ const defaultConfigTemplate = `
 #   |   |   |- blockchain db files/dir (blockstore.db, state.db, etc)
 #   |   |- info/
 #   |- signing/
+#   |- snapshots/
+#   |- rcvdSnaps/
 
 # Only the config.toml and genesis file are required to run the kwild node
 # The rest of the files & directories are created by the kwild node on startup
@@ -69,6 +71,7 @@ const defaultConfigTemplate = `
 #######################################################################
 ###                    Logging Config Options                       ###
 #######################################################################
+
 [log]
 
 # Output level for logging, default is "info". Other options are "debug", "error", "warn", "trace"
@@ -86,6 +89,7 @@ time_format = "{{ .Logging.TimeEncoding }}"
 #######################################################################
 ###                      App Config Options                         ###
 #######################################################################
+
 [app]
 
 # Node's Private key
@@ -136,10 +140,13 @@ tls_key_file = "{{ .AppCfg.TLSKeyFile }}"
 # Kwild Server hostname
 hostname = "{{ .AppCfg.Hostname }}"
 
-
+# Path to the snapshot file to restore the database from.
+# Used during the network migration process.
+snapshot_file = "{{ .AppCfg.SnapshotFile }}"
 #######################################################################
 ###                     Extension Configuration                     ###
 #######################################################################
+
 [app.extensions]
 
 {{- range $extensionName, $configs := .AppCfg.Extensions }}
@@ -149,10 +156,28 @@ hostname = "{{ .AppCfg.Hostname }}"
 {{- end }}
 {{- end }}
 
+#######################################################################
+###                     Snapshots Configuration                     ###
+#######################################################################
+
+[app.snapshots]
+
+# Enables snapshots
+enabled = {{.AppCfg.Snapshots.Enabled}}
+
+# Path to the snapshots directory
+snapshot_dir = "{{.AppCfg.Snapshots.SnapshotDir}}"
+
+# Specifies the block heights(multiples of recurring_height) at which the snapshot should be taken
+recurring_height = {{.AppCfg.Snapshots.RecurringHeight}}
+
+# Maximum number of snapshots to store
+max_snapshots = {{.AppCfg.Snapshots.MaxSnapshots}}
 
 #######################################################################
 ###                 Chain  Main Base Config Options                 ###
 #######################################################################
+
 [chain]
 
 # A custom human readable name for this node
@@ -165,6 +190,7 @@ moniker = "{{ .ChainCfg.Moniker }}"
 #######################################################
 ###       RPC Server Configuration Options          ###
 #######################################################
+
 [chain.rpc]
 
 # TCP or UNIX socket address for the RPC server to listen on
@@ -176,6 +202,7 @@ broadcast_tx_timeout = "{{configDuration .ChainCfg.RPC.BroadcastTxTimeout }}"
 #######################################################
 ###         Consensus Configuration Options         ###
 #######################################################
+
 [chain.consensus]
 
 # How long we wait for a proposal block before prevoting nil
@@ -195,6 +222,7 @@ timeout_commit = "{{configDuration .ChainCfg.Consensus.TimeoutCommit }}"
 #######################################################
 ###           P2P Configuration Options             ###
 #######################################################
+
 [chain.p2p]
 
 # Address to listen for incoming connections
@@ -246,6 +274,7 @@ seed_mode = {{ .ChainCfg.P2P.SeedMode }}
 #######################################################
 ###          Mempool Configuration Options          ###
 #######################################################
+
 [chain.mempool]
 # Maximum number of transactions in the mempool
 size = {{ .ChainCfg.Mempool.Size }}
@@ -260,4 +289,37 @@ max_tx_bytes = {{ .ChainCfg.Mempool.MaxTxBytes }}
 
 # Size of the cache (used to filter transactions we saw earlier) in transactions
 cache_size = {{ .ChainCfg.Mempool.CacheSize }}
+
+#######################################################
+###         State Sync Configuration Options        ###
+#######################################################
+
+[chain.statesync]
+# State sync rapidly bootstraps a new node by discovering, fetching, and restoring a state machine
+# snapshot from peers instead of fetching and replaying historical blocks. Requires some peers in
+# the network to take and serve state machine snapshots. State sync is not attempted if the node
+# has any local state (LastBlockHeight > 0). The node will have a truncated block history,
+# starting from the height of the snapshot.
+enable = {{ .ChainCfg.StateSync.Enable }}
+
+# SnapshotDir is the directory to store the received snapshot chunks.
+snapshot_dir = "{{ .ChainCfg.StateSync.SnapshotDir }}"
+
+# Trusted snapshot providers (comma-separated chain RPC servers) are the source-of-truth for the snapshot integrity.
+# Snapshots are accepted for statesync only after verifying it with these trusted snapshot providers.
+# Atleast 2 trusted rpc servers are required for enabling state sync.
+rpc_servers = "{{ .ChainCfg.StateSync.RPCServers }}"
+
+# Time to spend discovering snapshots before offering the best(latest) snapshot to the application. (default: 60 seconds)
+# If no snapshots are discovered within this time, the node will restart the discovery process and request snapshots from other peers.
+# The node is forever in the discovery mode until it discovers a snapshot.
+# If network has no snapshots, restart the node with state sync disabled to sync with the network.
+discovery_time = "{{ .ChainCfg.StateSync.DiscoveryTime }}"
+
+# The timeout duration before re-requesting a chunk, possibly from a different
+# peer (default: 1 minute), if the current peer is unresponsive to the chunk request.
+chunk_request_timeout = "{{ .ChainCfg.StateSync.ChunkRequestTimeout }}"
+
+# Note: If the requested chunk is not received for a duration of 2 minutes (hard-coded default), 
+# the state sync process is aborted and the node will fall back to the regular block sync process.
 `

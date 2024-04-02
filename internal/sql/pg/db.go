@@ -243,6 +243,33 @@ func (db *DB) BeginTx(ctx context.Context) (sql.Tx, error) {
 // It obtains a read connection from the pool, which will be returned
 // to the pool when the transaction is closed.
 func (db *DB) BeginReadTx(ctx context.Context) (sql.Tx, error) {
+	return db.beginTx(ctx, pgx.RepeatableRead)
+}
+
+// BeginSnapshotTx creates a read-only transaction with serializable isolation
+// level. This is used for taking a snapshot of the database.
+func (db *DB) BeginSnapshotTx(ctx context.Context) (sql.Tx, string, error) {
+	tx, err := db.beginTx(ctx, pgx.Serializable)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// export snpashot id
+	res, err := tx.Execute(ctx, "SELECT pg_export_snapshot();")
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Expected to have 1 row and 1 column
+	if len(res.Columns) != 1 || len(res.Rows) != 1 {
+		return nil, "", fmt.Errorf("unexpected result from pg_export_snapshot: %v", res)
+	}
+
+	snapshotID := res.Rows[0][0].(string)
+	return tx, snapshotID, err
+}
+
+func (db *DB) beginTx(ctx context.Context, iso pgx.TxIsoLevel) (sql.Tx, error) {
 	conn, err := db.pool.pgxp.Acquire(ctx) // ensure we have a connection
 	if err != nil {
 		return nil, err
@@ -250,7 +277,7 @@ func (db *DB) BeginReadTx(ctx context.Context) (sql.Tx, error) {
 
 	tx, err := conn.BeginTx(ctx, pgx.TxOptions{
 		AccessMode: pgx.ReadOnly,
-		IsoLevel:   pgx.RepeatableRead, // only for read-only as repeatable ready can fail a write tx commit
+		IsoLevel:   iso, // only for read-only as repeatable ready can fail a write tx commit
 	})
 	if err != nil {
 		conn.Release()

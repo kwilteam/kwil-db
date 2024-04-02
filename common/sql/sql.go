@@ -89,6 +89,13 @@ type OuterTxMaker interface {
 	BeginOuterTx(ctx context.Context) (OuterTx, error)
 }
 
+// SnapshotTxMaker is an interface that creates a transaction for taking a
+// snapshot of the database. This uses serializable isolation level to ensure
+// internal consistency.
+type SnapshotTxMaker interface {
+	BeginSnapshotTx(ctx context.Context) (Tx, string, error)
+}
+
 // AccessMode is the type of access to a database.
 // It can be read-write or read-only.
 type AccessMode uint8

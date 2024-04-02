@@ -71,6 +71,9 @@ type TestnetGenerateConfig struct {
 	Allocs                  map[string]*big.Int
 	FundNonValidators       bool
 	Extensions              []map[string]map[string]string // for each node
+	SnapshotsEnabled        bool
+	MaxSnapshots            uint64
+	SnapshotHeights         uint64
 }
 
 // ConfigOpts is a struct to alter the generation of the node config.
@@ -318,6 +321,19 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	}
 	cfg.ChainCfg.P2P.AddrBookStrict = false
 	cfg.ChainCfg.P2P.AllowDuplicateIP = true
+
+	if genCfg.SnapshotsEnabled {
+		cfg.AppCfg.Snapshots.Enabled = true
+
+		if genCfg.MaxSnapshots != 0 {
+			cfg.AppCfg.Snapshots.MaxSnapshots = genCfg.MaxSnapshots
+		}
+
+		if genCfg.SnapshotHeights != 0 {
+			cfg.AppCfg.Snapshots.RecurringHeight = genCfg.SnapshotHeights
+		}
+	}
+
 	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
 		nodeDir := filepath.Join(genCfg.OutputDir, fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i))
 		cfg.RootDir = nodeDir

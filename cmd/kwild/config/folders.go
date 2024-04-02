@@ -14,5 +14,7 @@ const (
 	ConfigFileName     = "config.toml"
 	PrivateKeyFileName = "private_key"
 
+	SnapshotDirName = "snapshots"
+
 	// Note that the sqlLite file path is user-configurable e.g. "data/kwil.db"
 )

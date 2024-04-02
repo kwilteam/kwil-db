@@ -758,6 +758,7 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	}
 
 	if tooLate := len(approve.ResolutionIDs) - len(ids); tooLate > 0 {
+		// TODO: probably refund these votes??
 		router.Log().Warnf("vote contains %d resolution IDs that are already done. too late, no refund!", tooLate)
 	}
 

@@ -51,6 +51,8 @@ type Engine interface {
 	// Execute executes a SQL statement on a dataset.
 	// It uses Kwil's SQL dialect.
 	Execute(ctx context.Context, tx sql.DB, dbid, query string, values map[string]any) (*sql.ResultSet, error)
+	// Reload reloads the engine with the latest db state
+	Reload(ctx context.Context, tx sql.Executor) error
 }
 
 type SchemaGetter interface {

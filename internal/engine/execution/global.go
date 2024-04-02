@@ -157,6 +157,27 @@ func NewGlobalContext(ctx context.Context, db sql.Executor, extensionInitializer
 	return g, nil
 }
 
+// Reload is used to reload the global context based on the current state of the database.
+// It is used after state sync to ensure that the global context is up to date.
+func (g *GlobalContext) Reload(ctx context.Context, db sql.Executor) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	schemas, err := getSchemas(ctx, db)
+	if err != nil {
+		return err
+	}
+
+	for _, schema := range orderSchemas(schemas) {
+		err := g.loadDataset(ctx, schema)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // CreateDataset deploys a schema.
 // It will create the requisite tables, and perform the required initializations.
 func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, txdata *common.TransactionData) (err error) {

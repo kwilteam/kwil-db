@@ -11,8 +11,6 @@ import (
 	"slices"
 	"sync"
 
-	"go.uber.org/zap"
-
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -28,7 +26,7 @@ import (
 
 // NewTxApp creates a new router.
 func NewTxApp(db DB, engine common.Engine, signer *auth.Ed25519Signer,
-	events Rebroadcaster, chainID string, GasEnabled bool, extensionConfigs map[string]map[string]string, log log.Logger) (*TxApp, error) {
+	events Rebroadcaster, snapshotter Snapshotter, chainID string, GasEnabled bool, extensionConfigs map[string]map[string]string, log log.Logger) (*TxApp, error) {
 	voteBodyTxSize, err := computeEmptyVoteBodyTxSize(chainID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute empty vote body tx size: %w", err)
@@ -48,6 +46,7 @@ func NewTxApp(db DB, engine common.Engine, signer *auth.Ed25519Signer,
 			nodeAddr:   signer.Identity(),
 		},
 		signer:              signer,
+		snapshotter:         snapshotter,
 		chainID:             chainID,
 		GasEnabled:          GasEnabled,
 		extensionConfigs:    extensionConfigs,
@@ -104,6 +103,8 @@ type TxApp struct {
 
 	extensionConfigs map[string]map[string]string
 
+	snapshotter    Snapshotter
+	replayStatusFn ReplayStatusChecker
 	// precomputed variables
 	emptyVoteBodyTxSize int64
 	resTypes            []string
@@ -203,6 +204,29 @@ func (r *TxApp) ChainInfo(ctx context.Context) (int64, []byte, error) {
 		height = 0 // for ChainInfo caller, non-negative is expected for genesis
 	}
 	return height, appHash, nil
+}
+
+// ReloadCache reloads the database state into the engine.
+func (r *TxApp) ReloadCache(ctx context.Context) error {
+	tx, err := r.Database.BeginReadTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// Reload the engine internal state from the updated database state
+	err = r.Engine.Reload(ctx, tx)
+	if err != nil {
+		return err
+	}
+
+	// Update the height and apphash from the updated database state
+	r.height, r.appHash, err = getChainState(ctx, tx)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 // UpdateValidator updates a validator's power.
@@ -313,7 +337,7 @@ func (r *TxApp) Execute(ctx TxContext, tx *transactions.Transaction) *TxResponse
 		return txRes(nil, transactions.CodeInvalidTxType, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String()))
 	}
 
-	r.log.Debug("executing transaction", zap.Any("tx", tx))
+	r.log.Debug("executing transaction", log.Any("tx", tx))
 
 	if r.currentTx == nil {
 		return txRes(nil, transactions.CodeUnknownError, errors.New("txapp misuse: cannot execute a blockchain transaction without a db transaction in progress"))
@@ -370,6 +394,7 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (appHash []byte
 
 	r.log.Debug("Finalize(start)", log.Int("height", r.height), log.String("appHash", hex.EncodeToString(r.appHash)))
 
+	// Check that the block height is correct
 	if blockHeight != r.height+1 {
 		return nil, nil, fmt.Errorf("Finalize was expecting height %d, got %d", r.height+1, blockHeight)
 	}
@@ -470,7 +495,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 
 	// apply all resolutions
 	for _, resolveFunc := range resolveFuncs {
-		r.log.Debug("resolving resolution", zap.String("type", resolveFunc.Resolution.Type), zap.String("id", resolveFunc.Resolution.ID.String()))
+		r.log.Debug("resolving resolution", log.String("type", resolveFunc.Resolution.Type), log.String("id", resolveFunc.Resolution.ID.String()))
 
 		tx, err := r.currentTx.BeginTx(ctx)
 		if err != nil {
@@ -530,7 +555,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 			credits.applyResolution(resolution)
 		}
 
-		r.log.Debug("expiring resolution", zap.String("type", resolution.Type), zap.String("id", resolution.ID.String()), zap.Bool("refunded", refunded))
+		r.log.Debug("expiring resolution", log.String("type", resolution.Type), log.String("id", resolution.ID.String()), log.Bool("refunded", refunded))
 	}
 
 	allIds := append(finalizedIds, expiredIds...)
@@ -647,6 +672,31 @@ func (r *TxApp) Commit(ctx context.Context) error {
 	}
 
 	r.announceValidators()
+
+	// Take a snapshot of the database if node is not in the catchup mode and snapshots are enabled
+	if r.snapshotter != nil && r.replayStatusFn != nil &&
+		r.snapshotter.IsSnapshotDue(uint64(r.height)) && !r.replayStatusFn() {
+		err = r.snapshotDatabase(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *TxApp) snapshotDatabase(ctx context.Context) error {
+	snapTx, snapshotID, err := r.Database.BeginSnapshotTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer snapTx.Rollback(ctx)
+
+	err = r.snapshotter.CreateSnapshot(ctx, uint64(r.height), snapshotID)
+	if err != nil {
+		r.log.Error("failed to dump logical snapshot", log.Error(err))
+	}
+
+	r.log.Info("Snapshot created successfully", log.Int("height", r.height))
 
 	return nil
 }
@@ -948,7 +998,7 @@ func txRes(spend *big.Int, code transactions.TxCode, err error) *TxResponse {
 // it should be used when committing or rolling back a transaction.
 func logErr(l log.Logger, err error) {
 	if err != nil {
-		l.Error("error committing/rolling back transaction", zap.Error(err))
+		l.Error("error committing/rolling back transaction", log.Error(err))
 	}
 }
 
@@ -966,4 +1016,11 @@ func computeEmptyVoteBodyTxSize(chainID string) (int64, error) {
 		return 0, err
 	}
 	return int64(len(sz)), nil
+}
+
+type ReplayStatusChecker func() bool
+
+// SetreplayStatusChecker sets the function to check if the node is in replay mode
+func (r *TxApp) SetReplayStatusChecker(fn ReplayStatusChecker) {
+	r.replayStatusFn = fn
 }

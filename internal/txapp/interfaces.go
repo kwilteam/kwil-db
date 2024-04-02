@@ -22,6 +22,15 @@ type Rebroadcaster interface {
 type DB interface {
 	sql.OuterTxMaker
 	sql.ReadTxMaker
+	sql.SnapshotTxMaker
+}
+
+type Snapshotter interface {
+	// CreateSnapshot creates a snapshot of the current state.
+	CreateSnapshot(ctx context.Context, height uint64, snapshotID string) error
+
+	// IsSnapshotDue returns true if a snapshot is due at the given height.
+	IsSnapshotDue(height uint64) bool
 }
 
 // package level funcs
