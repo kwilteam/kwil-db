@@ -1,0 +1,15 @@
+name: main
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  kgw-test:
+    uses: ./.github/workflows/kgw-test-reuse.yaml
+    with:
+      kwil-db-branch: main
+      kgw-branch: main
+    secrets:
+      kgw-access-token: ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }}

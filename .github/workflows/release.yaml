@@ -1,11 +1,34 @@
 name: Release
 
 on:
-  workflow_dispatch:
   release:
-    types: [published, edited]
+    types: [unpublished]
 
 jobs:
+  parse-version:
+    name: Run KGW test on correspond version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get kgw version # minor version
+        id: versions
+        shell: bash
+        run: |
+          version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//'` | cut -d '.' -f 2
+          kgw_version=`v7="v2"; v6="v1"; eval echo \${v$version}`
+          echo "kdb_version=v0.$version" >> $GITHUB_OUTPUT
+          echo "kgw_version=v0.$kgw_version" >> $GITHUB_OUTPUT
+          echo "kdb_version=v0.$version <> kgw_version=v0.$kgw_version"
+
+  call-kgw-test:
+    runs-on: ubuntu-latest
+    needs: parse-version
+    uses: ./.github/workflows/kgw-test-reuse.yaml
+    with:
+      kwil-db-branch: release-${{ needs.parse-version.outputs.kdb_version }}
+      kgw-branch: release-${{ needs.parse-version.outputs.kgw_version }}
+    secrets:
+      kgw-access-token: ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }}
+
   build-push-image:
     name: Build & push image
     if: false # temporary disable
@@ -105,6 +128,7 @@ jobs:
 
   deploy-to-eks:
     name: Deploy to k8s cluster
+    if: false # temporary disable
     runs-on: ubuntu-latest
     needs: build-push-image
 

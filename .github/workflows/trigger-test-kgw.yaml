@@ -1,0 +1,21 @@
+# trigger-test-kgw will run jobs when the CI workflow is successful
+name: trigger-test-kgw
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+jobs:
+  on-ci-success:
+    # run when `CI` workflow is successful, not sure if this will work on forked PRs
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/kgw-test-reuse.yaml
+    with:
+      # use the branch from the `CI` workflow
+      kwil-db-branch:  ${{ github.event.workflow_run.head_branch }}
+      kgw-branch: main
+    secrets:
+      kgw-access-token: ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }}
