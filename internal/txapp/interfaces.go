@@ -7,7 +7,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/abci/meta"
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	"github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
@@ -30,17 +29,17 @@ type DB interface {
 var (
 	// getEvents gets all events, even if they have been
 	// marked received
-	getEvents = events.GetEvents
+	getEvents = voting.GetEvents
 
 	// deleteEvent deletes an event. It will no longer
 	// be broadcasted.
-	deleteEvent  = events.DeleteEvent
-	deleteEvents = events.DeleteEvents
+	deleteEvent  = voting.DeleteEvent
+	deleteEvents = voting.DeleteEvents
 
 	// voting
 	setVoterPower                    = voting.SetValidatorPower
 	getAllVoters                     = voting.GetValidators
-	getResolutionsByThresholdAndType = voting.GetResolutionsByThresholdAndType
+	getResolutionsByThresholdAndType = voting.GetResolutionsByThresholdAndType // called from RW consensus tx
 	deleteResolutions                = voting.DeleteResolutions
 	markProcessed                    = voting.MarkProcessed
 	getExpired                       = voting.GetExpired

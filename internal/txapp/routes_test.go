@@ -83,7 +83,7 @@ func Test_Routes(t *testing.T) {
 					return nil
 				}
 
-				approveResolution = func(ctx context.Context, db sql.TxMaker, resolutionID types.UUID, expiration int64, from []byte) error {
+				approveResolution = func(ctx context.Context, db sql.TxMaker, resolutionID types.UUID, from []byte) error {
 					approveCount++
 
 					return nil
@@ -120,7 +120,7 @@ func Test_Routes(t *testing.T) {
 
 					return nil
 				}
-				approveResolution = func(_ context.Context, _ sql.TxMaker, _ types.UUID, _ int64, _ []byte) error {
+				approveResolution = func(_ context.Context, _ sql.TxMaker, _ types.UUID, _ []byte) error {
 					approveCount++
 
 					return nil

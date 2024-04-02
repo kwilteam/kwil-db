@@ -24,8 +24,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
-	"github.com/kwilteam/kwil-db/internal/events"
-	"github.com/kwilteam/kwil-db/internal/events/broadcast"
 	"github.com/kwilteam/kwil-db/internal/kv"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
 	"github.com/kwilteam/kwil-db/internal/listeners"
@@ -41,6 +39,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/kwilteam/kwil-db/internal/voting/broadcast"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -61,7 +60,8 @@ import (
 )
 
 // initStores prepares the datastores with an atomic DB transaction. These
-// actions are performed outside of ABCI's DB sessions.
+// actions are performed outside of ABCI's DB sessions. The stores should not
+// keep the db after initialization. Their functions accept a DB connection.
 func initStores(d *coreDependencies, db *pg.DB) error {
 	initTx, err := db.BeginTx(d.ctx)
 	if err != nil {
@@ -78,9 +78,6 @@ func initStores(d *coreDependencies, db *pg.DB) error {
 
 	// account store
 	initAccountRepository(d, initTx)
-
-	// vote store
-	initVoteStore(d, initTx)
 
 	if err = initTx.Commit(d.ctx); err != nil {
 		return fmt.Errorf("failed to commit the app initialization DB transaction: %w", err)
@@ -176,12 +173,12 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// engine
 	e := buildEngine(d, db)
 
+	// Initialize the events and voting data stores
+	ev := buildEventStore(d, closers) // makes own DB connection
+
 	// these are dummies, but they might need init in the future.
 	snapshotModule := buildSnapshotter()
 	bootstrapperModule := buildBootstrapper()
-
-	// event store
-	ev := buildEventStore(d, closers) // makes own DB connection
 
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
@@ -310,7 +307,7 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
-func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext, ev *events.EventStore) *txapp.TxApp {
+func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext, ev *voting.EventStore) *txapp.TxApp {
 	txApp, err := txapp.NewTxApp(db, engine, buildSigner(d), ev, d.genesisCfg.ChainID,
 		!d.genesisCfg.ConsensusParams.WithoutGasCosts, d.cfg.AppCfg.Extensions, *d.log.Named("tx-router"))
 	if err != nil {
@@ -346,23 +343,15 @@ func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broad
 	return broadcast.NewEventBroadcaster(ev, b, txapp, txapp, buildSigner(d), d.genesisCfg.ChainID)
 }
 
-func initVoteStore(d *coreDependencies, tx sql.Tx) {
-	err := voting.InitializeVoteStore(d.ctx, tx)
-	if err != nil {
-		failBuild(err, "failed to initialize vote store")
-	}
-}
-
-func buildEventStore(d *coreDependencies, closers *closeFuncs) *events.EventStore {
+func buildEventStore(d *coreDependencies, closers *closeFuncs) *voting.EventStore {
 	// NOTE: we're using the same postgresql database, but isolated pg schema.
-	// We cannot have a separate db here, because eventstore deletes need to be atomic with consensus
 	db, err := d.poolOpener(d.ctx, d.cfg.AppCfg.DBName, 10)
 	if err != nil {
 		failBuild(err, "failed to build event store")
 	}
 	closers.addCloser(db.Close, "closing event store")
 
-	e, err := events.NewEventStore(d.ctx, db)
+	e, err := voting.NewEventStore(d.ctx, db)
 	if err != nil {
 		failBuild(err, "failed to build event store")
 	}
@@ -432,7 +421,7 @@ func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
 
 	err = tx.Commit(d.ctx)
 	if err != nil {
-		failBuild(err, "failed to commit")
+		failBuild(err, "failed to commit engine init db txn")
 	}
 
 	return eng
@@ -742,6 +731,6 @@ func failBuild(err error, msg string) {
 	}
 }
 
-func buildListenerManager(d *coreDependencies, ev *events.EventStore, node *cometbft.CometBftNode, txapp *txapp.TxApp) *listeners.ListenerManager {
+func buildListenerManager(d *coreDependencies, ev *voting.EventStore, node *cometbft.CometBftNode, txapp *txapp.TxApp) *listeners.ListenerManager {
 	return listeners.NewListenerManager(d.cfg.AppCfg.Extensions, ev, node, d.privKey.PubKey().Bytes(), txapp, *d.log.Named("listener-manager"))
 }

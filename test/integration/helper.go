@@ -17,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"syscall"
@@ -401,10 +402,34 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 	dc, err := compose.NewDockerCompose(composeFiles...)
 	require.NoError(r.t, err, "failed to create docker compose object for kwild cluster")
 
+	ctxUp, cancel := context.WithCancel(ctx)
+
 	r.t.Cleanup(func() {
+		if r.t.Failed() {
+			r.t.Logf("Stopping but keeping containers for inspection after failed test: %v", dc.Services())
+			cancel() // Stop, not Down, which would remove the containers too --- this doesn't work, dang
+			time.Sleep(5 * time.Second)
+
+			// There is no dc.Stop, but there should be! Do this instead:
+			svcs := dc.Services()
+			slices.Sort(svcs)
+			for _, svc := range svcs { // sort is silly, but I just want to stop nodes before pgs
+				ct, err := dc.ServiceContainer(ctx, svc)
+				if err != nil {
+					r.t.Logf("could not get container %v: %v", svc, err)
+					continue
+				}
+				err = ct.Stop(ctx, nil)
+				if err != nil {
+					r.t.Logf("could not stop container %v: %v", svc, err)
+				}
+			}
+			return
+		}
 		r.t.Logf("teardown %s", dc.Services())
-		err := dc.Down(ctx)
+		err := dc.Down(ctx, compose.RemoveVolumes(true))
 		require.NoErrorf(r.t, err, "failed to teardown %s", dc.Services())
+		cancel() // no context leak
 	})
 
 	stack := dc.WithEnv(r.envs)
@@ -425,7 +450,7 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 	// their defined healthchecks.
 
 	// NOTE: services will be sorted by docker-compose here.
-	err = stack.Up(ctx, compose.Wait(true), compose.RunServices(services...))
+	err = stack.Up(ctxUp, compose.Wait(true), compose.RunServices(services...))
 	r.t.Log("docker compose up")
 
 	time.Sleep(3 * time.Second) // RPC errors with chain_info and other stuff... trying anything now
@@ -510,8 +535,8 @@ func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 	localNetworkName := localNetwork.Name
 
 	r.t.Cleanup(func() {
-		r.t.Logf("teardown docker network %s from %s", localNetworkName, testName)
-		if localNetwork != nil {
+		if localNetwork != nil && !r.t.Failed() {
+			r.t.Logf("teardown docker network %s from %s", localNetworkName, testName)
 			err := localNetwork.Remove(ctx)
 			require.NoError(r.t, err, "failed to remove network")
 		}

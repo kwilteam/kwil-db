@@ -353,7 +353,6 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 	}
 }
 
-// This test need to be run on builds with byzantine_test tag.
 func TestKwildEthDepositOracleExpiryIntegration(t *testing.T) {
 	if *parallelMode {
 		t.Parallel()
@@ -492,7 +491,7 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 	}
 }
 
-func TestKwilEthDepositFundTransfer(t *testing.T) {
+func TestKwildEthDepositFundTransfer(t *testing.T) {
 	if *parallelMode {
 		t.Parallel()
 	}

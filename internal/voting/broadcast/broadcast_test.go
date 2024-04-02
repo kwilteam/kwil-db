@@ -13,9 +13,9 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/events/broadcast"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/kwilteam/kwil-db/internal/voting/broadcast"
 )
 
 func Test_Broadcaster(t *testing.T) {
@@ -78,16 +78,21 @@ func Test_Broadcaster(t *testing.T) {
 			}
 			ctx := context.Background()
 
-			db, err := dbtest.NewTestDB(t)
+			db, cleanup, err := dbtest.NewTestPool(ctx, []string{"kwild_events", "kwild_voting"}) // db is the event store specific connection
 			require.NoError(t, err)
-			defer db.Close()
+			defer cleanup()
 
-			dbTx, err := db.BeginTx(ctx)
+			_, err = voting.NewEventStore(ctx, db)
 			require.NoError(t, err)
-			defer dbTx.Rollback(ctx) // always rollback to ensure cleanup
 
-			err = voting.InitializeVoteStore(ctx, dbTx)
+			// create a second db connection to emulate the consensus db
+			consensusDB, cleanup2, err := dbtest.NewTestPool(ctx, nil) // don't need to delete schema since we will never commit
 			require.NoError(t, err)
+			defer cleanup2()
+
+			consensusTx, err := consensusDB.BeginTx(ctx)
+			require.NoError(t, err)
+			defer consensusTx.Rollback(ctx) // always rollback, to clean up
 
 			txapp := tc.txapp
 			if txapp == nil {
@@ -126,7 +131,7 @@ func Test_Broadcaster(t *testing.T) {
 
 			// create resolutions for the events
 			for _, event := range e.events {
-				err = voting.CreateResolution(ctx, dbTx, event, 10000, []byte("proposer"))
+				err = voting.CreateResolution(ctx, consensusTx, event, 10000, []byte("proposer"))
 				require.NoError(t, err)
 			}
 
