@@ -1,0 +1,23 @@
+# manual-test-kgw.yaml run kgw-test with manual inputs: kwil-db-branch and kgw-branch.
+name: manual-test-kgw
+
+on:
+  workflow_dispatch:
+    inputs:
+      kwil-db-branch:
+        description: 'kwil-db branch to be tested'
+        required: true
+        type: string
+      kgw-branch:
+        description: 'kgw branch to be tested'
+        required: true
+        type: string
+
+jobs:
+  kgw-test:
+    uses: ./.github/workflows/kgw-test-reuse.yaml
+    with:
+      kwil-db-branch: ${{ github.event.inputs.kwil-db-branch }}
+      kgw-branch: ${{ github.event.inputs.kgw-branch }}
+    secrets:
+      kgw-access-token: ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }}

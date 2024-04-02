@@ -94,7 +94,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Cache Docker layers for kwild
+      - name: Cache Docker layers for kwild # both restore and save
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache-kwild
@@ -140,7 +140,6 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-kwild
           cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
 
-      # maybe no need
       - name: Run acceptance test
         run: |
           testUserID=$(id -u)
@@ -150,7 +149,6 @@ jobs:
           KACT_LOG_LEVEL=warn task test:act:nb
 
       - name: Run integration test
-        # without kgw test, probably should disable this ?
         run: |
           testUserID=$(id -u)
           testGroupID=$(id -g)
