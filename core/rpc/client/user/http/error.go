@@ -90,6 +90,18 @@ func parseBroadcastError(respTxt []byte) (bool, error) {
 			return false, err
 		}
 	}
+
+	// for kgw error response
+	if protoStatus.GetCode() == 0 { // if it's grpc status, it should have a code, code 0 is not error code
+		// NOTE: this could be removed once #623 is merged
+		// try to parse kgw error first
+		var kgwErr gatewayErrResponse
+		err := json.Unmarshal(respTxt, &kgwErr)
+		if err == nil {
+			return true, errors.Join(errors.New(kgwErr.Error))
+		}
+	}
+
 	stat := grpcStatus.FromProto(&protoStatus)
 	code, message := stat.Code(), stat.Message()
 	rpcErr := &client.RPCError{
