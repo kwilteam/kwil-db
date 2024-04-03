@@ -59,6 +59,10 @@ func (d *Deployer) Deploy() error {
 		return err
 	}
 
+	auth.GasFeeCap = big.NewInt(1e12)
+	auth.GasTipCap = big.NewInt(1e6) // avoid SuggestGasTipCap
+	auth.GasLimit = 3_000_000
+
 	tokenAddr, _, tokenInst, err := contracts.DeployERC20(auth, d.ethClient)
 	if err != nil {
 		return err
@@ -70,6 +74,10 @@ func (d *Deployer) Deploy() error {
 	if err != nil {
 		return err
 	}
+
+	auth.GasFeeCap = big.NewInt(1e12)
+	auth.GasTipCap = big.NewInt(1e6) // avoid SuggestGasTipCap
+	auth.GasLimit = 3_000_000
 
 	escrowAddr, _, escrowInst, err := contracts.DeployEscrow(auth, d.ethClient, tokenAddr)
 	if err != nil {
@@ -174,9 +182,11 @@ func (d *Deployer) prepareTxAuth(ctx context.Context, sender *ecdsa.PrivateKey) 
 	}
 
 	auth.Nonce = big.NewInt(int64(nonce))
-	auth.Value = big.NewInt(0)      // in wei
-	auth.GasLimit = uint64(3000000) // in units
-	auth.GasPrice = gasPrice
+	auth.Value = big.NewInt(0) // in wei
+	// auth.GasPrice = gasPrice
+	auth.GasTipCap = big.NewInt(1e6) // avoid SuggestGasTipCap
+	auth.GasFeeCap = gasPrice        // big.NewInt(1e16)
+	auth.GasLimit = 3_000_000
 	return auth, nil
 }
 

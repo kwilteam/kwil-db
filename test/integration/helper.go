@@ -61,7 +61,7 @@ var logWaitStrategies = map[string]string{
 	"node4":       "finalized block",
 	"node5":       "finalized block",
 	"kgw":         "KGW Server started",
-	"ganache":     "RPC Listening on 0.0.0.0:8545",
+	"hardhat":     "Started HTTP and WebSocket JSON-RPC server",
 	"pg0":         `listening on IPv4 address "0.0.0.0", port 5432`,
 	"pg1":         `listening on IPv4 address "0.0.0.0", port 5432`,
 	"pg2":         `listening on IPv4 address "0.0.0.0", port 5432`,
@@ -87,8 +87,7 @@ type IntTestConfig struct {
 	SchemaFile                string
 	DockerComposeFile         string
 	DockerComposeOverrideFile string
-	GanacheComposeFile        string
-	WithGanache               bool
+	WithETHDevNet             bool
 	ExposedHTTPPorts          bool
 
 	WaitTimeout time.Duration
@@ -244,9 +243,9 @@ func WithNumByzantineExpiryNodes(n int) HelperOpt {
 	}
 }
 
-func WithGanache() HelperOpt {
+func WithETHDevNet() HelperOpt {
 	return func(r *IntHelper) {
-		r.cfg.WithGanache = true
+		r.cfg.WithETHDevNet = true
 	}
 }
 
@@ -291,7 +290,6 @@ func (r *IntHelper) LoadConfig() {
 		AdminRPC:                  getEnv("KIT_ADMIN_RPC", "/tmp/admin.socket"),
 		DockerComposeFile:         getEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KIT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
-		GanacheComposeFile:        getEnv("KIT_GANACHE_COMPOSE_FILE", "./ganache-docker-compose.yml"),
 	}
 
 	waitTimeout := getEnv("KIT_WAIT_TIMEOUT", "20s")
@@ -332,7 +330,6 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 				RPCProvider:     r.ethDeposit.UnexposedChainRPC,
 				ContractAddress: address,
 				// setting values here since we cannot have the defaults, since
-				// local ganache is a new network
 				StartingHeight:        0,
 				RequiredConfirmations: r.ethDeposit.confirmations, // TODO: remove this from the r.ethDeposit struct. it is not needed
 				ReconnectionInterval:  30,
@@ -398,14 +395,14 @@ func fileExists(path string) bool {
 	return !os.IsNotExist(err)
 }
 
-func (r *IntHelper) RunGanache(ctx context.Context) {
-	r.RunDockerComposeWithServices(ctx, []string{"ganache"})
+func (r *IntHelper) RunETHDevNet(ctx context.Context) {
+	r.RunDockerComposeWithServices(ctx, []string{"hardhat"})
 	// Get the Escrow address and the ChainRPCURL
-	ctr, ok := r.containers["ganache"]
-	require.True(r.t, ok, "failed to get container for service ganache")
+	ctr, ok := r.containers["hardhat"]
+	require.True(r.t, ok, "failed to get container for hardhat service")
 
-	exposedChainRPC, unexposedChainRPC, err := utils.GanacheWSEndpoints(ctr, ctx)
-	require.NoError(r.t, err, "failed to get ganache endpoints")
+	exposedChainRPC, unexposedChainRPC, err := utils.ETHDevNetWSEndpoints(ctr, ctx)
+	require.NoError(r.t, err, "failed to get hardhat endpoints")
 
 	// Deploy contracts
 	ethDeployer, err := ethdeployer.NewDeployer(exposedChainRPC, r.cfg.CreatorRawPk, 5)
@@ -523,7 +520,7 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 // Following steps are done:
 // 1. Create a temporary directory for current test
 // 2. Prepare files for docker-compose to run
-// 3. Run Ganache ahead if required(for the purpose to populate config for eth-deposit)
+// 3. Run ETHDevNet ahead if required(for the purpose to populate config for eth-deposit)
 // 4. Generate node configuration files
 // 5. Run docker-compose with the given services
 func (r *IntHelper) Setup(ctx context.Context, services []string) {
@@ -543,10 +540,10 @@ func (r *IntHelper) Setup(ctx context.Context, services []string) {
 
 	r.prepareDockerCompose(ctx, tmpDir)
 
-	if r.cfg.WithGanache {
+	if r.cfg.WithETHDevNet {
 		// NOTE: it's more natural and easier if able to configure oracle
 		// through kwild cli flags
-		r.RunGanache(ctx)
+		r.RunETHDevNet(ctx)
 	}
 
 	r.generateNodeConfig(tmpDir)
