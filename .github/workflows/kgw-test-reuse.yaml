@@ -34,7 +34,15 @@ jobs:
           echo "kdb branch: ${{ inputs.kdb-branch }}"
           echo "kgw branch: ${{ inputs.kgw-branch }}"
 
-      - name: checkout kwil-db
+      - name: checkout kwil-db using sha
+        if: ${{ inputs.kdb-sha != '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.kdb-sha }}
+          submodules: true
+
+      - name: checkout kwil-db using branch
+        if: ${{ inputs.kdb-sha == '' }}
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.kdb-branch }}
