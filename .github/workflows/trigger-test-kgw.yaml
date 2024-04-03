@@ -9,6 +9,16 @@ on:
       - completed
 
 jobs:
+  workflow-context:
+    name: job-context
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump GitHub context
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github.event.workflow_run) }}
+        run: echo "$GITHUB_CONTEXT"
+
+
   on-ci-success:
     # run when `CI` workflow is successful, not sure if this will work on forked PRs
     if: ${{ github.event.workflow_run.conclusion == 'success' }}

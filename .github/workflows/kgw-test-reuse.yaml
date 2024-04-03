@@ -17,6 +17,11 @@ jobs:
   run-kgw-test:
     runs-on: ubuntu-latest
     steps:
+      - name: Show branch
+        run: |
+          echo "kwil-db branch: ${{ inputs.kwil-db-branch }}"
+          echo "kgw branch: ${{ inputs.kgw-branch }}"
+
       - name: checkout kwil-db
         uses: actions/checkout@v4
         with:
@@ -58,7 +63,7 @@ jobs:
         env:
           GH_ACCESS_TOKEN: ${{ secrets.kgw-access-token }}
         # vendor is used to bypass private repo issues;
-        # if kgw on main branch, we need to use go workspace, so that kgw
+        # if kgw on non-release branches, we want to use go workspace, so that kgw
         # always uses the latest version of kwil-db/core
         run: |
           git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"

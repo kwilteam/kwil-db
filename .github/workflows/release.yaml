@@ -8,24 +8,29 @@ jobs:
   parse-version:
     name: Run KGW test on correspond version
     runs-on: ubuntu-latest
+    # Map a step output to a job output
+    outputs:
+      vkdb: ${{ steps.versions.outputs.kdb_version }}
+      vkgw: ${{ steps.versions.outputs.kgw_version }}
     steps:
-      - name: Get kgw version # minor version
+      - name: Get kdb n kgw version # minor version
         id: versions
         shell: bash
         run: |
-          version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//'` | cut -d '.' -f 2
-          kgw_version=`v7="v2"; v6="v1"; eval echo \${v$version}`
+          version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//' | cut -d '.' -f 2`
+          kgw_version=$(v7="2"; v6="1"; eval echo \${v$version})
           echo "kdb_version=v0.$version" >> $GITHUB_OUTPUT
           echo "kgw_version=v0.$kgw_version" >> $GITHUB_OUTPUT
           echo "kdb_version=v0.$version <> kgw_version=v0.$kgw_version"
 
   call-kgw-test:
+    name: Call kgw test
     runs-on: ubuntu-latest
     needs: parse-version
     uses: ./.github/workflows/kgw-test-reuse.yaml
     with:
-      kwil-db-branch: release-${{ needs.parse-version.outputs.kdb_version }}
-      kgw-branch: release-${{ needs.parse-version.outputs.kgw_version }}
+      kwil-db-branch: release-${{ needs.parse-version.outputs.vkdb }}
+      kgw-branch: release-${{ needs.parse-version.outputs.vkgw }}
     secrets:
       kgw-access-token: ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }}
 
