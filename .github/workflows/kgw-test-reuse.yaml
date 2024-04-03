@@ -1,9 +1,9 @@
-name: Reusable kgw test workflow
+name: kgw-test-reuse
 
 on:
   workflow_call:
     inputs:
-      kwil-db-branch:
+      kdb-branch:
         required: true
         type: string
       kgw-branch:
@@ -14,18 +14,19 @@ on:
         required: true
 
 jobs:
-  run-kgw-test:
+  kgw-test:
     runs-on: ubuntu-latest
     steps:
       - name: Show branch
         run: |
-          echo "kwil-db branch: ${{ inputs.kwil-db-branch }}"
+          echo "====== kgw test branches ======"
+          echo "kdb branch: ${{ inputs.kdb-branch }}"
           echo "kgw branch: ${{ inputs.kgw-branch }}"
 
       - name: checkout kwil-db
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.kwil-db-branch }}
+          ref: ${{ inputs.kdb-branch }}
           submodules: true
 
       - name: Setup Go

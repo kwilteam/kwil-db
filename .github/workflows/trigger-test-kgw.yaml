@@ -9,8 +9,8 @@ on:
       - completed
 
 jobs:
-  workflow-context:
-    name: job-context
+  workflow-context: # for debugging
+    name: Dump workflow context
     runs-on: ubuntu-latest
     steps:
       - name: Dump GitHub context
