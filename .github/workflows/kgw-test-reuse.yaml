@@ -29,8 +29,8 @@ jobs:
         run: |
           echo "====== kgw test branches ======"
           test ${{ secrets.kgw-access-token }} = "" && echo "kgw access token empty" || echo "kgw access token available"
-          test ${{ inputs.kdb-repo }} = "" || echo "kdb repo: ${{ inputs.kdb-repo }}"
-          test ${{ inputs.kdb-sha }} = "" || echo "kdb sha: ${{ inputs.kdb-sha }}"
+          echo "kdb fork: ${{ inputs.kdb-repo }}"
+          echo "kdb sha: ${{ inputs.kdb-sha }}"
           echo "kdb branch: ${{ inputs.kdb-branch }}"
           echo "kgw branch: ${{ inputs.kgw-branch }}"
 
@@ -86,20 +86,21 @@ jobs:
         # if kgw on non-release branches, we want to use go workspace, so that kgw
         # always uses the latest version of kwil-db/core
         run: |
+          kdbDir=$(pwd)
           git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
           rm -rf /tmp/kgw
           git clone -b ${{ inputs.kgw-branch }}  https://github.com/kwilteam/kgw.git /tmp/kgw
+          rm -rf ~/.gitconfig
           cd /tmp/kgw
           if [[ ${{ inputs.kgw-branch }} == release-* ]]; then
             go mod vendor
           else
             # non release branch, use go workspace to always use the latest version of kwil-db/core
             go work init
-            go work use . /home/runner/work/kwil-db/kwil-db/core
+            go work use . $kdbDir/core
             go work vendor
           fi
           cd -
-          rm -rf ~/.gitconfig
 
       - name: Build kgw image
         id: docker_build_kgw
