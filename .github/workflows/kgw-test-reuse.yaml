@@ -3,6 +3,14 @@ name: kgw-test-reuse
 on:
   workflow_call:
     inputs:
+      # for logging purpose
+      kdb-repo:
+        type: string
+      # for workflow_run trigger, we need to check out to the sha, bcz most of
+      # the pr come from forked repo, and we can't access the branch, but we can
+      # access the sha(i.e, pull/xxx/head)
+      kdb-sha:
+        type: string
       kdb-branch:
         required: true
         type: string
@@ -20,6 +28,9 @@ jobs:
       - name: Show branch
         run: |
           echo "====== kgw test branches ======"
+          test ${{ secrets.kgw-access-token }} = "" && echo "kgw access token empty" || echo "kgw access token available"
+          test ${{ inputs.kdb-repo }} = "" || echo "kdb repo: ${{ inputs.kdb-repo }}"
+          test ${{ inputs.kdb-sha }} = "" || echo "kdb sha: ${{ inputs.kdb-sha }}"
           echo "kdb branch: ${{ inputs.kdb-branch }}"
           echo "kgw branch: ${{ inputs.kgw-branch }}"
 
