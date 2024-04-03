@@ -1,9 +1,17 @@
-name: Reusable kgw test workflow
+name: kgw-test-reuse
 
 on:
   workflow_call:
     inputs:
-      kwil-db-branch:
+      # for logging purpose
+      kdb-repo:
+        type: string
+      # for workflow_run trigger, we need to check out to the sha, bcz most of
+      # the pr come from forked repo, and we can't access the branch, but we can
+      # access the sha(i.e, pull/xxx/head)
+      kdb-sha:
+        type: string
+      kdb-branch:
         required: true
         type: string
       kgw-branch:
@@ -14,13 +22,30 @@ on:
         required: true
 
 jobs:
-  run-kgw-test:
+  kgw-test:
     runs-on: ubuntu-latest
     steps:
-      - name: checkout kwil-db
+      - name: Show branch
+        run: |
+          echo "====== kgw test branches ======"
+          test ${{ secrets.kgw-access-token }} = "" && echo "kgw access token empty" || echo "kgw access token available"
+          echo "kdb fork: ${{ inputs.kdb-repo }}"
+          echo "kdb sha: ${{ inputs.kdb-sha }}"
+          echo "kdb branch: ${{ inputs.kdb-branch }}"
+          echo "kgw branch: ${{ inputs.kgw-branch }}"
+
+      - name: checkout kwil-db using sha
+        if: ${{ inputs.kdb-sha != '' }}
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.kwil-db-branch }}
+          ref: ${{ inputs.kdb-sha }}
+          submodules: true
+
+      - name: checkout kwil-db using branch
+        if: ${{ inputs.kdb-sha == '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.kdb-branch }}
           submodules: true
 
       - name: Setup Go
@@ -34,7 +59,6 @@ jobs:
 
       - name: Init workspace
         run: |
-          pwd
           go work init && go work use . ./parse ./test ./core
 
       - name: Generate go vendor
@@ -58,23 +82,24 @@ jobs:
         env:
           GH_ACCESS_TOKEN: ${{ secrets.kgw-access-token }}
         # vendor is used to bypass private repo issues;
-        # if kgw on main branch, we need to use go workspace, so that kgw
+        # if kgw on non-release branches, we want to use go workspace, so that kgw
         # always uses the latest version of kwil-db/core
         run: |
+          kdbDir=$(pwd)
           git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
           rm -rf /tmp/kgw
           git clone -b ${{ inputs.kgw-branch }}  https://github.com/kwilteam/kgw.git /tmp/kgw
+          rm -rf ~/.gitconfig
           cd /tmp/kgw
           if [[ ${{ inputs.kgw-branch }} == release-* ]]; then
             go mod vendor
           else
             # non release branch, use go workspace to always use the latest version of kwil-db/core
             go work init
-            go work use . /home/runner/work/kwil-db/kwil-db/core
+            go work use . $kdbDir/core
             go work vendor
           fi
           cd -
-          rm -rf ~/.gitconfig
 
       - name: Build kgw image
         id: docker_build_kgw

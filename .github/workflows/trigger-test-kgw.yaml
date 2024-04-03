@@ -9,13 +9,26 @@ on:
       - completed
 
 jobs:
+  workflow-context: # for debugging
+    name: Dump workflow context
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if secret available
+        run: |
+          test ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }} = "" && echo "kgw access token empty" || echo "kgw access token available"
+
+
   on-ci-success:
     # run when `CI` workflow is successful, not sure if this will work on forked PRs
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/kgw-test-reuse.yaml
+    # https://github.com/GuillaumeFalourd/poc-github-actions/actions/runs/8534188213/job/23378138490
+    # shows all the context available in the `workflow_run` event
     with:
       # use the branch from the `CI` workflow
-      kwil-db-branch:  ${{ github.event.workflow_run.head_branch }}
+      kdb-repo: ${{ github.event.workflow_run.repository.full_name }}
+      kdb-sha: ${{ github.event.workflow_run.head_sha }}
+      kdb-branch:  ${{ github.event.workflow_run.head_branch }}
       kgw-branch: main
     secrets:
       kgw-access-token: ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }}
