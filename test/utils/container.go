@@ -48,11 +48,11 @@ func getEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context,
 	return
 }
 
-func GanacheHTTPEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
+func ETHDevNetHTTPEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
 	return getEndpoints(ctr, ctx, "8545", "http")
 }
 
-func GanacheWSEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
+func ETHDevNetWSEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
 	return getEndpoints(ctr, ctx, "8545", "ws")
 }
 

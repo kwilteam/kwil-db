@@ -329,7 +329,7 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 					integration.WithBlockInterval(time.Second),
 					integration.WithValidators(tc.numValidators),
 					integration.WithNonValidators(0),
-					integration.WithGanache(),
+					integration.WithETHDevNet(),
 					integration.WithGas(),
 					integration.WithEthDepositOracle(true),
 				}
@@ -372,7 +372,7 @@ func TestKwildEthDepositOracleExpiryIntegration(t *testing.T) {
 		integration.WithValidators(5),
 		integration.WithNonValidators(0),
 		integration.WithGas(),
-		integration.WithGanache(),
+		integration.WithETHDevNet(),
 		integration.WithEthDepositOracle(true),
 		integration.WithNumByzantineExpiryNodes(1), // 1 node listens on a different escrow contract and submits votes for events on the byz contract which never gets approved
 		integration.WithVoteExpiry(4),
@@ -417,7 +417,7 @@ func TestKwildEthDepositOracleExpiryRefundIntegration(t *testing.T) {
 		integration.WithValidators(5),
 		integration.WithNonValidators(0),
 		integration.WithGas(),
-		integration.WithGanache(),
+		integration.WithETHDevNet(),
 		integration.WithEthDepositOracle(true),
 		integration.WithNumByzantineExpiryNodes(2), // 2 nodes listen on different escrow contracts and submits votes for events on the byz contract which never gets approved.
 		integration.WithVoteExpiry(4),
@@ -460,7 +460,7 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 		integration.WithValidators(6),
 		integration.WithNonValidators(0),
 		integration.WithGas(),
-		integration.WithGanache(),
+		integration.WithETHDevNet(),
 		integration.WithEthDepositOracle(true),
 		integration.WithNumByzantineExpiryNodes(2), // 2 nodes listen on different escrow contracts and submits votes for events on the byz contract which never gets approved.
 	}
@@ -509,7 +509,7 @@ func TestKwildEthDepositFundTransfer(t *testing.T) {
 		integration.WithValidators(4),
 		integration.WithNonValidators(0),
 		integration.WithGas(),
-		integration.WithGanache(),
+		integration.WithETHDevNet(),
 		integration.WithEthDepositOracle(true),
 	}
 

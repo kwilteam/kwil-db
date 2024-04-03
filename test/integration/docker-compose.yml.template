@@ -454,19 +454,12 @@ services:
       --schema-sync-interval 2
     # domain should not be changed, and client should use 'domain' value as the provider, otherwise the test will fail
 
-  ganache:
-    image: trufflesuite/ganache:v7.9.2
+  hardhat:
+    image: kwildb/hardhat:latest
     ports:
       - "8545"
     networks:
       - {{ .Network }}
-    command:
-      - --wallet.hdPath
-      - m/44'/60'/0'
-      - --wallet.mnemonic
-      - test test test test test test test test test test test junk
-      - --chain.chainId
-      - "5"
 
 networks:
   {{ .Network }}:
