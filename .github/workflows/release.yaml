@@ -2,7 +2,9 @@ name: Release
 
 on:
   release:
-    types: [unpublished]
+    types:
+      - created # won't trigger from draft release
+      - published
 
 jobs:
   parse-release-version:
