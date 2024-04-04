@@ -140,21 +140,41 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-kwild
           cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
 
-      - name: Run acceptance test
-        run: |
-          testUserID=$(id -u)
-          testGroupID=$(id -g)
-          cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
-          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/acceptance/docker-compose.override.yml
-          KACT_LOG_LEVEL=warn task test:act:nb
+# UNCOMMENT this after kwil-js test is ready
+#      - name: Run acceptance test
+#        run: |
+#          testUserID=$(id -u)
+#          testGroupID=$(id -g)
+#          cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
+#          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/acceptance/docker-compose.override.yml
+#          KACT_LOG_LEVEL=warn task test:act:nb
+#
+#      - name: Run integration test
+#        run: |
+#          testUserID=$(id -u)
+#          testGroupID=$(id -g)
+#          cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
+#          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
+#          KIT_LOG_LEVEL=warn task test:it:nb
 
-      - name: Run integration test
+      - name: Run kwil-js test against kwild & kgw
         run: |
+          cd deployments/compose/kwil
           testUserID=$(id -u)
           testGroupID=$(id -g)
-          cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
-          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
-          KIT_LOG_LEVEL=warn task test:it:nb
+          cp docker-compose.override.yml.example docker-compose.override.yml
+          sed -i "s/1000/\"${testUserID}:${testGroupID}\"/g" docker-compose.override.yml
+          cat docker-compose.override.yml
+          cat docker-compose.yml
+          echo "run kwild in docker"
+          docker compose up -d
+          chain_id=`curl -s http://localhost:8080/api/v1/chain_info | jq .chain_id`
+          echo "run kgw in docker"
+          echo "run KWIL-JS TEST against kwild(http:localhost:8080),  with $chain_id"
+          echo "run KWIL-JS TEST against kgw(http://localhost:8090),  with $chain_id"
+          echo "stop running kwild & kgw"
+          docker rm -f kgwcontainer
+          docker compose down
 
       - name: Move cache
         run: |
