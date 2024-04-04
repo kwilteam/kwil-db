@@ -16,7 +16,7 @@ var (
 	listLong = `List the current validator set of the network.`
 
 	listExample = `# List the current validator set of the network
-kwil-admin validators list-validators`
+kwil-admin validators list`
 )
 
 func listCmd() *cobra.Command {
