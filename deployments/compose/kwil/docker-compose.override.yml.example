@@ -1,7 +1,5 @@
 version: '3'
 
 services:
-  pg:
-    user: 1000
-  kwild:
+  app:
     user: 1000

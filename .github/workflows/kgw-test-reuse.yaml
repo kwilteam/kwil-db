@@ -157,40 +157,43 @@ jobs:
         run: |
           docker pull kwilbrennan/extensions-math:multi-arch --platform linux/amd64
 
-# UNCOMMENT this after kwil-js test is ready
-#      - name: Run kgw integration test
-#        run: |
-#          testUserID=$(id -u)
-#          testGroupID=$(id -g)
-#          cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
-#          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
-#          KIT_LOG_LEVEL=warn go test -count=1 -timeout 0 ./test/integration -run ^TestKGW$ -v
+      - name: Run kgw integration test
+        run: |
+          testUserID=$(id -u)
+          testGroupID=$(id -g)
+          cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
+          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
+          KIT_LOG_LEVEL=warn go test -count=1 -timeout 0 ./test/integration -run ^TestKGW$ -v
 
       - name: Run kwil-js test against kwild & kgw
         run: |
           cd deployments/compose/kwil
-          testUserID=$(id -u)
-          testGroupID=$(id -g)
-          cp docker-compose.override.yml.example docker-compose.override.yml
-          sed -i "s/1000/\"${testUserID}:${testGroupID}\"/g" docker-compose.override.yml
-          cat docker-compose.override.yml
-          cat docker-compose.yml
-          echo "run kwild & kgw in docker"
+          echo "run kwild in docker"
           docker compose up -d
-          chain_id=`curl -s http://localhost:8080/api/v1/chain_info | jq .chain_id`
+          # build kwiljs
+          git clone https://github.com/kwilteam/kwil-js.git /tmp/kwil-js
+          cd /tmp/kwil-js
+          npm install
+          npm run build
+          # run tests
+          chain_id=`curl -s http://localhost:8080/api/v1/chain_info | jq -r .chain_id`
           echo "run kgw in docker"
-          docker run --name kgwcontainer -d --rm kgw:latest \
+          docker run --name kgwcontainer -d --rm  --network kwil_kwilnet0 -p 8090:8090 kgw:latest \
             --devmode -d "http://localhost:8090" \
             --cors-allow-origins "*" \
-            -b "http://localhost:8080" \
+            -b "http://kwild:8080" \
             --chain-id $chain_id \
             --allow-adhoc-query \
             --allow-deploy-db \
             --log-level debug
           echo "run KWIL-JS TEST against kwild(http:localhost:8080),  with $chain_id"
+          PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001 CHAIN_ID=$chain_id GATEWAY_ON=false GAS_ON=false KWIL_PROVIDER=http://localhost:8080 npm run integration
           echo "run KWIL-JS TEST against kgw(http://localhost:8090),  with $chain_id"
+          # assume the test above will drop the database, so we can deploy again
+          PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001 CHAIN_ID=$chain_id GATEWAY_ON=true GAS_ON=false KWIL_PROVIDER=http://localhost:8090 npm run integration
           echo "stop running kwild & kgw"
           docker rm -f kgwcontainer
+          cd -
           docker compose down
 
       - name: Move cache
