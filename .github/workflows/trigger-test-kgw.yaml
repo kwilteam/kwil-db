@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Check if secret available
         run: |
-          test ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }} = "" && echo "kgw access token empty" || echo "kgw access token available"
+          test ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }} = "" && echo "kgw access token empty" || echo "kgw access token available 1234"
 
 
   on-ci-success:
