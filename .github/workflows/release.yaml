@@ -3,7 +3,6 @@ name: Release
 on:
   release:
     types:
-      - created # won't trigger from draft release
       - published
 
 jobs:
