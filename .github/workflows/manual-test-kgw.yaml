@@ -4,9 +4,13 @@ name: manual-test-kgw
 on:
   workflow_dispatch:
     inputs:
+      kdb-sha:
+        description: 'kwil-db sha to be tested. If provided, it will used instead of branch'
+        required: false
+        type: string
       kdb-branch:
         description: 'kwil-db branch to be tested'
-        required: true
+        required: false
         type: string
       kgw-branch:
         description: 'kgw branch to be tested'
@@ -18,6 +22,7 @@ jobs:
     name: Run manual KGW test
     uses: ./.github/workflows/kgw-test-reuse.yaml
     with:
+      kdb-sha: ${{ github.event.inputs.kdb-sha }}
       kdb-branch: ${{ github.event.inputs.kdb-branch }}
       kgw-branch: ${{ github.event.inputs.kgw-branch }}
     secrets:
