@@ -146,7 +146,11 @@ func (s *Server) Start(ctx context.Context) error {
 		}()
 
 		s.log.Info("http server started", zap.String("address", s.cfg.AppCfg.HTTPListenAddress))
-		return s.gateway.Start()
+		err := s.gateway.Start()
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil // normal Shutdown
+		}
+		return err
 	})
 
 	group.Go(func() error {
@@ -210,13 +214,10 @@ func (s *Server) Start(ctx context.Context) error {
 			s.log.Info("server context is canceled")
 			return nil
 		}
-		if errors.Is(err, http.ErrServerClosed) {
-			s.log.Info("http server is closed")
-		} else {
-			s.log.Error("server error", zap.Error(err))
-			s.cancelCtxFunc()
-			return err
-		}
+
+		s.log.Error("server error", zap.Error(err))
+		s.cancelCtxFunc()
+		return err
 	}
 
 	return nil

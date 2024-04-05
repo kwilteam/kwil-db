@@ -325,10 +325,10 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 			helper.Setup(ctx, allServices)
 
 			// get deployer
-			ctx2, cancel := context.WithCancel(ctx)
+			ctxMiner, cancel := context.WithCancel(ctx)
 			defer cancel()
 			deployer := helper.EthDeployer(false)
-			err := deployer.KeepMining(ctx2)
+			err := deployer.KeepMining(ctxMiner)
 			require.NoError(t, err)
 
 			// Get the user driver
@@ -382,10 +382,10 @@ func TestKwildEthDepositOracleExpiryIntegration(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, append(allServices, "pg4", "node4"))
 
-			ctx2, cancel := context.WithCancel(ctx)
+			ctxMiner, cancel := context.WithCancel(ctx)
 			defer cancel()
 			byzDeployer := helper.EthDeployer(true)
-			err := byzDeployer.KeepMining(ctx2)
+			err := byzDeployer.KeepMining(ctxMiner)
 			require.NoError(t, err)
 
 			// Get the user driver
@@ -427,10 +427,10 @@ func TestKwildEthDepositOracleExpiryRefundIntegration(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, append(allServices, "pg4", "node4"))
 
-			ctx2, cancel := context.WithCancel(ctx)
+			ctxMiner, cancel := context.WithCancel(ctx)
 			defer cancel()
 			byzDeployer := helper.EthDeployer(true)
-			err := byzDeployer.KeepMining(ctx2)
+			err := byzDeployer.KeepMining(ctxMiner)
 			require.NoError(t, err)
 
 			// Get the user driver

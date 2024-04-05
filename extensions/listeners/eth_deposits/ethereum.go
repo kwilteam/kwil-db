@@ -44,8 +44,6 @@ var creditEventSignature ethcommon.Hash = crypto.Keccak256Hash([]byte("Credit(ad
 // it handles retries and resubscribing to the blockchain in case of
 // transient errors
 type ethClient struct {
-	ctx           context.Context
-	rpcurl        string
 	targetAddress ethcommon.Address
 	maxRetries    int64
 	logger        log.SugaredLogger
@@ -59,9 +57,9 @@ func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, targetAd
 	// I don't set the max retries here because this only gets run on startup
 	// the max retries are used for resubscribing to the blockchain
 	// if we fail 3 times here, it is likely a permanent error
-	err := retry(3, func() error {
+	err := retry(ctx, 3, func() error {
 		var innerErr error
-		client, innerErr = ethclient.Dial(rpcurl)
+		client, innerErr = ethclient.DialContext(ctx, rpcurl)
 		return innerErr
 	})
 	if err != nil {
@@ -69,8 +67,6 @@ func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, targetAd
 	}
 
 	return &ethClient{
-		ctx:           ctx,
-		rpcurl:        rpcurl,
 		targetAddress: targetAddress,
 		maxRetries:    maxRetries,
 		logger:        logger,
@@ -81,18 +77,10 @@ func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, targetAd
 // GetLatestBlock gets the latest block number from the ethereum blockchain
 func (ec *ethClient) GetLatestBlock(ctx context.Context) (int64, error) {
 	var blockNumber int64
-	err := retry(ec.maxRetries, func() error {
+	err := retry(ctx, ec.maxRetries, func() error {
 		header, err := ec.client.HeaderByNumber(ctx, nil)
 		if err != nil {
-			// if error, then reconnect client
 			ec.logger.Error("Failed to get latest block", "error", err)
-			ec.client.Close()
-			client, innerErr := ethclient.Dial(ec.rpcurl)
-			if innerErr != nil {
-				return innerErr
-			}
-			ec.client = client
-
 			return err
 		}
 		blockNumber = header.Number.Int64()
@@ -105,7 +93,7 @@ func (ec *ethClient) GetLatestBlock(ctx context.Context) (int64, error) {
 // It can be given a start range and an end range to filter the logs by block height.
 func (ec *ethClient) GetCreditEventLogs(ctx context.Context, fromBlock, toBlock int64) ([]types.Log, error) {
 	var logs []types.Log
-	err := retry(ec.maxRetries, func() error {
+	err := retry(ctx, ec.maxRetries, func() error {
 		var err error
 		logs, err = ec.client.FilterLogs(ctx, ethereum.FilterQuery{
 			ToBlock:   big.NewInt(toBlock),
@@ -114,14 +102,7 @@ func (ec *ethClient) GetCreditEventLogs(ctx context.Context, fromBlock, toBlock 
 			Topics:    [][]ethcommon.Hash{{creditEventSignature}},
 		})
 		if err != nil {
-			// if error, then reconnect client
 			ec.logger.Error("Failed to get credit event logs", "error", err)
-			ec.client.Close()
-			client, innerErr := ethclient.Dial(ec.rpcurl)
-			if innerErr != nil {
-				return innerErr
-			}
-			ec.client = client
 		}
 
 		return err
@@ -156,38 +137,31 @@ func decodeCreditEvent(l *types.Log) (*credit.AccountCreditResolution, error) {
 // ListenToBlocks subscribes to new blocks on the ethereum blockchain.
 // It takes a reconnectInterval, which is the amount of time it will wait
 // to reconnect to the ethereum client if no new blocks are received.
-// It takes a done channel, which is used to signal when the function should stop.
 // It takes a callback function that is called with the new block number.
 // It can send duplicates, if that is received from the ethereum client.
-// It will block until the context is cancelled, until Stop is called,
-// or until an error is returned from the callback function.
+// It will block until the context is cancelled, or until an error is
+// returned from the callback function.
 func (ec *ethClient) ListenToBlocks(ctx context.Context, reconnectInterval time.Duration, cb func(int64) error) error {
-	headers := make(chan *types.Header)
+	headers := make(chan *types.Header, 1)
 	sub, err := ec.client.SubscribeNewHead(ctx, headers)
 	if err != nil {
 		return err
 	}
 
 	resubscribe := func() error {
-		retryCount := 0
-		ec.logger.Debug("Resubscribing to the Ethereum node", "attempt", retryCount)
-		ec.client.Close()
+		var retryCount int
+		ec.logger.Warn("Resubscribing to Ethereum node", "attempt", retryCount) // anomalous
 		sub.Unsubscribe()
 
-		return retry(ec.maxRetries, func() error {
+		return retry(ctx, ec.maxRetries, func() error {
 			retryCount++
-
-			ec.client, err = ethclient.DialContext(ctx, ec.rpcurl)
-			if err != nil {
-				return err
-			}
 			sub, err = ec.client.SubscribeNewHead(ctx, headers)
-			if err != nil {
-				return err
-			}
-			return nil
+			return err
 		})
 	}
+
+	reconn := time.NewTicker(reconnectInterval)
+	defer reconn.Stop()
 
 	for {
 		select {
@@ -200,14 +174,17 @@ func (ec *ethClient) ListenToBlocks(ctx context.Context, reconnectInterval time.
 			if err != nil {
 				return err
 			}
+
+			reconn.Reset(reconnectInterval)
 		case err := <-sub.Err():
 			ec.logger.Error("Ethereum subscription error", "error", err)
 			err = resubscribe()
 			if err != nil {
 				return err
 			}
-		case <-time.After(reconnectInterval):
-			ec.logger.Debug("No new blocks received, resubscribing")
+			reconn.Reset(reconnectInterval)
+		case <-reconn.C:
+			ec.logger.Warn("No new blocks received, resubscribing")
 			err := resubscribe()
 			if err != nil {
 				return err
@@ -222,7 +199,7 @@ func (ec *ethClient) Close() {
 }
 
 // retry will retry the function until it is successful, or reached the max retries
-func retry(maxRetries int64, fn func() error) error {
+func retry(ctx context.Context, maxRetries int64, fn func() error) error {
 	retrier := &backoff.Backoff{
 		Min:    1 * time.Second,
 		Max:    10 * time.Second,
@@ -241,6 +218,10 @@ func retry(maxRetries int64, fn func() error) error {
 			return err
 		}
 
-		time.Sleep(retrier.Duration())
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retrier.Duration()):
+		}
 	}
 }
