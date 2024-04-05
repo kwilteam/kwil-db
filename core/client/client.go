@@ -8,7 +8,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"net"
 	"net/url"
 	"time"
 
@@ -74,10 +76,41 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 		noWarnings: clientOptions.Silence,
 	}
 
+	var tries int
+CHAIN_INFO:
 	chainInfo, err := c.ChainInfo(ctx)
 	if err != nil {
+		tries++
+		var retry bool
+		if errors.Is(err, io.EOF) {
+			c.logger.Error("io.EOF error`", zap.Error(err))
+			retry = true
+		} else if t, ok := err.(interface{ Temporary() bool }); ok {
+			c.logger.Error("Temporary() error", zap.Error(err))
+			retry = t.Temporary()
+		}
+
+		var opErr *net.OpError
+		if errors.As(err, &opErr) {
+			c.logger.Error("*net.OpError", zap.Error(opErr))
+			retry = true // might already be, but we want to be ere to log the opErr
+		} else if netErr, ok := err.(net.Error); ok {
+			c.logger.Error("net Error", zap.Error(netErr))
+			retry = true
+		}
+
+		if retry && tries < 5 {
+			select {
+			case <-time.After(time.Second):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+			goto CHAIN_INFO
+		}
+
 		return nil, fmt.Errorf("chain_info: %w", err)
 	}
+
 	chainID := chainInfo.ChainID
 	if c.chainID == "" {
 		if !c.noWarnings {
