@@ -41,7 +41,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 	needPrivateKey := flags&WithoutPrivateKey == 0
 
-	clientConfig := clientType.Options{}
+	clientConfig := clientType.Options{} // note for debugging: Logger: log.NewStdOut(log.DebugLevel)
 	if conf.PrivateKey != nil {
 		clientConfig.Signer = &auth.EthPersonalSigner{Key: *conf.PrivateKey}
 		if needPrivateKey { // only check chain ID if signing something

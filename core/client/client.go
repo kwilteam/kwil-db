@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"net"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/cstockton/go-conv"
@@ -82,21 +83,24 @@ CHAIN_INFO:
 	if err != nil {
 		tries++
 		var retry bool
-		if errors.Is(err, io.EOF) {
-			c.logger.Error("io.EOF error`", zap.Error(err))
+		if errors.Is(err, io.EOF) { // connected, partial response, retry
+			c.logger.Warn("io.EOF error`", zap.Error(err))
 			retry = true
-		} else if t, ok := err.(interface{ Temporary() bool }); ok {
-			c.logger.Error("Temporary() error", zap.Error(err))
-			retry = t.Temporary()
+		} else if t, ok := err.(interface{ Temporary() bool }); ok && t.Temporary() {
+			c.logger.Warn("Temporary()==true error", zap.Error(err))
+			retry = true
 		}
 
 		var opErr *net.OpError
 		if errors.As(err, &opErr) {
-			c.logger.Error("*net.OpError", zap.Error(opErr))
-			retry = true // might already be, but we want to be ere to log the opErr
-		} else if netErr, ok := err.(net.Error); ok {
-			c.logger.Error("net Error", zap.Error(netErr))
-			retry = true
+			c.logger.Warnf("*net.OpError %v (%T)", opErr, opErr.Err)
+			// don't retry all of this type, just for debugging
+		}
+		var syscallErr *os.SyscallError
+		if errors.As(err, &syscallErr) {
+			c.logger.Warnf("*os.SyscallError %v (%T)", syscallErr, syscallErr.Err)
+			// if eno, ok := syscallErr.Err.(syscall.Errno); ok { ... }
+			// don't retry all of this type, just for debugging
 		}
 
 		if retry && tries < 5 {
