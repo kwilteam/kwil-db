@@ -109,6 +109,7 @@ CHAIN_INFO:
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}
+			c.logger.Info("retrying chain_info")
 			goto CHAIN_INFO
 		}
 
