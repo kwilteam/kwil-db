@@ -1,11 +1,39 @@
 name: Release
 
 on:
-  workflow_dispatch:
   release:
-    types: [published, edited]
+    types:
+      - published
 
 jobs:
+  parse-release-version:
+    name: Parse kdb & kgw version
+    runs-on: ubuntu-latest
+    # Map a step output to a job output
+    outputs:
+      vkdb: ${{ steps.versions.outputs.kdb_version }}
+      vkgw: ${{ steps.versions.outputs.kgw_version }}
+    steps:
+      - name: Get kdb n kgw version # minor version
+        id: versions
+        shell: bash
+        run: |
+          version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//' | cut -d '.' -f 2`
+          kgw_version=$(v7="2"; v6="1"; eval echo \${v$version})
+          echo "kdb_version=v0.$version" >> $GITHUB_OUTPUT
+          echo "kgw_version=v0.$kgw_version" >> $GITHUB_OUTPUT
+          echo "kdb_version=v0.$version <> kgw_version=v0.$kgw_version"
+
+  kgw-test-release:
+    name: Run kgw test on release branches
+    needs: parse-release-version
+    uses: ./.github/workflows/kgw-test-reuse.yaml
+    with:
+      kdb-branch: release-${{ needs.parse-release-version.outputs.vkdb }}
+      kgw-branch: release-${{ needs.parse-release-version.outputs.vkgw }}
+    secrets:
+      kgw-access-token: ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }}
+
   build-push-image:
     name: Build & push image
     if: false # temporary disable
@@ -105,6 +133,7 @@ jobs:
 
   deploy-to-eks:
     name: Deploy to k8s cluster
+    if: false # temporary disable
     runs-on: ubuntu-latest
     needs: build-push-image
 

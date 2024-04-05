@@ -1,0 +1,179 @@
+name: kgw-test-reuse
+
+on:
+  workflow_call:
+    inputs:
+      # for logging purpose
+      kdb-repo:
+        type: string
+      # for workflow_run trigger, we need to check out to the sha, bcz most of
+      # the pr come from forked repo, and we can't access the branch, but we can
+      # access the sha(i.e, pull/xxx/head)
+      kdb-sha:
+        type: string
+      kdb-branch:
+        required: true
+        type: string
+      kgw-branch:
+        required: true
+        type: string
+    secrets:
+      kgw-access-token:
+        required: true
+
+jobs:
+  kgw-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show branch
+        run: |
+          echo "====== kgw test branches ======"
+          test ${{ secrets.kgw-access-token }} = "" && echo "kgw access token empty" || echo "kgw access token available"
+          echo "kdb fork: ${{ inputs.kdb-repo }}"
+          echo "kdb sha: ${{ inputs.kdb-sha }}"
+          echo "kdb branch: ${{ inputs.kdb-branch }}"
+          echo "kgw branch: ${{ inputs.kgw-branch }}"
+
+      - name: checkout kwil-db using sha
+        if: ${{ inputs.kdb-sha != '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.kdb-sha }}
+          submodules: true
+
+      - name: checkout kwil-db using branch
+        if: ${{ inputs.kdb-sha == '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.kdb-branch }}
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          check-latest: true
+
+      - name: Install Taskfile
+        uses: arduino/setup-task@v2
+
+      - name: Init workspace
+        run: |
+          go work init && go work use . ./parse ./test ./core
+
+      - name: Generate go vendor
+        run: | # should build the vendor using `go work vendor`?
+          go version
+          task vendor
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers for kgw # both restore and save
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-kgw
+          key: ${{ runner.os }}-buildx-kgw-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-kgw
+
+      - name: Pull kgw repo & create vendor
+        shell: bash
+        env:
+          GH_ACCESS_TOKEN: ${{ secrets.kgw-access-token }}
+        # vendor is used to bypass private repo issues;
+        # if kgw on non-release branches, we want to use go workspace, so that kgw
+        # always uses the latest version of kwil-db/core
+        run: |
+          kdbDir=$(pwd)
+          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
+          rm -rf /tmp/kgw
+          git clone -b ${{ inputs.kgw-branch }}  https://github.com/kwilteam/kgw.git /tmp/kgw
+          rm -rf ~/.gitconfig
+          cd /tmp/kgw
+          if [[ ${{ inputs.kgw-branch }} == release-* ]]; then
+            go mod vendor
+          else
+            # non release branch, use go workspace to always use the latest version of kwil-db/core
+            go work init
+            go work use . $kdbDir/core
+            go work vendor
+          fi
+          cd -
+
+      - name: Build kgw image
+        id: docker_build_kgw
+        uses: docker/build-push-action@v5
+        with:
+          context: /tmp/kgw
+          load: true
+          builder: ${{ steps.buildx.outputs.name }}
+          file: /tmp/kgw/Dockerfile
+          push: false
+          tags: kgw:latest
+          cache-from: type=local,src=/tmp/.buildx-cache-kgw
+          cache-to: type=local,dest=/tmp/.buildx-cache-kgw-new
+
+      - name: Cache Docker layers for kwild # both restore and save
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-kwild
+          key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-kwild
+
+      - name: manual git tag
+        run: |
+          version=`echo ${{ github.sha }} | cut -c 1-7`
+          echo "GIT_TAG=$version" >> $GITHUB_ENV
+
+      - name: manual build time
+        run: |
+          build_time=`TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ"`
+          echo "BUILD_TIME=$build_time" >> $GITHUB_ENV
+
+      - name: Build kwild image
+        id: docker_build_kwild
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          builder: ${{ steps.buildx.outputs.name }}
+          build-args: |
+            git_commit=${{ github.sha }}
+            version=${{ env.GIT_TAG }}
+            build_time=${{ env.BUILD_TIME }}
+          file: ./build/package/docker/kwild.dockerfile
+          push: false
+          tags: kwild:latest
+          cache-from: type=local,src=/tmp/.buildx-cache-kwild
+          cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
+
+      - name: Build cli binaries
+        run: |
+          task build:cli
+
+      - name: Pull math extension docker image
+        run: |
+          docker pull kwilbrennan/extensions-math:multi-arch --platform linux/amd64
+
+      - name: Run kgw integration test
+        run: |
+          testUserID=$(id -u)
+          testGroupID=$(id -g)
+          cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
+          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
+          KIT_LOG_LEVEL=warn go test -count=1 -timeout 0 ./test/integration -run ^TestKGW$ -v
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache-kgw
+          mv /tmp/.buildx-cache-kgw-new /tmp/.buildx-cache-kgw
+
+      - name: Prune Docker
+        if: ${{ always() }}
+        run: docker rm $(docker ps -a -q) -f ; docker network prune -f ; docker volume prune -f || true
+
+      - name: Show error log
+        if: ${{ failure() }}
+        run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwilInt*/*.log /tmp/TestKwilInt*/*/*.log
