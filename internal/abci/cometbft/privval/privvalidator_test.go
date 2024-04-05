@@ -1,4 +1,4 @@
-package privval_test
+package privval
 
 import (
 	"crypto/sha256"
@@ -9,7 +9,6 @@ import (
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cometbft/cometbft/types"
-	"github.com/kwilteam/kwil-db/internal/abci/cometbft/privval"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -45,37 +44,37 @@ func Test_PrivValidatorVote(t *testing.T) {
 	}
 
 	tests := []testCase{
-		// {
-		// 	name:    "signing a vote with no other votes signed",
-		// 	vote:    testVote(),
-		// 	chainID: defaultChainID,
-		// 	privKey: defaultPrivateKey,
-		// },
-		// {
-		// 	name:       "signing two separate votes, validly",
-		// 	vote:       testVote(height(1)),
-		// 	secondVote: testVote(height(2)),
-		// 	chainID:    defaultChainID,
-		// 	privKey:    defaultPrivateKey,
-		// },
-		// {
-		// 	name:       "signing a vote with a different previous vote signed",
-		// 	lastSigned: testVote(height(1)),
-		// 	vote:       testVote(height(2)),
-		// 	chainID:    defaultChainID,
-		// 	privKey:    defaultPrivateKey,
-		// },
-		// {
-		// 	name:       "signing the same vote despite it being signed already, first vote is last signed",
-		// 	lastSigned: testVote(signed("sig")),
-		// 	vote:       testVote(),
-		// 	chainID:    defaultChainID,
-		// 	privKey:    defaultPrivateKey,
-		// 	after: func(t *testing.T, tc *testCase) {
-		// 		// it should have the same signature as the last signed vote.
-		// 		assert.Equal(t, tc.lastSigned.Signature, tc.vote.Signature)
-		// 	},
-		// },
+		{
+			name:    "signing a vote with no other votes signed",
+			vote:    testVote(),
+			chainID: defaultChainID,
+			privKey: defaultPrivateKey,
+		},
+		{
+			name:       "signing two separate votes, validly",
+			vote:       testVote(height(1)),
+			secondVote: testVote(height(2)),
+			chainID:    defaultChainID,
+			privKey:    defaultPrivateKey,
+		},
+		{
+			name:       "signing a vote with a different previous vote signed",
+			lastSigned: testVote(height(1)),
+			vote:       testVote(height(2)),
+			chainID:    defaultChainID,
+			privKey:    defaultPrivateKey,
+		},
+		{
+			name:       "signing the same vote despite it being signed already, first vote is last signed",
+			lastSigned: testVote(signed("sig")),
+			vote:       testVote(),
+			chainID:    defaultChainID,
+			privKey:    defaultPrivateKey,
+			after: func(t *testing.T, tc *testCase) {
+				// it should have the same signature as the last signed vote.
+				assert.Equal(t, tc.lastSigned.Signature, tc.vote.Signature)
+			},
+		},
 		{
 			name:       "signing same vote twice, with different timestamps",
 			lastSigned: testVote(signed("sig"), timestamped(100)),
@@ -94,7 +93,7 @@ func Test_PrivValidatorVote(t *testing.T) {
 			vote:       testVote(height(99)),
 			chainID:    defaultChainID,
 			privKey:    defaultPrivateKey,
-			err:        privval.ErrHeightRegression,
+			err:        ErrHeightRegression,
 		},
 		{
 			name:       "test round regression",
@@ -102,7 +101,7 @@ func Test_PrivValidatorVote(t *testing.T) {
 			vote:       testVote(round(99)),
 			chainID:    defaultChainID,
 			privKey:    defaultPrivateKey,
-			err:        privval.ErrRoundRegression,
+			err:        ErrRoundRegression,
 		},
 		{
 			name:       "test step regression",
@@ -110,7 +109,15 @@ func Test_PrivValidatorVote(t *testing.T) {
 			vote:       testVote(step(cmtproto.PrevoteType)),
 			chainID:    defaultChainID,
 			privKey:    defaultPrivateKey,
-			err:        privval.ErrStepRegression,
+			err:        ErrStepRegression,
+		},
+		{
+			name:       "test invalid vote type",
+			lastSigned: testVote(step(cmtproto.ProposalType)),
+			vote:       testVote(),
+			chainID:    defaultChainID,
+			privKey:    defaultPrivateKey,
+			err:        ErrUnknownVoteType,
 		},
 	}
 
@@ -126,12 +133,16 @@ func Test_PrivValidatorVote(t *testing.T) {
 
 				store := newMockStore()
 				if tc.lastSigned != nil {
-					if err := setKeys(store, tc.lastSigned.Height, tc.lastSigned.Round, privval.VoteToStep(tc.lastSigned), tc.lastSigned.Signature, types.VoteSignBytes(tc.chainID, tc.lastSigned)); err != nil {
+					step, err := voteToStep(tc.lastSigned)
+					if err != nil {
+						return err
+					}
+					if err := setKeys(store, tc.lastSigned.Height, tc.lastSigned.Round, step, tc.lastSigned.Signature, types.VoteSignBytes(tc.chainID, tc.lastSigned)); err != nil {
 						return err
 					}
 				}
 
-				privVal, err := privval.NewValidatorSigner(privKeyBts, store)
+				privVal, err := NewValidatorSigner(privKeyBts, store)
 				if err != nil {
 					return err
 				}
@@ -238,14 +249,14 @@ func Test_Proposals(t *testing.T) {
 			lastSigned: testProposal(height(100)),
 			vote:       testProposal(height(99)),
 
-			err: privval.ErrHeightRegression,
+			err: ErrHeightRegression,
 		},
 		{
 			name:       "test round regression",
 			lastSigned: testProposal(round(100)),
 			vote:       testProposal(round(99)),
 
-			err: privval.ErrRoundRegression,
+			err: ErrRoundRegression,
 		},
 	}
 
@@ -266,7 +277,7 @@ func Test_Proposals(t *testing.T) {
 					}
 				}
 
-				privVal, err := privval.NewValidatorSigner(privKeyBts, store)
+				privVal, err := NewValidatorSigner(privKeyBts, store)
 				if err != nil {
 					return err
 				}
@@ -312,8 +323,8 @@ func Test_Proposals(t *testing.T) {
 
 // setKeys from vote sets the keys in the AtomicKV from the vote.
 // this is useful for testing starting up the atomic KV with an existing vote.
-func setKeys(store privval.AtomicReadWriter, ht int64, rnd int32, stp int8, signature []byte, signBytes []byte) error {
-	latest := privval.LastSignState{
+func setKeys(store AtomicReadWriter, ht int64, rnd int32, stp int8, signature []byte, signBytes []byte) error {
+	latest := LastSignState{
 		Height:    ht,
 		Round:     rnd,
 		Step:      stp,

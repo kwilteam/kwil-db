@@ -10,8 +10,7 @@ replace (
 require (
 	dario.cat/mergo v1.0.0
 	github.com/alexliesenfeld/health v0.6.0
-	github.com/cometbft/cometbft v0.38.5
-	github.com/cosmos/gogoproto v1.4.11
+	github.com/cometbft/cometbft v0.38.6
 	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/ethereum/go-ethereum v1.13.8
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5
@@ -55,6 +54,7 @@ require (
 	github.com/consensys/bavard v0.1.13 // indirect
 	github.com/consensys/gnark-crypto v0.12.1 // indirect
 	github.com/containerd/continuity v0.4.1 // indirect
+	github.com/cosmos/gogoproto v1.4.11 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
 	github.com/crate-crypto/go-kzg-4844 v0.7.0 // indirect
 	github.com/cstockton/go-conv v1.0.0 // indirect

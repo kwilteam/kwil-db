@@ -14,31 +14,28 @@ import (
 	"fmt"
 	"time"
 
-	cometEd25519 "github.com/cometbft/cometbft/crypto/ed25519"
-	cmtbytes "github.com/cometbft/cometbft/libs/bytes"
-	"github.com/cometbft/cometbft/libs/protoio"
-	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
-	cmttime "github.com/cometbft/cometbft/types/time"
-	"github.com/cosmos/gogoproto/proto"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/protoadapt"
 
+	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto"
+	cometEd25519 "github.com/cometbft/cometbft/crypto/ed25519"
+	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types" // will be api/cometbft/types/v1 in the api(/v1) module
 	"github.com/cometbft/cometbft/types"
+
+	coreTypes "github.com/kwilteam/kwil-db/core/types"
 )
 
-// NewValidatorSigner returns a new ValidatorSigner
-// it takes in an ed25519 key, and a keyvalue store
-// the key values store should NOT be atomically committed with other KV
-// stores.  Instead, it should simply fsync after every write/commit
+// NewValidatorSigner returns a new ValidatorSigner from an ed25519 key and a
+// keyvalue store. The key values stored should NOT be atomically committed with
+// other KV stores. Instead, it should simply fsync after every write/commit
 func NewValidatorSigner(privKey cometEd25519.PrivKey, storer AtomicReadWriter) (*ValidatorSigner, error) {
 	if len(privKey.Bytes()) != cometEd25519.PrivateKeySize {
 		return nil, fmt.Errorf("invalid private key size.  received: %d, expected: %d",
 			len(privKey.Bytes()), cometEd25519.PrivateKeySize)
 	}
 
-	lss := &LastSignState{
-		storer: storer,
-	}
-	err := lss.loadLatest()
+	lss, err := newLastSignState(storer)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +110,11 @@ func (v *ValidatorSigner) SignProposal(chainID string, proposal *tendermintTypes
 // SignVote signs a vote message
 // It is part of the cometTypes.PrivValidator interface
 func (v *ValidatorSigner) SignVote(chainID string, vote *tendermintTypes.Vote) error {
-	height, round, step := vote.Height, vote.Round, VoteToStep(vote)
+	step, err := voteToStep(vote)
+	if err != nil {
+		return err
+	}
+	height, round := vote.Height, vote.Round
 
 	sameHRS, err := v.lastSignedState.checkHRS(height, round, step)
 	if err != nil {
@@ -138,11 +139,10 @@ func (v *ValidatorSigner) SignVote(chainID string, vote *tendermintTypes.Vote) e
 		return errors.New("unexpected vote extension - extensions are only allowed in non-nil precommits")
 	}
 
-	// We might crash before writing to the wal,
-	// causing us to try to re-sign for the same HRS.
-	// If signbytes are the same, use the last signature.
-	// If they only differ by timestamp, use last timestamp and signature
-	// Otherwise, return error
+	// We might crash before writing to the wal, causing us to try to re-sign
+	// for the same HRS. If signbytes are the same, use the last signature. If
+	// they only differ by timestamp, use last timestamp and signature.
+	// Otherwise, return error.
 	if sameHRS {
 		if bytes.Equal(signBytes, v.lastSignedState.SignBytes) {
 			vote.Signature = v.lastSignedState.Signature
@@ -212,7 +212,7 @@ type LastSignState struct {
 	Signature []byte `json:"signature"`
 
 	// SignBytes is the bytes that were signed by the validator
-	SignBytes cmtbytes.HexBytes `json:"sign_bytes"`
+	SignBytes coreTypes.HexBytes `json:"sign_bytes"`
 
 	// storer is the store that this lastSignState is persisted to
 	storer AtomicReadWriter
@@ -228,29 +228,22 @@ func (l *LastSignState) store() error {
 	return l.storer.Write(bts)
 }
 
-// loadLatest loads the latest lastSignState from the given KV store
-// if none exists, it sets all fields to zero values
-func (l *LastSignState) loadLatest() (err error) {
+func newLastSignState(storer AtomicReadWriter) (*LastSignState, error) {
+	l := &LastSignState{storer: storer}
+
 	bts, err := l.storer.Read()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if bts == nil {
-		l.setZero()
-		return nil
+	if len(bts) == 0 {
+		return l, nil
 	}
 
-	return json.Unmarshal(bts, l)
-}
-
-// setZero sets all fields to zero values
-func (l *LastSignState) setZero() {
-	l.Height = 0
-	l.Round = 0
-	l.Step = 0
-	l.Signature = nil
-	l.SignBytes = nil
+	if err = json.Unmarshal(bts, l); err != nil {
+		return nil, err
+	}
+	return l, nil
 }
 
 // checkHRS checks that the given height, round, and step match the lastSignState.
@@ -295,60 +288,59 @@ func (lss *LastSignState) checkHRS(height int64, round int32, step int8) (bool, 
 // and vote extension signatures).
 func checkVotesOnlyDifferByTimestamp(lastSignBytes, newSignBytes []byte) (time.Time, bool) {
 	var lastVote, newVote tendermintTypes.CanonicalVote
-	if err := protoio.UnmarshalDelimited(lastSignBytes, &lastVote); err != nil {
+	if err := abciTypes.ReadMessage(bytes.NewReader(lastSignBytes), &lastVote); err != nil {
 		panic(fmt.Sprintf("LastSignBytes cannot be unmarshalled into vote: %v", err))
 	}
-	if err := protoio.UnmarshalDelimited(newSignBytes, &newVote); err != nil {
+	if err := abciTypes.ReadMessage(bytes.NewReader(newSignBytes), &newVote); err != nil {
 		panic(fmt.Sprintf("signBytes cannot be unmarshalled into vote: %v", err))
 	}
 
 	lastTime := lastVote.Timestamp
 	// set the times to the same value and check equality
-	now := cmttime.Now()
+	now := time.Now().UTC()
 	lastVote.Timestamp = now
 	newVote.Timestamp = now
 
-	return lastTime, proto.Equal(&newVote, &lastVote)
+	return lastTime, proto.Equal(protoadapt.MessageV2Of(&newVote), protoadapt.MessageV2Of(&lastVote))
 }
 
 // returns the timestamp from the lastSignBytes.
 // returns true if the only difference in the proposals is their timestamp
 func checkProposalsOnlyDifferByTimestamp(lastSignBytes, newSignBytes []byte) (time.Time, bool) {
 	var lastProposal, newProposal tendermintTypes.CanonicalProposal
-	if err := protoio.UnmarshalDelimited(lastSignBytes, &lastProposal); err != nil {
+	if err := abciTypes.ReadMessage(bytes.NewReader(lastSignBytes), &lastProposal); err != nil {
 		panic(fmt.Sprintf("LastSignBytes cannot be unmarshalled into proposal: %v", err))
 	}
-	if err := protoio.UnmarshalDelimited(newSignBytes, &newProposal); err != nil {
+	if err := abciTypes.ReadMessage(bytes.NewReader(newSignBytes), &newProposal); err != nil {
 		panic(fmt.Sprintf("signBytes cannot be unmarshalled into proposal: %v", err))
 	}
 
 	lastTime := lastProposal.Timestamp
 	// set the times to the same value and check equality
-	now := cmttime.Now()
+	now := time.Now().UTC()
 	lastProposal.Timestamp = now
 	newProposal.Timestamp = now
 
-	return lastTime, proto.Equal(&newProposal, &lastProposal)
+	return lastTime, proto.Equal(protoadapt.MessageV2Of(&newProposal), protoadapt.MessageV2Of(&lastProposal))
 }
 
-// this should be unexported, but is needed for testing
 // A vote is either stepPrevote or stepPrecommit.
-func VoteToStep(vote *tendermintTypes.Vote) int8 {
+func voteToStep(vote *tendermintTypes.Vote) (int8, error) {
 	switch vote.Type {
 	case tendermintTypes.PrevoteType:
-		return stepPrevote
+		return stepPrevote, nil
 	case tendermintTypes.PrecommitType:
-		return stepPrecommit
+		return stepPrecommit, nil
 	default:
-		panic(fmt.Sprintf("Unknown vote type: %v", vote.Type))
+		return 0, fmt.Errorf("%w: %v", ErrUnknownVoteType, vote.Type)
 	}
 }
 
 const (
-	stepNone      int8 = 0 // Used to distinguish the initial state
-	stepPropose   int8 = 1
-	stepPrevote   int8 = 2
-	stepPrecommit int8 = 3
+	stepNone int8 = iota // Used to distinguish the initial state
+	stepPropose
+	stepPrevote
+	stepPrecommit
 )
 
 // AtomicReadWriter is an interface for any store
@@ -366,4 +358,5 @@ var (
 	ErrRoundRegression  = errors.New("round regression")
 	ErrStepRegression   = errors.New("step regression")
 	ErrNilSignature     = errors.New("signature is nil")
+	ErrUnknownVoteType  = errors.New("unknown vote type")
 )
