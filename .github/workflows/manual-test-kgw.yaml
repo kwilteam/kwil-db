@@ -1,29 +1,30 @@
-# manual-test-kgw.yaml run kgw-test with manual inputs: kwil-db-branch and kgw-branch.
+# manual-test-kgw.yaml run kgw-test with manual inputs: kdb-ref, kgw-ref and kjs-ref.
 name: manual-test-kgw
 
 on:
   workflow_dispatch:
     inputs:
-      kdb-sha:
-        description: 'kwil-db sha to be tested. If provided, it will used instead of branch'
-        required: false
-        type: string
-      kdb-branch:
-        description: 'kwil-db branch to be tested'
-        required: false
-        type: string
-      kgw-branch:
-        description: 'kgw branch to be tested'
+      kdb-ref:
+        description: 'kwil-db branch/tag/SHA to be tested'
         required: true
         type: string
+      kgw-ref:
+        description: 'kgw branch/tag/SHA to be tested'
+        required: true
+        type: string
+      kjs-ref:
+        description: 'kwil-js branch/tag/SHA to be tested'
+        required: true
+        type: string
+        default: 'main'
 
 jobs:
   kgw-test-manual:
     name: Run manual KGW test
     uses: ./.github/workflows/kgw-test-reuse.yaml
     with:
-      kdb-sha: ${{ github.event.inputs.kdb-sha }}
-      kdb-branch: ${{ github.event.inputs.kdb-branch }}
-      kgw-branch: ${{ github.event.inputs.kgw-branch }}
+      kdb-ref: ${{ github.event.inputs.kdb-ref }}
+      kgw-ref: ${{ github.event.inputs.kgw-ref }}
+      kjs-ref: ${{ github.event.inputs.kjs-ref }}
     secrets:
       kgw-access-token: ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }}

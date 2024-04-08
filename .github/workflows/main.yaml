@@ -10,7 +10,8 @@ jobs:
     name: Run KGW test on main
     uses: ./.github/workflows/kgw-test-reuse.yaml
     with:
-      kdb-branch: main
-      kgw-branch: main
+      kdb-ref: main
+      kgw-ref: main
+      kjs-ref: main
     secrets:
       kgw-access-token: ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }}
