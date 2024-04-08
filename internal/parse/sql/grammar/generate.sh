@@ -2,6 +2,8 @@
 
 set -e
 
+cd "$(dirname "$0")"
+
 target=${1:-Go}
 package=${2:-sqlgrammar}
 output_dir=${3:-../gen}

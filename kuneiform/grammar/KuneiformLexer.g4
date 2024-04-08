@@ -49,6 +49,7 @@ DO_CASCADE:     'cascade';
 DO_SET_NULL:    'set' ('_'|WSNL) 'null';
 DO_SET_DEFAULT: 'set' ('_'|WSNL) 'default';
 DO_RESTRICT:    'restrict';
+DO:            'do';
 
 START_ACTION: 'action' -> pushMode(STMT_MODE);
 START_PROCEDURE: 'procedure' -> pushMode(STMT_MODE);
@@ -130,4 +131,4 @@ mode STMT_MODE;
     STMT_LINE_COMMENT: LINE_COMMENT -> channel(HIDDEN);
 
     // text to not tokenize braces in text literals
-    fragment ANY: ~[{}]+;
+    fragment ANY: ~[{}']+;

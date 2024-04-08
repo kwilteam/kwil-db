@@ -126,7 +126,7 @@ func (t *typeVisitor) VisitUpsert(p0 *tree.Upsert) any {
 			}
 
 			if !attr.Type.Equals(types.BoolType) {
-				return fmt.Errorf("%d: where clause must be boolean. Received: %s", ErrInvalidType, attr.Type.String())
+				return fmt.Errorf("%w: where clause must be boolean. Received: %s", ErrInvalidType, attr.Type.String())
 			}
 		}
 
@@ -179,7 +179,7 @@ func (t *typeVisitor) VisitConflictTarget(p0 *tree.ConflictTarget) any {
 			}
 
 			if !attr.Type.Equals(types.BoolType) {
-				return fmt.Errorf("%d: where clause must be boolean. Received: %s", ErrInvalidType, attr.Type.String())
+				return fmt.Errorf("%w: where clause must be boolean. Received: %s", ErrInvalidType, attr.Type.String())
 			}
 		}
 
@@ -196,7 +196,7 @@ func (t *typeVisitor) VisitLimit(p0 *tree.Limit) any {
 			}
 
 			if !limit.Type.Equals(types.IntType) {
-				return fmt.Errorf("%d: limit must be an integer. Received: %s", ErrInvalidType, limit.Type.String())
+				return fmt.Errorf("%w: limit must be an integer. Received: %s", ErrInvalidType, limit.Type.String())
 			}
 		}
 
@@ -207,7 +207,7 @@ func (t *typeVisitor) VisitLimit(p0 *tree.Limit) any {
 			}
 
 			if !offset.Type.Equals(types.IntType) {
-				return fmt.Errorf("%d: offset must be an integer. Received: %s", ErrInvalidType, offset.Type.String())
+				return fmt.Errorf("%w: offset must be an integer. Received: %s", ErrInvalidType, offset.Type.String())
 			}
 		}
 
@@ -254,7 +254,7 @@ func (t *typeVisitor) VisitGroupBy(p0 *tree.GroupBy) any {
 			}
 
 			if !attr.Type.Equals(types.BoolType) {
-				return fmt.Errorf("%d: having clause must be boolean. Received: %s", ErrInvalidType, attr.Type.String())
+				return fmt.Errorf("%w: having clause must be boolean. Received: %s", ErrInvalidType, attr.Type.String())
 			}
 		}
 
@@ -276,7 +276,7 @@ func (t *typeVisitor) VisitJoinPredicate(p0 *tree.JoinPredicate) any {
 			}
 
 			if !r.Type.Equals(types.BoolType) {
-				return fmt.Errorf("%d: join constraint must be boolean. Received: %s", ErrInvalidType, r.Type.String())
+				return fmt.Errorf("%w: join constraint must be boolean. Received: %s", ErrInvalidType, r.Type.String())
 			}
 		}
 
@@ -305,7 +305,7 @@ func (t *typeVisitor) VisitExpressionArithmetic(p0 *tree.ExpressionArithmetic) a
 			return nil, err
 		}
 		if !at.Type.Equals(types.IntType) {
-			return nil, fmt.Errorf("%d: arithmetic expression expected int. Received: %s", ErrInvalidType, at.Type.String())
+			return nil, fmt.Errorf("%w: arithmetic expression expected int. Received: %s", ErrInvalidType, at.Type.String())
 		}
 
 		bt, err := b(ev)
@@ -313,7 +313,7 @@ func (t *typeVisitor) VisitExpressionArithmetic(p0 *tree.ExpressionArithmetic) a
 			return nil, err
 		}
 		if !bt.Type.Equals(types.IntType) {
-			return nil, fmt.Errorf("%d: arithmetic expression expected int. Received: %s", ErrInvalidType, bt.Type.String())
+			return nil, fmt.Errorf("%w: arithmetic expression expected int. Received: %s", ErrInvalidType, bt.Type.String())
 		}
 
 		if p0.TypeCast != "" {
@@ -346,11 +346,11 @@ func (t *typeVisitor) VisitExpressionBetween(p0 *tree.ExpressionBetween) any {
 		}
 
 		if !et.Type.Equals(lt.Type) {
-			return nil, fmt.Errorf("%d: between expression expected %s. Received: %s", ErrInvalidType, et.Type.Name, lt.Type.String())
+			return nil, fmt.Errorf("%w: between expression expected %s. Received: %s", ErrInvalidType, et.Type.Name, lt.Type.String())
 		}
 
 		if !et.Type.Equals(rt.Type) {
-			return nil, fmt.Errorf("%d: between expression expected %s. Received: %s", ErrInvalidType, et.Type.Name, rt.Type.String())
+			return nil, fmt.Errorf("%w: between expression expected %s. Received: %s", ErrInvalidType, et.Type.Name, rt.Type.String())
 		}
 
 		if p0.TypeCast != "" {
@@ -376,7 +376,7 @@ func (t *typeVisitor) VisitExpressionBinaryComparison(p0 *tree.ExpressionBinaryC
 		}
 
 		if !at.Type.Equals(bt.Type) {
-			return nil, fmt.Errorf("%d: comparison expression expected %s. Received: %s", ErrInvalidType, at.Type.String(), bt.Type.String())
+			return nil, fmt.Errorf("%w: comparison expression expected %s. Received: %s", ErrInvalidType, at.Type.String(), bt.Type.String())
 		}
 
 		if p0.TypeCast != "" {
@@ -411,7 +411,7 @@ func (t *typeVisitor) VisitExpressionCase(p0 *tree.ExpressionCase) any {
 				return nil, err
 			}
 			if !ct.Type.Equals(types.BoolType) {
-				return nil, fmt.Errorf("%d: expected bool. Received: %s", ErrInvalidType, ct.Type.String())
+				return nil, fmt.Errorf("%w: expected bool. Received: %s", ErrInvalidType, ct.Type.String())
 			}
 		}
 
@@ -424,7 +424,7 @@ func (t *typeVisitor) VisitExpressionCase(p0 *tree.ExpressionCase) any {
 				return nil, err
 			}
 			if !whenType.Type.Equals(types.BoolType) {
-				return nil, fmt.Errorf("%d: expected bool. Received %s", ErrInvalidType, whenType.Type.String())
+				return nil, fmt.Errorf("%w: expected bool. Received %s", ErrInvalidType, whenType.Type.String())
 			}
 
 			then := w[1].Accept(t).(attributeFn)
@@ -438,7 +438,7 @@ func (t *typeVisitor) VisitExpressionCase(p0 *tree.ExpressionCase) any {
 			}
 
 			if !neededType.Equals(thenType.Type) {
-				return nil, fmt.Errorf("%d: all THEN types must be the same. Received: %s and %s", ErrInvalidType, neededType.String(), thenType.Type.String())
+				return nil, fmt.Errorf("%w: all THEN types must be the same. Received: %s and %s", ErrInvalidType, neededType.String(), thenType.Type.String())
 			}
 		}
 
@@ -450,7 +450,7 @@ func (t *typeVisitor) VisitExpressionCase(p0 *tree.ExpressionCase) any {
 			}
 
 			if !neededType.Equals(eType.Type) {
-				return nil, fmt.Errorf("%d: ELSE type must match THEN type. Received: %s and %s", ErrInvalidType, neededType.String(), eType.Type.String())
+				return nil, fmt.Errorf("%w: ELSE type must match THEN type. Received: %s and %s", ErrInvalidType, neededType.String(), eType.Type.String())
 			}
 		}
 
@@ -538,7 +538,7 @@ func (t *typeVisitor) VisitExpressionIs(p0 *tree.ExpressionIs) any {
 		}
 
 		if !lt.Type.Equals(rt.Type) && !lt.Type.Equals(types.NullType) && !rt.Type.Equals(types.NullType) {
-			return nil, fmt.Errorf("%d: comparing different types: %s and %s", ErrInvalidType, lt.Type.String(), rt.Type.String())
+			return nil, fmt.Errorf("%w: comparing different types: %s and %s", ErrInvalidType, lt.Type.String(), rt.Type.String())
 		}
 
 		if p0.TypeCast != "" {
@@ -565,7 +565,7 @@ func (t *typeVisitor) VisitExpressionList(p0 *tree.ExpressionList) any {
 			}
 
 			if !lastType.Equals(etType.Type) {
-				return nil, fmt.Errorf("%d: cannot assign type %s to expression list of type %s", ErrInvalidType, etType.Type.String(), lastType.String())
+				return nil, fmt.Errorf("%w: cannot assign type %s to expression list of type %s", ErrInvalidType, etType.Type.String(), lastType.String())
 			}
 		}
 
@@ -666,7 +666,7 @@ func (t *typeVisitor) VisitExpressionStringCompare(p0 *tree.ExpressionStringComp
 			return nil, err
 		}
 		if !at.Type.Equals(bt.Type) {
-			return nil, fmt.Errorf("%d: string comparison expression expected %s. Recieved: %s", ErrInvalidType, at.Type.String(), bt.Type.String())
+			return nil, fmt.Errorf("%w: string comparison expression expected %s. Received: %s", ErrInvalidType, at.Type.String(), bt.Type.String())
 		}
 
 		if p0.Escape != nil {
@@ -677,7 +677,7 @@ func (t *typeVisitor) VisitExpressionStringCompare(p0 *tree.ExpressionStringComp
 			}
 
 			if !et.Type.Equals(types.TextType) {
-				return nil, fmt.Errorf("%d: string comparison expected text. Received: %s", ErrInvalidType, et.Type.String())
+				return nil, fmt.Errorf("%w: string comparison expected text. Received: %s", ErrInvalidType, et.Type.String())
 			}
 		}
 
@@ -698,7 +698,7 @@ func (t *typeVisitor) VisitExpressionUnary(p0 *tree.ExpressionUnary) any {
 		}
 
 		if !ot.Type.Equals(types.IntType) {
-			return nil, fmt.Errorf("%d: expected int. Received: %s", ErrInvalidType, ot.Type.String())
+			return nil, fmt.Errorf("%w: expected int. Received: %s", ErrInvalidType, ot.Type.String())
 		}
 
 		if p0.TypeCast != "" {
@@ -801,7 +801,7 @@ func (t *typeVisitor) VisitInsertCore(p0 *tree.InsertCore) any {
 				}
 
 				if !expectedAttr.Type.Equals(attr.Type) {
-					return nil, fmt.Errorf("%d: type mismatch for column %s", ErrInvalidType, p0.Columns[i])
+					return nil, fmt.Errorf("%w: type mismatch for column %s", ErrInvalidType, p0.Columns[i])
 				}
 			}
 		}
@@ -913,7 +913,7 @@ func (t *typeVisitor) VisitUpdateCore(p0 *tree.UpdateCore) any {
 			}
 
 			if !whereType.Type.Equals(types.BoolType) {
-				return nil, fmt.Errorf("%d: where clause must be boolean. Got %s", ErrInvalidType, whereType.Type.String())
+				return nil, fmt.Errorf("%w: where clause must be boolean. Got %s", ErrInvalidType, whereType.Type.String())
 			}
 		}
 
@@ -980,7 +980,7 @@ func (t *typeVisitor) VisitDeleteCore(p0 *tree.DeleteCore) any {
 			}
 
 			if !whereType.Type.Equals(types.BoolType) {
-				return nil, fmt.Errorf("%d, where clause must be boolean. Got %s", ErrInvalidType, whereType.Type.String())
+				return nil, fmt.Errorf("%w, where clause must be boolean. Got %s", ErrInvalidType, whereType.Type.String())
 			}
 		}
 
@@ -1036,12 +1036,12 @@ func (t *typeVisitor) VisitSelectCore(p0 *tree.SelectCore) any {
 			shape := r.Shape()
 
 			if len(shape) != len(expectedShape) {
-				return nil, fmt.Errorf("%d: compound selects must return the same number of columns. Expected %d. Received: %d", ErrCompoundShape, len(expectedShape), len(shape))
+				return nil, fmt.Errorf("%w: compound selects must return the same number of columns. Expected %d. Received: %d", ErrCompoundShape, len(expectedShape), len(shape))
 			}
 
 			for i, col := range shape {
 				if !col.Equals(expectedShape[i]) {
-					return nil, fmt.Errorf("%d: compound selects must return the same types. %d: Expected %s. Received: %s", ErrCompoundShape, ErrInvalidType, expectedShape[i].Name, col.Name)
+					return nil, fmt.Errorf("%w: compound selects must return the same types: Expected %s Received: %s", ErrCompoundShape, expectedShape[i].Name, col.Name)
 				}
 			}
 		}
@@ -1101,7 +1101,7 @@ func (t *typeVisitor) VisitSimpleSelect(p0 *tree.SimpleSelect) any {
 				return nil, err
 			}
 			if !a.Attribute.Type.Equals(types.BoolType) {
-				return nil, fmt.Errorf("%d: where clause must be boolean", ErrInvalidType)
+				return nil, fmt.Errorf("%w: where clause must be boolean", ErrInvalidType)
 			}
 		}
 

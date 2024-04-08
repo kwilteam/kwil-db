@@ -419,6 +419,40 @@ func Test_Engine(t *testing.T) {
 				require.Equal(t, []string{"res"}, res.Columns) // without the `AS res`, it would be `?column?`
 			},
 		},
+		{
+			name: "procedure",
+			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
+				ctx := context.Background()
+
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, testdata.TestSchema.Owner)
+				require.NoError(t, err)
+			},
+			ses2: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
+				ctx := context.Background()
+
+				_, err := global.Procedure(ctx, tx, &common.ExecutionData{
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcCreateUser.Name,
+					Args:      []any{1, "satoshi", 42},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
+				})
+				require.NoError(t, err)
+
+				user, err := global.Procedure(ctx, tx, &common.ExecutionData{
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcGetUserByAddress.Name,
+					Args:      []any{"signer"},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
+				})
+				require.NoError(t, err)
+
+				require.Equal(t, len(user.Rows), 1)
+
+				require.Equal(t, []any{int64(1), "satoshi", int64(42)}, []any{user.Rows[0][0], user.Rows[0][1], user.Rows[0][2]})
+			},
+		},
 	}
 
 	for _, test := range tests {

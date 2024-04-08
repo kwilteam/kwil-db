@@ -57,7 +57,7 @@ cte_table_name:
 ;
 
 common_table_expression:
-    cte_table_name AS_ OPEN_PAR select_stmt_no_cte CLOSE_PAR
+    cte_table_name AS_ OPEN_PAR select_core CLOSE_PAR
 ;
 
 common_table_stmt: //additional structures
@@ -143,7 +143,11 @@ Type cast can only be applied to:
     function_call
 */
 expr:
-    literal type_cast?                                                   #literal_expr
+    TEXT_LITERAL type_cast?                                              #text_literal_expr
+    | BOOLEAN_LITERAL type_cast?                                         #boolean_literal_expr
+    | NUMERIC_LITERAL type_cast?                                         #numeric_literal_expr
+    | NULL_LITERAL type_cast?                                            #null_literal_expr
+    | BLOB_LITERAL type_cast?                                            #blob_literal_expr
     | variable type_cast?                                                #variable_expr
     | column_ref type_cast?                                              #column_expr
     | <assoc=right>  operator=(MINUS | PLUS) expr                        #unary_expr
@@ -168,7 +172,7 @@ expr:
     // comparison
     | left=expr comparisonOperator right=expr                            #comparison_expr
     //| left=expr comparisonOperator right=subquery                      #scalar_subquery_expr
-    | expr IS_ NOT_? (DISTINCT_ FROM_ expr | boolean_value | NULL_)      #is_expr
+    | expr IS_ NOT_? ((DISTINCT_ FROM_ expr)|BOOLEAN_LITERAL|NULL_LITERAL)#is_expr
     | expr (ISNULL_ | NOTNULL_)                                          #null_expr
     // logical expressions
     | <assoc=right> NOT_ expr                                             #logical_not_expr
@@ -177,7 +181,7 @@ expr:
 ;
 
 subquery:
-    OPEN_PAR select_stmt_no_cte CLOSE_PAR // note: don't support with clause in subquery
+    OPEN_PAR select_core CLOSE_PAR // note: don't support with clause in subquery
 ;
 
 expr_list:
@@ -194,26 +198,6 @@ cast_type:
 
 type_cast:
     TYPE_CAST cast_type
-;
-
-boolean_value:
-    TRUE_
-    | FALSE_
-;
-
-string_value:
-    STRING_LITERAL
-;
-
-numeric_value:
-    NUMERIC_LITERAL
-;
-
-literal:
-    NULL_
-    | boolean_value
-    | string_value
-    | numeric_value
 ;
 
 value_row:
@@ -261,16 +245,16 @@ upsert_clause:
     )
 ;
 
-select_stmt_no_cte:
-    select_core
-    (compound_operator select_core)*
+select_core:
+    simple_select
+    (compound_operator simple_select)*
     order_by_stmt?
     limit_stmt?
 ;
 
 select_stmt:
     common_table_stmt?
-    select_stmt_no_cte
+    select_core
 ;
 
 join_relation:
@@ -281,7 +265,7 @@ relation:
     table_or_subquery join_relation*
 ;
 
-select_core:
+simple_select:
     SELECT_ DISTINCT_?
     result_column (COMMA result_column)*
     (FROM_ relation)?
@@ -294,7 +278,7 @@ select_core:
 
 table_or_subquery:
     table_name (AS_ table_alias)?
-    | OPEN_PAR select_stmt_no_cte CLOSE_PAR (AS_ table_alias)?
+    | OPEN_PAR select_core CLOSE_PAR (AS_ table_alias)?
 ;
 
 result_column:

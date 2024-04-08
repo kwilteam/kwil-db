@@ -4,11 +4,10 @@ package main
 
 import (
 	_ "embed"
-	"encoding/json"
 	"fmt"
 
-	"github.com/kwilteam/kuneiform/kfparser"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/kuneiform"
 )
 
 //go:embed scheme.kf
@@ -24,24 +23,8 @@ const (
 	actAuthnOnly    = "authn_only" // matters with KGW
 )
 
-func loadTestSchema() (*transactions.Schema, error) {
-	astSchema, err := kfparser.Parse(testScheme)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse file: %w", err)
-	}
-
-	schemaJson, err := astSchema.ToJSON()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal schema: %w", err)
-	}
-
-	var db transactions.Schema
-	err = json.Unmarshal(schemaJson, &db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal schema json: %w", err)
-	}
-
-	return &db, nil
+func loadTestSchema() (*types.Schema, error) {
+	return kuneiform.Parse(testScheme)
 }
 
 func init() {

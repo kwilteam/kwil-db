@@ -6,8 +6,8 @@ import (
 
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/kwilteam/kwil-db/core/types"
+	sqlparser "github.com/kwilteam/kwil-db/internal/parse/sql"
 	"github.com/kwilteam/kwil-db/kuneiform/gen"
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 )
 
 // Parse parses a Kuneiform file and returns the parsed schema.

@@ -2,29 +2,28 @@ package specifications
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/kwilteam/kuneiform/kfparser"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/kuneiform"
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/stretchr/testify/require"
 )
 
 type DatabaseSchemaLoader interface {
-	Load(t *testing.T, targetSchema *testSchema) *transactions.Schema
-	LoadWithoutValidation(t *testing.T, targetSchema *testSchema) *transactions.Schema
+	Load(t *testing.T, targetSchema *testSchema) *types.Schema
+	LoadWithoutValidation(t *testing.T, targetSchema *testSchema) *types.Schema
 }
 
 type FileDatabaseSchemaLoader struct {
-	Modifier func(db *transactions.Schema)
+	Modifier func(db *types.Schema)
 }
 
-func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) *transactions.Schema {
+func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) *types.Schema {
 	t.Helper()
 
 	d, err := os.ReadFile(targetSchema.GetFilePath())
@@ -32,27 +31,16 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) 
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	astSchema, err := kfparser.Parse(string(d))
+	db, err := kuneiform.Parse(string(d))
 	if err != nil {
 		t.Fatal("cannot parse database schema", err)
-	}
-
-	schemaJson, err := astSchema.ToJSON()
-	if err != nil {
-		t.Fatal("failed to marshal schema: %w", err)
-	}
-
-	var db *transactions.Schema
-	err = json.Unmarshal(schemaJson, &db)
-	if err != nil {
-		t.Fatal("failed to unmarshal schema json: %w", err)
 	}
 
 	l.Modifier(db)
 	return db
 }
 
-func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSchema *testSchema) *transactions.Schema {
+func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSchema *testSchema) *types.Schema {
 	t.Helper()
 
 	d, err := os.ReadFile(targetSchema.GetFilePath())
@@ -60,21 +48,10 @@ func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSch
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	astSchema, err := kfparser.Parse(string(d))
+	db, err := kuneiform.Parse(string(d))
 	// ignore validation error
-	if astSchema == nil {
+	if db == nil {
 		t.Fatal("cannot parse database schema", err)
-	}
-
-	schemaJson, err := json.Marshal(astSchema)
-	if err != nil {
-		t.Fatal("failed to marshal schema: %w", err)
-	}
-
-	var db *transactions.Schema
-	err = json.Unmarshal(schemaJson, &db)
-	if err != nil {
-		t.Fatal("failed to unmarshal schema json: %w", err)
 	}
 
 	l.Modifier(db)

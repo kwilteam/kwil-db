@@ -7,7 +7,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 // A Dsl describes a set of interactions that could achieve a specific goal
@@ -32,7 +31,7 @@ type DatabaseDeployDsl interface {
 	DatabaseIdentifier
 	DatabaseExister
 	TxQueryDsl
-	DeployDatabase(ctx context.Context, db *transactions.Schema) (txHash []byte, err error)
+	DeployDatabase(ctx context.Context, db *types.Schema) (txHash []byte, err error)
 }
 
 // AccountBalanceDsl is the dsl for checking an confirmed account balance. This

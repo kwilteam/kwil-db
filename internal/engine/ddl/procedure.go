@@ -28,7 +28,13 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 		}
 
 		paramSet[field.Name] = struct{}{}
-		str.WriteString(fmt.Sprintf("%s %s", field.Name, field.Type.String()))
+
+		typ, err := field.Type.PGString()
+		if err != nil {
+			return "", err
+		}
+
+		str.WriteString(fmt.Sprintf("%s %s", field.Name, typ))
 	}
 
 	hasOutReturns := false
@@ -47,7 +53,13 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 			if i != 0 {
 				str.WriteString(", ")
 			}
-			str.WriteString(fmt.Sprintf("OUT %s %s", field.Name, field.Type.String()))
+
+			typ, err := field.Type.PGString()
+			if err != nil {
+				return "", err
+			}
+
+			str.WriteString(fmt.Sprintf("OUT %s %s", field.Name, typ))
 		}
 	}
 
@@ -64,7 +76,12 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 			}
 			// TODO: we need to give return types some sort of unique identifier.
 			// this needs to match what we give other variables (could even just be underscores).
-			str.WriteString(fmt.Sprintf("%s %s", field.Name, field.Type.String()))
+			typ, err := field.Type.PGString()
+			if err != nil {
+				return "", err
+			}
+
+			str.WriteString(fmt.Sprintf("%s %s", field.Name, typ))
 		}
 		str.WriteString(") ")
 	} else if !hasOutReturns {
@@ -85,8 +102,13 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 				continue
 			}
 
+			typ, err := declare.Type.PGString()
+			if err != nil {
+				return "", err
+			}
+
 			declaresTypes = true
-			declareSection.WriteString(fmt.Sprintf("%s %s;\n", declare.Name, declare.Type.String()))
+			declareSection.WriteString(fmt.Sprintf("%s %s;\n", declare.Name, typ))
 		}
 	}
 	if len(loopTargets) > 0 {

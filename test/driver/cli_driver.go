@@ -19,7 +19,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
 	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
 
@@ -177,7 +176,7 @@ func (d *KwilCliDriver) DatabaseExists(_ context.Context, dbid string) error {
 	return nil
 }
 
-func (d *KwilCliDriver) DeployDatabase(_ context.Context, db *transactions.Schema) (txHash []byte, err error) {
+func (d *KwilCliDriver) DeployDatabase(_ context.Context, db *types.Schema) (txHash []byte, err error) {
 	schemaFile := path.Join(os.TempDir(), fmt.Sprintf("schema-%s.json", time.Now().Format("20060102150405")))
 
 	dbByte, err := json.MarshalIndent(db, "", "  ")
@@ -251,7 +250,7 @@ func (d *KwilCliDriver) DropDatabase(_ context.Context, dbName string) (txHash [
 	return txHash, nil
 }
 
-func (d *KwilCliDriver) getSchema(dbid string) (*transactions.Schema, error) {
+func (d *KwilCliDriver) getSchema(dbid string) (*types.Schema, error) {
 	cmd := d.newKwilCliCmd("database", "read-schema", "--dbid", dbid)
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
@@ -273,7 +272,7 @@ func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, a
 		return nil, err
 	}
 
-	var action *transactions.Action
+	var action *types.Action
 	for _, a := range schema.Actions {
 		if a.Name == actionName {
 			action = a
@@ -511,13 +510,13 @@ func parseRespTxQuery(data any) (*respTxQuery, error) {
 }
 
 // parseRespGetSchema parses the get schema response(json) from the cli response
-func parseRespGetSchema(data any) (*transactions.Schema, error) {
+func parseRespGetSchema(data any) (*types.Schema, error) {
 	bts, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal get schema resp: %w", err)
 	}
 
-	var resp transactions.Schema
+	var resp types.Schema
 	err = json.Unmarshal(bts, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal get sceham: %w", err)

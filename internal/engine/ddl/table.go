@@ -12,7 +12,7 @@ func GenerateCreateTableStatement(pgSchema string, table *types.Table) (string, 
 
 	for _, column := range table.Columns {
 		colName := wrapIdent(column.Name)
-		colType, err := columnTypeToSQLType(column.Type)
+		colType, err := column.Type.PGString()
 		if err != nil {
 			return "", err
 		}

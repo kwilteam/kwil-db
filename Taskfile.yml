@@ -57,7 +57,6 @@ tasks:
       # and from bottom to top in terms of dependencies.
       - |
         (cd core; go mod tidy)
-        (cd parse; go mod tidy)
         go mod tidy
         (cd test; go mod tidy)
 
@@ -65,7 +64,7 @@ tasks:
     desc: Lint with golangci-lint
     cmds:
       # skip-dirs only works in .yaml
-      - golangci-lint run ./... ./core/... ./test/... ./parse/... -c .golangci.yml
+      - golangci-lint run ./... ./core/... ./test/... -c .golangci.yml
 
   linter:
     desc: Install the linter (not for CI which has an action for this)
@@ -237,14 +236,12 @@ tasks:
     desc: Run unit tests
     cmds:
       - go test ./core/... -tags=ext_test -count=1
-      - CGO_ENABLED=1 go test ./parse/... -tags=ext_test -count=1
       - CGO_ENABLED=1 go test ./... -tags=ext_test,pglive -count=1 -p=1 # no parallel for now because several try to use one pg database
 
   test:unit:race:
     desc: Run unit tests with the race detector
     cmds:
       - go test ./core/... -tags=ext_test -count=1 -race
-      - CGO_ENABLED=1 go test ./parse/... -tags=ext_test -count=1 -race
       - CGO_ENABLED=1 go test ./... -tags=ext_test -count=1 -race
 
   test:it:

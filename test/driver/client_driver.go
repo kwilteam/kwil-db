@@ -98,7 +98,7 @@ func (d *KwildClientDriver) DBID(name string) string {
 	return utils.GenerateDBID(name, d.signer.Identity())
 }
 
-func (d *KwildClientDriver) DeployDatabase(ctx context.Context, db *transactions.Schema) ([]byte, error) {
+func (d *KwildClientDriver) DeployDatabase(ctx context.Context, db *types.Schema) ([]byte, error) {
 	rec, err := d.clt.DeployDatabase(ctx, db)
 	if err != nil {
 		return nil, fmt.Errorf("error deploying database: %w", err)

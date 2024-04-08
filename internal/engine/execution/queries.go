@@ -11,7 +11,7 @@ import (
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/ddl"
-	"github.com/kwilteam/kwil-db/internal/engine/procedural"
+	procedural "github.com/kwilteam/kwil-db/internal/engine/procedures"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 )
 

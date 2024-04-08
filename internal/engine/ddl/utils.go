@@ -7,34 +7,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/conv"
 )
 
-func columnTypeToSQLType(columnType *types.DataType) (string, error) {
-	err := columnType.Clean()
-	if err != nil {
-		return "", err
-	}
-
-	var sqlType string
-	switch columnType {
-	case types.TextType:
-		sqlType = "TEXT"
-	case types.IntType:
-		sqlType = "INT8"
-	case types.NullType:
-		return "", fmt.Errorf("cannot have null column type")
-	case types.BlobType:
-		sqlType = "BYTEA"
-	case types.BoolType:
-		sqlType = "BOOLEAN"
-	case types.UUIDType:
-		sqlType = "UUID"
-	default:
-		// based on an alias
-		sqlType = columnType.String()
-	}
-
-	return sqlType, nil
-}
-
 func attributeToSQLString(colName string, attr *types.Attribute) (string, error) {
 	err := attr.Clean()
 	if err != nil {

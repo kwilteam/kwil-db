@@ -15,7 +15,7 @@ import (
 	"github.com/antlr4-go/antlr/v4"
 
 	"github.com/kwilteam/action-grammar-go/actgrammar"
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
+	sqlparser "github.com/kwilteam/kwil-db/internal/parse/sql"
 )
 
 // Parse parses an action statement string and returns an ActionStmt.

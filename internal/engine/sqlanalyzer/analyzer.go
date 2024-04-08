@@ -9,8 +9,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/order"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/schema"
+	sqlparser "github.com/kwilteam/kwil-db/internal/parse/sql"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 )
 
 // WalkerRecoverer is a wrapper around a statement that implements the AstWalker

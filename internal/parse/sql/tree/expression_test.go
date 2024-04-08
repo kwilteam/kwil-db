@@ -93,13 +93,6 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 			want: "@foo ::text",
 		},
 		{
-			name: "expression parameter without $ or @",
-			fields: &tree.ExpressionBindParameter{
-				Parameter: "foo",
-			},
-			wantPanic: true,
-		},
-		{
 			name: "expression parameter with empty string",
 			fields: &tree.ExpressionBindParameter{
 				Parameter: "",

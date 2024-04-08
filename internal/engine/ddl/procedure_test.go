@@ -36,7 +36,7 @@ func Test_Procedure(t *testing.T) {
 			},
 			returns: nil,
 			decls:   nil,
-			want:    "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 text) \nRETURNS void AS $$\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want:    "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 TEXT) \nRETURNS void AS $$\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
 		},
 		{
 			name: "multiple fields and return types",
@@ -65,7 +65,7 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 			decls: nil,
-			want:  "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 text[], field2 text, OUT _out_0 text[], OUT _out_1 bool) AS $$\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want:  "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 TEXT[], field2 TEXT, OUT _out_0 TEXT[], OUT _out_1 BOOL) AS $$\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
 		},
 		{
 			name:   "no fields, multiple return types",
@@ -82,7 +82,7 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 			decls: nil,
-			want:  "CREATE OR REPLACE FUNCTION test_schema.test_procedure(OUT _out_0 text[], OUT _out_1 bool) AS $$\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want:  "CREATE OR REPLACE FUNCTION test_schema.test_procedure(OUT _out_0 TEXT[], OUT _out_1 BOOL) AS $$\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
 		},
 		{
 			name: "single field, single return type",
@@ -98,7 +98,7 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 			decls: nil,
-			want:  "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 text, OUT _out_0 text) AS $$\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want:  "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 TEXT, OUT _out_0 TEXT) AS $$\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
 		},
 		{
 			name:   "return table",
@@ -131,7 +131,7 @@ func Test_Procedure(t *testing.T) {
 					},
 				},
 			},
-			want: "CREATE OR REPLACE FUNCTION test_schema.test_procedure() \nRETURNS TABLE(field1 text, field2 int[]) AS $$\nDECLARE\nlocal_type text;\ncars int[];\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want: "CREATE OR REPLACE FUNCTION test_schema.test_procedure() \nRETURNS TABLE(field1 TEXT, field2 INT8[]) AS $$\nDECLARE\nlocal_type TEXT;\ncars INT8[];\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
 		},
 		{
 			name: "variable is declared as parameter",
@@ -148,7 +148,7 @@ func Test_Procedure(t *testing.T) {
 					Type: types.TextType,
 				},
 			},
-			want: "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 text) \nRETURNS void AS $$\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want: "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 TEXT) \nRETURNS void AS $$\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
 		},
 		{
 			name:    "loops",

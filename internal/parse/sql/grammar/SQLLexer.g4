@@ -72,7 +72,6 @@ END_:               'END';
 ESCAPE_:            'ESCAPE';
 EXCEPT_:            'EXCEPT';
 EXISTS_:            'EXISTS';
-FALSE_:             'FALSE';
 FILTER_:            'FILTER';
 FIRST_:             'FIRST';
 FROM_:              'FROM';
@@ -96,7 +95,6 @@ NOTHING_:           'NOTHING';
 NOTNULL_:           'NOTNULL';
 NOT_:               'NOT';
 NULLS_:             'NULLS';
-NULL_:              'NULL';
 OFFSET_:            'OFFSET';
 OF_:                'OF';
 ON_:                'ON';
@@ -110,7 +108,6 @@ RIGHT_:             'RIGHT';
 SELECT_:            'SELECT';
 SET_:               'SET';
 THEN_:              'THEN';
-TRUE_:              'TRUE';
 UNION_:             'UNION';
 UPDATE_:            'UPDATE';
 USING_:             'USING';
@@ -119,6 +116,27 @@ WHEN_:              'WHEN';
 WHERE_:             'WHERE';
 WITH_:              'WITH';
 
+// literals
+
+BOOLEAN_LITERAL:
+    'true'
+    | 'false'
+;
+
+NUMERIC_LITERAL:
+    [0-9]+
+;
+
+BLOB_LITERAL:
+    '0x' [0-9a-f]+
+;
+
+TEXT_LITERAL:
+    '\'' ( ~'\'' | '\'\'')* '\''
+;
+
+NULL_LITERAL: 'null';
+
 IDENTIFIER:
     '"' (~'"' | '""')* '"' // Delimited identifiers
     | '`' (~'`' | '``')* '`'
@@ -126,11 +144,7 @@ IDENTIFIER:
     | [A-Z_] [A-Z_0-9]* // Ordinary identifiers
 ; // TODO check: needs more chars in set
 
-NUMERIC_LITERAL: ((DIGIT+ ('.' DIGIT*)?) | ('.' DIGIT+)) ('E' [-+]? DIGIT+)? | '0x' HEX_DIGIT+;
-
 BIND_PARAMETER: [@$] IDENTIFIER;
-
-STRING_LITERAL: '\'' ( ~'\'' | '\'\'')* '\'';
 
 SINGLE_LINE_COMMENT: '--' ~[\r\n]* (('\r'? '\n') | EOF) -> channel(HIDDEN);
 
@@ -139,6 +153,3 @@ MULTILINE_COMMENT: '/*' .*? '*/' -> channel(HIDDEN);
 SPACES: [ \u000B\t\r\n] -> channel(HIDDEN);
 
 UNEXPECTED_CHAR: .;
-
-fragment HEX_DIGIT: [0-9A-F];
-fragment DIGIT:     [0-9];

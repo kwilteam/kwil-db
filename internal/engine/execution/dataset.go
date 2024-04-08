@@ -42,7 +42,7 @@ func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App
 			return nil, err
 		}
 
-		res, err := app.DB.Execute(caller.Ctx, proc.callString(caller.Procedure), inputs...)
+		res, err := app.DB.Execute(caller.Ctx, proc.callString(d.schema.DBID()), inputs...)
 		if err != nil {
 			return nil, err
 		}

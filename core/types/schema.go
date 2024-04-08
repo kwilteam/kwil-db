@@ -880,6 +880,33 @@ func (c *DataType) String() string {
 	return c.Name
 }
 
+// PGString returns the string representation of the type in Postgres.
+func (c *DataType) PGString() (string, error) {
+	var scalar string
+	switch strings.ToLower(c.Name) {
+	case "int":
+		scalar = "INT8"
+	case "text":
+		scalar = "TEXT"
+	case "bool":
+		scalar = "BOOL"
+	case "blob":
+		scalar = "BYTEA"
+	case "uuid":
+		scalar = "UUID"
+	case "null":
+		return "", fmt.Errorf("cannot have null column type")
+	default:
+		return "", fmt.Errorf("unknown column type: %s", c.Name)
+	}
+
+	if c.IsArray {
+		return scalar + "[]", nil
+	}
+
+	return scalar, nil
+}
+
 func (c *DataType) Clean() error {
 	c.Name = strings.ToLower(c.Name)
 

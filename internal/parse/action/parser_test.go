@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	actparser "github.com/kwilteam/kwil-db/internal/parse/action"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
-	actparser "github.com/kwilteam/kwil-db/parse/action"
 )
 
 var trace = flag.Bool("trace", false, "run tests with tracing")

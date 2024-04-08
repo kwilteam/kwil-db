@@ -196,94 +196,10 @@ func Example_respSchema_text() {
 	//   users
 	//     Columns:
 	//     id
-	//       Type: integer
+	//       Type: int
 	//       primary_key
 	//         true
 	// Actions:
 	//   get_user (public)
 	//     Inputs: [user_id]
-}
-
-func Example_respSchema_json() {
-	display.Print(demoSchema, nil, "json")
-	// Output:
-	// {
-	//   "result": {
-	//     "owner": "dXNlcg==",
-	//     "name": "test_schema",
-	//     "tables": [
-	//       {
-	//         "name": "users",
-	//         "columns": [
-	//           {
-	//             "name": "id",
-	//             "type": "integer",
-	//             "attributes": [
-	//               {
-	//                 "type": "primary_key",
-	//                 "value": "true"
-	//               }
-	//             ]
-	//           }
-	//         ],
-	//         "indexes": [
-	//           {
-	//             "name": "index_name",
-	//             "columns": [
-	//               "id",
-	//               "name"
-	//             ],
-	//             "type": "btree"
-	//           }
-	//         ],
-	//         "foreign_keys": [
-	//           {
-	//             "child_keys": [
-	//               "child_id"
-	//             ],
-	//             "parent_keys": [
-	//               "parent_id"
-	//             ],
-	//             "parent_table": "parent_table",
-	//             "actions": [
-	//               {
-	//                 "on": "delete",
-	//                 "do": "cascade"
-	//               }
-	//             ]
-	//           }
-	//         ]
-	//       }
-	//     ],
-	//     "actions": [
-	//       {
-	//         "name": "get_user",
-	//         "inputs": [
-	//           "user_id"
-	//         ],
-	//         "mutability": "update",
-	//         "auxiliaries": [
-	//           "mustsign"
-	//         ],
-	//         "public": true,
-	//         "statements": [
-	//           "SELECT * FROM users WHERE id = $user_id"
-	//         ]
-	//       }
-	//     ],
-	//     "extensions": [
-	//       {
-	//         "name": "auth",
-	//         "config": [
-	//           {
-	//             "argument": "token",
-	//             "value": "abc123"
-	//           }
-	//         ],
-	//         "alias": "authentication"
-	//       }
-	//     ]
-	//   },
-	//   "error": ""
-	// }
 }

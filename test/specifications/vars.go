@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 var (
@@ -13,7 +13,7 @@ var (
 
 var (
 	SchemaLoader DatabaseSchemaLoader = &FileDatabaseSchemaLoader{
-		Modifier: func(db *transactions.Schema) {
+		Modifier: func(db *types.Schema) {
 			// NOTE: this is a hack to make sure the db name is temporary unique
 			db.Name = fmt.Sprintf("%s_%s", db.Name, time.Now().Format("20060102"))
 		}}

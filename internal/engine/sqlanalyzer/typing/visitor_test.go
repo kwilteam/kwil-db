@@ -7,7 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/typing"
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
+	sqlparser "github.com/kwilteam/kwil-db/internal/parse/sql"
 	"github.com/stretchr/testify/require"
 )
 

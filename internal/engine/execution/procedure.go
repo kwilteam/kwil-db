@@ -16,9 +16,9 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
+	actparser "github.com/kwilteam/kwil-db/internal/parse/action"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
-	actparser "github.com/kwilteam/kwil-db/parse/action"
 )
 
 // MaxStackDepth is the limit on the number of nested procedure calls allowed.
@@ -624,8 +624,8 @@ type preparedProcedure struct {
 
 func (p *preparedProcedure) callString(schema string) string {
 	str := strings.Builder{}
-	str.WriteString("SELECT * FROM")
-	str.WriteString(schema)
+	str.WriteString("SELECT * FROM ")
+	str.WriteString(dbidSchema(schema))
 	str.WriteString(".")
 	str.WriteString(p.name)
 	str.WriteString("(")

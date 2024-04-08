@@ -14,8 +14,8 @@ import "fmt"
 type TypeCastType string
 
 const (
-	TypeCastInt  TypeCastType = "INT"
-	TypeCastText TypeCastType = "TEXT"
+	TypeCastInt  TypeCastType = "int"
+	TypeCastText TypeCastType = "text"
 )
 
 func (t TypeCastType) String() string {

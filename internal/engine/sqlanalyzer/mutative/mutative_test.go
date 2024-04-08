@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/mutative"
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
+	sqlparser "github.com/kwilteam/kwil-db/internal/parse/sql"
 )
 
 func Test_Mutativity(t *testing.T) {

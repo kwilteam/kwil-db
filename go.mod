@@ -7,9 +7,8 @@ replace github.com/kwilteam/kwil-db/core => ./core
 require (
 	dario.cat/mergo v1.0.0
 	github.com/alexliesenfeld/health v0.6.0
-	github.com/cometbft/cometbft v0.38.6
 	github.com/antlr4-go/antlr/v4 v4.13.0
-	github.com/cosmos/gogoproto v1.4.11
+	github.com/cometbft/cometbft v0.38.6
 	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/ethereum/go-ethereum v1.13.8
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5
@@ -19,7 +18,6 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/kwilteam/action-grammar-go v0.1.1
 	github.com/kwilteam/kwil-db/core v0.1.0
-	github.com/kwilteam/kwil-db/parse v0.1.2
 	github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/mapstructure v1.5.0
@@ -30,7 +28,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.18.1
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	github.com/tonistiigi/go-rosetta v0.0.0-20220804170347-3f4430f2d346
 	go.uber.org/zap v1.26.0
 	golang.org/x/sync v0.5.0
@@ -91,7 +89,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
-	github.com/kwilteam/sql-grammar-go v0.1.0 // indirect
 	github.com/lib/pq v1.10.7 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
