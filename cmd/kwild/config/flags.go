@@ -29,6 +29,8 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	// Extension endpoints flags
 	flagSet.StringSliceVar(&cfg.AppCfg.ExtensionEndpoints, "app.extension-endpoints", cfg.AppCfg.ExtensionEndpoints, "kwild extension endpoints")
 
+	flagSet.Int64Var(&cfg.AppCfg.ReadTimeout, "app.read-timeout", cfg.AppCfg.ReadTimeout, "kwild read timeout (in milliseconds)")
+
 	// TODO: Snapshots are not supported yet
 	// // Snapshot Config flags
 	// flagSet.BoolVar(&cfg.AppCfg.SnapshotConfig.Enabled, "app.snapshots.enabled", cfg.AppCfg.SnapshotConfig.Enabled, "Enable snapshots")
