@@ -94,6 +94,25 @@ var (
 			},
 			PGName: "format",
 		},
+		"uuid_generate_v5": {
+			Args: func(args []*types.DataType) (*types.DataType, error) {
+				// first argument must be a uuid, second argument must be text
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				if !args[0].Equals(types.UUIDType) {
+					return nil, wrapErrArgumentType(types.UUIDType, args[0])
+				}
+
+				if !args[1].Equals(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[1])
+				}
+
+				return types.UUIDType, nil
+			},
+			PGName: "uuid_generate_v5",
+		},
 		// array functions
 		"array_append": {
 			Args: func(args []*types.DataType) (*types.DataType, error) {

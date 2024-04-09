@@ -63,6 +63,8 @@ END$$;`
 	sqlCreateCollationNOCASE = `CREATE COLLATION IF NOT EXISTS nocase (
 		provider = icu, locale = 'und-u-ks-level2', deterministic = false
 	);`
+
+	sqlCreateUUIDExtension = `CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`
 )
 
 func checkSuperuser(ctx context.Context, conn *pgx.Conn) error {
@@ -90,6 +92,11 @@ func ensureCollation(ctx context.Context, conn *pgx.Conn) error {
 
 func ensurePublication(ctx context.Context, conn *pgx.Conn) error {
 	_, err := conn.Exec(ctx, fmt.Sprintf(sqlCreatePublicationINE, publicationName))
+	return err
+}
+
+func ensureUUIDExtension(ctx context.Context, conn *pgx.Conn) error {
+	_, err := conn.Exec(ctx, sqlCreateUUIDExtension)
 	return err
 }
 
