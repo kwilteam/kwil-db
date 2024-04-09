@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/core/client"
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
@@ -189,7 +190,11 @@ func (c *GatewayClient) GetAuthCookie() (cookie *http.Cookie, found bool) {
 // If the cookie is not valid for the client target, it returns an error.
 // It will overwrite any existing authentication cookie.
 func (c *GatewayClient) SetAuthCookie(cookie *http.Cookie) error {
-	if cookie.Domain != "" && cookie.Domain != c.target.Host {
+	// ref https://stackoverflow.com/a/16328399.
+	// KGW already set the cookie domain without port in
+	// https://github.com/kwilteam/kgw/pull/18/files#diff-5b365c916e8b28d0115f136435a03daa1ef6df8cf0eb49479c556923545b56c7R60
+	targetDomain := strings.Split(c.target.Host, ":")[0]
+	if cookie.Domain != "" && cookie.Domain != targetDomain {
 		return fmt.Errorf("cookie domain %s not valid for host %s", cookie.Domain, c.target.Host)
 	}
 	if cookie.Name != kgwAuthCookieName && cookie.Name != kgwAuthCookieNameSecure {
