@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	httpFunction "github.com/kwilteam/kwil-db/core/rpc/http/function"
@@ -32,7 +33,7 @@ func NewClient(target *url.URL, opts ...ClientOption) *Client {
 
 	cfg := httpFunction.NewConfiguration()
 	cfg.HTTPClient = clientOpts.client
-	cfg.BasePath = target.String()
+	cfg.BasePath = strings.TrimRight(target.String(), "/")
 	cfg.Host = target.Host
 	cfg.Scheme = target.Scheme
 
