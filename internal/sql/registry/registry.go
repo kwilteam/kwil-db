@@ -89,6 +89,8 @@ func NewRegistry(ctx context.Context, opener PoolOpener, directory string, opts 
 		opt(r)
 	}
 
+	fmt.Println("LOOK FOR ME:" + fmt.Sprint(r.readerCloseTime))
+
 	// create the directory if it does not exist
 	err := r.filesystem.MkdirAll(directory, 0755)
 	if err != nil {

@@ -63,6 +63,8 @@ type AppConfig struct {
 	Hostname     string `mapstructure:"hostname"`
 	ProfileMode  string `mapstructure:"profile_mode"`
 	ProfileFile  string `mapstructure:"profile_file"`
+	// ReadTimeout is in milliseconds
+	ReadTimeout int64 `mapstructure:"read_timeout"`
 }
 
 type SnapshotConfig struct {
@@ -419,6 +421,7 @@ func DefaultConfig() *KwildConfig {
 			HTTPListenAddress:  "localhost:8080",
 			AdminListenAddress: "unix:///tmp/kwil_admin.sock",
 			SqliteFilePath:     DefaultSQLitePath,
+			ReadTimeout:        100,
 			// SnapshotConfig: SnapshotConfig{
 			// 	Enabled:         false,
 			// 	RecurringHeight: uint64(10000),

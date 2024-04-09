@@ -1,6 +1,8 @@
 package config
 
-import "github.com/spf13/pflag"
+import (
+	"github.com/spf13/pflag"
+)
 
 // AddConfigFlags adds all flags from KwildConfig to the given flagSet
 func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
@@ -22,6 +24,7 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	flagSet.StringVar(&cfg.AppCfg.TLSKeyFile, "app.tls-key-file", cfg.AppCfg.TLSKeyFile, "TLS key file path for RPC Server")
 	flagSet.BoolVar(&cfg.AppCfg.EnableRPCTLS, "app.rpctls", cfg.AppCfg.EnableRPCTLS, "Use TLS on the user gRPC server")
 	flagSet.StringVar(&cfg.AppCfg.Hostname, "app.hostname", cfg.AppCfg.Hostname, "kwild Server hostname")
+	flagSet.Int64Var(&cfg.AppCfg.ReadTimeout, "app.read-timeout", cfg.AppCfg.ReadTimeout, "database read timeout (milliseconds)")
 
 	flagSet.StringVar(&cfg.AppCfg.ProfileMode, "app.profile-mode", cfg.AppCfg.ProfileMode, "kwild profile mode (http, cpu, mem, mutex, or block)")
 	flagSet.StringVar(&cfg.AppCfg.ProfileFile, "app.profile-file", cfg.AppCfg.ProfileFile, "kwild profile output file path (e.g. cpu.pprof)")
