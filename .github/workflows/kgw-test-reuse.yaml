@@ -3,18 +3,20 @@ name: kgw-test-reuse
 on:
   workflow_call:
     inputs:
-      # for logging purpose
+      # for logging purpose, if kdb-ref is from PR.
       kdb-repo:
         type: string
-      # for workflow_run trigger, we need to check out to the sha, bcz most of
+      # for workflow_run trigger, we need to check out to the SHA, bcz most of
       # the pr come from forked repo, and we can't access the branch, but we can
       # access the sha(i.e, pull/xxx/head)
-      kdb-sha:
-        type: string
-      kdb-branch:
+      # In that case, use SHA as the input.
+      kdb-ref: # can be branch/tag/SHA
         required: true
         type: string
-      kgw-branch:
+      kgw-ref: # can be branch/tag/SHA
+        required: true
+        type: string
+      kjs-ref: # can be branch/tag/SHA
         required: true
         type: string
     secrets:
@@ -25,27 +27,26 @@ jobs:
   kgw-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Show branch
+      - name: Show references
         run: |
-          echo "====== kgw test branches ======"
+          echo "====== kgw test references ======"
           test ${{ secrets.kgw-access-token }} = "" && echo "kgw access token empty" || echo "kgw access token available"
-          echo "kdb fork: ${{ inputs.kdb-repo }}"
-          echo "kdb sha: ${{ inputs.kdb-sha }}"
-          echo "kdb branch: ${{ inputs.kdb-branch }}"
-          echo "kgw branch: ${{ inputs.kgw-branch }}"
+          echo "kdb repo: ${{ inputs.kdb-repo }}"
+          echo "kdb reference: ${{ inputs.kdb-ref }}"
+          echo "kgw reference: ${{ inputs.kgw-ref }}"
+          echo "kjs reference: ${{ inputs.kjs-ref }}"
 
-      - name: checkout kwil-db using sha
-        if: ${{ inputs.kdb-sha != '' }}
+      - name: checkout kwil-db using ref from input
+        if: ${{ inputs.kdb-ref != '' }}
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.kdb-sha }}
+          ref: ${{ inputs.kdb-ref }}
           submodules: true
 
-      - name: checkout kwil-db using branch
-        if: ${{ inputs.kdb-sha == '' }}
+      - name: checkout kwil-db using the reference or SHA for this event
+        if: ${{ inputs.kdb-ref == '' }}
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.kdb-branch }}
           submodules: true
 
       - name: Setup Go
@@ -88,10 +89,10 @@ jobs:
           kdbDir=$(pwd)
           git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
           rm -rf /tmp/kgw
-          git clone -b ${{ inputs.kgw-branch }}  https://github.com/kwilteam/kgw.git /tmp/kgw
+          git clone -b ${{ inputs.kgw-ref }}  https://github.com/kwilteam/kgw.git /tmp/kgw
           rm -rf ~/.gitconfig
           cd /tmp/kgw
-          if [[ ${{ inputs.kgw-branch }} == release-* ]]; then
+          if [[ ${{ inputs.kgw-ref }} == release-* ]]; then
             go mod vendor
           else
             # non release branch, use go workspace to always use the latest version of kwil-db/core
@@ -164,6 +165,46 @@ jobs:
           cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
           KIT_LOG_LEVEL=warn go test -count=1 -timeout 0 ./test/integration -run ^TestKGW$ -v
+
+      - name: Run kwil-js test against kwild & kgw
+        run: |
+          cd deployments/compose/kwil
+          echo "run kwild in docker"
+          docker compose up -d
+          # clone kwil-js
+          git clone https://github.com/kwilteam/kwil-js.git /tmp/kwil-js
+          cd /tmp/kwil-js
+          # find the latest tag if kjs-ref is a tag
+          if [[ ${{ inputs.kjs-ref }} == v0.* ]]; then
+            kjs_ref=`git tag -l | grep ${{ inputs.kjs-ref }} | sort | tail -n 1`
+          else
+            kjs_ref=${{ inputs.kjs-ref }}
+          fi
+          echo "====== checkout kwil-js ref: $kjs_ref"
+          git checkout $kjs_ref
+          # build kwil-js
+          npm install
+          npm run build
+          # run tests
+          chain_id=`curl -s http://localhost:8080/api/v1/chain_info | jq -r .chain_id`
+          echo "run kgw in docker"
+          docker run --name kgwcontainer -d --rm  --network kwil_kwilnet0 -p 8090:8090 kgw:latest \
+            --devmode -d "http://localhost:8090" \
+            --cors-allow-origins "*" \
+            -b "http://kwild:8080" \
+            --chain-id $chain_id \
+            --allow-adhoc-query \
+            --allow-deploy-db \
+            --log-level debug
+          echo "run KWIL-JS TEST against kwild(http:localhost:8080),  with $chain_id"
+          PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001 CHAIN_ID=$chain_id GATEWAY_ON=false GAS_ON=false KWIL_PROVIDER=http://localhost:8080 npm run integration
+          echo "run KWIL-JS TEST against kgw(http://localhost:8090),  with $chain_id"
+          # assume the test above will drop the database, so we can deploy again
+          PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001 CHAIN_ID=$chain_id GATEWAY_ON=true GAS_ON=false KWIL_PROVIDER=http://localhost:8090 npm run integration
+          echo "stop running kwild & kgw"
+          docker rm -f kgwcontainer
+          cd -
+          docker compose down
 
       - name: Move cache
         run: |
