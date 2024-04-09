@@ -174,13 +174,20 @@ func setContextualVars(ctx context.Context, db sql.DB, data *common.ExecutionDat
 		return err
 	}
 
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET %s.%s = '%s';`, pgSessionPrefix, txidVar, data.TxID))
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 var (
 	pgSessionPrefix = "ctx"
 	callerVar       = "caller"
+	txidVar         = "txid"
 	pgSessionVars   = map[string]*types.DataType{
 		callerVar: types.TextType,
+		txidVar:   types.TextType,
 	}
 )

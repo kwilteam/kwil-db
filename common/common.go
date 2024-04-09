@@ -86,6 +86,9 @@ type ExecutionData struct {
 	// It is injected as a variable for usage in the query, under
 	// the variable name "@caller".
 	Caller string
+
+	// TxID is the transaction ID of the incoming transaction.
+	TxID string
 }
 
 func (e *ExecutionData) Clean() error {

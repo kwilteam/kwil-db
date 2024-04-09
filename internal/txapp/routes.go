@@ -3,6 +3,7 @@ package txapp
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -54,6 +55,9 @@ type TxContext struct {
 	// ConsensusParams holds network level parameters that can be evolved
 	// over the lifetime of a network.
 	ConsensusParams ConsensusParams
+	// TxID is the ID of the current transaction.
+	// It is defined by CometBFT.
+	TxID []byte
 }
 
 // ConsensusParams holds network level parameters that may evolve over time.
@@ -284,6 +288,7 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 			Args:      args[i],
 			Signer:    tx.Sender,
 			Caller:    identifier,
+			TxID:      hex.EncodeToString(ctx.TxID),
 		})
 		if err != nil {
 			return txRes(spend, codeForEngineError(err), err)

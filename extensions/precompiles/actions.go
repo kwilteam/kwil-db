@@ -57,6 +57,11 @@ type ProcedureContext struct {
 	// if calling a precompile instance instead of a procedure, it
 	// will be the last used DBID.
 	DBID string
+
+	// TxID is the hash of the transaction that the scope
+	// was called in.
+	TxID string
+
 	// Procedure is the Procedure identifier for the current scope.
 	// if calling a precompile instance instead of a Procedure, it
 	// will be the last used Procedure.
@@ -97,6 +102,7 @@ func (p *ProcedureContext) Values() map[string]any {
 
 	// set environment variables
 	values["@caller"] = p.Caller
+	values["@txid"] = p.TxID
 
 	return values
 }
@@ -111,6 +117,7 @@ func (p *ProcedureContext) NewScope() *ProcedureContext {
 		Caller:     p.Caller,
 		values:     make(map[string]any),
 		DBID:       p.DBID,
+		TxID:       p.TxID,
 		Procedure:  p.Procedure,
 		StackDepth: p.StackDepth,
 		UsedGas:    p.UsedGas,

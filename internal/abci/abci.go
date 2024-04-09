@@ -18,6 +18,7 @@ import (
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
+	"github.com/cometbft/cometbft/crypto/tmhash"
 	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmtTypes "github.com/cometbft/cometbft/types"
 	"go.uber.org/zap"
@@ -268,6 +269,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			Proposer:        proposerPubKey,
 			ConsensusParams: *a.consensusParams,
 			Ctx:             ctx,
+			TxID:            tmhash.Sum(tx), // use cometbft TmHash to get the same hash as is indexed
 		}, decoded)
 
 		abciRes := &abciTypes.ExecTxResult{}
