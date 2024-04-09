@@ -43,7 +43,7 @@ func NewClient(target *url.URL, opts ...ClientOption) *Client {
 
 	cfg := httpTx.NewConfiguration()
 	cfg.HTTPClient = clientOpts.client
-	cfg.BasePath = target.String()
+	cfg.BasePath = strings.TrimRight(target.String(), "/")
 	cfg.Host = target.Host
 	cfg.Scheme = target.Scheme
 
