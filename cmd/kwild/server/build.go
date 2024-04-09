@@ -226,7 +226,7 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommi
 
 	reg, err := registry.NewRegistry(d.ctx, func(ctx context.Context, dbid string, create bool) (registry.Pool, error) {
 		return sqlite.NewPool(ctx, dbid, 1, 2, true)
-	}, d.cfg.AppCfg.SqliteFilePath, registry.WithReaderWaitTimeout(time.Millisecond*100), registry.WithLogger(
+	}, d.cfg.AppCfg.SqliteFilePath, registry.WithReaderWaitTimeout(time.Duration(d.cfg.AppCfg.ReadTimeout)*time.Millisecond), registry.WithLogger(
 		*d.log.Named("registry"),
 	))
 	if err != nil {
