@@ -4,6 +4,7 @@ on:
   release:
     types:
       - published
+  workflow_dispatch:
 
 jobs:
   parse-release-version:
@@ -13,6 +14,7 @@ jobs:
     outputs:
       vkdb: ${{ steps.versions.outputs.kdb_version }}
       vkgw: ${{ steps.versions.outputs.kgw_version }}
+      vkjs: ${{ steps.versions.outputs.kjs_version }}
     steps:
       - name: Get kdb n kgw version # minor version
         id: versions
@@ -20,17 +22,21 @@ jobs:
         run: |
           version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//' | cut -d '.' -f 2`
           kgw_version=$(v7="2"; v6="1"; eval echo \${v$version})
+          kjs_version=$(v7="6"; v6="5"; eval echo \${v$version})
           echo "kdb_version=v0.$version" >> $GITHUB_OUTPUT
           echo "kgw_version=v0.$kgw_version" >> $GITHUB_OUTPUT
-          echo "kdb_version=v0.$version <> kgw_version=v0.$kgw_version"
+          echo "kjs_version=v0.$kjs_version" >> $GITHUB_OUTPUT
+          echo "kdb_version=v0.$version <> kgw_version=v0.$kgw_version <> kjs_version=v0.$kjs_version"
 
   kgw-test-release:
     name: Run kgw test on release branches
     needs: parse-release-version
     uses: ./.github/workflows/kgw-test-reuse.yaml
     with:
-      kdb-branch: release-${{ needs.parse-release-version.outputs.vkdb }}
-      kgw-branch: release-${{ needs.parse-release-version.outputs.vkgw }}
+      kdb-ref: release-${{ needs.parse-release-version.outputs.vkdb }}
+      kgw-ref: release-${{ needs.parse-release-version.outputs.vkgw }}
+      # kwil-js has no release branch, we'll use the latest tag of this minor version
+      kjs-ref: ${{ needs.parse-release-version.outputs.vkjs }}
     secrets:
       kgw-access-token: ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }}
 
