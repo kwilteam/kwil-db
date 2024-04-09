@@ -2,7 +2,7 @@
 // No visitor methods will return anything.
 package traverse
 
-import "github.com/kwilteam/kwil-db/internal/engine/procedures/parser"
+import parser "github.com/kwilteam/kwil-db/internal/parse/procedure"
 
 // r s all nodes in the AST.
 // It can be given a set of functions to call when it visits a node of a certain type.

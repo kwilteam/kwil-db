@@ -1,10 +1,10 @@
-package parser
+package procedure
 
 import (
 	"fmt"
 
 	"github.com/antlr4-go/antlr/v4"
-	"github.com/kwilteam/kwil-db/internal/engine/procedures/parser/gen"
+	"github.com/kwilteam/kwil-db/internal/parse/procedure/gen"
 	sqlparser "github.com/kwilteam/kwil-db/internal/parse/sql"
 )
 

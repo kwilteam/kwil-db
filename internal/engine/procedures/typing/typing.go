@@ -8,8 +8,8 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine"
-	"github.com/kwilteam/kwil-db/internal/engine/procedures/parser"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/typing"
+	parser "github.com/kwilteam/kwil-db/internal/parse/procedure"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 

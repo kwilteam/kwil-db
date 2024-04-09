@@ -15,10 +15,10 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine"
-	"github.com/kwilteam/kwil-db/internal/engine/procedures/parser"
-	"github.com/kwilteam/kwil-db/internal/engine/procedures/visitors/traverse"
+	"github.com/kwilteam/kwil-db/internal/engine/procedures/traverse"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
+	parser "github.com/kwilteam/kwil-db/internal/parse/procedure"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 

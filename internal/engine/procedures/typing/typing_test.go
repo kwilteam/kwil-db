@@ -6,8 +6,8 @@ import (
 	"github.com/kwilteam/kwil-db/common/testdata"
 	"github.com/kwilteam/kwil-db/core/types"
 
-	"github.com/kwilteam/kwil-db/internal/engine/procedures/parser"
-	"github.com/kwilteam/kwil-db/internal/engine/procedures/visitors/typing"
+	"github.com/kwilteam/kwil-db/internal/engine/procedures/typing"
+	parser "github.com/kwilteam/kwil-db/internal/parse/procedure"
 	"github.com/stretchr/testify/require"
 )
 

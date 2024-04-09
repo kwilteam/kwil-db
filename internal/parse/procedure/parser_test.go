@@ -1,10 +1,10 @@
-package parser_test
+package procedure_test
 
 import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/engine/procedures/parser"
+	parser "github.com/kwilteam/kwil-db/internal/parse/procedure"
 	"github.com/stretchr/testify/require"
 )
 

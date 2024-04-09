@@ -4,10 +4,10 @@ package procedural
 import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/ddl"
-	"github.com/kwilteam/kwil-db/internal/engine/procedures/parser"
-	"github.com/kwilteam/kwil-db/internal/engine/procedures/visitors/clean"
-	"github.com/kwilteam/kwil-db/internal/engine/procedures/visitors/generate"
-	"github.com/kwilteam/kwil-db/internal/engine/procedures/visitors/typing"
+	"github.com/kwilteam/kwil-db/internal/engine/procedures/clean"
+	"github.com/kwilteam/kwil-db/internal/engine/procedures/generate"
+	"github.com/kwilteam/kwil-db/internal/engine/procedures/typing"
+	"github.com/kwilteam/kwil-db/internal/parse/procedure"
 )
 
 // PreparedProcedures will prepare the plpgsql functions for all procedures in the schema.
@@ -18,7 +18,7 @@ func GeneratePLPGSQL(schema *types.Schema, pgSchemaName string,
 	stmts := make([]string, len(schema.Procedures))
 
 	for i, proc := range schema.Procedures {
-		parsed, err := parser.Parse(proc.Body)
+		parsed, err := procedure.Parse(proc.Body)
 		if err != nil {
 			return nil, err
 		}
