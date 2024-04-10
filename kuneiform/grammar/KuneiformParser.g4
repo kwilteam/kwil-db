@@ -99,20 +99,16 @@ procedure_declaration:
     START_PROCEDURE procedure_name=STMT_IDENTIFIER
     STMT_LPAREN stmt_typed_param_list? STMT_RPAREN
     STMT_ACCESS+
-    (STMT_RETURNS (stmt_type_list|table_return))?
+    (STMT_RETURNS stmt_return)?
     STMT_BODY
 ;
 
-table_return:
-    STMT_TABLE STMT_LPAREN STMT_IDENTIFIER stmt_type_selector (STMT_COMMA STMT_IDENTIFIER stmt_type_selector)* STMT_RPAREN
+stmt_return:
+    STMT_TABLE? STMT_LPAREN STMT_IDENTIFIER stmt_type_selector (STMT_COMMA STMT_IDENTIFIER stmt_type_selector)* STMT_RPAREN
 ;
 
 stmt_typed_param_list:
     STMT_VAR stmt_type_selector (STMT_COMMA STMT_VAR stmt_type_selector)*
-;
-
-stmt_type_list:
-    STMT_LPAREN stmt_type_selector (STMT_COMMA stmt_type_selector)* STMT_RPAREN
 ;
 
 stmt_type_selector:

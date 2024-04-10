@@ -3,9 +3,10 @@ package typing_test
 import (
 	"testing"
 
-	"github.com/kwilteam/kwil-db/common/testdata"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/testdata"
 
+	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/engine/procedures/typing"
 	parser "github.com/kwilteam/kwil-db/internal/parse/procedure"
 	"github.com/stretchr/testify/require"
@@ -94,7 +95,7 @@ func Test_Typing(t *testing.T) {
 					Name: "$name",
 					Type: types.TextType,
 				},
-			})
+			}, execution.PgSessionVars)
 			if tc.err != nil {
 				require.ErrorAs(t, err, &tc.err)
 			} else {

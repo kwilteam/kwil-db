@@ -155,8 +155,8 @@ type Procedure struct {
 // ProcedureReturn holds the return type of a procedure.
 // Either one of the types can bet set, however, not both.
 type ProcedureReturn struct {
-	Types []*DataType  `rlp:"optional"`
-	Table []*NamedType `rlp:"optional"`
+	IsTable bool         `rlp:"optional"`
+	Types   []*NamedType `rlp:"optional"`
 }
 
 // NamedType is a field of a composite type.
@@ -352,29 +352,15 @@ func (p *Procedure) toTypes() *types.Procedure {
 }
 
 func (p *ProcedureReturn) toTypes() *types.ProcedureReturn {
-	if p.Types != nil {
-		tps := make([]*types.DataType, len(p.Types))
-		for i, t := range p.Types {
-			tps[i] = t.toTypes()
-		}
-
-		return &types.ProcedureReturn{
-			Types: tps,
-		}
+	tps := make([]*types.NamedType, len(p.Types))
+	for i, t := range p.Types {
+		tps[i] = t.toTypes()
 	}
 
-	if p.Table != nil {
-		tbl := make([]*types.NamedType, len(p.Table))
-		for i, col := range p.Table {
-			tbl[i] = col.toTypes()
-		}
-
-		return &types.ProcedureReturn{
-			Table: tbl,
-		}
+	return &types.ProcedureReturn{
+		IsTable: p.IsTable,
+		Fields:  tps,
 	}
-
-	return nil
 }
 
 func (p *NamedType) toTypes() *types.NamedType {
@@ -558,21 +544,13 @@ func (p *NamedType) fromParameter(p2 *types.ProcedureParameter) {
 }
 
 func (p *ProcedureReturn) fromTypes(p2 *types.ProcedureReturn) {
-	if p2.Types != nil {
-		for _, t := range p2.Types {
-			d := &DataType{}
-			d.fromTypes(t)
-			p.Types = append(p.Types, d)
-		}
+	for _, col := range p2.Fields {
+		n := &NamedType{}
+		n.fromTypes(col)
+		p.Types = append(p.Types, n)
 	}
 
-	if p2.Table != nil {
-		for _, col := range p2.Table {
-			n := &NamedType{}
-			n.fromTypes(col)
-			p.Table = append(p.Table, n)
-		}
-	}
+	p.IsTable = p2.IsTable
 }
 
 func (c *DataType) fromTypes(c2 *types.DataType) {

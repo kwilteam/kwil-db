@@ -20,8 +20,7 @@ func (p *proceduralLangVisitor) Visit(tree antlr.ParseTree) interface{} {
 	return tree.Accept(p)
 }
 
-func (p *proceduralLangVisitor) VisitCall_expression(ctx *gen.Call_expressionContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitCall_expression(ctx *gen.Call_expressionContext) any {
 	e := &ExpressionCall{
 		Name: ctx.IDENTIFIER().GetText(),
 	}
@@ -33,8 +32,7 @@ func (p *proceduralLangVisitor) VisitCall_expression(ctx *gen.Call_expressionCon
 	return e
 }
 
-func (p *proceduralLangVisitor) VisitExpr_arithmetic(ctx *gen.Expr_arithmeticContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_arithmetic(ctx *gen.Expr_arithmeticContext) any {
 	expr := &ExpressionArithmetic{
 		Left:  p.Visit(ctx.Expression(0)).(Expression),
 		Right: p.Visit(ctx.Expression(1)).(Expression),
@@ -58,16 +56,14 @@ func (p *proceduralLangVisitor) VisitExpr_arithmetic(ctx *gen.Expr_arithmeticCon
 	return expr
 }
 
-func (p *proceduralLangVisitor) VisitExpr_array_access(ctx *gen.Expr_array_accessContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_array_access(ctx *gen.Expr_array_accessContext) any {
 	return &ExpressionArrayAccess{
 		Target: p.Visit(ctx.Expression(0)).(Expression),
 		Index:  p.Visit(ctx.Expression(1)).(Expression),
 	}
 }
 
-func (p *proceduralLangVisitor) VisitExpr_blob_literal(ctx *gen.Expr_blob_literalContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_blob_literal(ctx *gen.Expr_blob_literalContext) any {
 	b := ctx.BLOB_LITERAL().GetText()
 	// trim off beginning 0x
 	if b[:2] != "0x" {
@@ -86,20 +82,17 @@ func (p *proceduralLangVisitor) VisitExpr_blob_literal(ctx *gen.Expr_blob_litera
 	}
 }
 
-func (p *proceduralLangVisitor) VisitExpr_boolean_literal(ctx *gen.Expr_boolean_literalContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_boolean_literal(ctx *gen.Expr_boolean_literalContext) any {
 	return &ExpressionBooleanLiteral{
 		Value: strings.ToLower(ctx.GetText()) == "true",
 	}
 }
 
-func (p *proceduralLangVisitor) VisitExpr_call(ctx *gen.Expr_callContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_call(ctx *gen.Expr_callContext) any {
 	return p.Visit(ctx.Call_expression())
 }
 
-func (p *proceduralLangVisitor) VisitExpr_comparison(ctx *gen.Expr_comparisonContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_comparison(ctx *gen.Expr_comparisonContext) any {
 	c := &ExpressionComparison{
 		Left:  p.Visit(ctx.Expression(0)).(Expression),
 		Right: p.Visit(ctx.Expression(1)).(Expression),
@@ -125,16 +118,14 @@ func (p *proceduralLangVisitor) VisitExpr_comparison(ctx *gen.Expr_comparisonCon
 	return c
 }
 
-func (p *proceduralLangVisitor) VisitExpr_field_access(ctx *gen.Expr_field_accessContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_field_access(ctx *gen.Expr_field_accessContext) any {
 	return &ExpressionFieldAccess{
 		Target: p.Visit(ctx.Expression()).(Expression),
 		Field:  ctx.IDENTIFIER().GetText(),
 	}
 }
 
-func (p *proceduralLangVisitor) VisitExpr_int_literal(ctx *gen.Expr_int_literalContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_int_literal(ctx *gen.Expr_int_literalContext) any {
 	textVal := ctx.INT_LITERAL().GetText()
 	i, err := strconv.ParseInt(textVal, 10, 64)
 	if err != nil {
@@ -146,25 +137,21 @@ func (p *proceduralLangVisitor) VisitExpr_int_literal(ctx *gen.Expr_int_literalC
 	}
 }
 
-func (p *proceduralLangVisitor) VisitExpr_make_array(ctx *gen.Expr_make_arrayContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_make_array(ctx *gen.Expr_make_arrayContext) any {
 	return p.Visit(ctx.Expression_make_array())
 }
 
-func (p *proceduralLangVisitor) VisitExpr_null_literal(ctx *gen.Expr_null_literalContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_null_literal(ctx *gen.Expr_null_literalContext) any {
 	return &ExpressionNullLiteral{}
 }
 
-func (p *proceduralLangVisitor) VisitExpr_parenthesized(ctx *gen.Expr_parenthesizedContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_parenthesized(ctx *gen.Expr_parenthesizedContext) any {
 	return &ExpressionParenthesized{
 		Expression: p.Visit(ctx.Expression()).(Expression),
 	}
 }
 
-func (p *proceduralLangVisitor) VisitExpr_text_literal(ctx *gen.Expr_text_literalContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_text_literal(ctx *gen.Expr_text_literalContext) any {
 
 	// parse out the quotes
 	if len(ctx.TEXT_LITERAL().GetText()) < 2 {
@@ -182,15 +169,13 @@ func (p *proceduralLangVisitor) VisitExpr_text_literal(ctx *gen.Expr_text_litera
 	}
 }
 
-func (p *proceduralLangVisitor) VisitExpr_variable(ctx *gen.Expr_variableContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpr_variable(ctx *gen.Expr_variableContext) any {
 	return &ExpressionVariable{
 		Name: getVariable(ctx.VARIABLE()),
 	}
 }
 
-func (p *proceduralLangVisitor) VisitExpression_list(ctx *gen.Expression_listContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpression_list(ctx *gen.Expression_listContext) any {
 	exprs := make([]Expression, len(ctx.AllExpression()))
 	for i, expr := range ctx.AllExpression() {
 		exprs[i] = p.Visit(expr).(Expression)
@@ -199,8 +184,7 @@ func (p *proceduralLangVisitor) VisitExpression_list(ctx *gen.Expression_listCon
 	return exprs
 }
 
-func (p *proceduralLangVisitor) VisitExpression_make_array(ctx *gen.Expression_make_arrayContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitExpression_make_array(ctx *gen.Expression_make_arrayContext) any {
 	exprs := p.Visit(ctx.Expression_list()).([]Expression)
 
 	return &ExpressionMakeArray{
@@ -208,8 +192,7 @@ func (p *proceduralLangVisitor) VisitExpression_make_array(ctx *gen.Expression_m
 	}
 }
 
-func (p *proceduralLangVisitor) VisitProgram(ctx *gen.ProgramContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitProgram(ctx *gen.ProgramContext) any {
 	var clauses []Statement
 	for _, statement := range ctx.AllStatement() {
 		res := p.Visit(statement)
@@ -221,16 +204,14 @@ func (p *proceduralLangVisitor) VisitProgram(ctx *gen.ProgramContext) interface 
 	return clauses
 }
 
-func (p *proceduralLangVisitor) VisitRange(ctx *gen.RangeContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitRange(ctx *gen.RangeContext) any {
 	return &LoopTargetRange{
 		Start: p.Visit(ctx.Expression(0)).(Expression),
 		End:   p.Visit(ctx.Expression(1)).(Expression),
 	}
 }
 
-func (p *proceduralLangVisitor) VisitStmt_procedure_call(ctx *gen.Stmt_procedure_callContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitStmt_procedure_call(ctx *gen.Stmt_procedure_callContext) any {
 	proc := ctx.Call_expression().Accept(p).(*ExpressionCall)
 
 	vars := make([]string, len(ctx.AllVARIABLE()))
@@ -247,8 +228,7 @@ func (p *proceduralLangVisitor) VisitStmt_procedure_call(ctx *gen.Stmt_procedure
 	}
 }
 
-func (p *proceduralLangVisitor) VisitStmt_for_loop(ctx *gen.Stmt_for_loopContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitStmt_for_loop(ctx *gen.Stmt_for_loopContext) any {
 	forLoop := &StatementForLoop{
 		Variable: getVariable(ctx.VARIABLE(0)),
 	}
@@ -286,8 +266,7 @@ func (p *proceduralLangVisitor) VisitStmt_for_loop(ctx *gen.Stmt_for_loopContext
 	return forLoop
 }
 
-func (p *proceduralLangVisitor) VisitStmt_if(ctx *gen.Stmt_ifContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitStmt_if(ctx *gen.Stmt_ifContext) any {
 	ifThens := ctx.AllIf_then_block()
 	ifClause := &StatementIf{
 		IfThens: make([]*IfThen, len(ifThens)),
@@ -309,8 +288,7 @@ func (p *proceduralLangVisitor) VisitStmt_if(ctx *gen.Stmt_ifContext) interface 
 	return ifClause
 }
 
-func (p *proceduralLangVisitor) VisitIf_then_block(ctx *gen.If_then_blockContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitIf_then_block(ctx *gen.If_then_blockContext) any {
 
 	stmts := make([]Statement, len(ctx.AllStatement()))
 	for i, stmt := range ctx.AllStatement() {
@@ -323,8 +301,7 @@ func (p *proceduralLangVisitor) VisitIf_then_block(ctx *gen.If_then_blockContext
 	}
 }
 
-func (p *proceduralLangVisitor) VisitStmt_return(ctx *gen.Stmt_returnContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitStmt_return(ctx *gen.Stmt_returnContext) any {
 	if ctx.Expression_list() != nil {
 		return &StatementReturn{
 			Values: ctx.Expression_list().Accept(p).([]Expression),
@@ -345,8 +322,7 @@ func (p *proceduralLangVisitor) VisitStmt_return(ctx *gen.Stmt_returnContext) in
 	return &StatementReturn{}
 }
 
-func (p *proceduralLangVisitor) VisitStmt_return_next(ctx *gen.Stmt_return_nextContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitStmt_return_next(ctx *gen.Stmt_return_nextContext) any {
 	return &StatementReturnNext{
 		Variable: getVariable(ctx.VARIABLE()),
 	}
@@ -356,8 +332,7 @@ func (p *proceduralLangVisitor) VisitStmt_break(ctx *gen.Stmt_breakContext) inte
 	return &StatementBreak{}
 }
 
-func (p *proceduralLangVisitor) VisitStmt_sql(ctx *gen.Stmt_sqlContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitStmt_sql(ctx *gen.Stmt_sqlContext) any {
 	ast, err := sqlparser.Parse(ctx.ANY_SQL().GetText())
 	if err != nil {
 		panic(fmt.Sprintf("invalid SQL statement: %v", err))
@@ -368,16 +343,14 @@ func (p *proceduralLangVisitor) VisitStmt_sql(ctx *gen.Stmt_sqlContext) interfac
 	}
 }
 
-func (p *proceduralLangVisitor) VisitStmt_variable_assignment(ctx *gen.Stmt_variable_assignmentContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitStmt_variable_assignment(ctx *gen.Stmt_variable_assignmentContext) any {
 	return &StatementVariableAssignment{
 		Name:  getVariable(ctx.VARIABLE()),
 		Value: p.Visit(ctx.Expression()).(Expression),
 	}
 }
 
-func (p *proceduralLangVisitor) VisitStmt_variable_assignment_with_declaration(ctx *gen.Stmt_variable_assignment_with_declarationContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitStmt_variable_assignment_with_declaration(ctx *gen.Stmt_variable_assignment_with_declarationContext) any {
 	return &StatementVariableAssignmentWithDeclaration{
 		Name:  getVariable(ctx.VARIABLE()),
 		Type:  getType(ctx.Type_()),
@@ -385,8 +358,7 @@ func (p *proceduralLangVisitor) VisitStmt_variable_assignment_with_declaration(c
 	}
 }
 
-func (p *proceduralLangVisitor) VisitStmt_variable_declaration(ctx *gen.Stmt_variable_declarationContext) interface {
-} {
+func (p *proceduralLangVisitor) VisitStmt_variable_declaration(ctx *gen.Stmt_variable_declarationContext) any {
 	return &StatementVariableDeclaration{
 		Name: getVariable(ctx.VARIABLE()),
 		Type: getType(ctx.Type_()),

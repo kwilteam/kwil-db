@@ -22,12 +22,6 @@ type StatementCleaner struct {
 	tree.AstListener
 }
 
-// EnterAggregateFunc checks that the function name is a valid identifier
-func (s *StatementCleaner) EnterAggregateFunc(node *tree.AggregateFunc) (err error) {
-	node.FunctionName = strings.ToLower(node.FunctionName)
-	return nil
-}
-
 // EnterConflictTarget checks that the indexed column names are valid identifiers
 func (s *StatementCleaner) EnterConflictTarget(node *tree.ConflictTarget) (err error) {
 	node.IndexedColumns, err = cleanIdentifiers(node.IndexedColumns)
@@ -150,12 +144,6 @@ func (s *StatementCleaner) EnterExpressionCase(node *tree.ExpressionCase) (err e
 // EnterExpressionArithmetic checks the validity of the operator
 func (s *StatementCleaner) EnterExpressionArithmetic(node *tree.ExpressionArithmetic) (err error) {
 	return wrapErr(ErrInvalidArithmeticOperator, node.Operator.Valid())
-}
-
-// EnterScalarFunc checks that the function name is a valid identifier and is a scalar function
-func (s *StatementCleaner) EnterScalarFunc(node *tree.ScalarFunction) (err error) {
-	node.FunctionName = strings.ToLower(node.FunctionName)
-	return nil
 }
 
 // EnterGroupBy does nothing

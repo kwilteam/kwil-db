@@ -39,14 +39,14 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 
 	hasOutReturns := false
 	// we need to write return types if there are any
-	if returns != nil && len(returns.Types) > 0 {
+	if returns != nil && len(returns.Fields) > 0 && !returns.IsTable {
 		hasOutReturns = true
 		if i != -1 {
 			str.WriteString(", ")
 		}
 
-		if len(returns.Types) != len(outParams) {
-			return "", fmt.Errorf("number of return types and out parameters do not match")
+		if len(returns.Fields) != len(outParams) {
+			return "", fmt.Errorf("number of return types and out parameters do not match. expected %d, got %d", len(returns.Fields), len(outParams))
 		}
 
 		for i, field := range outParams {
@@ -66,11 +66,11 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 	str.WriteString(") ")
 
 	// writing the return type
-	if returns != nil && returns.Table != nil {
+	if returns != nil && returns.IsTable && len(returns.Fields) > 0 {
 		str.WriteString("\nRETURNS ")
 
 		str.WriteString("TABLE(")
-		for i, field := range returns.Table {
+		for i, field := range returns.Fields {
 			if i != 0 {
 				str.WriteString(", ")
 			}

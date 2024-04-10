@@ -11,7 +11,6 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/csv"
-	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 
 	"github.com/spf13/cobra"
@@ -84,12 +83,7 @@ func batchCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error building inputs: %w", err))
 				}
 
-				actionStructure, err := getAction(ctx, cl, dbid, action)
-				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error getting action: %w", err))
-				}
-
-				tuples, err := createActionInputs(inputs, actionStructure.Parameters)
+				tuples, err := buildExecutionInputs(ctx, cl, dbid, action, inputs)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
 				}
@@ -124,21 +118,6 @@ func batchCmd() *cobra.Command {
 	cmd.MarkFlagRequired("path")
 	cmd.MarkFlagRequired("action")
 	return cmd
-}
-
-func getAction(ctx context.Context, c clientType.Client, dbid, action string) (*types.Action, error) {
-	schema, err := c.GetSchema(ctx, dbid)
-	if err != nil {
-		return nil, fmt.Errorf("error getting schema: %w", err)
-	}
-
-	for _, a := range schema.Actions {
-		if a.Name == action {
-			return a, nil
-		}
-	}
-
-	return nil, fmt.Errorf("action not found: %s", action)
 }
 
 // buildInputs builds the inputs for the file

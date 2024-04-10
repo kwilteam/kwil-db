@@ -268,25 +268,14 @@ func convertProceduresToEngine(proc []*txpb.Procedure) []*types.Procedure {
 		}
 
 		if p.ReturnTypes != nil {
-			if len(p.ReturnTypes) > 0 {
-				tps := make([]*types.DataType, len(p.ReturnTypes))
-				for i, t := range p.ReturnTypes {
-					tps[i] = convertDataTypeToEngine(t)
-				}
-
-				t.Returns = &types.ProcedureReturn{
-					Types: tps,
-				}
-			} else if len(p.ReturnTable) > 0 {
-				cols := make([]*types.NamedType, len(p.ReturnTable))
-				for i, col := range p.ReturnTable {
-					cols[i] = &types.NamedType{
-						Name: col.Name,
-						Type: convertDataTypeToEngine(col.Type),
-					}
-				}
-				t.Returns = &types.ProcedureReturn{
-					Table: cols,
+			t.Returns = &types.ProcedureReturn{
+				IsTable: p.ReturnTypes.IsTable,
+				Fields:  make([]*types.NamedType, len(p.ReturnTypes.Columns)),
+			}
+			for j, r := range p.ReturnTypes.Columns {
+				t.Returns.Fields[j] = &types.NamedType{
+					Name: r.Name,
+					Type: convertDataTypeToEngine(r.Type),
 				}
 			}
 		}
@@ -464,22 +453,15 @@ func convertProceduresFromEngine(proc []*types.Procedure) []*txpb.Procedure {
 		}
 
 		if p.Returns != nil {
-			if len(p.Returns.Types) > 0 {
-				tps := make([]*txpb.DataType, len(p.Returns.Types))
-				for i, t := range p.Returns.Types {
-					tps[i] = convertDataTypeFromEngine(t)
+			t.ReturnTypes = &txpb.ProcedureReturn{
+				IsTable: p.Returns.IsTable,
+				Columns: make([]*txpb.TypedVariable, len(p.Returns.Fields)),
+			}
+			for j, r := range p.Returns.Fields {
+				t.ReturnTypes.Columns[j] = &txpb.TypedVariable{
+					Name: r.Name,
+					Type: convertDataTypeFromEngine(r.Type),
 				}
-
-				t.ReturnTypes = tps
-			} else if len(p.Returns.Table) > 0 {
-				cols := make([]*txpb.TypedVariable, len(p.Returns.Table))
-				for i, col := range p.Returns.Table {
-					cols[i] = &txpb.TypedVariable{
-						Name: col.Name,
-						Type: convertDataTypeFromEngine(col.Type),
-					}
-				}
-				t.ReturnTable = cols
 			}
 		}
 

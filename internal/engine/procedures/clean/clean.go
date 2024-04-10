@@ -29,7 +29,7 @@ import (
 // It takes the parsed statements, the system schemas, the target procedure,
 // the dbid of the current schema, a prefix which it will use to prefix
 // postgres session variables, and a set of known postgres session variables and their types.
-func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSchema *types.Schema, pgSchemaName, contextPrefix string, knownVars map[string]*types.DataType) (params []*types.NamedType, err error) {
+func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSchema *types.Schema, pgSchemaName, contextPrefix string, knownVars map[string]*types.DataType) (params []*types.NamedType, sessionVars map[string]*types.DataType, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = e.(error)
@@ -37,11 +37,12 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 	}()
 
 	c := cleaner{
-		currentProc:      proc,
-		sessionPrefix:    contextPrefix,
-		currentSchema:    currentSchema,
-		knownSessionVars: knownVars,
-		pgSchemaName:     pgSchemaName,
+		currentProc:        proc,
+		sessionPrefix:      contextPrefix,
+		currentSchema:      currentSchema,
+		knownSessionVars:   knownVars,
+		pgSchemaName:       pgSchemaName,
+		cleanedSessionVars: map[string]*types.DataType{},
 	}
 
 	// cleanedParams holds the cleaned procedure parameters.
@@ -153,15 +154,16 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 		stmt.Accept(&t)
 	}
 
-	return cleanedParams, nil
+	return cleanedParams, c.cleanedSessionVars, nil
 }
 
 type cleaner struct {
-	currentSchema    *types.Schema
-	currentProc      *types.Procedure
-	sessionPrefix    string
-	knownSessionVars map[string]*types.DataType
-	pgSchemaName     string
+	currentSchema      *types.Schema
+	currentProc        *types.Procedure
+	sessionPrefix      string
+	knownSessionVars   map[string]*types.DataType
+	pgSchemaName       string
+	cleanedSessionVars map[string]*types.DataType
 }
 
 // cleanType ensures a type is fully qualified.
@@ -196,6 +198,7 @@ func (c *cleaner) cleanVar(n *string) {
 
 		// contextual parameter
 		*n = fmt.Sprintf("current_setting('%s.%s')", c.sessionPrefix, r[1:])
+		c.cleanedSessionVars[*n] = c.knownSessionVars[r[1:]]
 		return
 	default:
 		panic("variable names must start with $ or @")

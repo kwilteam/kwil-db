@@ -95,15 +95,11 @@ func (v *BaseKuneiformParserVisitor) VisitProcedure_declaration(ctx *Procedure_d
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitTable_return(ctx *Table_returnContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitStmt_return(ctx *Stmt_returnContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
 func (v *BaseKuneiformParserVisitor) VisitStmt_typed_param_list(ctx *Stmt_typed_param_listContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitStmt_type_list(ctx *Stmt_type_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

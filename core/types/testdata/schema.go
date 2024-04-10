@@ -27,6 +27,7 @@ var TestSchema = &types.Schema{
 	Procedures: []*types.Procedure{
 		ProcCreateUser,
 		ProcGetUserByAddress,
+		ProcGetUsersByAge,
 	},
 	Extensions: []*types.Extension{},
 }

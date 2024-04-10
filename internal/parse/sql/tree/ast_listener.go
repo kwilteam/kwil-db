@@ -2,8 +2,6 @@ package tree
 
 // AstListener defines the interface for walking through the AstNode.
 type AstListener interface {
-	EnterAggregateFunc(*AggregateFunc) error
-	ExitAggregateFunc(*AggregateFunc) error
 	EnterConflictTarget(*ConflictTarget) error
 	ExitConflictTarget(*ConflictTarget) error
 	EnterCTE(*CTE) error
@@ -48,8 +46,6 @@ type AstListener interface {
 	ExitExpressionCase(*ExpressionCase) error
 	EnterExpressionArithmetic(*ExpressionArithmetic) error
 	ExitExpressionArithmetic(*ExpressionArithmetic) error
-	EnterScalarFunc(*ScalarFunction) error
-	ExitScalarFunc(*ScalarFunction) error
 	EnterGroupBy(*GroupBy) error
 	ExitGroupBy(*GroupBy) error
 	EnterInsertStmt(*InsertStmt) error
@@ -110,14 +106,6 @@ var _ AstListener = &BaseListener{}
 
 func NewBaseListener() AstListener {
 	return &BaseListener{}
-}
-
-func (b *BaseListener) EnterAggregateFunc(p0 *AggregateFunc) error {
-	return nil
-}
-
-func (b *BaseListener) ExitAggregateFunc(p0 *AggregateFunc) error {
-	return nil
 }
 
 func (b *BaseListener) EnterCTE(p0 *CTE) error {
@@ -448,14 +436,6 @@ func (b *BaseListener) ExitReturningClauseColumn(p0 *ReturningClauseColumn) erro
 	return nil
 }
 
-func (b *BaseListener) EnterScalarFunc(p0 *ScalarFunction) error {
-	return nil
-}
-
-func (b *BaseListener) ExitScalarFunc(p0 *ScalarFunction) error {
-	return nil
-}
-
 func (b *BaseListener) EnterSelectStmt(p0 *SelectStmt) error {
 	return nil
 }
@@ -517,8 +497,6 @@ func (b *BaseListener) ExitUpsert(p0 *Upsert) error {
 // as functions in a struct.  This makes it easier to implement
 // for small, one-off walkers.
 type ImplementedListener struct {
-	FuncEnterAggregateFunc              func(p0 *AggregateFunc) error
-	FuncExitAggregateFunc               func(p0 *AggregateFunc) error
 	FuncEnterCTE                        func(p0 *CTE) error
 	FuncExitCTE                         func(p0 *CTE) error
 	FuncEnterCompoundOperator           func(p0 *CompoundOperator) error
@@ -601,8 +579,6 @@ type ImplementedListener struct {
 	FuncExitReturningClause             func(p0 *ReturningClause) error
 	FuncEnterReturningClauseColumn      func(p0 *ReturningClauseColumn) error
 	FuncExitReturningClauseColumn       func(p0 *ReturningClauseColumn) error
-	FuncEnterScalarFunc                 func(p0 *ScalarFunction) error
-	FuncExitScalarFunc                  func(p0 *ScalarFunction) error
 	FuncEnterSelectStmt                 func(p0 *SelectStmt) error
 	FuncExitSelectStmt                  func(p0 *SelectStmt) error
 	FuncEnterSimpleSelect               func(p0 *SimpleSelect) error
@@ -620,22 +596,6 @@ type ImplementedListener struct {
 }
 
 var _ AstListener = &ImplementedListener{}
-
-func (b *ImplementedListener) EnterAggregateFunc(p0 *AggregateFunc) error {
-	if b.FuncEnterAggregateFunc == nil {
-		return nil
-	}
-
-	return b.FuncEnterAggregateFunc(p0)
-}
-
-func (b *ImplementedListener) ExitAggregateFunc(p0 *AggregateFunc) error {
-	if b.FuncExitAggregateFunc == nil {
-		return nil
-	}
-
-	return b.FuncExitAggregateFunc(p0)
-}
 
 func (b *ImplementedListener) EnterCTE(p0 *CTE) error {
 	if b.FuncEnterCTE == nil {
@@ -1291,22 +1251,6 @@ func (b *ImplementedListener) ExitReturningClauseColumn(p0 *ReturningClauseColum
 	}
 
 	return b.FuncExitReturningClauseColumn(p0)
-}
-
-func (b *ImplementedListener) EnterScalarFunc(p0 *ScalarFunction) error {
-	if b.FuncEnterScalarFunc == nil {
-		return nil
-	}
-
-	return b.FuncEnterScalarFunc(p0)
-}
-
-func (b *ImplementedListener) ExitScalarFunc(p0 *ScalarFunction) error {
-	if b.FuncExitScalarFunc == nil {
-		return nil
-	}
-
-	return b.FuncExitScalarFunc(p0)
 }
 
 func (b *ImplementedListener) EnterSelectStmt(p0 *SelectStmt) error {

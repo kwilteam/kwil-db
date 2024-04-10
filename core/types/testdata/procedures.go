@@ -29,10 +29,41 @@ var (
 		};
 		`,
 		Returns: &types.ProcedureReturn{
-			Types: []*types.DataType{
-				types.IntType,
-				types.TextType,
-				types.IntType,
+			Fields: []*types.NamedType{
+				{
+					Name: "id",
+					Type: types.IntType,
+				},
+				{
+					Name: "username",
+					Type: types.TextType,
+				},
+				{
+					Name: "age",
+					Type: types.IntType,
+				},
+			},
+		},
+	}
+
+	ProcGetUsersByAge = &types.Procedure{
+		Name: "proc_get_users_by_age",
+		Parameters: []*types.ProcedureParameter{
+			{Name: "$age", Type: types.IntType},
+		},
+		Public: true,
+		Modifiers: []types.Modifier{
+			types.ModifierView,
+		},
+		Body: `
+		return SELECT id, username, age FROM users WHERE age = $age;
+		`,
+		Returns: &types.ProcedureReturn{
+			IsTable: true,
+			Fields: []*types.NamedType{
+				{Name: "id", Type: types.IntType},
+				{Name: "username", Type: types.TextType},
+				{Name: "age", Type: types.IntType},
 			},
 		},
 	}

@@ -35,10 +35,12 @@ procedure create_user($name text, $age int) public {
 }
 
 // get_user gets a user id, age, and address from a username
-procedure get_user($name text) public view returns (uuid, int, text) {
+procedure get_user($name text) public view returns (id uuid,age int,address text) {
     for $row in SELECT id, age, address FROM users WHERE name = $name {
         return $row.id, $row.age, $row.address; // will return on the first iteration
     }
+
+    error(format('user "%s" not found', $name));
 }
 
 // get_owned_users gets user ids, names, and ages by the owning address

@@ -54,13 +54,19 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 			returns: &types.ProcedureReturn{
-				Types: []*types.DataType{
+				Fields: []*types.NamedType{
 					{
-						Name:    "text",
-						IsArray: true,
+						Name: "field1", // gets ignored
+						Type: &types.DataType{
+							Name:    "text",
+							IsArray: true,
+						},
 					},
 					{
-						Name: "bool",
+						Name: "field2", // gets ignored
+						Type: &types.DataType{
+							Name: "bool",
+						},
 					},
 				},
 			},
@@ -71,13 +77,19 @@ func Test_Procedure(t *testing.T) {
 			name:   "no fields, multiple return types",
 			fields: nil,
 			returns: &types.ProcedureReturn{
-				Types: []*types.DataType{
+				Fields: []*types.NamedType{
 					{
-						Name:    "text",
-						IsArray: true,
+						Name: "field1", // gets ignored
+						Type: &types.DataType{
+							Name:    "text",
+							IsArray: true,
+						},
 					},
 					{
-						Name: "bool",
+						Name: "field2", // gets ignored
+						Type: &types.DataType{
+							Name: "bool",
+						},
 					},
 				},
 			},
@@ -93,8 +105,11 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 			returns: &types.ProcedureReturn{
-				Types: []*types.DataType{
-					types.TextType,
+				Fields: []*types.NamedType{
+					{
+						Name: "field1", // gets ignored
+						Type: types.TextType,
+					},
 				},
 			},
 			decls: nil,
@@ -104,7 +119,8 @@ func Test_Procedure(t *testing.T) {
 			name:   "return table",
 			fields: nil,
 			returns: &types.ProcedureReturn{
-				Table: []*types.NamedType{
+				IsTable: true,
+				Fields: []*types.NamedType{
 					{
 						Name: "field1",
 						Type: types.TextType,
@@ -165,11 +181,11 @@ func Test_Procedure(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var outParams []*types.NamedType
-			if test.returns != nil && test.returns.Types != nil {
-				for i, t := range test.returns.Types {
+			if test.returns != nil && !test.returns.IsTable {
+				for i, t := range test.returns.Fields {
 					outParams = append(outParams, &types.NamedType{
 						Name: fmt.Sprintf("_out_%d", i),
-						Type: t,
+						Type: t.Type,
 					})
 				}
 			}

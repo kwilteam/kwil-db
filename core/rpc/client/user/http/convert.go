@@ -123,7 +123,7 @@ func convertHttpTxResult(result *httpTx.TxTransactionResult) (*transactions.Tran
 	}, nil
 }
 
-func ConvertToSchema(schema *httpTx.TxSchema) (*types.Schema, error) {
+func convertToSchema(schema *httpTx.TxSchema) (*types.Schema, error) {
 	decodedOwner, err := base64.StdEncoding.DecodeString(schema.Owner)
 	if err != nil {
 		return nil, err
@@ -275,27 +275,18 @@ func convertHttpProcedures(procedures []httpTx.TxProcedure) []*types.Procedure {
 		}
 
 		var returns *types.ProcedureReturn
-		if len(procedure.ReturnTypes) > 0 {
-			returns = &types.ProcedureReturn{}
-
-			tps := make([]*types.DataType, len(procedure.ReturnTypes))
-			for j, tp := range procedure.ReturnTypes {
-				tps[j] = convertDataType(&tp)
+		if procedure.ReturnTypes != nil {
+			returns = &types.ProcedureReturn{
+				IsTable: procedure.ReturnTypes.IsTable,
+				Fields:  make([]*types.NamedType, len(procedure.ReturnTypes.Columns)),
 			}
 
-			returns.Types = tps
-		} else if procedure.ReturnTable != nil && len(procedure.ReturnTable) > 0 {
-			returns = &types.ProcedureReturn{}
-
-			cols := make([]*types.NamedType, len(procedure.ReturnTable))
-			for j, col := range procedure.ReturnTable {
-				cols[j] = &types.NamedType{
+			for j, col := range procedure.ReturnTypes.Columns {
+				returns.Fields[j] = &types.NamedType{
 					Name: col.Name,
 					Type: convertDataType(col.Type_),
 				}
 			}
-
-			returns.Table = cols
 		}
 
 		procs[i] = &types.Procedure{

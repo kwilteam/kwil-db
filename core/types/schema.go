@@ -807,27 +807,15 @@ func (p *Procedure) IsView() bool {
 // ProcedureReturn holds the return type of a procedure.
 // EITHER the Type field is set, OR the Table field is set.
 type ProcedureReturn struct {
-	Types []*DataType  `json:"returnTypes,omitempty"`
-	Table []*NamedType `json:"returnTable,omitempty"`
+	IsTable bool         `json:"isTable,omitempty"`
+	Fields  []*NamedType `json:"returnTypes,omitempty"`
 }
 
 func (p *ProcedureReturn) Clean() error {
-	if p.Types != nil {
-		for _, t := range p.Types {
-			return t.Clean()
-		}
+	for _, t := range p.Fields {
+		return t.Clean()
 	}
 
-	if p.Table != nil {
-		for _, col := range p.Table {
-			err := col.Clean()
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// it is possible that both are nil
 	return nil
 }
 
@@ -884,19 +872,19 @@ func (c *DataType) String() string {
 func (c *DataType) PGString() (string, error) {
 	var scalar string
 	switch strings.ToLower(c.Name) {
-	case "int":
+	case intStr:
 		scalar = "INT8"
-	case "text":
-		scalar = "TEXT"
-	case "bool":
-		scalar = "BOOL"
-	case "blob":
+	case textStr:
+		scalar = textStr
+	case boolStr:
+		scalar = boolStr
+	case blobStr:
 		scalar = "BYTEA"
-	case "uuid":
-		scalar = "UUID"
-	case "null":
+	case uuidStr:
+		scalar = uuidStr
+	case nullStr:
 		return "", fmt.Errorf("cannot have null column type")
-	case "unknown":
+	case unknownStr:
 		return "", fmt.Errorf("cannot have unknown column type")
 	default:
 		return "", fmt.Errorf("unknown column type: %s", c.Name)
@@ -910,18 +898,13 @@ func (c *DataType) PGString() (string, error) {
 }
 
 func (c *DataType) Clean() error {
-	c.Name = strings.ToLower(c.Name)
-
-	if c.Name != "int" &&
-		c.Name != "text" &&
-		c.Name != "bool" &&
-		c.Name != "blob" &&
-		c.Name != "uuid" &&
-		c.Name != "null" {
+	switch name := strings.ToLower(c.Name); name {
+	case intStr, textStr, boolStr, blobStr, uuidStr: // ok
+		c.Name = name
+		return nil
+	default:
 		return fmt.Errorf("unknown column type: %s", c.Name)
 	}
-
-	return nil
 }
 
 // Copy returns a copy of the type.
@@ -935,7 +918,7 @@ func (c *DataType) Copy() *DataType {
 // Equals returns true if the type is equal to the other type.
 // If either type is Unknown, it will return true.
 func (c *DataType) Equals(other *DataType) bool {
-	if c.Name == "unknown" || other.Name == "unknown" {
+	if c.Name == unknownStr || other.Name == unknownStr {
 		return true
 	}
 	return strings.EqualFold(c.Name, other.Name) && c.IsArray == other.IsArray
@@ -943,27 +926,37 @@ func (c *DataType) Equals(other *DataType) bool {
 
 var (
 	IntType = &DataType{
-		Name: "int",
+		Name: intStr,
 	}
 	TextType = &DataType{
-		Name: "text",
+		Name: textStr,
 	}
 	BoolType = &DataType{
-		Name: "bool",
+		Name: boolStr,
 	}
 	BlobType = &DataType{
-		Name: "blob",
+		Name: blobStr,
 	}
 	UUIDType = &DataType{
-		Name: "uuid",
+		Name: uuidStr,
 	}
 	// NullType is a special type used internally
 	NullType = &DataType{
-		Name: "null",
+		Name: nullStr,
 	}
 	// Unknown is a special type used internally
 	// when a type is unknown until runtime.
 	UnknownType = &DataType{
-		Name: "unknown",
+		Name: unknownStr,
 	}
+)
+
+const (
+	textStr    = "text"
+	intStr     = "int"
+	boolStr    = "bool"
+	blobStr    = "blob"
+	uuidStr    = "uuid"
+	nullStr    = "null"
+	unknownStr = "unknown"
 )

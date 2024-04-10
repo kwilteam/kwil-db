@@ -63,6 +63,7 @@ Class | Method | HTTP request | Description
  - [TxListDatabasesResponse](docs/TxListDatabasesResponse.md)
  - [TxPingResponse](docs/TxPingResponse.md)
  - [TxProcedure](docs/TxProcedure.md)
+ - [TxProcedureReturn](docs/TxProcedureReturn.md)
  - [TxQueryRequest](docs/TxQueryRequest.md)
  - [TxQueryResponse](docs/TxQueryResponse.md)
  - [TxSchema](docs/TxSchema.md)

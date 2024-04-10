@@ -272,27 +272,50 @@ func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, a
 		return nil, err
 	}
 
-	var action *types.Action
-	for _, a := range schema.Actions {
-		if a.Name == actionName {
-			action = a
-			break
-		}
+	params, err := getParamList(schema, actionName)
+	if err != nil {
+		return nil, err
 	}
 
-	if len(action.Parameters) != len(actionInputs) {
-		return nil, fmt.Errorf("invalid number of inputs, expected %d, got %d", len(action.Parameters), len(actionInputs))
+	if len(params) != len(actionInputs) {
+		return nil, fmt.Errorf("invalid number of inputs, expected %d, got %d", len(params), len(actionInputs))
 	}
 
 	args := []string{}
-	for i, input := range action.Parameters {
+	for i, input := range params {
 		input = input[1:] // remove the leading $
 		args = append(args, fmt.Sprintf("%s:%v", input, actionInputs[i]))
 	}
 	return args, nil
 }
 
+// getParamList gets the list of parameters needed by either an action or procedure
+// it will return an error if not found.
+func getParamList(schema *types.Schema, actionOrProcedure string) ([]string, error) {
+	for _, a := range schema.Actions {
+		if strings.EqualFold(a.Name, actionOrProcedure) {
+			return a.Parameters, nil
+		}
+	}
+
+	for _, p := range schema.Procedures {
+		if strings.EqualFold(p.Name, actionOrProcedure) {
+			params := []string{}
+			for _, param := range p.Parameters {
+				params = append(params, param.Name)
+			}
+			return params, nil
+		}
+	}
+
+	return nil, fmt.Errorf("action/procedure not found: %s", actionOrProcedure)
+}
+
 func (d *KwilCliDriver) Execute(_ context.Context, dbid string, action string, inputs ...[]any) ([]byte, error) {
+	if len(inputs) > 1 {
+		return nil, fmt.Errorf("kwil-cli does not support batched inputs")
+	}
+
 	// NOTE: kwil-cli does not support batched inputs
 	actionInputs, err := d.prepareCliActionParams(dbid, action, inputs[0])
 	if err != nil {

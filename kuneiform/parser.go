@@ -75,8 +75,7 @@ func (k *kfVisitor) checkUniqueName(name string) {
 
 var _ gen.KuneiformParserVisitor = &kfVisitor{}
 
-func (k *kfVisitor) VisitProgram(ctx *gen.ProgramContext) interface {
-} {
+func (k *kfVisitor) VisitProgram(ctx *gen.ProgramContext) any {
 	schema := &types.Schema{
 		Name:       ctx.Database_declaration().Accept(k).(string),
 		Tables:     arr[*types.Table](len(ctx.AllTable_declaration())),
@@ -110,8 +109,7 @@ func (k *kfVisitor) VisitProgram(ctx *gen.ProgramContext) interface {
 
 // START OF Table Declaration Parsing:
 
-func (k *kfVisitor) VisitTable_declaration(ctx *gen.Table_declarationContext) interface {
-} {
+func (k *kfVisitor) VisitTable_declaration(ctx *gen.Table_declarationContext) any {
 	tbl := &types.Table{
 		Name:        ctx.IDENTIFIER().GetText(),
 		Columns:     arr[*types.Column](len(ctx.AllColumn_def())),
@@ -136,8 +134,7 @@ func (k *kfVisitor) VisitTable_declaration(ctx *gen.Table_declarationContext) in
 	return tbl
 }
 
-func (k *kfVisitor) VisitIndex_def(ctx *gen.Index_defContext) interface {
-} {
+func (k *kfVisitor) VisitIndex_def(ctx *gen.Index_defContext) any {
 	idx := &types.Index{
 		Name: ctx.INDEX_NAME().GetText()[1:], // trim off the leading #
 	}
@@ -158,8 +155,7 @@ func (k *kfVisitor) VisitIndex_def(ctx *gen.Index_defContext) interface {
 	return idx
 }
 
-func (k *kfVisitor) VisitForeign_key_def(ctx *gen.Foreign_key_defContext) interface {
-} {
+func (k *kfVisitor) VisitForeign_key_def(ctx *gen.Foreign_key_defContext) any {
 	fk := &types.ForeignKey{
 		ChildKeys:   ctx.GetChild_keys().Accept(k).([]string),
 		ParentKeys:  ctx.GetParent_keys().Accept(k).([]string),
@@ -174,8 +170,7 @@ func (k *kfVisitor) VisitForeign_key_def(ctx *gen.Foreign_key_defContext) interf
 	return fk
 }
 
-func (k *kfVisitor) VisitForeign_key_action(ctx *gen.Foreign_key_actionContext) interface {
-} {
+func (k *kfVisitor) VisitForeign_key_action(ctx *gen.Foreign_key_actionContext) any {
 	act := &types.ForeignKeyAction{}
 
 	switch {
@@ -205,8 +200,7 @@ func (k *kfVisitor) VisitForeign_key_action(ctx *gen.Foreign_key_actionContext) 
 	return act
 }
 
-func (k *kfVisitor) VisitColumn_def(ctx *gen.Column_defContext) interface {
-} {
+func (k *kfVisitor) VisitColumn_def(ctx *gen.Column_defContext) any {
 	col := &types.Column{
 		Name: ctx.IDENTIFIER().GetText(),
 		Type: ctx.GetType_().Accept(k).(*types.DataType),
@@ -222,8 +216,7 @@ func (k *kfVisitor) VisitColumn_def(ctx *gen.Column_defContext) interface {
 	return col
 }
 
-func (k *kfVisitor) VisitDEFAULT(ctx *gen.DEFAULTContext) interface {
-} {
+func (k *kfVisitor) VisitDEFAULT(ctx *gen.DEFAULTContext) any {
 	val := ctx.Literal().Accept(k).(string)
 
 	return &types.Attribute{
@@ -232,54 +225,47 @@ func (k *kfVisitor) VisitDEFAULT(ctx *gen.DEFAULTContext) interface {
 	}
 }
 
-func (k *kfVisitor) VisitMAX(ctx *gen.MAXContext) interface {
-} {
+func (k *kfVisitor) VisitMAX(ctx *gen.MAXContext) any {
 	return &types.Attribute{
 		Type:  types.MAX,
 		Value: ctx.NUMERIC_LITERAL().GetText(),
 	}
 }
 
-func (k *kfVisitor) VisitMAX_LEN(ctx *gen.MAX_LENContext) interface {
-} {
+func (k *kfVisitor) VisitMAX_LEN(ctx *gen.MAX_LENContext) any {
 	return &types.Attribute{
 		Type:  types.MAX_LENGTH,
 		Value: ctx.NUMERIC_LITERAL().GetText(),
 	}
 }
 
-func (k *kfVisitor) VisitMIN(ctx *gen.MINContext) interface {
-} {
+func (k *kfVisitor) VisitMIN(ctx *gen.MINContext) any {
 	return &types.Attribute{
 		Type:  types.MIN,
 		Value: ctx.NUMERIC_LITERAL().GetText(),
 	}
 }
 
-func (k *kfVisitor) VisitMIN_LEN(ctx *gen.MIN_LENContext) interface {
-} {
+func (k *kfVisitor) VisitMIN_LEN(ctx *gen.MIN_LENContext) any {
 	return &types.Attribute{
 		Type:  types.MIN_LENGTH,
 		Value: ctx.NUMERIC_LITERAL().GetText(),
 	}
 }
 
-func (k *kfVisitor) VisitNOT_NULL(ctx *gen.NOT_NULLContext) interface {
-} {
+func (k *kfVisitor) VisitNOT_NULL(ctx *gen.NOT_NULLContext) any {
 	return &types.Attribute{
 		Type: types.NOT_NULL,
 	}
 }
 
-func (k *kfVisitor) VisitPRIMARY_KEY(ctx *gen.PRIMARY_KEYContext) interface {
-} {
+func (k *kfVisitor) VisitPRIMARY_KEY(ctx *gen.PRIMARY_KEYContext) any {
 	return &types.Attribute{
 		Type: types.PRIMARY_KEY,
 	}
 }
 
-func (k *kfVisitor) VisitUNIQUE(ctx *gen.UNIQUEContext) interface {
-} {
+func (k *kfVisitor) VisitUNIQUE(ctx *gen.UNIQUEContext) any {
 	return &types.Attribute{
 		Type: types.UNIQUE,
 	}
@@ -287,13 +273,11 @@ func (k *kfVisitor) VisitUNIQUE(ctx *gen.UNIQUEContext) interface {
 
 // END OF Table Declaration Parsing
 
-func (k *kfVisitor) VisitDatabase_declaration(ctx *gen.Database_declarationContext) interface {
-} {
+func (k *kfVisitor) VisitDatabase_declaration(ctx *gen.Database_declarationContext) any {
 	return ctx.IDENTIFIER().GetText()
 }
 
-func (k *kfVisitor) VisitIdentifier_list(ctx *gen.Identifier_listContext) interface {
-} {
+func (k *kfVisitor) VisitIdentifier_list(ctx *gen.Identifier_listContext) any {
 	idents := arr[string](len(ctx.AllIDENTIFIER()))
 	for i, ident := range ctx.AllIDENTIFIER() {
 		idents[i] = ident.GetText()
@@ -302,8 +286,7 @@ func (k *kfVisitor) VisitIdentifier_list(ctx *gen.Identifier_listContext) interf
 	return idents
 }
 
-func (k *kfVisitor) VisitLiteral(ctx *gen.LiteralContext) interface {
-} {
+func (k *kfVisitor) VisitLiteral(ctx *gen.LiteralContext) any {
 	switch {
 	case ctx.NUMERIC_LITERAL() != nil:
 		return ctx.NUMERIC_LITERAL().GetText()
@@ -320,8 +303,7 @@ func (k *kfVisitor) VisitLiteral(ctx *gen.LiteralContext) interface {
 	}
 }
 
-func (k *kfVisitor) VisitType_selector(ctx *gen.Type_selectorContext) interface {
-} {
+func (k *kfVisitor) VisitType_selector(ctx *gen.Type_selectorContext) any {
 	c := &types.DataType{}
 
 	c.Name = ctx.GetType_().GetText()
@@ -338,8 +320,7 @@ func (k *kfVisitor) VisitType_selector(ctx *gen.Type_selectorContext) interface 
 	return c
 }
 
-func (k *kfVisitor) VisitUse_declaration(ctx *gen.Use_declarationContext) interface {
-} {
+func (k *kfVisitor) VisitUse_declaration(ctx *gen.Use_declarationContext) any {
 	c := &types.Extension{}
 	for i, ident := range ctx.AllIDENTIFIER() {
 		// the first identifier is the extension name,
@@ -369,8 +350,7 @@ func (k *kfVisitor) VisitUse_declaration(ctx *gen.Use_declarationContext) interf
 // action/procedure parsing:
 
 // returns either *types.Action or *types.Procedure
-func (k *kfVisitor) VisitStmt_mode(ctx *gen.Stmt_modeContext) interface {
-} {
+func (k *kfVisitor) VisitStmt_mode(ctx *gen.Stmt_modeContext) any {
 	annotations := arr[string](len(ctx.AllANNOTATION()))
 	for i, a := range ctx.AllANNOTATION() {
 		annotations[i] = a.GetText()
@@ -393,8 +373,7 @@ func (k *kfVisitor) VisitStmt_mode(ctx *gen.Stmt_modeContext) interface {
 }
 
 // returns *types.Action
-func (k *kfVisitor) VisitAction_declaration(ctx *gen.Action_declarationContext) interface {
-} {
+func (k *kfVisitor) VisitAction_declaration(ctx *gen.Action_declarationContext) any {
 	name := ctx.STMT_IDENTIFIER().GetText()
 
 	k.checkUniqueName(name)
@@ -419,8 +398,7 @@ func (k *kfVisitor) VisitAction_declaration(ctx *gen.Action_declarationContext) 
 	return act
 }
 
-func (k *kfVisitor) VisitProcedure_declaration(ctx *gen.Procedure_declarationContext) interface {
-} {
+func (k *kfVisitor) VisitProcedure_declaration(ctx *gen.Procedure_declarationContext) any {
 	name := ctx.GetProcedure_name().GetText()
 
 	k.checkUniqueName(name)
@@ -441,20 +419,27 @@ func (k *kfVisitor) VisitProcedure_declaration(ctx *gen.Procedure_declarationCon
 		panic(err)
 	}
 
-	switch {
-	case ctx.Table_return() != nil:
-		proc.Returns = &types.ProcedureReturn{
-			Table: ctx.Table_return().Accept(k).([]*types.NamedType),
-		}
-	case ctx.Stmt_type_list() != nil:
-		proc.Returns = &types.ProcedureReturn{
-			Types: ctx.Stmt_type_list().Accept(k).([]*types.DataType),
-		}
-	default:
-		proc.Returns = nil
+	if ctx.Stmt_return() != nil {
+		proc.Returns = ctx.Stmt_return().Accept(k).(*types.ProcedureReturn)
 	}
 
 	return proc
+}
+
+func (k *kfVisitor) VisitStmt_return(ctx *gen.Stmt_returnContext) any {
+	r := &types.ProcedureReturn{
+		IsTable: ctx.STMT_TABLE() != nil,
+		Fields:  arr[*types.NamedType](len(ctx.AllSTMT_IDENTIFIER())),
+	}
+
+	for i, c := range ctx.AllSTMT_IDENTIFIER() {
+		r.Fields[i] = &types.NamedType{
+			Name: c.GetText(),
+			Type: ctx.Stmt_type_selector(i).Accept(k).(*types.DataType),
+		}
+	}
+
+	return r
 }
 
 // parseBody will parse the body of a procedure or action, removing
@@ -467,19 +452,7 @@ func parseBody(b string) string {
 	return b
 }
 
-func (k *kfVisitor) VisitStmt_type_list(ctx *gen.Stmt_type_listContext) interface {
-} {
-	list := arr[*types.DataType](len(ctx.AllStmt_type_selector()))
-
-	for i, t := range ctx.AllStmt_type_selector() {
-		list[i] = t.Accept(k).(*types.DataType)
-	}
-
-	return list
-}
-
-func (k *kfVisitor) VisitStmt_typed_param_list(ctx *gen.Stmt_typed_param_listContext) interface {
-} {
+func (k *kfVisitor) VisitStmt_typed_param_list(ctx *gen.Stmt_typed_param_listContext) any {
 	params := arr[*types.ProcedureParameter](len(ctx.AllSTMT_VAR()))
 
 	for i, v := range ctx.AllSTMT_VAR() {
@@ -492,8 +465,7 @@ func (k *kfVisitor) VisitStmt_typed_param_list(ctx *gen.Stmt_typed_param_listCon
 	return params
 }
 
-func (k *kfVisitor) VisitStmt_type_selector(ctx *gen.Stmt_type_selectorContext) interface {
-} {
+func (k *kfVisitor) VisitStmt_type_selector(ctx *gen.Stmt_type_selectorContext) any {
 	c := &types.DataType{}
 
 	c.Name = ctx.GetType_().GetText()
@@ -508,20 +480,6 @@ func (k *kfVisitor) VisitStmt_type_selector(ctx *gen.Stmt_type_selectorContext) 
 	}
 
 	return c
-}
-
-func (k *kfVisitor) VisitTable_return(ctx *gen.Table_returnContext) interface {
-} {
-	cols := arr[*types.NamedType](len(ctx.AllSTMT_IDENTIFIER()))
-
-	for i, c := range ctx.AllSTMT_IDENTIFIER() {
-		cols[i] = &types.NamedType{
-			Name: c.GetText(),
-			Type: ctx.Stmt_type_selector(i).Accept(k).(*types.DataType),
-		}
-	}
-
-	return cols
 }
 
 // getAccessModifiers returns the access modifiers for the given context.

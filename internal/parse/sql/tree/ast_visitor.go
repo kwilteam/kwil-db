@@ -3,7 +3,6 @@ package tree
 // AstVisitor defines visitor for AstNode.
 type AstVisitor interface {
 	Visit(AstNode) interface{}
-	VisitAggregateFunc(*AggregateFunc) any
 	VisitConflictTarget(*ConflictTarget) any
 	VisitCompoundOperator(*CompoundOperator) any
 	VisitCTE(*CTE) any
@@ -27,7 +26,6 @@ type AstVisitor interface {
 	VisitExpressionSelect(*ExpressionSelect) any
 	VisitExpressionCase(*ExpressionCase) any
 	VisitExpressionArithmetic(*ExpressionArithmetic) any
-	VisitScalarFunc(*ScalarFunction) any
 	VisitGroupBy(*GroupBy) any
 	VisitInsertStmt(*InsertStmt) any
 	VisitInsertCore(*InsertCore) any
@@ -64,10 +62,6 @@ var _ AstVisitor = &BaseAstVisitor{}
 func (v *BaseAstVisitor) Visit(node AstNode) interface{} {
 	// dispatch to the concrete visit method
 	return node.Accept(v)
-}
-
-func (v *BaseAstVisitor) VisitAggregateFunc(node *AggregateFunc) any {
-	return nil
 }
 
 func (v *BaseAstVisitor) VisitConflictTarget(node *ConflictTarget) any {
@@ -159,10 +153,6 @@ func (v *BaseAstVisitor) VisitExpressionCase(node *ExpressionCase) any {
 }
 
 func (v *BaseAstVisitor) VisitExpressionArithmetic(node *ExpressionArithmetic) any {
-	return nil
-}
-
-func (v *BaseAstVisitor) VisitScalarFunc(node *ScalarFunction) any {
 	return nil
 }
 

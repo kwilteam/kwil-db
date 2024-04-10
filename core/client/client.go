@@ -235,7 +235,7 @@ func (c *Client) Execute(ctx context.Context, dbid string, procedure string, tup
 
 // DEPRECATED: Use Call instead.
 func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any) (*clientType.Records, error) {
-	return c.Call(ctx, dbid, action, []any{inputs})
+	return c.Call(ctx, dbid, action, inputs)
 }
 
 // Call calls a procedure or action. It returns the result records.

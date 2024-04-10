@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/cstockton/go-conv"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,7 +44,8 @@ func ExecuteProcedureSpecification(ctx context.Context, t *testing.T, caller Pro
 	require.Len(t, records, 1)
 
 	user := records[0]
-	age, ok := user["age"].(int64)
-	require.True(t, ok)
-	require.Equal(t, age, 42)
+
+	age, err = conv.Int64(user["age"])
+	require.NoError(t, err)
+	require.Equal(t, age, int64(42))
 }

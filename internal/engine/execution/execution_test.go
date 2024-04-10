@@ -8,9 +8,9 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
-	"github.com/kwilteam/kwil-db/common/testdata"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/testdata"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 
 	"github.com/stretchr/testify/assert"
@@ -238,6 +238,33 @@ func Test_Execution(t *testing.T) {
 				assert.Equal(t, testdata.TestSchema.DBID(), datasets[0].DBID)
 			},
 		},
+		{
+			name: "procedure returning table",
+			fn: func(t *testing.T, eng *GlobalContext) {
+				ctx := context.Background()
+				db := mockResultDB(&sql.ResultSet{
+					Columns: []string{"_out_id", "_out_name", "_out_age"},
+				})
+
+				owner := "owner"
+
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, []byte(owner))
+				assert.NoError(t, err)
+
+				res, err := eng.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcGetUsersByAge.Name,
+					Args:      []any{22},
+					Signer:    []byte(owner),
+					Caller:    owner,
+				})
+				assert.NoError(t, err)
+
+				for i, expected := range testdata.ProcGetUsersByAge.Returns.Fields {
+					assert.Equal(t, expected.Name, res.Columns[i])
+				}
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -273,10 +300,19 @@ func newDB(readonly bool) *mockDB {
 	}
 }
 
+// mockResultDB can be used to mock a result set for a query
+func mockResultDB(result *sql.ResultSet) *mockDB {
+	db := newDB(false)
+	db.resultSet = result
+
+	return db
+}
+
 type mockDB struct {
 	accessMode    sql.AccessMode
 	dbs           map[string][]byte // serialized schemas
 	executedStmts []string
+	resultSet     *sql.ResultSet
 }
 
 var _ sql.AccessModer = (*mockDB)(nil)
@@ -311,6 +347,10 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 		delete(m.dbs, args[0].(string))
 	default:
 		m.executedStmts = append(m.executedStmts, stmt)
+
+		if m.resultSet != nil {
+			return m.resultSet, nil
+		}
 	}
 
 	return &sql.ResultSet{

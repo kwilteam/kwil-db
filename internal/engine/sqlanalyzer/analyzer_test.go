@@ -3,8 +3,8 @@ package sqlanalyzer_test
 import (
 	"testing"
 
-	"github.com/kwilteam/kwil-db/common/testdata"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/testdata"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/postgres"
 	"github.com/stretchr/testify/assert"

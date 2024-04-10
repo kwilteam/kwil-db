@@ -188,7 +188,7 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*types.Schema, err
 	}
 	defer res.Body.Close()
 
-	convertedSchema, err := ConvertToSchema(result.Schema)
+	convertedSchema, err := convertToSchema(result.Schema)
 	if err != nil {
 		return nil, err
 	}
@@ -298,6 +298,19 @@ func unmarshalMapResults(b []byte) ([]map[string]any, error) {
 	err := d.Decode(&result)
 	if err != nil {
 		return nil, err
+	}
+
+	// convert numbers to int64
+	for _, record := range result {
+		for k, v := range record {
+			if num, ok := v.(json.Number); ok {
+				i, err := num.Int64()
+				if err != nil {
+					return nil, err
+				}
+				record[k] = i
+			}
+		}
 	}
 
 	return result, nil

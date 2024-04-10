@@ -140,5 +140,19 @@ func (s *respSchema) MarshalText() ([]byte, error) {
 		msg.WriteString(fmt.Sprintf("    Inputs: %s\n", q.Parameters))
 	}
 
+	// print procedures
+	msg.WriteString("Procedures:\n")
+	for _, p := range s.Schema.Procedures {
+		public := "private"
+		if p.Public {
+			public = "public"
+		}
+
+		msg.WriteString(fmt.Sprintf("  %s (%s)\n", p.Name, public))
+		for _, param := range p.Parameters {
+			msg.WriteString(fmt.Sprintf("    %s: %s\n", param.Name, param.Type.String()))
+		}
+	}
+
 	return msg.Bytes(), nil
 }

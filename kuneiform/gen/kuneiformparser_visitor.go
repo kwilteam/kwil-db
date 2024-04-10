@@ -73,14 +73,11 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#procedure_declaration.
 	VisitProcedure_declaration(ctx *Procedure_declarationContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#table_return.
-	VisitTable_return(ctx *Table_returnContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#stmt_return.
+	VisitStmt_return(ctx *Stmt_returnContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#stmt_typed_param_list.
 	VisitStmt_typed_param_list(ctx *Stmt_typed_param_listContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#stmt_type_list.
-	VisitStmt_type_list(ctx *Stmt_type_listContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#stmt_type_selector.
 	VisitStmt_type_selector(ctx *Stmt_type_selectorContext) interface{}

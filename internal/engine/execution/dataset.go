@@ -47,6 +47,11 @@ func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App
 			return nil, err
 		}
 
+		err = proc.shapeReturn(res)
+		if err != nil {
+			return nil, err
+		}
+
 		caller.Result = res
 		return nil, nil
 	}

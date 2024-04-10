@@ -736,14 +736,13 @@ components:
           - public: true
             name: name
             returnTypes:
-            - null
-            - null
+              columns:
+              - null
+              - null
+              isTable: true
             annotations:
             - annotations
             - annotations
-            returnTable:
-            - null
-            - null
             modifiers:
             - modifiers
             - modifiers
@@ -756,14 +755,13 @@ components:
           - public: true
             name: name
             returnTypes:
-            - null
-            - null
+              columns:
+              - null
+              - null
+              isTable: true
             annotations:
             - annotations
             - annotations
-            returnTable:
-            - null
-            - null
             modifiers:
             - modifiers
             - modifiers
@@ -856,14 +854,7 @@ components:
         body:
           type: string
         returnTypes:
-          title: either return_types or return_table should be set
-          type: array
-          items:
-            $ref: '#/components/schemas/txDataType'
-        returnTable:
-          type: array
-          items:
-            $ref: '#/components/schemas/txTypedVariable'
+          $ref: '#/components/schemas/txProcedureReturn'
         annotations:
           type: array
           items:
@@ -872,14 +863,13 @@ components:
         public: true
         name: name
         returnTypes:
-        - null
-        - null
+          columns:
+          - null
+          - null
+          isTable: true
         annotations:
         - annotations
         - annotations
-        returnTable:
-        - null
-        - null
         modifiers:
         - modifiers
         - modifiers
@@ -889,6 +879,20 @@ components:
           type: null
         - name: name
           type: null
+    txProcedureReturn:
+      type: object
+      properties:
+        isTable:
+          type: boolean
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/txTypedVariable'
+      example:
+        columns:
+        - null
+        - null
+        isTable: true
     txQueryRequest:
       type: object
       properties:
@@ -1064,14 +1068,13 @@ components:
         - public: true
           name: name
           returnTypes:
-          - null
-          - null
+            columns:
+            - null
+            - null
+            isTable: true
           annotations:
           - annotations
           - annotations
-          returnTable:
-          - null
-          - null
           modifiers:
           - modifiers
           - modifiers
@@ -1084,14 +1087,13 @@ components:
         - public: true
           name: name
           returnTypes:
-          - null
-          - null
+            columns:
+            - null
+            - null
+            isTable: true
           annotations:
           - annotations
           - annotations
-          returnTable:
-          - null
-          - null
           modifiers:
           - modifiers
           - modifiers

@@ -150,6 +150,7 @@ func (a *ActionCall) Type() PayloadType {
 	return PayloadTypeCallAction
 }
 
+// Transfer transfers an amount of tokens from the sender to the receiver.
 type Transfer struct {
 	To     []byte `json:"to"`     // to be string as user identifier
 	Amount string `json:"amount"` // big.Int
@@ -170,6 +171,8 @@ func (v *Transfer) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
 }
 
+// ValidatorJoin requests to join the network with
+// a certain amount of power
 type ValidatorJoin struct {
 	Power uint64
 }
@@ -189,6 +192,7 @@ func (v *ValidatorJoin) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
 }
 
+// ValidatorApprove is used to vote for a validators approval to join the network
 type ValidatorApprove struct {
 	Candidate []byte
 }
@@ -208,6 +212,7 @@ func (v *ValidatorApprove) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
 }
 
+// ValidatorRemove is used to vote for a validators removal from the network
 type ValidatorRemove struct {
 	Validator []byte
 }
@@ -227,6 +232,7 @@ func (v *ValidatorRemove) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
 }
 
+// Validator leave is used to signal that the sending validator is leaving the network
 type ValidatorLeave struct{}
 
 func (v *ValidatorLeave) Type() PayloadType {
@@ -275,6 +281,8 @@ type ValidatorVoteBodies struct {
 
 var _ Payload = (*ValidatorVoteBodies)(nil)
 
+// VotableEvent is an event that can be included
+// in a ValidatorVoteBodies payload.
 type VotableEvent struct {
 	Type string
 	Body []byte

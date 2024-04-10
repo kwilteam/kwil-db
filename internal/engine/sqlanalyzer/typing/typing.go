@@ -15,6 +15,8 @@ type AnalyzeOptions struct {
 	// ArbitraryBinds will treat all bind parameters as unknown,
 	// effectively disabling type checking for them.
 	ArbitraryBinds bool
+	// Qualify will qualify all column references in the statement.
+	Qualify bool
 }
 
 // AnalyzeTypes will run type analysis on the given statement.
@@ -44,6 +46,7 @@ func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, options *AnalyzeOptio
 		ctes:           make(map[string]struct{}),
 		bindParams:     options.BindParams,
 		arbitraryBinds: options.ArbitraryBinds,
+		qualify:        options.Qualify,
 	}
 
 	res := ast.Accept(v)
@@ -77,23 +80,24 @@ type evaluationContext struct {
 // all tables to find the column.
 // If it does not find the column, or finds several
 // columns with the same name, it will return an error.
-func (e *evaluationContext) findColumn(table, column string) (*engine.QualifiedAttribute, error) {
+// It returns the relation the column is from, and the column itself.
+func (e *evaluationContext) findColumn(table, column string) (fromRelation string, attribute *engine.QualifiedAttribute, err error) {
 	if table != "" {
 		cols, ok := e.joinedTables[table]
 		if !ok {
 			// check outer tables
 			cols, ok = e.outerTables[table]
 			if !ok {
-				return nil, fmt.Errorf("table %s not found", table)
+				return "", nil, fmt.Errorf("table %s not found", table)
 			}
 		}
 
 		c, ok := cols.Attribute(column)
 		if !ok {
-			return nil, fmt.Errorf("column %s not found in table %s", column, table)
+			return "", nil, fmt.Errorf("column %s not found in table %s", column, table)
 		}
 
-		return &engine.QualifiedAttribute{
+		return table, &engine.QualifiedAttribute{
 			Name:      column,
 			Attribute: c,
 		}, nil
@@ -102,14 +106,15 @@ func (e *evaluationContext) findColumn(table, column string) (*engine.QualifiedA
 	// if table is empty, loop through all tables
 	var found bool
 	var foundValue *engine.QualifiedAttribute
-	for _, cols := range e.joinedTables {
+	var foundTable string
+	for tbl, cols := range e.joinedTables {
 		t, ok := cols.Attribute(column)
 		if !ok {
 			continue
 		}
 
 		if found {
-			return nil, fmt.Errorf("ambiguous column name: %s", column)
+			return "", nil, fmt.Errorf("ambiguous column name: %s", column)
 		}
 
 		found = true
@@ -117,12 +122,13 @@ func (e *evaluationContext) findColumn(table, column string) (*engine.QualifiedA
 			Name:      column,
 			Attribute: t,
 		}
+		foundTable = tbl
 	}
 	if !found {
-		return nil, fmt.Errorf("column %s not found", column)
+		return "", nil, fmt.Errorf("column %s not found", column)
 	}
 
-	return foundValue, nil
+	return foundTable, foundValue, nil
 }
 
 // join joins new engine.relations to the evaluation context.

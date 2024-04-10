@@ -751,24 +751,28 @@
           "type": "string"
         },
         "returnTypes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/txDataType"
-          },
+          "$ref": "#/definitions/txProcedureReturn",
           "title": "either return_types or return_table should be set"
-        },
-        "returnTable": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/txTypedVariable"
-          }
         },
         "annotations": {
           "type": "array",
           "items": {
             "type": "string"
+          }
+        }
+      }
+    },
+    "txProcedureReturn": {
+      "type": "object",
+      "properties": {
+        "isTable": {
+          "type": "boolean"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txTypedVariable"
           }
         }
       }

@@ -604,6 +604,7 @@ func prepareProcedure(proc *types.Procedure) (*preparedProcedure, error) {
 		public:     proc.Public,
 		parameters: proc.Parameters,
 		view:       proc.IsView(),
+		returns:    proc.Returns,
 	}, nil
 }
 
@@ -620,6 +621,8 @@ type preparedProcedure struct {
 
 	// view indicates whether the procedure has a `view` tag.
 	view bool
+
+	returns *types.ProcedureReturn
 }
 
 func (p *preparedProcedure) callString(schema string) string {
@@ -652,25 +655,25 @@ func (p *preparedProcedure) coerceInputs(inputs []any) ([]any, error) {
 			panic("passed array to coerceScalar")
 		}
 
-		switch typ {
-		case types.IntType:
+		if typ.Equals(types.IntType) {
 			return conv.Int(val)
-		case types.TextType:
+		} else if typ.Equals(types.TextType) {
 			return conv.String(val)
-		case types.BoolType:
+		} else if typ.Equals(types.BoolType) {
 			return conv.Bool(val)
-		case types.BlobType:
+		} else if typ.Equals(types.BlobType) {
 			return conv.Blob(val)
-		case types.UUIDType:
+		} else if typ.Equals(types.UUIDType) {
 			return conv.UUID(val)
-		default:
-			return nil, fmt.Errorf("unsupported type %s", typ)
 		}
+
+		return nil, fmt.Errorf("cannot encode arg type %s", typ)
 	}
 
 	for i, param := range p.parameters {
 		if !param.Type.IsArray {
-			coerced, err := coerceScalar(param.Type, inputs[i])
+			val := inputs[i]
+			coerced, err := coerceScalar(param.Type, val)
 			if err != nil {
 				return nil, err
 			}
@@ -698,4 +701,37 @@ func (p *preparedProcedure) coerceInputs(inputs []any) ([]any, error) {
 	}
 
 	return outs, nil
+}
+
+// shapeReturn takes a sql result and ensures it matches the expected return shape
+// of the procedure. It will modify the passed result to match the expected shape.
+func (p *preparedProcedure) shapeReturn(result *sql.ResultSet) error {
+	if p.returns == nil {
+		return nil
+	}
+
+	// if returning a table, we should rename all of the returned
+	// columns to match the expected return columns.
+	if len(p.returns.Fields) > 0 {
+		if len(p.returns.Fields) != len(result.Columns) {
+			// I'm quite positive this will get caught before the schema is even deployed,
+			// but just in case, we should check here.
+			return fmt.Errorf("shapeReturn: procedure definition expects result %d columns, but returned %d", len(p.returns.Fields), len(result.Columns))
+		}
+
+		for i, col := range p.returns.Fields {
+			result.Columns[i] = col.Name
+		}
+
+		return nil
+	}
+
+	// we don't have to do anything if it returns a list of types,
+	// however we will check the length, just for safety, however this
+	// should be caught before the schema is deployed.
+	if len(p.returns.Fields) != len(result.Columns) {
+		return fmt.Errorf("shapeReturn: procedure definition expects %d columns, but returned %d", len(p.returns.Fields), len(result.Columns))
+	}
+
+	return nil
 }

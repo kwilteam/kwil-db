@@ -23,12 +23,12 @@ func GeneratePLPGSQL(schema *types.Schema, pgSchemaName string,
 			return nil, err
 		}
 
-		cleanedParams, err := clean.CleanProcedure(parsed, proc, schema, pgSchemaName, sessionVarPrefix, sessionVarTypes)
+		cleanedParams, cleanedSessionVars, err := clean.CleanProcedure(parsed, proc, schema, pgSchemaName, sessionVarPrefix, sessionVarTypes)
 		if err != nil {
 			return nil, err
 		}
 
-		err = typing.EnsureTyping(parsed, proc, schema, cleanedParams)
+		err = typing.EnsureTyping(parsed, proc, schema, cleanedParams, cleanedSessionVars)
 		if err != nil {
 			return nil, err
 		}

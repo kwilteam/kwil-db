@@ -27,8 +27,7 @@ type generatorVisitor struct {
 
 var _ parser.Visitor = &generatorVisitor{}
 
-func (g *generatorVisitor) VisitExpressionArithmetic(p0 *parser.ExpressionArithmetic) interface {
-} {
+func (g *generatorVisitor) VisitExpressionArithmetic(p0 *parser.ExpressionArithmetic) any {
 	str := strings.Builder{}
 
 	str.WriteString(p0.Left.Accept(g).(string))
@@ -40,23 +39,19 @@ func (g *generatorVisitor) VisitExpressionArithmetic(p0 *parser.ExpressionArithm
 	return str.String()
 }
 
-func (g *generatorVisitor) VisitExpressionArrayAccess(p0 *parser.ExpressionArrayAccess) interface {
-} {
+func (g *generatorVisitor) VisitExpressionArrayAccess(p0 *parser.ExpressionArrayAccess) any {
 	return fmt.Sprintf("%s[%s]", p0.Target.Accept(g).(string), p0.Index.Accept(g).(string))
 }
 
-func (g *generatorVisitor) VisitExpressionBlobLiteral(p0 *parser.ExpressionBlobLiteral) interface {
-} {
+func (g *generatorVisitor) VisitExpressionBlobLiteral(p0 *parser.ExpressionBlobLiteral) any {
 	return fmt.Sprintf("'\\%s'", hex.EncodeToString(p0.Value))
 }
 
-func (g *generatorVisitor) VisitExpressionBooleanLiteral(p0 *parser.ExpressionBooleanLiteral) interface {
-} {
+func (g *generatorVisitor) VisitExpressionBooleanLiteral(p0 *parser.ExpressionBooleanLiteral) any {
 	return fmt.Sprintf("%t", p0.Value)
 }
 
-func (g *generatorVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) interface {
-} {
+func (g *generatorVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
 	str := strings.Builder{}
 	str.WriteString(p0.Name)
 
@@ -74,8 +69,7 @@ func (g *generatorVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) interf
 	return str.String()
 }
 
-func (g *generatorVisitor) VisitExpressionComparison(p0 *parser.ExpressionComparison) interface {
-} {
+func (g *generatorVisitor) VisitExpressionComparison(p0 *parser.ExpressionComparison) any {
 	str := strings.Builder{}
 
 	str.WriteString(p0.Left.Accept(g).(string))
@@ -87,18 +81,15 @@ func (g *generatorVisitor) VisitExpressionComparison(p0 *parser.ExpressionCompar
 	return str.String()
 }
 
-func (g *generatorVisitor) VisitExpressionFieldAccess(p0 *parser.ExpressionFieldAccess) interface {
-} {
+func (g *generatorVisitor) VisitExpressionFieldAccess(p0 *parser.ExpressionFieldAccess) any {
 	return fmt.Sprintf("%s.%s", p0.Target.Accept(g).(string), p0.Field)
 }
 
-func (g *generatorVisitor) VisitExpressionIntLiteral(p0 *parser.ExpressionIntLiteral) interface {
-} {
+func (g *generatorVisitor) VisitExpressionIntLiteral(p0 *parser.ExpressionIntLiteral) any {
 	return fmt.Sprintf("%d", p0.Value)
 }
 
-func (g *generatorVisitor) VisitExpressionMakeArray(p0 *parser.ExpressionMakeArray) interface {
-} {
+func (g *generatorVisitor) VisitExpressionMakeArray(p0 *parser.ExpressionMakeArray) any {
 	str := strings.Builder{}
 	str.WriteString("ARRAY[")
 	for i, val := range p0.Values {
@@ -114,18 +105,15 @@ func (g *generatorVisitor) VisitExpressionMakeArray(p0 *parser.ExpressionMakeArr
 	return str.String()
 }
 
-func (g *generatorVisitor) VisitExpressionNullLiteral(p0 *parser.ExpressionNullLiteral) interface {
-} {
+func (g *generatorVisitor) VisitExpressionNullLiteral(p0 *parser.ExpressionNullLiteral) any {
 	return "NULL"
 }
 
-func (g *generatorVisitor) VisitExpressionParenthesized(p0 *parser.ExpressionParenthesized) interface {
-} {
+func (g *generatorVisitor) VisitExpressionParenthesized(p0 *parser.ExpressionParenthesized) any {
 	return fmt.Sprintf("(%s)", p0.Expression.Accept(g).(string))
 }
 
-func (g *generatorVisitor) VisitExpressionTextLiteral(p0 *parser.ExpressionTextLiteral) interface {
-} {
+func (g *generatorVisitor) VisitExpressionTextLiteral(p0 *parser.ExpressionTextLiteral) any {
 
 	// escape single quotes
 	p0.Value = strings.ReplaceAll(p0.Value, "'", "''")
@@ -133,28 +121,23 @@ func (g *generatorVisitor) VisitExpressionTextLiteral(p0 *parser.ExpressionTextL
 	return fmt.Sprintf("'%s'", p0.Value)
 }
 
-func (g *generatorVisitor) VisitExpressionVariable(p0 *parser.ExpressionVariable) interface {
-} {
+func (g *generatorVisitor) VisitExpressionVariable(p0 *parser.ExpressionVariable) any {
 	return p0.Name
 }
 
-func (g *generatorVisitor) VisitLoopTargetCall(p0 *parser.LoopTargetCall) interface {
-} {
+func (g *generatorVisitor) VisitLoopTargetCall(p0 *parser.LoopTargetCall) any {
 	return fmt.Sprintf("SELECT * FROM %s", p0.Call.Accept(g).(string))
 }
 
-func (g *generatorVisitor) VisitLoopTargetRange(p0 *parser.LoopTargetRange) interface {
-} {
+func (g *generatorVisitor) VisitLoopTargetRange(p0 *parser.LoopTargetRange) any {
 	return fmt.Sprintf("%s..%s", p0.Start.Accept(g).(string), p0.End.Accept(g).(string))
 }
 
-func (g *generatorVisitor) VisitLoopTargetVariable(p0 *parser.LoopTargetVariable) interface {
-} {
+func (g *generatorVisitor) VisitLoopTargetVariable(p0 *parser.LoopTargetVariable) any {
 	return fmt.Sprintf("ARRAY %s", p0.Variable.Accept(g).(string))
 }
 
-func (g *generatorVisitor) VisitLoopTargetSQL(p0 *parser.LoopTargetSQL) interface {
-} {
+func (g *generatorVisitor) VisitLoopTargetSQL(p0 *parser.LoopTargetSQL) any {
 
 	stmt, err := tree.SafeToSQL(p0.Statement)
 	if err != nil {
@@ -165,8 +148,7 @@ func (g *generatorVisitor) VisitLoopTargetSQL(p0 *parser.LoopTargetSQL) interfac
 	return strings.TrimSuffix(stmt, "; ")
 }
 
-func (g *generatorVisitor) VisitStatementProcedureCall(p0 *parser.StatementProcedureCall) interface {
-} {
+func (g *generatorVisitor) VisitStatementProcedureCall(p0 *parser.StatementProcedureCall) any {
 	// in order to handle variadic returns, we will need
 	// to trim the last paren from the call, and add
 	// our out variables.
@@ -198,16 +180,14 @@ func (g *generatorVisitor) VisitStatementProcedureCall(p0 *parser.StatementProce
 	return fmt.Sprintf("PERFORM %s;", call)
 }
 
-func (g *generatorVisitor) VisitStatementBreak(p0 *parser.StatementBreak) interface {
-} {
+func (g *generatorVisitor) VisitStatementBreak(p0 *parser.StatementBreak) any {
 	if !g.inLoop {
 		panic("break statement outside of loop")
 	}
 	return "EXIT;"
 }
 
-func (g *generatorVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) interface {
-} {
+func (g *generatorVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) any {
 
 	_, ok := g.variables[p0.Variable]
 	if ok {
@@ -290,8 +270,7 @@ func (g *generatorVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) in
 	return str.String()
 }
 
-func (g *generatorVisitor) VisitStatementIf(p0 *parser.StatementIf) interface {
-} {
+func (g *generatorVisitor) VisitStatementIf(p0 *parser.StatementIf) any {
 	str := strings.Builder{}
 
 	mainIf := p0.IfThens[0]
@@ -326,8 +305,7 @@ func (g *generatorVisitor) VisitStatementIf(p0 *parser.StatementIf) interface {
 	return str.String()
 }
 
-func (g *generatorVisitor) VisitStatementReturn(p0 *parser.StatementReturn) interface {
-} {
+func (g *generatorVisitor) VisitStatementReturn(p0 *parser.StatementReturn) any {
 	if p0.SQL != nil {
 		stmt, err := tree.SafeToSQL(p0.SQL)
 		if err != nil {
@@ -340,8 +318,8 @@ func (g *generatorVisitor) VisitStatementReturn(p0 *parser.StatementReturn) inte
 	str := strings.Builder{}
 
 	if p0.Values != nil {
-		if len(p0.Values) != len(g.currentProcedure.Returns.Types) {
-			panic(fmt.Sprintf("expected %d return values, got %d", len(g.currentProcedure.Returns.Types), len(p0.Values)))
+		if len(p0.Values) != len(g.currentProcedure.Returns.Fields) {
+			panic(fmt.Sprintf("expected %d return values, got %d", len(g.currentProcedure.Returns.Fields), len(p0.Values)))
 		}
 
 		// redeclare returned variables in case there
@@ -358,7 +336,7 @@ func (g *generatorVisitor) VisitStatementReturn(p0 *parser.StatementReturn) inte
 			// we need to declare out vars to be able to return them
 			outVars[i] = &types.NamedType{
 				Name: fmt.Sprintf("_out_%d", i),
-				Type: g.currentProcedure.Returns.Types[i],
+				Type: g.currentProcedure.Returns.Fields[i].Type,
 			}
 
 			// we will assign the value to the out var
@@ -382,8 +360,7 @@ func (g *generatorVisitor) VisitStatementReturnNext(p0 *parser.StatementReturnNe
 	return fmt.Sprintf("RETURN NEXT %s;", p0.Variable)
 }
 
-func (g *generatorVisitor) VisitStatementSQL(p0 *parser.StatementSQL) interface {
-} {
+func (g *generatorVisitor) VisitStatementSQL(p0 *parser.StatementSQL) any {
 	stmt, err := tree.SafeToSQL(p0.Statement)
 	if err != nil {
 		panic(fmt.Sprintf("error converting statement to sql: %v", err))
@@ -392,8 +369,7 @@ func (g *generatorVisitor) VisitStatementSQL(p0 *parser.StatementSQL) interface 
 	return stmt
 }
 
-func (g *generatorVisitor) VisitStatementVariableAssignment(p0 *parser.StatementVariableAssignment) interface {
-} {
+func (g *generatorVisitor) VisitStatementVariableAssignment(p0 *parser.StatementVariableAssignment) any {
 
 	// we will ensure the variable was already declared,
 	// and then add 1 statement.
@@ -408,8 +384,7 @@ func (g *generatorVisitor) VisitStatementVariableAssignment(p0 *parser.Statement
 	return fmt.Sprintf("%s := %s;", p0.Name, res)
 }
 
-func (g *generatorVisitor) VisitStatementVariableAssignmentWithDeclaration(p0 *parser.StatementVariableAssignmentWithDeclaration) interface {
-} {
+func (g *generatorVisitor) VisitStatementVariableAssignmentWithDeclaration(p0 *parser.StatementVariableAssignmentWithDeclaration) any {
 
 	// we will add 1 statement, since this is a declaration and an assignment.
 
@@ -425,8 +400,7 @@ func (g *generatorVisitor) VisitStatementVariableAssignmentWithDeclaration(p0 *p
 	return fmt.Sprintf("%s := %s;", p0.Name, res)
 }
 
-func (g *generatorVisitor) VisitStatementVariableDeclaration(p0 *parser.StatementVariableDeclaration) interface {
-} {
+func (g *generatorVisitor) VisitStatementVariableDeclaration(p0 *parser.StatementVariableDeclaration) any {
 	// we will not add any statements, since this is just a declaration.
 	_, ok := g.variables[p0.Name]
 	if ok {

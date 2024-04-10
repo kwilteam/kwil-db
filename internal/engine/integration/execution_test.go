@@ -9,8 +9,8 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
-	"github.com/kwilteam/kwil-db/common/testdata"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/testdata"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 
 	"github.com/stretchr/testify/assert"
@@ -453,6 +453,7 @@ func Test_Engine(t *testing.T) {
 				require.Equal(t, []any{int64(1), "satoshi", int64(42)}, []any{user.Rows[0][0], user.Rows[0][1], user.Rows[0][2]})
 			},
 		},
+		// TODO: test procedure returns table
 	}
 
 	for _, test := range tests {

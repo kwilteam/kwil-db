@@ -3,6 +3,7 @@ package conv
 import (
 	"fmt"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/kwilteam/kwil-db/core/types"
 )
@@ -42,7 +43,11 @@ func String(a any) (string, error) {
 	case bool:
 		return strconv.FormatBool(xt), nil
 	case []byte:
-		return string(xt), nil
+		if utf8.Valid(xt) {
+			return string(xt), nil
+		} else {
+			return "", fmt.Errorf("cannot convert invalid utf8 []byte to string")
+		}
 	}
 	return "", fmt.Errorf("cannot convert %T to string", a)
 }

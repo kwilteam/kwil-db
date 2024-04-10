@@ -29,7 +29,7 @@ func Test_Parse(t *testing.T) {
 				insert into users (id, username) values ($id, $username);
 			}
 
-			procedure get_username ($id int) public view RETURNS (text) {
+			procedure get_username ($id int) public view RETURNS (name text) {
 				return select username from users where id = $id; // this is a comment
 			}
 			`,
@@ -63,8 +63,11 @@ func Test_Parse(t *testing.T) {
 							types.ModifierView,
 						},
 						Body: `return select username from users where id = $id; // this is a comment`,
-						Returns: &types.ProcedureReturn{Types: []*types.DataType{
-							types.TextType,
+						Returns: &types.ProcedureReturn{Fields: []*types.NamedType{
+							{
+								Name: "name",
+								Type: types.TextType,
+							},
 						}},
 					},
 				},
@@ -161,7 +164,8 @@ func Test_Parse(t *testing.T) {
 						},
 						Body: `return select id from users;`,
 						Returns: &types.ProcedureReturn{
-							Table: []*types.NamedType{
+							IsTable: true,
+							Fields: []*types.NamedType{
 								{
 									Name: "id",
 									Type: types.IntType,

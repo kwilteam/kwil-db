@@ -25,6 +25,8 @@ type typeVisitor struct {
 	// arbitraryBinds is a flag that allows us to ignore bind parameters
 	// when type checking
 	arbitraryBinds bool
+	// qualify is a flag that allows us to qualify all column references
+	qualify bool
 }
 
 var _ tree.AstVisitor = &typeVisitor{}
@@ -145,7 +147,7 @@ func (t *typeVisitor) VisitUpdateSetClause(p0 *tree.UpdateSetClause) any {
 			return fmt.Errorf("no table to update")
 		}
 		for _, col := range p0.Columns {
-			_, err := e.findColumn(e.joinOrder[0], col)
+			_, _, err := e.findColumn(e.joinOrder[0], col)
 			if err != nil {
 				return err
 			}
@@ -169,7 +171,7 @@ func (t *typeVisitor) VisitConflictTarget(p0 *tree.ConflictTarget) any {
 			return fmt.Errorf("no table to update")
 		}
 		for _, col := range p0.IndexedColumns {
-			_, err := e.findColumn(e.joinOrder[0], col)
+			_, _, err := e.findColumn(e.joinOrder[0], col)
 			if err != nil {
 				return err
 			}
@@ -486,9 +488,14 @@ func (t *typeVisitor) VisitExpressionCollate(p0 *tree.ExpressionCollate) any {
 
 func (t *typeVisitor) VisitExpressionColumn(p0 *tree.ExpressionColumn) any {
 	return attributeFn(func(ev *evaluationContext) (*engine.QualifiedAttribute, error) {
-		col, err := ev.findColumn(p0.Table, p0.Column)
+		// if table is not qualified, we will attempt to qualify, and return an error on ambiguity
+		tbl, col, err := ev.findColumn(p0.Table, p0.Column)
 		if err != nil {
 			return nil, err
+		}
+
+		if p0.Table == "" && t.qualify {
+			p0.Table = tbl // this will modify the statement
 		}
 
 		if p0.TypeCast != nil {

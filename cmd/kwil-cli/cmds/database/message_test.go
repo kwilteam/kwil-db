@@ -202,4 +202,5 @@ func Example_respSchema_text() {
 	// Actions:
 	//   get_user (public)
 	//     Inputs: [user_id]
+	// Procedures:
 }
