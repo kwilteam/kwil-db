@@ -30,12 +30,3 @@ func (t TypeCastType) Valid() error {
 		return fmt.Errorf("invalid type cast: %s", t)
 	}
 }
-
-// suffixTypeCast adds a type cast to `expression` if it is not empty
-// NOTE: `::` is used to indicate type cast in SQL
-func suffixTypeCast(expr string, typeCast TypeCastType) string {
-	if err := typeCast.Valid(); err == nil {
-		return fmt.Sprintf("%s ::%s", expr, typeCast)
-	}
-	return expr
-}
