@@ -1,5 +1,5 @@
 // package procedural ties together the different visitors to generate the plpgsql code for a procedure.
-package procedural
+package procedures
 
 import (
 	"github.com/kwilteam/kwil-db/core/types"

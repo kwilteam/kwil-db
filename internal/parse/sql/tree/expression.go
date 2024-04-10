@@ -3,8 +3,11 @@ package tree
 import (
 	"encoding/hex"
 	"fmt"
+	"reflect"
 	"strconv"
+	"strings"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	sqlwriter "github.com/kwilteam/kwil-db/internal/parse/sql/tree/sql-writer"
 )
 
@@ -31,7 +34,7 @@ type ExpressionTextLiteral struct {
 	expressionBase
 	Wrapped
 	Value    string
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionTextLiteral) Accept(v AstVisitor) any {
@@ -53,7 +56,22 @@ func (e *ExpressionTextLiteral) ToSQL() string {
 	}
 
 	stmt.WriteString(fmt.Sprintf("'%s'", e.Value))
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
+}
+
+func castSuffix(stmt string, typeCast *types.DataType) string {
+	if typeCast != nil {
+		stmt += "::"
+
+		tp, err := typeCast.PGString()
+		if err != nil {
+			panic(err)
+		}
+
+		stmt += tp
+	}
+
+	return stmt
 }
 
 type ExpressionNumericLiteral struct {
@@ -61,7 +79,7 @@ type ExpressionNumericLiteral struct {
 	expressionBase
 	Wrapped
 	Value    int64
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionNumericLiteral) Accept(v AstVisitor) any {
@@ -83,7 +101,7 @@ func (e *ExpressionNumericLiteral) ToSQL() string {
 	}
 
 	stmt.WriteString(strconv.FormatInt(e.Value, 10))
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionBooleanLiteral struct {
@@ -91,7 +109,7 @@ type ExpressionBooleanLiteral struct {
 	expressionBase
 	Wrapped
 	Value    bool
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionBooleanLiteral) Accept(v AstVisitor) any {
@@ -113,14 +131,14 @@ func (e *ExpressionBooleanLiteral) ToSQL() string {
 	}
 
 	stmt.WriteString(strconv.FormatBool(e.Value))
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionNullLiteral struct {
 	node
 	expressionBase
 	Wrapped
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionNullLiteral) Accept(v AstVisitor) any {
@@ -142,7 +160,7 @@ func (e *ExpressionNullLiteral) ToSQL() string {
 	}
 
 	stmt.WriteString("NULL")
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionBlobLiteral struct {
@@ -150,7 +168,7 @@ type ExpressionBlobLiteral struct {
 	expressionBase
 	Wrapped
 	Value    []byte
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionBlobLiteral) Accept(v AstVisitor) any {
@@ -173,7 +191,7 @@ func (e *ExpressionBlobLiteral) ToSQL() string {
 
 	stmt.WriteString(fmt.Sprintf("'\\%s'", hex.EncodeToString(e.Value)))
 
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionBindParameter struct {
@@ -182,7 +200,7 @@ type ExpressionBindParameter struct {
 	expressionBase
 	Wrapped
 	Parameter string
-	TypeCast  TypeCastType
+	TypeCast  *types.DataType
 }
 
 func (e *ExpressionBindParameter) Accept(v AstVisitor) any {
@@ -209,7 +227,7 @@ func (e *ExpressionBindParameter) ToSQL() string {
 
 	stmt.WriteString(e.Parameter)
 
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionColumn struct {
@@ -219,7 +237,7 @@ type ExpressionColumn struct {
 	Wrapped
 	Table    string
 	Column   string
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionColumn) Accept(v AstVisitor) any {
@@ -251,7 +269,7 @@ func (e *ExpressionColumn) ToSQL() string {
 
 	stmt.WriteIdent(e.Column)
 
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionUnary struct {
@@ -262,7 +280,7 @@ type ExpressionUnary struct {
 	Operator UnaryOperator
 	Operand  Expression
 
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 	// NOTE: type cast only makes sense when wrapped,
 }
 
@@ -278,9 +296,7 @@ func (e *ExpressionUnary) Walk(w AstListener) error {
 }
 
 func (e *ExpressionUnary) ToSQL() string {
-	if e.TypeCast != "" && !e.Wrapped {
-		panic("ExpressionCollate: type cast need wrapped")
-	}
+	checkTypeWrap(e.TypeCast, bool(e.Wrapped), e)
 
 	stmt := sqlwriter.NewWriter()
 
@@ -291,7 +307,22 @@ func (e *ExpressionUnary) ToSQL() string {
 	stmt.WriteString(e.Operator.String())
 	stmt.WriteString(e.Operand.ToSQL())
 
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
+}
+
+// checkTypeWrap checks if the type is nil and wrapped is false
+func checkTypeWrap(typ *types.DataType, wrapped bool, node any) {
+	typeOf := reflect.TypeOf(node)
+	if typeOf.Kind() == reflect.Ptr {
+		typeOf = typeOf.Elem()
+	}
+	if typeOf.Kind() != reflect.Struct {
+		panic("checkTypeWrap: node must be a struct. this is a bug")
+	}
+
+	if typ != nil && !wrapped {
+		panic(fmt.Sprintf("%s: expression with type cast must be wrapped in parentheses", typeOf.Name()))
+	}
 }
 
 type ExpressionBinaryComparison struct {
@@ -303,7 +334,7 @@ type ExpressionBinaryComparison struct {
 	Operator BinaryOperator
 	Right    Expression
 
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 	// NOTE: type cast only makes sense when wrapped,
 }
 
@@ -321,9 +352,7 @@ func (e *ExpressionBinaryComparison) Walk(w AstListener) error {
 }
 
 func (e *ExpressionBinaryComparison) ToSQL() string {
-	if e.TypeCast != "" && !e.Wrapped {
-		panic("ExpressionCollate: type cast need wrapped")
-	}
+	checkTypeWrap(e.TypeCast, bool(e.Wrapped), e)
 
 	stmt := sqlwriter.NewWriter()
 
@@ -335,7 +364,7 @@ func (e *ExpressionBinaryComparison) ToSQL() string {
 	stmt.WriteString(e.Operator.String())
 	stmt.WriteString(e.Right.ToSQL())
 
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionFunction struct {
@@ -343,11 +372,12 @@ type ExpressionFunction struct {
 
 	expressionBase
 	Wrapped
-	Function SQLFunction
+	Function string
 	Inputs   []Expression
+	Star     bool // true if function is called with *
 	Distinct bool
 
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionFunction) Accept(v AstVisitor) any {
@@ -357,7 +387,6 @@ func (e *ExpressionFunction) Accept(v AstVisitor) any {
 func (e *ExpressionFunction) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionFunction(e),
-		walk(w, e.Function),
 		walkMany(w, e.Inputs),
 		w.ExitExpressionFunction(e),
 	)
@@ -370,21 +399,27 @@ func (e *ExpressionFunction) ToSQL() string {
 		stmt.WrapParen()
 	}
 
-	var stringToWrite string
+	stmt.WriteString(strings.ToLower(e.Function))
+	stmt.Token.Lparen()
 
-	if e.Distinct {
-		exprFunc, ok := e.Function.(distinctable)
-		if !ok {
-			panic("ExpressionFunction: function '" + e.Function.Name() + "' does not support DISTINCT")
-		}
-		stringToWrite = exprFunc.stringDistinct(e.Inputs...)
+	if e.Star {
+		stmt.Token.Asterisk()
 	} else {
-		stringToWrite = e.Function.ToString(e.Inputs...)
+		if e.Distinct {
+			stmt.Token.Distinct()
+		}
+
+		for i, input := range e.Inputs {
+			if i > 0 {
+				stmt.Token.Comma()
+			}
+			stmt.WriteString(input.ToSQL())
+		}
 	}
 
-	stmt.WriteString(stringToWrite)
+	stmt.Token.Rparen()
 
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionList struct {
@@ -394,7 +429,7 @@ type ExpressionList struct {
 	Wrapped
 	Expressions []Expression
 
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionList) Accept(v AstVisitor) any {
@@ -424,7 +459,7 @@ func (e *ExpressionList) ToSQL() string {
 		stmt.WriteString(e.Expressions[i].ToSQL())
 	})
 
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionCollate struct {
@@ -435,7 +470,7 @@ type ExpressionCollate struct {
 	Expression Expression
 	Collation  CollationType
 
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 	// NOTE: type cast only makes sense when wrapped
 }
 
@@ -458,9 +493,7 @@ func (e *ExpressionCollate) ToSQL() string {
 	if e.Collation == "" {
 		panic("ExpressionCollate: collation name cannot be empty")
 	}
-	if e.TypeCast != "" && !e.Wrapped {
-		panic("ExpressionCollate: type cast need wrapped")
-	}
+	checkTypeWrap(e.TypeCast, bool(e.Wrapped), e)
 
 	stmt := sqlwriter.NewWriter()
 
@@ -472,7 +505,7 @@ func (e *ExpressionCollate) ToSQL() string {
 	stmt.Token.Collate()
 	stmt.WriteString(e.Collation.String())
 
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionStringCompare struct {
@@ -485,7 +518,7 @@ type ExpressionStringCompare struct {
 	Right    Expression
 	Escape   Expression // can only be used with LIKE or NOT LIKE
 
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 	// NOTE: type cast only makes sense when wrapped
 }
 
@@ -510,9 +543,7 @@ func (e *ExpressionStringCompare) ToSQL() string {
 	if e.Right == nil {
 		panic("ExpressionStringCompare: right expression cannot be nil")
 	}
-	if e.TypeCast != "" && !e.Wrapped {
-		panic("ExpressionStringCompare: type cast need wrapped")
-	}
+	checkTypeWrap(e.TypeCast, bool(e.Wrapped), e)
 
 	stmt := sqlwriter.NewWriter()
 
@@ -532,7 +563,7 @@ func (e *ExpressionStringCompare) ToSQL() string {
 		stmt.WriteString(e.Escape.ToSQL())
 	}
 
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionIs struct {
@@ -545,7 +576,7 @@ type ExpressionIs struct {
 	Not      bool
 	Right    Expression
 
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 	// NOTE: type cast only makes sense when wrapped
 }
 
@@ -569,9 +600,7 @@ func (e *ExpressionIs) ToSQL() string {
 	if e.Right == nil {
 		panic("ExpressionIs: right expression cannot be nil")
 	}
-	if e.TypeCast != "" && !e.Wrapped {
-		panic("ExpressionStringCompare: type cast need wrapped")
-	}
+	checkTypeWrap(e.TypeCast, bool(e.Wrapped), e)
 
 	stmt := sqlwriter.NewWriter()
 
@@ -588,7 +617,7 @@ func (e *ExpressionIs) ToSQL() string {
 		stmt.Token.Distinct().From()
 	}
 	stmt.WriteString(e.Right.ToSQL())
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionBetween struct {
@@ -601,7 +630,7 @@ type ExpressionBetween struct {
 	Left       Expression
 	Right      Expression
 
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 	// NOTE: type cast only makes sense when wrapped
 }
 
@@ -630,9 +659,7 @@ func (e *ExpressionBetween) ToSQL() string {
 	if e.Right == nil {
 		panic("ExpressionBetween: right expression cannot be nil")
 	}
-	if e.TypeCast != "" && !e.Wrapped {
-		panic("ExpressionBetween: type cast need wrapped")
-	}
+	checkTypeWrap(e.TypeCast, bool(e.Wrapped), e)
 
 	stmt := sqlwriter.NewWriter()
 
@@ -649,7 +676,7 @@ func (e *ExpressionBetween) ToSQL() string {
 	stmt.Token.And()
 	stmt.WriteString(e.Right.ToSQL())
 
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 type ExpressionSelect struct {
@@ -661,7 +688,7 @@ type ExpressionSelect struct {
 	IsExists bool
 	Select   *SelectCore
 
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 	// NOTE: type cast only makes sense when wrapped
 }
 
@@ -699,7 +726,7 @@ func (e *ExpressionSelect) ToSQL() string {
 	stmt.WriteString(selectSql)
 	stmt.Token.Rparen()
 
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }
 
 func (e *ExpressionSelect) check() {
@@ -713,9 +740,7 @@ func (e *ExpressionSelect) check() {
 		}
 	}
 
-	if e.TypeCast != "" && !e.Wrapped {
-		panic("ExpressionSelect: type cast need wrapped")
-	}
+	checkTypeWrap(e.TypeCast, bool(e.Wrapped), e)
 }
 
 type ExpressionCase struct {
@@ -727,7 +752,7 @@ type ExpressionCase struct {
 	WhenThenPairs  [][2]Expression
 	ElseExpression Expression
 
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 	// NOTE: type cast does not apply to the whole case expression
 }
 
@@ -798,7 +823,7 @@ type ExpressionArithmetic struct {
 	Operator ArithmeticOperator
 	Right    Expression
 
-	TypeCast TypeCastType
+	TypeCast *types.DataType
 	// NOTE: type cast only makes sense when wrapped
 }
 
@@ -816,9 +841,7 @@ func (e *ExpressionArithmetic) Walk(w AstListener) error {
 }
 
 func (e *ExpressionArithmetic) ToSQL() string {
-	if e.TypeCast != "" && !e.Wrapped {
-		panic("ExpressionArithmetic: type cast need wrapped")
-	}
+	checkTypeWrap(e.TypeCast, bool(e.Wrapped), e)
 
 	stmt := sqlwriter.NewWriter()
 
@@ -834,5 +857,5 @@ func (e *ExpressionArithmetic) ToSQL() string {
 	stmt.WriteString(e.Operator.String())
 	stmt.WriteString(e.Right.ToSQL())
 
-	return suffixTypeCast(stmt.String(), e.TypeCast)
+	return castSuffix(stmt.String(), e.TypeCast)
 }

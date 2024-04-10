@@ -3,6 +3,7 @@ package tree_test
 import (
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 
@@ -25,9 +26,9 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 			name: "expression literal with type cast",
 			fields: &tree.ExpressionTextLiteral{
 				Value:    "foo",
-				TypeCast: tree.TypeCastText,
+				TypeCast: types.TextType,
 			},
-			want: "'foo' ::text",
+			want: "'foo' ::TEXT",
 			// not variable. this should be the result string, no interpolation
 		},
 		{
@@ -43,9 +44,9 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 			fields: &tree.ExpressionTextLiteral{
 				Value:    "foo",
 				Wrapped:  true,
-				TypeCast: tree.TypeCastText,
+				TypeCast: types.TextType,
 			},
-			want: "( 'foo' ) ::text",
+			want: "( 'foo' ) ::TEXT",
 		},
 		{
 			name: "expression literal with int",
@@ -58,9 +59,9 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 			name: "expression literal with int and type cast",
 			fields: &tree.ExpressionNumericLiteral{
 				Value:    1,
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 			},
-			want: "1 ::int",
+			want: "1 ::INT8",
 		},
 		{
 			name: "expression $ bind parameter",
@@ -73,9 +74,9 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 			name: "expression $ bind parameter with type cast",
 			fields: &tree.ExpressionBindParameter{
 				Parameter: "$foo",
-				TypeCast:  tree.TypeCastText,
+				TypeCast:  types.TextType,
 			},
-			want: "$foo ::text",
+			want: "$foo ::TEXT",
 		},
 		{
 			name: "expression @ bind parameter",
@@ -88,9 +89,9 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 			name: "expression @ bind parameter with type cast",
 			fields: &tree.ExpressionBindParameter{
 				Parameter: "@foo",
-				TypeCast:  tree.TypeCastText,
+				TypeCast:  types.TextType,
 			},
-			want: "@foo ::text",
+			want: "@foo ::TEXT",
 		},
 		{
 			name: "expression parameter with empty string",
@@ -110,9 +111,9 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 			name: "expression column with type cast",
 			fields: &tree.ExpressionColumn{
 				Column:   "foo",
-				TypeCast: tree.TypeCastText,
+				TypeCast: types.TextType,
 			},
-			want: `"foo" ::text`,
+			want: `"foo" ::TEXT`,
 		},
 		{
 			name: "expression column with table",
@@ -127,9 +128,9 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 			fields: &tree.ExpressionColumn{
 				Table:    "bar",
 				Column:   "foo",
-				TypeCast: tree.TypeCastText,
+				TypeCast: types.TextType,
 			},
-			want: `"bar"."foo" ::text`,
+			want: `"bar"."foo" ::TEXT`,
 		},
 		{
 			name: "expression column with only table",
@@ -155,10 +156,10 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				Operand: &tree.ExpressionColumn{
 					Column: "foo",
 				},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 				Wrapped:  true,
 			},
-			want: `(NOT "foo") ::int`,
+			want: `(NOT "foo") ::INT8`,
 		},
 		{
 			name: "expression unary operator with type cast without wrapped",
@@ -167,7 +168,7 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				Operand: &tree.ExpressionColumn{
 					Column: "foo",
 				},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 			},
 			wantPanic: true,
 		},
@@ -194,10 +195,10 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionTextLiteral{
 					Value: "bar",
 				},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 				Wrapped:  true,
 			},
-			want: `("foo" = 'bar') ::int`,
+			want: `("foo" = 'bar') ::INT8`,
 		},
 		{
 			name: "expression binary comparison with type cast without wrapped",
@@ -209,14 +210,14 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionTextLiteral{
 					Value: "bar",
 				},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 			},
 			wantPanic: true,
 		},
 		{
 			name: "expression abs function",
 			fields: &tree.ExpressionFunction{
-				Function: tree.FunctionABSGetter(nil),
+				Function: "abs",
 				Inputs: []tree.Expression{
 					&tree.ExpressionColumn{
 						Column: "foo",
@@ -228,30 +229,15 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 		{
 			name: "expression abs function with type cast",
 			fields: &tree.ExpressionFunction{
-				Function: &tree.FunctionABS,
+				Function: "abs",
 				Inputs: []tree.Expression{
 					&tree.ExpressionColumn{
 						Column: "foo",
 					},
 				},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 			},
-			want: "abs(\"foo\") ::int",
-		},
-		{
-			name: "expression abs function with multiple inputs",
-			fields: &tree.ExpressionFunction{
-				Function: tree.FunctionABSGetter(nil),
-				Inputs: []tree.Expression{
-					&tree.ExpressionColumn{
-						Column: "foo",
-					},
-					&tree.ExpressionColumn{
-						Column: "bar",
-					},
-				},
-			},
-			wantPanic: true,
+			want: "abs(\"foo\") ::INT8",
 		},
 		{
 			name: "expression list",
@@ -273,15 +259,15 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				Expressions: []tree.Expression{
 					&tree.ExpressionColumn{
 						Column:   "foo",
-						TypeCast: tree.TypeCastText,
+						TypeCast: types.TextType,
 					},
 					&tree.ExpressionColumn{
 						Column:   "bar",
-						TypeCast: tree.TypeCastInt,
+						TypeCast: types.IntType,
 					},
 				},
 			},
-			want: `("foo" ::text, "bar" ::int)`,
+			want: `("foo" ::TEXT, "bar" ::INT8)`,
 		},
 		{
 			name: "expression list with type cast",
@@ -295,9 +281,9 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 						Column: "bar",
 					},
 				},
-				TypeCast: tree.TypeCastText,
+				TypeCast: types.TextType,
 			},
-			want: "(\"foo\", \"bar\") ::text",
+			want: "(\"foo\", \"bar\") ::TEXT",
 		},
 		{
 			name: "collate",
@@ -329,16 +315,16 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				},
 				Collation: tree.CollationTypeNoCase,
 				Wrapped:   true,
-				TypeCast:  tree.TypeCastInt,
+				TypeCast:  types.IntType,
 			},
-			want: `("foo" = 'bar' COLLATE NOCASE) ::int`,
+			want: `("foo" = 'bar' COLLATE NOCASE) ::INT8`,
 		},
 		{
 			name: "collate with type cast without wrapped",
 			fields: &tree.ExpressionCollate{
 				Expression: &tree.ExpressionBinaryComparison{},
 				Collation:  tree.CollationTypeNoCase,
-				TypeCast:   tree.TypeCastText,
+				TypeCast:   types.TextType,
 			},
 			wantPanic: true,
 		},
@@ -393,15 +379,15 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				Escape: &tree.ExpressionTextLiteral{
 					Value: "baz",
 				},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 				Wrapped:  true,
 			},
-			want: `("foo" NOT LIKE 'bar' ESCAPE 'baz') ::int`,
+			want: `("foo" NOT LIKE 'bar' ESCAPE 'baz') ::INT8`,
 		},
 		{
 			name: "string compare with escape and type cast without wrapped",
 			fields: &tree.ExpressionStringCompare{
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 			},
 			wantPanic: true,
 		},
@@ -422,10 +408,10 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 					Column: "foo",
 				},
 				Right:    &tree.ExpressionNullLiteral{},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 				Wrapped:  true,
 			},
-			want: `("foo" IS NULL) ::int`,
+			want: `("foo" IS NULL) ::INT8`,
 		},
 		{
 			name: "IsNull with type cast without wrapped",
@@ -434,7 +420,7 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 					Column: "foo",
 				},
 				Right:    &tree.ExpressionNullLiteral{},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 			},
 			wantPanic: true,
 		},
@@ -462,10 +448,10 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				},
 				Right:    &tree.ExpressionNullLiteral{},
 				Not:      true,
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 				Wrapped:  true,
 			},
-			want: `("foo" IS NOT NULL) ::int`,
+			want: `("foo" IS NOT NULL) ::INT8`,
 		},
 		{
 			name: "is not distinct from",
@@ -492,10 +478,10 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				},
 				Distinct: true,
 				Not:      true,
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 				Wrapped:  true,
 			},
-			want: `("foo" IS NOT DISTINCT FROM 'bar') ::int`,
+			want: `("foo" IS NOT DISTINCT FROM 'bar') ::INT8`,
 		},
 		{
 			name: "is not distinct from with type cast without wrapped",
@@ -508,7 +494,7 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				},
 				Distinct: true,
 				Not:      true,
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 			},
 			wantPanic: true,
 		},
@@ -571,10 +557,10 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionTextLiteral{
 					Value: "baz",
 				},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 				Wrapped:  true,
 			},
-			want: `("foo" NOT BETWEEN 'bar' AND 'baz') ::int`,
+			want: `("foo" NOT BETWEEN 'bar' AND 'baz') ::INT8`,
 		},
 		{
 			name: "valid between with type cast without wrapped",
@@ -589,7 +575,7 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionTextLiteral{
 					Value: "baz",
 				},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 			},
 			wantPanic: true,
 		},
@@ -684,10 +670,10 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 						},
 					},
 				},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 				Wrapped:  true,
 			},
-			want: `(NOT EXISTS (SELECT * FROM "foo" AS "f" WHERE "f"."foo" = $a)) ::int`,
+			want: `(NOT EXISTS (SELECT * FROM "foo" AS "f" WHERE "f"."foo" = $a)) ::INT8`,
 		},
 		{
 			name: "case expression",
@@ -784,10 +770,10 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionNumericLiteral{
 					Value: 1,
 				},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 				Wrapped:  true,
 			},
-			want: `("foo" + 1) ::int`,
+			want: `("foo" + 1) ::INT8`,
 		},
 		{
 			name: "arithmetic expression with type cast without wrapped",
@@ -799,7 +785,7 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionTextLiteral{
 					Value: "1",
 				},
-				TypeCast: tree.TypeCastInt,
+				TypeCast: types.IntType,
 			},
 			wantPanic: true,
 		},

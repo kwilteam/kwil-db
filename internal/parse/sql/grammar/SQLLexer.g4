@@ -33,6 +33,8 @@ SCOL:      ';';
 DOT:       '.';
 OPEN_PAR:  '(';
 CLOSE_PAR: ')';
+L_BRACKET: '[';
+R_BRACKET: ']';
 COMMA:     ',';
 ASSIGN:    '=';
 STAR:      '*';

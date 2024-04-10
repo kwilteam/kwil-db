@@ -446,7 +446,7 @@ func (k *kfVisitor) VisitProcedure_declaration(ctx *gen.Procedure_declarationCon
 		proc.Returns = &types.ProcedureReturn{
 			Table: ctx.Table_return().Accept(k).([]*types.NamedType),
 		}
-	case ctx.Stmt_typed_param_list() != nil:
+	case ctx.Stmt_type_list() != nil:
 		proc.Returns = &types.ProcedureReturn{
 			Types: ctx.Stmt_type_list().Accept(k).([]*types.DataType),
 		}

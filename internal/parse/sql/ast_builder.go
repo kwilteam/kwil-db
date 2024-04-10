@@ -9,6 +9,7 @@ import (
 
 	"github.com/antlr4-go/antlr/v4"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	grammar "github.com/kwilteam/kwil-db/internal/parse/sql/gen"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 	"github.com/kwilteam/kwil-db/internal/parse/util"
@@ -114,16 +115,25 @@ func (v *astBuilder) VisitType_cast(ctx *grammar.Type_castContext) interface{} {
 			panic(fmt.Sprintf("type cast should not be wrapped in  %c", typeCastRaw[0]))
 		}
 
-		// NOTE: typeCast is case-insensitive
-		switch strings.ToLower(typeCastRaw) {
-		case "int":
-			return tree.TypeCastInt
-		case "text":
-			return tree.TypeCastText
-		default:
-			// NOTE: we probably should move all semantic checks to analysis phase
-			panic(fmt.Sprintf("unknown type cast %s", typeCastRaw))
+		// should be "typename", potentially "typename[]" for array
+		var typ *types.DataType
+		if strings.HasSuffix(typeCastRaw, "[]") {
+			typ = &types.DataType{
+				Name:    strings.TrimSuffix(typeCastRaw, "[]"),
+				IsArray: true,
+			}
+		} else {
+			typ = &types.DataType{
+				Name: typeCastRaw,
+			}
 		}
+
+		err := typ.Clean()
+		if err != nil {
+			panic(fmt.Sprintf("invalid type cast %s: %v", typeCastRaw, err))
+		}
+
+		return typ
 	} else {
 		return ""
 	}
@@ -141,7 +151,7 @@ func (v *astBuilder) VisitText_literal_expr(ctx *grammar.Text_literal_exprContex
 		Value: val[1 : len(val)-1],
 	}
 	if ctx.Type_cast() != nil {
-		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
 	return expr
 }
@@ -157,7 +167,7 @@ func (v *astBuilder) VisitNumeric_literal_expr(ctx *grammar.Numeric_literal_expr
 		Value: val,
 	}
 	if ctx.Type_cast() != nil {
-		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
 	return expr
 }
@@ -173,7 +183,7 @@ func (v *astBuilder) VisitBoolean_literal_expr(ctx *grammar.Boolean_literal_expr
 		Value: boolVal,
 	}
 	if ctx.Type_cast() != nil {
-		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
 	return expr
 }
@@ -181,7 +191,7 @@ func (v *astBuilder) VisitBoolean_literal_expr(ctx *grammar.Boolean_literal_expr
 func (v *astBuilder) VisitNull_literal_expr(ctx *grammar.Null_literal_exprContext) interface{} {
 	expr := &tree.ExpressionNullLiteral{}
 	if ctx.Type_cast() != nil {
-		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
 	return expr
 }
@@ -204,7 +214,7 @@ func (v *astBuilder) VisitBlob_literal_expr(ctx *grammar.Blob_literal_exprContex
 		Value: decoded,
 	}
 	if ctx.Type_cast() != nil {
-		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
 	return expr
 }
@@ -215,7 +225,7 @@ func (v *astBuilder) VisitVariable_expr(ctx *grammar.Variable_exprContext) inter
 		Parameter: ctx.Variable().GetText(),
 	}
 	if ctx.Type_cast() != nil {
-		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
 	return expr
 }
@@ -235,7 +245,7 @@ func (v *astBuilder) VisitColumn_ref(ctx *grammar.Column_refContext) interface{}
 func (v *astBuilder) VisitColumn_expr(ctx *grammar.Column_exprContext) interface{} {
 	expr := v.Visit(ctx.Column_ref()).(*tree.ExpressionColumn)
 	if ctx.Type_cast() != nil {
-		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
 	return expr
 }
@@ -278,9 +288,9 @@ func (v *astBuilder) VisitCollate_expr(ctx *grammar.Collate_exprContext) interfa
 
 // VisitParenthesized_expr is called when visiting a parenthesized_expr, return *tree.Expression
 func (v *astBuilder) VisitParenthesized_expr(ctx *grammar.Parenthesized_exprContext) interface{} {
-	var typeCast tree.TypeCastType
+	var typeCast *types.DataType
 	if ctx.Type_cast() != nil {
-		typeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+		typeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
 
 	expr := v.Visit(ctx.Expr()).(tree.Expression)
@@ -393,14 +403,11 @@ func (v *astBuilder) VisitFunction_call(ctx *grammar.Function_callContext) inter
 	expr := &tree.ExpressionFunction{
 		Inputs: make([]tree.Expression, len(ctx.AllExpr())),
 	}
-	funcName := util.ExtractSQLName(ctx.Function_name().GetText())
+	expr.Function = util.ExtractSQLName(ctx.Function_name().GetText())
 
-	f, ok := tree.SQLFunctions[strings.ToLower(funcName)]
-	if !ok {
-		panic(fmt.Sprintf("unsupported function '%s'", funcName))
+	if ctx.STAR() != nil {
+		expr.Star = true
 	}
-	expr.Function = f
-
 	if ctx.DISTINCT_() != nil {
 		expr.Distinct = true
 	}
@@ -416,7 +423,7 @@ func (v *astBuilder) VisitFunction_call(ctx *grammar.Function_callContext) inter
 func (v *astBuilder) VisitFunction_expr(ctx *grammar.Function_exprContext) interface{} {
 	expr := v.Visit(ctx.Function_call()).(*tree.ExpressionFunction)
 	if ctx.Type_cast() != nil {
-		expr.TypeCast = v.Visit(ctx.Type_cast()).(tree.TypeCastType)
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
 	return expr
 }

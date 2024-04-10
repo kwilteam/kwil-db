@@ -31,7 +31,7 @@ func ExecuteDBDeleteSpecification(ctx context.Context, t *testing.T, execute Exe
 	user1Id, err := conv.Int32(records[0]["id"])
 	assert.NoError(t, err)
 
-	txHash, err := execute.ExecuteAction(ctx, dbID, actionName, []any{user1Id})
+	txHash, err := execute.Execute(ctx, dbID, actionName, []any{user1Id})
 	assert.NoError(t, err)
 
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()

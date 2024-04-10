@@ -36,6 +36,11 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) 
 		t.Fatal("cannot parse database schema", err)
 	}
 
+	err = kuneiform.ValidateStatements(db)
+	if err != nil {
+		t.Fatal("invalid database schema", err)
+	}
+
 	l.Modifier(db)
 	return db
 }

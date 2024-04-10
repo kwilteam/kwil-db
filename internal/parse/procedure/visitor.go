@@ -2,6 +2,7 @@ package procedure
 
 import (
 	"encoding/hex"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -359,7 +360,7 @@ func (p *proceduralLangVisitor) VisitStmt_sql(ctx *gen.Stmt_sqlContext) interfac
 } {
 	ast, err := sqlparser.Parse(ctx.ANY_SQL().GetText())
 	if err != nil {
-		panic("invalid SQL statement")
+		panic(fmt.Sprintf("invalid SQL statement: %v", err))
 	}
 
 	return &StatementSQL{

@@ -74,14 +74,14 @@ func TestParseActionStmt(t *testing.T) {
 						Right:    &tree.ExpressionBindParameter{Parameter: "$c"},
 					},
 					&tree.ExpressionFunction{
-						Function: &tree.FunctionABS,
+						Function: "abs",
 						Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
 					},
 					&tree.ExpressionFunction{
-						Function: &tree.FunctionABS,
+						Function: "abs",
 						Inputs: []tree.Expression{
 							&tree.ExpressionFunction{
-								Function: &tree.FunctionUPPER,
+								Function: "upper",
 								Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
 							},
 						},
@@ -135,14 +135,14 @@ func TestParseActionStmt(t *testing.T) {
 						Right:    &tree.ExpressionBindParameter{Parameter: "$c"},
 					},
 					&tree.ExpressionFunction{
-						Function: &tree.FunctionABS,
+						Function: "abs",
 						Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
 					},
 					&tree.ExpressionFunction{
-						Function: &tree.FunctionABS,
+						Function: "abs",
 						Inputs: []tree.Expression{
 							&tree.ExpressionFunction{
-								Function: &tree.FunctionUPPER,
+								Function: "upper",
 								Inputs:   []tree.Expression{&tree.ExpressionBindParameter{Parameter: "$c"}},
 							},
 						},

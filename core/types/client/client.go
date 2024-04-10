@@ -16,13 +16,17 @@ import (
 
 // Client defines methods are used to talk to a Kwil provider.
 type Client interface {
+	// DEPRECATED: Use Call instead.
 	CallAction(ctx context.Context, dbid string, action string, inputs []any) (*Records, error)
+	Call(ctx context.Context, dbid string, procedure string, inputs []any) (*Records, error)
 	ChainID() string
 	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
 	DeployDatabase(ctx context.Context, payload *types.Schema, opts ...TxOpt) (transactions.TxHash, error)
 	DropDatabase(ctx context.Context, name string, opts ...TxOpt) (transactions.TxHash, error)
 	DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt) (transactions.TxHash, error)
+	// DEPRECATED: Use Execute instead.
 	ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...TxOpt) (transactions.TxHash, error)
+	Execute(ctx context.Context, dbid string, action string, tuples [][]any, opts ...TxOpt) (transactions.TxHash, error)
 	GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error)
 	GetSchema(ctx context.Context, dbid string) (*types.Schema, error)
 	ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetIdentifier, error)

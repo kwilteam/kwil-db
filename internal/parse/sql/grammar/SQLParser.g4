@@ -193,7 +193,7 @@ comparisonOperator:
 ;
 
 cast_type:
-    IDENTIFIER
+    IDENTIFIER (L_BRACKET R_BRACKET)?
 ;
 
 type_cast:

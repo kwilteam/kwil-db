@@ -22,6 +22,9 @@ type typeVisitor struct {
 	// bindParams are the parameters that are available in the query
 	// we know the types from the kuneiform schema
 	bindParams map[string]*types.DataType
+	// arbitraryBinds is a flag that allows us to ignore bind parameters
+	// when type checking
+	arbitraryBinds bool
 }
 
 var _ tree.AstVisitor = &typeVisitor{}
@@ -316,8 +319,8 @@ func (t *typeVisitor) VisitExpressionArithmetic(p0 *tree.ExpressionArithmetic) a
 			return nil, fmt.Errorf("%w: arithmetic expression expected int. Received: %s", ErrInvalidType, bt.Type.String())
 		}
 
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(types.IntType), nil
@@ -353,8 +356,8 @@ func (t *typeVisitor) VisitExpressionBetween(p0 *tree.ExpressionBetween) any {
 			return nil, fmt.Errorf("%w: between expression expected %s. Received: %s", ErrInvalidType, et.Type.Name, rt.Type.String())
 		}
 
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(types.BoolType), nil
@@ -379,8 +382,8 @@ func (t *typeVisitor) VisitExpressionBinaryComparison(p0 *tree.ExpressionBinaryC
 			return nil, fmt.Errorf("%w: comparison expression expected %s. Received: %s", ErrInvalidType, at.Type.String(), bt.Type.String())
 		}
 
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(types.BoolType), nil
@@ -391,11 +394,15 @@ func (t *typeVisitor) VisitExpressionBindParameter(p0 *tree.ExpressionBindParame
 	return attributeFn(func(ev *evaluationContext) (*engine.QualifiedAttribute, error) {
 		c, ok := t.bindParams[p0.Parameter]
 		if !ok {
-			return nil, fmt.Errorf("bind parameter %s not found", p0.Parameter)
+			if t.arbitraryBinds {
+				c = types.UnknownType
+			} else {
+				return nil, fmt.Errorf("bind parameter %s not found", p0.Parameter)
+			}
 		}
 
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(c), nil
@@ -454,8 +461,8 @@ func (t *typeVisitor) VisitExpressionCase(p0 *tree.ExpressionCase) any {
 			}
 		}
 
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(neededType), nil
@@ -469,8 +476,8 @@ func (t *typeVisitor) VisitExpressionCollate(p0 *tree.ExpressionCollate) any {
 			return nil, err
 		}
 
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return rel, nil
@@ -484,8 +491,13 @@ func (t *typeVisitor) VisitExpressionColumn(p0 *tree.ExpressionColumn) any {
 			return nil, err
 		}
 
-		if p0.TypeCast != "" {
-			return cast(p0.Column, p0.TypeCast)
+		if p0.TypeCast != nil {
+			return &engine.QualifiedAttribute{
+				Name: p0.Column,
+				Attribute: &engine.Attribute{
+					Type: p0.TypeCast,
+				},
+			}, nil
 		}
 
 		return col, nil
@@ -494,9 +506,9 @@ func (t *typeVisitor) VisitExpressionColumn(p0 *tree.ExpressionColumn) any {
 
 func (t *typeVisitor) VisitExpressionFunction(p0 *tree.ExpressionFunction) any {
 	return attributeFn(func(ev *evaluationContext) (*engine.QualifiedAttribute, error) {
-		funcDef, ok := engine.Functions[p0.Function.Name()]
+		funcDef, ok := engine.Functions[p0.Function]
 		if !ok {
-			return nil, fmt.Errorf("function %s not found", p0.Function.Name())
+			return nil, fmt.Errorf("function %s not found", p0.Function)
 		}
 
 		var argTypes []*types.DataType
@@ -514,8 +526,8 @@ func (t *typeVisitor) VisitExpressionFunction(p0 *tree.ExpressionFunction) any {
 			return nil, err
 		}
 
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(returnType), nil
@@ -541,8 +553,8 @@ func (t *typeVisitor) VisitExpressionIs(p0 *tree.ExpressionIs) any {
 			return nil, fmt.Errorf("%w: comparing different types: %s and %s", ErrInvalidType, lt.Type.String(), rt.Type.String())
 		}
 
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(types.BoolType), nil
@@ -569,8 +581,8 @@ func (t *typeVisitor) VisitExpressionList(p0 *tree.ExpressionList) any {
 			}
 		}
 
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(lastType), nil
@@ -579,8 +591,8 @@ func (t *typeVisitor) VisitExpressionList(p0 *tree.ExpressionList) any {
 
 func (t *typeVisitor) VisitExpressionTextLiteral(p0 *tree.ExpressionTextLiteral) any {
 	return attributeFn(func(ev *evaluationContext) (*engine.QualifiedAttribute, error) {
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(types.TextType), nil
@@ -589,8 +601,8 @@ func (t *typeVisitor) VisitExpressionTextLiteral(p0 *tree.ExpressionTextLiteral)
 
 func (t *typeVisitor) VisitExpressionNumericLiteral(p0 *tree.ExpressionNumericLiteral) any {
 	return attributeFn(func(ev *evaluationContext) (*engine.QualifiedAttribute, error) {
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(types.IntType), nil
@@ -599,8 +611,8 @@ func (t *typeVisitor) VisitExpressionNumericLiteral(p0 *tree.ExpressionNumericLi
 
 func (t *typeVisitor) VisitExpressionBooleanLiteral(p0 *tree.ExpressionBooleanLiteral) any {
 	return attributeFn(func(ev *evaluationContext) (*engine.QualifiedAttribute, error) {
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(types.BoolType), nil
@@ -609,8 +621,8 @@ func (t *typeVisitor) VisitExpressionBooleanLiteral(p0 *tree.ExpressionBooleanLi
 
 func (t *typeVisitor) VisitExpressionNullLiteral(p0 *tree.ExpressionNullLiteral) any {
 	return attributeFn(func(ev *evaluationContext) (*engine.QualifiedAttribute, error) {
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(types.NullType), nil
@@ -619,8 +631,8 @@ func (t *typeVisitor) VisitExpressionNullLiteral(p0 *tree.ExpressionNullLiteral)
 
 func (t *typeVisitor) VisitExpressionBlobLiteral(p0 *tree.ExpressionBlobLiteral) any {
 	return attributeFn(func(ev *evaluationContext) (*engine.QualifiedAttribute, error) {
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(types.BlobType), nil
@@ -639,8 +651,8 @@ func (t *typeVisitor) VisitExpressionSelect(p0 *tree.ExpressionSelect) any {
 			return nil, fmt.Errorf("subquery must return exactly one column")
 		}
 
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		if p0.IsExists {
@@ -681,8 +693,8 @@ func (t *typeVisitor) VisitExpressionStringCompare(p0 *tree.ExpressionStringComp
 			}
 		}
 
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(types.BoolType), nil
@@ -701,28 +713,12 @@ func (t *typeVisitor) VisitExpressionUnary(p0 *tree.ExpressionUnary) any {
 			return nil, fmt.Errorf("%w: expected int. Received: %s", ErrInvalidType, ot.Type.String())
 		}
 
-		if p0.TypeCast != "" {
-			return cast("", p0.TypeCast)
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast), nil
 		}
 
 		return anonAttr(types.IntType), nil
 	})
-}
-
-// cast returns a custom data type from a type cast
-func cast(name string, c tree.TypeCastType) (*engine.QualifiedAttribute, error) {
-	if err := c.Valid(); err != nil {
-		return nil, err
-	}
-
-	return &engine.QualifiedAttribute{
-		Name: name,
-		Attribute: &engine.Attribute{
-			Type: &types.DataType{
-				Name: c.String(),
-			},
-		},
-	}, nil
 }
 
 // anonAttr is a helper function that creates an anonymous attribute

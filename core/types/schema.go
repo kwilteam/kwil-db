@@ -896,6 +896,8 @@ func (c *DataType) PGString() (string, error) {
 		scalar = "UUID"
 	case "null":
 		return "", fmt.Errorf("cannot have null column type")
+	case "unknown":
+		return "", fmt.Errorf("cannot have unknown column type")
 	default:
 		return "", fmt.Errorf("unknown column type: %s", c.Name)
 	}
@@ -910,6 +912,15 @@ func (c *DataType) PGString() (string, error) {
 func (c *DataType) Clean() error {
 	c.Name = strings.ToLower(c.Name)
 
+	if c.Name != "int" &&
+		c.Name != "text" &&
+		c.Name != "bool" &&
+		c.Name != "blob" &&
+		c.Name != "uuid" &&
+		c.Name != "null" {
+		return fmt.Errorf("unknown column type: %s", c.Name)
+	}
+
 	return nil
 }
 
@@ -922,7 +933,11 @@ func (c *DataType) Copy() *DataType {
 }
 
 // Equals returns true if the type is equal to the other type.
+// If either type is Unknown, it will return true.
 func (c *DataType) Equals(other *DataType) bool {
+	if c.Name == "unknown" || other.Name == "unknown" {
+		return true
+	}
 	return strings.EqualFold(c.Name, other.Name) && c.IsArray == other.IsArray
 }
 
@@ -942,7 +957,13 @@ var (
 	UUIDType = &DataType{
 		Name: "uuid",
 	}
+	// NullType is a special type used internally
 	NullType = &DataType{
 		Name: "null",
+	}
+	// Unknown is a special type used internally
+	// when a type is unknown until runtime.
+	UnknownType = &DataType{
+		Name: "unknown",
 	}
 )

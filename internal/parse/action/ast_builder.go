@@ -9,6 +9,7 @@ import (
 	"github.com/antlr4-go/antlr/v4"
 
 	"github.com/kwilteam/action-grammar-go/actgrammar"
+	"github.com/kwilteam/kwil-db/internal/engine"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 	"github.com/kwilteam/kwil-db/internal/parse/util"
 )
@@ -331,12 +332,15 @@ func (v *astBuilder) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) tree.E
 		expr := &tree.ExpressionFunction{
 			Inputs: make([]tree.Expression, len(ctx.AllFn_arg_expr())),
 		}
-		funcName := util.ExtractSQLName(ctx.Sfn_name().GetText())
-		f, ok := tree.SQLFunctions[strings.ToLower(funcName)]
+		expr.Function = util.ExtractSQLName(ctx.Sfn_name().GetText())
+
+		// this is a really ugly dependency; not quite circular, so it is ok.
+		// Since we likely will not make many changes to actions (in favor of procedures),
+		// it is ok for now
+		_, ok := engine.Functions[expr.Function]
 		if !ok {
-			panic(fmt.Sprintf("unsupported function '%s'", funcName))
+			panic(fmt.Sprintf("function %s does not exist", expr.Function))
 		}
-		expr.Function = f
 
 		for i, e := range ctx.AllFn_arg_expr() {
 			expr.Inputs[i] = v.visitFn_arg_expr(e)

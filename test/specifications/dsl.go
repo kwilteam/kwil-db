@@ -67,7 +67,7 @@ type ExecuteExtensionDsl interface {
 	DatabaseIdentifier
 	TxQueryDsl
 	ExecuteCallDsl
-	ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
+	Execute(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
 }
 
 // ExecuteQueryDsl is dsl for query specification
@@ -75,7 +75,7 @@ type ExecuteQueryDsl interface {
 	DatabaseIdentifier
 	TxQueryDsl
 	// ExecuteAction executes QUERY to a database
-	ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
+	Execute(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
 	QueryDatabase(ctx context.Context, dbid, query string) (*clientType.Records, error)
 	SupportBatch() bool
 }

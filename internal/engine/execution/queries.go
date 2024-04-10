@@ -99,7 +99,7 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema) err
 	// for each procedure, we will sanitize it,
 	// type check, generate the PLPGSQL code,
 	// and then execute the generated code.
-	stmts, err := procedural.GeneratePLPGSQL(schema, schemaName, pgSessionPrefix, pgSessionVars)
+	stmts, err := procedural.GeneratePLPGSQL(schema, schemaName, pgSessionPrefix, PgSessionVars)
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ var (
 	pgSessionPrefix = "ctx"
 	callerVar       = "caller"
 	txidVar         = "txid"
-	pgSessionVars   = map[string]*types.DataType{
+	PgSessionVars   = map[string]*types.DataType{
 		callerVar: types.TextType,
 		txidVar:   types.TextType,
 	}

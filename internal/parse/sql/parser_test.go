@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/postgres"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 	"github.com/stretchr/testify/assert"
@@ -289,7 +290,7 @@ func genSimpleExprIsSelectTree(left string, right string, not bool) *tree.Select
 	}
 }
 
-func genSimpleFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) *tree.SelectStmt {
+func genSimpleFunctionSelectTree(f string, inputs ...tree.Expression) *tree.SelectStmt {
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
 			SimpleSelects: []*tree.SimpleSelect{
@@ -309,7 +310,7 @@ func genSimpleFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) 
 	}
 }
 
-func genDistinctFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) *tree.SelectStmt {
+func genDistinctFunctionSelectTree(f string, inputs ...tree.Expression) *tree.SelectStmt {
 	return &tree.SelectStmt{
 		Stmt: &tree.SelectCore{
 			SimpleSelects: []*tree.SimpleSelect{
@@ -736,28 +737,28 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// function
 		// core functions
 		{"expr function abs", "select abs(1)",
-			genSimpleFunctionSelectTree(&tree.FunctionABS, genLiteralExpression("1"))},
+			genSimpleFunctionSelectTree("abs", genLiteralExpression("1"))},
 		{"expr function error", "select error('error message')",
-			genSimpleFunctionSelectTree(&tree.FunctionERROR, genLiteralExpression(`'error message'`))},
+			genSimpleFunctionSelectTree("error", genLiteralExpression(`'error message'`))},
 		{"expr function format", `select format('%d',2)`,
-			genSimpleFunctionSelectTree(&tree.FunctionFORMAT,
+			genSimpleFunctionSelectTree("format",
 				genLiteralExpression(`'%d'`), genLiteralExpression("2"))},
 		{"expr function length", `select length(1)`,
-			genSimpleFunctionSelectTree(&tree.FunctionLENGTH, genLiteralExpression("1"))},
+			genSimpleFunctionSelectTree("length", genLiteralExpression("1"))},
 		{"expr function lower", `select lower('Z')`,
-			genSimpleFunctionSelectTree(&tree.FunctionLOWER, genLiteralExpression("'Z'"))},
+			genSimpleFunctionSelectTree("lower", genLiteralExpression("'Z'"))},
 		{"expr function upper", `select upper('z')`,
-			genSimpleFunctionSelectTree(&tree.FunctionUPPER, genLiteralExpression("'z'"))},
+			genSimpleFunctionSelectTree("upper", genLiteralExpression("'z'"))},
 
 		// aggregate functions
 		{"expr function count", `select count(1)`,
-			genSimpleFunctionSelectTree(&tree.FunctionCOUNT, genLiteralExpression("1"))},
+			genSimpleFunctionSelectTree("count", genLiteralExpression("1"))},
 		{"expr function count distinct", `select count(distinct 1)`,
-			genDistinctFunctionSelectTree(&tree.FunctionCOUNT, genLiteralExpression("1"))},
+			genDistinctFunctionSelectTree("count", genLiteralExpression("1"))},
 		{"expr function sum", `select sum(1)`,
-			genSimpleFunctionSelectTree(&tree.FunctionSUM, genLiteralExpression("1"))},
+			genSimpleFunctionSelectTree("sum", genLiteralExpression("1"))},
 		{"expr function sum distinct", `select sum(distinct 1)`,
-			genDistinctFunctionSelectTree(&tree.FunctionSUM, genLiteralExpression("1"))},
+			genDistinctFunctionSelectTree("sum", genLiteralExpression("1"))},
 
 		// expr list
 		{"expr list", "select (1,2)",
@@ -2048,7 +2049,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			},
 		},
 		{"function name with back tick quote", "select `abs`(1)",
-			genSimpleFunctionSelectTree(&tree.FunctionABS, genLiteralExpression("1"))},
+			genSimpleFunctionSelectTree("abs", genLiteralExpression("1"))},
 
 		//// type cast
 		{"type cast",
@@ -2063,31 +2064,31 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionNumericLiteral{
 										Value:    1,
-										TypeCast: tree.TypeCastInt,
+										TypeCast: types.IntType,
 									},
 									Alias: "x",
 								},
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionBindParameter{
 										Parameter: "@caller",
-										TypeCast:  tree.TypeCastText,
+										TypeCast:  types.TextType,
 									},
 								},
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionColumn{
 										Table:    "t1",
 										Column:   "c1",
-										TypeCast: tree.TypeCastText,
+										TypeCast: types.TextType,
 									},
 								},
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionArithmetic{
 										Wrapped:  true,
-										TypeCast: tree.TypeCastInt,
+										TypeCast: types.IntType,
 										Left: &tree.ExpressionColumn{
 											Table:    "t1",
 											Column:   "c2",
-											TypeCast: tree.TypeCastInt,
+											TypeCast: types.IntType,
 										},
 										Operator: tree.ArithmeticOperatorMultiply,
 										Right:    genLiteralExpression("3"),
@@ -2101,15 +2102,15 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 										},
 										Right:    genLiteralExpression("NULL"),
 										Wrapped:  true,
-										TypeCast: tree.TypeCastInt,
+										TypeCast: types.IntType,
 									},
 								},
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionFunction{
-										Function: &tree.FunctionABS,
+										Function: "abs",
 										Inputs:   []tree.Expression{genLiteralExpression("2")},
 										Distinct: false,
-										TypeCast: tree.TypeCastInt,
+										TypeCast: types.IntType,
 									},
 								},
 							},
@@ -2277,7 +2278,7 @@ func TestParseRawSQL_semantic_invalid(t *testing.T) {
 		reason string
 	}{
 		// type cast
-		{"type cast not supported type", "select 1::random", "panic: unknown type cast random"},
+		{"type cast not supported type", "select 1::random", `panic: invalid type cast random: unknown column type: random`},
 	}
 
 	for _, tt := range tests {

@@ -39,7 +39,7 @@ func Test_Typing(t *testing.T) {
 		},
 		{
 			name: "select with where, aggregate",
-			stmt: `SELECT id, name FROM users WHERE id = $id GROUP BY id, name HAVING COUNT(*) > 1;`,
+			stmt: `SELECT id, name FROM users WHERE id = $id GROUP BY id, name HAVING count(*) > 1;`,
 			relation: map[string]*types.DataType{
 				"id":   types.IntType,
 				"name": types.TextType,
@@ -200,7 +200,7 @@ func Test_Typing(t *testing.T) {
 		},
 		{
 			name: "function",
-			stmt: `SELECT * FROM users WHERE id = $id AND name = 'satoshi' AND LENGTH(name) = 7;`,
+			stmt: `SELECT * FROM users WHERE id = $id AND name = 'satoshi' AND length(name) = 7;`,
 			relation: map[string]*types.DataType{
 				"id":   types.IntType,
 				"name": types.TextType,
@@ -284,7 +284,9 @@ func Test_Typing(t *testing.T) {
 			ast, err := sqlparser.Parse(test.stmt)
 			require.NoError(t, err)
 
-			rel, err := typing.AnalyzeTypes(ast, []*types.Table{usersTable, postsTable}, bindParams)
+			rel, err := typing.AnalyzeTypes(ast, []*types.Table{usersTable, postsTable}, &typing.AnalyzeOptions{
+				BindParams: bindParams,
+			})
 			if test.err != nil {
 				if errors.Is(test.err, errAny) {
 					require.Error(t, err)

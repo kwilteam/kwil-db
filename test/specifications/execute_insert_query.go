@@ -44,7 +44,7 @@ func ExecuteDBSingleInsertSpecification(ctx context.Context, t *testing.T, execu
 
 	createUserActionInput := []any{user1.ID, user1.UserName, user1.Age}
 
-	txHash, err := execute.ExecuteAction(ctx, dbID, createUserActionName, createUserActionInput)
+	txHash, err := execute.Execute(ctx, dbID, createUserActionName, createUserActionInput)
 	assert.NoError(t, err)
 
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
@@ -60,7 +60,7 @@ func ExecuteDBSingleInsertSpecification(ctx context.Context, t *testing.T, execu
 		{1111, "test_post", "test_body"},
 	}
 
-	txHash, err = execute.ExecuteAction(ctx, dbID, createPostQueryName, post1...)
+	txHash, err = execute.Execute(ctx, dbID, createPostQueryName, post1...)
 	assert.NoError(t, err)
 
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
@@ -76,7 +76,7 @@ func ExecuteDBSingleInsertSpecification(ctx context.Context, t *testing.T, execu
 	// TODO: move to a new specification
 	//multiStmtActionName := "multi_select"
 	//// execute multi statement action
-	//txHash, err = execute.ExecuteAction(ctx, dbID, multiStmtActionName, nil)
+	//txHash, err = execute.Execute(ctx, dbID, multiStmtActionName, nil)
 	//assert.NoError(t, err)
 	//
 	//expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
@@ -100,7 +100,7 @@ func ExecuteDBBatchInsertSpecification(ctx context.Context, t *testing.T, execut
 
 	createUserActionInput := []any{user1.ID, user1.UserName, user1.Age}
 
-	txHash, err := execute.ExecuteAction(ctx, dbID, createUserActionName, createUserActionInput)
+	txHash, err := execute.Execute(ctx, dbID, createUserActionName, createUserActionInput)
 	assert.NoError(t, err)
 
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
@@ -117,7 +117,7 @@ func ExecuteDBBatchInsertSpecification(ctx context.Context, t *testing.T, execut
 		{2222, "test_post2", "test_body2"},
 	}
 
-	txHash, err = execute.ExecuteAction(ctx, dbID, createPostQueryName, post1...)
+	txHash, err = execute.Execute(ctx, dbID, createPostQueryName, post1...)
 	assert.NoError(t, err)
 
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()

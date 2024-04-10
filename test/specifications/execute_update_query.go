@@ -25,7 +25,7 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	}
 
 	// When i execute action to database
-	txHash, err := execute.ExecuteAction(ctx, dbID, actionName, actionInput...)
+	txHash, err := execute.Execute(ctx, dbID, actionName, actionInput...)
 	assert.NoError(t, err)
 
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
@@ -80,7 +80,7 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	//actionInput = []map[string]any{
 	//	{"$username": userQ.UserName},
 	//}
-	//receipt, results, err = execute.ExecuteAction(ctx, dbID, getUserPostsActionName, actionInput)
+	//receipt, results, err = execute.Execute(ctx, dbID, getUserPostsActionName, actionInput)
 	//assert.NoError(t, err)
 	//assert.NotNil(t, receipt)
 	//assert.NotZero(t, len(results), "should get user's posts after user_id updated")

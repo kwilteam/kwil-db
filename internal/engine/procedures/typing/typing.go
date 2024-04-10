@@ -289,7 +289,7 @@ func (t *typingVisitor) VisitStatementProcedureCall(p0 *parser.StatementProcedur
 	}
 
 	if len(returns.Types) != len(p0.Variables) {
-		panic("expected return values")
+		panic(fmt.Sprintf("expected %d return values, got %d", len(returns.Types), len(p0.Variables)))
 	}
 
 	for i, v := range p0.Variables {
@@ -367,7 +367,9 @@ func (t *typingVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) inter
 
 // analyzeSQL analyzes the given SQL statement and returns the resulting relation.
 func (t *typingVisitor) analyzeSQL(stmt tree.AstNode) *engine.Relation {
-	m, err := typing.AnalyzeTypes(stmt, t.currentSchema.Tables, t.declarations)
+	m, err := typing.AnalyzeTypes(stmt, t.currentSchema.Tables, &typing.AnalyzeOptions{
+		BindParams: t.declarations,
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -414,7 +416,7 @@ func (t *typingVisitor) VisitStatementReturn(p0 *parser.StatementReturn) interfa
 		}
 	case t.currentProcedure.Returns.Types != nil:
 		if p0.Values == nil {
-			panic("expected return value")
+			panic(fmt.Sprintf("procedure %s expects return values", t.currentProcedure.Name))
 		}
 
 		if len(p0.Values) != len(t.currentProcedure.Returns.Types) {

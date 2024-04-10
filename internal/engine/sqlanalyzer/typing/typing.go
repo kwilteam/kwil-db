@@ -8,15 +8,30 @@ import (
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 
+// AnalyzeOptions is a set of options for type analysis.
+type AnalyzeOptions struct {
+	// BindParams are the bind parameters for the statement.
+	BindParams map[string]*types.DataType
+	// ArbitraryBinds will treat all bind parameters as unknown,
+	// effectively disabling type checking for them.
+	ArbitraryBinds bool
+}
+
 // AnalyzeTypes will run type analysis on the given statement.
 // It will return the relation that will be returned by the statement,
 // if any.
-func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, bindParams map[string]*types.DataType) (rel *engine.Relation, err error) {
+func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, options *AnalyzeOptions) (rel *engine.Relation, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic during type analysis: %v", r)
 		}
 	}()
+
+	if options == nil {
+		options = &AnalyzeOptions{
+			BindParams: make(map[string]*types.DataType),
+		}
+	}
 
 	tbls := make(map[string]*engine.Relation)
 	for _, t := range tables {
@@ -25,9 +40,10 @@ func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, bindParams map[string
 	}
 
 	v := &typeVisitor{
-		commonTables: tbls,
-		ctes:         make(map[string]struct{}),
-		bindParams:   bindParams,
+		commonTables:   tbls,
+		ctes:           make(map[string]struct{}),
+		bindParams:     options.BindParams,
+		arbitraryBinds: options.ArbitraryBinds,
 	}
 
 	res := ast.Accept(v)

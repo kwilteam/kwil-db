@@ -20,7 +20,7 @@ func ExecutePrivateActionSpecification(ctx context.Context, t *testing.T, execut
 
 	createPostActionInput := []any{id, postTitle, postContent}
 
-	txHash, err := execute.ExecuteAction(ctx, dbID, "create_post_private", createPostActionInput)
+	txHash, err := execute.Execute(ctx, dbID, "create_post_private", createPostActionInput)
 	require.NoError(t, err, "error executing private action")
 
 	expectTxFail(t, execute, ctx, txHash, defaultTxQueryTimeout)()
@@ -30,7 +30,7 @@ func ExecutePrivateActionSpecification(ctx context.Context, t *testing.T, execut
 	}
 
 	// calling nested should work
-	txHash, err = execute.ExecuteAction(ctx, dbID, "create_post_nested", createPostActionInput)
+	txHash, err = execute.Execute(ctx, dbID, "create_post_nested", createPostActionInput)
 	require.NoError(t, err, "error executing nested action")
 
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()

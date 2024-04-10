@@ -5,7 +5,8 @@ import (
 	"sort"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/attributes"
+	"github.com/kwilteam/kwil-db/internal/engine"
+	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/typing"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/utils"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
@@ -35,19 +36,59 @@ func (o *orderingWalker) EnterCTE(node *tree.CTE) error {
 		return nil
 	}
 
-	cteAttributes, err := attributes.GetSelectCoreRelationAttributes(node.Select.SimpleSelects[0], o.tables)
+	res, err := typing.AnalyzeTypes(node.Select, o.tables, &typing.AnalyzeOptions{
+		ArbitraryBinds: true,
+	})
 	if err != nil {
 		return err
 	}
 
-	cteTable, err := attributes.TableFromAttributes(node.Table, cteAttributes, true)
+	tbl, err := tableFromRelation(res, node.Table)
 	if err != nil {
 		return err
 	}
 
-	o.tables = append(o.tables, cteTable)
+	// make sure this does not have a conflicting name with another table
+	_, err = findTable(o.tables, tbl.Name)
+	if err == nil {
+		return fmt.Errorf(`table or subquery with name or alias "%s" already exists`, tbl.Name)
+	}
+
+	o.tables = append(o.tables, tbl)
 
 	return nil
+}
+
+// tableFromRelation will return a table from a relation.
+// It will make all columns primary keys.
+func tableFromRelation(rel *engine.Relation, name string) (*types.Table, error) {
+	tbl := &types.Table{
+		Name: name,
+	}
+
+	cols := make([]string, 0)
+	err := rel.Loop(func(s string, a *engine.Attribute) error {
+		tbl.Columns = append(tbl.Columns, &types.Column{
+			Name: s,
+			Type: a.Type,
+		})
+
+		cols = append(cols, s)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	tbl.Indexes = []*types.Index{
+		{
+			Name:    "_auto_primary_",
+			Columns: cols,
+			Type:    types.PRIMARY,
+		},
+	}
+
+	return tbl, nil
 }
 
 // Register RelationSubquerys as tables, so that we can order them.
@@ -59,23 +100,27 @@ func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) erro
 		return fmt.Errorf("subquery select has no select cores")
 	}
 
-	relationAttributes, err := attributes.GetSelectCoreRelationAttributes(node.Select.SimpleSelects[0], o.tables)
+	name := node.Alias // can be ""
+
+	res, err := typing.AnalyzeTypes(node.Select, o.tables, &typing.AnalyzeOptions{
+		ArbitraryBinds: true,
+	})
 	if err != nil {
 		return err
 	}
 
-	table, err := attributes.TableFromAttributes(node.Alias, relationAttributes, true)
+	tbl, err := tableFromRelation(res, name)
 	if err != nil {
 		return err
 	}
 
 	// make sure this does not have a conflicting name with another table
-	_, err = findTable(o.tables, table.Name)
+	_, err = findTable(o.tables, tbl.Name)
 	if err == nil {
-		return fmt.Errorf(`table or subquery with name or alias "%s" already exists`, table.Name)
+		return fmt.Errorf(`table or subquery with name or alias "%s" already exists`, tbl.Name)
 	}
 
-	o.tables = append(o.tables, table)
+	o.tables = append(o.tables, tbl)
 
 	return nil
 }
@@ -246,9 +291,14 @@ func containsAggregateFunc(ret tree.ResultColumn) (bool, error) {
 	depth := 0 // depth tracks if we are in a subquery or not
 
 	err := ret.Walk(&tree.ImplementedListener{
-		FuncEnterAggregateFunc: func(p0 *tree.AggregateFunc) error {
+		FuncEnterExpressionFunction: func(p0 *tree.ExpressionFunction) error {
 			if depth == 0 {
-				containsAggregateFunc = true
+				def, ok := engine.Functions[p0.Function]
+				if !ok {
+					return fmt.Errorf("function %s not found", p0.Function)
+				}
+
+				containsAggregateFunc = def.IsAggregate
 			}
 			return nil
 		},

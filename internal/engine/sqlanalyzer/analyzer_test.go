@@ -77,7 +77,7 @@ func Test_Analyze(t *testing.T) {
 				SELECT * FROM users_aged_20`,
 			want: `WITH
 				"users_aged_20" AS (
-					SELECT "users"."id", "users"."username" FROM "ds_dbid"."users" WHERE "age" = 20 ORDER BY "users"."id"
+					SELECT "id", "username" FROM "ds_dbid"."users" WHERE "age" = 20 ORDER BY "users"."id"
 				)
 				SELECT * FROM "users_aged_20" ORDER BY "users_aged_20"."id" , "users_aged_20"."username";`,
 			tables: []*types.Table{

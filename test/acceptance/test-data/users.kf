@@ -1,0 +1,47 @@
+database users;
+
+// This schema is meant to test the changes introduced in Kwil v0.8.
+// This includes:
+// - new types such as uuid, bool, and arrays
+// - new (optional) syntax for constraints and foreign key actions
+// - procedures, and the procedural language
+
+table users {
+    id uuid primary key,
+    name text maxlen(30) not null unique,
+    age int max(150),
+    address text not null,
+    #age_idx index(age)
+}
+
+table posts {
+    id uuid primary key,
+    content text maxlen(300) not null,
+    author_id uuid not null,
+    foreign key (author_id) references users(id) on update cascade on delete cascade,
+    #author_idx index(author_id)
+}
+
+// create_user creates a user in the database.
+// It is assigned a unique uuid.
+procedure create_user($name text, $age int) public {
+    // we will generate a uuid from the txid
+    INSERT INTO users (id, name, age, address)
+    VALUES (uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid),
+        $name,
+        $age,
+        @caller
+    );
+}
+
+// get_user gets a user id, age, and address from a username
+procedure get_user($name text) public view returns (uuid, int, text) {
+    for $row in SELECT id, age, address FROM users WHERE name = $name {
+        return $row.id, $row.age, $row.address; // will return on the first iteration
+    }
+}
+
+// get_owned_users gets user ids, names, and ages by the owning address
+procedure get_owned_users($address text) public view returns table(id uuid, name text, age int) {
+    return SELECT id, name, age FROM users WHERE address = $address;
+}

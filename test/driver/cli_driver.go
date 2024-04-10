@@ -292,7 +292,7 @@ func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, a
 	return args, nil
 }
 
-func (d *KwilCliDriver) ExecuteAction(_ context.Context, dbid string, action string, inputs ...[]any) ([]byte, error) {
+func (d *KwilCliDriver) Execute(_ context.Context, dbid string, action string, inputs ...[]any) ([]byte, error) {
 	// NOTE: kwil-cli does not support batched inputs
 	actionInputs, err := d.prepareCliActionParams(dbid, action, inputs[0])
 	if err != nil {

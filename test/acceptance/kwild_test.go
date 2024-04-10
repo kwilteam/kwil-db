@@ -119,6 +119,34 @@ func TestKwildTransferAcceptance(t *testing.T) {
 	}
 }
 
+// TestKwildProcedures runs acceptance tests against a single kwild node,
+// testing Kuneiforms procedural language.
+func TestKwildProcedures(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	ctx := context.Background()
+	testDrivers := strings.Split(*drivers, ",")
+	for _, driverType := range testDrivers {
+		t.Run(driverType+"_driver", func(t *testing.T) {
+			// setup for each driver
+			helper := acceptance.NewActHelper(t)
+			helper.LoadConfig()
+			if !*remote {
+				helper.Setup(ctx)
+			}
+			creatorDriver := helper.GetDriver(driverType, "creator")
+
+			specifications.ExecuteProcedureSpecification(ctx, t, creatorDriver)
+		})
+	}
+}
+
 // TestKwildAcceptance runs acceptance tests again a single kwild node(and
 // are not concurrent), using different drivers: clientDriver, cliDriver.
 // The tests here are not exhaustive, and are meant to only test happy paths.

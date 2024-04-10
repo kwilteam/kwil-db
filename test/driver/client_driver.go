@@ -142,8 +142,8 @@ func (d *KwildClientDriver) DatabaseExists(ctx context.Context, dbid string) err
 	return nil
 }
 
-func (d *KwildClientDriver) ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error) {
-	rec, err := d.clt.ExecuteAction(ctx, dbid, actionName, actionInputs)
+func (d *KwildClientDriver) Execute(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error) {
+	rec, err := d.clt.Execute(ctx, dbid, actionName, actionInputs)
 	if err != nil {
 		return nil, fmt.Errorf("error executing query: %w", err)
 	}
@@ -166,7 +166,7 @@ func (d *KwildClientDriver) QueryDatabase(ctx context.Context, dbid, query strin
 }
 
 func (d *KwildClientDriver) Call(ctx context.Context, dbid, action string, inputs []any) (*clientType.Records, error) {
-	return d.clt.CallAction(ctx, dbid, action, inputs)
+	return d.clt.Call(ctx, dbid, action, inputs)
 }
 
 func (d *KwildClientDriver) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
