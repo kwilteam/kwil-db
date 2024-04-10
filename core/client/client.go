@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/cstockton/go-conv"
@@ -99,7 +100,10 @@ CHAIN_INFO:
 		var syscallErr *os.SyscallError
 		if errors.As(err, &syscallErr) {
 			c.logger.Warnf("*os.SyscallError %v (%T)", syscallErr, syscallErr.Err)
-			// if eno, ok := syscallErr.Err.(syscall.Errno); ok { ... }
+			if eno, ok := syscallErr.Err.(syscall.Errno); ok && eno == syscall.ECONNRESET {
+				c.logger.Warn("connection reset", zap.Error(err))
+				retry = true
+			}
 			// don't retry all of this type, just for debugging
 		}
 
