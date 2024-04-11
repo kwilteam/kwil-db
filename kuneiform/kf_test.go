@@ -1,3 +1,19 @@
+package kuneiform_test
+
+import (
+	"testing"
+
+	"github.com/kwilteam/kwil-db/internal/engine/execution"
+	"github.com/kwilteam/kwil-db/internal/engine/procedures"
+	"github.com/kwilteam/kwil-db/kuneiform"
+	"github.com/stretchr/testify/require"
+)
+
+// TODO: we should probably delete this file.
+// I am using this to allow me to test something testing in the integration
+// test with quicker iteraqtions by not having to run docker.
+
+var schema = `
 database users;
 
 // This schema is meant to test the changes introduced in Kwil v0.8.
@@ -79,4 +95,14 @@ procedure create_post($content text) public {
         $user_id,
         $post_count
     );
+}`
+
+func Test_KF(t *testing.T) {
+	schema, err := kuneiform.Parse(schema)
+	require.NoError(t, err)
+
+	_ = schema
+
+	_, err = procedures.GeneratePLPGSQL(schema, "pgschema", "ctx", execution.PgSessionVars)
+	require.NoError(t, err)
 }

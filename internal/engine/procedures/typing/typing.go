@@ -5,6 +5,7 @@ package typing
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine"
@@ -13,7 +14,9 @@ import (
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 
-func EnsureTyping(stmts []parser.Statement, procedure *types.Procedure, schema *types.Schema, cleanedInputs []*types.NamedType, sessionVars map[string]*types.DataType) (err error) {
+func EnsureTyping(stmts []parser.Statement, procedure *types.Procedure, schema *types.Schema, cleanedInputs []*types.NamedType,
+	sessionVars map[string]*types.DataType) (anonReceiverTypes []*types.DataType, err error) {
+
 	declarations := make(map[string]*types.DataType)
 	for _, param := range cleanedInputs {
 		declarations[param.Name] = param.Type
@@ -31,10 +34,11 @@ func EnsureTyping(stmts []parser.Statement, procedure *types.Procedure, schema *
 	}
 
 	t := &typingVisitor{
-		currentSchema:         schema,
-		declarations:          declarations,
-		currentProcedure:      procedure,
-		anonymousDeclarations: make(map[string]map[string]*types.DataType),
+		currentSchema:          schema,
+		declarations:           declarations,
+		currentProcedure:       procedure,
+		anonymousDeclarations:  make(map[string]map[string]*types.DataType),
+		anonymousReceiverTypes: make([]*types.DataType, 0),
 	}
 
 	defer func() {
@@ -51,7 +55,7 @@ func EnsureTyping(stmts []parser.Statement, procedure *types.Procedure, schema *
 		stmt.Accept(t)
 	}
 
-	return nil
+	return t.anonymousReceiverTypes, nil
 }
 
 type typingVisitor struct {
@@ -66,6 +70,9 @@ type typingVisitor struct {
 	// anonymousDeclarations are essentially anonymous compound types, so the map maps the name
 	// to the fields to their types.
 	anonymousDeclarations map[string]map[string]*types.DataType
+
+	// anonymousReceiverTypes holds the types of the anonymous receivers
+	anonymousReceiverTypes []*types.DataType
 
 	// holds the last error that occurred
 	err error
@@ -307,17 +314,31 @@ func (t *typingVisitor) VisitStatementProcedureCall(p0 *parser.StatementProcedur
 	}
 
 	for i, v := range p0.Variables {
-		varType, ok := t.declarations[v]
+		if v == nil {
+			// skip if nil, since it is an anonymous receiver
+			t.anonymousReceiverTypes = append(t.anonymousReceiverTypes, returns.Fields[i].Type)
+			continue
+		}
+		varType, ok := t.declarations[*v]
 		if !ok {
-			panic(fmt.Sprintf("variable %s not declared", v))
+			panic(fmt.Sprintf("variable %s not declared", reverseCleanVar(*v)))
 		}
 
 		if !varType.Equals(returns.Fields[i].Type) {
-			panic(fmt.Sprintf("variable %s has wrong type", v))
+			panic(fmt.Sprintf("variable %s has wrong type", reverseCleanVar(*v)))
 		}
 	}
 
 	return nil
+}
+
+// TODO: this is a hack and implicit coupling with the clean package
+func reverseCleanVar(v string) string {
+	if !strings.HasPrefix(v, "_param_") {
+		panic("expected parameter prefix, received: " + v)
+	}
+
+	return "$" + strings.TrimPrefix(v, "_param_")
 }
 
 // analyzeProcedureCall is used to visit a procedure call and get info on the return type.

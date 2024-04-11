@@ -15,15 +15,15 @@ func (v *BaseProcedureParserVisitor) VisitStmt_variable_declaration(ctx *Stmt_va
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseProcedureParserVisitor) VisitStmt_procedure_call(ctx *Stmt_procedure_callContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseProcedureParserVisitor) VisitStmt_variable_assignment(ctx *Stmt_variable_assignmentContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
 func (v *BaseProcedureParserVisitor) VisitStmt_variable_assignment_with_declaration(ctx *Stmt_variable_assignment_with_declarationContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseProcedureParserVisitor) VisitStmt_procedure_call(ctx *Stmt_procedure_callContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -48,6 +48,10 @@ func (v *BaseProcedureParserVisitor) VisitStmt_return(ctx *Stmt_returnContext) i
 }
 
 func (v *BaseProcedureParserVisitor) VisitStmt_return_next(ctx *Stmt_return_nextContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseProcedureParserVisitor) VisitVariable_or_underscore(ctx *Variable_or_underscoreContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

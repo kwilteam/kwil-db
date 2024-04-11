@@ -13,14 +13,14 @@ type ProcedureParserVisitor interface {
 	// Visit a parse tree produced by ProcedureParser#stmt_variable_declaration.
 	VisitStmt_variable_declaration(ctx *Stmt_variable_declarationContext) interface{}
 
+	// Visit a parse tree produced by ProcedureParser#stmt_procedure_call.
+	VisitStmt_procedure_call(ctx *Stmt_procedure_callContext) interface{}
+
 	// Visit a parse tree produced by ProcedureParser#stmt_variable_assignment.
 	VisitStmt_variable_assignment(ctx *Stmt_variable_assignmentContext) interface{}
 
 	// Visit a parse tree produced by ProcedureParser#stmt_variable_assignment_with_declaration.
 	VisitStmt_variable_assignment_with_declaration(ctx *Stmt_variable_assignment_with_declarationContext) interface{}
-
-	// Visit a parse tree produced by ProcedureParser#stmt_procedure_call.
-	VisitStmt_procedure_call(ctx *Stmt_procedure_callContext) interface{}
 
 	// Visit a parse tree produced by ProcedureParser#stmt_for_loop.
 	VisitStmt_for_loop(ctx *Stmt_for_loopContext) interface{}
@@ -39,6 +39,9 @@ type ProcedureParserVisitor interface {
 
 	// Visit a parse tree produced by ProcedureParser#stmt_return_next.
 	VisitStmt_return_next(ctx *Stmt_return_nextContext) interface{}
+
+	// Visit a parse tree produced by ProcedureParser#variable_or_underscore.
+	VisitVariable_or_underscore(ctx *Variable_or_underscoreContext) interface{}
 
 	// Visit a parse tree produced by ProcedureParser#type.
 	VisitType(ctx *TypeContext) interface{}

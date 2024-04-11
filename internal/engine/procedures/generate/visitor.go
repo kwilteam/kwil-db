@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine"
 	parser "github.com/kwilteam/kwil-db/internal/parse/procedure"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
@@ -16,6 +17,15 @@ type generatorVisitor struct {
 	variables map[string]*types.DataType
 	// currentProcedure is the current procedure being generated.
 	currentProcedure *types.Procedure
+
+	// anonymousReceiverCount is the count of anonymous receivers.
+	// It is used to ensure unique names for anonymous receivers.
+	// Anonymoud receivers are used when a procedure returns like:
+	// $return1, _, $return3 := ...
+	anonymousReceiverCount int
+	// anonymousTypes are the types of the anonymous receivers.
+	anonymousTypes []*types.DataType
+
 	// returnedVariables holds the variables that are returned by the procedure,
 	// if any.
 	returnedVariables []*types.NamedType
@@ -23,6 +33,8 @@ type generatorVisitor struct {
 	loopTargets []string
 	// inLoop is true if the visitor is currently in a loop.
 	inLoop bool
+	// pgSchemaName is the name of the postgres schema.
+	pgSchemaName string
 }
 
 var _ parser.Visitor = &generatorVisitor{}
@@ -53,6 +65,15 @@ func (g *generatorVisitor) VisitExpressionBooleanLiteral(p0 *parser.ExpressionBo
 
 func (g *generatorVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
 	str := strings.Builder{}
+
+	// if it is not a function, it is a procedure,
+	// and we need to prefix it with the schema name.
+	_, ok := engine.Functions[p0.Name]
+	if !ok {
+		str.WriteString(g.pgSchemaName)
+		str.WriteString(".")
+	}
+
 	str.WriteString(p0.Name)
 
 	str.WriteString("(")
@@ -161,23 +182,32 @@ func (g *generatorVisitor) VisitStatementProcedureCall(p0 *parser.StatementProce
 		panic("internal error generating procedure call with return values")
 	}
 
-	// remove the last paren
-	call = call[:len(call)-1]
-
-	hasOtherArgs := call[len(call)-1] != '('
-	for _, v := range p0.Variables {
-		if hasOtherArgs {
-			call += ","
+	selectInto := strings.Builder{}
+	for i, v := range p0.Variables {
+		if i > 0 {
+			selectInto.WriteString(", ")
 		}
 
-		call += v
+		// if v is nil, it is an anonymous receiver.
+		if v == nil {
+			// if we do not have enough anonymous types, we should panic.
+			// this is an internal bug.
+			if len(g.anonymousTypes) <= g.anonymousReceiverCount {
+				panic("internal error: not enough anonymous types")
+			}
 
-		hasOtherArgs = true
+			// use double underscore for collision avoidance
+			ident := fmt.Sprintf("__anon_%d", g.anonymousReceiverCount)
+			g.anonymousReceiverCount++
+
+			g.variables[ident] = g.anonymousTypes[g.anonymousReceiverCount-1]
+			selectInto.WriteString(ident)
+		} else {
+			selectInto.WriteString(*v)
+		}
 	}
 
-	call += ")"
-
-	return fmt.Sprintf("PERFORM %s;", call)
+	return fmt.Sprintf("SELECT * INTO %s FROM %s;", selectInto.String(), call)
 }
 
 func (g *generatorVisitor) VisitStatementBreak(p0 *parser.StatementBreak) any {

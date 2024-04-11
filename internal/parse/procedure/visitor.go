@@ -214,9 +214,20 @@ func (p *proceduralLangVisitor) VisitRange(ctx *gen.RangeContext) any {
 func (p *proceduralLangVisitor) VisitStmt_procedure_call(ctx *gen.Stmt_procedure_callContext) any {
 	proc := ctx.Call_expression().Accept(p).(*ExpressionCall)
 
-	vars := make([]string, len(ctx.AllVARIABLE()))
-	for i, arg := range ctx.AllVARIABLE() {
-		vars[i] = getVariable(arg)
+	vars := make([]*string, len(ctx.AllVariable_or_underscore()))
+	for i, arg := range ctx.AllVariable_or_underscore() {
+		// can either be *string or nil
+		v := arg.Accept(p)
+		varStr, ok := v.(*string)
+		if ok {
+			vars[i] = varStr
+		} else {
+			// check if it's nil
+			if v != nil {
+				panic("invalid variable or underscore")
+			}
+			vars[i] = nil
+		}
 	}
 
 	return &StatementProcedureCall{
@@ -226,6 +237,19 @@ func (p *proceduralLangVisitor) VisitStmt_procedure_call(ctx *gen.Stmt_procedure
 			Arguments: proc.Arguments,
 		},
 	}
+}
+
+func (p *proceduralLangVisitor) VisitVariable_or_underscore(ctx *gen.Variable_or_underscoreContext) any {
+	if ctx.UNDERSCORE() != nil {
+		return nil
+	}
+	if ctx.VARIABLE() != nil {
+		v := getVariable(ctx.VARIABLE())
+		return &v
+	}
+
+	// this should never happen
+	panic("invalid variable or underscore")
 }
 
 func (p *proceduralLangVisitor) VisitStmt_for_loop(ctx *gen.Stmt_for_loopContext) any {

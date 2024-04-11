@@ -91,9 +91,13 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 			c.cleanVar(&srn.Variable)
 		},
 		StatementProcedureCall: func(spc *parser.StatementProcedureCall) {
-			cleanedVars := make([]string, len(spc.Variables))
+			cleanedVars := make([]*string, len(spc.Variables))
 			for i, arg := range spc.Variables {
-				c.cleanVar(&arg)
+				if arg == nil {
+					cleanedVars[i] = nil
+					continue
+				}
+				c.cleanVar(arg)
 				cleanedVars[i] = arg
 			}
 			spc.Variables = cleanedVars

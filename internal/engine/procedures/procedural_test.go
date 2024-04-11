@@ -292,6 +292,16 @@ func Test_Procedures(t *testing.T) {
 				build(),
 			wantErr: true,
 		},
+		{
+			name: "procedure call with anonymous receiver",
+			procedure: procedure("proc_call_anonymous_receiver").
+				withParams().
+				withBody(`
+				$id int;
+				$id, _ := get_user(1);
+				`).
+				build(),
+		},
 	}
 
 	for _, tt := range tests {

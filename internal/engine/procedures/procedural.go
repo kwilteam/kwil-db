@@ -28,12 +28,12 @@ func GeneratePLPGSQL(schema *types.Schema, pgSchemaName string,
 			return nil, err
 		}
 
-		err = typing.EnsureTyping(parsed, proc, schema, cleanedParams, cleanedSessionVars)
+		anonReceivers, err := typing.EnsureTyping(parsed, proc, schema, cleanedParams, cleanedSessionVars)
 		if err != nil {
 			return nil, err
 		}
 
-		generated, err := generate.GenerateProcedure(parsed, proc, cleanedParams)
+		generated, err := generate.GenerateProcedure(parsed, proc, cleanedParams, anonReceivers, pgSchemaName)
 		if err != nil {
 			return nil, err
 		}

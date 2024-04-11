@@ -86,7 +86,7 @@ func Test_Typing(t *testing.T) {
 			require.NoError(t, err)
 
 			// named types match the parameters of the procedure
-			err = typing.EnsureTyping(stmts, proc, testdata.TestSchema, []*types.NamedType{
+			_, err = typing.EnsureTyping(stmts, proc, testdata.TestSchema, []*types.NamedType{
 				{
 					Name: "$id",
 					Type: types.IntType,

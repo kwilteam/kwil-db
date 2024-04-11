@@ -710,28 +710,16 @@ func (p *preparedProcedure) shapeReturn(result *sql.ResultSet) error {
 		return nil
 	}
 
-	// if returning a table, we should rename all of the returned
-	// columns to match the expected return columns.
-	if len(p.returns.Fields) > 0 {
-		if len(p.returns.Fields) != len(result.Columns) {
-			// I'm quite positive this will get caught before the schema is even deployed,
-			// but just in case, we should check here.
-			return fmt.Errorf("shapeReturn: procedure definition expects result %d columns, but returned %d", len(p.returns.Fields), len(result.Columns))
-		}
-
-		for i, col := range p.returns.Fields {
-			result.Columns[i] = col.Name
-		}
-
-		return nil
+	if len(p.returns.Fields) != len(result.Columns) {
+		// I'm quite positive this will get caught before the schema is even deployed,
+		// but just in case, we should check here.
+		return fmt.Errorf("shapeReturn: procedure definition expects result %d columns, but returned %d", len(p.returns.Fields), len(result.Columns))
 	}
 
-	// we don't have to do anything if it returns a list of types,
-	// however we will check the length, just for safety, however this
-	// should be caught before the schema is deployed.
-	if len(p.returns.Fields) != len(result.Columns) {
-		return fmt.Errorf("shapeReturn: procedure definition expects %d columns, but returned %d", len(p.returns.Fields), len(result.Columns))
+	for i, col := range p.returns.Fields {
+		result.Columns[i] = col.Name
 	}
 
 	return nil
+
 }

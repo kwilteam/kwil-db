@@ -11,15 +11,20 @@ program:
 
 statement:
     VARIABLE type SEMICOLON # stmt_variable_declaration
+    // stmt_procedure_call must go above stmt_variable_assignment
+    | variable_or_underscore (COMMA variable_or_underscore)* ASSIGN call_expression SEMICOLON # stmt_procedure_call
     | VARIABLE ASSIGN expression SEMICOLON # stmt_variable_assignment
     | VARIABLE type ASSIGN expression SEMICOLON # stmt_variable_assignment_with_declaration
-    | (VARIABLE (COMMA VARIABLE) ASSIGN)? call_expression SEMICOLON # stmt_procedure_call
     | FOR VARIABLE IN (range|call_expression|VARIABLE|ANY_SQL) LBRACE statement* RBRACE # stmt_for_loop
     | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE statement* RBRACE)? # stmt_if
     | ANY_SQL SEMICOLON # stmt_sql
     | BREAK SEMICOLON # stmt_break
     | RETURN (expression_list|ANY_SQL) SEMICOLON # stmt_return
     | RETURN NEXT VARIABLE SEMICOLON # stmt_return_next
+;
+
+variable_or_underscore:
+   (VARIABLE|UNDERSCORE)
 ;
 
 type:

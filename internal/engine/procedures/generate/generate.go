@@ -24,7 +24,7 @@ type GeneratedProcedure struct {
 
 // GenerateProcedure generates the plpgsql code for a procedure.
 // It returns the body, as well as the variables that need to be declared.
-func GenerateProcedure(stmts []parser.Statement, proc *types.Procedure, procedureInputs []*types.NamedType) (g *GeneratedProcedure, err error) {
+func GenerateProcedure(stmts []parser.Statement, proc *types.Procedure, procedureInputs []*types.NamedType, anonymousReceiverTypes []*types.DataType, pgSchemaName string) (g *GeneratedProcedure, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("panic: %v", e)
@@ -44,6 +44,8 @@ func GenerateProcedure(stmts []parser.Statement, proc *types.Procedure, procedur
 	v := &generatorVisitor{
 		variables:        variables,
 		currentProcedure: proc,
+		anonymousTypes:   anonymousReceiverTypes,
+		pgSchemaName:     pgSchemaName,
 	}
 
 	body := strings.Builder{}
@@ -62,6 +64,12 @@ func GenerateProcedure(stmts []parser.Statement, proc *types.Procedure, procedur
 			Name: kv.Key,
 			Type: kv.Value.Copy(),
 		})
+	}
+
+	// sanity check in case we have too many/little
+	// anonymous receivers declared
+	if len(anonymousReceiverTypes) != v.anonymousReceiverCount {
+		return nil, fmt.Errorf("internal bug: expected %d anonymous receivers, got %d", v.anonymousReceiverCount, len(anonymousReceiverTypes))
 	}
 
 	return &GeneratedProcedure{

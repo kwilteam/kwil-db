@@ -17,6 +17,7 @@ PERIOD:    '.';
 LBRACKET : '[';
 RBRACKET : ']';
 SINGLE_QUOTE: '\'';
+UNDERSCORE: '_';
 
 // arithmetic operators
 PLUS:      '+';

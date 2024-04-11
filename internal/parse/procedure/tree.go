@@ -76,7 +76,9 @@ func (e *StatementProcedureCall) Accept(v Visitor) interface{} {
 
 type StatementProcedureCall struct {
 	baseStatement
-	Variables []string
+	// Variables holds the receivers that the procedure assigns to.
+	// It can be nil (e.g. $return1, _, $return3 := proc())
+	Variables []*string
 	Call      *ExpressionCall
 }
 
