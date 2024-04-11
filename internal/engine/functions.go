@@ -11,7 +11,7 @@ import (
 var (
 	Functions = map[string]*FunctionDefinition{
 		"abs": {
-			Args: func(args []*types.DataType) (*types.DataType, error) {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				if len(args) != 1 {
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
@@ -22,10 +22,12 @@ var (
 
 				return types.IntType, nil
 			},
-			PGName: "abs",
+			PGFormat: func(inputs []string) string {
+				return fmt.Sprintf("abs(%s)", inputs[0])
+			},
 		},
 		"error": {
-			Args: func(args []*types.DataType) (*types.DataType, error) {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				if len(args) != 1 {
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
@@ -36,10 +38,12 @@ var (
 
 				return types.NullType, nil
 			},
-			PGName: "error",
+			PGFormat: func(inputs []string) string {
+				return fmt.Sprintf("error(%s)", inputs[0])
+			},
 		},
 		"length": {
-			Args: func(args []*types.DataType) (*types.DataType, error) {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				if len(args) != 1 {
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
@@ -50,10 +54,12 @@ var (
 
 				return types.IntType, nil
 			},
-			PGName: "length",
+			PGFormat: func(inputs []string) string {
+				return fmt.Sprintf("length(%s)", inputs[0])
+			},
 		},
 		"lower": {
-			Args: func(args []*types.DataType) (*types.DataType, error) {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				if len(args) != 1 {
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
@@ -64,10 +70,12 @@ var (
 
 				return types.TextType, nil
 			},
-			PGName: "lower",
+			PGFormat: func(inputs []string) string {
+				return fmt.Sprintf("lower(%s)", inputs[0])
+			},
 		},
 		"upper": {
-			Args: func(args []*types.DataType) (*types.DataType, error) {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				if len(args) != 1 {
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
@@ -78,10 +86,12 @@ var (
 
 				return types.TextType, nil
 			},
-			PGName: "upper",
+			PGFormat: func(inputs []string) string {
+				return fmt.Sprintf("upper(%s)", inputs[0])
+			},
 		},
 		"format": {
-			Args: func(args []*types.DataType) (*types.DataType, error) {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				if len(args) < 1 {
 					return nil, fmt.Errorf("invalid number of arguments: expected at least 1, got %d", len(args))
 				}
@@ -92,10 +102,12 @@ var (
 
 				return types.TextType, nil
 			},
-			PGName: "format",
+			PGFormat: func(inputs []string) string {
+				return fmt.Sprintf("format(%s)", strings.Join(inputs, ", "))
+			},
 		},
 		"uuid_generate_v5": {
-			Args: func(args []*types.DataType) (*types.DataType, error) {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				// first argument must be a uuid, second argument must be text
 				if len(args) != 2 {
 					return nil, wrapErrArgumentNumber(2, len(args))
@@ -111,11 +123,13 @@ var (
 
 				return types.UUIDType, nil
 			},
-			PGName: "uuid_generate_v5",
+			PGFormat: func(inputs []string) string {
+				return fmt.Sprintf("uuid_generate_v5(%s)", strings.Join(inputs, ", "))
+			},
 		},
 		// array functions
 		"array_append": {
-			Args: func(args []*types.DataType) (*types.DataType, error) {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				if len(args) != 2 {
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
@@ -134,10 +148,36 @@ var (
 
 				return args[0], nil
 			},
-			PGName: "array_append",
+			PGFormat: func(inputs []string) string {
+				return fmt.Sprintf("array_append(%s)", strings.Join(inputs, ", "))
+			},
+		},
+		"array_prepend": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				if !args[0].IsArray {
+					return nil, fmt.Errorf("expected first argument to be an array, got %s", args[0].String())
+				}
+
+				if args[1].IsArray {
+					return nil, fmt.Errorf("expected second argument to be a scalar, got %s", args[1].String())
+				}
+
+				if !strings.EqualFold(args[0].Name, args[1].Name) {
+					return nil, fmt.Errorf("expected both arguments to be of the same base type, got %s and %s", args[0].Name, args[1].Name)
+				}
+
+				return args[0], nil
+			},
+			PGFormat: func(inputs []string) string {
+				return fmt.Sprintf("array_prepend(%s)", strings.Join(inputs, ", "))
+			},
 		},
 		"array_cat": {
-			Args: func(args []*types.DataType) (*types.DataType, error) {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				if len(args) != 2 {
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
@@ -156,10 +196,12 @@ var (
 
 				return args[0], nil
 			},
-			PGName: "array_cat",
+			PGFormat: func(inputs []string) string {
+				return fmt.Sprintf("array_cat(%s)", strings.Join(inputs, ", "))
+			},
 		},
 		"array_length": {
-			Args: func(args []*types.DataType) (*types.DataType, error) {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				if len(args) != 1 {
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
@@ -170,11 +212,13 @@ var (
 
 				return types.IntType, nil
 			},
-			PGName: "array_length",
+			PGFormat: func(inputs []string) string {
+				return fmt.Sprintf("array_length(%s, 1)", inputs[0])
+			},
 		},
 		// Aggregate functions
 		"count": {
-			Args: func(args []*types.DataType) (*types.DataType, error) {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				if len(args) > 1 {
 					return nil, fmt.Errorf("invalid number of arguments: expected at most 1, got %d", len(args))
 				}
@@ -182,10 +226,16 @@ var (
 				return types.IntType, nil
 			},
 			IsAggregate: true,
-			PGName:      "count",
+			PGFormat: func(inputs []string) string {
+				if len(inputs) == 0 {
+					return "count(*)"
+				}
+
+				return fmt.Sprintf("count(%s)", inputs[0])
+			},
 		},
 		"sum": {
-			Args: func(args []*types.DataType) (*types.DataType, error) {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				if len(args) != 1 {
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
@@ -197,20 +247,27 @@ var (
 				return types.IntType, nil
 			},
 			IsAggregate: true,
-			PGName:      "sum",
+			PGFormat: func(inputs []string) string {
+				return fmt.Sprintf("sum(%s)", inputs[0])
+			},
 		},
 	}
 )
 
 type FunctionDefinition struct {
-	// Args is a function that checks the arguments passed to the function.
+	// ValidateArgs is a function that checks the arguments passed to the function.
 	// It can check the argument type and amount of arguments.
 	// It returns the expected return type based on the arguments.
-	Args func(args []*types.DataType) (*types.DataType, error)
+	ValidateArgs func(args []*types.DataType) (*types.DataType, error)
 	// IsAggregate is true if the function is an aggregate function.
 	IsAggregate bool
 	// PGName is the name of the function in Postgres.
-	PGName string
+	// PGName string
+	// PGFormat is a function that formats the inputs to the function in Postgres format.
+	// For example, the function `sum` would format the inputs as `sum($1)`.
+	// It will be given the same amount of inputs as ValidateArgs() was given.
+	// ValidateArgs will always be called first.
+	PGFormat func(inputs []string) string
 }
 
 var (

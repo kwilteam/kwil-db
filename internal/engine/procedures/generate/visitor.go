@@ -64,25 +64,31 @@ func (g *generatorVisitor) VisitExpressionBooleanLiteral(p0 *parser.ExpressionBo
 }
 
 func (g *generatorVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
-	str := strings.Builder{}
+
+	inputs := make([]string, len(p0.Arguments))
+	for i, arg := range p0.Arguments {
+		inputs[i] = arg.Accept(g).(string)
+	}
 
 	// if it is not a function, it is a procedure,
 	// and we need to prefix it with the schema name.
-	_, ok := engine.Functions[p0.Name]
-	if !ok {
-		str.WriteString(g.pgSchemaName)
-		str.WriteString(".")
+	funcDef, ok := engine.Functions[p0.Name]
+	if ok {
+		return funcDef.PGFormat(inputs)
 	}
 
+	str := strings.Builder{}
+	str.WriteString(g.pgSchemaName)
+	str.WriteString(".")
 	str.WriteString(p0.Name)
 
 	str.WriteString("(")
-	for i, arg := range p0.Arguments {
+	for i, in := range inputs {
 		if i > 0 {
 			str.WriteString(", ")
 		}
 
-		str.WriteString(arg.Accept(g).(string))
+		str.WriteString(in)
 	}
 
 	str.WriteString(")")

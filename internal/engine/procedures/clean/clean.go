@@ -231,7 +231,7 @@ func (c *cleaner) findProcedure(name string) (*types.Procedure, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("procedure not found: %s", name)
+	return nil, fmt.Errorf("procedure/function not found: %s", name)
 }
 
 // returnable returns true if the statement

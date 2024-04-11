@@ -528,7 +528,7 @@ func (t *typeVisitor) VisitExpressionFunction(p0 *tree.ExpressionFunction) any {
 			argTypes = append(argTypes, attr.Type)
 		}
 
-		returnType, err := funcDef.Args(argTypes)
+		returnType, err := funcDef.ValidateArgs(argTypes)
 		if err != nil {
 			return nil, err
 		}

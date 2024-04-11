@@ -123,7 +123,7 @@ func (t *typingVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
 			argsTypes[i] = arg.Accept(t).(*types.DataType)
 		}
 
-		returnType, err := funcDef.Args(argsTypes)
+		returnType, err := funcDef.ValidateArgs(argsTypes)
 		if err != nil {
 			panic(err)
 		}
@@ -359,7 +359,7 @@ func (t *typingVisitor) analyzeProcedureCall(p0 *parser.ExpressionCall) *types.P
 			argsTypes[i] = arg.Accept(t).(*types.DataType)
 		}
 
-		returnType, err := funcDef.Args(argsTypes)
+		returnType, err := funcDef.ValidateArgs(argsTypes)
 		if err != nil {
 			panic(err)
 		}

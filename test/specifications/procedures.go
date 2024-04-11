@@ -67,7 +67,7 @@ func ExecuteProcedureSpecification(ctx context.Context, t *testing.T, caller Pro
 	_, ok = user["address"].(string)
 	require.True(t, ok)
 
-	executeProcedureReturnNext(ctx, t, ex)
+	testPosts(ctx, t, ex)
 }
 
 type executor struct {
@@ -100,7 +100,7 @@ func (e *executor) Call(ctx context.Context, action string, inputs []any) ([]map
 // RETURN NEXT semantics. This is kept unexported because creating a user in the database
 // is a pre-requisite, which is done in the exported ExecuteProcedureSpecification.
 // This test uses the `create_procedure` and `get_recent_posts_by_size` procedures from users.kf.
-func executeProcedureReturnNext(ctx context.Context, t *testing.T, caller *executor) {
+func testPosts(ctx context.Context, t *testing.T, caller *executor) {
 	// we will makie 5 posts, with 3 of them having more than 100 characters
 	posts := []string{
 		"short_post_1",
@@ -131,4 +131,17 @@ func executeProcedureReturnNext(ctx context.Context, t *testing.T, caller *execu
 	// latest posts are returned first
 	require.Equal(t, res[0]["content"], posts[3])
 	require.Equal(t, res[1]["content"], posts[2])
+
+	// reverse latest posts
+	res, err = caller.Call(ctx, "reverse_latest_posts", []any{"satoshi", 5})
+	require.NoError(t, err, "error calling reverse_latest_posts action")
+
+	require.Len(t, res, 5)
+
+	// check that the posts are reversed
+	require.Equal(t, res[0]["content"], posts[4])
+	require.Equal(t, res[1]["content"], posts[3])
+	require.Equal(t, res[2]["content"], posts[2])
+	require.Equal(t, res[3]["content"], posts[1])
+	require.Equal(t, res[4]["content"], posts[0])
 }

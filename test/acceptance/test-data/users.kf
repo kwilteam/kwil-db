@@ -51,6 +51,15 @@ procedure get_user($name text) public view returns (id uuid, age int, address te
     error(format('user "%s" not found', $name));
 }
 
+// get_user_by_owner gets a user id, age, and name by the owner
+procedure get_user_by_owner($address text) public view returns (id uuid, age int, name text, post_count int) {
+    for $row in SELECT id, age, name, post_count FROM users WHERE address = $address {
+        return $row.id, $row.age, $row.name, $row.post_count; // will return on the first iteration
+    }
+
+    error(format('user owned by "%s" not found', $address));
+}
+
 // increment_post_count increments a user's post count, identified by the owner.
 // it returns the user id and the new post count
 procedure increment_post_count($address text) private returns (id uuid, post_count int) {
@@ -107,4 +116,29 @@ procedure get_recent_posts_by_size($username text, $size int, $limit int) public
             return next $row.id, $row.content;
         }
     }
+}
+
+// reverse_latest_posts gets the $limit most recent posts,
+// but returns them in the order of oldest first. This is very useless
+// and inefficient, but it is intended to test arrays.
+procedure reverse_latest_posts($username text, $limit int) public view returns (content text[]) {
+    $content text[];
+
+    for $post in get_recent_posts($username) {
+        $content := array_append($content, $post.content);
+    }
+
+    return reverse_array($content);
+}
+
+// reverse_array reverses the order of an array.
+// This is intended to test array operations
+procedure reverse_array($arr text[]) public view returns (reversed text[]) {
+    $rev text[];
+
+    for $i in 1:array_length($arr) {
+        $rev := array_prepend($rev, $arr[$i]);
+    }
+
+    return $rev;
 }
