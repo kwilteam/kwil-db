@@ -61,11 +61,9 @@ func ExecuteProcedureSpecification(ctx context.Context, t *testing.T, caller Pro
 
 	user = res[0]
 
-	name, ok := user["name"].(string)
-	require.True(t, ok)
+	name, err = conv.String(user["name"])
+	require.NoError(t, err)
 	require.Equal(t, name, "satoshi")
-	_, ok = user["address"].(string)
-	require.True(t, ok)
 
 	testPosts(ctx, t, ex)
 }
@@ -144,9 +142,10 @@ func testPosts(ctx context.Context, t *testing.T, caller *executor) {
 	// check that the posts are reversed. since the query is reversing
 	// latest posts, it is expected that the posts are in the order
 	// they were created
-	require.Equal(t, content[0].(string), posts[0])
-	require.Equal(t, content[1].(string), posts[1])
-	require.Equal(t, content[2].(string), posts[2])
-	require.Equal(t, content[3].(string), posts[3])
-	require.Equal(t, content[4].(string), posts[4])
+	for i, c := range content {
+		con, err := conv.String(c)
+		require.NoError(t, err)
+
+		require.Equal(t, con, posts[i])
+	}
 }

@@ -78,7 +78,7 @@ func callCmd() *cobra.Command {
 					tuples = append(tuples, []any{})
 				}
 
-				data, err := clnt.CallAction(ctx, dbid, lowerName, tuples[0])
+				data, err := clnt.Call(ctx, dbid, lowerName, tuples[0])
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error calling action: %w", err))
 				}

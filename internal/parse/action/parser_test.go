@@ -18,7 +18,7 @@ func Test_ParseMany(t *testing.T) {
 	INSERT INTO users (id, name) VALUES ($id, 'test');
 	`
 
-	got, err := actparser.ParseMany(stmt)
+	got, err := actparser.Parse(stmt)
 	assert.NoError(t, err)
 
 	assert.Len(t, got, 2)
@@ -198,13 +198,13 @@ func TestParseActionStmt(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotAst, err := actparser.ParseActionStmt(tt.input, nil, *trace, false)
+			gotAst, err := actparser.Parse(tt.input)
 			if err != nil {
 				t.Errorf("ParseActionStmt() error = %v", err)
 				return
 			}
 
-			assert.EqualValues(t, tt.expect, gotAst, "ParseRawSQL() got %+v, want %+v", gotAst, tt.expect)
+			assert.EqualValues(t, tt.expect, gotAst[0], "ParseRawSQL() got %+v, want %+v", gotAst, tt.expect)
 		})
 	}
 }
@@ -240,7 +240,7 @@ func TestParseActionStmt_scalar_function(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := actparser.ParseActionStmt(tt.input, nil, *trace, false)
+			_, err := actparser.Parse(tt.input)
 			if tt.wantErr {
 				assert.Error(t, err, "ParseActionStmt(%v)", tt.input)
 			} else {

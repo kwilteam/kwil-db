@@ -59,7 +59,7 @@ type respRelations struct {
 }
 
 func (r *respRelations) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.Data.ExportString())
+	return json.Marshal(r.Data.Export())
 }
 
 func (r *respRelations) MarshalText() ([]byte, error) {

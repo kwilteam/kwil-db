@@ -121,7 +121,7 @@ func prepareAction(unparsed *types.Action, global *GlobalContext, schema *types.
 	// based on the type of statement, we will convert it into an instruction.
 	// If the procedure is a view, then it can neither contain mutative statements
 	// nor call non-view procedures.
-	parsedStmts, err := actparser.ParseMany(unparsed.Body)
+	parsedStmts, err := actparser.Parse(unparsed.Body)
 	if err != nil {
 		return nil, err
 	}
