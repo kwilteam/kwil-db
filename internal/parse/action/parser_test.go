@@ -1,7 +1,6 @@
 package actparser_test
 
 import (
-	"flag"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,8 +8,6 @@ import (
 	actparser "github.com/kwilteam/kwil-db/internal/parse/action"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
-
-var trace = flag.Bool("trace", false, "run tests with tracing")
 
 func Test_ParseMany(t *testing.T) {
 	stmt := `
