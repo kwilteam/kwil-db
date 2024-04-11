@@ -124,6 +124,10 @@ func (v *Traverser) VisitStatementReturnNext(s *parser.StatementReturnNext) inte
 		v.StatementReturnNext(s)
 	}
 
+	for _, expr := range s.Returns {
+		expr.Accept(v)
+	}
+
 	return nil
 }
 

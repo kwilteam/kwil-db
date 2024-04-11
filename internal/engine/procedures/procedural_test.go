@@ -223,7 +223,7 @@ func Test_Procedures(t *testing.T) {
 				withParams().
 				withBody(`
 				for $row in SELECT id FROM users {
-					return next $row;
+					return next $row.id;
 				}
 				`).
 				withReturns("table(id int)").

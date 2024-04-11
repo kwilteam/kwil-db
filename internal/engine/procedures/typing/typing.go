@@ -71,6 +71,11 @@ type typingVisitor struct {
 	// to the fields to their types.
 	anonymousDeclarations map[string]map[string]*types.DataType
 
+	// loopTarget is the anonymous declaration of the current loop target.
+	// Its type can be found in anonymousDeclarations.
+	// If we are not in a loop, this will be an empty string.
+	loopTarget string
+
 	// anonymousReceiverTypes holds the types of the anonymous receivers
 	anonymousReceiverTypes []*types.DataType
 
@@ -407,6 +412,8 @@ func (t *typingVisitor) VisitStatementBreak(p0 *parser.StatementBreak) any {
 }
 
 func (t *typingVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) any {
+	t.loopTarget = p0.Variable
+
 	switch target := p0.Target.(type) {
 	case *parser.LoopTargetVariable:
 		r := target.Accept(t).(*types.DataType)
@@ -454,6 +461,8 @@ func (t *typingVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) any {
 	for _, stmt := range p0.Body {
 		stmt.Accept(t)
 	}
+
+	t.loopTarget = ""
 
 	return nil
 }
@@ -535,29 +544,30 @@ func (t *typingVisitor) VisitStatementReturn(p0 *parser.StatementReturn) any {
 }
 
 func (t *typingVisitor) VisitStatementReturnNext(p0 *parser.StatementReturnNext) any {
-	// we can only call return next on records,
-	// which should be declared as anonymous
-	r, ok := t.anonymousDeclarations[p0.Variable]
-	if !ok {
-		panic("variable not declared")
+	if t.loopTarget == "" {
+		panic("RETURN NEXT can only be used in a loop")
 	}
 
 	if t.currentProcedure.Returns == nil {
 		panic("procedure does not return anything")
 	}
 
-	if t.currentProcedure.Returns.Fields == nil {
-		panic("procedure does not return a table")
+	if !t.currentProcedure.Returns.IsTable {
+		panic("RETURN NEXT can only be used in procedures that return a table")
 	}
 
-	for _, col := range t.currentProcedure.Returns.Fields {
-		dataType, ok := r[col.Name]
+	if len(p0.Returns) != len(t.currentProcedure.Returns.Fields) {
+		panic("RETURN NEXT must return the same number of fields as the procedure return")
+	}
+
+	for i, col := range t.currentProcedure.Returns.Fields {
+		r, ok := p0.Returns[i].Accept(t).(*types.DataType)
 		if !ok {
-			panic(fmt.Sprintf(`column "%s" not found in return table`, col.Name))
+			panic("expected custom data type")
 		}
 
-		if !col.Type.Equals(dataType) {
-			panic(fmt.Sprintf(`column "%s" has wrong type`, col.Name))
+		if !col.Type.Equals(r) {
+			panic(fmt.Sprintf("return type does not match procedure return type: %s != %s", col.Type, r))
 		}
 	}
 

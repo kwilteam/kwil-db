@@ -87,9 +87,6 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 				}
 			}
 		},
-		StatementReturnNext: func(srn *parser.StatementReturnNext) {
-			c.cleanVar(&srn.Variable)
-		},
 		StatementProcedureCall: func(spc *parser.StatementProcedureCall) {
 			cleanedVars := make([]*string, len(spc.Variables))
 			for i, arg := range spc.Variables {

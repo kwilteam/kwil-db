@@ -387,7 +387,14 @@ func (g *generatorVisitor) VisitStatementReturnNext(p0 *parser.StatementReturnNe
 		panic("RETURN NEXT statement outside of loop")
 	}
 
-	return fmt.Sprintf("RETURN NEXT %s;", p0.Variable)
+	str := strings.Builder{}
+	for i, expr := range p0.Returns {
+		str.WriteString(fmt.Sprintf("%s := %s;\n", g.currentProcedure.Returns.Fields[i].Name, expr.Accept(g).(string)))
+	}
+
+	str.WriteString("RETURN NEXT;")
+
+	return str.String()
 }
 
 func (g *generatorVisitor) VisitStatementSQL(p0 *parser.StatementSQL) any {

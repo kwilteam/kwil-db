@@ -204,8 +204,9 @@ func (e *StatementReturnNext) Accept(v Visitor) interface{} {
 
 type StatementReturnNext struct {
 	baseStatement
-	// Variable is the variable to return.
-	Variable string
+	// Returns are the values to return.
+	// There must be the same number of values as the procedure returns.
+	Returns []Expression
 }
 
 func (e *StatementBreak) Accept(v Visitor) interface{} {

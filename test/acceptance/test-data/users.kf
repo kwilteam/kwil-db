@@ -80,3 +80,31 @@ procedure create_post($content text) public {
         $post_count
     );
 }
+
+procedure get_recent_posts($username text) public view returns table(id uuid, content text) {
+return SELECT p.id, p.content from posts as p
+    inner join users as u on p.author_id = u.id
+    WHERE u.name = $username
+    ORDER BY p.post_num DESC;
+}
+
+// get_recent_posts_by_size gets the $limit most recent posts from a user larger than size $size
+// this obviously could be written more simply and efficiently with pure SQL.
+// but the intent is to test RETURN NEXT and loops over procedures
+procedure get_recent_posts_by_size($username text, $size int, $limit int) public view returns table(id uuid, content text) {
+    // set max limit of 50
+    if $limit > 50 {
+        $limit := 50;
+    }
+
+    $count int := 0;
+    for $row in get_recent_posts($username) {
+        if $count == $limit {
+            break;
+        }
+        if length($row.content) >= $size {
+            $count := $count + 1;
+            return next $row.id, $row.content;
+        }
+    }
+}

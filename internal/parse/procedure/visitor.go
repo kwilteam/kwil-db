@@ -348,7 +348,7 @@ func (p *proceduralLangVisitor) VisitStmt_return(ctx *gen.Stmt_returnContext) an
 
 func (p *proceduralLangVisitor) VisitStmt_return_next(ctx *gen.Stmt_return_nextContext) any {
 	return &StatementReturnNext{
-		Variable: getVariable(ctx.VARIABLE()),
+		Returns: ctx.Expression_list().Accept(p).([]Expression),
 	}
 }
 

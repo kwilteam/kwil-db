@@ -20,7 +20,7 @@ statement:
     | ANY_SQL SEMICOLON # stmt_sql
     | BREAK SEMICOLON # stmt_break
     | RETURN (expression_list|ANY_SQL) SEMICOLON # stmt_return
-    | RETURN NEXT VARIABLE SEMICOLON # stmt_return_next
+    | RETURN NEXT expression_list SEMICOLON # stmt_return_next
 ;
 
 variable_or_underscore:

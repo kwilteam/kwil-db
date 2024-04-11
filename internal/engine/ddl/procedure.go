@@ -74,8 +74,7 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 			if i != 0 {
 				str.WriteString(", ")
 			}
-			// TODO: we need to give return types some sort of unique identifier.
-			// this needs to match what we give other variables (could even just be underscores).
+
 			typ, err := field.Type.PGString()
 			if err != nil {
 				return "", err

@@ -875,13 +875,13 @@ func (c *DataType) PGString() (string, error) {
 	case intStr:
 		scalar = "INT8"
 	case textStr:
-		scalar = textStr
+		scalar = "TEXT"
 	case boolStr:
-		scalar = boolStr
+		scalar = "BOOL"
 	case blobStr:
 		scalar = "BYTEA"
 	case uuidStr:
-		scalar = uuidStr
+		scalar = "UUID"
 	case nullStr:
 		return "", fmt.Errorf("cannot have null column type")
 	case unknownStr:
