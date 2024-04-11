@@ -137,7 +137,7 @@ procedure reverse_array($arr text[]) public view returns (reversed text[]) {
     $rev text[];
 
     for $i in 1:array_length($arr) {
-        $rev := array_prepend($rev, $arr[$i]);
+        $rev := array_prepend($arr[$i], $rev);
     }
 
     return $rev;

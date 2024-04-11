@@ -9,6 +9,7 @@ RPAREN:   ')';
 LBRACE:   '{';
 RBRACE:   '}';
 COMMA:     ',';
+TYPE_CAST: '::';
 COLON:     ':';
 DOLLAR:    '$';
 AT:        '@';

@@ -158,19 +158,19 @@ var (
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
 
-				if !args[0].IsArray {
-					return nil, fmt.Errorf("expected first argument to be an array, got %s", args[0].String())
+				if args[0].IsArray {
+					return nil, fmt.Errorf("expected first argument to be a scalar, got %s", args[0].String())
 				}
 
-				if args[1].IsArray {
-					return nil, fmt.Errorf("expected second argument to be a scalar, got %s", args[1].String())
+				if !args[1].IsArray {
+					return nil, fmt.Errorf("expected second argument to be an array, got %s", args[1].String())
 				}
 
 				if !strings.EqualFold(args[0].Name, args[1].Name) {
 					return nil, fmt.Errorf("expected both arguments to be of the same base type, got %s and %s", args[0].Name, args[1].Name)
 				}
 
-				return args[0], nil
+				return args[1], nil
 			},
 			PGFormat: func(inputs []string) string {
 				return fmt.Sprintf("array_prepend(%s)", strings.Join(inputs, ", "))

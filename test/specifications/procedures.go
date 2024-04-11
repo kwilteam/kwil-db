@@ -136,12 +136,17 @@ func testPosts(ctx context.Context, t *testing.T, caller *executor) {
 	res, err = caller.Call(ctx, "reverse_latest_posts", []any{"satoshi", 5})
 	require.NoError(t, err, "error calling reverse_latest_posts action")
 
-	require.Len(t, res, 5)
+	require.Len(t, res, 1)
 
-	// check that the posts are reversed
-	require.Equal(t, res[0]["content"], posts[4])
-	require.Equal(t, res[1]["content"], posts[3])
-	require.Equal(t, res[2]["content"], posts[2])
-	require.Equal(t, res[3]["content"], posts[1])
-	require.Equal(t, res[4]["content"], posts[0])
+	content, ok := res[0]["content"].([]interface{})
+	require.True(t, ok)
+
+	// check that the posts are reversed. since the query is reversing
+	// latest posts, it is expected that the posts are in the order
+	// they were created
+	require.Equal(t, content[0].(string), posts[0])
+	require.Equal(t, content[1].(string), posts[1])
+	require.Equal(t, content[2].(string), posts[2])
+	require.Equal(t, content[3].(string), posts[3])
+	require.Equal(t, content[4].(string), posts[4])
 }
