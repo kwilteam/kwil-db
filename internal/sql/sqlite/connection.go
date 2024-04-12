@@ -198,9 +198,8 @@ func (c *Connection) execute(ctx context.Context, stmt string, args map[string]a
 	columns := determineColumnNames(prepared)
 
 	r := &Result{
-		stmt:           prepared,
-		firstIteration: true,
-		columnNames:    columns,
+		stmt:        prepared,
+		columnNames: columns,
 		closeFn: sync.OnceFunc(func() {
 			c.inUse.Store(false)
 			c.conn.SetInterrupt(nil)
