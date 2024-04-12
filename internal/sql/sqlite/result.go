@@ -26,13 +26,6 @@ type Result struct {
 	// columnNames is the list of column names.
 	columnNames []string
 
-	// columnTypes is the list of column types.
-	columnTypes []sqlite.ColumnType
-
-	// firstIteration indicates whether this is the first iteration.
-	// sqlite cannot return column types until the first iteration.
-	firstIteration bool
-
 	// closeFn is the function to closeFn the result set.
 	// this is used to signal that the connection can be used again,
 	// and is also used to close statements for read-only connections.
@@ -63,11 +56,6 @@ func (r *Result) Next() (rowReturned bool) {
 		return false
 	}
 
-	if r.firstIteration {
-		r.firstIteration = false
-		r.columnTypes = determineColumnTypes(r.stmt)
-	}
-
 	if !rowReturned {
 		r.complete = true
 	}
@@ -85,7 +73,7 @@ func (r *Result) Columns() []string {
 func (r *Result) Values() ([]any, error) {
 
 	values := make([]any, len(r.columnNames))
-	for i := range r.columnTypes {
+	for i := range r.columnNames {
 		colType := r.stmt.ColumnType(i)
 		switch colType {
 		case sqlite.TypeInteger:
