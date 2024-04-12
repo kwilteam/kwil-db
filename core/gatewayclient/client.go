@@ -177,12 +177,6 @@ func (c *GatewayClient) authenticate(ctx context.Context) error {
 			kgwAuthVersion, authParam.Version)
 	}
 
-	// returned from kgw in https://github.com/kwilteam/kgw/pull/42
-	if authParam.URI != "" && authParam.URI != authURI {
-		return fmt.Errorf("authn uri mismatch: configured '%s' != remote '%s'",
-			authURI, authParam.URI)
-	}
-
 	msg := composeGatewayAuthMessage(authParam, targetDomain, authURI, kgwAuthVersion, c.Client.ChainID())
 
 	if c.Signer == nil {
