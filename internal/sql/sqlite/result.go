@@ -212,14 +212,3 @@ func determineColumnNames(stmt *sqlite.Stmt) []string {
 	}
 	return columnNames
 }
-
-// determineColumnTypes determines the column types of the statement.
-func determineColumnTypes(stmt *sqlite.Stmt) []sqlite.ColumnType {
-	columnTypes := make([]sqlite.ColumnType, stmt.ColumnCount())
-
-	for i := 0; i < len(columnTypes); i++ {
-		columnTypes[i] = stmt.ColumnType(i)
-	}
-
-	return columnTypes
-}
