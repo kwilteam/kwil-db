@@ -108,10 +108,6 @@ func (r *Result) Values() ([]any, error) {
 
 			values[i] = bts
 		case sqlite.TypeNull:
-			tt := r.stmt.ColumnType(i)
-			ta := r.stmt.ColumnReader(i)
-			_ = tt
-			_ = ta
 			values[i] = nil
 		default:
 			panic("kwildb get any error: unknown type")
