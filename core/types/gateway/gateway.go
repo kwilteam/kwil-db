@@ -18,4 +18,9 @@ type GatewayAuthParameter struct {
 	Statement      string `json:"statement"` // optional
 	IssueAt        string `json:"issue_at"`
 	ExpirationTime string `json:"expiration_time"`
+	// client can use those to precheck before signing
+	ChainID string `json:"chain_id"` // the chain id of the gateway
+	Domain  string `json:"domain"`   // the domain of the gateway
+	Version string `json:"version"`  // the authn version used by the gateway
+	URI     string `json:"uri"`      // the endpoint used for authn
 }

@@ -157,7 +157,33 @@ func (c *GatewayClient) authenticate(ctx context.Context) error {
 		return fmt.Errorf("join path: %w", err)
 	}
 
-	msg := composeGatewayAuthMessage(authParam, c.target.String(), authURI, kgwAuthVersion, c.Client.ChainID())
+	// remove trailing slash, avoid the confusing case like "http://example.com/" != "http://example.com"
+	// This is also done in the kgw, https://github.com/kwilteam/kgw/pull/42
+	targetDomain := strings.TrimSuffix(c.target.String(), "/")
+	// backward compatibility if the Domain is not returned by the gateway
+	// Those fields are returned from kgw in https://github.com/kwilteam/kgw/pull/40
+	if authParam.Domain != "" && authParam.Domain != targetDomain {
+		return fmt.Errorf("domain mismatch: configured '%s' != remote %s",
+			targetDomain, authParam.Domain)
+	}
+
+	if authParam.ChainID != "" && authParam.ChainID != c.Client.ChainID() {
+		return fmt.Errorf("chain ID mismatch: configured '%s' !=  remote '%s'",
+			c.Client.ChainID(), authParam.ChainID)
+	}
+
+	if authParam.Version != "" && authParam.Version != kgwAuthVersion {
+		return fmt.Errorf("authn version mismatch: configured '%s' != remote '%s'",
+			kgwAuthVersion, authParam.Version)
+	}
+
+	// returned from kgw in https://github.com/kwilteam/kgw/pull/42
+	if authParam.URI != "" && authParam.URI != authURI {
+		return fmt.Errorf("authn uri mismatch: configured '%s' != remote '%s'",
+			authURI, authParam.URI)
+	}
+
+	msg := composeGatewayAuthMessage(authParam, targetDomain, authURI, kgwAuthVersion, c.Client.ChainID())
 
 	if c.Signer == nil {
 		return fmt.Errorf("cannot authenticate to gateway without a signer")
