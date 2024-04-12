@@ -85,7 +85,8 @@ func (r *Result) Columns() []string {
 func (r *Result) Values() ([]any, error) {
 
 	values := make([]any, len(r.columnNames))
-	for i, colType := range r.columnTypes {
+	for i := range r.columnTypes {
+		colType := r.stmt.ColumnType(i)
 		switch colType {
 		case sqlite.TypeInteger:
 			values[i] = r.stmt.ColumnInt64(i)
@@ -107,6 +108,10 @@ func (r *Result) Values() ([]any, error) {
 
 			values[i] = bts
 		case sqlite.TypeNull:
+			tt := r.stmt.ColumnType(i)
+			ta := r.stmt.ColumnReader(i)
+			_ = tt
+			_ = ta
 			values[i] = nil
 		default:
 			panic("kwildb get any error: unknown type")
