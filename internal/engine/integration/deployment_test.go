@@ -1,3 +1,5 @@
+//go:build pglive
+
 package integration_test
 
 import (
