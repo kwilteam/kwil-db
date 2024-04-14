@@ -38,6 +38,9 @@ func Test_StoringSchemas(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx) // we always want to rollback, never commit
 
+	err = InitializeEngine(ctx, tx)
+	require.NoError(t, err)
+
 	err = createSchemasTableIfNotExists(ctx, tx)
 	require.NoError(t, err)
 
