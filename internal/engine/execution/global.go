@@ -46,6 +46,37 @@ var (
 func InitializeEngine(ctx context.Context, tx sql.DB) error {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initTables,
+		1: func(ctx context.Context, db sql.DB) error {
+			_, err := db.Execute(ctx, sqlUpgradeSchemaTableV1AddOwnerColumn)
+			if err != nil {
+				return err
+			}
+
+			_, err = db.Execute(ctx, sqlUpgradeSchemaTableV1AddNameColumn)
+			if err != nil {
+				return err
+			}
+
+			// we now need to read out all schemas to backfill the changes to
+			// the datasets table. This includes:
+			// - upgrading the version of the schema
+			// - setting the owner of the schema
+			// - setting the name of the schema
+			schemas, err := getSchemas(ctx, db)
+			if err != nil {
+				return err
+			}
+
+			for _, schema := range schemas {
+				_, err := db.Execute(ctx, sqlBackfillSchemaTableV1, schema.Owner, schema.Name)
+				if err != nil {
+					return err
+				}
+			}
+
+			_, err = db.Execute(ctx, sqlAddProceduresTableV1)
+			return err
+		},
 	}
 
 	err := versioning.Upgrade(ctx, tx, pg.InternalSchemaName, upgradeFns, engineVersion)

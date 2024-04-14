@@ -804,6 +804,17 @@ func (p *Procedure) IsView() bool {
 	return false
 }
 
+// IsOwner returns true if the procedure has an owner modifier.
+func (p *Procedure) IsOwner() bool {
+	for _, m := range p.Modifiers {
+		if m == ModifierOwner {
+			return true
+		}
+	}
+
+	return false
+}
+
 // ProcedureReturn holds the return type of a procedure.
 // EITHER the Type field is set, OR the Table field is set.
 type ProcedureReturn struct {

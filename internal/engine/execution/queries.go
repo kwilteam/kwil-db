@@ -17,7 +17,7 @@ import (
 
 var (
 	// engineVersion is the version of the 'kwild_internal' schema
-	engineVersion int64 = 0
+	engineVersion int64 = 1
 
 	schemaVersion        = 0 // schema version allows upgrading schemas in the future
 	sqlCreateSchemaTable = fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s.kwil_schemas (
@@ -26,17 +26,73 @@ var (
 	version INT DEFAULT %d
 );`, pg.InternalSchemaName, schemaVersion)
 	sqlCreateSchema    = `CREATE SCHEMA "%s";`
-	sqlStoreKwilSchema = fmt.Sprintf(`INSERT INTO %s.kwil_schemas (dbid, schema_content, version) VALUES ($1, $2, $3)
-	ON CONFLICT (dbid) DO UPDATE SET schema_content = $2, version = $3`, pg.InternalSchemaName)
+	sqlStoreKwilSchema = fmt.Sprintf(`INSERT INTO %s.kwil_schemas (dbid, schema_content, version, owner, name)
+	VALUES ($1, $2, $3, $4, $5)
+	ON CONFLICT (dbid) DO UPDATE SET schema_content = $2, version = $3, owner = $4, name = $5;`, pg.InternalSchemaName)
+	sqlStoreProcedure = fmt.Sprintf(`INSERT INTO %s.procedures (name, schema, param_types, param_names, return_types, return_names, returns_table, public, owner_only, is_view)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);`, pg.InternalSchemaName)
 	sqlListSchemaContent = fmt.Sprintf(`SELECT schema_content FROM %s.kwil_schemas;`, pg.InternalSchemaName)
 	sqlDropSchema        = `DROP SCHEMA "%s" CASCADE;`
 	sqlDeleteKwilSchema  = fmt.Sprintf(`DELETE FROM %s.kwil_schemas WHERE dbid = $1;`, pg.InternalSchemaName)
+
+	// v1 upgrades the schema to be:
+	// TABLE kwil_schemas (
+	// 	dbid TEXT PRIMARY KEY,
+	// 	schema_content BYTEA,
+	// 	version INT DEFAULT 0,
+	// 	owner BYTEA,
+	// 	name TEXT
+	// )
+	// TABLE procedures (
+	// 	name TEXT,
+	// 	schema TEXT,
+	//  param_types TEXT[],
+	//  return_types TEXT[],
+	//  return_names TEXT[],
+	//  returns_table BOOLEAN,
+	//  public BOOLEAN,
+	//  owner_only BOOLEAN,
+	//  is_view BOOLEAN,
+	//  primary key (name, schema)
+	//  FOREIGN KEY (schema) REFERENCES kwil_schemas (dbid) ON UPDATE CASCADE ON DELETE CASCADE
+	//
+
+	// upgrades for v1:
+	sqlUpgradeSchemaTableV1AddOwnerColumn = fmt.Sprintf(`
+	ALTER TABLE %s.kwil_schemas ADD COLUMN name TEXT;
+	`, pg.InternalSchemaName)
+	sqlUpgradeSchemaTableV1AddNameColumn = fmt.Sprintf(`
+	ALTER TABLE %s.kwil_schemas ADD COLUMN owner BYTEA;
+	`, pg.InternalSchemaName)
+	// sqlBackfillSchemaTableV1 adds the owner and name to all existing schemas,
+	// and updates the version to 1.
+	sqlBackfillSchemaTableV1 = fmt.Sprintf(`
+	UPDATE %s.kwil_schemas SET owner = $1, name = $2, version = 1;
+	`, pg.InternalSchemaName)
+
+	sqlAddProceduresTableV1 = fmt.Sprintf(`
+	CREATE TABLE %s.procedures (
+		name TEXT not null,
+		schema TEXT not null,
+		param_types TEXT[],
+		param_names TEXT[],
+		return_types TEXT[],
+		return_names TEXT[],
+		returns_table BOOLEAN not null,
+		public BOOLEAN not null,
+		owner_only BOOLEAN not null,
+		is_view BOOLEAN not null,
+		primary key (name, schema),
+		FOREIGN KEY (schema) REFERENCES %s.kwil_schemas (dbid) ON UPDATE CASCADE ON DELETE CASCADE
+	)
+	`, pg.InternalSchemaName, pg.InternalSchemaName)
 )
 
 func initTables(ctx context.Context, db sql.DB) error {
 	if err := createSchemasTableIfNotExists(ctx, db); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -77,7 +133,7 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema) err
 
 	// since we will fail if the schema already exists, we can assume that it does not exist
 	// in the kwil_schemas table. If it does for some reason, we will update it.
-	_, err = sp.Execute(ctx, sqlStoreKwilSchema, schema.DBID(), schemaBts, schemaVersion)
+	_, err = sp.Execute(ctx, sqlStoreKwilSchema, schema.DBID(), schemaBts, schemaVersion, schema.Owner, schema.Name)
 	if err != nil {
 		return err
 	}
@@ -110,6 +166,44 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema) err
 		if err != nil {
 			return err
 		}
+	}
+
+	// store the procedures in the kwil_procedures table
+	for _, proc := range schema.Procedures {
+
+		var paramTypes []string
+		var paramNames []string
+		for _, col := range proc.Parameters {
+			paramTypes = append(paramTypes, col.Type.String())
+			paramNames = append(paramNames, col.Name)
+		}
+
+		var returnTypes []string
+		var returnNames []string
+		returnsTable := false
+		if proc.Returns != nil {
+			returnsTable = proc.Returns.IsTable
+			for _, col := range proc.Returns.Fields {
+				returnTypes = append(returnTypes, col.Type.String())
+				returnNames = append(returnNames, col.Name)
+			}
+		}
+
+		_, err = sp.Execute(ctx, sqlStoreProcedure,
+			proc.Name,
+			schema.DBID(),
+			paramTypes,
+			paramNames,
+			returnTypes,
+			returnNames,
+			returnsTable,
+			proc.Public,
+			proc.IsOwner(),
+			proc.IsView())
+		if err != nil {
+			return err
+		}
+
 	}
 
 	return sp.Commit(ctx)
