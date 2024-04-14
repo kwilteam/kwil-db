@@ -18,7 +18,9 @@ func ValidateStatements(schema *types.Schema) error {
 	}
 
 	if len(schema.Procedures) > 0 {
-		_, err := procedures.GeneratePLPGSQL(schema, "pg_schema", "ctx", execution.PgSessionVars)
+		_, err := procedures.GeneratePLPGSQL(schema, "pg_schema", "ctx", execution.PgSessionVars, &procedures.GenerateOptions{
+			LogProcedureNameOnError: true,
+		})
 		if err != nil {
 			return err
 		}

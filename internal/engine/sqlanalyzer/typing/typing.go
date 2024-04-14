@@ -17,6 +17,9 @@ type AnalyzeOptions struct {
 	ArbitraryBinds bool
 	// Qualify will qualify all column references in the statement.
 	Qualify bool
+	// VerifyProcedures will verify procedure calls in the statement.
+	VerifyProcedures bool
+	Procedures       []*types.Procedure
 }
 
 // AnalyzeTypes will run type analysis on the given statement.
@@ -42,11 +45,9 @@ func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, options *AnalyzeOptio
 	}
 
 	v := &typeVisitor{
-		commonTables:   tbls,
-		ctes:           make(map[string]struct{}),
-		bindParams:     options.BindParams,
-		arbitraryBinds: options.ArbitraryBinds,
-		qualify:        options.Qualify,
+		commonTables: tbls,
+		ctes:         make(map[string]struct{}),
+		options:      options,
 	}
 
 	res := ast.Accept(v)

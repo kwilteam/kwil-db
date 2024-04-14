@@ -112,7 +112,9 @@ func Test_Analyze(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := sqlanalyzer.ApplyRules(tt.stmt, sqlanalyzer.AllRules, tt.tables, "ds_dbid")
+			got, err := sqlanalyzer.ApplyRules(tt.stmt, sqlanalyzer.AllRules, &types.Schema{
+				Tables: tt.tables,
+			}, "ds_dbid")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ApplyRules() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -936,6 +936,22 @@ func (v *astBuilder) VisitTable_or_subquery(ctx *grammar.Table_or_subqueryContex
 			t.Alias = util.ExtractSQLName(ctx.Table_alias().GetText())
 		}
 		return &t
+	case ctx.Function_call() != nil:
+		funcDef := v.Visit(ctx.Function_call()).(*tree.ExpressionFunction)
+		if funcDef.Star {
+			panic("cannot join on a function that uses *")
+		}
+		if funcDef.Distinct {
+			panic("cannot join on a function that uses DISTINCT")
+		}
+
+		t := tree.RelationFunction{
+			Function: funcDef,
+		}
+		if ctx.Table_alias() != nil {
+			t.Alias = util.ExtractSQLName(ctx.Table_alias().GetText())
+		}
+		return &t
 	default:
 		panic("unsupported table_or_subquery type")
 	}

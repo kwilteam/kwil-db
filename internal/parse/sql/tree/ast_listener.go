@@ -64,10 +64,10 @@ type AstListener interface {
 	ExitOrderingTerm(*OrderingTerm) error
 	EnterQualifiedTableName(*QualifiedTableName) error
 	ExitQualifiedTableName(*QualifiedTableName) error
-	EnterRelation(Relation) error
-	ExitRelation(Relation) error
 	EnterRelationTable(*RelationTable) error
 	ExitRelationTable(*RelationTable) error
+	EnterRelationFunction(*RelationFunction) error
+	ExitRelationFunction(*RelationFunction) error
 	EnterRelationSubquery(*RelationSubquery) error
 	ExitRelationSubquery(*RelationSubquery) error
 	EnterRelationJoin(*RelationJoin) error
@@ -364,14 +364,6 @@ func (b *BaseListener) ExitQualifiedTableName(p0 *QualifiedTableName) error {
 	return nil
 }
 
-func (b *BaseListener) EnterRelation(p0 Relation) error {
-	return nil
-}
-
-func (b *BaseListener) ExitRelation(p0 Relation) error {
-	return nil
-}
-
 func (b *BaseListener) EnterRelationJoin(p0 *RelationJoin) error {
 	return nil
 }
@@ -393,6 +385,14 @@ func (b *BaseListener) EnterRelationTable(p0 *RelationTable) error {
 }
 
 func (b *BaseListener) ExitRelationTable(p0 *RelationTable) error {
+	return nil
+}
+
+func (b *BaseListener) EnterRelationFunction(p0 *RelationFunction) error {
+	return nil
+}
+
+func (b *BaseListener) ExitRelationFunction(p0 *RelationFunction) error {
 	return nil
 }
 
@@ -561,8 +561,8 @@ type ImplementedListener struct {
 	FuncExitOrderingTerm                func(p0 *OrderingTerm) error
 	FuncEnterQualifiedTableName         func(p0 *QualifiedTableName) error
 	FuncExitQualifiedTableName          func(p0 *QualifiedTableName) error
-	FuncEnterRelation                   func(p0 Relation) error
-	FuncExitRelation                    func(p0 Relation) error
+	FuncEnterRelationFunction           func(p0 *RelationFunction) error
+	FuncExitRelationFunction            func(p0 *RelationFunction) error
 	FuncEnterRelationJoin               func(p0 *RelationJoin) error
 	FuncExitRelationJoin                func(p0 *RelationJoin) error
 	FuncEnterRelationSubquery           func(p0 *RelationSubquery) error
@@ -1109,22 +1109,6 @@ func (b *ImplementedListener) ExitQualifiedTableName(p0 *QualifiedTableName) err
 	return b.FuncExitQualifiedTableName(p0)
 }
 
-func (b *ImplementedListener) EnterRelation(p0 Relation) error {
-	if b.FuncEnterRelation == nil {
-		return nil
-	}
-
-	return b.FuncEnterRelation(p0)
-}
-
-func (b *ImplementedListener) ExitRelation(p0 Relation) error {
-	if b.FuncExitRelation == nil {
-		return nil
-	}
-
-	return b.FuncExitRelation(p0)
-}
-
 func (b *ImplementedListener) EnterRelationJoin(p0 *RelationJoin) error {
 	if b.FuncEnterRelationJoin == nil {
 		return nil
@@ -1139,6 +1123,22 @@ func (b *ImplementedListener) ExitRelationJoin(p0 *RelationJoin) error {
 	}
 
 	return b.FuncExitRelationJoin(p0)
+}
+
+func (b *ImplementedListener) EnterRelationFunction(p0 *RelationFunction) error {
+	if b.FuncEnterRelationFunction == nil {
+		return nil
+	}
+
+	return b.FuncEnterRelationFunction(p0)
+}
+
+func (b *ImplementedListener) ExitRelationFunction(p0 *RelationFunction) error {
+	if b.FuncExitRelationFunction == nil {
+		return nil
+	}
+
+	return b.FuncExitRelationFunction(p0)
 }
 
 func (b *ImplementedListener) EnterRelationSubquery(p0 *RelationSubquery) error {

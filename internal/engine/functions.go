@@ -261,8 +261,6 @@ type FunctionDefinition struct {
 	ValidateArgs func(args []*types.DataType) (*types.DataType, error)
 	// IsAggregate is true if the function is an aggregate function.
 	IsAggregate bool
-	// PGName is the name of the function in Postgres.
-	// PGName string
 	// PGFormat is a function that formats the inputs to the function in Postgres format.
 	// For example, the function `sum` would format the inputs as `sum($1)`.
 	// It will be given the same amount of inputs as ValidateArgs() was given.

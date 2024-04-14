@@ -309,7 +309,7 @@ func Test_Procedures(t *testing.T) {
 			_, err := procedural.GeneratePLPGSQL(&types.Schema{
 				Tables:     testTables,
 				Procedures: append(testProcedures, tt.procedure),
-			}, "test_schema", "ctx", execution.PgSessionVars)
+			}, "test_schema", "ctx", execution.PgSessionVars, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GeneratePLPGSQL() error = %v, wantErr %v", err, tt.wantErr)
 				return

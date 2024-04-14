@@ -25,14 +25,21 @@ import (
 // CleanProcedure cleans a procedure to ensure it is valid.
 // It will alter the underlying statements to ensure they are valid.
 // It will return a list of types and their names that should be declared
-// as part of the PLPGSQL function's signature.
-// It takes the parsed statements, the system schemas, the target procedure,
-// the dbid of the current schema, a prefix which it will use to prefix
-// postgres session variables, and a set of known postgres session variables and their types.
+// as part of the PLPGSQL function's signature. It also returns a map of
+// session variables. These are things like @caller, but renamed to work within
+// Postgres.
+// It takes the parsed statements, the target procedure and its schema, the pg schema name,
+// a prefix which it will used to prefix postgres session variables
+// and a set of known postgres session variables and their types.
 func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSchema *types.Schema, pgSchemaName, contextPrefix string, knownVars map[string]*types.DataType) (params []*types.NamedType, sessionVars map[string]*types.DataType, err error) {
 	defer func() {
 		if e := recover(); e != nil {
-			err = e.(error)
+			var ok bool
+			err, ok = e.(error)
+			if !ok {
+				err = fmt.Errorf("%v", e)
+			}
+
 		}
 	}()
 
@@ -43,6 +50,7 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 		knownSessionVars:   knownVars,
 		pgSchemaName:       pgSchemaName,
 		cleanedSessionVars: map[string]*types.DataType{},
+		sqlCanMutate:       !proc.IsView(),
 	}
 
 	// cleanedParams holds the cleaned procedure parameters.
@@ -90,24 +98,12 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 		StatementProcedureCall: func(spc *parser.StatementProcedureCall) {
 			cleanedVars := make([]*string, len(spc.Variables))
 			for i, arg := range spc.Variables {
-				if arg == nil {
-					cleanedVars[i] = nil
-					continue
+				if arg != nil {
+					c.cleanVar(arg)
 				}
-				c.cleanVar(arg)
 				cleanedVars[i] = arg
 			}
 			spc.Variables = cleanedVars
-
-			_, ok := engine.Functions[strings.ToLower(spc.Call.Name)]
-			if !ok {
-				_, err := c.findProcedure(spc.Call.Name)
-				if err != nil {
-					panic(err)
-				}
-			}
-
-			spc.Call.Name = strings.ToLower(spc.Call.Name)
 		},
 		// loop targets
 		LoopTargetSQL: func(lts *parser.LoopTargetSQL) {
@@ -124,15 +120,22 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 			}
 		},
 		ExpressionCall: func(ec *parser.ExpressionCall) {
-			_, ok := engine.Functions[strings.ToLower(ec.Name)]
+			// we need to check if this is a built in function,
+			// or a user-defined procedure. If it is a procedure,
+			// we need to check if it is a view or not.
+
+			ec.Name = strings.ToLower(ec.Name)
+			_, ok := engine.Functions[ec.Name]
 			if !ok {
-				_, err := c.findProcedure(ec.Name)
+				proc2, err := c.findProcedure(ec.Name)
 				if err != nil {
 					panic(err)
 				}
-			}
 
-			ec.Name = strings.ToLower(ec.Name)
+				if proc.IsView() && !proc2.IsView() {
+					panic(fmt.Errorf(`%w: "%s"`, engine.ErrReadOnlyProcedureCallsMutative, proc2.Name))
+				}
+			}
 		},
 		ExpressionVariable: func(ev *parser.ExpressionVariable) {
 			c.cleanVar(&ev.Name)
@@ -165,6 +168,7 @@ type cleaner struct {
 	knownSessionVars   map[string]*types.DataType
 	pgSchemaName       string
 	cleanedSessionVars map[string]*types.DataType
+	sqlCanMutate       bool
 }
 
 // cleanType ensures a type is fully qualified.
@@ -186,31 +190,51 @@ func (c *cleaner) cleanVar(n *string) {
 		panic("variable names must be between 1 and 32 characters")
 	}
 
+	// variables in Kwil are defined with either $ or @, but these
+	// are not allowed in plpgsql. Furthermore, plpgsql is very picky with
+	// collisions, and will collide variable and column names. Therefore,
+	// we remove the prefixes and given them a unique name. Since Kwil
+	// enforces all columns to start with a letter, we can use underscores
+
 	switch r[0] {
 	case '$':
 		// user-defined parameter
 		*n = "_param_" + r[1:]
 		return
 	case '@':
-		_, ok := c.knownSessionVars[r[1:]]
+		// for contextual parameters, we use postgres's current_setting()
+		// feature for setting session variables. For example, @caller
+		// is accessed via current_setting('ctx.caller')
+
+		sesVar, ok := c.knownSessionVars[r[1:]]
 		if !ok {
-			panic("unknown session variable: " + r[1:])
+			panic(fmt.Errorf("%w: %s", engine.ErrUnknownContextualVariable, r[1:]))
 		}
 
 		// contextual parameter
 		*n = fmt.Sprintf("current_setting('%s.%s')", c.sessionPrefix, r[1:])
-		c.cleanedSessionVars[*n] = c.knownSessionVars[r[1:]]
+		c.cleanedSessionVars[*n] = sesVar
 		return
 	default:
+		// this should never happen
 		panic("variable names must start with $ or @")
 	}
 }
 
 // cleanSQL ensures the SQL AST is valid.
 func (c *cleaner) cleanSQL(ast tree.AstNode) {
-	err := sqlanalyzer.CleanAST(ast, c.currentSchema.Tables, c.pgSchemaName)
+	err := sqlanalyzer.CleanAST(ast, c.currentSchema, c.pgSchemaName)
 	if err != nil {
 		panic(err)
+	}
+
+	isMutative, err := sqlanalyzer.IsMutative(ast)
+	if err != nil {
+		panic(err)
+	}
+
+	if !c.sqlCanMutate && isMutative {
+		panic(engine.ErrReadOnlyProcedureContainsDML)
 	}
 
 	err = parameters.RenameVariables(ast, func(s string) string {
@@ -231,7 +255,7 @@ func (c *cleaner) findProcedure(name string) (*types.Procedure, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("procedure/function not found: %s", name)
+	return nil, fmt.Errorf(`%w: "%s"`, engine.ErrUnknownFunctionOrProcedure, name)
 }
 
 // returnable returns true if the statement

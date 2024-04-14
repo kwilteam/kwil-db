@@ -99,7 +99,9 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema) err
 	// for each procedure, we will sanitize it,
 	// type check, generate the PLPGSQL code,
 	// and then execute the generated code.
-	stmts, err := procedural.GeneratePLPGSQL(schema, schemaName, pgSessionPrefix, PgSessionVars)
+	stmts, err := procedural.GeneratePLPGSQL(schema, schemaName, pgSessionPrefix, PgSessionVars, &procedural.GenerateOptions{
+		LogProcedureNameOnError: true,
+	})
 	if err != nil {
 		return err
 	}
@@ -169,12 +171,16 @@ func deleteSchema(ctx context.Context, tx sql.TxMaker, dbid string) error {
 
 // setContextualVars sets the contextual variables for the given postgres session.
 func setContextualVars(ctx context.Context, db sql.DB, data *common.ExecutionData) error {
-	_, err := db.Execute(ctx, fmt.Sprintf(`SET %s.%s = '%s';`, pgSessionPrefix, callerVar, data.Caller))
+	// for contextual parameters, we use postgres's current_setting()
+	// feature for setting session variables. For example, @caller
+	// is accessed via current_setting('ctx.caller')
+
+	_, err := db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, pgSessionPrefix, callerVar, data.Caller))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET %s.%s = '%s';`, pgSessionPrefix, txidVar, data.TxID))
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, pgSessionPrefix, txidVar, data.TxID))
 	if err != nil {
 		return err
 	}

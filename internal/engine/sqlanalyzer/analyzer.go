@@ -8,7 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/join"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/order"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
-	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/schema"
+	schemaWalker "github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/schema"
 	sqlparser "github.com/kwilteam/kwil-db/internal/parse/sql"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
@@ -37,8 +37,8 @@ func (a *WalkerRecoverer) Walk(walker tree.AstListener) (err error) {
 // It parses it, and then traverses the AST with the given flags.
 // It will alter the statement to make it conform to the given flags, or return an error if it cannot.
 // All tables will target the pgSchemaName schema.
-func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table, pgSchemaName string) (*AnalyzedStatement, error) {
-	cleanedTables, err := cleanTables(tables)
+func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaName string) (*AnalyzedStatement, error) {
+	cleanedTables, err := cleanTables(schema.Tables)
 	if err != nil {
 		return nil, fmt.Errorf("error cleaning tables: %w", err)
 	}
@@ -50,13 +50,13 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table, pgSchemaNa
 
 	walker := &WalkerRecoverer{parsed}
 
-	clnr := clean.NewStatementCleaner()
+	clnr := clean.NewStatementCleaner(schema.Procedures)
 	err = walker.Walk(clnr)
 	if err != nil {
 		return nil, fmt.Errorf("error cleaning statement: %w", err)
 	}
 
-	schemaWalker := schema.NewSchemaWalker(pgSchemaName)
+	schemaWalker := schemaWalker.NewSchemaWalker(pgSchemaName)
 	err = walker.Walk(schemaWalker)
 	if err != nil {
 		return nil, fmt.Errorf("error applying schema rules: %w", err)
@@ -86,7 +86,7 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table, pgSchemaNa
 		orderedParams = paramVisitor.OrderedParameters
 	}
 
-	mutative, err := isMutative(parsed)
+	mutative, err := IsMutative(parsed)
 	if err != nil {
 		return nil, fmt.Errorf("error determining mutativity: %w", err)
 	}
@@ -104,24 +104,23 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table, pgSchemaNa
 	}, nil
 }
 
-// CleanAST makes the given statement deterministic.
-// It returns the cleaned AST and whether the statement is mutative.
-func CleanAST(ast tree.AstWalker, tables []*types.Table, pgSchemaName string) (err error) {
-	cleanedTables, err := cleanTables(tables)
+// CleanAST cleans and makes the given statement deterministic.
+func CleanAST(ast tree.AstWalker, schema *types.Schema, pgSchemaName string) (err error) {
+	cleanedTables, err := cleanTables(schema.Tables)
 	if err != nil {
 		return fmt.Errorf("error cleaning tables: %w", err)
 	}
 
 	accept := &WalkerRecoverer{ast}
 
-	clnr := clean.NewStatementCleaner()
+	clnr := clean.NewStatementCleaner(schema.Procedures)
 	err = accept.Walk(clnr)
 	if err != nil {
 		return fmt.Errorf("error cleaning statement: %w", err)
 	}
 
-	schemaWalker := schema.NewSchemaWalker(pgSchemaName)
-	err = accept.Walk(schemaWalker)
+	sw := schemaWalker.NewSchemaWalker(pgSchemaName)
+	err = accept.Walk(sw)
 	if err != nil {
 		return fmt.Errorf("error applying schema rules: %w", err)
 	}

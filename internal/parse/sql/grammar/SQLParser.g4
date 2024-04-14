@@ -279,6 +279,7 @@ simple_select:
 table_or_subquery:
     table_name (AS_ table_alias)?
     | OPEN_PAR select_core CLOSE_PAR (AS_ table_alias)?
+    | function_call (AS_ table_alias)?
 ;
 
 result_column:
@@ -355,7 +356,7 @@ asc_desc:
 
 // function_keywords are keywords also function names
 function_keyword:
-    | LIKE_
+    LIKE_
     | REPLACE_
 ;
 

@@ -239,7 +239,7 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 	// could go either way, but this ad hoc query function is questionable anyway.
 	parsed, err := sqlanalyzer.ApplyRules(query,
 		sqlanalyzer.AllRules,
-		dataset.schema.Tables, dbidSchema(dbid))
+		dataset.schema, dbidSchema(dbid))
 	if err != nil {
 		return nil, err
 	}

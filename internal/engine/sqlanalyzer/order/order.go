@@ -295,7 +295,8 @@ func containsAggregateFunc(ret tree.ResultColumn) (bool, error) {
 			if depth == 0 {
 				def, ok := engine.Functions[p0.Function]
 				if !ok {
-					return fmt.Errorf("function %s not found", p0.Function)
+					// can be a procedure
+					return nil
 				}
 
 				containsAggregateFunc = def.IsAggregate

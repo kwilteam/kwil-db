@@ -1,4 +1,4 @@
-// package  implements a visitor that visits all children of every node in the AST.
+// Traverse implements a visitor that visits all children of every node in the AST.
 // No visitor methods will return anything.
 package traverse
 

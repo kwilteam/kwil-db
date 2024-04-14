@@ -18,15 +18,8 @@ type typeVisitor struct {
 	commonTables map[string]*engine.Relation
 	// ctes is a set of common table expressions that have been defined.
 	// all of the keys can be found in commonTables.
-	ctes map[string]struct{}
-	// bindParams are the parameters that are available in the query
-	// we know the types from the kuneiform schema
-	bindParams map[string]*types.DataType
-	// arbitraryBinds is a flag that allows us to ignore bind parameters
-	// when type checking
-	arbitraryBinds bool
-	// qualify is a flag that allows us to qualify all column references
-	qualify bool
+	ctes    map[string]struct{}
+	options *AnalyzeOptions
 }
 
 var _ tree.AstVisitor = &typeVisitor{}
@@ -83,6 +76,77 @@ func (t *typeVisitor) VisitRelationSubquery(p0 *tree.RelationSubquery) any {
 		return e.join(&engine.QualifiedRelation{
 			Name:     p0.Alias, // this can be ""
 			Relation: r,
+		})
+	})
+}
+
+func findProcedure(name string, procedures []*types.Procedure) (*types.Procedure, error) {
+	for _, proc := range procedures {
+		if proc.Name == name {
+			return proc, nil
+		}
+	}
+
+	return nil, fmt.Errorf("procedure %s not found", name)
+}
+
+func (t *typeVisitor) VisitRelationFunction(p0 *tree.RelationFunction) any {
+	// check the function is a procedure that returns a table, and has the same
+	// number of inputs as the function has parameters
+	return evalFunc(func(e *evaluationContext) error {
+		_, err := p0.Function.Accept(t).(attributeFn)(e)
+		if err != nil {
+			return err
+		}
+
+		if !t.options.VerifyProcedures {
+			return nil
+		}
+
+		proc, err := findProcedure(p0.Function.Function, t.options.Procedures)
+		if err != nil {
+			return err
+		}
+
+		if len(p0.Function.Inputs) != len(proc.Parameters) {
+			return fmt.Errorf("procedure %s expected %d inputs, received %d", p0.Function.Function, len(proc.Parameters), len(p0.Function.Inputs))
+		}
+
+		for i, in := range p0.Function.Inputs {
+			attr, err := in.Accept(t).(attributeFn)(e)
+			if err != nil {
+				return err
+			}
+
+			if !attr.Type.Equals(proc.Parameters[i].Type) {
+				return fmt.Errorf("procedure %s expected input %d to be %s, received %s", p0.Function.Function, i, proc.Parameters[i].Type.String(), attr.Type.String())
+			}
+		}
+
+		if proc.Returns == nil {
+			return fmt.Errorf("procedure %s does not return a table", p0.Function.Function)
+		}
+		if !proc.Returns.IsTable {
+			return fmt.Errorf("procedure %s does not return a table", p0.Function.Function)
+		}
+
+		rel := engine.NewRelation()
+		for _, retCol := range proc.Returns.Fields {
+			err := rel.AddAttribute(&engine.QualifiedAttribute{
+				Name: retCol.Name,
+				Attribute: &engine.Attribute{
+					Type: retCol.Type,
+				},
+			})
+			if err != nil {
+				return err
+			}
+		}
+
+		// add the relation to the context
+		return e.join(&engine.QualifiedRelation{
+			Name:     p0.Alias,
+			Relation: rel,
 		})
 	})
 }
@@ -394,9 +458,9 @@ func (t *typeVisitor) VisitExpressionBinaryComparison(p0 *tree.ExpressionBinaryC
 
 func (t *typeVisitor) VisitExpressionBindParameter(p0 *tree.ExpressionBindParameter) any {
 	return attributeFn(func(ev *evaluationContext) (*engine.QualifiedAttribute, error) {
-		c, ok := t.bindParams[p0.Parameter]
+		c, ok := t.options.BindParams[p0.Parameter]
 		if !ok {
-			if t.arbitraryBinds {
+			if t.options.ArbitraryBinds {
 				c = types.UnknownType
 			} else {
 				return nil, fmt.Errorf("bind parameter %s not found", p0.Parameter)
@@ -494,7 +558,7 @@ func (t *typeVisitor) VisitExpressionColumn(p0 *tree.ExpressionColumn) any {
 			return nil, err
 		}
 
-		if p0.Table == "" && t.qualify {
+		if p0.Table == "" && t.options.Qualify {
 			p0.Table = tbl // this will modify the statement
 		}
 
@@ -515,7 +579,40 @@ func (t *typeVisitor) VisitExpressionFunction(p0 *tree.ExpressionFunction) any {
 	return attributeFn(func(ev *evaluationContext) (*engine.QualifiedAttribute, error) {
 		funcDef, ok := engine.Functions[p0.Function]
 		if !ok {
-			return nil, fmt.Errorf("function %s not found", p0.Function)
+			// can be a procedure
+			proc, err := findProcedure(p0.Function, t.options.Procedures)
+			if err != nil {
+				return nil, err
+			}
+
+			if len(p0.Inputs) != len(proc.Parameters) {
+				return nil, fmt.Errorf("procedure %s expected %d inputs, received %d", p0.Function, len(proc.Parameters), len(p0.Inputs))
+			}
+
+			for i, in := range p0.Inputs {
+				attr, err := in.Accept(t).(attributeFn)(ev)
+				if err != nil {
+					return nil, err
+				}
+
+				if !attr.Type.Equals(proc.Parameters[i].Type) {
+					return nil, fmt.Errorf("procedure %s expected input %d to be %s, received %s", p0.Function, i, proc.Parameters[i].Type.String(), attr.Type.String())
+				}
+			}
+
+			if proc.Returns == nil {
+				return anonAttr(types.NullType), nil
+			}
+
+			if proc.Returns.IsTable {
+				return anonAttr(types.NullType), nil
+			}
+
+			if len(proc.Returns.Fields) != 1 {
+				return nil, fmt.Errorf("procedure %s must return exactly one column", p0.Function)
+			}
+
+			return anonAttr(proc.Returns.Fields[0].Type), nil
 		}
 
 		var argTypes []*types.DataType

@@ -36,6 +36,7 @@ type AstVisitor interface {
 	VisitOrderingTerm(*OrderingTerm) any
 	VisitQualifiedTableName(*QualifiedTableName) any
 	VisitRelationTable(*RelationTable) any
+	VisitRelationFunction(*RelationFunction) any
 	VisitRelationSubquery(*RelationSubquery) any
 	VisitRelationJoin(*RelationJoin) any
 	VisitResultColumnStar(*ResultColumnStar) any
@@ -225,6 +226,10 @@ func (v *BaseAstVisitor) VisitSelectCore(node *SelectCore) any {
 }
 
 func (v *BaseAstVisitor) VisitRelationTable(node *RelationTable) any {
+	return nil
+}
+
+func (v *BaseAstVisitor) VisitRelationFunction(node *RelationFunction) any {
 	return nil
 }
 

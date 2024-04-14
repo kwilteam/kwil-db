@@ -20,6 +20,10 @@ func (p *proceduralLangVisitor) Visit(tree antlr.ParseTree) interface{} {
 	return tree.Accept(p)
 }
 
+func (p *proceduralLangVisitor) VisitErrorNode(node antlr.ErrorNode) interface{} {
+	panic("error node")
+}
+
 func (p *proceduralLangVisitor) VisitCall_expression(ctx *gen.Call_expressionContext) any {
 	e := &ExpressionCall{
 		Name: ctx.IDENTIFIER().GetText(),
@@ -271,9 +275,10 @@ func (p *proceduralLangVisitor) VisitStmt_for_loop(ctx *gen.Stmt_for_loopContext
 			},
 		}
 	case ctx.ANY_SQL() != nil:
+		stmt := ctx.ANY_SQL().GetText()
 		ast, err := sqlparser.Parse(ctx.ANY_SQL().GetText())
 		if err != nil {
-			panic("invalid SQL statement")
+			panic(fmt.Errorf("invalid SQL statement: %s: %s ", stmt, err.Error()))
 		}
 
 		forLoop.Target = &LoopTargetSQL{
@@ -333,9 +338,10 @@ func (p *proceduralLangVisitor) VisitStmt_return(ctx *gen.Stmt_returnContext) an
 	}
 
 	if ctx.ANY_SQL() != nil {
-		ast, err := sqlparser.Parse(ctx.ANY_SQL().GetText())
+		stmt := ctx.ANY_SQL().GetText()
+		ast, err := sqlparser.Parse(stmt)
 		if err != nil {
-			panic("invalid SQL statement")
+			panic(fmt.Errorf("invalid SQL statement: %s: %s ", stmt, err.Error()))
 		}
 
 		return &StatementReturn{
@@ -357,9 +363,10 @@ func (p *proceduralLangVisitor) VisitStmt_break(ctx *gen.Stmt_breakContext) inte
 }
 
 func (p *proceduralLangVisitor) VisitStmt_sql(ctx *gen.Stmt_sqlContext) any {
-	ast, err := sqlparser.Parse(ctx.ANY_SQL().GetText())
+	stmt := ctx.ANY_SQL().GetText()
+	ast, err := sqlparser.Parse(stmt)
 	if err != nil {
-		panic(fmt.Sprintf("invalid SQL statement: %v", err))
+		panic(fmt.Errorf("invalid SQL statement: %s: %s ", stmt, err.Error()))
 	}
 
 	return &StatementSQL{

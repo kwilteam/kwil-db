@@ -6,13 +6,13 @@ options {
 
 // top-level rule
 program:
-    statement*
+    statement* EOF
 ;
 
 statement:
     VARIABLE type SEMICOLON # stmt_variable_declaration
     // stmt_procedure_call must go above stmt_variable_assignment
-    | variable_or_underscore (COMMA variable_or_underscore)* ASSIGN call_expression SEMICOLON # stmt_procedure_call
+    | (variable_or_underscore (COMMA variable_or_underscore)* ASSIGN)? call_expression SEMICOLON # stmt_procedure_call
     | VARIABLE ASSIGN expression SEMICOLON # stmt_variable_assignment
     | VARIABLE type ASSIGN expression SEMICOLON # stmt_variable_assignment_with_declaration
     | FOR VARIABLE IN (range|call_expression|VARIABLE|ANY_SQL) LBRACE statement* RBRACE # stmt_for_loop

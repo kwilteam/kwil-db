@@ -2204,8 +2204,6 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		// table or subquery
 		{"table or subquery indexed", "select * from t1 indexed by index_a", "indexed"},
 		{"table or subquery not indexed", "select * from t1 not indexed", "not"},
-		// NOTE: what is table function??
-		{"table or subquery table function", "SELECT value FROM f(1)", "("},
 		{"table or subquery nest tos", "select * from (t1, t2)", ","},
 
 		// expr

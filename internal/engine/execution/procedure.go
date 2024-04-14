@@ -131,7 +131,7 @@ func prepareAction(unparsed *types.Action, global *GlobalContext, schema *types.
 		default:
 			return nil, fmt.Errorf("unknown statement type %T", stmt)
 		case *actparser.ExtensionCallStmt:
-			args, err := makeExecutables(stmt.Args)
+			args, err := makeExecutables(stmt.Args, schema)
 			if err != nil {
 				return nil, err
 			}
@@ -151,7 +151,7 @@ func prepareAction(unparsed *types.Action, global *GlobalContext, schema *types.
 		case *actparser.DMLStmt:
 			// apply schema to db name in statement
 			deterministic, err := sqlanalyzer.ApplyRules(stmt.Statement, sqlanalyzer.AllRules,
-				schema.Tables, dbidSchema(schema.DBID()))
+				schema, dbidSchema(schema.DBID()))
 			if err != nil {
 				return nil, err
 			}
@@ -166,7 +166,7 @@ func prepareAction(unparsed *types.Action, global *GlobalContext, schema *types.
 			}
 			instructions = append(instructions, i)
 		case *actparser.ActionCallStmt:
-			args, err := makeExecutables(stmt.Args)
+			args, err := makeExecutables(stmt.Args, schema)
 			if err != nil {
 				return nil, err
 			}
@@ -445,7 +445,7 @@ type evaluatable func(ctx context.Context, exec dbQueryFn, values map[string]any
 // See their execution in (*callMethod).execute inside the `range e.Args` to
 // collect the `inputs` passed to the call of a dataset method or other
 // "namespace" method, such as an extension method.
-func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
+func makeExecutables(exprs []tree.Expression, schema *types.Schema) ([]evaluatable, error) {
 	execs := make([]evaluatable, 0, len(exprs))
 
 	for _, expr := range exprs {
@@ -462,7 +462,7 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 		}
 
 		// clean expression, since it is submitted by the user
-		err := expr.Walk(clean.NewStatementCleaner())
+		err := expr.Walk(clean.NewStatementCleaner(schema.Procedures))
 		if err != nil {
 			return nil, err
 		}

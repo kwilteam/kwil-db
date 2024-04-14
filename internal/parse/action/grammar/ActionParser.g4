@@ -10,7 +10,7 @@ options {
 }
 
 statement:
-    stmt+
+    stmt+ EOF
 ;
 
 literal_value:

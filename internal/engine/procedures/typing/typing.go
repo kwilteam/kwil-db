@@ -27,7 +27,7 @@ func EnsureTyping(stmts []parser.Statement, procedure *types.Procedure, schema *
 		if ok {
 			// this should never happen, since session variables have a unique
 			// prefix
-			panic(fmt.Sprintf("session variable %s collision", v))
+			return nil, fmt.Errorf("session variable %s collision", v)
 		}
 
 		declarations[v] = typ
@@ -46,7 +46,11 @@ func EnsureTyping(stmts []parser.Statement, procedure *types.Procedure, schema *
 			if t.err != nil {
 				err = t.err
 			} else {
-				err = fmt.Errorf("%v", r)
+				var ok bool
+				err, ok = r.(error)
+				if !ok {
+					err = fmt.Errorf("panic: %v", r)
+				}
 			}
 		}
 	}()
@@ -241,7 +245,7 @@ func (t *typingVisitor) VisitExpressionVariable(p0 *parser.ExpressionVariable) a
 	if !ok {
 		anonType, ok := t.anonymousDeclarations[p0.Name]
 		if !ok {
-			panic(fmt.Sprintf("variable %s not declared", p0.Name))
+			panic(fmt.Errorf(`%w: "%s"`, engine.ErrUndeclaredVariable, reverseCleanVar(p0.Name)))
 		}
 
 		return anonType
@@ -326,7 +330,7 @@ func (t *typingVisitor) VisitStatementProcedureCall(p0 *parser.StatementProcedur
 		}
 		varType, ok := t.declarations[*v]
 		if !ok {
-			panic(fmt.Sprintf("variable %s not declared", reverseCleanVar(*v)))
+			panic(fmt.Errorf(`%w: "%s"`, engine.ErrUndeclaredVariable, reverseCleanVar(*v)))
 		}
 
 		if !varType.Equals(returns.Fields[i].Type) {
@@ -339,11 +343,11 @@ func (t *typingVisitor) VisitStatementProcedureCall(p0 *parser.StatementProcedur
 
 // TODO: this is a hack and implicit coupling with the clean package
 func reverseCleanVar(v string) string {
-	if !strings.HasPrefix(v, "_param_") {
-		panic("expected parameter prefix, received: " + v)
+	v, prefixed := strings.CutPrefix(v, "_param_")
+	if !prefixed {
+		panic("expected parameter prefix, received: " + v) // already in a panic, just do nothing and return v
 	}
-
-	return "$" + strings.TrimPrefix(v, "_param_")
+	return "$" + v
 }
 
 // analyzeProcedureCall is used to visit a procedure call and get info on the return type.
@@ -472,8 +476,10 @@ func (t *typingVisitor) analyzeSQL(stmt tree.AstNode) *engine.Relation {
 	// TODO: we have a problem here where the sql analyzer cannot analyze
 	// the @ vars, since it is using the current_setting() command.
 	m, err := typing.AnalyzeTypes(stmt, t.currentSchema.Tables, &typing.AnalyzeOptions{
-		BindParams: t.declarations,
-		Qualify:    true,
+		BindParams:       t.declarations,
+		Qualify:          true,
+		VerifyProcedures: true,
+		Procedures:       t.currentSchema.Procedures,
 	})
 	if err != nil {
 		panic(err)
@@ -583,7 +589,7 @@ func (t *typingVisitor) VisitStatementSQL(p0 *parser.StatementSQL) any {
 func (t *typingVisitor) VisitStatementVariableAssignment(p0 *parser.StatementVariableAssignment) any {
 	typ, ok := t.declarations[p0.Name]
 	if !ok {
-		panic(fmt.Sprintf("variable %s not declared", p0.Name))
+		panic(fmt.Errorf(`%w: "%s"`, engine.ErrUntypedVariable, reverseCleanVar(p0.Name)))
 	}
 
 	r, ok := p0.Value.Accept(t).(*types.DataType)

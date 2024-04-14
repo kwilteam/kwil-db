@@ -34,7 +34,7 @@ func ParseWithErrorListener(stmt string, errorListener *sqlparser.ErrorListener)
 
 	defer func() {
 		if e := recover(); e != nil {
-			errorListener.Add(fmt.Sprintf("panic: %v", e))
+			errorListener.Add(fmt.Sprintf("%v", e))
 		}
 
 		if err != nil {

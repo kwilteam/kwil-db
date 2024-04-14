@@ -32,20 +32,20 @@ var ProcedureParserParserStaticData struct {
 func procedureparserParserInit() {
 	staticData := &ProcedureParserParserStaticData
 	staticData.LiteralNames = []string{
-		"", "';'", "'('", "')'", "'{'", "'}'", "','", "':'", "'$'", "'@'", "':='",
-		"'.'", "'['", "']'", "'''", "'_'", "'+'", "'-'", "'*'", "'/'", "'%'",
-		"'<'", "'<='", "'>'", "'>='", "'!='", "'=='", "", "'for'", "'in'", "'if'",
-		"'elseif'", "'else'", "'to'", "'return'", "'break'", "'next'", "", "",
-		"", "", "'null'",
+		"", "';'", "'('", "')'", "'{'", "'}'", "','", "'::'", "':'", "'$'",
+		"'@'", "':='", "'.'", "'['", "']'", "'''", "'_'", "'+'", "'-'", "'*'",
+		"'/'", "'%'", "'<'", "'<='", "'>'", "'>='", "'!='", "'=='", "", "'for'",
+		"'in'", "'if'", "'elseif'", "'else'", "'to'", "'return'", "'break'",
+		"'next'", "", "", "", "", "'null'",
 	}
 	staticData.SymbolicNames = []string{
-		"", "SEMICOLON", "LPAREN", "RPAREN", "LBRACE", "RBRACE", "COMMA", "COLON",
-		"DOLLAR", "AT", "ASSIGN", "PERIOD", "LBRACKET", "RBRACKET", "SINGLE_QUOTE",
-		"UNDERSCORE", "PLUS", "MINUS", "MUL", "DIV", "MOD", "LT", "LT_EQ", "GT",
-		"GT_EQ", "NEQ", "EQ", "ANY_SQL", "FOR", "IN", "IF", "ELSEIF", "ELSE",
-		"TO", "RETURN", "BREAK", "NEXT", "BOOLEAN_LITERAL", "INT_LITERAL", "BLOB_LITERAL",
-		"TEXT_LITERAL", "NULL_LITERAL", "IDENTIFIER", "VARIABLE", "WS", "TERMINATOR",
-		"BLOCK_COMMENT", "LINE_COMMENT",
+		"", "SEMICOLON", "LPAREN", "RPAREN", "LBRACE", "RBRACE", "COMMA", "TYPE_CAST",
+		"COLON", "DOLLAR", "AT", "ASSIGN", "PERIOD", "LBRACKET", "RBRACKET",
+		"SINGLE_QUOTE", "UNDERSCORE", "PLUS", "MINUS", "MUL", "DIV", "MOD",
+		"LT", "LT_EQ", "GT", "GT_EQ", "NEQ", "EQ", "ANY_SQL", "FOR", "IN", "IF",
+		"ELSEIF", "ELSE", "TO", "RETURN", "BREAK", "NEXT", "BOOLEAN_LITERAL",
+		"INT_LITERAL", "BLOB_LITERAL", "TEXT_LITERAL", "NULL_LITERAL", "IDENTIFIER",
+		"VARIABLE", "WS", "TERMINATOR", "BLOCK_COMMENT", "LINE_COMMENT",
 	}
 	staticData.RuleNames = []string{
 		"program", "statement", "variable_or_underscore", "type", "expression",
@@ -54,89 +54,91 @@ func procedureparserParserInit() {
 	}
 	staticData.PredictionContextCache = antlr.NewPredictionContextCache()
 	staticData.serializedATN = []int32{
-		4, 1, 47, 187, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
+		4, 1, 48, 190, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
 		4, 2, 5, 7, 5, 2, 6, 7, 6, 2, 7, 7, 7, 2, 8, 7, 8, 2, 9, 7, 9, 1, 0, 5,
 		0, 22, 8, 0, 10, 0, 12, 0, 25, 9, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 5, 1, 34, 8, 1, 10, 1, 12, 1, 37, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 5, 1, 34, 8, 1, 10, 1, 12, 1, 37, 9, 1, 1, 1, 1, 1, 3, 1, 41, 8,
 		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1, 61, 8, 1, 1, 1, 1, 1, 5, 1, 65,
-		8, 1, 10, 1, 12, 1, 68, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 75, 8,
-		1, 10, 1, 12, 1, 78, 9, 1, 1, 1, 1, 1, 1, 1, 5, 1, 83, 8, 1, 10, 1, 12,
-		1, 86, 9, 1, 1, 1, 3, 1, 89, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 3, 1, 98, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1, 106, 8,
-		1, 1, 2, 1, 2, 1, 3, 1, 3, 1, 3, 3, 3, 113, 8, 3, 1, 4, 1, 4, 1, 4, 1,
-		4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 3, 4, 128, 8,
-		4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1,
-		4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 5, 4, 147, 8, 4, 10, 4, 12, 4, 150, 9,
-		4, 1, 5, 1, 5, 1, 5, 5, 5, 155, 8, 5, 10, 5, 12, 5, 158, 9, 5, 1, 6, 1,
-		6, 3, 6, 162, 8, 6, 1, 6, 1, 6, 1, 7, 1, 7, 1, 7, 3, 7, 169, 8, 7, 1, 7,
-		1, 7, 1, 8, 1, 8, 1, 8, 1, 8, 1, 9, 1, 9, 1, 9, 5, 9, 180, 8, 9, 10, 9,
-		12, 9, 183, 9, 9, 1, 9, 1, 9, 1, 9, 0, 1, 8, 10, 0, 2, 4, 6, 8, 10, 12,
-		14, 16, 18, 0, 4, 2, 0, 15, 15, 43, 43, 1, 0, 21, 26, 1, 0, 18, 20, 1,
-		0, 16, 17, 213, 0, 23, 1, 0, 0, 0, 2, 105, 1, 0, 0, 0, 4, 107, 1, 0, 0,
-		0, 6, 109, 1, 0, 0, 0, 8, 127, 1, 0, 0, 0, 10, 151, 1, 0, 0, 0, 12, 159,
-		1, 0, 0, 0, 14, 165, 1, 0, 0, 0, 16, 172, 1, 0, 0, 0, 18, 176, 1, 0, 0,
-		0, 20, 22, 3, 2, 1, 0, 21, 20, 1, 0, 0, 0, 22, 25, 1, 0, 0, 0, 23, 21,
-		1, 0, 0, 0, 23, 24, 1, 0, 0, 0, 24, 1, 1, 0, 0, 0, 25, 23, 1, 0, 0, 0,
-		26, 27, 5, 43, 0, 0, 27, 28, 3, 6, 3, 0, 28, 29, 5, 1, 0, 0, 29, 106, 1,
-		0, 0, 0, 30, 35, 3, 4, 2, 0, 31, 32, 5, 6, 0, 0, 32, 34, 3, 4, 2, 0, 33,
-		31, 1, 0, 0, 0, 34, 37, 1, 0, 0, 0, 35, 33, 1, 0, 0, 0, 35, 36, 1, 0, 0,
-		0, 36, 38, 1, 0, 0, 0, 37, 35, 1, 0, 0, 0, 38, 39, 5, 10, 0, 0, 39, 40,
-		3, 14, 7, 0, 40, 41, 5, 1, 0, 0, 41, 106, 1, 0, 0, 0, 42, 43, 5, 43, 0,
-		0, 43, 44, 5, 10, 0, 0, 44, 45, 3, 8, 4, 0, 45, 46, 5, 1, 0, 0, 46, 106,
-		1, 0, 0, 0, 47, 48, 5, 43, 0, 0, 48, 49, 3, 6, 3, 0, 49, 50, 5, 10, 0,
-		0, 50, 51, 3, 8, 4, 0, 51, 52, 5, 1, 0, 0, 52, 106, 1, 0, 0, 0, 53, 54,
-		5, 28, 0, 0, 54, 55, 5, 43, 0, 0, 55, 60, 5, 29, 0, 0, 56, 61, 3, 16, 8,
-		0, 57, 61, 3, 14, 7, 0, 58, 61, 5, 43, 0, 0, 59, 61, 5, 27, 0, 0, 60, 56,
-		1, 0, 0, 0, 60, 57, 1, 0, 0, 0, 60, 58, 1, 0, 0, 0, 60, 59, 1, 0, 0, 0,
-		61, 62, 1, 0, 0, 0, 62, 66, 5, 4, 0, 0, 63, 65, 3, 2, 1, 0, 64, 63, 1,
-		0, 0, 0, 65, 68, 1, 0, 0, 0, 66, 64, 1, 0, 0, 0, 66, 67, 1, 0, 0, 0, 67,
-		69, 1, 0, 0, 0, 68, 66, 1, 0, 0, 0, 69, 106, 5, 5, 0, 0, 70, 71, 5, 30,
-		0, 0, 71, 76, 3, 18, 9, 0, 72, 73, 5, 31, 0, 0, 73, 75, 3, 18, 9, 0, 74,
-		72, 1, 0, 0, 0, 75, 78, 1, 0, 0, 0, 76, 74, 1, 0, 0, 0, 76, 77, 1, 0, 0,
-		0, 77, 88, 1, 0, 0, 0, 78, 76, 1, 0, 0, 0, 79, 80, 5, 32, 0, 0, 80, 84,
-		5, 4, 0, 0, 81, 83, 3, 2, 1, 0, 82, 81, 1, 0, 0, 0, 83, 86, 1, 0, 0, 0,
-		84, 82, 1, 0, 0, 0, 84, 85, 1, 0, 0, 0, 85, 87, 1, 0, 0, 0, 86, 84, 1,
-		0, 0, 0, 87, 89, 5, 5, 0, 0, 88, 79, 1, 0, 0, 0, 88, 89, 1, 0, 0, 0, 89,
-		106, 1, 0, 0, 0, 90, 91, 5, 27, 0, 0, 91, 106, 5, 1, 0, 0, 92, 93, 5, 35,
-		0, 0, 93, 106, 5, 1, 0, 0, 94, 97, 5, 34, 0, 0, 95, 98, 3, 10, 5, 0, 96,
-		98, 5, 27, 0, 0, 97, 95, 1, 0, 0, 0, 97, 96, 1, 0, 0, 0, 98, 99, 1, 0,
-		0, 0, 99, 106, 5, 1, 0, 0, 100, 101, 5, 34, 0, 0, 101, 102, 5, 36, 0, 0,
-		102, 103, 3, 10, 5, 0, 103, 104, 5, 1, 0, 0, 104, 106, 1, 0, 0, 0, 105,
-		26, 1, 0, 0, 0, 105, 30, 1, 0, 0, 0, 105, 42, 1, 0, 0, 0, 105, 47, 1, 0,
-		0, 0, 105, 53, 1, 0, 0, 0, 105, 70, 1, 0, 0, 0, 105, 90, 1, 0, 0, 0, 105,
-		92, 1, 0, 0, 0, 105, 94, 1, 0, 0, 0, 105, 100, 1, 0, 0, 0, 106, 3, 1, 0,
-		0, 0, 107, 108, 7, 0, 0, 0, 108, 5, 1, 0, 0, 0, 109, 112, 5, 42, 0, 0,
-		110, 111, 5, 12, 0, 0, 111, 113, 5, 13, 0, 0, 112, 110, 1, 0, 0, 0, 112,
-		113, 1, 0, 0, 0, 113, 7, 1, 0, 0, 0, 114, 115, 6, 4, -1, 0, 115, 128, 5,
-		40, 0, 0, 116, 128, 5, 37, 0, 0, 117, 128, 5, 38, 0, 0, 118, 128, 5, 41,
-		0, 0, 119, 128, 5, 39, 0, 0, 120, 128, 3, 12, 6, 0, 121, 128, 3, 14, 7,
-		0, 122, 128, 5, 43, 0, 0, 123, 124, 5, 2, 0, 0, 124, 125, 3, 8, 4, 0, 125,
-		126, 5, 3, 0, 0, 126, 128, 1, 0, 0, 0, 127, 114, 1, 0, 0, 0, 127, 116,
-		1, 0, 0, 0, 127, 117, 1, 0, 0, 0, 127, 118, 1, 0, 0, 0, 127, 119, 1, 0,
-		0, 0, 127, 120, 1, 0, 0, 0, 127, 121, 1, 0, 0, 0, 127, 122, 1, 0, 0, 0,
-		127, 123, 1, 0, 0, 0, 128, 148, 1, 0, 0, 0, 129, 130, 10, 3, 0, 0, 130,
-		131, 7, 1, 0, 0, 131, 147, 3, 8, 4, 4, 132, 133, 10, 2, 0, 0, 133, 134,
-		7, 2, 0, 0, 134, 147, 3, 8, 4, 3, 135, 136, 10, 1, 0, 0, 136, 137, 7, 3,
-		0, 0, 137, 147, 3, 8, 4, 2, 138, 139, 10, 6, 0, 0, 139, 140, 5, 12, 0,
-		0, 140, 141, 3, 8, 4, 0, 141, 142, 5, 13, 0, 0, 142, 147, 1, 0, 0, 0, 143,
-		144, 10, 5, 0, 0, 144, 145, 5, 11, 0, 0, 145, 147, 5, 42, 0, 0, 146, 129,
-		1, 0, 0, 0, 146, 132, 1, 0, 0, 0, 146, 135, 1, 0, 0, 0, 146, 138, 1, 0,
-		0, 0, 146, 143, 1, 0, 0, 0, 147, 150, 1, 0, 0, 0, 148, 146, 1, 0, 0, 0,
-		148, 149, 1, 0, 0, 0, 149, 9, 1, 0, 0, 0, 150, 148, 1, 0, 0, 0, 151, 156,
-		3, 8, 4, 0, 152, 153, 5, 6, 0, 0, 153, 155, 3, 8, 4, 0, 154, 152, 1, 0,
-		0, 0, 155, 158, 1, 0, 0, 0, 156, 154, 1, 0, 0, 0, 156, 157, 1, 0, 0, 0,
-		157, 11, 1, 0, 0, 0, 158, 156, 1, 0, 0, 0, 159, 161, 5, 12, 0, 0, 160,
-		162, 3, 10, 5, 0, 161, 160, 1, 0, 0, 0, 161, 162, 1, 0, 0, 0, 162, 163,
-		1, 0, 0, 0, 163, 164, 5, 13, 0, 0, 164, 13, 1, 0, 0, 0, 165, 166, 5, 42,
-		0, 0, 166, 168, 5, 2, 0, 0, 167, 169, 3, 10, 5, 0, 168, 167, 1, 0, 0, 0,
-		168, 169, 1, 0, 0, 0, 169, 170, 1, 0, 0, 0, 170, 171, 5, 3, 0, 0, 171,
-		15, 1, 0, 0, 0, 172, 173, 3, 8, 4, 0, 173, 174, 5, 7, 0, 0, 174, 175, 3,
-		8, 4, 0, 175, 17, 1, 0, 0, 0, 176, 177, 3, 8, 4, 0, 177, 181, 5, 4, 0,
-		0, 178, 180, 3, 2, 1, 0, 179, 178, 1, 0, 0, 0, 180, 183, 1, 0, 0, 0, 181,
-		179, 1, 0, 0, 0, 181, 182, 1, 0, 0, 0, 182, 184, 1, 0, 0, 0, 183, 181,
-		1, 0, 0, 0, 184, 185, 5, 5, 0, 0, 185, 19, 1, 0, 0, 0, 17, 23, 35, 60,
-		66, 76, 84, 88, 97, 105, 112, 127, 146, 148, 156, 161, 168, 181,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1, 64, 8, 1,
+		1, 1, 1, 1, 5, 1, 68, 8, 1, 10, 1, 12, 1, 71, 9, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 5, 1, 78, 8, 1, 10, 1, 12, 1, 81, 9, 1, 1, 1, 1, 1, 1, 1, 5, 1,
+		86, 8, 1, 10, 1, 12, 1, 89, 9, 1, 1, 1, 3, 1, 92, 8, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1, 101, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 3, 1, 109, 8, 1, 1, 2, 1, 2, 1, 3, 1, 3, 1, 3, 3, 3, 116, 8, 3,
+		1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4,
+		1, 4, 3, 4, 131, 8, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4,
+		1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 1, 4, 5, 4, 150, 8, 4,
+		10, 4, 12, 4, 153, 9, 4, 1, 5, 1, 5, 1, 5, 5, 5, 158, 8, 5, 10, 5, 12,
+		5, 161, 9, 5, 1, 6, 1, 6, 3, 6, 165, 8, 6, 1, 6, 1, 6, 1, 7, 1, 7, 1, 7,
+		3, 7, 172, 8, 7, 1, 7, 1, 7, 1, 8, 1, 8, 1, 8, 1, 8, 1, 9, 1, 9, 1, 9,
+		5, 9, 183, 8, 9, 10, 9, 12, 9, 186, 9, 9, 1, 9, 1, 9, 1, 9, 0, 1, 8, 10,
+		0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 0, 4, 2, 0, 16, 16, 44, 44, 1, 0, 22,
+		27, 1, 0, 19, 21, 1, 0, 17, 18, 217, 0, 23, 1, 0, 0, 0, 2, 108, 1, 0, 0,
+		0, 4, 110, 1, 0, 0, 0, 6, 112, 1, 0, 0, 0, 8, 130, 1, 0, 0, 0, 10, 154,
+		1, 0, 0, 0, 12, 162, 1, 0, 0, 0, 14, 168, 1, 0, 0, 0, 16, 175, 1, 0, 0,
+		0, 18, 179, 1, 0, 0, 0, 20, 22, 3, 2, 1, 0, 21, 20, 1, 0, 0, 0, 22, 25,
+		1, 0, 0, 0, 23, 21, 1, 0, 0, 0, 23, 24, 1, 0, 0, 0, 24, 1, 1, 0, 0, 0,
+		25, 23, 1, 0, 0, 0, 26, 27, 5, 44, 0, 0, 27, 28, 3, 6, 3, 0, 28, 29, 5,
+		1, 0, 0, 29, 109, 1, 0, 0, 0, 30, 35, 3, 4, 2, 0, 31, 32, 5, 6, 0, 0, 32,
+		34, 3, 4, 2, 0, 33, 31, 1, 0, 0, 0, 34, 37, 1, 0, 0, 0, 35, 33, 1, 0, 0,
+		0, 35, 36, 1, 0, 0, 0, 36, 38, 1, 0, 0, 0, 37, 35, 1, 0, 0, 0, 38, 39,
+		5, 11, 0, 0, 39, 41, 1, 0, 0, 0, 40, 30, 1, 0, 0, 0, 40, 41, 1, 0, 0, 0,
+		41, 42, 1, 0, 0, 0, 42, 43, 3, 14, 7, 0, 43, 44, 5, 1, 0, 0, 44, 109, 1,
+		0, 0, 0, 45, 46, 5, 44, 0, 0, 46, 47, 5, 11, 0, 0, 47, 48, 3, 8, 4, 0,
+		48, 49, 5, 1, 0, 0, 49, 109, 1, 0, 0, 0, 50, 51, 5, 44, 0, 0, 51, 52, 3,
+		6, 3, 0, 52, 53, 5, 11, 0, 0, 53, 54, 3, 8, 4, 0, 54, 55, 5, 1, 0, 0, 55,
+		109, 1, 0, 0, 0, 56, 57, 5, 29, 0, 0, 57, 58, 5, 44, 0, 0, 58, 63, 5, 30,
+		0, 0, 59, 64, 3, 16, 8, 0, 60, 64, 3, 14, 7, 0, 61, 64, 5, 44, 0, 0, 62,
+		64, 5, 28, 0, 0, 63, 59, 1, 0, 0, 0, 63, 60, 1, 0, 0, 0, 63, 61, 1, 0,
+		0, 0, 63, 62, 1, 0, 0, 0, 64, 65, 1, 0, 0, 0, 65, 69, 5, 4, 0, 0, 66, 68,
+		3, 2, 1, 0, 67, 66, 1, 0, 0, 0, 68, 71, 1, 0, 0, 0, 69, 67, 1, 0, 0, 0,
+		69, 70, 1, 0, 0, 0, 70, 72, 1, 0, 0, 0, 71, 69, 1, 0, 0, 0, 72, 109, 5,
+		5, 0, 0, 73, 74, 5, 31, 0, 0, 74, 79, 3, 18, 9, 0, 75, 76, 5, 32, 0, 0,
+		76, 78, 3, 18, 9, 0, 77, 75, 1, 0, 0, 0, 78, 81, 1, 0, 0, 0, 79, 77, 1,
+		0, 0, 0, 79, 80, 1, 0, 0, 0, 80, 91, 1, 0, 0, 0, 81, 79, 1, 0, 0, 0, 82,
+		83, 5, 33, 0, 0, 83, 87, 5, 4, 0, 0, 84, 86, 3, 2, 1, 0, 85, 84, 1, 0,
+		0, 0, 86, 89, 1, 0, 0, 0, 87, 85, 1, 0, 0, 0, 87, 88, 1, 0, 0, 0, 88, 90,
+		1, 0, 0, 0, 89, 87, 1, 0, 0, 0, 90, 92, 5, 5, 0, 0, 91, 82, 1, 0, 0, 0,
+		91, 92, 1, 0, 0, 0, 92, 109, 1, 0, 0, 0, 93, 94, 5, 28, 0, 0, 94, 109,
+		5, 1, 0, 0, 95, 96, 5, 36, 0, 0, 96, 109, 5, 1, 0, 0, 97, 100, 5, 35, 0,
+		0, 98, 101, 3, 10, 5, 0, 99, 101, 5, 28, 0, 0, 100, 98, 1, 0, 0, 0, 100,
+		99, 1, 0, 0, 0, 101, 102, 1, 0, 0, 0, 102, 109, 5, 1, 0, 0, 103, 104, 5,
+		35, 0, 0, 104, 105, 5, 37, 0, 0, 105, 106, 3, 10, 5, 0, 106, 107, 5, 1,
+		0, 0, 107, 109, 1, 0, 0, 0, 108, 26, 1, 0, 0, 0, 108, 40, 1, 0, 0, 0, 108,
+		45, 1, 0, 0, 0, 108, 50, 1, 0, 0, 0, 108, 56, 1, 0, 0, 0, 108, 73, 1, 0,
+		0, 0, 108, 93, 1, 0, 0, 0, 108, 95, 1, 0, 0, 0, 108, 97, 1, 0, 0, 0, 108,
+		103, 1, 0, 0, 0, 109, 3, 1, 0, 0, 0, 110, 111, 7, 0, 0, 0, 111, 5, 1, 0,
+		0, 0, 112, 115, 5, 43, 0, 0, 113, 114, 5, 13, 0, 0, 114, 116, 5, 14, 0,
+		0, 115, 113, 1, 0, 0, 0, 115, 116, 1, 0, 0, 0, 116, 7, 1, 0, 0, 0, 117,
+		118, 6, 4, -1, 0, 118, 131, 5, 41, 0, 0, 119, 131, 5, 38, 0, 0, 120, 131,
+		5, 39, 0, 0, 121, 131, 5, 42, 0, 0, 122, 131, 5, 40, 0, 0, 123, 131, 3,
+		12, 6, 0, 124, 131, 3, 14, 7, 0, 125, 131, 5, 44, 0, 0, 126, 127, 5, 2,
+		0, 0, 127, 128, 3, 8, 4, 0, 128, 129, 5, 3, 0, 0, 129, 131, 1, 0, 0, 0,
+		130, 117, 1, 0, 0, 0, 130, 119, 1, 0, 0, 0, 130, 120, 1, 0, 0, 0, 130,
+		121, 1, 0, 0, 0, 130, 122, 1, 0, 0, 0, 130, 123, 1, 0, 0, 0, 130, 124,
+		1, 0, 0, 0, 130, 125, 1, 0, 0, 0, 130, 126, 1, 0, 0, 0, 131, 151, 1, 0,
+		0, 0, 132, 133, 10, 3, 0, 0, 133, 134, 7, 1, 0, 0, 134, 150, 3, 8, 4, 4,
+		135, 136, 10, 2, 0, 0, 136, 137, 7, 2, 0, 0, 137, 150, 3, 8, 4, 3, 138,
+		139, 10, 1, 0, 0, 139, 140, 7, 3, 0, 0, 140, 150, 3, 8, 4, 2, 141, 142,
+		10, 6, 0, 0, 142, 143, 5, 13, 0, 0, 143, 144, 3, 8, 4, 0, 144, 145, 5,
+		14, 0, 0, 145, 150, 1, 0, 0, 0, 146, 147, 10, 5, 0, 0, 147, 148, 5, 12,
+		0, 0, 148, 150, 5, 43, 0, 0, 149, 132, 1, 0, 0, 0, 149, 135, 1, 0, 0, 0,
+		149, 138, 1, 0, 0, 0, 149, 141, 1, 0, 0, 0, 149, 146, 1, 0, 0, 0, 150,
+		153, 1, 0, 0, 0, 151, 149, 1, 0, 0, 0, 151, 152, 1, 0, 0, 0, 152, 9, 1,
+		0, 0, 0, 153, 151, 1, 0, 0, 0, 154, 159, 3, 8, 4, 0, 155, 156, 5, 6, 0,
+		0, 156, 158, 3, 8, 4, 0, 157, 155, 1, 0, 0, 0, 158, 161, 1, 0, 0, 0, 159,
+		157, 1, 0, 0, 0, 159, 160, 1, 0, 0, 0, 160, 11, 1, 0, 0, 0, 161, 159, 1,
+		0, 0, 0, 162, 164, 5, 13, 0, 0, 163, 165, 3, 10, 5, 0, 164, 163, 1, 0,
+		0, 0, 164, 165, 1, 0, 0, 0, 165, 166, 1, 0, 0, 0, 166, 167, 5, 14, 0, 0,
+		167, 13, 1, 0, 0, 0, 168, 169, 5, 43, 0, 0, 169, 171, 5, 2, 0, 0, 170,
+		172, 3, 10, 5, 0, 171, 170, 1, 0, 0, 0, 171, 172, 1, 0, 0, 0, 172, 173,
+		1, 0, 0, 0, 173, 174, 5, 3, 0, 0, 174, 15, 1, 0, 0, 0, 175, 176, 3, 8,
+		4, 0, 176, 177, 5, 8, 0, 0, 177, 178, 3, 8, 4, 0, 178, 17, 1, 0, 0, 0,
+		179, 180, 3, 8, 4, 0, 180, 184, 5, 4, 0, 0, 181, 183, 3, 2, 1, 0, 182,
+		181, 1, 0, 0, 0, 183, 186, 1, 0, 0, 0, 184, 182, 1, 0, 0, 0, 184, 185,
+		1, 0, 0, 0, 185, 187, 1, 0, 0, 0, 186, 184, 1, 0, 0, 0, 187, 188, 5, 5,
+		0, 0, 188, 19, 1, 0, 0, 0, 18, 23, 35, 40, 63, 69, 79, 87, 91, 100, 108,
+		115, 130, 149, 151, 159, 164, 171, 184,
 	}
 	deserializer := antlr.NewATNDeserializer(nil)
 	staticData.atn = deserializer.Deserialize(staticData.serializedATN)
@@ -181,47 +183,48 @@ const (
 	ProcedureParserLBRACE          = 4
 	ProcedureParserRBRACE          = 5
 	ProcedureParserCOMMA           = 6
-	ProcedureParserCOLON           = 7
-	ProcedureParserDOLLAR          = 8
-	ProcedureParserAT              = 9
-	ProcedureParserASSIGN          = 10
-	ProcedureParserPERIOD          = 11
-	ProcedureParserLBRACKET        = 12
-	ProcedureParserRBRACKET        = 13
-	ProcedureParserSINGLE_QUOTE    = 14
-	ProcedureParserUNDERSCORE      = 15
-	ProcedureParserPLUS            = 16
-	ProcedureParserMINUS           = 17
-	ProcedureParserMUL             = 18
-	ProcedureParserDIV             = 19
-	ProcedureParserMOD             = 20
-	ProcedureParserLT              = 21
-	ProcedureParserLT_EQ           = 22
-	ProcedureParserGT              = 23
-	ProcedureParserGT_EQ           = 24
-	ProcedureParserNEQ             = 25
-	ProcedureParserEQ              = 26
-	ProcedureParserANY_SQL         = 27
-	ProcedureParserFOR             = 28
-	ProcedureParserIN              = 29
-	ProcedureParserIF              = 30
-	ProcedureParserELSEIF          = 31
-	ProcedureParserELSE            = 32
-	ProcedureParserTO              = 33
-	ProcedureParserRETURN          = 34
-	ProcedureParserBREAK           = 35
-	ProcedureParserNEXT            = 36
-	ProcedureParserBOOLEAN_LITERAL = 37
-	ProcedureParserINT_LITERAL     = 38
-	ProcedureParserBLOB_LITERAL    = 39
-	ProcedureParserTEXT_LITERAL    = 40
-	ProcedureParserNULL_LITERAL    = 41
-	ProcedureParserIDENTIFIER      = 42
-	ProcedureParserVARIABLE        = 43
-	ProcedureParserWS              = 44
-	ProcedureParserTERMINATOR      = 45
-	ProcedureParserBLOCK_COMMENT   = 46
-	ProcedureParserLINE_COMMENT    = 47
+	ProcedureParserTYPE_CAST       = 7
+	ProcedureParserCOLON           = 8
+	ProcedureParserDOLLAR          = 9
+	ProcedureParserAT              = 10
+	ProcedureParserASSIGN          = 11
+	ProcedureParserPERIOD          = 12
+	ProcedureParserLBRACKET        = 13
+	ProcedureParserRBRACKET        = 14
+	ProcedureParserSINGLE_QUOTE    = 15
+	ProcedureParserUNDERSCORE      = 16
+	ProcedureParserPLUS            = 17
+	ProcedureParserMINUS           = 18
+	ProcedureParserMUL             = 19
+	ProcedureParserDIV             = 20
+	ProcedureParserMOD             = 21
+	ProcedureParserLT              = 22
+	ProcedureParserLT_EQ           = 23
+	ProcedureParserGT              = 24
+	ProcedureParserGT_EQ           = 25
+	ProcedureParserNEQ             = 26
+	ProcedureParserEQ              = 27
+	ProcedureParserANY_SQL         = 28
+	ProcedureParserFOR             = 29
+	ProcedureParserIN              = 30
+	ProcedureParserIF              = 31
+	ProcedureParserELSEIF          = 32
+	ProcedureParserELSE            = 33
+	ProcedureParserTO              = 34
+	ProcedureParserRETURN          = 35
+	ProcedureParserBREAK           = 36
+	ProcedureParserNEXT            = 37
+	ProcedureParserBOOLEAN_LITERAL = 38
+	ProcedureParserINT_LITERAL     = 39
+	ProcedureParserBLOB_LITERAL    = 40
+	ProcedureParserTEXT_LITERAL    = 41
+	ProcedureParserNULL_LITERAL    = 42
+	ProcedureParserIDENTIFIER      = 43
+	ProcedureParserVARIABLE        = 44
+	ProcedureParserWS              = 45
+	ProcedureParserTERMINATOR      = 46
+	ProcedureParserBLOCK_COMMENT   = 47
+	ProcedureParserLINE_COMMENT    = 48
 )
 
 // ProcedureParser rules.
@@ -357,7 +360,7 @@ func (p *ProcedureParser) Program() (localctx IProgramContext) {
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&8849109057536) != 0 {
+	for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&26494311137280) != 0 {
 		{
 			p.SetState(20)
 			p.Statement()
@@ -991,6 +994,26 @@ func (s *Stmt_procedure_callContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
 
+func (s *Stmt_procedure_callContext) Call_expression() ICall_expressionContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(ICall_expressionContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(ICall_expressionContext)
+}
+
+func (s *Stmt_procedure_callContext) SEMICOLON() antlr.TerminalNode {
+	return s.GetToken(ProcedureParserSEMICOLON, 0)
+}
+
 func (s *Stmt_procedure_callContext) AllVariable_or_underscore() []IVariable_or_underscoreContext {
 	children := s.GetChildren()
 	len := 0
@@ -1034,26 +1057,6 @@ func (s *Stmt_procedure_callContext) Variable_or_underscore(i int) IVariable_or_
 
 func (s *Stmt_procedure_callContext) ASSIGN() antlr.TerminalNode {
 	return s.GetToken(ProcedureParserASSIGN, 0)
-}
-
-func (s *Stmt_procedure_callContext) Call_expression() ICall_expressionContext {
-	var t antlr.RuleContext
-	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(ICall_expressionContext); ok {
-			t = ctx.(antlr.RuleContext)
-			break
-		}
-	}
-
-	if t == nil {
-		return nil
-	}
-
-	return t.(ICall_expressionContext)
-}
-
-func (s *Stmt_procedure_callContext) SEMICOLON() antlr.TerminalNode {
-	return s.GetToken(ProcedureParserSEMICOLON, 0)
 }
 
 func (s *Stmt_procedure_callContext) AllCOMMA() []antlr.TerminalNode {
@@ -1171,13 +1174,13 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 	p.EnterRule(localctx, 2, ProcedureParserRULE_statement)
 	var _la int
 
-	p.SetState(105)
+	p.SetState(108)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 
-	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 8, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 9, p.GetParserRuleContext()) {
 	case 1:
 		localctx = NewStmt_variable_declarationContext(p, localctx)
 		p.EnterOuterAlt(localctx, 1)
@@ -1205,52 +1208,62 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 	case 2:
 		localctx = NewStmt_procedure_callContext(p, localctx)
 		p.EnterOuterAlt(localctx, 2)
-		{
-			p.SetState(30)
-			p.Variable_or_underscore()
-		}
-		p.SetState(35)
+		p.SetState(40)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
 		}
 		_la = p.GetTokenStream().LA(1)
 
-		for _la == ProcedureParserCOMMA {
+		if _la == ProcedureParserUNDERSCORE || _la == ProcedureParserVARIABLE {
 			{
-				p.SetState(31)
-				p.Match(ProcedureParserCOMMA)
-				if p.HasError() {
-					// Recognition error - abort rule
-					goto errorExit
-				}
-			}
-			{
-				p.SetState(32)
+				p.SetState(30)
 				p.Variable_or_underscore()
 			}
-
-			p.SetState(37)
+			p.SetState(35)
 			p.GetErrorHandler().Sync(p)
 			if p.HasError() {
 				goto errorExit
 			}
 			_la = p.GetTokenStream().LA(1)
-		}
-		{
-			p.SetState(38)
-			p.Match(ProcedureParserASSIGN)
-			if p.HasError() {
-				// Recognition error - abort rule
-				goto errorExit
+
+			for _la == ProcedureParserCOMMA {
+				{
+					p.SetState(31)
+					p.Match(ProcedureParserCOMMA)
+					if p.HasError() {
+						// Recognition error - abort rule
+						goto errorExit
+					}
+				}
+				{
+					p.SetState(32)
+					p.Variable_or_underscore()
+				}
+
+				p.SetState(37)
+				p.GetErrorHandler().Sync(p)
+				if p.HasError() {
+					goto errorExit
+				}
+				_la = p.GetTokenStream().LA(1)
 			}
+			{
+				p.SetState(38)
+				p.Match(ProcedureParserASSIGN)
+				if p.HasError() {
+					// Recognition error - abort rule
+					goto errorExit
+				}
+			}
+
 		}
 		{
-			p.SetState(39)
+			p.SetState(42)
 			p.Call_expression()
 		}
 		{
-			p.SetState(40)
+			p.SetState(43)
 			p.Match(ProcedureParserSEMICOLON)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1262,7 +1275,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 		localctx = NewStmt_variable_assignmentContext(p, localctx)
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(42)
+			p.SetState(45)
 			p.Match(ProcedureParserVARIABLE)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1270,7 +1283,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			}
 		}
 		{
-			p.SetState(43)
+			p.SetState(46)
 			p.Match(ProcedureParserASSIGN)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1278,11 +1291,11 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			}
 		}
 		{
-			p.SetState(44)
+			p.SetState(47)
 			p.expression(0)
 		}
 		{
-			p.SetState(45)
+			p.SetState(48)
 			p.Match(ProcedureParserSEMICOLON)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1294,7 +1307,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 		localctx = NewStmt_variable_assignment_with_declarationContext(p, localctx)
 		p.EnterOuterAlt(localctx, 4)
 		{
-			p.SetState(47)
+			p.SetState(50)
 			p.Match(ProcedureParserVARIABLE)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1302,11 +1315,11 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			}
 		}
 		{
-			p.SetState(48)
+			p.SetState(51)
 			p.Type_()
 		}
 		{
-			p.SetState(49)
+			p.SetState(52)
 			p.Match(ProcedureParserASSIGN)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1314,11 +1327,11 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			}
 		}
 		{
-			p.SetState(50)
+			p.SetState(53)
 			p.expression(0)
 		}
 		{
-			p.SetState(51)
+			p.SetState(54)
 			p.Match(ProcedureParserSEMICOLON)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1330,7 +1343,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 		localctx = NewStmt_for_loopContext(p, localctx)
 		p.EnterOuterAlt(localctx, 5)
 		{
-			p.SetState(53)
+			p.SetState(56)
 			p.Match(ProcedureParserFOR)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1338,7 +1351,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			}
 		}
 		{
-			p.SetState(54)
+			p.SetState(57)
 			p.Match(ProcedureParserVARIABLE)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1346,35 +1359,35 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			}
 		}
 		{
-			p.SetState(55)
+			p.SetState(58)
 			p.Match(ProcedureParserIN)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
-		p.SetState(60)
+		p.SetState(63)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
 		}
 
-		switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 2, p.GetParserRuleContext()) {
+		switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 3, p.GetParserRuleContext()) {
 		case 1:
 			{
-				p.SetState(56)
+				p.SetState(59)
 				p.Range_()
 			}
 
 		case 2:
 			{
-				p.SetState(57)
+				p.SetState(60)
 				p.Call_expression()
 			}
 
 		case 3:
 			{
-				p.SetState(58)
+				p.SetState(61)
 				p.Match(ProcedureParserVARIABLE)
 				if p.HasError() {
 					// Recognition error - abort rule
@@ -1384,7 +1397,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 
 		case 4:
 			{
-				p.SetState(59)
+				p.SetState(62)
 				p.Match(ProcedureParserANY_SQL)
 				if p.HasError() {
 					// Recognition error - abort rule
@@ -1396,27 +1409,27 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			goto errorExit
 		}
 		{
-			p.SetState(62)
+			p.SetState(65)
 			p.Match(ProcedureParserLBRACE)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
-		p.SetState(66)
+		p.SetState(69)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
 		}
 		_la = p.GetTokenStream().LA(1)
 
-		for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&8849109057536) != 0 {
+		for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&26494311137280) != 0 {
 			{
-				p.SetState(63)
+				p.SetState(66)
 				p.Statement()
 			}
 
-			p.SetState(68)
+			p.SetState(71)
 			p.GetErrorHandler().Sync(p)
 			if p.HasError() {
 				goto errorExit
@@ -1424,7 +1437,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			_la = p.GetTokenStream().LA(1)
 		}
 		{
-			p.SetState(69)
+			p.SetState(72)
 			p.Match(ProcedureParserRBRACE)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1436,7 +1449,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 		localctx = NewStmt_ifContext(p, localctx)
 		p.EnterOuterAlt(localctx, 6)
 		{
-			p.SetState(70)
+			p.SetState(73)
 			p.Match(ProcedureParserIF)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1444,10 +1457,10 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			}
 		}
 		{
-			p.SetState(71)
+			p.SetState(74)
 			p.If_then_block()
 		}
-		p.SetState(76)
+		p.SetState(79)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -1456,7 +1469,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 
 		for _la == ProcedureParserELSEIF {
 			{
-				p.SetState(72)
+				p.SetState(75)
 				p.Match(ProcedureParserELSEIF)
 				if p.HasError() {
 					// Recognition error - abort rule
@@ -1464,18 +1477,18 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 				}
 			}
 			{
-				p.SetState(73)
+				p.SetState(76)
 				p.If_then_block()
 			}
 
-			p.SetState(78)
+			p.SetState(81)
 			p.GetErrorHandler().Sync(p)
 			if p.HasError() {
 				goto errorExit
 			}
 			_la = p.GetTokenStream().LA(1)
 		}
-		p.SetState(88)
+		p.SetState(91)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -1484,7 +1497,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 
 		if _la == ProcedureParserELSE {
 			{
-				p.SetState(79)
+				p.SetState(82)
 				p.Match(ProcedureParserELSE)
 				if p.HasError() {
 					// Recognition error - abort rule
@@ -1492,27 +1505,27 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 				}
 			}
 			{
-				p.SetState(80)
+				p.SetState(83)
 				p.Match(ProcedureParserLBRACE)
 				if p.HasError() {
 					// Recognition error - abort rule
 					goto errorExit
 				}
 			}
-			p.SetState(84)
+			p.SetState(87)
 			p.GetErrorHandler().Sync(p)
 			if p.HasError() {
 				goto errorExit
 			}
 			_la = p.GetTokenStream().LA(1)
 
-			for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&8849109057536) != 0 {
+			for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&26494311137280) != 0 {
 				{
-					p.SetState(81)
+					p.SetState(84)
 					p.Statement()
 				}
 
-				p.SetState(86)
+				p.SetState(89)
 				p.GetErrorHandler().Sync(p)
 				if p.HasError() {
 					goto errorExit
@@ -1520,7 +1533,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 				_la = p.GetTokenStream().LA(1)
 			}
 			{
-				p.SetState(87)
+				p.SetState(90)
 				p.Match(ProcedureParserRBRACE)
 				if p.HasError() {
 					// Recognition error - abort rule
@@ -1534,7 +1547,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 		localctx = NewStmt_sqlContext(p, localctx)
 		p.EnterOuterAlt(localctx, 7)
 		{
-			p.SetState(90)
+			p.SetState(93)
 			p.Match(ProcedureParserANY_SQL)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1542,7 +1555,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			}
 		}
 		{
-			p.SetState(91)
+			p.SetState(94)
 			p.Match(ProcedureParserSEMICOLON)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1554,7 +1567,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 		localctx = NewStmt_breakContext(p, localctx)
 		p.EnterOuterAlt(localctx, 8)
 		{
-			p.SetState(92)
+			p.SetState(95)
 			p.Match(ProcedureParserBREAK)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1562,7 +1575,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			}
 		}
 		{
-			p.SetState(93)
+			p.SetState(96)
 			p.Match(ProcedureParserSEMICOLON)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1574,14 +1587,14 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 		localctx = NewStmt_returnContext(p, localctx)
 		p.EnterOuterAlt(localctx, 9)
 		{
-			p.SetState(94)
+			p.SetState(97)
 			p.Match(ProcedureParserRETURN)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
-		p.SetState(97)
+		p.SetState(100)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -1590,13 +1603,13 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 		switch p.GetTokenStream().LA(1) {
 		case ProcedureParserLPAREN, ProcedureParserLBRACKET, ProcedureParserBOOLEAN_LITERAL, ProcedureParserINT_LITERAL, ProcedureParserBLOB_LITERAL, ProcedureParserTEXT_LITERAL, ProcedureParserNULL_LITERAL, ProcedureParserIDENTIFIER, ProcedureParserVARIABLE:
 			{
-				p.SetState(95)
+				p.SetState(98)
 				p.Expression_list()
 			}
 
 		case ProcedureParserANY_SQL:
 			{
-				p.SetState(96)
+				p.SetState(99)
 				p.Match(ProcedureParserANY_SQL)
 				if p.HasError() {
 					// Recognition error - abort rule
@@ -1609,7 +1622,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			goto errorExit
 		}
 		{
-			p.SetState(99)
+			p.SetState(102)
 			p.Match(ProcedureParserSEMICOLON)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1621,7 +1634,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 		localctx = NewStmt_return_nextContext(p, localctx)
 		p.EnterOuterAlt(localctx, 10)
 		{
-			p.SetState(100)
+			p.SetState(103)
 			p.Match(ProcedureParserRETURN)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1629,7 +1642,7 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			}
 		}
 		{
-			p.SetState(101)
+			p.SetState(104)
 			p.Match(ProcedureParserNEXT)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1637,11 +1650,11 @@ func (p *ProcedureParser) Statement() (localctx IStatementContext) {
 			}
 		}
 		{
-			p.SetState(102)
+			p.SetState(105)
 			p.Expression_list()
 		}
 		{
-			p.SetState(103)
+			p.SetState(106)
 			p.Match(ProcedureParserSEMICOLON)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1746,7 +1759,7 @@ func (p *ProcedureParser) Variable_or_underscore() (localctx IVariable_or_unders
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(107)
+		p.SetState(110)
 		_la = p.GetTokenStream().LA(1)
 
 		if !(_la == ProcedureParserUNDERSCORE || _la == ProcedureParserVARIABLE) {
@@ -1855,14 +1868,14 @@ func (p *ProcedureParser) Type_() (localctx ITypeContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(109)
+		p.SetState(112)
 		p.Match(ProcedureParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit
 		}
 	}
-	p.SetState(112)
+	p.SetState(115)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -1871,7 +1884,7 @@ func (p *ProcedureParser) Type_() (localctx ITypeContext) {
 
 	if _la == ProcedureParserLBRACKET {
 		{
-			p.SetState(110)
+			p.SetState(113)
 			p.Match(ProcedureParserLBRACKET)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -1879,7 +1892,7 @@ func (p *ProcedureParser) Type_() (localctx ITypeContext) {
 			}
 		}
 		{
-			p.SetState(111)
+			p.SetState(114)
 			p.Match(ProcedureParserRBRACKET)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -2632,7 +2645,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 	var _alt int
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(127)
+	p.SetState(130)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -2645,7 +2658,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 		_prevctx = localctx
 
 		{
-			p.SetState(115)
+			p.SetState(118)
 			p.Match(ProcedureParserTEXT_LITERAL)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -2658,7 +2671,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(116)
+			p.SetState(119)
 			p.Match(ProcedureParserBOOLEAN_LITERAL)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -2671,7 +2684,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(117)
+			p.SetState(120)
 			p.Match(ProcedureParserINT_LITERAL)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -2684,7 +2697,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(118)
+			p.SetState(121)
 			p.Match(ProcedureParserNULL_LITERAL)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -2697,7 +2710,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(119)
+			p.SetState(122)
 			p.Match(ProcedureParserBLOB_LITERAL)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -2710,7 +2723,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(120)
+			p.SetState(123)
 			p.Expression_make_array()
 		}
 
@@ -2719,7 +2732,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(121)
+			p.SetState(124)
 			p.Call_expression()
 		}
 
@@ -2728,7 +2741,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(122)
+			p.SetState(125)
 			p.Match(ProcedureParserVARIABLE)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -2741,7 +2754,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(123)
+			p.SetState(126)
 			p.Match(ProcedureParserLPAREN)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -2749,11 +2762,11 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 			}
 		}
 		{
-			p.SetState(124)
+			p.SetState(127)
 			p.expression(0)
 		}
 		{
-			p.SetState(125)
+			p.SetState(128)
 			p.Match(ProcedureParserRPAREN)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -2766,12 +2779,12 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 		goto errorExit
 	}
 	p.GetParserRuleContext().SetStop(p.GetTokenStream().LT(-1))
-	p.SetState(148)
+	p.SetState(151)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
-	_alt = p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 12, p.GetParserRuleContext())
+	_alt = p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 13, p.GetParserRuleContext())
 	if p.HasError() {
 		goto errorExit
 	}
@@ -2781,26 +2794,26 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 				p.TriggerExitRuleEvent()
 			}
 			_prevctx = localctx
-			p.SetState(146)
+			p.SetState(149)
 			p.GetErrorHandler().Sync(p)
 			if p.HasError() {
 				goto errorExit
 			}
 
-			switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 11, p.GetParserRuleContext()) {
+			switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 12, p.GetParserRuleContext()) {
 			case 1:
 				localctx = NewExpr_comparisonContext(p, NewExpressionContext(p, _parentctx, _parentState))
 				localctx.(*Expr_comparisonContext).left = _prevctx
 
 				p.PushNewRecursionContext(localctx, _startState, ProcedureParserRULE_expression)
-				p.SetState(129)
+				p.SetState(132)
 
 				if !(p.Precpred(p.GetParserRuleContext(), 3)) {
 					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 3)", ""))
 					goto errorExit
 				}
 				{
-					p.SetState(130)
+					p.SetState(133)
 
 					var _lt = p.GetTokenStream().LT(1)
 
@@ -2808,7 +2821,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 
 					_la = p.GetTokenStream().LA(1)
 
-					if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&132120576) != 0) {
+					if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&264241152) != 0) {
 						var _ri = p.GetErrorHandler().RecoverInline(p)
 
 						localctx.(*Expr_comparisonContext).operator = _ri
@@ -2818,7 +2831,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 					}
 				}
 				{
-					p.SetState(131)
+					p.SetState(134)
 
 					var _x = p.expression(4)
 
@@ -2828,17 +2841,17 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 			case 2:
 				localctx = NewExpr_arithmeticContext(p, NewExpressionContext(p, _parentctx, _parentState))
 				p.PushNewRecursionContext(localctx, _startState, ProcedureParserRULE_expression)
-				p.SetState(132)
+				p.SetState(135)
 
 				if !(p.Precpred(p.GetParserRuleContext(), 2)) {
 					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 2)", ""))
 					goto errorExit
 				}
 				{
-					p.SetState(133)
+					p.SetState(136)
 					_la = p.GetTokenStream().LA(1)
 
-					if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&1835008) != 0) {
+					if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&3670016) != 0) {
 						p.GetErrorHandler().RecoverInline(p)
 					} else {
 						p.GetErrorHandler().ReportMatch(p)
@@ -2846,21 +2859,21 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 					}
 				}
 				{
-					p.SetState(134)
+					p.SetState(137)
 					p.expression(3)
 				}
 
 			case 3:
 				localctx = NewExpr_arithmeticContext(p, NewExpressionContext(p, _parentctx, _parentState))
 				p.PushNewRecursionContext(localctx, _startState, ProcedureParserRULE_expression)
-				p.SetState(135)
+				p.SetState(138)
 
 				if !(p.Precpred(p.GetParserRuleContext(), 1)) {
 					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 1)", ""))
 					goto errorExit
 				}
 				{
-					p.SetState(136)
+					p.SetState(139)
 					_la = p.GetTokenStream().LA(1)
 
 					if !(_la == ProcedureParserPLUS || _la == ProcedureParserMINUS) {
@@ -2871,21 +2884,21 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 					}
 				}
 				{
-					p.SetState(137)
+					p.SetState(140)
 					p.expression(2)
 				}
 
 			case 4:
 				localctx = NewExpr_array_accessContext(p, NewExpressionContext(p, _parentctx, _parentState))
 				p.PushNewRecursionContext(localctx, _startState, ProcedureParserRULE_expression)
-				p.SetState(138)
+				p.SetState(141)
 
 				if !(p.Precpred(p.GetParserRuleContext(), 6)) {
 					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 6)", ""))
 					goto errorExit
 				}
 				{
-					p.SetState(139)
+					p.SetState(142)
 					p.Match(ProcedureParserLBRACKET)
 					if p.HasError() {
 						// Recognition error - abort rule
@@ -2893,11 +2906,11 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 					}
 				}
 				{
-					p.SetState(140)
+					p.SetState(143)
 					p.expression(0)
 				}
 				{
-					p.SetState(141)
+					p.SetState(144)
 					p.Match(ProcedureParserRBRACKET)
 					if p.HasError() {
 						// Recognition error - abort rule
@@ -2908,14 +2921,14 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 			case 5:
 				localctx = NewExpr_field_accessContext(p, NewExpressionContext(p, _parentctx, _parentState))
 				p.PushNewRecursionContext(localctx, _startState, ProcedureParserRULE_expression)
-				p.SetState(143)
+				p.SetState(146)
 
 				if !(p.Precpred(p.GetParserRuleContext(), 5)) {
 					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 5)", ""))
 					goto errorExit
 				}
 				{
-					p.SetState(144)
+					p.SetState(147)
 					p.Match(ProcedureParserPERIOD)
 					if p.HasError() {
 						// Recognition error - abort rule
@@ -2923,7 +2936,7 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 					}
 				}
 				{
-					p.SetState(145)
+					p.SetState(148)
 					p.Match(ProcedureParserIDENTIFIER)
 					if p.HasError() {
 						// Recognition error - abort rule
@@ -2936,12 +2949,12 @@ func (p *ProcedureParser) expression(_p int) (localctx IExpressionContext) {
 			}
 
 		}
-		p.SetState(150)
+		p.SetState(153)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
 		}
-		_alt = p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 12, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 13, p.GetParserRuleContext())
 		if p.HasError() {
 			goto errorExit
 		}
@@ -3083,10 +3096,10 @@ func (p *ProcedureParser) Expression_list() (localctx IExpression_listContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(151)
+		p.SetState(154)
 		p.expression(0)
 	}
-	p.SetState(156)
+	p.SetState(159)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -3095,7 +3108,7 @@ func (p *ProcedureParser) Expression_list() (localctx IExpression_listContext) {
 
 	for _la == ProcedureParserCOMMA {
 		{
-			p.SetState(152)
+			p.SetState(155)
 			p.Match(ProcedureParserCOMMA)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -3103,11 +3116,11 @@ func (p *ProcedureParser) Expression_list() (localctx IExpression_listContext) {
 			}
 		}
 		{
-			p.SetState(153)
+			p.SetState(156)
 			p.expression(0)
 		}
 
-		p.SetState(158)
+		p.SetState(161)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -3225,29 +3238,29 @@ func (p *ProcedureParser) Expression_make_array() (localctx IExpression_make_arr
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(159)
+		p.SetState(162)
 		p.Match(ProcedureParserLBRACKET)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit
 		}
 	}
-	p.SetState(161)
+	p.SetState(164)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	if (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&17454747095044) != 0 {
+	if (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&34909494190084) != 0 {
 		{
-			p.SetState(160)
+			p.SetState(163)
 			p.Expression_list()
 		}
 
 	}
 	{
-		p.SetState(163)
+		p.SetState(166)
 		p.Match(ProcedureParserRBRACKET)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -3370,7 +3383,7 @@ func (p *ProcedureParser) Call_expression() (localctx ICall_expressionContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(165)
+		p.SetState(168)
 		p.Match(ProcedureParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -3378,29 +3391,29 @@ func (p *ProcedureParser) Call_expression() (localctx ICall_expressionContext) {
 		}
 	}
 	{
-		p.SetState(166)
+		p.SetState(169)
 		p.Match(ProcedureParserLPAREN)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit
 		}
 	}
-	p.SetState(168)
+	p.SetState(171)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	if (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&17454747095044) != 0 {
+	if (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&34909494190084) != 0 {
 		{
-			p.SetState(167)
+			p.SetState(170)
 			p.Expression_list()
 		}
 
 	}
 	{
-		p.SetState(170)
+		p.SetState(173)
 		p.Match(ProcedureParserRPAREN)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -3537,11 +3550,11 @@ func (p *ProcedureParser) Range_() (localctx IRangeContext) {
 	p.EnterRule(localctx, 16, ProcedureParserRULE_range)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(172)
+		p.SetState(175)
 		p.expression(0)
 	}
 	{
-		p.SetState(173)
+		p.SetState(176)
 		p.Match(ProcedureParserCOLON)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -3549,7 +3562,7 @@ func (p *ProcedureParser) Range_() (localctx IRangeContext) {
 		}
 	}
 	{
-		p.SetState(174)
+		p.SetState(177)
 		p.expression(0)
 	}
 
@@ -3706,31 +3719,31 @@ func (p *ProcedureParser) If_then_block() (localctx IIf_then_blockContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(176)
+		p.SetState(179)
 		p.expression(0)
 	}
 	{
-		p.SetState(177)
+		p.SetState(180)
 		p.Match(ProcedureParserLBRACE)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit
 		}
 	}
-	p.SetState(181)
+	p.SetState(184)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&8849109057536) != 0 {
+	for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&26494311137280) != 0 {
 		{
-			p.SetState(178)
+			p.SetState(181)
 			p.Statement()
 		}
 
-		p.SetState(183)
+		p.SetState(186)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -3738,7 +3751,7 @@ func (p *ProcedureParser) If_then_block() (localctx IIf_then_blockContext) {
 		_la = p.GetTokenStream().LA(1)
 	}
 	{
-		p.SetState(184)
+		p.SetState(187)
 		p.Match(ProcedureParserRBRACE)
 		if p.HasError() {
 			// Recognition error - abort rule

@@ -5,21 +5,26 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine"
 	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 
 // TODO: the statement cleaner should also check for table / column existence
-func NewStatementCleaner() *StatementCleaner {
+func NewStatementCleaner(procedures []*types.Procedure) *StatementCleaner {
 	return &StatementCleaner{
 		AstListener: tree.NewBaseListener(),
+		procedures:  procedures,
 	}
 }
 
-var _ tree.AstListener = &StatementCleaner{}
+var _ tree.AstListener = &StatementCleaner{
+	procedures: []*types.Procedure{},
+}
 
 type StatementCleaner struct {
 	tree.AstListener
+	procedures []*types.Procedure
 }
 
 // EnterConflictTarget checks that the indexed column names are valid identifiers
@@ -87,9 +92,21 @@ func (s *StatementCleaner) EnterExpressionFunction(node *tree.ExpressionFunction
 
 	_, ok := engine.Functions[strings.ToLower(node.Function)]
 	if !ok {
-		return wrapErr(ErrUnknownFunction, fmt.Errorf(node.Function))
+		// check if it's a procedure
+		if findProcedure(s.procedures, node.Function) == nil {
+			return wrapErr(engine.ErrUnknownFunctionOrProcedure, fmt.Errorf(node.Function))
+		}
 	}
 
+	return nil
+}
+
+func findProcedure(procedures []*types.Procedure, name string) *types.Procedure {
+	for _, p := range procedures {
+		if p.Name == name {
+			return p
+		}
+	}
 	return nil
 }
 
@@ -179,8 +196,14 @@ func (s *StatementCleaner) EnterInsertCore(node *tree.InsertCore) (err error) {
 	return wrapErr(ErrInvalidIdentifier, err)
 }
 
-// EnterJoinClause does nothing
-func (s *StatementCleaner) EnterRelation(node tree.Relation) (err error) {
+func (s *StatementCleaner) EnterRelationFunction(node *tree.RelationFunction) (err error) {
+	// check the alias is a valid identifier
+	if node.Alias != "" {
+		node.Alias, err = cleanIdentifier(node.Alias)
+		if err != nil {
+			return wrapErr(ErrInvalidIdentifier, err)
+		}
+	}
 	return nil
 }
 

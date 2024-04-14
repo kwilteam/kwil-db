@@ -67,6 +67,46 @@ func (t *RelationTable) SetSchema(schema string) {
 	t.schema = schema
 }
 
+// RelationFunc is a relation that is a function call.
+// This can be used it a user has a function that returns a table.
+type RelationFunction struct {
+	node
+
+	Function *ExpressionFunction
+	Alias    string
+}
+
+func (t *RelationFunction) Accept(v AstVisitor) any {
+	return v.VisitRelationFunction(t)
+}
+
+func (t *RelationFunction) Walk(w AstListener) error {
+	return run(
+		w.EnterRelationFunction(t),
+		walk(w, t.Function),
+		w.ExitRelationFunction(t),
+	)
+}
+
+func (t *RelationFunction) relation() {}
+
+func (t *RelationFunction) ToSQL() string {
+	if t.Function == nil {
+		panic("function is nil")
+	}
+
+	stmt := sqlwriter.NewWriter()
+
+	stmt.WriteString(t.Function.ToSQL())
+	if t.Alias != "" {
+		stmt.Token.As()
+		stmt.WriteIdent(t.Alias)
+
+	}
+
+	return stmt.String()
+}
+
 type RelationSubquery struct {
 	node
 
