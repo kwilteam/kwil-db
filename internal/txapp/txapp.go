@@ -457,10 +457,14 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 
 			requiredPowerMap[resolution.Type] = threshold
 		}
+		refunded := false
 		// if it has enough power, we will still refund
 		if resolution.ApprovedPower >= threshold {
+			refunded = true
 			credits.applyResolution(resolution)
 		}
+
+		r.log.Debug("expiring resolution", zap.String("type", resolution.Type), zap.String("id", resolution.ID.String()), zap.Bool("refunded", refunded))
 	}
 
 	err = deleteResolutions(ctx, r.currentTx, expiredIds...)
