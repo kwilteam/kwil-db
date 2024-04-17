@@ -8,7 +8,7 @@ import (
 var Builder = newLogicalPlanBuilder()
 
 // logicalPlanBuilder is a helper to build logical plans.
-// Method From and NoRelation return a new logicalPlanBuilder, other methods
+// Method From and NoRelationOp return a new logicalPlanBuilder, other methods
 // modify the current builder.
 type logicalPlanBuilder struct {
 	plan LogicalPlan
@@ -18,7 +18,7 @@ func newLogicalPlanBuilder() *logicalPlanBuilder {
 	return &logicalPlanBuilder{}
 }
 
-// NoRelation creates a new logicalPlanBuilder with no relation(from).
+// NoRelationOp creates a new logicalPlanBuilder with no relation(from).
 func (b *logicalPlanBuilder) NoRelation() *logicalPlanBuilder {
 	return &logicalPlanBuilder{plan: NoSource()}
 }

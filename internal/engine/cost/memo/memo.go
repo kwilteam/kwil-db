@@ -18,8 +18,8 @@ type Group struct {
 
 	best virtual_plan.VirtualPlan
 
-	logical []GroupRel
-	virtual []GroupRel
+	logical []GroupExpression
+	virtual []GroupExpression
 }
 
 //func (g *Group) String() string {
@@ -31,7 +31,7 @@ func NewGroup(id int) *Group {
 	return &Group{id: id}
 }
 
-func (g *Group) addRelExpr(rel GroupRel) {
+func (g *Group) addRelExpr(rel GroupExpression) {
 	switch t := rel.(type) {
 	case *LogicalRel:
 		g.logical = append(g.logical, t)

@@ -1,6 +1,8 @@
 package plantree
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type NodeFunc func(TreeNode) (bool, any)
 type TransformFunc func(TreeNode) TreeNode

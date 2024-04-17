@@ -5,9 +5,12 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
+	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
 )
 
 type LogicalPlan interface {
+	pt.TreeNode
+
 	fmt.Stringer
 
 	// Schema returns the schema of the data that will be produced by this LogicalPlan.
@@ -35,56 +38,56 @@ func Format(plan LogicalPlan, indent int) string {
 	return msg.String()
 }
 
-type LogicalOperatorVisitor interface {
-	Visit(LogicalPlan) any
-	VisitScanOp(*ScanOp) any
-	VisitProjectionOp(*ProjectionOp) any
-	//VisitLogicalSubquery(*LogicalSubquery) any
-	VisitFilterOp(*FilterOp) any
-	VisitJoinOp(*JoinOp) any
-	VisitLimitOp(*LimitOp) any
-	VisitAggregate(*AggregateOp) any
-	VisitSort(*SortOp) any
-	//VisitLogicalDistinct(*LogicalDistinct) any
-	//VisitLogicalSet(*LogicalSet) any
-}
-
-type baseLogicalOperatorVisitor struct{}
-
-func (v *baseLogicalOperatorVisitor) Visit(plan LogicalPlan) any {
-	//return plan.Accept(v)
-	return nil
-}
-
-func (v *baseLogicalOperatorVisitor) VisitScanOp(op *ScanOp) any {
-	return nil
-}
-
-func (v *baseLogicalOperatorVisitor) VisitProjectionOp(op *ProjectionOp) any {
-	return nil
-}
-
-func (v *baseLogicalOperatorVisitor) VisitFilterOp(op *FilterOp) any {
-	return nil
-}
-
-func (v *baseLogicalOperatorVisitor) VisitJoinOp(op *JoinOp) any {
-	return nil
-}
-
-func (v *baseLogicalOperatorVisitor) VisitLimitOp(op *LimitOp) any {
-	return nil
-}
-
-func (v *baseLogicalOperatorVisitor) VisitAggregate(op *AggregateOp) any {
-	return nil
-}
-
-func (v *baseLogicalOperatorVisitor) VisitSort(op *SortOp) any {
-	return nil
-}
-
-var _ LogicalOperatorVisitor = &baseLogicalOperatorVisitor{}
+//type LogicalOperatorVisitor interface {
+//	Visit(LogicalPlan) any
+//	VisitScanOp(*ScanOp) any
+//	VisitProjectionOp(*ProjectionOp) any
+//	//VisitLogicalSubquery(*LogicalSubquery) any
+//	VisitFilterOp(*FilterOp) any
+//	VisitJoinOp(*JoinOp) any
+//	VisitLimitOp(*LimitOp) any
+//	VisitAggregate(*AggregateOp) any
+//	VisitSort(*SortOp) any
+//	//VisitLogicalDistinct(*LogicalDistinct) any
+//	//VisitLogicalSet(*LogicalSet) any
+//}
+//
+//type baseLogicalOperatorVisitor struct{}
+//
+//func (v *baseLogicalOperatorVisitor) Visit(plan LogicalPlan) any {
+//	//return plan.Accept(v)
+//	return nil
+//}
+//
+//func (v *baseLogicalOperatorVisitor) VisitScanOp(op *ScanOp) any {
+//	return nil
+//}
+//
+//func (v *baseLogicalOperatorVisitor) VisitProjectionOp(op *ProjectionOp) any {
+//	return nil
+//}
+//
+//func (v *baseLogicalOperatorVisitor) VisitFilterOp(op *FilterOp) any {
+//	return nil
+//}
+//
+//func (v *baseLogicalOperatorVisitor) VisitJoinOp(op *JoinOp) any {
+//	return nil
+//}
+//
+//func (v *baseLogicalOperatorVisitor) VisitLimitOp(op *LimitOp) any {
+//	return nil
+//}
+//
+//func (v *baseLogicalOperatorVisitor) VisitAggregate(op *AggregateOp) any {
+//	return nil
+//}
+//
+//func (v *baseLogicalOperatorVisitor) VisitSort(op *SortOp) any {
+//	return nil
+//}
+//
+//var _ LogicalOperatorVisitor = &baseLogicalOperatorVisitor{}
 
 //func Explain(p LogicalPlan) string {
 //	return explainWithPrefix(p, "", "")

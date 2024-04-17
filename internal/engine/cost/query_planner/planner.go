@@ -296,7 +296,7 @@ func (q *queryPlanner) buildSimpleSelect(node *tree.SimpleSelect, ctx *PlannerCo
 	plan = q.buildFrom(node.From, ctx)
 
 	noFrom := false
-	if _, ok := plan.(*lp.NoRelation); ok {
+	if _, ok := plan.(*lp.NoRelationOp); ok {
 		noFrom = true
 	}
 

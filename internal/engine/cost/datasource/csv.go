@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"unsafe"
 
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
@@ -17,6 +18,7 @@ type CsvDataSource struct {
 	path    string
 	records []Row
 	schema  *datatypes.Schema
+	stat    *datatypes.Statistics
 }
 
 func NewCSVDataSource(path string) (*CsvDataSource, error) {
@@ -26,6 +28,74 @@ func NewCSVDataSource(path string) (*CsvDataSource, error) {
 	}
 
 	return ds, nil
+}
+
+func (ds *CsvDataSource) collectStats() {
+	if ds.stat == nil {
+		ds.stat = datatypes.NewEmptyStatistics()
+	}
+
+	type counter map[any]int
+	distinct := make(map[string]counter)
+
+	rowCount := int64(len(ds.records))
+
+	for i, f := range ds.schema.Fields {
+		colStat := &datatypes.ColumnStatistics{}
+
+		for _, r := range ds.records {
+			rv := r[i].Value()
+
+			if f.Type == "string" {
+				v := rv.(string)
+				if colStat.Min == nil {
+					colStat.Min = v
+				}
+
+				if colStat.Max == nil {
+					colStat.Max = v
+				}
+				vMin := colStat.Min.(string)
+				vMax := colStat.Max.(string)
+
+				colStat.Min = min(v, vMin)
+				colStat.Max = max(v, vMax)
+			} else {
+				v := rv.(int64)
+				if colStat.Min == nil {
+					colStat.Min = v
+				}
+
+				if colStat.Max == nil {
+					colStat.Max = v
+				}
+				vMin := colStat.Min.(int64)
+				vMax := colStat.Max.(int64)
+				colStat.Min = min(v, vMin)
+				colStat.Max = max(v, vMax)
+			}
+
+			if _, ok := distinct[f.Name]; !ok {
+				distinct[f.Name] = make(counter)
+			}
+
+			distinct[f.Name][rv]++
+
+			if rv == nil {
+				colStat.NullCount++
+			}
+
+			// not exactly correct
+			colStat.AvgSize += int64(unsafe.Sizeof(rv))
+		}
+
+		colStat.DistinctCount = int64(len(distinct[f.Name]))
+		colStat.AvgSize = colStat.AvgSize / rowCount
+
+		ds.stat.ColumnStatistics = append(ds.stat.ColumnStatistics, *colStat)
+	}
+
+	ds.stat.RowCount = rowCount
 }
 
 func (ds *CsvDataSource) load() error {
@@ -90,7 +160,10 @@ func (ds *CsvDataSource) Schema() *datatypes.Schema {
 }
 
 func (ds *CsvDataSource) Statistics() *datatypes.Statistics {
-	panic("not implemented")
+	if ds.stat == nil {
+		ds.collectStats()
+	}
+	return ds.stat
 }
 
 func (ds *CsvDataSource) Scan(ctx context.Context, projection ...string) *Result {

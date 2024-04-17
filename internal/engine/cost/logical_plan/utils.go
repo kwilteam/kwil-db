@@ -199,3 +199,33 @@ func PpList[T any](l []T) string {
 	}
 	return str
 }
+
+func PlanString(p LogicalPlan) string {
+	var ps string
+	switch t := p.(type) {
+	case *NoRelationOp:
+		ps = t.String()
+	case *ScanOp:
+		ps = t.String()
+	case *ProjectionOp:
+		ps = t.String()
+	case *FilterOp:
+		ps = t.String()
+	case *JoinOp:
+		ps = t.String()
+	case *LimitOp:
+		ps = t.String()
+	case *AggregateOp:
+		ps = t.String()
+	case *SortOp:
+		ps = t.String()
+	case *SubqueryOp:
+		ps = t.String()
+	case *DistinctOp:
+		ps = t.String()
+	default:
+		ps = fmt.Sprintf("Unknown LogicalPlan type %T", t)
+	}
+
+	return ps
+}

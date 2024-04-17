@@ -1,68 +1,35 @@
-package query_planner
+package costmodel
 
 import (
-	"flag"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/testkit"
-	"path/filepath"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-
-	"github.com/kwilteam/kwil-db/internal/engine/cost/catalog"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/query_planner"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
+	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
-var (
-	testData        = flag.String("test_data", "testdata/[^.]*", "test data glob")
-	updateTestFiles = flag.Bool("update", false, "update test golden files")
-)
-
-func runToPlan(t *testing.T, sql string, cat catalog.Catalog) string {
-	t.Helper()
-
-	stmt, err := sqlparser.Parse(sql)
-	assert.NoError(t, err)
-
-	q := NewPlanner(cat)
-	plan := q.ToPlan(stmt)
-	return logical_plan.Format(plan, 0)
-	//
-}
-
-func Test_queryPlanner_ToPlan_golden(t *testing.T) {
-	// test with golden files, located in ./testdata
-	cat := testkit.InitMockCatalog()
-
-	testFiles, err := filepath.Glob(*testData)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, testFiles, "no test files found")
-
-	for _, testFile := range testFiles {
-		r, err := testkit.NewTestDataReader(testFile, *updateTestFiles)
-		assert.NoError(t, err)
-
-		for r.Next() {
-			//fmt.Printf("Running test: %+v\n", r.Data)
-
-			tc := r.Data
-			sql := tc.Sql
-			expected := tc.Expected
-
-			t.Run(tc.CaseName, func(t *testing.T) {
-				got := runToPlan(t, sql, cat)
-				r.Record(got) // record the result for update purposes
-				if !*updateTestFiles {
-					assert.Equal(t, expected, got)
-				}
-			})
-
-			r.Rewrite() // write the updated test file
-		}
+func Test_RelExpr_String(t *testing.T) {
+	tests := []struct {
+		name string
+		r    *RelExpr
+		want string
+	}{
+		{
+			name: "test",
+			r:    &RelExpr{},
+			want: "test\n\n  stat: &{0 []}\n  cost: 0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.r.String(); got != tt.want {
+				t.Errorf("RelExpr.String() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
-func Test_queryPlanner_ToPlan(t *testing.T) {
+func Test_NewRelExpr(t *testing.T) {
 	cat := testkit.InitMockCatalog()
 
 	tests := []struct {
@@ -74,20 +41,20 @@ func Test_queryPlanner_ToPlan(t *testing.T) {
 		{
 			name: "select int",
 			sql:  "SELECT 1",
-			wt: "Projection: 1\n" +
-				"  NoRelationOp\n",
+			wt: "Projection: 1, Stat: (RowCount: 0), Cost: 0\n" +
+				"  NoRelationOp, Stat: (RowCount: 0), Cost: 0\n",
 		},
 		{
 			name: "select string",
 			sql:  "SELECT 'hello'",
-			wt: "Projection: 'hello'\n" +
-				"  NoRelationOp\n",
+			wt: "Projection: 'hello', Stat: (RowCount: 0), Cost: 0\n" +
+				"  NoRelationOp, Stat: (RowCount: 0), Cost: 0\n",
 		},
 		{
 			name: "select value expression",
 			sql:  "SELECT 1+2",
-			wt: "Projection: 1 + 2\n" +
-				"  NoRelationOp\n",
+			wt: "Projection: 1 + 2, Stat: (RowCount: 0), Cost: 0\n" +
+				"  NoRelationOp, Stat: (RowCount: 0), Cost: 0\n",
 		},
 		// TODO: add function metadata to catalog
 		// TODO: add support for functions in logical expr
@@ -100,8 +67,8 @@ func Test_queryPlanner_ToPlan(t *testing.T) {
 		{
 			name: "select wildcard",
 			sql:  "SELECT * FROM users",
-			wt: "Projection: users.id, users.username, users.age, users.state, users.wallet\n" +
-				"  Scan: users\n",
+			wt: "Projection: users.id, users.username, users.age, users.state, users.wallet, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		//{ // TODO?
 		//	name: "select wildcard, deduplication",
@@ -112,8 +79,8 @@ func Test_queryPlanner_ToPlan(t *testing.T) {
 		{
 			name: "select columns",
 			sql:  "select username, age from users",
-			wt: "Projection: users.username, users.age\n" +
-				"  Scan: users\n",
+			wt: "Projection: users.username, users.age, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select column with alias",
@@ -190,30 +157,10 @@ func Test_queryPlanner_ToPlan(t *testing.T) {
 			stmt, err := sqlparser.Parse(tt.sql)
 			assert.NoError(t, err)
 
-			q := NewPlanner(cat)
+			q := query_planner.NewPlanner(cat)
 			plan := q.ToPlan(stmt)
-			got := logical_plan.Format(plan, 0)
-			assert.Equal(t, tt.wt, got)
+			rel := BuildRelExpr(plan)
+			assert.Equal(t, tt.wt, Format(rel, 0))
 		})
 	}
 }
-
-//func runToPlanTest(sql string) {
-//  cat := testkit.InitMockCatalog()
-//	q := NewPlanner(cat)
-//	stmt, err := sqlparser.Parse(sql)
-//	if err != nil {
-//		log.Fatal(fmt.Sprintf("failed to parse sql: %s", err))
-//	}
-//
-//	plan := q.ToPlan(stmt)
-//	fmt.Println(logical_plan.Format(plan, 0))
-//}
-//
-//func Example_queryPlanner_ToPlan_select_wildcard() {
-//	sql := "SELECT * FROM users"
-//	runToPlanTest(sql)
-//	// Output:
-//	// Projection: id, username, age, state, wallet
-//	//   Scan: users; projection=[]
-//}

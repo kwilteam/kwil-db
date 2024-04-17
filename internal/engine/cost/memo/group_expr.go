@@ -9,12 +9,36 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/cost/virtual_plan"
 )
 
-type GroupRel interface {
+//// GroupExpr is used to store all the logically equivalent expressions which
+//// have the same root operator. Different from a normal expression, the
+//// Children of a Group expression are expression Groups, not expressions.
+//// Another property of Group expression is that the child Group references will
+//// never be changed once the Group expression is created.
+//type GroupExpr struct {
+//	ExprNode plannercore.LogicalPlan
+//	Children []*Group
+//	Group    *Group
+//
+//	// ExploreMark is uses to mark whether this GroupExpr has been fully
+//	// explored by a transformation rule batch in a certain round.
+//	ExploreMark
+//
+//	selfFingerprint string
+//	// appliedRuleSet saves transformation rules which have been applied to this
+//	// GroupExpr, and will not be applied again. Use `uint64` which should be the
+//	// id of a Transformation instead of `Transformation` itself to avoid import cycle.
+//	appliedRuleSet map[uint64]struct{}
+//}
+
+// GroupExpression is an interface for a relation expression(from Volcano/Cascades model).
+// A GroupExpression is to store all the logically equivalent expressions which
+// have the same root operator. Every child of a GroupExpression is a Group.
+type GroupExpression interface {
 	plantree.TreeNode
 
 	Group() *Group
 	InputGroups() []*Group
-	Inputs() []GroupRel
+	Inputs() []GroupExpression
 	Statistics() *datatypes.Statistics
 	SetStatistics(stat *datatypes.Statistics)
 	Cost() int64
@@ -71,8 +95,8 @@ func (r *LogicalRel) InputGroups() []*Group {
 	return r.inputs
 }
 
-func (r *LogicalRel) Inputs() []GroupRel {
-	var rels []GroupRel
+func (r *LogicalRel) Inputs() []GroupExpr {
+	var rels []GroupExpr
 	for _, input := range r.inputs {
 		rels = append(rels, input.logical...)
 		rels = append(rels, input.virtual...)
@@ -129,8 +153,8 @@ func (r *VirtualRel) InputGroups() []*Group {
 	return r.inputs
 }
 
-func (r *VirtualRel) Inputs() []GroupRel {
-	var rels []GroupRel
+func (r *VirtualRel) Inputs() []GroupExpr {
+	var rels []GroupExpr
 	for _, input := range r.inputs {
 		rels = append(rels, input.logical...)
 		rels = append(rels, input.virtual...)
@@ -151,7 +175,7 @@ func (r *VirtualRel) Cost() int64 {
 	return r.cost
 }
 
-func Format(plan GroupRel, indent int) string {
+func Format(plan GroupExpr, indent int) string {
 	var msg bytes.Buffer
 	msg.WriteString(plan.String())
 	msg.WriteString("\n")
