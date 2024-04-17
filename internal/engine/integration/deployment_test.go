@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/internal/engine"
 	"github.com/kwilteam/kwil-db/kuneiform"
 	"github.com/stretchr/testify/require"
@@ -150,7 +151,11 @@ func Test_Deployment(t *testing.T) {
 			parsed, err := kuneiform.Parse(schema)
 			require.NoError(t, err)
 
-			err = global.CreateDataset(ctx, tx, parsed, owner)
+			err = global.CreateDataset(ctx, tx, parsed, &common.TransactionData{
+				Signer: owner,
+				Caller: string(owner),
+				TxID:   "test",
+			})
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {

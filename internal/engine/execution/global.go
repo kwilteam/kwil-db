@@ -47,7 +47,38 @@ func InitializeEngine(ctx context.Context, tx sql.DB) error {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initTables,
 		1: func(ctx context.Context, db sql.DB) error {
-			_, err := db.Execute(ctx, sqlUpgradeSchemaTableV1AddOwnerColumn)
+
+			// add the uuid column to the kwil_schemas table
+			_, err := db.Execute(ctx, sqlUpgradeSchemaTableV1AddUUIDColumn)
+			if err != nil {
+				return err
+			}
+
+			// backfill the uuid column with uuids
+			_, err = db.Execute(ctx, sqlBackfillSchemaTableV1UUID)
+			if err != nil {
+				return err
+			}
+
+			// remove the primary key constraint from the kwil_schemas table
+			_, err = db.Execute(ctx, sqlUpgradeRemovePrimaryKey)
+			if err != nil {
+				return err
+			}
+
+			// add the new primary key constraint to the kwil_schemas table
+			_, err = db.Execute(ctx, sqlUpgradeAddPrimaryKeyV1UUID)
+			if err != nil {
+				return err
+			}
+
+			// add a unique constraint to the dbid column
+			_, err = db.Execute(ctx, sqlUpgradeAddUniqueConstraintV1DBID)
+			if err != nil {
+				return err
+			}
+
+			_, err = db.Execute(ctx, sqlUpgradeSchemaTableV1AddOwnerColumn)
 			if err != nil {
 				return err
 			}
@@ -118,7 +149,7 @@ func NewGlobalContext(ctx context.Context, db sql.Executor, extensionInitializer
 
 // CreateDataset deploys a schema.
 // It will create the requisite tables, and perform the required initializations.
-func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, caller []byte) (err error) {
+func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, txdata *common.TransactionData) (err error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -126,7 +157,7 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *ty
 	if err != nil {
 		return err
 	}
-	schema.Owner = caller
+	schema.Owner = txdata.Signer
 
 	err = g.loadDataset(ctx, schema)
 	if err != nil {
@@ -135,7 +166,7 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *ty
 
 	// it is critical that the schema is loaded before being created.
 	// the engine will not be able to parse the schema if it is not loaded.
-	err = createSchema(ctx, tx, schema)
+	err = createSchema(ctx, tx, schema, txdata.TxID)
 	if err != nil {
 		g.unloadDataset(schema.DBID())
 		return err
@@ -146,7 +177,7 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *ty
 
 // DeleteDataset deletes a dataset.
 // It will ensure that the caller is the owner of the dataset.
-func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid string, caller []byte) error {
+func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid string, txdata *common.TransactionData) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -155,7 +186,7 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid strin
 		return ErrDatasetNotFound
 	}
 
-	if !bytes.Equal(caller, dataset.schema.Owner) {
+	if !bytes.Equal(txdata.Signer, dataset.schema.Owner) {
 		return fmt.Errorf(`cannot delete dataset "%s", not owner`, dbid)
 	}
 

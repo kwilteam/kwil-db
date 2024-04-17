@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
@@ -37,7 +38,11 @@ func Test_Schemas(t *testing.T) {
 				schema, err := loadSchema("users.kf")
 				require.NoError(t, err)
 
-				err = global.CreateDataset(ctx, db, schema, owner)
+				err = global.CreateDataset(ctx, db, schema, &common.TransactionData{
+					Signer: owner,
+					Caller: string(owner),
+					TxID:   "test",
+				})
 				require.NoError(t, err)
 			},
 		},

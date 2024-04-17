@@ -44,7 +44,7 @@ func Test_StoringSchemas(t *testing.T) {
 	err = createSchemasTableIfNotExists(ctx, tx)
 	require.NoError(t, err)
 
-	err = createSchema(ctx, tx, testdata.TestSchema)
+	err = createSchema(ctx, tx, testdata.TestSchema, "txid")
 	require.NoError(t, err)
 
 	defer func() {

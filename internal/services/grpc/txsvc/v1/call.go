@@ -49,8 +49,10 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 		Dataset:   body.DBID,
 		Procedure: body.Action,
 		Args:      args,
-		Signer:    signer,
-		Caller:    caller,
+		TransactionData: common.TransactionData{
+			Signer: signer,
+			Caller: caller,
+		},
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to execute view action: %s", err.Error())

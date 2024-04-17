@@ -141,13 +141,22 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
+	identifier, err := ident.Identifier(tx.Signature.Type, tx.Sender)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
 	tx2, err := dbTx.BeginTx(ctx.Ctx)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
-	err = router.Engine.CreateDataset(ctx.Ctx, tx2, schema, tx.Sender)
+	err = router.Engine.CreateDataset(ctx.Ctx, tx2, schema, &common.TransactionData{
+		Signer: tx.Sender,
+		Caller: identifier,
+		TxID:   hex.EncodeToString(ctx.TxID),
+	})
 	if err != nil {
 		return txRes(spend, codeForEngineError(err), err)
 	}
@@ -190,13 +199,22 @@ func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transaction
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
+	identifier, err := ident.Identifier(tx.Signature.Type, tx.Sender)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
 	tx2, err := dbTx.BeginTx(ctx.Ctx)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
-	err = router.Engine.DeleteDataset(ctx.Ctx, tx2, drop.DBID, tx.Sender)
+	err = router.Engine.DeleteDataset(ctx.Ctx, tx2, drop.DBID, &common.TransactionData{
+		Signer: tx.Sender,
+		Caller: identifier,
+		TxID:   hex.EncodeToString(ctx.TxID),
+	})
 	if err != nil {
 		return txRes(spend, codeForEngineError(err), err)
 	}
@@ -286,9 +304,11 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 			Dataset:   action.DBID,
 			Procedure: action.Action,
 			Args:      args[i],
-			Signer:    tx.Sender,
-			Caller:    identifier,
-			TxID:      hex.EncodeToString(ctx.TxID),
+			TransactionData: common.TransactionData{
+				Signer: tx.Sender,
+				Caller: identifier,
+				TxID:   hex.EncodeToString(ctx.TxID),
+			},
 		})
 		if err != nil {
 			return txRes(spend, codeForEngineError(err), err)

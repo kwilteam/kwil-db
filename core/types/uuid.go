@@ -20,6 +20,13 @@ func NewUUIDV5(from []byte) UUID {
 	return UUID(u)
 }
 
+// NewUUIDV5WithNamespace generates a uuidv5 from a byte slice and a namespace.
+// This is used to deterministically generate uuids.
+func NewUUIDV5WithNamespace(namespace UUID, from []byte) UUID {
+	u := uuid.NewSHA1(uuid.UUID(namespace), from)
+	return UUID(u)
+}
+
 // ParseUUID parses a uuid from a string
 func ParseUUID(s string) (*UUID, error) {
 	u, err := uuid.Parse(s)

@@ -26,10 +26,10 @@ var (
 	version INT DEFAULT %d
 );`, pg.InternalSchemaName, schemaVersion)
 	sqlCreateSchema    = `CREATE SCHEMA "%s";`
-	sqlStoreKwilSchema = fmt.Sprintf(`INSERT INTO %s.kwil_schemas (dbid, schema_content, version, owner, name)
-	VALUES ($1, $2, $3, $4, $5)
-	ON CONFLICT (dbid) DO UPDATE SET schema_content = $2, version = $3, owner = $4, name = $5;`, pg.InternalSchemaName)
-	sqlStoreProcedure = fmt.Sprintf(`INSERT INTO %s.procedures (name, schema, param_types, param_names, return_types, return_names, returns_table, public, owner_only, is_view)
+	sqlStoreKwilSchema = fmt.Sprintf(`INSERT INTO %s.kwil_schemas (id, dbid, schema_content, version, owner, name)
+	VALUES ($1, $2, $3, $4, $5, $6)
+	ON CONFLICT (dbid) DO UPDATE SET schema_content = $3, version = $4, owner = $5, name = $6;`, pg.InternalSchemaName)
+	sqlStoreProcedure = fmt.Sprintf(`INSERT INTO %s.procedures (name, schema_id, param_types, param_names, return_types, return_names, returns_table, public, owner_only, is_view)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);`, pg.InternalSchemaName)
 	sqlListSchemaContent = fmt.Sprintf(`SELECT schema_content FROM %s.kwil_schemas;`, pg.InternalSchemaName)
 	sqlDropSchema        = `DROP SCHEMA "%s" CASCADE;`
@@ -37,7 +37,8 @@ var (
 
 	// v1 upgrades the schema to be:
 	// TABLE kwil_schemas (
-	// 	dbid TEXT PRIMARY KEY,
+	// ID uuid PRIMARY KEY,
+	// 	dbid TEXT,
 	// 	schema_content BYTEA,
 	// 	version INT DEFAULT 0,
 	// 	owner BYTEA,
@@ -45,8 +46,9 @@ var (
 	// )
 	// TABLE procedures (
 	// 	name TEXT,
-	// 	schema TEXT,
+	// 	schema_id UUID,
 	//  param_types TEXT[],
+	//  param_names TEXT[],
 	//  return_types TEXT[],
 	//  return_names TEXT[],
 	//  returns_table BOOLEAN,
@@ -54,10 +56,37 @@ var (
 	//  owner_only BOOLEAN,
 	//  is_view BOOLEAN,
 	//  primary key (name, schema)
-	//  FOREIGN KEY (schema) REFERENCES kwil_schemas (dbid) ON UPDATE CASCADE ON DELETE CASCADE
+	//  FOREIGN KEY (schema) REFERENCES kwil_schemas (id) ON UPDATE CASCADE ON DELETE CASCADE
 	//
 
 	// upgrades for v1:
+	// to change the primary key, we will:
+	// 1. add a new uuid column, and generate a uuid for each schema
+	// 2. remove the old primary key
+	// 3. add a new primary key
+	sqlUpgradeSchemaTableV1AddUUIDColumn = fmt.Sprintf(`
+	ALTER TABLE %s.kwil_schemas ADD COLUMN id UUID;
+	`, pg.InternalSchemaName)
+	// sqlBackfillSchemaTableV1UUID adds a UUID to all existing schemas.
+	// It uses a random UUID namespace to generate the UUIDs from the dbid.
+	// This namespace is not used anywhere else. We want to decouple the UUID
+	// from the DBID, so separate UUIDs will be used in the future that are based on
+	// the txid.
+	sqlBackfillSchemaTableV1UUID = fmt.Sprintf(`
+	UPDATE %s.kwil_schemas SET id = uuid_generate_v5('052d10c4-acf8-4ec9-a616-105bf1d1e873'::uuid, dbid);
+	`, pg.InternalSchemaName)
+	sqlUpgradeRemovePrimaryKey = fmt.Sprintf(`
+	ALTER TABLE %s.kwil_schemas DROP CONSTRAINT kwil_schemas_pkey;
+	`, pg.InternalSchemaName)
+	sqlUpgradeAddPrimaryKeyV1UUID = fmt.Sprintf(`
+	ALTER TABLE %s.kwil_schemas ADD PRIMARY KEY (id);
+	`, pg.InternalSchemaName)
+
+	// unique constraint for the dbid
+	sqlUpgradeAddUniqueConstraintV1DBID = fmt.Sprintf(`
+	ALTER TABLE %s.kwil_schemas ADD CONSTRAINT kwil_schemas_dbid_unique UNIQUE (dbid);
+	`, pg.InternalSchemaName)
+
 	sqlUpgradeSchemaTableV1AddOwnerColumn = fmt.Sprintf(`
 	ALTER TABLE %s.kwil_schemas ADD COLUMN name TEXT;
 	`, pg.InternalSchemaName)
@@ -73,7 +102,7 @@ var (
 	sqlAddProceduresTableV1 = fmt.Sprintf(`
 	CREATE TABLE %s.procedures (
 		name TEXT not null,
-		schema TEXT not null,
+		schema_id uuid not null,
 		param_types TEXT[],
 		param_names TEXT[],
 		return_types TEXT[],
@@ -82,8 +111,8 @@ var (
 		public BOOLEAN not null,
 		owner_only BOOLEAN not null,
 		is_view BOOLEAN not null,
-		primary key (name, schema),
-		FOREIGN KEY (schema) REFERENCES %s.kwil_schemas (dbid) ON UPDATE CASCADE ON DELETE CASCADE
+		primary key (name, schema_id),
+		FOREIGN KEY (schema_id) REFERENCES %s.kwil_schemas (id) ON UPDATE CASCADE ON DELETE CASCADE
 	)
 	`, pg.InternalSchemaName, pg.InternalSchemaName)
 )
@@ -106,11 +135,14 @@ func createSchemasTableIfNotExists(ctx context.Context, tx sql.DB) error {
 	return err
 }
 
+// a random uuidNamespace for generating UUIDs for schemas.
+var uuidNamespace = "01c32544-c21f-4522-98c5-40e6fb0a0831"
+
 // createSchema creates a schema in the database.
 // It will also store the schema in the kwil_schemas table.
 // It also creates the relevant tables, indexes, etc.
 // If the schema already exists in the Kwil schemas table, it will be updated.
-func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema) error {
+func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema, txid string) error {
 	schemaName := dbidSchema(schema.DBID())
 
 	sp, err := tx.BeginTx(ctx)
@@ -131,9 +163,16 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema) err
 		return err
 	}
 
+	uuidNamespace, err := types.ParseUUID(uuidNamespace)
+	if err != nil {
+		return err
+	}
+
+	uuid := types.NewUUIDV5WithNamespace(*uuidNamespace, []byte(txid))
+
 	// since we will fail if the schema already exists, we can assume that it does not exist
 	// in the kwil_schemas table. If it does for some reason, we will update it.
-	_, err = sp.Execute(ctx, sqlStoreKwilSchema, schema.DBID(), schemaBts, schemaVersion, schema.Owner, schema.Name)
+	_, err = sp.Execute(ctx, sqlStoreKwilSchema, uuid, schema.DBID(), schemaBts, schemaVersion, schema.Owner, schema.Name)
 	if err != nil {
 		return err
 	}
@@ -191,7 +230,7 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema) err
 
 		_, err = sp.Execute(ctx, sqlStoreProcedure,
 			proc.Name,
-			schema.DBID(),
+			uuid,
 			paramTypes,
 			paramNames,
 			returnTypes,
