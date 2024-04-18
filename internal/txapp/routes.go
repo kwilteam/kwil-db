@@ -11,6 +11,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/internal/accounts"
+	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
@@ -85,6 +87,23 @@ func registerRoute(payloadType string, route Route) error {
 	return nil
 }
 
+func codeForEngineError(err error) transactions.TxCode {
+	if err == nil {
+		return transactions.CodeOk
+	}
+	if errors.Is(err, execution.ErrDatasetExists) {
+		return transactions.CodeDatasetExists
+	}
+	if errors.Is(err, execution.ErrDatasetNotFound) {
+		return transactions.CodeDatasetMissing
+	}
+	if errors.Is(err, execution.ErrInvalidSchema) {
+		return transactions.CodeInvalidSchema
+	}
+
+	return transactions.CodeUnknownError
+}
+
 type deployDatasetRoute struct{}
 
 func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
@@ -126,7 +145,7 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 
 	err = router.Engine.CreateDataset(ctx.Ctx, tx2, schema, tx.Sender)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return txRes(spend, codeForEngineError(err), err)
 	}
 
 	err = tx2.Commit(ctx.Ctx)
@@ -175,7 +194,7 @@ func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transaction
 
 	err = router.Engine.DeleteDataset(ctx.Ctx, tx2, drop.DBID, tx.Sender)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return txRes(spend, codeForEngineError(err), err)
 	}
 
 	err = tx2.Commit(ctx.Ctx)
@@ -267,7 +286,7 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 			Caller:    identifier,
 		})
 		if err != nil {
-			return txRes(spend, transactions.CodeUnknownError, err)
+			return txRes(spend, codeForEngineError(err), err)
 		}
 	}
 
@@ -328,6 +347,12 @@ func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.T
 
 	err = transfer(ctx.Ctx, tx2, tx.Sender, transferBody.To, bigAmt)
 	if err != nil {
+		if errors.Is(err, accounts.ErrInsufficientFunds) {
+			return txRes(spend, transactions.CodeInsufficientBalance, err)
+		}
+		if errors.Is(err, accounts.ErrNegativeBalance) {
+			return txRes(spend, transactions.CodeInvalidAmount, err)
+		}
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 

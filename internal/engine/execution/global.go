@@ -37,7 +37,11 @@ type GlobalContext struct {
 	service *common.Service
 }
 
-var ErrDatasetNotFound = fmt.Errorf("dataset not found")
+var (
+	ErrDatasetNotFound = errors.New("dataset not found")
+	ErrDatasetExists   = errors.New("dataset exists")
+	ErrInvalidSchema   = errors.New("invalid schema")
+)
 
 func InitializeEngine(ctx context.Context, tx sql.DB) error {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
@@ -246,7 +250,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 	dbid := schema.DBID()
 	_, ok := g.initializers[dbid]
 	if ok {
-		return fmt.Errorf("dataset %s already exists", dbid)
+		return fmt.Errorf("%w: %s", ErrDatasetExists, dbid)
 	}
 
 	datasetCtx := &baseDataset{
@@ -259,12 +263,12 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 	for _, unprepared := range schema.Procedures {
 		prepared, err := prepareProcedure(unprepared, g, schema)
 		if err != nil {
-			return err
+			return errors.Join(err, ErrInvalidSchema)
 		}
 
 		_, ok := datasetCtx.procedures[prepared.name]
 		if ok {
-			return fmt.Errorf(`duplicate procedure name: "%s"`, prepared.name)
+			return fmt.Errorf(`%w: duplicate procedure name: "%s"`, ErrInvalidSchema, prepared.name)
 		}
 
 		datasetCtx.procedures[prepared.name] = prepared
@@ -273,12 +277,12 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 	for _, ext := range schema.Extensions {
 		_, ok := datasetCtx.namespaces[ext.Alias]
 		if ok {
-			return fmt.Errorf(`duplicate namespace assignment: "%s"`, ext.Alias)
+			return fmt.Errorf(`%w duplicate namespace assignment: "%s"`, ErrInvalidSchema, ext.Alias)
 		}
 
 		initializer, ok := g.initializers[ext.Name]
 		if !ok {
-			return fmt.Errorf(`namespace "%s" not found`, ext.Name)
+			return fmt.Errorf(`namespace "%s" not found`, ext.Name) // ErrMissingExtension?
 		}
 
 		namespace, err := initializer(&precompiles.DeploymentContext{
