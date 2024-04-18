@@ -1227,10 +1227,20 @@ func (t *typeVisitor) VisitSimpleSelect(p0 *tree.SimpleSelect) any {
 			}
 		}
 
-		// we handle group by and having after the result columns
-		// because we can reference aliases in the group by and having clauses
 		if p0.GroupBy != nil {
-			err := p0.GroupBy.Accept(t).(evalFunc)(e)
+			// group by context is a very weird case in postgres.
+			// It can reference all joined tables, and can use both aliases
+			// and unaliased columns. We therefore need to create a new context
+			// that contains all of the old tables, with the aliases added
+			// anonymously.
+
+			e2 := e.copy()
+			err := e2.mergeAnonymousSafe(result)
+			if err != nil {
+				return nil, err
+			}
+
+			err = p0.GroupBy.Accept(t).(evalFunc)(e2)
 			if err != nil {
 				return nil, err
 			}

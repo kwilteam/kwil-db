@@ -236,7 +236,7 @@ func Test_Typing(t *testing.T) {
 			err:  typing.ErrCompoundShape,
 		},
 		{
-			name: "select *table",
+			name: "select table",
 			stmt: `SELECT u.* FROM users as u inner join users as u1 on u.id=u1.id;`,
 			relation: map[string]*types.DataType{
 				"id":   types.IntType,
@@ -385,6 +385,17 @@ func Test_Typing(t *testing.T) {
 			relation: map[string]*types.DataType{
 				"id":       types.IntType,
 				"username": types.TextType,
+			},
+		},
+		{
+			name: "join with having",
+			stmt: `SELECT u1.id, u2.name FROM users AS u1
+			INNER JOIN users AS u2 ON u1.id = u2.id
+			GROUP BY u1.id, u2.name
+			HAVING u1.id = $id AND u2.name = $name;`,
+			relation: map[string]*types.DataType{
+				"id":   types.IntType,
+				"name": types.TextType,
 			},
 		},
 	}

@@ -1,6 +1,7 @@
 package typing
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -115,7 +116,7 @@ func (e *evaluationContext) findColumn(table, column string) (fromRelation strin
 		}
 
 		if found {
-			return "", nil, fmt.Errorf("ambiguous column name: %s", column)
+			return "", nil, fmt.Errorf(`%w: "%s"`, errAmbiguousColumn, column)
 		}
 
 		found = true
@@ -126,7 +127,7 @@ func (e *evaluationContext) findColumn(table, column string) (fromRelation strin
 		foundTable = tbl
 	}
 	if !found {
-		return "", nil, fmt.Errorf("column %s not found", column)
+		return "", nil, fmt.Errorf(`%w: "%s"`, errColumnNotFound, column)
 	}
 
 	return foundTable, foundValue, nil
@@ -157,6 +158,46 @@ func (e *evaluationContext) join(relation *engine.QualifiedRelation) error {
 	e.joinOrder = append(e.joinOrder, relation.Name)
 
 	return nil
+}
+
+// mergeAnonymousSafe merges an anonymous relation into the current scope.
+// it is like joining, but if there is a naming conflict where the type
+// of the column is the same, it will not return an error. It will not merge columns that
+// make the relation ambiguous.
+func (e *evaluationContext) mergeAnonymousSafe(relation *engine.Relation) error {
+	anonTbl, ok := e.joinedTables[""]
+	if !ok {
+		anonTbl = engine.NewRelation()
+		e.joinedTables[""] = anonTbl
+	}
+
+	// for each column in the new table, check if it is already in ANY
+	// of the tables. If not, add it. If so, ensure the types
+	// are the same.
+	return relation.Loop(func(s string, a *engine.Attribute) error {
+		_, attr, err := e.findColumn("", s)
+		// if no error, then the column exists, so check the type
+		if err == nil {
+			if !attr.Type.Equals(a.Type) {
+				return fmt.Errorf("conflicting column type in ambiguous column: %s", s)
+			}
+			return nil
+		}
+		// if the column is not found, add it
+		if errors.Is(err, errColumnNotFound) {
+			return anonTbl.AddAttribute(&engine.QualifiedAttribute{
+				Name:      s,
+				Attribute: a,
+			})
+		}
+		// if it is ambiguous, then it already exists, so
+		// we can ignore it
+		if errors.Is(err, errAmbiguousColumn) {
+			return nil
+		}
+
+		return err
+	})
 }
 
 // loop loops through the joined tables in the evaluation context,
