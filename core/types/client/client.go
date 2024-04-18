@@ -1,3 +1,8 @@
+// Package client contains the shared client types, including the options used
+// to construct a Client instance, and the records iterator used to represent
+// the results of an action call. This package also defines the Client interface
+// that should be satisfied by different implementations, such as a gateway
+// client.
 package client
 
 import (
