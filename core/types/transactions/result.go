@@ -39,6 +39,11 @@ const (
 	CodeInvalidAmount       TxCode = 8
 	CodeInvalidSender       TxCode = 9
 
+	// engine-related error code
+	CodeInvalidSchema  TxCode = 100
+	CodeDatasetMissing TxCode = 110
+	CodeDatasetExists  TxCode = 120
+
 	CodeUnknownError TxCode = math.MaxUint32
 )
 
@@ -46,8 +51,8 @@ func (c TxCode) Uint32() uint32 {
 	return uint32(c)
 }
 
-func (tc TxCode) String() string {
-	switch tc {
+func (c TxCode) String() string {
+	switch c {
 	case CodeOk:
 		return "OK"
 	case CodeEncodingError:

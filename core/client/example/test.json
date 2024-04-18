@@ -1,0 +1,124 @@
+{
+  "owner": "",
+  "name": "was_here",
+  "tables": [
+    {
+      "name": "tags",
+      "columns": [
+        {
+          "name": "ident",
+          "type": "text",
+          "attributes": [
+            {
+              "type": "primary_key"
+            },
+            {
+              "type": "not_null"
+            }
+          ]
+        },
+        {
+          "name": "val",
+          "type": "int",
+          "attributes": [
+            {
+              "type": "default",
+              "value": "42"
+            }
+          ]
+        },
+        {
+          "name": "msg",
+          "type": "text",
+          "attributes": [
+            {
+              "type": "not_null"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "name": "tag",
+      "inputs": [
+        "$msg"
+      ],
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": null,
+      "statements": [
+        "INSERT INTO \"tags\" (ident, msg) VALUES (@caller, $msg);"
+      ]
+    },
+    {
+      "name": "delete_mine",
+      "inputs": null,
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": null,
+      "statements": [
+        "DELETE FROM tags WHERE ident = @caller;"
+      ]
+    },
+    {
+      "name": "delete_other",
+      "inputs": [
+        "$ident"
+      ],
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": [
+        "owner"
+      ],
+      "statements": [
+        "DELETE FROM \"tags\" WHERE ident = $ident;"
+      ]
+    },
+    {
+      "name": "delete_all",
+      "inputs": null,
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": [
+        "owner"
+      ],
+      "statements": [
+        "DELETE FROM tags;"
+      ]
+    },
+    {
+      "name": "get_user_tag",
+      "inputs": [
+        "$ident"
+      ],
+      "public": true,
+      "mutability": "view",
+      "auxiliaries": null,
+      "statements": [
+        "SELECT msg, val FROM tags WHERE ident = $ident;"
+      ]
+    },
+    {
+      "name": "get_my_tag",
+      "inputs": null,
+      "public": true,
+      "mutability": "view",
+      "auxiliaries": null,
+      "statements": [
+        "SELECT msg, val FROM tags WHERE ident = @caller;"
+      ]
+    },
+    {
+      "name": "get_all",
+      "inputs": null,
+      "public": true,
+      "mutability": "view",
+      "auxiliaries": null,
+      "statements": [
+        "SELECT * FROM tags;"
+      ]
+    }
+  ]
+}
