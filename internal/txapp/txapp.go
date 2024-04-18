@@ -877,18 +877,24 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 		if errors.Is(err, accounts.ErrInsufficientFunds) {
 			// spend as much as possible
 			account, err := getAccount(ctx.Ctx, dbTx, tx.Sender)
-			if err != nil {
+			if err != nil { // account will just be empty if not found
 				return nil, transactions.CodeUnknownError, err
 			}
 
 			err2 := spend(ctx.Ctx, dbTx, tx.Sender, account.Balance, int64(tx.Body.Nonce))
 			if err2 != nil {
+				if errors.Is(err2, accounts.ErrAccountNotFound) {
+					return nil, transactions.CodeInsufficientBalance, errors.New("account has zero balance")
+				}
 				return nil, transactions.CodeUnknownError, err2
 			}
 
 			return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
 		}
 		if err != nil {
+			if errors.Is(err, accounts.ErrAccountNotFound) {
+				return nil, transactions.CodeInsufficientBalance, errors.New("account has zero balance")
+			}
 			return nil, transactions.CodeUnknownError, err
 		}
 
@@ -911,6 +917,9 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 		return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account has %s tokens", amt.String(), account.Balance.String())
 	}
 	if err != nil {
+		if errors.Is(err, accounts.ErrAccountNotFound) { // probably wouldn't have passed the fee check
+			return nil, transactions.CodeInsufficientBalance, errors.New("account has zero balance")
+		}
 		return nil, transactions.CodeUnknownError, err
 	}
 
