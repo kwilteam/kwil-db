@@ -477,15 +477,17 @@ func (t *typeVisitor) VisitExpressionBindParameter(p0 *tree.ExpressionBindParame
 
 func (t *typeVisitor) VisitExpressionCase(p0 *tree.ExpressionCase) any {
 	return attributeFn(func(ev *evaluationContext) (*engine.QualifiedAttribute, error) {
+		// whenTypes must always be bool, unless there is a case expression
+		// If a case expression is present, then when clause must be the same type as the case expression
+		expectedWhenType := types.BoolType
 		if p0.CaseExpression != nil {
 			c := p0.CaseExpression.Accept(t).(attributeFn)
 			ct, err := c(ev)
 			if err != nil {
 				return nil, err
 			}
-			if !ct.Type.Equals(types.BoolType) {
-				return nil, fmt.Errorf("%w: expected bool. Received: %s", ErrInvalidType, ct.Type.String())
-			}
+
+			expectedWhenType = ct.Type
 		}
 
 		var neededType *types.DataType
@@ -496,7 +498,7 @@ func (t *typeVisitor) VisitExpressionCase(p0 *tree.ExpressionCase) any {
 			if err != nil {
 				return nil, err
 			}
-			if !whenType.Type.Equals(types.BoolType) {
+			if !whenType.Type.Equals(expectedWhenType) {
 				return nil, fmt.Errorf("%w: expected bool. Received %s", ErrInvalidType, whenType.Type.String())
 			}
 
@@ -1149,6 +1151,15 @@ func (t *typeVisitor) VisitSelectCore(p0 *tree.SelectCore) any {
 		// if this is a compound select, the joined tables from the selects are not in scope, and
 		// we must instead join an anonymous relation that is the compound select.
 		// if there is only one select, we can reference the joined tables.
+		/* example query:
+		 	SELECT * FROM (
+				SELECT id FROM foo
+				UNION
+				SELECT id FROM bar
+			)
+			ORDER BY id
+		)
+		*/
 		var e3 *evaluationContext
 		if len(p0.SimpleSelects) > 1 {
 			// copy in case we are in a correlated subquery
@@ -1205,19 +1216,21 @@ func (t *typeVisitor) VisitSimpleSelect(p0 *tree.SimpleSelect) any {
 			}
 		}
 
-		if p0.GroupBy != nil {
-			err := p0.GroupBy.Accept(t).(evalFunc)(e)
-			if err != nil {
-				return nil, err
-			}
-		}
-
 		// make an empty relation for the result
 		result := engine.NewRelation()
 
 		// apply the result columns
 		for _, col := range p0.Columns {
 			err := col.Accept(t).(resultFunc)(e, result)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// we handle group by and having after the result columns
+		// because we can reference aliases in the group by and having clauses
+		if p0.GroupBy != nil {
+			err := p0.GroupBy.Accept(t).(evalFunc)(e)
 			if err != nil {
 				return nil, err
 			}

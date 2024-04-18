@@ -86,11 +86,11 @@ func (s *StatementCleaner) EnterExpressionBinaryComparison(node *tree.Expression
 	return wrapErr(ErrInvalidBinaryOperator, node.Operator.Valid())
 }
 
-// EnterExpressionFunction does nothing, since the function implementation is visited separately
+// EnterExpressionFunction lowers the function name and checks that it is a valid function
 func (s *StatementCleaner) EnterExpressionFunction(node *tree.ExpressionFunction) (err error) {
 	node.Function = strings.ToLower(node.Function)
 
-	_, ok := engine.Functions[strings.ToLower(node.Function)]
+	_, ok := engine.Functions[node.Function]
 	if !ok {
 		// check if it's a procedure
 		if findProcedure(s.procedures, node.Function) == nil {

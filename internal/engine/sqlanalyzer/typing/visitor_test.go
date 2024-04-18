@@ -379,6 +379,14 @@ func Test_Typing(t *testing.T) {
 				"name": types.TextType,
 			},
 		},
+		{
+			name: "alias used in having clause",
+			stmt: `SELECT id, name as username FROM users WHERE id = $id GROUP BY id, username HAVING count(username) > 1;`,
+			relation: map[string]*types.DataType{
+				"id":       types.IntType,
+				"username": types.TextType,
+			},
+		},
 	}
 
 	for _, test := range tests {

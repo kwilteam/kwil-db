@@ -51,8 +51,8 @@ type instruction interface { // i.e. dmlStmt, callMethod, or instructionFunc
 	execute(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error
 }
 
-// preparedAction is a predefined preparedAction that can be executed.
-// Unlike the preparedAction declared in the shared types, this
+// preparedAction is a predefined action that can be executed.
+// Unlike the action declared in the shared types,
 // preparedAction's statements are parsed into a set of instructions.
 type preparedAction struct {
 	// name is the name of the procedure.
