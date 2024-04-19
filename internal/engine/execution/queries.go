@@ -11,8 +11,9 @@ import (
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/ddl"
-	procedural "github.com/kwilteam/kwil-db/internal/engine/procedures"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
+	"github.com/kwilteam/kwil-db/parse/metadata"
+	procedural "github.com/kwilteam/kwil-db/parse/procedures"
 )
 
 var (
@@ -96,7 +97,7 @@ var (
 	// sqlBackfillSchemaTableV1 adds the owner and name to all existing schemas,
 	// and updates the version to 1.
 	sqlBackfillSchemaTableV1 = fmt.Sprintf(`
-	UPDATE %s.kwil_schemas SET owner = $1, name = $2, version = 1;
+	UPDATE %s.kwil_schemas SET owner = $1, name = $2, version = 1 WHERE dbid = $3;
 	`, pg.InternalSchemaName)
 
 	sqlAddProceduresTableV1 = fmt.Sprintf(`
@@ -197,13 +198,18 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema, txi
 	// for each procedure, we will sanitize it,
 	// type check, generate the PLPGSQL code,
 	// and then execute the generated code.
-	stmts, err := procedural.GeneratePLPGSQL(schema, schemaName, pgSessionPrefix, PgSessionVars, &procedural.GenerateOptions{
+	procs, err := procedural.AnalyzeProcedures(schema, schemaName, &procedural.AnalyzeOptions{
 		LogProcedureNameOnError: true,
 	})
 	if err != nil {
 		return err
 	}
-	for _, stmt := range stmts {
+	for _, proc := range procs {
+		stmt, err := ddl.GenerateProcedure(proc, schemaName)
+		if err != nil {
+			return err
+		}
+
 		_, err = sp.Execute(ctx, stmt)
 		if err != nil {
 			return err
@@ -240,7 +246,7 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema, txi
 			returnNames,
 			returnsTable,
 			proc.Public,
-			proc.IsOwner(),
+			proc.IsOwnerOnly(),
 			proc.IsView())
 		if err != nil {
 			return err
@@ -306,30 +312,21 @@ func deleteSchema(ctx context.Context, tx sql.TxMaker, dbid string) error {
 }
 
 // setContextualVars sets the contextual variables for the given postgres session.
+// TODO: use this function for actions too.
 func setContextualVars(ctx context.Context, db sql.DB, data *common.ExecutionData) error {
 	// for contextual parameters, we use postgres's current_setting()
 	// feature for setting session variables. For example, @caller
 	// is accessed via current_setting('ctx.caller')
 
-	_, err := db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, pgSessionPrefix, callerVar, data.Caller))
+	_, err := db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, metadata.PgSessionPrefix, metadata.CallerVar, data.Caller))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, pgSessionPrefix, txidVar, data.TxID))
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, metadata.PgSessionPrefix, metadata.TxidVar, data.TxID))
 	if err != nil {
 		return err
 	}
 
 	return nil
 }
-
-var (
-	pgSessionPrefix = "ctx"
-	callerVar       = "caller"
-	txidVar         = "txid"
-	PgSessionVars   = map[string]*types.DataType{
-		callerVar: types.TextType,
-		txidVar:   types.TextType,
-	}
-)

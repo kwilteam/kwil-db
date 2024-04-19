@@ -6,6 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/ddl"
+	"github.com/kwilteam/kwil-db/parse/procedures"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -188,9 +189,25 @@ func Test_Procedure(t *testing.T) {
 						Type: t.Type,
 					})
 				}
+
+				test.returns.Fields = outParams
 			}
 
-			got, err := ddl.GenerateProcedure(test.fields, test.loopTargets, test.returns, test.decls, outParams, schema, name, body)
+			ret := types.ProcedureReturn{}
+			if test.returns != nil {
+				ret = *test.returns
+			}
+
+			got, err := ddl.GenerateProcedure(&procedures.AnalyzedProcedure{
+				Name:              name,
+				Parameters:        test.fields,
+				Returns:           ret,
+				DeclaredVariables: test.decls,
+				LoopTargets:       test.loopTargets,
+				Body:              body,
+				IsView:            false,
+				OwnerOnly:         false,
+			}, schema)
 			if err != nil {
 				t.Errorf("ddl.GeneratedProcedure() error = %v", err)
 				return

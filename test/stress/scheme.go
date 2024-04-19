@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/kuneiform"
+	"github.com/kwilteam/kwil-db/parse"
 )
 
 //go:embed scheme.kf
@@ -24,7 +24,7 @@ const (
 )
 
 func loadTestSchema() (*types.Schema, error) {
-	return kuneiform.Parse(testScheme)
+	return parse.ParseKuneiform(testScheme)
 }
 
 func init() {

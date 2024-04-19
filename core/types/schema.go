@@ -14,11 +14,12 @@ type Schema struct {
 	// Name is the name of the schema given by the deployer.
 	Name string `json:"name"`
 	// Owner is the identifier (generally an address in bytes or public key) of the owner of the schema
-	Owner      []byte       `json:"owner"`
-	Extensions []*Extension `json:"extensions"`
-	Tables     []*Table     `json:"tables"`
-	Actions    []*Action    `json:"actions"`
-	Procedures []*Procedure `json:"procedures"`
+	Owner             []byte              `json:"owner"`
+	Extensions        []*Extension        `json:"extensions"`
+	Tables            []*Table            `json:"tables"`
+	Actions           []*Action           `json:"actions"`
+	Procedures        []*Procedure        `json:"procedures"`
+	ForeignProcedures []*ForeignProcedure `json:"foreign_calls"`
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
@@ -84,6 +85,18 @@ func (s *Schema) Clean() error {
 		}
 
 		err = checkName(extension.Alias)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, foreignCall := range s.ForeignProcedures {
+		err := foreignCall.Clean()
+		if err != nil {
+			return err
+		}
+
+		err = checkName(foreignCall.Name)
 		if err != nil {
 			return err
 		}
@@ -706,6 +719,17 @@ func (p *Action) IsView() bool {
 	return false
 }
 
+// IsOwner returns true if the procedure has an owner modifier.
+func (p *Action) IsOwnerOnly() bool {
+	for _, m := range p.Modifiers {
+		if m == ModifierOwner {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Modifier modifies the access to a procedure.
 type Modifier string
 
@@ -761,7 +785,7 @@ type Procedure struct {
 	Body string `json:"body"`
 
 	// Returns is the return type of the procedure.
-	Returns *ProcedureReturn `json:"returnTypes,omitempty"`
+	Returns *ProcedureReturn `json:"returnTypes"`
 	// Annotations are the annotations of the procedure.
 	Annotations []string `json:"annotations,omitempty"`
 }
@@ -805,7 +829,7 @@ func (p *Procedure) IsView() bool {
 }
 
 // IsOwner returns true if the procedure has an owner modifier.
-func (p *Procedure) IsOwner() bool {
+func (p *Procedure) IsOwnerOnly() bool {
 	for _, m := range p.Modifiers {
 		if m == ModifierOwner {
 			return true
@@ -818,8 +842,8 @@ func (p *Procedure) IsOwner() bool {
 // ProcedureReturn holds the return type of a procedure.
 // EITHER the Type field is set, OR the Table field is set.
 type ProcedureReturn struct {
-	IsTable bool         `json:"isTable,omitempty"`
-	Fields  []*NamedType `json:"returnTypes,omitempty"`
+	IsTable bool         `json:"isTable"`
+	Fields  []*NamedType `json:"returnTypes"`
 }
 
 func (p *ProcedureReturn) Clean() error {
@@ -828,6 +852,18 @@ func (p *ProcedureReturn) Clean() error {
 	}
 
 	return nil
+}
+
+func (p *ProcedureReturn) Copy() *ProcedureReturn {
+	fields := make([]*NamedType, len(p.Fields))
+	for i, field := range p.Fields {
+		fields[i] = field.Copy()
+	}
+
+	return &ProcedureReturn{
+		IsTable: p.IsTable,
+		Fields:  fields,
+	}
 }
 
 // ProcedureParameter is a parameter in a procedure.
@@ -860,6 +896,49 @@ func (p *NamedType) Clean() error {
 		cleanIdent(&p.Name),
 		p.Type.Clean(),
 	)
+}
+
+func (p *NamedType) Copy() *NamedType {
+	return &NamedType{
+		Name: p.Name,
+		Type: p.Type.Copy(),
+	}
+}
+
+// ForeignProcedure is used to define foreign procedures that can be
+// dynamically called by the procedure.
+type ForeignProcedure struct {
+	// Name is the name of the foreign procedure.
+	Name string `json:"name"`
+	// Parameters are the parameters of the foreign procedure.
+	Parameters []*DataType `json:"parameters"`
+	// Returns specifies what the foreign procedure returns.
+	// If it does not return a table, the names of the return
+	// values are not needed, and should be left empty.
+	Returns *ProcedureReturn `json:"returns"`
+}
+
+func (f *ForeignProcedure) Clean() error {
+	err := cleanIdent(&f.Name)
+	if err != nil {
+		return err
+	}
+
+	for _, param := range f.Parameters {
+		err := param.Clean()
+		if err != nil {
+			return err
+		}
+	}
+
+	if f.Returns != nil {
+		err := f.Returns.Clean()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // DataType is a data type.
