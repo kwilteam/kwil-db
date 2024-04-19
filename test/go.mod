@@ -1,12 +1,13 @@
 module github.com/kwilteam/kwil-db/test
 
-go 1.21
+go 1.21.0
 
 // During development cycle, use the workspace kwil-db module. Remove this after
 // tagging kwil-db module.
 replace (
 	github.com/kwilteam/kwil-db => ../
 	github.com/kwilteam/kwil-db/core => ../core
+	github.com/kwilteam/kwil-db/parse => ../parse
 )
 
 require (
@@ -15,8 +16,9 @@ require (
 	github.com/docker/go-connections v0.5.0
 	github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246
 	github.com/ethereum/go-ethereum v1.13.8
-	github.com/kwilteam/kwil-db v0.7.1
-	github.com/kwilteam/kwil-db/core v0.1.0
+	github.com/kwilteam/kwil-db v0.7.2
+	github.com/kwilteam/kwil-db/core v0.1.2
+	github.com/kwilteam/kwil-db/parse v0.0.1
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go v0.29.1
 	github.com/testcontainers/testcontainers-go/modules/compose v0.29.2-0.20240321072901-c83b93cb1eff
