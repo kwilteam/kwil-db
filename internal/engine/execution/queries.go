@@ -115,6 +115,9 @@ var (
 		FOREIGN KEY (schema_id) REFERENCES %s.kwil_schemas (id) ON UPDATE CASCADE ON DELETE CASCADE
 	)
 	`, pg.InternalSchemaName, pg.InternalSchemaName)
+	sqlIndexProceduresTableV1SchemaID = fmt.Sprintf(`
+	CREATE INDEX procedures_schema_id ON %s.procedures (schema_id);
+	`, pg.InternalSchemaName)
 )
 
 func initTables(ctx context.Context, db sql.DB) error {

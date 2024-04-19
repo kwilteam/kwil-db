@@ -112,20 +112,20 @@ func buildExecutionInputs(ctx context.Context, client clientType.Client, dbid st
 
 	for _, a := range schema.Actions {
 		if strings.EqualFold(a.Name, proc) {
-			return buildActionInputs(a, inputs)
+			return buildActionInputs(a, inputs), nil
 		}
 	}
 
 	for _, p := range schema.Procedures {
 		if strings.EqualFold(p.Name, proc) {
-			return buildProcedureInputs(p, inputs)
+			return buildProcedureInputs(p, inputs), nil
 		}
 	}
 
 	return nil, fmt.Errorf("procedure/action not found")
 }
 
-func buildActionInputs(a *types.Action, inputs []map[string]any) ([][]any, error) {
+func buildActionInputs(a *types.Action, inputs []map[string]any) [][]any {
 	tuples := [][]any{}
 	for _, input := range inputs {
 		newTuple := []any{}
@@ -136,10 +136,10 @@ func buildActionInputs(a *types.Action, inputs []map[string]any) ([][]any, error
 		tuples = append(tuples, newTuple)
 	}
 
-	return tuples, nil
+	return tuples
 }
 
-func buildProcedureInputs(p *types.Procedure, inputs []map[string]any) ([][]any, error) {
+func buildProcedureInputs(p *types.Procedure, inputs []map[string]any) [][]any {
 	tuples := [][]any{}
 	for _, input := range inputs {
 		newTuple := []any{}
@@ -150,5 +150,5 @@ func buildProcedureInputs(p *types.Procedure, inputs []map[string]any) ([][]any,
 		tuples = append(tuples, newTuple)
 	}
 
-	return tuples, nil
+	return tuples
 }

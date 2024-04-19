@@ -106,7 +106,16 @@ func InitializeEngine(ctx context.Context, tx sql.DB) error {
 			}
 
 			_, err = db.Execute(ctx, sqlAddProceduresTableV1)
-			return err
+			if err != nil {
+				return err
+			}
+
+			_, err = db.Execute(ctx, sqlIndexProceduresTableV1SchemaID)
+			if err != nil {
+				return err
+			}
+
+			return nil
 		},
 	}
 
