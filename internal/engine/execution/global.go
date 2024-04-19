@@ -12,9 +12,9 @@ import (
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
-	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
+	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer"
 )
 
 // GlobalContext is the context for the entire execution.
@@ -99,7 +99,7 @@ func InitializeEngine(ctx context.Context, tx sql.DB) error {
 			}
 
 			for _, schema := range schemas {
-				_, err := db.Execute(ctx, sqlBackfillSchemaTableV1, schema.Owner, schema.Name)
+				_, err := db.Execute(ctx, sqlBackfillSchemaTableV1, schema.Owner, schema.Name, schema.DBID())
 				if err != nil {
 					return err
 				}
@@ -349,12 +349,12 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 		global:     g,
 	}
 
-	for _, unprepared := range schema.Actions {
-		prepared, err := prepareAction(unprepared, g, schema)
-		if err != nil {
-			return err
-		}
+	preparedActions, err := prepareActions(schema)
+	if err != nil {
+		return err
+	}
 
+	for _, prepared := range preparedActions {
 		_, ok := datasetCtx.actions[prepared.name]
 		if ok {
 			return fmt.Errorf(`duplicate procedure name: "%s"`, prepared.name)

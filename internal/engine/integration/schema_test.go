@@ -1,4 +1,4 @@
-//go:build pglive
+// go:build pglive
 
 package integration_test
 
@@ -11,7 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
-	"github.com/kwilteam/kwil-db/kuneiform"
+	"github.com/kwilteam/kwil-db/parse"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,6 +44,64 @@ func Test_Schemas(t *testing.T) {
 					TxID:   "test",
 				})
 				require.NoError(t, err)
+				datasets, err := global.ListDatasets(owner)
+				require.NoError(t, err)
+				require.Len(t, datasets, 1)
+
+				// create user
+				_, err = global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:   datasets[0].DBID,
+					Procedure: "create_user",
+					Args:      []any{"satoshi", "42"},
+					TransactionData: common.TransactionData{
+						Signer: owner,
+						Caller: string(owner),
+						TxID:   "1",
+					},
+				})
+				require.NoError(t, err)
+
+				// make a post
+				_, err = global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:   datasets[0].DBID,
+					Procedure: "create_post",
+					Args:      []any{"hello world"},
+					TransactionData: common.TransactionData{
+						Signer: owner,
+						Caller: string(owner),
+						TxID:   "2",
+					},
+				})
+
+				res, err := global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:   datasets[0].DBID,
+					Procedure: "get_user",
+					Args:      []any{"satoshi"},
+					TransactionData: common.TransactionData{
+						Signer: owner,
+						Caller: string(owner),
+						TxID:   "1",
+					},
+				})
+				require.NoError(t, err)
+
+				require.Len(t, res.Rows, 1)
+
+				// check the columns
+				require.Len(t, res.Columns, 4)
+				// should be id, age, address, post_count
+				require.Equal(t, "id", res.Columns[0])
+				require.Equal(t, "age", res.Columns[1])
+				require.Equal(t, "address", res.Columns[2])
+				require.Equal(t, "post_count", res.Columns[3])
+
+				// check the values
+				// we will simply check row 0 is some uuid
+				_, ok := res.Rows[0][0].([16]byte)
+				require.True(t, ok)
+				require.Equal(t, int64(42), res.Rows[0][1])
+				require.Equal(t, string(owner), res.Rows[0][2])
+				require.Equal(t, int64(1), res.Rows[0][3])
 			},
 		},
 	}
@@ -78,7 +136,7 @@ func loadSchema(file string) (*types.Schema, error) {
 		return nil, err
 	}
 
-	db, err := kuneiform.Parse(string(d))
+	db, err := parse.ParseKuneiform(string(d))
 	if err != nil {
 		return nil, err
 	}

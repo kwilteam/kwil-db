@@ -2,8 +2,9 @@ package validation
 
 // max name lengths
 const (
-	MAX_OWNER_NAME_LENGTH = 44  // ETH addresses are 42, Solana are 44
-	MAX_IDENT_NAME_LENGTH = 128 // reasoning for this value?  Also, does this apply to table names, which are potentially long with a schema prefix?
+	// postgres limits identifiers to 63, but we need to reserve space
+	// for prefixes. 32 is a reasonable limit.
+	MAX_IDENT_NAME_LENGTH = 32
 )
 
 // table restrictions
