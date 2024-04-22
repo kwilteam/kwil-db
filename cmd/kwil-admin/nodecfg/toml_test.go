@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_Generate_TOML(t *testing.T) {
@@ -74,6 +75,7 @@ func Test_IncrementingPorts(t *testing.T) {
 		input  string
 		amount int
 		want   string
+		fail   bool
 	}
 
 	testcases := []testcase{
@@ -81,27 +83,54 @@ func Test_IncrementingPorts(t *testing.T) {
 			input:  "localhost:26656",
 			amount: 1,
 			want:   "localhost:26657",
+			fail:   false,
 		},
 		{
 			input:  "http://localhost:26656",
 			amount: 2,
 			want:   "http://localhost:26658",
+			fail:   false,
 		},
 		{
 			input:  "https://localhost:26656",
 			amount: -2,
 			want:   "https://localhost:26654",
+			fail:   false,
 		},
 		{
 			input:  "tcp://0.0.0.0:26656",
 			amount: 3,
 			want:   "tcp://0.0.0.0:26659",
+			fail:   false,
+		},
+		{
+			input:  "0.0.0.0:26656",
+			amount: 2,
+			want:   "0.0.0.0:26658",
+			fail:   false,
+		},
+		{
+			input:  "127.0.0.0",
+			amount: 2,
+			want:   "",
+			fail:   true,
+		},
+		{
+			input:  ":26656",
+			amount: 2,
+			want:   ":26658",
+			fail:   false,
 		},
 	}
 
 	for _, tc := range testcases {
 		got, err := incrementPort(tc.input, tc.amount)
-		assert.NoError(t, err)
+		if tc.fail {
+			require.Error(t, err)
+			continue
+		}
+
+		require.NoError(t, err)
 		assert.Equal(t, tc.want, got)
 	}
 }

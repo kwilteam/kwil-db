@@ -66,7 +66,7 @@ const (
 func ParseURL(u string) (*URL, error) {
 	original := u
 	// If the url does not have a scheme, assume it's a tcp address, rewrite and reparse.
-	hasScheme, err := hasScheme(u)
+	hasScheme, err := HasScheme(u)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func ParseURL(u string) (*URL, error) {
 }
 
 // hasScheme returns true if the url has a known scheme.
-func hasScheme(u string) (bool, error) {
+func HasScheme(u string) (bool, error) {
 	parsed, err := url.Parse(u)
 	if err != nil { // errors on 127.0.0.1:8080 so return false with no error
 		return false, nil
