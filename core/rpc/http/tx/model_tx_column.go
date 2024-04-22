@@ -10,6 +10,6 @@ package swagger
 
 type TxColumn struct {
 	Name string `json:"name,omitempty"`
-	Type_ string `json:"type,omitempty"`
+	Type_ *TxDataType `json:"type,omitempty"`
 	Attributes []TxAttribute `json:"attributes,omitempty"`
 }

@@ -138,7 +138,7 @@ func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 }
 
 // GetSchema gets a schema by dbid.
-func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
+func (c *Client) GetSchema(ctx context.Context, dbid string) (*types.Schema, error) {
 	ds, err := c.txClient.GetSchema(ctx, dbid)
 	if err != nil {
 		return nil, err
@@ -148,9 +148,11 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Sche
 }
 
 // DeployDatabase deploys a database.
-func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schema, opts ...clientType.TxOpt) (transactions.TxHash, error) {
+func (c *Client) DeployDatabase(ctx context.Context, payload *types.Schema, opts ...clientType.TxOpt) (transactions.TxHash, error) {
 	txOpts := clientType.GetTxOpts(opts)
-	tx, err := c.newTx(ctx, payload, txOpts)
+	s2 := &transactions.Schema{}
+	s2.FromTypes(payload)
+	tx, err := c.newTx(ctx, s2, txOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -194,18 +196,23 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...client
 	return res, nil
 }
 
-// ExecuteAction executes an action.
+// DEPRECATED: Use Execute instead.
+func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...clientType.TxOpt) (transactions.TxHash, error) {
+	return c.Execute(ctx, dbid, action, tuples, opts...)
+}
+
+// Execute executes a procedure or action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
 // It can take any number of inputs, and if multiple tuples of inputs are passed,
 // it will execute them in the same transaction.
-func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...clientType.TxOpt) (transactions.TxHash, error) {
+func (c *Client) Execute(ctx context.Context, dbid string, procedure string, tuples [][]any, opts ...clientType.TxOpt) (transactions.TxHash, error) {
 	stringTuples, isNil, err := convertTuples(tuples)
 	if err != nil {
 		return nil, err
 	}
 
 	executionBody := &transactions.ActionExecution{
-		Action:    action,
+		Action:    procedure,
 		DBID:      dbid,
 		Arguments: stringTuples,
 		NilArg:    isNil,
@@ -218,7 +225,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 	}
 
 	c.logger.Debug("execute action",
-		zap.String("DBID", dbid), zap.String("action", action),
+		zap.String("DBID", dbid), zap.String("action", procedure),
 		zap.String("signature_type", tx.Signature.Type),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)),
 		zap.String("fee", tx.Body.Fee.String()), zap.Int64("nonce", int64(tx.Body.Nonce)))
@@ -226,8 +233,13 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
 }
 
-// CallAction call an action. It returns the result records.
+// DEPRECATED: Use Call instead.
 func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any) (*clientType.Records, error) {
+	return c.Call(ctx, dbid, action, inputs)
+}
+
+// Call calls a procedure or action. It returns the result records.
+func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs []any) (*clientType.Records, error) {
 	stringInputs, isNil, err := convertTuple(inputs)
 	if err != nil {
 		return nil, err
@@ -235,7 +247,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 
 	payload := &transactions.ActionCall{
 		DBID:      dbid,
-		Action:    action,
+		Action:    procedure,
 		Arguments: stringInputs,
 		NilArg:    isNil,
 	}

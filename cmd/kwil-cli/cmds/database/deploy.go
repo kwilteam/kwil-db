@@ -8,12 +8,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/kwilteam/kuneiform/kfparser"
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/kuneiform"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +46,7 @@ func deployCmd() *cobra.Command {
 				}
 				defer file.Close()
 
-				var db *transactions.Schema
+				var db *types.Schema
 				if fileType == "kf" {
 					db, err = UnmarshalKf(file)
 				} else if fileType == "json" {
@@ -92,38 +92,22 @@ func deployCmd() *cobra.Command {
 	return cmd
 }
 
-func UnmarshalKf(file *os.File) (*transactions.Schema, error) {
+func UnmarshalKf(file *os.File) (*types.Schema, error) {
 	source, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read Kuneiform source file: %w", err)
 	}
 
-	astSchema, err := kfparser.Parse(string(source))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse file: %w", err)
-	}
-
-	schemaJson, err := astSchema.ToJSON()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal schema: %w", err)
-	}
-
-	var db transactions.Schema
-	err = json.Unmarshal(schemaJson, &db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal schema json: %w", err)
-	}
-
-	return &db, nil
+	return kuneiform.Parse(string(source))
 }
 
-func UnmarshalJson(file *os.File) (*transactions.Schema, error) {
+func UnmarshalJson(file *os.File) (*types.Schema, error) {
 	bts, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	var db transactions.Schema
+	var db types.Schema
 	err = json.Unmarshal(bts, &db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal file: %w", err)

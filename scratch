@@ -1,0 +1,9 @@
+CREATE OR REPLACE FUNCTION ds_x975a5d686cb685d60bed9d99a0d3cb80e4f712dbf8d2700297085752.get_owned_users(_param_address TEXT) 
+RETURNS TABLE(id UUID, name TEXT, age INT8) AS $$
+BEGIN
+RETURN QUERY    SELECT      "id"      ,      "name"      ,      "age"
+FROM     "ds_x975a5d686cb685d60bed9d99a0d3cb80e4f712dbf8d2700297085752" . "users"
+WHERE      "address"     =   _param_address      ORDER  BY      "users"    .    "id"; 
+
+END;
+$$ LANGUAGE plpgsql;

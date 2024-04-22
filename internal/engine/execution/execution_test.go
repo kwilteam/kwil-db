@@ -8,8 +8,9 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
-	"github.com/kwilteam/kwil-db/common/testdata"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/testdata"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 
 	"github.com/stretchr/testify/assert"
@@ -29,10 +30,14 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+					Signer: testdata.TestSchema.Owner,
+					Caller: string(testdata.TestSchema.Owner),
+					TxID:   "txid1",
+				})
 				assert.NoError(t, err)
 
-				schema, err := eng.GetSchema(ctx, testdata.TestSchema.DBID())
+				schema, err := eng.GetSchema(testdata.TestSchema.DBID())
 				assert.NoError(t, err)
 
 				assert.EqualValues(t, testdata.TestSchema, schema)
@@ -44,13 +49,21 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+					Signer: testdata.TestSchema.Owner,
+					Caller: string(testdata.TestSchema.Owner),
+					TxID:   "txid1",
+				})
 				assert.NoError(t, err)
 
 				_, ok := db.dbs[testdata.TestSchema.DBID()]
 				assert.True(t, ok)
 
-				err = eng.DeleteDataset(ctx, db, testdata.TestSchema.DBID(), testdata.TestSchema.Owner)
+				err = eng.DeleteDataset(ctx, db, testdata.TestSchema.DBID(), &common.TransactionData{
+					Signer: testdata.TestSchema.Owner,
+					Caller: string(testdata.TestSchema.Owner),
+					TxID:   "txid2",
+				})
 				assert.NoError(t, err)
 
 				_, ok = db.dbs[testdata.TestSchema.DBID()]
@@ -63,10 +76,18 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+					Signer: testdata.TestSchema.Owner,
+					Caller: string(testdata.TestSchema.Owner),
+					TxID:   "txid1",
+				})
 				assert.NoError(t, err)
 
-				err = eng.DeleteDataset(ctx, db, testdata.TestSchema.DBID(), []byte("not_the_owner"))
+				err = eng.DeleteDataset(ctx, db, testdata.TestSchema.DBID(), &common.TransactionData{
+					Signer: []byte("not_owner"),
+					Caller: "not_owner",
+					TxID:   "txid1",
+				})
 				assert.Error(t, err)
 			},
 		},
@@ -76,7 +97,11 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.DeleteDataset(ctx, db, "not_a_real_db", testdata.TestSchema.Owner)
+				err := eng.DeleteDataset(ctx, db, "not_a_real_db", &common.TransactionData{
+					Signer: testdata.TestSchema.Owner,
+					Caller: string(testdata.TestSchema.Owner),
+					TxID:   "txid2",
+				})
 				assert.Error(t, err)
 			},
 		},
@@ -86,15 +111,22 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+					Signer: testdata.TestSchema.Owner,
+					Caller: string(testdata.TestSchema.Owner),
+					TxID:   "txid1",
+				})
 				assert.NoError(t, err)
 
 				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: "create_user",
 					Args:      []any{1, "brennan", 22},
-					Signer:    testdata.TestSchema.Owner,
-					Caller:    string(testdata.TestSchema.Owner),
+					TransactionData: common.TransactionData{
+						Signer: testdata.TestSchema.Owner,
+						Caller: string(testdata.TestSchema.Owner),
+						TxID:   "txid2",
+					},
 				})
 				assert.NoError(t, err)
 			},
@@ -105,15 +137,22 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+					Signer: testdata.TestSchema.Owner,
+					Caller: string(testdata.TestSchema.Owner),
+					TxID:   "txid1",
+				})
 				assert.NoError(t, err)
 
 				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: "create_user",
 					Args:      []any{1, "brennan"}, // missing age
-					Signer:    testdata.TestSchema.Owner,
-					Caller:    string(testdata.TestSchema.Owner),
+					TransactionData: common.TransactionData{
+						Signer: testdata.TestSchema.Owner,
+						Caller: string(testdata.TestSchema.Owner),
+						TxID:   "txid2",
+					},
 				})
 				assert.Error(t, err)
 			},
@@ -124,15 +163,22 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+					Signer: testdata.TestSchema.Owner,
+					Caller: string(testdata.TestSchema.Owner),
+					TxID:   "txid1",
+				})
 				assert.NoError(t, err)
 
 				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureRecursive.Name,
+					Procedure: testdata.ActionRecursive.Name,
 					Args:      []any{"id000000", "asdfasdfasdfasdf", "bigbigbigbigbigbigbigbigbigbig"},
-					Signer:    testdata.TestSchema.Owner,
-					Caller:    string(testdata.TestSchema.Owner),
+					TransactionData: common.TransactionData{
+						Signer: testdata.TestSchema.Owner,
+						Caller: string(testdata.TestSchema.Owner),
+						TxID:   "txid2",
+					},
 				})
 				assert.ErrorIs(t, err, ErrMaxStackDepth)
 			},
@@ -143,15 +189,22 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+					Signer: testdata.TestSchema.Owner,
+					Caller: string(testdata.TestSchema.Owner),
+					TxID:   "txid1",
+				})
 				assert.NoError(t, err)
 
 				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ProcedureRecursiveSneakyA.Name,
+					Procedure: testdata.ActionRecursiveSneakyA.Name,
 					Args:      []any{},
-					Signer:    testdata.TestSchema.Owner,
-					Caller:    string(testdata.TestSchema.Owner),
+					TransactionData: common.TransactionData{
+						Signer: testdata.TestSchema.Owner,
+						Caller: string(testdata.TestSchema.Owner),
+						TxID:   "txid2",
+					},
 				})
 				assert.ErrorIs(t, err, ErrMaxStackDepth)
 			},
@@ -162,7 +215,11 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, testdata.TestSchema.Owner)
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+					Signer: testdata.TestSchema.Owner,
+					Caller: string(testdata.TestSchema.Owner),
+					TxID:   "txid1",
+				})
 				assert.NoError(t, err)
 
 				db2 := newDB(true)
@@ -171,8 +228,11 @@ func Test_Execution(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: "create_user",
 					Args:      []any{1, "brennan", 22},
-					Signer:    testdata.TestSchema.Owner,
-					Caller:    string(testdata.TestSchema.Owner),
+					TransactionData: common.TransactionData{
+						Signer: testdata.TestSchema.Owner,
+						Caller: string(testdata.TestSchema.Owner),
+						TxID:   "txid2",
+					},
 				})
 				assert.Error(t, err)
 				assert.ErrorIs(t, err, ErrMutativeProcedure)
@@ -181,8 +241,11 @@ func Test_Execution(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: "get_user_by_address",
 					Args:      []any{"address"},
-					Signer:    testdata.TestSchema.Owner,
-					Caller:    string(testdata.TestSchema.Owner),
+					TransactionData: common.TransactionData{
+						Signer: testdata.TestSchema.Owner,
+						Caller: string(testdata.TestSchema.Owner),
+						TxID:   "txid3",
+					},
 				})
 				assert.NoError(t, err)
 			},
@@ -193,15 +256,22 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testSchema, testSchema.Owner)
+				err := eng.CreateDataset(ctx, db, testSchema, &common.TransactionData{
+					Signer: testSchema.Owner,
+					Caller: string(testSchema.Owner),
+					TxID:   "txid1",
+				})
 				assert.NoError(t, err)
 
 				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:   testSchema.DBID(),
 					Procedure: "use_math",
 					Args:      []any{1, 2},
-					Signer:    testSchema.Owner,
-					Caller:    string(testSchema.Owner),
+					TransactionData: common.TransactionData{
+						Signer: testSchema.Owner,
+						Caller: string(testSchema.Owner),
+						// no txid since it is non-mutative
+					},
 				})
 				assert.NoError(t, err)
 
@@ -211,8 +281,11 @@ func Test_Execution(t *testing.T) {
 					Dataset:   testSchema.DBID(),
 					Procedure: "use_math",
 					Args:      []any{1, 2},
-					Signer:    testSchema.Owner,
-					Caller:    string(testSchema.Owner),
+					TransactionData: common.TransactionData{
+						Signer: testSchema.Owner,
+						Caller: string(testSchema.Owner),
+						TxID:   "txid3",
+					},
 				})
 				assert.NoError(t, err)
 			},
@@ -225,16 +298,53 @@ func Test_Execution(t *testing.T) {
 
 				owner := "owner"
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, []byte(owner))
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+					Signer: []byte(owner),
+					Caller: owner,
+					TxID:   "txid1",
+				})
 				assert.NoError(t, err)
 
-				datasets, err := eng.ListDatasets(ctx, []byte(owner))
+				datasets, err := eng.ListDatasets([]byte(owner))
 				assert.NoError(t, err)
 
 				assert.Equal(t, 1, len(datasets))
 				assert.Equal(t, testdata.TestSchema.Name, datasets[0].Name)
 				assert.Equal(t, testdata.TestSchema.Owner, datasets[0].Owner)
 				assert.Equal(t, testdata.TestSchema.DBID(), datasets[0].DBID)
+			},
+		},
+		{
+			name: "procedure returning table",
+			fn: func(t *testing.T, eng *GlobalContext) {
+				ctx := context.Background()
+				db := mockResultDB(&sql.ResultSet{
+					Columns: []string{"_out_id", "_out_name", "_out_age"},
+				})
+
+				owner := "owner"
+
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+					Signer: []byte(owner),
+					Caller: owner,
+					TxID:   "txid1",
+				})
+				assert.NoError(t, err)
+
+				res, err := eng.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcGetUsersByAge.Name,
+					Args:      []any{22},
+					TransactionData: common.TransactionData{
+						Signer: []byte(owner),
+						Caller: owner,
+					},
+				})
+				assert.NoError(t, err)
+
+				for i, expected := range testdata.ProcGetUsersByAge.Returns.Fields {
+					assert.Equal(t, expected.Name, res.Columns[i])
+				}
 			},
 		},
 	}
@@ -272,10 +382,19 @@ func newDB(readonly bool) *mockDB {
 	}
 }
 
+// mockResultDB can be used to mock a result set for a query
+func mockResultDB(result *sql.ResultSet) *mockDB {
+	db := newDB(false)
+	db.resultSet = result
+
+	return db
+}
+
 type mockDB struct {
 	accessMode    sql.AccessMode
 	dbs           map[string][]byte // serialized schemas
 	executedStmts []string
+	resultSet     *sql.ResultSet
 }
 
 var _ sql.AccessModer = (*mockDB)(nil)
@@ -294,8 +413,8 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 	// mock some expected queries used internally
 	switch stmt {
 	case sqlStoreKwilSchema:
-		// first arg is dbid, 2nd is schema content, 3rd is schema version
-		m.dbs[args[0].(string)] = args[1].([]byte)
+		// first arg is uuid, 2nd is dbid, 3rd is schema content, 4th is schema version
+		m.dbs[args[1].(string)] = args[2].([]byte)
 	case sqlListSchemaContent:
 		rows := make([][]any, 0)
 		for _, bts := range m.dbs {
@@ -310,6 +429,10 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 		delete(m.dbs, args[0].(string))
 	default:
 		m.executedStmts = append(m.executedStmts, stmt)
+
+		if m.resultSet != nil {
+			return m.resultSet, nil
+		}
 	}
 
 	return &sql.ResultSet{
@@ -332,62 +455,60 @@ func (m *mockTx) Rollback(ctx context.Context) error {
 
 // identitySchema is a schema that relies on the testdata user's schema
 // it creates an example credential application
-var testSchema = &common.Schema{
+var testSchema = &types.Schema{
 	Name:  "identity_db",
 	Owner: []byte(`owner`),
-	Tables: []*common.Table{
+	Tables: []*types.Table{
 		{
 			Name: "credentials",
-			Columns: []*common.Column{
+			Columns: []*types.Column{
 				{
 					Name: "id",
-					Type: common.INT,
-					Attributes: []*common.Attribute{
+					Type: types.IntType,
+					Attributes: []*types.Attribute{
 						{
-							Type: common.PRIMARY_KEY,
+							Type: types.PRIMARY_KEY,
 						},
 					},
 				},
 				{
 					Name: "user_id",
-					Type: common.INT,
-					Attributes: []*common.Attribute{
+					Type: types.IntType,
+					Attributes: []*types.Attribute{
 						{
-							Type: common.NOT_NULL,
+							Type: types.NOT_NULL,
 						},
 					},
 				},
 				{
 					Name: "credential",
-					Type: common.TEXT,
+					Type: types.TextType,
 				},
 			},
-			Indexes: []*common.Index{
+			Indexes: []*types.Index{
 				{
 					Name:    "user_id",
 					Columns: []string{"user_id"},
-					Type:    common.BTREE,
+					Type:    types.BTREE,
 				},
 			},
 		},
 	},
-	Procedures: []*common.Procedure{
+	Actions: []*types.Action{
 		{
-			Name:   "use_math",
-			Args:   []string{"$a", "$b"},
-			Public: true,
-			Modifiers: []common.Modifier{
-				common.ModifierView,
+			Name:       "use_math",
+			Parameters: []string{"$a", "$b"},
+			Public:     true,
+			Modifiers: []types.Modifier{
+				types.ModifierView,
 			},
-			Statements: []string{
-				`math.add($a, $b);`,
-			},
+			Body: `math.add($a, $b);`,
 		},
 	},
-	Extensions: []*common.Extension{
+	Extensions: []*types.Extension{
 		{
 			Name: "math",
-			Initialization: []*common.ExtensionConfig{
+			Initialization: []*types.ExtensionConfig{
 				{
 					Key:   "math_key",
 					Value: "math_val",
@@ -420,13 +541,13 @@ func (m *mathExt) Call(caller *precompiles.ProcedureContext, app *common.App, me
 // Test_OrderSchemas tests that schemas are ordered correctly when importing with dependencies
 func Test_OrderSchemas(t *testing.T) {
 	// create random schemas, and randomly add others as dependencies
-	schemas := make([]*common.Schema, 0)
+	schemas := make([]*types.Schema, 0)
 
 	for i := 0; i < 100; i++ {
 		schema := randomSchema()
 
 		for _, schema2 := range schemas {
-			schema2.Extensions = append(schema.Extensions, &common.Extension{
+			schema2.Extensions = append(schema.Extensions, &types.Extension{
 				Name:  schema.DBID(),
 				Alias: schema.Name,
 			})
@@ -439,7 +560,7 @@ func Test_OrderSchemas(t *testing.T) {
 	for _, schema := range schemas {
 		for i := 0; i < 10; i++ {
 			dep := randomSchema()
-			schema.Extensions = append(schema.Extensions, &common.Extension{
+			schema.Extensions = append(schema.Extensions, &types.Extension{
 				Name:  dep.DBID(),
 				Alias: dep.Name,
 			})
@@ -479,8 +600,8 @@ func randomString(length int) string {
 	return string(b)
 }
 
-func randomSchema() *common.Schema {
-	return &common.Schema{
+func randomSchema() *types.Schema {
+	return &types.Schema{
 		Name:  randomString(10),
 		Owner: []byte(randomString(10)),
 	}

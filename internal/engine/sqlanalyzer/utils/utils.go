@@ -1,36 +1,8 @@
 package utils
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
-
-	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
-
-// IsLiteral detects if the passed string is convertable to a literal.
-// It returns the type of the literal, or an error if it is not a literal.
-func IsLiteral(literal string) (common.DataType, error) {
-	if strings.HasPrefix(literal, "'") && strings.HasSuffix(literal, "'") {
-		return common.TEXT, nil
-	}
-
-	if strings.EqualFold(literal, "true") || strings.EqualFold(literal, "false") {
-		return common.BOOL, nil
-	}
-
-	if strings.EqualFold(literal, "null") {
-		return common.NULL, nil
-	}
-
-	_, err := strconv.Atoi(literal)
-	if err != nil {
-		return common.NULL, fmt.Errorf("invalid literal: could not detect literal type: %s", literal)
-	}
-
-	return common.INT, nil
-}
 
 // GetUsedTables returns the tables that are used or joined in a Join Clause.
 // It will search across the base table as well as all joined predicates.

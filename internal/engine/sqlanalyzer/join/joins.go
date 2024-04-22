@@ -1,6 +1,6 @@
 package join
 
-import "github.com/kwilteam/kwil-db/parse/sql/tree"
+import "github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 
 /*
 	This file contains functionality for evaluating expressions as join conditions.

@@ -28,4 +28,7 @@ var (
 	schemaInvalidExtensionInit = &testSchema{
 		FileName: "invalid_extension_init",
 	}
+	userDB = &testSchema{
+		FileName: "users",
+	}
 )

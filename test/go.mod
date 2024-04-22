@@ -7,7 +7,6 @@ go 1.21
 replace (
 	github.com/kwilteam/kwil-db => ../
 	github.com/kwilteam/kwil-db/core => ../core
-	github.com/kwilteam/kwil-db/parse => ../parse
 )
 
 require (
@@ -16,7 +15,6 @@ require (
 	github.com/docker/go-connections v0.5.0
 	github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246
 	github.com/ethereum/go-ethereum v1.13.8
-	github.com/kwilteam/kuneiform v0.6.1-0.20240325162722-e0e0101eca92
 	github.com/kwilteam/kwil-db v0.7.1
 	github.com/kwilteam/kwil-db/core v0.1.0
 	github.com/stretchr/testify v1.9.0
@@ -149,7 +147,6 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/kwilteam/action-grammar-go v0.1.1 // indirect
-	github.com/kwilteam/kwil-db/parse v0.1.2 // indirect
 	github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7 // indirect
 	github.com/lib/pq v1.10.7 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect

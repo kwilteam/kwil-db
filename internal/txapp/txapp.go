@@ -744,7 +744,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 		eventMap[evt.ID()] = evt
 	}
 
-	finalEvents := make([]*types.VotableEvent, 0)
+	finalEvents := make([]*transactions.VotableEvent, 0)
 	for _, id := range ids {
 		event, ok := eventMap[id]
 		if !ok {
@@ -757,7 +757,10 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 			break
 		}
 		maxTxsSize -= evtSz
-		finalEvents = append(finalEvents, event)
+		finalEvents = append(finalEvents, &transactions.VotableEvent{
+			Type: event.Type,
+			Body: event.Body,
+		})
 	}
 
 	if len(finalEvents) == 0 {
@@ -952,7 +955,7 @@ func logErr(l log.Logger, err error) {
 func computeEmptyVoteBodyTxSize(chainID string) (int64, error) {
 	// Create a transaction with an empty payload to measure the fixed size without the payload.
 	tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteBodies{
-		Events: []*types.VotableEvent{},
+		Events: []*transactions.VotableEvent{},
 	}, chainID, 1<<63) // large nonce using all 8 bytes of the uint64
 	if err != nil {
 		return 0, err

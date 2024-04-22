@@ -7,7 +7,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 // A Dsl describes a set of interactions that could achieve a specific goal
@@ -32,7 +31,7 @@ type DatabaseDeployDsl interface {
 	DatabaseIdentifier
 	DatabaseExister
 	TxQueryDsl
-	DeployDatabase(ctx context.Context, db *transactions.Schema) (txHash []byte, err error)
+	DeployDatabase(ctx context.Context, db *types.Schema) (txHash []byte, err error)
 }
 
 // AccountBalanceDsl is the dsl for checking an confirmed account balance. This
@@ -68,7 +67,7 @@ type ExecuteExtensionDsl interface {
 	DatabaseIdentifier
 	TxQueryDsl
 	ExecuteCallDsl
-	ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
+	Execute(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
 }
 
 // ExecuteQueryDsl is dsl for query specification
@@ -76,7 +75,7 @@ type ExecuteQueryDsl interface {
 	DatabaseIdentifier
 	TxQueryDsl
 	// ExecuteAction executes QUERY to a database
-	ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
+	Execute(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
 	QueryDatabase(ctx context.Context, dbid, query string) (*clientType.Records, error)
 	SupportBatch() bool
 }

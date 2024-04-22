@@ -10,7 +10,6 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	"github.com/spf13/cobra"
 )
@@ -52,12 +51,12 @@ func executeCmd() *cobra.Command {
 
 				lowerName := strings.ToLower(actionName)
 
-				actionStructure, err := getAction(ctx, cl, dbId, lowerName)
+				parsedArgs, err := parseInputs(args)
 				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error getting action: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error parsing inputs: %w", err))
 				}
 
-				inputs, err := GetInputs(args, actionStructure)
+				inputs, err := buildExecutionInputs(ctx, cl, dbId, lowerName, parsedArgs)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting inputs: %w", err))
 				}
@@ -111,30 +110,4 @@ func parseInputs(args []string) ([]map[string]any, error) {
 	}
 
 	return []map[string]any{inputs}, nil
-}
-
-func GetInputs(args []string, action *transactions.Action) ([][]any, error) {
-	inputs, err := parseInputs(args)
-	if err != nil {
-		return nil, fmt.Errorf("error getting inputs: %w", err)
-	}
-
-	return createActionInputs(inputs, action.Inputs)
-}
-
-// createActionInputs takes a []map[string]any and an action, and converts it to [][]any.
-// This is to support batch.
-func createActionInputs(inputs []map[string]any, actionInputs []string) ([][]any, error) {
-	tuples := [][]any{}
-	for _, input := range inputs {
-		newTuple := []any{}
-		for _, inputField := range actionInputs {
-			// If the inputField is not in the input map, we append nil.
-			newTuple = append(newTuple, input[inputField])
-		}
-
-		tuples = append(tuples, newTuple)
-	}
-
-	return tuples, nil
 }

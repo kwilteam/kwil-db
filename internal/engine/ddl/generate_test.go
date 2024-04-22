@@ -5,9 +5,9 @@ import (
 	"testing"
 	"unicode"
 
-	types "github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/ddl"
-	"github.com/kwilteam/kwil-db/parse/sql/postgres"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/postgres"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,7 +29,7 @@ func TestGenerateDDL(t *testing.T) {
 					Columns: []*types.Column{
 						{
 							Name: "id",
-							Type: types.INT,
+							Type: types.IntType,
 							Attributes: []*types.Attribute{
 								{
 									Type: "priMAry_key", // testing string case insensitivity
@@ -41,7 +41,7 @@ func TestGenerateDDL(t *testing.T) {
 						},
 						{
 							Name: "name",
-							Type: types.TEXT,
+							Type: types.TextType,
 							Attributes: []*types.Attribute{
 								{
 									Type: types.NOT_NULL,
@@ -75,7 +75,7 @@ func TestGenerateDDL(t *testing.T) {
 					Columns: []*types.Column{
 						{
 							Name: "id",
-							Type: types.INT,
+							Type: types.IntType,
 							Attributes: []*types.Attribute{
 								{
 									Type: types.NOT_NULL,
@@ -84,7 +84,7 @@ func TestGenerateDDL(t *testing.T) {
 						},
 						{
 							Name: "name",
-							Type: types.TEXT,
+							Type: types.TextType,
 							Attributes: []*types.Attribute{
 								{
 									Type: types.NOT_NULL,
@@ -123,7 +123,7 @@ func TestGenerateDDL(t *testing.T) {
 					Columns: []*types.Column{
 						{
 							Name: "id",
-							Type: types.INT,
+							Type: types.IntType,
 							Attributes: []*types.Attribute{
 								{
 									Type: "primary_key",
@@ -135,7 +135,7 @@ func TestGenerateDDL(t *testing.T) {
 						},
 						{
 							Name: "name",
-							Type: types.TEXT,
+							Type: types.TextType,
 							Attributes: []*types.Attribute{
 								{
 									Type: types.NOT_NULL,
@@ -171,7 +171,7 @@ func TestGenerateDDL(t *testing.T) {
 					Columns: []*types.Column{
 						{
 							Name: "id",
-							Type: types.INT,
+							Type: types.IntType,
 							Attributes: []*types.Attribute{
 								{
 									Type: types.NOT_NULL,
@@ -180,7 +180,7 @@ func TestGenerateDDL(t *testing.T) {
 						},
 						{
 							Name: "name",
-							Type: types.TEXT,
+							Type: types.TextType,
 							Attributes: []*types.Attribute{
 								{
 									Type: types.NOT_NULL,
@@ -211,7 +211,7 @@ func TestGenerateDDL(t *testing.T) {
 					Columns: []*types.Column{
 						{
 							Name: "id",
-							Type: types.INT,
+							Type: types.IntType,
 							Attributes: []*types.Attribute{
 								{
 									Type: types.PRIMARY_KEY,
@@ -220,7 +220,7 @@ func TestGenerateDDL(t *testing.T) {
 						},
 						{
 							Name: "name",
-							Type: types.TEXT,
+							Type: types.TextType,
 							Attributes: []*types.Attribute{
 								{
 									Type:  types.DEFAULT,
@@ -255,7 +255,7 @@ func TestGenerateDDL(t *testing.T) {
 					Columns: []*types.Column{
 						{
 							Name: "id",
-							Type: types.INT,
+							Type: types.IntType,
 							Attributes: []*types.Attribute{
 								{
 									Type: types.PRIMARY_KEY,
@@ -264,7 +264,7 @@ func TestGenerateDDL(t *testing.T) {
 						},
 						{
 							Name: "name",
-							Type: types.TEXT,
+							Type: types.TextType,
 							Attributes: []*types.Attribute{
 								{
 									Type:  types.DEFAULT,
@@ -343,11 +343,11 @@ func Test_PrimaryIndexModification(t *testing.T) {
 		Columns: []*types.Column{
 			{
 				Name: "id1",
-				Type: types.INT,
+				Type: types.IntType,
 			},
 			{
 				Name: "id2", // doing this to check composite primary keys
-				Type: types.INT,
+				Type: types.IntType,
 			},
 		},
 		Indexes: []*types.Index{

@@ -100,6 +100,7 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 			if err != nil {
 				return err
 			}
+
 			err = rebroadcaster.MarkRebroadcast(ctx, voteID.ResolutionIDs)
 			if err != nil {
 				return err

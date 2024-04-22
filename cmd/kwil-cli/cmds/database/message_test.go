@@ -7,7 +7,6 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 func Example_respDBlist_text_0() {
@@ -127,17 +126,17 @@ func Example_respRelations_json() {
 }
 
 var demoSchema = &respSchema{
-	Schema: &transactions.Schema{
+	Schema: &types.Schema{
 		Owner: []byte("user"),
 		Name:  "test_schema",
-		Tables: []*transactions.Table{
+		Tables: []*types.Table{
 			{
 				Name: "users",
-				Columns: []*transactions.Column{
+				Columns: []*types.Column{
 					{
 						Name: "id",
-						Type: "integer",
-						Attributes: []*transactions.Attribute{
+						Type: types.IntType,
+						Attributes: []*types.Attribute{
 							{
 								Type:  "primary_key",
 								Value: "true",
@@ -145,12 +144,12 @@ var demoSchema = &respSchema{
 						},
 					},
 				},
-				ForeignKeys: []*transactions.ForeignKey{
+				ForeignKeys: []*types.ForeignKey{
 					{
 						ChildKeys:   []string{"child_id"},
 						ParentKeys:  []string{"parent_id"},
 						ParentTable: "parent_table",
-						Actions: []*transactions.ForeignKeyAction{
+						Actions: []*types.ForeignKeyAction{
 							{
 								On: "delete",
 								Do: "cascade",
@@ -158,7 +157,7 @@ var demoSchema = &respSchema{
 						},
 					},
 				},
-				Indexes: []*transactions.Index{
+				Indexes: []*types.Index{
 					{
 						Name:    "index_name",
 						Columns: []string{"id", "name"},
@@ -167,23 +166,21 @@ var demoSchema = &respSchema{
 				},
 			},
 		},
-		Actions: []*transactions.Action{
+		Actions: []*types.Action{
 			{
-				Name:        "get_user",
-				Inputs:      []string{"user_id"},
-				Mutability:  transactions.MutabilityUpdate.String(),
-				Auxiliaries: []string{transactions.AuxiliaryTypeMustSign.String()},
-				Public:      true,
-				Statements:  []string{"SELECT * FROM users WHERE id = $user_id"},
+				Name:       "get_user",
+				Parameters: []string{"user_id"},
+				Public:     true,
+				Body:       "SELECT * FROM users WHERE id = $user_id",
 			},
 		},
-		Extensions: []*transactions.Extension{
+		Extensions: []*types.Extension{
 			{
 				Name: "auth",
-				Config: []*transactions.ExtensionConfig{
+				Initialization: []*types.ExtensionConfig{
 					{
-						Argument: "token",
-						Value:    "abc123",
+						Key:   "token",
+						Value: "abc123",
 					},
 				},
 				Alias: "authentication",
@@ -199,94 +196,11 @@ func Example_respSchema_text() {
 	//   users
 	//     Columns:
 	//     id
-	//       Type: integer
+	//       Type: int
 	//       primary_key
 	//         true
 	// Actions:
 	//   get_user (public)
 	//     Inputs: [user_id]
-}
-
-func Example_respSchema_json() {
-	display.Print(demoSchema, nil, "json")
-	// Output:
-	// {
-	//   "result": {
-	//     "owner": "dXNlcg==",
-	//     "name": "test_schema",
-	//     "tables": [
-	//       {
-	//         "name": "users",
-	//         "columns": [
-	//           {
-	//             "name": "id",
-	//             "type": "integer",
-	//             "attributes": [
-	//               {
-	//                 "type": "primary_key",
-	//                 "value": "true"
-	//               }
-	//             ]
-	//           }
-	//         ],
-	//         "indexes": [
-	//           {
-	//             "name": "index_name",
-	//             "columns": [
-	//               "id",
-	//               "name"
-	//             ],
-	//             "type": "btree"
-	//           }
-	//         ],
-	//         "foreign_keys": [
-	//           {
-	//             "child_keys": [
-	//               "child_id"
-	//             ],
-	//             "parent_keys": [
-	//               "parent_id"
-	//             ],
-	//             "parent_table": "parent_table",
-	//             "actions": [
-	//               {
-	//                 "on": "delete",
-	//                 "do": "cascade"
-	//               }
-	//             ]
-	//           }
-	//         ]
-	//       }
-	//     ],
-	//     "actions": [
-	//       {
-	//         "name": "get_user",
-	//         "inputs": [
-	//           "user_id"
-	//         ],
-	//         "mutability": "update",
-	//         "auxiliaries": [
-	//           "mustsign"
-	//         ],
-	//         "public": true,
-	//         "statements": [
-	//           "SELECT * FROM users WHERE id = $user_id"
-	//         ]
-	//       }
-	//     ],
-	//     "extensions": [
-	//       {
-	//         "name": "auth",
-	//         "config": [
-	//           {
-	//             "argument": "token",
-	//             "value": "abc123"
-	//           }
-	//         ],
-	//         "alias": "authentication"
-	//       }
-	//     ]
-	//   },
-	//   "error": ""
-	// }
+	// Procedures:
 }

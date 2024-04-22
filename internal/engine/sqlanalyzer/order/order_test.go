@@ -1,14 +1,13 @@
 package order_test
 
 import (
-	"errors"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/order"
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
-	"github.com/kwilteam/kwil-db/parse/sql/postgres"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	sqlparser "github.com/kwilteam/kwil-db/internal/parse/sql"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/postgres"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -44,7 +43,7 @@ func Test_Order(t *testing.T) {
 		},
 		{
 			name: "select count",
-			stmt: `SELECT COUNT(*) FROM users;`,
+			stmt: `SELECT count(*) FROM users;`,
 			want: `SELECT count(*) FROM "users";`,
 		},
 		{
@@ -79,7 +78,7 @@ func Test_Order(t *testing.T) {
 		},
 		{
 			name: "select with joins and subqueries", // it should not register the subquery as a table
-			stmt: `SELECT p.id, p.title, (SELECT COUNT(*) FROM likes WHERE likes.post_id = p.id) AS total_likes
+			stmt: `SELECT p.id, p.title, (SELECT count(*) FROM likes WHERE likes.post_id = p.id) AS total_likes
 			FROM posts AS p
 			INNER JOIN followers AS f ON p.user_id = f.user_id
 			INNER JOIN users ON users.id = f.user_id
@@ -117,14 +116,14 @@ func Test_Order(t *testing.T) {
 			name: "common table expression",
 			stmt: `WITH
 				user_likes_count AS (
-					SELECT liker_id as user_id, COUNT(*) AS likes_count FROM likes GROUP BY liker_id
+					SELECT liker_id as user_id, count(*) AS likes_count FROM likes GROUP BY liker_id
 				)
 				SELECT u.id, u.name, ulc.likes_count
 				FROM users AS u
 				LEFT JOIN user_likes_count AS ulc ON u.id = ulc.user_id;`,
 			want: `WITH
 				"user_likes_count" AS (
-					SELECT "likes"."liker_id" AS "user_id", count(*) AS "likes_count" FROM "likes" GROUP BY "liker_id" ORDER BY "liker_id"
+					SELECT "liker_id" AS "user_id", count(*) AS "likes_count" FROM "likes" GROUP BY "liker_id" ORDER BY "liker_id"
 				)
 				SELECT "u"."id", "u"."name", "ulc"."likes_count"
 				FROM "users" AS "u"
@@ -133,20 +132,20 @@ func Test_Order(t *testing.T) {
 		},
 		{
 			name: "raw select",
-			stmt: `SELECT $id AS result`,
-			want: `SELECT $id AS "result";`,
+			stmt: `SELECT $id AS res`,
+			want: `SELECT $id AS "res";`,
 		},
 		{
 			name: "joined subquery",
 			stmt: `SELECT u.id, subq.total_likes
 			FROM users AS u
 			INNER JOIN (
-				SELECT post_id, COUNT(*) AS total_likes FROM likes GROUP BY post_id
+				SELECT post_id, count(*) AS total_likes FROM likes GROUP BY post_id
 			) AS subq ON u.id = subq.post_id;`,
 			want: `SELECT "u"."id", "subq"."total_likes"
 			FROM "users" AS "u"
 			INNER JOIN (
-				SELECT "likes"."post_id", count(*) AS "total_likes" FROM "likes" GROUP BY "post_id" ORDER BY "post_id"
+				SELECT "post_id", count(*) AS "total_likes" FROM "likes" GROUP BY "post_id" ORDER BY "post_id"
 			) AS "subq" ON "u"."id" = "subq"."post_id" ORDER BY "subq"."post_id", "subq"."total_likes", "u"."id";`,
 		},
 	}
@@ -159,7 +158,7 @@ func Test_Order(t *testing.T) {
 			walker := order.NewOrderWalker(defaultTables)
 			err = stmt.Walk(walker)
 			if err != nil {
-				require.True(t, errors.Is(err, tt.err))
+				require.ErrorIs(t, err, tt.err)
 				return
 			}
 			require.Equal(t, tt.err, err)
@@ -175,98 +174,98 @@ func Test_Order(t *testing.T) {
 	}
 }
 
-var defaultTables = []*common.Table{
+var defaultTables = []*types.Table{
 	{
 		Name: "users",
-		Columns: []*common.Column{
+		Columns: []*types.Column{
 			{
 				Name: "id",
-				Type: common.INT,
-				Attributes: []*common.Attribute{
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
 					{
-						Type: common.PRIMARY_KEY,
+						Type: types.PRIMARY_KEY,
 					},
 				},
 			},
 			{
 				Name: "name",
-				Type: common.TEXT,
+				Type: types.TextType,
 			},
 		},
-		Indexes:     []*common.Index{},
-		ForeignKeys: []*common.ForeignKey{},
+		Indexes:     []*types.Index{},
+		ForeignKeys: []*types.ForeignKey{},
 	},
 	{
 		Name: "posts",
-		Columns: []*common.Column{
+		Columns: []*types.Column{
 			{
 				Name: "id",
-				Type: common.INT,
-				Attributes: []*common.Attribute{
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
 					{
-						Type: common.PRIMARY_KEY,
+						Type: types.PRIMARY_KEY,
 					},
 				},
 			},
 			{
 				Name: "user_id",
-				Type: common.INT,
-				Attributes: []*common.Attribute{
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
 					{
-						Type: common.NOT_NULL,
+						Type: types.NOT_NULL,
 					},
 				},
 			},
 			{
 				Name: "title",
-				Type: common.TEXT,
+				Type: types.TextType,
 			},
 		},
 	},
 	{
 		Name: "followers",
-		Columns: []*common.Column{
+		Columns: []*types.Column{
 			{
 				Name: "user_id",
-				Type: common.INT,
+				Type: types.IntType,
 			},
 			{
 				Name: "follower_id",
-				Type: common.INT,
+				Type: types.IntType,
 			},
 		},
-		Indexes: []*common.Index{
+		Indexes: []*types.Index{
 			{
 				Name: "primary_key",
 				Columns: []string{
 					"user_id",
 					"follower_id",
 				},
-				Type: common.PRIMARY,
+				Type: types.PRIMARY,
 			},
 		},
 	},
 	{
 		// likes is a join table for liker id and post id
 		Name: "likes",
-		Columns: []*common.Column{
+		Columns: []*types.Column{
 			{
 				Name: "liker_id",
-				Type: common.INT,
+				Type: types.IntType,
 			},
 			{
 				Name: "post_id",
-				Type: common.INT,
+				Type: types.IntType,
 			},
 		},
-		Indexes: []*common.Index{
+		Indexes: []*types.Index{
 			{
 				Name: "primary_key",
 				Columns: []string{
 					"liker_id",
 					"post_id",
 				},
-				Type: common.PRIMARY,
+				Type: types.PRIMARY,
 			},
 		},
 	},

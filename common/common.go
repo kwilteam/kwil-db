@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"strings"
 
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -33,31 +34,53 @@ type App struct {
 }
 
 type Engine interface {
+	SchemaGetter
 	// CreateDataset deploys a new dataset from a schema.
 	// The dataset will be owned by the caller.
-	CreateDataset(ctx context.Context, tx sql.DB, schema *Schema, caller []byte) error
+	CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, txdata *TransactionData) error
 	// DeleteDataset deletes a dataset.
 	// The caller must be the owner of the dataset.
-	DeleteDataset(ctx context.Context, tx sql.DB, dbid string, caller []byte) error
+	DeleteDataset(ctx context.Context, tx sql.DB, dbid string, txdata *TransactionData) error
 	// Procedure executes a procedure in a dataset. It can be given
 	// either a readwrite or readonly database transaction. If it is
 	// given a read-only transaction, it will not be able to execute
 	// any procedures that are not `view`.
 	Procedure(ctx context.Context, tx sql.DB, options *ExecutionData) (*sql.ResultSet, error)
-	// GetSchema returns the schema of a dataset.
-	// It will return an error if the dataset does not exist.
-	GetSchema(ctx context.Context, dbid string) (*Schema, error)
 	// ListDatasets returns a list of all datasets on the network.
-	ListDatasets(ctx context.Context, caller []byte) ([]*types.DatasetIdentifier, error)
+	ListDatasets(caller []byte) ([]*types.DatasetIdentifier, error)
 	// Execute executes a SQL statement on a dataset.
 	// It uses Kwil's SQL dialect.
 	Execute(ctx context.Context, tx sql.DB, dbid, query string, values map[string]any) (*sql.ResultSet, error)
+}
+
+type SchemaGetter interface {
+	// GetSchema returns the schema of a dataset.
+	// It will return an error if the dataset does not exist.
+	GetSchema(dbid string) (*types.Schema, error)
+}
+
+// TransactionData holds contextual data about the transaction that
+// called the procedure.
+type TransactionData struct {
+	// Signer is the address of public key that signed the incoming
+	// transaction.
+	Signer []byte
+
+	// Caller is a string identifier for the signer.
+	// It is derived from the signer's registered authenticator.
+	// It is injected as a variable for usage in the query, under
+	// the variable name "@caller".
+	Caller string
+
+	// TxID is the transaction ID of the incoming transaction.
+	TxID string
 }
 
 // ExecutionOptions is contextual data that is passed to a procedure
 // during call / execution. It is scoped to the lifetime of a single
 // execution.
 type ExecutionData struct {
+	TransactionData
 	// Dataset is the DBID of the dataset that was called.
 	// Even if a procedure in another dataset is called, this will
 	// always be the original dataset.
@@ -71,21 +94,9 @@ type ExecutionData struct {
 	// Args are the arguments that were passed to the procedure.
 	// Currently these are all string or untyped nil values.
 	Args []any
-
-	// Signer is the address of public key that signed the incoming
-	// transaction.
-	Signer []byte
-
-	// Caller is a string identifier for the signer.
-	// It is derived from the signer's registered authenticator.
-	// It is injected as a variable for usage in the query, under
-	// the variable name "@caller".
-	Caller string
 }
 
 func (e *ExecutionData) Clean() error {
-	return runCleans(
-		cleanDBID(&e.Dataset),
-		cleanIdent(&e.Procedure),
-	)
+	e.Procedure = strings.ToLower(e.Procedure)
+	return nil
 }

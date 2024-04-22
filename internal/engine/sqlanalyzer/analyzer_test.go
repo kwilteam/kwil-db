@@ -3,10 +3,10 @@ package sqlanalyzer_test
 import (
 	"testing"
 
-	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/common/testdata"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/testdata"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
-	"github.com/kwilteam/kwil-db/parse/sql/postgres"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/postgres"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,7 +15,7 @@ func Test_Analyze(t *testing.T) {
 		name    string
 		stmt    string
 		want    string
-		tables  []*common.Table
+		tables  []*types.Table
 		wantErr bool
 	}
 
@@ -24,32 +24,32 @@ func Test_Analyze(t *testing.T) {
 			name: "simple select",
 			stmt: "SELECT * FROM users",
 			want: `SELECT * FROM "ds_dbid"."users" ORDER BY "users"."id";`,
-			tables: []*common.Table{
+			tables: []*types.Table{
 				tblUsers,
 			},
 		},
 		{
 			name: "select with joins and subqueries",
 			stmt: `SELECT p.id, p.title
-			FROM posts AS p
-			INNER JOIN followers AS f ON p.user_id = f.user_id
-			INNER JOIN users AS u ON u.id = f.user_id
-			WHERE f.follower_id = (
-				SELECT id FROM users WHERE username = $username
-			)
-			ORDER BY p.post_date DESC NULLS LAST
-			LIMIT 20 OFFSET $offset;`,
+				FROM posts AS p
+				INNER JOIN followers AS f ON p.user_id = f.user_id
+				INNER JOIN users AS u ON u.id = f.user_id
+				WHERE f.follower_id = (
+					SELECT id FROM users WHERE username = $username
+				)
+				ORDER BY p.post_date DESC NULLS LAST
+				LIMIT 20 OFFSET $offset;`,
 			want: `SELECT "p"."id", "p"."title"
-			FROM "ds_dbid"."posts" AS "p"
-			INNER JOIN "ds_dbid"."followers" AS "f" ON "p"."user_id" = "f"."user_id"
-			INNER JOIN "ds_dbid"."users" AS "u" ON "u"."id" = "f"."user_id"
-			WHERE "f"."follower_id" = (
-				SELECT "id" FROM "ds_dbid"."users" WHERE "username" = $1 ORDER BY "users"."id"
-			)
-			ORDER BY "p"."post_date" DESC NULLS LAST,
-			"f"."follower_id" , "f"."user_id" , "p"."id" , "u"."id"
-			LIMIT 20 OFFSET $2;`,
-			tables: []*common.Table{
+				FROM "ds_dbid"."posts" AS "p"
+				INNER JOIN "ds_dbid"."followers" AS "f" ON "p"."user_id" = "f"."user_id"
+				INNER JOIN "ds_dbid"."users" AS "u" ON "u"."id" = "f"."user_id"
+				WHERE "f"."follower_id" = (
+					SELECT "id" FROM "ds_dbid"."users" WHERE "username" = $1 ORDER BY "users"."id"
+				)
+				ORDER BY "p"."post_date" DESC NULLS LAST,
+				"f"."follower_id" , "f"."user_id" , "p"."id" , "u"."id"
+				LIMIT 20 OFFSET $2;`,
+			tables: []*types.Table{
 				tblUsers,
 				tblPosts,
 				tblFollowers,
@@ -58,29 +58,29 @@ func Test_Analyze(t *testing.T) {
 		{
 			name: "table joined on self",
 			stmt: `SELECT u1.id, u1.name, u2.name
-			FROM users AS u1
-			INNER JOIN users AS u2 ON u1.id = u2.id`,
+				FROM users AS u1
+				INNER JOIN users AS u2 ON u1.id = u2.id`,
 			want: `SELECT "u1"."id", "u1"."name", "u2"."name"
-			FROM "ds_dbid"."users" AS "u1"
-			INNER JOIN "ds_dbid"."users" AS "u2" ON "u1"."id" = "u2"."id"
-			ORDER BY "u1"."id" , "u2"."id";`,
-			tables: []*common.Table{
+				FROM "ds_dbid"."users" AS "u1"
+				INNER JOIN "ds_dbid"."users" AS "u2" ON "u1"."id" = "u2"."id"
+				ORDER BY "u1"."id" , "u2"."id";`,
+			tables: []*types.Table{
 				tblUsers,
 			},
 		},
 		{
 			name: "common table expression",
 			stmt: `WITH
-			users_aged_20 AS (
-				SELECT id, username FROM users WHERE age = 20
-			)
-			SELECT * FROM users_aged_20`,
+				users_aged_20 AS (
+					SELECT id, username FROM users WHERE age = 20
+				)
+				SELECT * FROM users_aged_20`,
 			want: `WITH
-			"users_aged_20" AS (
-				SELECT "users"."id", "users"."username" FROM "ds_dbid"."users" WHERE "age" = 20 ORDER BY "users"."id"
-			)
-			SELECT * FROM "users_aged_20" ORDER BY "users_aged_20"."id" , "users_aged_20"."username";`,
-			tables: []*common.Table{
+				"users_aged_20" AS (
+					SELECT "id", "username" FROM "ds_dbid"."users" WHERE "age" = 20 ORDER BY "users"."id"
+				)
+				SELECT * FROM "users_aged_20" ORDER BY "users_aged_20"."id" , "users_aged_20"."username";`,
+			tables: []*types.Table{
 				tblUsers,
 			},
 		},
@@ -88,7 +88,7 @@ func Test_Analyze(t *testing.T) {
 			name: "basic insert",
 			stmt: `INSERT INTO users (id, username, age) VALUES (1, 'user1', 20)`,
 			want: `INSERT INTO "ds_dbid"."users" ("id", "username", "age") VALUES (1, 'user1', 20);`,
-			tables: []*common.Table{
+			tables: []*types.Table{
 				tblUsers,
 			},
 		},
@@ -96,7 +96,7 @@ func Test_Analyze(t *testing.T) {
 			name: "select with count",
 			stmt: `SELECT COUNT(*) FROM users`,
 			want: `SELECT count(*) FROM "ds_dbid"."users";`,
-			tables: []*common.Table{
+			tables: []*types.Table{
 				tblUsers,
 			},
 		},
@@ -104,7 +104,7 @@ func Test_Analyze(t *testing.T) {
 			name: "select with aggregate and group by",
 			stmt: `SELECT sum(age) FROM users GROUP BY username;`,
 			want: `SELECT sum("age") FROM "ds_dbid"."users" GROUP BY "username" ORDER BY "username";`,
-			tables: []*common.Table{
+			tables: []*types.Table{
 				tblUsers,
 			},
 		},
@@ -112,7 +112,9 @@ func Test_Analyze(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := sqlanalyzer.ApplyRules(tt.stmt, sqlanalyzer.AllRules, tt.tables, "ds_dbid")
+			got, err := sqlanalyzer.ApplyRules(tt.stmt, sqlanalyzer.AllRules, &types.Schema{
+				Tables: tt.tables,
+			}, "ds_dbid")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ApplyRules() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -129,63 +131,63 @@ func Test_Analyze(t *testing.T) {
 var (
 	tblUsers = testdata.TableUsers
 
-	tblPosts = &common.Table{
+	tblPosts = &types.Table{
 		Name: "posts",
-		Columns: []*common.Column{
+		Columns: []*types.Column{
 			{
 				Name: "id",
-				Type: common.INT,
-				Attributes: []*common.Attribute{
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
 					{
-						Type: common.PRIMARY_KEY,
+						Type: types.PRIMARY_KEY,
 					},
 				},
 			},
 			{
 				Name: "user_id",
-				Type: common.INT,
-				Attributes: []*common.Attribute{
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
 					{
-						Type: common.NOT_NULL,
+						Type: types.NOT_NULL,
 					},
 				},
 			},
 			{
 				Name: "title",
-				Type: common.TEXT,
+				Type: types.TextType,
 			},
 			{
 				Name: "post_date",
-				Type: common.INT,
-				Attributes: []*common.Attribute{
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
 					{
-						Type: common.NOT_NULL,
+						Type: types.NOT_NULL,
 					},
 				},
 			},
 		},
 	}
 
-	tblFollowers = &common.Table{
+	tblFollowers = &types.Table{
 		Name: "followers",
-		Columns: []*common.Column{
+		Columns: []*types.Column{
 			{
 				Name: "user_id",
-				Type: common.INT,
+				Type: types.IntType,
 			},
 			{
 				Name: "follower_id",
-				Type: common.INT,
+				Type: types.IntType,
 			},
 		},
-		Indexes: []*common.Index{
+		Indexes: []*types.Index{
 			{
 				Name: "primary_key",
 				Columns: []string{
 					"user_id",
 					"follower_id",
 				},
-				Type: common.PRIMARY,
+				Type: types.PRIMARY,
 			},
 		},
 	}

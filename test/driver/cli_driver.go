@@ -19,7 +19,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
 	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
 
@@ -177,7 +176,7 @@ func (d *KwilCliDriver) DatabaseExists(_ context.Context, dbid string) error {
 	return nil
 }
 
-func (d *KwilCliDriver) DeployDatabase(_ context.Context, db *transactions.Schema) (txHash []byte, err error) {
+func (d *KwilCliDriver) DeployDatabase(_ context.Context, db *types.Schema) (txHash []byte, err error) {
 	schemaFile := path.Join(os.TempDir(), fmt.Sprintf("schema-%s.json", time.Now().Format("20060102150405")))
 
 	dbByte, err := json.MarshalIndent(db, "", "  ")
@@ -251,7 +250,7 @@ func (d *KwilCliDriver) DropDatabase(_ context.Context, dbName string) (txHash [
 	return txHash, nil
 }
 
-func (d *KwilCliDriver) getSchema(dbid string) (*transactions.Schema, error) {
+func (d *KwilCliDriver) getSchema(dbid string) (*types.Schema, error) {
 	cmd := d.newKwilCliCmd("database", "read-schema", "--dbid", dbid)
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
@@ -273,27 +272,50 @@ func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, a
 		return nil, err
 	}
 
-	var action *transactions.Action
-	for _, a := range schema.Actions {
-		if a.Name == actionName {
-			action = a
-			break
-		}
+	params, err := getParamList(schema, actionName)
+	if err != nil {
+		return nil, err
 	}
 
-	if len(action.Inputs) != len(actionInputs) {
-		return nil, fmt.Errorf("invalid number of inputs, expected %d, got %d", len(action.Inputs), len(actionInputs))
+	if len(params) != len(actionInputs) {
+		return nil, fmt.Errorf("invalid number of inputs, expected %d, got %d", len(params), len(actionInputs))
 	}
 
 	args := []string{}
-	for i, input := range action.Inputs {
+	for i, input := range params {
 		input = input[1:] // remove the leading $
 		args = append(args, fmt.Sprintf("%s:%v", input, actionInputs[i]))
 	}
 	return args, nil
 }
 
-func (d *KwilCliDriver) ExecuteAction(_ context.Context, dbid string, action string, inputs ...[]any) ([]byte, error) {
+// getParamList gets the list of parameters needed by either an action or procedure
+// it will return an error if not found.
+func getParamList(schema *types.Schema, actionOrProcedure string) ([]string, error) {
+	for _, a := range schema.Actions {
+		if strings.EqualFold(a.Name, actionOrProcedure) {
+			return a.Parameters, nil
+		}
+	}
+
+	for _, p := range schema.Procedures {
+		if strings.EqualFold(p.Name, actionOrProcedure) {
+			params := []string{}
+			for _, param := range p.Parameters {
+				params = append(params, param.Name)
+			}
+			return params, nil
+		}
+	}
+
+	return nil, fmt.Errorf("action/procedure not found: %s", actionOrProcedure)
+}
+
+func (d *KwilCliDriver) Execute(_ context.Context, dbid string, action string, inputs ...[]any) ([]byte, error) {
+	if len(inputs) > 1 {
+		return nil, fmt.Errorf("kwil-cli does not support batched inputs")
+	}
+
 	// NOTE: kwil-cli does not support batched inputs
 	actionInputs, err := d.prepareCliActionParams(dbid, action, inputs[0])
 	if err != nil {
@@ -511,13 +533,13 @@ func parseRespTxQuery(data any) (*respTxQuery, error) {
 }
 
 // parseRespGetSchema parses the get schema response(json) from the cli response
-func parseRespGetSchema(data any) (*transactions.Schema, error) {
+func parseRespGetSchema(data any) (*types.Schema, error) {
 	bts, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal get schema resp: %w", err)
 	}
 
-	var resp transactions.Schema
+	var resp types.Schema
 	err = json.Unmarshal(bts, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal get sceham: %w", err)

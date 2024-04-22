@@ -4,8 +4,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/rlp"
-
-	"github.com/kwilteam/kwil-db/core/types"
 )
 
 type SerializedData = []byte
@@ -57,11 +55,11 @@ func EncodeSlice[T any](kvs []T) ([]byte, error) {
 	for i, kv := range kvs {
 		marshaller[i] = &serialBinaryMarshaller[T]{kv}
 	}
-	return types.SerializeSlice[*serialBinaryMarshaller[T]](marshaller)
+	return serializeSlice[*serialBinaryMarshaller[T]](marshaller)
 }
 
 func DecodeSlice[T any](bts []byte) ([]*T, error) {
-	marshaller, err := types.DeserializeSlice[*serialBinaryMarshaller[T]](bts, func() *serialBinaryMarshaller[T] {
+	marshaller, err := deserializeSlice[*serialBinaryMarshaller[T]](bts, func() *serialBinaryMarshaller[T] {
 		return &serialBinaryMarshaller[T]{}
 	})
 	if err != nil {

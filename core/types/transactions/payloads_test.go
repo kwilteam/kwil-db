@@ -30,7 +30,9 @@ func Test_Types(t *testing.T) {
 						Columns: []*transactions.Column{
 							{
 								Name: "id",
-								Type: "integer",
+								Type: &transactions.DataType{
+									Name: "int",
+								},
 								Attributes: []*transactions.Attribute{
 									{
 										Type:  "primary_key",
@@ -64,21 +66,20 @@ func Test_Types(t *testing.T) {
 				Actions: []*transactions.Action{
 					{
 						Name:        "get_user",
-						Inputs:      []string{"user_id"},
-						Mutability:  transactions.MutabilityUpdate.String(),
-						Auxiliaries: []string{transactions.AuxiliaryTypeMustSign.String()},
-						Public:      true,
-						Statements:  []string{"SELECT * FROM users WHERE id = $user_id"},
 						Annotations: []string{"sql(engine=sqlite3)"},
+						Parameters:  []string{"user_id"},
+						Public:      true,
+						Modifiers:   []string{"view"},
+						Body:        "SELECT * FROM users WHERE id = $user_id",
 					},
 				},
 				Extensions: []*transactions.Extension{
 					{
 						Name: "auth",
-						Config: []*transactions.ExtensionConfig{
+						Initialization: []*transactions.ExtensionConfig{
 							{
-								Argument: "token",
-								Value:    "abc123",
+								Key:   "token",
+								Value: "abc123",
 							},
 						},
 						Alias: "authentication",
@@ -194,7 +195,7 @@ func Test_Types(t *testing.T) {
 		{
 			name: "validator_vote_bodies",
 			obj: &transactions.ValidatorVoteBodies{
-				Events: []*types.VotableEvent{
+				Events: []*transactions.VotableEvent{
 					{
 						Type: "asdfadsf",
 						Body: []byte("asdfadsf"),

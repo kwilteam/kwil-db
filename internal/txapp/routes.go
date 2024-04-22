@@ -3,6 +3,7 @@ package txapp
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -54,6 +55,9 @@ type TxContext struct {
 	// ConsensusParams holds network level parameters that can be evolved
 	// over the lifetime of a network.
 	ConsensusParams ConsensusParams
+	// TxID is the ID of the current transaction.
+	// It is defined by CometBFT.
+	TxID []byte
 }
 
 // ConsensusParams holds network level parameters that may evolve over time.
@@ -132,7 +136,12 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	schema, err := convertSchemaToEngine(schemaPayload)
+	schema, err := schemaPayload.ToTypes()
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
+	identifier, err := ident.Identifier(tx.Signature.Type, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -143,7 +152,11 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
-	err = router.Engine.CreateDataset(ctx.Ctx, tx2, schema, tx.Sender)
+	err = router.Engine.CreateDataset(ctx.Ctx, tx2, schema, &common.TransactionData{
+		Signer: tx.Sender,
+		Caller: identifier,
+		TxID:   hex.EncodeToString(ctx.TxID),
+	})
 	if err != nil {
 		return txRes(spend, codeForEngineError(err), err)
 	}
@@ -186,13 +199,22 @@ func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transaction
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
+	identifier, err := ident.Identifier(tx.Signature.Type, tx.Sender)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+
 	tx2, err := dbTx.BeginTx(ctx.Ctx)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 	defer tx2.Rollback(ctx.Ctx)
 
-	err = router.Engine.DeleteDataset(ctx.Ctx, tx2, drop.DBID, tx.Sender)
+	err = router.Engine.DeleteDataset(ctx.Ctx, tx2, drop.DBID, &common.TransactionData{
+		Signer: tx.Sender,
+		Caller: identifier,
+		TxID:   hex.EncodeToString(ctx.TxID),
+	})
 	if err != nil {
 		return txRes(spend, codeForEngineError(err), err)
 	}
@@ -282,8 +304,11 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 			Dataset:   action.DBID,
 			Procedure: action.Action,
 			Args:      args[i],
-			Signer:    tx.Sender,
-			Caller:    identifier,
+			TransactionData: common.TransactionData{
+				Signer: tx.Sender,
+				Caller: identifier,
+				TxID:   hex.EncodeToString(ctx.TxID),
+			},
 		})
 		if err != nil {
 			return txRes(spend, codeForEngineError(err), err)
@@ -801,27 +826,32 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	// 1. VoteBody should only include the events for which the resolutions are not yet created. Maybe filter out the events for which the resolutions are already created and ignore them.
 	// 2. If the node is the proposer, delete the event from the event store
 	for _, event := range vote.Events {
+		ev := &types.VotableEvent{
+			Type: event.Type,
+			Body: event.Body,
+		}
+
 		resCfg, err := resolutions.GetResolution(event.Type)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
 		expiryHeight := ctx.BlockHeight + resCfg.ExpirationPeriod
-		err = createResolution(ctx.Ctx, tx2, event, expiryHeight, tx.Sender)
+		err = createResolution(ctx.Ctx, tx2, ev, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
 		// since the vote body proposer is implicitly voting for the event,
 		// we need to approve the newly created vote body here
-		err = approveResolution(ctx.Ctx, tx2, event.ID(), tx.Sender)
+		err = approveResolution(ctx.Ctx, tx2, ev.ID(), tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
 		// If the local validator is the proposer, then we should delete the event from the event store.
 		if fromLocalValidator {
-			err = deleteEvent(ctx.Ctx, tx2, event.ID())
+			err = deleteEvent(ctx.Ctx, tx2, ev.ID())
 			if err != nil {
 				return txRes(spend, transactions.CodeUnknownError, err)
 			}

@@ -3,34 +3,9 @@ package ddl
 import (
 	"fmt"
 
-	types "github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/conv"
 )
-
-func columnTypeToSQLType(columnType types.DataType) (string, error) {
-	err := columnType.Clean()
-	if err != nil {
-		return "", err
-	}
-
-	var sqlType string
-	switch columnType {
-	case types.TEXT:
-		sqlType = "TEXT"
-	case types.INT:
-		sqlType = "INT8"
-	case types.NULL:
-		sqlType = "NULL"
-	case types.BLOB:
-		sqlType = "BYTEA"
-	case types.BOOL:
-		sqlType = "BOOLEAN"
-	default:
-		return "", fmt.Errorf("unknown column type: %s", columnType)
-	}
-
-	return sqlType, nil
-}
 
 func attributeToSQLString(colName string, attr *types.Attribute) (string, error) {
 	err := attr.Clean()

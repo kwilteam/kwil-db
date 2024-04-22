@@ -4,15 +4,16 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/attributes"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine"
+	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/typing"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/utils"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 
-func NewOrderWalker(tables []*common.Table) tree.AstListener {
+func NewOrderWalker(tables []*types.Table) tree.AstListener {
 	// copy tables, since we will be modifying the tables slice to register CTEs
-	tbls := make([]*common.Table, len(tables))
+	tbls := make([]*types.Table, len(tables))
 	copy(tbls, tables)
 
 	return &orderingWalker{
@@ -24,7 +25,7 @@ func NewOrderWalker(tables []*common.Table) tree.AstListener {
 type orderingWalker struct {
 	tree.BaseListener
 
-	tables []*common.Table // all tables in the schema
+	tables []*types.Table // all tables in the schema
 }
 
 var _ tree.AstListener = &orderingWalker{}
@@ -35,19 +36,59 @@ func (o *orderingWalker) EnterCTE(node *tree.CTE) error {
 		return nil
 	}
 
-	cteAttributes, err := attributes.GetSelectCoreRelationAttributes(node.Select.SimpleSelects[0], o.tables)
+	res, err := typing.AnalyzeTypes(node.Select, o.tables, &typing.AnalyzeOptions{
+		ArbitraryBinds: true,
+	})
 	if err != nil {
 		return err
 	}
 
-	cteTable, err := attributes.TableFromAttributes(node.Table, cteAttributes, true)
+	tbl, err := tableFromRelation(res, node.Table)
 	if err != nil {
 		return err
 	}
 
-	o.tables = append(o.tables, cteTable)
+	// make sure this does not have a conflicting name with another table
+	_, err = findTable(o.tables, tbl.Name)
+	if err == nil {
+		return fmt.Errorf(`table or subquery with name or alias "%s" already exists`, tbl.Name)
+	}
+
+	o.tables = append(o.tables, tbl)
 
 	return nil
+}
+
+// tableFromRelation will return a table from a relation.
+// It will make all columns primary keys.
+func tableFromRelation(rel *engine.Relation, name string) (*types.Table, error) {
+	tbl := &types.Table{
+		Name: name,
+	}
+
+	cols := make([]string, 0)
+	err := rel.Loop(func(s string, a *engine.Attribute) error {
+		tbl.Columns = append(tbl.Columns, &types.Column{
+			Name: s,
+			Type: a.Type,
+		})
+
+		cols = append(cols, s)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	tbl.Indexes = []*types.Index{
+		{
+			Name:    "_auto_primary_",
+			Columns: cols,
+			Type:    types.PRIMARY,
+		},
+	}
+
+	return tbl, nil
 }
 
 // Register RelationSubquerys as tables, so that we can order them.
@@ -59,23 +100,27 @@ func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) erro
 		return fmt.Errorf("subquery select has no select cores")
 	}
 
-	relationAttributes, err := attributes.GetSelectCoreRelationAttributes(node.Select.SimpleSelects[0], o.tables)
+	name := node.Alias // can be ""
+
+	res, err := typing.AnalyzeTypes(node.Select, o.tables, &typing.AnalyzeOptions{
+		ArbitraryBinds: true,
+	})
 	if err != nil {
 		return err
 	}
 
-	table, err := attributes.TableFromAttributes(node.Alias, relationAttributes, true)
+	tbl, err := tableFromRelation(res, name)
 	if err != nil {
 		return err
 	}
 
 	// make sure this does not have a conflicting name with another table
-	_, err = findTable(o.tables, table.Name)
+	_, err = findTable(o.tables, tbl.Name)
 	if err == nil {
-		return fmt.Errorf(`table or subquery with name or alias "%s" already exists`, table.Name)
+		return fmt.Errorf(`table or subquery with name or alias "%s" already exists`, tbl.Name)
 	}
 
-	o.tables = append(o.tables, table)
+	o.tables = append(o.tables, tbl)
 
 	return nil
 }
@@ -114,7 +159,7 @@ func (o *orderingWalker) ExitSelectCore(node *tree.SelectCore) error {
 var ErrDistinctWithGroupBy = fmt.Errorf("select distinct with group by not supported")
 
 // orderSimpleStatement will return the ordering required for a simple statement.
-func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*common.Table) ([]*tree.OrderingTerm, error) {
+func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*types.Table) ([]*tree.OrderingTerm, error) {
 	// it is possible to not have any tables in a select
 	// if so, no ordering is required
 	if stmt.From == nil {
@@ -164,7 +209,7 @@ func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*common.Table) ([]*t
 		return nil, fmt.Errorf("error getting used tables: %w", err)
 	}
 
-	usedTblsFull := make([]*common.Table, len(usedTables))
+	usedTblsFull := make([]*types.Table, len(usedTables))
 	for i, tbl := range usedTables {
 		newTable, err := findTable(tables, tbl.Name)
 		if err != nil {
@@ -246,9 +291,15 @@ func containsAggregateFunc(ret tree.ResultColumn) (bool, error) {
 	depth := 0 // depth tracks if we are in a subquery or not
 
 	err := ret.Walk(&tree.ImplementedListener{
-		FuncEnterAggregateFunc: func(p0 *tree.AggregateFunc) error {
+		FuncEnterExpressionFunction: func(p0 *tree.ExpressionFunction) error {
 			if depth == 0 {
-				containsAggregateFunc = true
+				def, ok := engine.Functions[p0.Function]
+				if !ok {
+					// can be a procedure
+					return nil
+				}
+
+				containsAggregateFunc = def.IsAggregate
 			}
 			return nil
 		},
@@ -273,7 +324,7 @@ var ErrCompoundStatementDifferentNumberOfColumns = fmt.Errorf("select cores have
 // if there is a group by clause in any of the select cores, we will return an error.
 // using a group by with a compound statement is not yet supported because idk how
 // to make it deterministic with postgres's ordering, and it is not a common use case.
-func orderCompoundStatement(stmt []*tree.SimpleSelect, tables []*common.Table) ([]*tree.OrderingTerm, error) {
+func orderCompoundStatement(stmt []*tree.SimpleSelect, tables []*types.Table) ([]*tree.OrderingTerm, error) {
 	if len(stmt) == 0 {
 		return nil, fmt.Errorf("no select cores in compound statement")
 	}
@@ -331,7 +382,7 @@ func containsGroupBy(stmt *tree.SimpleSelect) (bool, error) {
 
 // getReturnedColumnOrderingTerms gets the ordering terms for the returned columns.
 // it is used to order result columns for compound select statements or distinct statements.
-func getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*common.Table) ([]*tree.OrderingTerm, error) {
+func getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*types.Table) ([]*tree.OrderingTerm, error) {
 	terms := []*tree.OrderingTerm{}
 
 	for _, col := range resultCols {
@@ -368,7 +419,7 @@ func getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*co
 
 // getTableOrderTerms returns the ordering terms for a table.
 // It is used to order result columns for compound select statements or distinct statements.
-func getTableOrderTerms(tbl *common.Table) []*tree.OrderingTerm {
+func getTableOrderTerms(tbl *types.Table) []*tree.OrderingTerm {
 	terms := []*tree.OrderingTerm{}
 
 	columns := tbl.Columns
@@ -389,7 +440,7 @@ func getTableOrderTerms(tbl *common.Table) []*tree.OrderingTerm {
 }
 
 // findTable will return the table with the given name, or an error if it does not exist.
-func findTable(tables []*common.Table, name string) (*common.Table, error) {
+func findTable(tables []*types.Table, name string) (*types.Table, error) {
 	for _, tbl := range tables {
 		if tbl.Name == name {
 			return tbl, nil

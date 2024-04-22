@@ -60,7 +60,7 @@ jobs:
 
       - name: Init workspace
         run: |
-          go work init && go work use . ./parse ./test ./core
+          go work init && go work use . ./test ./core
 
       - name: Generate go vendor
         run: | # should build the vendor using `go work vendor`?

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/common/testdata"
+	"github.com/kwilteam/kwil-db/core/types/testdata"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,10 +38,13 @@ func Test_StoringSchemas(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx) // we always want to rollback, never commit
 
+	err = InitializeEngine(ctx, tx)
+	require.NoError(t, err)
+
 	err = createSchemasTableIfNotExists(ctx, tx)
 	require.NoError(t, err)
 
-	err = createSchema(ctx, tx, testdata.TestSchema)
+	err = createSchema(ctx, tx, testdata.TestSchema, "txid")
 	require.NoError(t, err)
 
 	defer func() {

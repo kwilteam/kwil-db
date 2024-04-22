@@ -9,6 +9,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 // Initializer initializes a new instance of a precompile.
@@ -37,7 +38,7 @@ type Instance interface {
 // transaction.
 type DeploymentContext struct {
 	Ctx    context.Context
-	Schema *common.Schema
+	Schema *types.Schema
 }
 
 // ProcedureContext is the context for a procedure execution.
@@ -56,6 +57,11 @@ type ProcedureContext struct {
 	// if calling a precompile instance instead of a procedure, it
 	// will be the last used DBID.
 	DBID string
+
+	// TxID is the hash of the transaction that the scope
+	// was called in.
+	TxID string
+
 	// Procedure is the Procedure identifier for the current scope.
 	// if calling a precompile instance instead of a Procedure, it
 	// will be the last used Procedure.
@@ -66,6 +72,8 @@ type ProcedureContext struct {
 	// StackDepth tracks the current depth of the procedure call stack. It is
 	// incremented each time a procedure calls another procedure.
 	StackDepth int
+	// UsedGas is the amount of gas used in the current execution.
+	UsedGas uint64
 }
 
 // SetValue sets a value in the scope.
@@ -94,6 +102,7 @@ func (p *ProcedureContext) Values() map[string]any {
 
 	// set environment variables
 	values["@caller"] = p.Caller
+	values["@txid"] = p.TxID
 
 	return values
 }
@@ -108,8 +117,10 @@ func (p *ProcedureContext) NewScope() *ProcedureContext {
 		Caller:     p.Caller,
 		values:     make(map[string]any),
 		DBID:       p.DBID,
+		TxID:       p.TxID,
 		Procedure:  p.Procedure,
 		StackDepth: p.StackDepth,
+		UsedGas:    p.UsedGas,
 	}
 }
 

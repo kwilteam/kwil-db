@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 )
 
@@ -11,13 +12,17 @@ import (
 // It implements the precompiles.Instance interface.
 type baseDataset struct {
 	// schema is the schema of the dataset.
-	schema *common.Schema
+	schema *types.Schema
 
-	// namespaces are the namespaces available for use in the dataset.
-	namespaces map[string]precompiles.Instance
+	// extensions are the extensions available for use in the dataset.
+	extensions map[string]precompiles.Instance
+
+	// actions are the actions that are available for use in the dataset.
+	actions map[string]*preparedAction
 
 	// procedures are the procedures that are available for use in the dataset.
-	procedures map[string]*procedure
+	// It only includes public procedures.
+	procedures map[string]*preparedProcedure
 
 	// global is the global context.
 	global *GlobalContext
@@ -29,12 +34,35 @@ var _ precompiles.Instance = (*baseDataset)(nil)
 // If the procedure is not public, it will return an error.
 // It satisfies precompiles.Instance.
 func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App, method string, inputs []any) ([]any, error) {
+	// check if it is a procedure
 	proc, ok := d.procedures[method]
+	if ok {
+		inputs, err := proc.coerceInputs(inputs)
+		if err != nil {
+			return nil, err
+		}
+
+		res, err := app.DB.Execute(caller.Ctx, proc.callString(d.schema.DBID()), inputs...)
+		if err != nil {
+			return nil, err
+		}
+
+		err = proc.shapeReturn(res)
+		if err != nil {
+			return nil, err
+		}
+
+		caller.Result = res
+		return nil, nil
+	}
+
+	// otherwise, it is an action
+	act, ok := d.actions[method]
 	if !ok {
 		return nil, fmt.Errorf(`procedure "%s" not found`, method)
 	}
 
-	if !proc.public {
+	if !act.public {
 		return nil, fmt.Errorf(`procedure "%s" is not public`, method)
 	}
 
@@ -42,7 +70,7 @@ func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App
 	newCtx.DBID = d.schema.DBID()
 	newCtx.Procedure = method
 
-	err := proc.call(newCtx, d.global, app.DB, inputs)
+	err := act.call(newCtx, d.global, app.DB, inputs)
 	if err != nil {
 		return nil, err
 	}

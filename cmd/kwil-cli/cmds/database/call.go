@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 
 	"github.com/spf13/cobra"
@@ -68,12 +69,7 @@ func callCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error getting inputs: %w", err))
 				}
 
-				actionStructure, err := getAction(ctx, clnt, dbid, lowerName)
-				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error getting action: %w", err))
-				}
-
-				tuples, err := createActionInputs(inputs, actionStructure.Inputs)
+				tuples, err := buildExecutionInputs(ctx, clnt, dbid, lowerName, inputs)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
 				}
@@ -82,7 +78,7 @@ func callCmd() *cobra.Command {
 					tuples = append(tuples, []any{})
 				}
 
-				data, err := clnt.CallAction(ctx, dbid, lowerName, tuples[0])
+				data, err := clnt.Call(ctx, dbid, lowerName, tuples[0])
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error calling action: %w", err))
 				}
@@ -104,4 +100,55 @@ func callCmd() *cobra.Command {
 
 	cmd.MarkFlagRequired(actionNameFlag)
 	return cmd
+}
+
+// buildProcedureInputs will build the inputs for either
+// an action or procedure executon/call.
+func buildExecutionInputs(ctx context.Context, client clientType.Client, dbid string, proc string, inputs []map[string]any) ([][]any, error) {
+	schema, err := client.GetSchema(ctx, dbid)
+	if err != nil {
+		return nil, fmt.Errorf("error getting schema: %w", err)
+	}
+
+	for _, a := range schema.Actions {
+		if strings.EqualFold(a.Name, proc) {
+			return buildActionInputs(a, inputs), nil
+		}
+	}
+
+	for _, p := range schema.Procedures {
+		if strings.EqualFold(p.Name, proc) {
+			return buildProcedureInputs(p, inputs), nil
+		}
+	}
+
+	return nil, fmt.Errorf("procedure/action not found")
+}
+
+func buildActionInputs(a *types.Action, inputs []map[string]any) [][]any {
+	tuples := [][]any{}
+	for _, input := range inputs {
+		newTuple := []any{}
+		for _, inputField := range a.Parameters {
+			newTuple = append(newTuple, input[inputField])
+		}
+
+		tuples = append(tuples, newTuple)
+	}
+
+	return tuples
+}
+
+func buildProcedureInputs(p *types.Procedure, inputs []map[string]any) [][]any {
+	tuples := [][]any{}
+	for _, input := range inputs {
+		newTuple := []any{}
+		for _, inputField := range p.Parameters {
+			newTuple = append(newTuple, input[inputField.Name])
+		}
+
+		tuples = append(tuples, newTuple)
+	}
+
+	return tuples
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	httpTx "github.com/kwilteam/kwil-db/core/rpc/http/tx"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
@@ -122,28 +123,34 @@ func convertHttpTxResult(result *httpTx.TxTransactionResult) (*transactions.Tran
 	}, nil
 }
 
-// convertHttpSchema converts a httpTx.TxSchema to a transactions.Schema
-func convertHttpSchema(schema *httpTx.TxSchema) (*transactions.Schema, error) {
+func convertToSchema(schema *httpTx.TxSchema) (*types.Schema, error) {
 	decodedOwner, err := base64.StdEncoding.DecodeString(schema.Owner)
 	if err != nil {
 		return nil, err
 	}
 
-	return &transactions.Schema{
+	s := &types.Schema{
 		Owner:      decodedOwner,
 		Name:       schema.Name,
 		Tables:     convertHttpTables(schema.Tables),
 		Actions:    convertHttpActions(schema.Actions),
 		Extensions: convertHttpExtensions(schema.Extensions),
-	}, nil
+		Procedures: convertHttpProcedures(schema.Procedures),
+	}
+
+	err = s.Clean()
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
 }
 
-// convertHttpTables converts []httpTx.TxTable to a []transactions.Table
-func convertHttpTables(tables []httpTx.TxTable) []*transactions.Table {
-	tbls := make([]*transactions.Table, len(tables))
+func convertHttpTables(tables []httpTx.TxTable) []*types.Table {
+	tbls := make([]*types.Table, len(tables))
 
 	for i, table := range tables {
-		tbls[i] = &transactions.Table{
+		tbls[i] = &types.Table{
 			Name:        table.Name,
 			Columns:     convertHttpColumns(table.Columns),
 			Indexes:     convertHttpIndexes(table.Indexes),
@@ -154,14 +161,13 @@ func convertHttpTables(tables []httpTx.TxTable) []*transactions.Table {
 	return tbls
 }
 
-// convertHttpColumns converts []httpTx.TxColumn to []transactions.Column
-func convertHttpColumns(columns []httpTx.TxColumn) []*transactions.Column {
-	cols := make([]*transactions.Column, len(columns))
+func convertHttpColumns(columns []httpTx.TxColumn) []*types.Column {
+	cols := make([]*types.Column, len(columns))
 
 	for i, column := range columns {
-		cols[i] = &transactions.Column{
+		cols[i] = &types.Column{
 			Name:       column.Name,
-			Type:       column.Type_,
+			Type:       convertDataType(column.Type_),
 			Attributes: convertHttpAttributes(column.Attributes),
 		}
 	}
@@ -169,44 +175,48 @@ func convertHttpColumns(columns []httpTx.TxColumn) []*transactions.Column {
 	return cols
 }
 
-// convertHttpAttributes converts []httpTx.TxAttribute to []transactions.Attribute
-func convertHttpAttributes(attributes []httpTx.TxAttribute) []*transactions.Attribute {
-	attrs := make([]*transactions.Attribute, len(attributes))
+func convertDataType(d *httpTx.TxDataType) *types.DataType {
+	return &types.DataType{
+		Name:    d.Name,
+		IsArray: d.IsArray,
+	}
+}
+
+func convertHttpAttributes(attributes []httpTx.TxAttribute) []*types.Attribute {
+	attrs := make([]*types.Attribute, len(attributes))
 	for i, attribute := range attributes {
-		attrs[i] = &transactions.Attribute{
-			Type:  attribute.Type_,
+		attrs[i] = &types.Attribute{
+			Type:  types.AttributeType(attribute.Type_),
 			Value: attribute.Value,
 		}
 	}
 	return attrs
 }
 
-// convertHttpIndexes converts []httpTx.TxIndex to []transactions.Index
-func convertHttpIndexes(indexes []httpTx.TxIndex) []*transactions.Index {
-	idxs := make([]*transactions.Index, len(indexes))
+func convertHttpIndexes(indexes []httpTx.TxIndex) []*types.Index {
+	idxs := make([]*types.Index, len(indexes))
 	for i, index := range indexes {
-		idxs[i] = &transactions.Index{
+		idxs[i] = &types.Index{
 			Name:    index.Name,
 			Columns: index.Columns,
-			Type:    index.Type_,
+			Type:    types.IndexType(index.Type_),
 		}
 	}
 	return idxs
 }
 
-// convertHttpForeignKeys converts []httpTx.TxForeignKey to []transactions.ForeignKey
-func convertHttpForeignKeys(foreignKeys []httpTx.TxForeignKey) []*transactions.ForeignKey {
-	fks := make([]*transactions.ForeignKey, len(foreignKeys))
+func convertHttpForeignKeys(foreignKeys []httpTx.TxForeignKey) []*types.ForeignKey {
+	fks := make([]*types.ForeignKey, len(foreignKeys))
 	for i, fk := range foreignKeys {
-		actions := make([]*transactions.ForeignKeyAction, len(fk.Actions))
+		actions := make([]*types.ForeignKeyAction, len(fk.Actions))
 		for j, action := range fk.Actions {
-			actions[j] = &transactions.ForeignKeyAction{
-				On: action.On,
-				Do: action.Do,
+			actions[j] = &types.ForeignKeyAction{
+				On: types.ForeignKeyActionOn(action.On),
+				Do: types.ForeignKeyActionDo(action.Do),
 			}
 		}
 
-		fks[i] = &transactions.ForeignKey{
+		fks[i] = &types.ForeignKey{
 			ChildKeys:   fk.ChildKeys,
 			ParentKeys:  fk.ParentKeys,
 			ParentTable: fk.ParentTable,
@@ -216,40 +226,88 @@ func convertHttpForeignKeys(foreignKeys []httpTx.TxForeignKey) []*transactions.F
 	return fks
 }
 
-// convertHttpActions converts []httpTx.TxAction to []transactions.Action
-func convertHttpActions(actions []httpTx.TxAction) []*transactions.Action {
-	acts := make([]*transactions.Action, len(actions))
+func convertHttpActions(actions []httpTx.TxAction) []*types.Action {
+	acts := make([]*types.Action, len(actions))
 	for i, action := range actions {
-		acts[i] = &transactions.Action{
+		mods := make([]types.Modifier, len(action.Modifiers))
+		for j, mod := range action.Modifiers {
+			mods[j] = types.Modifier(mod)
+		}
+
+		acts[i] = &types.Action{
 			Name:        action.Name,
 			Annotations: action.Annotations,
-			Inputs:      action.Inputs,
-			Mutability:  action.Mutability,
-			Auxiliaries: action.Auxiliaries,
+			Parameters:  action.Parameters,
 			Public:      action.Public,
-			Statements:  action.Statements,
+			Modifiers:   mods,
+			Body:        action.Body,
 		}
 	}
 	return acts
 }
 
-// convertHttpExtensions converts []httpTx.TxExtension to []transactions.Extension
-func convertHttpExtensions(extensions []httpTx.TxExtensions) []*transactions.Extension {
-	exts := make([]*transactions.Extension, len(extensions))
+func convertHttpExtensions(extensions []httpTx.TxExtensions) []*types.Extension {
+	exts := make([]*types.Extension, len(extensions))
 	for i, extension := range extensions {
-		initialize := make([]*transactions.ExtensionConfig, len(extension.Initialization))
+		initialize := make([]*types.ExtensionConfig, len(extension.Initialization))
 		for j, init := range extension.Initialization {
-			initialize[j] = &transactions.ExtensionConfig{
-				Argument: init.Argument,
-				Value:    init.Value,
+			initialize[j] = &types.ExtensionConfig{
+				Key:   init.Argument,
+				Value: init.Value,
 			}
 		}
 
-		exts[i] = &transactions.Extension{
-			Name:   extension.Name,
-			Config: initialize,
-			Alias:  extension.Alias,
+		exts[i] = &types.Extension{
+			Name:           extension.Name,
+			Initialization: initialize,
+			Alias:          extension.Alias,
 		}
 	}
 	return exts
+}
+
+func convertHttpProcedures(procedures []httpTx.TxProcedure) []*types.Procedure {
+	procs := make([]*types.Procedure, len(procedures))
+	for i, procedure := range procedures {
+		mods := make([]types.Modifier, len(procedure.Modifiers))
+		for j, mod := range procedure.Modifiers {
+			mods[j] = types.Modifier(mod)
+		}
+
+		var returns *types.ProcedureReturn
+		if procedure.ReturnTypes != nil {
+			returns = &types.ProcedureReturn{
+				IsTable: procedure.ReturnTypes.IsTable,
+				Fields:  make([]*types.NamedType, len(procedure.ReturnTypes.Columns)),
+			}
+
+			for j, col := range procedure.ReturnTypes.Columns {
+				returns.Fields[j] = &types.NamedType{
+					Name: col.Name,
+					Type: convertDataType(col.Type_),
+				}
+			}
+		}
+
+		procs[i] = &types.Procedure{
+			Name:        procedure.Name,
+			Annotations: procedure.Annotations,
+			Modifiers:   mods,
+			Public:      procedure.Public,
+			Parameters:  convertHttpParameters(procedure.Parameters),
+			Body:        procedure.Body,
+		}
+	}
+	return procs
+}
+
+func convertHttpParameters(parameters []httpTx.TxTypedVariable) []*types.ProcedureParameter {
+	params := make([]*types.ProcedureParameter, len(parameters))
+	for i, param := range parameters {
+		params[i] = &types.ProcedureParameter{
+			Name: param.Name,
+			Type: convertDataType(param.Type_),
+		}
+	}
+	return params
 }

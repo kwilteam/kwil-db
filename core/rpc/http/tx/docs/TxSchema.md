@@ -8,6 +8,7 @@ Name | Type | Description | Notes
 **Tables** | [**[]TxTable**](txTable.md) |  | [optional] [default to null]
 **Actions** | [**[]TxAction**](txAction.md) |  | [optional] [default to null]
 **Extensions** | [**[]TxExtensions**](txExtensions.md) |  | [optional] [default to null]
+**Procedures** | [**[]TxProcedure**](txProcedure.md) |  | [optional] [default to null]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

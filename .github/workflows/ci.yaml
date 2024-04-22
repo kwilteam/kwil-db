@@ -69,8 +69,8 @@ jobs:
 
       - name: Compile packages, apps, and specs
         run: | # enter workspace mode to do this on one line
-          go work init && go work use . ./parse ./test ./core
-          go build -mod=readonly ./... ./parse/... ./core/... ./test/specifications/
+          go work init && go work use . ./test ./core
+          go build -mod=readonly ./... ./core/... ./test/specifications/
 
       - name: Lint
         uses: golangci/golangci-lint-action@v4.0.0
@@ -78,7 +78,7 @@ jobs:
           install-mode: "binary"
           version: "latest"
           skip-pkg-cache: true
-          args: ./... ./core/... ./test/... ./parse/... --timeout=10m --config=.golangci.yml --skip-dirs ./core/rpc/protobuf
+          args: ./... ./core/... ./test/... --timeout=10m --config=.golangci.yml --skip-dirs ./core/rpc/protobuf
 
       # unit test
       - name: Run unit test

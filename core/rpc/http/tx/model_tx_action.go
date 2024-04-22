@@ -11,9 +11,8 @@ package swagger
 type TxAction struct {
 	Name string `json:"name,omitempty"`
 	Public bool `json:"public,omitempty"`
-	Inputs []string `json:"inputs,omitempty"`
-	Statements []string `json:"statements,omitempty"`
-	Mutability string `json:"mutability,omitempty"`
-	Auxiliaries []string `json:"auxiliaries,omitempty"`
+	Parameters []string `json:"parameters,omitempty"`
+	Modifiers []string `json:"modifiers,omitempty"`
+	Body string `json:"body,omitempty"`
 	Annotations []string `json:"annotations,omitempty"`
 }

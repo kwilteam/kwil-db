@@ -46,6 +46,77 @@ var (
 func InitializeEngine(ctx context.Context, tx sql.DB) error {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initTables,
+		1: func(ctx context.Context, db sql.DB) error {
+
+			// add the uuid column to the kwil_schemas table
+			_, err := db.Execute(ctx, sqlUpgradeSchemaTableV1AddUUIDColumn)
+			if err != nil {
+				return err
+			}
+
+			// backfill the uuid column with uuids
+			_, err = db.Execute(ctx, sqlBackfillSchemaTableV1UUID)
+			if err != nil {
+				return err
+			}
+
+			// remove the primary key constraint from the kwil_schemas table
+			_, err = db.Execute(ctx, sqlUpgradeRemovePrimaryKey)
+			if err != nil {
+				return err
+			}
+
+			// add the new primary key constraint to the kwil_schemas table
+			_, err = db.Execute(ctx, sqlUpgradeAddPrimaryKeyV1UUID)
+			if err != nil {
+				return err
+			}
+
+			// add a unique constraint to the dbid column
+			_, err = db.Execute(ctx, sqlUpgradeAddUniqueConstraintV1DBID)
+			if err != nil {
+				return err
+			}
+
+			_, err = db.Execute(ctx, sqlUpgradeSchemaTableV1AddOwnerColumn)
+			if err != nil {
+				return err
+			}
+
+			_, err = db.Execute(ctx, sqlUpgradeSchemaTableV1AddNameColumn)
+			if err != nil {
+				return err
+			}
+
+			// we now need to read out all schemas to backfill the changes to
+			// the datasets table. This includes:
+			// - upgrading the version of the schema
+			// - setting the owner of the schema
+			// - setting the name of the schema
+			schemas, err := getSchemas(ctx, db)
+			if err != nil {
+				return err
+			}
+
+			for _, schema := range schemas {
+				_, err := db.Execute(ctx, sqlBackfillSchemaTableV1, schema.Owner, schema.Name)
+				if err != nil {
+					return err
+				}
+			}
+
+			_, err = db.Execute(ctx, sqlAddProceduresTableV1)
+			if err != nil {
+				return err
+			}
+
+			_, err = db.Execute(ctx, sqlIndexProceduresTableV1SchemaID)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		},
 	}
 
 	err := versioning.Upgrade(ctx, tx, pg.InternalSchemaName, upgradeFns, engineVersion)
@@ -87,7 +158,7 @@ func NewGlobalContext(ctx context.Context, db sql.Executor, extensionInitializer
 
 // CreateDataset deploys a schema.
 // It will create the requisite tables, and perform the required initializations.
-func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *common.Schema, caller []byte) (err error) {
+func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, txdata *common.TransactionData) (err error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -95,14 +166,16 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *co
 	if err != nil {
 		return err
 	}
-	schema.Owner = caller
+	schema.Owner = txdata.Signer
 
 	err = g.loadDataset(ctx, schema)
 	if err != nil {
 		return err
 	}
 
-	err = createSchema(ctx, tx, schema)
+	// it is critical that the schema is loaded before being created.
+	// the engine will not be able to parse the schema if it is not loaded.
+	err = createSchema(ctx, tx, schema, txdata.TxID)
 	if err != nil {
 		g.unloadDataset(schema.DBID())
 		return err
@@ -113,7 +186,7 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *co
 
 // DeleteDataset deletes a dataset.
 // It will ensure that the caller is the owner of the dataset.
-func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid string, caller []byte) error {
+func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid string, txdata *common.TransactionData) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -122,7 +195,7 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid strin
 		return ErrDatasetNotFound
 	}
 
-	if !bytes.Equal(caller, dataset.schema.Owner) {
+	if !bytes.Equal(txdata.Signer, dataset.schema.Owner) {
 		return fmt.Errorf(`cannot delete dataset "%s", not owner`, dbid)
 	}
 
@@ -159,21 +232,36 @@ func (g *GlobalContext) Procedure(ctx context.Context, tx sql.DB, options *commo
 		Caller:    options.Caller,
 		DBID:      options.Dataset,
 		Procedure: options.Procedure,
+		TxID:      options.TxID,
 		// starting with stack depth 0, increment in each action call
+	}
+
+	tx2, err := tx.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx2.Rollback(ctx)
+
+	err = setContextualVars(ctx, tx2, options)
+	if err != nil {
+		return nil, err
 	}
 
 	_, err = dataset.Call(procedureCtx, &common.App{
 		Service: g.service,
-		DB:      tx,
+		DB:      tx2,
 		Engine:  g,
 	}, options.Procedure, options.Args)
+	if err != nil {
+		return nil, err
+	}
 
-	return procedureCtx.Result, err
+	return procedureCtx.Result, tx2.Commit(ctx)
 }
 
 // ListDatasets list datasets deployed by a specific caller.
 // If caller is empty, it will list all datasets.
-func (g *GlobalContext) ListDatasets(_ context.Context, caller []byte) ([]*types.DatasetIdentifier, error) {
+func (g *GlobalContext) ListDatasets(caller []byte) ([]*types.DatasetIdentifier, error) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
@@ -195,7 +283,7 @@ func (g *GlobalContext) ListDatasets(_ context.Context, caller []byte) ([]*types
 }
 
 // GetSchema gets a schema from a deployed dataset.
-func (g *GlobalContext) GetSchema(_ context.Context, dbid string) (*common.Schema, error) {
+func (g *GlobalContext) GetSchema(dbid string) (*types.Schema, error) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
@@ -222,7 +310,7 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 	// could go either way, but this ad hoc query function is questionable anyway.
 	parsed, err := sqlanalyzer.ApplyRules(query,
 		sqlanalyzer.AllRules,
-		dataset.schema.Tables, dbidSchema(dbid))
+		dataset.schema, dbidSchema(dbid))
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +334,7 @@ type dbQueryFn func(ctx context.Context, stmt string, args ...any) (*sql.ResultS
 
 // loadDataset loads a dataset into the global context.
 // It does not create the dataset in the datastore.
-func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) error {
+func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) error {
 	dbid := schema.DBID()
 	_, ok := g.initializers[dbid]
 	if ok {
@@ -255,13 +343,28 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 
 	datasetCtx := &baseDataset{
 		schema:     schema,
-		namespaces: make(map[string]precompiles.Instance),
-		procedures: make(map[string]*procedure),
+		extensions: make(map[string]precompiles.Instance),
+		actions:    make(map[string]*preparedAction),
+		procedures: make(map[string]*preparedProcedure),
 		global:     g,
 	}
 
+	for _, unprepared := range schema.Actions {
+		prepared, err := prepareAction(unprepared, g, schema)
+		if err != nil {
+			return err
+		}
+
+		_, ok := datasetCtx.actions[prepared.name]
+		if ok {
+			return fmt.Errorf(`duplicate procedure name: "%s"`, prepared.name)
+		}
+
+		datasetCtx.actions[prepared.name] = prepared
+	}
+
 	for _, unprepared := range schema.Procedures {
-		prepared, err := prepareProcedure(unprepared, g, schema)
+		prepared, err := prepareProcedure(unprepared)
 		if err != nil {
 			return errors.Join(err, ErrInvalidSchema)
 		}
@@ -275,7 +378,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 	}
 
 	for _, ext := range schema.Extensions {
-		_, ok := datasetCtx.namespaces[ext.Alias]
+		_, ok := datasetCtx.extensions[ext.Alias]
 		if ok {
 			return fmt.Errorf(`%w duplicate namespace assignment: "%s"`, ErrInvalidSchema, ext.Alias)
 		}
@@ -293,7 +396,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *common.Schema) 
 			return err
 		}
 
-		datasetCtx.namespaces[ext.Alias] = namespace
+		datasetCtx.extensions[ext.Alias] = namespace
 	}
 
 	g.initializers[dbid] = func(_ *precompiles.DeploymentContext, _ *common.Service, _ map[string]string) (precompiles.Instance, error) {
@@ -312,7 +415,7 @@ func (g *GlobalContext) unloadDataset(dbid string) {
 }
 
 // orderSchemas orders schemas based on their dependencies to other schemas.
-func orderSchemas(schemas []*common.Schema) []*common.Schema {
+func orderSchemas(schemas []*types.Schema) []*types.Schema {
 	// Mapping from schema DBID to its extensions
 	schemaMap := make(map[string][]string)
 	for _, schema := range schemas {
@@ -346,7 +449,7 @@ func orderSchemas(schemas []*common.Schema) []*common.Schema {
 	visitAll(keys)
 
 	// Reorder schemas based on result
-	var orderedSchemas []*common.Schema
+	var orderedSchemas []*types.Schema
 	for _, dbid := range result {
 		for _, schema := range schemas {
 			if schema.DBID() == dbid {

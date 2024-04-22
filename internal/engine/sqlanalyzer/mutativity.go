@@ -2,10 +2,10 @@ package sqlanalyzer
 
 import (
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/mutative"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 
-func isMutative(stmt tree.AstWalker) (bool, error) {
+func IsMutative(stmt tree.AstWalker) (bool, error) {
 	mutativityWalker := mutative.NewMutativityWalker()
 
 	err := stmt.Walk(mutativityWalker)

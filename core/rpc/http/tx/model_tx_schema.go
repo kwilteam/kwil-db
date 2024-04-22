@@ -14,4 +14,5 @@ type TxSchema struct {
 	Tables []TxTable `json:"tables,omitempty"`
 	Actions []TxAction `json:"actions,omitempty"`
 	Extensions []TxExtensions `json:"extensions,omitempty"`
+	Procedures []TxProcedure `json:"procedures,omitempty"`
 }

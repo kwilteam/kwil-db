@@ -42,7 +42,7 @@ func (tc *timedClient) ChainInfo(ctx context.Context) (*types.ChainInfo, error) 
 	return tc.Client.ChainInfo(ctx)
 }
 
-func (tc *timedClient) DeployDatabase(ctx context.Context, payload *transactions.Schema, opts ...clientType.TxOpt) (transactions.TxHash, error) {
+func (tc *timedClient) DeployDatabase(ctx context.Context, payload *types.Schema, opts ...clientType.TxOpt) (transactions.TxHash, error) {
 	if tc.showReqDur {
 		defer tc.printDur(time.Now(), "DeployDatabase")
 	}
@@ -77,7 +77,7 @@ func (tc *timedClient) GetAccount(ctx context.Context, pubKey []byte, status typ
 	return tc.Client.GetAccount(ctx, pubKey, status)
 }
 
-func (tc *timedClient) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
+func (tc *timedClient) GetSchema(ctx context.Context, dbid string) (*types.Schema, error) {
 	if tc.showReqDur {
 		defer tc.printDur(time.Now(), "GetSchema")
 	}

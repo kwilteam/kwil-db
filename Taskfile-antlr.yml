@@ -4,10 +4,10 @@ tasks:
   sql:
     desc: Generate sql grammar go code.
     cmds:
-      - rm -rf parse/sql/grammar/*
-      - rm -rf parse/sql/antlr-grammar/{gen,.antlr}/*
-      - cd parse/sql/antlr-grammar/ && ./generate.sh Go grammar ../grammar
+      - rm -rf internal/parse/sql/grammar/*
+      - rm -rf internal/parse/sql/gen/*
+      - cd internal/parse/sql/grammar/ && ./generate.sh Go grammar ../grammar # TODO: use script
     sources:
-      - parse/sql/antlr-grammar/*.g4
+      - internal/parse/sql/antlr-grammar/*.g4
     generates:
-      - parse/sql/grammar/*.{go,interp,tokens}
+      - internal/parse/sql/gen/*.{go,interp,tokens}

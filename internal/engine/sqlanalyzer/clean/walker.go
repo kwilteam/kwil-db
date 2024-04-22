@@ -2,28 +2,29 @@ package clean
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine"
+	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 )
 
 // TODO: the statement cleaner should also check for table / column existence
-func NewStatementCleaner() *StatementCleaner {
+func NewStatementCleaner(procedures []*types.Procedure) *StatementCleaner {
 	return &StatementCleaner{
 		AstListener: tree.NewBaseListener(),
+		procedures:  procedures,
 	}
 }
 
-var _ tree.AstListener = &StatementCleaner{}
+var _ tree.AstListener = &StatementCleaner{
+	procedures: []*types.Procedure{},
+}
 
 type StatementCleaner struct {
 	tree.AstListener
-}
-
-// EnterAggregateFunc checks that the function name is a valid identifier
-func (s *StatementCleaner) EnterAggregateFunc(node *tree.AggregateFunc) (err error) {
-	node.FunctionName, err = cleanIdentifier(node.FunctionName)
-	return wrapErr(ErrInvalidIdentifier, err)
+	procedures []*types.Procedure
 }
 
 // EnterConflictTarget checks that the indexed column names are valid identifiers
@@ -85,8 +86,27 @@ func (s *StatementCleaner) EnterExpressionBinaryComparison(node *tree.Expression
 	return wrapErr(ErrInvalidBinaryOperator, node.Operator.Valid())
 }
 
-// EnterExpressionFunction does nothing, since the function implementation is visited separately
+// EnterExpressionFunction lowers the function name and checks that it is a valid function
 func (s *StatementCleaner) EnterExpressionFunction(node *tree.ExpressionFunction) (err error) {
+	node.Function = strings.ToLower(node.Function)
+
+	_, ok := engine.Functions[node.Function]
+	if !ok {
+		// check if it's a procedure
+		if findProcedure(s.procedures, node.Function) == nil {
+			return wrapErr(engine.ErrUnknownFunctionOrProcedure, fmt.Errorf(node.Function))
+		}
+	}
+
+	return nil
+}
+
+func findProcedure(procedures []*types.Procedure, name string) *types.Procedure {
+	for _, p := range procedures {
+		if p.Name == name {
+			return p
+		}
+	}
 	return nil
 }
 
@@ -143,12 +163,6 @@ func (s *StatementCleaner) EnterExpressionArithmetic(node *tree.ExpressionArithm
 	return wrapErr(ErrInvalidArithmeticOperator, node.Operator.Valid())
 }
 
-// EnterScalarFunc checks that the function name is a valid identifier and is a scalar function
-func (s *StatementCleaner) EnterScalarFunc(node *tree.ScalarFunction) (err error) {
-	node.FunctionName, err = cleanIdentifier(node.FunctionName)
-	return wrapErr(ErrInvalidIdentifier, err)
-}
-
 // EnterGroupBy does nothing
 func (s *StatementCleaner) EnterGroupBy(node *tree.GroupBy) (err error) {
 	return nil
@@ -182,8 +196,14 @@ func (s *StatementCleaner) EnterInsertCore(node *tree.InsertCore) (err error) {
 	return wrapErr(ErrInvalidIdentifier, err)
 }
 
-// EnterJoinClause does nothing
-func (s *StatementCleaner) EnterRelation(node tree.Relation) (err error) {
+func (s *StatementCleaner) EnterRelationFunction(node *tree.RelationFunction) (err error) {
+	// check the alias is a valid identifier
+	if node.Alias != "" {
+		node.Alias, err = cleanIdentifier(node.Alias)
+		if err != nil {
+			return wrapErr(ErrInvalidIdentifier, err)
+		}
+	}
 	return nil
 }
 
@@ -296,9 +316,9 @@ func (s *StatementCleaner) EnterSimpleSelect(node *tree.SimpleSelect) (err error
 
 // EnterSelectStmt checks that, for each SelectCore besides the last, a compound operator is provided
 func (s *StatementCleaner) EnterSelectCore(node *tree.SelectCore) (err error) {
-	for _, core := range node.SimpleSelects[:len(node.SimpleSelects)-1] {
+	for _, core := range node.SimpleSelects[1:] {
 		if core.Compound == nil {
-			return wrapErr(ErrInvalidCompoundOperator, errors.New("compound operator must be provided for all SelectCores except the last"))
+			return wrapErr(ErrInvalidCompoundOperator, errors.New("compound operator must be provided for all SelectCores except the first"))
 		}
 	}
 
