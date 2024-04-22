@@ -399,12 +399,12 @@ func (m *mockTxApp) ApplyMempool(ctx context.Context, tx *transactions.Transacti
 	return nil
 }
 
-func (m *mockTxApp) Begin(ctx context.Context) error {
+func (m *mockTxApp) Begin(ctx context.Context, height int64) error {
 	return nil
 }
 
-func (m *mockTxApp) Commit(ctx context.Context) error {
-	return nil
+func (m *mockTxApp) Commit(ctx context.Context) (int64, error) {
+	return 1, nil
 }
 
 func (m *mockTxApp) Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse {

@@ -6,6 +6,7 @@ package nodecfg
 import (
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"math/big"
 	"net"
 	"net/url"
@@ -19,6 +20,7 @@ import (
 	// exported API.
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"github.com/kwilteam/kwil-db/common/chain"
 	coreUrl "github.com/kwilteam/kwil-db/core/utils/url"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 )
@@ -42,10 +44,10 @@ type NodeGenerateConfig struct {
 	OutputDir       string
 	JoinExpiry      int64
 	WithoutGasCosts bool
-	WithoutNonces   bool
 	Allocs          map[string]*big.Int
 	VoteExpiry      int64
 	Extensions      map[string]map[string]string
+	Forks           map[string]*uint64
 }
 
 type TestnetGenerateConfig struct {
@@ -66,7 +68,6 @@ type TestnetGenerateConfig struct {
 	P2pPort                 int
 	JoinExpiry              int64
 	WithoutGasCosts         bool
-	WithoutNonces           bool
 	VoteExpiry              int64
 	Allocs                  map[string]*big.Int
 	FundNonValidators       bool
@@ -74,6 +75,7 @@ type TestnetGenerateConfig struct {
 	SnapshotsEnabled        bool
 	MaxSnapshots            uint64
 	SnapshotHeights         uint64
+	Forks                   map[string]*uint64
 }
 
 // ConfigOpts is a struct to alter the generation of the node config.
@@ -132,7 +134,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 
 	_, err = os.Stat(genFile)
 	if os.IsNotExist(err) {
-		genesisCfg := config.NewGenesisWithValidator(pub)
+		genesisCfg := chain.NewGenesisWithValidator(pub)
 		genCfg.applyGenesisParams(genesisCfg)
 		return genesisCfg.SaveAs(genFile)
 
@@ -192,13 +194,12 @@ func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silenc
 	return pubKey, nil
 }
 
-func (genCfg *NodeGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisConfig) {
+func (genCfg *NodeGenerateConfig) applyGenesisParams(genesisCfg *chain.GenesisConfig) {
 	if genCfg.ChainID != "" {
 		genesisCfg.ChainID = genCfg.ChainID
 	}
 	genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
 	genesisCfg.ConsensusParams.WithoutGasCosts = genCfg.WithoutGasCosts
-	genesisCfg.ConsensusParams.WithoutNonces = genCfg.WithoutNonces
 	genesisCfg.ConsensusParams.Votes.VoteExpiry = genCfg.VoteExpiry
 
 	numAllocs := len(genCfg.Allocs)
@@ -206,7 +207,7 @@ func (genCfg *NodeGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisC
 		numAllocs += len(genesisCfg.Validators)
 	}
 	if numAllocs > 0 {
-		genesisCfg.Alloc = make(config.GenesisAlloc, len(genCfg.Allocs))
+		genesisCfg.Alloc = make(chain.GenesisAlloc, len(genCfg.Allocs))
 		for acct, bal := range genCfg.Allocs {
 			genesisCfg.Alloc[acct] = bal
 		}
@@ -214,6 +215,7 @@ func (genCfg *NodeGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisC
 			genesisCfg.Alloc[vi.PubKey.String()] = genesisValidatorGas
 		}
 	}
+	genesisCfg.ForkHeights = maps.Clone(genCfg.Forks)
 }
 
 // GenerateTestnetConfig is like GenerateNodeConfig but it generates multiple
@@ -284,9 +286,9 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		}
 	}
 
-	genConfig := config.DefaultGenesisConfig()
+	genConfig := chain.DefaultGenesisConfig()
 	for i, pk := range privateKeys[:genCfg.NValidators] {
-		genConfig.Validators = append(genConfig.Validators, &config.GenesisValidator{
+		genConfig.Validators = append(genConfig.Validators, &chain.GenesisValidator{
 			PubKey: pk.PubKey().Bytes(),
 			Power:  1,
 			Name:   fmt.Sprintf("validator-%d", i),
@@ -381,20 +383,19 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	return nil
 }
 
-func (genCfg *TestnetGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisConfig) {
+func (genCfg *TestnetGenerateConfig) applyGenesisParams(genesisCfg *chain.GenesisConfig) {
 	if genCfg.ChainID != "" {
 		genesisCfg.ChainID = genCfg.ChainID
 	}
 	genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
 	genesisCfg.ConsensusParams.Votes.VoteExpiry = genCfg.VoteExpiry
 	genesisCfg.ConsensusParams.WithoutGasCosts = genCfg.WithoutGasCosts
-	genesisCfg.ConsensusParams.WithoutNonces = genCfg.WithoutNonces
 	numAllocs := len(genCfg.Allocs)
 	if !genCfg.WithoutGasCosts { // when gas is enabled, give genesis validators some funds
 		numAllocs += len(genesisCfg.Validators)
 	}
 	if numAllocs > 0 {
-		genesisCfg.Alloc = make(config.GenesisAlloc, len(genCfg.Allocs))
+		genesisCfg.Alloc = make(chain.GenesisAlloc, len(genCfg.Allocs))
 		for acct, bal := range genCfg.Allocs {
 			genesisCfg.Alloc[acct] = bal
 		}
@@ -402,6 +403,7 @@ func (genCfg *TestnetGenerateConfig) applyGenesisParams(genesisCfg *config.Genes
 			genesisCfg.Alloc[vi.PubKey.String()] = genesisValidatorGas
 		}
 	}
+	genesisCfg.ForkHeights = maps.Clone(genCfg.Forks)
 }
 
 func hostnameOrIP(genCfg *TestnetGenerateConfig, i int, useDnsHost bool) string {

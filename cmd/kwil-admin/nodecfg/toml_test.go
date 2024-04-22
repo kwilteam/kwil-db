@@ -40,7 +40,6 @@ func Test_GenerateNodeCfg(t *testing.T) {
 		OutputDir:       "test/trybuild/",
 		JoinExpiry:      100,
 		WithoutGasCosts: true,
-		WithoutNonces:   false,
 	}
 
 	err := GenerateNodeConfig(&genCfg)

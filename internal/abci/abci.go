@@ -8,21 +8,30 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
+	"github.com/kwilteam/kwil-db/common/chain"
+	"github.com/kwilteam/kwil-db/common/chain/forks"
+	"github.com/kwilteam/kwil-db/common/ident"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/ident"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
+	"github.com/kwilteam/kwil-db/extensions/consensus"
+	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/statesync"
 	"github.com/kwilteam/kwil-db/internal/txapp"
+	"github.com/kwilteam/kwil-db/internal/version"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/cometbft/cometbft/crypto/tmhash"
-	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmtTypes "github.com/cometbft/cometbft/types"
 	"go.uber.org/zap"
 )
@@ -30,15 +39,17 @@ import (
 // AbciConfig includes data that defines the chain and allow the application to
 // satisfy the ABCI Application interface.
 type AbciConfig struct {
+	// GenesisAppHash is considered only when doing InitChain (genesis).
 	GenesisAppHash     []byte
 	ChainID            string
 	ApplicationVersion uint64
 	GenesisAllocs      map[string]*big.Int
 	GasEnabled         bool
+	ForkHeights        map[string]*uint64
 }
 
-func NewAbciApp(cfg *AbciConfig, snapshotter SnapshotModule, statesyncer StateSyncModule,
-	txRouter TxApp, consensusParams *txapp.ConsensusParams, log log.Logger) *AbciApp {
+func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule, statesyncer StateSyncModule,
+	txRouter TxApp, consensusParams *chain.ConsensusParams, log log.Logger) (*AbciApp, error) {
 	app := &AbciApp{
 		cfg:             *cfg,
 		statesyncer:     statesyncer,
@@ -52,7 +63,57 @@ func NewAbciApp(cfg *AbciConfig, snapshotter SnapshotModule, statesyncer StateSy
 		txCache:                  make(map[string]bool),
 	}
 
-	return app
+	app.forks.FromMap(cfg.ForkHeights)
+
+	// Enable any dynamically registered payloads, encoders, etc. from
+	// extension-defined forks that must be enabled by the current height. In
+	// addition to node restart, this is where forks with genesis height (0)
+	// activation are enabled since the first FinalizeBlock is for height 1.
+	height, appHash, err := app.txApp.ChainInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	app.log.Infof("Preparing ABCI application at height %v, appHash %x", height, appHash)
+	activeForks := app.forks.ActivatedBy(uint64(height))
+	slices.SortStableFunc(activeForks, forks.ForkSortFunc)
+	for _, fork := range activeForks {
+		forkName := fork.Name
+		app.log.Infof("Hardfork %v activated at height %d", forkName, fork.Height)
+		fork, have := consensus.Hardforks[forkName]
+		if !have {
+			return nil, fmt.Errorf("undefined hard fork %v", forkName)
+		}
+
+		// Update transaction payloads.
+		for _, newPayload := range fork.TxPayloads {
+			log.Infof("Registering transaction route for payload type %v", fork.Name)
+			if err := txapp.RegisterRouteImpl(newPayload.Type, newPayload.Route); err != nil {
+				return nil, fmt.Errorf("failed to register route for payload %v: %w", newPayload.Type, err)
+			}
+		}
+		// Update authenticators.
+		for _, authMod := range fork.AuthUpdates {
+			authExt.RegisterAuthenticator(authMod.Operation, authMod.Name, authMod.Authn)
+		}
+		// Update resolutions.
+		for _, resMod := range fork.ResolutionUpdates {
+			resolutions.RegisterResolution(resMod.Name, resMod.Operation, *resMod.Config)
+		}
+		// Update serialization codecs.
+		for _, enc := range fork.Encoders {
+			serialize.RegisterCodec(enc)
+		}
+
+		// NOTE: Forks defined with activation at genesis do NOT have their
+		// consensus parameter updates or state mods applied. When specified
+		// with activation height 0, the full desired consensus parameters
+		// should be specified in genesis.json. When restarting above genesis
+		// height, these updates would already have been applied.
+	}
+
+	app.height.Store(height)
+
+	return app, nil
 }
 
 // pubkeyToAddr converts an Ed25519 public key as used to identify nodes in
@@ -76,7 +137,8 @@ func proposerAddrToString(addr []byte) string {
 }
 
 type AbciApp struct {
-	cfg AbciConfig
+	cfg   AbciConfig
+	forks forks.Forks
 
 	// snapshotter is the snapshotter module that handles snapshotting
 	snapshotter SnapshotModule
@@ -88,11 +150,11 @@ type AbciApp struct {
 
 	txApp TxApp
 
-	consensusParams *txapp.ConsensusParams
+	consensusParams *chain.ConsensusParams
 
-	// height carries the height from FinalizeBlock to Commit for the snapshotter.
-	// Ultimately this may not be required, or TxApp could provide the info.
-	height uint64
+	// height corresponds to the latest committed block. It is set in: the
+	// constructor, InitChain, and Commit.
+	height atomic.Int64
 
 	broadcastFn EventBroadcaster
 
@@ -109,6 +171,24 @@ type AbciApp struct {
 
 func (a *AbciApp) ChainID() string {
 	return a.cfg.ChainID
+}
+
+// Activations consults chain config for the names of hard forks that activate
+// at the given block height, and retrieves the associated changes from the
+// consensus package that contains the canonical and extended fork definitions.
+func (a *AbciApp) Activations(height int64) []*consensus.Hardfork {
+	// hmm, this is a tup of the TxApp method
+	var activations []*consensus.Hardfork
+	activationNames := a.forks.ActivatesAt(uint64(height))
+	for _, name := range activationNames {
+		fork := consensus.Hardforks[name]
+		if fork == nil {
+			a.log.Errorf("hardfork %v at height %d has no definition", name, height)
+			continue // really could be a panic
+		}
+		activations = append(activations, fork)
+	}
+	return activations
 }
 
 var _ abciTypes.Application = &AbciApp{}
@@ -142,6 +222,10 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	newTx := incoming.Type == abciTypes.CheckTxType_New
 	logger := a.log.With(zap.Bool("recheck", !newTx))
 	logger.Debug("check tx")
+
+	if a.forks.IsHalt(uint64(a.height.Load())) {
+		return &abciTypes.ResponseCheckTx{Code: codeInvalidTxType.Uint32(), Log: "network is halted for migration"}, nil
+	}
 
 	var err error
 	code := codeOk
@@ -220,9 +304,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinalizeBlock) (*abciTypes.ResponseFinalizeBlock, error) {
 	logger := a.log.With(zap.String("stage", "ABCI FinalizeBlock"), zap.Int64("height", req.Height))
 
-	res := &abciTypes.ResponseFinalizeBlock{}
-
-	err := a.txApp.Begin(ctx)
+	err := a.txApp.Begin(ctx, req.Height)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx commit failed: %w", err)
 	}
@@ -235,11 +317,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	// Punish bad validators.
 	for _, ev := range req.Misbehavior {
 		addr := proposerAddrToString(ev.Validator.Address) // comet example app confirms this conversion... weird
-		// if ev.Type == abciTypes.MisbehaviorType_DUPLICATE_VOTE { // ?
-		// 	a.log.Error("Wanted to punish val, but can't find it", zap.String("val", addr))
-		// 	continue
-		// }
 		logger.Info("punish validator", zap.String("addr", addr))
+		// FORKSITE: could alter punishment system (consider misbehavior Type)
 
 		// This is why we need the addr=>pubkey map. Why, comet, why?
 		pubkey, ok := a.validatorAddressToPubKey[addr]
@@ -262,6 +341,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to address %v", addr)
 	}
 
+	res := &abciTypes.ResponseFinalizeBlock{}
+
 	for _, tx := range req.Txs {
 		decoded := &transactions.Transaction{}
 		err := decoded.UnmarshalBinary(tx)
@@ -272,7 +353,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		txRes := a.txApp.Execute(txapp.TxContext{
 			BlockHeight:     req.Height,
 			Proposer:        proposerPubKey,
-			ConsensusParams: *a.consensusParams,
+			ConsensusParams: a.consensusParams,
 			Ctx:             ctx,
 			TxID:            tmhash.Sum(tx), // use cometbft TmHash to get the same hash as is indexed
 		}, decoded)
@@ -296,15 +377,22 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		a.txCacheMu.Unlock()
 	}
 
-	res.ConsensusParamUpdates = &tendermintTypes.ConsensusParams{ // why are we "updating" these on every block? Should be nil for no update.
-		// we can include evidence in here for malicious actors, but this is not important this release
-		Version: &tendermintTypes.VersionParams{
-			App: a.cfg.ApplicationVersion, // how would we change the application version?
-		},
-		Validator: &tendermintTypes.ValidatorParams{
-			PubKeyTypes: []string{"ed25519"},
-		},
+	// If at activation height, submit any consensus params updates associated
+	// with the fork. They should not overlap (some forks should be superseded
+	// by later fork definitions and not used on new networks).
+	paramUpdates := consensus.ParamUpdates{}
+	for _, fork := range a.Activations(req.Height) {
+		if fork.ParamsUpdates == nil {
+			continue
+		}
+		consensus.MergeConsensusUpdates(&paramUpdates, fork.ParamsUpdates)
 	}
+
+	// Merge, including kwil-specific params like join expiry.
+	updateConsensusParams(a.consensusParams, &paramUpdates)
+
+	// cometbft wants its api/tendermint type
+	res.ConsensusParamUpdates = cometbft.ParamUpdatesToComet(&paramUpdates)
 
 	// Broadcast any events that have not been broadcasted yet
 	if a.broadcastFn != nil && len(proposerPubKey) > 0 {
@@ -320,7 +408,10 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("failed to finalize transaction app: %w", err)
 	}
 	res.AppHash = appHash
-	a.height = uint64(req.Height) // remember for Commit
+
+	if a.forks.BeginsHalt(uint64(req.Height) - 1) {
+		a.log.Info("This is the last block before halt.")
+	}
 
 	valUpdates := validatorUpdates(initialValidators, finalValidators)
 
@@ -385,10 +476,13 @@ func validatorUpdates(initial, final []*types.Validator) []*types.Validator {
 // Commit persists the state changes. This is called under mempool lock in
 // cometbft, unlike FinalizeBlock.
 func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abciTypes.ResponseCommit, error) {
-	err := a.txApp.Commit(ctx)
+	height, err := a.txApp.Commit(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction app: %w", err)
 	}
+	a.height.Store(height)
+	// If a broadcast was accepted during execution of that block, it will be
+	// rechecked and possibly evicted immediately following our commit Response.
 
 	return &abciTypes.ResponseCommit{}, nil // RetainHeight stays 0 to not prune any blocks
 }
@@ -434,8 +528,8 @@ func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciType
 	return &abciTypes.ResponseInfo{
 		LastBlockHeight:  height,
 		LastBlockAppHash: appHash,
-		// Version: kwildVersion, // the *software* semver string
-		AppVersion: a.cfg.ApplicationVersion,
+		Version:          version.KwilVersion, // the *software* semver string
+		AppVersion:       a.cfg.ApplicationVersion,
 	}, nil
 }
 
@@ -488,6 +582,7 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 	}
 
 	logger.Info("initialized chain", zap.String("app hash", fmt.Sprintf("%x", a.cfg.GenesisAppHash)))
+	a.height.Store(req.InitialHeight)
 
 	return &abciTypes.ResponseInitChain{
 		Validators: valUpdates,
@@ -804,6 +899,10 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
+	if a.forks.IsHalt(uint64(req.Height)) {
+		return &abciTypes.ResponsePrepareProposal{}, nil // No more transactions.
+	}
+
 	pubKey, ok := a.validatorAddressToPubKey[proposerAddrToString(req.ProposerAddress)]
 	if !ok {
 		// there is an edge case where cometbft will allow a node to PrepareProposal
@@ -888,8 +987,15 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 // else accept the proposed block.
 func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestProcessProposal) (*abciTypes.ResponseProcessProposal, error) {
 	logger := a.log.With(zap.String("stage", "ABCI ProcessProposal"),
-		zap.Int64("height", req.Height),
-		zap.Int("txs", len(req.Txs)))
+		log.Int("height", req.Height), log.Int("txs", len(req.Txs)))
+
+	if a.forks.IsHalt(uint64(req.Height)) {
+		if len(req.Txs) != 0 { // This network is done.  No more transactions.
+			return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
+		}
+		// Empty block == OK.
+		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_ACCEPT}, nil
+	}
 
 	proposerPubKey, ok := a.validatorAddressToPubKey[proposerAddrToString(req.ProposerAddress)]
 	if !ok {

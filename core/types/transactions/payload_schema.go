@@ -12,13 +12,7 @@ func (s *Schema) MarshalBinary() (serialize.SerializedData, error) {
 }
 
 func (s *Schema) UnmarshalBinary(b serialize.SerializedData) error {
-	result, err := serialize.Decode[Schema](b)
-	if err != nil {
-		return err
-	}
-
-	*s = *result
-	return nil
+	return serialize.Decode(b, s)
 }
 
 func (s *Schema) Type() PayloadType {

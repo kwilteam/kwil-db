@@ -171,7 +171,7 @@ func (t *Transaction) MarshalBinary() (serialize.SerializedData, error) {
 }
 
 func (t *Transaction) UnmarshalBinary(data serialize.SerializedData) error {
-	return serialize.DecodeInto(data, t)
+	return serialize.Decode(data, t)
 }
 
 // TransactionBody is the body of a transaction that gets included in the

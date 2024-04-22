@@ -14,11 +14,34 @@ import (
 // registeredResolutions is a map of all registered resolutions.
 var registeredResolutions = make(map[string]ResolutionConfig)
 
+// ModOperation is the type used to enumerate different resolution modifications
+type ModOperation int8
+
+// Resolutions may be removed, updated, or added.
+const (
+	ModRemove ModOperation = iota - 1
+	ModUpdate
+	ModAdd
+)
+
 // RegisterResolution registers a resolution with the Kwil network.
-func RegisterResolution(name string, resolution ResolutionConfig) error {
+func RegisterResolution(name string, mod ModOperation, resolution ResolutionConfig) error {
 	name = strings.ToLower(name)
 	if _, ok := registeredResolutions[name]; ok {
-		return fmt.Errorf("resolution with name %s already registered: ", name)
+		switch mod {
+		case ModAdd:
+			return fmt.Errorf("resolution with name %s already registered: ", name)
+		case ModRemove:
+			delete(registeredResolutions, name)
+		case ModUpdate:
+			registeredResolutions[name] = resolution
+		}
+		return nil
+	}
+	switch mod {
+	case ModRemove, ModUpdate:
+		return fmt.Errorf("resolution does not exist to modify (%d)", mod)
+	default: // add
 	}
 
 	if resolution.RefundThreshold == nil {

@@ -34,9 +34,9 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 
 	tx, err := convertFromPBTx(req.Tx)
 	if err != nil {
+		// This is not necessarily an internal error. The transaction is from the client
 		logger.Error("failed to convert transaction", zap.Error(err))
-		// NOTE: for internal error, we should not expose the error message to the client
-		return nil, status.Errorf(codes.Internal, "failed to convert transaction")
+		return nil, status.Errorf(codes.Internal, "failed to convert transaction: %v", err)
 	}
 
 	logger = logger.With(zap.String("from", hex.EncodeToString(tx.Sender)))

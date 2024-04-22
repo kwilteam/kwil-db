@@ -6,13 +6,13 @@ import (
 )
 
 // addSerializedTypePrefix adds a prefix to the encoded value to indicate the encoding type.
-func addSerializedTypePrefix(encoding encodingType, encodedValue []byte) SerializedData {
-	encodingTypeBytes := uint16ToBytes(uint16(encoding))
+func addSerializedTypePrefix(encoding EncodingType, encodedValue []byte) SerializedData {
+	encodingTypeBytes := uint16ToBytes(encoding)
 	return append(encodingTypeBytes, encodedValue...)
 }
 
 // removeSerializedTypePrefix removes the prefix from the encoded value.
-func removeSerializedTypePrefix(data SerializedData) (encodingType, []byte, error) {
+func removeSerializedTypePrefix(data SerializedData) (EncodingType, []byte, error) {
 	if len(data) < 3 {
 		return encodingTypeInvalid, nil, fmt.Errorf("cannot deserialize encoded value: data is too short")
 	}
@@ -21,7 +21,7 @@ func removeSerializedTypePrefix(data SerializedData) (encodingType, []byte, erro
 		return encodingTypeInvalid, nil, err
 	}
 
-	return encodingType(typ), data[2:], nil
+	return typ, data[2:], nil
 }
 
 // uint16ToBytes converts a uint16 to a byte slice (big endian).

@@ -13,6 +13,7 @@ import (
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types" // :(
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/ident"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
@@ -22,7 +23,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/abci"             // errors from chainClient
 	"github.com/kwilteam/kwil-db/internal/engine/execution" // errors from engine
-	"github.com/kwilteam/kwil-db/internal/ident"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/version"
 )
@@ -214,7 +214,8 @@ func (svc *Service) Broadcast(ctx context.Context, req *userjson.BroadcastReques
 	logger = logger.With(log.String("from", hex.EncodeToString(req.Tx.Sender)))
 
 	// NOTE: it's mostly pointless to have the structured transaction in the
-	// request rather than the serialized transaction.
+	// request rather than the serialized transaction, except that a client only
+	// has to serialize the *body* to sign.
 	encodedTx, err := req.Tx.MarshalBinary()
 	if err != nil {
 		logger.Error("failed to serialize transaction data", log.Error(err))
@@ -249,6 +250,50 @@ func (svc *Service) Broadcast(ctx context.Context, req *userjson.BroadcastReques
 		TxHash: txHash,
 	}, nil
 }
+
+/* Most broadcast capabilities are bytes, not an object. We should support the following:
+
+type BroadcastRawRequest struct {
+	Raw  []byte                 `json:"raw,omitempty"`
+	Sync *jsonrpc.BroadcastSync `json:"sync,omitempty"`
+}
+type BroadcastRawResponse struct {
+	TxHash types.HexBytes `json:"tx_hash,omitempty"`
+}
+
+func (svc *Service) BroadcastRaw(ctx context.Context, req *BroadcastRawRequest) (*BroadcastRawResponse, *jsonrpc.Error) {
+	var sync = jsonrpc.BroadcastSyncSync // default to sync, not async or commit
+	if req.Sync != nil {
+		sync = *req.Sync
+	}
+	res, err := svc.chainClient.BroadcastTx(ctx, req.Raw, uint8(sync))
+	if err != nil {
+		svc.log.Error("failed to broadcast tx", log.Error(err))
+		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to broadcast transaction", nil)
+	}
+
+	// If we want details, like Sender, Nonce, etc.:
+	// var tx transactions.Transaction
+	// tx.UnmarshalBinary(req.Raw) //	serialize.Decode(req.Raw, &tx)
+
+	code, txHash := res.Code, res.Hash.Bytes()
+
+	if txCode := transactions.TxCode(code); txCode != transactions.CodeOk {
+		errData := &jsonrpc.BroadcastError{
+			TxCode:  txCode.Uint32(), // e.g. invalid nonce, wrong chain, etc.
+			Hash:    hex.EncodeToString(txHash),
+			Message: res.Log,
+		}
+		data, _ := json.Marshal(errData)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorTxExecFailure, "broadcast error", data)
+	}
+
+	svc.log.Info("broadcast transaction", log.String("TxHash", hex.EncodeToString(txHash)), log.Uint("sync", sync))
+	return &BroadcastRawResponse{
+		TxHash: txHash,
+	}, nil
+}
+*/
 
 func (svc *Service) EstimatePrice(ctx context.Context, req *userjson.EstimatePriceRequest) (*userjson.EstimatePriceResponse, *jsonrpc.Error) {
 	svc.log.Debug("Estimating price", log.String("payload_type", req.Tx.Body.PayloadType))

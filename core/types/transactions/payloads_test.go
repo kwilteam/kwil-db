@@ -297,6 +297,14 @@ func TestUnmarshalPayload(t *testing.T) {
 	}
 }
 
+func TestExtendedPayloadType(t *testing.T) {
+	noopPayload := transactions.PayloadType("noop")
+	assert.False(t, noopPayload.Valid())
+
+	transactions.RegisterPayload(noopPayload)
+	assert.True(t, noopPayload.Valid())
+}
+
 func mustDetect(v any) *transactions.EncodedValue {
 	ev, err := transactions.EncodeValue(v)
 	if err != nil {

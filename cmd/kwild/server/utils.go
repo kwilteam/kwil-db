@@ -11,7 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft/privval"
-	"github.com/kwilteam/kwil-db/internal/extensions"
+	remoteExtn "github.com/kwilteam/kwil-db/internal/extensions"
 	"github.com/kwilteam/kwil-db/internal/kv"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
@@ -56,7 +56,7 @@ func getExtensions(ctx context.Context, urls []string) (map[string]precompiles.I
 	}
 
 	for _, url := range urls {
-		ext := extensions.New(url)
+		ext := remoteExtn.New(url)
 		err := ext.Connect(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect extension '%s': %w", ext.Name(), err)
@@ -67,7 +67,7 @@ func getExtensions(ctx context.Context, urls []string) (map[string]precompiles.I
 			return nil, fmt.Errorf("duplicate extension name: %s", ext.Name())
 		}
 
-		exts[ext.Name()] = extensions.AdaptLegacyExtension(ext)
+		exts[ext.Name()] = remoteExtn.AdaptLegacyExtension(ext)
 	}
 	return exts, nil
 }

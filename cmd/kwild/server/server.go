@@ -12,8 +12,11 @@ import (
 	"time"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
@@ -23,10 +26,6 @@ import (
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/version"
-
-	// internalize
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 // Server controls the gRPC server and http gateway.
@@ -58,7 +57,8 @@ const (
 )
 
 // New builds the kwild server.
-func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.GenesisConfig, nodeKey *crypto.Ed25519PrivateKey, autogen bool) (svr *Server, err error) {
+func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *chain.GenesisConfig,
+	nodeKey *crypto.Ed25519PrivateKey, autogen bool) (svr *Server, err error) {
 	logger, err := log.NewChecked(*cfg.LogConfig())
 	if err != nil {
 		return nil, fmt.Errorf("invalid logger config: %w", err)

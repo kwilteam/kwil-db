@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/utils/url"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 
@@ -46,7 +47,7 @@ func portFromURL(u string) string {
 }
 
 // newCometConfig creates a new CometBFT config for use with NewCometBftNode.
-// This applies The operator's settings from the Kwil config as well as applying
+// This applies the operator's settings from the Kwil config as well as applying
 // some overrides to the defaults for Kwil.
 //
 // NOTE: this is somewhat error prone, so care must be taken to update this
@@ -130,29 +131,12 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 	return nodeCfg
 }
 
-// Used by cometbft while initializing the node to extract the genesis configuration
-func extractGenesisDoc(g *config.GenesisConfig) (*cmttypes.GenesisDoc, error) {
-
-	consensusParams := &cmttypes.ConsensusParams{
-		Block: cmttypes.BlockParams{ // TODO: set MaxBytes to -1 so we can do the truncation in PrepareProposal after our other processing
-			MaxBytes: g.ConsensusParams.Block.MaxBytes,
-			MaxGas:   g.ConsensusParams.Block.MaxGas,
-		},
-		Evidence: cmttypes.EvidenceParams{
-			MaxAgeNumBlocks: g.ConsensusParams.Evidence.MaxAgeNumBlocks,
-			MaxAgeDuration:  g.ConsensusParams.Evidence.MaxAgeDuration,
-			MaxBytes:        g.ConsensusParams.Evidence.MaxBytes,
-		},
-		Version: cmttypes.VersionParams{
-			App: g.ConsensusParams.Version.App,
-		},
-		Validator: cmttypes.ValidatorParams{
-			PubKeyTypes: g.ConsensusParams.Validator.PubKeyTypes,
-		},
-		ABCI: cmttypes.ABCIParams{
-			VoteExtensionsEnableHeight: 0, // disabled for now
-		},
-	}
+// extractGenesisDoc is used by cometbft while initializing the node to extract
+// the genesis configuration. Note that cometbft's GenesisDoc is a subset of
+// kwild's genesis file.
+func extractGenesisDoc(g *chain.GenesisConfig) (*cmttypes.GenesisDoc, error) {
+	// BaseConsensusParms => cometbft's ConsensusParms
+	consensusParams := cometbft.ExtractConsensusParams(&g.ConsensusParams.BaseConsensusParams)
 
 	genDoc := &cmttypes.GenesisDoc{
 		ChainID:         g.ChainID,

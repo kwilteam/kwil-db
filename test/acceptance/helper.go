@@ -194,7 +194,6 @@ func (r *ActHelper) generateNodeConfig() {
 		OutputDir:       tmpPath,
 		JoinExpiry:      14400,
 		WithoutGasCosts: !r.cfg.GasEnabled,
-		WithoutNonces:   false,
 		Allocs: map[string]*big.Int{
 			creatorIdent: bal,
 		},

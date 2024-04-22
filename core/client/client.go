@@ -36,6 +36,13 @@ type Client struct {
 	noWarnings bool // silence warning logs
 }
 
+// SvcClient is a trapdoor to access the underlying
+// core/rpc/client/user.TxSvcClient. Most applications will only use the methods
+// of Client.
+func (c *Client) SvcClient() user.TxSvcClient {
+	return c.txClient
+}
+
 var _ clientType.Client = (*Client)(nil)
 
 // NewClient creates a Kwil client. The target should be a URL (for an
@@ -367,7 +374,7 @@ func (c *Client) WaitTx(ctx context.Context, txHash []byte, interval time.Durati
 	}
 }
 
-// ChainID returns the chain ID of the remote host.
+// ChainID returns the configured chain ID.
 func (c *Client) ChainID() string {
 	return c.chainID
 }

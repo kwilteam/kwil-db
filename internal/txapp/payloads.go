@@ -19,5 +19,5 @@ func (p *CreditPayload) MarshalBinary() ([]byte, error) {
 }
 
 func (p *CreditPayload) UnmarshalBinary(data []byte) error {
-	return serialize.DecodeInto(data, p)
+	return serialize.Decode(data, p)
 }

@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	err := RegisterAuthenticator(nep413Name, Nep413Authenticator{
+	err := RegisterAuthenticator(ModAdd, nep413Name, Nep413Authenticator{
 		MsgEncoder: func(bts []byte) string {
 			return string(bts)
 		},

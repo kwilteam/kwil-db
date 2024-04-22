@@ -9,7 +9,7 @@ import (
 
 func init() {
 	// Register a resolution
-	err := resolutions.RegisterResolution("spam-resolution", resolutions.ResolutionConfig{
+	err := resolutions.RegisterResolution("spam-resolution", resolutions.ModAdd, resolutions.ResolutionConfig{
 		ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error {
 			// This is where the resolution logic goes
 			app.Service.Logger.Info("Spam resolution logic approved")

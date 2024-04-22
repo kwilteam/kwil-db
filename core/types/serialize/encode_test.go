@@ -117,7 +117,7 @@ func (g genericTestCase[T]) runTest(t *testing.T) {
 	}
 
 	result := new(T)
-	err = serialize.DecodeInto(output, result)
+	err = serialize.Decode(output, result)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}

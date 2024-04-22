@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/common/ident"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	"github.com/kwilteam/kwil-db/core/rpc/json/function"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
-	"github.com/kwilteam/kwil-db/internal/ident"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/version"
 )

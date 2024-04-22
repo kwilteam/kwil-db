@@ -48,6 +48,10 @@ func NewKwildClientDriver(clt clientType.Client, signer auth.Signer, deployer *e
 	return driver
 }
 
+func (d *KwildClientDriver) Client() clientType.Client {
+	return d.clt
+}
+
 func (d *KwildClientDriver) SupportBatch() bool {
 	return true
 }

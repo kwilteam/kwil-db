@@ -55,11 +55,11 @@ type TxApp interface {
 	// Begin signals that a new block has begun. The following methods are
 	// expected to use either an encompassing DB transaction started with Begin
 	// and ended with Commit.
-	Begin(ctx context.Context) error
+	Begin(ctx context.Context, height int64) error
 	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
 	UpdateValidator(ctx context.Context, validator []byte, power int64) error
-	Finalize(ctx context.Context, blockHeight int64) (appHash []byte, validatorUpgrades []*types.Validator, err error)
-	Commit(ctx context.Context) error
+	Finalize(ctx context.Context, height int64) (appHash []byte, validatorUpgrades []*types.Validator, err error)
+	Commit(ctx context.Context) (int64, error)
 
 	// ConsensusAccountInfo and ConsensusValidators are used in two different
 	// contexts, but always from the ABCI consensus connection. During block

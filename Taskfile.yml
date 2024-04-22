@@ -9,6 +9,10 @@ tasks:
     cmds:
       - task -l
 
+  work:
+    cmds:
+      - go work init . ./core ./test ./parse
+
   install:deps:
     aliases: [tools]
     desc: Install tools required to build this app
@@ -282,3 +286,10 @@ tasks:
     cmds:
       - (cd nodes/spamd; ./build.sh)
       - go test -count=1 -timeout 0 -run TestSpamListener ./integration -v -spam {{.CLI_ARGS}}
+
+  test:it:fork:
+    desc: Run integration test with a hardfork configured
+    dir: test # different module
+    cmds:
+      - (cd nodes/fork; ./build.sh)
+      - go test -count=1 -timeout 0 -run TestKwildNetworkHardfork ./integration -v -fork {{.CLI_ARGS}}

@@ -18,7 +18,7 @@ const CreditAccountEventType = "credit_account"
 // see more here: https://www.digitalocean.com/community/tutorials/understanding-init-in-go
 func init() {
 	// calling RegisterResolution will make the resolution available on startup
-	err := resolutions.RegisterResolution(CreditAccountEventType, resolutionConfig)
+	err := resolutions.RegisterResolution(CreditAccountEventType, resolutions.ModAdd, resolutionConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -55,7 +55,7 @@ func (a *AccountCreditResolution) MarshalBinary() ([]byte, error) {
 // UnmarshalBinary unmarshals the AccountCreditResolution from binary.
 // It is the inverse of MarshalBinary, and uses the same serialization library.
 func (a *AccountCreditResolution) UnmarshalBinary(data []byte) error {
-	return serialize.DecodeInto(data, a)
+	return serialize.Decode(data, a)
 }
 
 // resolutionConfig defines the rules for the credit_account resolution.

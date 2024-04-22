@@ -1,53 +1,128 @@
 package serialize
 
 import (
+	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type SerializedData = []byte
 
-type encodingType uint16
+// EncodingType is the type used to enumerate different codecs for binary data.
+type EncodingType = uint16
+
+const EncodingTypeCustom = 1 << 12 // 4096 codecs reserved for kwild
 
 const (
 	// it is very important that the order of the encoding types is not changed
-	encodingTypeInvalid encodingType = iota
+	encodingTypeInvalid EncodingType = iota
 	encodingTypeRLP
 )
 
-var currentEncodingType = encodingTypeRLP
-
-// Encode encodes the given value into a serialized data format.
-func Encode(val any) (SerializedData, error) {
-	var btsVal []byte
-	var err error
-	switch currentEncodingType {
-	case encodingTypeRLP:
-		btsVal, err = encodeRLP(val)
-	default:
-		return nil, fmt.Errorf("invalid encoding type: %d", currentEncodingType)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return addSerializedTypePrefix(currentEncodingType, btsVal), nil
+// Codec contains the encoding and decoding functionality for a certain
+// serialization scheme that may be used in the Encode, Decode, and Decode
+// methods for payloads with the matching EncodingType.
+type Codec struct {
+	Type   EncodingType
+	Name   string
+	Encode func(any) ([]byte, error)
+	Decode func([]byte, any) error
 }
 
-// Decode decodes the given serialized data into the given value.
-func Decode[T any](bts SerializedData) (*T, error) {
-	encType, val, err := removeSerializedTypePrefix(bts)
+var (
+	rlpCodec = Codec{
+		Type: encodingTypeRLP,
+		Name: "RLP",
+		Encode: func(val any) ([]byte, error) {
+			return rlp.EncodeToBytes(val)
+		},
+		Decode: func(bts []byte, v any) error {
+			return rlp.DecodeBytes(bts, v)
+		},
+	}
+)
+
+var encodings = map[EncodingType]Codec{
+	encodingTypeRLP: rlpCodec,
+}
+
+// RegisterCodec installs a new external codec. The codec extension
+// implementation should choose a Type that does not collide with other codecs.
+// The EncodingTypeCustom offset should be used as the first possible external
+// codec's type to leave space for more kwild canonical codecs in the future.
+//
+// core cannot require main module, only reverse, so registry is here, and
+// extensions/consensus.RegisterCodec is provided to ensure the same registry
+// used by kwild is used when extension authors define a new codec.
+func RegisterCodec(c *Codec) {
+	encType := c.Type
+	if encType <= EncodingTypeCustom {
+		panic(fmt.Sprintf("reserved codec type %d", encType))
+	}
+	if c0, have := encodings[encType]; have {
+		panic(fmt.Sprintf("already have codec %d (%v)", encType, c0.Name))
+	}
+	encodings[encType] = *c
+}
+
+// Encode encodes the given value into the current serialized data format (RLP).
+func Encode(val any) (SerializedData, error) {
+	return EncodeWithCodec(val, rlpCodec)
+}
+
+// EncodeWithCodec encodes the given value into a serialized data format with
+// the provided Codec.
+func EncodeWithCodec(val any, enc Codec) (SerializedData, error) {
+	btsVal, err := enc.Encode(val)
 	if err != nil {
 		return nil, err
 	}
 
-	switch encType {
-	case encodingTypeRLP:
-		return decodeRLP[T](val)
-	default:
-		return nil, fmt.Errorf("invalid encoding type: %d", encType)
+	return addSerializedTypePrefix(enc.Type, btsVal), nil
+}
+
+func requireNonNilPointer(v any) error {
+	rVal := reflect.ValueOf(v)
+	if rType := rVal.Type(); rType.Kind() != reflect.Ptr {
+		return fmt.Errorf("not a pointer: %s / %T", rType.Kind(), v)
 	}
+	if rVal.IsNil() {
+		return errors.New("cannot decode into nil pointer")
+	}
+	return nil
+}
+
+// Decode decodes the data into a value, which should be passed as a pointer.
+func Decode(bts SerializedData, v any) error {
+	if err := requireNonNilPointer(v); err != nil {
+		return err
+	}
+
+	encType, val, err := removeSerializedTypePrefix(bts)
+	if err != nil {
+		return err
+	}
+
+	codec, have := encodings[encType]
+	if !have {
+		return fmt.Errorf("unknown encoding type %v", encType)
+	}
+
+	return codec.Decode(val, v)
+}
+
+// DecodeGeneric decodes the given serialized data into the given value. See
+// also Decode for use with an existing instance. This is generally no more
+// useful than Decode; it is syntactic sugar that requires no existing instance
+// of the type, and returns a pointer to the declared type.
+func DecodeGeneric[T any](bts SerializedData) (*T, error) {
+	var val T
+	if err := Decode(bts, &val); err != nil {
+		return nil, err
+	}
+	return &val, nil
 }
 
 func EncodeSlice[T any](kvs []T) ([]byte, error) {
@@ -84,81 +159,5 @@ func (m *serialBinaryMarshaller[T]) MarshalBinary() ([]byte, error) {
 }
 
 func (m *serialBinaryMarshaller[T]) UnmarshalBinary(bts []byte) error {
-	val, err := Decode[T](bts)
-	if err != nil {
-		return err
-	}
-
-	m.val = *val
-	return nil
-}
-
-/*
-
-// EncodeSlice serializes a slice into a byte slice
-func EncodeSlice[T any](kvs []T) ([]byte, error) {
-	var result []byte
-	for _, kv := range kvs {
-		data, err := Encode(kv)
-		if err != nil {
-			return nil, err
-		}
-		length := uint64(len(data))
-		result = append(result, append(make([]byte, 8), data...)...)
-		binary.BigEndian.PutUint64(result[len(result)-len(data)-8:len(result)-len(data)], length)
-	}
-	return result, nil
-}
-
-// DecodeSlice deserializes a byte slice into a slice
-// It is important this is only given the results of EncodeSlice
-func DecodeSlice[T any](bts []byte) ([]*T, error) {
-	var result []*T
-	for len(bts) > 0 {
-		if len(bts) < 8 {
-			return nil, fmt.Errorf("insufficient bytes")
-		}
-		length := binary.BigEndian.Uint64(bts[:8])
-		if uint64(len(bts[8:])) < length {
-			return nil, fmt.Errorf("invalid length")
-		}
-		bts = bts[8:]
-		value, err := Decode[T](bts[:length])
-		if err != nil {
-			return nil, err
-		}
-
-		result = append(result, value)
-		bts = bts[length:]
-	}
-	return result, nil
-}
-*/
-
-func encodeRLP(val any) ([]byte, error) {
-	return rlp.EncodeToBytes(val)
-}
-
-func decodeRLP[T any](bts []byte) (*T, error) {
-	var val T
-	err := rlp.DecodeBytes(bts, &val)
-	if err != nil {
-		return nil, err
-	}
-
-	return &val, nil
-}
-
-func DecodeInto(bts []byte, v any) error {
-	encType, val, err := removeSerializedTypePrefix(bts)
-	if err != nil {
-		return err
-	}
-
-	switch encType {
-	case encodingTypeRLP:
-		return rlp.DecodeBytes(val, v)
-	default:
-		return fmt.Errorf("invalid encoding type: %d", encType)
-	}
+	return Decode(bts, &m.val)
 }

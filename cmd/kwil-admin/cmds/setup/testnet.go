@@ -38,7 +38,7 @@ func testnetCmd() *cobra.Command {
 	var blockInterval time.Duration
 	var joinExpiry int64
 	var validatorAmount, nonValidatorAmount, p2pPort int
-	var withoutNonces, withGas, snapshotsEnabled bool
+	var withGas, snapshotsEnabled bool
 	var allocs AllocsFlag
 	var snapshotHeights, maxSnapshots uint64
 
@@ -64,7 +64,6 @@ func testnetCmd() *cobra.Command {
 				P2pPort:                 p2pPort,
 				JoinExpiry:              joinExpiry,
 				WithoutGasCosts:         !withGas,
-				WithoutNonces:           withoutNonces,
 				Allocs:                  allocs.M,
 				SnapshotsEnabled:        snapshotsEnabled,
 				MaxSnapshots:            maxSnapshots,
@@ -93,7 +92,6 @@ func testnetCmd() *cobra.Command {
 	cmd.Flags().Int64Var(&joinExpiry, "join-expiry", 14400, "number of blocks before a join request expires")
 	cmd.Flags().IntVarP(&validatorAmount, "validators", "v", 3, "number of validators to generate")
 	cmd.Flags().IntVarP(&nonValidatorAmount, "non-validators", "n", 0, "number of non-validators to generate")
-	cmd.Flags().BoolVar(&withoutNonces, "without-nonces", false, "disable account nonces")
 	cmd.Flags().BoolVar(&withGas, "gas", false, "enable gas")
 	cmd.Flags().Var(&allocs, "alloc", "account=amount pairs of genesis account allocations")
 	cmd.Flags().BoolVar(&snapshotsEnabled, "--snaps", false, "enables db snapshots")

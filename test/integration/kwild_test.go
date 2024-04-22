@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"context"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"math/big"
@@ -9,6 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/kwilteam/kwil-db/test/integration"
 	"github.com/kwilteam/kwil-db/test/specifications"
 	"github.com/stretchr/testify/require"
@@ -17,6 +22,8 @@ import (
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
 var spamTest = flag.Bool("spam", false, "run the spam test that requires a special docker image to be built")
+
+var forkTest = flag.Bool("fork", false, "run the fork test that requires a special docker image to be built")
 
 var drivers = flag.String("drivers", "jsonrpc,cli", "comma separated list of drivers to run")
 
@@ -302,6 +309,130 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 			// test state, so we can verify across nodes
 		})
 	}
+}
+
+// TestKwildNetworkHardfork checks that the basic height based rule changes with
+// hard forks are working.
+//
+// This test completely breaks the mould used in the other integration tests
+// since the "gremlin" test hard fork does not and should not corresponding
+// modification to client tooling. We're just type asserting our way into the
+// underlying client types to do the checks needed.
+func TestKwildNetworkHardfork(t *testing.T) {
+	if !*forkTest {
+		t.Skip("Fork test requires -fork flag (and special docker image).")
+	}
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	ctx := context.Background()
+
+	// At block 8, enable the "gremlin" hardfork rule changes.
+	// We should check:
+	// - all of network follows new rules (no liveness issues)
+	// - a "noop" transaction works after activation
+	// - the dc18 account credited in the state mode gets it's 42000 atoms
+	// - the consensus params has app version set to 1 (can we even check that?)
+	gremlinHeight := uint64(8)
+	blockInterval := time.Second
+
+	opts := []integration.HelperOpt{
+		integration.WithForkNode(),
+		integration.WithValidators(4),
+		integration.WithBlockInterval(blockInterval),
+		integration.WithForks(map[string]*uint64{
+			"gremlin": &gremlinHeight,
+		}),
+	}
+
+	driverType := "http"
+
+	t.Run(driverType+"_driver", func(t *testing.T) {
+		helper := integration.NewIntHelper(t, opts...)
+		helper.Setup(ctx, basicServices)
+
+		// Wait for the network to produce at least 1 block for the genesis
+		// validators to get committed and synced.
+		time.Sleep(2 * blockInterval)
+
+		node0Driver := helper.GetUserDriver(ctx, "node0", driverType, nil)
+		node1Driver := helper.GetUserDriver(ctx, "node1", driverType, nil)
+		node2Driver := helper.GetUserDriver(ctx, "node2", driverType, nil)
+		// node3Driver := helper.GetUserDriver(ctx, "node3", driverType)
+		// targetPubKey := helper.NodePrivateKey("node3").PubKey().Bytes()
+
+		// Create a new database and verify that the database exists on other nodes
+		specifications.DatabaseDeploySpecification(ctx, t, node0Driver)
+		time.Sleep(time.Second * 2) // need time to sync
+		specifications.DatabaseVerifySpecification(ctx, t, node1Driver, true)
+		specifications.DatabaseVerifySpecification(ctx, t, node2Driver, true)
+
+		// ample time to reach activation height, when network failure could occur
+		time.Sleep(time.Duration(gremlinHeight+6 /* 6? use chain_info in loop instead */) * blockInterval)
+
+		// Now we are going to test that it was activated:
+		// - make a "noop" transaction
+		// - check the dc18 account balance
+
+		cl := node0Driver.(*driver.KwildClientDriver).Client().(*client.Client)
+		n0AcctStatus, err := cl.GetAccount(ctx, cl.Signer.Identity(), types.AccountStatusLatest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		noopTx, err := transactions.CreateTransaction(&noopPayload{}, helper.ChainID(), uint64(n0AcctStatus.Nonce)+1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		noopTx.Body.Fee = big.NewInt(42000)
+		if err = noopTx.Sign(cl.Signer); err != nil {
+			t.Fatal(err)
+		}
+		noopTxHash, err := cl.SvcClient().Broadcast(ctx, noopTx, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		specifications.ExpectTxSuccess(t, node0Driver, ctx, noopTxHash)
+
+		dc18, _ := hex.DecodeString("dc18f4993e93b50486e3e54e27d91d57cee1da07")
+		dc18Balance, err := node0Driver.AccountBalance(ctx, dc18)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if dc18Balance.Cmp(big.NewInt(42000)) != 0 {
+			t.Errorf("expected dc18 acct balance %v, got %v", 42000, dc18Balance)
+		}
+
+		// Insert 1 User and 1or2 Posts
+		specifications.ExecuteDBInsertSpecification(ctx, t, node0Driver)
+
+		// Start 4th node and ensure that the database is caught up, cleanly
+		// applying the hardfork changes in catchup.
+		helper.RunDockerComposeWithServices(ctx, newServices)
+		node3Driver := helper.GetUserDriver(ctx, "node3", driverType, nil)
+
+		// Checks if the database exists on the new node and that the user and
+		// posts are synced.
+		time.Sleep(time.Second * 8) // need time to catch up
+		specifications.DatabaseVerifySpecification(ctx, t, node3Driver, true)
+
+		const expectPosts = 1
+		specifications.ExecuteDBRecordsVerifySpecification(ctx, t, node3Driver, expectPosts)
+	})
+}
+
+type noopPayload struct{}
+
+func (a *noopPayload) MarshalBinary() ([]byte, error) {
+	return []byte{0x42}, nil
+}
+
+func (a *noopPayload) UnmarshalBinary(b []byte) error { // unused
+	return nil
+}
+
+func (a *noopPayload) Type() transactions.PayloadType {
+	return "noop"
 }
 
 func TestKwildEthDepositOracleIntegration(t *testing.T) {
