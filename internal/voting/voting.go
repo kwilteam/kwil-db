@@ -409,23 +409,32 @@ func FilterNotProcessed(ctx context.Context, db sql.Executor, ids ...types.UUID)
 	return processed, nil
 }
 
-// FilterExistsNoBody takes a set of resolutions and returns the ones that do exist but do not have a body.
+// FilterExistsNoBody takes a set of resolutions and returns the ones that
+// either do not exist or exists but doesn't have the resolution body
 func FilterExistsNoBody(ctx context.Context, db sql.Executor, ids ...types.UUID) ([]types.UUID, error) {
-	res, err := db.Execute(ctx, returnNoBody, types.UUIDArray(ids))
+	res, err := db.Execute(ctx, returnHasBody, types.UUIDArray(ids))
 	if err != nil {
 		return nil, err
 	}
 
-	processed := make([]types.UUID, len(res.Rows))
-	for i, row := range res.Rows {
+	hasBody := make(map[types.UUID]bool)
+	var resIDs []types.UUID
+
+	for _, row := range res.Rows {
 		if len(row) != 1 {
 			// this should never happen, just for safety
 			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 		}
-		processed[i] = types.UUID(row[0].([]byte))
+		hasBody[types.UUID(row[0].([]byte))] = true
+
 	}
 
-	return processed, nil
+	for _, id := range ids {
+		if !hasBody[id] {
+			resIDs = append(resIDs, id)
+		}
+	}
+	return resIDs, nil
 }
 
 // HasVoted checks if a voter has voted on a resolution.

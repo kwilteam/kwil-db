@@ -654,11 +654,13 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 		ids = append(ids, event.ID())
 	}
 
+	// Filter out events which doesn't have resolutions or resolution body
 	doesNotHaveBody, err := voting.FilterExistsNoBody(ctx, readTx, ids...)
 	if err != nil {
 		return nil, err
 	}
 
+	// Filter out already processed resolutions
 	notProcessed, err := voting.FilterNotProcessed(ctx, readTx, doesNotHaveBody...)
 	if err != nil {
 		return nil, err
