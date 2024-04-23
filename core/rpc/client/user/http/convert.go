@@ -278,10 +278,10 @@ func convertHttpProcedures(procedures []httpTx.TxProcedure) []*types.Procedure {
 		if procedure.ReturnTypes != nil {
 			returns = &types.ProcedureReturn{
 				IsTable: procedure.ReturnTypes.IsTable,
-				Fields:  make([]*types.NamedType, len(procedure.ReturnTypes.Columns)),
+				Fields:  make([]*types.NamedType, len(procedure.ReturnTypes.Fields)),
 			}
 
-			for j, col := range procedure.ReturnTypes.Columns {
+			for j, col := range procedure.ReturnTypes.Fields {
 				returns.Fields[j] = &types.NamedType{
 					Name: col.Name,
 					Type: convertDataType(col.Type_),

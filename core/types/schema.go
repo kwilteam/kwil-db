@@ -687,7 +687,7 @@ func (a *AttributeType) Clean() error {
 type Action struct {
 	Name        string     `json:"name"`
 	Annotations []string   `json:"annotations,omitempty"`
-	Parameters  []string   `json:"inputs"`
+	Parameters  []string   `json:"parameters"`
 	Public      bool       `json:"public"`
 	Modifiers   []Modifier `json:"modifiers"`
 	// Statements  []string   `json:"statements"`
@@ -843,7 +843,7 @@ func (p *Procedure) IsOwnerOnly() bool {
 // EITHER the Type field is set, OR the Table field is set.
 type ProcedureReturn struct {
 	IsTable bool         `json:"isTable"`
-	Fields  []*NamedType `json:"returnTypes"`
+	Fields  []*NamedType `json:"fields"`
 }
 
 func (p *ProcedureReturn) Clean() error {

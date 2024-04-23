@@ -736,10 +736,10 @@ components:
           - public: true
             name: name
             returnTypes:
-              columns:
-              - null
-              - null
               isTable: true
+              fields:
+              - null
+              - null
             annotations:
             - annotations
             - annotations
@@ -755,10 +755,10 @@ components:
           - public: true
             name: name
             returnTypes:
-              columns:
-              - null
-              - null
               isTable: true
+              fields:
+              - null
+              - null
             annotations:
             - annotations
             - annotations
@@ -863,10 +863,10 @@ components:
         public: true
         name: name
         returnTypes:
-          columns:
-          - null
-          - null
           isTable: true
+          fields:
+          - null
+          - null
         annotations:
         - annotations
         - annotations
@@ -884,15 +884,15 @@ components:
       properties:
         isTable:
           type: boolean
-        columns:
+        fields:
           type: array
           items:
             $ref: '#/components/schemas/txTypedVariable'
       example:
-        columns:
-        - null
-        - null
         isTable: true
+        fields:
+        - null
+        - null
     txQueryRequest:
       type: object
       properties:
@@ -1068,10 +1068,10 @@ components:
         - public: true
           name: name
           returnTypes:
-            columns:
-            - null
-            - null
             isTable: true
+            fields:
+            - null
+            - null
           annotations:
           - annotations
           - annotations
@@ -1087,10 +1087,10 @@ components:
         - public: true
           name: name
           returnTypes:
-            columns:
-            - null
-            - null
             isTable: true
+            fields:
+            - null
+            - null
           annotations:
           - annotations
           - annotations

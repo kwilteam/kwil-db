@@ -768,7 +768,7 @@
         "isTable": {
           "type": "boolean"
         },
-        "columns": {
+        "fields": {
           "type": "array",
           "items": {
             "type": "object",

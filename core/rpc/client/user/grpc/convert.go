@@ -270,9 +270,9 @@ func convertProceduresToEngine(proc []*txpb.Procedure) []*types.Procedure {
 		if p.ReturnTypes != nil {
 			t.Returns = &types.ProcedureReturn{
 				IsTable: p.ReturnTypes.IsTable,
-				Fields:  make([]*types.NamedType, len(p.ReturnTypes.Columns)),
+				Fields:  make([]*types.NamedType, len(p.ReturnTypes.Fields)),
 			}
-			for j, r := range p.ReturnTypes.Columns {
+			for j, r := range p.ReturnTypes.Fields {
 				t.Returns.Fields[j] = &types.NamedType{
 					Name: r.Name,
 					Type: convertDataTypeToEngine(r.Type),
@@ -455,10 +455,10 @@ func convertProceduresFromEngine(proc []*types.Procedure) []*txpb.Procedure {
 		if p.Returns != nil {
 			t.ReturnTypes = &txpb.ProcedureReturn{
 				IsTable: p.Returns.IsTable,
-				Columns: make([]*txpb.TypedVariable, len(p.Returns.Fields)),
+				Fields: make([]*txpb.TypedVariable, len(p.Returns.Fields)),
 			}
 			for j, r := range p.Returns.Fields {
-				t.ReturnTypes.Columns[j] = &txpb.TypedVariable{
+				t.ReturnTypes.Fields[j] = &txpb.TypedVariable{
 					Name: r.Name,
 					Type: convertDataTypeFromEngine(r.Type),
 				}
