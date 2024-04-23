@@ -46,7 +46,7 @@ services:
       retries: 10
 
   pg0:
-    image: postgres:16.1
+    image: postgres:16.2
     ports:
       - "5432"
     restart: always
@@ -59,6 +59,8 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
+      -c track_commit_timestamp=true
+      -c wal_sender_timeout=0
     volumes:
       - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
@@ -111,7 +113,7 @@ services:
       retries: 10
 
   pg1:
-    image: postgres:16.1
+    image: postgres:16.2
     ports:
       - "5432"
     restart: always
@@ -124,6 +126,8 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
+      -c track_commit_timestamp=true
+      -c wal_sender_timeout=0
     volumes:
       - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
@@ -176,7 +180,7 @@ services:
       retries: 10
 
   pg2:
-    image: postgres:16.1
+    image: postgres:16.2
     ports:
       - "5432"
     restart: always
@@ -189,6 +193,8 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
+      -c track_commit_timestamp=true
+      -c wal_sender_timeout=0
     volumes:
       - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
@@ -244,7 +250,7 @@ services:
       retries: 10
 
   pg3:
-    image: postgres:16.1
+    image: postgres:16.2
     ports:
       - "5432"
     restart: always
@@ -257,6 +263,8 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
+      -c track_commit_timestamp=true
+      -c wal_sender_timeout=0
     volumes:
       - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
@@ -309,7 +317,7 @@ services:
       retries: 10
 
   pg4:
-    image: postgres:16.1
+    image: postgres:16.2
     ports:
       - "5432"
     restart: always
@@ -322,6 +330,8 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
+      -c track_commit_timestamp=true
+      -c wal_sender_timeout=0
     volumes:
       - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
@@ -374,7 +384,7 @@ services:
       retries: 10
 
   pg5:
-    image: postgres:16.1
+    image: postgres:16.2
     ports:
       - "5432"
     restart: always
@@ -387,6 +397,8 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
+      -c track_commit_timestamp=true
+      -c wal_sender_timeout=0
     volumes:
       - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
