@@ -1,0 +1,35 @@
+database was_here;
+
+table tags {
+    ident text primary notnull,
+    val int default(42),
+    msg text notnull
+}
+
+action tag($msg) public {
+    INSERT INTO "tags" (ident, msg) VALUES (@caller, $msg);
+}
+
+action delete_mine() public {
+    DELETE FROM tags WHERE ident = @caller;
+}
+
+action delete_other ($ident) public owner {
+    DELETE FROM "tags" WHERE ident = $ident;
+}
+
+action delete_all () public owner {
+    DELETE FROM tags;
+}
+
+action get_user_tag($ident) public view {
+    SELECT msg, val FROM tags WHERE ident = $ident;
+}
+
+action get_my_tag() public view {
+    SELECT msg, val FROM tags WHERE ident = @caller;
+}
+
+action get_all() public view {
+    SELECT * FROM tags;
+}
