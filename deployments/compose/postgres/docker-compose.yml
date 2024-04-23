@@ -1,7 +1,7 @@
 services:
   pg:
     container_name: postgres
-    image: postgres:16.1
+    image: postgres:16.2
     ports:
       - "5432:5432"
     restart: always
@@ -17,6 +17,8 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
       -c max_prepared_transactions=2
+      -c track_commit_timestamp=true
+      -c wal_sender_timeout=0
     volumes: 
       - kwildb:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/create_user.sql
