@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"net/url"
 	"os"
 	"os/signal"
 	"path"
@@ -20,6 +21,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
+	"github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/kwilteam/kwil-db/test/utils"
@@ -38,10 +40,11 @@ const TestChainID = "kwil-test-chain"
 
 // ActTestCfg is the config for acceptance test
 type ActTestCfg struct {
-	HTTPEndpoint string
-	GrpcEndpoint string
-	P2PAddress   string // cometbft p2p address
-	AdminRPC     string // tcp or unix socket
+	JSONRPCEndpoint string
+	HTTPEndpoint    string
+	GrpcEndpoint    string
+	P2PAddress      string // cometbft p2p address
+	AdminRPC        string // tcp or unix socket
 
 	SchemaFile                string
 	DockerComposeFile         string
@@ -134,7 +137,8 @@ func (r *ActHelper) LoadConfig() *ActTestCfg {
 		VisitorRawPK:              getEnv("KACT_VISITOR_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
 		SchemaFile:                getEnv("KACT_SCHEMA", "./test-data/test_db.kf"),
 		LogLevel:                  getEnv("KACT_LOG_LEVEL", "info"),
-		HTTPEndpoint:              getEnv("KACT_HTTP_ENDPOINT", "http://localhost:8080"),
+		JSONRPCEndpoint:           getEnv("KACT_JSONRPC_ENDPOINT", "http://127.0.0.1:8484/rpc/v1"),
+		HTTPEndpoint:              getEnv("KACT_HTTP_ENDPOINT", "http://127.0.0.1:8080/"),
 		GrpcEndpoint:              getEnv("KACT_GRPC_ENDPOINT", "localhost:50051"), // NOTE: no longer used
 		P2PAddress:                getEnv("KACT_CHAIN_ENDPOINT", "tcp://0.0.0.0:26656"),
 		AdminRPC:                  getEnv("KACT_ADMIN_RPC", "unix:///tmp/admin.sock"),
@@ -261,11 +265,16 @@ func (r *ActHelper) Setup(ctx context.Context) {
 	r.runDockerCompose(ctx)
 
 	// update configured endpoints, so that we can still test against remote services
+	jsonrpcEndpoint, _, err := utils.KwildJSONRPCEndpoints(r.container, ctx)
+	require.NoError(r.t, err, "failed to get json-rpc endpoint")
+	r.cfg.JSONRPCEndpoint = jsonrpcEndpoint + "/rpc/v1"
+
 	httpEndpoint, _, err := utils.KwildHTTPEndpoints(r.container, ctx)
 	require.NoError(r.t, err, "failed to get http endpoint")
+	r.cfg.HTTPEndpoint = httpEndpoint
+
 	grpcEndpoint, _, err := utils.KwildGRPCEndpoints(r.container, ctx)
 	require.NoError(r.t, err, "failed to get grpc endpoint")
-	r.cfg.HTTPEndpoint = httpEndpoint
 	r.cfg.GrpcEndpoint = grpcEndpoint
 }
 
@@ -289,24 +298,43 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 	}
 
 	switch driveType {
+	case "jsonrpc":
+		return r.getJSONRPCClientDriver(signer, r.cfg.JSONRPCEndpoint)
 	case "http":
 		return r.getHTTPClientDriver(signer, r.cfg.HTTPEndpoint)
 	case "grpc":
 		return r.getGRPCClientDriver(signer, r.cfg.GrpcEndpoint)
 	case "cli":
-		return r.getCliDriver(pk, signer.Identity(), r.cfg.HTTPEndpoint)
+		return r.getCliDriver(pk, signer.Identity(), r.cfg.JSONRPCEndpoint)
 	default:
 		panic("unsupported driver type")
 	}
 }
 
-func (r *ActHelper) getHTTPClientDriver(signer auth.Signer, endpoint string) KwilAcceptanceDriver {
+func (r *ActHelper) getJSONRPCClientDriver(signer auth.Signer, endpoint string) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	kwilClt, err := client.NewClient(context.TODO(), endpoint, &clientType.Options{
 		Signer:  signer,
 		ChainID: TestChainID,
 		Logger:  logger,
+	})
+	require.NoError(r.t, err, "failed to create json-rpc client")
+
+	return driver.NewKwildClientDriver(kwilClt, signer, nil, logger)
+}
+
+func (r *ActHelper) getHTTPClientDriver(signer auth.Signer, endpoint string) KwilAcceptanceDriver {
+	logger := log.New(log.Config{Level: r.cfg.LogLevel})
+
+	parsedURL, err := url.Parse(endpoint)
+	require.NoError(r.t, err, "bad url")
+
+	httpClient := http.NewClient(parsedURL)
+
+	kwilClt, err := client.WrapClient(context.TODO(), httpClient, &clientType.Options{
+		Signer: signer,
+		Logger: logger,
 	})
 	require.NoError(r.t, err, "failed to create http client")
 

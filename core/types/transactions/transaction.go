@@ -118,20 +118,20 @@ func CreateTransaction(contents Payload, chainID string, nonce uint64) (*Transac
 	}, nil
 }
 
-type Transaction struct { // TODO: json tags with lower case, technically a breaking change
+type Transaction struct {
 	// Signature is the signature of the transaction.
-	Signature *auth.Signature
+	Signature *auth.Signature `json:"signature,omitempty"`
 
 	// Body is the body of the transaction. It gets serialized and signed.
-	Body *TransactionBody
+	Body *TransactionBody `json:"body,omitempty"`
 
 	// Serialization is the serialization performed on `Body`
 	// in order to generate the message that being signed.
-	Serialization SignedMsgSerializationType
+	Serialization SignedMsgSerializationType `json:"serialization"`
 
 	// Sender is the user identifier, which is generally an address but may be
 	// a public key of the sender.
-	Sender []byte // TODO: this field isn't actually used. internally, we always use the signer's identity
+	Sender []byte `json:"sender"`
 }
 
 // SerializeMsg produces the serialization of the transaction that is to be used
@@ -176,20 +176,20 @@ func (t *Transaction) UnmarshalBinary(data serialize.SerializedData) error {
 // NOTE: rlp encoding will preserve the order of the fields
 type TransactionBody struct {
 	// Description is a human-readable description of the transaction
-	Description string
+	Description string `json:"desc"`
 
 	// Payload is the raw bytes of the payload data, it is RLP encoded
-	Payload serialize.SerializedData
+	Payload serialize.SerializedData `json:"payload"`
 
 	// PayloadType is the type of the payload
 	// This can be used to determine how to decode the payload
-	PayloadType PayloadType
+	PayloadType PayloadType `json:"type"`
 
 	// Fee is the fee the sender is willing to pay for the transaction
-	Fee *big.Int
+	Fee *big.Int `json:"fee"`
 
 	// Nonce is the next nonce of the sender
-	Nonce uint64
+	Nonce uint64 `json:"nonce"`
 
 	// ChainID identifies the Kwil chain for which the transaction is intended.
 	// Alternatively, this could be withheld from the TransactionBody and passed
@@ -198,7 +198,7 @@ type TransactionBody struct {
 	// serialization must include it anyway since it passes through the
 	// consensus engine and p2p systems as an opaque blob that must be
 	// unmarshalled with the chain ID in Kwil blockchain application.
-	ChainID string
+	ChainID string `json:"chain_id"`
 }
 
 func (t *TransactionBody) MarshalBinary() ([]byte, error) {

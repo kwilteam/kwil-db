@@ -50,10 +50,11 @@ type Logging struct {
 }
 
 type AppConfig struct {
-	GrpcListenAddress  string `mapstructure:"grpc_listen_addr"`
-	HTTPListenAddress  string `mapstructure:"http_listen_addr"`
-	AdminListenAddress string `mapstructure:"admin_listen_addr"`
-	PrivateKeyPath     string `mapstructure:"private_key_path"`
+	JSONRPCListenAddress string `mapstructure:"jsonrpc_listen_addr"`
+	GrpcListenAddress    string `mapstructure:"grpc_listen_addr"`
+	HTTPListenAddress    string `mapstructure:"http_listen_addr"`
+	AdminListenAddress   string `mapstructure:"admin_listen_addr"`
+	PrivateKeyPath       string `mapstructure:"private_key_path"`
 
 	// PostgreSQL DB settings. DBName is the name if the PostgreSQL database to
 	// connect to. The different data stores (e.g. engine, acct store, event
@@ -275,6 +276,7 @@ func GetCfg(flagCfg *KwildConfig, quickStart bool) (*KwildConfig, bool, error) {
 
 	// Remember the default listen addresses in case we need to apply the
 	// default port to a user override.
+	defaultListenJSONRPC := cfg.AppCfg.JSONRPCListenAddress
 	defaultListenRPC, defaultListenHTTP := cfg.AppCfg.GrpcListenAddress, cfg.AppCfg.HTTPListenAddress
 
 	// read in env config
@@ -343,6 +345,7 @@ func GetCfg(flagCfg *KwildConfig, quickStart bool) (*KwildConfig, bool, error) {
 
 	cfg.AppCfg.GrpcListenAddress = cleanListenAddr(cfg.AppCfg.GrpcListenAddress, defaultListenRPC)
 	cfg.AppCfg.HTTPListenAddress = cleanListenAddr(cfg.AppCfg.HTTPListenAddress, defaultListenHTTP)
+	cfg.AppCfg.JSONRPCListenAddress = cleanListenAddr(cfg.AppCfg.JSONRPCListenAddress, defaultListenJSONRPC)
 
 	return cfg, configFileExists, nil
 }
@@ -485,13 +488,14 @@ func fileExists(path string) bool {
 func DefaultConfig() *KwildConfig {
 	return &KwildConfig{
 		AppCfg: &AppConfig{
-			GrpcListenAddress:  "localhost:50051",
-			HTTPListenAddress:  "0.0.0.0:8080",
-			AdminListenAddress: "unix:///tmp/kwil_admin.sock",
-			DBHost:             "127.0.0.1",
-			DBPort:             "5432", // ignored with unix socket, but applies if IP used for DBHost
-			DBUser:             "kwild",
-			DBName:             "kwild",
+			JSONRPCListenAddress: "0.0.0.0:8484",
+			GrpcListenAddress:    "localhost:50051",
+			HTTPListenAddress:    "0.0.0.0:8080",
+			AdminListenAddress:   "unix:///tmp/kwil_admin.sock",
+			DBHost:               "127.0.0.1",
+			DBPort:               "5432", // ignored with unix socket, but applies if IP used for DBHost
+			DBUser:               "kwild",
+			DBName:               "kwild",
 			// SnapshotConfig: SnapshotConfig{
 			// 	Enabled:         false,
 			// 	RecurringHeight: uint64(10000),

@@ -31,6 +31,9 @@
 
 [app]
 
+# TCP address for the KWILD App's JSON-RPC server to listen on
+jsonrpc_listen_addr = "192.168.1.1:8484"
+
 # TCP address for the KWILD App's GRPC server to listen on
 grpc_listen_addr = "localhost:50051"
 

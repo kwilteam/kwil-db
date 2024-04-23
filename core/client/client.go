@@ -17,7 +17,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
-	"github.com/kwilteam/kwil-db/core/rpc/client/user/http"
+	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -43,14 +43,18 @@ var _ clientType.Client = (*Client)(nil)
 // It by default communicates with target via HTTP; chain ID of the remote host
 // will be verified against the chain ID passed in.
 func NewClient(ctx context.Context, target string, options *clientType.Options) (c *Client, err error) {
-	parsedUrl, err := url.Parse(target)
+	parsedURL, err := url.Parse(target)
 	if err != nil {
 		return nil, fmt.Errorf("parse url: %w", err)
 	}
 
-	httpClient := http.NewClient(parsedUrl)
+	jsonrpcClientOpts := []rpcclient.Opts{}
+	if options != nil {
+		jsonrpcClientOpts = append(jsonrpcClientOpts, rpcclient.WithLogger(options.Logger))
+	}
+	client := rpcclient.NewClient(parsedURL.String(), jsonrpcClientOpts...)
 
-	clt, err := WrapClient(ctx, httpClient, options)
+	clt, err := WrapClient(ctx, client, options)
 	if err != nil {
 		return nil, fmt.Errorf("wrap client: %w", err)
 	}

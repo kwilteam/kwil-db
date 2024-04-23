@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net/url"
 	"os"
 	"os/signal"
 	"path"
@@ -32,6 +33,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/gatewayclient"
 	"github.com/kwilteam/kwil-db/core/log"
 	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
+	http "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	ethdeposits "github.com/kwilteam/kwil-db/extensions/listeners/eth_deposits"
 	"github.com/kwilteam/kwil-db/test/driver"
@@ -78,10 +80,11 @@ const (
 // IntTestConfig is the config for integration test
 // This is totally separate from acceptance test
 type IntTestConfig struct {
-	HTTPEndpoint  string
-	GrpcEndpoint  string
-	ChainEndpoint string
-	AdminRPC      string // either tcp or unix.  Should be of form unix://var/run/kwil/admin.sock or tcp://localhost:26657
+	JSONRPCEndpoint string
+	HTTPEndpoint    string
+	GrpcEndpoint    string
+	ChainEndpoint   string
+	AdminRPC        string // either tcp or unix.  Should be of form unix://var/run/kwil/admin.sock or tcp://localhost:26657
 
 	SchemaFile                string
 	DockerComposeFile         string
@@ -254,7 +257,8 @@ func (r *IntHelper) LoadConfig() {
 		VisitorRawPK:              getEnv("KIT_VISITOR_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
 		SchemaFile:                getEnv("KIT_SCHEMA", "./test-data/test_db.kf"),
 		LogLevel:                  getEnv("KIT_LOG_LEVEL", "info"),
-		HTTPEndpoint:              getEnv("KIT_HTTP_ENDPOINT", "http://localhost:8080"),
+		HTTPEndpoint:              getEnv("KIT_HTTP_ENDPOINT", "http://localhost:8080/"),
+		JSONRPCEndpoint:           getEnv("KIT_JSONRPC_ENDPOINT", "http://localhost:8484/rpc/v1"),
 		GrpcEndpoint:              getEnv("KIT_GRPC_ENDPOINT", "localhost:50051"),
 		AdminRPC:                  getEnv("KIT_ADMIN_RPC", "unix:///tmp/admin.sock"),
 		DockerComposeFile:         getEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
@@ -667,9 +671,11 @@ func (r *IntHelper) GetUserGatewayDriver(ctx context.Context, driverType string,
 	}
 
 	switch driverType {
+	// case "jsonrpc":
+	// 	return r.getJSONRPCClientDriver(signer, gatewayURL, gatewayProvider, nil)
 	case "http":
 		return r.getHTTPClientDriver(signer, gatewayURL, gatewayProvider, nil)
-	case "cli":
+	case "cli": // this isn't going to work either now since kwil-cli uses the jsonrpc client
 		return r.getCliDriver(gatewayURL, pk, signer.Identity(), gatewayProvider, nil)
 	default:
 		panic("unsupported driver type")
@@ -684,24 +690,30 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverTy
 	ctr := r.containers[nodeName]
 	grpcURL, _, err := utils.KwildGRPCEndpoints(ctr, ctx)
 	require.NoError(r.t, err, "failed to get grpc url")
+	jsonrpcURL, _, err := utils.KwildJSONRPCEndpoints(ctr, ctx)
+	jsonrpcURL += "/rpc/v1"
+	require.NoError(r.t, err, "failed to get json-rpc url")
 	httpURL, _, err := utils.KwildHTTPEndpoints(ctr, ctx)
 	require.NoError(r.t, err, "failed to get http url")
 	cometBftURL, _, err := utils.KwildRpcEndpoints(ctr, ctx)
 	require.NoError(r.t, err, "failed to get cometBft url")
-	r.t.Logf("grpcURL: %s httpURL: %s cometBftURL: %s for container: %s", grpcURL, httpURL, cometBftURL, nodeName)
+	r.t.Logf("grpcURL: %s httpURL: %s jsonrpcURL: %s cometBftURL: %s for container: %s",
+		grpcURL, httpURL, jsonrpcURL, cometBftURL, nodeName)
 
 	signer := r.cfg.CreatorSigner
 	pk := r.cfg.CreatorRawPk
 
 	switch driverType {
+	case "jsonrpc":
+		return r.getJSONRPCClientDriver(signer, jsonrpcURL, gatewayProvider, deployer)
 	case "http":
 		return r.getHTTPClientDriver(signer, httpURL, gatewayProvider, deployer)
-	case "grpc":
+	case "grpc": // can probably remove this now, it's not even supported in 0.7 afaik
 		// should use grpcURL, r.cfg.GrpcEndpoint is not correct(it's intended
 		// to be used for `remote` test mode, but integation tests don't use it)
 		return r.getGRPCClientDriver(signer, deployer)
 	case "cli":
-		return r.getCliDriver(httpURL, pk, signer.Identity(), gatewayProvider, deployer)
+		return r.getCliDriver(jsonrpcURL, pk, signer.Identity(), gatewayProvider, deployer)
 	default:
 		panic("unsupported driver type")
 	}
@@ -744,7 +756,7 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driv
 	}
 }
 
-func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gatewayProvider bool, deployer *ethdeployer.Deployer) *driver.KwildClientDriver {
+func (r *IntHelper) getJSONRPCClientDriver(signer auth.Signer, endpoint string, gatewayProvider bool, deployer *ethdeployer.Deployer) *driver.KwildClientDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 	logger = *logger.With(log.String("testCase", r.t.Name()))
 
@@ -752,6 +764,7 @@ func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gat
 	var err error
 
 	if gatewayProvider {
+		// TODO: make gatewayclient use the JSON-RPC client! It's still the old HTTP one and it won't work
 		kwilClt, err = gatewayclient.NewClient(context.TODO(), endpoint, &gatewayclient.GatewayOptions{
 			Options: clientType.Options{
 				Signer:  signer,
@@ -768,6 +781,36 @@ func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gat
 	}
 
 	require.NoError(r.t, err, "failed to create kwil client")
+
+	return driver.NewKwildClientDriver(kwilClt, signer, deployer, logger)
+}
+
+func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gatewayProvider bool, deployer *ethdeployer.Deployer) *driver.KwildClientDriver {
+	logger := log.New(log.Config{Level: r.cfg.LogLevel})
+	logger = *logger.With(log.String("testCase", r.t.Name()))
+
+	parsedURL, err := url.Parse(endpoint)
+	require.NoError(r.t, err, "bad url")
+
+	var kwilClt clientType.Client
+
+	if gatewayProvider {
+		kwilClt, err = gatewayclient.NewClient(context.TODO(), endpoint, &gatewayclient.GatewayOptions{
+			Options: clientType.Options{
+				Signer:  signer,
+				ChainID: testChainID,
+				Logger:  logger,
+			},
+		})
+	} else {
+		httpClient := http.NewClient(parsedURL)
+		kwilClt, err = client.WrapClient(context.TODO(), httpClient, &clientType.Options{
+			Signer:  signer,
+			ChainID: testChainID,
+			Logger:  logger,
+		})
+	}
+	require.NoError(r.t, err, "wrapping http client failed")
 
 	return driver.NewKwildClientDriver(kwilClt, signer, deployer, logger)
 }
@@ -817,13 +860,13 @@ func (r *IntHelper) getCLIAdminClientDriver(adminSvcServer string, c *testcontai
 	}
 }
 
-func (r *IntHelper) getCliDriver(endpoint string, privKey string, identity []byte, gatewayProvider bool, deployer *ethdeployer.Deployer) *driver.KwilCliDriver {
+func (r *IntHelper) getCliDriver(endpoint, privKey string, identity []byte,
+	gatewayProvider bool, deployer *ethdeployer.Deployer) *driver.KwilCliDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 	logger = *logger.With(log.String("testCase", r.t.Name()))
 
 	_, currentFilePath, _, _ := runtime.Caller(1)
-	cliBinPath := path.Join(path.Dir(currentFilePath),
-		"../../.build/kwil-cli")
+	cliBinPath := path.Join(path.Dir(currentFilePath), "../../.build/kwil-cli")
 
 	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, testChainID, identity, gatewayProvider, deployer, logger)
 }

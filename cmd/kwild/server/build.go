@@ -36,6 +36,7 @@ import (
 	kwilgrpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 	healthcheck "github.com/kwilteam/kwil-db/internal/services/health"
 	simple_checker "github.com/kwilteam/kwil-db/internal/services/health/simple-checker"
+	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/voting"
@@ -204,6 +205,13 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// listener manager
 	listeners := buildListenerManager(d, ev, cometBftNode, txApp)
 
+	jsonRPCTxSvc := rpcserver.NewService(db, e, wrappedCmtClient, txApp, d.log)
+	jsonRPCserver, err := rpcserver.NewServer(d.cfg.AppCfg.JSONRPCListenAddress,
+		*d.log.Named("jsonrpcserver"), jsonRPCTxSvc)
+	if err != nil {
+		failBuild(err, "unable to start json-rpc server")
+	}
+
 	// tx service and grpc server
 	txsvc := buildTxSvc(d, db, e, wrappedCmtClient, txApp)
 	grpcServer := buildGrpcServer(d, txsvc)
@@ -214,6 +222,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	return &Server{
 		grpcServer:      grpcServer,
+		jsonRPCserver:   jsonRPCserver,
 		adminTPCServer:  adminTCPServer,
 		gateway:         buildGatewayServer(d),
 		cometBftNode:    cometBftNode,

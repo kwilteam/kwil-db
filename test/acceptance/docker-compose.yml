@@ -5,6 +5,7 @@ services:
     image: kwild:latest
     ports:
       - "8080"
+      - "8484"
       - "50051"
       - "50151"
       - "26656"

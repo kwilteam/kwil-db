@@ -19,7 +19,7 @@ var remote = flag.Bool("remote", false, "test against remote node")
 
 // NOTE: `-parallel` is a flag that is already used by `go test`
 var parallelMode = flag.Bool("parallel-mode", false, "run tests in parallelMode mode")
-var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
+var drivers = flag.String("drivers", "jsonrpc,http,cli", "comma separated list of drivers to run")
 
 func TestLocalDevSetup(t *testing.T) {
 	if !*dev {

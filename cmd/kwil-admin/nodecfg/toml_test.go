@@ -14,6 +14,7 @@ func Test_Generate_TOML(t *testing.T) {
 	cfg := config.DefaultConfig()
 
 	cfg.AppCfg.DBHost = "/tmp/custom_pg_socket_path"
+	cfg.AppCfg.JSONRPCListenAddress = "127.0.0.1:9494"
 	cfg.AppCfg.GrpcListenAddress = "localhost:9000"
 	cfg.AppCfg.ExtensionEndpoints = []string{"localhost:9001", "localhost:9002"}
 	cfg.Logging.OutputPaths = []string{"stdout", "file"}

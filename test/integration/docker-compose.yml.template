@@ -6,6 +6,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 0}}:{{end}}8080"
+      - "{{with .ExposedHTTPPorts}}{{index . 0 | plus 404 }}:{{end}}8484"
       - "50051"
       - "26656"
       - "26657"
@@ -75,6 +76,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 1}}:{{end}}8080"
+      - "{{with .ExposedHTTPPorts}}{{index . 1 | plus 404 }}:{{end}}8484"
       - "50051"
       - "26656"
       - "26657"
@@ -142,6 +144,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 2}}:{{end}}8080"
+      - "{{with .ExposedHTTPPorts}}{{index . 2 | plus 404 }}:{{end}}8484"
       - "50051"
       - "26656"
       - "26657"
@@ -212,6 +215,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 3}}:{{end}}8080"
+      - "{{with .ExposedHTTPPorts}}{{index . 3 | plus 404 }}:{{end}}8484"
       - "50051"
       - "26656"
       - "26657"
@@ -279,6 +283,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 4}}:{{end}}8080"
+      - "{{with .ExposedHTTPPorts}}{{index . 4 | plus 404 }}:{{end}}8484"
       - "50051"
       - "26656"
       - "26657"
@@ -346,6 +351,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 5}}:{{end}}8080"
+      - "{{with .ExposedHTTPPorts}}{{index . 5 | plus 404 }}:{{end}}8484"
       - "50051"
       - "26656"
       - "26657"

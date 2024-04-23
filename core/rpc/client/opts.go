@@ -3,7 +3,7 @@ package client
 import (
 	"net/http"
 
-	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
+	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 )
 
 // ActionCallOpts is the options for action call.
@@ -35,7 +35,7 @@ func WithAuthCookie(cookie *http.Cookie) ActionCallOption {
 type BroadcastWait uint8
 
 const (
-	BroadcastWaitAsync  = BroadcastWait(txpb.BroadcastSync_async)
-	BroadcastWaitSync   = BroadcastWait(txpb.BroadcastSync_sync)
-	BroadcastWaitCommit = BroadcastWait(txpb.BroadcastSync_commit)
+	BroadcastWaitAsync  = BroadcastWait(jsonrpc.BroadcastSyncAsync)
+	BroadcastWaitSync   = BroadcastWait(jsonrpc.BroadcastSyncSync)
+	BroadcastWaitCommit = BroadcastWait(jsonrpc.BroadcastSyncCommit)
 )

@@ -433,6 +433,12 @@ func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivK
 // it does not apply to the admin address.
 func addressSpecificConfig(c *config.KwildConfig) error {
 
+	jsonrpcAddr, err := incrementPort(c.AppCfg.JSONRPCListenAddress, 1)
+	if err != nil {
+		return err
+	}
+	c.AppCfg.JSONRPCListenAddress = jsonrpcAddr
+
 	grpcAddr, err := incrementPort(c.AppCfg.GrpcListenAddress, 1)
 	if err != nil {
 		return err

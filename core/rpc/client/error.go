@@ -12,8 +12,9 @@ import (
 var (
 	// ErrUnauthorized is returned when the client is not authenticated
 	// It is the equivalent of http status code 401
-	ErrUnauthorized = errors.New("unauthorized")
-	ErrNotFound     = errors.New("not found")
+	ErrUnauthorized   = errors.New("unauthorized")
+	ErrNotFound       = errors.New("not found") // resource not found
+	ErrMethodNotFound = errors.New("method not found")
 )
 
 // ConvertGRPCErr will convert the error to a known type, if possible.

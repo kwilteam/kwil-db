@@ -41,6 +41,7 @@ var (
 	ErrDatasetNotFound = errors.New("dataset not found")
 	ErrDatasetExists   = errors.New("dataset exists")
 	ErrInvalidSchema   = errors.New("invalid schema")
+	ErrDBInternal      = errors.New("internal database error")
 )
 
 func InitializeEngine(ctx context.Context, tx sql.DB) error {
@@ -164,7 +165,7 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *ty
 
 	err = schema.Clean()
 	if err != nil {
-		return err
+		return errors.Join(err, ErrInvalidSchema)
 	}
 	schema.Owner = txdata.Signer
 
@@ -201,7 +202,7 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid strin
 
 	err := deleteSchema(ctx, tx, dbid)
 	if err != nil {
-		return err
+		return errors.Join(err, ErrDBInternal)
 	}
 
 	g.unloadDataset(dbid)
@@ -238,7 +239,7 @@ func (g *GlobalContext) Procedure(ctx context.Context, tx sql.DB, options *commo
 
 	tx2, err := tx.BeginTx(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, ErrDBInternal)
 	}
 	defer tx2.Rollback(ctx)
 
@@ -351,13 +352,13 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 
 	preparedActions, err := prepareActions(schema)
 	if err != nil {
-		return err
+		return errors.Join(err, ErrInvalidSchema)
 	}
 
 	for _, prepared := range preparedActions {
 		_, ok := datasetCtx.actions[prepared.name]
 		if ok {
-			return fmt.Errorf(`duplicate procedure name: "%s"`, prepared.name)
+			return fmt.Errorf(`%w: duplicate action name: "%s"`, ErrInvalidSchema, prepared.name)
 		}
 
 		datasetCtx.actions[prepared.name] = prepared

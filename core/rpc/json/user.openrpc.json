@@ -1,0 +1,527 @@
+{
+	"openrpc": "1.2.4",
+	"info": {
+		"title": "DRAFT Kwil JSON-RPC Specification",
+		"description": "A specification of the standard interface for Kwil clients.",
+		"license": {
+			"name": "CC0-1.0",
+			"url": "https://creativecommons.org/publicdomain/zero/1.0/legalcode"
+		},
+		"version": "0.0.0"
+	},
+	"servers": [],
+	"methods": [
+		{
+			"name": "ping",
+			"summary": "Pings the node.",
+			"params": [
+				{
+					"name": "message",
+					"required": false,
+					"schema": {
+						"type": "string"
+					}
+				}
+			],
+			"result": {
+				"name": "message",
+				"schema": {
+					"title": "response",
+					"type": "string"
+				}
+			}
+		},
+		{
+			"name": "get_schema",
+			"summary": "Gets a schema.",
+			"params": [
+				{
+					"name": "dbid",
+					"required": false,
+					"schema": {
+						"type": "string"
+					}
+				}
+			],
+			"result": {
+				"name": "schema",
+				"schema": {
+					"type": "object",
+					"$ref": "#/components/schemas/schema"
+				}
+			}
+		},
+        {
+			"name": "chain_info",
+			"summary": "Gets chain info.",
+			"params": [],
+            "result": {
+                "name": "chainInfoResult",
+                "description": "chain info result",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "chain_id": {
+                            "type":"string"
+                        },
+                        "height": {
+                            "type": "integer"
+                        },
+                        "hash": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "account",
+            "summary": "Get account info",
+            "params": [
+                {
+                    "name": "identifier",
+                    "schema": {
+                        "type": "string"
+                    }
+                },
+                {
+                    "name": "status",
+                    "schema": {
+                        "type": "integer"
+                    }
+                }
+            ],
+            "result": {
+                "name": "accountInfoResult",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "identifier": {
+                            "type": "string"
+                        },
+                        "balance": {
+                            "type": "string"
+                        },
+                        "nonce": {
+                            "type": "integer"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "broadcast",
+            "summary": "broadcast a transaction",
+            "params": [
+                {
+                    "name": "tx",
+                    "schema": {
+                        "type": "object",
+                        "$ref": "#/components/schemas/transaction"
+                    }
+                }
+            ],
+            "result": {
+                "name": "broadcastResult",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "tx_hash": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "call",
+            "summary": "call a view action",
+            "params": [
+                {
+                    "name": "tx",
+                    "schema": {
+                        "type": "object",
+                        "$ref": "#/components/schemas/transaction"
+                    }
+                }
+            ],
+            "result": {
+                "name": "broadcastResult",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "tx_hash": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+	],
+	"components": {
+		"schemas": {
+            "callMsgBody": {
+                "type": "object",
+                "properties": {
+                    "payload": {
+                        "type": "string"
+                    }
+                }
+            },
+			"extensionConfig": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"value": {
+						"type": "string"
+					}
+				}
+			},
+			"dataType": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"is_array": {
+						"type": "boolean"
+					}
+				}
+			},
+			"colAttribute": {
+				"type": "object",
+				"properties": {
+					"type": {
+						"type": "string"
+					},
+					"value": {
+						"type": "string"
+					}
+				}
+			},
+            "action": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"annotations": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"parameters": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"public": {
+						"type": "boolean"
+					},
+					"modifiers": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"body": {
+						"type": "string"
+					}
+				}
+			},
+            "procedure": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"parameters": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/procedureReturn"
+						}
+					},
+					"public": {
+						"type": "boolean"
+					},
+					"modifiers": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"body": {
+						"type": "string"
+					},
+					"return_types": {
+						"type": "object",
+						"$ref": "#/components/schemas/procedureReturn"
+					},
+					"annotations": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			"foreignProcedure": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"parameters": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/dataType"
+						}
+					},
+					"returns": {
+						"type": "object",
+						"$ref": "#/components/schemas/procedureReturn"
+					}
+				}
+			},
+			"procedureReturn": {
+				"type": "object",
+				"properties": {
+					"is_table": {
+						"type": "boolean"
+					},
+					"fields": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/namedType"
+						}
+					}
+				}
+			},
+			"namedType": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"type": {
+						"type":"object",
+						"$ref": "#/components/schemas/dataType"
+					}
+				}
+			},
+			"column": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"type": {
+						"type": "object",
+						"schema": "#/components/schemas/dataType"
+					},
+					"attributes": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/colAttribute"
+						}
+					}
+				}
+			},
+			"extension": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"initialization": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/extensionConfig"
+						}
+					},
+					"alias": {
+						"type": "string"
+					}
+				}
+			},
+            "index": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"columns": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"type": {
+						"type": "string"
+					}
+				}
+			},
+            "foreignKey": {
+				"type": "object",
+				"properties": {
+					"child_keys": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"parent_keys": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"parent_table": {
+						"type": "string"
+					},
+					"actions": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/foreignKeyAction"
+						}
+					}
+				}
+			},
+			"foreignKeyAction": {
+				"type": "object",
+				"properties": {
+					"on": {
+						"type": "string"
+					},
+					"do": {
+						"type": "string"
+					}
+				}
+			},
+			"table": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"columns": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/column"
+						}
+					},
+					"indexes": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/index"
+						}
+					},
+					"foreign_keys": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/foreignKey"
+						}
+					}
+				}
+			},
+            "transaction": {
+				"type": "object",
+				"properties": {
+          			"signature": {
+            			"type": "object",
+                        "$ref": "#/components/schemas/signature"
+         			},
+                    "body": {
+                        "$ref": "#/components/schemas/txBody"
+                    },
+                    "serialization": {
+                        "type": "string"
+                    },
+                    "sender": {
+                        "type": "string"
+                    }
+                }
+            },
+            "signature": {
+				"type": "object",
+				"properties": {
+          			"sig": {
+            			"type": "string"
+         			},
+                    "type": {
+            			"type": "string"
+         			}
+                }
+            },
+            "txBody": {
+				"type": "object",
+				"properties": {
+          			"desc": {
+            			"type": "string"
+         			},
+                    "payload": {
+                        "description": "base64 serialized payload",
+            			"type": "string"
+         			},
+                    "type": {
+            			"type": "string"
+         			},
+                    "fee": {
+            			"type": "string"
+         			},
+                    "nonce": {
+            			"type": "integer"
+         			},
+                    "chain_id": {
+            			"type": "string"
+         			}
+                }
+            },
+			"schema": {
+				"type": "object",
+				"properties": {
+          			"name": {
+            			"type": "string"
+         			},
+          			"owner": {
+          			  "type": "string"
+          			},
+					"extensions": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/extension"
+						}
+					},
+					"tables": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/table"
+						}
+					},
+					"actions": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/action"
+						}
+					},
+					"procedures": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/procedure"
+						}
+					},
+					"foreign_calls": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/foreignProcedure"
+						}
+					}
+				}
+			}
+		}
+	}
+}

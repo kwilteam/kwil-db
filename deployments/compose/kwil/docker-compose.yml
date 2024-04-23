@@ -46,6 +46,7 @@ services:
       dockerfile: ./build/package/docker/kwild.dockerfile
     ports:
       - "8080:8080"
+      - "8484:8484"
       - "50051:50051"
       - "50151:50151"
       - "26656:26656"

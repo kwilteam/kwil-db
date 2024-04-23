@@ -778,8 +778,7 @@ type Action struct {
 	Parameters  []string   `json:"parameters"`
 	Public      bool       `json:"public"`
 	Modifiers   []Modifier `json:"modifiers"`
-	// Statements  []string   `json:"statements"`
-	Body string `json:"body"`
+	Body        string     `json:"body"`
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).

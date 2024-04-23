@@ -28,7 +28,7 @@ import (
 // KwilCliDriver is a driver for tests using `cmd/kwil-cli`
 type KwilCliDriver struct {
 	cliBin          string // kwil-cli binary path
-	rpcUrl          string
+	rpcURL          string
 	privKey         string
 	identity        []byte
 	gatewayProvider bool
@@ -37,10 +37,10 @@ type KwilCliDriver struct {
 	logger          log.Logger
 }
 
-func NewKwilCliDriver(cliBin, rpcUrl, privKey, chainID string, identity []byte, gatewayProvider bool, deployer *ethdeployer.Deployer, logger log.Logger) *KwilCliDriver {
+func NewKwilCliDriver(cliBin, rpcURL, privKey, chainID string, identity []byte, gatewayProvider bool, deployer *ethdeployer.Deployer, logger log.Logger) *KwilCliDriver {
 	return &KwilCliDriver{
 		cliBin:          cliBin,
-		rpcUrl:          rpcUrl,
+		rpcURL:          rpcURL,
 		privKey:         privKey,
 		identity:        identity,
 		gatewayProvider: gatewayProvider,
@@ -52,7 +52,7 @@ func NewKwilCliDriver(cliBin, rpcUrl, privKey, chainID string, identity []byte, 
 
 // newKwilCliCmd returns a new exec.Cmd for kwil-cli
 func (d *KwilCliDriver) newKwilCliCmd(args ...string) *exec.Cmd {
-	args = append(args, "--provider", d.rpcUrl)
+	args = append(args, "--provider", d.rpcURL)
 	args = append(args, "--private-key", d.privKey)
 	args = append(args, "--chain-id", d.chainID)
 	args = append(args, "--output", "json")
@@ -70,7 +70,7 @@ func (d *KwilCliDriver) newKwilCliCmd(args ...string) *exec.Cmd {
 func (d *KwilCliDriver) newKwilCliCmdWithYes(args ...string) *exec.Cmd {
 	args = append([]string{"yes |", d.cliBin}, args...)
 
-	args = append(args, "--provider", d.rpcUrl)
+	args = append(args, "--provider", d.rpcURL)
 	args = append(args, "--private-key", d.privKey)
 	args = append(args, "--chain-id", d.chainID)
 	args = append(args, "--output", "json")
@@ -99,7 +99,7 @@ func (d *KwilCliDriver) account(ctx context.Context, acctID []byte) (*types.Acco
 	d.logger.Debug("account balance result", zap.Any("result", out.Result))
 	acct, err := parseRespAccount(out.Result)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse list databases response: %w", err)
+		return nil, fmt.Errorf("failed to parse account balance response: %w", err)
 	}
 
 	return acct, nil
@@ -108,7 +108,7 @@ func (d *KwilCliDriver) account(ctx context.Context, acctID []byte) (*types.Acco
 func (d *KwilCliDriver) AccountBalance(ctx context.Context, acctID []byte) (*big.Int, error) {
 	acct, err := d.account(ctx, acctID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse list databases response: %w", err)
+		return nil, err
 	}
 
 	return acct.Balance, nil
@@ -257,6 +257,7 @@ func (d *KwilCliDriver) getSchema(dbid string) (*types.Schema, error) {
 		return nil, fmt.Errorf("failed to getSchema: %w", err)
 	}
 
+	d.logger.Debug("get schema result", zap.Any("result", out.Result))
 	schema, err := parseRespGetSchema(out.Result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse getSchema response: %w", err)
@@ -415,11 +416,12 @@ func mustRun(cmd *exec.Cmd, logger log.Logger) (*cliResponse, error) {
 	}
 
 	output := out.Bytes()
-	// logger.Debug("cmd output", zap.String("output", string(output)))
+	logger.Debug("cmd output", zap.String("output", string(output)))
 
 	var result *cliResponse
 	err = json.Unmarshal(output, &result)
 	if err != nil {
+		logger.Error("bad cmd output", zap.String("output", string(output)))
 		return nil, err
 	}
 
