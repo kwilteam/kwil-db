@@ -129,7 +129,7 @@ const (
 	WHERE p.id IS NULL;`
 
 	// returnNoBody returns all resolutions that do not have a body passed in the input array
-	returnNoBody = `SELECT id FROM ` + votingSchemaName + `.resolutions WHERE id =ANY($1) AND body IS NULL;`
+	returnHasBody = `SELECT id FROM ` + votingSchemaName + `.resolutions WHERE id =ANY($1) AND body IS NOT NULL;`
 
 	// getResolutionsFullInfoByPower and getResolutionsFullInfoByExpiration are used to get the full info of a set of resolutions
 	// they should be updated together if their return values change

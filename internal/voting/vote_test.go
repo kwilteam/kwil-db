@@ -262,12 +262,30 @@ func Test_Voting(t *testing.T) {
 
 				containsBody, err := voting.FilterExistsNoBody(ctx, db, types.NewUUIDV5([]byte("ss")))
 				require.NoError(t, err)
-				require.Empty(t, containsBody)
+				require.Equal(t, len(containsBody), 1)
 
 				processed, err := voting.FilterNotProcessed(ctx, db, types.NewUUIDV5([]byte("ss")))
 				require.NoError(t, err)
 
 				require.Equal(t, len(processed), 1)
+			},
+		},
+		{
+			name: "filter existing resolution bodies",
+			startingPower: map[string]int64{
+				"a": 100,
+			},
+			fn: func(t *testing.T, db sql.DB) {
+				ctx := context.Background()
+				// create a resolution
+				evtID := testEvent.ID()
+				err := voting.CreateResolution(ctx, db, testEvent, 10, []byte("a"))
+				require.NoError(t, err)
+
+				// filter for the resolution
+				containsBody, err := voting.FilterExistsNoBody(ctx, db, evtID)
+				require.NoError(t, err)
+				require.Empty(t, containsBody)
 			},
 		},
 	}
