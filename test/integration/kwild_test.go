@@ -32,6 +32,8 @@ var allServices = []string{integration.ExtContainer, integration.Ext3Container,
 	"pg0", "pg1", "pg2", "pg3", "node0", "node1", "node2", "node3",
 }
 
+var singleNodeServices = []string{integration.ExtContainer, "pg0", "node0"}
+
 var byzAllServices = []string{integration.ExtContainer, integration.Ext3Container, "pg0", "pg1", "pg2", "pg3", "pg4", "pg5", "node0", "node1", "node2", "node3", "node4", "node5"}
 
 func TestLocalDevSetup(t *testing.T) {
@@ -307,52 +309,54 @@ func TestKwildEthDepositOracleIntegration(t *testing.T) {
 		t.Parallel()
 	}
 
-	opts := []integration.HelperOpt{
-		integration.WithBlockInterval(time.Second),
-		integration.WithValidators(4),
-		integration.WithNonValidators(0),
-		integration.WithGanache(),
-		integration.WithGas(),
-		integration.WithEthDepositOracle(true),
+	type testcase struct {
+		name          string
+		numValidators int
+		serviceNames  []string
+	}
+
+	testcases := []testcase{
+		{"single-node", 1, singleNodeServices},
+		{"multi-node", 4, allServices},
 	}
 
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
-		t.Run(driverType+"_driver", func(t *testing.T) {
-			ctx := context.Background()
+		for _, tc := range testcases {
+			t.Run(tc.name+"_"+driverType+"_driver", func(t *testing.T) {
+				ctx := context.Background()
+				opts := []integration.HelperOpt{
+					integration.WithBlockInterval(time.Second),
+					integration.WithValidators(tc.numValidators),
+					integration.WithNonValidators(0),
+					integration.WithGanache(),
+					integration.WithGas(),
+					integration.WithEthDepositOracle(true),
+				}
+				helper := integration.NewIntHelper(t, opts...)
+				helper.Setup(ctx, tc.serviceNames)
 
-			helper := integration.NewIntHelper(t, opts...)
-			helper.Setup(ctx, allServices)
+				// get deployer
+				ctxMiner, cancel := context.WithCancel(ctx)
+				defer cancel()
+				deployer := helper.EthDeployer(false)
+				err := deployer.KeepMining(ctxMiner)
+				require.NoError(t, err)
 
-			// get deployer
-			ctxMiner, cancel := context.WithCancel(ctx)
-			defer cancel()
-			deployer := helper.EthDeployer(false)
-			err := deployer.KeepMining(ctxMiner)
-			require.NoError(t, err)
+				// Get the user driver
+				userDriver := helper.GetUserDriver(ctx, "node0", driverType, deployer)
 
-			// Get the user driver
-			userDriver := helper.GetUserDriver(ctx, "node0", driverType, deployer)
+				// Deposit the amount to the escrow
+				amount := big.NewInt(10)
+				specifications.DepositSuccessSpecification(ctx, t, userDriver, amount)
 
-			// Node0 Driver
-			// node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
+				// Deploy DB without enough funds
+				specifications.DeployDbInsufficientFundsSpecification(ctx, t, userDriver)
 
-			// Approve the deposit
-			// specifications.ApproveSpecification(ctx, t, userDriver)
-
-			// Deposit the amount to the escrow
-			amount := big.NewInt(10)
-			specifications.DepositSuccessSpecification(ctx, t, userDriver, amount)
-
-			// Deposit Failure
-			// specifications.DepositFailSpecification(ctx, t, userDriver)
-
-			// Deploy DB without enough funds
-			specifications.DeployDbInsufficientFundsSpecification(ctx, t, userDriver)
-
-			// Deploy DB with enough funds
-			specifications.DeployDbSuccessSpecification(ctx, t, userDriver)
-		})
+				// Deploy DB with enough funds
+				specifications.DeployDbSuccessSpecification(ctx, t, userDriver)
+			})
+		}
 	}
 }
 
