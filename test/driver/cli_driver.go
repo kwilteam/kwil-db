@@ -20,7 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/utils"
-	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
+	ethdeployer "github.com/kwilteam/kwil-db/test/eth-deployer"
 
 	"go.uber.org/zap"
 )

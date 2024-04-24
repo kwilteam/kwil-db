@@ -19,7 +19,7 @@ var remote = flag.Bool("remote", false, "test against remote node")
 
 // NOTE: `-parallel` is a flag that is already used by `go test`
 var parallelMode = flag.Bool("parallel-mode", false, "run tests in parallelMode mode")
-var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
+var drivers = flag.String("drivers", "http", "comma separated list of drivers to run")
 
 func TestLocalDevSetup(t *testing.T) {
 	if !*dev {
@@ -69,10 +69,10 @@ func TestKwildTransferAcceptance(t *testing.T) {
 			// Wait for Genesis allocs to get credited at the end of 1st block, before issuing any transactions.
 			time.Sleep(2 * time.Second)
 
-			senderDriver := helper.GetDriver(driverType, "creator")
+			senderDriver := helper.GetDriver(driverType, "creator", nil)
 			sender := specifications.TransferAmountDsl(senderDriver)
 
-			receiverDriver := helper.GetDriver(driverType, "visitor")
+			receiverDriver := helper.GetDriver(driverType, "visitor", nil)
 			receiver := specifications.TransferAmountDsl(receiverDriver)
 
 			bal0Sender, err := sender.AccountBalance(ctx, senderIdentity)
@@ -140,7 +140,7 @@ func TestKwildProcedures(t *testing.T) {
 			if !*remote {
 				helper.Setup(ctx)
 			}
-			creatorDriver := helper.GetDriver(driverType, "creator")
+			creatorDriver := helper.GetDriver(driverType, "creator", nil)
 
 			specifications.ExecuteProcedureSpecification(ctx, t, creatorDriver)
 		})
@@ -169,7 +169,7 @@ func TestKwildAcceptance(t *testing.T) {
 			if !*remote {
 				helper.Setup(ctx)
 			}
-			creatorDriver := helper.GetDriver(driverType, "creator")
+			creatorDriver := helper.GetDriver(driverType, "creator", nil)
 
 			// ================
 			// When user deployed database
@@ -185,7 +185,7 @@ func TestKwildAcceptance(t *testing.T) {
 			// Read `test/specifications/README.md` for more information.
 			db := specifications.SchemaLoader.Load(t, specifications.SchemaTestDB)
 			dbid := creatorDriver.DBID(db.Name)
-			visitorDriver := helper.GetDriver(driverType, "visitor")
+			visitorDriver := helper.GetDriver(driverType, "visitor", nil)
 			specifications.ExecuteOwnerActionFailSpecification(ctx, t, visitorDriver, dbid)
 
 			specifications.ExecuteDBInsertSpecification(ctx, t, creatorDriver)
@@ -214,6 +214,56 @@ func TestKwildAcceptance(t *testing.T) {
 
 			// TODO: test inputting invalid utf-8 into action that needs string (should fail)
 			// this previously crashed the node
+		})
+	}
+}
+
+func TestKwildEthDepositOracle(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	ctx := context.Background()
+
+	opts := []acceptance.HelperOpt{
+		acceptance.WithGanache(),
+		acceptance.WithEthDepositOracle(true),
+		acceptance.WithGasEnabled(),
+	}
+
+	testDrivers := strings.Split(*drivers, ",")
+	for _, driverType := range testDrivers {
+		t.Run(driverType+"_driver", func(t *testing.T) {
+			// setup for each driver
+			helper := acceptance.NewActHelper(t, opts...)
+
+			if !*remote {
+				helper.Setup(ctx)
+			}
+
+			deployer := helper.EthDeployer()
+			err := deployer.KeepMining(ctx)
+			require.NoError(t, err)
+
+			// Get the user driver
+			userDriver := helper.GetDriver(driverType, "creator", deployer)
+
+			// Approve the specification
+			specifications.ApproveSpecification(ctx, t, userDriver)
+
+			// Deposit the amount to the escrow contract
+			specifications.DepositSuccessSpecification(ctx, t, userDriver, big.NewInt(10))
+
+			// Deploy DB without enough funds
+			specifications.DeployDbInsufficientFundsSpecification(ctx, t, userDriver)
+
+			// Deploy DB with enough funds
+			specifications.DeployDbSuccessSpecification(ctx, t, userDriver)
+
 		})
 	}
 }

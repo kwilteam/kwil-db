@@ -78,5 +78,19 @@ services:
     networks:
       - kwil-act-testnet
 
+  ganache:
+    image: trufflesuite/ganache:v7.9.2
+    ports:
+      - "8545"
+    networks:
+      - kwil-act-testnet
+    command:
+      - --wallet.hdPath
+      - m/44'/60'/0'
+      - --wallet.mnemonic
+      - test test test test test test test test test test test junk
+      - --chain.chainId
+      - "5"
+
 networks:
   kwil-act-testnet:

@@ -36,7 +36,7 @@ import (
 	ethdeposits "github.com/kwilteam/kwil-db/extensions/listeners/eth_deposits"
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/kwilteam/kwil-db/test/driver/operator"
-	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
+	ethdeployer "github.com/kwilteam/kwil-db/test/eth-deployer"
 	"github.com/kwilteam/kwil-db/test/utils"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"

@@ -3,7 +3,6 @@ package ethdeployer
 import (
 	"context"
 	"crypto/ecdsa"
-	"fmt"
 	"math/big"
 	"sync"
 	"testing"
@@ -13,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ec "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/kwilteam/kwil-db/test/integration/eth-deployer/contracts"
+	"github.com/kwilteam/kwil-db/test/eth-deployer/contracts"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,18 +28,18 @@ type Deployer struct {
 
 	ethClient *ethclient.Client
 
-	mu sync.Mutex // what is this guarding? maybe remove
+	mu sync.Mutex
 }
 
 // NewDeployer("ws://localhost:8545","dd23ca549a97cb330b011aebb674730df8b14acaee42d211ab45692699ab8ba5")
-func NewDeployer(endpoint, secp256k1PrivKey string, chainID int64) (*Deployer, error) {
+func NewDeployer(endpoint string, pKey string, chainID int64) (*Deployer, error) {
 	ctx := context.Background()
 	ethClient, err := ethclient.DialContext(ctx, endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	privKey, err := ec.HexToECDSA(secp256k1PrivKey)
+	privKey, err := ec.HexToECDSA(pKey)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +97,11 @@ func (d *Deployer) Approve(ctx context.Context, sender *ecdsa.PrivateKey, amount
 	}
 
 	_, err = d.tokenInst.Approve(auth, d.escrowAddr, amount)
-	return err
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // sender deposits given amount of tokens to the escrow contract
@@ -111,16 +114,10 @@ func (d *Deployer) Deposit(ctx context.Context, sender *ecdsa.PrivateKey, amount
 		return err
 	}
 
-	tx, err := d.escrowInst.Deposit(auth, amount)
+	_, err = d.escrowInst.Deposit(auth, amount)
 	if err != nil {
 		return err
 	}
-
-	receipt, err := d.ethClient.TransactionReceipt(ctx, tx.Hash())
-	if err != nil {
-		return err
-	}
-	fmt.Printf("ETH tx %x, status code %d (1 means success)\n", receipt.TxHash, receipt.Status)
 
 	return nil
 }
@@ -136,7 +133,11 @@ func (d *Deployer) DummyTx(ctx context.Context, sender *ecdsa.PrivateKey) error 
 	}
 
 	_, err = d.escrowInst.Test(auth)
-	return err
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (d *Deployer) VerifyDeposit(t *testing.T, ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) {
@@ -205,16 +206,10 @@ func (d *Deployer) KeepMining(ctx context.Context) error {
 	}
 
 	go func() {
-		defer d.ethClient.Close()
 		for {
 			d.DummyTx(ctx, sender)
-			select {
-			case <-time.After(5 * time.Second):
-			case <-ctx.Done():
-				return
-			}
+			time.Sleep(5 * time.Second)
 		}
 	}()
-
 	return nil
 }
