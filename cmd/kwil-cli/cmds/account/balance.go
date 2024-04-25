@@ -41,7 +41,7 @@ func balanceCmd() *cobra.Command {
 						return display.PrintErr(cmd, errors.New("empty account ID"))
 					}
 				}
-				acct, err := cl.GetAccount(ctx, acctID, types.AccountStatusLatest)
+				acct, err := cl.GetAccount(ctx, acctID, types.AccountStatusPending)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("get account failed: %w", err))
 				}
