@@ -149,6 +149,9 @@ moniker = "{{ .ChainCfg.Moniker }}"
 # TCP or UNIX socket address for the RPC server to listen on
 listen_addr = "{{ .ChainCfg.RPC.ListenAddress }}"
 
+# Timeout for each broadcast tx commit
+broadcast_tx_timeout = "{{configDuration .ChainCfg.RPC.BroadcastTxTimeout }}"
+
 #######################################################
 ###         Consensus Configuration Options         ###
 #######################################################
