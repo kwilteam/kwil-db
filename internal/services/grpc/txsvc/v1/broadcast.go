@@ -57,7 +57,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 	if err != nil {
 		logger.Error("failed to broadcast tx", zap.Error(err))
 		if res == nil { // they really do this to report hash on commit fail/timeout
-			return nil, status.Errorf(codes.Internal, "failed to broadcast transaction")
+			return nil, status.Errorf(codes.Unknown, "failed to broadcast transaction: %v", err)
 		} // else we have a result, and error is probably timeout
 		commitFail = true // we have res, but also treat as error.
 	}
