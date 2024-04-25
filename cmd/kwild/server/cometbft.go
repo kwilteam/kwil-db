@@ -70,6 +70,7 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 		portFromURL(nodeCfg.RPC.ListenAddress))
 	nodeCfg.RPC.TLSCertFile = cfg.AppCfg.TLSCertFile
 	nodeCfg.RPC.TLSKeyFile = cfg.AppCfg.TLSKeyFile
+	nodeCfg.RPC.TimeoutBroadcastTxCommit = time.Duration(userChainCfg.RPC.BroadcastTxTimeout)
 
 	nodeCfg.P2P.ListenAddress = cleanListenAddr(userChainCfg.P2P.ListenAddress,
 		portFromURL(nodeCfg.P2P.ListenAddress))
