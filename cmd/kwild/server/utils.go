@@ -121,6 +121,15 @@ func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, syn
 		bcastFun = func(ctx context.Context, tx cmttypes.Tx) (*cmtCoreTypes.ResultBroadcastTx, error) {
 			res, err := wc.cl.BroadcastTxCommit(ctx, tx)
 			if err != nil {
+				if res != nil { // seriously, they do this
+					return &cmtCoreTypes.ResultBroadcastTx{
+						Code:      res.CheckTx.Code,
+						Data:      res.CheckTx.Data,
+						Log:       res.CheckTx.Log,
+						Codespace: res.CheckTx.Codespace,
+						Hash:      res.Hash,
+					}, err
+				}
 				return nil, err
 			}
 			if res.CheckTx.Code != abciTypes.CodeTypeOK {

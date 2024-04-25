@@ -3,6 +3,7 @@ package txsvc
 import (
 	"context"
 	"encoding/hex"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
@@ -51,20 +52,32 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 	if req.Sync != nil {
 		sync = uint8(*req.Sync)
 	}
+	var commitFail bool
 	res, err := s.chainClient.BroadcastTx(ctx, encodedTx, sync)
 	if err != nil {
 		logger.Error("failed to broadcast tx", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to broadcast transaction")
+		if res == nil { // they really do this to report hash on commit fail/timeout
+			return nil, status.Errorf(codes.Internal, "failed to broadcast transaction")
+		} // else we have a result, and error is probably timeout
+		commitFail = true // we have res, but also treat as error.
 	}
 	code, txHash := res.Code, res.Hash.Bytes()
 
-	if txCode := transactions.TxCode(code); txCode != transactions.CodeOk {
+	if txCode := transactions.TxCode(code); txCode != transactions.CodeOk || commitFail {
 		stat := &spb.Status{
 			Code:    int32(codes.InvalidArgument),
 			Message: "broadcast error",
 		}
+		if commitFail { // we have both res and err, probably a timeout
+			stat.Message = err.Error()
+			if strings.Contains(err.Error(), "timed out") { // not exported; doing our best
+				stat.Code = int32(codes.DeadlineExceeded)
+			} else {
+				stat.Code = int32(codes.Unknown)
+			}
+		}
 		if details, err := anypb.New(&txpb.BroadcastErrorDetails{
-			Code:    code, // e.g. invalid nonce, wrong chain, etc.
+			Code:    code, // e.g. invalid nonce, wrong chain, etc. or maybe OK if commit timed out
 			Hash:    hex.EncodeToString(txHash),
 			Message: res.Log,
 		}); err != nil {
