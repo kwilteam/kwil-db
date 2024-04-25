@@ -455,7 +455,7 @@ func convertProceduresFromEngine(proc []*types.Procedure) []*txpb.Procedure {
 		if p.Returns != nil {
 			t.ReturnTypes = &txpb.ProcedureReturn{
 				IsTable: p.Returns.IsTable,
-				Fields: make([]*txpb.TypedVariable, len(p.Returns.Fields)),
+				Fields:  make([]*txpb.TypedVariable, len(p.Returns.Fields)),
 			}
 			for j, r := range p.Returns.Fields {
 				t.ReturnTypes.Fields[j] = &txpb.TypedVariable{
