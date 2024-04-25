@@ -16,7 +16,7 @@ import (
 )
 
 func balanceCmd() *cobra.Command {
-	var confirmed bool
+	var pending bool
 	cmd := &cobra.Command{
 		Use:   "balance",
 		Short: "Gets an account's balance and nonce",
@@ -42,9 +42,9 @@ func balanceCmd() *cobra.Command {
 						return display.PrintErr(cmd, errors.New("empty account ID"))
 					}
 				}
-				status := types.AccountStatusPending
-				if confirmed {
-					status = types.AccountStatusLatest
+				status := types.AccountStatusLatest
+				if pending {
+					status = types.AccountStatusPending
 				}
 				acct, err := cl.GetAccount(ctx, acctID, status)
 				if err != nil {
@@ -60,7 +60,7 @@ func balanceCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&confirmed, "confirmed", false, "reflect only confirmed state (default reflects mempool / pending)")
+	cmd.Flags().BoolVar(&pending, "pending", false, "reflect pending updates from mempool (default is confirmed only)")
 
 	return cmd
 }
