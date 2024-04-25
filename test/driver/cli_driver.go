@@ -90,7 +90,7 @@ func (d *KwilCliDriver) SupportBatch() bool {
 }
 
 func (d *KwilCliDriver) account(ctx context.Context, acctID []byte) (*types.Account, error) {
-	cmd := d.newKwilCliCmd("account", "balance", "--confirmed", hex.EncodeToString(acctID))
+	cmd := d.newKwilCliCmd("account", "balance", hex.EncodeToString(acctID))
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get account balance: %w", err)
