@@ -15,6 +15,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	confirmed bool
+)
+
 func balanceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "balance",
@@ -41,7 +45,11 @@ func balanceCmd() *cobra.Command {
 						return display.PrintErr(cmd, errors.New("empty account ID"))
 					}
 				}
-				acct, err := cl.GetAccount(ctx, acctID, types.AccountStatusPending)
+				status := types.AccountStatusPending
+				if confirmed {
+					status = types.AccountStatusLatest
+				}
+				acct, err := cl.GetAccount(ctx, acctID, status)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("get account failed: %w", err))
 				}
@@ -54,6 +62,8 @@ func balanceCmd() *cobra.Command {
 
 		},
 	}
+
+	cmd.Flags().BoolVar(&confirmed, "confirmed", false, "reflect only confirmed state (default reflects mempool / pending)")
 
 	return cmd
 }
