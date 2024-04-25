@@ -54,7 +54,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 	res, err := s.chainClient.BroadcastTx(ctx, encodedTx, sync)
 	if err != nil {
 		logger.Error("failed to broadcast tx", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to broadcast transaction")
+		return nil, status.Errorf(codes.Unknown, "failed to broadcast transaction: %w", err)
 	}
 	code, txHash := res.Code, res.Hash.Bytes()
 
