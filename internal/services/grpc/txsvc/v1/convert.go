@@ -14,11 +14,33 @@ func convertSchemaFromEngine(schema *common.Schema) (*txpb.Schema, error) {
 		return nil, err
 	}
 	return &txpb.Schema{
-		Owner:   schema.Owner,
-		Name:    schema.Name,
-		Tables:  convertTablesFromEngine(schema.Tables),
-		Actions: actions,
+		Owner:      schema.Owner,
+		Name:       schema.Name,
+		Tables:     convertTablesFromEngine(schema.Tables),
+		Extensions: convertExtensionsFromEngine(schema.Extensions),
+		Actions:    actions,
 	}, nil
+}
+
+func convertExtensionsFromEngine(extensions []*common.Extension) []*txpb.Extensions {
+	convExtensions := make([]*txpb.Extensions, len(extensions))
+	for i, extension := range extensions {
+		initialization := make([]*txpb.Extensions_ExtensionConfig, len(extension.Initialization))
+		for j, init := range extension.Initialization {
+			initialization[j] = &txpb.Extensions_ExtensionConfig{
+				Argument: init.Key,
+				Value:    init.Value,
+			}
+		}
+
+		convExtensions[i] = &txpb.Extensions{
+			Name:           extension.Name,
+			Alias:          extension.Alias,
+			Initialization: initialization,
+		}
+	}
+
+	return convExtensions
 }
 
 func convertTablesFromEngine(tables []*common.Table) []*txpb.Table {
