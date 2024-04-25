@@ -44,6 +44,7 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 
 	// Chain RPC flags
 	flagSet.StringVar(&cfg.ChainCfg.RPC.ListenAddress, "chain.rpc.listen-addr", cfg.ChainCfg.RPC.ListenAddress, "Chain RPC listen address")
+	flagSet.Var(&cfg.ChainCfg.RPC.BroadcastTxTimeout, "chain.rpc.broadcast-tx-timeout", "Chain RPC broadcast transaction timeout")
 
 	// Chain P2P flags
 	flagSet.StringVar(&cfg.ChainCfg.P2P.ListenAddress, "chain.p2p.listen-addr", cfg.ChainCfg.P2P.ListenAddress, "Chain P2P listen address")
