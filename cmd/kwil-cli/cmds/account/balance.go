@@ -15,11 +15,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	confirmed bool
-)
-
 func balanceCmd() *cobra.Command {
+	var confirmed bool
 	cmd := &cobra.Command{
 		Use:   "balance",
 		Short: "Gets an account's balance and nonce",
