@@ -237,7 +237,7 @@ type Column struct {
 
 func (c *Column) Clean() error {
 	for _, attr := range c.Attributes {
-		if err := attr.Clean(); err != nil {
+		if err := attr.Clean(c); err != nil {
 			return err
 		}
 	}
@@ -278,7 +278,19 @@ type Attribute struct {
 	Value string        `json:"value,omitempty"`
 }
 
-func (a *Attribute) Clean() error {
+// Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
+func (a *Attribute) Clean(col *Column) error {
+	switch a.Type {
+	case MIN, MAX:
+		if !col.Type.Equals(IntType) {
+			return fmt.Errorf("attribute %s is only valid for int columns", a.Type)
+		}
+	case MIN_LENGTH, MAX_LENGTH:
+		if !col.Type.Equals(TextType) {
+			return fmt.Errorf("attribute %s is only valid for text columns", a.Type)
+		}
+	}
+
 	return a.Type.Clean()
 }
 
@@ -785,7 +797,7 @@ type Procedure struct {
 	Body string `json:"body"`
 
 	// Returns is the return type of the procedure.
-	Returns *ProcedureReturn `json:"returnTypes"`
+	Returns *ProcedureReturn `json:"return_types"`
 	// Annotations are the annotations of the procedure.
 	Annotations []string `json:"annotations,omitempty"`
 }
@@ -842,7 +854,7 @@ func (p *Procedure) IsOwnerOnly() bool {
 // ProcedureReturn holds the return type of a procedure.
 // EITHER the Type field is set, OR the Table field is set.
 type ProcedureReturn struct {
-	IsTable bool         `json:"isTable"`
+	IsTable bool         `json:"is_table"`
 	Fields  []*NamedType `json:"fields"`
 }
 

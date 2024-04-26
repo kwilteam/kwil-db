@@ -8,7 +8,7 @@ import (
 
 	"github.com/antlr4-go/antlr/v4"
 
-	"github.com/kwilteam/action-grammar-go/actgrammar"
+	actgrammar "github.com/kwilteam/kwil-db/parse/actions/gen"
 	"github.com/kwilteam/kwil-db/parse/metadata"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 	"github.com/kwilteam/kwil-db/parse/util"

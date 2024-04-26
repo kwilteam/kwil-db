@@ -38,6 +38,11 @@ func ParseKuneiform(kf string) (*types.Schema, error) {
 		return nil, err
 	}
 
+	err = schema.Clean()
+	if err != nil {
+		return nil, err
+	}
+
 	if err := ValidateSchema(schema); err != nil {
 		return nil, err
 	}

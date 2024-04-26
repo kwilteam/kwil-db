@@ -6,7 +6,6 @@ replace github.com/kwilteam/kwil-db/core => ../core
 
 require (
 	github.com/antlr4-go/antlr/v4 v4.13.0
-	github.com/kwilteam/action-grammar-go v0.1.1
 	github.com/kwilteam/kwil-db v0.7.2
 	github.com/kwilteam/kwil-db/core v0.1.2
 	github.com/pganalyze/pg_query_go/v5 v5.1.0

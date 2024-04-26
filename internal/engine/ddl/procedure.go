@@ -10,9 +10,6 @@ import (
 
 // GenerateProcedure generates the plpgsql code for a procedure.
 // It takes a procedure and the body of the procedure and returns the plpgsql code for the procedure.
-// func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns *types.ProcedureReturn,
-//
-//	declarations []*types.NamedType, outParams []*types.NamedType, schema, name, body string) (string, error) {
 func GenerateProcedure(proc *procedures.AnalyzedProcedure, pgSchema string) (string, error) {
 	str := strings.Builder{}
 	str.WriteString("CREATE OR REPLACE FUNCTION ")

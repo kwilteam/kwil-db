@@ -8,11 +8,6 @@ import (
 )
 
 func attributeToSQLString(colName string, attr *types.Attribute) (string, error) {
-	err := attr.Clean()
-	if err != nil {
-		return "", err
-	}
-
 	switch attr.Type {
 	case types.PRIMARY_KEY:
 		return "", nil
