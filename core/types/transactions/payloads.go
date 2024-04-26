@@ -2,6 +2,8 @@ package transactions
 
 import (
 	"encoding"
+	"errors"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -25,7 +27,11 @@ func (p PayloadType) Valid() bool {
 		PayloadTypeValidatorApprove,
 		PayloadTypeValidatorRemove,
 		PayloadTypeValidatorLeave,
-		PayloadTypeTransfer:
+		PayloadTypeTransfer,
+		// These should not come in user transactions, but they are not invalid
+		// payload types in general.
+		PayloadTypeValidatorVoteIDs,
+		PayloadTypeValidatorVoteBodies:
 		return true
 	default:
 		return false
@@ -45,6 +51,45 @@ const (
 	PayloadTypeValidatorVoteIDs    PayloadType = "validator_vote_ids"
 	PayloadTypeValidatorVoteBodies PayloadType = "validator_vote_bodies"
 )
+
+// payloadConcreteTypes associates a payload type with the concrete type of
+// Payload. Use with UnmarshalPayload or reflect to instantiate.
+var payloadConcreteTypes = map[PayloadType]Payload{
+	PayloadTypeDropSchema:          &DropSchema{},
+	PayloadTypeDeploySchema:        &Schema{},
+	PayloadTypeExecute:             &ActionExecution{},
+	PayloadTypeCallAction:          &ActionCall{},
+	PayloadTypeValidatorJoin:       &ValidatorJoin{},
+	PayloadTypeValidatorApprove:    &ValidatorApprove{},
+	PayloadTypeValidatorRemove:     &ValidatorRemove{},
+	PayloadTypeValidatorLeave:      &ValidatorLeave{},
+	PayloadTypeTransfer:            &Transfer{},
+	PayloadTypeValidatorVoteIDs:    &ValidatorVoteIDs{},
+	PayloadTypeValidatorVoteBodies: &ValidatorVoteBodies{},
+}
+
+// UnmarshalPayload unmarshals a serialized transaction payload into an instance
+// of the type registered for the given PayloadType.
+func UnmarshalPayload(payloadType PayloadType, payload []byte) (Payload, error) {
+	prototype, have := payloadConcreteTypes[payloadType]
+	if !have {
+		return nil, errors.New("unknown payload type")
+	}
+
+	t := reflect.TypeOf(prototype).Elem()
+	elem := reflect.New(t)       // reflect.Type => reflect.Value
+	instance := elem.Interface() // reflect.Type => any
+
+	err := serialize.DecodeInto(payload, instance)
+	if err != nil {
+		return nil, err
+	}
+	payloadIface, ok := instance.(Payload)
+	if !ok { // should be impossible since payloadConcreteTypes maps to a Payload
+		return nil, errors.New("instance not a payload")
+	}
+	return payloadIface, nil
+}
 
 // Payload is the interface that all payloads must implement
 // Implementations should use Kwil's serialization package to encode and decode themselves

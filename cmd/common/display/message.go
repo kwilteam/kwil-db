@@ -1,6 +1,8 @@
 package display
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -86,21 +88,39 @@ func (s RespString) MarshalText() ([]byte, error) {
 
 // RespTxQuery is used to represent a transaction response in cli
 type RespTxQuery struct {
-	Msg *transactions.TcTxQueryResponse
+	Msg     *transactions.TcTxQueryResponse
+	WithRaw bool
 }
 
 func (r *RespTxQuery) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
+	out := &struct {
 		Hash     string                         `json:"hash"` // HEX
 		Height   int64                          `json:"height"`
 		Tx       *transactions.Transaction      `json:"tx"`
 		TxResult transactions.TransactionResult `json:"tx_result"`
+		Raw      string                         `json:"raw,omitempty"`
+		Warn     string                         `json:"warning,omitempty"`
 	}{
 		Hash:     hex.EncodeToString(r.Msg.Hash),
 		Height:   r.Msg.Height,
 		Tx:       r.Msg.Tx,
 		TxResult: r.Msg.TxResult,
-	})
+	}
+	// Always try to serialize to verify hash, but only show raw if requested.
+	raw, err := r.Msg.Tx.MarshalBinary()
+	if err != nil {
+		out.Warn = "ERROR encoding transaction: " + err.Error()
+	} else {
+		if r.WithRaw {
+			out.Raw = hex.EncodeToString(raw)
+			hash := sha256.Sum256(raw)
+			if !bytes.Equal(hash[:], r.Msg.Hash) {
+				out.Warn = fmt.Sprintf("HASH MISMATCH: requested %x; received %x",
+					r.Msg.Hash, hash)
+			}
+		}
+	}
+	return json.Marshal(out)
 }
 
 func heightStatus(res *transactions.TcTxQueryResponse) string {
@@ -123,6 +143,21 @@ Log: %s`,
 		r.Msg.Height,
 		r.Msg.TxResult.Log,
 	)
+
+	// Always try to serialize to verify hash, but only show raw if requested.
+	raw, err := r.Msg.Tx.MarshalBinary()
+	if err != nil {
+		msg += "\nERROR encoding transaction: " + err.Error()
+	} else {
+		if r.WithRaw {
+			msg += "\nRaw: " + hex.EncodeToString(raw)
+		}
+		hash := sha256.Sum256(raw)
+		if !bytes.Equal(hash[:], r.Msg.Hash) {
+			msg += fmt.Sprintf("\nWARNING! HASH MISMATCH:\n\tRequested %x\n\tReceived  %x",
+				r.Msg.Hash, hash)
+		}
+	}
 
 	return []byte(msg), nil
 }
