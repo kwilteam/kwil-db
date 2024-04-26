@@ -16,6 +16,7 @@ import (
 )
 
 func balanceCmd() *cobra.Command {
+	var pending bool
 	cmd := &cobra.Command{
 		Use:   "balance",
 		Short: "Gets an account's balance and nonce",
@@ -41,7 +42,11 @@ func balanceCmd() *cobra.Command {
 						return display.PrintErr(cmd, errors.New("empty account ID"))
 					}
 				}
-				acct, err := cl.GetAccount(ctx, acctID, types.AccountStatusLatest)
+				status := types.AccountStatusLatest
+				if pending {
+					status = types.AccountStatusPending
+				}
+				acct, err := cl.GetAccount(ctx, acctID, status)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("get account failed: %w", err))
 				}
@@ -54,6 +59,8 @@ func balanceCmd() *cobra.Command {
 
 		},
 	}
+
+	cmd.Flags().BoolVar(&pending, "pending", false, "reflect pending updates from mempool (default is confirmed only)")
 
 	return cmd
 }
