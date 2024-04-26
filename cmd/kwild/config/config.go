@@ -95,6 +95,9 @@ type SnapshotConfig struct {
 type ChainRPCConfig struct {
 	// TCP or UNIX socket address for the RPC server to listen on
 	ListenAddress string `mapstructure:"listen_addr"`
+
+	// How long to wait for a tx to be committed when transactions are authored with --sync flag
+	BroadcastTxTimeout Duration `mapstructure:"broadcast_tx_timeout"`
 }
 
 type P2PConfig struct {
@@ -516,7 +519,8 @@ func DefaultConfig() *KwildConfig {
 				DialTimeout:         Duration(3 * time.Second),
 			},
 			RPC: &ChainRPCConfig{
-				ListenAddress: "tcp://127.0.0.1:26657",
+				ListenAddress:      "tcp://127.0.0.1:26657",
+				BroadcastTxTimeout: Duration(10 * time.Second),
 			},
 			Mempool: &MempoolConfig{
 				Size:        5000,
