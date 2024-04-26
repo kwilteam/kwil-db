@@ -127,12 +127,16 @@ func getExampleTxQueryResponse() *transactions.TcTxQueryResponse {
 }
 
 func Example_respTxQuery_text() {
-	Print(&RespTxQuery{Msg: getExampleTxQueryResponse()}, nil, "text")
+	Print(&RespTxQuery{Msg: getExampleTxQueryResponse(), WithRaw: true}, nil, "text")
 	// Output:
 	// Transaction ID: 31303234
 	// Status: success
 	// Height: 10
 	// Log: This is log
+	// Raw: 0001f8e4f850b841cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e2534758008c736563703235366b315f6570f888a25468697320697320612074657374207472616e73616374696f6e20666f7220636c69b8540001f850b8397866363137616631636137373465626264366432336538666531326335366434316432356132326438316538386636376336633665653064348b6372656174655f75736572c8c783666f6f8233328765786563757465640a846173646686636f6e63617480
+	// WARNING! HASH MISMATCH:
+	// 	Requested 31303234
+	// 	Received  fe77ea3e9c86de9b6afcf8a27c38ac9ddf102086f8ac51263659525d1c39fbf0
 }
 
 func Example_respTxQuery_json() {
@@ -164,6 +168,42 @@ func Example_respTxQuery_json() {
 	//       "gas_used": 10,
 	//       "gas_wanted": 10
 	//     }
+	//   },
+	//   "error": ""
+	// }
+}
+
+func Example_respTxQuery_WithRaw_json() {
+	Print(&RespTxQuery{Msg: getExampleTxQueryResponse(), WithRaw: true}, nil, "json")
+	// Output:
+	// {
+	//   "result": {
+	//     "hash": "31303234",
+	//     "height": 10,
+	//     "tx": {
+	//       "signature": {
+	//         "sig": "yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=",
+	//         "type": "secp256k1_ep"
+	//       },
+	//       "body": {
+	//         "desc": "This is a test transaction for cli",
+	//         "payload": "AAH4ULg5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2VyyMeDZm9vgjMy",
+	//         "type": "execute",
+	//         "fee": "100",
+	//         "nonce": 10,
+	//         "chain_id": "asdf"
+	//       },
+	//       "serialization": "concat",
+	//       "sender": ""
+	//     },
+	//     "tx_result": {
+	//       "code": 0,
+	//       "log": "This is log",
+	//       "gas_used": 10,
+	//       "gas_wanted": 10
+	//     },
+	//     "raw": "0001f8e4f850b841cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e2534758008c736563703235366b315f6570f888a25468697320697320612074657374207472616e73616374696f6e20666f7220636c69b8540001f850b8397866363137616631636137373465626264366432336538666531326335366434316432356132326438316538386636376336633665653064348b6372656174655f75736572c8c783666f6f8233328765786563757465640a846173646686636f6e63617480",
+	//     "warning": "HASH MISMATCH: requested 31303234; received fe77ea3e9c86de9b6afcf8a27c38ac9ddf102086f8ac51263659525d1c39fbf0"
 	//   },
 	//   "error": ""
 	// }

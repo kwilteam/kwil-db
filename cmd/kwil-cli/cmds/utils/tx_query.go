@@ -13,6 +13,7 @@ import (
 )
 
 func txQueryCmd() *cobra.Command {
+	var raw bool
 	cmd := &cobra.Command{
 		Use:   "query-tx <tx_id>",
 		Short: "Queries a transaction from the blockchain. Requires 1 argument: the hex encoded transaction id.",
@@ -29,11 +30,13 @@ func txQueryCmd() *cobra.Command {
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error querying transaction: %w", err))
 				}
-				return display.PrintCmd(cmd, &display.RespTxQuery{Msg: msg})
+				return display.PrintCmd(cmd, &display.RespTxQuery{Msg: msg, WithRaw: raw})
 			})
 
 		},
 	}
+
+	cmd.Flags().BoolVarP(&raw, "raw", "R", false, "also display the bytes of the serialized transaction")
 
 	return cmd
 }

@@ -16,6 +16,7 @@ func NewCmdUtils() *cobra.Command {
 		pingCmd(),
 		printConfigCmd(),
 		txQueryCmd(),
+		decodeTxCmd(),
 		chainInfoCmd(),
 		kgwAuthnCmd(),
 		newParseCmd(),

@@ -256,3 +256,46 @@ func Test_Types(t *testing.T) {
 		})
 	}
 }
+
+func TestUnmarshalPayload(t *testing.T) {
+	// for each payload type, ensure UnmarshalPayload can recreate an instance
+	// of the expected type from just []byte and PayloadType. Contents and RLP
+	// quirks are not important, only that the type returned from
+	// UnmarshalPayload is correct.
+	tests := []transactions.Payload{
+		&transactions.DropSchema{},
+		&transactions.Schema{},
+		&transactions.ActionCall{},
+		&transactions.ActionExecution{},
+		&transactions.Transfer{},
+		&transactions.ValidatorApprove{},
+		&transactions.ValidatorJoin{},
+		&transactions.ValidatorRemove{},
+		&transactions.ValidatorLeave{},
+		&transactions.ValidatorVoteIDs{},
+		&transactions.ValidatorVoteBodies{},
+	}
+	for _, tt := range tests {
+		t.Run(tt.Type().String(), func(t *testing.T) {
+			payloadType := tt.Type()
+			payloadIn, err := tt.MarshalBinary() // serialize.Encode(tt.in)
+			if err != nil {
+				t.Errorf("failed to encode input payload object: %v", err)
+			}
+
+			got, err := transactions.UnmarshalPayload(payloadType, payloadIn)
+			if err != nil {
+				t.Errorf("failed to unmarshal payload: %v", err)
+			}
+
+			assert.IsType(t, tt, got)
+
+			// compare, considering empty and nil slices the same since RLP
+			// can't round-trip things :/
+			if !cmp.Equal(got, tt, cmpopts.EquateEmpty()) {
+				t.Error("objects are not equal")
+				assert.EqualValuesf(t, got, tt, "objects are not equal") // for the diff
+			}
+		})
+	}
+}
