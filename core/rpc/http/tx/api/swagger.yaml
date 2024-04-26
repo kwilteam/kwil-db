@@ -474,18 +474,18 @@ components:
         - type: type
           value: value
         type:
+          is_array: true
           name: name
-          isArray: true
     txDataType:
       type: object
       properties:
         name:
           type: string
-        isArray:
+        is_array:
           type: boolean
       example:
+        is_array: true
         name: name
-        isArray: true
     txDatasetInfo:
       type: object
       properties:
@@ -624,8 +624,8 @@ components:
               - type: type
                 value: value
               type:
+                is_array: true
                 name: name
-                isArray: true
             - name: name
               attributes:
               - type: type
@@ -633,8 +633,8 @@ components:
               - type: type
                 value: value
               type:
+                is_array: true
                 name: name
-                isArray: true
             name: name
             foreign_keys:
             - child_keys:
@@ -680,8 +680,8 @@ components:
               - type: type
                 value: value
               type:
+                is_array: true
                 name: name
-                isArray: true
             - name: name
               attributes:
               - type: type
@@ -689,8 +689,8 @@ components:
               - type: type
                 value: value
               type:
+                is_array: true
                 name: name
-                isArray: true
             name: name
             foreign_keys:
             - child_keys:
@@ -734,12 +734,12 @@ components:
             alias: alias
           procedures:
           - public: true
-            name: name
-            returnTypes:
-              isTable: true
+            return_types:
               fields:
               - null
               - null
+              is_table: true
+            name: name
             annotations:
             - annotations
             - annotations
@@ -753,12 +753,12 @@ components:
             - name: name
               type: null
           - public: true
-            name: name
-            returnTypes:
-              isTable: true
+            return_types:
               fields:
               - null
               - null
+              is_table: true
+            name: name
             annotations:
             - annotations
             - annotations
@@ -853,7 +853,7 @@ components:
             type: string
         body:
           type: string
-        returnTypes:
+        return_types:
           $ref: '#/components/schemas/txProcedureReturn'
         annotations:
           type: array
@@ -861,12 +861,12 @@ components:
             type: string
       example:
         public: true
-        name: name
-        returnTypes:
-          isTable: true
+        return_types:
           fields:
           - null
           - null
+          is_table: true
+        name: name
         annotations:
         - annotations
         - annotations
@@ -882,17 +882,17 @@ components:
     txProcedureReturn:
       type: object
       properties:
-        isTable:
+        is_table:
           type: boolean
         fields:
           type: array
           items:
             $ref: '#/components/schemas/txTypedVariable'
       example:
-        isTable: true
         fields:
         - null
         - null
+        is_table: true
     txQueryRequest:
       type: object
       properties:
@@ -956,8 +956,8 @@ components:
             - type: type
               value: value
             type:
+              is_array: true
               name: name
-              isArray: true
           - name: name
             attributes:
             - type: type
@@ -965,8 +965,8 @@ components:
             - type: type
               value: value
             type:
+              is_array: true
               name: name
-              isArray: true
           name: name
           foreign_keys:
           - child_keys:
@@ -1012,8 +1012,8 @@ components:
             - type: type
               value: value
             type:
+              is_array: true
               name: name
-              isArray: true
           - name: name
             attributes:
             - type: type
@@ -1021,8 +1021,8 @@ components:
             - type: type
               value: value
             type:
+              is_array: true
               name: name
-              isArray: true
           name: name
           foreign_keys:
           - child_keys:
@@ -1066,12 +1066,12 @@ components:
           alias: alias
         procedures:
         - public: true
-          name: name
-          returnTypes:
-            isTable: true
+          return_types:
             fields:
             - null
             - null
+            is_table: true
+          name: name
           annotations:
           - annotations
           - annotations
@@ -1085,12 +1085,12 @@ components:
           - name: name
             type: null
         - public: true
-          name: name
-          returnTypes:
-            isTable: true
+          return_types:
             fields:
             - null
             - null
+            is_table: true
+          name: name
           annotations:
           - annotations
           - annotations
@@ -1178,8 +1178,8 @@ components:
           - type: type
             value: value
           type:
+            is_array: true
             name: name
-            isArray: true
         - name: name
           attributes:
           - type: type
@@ -1187,8 +1187,8 @@ components:
           - type: type
             value: value
           type:
+            is_array: true
             name: name
-            isArray: true
         name: name
         foreign_keys:
         - child_keys:

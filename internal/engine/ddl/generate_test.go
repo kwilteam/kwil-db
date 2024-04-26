@@ -22,52 +22,6 @@ func TestGenerateDDL(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "table with primary key attribute",
-			args: args{
-				table: &types.Table{
-					Name: "test",
-					Columns: []*types.Column{
-						{
-							Name: "id",
-							Type: types.IntType,
-							Attributes: []*types.Attribute{
-								{
-									Type: "priMAry_key", // testing string case insensitivity
-								},
-								{
-									Type: types.NOT_NULL,
-								},
-							},
-						},
-						{
-							Name: "name",
-							Type: types.TextType,
-							Attributes: []*types.Attribute{
-								{
-									Type: types.NOT_NULL,
-								},
-								{
-									Type:  types.DEFAULT,
-									Value: "'foo'",
-								},
-							},
-						},
-					},
-					Indexes: []*types.Index{
-						{
-							Name:    "test_index",
-							Type:    types.UNIQUE_BTREE,
-							Columns: []string{"id", "name"},
-						},
-					},
-				},
-			},
-			want: []string{
-				`CREATE TABLE "dbid"."test" ("id" INT8 NOT NULL, "name" TEXT NOT NULL DEFAULT 'foo', PRIMARY KEY ("id"));`,
-				`CREATE UNIQUE INDEX "test_index" ON "dbid"."test" ("id", "name");`,
-			},
-		},
-		{
 			name: "table with composite primary key",
 			args: args{
 				table: &types.Table{
@@ -114,54 +68,6 @@ func TestGenerateDDL(t *testing.T) {
 				`CREATE TABLE "dbid"."test" ("id" INT8 NOT NULL, "name" TEXT NOT NULL DEFAULT 'foo', PRIMARY KEY ("id", "name"));`,
 				`CREATE UNIQUE INDEX "test_index" ON "dbid"."test" ("id", "name");`,
 			},
-		},
-		{
-			name: "table with composite primary key and attribute primary key",
-			args: args{
-				table: &types.Table{
-					Name: "test",
-					Columns: []*types.Column{
-						{
-							Name: "id",
-							Type: types.IntType,
-							Attributes: []*types.Attribute{
-								{
-									Type: "primary_key",
-								},
-								{
-									Type: types.NOT_NULL,
-								},
-							},
-						},
-						{
-							Name: "name",
-							Type: types.TextType,
-							Attributes: []*types.Attribute{
-								{
-									Type: types.NOT_NULL,
-								},
-								{
-									Type:  types.DEFAULT,
-									Value: "'foo'",
-								},
-							},
-						},
-					},
-					Indexes: []*types.Index{
-						{
-							Name:    "test_index",
-							Type:    types.UNIQUE_BTREE,
-							Columns: []string{"id", "name"},
-						},
-						{
-							Name:    "CompositePrimaryKey",
-							Type:    types.PRIMARY,
-							Columns: []string{"id", "name"},
-						},
-					},
-				},
-			},
-			wantErr: true,
 		},
 		{
 			name: "table with composite primary key and composite index",

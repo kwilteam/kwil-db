@@ -62,11 +62,6 @@ func wrapIdents(idents []string) []string {
 }
 
 func generateForeignKeyStmt(pgSchema string, fk *types.ForeignKey) (string, error) {
-	err := fk.Clean()
-	if err != nil {
-		return "", err
-	}
-
 	stmt := strings.Builder{}
 	stmt.WriteString(` FOREIGN KEY (`)
 	writeDelimitedStrings(&stmt, fk.ChildKeys)

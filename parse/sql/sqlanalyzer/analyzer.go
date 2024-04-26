@@ -142,7 +142,7 @@ func cleanTables(tables []*types.Table) ([]*types.Table, error) {
 	cleaned := make([]*types.Table, len(tables))
 
 	for i, tbl := range tables {
-		err := tbl.Clean()
+		err := tbl.Clean(tables)
 		if err != nil {
 			return nil, fmt.Errorf(`error cleaning table "%s": %w`, tbl.Name, err)
 		}

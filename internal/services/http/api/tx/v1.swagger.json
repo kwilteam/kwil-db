@@ -565,7 +565,7 @@
         "name": {
           "type": "string"
         },
-        "isArray": {
+        "is_array": {
           "type": "boolean"
         }
       }
@@ -750,7 +750,7 @@
         "body": {
           "type": "string"
         },
-        "returnTypes": {
+        "return_types": {
           "$ref": "#/definitions/txProcedureReturn",
           "title": "either return_types or return_table should be set"
         },
@@ -765,7 +765,7 @@
     "txProcedureReturn": {
       "type": "object",
       "properties": {
-        "isTable": {
+        "is_table": {
           "type": "boolean"
         },
         "fields": {

@@ -43,7 +43,7 @@ func (s *Schema) Clean() error {
 	}
 
 	for _, table := range s.Tables {
-		err := table.Clean()
+		err := table.Clean(s.Tables)
 		if err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ type Table struct {
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
-func (t *Table) Clean() error {
+func (t *Table) Clean(tables []*Table) error {
 	hasPrimaryAttribute := false
 	for _, col := range t.Columns {
 		if err := col.Clean(); err != nil {
@@ -133,10 +133,17 @@ func (t *Table) Clean() error {
 	}
 
 	hasPrimaryIndex := false
+	idxNames := make(map[string]struct{})
 	for _, idx := range t.Indexes {
-		if err := idx.Clean(); err != nil {
+		if err := idx.Clean(t); err != nil {
 			return err
 		}
+
+		_, ok := idxNames[idx.Name]
+		if ok {
+			return fmt.Errorf("table %s has multiple indexes with the same name: %s", t.Name, idx.Name)
+		}
+		idxNames[idx.Name] = struct{}{}
 
 		if idx.Type == PRIMARY {
 			if hasPrimaryIndex {
@@ -157,6 +164,12 @@ func (t *Table) Clean() error {
 	_, err := t.GetPrimaryKey()
 	if err != nil {
 		return err
+	}
+
+	for _, fk := range t.ForeignKeys {
+		if err := fk.Clean(t, tables); err != nil {
+			return err
+		}
 	}
 
 	return cleanIdent(&t.Name)
@@ -313,7 +326,13 @@ type Index struct {
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
-func (i *Index) Clean() error {
+func (i *Index) Clean(tbl *Table) error {
+	for _, col := range i.Columns {
+		if !hasColumn(tbl, col) {
+			return fmt.Errorf("column %s not found in table %s", col, tbl.Name)
+		}
+	}
+
 	return errors.Join(
 		cleanIdent(&i.Name),
 		cleanIdents(&i.Columns),
@@ -391,7 +410,7 @@ type ForeignKey struct {
 }
 
 // Clean runs a set of validations and cleans the foreign key
-func (f *ForeignKey) Clean() error {
+func (f *ForeignKey) Clean(currentTable *Table, allTables []*Table) error {
 	if len(f.ChildKeys) != len(f.ParentKeys) {
 		return fmt.Errorf("foreign key must have same number of child and parent keys")
 	}
@@ -403,12 +422,49 @@ func (f *ForeignKey) Clean() error {
 		}
 	}
 
+	for _, childKey := range f.ChildKeys {
+		if !hasColumn(currentTable, childKey) {
+			return fmt.Errorf("column %s not found in table %s", childKey, currentTable.Name)
+		}
+	}
+
+	found := false
+	for _, table := range allTables {
+		// we need to use equal fold since this can be used
+		// in a case insensitive context
+		if strings.EqualFold(table.Name, f.ParentTable) {
+			found = true
+			for _, parentKey := range f.ParentKeys {
+				if !hasColumn(table, parentKey) {
+					return fmt.Errorf("column %s not found in table %s", parentKey, table.Name)
+				}
+			}
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("parent table %s not found", f.ParentTable)
+	}
+
 	return errors.Join(
 		cleanIdents(&f.ChildKeys),
 		cleanIdents(&f.ParentKeys),
 		// cleanIdent(&f.ParentSchema),
 		cleanIdent(&f.ParentTable),
 	)
+}
+
+func hasColumn(table *Table, colName string) bool {
+	for _, col := range table.Columns {
+		// we need to use equal fold since this can be used
+		// in a case insensitive context
+		if strings.EqualFold(col.Name, colName) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Copy returns a copy of the foreign key
@@ -959,7 +1015,7 @@ type DataType struct {
 	// Name is the name of the type.
 	Name string `json:"name"`
 	// IsArray is true if the type is an array.
-	IsArray bool `json:"isArray"`
+	IsArray bool `json:"is_array"`
 }
 
 // String returns the string representation of the type.

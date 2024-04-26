@@ -14,6 +14,6 @@ type TxProcedure struct {
 	Public bool `json:"public,omitempty"`
 	Modifiers []string `json:"modifiers,omitempty"`
 	Body string `json:"body,omitempty"`
-	ReturnTypes *TxProcedureReturn `json:"returnTypes,omitempty"`
+	ReturnTypes *TxProcedureReturn `json:"return_types,omitempty"`
 	Annotations []string `json:"annotations,omitempty"`
 }
