@@ -124,12 +124,17 @@ func parseBroadcastError(respTxt []byte) (bool, error) {
 				err = errors.Join(err, transactions.ErrInsufficientBalance)
 			}
 
-			// Reset the generic code and message in the RPCError with the
-			// broadcast-specific details. NOTE: this will overwrite if there
-			// are more than one details object, which is not expected.
-			rpcErr.Code = int32(txCode)
-			rpcErr.Msg = bcastErr.Message
-			if bcastErr.Hash != "" { // if there is a tx hash, include it (possibly just executed it)
+			// Supplement the message in the RPCError with the details, if there
+			// are any. NOTE: this will overwrite if there are more than one
+			// details object, which is not expected.
+			if bcastErr.Message != "" || txCode != transactions.CodeOk {
+				if rpcErr.Msg != "" {
+					rpcErr.Msg += ", "
+				}
+				rpcErr.Msg += fmt.Sprintf("detail: %v (%d)", bcastErr.Message, txCode)
+			}
+			// If there is a tx hash, include it (possibly just executed it).
+			if bcastErr.Hash != "" {
 				rpcErr.Msg += "\nTxHash: " + bcastErr.Hash
 			}
 		} else { // else unknown details type
