@@ -752,6 +752,8 @@ func (a *AbciApp) prepareBlockTransactions(txs [][]byte, log *log.Logger, maxTxB
 		txSize := int64(len(txs[tx.is]))
 		if maxTxBytes < txSize {
 			// Ignore the rest of the transactions by this sender
+			a.log.Warn("transaction being excluded from block with insufficient remaining space",
+				zap.String("sender", hex.EncodeToString(tx.Sender)))
 			senders[sender] = true
 			break
 		}
