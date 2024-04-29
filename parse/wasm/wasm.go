@@ -1,6 +1,6 @@
 //go:build js && wasm
 
-//go:generate env GOOS=js GOARCH=wasm go build -o kuneiform.wasm -ldflags "-s -w" -trimpath -tags netgo wasm.go CGO_ENABLED=0
+//go:generate env GOOS=js CGO_ENABLED=0 GOARCH=wasm go build -o kuneiform.wasm -ldflags "-s -w" -trimpath -tags netgo wasm.go
 package main
 
 import (
