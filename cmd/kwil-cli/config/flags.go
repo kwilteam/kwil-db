@@ -11,27 +11,19 @@ import (
 var cliCfg = DefaultKwilCliPersistedConfig()
 
 const (
-	defaultConfigDirName      = ".kwil_cli"
+	defaultConfigDirName      = ".kwil-cli"
 	defaultConfigFileName     = "config.json"
 	AlternativeConfigHomePath = "/tmp"
 
 	// NOTE: these flags below are also used as viper key names
 	globalPrivateKeyFlag = "private-key"
-	// globalProviderFlag historically there was a chain-provider flag,
-	// we could/should change this flag to `provider`
-	// also since the config file is using `grpc_url`, should change too
-	// TODO: this is a breaking change
-	globalProviderFlag = "kwil-provider"
-	globalChainIDFlag  = "chain-id"
-	globalOutputFlag   = "output"
-	globalTlsCertFlag  = "tls-cert-file"
+	globalProviderFlag   = "provider"
+	globalChainIDFlag    = "chain-id"
 	// NOTE: viper key name are used for viper related operations
 	// here they are same `mapstructure` names defined in the config struct
 	viperPrivateKeyName = "private_key"
-	viperProviderName   = "grpc_url"
+	viperProviderName   = "provider"
 	viperChainID        = "chain_id"
-	viperTlsCertName    = "tls_cert_file"
-	viperOutputName     = "output"
 )
 
 var defaultConfigFile string
@@ -51,7 +43,7 @@ func init() {
 func BindGlobalFlags(fs *pflag.FlagSet) {
 	// Bind flags to environment variables
 	fs.String(globalPrivateKeyFlag, cliCfg.PrivateKey, "the private key of the wallet that will be used for signing")
-	fs.String(globalProviderFlag, cliCfg.GrpcURL, "the Kwil provider HTTP endpoint")
+	fs.String(globalProviderFlag, cliCfg.Provider, "the Kwil rpc provider HTTP endpoint")
 	fs.String(globalChainIDFlag, cliCfg.ChainID, "the expected/intended Kwil Chain ID")
 
 	// Bind flags to viper, named by the flag name
