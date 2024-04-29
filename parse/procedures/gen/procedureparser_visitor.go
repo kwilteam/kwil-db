@@ -85,6 +85,9 @@ type ProcedureParserVisitor interface {
 	// Visit a parse tree produced by ProcedureParser#expr_parenthesized.
 	VisitExpr_parenthesized(ctx *Expr_parenthesizedContext) interface{}
 
+	// Visit a parse tree produced by ProcedureParser#type_cast.
+	VisitType_cast(ctx *Type_castContext) interface{}
+
 	// Visit a parse tree produced by ProcedureParser#expression_list.
 	VisitExpression_list(ctx *Expression_listContext) interface{}
 

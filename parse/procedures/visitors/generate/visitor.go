@@ -53,15 +53,15 @@ func (g *generatorVisitor) VisitExpressionArithmetic(p0 *parser.ExpressionArithm
 }
 
 func (g *generatorVisitor) VisitExpressionArrayAccess(p0 *parser.ExpressionArrayAccess) any {
-	return fmt.Sprintf("%s[%s]", p0.Target.Accept(g).(string), p0.Index.Accept(g).(string))
+	return typeCast(fmt.Sprintf("%s[%s]", p0.Target.Accept(g).(string), p0.Index.Accept(g).(string)), p0.TypeCast)
 }
 
 func (g *generatorVisitor) VisitExpressionBlobLiteral(p0 *parser.ExpressionBlobLiteral) any {
-	return fmt.Sprintf("'\\%s'", hex.EncodeToString(p0.Value))
+	return typeCast(fmt.Sprintf("'\\%s'", hex.EncodeToString(p0.Value)), p0.TypeCast)
 }
 
 func (g *generatorVisitor) VisitExpressionBooleanLiteral(p0 *parser.ExpressionBooleanLiteral) any {
-	return fmt.Sprintf("%t", p0.Value)
+	return typeCast(fmt.Sprintf("%t", p0.Value), p0.TypeCast)
 }
 
 func (g *generatorVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
@@ -75,7 +75,7 @@ func (g *generatorVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
 	// and we need to prefix it with the schema name.
 	funcDef, ok := metadata.Functions[p0.Name]
 	if ok {
-		return funcDef.PGFormat(inputs)
+		return typeCast(funcDef.PGFormat(inputs), p0.TypeCast)
 	}
 
 	str := strings.Builder{}
@@ -94,7 +94,7 @@ func (g *generatorVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
 
 	str.WriteString(")")
 
-	return str.String()
+	return typeCast(str.String(), p0.TypeCast)
 }
 
 func (g *generatorVisitor) VisitExpressionForeignCall(p0 *parser.ExpressionForeignCall) any {
@@ -119,7 +119,7 @@ func (g *generatorVisitor) VisitExpressionForeignCall(p0 *parser.ExpressionForei
 
 	str.WriteString(")")
 
-	return str.String()
+	return typeCast(str.String(), p0.TypeCast)
 }
 
 func (g *generatorVisitor) VisitExpressionComparison(p0 *parser.ExpressionComparison) any {
@@ -135,11 +135,11 @@ func (g *generatorVisitor) VisitExpressionComparison(p0 *parser.ExpressionCompar
 }
 
 func (g *generatorVisitor) VisitExpressionFieldAccess(p0 *parser.ExpressionFieldAccess) any {
-	return fmt.Sprintf("%s.%s", p0.Target.Accept(g).(string), p0.Field)
+	return typeCast(fmt.Sprintf("%s.%s", p0.Target.Accept(g).(string), p0.Field), p0.TypeCast)
 }
 
 func (g *generatorVisitor) VisitExpressionIntLiteral(p0 *parser.ExpressionIntLiteral) any {
-	return fmt.Sprintf("%d", p0.Value)
+	return typeCast(fmt.Sprintf("%d", p0.Value), p0.TypeCast)
 }
 
 func (g *generatorVisitor) VisitExpressionMakeArray(p0 *parser.ExpressionMakeArray) any {
@@ -155,15 +155,15 @@ func (g *generatorVisitor) VisitExpressionMakeArray(p0 *parser.ExpressionMakeArr
 
 	str.WriteString("]")
 
-	return str.String()
+	return typeCast(str.String(), p0.TypeCast)
 }
 
 func (g *generatorVisitor) VisitExpressionNullLiteral(p0 *parser.ExpressionNullLiteral) any {
-	return "NULL"
+	return typeCast("NULL", p0.TypeCast)
 }
 
 func (g *generatorVisitor) VisitExpressionParenthesized(p0 *parser.ExpressionParenthesized) any {
-	return fmt.Sprintf("(%s)", p0.Expression.Accept(g).(string))
+	return typeCast(fmt.Sprintf("(%s)", p0.Expression.Accept(g).(string)), p0.TypeCast)
 }
 
 func (g *generatorVisitor) VisitExpressionTextLiteral(p0 *parser.ExpressionTextLiteral) any {
@@ -171,11 +171,11 @@ func (g *generatorVisitor) VisitExpressionTextLiteral(p0 *parser.ExpressionTextL
 	// escape single quotes
 	p0.Value = strings.ReplaceAll(p0.Value, "'", "''")
 
-	return fmt.Sprintf("'%s'", p0.Value)
+	return typeCast(fmt.Sprintf("'%s'", p0.Value), p0.TypeCast)
 }
 
 func (g *generatorVisitor) VisitExpressionVariable(p0 *parser.ExpressionVariable) any {
-	return p0.Name
+	return typeCast(p0.Name, p0.TypeCast)
 }
 
 func (g *generatorVisitor) VisitLoopTargetCall(p0 *parser.LoopTargetCall) any {
@@ -479,4 +479,19 @@ func (g *generatorVisitor) VisitStatementVariableDeclaration(p0 *parser.Statemen
 	g.variables[p0.Name] = p0.Type
 
 	return ""
+}
+
+// typeCast casts a string to a specific type.
+// If the type is nil, it will return the string as is.
+func typeCast(s string, t *types.DataType) string {
+	if t == nil {
+		return s
+	}
+
+	pgName, err := t.PGString()
+	if err != nil {
+		panic(fmt.Sprintf("error getting pg string: %v", err))
+	}
+
+	return s + "::" + pgName
 }

@@ -33,21 +33,27 @@ type:
 
 // expressions
 expression:
-    TEXT_LITERAL # expr_text_literal
-    | BOOLEAN_LITERAL # expr_boolean_literal
-    | INT_LITERAL # expr_int_literal
-    | NULL_LITERAL # expr_null_literal
-    | BLOB_LITERAL # expr_blob_literal
-    | expression_make_array # expr_make_array
-    | call_expression # expr_call
-    | VARIABLE # expr_variable
-    | expression LBRACKET expression RBRACKET # expr_array_access
-    | expression PERIOD IDENTIFIER # expr_field_access
-    | LPAREN expression RPAREN # expr_parenthesized
+    TEXT_LITERAL type_cast? # expr_text_literal
+    | BOOLEAN_LITERAL type_cast? # expr_boolean_literal
+    | INT_LITERAL type_cast? # expr_int_literal
+    | NULL_LITERAL type_cast? # expr_null_literal
+    | BLOB_LITERAL type_cast? # expr_blob_literal
+    | expression_make_array type_cast? # expr_make_array
+    | call_expression type_cast? # expr_call
+    | VARIABLE type_cast? # expr_variable
+    | expression LBRACKET expression RBRACKET type_cast? # expr_array_access
+    | expression PERIOD IDENTIFIER type_cast? # expr_field_access
+    | LPAREN expression RPAREN type_cast? # expr_parenthesized
+    // the below do not have type casts, but can be wrapped in parens
+    // which can be type casted
     | left=expression operator=(LT|LT_EQ|GT|GT_EQ|NEQ|EQ) right=expression # expr_comparison
     // logical operators, separated for precedence
     | expression (MUL|DIV|MOD) expression # expr_arithmetic
     | expression (PLUS|MINUS) expression # expr_arithmetic
+;
+
+type_cast:
+    TYPE_CAST IDENTIFIER (LBRACKET RBRACKET)?
 ;
 
 expression_list:

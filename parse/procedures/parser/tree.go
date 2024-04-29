@@ -233,7 +233,8 @@ func (e *ExpressionTextLiteral) Accept(v Visitor) interface{} {
 
 type ExpressionTextLiteral struct {
 	baseExpression
-	Value string
+	Value    string
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionBooleanLiteral) Accept(v Visitor) interface{} {
@@ -242,7 +243,8 @@ func (e *ExpressionBooleanLiteral) Accept(v Visitor) interface{} {
 
 type ExpressionBooleanLiteral struct {
 	baseExpression
-	Value bool
+	Value    bool
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionIntLiteral) Accept(v Visitor) interface{} {
@@ -251,7 +253,8 @@ func (e *ExpressionIntLiteral) Accept(v Visitor) interface{} {
 
 type ExpressionIntLiteral struct {
 	baseExpression
-	Value int64
+	Value    int64
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionNullLiteral) Accept(v Visitor) interface{} {
@@ -260,6 +263,7 @@ func (e *ExpressionNullLiteral) Accept(v Visitor) interface{} {
 
 type ExpressionNullLiteral struct {
 	baseExpression
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionBlobLiteral) Accept(v Visitor) interface{} {
@@ -268,7 +272,8 @@ func (e *ExpressionBlobLiteral) Accept(v Visitor) interface{} {
 
 type ExpressionBlobLiteral struct {
 	baseExpression
-	Value []byte
+	Value    []byte
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionMakeArray) Accept(v Visitor) interface{} {
@@ -277,7 +282,8 @@ func (e *ExpressionMakeArray) Accept(v Visitor) interface{} {
 
 type ExpressionMakeArray struct {
 	baseExpression
-	Values []Expression
+	Values   []Expression
+	TypeCast *types.DataType
 }
 
 // ICallExpression is a procedure call.
@@ -300,6 +306,7 @@ type ExpressionCall struct {
 	Name string
 	// Arguments are the arguments to the procedure.
 	Arguments []Expression // can be nil
+	TypeCast  *types.DataType
 }
 
 func (e *ExpressionForeignCall) Accept(v Visitor) interface{} {
@@ -318,6 +325,7 @@ type ExpressionForeignCall struct {
 	ContextArgs []Expression
 	// Arguments are the arguments to the procedure.
 	Arguments []Expression // can be nil
+	TypeCast  *types.DataType
 }
 
 func (e *ExpressionVariable) Accept(v Visitor) interface{} {
@@ -330,7 +338,8 @@ type ExpressionVariable struct {
 	// It is case-insensitive.
 	// It does include the $.
 	// It should include all fields, separated by dots.
-	Name string
+	Name     string
+	TypeCast *types.DataType
 }
 
 type VariablePrefix uint8
@@ -349,7 +358,8 @@ type ExpressionArrayAccess struct {
 	// Target is the array to access the index from.
 	Target Expression
 	// Index is the index to access.
-	Index Expression
+	Index    Expression
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionFieldAccess) Accept(v Visitor) interface{} {
@@ -361,7 +371,8 @@ type ExpressionFieldAccess struct {
 	// Target is the object to access the field from.
 	Target Expression
 	// Field is the field to access.
-	Field string
+	Field    string
+	TypeCast *types.DataType
 }
 
 func (e *ExpressionParenthesized) Accept(v Visitor) interface{} {
@@ -372,6 +383,7 @@ type ExpressionParenthesized struct {
 	baseExpression
 	// Expression is the expression inside the parentheses.
 	Expression Expression
+	TypeCast   *types.DataType
 }
 
 func (e *ExpressionComparison) Accept(v Visitor) interface{} {

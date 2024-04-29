@@ -106,16 +106,31 @@ func (t *typingVisitor) VisitExpressionArrayAccess(p0 *parser.ExpressionArrayAcc
 		panic("expected array")
 	}
 
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
+	}
+
 	return &types.DataType{
 		Name: r.Name,
 	}
 }
 
 func (t *typingVisitor) VisitExpressionBlobLiteral(p0 *parser.ExpressionBlobLiteral) any {
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
+	}
+
 	return types.BlobType
 }
 
 func (t *typingVisitor) VisitExpressionBooleanLiteral(p0 *parser.ExpressionBooleanLiteral) any {
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
+	}
+
 	return types.BoolType
 }
 
@@ -130,6 +145,11 @@ func (t *typingVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
 		returnType, err := funcDef.ValidateArgs(argsTypes)
 		if err != nil {
 			panic(err)
+		}
+
+		// return type cast as the type if it exists
+		if p0.TypeCast != nil {
+			return p0.TypeCast
 		}
 
 		return returnType
@@ -163,6 +183,11 @@ func (t *typingVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
 
 	if len(returns.Fields) != 1 {
 		panic(fmt.Sprintf(`procedure must "%s" return exactly one value to be called as an expression`, p0.Name))
+	}
+
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
 	}
 
 	return returns.Fields[0].Type
@@ -224,6 +249,12 @@ func (t *typingVisitor) VisitExpressionForeignCall(p0 *parser.ExpressionForeignC
 	if len(proc.Returns.Fields) != 1 {
 		panic("foreign procedure must return exactly one value to be called as an expression")
 	}
+
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
+	}
+
 	return proc.Returns.Fields[0].Type
 }
 
@@ -253,10 +284,20 @@ func (t *typingVisitor) VisitExpressionFieldAccess(p0 *parser.ExpressionFieldAcc
 		panic(fmt.Sprintf("field %s not found", p0.Field))
 	}
 
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
+	}
+
 	return dt
 }
 
 func (t *typingVisitor) VisitExpressionIntLiteral(p0 *parser.ExpressionIntLiteral) any {
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
+	}
+
 	return types.IntType
 }
 
@@ -282,6 +323,11 @@ func (t *typingVisitor) VisitExpressionMakeArray(p0 *parser.ExpressionMakeArray)
 		}
 	}
 
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
+	}
+
 	return &types.DataType{
 		Name:    arrayType.Name,
 		IsArray: true,
@@ -289,14 +335,29 @@ func (t *typingVisitor) VisitExpressionMakeArray(p0 *parser.ExpressionMakeArray)
 }
 
 func (t *typingVisitor) VisitExpressionNullLiteral(p0 *parser.ExpressionNullLiteral) any {
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
+	}
+
 	return types.NullType
 }
 
 func (t *typingVisitor) VisitExpressionParenthesized(p0 *parser.ExpressionParenthesized) any {
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
+	}
+
 	return p0.Expression.Accept(t)
 }
 
 func (t *typingVisitor) VisitExpressionTextLiteral(p0 *parser.ExpressionTextLiteral) any {
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
+	}
+
 	return types.TextType
 }
 
@@ -308,7 +369,17 @@ func (t *typingVisitor) VisitExpressionVariable(p0 *parser.ExpressionVariable) a
 			panic(fmt.Errorf(`%w: "%s"`, metadata.ErrUndeclaredVariable, util.UnformatParameterName(p0.Name)))
 		}
 
+		// return type cast as the type if it exists
+		if p0.TypeCast != nil {
+			return p0.TypeCast
+		}
+
 		return anonType
+	}
+
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
 	}
 
 	return dt

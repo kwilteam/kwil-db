@@ -98,10 +98,16 @@ func (p *proceduralLangVisitor) VisitExpr_arithmetic(ctx *gen.Expr_arithmeticCon
 }
 
 func (p *proceduralLangVisitor) VisitExpr_array_access(ctx *gen.Expr_array_accessContext) any {
-	return &ExpressionArrayAccess{
+	e := &ExpressionArrayAccess{
 		Target: p.Visit(ctx.Expression(0)).(Expression),
 		Index:  p.Visit(ctx.Expression(1)).(Expression),
 	}
+
+	if ctx.Type_cast() != nil {
+		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
+	}
+
+	return e
 }
 
 func (p *proceduralLangVisitor) VisitExpr_blob_literal(ctx *gen.Expr_blob_literalContext) any {
@@ -118,19 +124,47 @@ func (p *proceduralLangVisitor) VisitExpr_blob_literal(ctx *gen.Expr_blob_litera
 		panic("invalid blob literal")
 	}
 
-	return &ExpressionBlobLiteral{
+	e := &ExpressionBlobLiteral{
 		Value: decoded,
 	}
+
+	if ctx.Type_cast() != nil {
+		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
+	}
+
+	return e
 }
 
 func (p *proceduralLangVisitor) VisitExpr_boolean_literal(ctx *gen.Expr_boolean_literalContext) any {
-	return &ExpressionBooleanLiteral{
+	e := &ExpressionBooleanLiteral{
 		Value: strings.ToLower(ctx.GetText()) == "true",
 	}
+
+	if ctx.Type_cast() != nil {
+		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
+	}
+
+	return e
 }
 
 func (p *proceduralLangVisitor) VisitExpr_call(ctx *gen.Expr_callContext) any {
-	return p.Visit(ctx.Call_expression())
+	e := p.Visit(ctx.Call_expression())
+
+	if ctx.Type_cast() != nil {
+		tc := ctx.Type_cast().Accept(p).(*types.DataType)
+
+		switch v := e.(type) {
+		case *ExpressionCall:
+			v.TypeCast = tc
+		case *ExpressionForeignCall:
+			v.TypeCast = tc
+		default:
+			// should never happen
+			panic(fmt.Sprintf("invalid type cast for %T", e))
+		}
+	}
+
+	return e
 }
 
 func (p *proceduralLangVisitor) VisitExpr_comparison(ctx *gen.Expr_comparisonContext) any {
@@ -160,10 +194,16 @@ func (p *proceduralLangVisitor) VisitExpr_comparison(ctx *gen.Expr_comparisonCon
 }
 
 func (p *proceduralLangVisitor) VisitExpr_field_access(ctx *gen.Expr_field_accessContext) any {
-	return &ExpressionFieldAccess{
+	e := &ExpressionFieldAccess{
 		Target: p.Visit(ctx.Expression()).(Expression),
 		Field:  ctx.IDENTIFIER().GetText(),
 	}
+
+	if ctx.Type_cast() != nil {
+		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
+	}
+
+	return e
 }
 
 func (p *proceduralLangVisitor) VisitExpr_int_literal(ctx *gen.Expr_int_literalContext) any {
@@ -173,23 +213,50 @@ func (p *proceduralLangVisitor) VisitExpr_int_literal(ctx *gen.Expr_int_literalC
 		panic("invalid int literal")
 	}
 
-	return &ExpressionIntLiteral{
+	e := &ExpressionIntLiteral{
 		Value: i,
 	}
+
+	if ctx.Type_cast() != nil {
+		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
+	}
+
+	return e
 }
 
 func (p *proceduralLangVisitor) VisitExpr_make_array(ctx *gen.Expr_make_arrayContext) any {
-	return p.Visit(ctx.Expression_make_array())
+	e := p.Visit(ctx.Expression_make_array())
+	if ctx.Type_cast() != nil {
+		e2, ok := e.(*ExpressionMakeArray)
+		if !ok {
+			panic("invalid make array expression")
+		}
+
+		e2.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
+	}
+
+	return e
 }
 
 func (p *proceduralLangVisitor) VisitExpr_null_literal(ctx *gen.Expr_null_literalContext) any {
-	return &ExpressionNullLiteral{}
+	e := &ExpressionNullLiteral{}
+	if ctx.Type_cast() != nil {
+		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
+	}
+
+	return e
 }
 
 func (p *proceduralLangVisitor) VisitExpr_parenthesized(ctx *gen.Expr_parenthesizedContext) any {
-	return &ExpressionParenthesized{
+	e := &ExpressionParenthesized{
 		Expression: p.Visit(ctx.Expression()).(Expression),
 	}
+
+	if ctx.Type_cast() != nil {
+		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
+	}
+
+	return e
 }
 
 func (p *proceduralLangVisitor) VisitExpr_text_literal(ctx *gen.Expr_text_literalContext) any {
@@ -205,15 +272,27 @@ func (p *proceduralLangVisitor) VisitExpr_text_literal(ctx *gen.Expr_text_litera
 
 	text := ctx.TEXT_LITERAL().GetText()[1 : len(ctx.TEXT_LITERAL().GetText())-1]
 
-	return &ExpressionTextLiteral{
+	e := &ExpressionTextLiteral{
 		Value: text,
 	}
+
+	if ctx.Type_cast() != nil {
+		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
+	}
+
+	return e
 }
 
 func (p *proceduralLangVisitor) VisitExpr_variable(ctx *gen.Expr_variableContext) any {
-	return &ExpressionVariable{
+	e := &ExpressionVariable{
 		Name: getVariable(ctx.VARIABLE()),
 	}
+
+	if ctx.Type_cast() != nil {
+		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
+	}
+
+	return e
 }
 
 func (p *proceduralLangVisitor) VisitExpression_list(ctx *gen.Expression_listContext) any {
@@ -446,4 +525,15 @@ func getType(t gen.ITypeContext) *types.DataType {
 		Name:    t.IDENTIFIER().GetText(),
 		IsArray: t.LBRACKET() != nil,
 	}
+}
+
+func (p *proceduralLangVisitor) VisitType_cast(ctx *gen.Type_castContext) any {
+	dt := &types.DataType{
+		Name: ctx.IDENTIFIER().GetText(),
+	}
+	if ctx.LBRACKET() != nil {
+		dt.IsArray = true
+	}
+
+	return dt
 }
