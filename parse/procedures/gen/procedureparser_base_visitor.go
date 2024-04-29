@@ -111,6 +111,10 @@ func (v *BaseProcedureParserVisitor) VisitExpr_parenthesized(ctx *Expr_parenthes
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseProcedureParserVisitor) VisitType_cast(ctx *Type_castContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseProcedureParserVisitor) VisitExpression_list(ctx *Expression_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }

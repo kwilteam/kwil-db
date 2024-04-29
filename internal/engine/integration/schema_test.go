@@ -122,6 +122,51 @@ func Test_Schemas(t *testing.T) {
 				require.Equal(t, "this is a longer post than the others`", res.Rows[0][1])
 			},
 		},
+		{
+			// video game schema contains other functionalities, such as type assertions
+			// arithmetic, etc. TODO: add here once we support fixed point arithmetic
+			name: "test video game schema",
+			fn: func(t *testing.T, global *execution.GlobalContext, db sql.DB) {
+				usersDBID, _, gameDBID := deployAllSchemas(t, global, db)
+
+				ctx := context.Background()
+
+				// create user
+				_, err := global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:         usersDBID,
+					Procedure:       "create_user",
+					Args:            []any{"satoshi", "42"},
+					TransactionData: txData(),
+				})
+				require.NoError(t, err)
+
+				// set the user's high score
+				_, err = global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:         gameDBID,
+					Procedure:       "set_high_score",
+					Args:            []any{100},
+					TransactionData: txData(),
+				})
+				require.NoError(t, err)
+
+				// get the user's high score
+				res, err := global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:         gameDBID,
+					Procedure:       "get_high_score",
+					Args:            []any{"satoshi"},
+					TransactionData: txData(),
+				})
+				require.NoError(t, err)
+
+				// check the columns. should be score, as an int
+				require.Len(t, res.Columns, 1)
+				require.Equal(t, "score", res.Columns[0])
+
+				// check the values
+				require.Len(t, res.Rows, 1)
+				require.Equal(t, int64(100), res.Rows[0][0])
+			},
+		},
 	}
 
 	for _, tc := range testCases {

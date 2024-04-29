@@ -13,9 +13,9 @@ table scores {
     high_score int notnull min(0) default(0)
 }
 
-// register_user registers a use that already exists in the foreign users db.
+// set_high_score registers a use that already exists in the foreign users db.
 // if the user does not exist, it will return an error
-procedure register_user($initial_score int) public {
+procedure set_high_score($initial_score int) public {
     $dbid text := admin_get('dbid');
     $procedure text := admin_get('userbyowner');
 
@@ -30,6 +30,12 @@ procedure register_user($initial_score int) public {
 // get_high_score gets the high score of a user, identified by username.
 // if the user does not exist, it will return an error
 procedure get_high_score($username text) public view returns (score int) {
+    // this is very convoluted, but it is meant to test type assertion
+    return get_high_score_text($username)::int;
+}
+
+// get_high_score_text gets a users high score and returns it as text
+procedure get_high_score_text($username text) public view returns (score text) {
     $dbid text := admin_get('dbid');
     $procedure text := admin_get('userbyname');
 
@@ -38,7 +44,7 @@ procedure get_high_score($username text) public view returns (score int) {
     $user_id, _ := get_user[$dbid, $procedure]($username);
 
     for $row in select high_score from scores where user_id = $user_id {
-        return $row.high_score;
+        return $row.high_score::text;
     }
 
     error(format('user %s not found', $username));
