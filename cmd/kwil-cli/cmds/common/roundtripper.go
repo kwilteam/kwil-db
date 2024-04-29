@@ -35,8 +35,8 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 		return err
 	}
 
-	if conf.GrpcURL == "" {
-		return fmt.Errorf("kwil provider url is required")
+	if conf.Provider == "" {
+		return fmt.Errorf("rpc provider url is required")
 	}
 
 	needPrivateKey := flags&WithoutPrivateKey == 0
@@ -53,7 +53,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 	// if not using the gateway, then we can simply create a regular client and return
 	if flags&UsingGateway == 0 {
-		client, err := client.NewClient(ctx, conf.GrpcURL, &clientConfig)
+		client, err := client.NewClient(ctx, conf.Provider, &clientConfig)
 		if err != nil {
 			return err
 		}
@@ -63,7 +63,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 	// if we reach here, we are talking to a gateway
 
-	client, err := gatewayclient.NewClient(ctx, conf.GrpcURL, &gatewayclient.GatewayOptions{
+	client, err := gatewayclient.NewClient(ctx, conf.Provider, &gatewayclient.GatewayOptions{
 		Options: clientConfig,
 		AuthSignFunc: func(message string, signer auth.Signer) (*auth.Signature, error) {
 			assumeYes, err := GetAssumeYesFlag(cmd)

@@ -16,7 +16,7 @@ import (
 
 type KwilCliConfig struct {
 	PrivateKey *crypto.Secp256k1PrivateKey
-	GrpcURL    string // TODO: change to maybe `RPCProvider` or `ProviderURL`
+	Provider   string
 	ChainID    string
 }
 
@@ -37,14 +37,14 @@ func (c *KwilCliConfig) ToPersistedConfig() *kwilCliPersistedConfig {
 	}
 	return &kwilCliPersistedConfig{
 		PrivateKey: privKeyHex,
-		GrpcURL:    c.GrpcURL,
+		Provider:   c.Provider,
 		ChainID:    c.ChainID,
 	}
 }
 
 func DefaultKwilCliPersistedConfig() *kwilCliPersistedConfig {
 	return &kwilCliPersistedConfig{
-		GrpcURL: "http://localhost:8080",
+		Provider: "http://localhost:8080",
 	}
 }
 
@@ -53,21 +53,26 @@ func DefaultKwilCliPersistedConfig() *kwilCliPersistedConfig {
 type kwilCliPersistedConfig struct {
 	// NOTE: `mapstructure` is used by viper, name is same as the viper key name
 	PrivateKey string `mapstructure:"private_key" json:"private_key,omitempty"`
-	GrpcURL    string `mapstructure:"grpc_url" json:"grpc_url,omitempty"`
+	Provider   string `mapstructure:"provider" json:"provider,omitempty"`
 	ChainID    string `mapstructure:"chain_id" json:"chain_id,omitempty"`
 }
 
 func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
 	kwilConfig := &KwilCliConfig{
-		GrpcURL: c.GrpcURL,
-		ChainID: c.ChainID,
+		Provider: c.Provider,
+		ChainID:  c.ChainID,
 	}
 
-	privateKey, err := crypto.Secp256k1PrivateKeyFromHex(c.PrivateKey)
-	if err != nil {
+	// NOTE: so non private_key required cmds could be run
+	if c.PrivateKey == "" {
 		return kwilConfig, nil
 	}
 
+	// we should complain if the private key is configured and invalid
+	privateKey, err := crypto.Secp256k1PrivateKeyFromHex(c.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key: %w", err)
+	}
 	kwilConfig.PrivateKey = privateKey
 
 	return kwilConfig, nil

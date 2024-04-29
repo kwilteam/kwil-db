@@ -49,12 +49,12 @@ func Example_respKwilCliConfig_text() {
 		cfg: &config.KwilCliConfig{
 			PrivateKey: pk,
 			ChainID:    "chainid123",
-			GrpcURL:    "localhost:9090",
+			Provider:   "localhost:9090",
 		},
 	}, nil, "text")
 	// Output:
 	// PrivateKey: ***
-	// GrpcURL: localhost:9090
+	// Provider: localhost:9090
 	// ChainID: chainid123
 }
 
@@ -68,14 +68,14 @@ func Example_respKwilCliConfig_json() {
 		cfg: &config.KwilCliConfig{
 			PrivateKey: pk,
 			ChainID:    "chainid123",
-			GrpcURL:    "localhost:9090",
+			Provider:   "localhost:9090",
 		},
 	}, nil, "json")
 	// Output:
 	// {
 	//   "result": {
 	//     "private_key": "***",
-	//     "grpc_url": "localhost:9090",
+	//     "provider": "localhost:9090",
 	//     "chain_id": "chainid123"
 	//   },
 	//   "error": ""

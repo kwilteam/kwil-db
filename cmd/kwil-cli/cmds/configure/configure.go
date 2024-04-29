@@ -15,7 +15,7 @@ var configureLong = `Configure the Kwil CLI with persistent global settings.
 
 This command will prompt you for the following settings:
 
-- Kwil RPC URL: the gRPC URL of the Kwil node you wish to connect to.
+- Kwil RPC provider URL: the RPC URL of the Kwil node you wish to connect to.
 - Kwil Chain ID: the chain ID of the Kwil node you wish to connect to.  If left empty, the Kwil node will provide this value.
 - Private Key: the private key to use for signing transactions.  If left empty, the Kwil CLI will not sign transactions.`
 
@@ -38,7 +38,7 @@ func NewCmdConfigure() *cobra.Command {
 			}
 
 			err = runErrs(conf,
-				promptGRPCURL,
+				promptRPCProvider,
 				promptChainID,
 				promptPrivateKey,
 			)
@@ -65,17 +65,17 @@ func runErrs(conf *config.KwilCliConfig, fns ...func(*config.KwilCliConfig) erro
 	return nil
 }
 
-func promptGRPCURL(conf *config.KwilCliConfig) error {
+func promptRPCProvider(conf *config.KwilCliConfig) error {
 	prompt := &common.Prompter{
-		Label:   "Kwil RPC URL",
-		Default: conf.GrpcURL,
+		Label:   "Kwil RPC provider URL",
+		Default: conf.Provider,
 	}
 	res, err := prompt.Run()
 	if err != nil {
 		return err
 	}
 
-	conf.GrpcURL = res
+	conf.Provider = res
 
 	return nil
 }
