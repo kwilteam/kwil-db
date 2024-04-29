@@ -572,6 +572,23 @@ components:
       example:
         do: do
         "on": "on"
+    txForeignProcedure:
+      type: object
+      properties:
+        name:
+          type: string
+        parameters:
+          type: array
+          items:
+            $ref: '#/components/schemas/txDataType'
+        return_types:
+          $ref: '#/components/schemas/txProcedureReturn'
+      example:
+        return_types: null
+        name: name
+        parameters:
+        - null
+        - null
     txGetAccountResponse:
       type: object
       properties:
@@ -772,6 +789,17 @@ components:
             - name: name
               type: null
           name: name
+          foreign_procedures:
+          - return_types: null
+            name: name
+            parameters:
+            - null
+            - null
+          - return_types: null
+            name: name
+            parameters:
+            - null
+            - null
           actions:
           - public: true
             name: name
@@ -934,6 +962,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/txProcedure'
+        foreign_procedures:
+          type: array
+          items:
+            $ref: '#/components/schemas/txForeignProcedure'
       example:
         owner: ""
         tables:
@@ -1104,6 +1136,17 @@ components:
           - name: name
             type: null
         name: name
+        foreign_procedures:
+        - return_types: null
+          name: name
+          parameters:
+          - null
+          - null
+        - return_types: null
+          name: name
+          parameters:
+          - null
+          - null
         actions:
         - public: true
           name: name

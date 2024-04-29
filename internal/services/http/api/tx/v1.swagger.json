@@ -657,6 +657,24 @@
         }
       }
     },
+    "txForeignProcedure": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txDataType"
+          }
+        },
+        "return_types": {
+          "$ref": "#/definitions/txProcedureReturn"
+        }
+      }
+    },
     "txGetAccountResponse": {
       "type": "object",
       "properties": {
@@ -833,6 +851,13 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/txProcedure"
+          }
+        },
+        "foreign_procedures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txForeignProcedure"
           }
         }
       }

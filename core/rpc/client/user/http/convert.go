@@ -130,12 +130,13 @@ func convertToSchema(schema *httpTx.TxSchema) (*types.Schema, error) {
 	}
 
 	s := &types.Schema{
-		Owner:      decodedOwner,
-		Name:       schema.Name,
-		Tables:     convertHttpTables(schema.Tables),
-		Actions:    convertHttpActions(schema.Actions),
-		Extensions: convertHttpExtensions(schema.Extensions),
-		Procedures: convertHttpProcedures(schema.Procedures),
+		Owner:             decodedOwner,
+		Name:              schema.Name,
+		Tables:            convertHttpTables(schema.Tables),
+		Actions:           convertHttpActions(schema.Actions),
+		Extensions:        convertHttpExtensions(schema.Extensions),
+		Procedures:        convertHttpProcedures(schema.Procedures),
+		ForeignProcedures: convertHTTPForeignProcedures(schema.ForeignProcedures),
 	}
 
 	err = s.Clean()
@@ -310,4 +311,36 @@ func convertHttpParameters(parameters []httpTx.TxTypedVariable) []*types.Procedu
 		}
 	}
 	return params
+}
+
+func convertHTTPForeignProcedures(procedures []httpTx.TxForeignProcedure) []*types.ForeignProcedure {
+	procs := make([]*types.ForeignProcedure, len(procedures))
+	for i, procedure := range procedures {
+		params := make([]*types.DataType, len(procedure.Parameters))
+		for j, param := range procedure.Parameters {
+			params[j] = convertDataType(&param)
+		}
+
+		var returns *types.ProcedureReturn
+		if procedure.ReturnTypes != nil {
+			returns = &types.ProcedureReturn{
+				IsTable: procedure.ReturnTypes.IsTable,
+				Fields:  make([]*types.NamedType, len(procedure.ReturnTypes.Fields)),
+			}
+
+			for j, col := range procedure.ReturnTypes.Fields {
+				returns.Fields[j] = &types.NamedType{
+					Name: col.Name,
+					Type: convertDataType(col.Type_),
+				}
+			}
+		}
+
+		procs[i] = &types.ForeignProcedure{
+			Name:       procedure.Name,
+			Parameters: params,
+			Returns:    returns,
+		}
+	}
+	return procs
 }
