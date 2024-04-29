@@ -11,12 +11,13 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
 
-func NewOrderWalker(tables []*types.Table) tree.AstListener {
+func NewOrderWalker(schema *types.Schema) tree.AstListener {
 	// copy tables, since we will be modifying the tables slice to register CTEs
-	tbls := make([]*types.Table, len(tables))
-	copy(tbls, tables)
+	tbls := make([]*types.Table, len(schema.Tables))
+	copy(tbls, schema.Tables)
 
 	return &orderingWalker{
+		schema: schema,
 		tables: tbls,
 	}
 }
@@ -25,6 +26,7 @@ func NewOrderWalker(tables []*types.Table) tree.AstListener {
 type orderingWalker struct {
 	tree.BaseListener
 
+	schema *types.Schema
 	tables []*types.Table // all tables in the schema
 }
 
@@ -104,6 +106,7 @@ func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) erro
 
 	res, err := typing.AnalyzeTypes(node.Select, o.tables, &typing.AnalyzeOptions{
 		ArbitraryBinds: true,
+		Schema:         o.schema,
 	})
 	if err != nil {
 		return err

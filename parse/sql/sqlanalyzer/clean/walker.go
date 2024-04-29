@@ -2,29 +2,27 @@ package clean
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/metadata"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/parse/util"
 )
 
 // TODO: the statement cleaner should also check for table / column existence
-func NewStatementCleaner(procedures []*types.Procedure) *StatementCleaner {
+func NewStatementCleaner(schema *types.Schema) *StatementCleaner {
 	return &StatementCleaner{
 		AstListener: tree.NewBaseListener(),
-		procedures:  procedures,
+		schema:      schema,
 	}
 }
 
-var _ tree.AstListener = &StatementCleaner{
-	procedures: []*types.Procedure{},
-}
+var _ tree.AstListener = &StatementCleaner{}
 
 type StatementCleaner struct {
 	tree.AstListener
-	procedures []*types.Procedure
+	schema *types.Schema
 }
 
 // EnterConflictTarget checks that the indexed column names are valid identifiers
@@ -89,24 +87,22 @@ func (s *StatementCleaner) EnterExpressionBinaryComparison(node *tree.Expression
 // EnterExpressionFunction lowers the function name and checks that it is a valid function
 func (s *StatementCleaner) EnterExpressionFunction(node *tree.ExpressionFunction) (err error) {
 	node.Function = strings.ToLower(node.Function)
+	// this can either be a procedure or a function call.
+	// it cannot be a foreign procedure, as those are parsed differently
 
 	_, ok := metadata.Functions[node.Function]
 	if !ok {
 		// check if it's a procedure
-		if findProcedure(s.procedures, node.Function) == nil {
-			return wrapErr(metadata.ErrUnknownFunctionOrProcedure, fmt.Errorf(node.Function))
+		if _, ok := s.schema.FindProcedure(node.Function); ok {
+			return nil
+		}
+
+		_, _, err := util.FindProcOrForeign(s.schema, node.Function)
+		if err != nil {
+			return err
 		}
 	}
 
-	return nil
-}
-
-func findProcedure(procedures []*types.Procedure, name string) *types.Procedure {
-	for _, p := range procedures {
-		if p.Name == name {
-			return p
-		}
-	}
 	return nil
 }
 

@@ -38,11 +38,6 @@ func (a *WalkerRecoverer) Walk(walker tree.AstListener) (err error) {
 // It will alter the statement to make it conform to the given flags, or return an error if it cannot.
 // All tables will target the pgSchemaName schema.
 func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaName string) (*AnalyzedStatement, error) {
-	cleanedTables, err := cleanTables(schema.Tables)
-	if err != nil {
-		return nil, fmt.Errorf("error cleaning tables: %w", err)
-	}
-
 	parsed, err := sqlparser.Parse(stmt)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing statement: %w", err)
@@ -50,7 +45,7 @@ func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaNam
 
 	walker := &WalkerRecoverer{parsed}
 
-	clnr := clean.NewStatementCleaner(schema.Procedures)
+	clnr := clean.NewStatementCleaner(schema)
 	err = walker.Walk(clnr)
 	if err != nil {
 		return nil, fmt.Errorf("error cleaning statement: %w", err)
@@ -70,7 +65,7 @@ func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaNam
 	}
 
 	if flags&GuaranteedOrder != 0 {
-		err := walker.Walk(order.NewOrderWalker(cleanedTables))
+		err := walker.Walk(order.NewOrderWalker(schema))
 		if err != nil {
 			return nil, fmt.Errorf("error enforcing guaranteed order: %w", err)
 		}
@@ -106,14 +101,9 @@ func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaNam
 
 // CleanAST cleans and makes the given statement deterministic.
 func CleanAST(ast tree.AstWalker, schema *types.Schema, pgSchemaName string) (err error) {
-	cleanedTables, err := cleanTables(schema.Tables)
-	if err != nil {
-		return fmt.Errorf("error cleaning tables: %w", err)
-	}
-
 	accept := &WalkerRecoverer{ast}
 
-	clnr := clean.NewStatementCleaner(schema.Procedures)
+	clnr := clean.NewStatementCleaner(schema)
 	err = accept.Walk(clnr)
 	if err != nil {
 		return fmt.Errorf("error cleaning statement: %w", err)
@@ -130,27 +120,12 @@ func CleanAST(ast tree.AstWalker, schema *types.Schema, pgSchemaName string) (er
 		return fmt.Errorf("error applying join rules: %w", err)
 	}
 
-	err = accept.Walk(order.NewOrderWalker(cleanedTables))
+	err = accept.Walk(order.NewOrderWalker(schema))
 	if err != nil {
 		return fmt.Errorf("error enforcing guaranteed order: %w", err)
 	}
 
 	return nil
-}
-
-func cleanTables(tables []*types.Table) ([]*types.Table, error) {
-	cleaned := make([]*types.Table, len(tables))
-
-	for i, tbl := range tables {
-		err := tbl.Clean(tables)
-		if err != nil {
-			return nil, fmt.Errorf(`error cleaning table "%s": %w`, tbl.Name, err)
-		}
-
-		cleaned[i] = tbl.Copy()
-	}
-
-	return cleaned, nil
 }
 
 type VerifyFlag uint8

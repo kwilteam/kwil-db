@@ -19,7 +19,8 @@ type AnalyzeOptions struct {
 	Qualify bool
 	// VerifyProcedures will verify procedure calls in the statement.
 	VerifyProcedures bool
-	Procedures       []*types.Procedure
+	// Schema is the current database schema.
+	Schema *types.Schema
 }
 
 // AnalyzeTypes will run type analysis on the given statement.
@@ -35,6 +36,7 @@ func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, options *AnalyzeOptio
 	if options == nil {
 		options = &AnalyzeOptions{
 			BindParams: make(map[string]*types.DataType),
+			Schema:     &types.Schema{},
 		}
 	}
 
@@ -140,7 +142,9 @@ func (e *evaluationContext) join(relation *QualifiedRelation) error {
 	if relation.Name == "" {
 		// ensure an anonymous relation already exists
 		if _, ok := e.joinedTables[""]; !ok {
+			// if it does not exist, create it and add it to the join order
 			e.joinedTables[""] = NewRelation()
+			e.joinOrder = append(e.joinOrder, "")
 		}
 
 		return e.joinedTables[""].Merge(relation.Relation)

@@ -20,6 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer/parameters"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/parse/util"
 )
 
 // CleanProcedure cleans a procedure to ensure it is valid.
@@ -31,7 +32,7 @@ import (
 // It takes the parsed statements, the target procedure and its schema, the pg schema name,
 // a prefix which it will used to prefix postgres session variables
 // and a set of known postgres session variables and their types.
-func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSchema *types.Schema, pgSchemaName string, knownVars map[string]*types.DataType) (params []*types.NamedType, sessionVars map[string]*types.DataType, err error) {
+func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSchema *types.Schema, pgSchemaName string) (params []*types.NamedType, sessionVars map[string]*types.DataType, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			var ok bool
@@ -46,7 +47,6 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 	c := cleaner{
 		currentProc:        proc,
 		currentSchema:      currentSchema,
-		knownSessionVars:   knownVars,
 		pgSchemaName:       pgSchemaName,
 		cleanedSessionVars: map[string]*types.DataType{},
 		sqlCanMutate:       !proc.IsView(),
@@ -126,6 +126,10 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 			ec.Name = strings.ToLower(ec.Name)
 			_, ok := metadata.Functions[ec.Name]
 			if !ok {
+				if c.isForeignProcedure(ec.Name) {
+					return
+				}
+
 				proc2, err := c.findProcedure(ec.Name)
 				if err != nil {
 					panic(err)
@@ -180,7 +184,6 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 type cleaner struct {
 	currentSchema      *types.Schema
 	currentProc        *types.Procedure
-	knownSessionVars   map[string]*types.DataType
 	pgSchemaName       string
 	cleanedSessionVars map[string]*types.DataType
 	sqlCanMutate       bool
@@ -214,20 +217,20 @@ func (c *cleaner) cleanVar(n *string) {
 	switch r[0] {
 	case '$':
 		// user-defined parameter
-		*n = "_param_" + r[1:]
+		*n = util.FormatParameterName(r)
 		return
 	case '@':
 		// for contextual parameters, we use postgres's current_setting()
 		// feature for setting session variables. For example, @caller
 		// is accessed via current_setting('ctx.caller')
 
-		sesVar, ok := c.knownSessionVars[r[1:]]
+		sesVar, ok := metadata.GetSessionVariable(r)
 		if !ok {
-			panic(fmt.Errorf("%w: %s", metadata.ErrUnknownContextualVariable, r[1:]))
+			panic(fmt.Errorf("%w: %s", metadata.ErrUnknownContextualVariable, r))
 		}
 
 		// contextual parameter
-		*n = fmt.Sprintf("current_setting('%s.%s')", metadata.PgSessionPrefix, r[1:])
+		*n = util.FormatContextualVariableName(r, sesVar)
 		c.cleanedSessionVars[*n] = sesVar
 		return
 	default:
@@ -271,6 +274,16 @@ func (c *cleaner) findProcedure(name string) (*types.Procedure, error) {
 	}
 
 	return nil, fmt.Errorf(`%w: "%s"`, metadata.ErrUnknownFunctionOrProcedure, name)
+}
+
+func (c *cleaner) isForeignProcedure(name string) bool {
+	for _, proc := range c.currentSchema.ForeignProcedures {
+		if strings.EqualFold(proc.Name, name) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // findForeignProcedure finds a foreign procedure based on its name.

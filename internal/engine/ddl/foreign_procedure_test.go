@@ -37,7 +37,7 @@ BEGIN
     SELECT p.param_types, p.return_types, p.is_view, p.owner_only, p.public, s.owner, p.returns_table
     INTO _expected_input_types, _expected_return_types, _is_view, _is_owner_only, _is_public, _schema_owner, _returns_table
     FROM kwild_internal.procedures as p INNER JOIN kwild_internal.kwil_schemas as s
-    ON s.schema_id = p.id
+    ON p.schema_id = s.id
     WHERE p.name = _procedure AND s.dbid = _dbid;
 
     IF _schema_owner IS NULL THEN
@@ -48,8 +48,8 @@ BEGIN
         RAISE EXCEPTION 'Non-view procedure "%" called in view-only connection', _procedure;
     END IF;
 
-    IF _is_owner_only = TRUE AND _schema_owner != current_setting('ctx.caller') THEN
-        RAISE EXCEPTION 'Procedure "%" is owner-only and cannot be called by user "%" in schema "%"', _procedure, current_setting('ctx.caller'), _dbid;
+    IF _is_owner_only = TRUE AND _schema_owner != current_setting('ctx.signer')::BYTEA THEN
+        RAISE EXCEPTION 'Procedure "%" is owner-only and cannot be called by signer "%" in schema "%"', _procedure, current_setting('ctx.signer'), _dbid;
     END IF;
 
     IF _is_public = FALSE THEN

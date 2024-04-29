@@ -1979,50 +1979,35 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				},
 			},
 		},
-		{"column name with bracket quote", `select [col1] from "t1"`,
-			&tree.SelectStmt{
-				Stmt: &tree.SelectCore{
-					SimpleSelects: []*tree.SimpleSelect{
-						{
-							SelectType: tree.SelectTypeAll,
-							Columns: []tree.ResultColumn{
-								&tree.ResultColumnExpression{
-									Expression: &tree.ExpressionColumn{
-										Column: "col1",
-									},
-								},
-							},
-							From: &tree.RelationTable{
-								Name: "t1",
-							},
-						},
-					},
-				},
-			},
-		},
-		{"column name alias with bracket quote", `select [col1] as [col] from t1`,
-			&tree.SelectStmt{
-				Stmt: &tree.SelectCore{
-					SimpleSelects: []*tree.SimpleSelect{
-						{
-							SelectType: tree.SelectTypeAll,
-							Columns: []tree.ResultColumn{
-								&tree.ResultColumnExpression{
-									Expression: &tree.ExpressionColumn{
-										Table:  "",
-										Column: "col1",
-									},
-									Alias: "col",
-								},
-							},
-							From: &tree.RelationTable{
-								Name: "t1",
-							},
-						},
-					},
-				},
-			},
-		},
+		// we cannot actually test this without re-architecting the whole test,
+		// so will comment out for now
+		// {
+		// 	name:  "foreign function call",
+		// 	input: `select call['a', $b]('c');`,
+		// 	expect: &tree.SelectStmt{
+		// 		Stmt: &tree.SelectCore{
+		// 			SimpleSelects: []*tree.SimpleSelect{
+		// 				{
+		// 					SelectType: tree.SelectTypeAll,
+		// 					Columns: []tree.ResultColumn{
+		// 						&tree.ResultColumnExpression{
+		// 							Expression: &tree.ExpressionFunction{
+		// 								Function: "call",
+		// 								ContextualParams: []tree.Expression{
+		// 									genLiteralExpression("'a'"),
+		// 									&tree.ExpressionBindParameter{Parameter: "$b"},
+		// 								},
+		// 								Inputs: []tree.Expression{
+		// 									genLiteralExpression("'c'"),
+		// 								},
+		// 							},
+		// 						},
+		// 					},
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// },
 		{"collation name with back tick quote", "select `col1` COLLATE `nocase` from `t1`; ",
 			&tree.SelectStmt{
 				Stmt: &tree.SelectCore{

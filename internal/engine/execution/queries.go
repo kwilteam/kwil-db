@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -216,6 +217,21 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema, txi
 		}
 	}
 
+	// To support foreign procedure calls, we generate a function for each procedure.
+	// The function ensures that, whatever target procedure is chosen at runtime, that
+	// its input and output types are compatible with the expected types.
+	for _, proc := range schema.ForeignProcedures {
+		stmt, err := ddl.GenerateForeignProcedure(proc)
+		if err != nil {
+			return err
+		}
+
+		_, err = sp.Execute(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+
 	// store the procedures in the kwil_procedures table
 	for _, proc := range schema.Procedures {
 
@@ -324,6 +340,11 @@ func setContextualVars(ctx context.Context, db sql.DB, data *common.ExecutionDat
 	}
 
 	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, metadata.PgSessionPrefix, metadata.TxidVar, data.TxID))
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, metadata.PgSessionPrefix, metadata.SignerVar, hex.EncodeToString(data.Signer)))
 	if err != nil {
 		return err
 	}

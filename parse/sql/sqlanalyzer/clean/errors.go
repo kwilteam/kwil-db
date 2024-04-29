@@ -23,7 +23,6 @@ var (
 	ErrInvalidBinaryOperator           = errors.New("invalid binary operator")
 	ErrInvalidStringComparisonOperator = errors.New("invalid string comparison operator")
 	ErrInvalidArithmeticOperator       = errors.New("invalid arithmetic operator")
-	ErrUnknownFunction                 = errors.New("unknown function")
 )
 
 // wrapErr wraps an error with another, if the second error is not nil

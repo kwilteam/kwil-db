@@ -155,7 +155,9 @@ func Test_Order(t *testing.T) {
 			stmt, err := sqlparser.Parse(tt.stmt)
 			require.NoError(t, err)
 
-			walker := order.NewOrderWalker(defaultTables)
+			walker := order.NewOrderWalker(&types.Schema{
+				Tables: defaultTables,
+			})
 			err = stmt.Walk(walker)
 			if err != nil {
 				require.ErrorIs(t, err, tt.err)

@@ -5,13 +5,13 @@ package typing
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/metadata"
 	"github.com/kwilteam/kwil-db/parse/procedures/parser"
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer/typing"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/parse/util"
 )
 
 func EnsureTyping(stmts []parser.Statement, procedure *types.Procedure, schema *types.Schema, cleanedInputs []*types.NamedType,
@@ -100,7 +100,7 @@ func (t *typingVisitor) VisitExpressionArrayAccess(p0 *parser.ExpressionArrayAcc
 
 	r, ok := p0.Target.Accept(t).(*types.DataType)
 	if !ok {
-		panic("expected custom data type")
+		panic("BUG: expected data type")
 	}
 	if !r.IsArray {
 		panic("expected array")
@@ -135,45 +135,37 @@ func (t *typingVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
 		return returnType
 	}
 
-	var proc *types.Procedure
-	found := false
-	for _, p := range t.currentSchema.Procedures {
-		if p.Name == p0.Name {
-			proc = p
-			found = true
-			break
-		}
-	}
-	if !found {
-		panic(fmt.Sprintf(`unknown function/procedure "%s"`, p0.Name))
+	params, returns, err := util.FindProcOrForeign(t.currentSchema, p0.Name)
+	if err != nil {
+		panic(err)
 	}
 
 	// check the args
-	if len(p0.Arguments) != len(proc.Parameters) {
-		panic(fmt.Sprintf(`expected %d arguments, got %d`, len(proc.Parameters), len(p0.Arguments)))
+	if len(p0.Arguments) != len(params) {
+		panic(fmt.Sprintf(`expected %d arguments, got %d`, len(params), len(p0.Arguments)))
 	}
 
 	for i, arg := range p0.Arguments {
 		argType := arg.Accept(t).(*types.DataType)
-		if !argType.Equals(proc.Parameters[i].Type) {
+		if !argType.Equals(params[i]) {
 			panic(fmt.Sprintf(`argument %d has wrong type`, i))
 		}
 	}
 
 	// it must not return a table, and only return exactly one value
-	if proc.Returns == nil {
+	if returns == nil {
 		panic(fmt.Sprintf(`procedure "%s" does not return anything, so it cannot be called as an expression`, p0.Name))
 	}
 
-	if proc.Returns.IsTable {
+	if returns.IsTable {
 		panic(fmt.Sprintf(`procedure "%s" returns a table, which cannot be called as an expression`, p0.Name))
 	}
 
-	if len(proc.Returns.Fields) != 1 {
+	if len(returns.Fields) != 1 {
 		panic(fmt.Sprintf(`procedure must "%s" return exactly one value to be called as an expression`, p0.Name))
 	}
 
-	return proc.Returns.Fields[0].Type
+	return returns.Fields[0].Type
 }
 
 func (t *typingVisitor) VisitExpressionForeignCall(p0 *parser.ExpressionForeignCall) any {
@@ -201,7 +193,7 @@ func (t *typingVisitor) VisitExpressionForeignCall(p0 *parser.ExpressionForeignC
 	for _, arg := range p0.ContextArgs {
 		r, ok := arg.Accept(t).(*types.DataType)
 		if !ok {
-			panic("expected custom data type")
+			panic("BUG: expected data type")
 		}
 
 		if !r.Equals(types.TextType) {
@@ -222,7 +214,7 @@ func (t *typingVisitor) VisitExpressionForeignCall(p0 *parser.ExpressionForeignC
 	}
 
 	if proc.Returns == nil {
-		return nil
+		panic("procedure does not return anything")
 	}
 
 	// proc must return exactly one value that is not a table
@@ -232,12 +224,21 @@ func (t *typingVisitor) VisitExpressionForeignCall(p0 *parser.ExpressionForeignC
 	if len(proc.Returns.Fields) != 1 {
 		panic("foreign procedure must return exactly one value to be called as an expression")
 	}
-	return proc.Returns
+	return proc.Returns.Fields[0].Type
 }
 
 func (t *typingVisitor) VisitExpressionComparison(p0 *parser.ExpressionComparison) any {
-	t.asserIntType(p0.Left)
-	t.asserIntType(p0.Right)
+	left := p0.Left.Accept(t).(*types.DataType)
+	right := p0.Right.Accept(t).(*types.DataType)
+
+	// left and right must either be the same type,
+	// or one of them must be null
+	if !left.Equals(right) {
+		if !left.Equals(types.NullType) && !right.Equals(types.NullType) {
+			panic("comparison types do not match")
+		}
+	}
+
 	return types.BoolType
 }
 
@@ -304,7 +305,7 @@ func (t *typingVisitor) VisitExpressionVariable(p0 *parser.ExpressionVariable) a
 	if !ok {
 		anonType, ok := t.anonymousDeclarations[p0.Name]
 		if !ok {
-			panic(fmt.Errorf(`%w: "%s"`, metadata.ErrUndeclaredVariable, reverseCleanVar(p0.Name)))
+			panic(fmt.Errorf(`%w: "%s"`, metadata.ErrUndeclaredVariable, util.UnformatParameterName(p0.Name)))
 		}
 
 		return anonType
@@ -389,24 +390,15 @@ func (t *typingVisitor) VisitStatementProcedureCall(p0 *parser.StatementProcedur
 		}
 		varType, ok := t.declarations[*v]
 		if !ok {
-			panic(fmt.Errorf(`%w: "%s"`, metadata.ErrUndeclaredVariable, reverseCleanVar(*v)))
+			panic(fmt.Errorf(`%w: "%s"`, metadata.ErrUndeclaredVariable, util.UnformatParameterName(*v)))
 		}
 
 		if !varType.Equals(returns.Fields[i].Type) {
-			panic(fmt.Sprintf("variable %s has wrong type", reverseCleanVar(*v)))
+			panic(fmt.Sprintf("variable %s has wrong type", util.UnformatParameterName(*v)))
 		}
 	}
 
 	return nil
-}
-
-// TODO: this is a hack and implicit coupling with the clean package
-func reverseCleanVar(v string) string {
-	v, prefixed := strings.CutPrefix(v, "_param_")
-	if !prefixed {
-		panic("expected parameter prefix, received: " + v) // already in a panic, just do nothing and return v
-	}
-	return "$" + v
 }
 
 // analyzeProcedureCall is used to visit a procedure call and get info on the return type.
@@ -438,38 +430,28 @@ func (t *typingVisitor) analyzeProcedureCall(p0 parser.ICallExpression) *types.P
 			}
 		}
 
-		// check if it is a procedure
-		var proc *types.Procedure
-		found := false
-		for _, p := range t.currentSchema.Procedures {
-			if p.Name == call.Name {
-				proc = p
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			panic(fmt.Sprintf(`unknown function/procedure "%s"`, call.Name))
+		params, returns, err := util.FindProcOrForeign(t.currentSchema, call.Name)
+		if err != nil {
+			panic(err)
 		}
 
 		// check the args
-		if len(call.Arguments) != len(proc.Parameters) {
-			panic(fmt.Sprintf(`expected %d arguments, got %d`, len(proc.Parameters), len(call.Arguments)))
+		if len(call.Arguments) != len(params) {
+			panic(fmt.Sprintf(`expected %d arguments, got %d`, len(params), len(call.Arguments)))
 		}
 
 		for i, arg := range call.Arguments {
 			argType := arg.Accept(t).(*types.DataType)
-			if !argType.Equals(proc.Parameters[i].Type) {
+			if !argType.Equals(params[i]) {
 				panic(fmt.Sprintf(`argument %d has wrong type`, i))
 			}
 		}
 
-		if proc.Returns == nil {
+		if returns == nil {
 			return &types.ProcedureReturn{} // avoid nil pointer
 		}
 
-		return proc.Returns
+		return returns
 	case *parser.ExpressionForeignCall:
 		// foreign call must be defined in the schema.
 		// We will reverse-clean to get the original name,
@@ -495,7 +477,7 @@ func (t *typingVisitor) analyzeProcedureCall(p0 parser.ICallExpression) *types.P
 		for _, arg := range call.ContextArgs {
 			r, ok := arg.Accept(t).(*types.DataType)
 			if !ok {
-				panic("expected custom data type")
+				panic("BUG: expected data type")
 			}
 
 			if !r.Equals(types.TextType) {
@@ -593,7 +575,7 @@ func (t *typingVisitor) analyzeSQL(stmt tree.AstNode) *typing.Relation {
 		BindParams:       t.declarations,
 		Qualify:          true,
 		VerifyProcedures: true,
-		Procedures:       t.currentSchema.Procedures,
+		Schema:           t.currentSchema,
 	})
 	if err != nil {
 		panic(err)
@@ -651,7 +633,7 @@ func (t *typingVisitor) VisitStatementReturn(p0 *parser.StatementReturn) any {
 		for i, v := range p0.Values {
 			r, ok := v.Accept(t).(*types.DataType)
 			if !ok {
-				panic("expected custom data type")
+				panic("BUG: expected data type")
 			}
 
 			if !t.currentProcedure.Returns.Fields[i].Type.Equals(r) {
@@ -683,7 +665,7 @@ func (t *typingVisitor) VisitStatementReturnNext(p0 *parser.StatementReturnNext)
 	for i, col := range t.currentProcedure.Returns.Fields {
 		r, ok := p0.Returns[i].Accept(t).(*types.DataType)
 		if !ok {
-			panic("expected custom data type")
+			panic("BUG: expected data type")
 		}
 
 		if !col.Type.Equals(r) {
@@ -703,12 +685,12 @@ func (t *typingVisitor) VisitStatementSQL(p0 *parser.StatementSQL) any {
 func (t *typingVisitor) VisitStatementVariableAssignment(p0 *parser.StatementVariableAssignment) any {
 	typ, ok := t.declarations[p0.Name]
 	if !ok {
-		panic(fmt.Errorf(`%w: "%s"`, metadata.ErrUntypedVariable, reverseCleanVar(p0.Name)))
+		panic(fmt.Errorf(`%w: "%s"`, metadata.ErrUntypedVariable, util.UnformatParameterName(p0.Name)))
 	}
 
 	r, ok := p0.Value.Accept(t).(*types.DataType)
 	if !ok {
-		panic("expected custom data type")
+		panic("BUG: expected data type")
 	}
 
 	if !typ.Equals(r) {
@@ -721,7 +703,7 @@ func (t *typingVisitor) VisitStatementVariableAssignment(p0 *parser.StatementVar
 func (t *typingVisitor) VisitStatementVariableAssignmentWithDeclaration(p0 *parser.StatementVariableAssignmentWithDeclaration) any {
 	retType, ok := p0.Value.Accept(t).(*types.DataType)
 	if !ok {
-		panic("expected custom data type")
+		panic("BUG: expected data type")
 	}
 
 	if !p0.Type.Equals(retType) {

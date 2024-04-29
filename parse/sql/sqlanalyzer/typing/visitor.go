@@ -6,6 +6,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/metadata"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/parse/util"
 )
 
 type typeVisitor struct {
@@ -80,14 +81,16 @@ func (t *typeVisitor) VisitRelationSubquery(p0 *tree.RelationSubquery) any {
 	})
 }
 
-func findProcedure(name string, procedures []*types.Procedure) (*types.Procedure, error) {
+// findProcedure finds a procedure by name in a list of procedures.
+// It returns false if the procedure is not found.
+func findProcedure(name string, procedures []*types.Procedure) (proc *types.Procedure, found bool) {
 	for _, proc := range procedures {
 		if proc.Name == name {
-			return proc, nil
+			return proc, true
 		}
 	}
 
-	return nil, fmt.Errorf("procedure %s not found", name)
+	return nil, false
 }
 
 func (t *typeVisitor) VisitRelationFunction(p0 *tree.RelationFunction) any {
@@ -99,17 +102,18 @@ func (t *typeVisitor) VisitRelationFunction(p0 *tree.RelationFunction) any {
 			return err
 		}
 
-		if !t.options.VerifyProcedures {
-			return nil
-		}
+		// commenting this out, trying something to get better safety
+		// if !t.options.VerifyProcedures {
+		// 	return nil
+		// }
 
-		proc, err := findProcedure(p0.Function.Function, t.options.Procedures)
+		parameters, returns, err := util.FindProcOrForeign(t.options.Schema, p0.Function.Function)
 		if err != nil {
 			return err
 		}
 
-		if len(p0.Function.Inputs) != len(proc.Parameters) {
-			return fmt.Errorf("procedure %s expected %d inputs, received %d", p0.Function.Function, len(proc.Parameters), len(p0.Function.Inputs))
+		if len(p0.Function.Inputs) != len(parameters) {
+			return fmt.Errorf("procedure %s expected %d inputs, received %d", p0.Function.Function, len(parameters), len(p0.Function.Inputs))
 		}
 
 		for i, in := range p0.Function.Inputs {
@@ -118,20 +122,20 @@ func (t *typeVisitor) VisitRelationFunction(p0 *tree.RelationFunction) any {
 				return err
 			}
 
-			if !attr.Type.Equals(proc.Parameters[i].Type) {
-				return fmt.Errorf("procedure %s expected input %d to be %s, received %s", p0.Function.Function, i, proc.Parameters[i].Type.String(), attr.Type.String())
+			if !attr.Type.Equals(parameters[i]) {
+				return fmt.Errorf("procedure %s expected input %d to be %s, received %s", p0.Function.Function, i, parameters[i].String(), attr.Type.String())
 			}
 		}
 
-		if proc.Returns == nil {
+		if returns == nil {
 			return fmt.Errorf("procedure %s does not return a table", p0.Function.Function)
 		}
-		if !proc.Returns.IsTable {
+		if !returns.IsTable {
 			return fmt.Errorf("procedure %s does not return a table", p0.Function.Function)
 		}
 
 		rel := NewRelation()
-		for _, retCol := range proc.Returns.Fields {
+		for _, retCol := range returns.Fields {
 			err := rel.AddAttribute(&QualifiedAttribute{
 				Name: retCol.Name,
 				Attribute: &Attribute{
@@ -463,7 +467,7 @@ func (t *typeVisitor) VisitExpressionBindParameter(p0 *tree.ExpressionBindParame
 			if t.options.ArbitraryBinds {
 				c = types.UnknownType
 			} else {
-				return nil, fmt.Errorf("bind parameter %s not found", p0.Parameter)
+				return nil, fmt.Errorf("bind parameter %s not found", util.UnformatParameterName(p0.Parameter))
 			}
 		}
 
@@ -581,14 +585,14 @@ func (t *typeVisitor) VisitExpressionFunction(p0 *tree.ExpressionFunction) any {
 	return attributeFn(func(ev *evaluationContext) (*QualifiedAttribute, error) {
 		funcDef, ok := metadata.Functions[p0.Function]
 		if !ok {
-			// can be a procedure
-			proc, err := findProcedure(p0.Function, t.options.Procedures)
+			// can be a procedure/foreign procedure
+			params, returns, err := util.FindProcOrForeign(t.options.Schema, p0.Function)
 			if err != nil {
 				return nil, err
 			}
 
-			if len(p0.Inputs) != len(proc.Parameters) {
-				return nil, fmt.Errorf("procedure %s expected %d inputs, received %d", p0.Function, len(proc.Parameters), len(p0.Inputs))
+			if len(p0.Inputs) != len(params) {
+				return nil, fmt.Errorf("procedure %s expected %d inputs, received %d", p0.Function, len(params), len(p0.Inputs))
 			}
 
 			for i, in := range p0.Inputs {
@@ -597,24 +601,24 @@ func (t *typeVisitor) VisitExpressionFunction(p0 *tree.ExpressionFunction) any {
 					return nil, err
 				}
 
-				if !attr.Type.Equals(proc.Parameters[i].Type) {
-					return nil, fmt.Errorf("procedure %s expected input %d to be %s, received %s", p0.Function, i, proc.Parameters[i].Type.String(), attr.Type.String())
+				if !attr.Type.Equals(params[i]) {
+					return nil, fmt.Errorf("procedure %s expected input %d to be %s, received %s", p0.Function, i, params[i].String(), attr.Type.String())
 				}
 			}
 
-			if proc.Returns == nil {
+			if returns == nil {
 				return anonAttr(types.NullType), nil
 			}
 
-			if proc.Returns.IsTable {
+			if returns.IsTable {
 				return anonAttr(types.NullType), nil
 			}
 
-			if len(proc.Returns.Fields) != 1 {
+			if len(returns.Fields) != 1 {
 				return nil, fmt.Errorf("procedure %s must return exactly one column", p0.Function)
 			}
 
-			return anonAttr(proc.Returns.Fields[0].Type), nil
+			return anonAttr(returns.Fields[0].Type), nil
 		}
 
 		var argTypes []*types.DataType

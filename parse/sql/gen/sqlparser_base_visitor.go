@@ -47,7 +47,11 @@ func (v *BaseSQLParserVisitor) VisitVariable(ctx *VariableContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSQLParserVisitor) VisitFunction_call(ctx *Function_callContext) interface{} {
+func (v *BaseSQLParserVisitor) VisitNormal_function_call(ctx *Normal_function_callContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSQLParserVisitor) VisitForeign_function_call(ctx *Foreign_function_callContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

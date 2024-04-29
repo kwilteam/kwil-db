@@ -55,7 +55,7 @@ func convertStatement(stmt actparser.ActionStmt, schema *types.Schema, pgSchemaN
 			recs[i] = strings.ToLower(rec)
 		}
 
-		params, err := prepareInlineExpressions(stmt.Args, schema.Procedures)
+		params, err := prepareInlineExpressions(stmt.Args, schema)
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +77,7 @@ func convertStatement(stmt actparser.ActionStmt, schema *types.Schema, pgSchemaN
 			return nil, fmt.Errorf("actions cannot specify return values")
 		}
 
-		params, err := prepareInlineExpressions(stmt.Args, schema.Procedures)
+		params, err := prepareInlineExpressions(stmt.Args, schema)
 		if err != nil {
 			return nil, err
 		}
@@ -172,7 +172,7 @@ func (s *SQLStatement) analyzedStmt() {}
 // prepareInlineExpressions prepares inline expressions for analysis.
 // It takes the expressions from the syntax tree, as well as the procedures
 // that exist in the schema, which is necessary for validating the expressions.
-func prepareInlineExpressions(exprs []tree.Expression, procedures []*types.Procedure) ([]*InlineExpression, error) {
+func prepareInlineExpressions(exprs []tree.Expression, schema *types.Schema) ([]*InlineExpression, error) {
 	prepared := make([]*InlineExpression, len(exprs))
 	for i, expr := range exprs {
 		// this is copied over from an old place in the engine.
@@ -189,7 +189,7 @@ func prepareInlineExpressions(exprs []tree.Expression, procedures []*types.Proce
 		}
 
 		// clean expression, since it is submitted by the user
-		err := expr.Walk(clean.NewStatementCleaner(procedures))
+		err := expr.Walk(clean.NewStatementCleaner(schema))
 		if err != nil {
 			return nil, err
 		}

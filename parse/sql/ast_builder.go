@@ -400,9 +400,28 @@ func (v *astBuilder) VisitCase_expr(ctx *grammar.Case_exprContext) interface{} {
 
 // VisitFunction_call is called when visiting a function_call, return *tree.ExpressionFunction
 func (v *astBuilder) VisitFunction_call(ctx *grammar.Function_callContext) interface{} {
-	expr := &tree.ExpressionFunction{
-		Inputs: make([]tree.Expression, len(ctx.AllExpr())),
-	}
+	panic("should be impossible to reach here")
+	// expr := &tree.ExpressionFunction{
+	// 	Inputs: make([]tree.Expression, len(ctx.AllExpr())),
+	// }
+	// expr.Function = util.ExtractSQLName(ctx.Function_name().GetText())
+
+	// if ctx.STAR() != nil {
+	// 	expr.Star = true
+	// }
+	// if ctx.DISTINCT_() != nil {
+	// 	expr.Distinct = true
+	// }
+
+	// for i, e := range ctx.AllExpr() {
+	// 	expr.Inputs[i] = v.Visit(e).(tree.Expression)
+	// }
+
+	// return expr
+}
+
+func (v *astBuilder) VisitNormal_function_call(ctx *grammar.Normal_function_callContext) interface{} {
+	expr := &tree.ExpressionFunction{}
 	expr.Function = util.ExtractSQLName(ctx.Function_name().GetText())
 
 	if ctx.STAR() != nil {
@@ -412,8 +431,32 @@ func (v *astBuilder) VisitFunction_call(ctx *grammar.Function_callContext) inter
 		expr.Distinct = true
 	}
 
-	for i, e := range ctx.AllExpr() {
-		expr.Inputs[i] = v.Visit(e).(tree.Expression)
+	if ctx.Expr_list() != nil {
+		expr.Inputs = v.Visit(ctx.Expr_list()).(*tree.ExpressionList).Expressions
+	}
+
+	return expr
+}
+
+func (v *astBuilder) VisitForeign_function_call(ctx *grammar.Foreign_function_callContext) interface{} {
+	expr := &tree.ExpressionFunction{}
+
+	expr.Function = util.ExtractSQLName(ctx.IDENTIFIER().GetText())
+
+	if ctx.GetDbid() == nil {
+		panic("foreign call requires dbid as first contextual parameters")
+	}
+
+	expr.ContextualParams = append(expr.ContextualParams, v.Visit(ctx.GetDbid()).(tree.Expression))
+
+	if ctx.GetProcedure() == nil {
+		panic("foreign call requires procedure as second contextual parameters")
+	}
+
+	expr.ContextualParams = append(expr.ContextualParams, v.Visit(ctx.GetProcedure()).(tree.Expression))
+
+	if ctx.Expr_list() != nil {
+		expr.Inputs = v.Visit(ctx.Expr_list()).(*tree.ExpressionList).Expressions
 	}
 
 	return expr

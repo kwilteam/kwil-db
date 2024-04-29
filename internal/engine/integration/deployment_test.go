@@ -113,6 +113,76 @@ func Test_Deployment(t *testing.T) {
 			`,
 			err: metadata.ErrUnknownFunctionOrProcedure,
 		},
+		{
+			name: "various foreign procedures",
+			schema: `database foreign_procedures;
+
+			foreign procedure get_tbl() returns table(id int)
+			foreign procedure get_scalar(int) returns (int)
+			foreign procedure get_named_scalar(int) returns (id int)
+
+			procedure call_all() public returns table(id int) {
+				$int1 int := get_scalar['dbid', 'get_scalar'](1);
+				$int2 int := get_named_scalar['dbid', 'get_scalar'](1);
+
+				return select * from get_tbl['dbid', 'get_table']();
+			}
+			`,
+		},
+		{
+			name: "procedure returns select join from others",
+			schema: `database select_join;
+
+			table users {
+				id int primary key,
+				name text
+			}
+
+			foreign procedure get_tbl() returns table(id int)
+
+			procedure get_users() public returns table(id int, name text) {
+				return select * from users;
+			}
+
+			// get_all joins the users table with the result of get_tbl
+			procedure get_all() public returns table(id int, name text) {
+				return select a.id as id, u.name as name from get_tbl['dbid', 'get_tbl']() AS a
+				INNER JOIN get_users() AS u ON a.id = u.id;
+			}
+			`,
+		},
+		{
+			name: "action references foreign procedure and local procedure",
+			schema: `database select_join;
+
+			table users {
+				id int primary key,
+				name text
+			}
+
+			foreign procedure get_tbl() returns table(id int)
+
+			procedure get_users() public returns table(id int, name text) {
+				return select * from users;
+			}
+
+			// get_all joins the users table with the result of get_tbl
+			action get_all() public view {
+				select a.id as id, u.name as name from get_tbl['dbid', 'get_tbl']() AS a
+				INNER JOIN get_users() AS u ON a.id = u.id;
+			}
+			`,
+		},
+		{
+			name: "action references unknown foreign procedure",
+			schema: `database select_join;
+			
+			action get_all() public view {
+				select * from get_tbl['dbid', 'get_tbl']();
+			}
+			`,
+			err: metadata.ErrUnknownFunctionOrProcedure,
+		},
 	}
 
 	for _, tc := range testCases {

@@ -301,6 +301,15 @@ func Test_Procedures(t *testing.T) {
 				`).
 				build(),
 		},
+		{
+			name: "null comparison",
+			procedure: procedure("null_comparison").
+				withParams("$name:text").
+				withBody(`
+				if $name == null {
+				}
+				`).build(),
+		},
 	}
 
 	for _, tt := range tests {

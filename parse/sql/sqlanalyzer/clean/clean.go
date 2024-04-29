@@ -17,7 +17,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/common/validation"
+	"github.com/kwilteam/kwil-db/core/types/validation"
 )
 
 // checks that the string only contains alphanumeric characters and underscores

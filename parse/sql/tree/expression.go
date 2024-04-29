@@ -373,9 +373,11 @@ type ExpressionFunction struct {
 	expressionBase
 	Wrapped
 	Function string
-	Inputs   []Expression
-	Star     bool // true if function is called with *
-	Distinct bool
+	// ContextualParams are params passed in square brackets
+	ContextualParams []Expression
+	Inputs           []Expression
+	Star             bool // true if function is called with *
+	Distinct         bool
 
 	TypeCast *types.DataType
 }
@@ -409,11 +411,20 @@ func (e *ExpressionFunction) ToSQL() string {
 			stmt.Token.Distinct()
 		}
 
-		for i, input := range e.Inputs {
+		// the contextual params just get passed first
+		for i, param := range e.ContextualParams {
 			if i > 0 {
 				stmt.Token.Comma()
 			}
-			stmt.WriteString(input.ToSQL())
+			stmt.WriteString(param.ToSQL())
+		}
+
+		// then the input params
+		for i, param := range e.Inputs {
+			if i > 0 || len(e.ContextualParams) > 0 {
+				stmt.Token.Comma()
+			}
+			stmt.WriteString(param.ToSQL())
 		}
 	}
 

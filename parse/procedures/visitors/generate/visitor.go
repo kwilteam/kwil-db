@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/parse/metadata"
 	parser "github.com/kwilteam/kwil-db/parse/procedures/parser"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	"github.com/kwilteam/kwil-db/parse/util"
 )
 
 type generatorVisitor struct {
@@ -104,8 +105,7 @@ func (g *generatorVisitor) VisitExpressionForeignCall(p0 *parser.ExpressionForei
 
 	str := strings.Builder{}
 
-	str.WriteString("_fp_")
-	str.WriteString(p0.Name)
+	str.WriteString(util.FormatForeignProcedureName(p0.Name))
 
 	str.WriteString("(")
 	// appending the context args and regular args.

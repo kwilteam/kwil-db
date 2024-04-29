@@ -37,8 +37,11 @@ type SQLParserVisitor interface {
 	// Visit a parse tree produced by SQLParser#variable.
 	VisitVariable(ctx *VariableContext) interface{}
 
-	// Visit a parse tree produced by SQLParser#function_call.
-	VisitFunction_call(ctx *Function_callContext) interface{}
+	// Visit a parse tree produced by SQLParser#normal_function_call.
+	VisitNormal_function_call(ctx *Normal_function_callContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#foreign_function_call.
+	VisitForeign_function_call(ctx *Foreign_function_callContext) interface{}
 
 	// Visit a parse tree produced by SQLParser#column_ref.
 	VisitColumn_ref(ctx *Column_refContext) interface{}

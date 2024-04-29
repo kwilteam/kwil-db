@@ -1,0 +1,71 @@
+database video_game;
+
+// the video_game database is meant to compose with the users
+// database, found in ./users.kf. The video_game database is
+// a basic video game that tracks user scores.
+
+// table scores tracks user high scores
+table scores {
+    // user_id references the user's uuid in the users database
+    // ideally, this would use a foreign key, but we do not have
+    // cross-db foreign keys yet.
+    user_id uuid primary key,
+    high_score int notnull min(0) default(0)
+}
+
+// register_user registers a use that already exists in the foreign users db.
+// if the user does not exist, it will return an error
+procedure register_user($initial_score int) public {
+    $dbid text := admin_get('dbid');
+    $procedure text := admin_get('userbyowner');
+
+    // calling the users's schema "get_user_by_owner"
+    $user_id uuid;
+    $user_id, _:= get_user[$dbid, $procedure](@caller);
+    
+    INSERT INTO scores(user_id, high_score)
+    VALUES ($user_id, $initial_score);
+}
+
+// get_high_score gets the high score of a user, identified by username.
+// if the user does not exist, it will return an error
+procedure get_high_score($username text) public view returns (score int) {
+    $dbid text := admin_get('dbid');
+    $procedure text := admin_get('userbyname');
+
+    // calling the users's schema "get_user_by_name"
+    $user_id uuid;
+    $user_id, _ := get_user[$dbid, $procedure]($username);
+
+    for $row in select high_score from scores where user_id = $user_id {
+        return $row.high_score;
+    }
+
+    error(format('user %s not found', $username));
+}
+
+// the following foreign procedures define procedures
+// that the users db has. It returns redundant data since it needs
+// to match the procedure signature defines in users.
+foreign procedure get_user($address text) returns (uuid, text)
+
+// table keyvalue is a kv table to track metadata
+// for foreign calls.
+table keyvalue {
+    key text primary,
+    value text not null
+}
+
+procedure admin_set($key text, $value text) public owner {
+    insert into keyvalue (key, value)
+    values ($key, $value)
+    on conflict (key) do update set value = $value;
+}
+
+procedure admin_get($key text) public view returns (value text) {
+    for $row in select value from keyvalue where key = $key {
+        return $row.value;
+    }
+
+    error(format('admin has not set a value for key %s', $key));
+}

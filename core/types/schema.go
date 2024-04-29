@@ -105,6 +105,30 @@ func (s *Schema) Clean() error {
 	return nil
 }
 
+// FindProcedure finds a procedure based on its name.
+// It returns false if the procedure is not found.
+func (s *Schema) FindProcedure(name string) (procedure *Procedure, found bool) {
+	for _, proc := range s.Procedures {
+		if strings.EqualFold(proc.Name, name) {
+			return proc, true
+		}
+	}
+
+	return nil, false
+}
+
+// FindForeignProcedure finds a foreign procedure based on its name.
+// It returns false if the procedure is not found.
+func (s *Schema) FindForeignProcedure(name string) (procedure *ForeignProcedure, found bool) {
+	for _, proc := range s.ForeignProcedures {
+		if strings.EqualFold(proc.Name, name) {
+			return proc, true
+		}
+	}
+
+	return nil, false
+}
+
 func (s *Schema) DBID() string {
 	return utils.GenerateDBID(s.Name, s.Owner)
 }

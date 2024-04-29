@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/parse/metadata"
 	procedure "github.com/kwilteam/kwil-db/parse/procedures/parser"
 	"github.com/kwilteam/kwil-db/parse/procedures/visitors/clean"
 	"github.com/kwilteam/kwil-db/parse/procedures/visitors/generate"
@@ -46,7 +45,7 @@ func AnalyzeProcedures(schema *types.Schema, pgSchemaName string, options *Analy
 			return nil, err
 		}
 
-		cleanedParams, cleanedSessionVars, err := clean.CleanProcedure(parsed, proc, schema, pgSchemaName, metadata.PgSessionVars)
+		cleanedParams, cleanedSessionVars, err := clean.CleanProcedure(parsed, proc, schema, pgSchemaName)
 		if err != nil {
 			return nil, err
 		}

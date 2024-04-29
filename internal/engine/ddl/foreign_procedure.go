@@ -37,7 +37,7 @@ BEGIN
 
     -- we now ensure that:
     -- 1. if we are in a read-only connection, that the procedure is view
-    -- 2. if it is owner only, the caller is the owner
+    -- 2. if it is owner only, the signer is the owner
     -- 3. it is public
     -- 4. our input types match the expected input types
     -- 5. our return types match the expected return types
@@ -47,9 +47,9 @@ BEGIN
         RAISE EXCEPTION 'Non-view procedure "%" called in view-only connection', _procedure;
     END IF;
 
-    -- 2. if it is owner only, the caller is the owner
-    IF _is_owner_only = TRUE AND _schema_owner != current_setting('ctx.caller') THEN
-        RAISE EXCEPTION 'Procedure "%" is owner-only and cannot be called by user "%" in schema "%"', _procedure, current_setting('ctx.caller'), _dbid;
+    -- 2. if it is owner only, the signer is the owner
+    IF _is_owner_only = TRUE AND _schema_owner != current_setting('ctx.signer')::BYTEA THEN
+        RAISE EXCEPTION 'Procedure "%" is owner-only and cannot be called by user "%" in schema "%"', _procedure, current_setting('ctx.signer'), _dbid;
     END IF;
 
     -- 3. it is public
@@ -129,7 +129,6 @@ func GenerateForeignProcedure(proc *types.ForeignProcedure) (string, error) {
 				return "", err
 			}
 
-			str.WriteString("_out_")
 			name := fmt.Sprintf("_out_%d", i+1)
 			str.WriteString(name)
 			str.WriteString(" ")
@@ -186,7 +185,7 @@ func GenerateForeignProcedure(proc *types.ForeignProcedure) (string, error) {
 	SELECT p.param_types, p.return_types, p.is_view, p.owner_only, p.public, s.owner, p.returns_table
 	INTO _expected_input_types, _expected_return_types, _is_view, _is_owner_only, _is_public, _schema_owner, _returns_table
 	FROM kwild_internal.procedures as p INNER JOIN kwild_internal.kwil_schemas as s
-	ON s.schema_id = p.id
+	ON p.schema_id = s.id
 	WHERE p.name = _procedure AND s.dbid = _dbid;
 
 	IF _schema_owner IS NULL THEN
@@ -197,8 +196,8 @@ func GenerateForeignProcedure(proc *types.ForeignProcedure) (string, error) {
 		RAISE EXCEPTION 'Non-view procedure "%" called in view-only connection', _procedure;
 	END IF;
 
-	IF _is_owner_only = TRUE AND _schema_owner != current_setting('ctx.caller') THEN
-		RAISE EXCEPTION 'Procedure "%" is owner-only and cannot be called by user "%" in schema "%"', _procedure, current_setting('ctx.caller'), _dbid;
+	IF _is_owner_only = TRUE AND _schema_owner != current_setting('ctx.signer')::BYTEA THEN
+		RAISE EXCEPTION 'Procedure "%" is owner-only and cannot be called by signer "%" in schema "%"', _procedure, current_setting('ctx.signer'), _dbid;
 	END IF;
 
 	IF _is_public = FALSE THEN
@@ -314,13 +313,12 @@ func GenerateForeignProcedure(proc *types.ForeignProcedure) (string, error) {
 // dollarsignVars returns enough dollar signs to be used as a variable in a plpgsql function.
 func dollarsignVars(strs []string) string {
 	str := strings.Builder{}
-	for i, s := range strs {
+	for i := range strs {
 		if i > 0 {
 			str.WriteString(", ")
 		}
 
-		str.WriteString("$")
-		str.WriteString(s)
+		str.WriteString(fmt.Sprintf("$%d", i+1))
 	}
 
 	return str.String()

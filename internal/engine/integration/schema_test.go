@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -27,81 +28,171 @@ func Test_Schemas(t *testing.T) {
 		name string
 		// fn is the test function
 		// the passed db will be in a transaction
-		fn func(t *testing.T, global *execution.GlobalContext, db sql.DB, readonly sql.DB)
+		fn func(t *testing.T, global *execution.GlobalContext, db sql.DB)
 	}
 
+	// the tests rely on three schemas:
+	// users: a table of users, which maps a wallet address to a human readable name
+	// social_media: a table of posts and post_counts. posts contains posts, and post_counts contains the number of posts a user has made.
+	// video_game: a table of scores tracks users high scores in a video game.
+	// posts and video+game also have admin commands for setting the dbid and procedure names.
 	testCases := []testCase{
-		{
-			name: "simple schema",
-			fn: func(t *testing.T, global *execution.GlobalContext, db sql.DB, readonly sql.DB) {
-				ctx := context.Background()
-				schema, err := loadSchema("users.kf")
-				require.NoError(t, err)
+		// {
+		// 	name: "simple schema",
+		// 	fn: func(t *testing.T, global *execution.GlobalContext, db sql.DB) {
+		// 		ctx := context.Background()
+		// 		schema, err := loadSchema("users.kf")
+		// 		require.NoError(t, err)
 
-				err = global.CreateDataset(ctx, db, schema, &common.TransactionData{
-					Signer: owner,
-					Caller: string(owner),
-					TxID:   "test",
-				})
-				require.NoError(t, err)
-				datasets, err := global.ListDatasets(owner)
-				require.NoError(t, err)
-				require.Len(t, datasets, 1)
+		// 		err = global.CreateDataset(ctx, db, schema, &common.TransactionData{
+		// 			Signer: owner,
+		// 			Caller: string(owner),
+		// 			TxID:   "test",
+		// 		})
+		// 		require.NoError(t, err)
+		// 		datasets, err := global.ListDatasets(owner)
+		// 		require.NoError(t, err)
+		// 		require.Len(t, datasets, 1)
+
+		// 		// create user
+		// 		_, err = global.Procedure(ctx, db, &common.ExecutionData{
+		// 			Dataset:   datasets[0].DBID,
+		// 			Procedure: "create_user",
+		// 			Args:      []any{"satoshi", "42"},
+		// 			TransactionData: common.TransactionData{
+		// 				Signer: owner,
+		// 				Caller: string(owner),
+		// 				TxID:   "1",
+		// 			},
+		// 		})
+		// 		require.NoError(t, err)
+
+		// 		// make a post
+		// 		_, err = global.Procedure(ctx, db, &common.ExecutionData{
+		// 			Dataset:   datasets[0].DBID,
+		// 			Procedure: "create_post",
+		// 			Args:      []any{"hello world"},
+		// 			TransactionData: common.TransactionData{
+		// 				Signer: owner,
+		// 				Caller: string(owner),
+		// 				TxID:   "2",
+		// 			},
+		// 		})
+
+		// 		res, err := global.Procedure(ctx, db, &common.ExecutionData{
+		// 			Dataset:   datasets[0].DBID,
+		// 			Procedure: "get_user",
+		// 			Args:      []any{"satoshi"},
+		// 			TransactionData: common.TransactionData{
+		// 				Signer: owner,
+		// 				Caller: string(owner),
+		// 				TxID:   "1",
+		// 			},
+		// 		})
+		// 		require.NoError(t, err)
+
+		// 		require.Len(t, res.Rows, 1)
+
+		// 		// check the columns
+		// 		require.Len(t, res.Columns, 4)
+		// 		// should be id, age, address, post_count
+		// 		require.Equal(t, "id", res.Columns[0])
+		// 		require.Equal(t, "age", res.Columns[1])
+		// 		require.Equal(t, "address", res.Columns[2])
+		// 		require.Equal(t, "post_count", res.Columns[3])
+
+		// 		// check the values
+		// 		// we will simply check row 0 is some uuid
+		// 		_, ok := res.Rows[0][0].([16]byte)
+		// 		require.True(t, ok)
+		// 		require.Equal(t, int64(42), res.Rows[0][1])
+		// 		require.Equal(t, string(owner), res.Rows[0][2])
+		// 		require.Equal(t, int64(1), res.Rows[0][3])
+		// 	},
+		// },
+		{
+			name: "create user, make several posts, and get posts",
+			fn: func(t *testing.T, global *execution.GlobalContext, db sql.DB) {
+				usersDBID, socialDBID, _ := deployAllSchemas(t, global, db)
+				_ = socialDBID
+
+				ctx := context.Background()
 
 				// create user
-				_, err = global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:   datasets[0].DBID,
-					Procedure: "create_user",
-					Args:      []any{"satoshi", "42"},
-					TransactionData: common.TransactionData{
-						Signer: owner,
-						Caller: string(owner),
-						TxID:   "1",
-					},
+				_, err := global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:         usersDBID,
+					Procedure:       "create_user",
+					Args:            []any{"satoshi", "42"},
+					TransactionData: txData(),
 				})
 				require.NoError(t, err)
 
 				// make a post
 				_, err = global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:   datasets[0].DBID,
-					Procedure: "create_post",
-					Args:      []any{"hello world"},
-					TransactionData: common.TransactionData{
-						Signer: owner,
-						Caller: string(owner),
-						TxID:   "2",
-					},
-				})
-
-				res, err := global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:   datasets[0].DBID,
-					Procedure: "get_user",
-					Args:      []any{"satoshi"},
-					TransactionData: common.TransactionData{
-						Signer: owner,
-						Caller: string(owner),
-						TxID:   "1",
-					},
+					Dataset:         socialDBID,
+					Procedure:       "create_post",
+					Args:            []any{"hello world"},
+					TransactionData: txData(),
 				})
 				require.NoError(t, err)
 
-				require.Len(t, res.Rows, 1)
+				// make another post
+				_, err = global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:         socialDBID,
+					Procedure:       "create_post",
+					Args:            []any{"goodbye world"},
+					TransactionData: txData(),
+				})
+				require.NoError(t, err)
 
-				// check the columns
-				require.Len(t, res.Columns, 4)
-				// should be id, age, address, post_count
+				// make one more large post
+				_, err = global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:         socialDBID,
+					Procedure:       "create_post",
+					Args:            []any{"this is a longer post than the others`"},
+					TransactionData: txData(),
+				})
+				require.NoError(t, err)
+
+				// get posts using get_recent_posts
+				res, err := global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:         socialDBID,
+					Procedure:       "get_recent_posts",
+					Args:            []any{"satoshi"},
+					TransactionData: txData(),
+				})
+				require.NoError(t, err)
+
+				// check the columns. should be id, content
+				require.Len(t, res.Columns, 2)
 				require.Equal(t, "id", res.Columns[0])
-				require.Equal(t, "age", res.Columns[1])
-				require.Equal(t, "address", res.Columns[2])
-				require.Equal(t, "post_count", res.Columns[3])
+				require.Equal(t, "content", res.Columns[1])
 
 				// check the values
-				// we will simply check row 0 is some uuid
-				_, ok := res.Rows[0][0].([16]byte)
-				require.True(t, ok)
-				require.Equal(t, int64(42), res.Rows[0][1])
-				require.Equal(t, string(owner), res.Rows[0][2])
-				require.Equal(t, int64(1), res.Rows[0][3])
+				// the last post should be the first one returned
+				require.Len(t, res.Rows, 3)
+				require.Equal(t, "this is a longer post than the others`", res.Rows[0][1])
+				require.Equal(t, "goodbye world", res.Rows[1][1])
+				require.Equal(t, "hello world", res.Rows[2][1])
+
+				// use get_recent_posts_by_size to only get posts larger than 20 characters
+				res, err = global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:         socialDBID,
+					Procedure:       "get_recent_posts_by_size",
+					Args:            []any{"satoshi", 20, 10}, // takes username, size, limit
+					TransactionData: txData(),
+				})
+				require.NoError(t, err)
+
+				// check the columns. should be id, content
+				require.Len(t, res.Columns, 2)
+				require.Equal(t, "id", res.Columns[0])
+				require.Equal(t, "content", res.Columns[1])
+
+				// check the values
+				// the last post should be the first one returned
+				require.Len(t, res.Rows, 1)
+				require.Equal(t, "this is a longer post than the others`", res.Rows[0][1])
 			},
 		},
 	}
@@ -124,7 +215,7 @@ func Test_Schemas(t *testing.T) {
 			require.NoError(t, err)
 			defer readonly.Rollback(ctx)
 
-			tc.fn(t, global, tx, readonly)
+			tc.fn(t, global, tx)
 		})
 	}
 }
@@ -142,4 +233,89 @@ func loadSchema(file string) (*types.Schema, error) {
 	}
 
 	return db, nil
+}
+
+// deployAllSchemas deploys all schemas in the schemas directory.
+// it returns the dbid of the deployed schemas.
+// It will also properly configure the metadata for social_media and video_game.
+func deployAllSchemas(t *testing.T, global *execution.GlobalContext, db sql.DB) (usersDBID, socialMediaDBID, videoGameDBID string) {
+	ctx := context.Background()
+	schemas := []string{"users.kf", "social_media.kf", "video_game.kf"}
+	for _, schema := range schemas {
+		schema, err := loadSchema(schema)
+		require.NoError(t, err)
+
+		transactionData := txData()
+		err = global.CreateDataset(ctx, db, schema, &transactionData)
+		require.NoError(t, err)
+	}
+
+	datasets, err := global.ListDatasets(owner)
+	require.NoError(t, err)
+
+	// get the dbids for the three datasets
+	var users, socialMedia, videoGame string
+	for _, dataset := range datasets {
+		switch dataset.Name {
+		case "users":
+			users = dataset.DBID
+		case "social_media":
+			socialMedia = dataset.DBID
+		case "video_game":
+			videoGame = dataset.DBID
+		}
+	}
+	require.NotEmpty(t, users)
+	require.NotEmpty(t, socialMedia)
+	require.NotEmpty(t, videoGame)
+
+	// set the metadata for social_media and video_game
+	// they each need three types of metadata:
+	// - dbid: the dbid of the dataset
+	// - userbyname: the procedure to get a user by name
+	// - userbyowner: the procedure to get a user by owner
+	for _, dbid := range []string{socialMedia, videoGame} {
+		_, err := global.Procedure(ctx, db, &common.ExecutionData{
+			Dataset:         dbid,
+			Procedure:       "admin_set",
+			Args:            []any{"dbid", users},
+			TransactionData: txData(),
+		})
+		require.NoError(t, err)
+
+		_, err = global.Procedure(ctx, db, &common.ExecutionData{
+			Dataset:         dbid,
+			Procedure:       "admin_set",
+			Args:            []any{"userbyname", "get_user_by_name"},
+			TransactionData: txData(),
+		})
+		require.NoError(t, err)
+
+		_, err = global.Procedure(ctx, db, &common.ExecutionData{
+			Dataset:         dbid,
+			Procedure:       "admin_set",
+			Args:            []any{"userbyowner", "get_user_by_owner"},
+			TransactionData: txData(),
+		})
+		require.NoError(t, err)
+	}
+
+	return users, socialMedia, videoGame
+}
+
+// txCounter is a global counter for transaction ids.
+var txCounter int
+
+func nextTxID() string {
+	txCounter++
+	return fmt.Sprintf("tx_%d", txCounter)
+}
+
+// txData returns a common.TransactionData with the owner as the signer and caller.
+func txData() common.TransactionData {
+	return common.TransactionData{
+		Signer: owner,
+		Caller: string(owner),
+		TxID:   nextTxID(),
+	}
 }

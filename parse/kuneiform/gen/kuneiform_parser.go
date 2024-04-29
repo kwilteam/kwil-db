@@ -47,10 +47,10 @@ func kuneiformparserParserInit() {
 		"DO_SET_NULL", "DO_SET_DEFAULT", "DO_RESTRICT", "DO", "START_ACTION",
 		"START_PROCEDURE", "NUMERIC_LITERAL", "TEXT_LITERAL", "BOOLEAN_LITERAL",
 		"BLOB_LITERAL", "VAR", "INDEX_NAME", "IDENTIFIER", "ANNOTATION", "WS",
-		"TERMINATOR", "BLOCK_COMMENT", "LINE_COMMENT", "STMT_BODY", "TEXT",
-		"STMT_LPAREN", "STMT_RPAREN", "STMT_COMMA", "STMT_PERIOD", "STMT_RETURNS",
+		"TERMINATOR", "BLOCK_COMMENT", "LINE_COMMENT", "COMMENT", "STMT_BODY",
+		"TEXT", "STMT_LPAREN", "STMT_RPAREN", "STMT_COMMA", "STMT_PERIOD", "STMT_RETURNS",
 		"STMT_TABLE", "STMT_ARRAY", "STMT_VAR", "STMT_ACCESS", "STMT_IDENTIFIER",
-		"STMT_WS", "STMT_TERMINATOR", "STMT_BLOCK_COMMENT", "STMT_LINE_COMMENT",
+		"STMT_WS", "STMT_TERMINATOR",
 	}
 	staticData.RuleNames = []string{
 		"program", "stmt_mode", "database_declaration", "use_declaration", "foreign_declaration",
@@ -61,7 +61,7 @@ func kuneiformparserParserInit() {
 	}
 	staticData.PredictionContextCache = antlr.NewPredictionContextCache()
 	staticData.serializedATN = []int32{
-		4, 1, 69, 305, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
+		4, 1, 68, 305, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
 		4, 2, 5, 7, 5, 2, 6, 7, 6, 2, 7, 7, 7, 2, 8, 7, 8, 2, 9, 7, 9, 2, 10, 7,
 		10, 2, 11, 7, 11, 2, 12, 7, 12, 2, 13, 7, 13, 2, 14, 7, 14, 2, 15, 7, 15,
 		2, 16, 7, 16, 2, 17, 7, 17, 2, 18, 7, 18, 2, 19, 7, 19, 2, 20, 7, 20, 2,
@@ -167,30 +167,30 @@ func kuneiformparserParserInit() {
 		1, 0, 0, 0, 232, 234, 5, 24, 0, 0, 233, 209, 1, 0, 0, 0, 233, 213, 1, 0,
 		0, 0, 233, 217, 1, 0, 0, 0, 233, 221, 1, 0, 0, 0, 233, 225, 1, 0, 0, 0,
 		233, 226, 1, 0, 0, 0, 233, 227, 1, 0, 0, 0, 233, 232, 1, 0, 0, 0, 234,
-		33, 1, 0, 0, 0, 235, 236, 5, 40, 0, 0, 236, 237, 5, 65, 0, 0, 237, 246,
-		5, 56, 0, 0, 238, 243, 5, 63, 0, 0, 239, 240, 5, 58, 0, 0, 240, 242, 5,
-		63, 0, 0, 241, 239, 1, 0, 0, 0, 242, 245, 1, 0, 0, 0, 243, 241, 1, 0, 0,
+		33, 1, 0, 0, 0, 235, 236, 5, 40, 0, 0, 236, 237, 5, 66, 0, 0, 237, 246,
+		5, 57, 0, 0, 238, 243, 5, 64, 0, 0, 239, 240, 5, 59, 0, 0, 240, 242, 5,
+		64, 0, 0, 241, 239, 1, 0, 0, 0, 242, 245, 1, 0, 0, 0, 243, 241, 1, 0, 0,
 		0, 243, 244, 1, 0, 0, 0, 244, 247, 1, 0, 0, 0, 245, 243, 1, 0, 0, 0, 246,
 		238, 1, 0, 0, 0, 246, 247, 1, 0, 0, 0, 247, 248, 1, 0, 0, 0, 248, 250,
-		5, 57, 0, 0, 249, 251, 5, 64, 0, 0, 250, 249, 1, 0, 0, 0, 251, 252, 1,
+		5, 58, 0, 0, 249, 251, 5, 65, 0, 0, 250, 249, 1, 0, 0, 0, 251, 252, 1,
 		0, 0, 0, 252, 250, 1, 0, 0, 0, 252, 253, 1, 0, 0, 0, 253, 254, 1, 0, 0,
-		0, 254, 255, 5, 54, 0, 0, 255, 35, 1, 0, 0, 0, 256, 257, 5, 41, 0, 0, 257,
-		258, 5, 65, 0, 0, 258, 260, 5, 56, 0, 0, 259, 261, 3, 40, 20, 0, 260, 259,
-		1, 0, 0, 0, 260, 261, 1, 0, 0, 0, 261, 262, 1, 0, 0, 0, 262, 264, 5, 57,
-		0, 0, 263, 265, 5, 64, 0, 0, 264, 263, 1, 0, 0, 0, 265, 266, 1, 0, 0, 0,
+		0, 254, 255, 5, 55, 0, 0, 255, 35, 1, 0, 0, 0, 256, 257, 5, 41, 0, 0, 257,
+		258, 5, 66, 0, 0, 258, 260, 5, 57, 0, 0, 259, 261, 3, 40, 20, 0, 260, 259,
+		1, 0, 0, 0, 260, 261, 1, 0, 0, 0, 261, 262, 1, 0, 0, 0, 262, 264, 5, 58,
+		0, 0, 263, 265, 5, 65, 0, 0, 264, 263, 1, 0, 0, 0, 265, 266, 1, 0, 0, 0,
 		266, 264, 1, 0, 0, 0, 266, 267, 1, 0, 0, 0, 267, 270, 1, 0, 0, 0, 268,
-		269, 5, 60, 0, 0, 269, 271, 3, 38, 19, 0, 270, 268, 1, 0, 0, 0, 270, 271,
-		1, 0, 0, 0, 271, 272, 1, 0, 0, 0, 272, 273, 5, 54, 0, 0, 273, 37, 1, 0,
-		0, 0, 274, 276, 5, 61, 0, 0, 275, 274, 1, 0, 0, 0, 275, 276, 1, 0, 0, 0,
-		276, 277, 1, 0, 0, 0, 277, 278, 5, 56, 0, 0, 278, 279, 5, 65, 0, 0, 279,
-		285, 3, 42, 21, 0, 280, 281, 5, 58, 0, 0, 281, 282, 5, 65, 0, 0, 282, 284,
+		269, 5, 61, 0, 0, 269, 271, 3, 38, 19, 0, 270, 268, 1, 0, 0, 0, 270, 271,
+		1, 0, 0, 0, 271, 272, 1, 0, 0, 0, 272, 273, 5, 55, 0, 0, 273, 37, 1, 0,
+		0, 0, 274, 276, 5, 62, 0, 0, 275, 274, 1, 0, 0, 0, 275, 276, 1, 0, 0, 0,
+		276, 277, 1, 0, 0, 0, 277, 278, 5, 57, 0, 0, 278, 279, 5, 66, 0, 0, 279,
+		285, 3, 42, 21, 0, 280, 281, 5, 59, 0, 0, 281, 282, 5, 66, 0, 0, 282, 284,
 		3, 42, 21, 0, 283, 280, 1, 0, 0, 0, 284, 287, 1, 0, 0, 0, 285, 283, 1,
 		0, 0, 0, 285, 286, 1, 0, 0, 0, 286, 288, 1, 0, 0, 0, 287, 285, 1, 0, 0,
-		0, 288, 289, 5, 57, 0, 0, 289, 39, 1, 0, 0, 0, 290, 291, 5, 63, 0, 0, 291,
-		297, 3, 42, 21, 0, 292, 293, 5, 58, 0, 0, 293, 294, 5, 63, 0, 0, 294, 296,
+		0, 288, 289, 5, 58, 0, 0, 289, 39, 1, 0, 0, 0, 290, 291, 5, 64, 0, 0, 291,
+		297, 3, 42, 21, 0, 292, 293, 5, 59, 0, 0, 293, 294, 5, 64, 0, 0, 294, 296,
 		3, 42, 21, 0, 295, 292, 1, 0, 0, 0, 296, 299, 1, 0, 0, 0, 297, 295, 1,
 		0, 0, 0, 297, 298, 1, 0, 0, 0, 298, 41, 1, 0, 0, 0, 299, 297, 1, 0, 0,
-		0, 300, 302, 5, 65, 0, 0, 301, 303, 5, 62, 0, 0, 302, 301, 1, 0, 0, 0,
+		0, 300, 302, 5, 66, 0, 0, 301, 303, 5, 63, 0, 0, 302, 301, 1, 0, 0, 0,
 		302, 303, 1, 0, 0, 0, 303, 43, 1, 0, 0, 0, 31, 49, 51, 59, 64, 80, 84,
 		95, 100, 110, 112, 122, 126, 136, 157, 162, 171, 179, 186, 196, 206, 233,
 		243, 246, 252, 260, 266, 270, 275, 285, 297, 302,
@@ -231,76 +231,75 @@ func NewKuneiformParser(input antlr.TokenStream) *KuneiformParser {
 
 // KuneiformParser tokens.
 const (
-	KuneiformParserEOF                = antlr.TokenEOF
-	KuneiformParserLBRACE             = 1
-	KuneiformParserRBRACE             = 2
-	KuneiformParserLBRACKET           = 3
-	KuneiformParserRBRACKET           = 4
-	KuneiformParserCOL                = 5
-	KuneiformParserSCOL               = 6
-	KuneiformParserLPAREN             = 7
-	KuneiformParserRPAREN             = 8
-	KuneiformParserCOMMA              = 9
-	KuneiformParserAT                 = 10
-	KuneiformParserPERIOD             = 11
-	KuneiformParserEQUALS             = 12
-	KuneiformParserDATABASE           = 13
-	KuneiformParserUSE                = 14
-	KuneiformParserIMPORT             = 15
-	KuneiformParserAS                 = 16
-	KuneiformParserMIN                = 17
-	KuneiformParserMAX                = 18
-	KuneiformParserMIN_LEN            = 19
-	KuneiformParserMAX_LEN            = 20
-	KuneiformParserNOT_NULL           = 21
-	KuneiformParserPRIMARY            = 22
-	KuneiformParserDEFAULT            = 23
-	KuneiformParserUNIQUE             = 24
-	KuneiformParserINDEX              = 25
-	KuneiformParserTABLE              = 26
-	KuneiformParserTYPE               = 27
-	KuneiformParserRETURNS            = 28
-	KuneiformParserFOREIGN_KEY        = 29
-	KuneiformParserFOREIGN_PROCEDURE  = 30
-	KuneiformParserREFERENCES         = 31
-	KuneiformParserON_UPDATE          = 32
-	KuneiformParserON_DELETE          = 33
-	KuneiformParserDO_NO_ACTION       = 34
-	KuneiformParserDO_CASCADE         = 35
-	KuneiformParserDO_SET_NULL        = 36
-	KuneiformParserDO_SET_DEFAULT     = 37
-	KuneiformParserDO_RESTRICT        = 38
-	KuneiformParserDO                 = 39
-	KuneiformParserSTART_ACTION       = 40
-	KuneiformParserSTART_PROCEDURE    = 41
-	KuneiformParserNUMERIC_LITERAL    = 42
-	KuneiformParserTEXT_LITERAL       = 43
-	KuneiformParserBOOLEAN_LITERAL    = 44
-	KuneiformParserBLOB_LITERAL       = 45
-	KuneiformParserVAR                = 46
-	KuneiformParserINDEX_NAME         = 47
-	KuneiformParserIDENTIFIER         = 48
-	KuneiformParserANNOTATION         = 49
-	KuneiformParserWS                 = 50
-	KuneiformParserTERMINATOR         = 51
-	KuneiformParserBLOCK_COMMENT      = 52
-	KuneiformParserLINE_COMMENT       = 53
-	KuneiformParserSTMT_BODY          = 54
-	KuneiformParserTEXT               = 55
-	KuneiformParserSTMT_LPAREN        = 56
-	KuneiformParserSTMT_RPAREN        = 57
-	KuneiformParserSTMT_COMMA         = 58
-	KuneiformParserSTMT_PERIOD        = 59
-	KuneiformParserSTMT_RETURNS       = 60
-	KuneiformParserSTMT_TABLE         = 61
-	KuneiformParserSTMT_ARRAY         = 62
-	KuneiformParserSTMT_VAR           = 63
-	KuneiformParserSTMT_ACCESS        = 64
-	KuneiformParserSTMT_IDENTIFIER    = 65
-	KuneiformParserSTMT_WS            = 66
-	KuneiformParserSTMT_TERMINATOR    = 67
-	KuneiformParserSTMT_BLOCK_COMMENT = 68
-	KuneiformParserSTMT_LINE_COMMENT  = 69
+	KuneiformParserEOF               = antlr.TokenEOF
+	KuneiformParserLBRACE            = 1
+	KuneiformParserRBRACE            = 2
+	KuneiformParserLBRACKET          = 3
+	KuneiformParserRBRACKET          = 4
+	KuneiformParserCOL               = 5
+	KuneiformParserSCOL              = 6
+	KuneiformParserLPAREN            = 7
+	KuneiformParserRPAREN            = 8
+	KuneiformParserCOMMA             = 9
+	KuneiformParserAT                = 10
+	KuneiformParserPERIOD            = 11
+	KuneiformParserEQUALS            = 12
+	KuneiformParserDATABASE          = 13
+	KuneiformParserUSE               = 14
+	KuneiformParserIMPORT            = 15
+	KuneiformParserAS                = 16
+	KuneiformParserMIN               = 17
+	KuneiformParserMAX               = 18
+	KuneiformParserMIN_LEN           = 19
+	KuneiformParserMAX_LEN           = 20
+	KuneiformParserNOT_NULL          = 21
+	KuneiformParserPRIMARY           = 22
+	KuneiformParserDEFAULT           = 23
+	KuneiformParserUNIQUE            = 24
+	KuneiformParserINDEX             = 25
+	KuneiformParserTABLE             = 26
+	KuneiformParserTYPE              = 27
+	KuneiformParserRETURNS           = 28
+	KuneiformParserFOREIGN_KEY       = 29
+	KuneiformParserFOREIGN_PROCEDURE = 30
+	KuneiformParserREFERENCES        = 31
+	KuneiformParserON_UPDATE         = 32
+	KuneiformParserON_DELETE         = 33
+	KuneiformParserDO_NO_ACTION      = 34
+	KuneiformParserDO_CASCADE        = 35
+	KuneiformParserDO_SET_NULL       = 36
+	KuneiformParserDO_SET_DEFAULT    = 37
+	KuneiformParserDO_RESTRICT       = 38
+	KuneiformParserDO                = 39
+	KuneiformParserSTART_ACTION      = 40
+	KuneiformParserSTART_PROCEDURE   = 41
+	KuneiformParserNUMERIC_LITERAL   = 42
+	KuneiformParserTEXT_LITERAL      = 43
+	KuneiformParserBOOLEAN_LITERAL   = 44
+	KuneiformParserBLOB_LITERAL      = 45
+	KuneiformParserVAR               = 46
+	KuneiformParserINDEX_NAME        = 47
+	KuneiformParserIDENTIFIER        = 48
+	KuneiformParserANNOTATION        = 49
+	KuneiformParserWS                = 50
+	KuneiformParserTERMINATOR        = 51
+	KuneiformParserBLOCK_COMMENT     = 52
+	KuneiformParserLINE_COMMENT      = 53
+	KuneiformParserCOMMENT           = 54
+	KuneiformParserSTMT_BODY         = 55
+	KuneiformParserTEXT              = 56
+	KuneiformParserSTMT_LPAREN       = 57
+	KuneiformParserSTMT_RPAREN       = 58
+	KuneiformParserSTMT_COMMA        = 59
+	KuneiformParserSTMT_PERIOD       = 60
+	KuneiformParserSTMT_RETURNS      = 61
+	KuneiformParserSTMT_TABLE        = 62
+	KuneiformParserSTMT_ARRAY        = 63
+	KuneiformParserSTMT_VAR          = 64
+	KuneiformParserSTMT_ACCESS       = 65
+	KuneiformParserSTMT_IDENTIFIER   = 66
+	KuneiformParserSTMT_WS           = 67
+	KuneiformParserSTMT_TERMINATOR   = 68
 )
 
 // KuneiformParser rules.

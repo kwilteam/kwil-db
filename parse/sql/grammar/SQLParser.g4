@@ -80,9 +80,10 @@ variable:
 ;
 
 function_call:
-    function_name OPEN_PAR ((DISTINCT_? expr (COMMA expr)*) | STAR)? CLOSE_PAR #normal_function_call
-    | IDENTIFIER L_BRACKET dbid=expr COMMA procedure=expr R_BRACKET OPEN_PAR (expr (COMMA expr)*)? CLOSE_PAR #foreign_function_call
+    function_name OPEN_PAR ((DISTINCT_? expr_list) | STAR)? CLOSE_PAR #normal_function_call
+    | IDENTIFIER L_BRACKET dbid=expr COMMA procedure=expr R_BRACKET OPEN_PAR expr_list? CLOSE_PAR #foreign_function_call
 ;
+
 
 column_ref:
     (table_name DOT)? column_name
@@ -278,9 +279,9 @@ simple_select:
 ;
 
 table_or_subquery:
-    table_name (AS_ table_alias)?
+    function_call (AS_ table_alias)?
+    | table_name (AS_ table_alias)?
     | OPEN_PAR select_core CLOSE_PAR (AS_ table_alias)?
-    | function_call (AS_ table_alias)?
 ;
 
 result_column:

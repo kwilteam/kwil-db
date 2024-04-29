@@ -102,13 +102,20 @@ fragment DIGIT: [0-9];
 // STMT_MODE captures actions and procedures.
 // it is used to allow us to correctly parse action / procedure bodies
 mode STMT_MODE;
+    COMMENT:   ( '//' ~[\r\n]* '\r'? '\n'
+        | '/*' .*? '*/'
+        ) -> skip
+    ;
+
     // STMT_BODY captures everything between two curly braces.
     // It is defined recusively to only exit on the final curly brace.
-    STMT_BODY: LBRACE ( ANY | STMT_BODY | TEXT )* RBRACE -> popMode;
+    STMT_BODY: LBRACE ( COMMENT | ANY | STMT_BODY | TEXT )* RBRACE -> popMode;
 
     // we don't make TEXT fragmented because we want anything
     // textual to be ignore and not tokenized.
     TEXT: '\'' ( '\\' '\'' | ~('\'' | '\\') )* '\'';
+
+
 
     STMT_LPAREN: LPAREN;
     STMT_RPAREN: RPAREN;
@@ -129,8 +136,6 @@ mode STMT_MODE;
 
     STMT_WS: WS -> channel(HIDDEN);
     STMT_TERMINATOR: TERMINATOR -> channel(HIDDEN);
-    STMT_BLOCK_COMMENT: BLOCK_COMMENT -> channel(HIDDEN);
-    STMT_LINE_COMMENT: LINE_COMMENT -> channel(HIDDEN);
 
-    // text to not tokenize braces in text literals
-    fragment ANY: ~[{}']+;
+    // fragment text to not tokenize braces in text literals
+    fragment ANY: ~[{}'/]+;
