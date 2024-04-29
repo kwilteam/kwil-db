@@ -69,9 +69,6 @@ EXECUTE format('SELECT * FROM ds_%I.%I()', _dbid, _procedure);
 END;
 $$ LANGUAGE plpgsql;`,
 		},
-		// {
-		// 	name: "procedure has inputs and outputs (not table output)",
-		// },
 	}
 
 	for _, test := range tests {
@@ -91,113 +88,6 @@ $$ LANGUAGE plpgsql;`,
 		})
 	}
 }
-
-// func Test_ForeignProcedureReturnsTable(t *testing.T) {
-// 	type testcase struct {
-// 		name      string
-// 		procedure string
-// 		ins       []*types.NamedType
-// 		outs      []*types.NamedType
-// 		want      string
-// 	}
-
-// 	tests := []testcase{
-// 		{
-// 			name:      "simple",
-// 			procedure: "test",
-// 			ins: []*types.NamedType{
-// 				{
-// 					Name: "a",
-// 					Type: types.IntType,
-// 				},
-// 			},
-// 			outs: []*types.NamedType{
-// 				{
-// 					Name: "b",
-// 					Type: types.IntType,
-// 				},
-// 			},
-// 			want: `
-// CREATE OR REPLACE FUNCTION _fp_test(_dbid TEXT, _name TEXT, a INT8)
-// RETURNS TABLE(b INT8)
-// AS $$
-// BEGIN
-// 	RETURN QUERY EXECUTE format('SELECT * FROM %I.%I(a)', _dbid, _name);
-// END;
-// $$ LANGUAGE plpgsql;
-// `,
-// 		},
-// 		{
-// 			name:      "multiple",
-// 			procedure: "test",
-// 			ins: []*types.NamedType{
-// 				{
-// 					Name: "a",
-// 					Type: types.IntType,
-// 				},
-// 				{
-// 					Name: "b",
-// 					Type: types.TextType,
-// 				},
-// 			},
-// 			outs: []*types.NamedType{
-// 				{
-// 					Name: "c",
-// 					Type: types.IntType,
-// 				},
-// 				{
-// 					Name: "d",
-// 					Type: types.TextType,
-// 				},
-// 			},
-// 			want: `
-// 			CREATE OR REPLACE FUNCTION _fp_test(_dbid TEXT, _name TEXT, a INT8, b TEXT)
-// RETURNS TABLE(c INT8, d TEXT)
-// AS $$
-// BEGIN
-// 	RETURN QUERY EXECUTE format('SELECT * FROM %I.%I(a, b)', _dbid, _name);
-// END;
-// $$ LANGUAGE plpgsql;
-// 			`,
-// 		},
-// 		{
-// 			// we only test for no inputs because a table return cannot have no outputs.
-// 			name:      "no inputs",
-// 			procedure: "test",
-// 			ins:       nil,
-// 			outs: []*types.NamedType{
-// 				{
-// 					Name: "b",
-// 					Type: types.IntType,
-// 				},
-// 			},
-// 			want: `
-// 			CREATE OR REPLACE FUNCTION _fp_test(_dbid TEXT, _name TEXT)
-// RETURNS TABLE(b INT8)
-// AS $$
-// BEGIN
-// 	RETURN QUERY EXECUTE format('SELECT * FROM %I.%I()', _dbid, _name);
-// END;
-// $$ LANGUAGE plpgsql;
-// 			`,
-// 		},
-// 	}
-
-// 	for _, test := range tests {
-// 		t.Run(test.name, func(t *testing.T) {
-// 			got, err := formatForeignProcReturnsTable(test.procedure, test.ins, test.outs)
-// 			if err != nil {
-// 				t.Fatalf("unexpected error: %v", err)
-// 			}
-
-// 			fmt.Println(got)
-// 			fmt.Printf("\n\n\n")
-// 			fmt.Println(test.want)
-// 			panic("")
-// 			require.Equalf(t, removeWhitespace(test.want), removeWhitespace(got), "expected: %v, got: %v", test.want, got)
-// 		})
-// 	}
-// }
 
 func removeWhitespace(s string) string {
 	return strings.Map(func(r rune) rune {

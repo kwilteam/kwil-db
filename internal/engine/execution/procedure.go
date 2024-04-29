@@ -119,15 +119,11 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 			default:
 				return nil, fmt.Errorf("unknown statement type %T", stmt)
 			case *actions.ExtensionCall:
-				args, err := makeExecutables(stmt.Params)
-				if err != nil {
-					return nil, err
-				}
 
 				i := &callMethod{
 					Namespace: stmt.Extension,
 					Method:    stmt.Method,
-					Args:      args,
+					Args:      makeExecutables(stmt.Params),
 					Receivers: stmt.Receivers,
 				}
 				instructions = append(instructions, i)
@@ -142,10 +138,6 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 				}
 				instructions = append(instructions, i)
 			case *actions.ActionCall:
-				args, err := makeExecutables(stmt.Params)
-				if err != nil {
-					return nil, err
-				}
 
 				// we must check if it is calling a view procedure or not
 				callingViewProcedure := false // callingViewProcedure tracks whether the called procedure is a view
@@ -156,6 +148,9 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 						calledAction = p
 						break
 					}
+				}
+				if calledAction == nil {
+					return nil, fmt.Errorf(`procedure "%s" not found`, stmt.Action)
 				}
 
 				for _, mod := range calledAction.Modifiers {
@@ -173,7 +168,7 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 				// call actions within the same schema, and actions cannot return values.
 				i := &callMethod{
 					Method: stmt.Action,
-					Args:   args,
+					Args:   makeExecutables(stmt.Params),
 				}
 				instructions = append(instructions, i)
 			}
@@ -396,14 +391,14 @@ type evaluatable func(ctx context.Context, exec dbQueryFn, values map[string]any
 // See their execution in (*callMethod).execute inside the `range e.Args` to
 // collect the `inputs` passed to the call of a dataset method or other
 // "namespace" method, such as an extension method.
-func makeExecutables(params []*actions.InlineExpression) ([]evaluatable, error) {
+func makeExecutables(params []*actions.InlineExpression) []evaluatable {
 	var evaluatables []evaluatable
 
 	for _, param := range params {
 		// copy the param to avoid loop variable capture
 		param2 := &actions.InlineExpression{
 			Statement:     param.Statement,
-			OrderedParams: append([]string{}, param.OrderedParams...),
+			OrderedParams: param.OrderedParams,
 		}
 		evaluatables = append(evaluatables, func(ctx context.Context, exec dbQueryFn, values map[string]any) (any, error) {
 			// we need to start with a slice of the mode key
@@ -434,7 +429,7 @@ func makeExecutables(params []*actions.InlineExpression) ([]evaluatable, error) 
 		})
 	}
 
-	return evaluatables, nil
+	return evaluatables
 }
 
 // orderAndCleanValueMap takes a map of values and a slice of keys, and returns

@@ -3,6 +3,7 @@ package types
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types/validation"
@@ -142,6 +143,7 @@ type Table struct {
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
+// It takes a slice of all tables in the schema, which is used to check for foreign key references.
 func (t *Table) Clean(tables []*Table) error {
 	hasPrimaryAttribute := false
 	for _, col := range t.Columns {
@@ -480,15 +482,9 @@ func (f *ForeignKey) Clean(currentTable *Table, allTables []*Table) error {
 }
 
 func hasColumn(table *Table, colName string) bool {
-	for _, col := range table.Columns {
-		// we need to use equal fold since this can be used
-		// in a case insensitive context
-		if strings.EqualFold(col.Name, colName) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(table.Columns, func(col *Column) bool {
+		return strings.EqualFold(col.Name, colName)
+	})
 }
 
 // Copy returns a copy of the foreign key
@@ -811,7 +807,7 @@ func (p *Action) IsView() bool {
 	return false
 }
 
-// IsOwner returns true if the procedure has an owner modifier.
+// IsOwnerOnly returns true if the procedure has an owner modifier.
 func (p *Action) IsOwnerOnly() bool {
 	for _, m := range p.Modifiers {
 		if m == ModifierOwner {
@@ -920,7 +916,7 @@ func (p *Procedure) IsView() bool {
 	return false
 }
 
-// IsOwner returns true if the procedure has an owner modifier.
+// IsOwnerOnly returns true if the procedure has an owner modifier.
 func (p *Procedure) IsOwnerOnly() bool {
 	for _, m := range p.Modifiers {
 		if m == ModifierOwner {

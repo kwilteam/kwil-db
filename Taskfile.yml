@@ -47,8 +47,12 @@ tasks:
       # so we have to list all the folders that are adjacent to protobuf.
       - |
         goimports -format-only -w ./cmd ./internal ./test ./core/client \
-          ./core/crypto ./core/log ./core/rpc/client ./core/rpc/conversion \
-          ./core/rpc/transport ./core/types ./core/utils
+          ./core/crypto ./core/log ./core/rpc/client \
+          ./core/rpc/transport ./core/types ./core/utils \
+          ./parse/parse.go ./parse/metadata ./parse/kuneiform/*.go \
+          ./parse/procedures/*.go ./parse/procedures/parser ./parse/procedures/visitors \
+          ./parse/sql/*.go ./parse/sql/postgres ./parse/sql/sqlanalyzer ./parse/sql/tree \
+          ./parse/actions/*.go ./parse/actions/parser \
 
   tidy:
     desc: go mod tidy each module
@@ -64,7 +68,7 @@ tasks:
     desc: Lint with golangci-lint
     cmds:
       # skip-dirs only works in .yaml
-      - golangci-lint run ./... ./core/... ./test/... -c .golangci.yml
+      - golangci-lint run ./... ./core/... ./test/... ./parse/... -c .golangci.yml
 
   linter:
     desc: Install the linter (not for CI which has an action for this)

@@ -81,18 +81,6 @@ func (t *typeVisitor) VisitRelationSubquery(p0 *tree.RelationSubquery) any {
 	})
 }
 
-// findProcedure finds a procedure by name in a list of procedures.
-// It returns false if the procedure is not found.
-func findProcedure(name string, procedures []*types.Procedure) (proc *types.Procedure, found bool) {
-	for _, proc := range procedures {
-		if proc.Name == name {
-			return proc, true
-		}
-	}
-
-	return nil, false
-}
-
 func (t *typeVisitor) VisitRelationFunction(p0 *tree.RelationFunction) any {
 	// check the function is a procedure that returns a table, and has the same
 	// number of inputs as the function has parameters
