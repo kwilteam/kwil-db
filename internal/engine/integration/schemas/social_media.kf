@@ -1,27 +1,121 @@
-"database testdb;
+database social_media;
 
-use math {
-        round: 'up'
-} as math_up;
+// This schema is meant to compose with the user.kf, and implement a basic
+// social media / blogging platform
 
-use math {
-        round: 'down'
-} as math_down;
-
-table users {
-        id int primary notnull,
-    username text default('sds'),
-    age int min(0),
-    wallet text unique
+table post_counts {
+    user_id uuid primary key,
+    post_count int not null default(0)
 }
 
 table posts {
-        id int primary notnull,
-    user_id int,
-    title text,
-    content text maxlen(1000),
-    #unique_index unique(user_id, title),
-    foreign_key (user_id) references users(id) on_delete do cascade on_update do cascade
+    id uuid primary key,
+    content text maxlen(300) not null,
+    author_id uuid not null, // references users db
+    // post_num is the index of the post for the author
+    // the first post for a user will be 1, then 2, 3, etc.
+    // it is used for chronological ordering
+    post_num int not null,
+    #author_idx index(author_id)
 }
 
-action create_user($id, $username, $age) pub...+2479 more"
+// increment_post_count increments the post count for the user, identified by
+// its user_id. It returns the user id and the new post count. If the user has not
+// yet posted, it will set the post count to 1
+procedure increment_post_count($user_id uuid) private returns (post_count int) {
+    FOR $row IN insert into post_counts (user_id, post_count)
+    values ($user_id, 1)
+    on conflict (user_id) do update
+        set post_count = post_count + 1
+    returning post_count {
+        return $row.post_count;
+    }
+}
+
+// create_post creates a post
+procedure create_post($content text) public {
+    $user_id uuid := get_user_id(@caller);
+
+    // increment the post count
+    $post_count int := increment_post_count($user_id);
+
+    INSERT INTO posts (id, content, author_id, post_num)
+    VALUES (
+        uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid),
+        $content,
+        $user_id,
+        $post_count
+    );
+}
+
+// get_recent_posts gets a users most recent posts,
+// in descending order
+procedure get_recent_posts($username text) public view returns table(id uuid, content text) {
+    // get the configured dbid and procedure
+    $user_id uuid := get_user_id(@caller);
+
+    return SELECT id, content from posts
+        WHERE author_id = $user_id
+        ORDER BY post_num DESC
+        LIMIT 10;
+}
+
+// get_recent_posts_by_size gets the $limit most recent posts from a user larger than size $size
+// this obviously could be written more simply and efficiently with pure SQL.
+// but the intent is to test RETURN NEXT and loops over procedures
+procedure get_recent_posts_by_size($username text, $size int, $limit int) public view returns table(id uuid, content text) {
+    // set max limit of 50
+    if $limit > 50 {
+        $limit := 50;
+    }
+
+    $count int := 0;
+    for $row in get_recent_posts($username) {
+        if $count == $limit {
+            break;
+        }
+        if length($row.content) >= $size {
+            $count := $count + 1;
+            return next $row.id, $row.content;
+        }
+    }
+}
+
+
+// the following foreign procedures define procedures
+// that the users db has. It returns redundant data since it needs
+// to match the procedure signature defines in users.
+foreign procedure get_user($address text) returns (uuid, text)
+
+// table keyvalue is a kv table to track metadata
+// for foreign calls.
+table keyvalue {
+    key text primary,
+    value text not null
+}
+
+procedure admin_set($key text, $value text) public owner {
+    insert into keyvalue (key, value)
+    values ($key, $value)
+    on conflict (key) do update set value = $value;
+}
+
+procedure admin_get($key text) public view returns (value text) {
+    for $row in select value from keyvalue where key = $key {
+        return $row.value;
+    }
+
+    error(format('admin has not set a value for key %s', $key));
+}
+
+// gets the user's id
+procedure get_user_id($address text) public view returns (id uuid) {
+    $dbid text := admin_get('dbid');
+    $procedure text := admin_get('userbyowner');
+
+    // get the user id
+    $user_id uuid;
+    $user_id, _ := get_user[$dbid, $procedure](@caller);
+
+    return $user_id;
+}
