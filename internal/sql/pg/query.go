@@ -90,8 +90,13 @@ const (
 	// helpful for in-line expressions that reference no known table. There must
 	// be an encode/decode plan available for the OID and the Go type.
 	QueryModeDefault QueryMode = pgx.QueryExecModeCacheStatement
+	// QueryModeDescribeExec also uses a prepared statement, but it is unnamed
+	// and not cached, and thus avoids the need to retry a query if the table
+	// definitions are modified concurrently. Requires two round trips.
+	QueryModeDescribeExec QueryMode = pgx.QueryExecModeDescribeExec
 	// QueryModeExec still uses the extended protocol, but does not ask
-	// postgresql to describe the statement to determine types.
+	// postgresql to describe the statement to determine parameters types.
+	// Instead, the types are determined from the Go variables.
 	QueryModeExec QueryMode = pgx.QueryExecModeExec
 	// QueryModeSimple is like QueryModeExec, except that it uses the "simple"
 	// postgresql wire protocol. Prefer QueryModeExec if argument type inference
@@ -105,10 +110,12 @@ const (
 	// different type (not QueryMode) if this seems risky, but I like them grouped
 
 	// QueryModeInferredArgTypes runs the query in a special execution mode that
-	// is like QueryExecModeExec except that it infers the argument OIDs from
-	// the Go argument values and asserts those types in preparing the
-	// statement, which is necessary for our in-line expressions. It is
-	// incompatible with other special arguments like NamedArgs.
+	// is like QueryModeExec except that it infers the argument OIDs from the Go
+	// argument values AND asserts those types in preparing the statement, which
+	// is necessary for our in-line expressions. QueryModeExec does not use
+	// Parse/Describe messages; this mode does while asserting the param types.
+	// It is like a hybrid between QueryModeDescribeExec and QueryModeExec. It
+	// is incompatible with other special arguments like NamedArgs.
 	QueryModeInferredArgTypes QueryMode = 1 << 16
 )
 

@@ -327,6 +327,7 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 	}
 
 	args := orderAndCleanValueMap(values, parsed.ParameterOrder)
+	args = append([]any{pg.QueryModeExec}, args...)
 
 	return tx.Execute(ctx, parsed.Statement, args...)
 }
