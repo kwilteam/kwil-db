@@ -38,14 +38,24 @@ func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteC
 	assert.Error(t, err, "calling owner only action with non-owner as sender should fail")
 }
 
-// ExecuteAuthnCallSpecification tests that kgw authn annotation action
+// ExecuteAuthnCallActionSpecification tests that kgw authn annotation action
 // accepts calls with authentication
-func ExecuteAuthnCallSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl, dbid string) {
-	t.Logf("Executing ExecuteAuthnCallSpecification")
+func ExecuteAuthnCallActionSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl, dbid string) {
+	t.Logf("Executing ExecuteAuthnCallActionSpecification")
 
 	// try calling authn action, should success
-	_, err := caller.Call(ctx, dbid, "authn_only", nil)
+	_, err := caller.Call(ctx, dbid, "authn_only_action", nil)
 	assert.NoError(t, err, "expected success calling kgw authn action")
+}
+
+// ExecuteAuthnCallProcedureSpecification tests that kgw authn annotation procedure
+// accepts calls with authentication
+func ExecuteAuthnCallProcedureSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl, dbid string) {
+	t.Logf("Executing ExecuteAuthnCallProcedureSpecification")
+
+	// try calling authn procedure, should success
+	_, err := caller.Call(ctx, dbid, "authn_only_procedure", nil)
+	assert.NoError(t, err, "expected success calling kgw authn procedure")
 }
 
 func checkGetPostResults(t *testing.T, results []map[string]any) {
