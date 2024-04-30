@@ -1,6 +1,0 @@
-antlr-4.13.1-complete.jar
-.antlr
-!gen
-*.interp
-*.tokens
-*.java

@@ -7,12 +7,10 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/internal/engine"
-	"github.com/kwilteam/kwil-db/kuneiform"
+	"github.com/kwilteam/kwil-db/parse/kuneiform"
+	"github.com/kwilteam/kwil-db/parse/metadata"
 	"github.com/stretchr/testify/require"
 )
-
-var _ = engine.ErrReadOnlyProcedureContainsDML // hack to keep this imported while i comment out the tests
 
 // TestDeployment tests the negative cases for deployment of schemas
 func Test_Deployment(t *testing.T) {
@@ -40,7 +38,7 @@ func Test_Deployment(t *testing.T) {
 		procedure mutate_in_view() public view {
 		    INSERT INTO users (id) VALUES (1);
 		}`,
-			err: engine.ErrReadOnlyProcedureContainsDML,
+			err: metadata.ErrReadOnlyProcedureContainsDML,
 		},
 		{
 			name: "view procedure calls non-view",
@@ -58,7 +56,7 @@ func Test_Deployment(t *testing.T) {
 		procedure not_a_view() public {
 			INSERT INTO users (id) VALUES (1);
 		}`,
-			err: engine.ErrReadOnlyProcedureCallsMutative,
+			err: metadata.ErrReadOnlyProcedureCallsMutative,
 		},
 		{
 			name: "empty procedure",
@@ -71,24 +69,24 @@ func Test_Deployment(t *testing.T) {
 		{
 			name:      "untyped variable",
 			procedure: `$intval := 1;`,
-			err:       engine.ErrUntypedVariable,
+			err:       metadata.ErrUntypedVariable,
 		},
 		{
 			name:      "undeclared variable",
 			procedure: `$intval int := $a;`,
-			err:       engine.ErrUndeclaredVariable,
+			err:       metadata.ErrUndeclaredVariable,
 		},
 		{
 			name:      "non-existent @ variable",
 			procedure: `$id int := @ethereum_height;`,
-			err:       engine.ErrUnknownContextualVariable,
+			err:       metadata.ErrUnknownContextualVariable,
 		},
 		{
 			name: "unknown function",
 			procedure: `
 			$int int := unknown_function();
 			`,
-			err: engine.ErrUnknownFunctionOrProcedure,
+			err: metadata.ErrUnknownFunctionOrProcedure,
 		},
 		{
 			name: "known procedure",
@@ -113,7 +111,77 @@ func Test_Deployment(t *testing.T) {
 				break;
 			}
 			`,
-			err: engine.ErrUnknownFunctionOrProcedure,
+			err: metadata.ErrUnknownFunctionOrProcedure,
+		},
+		{
+			name: "various foreign procedures",
+			schema: `database foreign_procedures;
+
+			foreign procedure get_tbl() returns table(id int)
+			foreign procedure get_scalar(int) returns (int)
+			foreign procedure get_named_scalar(int) returns (id int)
+
+			procedure call_all() public returns table(id int) {
+				$int1 int := get_scalar['dbid', 'get_scalar'](1);
+				$int2 int := get_named_scalar['dbid', 'get_scalar'](1);
+
+				return select * from get_tbl['dbid', 'get_table']();
+			}
+			`,
+		},
+		{
+			name: "procedure returns select join from others",
+			schema: `database select_join;
+
+			table users {
+				id int primary key,
+				name text
+			}
+
+			foreign procedure get_tbl() returns table(id int)
+
+			procedure get_users() public returns table(id int, name text) {
+				return select * from users;
+			}
+
+			// get_all joins the users table with the result of get_tbl
+			procedure get_all() public returns table(id int, name text) {
+				return select a.id as id, u.name as name from get_tbl['dbid', 'get_tbl']() AS a
+				INNER JOIN get_users() AS u ON a.id = u.id;
+			}
+			`,
+		},
+		{
+			name: "action references foreign procedure and local procedure",
+			schema: `database select_join;
+
+			table users {
+				id int primary key,
+				name text
+			}
+
+			foreign procedure get_tbl() returns table(id int)
+
+			procedure get_users() public returns table(id int, name text) {
+				return select * from users;
+			}
+
+			// get_all joins the users table with the result of get_tbl
+			action get_all() public view {
+				select a.id as id, u.name as name from get_tbl['dbid', 'get_tbl']() AS a
+				INNER JOIN get_users() AS u ON a.id = u.id;
+			}
+			`,
+		},
+		{
+			name: "action references unknown foreign procedure",
+			schema: `database select_join;
+			
+			action get_all() public view {
+				select * from get_tbl['dbid', 'get_tbl']();
+			}
+			`,
+			err: metadata.ErrUnknownFunctionOrProcedure,
 		},
 	}
 
@@ -148,6 +216,9 @@ func Test_Deployment(t *testing.T) {
 			require.NoError(t, err)
 			defer readonly.Rollback(ctx)
 
+			// we intentionally use the bare kuneiform parser and don't
+			// perform extra checks because we want to test that the engine
+			// catches these errors
 			parsed, err := kuneiform.Parse(schema)
 			require.NoError(t, err)
 

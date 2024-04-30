@@ -5,15 +5,15 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/parse/procedures"
 )
 
 // GenerateProcedure generates the plpgsql code for a procedure.
 // It takes a procedure and the body of the procedure and returns the plpgsql code for the procedure.
-func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns *types.ProcedureReturn,
-	declarations []*types.NamedType, outParams []*types.NamedType, schema, name, body string) (string, error) {
+func GenerateProcedure(proc *procedures.AnalyzedProcedure, pgSchema string) (string, error) {
 	str := strings.Builder{}
 	str.WriteString("CREATE OR REPLACE FUNCTION ")
-	str.WriteString(fmt.Sprintf("%s.%s(", schema, name))
+	str.WriteString(fmt.Sprintf("%s.%s(", pgSchema, proc.Name))
 
 	// writing the function parameters
 
@@ -22,7 +22,7 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 	paramSet := make(map[string]struct{})
 	i := -1
 	var field *types.NamedType
-	for i, field = range fields {
+	for i, field = range proc.Parameters {
 		if i != 0 {
 			str.WriteString(", ")
 		}
@@ -39,17 +39,13 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 
 	hasOutReturns := false
 	// we need to write return types if there are any
-	if returns != nil && len(returns.Fields) > 0 && !returns.IsTable {
+	if len(proc.Returns.Fields) > 0 && !proc.Returns.IsTable {
 		hasOutReturns = true
 		if i != -1 {
 			str.WriteString(", ")
 		}
 
-		if len(returns.Fields) != len(outParams) {
-			return "", fmt.Errorf("number of return types and out parameters do not match. expected %d, got %d", len(returns.Fields), len(outParams))
-		}
-
-		for i, field := range outParams {
+		for i, field := range proc.Returns.Fields {
 			if i != 0 {
 				str.WriteString(", ")
 			}
@@ -66,11 +62,11 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 	str.WriteString(") ")
 
 	// writing the return type
-	if returns != nil && returns.IsTable && len(returns.Fields) > 0 {
+	if proc.Returns.IsTable && len(proc.Returns.Fields) > 0 {
 		str.WriteString("\nRETURNS ")
 
 		str.WriteString("TABLE(")
-		for i, field := range returns.Fields {
+		for i, field := range proc.Returns.Fields {
 			if i != 0 {
 				str.WriteString(", ")
 			}
@@ -94,8 +90,8 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 	// declaresTypes tracks if the DECLARE section is needed.
 	declaresTypes := false
 	declareSection := strings.Builder{}
-	if len(declarations) > 0 {
-		for _, declare := range declarations {
+	if len(proc.DeclaredVariables) > 0 {
+		for _, declare := range proc.DeclaredVariables {
 			_, ok := paramSet[declare.Name]
 			if ok {
 				continue
@@ -110,9 +106,9 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 			declareSection.WriteString(fmt.Sprintf("%s %s;\n", declare.Name, typ))
 		}
 	}
-	if len(loopTargets) > 0 {
+	if len(proc.LoopTargets) > 0 {
 		declaresTypes = true
-		for _, loopTarget := range loopTargets {
+		for _, loopTarget := range proc.LoopTargets {
 			declareSection.WriteString(fmt.Sprintf("%s RECORD;\n", loopTarget))
 		}
 	}
@@ -125,7 +121,7 @@ func GenerateProcedure(fields []*types.NamedType, loopTargets []string, returns 
 	// finishing the function
 
 	str.WriteString("BEGIN\n")
-	str.WriteString(body)
+	str.WriteString(proc.Body)
 	str.WriteString("\nEND;\n$$ LANGUAGE plpgsql;")
 
 	return str.String(), nil

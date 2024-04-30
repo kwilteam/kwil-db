@@ -9,6 +9,6 @@
 package swagger
 
 type TxProcedureReturn struct {
-	IsTable bool `json:"isTable,omitempty"`
-	Columns []TxTypedVariable `json:"columns,omitempty"`
+	IsTable bool `json:"is_table,omitempty"`
+	Fields []TxTypedVariable `json:"fields,omitempty"`
 }

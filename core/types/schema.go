@@ -3,6 +3,7 @@ package types
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types/validation"
@@ -14,11 +15,12 @@ type Schema struct {
 	// Name is the name of the schema given by the deployer.
 	Name string `json:"name"`
 	// Owner is the identifier (generally an address in bytes or public key) of the owner of the schema
-	Owner      []byte       `json:"owner"`
-	Extensions []*Extension `json:"extensions"`
-	Tables     []*Table     `json:"tables"`
-	Actions    []*Action    `json:"actions"`
-	Procedures []*Procedure `json:"procedures"`
+	Owner             []byte              `json:"owner"`
+	Extensions        []*Extension        `json:"extensions"`
+	Tables            []*Table            `json:"tables"`
+	Actions           []*Action           `json:"actions"`
+	Procedures        []*Procedure        `json:"procedures"`
+	ForeignProcedures []*ForeignProcedure `json:"foreign_calls"`
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
@@ -42,7 +44,7 @@ func (s *Schema) Clean() error {
 	}
 
 	for _, table := range s.Tables {
-		err := table.Clean()
+		err := table.Clean(s.Tables)
 		if err != nil {
 			return err
 		}
@@ -89,7 +91,43 @@ func (s *Schema) Clean() error {
 		}
 	}
 
+	for _, foreignCall := range s.ForeignProcedures {
+		err := foreignCall.Clean()
+		if err != nil {
+			return err
+		}
+
+		err = checkName(foreignCall.Name)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// FindProcedure finds a procedure based on its name.
+// It returns false if the procedure is not found.
+func (s *Schema) FindProcedure(name string) (procedure *Procedure, found bool) {
+	for _, proc := range s.Procedures {
+		if strings.EqualFold(proc.Name, name) {
+			return proc, true
+		}
+	}
+
+	return nil, false
+}
+
+// FindForeignProcedure finds a foreign procedure based on its name.
+// It returns false if the procedure is not found.
+func (s *Schema) FindForeignProcedure(name string) (procedure *ForeignProcedure, found bool) {
+	for _, proc := range s.ForeignProcedures {
+		if strings.EqualFold(proc.Name, name) {
+			return proc, true
+		}
+	}
+
+	return nil, false
 }
 
 func (s *Schema) DBID() string {
@@ -105,7 +143,8 @@ type Table struct {
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
-func (t *Table) Clean() error {
+// It takes a slice of all tables in the schema, which is used to check for foreign key references.
+func (t *Table) Clean(tables []*Table) error {
 	hasPrimaryAttribute := false
 	for _, col := range t.Columns {
 		if err := col.Clean(); err != nil {
@@ -120,10 +159,17 @@ func (t *Table) Clean() error {
 	}
 
 	hasPrimaryIndex := false
+	idxNames := make(map[string]struct{})
 	for _, idx := range t.Indexes {
-		if err := idx.Clean(); err != nil {
+		if err := idx.Clean(t); err != nil {
 			return err
 		}
+
+		_, ok := idxNames[idx.Name]
+		if ok {
+			return fmt.Errorf("table %s has multiple indexes with the same name: %s", t.Name, idx.Name)
+		}
+		idxNames[idx.Name] = struct{}{}
 
 		if idx.Type == PRIMARY {
 			if hasPrimaryIndex {
@@ -144,6 +190,12 @@ func (t *Table) Clean() error {
 	_, err := t.GetPrimaryKey()
 	if err != nil {
 		return err
+	}
+
+	for _, fk := range t.ForeignKeys {
+		if err := fk.Clean(t, tables); err != nil {
+			return err
+		}
 	}
 
 	return cleanIdent(&t.Name)
@@ -224,7 +276,7 @@ type Column struct {
 
 func (c *Column) Clean() error {
 	for _, attr := range c.Attributes {
-		if err := attr.Clean(); err != nil {
+		if err := attr.Clean(c); err != nil {
 			return err
 		}
 	}
@@ -265,7 +317,19 @@ type Attribute struct {
 	Value string        `json:"value,omitempty"`
 }
 
-func (a *Attribute) Clean() error {
+// Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
+func (a *Attribute) Clean(col *Column) error {
+	switch a.Type {
+	case MIN, MAX:
+		if !col.Type.Equals(IntType) {
+			return fmt.Errorf("attribute %s is only valid for int columns", a.Type)
+		}
+	case MIN_LENGTH, MAX_LENGTH:
+		if !col.Type.Equals(TextType) {
+			return fmt.Errorf("attribute %s is only valid for text columns", a.Type)
+		}
+	}
+
 	return a.Type.Clean()
 }
 
@@ -288,7 +352,13 @@ type Index struct {
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
-func (i *Index) Clean() error {
+func (i *Index) Clean(tbl *Table) error {
+	for _, col := range i.Columns {
+		if !hasColumn(tbl, col) {
+			return fmt.Errorf("column %s not found in table %s", col, tbl.Name)
+		}
+	}
+
 	return errors.Join(
 		cleanIdent(&i.Name),
 		cleanIdents(&i.Columns),
@@ -366,7 +436,7 @@ type ForeignKey struct {
 }
 
 // Clean runs a set of validations and cleans the foreign key
-func (f *ForeignKey) Clean() error {
+func (f *ForeignKey) Clean(currentTable *Table, allTables []*Table) error {
 	if len(f.ChildKeys) != len(f.ParentKeys) {
 		return fmt.Errorf("foreign key must have same number of child and parent keys")
 	}
@@ -378,12 +448,43 @@ func (f *ForeignKey) Clean() error {
 		}
 	}
 
+	for _, childKey := range f.ChildKeys {
+		if !hasColumn(currentTable, childKey) {
+			return fmt.Errorf("column %s not found in table %s", childKey, currentTable.Name)
+		}
+	}
+
+	found := false
+	for _, table := range allTables {
+		// we need to use equal fold since this can be used
+		// in a case insensitive context
+		if strings.EqualFold(table.Name, f.ParentTable) {
+			found = true
+			for _, parentKey := range f.ParentKeys {
+				if !hasColumn(table, parentKey) {
+					return fmt.Errorf("column %s not found in table %s", parentKey, table.Name)
+				}
+			}
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("parent table %s not found", f.ParentTable)
+	}
+
 	return errors.Join(
 		cleanIdents(&f.ChildKeys),
 		cleanIdents(&f.ParentKeys),
 		// cleanIdent(&f.ParentSchema),
 		cleanIdent(&f.ParentTable),
 	)
+}
+
+func hasColumn(table *Table, colName string) bool {
+	return slices.ContainsFunc(table.Columns, func(col *Column) bool {
+		return strings.EqualFold(col.Name, colName)
+	})
 }
 
 // Copy returns a copy of the foreign key
@@ -674,7 +775,7 @@ func (a *AttributeType) Clean() error {
 type Action struct {
 	Name        string     `json:"name"`
 	Annotations []string   `json:"annotations,omitempty"`
-	Parameters  []string   `json:"inputs"`
+	Parameters  []string   `json:"parameters"`
 	Public      bool       `json:"public"`
 	Modifiers   []Modifier `json:"modifiers"`
 	// Statements  []string   `json:"statements"`
@@ -699,6 +800,17 @@ func (p *Action) Clean() error {
 func (p *Action) IsView() bool {
 	for _, m := range p.Modifiers {
 		if m == ModifierView {
+			return true
+		}
+	}
+
+	return false
+}
+
+// IsOwnerOnly returns true if the procedure has an owner modifier.
+func (p *Action) IsOwnerOnly() bool {
+	for _, m := range p.Modifiers {
+		if m == ModifierOwner {
 			return true
 		}
 	}
@@ -761,7 +873,7 @@ type Procedure struct {
 	Body string `json:"body"`
 
 	// Returns is the return type of the procedure.
-	Returns *ProcedureReturn `json:"returnTypes,omitempty"`
+	Returns *ProcedureReturn `json:"return_types"`
 	// Annotations are the annotations of the procedure.
 	Annotations []string `json:"annotations,omitempty"`
 }
@@ -804,8 +916,8 @@ func (p *Procedure) IsView() bool {
 	return false
 }
 
-// IsOwner returns true if the procedure has an owner modifier.
-func (p *Procedure) IsOwner() bool {
+// IsOwnerOnly returns true if the procedure has an owner modifier.
+func (p *Procedure) IsOwnerOnly() bool {
 	for _, m := range p.Modifiers {
 		if m == ModifierOwner {
 			return true
@@ -818,8 +930,8 @@ func (p *Procedure) IsOwner() bool {
 // ProcedureReturn holds the return type of a procedure.
 // EITHER the Type field is set, OR the Table field is set.
 type ProcedureReturn struct {
-	IsTable bool         `json:"isTable,omitempty"`
-	Fields  []*NamedType `json:"returnTypes,omitempty"`
+	IsTable bool         `json:"is_table"`
+	Fields  []*NamedType `json:"fields"`
 }
 
 func (p *ProcedureReturn) Clean() error {
@@ -828,6 +940,18 @@ func (p *ProcedureReturn) Clean() error {
 	}
 
 	return nil
+}
+
+func (p *ProcedureReturn) Copy() *ProcedureReturn {
+	fields := make([]*NamedType, len(p.Fields))
+	for i, field := range p.Fields {
+		fields[i] = field.Copy()
+	}
+
+	return &ProcedureReturn{
+		IsTable: p.IsTable,
+		Fields:  fields,
+	}
 }
 
 // ProcedureParameter is a parameter in a procedure.
@@ -862,13 +986,56 @@ func (p *NamedType) Clean() error {
 	)
 }
 
+func (p *NamedType) Copy() *NamedType {
+	return &NamedType{
+		Name: p.Name,
+		Type: p.Type.Copy(),
+	}
+}
+
+// ForeignProcedure is used to define foreign procedures that can be
+// dynamically called by the procedure.
+type ForeignProcedure struct {
+	// Name is the name of the foreign procedure.
+	Name string `json:"name"`
+	// Parameters are the parameters of the foreign procedure.
+	Parameters []*DataType `json:"parameters"`
+	// Returns specifies what the foreign procedure returns.
+	// If it does not return a table, the names of the return
+	// values are not needed, and should be left empty.
+	Returns *ProcedureReturn `json:"returns"`
+}
+
+func (f *ForeignProcedure) Clean() error {
+	err := cleanIdent(&f.Name)
+	if err != nil {
+		return err
+	}
+
+	for _, param := range f.Parameters {
+		err := param.Clean()
+		if err != nil {
+			return err
+		}
+	}
+
+	if f.Returns != nil {
+		err := f.Returns.Clean()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // DataType is a data type.
 // It includes both built-in types and user-defined types.
 type DataType struct {
 	// Name is the name of the type.
 	Name string `json:"name"`
 	// IsArray is true if the type is an array.
-	IsArray bool `json:"isArray"`
+	IsArray bool `json:"is_array"`
 }
 
 // String returns the string representation of the type.

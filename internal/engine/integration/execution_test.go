@@ -561,7 +561,6 @@ func Test_Engine(t *testing.T) {
 				require.Equal(t, []any{int64(1), "satoshi", int64(42)}, []any{user.Rows[0][0], user.Rows[0][1], user.Rows[0][2]})
 			},
 		},
-		// TODO: test procedure returns table
 	}
 
 	for _, test := range tests {

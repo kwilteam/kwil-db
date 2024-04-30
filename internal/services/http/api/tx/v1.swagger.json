@@ -565,7 +565,7 @@
         "name": {
           "type": "string"
         },
-        "isArray": {
+        "is_array": {
           "type": "boolean"
         }
       }
@@ -654,6 +654,24 @@
         },
         "do": {
           "type": "string"
+        }
+      }
+    },
+    "txForeignProcedure": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txDataType"
+          }
+        },
+        "return_types": {
+          "$ref": "#/definitions/txProcedureReturn"
         }
       }
     },
@@ -750,7 +768,7 @@
         "body": {
           "type": "string"
         },
-        "returnTypes": {
+        "return_types": {
           "$ref": "#/definitions/txProcedureReturn",
           "title": "either return_types or return_table should be set"
         },
@@ -765,10 +783,10 @@
     "txProcedureReturn": {
       "type": "object",
       "properties": {
-        "isTable": {
+        "is_table": {
           "type": "boolean"
         },
-        "columns": {
+        "fields": {
           "type": "array",
           "items": {
             "type": "object",
@@ -833,6 +851,13 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/txProcedure"
+          }
+        },
+        "foreign_procedures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txForeignProcedure"
           }
         }
       }

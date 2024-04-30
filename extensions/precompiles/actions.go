@@ -103,6 +103,7 @@ func (p *ProcedureContext) Values() map[string]any {
 	// set environment variables
 	values["@caller"] = p.Caller
 	values["@txid"] = p.TxID
+	values["@signer"] = p.Signer
 
 	return values
 }

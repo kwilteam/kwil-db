@@ -13,12 +13,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/internal/conv"
-	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
-	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
-	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
-	actparser "github.com/kwilteam/kwil-db/internal/parse/action"
-	"github.com/kwilteam/kwil-db/internal/parse/sql/tree"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
+	"github.com/kwilteam/kwil-db/parse/actions"
 )
 
 // MaxStackDepth is the limit on the number of nested procedure calls allowed.
@@ -71,173 +67,123 @@ type preparedAction struct {
 	instructions []instruction
 }
 
-// prepareAction parses an action from a types.Action.
+// prepareActions parses all actions.
 // It converts all modifiers and statements into instructions.
 // these instructions are then used to execute the action.
 // It will convert modifiers first, since these should be checked immediately
 // when the action is called. It will then convert the statements into
 // instructions.
-func prepareAction(unparsed *types.Action, global *GlobalContext, schema *types.Schema) (*preparedAction, error) {
-	instructions := make([]instruction, 0)
+func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 	owner := make([]byte, len(schema.Owner))
 	copy(owner, schema.Owner) // copy this here since caller may modify the passed schema. maybe not necessary
 
-	// converting modifiers
-	isViewProcedure := false // isViewAction tracks whether this procedure is a view
-	for _, mod := range unparsed.Modifiers {
-		switch mod {
-		case types.ModifierOwner:
-			instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
+	preparedActions := make([]*preparedAction, len(schema.Actions))
 
+	// converting statements to instructions
+
+	parsedActions, err := actions.AnalyzeActions(schema, dbidSchema(schema.DBID()))
+	if err != nil {
+		return nil, err
+	}
+
+	for idx, analyzedAction := range parsedActions {
+		instructions := make([]instruction, 0)
+
+		// add instructions for both owner only and view procedures
+		if analyzedAction.OwnerOnly {
+			instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
 				if !bytes.Equal(scope.Signer, owner) {
 					return fmt.Errorf("cannot call owner procedure, not owner")
 				}
 
 				return nil
 			}))
-		case types.ModifierView:
-			isViewProcedure = true
 		}
-	}
-	// if not a view action, then the action can only be called from a blockchain tx.
-	// This means that the DB connection needs to be readwrite. If not readwrite, we
-	// need to return an error
-	if !isViewProcedure {
-		instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
-			tx, ok := db.(sql.AccessModer)
-			if !ok {
-				return errors.New("DB does not provide access mode needed for mutative action")
-			}
-			if tx.AccessMode() != sql.ReadWrite {
-				return fmt.Errorf("cannot call non-view procedure, not in a chain transaction")
-			}
 
-			return nil
-		}))
-	}
+		if !analyzedAction.IsView {
+			instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
+				tx, ok := db.(sql.AccessModer)
+				if !ok {
+					return errors.New("DB does not provide access mode needed for mutative action")
+				}
+				if tx.AccessMode() != sql.ReadWrite {
+					return fmt.Errorf("cannot call non-view procedure, not in a chain transaction")
+				}
 
-	// converting statements
-	// we need to parse each statement with the action parser
-	// based on the type of statement, we will convert it into an instruction.
-	// If the procedure is a view, then it can neither contain mutative statements
-	// nor call non-view procedures.
-	parsedStmts, err := actparser.Parse(unparsed.Body)
-	if err != nil {
-		return nil, err
-	}
+				return nil
+			}))
+		}
 
-	for _, parsedStmt := range parsedStmts {
-		switch stmt := parsedStmt.(type) {
-		default:
-			return nil, fmt.Errorf("unknown statement type %T", stmt)
-		case *actparser.ExtensionCallStmt:
-			args, err := makeExecutables(stmt.Args, schema)
-			if err != nil {
-				return nil, err
-			}
+		for _, parsedStmt := range analyzedAction.Statements {
+			switch stmt := parsedStmt.(type) {
+			default:
+				return nil, fmt.Errorf("unknown statement type %T", stmt)
+			case *actions.ExtensionCall:
 
-			receivers := make([]string, len(stmt.Receivers))
-			for i, receiver := range stmt.Receivers {
-				receivers[i] = strings.ToLower(receiver)
-			}
+				i := &callMethod{
+					Namespace: stmt.Extension,
+					Method:    stmt.Method,
+					Args:      makeExecutables(stmt.Params),
+					Receivers: stmt.Receivers,
+				}
+				instructions = append(instructions, i)
+			case *actions.SQLStatement:
+				if stmt.Mutative && analyzedAction.IsView {
+					return nil, fmt.Errorf("view procedure cannot contain mutative statements")
+				}
 
-			i := &callMethod{
-				Namespace: strings.ToLower(stmt.Extension),
-				Method:    strings.ToLower(stmt.Method),
-				Args:      args,
-				Receivers: receivers,
-			}
-			instructions = append(instructions, i)
-		case *actparser.DMLStmt:
-			// apply schema to db name in statement
-			deterministic, err := sqlanalyzer.ApplyRules(stmt.Statement, sqlanalyzer.AllRules,
-				schema, dbidSchema(schema.DBID()))
-			if err != nil {
-				return nil, err
-			}
+				i := &dmlStmt{
+					SQLStatement:      stmt.Statement,
+					OrderedParameters: stmt.ParameterOrder,
+				}
+				instructions = append(instructions, i)
+			case *actions.ActionCall:
 
-			if deterministic.Mutative && isViewProcedure {
-				return nil, fmt.Errorf("view procedure cannot contain mutative statements")
-			}
+				// we must check if it is calling a view procedure or not
+				callingViewProcedure := false // callingViewProcedure tracks whether the called procedure is a view
 
-			i := &dmlStmt{
-				SQLStatement:      deterministic.Statement,
-				OrderedParameters: deterministic.ParameterOrder,
-			}
-			instructions = append(instructions, i)
-		case *actparser.ActionCallStmt:
-			args, err := makeExecutables(stmt.Args, schema)
-			if err != nil {
-				return nil, err
-			}
-
-			receivers := make([]string, len(stmt.Receivers))
-			for i, receiver := range stmt.Receivers {
-				receivers[i] = strings.ToLower(receiver)
-			}
-
-			// if calling external procedure, the procedure must be public and view.
-			// if calling internal procedure, the procedure must be view.
-			callingViewProcedure := false // callingViewProcedure tracks whether the called procedure is a view
-			if stmt.Database == schema.DBID() || stmt.Database == "" {
-				// internal
-				var action *types.Action
+				var calledAction *types.Action
 				for _, p := range schema.Actions {
-					if p.Name == stmt.Method {
-						action = p
+					if p.Name == stmt.Action {
+						calledAction = p
 						break
 					}
 				}
-				if action == nil {
-					return nil, fmt.Errorf(`procedure "%s" not found`, stmt.Method)
+				if calledAction == nil {
+					return nil, fmt.Errorf(`procedure "%s" not found`, stmt.Action)
 				}
 
-				for _, mod := range action.Modifiers {
+				for _, mod := range calledAction.Modifiers {
 					if mod == types.ModifierView {
 						callingViewProcedure = true
 						break
 					}
 				}
 
-			} else {
-				// external
-				dataset, ok := global.datasets[stmt.Database]
-				if !ok {
-					return nil, fmt.Errorf(`dataset "%s" not found`, stmt.Database)
+				if analyzedAction.IsView && !callingViewProcedure {
+					return nil, fmt.Errorf("view procedures cannot call non-view procedures")
 				}
 
-				proc, ok := dataset.actions[stmt.Method]
-				if !ok {
-					return nil, fmt.Errorf(`procedure "%s" not found`, stmt.Method)
+				// we leave the namespace and receivers empty, since action calls can only
+				// call actions within the same schema, and actions cannot return values.
+				i := &callMethod{
+					Method: stmt.Action,
+					Args:   makeExecutables(stmt.Params),
 				}
-
-				if !proc.public {
-					return nil, fmt.Errorf(`%w: procedure "%s" is not public`, ErrPrivateProcedure, stmt.Method)
-				}
-
-				callingViewProcedure = proc.view
+				instructions = append(instructions, i)
 			}
-			if isViewProcedure && !callingViewProcedure {
-				return nil, fmt.Errorf("view procedures cannot call non-view procedures")
-			}
+		}
 
-			i := &callMethod{
-				Namespace: strings.ToLower(stmt.Database),
-				Method:    strings.ToLower(stmt.Method),
-				Args:      args,
-				Receivers: receivers,
-			}
-			instructions = append(instructions, i)
+		preparedActions[idx] = &preparedAction{
+			name:         analyzedAction.Name,
+			public:       analyzedAction.Public,
+			parameters:   analyzedAction.Parameters,
+			view:         analyzedAction.IsView,
+			instructions: instructions,
 		}
 	}
 
-	return &preparedAction{
-		name:         unparsed.Name,
-		public:       unparsed.Public,
-		parameters:   unparsed.Parameters, // map with $ bind names, no @caller etc. yet
-		view:         unparsed.IsView(),
-		instructions: instructions,
-	}, nil
+	return preparedActions, nil
 }
 
 // Call executes an action.
@@ -436,7 +382,7 @@ func (f instructionFunc) execute(scope *precompiles.ProcedureContext, global *Gl
 // It is used to handle inline expressions, such as within action calls.
 type evaluatable func(ctx context.Context, exec dbQueryFn, values map[string]any) (any, error)
 
-// makeExecutables converts a set of tree.Expression into a set of evaluatables.
+// makeExecutables converts inline expressions into a set of evaluatables.
 // These are SQL statements that executed with arguments from previously bound
 // values (either from the action call params or results from preceding
 // instructions in the procedure), and whose results are used as the input
@@ -445,73 +391,24 @@ type evaluatable func(ctx context.Context, exec dbQueryFn, values map[string]any
 // See their execution in (*callMethod).execute inside the `range e.Args` to
 // collect the `inputs` passed to the call of a dataset method or other
 // "namespace" method, such as an extension method.
-func makeExecutables(exprs []tree.Expression, schema *types.Schema) ([]evaluatable, error) {
-	execs := make([]evaluatable, 0, len(exprs))
+func makeExecutables(params []*actions.InlineExpression) []evaluatable {
+	var evaluatables []evaluatable
 
-	for _, expr := range exprs {
-		switch e := expr.(type) {
-		case *tree.ExpressionBindParameter:
-			// This could be a special one that returns an evaluatable that
-			// ignores the passed ResultSetFunc since the value is
-		case *tree.ExpressionTextLiteral, *tree.ExpressionNumericLiteral, *tree.ExpressionBooleanLiteral,
-			*tree.ExpressionNullLiteral, *tree.ExpressionBlobLiteral, *tree.ExpressionUnary,
-			*tree.ExpressionBinaryComparison, *tree.ExpressionFunction, *tree.ExpressionArithmetic:
-			// Acceptable expression type.
-		default:
-			return nil, fmt.Errorf("unsupported expression type: %T", e)
+	for _, param := range params {
+		// copy the param to avoid loop variable capture
+		param2 := &actions.InlineExpression{
+			Statement:     param.Statement,
+			OrderedParams: param.OrderedParams,
 		}
-
-		// clean expression, since it is submitted by the user
-		err := expr.Walk(clean.NewStatementCleaner(schema.Procedures))
-		if err != nil {
-			return nil, err
-		}
-
-		// The schema walker is not necessary for inline expressions, since
-		// we do not support table references in inline expressions.
-		walker := sqlanalyzer.NewWalkerRecoverer(expr)
-		paramVisitor := parameters.NewParametersWalker()
-		err = walker.Walk(paramVisitor)
-		if err != nil {
-			return nil, fmt.Errorf("error replacing parameters: %w", err)
-		}
-
-		// SELECT expr;  -- prepare new value in receivers for subsequent
-		// statements This query needs to be run in "simple" execution mode
-		// rather than "extended" execution mode, which asks the database for
-		// OID (placeholder types) that it can't know since there's no FOR table.
-		selectTree := &tree.SelectStmt{
-			Stmt: &tree.SelectCore{
-				SimpleSelects: []*tree.SimpleSelect{
-					{
-						SelectType: tree.SelectTypeAll,
-						Columns: []tree.ResultColumn{
-							&tree.ResultColumnExpression{
-								Expression: expr,
-							},
-						},
-					},
-				},
-			},
-		}
-
-		stmt, err := tree.SafeToSQL(selectTree)
-		if err != nil {
-			return nil, err
-		}
-
-		// here, we need to prepare the passed values and order them according to the bind names
-		// We also must indicate to the database that we are in inferred arg types mode.
-		// This allows inline expressions, such as SELECT $1 + $2.
-		execs = append(execs, func(ctx context.Context, exec dbQueryFn, values map[string]any) (any, error) {
+		evaluatables = append(evaluatables, func(ctx context.Context, exec dbQueryFn, values map[string]any) (any, error) {
 			// we need to start with a slice of the mode key
 			// for in-line expressions, we need to use the inferred arg types
 			valSlice := []any{pg.QueryModeInferredArgTypes}
 
 			// ordering the map values according to the bind names
-			valSlice = append(valSlice, orderAndCleanValueMap(values, paramVisitor.OrderedParameters)...)
+			valSlice = append(valSlice, orderAndCleanValueMap(values, param2.OrderedParams)...)
 
-			result, err := exec(ctx, stmt, valSlice...) // more values than binds
+			result, err := exec(ctx, param2.Statement, valSlice...) // more values than binds
 			if err != nil {
 				return nil, err
 			}
@@ -532,7 +429,7 @@ func makeExecutables(exprs []tree.Expression, schema *types.Schema) ([]evaluatab
 		})
 	}
 
-	return execs, nil
+	return evaluatables
 }
 
 // orderAndCleanValueMap takes a map of values and a slice of keys, and returns
@@ -572,31 +469,6 @@ func cleanseIntValue(val any) any {
 
 	return val
 }
-
-// // TODO: this function signature will likely need to change
-// func generateProcedures(targetSchema *common.Schema, schemaGetter common.SchemaGetter) ([]string, error) {
-// 	results := make([]string, len(targetSchema.Procedures))
-// 	for i, proc := range targetSchema.Procedures {
-// 		parsed, err := parser.Parse(proc.Body)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		generatedBody, err := generate.GenerateProcedure(parsed, schemaGetter, targetSchema)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		procedure, err := ddl.GenerateProcedure(proc.Parameters, proc.Returns, generatedBody.DeclaredVariables, dbidSchema(targetSchema.DBID()), proc.Name, generatedBody.Body)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		results[i] = procedure
-// 	}
-
-// 	panic("not implemented")
-// }
 
 func prepareProcedure(proc *types.Procedure) (*preparedProcedure, error) {
 	return &preparedProcedure{

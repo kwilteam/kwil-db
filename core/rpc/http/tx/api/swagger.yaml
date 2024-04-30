@@ -474,18 +474,18 @@ components:
         - type: type
           value: value
         type:
+          is_array: true
           name: name
-          isArray: true
     txDataType:
       type: object
       properties:
         name:
           type: string
-        isArray:
+        is_array:
           type: boolean
       example:
+        is_array: true
         name: name
-        isArray: true
     txDatasetInfo:
       type: object
       properties:
@@ -572,6 +572,23 @@ components:
       example:
         do: do
         "on": "on"
+    txForeignProcedure:
+      type: object
+      properties:
+        name:
+          type: string
+        parameters:
+          type: array
+          items:
+            $ref: '#/components/schemas/txDataType'
+        return_types:
+          $ref: '#/components/schemas/txProcedureReturn'
+      example:
+        return_types: null
+        name: name
+        parameters:
+        - null
+        - null
     txGetAccountResponse:
       type: object
       properties:
@@ -624,8 +641,8 @@ components:
               - type: type
                 value: value
               type:
+                is_array: true
                 name: name
-                isArray: true
             - name: name
               attributes:
               - type: type
@@ -633,8 +650,8 @@ components:
               - type: type
                 value: value
               type:
+                is_array: true
                 name: name
-                isArray: true
             name: name
             foreign_keys:
             - child_keys:
@@ -680,8 +697,8 @@ components:
               - type: type
                 value: value
               type:
+                is_array: true
                 name: name
-                isArray: true
             - name: name
               attributes:
               - type: type
@@ -689,8 +706,8 @@ components:
               - type: type
                 value: value
               type:
+                is_array: true
                 name: name
-                isArray: true
             name: name
             foreign_keys:
             - child_keys:
@@ -734,12 +751,12 @@ components:
             alias: alias
           procedures:
           - public: true
+            return_types:
+              fields:
+              - null
+              - null
+              is_table: true
             name: name
-            returnTypes:
-              columns:
-              - null
-              - null
-              isTable: true
             annotations:
             - annotations
             - annotations
@@ -753,12 +770,12 @@ components:
             - name: name
               type: null
           - public: true
+            return_types:
+              fields:
+              - null
+              - null
+              is_table: true
             name: name
-            returnTypes:
-              columns:
-              - null
-              - null
-              isTable: true
             annotations:
             - annotations
             - annotations
@@ -772,6 +789,17 @@ components:
             - name: name
               type: null
           name: name
+          foreign_procedures:
+          - return_types: null
+            name: name
+            parameters:
+            - null
+            - null
+          - return_types: null
+            name: name
+            parameters:
+            - null
+            - null
           actions:
           - public: true
             name: name
@@ -853,7 +881,7 @@ components:
             type: string
         body:
           type: string
-        returnTypes:
+        return_types:
           $ref: '#/components/schemas/txProcedureReturn'
         annotations:
           type: array
@@ -861,12 +889,12 @@ components:
             type: string
       example:
         public: true
+        return_types:
+          fields:
+          - null
+          - null
+          is_table: true
         name: name
-        returnTypes:
-          columns:
-          - null
-          - null
-          isTable: true
         annotations:
         - annotations
         - annotations
@@ -882,17 +910,17 @@ components:
     txProcedureReturn:
       type: object
       properties:
-        isTable:
+        is_table:
           type: boolean
-        columns:
+        fields:
           type: array
           items:
             $ref: '#/components/schemas/txTypedVariable'
       example:
-        columns:
+        fields:
         - null
         - null
-        isTable: true
+        is_table: true
     txQueryRequest:
       type: object
       properties:
@@ -934,6 +962,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/txProcedure'
+        foreign_procedures:
+          type: array
+          items:
+            $ref: '#/components/schemas/txForeignProcedure'
       example:
         owner: ""
         tables:
@@ -956,8 +988,8 @@ components:
             - type: type
               value: value
             type:
+              is_array: true
               name: name
-              isArray: true
           - name: name
             attributes:
             - type: type
@@ -965,8 +997,8 @@ components:
             - type: type
               value: value
             type:
+              is_array: true
               name: name
-              isArray: true
           name: name
           foreign_keys:
           - child_keys:
@@ -1012,8 +1044,8 @@ components:
             - type: type
               value: value
             type:
+              is_array: true
               name: name
-              isArray: true
           - name: name
             attributes:
             - type: type
@@ -1021,8 +1053,8 @@ components:
             - type: type
               value: value
             type:
+              is_array: true
               name: name
-              isArray: true
           name: name
           foreign_keys:
           - child_keys:
@@ -1066,12 +1098,12 @@ components:
           alias: alias
         procedures:
         - public: true
+          return_types:
+            fields:
+            - null
+            - null
+            is_table: true
           name: name
-          returnTypes:
-            columns:
-            - null
-            - null
-            isTable: true
           annotations:
           - annotations
           - annotations
@@ -1085,12 +1117,12 @@ components:
           - name: name
             type: null
         - public: true
+          return_types:
+            fields:
+            - null
+            - null
+            is_table: true
           name: name
-          returnTypes:
-            columns:
-            - null
-            - null
-            isTable: true
           annotations:
           - annotations
           - annotations
@@ -1104,6 +1136,17 @@ components:
           - name: name
             type: null
         name: name
+        foreign_procedures:
+        - return_types: null
+          name: name
+          parameters:
+          - null
+          - null
+        - return_types: null
+          name: name
+          parameters:
+          - null
+          - null
         actions:
         - public: true
           name: name
@@ -1178,8 +1221,8 @@ components:
           - type: type
             value: value
           type:
+            is_array: true
             name: name
-            isArray: true
         - name: name
           attributes:
           - type: type
@@ -1187,8 +1230,8 @@ components:
           - type: type
             value: value
           type:
+            is_array: true
             name: name
-            isArray: true
         name: name
         foreign_keys:
         - child_keys:

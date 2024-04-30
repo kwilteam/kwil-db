@@ -3,6 +3,10 @@ run:
   skip-dirs:
     - core/rpc/protobuf
     - core/rpc/http
+    - parse/sql/gen
+    - parse/procedures/gen
+    - parse/kuneiform/gen
+    - parse/actions/gen
 
 output:
   format: github-actions,colored-line-number

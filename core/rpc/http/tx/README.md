@@ -56,6 +56,7 @@ Class | Method | HTTP request | Description
  - [TxExtensions](docs/TxExtensions.md)
  - [TxForeignKey](docs/TxForeignKey.md)
  - [TxForeignKeyAction](docs/TxForeignKeyAction.md)
+ - [TxForeignProcedure](docs/TxForeignProcedure.md)
  - [TxGetAccountResponse](docs/TxGetAccountResponse.md)
  - [TxGetConfigResponse](docs/TxGetConfigResponse.md)
  - [TxGetSchemaResponse](docs/TxGetSchemaResponse.md)

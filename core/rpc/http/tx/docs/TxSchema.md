@@ -9,6 +9,7 @@ Name | Type | Description | Notes
 **Actions** | [**[]TxAction**](txAction.md) |  | [optional] [default to null]
 **Extensions** | [**[]TxExtensions**](txExtensions.md) |  | [optional] [default to null]
 **Procedures** | [**[]TxProcedure**](txProcedure.md) |  | [optional] [default to null]
+**ForeignProcedures** | [**[]TxForeignProcedure**](txForeignProcedure.md) |  | [optional] [default to null]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

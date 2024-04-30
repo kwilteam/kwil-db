@@ -26,7 +26,7 @@ var (
 		Body: `
 		for $row in SELECT id, username, age FROM users WHERE address = $address {
 			return $row.id, $row.username, $row.age;
-		};
+		}
 		error('User not found');
 		`,
 		Returns: &types.ProcedureReturn{

@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/kuneiform"
+	"github.com/kwilteam/kwil-db/parse"
+	"github.com/kwilteam/kwil-db/parse/kuneiform"
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/stretchr/testify/require"
 )
@@ -31,7 +32,7 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) 
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	db, err := kuneiform.Parse(string(d))
+	db, err := parse.ParseKuneiform(string(d))
 	if err != nil {
 		t.Fatal("cannot parse database schema", err)
 	}
@@ -53,7 +54,7 @@ func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSch
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	db, err := kuneiform.Parse(string(d))
+	db, err := parse.ParseKuneiform(string(d))
 	// ignore validation error
 	if db == nil {
 		t.Fatal("cannot parse database schema", err)

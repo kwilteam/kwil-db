@@ -10,5 +10,5 @@ package swagger
 
 type TxDataType struct {
 	Name string `json:"name,omitempty"`
-	IsArray bool `json:"isArray,omitempty"`
+	IsArray bool `json:"is_array,omitempty"`
 }

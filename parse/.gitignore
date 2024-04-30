@@ -1,0 +1,8 @@
+antlr-4.13.1-complete.jar
+.antlr
+!gen
+*.interp
+*.tokens
+*.java
+wasm/*.wasm
+wasm/*.gz

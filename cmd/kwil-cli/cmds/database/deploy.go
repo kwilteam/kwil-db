@@ -13,7 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/kuneiform"
+	"github.com/kwilteam/kwil-db/parse"
 	"github.com/spf13/cobra"
 )
 
@@ -98,7 +98,7 @@ func UnmarshalKf(file *os.File) (*types.Schema, error) {
 		return nil, fmt.Errorf("failed to read Kuneiform source file: %w", err)
 	}
 
-	return kuneiform.Parse(string(source))
+	return parse.ParseKuneiform(string(source))
 }
 
 func UnmarshalJson(file *os.File) (*types.Schema, error) {
