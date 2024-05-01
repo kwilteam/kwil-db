@@ -50,7 +50,7 @@ func TestKGW(t *testing.T) {
 
 			// When user deployed a database
 			// invalid kuneiform
-			//specifications.DatabaseDeployInvalidSql1Specification(ctx, t, creatorDriver)
+			specifications.DatabaseDeployInvalidSql1Specification(ctx, t, creatorDriver)
 			specifications.DatabaseDeployInvalidExtensionSpecification(ctx, t, creatorDriver)
 			// valid
 			specifications.DatabaseDeploySpecification(ctx, t, creatorDriver)
