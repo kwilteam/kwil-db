@@ -4,17 +4,22 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 )
 
-type AdminClientOpt func(*AdminClient)
+type Opt func(*AdminClient)
 
 // WithLogger sets the logger for the admin client.
-func WithLogger(logger log.Logger) AdminClientOpt {
+func WithLogger(logger log.Logger) Opt {
 	return func(c *AdminClient) {
 		c.log = logger
 	}
 }
 
-// WithTLS provides the required TLS files for the admin client to connect via gRPC.
-func WithTLS(kwildCertFile, clientKeyFile, clientCertFile string) AdminClientOpt {
+// WithTLS provides the required files for the admin client to use TLS, and
+// possibly client authenticated TLS. kwildCertFile may be omitted if the
+// service is issued a TLS certificate by a root CA. The client files may be
+// omitted if not using TLS for client authentication, only for transport
+// encryption and server authentication. The server must be configured
+// appropriately.
+func WithTLS(kwildCertFile, clientKeyFile, clientCertFile string) Opt {
 	return func(c *AdminClient) {
 		c.kwildCertFile = kwildCertFile
 		c.clientKeyFile = clientKeyFile

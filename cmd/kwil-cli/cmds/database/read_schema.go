@@ -30,7 +30,7 @@ func readSchemaCmd() *cobra.Command {
 		Long:    readSchemaLong,
 		Example: readSchemaExample,
 		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.DialClient(cmd.Context(), cmd, common.WithoutPrivateKey, func(ctx context.Context, client clientType.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {

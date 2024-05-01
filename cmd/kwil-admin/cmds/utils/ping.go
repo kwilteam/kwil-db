@@ -12,7 +12,7 @@ var (
 	pingLong = `Check connectivity with the node's admin RPC interface. If successful, returns 'pong'.`
 
 	pingExample = `# Ping the node's admin RPC interface
-kwil-admin node ping --rpcserver localhost:50151 --authrpc-cert "~/.kwild/rpc.cert"`
+kwil-admin node ping --rpcserver /tmp/kwild.socket`
 )
 
 func pingCmd() *cobra.Command {

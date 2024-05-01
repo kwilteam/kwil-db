@@ -12,7 +12,7 @@ var (
 	versionLong = `Print the node's version information. The version is the Kwil's version string, set at compile time.`
 
 	versionExample = `# Print the node's version information
-kwil-admin node version --rpcserver localhost:50151 --authrpc-cert "~/.kwild/rpc.cert"`
+kwil-admin node version --rpcserver /tmp/kwild.socket`
 )
 
 func versionCmd() *cobra.Command {
@@ -21,7 +21,8 @@ func versionCmd() *cobra.Command {
 		Short:   "Print the node's version information.",
 		Long:    versionLong,
 		Example: versionExample,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			client, err := common.GetAdminSvcClient(ctx, cmd)
 			if err != nil {

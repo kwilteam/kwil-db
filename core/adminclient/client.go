@@ -6,114 +6,180 @@ package adminclient
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	neturl "net/url"
+	"os"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	adminRpc "github.com/kwilteam/kwil-db/core/rpc/client/admin"
-	admingrpc "github.com/kwilteam/kwil-db/core/rpc/client/admin/grpc"
-	txGrpc "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
+	adminjson "github.com/kwilteam/kwil-db/core/rpc/client/admin/jsonrpc"
+	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
 	"github.com/kwilteam/kwil-db/core/rpc/transport"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils/url"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // AdminClient is a client for the Kwil admin service.
 // It inherits both the admin and tx services.
 type AdminClient struct {
-	adminRpc.AdminClient // transport for admin client. we can just expose this, since we don't need to wrap it with any logic
-	txClient             // should be the subset of the interface of core/client/Client that we want to expose here.
+	adminSvcClient
 
 	log log.Logger
 
-	// tls cert files, if using grpc and not unix socket
+	// optional TLS files
 	kwildCertFile  string
 	clientKeyFile  string
 	clientCertFile string
 }
 
-// txClient is the txsvc client interface.
+// AdminSvcClient is the txsvc client interface.
 // It allows us to selectively expose the txsvc client methods.
-type txClient interface {
+type adminSvcClient interface {
+	adminRpc.AdminClient
+
+	// The rest is a subset of the interface of core/client.Client.
+
 	// Ping pings the connected node.
 	Ping(ctx context.Context) (string, error)
 	// TxQuery queries a transaction by hash.
 	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)
 }
 
-// NewClient creates a new admin client.
-// It can be configured to either use TLS or not, if using gRPC.
-// The target arg should be either "tcp://localhost:50151", "localhost:50151", or "unix://path/to/socket.sock"
-func NewClient(ctx context.Context, target string, opts ...AdminClientOpt) (*AdminClient, error) {
+// defaultTransport constructs a new http.Transport that is equivalent to the
+// http.DefaultTransport, but a new instance.
+func defaultTransport() *http.Transport {
+	defaultDial := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	return &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           defaultDial.DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+}
+
+type dialerFunc func(ctx context.Context, network, addr string) (net.Conn, error)
+
+func prepareHTTPDialerURL(target string) (*neturl.URL, dialerFunc, error) {
+	// Subtle way to default to either http or https, and to allow target to
+	// include a scheme, including the pseudo-scheme "unix://".
+	var parsedURL *neturl.URL
+	{
+		parsedTarget, err := url.ParseURLWithDefaultScheme(target, "http://")
+		if err != nil {
+			return nil, nil, err
+		}
+		parsedURL = parsedTarget.URL()
+		// NOTE: for unix:// URLs, url.ParseURL... leaves Path empty and Host
+		// set to the socket file path.
+	}
+
+	switch url.Scheme(parsedURL.Scheme) {
+	case url.HTTP: // includes unix targets with no scheme like /var/run/kwild.socket
+	case url.HTTPS:
+		if parsedURL.Host == "" {
+			return nil, nil, fmt.Errorf("https with a unix socket not allowed")
+		}
+	case url.UNIX:
+		// reparse with http scheme to make a url we can use with http.Client requests
+		parsedURL.Scheme = "http"
+		parsedURL.Path, parsedURL.Host = parsedURL.Host, "" // make the unix dialer
+		var err error
+		parsedURL, err = neturl.Parse(parsedURL.String())
+		if err != nil {
+			return nil, nil, err
+		}
+		// Host should now be empty, with Path containing the socket path
+	default:
+		return nil, nil, fmt.Errorf("invalid scheme %q (must be http or https)", parsedURL.Scheme)
+	}
+
+	// For a unix socket, override the dialer. It dials the unix socket file
+	// system path. The host in the URL is ignored; it is just a placeholder.
+	var dialer dialerFunc
+	if parsedURL.Host == "" {
+		socketPath := parsedURL.Path
+		parsedURL.Host, parsedURL.Path = "local.socket", "" // http://local.socket
+		dialer = func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
+			return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
+		}
+	} else if parsedURL.Port() == "" {
+		// Taking this liberty for admin tool, which is unlikely to be exposed
+		// with DNS and implied port 80/443.
+		parsedURL.Host += ":8485"
+	}
+
+	return parsedURL, dialer, nil
+}
+
+// NewClient creates a new admin client . The target arg is usually either
+// "127.0.0.1:8485" or "/path/to/socket.socket". The scheme http:// or https://
+// may be included, to dictate if TLS is required or not. If no scheme is given,
+// http:// is assumed. UNIX socket transport may not use TLS. The endpoint path
+// is a separate argument to distinguish it from the UNIX socket file path.
+//
+// For example,
+//
+//	adminclient.NewClient(ctx, "/run/kwild.sock")
+func NewClient(ctx context.Context, target string, opts ...Opt) (*AdminClient, error) {
 	c := &AdminClient{
 		log: log.NewNoOp(),
 	}
-
-	parsedTarget, err := url.ParseURL(target)
-	if err != nil {
-		return nil, err
+	for _, opt := range opts {
+		opt(c)
 	}
 
-	// we can have:
-	// tcp + tls
-	// tcp + no tls
-	// unix socket + no tls
-	dialOpts := []grpc.DialOption{}
+	trans := defaultTransport() // http.DefaultTransport.(*http.Transport) // http.RoundTripper
 
-	switch parsedTarget.Scheme {
-	case url.TCP: // default to grpc
-		if c.kwildCertFile != "" || c.clientKeyFile != "" || c.clientCertFile != "" {
-			// tcp + tls
+	// Validate and standardize the URL, and make a dialer if a unix socket.
+	targetURL, dialer, err := prepareHTTPDialerURL(target)
+	if err != nil {
+		return nil, fmt.Errorf("bad url: %w", err)
+	}
+	trans.DialContext = dialer // remains nil for non-unix
 
-			tlsCfg, err := newAuthenticatedTLSConfig(c.kwildCertFile, c.clientCertFile, c.clientKeyFile)
-			if err != nil {
-				return nil, err
-			}
+	// This http.Transport's TLS config does not mean it will use TLS. The
+	// scheme dictates that. But append RootCAs and client Certificates if
+	// config has them.
+	tlsConfig := transport.DefaultClientTLSConfig()
+	trans.TLSClientConfig = tlsConfig
 
-			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
-		} else {
-			// tcp + no tls
-			dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Set RootCAs if we have a kwild cert file.
+	if c.kwildCertFile != "" {
+		pemCerts, err := os.ReadFile(c.kwildCertFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read cert file: %w", err)
 		}
-	case url.UNIX:
-		dialOpts = append(dialOpts, grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			return net.Dial("unix", s)
-		}), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	default:
-		return nil, fmt.Errorf("unknown scheme %q", parsedTarget.Scheme)
+		if !tlsConfig.RootCAs.AppendCertsFromPEM(pemCerts) {
+			return nil, errors.New("credentials: failed to append certificates")
+		}
 	}
 
-	// we dial a normal grpc connection, and then wrap it with the services
-	conn, err := grpc.DialContext(ctx, parsedTarget.Target, dialOpts...)
-	if err != nil {
-		return nil, err
+	// Set Certificates for client authentication, if required
+	if c.clientKeyFile != "" && c.clientCertFile != "" {
+		authCert, err := tls.LoadX509KeyPair(c.clientCertFile, c.clientKeyFile)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.Certificates = append(tlsConfig.Certificates, authCert)
 	}
 
-	c.AdminClient = admingrpc.NewAdminClient(conn)
-
-	c.txClient = txGrpc.WrapConn(conn)
+	cl := adminjson.NewClient(targetURL,
+		rpcclient.WithHTTPClient(&http.Client{
+			Transport: trans,
+		}),
+		rpcclient.WithLogger(c.log),
+	)
+	c.adminSvcClient = cl
 
 	return c, nil
-}
-
-// newAuthenticatedTLSConfig creates a new tls.Config for an
-// mutually-authenticated TLS (mTLS) client. In addition to the server's
-// certificate file, the client's own key pair is required to support protocol
-// level client authentication.
-func newAuthenticatedTLSConfig(kwildCertFile, clientCertFile, clientKeyFile string) (*tls.Config, error) {
-	cfg, err := transport.NewClientTLSConfigFromFile(kwildCertFile)
-	if err != nil {
-		return nil, err
-	}
-
-	authCert, err := tls.LoadX509KeyPair(clientCertFile, clientKeyFile)
-	if err != nil {
-		return nil, err
-	}
-	cfg.Certificates = append(cfg.Certificates, authCert)
-
-	return cfg, nil
 }

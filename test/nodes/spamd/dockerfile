@@ -16,5 +16,5 @@ FROM kwild:latest
 WORKDIR /app
 COPY --from=build /app/dist/spamd ./kwild
 RUN chmod +x ./kwild 
-EXPOSE 50151 8080 8484 26656 26657
+EXPOSE 8080 8484 26656 26657
 ENTRYPOINT ["/app/kwild"]

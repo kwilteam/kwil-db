@@ -37,7 +37,7 @@ jsonrpc_listen_addr = "0.0.0.0:8484"
 http_listen_addr = "0.0.0.0:8080"
 
 # Unix socket or TCP address for the KWILD App's Admin GRPC server to listen on
-admin_listen_addr = "/tmp/kwil_admin.sock"
+admin_listen_addr = "/tmp/kwild.socket"
 
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = []
@@ -56,6 +56,16 @@ pg_db_pass = ""
 
 # PostgreSQL database name (override database name, default is "kwild")
 pg_db_name = "kwild"
+
+# The admin RPC server can require a password, if set. Ensure the connection is
+# encrypted since the password is sent unencrypted in the HTTP Authorization
+# header. Not needed if client authentication is done with mutual TLS (clients.pem).
+admin_pass = ""
+
+# Disable TLS on the admin service server. It is automatically disabled for a
+# UNIX socket or loopback TCP listen address. This setting can disable it for
+# any TCP listen address.
+admin_notls = false
 
 # The path to a file containing certificate that is used to create the HTTPS server.
 # Might be either absolute path or path related to the kwild root directory.

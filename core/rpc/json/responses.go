@@ -8,11 +8,20 @@ import (
 // This file defines the response types. There is one for each request type.
 // As with the request types, many are based on types in the core module.
 
+type VersionResponse struct {
+	Service     string `json:"service"`
+	Version     string `json:"api_ver"`
+	Major       uint32 `json:"major"`
+	Minor       uint32 `json:"minor"`
+	Patch       uint32 `json:"patch"`
+	KwilVersion string `json:"kwil_ver"`
+}
+
 // AccountResponse contains the response object for MethodAccount.
 type AccountResponse struct {
-	Identifier []byte `json:"identifier,omitempty"`
-	Balance    string `json:"balance"`
-	Nonce      int64  `json:"nonce"`
+	Identifier types.HexBytes `json:"identifier,omitempty"`
+	Balance    string         `json:"balance"`
+	Nonce      int64          `json:"nonce"`
 }
 
 // BroadcastResponse contains the response object for MethodBroadcast.

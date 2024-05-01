@@ -2,53 +2,122 @@ package rpcserver
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
+	"slices"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 )
 
-var logger log.Logger
+// The endpoint path is constant for now.
+const pathV1 = "/rpc/v1"
 
-// Server is a JSON-RPC server for the Kwil "tx" service.
+// Server is a JSON-RPC server.
 type Server struct {
-	srv *http.Server
-	log log.Logger
-	svc TxSvc
-	// TODO: maybe separate the HTTP serving pieces from the dispatching to
-	// service methods. Instead of depending on a TxSvc, have externally
-	// registered method handlers that use the service.
-
-	// methodHandlers map[jsonrpc.Method]MethodHandler
+	srv            *http.Server
+	unix           bool // the listener's network should be "unix" instead of "tcp"
+	log            log.Logger
+	methodHandlers map[jsonrpc.Method]MethodHandler
+	authSHA        []byte
+	tlsCfg         *tls.Config
 }
 
-type TxSvc interface {
-	ChainInfo(context.Context, *jsonrpc.ChainInfoRequest) (*jsonrpc.ChainInfoResponse, *jsonrpc.Error)
-	Broadcast(context.Context, *jsonrpc.BroadcastRequest) (*jsonrpc.BroadcastResponse, *jsonrpc.Error)
-	EstimatePrice(context.Context, *jsonrpc.EstimatePriceRequest) (*jsonrpc.EstimatePriceResponse, *jsonrpc.Error)
-	Query(context.Context, *jsonrpc.QueryRequest) (*jsonrpc.QueryResponse, *jsonrpc.Error)
-	Account(context.Context, *jsonrpc.AccountRequest) (*jsonrpc.AccountResponse, *jsonrpc.Error)
-	Ping(context.Context, *jsonrpc.PingRequest) (*jsonrpc.PingResponse, *jsonrpc.Error)
-	ListDatabases(context.Context, *jsonrpc.ListDatabasesRequest) (*jsonrpc.ListDatabasesResponse, *jsonrpc.Error)
-	Schema(context.Context, *jsonrpc.SchemaRequest) (*jsonrpc.SchemaResponse, *jsonrpc.Error)
-	Call(context.Context, *jsonrpc.CallRequest) (*jsonrpc.CallResponse, *jsonrpc.Error)
-	TxQuery(context.Context, *jsonrpc.TxQueryRequest) (*jsonrpc.TxQueryResponse, *jsonrpc.Error)
+type serverConfig struct {
+	pass      string
+	tlsConfig *tls.Config
 }
 
-// NewServer creates a new JSON-RPC server. Presently this requires a TxSvc, but
-// it should switch to externally registered routes.
-func NewServer(addr string, log log.Logger, svc TxSvc) (*Server, error) {
+type Opt func(*serverConfig)
+
+// WithPass will require a password in the request header's Authorization value
+// in "Basic" formatting. Don't use this without TLS; either terminate TLS in an
+// upstream reverse proxy, or use WithTLS with Certificates provided.
+func WithPass(pass string) Opt {
+	return func(c *serverConfig) {
+		c.pass = pass
+	}
+}
+
+// WithTLS provides a tls.Config to use with tls.NewListener around the standard
+// net.Listener.
+func WithTLS(cfg *tls.Config) Opt {
+	return func(c *serverConfig) {
+		c.tlsConfig = cfg
+	}
+}
+
+// checkAddr cleans the address, and indicates if it is a unix socket (local
+// filesystem path). The addr for NewServer should be a host:port style string,
+// but if it is a URL, this will attempt to get the host and port from it.
+func checkAddr(addr string) (string, bool, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		if strings.Contains(err.Error(), "missing port in address") {
+			host = addr
+			port = "8485"
+		} else if strings.Contains(err.Error(), "too many colons in address") {
+			u, err := url.Parse(addr)
+			if err != nil {
+				return "", false, err
+			}
+			host, port = u.Host, u.Port()
+		} else {
+			return "", false, err
+		}
+	}
+
+	if strings.HasPrefix(host, "/") { // unix, no port
+		return host, true, nil
+	}
+
+	return net.JoinHostPort(host, port), false, nil
+}
+
+// NewServer creates a new JSON-RPC server. Use RegisterMethodHandler or
+// RegisterSvc to add method handlers.
+func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
+	addr, isUNIX, err := checkAddr(addr)
+	if err != nil {
+		return nil, err
+	}
+	if isUNIX { // prepare for the socket file
+		err = os.MkdirAll(filepath.Dir(addr), 0700) // ensure parent dir exists
+		if err != nil {
+			return nil, fmt.Errorf("failed to create admin service unix socket directory at %q: %w",
+				filepath.Dir(addr), err)
+		}
+
+		err = syscall.Unlink(addr) // if left from last run
+		if err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to build grpc server: %w", err)
+		}
+	}
+
+	cfg := &serverConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
 	mux := http.NewServeMux() // http.DefaultServeMux has the pprof endpoints mounted
+
 	srv := &http.Server{
-		Addr:              addr,
+		Addr:              addr, // only used with srv.ListenAndServe, not Serve
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -56,23 +125,46 @@ func NewServer(addr string, log log.Logger, svc TxSvc) (*Server, error) {
 	}
 
 	s := &Server{
-		srv: srv,
-		log: log,
-		svc: svc,
+		srv:            srv,
+		unix:           isUNIX,
+		log:            log,
+		methodHandlers: make(map[jsonrpc.Method]MethodHandler),
+		tlsCfg:         cfg.tlsConfig,
 	}
 
-	mux.Handle("/rpc/v1", http.HandlerFunc(s.handlerV1))
+	if cfg.pass != "" {
+		authSHA := sha256.Sum256([]byte(cfg.pass))
+		s.authSHA = slices.Clone(authSHA[:])
+	} // otherwise no basic auth check
+
+	mux.Handle(pathV1, http.MaxBytesHandler(http.HandlerFunc(s.handlerV1), 1<<22))
 
 	return s, nil
 }
 
 func (s *Server) Serve(ctx context.Context) error {
-	ln, err := net.Listen("tcp", s.srv.Addr)
+	network := "tcp"
+	if s.unix {
+		network = "unix"
+	}
+	ln, err := net.Listen(network, s.srv.Addr)
 	if err != nil {
 		return err
 	}
+	if s.tlsCfg != nil {
+		ln = tls.NewListener(ln, s.tlsCfg)
+	}
+	if s.unix {
+		if err = os.Chmod(s.srv.Addr, 0755); err != nil {
+			ln.Close()
+			return err
+		}
+	}
 	s.log.Info("JSON-RPC server listening", log.String("address", ln.Addr().String()))
+	return s.ServeOn(ctx, ln)
+}
 
+func (s *Server) ServeOn(ctx context.Context, ln net.Listener) error {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -90,7 +182,8 @@ func (s *Server) Serve(ctx context.Context) error {
 	s.log.Infof("JSON-RPC server shutting down...")
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err = s.srv.Shutdown(ctxTimeout); err != nil {
+	err := s.srv.Shutdown(ctxTimeout)
+	if err != nil {
 		err = fmt.Errorf("http.Server.Shutdown: %v", err)
 	}
 
@@ -114,6 +207,21 @@ func (s *Server) handlerV1(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	r.Close = true
 
+	if s.authSHA != nil {
+		// r.SetBasicAuth("", "passwords")
+		_, pass, haveAuth := r.Response.Request.BasicAuth() // r.Header.Get("Authorization")
+		if !haveAuth {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+		// Reveal nothing about the configured pass in verification time.
+		authSHA := sha256.Sum256([]byte(pass))
+		if subtle.ConstantTimeCompare(s.authSHA, authSHA[:]) != 1 {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+	}
+
 	bodyReader := http.MaxBytesReader(w, r.Body, szLimit)
 	body, err := io.ReadAll(bodyReader)
 	r.Body.Close()
@@ -128,6 +236,7 @@ func (s *Server) handlerV1(w http.ResponseWriter, r *http.Request) {
 		s.writeJSON(w, resp, http.StatusBadRequest)
 		return
 	}
+
 	s.processRequest(r.Context(), w, req)
 }
 
@@ -206,7 +315,7 @@ func (s *Server) handleRequest(ctx context.Context, req *jsonrpc.Request) *jsonr
 	s.log.Debug("handling request", log.String("method", req.Method))
 
 	// call the method with the params
-	result, rpcErr := handleMethod(ctx, s, jsonrpc.Method(req.Method), req.Params)
+	result, rpcErr := s.handleMethod(ctx, jsonrpc.Method(req.Method), req.Params)
 	if rpcErr != nil {
 		return jsonrpc.NewErrorResponse(req.ID, rpcErr)
 	}

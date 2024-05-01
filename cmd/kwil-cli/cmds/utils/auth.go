@@ -34,7 +34,7 @@ func kgwAuthnCmd() *cobra.Command {
 		Long:    authCmdDesc,
 		Example: authCmdExample,
 		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.DialClient(cmd.Context(), cmd, common.UsingGateway,
 				func(ctx context.Context, client clientType.Client, cfg *config.KwilCliConfig) error {
 					if cfg.PrivateKey == nil {

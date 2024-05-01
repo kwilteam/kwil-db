@@ -56,8 +56,8 @@ func batchCmd() *cobra.Command {
 		Short:   "Batch execute an action using inputs from a CSV file.",
 		Long:    batchLong,
 		Example: batchExample,
-		Args:    cobra.ExactArgs(0),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {

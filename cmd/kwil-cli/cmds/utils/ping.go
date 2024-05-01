@@ -15,7 +15,8 @@ func pingCmd() *cobra.Command {
 		Use:   "ping",
 		Short: "Ping the kwil provider endpoint.  If successful, returns 'pong'.",
 		Long:  "Ping the kwil provider endpoint.  If successful, returns 'pong'.",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.DialClient(cmd.Context(), cmd, common.WithoutPrivateKey, func(ctx context.Context, client clientType.Client, cfg *config.KwilCliConfig) error {
 				res, err := client.Ping(ctx)
 				if err != nil {

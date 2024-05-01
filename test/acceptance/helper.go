@@ -131,10 +131,10 @@ func (r *ActHelper) LoadConfig() *ActTestCfg {
 		VisitorRawPK:              getEnv("KACT_VISITOR_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
 		SchemaFile:                getEnv("KACT_SCHEMA", "./test-data/test_db.kf"),
 		LogLevel:                  getEnv("KACT_LOG_LEVEL", "info"),
-		JSONRPCEndpoint:           getEnv("KACT_JSONRPC_ENDPOINT", "http://127.0.0.1:8484/rpc/v1"),
+		JSONRPCEndpoint:           getEnv("KACT_JSONRPC_ENDPOINT", "http://127.0.0.1:8484"),
 		HTTPEndpoint:              getEnv("KACT_HTTP_ENDPOINT", "http://127.0.0.1:8080/"),
 		P2PAddress:                getEnv("KACT_CHAIN_ENDPOINT", "tcp://0.0.0.0:26656"),
-		AdminRPC:                  getEnv("KACT_ADMIN_RPC", "unix:///tmp/admin.sock"),
+		AdminRPC:                  getEnv("KACT_ADMIN_RPC", "/tmp/admin.socket"),
 		DockerComposeFile:         getEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
@@ -260,7 +260,7 @@ func (r *ActHelper) Setup(ctx context.Context) {
 	// update configured endpoints, so that we can still test against remote services
 	jsonrpcEndpoint, _, err := utils.KwildJSONRPCEndpoints(r.container, ctx)
 	require.NoError(r.t, err, "failed to get json-rpc endpoint")
-	r.cfg.JSONRPCEndpoint = jsonrpcEndpoint + "/rpc/v1"
+	r.cfg.JSONRPCEndpoint = jsonrpcEndpoint
 
 	httpEndpoint, _, err := utils.KwildHTTPEndpoints(r.container, ctx)
 	require.NoError(r.t, err, "failed to get http endpoint")

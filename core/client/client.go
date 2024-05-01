@@ -39,20 +39,38 @@ type Client struct {
 
 var _ clientType.Client = (*Client)(nil)
 
-// NewClient creates a Kwil client.
-// It by default communicates with target via HTTP; chain ID of the remote host
-// will be verified against the chain ID passed in.
+// NewClient creates a Kwil client. The target should be a URL (for an
+// http.Client). It by default communicates with target via HTTP; chain ID of the
+// remote host will be verified against the chain ID passed in.
 func NewClient(ctx context.Context, target string, options *clientType.Options) (c *Client, err error) {
+	// OPTION A: Target is a base URL, and the jsonrpc client appends the path
+	// for the API version it speaks (e.g. /rpc/v1). The json rpc client knows
+	// v1 methods and types, and speaks to the /rpc/v1 handler.
 	parsedURL, err := url.Parse(target)
 	if err != nil {
 		return nil, fmt.Errorf("parse url: %w", err)
 	}
 
+	// OPTION B: The jsonrpc client uses the URL unmodified. No path is
+	// appended. Caller must use /rpc/v1 or whatever directs to the v1 handler.
+	// If a hostport is provided, construct a URL with the default scheme
+	// (http://) and path (/rpc/v1). Preferred use is with a URL.
+	//
+	// _, _, err = net.SplitHostPort(target)
+	// if err == nil {
+	// 	target = "http://" + target + "/rpc/v1"
+	// } else {
+	// 	_, err = url.Parse(target)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("parse url: %w", err)
+	// 	}
+	// }
+
 	jsonrpcClientOpts := []rpcclient.Opts{}
-	if options != nil {
+	if options != nil && options.Logger.L != nil {
 		jsonrpcClientOpts = append(jsonrpcClientOpts, rpcclient.WithLogger(options.Logger))
 	}
-	client := rpcclient.NewClient(parsedURL.String(), jsonrpcClientOpts...)
+	client := rpcclient.NewClient(parsedURL, jsonrpcClientOpts...)
 
 	clt, err := WrapClient(ctx, client, options)
 	if err != nil {

@@ -5,7 +5,6 @@ tasks:
     cmds:
       - task: tx:v1
       - task: tx:v1:swagger
-      - task: admin:v0
       - task: function:v0
       - task: function:v0:swagger
 
@@ -40,22 +39,6 @@ tasks:
       - internal/services/http/api/tx/v1.swagger.json
     generates:
       - core/rpc/http/tx/*
-
-  admin:v0:
-    desc: Compiles admin v0 protobuf
-    preconditions:
-      - sh: a="libprotoc 23.4";b=`protoc --version`;test "$a" = "$b"
-        msg: "Protobuf compiler version is not 23.4, please install the correct version"
-    cmds:
-      - |
-        protoc -I ./proto \
-        --go_out=. --go_opt module=github.com/kwilteam/kwil-db \
-        --go-grpc_out=. --go-grpc_opt module=github.com/kwilteam/kwil-db \
-        proto/kwil/admin/v0/*.proto
-    sources:
-      - proto/kwil/admin/v0/*.proto
-    generates:
-      - core/rpc/protobuf/admin/v0/*.go
 
   function:v0:
     desc: Compiles functions v0 protobuf

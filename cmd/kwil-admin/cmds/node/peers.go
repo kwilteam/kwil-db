@@ -14,7 +14,7 @@ var (
 	peersLong = `Print a list of the node's peers, with their public information.`
 
 	peersExample = `# Print a list of the node's peers
-kwil-admin node peers --rpcserver localhost:50151 --authrpc-cert "~/.kwild/rpc.cert"`
+kwil-admin node peers --rpcserver /tmp/kwild.socket`
 )
 
 func peersCmd() *cobra.Command {
@@ -23,7 +23,8 @@ func peersCmd() *cobra.Command {
 		Short:   "Print a list of the node's peers, with their public information.",
 		Long:    peersLong,
 		Example: peersExample,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			client, err := common.GetAdminSvcClient(ctx, cmd)
 			if err != nil {

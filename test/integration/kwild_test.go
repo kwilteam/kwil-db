@@ -120,7 +120,7 @@ func TestKwildValidatorRemoval(t *testing.T) {
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
 		if driverType != "cli" {
-			continue // admin service is cli->grpc only still
+			continue // admin service is cli->jsonrpc only
 		}
 
 		t.Run(driverType+"_driver", func(t *testing.T) {
@@ -176,7 +176,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
 		if driverType != "cli" {
-			continue // admin service is cli->grpc only still
+			continue // admin service is cli->jsonrpc only still
 		}
 
 		t.Run(driverType+"_driver", func(t *testing.T) {
@@ -468,7 +468,7 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
 		if driverType != "cli" {
-			continue // admin service is cli->grpc only still
+			continue // admin service is cli->jsonrpc only still
 		}
 
 		t.Run(driverType+"_driver", func(t *testing.T) {

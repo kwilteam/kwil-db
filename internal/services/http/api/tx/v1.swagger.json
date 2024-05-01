@@ -145,28 +145,6 @@
         ]
       }
     },
-    "/api/v1/config": {
-      "get": {
-        "operationId": "TxService_GetConfig",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/txGetConfigResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
     "/api/v1/databases/{dbid}/schema": {
       "get": {
         "operationId": "TxService_GetSchema",
@@ -680,21 +658,6 @@
       "properties": {
         "account": {
           "$ref": "#/definitions/txAccount"
-        }
-      }
-    },
-    "txGetConfigResponse": {
-      "type": "object",
-      "properties": {
-        "chain_code": {
-          "type": "string",
-          "format": "int64"
-        },
-        "provider_address": {
-          "type": "string"
-        },
-        "pool_address": {
-          "type": "string"
         }
       }
     },

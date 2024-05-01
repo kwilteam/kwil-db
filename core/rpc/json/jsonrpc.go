@@ -43,7 +43,7 @@ var _ error = Error{} // can't have pointer receiver for this to work
 // Error satisfies the Go error interface.
 func (e Error) Error() string {
 	data, _ := json.MarshalIndent(e.Data, "", "  ")
-	return fmt.Sprintf("rpcError: code = %d, message = %v, data = %s",
+	return fmt.Sprintf("jsonrpc.Error: code = %d, message = %v, data = %s",
 		e.Code, e.Message, string(data))
 }
 

@@ -8,14 +8,15 @@ type Method string
 //  - unmarshal params into an instance of the type for method
 
 const (
-	MethodPing      Method = "ping"
-	MethodChainInfo Method = "chain_info"
-	MethodAccount   Method = "account"
-	MethodBroadcast Method = "broadcast"
-	MethodCall      Method = "call"
-	MethodDatabases Method = "databases"
-	MethodPrice     Method = "estimate_price"
-	MethodQuery     Method = "query"
-	MethodTxQuery   Method = "tx_query"
-	MethodSchema    Method = "schema"
+	MethodUserVersion Method = "user.version"
+	MethodPing        Method = "user.ping"
+	MethodChainInfo   Method = "user.chain_info"
+	MethodAccount     Method = "user.account"
+	MethodBroadcast   Method = "user.broadcast"
+	MethodCall        Method = "user.call"
+	MethodDatabases   Method = "user.databases"
+	MethodPrice       Method = "user.estimate_price"
+	MethodQuery       Method = "user.query"
+	MethodTxQuery     Method = "user.tx_query"
+	MethodSchema      Method = "user.schema"
 )

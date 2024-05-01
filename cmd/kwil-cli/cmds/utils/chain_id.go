@@ -19,7 +19,8 @@ func chainInfoCmd() *cobra.Command {
 		Use:   "chain-info",
 		Short: chainInfoLong,
 		Long:  chainInfoLong,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.DialClient(cmd.Context(), cmd, common.WithoutPrivateKey, func(ctx context.Context, client clientType.Client, cfg *config.KwilCliConfig) error {
 				chainInfo, err := client.ChainInfo(ctx)
 				if err != nil {

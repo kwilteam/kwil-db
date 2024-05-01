@@ -13,7 +13,7 @@ import (
 var (
 	dumpCfgLong    = `Gets the current config from the node.`
 	dumpCfgExample = `# Get the current config from the node.
-kwil node dump-config --rpcserver unix:///tmp/kwil_admin.sock`
+kwil-admin node dump-config --rpcserver /tmp/kwild.socket`
 )
 
 func dumpCfgCmd() *cobra.Command {
@@ -22,7 +22,8 @@ func dumpCfgCmd() *cobra.Command {
 		Short:   "Gets the current config from the node.",
 		Long:    dumpCfgLong,
 		Example: dumpCfgExample,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			client, err := common.GetAdminSvcClient(ctx, cmd)
 			if err != nil {

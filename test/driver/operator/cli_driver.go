@@ -15,7 +15,7 @@ import (
 // OperatorCLIDriver is a driver for the operator using the kwil-admin cli.
 type OperatorCLIDriver struct {
 	Exec   ExecFn // execute a command
-	RpcUrl string // rpc url (either unix socket or tcp)
+	RpcUrl string // rpc url (either unix socket path, host:port, or http/https URL)
 }
 
 // ExecFn executes a CLI command for the admin client.

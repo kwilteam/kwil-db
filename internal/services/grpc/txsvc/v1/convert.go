@@ -1,4 +1,4 @@
-package grpc
+package txsvc
 
 import (
 	"fmt"
@@ -10,12 +10,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
-func convertTx(incoming *transactions.Transaction) *txpb.Transaction {
-	return ConvertToPBTx(incoming)
-}
-
-// ConvertFromPBTx converts a protobuf transaction to an abci transaction
-func ConvertFromPBTx(incoming *txpb.Transaction) (*transactions.Transaction, error) {
+// convertFromPBTx converts a protobuf transaction to an abci transaction
+func convertFromPBTx(incoming *txpb.Transaction) (*transactions.Transaction, error) {
 	payloadType := transactions.PayloadType(incoming.Body.PayloadType)
 	if !payloadType.Valid() {
 		return nil, fmt.Errorf("invalid payload type: %s", incoming.Body.PayloadType)
@@ -50,8 +46,8 @@ func ConvertFromPBTx(incoming *txpb.Transaction) (*transactions.Transaction, err
 	}, nil
 }
 
-// ConvertToPBTx converts an abci transaction(encoded) to a protobuf transaction
-func ConvertToPBTx(tx *transactions.Transaction) *txpb.Transaction {
+// convertToPBTx converts an abci transaction(encoded) to a protobuf transaction
+func convertToPBTx(tx *transactions.Transaction) *txpb.Transaction {
 	return &txpb.Transaction{
 		Body: &txpb.Transaction_Body{
 			Payload:     tx.Body.Payload,
@@ -81,224 +77,7 @@ func convertToPBCryptoSignature(sig *auth.Signature) *txpb.Signature {
 	return newSig
 }
 
-// translateFromPBTxResult convert a protobuf tx result to vanilla tx result
-// NOTE: here i try to indicate this `conversion` won't throw error, not sure
-// if this is a good idea
-func translateFromPBTxResult(resp *txpb.TransactionResult) *transactions.TransactionResult {
-	return &transactions.TransactionResult{
-		Code:      resp.Code,
-		Log:       resp.Log,
-		GasUsed:   resp.GasUsed,
-		GasWanted: resp.GasWanted,
-		Data:      resp.Data,
-		Events:    resp.Events,
-	}
-}
-
-func convertFromPBTxQueryResp(resp *txpb.TxQueryResponse) (*transactions.TcTxQueryResponse, error) {
-	tx, err := ConvertFromPBTx(resp.Tx)
-	if err != nil {
-		return nil, err
-	}
-
-	txResult := translateFromPBTxResult(resp.TxResult)
-
-	return &transactions.TcTxQueryResponse{
-		Hash:     resp.Hash,
-		Height:   resp.Height,
-		Tx:       *tx,
-		TxResult: *txResult,
-	}, nil
-}
-
-func convertPBToSchema(schema *txpb.Schema) (*types.Schema, error) {
-	s := &types.Schema{
-		Owner:      schema.Owner,
-		Name:       schema.Name,
-		Tables:     convertTablesToEngine(schema.Tables),
-		Actions:    convertActionsToEngine(schema.Actions),
-		Extensions: convertExtensionsToEngine(schema.Extensions),
-		Procedures: convertProceduresToEngine(schema.Procedures),
-	}
-
-	return s, s.Clean()
-}
-
-func convertTablesToEngine(tables []*txpb.Table) []*types.Table {
-	convTables := make([]*types.Table, len(tables))
-	for i, table := range tables {
-		convTable := &types.Table{
-			Name:        table.Name,
-			Columns:     convertColumnsToEngine(table.Columns),
-			Indexes:     convertIndexesToEngine(table.Indexes),
-			ForeignKeys: convertForeignKeysToEngine(table.ForeignKeys),
-		}
-		convTables[i] = convTable
-	}
-
-	return convTables
-}
-
-func convertColumnsToEngine(columns []*txpb.Column) []*types.Column {
-	convColumns := make([]*types.Column, len(columns))
-	for i, column := range columns {
-		convColumn := &types.Column{
-			Name:       column.Name,
-			Type:       convertDataTypeToEngine(column.Type),
-			Attributes: convertAttributesToEngine(column.Attributes),
-		}
-		convColumns[i] = convColumn
-	}
-
-	return convColumns
-}
-
-func convertDataTypeToEngine(dataType *txpb.DataType) *types.DataType {
-	return &types.DataType{
-		Name:    dataType.Name,
-		IsArray: dataType.IsArray,
-	}
-}
-
-func convertAttributesToEngine(attributes []*txpb.Attribute) []*types.Attribute {
-	convAttributes := make([]*types.Attribute, len(attributes))
-	for i, attribute := range attributes {
-		convAttribute := &types.Attribute{
-			Type:  types.AttributeType(attribute.Type),
-			Value: attribute.Value,
-		}
-		convAttributes[i] = convAttribute
-	}
-
-	return convAttributes
-}
-
-func convertIndexesToEngine(indexes []*txpb.Index) []*types.Index {
-	convIndexes := make([]*types.Index, len(indexes))
-	for i, index := range indexes {
-		convIndexes[i] = &types.Index{
-			Name:    index.Name,
-			Columns: index.Columns,
-			Type:    types.IndexType(index.Type),
-		}
-	}
-
-	return convIndexes
-}
-
-func convertActionsToEngine(actions []*txpb.Action) []*types.Action {
-	convActions := make([]*types.Action, len(actions))
-	for i, action := range actions {
-		convActions[i] = &types.Action{
-			Name:        action.Name,
-			Public:      action.Public,
-			Parameters:  action.Parameters,
-			Modifiers:   convertModifiersToEngine(action.Modifiers),
-			Annotations: action.Annotations,
-			Body:        action.Body,
-		}
-	}
-
-	return convActions
-}
-
-func convertModifiersToEngine(mods []string) []types.Modifier {
-	convModifiers := make([]types.Modifier, len(mods))
-	for i, mod := range mods {
-		convModifiers[i] = types.Modifier(mod)
-	}
-
-	return convModifiers
-}
-
-func convertForeignKeysToEngine(foreignKeys []*txpb.ForeignKey) []*types.ForeignKey {
-	convForeignKeys := make([]*types.ForeignKey, len(foreignKeys))
-	for i, foreignKey := range foreignKeys {
-		convertedActions := make([]*types.ForeignKeyAction, len(foreignKey.Actions))
-
-		for j, action := range foreignKey.Actions {
-			convertedActions[j] = &types.ForeignKeyAction{
-				On: types.ForeignKeyActionOn(action.On),
-				Do: types.ForeignKeyActionDo(action.Do),
-			}
-		}
-
-		convForeignKeys[i] = &types.ForeignKey{
-			ChildKeys:   foreignKey.ChildKeys,
-			ParentKeys:  foreignKey.ParentKeys,
-			ParentTable: foreignKey.ParentTable,
-			Actions:     convertedActions,
-		}
-	}
-
-	return convForeignKeys
-}
-
-func convertExtensionsToEngine(ext []*txpb.Extensions) []*types.Extension {
-	convExtensions := make([]*types.Extension, len(ext))
-	for i, e := range ext {
-		exts := make([]*types.ExtensionConfig, len(e.Initialization))
-		for i, init := range e.Initialization {
-			exts[i] = &types.ExtensionConfig{
-				Key:   init.Argument,
-				Value: init.Value,
-			}
-		}
-
-		convExtensions[i] = &types.Extension{
-			Name:           e.Name,
-			Initialization: exts,
-			Alias:          e.Alias,
-		}
-	}
-
-	return convExtensions
-}
-
-func convertProceduresToEngine(proc []*txpb.Procedure) []*types.Procedure {
-	convProcedures := make([]*types.Procedure, len(proc))
-	for i, p := range proc {
-		t := &types.Procedure{
-			Name:        p.Name,
-			Annotations: p.Annotations,
-			Public:      p.Public,
-			Parameters:  convertParametersToEngine(p.Parameters),
-			Modifiers:   convertModifiersToEngine(p.Modifiers),
-			Body:        p.Body,
-		}
-
-		if p.ReturnTypes != nil {
-			t.Returns = &types.ProcedureReturn{
-				IsTable: p.ReturnTypes.IsTable,
-				Fields:  make([]*types.NamedType, len(p.ReturnTypes.Fields)),
-			}
-			for j, r := range p.ReturnTypes.Fields {
-				t.Returns.Fields[j] = &types.NamedType{
-					Name: r.Name,
-					Type: convertDataTypeToEngine(r.Type),
-				}
-			}
-		}
-
-		convProcedures[i] = t
-	}
-
-	return convProcedures
-}
-
-func convertParametersToEngine(incoming []*txpb.TypedVariable) []*types.ProcedureParameter {
-	convParams := make([]*types.ProcedureParameter, len(incoming))
-	for i, param := range incoming {
-		convParams[i] = &types.ProcedureParameter{
-			Name: param.Name,
-			Type: convertDataTypeToEngine(param.Type),
-		}
-	}
-
-	return convParams
-}
-
-func ConvertSchemaToPB(schema *types.Schema) (*txpb.Schema, error) {
+func convertSchemaToPB(schema *types.Schema) (*txpb.Schema, error) {
 	return &txpb.Schema{
 		Owner:             schema.Owner,
 		Name:              schema.Name,

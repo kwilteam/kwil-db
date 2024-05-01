@@ -82,7 +82,7 @@ type IntTestConfig struct {
 	JSONRPCEndpoint string
 	HTTPEndpoint    string
 	ChainEndpoint   string
-	AdminRPC        string // either tcp or unix.  Should be of form unix://var/run/kwil/admin.sock or tcp://localhost:26657
+	AdminRPC        string // Should be of form /var/run/kwil/admin.sock or 127.0.0.1:8485
 
 	SchemaFile                string
 	DockerComposeFile         string
@@ -287,8 +287,8 @@ func (r *IntHelper) LoadConfig() {
 		SchemaFile:                getEnv("KIT_SCHEMA", "./test-data/test_db.kf"),
 		LogLevel:                  getEnv("KIT_LOG_LEVEL", "info"),
 		HTTPEndpoint:              getEnv("KIT_HTTP_ENDPOINT", "http://localhost:8080/"),
-		JSONRPCEndpoint:           getEnv("KIT_JSONRPC_ENDPOINT", "http://localhost:8484/rpc/v1"),
-		AdminRPC:                  getEnv("KIT_ADMIN_RPC", "unix:///tmp/admin.sock"),
+		JSONRPCEndpoint:           getEnv("KIT_JSONRPC_ENDPOINT", "http://localhost:8484"),
+		AdminRPC:                  getEnv("KIT_ADMIN_RPC", "/tmp/admin.socket"),
 		DockerComposeFile:         getEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KIT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 		GanacheComposeFile:        getEnv("KIT_GANACHE_COMPOSE_FILE", "./ganache-docker-compose.yml"),
@@ -720,7 +720,6 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverTy
 
 	ctr := r.containers[nodeName]
 	jsonrpcURL, _, err := utils.KwildJSONRPCEndpoints(ctr, ctx)
-	jsonrpcURL += "/rpc/v1"
 	require.NoError(r.t, err, "failed to get json-rpc url")
 	httpURL, _, err := utils.KwildHTTPEndpoints(ctr, ctx)
 	require.NoError(r.t, err, "failed to get http url")
@@ -749,19 +748,18 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverTy
 // The passed nodeName needs to be the same as the name of the container in docker-compose.yml
 func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driverType string) operator.KwilOperatorDriver {
 	switch driverType {
-	case "http":
-		r.t.Fatalf("http driver not supported for node operator")
-		return nil
-	case "grpc": // remove soon
+	case "jsonrpc":
+		// Only cli is used presently, running from *within the container*.
+
 		c, ok := r.containers[nodeName]
 		if !ok {
 			r.t.Fatalf("container %s not found", nodeName)
 		}
 
-		adminGrpcUrl, err := c.PortEndpoint(ctx, "50151", "tcp")
-		require.NoError(r.t, err, "failed to get admin grpc url")
+		adminJSONRPCURL, err := c.PortEndpoint(ctx, "8485", "http")
+		require.NoError(r.t, err, "failed to get admin json-rpc url")
 
-		clt, err := adminclient.NewClient(ctx, adminGrpcUrl)
+		clt, err := adminclient.NewClient(ctx, adminJSONRPCURL)
 		if err != nil {
 			r.t.Fatalf("failed to create admin client: %v", err)
 		}
@@ -776,8 +774,13 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driv
 		}
 
 		return r.getCLIAdminClientDriver(r.cfg.AdminRPC, c)
+
+	case "http", "grpc":
+		r.t.Fatalf("driver not supported for node operator: %v", driverType)
+		return nil
 	default:
-		panic("unsupported driver type")
+		r.t.Fatalf("unknown node operator driver: %v", driverType)
+		return nil
 	}
 }
 
@@ -840,8 +843,9 @@ func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gat
 	return driver.NewKwildClientDriver(kwilClt, signer, deployer, logger)
 }
 
-// getCLIAdminClientDriver returns a kwil-admin client driver connected to the given kwil node.
-// the adminSvcServer should be either unix:// or tcp://
+// getCLIAdminClientDriver returns a kwil-admin client driver connected to the
+// given kwil node's container. The adminSvcServer is passed to kwil-admin's
+// --rpcserver flag.
 func (r *IntHelper) getCLIAdminClientDriver(adminSvcServer string, c *testcontainers.DockerContainer) operator.KwilOperatorDriver {
 	return &operator.OperatorCLIDriver{
 		Exec: func(ctx context.Context, args ...string) ([]byte, error) {

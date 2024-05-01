@@ -9,7 +9,6 @@ Method | HTTP request | Description
 [**TxServiceChainInfo**](TxServiceApi.md#TxServiceChainInfo) | **Get** /api/v1/chain_info | 
 [**TxServiceEstimatePrice**](TxServiceApi.md#TxServiceEstimatePrice) | **Post** /api/v1/estimate_price | 
 [**TxServiceGetAccount**](TxServiceApi.md#TxServiceGetAccount) | **Get** /api/v1/accounts/{identifier} | 
-[**TxServiceGetConfig**](TxServiceApi.md#TxServiceGetConfig) | **Get** /api/v1/config | 
 [**TxServiceGetSchema**](TxServiceApi.md#TxServiceGetSchema) | **Get** /api/v1/databases/{dbid}/schema | 
 [**TxServiceListDatabases**](TxServiceApi.md#TxServiceListDatabases) | **Get** /api/v1/{owner}/databases | 
 [**TxServicePing**](TxServiceApi.md#TxServicePing) | **Get** /api/v1/ping | 
@@ -138,28 +137,6 @@ Name | Type | Description  | Notes
 ### Return type
 
 [**TxGetAccountResponse**](txGetAccountResponse.md)
-
-### Authorization
-
-No authorization required
-
-### HTTP request headers
-
- - **Content-Type**: Not defined
- - **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-# **TxServiceGetConfig**
-> TxGetConfigResponse TxServiceGetConfig(ctx, )
-
-
-### Required Parameters
-This endpoint does not need any parameter.
-
-### Return type
-
-[**TxGetConfigResponse**](txGetConfigResponse.md)
 
 ### Authorization
 

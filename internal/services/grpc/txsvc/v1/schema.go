@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"go.uber.org/zap"
@@ -25,7 +24,7 @@ func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*t
 		return nil, status.Error(codes.Unknown, "failed to get schema")
 	}
 
-	txSchema, err := grpc.ConvertSchemaToPB(schema)
+	txSchema, err := convertSchemaToPB(schema)
 	if err != nil {
 		logger.Error("failed to convert schema", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to convert schema")

@@ -1,4 +1,4 @@
-package rpcserver
+package usersvc
 
 import (
 	"context"
@@ -21,9 +21,11 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci"             // errors from chainClient
 	"github.com/kwilteam/kwil-db/internal/engine/execution" // errors from engine
 	"github.com/kwilteam/kwil-db/internal/ident"
+	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
+	"github.com/kwilteam/kwil-db/internal/version"
 )
 
-// Service is an implementation of TxSvc. This should probably go somewhere else.
+// Service is the "user" RPC service, also known as txsvc in other contexts.
 type Service struct {
 	log log.Logger
 
@@ -33,6 +35,7 @@ type Service struct {
 	chainClient BlockchainTransactor
 }
 
+// NewService creates a new instance of the user RPC service.
 func NewService(db sql.ReadTxMaker, engine EngineReader,
 	chainClient BlockchainTransactor, nodeApp NodeApplication, logger log.Logger) *Service {
 	return &Service{
@@ -41,6 +44,82 @@ func NewService(db sql.ReadTxMaker, engine EngineReader,
 		nodeApp:     nodeApp,
 		chainClient: chainClient,
 		db:          db,
+	}
+}
+
+// The "user" service is versioned by these values. However, despite this API
+// level versioning, methods can be versioned. For example "user.account.v2".
+// The APIs minor version can indicate which new methods (or method versions)
+// are available, while the API major version would be bumped for method removal
+// or any other breaking changes.
+const (
+	apiVerUserMajor = 0
+	apiVerUserMinor = 1
+	apiVerUserPatch = 0
+)
+
+var (
+	apiVerUserSemver = fmt.Sprintf("%d.%d.%d", apiVerUserMajor, apiVerUserMinor, apiVerUserPatch)
+)
+
+// The user Service must be usable as a Svc registered with a JSON-RPC Server.
+var _ rpcserver.Svc = (*Service)(nil)
+
+func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
+	return map[jsonrpc.Method]rpcserver.MethodHandler{
+		jsonrpc.MethodUserVersion: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
+			req := &jsonrpc.VersionRequest{}
+			return req, func() (any, *jsonrpc.Error) {
+				return &jsonrpc.VersionResponse{
+					Service:     "user",
+					Version:     apiVerUserSemver,
+					Major:       apiVerUserMajor,
+					Minor:       apiVerUserMinor,
+					Patch:       apiVerUserPatch,
+					KwilVersion: version.KwilVersion,
+				}, nil
+			}
+		},
+		jsonrpc.MethodAccount: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
+			req := &jsonrpc.AccountRequest{}
+			return req, func() (any, *jsonrpc.Error) { return svc.Account(ctx, req) }
+		},
+		jsonrpc.MethodBroadcast: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
+			req := &jsonrpc.BroadcastRequest{}
+			return req, func() (any, *jsonrpc.Error) { return svc.Broadcast(ctx, req) }
+		},
+		jsonrpc.MethodCall: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
+			req := &jsonrpc.CallRequest{}
+			return req, func() (any, *jsonrpc.Error) { return svc.Call(ctx, req) }
+		},
+		jsonrpc.MethodChainInfo: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
+			req := &jsonrpc.ChainInfoRequest{}
+			return req, func() (any, *jsonrpc.Error) { return svc.ChainInfo(ctx, req) }
+		},
+		jsonrpc.MethodDatabases: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
+			req := &jsonrpc.ListDatabasesRequest{}
+			return req, func() (any, *jsonrpc.Error) { return svc.ListDatabases(ctx, req) }
+		},
+		jsonrpc.MethodPing: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
+			req := &jsonrpc.PingRequest{}
+			return req, func() (any, *jsonrpc.Error) { return svc.Ping(ctx, req) }
+		},
+		jsonrpc.MethodPrice: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
+			req := &jsonrpc.EstimatePriceRequest{}
+			return req, func() (any, *jsonrpc.Error) { return svc.EstimatePrice(ctx, req) }
+		},
+		jsonrpc.MethodQuery: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
+			req := &jsonrpc.QueryRequest{}
+			return req, func() (any, *jsonrpc.Error) { return svc.Query(ctx, req) }
+		},
+		jsonrpc.MethodSchema: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
+			req := &jsonrpc.SchemaRequest{}
+			return req, func() (any, *jsonrpc.Error) { return svc.Schema(ctx, req) }
+		},
+		jsonrpc.MethodTxQuery: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
+			req := &jsonrpc.TxQueryRequest{}
+			return req, func() (any, *jsonrpc.Error) { return svc.TxQuery(ctx, req) }
+		},
 	}
 }
 
@@ -65,8 +144,6 @@ type NodeApplication interface {
 	AccountInfo(ctx context.Context, identifier []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
 	Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
 }
-
-var _ TxSvc = (*Service)(nil)
 
 func (svc *Service) ChainInfo(ctx context.Context, req *jsonrpc.ChainInfoRequest) (*jsonrpc.ChainInfoResponse, *jsonrpc.Error) {
 	status, err := svc.chainClient.Status(ctx)
@@ -130,7 +207,7 @@ func (svc *Service) EstimatePrice(ctx context.Context, req *jsonrpc.EstimatePric
 
 	price, err := svc.nodeApp.Price(ctx, req.Tx)
 	if err != nil {
-		logger.Error("failed to estimate price", log.Error(err)) // why not tell the client though?
+		svc.log.Error("failed to estimate price", log.Error(err)) // why not tell the client though?
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to estimate price", nil)
 	}
 

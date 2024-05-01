@@ -114,24 +114,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/rpcStatus'
-  /api/v1/config:
-    get:
-      tags:
-      - TxService
-      operationId: TxService_GetConfig
-      responses:
-        "200":
-          description: A successful response.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/txGetConfigResponse'
-        default:
-          description: An unexpected error response.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/rpcStatus'
   /api/v1/databases/{dbid}/schema:
     get:
       tags:
@@ -599,20 +581,6 @@ components:
           identifier: ""
           balance: balance
           nonce: nonce
-    txGetConfigResponse:
-      type: object
-      properties:
-        chain_code:
-          type: string
-          format: int64
-        provider_address:
-          type: string
-        pool_address:
-          type: string
-      example:
-        provider_address: provider_address
-        chain_code: chain_code
-        pool_address: pool_address
     txGetSchemaResponse:
       type: object
       properties:

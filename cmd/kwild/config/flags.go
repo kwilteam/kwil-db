@@ -17,6 +17,8 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	flagSet.StringVar(&cfg.AppCfg.JSONRPCListenAddress, "app.jsonrpc-listen-addr", cfg.AppCfg.JSONRPCListenAddress, "kwild JSON-RPC listen address")
 	flagSet.StringVar(&cfg.AppCfg.HTTPListenAddress, "app.http-listen-addr", cfg.AppCfg.HTTPListenAddress, "kwild HTTP listen address")
 	flagSet.StringVar(&cfg.AppCfg.AdminListenAddress, "app.admin-listen-addr", cfg.AppCfg.AdminListenAddress, "kwild admin listen address (unix or tcp)")
+	flagSet.StringVar(&cfg.AppCfg.AdminRPCPass, "app.admin-pass", cfg.AppCfg.AdminRPCPass, "password for the kwil admin service (may be empty)")
+	flagSet.BoolVar(&cfg.AppCfg.NoTLS, "app.admin-notls", cfg.AppCfg.NoTLS, "do not enable TLS on admin server (automatically disabled for unix socket or loopback listen addresses)")
 	flagSet.StringVar(&cfg.AppCfg.TLSCertFile, "app.tls-cert-file", cfg.AppCfg.TLSCertFile, "TLS certificate file path for the admin and consensus RPC server (optional)")
 	flagSet.StringVar(&cfg.AppCfg.TLSKeyFile, "app.tls-key-file", cfg.AppCfg.TLSKeyFile, "TLS key file path for the admin and consensus RPC servers (optional)")
 	flagSet.StringVar(&cfg.AppCfg.Hostname, "app.hostname", cfg.AppCfg.Hostname, "kwild Server hostname")

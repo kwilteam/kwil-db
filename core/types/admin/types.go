@@ -39,8 +39,10 @@ type ValidatorInfo struct {
 	Power  int64          `json:"power"`
 }
 
+// type ValidatorInfo = types.Validator
+
 // Status includes a comprehensive summary of a nodes status, including if the
-// service is running, it's best block and if it is syncing, it's identity on
+// service is running, its best block and if it is syncing, its identity on
 // the network, and the node's validator identity if it is one. Note that our
 // validator is part of the node rather than an external signer.
 type Status struct {

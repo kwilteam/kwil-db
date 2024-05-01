@@ -11,7 +11,8 @@ func printConfigCmd() *cobra.Command {
 		Use:   "print-config",
 		Short: "Print the current CLI configuration.",
 		Long:  "Print the current CLI configuration.",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.LoadCliConfig()
 			if err != nil {
 				return display.PrintErr(cmd, err)

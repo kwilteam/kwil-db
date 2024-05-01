@@ -1,6 +1,8 @@
 run:
-  deadline: 10m
-  skip-dirs:
+  timeout: 10m
+
+issues:
+  exclude-dirs:
     - core/rpc/protobuf
     - core/rpc/http
     - parse/sql/gen
@@ -9,7 +11,9 @@ run:
     - parse/actions/gen
 
 output:
-  format: github-actions,colored-line-number
+  formats:
+    - format: github-actions
+    - format: colored-line-number
 
 linters:
   disable-all: true

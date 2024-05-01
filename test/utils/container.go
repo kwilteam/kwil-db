@@ -69,7 +69,7 @@ func KwildWSEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) 
 }
 
 func KwildAdminEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
-	return getEndpoints(ctr, ctx, "50151", "tcp")
+	return getEndpoints(ctr, ctx, "8485", "tcp") // unused because we are using kwil-admin inside the container with a unix socket
 }
 
 func KwildP2pEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
