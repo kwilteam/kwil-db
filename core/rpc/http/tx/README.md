@@ -26,7 +26,6 @@ Class | Method | HTTP request | Description
 *TxServiceApi* | [**TxServiceChainInfo**](docs/TxServiceApi.md#txservicechaininfo) | **Get** /api/v1/chain_info | 
 *TxServiceApi* | [**TxServiceEstimatePrice**](docs/TxServiceApi.md#txserviceestimateprice) | **Post** /api/v1/estimate_price | 
 *TxServiceApi* | [**TxServiceGetAccount**](docs/TxServiceApi.md#txservicegetaccount) | **Get** /api/v1/accounts/{identifier} | 
-*TxServiceApi* | [**TxServiceGetConfig**](docs/TxServiceApi.md#txservicegetconfig) | **Get** /api/v1/config | 
 *TxServiceApi* | [**TxServiceGetSchema**](docs/TxServiceApi.md#txservicegetschema) | **Get** /api/v1/databases/{dbid}/schema | 
 *TxServiceApi* | [**TxServiceListDatabases**](docs/TxServiceApi.md#txservicelistdatabases) | **Get** /api/v1/{owner}/databases | 
 *TxServiceApi* | [**TxServicePing**](docs/TxServiceApi.md#txserviceping) | **Get** /api/v1/ping | 
@@ -58,7 +57,6 @@ Class | Method | HTTP request | Description
  - [TxForeignKeyAction](docs/TxForeignKeyAction.md)
  - [TxForeignProcedure](docs/TxForeignProcedure.md)
  - [TxGetAccountResponse](docs/TxGetAccountResponse.md)
- - [TxGetConfigResponse](docs/TxGetConfigResponse.md)
  - [TxGetSchemaResponse](docs/TxGetSchemaResponse.md)
  - [TxIndex](docs/TxIndex.md)
  - [TxListDatabasesResponse](docs/TxListDatabasesResponse.md)

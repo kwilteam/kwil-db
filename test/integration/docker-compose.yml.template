@@ -31,7 +31,7 @@ services:
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
       --app.http-listen-addr=:8080
-      --app.admin-listen-addr=unix:///tmp/admin.sock
+      --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg0
@@ -97,7 +97,7 @@ services:
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
       --app.http-listen-addr=:8080
-      --app.admin-listen-addr=unix:///tmp/admin.sock
+      --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg1
@@ -163,7 +163,7 @@ services:
       --log.time-format=rfc3339milli
       --app.extension-endpoints=ext1:50051
       --app.http-listen-addr=:8080
-      --app.admin-listen-addr=unix:///tmp/admin.sock
+      --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg2
@@ -233,7 +233,7 @@ services:
       --app.extension-endpoints=ext3:50051
       --app.http-listen-addr=:8080
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
-      --app.admin-listen-addr=unix:///tmp/admin.sock
+      --app.admin-listen-addr=/tmp/admin.socket
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg3
       --app.pg-db-port=5432
@@ -298,7 +298,7 @@ services:
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
       --app.http-listen-addr=:8080
-      --app.admin-listen-addr=unix:///tmp/admin.sock
+      --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg4
@@ -364,7 +364,7 @@ services:
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
       --app.http-listen-addr=:8080
-      --app.admin-listen-addr=unix:///tmp/admin.sock
+      --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg5

@@ -122,6 +122,16 @@ pg_db_pass = "{{ .AppCfg.DBPass }}"
 # PostgreSQL database name (override database name, default is "kwild")
 pg_db_name = "{{ .AppCfg.DBName }}"
 
+# The admin RPC server can require a password, if set. Ensure the connection is
+# encrypted since the password is sent unencrypted in the HTTP Authorization
+# header. Not needed if client authentication is done with mutual TLS (clients.pem).
+# admin_pass = "{{ .AppCfg.AdminRPCPass }}"
+
+# Disable TLS on the admin service server. It is automatically disabled for a
+# UNIX socket or loopback TCP listen address. This setting can disable it for
+# any TCP listen address.
+admin_notls = {{ .AppCfg.NoTLS }}
+
 # The path to a file containing certificate that is used to create the HTTPS server.
 # Might be either absolute path or path related to the kwild root directory.
 # If the certificate is signed by a certificate authority,

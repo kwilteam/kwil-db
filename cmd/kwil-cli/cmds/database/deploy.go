@@ -37,7 +37,7 @@ func deployCmd() *cobra.Command {
 		Long:    deployLong,
 		Example: deployExample,
 		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
 				// read in the file
 				file, err := os.Open(filePath)

@@ -1,6 +1,7 @@
-// Package rpcclient provides a Kwil JSON-RPC client. It supports only HTTP
-// POST, no WebSockets yet. It implements the core/rpc/client/user.TxSvcClient
-// interface that is required by core/client.Client.
+// Package rpcclient provides a Kwil JSON-RPC (API v1) client. It supports only
+// HTTP POST, no WebSockets yet. The Client type implements the
+// core/rpc/client/user.TxSvcClient interface that is required by
+// core/client.Client.
 package rpcclient
 
 import (
@@ -10,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strconv"
 	"sync/atomic"
@@ -45,8 +47,13 @@ type Client struct {
 	reqID atomic.Uint64
 }
 
-// NewClient creates a new JSON-RPC Client for a URL.
-func NewClient(url string, opts ...Opts) *Client {
+// NewClient creates a new v1 JSON-RPC Client for a provider at a given base URL
+// of an HTTP server where the "/rpc/v1" rooted. i.e. The URL should not include
+// "/rpc/v1" as that is appended automatically.
+func NewClient(url *url.URL, opts ...Opts) *Client {
+	// This client uses API v1 methods and request/response types.
+	url = url.JoinPath("/rpc/v1")
+
 	clientOpts := &clientOptions{
 		client: &http.Client{},
 		log:    log.NewNoOp(), // log.NewStdOut(log.InfoLevel),
@@ -56,7 +63,7 @@ func NewClient(url string, opts ...Opts) *Client {
 	}
 
 	cl := &Client{
-		endpoint: url,
+		endpoint: url.String(),
 		client:   clientOpts.client,
 		log:      clientOpts.log,
 	}
@@ -88,7 +95,9 @@ func (cl *Client) nextReqID() string {
 	return strconv.FormatUint(id, 10)
 }
 
-func (cl *Client) call(ctx context.Context, method string, cmd, res any) error {
+// NOTE: make a BaseClient with CallMethod only.
+
+func (cl *Client) CallMethod(ctx context.Context, method string, cmd, res any) error {
 	// res needs to be a pointer otherwise we can't unmarshal into it.
 	if rtp := reflect.TypeOf(res); rtp.Kind() != reflect.Ptr {
 		return errors.New("result must be a pointer")
@@ -185,7 +194,7 @@ func clientError(jsonRPCErr *jsonrpc.Error) error {
 	err := errors.Join(jsonRPCErr, rpcErr)
 
 	switch jsonRPCErr.Code {
-	case jsonrpc.ErrorEngineDatasetNotFound, jsonrpc.ErrorTxNotFound:
+	case jsonrpc.ErrorEngineDatasetNotFound, jsonrpc.ErrorTxNotFound, jsonrpc.ErrorValidatorNotFound:
 		return errors.Join(client.ErrNotFound, err)
 	case jsonrpc.ErrorUnknownMethod:
 		// TODO: change to client.ErrMethodNotFound. This should be different

@@ -15,7 +15,8 @@ var idCmd = &cobra.Command{
 	Use:   "id",
 	Short: "Show the account ID.",
 	Long:  "Returns the Kwil account identifier (typically an Ethereum address), if a private key is configured.",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		conf, err := config.LoadCliConfig()
 		if err != nil {
 			return display.PrintErr(cmd, err)

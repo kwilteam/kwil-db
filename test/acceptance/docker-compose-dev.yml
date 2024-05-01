@@ -8,7 +8,6 @@ services:
     ports:
       - "8080:8080"
       - "8484:8484"
-      - "50151:50151"
       - "26656:26656"
       - "26657:26657"
       - "40000:40000" # debugger, if build with debug dockerfile
@@ -34,7 +33,7 @@ services:
       --log.format=plain
       --log.time-format=rfc3339milli
       --app.extension-endpoints=ext:50051
-      --app.admin-listen-addr=unix:///tmp/admin.sock
+      --app.admin-listen-addr=/tmp/admin.socket
       --app.http-listen-addr=:8080
       --chain.p2p.external-address=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657

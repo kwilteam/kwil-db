@@ -38,6 +38,9 @@ const (
 	ErrorIdentInvalid  ErrorCode = -601
 
 	ErrorNodeInternal ErrorCode = -700
+
+	ErrorValidatorsInternal ErrorCode = -800
+	ErrorValidatorNotFound  ErrorCode = -801
 )
 
 // More detailed errors use a structured error type in the "data" field of the

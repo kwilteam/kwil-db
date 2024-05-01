@@ -25,7 +25,6 @@ const (
 	TxService_Query_FullMethodName         = "/tx.TxService/Query"
 	TxService_GetAccount_FullMethodName    = "/tx.TxService/GetAccount"
 	TxService_Ping_FullMethodName          = "/tx.TxService/Ping"
-	TxService_GetConfig_FullMethodName     = "/tx.TxService/GetConfig"
 	TxService_ListDatabases_FullMethodName = "/tx.TxService/ListDatabases"
 	TxService_GetSchema_FullMethodName     = "/tx.TxService/GetSchema"
 	TxService_Call_FullMethodName          = "/tx.TxService/Call"
@@ -42,7 +41,6 @@ type TxServiceClient interface {
 	Query(ctx context.Context, in *QueryRequest, opts ...grpc.CallOption) (*QueryResponse, error)
 	GetAccount(ctx context.Context, in *GetAccountRequest, opts ...grpc.CallOption) (*GetAccountResponse, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
-	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 	ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error)
 	GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error)
 	Call(ctx context.Context, in *CallRequest, opts ...grpc.CallOption) (*CallResponse, error)
@@ -111,15 +109,6 @@ func (c *txServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...grp
 	return out, nil
 }
 
-func (c *txServiceClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error) {
-	out := new(GetConfigResponse)
-	err := c.cc.Invoke(ctx, TxService_GetConfig_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *txServiceClient) ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error) {
 	out := new(ListDatabasesResponse)
 	err := c.cc.Invoke(ctx, TxService_ListDatabases_FullMethodName, in, out, opts...)
@@ -166,7 +155,6 @@ type TxServiceServer interface {
 	Query(context.Context, *QueryRequest) (*QueryResponse, error)
 	GetAccount(context.Context, *GetAccountRequest) (*GetAccountResponse, error)
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
-	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error)
 	GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error)
 	Call(context.Context, *CallRequest) (*CallResponse, error)
@@ -195,9 +183,6 @@ func (UnimplementedTxServiceServer) GetAccount(context.Context, *GetAccountReque
 }
 func (UnimplementedTxServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
-}
-func (UnimplementedTxServiceServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetConfig not implemented")
 }
 func (UnimplementedTxServiceServer) ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListDatabases not implemented")
@@ -332,24 +317,6 @@ func _TxService_Ping_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TxService_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetConfigRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TxServiceServer).GetConfig(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TxService_GetConfig_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TxServiceServer).GetConfig(ctx, req.(*GetConfigRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _TxService_ListDatabases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListDatabasesRequest)
 	if err := dec(in); err != nil {
@@ -452,10 +419,6 @@ var TxService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ping",
 			Handler:    _TxService_Ping_Handler,
-		},
-		{
-			MethodName: "GetConfig",
-			Handler:    _TxService_GetConfig_Handler,
 		},
 		{
 			MethodName: "ListDatabases",

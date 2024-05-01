@@ -64,14 +64,23 @@ const (
 // If it does not have a port, it is set to 0. This is only appropriate for
 // listen addresses.
 func ParseURL(u string) (*URL, error) {
+	return ParseURLWithDefaultScheme(u, "")
+}
+
+// ParseURLWithDefaultScheme is like ParseURL, but the default scheme may be
+// specified. If empty, "tcp://" is used.
+func ParseURLWithDefaultScheme(u, defaultScheme string) (*URL, error) {
 	original := u
-	// If the url does not have a scheme, assume it's a tcp address, rewrite and reparse.
+	// If the url does not have a scheme, give it one, rewrite and reparse.
 	hasScheme, err := HasScheme(u)
 	if err != nil {
 		return nil, err
 	}
 	if !hasScheme {
-		u = "tcp://" + u
+		if defaultScheme == "" {
+			defaultScheme = "tcp://"
+		}
+		u = defaultScheme + u
 	}
 
 	parsed, err := url.Parse(u)
@@ -87,6 +96,8 @@ func ParseURL(u string) (*URL, error) {
 			return nil, err
 		}
 		parsed.Host = target
+		parsed.Path = ""
+		parsed.RawPath = ""
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownScheme, parsed.Scheme)
 	}

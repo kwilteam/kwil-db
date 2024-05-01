@@ -51,7 +51,8 @@ type AppConfig struct {
 	JSONRPCListenAddress string `mapstructure:"jsonrpc_listen_addr"`
 	HTTPListenAddress    string `mapstructure:"http_listen_addr"` // DEPRECATED: use the JSON-RPC services
 	AdminListenAddress   string `mapstructure:"admin_listen_addr"`
-	PrivateKeyPath       string `mapstructure:"private_key_path"`
+
+	PrivateKeyPath string `mapstructure:"private_key_path"`
 
 	// PostgreSQL DB settings. DBName is the name if the PostgreSQL database to
 	// connect to. The different data stores (e.g. engine, acct store, event
@@ -72,6 +73,8 @@ type AppConfig struct {
 	DBName string `mapstructure:"pg_db_name"`
 
 	ExtensionEndpoints []string                     `mapstructure:"extension_endpoints"`
+	AdminRPCPass       string                       `mapstructure:"admin_pass"`
+	NoTLS              bool                         `mapstructure:"admin_notls"`
 	TLSCertFile        string                       `mapstructure:"tls_cert_file"`
 	TLSKeyFile         string                       `mapstructure:"tls_key_file"`
 	Hostname           string                       `mapstructure:"hostname"`
@@ -499,6 +502,11 @@ func LoadEnvConfig() (*KwildConfig, error) {
 		viper.BindEnv(bindKey, envKey)
 	}
 
+	// TODO: try this
+	// viper.SetEnvPrefix("KWILD")
+	// viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_")) // --app.output-paths => KWILD_APP_OUTPUT_PATHS
+	// viper.AutomaticEnv()
+
 	// var cfg KwildConfig, won't work because, viper won't be able to extract
 	// the heirarchical keys from the config structure as fields like cfg.app set to nil.
 	// It can only extract the first level keys [app, chain, log] in this case.
@@ -542,7 +550,7 @@ func DefaultConfig() *KwildConfig {
 		AppCfg: &AppConfig{
 			JSONRPCListenAddress: "0.0.0.0:8484",
 			HTTPListenAddress:    "0.0.0.0:8080",
-			AdminListenAddress:   "unix:///tmp/kwil_admin.sock",
+			AdminListenAddress:   "/tmp/kwild.socket", // Or, suggested, 127.0.0.1:8485
 			DBHost:               "127.0.0.1",
 			DBPort:               "5432", // ignored with unix socket, but applies if IP used for DBHost
 			DBUser:               "kwild",

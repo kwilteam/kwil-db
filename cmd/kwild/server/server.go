@@ -30,14 +30,14 @@ import (
 
 // Server controls the gRPC server and http gateway.
 type Server struct {
-	grpcServer      *grpc.Server
-	jsonRPCserver   *rpcserver.Server
-	gateway         *gateway.GatewayServer
-	adminTPCServer  *grpc.Server
-	cometBftNode    *cometbft.CometBftNode
-	listenerManager *listeners.ListenerManager
-	closers         *closeFuncs
-	log             log.Logger
+	grpcServer         *grpc.Server
+	jsonRPCServer      *rpcserver.Server
+	jsonRPCAdminServer *rpcserver.Server
+	gateway            *gateway.GatewayServer
+	cometBftNode       *cometbft.CometBftNode
+	listenerManager    *listeners.ListenerManager
+	closers            *closeFuncs
+	log                log.Logger
 
 	cfg *config.KwildConfig
 
@@ -49,9 +49,6 @@ const (
 	abciDirName      = config.ABCIDirName
 	rcvdSnapsDirName = config.ReceivedSnapsDirName
 	signingDirName   = config.SigningDirName
-
-	// Note that the sqlLite file path is user-configurable
-	// e.g. "data/kwil.db"
 )
 
 // New builds the kwild server.
@@ -90,8 +87,8 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.Genesi
 		return nil, fmt.Errorf("failed to create root directory %q: %w", cfg.RootDir, err)
 	}
 
-	logger.Debug("loading TLS key pair for gRPC servers", zap.String("key_file", "d.cfg.TLSKeyFile"),
-		zap.String("cert_file", "d.cfg.TLSCertFile")) // wtf why can't we log yet?
+	logger.Debug("loading TLS key pair for gRPC servers", log.String("key_file", "d.cfg.TLSKeyFile"),
+		log.String("cert_file", "d.cfg.TLSCertFile")) // wtf why can't we log yet?
 	keyPair, err := loadTLSCertificate(cfg.AppCfg.TLSKeyFile, cfg.AppCfg.TLSCertFile, cfg.AppCfg.Hostname)
 	if err != nil {
 		return nil, err
@@ -167,19 +164,13 @@ func (s *Server) Start(ctx context.Context) error {
 	s.log.Info("grpc server started", zap.String("address", s.grpcServer.Addr()))
 
 	group.Go(func() error {
-		go func() {
-			<-groupCtx.Done()
-			s.log.Info("stop admin server")
-			s.adminTPCServer.Stop()
-		}()
-
-		return s.adminTPCServer.Start()
+		s.log.Info("starting user json-rpc server", zap.String("address", s.cfg.AppCfg.JSONRPCListenAddress))
+		return s.jsonRPCServer.Serve(groupCtx)
 	})
-	s.log.Info("grpc server started", zap.String("address", s.adminTPCServer.Addr()))
 
 	group.Go(func() error {
-		s.log.Info("starting json-rpc server", zap.String("address", s.cfg.AppCfg.JSONRPCListenAddress))
-		return s.jsonRPCserver.Serve(groupCtx)
+		s.log.Info("starting admin json-rpc server", zap.String("address", s.cfg.AppCfg.AdminListenAddress))
+		return s.jsonRPCAdminServer.Serve(groupCtx)
 	})
 
 	// Start listener manager only after node caught up

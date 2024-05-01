@@ -13,8 +13,8 @@ import (
 var (
 	statusLong = `Print the node's status information.`
 
-	statusExample = `# Print the node's status information
-kwil-admin node status --rpcserver localhost:50151 --authrpc-cert "~/.kwild/rpc.cert"`
+	statusExample = `# Print a remote node's status (TLS with self-signed certificate)
+kwil-admin node status --rpcserver /tmp/kwild.socket`
 )
 
 func statusCmd() *cobra.Command {
@@ -23,7 +23,8 @@ func statusCmd() *cobra.Command {
 		Short:   "Print the node's status information.",
 		Long:    statusLong,
 		Example: statusExample,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			client, err := common.GetAdminSvcClient(ctx, cmd)
 			if err != nil {

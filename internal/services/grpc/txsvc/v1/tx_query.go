@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/abci"
@@ -35,7 +34,7 @@ func (s *Service) TxQuery(ctx context.Context, req *txpb.TxQueryRequest) (*txpb.
 		return nil, status.Error(codes.Internal, "failed to deserialize transaction")
 	}
 
-	tx := grpc.ConvertToPBTx(originalTx)
+	tx := convertToPBTx(originalTx)
 
 	txResult := &txpb.TransactionResult{
 		Code:      cmtResult.TxResult.Code,

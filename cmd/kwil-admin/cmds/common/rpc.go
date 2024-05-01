@@ -17,7 +17,7 @@ import (
 // These flags can be used to create an admin service client.
 // The flags will be bound to all subcommands of the given command.
 func BindRPCFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringP("rpcserver", "s", "unix:///tmp/kwil_admin.sock", "admin RPC server address (either unix or tcp)")
+	cmd.PersistentFlags().StringP("rpcserver", "s", "/tmp/kwild.socket", "admin RPC server address (either unix or tcp)")
 
 	cmd.PersistentFlags().String("authrpc-cert", "", "kwild's TLS certificate")
 	cmd.PersistentFlags().String("tlskey", "auth.key", "kwil-admin's TLS key file to establish a mTLS (authenticated) connection")
@@ -32,7 +32,7 @@ func GetRPCServerFlag(cmd *cobra.Command) (string, error) {
 // GetAdminSvcClient will return an admin service client based on the flags.
 // The flags should be bound using the BindRPCFlags function.
 func GetAdminSvcClient(ctx context.Context, cmd *cobra.Command) (*adminclient.AdminClient, error) {
-	dialOpt := []adminclient.AdminClientOpt{}
+	dialOpt := []adminclient.Opt{}
 
 	rpcServer, err := GetRPCServerFlag(cmd)
 	if err != nil {
