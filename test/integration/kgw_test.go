@@ -72,13 +72,15 @@ func TestKGW(t *testing.T) {
 			// cannot be explicitly tested here
 			//
 			// successful call, bc schema on kgw is not synced yet, no authn rules are enforced
-			specifications.ExecuteAuthnCallSpecification(ctx, t, visitorDriver, dbid)
+			specifications.ExecuteAuthnCallActionSpecification(ctx, t, visitorDriver, dbid)
 			// sleep is necessary, longer than kgw schema sync interval
 			time.Sleep(time.Second * 3)
-			// successful call, gatewayDriver will automatically authenticate if required
-			specifications.ExecuteAuthnCallSpecification(ctx, t, visitorDriver, dbid)
-			// successful call, cookie from last call should be reused
-			specifications.ExecuteAuthnCallSpecification(ctx, t, visitorDriver, dbid)
+			// successful call action, gatewayDriver will automatically authenticate if required
+			specifications.ExecuteAuthnCallActionSpecification(ctx, t, visitorDriver, dbid)
+			// successful call action, cookie from last call should be reused
+			specifications.ExecuteAuthnCallActionSpecification(ctx, t, visitorDriver, dbid)
+			// successful call procedure, cookie from last call should be reused
+			specifications.ExecuteAuthnCallProcedureSpecification(ctx, t, visitorDriver, dbid)
 
 			// test that the loaded extensions works
 			specifications.ExecuteExtensionSpecification(ctx, t, creatorDriver)

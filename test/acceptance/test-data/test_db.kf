@@ -118,11 +118,6 @@ action divide($numerator1, $numerator2, $denominator) public view {
     select $up AS upper_value, $down AS lower_value;
 }
 
-@kgw(authn='true')
-action owner_only() public owner view {
-    select 'owner only';
-}
-
 action create_post_private($id, $title, $content) private {
     INSERT INTO posts (id, user_id, title, content)
     VALUES ($id, (
@@ -134,7 +129,18 @@ action create_post_nested($id, $title, $content) public {
     create_post_private($id, $title, $content);
 }
 
+
 @kgw(authn='true')
-action authn_only() public view {
-    select 'authn only';
+action owner_only() public owner view {
+    select 'owner only';
+}
+
+@kgw(authn='true')
+action authn_only_action() public view {
+    select 'authn only action';
+}
+
+@kgw(authn='true')
+action authn_only_procedure() public view {
+    select 'authn only procedure';
 }

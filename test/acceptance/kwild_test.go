@@ -173,7 +173,7 @@ func TestKwildAcceptance(t *testing.T) {
 
 			// ================
 			// When user deployed database
-			//specifications.DatabaseDeployInvalidSql1Specification(ctx, t, creatorDriver)
+			specifications.DatabaseDeployInvalidSql1Specification(ctx, t, creatorDriver)
 			specifications.DatabaseDeployInvalidExtensionSpecification(ctx, t, creatorDriver)
 			specifications.DatabaseDeploySpecification(ctx, t, creatorDriver)
 

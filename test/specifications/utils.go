@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/parse"
 	"github.com/kwilteam/kwil-db/parse/kuneiform"
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/stretchr/testify/require"
@@ -24,6 +23,17 @@ type FileDatabaseSchemaLoader struct {
 	Modifier func(db *types.Schema)
 }
 
+// parseKuneiformWithoutValidation parses a Kuneiform schema without performing
+// any validation checks.
+func parseKuneiformWithoutValidation(kf string) (*types.Schema, error) {
+	schema, err := kuneiform.Parse(kf)
+	if err != nil {
+		return nil, err
+	}
+
+	return schema, nil
+}
+
 func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) *types.Schema {
 	t.Helper()
 
@@ -32,7 +42,7 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) 
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	db, err := parse.ParseKuneiform(string(d))
+	db, err := parseKuneiformWithoutValidation(string(d))
 	if err != nil {
 		t.Fatal("cannot parse database schema", err)
 	}
@@ -54,8 +64,7 @@ func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSch
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	db, err := parse.ParseKuneiform(string(d))
-	// ignore validation error
+	db, err := parseKuneiformWithoutValidation(string(d))
 	if db == nil {
 		t.Fatal("cannot parse database schema", err)
 	}

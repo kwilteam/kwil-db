@@ -12,9 +12,14 @@ import (
 // ValidateSchema validates the syntax of the action and procedure bodies
 // in a schema.
 func ValidateSchema(schema *types.Schema) error {
+	err := schema.Clean()
+	if err != nil {
+		return err
+	}
+
 	// to validate, we will simply call the analyzers and discard
 	// the results. If there is an error, we will return it.
-	_, err := actions.AnalyzeActions(schema, schema.DBID())
+	_, err = actions.AnalyzeActions(schema, schema.DBID())
 	if err != nil {
 		return err
 	}
@@ -34,11 +39,6 @@ func ValidateSchema(schema *types.Schema) error {
 // type checking, and ensuring that all view procedures/actions do not modify state.
 func ParseKuneiform(kf string) (*types.Schema, error) {
 	schema, err := kuneiform.Parse(kf)
-	if err != nil {
-		return nil, err
-	}
-
-	err = schema.Clean()
 	if err != nil {
 		return nil, err
 	}
