@@ -130,7 +130,7 @@ func (e *ErrorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol
 	e.Errs = append(e.Errs, &ParseError{
 		ParserName: e.name,
 		Type:       ParseErrorTypeSyntax,
-		Err:        msg,
+		Err:        ErrSyntaxError.Error() + ": " + msg,
 		Node:       e.adjustNode(unaryNode(line, column)),
 	})
 }

@@ -3,6 +3,7 @@ package typing
 import (
 	"errors"
 	"fmt"
+	"runtime"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
@@ -32,7 +33,18 @@ type AnalyzeOptions struct {
 func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, options *AnalyzeOptions) (rel *Relation, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("panic during type analysis: %v", r)
+			var ok bool
+			err, ok = r.(error)
+			if !ok {
+				err = fmt.Errorf("%v", r)
+			} else {
+				err = fmt.Errorf("%w", err)
+			}
+
+			// add stack trace since this is a bug:
+			buf := make([]byte, 1<<16)
+			stackSize := runtime.Stack(buf, false)
+			err = fmt.Errorf("%w\n%s", err, buf[:stackSize])
 		}
 	}()
 

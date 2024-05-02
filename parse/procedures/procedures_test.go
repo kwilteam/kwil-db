@@ -5,20 +5,24 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/core/types"
+	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	procedural "github.com/kwilteam/kwil-db/parse/procedures"
+	"github.com/kwilteam/kwil-db/parse/types"
+	"github.com/stretchr/testify/require"
 )
 
-// this test is mostly to test two things:
-// 1. proper interface conversion among the different visitors
-// 2. strong typing for procedures
-// We won't actually verify the outputs of the generated code for now.
+// flag that can be set to false for quick debugging.
+// If true, it will deploy 3 helper procedures to the schema
+// that can be used in the tests.
+var deployHelperProcedures = true
 
+// this test is meant to test the error outputs of certain procedure
+// errors. These include syntax errors, types errors, etc.
 func Test_Procedures(t *testing.T) {
 	type testcase struct {
 		name      string
-		procedure *types.Procedure
-		wantErr   bool
+		procedure *coreTypes.Procedure
+		wantErr   error
 	}
 
 	tests := []testcase{
@@ -38,7 +42,7 @@ func Test_Procedures(t *testing.T) {
 				withBody(`
 				$id2 int := 1 + '1';
 				`).build(),
-			wantErr: true,
+			wantErr: types.ErrArithmeticType,
 		},
 		{
 			name: "returning single value",
@@ -90,7 +94,7 @@ func Test_Procedures(t *testing.T) {
 				return $arr;
 				`).
 				withReturns("int").build(),
-			wantErr: true,
+			wantErr: types.ErrArrayType,
 		},
 		{
 			name: "for loop over array",
@@ -105,7 +109,7 @@ func Test_Procedures(t *testing.T) {
 				build(),
 		},
 		{
-			name: "for loop over array with invalid type",
+			name: "for loop over array return invalid type",
 			procedure: procedure("for_loop_array_invalid_type").
 				withParams("$arr:text[]").
 				withBody(`
@@ -115,7 +119,7 @@ func Test_Procedures(t *testing.T) {
 				`).
 				withReturns("int").
 				build(),
-			wantErr: true,
+			wantErr: types.ErrAssignment,
 		},
 		{
 			name: "for loop over range",
@@ -166,11 +170,10 @@ func Test_Procedures(t *testing.T) {
 				withParams("$name:text").
 				withBody(`
 				$name_arr text := 'name1';
-				$name_arr := array_append($name_arr, $name);
+				$name_arr2 text[] := array_append($name_arr, $name);
 				`).
-				withReturns("text").
 				build(),
-			wantErr: true,
+			wantErr: types.ErrParamType,
 		},
 		{
 			name: "bare procedure call",
@@ -204,7 +207,7 @@ func Test_Procedures(t *testing.T) {
 				$id, $name := get_user(1);
 				`).
 				build(),
-			wantErr: true,
+			wantErr: types.ErrAssignment,
 		},
 		{
 			name: "misplaced break",
@@ -214,7 +217,7 @@ func Test_Procedures(t *testing.T) {
 				break;
 				`).
 				build(),
-			wantErr: true,
+			wantErr: types.ErrBreakUsedOutsideOfLoop,
 		},
 		{
 			name: "return next",
@@ -259,7 +262,7 @@ func Test_Procedures(t *testing.T) {
 				`).
 				withReturns("int").
 				build(),
-			wantErr: true,
+			wantErr: types.ErrReturnCount,
 		},
 		{
 			name: "sql stmt",
@@ -289,7 +292,7 @@ func Test_Procedures(t *testing.T) {
 				$res int := get_users();
 				`).
 				build(),
-			wantErr: true,
+			wantErr: types.ErrAssignment,
 		},
 		{
 			name: "procedure call with anonymous receiver",
@@ -310,84 +313,99 @@ func Test_Procedures(t *testing.T) {
 				}
 				`).build(),
 		},
+		{
+			name: "sql- invalid join syntax",
+			procedure: procedure("invalid_join").
+				withParams().
+				withBody(`
+				SELECT * FROM users INNER J;
+				`).build(),
+			wantErr: types.ErrSyntaxError,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, parseErrs, err := procedural.AnalyzeProcedures(&types.Schema{
-				Tables:     testTables,
-				Procedures: append(testProcedures, tt.procedure),
-			}, "test_schema", nil)
-			// we want to check parse errors in this test too
-			if parseErrs.Err() != nil {
-				err = parseErrs.Err()
+			procs := []*coreTypes.Procedure{tt.procedure}
+			if deployHelperProcedures {
+				procs = append(procs, testProcedures...)
 			}
 
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GeneratePLPGSQL() error = %v, wantErr %v", err, tt.wantErr)
-				return
+			_, parseErrs, err := procedural.AnalyzeProcedures(&coreTypes.Schema{
+				Tables:     testTables,
+				Procedures: procs,
+			}, "test_schema", nil)
+			require.NoError(t, err) // ensure no error is returned, and that they were caught by the error listener
+			// we want to check parse errors in this test too
+			if tt.wantErr != nil {
+				require.NotNil(t, parseErrs)
+				// we want to ensure that the first error is the one we expect
+				firstErr := parseErrs[0]
+				require.Contains(t, firstErr.Error(), tt.wantErr.Error())
+			} else {
+				require.Empty(t, parseErrs)
 			}
 		})
 	}
 }
 
 var (
-	testTables = []*types.Table{
+	testTables = []*coreTypes.Table{
 		{
 			Name: "users",
-			Columns: []*types.Column{
+			Columns: []*coreTypes.Column{
 				{
 					Name: "id",
-					Type: types.IntType,
-					Attributes: []*types.Attribute{
+					Type: coreTypes.IntType,
+					Attributes: []*coreTypes.Attribute{
 						{
-							Type: types.PRIMARY_KEY,
+							Type: coreTypes.PRIMARY_KEY,
 						},
 					},
 				},
 				{
 					Name: "name",
-					Type: types.TextType,
+					Type: coreTypes.TextType,
 				},
 				{
 					Name: "age",
-					Type: types.IntType,
+					Type: coreTypes.IntType,
 				},
 				{
 					Name: "address",
-					Type: types.TextType,
+					Type: coreTypes.TextType,
 				},
 			},
 		},
 		{
 			Name: "posts",
-			Columns: []*types.Column{
+			Columns: []*coreTypes.Column{
 				{
 					Name: "id",
-					Type: types.IntType,
-					Attributes: []*types.Attribute{
+					Type: coreTypes.IntType,
+					Attributes: []*coreTypes.Attribute{
 						{
-							Type: types.PRIMARY_KEY,
+							Type: coreTypes.PRIMARY_KEY,
 						},
 					},
 				},
 				{
 					Name: "title",
-					Type: types.TextType,
+					Type: coreTypes.TextType,
 				},
 				{
 					Name: "content",
-					Type: types.TextType,
+					Type: coreTypes.TextType,
 				},
 				{
 					Name: "author_id",
-					Type: types.IntType,
+					Type: coreTypes.IntType,
 				},
 			},
 		},
 	}
 
-	testProcedures = []*types.Procedure{
+	testProcedures = []*coreTypes.Procedure{
 		procedure("get_users").
 			withBody(`
 			return SELECT id, name FROM users;
@@ -441,8 +459,8 @@ func (pb *procedureBuilder) withReturns(returns ...string) *procedureBuilder {
 	return pb
 }
 
-func (pb *procedureBuilder) build() *types.Procedure {
-	params := make([]*types.ProcedureParameter, len(pb.params))
+func (pb *procedureBuilder) build() *coreTypes.Procedure {
+	params := make([]*coreTypes.ProcedureParameter, len(pb.params))
 	for i, p := range pb.params {
 		strs := strings.Split(p, ":")
 
@@ -452,16 +470,16 @@ func (pb *procedureBuilder) build() *types.Procedure {
 			strs[1] = strs[1][:len(strs[1])-2]
 		}
 
-		params[i] = &types.ProcedureParameter{
+		params[i] = &coreTypes.ProcedureParameter{
 			Name: strs[0],
-			Type: &types.DataType{
+			Type: &coreTypes.DataType{
 				Name:    strs[1],
 				IsArray: isArray,
 			},
 		}
 	}
 
-	procReturn := &types.ProcedureReturn{}
+	procReturn := &coreTypes.ProcedureReturn{}
 
 	if len(pb.returns) == 1 && strings.HasPrefix(pb.returns[0], "table") {
 		procReturn.IsTable = true
@@ -480,16 +498,16 @@ func (pb *procedureBuilder) build() *types.Procedure {
 				sstrs[1] = sstrs[1][:len(sstrs[1])-2]
 			}
 
-			procReturn.Fields = append(procReturn.Fields, &types.NamedType{
+			procReturn.Fields = append(procReturn.Fields, &coreTypes.NamedType{
 				Name: sstrs[0],
-				Type: &types.DataType{
+				Type: &coreTypes.DataType{
 					Name:    sstrs[1],
 					IsArray: isArray,
 				},
 			})
 		}
 	} else {
-		returns := make([]*types.NamedType, len(pb.returns))
+		returns := make([]*coreTypes.NamedType, len(pb.returns))
 
 		for i, r := range pb.returns {
 			isArray := false
@@ -498,9 +516,9 @@ func (pb *procedureBuilder) build() *types.Procedure {
 				r = r[:len(r)-2]
 			}
 
-			returns[i] = &types.NamedType{
+			returns[i] = &coreTypes.NamedType{
 				Name: fmt.Sprintf("ret%d", i),
-				Type: &types.DataType{
+				Type: &coreTypes.DataType{
 					Name:    r,
 					IsArray: isArray,
 				},
@@ -509,7 +527,7 @@ func (pb *procedureBuilder) build() *types.Procedure {
 		procReturn.Fields = returns
 	}
 
-	return &types.Procedure{
+	return &coreTypes.Procedure{
 		Name:       pb.name,
 		Public:     true,
 		Parameters: params,

@@ -69,14 +69,32 @@ func AnalyzeProcedures(schema *types.Schema, pgSchemaName string, options *Analy
 			return nil, nil, err
 		}
 
+		// if there are errors, we should not continue generating the procedure
+		if errorListener.Err() != nil {
+			parseErrs.Add(errorListener.Errors()...)
+			continue
+		}
+
 		cleanedParams, cleanedSessionVars, err := clean.CleanProcedure(parsed, proc, schema, pgSchemaName, errorListener)
 		if err != nil {
 			return nil, nil, err
 		}
 
+		// if there are errors, we should not continue generating the procedure
+		if errorListener.Err() != nil {
+			parseErrs.Add(errorListener.Errors()...)
+			continue
+		}
+
 		anonReceivers, err := typing.EnsureTyping(parsed, proc, schema, cleanedParams, cleanedSessionVars, errorListener)
 		if err != nil {
 			return nil, nil, err
+		}
+
+		// if there are errors, we should not continue generating the procedure
+		if errorListener.Err() != nil {
+			parseErrs.Add(errorListener.Errors()...)
+			continue
 		}
 
 		generated, err := generate.GenerateProcedure(parsed, proc, cleanedParams, anonReceivers, pgSchemaName)
@@ -106,7 +124,6 @@ func AnalyzeProcedures(schema *types.Schema, pgSchemaName string, options *Analy
 		}
 
 		stmts[i] = analyzed
-		parseErrs.Add(errorListener.Errors()...)
 	}
 
 	return stmts, parseErrs, nil
