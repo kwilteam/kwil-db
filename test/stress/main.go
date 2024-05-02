@@ -46,7 +46,7 @@ var (
 )
 
 func main() {
-	flag.StringVar(&host, "host", "http://127.0.0.1:8080", "provider's http url, schema is required")
+	flag.StringVar(&host, "host", "http://127.0.0.1:8484/rpc/v1", "provider's http url, schema is required")
 	flag.BoolVar(&gatewayProvider, "gw", false, "gateway provider instead of vanilla provider, "+
 		"need to make sure host is same as gateway's domain")
 	flag.StringVar(&key, "key", "", "existing key to use instead of generating a new one")

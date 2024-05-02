@@ -3,6 +3,7 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/rpc/client"
@@ -10,8 +11,30 @@ import (
 	admpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/admin/v0"
 	"github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
+
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+// convertGRPCErr will convert the error to a known type, if possible.
+// It is expected that the error is from a gRPC call.
+func convertGRPCErr(err error) error {
+	statusError, ok := status.FromError(err)
+	if !ok {
+		return fmt.Errorf("unrecognized error: %w", err)
+	}
+
+	switch statusError.Code() {
+	case codes.OK:
+		// this should never happen?
+		return fmt.Errorf("unexpected OK status code returned error")
+	case codes.NotFound:
+		return client.ErrNotFound
+	}
+
+	return fmt.Errorf("%v (%d)", statusError.Message(), statusError.Code())
+}
 
 // GrpcAdminClient is an grpc client for the Kwil admin service.
 type GrpcAdminClient struct {
@@ -30,7 +53,7 @@ func NewAdminClient(conn *grpc.ClientConn) *GrpcAdminClient {
 func (c *GrpcAdminClient) Version(ctx context.Context) (string, error) {
 	resp, err := c.client.Version(ctx, &admpb.VersionRequest{})
 	if err != nil {
-		return "", client.ConvertGRPCErr(err)
+		return "", convertGRPCErr(err)
 	}
 	return resp.VersionString, nil
 }
@@ -51,7 +74,7 @@ func convertNodeInfo(ni *admpb.NodeInfo) *adminTypes.NodeInfo {
 func (c *GrpcAdminClient) Status(ctx context.Context) (*adminTypes.Status, error) {
 	resp, err := c.client.Status(ctx, &admpb.StatusRequest{})
 	if err != nil {
-		return nil, client.ConvertGRPCErr(err)
+		return nil, convertGRPCErr(err)
 	}
 	return &adminTypes.Status{
 		Node: convertNodeInfo(resp.Node),
@@ -72,7 +95,7 @@ func (c *GrpcAdminClient) Status(ctx context.Context) (*adminTypes.Status, error
 func (c *GrpcAdminClient) Peers(ctx context.Context) ([]*adminTypes.PeerInfo, error) {
 	resp, err := c.client.Peers(ctx, &admpb.PeersRequest{})
 	if err != nil {
-		return nil, client.ConvertGRPCErr(err)
+		return nil, convertGRPCErr(err)
 	}
 	peers := make([]*adminTypes.PeerInfo, len(resp.Peers))
 	for i, pbPeer := range resp.Peers {
@@ -90,7 +113,7 @@ func (c *GrpcAdminClient) Peers(ctx context.Context) ([]*adminTypes.PeerInfo, er
 func (c *GrpcAdminClient) Approve(ctx context.Context, publicKey []byte) ([]byte, error) {
 	resp, err := c.client.Approve(ctx, &admpb.ApproveRequest{Pubkey: publicKey})
 	if err != nil {
-		return nil, client.ConvertGRPCErr(err)
+		return nil, convertGRPCErr(err)
 	}
 	return resp.TxHash, nil
 }
@@ -100,7 +123,7 @@ func (c *GrpcAdminClient) Approve(ctx context.Context, publicKey []byte) ([]byte
 func (c *GrpcAdminClient) Join(ctx context.Context) ([]byte, error) {
 	resp, err := c.client.Join(ctx, &admpb.JoinRequest{})
 	if err != nil {
-		return nil, client.ConvertGRPCErr(err)
+		return nil, convertGRPCErr(err)
 	}
 	return resp.TxHash, nil
 }
@@ -110,7 +133,7 @@ func (c *GrpcAdminClient) Join(ctx context.Context) ([]byte, error) {
 func (c *GrpcAdminClient) Leave(ctx context.Context) ([]byte, error) {
 	resp, err := c.client.Leave(ctx, &admpb.LeaveRequest{})
 	if err != nil {
-		return nil, client.ConvertGRPCErr(err)
+		return nil, convertGRPCErr(err)
 	}
 	return resp.TxHash, nil
 }
@@ -120,7 +143,7 @@ func (c *GrpcAdminClient) Leave(ctx context.Context) ([]byte, error) {
 func (c *GrpcAdminClient) Remove(ctx context.Context, publicKey []byte) ([]byte, error) {
 	resp, err := c.client.Remove(ctx, &admpb.RemoveRequest{Pubkey: publicKey})
 	if err != nil {
-		return nil, client.ConvertGRPCErr(err)
+		return nil, convertGRPCErr(err)
 	}
 	return resp.TxHash, nil
 }
@@ -129,7 +152,7 @@ func (c *GrpcAdminClient) Remove(ctx context.Context, publicKey []byte) ([]byte,
 func (c *GrpcAdminClient) JoinStatus(ctx context.Context, pubkey []byte) (*types.JoinRequest, error) {
 	resp, err := c.client.JoinStatus(ctx, &admpb.JoinStatusRequest{Pubkey: pubkey})
 	if err != nil {
-		return nil, client.ConvertGRPCErr(err)
+		return nil, convertGRPCErr(err)
 	}
 
 	return convertPendingJoin(resp.JoinRequest), nil
@@ -138,7 +161,7 @@ func (c *GrpcAdminClient) JoinStatus(ctx context.Context, pubkey []byte) (*types
 func (c *GrpcAdminClient) ListValidators(ctx context.Context) ([]*types.Validator, error) {
 	resp, err := c.client.ListValidators(ctx, &admpb.ListValidatorsRequest{})
 	if err != nil {
-		return nil, client.ConvertGRPCErr(err)
+		return nil, convertGRPCErr(err)
 	}
 	validators := make([]*types.Validator, len(resp.Validators))
 	for i, v := range resp.Validators {
@@ -153,7 +176,7 @@ func (c *GrpcAdminClient) ListValidators(ctx context.Context) ([]*types.Validato
 func (c *GrpcAdminClient) ListPendingJoins(ctx context.Context) ([]*types.JoinRequest, error) {
 	resp, err := c.client.ListPendingJoins(ctx, &admpb.ListJoinRequestsRequest{})
 	if err != nil {
-		return nil, client.ConvertGRPCErr(err)
+		return nil, convertGRPCErr(err)
 	}
 	joins := make([]*types.JoinRequest, len(resp.JoinRequests))
 	for i, j := range resp.JoinRequests {
@@ -165,7 +188,7 @@ func (c *GrpcAdminClient) ListPendingJoins(ctx context.Context) ([]*types.JoinRe
 func (c *GrpcAdminClient) GetConfig(ctx context.Context) ([]byte, error) {
 	resp, err := c.client.GetConfig(ctx, &admpb.GetConfigRequest{})
 	if err != nil {
-		return nil, client.ConvertGRPCErr(err)
+		return nil, convertGRPCErr(err)
 	}
 
 	return resp.Config, nil

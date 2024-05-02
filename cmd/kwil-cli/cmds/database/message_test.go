@@ -1,7 +1,6 @@
 package database
 
 import (
-	"encoding/base64"
 	"encoding/hex"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
@@ -51,13 +50,13 @@ func mustDecodeHex(s string) []byte {
 	return b
 }
 
-func mustDecodeBase64(s string) []byte {
-	b, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		panic(err)
-	}
-	return b
-}
+// func mustDecodeBase64(s string) []byte {
+// 	b, err := base64.StdEncoding.DecodeString(s)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	return b
+// }
 
 func Example_respDBlist_json() {
 
@@ -65,12 +64,12 @@ func Example_respDBlist_json() {
 		&respDBList{Info: []*types.DatasetIdentifier{
 			{
 				Name:  "db_a",
-				Owner: mustDecodeBase64("b3duZXI="),
+				Owner: mustDecodeHex("6f776e6572"),
 				DBID:  "xabc",
 			},
 			{
 				Name:  "db_b",
-				Owner: mustDecodeBase64("b3duZXI="),
+				Owner: mustDecodeHex("6f776e6572"),
 				DBID:  "xdef",
 			},
 		}},
@@ -81,12 +80,12 @@ func Example_respDBlist_json() {
 	//   "result": [
 	//     {
 	//       "name": "db_a",
-	//       "owner": "b3duZXI=",
+	//       "owner": "6f776e6572",
 	//       "dbid": "xabc"
 	//     },
 	//     {
 	//       "name": "db_b",
-	//       "owner": "b3duZXI=",
+	//       "owner": "6f776e6572",
 	//       "dbid": "xdef"
 	//     }
 	//   ],

@@ -88,6 +88,8 @@ func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*Gatew
 		return nil, fmt.Errorf("parse target: %w", err)
 	}
 
+	// TODO: use jsonrpc, and maybe make an option in GatewayOptions to use the
+	// old endpoints rather than json-rpc?
 	txClient := httpTx.NewClient(parsedTarget, httpTx.WithHTTPClient(httpClient))
 
 	coreClient, err := client.WrapClient(ctx, txClient, &options.Options)

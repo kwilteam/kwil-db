@@ -9,8 +9,8 @@ import (
 
 type Field = zap.Field
 
-func String(key, val string) Field {
-	return zap.String(key, val)
+func String[T ~string](key string, val T) Field { // work with types that are an underlying string
+	return zap.String(key, string(val))
 }
 
 func Bool(key string, val bool) Field {
@@ -21,20 +21,24 @@ func Duration(key string, val time.Duration) Field {
 	return zap.Duration(key, val)
 }
 
-func Float[T float32 | float64](key string, val T) Field {
+func Float[T ~float32 | ~float64](key string, val T) Field {
 	return zap.Float64(key, float64(val))
 }
 
-func Int[T int | int64 | int32 | int16 | int8](key string, val T) Field {
+func Int[T ~int | ~int64 | ~int32 | ~int16 | ~int8](key string, val T) Field {
 	return zap.Int64(key, int64(val))
 }
 
-func Uint[T uint | uint64 | uint32 | uint16 | uint8](key string, val T) Field {
+func Uint[T ~uint | ~uint64 | ~uint32 | ~uint16 | ~uint8](key string, val T) Field {
 	return zap.Uint64(key, uint64(val))
 }
 
 func Any(key string, val any) Field {
 	return zap.Any(key, val)
+}
+
+func Error(err error) Field {
+	return zap.Error(err)
 }
 
 func genDetailedField() []zap.Field {

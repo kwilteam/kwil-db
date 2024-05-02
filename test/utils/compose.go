@@ -27,7 +27,13 @@ func genCompose(templateFile string, config ComposeConfig) (string, error) {
 		config.DockerImage = DefaultDockerImage
 	}
 
-	tmpl, err := template.New("test-docker-compose").Parse(string(tpt))
+	funcMap := template.FuncMap{
+		"plus": func(i, j int) int {
+			return i + j
+		},
+	}
+
+	tmpl, err := template.New("test-docker-compose").Funcs(funcMap).Parse(string(tpt))
 	if err != nil {
 		return "", err
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/listeners"
 	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
 	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
+	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 
 	// internalize
@@ -30,6 +31,7 @@ import (
 // Server controls the gRPC server and http gateway.
 type Server struct {
 	grpcServer      *grpc.Server
+	jsonRPCserver   *rpcserver.Server
 	gateway         *gateway.GatewayServer
 	adminTPCServer  *grpc.Server
 	cometBftNode    *cometbft.CometBftNode
@@ -162,7 +164,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 		return s.grpcServer.Start()
 	})
-	s.log.Info("grpc server started", zap.String("address", s.cfg.AppCfg.GrpcListenAddress))
+	s.log.Info("grpc server started", zap.String("address", s.grpcServer.Addr()))
 
 	group.Go(func() error {
 		go func() {
@@ -173,7 +175,12 @@ func (s *Server) Start(ctx context.Context) error {
 
 		return s.adminTPCServer.Start()
 	})
-	s.log.Info("grpc server started", zap.String("address", s.cfg.AppCfg.AdminListenAddress))
+	s.log.Info("grpc server started", zap.String("address", s.adminTPCServer.Addr()))
+
+	group.Go(func() error {
+		s.log.Info("starting json-rpc server", zap.String("address", s.cfg.AppCfg.JSONRPCListenAddress))
+		return s.jsonRPCserver.Serve(groupCtx)
+	})
 
 	// Start listener manager only after node caught up
 	group.Go(func() error {

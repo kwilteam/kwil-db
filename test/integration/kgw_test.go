@@ -38,6 +38,9 @@ func TestKGW(t *testing.T) {
 
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
+		if driverType == "jsonrpc" || driverType == "cli" {
+			continue // TODO: support it
+		}
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, basicServices)

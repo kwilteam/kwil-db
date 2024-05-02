@@ -44,7 +44,7 @@ func (c *KwilCliConfig) ToPersistedConfig() *kwilCliPersistedConfig {
 
 func DefaultKwilCliPersistedConfig() *kwilCliPersistedConfig {
 	return &kwilCliPersistedConfig{
-		Provider: "http://localhost:8080",
+		Provider: "http://127.0.0.1:8484/rpc/v1",
 	}
 }
 

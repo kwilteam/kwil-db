@@ -14,12 +14,11 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 
 	// General APP flags:
 	flagSet.StringVar(&cfg.AppCfg.PrivateKeyPath, "app.private-key-path", cfg.AppCfg.PrivateKeyPath, "Path to the node private key file")
-	flagSet.StringVar(&cfg.AppCfg.GrpcListenAddress, "app.grpc-listen-addr", cfg.AppCfg.GrpcListenAddress, "kwild gRPC listen address")
+	flagSet.StringVar(&cfg.AppCfg.JSONRPCListenAddress, "app.jsonrpc-listen-addr", cfg.AppCfg.JSONRPCListenAddress, "kwild JSON-RPC listen address")
 	flagSet.StringVar(&cfg.AppCfg.HTTPListenAddress, "app.http-listen-addr", cfg.AppCfg.HTTPListenAddress, "kwild HTTP listen address")
 	flagSet.StringVar(&cfg.AppCfg.AdminListenAddress, "app.admin-listen-addr", cfg.AppCfg.AdminListenAddress, "kwild admin listen address (unix or tcp)")
-	flagSet.StringVar(&cfg.AppCfg.TLSCertFile, "app.tls-cert-file", cfg.AppCfg.TLSCertFile, "TLS certificate file path for RPC Server")
-	flagSet.StringVar(&cfg.AppCfg.TLSKeyFile, "app.tls-key-file", cfg.AppCfg.TLSKeyFile, "TLS key file path for RPC Server")
-	flagSet.BoolVar(&cfg.AppCfg.EnableRPCTLS, "app.rpctls", cfg.AppCfg.EnableRPCTLS, "Use TLS on the user gRPC server")
+	flagSet.StringVar(&cfg.AppCfg.TLSCertFile, "app.tls-cert-file", cfg.AppCfg.TLSCertFile, "TLS certificate file path for the admin and consensus RPC server (optional)")
+	flagSet.StringVar(&cfg.AppCfg.TLSKeyFile, "app.tls-key-file", cfg.AppCfg.TLSKeyFile, "TLS key file path for the admin and consensus RPC servers (optional)")
 	flagSet.StringVar(&cfg.AppCfg.Hostname, "app.hostname", cfg.AppCfg.Hostname, "kwild Server hostname")
 
 	flagSet.StringVar(&cfg.AppCfg.DBHost, "app.pg-db-host", cfg.AppCfg.DBHost, "PostgreSQL host address (no port)")

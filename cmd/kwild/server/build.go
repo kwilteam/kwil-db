@@ -36,6 +36,7 @@ import (
 	kwilgrpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 	healthcheck "github.com/kwilteam/kwil-db/internal/services/health"
 	simple_checker "github.com/kwilteam/kwil-db/internal/services/health/simple-checker"
+	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/voting"
@@ -204,6 +205,13 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// listener manager
 	listeners := buildListenerManager(d, ev, cometBftNode, txApp)
 
+	jsonRPCTxSvc := rpcserver.NewService(db, e, wrappedCmtClient, txApp, d.log)
+	jsonRPCserver, err := rpcserver.NewServer(d.cfg.AppCfg.JSONRPCListenAddress,
+		*d.log.Named("jsonrpcserver"), jsonRPCTxSvc)
+	if err != nil {
+		failBuild(err, "unable to start json-rpc server")
+	}
+
 	// tx service and grpc server
 	txsvc := buildTxSvc(d, db, e, wrappedCmtClient, txApp)
 	grpcServer := buildGrpcServer(d, txsvc)
@@ -214,8 +222,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	return &Server{
 		grpcServer:      grpcServer,
+		jsonRPCserver:   jsonRPCserver,
 		adminTPCServer:  adminTCPServer,
-		gateway:         buildGatewayServer(d),
+		gateway:         buildGatewayServer(d, grpcServer.Addr()),
 		cometBftNode:    cometBftNode,
 		listenerManager: listeners,
 		log:             *d.log.Named("server"),
@@ -497,15 +506,9 @@ func loadTLSCertificate(keyFile, certFile, hostname string) (*tls.Certificate, e
 }
 
 func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *kwilgrpc.Server {
-	lis, err := net.Listen("tcp", d.cfg.AppCfg.GrpcListenAddress)
+	lis, err := net.Listen("tcp", "127.0.0.1:0") // listen on random available port
 	if err != nil {
 		failBuild(err, "failed to build grpc server")
-	}
-	if d.cfg.AppCfg.EnableRPCTLS {
-		lis = tls.NewListener(lis, &tls.Config{
-			Certificates: []tls.Certificate{*d.keypair},
-			MinVersion:   tls.VersionTLS12,
-		})
 	}
 
 	// Increase the maximum message size to the largest allowable transaction
@@ -645,12 +648,12 @@ func buildAdminService(d *coreDependencies, closer *closeFuncs, admsvc admpb.Adm
 	return nil
 }
 
-func buildGatewayServer(d *coreDependencies) *gateway.GatewayServer {
+func buildGatewayServer(d *coreDependencies, gRPCAddr string) *gateway.GatewayServer {
 	gw, err := gateway.NewGateway(d.ctx, d.cfg.AppCfg.HTTPListenAddress,
 		gateway.WithLogger(*d.log.Named("gateway")),
 		gateway.WithMiddleware(cors.MCors([]string{})),
-		gateway.WithGrpcService(d.cfg.AppCfg.GrpcListenAddress, txpb.RegisterTxServiceHandlerFromEndpoint),
-		gateway.WithGrpcService(d.cfg.AppCfg.GrpcListenAddress, functionpb.RegisterFunctionServiceHandlerFromEndpoint),
+		gateway.WithGrpcService(gRPCAddr, txpb.RegisterTxServiceHandlerFromEndpoint),
+		gateway.WithGrpcService(gRPCAddr, functionpb.RegisterFunctionServiceHandlerFromEndpoint),
 	)
 	if err != nil {
 		failBuild(err, "failed to build gateway server")

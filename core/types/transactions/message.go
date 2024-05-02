@@ -5,27 +5,28 @@ transactions and call messages.
 package transactions
 
 import (
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 )
 
 // CallMessageBody is the body of a call message.
 type CallMessageBody struct {
 	// Payload is the payload of the message, it is RLP encoded
-	Payload serialize.SerializedData
+	Payload serialize.SerializedData `json:"payload"`
 }
 
 // CallMessage represents a message could be used to call an action.
 // This is meant to work like transactions.Transaction, except that it is not a transaction.
 type CallMessage struct {
 	// Body is the body of the actual message
-	Body *CallMessageBody
+	Body *CallMessageBody `json:"body"`
 
 	// the type of authenticator, which will be used to derive 'identifier'
 	// from the 'sender`
-	AuthType string
+	AuthType string `json:"auth_type"`
 
 	// Sender is the public key of the sender
-	Sender []byte
+	Sender types.HexBytes `json:"sender"`
 }
 
 // CreateCallMessage creates a new call message from a ActionCall payload.

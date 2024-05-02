@@ -76,7 +76,7 @@ type TestnetGenerateConfig struct {
 // ConfigOpts is a struct to alter the generation of the node config.
 type ConfigOpts struct {
 	// UniquePorts is a flag to generate unique listening addresses
-	// (gRPC, HTTP, Admin, P2P, RPC) for each node.
+	// (JSON-RPC, HTTP, Admin, P2P, node RPC) for each node.
 	// This is useful for testing multiple nodes on the same machine.
 	// If it is used for generating a single config, it has no effect.
 	UniquePorts bool
@@ -433,11 +433,11 @@ func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivK
 // it does not apply to the admin address.
 func addressSpecificConfig(c *config.KwildConfig) error {
 
-	grpcAddr, err := incrementPort(c.AppCfg.GrpcListenAddress, 1)
+	jsonrpcAddr, err := incrementPort(c.AppCfg.JSONRPCListenAddress, 1)
 	if err != nil {
 		return err
 	}
-	c.AppCfg.GrpcListenAddress = grpcAddr
+	c.AppCfg.JSONRPCListenAddress = jsonrpcAddr
 
 	httpAddr, err := incrementPort(c.AppCfg.HTTPListenAddress, 1)
 	if err != nil {

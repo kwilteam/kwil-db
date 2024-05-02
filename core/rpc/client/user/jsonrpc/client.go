@@ -1,0 +1,202 @@
+// Package rpcclient provides a Kwil JSON-RPC client. It supports only HTTP
+// POST, no WebSockets yet. It implements the core/rpc/client/user.TxSvcClient
+// interface that is required by core/client.Client.
+package rpcclient
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"reflect"
+	"strconv"
+	"sync/atomic"
+
+	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/rpc/client"
+	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
+)
+
+// client will use the commands to make certain requests
+//  - "params" field is set to the marshalled request structs
+//  - the "method" in the outer request type is instead of the endpoint, all POST
+//  - "id" is set to a counter's value
+//	- "jsonrpc" set to "2.0"
+//	- make http POST request with marshalled Request
+//	- unmarshal response into Response
+//	- if "error" field is set, the Error type is returned as Go error
+//	- maybe compare "id" to expected ID from request
+//	- unmarshal the "result" (json.RawMessage) into the method's result type
+
+// note compared to http grpc gateway:
+//
+//  - the structs marshal into json objects, set in "params" field of request.
+//    with the old http gateway, endpoints were defined with associated
+//    message (pb) types sent in POST, or just GET with endpoint implying method.
+//  - the "method" in the outer request type is instead of the endpoint, all POST
+
+type Client struct {
+	client   *http.Client
+	endpoint string
+	log      log.Logger
+
+	reqID atomic.Uint64
+}
+
+// NewClient creates a new JSON-RPC Client for a URL.
+func NewClient(url string, opts ...Opts) *Client {
+	clientOpts := &clientOptions{
+		client: &http.Client{},
+		log:    log.NewNoOp(), // log.NewStdOut(log.InfoLevel),
+	}
+	for _, opt := range opts {
+		opt(clientOpts)
+	}
+
+	cl := &Client{
+		endpoint: url,
+		client:   clientOpts.client,
+		log:      clientOpts.log,
+	}
+
+	return cl
+}
+
+type Opts func(*clientOptions)
+
+type clientOptions struct {
+	client *http.Client
+	log    log.Logger
+}
+
+func WithLogger(log log.Logger) Opts {
+	return func(c *clientOptions) {
+		c.log = log
+	}
+}
+
+func WithHTTPClient(client *http.Client) Opts {
+	return func(c *clientOptions) {
+		c.client = client
+	}
+}
+
+func (cl *Client) nextReqID() string {
+	id := cl.reqID.Add(1)
+	return strconv.FormatUint(id, 10)
+}
+
+func (cl *Client) call(ctx context.Context, method string, cmd, res any) error {
+	// res needs to be a pointer otherwise we can't unmarshal into it.
+	if rtp := reflect.TypeOf(res); rtp.Kind() != reflect.Ptr {
+		return errors.New("result must be a pointer")
+	}
+
+	// Marshal the params.
+	params, err := json.Marshal(cmd)
+	if err != nil {
+		return err
+	}
+
+	// Marshal the request.
+	id := cl.nextReqID()
+	req := jsonrpc.NewRequest(id, method, params)
+
+	request, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	// Build and perform the http request.
+	requestReader := bytes.NewReader(request)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		cl.endpoint, requestReader)
+	if err != nil {
+		return fmt.Errorf("failed to construct new http request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	// httpReq.SetBasicAuth(c.User, c.Pass)
+
+	httpResponse, err := cl.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("http post failed: %w", err)
+	}
+	defer httpResponse.Body.Close()
+
+	// For the most part we ignore the http status code in favor of structured
+	// errors in the response, but in case we cannot decode any response body,
+	// get an error based on the http status code.
+	var httpErr error
+	switch status := httpResponse.StatusCode; status {
+	case http.StatusOK: // expected with nil resp.Error
+	case http.StatusUnauthorized:
+		httpErr = client.ErrUnauthorized
+	case http.StatusNotFound:
+		httpErr = client.ErrNotFound
+	case http.StatusInternalServerError:
+		httpErr = errors.New("server error")
+	default:
+		if status >= 400 {
+			httpErr = errors.New(http.StatusText(status))
+		}
+	}
+
+	resp := &jsonrpc.Response{}
+	err = json.NewDecoder(httpResponse.Body).Decode(resp)
+	if err != nil {
+		if httpErr != nil {
+			return httpErr
+		}
+		return fmt.Errorf("failed to decode response: %w", errors.Join(err, httpErr))
+	}
+
+	if resp.Error != nil {
+		return clientError(resp.Error)
+	} // any not OK http status code should have
+
+	if resp.JSONRPC != "2.0" { // indicates response body was not a jsonrpc.Response but didn't fail Decode
+		if httpErr != nil {
+			return httpErr
+		}
+		return fmt.Errorf("invalid JSON-RPC response")
+	}
+
+	// if resp.ID != id {
+	// 	fmt.Printf("got id %v, expected %v\n", resp.ID, id)
+	// } // who cares, this is http post
+
+	if err = json.Unmarshal(resp.Result, res); err != nil {
+		return fmt.Errorf("failed to decode result as response: %w", errors.Join(err, httpErr))
+	}
+
+	return nil
+}
+
+// clientError joins a jsonrpc.Error with a client.RPCError and any appropriate
+// named error kind like ErrNotFound, ErrUnauthorized, etc. based on the code.
+func clientError(jsonRPCErr *jsonrpc.Error) error {
+	rpcErr := &client.RPCError{
+		Msg:  jsonRPCErr.Message,
+		Code: int32(jsonRPCErr.Code),
+	}
+	err := errors.Join(jsonRPCErr, rpcErr)
+
+	switch jsonRPCErr.Code {
+	case jsonrpc.ErrorEngineDatasetNotFound, jsonrpc.ErrorTxNotFound:
+		return errors.Join(client.ErrNotFound, err)
+	case jsonrpc.ErrorUnknownMethod:
+		// TODO: change to client.ErrMethodNotFound. This should be different
+		// from other "not found" conditions
+		return errors.Join(client.ErrNotFound, err)
+	// case jsonrpc.ErrorUnauthorized: // not yet used on server
+	// 	return errors.Join(client.ErrUnauthorized, err)
+	// case jsonrpc.ErrorInvalidSignature: // or leave this to core/client.Client to detect and report
+	// 	return errors.Join(client.ErrInvalidSignature, err)
+	default:
+	}
+
+	return err
+}

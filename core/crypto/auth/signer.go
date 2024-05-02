@@ -13,10 +13,10 @@ import (
 // but I am keeping it like this for compatibility with the old code.
 type Signature struct {
 	// Signature is the raw signature bytes
-	Signature []byte `json:"signature_bytes"`
+	Signature []byte `json:"sig"`
 	// Type is the signature type, which must have a registered Authenticator of
 	// the same name for the Verify method to be usable.
-	Type string `json:"signature_type"`
+	Type string `json:"type"`
 }
 
 // Signer is an interface for something that can sign messages.
