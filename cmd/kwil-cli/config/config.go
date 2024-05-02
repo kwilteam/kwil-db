@@ -86,7 +86,7 @@ func PersistConfig(conf *KwilCliConfig) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	file, err := utils.CreateOrOpenFile(defaultConfigFile)
+	file, err := utils.CreateOrOpenFile(configFile)
 	if err != nil {
 		return fmt.Errorf("failed to create or open config file: %w", err)
 	}
@@ -105,7 +105,7 @@ func PersistConfig(conf *KwilCliConfig) error {
 }
 
 func LoadPersistedConfig() (*KwilCliConfig, error) {
-	bts, err := utils.ReadOrCreateFile(defaultConfigFile)
+	bts, err := utils.ReadOrCreateFile(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create or open config file: %w", err)
 	}
@@ -152,11 +152,11 @@ func LoadCliConfig() (*KwilCliConfig, error) {
 		return nil, err
 	}
 
-	// NOTE: defaultConfigFile is set in init() in flags.go
-	// read default config file if it exists
-	// and override viper values from config file
-	if fileExists(defaultConfigFile) {
-		viper.SetConfigFile(defaultConfigFile)
+	// If the config file exists, override viper values from the config file
+	// The config file is set through the flag and has the default value as
+	// defaultConfigFile set in the init function in flags.go
+	if fileExists(configFile) {
+		viper.SetConfigFile(configFile)
 		if err := viper.MergeInConfig(); err != nil {
 			fmt.Printf("Error reading config file: %s\n", err)
 			askAndDeleteConfig()
