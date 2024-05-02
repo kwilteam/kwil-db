@@ -53,6 +53,10 @@ func (s *Server) RegisterService(sd *grpc.ServiceDesc, ss interface{}) {
 	s.server.RegisterService(sd, ss)
 }
 
+func (s *Server) Addr() string {
+	return s.listener.Addr().String()
+}
+
 func (s *Server) Start() error {
 	return s.server.Serve(s.listener)
 }

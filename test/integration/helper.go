@@ -32,7 +32,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/gatewayclient"
 	"github.com/kwilteam/kwil-db/core/log"
-	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	http "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	ethdeposits "github.com/kwilteam/kwil-db/extensions/listeners/eth_deposits"
@@ -82,7 +81,6 @@ const (
 type IntTestConfig struct {
 	JSONRPCEndpoint string
 	HTTPEndpoint    string
-	GrpcEndpoint    string
 	ChainEndpoint   string
 	AdminRPC        string // either tcp or unix.  Should be of form unix://var/run/kwil/admin.sock or tcp://localhost:26657
 
@@ -259,7 +257,6 @@ func (r *IntHelper) LoadConfig() {
 		LogLevel:                  getEnv("KIT_LOG_LEVEL", "info"),
 		HTTPEndpoint:              getEnv("KIT_HTTP_ENDPOINT", "http://localhost:8080/"),
 		JSONRPCEndpoint:           getEnv("KIT_JSONRPC_ENDPOINT", "http://localhost:8484/rpc/v1"),
-		GrpcEndpoint:              getEnv("KIT_GRPC_ENDPOINT", "localhost:50051"),
 		AdminRPC:                  getEnv("KIT_ADMIN_RPC", "unix:///tmp/admin.sock"),
 		DockerComposeFile:         getEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KIT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
@@ -688,8 +685,6 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverTy
 	gatewayProvider := false
 
 	ctr := r.containers[nodeName]
-	grpcURL, _, err := utils.KwildGRPCEndpoints(ctr, ctx)
-	require.NoError(r.t, err, "failed to get grpc url")
 	jsonrpcURL, _, err := utils.KwildJSONRPCEndpoints(ctr, ctx)
 	jsonrpcURL += "/rpc/v1"
 	require.NoError(r.t, err, "failed to get json-rpc url")
@@ -697,8 +692,8 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverTy
 	require.NoError(r.t, err, "failed to get http url")
 	cometBftURL, _, err := utils.KwildRpcEndpoints(ctr, ctx)
 	require.NoError(r.t, err, "failed to get cometBft url")
-	r.t.Logf("grpcURL: %s httpURL: %s jsonrpcURL: %s cometBftURL: %s for container: %s",
-		grpcURL, httpURL, jsonrpcURL, cometBftURL, nodeName)
+	r.t.Logf("httpURL: %s jsonrpcURL: %s cometBftURL: %s for container: %s",
+		httpURL, jsonrpcURL, cometBftURL, nodeName)
 
 	signer := r.cfg.CreatorSigner
 	pk := r.cfg.CreatorRawPk
@@ -708,10 +703,6 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverTy
 		return r.getJSONRPCClientDriver(signer, jsonrpcURL, gatewayProvider, deployer)
 	case "http":
 		return r.getHTTPClientDriver(signer, httpURL, gatewayProvider, deployer)
-	case "grpc": // can probably remove this now, it's not even supported in 0.7 afaik
-		// should use grpcURL, r.cfg.GrpcEndpoint is not correct(it's intended
-		// to be used for `remote` test mode, but integation tests don't use it)
-		return r.getGRPCClientDriver(signer, deployer)
 	case "cli":
 		return r.getCliDriver(jsonrpcURL, pk, signer.Identity(), gatewayProvider, deployer)
 	default:
@@ -727,7 +718,7 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driv
 	case "http":
 		r.t.Fatalf("http driver not supported for node operator")
 		return nil
-	case "grpc":
+	case "grpc": // remove soon
 		c, ok := r.containers[nodeName]
 		if !ok {
 			r.t.Fatalf("container %s not found", nodeName)
@@ -811,24 +802,6 @@ func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gat
 		})
 	}
 	require.NoError(r.t, err, "wrapping http client failed")
-
-	return driver.NewKwildClientDriver(kwilClt, signer, deployer, logger)
-}
-
-func (r *IntHelper) getGRPCClientDriver(signer auth.Signer, deployer *ethdeployer.Deployer) *driver.KwildClientDriver {
-	logger := log.New(log.Config{Level: r.cfg.LogLevel})
-	logger = *logger.With(log.String("testCase", r.t.Name()))
-
-	gtOptions := []gRPC.Option{gRPC.WithTlsCert("")}
-	gt, err := gRPC.New(context.Background(), r.cfg.GrpcEndpoint, gtOptions...)
-	require.NoError(r.t, err, "failed to create grpc transport")
-
-	kwilClt, err := client.WrapClient(context.TODO(), gt, &clientType.Options{
-		Signer:  signer,
-		ChainID: testChainID,
-		Logger:  logger,
-	})
-	require.NoError(r.t, err, "failed to create grpc client")
 
 	return driver.NewKwildClientDriver(kwilClt, signer, deployer, logger)
 }

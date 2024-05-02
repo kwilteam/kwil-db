@@ -51,8 +51,7 @@ type Logging struct {
 
 type AppConfig struct {
 	JSONRPCListenAddress string `mapstructure:"jsonrpc_listen_addr"`
-	GrpcListenAddress    string `mapstructure:"grpc_listen_addr"`
-	HTTPListenAddress    string `mapstructure:"http_listen_addr"`
+	HTTPListenAddress    string `mapstructure:"http_listen_addr"` // DEPRECATED: use the JSON-RPC services
 	AdminListenAddress   string `mapstructure:"admin_listen_addr"`
 	PrivateKeyPath       string `mapstructure:"private_key_path"`
 
@@ -77,7 +76,6 @@ type AppConfig struct {
 	ExtensionEndpoints []string                     `mapstructure:"extension_endpoints"`
 	TLSCertFile        string                       `mapstructure:"tls_cert_file"`
 	TLSKeyFile         string                       `mapstructure:"tls_key_file"`
-	EnableRPCTLS       bool                         `mapstructure:"rpctls"`
 	Hostname           string                       `mapstructure:"hostname"`
 	ProfileMode        string                       `mapstructure:"profile_mode"`
 	ProfileFile        string                       `mapstructure:"profile_file"`
@@ -276,8 +274,7 @@ func GetCfg(flagCfg *KwildConfig, quickStart bool) (*KwildConfig, bool, error) {
 
 	// Remember the default listen addresses in case we need to apply the
 	// default port to a user override.
-	defaultListenJSONRPC := cfg.AppCfg.JSONRPCListenAddress
-	defaultListenRPC, defaultListenHTTP := cfg.AppCfg.GrpcListenAddress, cfg.AppCfg.HTTPListenAddress
+	defaultListenJSONRPC, defaultListenHTTP := cfg.AppCfg.JSONRPCListenAddress, cfg.AppCfg.HTTPListenAddress
 
 	// read in env config
 	envCfg, err := LoadEnvConfig()
@@ -343,7 +340,6 @@ func GetCfg(flagCfg *KwildConfig, quickStart bool) (*KwildConfig, bool, error) {
 		cfg.ChainCfg.Moniker = defaultMoniker()
 	}
 
-	cfg.AppCfg.GrpcListenAddress = cleanListenAddr(cfg.AppCfg.GrpcListenAddress, defaultListenRPC)
 	cfg.AppCfg.HTTPListenAddress = cleanListenAddr(cfg.AppCfg.HTTPListenAddress, defaultListenHTTP)
 	cfg.AppCfg.JSONRPCListenAddress = cleanListenAddr(cfg.AppCfg.JSONRPCListenAddress, defaultListenJSONRPC)
 
@@ -489,7 +485,6 @@ func DefaultConfig() *KwildConfig {
 	return &KwildConfig{
 		AppCfg: &AppConfig{
 			JSONRPCListenAddress: "0.0.0.0:8484",
-			GrpcListenAddress:    "localhost:50051",
 			HTTPListenAddress:    "0.0.0.0:8080",
 			AdminListenAddress:   "unix:///tmp/kwil_admin.sock",
 			DBHost:               "127.0.0.1",

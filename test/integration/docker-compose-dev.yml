@@ -7,7 +7,6 @@ services:
     ports:
       - "8080"
       - "8484"
-      - "50051"
       - "26656"
       - "26657"
     #env_file:
@@ -29,7 +28,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
@@ -75,7 +73,6 @@ services:
     ports:
       - "8080"
       - "8484"
-      - "50051"
       - "26656"
       - "26657"
     volumes:
@@ -95,7 +92,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
@@ -142,7 +138,6 @@ services:
     ports:
       - "8080"
       - "8484"
-      - "50051"
       - "26656"
       - "26657"
     volumes:
@@ -162,7 +157,6 @@ services:
       --log.format=plain
       --log.time-format=rfc3339milli
       --app.extension-endpoints=ext1:50051
-      --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
@@ -211,7 +205,6 @@ services:
     ports:
       - "8080"
       - "8484"
-      - "50051"
       - "26656"
       - "26657"
     volumes:
@@ -231,7 +224,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext3:50051
-      --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --app.admin-listen-addr=unix:///tmp/admin.sock
@@ -277,7 +269,6 @@ services:
     ports:
       - "8080"
       - "8484"
-      - "50051"
       - "26656"
       - "26657"
     volumes:
@@ -297,7 +288,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
@@ -343,7 +333,6 @@ services:
     ports:
       - "8080"
       - "8484"
-      - "50051"
       - "26656"
       - "26657"
     volumes:
@@ -363,7 +352,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656

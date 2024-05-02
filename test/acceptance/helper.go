@@ -20,7 +20,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/test/driver"
@@ -42,7 +41,6 @@ const TestChainID = "kwil-test-chain"
 type ActTestCfg struct {
 	JSONRPCEndpoint string
 	HTTPEndpoint    string
-	GrpcEndpoint    string
 	P2PAddress      string // cometbft p2p address
 	AdminRPC        string // tcp or unix socket
 
@@ -69,13 +67,9 @@ func (e *ActTestCfg) VisitorIdent() []byte {
 	return e.VisitorSigner.Identity()
 }
 
-func (e *ActTestCfg) IsRemote() bool {
-	return e.GrpcEndpoint != ""
-}
-
 func (e *ActTestCfg) DumpToEnv() error {
 	var envTemplage = `
-GRPC_ENDPOINT=%s
+JSONRPC_ENDPOINT=%s
 GATEWAY_ENDPOINT=%s
 CHAIN_ENDPOINT=%s
 CREATOR_PRIVATE_KEY=%s
@@ -84,7 +78,7 @@ VISITOR_PRIVATE_KEY=%s
 VISITOR_PUBLIC_KEY=%x
 `
 	content := fmt.Sprintf(envTemplage,
-		e.GrpcEndpoint,
+		e.JSONRPCEndpoint,
 		e.HTTPEndpoint,
 		e.P2PAddress,
 		e.CreatorRawPk,
@@ -139,7 +133,6 @@ func (r *ActHelper) LoadConfig() *ActTestCfg {
 		LogLevel:                  getEnv("KACT_LOG_LEVEL", "info"),
 		JSONRPCEndpoint:           getEnv("KACT_JSONRPC_ENDPOINT", "http://127.0.0.1:8484/rpc/v1"),
 		HTTPEndpoint:              getEnv("KACT_HTTP_ENDPOINT", "http://127.0.0.1:8080/"),
-		GrpcEndpoint:              getEnv("KACT_GRPC_ENDPOINT", "localhost:50051"), // NOTE: no longer used
 		P2PAddress:                getEnv("KACT_CHAIN_ENDPOINT", "tcp://0.0.0.0:26656"),
 		AdminRPC:                  getEnv("KACT_ADMIN_RPC", "unix:///tmp/admin.sock"),
 		DockerComposeFile:         getEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
@@ -272,10 +265,6 @@ func (r *ActHelper) Setup(ctx context.Context) {
 	httpEndpoint, _, err := utils.KwildHTTPEndpoints(r.container, ctx)
 	require.NoError(r.t, err, "failed to get http endpoint")
 	r.cfg.HTTPEndpoint = httpEndpoint
-
-	grpcEndpoint, _, err := utils.KwildGRPCEndpoints(r.container, ctx)
-	require.NoError(r.t, err, "failed to get grpc endpoint")
-	r.cfg.GrpcEndpoint = grpcEndpoint
 }
 
 func (r *ActHelper) WaitUntilInterrupt() {
@@ -302,8 +291,6 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 		return r.getJSONRPCClientDriver(signer, r.cfg.JSONRPCEndpoint)
 	case "http":
 		return r.getHTTPClientDriver(signer, r.cfg.HTTPEndpoint)
-	case "grpc":
-		return r.getGRPCClientDriver(signer, r.cfg.GrpcEndpoint)
 	case "cli":
 		return r.getCliDriver(pk, signer.Identity(), r.cfg.JSONRPCEndpoint)
 	default:
@@ -337,23 +324,6 @@ func (r *ActHelper) getHTTPClientDriver(signer auth.Signer, endpoint string) Kwi
 		Logger: logger,
 	})
 	require.NoError(r.t, err, "failed to create http client")
-
-	return driver.NewKwildClientDriver(kwilClt, signer, nil, logger)
-}
-
-func (r *ActHelper) getGRPCClientDriver(signer auth.Signer, endpoint string) KwilAcceptanceDriver {
-	logger := log.New(log.Config{Level: r.cfg.LogLevel})
-
-	gtOptions := []gRPC.Option{gRPC.WithTlsCert("")}
-	gt, err := gRPC.New(context.Background(), endpoint, gtOptions...)
-	require.NoError(r.t, err, "failed to create grpc transport")
-
-	kwilClt, err := client.WrapClient(context.TODO(), gt, &clientType.Options{
-		Signer: signer,
-		Logger: logger,
-		// we dont care about chain id here
-	})
-	require.NoError(r.t, err, "failed to create grpc client")
 
 	return driver.NewKwildClientDriver(kwilClt, signer, nil, logger)
 }

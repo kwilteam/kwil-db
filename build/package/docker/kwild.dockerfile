@@ -26,5 +26,5 @@ COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /app/dist/kwild ./kwild
 COPY --from=build /app/dist/kwil-admin ./kwil-admin
 COPY --from=build /app/dist/kwil-cli ./kwil-cli
-EXPOSE 50051 50151 8080 8484 26656 26657
+EXPOSE 50151 8080 8484 26656 26657
 ENTRYPOINT ["/app/kwild"]

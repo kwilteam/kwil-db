@@ -164,7 +164,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 		return s.grpcServer.Start()
 	})
-	s.log.Info("grpc server started", zap.String("address", s.cfg.AppCfg.GrpcListenAddress))
+	s.log.Info("grpc server started", zap.String("address", s.grpcServer.Addr()))
 
 	group.Go(func() error {
 		go func() {
@@ -175,7 +175,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 		return s.adminTPCServer.Start()
 	})
-	s.log.Info("grpc server started", zap.String("address", s.cfg.AppCfg.AdminListenAddress))
+	s.log.Info("grpc server started", zap.String("address", s.adminTPCServer.Addr()))
 
 	group.Go(func() error {
 		s.log.Info("starting json-rpc server", zap.String("address", s.cfg.AppCfg.JSONRPCListenAddress))

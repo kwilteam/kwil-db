@@ -15,6 +15,8 @@ import (
 	grpcInsecure "google.golang.org/grpc/credentials/insecure"
 )
 
+// Client is the legacy gRPC user/tx service client.
+// DEPRECATED: use the JSON-RPC service instead.
 type Client struct {
 	TxClient txpb.TxServiceClient
 	conn     *grpc.ClientConn

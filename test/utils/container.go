@@ -56,10 +56,6 @@ func GanacheWSEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context
 	return getEndpoints(ctr, ctx, "8545", "ws")
 }
 
-func KwildGRPCEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
-	return getEndpoints(ctr, ctx, "50051", "tcp")
-}
-
 func KwildJSONRPCEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
 	return getEndpoints(ctr, ctx, "8484", "http")
 }
