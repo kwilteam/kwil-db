@@ -6,6 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
 // AnalyzeOptions is a set of options for type analysis.
@@ -21,6 +22,8 @@ type AnalyzeOptions struct {
 	VerifyProcedures bool
 	// Schema is the current database schema.
 	Schema *types.Schema
+	// ErrorListener is the error listener for the statement.
+	ErrorListener parseTypes.NativeErrorListener
 }
 
 // AnalyzeTypes will run type analysis on the given statement.
@@ -38,6 +41,9 @@ func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, options *AnalyzeOptio
 			BindParams: make(map[string]*types.DataType),
 			Schema:     &types.Schema{},
 		}
+	}
+	if options.ErrorListener == nil {
+		options.ErrorListener = parseTypes.NewErrorListener()
 	}
 
 	tbls := make(map[string]*Relation)
@@ -58,7 +64,8 @@ func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, options *AnalyzeOptio
 		return nil, fmt.Errorf("unknown error: could not analyze types")
 	}
 
-	return fn(newEvaluationContext())
+	rel = fn(newEvaluationContext())
+	return rel, nil
 }
 
 // evaluationContext is a context for evaluating expressions.
@@ -143,7 +150,7 @@ func (e *evaluationContext) join(relation *QualifiedRelation) error {
 		// ensure an anonymous relation already exists
 		if _, ok := e.joinedTables[""]; !ok {
 			// if it does not exist, create it and add it to the join order
-			e.joinedTables[""] = NewRelation()
+			e.joinedTables[""] = newRelation()
 			e.joinOrder = append(e.joinOrder, "")
 		}
 
@@ -170,7 +177,7 @@ func (e *evaluationContext) join(relation *QualifiedRelation) error {
 func (e *evaluationContext) mergeAnonymousSafe(relation *Relation) error {
 	anonTbl, ok := e.joinedTables[""]
 	if !ok {
-		anonTbl = NewRelation()
+		anonTbl = newRelation()
 		e.joinedTables[""] = anonTbl
 	}
 

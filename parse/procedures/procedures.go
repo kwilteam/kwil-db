@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/parse/procedures/visitors/clean"
 	"github.com/kwilteam/kwil-db/parse/procedures/visitors/generate"
 	"github.com/kwilteam/kwil-db/parse/procedures/visitors/typing"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
 // AnalyzeOptions allows for setting options for the generation of plpgsql functions.
@@ -17,13 +18,20 @@ import (
 // more useful in an IDE than in the transaction logs.
 type AnalyzeOptions struct {
 	// LogProcedureNameOnError will log the procedure name in the error message.
+	// This is generally useful if the parser is not being used in an IDE where positional
+	// errors are displayed, and we want to tell the user which procedure caused the error.
 	LogProcedureNameOnError bool
+	// SchemaInfo is the schema information for the procedure.
+	// If it is not nil, the schema information will be used to modify the position
+	// of the error messages.
+	SchemaInfo *parseTypes.SchemaInfo
 }
 
 // AnalyzeProcedures will analyze a procedure, parse the body, and identify the inputs, returns, variables, and body
 // that need to be generated for the procedure.
-func AnalyzeProcedures(schema *types.Schema, pgSchemaName string, options *AnalyzeOptions) (stmts []*AnalyzedProcedure, err error) {
+func AnalyzeProcedures(schema *types.Schema, pgSchemaName string, options *AnalyzeOptions) (stmts []*AnalyzedProcedure, parseErrs parseTypes.ParseErrors, err error) {
 	stmts = make([]*AnalyzedProcedure, len(schema.Procedures))
+	parseErrs = make(parseTypes.ParseErrors, 0)
 
 	if options == nil {
 		options = &AnalyzeOptions{}
@@ -40,24 +48,40 @@ func AnalyzeProcedures(schema *types.Schema, pgSchemaName string, options *Analy
 	}()
 
 	for i, proc = range schema.Procedures {
-		parsed, err := procedure.Parse(proc.Body)
+
+		// if schema info is provided, we will use it to modify the error messages.
+		errorListener := parseTypes.NewErrorListener()
+		startLine := 0
+		startCol := 0
+		if options.SchemaInfo != nil {
+			procPos, ok := options.SchemaInfo.Blocks[proc.Name]
+			if !ok {
+				// should never happen, this would be a bug in our code
+				return nil, nil, fmt.Errorf("could not find position for procedure %s", proc.Name)
+			}
+			startLine = procPos.StartLine
+			startCol = procPos.StartCol
+		}
+		errorListener = errorListener.Child("procedure", startLine, startCol)
+
+		parsed, err := procedure.ParseWithErrorListener(proc.Body, errorListener)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		cleanedParams, cleanedSessionVars, err := clean.CleanProcedure(parsed, proc, schema, pgSchemaName)
+		cleanedParams, cleanedSessionVars, err := clean.CleanProcedure(parsed, proc, schema, pgSchemaName, errorListener)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		anonReceivers, err := typing.EnsureTyping(parsed, proc, schema, cleanedParams, cleanedSessionVars)
+		anonReceivers, err := typing.EnsureTyping(parsed, proc, schema, cleanedParams, cleanedSessionVars, errorListener)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		generated, err := generate.GenerateProcedure(parsed, proc, cleanedParams, anonReceivers, pgSchemaName)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		// If the procedure returns out variables (instead of a table), then we need to ensure that the generated names
@@ -82,9 +106,10 @@ func AnalyzeProcedures(schema *types.Schema, pgSchemaName string, options *Analy
 		}
 
 		stmts[i] = analyzed
+		parseErrs.Add(errorListener.Errors()...)
 	}
 
-	return stmts, nil
+	return stmts, parseErrs, nil
 }
 
 // AnalyzedProcedure is the result of analyzing a procedure.

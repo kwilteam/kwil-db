@@ -2,11 +2,12 @@ package tree
 
 import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 // ResultColumnStar represents a wildcard column, i.e. `*`.
 type ResultColumnStar struct {
-	node
+	types.Node
 }
 
 func (r *ResultColumnStar) Accept(v AstVisitor) any {
@@ -26,7 +27,7 @@ func (r *ResultColumnStar) Walk(w AstListener) error {
 
 // ResultColumnExpression represents a result column with an expression and an optional alias.
 type ResultColumnExpression struct {
-	node
+	types.Node
 
 	Expression Expression
 	Alias      string
@@ -57,7 +58,7 @@ func (r *ResultColumnExpression) Walk(w AstListener) error {
 // ResultColumnTable represents a table name with a star, i.e. `table.*`.
 // Or qualified star?
 type ResultColumnTable struct {
-	node
+	types.Node
 
 	TableName string
 }

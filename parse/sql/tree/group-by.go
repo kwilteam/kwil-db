@@ -2,10 +2,11 @@ package tree
 
 import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 type GroupBy struct {
-	node
+	types.Node
 
 	Expressions []Expression
 	Having      Expression

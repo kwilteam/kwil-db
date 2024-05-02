@@ -10,17 +10,18 @@ import (
 	"github.com/antlr4-go/antlr/v4"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/parse/metadata"
 	grammar "github.com/kwilteam/kwil-db/parse/sql/gen"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 	"github.com/kwilteam/kwil-db/parse/util"
 )
 
 // astBuilder is a visitor that visits Antlr parsed tree and builds sql AST.
 type astBuilder struct {
 	*grammar.BaseSQLParserVisitor
-
-	trace    bool
-	trackPos bool
+	errs  parseTypes.AntlrErrorListener
+	trace bool
 }
 
 type astBuilderOption func(*astBuilder)
@@ -28,12 +29,6 @@ type astBuilderOption func(*astBuilder)
 func astBuilderWithTrace(on bool) astBuilderOption {
 	return func(l *astBuilder) {
 		l.trace = on
-	}
-}
-
-func astBuilderWithPos(on bool) astBuilderOption {
-	return func(l *astBuilder) {
-		l.trackPos = on
 	}
 }
 
@@ -49,22 +44,10 @@ func newAstBuilder(opts ...astBuilderOption) *astBuilder {
 	return k
 }
 
-func (v *astBuilder) getPos(ctx antlr.ParserRuleContext) *tree.Position {
-	if !v.trackPos {
-		return nil
-	}
-
-	return &tree.Position{
-		StartLine:   ctx.GetStart().GetLine(),
-		StartColumn: ctx.GetStart().GetColumn(),
-		EndLine:     ctx.GetStop().GetLine(),
-		EndColumn:   ctx.GetStop().GetColumn(),
-	}
-}
-
 // VisitCommon_table_expression is called when visiting a common_table_expression, return *tree.CTE
 func (v *astBuilder) VisitCommon_table_expression(ctx *grammar.Common_table_expressionContext) interface{} {
 	cte := tree.CTE{}
+	cte.Set(ctx)
 
 	// cte_table_name
 	cteTableCtx := ctx.Cte_table_name()
@@ -99,20 +82,13 @@ func getInsertType(ctx *grammar.Insert_coreContext) tree.InsertType {
 	return tree.InsertTypeInsert
 }
 
-// NOTE: VisitExpr() is dispatched in various VisitXXX_expr methods.
-// Calling `v.Visit(ctx.Expr()).(tree.Expression)` will dispatch to the correct
-// VisitXXX_expr method.
-// func (v *KFSqliteVisitor) VisitExpr(ctx *grammar.ExprContext) interface{} {
-// 	//return v.visitExpr(ctx)
-// }
-
 // VisitType_cast is called when visiting a type_cast, return tree.TypeCastType
 func (v *astBuilder) VisitType_cast(ctx *grammar.Type_castContext) interface{} {
 	if ctx != nil {
 		typeCastRaw := ctx.Cast_type().GetText()
-		if typeCastRaw[0] == '`' || typeCastRaw[0] == '"' || typeCastRaw[0] == '[' {
-			// NOTE: typeCast is an IDENTIFIER, so it could be wrapped with ` or " or [ ]
-			panic(fmt.Sprintf("type cast should not be wrapped in  %c", typeCastRaw[0]))
+		if typeCastRaw[0] == '`' || typeCastRaw[0] == '"' {
+			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("type cast should not be wrapped in  %c", typeCastRaw[0]))
+			return types.UnknownType
 		}
 
 		// should be "typename", potentially "typename[]" for array
@@ -130,12 +106,13 @@ func (v *astBuilder) VisitType_cast(ctx *grammar.Type_castContext) interface{} {
 
 		err := typ.Clean()
 		if err != nil {
-			panic(fmt.Sprintf("invalid type cast %s: %v", typeCastRaw, err))
+			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeType, err.Error())
+			return types.UnknownType
 		}
 
 		return typ
 	} else {
-		return ""
+		return types.UnknownType
 	}
 }
 
@@ -144,7 +121,9 @@ func (v *astBuilder) VisitText_literal_expr(ctx *grammar.Text_literal_exprContex
 	// all literal values are string
 	val := ctx.TEXT_LITERAL().GetText()
 	if !strings.HasPrefix(val, "'") || !strings.HasSuffix(val, "'") {
-		panic(fmt.Sprintf("invalid text literal %s", val))
+		// this shouldn't happen, and should be caught by the lexer
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("invalid text literal %s", val))
+		return &tree.ExpressionTextLiteral{}
 	}
 
 	expr := &tree.ExpressionTextLiteral{
@@ -153,6 +132,7 @@ func (v *astBuilder) VisitText_literal_expr(ctx *grammar.Text_literal_exprContex
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
+	expr.Set(ctx)
 	return expr
 }
 
@@ -160,7 +140,9 @@ func (v *astBuilder) VisitNumeric_literal_expr(ctx *grammar.Numeric_literal_expr
 	t := ctx.NUMERIC_LITERAL().GetText()
 	val, err := strconv.ParseInt(t, 10, 64)
 	if err != nil {
-		panic(fmt.Sprintf("failed to parse numeric literal %s: %v", t, err))
+		// this shouldn't happen, and should be caught by the lexer
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("failed to parse numeric literal %s: %v", t, err))
+		return &tree.ExpressionNumericLiteral{}
 	}
 
 	expr := &tree.ExpressionNumericLiteral{
@@ -169,6 +151,8 @@ func (v *astBuilder) VisitNumeric_literal_expr(ctx *grammar.Numeric_literal_expr
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
+	expr.Set(ctx)
+
 	return expr
 }
 
@@ -176,7 +160,9 @@ func (v *astBuilder) VisitBoolean_literal_expr(ctx *grammar.Boolean_literal_expr
 	b := ctx.BOOLEAN_LITERAL().GetText()
 	boolVal, err := strconv.ParseBool(b)
 	if err != nil {
-		panic(fmt.Sprintf("failed to parse boolean literal %s: %v", b, err))
+		// this shouldn't happen, and should be caught by the lexer
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("failed to parse boolean literal %s: %v", b, err))
+		return &tree.ExpressionBooleanLiteral{}
 	}
 
 	expr := &tree.ExpressionBooleanLiteral{
@@ -185,6 +171,7 @@ func (v *astBuilder) VisitBoolean_literal_expr(ctx *grammar.Boolean_literal_expr
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
+	expr.Set(ctx)
 	return expr
 }
 
@@ -193,6 +180,7 @@ func (v *astBuilder) VisitNull_literal_expr(ctx *grammar.Null_literal_exprContex
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
+	expr.Set(ctx)
 	return expr
 }
 
@@ -201,13 +189,17 @@ func (v *astBuilder) VisitBlob_literal_expr(ctx *grammar.Blob_literal_exprContex
 
 	// trim 0x prefix
 	if !strings.HasPrefix(t, "0x") {
-		panic(fmt.Sprintf("invalid blob literal %s", t))
+		// should be caught by the lexer
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("invalid blob literal %s", t))
+		return &tree.ExpressionBlobLiteral{}
 	}
 	t = t[2:]
 
 	decoded, err := hex.DecodeString(t)
 	if err != nil {
-		panic(fmt.Sprintf("failed to decode blob literal %s: %v", t, err))
+		// should be caught by the lexer
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("failed to decode blob literal %s: %v", t, err))
+		return &tree.ExpressionBlobLiteral{}
 	}
 
 	expr := &tree.ExpressionBlobLiteral{
@@ -216,6 +208,8 @@ func (v *astBuilder) VisitBlob_literal_expr(ctx *grammar.Blob_literal_exprContex
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
+	expr.Set(ctx)
+
 	return expr
 }
 
@@ -227,6 +221,7 @@ func (v *astBuilder) VisitVariable_expr(ctx *grammar.Variable_exprContext) inter
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
+	expr.Set(ctx)
 	return expr
 }
 
@@ -238,6 +233,7 @@ func (v *astBuilder) VisitColumn_ref(ctx *grammar.Column_refContext) interface{}
 		expr.Table = util.ExtractSQLName(ctx.Table_name().GetText())
 	}
 	expr.Column = util.ExtractSQLName(ctx.Column_name().GetText())
+	expr.Set(ctx)
 	return expr
 }
 
@@ -247,6 +243,7 @@ func (v *astBuilder) VisitColumn_expr(ctx *grammar.Column_exprContext) interface
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
+	expr.Set(ctx)
 	return expr
 }
 
@@ -262,6 +259,7 @@ func (v *astBuilder) VisitUnary_expr(ctx *grammar.Unary_exprContext) interface{}
 		panic(fmt.Sprintf("unknown unary operator %s", ctx.GetText()))
 	}
 	expr.Operand = v.Visit(ctx.Expr()).(tree.Expression)
+	expr.Set(ctx)
 	return expr
 }
 
@@ -278,12 +276,13 @@ func (v *astBuilder) getCollateType(collationName string) tree.CollationType {
 
 // VisitCollate_expr is called when visiting a collate_expr, return *tree.ExpressionCollate
 func (v *astBuilder) VisitCollate_expr(ctx *grammar.Collate_exprContext) interface{} {
-	expr := v.Visit(ctx.Expr()).(tree.Expression)
 	collationName := util.ExtractSQLName(ctx.Collation_name().GetText())
-	return &tree.ExpressionCollate{
-		Expression: expr,
+	expr2 := &tree.ExpressionCollate{
+		Expression: v.Visit(ctx.Expr()).(tree.Expression),
 		Collation:  v.getCollateType(collationName),
 	}
+	expr2.Set(ctx)
+	return expr2
 }
 
 // VisitParenthesized_expr is called when visiting a parenthesized_expr, return *tree.Expression
@@ -350,11 +349,16 @@ func (v *astBuilder) VisitParenthesized_expr(ctx *grammar.Parenthesized_exprCont
 		e.Wrapped = true
 		// typeCast does not apply on case expression
 	}
+
+	expr.Set(ctx)
+
 	return expr
 }
 
 func (v *astBuilder) VisitSubquery(ctx *grammar.SubqueryContext) interface{} {
-	return v.Visit(ctx.Select_core()).(*tree.SelectCore)
+	s := v.Visit(ctx.Select_core()).(*tree.SelectCore)
+	s.Set(ctx)
+	return s
 }
 
 // VisitSubquery_expr is called when visiting a subquery_expr, return *tree.ExpressionSelect
@@ -369,6 +373,7 @@ func (v *astBuilder) VisitSubquery_expr(ctx *grammar.Subquery_exprContext) inter
 	if ctx.NOT_() != nil {
 		expr.IsNot = true
 	}
+	expr.Set(ctx)
 	return expr
 }
 
@@ -394,7 +399,7 @@ func (v *astBuilder) VisitCase_expr(ctx *grammar.Case_exprContext) interface{} {
 		expr.WhenThenPairs = append(expr.WhenThenPairs,
 			v.Visit(whenCtx).([2]tree.Expression))
 	}
-
+	expr.Set(ctx)
 	return expr
 }
 
@@ -434,7 +439,7 @@ func (v *astBuilder) VisitNormal_function_call(ctx *grammar.Normal_function_call
 	if ctx.Expr_list() != nil {
 		expr.Inputs = v.Visit(ctx.Expr_list()).(*tree.ExpressionList).Expressions
 	}
-
+	expr.Set(ctx)
 	return expr
 }
 
@@ -444,13 +449,15 @@ func (v *astBuilder) VisitForeign_function_call(ctx *grammar.Foreign_function_ca
 	expr.Function = util.ExtractSQLName(ctx.IDENTIFIER().GetText())
 
 	if ctx.GetDbid() == nil {
-		panic("foreign call requires dbid as first contextual parameters")
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("%s: missing dbid", metadata.ErrForeignCallMissingField.Error()))
+		return expr
 	}
 
 	expr.ContextualParams = append(expr.ContextualParams, v.Visit(ctx.GetDbid()).(tree.Expression))
 
 	if ctx.GetProcedure() == nil {
-		panic("foreign call requires procedure as second contextual parameters")
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("%s: missing procedure", metadata.ErrForeignCallMissingField.Error()))
+		return expr
 	}
 
 	expr.ContextualParams = append(expr.ContextualParams, v.Visit(ctx.GetProcedure()).(tree.Expression))
@@ -458,7 +465,7 @@ func (v *astBuilder) VisitForeign_function_call(ctx *grammar.Foreign_function_ca
 	if ctx.Expr_list() != nil {
 		expr.Inputs = v.Visit(ctx.Expr_list()).(*tree.ExpressionList).Expressions
 	}
-
+	expr.Set(ctx)
 	return expr
 }
 
@@ -468,12 +475,15 @@ func (v *astBuilder) VisitFunction_expr(ctx *grammar.Function_exprContext) inter
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
 	}
+	expr.Set(ctx)
 	return expr
 }
 
 // VisitExpr_list_expr is called when visiting a expr_list_expr, return *tree.ExpressionList
 func (v *astBuilder) VisitExpr_list_expr(ctx *grammar.Expr_list_exprContext) interface{} {
-	return v.Visit(ctx.Expr_list()).(*tree.ExpressionList)
+	e := v.Visit(ctx.Expr_list()).(*tree.ExpressionList)
+	e.Set(ctx)
+	return e
 }
 
 // VisitArithmetic_expr is called when visiting a arithmetic_expr, return *tree.ExpressionArithmetic
@@ -497,6 +507,7 @@ func (v *astBuilder) VisitArithmetic_expr(ctx *grammar.Arithmetic_exprContext) i
 		panic(fmt.Sprintf("unknown arithmetic operator %s", ctx.GetText()))
 	}
 
+	expr.Set(ctx)
 	return expr
 }
 
@@ -510,7 +521,11 @@ func (v *astBuilder) VisitIn_subquery_expr(ctx *grammar.In_subquery_exprContext)
 		expr.Operator = tree.ComparisonOperatorNotIn
 	}
 	sub := v.Visit(ctx.Subquery()).(*tree.SelectCore)
-	expr.Right = &tree.ExpressionSelect{Select: sub}
+	expr.Right = &tree.ExpressionSelect{
+		Select: sub,
+		Node:   sub.Node,
+	}
+	expr.Set(ctx)
 	return expr
 }
 
@@ -521,7 +536,9 @@ func (v *astBuilder) VisitExpr_list(ctx *grammar.Expr_listContext) interface{} {
 	for i, exprCtx := range ctx.AllExpr() {
 		exprs[i] = v.Visit(exprCtx).(tree.Expression)
 	}
-	return &tree.ExpressionList{Expressions: exprs}
+	expr := &tree.ExpressionList{Expressions: exprs}
+	expr.Set(ctx)
+	return expr
 }
 
 // VisitIn_list_expr is called when visiting a in_list_expr, return *tree.ExpressionBinaryComparison
@@ -534,6 +551,7 @@ func (v *astBuilder) VisitIn_list_expr(ctx *grammar.In_list_exprContext) interfa
 		expr.Operator = tree.ComparisonOperatorNotIn
 	}
 	expr.Right = v.Visit(ctx.Expr_list()).(*tree.ExpressionList)
+	expr.Set(ctx)
 	return expr
 }
 
@@ -547,6 +565,7 @@ func (v *astBuilder) VisitBetween_expr(ctx *grammar.Between_exprContext) interfa
 	if ctx.NOT_() != nil {
 		expr.NotBetween = true
 	}
+	expr.Set(ctx)
 	return expr
 }
 
@@ -563,6 +582,7 @@ func (v *astBuilder) VisitLike_expr(ctx *grammar.Like_exprContext) interface{} {
 	if ctx.ESCAPE_() != nil {
 		expr.Escape = v.Visit(ctx.GetEscape()).(tree.Expression)
 	}
+	expr.Set(ctx)
 	return expr
 }
 
@@ -595,7 +615,7 @@ func (v *astBuilder) VisitComparison_expr(ctx *grammar.Comparison_exprContext) i
 		Operator: v.Visit(ctx.ComparisonOperator()).(tree.ComparisonOperator),
 		Right:    v.Visit(ctx.GetRight()).(tree.Expression),
 	}
-
+	expr.Set(ctx)
 	return expr
 }
 
@@ -604,6 +624,7 @@ func (v *astBuilder) VisitIs_expr(ctx *grammar.Is_exprContext) interface{} {
 	expr := &tree.ExpressionIs{
 		Left: v.Visit(ctx.Expr(0)).(tree.Expression),
 	}
+	expr.Set(ctx)
 	if ctx.NOT_() != nil {
 		expr.Not = true
 	}
@@ -611,6 +632,7 @@ func (v *astBuilder) VisitIs_expr(ctx *grammar.Is_exprContext) interface{} {
 	switch {
 	case ctx.NULL_LITERAL() != nil:
 		expr.Right = &tree.ExpressionNullLiteral{}
+		expr.Right.SetToken(ctx.NULL_LITERAL().GetSymbol())
 	case ctx.BOOLEAN_LITERAL() != nil:
 		tf := ctx.BOOLEAN_LITERAL().GetText()
 		var b bool
@@ -619,15 +641,18 @@ func (v *astBuilder) VisitIs_expr(ctx *grammar.Is_exprContext) interface{} {
 		} else if strings.EqualFold(tf, "false") {
 			b = false
 		} else {
-			panic(fmt.Sprintf("unknown boolean literal %s", tf))
+			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("unknown boolean literal %s", tf))
+			return expr
 		}
 
 		expr.Right = &tree.ExpressionBooleanLiteral{
 			Value: b,
 		}
+		expr.Right.SetToken(ctx.BOOLEAN_LITERAL().GetSymbol())
 	case ctx.DISTINCT_() != nil:
 		expr.Right = v.Visit(ctx.Expr(1)).(tree.Expression)
 		expr.Distinct = true
+		expr.Right.Set(ctx.Expr(1))
 	default:
 		panic(fmt.Sprintf("unknown IS expression %s", ctx.GetText()))
 	}
@@ -640,6 +665,9 @@ func (v *astBuilder) VisitNull_expr(ctx *grammar.Null_exprContext) interface{} {
 		Left:  v.Visit(ctx.Expr()).(tree.Expression),
 		Right: &tree.ExpressionNullLiteral{},
 	}
+	expr.Set(ctx)
+	expr.Right.Set(ctx)
+
 	if ctx.NOTNULL_() != nil {
 		expr.Not = true
 	}
@@ -648,10 +676,12 @@ func (v *astBuilder) VisitNull_expr(ctx *grammar.Null_exprContext) interface{} {
 
 // VisitLogical_not_expr is called when visiting a logical_not_expr, return *tree.ExpressionUnary
 func (v *astBuilder) VisitLogical_not_expr(ctx *grammar.Logical_not_exprContext) interface{} {
-	return &tree.ExpressionUnary{
+	e := &tree.ExpressionUnary{
 		Operator: tree.UnaryOperatorNot,
 		Operand:  v.Visit(ctx.Expr()).(tree.Expression),
 	}
+	e.Set(ctx)
+	return e
 }
 
 // VisitLogical_binary_expr is called when visiting a logical_binary_expr, return *tree.ExpressionBinaryLogical
@@ -660,6 +690,7 @@ func (v *astBuilder) VisitLogical_binary_expr(ctx *grammar.Logical_binary_exprCo
 		Left:  v.Visit(ctx.GetLeft()).(tree.Expression),
 		Right: v.Visit(ctx.GetRight()).(tree.Expression),
 	}
+	expr.Set(ctx)
 
 	switch {
 	case ctx.AND_() != nil:
@@ -697,9 +728,11 @@ func (v *astBuilder) VisitUpsert_clause(ctx *grammar.Upsert_clauseContext) inter
 	clause := tree.Upsert{
 		Type: tree.UpsertTypeDoNothing,
 	}
+	clause.Set(ctx)
 
 	// conflict target
 	conflictTarget := tree.ConflictTarget{}
+	conflictTarget.Set(ctx)
 	allIndexedColumnCtx := ctx.AllIndexed_column()
 	indexedColumns := make([]string, len(allIndexedColumnCtx))
 	for i, indexedColumnCtx := range allIndexedColumnCtx {
@@ -738,6 +771,7 @@ func (v *astBuilder) VisitUpsert_clause(ctx *grammar.Upsert_clauseContext) inter
 // VisitUpsert_update is called when visiting a upsert_update, return *tree.UpdateSetClause
 func (v *astBuilder) VisitUpsert_update(ctx *grammar.Upsert_updateContext) interface{} {
 	clause := tree.UpdateSetClause{}
+	clause.Set(ctx)
 	if ctx.Column_name_list() != nil {
 		clause.Columns = v.Visit(ctx.Column_name_list()).([]string)
 	} else {
@@ -765,18 +799,23 @@ func (v *astBuilder) VisitColumn_name(ctx *grammar.Column_nameContext) interface
 // VisitReturning_clause is called when visiting a returning_clause, return *tree.ReturningClause
 func (v *astBuilder) VisitReturning_clause(ctx *grammar.Returning_clauseContext) interface{} {
 	clause := tree.ReturningClause{}
+	clause.Set(ctx)
 	clause.Returned = make([]*tree.ReturningClauseColumn, len(ctx.AllReturning_clause_result_column()))
 	for i, columnCtx := range ctx.AllReturning_clause_result_column() {
 		if columnCtx.STAR() != nil {
-			clause.Returned[i] = &tree.ReturningClauseColumn{
+			col := &tree.ReturningClauseColumn{
 				All: true,
 			}
+			col.SetToken(columnCtx.STAR().GetSymbol())
+			clause.Returned[i] = col
 			continue
 		}
 
-		clause.Returned[i] = &tree.ReturningClauseColumn{
+		col := &tree.ReturningClauseColumn{
 			Expression: v.Visit(columnCtx.Expr()).(tree.Expression),
 		}
+		col.Set(columnCtx.Expr())
+		clause.Returned[i] = col
 
 		if columnCtx.Column_alias() != nil {
 			clause.Returned[i].Alias = util.ExtractSQLName(columnCtx.Column_alias().GetText())
@@ -789,7 +828,7 @@ func (v *astBuilder) VisitReturning_clause(ctx *grammar.Returning_clauseContext)
 // VisitUpdate_set_subclause is called when visiting a column_assign_subclause, return *tree.UpdateSetClause
 func (v *astBuilder) VisitUpdate_set_subclause(ctx *grammar.Update_set_subclauseContext) interface{} {
 	result := tree.UpdateSetClause{}
-
+	result.Set(ctx)
 	if ctx.Column_name_list() != nil {
 		result.Columns = v.Visit(ctx.Column_name_list()).([]string)
 	} else {
@@ -803,7 +842,7 @@ func (v *astBuilder) VisitUpdate_set_subclause(ctx *grammar.Update_set_subclause
 // VisitQualified_table_name is called when visiting a qualified_table_name, return *tree.QualifiedTableName
 func (v *astBuilder) VisitQualified_table_name(ctx *grammar.Qualified_table_nameContext) interface{} {
 	result := tree.QualifiedTableName{}
-
+	result.Set(ctx)
 	result.TableName = util.ExtractSQLName(ctx.Table_name().GetText())
 
 	if ctx.Table_alias() != nil {
@@ -816,6 +855,7 @@ func (v *astBuilder) VisitQualified_table_name(ctx *grammar.Qualified_table_name
 // VisitUpdate_core is called when visiting a update_core, return *tree.UpdateCore
 func (v *astBuilder) VisitUpdate_core(ctx *grammar.Update_coreContext) interface{} {
 	var updateStmt tree.UpdateCore
+	updateStmt.Set(ctx)
 
 	updateStmt.QualifiedTableName = v.Visit(ctx.Qualified_table_name()).(*tree.QualifiedTableName)
 
@@ -842,6 +882,7 @@ func (v *astBuilder) VisitUpdate_core(ctx *grammar.Update_coreContext) interface
 // VisitUpdate_stmt is called when visiting a update_stmt, return *tree.UpdateStmt
 func (v *astBuilder) VisitUpdate_stmt(ctx *grammar.Update_stmtContext) interface{} {
 	t := tree.UpdateStmt{}
+	t.Set(ctx)
 
 	if ctx.Common_table_stmt() != nil {
 		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
@@ -853,6 +894,7 @@ func (v *astBuilder) VisitUpdate_stmt(ctx *grammar.Update_stmtContext) interface
 
 func (v *astBuilder) VisitInsert_core(ctx *grammar.Insert_coreContext) interface{} {
 	var insertStmt tree.InsertCore
+	insertStmt.Set(ctx)
 
 	insertStmt.InsertType = getInsertType(ctx)
 	insertStmt.Table = util.ExtractSQLName(ctx.Table_name().GetText())
@@ -881,6 +923,7 @@ func (v *astBuilder) VisitInsert_core(ctx *grammar.Insert_coreContext) interface
 
 func (v *astBuilder) VisitInsert_stmt(ctx *grammar.Insert_stmtContext) interface{} {
 	t := tree.InsertStmt{}
+	t.Set(ctx)
 
 	if ctx.Common_table_stmt() != nil {
 		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
@@ -892,23 +935,30 @@ func (v *astBuilder) VisitInsert_stmt(ctx *grammar.Insert_stmtContext) interface
 
 // VisitCompound_operator is called when visiting a compound_operator, return *tree.CompoundOperator
 func (v *astBuilder) VisitCompound_operator(ctx *grammar.Compound_operatorContext) interface{} {
+	var t *tree.CompoundOperator
 	switch {
 	case ctx.UNION_() != nil:
 		if ctx.ALL_() != nil {
-			return &tree.CompoundOperator{Operator: tree.CompoundOperatorTypeUnionAll}
+			t = &tree.CompoundOperator{Operator: tree.CompoundOperatorTypeUnionAll}
+		} else {
+			t = &tree.CompoundOperator{Operator: tree.CompoundOperatorTypeUnion}
 		}
-		return &tree.CompoundOperator{Operator: tree.CompoundOperatorTypeUnion}
 	case ctx.INTERSECT_() != nil:
-		return &tree.CompoundOperator{Operator: tree.CompoundOperatorTypeIntersect}
+		t = &tree.CompoundOperator{Operator: tree.CompoundOperatorTypeIntersect}
 	case ctx.EXCEPT_() != nil:
-		return &tree.CompoundOperator{Operator: tree.CompoundOperatorTypeExcept}
+		t = &tree.CompoundOperator{Operator: tree.CompoundOperatorTypeExcept}
+	default:
+		panic("unknown compound operator")
 	}
-	panic("unreachable")
+
+	t.Set(ctx)
+	return t
 }
 
 // VisitOrdering_term is called when visiting a ordering_term, return *tree.OrderingTerm
 func (v *astBuilder) VisitOrdering_term(ctx *grammar.Ordering_termContext) interface{} {
 	result := tree.OrderingTerm{}
+	result.Set(ctx)
 	result.Expression = v.Visit(ctx.Expr()).(tree.Expression)
 
 	if ctx.Asc_desc() != nil {
@@ -934,6 +984,7 @@ func (v *astBuilder) VisitOrdering_term(ctx *grammar.Ordering_termContext) inter
 func (v *astBuilder) VisitOrder_by_stmt(ctx *grammar.Order_by_stmtContext) interface{} {
 	count := len(ctx.AllOrdering_term())
 	result := tree.OrderBy{OrderingTerms: make([]*tree.OrderingTerm, count)}
+	result.Set(ctx)
 
 	for i, orderingTermCtx := range ctx.AllOrdering_term() {
 		result.OrderingTerms[i] = v.Visit(orderingTermCtx).(*tree.OrderingTerm)
@@ -947,6 +998,7 @@ func (v *astBuilder) VisitLimit_stmt(ctx *grammar.Limit_stmtContext) interface{}
 	result := tree.Limit{
 		Expression: v.Visit(ctx.Expr(0)).(tree.Expression),
 	}
+	result.Set(ctx)
 
 	// LIMIT row_count OFFSET offset;
 	// IS SAME AS
@@ -970,6 +1022,7 @@ func (v *astBuilder) VisitTable_or_subquery(ctx *grammar.Table_or_subqueryContex
 		if ctx.Table_alias() != nil {
 			t.Alias = util.ExtractSQLName(ctx.Table_alias().GetText())
 		}
+		t.Set(ctx)
 		return &t
 	case ctx.Select_core() != nil:
 		t := tree.RelationSubquery{
@@ -978,19 +1031,21 @@ func (v *astBuilder) VisitTable_or_subquery(ctx *grammar.Table_or_subqueryContex
 		if ctx.Table_alias() != nil {
 			t.Alias = util.ExtractSQLName(ctx.Table_alias().GetText())
 		}
+		t.Set(ctx)
 		return &t
 	case ctx.Function_call() != nil:
 		funcDef := v.Visit(ctx.Function_call()).(*tree.ExpressionFunction)
 		if funcDef.Star {
-			panic("cannot join on a function that uses *")
+			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, "cannot join on a function that uses *")
 		}
 		if funcDef.Distinct {
-			panic("cannot join on a function that uses DISTINCT")
+			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, "cannot join on a function that uses DISTINCT")
 		}
 
 		t := tree.RelationFunction{
 			Function: funcDef,
 		}
+		t.Set(ctx)
 		if ctx.Table_alias() != nil {
 			t.Alias = util.ExtractSQLName(ctx.Table_alias().GetText())
 		}
@@ -1005,6 +1060,7 @@ func (v *astBuilder) VisitJoin_operator(ctx *grammar.Join_operatorContext) inter
 	jp := tree.JoinOperator{
 		JoinType: tree.JoinTypeJoin,
 	}
+	jp.Set(ctx)
 
 	if ctx.INNER_() != nil {
 		jp.JoinType = tree.JoinTypeInner
@@ -1030,6 +1086,7 @@ func (v *astBuilder) VisitJoin_operator(ctx *grammar.Join_operatorContext) inter
 // VisitJoin_relation is called when visiting a join_relation, return *tree.JoinPredicate
 func (v *astBuilder) VisitJoin_relation(ctx *grammar.Join_relationContext) interface{} {
 	jp := tree.JoinPredicate{}
+	jp.Set(ctx)
 	jp.JoinOperator = v.Visit(ctx.Join_operator()).(*tree.JoinOperator)
 	jp.Table = v.Visit(ctx.GetRight_relation()).(tree.Relation)
 	jp.Constraint = v.Visit(ctx.Join_constraint().Expr()).(tree.Expression)
@@ -1041,11 +1098,15 @@ func (v *astBuilder) VisitResult_column(ctx *grammar.Result_columnContext) inter
 	switch {
 	// table_name need to be checked first
 	case ctx.Table_name() != nil:
-		return &tree.ResultColumnTable{
+		t := &tree.ResultColumnTable{
 			TableName: util.ExtractSQLName(ctx.Table_name().GetText()),
 		}
+		t.Set(ctx)
+		return t
 	case ctx.STAR() != nil:
-		return &tree.ResultColumnStar{}
+		t := &tree.ResultColumnStar{}
+		t.Set(ctx)
+		return t
 	case ctx.Expr() != nil:
 		r := &tree.ResultColumnExpression{
 			Expression: v.Visit(ctx.Expr()).(tree.Expression),
@@ -1053,6 +1114,7 @@ func (v *astBuilder) VisitResult_column(ctx *grammar.Result_columnContext) inter
 		if ctx.Column_alias() != nil {
 			r.Alias = util.ExtractSQLName(ctx.Column_alias().GetText())
 		}
+		r.Set(ctx)
 		return r
 	}
 
@@ -1061,6 +1123,7 @@ func (v *astBuilder) VisitResult_column(ctx *grammar.Result_columnContext) inter
 
 func (v *astBuilder) VisitDelete_core(ctx *grammar.Delete_coreContext) interface{} {
 	var deleteStmt tree.DeleteCore
+	deleteStmt.Set(ctx)
 	deleteStmt.QualifiedTableName = v.Visit(ctx.Qualified_table_name()).(*tree.QualifiedTableName)
 
 	if ctx.WHERE_() != nil {
@@ -1077,6 +1140,7 @@ func (v *astBuilder) VisitDelete_core(ctx *grammar.Delete_coreContext) interface
 // VisitDelete_stmt is called when visiting a delete_stmt, return *tree.DeleteStmt
 func (v *astBuilder) VisitDelete_stmt(ctx *grammar.Delete_stmtContext) interface{} {
 	t := tree.DeleteStmt{}
+	t.Set(ctx)
 
 	if ctx.Common_table_stmt() != nil {
 		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
@@ -1091,6 +1155,7 @@ func (v *astBuilder) VisitSimple_select(ctx *grammar.Simple_selectContext) inter
 	t := tree.SimpleSelect{
 		SelectType: tree.SelectTypeAll,
 	}
+	t.Set(ctx)
 
 	if ctx.DISTINCT_() != nil {
 		t.SelectType = tree.SelectTypeDistinct
@@ -1120,6 +1185,7 @@ func (v *astBuilder) VisitSimple_select(ctx *grammar.Simple_selectContext) inter
 		groupBy := &tree.GroupBy{
 			Expressions: exprs,
 		}
+		groupBy.Set(ctx)
 
 		if ctx.HAVING_() != nil {
 			groupBy.Having = v.Visit(ctx.GetHavingExpr()).(tree.Expression)
@@ -1140,6 +1206,7 @@ func (v *astBuilder) VisitRelation(ctx *grammar.RelationContext) interface{} {
 			Relation: left,
 			Joins:    make([]*tree.JoinPredicate, len(ctx.AllJoin_relation())),
 		}
+		rel.Set(ctx)
 		// join relations
 		for i, joinRelationCtx := range ctx.AllJoin_relation() {
 			rel.Joins[i] = v.Visit(joinRelationCtx).(*tree.JoinPredicate)
@@ -1154,6 +1221,7 @@ func (v *astBuilder) VisitRelation(ctx *grammar.RelationContext) interface{} {
 // VisitSelect_core is called when visiting a select_stmt_core, return *tree.SelectCore
 func (v *astBuilder) VisitSelect_core(ctx *grammar.Select_coreContext) interface{} {
 	t := tree.SelectCore{}
+	t.Set(ctx)
 	selectCores := make([]*tree.SimpleSelect, len(ctx.AllSimple_select()))
 
 	// first Simple_select
@@ -1183,6 +1251,7 @@ func (v *astBuilder) VisitSelect_core(ctx *grammar.Select_coreContext) interface
 // VisitSelect_stmt is called when visiting a select_stmt, return *tree.SelectStmt
 func (v *astBuilder) VisitSelect_stmt(ctx *grammar.Select_stmtContext) interface{} {
 	t := tree.SelectStmt{}
+	t.Set(ctx)
 
 	if ctx.Common_table_stmt() != nil {
 		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
@@ -1213,6 +1282,8 @@ func (v *astBuilder) VisitSql_stmt(ctx *grammar.Sql_stmtContext) interface{} {
 	case ctx.Update_stmt() != nil:
 		return ctx.Update_stmt().Accept(v)
 	default:
+		str := ctx.GetText()
+		_ = str
 		panic("unsupported sql statement")
 	}
 }

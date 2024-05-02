@@ -1,6 +1,7 @@
 package order
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
@@ -9,9 +10,10 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer/typing"
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer/utils"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
-func NewOrderWalker(schema *types.Schema) tree.AstListener {
+func NewOrderWalker(schema *types.Schema, errLis parseTypes.NativeErrorListener) tree.AstListener {
 	// copy tables, since we will be modifying the tables slice to register CTEs
 	tbls := make([]*types.Table, len(schema.Tables))
 	copy(tbls, schema.Tables)
@@ -19,6 +21,7 @@ func NewOrderWalker(schema *types.Schema) tree.AstListener {
 	return &orderingWalker{
 		schema: schema,
 		tables: tbls,
+		errs:   errLis,
 	}
 }
 
@@ -28,6 +31,7 @@ type orderingWalker struct {
 
 	schema *types.Schema
 	tables []*types.Table // all tables in the schema
+	errs   parseTypes.NativeErrorListener
 }
 
 var _ tree.AstListener = &orderingWalker{}
@@ -53,7 +57,8 @@ func (o *orderingWalker) EnterCTE(node *tree.CTE) error {
 	// make sure this does not have a conflicting name with another table
 	_, err = findTable(o.tables, tbl.Name)
 	if err == nil {
-		return fmt.Errorf(`table or subquery with name or alias "%s" already exists`, tbl.Name)
+		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`table or subquery with name or alias "%s" already exists`, tbl.Name))
+		return nil
 	}
 
 	o.tables = append(o.tables, tbl)
@@ -96,10 +101,12 @@ func tableFromRelation(rel *typing.Relation, name string) (*types.Table, error) 
 // Register RelationSubquerys as tables, so that we can order them.
 func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) error {
 	if node.Select == nil {
-		return fmt.Errorf("subquery select is nil")
+		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, "subquery select is nil")
+		return nil
 	}
 	if len(node.Select.SimpleSelects) == 0 {
-		return fmt.Errorf("subquery select has no select cores")
+		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, "subquery select has no select cores")
+		return nil
 	}
 
 	name := node.Alias // can be ""
@@ -120,7 +127,8 @@ func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) erro
 	// make sure this does not have a conflicting name with another table
 	_, err = findTable(o.tables, tbl.Name)
 	if err == nil {
-		return fmt.Errorf(`table or subquery with name or alias "%s" already exists`, tbl.Name)
+		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`table or subquery with name or alias "%s" already exists`, tbl.Name))
+		return nil
 	}
 
 	o.tables = append(o.tables, tbl)
@@ -134,14 +142,16 @@ func (o *orderingWalker) ExitSelectCore(node *tree.SelectCore) error {
 	var err error
 	switch len(node.SimpleSelects) {
 	case 0:
-		return fmt.Errorf("no select cores in select statement")
+		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, "no select cores in select statement")
+		return nil
 	case 1:
-		terms, err = orderSimpleStatement(node.SimpleSelects[0], o.tables)
+		terms, err = o.orderSimpleStatement(node.SimpleSelects[0], o.tables)
 	default:
-		terms, err = orderCompoundStatement(node.SimpleSelects, o.tables)
+		terms, err = o.orderCompoundStatement(node.SimpleSelects, o.tables)
 	}
 	if err != nil {
-		return fmt.Errorf("error ordering statement: %w", err)
+		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+		return nil
 	}
 
 	if len(terms) == 0 {
@@ -159,10 +169,12 @@ func (o *orderingWalker) ExitSelectCore(node *tree.SelectCore) error {
 	return nil
 }
 
-var ErrDistinctWithGroupBy = fmt.Errorf("select distinct with group by not supported")
+var ErrDistinctWithGroupBy = errors.New("select distinct with group by not supported")
 
 // orderSimpleStatement will return the ordering required for a simple statement.
-func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*types.Table) ([]*tree.OrderingTerm, error) {
+// If there are errors we wish to pass to the error listener, we will simply log them here and return nil error,
+// since returning nil,nil is a valid return value for this function.
+func (o *orderingWalker) orderSimpleStatement(stmt *tree.SimpleSelect, tables []*types.Table) ([]*tree.OrderingTerm, error) {
 	// it is possible to not have any tables in a select
 	// if so, no ordering is required
 	if stmt.From == nil {
@@ -196,7 +208,8 @@ func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*types.Table) ([]*tr
 					},
 				}
 			default:
-				return nil, fmt.Errorf("multiple columns in a simple grouped term in a group by expression not supported")
+				o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeSemantic, "multiple columns in a simple grouped term in a group by expression not supported")
+				return nil, nil
 			}
 		}
 
@@ -209,14 +222,16 @@ func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*types.Table) ([]*tr
 	// this allows us to search for them by their alias, and not their real name.
 	usedTables, err := utils.GetUsedTables(stmt.From)
 	if err != nil {
-		return nil, fmt.Errorf("error getting used tables: %w", err)
+		o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeUnknown, err.Error())
+		return nil, nil
 	}
 
 	usedTblsFull := make([]*types.Table, len(usedTables))
 	for i, tbl := range usedTables {
 		newTable, err := findTable(tables, tbl.Name)
 		if err != nil {
-			return nil, fmt.Errorf("error finding table: %w", err)
+			o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			return nil, nil
 		}
 
 		copied := newTable.Copy() // copy since we will be modifying the table
@@ -230,7 +245,7 @@ func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*types.Table) ([]*tr
 	}
 
 	if stmt.SelectType == tree.SelectTypeDistinct {
-		return getReturnedColumnOrderingTerms(stmt.Columns, usedTblsFull)
+		return o.getReturnedColumnOrderingTerms(stmt.Columns, usedTblsFull)
 	}
 
 	sort.Slice(usedTblsFull, func(i, j int) bool {
@@ -243,7 +258,8 @@ func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*types.Table) ([]*tr
 	for _, ret := range stmt.Columns {
 		containsAggregate, err := containsAggregateFunc(ret)
 		if err != nil {
-			return nil, fmt.Errorf("error checking for aggregate function: %w", err)
+			o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeUnknown, err.Error())
+			return nil, nil
 		}
 
 		if containsAggregate {
@@ -253,7 +269,8 @@ func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*types.Table) ([]*tr
 
 	if numberOfAggregates > 0 {
 		if numberOfAggregates != len(stmt.Columns) {
-			return nil, fmt.Errorf("all columns must be aggregates if an aggregate function is used without a group by")
+			o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeSemantic, "all columns must be aggregates if an aggregate function is used without a group by")
+			return nil, nil
 		}
 		return nil, nil // order nothing in this case
 	}
@@ -262,7 +279,8 @@ func orderSimpleStatement(stmt *tree.SimpleSelect, tables []*types.Table) ([]*tr
 	for _, tbl := range usedTblsFull {
 		primaries, err := tbl.GetPrimaryKey()
 		if err != nil {
-			return nil, fmt.Errorf("error getting primary key: %w", err)
+			o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeUnknown, err.Error())
+			return nil, nil
 		}
 
 		if len(primaries) == 0 {
@@ -327,8 +345,11 @@ var ErrCompoundStatementDifferentNumberOfColumns = fmt.Errorf("select cores have
 // if there is a group by clause in any of the select cores, we will return an error.
 // using a group by with a compound statement is not yet supported because idk how
 // to make it deterministic with postgres's ordering, and it is not a common use case.
-func orderCompoundStatement(stmt []*tree.SimpleSelect, tables []*types.Table) ([]*tree.OrderingTerm, error) {
+// If there are errors we wish to pass to the error listener, we will simply log them here and return nil error,
+// since returning nil,nil is a valid return value for this function.
+func (o *orderingWalker) orderCompoundStatement(stmt []*tree.SimpleSelect, tables []*types.Table) ([]*tree.OrderingTerm, error) {
 	if len(stmt) == 0 {
+		// returning error here since this would indicate a bug in the parser
 		return nil, fmt.Errorf("no select cores in compound statement")
 	}
 
@@ -340,20 +361,23 @@ func orderCompoundStatement(stmt []*tree.SimpleSelect, tables []*types.Table) ([
 	for _, core := range stmt {
 		contains, err := containsGroupBy(core)
 		if err != nil {
-			return nil, fmt.Errorf("error checking for group by: %w", err)
+			o.errs.NodeErr(core.GetNode(), parseTypes.ParseErrorTypeUnknown, err.Error())
+			return nil, nil
 		}
 
 		if contains {
-			return nil, ErrGroupByWithCompoundStatement
+			o.errs.NodeErr(core.GetNode(), parseTypes.ParseErrorTypeSemantic, ErrGroupByWithCompoundStatement.Error())
+			return nil, nil
 		}
 
 		if len(core.Columns) != expectedNumberOfColumns {
-			return nil, ErrCompoundStatementDifferentNumberOfColumns
+			o.errs.NodeErr(core.GetNode(), parseTypes.ParseErrorTypeSemantic, ErrCompoundStatementDifferentNumberOfColumns.Error())
+			return nil, nil
 		}
 	}
 
 	// we will order the first select core, and then return.
-	return getReturnedColumnOrderingTerms(stmt[0].Columns, tables)
+	return o.getReturnedColumnOrderingTerms(stmt[0].Columns, tables)
 }
 
 // containsGroupBy will return true if the select core contains a group by clause.
@@ -385,7 +409,9 @@ func containsGroupBy(stmt *tree.SimpleSelect) (bool, error) {
 
 // getReturnedColumnOrderingTerms gets the ordering terms for the returned columns.
 // it is used to order result columns for compound select statements or distinct statements.
-func getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*types.Table) ([]*tree.OrderingTerm, error) {
+// If there are errors we wish to pass to the error listener, we will simply log them here and return nil error,
+// since returning nil,nil is a valid return value for this function.
+func (o *orderingWalker) getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*types.Table) ([]*tree.OrderingTerm, error) {
 	terms := []*tree.OrderingTerm{}
 
 	for _, col := range resultCols {
@@ -402,7 +428,8 @@ func getReturnedColumnOrderingTerms(resultCols []tree.ResultColumn, tables []*ty
 		case *tree.ResultColumnTable:
 			tbl, err := findTable(tables, c.TableName)
 			if err != nil {
-				return nil, fmt.Errorf("error finding table: %w", err)
+				o.errs.NodeErr(c.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+				return nil, nil
 			}
 
 			terms = append(terms, getTableOrderTerms(tbl)...)
@@ -450,5 +477,5 @@ func findTable(tables []*types.Table, name string) (*types.Table, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("table not found: %s", name)
+	return nil, fmt.Errorf("unknown table: %s", name)
 }

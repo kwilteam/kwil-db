@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 type UpsertType uint8
@@ -23,7 +24,7 @@ func (u UpsertType) Valid() error {
 }
 
 type Upsert struct {
-	node
+	types.Node
 
 	ConflictTarget *ConflictTarget
 	Type           UpsertType

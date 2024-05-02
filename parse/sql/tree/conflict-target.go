@@ -2,10 +2,11 @@ package tree
 
 import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 type ConflictTarget struct {
-	node
+	types.Node
 
 	IndexedColumns []string
 	Where          Expression

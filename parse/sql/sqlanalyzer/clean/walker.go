@@ -2,43 +2,73 @@ package clean
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/metadata"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 	"github.com/kwilteam/kwil-db/parse/util"
 )
 
 // TODO: the statement cleaner should also check for table / column existence
-func NewStatementCleaner(schema *types.Schema) *StatementCleaner {
+func NewStatementCleaner(schema *types.Schema, errorListener parseTypes.NativeErrorListener) *StatementCleaner {
 	return &StatementCleaner{
 		AstListener: tree.NewBaseListener(),
 		schema:      schema,
+		errs:        errorListener,
 	}
 }
+
+var ErrTableNotFound = errors.New("table not found")
 
 var _ tree.AstListener = &StatementCleaner{}
 
 type StatementCleaner struct {
 	tree.AstListener
 	schema *types.Schema
+	errs   parseTypes.NativeErrorListener
+}
+
+// err is a helper function to send errors to the error listener.
+// It will ignore nil errors. If err1 is not nil but err2 is, it will
+// not send an error. It is meant to be used to wrap errors, with the
+// first error being the type of error, and the second error giving
+// more information
+func (s *StatementCleaner) err(err1, err2 error, getNode getNoder) {
+	if err1 == nil {
+		panic("internal api misuse: err1 cannot be nil")
+	}
+
+	if err2 == nil {
+		return
+	}
+
+	s.errs.NodeErr(getNode.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("%s: %s", err1.Error(), err2.Error()))
+}
+
+type getNoder interface {
+	GetNode() *parseTypes.Node
 }
 
 // EnterConflictTarget checks that the indexed column names are valid identifiers
 func (s *StatementCleaner) EnterConflictTarget(node *tree.ConflictTarget) (err error) {
 	node.IndexedColumns, err = cleanIdentifiers(node.IndexedColumns)
-	return wrapErr(ErrInvalidIdentifier, err)
+	s.err(ErrInvalidIdentifier, err, node)
+	return nil
 }
 
 // EnterCTE checks that the table name and column names are valid identifiers
 func (s *StatementCleaner) EnterCTE(node *tree.CTE) (err error) {
 	node.Table, err = cleanIdentifier(node.Table)
 	if err != nil {
-		return wrapErr(ErrInvalidIdentifier, err)
+		s.err(ErrInvalidIdentifier, err, node)
+		return nil
 	}
 	node.Columns, err = cleanIdentifiers(node.Columns)
-	return wrapErr(ErrInvalidIdentifier, err)
+	s.err(ErrInvalidIdentifier, err, node)
+	return nil
 }
 
 // EnterDelete does nothing
@@ -54,7 +84,8 @@ func (s *StatementCleaner) EnterDeleteCore(node *tree.DeleteCore) (err error) {
 // EnterExpressionBindParameter checks that the bind parameter is a valid bind parameter
 func (s *StatementCleaner) EnterExpressionBindParameter(node *tree.ExpressionBindParameter) (err error) {
 	if !strings.HasPrefix(node.Parameter, "$") && !strings.HasPrefix(node.Parameter, "@") {
-		return wrapErr(ErrInvalidBindParameter, errors.New("bind parameter must start with $ or @"))
+		s.err(ErrInvalidBindParameter, errors.New("bind parameter must start with $ or @"), node)
+		return nil
 	}
 
 	node.Parameter = strings.ToLower(node.Parameter)
@@ -66,22 +97,26 @@ func (s *StatementCleaner) EnterExpressionColumn(node *tree.ExpressionColumn) (e
 	if node.Table != "" {
 		node.Table, err = cleanIdentifier(node.Table)
 		if err != nil {
-			return wrapErr(ErrInvalidIdentifier, err)
+			s.err(ErrInvalidIdentifier, err, node)
+			return nil
 		}
 	}
 
 	node.Column, err = cleanIdentifier(node.Column)
-	return wrapErr(ErrInvalidIdentifier, err)
+	s.err(ErrInvalidIdentifier, err, node)
+	return nil
 }
 
 // EnterExpressionUnary checks that the operator is a valid operator
 func (s *StatementCleaner) EnterExpressionUnary(node *tree.ExpressionUnary) (err error) {
-	return wrapErr(ErrInvalidUnaryOperator, node.Operator.Valid())
+	s.err(ErrInvalidUnaryOperator, node.Operator.Valid(), node)
+	return nil
 }
 
 // EnterExpressionBinary checks that the operator is a valid operator
 func (s *StatementCleaner) EnterExpressionBinaryComparison(node *tree.ExpressionBinaryComparison) (err error) {
-	return wrapErr(ErrInvalidBinaryOperator, node.Operator.Valid())
+	s.err(ErrInvalidBinaryOperator, node.Operator.Valid(), node)
+	return nil
 }
 
 // EnterExpressionFunction lowers the function name and checks that it is a valid function
@@ -114,12 +149,14 @@ func (s *StatementCleaner) EnterExpressionList(node *tree.ExpressionList) (err e
 // EnterExpressionCollate checks that the collation is a valid collation
 func (s *StatementCleaner) EnterExpressionCollate(node *tree.ExpressionCollate) (err error) {
 	if node.Collation.Empty() {
-		return wrapErr(ErrInvalidCollation, errors.New("collation cannot be empty"))
+		s.err(ErrInvalidCollation, errors.New("collation cannot be empty"), node)
+		return nil
 	}
 
 	err = node.Collation.Valid()
 	if err != nil {
-		return wrapErr(ErrInvalidCollation, err)
+		s.err(ErrInvalidCollation, err, node)
+		return nil
 	}
 
 	return nil
@@ -127,7 +164,8 @@ func (s *StatementCleaner) EnterExpressionCollate(node *tree.ExpressionCollate) 
 
 // EnterExpressionStringCompare checks that the operator is a valid operator
 func (s *StatementCleaner) EnterExpressionStringCompare(node *tree.ExpressionStringCompare) (err error) {
-	return wrapErr(ErrInvalidStringComparisonOperator, node.Operator.Valid())
+	s.err(ErrInvalidStringComparisonOperator, node.Operator.Valid(), node)
+	return nil
 }
 
 // EnterExpressionIs does nothing
@@ -143,7 +181,8 @@ func (s *StatementCleaner) EnterExpressionBetween(node *tree.ExpressionBetween) 
 // EnterExpressionExists checks that you can only negate EXISTS
 func (s *StatementCleaner) EnterExpressionSelect(node *tree.ExpressionSelect) (err error) {
 	if node.IsNot && !node.IsExists {
-		return wrapErr(ErrInvalidIdentifier, errors.New("cannot negate non-EXISTS select expression"))
+		s.err(ErrInvalidIdentifier, errors.New("cannot negate non-EXISTS select expression"), node)
+		return nil
 	}
 
 	return nil
@@ -156,7 +195,8 @@ func (s *StatementCleaner) EnterExpressionCase(node *tree.ExpressionCase) (err e
 
 // EnterExpressionArithmetic checks the validity of the operator
 func (s *StatementCleaner) EnterExpressionArithmetic(node *tree.ExpressionArithmetic) (err error) {
-	return wrapErr(ErrInvalidArithmeticOperator, node.Operator.Valid())
+	s.err(ErrInvalidArithmeticOperator, node.Operator.Valid(), node)
+	return nil
 }
 
 // EnterGroupBy does nothing
@@ -173,23 +213,33 @@ func (s *StatementCleaner) EnterInsertStmt(node *tree.InsertStmt) (err error) {
 func (s *StatementCleaner) EnterInsertCore(node *tree.InsertCore) (err error) {
 	err = node.InsertType.Valid()
 	if err != nil {
-		return wrapErr(ErrInvalidInsertType, err)
+		s.err(ErrInvalidInsertType, err, node)
+		return nil
 	}
 
 	node.Table, err = cleanIdentifier(node.Table)
 	if err != nil {
-		return wrapErr(ErrInvalidIdentifier, err)
+		s.err(ErrInvalidIdentifier, err, node)
+		return nil
+	}
+
+	_, found := s.schema.FindTable(node.Table)
+	if !found {
+		s.err(ErrUnknownTable, ErrTableNotFound, node)
+		return nil
 	}
 
 	if node.TableAlias != "" {
 		node.TableAlias, err = cleanIdentifier(node.TableAlias)
 		if err != nil {
-			return wrapErr(ErrInvalidIdentifier, err)
+			s.err(ErrInvalidIdentifier, err, node)
+			return nil
 		}
 	}
 
 	node.Columns, err = cleanIdentifiers(node.Columns)
-	return wrapErr(ErrInvalidIdentifier, err)
+	s.err(ErrInvalidIdentifier, err, node)
+	return nil
 }
 
 func (s *StatementCleaner) EnterRelationFunction(node *tree.RelationFunction) (err error) {
@@ -197,7 +247,8 @@ func (s *StatementCleaner) EnterRelationFunction(node *tree.RelationFunction) (e
 	if node.Alias != "" {
 		node.Alias, err = cleanIdentifier(node.Alias)
 		if err != nil {
-			return wrapErr(ErrInvalidIdentifier, err)
+			s.err(ErrInvalidIdentifier, err, node)
+			return nil
 		}
 	}
 	return nil
@@ -210,7 +261,8 @@ func (s *StatementCleaner) EnterJoinPredicate(node *tree.JoinPredicate) (err err
 
 // EnterJoinOperator validates the join operator
 func (s *StatementCleaner) EnterJoinOperator(node *tree.JoinOperator) (err error) {
-	return wrapErr(ErrInvalidJoinOperator, node.Valid())
+	s.err(ErrInvalidJoinOperator, node.Valid(), node)
+	return nil
 }
 
 // EnterLimit does nothing
@@ -227,11 +279,13 @@ func (s *StatementCleaner) EnterOrderBy(node *tree.OrderBy) (err error) {
 func (s *StatementCleaner) EnterOrderingTerm(node *tree.OrderingTerm) (err error) {
 	// ordertype and nullorderingtype are both valid as empty, so we don't need to check for that
 	if err = node.OrderType.Valid(); err != nil {
-		return wrapErr(ErrInvalidOrderType, err)
+		s.err(ErrInvalidOrderType, err, node)
+		return nil
 	}
 
 	if err = node.NullOrdering.Valid(); err != nil {
-		return wrapErr(ErrInvalidNullOrderType, err)
+		s.err(ErrInvalidNullOrderType, err, node)
+		return nil
 	}
 
 	return nil
@@ -241,13 +295,17 @@ func (s *StatementCleaner) EnterOrderingTerm(node *tree.OrderingTerm) (err error
 func (s *StatementCleaner) EnterQualifiedTableName(node *tree.QualifiedTableName) (err error) {
 	node.TableName, err = cleanIdentifier(node.TableName)
 	if err != nil {
-		return wrapErr(ErrInvalidIdentifier, err)
+		s.err(ErrInvalidIdentifier, err, node)
+		return nil
 	}
+
+	// we do not check for table existence here since it can reference a cte
 
 	if node.TableAlias != "" {
 		node.TableAlias, err = cleanIdentifier(node.TableAlias)
 		if err != nil {
-			return wrapErr(ErrInvalidIdentifier, err)
+			s.err(ErrInvalidIdentifier, err, node)
+			return nil
 		}
 	}
 
@@ -264,7 +322,8 @@ func (s *StatementCleaner) EnterResultColumnExpression(node *tree.ResultColumnEx
 	if node.Alias != "" {
 		node.Alias, err = cleanIdentifier(node.Alias)
 		if err != nil {
-			return wrapErr(ErrInvalidIdentifier, err)
+			s.err(ErrInvalidIdentifier, err, node)
+			return nil
 		}
 	}
 
@@ -275,7 +334,8 @@ func (s *StatementCleaner) EnterResultColumnExpression(node *tree.ResultColumnEx
 func (s *StatementCleaner) EnterResultColumnTable(node *tree.ResultColumnTable) (err error) {
 	node.TableName, err = cleanIdentifier(node.TableName)
 	if err != nil {
-		return wrapErr(ErrInvalidIdentifier, err)
+		s.err(ErrInvalidIdentifier, err, node)
+		return nil
 	}
 
 	return nil
@@ -290,11 +350,13 @@ func (s *StatementCleaner) EnterReturningClause(node *tree.ReturningClause) (err
 // only be used if an expression is used.
 func (s *StatementCleaner) EnterReturningClauseColumn(node *tree.ReturningClauseColumn) (err error) {
 	if node.All && node.Expression != nil {
-		return wrapErr(ErrInvalidReturningClause, errors.New("all and expression cannot be set at the same time"))
+		s.err(ErrInvalidReturningClause, errors.New("all and expression cannot be set at the same time"), node)
+		return nil
 	}
 
 	if node.Alias != "" && node.Expression == nil {
-		return wrapErr(ErrInvalidReturningClause, errors.New("alias cannot be set without an expression"))
+		s.err(ErrInvalidReturningClause, errors.New("alias cannot be set without an expression"), node)
+		return nil
 	}
 
 	return nil
@@ -307,14 +369,16 @@ func (s *StatementCleaner) EnterSelectStmt(node *tree.SelectStmt) (err error) {
 
 // EnterSelectCore validates the select type
 func (s *StatementCleaner) EnterSimpleSelect(node *tree.SimpleSelect) (err error) {
-	return wrapErr(ErrInvalidSelectType, node.SelectType.Valid())
+	s.err(ErrInvalidSelectType, node.SelectType.Valid(), node)
+	return nil
 }
 
 // EnterSelectStmt checks that, for each SelectCore besides the last, a compound operator is provided
 func (s *StatementCleaner) EnterSelectCore(node *tree.SelectCore) (err error) {
 	for _, core := range node.SimpleSelects[1:] {
 		if core.Compound == nil {
-			return wrapErr(ErrInvalidCompoundOperator, errors.New("compound operator must be provided for all SelectCores except the first"))
+			s.err(ErrInvalidCompoundOperator, errors.New("compound operator must be provided for all SelectCores except the first"), node)
+			return nil
 		}
 	}
 
@@ -323,20 +387,25 @@ func (s *StatementCleaner) EnterSelectCore(node *tree.SelectCore) (err error) {
 
 // EnterCompoundOperator validates the compound operator
 func (s *StatementCleaner) EnterCompoundOperator(node *tree.CompoundOperator) (err error) {
-	return wrapErr(ErrInvalidCompoundOperator, node.Operator.Valid())
+	s.err(ErrInvalidCompoundOperator, node.Operator.Valid(), node)
+	return nil
 }
 
 // EnterRelationTable checks the table name and alias
 func (s *StatementCleaner) EnterRelationTable(node *tree.RelationTable) (err error) {
 	node.Name, err = cleanIdentifier(node.Name)
 	if err != nil {
-		return wrapErr(ErrInvalidIdentifier, err)
+		s.err(ErrInvalidIdentifier, err, node)
+		return nil
 	}
+
+	// we do not check for table existence here since it can reference a cte
 
 	if node.Alias != "" {
 		node.Alias, err = cleanIdentifier(node.Alias)
 		if err != nil {
-			return wrapErr(ErrInvalidIdentifier, err)
+			s.err(ErrInvalidIdentifier, err, node)
+			return nil
 		}
 	}
 
@@ -348,7 +417,8 @@ func (s *StatementCleaner) EnterRelationSubquery(node *tree.RelationSubquery) (e
 	if node.Alias != "" {
 		node.Alias, err = cleanIdentifier(node.Alias)
 		if err != nil {
-			return wrapErr(ErrInvalidIdentifier, err)
+			s.err(ErrInvalidIdentifier, err, node)
+			return nil
 		}
 	}
 
@@ -365,7 +435,8 @@ func (s *StatementCleaner) EnterUpdateSetClause(node *tree.UpdateSetClause) (err
 	for i, column := range node.Columns {
 		node.Columns[i], err = cleanIdentifier(column)
 		if err != nil {
-			return wrapErr(ErrInvalidIdentifier, err)
+			s.err(ErrInvalidIdentifier, err, node)
+			return nil
 		}
 	}
 
@@ -379,5 +450,6 @@ func (s *StatementCleaner) EnterUpdateStmt(node *tree.UpdateStmt) (err error) {
 
 // EnterUpsert validates the upsert type
 func (s *StatementCleaner) EnterUpsert(node *tree.Upsert) (err error) {
-	return wrapErr(ErrInvalidUpsertType, node.Type.Valid())
+	s.err(ErrInvalidUpsertType, node.Type.Valid(), node)
+	return nil
 }

@@ -24,7 +24,16 @@ const (
 )
 
 func loadTestSchema() (*types.Schema, error) {
-	return parse.ParseKuneiform(testScheme)
+	res, err := parse.ParseKuneiform(testScheme)
+	if err != nil {
+		return nil, err
+	}
+	if res.Err() != nil {
+		return nil, res.Err()
+	}
+
+	return res.Schema, nil
+
 }
 
 func init() {

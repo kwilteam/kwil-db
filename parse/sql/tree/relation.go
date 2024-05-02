@@ -2,6 +2,7 @@ package tree
 
 import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 // Relation is one of:
@@ -15,7 +16,7 @@ type Relation interface {
 }
 
 type RelationTable struct {
-	node
+	types.Node
 
 	schema string
 	Name   string
@@ -70,7 +71,7 @@ func (t *RelationTable) SetSchema(schema string) {
 // RelationFunc is a relation that is a function call.
 // This can be used it a user has a function that returns a table.
 type RelationFunction struct {
-	node
+	types.Node
 
 	Function *ExpressionFunction
 	Alias    string
@@ -108,7 +109,7 @@ func (t *RelationFunction) ToSQL() string {
 }
 
 type RelationSubquery struct {
-	node
+	types.Node
 
 	Select *SelectCore
 	Alias  string
@@ -150,7 +151,7 @@ func (t *RelationSubquery) ToSQL() string {
 func (t *RelationSubquery) relation() {}
 
 type RelationJoin struct {
-	node
+	types.Node
 
 	Relation Relation
 	Joins    []*JoinPredicate

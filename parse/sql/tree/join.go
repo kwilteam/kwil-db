@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 // TODO: update this docs to reflect the current state of the code
@@ -49,7 +50,7 @@ From the SQLite documentation:
 */
 
 type JoinPredicate struct {
-	node
+	types.Node
 
 	JoinOperator *JoinOperator
 	Table        Relation
@@ -94,7 +95,7 @@ func (j *JoinPredicate) Accept(v AstVisitor) any {
 }
 
 type JoinOperator struct {
-	node
+	types.Node
 
 	JoinType JoinType
 	Outer    bool

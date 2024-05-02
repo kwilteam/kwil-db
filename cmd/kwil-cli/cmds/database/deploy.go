@@ -98,7 +98,15 @@ func UnmarshalKf(file *os.File) (*types.Schema, error) {
 		return nil, fmt.Errorf("failed to read Kuneiform source file: %w", err)
 	}
 
-	return parse.ParseKuneiform(string(source))
+	res, err := parse.ParseKuneiform(string(source))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Kuneiform source file: %w", err)
+	}
+	if res.Err() != nil {
+		return nil, fmt.Errorf("failed to parse Kuneiform source file: %w", res.Err())
+	}
+
+	return res.Schema, nil
 }
 
 func UnmarshalJson(file *os.File) (*types.Schema, error) {

@@ -219,7 +219,7 @@ func Test_Deployment(t *testing.T) {
 			// we intentionally use the bare kuneiform parser and don't
 			// perform extra checks because we want to test that the engine
 			// catches these errors
-			parsed, err := kuneiform.Parse(schema)
+			parsed, _, _, err := kuneiform.Parse(schema)
 			require.NoError(t, err)
 
 			err = global.CreateDataset(ctx, tx, parsed, &common.TransactionData{
@@ -228,7 +228,7 @@ func Test_Deployment(t *testing.T) {
 				TxID:   "test",
 			})
 			if tc.err != nil {
-				require.ErrorIs(t, err, tc.err)
+				require.ErrorAs(t, err, &tc.err)
 			} else {
 				require.NoError(t, err)
 			}

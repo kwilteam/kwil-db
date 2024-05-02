@@ -1,6 +1,8 @@
 package tree
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func SafeToSQL(node AstNode) (str string, err error) {
 	defer func() {

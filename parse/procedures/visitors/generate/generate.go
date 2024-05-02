@@ -24,14 +24,15 @@ type GeneratedProcedure struct {
 
 // GenerateProcedure generates the plpgsql code for a procedure.
 // It returns the body, as well as the variables that need to be declared.
-func GenerateProcedure(stmts []parser.Statement, proc *types.Procedure, procedureInputs []*types.NamedType, anonymousReceiverTypes []*types.DataType, pgSchemaName string) (g *GeneratedProcedure, err error) {
+// Unlike other visitors, it does not need an error listener, since all errors
+// should already be caught. There are some checks it does internally, but this
+// should be treated as a last-resort check, and failure to catch these earlier
+// should be considered a bug.
+func GenerateProcedure(stmts []parser.Statement, proc *types.Procedure, procedureInputs []*types.NamedType,
+	anonymousReceiverTypes []*types.DataType, pgSchemaName string) (g *GeneratedProcedure, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("panic: %v", e)
-		}
-
-		if err != nil {
-			err = fmt.Errorf("generate: %w", err)
 		}
 	}()
 

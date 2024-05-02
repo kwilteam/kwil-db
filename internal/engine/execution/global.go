@@ -15,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
 // GlobalContext is the context for the entire execution.
@@ -327,14 +328,19 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 		return nil, ErrDatasetNotFound
 	}
 
+	errLis := parseTypes.NewErrorListener()
+
 	// We have to parse the query and ensure the dbid is used to derive schema.
 	// OR do we permit (or require) the schema to be specified in the query? It
 	// could go either way, but this ad hoc query function is questionable anyway.
 	parsed, err := sqlanalyzer.ApplyRules(query,
 		sqlanalyzer.AllRules,
-		dataset.schema, dbidSchema(dbid))
+		dataset.schema, dbidSchema(dbid), errLis)
 	if err != nil {
 		return nil, err
+	}
+	if errLis.Err() != nil {
+		return nil, errLis.Err()
 	}
 
 	if parsed.Mutative {

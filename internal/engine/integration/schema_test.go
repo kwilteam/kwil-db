@@ -204,7 +204,7 @@ func loadSchema(file string) (*types.Schema, error) {
 		return nil, err
 	}
 
-	return db, nil
+	return db.Schema, nil
 }
 
 // deployAllSchemas deploys all schemas in the schemas directory.

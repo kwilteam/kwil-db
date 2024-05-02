@@ -2,70 +2,60 @@ package sqlparser
 
 import (
 	"fmt"
+	"runtime"
 
 	antlr "github.com/antlr4-go/antlr/v4"
 
 	grammar "github.com/kwilteam/kwil-db/parse/sql/gen"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
-// Parse parses a raw sql string and returns a tree.Statement
-func Parse(sql string) (ast tree.Statement, err error) {
-	currentLine := 1
-	return ParseSql(sql, currentLine, nil, false, false)
-}
-
-// ParseSql parses a single raw sql statement and returns tree.Statement
-func ParseSql(sql string, currentLine int, errorListener *ErrorListener,
-	trace bool, withPos bool) (ast tree.Statement, err error) {
-	var visitor *astBuilder
-
-	if errorListener == nil {
-		errorListener = NewErrorListener()
+// Parse parses a raw sql string and returns a tree.Statement.
+// It should only be used if the user is trying to parse a single
+// sql statement, and doesn't care about error handling.
+func Parse(sql string) (tree.Statement, error) {
+	stmts, err := ParseMany(sql)
+	if err != nil {
+		return nil, err
 	}
 
-	stream := antlr.NewInputStream(sql)
-	lexer := grammar.NewSQLLexer(stream)
-	tokenStream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-	p := grammar.NewSQLParser(tokenStream)
+	if len(stmts) != 1 {
+		return nil, fmt.Errorf("expected 1 statement, but found %d", len(stmts))
+	}
 
-	// remove default error visitor
-	p.RemoveErrorListeners()
-	p.AddErrorListener(errorListener)
-
-	p.BuildParseTrees = true
-
-	defer func() {
-		if e := recover(); e != nil {
-			errorListener.Add(fmt.Sprintf("panic: %v", e))
-		}
-
-		if err != nil {
-			errorListener.AddError(err)
-		}
-
-		err = errorListener.Err()
-	}()
-
-	visitor = newAstBuilder(astBuilderWithTrace(trace), astBuilderWithPos(withPos))
-	stmts := p.Statements().Accept(visitor).([]tree.AstNode)
-	// since we only expect a single statement
-	return stmts[0].(tree.Statement), err
+	return stmts[0], nil
 }
 
-// ParseMany returns the result of all parsed statements.
-// This is done to maintain compatibility with the previous implementation.
-// TODO: see if we should get rid of the previous implementation before
-// merging this.
-func ParseMany(sql string) (stmts []tree.Statement, err error) {
-	errorListener := NewErrorListener()
+// ParseMany parses a raw sql string and returns tree.Statements.
+// It should only be used if the user is trying to parse multiple
+// sql statements, and doesn't care about error handling.
+func ParseMany(sql string) ([]tree.Statement, error) {
+	errorListener := parseTypes.NewErrorListener()
+	ast, err := ParseWithErrorListener(sql, errorListener)
+	if err != nil {
+		return nil, err
+	}
 
+	if errorListener.Err() != nil {
+		return nil, errorListener.Err()
+	}
+
+	return ast, nil
+}
+
+// ParseWithErrorListener parses a raw sql string and returns tree.Statements.
+// Syntax errors are returned in the error listener.
+func ParseWithErrorListener(sql string, errorListener parseTypes.AntlrErrorListener) (stmts []tree.Statement, err error) {
 	stream := antlr.NewInputStream(sql)
 	lexer := grammar.NewSQLLexer(stream)
 	tokenStream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
 	p := grammar.NewSQLParser(tokenStream)
 
 	// remove default error visitor
+	lexer.RemoveErrorListeners()
+	lexer.AddErrorListener(errorListener)
+
 	p.RemoveErrorListeners()
 	p.AddErrorListener(errorListener)
 
@@ -73,17 +63,33 @@ func ParseMany(sql string) (stmts []tree.Statement, err error) {
 
 	defer func() {
 		if e := recover(); e != nil {
-			errorListener.Add(fmt.Sprintf("panic: %v", e))
-		}
+			var ok bool
+			err, ok = e.(error)
+			if !ok {
+				err = fmt.Errorf("panic: %v", e)
+			}
 
-		if err != nil {
-			errorListener.AddError(err)
-		}
+			// if there is a panic, it is likely due to a syntax error
+			// check for parse errors and return them first
+			if errorListener.Err() != nil {
+				// if there is an error listener error, we should swallow the panic
+				// If the issue persists until after the user has fixed the parse errors,
+				// the panic will be returned in the else block.
+				err = nil
+			} else {
+				// if there are no parse errors, then there is a bug.
+				// we should return the panic with a stack trace.
+				buf := make([]byte, 1<<16)
+				stackSize := runtime.Stack(buf, false)
 
-		err = errorListener.Err()
+				err = fmt.Errorf("%w\n\n%s", err, buf[:stackSize])
+			}
+		}
 	}()
 
-	visitor := newAstBuilder(astBuilderWithTrace(false), astBuilderWithPos(false))
+	visitor := &astBuilder{
+		errs: errorListener,
+	}
 	parsed := p.Statements().Accept(visitor).([]tree.AstNode)
 
 	s := make([]tree.Statement, len(parsed))
@@ -91,5 +97,5 @@ func ParseMany(sql string) (stmts []tree.Statement, err error) {
 		s[i] = stmt.(tree.Statement)
 	}
 
-	return s, err
+	return s, nil
 }

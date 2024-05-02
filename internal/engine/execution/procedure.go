@@ -81,9 +81,14 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 
 	// converting statements to instructions
 
-	parsedActions, err := actions.AnalyzeActions(schema, dbidSchema(schema.DBID()))
+	parsedActions, parseErrs, err := actions.AnalyzeActions(schema, &actions.AnalyzeOpts{
+		PGSchemaName: dbidSchema(schema.DBID()),
+	})
 	if err != nil {
 		return nil, err
+	}
+	if parseErrs.Err() != nil {
+		return nil, parseErrs.Err()
 	}
 
 	for idx, analyzedAction := range parsedActions {

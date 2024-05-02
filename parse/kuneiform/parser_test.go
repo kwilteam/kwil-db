@@ -253,6 +253,12 @@ func Test_Parse(t *testing.T) {
 				foreign key (username) references other_users (username) on delete set default on update no action,
 				foreign key (age) references other_users (age) on delete restrict
 			}
+
+			table other_uses {
+				id int primary key,
+				username text unique,
+				age int unique
+			}
 			`,
 			want: &types.Schema{
 				Name: "mydb",
@@ -414,6 +420,38 @@ func Test_Parse(t *testing.T) {
 							},
 						},
 					},
+					{
+						Name: "other_uses",
+						Columns: []*types.Column{
+							{
+								Name: "id",
+								Type: types.IntType,
+								Attributes: []*types.Attribute{
+									{
+										Type: types.PRIMARY_KEY,
+									},
+								},
+							},
+							{
+								Name: "username",
+								Type: types.TextType,
+								Attributes: []*types.Attribute{
+									{
+										Type: types.UNIQUE,
+									},
+								},
+							},
+							{
+								Name: "age",
+								Type: types.IntType,
+								Attributes: []*types.Attribute{
+									{
+										Type: types.UNIQUE,
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -554,7 +592,7 @@ func Test_Parse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Parse(tt.kf)
+			got, _, _, err := Parse(tt.kf)
 			if err != nil {
 				t.Fatalf("Parse() error = %v", err)
 			}

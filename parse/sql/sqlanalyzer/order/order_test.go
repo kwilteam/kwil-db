@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/postgres"
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer/order"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -155,12 +156,15 @@ func Test_Order(t *testing.T) {
 			stmt, err := sqlparser.Parse(tt.stmt)
 			require.NoError(t, err)
 
+			errLis := parseTypes.NewErrorListener()
+
 			walker := order.NewOrderWalker(&types.Schema{
 				Tables: defaultTables,
-			})
+			}, errLis)
 			err = stmt.Walk(walker)
-			if err != nil {
-				require.ErrorIs(t, err, tt.err)
+			require.Nil(t, err)
+			if errLis.Err() != nil {
+				require.Contains(t, errLis.Err().Error(), tt.err.Error())
 				return
 			}
 			require.Equal(t, tt.err, err)

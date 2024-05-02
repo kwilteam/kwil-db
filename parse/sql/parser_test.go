@@ -1,7 +1,6 @@
 package sqlparser
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"regexp"
@@ -9,9 +8,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/sql/postgres"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,6 +29,10 @@ func Test_ParseMany(t *testing.T) {
 	res, err := ParseMany(stmt)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	for _, s := range res {
+		checkNodesAreSet(t, s)
 	}
 
 	require.Equal(t, 2, len(res))
@@ -374,6 +380,16 @@ func genSimpleUpdateTree(qt *tree.QualifiedTableName, column, value string) *tre
 			},
 		},
 	}
+}
+
+// deepCompare deep compares the values of two nodes.
+// It ignores the parseTypes.Node field.
+func deepCompare(node1, node2 tree.AstNode) bool {
+	// we return true for the parseTypes.Node field,
+	// we also need to ignore the unexported "schema" fields
+	return cmp.Equal(node1, node2, cmp.Comparer(func(x, y parseTypes.Node) bool {
+		return true
+	}), cmpopts.IgnoreUnexported(tree.RelationTable{}, tree.InsertCore{}, tree.QualifiedTableName{}))
 }
 
 func TestParseRawSQL_syntax_valid(t *testing.T) {
@@ -2118,14 +2134,13 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				tt.expect = nil
 			}()
 
-			stmt, err := ParseSql(tt.input, 1, nil, *traceMode, false)
-			if err != nil {
-				t.Errorf("ParseRawSQL() got %s", err)
-				return
-			}
+			stmts, err := ParseMany(tt.input)
+			require.NoError(t, err)
+			stmt := stmts[0]
 
-			// use assert.Exactly?
-			assert.EqualValues(t, tt.expect, stmt, "ParseRawSQL() got %+v, want %+v", stmt, tt.expect)
+			if !deepCompare(stmt, tt.expect) {
+				t.Errorf("ParseRawSQL() got %+v, want %+v", stmt, tt.expect)
+			}
 
 			sql, err := tree.SafeToSQL(stmt)
 			if err != nil {
@@ -2148,6 +2163,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 
 			err = postgres.CheckSyntaxReplaceDollar(sql)
 			assert.NoErrorf(t, err, "postgres syntax check failed: %s", err)
+
+			checkNodesAreSet(t, stmt)
 		})
 	}
 }
@@ -2237,11 +2254,13 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			//eh := NewErrorHandler(1)
 			//el := newSqliteErrorListener(eh)
-			res, err := ParseSql(tt.input, 1, nil, *traceMode, false)
+			res, err := ParseMany(tt.input)
+			// the returned error should be nil, since the error listener
+			// should have caught the error
 			assert.Errorf(t, err, "Parser should complain abould invalid syntax")
-			_ = res
-			if !errors.Is(err, ErrInvalidSyntax) {
-				t.Fatalf("ParseRawSQL() expected error: %s, got %s", ErrInvalidSyntax, err)
+
+			for _, r := range res {
+				checkNodesAreSet(t, r)
 			}
 
 			//if el.symbol != tt.causeSymbol {
@@ -2261,16 +2280,365 @@ func TestParseRawSQL_semantic_invalid(t *testing.T) {
 		reason string
 	}{
 		// type cast
-		{"type cast not supported type", "select 1::random", `panic: invalid type cast random: unknown column type: random`},
+		{"type cast not supported type", "select 1::random", `unknown type`},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseSql(tt.input, 1, nil, *traceMode, false)
-			assert.Errorf(t, err, "Parser should complain abould invalid syntax")
+			res, err := ParseMany(tt.input)
+			require.NotNil(t, err)
 
-			// should panic, which is caught by ParseRawSQL
 			assert.Contains(t, err.Error(), tt.reason)
+
+			for _, r := range res {
+				checkNodesAreSet(t, r)
+			}
 		})
 	}
+}
+
+// checkNodesAreSet checks that all nodes have been set.
+// it ensures that we have called Set on all nodes in the AST.
+func checkNodesAreSet(t *testing.T, node tree.AstNode) {
+	l := tree.ImplementedListener{
+		FuncEnterCTE: func(p0 *tree.CTE) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterCompoundOperator: func(p0 *tree.CompoundOperator) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterConflictTarget: func(p0 *tree.ConflictTarget) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterDeleteStmt: func(p0 *tree.DeleteStmt) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterDeleteCore: func(p0 *tree.DeleteCore) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionArithmetic: func(p0 *tree.ExpressionArithmetic) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionBetween: func(p0 *tree.ExpressionBetween) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionBinaryComparison: func(p0 *tree.ExpressionBinaryComparison) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionBindParameter: func(p0 *tree.ExpressionBindParameter) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionCase: func(p0 *tree.ExpressionCase) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionCollate: func(p0 *tree.ExpressionCollate) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionColumn: func(p0 *tree.ExpressionColumn) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionFunction: func(p0 *tree.ExpressionFunction) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionIs: func(p0 *tree.ExpressionIs) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionList: func(p0 *tree.ExpressionList) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionTextLiteral: func(p0 *tree.ExpressionTextLiteral) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionNumericLiteral: func(p0 *tree.ExpressionNumericLiteral) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionBooleanLiteral: func(p0 *tree.ExpressionBooleanLiteral) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionNullLiteral: func(p0 *tree.ExpressionNullLiteral) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionBlobLiteral: func(p0 *tree.ExpressionBlobLiteral) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionSelect: func(p0 *tree.ExpressionSelect) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionStringCompare: func(p0 *tree.ExpressionStringCompare) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterExpressionUnary: func(p0 *tree.ExpressionUnary) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterGroupBy: func(p0 *tree.GroupBy) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterInsertStmt: func(p0 *tree.InsertStmt) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterInsertCore: func(p0 *tree.InsertCore) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterJoinOperator: func(p0 *tree.JoinOperator) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterJoinPredicate: func(p0 *tree.JoinPredicate) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterLimit: func(p0 *tree.Limit) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterOrderBy: func(p0 *tree.OrderBy) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterOrderingTerm: func(p0 *tree.OrderingTerm) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterQualifiedTableName: func(p0 *tree.QualifiedTableName) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterRelationFunction: func(p0 *tree.RelationFunction) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterRelationJoin: func(p0 *tree.RelationJoin) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterRelationSubquery: func(p0 *tree.RelationSubquery) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterRelationTable: func(p0 *tree.RelationTable) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterResultColumnExpression: func(p0 *tree.ResultColumnExpression) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterResultColumnStar: func(p0 *tree.ResultColumnStar) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterResultColumnTable: func(p0 *tree.ResultColumnTable) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterReturningClause: func(p0 *tree.ReturningClause) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterReturningClauseColumn: func(p0 *tree.ReturningClauseColumn) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterSelectStmt: func(p0 *tree.SelectStmt) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterSimpleSelect: func(p0 *tree.SimpleSelect) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterSelectCore: func(p0 *tree.SelectCore) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterUpdateStmt: func(p0 *tree.UpdateStmt) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterUpdateSetClause: func(p0 *tree.UpdateSetClause) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterUpdateCore: func(p0 *tree.UpdateCore) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+		FuncEnterUpsert: func(p0 *tree.Upsert) error {
+			if !p0.Node.IsSet {
+				return fmt.Errorf("node not set for AST node %T", p0)
+			}
+
+			return nil
+		},
+	}
+
+	err := node.Walk(&l)
+	require.NoError(t, err)
 }

@@ -5,10 +5,11 @@ import (
 	"strings"
 
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 type OrderBy struct {
-	node
+	types.Node
 
 	OrderingTerms []*OrderingTerm
 }
@@ -42,7 +43,7 @@ func (o *OrderBy) ToSQL() string {
 }
 
 type OrderingTerm struct {
-	node
+	types.Node
 
 	Expression   Expression
 	OrderType    OrderType

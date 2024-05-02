@@ -106,6 +106,18 @@ func (s *Schema) Clean() error {
 	return nil
 }
 
+// FindTable finds a table based on its name.
+// It returns false if the table is not found.
+func (s *Schema) FindTable(name string) (table *Table, found bool) {
+	for _, tbl := range s.Tables {
+		if strings.EqualFold(tbl.Name, name) {
+			return tbl, true
+		}
+	}
+
+	return nil, false
+}
+
 // FindProcedure finds a procedure based on its name.
 // It returns false if the procedure is not found.
 func (s *Schema) FindProcedure(name string) (procedure *Procedure, found bool) {
@@ -265,6 +277,18 @@ func (t *Table) Copy() *Table {
 	}
 
 	return res
+}
+
+// FindColumn finds a column based on its name.
+// It returns false if the column is not found.
+func (t *Table) FindColumn(name string) (column *Column, found bool) {
+	for _, col := range t.Columns {
+		if strings.EqualFold(col.Name, name) {
+			return col, true
+		}
+	}
+
+	return nil, false
 }
 
 // Column is a column in a table.
@@ -789,6 +813,8 @@ func (p *Action) Clean() error {
 		}
 	}
 
+	p.Body = strings.TrimSpace(p.Body)
+
 	return errors.Join(
 		cleanIdent(&p.Name),
 		cleanActionParameters(&p.Parameters),
@@ -898,8 +924,9 @@ func (p *Procedure) Clean() error {
 		if err != nil {
 			return err
 		}
-
 	}
+
+	p.Body = strings.TrimSpace(p.Body)
 
 	return cleanIdent(&p.Name)
 }
@@ -1080,7 +1107,7 @@ func (c *DataType) Clean() error {
 		c.Name = name
 		return nil
 	default:
-		return fmt.Errorf("unknown column type: %s", c.Name)
+		return fmt.Errorf("unknown type: %s", c.Name)
 	}
 }
 

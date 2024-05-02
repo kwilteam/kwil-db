@@ -17,6 +17,14 @@ func parseAndMarshal(input string) (jsonStr string, err error) {
 		return "", err
 	}
 
+	// convert all errors to be 1-indexed
+	for _, e := range schema.Errs {
+		e.Node.StartCol++
+		e.Node.StartLine++
+		e.Node.EndCol++
+		e.Node.EndLine++
+	}
+
 	jsonBytes, err := json.Marshal(schema)
 	if err != nil {
 		return "", err
