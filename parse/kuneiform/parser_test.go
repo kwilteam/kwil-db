@@ -238,19 +238,77 @@ func Test_Parse(t *testing.T) {
 			kf: `
 			database mydb;
 
+			table other_users {
+				id int primary key,
+				username text not null unique minlen(5) maxlen(32),
+				age int max(100) min(18) default(18)
+			}
+
 			table users {
 				id int primary key,
 				username text not null unique minlen(5) maxlen(32),
 				age int max(100) min(18) default(18),
 				bts blob default(0x00),
-				foreign key (id) references other_uses (id) on delete cascade on update set null,
-				foreign key (username) references other_uses (username) on delete set default on update no action,
-				foreign key (age) references other_uses (age) on delete restrict
+				foreign key (id) references other_users (id) on delete cascade on update set null,
+				foreign key (username) references other_users (username) on delete set default on update no action,
+				foreign key (age) references other_users (age) on delete restrict
 			}
 			`,
 			want: &types.Schema{
 				Name: "mydb",
 				Tables: []*types.Table{
+					{
+						Name: "other_users",
+						Columns: []*types.Column{
+							{
+								Name: "id",
+								Type: types.IntType,
+								Attributes: []*types.Attribute{
+									{
+										Type: types.PRIMARY_KEY,
+									},
+								},
+							},
+							{
+								Name: "username",
+								Type: types.TextType,
+								Attributes: []*types.Attribute{
+									{
+										Type: types.NOT_NULL,
+									},
+									{
+										Type: types.UNIQUE,
+									},
+									{
+										Type:  types.MIN_LENGTH,
+										Value: "5",
+									},
+									{
+										Type:  types.MAX_LENGTH,
+										Value: "32",
+									},
+								},
+							},
+							{
+								Name: "age",
+								Type: types.IntType,
+								Attributes: []*types.Attribute{
+									{
+										Type:  types.MAX,
+										Value: "100",
+									},
+									{
+										Type:  types.MIN,
+										Value: "18",
+									},
+									{
+										Type:  types.DEFAULT,
+										Value: "18",
+									},
+								},
+							},
+						},
+					},
 					{
 						Name: "users",
 						Columns: []*types.Column{
@@ -315,7 +373,7 @@ func Test_Parse(t *testing.T) {
 						ForeignKeys: []*types.ForeignKey{
 							{
 								ChildKeys:   []string{"id"},
-								ParentTable: "other_uses",
+								ParentTable: "other_users",
 								ParentKeys:  []string{"id"},
 								Actions: []*types.ForeignKeyAction{
 									{
@@ -330,7 +388,7 @@ func Test_Parse(t *testing.T) {
 							},
 							{
 								ChildKeys:   []string{"username"},
-								ParentTable: "other_uses",
+								ParentTable: "other_users",
 								ParentKeys:  []string{"username"},
 								Actions: []*types.ForeignKeyAction{
 									{
@@ -345,7 +403,7 @@ func Test_Parse(t *testing.T) {
 							},
 							{
 								ChildKeys:   []string{"age"},
-								ParentTable: "other_uses",
+								ParentTable: "other_users",
 								ParentKeys:  []string{"age"},
 								Actions: []*types.ForeignKeyAction{
 									{
