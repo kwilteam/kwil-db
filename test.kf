@@ -6,5 +6,5 @@ table users {
 
 procedure my_proc() public {
     $a int;
-    INSERT INTO users (id) values ($a)
+    select * from users inner j
 }

@@ -23,25 +23,7 @@ type astBuilder struct {
 	trace bool
 }
 
-type astBuilderOption func(*astBuilder)
-
-func astBuilderWithTrace(on bool) astBuilderOption {
-	return func(l *astBuilder) {
-		l.trace = on
-	}
-}
-
 var _ grammar.SQLParserVisitor = &astBuilder{}
-
-func newAstBuilder(opts ...astBuilderOption) *astBuilder {
-	k := &astBuilder{}
-
-	for _, opt := range opts {
-		opt(k)
-	}
-
-	return k
-}
 
 // VisitCommon_table_expression is called when visiting a common_table_expression, return *tree.CTE
 func (v *astBuilder) VisitCommon_table_expression(ctx *grammar.Common_table_expressionContext) interface{} {
