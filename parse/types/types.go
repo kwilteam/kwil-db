@@ -7,16 +7,20 @@ import (
 	"github.com/antlr4-go/antlr/v4"
 )
 
+// ParseErrors is a collection of parse errors.
 type ParseErrors []*ParseError
 
+// Error implements the error interface.
 func (p ParseErrors) Error() string {
 	return CombineParseErrors(p).Error()
 }
 
+// Err returns all the errors as a single error.
 func (p ParseErrors) Err() error {
 	return CombineParseErrors(p)
 }
 
+// Add adds errors to the collection.
 func (p *ParseErrors) Add(errs ...*ParseError) {
 	*p = append(*p, errs...)
 }
@@ -52,6 +56,7 @@ func CombineParseErrors(errs []*ParseError) error {
 	}
 }
 
+// ParseErrorTypes are used to group errors into categories.
 type ParseErrorType string
 
 const (
@@ -61,6 +66,8 @@ const (
 	ParseErrorTypeUnknown  ParseErrorType = "unknown"
 )
 
+// Node is a node in the parse tree. It represents a range of line and column
+// values in Kuneiform source code.
 type Node struct {
 	// Set is true if the position of the node has been set.
 	// This is useful for testing parsers.

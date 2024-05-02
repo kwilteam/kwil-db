@@ -4,6 +4,8 @@ import (
 	"github.com/antlr4-go/antlr/v4"
 )
 
+// BaseErrorListener is an interface for error listeners that are used by both Antlr
+// and Kwil's native validation logic.
 type BaseErrorListener interface {
 	// Err returns the error if there are any, otherwise it returns nil.
 	Err() error
@@ -28,8 +30,8 @@ type AntlrErrorListener interface {
 	ChildFromToken(name string, t antlr.Token) *ErrorListener
 }
 
-// NativeErrorListener iis an interface for error listeners required by Kwil's native
-// visitors.
+// NativeErrorListener is an interface for error listeners required by Kwil's native
+// visitors, which perform validation such as type checking, semantic checking, etc.
 type NativeErrorListener interface {
 	BaseErrorListener
 	// NodeErr adds an error where our native node type is identifiable.
@@ -39,7 +41,8 @@ type NativeErrorListener interface {
 	Child(name string, startLine, startCol int) *ErrorListener
 }
 
-// ErrorListener is an error listener that collects errors during parsing.
+// ErrorListener listens to errors emitted by Antlr, and also collects
+// errors from Kwil's native validation logic.
 type ErrorListener struct {
 	Errs      []*ParseError
 	startLine int
@@ -103,7 +106,7 @@ func (e *ErrorListener) adjustNode(node *Node) *Node {
 	}
 }
 
-// TokenErr adds an error that comes from a token.
+// TokenErr adds an error that comes from an Antlr token.
 func (e *ErrorListener) TokenErr(t antlr.Token, errType ParseErrorType, msg string) {
 	e.Errs = append(e.Errs, &ParseError{
 		ParserName: e.name,
@@ -113,7 +116,7 @@ func (e *ErrorListener) TokenErr(t antlr.Token, errType ParseErrorType, msg stri
 	})
 }
 
-// RuleErr adds an error that comes from a parser rule.
+// RuleErr adds an error that comes from a Antlr parser rule.
 func (e *ErrorListener) RuleErr(ctx antlr.ParserRuleContext, errType ParseErrorType, msg string) {
 	node := &Node{}
 	node.Set(ctx)
@@ -122,16 +125,6 @@ func (e *ErrorListener) RuleErr(ctx antlr.ParserRuleContext, errType ParseErrorT
 		Type:       errType,
 		Err:        msg,
 		Node:       e.adjustNode(node),
-	})
-}
-
-func (e *ErrorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol interface{}, line, column int,
-	msg string, ex antlr.RecognitionException) {
-	e.Errs = append(e.Errs, &ParseError{
-		ParserName: e.name,
-		Type:       ParseErrorTypeSyntax,
-		Err:        ErrSyntaxError.Error() + ": " + msg,
-		Node:       e.adjustNode(unaryNode(line, column)),
 	})
 }
 
@@ -148,25 +141,43 @@ func (l *ErrorListener) Child(name string, startLine, startCol int) *ErrorListen
 
 // ChildFromToken creates a new error listener that is a child of the current error listener.
 // It will have the same starting position as the token.
-// It is defined here because we have to hack around Antlr's semantic of returning 1-indexed
-// lines and 0-indexed columns, and we are encapsulating it in this package.
+// It is defined here because we have to account for antlr-go returning 1-indexed lines
+// and 0-indexed columns, which is both confusing and non-standard for Antlr. We adjust
+// everything to be 0-indexed, which while a-typical, is more convenient for tracking
+// position in nested parsers. To abstract this aytpicality, we confine it all in this
+// package.
 func (l *ErrorListener) ChildFromToken(name string, t antlr.Token) *ErrorListener {
 	startline := t.GetLine() - 1
 	startcol := t.GetColumn()
 	return l.Child(name, startline, startcol)
 }
 
+// SyntaxError implements the Antlr error listener interface.
+func (e *ErrorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol interface{}, line, column int,
+	msg string, ex antlr.RecognitionException) {
+	e.Errs = append(e.Errs, &ParseError{
+		ParserName: e.name,
+		Type:       ParseErrorTypeSyntax,
+		Err:        ErrSyntaxError.Error() + ": " + msg,
+		Node:       e.adjustNode(unaryNode(line, column)),
+	})
+}
+
 // We do not need to do anything in the below methods because they are simply Antlr's way of reporting.
 // We may want to add warnings in the future, but for now, we will ignore them.
 // https://stackoverflow.com/questions/71056312/antlr-how-to-avoid-reportattemptingfullcontext-and-reportambiguity
+
+// ReportAmbiguity implements the Antlr error listener interface.
 func (l *ErrorListener) ReportAmbiguity(recognizer antlr.Parser, dfa *antlr.DFA, startIndex, stopIndex int,
 	exact bool, ambigAlts *antlr.BitSet, configs *antlr.ATNConfigSet) {
 }
 
+// ReportAttemptingFullContext implements the Antlr error listener interface.
 func (l *ErrorListener) ReportAttemptingFullContext(recognizer antlr.Parser, dfa *antlr.DFA, startIndex,
 	stopIndex int, conflictingAlts *antlr.BitSet, configs *antlr.ATNConfigSet) {
 }
 
+// ReportContextSensitivity implements the Antlr error listener interface.
 func (l *ErrorListener) ReportContextSensitivity(recognizer antlr.Parser, dfa *antlr.DFA, startIndex, stopIndex,
 	prediction int, configs *antlr.ATNConfigSet) {
 }
