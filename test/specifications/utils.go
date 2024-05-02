@@ -10,6 +10,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse"
+	"github.com/kwilteam/kwil-db/parse/kuneiform"
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/stretchr/testify/require"
 )
@@ -62,15 +63,15 @@ func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSch
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	db, err := parse.ParseKuneiform(string(d))
+	db, _, _, err := kuneiform.Parse(string(d))
 	if err != nil {
 		t.Fatal("cannot parse database schema", err)
 	}
 	// ignore parser validation error
 
-	l.Modifier(db.Schema)
+	l.Modifier(db)
 
-	return db.Schema
+	return db
 }
 
 func ExpectTxSuccess(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte) {
