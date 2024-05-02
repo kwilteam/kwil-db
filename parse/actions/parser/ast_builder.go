@@ -336,7 +336,7 @@ func (v *astBuilder) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) tree.E
 		// this is a really ugly dependency; not quite circular, so it is ok.
 		// Since we likely will not make many changes to actions (in favor of procedures),
 		// it is ok for now
-		_, ok := metadata.Functions[expr.Function]
+		_, ok := metadata.Functions[strings.ToLower(expr.Function)]
 		if !ok {
 			v.errs.RuleErr(ctx.Sfn_name(), parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("function %s does not exist", expr.Function))
 			return &tree.ExpressionNullLiteral{}

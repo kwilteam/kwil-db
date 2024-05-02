@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/parse/metadata"
 	parser "github.com/kwilteam/kwil-db/parse/procedures/parser"
 	"github.com/kwilteam/kwil-db/parse/procedures/visitors/typing"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 	parserTypes "github.com/kwilteam/kwil-db/parse/types"
 	"github.com/stretchr/testify/require"
 )
@@ -48,7 +49,7 @@ func Test_Typing(t *testing.T) {
 			$id1 int;
 			$id1 text;
 			`,
-			err: metadata.ErrVariableAlreadyDeclared,
+			err: parseTypes.ErrVariableAlreadyDeclared,
 		},
 		{
 			name: "redeclare input",
@@ -56,7 +57,7 @@ func Test_Typing(t *testing.T) {
 			body: `
 			$id int;
 			`,
-			err: metadata.ErrVariableAlreadyDeclared,
+			err: parseTypes.ErrVariableAlreadyDeclared,
 		},
 		{
 			name: "math",

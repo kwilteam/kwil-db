@@ -1,0 +1,10 @@
+database aa;
+
+table users {
+    id int primary key
+}
+
+procedure my_proc() public {
+    $a int;
+    INSERT INTO users (id) values ($a)
+}

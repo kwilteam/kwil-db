@@ -213,7 +213,7 @@ func (t *typingVisitor) VisitExpressionForeignCall(p0 *parser.ExpressionForeignC
 		}
 	}
 	if !found {
-		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, metadata.ErrUnknownForeignProcedure.Error(), p0.Name))
+		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, parseTypes.ErrUnknownForeignProcedure.Error(), p0.Name))
 		return types.UnknownType
 	}
 
@@ -278,7 +278,7 @@ func (t *typingVisitor) VisitExpressionComparison(p0 *parser.ExpressionCompariso
 	// or one of them must be null
 	if !left.Equals(right) {
 		if !left.Equals(types.NullType) && !right.Equals(types.NullType) {
-			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, metadata.ErrComparisonTypesDoNotMatch.Error())
+			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, parseTypes.ErrComparisonTypesDoNotMatch.Error())
 		}
 	}
 
@@ -294,7 +294,7 @@ func (t *typingVisitor) VisitExpressionFieldAccess(p0 *parser.ExpressionFieldAcc
 
 	dt, ok := anonType[p0.Field]
 	if !ok {
-		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, metadata.ErrUnknownField.Error())
+		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, parseTypes.ErrUnknownField.Error())
 		return types.UnknownType
 	}
 
@@ -335,7 +335,7 @@ func (t *typingVisitor) VisitExpressionMakeArray(p0 *parser.ExpressionMakeArray)
 		}
 
 		if !arrayType.Equals(dataType) {
-			t.errs.NodeErr(e.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("%s: %s != %s", metadata.ErrArrayElementTypesDoNotMatch.Error(), arrayType, dataType))
+			t.errs.NodeErr(e.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("%s: %s != %s", parseTypes.ErrArrayElementTypesDoNotMatch.Error(), arrayType, dataType))
 		}
 	}
 
@@ -382,7 +382,7 @@ func (t *typingVisitor) VisitExpressionVariable(p0 *parser.ExpressionVariable) a
 	if !ok {
 		anonType, ok := t.anonymousDeclarations[p0.Name]
 		if !ok {
-			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf(`%s: "%s"`, metadata.ErrUndeclaredVariable.Error(), util.UnformatParameterName(p0.Name)))
+			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf(`%s: "%s"`, parseTypes.ErrUndeclaredVariable.Error(), util.UnformatParameterName(p0.Name)))
 			return types.UnknownType
 		}
 
@@ -481,7 +481,7 @@ func (t *typingVisitor) VisitStatementProcedureCall(p0 *parser.StatementProcedur
 		}
 		varType, ok := t.declarations[*v]
 		if !ok {
-			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf(`%s: "%s"`, metadata.ErrUndeclaredVariable.Error(), util.UnformatParameterName(*v)))
+			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf(`%s: "%s"`, parseTypes.ErrUndeclaredVariable.Error(), util.UnformatParameterName(*v)))
 			continue
 		}
 
@@ -561,7 +561,7 @@ func (t *typingVisitor) analyzeProcedureCall(p0 parser.ICallExpression) *types.P
 			}
 		}
 		if !found {
-			t.errs.NodeErr(call.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, metadata.ErrUnknownForeignProcedure.Error(), call.Name))
+			t.errs.NodeErr(call.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, parseTypes.ErrUnknownForeignProcedure.Error(), call.Name))
 			return &types.ProcedureReturn{}
 		}
 
@@ -607,7 +607,7 @@ func (t *typingVisitor) analyzeProcedureCall(p0 parser.ICallExpression) *types.P
 
 func (t *typingVisitor) VisitStatementBreak(p0 *parser.StatementBreak) any {
 	if t.loopTarget == "" {
-		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, metadata.ErrBreakUsedOutsideOfLoop.Error())
+		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, parseTypes.ErrBreakUsedOutsideOfLoop.Error())
 	}
 	return nil
 }
@@ -624,7 +624,7 @@ func (t *typingVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) any {
 		// a field in an array of a known type
 		_, ok := t.declarations[p0.Variable]
 		if ok {
-			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, metadata.ErrVariableAlreadyDeclared.Error())
+			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, parseTypes.ErrVariableAlreadyDeclared.Error())
 			return nil
 		}
 
@@ -634,7 +634,7 @@ func (t *typingVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) any {
 		r := target.Accept(t).(map[string]*types.DataType)
 		_, ok := t.anonymousDeclarations[p0.Variable]
 		if ok {
-			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, metadata.ErrVariableAlreadyDeclared.Error())
+			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, parseTypes.ErrVariableAlreadyDeclared.Error())
 		}
 
 		t.anonymousDeclarations[p0.Variable] = r
@@ -644,7 +644,7 @@ func (t *typingVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) any {
 		// we will not declare these as anonymous, since it is a simple int
 		_, ok := t.declarations[p0.Variable]
 		if ok {
-			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, metadata.ErrVariableAlreadyDeclared.Error())
+			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, parseTypes.ErrVariableAlreadyDeclared.Error())
 		}
 
 		t.declarations[p0.Variable] = r
@@ -653,7 +653,7 @@ func (t *typingVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) any {
 
 		_, ok := t.anonymousDeclarations[p0.Variable]
 		if ok {
-			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, metadata.ErrVariableAlreadyDeclared.Error())
+			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, parseTypes.ErrVariableAlreadyDeclared.Error())
 		}
 
 		t.anonymousDeclarations[p0.Variable] = r
@@ -750,7 +750,7 @@ func (t *typingVisitor) VisitStatementReturn(p0 *parser.StatementReturn) any {
 			}
 
 			if !t.currentProcedure.Returns.Fields[i].Type.Equals(r) {
-				t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("%s: expected: %s received: %s", metadata.ErrIncorrectReturnType.Error(), t.currentProcedure.Returns.Fields[i], r))
+				t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("%s: expected: %s received: %s", parseTypes.ErrIncorrectReturnType.Error(), t.currentProcedure.Returns.Fields[i], r))
 			}
 		}
 	}
@@ -760,7 +760,7 @@ func (t *typingVisitor) VisitStatementReturn(p0 *parser.StatementReturn) any {
 
 func (t *typingVisitor) VisitStatementReturnNext(p0 *parser.StatementReturnNext) any {
 	if t.loopTarget == "" {
-		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, metadata.ErrReturnNextUsedOutsideOfLoop.Error())
+		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, parseTypes.ErrReturnNextUsedOutsideOfLoop.Error())
 		return nil
 	}
 
@@ -770,12 +770,12 @@ func (t *typingVisitor) VisitStatementReturnNext(p0 *parser.StatementReturnNext)
 	}
 
 	if !t.currentProcedure.Returns.IsTable {
-		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, metadata.ErrReturnNextUsedInNonTableProc.Error())
+		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, parseTypes.ErrReturnNextUsedInNonTableProc.Error())
 		return nil
 	}
 
 	if len(p0.Returns) != len(t.currentProcedure.Returns.Fields) {
-		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, metadata.ErrReturnNextInvalidCount.Error())
+		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, parseTypes.ErrReturnNextInvalidCount.Error())
 	}
 
 	for i, col := range t.currentProcedure.Returns.Fields {
@@ -785,7 +785,7 @@ func (t *typingVisitor) VisitStatementReturnNext(p0 *parser.StatementReturnNext)
 		}
 
 		if !col.Type.Equals(r) {
-			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("%s: expected: %s received: %s", metadata.ErrIncorrectReturnType.Error(), col.Type, r))
+			t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("%s: expected: %s received: %s", parseTypes.ErrIncorrectReturnType.Error(), col.Type, r))
 		}
 	}
 
@@ -802,7 +802,7 @@ func (t *typingVisitor) VisitStatementVariableAssignment(p0 *parser.StatementVar
 	typ, ok := t.declarations[p0.Name]
 	if !ok {
 		// I don't think this can happen
-		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, metadata.ErrUndeclaredVariable.Error(), util.UnformatParameterName(p0.Name)))
+		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, parseTypes.ErrUndeclaredVariable.Error(), util.UnformatParameterName(p0.Name)))
 		return nil
 	}
 
@@ -812,7 +812,7 @@ func (t *typingVisitor) VisitStatementVariableAssignment(p0 *parser.StatementVar
 	}
 
 	if !typ.Equals(r) {
-		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("%s: expected: %s received: %s", metadata.ErrAssignmentTypeMismatch.Error(), typ, r))
+		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("%s: expected: %s received: %s", parseTypes.ErrAssignmentTypeMismatch.Error(), typ, r))
 	}
 
 	return nil
@@ -825,12 +825,12 @@ func (t *typingVisitor) VisitStatementVariableAssignmentWithDeclaration(p0 *pars
 	}
 
 	if !p0.Type.Equals(retType) {
-		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("%s: expected: %s received: %s", metadata.ErrAssignmentTypeMismatch.Error(), p0.Type, retType))
+		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("%s: expected: %s received: %s", parseTypes.ErrAssignmentTypeMismatch.Error(), p0.Type, retType))
 	}
 
 	_, ok = t.declarations[p0.Name]
 	if ok {
-		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, metadata.ErrVariableAlreadyDeclared.Error())
+		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, parseTypes.ErrVariableAlreadyDeclared.Error())
 		return nil
 	}
 
@@ -842,7 +842,7 @@ func (t *typingVisitor) VisitStatementVariableAssignmentWithDeclaration(p0 *pars
 func (t *typingVisitor) VisitStatementVariableDeclaration(p0 *parser.StatementVariableDeclaration) any {
 	_, ok := t.declarations[p0.Name]
 	if ok {
-		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, metadata.ErrVariableAlreadyDeclared.Error())
+		t.errs.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, parseTypes.ErrVariableAlreadyDeclared.Error())
 		return nil
 	}
 

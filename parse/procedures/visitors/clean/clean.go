@@ -139,7 +139,7 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 				}
 
 				if proc.IsView() && !proc2.IsView() {
-					errorListener.NodeErr(&ec.Node, parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, metadata.ErrReadOnlyProcedureCallsMutative.Error(), proc2.Name))
+					errorListener.NodeErr(&ec.Node, parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, parseTypes.ErrReadOnlyProcedureCallsMutative.Error(), proc2.Name))
 				}
 			}
 		},
@@ -232,7 +232,7 @@ func (c *cleaner) cleanVar(n *string) {
 
 		sesVar, ok := metadata.GetSessionVariable(r)
 		if !ok {
-			panic(fmt.Errorf("%w: %s", metadata.ErrUnknownContextualVariable, r))
+			panic(fmt.Errorf("%w: %s", parseTypes.ErrUnknownContextualVariable, r))
 		}
 
 		// contextual parameter
@@ -265,7 +265,7 @@ func (c *cleaner) cleanSQL(ast tree.AstNode, ctx *parseTypes.Node) {
 	}
 
 	if !c.sqlCanMutate && isMutative {
-		c.errs.NodeErr(ctx, parseTypes.ParseErrorTypeSemantic, metadata.ErrReadOnlyProcedureContainsDML.Error())
+		c.errs.NodeErr(ctx, parseTypes.ParseErrorTypeSemantic, parseTypes.ErrReadOnlyProcedureContainsDML.Error())
 	}
 
 	err = parameters.RenameVariables(ast, func(s string) string {
@@ -286,7 +286,7 @@ func (c *cleaner) findProcedure(name string) (*types.Procedure, error) {
 		}
 	}
 
-	return nil, fmt.Errorf(`%w: "%s"`, metadata.ErrUnknownFunctionOrProcedure, name)
+	return nil, fmt.Errorf(`%w: "%s"`, parseTypes.ErrUnknownFunctionOrProcedure, name)
 }
 
 func (c *cleaner) isForeignProcedure(name string) bool {
@@ -308,7 +308,7 @@ func (c *cleaner) findForeignProcedure(name string) (*types.ForeignProcedure, er
 		}
 	}
 
-	return nil, fmt.Errorf(`%w: "%s"`, metadata.ErrUnknownForeignProcedure, name)
+	return nil, fmt.Errorf(`%w: "%s"`, parseTypes.ErrUnknownForeignProcedure, name)
 }
 
 // returnable returns true if the statement

@@ -6,6 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/metadata"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
 // FindProcOrForeign finds a procedure or foreign procedure by name.
@@ -33,7 +34,7 @@ func FindProcOrForeign(schema *types.Schema, name string) (parameters []*types.D
 		return parameters, returns, nil
 	}
 
-	return nil, nil, fmt.Errorf("%w: %s", metadata.ErrUnknownFunctionOrProcedure, name)
+	return nil, nil, fmt.Errorf("%w: %s", parseTypes.ErrUnknownFunctionOrProcedure, name)
 }
 
 // FormatProcedureName formats a procedure name for usage in postgres. This

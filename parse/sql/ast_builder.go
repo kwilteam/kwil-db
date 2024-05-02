@@ -10,7 +10,6 @@ import (
 	"github.com/antlr4-go/antlr/v4"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/parse/metadata"
 	grammar "github.com/kwilteam/kwil-db/parse/sql/gen"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 	parseTypes "github.com/kwilteam/kwil-db/parse/types"
@@ -449,14 +448,14 @@ func (v *astBuilder) VisitForeign_function_call(ctx *grammar.Foreign_function_ca
 	expr.Function = util.ExtractSQLName(ctx.IDENTIFIER().GetText())
 
 	if ctx.GetDbid() == nil {
-		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("%s: missing dbid", metadata.ErrForeignCallMissingField.Error()))
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("%s: missing dbid", parseTypes.ErrForeignCallMissingField.Error()))
 		return expr
 	}
 
 	expr.ContextualParams = append(expr.ContextualParams, v.Visit(ctx.GetDbid()).(tree.Expression))
 
 	if ctx.GetProcedure() == nil {
-		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("%s: missing procedure", metadata.ErrForeignCallMissingField.Error()))
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("%s: missing procedure", parseTypes.ErrForeignCallMissingField.Error()))
 		return expr
 	}
 
