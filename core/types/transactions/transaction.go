@@ -8,6 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 
 	gethTypes "github.com/ethereum/go-ethereum/signer/core/apitypes"
@@ -131,7 +132,7 @@ type Transaction struct {
 
 	// Sender is the user identifier, which is generally an address but may be
 	// a public key of the sender.
-	Sender []byte `json:"sender"`
+	Sender types.HexBytes `json:"sender"`
 }
 
 // SerializeMsg produces the serialization of the transaction that is to be used

@@ -5,6 +5,7 @@ transactions and call messages.
 package transactions
 
 import (
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 )
 
@@ -25,7 +26,7 @@ type CallMessage struct {
 	AuthType string `json:"auth_type"`
 
 	// Sender is the public key of the sender
-	Sender []byte `json:"sender"`
+	Sender types.HexBytes `json:"sender"`
 }
 
 // CreateCallMessage creates a new call message from a ActionCall payload.

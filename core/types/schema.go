@@ -15,7 +15,7 @@ type Schema struct {
 	// Name is the name of the schema given by the deployer.
 	Name string `json:"name"`
 	// Owner is the identifier (generally an address in bytes or public key) of the owner of the schema
-	Owner             []byte              `json:"owner"`
+	Owner             HexBytes            `json:"owner"`
 	Extensions        []*Extension        `json:"extensions"`
 	Tables            []*Table            `json:"tables"`
 	Actions           []*Action           `json:"actions"`

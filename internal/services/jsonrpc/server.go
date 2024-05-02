@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"reflect"
 	"sync"
 	"time"
 
@@ -169,22 +170,24 @@ func (s *Server) writeJSON(w http.ResponseWriter, thing any, code int) {
 	}
 }
 
-// type methodHandler func(ctx context.Context, s *Server, params json.RawMessage) (any, *jsonrpc.Error)
-
-// routes maps routes to a handler function.
-//
-// TODO: instead of a map of handlers, create instance of registered request
-// type and call the TxSvc method with it. But I hate reflect.
-// var routes = map[string]methodHandler{
-// 	jsonrpc.MethodAccount:   handleAccount,
-// 	jsonrpc.MethodChainInfo: nil,
-// }
-
-// func registerMethod[T any](method string, req *T, handler func(context.Context, *T) (any, *jsonrpc.Error)) {}
+func zeroID(id any) bool {
+	if id == nil {
+		return true // would be !rv.IsValid()
+	}
+	rv := reflect.ValueOf(id)
+	if rv.IsZero() {
+		return true
+	}
+	rt := reflect.TypeOf(id) // already caught nil interface and nil ptr
+	if rt.Kind() == reflect.Ptr {
+		return zeroID(rv.Elem().Interface())
+	}
+	return false // already did rv.IsZero
+}
 
 // handleRequest sends the request to the correct handler function if able.
 func (s *Server) handleRequest(ctx context.Context, req *jsonrpc.Request) *jsonrpc.Response {
-	if req.JSONRPC != "2.0" || req.ID == 0 {
+	if req.JSONRPC != "2.0" || zeroID(req.ID) {
 		rpcErr := jsonrpc.NewError(jsonrpc.ErrorInvalidRequest, "invalid json-rpc request object", nil)
 		return jsonrpc.NewErrorResponse(req.ID, rpcErr)
 	}

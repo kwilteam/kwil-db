@@ -8,7 +8,7 @@ import (
 // TODO: doc it all
 
 type Account struct {
-	Identifier []byte   `json:"identifier"`
+	Identifier HexBytes `json:"identifier"`
 	Balance    *big.Int `json:"balance"`
 	Nonce      int64    `json:"nonce"`
 }
@@ -26,6 +26,10 @@ type ChainInfo struct {
 	BlockHeight uint64 `json:"block_height"`
 	BlockHash   string `json:"block_hash"`
 }
+
+// The validator related types that identify validators by pubkey are still
+// []byte, so base64 json marshalling. I'm not sure if they should be hex like
+// the account/owner fields in the user service.
 
 type JoinRequest struct {
 	Candidate []byte   `json:"candidate"`  // pubkey of the candidate validator
@@ -61,9 +65,9 @@ func (v *Validator) String() string {
 
 // DatasetIdentifier contains the information required to identify a dataset.
 type DatasetIdentifier struct {
-	Name  string `json:"name"`
-	Owner []byte `json:"owner"`
-	DBID  string `json:"dbid"`
+	Name  string   `json:"name"`
+	Owner HexBytes `json:"owner"`
+	DBID  string   `json:"dbid"`
 }
 
 // VotableEvent is an event that can be voted.
