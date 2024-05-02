@@ -19,15 +19,19 @@ const (
 	globalPrivateKeyFlag = "private-key"
 	globalProviderFlag   = "provider"
 	globalChainIDFlag    = "chain-id"
+	globalConfigFileFlag = "config"
+
 	// NOTE: viper key name are used for viper related operations
 	// here they are same `mapstructure` names defined in the config struct
 	viperPrivateKeyName = "private_key"
 	viperProviderName   = "provider"
 	viperChainID        = "chain_id"
+	viperConfigFile     = "config"
 )
 
 var defaultConfigFile string
 var DefaultConfigDir string
+var configFile string
 
 func init() {
 	dirname, err := os.UserHomeDir()
@@ -45,6 +49,7 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.String(globalPrivateKeyFlag, cliCfg.PrivateKey, "the private key of the wallet that will be used for signing")
 	fs.String(globalProviderFlag, cliCfg.Provider, "the Kwil provider RPC endpoint")
 	fs.String(globalChainIDFlag, cliCfg.ChainID, "the expected/intended Kwil Chain ID")
+	fs.StringVar(&configFile, globalConfigFileFlag, defaultConfigFile, "the path to the Kwil CLI persistent global settings file")
 
 	// Bind flags to viper, named by the flag name
 	viper.BindPFlag(viperPrivateKeyName, fs.Lookup(globalPrivateKeyFlag))
