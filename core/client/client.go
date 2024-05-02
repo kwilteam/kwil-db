@@ -64,6 +64,39 @@ func NewClient(ctx context.Context, target string, options *clientType.Options) 
 	return clt, nil
 }
 
+func (c *Client) mayRetry(err error) bool {
+	var retry bool
+	if errors.Is(err, io.EOF) { // connected, partial response, retry
+		c.logger.Warn("io.EOF error`", zap.Error(err))
+		retry = true
+	} else if t, ok := err.(interface{ Temporary() bool }); ok && t.Temporary() {
+		c.logger.Warn("Temporary()==true error", zap.Error(err))
+		retry = true
+	}
+
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		c.logger.Warnf("*net.OpError %v (%T)", opErr, opErr.Err)
+		// don't retry all of this type, just for debugging
+	}
+	var syscallErr *os.SyscallError
+	if errors.As(err, &syscallErr) {
+		c.logger.Warnf("*os.SyscallError %v (%T)", syscallErr, syscallErr.Err)
+		if eno, ok := syscallErr.Err.(syscall.Errno); ok && eno == syscall.ECONNRESET {
+			c.logger.Warn("connection reset", zap.Error(err))
+			retry = true
+		}
+		// don't retry all of this type, just for debugging
+	}
+
+	return retry
+}
+
+const (
+	maxConnRetries = 5
+	retryDelay     = time.Second
+)
+
 // WrapClient wraps a TxSvcClient with a Kwil client.
 // It provides a way to use a custom rpc client with the Kwil client.
 func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientType.Options) (*Client, error) {
@@ -78,43 +111,25 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 		noWarnings: clientOptions.Silence,
 	}
 
+	// On construction we use ChainInfo to ensure the chainID given in the
+	// options matches the chainID reported by the RPC provider. Arguably the
+	// constructor shouldn't make any RPCs, but until and unless we shift this
+	// job to the consumer (or the first RPC), we may hit transient errors on
+	// this initial connection. If permitted by options.RetryHandshake, we will
+	// retry a number of times if the error is potentially transient.
 	var tries int
 CHAIN_INFO:
-	chainInfo, err := c.ChainInfo(ctx)
+	chainInfo, err := client.ChainInfo(ctx)
 	if err != nil {
 		tries++
-		var retry bool
-		if errors.Is(err, io.EOF) { // connected, partial response, retry
-			c.logger.Warn("io.EOF error`", zap.Error(err))
-			retry = true
-		} else if t, ok := err.(interface{ Temporary() bool }); ok && t.Temporary() {
-			c.logger.Warn("Temporary()==true error", zap.Error(err))
-			retry = true
-		}
-
-		var opErr *net.OpError
-		if errors.As(err, &opErr) {
-			c.logger.Warnf("*net.OpError %v (%T)", opErr, opErr.Err)
-			// don't retry all of this type, just for debugging
-		}
-		var syscallErr *os.SyscallError
-		if errors.As(err, &syscallErr) {
-			c.logger.Warnf("*os.SyscallError %v (%T)", syscallErr, syscallErr.Err)
-			if eno, ok := syscallErr.Err.(syscall.Errno); ok && eno == syscall.ECONNRESET {
-				c.logger.Warn("connection reset", zap.Error(err))
-				retry = true
-			}
-			// don't retry all of this type, just for debugging
-		}
-
-		if retry && tries < 5 {
+		if options.RetryHandshake && tries < maxConnRetries && c.mayRetry(err) {
 			select {
-			case <-time.After(time.Second):
+			case <-time.After(retryDelay):
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}
 			c.logger.Info("retrying chain_info")
-			goto CHAIN_INFO
+			goto CHAIN_INFO // feel free to rewrite with for, but it's way more awkward
 		}
 
 		return nil, fmt.Errorf("chain_info: %w", err)

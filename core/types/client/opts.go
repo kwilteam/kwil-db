@@ -25,6 +25,10 @@ type Options struct {
 
 	// Silence silences warnings logged from the client.
 	Silence bool
+
+	// RetryHandshake indicates if the initial RPC to the provider during client
+	// construction should be allowed to retry on certain possibly transient errors.
+	RetryHandshake bool
 }
 
 // Apply applies the passed options to the receiver.
