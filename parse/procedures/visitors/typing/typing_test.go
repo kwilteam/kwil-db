@@ -10,6 +10,7 @@ import (
 	parser "github.com/kwilteam/kwil-db/parse/procedures/parser"
 	"github.com/kwilteam/kwil-db/parse/procedures/visitors/typing"
 	parseTypes "github.com/kwilteam/kwil-db/parse/types"
+
 	"github.com/stretchr/testify/require"
 )
 

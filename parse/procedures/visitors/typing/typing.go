@@ -4,6 +4,7 @@
 package typing
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 
@@ -104,7 +105,7 @@ func (t *typingVisitor) VisitExpressionArithmetic(p0 *parser.ExpressionArithmeti
 	}
 
 	if !isNumeric(left) {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, types.ErrNotNumericType.Error())
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, types.ErrNotNumericType)
 	}
 
 	return coreTypes.IntType
@@ -118,7 +119,7 @@ func (t *typingVisitor) VisitExpressionArrayAccess(p0 *parser.ExpressionArrayAcc
 		panic("BUG: expected data type")
 	}
 	if !r.IsArray {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, "expected array")
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, errors.New("expected array"))
 	}
 
 	// return type cast as the type if it exists
@@ -159,7 +160,7 @@ func (t *typingVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
 
 		returnType, err := funcDef.ValidateArgs(argsTypes)
 		if err != nil {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, err.Error())
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, err)
 			return coreTypes.UnknownType
 		}
 
@@ -173,36 +174,36 @@ func (t *typingVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
 
 	params, returns, err := util.FindProcOrForeign(t.currentSchema, p0.Name)
 	if err != nil {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, err.Error())
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, err)
 		return coreTypes.UnknownType
 	}
 
 	// check the args
 	if len(p0.Arguments) != len(params) {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`expected %d arguments, got %d`, len(params), len(p0.Arguments)))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`expected %d arguments, got %d`, len(params), len(p0.Arguments)))
 		return coreTypes.UnknownType
 	}
 
 	for i, arg := range p0.Arguments {
 		argType := arg.Accept(t).(*coreTypes.DataType)
 		if !argType.Equals(params[i]) {
-			t.errs.NodeErr(arg.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`argument %d has wrong type`, i))
+			t.errs.NodeErr(arg.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`argument %d has wrong type`, i))
 		}
 	}
 
 	// it must not return a table, and only return exactly one value
 	if returns == nil {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`procedure "%s" does not return anything`, p0.Name))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`procedure "%s" does not return anything`, p0.Name))
 		return coreTypes.UnknownType
 	}
 
 	if returns.IsTable {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`%s: procedure "%s" returns a table`, types.ErrAssignment, p0.Name))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`%w: procedure "%s" returns a table`, types.ErrAssignment, p0.Name))
 		return coreTypes.UnknownType
 	}
 
 	if len(returns.Fields) != 1 {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`procedure "%s" does not return exactly 1 value`, p0.Name))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`procedure "%s" does not return exactly 1 value`, p0.Name))
 		return coreTypes.UnknownType
 	}
 
@@ -228,14 +229,14 @@ func (t *typingVisitor) VisitExpressionForeignCall(p0 *parser.ExpressionForeignC
 		}
 	}
 	if !found {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, types.ErrUnknownForeignProcedure.Error(), p0.Name))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, fmt.Errorf(`%w: "%s"`, types.ErrUnknownForeignProcedure, p0.Name))
 		return coreTypes.UnknownType
 	}
 
 	// we need to verify that there are exactly two contextual args, and that they are
 	// both strings
 	if len(p0.ContextArgs) != 2 {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, "expected exactly two contextual arguments")
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, errors.New("expected exactly two contextual arguments"))
 		return coreTypes.UnknownType
 	}
 	for _, arg := range p0.ContextArgs {
@@ -245,35 +246,35 @@ func (t *typingVisitor) VisitExpressionForeignCall(p0 *parser.ExpressionForeignC
 		}
 
 		if !r.Equals(coreTypes.TextType) {
-			t.errs.NodeErr(arg.GetNode(), types.ParseErrorTypeType, "expected text type")
+			t.errs.NodeErr(arg.GetNode(), types.ParseErrorTypeType, errors.New("expected text type"))
 		}
 	}
 
 	// check the args
 	if len(p0.Arguments) != len(proc.Parameters) {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`expected %d arguments, got %d`, len(proc.Parameters), len(p0.Arguments)))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`expected %d arguments, got %d`, len(proc.Parameters), len(p0.Arguments)))
 		return coreTypes.UnknownType
 	}
 
 	for i, arg := range p0.Arguments {
 		argType := arg.Accept(t).(*coreTypes.DataType)
 		if !argType.Equals(proc.Parameters[i]) {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`argument %d has wrong type`, i))
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`argument %d has wrong type`, i))
 		}
 	}
 
 	if proc.Returns == nil {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`foreign procedure "%s" does not return anything`, p0.Name))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`foreign procedure "%s" does not return anything`, p0.Name))
 		return coreTypes.UnknownType
 	}
 
 	// proc must return exactly one value that is not a table
 	if proc.Returns.IsTable {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`%s: foreign procedure "%s" returns a table`, types.ErrAssignment.Error(), p0.Name))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`%w: foreign procedure "%s" returns a table`, types.ErrAssignment, p0.Name))
 		return coreTypes.UnknownType
 	}
 	if len(proc.Returns.Fields) != 1 {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`foreign procedure "%s" does not return exactly 1 value`, p0.Name))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`foreign procedure "%s" does not return exactly 1 value`, p0.Name))
 		return coreTypes.UnknownType
 	}
 
@@ -293,7 +294,7 @@ func (t *typingVisitor) VisitExpressionComparison(p0 *parser.ExpressionCompariso
 	// or one of them must be null
 	if !left.Equals(right) {
 		if !left.Equals(coreTypes.NullType) && !right.Equals(coreTypes.NullType) {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, types.ErrComparisonType.Error())
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, types.ErrComparisonType)
 		}
 	}
 
@@ -309,7 +310,7 @@ func (t *typingVisitor) VisitExpressionFieldAccess(p0 *parser.ExpressionFieldAcc
 
 	dt, ok := anonType[p0.Field]
 	if !ok {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, types.ErrUnknownField.Error())
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, types.ErrUnknownField)
 		return coreTypes.UnknownType
 	}
 
@@ -340,7 +341,7 @@ func (t *typingVisitor) VisitExpressionMakeArray(p0 *parser.ExpressionMakeArray)
 		}
 
 		if dataType.IsArray {
-			t.errs.NodeErr(e.GetNode(), types.ParseErrorTypeType, "array cannot contain arrays")
+			t.errs.NodeErr(e.GetNode(), types.ParseErrorTypeType, errors.New("array cannot contain arrays"))
 			return coreTypes.UnknownType
 		}
 
@@ -350,7 +351,8 @@ func (t *typingVisitor) VisitExpressionMakeArray(p0 *parser.ExpressionMakeArray)
 		}
 
 		if !arrayType.Equals(dataType) {
-			t.errs.NodeErr(e.GetNode(), types.ParseErrorTypeType, fmt.Sprintf("%s: %s != %s", types.ErrArrayType.Error(), arrayType, dataType))
+			t.errs.NodeErr(e.GetNode(), types.ParseErrorTypeType,
+				fmt.Errorf("%w: %s != %s", types.ErrArrayType, arrayType, dataType))
 		}
 	}
 
@@ -397,7 +399,8 @@ func (t *typingVisitor) VisitExpressionVariable(p0 *parser.ExpressionVariable) a
 	if !ok {
 		anonType, ok := t.anonymousDeclarations[p0.Name]
 		if !ok {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`%s: "%s"`, types.ErrUndeclaredVariable.Error(), util.UnformatParameterName(p0.Name)))
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+				fmt.Errorf(`%w: "%s"`, types.ErrUndeclaredVariable, util.UnformatParameterName(p0.Name)))
 			return coreTypes.UnknownType
 		}
 
@@ -421,7 +424,7 @@ func (t *typingVisitor) VisitLoopTargetCall(p0 *parser.LoopTargetCall) any {
 	r := t.analyzeProcedureCall(p0.Call)
 
 	if !r.IsTable {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, "loops on procedures must return a table")
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, errors.New("loops on procedures must return a table"))
 	}
 
 	vals := make(map[string]*coreTypes.DataType)
@@ -447,7 +450,7 @@ func (t *typingVisitor) VisitLoopTargetSQL(p0 *parser.LoopTargetSQL) any {
 		return nil
 	})
 	if err != nil {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, err.Error())
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, err)
 	}
 	return r
 }
@@ -461,7 +464,7 @@ func (t *typingVisitor) VisitLoopTargetVariable(p0 *parser.LoopTargetVariable) a
 	}
 
 	if !r.IsArray {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, "expected array")
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, errors.New("expected array"))
 		return coreTypes.UnknownType
 	}
 
@@ -480,12 +483,14 @@ func (t *typingVisitor) VisitStatementProcedureCall(p0 *parser.StatementProcedur
 	}
 
 	if len(returns.Fields) != len(p0.Variables) {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`%s: expected: %d received: %d`, types.ErrReturnCount.Error(), len(returns.Fields), len(p0.Variables)))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+			fmt.Errorf(`%w: expected: %d received: %d`, types.ErrReturnCount, len(returns.Fields), len(p0.Variables)))
 		return nil
 	}
 
 	if returns.IsTable {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf("%s: procedure returns a table, which cannot be assigned to variables", types.ErrAssignment))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+			fmt.Errorf("%w: procedure returns a table, which cannot be assigned to variables", types.ErrAssignment))
 	}
 
 	for i, v := range p0.Variables {
@@ -496,12 +501,14 @@ func (t *typingVisitor) VisitStatementProcedureCall(p0 *parser.StatementProcedur
 		}
 		varType, ok := t.declarations[*v]
 		if !ok {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`%s: "%s"`, types.ErrUndeclaredVariable.Error(), util.UnformatParameterName(*v)))
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+				fmt.Errorf(`%w: "%s"`, types.ErrUndeclaredVariable, util.UnformatParameterName(*v)))
 			continue
 		}
 
 		if !varType.Equals(returns.Fields[i].Type) {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`%s: cannot assign return type %s to variable "%s" of type %s`, types.ErrAssignment, returns.Fields[i].Type.String(), util.UnformatParameterName(*v), varType.String()))
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+				fmt.Errorf(`%w: cannot assign return type %s to variable "%s" of type %s`, types.ErrAssignment, returns.Fields[i].Type.String(), util.UnformatParameterName(*v), varType.String()))
 		}
 	}
 
@@ -525,7 +532,7 @@ func (t *typingVisitor) analyzeProcedureCall(p0 parser.ICallExpression) *coreTyp
 
 			returnType, err := funcDef.ValidateArgs(argsTypes)
 			if err != nil {
-				t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeType, err.Error())
+				t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeType, err)
 				return &coreTypes.ProcedureReturn{}
 			}
 
@@ -540,20 +547,20 @@ func (t *typingVisitor) analyzeProcedureCall(p0 parser.ICallExpression) *coreTyp
 
 		params, returns, err := util.FindProcOrForeign(t.currentSchema, call.Name)
 		if err != nil {
-			t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeSemantic, err.Error())
+			t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeSemantic, err)
 			return &coreTypes.ProcedureReturn{}
 		}
 
 		// check the args
 		if len(call.Arguments) != len(params) {
-			t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`expected %d arguments, got %d`, len(params), len(call.Arguments)))
+			t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`expected %d arguments, got %d`, len(params), len(call.Arguments)))
 			return &coreTypes.ProcedureReturn{}
 		}
 
 		for i, arg := range call.Arguments {
 			argType := arg.Accept(t).(*coreTypes.DataType)
 			if !argType.Equals(params[i]) {
-				t.errs.NodeErr(arg.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`argument %d has wrong type`, i))
+				t.errs.NodeErr(arg.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`argument %d has wrong type`, i))
 			}
 		}
 
@@ -576,14 +583,14 @@ func (t *typingVisitor) analyzeProcedureCall(p0 parser.ICallExpression) *coreTyp
 			}
 		}
 		if !found {
-			t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, types.ErrUnknownForeignProcedure.Error(), call.Name))
+			t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeSemantic, fmt.Errorf(`%w: "%s"`, types.ErrUnknownForeignProcedure, call.Name))
 			return &coreTypes.ProcedureReturn{}
 		}
 
 		// we need to verify that there are exactly two contextual args, and that they are
 		// both strings
 		if len(call.ContextArgs) != 2 {
-			t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeType, "expected exactly two contextual arguments")
+			t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeType, errors.New("expected exactly two contextual arguments"))
 			return &coreTypes.ProcedureReturn{}
 		}
 		for _, arg := range call.ContextArgs {
@@ -593,20 +600,20 @@ func (t *typingVisitor) analyzeProcedureCall(p0 parser.ICallExpression) *coreTyp
 			}
 
 			if !r.Equals(coreTypes.TextType) {
-				t.errs.NodeErr(arg.GetNode(), types.ParseErrorTypeType, "expected text type")
+				t.errs.NodeErr(arg.GetNode(), types.ParseErrorTypeType, errors.New("expected text type"))
 			}
 		}
 
 		// check the args
 		if len(call.Arguments) != len(proc.Parameters) {
-			t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`expected %d arguments, got %d`, len(proc.Parameters), len(call.Arguments)))
+			t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`expected %d arguments, got %d`, len(proc.Parameters), len(call.Arguments)))
 			return &coreTypes.ProcedureReturn{}
 		}
 
 		for i, arg := range call.Arguments {
 			argType := arg.Accept(t).(*coreTypes.DataType)
 			if !argType.Equals(proc.Parameters[i]) {
-				t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`argument %d has wrong type`, i))
+				t.errs.NodeErr(call.GetNode(), types.ParseErrorTypeType, fmt.Errorf(`argument %d has wrong type`, i))
 			}
 		}
 
@@ -622,7 +629,7 @@ func (t *typingVisitor) analyzeProcedureCall(p0 parser.ICallExpression) *coreTyp
 
 func (t *typingVisitor) VisitStatementBreak(p0 *parser.StatementBreak) any {
 	if t.loopTarget == "" {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrBreakUsedOutsideOfLoop.Error())
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrBreakUsedOutsideOfLoop)
 	}
 	return nil
 }
@@ -639,7 +646,7 @@ func (t *typingVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) any {
 		// a field in an array of a known type
 		_, ok := t.declarations[p0.Variable]
 		if ok {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrVariableAlreadyDeclared.Error())
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrVariableAlreadyDeclared)
 			return nil
 		}
 
@@ -648,12 +655,14 @@ func (t *typingVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) any {
 		// check that we are iterating over an array
 		dataType, ok := t.declarations[target.Variable.Name]
 		if !ok {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, types.ErrUndeclaredVariable.Error(), util.UnformatParameterName(target.Variable.Name)))
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic,
+				fmt.Errorf(`%w: "%s"`, types.ErrUndeclaredVariable, util.UnformatParameterName(target.Variable.Name)))
 			return nil
 		}
 
 		if !dataType.IsArray {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`%s: cannot loop over type %s`, types.ErrInvalidIterable.Error(), dataType.String()))
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+				fmt.Errorf(`%w: cannot loop over type %s`, types.ErrInvalidIterable, dataType.String()))
 			return nil
 		}
 	case *parser.LoopTargetCall:
@@ -661,7 +670,7 @@ func (t *typingVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) any {
 		r := target.Accept(t).(map[string]*coreTypes.DataType)
 		_, ok := t.anonymousDeclarations[p0.Variable]
 		if ok {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrVariableAlreadyDeclared.Error())
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrVariableAlreadyDeclared)
 		}
 
 		t.anonymousDeclarations[p0.Variable] = r
@@ -671,7 +680,7 @@ func (t *typingVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) any {
 		// we will not declare these as anonymous, since it is a simple int
 		_, ok := t.declarations[p0.Variable]
 		if ok {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrVariableAlreadyDeclared.Error())
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrVariableAlreadyDeclared)
 		}
 
 		t.declarations[p0.Variable] = r
@@ -680,7 +689,7 @@ func (t *typingVisitor) VisitStatementForLoop(p0 *parser.StatementForLoop) any {
 
 		_, ok := t.anonymousDeclarations[p0.Variable]
 		if ok {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrVariableAlreadyDeclared.Error())
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrVariableAlreadyDeclared)
 		}
 
 		t.anonymousDeclarations[p0.Variable] = r
@@ -736,13 +745,13 @@ func (t *typingVisitor) VisitStatementIf(p0 *parser.StatementIf) any {
 
 func (t *typingVisitor) VisitStatementReturn(p0 *parser.StatementReturn) any {
 	if t.currentProcedure.Returns == nil {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, "procedure does not return anything")
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, errors.New("procedure does not return anything"))
 		return nil
 	}
 
 	if t.currentProcedure.Returns.IsTable {
 		if p0.SQL == nil {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, "procedure returning table must have a return a SQL statement")
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, errors.New("procedure returning table must have a return a SQL statement"))
 			return nil
 		}
 
@@ -751,22 +760,25 @@ func (t *typingVisitor) VisitStatementReturn(p0 *parser.StatementReturn) any {
 		for _, col := range t.currentProcedure.Returns.Fields {
 			attr, ok := r.Attribute(col.Name)
 			if !ok {
-				t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, fmt.Sprintf(`missing column: procedure expects column "%s" in return table`, col.Name))
+				t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic,
+					fmt.Errorf(`missing column: procedure expects column "%s" in return table`, col.Name))
 				continue
 			}
 
 			if !col.Type.Equals(attr.Type) {
-				t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`column "%s" returns wrong type`, col.Name))
+				t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+					fmt.Errorf(`column "%s" returns wrong type`, col.Name))
 			}
 		}
 	} else {
 		if p0.Values == nil {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, "procedure expects return values")
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, errors.New("procedure expects return values"))
 			return nil
 		}
 
 		if len(p0.Values) != len(t.currentProcedure.Returns.Fields) {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf(`%s: expected: %d received: %d`, types.ErrReturnCount.Error(), len(t.currentProcedure.Returns.Fields), len(p0.Values)))
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+				fmt.Errorf(`%w: expected: %d received: %d`, types.ErrReturnCount, len(t.currentProcedure.Returns.Fields), len(p0.Values)))
 			return nil
 		}
 
@@ -777,7 +789,8 @@ func (t *typingVisitor) VisitStatementReturn(p0 *parser.StatementReturn) any {
 			}
 
 			if !t.currentProcedure.Returns.Fields[i].Type.Equals(r) {
-				t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf("%s: expected: %s received: %s", types.ErrAssignment.Error(), t.currentProcedure.Returns.Fields[i].Type.String(), r.String()))
+				t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+					fmt.Errorf("%w: expected: %s received: %s", types.ErrAssignment, t.currentProcedure.Returns.Fields[i].Type.String(), r.String()))
 			}
 		}
 	}
@@ -787,22 +800,22 @@ func (t *typingVisitor) VisitStatementReturn(p0 *parser.StatementReturn) any {
 
 func (t *typingVisitor) VisitStatementReturnNext(p0 *parser.StatementReturnNext) any {
 	if t.loopTarget == "" {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrReturnNextUsedOutsideOfLoop.Error())
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrReturnNextUsedOutsideOfLoop)
 		return nil
 	}
 
 	if t.currentProcedure.Returns == nil {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, "procedure does not return anything")
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, errors.New("procedure does not return anything"))
 		return nil
 	}
 
 	if !t.currentProcedure.Returns.IsTable {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrReturnNextUsedInNonTableProc.Error())
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrReturnNextUsedInNonTableProc)
 		return nil
 	}
 
 	if len(p0.Returns) != len(t.currentProcedure.Returns.Fields) {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrReturnNextInvalidCount.Error())
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrReturnNextInvalidCount)
 	}
 
 	for i, col := range t.currentProcedure.Returns.Fields {
@@ -812,7 +825,8 @@ func (t *typingVisitor) VisitStatementReturnNext(p0 *parser.StatementReturnNext)
 		}
 
 		if !col.Type.Equals(r) {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf("%s: expected: %s received: %s", types.ErrAssignment.Error(), col.Type.String(), r.String()))
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+				fmt.Errorf("%w: expected: %s received: %s", types.ErrAssignment, col.Type.String(), r.String()))
 		}
 	}
 
@@ -829,7 +843,8 @@ func (t *typingVisitor) VisitStatementVariableAssignment(p0 *parser.StatementVar
 	typ, ok := t.declarations[p0.Name]
 	if !ok {
 		// I don't think this can happen
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, types.ErrUndeclaredVariable.Error(), util.UnformatParameterName(p0.Name)))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic,
+			fmt.Errorf(`%w: "%s"`, types.ErrUntypedVariable, util.UnformatParameterName(p0.Name)))
 		return nil
 	}
 
@@ -839,7 +854,8 @@ func (t *typingVisitor) VisitStatementVariableAssignment(p0 *parser.StatementVar
 	}
 
 	if !typ.Equals(r) {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf("%s: expected: %s received: %s", types.ErrAssignment.Error(), typ, r))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+			fmt.Errorf("%w: expected: %s received: %s", types.ErrAssignment, typ, r))
 	}
 
 	return nil
@@ -852,12 +868,13 @@ func (t *typingVisitor) VisitStatementVariableAssignmentWithDeclaration(p0 *pars
 	}
 
 	if !p0.Type.Equals(retType) {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, fmt.Sprintf("%s: expected: %s received: %s", types.ErrAssignment.Error(), p0.Type, retType))
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+			fmt.Errorf("%w: expected: %s received: %s", types.ErrAssignment, p0.Type, retType))
 	}
 
 	_, ok = t.declarations[p0.Name]
 	if ok {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrVariableAlreadyDeclared.Error())
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrVariableAlreadyDeclared)
 		return nil
 	}
 
@@ -869,7 +886,7 @@ func (t *typingVisitor) VisitStatementVariableAssignmentWithDeclaration(p0 *pars
 func (t *typingVisitor) VisitStatementVariableDeclaration(p0 *parser.StatementVariableDeclaration) any {
 	_, ok := t.declarations[p0.Name]
 	if ok {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrVariableAlreadyDeclared.Error())
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrVariableAlreadyDeclared)
 		return nil
 	}
 
@@ -882,16 +899,16 @@ func (t *typingVisitor) VisitStatementVariableDeclaration(p0 *parser.StatementVa
 func (t *typingVisitor) asserIntType(dt parser.Expression) {
 	res, ok := dt.Accept(t).(*coreTypes.DataType)
 	if !ok {
-		t.errs.NodeErr(dt.GetNode(), types.ParseErrorTypeType, "expected integer type")
+		t.errs.NodeErr(dt.GetNode(), types.ParseErrorTypeType, errors.New("expected integer type"))
 		return
 	}
 	if res == nil {
-		t.errs.NodeErr(dt.GetNode(), types.ParseErrorTypeType, "expected integer type")
+		t.errs.NodeErr(dt.GetNode(), types.ParseErrorTypeType, errors.New("expected integer type"))
 		return
 	}
 
 	if !res.Equals(coreTypes.IntType) {
-		t.errs.NodeErr(dt.GetNode(), types.ParseErrorTypeType, "expected integer type")
+		t.errs.NodeErr(dt.GetNode(), types.ParseErrorTypeType, errors.New("expected integer type"))
 		return
 	}
 }
@@ -901,24 +918,24 @@ func (t *typingVisitor) asserIntType(dt parser.Expression) {
 func (t *typingVisitor) assertBoolType(dt parser.Expression) {
 	res, ok := dt.Accept(t).(*coreTypes.DataType)
 	if !ok {
-		t.errs.NodeErr(dt.GetNode(), types.ParseErrorTypeType, "expected boolean type")
+		t.errs.NodeErr(dt.GetNode(), types.ParseErrorTypeType, errors.New("expected boolean type"))
 		return
 	}
 	if res == nil {
-		t.errs.NodeErr(dt.GetNode(), types.ParseErrorTypeType, "expected boolean type")
+		t.errs.NodeErr(dt.GetNode(), types.ParseErrorTypeType, errors.New("expected boolean type"))
 		return
 	}
 
 	if !res.Equals(coreTypes.BoolType) {
-		t.errs.NodeErr(dt.GetNode(), types.ParseErrorTypeType, "expected boolean type")
+		t.errs.NodeErr(dt.GetNode(), types.ParseErrorTypeType, errors.New("expected boolean type"))
 		return
 	}
 }
 
-// leftRightErr returns a string with the error message that the left and right.
-// It is used for incompatible coreTypes.
-func leftRightErr(err error, left, right *coreTypes.DataType) string {
-	return fmt.Sprintf("%s: %s not comparable to %s", err.Error(), left.String(), right.String())
+// leftRightErr returns an error with the message that the left and right. It is
+// used for incompatible coreTypes.
+func leftRightErr(err error, left, right *coreTypes.DataType) error {
+	return fmt.Errorf("%w: %s not comparable to %s", err, left.String(), right.String())
 }
 
 // isNumeric returns true if the given data type is numeric.

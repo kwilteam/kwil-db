@@ -1,6 +1,7 @@
 package typing
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -37,7 +38,7 @@ func (t *typeVisitor) VisitCTE(p0 *tree.CTE) any {
 
 		_, ok := t.commonTables[p0.Table]
 		if ok {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("common table expression conflicts with existing table %s", p0.Table))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("common table expression conflicts with existing table %s", p0.Table))
 			return
 		}
 
@@ -64,7 +65,7 @@ func (t *typeVisitor) VisitRelationSubquery(p0 *tree.RelationSubquery) any {
 			Relation: r,
 		})
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 		}
 	})
 }
@@ -78,12 +79,12 @@ func (t *typeVisitor) VisitRelationFunction(p0 *tree.RelationFunction) any {
 
 		parameters, returns, err := util.FindProcOrForeign(t.options.Schema, p0.Function.Function)
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 			return
 		}
 
 		if len(p0.Function.Inputs) != len(parameters) {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("procedure %s expected %d inputs, received %d", p0.Function.Function, len(parameters), len(p0.Function.Inputs)))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("procedure %s expected %d inputs, received %d", p0.Function.Function, len(parameters), len(p0.Function.Inputs)))
 			return
 		}
 
@@ -91,17 +92,17 @@ func (t *typeVisitor) VisitRelationFunction(p0 *tree.RelationFunction) any {
 			attr := in.Accept(t).(attributeFn)(e)
 
 			if !attr.Type.Equals(parameters[i]) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("procedure %s expected input %d to be %s, received %s", p0.Function.Function, i, parameters[i].String(), attr.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("procedure %s expected input %d to be %s, received %s", p0.Function.Function, i, parameters[i].String(), attr.Type.String()))
 				// we don't have to return here, we can continue to check the return type
 			}
 		}
 
 		if returns == nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("procedure %s does not return a table", p0.Function.Function))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("procedure %s does not return a table", p0.Function.Function))
 			return
 		}
 		if !returns.IsTable {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("procedure %s does not return a table", p0.Function.Function))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("procedure %s does not return a table", p0.Function.Function))
 			return
 		}
 
@@ -114,7 +115,7 @@ func (t *typeVisitor) VisitRelationFunction(p0 *tree.RelationFunction) any {
 				},
 			})
 			if err != nil {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 				return
 			}
 		}
@@ -125,7 +126,7 @@ func (t *typeVisitor) VisitRelationFunction(p0 *tree.RelationFunction) any {
 			Relation: rel,
 		})
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 		}
 	})
 }
@@ -134,7 +135,7 @@ func (t *typeVisitor) VisitRelationTable(p0 *tree.RelationTable) any {
 	return evalFunc(func(e *evaluationContext) {
 		tbl, ok := t.commonTables[p0.Name]
 		if !ok {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("table %s not found", p0.Name))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("table %s not found", p0.Name))
 			return
 		}
 
@@ -148,7 +149,7 @@ func (t *typeVisitor) VisitRelationTable(p0 *tree.RelationTable) any {
 			Relation: tbl,
 		})
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 		}
 	})
 }
@@ -169,7 +170,7 @@ func (t *typeVisitor) VisitUpsert(p0 *tree.Upsert) any {
 			attr := p0.Where.Accept(t).(attributeFn)(e)
 
 			if !attr.Type.Equals(types.BoolType) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("where clause must evaluate to boolean. Received: %s", attr.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("where clause must evaluate to boolean. Received: %s", attr.Type.String()))
 				return
 			}
 		}
@@ -181,13 +182,13 @@ func (t *typeVisitor) VisitUpdateSetClause(p0 *tree.UpdateSetClause) any {
 		// check that the columns exist
 		// we can only update columns in the first table
 		if len(e.joinOrder) == 0 {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, "no table to update")
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, errors.New("no table to update"))
 			return
 		}
 		for _, col := range p0.Columns {
 			_, _, err := e.findColumn(e.joinOrder[0], col)
 			if err != nil {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 				return
 			}
 		}
@@ -203,13 +204,13 @@ func (t *typeVisitor) VisitConflictTarget(p0 *tree.ConflictTarget) any {
 	return evalFunc(func(e *evaluationContext) {
 		// check that the columns exist
 		if len(e.joinOrder) == 0 {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, "no table to update")
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, errors.New("no table to update"))
 			return
 		}
 		for _, col := range p0.IndexedColumns {
 			_, _, err := e.findColumn(e.joinOrder[0], col)
 			if err != nil {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 				return
 			}
 		}
@@ -218,7 +219,7 @@ func (t *typeVisitor) VisitConflictTarget(p0 *tree.ConflictTarget) any {
 			attr := p0.Where.Accept(t).(attributeFn)(e)
 
 			if !attr.Type.Equals(types.BoolType) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("where clause must evaluate to boolean. Received: %s", attr.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("where clause must evaluate to boolean. Received: %s", attr.Type.String()))
 			}
 		}
 	})
@@ -230,7 +231,7 @@ func (t *typeVisitor) VisitLimit(p0 *tree.Limit) any {
 			limit := p0.Expression.Accept(t).(attributeFn)(e)
 
 			if !limit.Type.Equals(types.IntType) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("limit must be an integer. Received: %s", limit.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("limit must be an integer. Received: %s", limit.Type.String()))
 				// we can continue here, since this will not affect future evaluation
 			}
 		}
@@ -239,7 +240,7 @@ func (t *typeVisitor) VisitLimit(p0 *tree.Limit) any {
 			offset := p0.Offset.Accept(t).(attributeFn)(e)
 
 			if !offset.Type.Equals(types.IntType) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("offset must be an integer. Received: %s", offset.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("offset must be an integer. Received: %s", offset.Type.String()))
 			}
 		}
 	})
@@ -272,7 +273,7 @@ func (t *typeVisitor) VisitGroupBy(p0 *tree.GroupBy) any {
 			attr := p0.Having.Accept(t).(attributeFn)(e)
 
 			if !attr.Type.Equals(types.BoolType) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("having clause must be boolean. Received: %s", attr.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("having clause must be boolean. Received: %s", attr.Type.String()))
 				return
 			}
 		}
@@ -287,7 +288,7 @@ func (t *typeVisitor) VisitJoinPredicate(p0 *tree.JoinPredicate) any {
 			r := p0.Constraint.Accept(t).(attributeFn)(e)
 
 			if !r.Type.Equals(types.BoolType) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("join constraint must be boolean. Received: %s", r.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("join constraint must be boolean. Received: %s", r.Type.String()))
 			}
 		}
 	})
@@ -311,13 +312,13 @@ func (t *typeVisitor) VisitExpressionArithmetic(p0 *tree.ExpressionArithmetic) a
 
 		at := left(ev)
 		if !at.Type.Equals(types.IntType) {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("arithmetic expression expected int. Received: %s", at.Type.String()))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("arithmetic expression expected int. Received: %s", at.Type.String()))
 			return unknownAttr()
 		}
 
 		bt := right(ev)
 		if !bt.Type.Equals(types.IntType) {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("arithmetic expression expected int. Received: %s", bt.Type.String()))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("arithmetic expression expected int. Received: %s", bt.Type.String()))
 			return unknownAttr()
 		}
 
@@ -342,12 +343,12 @@ func (t *typeVisitor) VisitExpressionBetween(p0 *tree.ExpressionBetween) any {
 		rt := right(ev)
 
 		if !et.Type.Equals(lt.Type) {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("between expression expected %s. Received: %s", et.Type.Name, lt.Type.String()))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("between expression expected %s. Received: %s", et.Type.Name, lt.Type.String()))
 			return unknownAttr()
 		}
 
 		if !et.Type.Equals(rt.Type) {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("between expression expected %s. Received: %s", et.Type.Name, rt.Type.String()))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("between expression expected %s. Received: %s", et.Type.Name, rt.Type.String()))
 			return unknownAttr()
 		}
 
@@ -368,7 +369,7 @@ func (t *typeVisitor) VisitExpressionBinaryComparison(p0 *tree.ExpressionBinaryC
 		bt := right(ev)
 
 		if !at.Type.Equals(bt.Type) {
-			t.options.ErrorListener.NodeErr(parseTypes.MergeNodes(p0.Left.GetNode(), p0.Right.GetNode()), parseTypes.ParseErrorTypeType, fmt.Sprintf("cannot compare types: left: %s right: %s", at.Type.String(), bt.Type.String()))
+			t.options.ErrorListener.NodeErr(parseTypes.MergeNodes(p0.Left.GetNode(), p0.Right.GetNode()), parseTypes.ParseErrorTypeType, fmt.Errorf("cannot compare types: left: %s right: %s", at.Type.String(), bt.Type.String()))
 			return unknownAttr()
 		}
 
@@ -387,7 +388,7 @@ func (t *typeVisitor) VisitExpressionBindParameter(p0 *tree.ExpressionBindParame
 			if t.options.ArbitraryBinds {
 				c = types.UnknownType
 			} else {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("bind parameter %s not found", util.UnformatParameterName(p0.Parameter)))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("bind parameter %s not found", util.UnformatParameterName(p0.Parameter)))
 				return unknownAttr()
 			}
 		}
@@ -419,7 +420,7 @@ func (t *typeVisitor) VisitExpressionCase(p0 *tree.ExpressionCase) any {
 			whenType := when(ev)
 
 			if !whenType.Type.Equals(expectedWhenType) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("when clause expected %s. Received: %s", expectedWhenType.String(), whenType.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("when clause expected %s. Received: %s", expectedWhenType.String(), whenType.Type.String()))
 				return unknownAttr()
 			}
 
@@ -431,7 +432,7 @@ func (t *typeVisitor) VisitExpressionCase(p0 *tree.ExpressionCase) any {
 			}
 
 			if !neededType.Equals(thenType.Type) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("all THEN types must be the same. Received: %s and %s", neededType.String(), thenType.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("all THEN types must be the same. Received: %s and %s", neededType.String(), thenType.Type.String()))
 				return unknownAttr()
 			}
 		}
@@ -441,7 +442,7 @@ func (t *typeVisitor) VisitExpressionCase(p0 *tree.ExpressionCase) any {
 			eType := e(ev)
 
 			if !neededType.Equals(eType.Type) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("ELSE type must match THEN type. Received: %s and %s", neededType.String(), eType.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("ELSE type must match THEN type. Received: %s and %s", neededType.String(), eType.Type.String()))
 				return unknownAttr()
 			}
 		}
@@ -471,7 +472,7 @@ func (t *typeVisitor) VisitExpressionColumn(p0 *tree.ExpressionColumn) any {
 		// if table is not qualified, we will attempt to qualify, and return an error on ambiguity
 		tbl, col, err := ev.findColumn(p0.Table, p0.Column)
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 			return unknownAttr()
 		}
 
@@ -499,12 +500,12 @@ func (t *typeVisitor) VisitExpressionFunction(p0 *tree.ExpressionFunction) any {
 			// can be a procedure/foreign procedure
 			params, returns, err := util.FindProcOrForeign(t.options.Schema, p0.Function)
 			if err != nil {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 				return unknownAttr()
 			}
 
 			if len(p0.Inputs) != len(params) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("procedure %s expected %d inputs, received %d", p0.Function, len(params), len(p0.Inputs)))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("procedure %s expected %d inputs, received %d", p0.Function, len(params), len(p0.Inputs)))
 				return unknownAttr()
 			}
 
@@ -512,7 +513,7 @@ func (t *typeVisitor) VisitExpressionFunction(p0 *tree.ExpressionFunction) any {
 				attr := in.Accept(t).(attributeFn)(ev)
 
 				if !attr.Type.Equals(params[i]) {
-					t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("procedure %s expected input %d to be %s, received %s", p0.Function, i, params[i].String(), attr.Type.String()))
+					t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("procedure %s expected input %d to be %s, received %s", p0.Function, i, params[i].String(), attr.Type.String()))
 					return unknownAttr()
 				}
 			}
@@ -526,7 +527,7 @@ func (t *typeVisitor) VisitExpressionFunction(p0 *tree.ExpressionFunction) any {
 			}
 
 			if len(returns.Fields) != 1 {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("procedure %s must return exactly one column", p0.Function))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("procedure %s must return exactly one column", p0.Function))
 				return unknownAttr()
 			}
 
@@ -541,7 +542,7 @@ func (t *typeVisitor) VisitExpressionFunction(p0 *tree.ExpressionFunction) any {
 
 		returnType, err := funcDef.ValidateArgs(argTypes)
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, err)
 			return unknownAttr()
 		}
 
@@ -563,7 +564,7 @@ func (t *typeVisitor) VisitExpressionIs(p0 *tree.ExpressionIs) any {
 		rt := r(ev)
 
 		if !lt.Type.Equals(rt.Type) && !lt.Type.Equals(types.NullType) && !rt.Type.Equals(types.NullType) {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("is expression expected %s. Received: %s", lt.Type.String(), rt.Type.String()))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("is expression expected %s. Received: %s", lt.Type.String(), rt.Type.String()))
 			return unknownAttr()
 		}
 
@@ -588,7 +589,7 @@ func (t *typeVisitor) VisitExpressionList(p0 *tree.ExpressionList) any {
 			}
 
 			if !lastType.Equals(etType.Type) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("expression list expected %s. Received: %s", lastType.String(), etType.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("expression list expected %s. Received: %s", lastType.String(), etType.Type.String()))
 				return unknownAttr()
 			}
 		}
@@ -657,7 +658,7 @@ func (t *typeVisitor) VisitExpressionSelect(p0 *tree.ExpressionSelect) any {
 
 		shape := r.Shape()
 		if len(shape) != 1 && !p0.IsExists {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, "subquery must return exactly one column")
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, errors.New("subquery must return exactly one column"))
 			return unknownAttr()
 		}
 
@@ -683,7 +684,7 @@ func (t *typeVisitor) VisitExpressionStringCompare(p0 *tree.ExpressionStringComp
 		bt := b(ev)
 
 		if !at.Type.Equals(bt.Type) {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("string comparison expression expected %s. Received: %s", at.Type.String(), bt.Type.String()))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("string comparison expression expected %s. Received: %s", at.Type.String(), bt.Type.String()))
 			return unknownAttr()
 		}
 
@@ -692,7 +693,7 @@ func (t *typeVisitor) VisitExpressionStringCompare(p0 *tree.ExpressionStringComp
 			et := esc(ev)
 
 			if !et.Type.Equals(types.TextType) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("string comparison escape expected text. Received: %s", et.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("string comparison escape expected text. Received: %s", et.Type.String()))
 				return unknownAttr()
 			}
 		}
@@ -711,7 +712,7 @@ func (t *typeVisitor) VisitExpressionUnary(p0 *tree.ExpressionUnary) any {
 		ot := o(ev)
 
 		if !ot.Type.Equals(types.IntType) {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Sprintf("unary expression expected int. Received: %s", ot.Type.String()))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeType, fmt.Errorf("unary expression expected int. Received: %s", ot.Type.String()))
 			return unknownAttr()
 		}
 
@@ -764,13 +765,13 @@ func (t *typeVisitor) VisitInsertCore(p0 *tree.InsertCore) any {
 		// inserted into.
 		tbl, ok := t.commonTables[p0.Table]
 		if !ok {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("table %s not found", p0.Table))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("table %s not found", p0.Table))
 			return newRelation()
 		}
 
 		_, ok = t.ctes[p0.Table]
 		if ok {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("cannot insert into common table expression %s", p0.Table))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("cannot insert into common table expression %s", p0.Table))
 			return newRelation()
 		}
 
@@ -778,7 +779,7 @@ func (t *typeVisitor) VisitInsertCore(p0 *tree.InsertCore) any {
 		for _, col := range p0.Columns {
 			_, ok := tbl.Attribute(col)
 			if !ok {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("column %s not found", col))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("column %s not found", col))
 				return newRelation()
 			}
 		}
@@ -790,7 +791,7 @@ func (t *typeVisitor) VisitInsertCore(p0 *tree.InsertCore) any {
 		// Therefore, we will not add the alias to the context.
 		for _, row := range p0.Values {
 			if len(row) != len(p0.Columns) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, "mismatched column/value count")
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, errors.New("mismatched column/value count"))
 				return newRelation()
 			}
 
@@ -799,12 +800,12 @@ func (t *typeVisitor) VisitInsertCore(p0 *tree.InsertCore) any {
 
 				expectedAttr, ok := tbl.Attribute(p0.Columns[i])
 				if !ok {
-					t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("unknown column %s", p0.Columns[i]))
+					t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("unknown column %s", p0.Columns[i]))
 					return newRelation()
 				}
 
 				if !expectedAttr.Type.Equals(attr.Type) {
-					t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("%s: type mismatch for column %s", ErrInvalidType.Error(), p0.Columns[i]))
+					t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("%s: type mismatch for column %s", ErrInvalidType.Error(), p0.Columns[i]))
 					return newRelation()
 				}
 			}
@@ -825,7 +826,7 @@ func (t *typeVisitor) VisitInsertCore(p0 *tree.InsertCore) any {
 			Relation: tbl,
 		})
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 			return newRelation()
 		}
 
@@ -863,13 +864,13 @@ func (t *typeVisitor) VisitUpdateCore(p0 *tree.UpdateCore) any {
 	return returnFunc(func(e *evaluationContext) *Relation {
 		tbl, ok := t.commonTables[p0.QualifiedTableName.TableName]
 		if !ok {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("unknown table %s", p0.QualifiedTableName.TableName))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("unknown table %s", p0.QualifiedTableName.TableName))
 			return newRelation()
 		}
 
 		_, ok = t.ctes[p0.QualifiedTableName.TableName]
 		if ok {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("cannot update common table expression %s", p0.QualifiedTableName.TableName))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("cannot update common table expression %s", p0.QualifiedTableName.TableName))
 			return newRelation()
 		}
 
@@ -887,7 +888,7 @@ func (t *typeVisitor) VisitUpdateCore(p0 *tree.UpdateCore) any {
 			Relation: tbl,
 		})
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 			return newRelation()
 		}
 
@@ -903,7 +904,7 @@ func (t *typeVisitor) VisitUpdateCore(p0 *tree.UpdateCore) any {
 			whereType := p0.Where.Accept(t).(attributeFn)(e2)
 
 			if !whereType.Type.Equals(types.BoolType) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("%s: where clause must be boolean. Got %s", ErrInvalidType.Error(), whereType.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("%s: where clause must be boolean. Got %s", ErrInvalidType.Error(), whereType.Type.String()))
 				return newRelation()
 			}
 		}
@@ -934,13 +935,13 @@ func (t *typeVisitor) VisitDeleteCore(p0 *tree.DeleteCore) any {
 	return returnFunc(func(e *evaluationContext) *Relation {
 		tbl, ok := t.commonTables[p0.QualifiedTableName.TableName]
 		if !ok {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("unknown table %s", p0.QualifiedTableName.TableName))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("unknown table %s", p0.QualifiedTableName.TableName))
 			return newRelation()
 		}
 
 		_, ok = t.ctes[p0.QualifiedTableName.TableName]
 		if ok {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("cannot delete from common table expression %s", p0.QualifiedTableName.TableName))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("cannot delete from common table expression %s", p0.QualifiedTableName.TableName))
 			return newRelation()
 		}
 
@@ -957,7 +958,7 @@ func (t *typeVisitor) VisitDeleteCore(p0 *tree.DeleteCore) any {
 			Relation: tbl,
 		})
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 			return newRelation()
 		}
 
@@ -965,7 +966,7 @@ func (t *typeVisitor) VisitDeleteCore(p0 *tree.DeleteCore) any {
 			whereType := p0.Where.Accept(t).(attributeFn)(e2)
 
 			if !whereType.Type.Equals(types.BoolType) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("%s, where clause must be boolean. Got %s", ErrInvalidType.Error(), whereType.Type.String()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("%s, where clause must be boolean. Got %s", ErrInvalidType.Error(), whereType.Type.String()))
 				return newRelation()
 			}
 		}
@@ -1009,13 +1010,13 @@ func (t *typeVisitor) VisitSelectCore(p0 *tree.SelectCore) any {
 			shape := r.Shape()
 
 			if len(shape) != len(expectedShape) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("%s: compound selects must return the same number of columns. Expected %d. Received: %d", ErrCompoundShape.Error(), len(expectedShape), len(shape)))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("%s: compound selects must return the same number of columns. Expected %d. Received: %d", ErrCompoundShape.Error(), len(expectedShape), len(shape)))
 				return newRelation()
 			}
 
 			for i, col := range shape {
 				if !col.Equals(expectedShape[i]) {
-					t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("%s: compound selects must return the same types: Expected %s Received: %s", ErrCompoundShape.Error(), expectedShape[i].Name, col.Name))
+					t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("%s: compound selects must return the same types: Expected %s Received: %s", ErrCompoundShape.Error(), expectedShape[i].Name, col.Name))
 					return newRelation()
 				}
 			}
@@ -1045,7 +1046,7 @@ func (t *typeVisitor) VisitSelectCore(p0 *tree.SelectCore) any {
 				Relation: res,
 			})
 			if err != nil {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 				return newRelation()
 			}
 		} else {
@@ -1074,7 +1075,7 @@ func (t *typeVisitor) VisitSimpleSelect(p0 *tree.SimpleSelect) any {
 		if p0.Where != nil {
 			a := p0.Where.Accept(t).(attributeFn)(e)
 			if !a.Attribute.Type.Equals(types.BoolType) {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("%s: where clause must be boolean", ErrInvalidType.Error()))
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("%s: where clause must be boolean", ErrInvalidType.Error()))
 				return newRelation()
 			}
 		}
@@ -1097,7 +1098,7 @@ func (t *typeVisitor) VisitSimpleSelect(p0 *tree.SimpleSelect) any {
 			e2 := e.copy()
 			err := e2.mergeAnonymousSafe(result)
 			if err != nil {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 				return newRelation()
 			}
 
@@ -1131,7 +1132,7 @@ func (t *typeVisitor) VisitResultColumnExpression(p0 *tree.ResultColumnExpressio
 
 		err := r.AddAttribute(val)
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 		}
 	})
 }
@@ -1142,7 +1143,7 @@ func (t *typeVisitor) VisitResultColumnStar(p0 *tree.ResultColumnStar) any {
 			return r.Merge(r2)
 		})
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 		}
 	})
 }
@@ -1151,13 +1152,13 @@ func (t *typeVisitor) VisitResultColumnTable(p0 *tree.ResultColumnTable) any {
 	return resultFunc(func(e *evaluationContext, r *Relation) {
 		tbl, ok := e.joinedTables[p0.TableName]
 		if !ok {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("table %s not found", p0.TableName))
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf("table %s not found", p0.TableName))
 			return
 		}
 
 		err := r.Merge(tbl)
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 		}
 	})
 }
@@ -1180,14 +1181,14 @@ func (t *typeVisitor) VisitReturningClauseColumn(p0 *tree.ReturningClauseColumn)
 				return r.Merge(r2)
 			})
 			if err != nil {
-				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+				t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 			}
 
 			return
 		}
 
 		if p0.Expression == nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, "invalid returning clause")
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, errors.New("invalid returning clause"))
 			return
 		}
 
@@ -1206,7 +1207,7 @@ func (t *typeVisitor) VisitReturningClauseColumn(p0 *tree.ReturningClauseColumn)
 
 		err := r.AddAttribute(attribute)
 		if err != nil {
-			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			t.options.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 		}
 	})
 }

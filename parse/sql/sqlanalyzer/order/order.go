@@ -57,7 +57,8 @@ func (o *orderingWalker) EnterCTE(node *tree.CTE) error {
 	// make sure this does not have a conflicting name with another table
 	_, err = findTable(o.tables, tbl.Name)
 	if err == nil {
-		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`table or subquery with name or alias "%s" already exists`, tbl.Name))
+		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic,
+			fmt.Errorf(`table or subquery with name or alias "%s" already exists`, tbl.Name))
 		return nil
 	}
 
@@ -101,11 +102,11 @@ func tableFromRelation(rel *typing.Relation, name string) (*types.Table, error) 
 // Register RelationSubquerys as tables, so that we can order them.
 func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) error {
 	if node.Select == nil {
-		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, "subquery select is nil")
+		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, errors.New("subquery select is nil"))
 		return nil
 	}
 	if len(node.Select.SimpleSelects) == 0 {
-		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, "subquery select has no select cores")
+		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, errors.New("subquery select has no select cores"))
 		return nil
 	}
 
@@ -127,7 +128,7 @@ func (o *orderingWalker) EnterRelationSubquery(node *tree.RelationSubquery) erro
 	// make sure this does not have a conflicting name with another table
 	_, err = findTable(o.tables, tbl.Name)
 	if err == nil {
-		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`table or subquery with name or alias "%s" already exists`, tbl.Name))
+		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Errorf(`table or subquery with name or alias "%s" already exists`, tbl.Name))
 		return nil
 	}
 
@@ -142,7 +143,7 @@ func (o *orderingWalker) ExitSelectCore(node *tree.SelectCore) error {
 	var err error
 	switch len(node.SimpleSelects) {
 	case 0:
-		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, "no select cores in select statement")
+		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, errors.New("no select cores in select statement"))
 		return nil
 	case 1:
 		terms, err = o.orderSimpleStatement(node.SimpleSelects[0], o.tables)
@@ -150,7 +151,7 @@ func (o *orderingWalker) ExitSelectCore(node *tree.SelectCore) error {
 		terms, err = o.orderCompoundStatement(node.SimpleSelects, o.tables)
 	}
 	if err != nil {
-		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+		o.errs.NodeErr(node.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 		return nil
 	}
 
@@ -208,7 +209,8 @@ func (o *orderingWalker) orderSimpleStatement(stmt *tree.SimpleSelect, tables []
 					},
 				}
 			default:
-				o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeSemantic, "multiple columns in a simple grouped term in a group by expression not supported")
+				o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeSemantic,
+					errors.New("multiple columns in a simple grouped term in a group by expression not supported"))
 				return nil, nil
 			}
 		}
@@ -222,7 +224,7 @@ func (o *orderingWalker) orderSimpleStatement(stmt *tree.SimpleSelect, tables []
 	// this allows us to search for them by their alias, and not their real name.
 	usedTables, err := utils.GetUsedTables(stmt.From)
 	if err != nil {
-		o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeUnknown, err.Error())
+		o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeUnknown, err)
 		return nil, nil
 	}
 
@@ -230,7 +232,7 @@ func (o *orderingWalker) orderSimpleStatement(stmt *tree.SimpleSelect, tables []
 	for i, tbl := range usedTables {
 		newTable, err := findTable(tables, tbl.Name)
 		if err != nil {
-			o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+			o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 			return nil, nil
 		}
 
@@ -258,7 +260,7 @@ func (o *orderingWalker) orderSimpleStatement(stmt *tree.SimpleSelect, tables []
 	for _, ret := range stmt.Columns {
 		containsAggregate, err := containsAggregateFunc(ret)
 		if err != nil {
-			o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeUnknown, err.Error())
+			o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeUnknown, err)
 			return nil, nil
 		}
 
@@ -269,7 +271,8 @@ func (o *orderingWalker) orderSimpleStatement(stmt *tree.SimpleSelect, tables []
 
 	if numberOfAggregates > 0 {
 		if numberOfAggregates != len(stmt.Columns) {
-			o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeSemantic, "all columns must be aggregates if an aggregate function is used without a group by")
+			o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeSemantic,
+				errors.New("all columns must be aggregates if an aggregate function is used without a group by"))
 			return nil, nil
 		}
 		return nil, nil // order nothing in this case
@@ -279,7 +282,7 @@ func (o *orderingWalker) orderSimpleStatement(stmt *tree.SimpleSelect, tables []
 	for _, tbl := range usedTblsFull {
 		primaries, err := tbl.GetPrimaryKey()
 		if err != nil {
-			o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeUnknown, err.Error())
+			o.errs.NodeErr(stmt.GetNode(), parseTypes.ParseErrorTypeUnknown, err)
 			return nil, nil
 		}
 
@@ -361,17 +364,17 @@ func (o *orderingWalker) orderCompoundStatement(stmt []*tree.SimpleSelect, table
 	for _, core := range stmt {
 		contains, err := containsGroupBy(core)
 		if err != nil {
-			o.errs.NodeErr(core.GetNode(), parseTypes.ParseErrorTypeUnknown, err.Error())
+			o.errs.NodeErr(core.GetNode(), parseTypes.ParseErrorTypeUnknown, err)
 			return nil, nil
 		}
 
 		if contains {
-			o.errs.NodeErr(core.GetNode(), parseTypes.ParseErrorTypeSemantic, ErrGroupByWithCompoundStatement.Error())
+			o.errs.NodeErr(core.GetNode(), parseTypes.ParseErrorTypeSemantic, ErrGroupByWithCompoundStatement)
 			return nil, nil
 		}
 
 		if len(core.Columns) != expectedNumberOfColumns {
-			o.errs.NodeErr(core.GetNode(), parseTypes.ParseErrorTypeSemantic, ErrCompoundStatementDifferentNumberOfColumns.Error())
+			o.errs.NodeErr(core.GetNode(), parseTypes.ParseErrorTypeSemantic, ErrCompoundStatementDifferentNumberOfColumns)
 			return nil, nil
 		}
 	}
@@ -428,7 +431,7 @@ func (o *orderingWalker) getReturnedColumnOrderingTerms(resultCols []tree.Result
 		case *tree.ResultColumnTable:
 			tbl, err := findTable(tables, c.TableName)
 			if err != nil {
-				o.errs.NodeErr(c.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+				o.errs.NodeErr(c.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 				return nil, nil
 			}
 

@@ -1,6 +1,8 @@
 package types
 
 import (
+	"fmt"
+
 	"github.com/antlr4-go/antlr/v4"
 )
 
@@ -21,10 +23,10 @@ type AntlrErrorListener interface {
 	BaseErrorListener
 	antlr.ErrorListener
 	// TokenErr adds an error where the error comes from an antlr generated token.
-	TokenErr(t antlr.Token, errType ParseErrorType, msg string)
+	TokenErr(t antlr.Token, errType ParseErrorType, err error)
 	// RuleErr adds an error where the position of an antlr generated rule is
 	// known.
-	RuleErr(ctx antlr.ParserRuleContext, errType ParseErrorType, msg string)
+	RuleErr(ctx antlr.ParserRuleContext, errType ParseErrorType, err error)
 	// ChildFromToken creates a new error listener that is a child of the current error listener.
 	// It will have the same starting position as the token.
 	ChildFromToken(name string, t antlr.Token) *ErrorListener
@@ -35,7 +37,7 @@ type AntlrErrorListener interface {
 type NativeErrorListener interface {
 	BaseErrorListener
 	// NodeErr adds an error where our native node type is identifiable.
-	NodeErr(node *Node, errType ParseErrorType, msg string)
+	NodeErr(node *Node, errType ParseErrorType, err error)
 	// Child creates a new error listener. It will not have any of the errors from the parent,
 	// and should simply be used for nested parsing.
 	Child(name string, startLine, startCol int) *ErrorListener
@@ -71,7 +73,11 @@ func NewErrorListener() *ErrorListener {
 
 // Err returns the error if there are any, otherwise it returns nil.
 func (e *ErrorListener) Err() error {
-	return CombineParseErrors(e.Errs)
+	if len(e.Errs) == 0 {
+		return nil
+	}
+	pe := ParseErrors(e.Errs)
+	return &pe
 }
 
 // Errors returns the errors that have been collected.
@@ -85,11 +91,11 @@ func (e *ErrorListener) Add(errs ...*ParseError) {
 }
 
 // NodeErr adds an error that comes from a node.
-func (e *ErrorListener) NodeErr(node *Node, errType ParseErrorType, msg string) {
+func (e *ErrorListener) NodeErr(node *Node, errType ParseErrorType, err error) {
 	e.Errs = append(e.Errs, &ParseError{
 		ParserName: e.name,
 		Type:       errType,
-		Err:        msg,
+		Err:        err,
 		Node:       e.adjustNode(node),
 	})
 }
@@ -107,35 +113,35 @@ func (e *ErrorListener) adjustNode(node *Node) *Node {
 }
 
 // TokenErr adds an error that comes from an Antlr token.
-func (e *ErrorListener) TokenErr(t antlr.Token, errType ParseErrorType, msg string) {
+func (e *ErrorListener) TokenErr(t antlr.Token, errType ParseErrorType, err error) {
 	e.Errs = append(e.Errs, &ParseError{
 		ParserName: e.name,
 		Type:       errType,
-		Err:        msg,
+		Err:        err,
 		Node:       e.adjustNode(unaryNode(t.GetLine()-1, t.GetColumn())),
 	})
 }
 
 // RuleErr adds an error that comes from a Antlr parser rule.
-func (e *ErrorListener) RuleErr(ctx antlr.ParserRuleContext, errType ParseErrorType, msg string) {
+func (e *ErrorListener) RuleErr(ctx antlr.ParserRuleContext, errType ParseErrorType, err error) {
 	node := &Node{}
 	node.Set(ctx)
 	e.Errs = append(e.Errs, &ParseError{
 		ParserName: e.name,
 		Type:       errType,
-		Err:        msg,
+		Err:        err,
 		Node:       e.adjustNode(node),
 	})
 }
 
 // Child creates a new error listener. It will not have any of the errors from the parent,
 // and should simply be used for nested parsing.
-func (l *ErrorListener) Child(name string, startLine, startCol int) *ErrorListener {
+func (e *ErrorListener) Child(name string, startLine, startCol int) *ErrorListener {
 	return &ErrorListener{
 		name:      name,
 		Errs:      make([]*ParseError, 0),
-		startLine: l.startLine + startLine,
-		startCol:  l.startCol + startCol,
+		startLine: e.startLine + startLine,
+		startCol:  e.startCol + startCol,
 	}
 }
 
@@ -146,10 +152,10 @@ func (l *ErrorListener) Child(name string, startLine, startCol int) *ErrorListen
 // everything to be 0-indexed, which while a-typical, is more convenient for tracking
 // position in nested parsers. To abstract this aytpicality, we confine it all in this
 // package.
-func (l *ErrorListener) ChildFromToken(name string, t antlr.Token) *ErrorListener {
+func (e *ErrorListener) ChildFromToken(name string, t antlr.Token) *ErrorListener {
 	startline := t.GetLine() - 1
 	startcol := t.GetColumn()
-	return l.Child(name, startline, startcol)
+	return e.Child(name, startline, startcol)
 }
 
 // SyntaxError implements the Antlr error listener interface.
@@ -158,7 +164,7 @@ func (e *ErrorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol
 	e.Errs = append(e.Errs, &ParseError{
 		ParserName: e.name,
 		Type:       ParseErrorTypeSyntax,
-		Err:        ErrSyntaxError.Error() + ": " + msg,
+		Err:        fmt.Errorf("%w: %s", ErrSyntaxError, msg),
 		Node:       e.adjustNode(unaryNode(line, column)),
 	})
 }
@@ -168,16 +174,16 @@ func (e *ErrorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol
 // https://stackoverflow.com/questions/71056312/antlr-how-to-avoid-reportattemptingfullcontext-and-reportambiguity
 
 // ReportAmbiguity implements the Antlr error listener interface.
-func (l *ErrorListener) ReportAmbiguity(recognizer antlr.Parser, dfa *antlr.DFA, startIndex, stopIndex int,
+func (e *ErrorListener) ReportAmbiguity(recognizer antlr.Parser, dfa *antlr.DFA, startIndex, stopIndex int,
 	exact bool, ambigAlts *antlr.BitSet, configs *antlr.ATNConfigSet) {
 }
 
 // ReportAttemptingFullContext implements the Antlr error listener interface.
-func (l *ErrorListener) ReportAttemptingFullContext(recognizer antlr.Parser, dfa *antlr.DFA, startIndex,
+func (e *ErrorListener) ReportAttemptingFullContext(recognizer antlr.Parser, dfa *antlr.DFA, startIndex,
 	stopIndex int, conflictingAlts *antlr.BitSet, configs *antlr.ATNConfigSet) {
 }
 
 // ReportContextSensitivity implements the Antlr error listener interface.
-func (l *ErrorListener) ReportContextSensitivity(recognizer antlr.Parser, dfa *antlr.DFA, startIndex, stopIndex,
+func (e *ErrorListener) ReportContextSensitivity(recognizer antlr.Parser, dfa *antlr.DFA, startIndex, stopIndex,
 	prediction int, configs *antlr.ATNConfigSet) {
 }

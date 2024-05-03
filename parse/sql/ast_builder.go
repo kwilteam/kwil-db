@@ -2,6 +2,7 @@ package sqlparser
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -68,7 +69,7 @@ func (v *astBuilder) VisitType_cast(ctx *grammar.Type_castContext) interface{} {
 	if ctx != nil {
 		typeCastRaw := ctx.Cast_type().GetText()
 		if typeCastRaw[0] == '`' || typeCastRaw[0] == '"' {
-			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("type cast should not be wrapped in  %c", typeCastRaw[0]))
+			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Errorf("type cast should not be wrapped in %c", typeCastRaw[0]))
 			return types.UnknownType
 		}
 
@@ -87,7 +88,7 @@ func (v *astBuilder) VisitType_cast(ctx *grammar.Type_castContext) interface{} {
 
 		err := typ.Clean()
 		if err != nil {
-			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeType, err.Error())
+			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeType, err)
 			return types.UnknownType
 		}
 
@@ -103,7 +104,7 @@ func (v *astBuilder) VisitText_literal_expr(ctx *grammar.Text_literal_exprContex
 	val := ctx.TEXT_LITERAL().GetText()
 	if !strings.HasPrefix(val, "'") || !strings.HasSuffix(val, "'") {
 		// this shouldn't happen, and should be caught by the lexer
-		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("invalid text literal %s", val))
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Errorf("invalid text literal %s", val))
 		return &tree.ExpressionTextLiteral{}
 	}
 
@@ -122,7 +123,7 @@ func (v *astBuilder) VisitNumeric_literal_expr(ctx *grammar.Numeric_literal_expr
 	val, err := strconv.ParseInt(t, 10, 64)
 	if err != nil {
 		// this shouldn't happen, and should be caught by the lexer
-		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("failed to parse numeric literal %s: %v", t, err))
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Errorf("failed to parse numeric literal %s: %w", t, err))
 		return &tree.ExpressionNumericLiteral{}
 	}
 
@@ -142,7 +143,7 @@ func (v *astBuilder) VisitBoolean_literal_expr(ctx *grammar.Boolean_literal_expr
 	boolVal, err := strconv.ParseBool(b)
 	if err != nil {
 		// this shouldn't happen, and should be caught by the lexer
-		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("failed to parse boolean literal %s: %v", b, err))
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Errorf("failed to parse boolean literal %s: %w", b, err))
 		return &tree.ExpressionBooleanLiteral{}
 	}
 
@@ -171,7 +172,7 @@ func (v *astBuilder) VisitBlob_literal_expr(ctx *grammar.Blob_literal_exprContex
 	// trim 0x prefix
 	if !strings.HasPrefix(t, "0x") {
 		// should be caught by the lexer
-		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("invalid blob literal %s", t))
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Errorf("invalid blob literal %s", t))
 		return &tree.ExpressionBlobLiteral{}
 	}
 	t = t[2:]
@@ -179,7 +180,7 @@ func (v *astBuilder) VisitBlob_literal_expr(ctx *grammar.Blob_literal_exprContex
 	decoded, err := hex.DecodeString(t)
 	if err != nil {
 		// should be caught by the lexer
-		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("failed to decode blob literal %s: %v", t, err))
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Errorf("failed to decode blob literal %s: %w", t, err))
 		return &tree.ExpressionBlobLiteral{}
 	}
 
@@ -430,14 +431,14 @@ func (v *astBuilder) VisitForeign_function_call(ctx *grammar.Foreign_function_ca
 	expr.Function = util.ExtractSQLName(ctx.IDENTIFIER().GetText())
 
 	if ctx.GetDbid() == nil {
-		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("%s: missing dbid", parseTypes.ErrForeignCallMissingField.Error()))
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Errorf("%w: missing dbid", parseTypes.ErrForeignCallMissingField))
 		return expr
 	}
 
 	expr.ContextualParams = append(expr.ContextualParams, v.Visit(ctx.GetDbid()).(tree.Expression))
 
 	if ctx.GetProcedure() == nil {
-		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("%s: missing procedure", parseTypes.ErrForeignCallMissingField.Error()))
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Errorf("%w: missing procedure", parseTypes.ErrForeignCallMissingField))
 		return expr
 	}
 
@@ -622,7 +623,7 @@ func (v *astBuilder) VisitIs_expr(ctx *grammar.Is_exprContext) interface{} {
 		} else if strings.EqualFold(tf, "false") {
 			b = false
 		} else {
-			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("unknown boolean literal %s", tf))
+			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Errorf("unknown boolean literal %s", tf))
 			return expr
 		}
 
@@ -1017,10 +1018,10 @@ func (v *astBuilder) VisitTable_or_subquery(ctx *grammar.Table_or_subqueryContex
 	case ctx.Function_call() != nil:
 		funcDef := v.Visit(ctx.Function_call()).(*tree.ExpressionFunction)
 		if funcDef.Star {
-			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, "cannot join on a function that uses *")
+			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("cannot join on a function that uses *"))
 		}
 		if funcDef.Distinct {
-			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, "cannot join on a function that uses DISTINCT")
+			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("cannot join on a function that uses DISTINCT"))
 		}
 
 		t := tree.RelationFunction{

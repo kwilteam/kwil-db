@@ -50,10 +50,10 @@ func (s *schemaDisplay) MarshalJSON() ([]byte, error) {
 
 func (s *schemaDisplay) MarshalText() (text []byte, err error) {
 	// we set the schema info to nil because it is not needed for users
-	// who are just looking at the schema.
+	// who are just looking at the schema.type ParseResult struct {
 	s.Result.SchemaInfo = nil
-	if s.Result.Errs.Err() != nil {
-		return []byte(s.Result.Errs.Error()), nil
+	if err := s.Result.Err(); err != nil {
+		return []byte(err.Error()), nil
 	} else {
 		return json.MarshalIndent(s.Result, "", "  ")
 	}

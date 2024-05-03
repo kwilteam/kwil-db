@@ -20,7 +20,7 @@ func NewJoinWalker(errLis parseTypes.NativeErrorListener) tree.AstListener {
 func (s *joinWalker) EnterJoinPredicate(j *tree.JoinPredicate) error {
 	err := checkJoin(j)
 	if err != nil {
-		s.errs.NodeErr(j.GetNode(), parseTypes.ParseErrorTypeSemantic, err.Error())
+		s.errs.NodeErr(j.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
 	}
 
 	return nil

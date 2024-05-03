@@ -10,14 +10,45 @@ import (
 // ParseErrors is a collection of parse errors.
 type ParseErrors []*ParseError
 
-// Error implements the error interface.
-func (p ParseErrors) Error() string {
-	return CombineParseErrors(p).Error()
+var _ interface{ Unwrap() []error } = (*ParseErrors)(nil)
+
+// Unwrap allows errors.Is and error.As to identify wrapped errors.
+func (p ParseErrors) Unwrap() []error {
+	errs := make([]error, len(p))
+	for i := range p {
+		errs[i] = p[i]
+	}
+	return errs
 }
 
 // Err returns all the errors as a single error.
 func (p ParseErrors) Err() error {
-	return CombineParseErrors(p)
+	if len(p) == 0 {
+		return nil
+	}
+	return &p
+}
+
+// The zero value of a ParseErrors instance intentionally does not implement the
+// error interface. The Err method will return nil if the length is zero.
+var _ error = (*ParseErrors)(nil)
+
+// Error implements the error interface.
+func (p *ParseErrors) Error() string {
+	errs := *p
+	switch len(errs) {
+	case 0: // use Err and this won't happen
+		return "<nil>"
+	case 1:
+		return errs[0].Error()
+	default:
+		var str strings.Builder
+		str.WriteString("detected multiple parse errors:")
+		for i, err := range errs {
+			str.WriteString(fmt.Sprintf("\n%d: %s", i, err.Error()))
+		}
+		return str.String()
+	}
 }
 
 // Add adds errors to the collection.
@@ -29,31 +60,21 @@ func (p *ParseErrors) Add(errs ...*ParseError) {
 type ParseError struct {
 	ParserName string         `json:"parser_name,omitempty"`
 	Type       ParseErrorType `json:"type"`
-	Err        string         `json:"error"`
+	Err        error          `json:"error"`
 	Node       *Node          `json:"node,omitempty"`
+}
+
+// Unwrap() allows errors.Is and errors.As to find wrapped errors.
+func (p ParseError) Unwrap() error {
+	return p.Err
 }
 
 // Error satisfies the standard library error interface.
 func (p *ParseError) Error() string {
 	// Add 1 to the line and column numbers to make them 1-indexed.
-	return fmt.Sprintf("(%s) %s error: start %d:%d end %d:%d: %s", p.ParserName, p.Type, p.Node.StartLine+1, p.Node.StartCol+1, p.Node.EndLine+1, p.Node.EndCol+1, p.Err)
-}
-
-// CombineParseErrors formats multiple parse errors into a single error.
-// If there are no errors, it will return nil.
-func CombineParseErrors(errs []*ParseError) error {
-	switch len(errs) {
-	case 0:
-		return nil
-	case 1:
-		return errs[0]
-	default:
-		str := strings.Builder{}
-		for i, err := range errs {
-			str.WriteString(fmt.Sprintf("\n%d: %s", i, err.Error()))
-		}
-		return fmt.Errorf("detected multiple parse errors:%s", str.String())
-	}
+	return fmt.Sprintf("(%s) %s error: start %d:%d end %d:%d: %s", p.ParserName, p.Type,
+		p.Node.StartLine+1, p.Node.StartCol+1,
+		p.Node.EndLine+1, p.Node.EndCol+1, p.Err)
 }
 
 // ParseErrorTypes are used to group errors into categories.

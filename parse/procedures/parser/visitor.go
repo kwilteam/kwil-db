@@ -2,6 +2,7 @@ package parser
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -45,13 +46,13 @@ func (p *proceduralLangVisitor) VisitForeign_call(ctx *gen.Foreign_callContext) 
 	dbid := ctx.GetDbid()
 	if dbid == nil {
 		// this should get caught by the parser
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, "missing dbid")
+		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("missing dbid"))
 	}
 
 	procedure := ctx.GetProcedure()
 	if procedure == nil {
 		// this should get caught by the parser
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, "missing procedure")
+		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("missing procedure"))
 	}
 
 	e.ContextArgs = []Expression{dbid.Accept(p).(Expression), procedure.Accept(p).(Expression)}
@@ -112,7 +113,7 @@ func (p *proceduralLangVisitor) VisitExpr_blob_literal(ctx *gen.Expr_blob_litera
 	// trim off beginning 0x
 	if b[:2] != "0x" {
 		// this should get caught by the parser
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, "invalid blob literal")
+		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid blob literal"))
 	}
 
 	b = b[2:]
@@ -120,7 +121,7 @@ func (p *proceduralLangVisitor) VisitExpr_blob_literal(ctx *gen.Expr_blob_litera
 	decoded, err := hex.DecodeString(b)
 	if err != nil {
 		// this should get caught by the parser
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, "invalid blob literal")
+		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid blob literal"))
 	}
 
 	e := &ExpressionBlobLiteral{
@@ -221,7 +222,7 @@ func (p *proceduralLangVisitor) VisitExpr_int_literal(ctx *gen.Expr_int_literalC
 	i, err := strconv.ParseInt(textVal, 10, 64)
 	if err != nil {
 		// this should get caught by the parser
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, "invalid integer literal")
+		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid integer literal"))
 	}
 
 	e := &ExpressionIntLiteral{
@@ -247,7 +248,7 @@ func (p *proceduralLangVisitor) VisitExpr_make_array(ctx *gen.Expr_make_arrayCon
 
 	e2, ok := e.(*ExpressionMakeArray)
 	if !ok {
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeUnknown, "expected array literal")
+		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeUnknown, errors.New("expected array literal"))
 	}
 
 	e2.Set(ctx)
@@ -286,12 +287,12 @@ func (p *proceduralLangVisitor) VisitExpr_text_literal(ctx *gen.Expr_text_litera
 	// parse out the quotes
 	if len(ctx.TEXT_LITERAL().GetText()) < 2 {
 		// this should get caught by the parser
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, "invalid text literal")
+		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid text literal"))
 	}
 
 	if ctx.TEXT_LITERAL().GetText()[0] != '\'' || ctx.TEXT_LITERAL().GetText()[len(ctx.TEXT_LITERAL().GetText())-1] != '\'' {
 		// this should get caught by the parser
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, "invalid text literal")
+		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid text literal"))
 	}
 
 	text := ctx.TEXT_LITERAL().GetText()[1 : len(ctx.TEXT_LITERAL().GetText())-1]
@@ -386,7 +387,7 @@ func (p *proceduralLangVisitor) VisitStmt_procedure_call(ctx *gen.Stmt_procedure
 			// check if it's nil
 			if v != nil {
 				// this would be a bug
-				p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeUnknown, "invalid variable")
+				p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeUnknown, errors.New("invalid variable"))
 			}
 			s.Variables[i] = nil
 		}
@@ -406,7 +407,7 @@ func (p *proceduralLangVisitor) VisitVariable_or_underscore(ctx *gen.Variable_or
 	}
 
 	// this should never happen
-	p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeUnknown, "invalid variable")
+	p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeUnknown, errors.New("invalid variable"))
 	return nil
 }
 
@@ -560,7 +561,7 @@ func (p *proceduralLangVisitor) parseSQLToken(tok antlr.TerminalNode) tree.AstNo
 	}
 
 	if len(ast) != 1 {
-		p.errs.TokenErr(tok.GetSymbol(), parseTypes.ParseErrorTypeSyntax, "expected single SQL statement, found "+strconv.Itoa(len(ast)))
+		p.errs.TokenErr(tok.GetSymbol(), parseTypes.ParseErrorTypeSyntax, errors.New("expected single SQL statement, found "+strconv.Itoa(len(ast))))
 
 		if len(ast) > 0 {
 			return ast[0]

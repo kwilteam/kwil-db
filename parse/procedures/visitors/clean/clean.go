@@ -10,6 +10,7 @@
 package clean
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -93,7 +94,8 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 			if sr.SQL != nil {
 				c.cleanSQL(sr.SQL, sr.SQLLocation)
 				if !returnable(sr.SQL) {
-					errorListener.NodeErr(&sr.Node, parseTypes.ParseErrorTypeSemantic, "RETURN statement must return a SELECT or have a RETURNING clause")
+					errorListener.NodeErr(&sr.Node, parseTypes.ParseErrorTypeSemantic,
+						errors.New("RETURN statement must return a SELECT or have a RETURNING clause"))
 				}
 			}
 		},
@@ -112,13 +114,15 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 			c.cleanSQL(lts.Statement, lts.StatementLocation)
 
 			if !returnable(lts.Statement) {
-				errorListener.NodeErr(&lts.Node, parseTypes.ParseErrorTypeSemantic, "LOOP target must be a SELECT or have a RETURNING clause")
+				errorListener.NodeErr(&lts.Node, parseTypes.ParseErrorTypeSemantic,
+					errors.New("LOOP target must be a SELECT or have a RETURNING clause"))
 			}
 		},
 		// expressions
 		ExpressionMakeArray: func(ema *parser.ExpressionMakeArray) {
 			if len(ema.Values) == 0 {
-				errorListener.NodeErr(&ema.Node, parseTypes.ParseErrorTypeSemantic, "ARRAY must have at least one element")
+				errorListener.NodeErr(&ema.Node, parseTypes.ParseErrorTypeSemantic,
+					errors.New("ARRAY must have at least one element"))
 			}
 		},
 		ExpressionCall: func(ec *parser.ExpressionCall) {
@@ -139,7 +143,8 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 				}
 
 				if proc.IsView() && !proc2.IsView() {
-					errorListener.NodeErr(&ec.Node, parseTypes.ParseErrorTypeSemantic, fmt.Sprintf(`%s: "%s"`, parseTypes.ErrReadOnlyProcedureCallsMutative.Error(), proc2.Name))
+					errorListener.NodeErr(&ec.Node, parseTypes.ParseErrorTypeSemantic,
+						fmt.Errorf(`%w: "%s"`, parseTypes.ErrReadOnlyProcedureCallsMutative, proc2.Name))
 				}
 			}
 		},
@@ -147,15 +152,17 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 			// this must be a locally defined procedure
 			proc, err := c.findForeignProcedure(efc.Name)
 			if err != nil {
-				errorListener.NodeErr(&efc.Node, parseTypes.ParseErrorTypeSemantic, err.Error())
+				errorListener.NodeErr(&efc.Node, parseTypes.ParseErrorTypeSemantic, err)
 			}
 
 			if len(efc.ContextArgs) != 2 {
-				errorListener.NodeErr(&efc.Node, parseTypes.ParseErrorTypeSemantic, "foreign procedure calls must have two context arguments")
+				errorListener.NodeErr(&efc.Node, parseTypes.ParseErrorTypeSemantic,
+					errors.New("foreign procedure calls must have two context arguments"))
 			}
 
 			if len(efc.Arguments) != len(proc.Parameters) {
-				errorListener.NodeErr(&efc.Node, parseTypes.ParseErrorTypeSemantic, "foreign procedure calls must have the same number of arguments as foreign procedure definition")
+				errorListener.NodeErr(&efc.Node, parseTypes.ParseErrorTypeSemantic,
+					errors.New("foreign procedure calls must have the same number of arguments as foreign procedure definition"))
 			}
 
 			efc.Name = strings.ToLower(efc.Name)
@@ -167,14 +174,14 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 			err := ec.Operator.Validate()
 			if err != nil {
 				// this should never happen
-				errorListener.NodeErr(&ec.Node, parseTypes.ParseErrorTypeSyntax, err.Error())
+				errorListener.NodeErr(&ec.Node, parseTypes.ParseErrorTypeSyntax, err)
 			}
 		},
 		ExpressionArithmetic: func(ea *parser.ExpressionArithmetic) {
 			err := ea.Operator.Validate()
 			if err != nil {
 				// this should never happen
-				errorListener.NodeErr(&ea.Node, parseTypes.ParseErrorTypeSyntax, err.Error())
+				errorListener.NodeErr(&ea.Node, parseTypes.ParseErrorTypeSyntax, err)
 			}
 		},
 	}
@@ -265,7 +272,7 @@ func (c *cleaner) cleanSQL(ast tree.AstNode, ctx *parseTypes.Node) {
 	}
 
 	if !c.sqlCanMutate && isMutative {
-		c.errs.NodeErr(ctx, parseTypes.ParseErrorTypeSemantic, parseTypes.ErrReadOnlyProcedureContainsDML.Error())
+		c.errs.NodeErr(ctx, parseTypes.ParseErrorTypeSemantic, parseTypes.ErrReadOnlyProcedureContainsDML)
 	}
 
 	err = parameters.RenameVariables(ast, func(s string) string {

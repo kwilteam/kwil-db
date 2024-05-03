@@ -1,6 +1,7 @@
 package kuneiform
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -68,7 +69,7 @@ type kfVisitor struct {
 func (k *kfVisitor) registerBlock(ctx antlr.ParserRuleContext, name string) {
 	lower := strings.ToLower(name)
 	if _, ok := k.registeredNames[lower]; ok {
-		k.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, "conflicting name: "+name)
+		k.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, fmt.Errorf("conflicting name: "+name))
 		return
 	}
 
@@ -407,7 +408,7 @@ func (k *kfVisitor) VisitAction_declaration(ctx *gen.Action_declarationContext) 
 	var hasPubOrPriv bool
 	act.Modifiers, act.Public, hasPubOrPriv = k.getAccessModifiers(ctx.AllSTMT_ACCESS())
 	if !hasPubOrPriv {
-		k.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, "missing public or private modifier")
+		k.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, errors.New("missing public or private modifier"))
 	}
 
 	return act
@@ -431,7 +432,7 @@ func (k *kfVisitor) VisitProcedure_declaration(ctx *gen.Procedure_declarationCon
 	var hasPubOrPriv bool
 	proc.Modifiers, proc.Public, hasPubOrPriv = k.getAccessModifiers(ctx.AllSTMT_ACCESS())
 	if !hasPubOrPriv {
-		k.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, "missing public or private modifier")
+		k.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, errors.New("missing public or private modifier"))
 	}
 
 	if ctx.Stmt_return() != nil {
@@ -599,7 +600,8 @@ func (k *kfVisitor) getAccessModifiers(mods []antlr.TerminalNode) (modifiers []t
 			modifiers = append(modifiers, types.ModifierOwner)
 		default:
 			m.GetSymbol()
-			k.errs.TokenErr(m.GetSymbol(), parseTypes.ParseErrorTypeSemantic, "unexpected modifier: "+m.GetText())
+			k.errs.TokenErr(m.GetSymbol(), parseTypes.ParseErrorTypeSemantic,
+				fmt.Errorf("unexpected modifier: %v", m.GetText()))
 			return
 		}
 	}

@@ -17,17 +17,17 @@ func ParseKuneiform(kf string) (*ParseResult, error) {
 	// we will return the schema on errors, since language servers will want to
 	// have the schema even if there are errors.
 	schema, info, errs, err := kuneiform.Parse(kf)
-	res := &ParseResult{
-		Schema:     schema,
-		Errs:       errs,
-		SchemaInfo: info,
-	}
 	if err != nil {
 		if schema != nil {
 			schema.Clean() // try to clean, but ignore errors
 		}
 
-		return res, err
+		return nil, err
+	}
+	res := &ParseResult{
+		Schema:     schema,
+		Errs:       errs,
+		SchemaInfo: info,
 	}
 	if res.Err() != nil {
 		if schema != nil {
@@ -39,7 +39,7 @@ func ParseKuneiform(kf string) (*ParseResult, error) {
 
 	err = schema.Clean()
 	if err != nil {
-		return res, err
+		return nil, err
 	}
 
 	_, actionErrs, err := actions.AnalyzeActions(schema, &actions.AnalyzeOpts{
@@ -71,5 +71,8 @@ type ParseResult struct {
 
 // Err returns the first error in the parse result.
 func (r *ParseResult) Err() error {
+	if r == nil {
+		return nil
+	}
 	return r.Errs.Err()
 }

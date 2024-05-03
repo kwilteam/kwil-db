@@ -228,7 +228,7 @@ func Test_Deployment(t *testing.T) {
 				TxID:   "test",
 			})
 			if tc.err != nil {
-				require.ErrorAs(t, err, &tc.err)
+				require.ErrorIs(t, err, tc.err)
 			} else {
 				require.NoError(t, err)
 			}

@@ -2,7 +2,6 @@ package clean
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -45,7 +44,7 @@ func (s *StatementCleaner) err(err1, err2 error, getNode getNoder) {
 		return
 	}
 
-	s.errs.NodeErr(getNode.GetNode(), parseTypes.ParseErrorTypeSemantic, fmt.Sprintf("%s: %s", err1.Error(), err2.Error()))
+	s.errs.NodeErr(getNode.GetNode(), parseTypes.ParseErrorTypeSemantic, errors.Join(err1, err2))
 }
 
 type getNoder interface {

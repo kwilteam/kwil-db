@@ -194,7 +194,7 @@ func (v *astBuilder) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) tree.E
 				return &tree.ExpressionNumericLiteral{Value: i}
 			}
 		}
-		v.errs.RuleErr(ctx.Literal_value(), parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("cannot recognize literal '%s'", literal))
+		v.errs.RuleErr(ctx.Literal_value(), parseTypes.ParseErrorTypeSyntax, fmt.Errorf("cannot recognize literal '%s'", literal))
 		return &tree.ExpressionNullLiteral{} // just to avoid nil panic
 	// sql bind parameter
 	case ctx.Variable() != nil:
@@ -338,7 +338,7 @@ func (v *astBuilder) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) tree.E
 		// it is ok for now
 		_, ok := metadata.Functions[strings.ToLower(expr.Function)]
 		if !ok {
-			v.errs.RuleErr(ctx.Sfn_name(), parseTypes.ParseErrorTypeSyntax, fmt.Sprintf("function %s does not exist", expr.Function))
+			v.errs.RuleErr(ctx.Sfn_name(), parseTypes.ParseErrorTypeSyntax, fmt.Errorf("function %s does not exist", expr.Function))
 			return &tree.ExpressionNullLiteral{}
 		}
 

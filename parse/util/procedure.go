@@ -40,22 +40,22 @@ func FindProcOrForeign(schema *types.Schema, name string) (parameters []*types.D
 // FormatProcedureName formats a procedure name for usage in postgres. This
 // simply prepends the name with _fp_
 func FormatForeignProcedureName(name string) string {
-	return fmt.Sprintf("_fp_%s", name)
+	return "_fp_" + name
 }
 
 // FormatParameterName formats a parameter name for usage in postgres. This
 // simply prepends the name with _param_, and removes the $ prefix.
 func FormatParameterName(name string) string {
-	return fmt.Sprintf("_param_%s", name[1:])
+	return "_param_" + name[1:]
 }
 
 // UnformatParameterName removes the _param_ prefix from a parameter name.
 // If it does not have the prefix, it will return the name as is.
 func UnformatParameterName(name string) string {
-	if len(name) > 7 && name[:7] == "_param_" {
-		return "$" + name[7:]
+	name, cut := strings.CutPrefix(name, "_param_")
+	if cut {
+		return "$" + name
 	}
-
 	return name
 }
 
@@ -85,14 +85,16 @@ func FormatContextualVariableName(name string, dataType *types.DataType) string 
 
 // UnformatContextualVariableName removes the current_setting function from a contextual variable name.
 // If it does not have the function, it will return the name as is. It will also remove any type casting.
+/* unused, untested
 func UnformatContextualVariableName(name string) string {
 	// trim the type casting
 	strs := strings.Split(name, "::")
 	name = strs[0]
 
 	if len(name) > 17 && name[:17] == "current_setting('" {
-		return "@" + name[17:len(name)-2]
+		return "@" + name[17:len(name)-2] // ? -2
 	}
 
 	return name
 }
+*/
