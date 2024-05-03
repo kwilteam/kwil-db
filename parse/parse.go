@@ -18,12 +18,9 @@ func ParseKuneiform(kf string) (*ParseResult, error) {
 	// have the schema even if there are errors.
 	schema, info, errs, err := kuneiform.Parse(kf)
 	if err != nil {
-		if schema != nil {
-			schema.Clean() // try to clean, but ignore errors
-		}
-
 		return nil, err
 	}
+
 	res := &ParseResult{
 		Schema:     schema,
 		Errs:       errs,
@@ -31,7 +28,9 @@ func ParseKuneiform(kf string) (*ParseResult, error) {
 	}
 	if res.Err() != nil {
 		if schema != nil {
-			schema.Clean() // try to clean, but ignore errors
+			// try to clean, but ignore errors since the failed parse
+			// may have left the schema in a bad state.
+			schema.Clean()
 		}
 
 		return res, nil

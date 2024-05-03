@@ -82,19 +82,3 @@ func FormatContextualVariableName(name string, dataType *types.DataType) string 
 
 	panic("unallowed contextual variable type: " + dataType.String())
 }
-
-// UnformatContextualVariableName removes the current_setting function from a contextual variable name.
-// If it does not have the function, it will return the name as is. It will also remove any type casting.
-/* unused, untested
-func UnformatContextualVariableName(name string) string {
-	// trim the type casting
-	strs := strings.Split(name, "::")
-	name = strs[0]
-
-	if len(name) > 17 && name[:17] == "current_setting('" {
-		return "@" + name[17:len(name)-2] // ? -2
-	}
-
-	return name
-}
-*/
