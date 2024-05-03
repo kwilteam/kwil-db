@@ -14,10 +14,10 @@ import (
 	"github.com/kwilteam/kwil-db/core/client"
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/gateway"
-	httpGateway "github.com/kwilteam/kwil-db/core/rpc/client/gateway/http"
-	httpTx "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
+	jsonrpcGateway "github.com/kwilteam/kwil-db/core/rpc/client/gateway/jsonrpc"
+	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
+	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	gatewayTypes "github.com/kwilteam/kwil-db/core/types/gateway"
 )
 
 // GatewayClient is a client that is made to interact with a kwil gateway.
@@ -25,12 +25,12 @@ import (
 // authentication cookies to the gateway.
 // It automatically handles the authentication process with the gateway.
 type GatewayClient struct {
-	client.Client
+	client.Client // user client
 
 	target *url.URL
 
-	httpClient    *http.Client
-	gatewayClient gateway.GatewayClient
+	conn          *http.Client // the "connection"
+	gatewayClient gateway.Client
 
 	gatewaySigner GatewayAuthSignFunc // a hook for when the gateway authentication is needed
 
@@ -68,6 +68,11 @@ func (acj *customAuthCookieJar) Cookies(u *url.URL) []*http.Cookie {
 	return acj.jar.Cookies(u)
 }
 
+// NewClient creates a new gateway client. The target should be the root URL of
+// the gateway. It uses core/client as the underlying client to interact with
+// the gateway for kwil-db specific jsonrpc requests, core/rpc/client/gateway/jsonrpc
+// for gateway specific jsonrpc requests, and sharing the same http connection.
+// See GatewayOptions for options that can be set.
 func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*GatewayClient, error) {
 	options := DefaultOptions()
 	options.Apply(opts)
@@ -79,7 +84,7 @@ func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*Gatew
 
 	persistJar := &customAuthCookieJar{jar: cookieJar}
 
-	httpClient := &http.Client{
+	httpConn := &http.Client{
 		Jar: persistJar,
 	}
 
@@ -88,31 +93,41 @@ func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*Gatew
 		return nil, fmt.Errorf("parse target: %w", err)
 	}
 
-	// TODO: use jsonrpc, and maybe make an option in GatewayOptions to use the
-	// old endpoints rather than json-rpc?
-	txClient := httpTx.NewClient(parsedTarget, httpTx.WithHTTPClient(httpClient))
+	jsonrpcClientOpts := []rpcclient.Opts{}
+	if options != nil {
+		jsonrpcClientOpts = append(jsonrpcClientOpts,
+			rpcclient.WithLogger(options.Logger),
+			// so txClient and gatewayClient can share the connection
+			rpcclient.WithHTTPClient(httpConn),
+		)
+	}
 
-	coreClient, err := client.WrapClient(ctx, txClient, &options.Options)
+	// NOTE: we are not using client.NewClient here, so we can configure
+	// it to use same http connection as gatewayClient.
+	txClient := rpcclient.NewClient(parsedTarget, jsonrpcClientOpts...)
+	userClient, err := client.WrapClient(ctx, txClient, &options.Options)
 	if err != nil {
 		return nil, fmt.Errorf("wrap client: %w", err)
 	}
 
-	gatewayRPC, err := httpGateway.NewGatewayHttpClient(parsedTarget, httpGateway.WithHTTPClient(httpClient))
+	gatewayClient, err := jsonrpcGateway.NewClient(parsedTarget,
+		gateway.WithHTTPClient(httpConn))
 	if err != nil {
 		return nil, fmt.Errorf("create gateway rpc client: %w", err)
 	}
 
 	g := &GatewayClient{
-		Client:        *coreClient,
-		httpClient:    httpClient,
+		Client:        *userClient,
+		conn:          httpConn,
 		gatewaySigner: options.AuthSignFunc,
-		gatewayClient: gatewayRPC,
+		gatewayClient: gatewayClient,
 		target:        parsedTarget,
 	}
 
 	optAuthCookieHandler := options.AuthCookieHandler
 	persistJar.handleAuthCookie = func(c *http.Cookie) error {
 		g.authCookie = c
+
 		if optAuthCookieHandler == nil {
 			return nil
 		}
@@ -137,9 +152,17 @@ func (c *GatewayClient) Call(ctx context.Context, dbid string, action string, in
 	if err == nil {
 		return res, nil
 	}
-	if !errors.Is(err, rpcClient.ErrUnauthorized) {
-		return nil, err
+
+	var jsonRPCErr *jsonrpc.Error
+	if errors.As(err, &jsonRPCErr) {
+		if jsonRPCErr.Code != jsonrpc.ErrorKGWNotAuthorized {
+			return nil, err
+		}
 	}
+
+	//if !errors.Is(err, rpcClient.ErrUnauthorized) {
+	//	return nil, err
+	//}
 
 	// we need to authenticate
 	err = c.authenticate(ctx)
@@ -153,21 +176,18 @@ func (c *GatewayClient) Call(ctx context.Context, dbid string, action string, in
 
 // authenticate authenticates the client with the gateway.
 func (c *GatewayClient) authenticate(ctx context.Context) error {
-	authParam, err := c.gatewayClient.GetAuthParameter(ctx)
-	if errors.Is(err, rpcClient.ErrNotFound) {
-		return fmt.Errorf("failed to get auth parameter. are you sure you're talking to a gateway? err: %w", err)
-	} else if err != nil {
-		return fmt.Errorf("get auth parameter: %w", err)
-	}
-
-	authURI, err := url.JoinPath(c.target.String(), gateway.AuthEndpoint)
+	authParam, err := c.gatewayClient.GetAuthnParameter(ctx)
 	if err != nil {
-		return fmt.Errorf("join path: %w", err)
+		if errors.Is(err, rpcClient.ErrNotFound) {
+			return fmt.Errorf("failed to get auth parameter. are you sure you're talking to a gateway? err: %w", err)
+		}
+		return fmt.Errorf("get authn parameter: %w", err)
 	}
 
 	// remove trailing slash, avoid the confusing case like "http://example.com/" != "http://example.com"
 	// This is also done in the kgw, https://github.com/kwilteam/kgw/pull/42
-	targetDomain := strings.TrimSuffix(c.target.String(), "/")
+	// With switching to JSON rpc in KGW, the domain should not include the path.
+	targetDomain := c.target.Scheme + "://" + c.target.Host
 	// backward compatibility if the Domain is not returned by the gateway
 	// Those fields are returned from kgw in https://github.com/kwilteam/kgw/pull/40
 	if authParam.Domain != "" && authParam.Domain != targetDomain {
@@ -185,7 +205,9 @@ func (c *GatewayClient) authenticate(ctx context.Context) error {
 			kgwAuthVersion, authParam.Version)
 	}
 
-	msg := composeGatewayAuthMessage(authParam, targetDomain, authURI, kgwAuthVersion, c.Client.ChainID())
+	// as we've already checked the domain, URI won't surprise us; we can just
+	// use what KGW returned
+	msg := composeGatewayAuthMessage(authParam, targetDomain, authParam.URI, kgwAuthVersion, c.Client.ChainID())
 
 	if c.Signer == nil {
 		return fmt.Errorf("cannot authenticate to gateway without a signer")
@@ -196,13 +218,13 @@ func (c *GatewayClient) authenticate(ctx context.Context) error {
 	}
 
 	// send the auth request
-	err = c.gatewayClient.Auth(ctx, &gatewayTypes.GatewayAuth{
+	err = c.gatewayClient.Authn(ctx, &gateway.AuthnRequest{
 		Nonce:     authParam.Nonce,
 		Sender:    c.Signer.Identity(),
 		Signature: sig,
 	})
 	if err != nil {
-		return fmt.Errorf("gateway auth: %w", err)
+		return fmt.Errorf("gateway authn: %w", err)
 	}
 
 	return nil
@@ -229,7 +251,7 @@ func (c *GatewayClient) SetAuthCookie(cookie *http.Cookie) error {
 		return fmt.Errorf("cookie name %s not valid", cookie.Name)
 	}
 
-	c.httpClient.Jar.SetCookies(c.target, []*http.Cookie{cookie})
+	c.conn.Jar.SetCookies(c.target, []*http.Cookie{cookie})
 
 	c.authCookie = cookie
 

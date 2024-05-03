@@ -2,37 +2,50 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/kwilteam/kwil-db/core/types/gateway"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
-// GatewayClient is the interface for the Kwil gateway client.
-type GatewayClient interface {
-	// Auth sends an authentication request to the gateway.
+// Client is the interface for the Kwil gateway client.
+type Client interface {
+	// Authn sends an authentication request to the gateway.
 	// It will set a cookie in the client if successful.
-	Auth(ctx context.Context, req *gateway.GatewayAuth) error
+	Authn(ctx context.Context, req *AuthnRequest) error
 
-	// GetAuthParameter returns the parameters that will be used to compose the
+	// GetAuthnParameter returns the parameters that will be used to compose the
 	// authentication message that will be signed by the client.
-	GetAuthParameter(ctx context.Context) (*gateway.GatewayAuthParameter, error)
-
-	// TODO: how do we check for cookie expiration?
+	GetAuthnParameter(ctx context.Context) (*AuthnParameterResponse, error)
 }
 
-var (
-	// ErrAuthenticationFailed is returned when the gateway authentication fails.
-	// This is usually due to an incorrect signature.
-	ErrAuthenticationFailed = fmt.Errorf("gateway authentication failed")
+// AuthnRequest is a request for authentication from the kgw.
+type AuthnRequest struct {
+	Nonce     string          `json:"nonce"`  // identifier for authn session
+	Sender    types.HexBytes  `json:"sender"` // sender public key
+	Signature *auth.Signature `json:"signature"`
+}
 
-	// ErrGatewayNotAuthenticated is returned when the client is not authenticated
-	// with the gateway.
-	ErrGatewayNotAuthenticated = fmt.Errorf("gateway not authenticated")
-)
+type AuthnResponse struct{}
+
+type AuthnParameterRequest struct{}
+
+// AuthnParameterResponse defines the result when request for gateway(KGW)
+// authentication. It's the parameters that will be used to compose the
+// message(SIWE like) to sign.
+type AuthnParameterResponse struct {
+	Nonce          string `json:"nonce"`
+	Statement      string `json:"statement"` // optional
+	IssueAt        string `json:"issue_at"`
+	ExpirationTime string `json:"expiration_time"`
+	// client can use those to precheck before signing
+	ChainID string `json:"chain_id"` // the chain id of the gateway
+	Domain  string `json:"domain"`   // the domain of the gateway
+	Version string `json:"version"`  // the authn version used by the gateway
+	URI     string `json:"uri"`      // the endpoint used for authn
+}
 
 const (
-	// AuthEndpoint is the endpoint for the gateway authentication.
-	// This is defined here since the endpoint is part of the signature
-	// protocol, which both the gateway and client are expected to follow.
-	AuthEndpoint = "/auth"
+	MethodAuthn      = "kgw.authn"
+	MethodAuthnParam = "kgw.authn_param"
+	MethodLogout     = "kgw.logout"
 )

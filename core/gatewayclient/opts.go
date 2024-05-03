@@ -10,17 +10,20 @@ import (
 type GatewayOptions struct {
 	clientType.Options
 
-	// AuthSignFunc is a function that will be used to sign gateway authentication messages.
+	// AuthSignFunc is a function that will be used to sign gateway
+	// authentication messages. By default, it's set to just sign the message
+	// using the client's signer.
 	AuthSignFunc GatewayAuthSignFunc
 
+	// AuthCookieHandler is a function that will be called whenever a cookie is
+	// being set to cookie jar. No default is set.
 	AuthCookieHandler func(*http.Cookie) error
 }
 
 // DefaultOptions returns the default options for the gateway client.
 func DefaultOptions() *GatewayOptions {
 	return &GatewayOptions{
-		Options: *clientType.DefaultOptions(),
-
+		Options:      *clientType.DefaultOptions(),
 		AuthSignFunc: defaultGatewayAuthSignFunc,
 	}
 }

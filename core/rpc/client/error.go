@@ -10,8 +10,9 @@ var (
 	// ErrUnauthorized is returned when the client is not authenticated
 	// It is the equivalent of http status code 401
 	ErrUnauthorized   = errors.New("unauthorized")
-	ErrNotFound       = errors.New("not found") // resource not found
-	ErrMethodNotFound = errors.New("method not found")
+	ErrNotFound       = errors.New("not found")
+	ErrInvalidRequest = errors.New("invalid request")
+	ErrNotAllowed     = errors.New("not allowed")
 )
 
 // RPCError is a common error type used by any RPC client implementation to

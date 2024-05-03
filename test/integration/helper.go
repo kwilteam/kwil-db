@@ -701,12 +701,10 @@ func (r *IntHelper) GetUserGatewayDriver(ctx context.Context, driverType string,
 		pk = r.cfg.VisitorRawPK
 	}
 
-	switch driverType {
-	// case "jsonrpc":
-	// 	return r.getJSONRPCClientDriver(signer, gatewayURL, gatewayProvider, nil)
-	case "http":
-		return r.getHTTPClientDriver(signer, gatewayURL, gatewayProvider, nil)
-	case "cli": // this isn't going to work either now since kwil-cli uses the jsonrpc client
+	switch driverType { // NOTE: REST api(for kwild) is discarded since kgw v0.3
+	case "jsonrpc":
+		return r.getJSONRPCClientDriver(signer, gatewayURL, gatewayProvider, nil)
+	case "cli":
 		return r.getCliDriver(gatewayURL, pk, signer.Identity(), gatewayProvider, nil)
 	default:
 		panic("unsupported driver type")
