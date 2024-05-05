@@ -612,7 +612,7 @@ func (t *typeVisitor) VisitExpressionTextLiteral(p0 *tree.ExpressionTextLiteral)
 	})
 }
 
-func (t *typeVisitor) VisitExpressionNumericLiteral(p0 *tree.ExpressionNumericLiteral) any {
+func (t *typeVisitor) VisitExpressionNumericLiteral(p0 *tree.ExpressionIntLiteral) any {
 	return attributeFn(func(ev *evaluationContext) *QualifiedAttribute {
 		if p0.TypeCast != nil {
 			return anonAttr(p0.TypeCast)

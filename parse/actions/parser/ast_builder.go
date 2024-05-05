@@ -191,7 +191,7 @@ func (v *astBuilder) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) tree.E
 		} else {
 			i, err := strconv.ParseInt(literal, 10, 64)
 			if err == nil {
-				return &tree.ExpressionNumericLiteral{Value: i}
+				return &tree.ExpressionIntLiteral{Value: i}
 			}
 		}
 		v.errs.RuleErr(ctx.Literal_value(), parseTypes.ParseErrorTypeSyntax, fmt.Errorf("cannot recognize literal '%s'", literal))
@@ -206,7 +206,7 @@ func (v *astBuilder) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) tree.E
 		switch t := expr.(type) {
 		case *tree.ExpressionTextLiteral:
 			t.Wrapped = true
-		case *tree.ExpressionNumericLiteral:
+		case *tree.ExpressionIntLiteral:
 			t.Wrapped = true
 		case *tree.ExpressionBindParameter:
 			t.Wrapped = true

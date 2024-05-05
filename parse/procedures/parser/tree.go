@@ -3,7 +3,9 @@ package parser
 import (
 	"fmt"
 
+	"github.com/holiman/uint256"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
@@ -250,6 +252,14 @@ type baseExpression struct{}
 
 func (baseExpression) expression() {}
 
+type TypeCastable struct {
+	TypeCast *types.DataType
+}
+
+func (t *TypeCastable) Cast(d *types.DataType) {
+	t.TypeCast = d
+}
+
 func (e *ExpressionTextLiteral) Accept(v Visitor) interface{} {
 	return v.VisitExpressionTextLiteral(e)
 }
@@ -257,8 +267,8 @@ func (e *ExpressionTextLiteral) Accept(v Visitor) interface{} {
 type ExpressionTextLiteral struct {
 	baseExpression
 	parseTypes.Node
-	Value    string
-	TypeCast *types.DataType
+	Value string
+	TypeCastable
 }
 
 func (e *ExpressionBooleanLiteral) Accept(v Visitor) interface{} {
@@ -268,8 +278,8 @@ func (e *ExpressionBooleanLiteral) Accept(v Visitor) interface{} {
 type ExpressionBooleanLiteral struct {
 	baseExpression
 	parseTypes.Node
-	Value    bool
-	TypeCast *types.DataType
+	Value bool
+	TypeCastable
 }
 
 func (e *ExpressionIntLiteral) Accept(v Visitor) interface{} {
@@ -279,8 +289,8 @@ func (e *ExpressionIntLiteral) Accept(v Visitor) interface{} {
 type ExpressionIntLiteral struct {
 	baseExpression
 	parseTypes.Node
-	Value    int64
-	TypeCast *types.DataType
+	Value int64
+	TypeCastable
 }
 
 func (e *ExpressionNullLiteral) Accept(v Visitor) interface{} {
@@ -290,7 +300,7 @@ func (e *ExpressionNullLiteral) Accept(v Visitor) interface{} {
 type ExpressionNullLiteral struct {
 	baseExpression
 	parseTypes.Node
-	TypeCast *types.DataType
+	TypeCastable
 }
 
 func (e *ExpressionBlobLiteral) Accept(v Visitor) interface{} {
@@ -300,8 +310,32 @@ func (e *ExpressionBlobLiteral) Accept(v Visitor) interface{} {
 type ExpressionBlobLiteral struct {
 	baseExpression
 	parseTypes.Node
-	Value    []byte
-	TypeCast *types.DataType
+	Value []byte
+	TypeCastable
+}
+
+// fixed point literal
+type ExpressionFixedLiteral struct {
+	baseExpression
+	parseTypes.Node
+	// Value is the value of the fixed point number.
+	Value *decimal.Decimal
+	TypeCastable
+}
+
+func (e *ExpressionFixedLiteral) Accept(v Visitor) interface{} {
+	return v.VisitExpressionFixedLiteral(e)
+}
+
+type ExpressionUint256Literal struct {
+	baseExpression
+	parseTypes.Node
+	Value *uint256.Int
+	TypeCastable
+}
+
+func (e *ExpressionUint256Literal) Accept(v Visitor) interface{} {
+	return v.VisitExpressionUint256Literal(e)
 }
 
 func (e *ExpressionMakeArray) Accept(v Visitor) interface{} {
@@ -311,8 +345,8 @@ func (e *ExpressionMakeArray) Accept(v Visitor) interface{} {
 type ExpressionMakeArray struct {
 	baseExpression
 	parseTypes.Node
-	Values   []Expression
-	TypeCast *types.DataType
+	Values []Expression
+	TypeCastable
 }
 
 // ICallExpression is a procedure call.
@@ -336,7 +370,7 @@ type ExpressionCall struct {
 	Name string
 	// Arguments are the arguments to the procedure.
 	Arguments []Expression // can be nil
-	TypeCast  *types.DataType
+	TypeCastable
 }
 
 func (e *ExpressionForeignCall) Accept(v Visitor) interface{} {
@@ -356,7 +390,7 @@ type ExpressionForeignCall struct {
 	ContextArgs []Expression
 	// Arguments are the arguments to the procedure.
 	Arguments []Expression // can be nil
-	TypeCast  *types.DataType
+	TypeCastable
 }
 
 func (e *ExpressionVariable) Accept(v Visitor) interface{} {
@@ -370,8 +404,8 @@ type ExpressionVariable struct {
 	// It is case-insensitive.
 	// It does include the $.
 	// It should include all fields, separated by dots.
-	Name     string
-	TypeCast *types.DataType
+	Name string
+	TypeCastable
 }
 
 type VariablePrefix uint8
@@ -391,8 +425,8 @@ type ExpressionArrayAccess struct {
 	// Target is the array to access the index from.
 	Target Expression
 	// Index is the index to access.
-	Index    Expression
-	TypeCast *types.DataType
+	Index Expression
+	TypeCastable
 }
 
 func (e *ExpressionFieldAccess) Accept(v Visitor) interface{} {
@@ -405,8 +439,8 @@ type ExpressionFieldAccess struct {
 	// Target is the object to access the field from.
 	Target Expression
 	// Field is the field to access.
-	Field    string
-	TypeCast *types.DataType
+	Field string
+	TypeCastable
 }
 
 func (e *ExpressionParenthesized) Accept(v Visitor) interface{} {
@@ -418,7 +452,7 @@ type ExpressionParenthesized struct {
 	parseTypes.Node
 	// Expression is the expression inside the parentheses.
 	Expression Expression
-	TypeCast   *types.DataType
+	TypeCastable
 }
 
 func (e *ExpressionComparison) Accept(v Visitor) interface{} {
@@ -500,6 +534,8 @@ type Visitor interface {
 	VisitExpressionIntLiteral(*ExpressionIntLiteral) interface{}
 	VisitExpressionNullLiteral(*ExpressionNullLiteral) interface{}
 	VisitExpressionBlobLiteral(*ExpressionBlobLiteral) interface{}
+	VisitExpressionFixedLiteral(*ExpressionFixedLiteral) interface{}
+	VisitExpressionUint256Literal(*ExpressionUint256Literal) interface{}
 	VisitExpressionMakeArray(*ExpressionMakeArray) interface{}
 	VisitExpressionCall(*ExpressionCall) interface{}
 	VisitExpressionForeignCall(*ExpressionForeignCall) interface{}
@@ -546,9 +582,13 @@ func (v *BaseVisitor) VisitExpressionTextLiteral(*ExpressionTextLiteral) interfa
 func (v *BaseVisitor) VisitExpressionBooleanLiteral(*ExpressionBooleanLiteral) interface{} {
 	return nil
 }
-func (v *BaseVisitor) VisitExpressionIntLiteral(*ExpressionIntLiteral) interface{}       { return nil }
-func (v *BaseVisitor) VisitExpressionNullLiteral(*ExpressionNullLiteral) interface{}     { return nil }
-func (v *BaseVisitor) VisitExpressionBlobLiteral(*ExpressionBlobLiteral) interface{}     { return nil }
+func (v *BaseVisitor) VisitExpressionIntLiteral(*ExpressionIntLiteral) interface{}     { return nil }
+func (v *BaseVisitor) VisitExpressionNullLiteral(*ExpressionNullLiteral) interface{}   { return nil }
+func (v *BaseVisitor) VisitExpressionBlobLiteral(*ExpressionBlobLiteral) interface{}   { return nil }
+func (v *BaseVisitor) VisitExpressionFixedLiteral(*ExpressionFixedLiteral) interface{} { return nil }
+func (v *BaseVisitor) VisitExpressionUint256Literal(*ExpressionUint256Literal) interface{} {
+	return nil
+}
 func (v *BaseVisitor) VisitExpressionMakeArray(*ExpressionMakeArray) interface{}         { return nil }
 func (v *BaseVisitor) VisitExpressionCall(*ExpressionCall) interface{}                   { return nil }
 func (v *BaseVisitor) VisitExpressionForeignCall(*ExpressionForeignCall) interface{}     { return nil }

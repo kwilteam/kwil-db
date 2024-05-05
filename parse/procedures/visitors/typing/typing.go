@@ -150,6 +150,15 @@ func (t *typingVisitor) VisitExpressionBooleanLiteral(p0 *parser.ExpressionBoole
 	return coreTypes.BoolType
 }
 
+func (t *typingVisitor) VisitExpressionFixedLiteral(p0 *parser.ExpressionFixedLiteral) any {
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
+	}
+
+	return coreTypes.NewFixedType()
+}
+
 func (t *typingVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {
 	funcDef, ok := metadata.Functions[p0.Name]
 	if ok {

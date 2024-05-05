@@ -1062,14 +1062,30 @@ type DataType struct {
 	Name string `json:"name"`
 	// IsArray is true if the type is an array.
 	IsArray bool `json:"is_array"`
+	// Metadata is the metadata of the type.
+	Metadata any `json:"metadata"`
 }
 
 // String returns the string representation of the type.
 func (c *DataType) String() string {
+	str := strings.Builder{}
+	str.WriteString(c.Name)
 	if c.IsArray {
-		return c.Name + "[]"
+		return str.String() + "[]"
 	}
-	return c.Name
+
+	if c.Name == FixedStr {
+		data, ok := c.Metadata.([2]uint16)
+		if ok {
+			str.WriteString("(")
+			str.WriteString(fmt.Sprint(data[0]))
+			str.WriteString(",")
+			str.WriteString(fmt.Sprint(data[1]))
+			str.WriteString(")")
+		}
+	}
+
+	return str.String()
 }
 
 // PGString returns the string representation of the type in Postgres.
@@ -1086,6 +1102,16 @@ func (c *DataType) PGString() (string, error) {
 		scalar = "BYTEA"
 	case uuidStr:
 		scalar = "UUID"
+	case uint256Str:
+		scalar = "UINT256"
+	case FixedStr:
+		data, ok := c.Metadata.([2]uint16)
+		if !ok {
+			// should never happen, since Clean() should have caught this
+			return "", fmt.Errorf("fixed type must have metadata of type [2]uint8")
+		}
+
+		scalar = fmt.Sprintf("NUMERIC(%d,%d)", data[0], data[1])
 	case nullStr:
 		return "", fmt.Errorf("cannot have null column type")
 	case unknownStr:
@@ -1103,8 +1129,33 @@ func (c *DataType) PGString() (string, error) {
 
 func (c *DataType) Clean() error {
 	switch name := strings.ToLower(c.Name); name {
-	case intStr, textStr, boolStr, blobStr, uuidStr: // ok
+	case intStr, textStr, boolStr, blobStr, uuidStr, uint256Str: // ok
+		if c.Metadata != nil {
+			return fmt.Errorf("type %s cannot have metadata", c.Name)
+		}
 		c.Name = name
+		return nil
+	case FixedStr:
+		data, ok := c.Metadata.([2]uint16)
+		if !ok {
+			return fmt.Errorf("fixed type must have metadata of type [2]uint8")
+		}
+
+		err := checkFixedTypeMetdata(data[0], data[1])
+		if err != nil {
+			return err
+		}
+
+		return nil
+	case nullStr, unknownStr:
+		if c.IsArray {
+			return fmt.Errorf("array type cannot be null or unknown")
+		}
+
+		if c.Metadata != nil {
+			return fmt.Errorf("type %s cannot have metadata", c.Name)
+		}
+
 		return nil
 	default:
 		return fmt.Errorf("unknown type: %s", c.Name)
@@ -1114,20 +1165,37 @@ func (c *DataType) Clean() error {
 // Copy returns a copy of the type.
 func (c *DataType) Copy() *DataType {
 	return &DataType{
-		Name:    c.Name,
-		IsArray: c.IsArray,
+		Name:     c.Name,
+		IsArray:  c.IsArray,
+		Metadata: c.Metadata,
 	}
 }
 
 // Equals returns true if the type is equal to the other type.
 // If either type is Unknown, it will return true.
 func (c *DataType) Equals(other *DataType) bool {
+	// if unknown, return true
 	if c.Name == unknownStr || other.Name == unknownStr {
 		return true
 	}
-	return strings.EqualFold(c.Name, other.Name) && c.IsArray == other.IsArray
+	// if null, check if the other is null
+	if c.Name == nullStr {
+		return other.Name == nullStr
+	}
+
+	if c.IsArray != other.IsArray {
+		return false
+	}
+
+	if c.Name == FixedStr && other.Name == FixedStr {
+		return c.Metadata == other.Metadata
+	}
+
+	return strings.EqualFold(c.Name, other.Name)
 }
 
+// declared DataType constants.
+// We do not have one for fixed because fixed types require metadata.
 var (
 	IntType = &DataType{
 		Name: intStr,
@@ -1143,6 +1211,9 @@ var (
 	}
 	UUIDType = &DataType{
 		Name: uuidStr,
+	}
+	Uint256Type = &DataType{
+		Name: uint256Str,
 	}
 	// NullType is a special type used internally
 	NullType = &DataType{
@@ -1161,6 +1232,43 @@ const (
 	boolStr    = "bool"
 	blobStr    = "blob"
 	uuidStr    = "uuid"
+	uint256Str = "uint256"
+	// FixedStr is a fixed point number.
+	FixedStr   = "fixed"
 	nullStr    = "null"
 	unknownStr = "unknown"
 )
+
+// NewFixedType creates a new fixed type.
+func NewFixedType(precision, scale uint16) (*DataType, error) {
+	err := checkFixedTypeMetdata(precision, scale)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DataType{
+		Name:     FixedStr,
+		Metadata: [2]uint16{precision, scale},
+	}, nil
+}
+
+// checkFixedTypeMetdata checks the metadata of a fixed type.
+// It checks that precision and scale are less than 1000, that precision is greater than 0,
+// and that scale is less than or equal to precision.
+func checkFixedTypeMetdata(precision, scale uint16) error {
+	if precision > 1000 {
+		return fmt.Errorf("fixed type precision cannot exceed 500 digits")
+	}
+	if scale > 1000 {
+		return fmt.Errorf("fixed type scale cannot exceed 500 digits")
+	}
+	if precision == 0 {
+		return fmt.Errorf("fixed type precision must be greater than 0")
+	}
+
+	if scale > precision {
+		return fmt.Errorf("fixed type scale cannot exceed precision")
+	}
+
+	return nil
+}

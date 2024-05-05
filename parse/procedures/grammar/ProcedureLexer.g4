@@ -56,7 +56,11 @@ BOOLEAN_LITERAL:
 ;
 
 INT_LITERAL:
-    [0-9]+
+    ('-'|'+')?[0-9]+
+;
+
+FIXED_LITERAL:
+    ('-'|'+')?[0-9]+ '.' [0-9]+
 ;
 
 BLOB_LITERAL:
@@ -64,7 +68,7 @@ BLOB_LITERAL:
 ;
 
 TEXT_LITERAL:
-    SINGLE_QUOTE (~['\r\n\\] | ('\\' .))* SINGLE_QUOTE
+    SINGLE_QUOTE (~['\\] | ('\\' .))* SINGLE_QUOTE
 ;
 
 NULL_LITERAL: 'null';

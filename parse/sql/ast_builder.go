@@ -118,16 +118,16 @@ func (v *astBuilder) VisitText_literal_expr(ctx *grammar.Text_literal_exprContex
 	return expr
 }
 
-func (v *astBuilder) VisitNumeric_literal_expr(ctx *grammar.Numeric_literal_exprContext) interface{} {
-	t := ctx.NUMERIC_LITERAL().GetText()
+func (v *astBuilder) VisitInt_literal_expr(ctx *grammar.Int_literal_exprContext) interface{} {
+	t := ctx.INT_LITERAL().GetText()
 	val, err := strconv.ParseInt(t, 10, 64)
 	if err != nil {
 		// this shouldn't happen, and should be caught by the lexer
 		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Errorf("failed to parse numeric literal %s: %w", t, err))
-		return &tree.ExpressionNumericLiteral{}
+		return &tree.ExpressionIntLiteral{}
 	}
 
-	expr := &tree.ExpressionNumericLiteral{
+	expr := &tree.ExpressionIntLiteral{
 		Value: val,
 	}
 	if ctx.Type_cast() != nil {
@@ -279,7 +279,7 @@ func (v *astBuilder) VisitParenthesized_expr(ctx *grammar.Parenthesized_exprCont
 	case *tree.ExpressionTextLiteral:
 		e.Wrapped = true
 		e.TypeCast = typeCast
-	case *tree.ExpressionNumericLiteral:
+	case *tree.ExpressionIntLiteral:
 		e.Wrapped = true
 		e.TypeCast = typeCast
 	case *tree.ExpressionBooleanLiteral:

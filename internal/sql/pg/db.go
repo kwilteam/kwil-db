@@ -155,6 +155,10 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to create UUID extension: %w", err)
 	}
 
+	if err = ensureUint256Domain(ctx, pool.writer); err != nil {
+		return nil, fmt.Errorf("failed to create uint256 domain: %w", err)
+	}
+
 	okSchema := cfg.SchemaFilter
 	if okSchema == nil {
 		okSchema = defaultSchemaFilter

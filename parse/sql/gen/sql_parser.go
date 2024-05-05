@@ -44,7 +44,7 @@ func sqlparserParserInit() {
 		"'OF'", "'ON'", "'ORDER'", "'OR'", "'OUTER'", "'RAISE'", "'REPLACE'",
 		"'RETURNING'", "'RIGHT'", "'SELECT'", "'SET'", "'THEN'", "'UNION'",
 		"'UPDATE'", "'USING'", "'VALUES'", "'WHEN'", "'WHERE'", "'WITH'", "",
-		"", "", "", "'null'",
+		"", "", "", "", "'null'",
 	}
 	staticData.SymbolicNames = []string{
 		"", "SCOL", "DOT", "OPEN_PAR", "CLOSE_PAR", "L_BRACKET", "R_BRACKET",
@@ -58,9 +58,10 @@ func sqlparserParserInit() {
 		"LIKE_", "LIMIT_", "NOTHING_", "NOTNULL_", "NOT_", "NULLS_", "OFFSET_",
 		"OF_", "ON_", "ORDER_", "OR_", "OUTER_", "RAISE_", "REPLACE_", "RETURNING_",
 		"RIGHT_", "SELECT_", "SET_", "THEN_", "UNION_", "UPDATE_", "USING_",
-		"VALUES_", "WHEN_", "WHERE_", "WITH_", "BOOLEAN_LITERAL", "NUMERIC_LITERAL",
-		"BLOB_LITERAL", "TEXT_LITERAL", "NULL_LITERAL", "IDENTIFIER", "BIND_PARAMETER",
-		"SINGLE_LINE_COMMENT", "MULTILINE_COMMENT", "SPACES", "UNEXPECTED_CHAR",
+		"VALUES_", "WHEN_", "WHERE_", "WITH_", "BOOLEAN_LITERAL", "INT_LITERAL",
+		"FIXED_LITERAL", "BLOB_LITERAL", "TEXT_LITERAL", "NULL_LITERAL", "IDENTIFIER",
+		"BIND_PARAMETER", "SINGLE_LINE_COMMENT", "MULTILINE_COMMENT", "SPACES",
+		"UNEXPECTED_CHAR",
 	}
 	staticData.RuleNames = []string{
 		"statements", "sql_stmt_list", "sql_stmt", "indexed_column", "cte_table_name",
@@ -78,7 +79,7 @@ func sqlparserParserInit() {
 	}
 	staticData.PredictionContextCache = antlr.NewPredictionContextCache()
 	staticData.serializedATN = []int32{
-		4, 1, 97, 721, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
+		4, 1, 98, 721, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
 		4, 2, 5, 7, 5, 2, 6, 7, 6, 2, 7, 7, 7, 2, 8, 7, 8, 2, 9, 7, 9, 2, 10, 7,
 		10, 2, 11, 7, 11, 2, 12, 7, 12, 2, 13, 7, 13, 2, 14, 7, 14, 2, 15, 7, 15,
 		2, 16, 7, 16, 2, 17, 7, 17, 2, 18, 7, 18, 2, 19, 7, 19, 2, 20, 7, 20, 2,
@@ -206,12 +207,12 @@ func sqlparserParserInit() {
 		0, 182, 183, 1, 0, 0, 0, 183, 185, 1, 0, 0, 0, 184, 186, 3, 46, 23, 0,
 		185, 184, 1, 0, 0, 0, 185, 186, 1, 0, 0, 0, 186, 15, 1, 0, 0, 0, 187, 189,
 		3, 12, 6, 0, 188, 187, 1, 0, 0, 0, 188, 189, 1, 0, 0, 0, 189, 190, 1, 0,
-		0, 0, 190, 191, 3, 14, 7, 0, 191, 17, 1, 0, 0, 0, 192, 193, 5, 93, 0, 0,
+		0, 0, 190, 191, 3, 14, 7, 0, 191, 17, 1, 0, 0, 0, 192, 193, 5, 94, 0, 0,
 		193, 19, 1, 0, 0, 0, 194, 195, 3, 94, 47, 0, 195, 201, 5, 3, 0, 0, 196,
 		198, 5, 37, 0, 0, 197, 196, 1, 0, 0, 0, 197, 198, 1, 0, 0, 0, 198, 199,
 		1, 0, 0, 0, 199, 202, 3, 30, 15, 0, 200, 202, 5, 9, 0, 0, 201, 197, 1,
 		0, 0, 0, 201, 200, 1, 0, 0, 0, 201, 202, 1, 0, 0, 0, 202, 203, 1, 0, 0,
-		0, 203, 204, 5, 4, 0, 0, 204, 218, 1, 0, 0, 0, 205, 206, 5, 92, 0, 0, 206,
+		0, 203, 204, 5, 4, 0, 0, 204, 218, 1, 0, 0, 0, 205, 206, 5, 93, 0, 0, 206,
 		207, 5, 5, 0, 0, 207, 208, 3, 26, 13, 0, 208, 209, 5, 7, 0, 0, 209, 210,
 		3, 26, 13, 0, 210, 211, 5, 6, 0, 0, 211, 213, 5, 3, 0, 0, 212, 214, 3,
 		30, 15, 0, 213, 212, 1, 0, 0, 0, 213, 214, 1, 0, 0, 0, 214, 215, 1, 0,
@@ -221,13 +222,13 @@ func sqlparserParserInit() {
 		1, 0, 0, 0, 223, 224, 1, 0, 0, 0, 224, 225, 3, 100, 50, 0, 225, 23, 1,
 		0, 0, 0, 226, 227, 5, 84, 0, 0, 227, 228, 3, 26, 13, 0, 228, 229, 5, 79,
 		0, 0, 229, 230, 3, 26, 13, 0, 230, 25, 1, 0, 0, 0, 231, 232, 6, 13, -1,
-		0, 232, 234, 5, 90, 0, 0, 233, 235, 3, 36, 18, 0, 234, 233, 1, 0, 0, 0,
+		0, 232, 234, 5, 91, 0, 0, 233, 235, 3, 36, 18, 0, 234, 233, 1, 0, 0, 0,
 		234, 235, 1, 0, 0, 0, 235, 301, 1, 0, 0, 0, 236, 238, 5, 87, 0, 0, 237,
 		239, 3, 36, 18, 0, 238, 237, 1, 0, 0, 0, 238, 239, 1, 0, 0, 0, 239, 301,
 		1, 0, 0, 0, 240, 242, 5, 88, 0, 0, 241, 243, 3, 36, 18, 0, 242, 241, 1,
-		0, 0, 0, 242, 243, 1, 0, 0, 0, 243, 301, 1, 0, 0, 0, 244, 246, 5, 91, 0,
+		0, 0, 0, 242, 243, 1, 0, 0, 0, 243, 301, 1, 0, 0, 0, 244, 246, 5, 92, 0,
 		0, 245, 247, 3, 36, 18, 0, 246, 245, 1, 0, 0, 0, 246, 247, 1, 0, 0, 0,
-		247, 301, 1, 0, 0, 0, 248, 250, 5, 89, 0, 0, 249, 251, 3, 36, 18, 0, 250,
+		247, 301, 1, 0, 0, 0, 248, 250, 5, 90, 0, 0, 249, 251, 3, 36, 18, 0, 250,
 		249, 1, 0, 0, 0, 250, 251, 1, 0, 0, 0, 251, 301, 1, 0, 0, 0, 252, 254,
 		3, 18, 9, 0, 253, 255, 3, 36, 18, 0, 254, 253, 1, 0, 0, 0, 254, 255, 1,
 		0, 0, 0, 255, 301, 1, 0, 0, 0, 256, 258, 3, 22, 11, 0, 257, 259, 3, 36,
@@ -272,7 +273,7 @@ func sqlparserParserInit() {
 		354, 1, 0, 0, 0, 354, 370, 1, 0, 0, 0, 355, 356, 10, 5, 0, 0, 356, 358,
 		5, 57, 0, 0, 357, 359, 5, 65, 0, 0, 358, 357, 1, 0, 0, 0, 358, 359, 1,
 		0, 0, 0, 359, 365, 1, 0, 0, 0, 360, 361, 5, 37, 0, 0, 361, 362, 5, 46,
-		0, 0, 362, 366, 3, 26, 13, 0, 363, 366, 5, 87, 0, 0, 364, 366, 5, 91, 0,
+		0, 0, 362, 366, 3, 26, 13, 0, 363, 366, 5, 87, 0, 0, 364, 366, 5, 92, 0,
 		0, 365, 360, 1, 0, 0, 0, 365, 363, 1, 0, 0, 0, 365, 364, 1, 0, 0, 0, 366,
 		370, 1, 0, 0, 0, 367, 368, 10, 4, 0, 0, 368, 370, 7, 2, 0, 0, 369, 302,
 		1, 0, 0, 0, 369, 305, 1, 0, 0, 0, 369, 308, 1, 0, 0, 0, 369, 317, 1, 0,
@@ -284,7 +285,7 @@ func sqlparserParserInit() {
 		0, 377, 29, 1, 0, 0, 0, 378, 383, 3, 26, 13, 0, 379, 380, 5, 7, 0, 0, 380,
 		382, 3, 26, 13, 0, 381, 379, 1, 0, 0, 0, 382, 385, 1, 0, 0, 0, 383, 381,
 		1, 0, 0, 0, 383, 384, 1, 0, 0, 0, 384, 31, 1, 0, 0, 0, 385, 383, 1, 0,
-		0, 0, 386, 387, 7, 3, 0, 0, 387, 33, 1, 0, 0, 0, 388, 391, 5, 92, 0, 0,
+		0, 0, 386, 387, 7, 3, 0, 0, 387, 33, 1, 0, 0, 0, 388, 391, 5, 93, 0, 0,
 		389, 390, 5, 5, 0, 0, 390, 392, 5, 6, 0, 0, 391, 389, 1, 0, 0, 0, 391,
 		392, 1, 0, 0, 0, 392, 35, 1, 0, 0, 0, 393, 394, 5, 20, 0, 0, 394, 395,
 		3, 34, 17, 0, 395, 37, 1, 0, 0, 0, 396, 397, 5, 3, 0, 0, 397, 402, 3, 26,
@@ -400,12 +401,12 @@ func sqlparserParserInit() {
 		694, 693, 1, 0, 0, 0, 694, 695, 1, 0, 0, 0, 695, 698, 1, 0, 0, 0, 696,
 		697, 5, 66, 0, 0, 697, 699, 7, 5, 0, 0, 698, 696, 1, 0, 0, 0, 698, 699,
 		1, 0, 0, 0, 699, 89, 1, 0, 0, 0, 700, 701, 7, 6, 0, 0, 701, 91, 1, 0, 0,
-		0, 702, 703, 7, 7, 0, 0, 703, 93, 1, 0, 0, 0, 704, 707, 5, 92, 0, 0, 705,
+		0, 702, 703, 7, 7, 0, 0, 703, 93, 1, 0, 0, 0, 704, 707, 5, 93, 0, 0, 705,
 		707, 3, 92, 46, 0, 706, 704, 1, 0, 0, 0, 706, 705, 1, 0, 0, 0, 707, 95,
-		1, 0, 0, 0, 708, 709, 5, 92, 0, 0, 709, 97, 1, 0, 0, 0, 710, 711, 5, 92,
-		0, 0, 711, 99, 1, 0, 0, 0, 712, 713, 5, 92, 0, 0, 713, 101, 1, 0, 0, 0,
-		714, 715, 5, 92, 0, 0, 715, 103, 1, 0, 0, 0, 716, 717, 5, 92, 0, 0, 717,
-		105, 1, 0, 0, 0, 718, 719, 5, 92, 0, 0, 719, 107, 1, 0, 0, 0, 96, 111,
+		1, 0, 0, 0, 708, 709, 5, 93, 0, 0, 709, 97, 1, 0, 0, 0, 710, 711, 5, 93,
+		0, 0, 711, 99, 1, 0, 0, 0, 712, 713, 5, 93, 0, 0, 713, 101, 1, 0, 0, 0,
+		714, 715, 5, 93, 0, 0, 715, 103, 1, 0, 0, 0, 716, 717, 5, 93, 0, 0, 717,
+		105, 1, 0, 0, 0, 718, 719, 5, 93, 0, 0, 719, 107, 1, 0, 0, 0, 96, 111,
 		119, 126, 131, 137, 144, 155, 160, 174, 182, 185, 188, 197, 201, 213, 217,
 		222, 234, 238, 242, 246, 250, 254, 258, 266, 269, 272, 277, 282, 286, 296,
 		300, 310, 332, 338, 347, 353, 358, 365, 369, 371, 383, 391, 402, 413, 421,
@@ -538,16 +539,17 @@ const (
 	SQLParserWHERE_              = 85
 	SQLParserWITH_               = 86
 	SQLParserBOOLEAN_LITERAL     = 87
-	SQLParserNUMERIC_LITERAL     = 88
-	SQLParserBLOB_LITERAL        = 89
-	SQLParserTEXT_LITERAL        = 90
-	SQLParserNULL_LITERAL        = 91
-	SQLParserIDENTIFIER          = 92
-	SQLParserBIND_PARAMETER      = 93
-	SQLParserSINGLE_LINE_COMMENT = 94
-	SQLParserMULTILINE_COMMENT   = 95
-	SQLParserSPACES              = 96
-	SQLParserUNEXPECTED_CHAR     = 97
+	SQLParserINT_LITERAL         = 88
+	SQLParserFIXED_LITERAL       = 89
+	SQLParserBLOB_LITERAL        = 90
+	SQLParserTEXT_LITERAL        = 91
+	SQLParserNULL_LITERAL        = 92
+	SQLParserIDENTIFIER          = 93
+	SQLParserBIND_PARAMETER      = 94
+	SQLParserSINGLE_LINE_COMMENT = 95
+	SQLParserMULTILINE_COMMENT   = 96
+	SQLParserSPACES              = 97
+	SQLParserUNEXPECTED_CHAR     = 98
 )
 
 // SQLParser rules.
@@ -2584,7 +2586,7 @@ func (p *SQLParser) Function_call() (localctx IFunction_callContext) {
 			goto errorExit
 		}
 		switch p.GetTokenStream().LA(1) {
-		case SQLParserOPEN_PAR, SQLParserPLUS, SQLParserMINUS, SQLParserCASE_, SQLParserDISTINCT_, SQLParserEXISTS_, SQLParserLIKE_, SQLParserNOT_, SQLParserREPLACE_, SQLParserBOOLEAN_LITERAL, SQLParserNUMERIC_LITERAL, SQLParserBLOB_LITERAL, SQLParserTEXT_LITERAL, SQLParserNULL_LITERAL, SQLParserIDENTIFIER, SQLParserBIND_PARAMETER:
+		case SQLParserOPEN_PAR, SQLParserPLUS, SQLParserMINUS, SQLParserCASE_, SQLParserDISTINCT_, SQLParserEXISTS_, SQLParserLIKE_, SQLParserNOT_, SQLParserREPLACE_, SQLParserBOOLEAN_LITERAL, SQLParserINT_LITERAL, SQLParserBLOB_LITERAL, SQLParserTEXT_LITERAL, SQLParserNULL_LITERAL, SQLParserIDENTIFIER, SQLParserBIND_PARAMETER:
 			p.SetState(197)
 			p.GetErrorHandler().Sync(p)
 			if p.HasError() {
@@ -2695,7 +2697,7 @@ func (p *SQLParser) Function_call() (localctx IFunction_callContext) {
 		}
 		_la = p.GetTokenStream().LA(1)
 
-		if ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&2305851805575154696) != 0) || ((int64((_la-65)) & ^0x3f) == 0 && ((int64(1)<<(_la-65))&532677121) != 0) {
+		if ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&2305851805575154696) != 0) || ((int64((_la-65)) & ^0x3f) == 0 && ((int64(1)<<(_la-65))&1052770817) != 0) {
 			{
 				p.SetState(212)
 				p.Expr_list()
@@ -3950,6 +3952,54 @@ func (s *Text_literal_exprContext) Accept(visitor antlr.ParseTreeVisitor) interf
 	}
 }
 
+type Int_literal_exprContext struct {
+	ExprContext
+}
+
+func NewInt_literal_exprContext(parser antlr.Parser, ctx antlr.ParserRuleContext) *Int_literal_exprContext {
+	var p = new(Int_literal_exprContext)
+
+	InitEmptyExprContext(&p.ExprContext)
+	p.parser = parser
+	p.CopyAll(ctx.(*ExprContext))
+
+	return p
+}
+
+func (s *Int_literal_exprContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *Int_literal_exprContext) INT_LITERAL() antlr.TerminalNode {
+	return s.GetToken(SQLParserINT_LITERAL, 0)
+}
+
+func (s *Int_literal_exprContext) Type_cast() IType_castContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IType_castContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IType_castContext)
+}
+
+func (s *Int_literal_exprContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+	switch t := visitor.(type) {
+	case SQLParserVisitor:
+		return t.VisitInt_literal_expr(s)
+
+	default:
+		return t.VisitChildren(s)
+	}
+}
+
 type Unary_exprContext struct {
 	ExprContext
 	operator antlr.Token
@@ -4286,54 +4336,6 @@ func (s *Expr_list_exprContext) Accept(visitor antlr.ParseTreeVisitor) interface
 	switch t := visitor.(type) {
 	case SQLParserVisitor:
 		return t.VisitExpr_list_expr(s)
-
-	default:
-		return t.VisitChildren(s)
-	}
-}
-
-type Numeric_literal_exprContext struct {
-	ExprContext
-}
-
-func NewNumeric_literal_exprContext(parser antlr.Parser, ctx antlr.ParserRuleContext) *Numeric_literal_exprContext {
-	var p = new(Numeric_literal_exprContext)
-
-	InitEmptyExprContext(&p.ExprContext)
-	p.parser = parser
-	p.CopyAll(ctx.(*ExprContext))
-
-	return p
-}
-
-func (s *Numeric_literal_exprContext) GetRuleContext() antlr.RuleContext {
-	return s
-}
-
-func (s *Numeric_literal_exprContext) NUMERIC_LITERAL() antlr.TerminalNode {
-	return s.GetToken(SQLParserNUMERIC_LITERAL, 0)
-}
-
-func (s *Numeric_literal_exprContext) Type_cast() IType_castContext {
-	var t antlr.RuleContext
-	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IType_castContext); ok {
-			t = ctx.(antlr.RuleContext)
-			break
-		}
-	}
-
-	if t == nil {
-		return nil
-	}
-
-	return t.(IType_castContext)
-}
-
-func (s *Numeric_literal_exprContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
-	switch t := visitor.(type) {
-	case SQLParserVisitor:
-		return t.VisitNumeric_literal_expr(s)
 
 	default:
 		return t.VisitChildren(s)
@@ -4884,12 +4886,12 @@ func (p *SQLParser) expr(_p int) (localctx IExprContext) {
 		}
 
 	case 3:
-		localctx = NewNumeric_literal_exprContext(p, localctx)
+		localctx = NewInt_literal_exprContext(p, localctx)
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
 			p.SetState(240)
-			p.Match(SQLParserNUMERIC_LITERAL)
+			p.Match(SQLParserINT_LITERAL)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
@@ -5128,7 +5130,7 @@ func (p *SQLParser) expr(_p int) (localctx IExprContext) {
 		}
 		_la = p.GetTokenStream().LA(1)
 
-		if ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&2305851805575154696) != 0) || ((int64((_la-65)) & ^0x3f) == 0 && ((int64(1)<<(_la-65))&532677121) != 0) {
+		if ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&2305851805575154696) != 0) || ((int64((_la-65)) & ^0x3f) == 0 && ((int64(1)<<(_la-65))&1052770817) != 0) {
 			{
 				p.SetState(276)
 
@@ -10065,7 +10067,7 @@ func (p *SQLParser) Returning_clause_result_column() (localctx IReturning_clause
 			}
 		}
 
-	case SQLParserOPEN_PAR, SQLParserPLUS, SQLParserMINUS, SQLParserCASE_, SQLParserEXISTS_, SQLParserLIKE_, SQLParserNOT_, SQLParserREPLACE_, SQLParserBOOLEAN_LITERAL, SQLParserNUMERIC_LITERAL, SQLParserBLOB_LITERAL, SQLParserTEXT_LITERAL, SQLParserNULL_LITERAL, SQLParserIDENTIFIER, SQLParserBIND_PARAMETER:
+	case SQLParserOPEN_PAR, SQLParserPLUS, SQLParserMINUS, SQLParserCASE_, SQLParserEXISTS_, SQLParserLIKE_, SQLParserNOT_, SQLParserREPLACE_, SQLParserBOOLEAN_LITERAL, SQLParserINT_LITERAL, SQLParserBLOB_LITERAL, SQLParserTEXT_LITERAL, SQLParserNULL_LITERAL, SQLParserIDENTIFIER, SQLParserBIND_PARAMETER:
 		p.EnterOuterAlt(localctx, 2)
 		{
 			p.SetState(599)

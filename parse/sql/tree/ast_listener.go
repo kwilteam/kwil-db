@@ -12,8 +12,8 @@ type AstListener interface {
 	ExitDeleteCore(*DeleteCore) error
 	EnterExpressionTextLiteral(*ExpressionTextLiteral) error
 	ExitExpressionTextLiteral(*ExpressionTextLiteral) error
-	EnterExpressionNumericLiteral(*ExpressionNumericLiteral) error
-	ExitExpressionNumericLiteral(*ExpressionNumericLiteral) error
+	EnterExpressionNumericLiteral(*ExpressionIntLiteral) error
+	ExitExpressionNumericLiteral(*ExpressionIntLiteral) error
 	EnterExpressionBooleanLiteral(*ExpressionBooleanLiteral) error
 	ExitExpressionBooleanLiteral(*ExpressionBooleanLiteral) error
 	EnterExpressionNullLiteral(*ExpressionNullLiteral) error
@@ -236,11 +236,11 @@ func (b *BaseListener) ExitExpressionTextLiteral(p0 *ExpressionTextLiteral) erro
 	return nil
 }
 
-func (b *BaseListener) EnterExpressionNumericLiteral(p0 *ExpressionNumericLiteral) error {
+func (b *BaseListener) EnterExpressionNumericLiteral(p0 *ExpressionIntLiteral) error {
 	return nil
 }
 
-func (b *BaseListener) ExitExpressionNumericLiteral(p0 *ExpressionNumericLiteral) error {
+func (b *BaseListener) ExitExpressionNumericLiteral(p0 *ExpressionIntLiteral) error {
 	return nil
 }
 
@@ -529,8 +529,8 @@ type ImplementedListener struct {
 	FuncExitExpressionList              func(p0 *ExpressionList) error
 	FuncEnterExpressionTextLiteral      func(p0 *ExpressionTextLiteral) error
 	FuncExitExpressionTextLiteral       func(p0 *ExpressionTextLiteral) error
-	FuncEnterExpressionNumericLiteral   func(p0 *ExpressionNumericLiteral) error
-	FuncExitExpressionNumericLiteral    func(p0 *ExpressionNumericLiteral) error
+	FuncEnterExpressionNumericLiteral   func(p0 *ExpressionIntLiteral) error
+	FuncExitExpressionNumericLiteral    func(p0 *ExpressionIntLiteral) error
 	FuncEnterExpressionBooleanLiteral   func(p0 *ExpressionBooleanLiteral) error
 	FuncExitExpressionBooleanLiteral    func(p0 *ExpressionBooleanLiteral) error
 	FuncEnterExpressionNullLiteral      func(p0 *ExpressionNullLiteral) error
@@ -853,7 +853,7 @@ func (b *ImplementedListener) ExitExpressionTextLiteral(p0 *ExpressionTextLitera
 	return b.FuncExitExpressionTextLiteral(p0)
 }
 
-func (b *ImplementedListener) EnterExpressionNumericLiteral(p0 *ExpressionNumericLiteral) error {
+func (b *ImplementedListener) EnterExpressionNumericLiteral(p0 *ExpressionIntLiteral) error {
 	if b.FuncEnterExpressionNumericLiteral == nil {
 		return nil
 	}
@@ -861,7 +861,7 @@ func (b *ImplementedListener) EnterExpressionNumericLiteral(p0 *ExpressionNumeri
 	return b.FuncEnterExpressionNumericLiteral(p0)
 }
 
-func (b *ImplementedListener) ExitExpressionNumericLiteral(p0 *ExpressionNumericLiteral) error {
+func (b *ImplementedListener) ExitExpressionNumericLiteral(p0 *ExpressionIntLiteral) error {
 	if b.FuncExitExpressionNumericLiteral == nil {
 		return nil
 	}

@@ -147,9 +147,10 @@ Type cast can only be applied to:
 expr:
     TEXT_LITERAL type_cast?                                              #text_literal_expr
     | BOOLEAN_LITERAL type_cast?                                         #boolean_literal_expr
-    | NUMERIC_LITERAL type_cast?                                         #numeric_literal_expr
+    | INT_LITERAL type_cast?                                             #int_literal_expr
     | NULL_LITERAL type_cast?                                            #null_literal_expr
     | BLOB_LITERAL type_cast?                                            #blob_literal_expr
+    | FIXED_LITERAL type_cast?                                           #fixed_literal_expr
     | variable type_cast?                                                #variable_expr
     | column_ref type_cast?                                              #column_expr
     | <assoc=right>  operator=(MINUS | PLUS) expr                        #unary_expr

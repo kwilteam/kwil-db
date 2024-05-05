@@ -58,7 +58,7 @@ func castSuffix(stmt string, typeCast *types.DataType) string {
 	return stmt
 }
 
-type ExpressionNumericLiteral struct {
+type ExpressionIntLiteral struct {
 	parseTypes.Node
 
 	Wrapped
@@ -66,18 +66,18 @@ type ExpressionNumericLiteral struct {
 	TypeCast *types.DataType
 }
 
-func (e *ExpressionNumericLiteral) Accept(v AstVisitor) any {
+func (e *ExpressionIntLiteral) Accept(v AstVisitor) any {
 	return v.VisitExpressionNumericLiteral(e)
 }
 
-func (e *ExpressionNumericLiteral) Walk(w AstListener) error {
+func (e *ExpressionIntLiteral) Walk(w AstListener) error {
 	return run(
 		w.EnterExpressionNumericLiteral(e),
 		w.ExitExpressionNumericLiteral(e),
 	)
 }
 
-func (e *ExpressionNumericLiteral) ToSQL() string {
+func (e *ExpressionIntLiteral) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
 	if e.Wrapped {

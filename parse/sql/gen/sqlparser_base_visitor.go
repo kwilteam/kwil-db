@@ -111,6 +111,10 @@ func (v *BaseSQLParserVisitor) VisitText_literal_expr(ctx *Text_literal_exprCont
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseSQLParserVisitor) VisitInt_literal_expr(ctx *Int_literal_exprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseSQLParserVisitor) VisitUnary_expr(ctx *Unary_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -128,10 +132,6 @@ func (v *BaseSQLParserVisitor) VisitBetween_expr(ctx *Between_exprContext) inter
 }
 
 func (v *BaseSQLParserVisitor) VisitExpr_list_expr(ctx *Expr_list_exprContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseSQLParserVisitor) VisitNumeric_literal_expr(ctx *Numeric_literal_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

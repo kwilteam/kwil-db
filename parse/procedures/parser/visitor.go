@@ -4,11 +4,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
+	"github.com/holiman/uint256"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/parse/procedures/gen"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
@@ -108,47 +111,125 @@ func (p *proceduralLangVisitor) VisitExpr_array_access(ctx *gen.Expr_array_acces
 	return e
 }
 
-func (p *proceduralLangVisitor) VisitExpr_blob_literal(ctx *gen.Expr_blob_literalContext) any {
-	b := ctx.BLOB_LITERAL().GetText()
-	// trim off beginning 0x
-	if b[:2] != "0x" {
-		// this should get caught by the parser
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid blob literal"))
-	}
-
-	b = b[2:]
-
-	decoded, err := hex.DecodeString(b)
-	if err != nil {
-		// this should get caught by the parser
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid blob literal"))
-	}
-
-	e := &ExpressionBlobLiteral{
-		Value: decoded,
-	}
-
+func (p *proceduralLangVisitor) VisitExpr_literal(ctx *gen.Expr_literalContext) any {
+	l := ctx.Literal().Accept(p).(interface{ Cast(*types.DataType) })
 	if ctx.Type_cast() != nil {
-		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
+		l.Cast(ctx.Type_cast().Accept(p).(*types.DataType))
 	}
 
-	e.Set(ctx)
-
-	return e
+	return l
 }
 
-func (p *proceduralLangVisitor) VisitExpr_boolean_literal(ctx *gen.Expr_boolean_literalContext) any {
-	e := &ExpressionBooleanLiteral{
-		Value: strings.ToLower(ctx.GetText()) == "true",
+var (
+	maxInt64 = big.NewInt(9223372036854775807)
+	minInt64 = big.NewInt(-9223372036854775808)
+)
+
+func (p *proceduralLangVisitor) VisitLiteral(ctx *gen.LiteralContext) any {
+	switch {
+	case ctx.INT_LITERAL() != nil:
+		// TODO: we should conditionally parse for uint256 here too
+		txt := ctx.INT_LITERAL().GetText()
+
+		// parse as big int, then if it is too large for int64, we will
+		// make it a uint256
+		bigNum := new(big.Int)
+		_, ok := bigNum.SetString(txt, 10)
+		if !ok {
+			// this should get caught by the parser
+			p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid integer literal"))
+		}
+
+		if bigNum.Cmp(maxInt64) > 0 {
+			// make it a uint256
+			u256, ok := uint256.FromBig(bigNum)
+			if !ok {
+				// this should get caught by the parser
+				p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid integer literal"))
+				return &ExpressionNullLiteral{}
+			}
+
+			return &ExpressionUint256Literal{
+				Value: u256,
+			}
+		}
+		if bigNum.Cmp(minInt64) < 0 {
+			// error
+			p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid integer literal"))
+			return &ExpressionNullLiteral{}
+		}
+
+		return &ExpressionIntLiteral{
+			Value: bigNum.Int64(),
+		}
+	case ctx.TEXT_LITERAL() != nil:
+		txt := ctx.TEXT_LITERAL().GetText()
+		// trim off beginning and ending quotes
+		if txt[0] != '\'' || txt[len(txt)-1] != '\'' {
+			// this should get caught by the parser
+			p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid text literal"))
+		}
+
+		return &ExpressionTextLiteral{
+			Value: txt[1 : len(txt)-1],
+		}
+	case ctx.BLOB_LITERAL() != nil:
+		b := ctx.BLOB_LITERAL().GetText()
+		// trim off beginning 0x
+		if b[:2] != "0x" {
+			// this should get caught by the parser
+			p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid blob literal"))
+		}
+
+		b = b[2:]
+
+		decoded, err := hex.DecodeString(b)
+		if err != nil {
+			// this should get caught by the parser
+			p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid blob literal"))
+		}
+
+		return &ExpressionBlobLiteral{
+			Value: decoded,
+		}
+	case ctx.BOOLEAN_LITERAL() != nil:
+		return &ExpressionBooleanLiteral{
+			Value: strings.ToLower(ctx.BOOLEAN_LITERAL().GetText()) == "true",
+		}
+	case ctx.NULL_LITERAL() != nil:
+		return &ExpressionNullLiteral{}
+	case ctx.FIXED_LITERAL() != nil:
+		txt := ctx.FIXED_LITERAL().GetText()
+		// should be of form 123.456
+		parts := strings.Split(txt, ".")
+		if len(parts) != 2 {
+			// this should get caught by the parser
+			p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid fixed literal"))
+			return &ExpressionNullLiteral{}
+		}
+
+		dec, err := decimal.New(txt, int16(len(parts[0])), int16(len(parts[1])))
+		if err != nil {
+			p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, err)
+			return &ExpressionNullLiteral{}
+		}
+
+		return &ExpressionFixedLiteral{
+			Value: dec,
+		}
+	default:
+		// this should never happen
+		panic("invalid literal")
+	}
+}
+
+func (p *proceduralLangVisitor) VisitLiteral_list(ctx *gen.Literal_listContext) any {
+	literals := make([]Expression, len(ctx.AllLiteral()))
+	for i, lit := range ctx.AllLiteral() {
+		literals[i] = lit.Accept(p).(Expression)
 	}
 
-	if ctx.Type_cast() != nil {
-		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
-	}
-
-	e.Set(ctx)
-
-	return e
+	return literals
 }
 
 func (p *proceduralLangVisitor) VisitExpr_call(ctx *gen.Expr_callContext) any {
@@ -217,27 +298,6 @@ func (p *proceduralLangVisitor) VisitExpr_field_access(ctx *gen.Expr_field_acces
 	return e
 }
 
-func (p *proceduralLangVisitor) VisitExpr_int_literal(ctx *gen.Expr_int_literalContext) any {
-	textVal := ctx.INT_LITERAL().GetText()
-	i, err := strconv.ParseInt(textVal, 10, 64)
-	if err != nil {
-		// this should get caught by the parser
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid integer literal"))
-	}
-
-	e := &ExpressionIntLiteral{
-		Value: i,
-	}
-
-	if ctx.Type_cast() != nil {
-		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
-	}
-
-	e.Set(ctx)
-
-	return e
-}
-
 func (p *proceduralLangVisitor) VisitExpr_make_array(ctx *gen.Expr_make_arrayContext) any {
 	e := p.Visit(ctx.Expression_make_array())
 
@@ -257,48 +317,9 @@ func (p *proceduralLangVisitor) VisitExpr_make_array(ctx *gen.Expr_make_arrayCon
 	return e
 }
 
-func (p *proceduralLangVisitor) VisitExpr_null_literal(ctx *gen.Expr_null_literalContext) any {
-	e := &ExpressionNullLiteral{}
-	if ctx.Type_cast() != nil {
-		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
-	}
-
-	e.Set(ctx)
-
-	return e
-}
-
 func (p *proceduralLangVisitor) VisitExpr_parenthesized(ctx *gen.Expr_parenthesizedContext) any {
 	e := &ExpressionParenthesized{
 		Expression: p.Visit(ctx.Expression()).(Expression),
-	}
-
-	if ctx.Type_cast() != nil {
-		e.TypeCast = ctx.Type_cast().Accept(p).(*types.DataType)
-	}
-
-	e.Set(ctx)
-
-	return e
-}
-
-func (p *proceduralLangVisitor) VisitExpr_text_literal(ctx *gen.Expr_text_literalContext) any {
-
-	// parse out the quotes
-	if len(ctx.TEXT_LITERAL().GetText()) < 2 {
-		// this should get caught by the parser
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid text literal"))
-	}
-
-	if ctx.TEXT_LITERAL().GetText()[0] != '\'' || ctx.TEXT_LITERAL().GetText()[len(ctx.TEXT_LITERAL().GetText())-1] != '\'' {
-		// this should get caught by the parser
-		p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid text literal"))
-	}
-
-	text := ctx.TEXT_LITERAL().GetText()[1 : len(ctx.TEXT_LITERAL().GetText())-1]
-
-	e := &ExpressionTextLiteral{
-		Value: text,
 	}
 
 	if ctx.Type_cast() != nil {
@@ -623,9 +644,44 @@ func getType(t gen.ITypeContext) *types.DataType {
 }
 
 func (p *proceduralLangVisitor) VisitType_cast(ctx *gen.Type_castContext) any {
+	return ctx.Type_().Accept(p)
+}
+
+func (p *proceduralLangVisitor) VisitType(ctx *gen.TypeContext) any {
 	dt := &types.DataType{
 		Name: ctx.IDENTIFIER().GetText(),
 	}
+
+	if ctx.Literal_list() != nil {
+		literals := ctx.Literal_list().Accept(p).([]Expression)
+
+		// check here that the data type can support metadata
+		if strings.ToLower(dt.Name) == types.FixedStr {
+			if len(literals) != 2 {
+				p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid metadata for type"))
+			}
+
+			precision, ok := literals[0].(*ExpressionIntLiteral)
+			if !ok {
+				p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid metadata for type"))
+			}
+
+			scale, ok := literals[1].(*ExpressionIntLiteral)
+			if !ok {
+				p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid metadata for type"))
+			}
+
+			// create a new fixed data type, which will validate the metadata
+			var err error
+			dt, err = types.NewFixedType(uint16(precision.Value), uint16(scale.Value))
+			if err != nil {
+				p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, err)
+			}
+		} else {
+			p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid metadata for type"))
+		}
+	}
+
 	if ctx.LBRACKET() != nil {
 		dt.IsArray = true
 	}

@@ -85,6 +85,9 @@ type SQLParserVisitor interface {
 	// Visit a parse tree produced by SQLParser#text_literal_expr.
 	VisitText_literal_expr(ctx *Text_literal_exprContext) interface{}
 
+	// Visit a parse tree produced by SQLParser#int_literal_expr.
+	VisitInt_literal_expr(ctx *Int_literal_exprContext) interface{}
+
 	// Visit a parse tree produced by SQLParser#unary_expr.
 	VisitUnary_expr(ctx *Unary_exprContext) interface{}
 
@@ -99,9 +102,6 @@ type SQLParserVisitor interface {
 
 	// Visit a parse tree produced by SQLParser#expr_list_expr.
 	VisitExpr_list_expr(ctx *Expr_list_exprContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#numeric_literal_expr.
-	VisitNumeric_literal_expr(ctx *Numeric_literal_exprContext) interface{}
 
 	// Visit a parse tree produced by SQLParser#null_literal_expr.
 	VisitNull_literal_expr(ctx *Null_literal_exprContext) interface{}

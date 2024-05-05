@@ -46,8 +46,26 @@ type ProcedureParserVisitor interface {
 	// Visit a parse tree produced by ProcedureParser#type.
 	VisitType(ctx *TypeContext) interface{}
 
+	// Visit a parse tree produced by ProcedureParser#literal.
+	VisitLiteral(ctx *LiteralContext) interface{}
+
+	// Visit a parse tree produced by ProcedureParser#literal_list.
+	VisitLiteral_list(ctx *Literal_listContext) interface{}
+
+	// Visit a parse tree produced by ProcedureParser#expr_call.
+	VisitExpr_call(ctx *Expr_callContext) interface{}
+
+	// Visit a parse tree produced by ProcedureParser#expr_literal.
+	VisitExpr_literal(ctx *Expr_literalContext) interface{}
+
+	// Visit a parse tree produced by ProcedureParser#expr_make_array.
+	VisitExpr_make_array(ctx *Expr_make_arrayContext) interface{}
+
 	// Visit a parse tree produced by ProcedureParser#expr_array_access.
 	VisitExpr_array_access(ctx *Expr_array_accessContext) interface{}
+
+	// Visit a parse tree produced by ProcedureParser#expr_field_access.
+	VisitExpr_field_access(ctx *Expr_field_accessContext) interface{}
 
 	// Visit a parse tree produced by ProcedureParser#expr_arithmetic.
 	VisitExpr_arithmetic(ctx *Expr_arithmeticContext) interface{}
@@ -55,32 +73,8 @@ type ProcedureParserVisitor interface {
 	// Visit a parse tree produced by ProcedureParser#expr_variable.
 	VisitExpr_variable(ctx *Expr_variableContext) interface{}
 
-	// Visit a parse tree produced by ProcedureParser#expr_null_literal.
-	VisitExpr_null_literal(ctx *Expr_null_literalContext) interface{}
-
-	// Visit a parse tree produced by ProcedureParser#expr_blob_literal.
-	VisitExpr_blob_literal(ctx *Expr_blob_literalContext) interface{}
-
 	// Visit a parse tree produced by ProcedureParser#expr_comparison.
 	VisitExpr_comparison(ctx *Expr_comparisonContext) interface{}
-
-	// Visit a parse tree produced by ProcedureParser#expr_boolean_literal.
-	VisitExpr_boolean_literal(ctx *Expr_boolean_literalContext) interface{}
-
-	// Visit a parse tree produced by ProcedureParser#expr_call.
-	VisitExpr_call(ctx *Expr_callContext) interface{}
-
-	// Visit a parse tree produced by ProcedureParser#expr_make_array.
-	VisitExpr_make_array(ctx *Expr_make_arrayContext) interface{}
-
-	// Visit a parse tree produced by ProcedureParser#expr_field_access.
-	VisitExpr_field_access(ctx *Expr_field_accessContext) interface{}
-
-	// Visit a parse tree produced by ProcedureParser#expr_int_literal.
-	VisitExpr_int_literal(ctx *Expr_int_literalContext) interface{}
-
-	// Visit a parse tree produced by ProcedureParser#expr_text_literal.
-	VisitExpr_text_literal(ctx *Expr_text_literalContext) interface{}
 
 	// Visit a parse tree produced by ProcedureParser#expr_parenthesized.
 	VisitExpr_parenthesized(ctx *Expr_parenthesizedContext) interface{}

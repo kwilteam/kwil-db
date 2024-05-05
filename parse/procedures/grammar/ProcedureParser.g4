@@ -28,16 +28,25 @@ variable_or_underscore:
 ;
 
 type:
-    IDENTIFIER (LBRACKET RBRACKET)? // Handles arrays of any type, including nested arrays
+    IDENTIFIER (LPAREN literal_list RPAREN)? (LBRACKET RBRACKET)? // Handles arrays of any type, including nested arrays
+;
+
+literal:
+    TEXT_LITERAL
+    | BOOLEAN_LITERAL
+    | INT_LITERAL
+    | NULL_LITERAL
+    | BLOB_LITERAL
+    | FIXED_LITERAL
+;
+
+literal_list:
+    literal (COMMA literal)*
 ;
 
 // expressions
 expression:
-    TEXT_LITERAL type_cast? # expr_text_literal
-    | BOOLEAN_LITERAL type_cast? # expr_boolean_literal
-    | INT_LITERAL type_cast? # expr_int_literal
-    | NULL_LITERAL type_cast? # expr_null_literal
-    | BLOB_LITERAL type_cast? # expr_blob_literal
+    literal type_cast? # expr_literal
     | expression_make_array type_cast? # expr_make_array
     | call_expression type_cast? # expr_call
     | VARIABLE type_cast? # expr_variable
@@ -53,7 +62,7 @@ expression:
 ;
 
 type_cast:
-    TYPE_CAST IDENTIFIER (LBRACKET RBRACKET)?
+    TYPE_CAST type
 ;
 
 expression_list:

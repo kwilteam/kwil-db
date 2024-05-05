@@ -125,8 +125,12 @@ BOOLEAN_LITERAL:
     | 'false'
 ;
 
-NUMERIC_LITERAL:
-    [0-9]+
+INT_LITERAL:
+    ('-'|'+')?[0-9]+
+;
+
+FIXED_LITERAL:
+    ('-'|'+')?[0-9]+ '.' [0-9]+
 ;
 
 BLOB_LITERAL:
@@ -134,7 +138,7 @@ BLOB_LITERAL:
 ;
 
 TEXT_LITERAL:
-    '\'' ( ~'\'' | '\'\'')* '\''
+    '\'' (~['\\] | ('\\' .))* '\''
 ;
 
 NULL_LITERAL: 'null';

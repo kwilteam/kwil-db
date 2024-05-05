@@ -9,7 +9,7 @@ type AstVisitor interface {
 	VisitDeleteStmt(*DeleteStmt) any
 	VisitDeleteCore(*DeleteCore) any
 	VisitExpressionTextLiteral(*ExpressionTextLiteral) any
-	VisitExpressionNumericLiteral(*ExpressionNumericLiteral) any
+	VisitExpressionNumericLiteral(*ExpressionIntLiteral) any
 	VisitExpressionBooleanLiteral(*ExpressionBooleanLiteral) any
 	VisitExpressionNullLiteral(*ExpressionNullLiteral) any
 	VisitExpressionBlobLiteral(*ExpressionBlobLiteral) any
@@ -89,7 +89,7 @@ func (v *BaseAstVisitor) VisitExpressionTextLiteral(node *ExpressionTextLiteral)
 	return nil
 }
 
-func (v *BaseAstVisitor) VisitExpressionNumericLiteral(node *ExpressionNumericLiteral) any {
+func (v *BaseAstVisitor) VisitExpressionNumericLiteral(node *ExpressionIntLiteral) any {
 	return nil
 }
 

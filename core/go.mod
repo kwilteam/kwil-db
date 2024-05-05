@@ -4,6 +4,7 @@ go 1.21
 
 require (
 	github.com/antihax/optional v1.0.0
+	github.com/cockroachdb/apd/v3 v3.2.1
 	github.com/cstockton/go-conv v1.0.0
 	github.com/decred/dcrd/certgen v1.1.2
 	github.com/ethereum/go-ethereum v1.14.3

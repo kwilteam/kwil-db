@@ -50,14 +50,14 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 		},
 		{
 			name: "expression literal with int",
-			fields: &tree.ExpressionNumericLiteral{
+			fields: &tree.ExpressionIntLiteral{
 				Value: 1,
 			},
 			want: "1",
 		},
 		{
 			name: "expression literal with int and type cast",
-			fields: &tree.ExpressionNumericLiteral{
+			fields: &tree.ExpressionIntLiteral{
 				Value:    1,
 				TypeCast: types.IntType,
 			},
@@ -754,7 +754,7 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 					Column: "foo",
 				},
 				Operator: tree.ArithmeticOperatorAdd,
-				Right: &tree.ExpressionNumericLiteral{
+				Right: &tree.ExpressionIntLiteral{
 					Value: 1,
 				},
 			},
@@ -767,7 +767,7 @@ func TestExpressionTextLiteral_ToSQL(t *testing.T) {
 					Column: "foo",
 				},
 				Operator: tree.ArithmeticOperatorAdd,
-				Right: &tree.ExpressionNumericLiteral{
+				Right: &tree.ExpressionIntLiteral{
 					Value: 1,
 				},
 				TypeCast: types.IntType,

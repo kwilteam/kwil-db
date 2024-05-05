@@ -223,7 +223,7 @@ func prepareInlineExpressions(exprs []tree.Expression, schema *types.Schema, err
 		case *tree.ExpressionBindParameter:
 			// This could be a special one that returns an evaluatable that
 			// ignores the passed ResultSetFunc since the value is
-		case *tree.ExpressionTextLiteral, *tree.ExpressionNumericLiteral, *tree.ExpressionBooleanLiteral,
+		case *tree.ExpressionTextLiteral, *tree.ExpressionIntLiteral, *tree.ExpressionBooleanLiteral,
 			*tree.ExpressionNullLiteral, *tree.ExpressionBlobLiteral, *tree.ExpressionUnary,
 			*tree.ExpressionBinaryComparison, *tree.ExpressionFunction, *tree.ExpressionArithmetic:
 			// Acceptable expression type.

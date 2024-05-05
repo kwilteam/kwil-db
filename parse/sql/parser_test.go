@@ -47,7 +47,7 @@ func genLiteralExpression(value string) tree.Expression {
 
 	s, err := strconv.ParseInt(value, 10, 64)
 	if err == nil {
-		return &tree.ExpressionNumericLiteral{Value: s}
+		return &tree.ExpressionIntLiteral{Value: s}
 	}
 
 	if strings.EqualFold(value, "true") {
@@ -2063,7 +2063,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 							SelectType: tree.SelectTypeAll,
 							Columns: []tree.ResultColumn{
 								&tree.ResultColumnExpression{
-									Expression: &tree.ExpressionNumericLiteral{
+									Expression: &tree.ExpressionIntLiteral{
 										Value:    1,
 										TypeCast: types.IntType,
 									},
@@ -2413,7 +2413,7 @@ func checkNodesAreSet(t *testing.T, node tree.AstNode) {
 
 			return nil
 		},
-		FuncEnterExpressionNumericLiteral: func(p0 *tree.ExpressionNumericLiteral) error {
+		FuncEnterExpressionNumericLiteral: func(p0 *tree.ExpressionIntLiteral) error {
 			if !p0.Node.IsSet {
 				return fmt.Errorf("node not set for AST node %T", p0)
 			}

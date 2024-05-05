@@ -62,7 +62,7 @@ func (e *ExpressionTextLiteral) joinable() joinableStatus {
 	return joinableStatusInvalid
 }
 
-func (e *ExpressionNumericLiteral) joinable() joinableStatus {
+func (e *ExpressionIntLiteral) joinable() joinableStatus {
 	return joinableStatusInvalid
 }
 

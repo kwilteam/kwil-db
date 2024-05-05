@@ -58,7 +58,7 @@ func checkJoin(join *tree.JoinPredicate) error {
 
 func validateJoinStatus(joinConstraint tree.Expression) joinableStatus {
 	switch j := joinConstraint.(type) {
-	case *tree.ExpressionTextLiteral, *tree.ExpressionNumericLiteral, *tree.ExpressionBooleanLiteral,
+	case *tree.ExpressionTextLiteral, *tree.ExpressionIntLiteral, *tree.ExpressionBooleanLiteral,
 		*tree.ExpressionNullLiteral, *tree.ExpressionBlobLiteral:
 		return joinableStatusInvalid
 	case *tree.ExpressionBindParameter:

@@ -59,7 +59,31 @@ func (v *BaseProcedureParserVisitor) VisitType(ctx *TypeContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseProcedureParserVisitor) VisitLiteral(ctx *LiteralContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseProcedureParserVisitor) VisitLiteral_list(ctx *Literal_listContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseProcedureParserVisitor) VisitExpr_call(ctx *Expr_callContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseProcedureParserVisitor) VisitExpr_literal(ctx *Expr_literalContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseProcedureParserVisitor) VisitExpr_make_array(ctx *Expr_make_arrayContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseProcedureParserVisitor) VisitExpr_array_access(ctx *Expr_array_accessContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseProcedureParserVisitor) VisitExpr_field_access(ctx *Expr_field_accessContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -71,39 +95,7 @@ func (v *BaseProcedureParserVisitor) VisitExpr_variable(ctx *Expr_variableContex
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseProcedureParserVisitor) VisitExpr_null_literal(ctx *Expr_null_literalContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseProcedureParserVisitor) VisitExpr_blob_literal(ctx *Expr_blob_literalContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseProcedureParserVisitor) VisitExpr_comparison(ctx *Expr_comparisonContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseProcedureParserVisitor) VisitExpr_boolean_literal(ctx *Expr_boolean_literalContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseProcedureParserVisitor) VisitExpr_call(ctx *Expr_callContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseProcedureParserVisitor) VisitExpr_make_array(ctx *Expr_make_arrayContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseProcedureParserVisitor) VisitExpr_field_access(ctx *Expr_field_accessContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseProcedureParserVisitor) VisitExpr_int_literal(ctx *Expr_int_literalContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseProcedureParserVisitor) VisitExpr_text_literal(ctx *Expr_text_literalContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
