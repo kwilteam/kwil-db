@@ -1,5 +1,7 @@
 package jsonrpc
 
+import "fmt"
+
 type ErrorCode int32
 
 const (
@@ -50,4 +52,8 @@ type BroadcastError struct {
 	TxCode  uint32 `json:"tx_code,omitempty"`
 	Hash    string `json:"hash,omitempty"` // may be empty if it could not even deserialize our tx
 	Message string `json:"message,omitempty"`
+}
+
+func (be BroadcastError) Error() string {
+	return fmt.Sprintf("broadcast error: code = %d, hash = %s, msg = %s", be.TxCode, be.Hash, be.Message)
 }

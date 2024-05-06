@@ -11,7 +11,7 @@ table posts {
     id int primary notnull,
     user_id int,
     title text,
-    content text maxlen(500000), // 500 kB
+    content text maxlen(5000000), // 5 MB // To support tests with max supported payload size
     #unique_index unique(user_id, title),
     foreign_key (user_id) references users(id) on_delete do cascade on_update do cascade
 }

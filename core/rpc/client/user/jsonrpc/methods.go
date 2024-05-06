@@ -3,6 +3,7 @@ package rpcclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -36,6 +37,25 @@ func (cl *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, s
 	res := &jsonrpc.BroadcastResponse{}
 	err := cl.call(ctx, string(jsonrpc.MethodBroadcast), cmd, res)
 	if err != nil {
+		var jsonRPCErr *jsonrpc.Error
+		if errors.As(err, &jsonRPCErr) && jsonRPCErr.Code == jsonrpc.ErrorTxExecFailure && len(jsonRPCErr.Data) > 0 {
+			var berr jsonrpc.BroadcastError
+			jsonErr := json.Unmarshal(jsonRPCErr.Data, &berr)
+			if jsonErr != nil {
+				return nil, errors.Join(jsonErr, err)
+			}
+
+			switch transactions.TxCode(berr.TxCode) {
+			case transactions.CodeWrongChain:
+				return nil, errors.Join(transactions.ErrWrongChain, err)
+			case transactions.CodeInvalidNonce:
+				return nil, errors.Join(transactions.ErrInvalidNonce, err)
+			case transactions.CodeInvalidAmount:
+				return nil, errors.Join(transactions.ErrInvalidAmount, err)
+			case transactions.CodeInsufficientBalance:
+				return nil, errors.Join(transactions.ErrInsufficientBalance, err)
+			}
+		}
 		return nil, err
 	}
 	return res.TxHash, nil
