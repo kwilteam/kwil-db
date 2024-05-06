@@ -114,7 +114,7 @@ func (s *Server) handlerV1(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	r.Close = true
 
-	bodyReader := io.LimitReader(r.Body, szLimit)
+	bodyReader := http.MaxBytesReader(w, r.Body, szLimit)
 	body, err := io.ReadAll(bodyReader)
 	r.Body.Close()
 	if err != nil {
