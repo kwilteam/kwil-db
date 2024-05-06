@@ -38,13 +38,16 @@ func (a *WalkerRecoverer) Walk(walker tree.AstListener) (err error) {
 // It parses it, and then traverses the AST with the given flags.
 // It will alter the statement to make it conform to the given flags, or return an error if it cannot.
 // All tables will target the pgSchemaName schema.
-func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaName string, errorListener parseTypes.NativeErrorListener) (*AnalyzedStatement, error) {
-	parsed, err := sqlparser.Parse(stmt)
+func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaName string, errorListener *parseTypes.ErrorListener) (*AnalyzedStatement, error) {
+	parsed, err := sqlparser.ParseWithErrorListener(stmt, errorListener)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing statement: %w", err)
 	}
+	if len(parsed) != 1 {
+		return nil, fmt.Errorf("expected 1 statement, but found %d", len(parsed))
+	}
 
-	walker := &WalkerRecoverer{parsed}
+	walker := &WalkerRecoverer{parsed[0]}
 
 	clnr := clean.NewStatementCleaner(schema, errorListener)
 	err = walker.Walk(clnr)
@@ -82,12 +85,12 @@ func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaNam
 		orderedParams = paramVisitor.OrderedParameters
 	}
 
-	mutative, err := IsMutative(parsed)
+	mutative, err := IsMutative(parsed[0])
 	if err != nil {
 		return nil, fmt.Errorf("error determining mutativity: %w", err)
 	}
 
-	generated, err := tree.SafeToSQL(parsed)
+	generated, err := tree.SafeToSQL(parsed[0])
 	if err != nil {
 		return nil, fmt.Errorf("error generating SQL: %w", err)
 	}

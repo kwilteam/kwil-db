@@ -56,7 +56,7 @@ func parseWrapper() js.Func {
 }
 
 func main() {
-	fmt.Println("Load Kuneiform parser...")
+	fmt.Println("Loading Kuneiform parser...")
 	// expose the parse function to the global scope
 	js.Global().Set("parseKuneiform", parseWrapper())
 	<-make(chan bool)
