@@ -95,7 +95,7 @@ func (e *ErrorListener) NodeErr(node *Node, errType ParseErrorType, err error) {
 	e.Errs = append(e.Errs, &ParseError{
 		ParserName: e.name,
 		Type:       errType,
-		Err:        err,
+		Err:        ErrMsg{err},
 		Node:       e.adjustNode(node),
 	})
 }
@@ -117,7 +117,7 @@ func (e *ErrorListener) TokenErr(t antlr.Token, errType ParseErrorType, err erro
 	e.Errs = append(e.Errs, &ParseError{
 		ParserName: e.name,
 		Type:       errType,
-		Err:        err,
+		Err:        ErrMsg{err},
 		Node:       e.adjustNode(unaryNode(t.GetLine()-1, t.GetColumn())),
 	})
 }
@@ -129,7 +129,7 @@ func (e *ErrorListener) RuleErr(ctx antlr.ParserRuleContext, errType ParseErrorT
 	e.Errs = append(e.Errs, &ParseError{
 		ParserName: e.name,
 		Type:       errType,
-		Err:        err,
+		Err:        ErrMsg{err},
 		Node:       e.adjustNode(node),
 	})
 }
@@ -164,7 +164,7 @@ func (e *ErrorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol
 	e.Errs = append(e.Errs, &ParseError{
 		ParserName: e.name,
 		Type:       ParseErrorTypeSyntax,
-		Err:        fmt.Errorf("%w: %s", ErrSyntaxError, msg),
+		Err:        ErrMsg{fmt.Errorf("%w: %s", ErrSyntaxError, msg)},
 		Node:       e.adjustNode(unaryNode(line, column)),
 	})
 }

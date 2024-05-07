@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -60,7 +61,7 @@ func (p *ParseErrors) Add(errs ...*ParseError) {
 type ParseError struct {
 	ParserName string         `json:"parser_name,omitempty"`
 	Type       ParseErrorType `json:"type"`
-	Err        error          `json:"error"`
+	Err        ErrMsg         `json:"error"`
 	Node       *Node          `json:"node,omitempty"`
 }
 
@@ -75,6 +76,30 @@ func (p *ParseError) Error() string {
 	return fmt.Sprintf("(%s) %s error: start %d:%d end %d:%d: %s", p.ParserName, p.Type,
 		p.Node.StartLine+1, p.Node.StartCol+1,
 		p.Node.EndLine+1, p.Node.EndCol+1, p.Err)
+}
+
+// ErrMsg is a type that can be used to create error messages.
+// It marshals and unmarshals to and from a string.
+type ErrMsg struct {
+	error
+}
+
+func (e ErrMsg) Error() string {
+	return e.error.Error()
+}
+
+func (e *ErrMsg) MarshalJSON() ([]byte, error) {
+	return json.Marshal(e.Error())
+}
+
+func (e *ErrMsg) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+
+	e.error = fmt.Errorf(s)
+	return nil
 }
 
 // ParseErrorTypes are used to group errors into categories.
