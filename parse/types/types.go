@@ -84,14 +84,22 @@ type ErrMsg struct {
 	error
 }
 
+// Error implements the error interface.
 func (e ErrMsg) Error() string {
 	return e.error.Error()
 }
 
+// Unwrap allows errors.Is and errors.As to find wrapped errors.
+func (e ErrMsg) Unwrap() error {
+	return e.error
+}
+
+// MarshalJSON marshals the error message to JSON.
 func (e *ErrMsg) MarshalJSON() ([]byte, error) {
 	return json.Marshal(e.Error())
 }
 
+// UnmarshalJSON unmarshals the error message from JSON.
 func (e *ErrMsg) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
