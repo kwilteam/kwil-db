@@ -23,6 +23,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/version"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func RootCmd() *cobra.Command {
@@ -89,6 +90,7 @@ func RootCmd() *cobra.Command {
 	flagSet := cmd.Flags()
 	flagSet.SortFlags = false
 	config.AddConfigFlags(flagSet, flagCfg)
+	viper.BindPFlags(flagSet)
 
 	flagSet.BoolVarP(&autoGen, "autogen", "a", false,
 		"auto generate private key, genesis file, and config file if not exist")

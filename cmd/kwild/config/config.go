@@ -463,15 +463,28 @@ func LoadConfigFile(configPath string) (*KwildConfig, error) {
 
 // LoadEnvConfig loads a config from environment variables.
 func LoadEnvConfig() (*KwildConfig, error) {
-	viper.SetEnvPrefix("KWILD")
-	viper.AutomaticEnv()
+	// Manually bind environment variables to viper keys.
+	for _, key := range viper.AllKeys() {
+		// Replace dashes with underscores in the key to match the flag name.
+		// This is required because there is inconsistency between our flag names
+		// and the struct tags. The struct tags use underscores, but the flag names
+		// use dashes. Viper uses the flag names to bind environment variables
+		// and this conversion is required to map it to the struct fields correctly.
+		bindKey := strings.ReplaceAll(key, "-", "_")
+		envKey := "KWILD_" + strings.ToUpper(strings.ReplaceAll(bindKey, ".", "_"))
+		viper.BindEnv(bindKey, envKey)
+	}
 
-	var cfg KwildConfig
-	if err := viper.Unmarshal(&cfg); err != nil {
+	// var cfg KwildConfig, won't work because, viper won't be able to extract
+	// the heirarchical keys from the config structure as fields like cfg.app set to nil.
+	// It can only extract the first level keys [app, chain, log] in this case.
+	// To remedy that, we use DefaultEmptyConfig with all the sub fields initialized.
+	cfg := DefaultEmptyConfig()
+	if err := viper.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("decoding config: %v", err)
 	}
 
-	return &cfg, nil
+	return cfg, nil
 }
 
 var ErrConfigFileNotFound = fmt.Errorf("config file not found")
@@ -479,6 +492,25 @@ var ErrConfigFileNotFound = fmt.Errorf("config file not found")
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
+}
+
+// DefaultEmptyConfig returns a config with all fields set to their zero values.
+// This is used by viper to extract all the heirarchical keys from the config
+// structure.
+func DefaultEmptyConfig() *KwildConfig {
+	return &KwildConfig{
+		AppCfg: &AppConfig{
+			Extensions: make(map[string]map[string]string),
+		},
+		ChainCfg: &ChainConfig{
+			P2P:       &P2PConfig{},
+			RPC:       &ChainRPCConfig{},
+			Mempool:   &MempoolConfig{},
+			StateSync: &StateSyncConfig{},
+			Consensus: &ConsensusConfig{},
+		},
+		Logging: &Logging{},
+	}
 }
 
 func DefaultConfig() *KwildConfig {
