@@ -3,6 +3,7 @@ package kuneiform
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
@@ -45,15 +46,32 @@ func Parse(kf string) (schema *types.Schema, info *parseTypes.SchemaInfo, parseE
 			if !ok {
 				err = fmt.Errorf("panic: %v", e)
 			}
+
+			// if there is a panic, it is likely due to a syntax error
+			// check for parse errors and return them first
+			if errorListener.Err() != nil {
+				// if there is an error listener error, we should swallow the panic
+				// If the issue persists until after the user has fixed the parse errors,
+				// the panic will be returned in the else block.
+				err = nil
+				parseErrs = errorListener.Errs
+			} else {
+				// if there are no parse errors, then there is a bug.
+				// we should return the panic with a stack trace.
+				buf := make([]byte, 1<<16)
+				stackSize := runtime.Stack(buf, false)
+
+				err = fmt.Errorf("%w\n\n%s", err, buf[:stackSize])
+			}
 		}
 	}()
 
-	res, ok := p.Program().Accept(visitor).(*types.Schema)
+	schema, ok := p.Program().Accept(visitor).(*types.Schema)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("unexpected result type: %T", res)
+		return nil, nil, nil, fmt.Errorf("unexpected result type: %T", schema)
 	}
 
-	return res, visitor.schemaInfo, errorListener.Errs, nil
+	return schema, visitor.schemaInfo, errorListener.Errs, nil
 }
 
 type kfVisitor struct {

@@ -3,6 +3,8 @@
 package parse
 
 import (
+	"fmt"
+
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/actions"
 	"github.com/kwilteam/kwil-db/parse/kuneiform"
@@ -18,7 +20,7 @@ func ParseKuneiform(kf string) (*ParseResult, error) {
 	// have the schema even if there are errors.
 	schema, info, errs, err := kuneiform.Parse(kf)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unknown schema error: %w", err)
 	}
 
 	res := &ParseResult{
@@ -46,7 +48,7 @@ func ParseKuneiform(kf string) (*ParseResult, error) {
 		SchemaInfo:   info,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error analyzing actions: %w", err)
 	}
 	res.Errs.Add(actionErrs...)
 
@@ -54,7 +56,7 @@ func ParseKuneiform(kf string) (*ParseResult, error) {
 		SchemaInfo: info,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error analyzing procedures: %w", err)
 	}
 	res.Errs.Add(procErrs...)
 
