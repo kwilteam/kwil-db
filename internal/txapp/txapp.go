@@ -206,8 +206,8 @@ func (r *TxApp) ChainInfo(ctx context.Context) (int64, []byte, error) {
 	return height, appHash, nil
 }
 
-// ReloadCache reloads the database state into the engine.
-func (r *TxApp) ReloadCache(ctx context.Context) error {
+// Reload reloads the database state into the engine.
+func (r *TxApp) Reload(ctx context.Context) error {
 	tx, err := r.Database.BeginReadTx(ctx)
 	if err != nil {
 		return err

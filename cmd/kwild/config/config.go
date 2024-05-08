@@ -189,9 +189,9 @@ type StateSyncConfig struct {
 
 	// Light client verification options, Automatically fetched from the RPC Servers
 	// during the node initialization.
-	TrustHeight int64    `mapstructure:"trust_height"`
-	TrustHash   string   `mapstructure:"trust_hash"`
-	TrustPeriod Duration `mapstructure:"trust_period"`
+	TrustHeight int64
+	TrustHash   string
+	TrustPeriod Duration
 }
 
 type ChainConfig struct {

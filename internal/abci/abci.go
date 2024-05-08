@@ -482,12 +482,12 @@ func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.Request
 		return nil, fmt.Errorf("mismatched statesync configuration between CometBFT and ABCI app")
 	}
 
-	dbRestored, refetch, err := a.statesyncer.ApplySnapshotChunk(ctx, req.Chunk, req.Index)
+	dbRestored, err := a.statesyncer.ApplySnapshotChunk(ctx, req.Chunk, req.Index)
 	if err != nil {
 		var refetchChunks []uint32
 		// If the chunk was not applied successfully either due to chunk hash mismatch or other reasons,
 		// refetch the chunk from other peers
-		if refetch {
+		if errors.Is(err, statesync.ErrRefetchSnapshotChunk) {
 			refetchChunks = append(refetchChunks, req.Index)
 		}
 		return &abciTypes.ResponseApplySnapshotChunk{
@@ -499,7 +499,7 @@ func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.Request
 	if dbRestored {
 		// DB restored successfully from the snapshot
 		// Update the engine's in-memory info with the new database state
-		err := a.txApp.ReloadCache(ctx)
+		err := a.txApp.Reload(ctx)
 		if err != nil {
 			return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ABORT}, err
 		}
@@ -564,7 +564,7 @@ func (a *AbciApp) OfferSnapshot(ctx context.Context, req *abciTypes.RequestOffer
 		return &abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_REJECT}, err
 	}
 
-	err = a.statesyncer.OfferSnapshot(&snapshot)
+	err = a.statesyncer.OfferSnapshot(ctx, &snapshot)
 	if err != nil {
 		return &abciTypes.ResponseOfferSnapshot{Result: statesync.ToABCIOfferSnapshotResponse(err)}, nil
 	}

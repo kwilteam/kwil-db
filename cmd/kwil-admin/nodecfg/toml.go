@@ -307,7 +307,7 @@ snapshot_dir = "{{ .ChainCfg.StateSync.SnapshotDir }}"
 
 # Trusted snapshot providers (comma-separated chain RPC servers) are the source-of-truth for the snapshot integrity.
 # Snapshots are accepted for statesync only after verifying it with these trusted snapshot providers.
-# Atleast 2 trusted rpc servers are required for enabling state sync.
+# Atleast 1 trusted rpc server is required for enabling state sync.
 rpc_servers = "{{ .ChainCfg.StateSync.RPCServers }}"
 
 # Time to spend discovering snapshots before offering the best(latest) snapshot to the application. (default: 60 seconds)

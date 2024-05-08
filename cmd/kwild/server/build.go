@@ -589,8 +589,9 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 	}
 
 	if len(providers) == 1 {
-		d.log.Warn("multiple state sync providers are not supported yet, using the first one")
 		// Duplicating the same provider to satisfy cometbft statesync requirement of having at least 2 providers.
+		// Statesynce module doesn't have the same requirements and
+		// can work with a single provider (providers are passed as is)
 		d.cfg.ChainCfg.StateSync.RPCServers += "," + providers[0]
 	}
 
@@ -602,19 +603,19 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 		}
 
 		// Try to fetch the status of the remote server.
-		res, err := clt.Commit(d.ctx, nil)
+		res, err := clt.Header(d.ctx, nil)
 		if err != nil {
 			continue
 		}
 
 		// If the remote server is in the same chain, we can trust it.
-		if res.ChainID != d.genesisCfg.ChainID {
+		if res.Header.ChainID != d.genesisCfg.ChainID {
 			continue
 		}
 
 		// Get the trust height and trust hash from the remote server
-		d.cfg.ChainCfg.StateSync.TrustHeight = res.Height
-		d.cfg.ChainCfg.StateSync.TrustHash = res.Commit.BlockID.Hash.String()
+		d.cfg.ChainCfg.StateSync.TrustHeight = res.Header.Height
+		d.cfg.ChainCfg.StateSync.TrustHash = res.Header.Hash().String()
 		configDone = true
 		break
 	}

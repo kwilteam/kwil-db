@@ -27,10 +27,10 @@ type SnapshotModule interface {
 // DBBootstrapModule is an interface for a struct that implements bootstrapping
 type StateSyncModule interface {
 	// Offers a snapshot (metadata) to the bootstrapper and decides whether to accept the snapshot or not
-	OfferSnapshot(snapshot *statesync.Snapshot) error
+	OfferSnapshot(ctx context.Context, snapshot *statesync.Snapshot) error
 
 	// Offers a snapshot Chunk to the bootstrapper, once all the chunks corresponding to the snapshot are received, the databases are restored from the chunks
-	ApplySnapshotChunk(ctx context.Context, chunk []byte, index uint32) (bool, bool, error)
+	ApplySnapshotChunk(ctx context.Context, chunk []byte, index uint32) (bool, error)
 }
 
 // TxApp is an application that can process transactions.
@@ -49,7 +49,9 @@ type TxApp interface {
 	UpdateValidator(ctx context.Context, validator []byte, power int64) error
 	GetValidators(ctx context.Context) ([]*types.Validator, error)
 	AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
-	ReloadCache(ctx context.Context) error
+
+	// Reload reloads the state of engine and txapp.
+	Reload(ctx context.Context) error
 }
 
 // ConsensusParams returns kwil specific consensus parameters.

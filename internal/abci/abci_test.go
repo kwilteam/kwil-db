@@ -436,6 +436,6 @@ func (m *mockTxApp) UpdateValidator(ctx context.Context, validator []byte, power
 	return nil
 }
 
-func (m *mockTxApp) ReloadCache(ctx context.Context) error {
+func (m *mockTxApp) Reload(ctx context.Context) error {
 	return nil
 }
