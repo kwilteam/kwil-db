@@ -267,7 +267,14 @@ func hammer(ctx context.Context) error {
 				h.printf("new post id = %d, took %vms%s", next, float64(since.Microseconds())/1e3, slow)
 			}()
 
-			content := bigData[:rand.Intn(maxContentLen)+1] // random.String(rand.Intn(maxContentLen) + 1) // randomBytes(maxContentLen)
+			var content string
+			if variablePayload {
+				fmt.Println("variablePayload")
+				content = bigData[:rand.Intn(maxContentLen)+1] // randomize the content length
+			} else {
+				content = bigData
+			}
+
 			h.printf("beginning createPostAsync id = %d, content len = %d (concurrent with %d others)",
 				next, len(content), len(posters)-1)
 			promise, err := h.createPostAsync(ctx, dbid, next, "title_"+strconv.Itoa(next), content)

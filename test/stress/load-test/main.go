@@ -42,6 +42,8 @@ var (
 	nonceChaos          int
 	rpcTiming           bool
 
+	variablePayload bool
+
 	wg sync.WaitGroup
 )
 
@@ -72,6 +74,8 @@ func main() {
 	flag.BoolVar(&rpcTiming, "v", false, "print RPC durations")
 
 	flag.DurationVar(&txPollInterval, "pollint", 200*time.Millisecond, "polling interval when waiting for tx confirmation")
+
+	flag.BoolVar(&variablePayload, "vp", false, "use variable payload sizes in post actions")
 
 	flag.Parse()
 
