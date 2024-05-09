@@ -65,9 +65,9 @@ func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, options *AnalyzeOptio
 	}
 
 	v := &typeVisitor{
-		commonTables: tbls,
-		ctes:         make(map[string]struct{}),
-		options:      options,
+		commonTables:   tbls,
+		ctes:           make(map[string]struct{}),
+		AnalyzeOptions: options,
 	}
 
 	res := ast.Accept(v)

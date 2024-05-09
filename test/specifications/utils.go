@@ -43,16 +43,16 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) 
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	db, err := parseKuneiformWithoutValidation(string(d))
+	parseResult, err := parse.ParseKuneiform(string(d))
 	if err != nil {
 		t.Fatal("cannot parse database schema", err)
 	}
-	if db.Err() != nil {
-		t.Fatal("cannot parse database schema", db.Err())
+	if parseResult.Err() != nil {
+		t.Fatal("cannot parse database schema", parseResult.Err())
 	}
 
-	l.Modifier(db.Schema)
-	return db.Schema
+	l.Modifier(parseResult.Schema)
+	return parseResult.Schema
 }
 
 func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSchema *testSchema) *types.Schema {

@@ -617,7 +617,6 @@ func (k *kfVisitor) getAccessModifiers(mods []antlr.TerminalNode) (modifiers []t
 		case "owner":
 			modifiers = append(modifiers, types.ModifierOwner)
 		default:
-			m.GetSymbol()
 			k.errs.TokenErr(m.GetSymbol(), parseTypes.ParseErrorTypeSemantic,
 				fmt.Errorf("unexpected modifier: %v", m.GetText()))
 			return

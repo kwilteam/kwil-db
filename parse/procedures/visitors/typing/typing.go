@@ -79,7 +79,7 @@ type typingVisitor struct {
 	// anonymousDeclarations holds information about all anonymous variable declarations in the procedure
 	// currently, the only anonymous declarations are loop targets (e.g. FOR i IN SELECT * FROM users).
 	// anonymousDeclarations are essentially anonymous compound types, so the map maps the name
-	// to the fields to their coreTypes.
+	// to the fields to their data types.
 	anonymousDeclarations map[string]map[string]*coreTypes.DataType
 
 	// loopTarget is the anonymous declaration of the current loop target.
@@ -399,7 +399,7 @@ func (t *typingVisitor) VisitExpressionVariable(p0 *parser.ExpressionVariable) a
 	if !ok {
 		anonType, ok := t.anonymousDeclarations[p0.Name]
 		if !ok {
-			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType,
+			t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic,
 				fmt.Errorf(`%w: "%s"`, types.ErrUndeclaredVariable, util.UnformatParameterName(p0.Name)))
 			return coreTypes.UnknownType
 		}
@@ -810,7 +810,7 @@ func (t *typingVisitor) VisitStatementReturnNext(p0 *parser.StatementReturnNext)
 	}
 
 	if !t.currentProcedure.Returns.IsTable {
-		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, types.ErrReturnNextUsedInNonTableProc)
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeType, types.ErrReturnNextUsedInNonTableProc)
 		return nil
 	}
 

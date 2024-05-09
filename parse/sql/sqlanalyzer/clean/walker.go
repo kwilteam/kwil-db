@@ -20,8 +20,6 @@ func NewStatementCleaner(schema *types.Schema, errorListener parseTypes.NativeEr
 	}
 }
 
-var ErrTableNotFound = errors.New("table not found")
-
 var _ tree.AstListener = &StatementCleaner{}
 
 type StatementCleaner struct {
@@ -224,7 +222,7 @@ func (s *StatementCleaner) EnterInsertCore(node *tree.InsertCore) (err error) {
 
 	_, found := s.schema.FindTable(node.Table)
 	if !found {
-		s.err(ErrUnknownTable, ErrTableNotFound, node)
+		s.err(ErrTableNotFound, ErrTableNotFound, node)
 		return nil
 	}
 
