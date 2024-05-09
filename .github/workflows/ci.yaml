@@ -3,12 +3,44 @@ name: CI
 on:
   pull_request:
     types: [ opened, synchronize, reopened, ready_for_review ]
+    branches:
+      - main
+      - release*
+  # path filter won't work bcz PR status check will be 'pending' if workflow is
+  # skipped due to path filtering, i.e. blocked
+  #paths:
+
   workflow_dispatch:
 
 jobs:
-  test:
+  # JOB to run change detection
+  changes:
     runs-on: ubuntu-latest
-    if: ${{ !github.event.pull_request.draft }} # only run on non-draft PRs
+    permissions:
+      pull-requests: read
+    # Set job outputs to values from filter step
+    outputs:
+      run: ${{ steps.filter.outputs.code }}
+    steps:
+      # For pull requests it's not necessary to checkout the code
+      # but it's useful to see the effect of the path filter in current PR
+      - uses: actions/checkout@v4
+        with:
+          # This may save additional git fetch roundtrip if
+          # merge-base is found within latest 20 commits
+          fetch-depth: 20
+      - uses: dorny/paths-filter@v3.0.2
+        id: filter
+        with:
+          # Path to file where filters are defined
+          filters: .github/filters.yaml
+          #predicate-quantifier: 'every' # check dorny/paths-filter#225
+
+  test:
+    needs: changes
+    #  only run only if there are changes and non-draft PRs
+    if: ${{ needs.changes.outputs.run == 'true' && !github.event.pull_request.draft}}
+    runs-on: ubuntu-latest
 
     services:
       postgres:

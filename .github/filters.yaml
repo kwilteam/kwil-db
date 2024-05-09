@@ -1,0 +1,18 @@
+code:
+  - added|modified: 'go.mod'
+  - added|modified: '.github/filters.yaml'
+  - added|modified: '.github/workflows/ci.yaml'
+  - added|modified: 'build/package/docker/kwild.dockerfile'
+  - added|modified: 'cmd/**'
+  - added|modified: 'common/**'
+  - added|modified: 'core/**/*.go'
+  - added|modified: 'core/!(*.md)'
+  - added|modified: 'core/client/!(*.md)'
+  - added|modified: 'core/client/!(example/**)/**' # this is really weird shit
+  - added|modified: 'core/gatewayclient/!(*.md)'
+  - added|modified: 'core/gatewayclient/!(example/**)/**'
+  - added|modified: 'internal/**'
+  - added|modified: 'parse/**'
+  - added|modified: 'scripts/**/*'
+  - added|modified: 'test/**/*'
+  - 'test/!(stress/**)/**'
