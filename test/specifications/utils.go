@@ -24,17 +24,6 @@ type FileDatabaseSchemaLoader struct {
 	Modifier func(db *types.Schema)
 }
 
-// parseKuneiformWithoutValidation parses a Kuneiform schema without performing
-// any validation checks.
-func parseKuneiformWithoutValidation(kf string) (*parse.ParseResult, error) {
-	schema, err := parse.ParseKuneiform(kf)
-	if err != nil {
-		return nil, err
-	}
-
-	return schema, nil
-}
-
 func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) *types.Schema {
 	t.Helper()
 
