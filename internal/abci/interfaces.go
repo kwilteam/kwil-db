@@ -11,35 +11,26 @@ import (
 	// packages that provide the concrete implementations. This is a bit
 	// backwards, but it at least allows us to stub out for testing.
 
-	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
+	"github.com/kwilteam/kwil-db/internal/statesync"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 )
 
 // SnapshotModule is an interface for a struct that implements snapshotting
 type SnapshotModule interface {
-	// Checks if databases are to be snapshotted at a particular height
-	IsSnapshotDue(height uint64) bool
-
-	// Starts the snapshotting process, Locking databases need to be handled outside this fn
-	CreateSnapshot(height uint64) error
-
 	// Lists all the available snapshots in the snapshotstore and returns the snapshot metadata
-	ListSnapshots() ([]snapshots.Snapshot, error)
+	ListSnapshots() []*statesync.Snapshot
 
 	// Returns the snapshot chunk of index chunkId at a given height
-	LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) []byte
+	LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) ([]byte, error)
 }
 
 // DBBootstrapModule is an interface for a struct that implements bootstrapping
-type DBBootstrapModule interface {
+type StateSyncModule interface {
 	// Offers a snapshot (metadata) to the bootstrapper and decides whether to accept the snapshot or not
-	OfferSnapshot(snapshot *snapshots.Snapshot) error
+	OfferSnapshot(ctx context.Context, snapshot *statesync.Snapshot) error
 
 	// Offers a snapshot Chunk to the bootstrapper, once all the chunks corresponding to the snapshot are received, the databases are restored from the chunks
-	ApplySnapshotChunk(chunk []byte, index uint32) ([]uint32, snapshots.Status, error)
-
-	// Signifies the end of the db restoration
-	IsDBRestored() bool
+	ApplySnapshotChunk(ctx context.Context, chunk []byte, index uint32) (bool, error)
 }
 
 // TxApp is an application that can process transactions.
@@ -58,6 +49,9 @@ type TxApp interface {
 	UpdateValidator(ctx context.Context, validator []byte, power int64) error
 	GetValidators(ctx context.Context) ([]*types.Validator, error)
 	AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
+
+	// Reload reloads the state of engine and txapp.
+	Reload(ctx context.Context) error
 }
 
 // ConsensusParams returns kwil specific consensus parameters.

@@ -110,6 +110,8 @@ type IntTestConfig struct {
 	WithGas       bool
 
 	SpamOracleEnabled bool
+
+	Snapshots SnapshotConfig
 }
 
 type IntHelper struct {
@@ -142,6 +144,12 @@ type EthDepositOracle struct {
 	ByzantineEscrowAddr     string
 }
 
+type SnapshotConfig struct {
+	Enabled         bool
+	MaxSnapshots    uint64
+	RecurringHeight uint64
+}
+
 func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 	helper := &IntHelper{
 		t:           t,
@@ -149,6 +157,11 @@ func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 		containers:  make(map[string]*testcontainers.DockerContainer),
 		cfg: &IntTestConfig{
 			Allocs: make(map[string]*big.Int),
+			Snapshots: SnapshotConfig{
+				Enabled:         false,
+				MaxSnapshots:    3,
+				RecurringHeight: 10,
+			},
 		},
 		envs: make(map[string]string),
 	}
@@ -240,6 +253,24 @@ func WithGanache() HelperOpt {
 func WithSpamOracle() HelperOpt {
 	return func(r *IntHelper) {
 		r.cfg.SpamOracleEnabled = true
+	}
+}
+
+func WithSnapshots() HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.Snapshots.Enabled = true
+	}
+}
+
+func WithMaxSnapshots(num uint64) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.Snapshots.MaxSnapshots = num
+	}
+}
+
+func WithRecurringHeight(heights uint64) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.Snapshots.RecurringHeight = heights
 	}
 }
 
@@ -351,6 +382,9 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 		Allocs:            allocs,
 		FundNonValidators: r.cfg.WithGas, // when gas is required, also give the non-validators some for tests
 		Extensions:        extensionConfigs,
+		SnapshotsEnabled:  r.cfg.Snapshots.Enabled,
+		MaxSnapshots:      r.cfg.Snapshots.MaxSnapshots,
+		SnapshotHeights:   r.cfg.Snapshots.RecurringHeight,
 	}, &nodecfg.ConfigOpts{
 		DnsHost: true,
 	})

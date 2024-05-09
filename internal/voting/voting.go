@@ -35,7 +35,27 @@ func initializeVoteStore(ctx context.Context, db sql.TxMaker) error {
 		return fmt.Errorf("failed to initialize or upgrade vote store: %w", err)
 	}
 
-	return nil
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// This is moved out of initVotingTables, to ensure that
+	// upgrade logic should just handle the schema changes, but not the data.
+	// If the database is initialized with the latest version, but for example,
+	// If there is a change in the supported resolution types, the upgrade logic
+	// skips the resolution types updates.
+	resolutions := resolutions.ListResolutions()
+	for _, name := range resolutions {
+		uuid := types.NewUUIDV5([]byte(name))
+		_, err := tx.Execute(ctx, createResolutionType, uuid[:], name)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
 }
 
 func initVotingTables(ctx context.Context, db sql.DB) error {
@@ -45,15 +65,6 @@ func initVotingTables(ctx context.Context, db sql.DB) error {
 
 	for _, stmt := range initStmts {
 		_, err := db.Execute(ctx, stmt)
-		if err != nil {
-			return err
-		}
-	}
-
-	resolutions := resolutions.ListResolutions()
-	for _, name := range resolutions {
-		uuid := types.NewUUIDV5([]byte(name))
-		_, err := db.Execute(ctx, createResolutionType, uuid[:], name)
 		if err != nil {
 			return err
 		}

@@ -7,8 +7,6 @@ import (
 	"slices"
 	"time"
 
-	"go.uber.org/zap"
-
 	common "github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -78,7 +76,6 @@ func (omgr *ListenerManager) Start() (err error) {
 
 			for name, start := range listeners.RegisteredListeners() {
 				go func(start listeners.ListenFunc, name string) {
-					defer cancel2() // stop others, like an error group
 					err := start(ctx2, &common.Service{
 						Logger:           omgr.logger.Named(name).Sugar(),
 						ExtensionConfigs: omgr.config,
@@ -90,12 +87,14 @@ func (omgr *ListenerManager) Start() (err error) {
 					})
 					if err != nil {
 						omgr.logger.Error("==========================  Event listener stopped  ==========================",
-							zap.String("listener", name), zap.Error(err))
+							log.String("listener", name), log.Error(err))
 						if !errors.Is(err, context.Canceled) {
 							errChan <- err
 						}
+						cancel2() // Stop other listeners
 					} else {
-						omgr.logger.Debug("Event listener stopped (cleanly)", zap.String("listener", name))
+						// Listener exited with nil, no need to stop other listeners in this case
+						omgr.logger.Debug("Event listener stopped (cleanly)", log.String("listener", name))
 					}
 				}(start, name)
 
@@ -109,7 +108,7 @@ func (omgr *ListenerManager) Start() (err error) {
 	}
 
 	defer func() {
-		omgr.logger.Info("ListenerManager stopped.", zap.Error(err))
+		omgr.logger.Info("ListenerManager stopped.", log.Error(err))
 	}()
 
 	containsMe := func(validators []*types.Validator) bool {

@@ -72,7 +72,8 @@ func ResetAll(rootDir, snapshotDir string) error {
 
 	// TODO: support postgres database drop or schema drops
 
-	if err := os.RemoveAll(rootify(snapshotDir, rootDir)); err == nil {
+	snapshotDir = rootify(snapshotDir, rootDir)
+	if err := os.RemoveAll(snapshotDir); err == nil {
 		fmt.Println("Removed all snapshots", "dir", snapshotDir)
 	} else {
 		fmt.Println("Error removing all snapshots", "dir", snapshotDir, "err", err)

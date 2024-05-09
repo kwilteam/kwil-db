@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -14,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/ident"
+	"github.com/kwilteam/kwil-db/internal/statesync"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
@@ -23,12 +25,6 @@ import (
 	cmtTypes "github.com/cometbft/cometbft/types"
 	"go.uber.org/zap"
 )
-
-// appState is an in-memory representation of the state of the application.
-type appState struct {
-	height  int64
-	appHash []byte
-}
 
 // AbciConfig includes data that defines the chain and allow the application to
 // satisfy the ABCI Application interface.
@@ -40,11 +36,11 @@ type AbciConfig struct {
 	GasEnabled         bool
 }
 
-func NewAbciApp(cfg *AbciConfig, snapshotter SnapshotModule, bootstrapper DBBootstrapModule,
+func NewAbciApp(cfg *AbciConfig, snapshotter SnapshotModule, statesyncer StateSyncModule,
 	txRouter TxApp, consensusParams *txapp.ConsensusParams, log log.Logger) *AbciApp {
 	app := &AbciApp{
 		cfg:             *cfg,
-		bootstrapper:    bootstrapper,
+		statesyncer:     statesyncer,
 		snapshotter:     snapshotter,
 		txApp:           txRouter,
 		consensusParams: consensusParams,
@@ -84,13 +80,9 @@ type AbciApp struct {
 	snapshotter SnapshotModule
 
 	// bootstrapper is the bootstrapper module that handles bootstrapping the database
-	bootstrapper DBBootstrapModule
+	statesyncer StateSyncModule
 
 	log log.Logger
-
-	// Expected AppState after bootstrapping the node with a given snapshot,
-	// state gets updated with the bootupState after bootstrapping
-	bootupState appState
 
 	txApp TxApp
 
@@ -379,16 +371,6 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		return nil, fmt.Errorf("failed to commit transaction app: %w", err)
 	}
 
-	// snapshotting
-	if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(a.height) {
-		// TODO: Lock all DBs
-		err = a.snapshotter.CreateSnapshot(a.height)
-		if err != nil {
-			a.log.Error("snapshot creation failed", zap.Error(err))
-		}
-		// Unlock all the DBs
-	}
-
 	return &abciTypes.ResponseCommit{}, nil // RetainHeight stays 0 to not prune any blocks
 }
 
@@ -496,16 +478,33 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 
 // ApplySnapshotChunk is on the state sync connection
 func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.RequestApplySnapshotChunk) (*abciTypes.ResponseApplySnapshotChunk, error) {
-	refetchChunks, status, err := a.bootstrapper.ApplySnapshotChunk(req.Chunk, req.Index)
-	if err != nil {
-		return &abciTypes.ResponseApplySnapshotChunk{Result: abciStatus(status), RefetchChunks: refetchChunks}, nil
+	if a.statesyncer == nil {
+		return nil, fmt.Errorf("mismatched statesync configuration between CometBFT and ABCI app")
 	}
 
-	if a.bootstrapper.IsDBRestored() {
-		// NOTE: when snapshot is implemented, the bootstrapper should be able
-		// to meta.SetChainState.
-		a.log.Info("Bootstrapped database successfully")
+	dbRestored, err := a.statesyncer.ApplySnapshotChunk(ctx, req.Chunk, req.Index)
+	if err != nil {
+		var refetchChunks []uint32
+		// If the chunk was not applied successfully either due to chunk hash mismatch or other reasons,
+		// refetch the chunk from other peers
+		if errors.Is(err, statesync.ErrRefetchSnapshotChunk) {
+			refetchChunks = append(refetchChunks, req.Index)
+		}
+		return &abciTypes.ResponseApplySnapshotChunk{
+			Result:        statesync.ToABCIApplySnapshotChunkResponse(err),
+			RefetchChunks: refetchChunks,
+		}, nil
 	}
+
+	if dbRestored {
+		// DB restored successfully from the snapshot
+		// Update the engine's in-memory info with the new database state
+		err := a.txApp.Reload(ctx)
+		if err != nil {
+			return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ABORT}, err
+		}
+	}
+
 	return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ACCEPT, RefetchChunks: nil}, nil
 }
 
@@ -515,18 +514,25 @@ func (a *AbciApp) ListSnapshots(ctx context.Context, req *abciTypes.RequestListS
 		return &abciTypes.ResponseListSnapshots{}, nil
 	}
 
-	snapshots, err := a.snapshotter.ListSnapshots()
-	if err != nil {
-		return &abciTypes.ResponseListSnapshots{}, nil
-	}
+	snapshots := a.snapshotter.ListSnapshots()
 
 	var res []*abciTypes.Snapshot
 	for _, snapshot := range snapshots {
-		abciSnapshot, err := convertToABCISnapshot(&snapshot)
+		bts, err := json.Marshal(snapshot)
 		if err != nil {
-			return &abciTypes.ResponseListSnapshots{}, nil
+			return nil, err
 		}
-		res = append(res, abciSnapshot)
+
+		sp := &abciTypes.Snapshot{
+			Height:   snapshot.Height,
+			Format:   snapshot.Format,
+			Chunks:   snapshot.ChunkCount,
+			Hash:     snapshot.SnapshotHash,
+			Metadata: make([]byte, len(bts)),
+		}
+		copy(sp.Metadata, bts)
+
+		res = append(res, sp)
 	}
 	return &abciTypes.ResponseListSnapshots{Snapshots: res}, nil
 }
@@ -537,18 +543,31 @@ func (a *AbciApp) LoadSnapshotChunk(ctx context.Context, req *abciTypes.RequestL
 		return &abciTypes.ResponseLoadSnapshotChunk{}, nil
 	}
 
-	chunk := a.snapshotter.LoadSnapshotChunk(req.Height, req.Format, req.Chunk)
+	chunk, err := a.snapshotter.LoadSnapshotChunk(req.Height, req.Format, req.Chunk)
+	if err != nil {
+		return nil, err
+	}
 	return &abciTypes.ResponseLoadSnapshotChunk{Chunk: chunk}, nil
 }
 
 // OfferSnapshot is on the state sync connection
 func (a *AbciApp) OfferSnapshot(ctx context.Context, req *abciTypes.RequestOfferSnapshot) (*abciTypes.ResponseOfferSnapshot, error) {
-	snapshot := convertABCISnapshots(req.Snapshot)
-	if a.bootstrapper.OfferSnapshot(snapshot) != nil {
-		return &abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_REJECT}, nil
+	if a.statesyncer == nil {
+		return &abciTypes.ResponseOfferSnapshot{
+				Result: abciTypes.ResponseOfferSnapshot_REJECT},
+			fmt.Errorf("mismatched statesync configuration between CometBFT and ABCI app")
 	}
-	a.bootupState.appHash = req.Snapshot.Hash
-	a.bootupState.height = int64(snapshot.Height)
+
+	var snapshot statesync.Snapshot
+	err := json.Unmarshal(req.Snapshot.Metadata, &snapshot)
+	if err != nil {
+		return &abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_REJECT}, err
+	}
+
+	err = a.statesyncer.OfferSnapshot(ctx, &snapshot)
+	if err != nil {
+		return &abciTypes.ResponseOfferSnapshot{Result: statesync.ToABCIOfferSnapshotResponse(err)}, nil
+	}
 	return &abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_ACCEPT}, nil
 }
 
@@ -882,6 +901,34 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 }
 
 func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abciTypes.ResponseQuery, error) {
+	if req.Path == statesync.ABCISnapshotQueryPath { // "/snapshot/height"
+		if a.snapshotter == nil {
+			return &abciTypes.ResponseQuery{}, nil
+		}
+
+		var snapshot *statesync.Snapshot
+		height := string(req.Data)
+		exists := false
+
+		curSnapshots := a.snapshotter.ListSnapshots()
+		for _, s := range curSnapshots {
+			if height == fmt.Sprintf("%d", s.Height) {
+				exists = true
+				snapshot = s
+				break
+			}
+		}
+
+		if !exists {
+			return &abciTypes.ResponseQuery{}, nil
+		}
+
+		bts, err := json.Marshal(snapshot)
+		if err != nil {
+			return nil, err
+		}
+		return &abciTypes.ResponseQuery{Value: bts}, nil
+	}
 	return &abciTypes.ResponseQuery{}, nil
 }
 

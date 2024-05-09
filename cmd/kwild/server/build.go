@@ -1,12 +1,14 @@
 package server
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -21,7 +23,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/abci/meta"
-	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/kv"
@@ -38,6 +39,7 @@ import (
 	simple_checker "github.com/kwilteam/kwil-db/internal/services/health/simple-checker"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
+	"github.com/kwilteam/kwil-db/internal/statesync"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/voting"
 	"github.com/kwilteam/kwil-db/internal/voting/broadcast"
@@ -54,7 +56,6 @@ import (
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -178,8 +179,8 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	ev := buildEventStore(d, closers) // makes own DB connection
 
 	// these are dummies, but they might need init in the future.
-	snapshotModule := buildSnapshotter()
-	bootstrapperModule := buildBootstrapper()
+	snapshotter := buildSnapshotter(d)
+	statesyncer := buildStatesyncer(d)
 
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
@@ -187,9 +188,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// to get the comet node, we need the abci app
 	// to get the abci app, we need the tx router
 	// but the tx router needs the cometbft client
-	txApp := buildTxApp(d, db, e, ev)
+	txApp := buildTxApp(d, db, e, ev, snapshotter)
 
-	abciApp := buildAbci(d, txApp, snapshotModule, bootstrapperModule)
+	abciApp := buildAbci(d, txApp, snapshotter, statesyncer)
 
 	// NOTE: buildCometNode immediately starts talking to the abciApp and
 	// replaying blocks (and using atomic db tx commits), i.e. calling
@@ -198,6 +199,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 	wrappedCmtClient := &wrappedCometBFTClient{cometBftClient}
+	txApp.SetReplayStatusChecker(cometBftNode.IsCatchup)
 
 	eventBroadcaster := buildEventBroadcaster(d, ev, wrappedCmtClient, txApp)
 	abciApp.SetEventBroadcaster(eventBroadcaster.RunBroadcast)
@@ -316,8 +318,13 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
-func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext, ev *voting.EventStore) *txapp.TxApp {
-	txApp, err := txapp.NewTxApp(db, engine, buildSigner(d), ev, d.genesisCfg.ChainID,
+func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext, ev *voting.EventStore, snapshotter *statesync.SnapshotStore) *txapp.TxApp {
+	var sh txapp.Snapshotter
+	if snapshotter != nil {
+		sh = snapshotter
+	}
+
+	txApp, err := txapp.NewTxApp(db, engine, buildSigner(d), ev, sh, d.genesisCfg.ChainID,
 		!d.genesisCfg.ConsensusParams.WithoutGasCosts, d.cfg.AppCfg.Extensions, *d.log.Named("tx-router"))
 	if err != nil {
 		failBuild(err, "failed to build new TxApp")
@@ -325,11 +332,15 @@ func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext,
 	return txApp
 }
 
-func buildAbci(d *coreDependencies, txApp abci.TxApp, snapshotter *snapshots.SnapshotStore,
-	bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
+func buildAbci(d *coreDependencies, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer) *abci.AbciApp {
 	var sh abci.SnapshotModule
 	if snapshotter != nil {
 		sh = snapshotter
+	}
+
+	var ss abci.StateSyncModule
+	if statesyncer != nil {
+		ss = statesyncer
 	}
 
 	cfg := &abci.AbciConfig{
@@ -339,7 +350,7 @@ func buildAbci(d *coreDependencies, txApp abci.TxApp, snapshotter *snapshots.Sna
 		GenesisAllocs:      d.genesisCfg.Alloc,
 		GasEnabled:         !d.genesisCfg.ConsensusParams.WithoutGasCosts,
 	}
-	return abci.NewAbciApp(cfg, sh, bootstrapper, txApp,
+	return abci.NewAbciApp(cfg, sh, ss, txApp,
 		&txapp.ConsensusParams{
 			VotingPeriod:       d.genesisCfg.ConsensusParams.Votes.VoteExpiry,
 			JoinVoteExpiration: d.genesisCfg.ConsensusParams.Validator.JoinExpiry,
@@ -390,6 +401,10 @@ func buildSigner(d *coreDependencies) *auth.Ed25519Signer {
 }
 
 func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
+	// Check if the database is supposed to be restored from the snapshot
+	// If yes, restore the database from the snapshot
+	restoreDB(d)
+
 	db, err := d.dbOpener(d.ctx, d.cfg.AppCfg.DBName, 11)
 	if err != nil {
 		failBuild(err, "kwild database open failed")
@@ -399,6 +414,81 @@ func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 	return db
 }
 
+// restoreDB restores the database from a snapshot if the genesis apphash is specified.
+// Genesis apphash ensures that all the nodes in the network start from the same state.
+// Genesis apphash should match the hash of the snapshot file.
+// Snapshot file can be compressed or uncompressed represented by .gz extension.
+// DB restoration from snapshot is skipped in the following scenarios:
+//   - If the DB is already initialized (i.e this is not a new node)
+//   - If the genesis apphash is not specified
+//   - If statesync is enabled. Statesync will take care of rapildly syncing the database
+//     to the network state using statesync snapshots.
+func restoreDB(d *coreDependencies) {
+	if isDbInitialized(d) || d.genesisCfg.DataAppHash == nil || d.cfg.ChainCfg.StateSync.Enable {
+		return
+	}
+
+	genCfg := d.genesisCfg
+	appCfg := d.cfg.AppCfg
+	// DB is uninitialized and genesis apphash is specified.
+	// DB is supposed to be restored from the snapshot.
+	// Ensure that the snapshot file exists and the snapshot hash matches the genesis apphash.
+
+	// Ensure that the snapshot file exists, if node is supposed to start with a snapshot state
+	if genCfg.DataAppHash != nil && appCfg.SnapshotFile == "" {
+		failBuild(nil, "snapshot file not provided")
+	}
+
+	// Snapshot file exists
+	snapFile, err := os.Open(appCfg.SnapshotFile)
+	if err != nil {
+		failBuild(err, "failed to open snapshot file")
+	}
+
+	// Check if the snapshot file is compressed, if yes decompress it
+	var reader io.Reader
+	if strings.HasSuffix(appCfg.SnapshotFile, ".gz") {
+		// Decompress the snapshot file
+		gzipReader, err := gzip.NewReader(snapFile)
+		if err != nil {
+			failBuild(err, "failed to create gzip reader")
+		}
+		defer gzipReader.Close()
+		reader = gzipReader
+	} else {
+		reader = snapFile
+	}
+
+	// Restore DB from the snapshot if snapshot matches.
+	err = statesync.RestoreDB(d.ctx, reader, appCfg.DBName, appCfg.DBUser, appCfg.DBPass,
+		appCfg.DBHost, appCfg.DBPort, genCfg.DataAppHash, d.log)
+	if err != nil {
+		failBuild(err, "failed to restore DB from snapshot")
+	}
+}
+
+// isDbInitialized checks if the database is already initialized.
+func isDbInitialized(d *coreDependencies) bool {
+	db, err := d.dbOpener(d.ctx, d.cfg.AppCfg.DBName, 11)
+	if err != nil {
+		failBuild(err, "kwild database open failed")
+	}
+	defer db.Close()
+
+	// Check if the database is empty or initialized previously
+	// If the database is empty, we need to restore the database from the snapshot
+	initTx, err := db.BeginTx(d.ctx)
+	if err != nil {
+		failBuild(err, "could not start app initialization DB transaction")
+	}
+	defer initTx.Rollback(d.ctx)
+
+	_, err = voting.GetValidators(d.ctx, initTx)
+	// ERROR: relation "kwild_voting.voters" does not exist
+	// assumption that error is due to the missing table and schema.
+	return err == nil
+}
+
 func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
 	extensions, err := getExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
 	if err != nil {
@@ -406,7 +496,7 @@ func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
 	}
 
 	for name := range extensions {
-		d.log.Info("registered extension", zap.String("name", name))
+		d.log.Info("registered extension", log.String("name", name))
 	}
 
 	tx, err := db.BeginTx(d.ctx)
@@ -450,31 +540,93 @@ func initAccountRepository(d *coreDependencies, tx sql.Tx) {
 	}
 }
 
-func buildSnapshotter() *snapshots.SnapshotStore {
-	return nil
-	// TODO: Uncomment when we have statesync ready
-	// cfg := d.cfg.AppCfg
-	// if !cfg.SnapshotConfig.Enabled {
-	// 	return nil
-	// }
+func buildSnapshotter(d *coreDependencies) *statesync.SnapshotStore {
+	cfg := d.cfg.AppCfg
+	if !cfg.Snapshots.Enabled {
+		return nil
+	}
 
-	// return snapshots.NewSnapshotStore(cfg.SqliteFilePath,
-	// 	cfg.SnapshotConfig.SnapshotDir,
-	// 	cfg.SnapshotConfig.RecurringHeight,
-	// 	cfg.SnapshotConfig.MaxSnapshots,
-	// 	snapshots.WithLogger(*d.log.Named("snapshotStore")),
-	// )
+	dbCfg := &statesync.DBConfig{
+		DBUser: cfg.DBUser,
+		DBPass: cfg.DBPass,
+		DBHost: cfg.DBHost,
+		DBPort: cfg.DBPort,
+		DBName: cfg.DBName,
+	}
+
+	snapshotCfg := &statesync.SnapshotConfig{
+		SnapshotDir:     cfg.Snapshots.SnapshotDir,
+		RecurringHeight: cfg.Snapshots.RecurringHeight,
+		MaxSnapshots:    int(cfg.Snapshots.MaxSnapshots),
+	}
+
+	ss, err := statesync.NewSnapshotStore(snapshotCfg, dbCfg, *d.log.Named("snapshot-store"))
+	if err != nil {
+		failBuild(err, "failed to build snapshot store")
+	}
+	return ss
 }
 
-func buildBootstrapper() *snapshots.Bootstrapper {
-	return nil
-	// TODO: Uncomment when we have statesync ready
-	// rcvdSnapsDir := filepath.Join(d.cfg.RootDir, rcvdSnapsDirName)
-	// bootstrapper, err := snapshots.NewBootstrapper(d.cfg.AppCfg.SqliteFilePath, rcvdSnapsDir)
-	// if err != nil {
-	// 	failBuild(err, "Bootstrap module initialization failure")
-	// }
-	// return bootstrapper
+func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
+	if !d.cfg.ChainCfg.StateSync.Enable {
+		return nil
+	}
+
+	cfg := d.cfg.AppCfg
+
+	dbCfg := &statesync.DBConfig{
+		DBUser: cfg.DBUser,
+		DBPass: cfg.DBPass,
+		DBHost: cfg.DBHost,
+		DBPort: cfg.DBPort,
+		DBName: cfg.DBName,
+	}
+
+	providers := strings.Split(d.cfg.ChainCfg.StateSync.RPCServers, ",")
+
+	if len(providers) == 0 {
+		failBuild(nil, "failed to configure state syncer, no remote servers provided.")
+	}
+
+	if len(providers) == 1 {
+		// Duplicating the same provider to satisfy cometbft statesync requirement of having at least 2 providers.
+		// Statesynce module doesn't have the same requirements and
+		// can work with a single provider (providers are passed as is)
+		d.cfg.ChainCfg.StateSync.RPCServers += "," + providers[0]
+	}
+
+	configDone := false
+	for _, p := range providers {
+		clt, err := statesync.ChainRPCClient(p)
+		if err != nil {
+			continue
+		}
+
+		// Try to fetch the status of the remote server.
+		res, err := clt.Header(d.ctx, nil)
+		if err != nil {
+			continue
+		}
+
+		// If the remote server is in the same chain, we can trust it.
+		if res.Header.ChainID != d.genesisCfg.ChainID {
+			continue
+		}
+
+		// Get the trust height and trust hash from the remote server
+		d.cfg.ChainCfg.StateSync.TrustHeight = res.Header.Height
+		d.cfg.ChainCfg.StateSync.TrustHash = res.Header.Hash().String()
+		configDone = true
+		break
+	}
+
+	if !configDone {
+		failBuild(nil, "failed to configure state syncer, failed to fetch trust options from the remote server.")
+	}
+
+	// create state syncer
+	return statesync.NewStateSyncer(d.ctx, dbCfg, d.cfg.ChainCfg.StateSync.SnapshotDir,
+		providers, *d.log.Named("state-syncer"))
 }
 
 func fileExists(name string) bool {
@@ -574,14 +726,14 @@ func buildAdminService(d *coreDependencies, closer *closeFuncs, admsvc admpb.Adm
 			if err != nil {
 				failBuild(err, "failed to generate admin client credentials")
 			}
-			d.log.Info("generated admin service client key pair", zap.String("cert", clientCertFile), zap.String("key", clientKeyFile))
+			d.log.Info("generated admin service client key pair", log.String("cert", clientCertFile), log.String("key", clientKeyFile))
 			if clientsCerts, err = os.ReadFile(clientCertFile); err != nil {
 				failBuild(err, "failed to read auto-generate client certificate")
 			}
 			if err = os.WriteFile(clientsFile, clientsCerts, 0644); err != nil {
 				failBuild(err, "failed to write client CAs file")
 			}
-			d.log.Info("generated admin service client CAs file", zap.String("file", clientsFile))
+			d.log.Info("generated admin service client CAs file", log.String("file", clientsFile))
 		} else {
 			d.log.Info("No admin client CAs file. Use kwil-admin's node gen-auth-key command to generate")
 		}
