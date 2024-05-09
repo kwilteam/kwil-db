@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
@@ -82,6 +83,10 @@ func convertToHttpCookie(c cookie) *http.Cookie {
 func getDomain(target string) (string, error) {
 	if target == "" {
 		return "", fmt.Errorf("target is empty")
+	}
+
+	if !(strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://")) {
+		return "", fmt.Errorf("target missing scheme")
 	}
 
 	parsedTarget, err := url.Parse(target)
