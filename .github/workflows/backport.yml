@@ -1,0 +1,25 @@
+name: backport
+
+on:
+  pull_request_target:
+    types:
+      - closed
+
+jobs:
+  backport:
+    name: Backport PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Backport Action
+        uses: kwilteam/backport-github-action@f7073a2287aefc1fa12685eb25a712ab5620445c #v9.3.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          auto_backport_label_prefix: backport-to-
+
+      - name: Info log
+        if: ${{ success() }}
+        run: cat ~/.backport/backport.info.log
+
+      - name: Debug log
+        if: ${{ failure() }}
+        run: cat ~/.backport/backport.debug.log
