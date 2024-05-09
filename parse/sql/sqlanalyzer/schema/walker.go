@@ -1,6 +1,8 @@
 package schema
 
-import "github.com/kwilteam/kwil-db/parse/sql/tree"
+import (
+	"github.com/kwilteam/kwil-db/parse/sql/tree"
+)
 
 // SchemaWalker walks statements and ensures that their statements are targeting a postgres schema / namespace.
 type SchemaWalker struct {
@@ -12,6 +14,10 @@ type SchemaWalker struct {
 	SetCount int
 }
 
+// NewSchemaWalker creates a new SchemaWalker.
+// The schemawalker qualifies table names with the target schema.
+// it does not perform syntax / semantic validation, and therefore
+// does not need an error listener.
 func NewSchemaWalker(targetSchema string) *SchemaWalker {
 	return &SchemaWalker{
 		AstListener: tree.NewBaseListener(),

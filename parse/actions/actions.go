@@ -10,25 +10,62 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer/parameters"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
+
+// AnalyzeOpts are options for analyzing actions.
+type AnalyzeOpts struct {
+	// PGSchemaName is the name of the Postgres schema.
+	// If not set, it will default to the passed schema dbid.
+	PGSchemaName string
+	// SchemaInfo contains position information for the schema.
+	// If not nil, it will use the position information to modify the error messages.
+	SchemaInfo *parseTypes.SchemaInfo
+}
 
 // AnalyzeActions analyzes the actions in a schema.
 // It will perform validation checks on statements, such as ensuring that
 // all view actions do not modify state. It will make all sql statements deterministic.
-func AnalyzeActions(schema *types.Schema, pgSchemaName string) ([]*AnalyzedAction, error) {
+func AnalyzeActions(schema *types.Schema, opts *AnalyzeOpts) ([]*AnalyzedAction, parseTypes.ParseErrors, error) {
+	if opts == nil {
+		opts = &AnalyzeOpts{}
+	}
+
+	if opts.PGSchemaName == "" {
+		opts.PGSchemaName = schema.DBID()
+	}
+
+	parseErrs := parseTypes.ParseErrors{}
+
 	analyzed := make([]*AnalyzedAction, len(schema.Actions))
 	for i, action := range schema.Actions {
-		stmts, err := actparser.Parse(action.Body)
+		// if schema info is provided, we will use it to modify the error messages.
+		errorListener := parseTypes.NewErrorListener()
+		startingLine := 1
+		startingCol := 1
+		if opts.SchemaInfo != nil {
+			actionPos, ok := opts.SchemaInfo.Blocks[action.Name]
+			if !ok {
+				// should never happen, this would be a bug in our code
+				return nil, nil, fmt.Errorf("could not find position for action %s", action.Name)
+			}
+
+			startingLine = actionPos.StartLine
+			startingCol = actionPos.StartCol
+		}
+
+		errorListener = errorListener.Child("action", startingLine, startingCol)
+		stmts, err := actparser.Parse(action.Body, errorListener)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		analyzedStmts := make([]AnalyzedStatement, len(stmts))
 
 		for j, stmt := range stmts {
-			analyzedStmt, err := convertStatement(stmt, schema, pgSchemaName)
+			analyzedStmt, err := convertStatement(stmt, schema, opts.PGSchemaName, errorListener)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			analyzedStmts[j] = analyzedStmt
 		}
@@ -41,13 +78,15 @@ func AnalyzeActions(schema *types.Schema, pgSchemaName string) ([]*AnalyzedActio
 			Parameters: action.Parameters,
 			Statements: analyzedStmts,
 		}
+
+		parseErrs.Add(errorListener.Errors()...)
 	}
 
-	return analyzed, nil
+	return analyzed, parseErrs, nil
 }
 
 // convertStatement converts a statement from the actparser AST to an AnalyzedStatement.
-func convertStatement(stmt actparser.ActionStmt, schema *types.Schema, pgSchemaName string) (AnalyzedStatement, error) {
+func convertStatement(stmt actparser.ActionStmt, schema *types.Schema, pgSchemaName string, errLis parseTypes.NativeErrorListener) (AnalyzedStatement, error) {
 	switch stmt := stmt.(type) {
 	case *actparser.ExtensionCallStmt:
 		recs := make([]string, len(stmt.Receivers))
@@ -55,7 +94,7 @@ func convertStatement(stmt actparser.ActionStmt, schema *types.Schema, pgSchemaN
 			recs[i] = strings.ToLower(rec)
 		}
 
-		params, err := prepareInlineExpressions(stmt.Args, schema)
+		params, err := prepareInlineExpressions(stmt.Args, schema, errLis)
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +116,7 @@ func convertStatement(stmt actparser.ActionStmt, schema *types.Schema, pgSchemaN
 			return nil, fmt.Errorf("actions cannot specify return values")
 		}
 
-		params, err := prepareInlineExpressions(stmt.Args, schema)
+		params, err := prepareInlineExpressions(stmt.Args, schema, errLis)
 		if err != nil {
 			return nil, err
 		}
@@ -87,10 +126,14 @@ func convertStatement(stmt actparser.ActionStmt, schema *types.Schema, pgSchemaN
 			Params: params,
 		}, nil
 	case *actparser.DMLStmt:
+		child := errLis.Child("action-sql", stmt.Node.StartLine, stmt.Node.StartCol)
 		// make the statement deterministic.
-		generated, err := sqlanalyzer.ApplyRules(stmt.Statement, sqlanalyzer.AllRules, schema, pgSchemaName)
+		generated, err := sqlanalyzer.ApplyRules(stmt.Statement, sqlanalyzer.AllRules, schema, pgSchemaName, child)
 		if err != nil {
 			return nil, err
+		}
+		if child.Err() != nil {
+			errLis.Add(child.Errors()...)
 		}
 
 		return &SQLStatement{
@@ -172,7 +215,7 @@ func (s *SQLStatement) analyzedStmt() {}
 // prepareInlineExpressions prepares inline expressions for analysis.
 // It takes the expressions from the syntax tree, as well as the procedures
 // that exist in the schema, which is necessary for validating the expressions.
-func prepareInlineExpressions(exprs []tree.Expression, schema *types.Schema) ([]*InlineExpression, error) {
+func prepareInlineExpressions(exprs []tree.Expression, schema *types.Schema, errLis parseTypes.NativeErrorListener) ([]*InlineExpression, error) {
 	prepared := make([]*InlineExpression, len(exprs))
 	for i, expr := range exprs {
 		// this is copied over from an old place in the engine.
@@ -189,7 +232,7 @@ func prepareInlineExpressions(exprs []tree.Expression, schema *types.Schema) ([]
 		}
 
 		// clean expression, since it is submitted by the user
-		err := expr.Walk(clean.NewStatementCleaner(schema))
+		err := expr.Walk(clean.NewStatementCleaner(schema, errLis))
 		if err != nil {
 			return nil, err
 		}

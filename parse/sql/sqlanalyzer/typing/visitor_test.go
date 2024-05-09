@@ -10,6 +10,7 @@ import (
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer/typing"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -83,12 +84,16 @@ func Test_Qualification(t *testing.T) {
 			ast, err := sqlparser.Parse(test.stmt)
 			require.NoError(t, err)
 
+			lis := parseTypes.NewErrorListener()
+
 			_, err = typing.AnalyzeTypes(ast, []*types.Table{usersTable, postsTable}, &typing.AnalyzeOptions{
 				ArbitraryBinds: true,
 				Qualify:        true,
+				ErrorListener:  lis,
 			})
+			require.NoError(t, err)
 			if test.wantErr {
-				require.Error(t, err)
+				require.Error(t, lis.Err())
 				return
 			}
 			require.NoError(t, err)
@@ -404,20 +409,23 @@ func Test_Typing(t *testing.T) {
 			ast, err := sqlparser.Parse(test.stmt)
 			require.NoError(t, err)
 
+			lis := parseTypes.NewErrorListener()
 			rel, err := typing.AnalyzeTypes(ast, []*types.Table{usersTable, postsTable}, &typing.AnalyzeOptions{
-				BindParams: bindParams,
+				BindParams:    bindParams,
+				ErrorListener: lis,
 			})
+			require.NoError(t, err)
 			if test.err != nil {
 				if errors.Is(test.err, errAny) {
-					require.Error(t, err)
+					require.Error(t, lis.Err())
 					return
 				}
 
 				// we are expecting an error
-				require.ErrorAs(t, err, &test.err)
+				require.ErrorAs(t, lis.Err(), &test.err)
 				return
 			} else {
-				require.NoError(t, err)
+				require.NoError(t, lis.Err())
 			}
 
 			returned := make(map[string]*types.DataType)
@@ -438,9 +446,6 @@ func Test_Typing(t *testing.T) {
 	}
 }
 
-// TODO: we should add tables with custom data types to the tests
-// this is not supported at the time of writing this test,
-// but it will be before release
 var (
 	bindParams = map[string]*types.DataType{
 		"$id":    types.IntType,

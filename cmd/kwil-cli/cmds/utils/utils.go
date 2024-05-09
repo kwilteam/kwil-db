@@ -18,6 +18,7 @@ func NewCmdUtils() *cobra.Command {
 		txQueryCmd(),
 		chainInfoCmd(),
 		kgwAuthnCmd(),
+		newParseCmd(),
 	)
 
 	return cmd

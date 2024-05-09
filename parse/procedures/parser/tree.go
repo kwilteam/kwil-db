@@ -5,10 +5,12 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
 type Accepter interface {
 	Accept(Visitor) interface{}
+	GetNode() *parseTypes.Node
 }
 
 type Statement interface {
@@ -24,7 +26,8 @@ func (e *StatementVariableDeclaration) Accept(v Visitor) interface{} {
 }
 
 type StatementVariableDeclaration struct {
-	*baseStatement
+	baseStatement
+	parseTypes.Node
 	// Name is the name of the variable.
 	// It is case-insensitive.
 	// It does include the $.
@@ -42,6 +45,7 @@ func (e *StatementVariableAssignment) Accept(v Visitor) interface{} {
 
 type StatementVariableAssignment struct {
 	baseStatement
+	parseTypes.Node
 	// Name is the name of the variable.
 	// It is case-insensitive.
 	// It does include the $.
@@ -56,6 +60,7 @@ func (e *StatementVariableAssignmentWithDeclaration) Accept(v Visitor) interface
 
 type StatementVariableAssignmentWithDeclaration struct {
 	baseStatement
+	parseTypes.Node
 	// Name is the name of the variable.
 	// It is case-insensitive.
 	// It does include the $.
@@ -76,6 +81,7 @@ func (e *StatementProcedureCall) Accept(v Visitor) interface{} {
 
 type StatementProcedureCall struct {
 	baseStatement
+	parseTypes.Node
 	// Variables holds the receivers that the procedure assigns to.
 	// It can be nil (e.g. $return1, _, $return3 := proc())
 	Variables []*string
@@ -88,6 +94,7 @@ func (e *StatementForLoop) Accept(v Visitor) interface{} {
 
 type StatementForLoop struct {
 	baseStatement
+	parseTypes.Node
 	// Variable is the variable to assign the value to.
 	Variable string
 	// Target is the target of the loop.
@@ -113,6 +120,7 @@ func (e *LoopTargetRange) Accept(v Visitor) interface{} {
 
 type LoopTargetRange struct {
 	baseLoopTarget
+	parseTypes.Node
 	// Start is the start of the range.
 	Start Expression
 	// End is the end of the range.
@@ -125,6 +133,7 @@ func (e *LoopTargetCall) Accept(v Visitor) interface{} {
 
 type LoopTargetCall struct {
 	baseLoopTarget
+	parseTypes.Node
 	// Call is the procedure call to loop through.
 	// It must return either an array or a table.
 	Call ICallExpression
@@ -136,8 +145,11 @@ func (e *LoopTargetVariable) Accept(v Visitor) interface{} {
 
 type LoopTargetSQL struct {
 	baseLoopTarget
+	parseTypes.Node
 	// Statement is the Statement statement to execute.
 	Statement tree.AstNode
+	// StatementLocation tracks the starting location of the statement.
+	StatementLocation *parseTypes.Node
 }
 
 func (e *LoopTargetSQL) Accept(v Visitor) interface{} {
@@ -146,6 +158,7 @@ func (e *LoopTargetSQL) Accept(v Visitor) interface{} {
 
 type LoopTargetVariable struct {
 	baseLoopTarget
+	parseTypes.Node
 	// Variable is the variable to loop through.
 	// It must be an array.
 	Variable *ExpressionVariable
@@ -157,6 +170,7 @@ func (e *StatementIf) Accept(v Visitor) interface{} {
 
 type StatementIf struct {
 	baseStatement
+	parseTypes.Node
 	// IfThens are the if statements.
 	// They are evaluated in order, as
 	// IF ... THEN ... ELSEIF ... THEN ...
@@ -169,6 +183,7 @@ type StatementIf struct {
 }
 
 type IfThen struct {
+	parseTypes.Node
 	If   Expression
 	Then []Statement
 }
@@ -179,8 +194,11 @@ func (e *StatementSQL) Accept(v Visitor) interface{} {
 
 type StatementSQL struct {
 	baseStatement
+	parseTypes.Node
 	// Statement is the SQL statement to execute.
 	Statement tree.AstNode
+	// StatementLocation tracks the starting location of the statement.
+	StatementLocation *parseTypes.Node
 }
 
 func (e *StatementReturn) Accept(v Visitor) interface{} {
@@ -189,6 +207,7 @@ func (e *StatementReturn) Accept(v Visitor) interface{} {
 
 type StatementReturn struct {
 	baseStatement
+	parseTypes.Node
 	// Values is the value to return.
 	// It can be nil.
 	Values []Expression
@@ -196,6 +215,8 @@ type StatementReturn struct {
 	// SQL is the SQL statement to execute.
 	// If this is not nil, Value must be nil.
 	SQL tree.AstNode
+	// SQLLocation tracks the starting location of the statement.
+	SQLLocation *parseTypes.Node
 }
 
 func (e *StatementReturnNext) Accept(v Visitor) interface{} {
@@ -204,6 +225,7 @@ func (e *StatementReturnNext) Accept(v Visitor) interface{} {
 
 type StatementReturnNext struct {
 	baseStatement
+	parseTypes.Node
 	// Returns are the values to return.
 	// There must be the same number of values as the procedure returns.
 	Returns []Expression
@@ -216,6 +238,7 @@ func (e *StatementBreak) Accept(v Visitor) interface{} {
 // StatementBreak is a statement that breaks out of a loop.
 type StatementBreak struct {
 	baseStatement
+	parseTypes.Node
 }
 
 type Expression interface {
@@ -233,6 +256,7 @@ func (e *ExpressionTextLiteral) Accept(v Visitor) interface{} {
 
 type ExpressionTextLiteral struct {
 	baseExpression
+	parseTypes.Node
 	Value    string
 	TypeCast *types.DataType
 }
@@ -243,6 +267,7 @@ func (e *ExpressionBooleanLiteral) Accept(v Visitor) interface{} {
 
 type ExpressionBooleanLiteral struct {
 	baseExpression
+	parseTypes.Node
 	Value    bool
 	TypeCast *types.DataType
 }
@@ -253,6 +278,7 @@ func (e *ExpressionIntLiteral) Accept(v Visitor) interface{} {
 
 type ExpressionIntLiteral struct {
 	baseExpression
+	parseTypes.Node
 	Value    int64
 	TypeCast *types.DataType
 }
@@ -263,6 +289,7 @@ func (e *ExpressionNullLiteral) Accept(v Visitor) interface{} {
 
 type ExpressionNullLiteral struct {
 	baseExpression
+	parseTypes.Node
 	TypeCast *types.DataType
 }
 
@@ -272,6 +299,7 @@ func (e *ExpressionBlobLiteral) Accept(v Visitor) interface{} {
 
 type ExpressionBlobLiteral struct {
 	baseExpression
+	parseTypes.Node
 	Value    []byte
 	TypeCast *types.DataType
 }
@@ -282,6 +310,7 @@ func (e *ExpressionMakeArray) Accept(v Visitor) interface{} {
 
 type ExpressionMakeArray struct {
 	baseExpression
+	parseTypes.Node
 	Values   []Expression
 	TypeCast *types.DataType
 }
@@ -301,6 +330,7 @@ func (e *ExpressionCall) isCall() {}
 
 type ExpressionCall struct {
 	baseExpression
+	parseTypes.Node
 	// Name is the name of the procedure.
 	// It should always be lower case.
 	Name string
@@ -317,6 +347,7 @@ func (e *ExpressionForeignCall) isCall() {}
 
 type ExpressionForeignCall struct {
 	baseExpression
+	parseTypes.Node
 	// Name is the name of the procedure.
 	// It should always be lower case.
 	Name string
@@ -334,6 +365,7 @@ func (e *ExpressionVariable) Accept(v Visitor) interface{} {
 
 type ExpressionVariable struct {
 	baseExpression
+	parseTypes.Node
 	// Name is the name of the variable.
 	// It is case-insensitive.
 	// It does include the $.
@@ -355,6 +387,7 @@ func (e *ExpressionArrayAccess) Accept(v Visitor) interface{} {
 
 type ExpressionArrayAccess struct {
 	baseExpression
+	parseTypes.Node
 	// Target is the array to access the index from.
 	Target Expression
 	// Index is the index to access.
@@ -368,6 +401,7 @@ func (e *ExpressionFieldAccess) Accept(v Visitor) interface{} {
 
 type ExpressionFieldAccess struct {
 	baseExpression
+	parseTypes.Node
 	// Target is the object to access the field from.
 	Target Expression
 	// Field is the field to access.
@@ -381,6 +415,7 @@ func (e *ExpressionParenthesized) Accept(v Visitor) interface{} {
 
 type ExpressionParenthesized struct {
 	baseExpression
+	parseTypes.Node
 	// Expression is the expression inside the parentheses.
 	Expression Expression
 	TypeCast   *types.DataType
@@ -392,6 +427,7 @@ func (e *ExpressionComparison) Accept(v Visitor) interface{} {
 
 type ExpressionComparison struct {
 	baseExpression
+	parseTypes.Node
 	Left     Expression
 	Operator ComparisonOperator
 	Right    Expression
@@ -403,6 +439,7 @@ func (e *ExpressionArithmetic) Accept(v Visitor) interface{} {
 
 type ExpressionArithmetic struct {
 	baseExpression
+	parseTypes.Node
 	Left     Expression
 	Operator ArithmeticOperator
 	Right    Expression

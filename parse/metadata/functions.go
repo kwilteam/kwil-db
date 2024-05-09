@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
 var (
@@ -135,15 +136,15 @@ var (
 				}
 
 				if !args[0].IsArray {
-					return nil, fmt.Errorf("expected first argument to be an array, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected first argument to be an array, got %s", parseTypes.ErrParamType, args[0].String())
 				}
 
 				if args[1].IsArray {
-					return nil, fmt.Errorf("expected second argument to be a scalar, got %s", args[1].String())
+					return nil, fmt.Errorf("%w: expected second argument to be a scalar, got %s", parseTypes.ErrParamType, args[1].String())
 				}
 
 				if !strings.EqualFold(args[0].Name, args[1].Name) {
-					return nil, fmt.Errorf("expected both arguments to be of the same base type, got %s and %s", args[0].Name, args[1].Name)
+					return nil, fmt.Errorf("%w: append type must be equal to scalar array type: array type: %s append type: %s", parseTypes.ErrArrayType, args[0].Name, args[1].Name)
 				}
 
 				return args[0], nil
@@ -159,15 +160,15 @@ var (
 				}
 
 				if args[0].IsArray {
-					return nil, fmt.Errorf("expected first argument to be a scalar, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected first argument to be a scalar, got %s", parseTypes.ErrParamType, args[0].String())
 				}
 
 				if !args[1].IsArray {
-					return nil, fmt.Errorf("expected second argument to be an array, got %s", args[1].String())
+					return nil, fmt.Errorf("%w: expected second argument to be an array, got %s", parseTypes.ErrParamType, args[1].String())
 				}
 
 				if !strings.EqualFold(args[0].Name, args[1].Name) {
-					return nil, fmt.Errorf("expected both arguments to be of the same base type, got %s and %s", args[0].Name, args[1].Name)
+					return nil, fmt.Errorf("%w: prepend type must be equal to scalar array type: array type: %s prepend type: %s", parseTypes.ErrArrayType, args[1].Name, args[0].Name)
 				}
 
 				return args[1], nil
@@ -183,15 +184,15 @@ var (
 				}
 
 				if !args[0].IsArray {
-					return nil, fmt.Errorf("expected first argument to be an array, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected first argument to be an array, got %s", parseTypes.ErrParamType, args[0].String())
 				}
 
 				if !args[1].IsArray {
-					return nil, fmt.Errorf("expected second argument to be an array, got %s", args[1].String())
+					return nil, fmt.Errorf("%w: expected second argument to be an array, got %s", parseTypes.ErrParamType, args[1].String())
 				}
 
 				if !strings.EqualFold(args[0].Name, args[1].Name) {
-					return nil, fmt.Errorf("expected both arguments to be of the same base type, got %s and %s", args[0].Name, args[1].Name)
+					return nil, fmt.Errorf("%w: expected both arrays to be of the same scalar type, got %s and %s", parseTypes.ErrArrayType, args[0].Name, args[1].Name)
 				}
 
 				return args[0], nil
@@ -272,14 +273,12 @@ type FunctionDefinition struct {
 var (
 	// ErrInvalidArgumentNumber is returned when the number of arguments passed to a function is invalid.
 	ErrInvalidArgumentNumber = errors.New("invalid number of arguments")
-	// ErrInvalidArgumentType is returned when the type of an argument passed to a function is invalid.
-	ErrInvalidArgumentType = errors.New("invalid argument type")
 )
 
 func wrapErrArgumentNumber(expected, got int) error {
-	return fmt.Errorf("%w: expected %d, got %d", ErrInvalidArgumentNumber, expected, got)
+	return fmt.Errorf("%w: expected %d, got %d", parseTypes.ErrArgCount, expected, got)
 }
 
 func wrapErrArgumentType(expected, got *types.DataType) error {
-	return fmt.Errorf("%w: expected %s, got %s", ErrInvalidArgumentType, expected.String(), got.String())
+	return fmt.Errorf("%w: expected %s, got %s", parseTypes.ErrParamType, expected.String(), got.String())
 }

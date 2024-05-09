@@ -3,10 +3,13 @@ package actparser_test
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	actparser "github.com/kwilteam/kwil-db/parse/actions/parser"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
 func Test_ParseMany(t *testing.T) {
@@ -15,7 +18,9 @@ func Test_ParseMany(t *testing.T) {
 	INSERT INTO users (id, name) VALUES ($id, 'test');
 	`
 
-	got, err := actparser.Parse(stmt)
+	errLis := parseTypes.NewErrorListener()
+
+	got, err := actparser.Parse(stmt, errLis)
 	assert.NoError(t, err)
 
 	assert.Len(t, got, 2)
@@ -195,13 +200,19 @@ func TestParseActionStmt(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotAst, err := actparser.Parse(tt.input)
+			errLis := parseTypes.NewErrorListener()
+			gotAst, err := actparser.Parse(tt.input, errLis)
+			require.NoError(t, err, "ParseActionStmt(%v)", tt.input)
+			err = errLis.Err()
+
 			if err != nil {
 				t.Errorf("ParseActionStmt() error = %v", err)
 				return
 			}
 
-			assert.EqualValues(t, tt.expect, gotAst[0], "ParseRawSQL() got %+v, want %+v", gotAst, tt.expect)
+			if !deepCompare(gotAst[0], tt.expect) {
+				t.Errorf("ParseActionStmt() got = %v, want %v", gotAst[0], tt.expect)
+			}
 		})
 	}
 }
@@ -237,7 +248,10 @@ func TestParseActionStmt_scalar_function(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := actparser.Parse(tt.input)
+			errLis := parseTypes.NewErrorListener()
+			_, err := actparser.Parse(tt.input, errLis)
+			require.NoError(t, err, "ParseActionStmt(%v)", tt.input)
+			err = errLis.Err()
 			if tt.wantErr {
 				assert.Error(t, err, "ParseActionStmt(%v)", tt.input)
 			} else {
@@ -245,4 +259,14 @@ func TestParseActionStmt_scalar_function(t *testing.T) {
 			}
 		})
 	}
+}
+
+// deepCompare deep compares the values of two nodes.
+// It ignores the parseTypes.Node field.
+func deepCompare(node1, node2 any) bool {
+	// we return true for the parseTypes.Node field,
+	// we also need to ignore the unexported "schema" fields
+	return cmp.Equal(node1, node2, cmp.Comparer(func(x, y parseTypes.Node) bool {
+		return true
+	}))
 }

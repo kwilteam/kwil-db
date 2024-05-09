@@ -2,10 +2,11 @@ package tree
 
 import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 type UpdateStmt struct {
-	node
+	types.Node
 
 	CTE  []*CTE
 	Core *UpdateCore
@@ -44,7 +45,7 @@ func (u *UpdateStmt) ToSQL() string {
 func (u *UpdateStmt) statement() {}
 
 type UpdateCore struct {
-	node
+	types.Node
 
 	QualifiedTableName *QualifiedTableName
 	UpdateSetClause    []*UpdateSetClause

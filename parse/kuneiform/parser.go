@@ -1,76 +1,105 @@
 package kuneiform
 
 import (
+	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/kuneiform/gen"
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
 // Parse parses a Kuneiform file and returns the parsed schema.
 // It will also parse the SQL to perform validity checks.
-func Parse(kf string) (schema *types.Schema, err error) {
+func Parse(kf string) (schema *types.Schema, info *parseTypes.SchemaInfo, parseErrs parseTypes.ParseErrors, err error) {
+	errorListener := parseTypes.NewErrorListener()
+
 	visitor := &kfVisitor{
 		registeredNames: make(map[string]struct{}),
+		schemaInfo:      &parseTypes.SchemaInfo{Blocks: make(map[string]*parseTypes.Block)},
+		errs:            errorListener,
 	}
-
-	errorListener := sqlparser.NewErrorListener()
 
 	stream := antlr.NewInputStream(kf)
 	lexer := gen.NewKuneiformLexer(stream)
+
+	// remove default error listener
+	lexer.RemoveErrorListeners()
+	lexer.AddErrorListener(errorListener)
+
 	tokenStream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
 	p := gen.NewKuneiformParser(tokenStream)
 
-	if errorListener != nil {
-		// remove default error visitor
-		p.RemoveErrorListeners()
-		p.AddErrorListener(errorListener)
-	}
+	// remove default error listener
+	p.RemoveErrorListeners()
+	p.AddErrorListener(errorListener)
 
 	p.BuildParseTrees = true
 
 	defer func() {
 		if e := recover(); e != nil {
-			errorListener.Add(fmt.Sprintf("panic: %v", e))
-		}
+			var ok bool
+			err, ok = e.(error)
+			if !ok {
+				err = fmt.Errorf("panic: %v", e)
+			}
 
-		if err != nil {
-			errorListener.AddError(err)
-		}
+			// if there is a panic, it is likely due to a syntax error
+			// check for parse errors and return them first
+			if errorListener.Err() != nil {
+				// if there is an error listener error, we should swallow the panic
+				// If the issue persists until after the user has fixed the parse errors,
+				// the panic will be returned in the else block.
+				err = nil
+				parseErrs = errorListener.Errs
+			} else {
+				// if there are no parse errors, then there is a bug.
+				// we should return the panic with a stack trace.
+				buf := make([]byte, 1<<16)
+				stackSize := runtime.Stack(buf, false)
 
-		err = errorListener.Err()
+				err = fmt.Errorf("%w\n\n%s", err, buf[:stackSize])
+			}
+		}
 	}()
 
-	res, ok := p.Program().Accept(visitor).(*types.Schema)
+	schema, ok := p.Program().Accept(visitor).(*types.Schema)
 	if !ok {
-		return nil, fmt.Errorf("unexpected result type: %T", res)
+		return nil, nil, nil, fmt.Errorf("unexpected result type: %T", schema)
 	}
 
-	if errorListener.Err() != nil {
-		return nil, errorListener.Err()
-	}
-
-	return res, nil
+	return schema, visitor.schemaInfo, errorListener.Errs, nil
 }
 
 type kfVisitor struct {
 	*gen.BaseKuneiformParserVisitor
 	// registeredNames tracks the names of all tables, columns, and indexes
 	registeredNames map[string]struct{}
+	schemaInfo      *parseTypes.SchemaInfo
+	errs            parseTypes.AntlrErrorListener
 }
 
-// checkUniqueName checks if the name is unique.
-// If it is not, it will panic.
-func (k *kfVisitor) checkUniqueName(name string) {
+// registerBlock registers a new block (table, action, procedure, etc.)
+// it checks that the name is unique and panics if it is not.
+func (k *kfVisitor) registerBlock(ctx antlr.ParserRuleContext, name string) {
 	lower := strings.ToLower(name)
 	if _, ok := k.registeredNames[lower]; ok {
-		panic(fmt.Sprintf("conflicting name: %s", name))
+		k.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, fmt.Errorf("conflicting name: "+name))
+		return
 	}
 
 	k.registeredNames[lower] = struct{}{}
+
+	node := &parseTypes.Node{}
+	node.Set(ctx)
+	k.schemaInfo.Blocks[lower] = &parseTypes.Block{
+		Node:     *node,
+		AbsStart: ctx.GetStart().GetStart(),
+		AbsEnd:   ctx.GetStop().GetStop(),
+	}
 }
 
 var _ gen.KuneiformParserVisitor = &kfVisitor{}
@@ -122,7 +151,7 @@ func (k *kfVisitor) VisitTable_declaration(ctx *gen.Table_declarationContext) an
 		ForeignKeys: arr[*types.ForeignKey](len(ctx.AllForeign_key_def())),
 	}
 
-	k.checkUniqueName(tbl.Name)
+	k.registerBlock(ctx, tbl.Name)
 
 	for i, col := range ctx.AllColumn_def() {
 		tbl.Columns[i] = col.Accept(k).(*types.Column)
@@ -338,7 +367,7 @@ func (k *kfVisitor) VisitUse_declaration(ctx *gen.Use_declarationContext) any {
 		}
 		if i == len(ctx.AllIDENTIFIER())-1 {
 			c.Alias = ident.GetText()
-			k.checkUniqueName(c.Alias)
+			k.registerBlock(ctx, c.Alias)
 			continue
 		}
 
@@ -381,7 +410,7 @@ func (k *kfVisitor) VisitStmt_mode(ctx *gen.Stmt_modeContext) any {
 func (k *kfVisitor) VisitAction_declaration(ctx *gen.Action_declarationContext) any {
 	name := ctx.STMT_IDENTIFIER().GetText()
 
-	k.checkUniqueName(name)
+	k.registerBlock(ctx, name)
 
 	act := &types.Action{
 		Name:        name,
@@ -394,10 +423,10 @@ func (k *kfVisitor) VisitAction_declaration(ctx *gen.Action_declarationContext) 
 		act.Parameters[i] = v.GetText()
 	}
 
-	var err error
-	act.Modifiers, act.Public, err = getAccessModifiers(ctx.AllSTMT_ACCESS())
-	if err != nil {
-		panic(err)
+	var hasPubOrPriv bool
+	act.Modifiers, act.Public, hasPubOrPriv = k.getAccessModifiers(ctx.AllSTMT_ACCESS())
+	if !hasPubOrPriv {
+		k.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, errors.New("missing public or private modifier"))
 	}
 
 	return act
@@ -406,7 +435,7 @@ func (k *kfVisitor) VisitAction_declaration(ctx *gen.Action_declarationContext) 
 func (k *kfVisitor) VisitProcedure_declaration(ctx *gen.Procedure_declarationContext) any {
 	name := ctx.GetProcedure_name().GetText()
 
-	k.checkUniqueName(name)
+	k.registerBlock(ctx, name)
 
 	proc := &types.Procedure{
 		Name:        name,
@@ -418,10 +447,10 @@ func (k *kfVisitor) VisitProcedure_declaration(ctx *gen.Procedure_declarationCon
 		proc.Parameters = ctx.Stmt_typed_param_list().Accept(k).([]*types.ProcedureParameter)
 	}
 
-	var err error
-	proc.Modifiers, proc.Public, err = getAccessModifiers(ctx.AllSTMT_ACCESS())
-	if err != nil {
-		panic(err)
+	var hasPubOrPriv bool
+	proc.Modifiers, proc.Public, hasPubOrPriv = k.getAccessModifiers(ctx.AllSTMT_ACCESS())
+	if !hasPubOrPriv {
+		k.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, errors.New("missing public or private modifier"))
 	}
 
 	if ctx.Stmt_return() != nil {
@@ -452,8 +481,6 @@ func (k *kfVisitor) VisitStmt_return(ctx *gen.Stmt_returnContext) any {
 func parseBody(b string) string {
 	b = strings.TrimPrefix(b, "{")
 	b = strings.TrimSuffix(b, "}")
-	b = strings.TrimSpace(b)
-
 	return b
 }
 
@@ -485,12 +512,6 @@ func (k *kfVisitor) VisitStmt_type_selector(ctx *gen.Stmt_type_selectorContext) 
 	}
 
 	return c
-}
-
-func (k *kfVisitor) VisitErrorNode(node antlr.ErrorNode) interface {
-} {
-	// I don't think this should ever happen
-	panic("error near: " + node.GetText())
 }
 
 func (k *kfVisitor) VisitForeign_declaration(ctx *gen.Foreign_declarationContext) interface {
@@ -581,9 +602,8 @@ func (k *kfVisitor) VisitType_selector_list(ctx *gen.Type_selector_listContext) 
 
 // getAccessModifiers returns the access modifiers for the given context.
 // It also returns whether or not the action/procedure is public or private.
-// If it can't find public or private, it will return an error.
-func getAccessModifiers(mods []antlr.TerminalNode) (modifiers []types.Modifier, public bool, err error) {
-	foundPublicOrPrivate := false
+// If it can't find public or private, it will return false
+func (k *kfVisitor) getAccessModifiers(mods []antlr.TerminalNode) (modifiers []types.Modifier, public bool, foundPublicOrPrivate bool) {
 	for _, m := range mods {
 		switch strings.ToLower(m.GetText()) {
 		case "public":
@@ -597,13 +617,10 @@ func getAccessModifiers(mods []antlr.TerminalNode) (modifiers []types.Modifier, 
 		case "owner":
 			modifiers = append(modifiers, types.ModifierOwner)
 		default:
-			err = fmt.Errorf("unexpected modifier: %s", m.GetText())
+			k.errs.TokenErr(m.GetSymbol(), parseTypes.ParseErrorTypeSemantic,
+				fmt.Errorf("unexpected modifier: %v", m.GetText()))
 			return
 		}
-	}
-
-	if !foundPublicOrPrivate {
-		err = fmt.Errorf("missing public or private")
 	}
 
 	return

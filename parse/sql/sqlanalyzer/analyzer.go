@@ -11,6 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer/parameters"
 	schemaWalker "github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer/schema"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
 // WalkerRecoverer is a wrapper around a statement that implements the AstWalker
@@ -37,15 +38,18 @@ func (a *WalkerRecoverer) Walk(walker tree.AstListener) (err error) {
 // It parses it, and then traverses the AST with the given flags.
 // It will alter the statement to make it conform to the given flags, or return an error if it cannot.
 // All tables will target the pgSchemaName schema.
-func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaName string) (*AnalyzedStatement, error) {
-	parsed, err := sqlparser.Parse(stmt)
+func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaName string, errorListener *parseTypes.ErrorListener) (*AnalyzedStatement, error) {
+	parsed, err := sqlparser.ParseWithErrorListener(stmt, errorListener)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing statement: %w", err)
 	}
+	if len(parsed) != 1 {
+		return nil, fmt.Errorf("expected 1 statement, but found %d", len(parsed))
+	}
 
-	walker := &WalkerRecoverer{parsed}
+	walker := &WalkerRecoverer{parsed[0]}
 
-	clnr := clean.NewStatementCleaner(schema)
+	clnr := clean.NewStatementCleaner(schema, errorListener)
 	err = walker.Walk(clnr)
 	if err != nil {
 		return nil, fmt.Errorf("error cleaning statement: %w", err)
@@ -58,14 +62,14 @@ func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaNam
 	}
 
 	if flags&NoCartesianProduct != 0 {
-		err := walker.Walk(join.NewJoinWalker())
+		err := walker.Walk(join.NewJoinWalker(errorListener))
 		if err != nil {
 			return nil, fmt.Errorf("error applying join rules: %w", err)
 		}
 	}
 
 	if flags&GuaranteedOrder != 0 {
-		err := walker.Walk(order.NewOrderWalker(schema))
+		err := walker.Walk(order.NewOrderWalker(schema, errorListener))
 		if err != nil {
 			return nil, fmt.Errorf("error enforcing guaranteed order: %w", err)
 		}
@@ -81,12 +85,12 @@ func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaNam
 		orderedParams = paramVisitor.OrderedParameters
 	}
 
-	mutative, err := IsMutative(parsed)
+	mutative, err := IsMutative(parsed[0])
 	if err != nil {
 		return nil, fmt.Errorf("error determining mutativity: %w", err)
 	}
 
-	generated, err := tree.SafeToSQL(parsed)
+	generated, err := tree.SafeToSQL(parsed[0])
 	if err != nil {
 		return nil, fmt.Errorf("error generating SQL: %w", err)
 	}
@@ -100,10 +104,10 @@ func ApplyRules(stmt string, flags VerifyFlag, schema *types.Schema, pgSchemaNam
 }
 
 // CleanAST cleans and makes the given statement deterministic.
-func CleanAST(ast tree.AstWalker, schema *types.Schema, pgSchemaName string) (err error) {
+func CleanAST(ast tree.AstWalker, schema *types.Schema, pgSchemaName string, errorListener parseTypes.NativeErrorListener) (err error) {
 	accept := &WalkerRecoverer{ast}
 
-	clnr := clean.NewStatementCleaner(schema)
+	clnr := clean.NewStatementCleaner(schema, errorListener)
 	err = accept.Walk(clnr)
 	if err != nil {
 		return fmt.Errorf("error cleaning statement: %w", err)
@@ -115,12 +119,12 @@ func CleanAST(ast tree.AstWalker, schema *types.Schema, pgSchemaName string) (er
 		return fmt.Errorf("error applying schema rules: %w", err)
 	}
 
-	err = accept.Walk(join.NewJoinWalker())
+	err = accept.Walk(join.NewJoinWalker(errorListener))
 	if err != nil {
 		return fmt.Errorf("error applying join rules: %w", err)
 	}
 
-	err = accept.Walk(order.NewOrderWalker(schema))
+	err = accept.Walk(order.NewOrderWalker(schema, errorListener))
 	if err != nil {
 		return fmt.Errorf("error enforcing guaranteed order: %w", err)
 	}

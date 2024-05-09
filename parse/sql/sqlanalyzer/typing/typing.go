@@ -3,9 +3,11 @@ package typing
 import (
 	"errors"
 	"fmt"
+	"runtime"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
 // AnalyzeOptions is a set of options for type analysis.
@@ -21,6 +23,8 @@ type AnalyzeOptions struct {
 	VerifyProcedures bool
 	// Schema is the current database schema.
 	Schema *types.Schema
+	// ErrorListener is the error listener for the statement.
+	ErrorListener parseTypes.NativeErrorListener
 }
 
 // AnalyzeTypes will run type analysis on the given statement.
@@ -29,7 +33,18 @@ type AnalyzeOptions struct {
 func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, options *AnalyzeOptions) (rel *Relation, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("panic during type analysis: %v", r)
+			var ok bool
+			err, ok = r.(error)
+			if !ok {
+				err = fmt.Errorf("%v", r)
+			} else {
+				err = fmt.Errorf("%w", err)
+			}
+
+			// add stack trace since this is a bug:
+			buf := make([]byte, 1<<16)
+			stackSize := runtime.Stack(buf, false)
+			err = fmt.Errorf("%w\n%s", err, buf[:stackSize])
 		}
 	}()
 
@@ -39,6 +54,9 @@ func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, options *AnalyzeOptio
 			Schema:     &types.Schema{},
 		}
 	}
+	if options.ErrorListener == nil {
+		options.ErrorListener = parseTypes.NewErrorListener()
+	}
 
 	tbls := make(map[string]*Relation)
 	for _, t := range tables {
@@ -47,9 +65,9 @@ func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, options *AnalyzeOptio
 	}
 
 	v := &typeVisitor{
-		commonTables: tbls,
-		ctes:         make(map[string]struct{}),
-		options:      options,
+		commonTables:   tbls,
+		ctes:           make(map[string]struct{}),
+		AnalyzeOptions: options,
 	}
 
 	res := ast.Accept(v)
@@ -58,7 +76,8 @@ func AnalyzeTypes(ast tree.AstNode, tables []*types.Table, options *AnalyzeOptio
 		return nil, fmt.Errorf("unknown error: could not analyze types")
 	}
 
-	return fn(newEvaluationContext())
+	rel = fn(newEvaluationContext())
+	return rel, nil
 }
 
 // evaluationContext is a context for evaluating expressions.
@@ -143,7 +162,7 @@ func (e *evaluationContext) join(relation *QualifiedRelation) error {
 		// ensure an anonymous relation already exists
 		if _, ok := e.joinedTables[""]; !ok {
 			// if it does not exist, create it and add it to the join order
-			e.joinedTables[""] = NewRelation()
+			e.joinedTables[""] = newRelation()
 			e.joinOrder = append(e.joinOrder, "")
 		}
 
@@ -170,7 +189,7 @@ func (e *evaluationContext) join(relation *QualifiedRelation) error {
 func (e *evaluationContext) mergeAnonymousSafe(relation *Relation) error {
 	anonTbl, ok := e.joinedTables[""]
 	if !ok {
-		anonTbl = NewRelation()
+		anonTbl = newRelation()
 		e.joinedTables[""] = anonTbl
 	}
 

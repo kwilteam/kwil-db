@@ -2,10 +2,11 @@ package tree
 
 import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 type ReturningClause struct {
-	node
+	types.Node
 
 	Returned []*ReturningClauseColumn
 }
@@ -56,7 +57,7 @@ func (r *ReturningClause) check() {
 }
 
 type ReturningClauseColumn struct {
-	node
+	types.Node
 
 	All        bool
 	Expression Expression

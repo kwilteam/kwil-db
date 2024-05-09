@@ -4,10 +4,11 @@ import (
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 type SelectStmt struct {
-	node
+	types.Node
 
 	CTE  []*CTE
 	Stmt *SelectCore
@@ -46,7 +47,7 @@ func (s *SelectStmt) ToSQL() string {
 func (s *SelectStmt) statement() {}
 
 type SelectCore struct {
-	node
+	types.Node
 
 	SimpleSelects []*SimpleSelect
 	OrderBy       *OrderBy
@@ -83,7 +84,7 @@ func (s *SelectCore) ToSQL() (res string) {
 }
 
 type SimpleSelect struct {
-	node
+	types.Node
 
 	SelectType SelectType
 	Columns    []ResultColumn
@@ -196,7 +197,7 @@ func (c *CompoundOperatorType) ToSQL() string {
 }
 
 type CompoundOperator struct {
-	node
+	types.Node
 
 	Operator CompoundOperatorType
 }

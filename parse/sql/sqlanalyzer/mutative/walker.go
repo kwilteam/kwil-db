@@ -2,6 +2,7 @@ package mutative
 
 import "github.com/kwilteam/kwil-db/parse/sql/tree"
 
+// IsMutative returns true if the statement is mutative, false otherwise.
 func NewMutativityWalker() *MutativityWalker {
 	return &MutativityWalker{
 		AstListener: tree.NewBaseListener(),

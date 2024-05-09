@@ -10,6 +10,7 @@
 package clean
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer/parameters"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 	"github.com/kwilteam/kwil-db/parse/util"
 )
 
@@ -32,7 +34,8 @@ import (
 // It takes the parsed statements, the target procedure and its schema, the pg schema name,
 // a prefix which it will used to prefix postgres session variables
 // and a set of known postgres session variables and their types.
-func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSchema *types.Schema, pgSchemaName string) (params []*types.NamedType, sessionVars map[string]*types.DataType, err error) {
+func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSchema *types.Schema, pgSchemaName string,
+	errorListener parseTypes.NativeErrorListener) (params []*types.NamedType, sessionVars map[string]*types.DataType, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			var ok bool
@@ -50,6 +53,7 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 		pgSchemaName:       pgSchemaName,
 		cleanedSessionVars: map[string]*types.DataType{},
 		sqlCanMutate:       !proc.IsView(),
+		errs:               errorListener,
 	}
 
 	// cleanedParams holds the cleaned procedure parameters.
@@ -84,13 +88,14 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 			c.cleanVar(&sfl.Variable)
 		},
 		StatementSQL: func(ss *parser.StatementSQL) {
-			c.cleanSQL(ss.Statement)
+			c.cleanSQL(ss.Statement, ss.StatementLocation)
 		},
 		StatementReturn: func(sr *parser.StatementReturn) {
 			if sr.SQL != nil {
-				c.cleanSQL(sr.SQL)
+				c.cleanSQL(sr.SQL, sr.SQLLocation)
 				if !returnable(sr.SQL) {
-					panic("RETURN statement must return a SELECT or have a RETURNING clause")
+					errorListener.NodeErr(&sr.Node, parseTypes.ParseErrorTypeSemantic,
+						errors.New("RETURN statement must return a SELECT or have a RETURNING clause"))
 				}
 			}
 		},
@@ -106,16 +111,18 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 		},
 		// loop targets
 		LoopTargetSQL: func(lts *parser.LoopTargetSQL) {
-			c.cleanSQL(lts.Statement)
+			c.cleanSQL(lts.Statement, lts.StatementLocation)
 
 			if !returnable(lts.Statement) {
-				panic("LOOP target must be a SELECT or have a RETURNING clause")
+				errorListener.NodeErr(&lts.Node, parseTypes.ParseErrorTypeSemantic,
+					errors.New("LOOP target must be a SELECT or have a RETURNING clause"))
 			}
 		},
 		// expressions
 		ExpressionMakeArray: func(ema *parser.ExpressionMakeArray) {
 			if len(ema.Values) == 0 {
-				panic("ARRAY must have at least one element")
+				errorListener.NodeErr(&ema.Node, parseTypes.ParseErrorTypeSemantic,
+					errors.New("ARRAY must have at least one element"))
 			}
 		},
 		ExpressionCall: func(ec *parser.ExpressionCall) {
@@ -136,7 +143,8 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 				}
 
 				if proc.IsView() && !proc2.IsView() {
-					panic(fmt.Errorf(`%w: "%s"`, metadata.ErrReadOnlyProcedureCallsMutative, proc2.Name))
+					errorListener.NodeErr(&ec.Node, parseTypes.ParseErrorTypeSemantic,
+						fmt.Errorf(`%w: "%s"`, parseTypes.ErrReadOnlyProcedureCallsMutative, proc2.Name))
 				}
 			}
 		},
@@ -144,15 +152,17 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 			// this must be a locally defined procedure
 			proc, err := c.findForeignProcedure(efc.Name)
 			if err != nil {
-				panic(err)
+				errorListener.NodeErr(&efc.Node, parseTypes.ParseErrorTypeSemantic, err)
 			}
 
 			if len(efc.ContextArgs) != 2 {
-				panic("foreign procedure calls must have two context arguments")
+				errorListener.NodeErr(&efc.Node, parseTypes.ParseErrorTypeSemantic,
+					errors.New("foreign procedure calls must have two context arguments"))
 			}
 
 			if len(efc.Arguments) != len(proc.Parameters) {
-				panic("foreign procedure calls must have the same number of arguments as the procedure")
+				errorListener.NodeErr(&efc.Node, parseTypes.ParseErrorTypeSemantic,
+					errors.New("foreign procedure calls must have the same number of arguments as foreign procedure definition"))
 			}
 
 			efc.Name = strings.ToLower(efc.Name)
@@ -163,13 +173,15 @@ func CleanProcedure(stmts []parser.Statement, proc *types.Procedure, currentSche
 		ExpressionComparison: func(ec *parser.ExpressionComparison) {
 			err := ec.Operator.Validate()
 			if err != nil {
-				panic(err)
+				// this should never happen
+				errorListener.NodeErr(&ec.Node, parseTypes.ParseErrorTypeSyntax, err)
 			}
 		},
 		ExpressionArithmetic: func(ea *parser.ExpressionArithmetic) {
 			err := ea.Operator.Validate()
 			if err != nil {
-				panic(err)
+				// this should never happen
+				errorListener.NodeErr(&ea.Node, parseTypes.ParseErrorTypeSyntax, err)
 			}
 		},
 	}
@@ -187,6 +199,7 @@ type cleaner struct {
 	pgSchemaName       string
 	cleanedSessionVars map[string]*types.DataType
 	sqlCanMutate       bool
+	errs               parseTypes.NativeErrorListener
 }
 
 // cleanType ensures a type is fully qualified.
@@ -226,7 +239,7 @@ func (c *cleaner) cleanVar(n *string) {
 
 		sesVar, ok := metadata.GetSessionVariable(r)
 		if !ok {
-			panic(fmt.Errorf("%w: %s", metadata.ErrUnknownContextualVariable, r))
+			panic(fmt.Errorf("%w: %s", parseTypes.ErrUnknownContextualVariable, r))
 		}
 
 		// contextual parameter
@@ -240,10 +253,17 @@ func (c *cleaner) cleanVar(n *string) {
 }
 
 // cleanSQL ensures the SQL AST is valid.
-func (c *cleaner) cleanSQL(ast tree.AstNode) {
-	err := sqlanalyzer.CleanAST(ast, c.currentSchema, c.pgSchemaName)
+func (c *cleaner) cleanSQL(ast tree.AstNode, ctx *parseTypes.Node) {
+	// if errors are encountered during cleaning, we should not continue
+	// in order to avoid panics due to the SQL being invalid.
+	errLis := c.errs.Child("sql-clean", ctx.StartLine, ctx.StartCol)
+	err := sqlanalyzer.CleanAST(ast, c.currentSchema, c.pgSchemaName, errLis)
 	if err != nil {
 		panic(err)
+	}
+	if errLis.Err() != nil {
+		c.errs.Add(errLis.Errors()...)
+		return
 	}
 
 	isMutative, err := sqlanalyzer.IsMutative(ast)
@@ -252,7 +272,7 @@ func (c *cleaner) cleanSQL(ast tree.AstNode) {
 	}
 
 	if !c.sqlCanMutate && isMutative {
-		panic(metadata.ErrReadOnlyProcedureContainsDML)
+		c.errs.NodeErr(ctx, parseTypes.ParseErrorTypeSemantic, parseTypes.ErrReadOnlyProcedureContainsDML)
 	}
 
 	err = parameters.RenameVariables(ast, func(s string) string {
@@ -273,7 +293,7 @@ func (c *cleaner) findProcedure(name string) (*types.Procedure, error) {
 		}
 	}
 
-	return nil, fmt.Errorf(`%w: "%s"`, metadata.ErrUnknownFunctionOrProcedure, name)
+	return nil, fmt.Errorf(`%w: "%s"`, parseTypes.ErrUnknownFunctionOrProcedure, name)
 }
 
 func (c *cleaner) isForeignProcedure(name string) bool {
@@ -295,7 +315,7 @@ func (c *cleaner) findForeignProcedure(name string) (*types.ForeignProcedure, er
 		}
 	}
 
-	return nil, fmt.Errorf(`%w: "%s"`, metadata.ErrUnknownForeignProcedure, name)
+	return nil, fmt.Errorf(`%w: "%s"`, parseTypes.ErrUnknownForeignProcedure, name)
 }
 
 // returnable returns true if the statement

@@ -16,8 +16,8 @@ type Relation struct {
 	oridinalPositions []string
 }
 
-// NewRelation creates a new relation.
-func NewRelation() *Relation {
+// newRelation creates a new relation.
+func newRelation() *Relation {
 	return &Relation{
 		attributes:        make(map[string]*Attribute),
 		oridinalPositions: []string{},

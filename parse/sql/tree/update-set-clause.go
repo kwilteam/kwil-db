@@ -2,13 +2,14 @@ package tree
 
 import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 // UpdateSetClause is a clause that represents the SET clause in an UPDATE statement.
 // This does NOT include the SET keyword.
 // e.g. column1 = expression, column2 = expression, ...
 type UpdateSetClause struct {
-	node
+	types.Node
 
 	Columns    []string
 	Expression Expression

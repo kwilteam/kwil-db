@@ -11,6 +11,7 @@ import (
 	actgrammar "github.com/kwilteam/kwil-db/parse/actions/gen"
 	"github.com/kwilteam/kwil-db/parse/metadata"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 	"github.com/kwilteam/kwil-db/parse/util"
 )
 
@@ -19,20 +20,11 @@ type astBuilder struct {
 	actgrammar.BaseActionParserVisitor
 	// @yaiba NOTE: may need schema to distinguish extension and action
 
-	trace    bool
-	trackPos bool
+	trace bool
+	errs  parseTypes.AntlrErrorListener
 }
 
 var _ actgrammar.ActionParserVisitor = &astBuilder{}
-
-func newAstBuilder(trace bool, trackPos bool) *astBuilder {
-	k := &astBuilder{
-		trace:    trace,
-		trackPos: trackPos,
-	}
-
-	return k
-}
 
 //func (v *astBuilder) getPos(ctx antlr.ParserRuleContext) *tree.Position {
 //	if !v.trackPos {
@@ -107,7 +99,9 @@ func (v *astBuilder) VisitStatement(ctx *actgrammar.StatementContext) interface{
 // VisitSql_stmt is called when parse sql statement, return *types.DMLStmt
 func (v *astBuilder) VisitSql_stmt(ctx *actgrammar.Sql_stmtContext) interface{} {
 	stmt := ctx.GetText()
-	return &DMLStmt{Statement: stmt}
+	d := &DMLStmt{Statement: stmt}
+	d.Set(ctx)
+	return d
 }
 
 // VisitCall_stmt is called when parse call statement, return *types.CallStmt
@@ -134,6 +128,8 @@ func (v *astBuilder) VisitCall_stmt(ctx *actgrammar.Call_stmtContext) interface{
 			stmt.Args = v.Visit(ctx.Call_body().Fn_arg_list()).([]tree.Expression)
 		}
 
+		stmt.Set(ctx)
+
 		return stmt
 
 	} else {
@@ -145,6 +141,8 @@ func (v *astBuilder) VisitCall_stmt(ctx *actgrammar.Call_stmtContext) interface{
 		if len(ctx.Call_body().Fn_arg_list().AllFn_arg_expr()) > 0 {
 			stmt.Args = v.Visit(ctx.Call_body().Fn_arg_list()).([]tree.Expression)
 		}
+
+		stmt.Set(ctx)
 
 		return stmt
 	}
@@ -196,7 +194,8 @@ func (v *astBuilder) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) tree.E
 				return &tree.ExpressionNumericLiteral{Value: i}
 			}
 		}
-		panic(fmt.Sprintf("cannot recognize literal '%s'", literal))
+		v.errs.RuleErr(ctx.Literal_value(), parseTypes.ParseErrorTypeSyntax, fmt.Errorf("cannot recognize literal '%s'", literal))
+		return &tree.ExpressionNullLiteral{} // just to avoid nil panic
 	// sql bind parameter
 	case ctx.Variable() != nil:
 		return &tree.ExpressionBindParameter{Parameter: ctx.Variable().GetText()}
@@ -337,9 +336,10 @@ func (v *astBuilder) visitFn_arg_expr(ctx actgrammar.IFn_arg_exprContext) tree.E
 		// this is a really ugly dependency; not quite circular, so it is ok.
 		// Since we likely will not make many changes to actions (in favor of procedures),
 		// it is ok for now
-		_, ok := metadata.Functions[expr.Function]
+		_, ok := metadata.Functions[strings.ToLower(expr.Function)]
 		if !ok {
-			panic(fmt.Sprintf("function %s does not exist", expr.Function))
+			v.errs.RuleErr(ctx.Sfn_name(), parseTypes.ParseErrorTypeSyntax, fmt.Errorf("function %s does not exist", expr.Function))
+			return &tree.ExpressionNullLiteral{}
 		}
 
 		for i, e := range ctx.AllFn_arg_expr() {

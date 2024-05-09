@@ -4,10 +4,11 @@ import (
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 type InsertStmt struct {
-	node
+	types.Node
 
 	CTE  []*CTE
 	Core *InsertCore
@@ -46,7 +47,7 @@ func (ins *InsertStmt) ToSQL() string {
 func (ins *InsertStmt) statement() {}
 
 type InsertCore struct {
-	node
+	types.Node
 
 	schema          string
 	InsertType      InsertType

@@ -2,10 +2,11 @@ package tree
 
 import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 type DeleteStmt struct {
-	node
+	types.Node
 
 	CTE  []*CTE
 	Core *DeleteCore
@@ -44,7 +45,7 @@ func (d *DeleteStmt) ToSQL() string {
 func (d *DeleteStmt) statement() {}
 
 type DeleteCore struct {
-	node
+	types.Node
 
 	QualifiedTableName *QualifiedTableName
 	Where              Expression

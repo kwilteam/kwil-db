@@ -9,6 +9,8 @@ import (
 	"github.com/kwilteam/kwil-db/parse/metadata"
 	parser "github.com/kwilteam/kwil-db/parse/procedures/parser"
 	"github.com/kwilteam/kwil-db/parse/procedures/visitors/typing"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,7 +49,7 @@ func Test_Typing(t *testing.T) {
 			$id1 int;
 			$id1 text;
 			`,
-			err: typing.ErrVariableAlreadyDeclared,
+			err: parseTypes.ErrVariableAlreadyDeclared,
 		},
 		{
 			name: "redeclare input",
@@ -55,7 +57,7 @@ func Test_Typing(t *testing.T) {
 			body: `
 			$id int;
 			`,
-			err: typing.ErrVariableAlreadyDeclared,
+			err: parseTypes.ErrVariableAlreadyDeclared,
 		},
 		{
 			name: "math",
@@ -85,6 +87,8 @@ func Test_Typing(t *testing.T) {
 			stmts, err := parser.Parse(tc.body)
 			require.NoError(t, err)
 
+			errListener := parseTypes.NewErrorListener()
+
 			// named types match the parameters of the procedure
 			_, err = typing.EnsureTyping(stmts, proc, testdata.TestSchema, []*types.NamedType{
 				{
@@ -95,7 +99,12 @@ func Test_Typing(t *testing.T) {
 					Name: "$name",
 					Type: types.TextType,
 				},
-			}, metadata.PgSessionVars)
+			}, metadata.PgSessionVars, errListener)
+			// if the error listener has an error, we should use that error
+			if errListener.Err() != nil {
+				err = errListener.Err()
+			}
+
 			if tc.err != nil {
 				require.ErrorAs(t, err, &tc.err)
 			} else {

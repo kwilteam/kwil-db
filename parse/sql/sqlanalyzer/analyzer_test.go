@@ -7,7 +7,9 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/testdata"
 	"github.com/kwilteam/kwil-db/parse/sql/postgres"
 	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_Analyze(t *testing.T) {
@@ -112,11 +114,13 @@ func Test_Analyze(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			errList := parseTypes.NewErrorListener()
 			got, err := sqlanalyzer.ApplyRules(tt.stmt, sqlanalyzer.AllRules, &types.Schema{
 				Tables: tt.tables,
-			}, "dbid")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ApplyRules() error = %v, wantErr %v", err, tt.wantErr)
+			}, "dbid", errList)
+			require.NoError(t, err)
+			if (errList.Err() != nil) != tt.wantErr {
+				t.Errorf("ApplyRules() error = %v, wantErr %v", errList.Err(), tt.wantErr)
 				return
 			}
 

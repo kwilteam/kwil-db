@@ -2,12 +2,13 @@ package tree
 
 import (
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 // Limit is a LIMIT clause.
 // It takes an expression, and can optionally take either an offset or a second expression.
 type Limit struct {
-	node
+	types.Node
 
 	Expression Expression
 	Offset     Expression

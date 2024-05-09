@@ -143,7 +143,7 @@ IDENTIFIER:
     '"' (~'"' | '""')* '"' // Delimited identifiers
     | '`' (~'`' | '``')* '`'
     | [A-Z_] [A-Z_0-9]* // Ordinary identifiers
-; // TODO check: needs more chars in set
+;
 
 BIND_PARAMETER: [@$] IDENTIFIER;
 

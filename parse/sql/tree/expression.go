@@ -9,29 +9,13 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
-
-type expressionBase struct{}
-
-func (e *expressionBase) expression() {}
-
-func (e *expressionBase) joinable() joinableStatus {
-	return joinableStatusInvalid
-}
-
-func (e *expressionBase) ToSQL() string {
-	panic("expressionBase: ToSQL() must be implemented by child")
-}
-
-func (e *expressionBase) Walk(w AstListener) error {
-	return fmt.Errorf("expressionBase: Walk() must be implemented by child")
-}
 
 type Wrapped bool
 
 type ExpressionTextLiteral struct {
-	node
-	expressionBase
+	parseTypes.Node
 	Wrapped
 	Value    string
 	TypeCast *types.DataType
@@ -75,8 +59,8 @@ func castSuffix(stmt string, typeCast *types.DataType) string {
 }
 
 type ExpressionNumericLiteral struct {
-	node
-	expressionBase
+	parseTypes.Node
+
 	Wrapped
 	Value    int64
 	TypeCast *types.DataType
@@ -105,8 +89,8 @@ func (e *ExpressionNumericLiteral) ToSQL() string {
 }
 
 type ExpressionBooleanLiteral struct {
-	node
-	expressionBase
+	parseTypes.Node
+
 	Wrapped
 	Value    bool
 	TypeCast *types.DataType
@@ -135,8 +119,8 @@ func (e *ExpressionBooleanLiteral) ToSQL() string {
 }
 
 type ExpressionNullLiteral struct {
-	node
-	expressionBase
+	parseTypes.Node
+
 	Wrapped
 	TypeCast *types.DataType
 }
@@ -164,8 +148,8 @@ func (e *ExpressionNullLiteral) ToSQL() string {
 }
 
 type ExpressionBlobLiteral struct {
-	node
-	expressionBase
+	parseTypes.Node
+
 	Wrapped
 	Value    []byte
 	TypeCast *types.DataType
@@ -195,9 +179,8 @@ func (e *ExpressionBlobLiteral) ToSQL() string {
 }
 
 type ExpressionBindParameter struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	Parameter string
 	TypeCast  *types.DataType
@@ -231,9 +214,8 @@ func (e *ExpressionBindParameter) ToSQL() string {
 }
 
 type ExpressionColumn struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	Table    string
 	Column   string
@@ -273,9 +255,8 @@ func (e *ExpressionColumn) ToSQL() string {
 }
 
 type ExpressionUnary struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	Operator UnaryOperator
 	Operand  Expression
@@ -326,9 +307,8 @@ func checkTypeWrap(typ *types.DataType, wrapped bool, node any) {
 }
 
 type ExpressionBinaryComparison struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	Left     Expression
 	Operator BinaryOperator
@@ -368,9 +348,8 @@ func (e *ExpressionBinaryComparison) ToSQL() string {
 }
 
 type ExpressionFunction struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	Function string
 	// ContextualParams are params passed in square brackets
@@ -434,9 +413,8 @@ func (e *ExpressionFunction) ToSQL() string {
 }
 
 type ExpressionList struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	Expressions []Expression
 
@@ -474,9 +452,8 @@ func (e *ExpressionList) ToSQL() string {
 }
 
 type ExpressionCollate struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	Expression Expression
 	Collation  CollationType
@@ -520,9 +497,8 @@ func (e *ExpressionCollate) ToSQL() string {
 }
 
 type ExpressionStringCompare struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	Left     Expression
 	Operator StringOperator
@@ -578,9 +554,8 @@ func (e *ExpressionStringCompare) ToSQL() string {
 }
 
 type ExpressionIs struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	Left     Expression
 	Distinct bool
@@ -632,9 +607,8 @@ func (e *ExpressionIs) ToSQL() string {
 }
 
 type ExpressionBetween struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	Expression Expression
 	NotBetween bool
@@ -691,9 +665,8 @@ func (e *ExpressionBetween) ToSQL() string {
 }
 
 type ExpressionSelect struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	IsNot    bool
 	IsExists bool
@@ -755,9 +728,8 @@ func (e *ExpressionSelect) check() {
 }
 
 type ExpressionCase struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	CaseExpression Expression
 	WhenThenPairs  [][2]Expression
@@ -826,9 +798,8 @@ func (e *ExpressionCase) ToSQL() string {
 }
 
 type ExpressionArithmetic struct {
-	node
+	parseTypes.Node
 
-	expressionBase
 	Wrapped
 	Left     Expression
 	Operator ArithmeticOperator

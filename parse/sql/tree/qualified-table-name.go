@@ -1,11 +1,14 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+import (
+	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
+	"github.com/kwilteam/kwil-db/parse/types"
+)
 
 // QualifiedTableName is a table name that is qualified with a schema and can be aliased.
 // It is used in UPDATE and DELETE statements to specify the target table.
 type QualifiedTableName struct {
-	node
+	types.Node
 
 	schema     string
 	TableName  string

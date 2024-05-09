@@ -1,21 +1,16 @@
 package tree
 
-// Node defines interface for all nodes.
-type Node interface {
-	// Text returns the original text of the node.
-	Text() string
-	// SetText sets original text to the node.
-	SetText(string)
-	// Position returns the position of the node.
-	Position() *Position
-	// SetPosition sets position to the node.
-	SetPosition(*Position)
-}
+import (
+	"github.com/antlr4-go/antlr/v4"
+	"github.com/kwilteam/kwil-db/parse/types"
+)
 
 // AstNode represents an AST node.
 type AstNode interface {
-	Node
 	AstWalker
+	GetNode() *types.Node
+	Set(rule antlr.ParserRuleContext)
+	SetToken(tok antlr.Token)
 
 	// ToSQL converts the node to a SQL string.
 	ToSQL() string
@@ -31,8 +26,6 @@ type Statement interface {
 
 type Expression interface {
 	AstNode
-
-	expression() // private function to prevent external packages from implementing this interface
 	joinable
 }
 

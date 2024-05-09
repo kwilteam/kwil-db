@@ -199,12 +199,16 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema, txi
 	// for each procedure, we will sanitize it,
 	// type check, generate the PLPGSQL code,
 	// and then execute the generated code.
-	procs, err := procedural.AnalyzeProcedures(schema, schemaName, &procedural.AnalyzeOptions{
+	procs, errs, err := procedural.AnalyzeProcedures(schema, schemaName, &procedural.AnalyzeOptions{
 		LogProcedureNameOnError: true,
 	})
 	if err != nil {
 		return err
 	}
+	if errs.Err() != nil {
+		return errs.Err()
+	}
+
 	for _, proc := range procs {
 		stmt, err := ddl.GenerateProcedure(proc, schemaName)
 		if err != nil {

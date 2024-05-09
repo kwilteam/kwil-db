@@ -3,9 +3,11 @@ package parser_test
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/kwilteam/kwil-db/core/types"
 	parser "github.com/kwilteam/kwil-db/parse/procedures/parser"
-	"github.com/stretchr/testify/require"
+	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
 
 func Test_Parser(t *testing.T) {
@@ -112,7 +114,52 @@ func Test_Parser(t *testing.T) {
 		}
 
 		for i, r := range res {
-			require.EqualValues(t, tt.want[i], r, "unexpected result")
+			if !deepCompare(r, tt.want[i]) {
+				t.Errorf("unexpected result: got %v, want %v", r, tt.want[i])
+			}
 		}
 	}
+}
+
+// deepCompare deep compares the values of two nodes.
+// It ignores the parseTypes.Node field.
+func deepCompare(node1, node2 any) bool {
+	// we return true for the parseTypes.Node field,
+	// we also need to ignore the unexported "schema" fields
+	return cmp.Equal(node1, node2, cmp.Comparer(func(x, y parseTypes.Node) bool {
+		return true
+	}), cmpopts.IgnoreUnexported(
+		parser.StatementVariableDeclaration{},
+		parser.StatementVariableAssignment{},
+		parser.StatementVariableAssignmentWithDeclaration{},
+		parser.StatementProcedureCall{},
+		parser.StatementForLoop{},
+		parser.StatementIf{},
+		parser.StatementSQL{},
+		parser.StatementReturn{},
+		parser.StatementReturnNext{},
+		parser.StatementBreak{},
+
+		parser.ExpressionTextLiteral{},
+		parser.ExpressionBooleanLiteral{},
+		parser.ExpressionIntLiteral{},
+		parser.ExpressionNullLiteral{},
+		parser.ExpressionBlobLiteral{},
+		parser.ExpressionMakeArray{},
+		parser.ExpressionCall{},
+		parser.ExpressionForeignCall{},
+		parser.ExpressionVariable{},
+		parser.ExpressionArrayAccess{},
+		parser.ExpressionFieldAccess{},
+		parser.ExpressionParenthesized{},
+		parser.ExpressionComparison{},
+		parser.ExpressionArithmetic{},
+
+		parser.LoopTargetRange{},
+		parser.LoopTargetCall{},
+		parser.LoopTargetSQL{},
+		parser.LoopTargetVariable{},
+
+		parser.IfThen{},
+	))
 }
