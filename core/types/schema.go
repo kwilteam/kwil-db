@@ -150,7 +150,7 @@ func (s *Schema) DBID() string {
 type Table struct {
 	Name        string        `json:"name"`
 	Columns     []*Column     `json:"columns"`
-	Indexes     []*Index      `json:"indexes,omitempty"`
+	Indexes     []*Index      `json:"indexes"`
 	ForeignKeys []*ForeignKey `json:"foreign_keys"`
 }
 
@@ -295,7 +295,7 @@ func (t *Table) FindColumn(name string) (column *Column, found bool) {
 type Column struct {
 	Name       string       `json:"name"`
 	Type       *DataType    `json:"type"`
-	Attributes []*Attribute `json:"attributes,omitempty"`
+	Attributes []*Attribute `json:"attributes"`
 }
 
 func (c *Column) Clean() error {
@@ -338,7 +338,7 @@ func (c *Column) hasPrimary() bool {
 // These are constraints and default values.
 type Attribute struct {
 	Type  AttributeType `json:"type"`
-	Value string        `json:"value,omitempty"`
+	Value string        `json:"value"`
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
@@ -798,7 +798,7 @@ func (a *AttributeType) Clean() error {
 // These are defined by Kuneiform's `action` keyword.
 type Action struct {
 	Name        string     `json:"name"`
-	Annotations []string   `json:"annotations,omitempty"`
+	Annotations []string   `json:"annotations"`
 	Parameters  []string   `json:"parameters"`
 	Public      bool       `json:"public"`
 	Modifiers   []Modifier `json:"modifiers"`
@@ -900,7 +900,7 @@ type Procedure struct {
 	// Returns is the return type of the procedure.
 	Returns *ProcedureReturn `json:"return_types"`
 	// Annotations are the annotations of the procedure.
-	Annotations []string `json:"annotations,omitempty"`
+	Annotations []string `json:"annotations"`
 }
 
 func (p *Procedure) Clean() error {
