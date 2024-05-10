@@ -1,6 +1,7 @@
 package transactions
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -173,8 +174,10 @@ func (t *Transaction) UnmarshalBinary(data serialize.SerializedData) error {
 	return serialize.DecodeInto(data, t)
 }
 
-// TransactionBody is the body of a transaction that gets included in the signature
-// NOTE: rlp encoding will preserve the order of the fields
+// TransactionBody is the body of a transaction that gets included in the
+// signature. This type implements json.Marshaler and json.Unmarshaler to ensure
+// that the Fee field is represented as a string in JSON rather than a number.
+// RLP encoding will preserve the order of the fields.
 type TransactionBody struct {
 	// Description is a human-readable description of the transaction
 	Description string `json:"desc"`
@@ -187,7 +190,7 @@ type TransactionBody struct {
 	PayloadType PayloadType `json:"type"`
 
 	// Fee is the fee the sender is willing to pay for the transaction
-	Fee *big.Int `json:"fee"`
+	Fee *big.Int // MarshalJSON and UnmarshalJSON handle this field.
 
 	// Nonce is the next nonce of the sender
 	Nonce uint64 `json:"nonce"`
@@ -200,6 +203,54 @@ type TransactionBody struct {
 	// consensus engine and p2p systems as an opaque blob that must be
 	// unmarshalled with the chain ID in Kwil blockchain application.
 	ChainID string `json:"chain_id"`
+}
+
+// MarshalJSON marshals to JSON but with Fee as a string.
+func (t TransactionBody) MarshalJSON() ([]byte, error) {
+	// We could embed as "type txBodyAlias TransactionBody" instance in a struct
+	// with a Fee string field, but the order of fields in marshalled json would
+	// be different, so we clone the entire type with just Fee type changed.
+	return json.Marshal(&struct {
+		Description string                   `json:"desc"`
+		Payload     serialize.SerializedData `json:"payload"`
+		PayloadType PayloadType              `json:"type"`
+		Fee         string                   `json:"fee"`
+		Nonce       uint64                   `json:"nonce"`
+		ChainID     string                   `json:"chain_id"`
+	}{
+		Description: t.Description,
+		Payload:     t.Payload,
+		PayloadType: t.PayloadType,
+		Fee:         t.Fee.String(), // *big.Int => string
+		Nonce:       t.Nonce,
+		ChainID:     t.ChainID,
+	})
+}
+
+// UnmarshalJSON unmarshals from JSON, handling a fee string.
+func (t *TransactionBody) UnmarshalJSON(data []byte) error {
+	// unmarshalling doesn't care about the order of the fields, so we can
+	// unmarshal directly into t by embedding in an anonymous struct.
+	type txBodyAlias TransactionBody // same json tags, lost methods, no recursion
+	aux := &struct {
+		Fee string `json:"fee"`
+		*txBodyAlias
+	}{
+		txBodyAlias: (*txBodyAlias)(t),
+	}
+	// Unmarshal all fields except Fee directly into t.
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	// Grab the Fee from the anonymous struct, decode it, and set in t.Fee.
+	if aux.Fee != "" {
+		feeBigInt, ok := new(big.Int).SetString(aux.Fee, 10)
+		if !ok {
+			return fmt.Errorf("could not parse fee: %q", aux.Fee)
+		}
+		t.Fee = feeBigInt
+	}
+	return nil
 }
 
 func (t *TransactionBody) MarshalBinary() ([]byte, error) {
