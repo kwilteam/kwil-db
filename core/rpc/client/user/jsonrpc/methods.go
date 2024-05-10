@@ -212,10 +212,11 @@ func (cl *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcT
 	if err != nil {
 		return nil, err
 	}
+
 	return &transactions.TcTxQueryResponse{
 		Hash:     res.Hash,
 		Height:   res.Height,
-		Tx:       *res.Tx,
+		Tx:       res.Tx,
 		TxResult: *res.TxResult,
 	}, nil
 }
