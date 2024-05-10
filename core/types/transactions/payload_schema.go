@@ -30,11 +30,12 @@ type Schema struct {
 	// Name is the name of the schema given by the deployer.
 	Name string
 	// Owner is the identifier (generally an address in bytes or public key) of the owner of the schema
-	Owner      []byte
-	Extensions []*Extension
-	Tables     []*Table
-	Actions    []*Action
-	Procedures []*Procedure
+	Owner             []byte
+	Extensions        []*Extension
+	Tables            []*Table
+	Actions           []*Action
+	Procedures        []*Procedure
+	ForeignProcedures []*ForeignProcedure
 }
 
 // Table is a table in a database schema.
@@ -185,6 +186,17 @@ type DataType struct {
 	IsArray bool
 }
 
+// ForeignProcedure is a foreign procedure call in a database
+// schema. These are defined by Kuneiform's `call` keyword.
+type ForeignProcedure struct {
+	// Name is the name of the procedure.
+	Name string
+	// Parameters are the parameters of the procedure.
+	Parameters []*DataType
+	// Returns is the return type of the procedure.
+	Returns *ProcedureReturn
+}
+
 // ToTypes converts the type to the core type
 
 func (s *Schema) ToTypes() (s2 *types.Schema, err error) {
@@ -213,6 +225,10 @@ func (s *Schema) ToTypes() (s2 *types.Schema, err error) {
 
 	for _, extension := range s.Extensions {
 		s2.Extensions = append(s2.Extensions, extension.toTypes())
+	}
+
+	for _, foreignProcedure := range s.ForeignProcedures {
+		s2.ForeignProcedures = append(s2.ForeignProcedures, foreignProcedure.toTypes())
 	}
 
 	return s2, s2.Clean()
@@ -384,6 +400,24 @@ func (c *DataType) toTypes() *types.DataType {
 	}
 }
 
+func (f *ForeignProcedure) toTypes() *types.ForeignProcedure {
+	params := make([]*types.DataType, len(f.Parameters))
+	for i, param := range f.Parameters {
+		params[i] = param.toTypes()
+	}
+
+	var returns *types.ProcedureReturn
+	if f.Returns != nil {
+		returns = f.Returns.toTypes()
+	}
+
+	return &types.ForeignProcedure{
+		Name:       f.Name,
+		Parameters: params,
+		Returns:    returns,
+	}
+}
+
 // fromTypes converts the core type to the RLP serializable type.
 
 func (s *Schema) FromTypes(s2 *types.Schema) {
@@ -412,6 +446,12 @@ func (s *Schema) FromTypes(s2 *types.Schema) {
 		e := &Extension{}
 		e.fromTypes(extension)
 		s.Extensions = append(s.Extensions, e)
+	}
+
+	for _, foreignProcedure := range s2.ForeignProcedures {
+		f := &ForeignProcedure{}
+		f.fromTypes(foreignProcedure)
+		s.ForeignProcedures = append(s.ForeignProcedures, f)
 	}
 }
 
@@ -556,4 +596,19 @@ func (p *ProcedureReturn) fromTypes(p2 *types.ProcedureReturn) {
 func (c *DataType) fromTypes(c2 *types.DataType) {
 	c.Name = c2.Name
 	c.IsArray = c2.IsArray
+}
+
+func (f *ForeignProcedure) fromTypes(f2 *types.ForeignProcedure) {
+	f.Name = f2.Name
+
+	for _, param := range f2.Parameters {
+		p := &DataType{}
+		p.fromTypes(param)
+		f.Parameters = append(f.Parameters, p)
+	}
+
+	if f2.Returns != nil {
+		f.Returns = &ProcedureReturn{}
+		f.Returns.fromTypes(f2.Returns)
+	}
 }
