@@ -19,7 +19,7 @@ func (p PayloadType) Valid() bool {
 	switch p {
 	case PayloadTypeDeploySchema,
 		PayloadTypeDropSchema,
-		PayloadTypeExecuteAction,
+		PayloadTypeExecute,
 		PayloadTypeCallAction,
 		PayloadTypeValidatorJoin,
 		PayloadTypeValidatorApprove,
@@ -35,7 +35,7 @@ func (p PayloadType) Valid() bool {
 const (
 	PayloadTypeDeploySchema        PayloadType = "deploy_schema"
 	PayloadTypeDropSchema          PayloadType = "drop_schema"
-	PayloadTypeExecuteAction       PayloadType = "execute_action"
+	PayloadTypeExecute             PayloadType = "execute"
 	PayloadTypeCallAction          PayloadType = "call_action"
 	PayloadTypeTransfer            PayloadType = "transfer"
 	PayloadTypeValidatorJoin       PayloadType = "validator_join"
@@ -114,7 +114,7 @@ func (a *ActionExecution) UnmarshalBinary(b serialize.SerializedData) error {
 }
 
 func (a *ActionExecution) Type() PayloadType {
-	return PayloadTypeExecuteAction
+	return PayloadTypeExecute
 }
 
 // ActionCall is the payload that is used to call an action
