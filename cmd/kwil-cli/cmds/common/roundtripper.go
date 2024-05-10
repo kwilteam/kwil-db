@@ -101,7 +101,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 		return fn(ctx, client, conf)
 	}
 
-	providerDomain, err := getDomain(conf.Provider)
+	providerDomain, err := getDomain(conf.GrpcURL)
 	if err != nil {
 		return err
 	}
