@@ -9,7 +9,7 @@ jobs:
   backport:
     name: Backport PR
     runs-on: ubuntu-latest
-    if: github.event.pull_request.merged && contains(github.event.pull_request.labels.*.name, 'backport-to-')
+    if: contains(github.event.pull_request.labels.*.name, 'backport-to-')
     steps:
       - name: Backport Action
         uses: kwilteam/backport-github-action@b3eae3fb1be75da400e9d7094282dfcd9bc6ffa1 # kwil branch
