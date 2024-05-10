@@ -32,7 +32,6 @@ func TestLocalDevSetup(t *testing.T) {
 	helper := acceptance.NewActHelper(t)
 	cfg := helper.LoadConfig()
 	cfg.DockerComposeFile = "./docker-compose-dev.yml" // use the dev compose file
-	cfg.GasEnabled = true
 
 	helper.Setup(ctx)
 	helper.WaitUntilInterrupt()
