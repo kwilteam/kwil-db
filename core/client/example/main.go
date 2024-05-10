@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -10,7 +9,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/kwilteam/kuneiform/kfparser"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -19,6 +17,7 @@ import (
 	ctypes "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
+	"github.com/kwilteam/kwil-db/parse"
 )
 
 const (
@@ -232,22 +231,16 @@ action get_all() public view {
 // go:embed test.json
 // var testJSON []byte
 
-func unmarshalKf(file io.Reader) (*transactions.Schema, error) {
+func unmarshalKf(file io.Reader) (*types.Schema, error) {
 	source, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read Kuneiform source file: %w", err)
 	}
 
-	astSchema, err := kfparser.Parse(string(source))
+	parseRes, err := parse.ParseKuneiform(string(source))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse file: %w", err)
 	} // kfSchema := astSchema.(*schema.Schema); j, _ := json.Marshal(kfSchema)
 
-	schemaJSON, err := astSchema.ToJSON()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal schema: %w", err)
-	}
-
-	var db transactions.Schema
-	return &db, json.Unmarshal(schemaJSON, &db)
+	return parseRes.Schema, nil
 }
