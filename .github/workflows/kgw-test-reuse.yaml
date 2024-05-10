@@ -24,7 +24,30 @@ on:
         required: true
 
 jobs:
+  # JOB to run change detection
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    # Set job outputs to values from filter step
+    outputs:
+      run: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # This may save additional git fetch roundtrip if
+          # merge-base is found within latest 20 commits
+          fetch-depth: 20
+      - uses: dorny/paths-filter@v3.0.2
+        id: filter
+        with:
+          filters: .github/filters.yaml
+          #predicate-quantifier: 'every'
+
   kgw-test:
+    needs: changes
+    #  only run only if there are changes, or manually triggered
+    if: ${{ needs.changes.outputs.run == 'true' || github.event_name == 'workflow_dispatch'}}
     runs-on: ubuntu-latest
     steps:
       - name: Show references
@@ -157,6 +180,14 @@ jobs:
       - name: Pull math extension docker image
         run: |
           docker pull kwilbrennan/extensions-math:multi-arch --platform linux/amd64
+
+      - name: Run integration test on REST API
+        run: |
+          testUserID=$(id -u)
+          testGroupID=$(id -g)
+          cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
+          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
+          KIT_LOG_LEVEL=warn task test:it:nb -- -drivers http
 
       - name: Run kgw integration test
         run: |
