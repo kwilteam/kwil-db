@@ -10,7 +10,7 @@ require (
 	github.com/ethereum/go-ethereum v1.13.8
 	github.com/kwilteam/kuneiform v0.6.1
 	github.com/kwilteam/kwil-db v0.7.0-rc.1.0.20240311161520-7a09c4734cf1
-	github.com/kwilteam/kwil-db/core v0.1.2
+	github.com/kwilteam/kwil-db/core v0.1.3
 	github.com/stretchr/testify v1.8.4
 	github.com/testcontainers/testcontainers-go v0.27.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.27.0
