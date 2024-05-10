@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -137,9 +138,35 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		s.authSHA = slices.Clone(authSHA[:])
 	} // otherwise no basic auth check
 
-	mux.Handle(pathV1, http.MaxBytesHandler(http.HandlerFunc(s.handlerV1), 1<<22))
+	var h http.Handler
+	h = http.HandlerFunc(s.handlerV1)
+	h = http.MaxBytesHandler(h, 1<<22)
+	h = recoverer(h, log)
+
+	mux.Handle(pathV1, h)
 
 	return s, nil
+}
+
+func recoverer(h http.Handler, log log.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rvr := recover(); rvr != nil {
+				if rvr == http.ErrAbortHandler {
+					// we don't recover http.ErrAbortHandler so the response
+					// to the client is aborted, this should not be logged
+					panic(rvr)
+				}
+
+				debugStack := debug.Stack()
+				log.Errorf("panic:\n%v", string(debugStack))
+
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}()
+
+		h.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) Serve(ctx context.Context) error {
