@@ -26,7 +26,7 @@ type AccountResponse struct {
 
 // BroadcastResponse contains the response object for MethodBroadcast.
 type BroadcastResponse struct {
-	TxHash []byte `json:"tx_hash,omitempty"`
+	TxHash types.HexBytes `json:"tx_hash,omitempty"`
 }
 
 type Result struct { // for other types, but embedding it is kinda annoying when instantiating
@@ -67,16 +67,8 @@ type EstimatePriceResponse struct {
 
 // TxQueryResponse contains the response object for MethodTxQuery.
 type TxQueryResponse struct { // transactions.TcTxQueryResponse but pointers
-	Hash     []byte                          `json:"hash,omitempty"`
+	Hash     types.HexBytes                  `json:"hash,omitempty"`
 	Height   int64                           `json:"height,omitempty"`
 	Tx       *transactions.Transaction       `json:"tx,omitempty"`
 	TxResult *transactions.TransactionResult `json:"tx_result,omitempty"`
 }
-
-// for admin service (TODO):
-// NodeInfoResponse contains the response object for MethodSchema.
-// type NodeInfoResponse struct {
-// 	NodeID     string `json:"node_id,omitempty"`
-// 	PublicKey  []byte `json:"public_key,omitempty"`
-// 	P2PAddress string `json:"p2p_address,omitempty"`
-// }

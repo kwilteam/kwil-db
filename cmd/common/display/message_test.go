@@ -151,7 +151,7 @@ func Example_respTxQuery_json() {
 	//         "desc": "This is a test transaction for cli",
 	//         "payload": "AAH4ULg5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2VyyMeDZm9vgjMy",
 	//         "type": "execute_action",
-	//         "fee": 100,
+	//         "fee": "100",
 	//         "nonce": 10,
 	//         "chain_id": "asdf"
 	//       },
@@ -180,7 +180,7 @@ func Test_TxHashAndExecResponse(t *testing.T) {
 	expectJson := `{"tx_hash":"0102030405","exec_result":{"hash":"0102030405","height":10,"tx":` +
 		`{` +
 		`"signature":{"sig":"yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=","type":"secp256k1_ep"},` +
-		`"body":{"desc":"This is a test transaction for cli","payload":"AAH4ULg5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2VyyMeDZm9vgjMy","type":"execute_action","fee":100,"nonce":10,"chain_id":"asdf"},` +
+		`"body":{"desc":"This is a test transaction for cli","payload":"AAH4ULg5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2VyyMeDZm9vgjMy","type":"execute_action","fee":"100","nonce":10,"chain_id":"asdf"},` +
 		`"serialization":"concat","sender":""},` +
 		`"tx_result":{"code":0,"log":"This is log","gas_used":10,"gas_wanted":10}}` +
 		`}`

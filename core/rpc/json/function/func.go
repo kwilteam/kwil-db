@@ -17,7 +17,7 @@ const (
 type VerifySignatureRequest struct {
 	Signature *TxSignature   `json:"signature,omitempty"`
 	Sender    types.HexBytes `json:"sender,omitempty"`
-	Msg       types.HexBytes `json:"msg,omitempty"`
+	Msg       []byte         `json:"msg,omitempty"`
 }
 
 type TxSignature struct {

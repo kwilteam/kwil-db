@@ -51,14 +51,6 @@ type ValidatorRemoveProposal struct {
 	Remover []byte `json:"remover"` // pubkey of the validator proposing the removal
 }
 
-// NodeInfo contains public information about a node.
-// It can be used by clients to join as a peer.
-type NodeInfo struct {
-	NodeID           string   `json:"node_id"`
-	PublicKey        HexBytes `json:"pubkey"`
-	P2PListenAddress string   `json:"p2p_listen_address"`
-}
-
 func (v *Validator) String() string {
 	return fmt.Sprintf("{pubkey = %x, power = %d}", v.PubKey, v.Power)
 }

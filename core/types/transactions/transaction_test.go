@@ -2,6 +2,7 @@ package transactions_test
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"testing"
@@ -54,6 +55,35 @@ func Test_TransactionMarshal(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, tx, tx2)
+}
+
+func Test_TransactionBodyMarshalJSON(t *testing.T) {
+	txB := transactions.TransactionBody{ // not a pointer, ensure MarshalJSON method works for value
+		Payload:     []byte("payload"),
+		PayloadType: transactions.PayloadTypeDeploySchema,
+		Fee:         big.NewInt(100),
+		Nonce:       1,
+		ChainID:     "chainIDXXX",
+	}
+
+	b, err := json.Marshal(txB)
+	require.NoError(t, err)
+
+	txB2 := transactions.TransactionBody{}
+	err = json.Unmarshal(b, &txB2)
+	require.NoError(t, err)
+
+	require.Equal(t, txB, txB2)
+
+	// Marshal pointer
+	b, err = json.Marshal(&txB)
+	require.NoError(t, err)
+
+	txB3 := transactions.TransactionBody{}
+	err = json.Unmarshal(b, &txB3)
+	require.NoError(t, err)
+
+	require.Equal(t, txB, txB3)
 }
 
 type actionExecutionV0 struct {

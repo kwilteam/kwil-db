@@ -95,5 +95,5 @@ type QueryRequest struct {
 
 // TxQueryRequest contains the request parameters for MethodTxQuery.
 type TxQueryRequest struct {
-	TxHash []byte `json:"tx_hash,omitempty"`
+	TxHash types.HexBytes `json:"tx_hash,omitempty"`
 }
