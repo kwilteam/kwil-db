@@ -22,7 +22,7 @@ func init() {
 	err := errors.Join(
 		registerRoute(transactions.PayloadTypeDeploySchema.String(), &deployDatasetRoute{}),
 		registerRoute(transactions.PayloadTypeDropSchema.String(), &dropDatasetRoute{}),
-		registerRoute(transactions.PayloadTypeExecuteAction.String(), &executeActionRoute{}),
+		registerRoute(transactions.PayloadTypeExecute.String(), &executeActionRoute{}),
 		registerRoute(transactions.PayloadTypeTransfer.String(), &transferRoute{}),
 		registerRoute(transactions.PayloadTypeValidatorJoin.String(), &validatorJoinRoute{}),
 		registerRoute(transactions.PayloadTypeValidatorApprove.String(), &validatorApproveRoute{}),
