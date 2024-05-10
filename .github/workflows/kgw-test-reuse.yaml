@@ -181,6 +181,14 @@ jobs:
         run: |
           docker pull kwilbrennan/extensions-math:multi-arch --platform linux/amd64
 
+      - name: Run integration test on REST API
+        run: |
+          testUserID=$(id -u)
+          testGroupID=$(id -g)
+          cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
+          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
+          KIT_LOG_LEVEL=warn task test:it:nb -- -drivers http
+
       - name: Run kgw integration test
         run: |
           testUserID=$(id -u)
