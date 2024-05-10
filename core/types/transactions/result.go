@@ -82,6 +82,6 @@ func (c TxCode) String() string {
 type TcTxQueryResponse struct {
 	Hash     []byte            `json:"hash,omitempty"`
 	Height   int64             `json:"height,omitempty"`
-	Tx       Transaction       `json:"tx"`
+	Tx       *Transaction      `json:"tx"`
 	TxResult TransactionResult `json:"tx_result"`
 }

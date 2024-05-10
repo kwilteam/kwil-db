@@ -1,0 +1,109 @@
+database testdb;
+
+table users {
+    id int primary notnull,
+    username text default('sds'),
+    age int min(0),
+    wallet text unique
+}
+
+table posts {
+    id int primary notnull,
+    user_id int,
+    title text,
+    content text maxlen(5000000), // 5 MB // To support tests with max supported payload size
+    #unique_index unique(user_id, title),
+    foreign_key (user_id) references users(id) on_delete do cascade on_update do cascade
+}
+
+action create_user($id, $username, $age) public {
+    INSERT INTO users (id, username, age, wallet)
+    VALUES ($id, $username, $age, @caller);
+}
+
+action update_user($id, $username, $age) public {
+    UPDATE users
+    SET id = $id, username = $username, age = $age
+    WHERE wallet = @caller;
+}
+
+action update_username($username) public {
+    UPDATE users
+    SET username = $username
+    WHERE wallet = @caller;
+}
+
+action delete_user() public {
+    DELETE FROM users
+    WHERE wallet = @caller;
+}
+
+action delete_user_by_id ($id) public owner {
+    DELETE FROM users
+    WHERE id = $id;
+}
+
+action create_post($id, $title, $content) public {
+    INSERT INTO posts (id, user_id, title, content)
+    VALUES ($id, (
+        SELECT id FROM users WHERE wallet = @caller
+    ), $title, $content);
+}
+
+action delete_post($id) public {
+    DELETE FROM posts
+    WHERE id = $id AND user_id = (
+        SELECT id
+        FROM users
+        WHERE wallet = @caller
+    );
+}
+
+action get_user_by_wallet($address) public view {
+    SELECT *
+    FROM users
+    WHERE wallet = $address;
+}
+
+action list_users() public owner view {
+    SELECT *
+    FROM users;
+}
+
+action get_user_posts_by_userid($id) public view {
+    SELECT id, title, content
+    FROM posts
+    WHERE user_id = $id;
+}
+
+action get_user_posts($username) public view {
+    SELECT id, title, content
+    FROM posts
+    WHERE user_id = (
+        SELECT id
+        FROM users
+        WHERE username = $username
+    );
+}
+
+action get_post($id) public view {
+    SELECT *
+    FROM posts
+    WHERE id = $id;
+}
+
+action multi_select() public {
+    SELECT * FROM posts;
+
+    SELECT * FROM users;
+}
+
+@kgw(authn='true')
+action owner_only() public owner view {
+    select 'owner only';
+}
+
+@kgw(authn='true')
+action authn_only() public view {
+    select 'authn only';
+}

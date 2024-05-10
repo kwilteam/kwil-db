@@ -197,7 +197,10 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
 	cometBftClient := buildCometBftClient(cometBftNode)
-	wrappedCmtClient := newWrappedCometBFTClient(cometBftClient, abciApp)
+	wrappedCmtClient := &wrappedCometBFTClient{
+		cl:    cometBftClient,
+		cache: abciApp,
+	}
 	txApp.SetReplayStatusChecker(cometBftNode.IsCatchup)
 
 	eventBroadcaster := buildEventBroadcaster(d, ev, wrappedCmtClient, txApp)

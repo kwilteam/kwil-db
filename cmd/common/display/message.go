@@ -93,7 +93,7 @@ func (r *RespTxQuery) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Hash     string                         `json:"hash"` // HEX
 		Height   int64                          `json:"height"`
-		Tx       transactions.Transaction       `json:"tx"`
+		Tx       *transactions.Transaction      `json:"tx"`
 		TxResult transactions.TransactionResult `json:"tx_result"`
 	}{
 		Hash:     hex.EncodeToString(r.Msg.Hash),

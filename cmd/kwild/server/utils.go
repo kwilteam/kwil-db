@@ -53,15 +53,12 @@ func getExtensions(ctx context.Context, urls []string) (map[string]precompiles.I
 // wrappedCometBFTClient satisfies the generic txsvc.BlockchainBroadcaster and
 // admsvc.Node interfaces, hiding the details of cometBFT.
 type wrappedCometBFTClient struct {
-	cl *cmtlocal.Local
-	mp MempoolModule
-}
-type MempoolModule interface {
-	IsMempoolTx(txHash []byte) bool
+	cl    *cmtlocal.Local
+	cache mempoolCache
 }
 
-func newWrappedCometBFTClient(cl *cmtlocal.Local, mp MempoolModule) *wrappedCometBFTClient {
-	return &wrappedCometBFTClient{cl: cl, mp: mp}
+type mempoolCache interface {
+	TxInMempool([]byte) bool
 }
 
 func convertNodeInfo(ni *p2p.DefaultNodeInfo) *types.NodeInfo {
@@ -175,7 +172,7 @@ func (wc *wrappedCometBFTClient) TxQuery(ctx context.Context, hash []byte, prove
 	}
 
 	// The transaction could be in the mempool, Check with ABCI directly if it heard of the transaction.
-	if wc.mp.IsMempoolTx(hash) {
+	if wc.cache.TxInMempool(hash) {
 		return &cmtCoreTypes.ResultTx{
 			Hash:   hash,
 			Height: -1,
