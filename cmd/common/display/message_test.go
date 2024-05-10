@@ -103,7 +103,7 @@ func getExampleTxQueryResponse() *transactions.TcTxQueryResponse {
 	return &transactions.TcTxQueryResponse{
 		Hash:   []byte("1024"),
 		Height: 10,
-		Tx: transactions.Transaction{
+		Tx: &transactions.Transaction{
 			Body: &transactions.TransactionBody{
 				Payload:     payloadRLP,
 				PayloadType: rawPayload.Type(),

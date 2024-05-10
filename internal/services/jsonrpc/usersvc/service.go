@@ -440,10 +440,14 @@ func (svc *Service) TxQuery(ctx context.Context, req *jsonrpc.TxQueryRequest) (*
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to query transaction", nil)
 	}
 
-	tx := &transactions.Transaction{}
-	if err := tx.UnmarshalBinary(cmtResult.Tx); err != nil {
-		logger.Error("failed to deserialize transaction", log.Error(err))
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to deserialize transaction", nil)
+	//cmtResult.Tx can be nil
+	var tx *transactions.Transaction
+	if cmtResult.Tx != nil {
+		tx = &transactions.Transaction{}
+		if err := tx.UnmarshalBinary(cmtResult.Tx); err != nil {
+			logger.Error("failed to deserialize transaction", log.Error(err))
+			return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to deserialize transaction", nil)
+		}
 	}
 
 	txResult := &transactions.TransactionResult{

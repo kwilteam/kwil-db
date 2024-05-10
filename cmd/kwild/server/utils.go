@@ -1,11 +1,9 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 
 	types "github.com/kwilteam/kwil-db/core/types/admin"
@@ -55,7 +53,12 @@ func getExtensions(ctx context.Context, urls []string) (map[string]precompiles.I
 // wrappedCometBFTClient satisfies the generic txsvc.BlockchainBroadcaster and
 // admsvc.Node interfaces, hiding the details of cometBFT.
 type wrappedCometBFTClient struct {
-	cl *cmtlocal.Local
+	cl    *cmtlocal.Local
+	cache mempoolCache
+}
+
+type mempoolCache interface {
+	TxInMempool([]byte) bool
 }
 
 func convertNodeInfo(ni *p2p.DefaultNodeInfo) *types.NodeInfo {
@@ -168,23 +171,13 @@ func (wc *wrappedCometBFTClient) TxQuery(ctx context.Context, hash []byte, prove
 		return res, nil
 	}
 
-	// The transaction could be in mempool.
-	limit := math.MaxInt                             // cmt is bugged, -1 doesn't actually work (see rpc/core.validatePerPage and how it goes with 30 instead of no limit)
-	unconf, err := wc.cl.UnconfirmedTxs(ctx, &limit) // SLOW quite often!
-	if err != nil {
-		return nil, err
-	}
-	for _, tx := range unconf.Txs {
-		if bytes.Equal(tx.Hash(), hash) {
-			// Found it. Shoe-horn into a ResultTx with -1 height, and the zero
-			// values for ResponseDeliverTx and TxProof (it's checked and
-			// accepted to mempool, but not delivered in a block yet).
-			return &cmtCoreTypes.ResultTx{
-				Hash:   hash,
-				Height: -1,
-				Tx:     tx,
-			}, nil
-		}
+	// The transaction could be in the mempool, Check with ABCI directly if it heard of the transaction.
+	if wc.cache.TxInMempool(hash) {
+		return &cmtCoreTypes.ResultTx{
+			Hash:   hash,
+			Height: -1,
+			Tx:     nil, // The transaction is still in the mempool, so not indexed yet. Returning nil to avoid hash computations on all the transactions in the mempool (potential DoS attack vector).
+		}, nil
 	}
 	return nil, abci.ErrTxNotFound
 }
