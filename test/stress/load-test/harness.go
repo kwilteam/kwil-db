@@ -86,6 +86,7 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 			h.nonce = acct.Nonce
 			h.printf("RESET NONCE TO LATEST REPORTED: %d", h.nonce)
 		}
+		// Look out for mempool full errors, etc.
 		return err
 	}
 	return nil
@@ -123,7 +124,9 @@ func (h *harness) executeActionAsync(ctx context.Context, dbid, action string,
 	err := h.underNonceLock(ctx, func(nonce int64) error {
 		var err error
 		txHash, err = h.ExecuteAction(ctx, dbid, action, inputs,
-			clientType.WithNonce(nonce) /*, clientType.WithFee(&big.Int{})*/) // TODO: badFee mode
+			clientType.WithNonce(nonce),
+			//clientType.WithSyncBroadcast(true) /*, clientType.WithFee(&big.Int{})*/ // TODO: badFee mode
+		)
 		return err
 	})
 	if err != nil {

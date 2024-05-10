@@ -48,6 +48,8 @@ func NewAbciApp(cfg *AbciConfig, snapshotter SnapshotModule, statesyncer StateSy
 		log: log,
 
 		validatorAddressToPubKey: make(map[string][]byte),
+
+		txs: make(map[string]bool),
 	}
 
 	return app
@@ -96,6 +98,13 @@ type AbciApp struct {
 
 	// validatorAddressToPubKey is a map of validator addresses to their public keys
 	validatorAddressToPubKey map[string][]byte
+
+	// Mempool transactions Cache
+	// This is to store precomputed hashes of all the transactions in the mempool
+	// to avoid recomputing the hash for each transaction in the mempool for
+	// TxQuery requests (to mitigate Potential DDOS attack vector).
+	// https://github.com/kwilteam/kwil-db/issues/714
+	txs map[string]bool
 }
 
 func (a *AbciApp) ChainID() string {
@@ -150,16 +159,18 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil // return error now or is it still all about code?
 	}
 
-	txHash := cmtTypes.Tx(incoming.Tx).Hash()
 	logger.Debug("",
 		zap.String("sender", hex.EncodeToString(tx.Sender)),
 		zap.String("PayloadType", tx.Body.PayloadType.String()),
-		zap.Uint64("nonce", tx.Body.Nonce),
-		zap.String("hash", hex.EncodeToString(txHash)))
+		zap.Uint64("nonce", tx.Body.Nonce))
 
 	// For a new transaction (not re-check), before looking at execution cost or
 	// checking nonce validity, ensure the payload is recognized and signature is valid.
 	if newTx {
+		// Register the incoming transaction in the mempool txs cache.
+		txHash := cmtTypes.Tx(incoming.Tx).Hash()
+		a.txs[string(txHash)] = true
+
 		// Verify the correct chain ID is set, if it is set.
 		if protected := tx.Body.ChainID != ""; protected && tx.Body.ChainID != a.cfg.ChainID {
 			code = codeWrongChain
@@ -176,7 +187,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil
 		}
 	} else {
-		logger.Info("Recheck", zap.String("hash", hex.EncodeToString(txHash)), zap.Uint64("nonce", tx.Body.Nonce), zap.String("payloadType", tx.Body.PayloadType.String()), zap.String("sender", hex.EncodeToString(tx.Sender)))
+		logger.Info("Recheck", zap.String("sender", hex.EncodeToString(tx.Sender)), zap.Uint64("nonce", tx.Body.Nonce), zap.String("payloadType", tx.Body.PayloadType.String()))
 	}
 
 	err = a.txApp.ApplyMempool(ctx, tx)
@@ -275,6 +286,11 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		abciRes.GasUsed = txRes.Spend
 
 		res.TxResults = append(res.TxResults, abciRes)
+
+		// Remove the transaction from the mempool cache
+		// as it has been included in the block
+		txHash := cmtTypes.Tx(tx).Hash()
+		delete(a.txs, string(txHash))
 	}
 
 	res.ConsensusParamUpdates = &tendermintTypes.ConsensusParams{ // why are we "updating" these on every block? Should be nil for no update.
@@ -936,4 +952,10 @@ type EventBroadcaster func(ctx context.Context, proposer []byte) error
 
 func (a *AbciApp) SetEventBroadcaster(fn EventBroadcaster) {
 	a.broadcastFn = fn
+}
+
+// IsMempoolTx checks if a transaction is in the mempool.
+func (a *AbciApp) IsMempoolTx(txHash []byte) bool {
+	_, ok := a.txs[string(txHash)]
+	return ok
 }
