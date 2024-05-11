@@ -80,10 +80,10 @@ func cleanHeader(header string) string {
 // is valid. If the input is invalid, it will return an error.
 // The function takes an action, as well as a map mapping the CSV column name to the
 // action input name.
-func (c *CSV) BuildInputs(inputNames map[string]string) ([]map[string]any, error) {
-	resultMap := make([]map[string]any, 0)
+func (c *CSV) BuildInputs(inputNames map[string]string) ([]map[string]string, error) {
+	resultMap := make([]map[string]string, 0)
 	err := c.ForEachRecord(func(record []CSVCell) error {
-		input := make(map[string]any)
+		input := make(map[string]string)
 
 		for _, cell := range record {
 			inputName, ok := inputNames[*cell.Column]

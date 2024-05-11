@@ -3,6 +3,7 @@ package types
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 
 	"github.com/google/uuid"
@@ -15,9 +16,9 @@ type UUID [16]byte
 
 // NewUUIDV5 generates a uuidv5 from a byte slice.
 // This is used to deterministically generate uuids.
-func NewUUIDV5(from []byte) UUID {
-	u := uuid.NewSHA1(namespace, from)
-	return UUID(u)
+func NewUUIDV5(from []byte) *UUID {
+	u := UUID(uuid.NewSHA1(namespace, from))
+	return &u
 }
 
 // NewUUIDV5WithNamespace generates a uuidv5 from a byte slice and a namespace.
@@ -43,20 +44,46 @@ func (u UUID) String() string {
 }
 
 func (u UUID) Value() (driver.Value, error) {
-	return u[:], nil // []byte works for sql
+	return u.String(), nil
 }
 
-func (u UUID) Bytes() []byte {
+func (u *UUID) Bytes() []byte {
 	return u[:]
 }
 
-var _ driver.Valuer = UUID{}
+// Over json, we want to send uuids as strings
+func (u UUID) MarshalJSON() ([]byte, error) {
+	return json.Marshal(u.String())
+}
+
+func (u *UUID) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+
+	uu, err := ParseUUID(s)
+	if err != nil {
+		return err
+	}
+
+	copy(u[:], uu[:])
+	return nil
+}
+
 var _ driver.Valuer = (*UUID)(nil)
 
 func (u *UUID) Scan(src any) error {
 	switch s := src.(type) {
 	case []byte:
 		copy(u[:], s)
+		return nil
+	case string:
+		ui, err := ParseUUID(s)
+		if err != nil {
+			return err
+		}
+		copy(u[:], ui[:])
 		return nil
 	}
 	return errors.New("not a byte slice")
@@ -67,19 +94,19 @@ var _ sql.Scanner = (*UUID)(nil)
 // pgx seems to work alright with any slice of Valuers (like a []UUID), but
 // explicitly defining the Valuer for a custom type saves some reflection
 
-type UUIDArray []UUID
+// UUIDArray is a slice of UUIDs.
+// It is used to store arrays of UUIDs in the database.
+type UUIDArray []*UUID
 
 func (u UUIDArray) Value() (driver.Value, error) {
-	v := make([][]byte, len(u))
+	// Postgres does not like []byte for uuid, so we convert to string
+	v := make([]string, len(u))
 	for i, ui := range u {
-		vi := make([]byte, 16)
-		copy(vi, ui[:])
-		v[i] = vi
+		v[i] = ui.String()
 	}
 	return v, nil
 }
 
-var _ driver.Valuer = UUIDArray{}
 var _ driver.Valuer = (*UUIDArray)(nil)
 
 func (u *UUIDArray) Scan(src any) error {
@@ -89,11 +116,18 @@ func (u *UUIDArray) Scan(src any) error {
 		for i, si := range s {
 			var vi UUID
 			copy(vi[:], si)
-			ux[i] = vi
+			ux[i] = &vi
 		}
 		return nil
+	case []string:
+		ux := make(UUIDArray, len(s))
+		for i, si := range s {
+			ui, err := ParseUUID(si)
+			if err != nil {
+				return err
+			}
+			ux[i] = ui
+		}
 	}
 	return errors.New("not a byte slice slice")
 }
-
-var _ sql.Scanner = (*UUIDArray)(nil)

@@ -478,7 +478,11 @@ func (lv *lazyValues) String() string {
 	return fmt.Sprintf("%v", values) // alt: json.Encode to make it slightly prettier
 }
 
-var typeMap = pgtype.NewMap()
+func init() {
+	typeMap = pgtype.NewMap()
+}
+
+var typeMap *pgtype.Map
 
 func decodeTextColumnData(data []byte, dataType uint32) (interface{}, error) {
 	if dt, ok := typeMap.TypeForOID(dataType); ok {

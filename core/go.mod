@@ -5,12 +5,12 @@ go 1.21
 require (
 	github.com/antihax/optional v1.0.0
 	github.com/cockroachdb/apd/v3 v3.2.1
-	github.com/cstockton/go-conv v1.0.0
 	github.com/decred/dcrd/certgen v1.1.2
 	github.com/ethereum/go-ethereum v1.14.3
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.1
+	github.com/holiman/uint256 v1.2.4
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/oauth2 v0.19.0
@@ -30,7 +30,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/ethereum/c-kzg-4844 v1.0.0 // indirect
-	github.com/holiman/uint256 v1.2.4 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -104,7 +105,7 @@ func callCmd() *cobra.Command {
 
 // buildProcedureInputs will build the inputs for either
 // an action or procedure executon/call.
-func buildExecutionInputs(ctx context.Context, client clientType.Client, dbid string, proc string, inputs []map[string]any) ([][]any, error) {
+func buildExecutionInputs(ctx context.Context, client clientType.Client, dbid string, proc string, inputs []map[string]string) ([][]any, error) {
 	schema, err := client.GetSchema(ctx, dbid)
 	if err != nil {
 		return nil, fmt.Errorf("error getting schema: %w", err)
@@ -112,43 +113,175 @@ func buildExecutionInputs(ctx context.Context, client clientType.Client, dbid st
 
 	for _, a := range schema.Actions {
 		if strings.EqualFold(a.Name, proc) {
-			return buildActionInputs(a, inputs), nil
+			return buildActionInputs(a, inputs)
 		}
 	}
 
 	for _, p := range schema.Procedures {
 		if strings.EqualFold(p.Name, proc) {
-			return buildProcedureInputs(p, inputs), nil
+			return buildProcedureInputs(p, inputs)
 		}
 	}
 
 	return nil, fmt.Errorf("procedure/action not found")
 }
 
-func buildActionInputs(a *types.Action, inputs []map[string]any) [][]any {
+func decodeManyB64(inputs []string) ([][]byte, bool) {
+	b64Arr := [][]byte{}
+	b64Ok := true
+	for _, s := range inputs {
+		// in the CLI, if data has suffix ;b64, it is base64 encoded
+		if strings.HasSuffix(s, ";b64") {
+			s = strings.TrimSuffix(s, ";b64")
+		} else {
+			b64Ok = false
+			break
+		}
+
+		bts, err := base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			b64Ok = false
+			break
+		}
+		b64Arr = append(b64Arr, bts)
+	}
+
+	return b64Arr, b64Ok
+}
+
+func buildActionInputs(a *types.Action, inputs []map[string]string) ([][]any, error) {
 	tuples := [][]any{}
 	for _, input := range inputs {
 		newTuple := []any{}
 		for _, inputField := range a.Parameters {
-			newTuple = append(newTuple, input[inputField])
-		}
+			// unlike procedures, actions do not have typed parameters,
+			// so we should try to always parse arrays.
 
+			val, ok := input[inputField]
+			if !ok {
+				fmt.Println(len(newTuple))
+				// if not found, we should just add nil
+				newTuple = append(newTuple, nil)
+				continue
+			}
+
+			split, err := splitIgnoringQuotedCommas(val)
+			if err != nil {
+				return nil, err
+			}
+
+			// attempt to decode base64 encoded values
+			b64Arr, b64Ok := decodeManyB64(split)
+			if b64Ok {
+				// additional check here in case user is sending a single base64 value, we don't
+				// want to encode it as an array.
+				if len(b64Arr) == 1 {
+					newTuple = append(newTuple, b64Arr[0])
+					continue
+				}
+
+				newTuple = append(newTuple, b64Arr)
+			} else {
+				// if nothing was split, then keep the original value, not the []string{}
+				if len(split) == 1 {
+					newTuple = append(newTuple, split[0])
+					continue
+				}
+
+				newTuple = append(newTuple, split)
+			}
+		}
 		tuples = append(tuples, newTuple)
 	}
 
-	return tuples
+	return tuples, nil
 }
 
-func buildProcedureInputs(p *types.Procedure, inputs []map[string]any) [][]any {
+func buildProcedureInputs(p *types.Procedure, inputs []map[string]string) ([][]any, error) {
 	tuples := [][]any{}
 	for _, input := range inputs {
 		newTuple := []any{}
 		for _, inputField := range p.Parameters {
-			newTuple = append(newTuple, input[inputField.Name])
+			v, ok := input[inputField.Name]
+			if !ok {
+				// if not found, we should just add nil
+				newTuple = append(newTuple, nil)
+				continue
+			}
+
+			// if the input is an array, split it by commas
+			if inputField.Type.IsArray {
+				split, err := splitIgnoringQuotedCommas(v)
+				if err != nil {
+					return nil, err
+				}
+
+				// attempt to decode base64 encoded values
+				b64Arr, b64Ok := decodeManyB64(split)
+				if b64Ok {
+					newTuple = append(newTuple, b64Arr)
+				} else {
+					newTuple = append(newTuple, split)
+				}
+				continue
+			}
+
+			// attempt to decode base64 encoded values
+
+			bts, ok := decodeManyB64([]string{v})
+			if ok {
+				newTuple = append(newTuple, bts[0])
+			} else {
+				newTuple = append(newTuple, input[inputField.Name])
+			}
 		}
 
 		tuples = append(tuples, newTuple)
 	}
 
-	return tuples
+	return tuples, nil
+}
+
+// splitIgnoringQuotedCommas splits a string by commas, but ignores commas that are inside single or double quotes.
+// It will return an error if there are unclosed quotes.
+func splitIgnoringQuotedCommas(input string) ([]string, error) {
+	var result []string
+	var currentToken []rune
+	inSingleQuote := false
+	inDoubleQuote := false
+
+	for _, char := range input {
+		switch char {
+		case '\'':
+			if !inDoubleQuote { // Toggle single quote flag if not inside double quotes
+				inSingleQuote = !inSingleQuote
+				continue // Skip appending this quote character to token
+			}
+			currentToken = append(currentToken, char)
+		case '"':
+			if !inSingleQuote { // Toggle double quote flag if not inside single quotes
+				inDoubleQuote = !inDoubleQuote
+				continue // Skip appending this quote character to token
+			}
+			currentToken = append(currentToken, char)
+		case ',':
+			if inSingleQuote || inDoubleQuote { // If inside quotes, treat comma as a normal character
+				currentToken = append(currentToken, char)
+			} else { // Otherwise, it's a delimiter
+				result = append(result, string(currentToken))
+				currentToken = []rune{}
+			}
+		default:
+			currentToken = append(currentToken, char)
+		}
+	}
+
+	// Append the last token
+	result = append(result, string(currentToken))
+
+	if inSingleQuote || inDoubleQuote {
+		return nil, fmt.Errorf("unclosed quote in array inputs")
+	}
+
+	return result, nil
 }

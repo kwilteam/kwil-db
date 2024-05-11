@@ -3,7 +3,6 @@ package txsvc
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/kwilteam/kwil-db/common"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
@@ -22,11 +21,9 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 
 	args := make([]any, len(body.Arguments))
 	for i, arg := range body.Arguments {
-		args[i] = arg
-	}
-	for i, isNil := range body.NilArg { // length validation in convertActionCall
-		if isNil {
-			args[i] = nil
+		args[i], err = arg.Decode()
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "failed to decode argument %d: %s", i, err.Error())
 		}
 	}
 
@@ -79,11 +76,6 @@ func convertActionCall(req *txpb.CallRequest) (*transactions.ActionCall, *transa
 	err := actionPayload.UnmarshalBinary(req.Body.Payload)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	if nArg := len(actionPayload.NilArg); nArg > 0 && nArg != len(actionPayload.Arguments) {
-		return nil, nil, fmt.Errorf("input arguments of length %d but nil args of length %d",
-			len(actionPayload.Arguments), len(actionPayload.NilArg))
 	}
 
 	return &actionPayload, &transactions.CallMessage{

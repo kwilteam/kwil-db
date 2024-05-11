@@ -127,6 +127,6 @@ func (m *mockOuterTx) Precommit(ctx context.Context) ([]byte, error) {
 
 type mockRebroadcast struct{}
 
-func (m *mockRebroadcast) MarkRebroadcast(ctx context.Context, ids []types.UUID) error {
+func (m *mockRebroadcast) MarkRebroadcast(ctx context.Context, ids []*types.UUID) error {
 	return nil
 }

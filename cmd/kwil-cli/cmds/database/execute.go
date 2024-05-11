@@ -63,7 +63,7 @@ func executeCmd() *cobra.Command {
 
 				// Could actually just directly pass nonce to the client method,
 				// but those methods don't need tx details in the inputs.
-				txHash, err := cl.ExecuteAction(ctx, dbId, lowerName, inputs,
+				txHash, err := cl.Execute(ctx, dbId, lowerName, inputs,
 					clientType.WithNonce(nonceOverride), clientType.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error executing database: %w", err))
@@ -94,8 +94,8 @@ func executeCmd() *cobra.Command {
 
 // inputs will be received as args.  The args will be in the form of
 // $argname:value.  Example $username:satoshi $age:32
-func parseInputs(args []string) ([]map[string]any, error) {
-	inputs := make(map[string]any, len(args))
+func parseInputs(args []string) ([]map[string]string, error) {
+	inputs := make(map[string]string, len(args))
 
 	for _, arg := range args {
 		ensureInputFormat(&arg)
@@ -109,5 +109,5 @@ func parseInputs(args []string) ([]map[string]any, error) {
 		inputs[split[0]] = split[1]
 	}
 
-	return []map[string]any{inputs}, nil
+	return []map[string]string{inputs}, nil
 }

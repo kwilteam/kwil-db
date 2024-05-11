@@ -39,10 +39,10 @@ var (
 type EventStore interface {
 	// GetUnbroadcastedEvents filters out the events observed by the validator
 	// that are not previously broadcasted.
-	GetUnbroadcastedEvents(ctx context.Context) ([]types.UUID, error)
+	GetUnbroadcastedEvents(ctx context.Context) ([]*types.UUID, error)
 
 	// MarkBroadcasted marks list of events as broadcasted.
-	MarkBroadcasted(ctx context.Context, ids []types.UUID) error
+	MarkBroadcasted(ctx context.Context, ids []*types.UUID) error
 }
 
 // Broadcaster is an interface for broadcasting to the Kwil network.

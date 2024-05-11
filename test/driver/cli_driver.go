@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"strings"
 	"time"
 
@@ -282,10 +284,33 @@ func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, a
 		return nil, fmt.Errorf("invalid number of inputs, expected %d, got %d", len(params), len(actionInputs))
 	}
 
+	stringify := func(v any) string {
+		switch v := v.(type) {
+		case []byte:
+			return base64.StdEncoding.EncodeToString(v) + ";b64"
+		case fmt.Stringer:
+			return v.String()
+		default:
+			return fmt.Sprintf("%v", v)
+		}
+	}
+
 	args := []string{}
 	for i, input := range params {
 		input = input[1:] // remove the leading $
-		args = append(args, fmt.Sprintf("%s:%v", input, actionInputs[i]))
+
+		// if the input is a slice, we need to delimit it with commas
+		typeOf := reflect.TypeOf(actionInputs[i])
+		if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 {
+			var sliceArgs []string
+			for _, v := range actionInputs[i].([]any) {
+				sliceArgs = append(sliceArgs, stringify(v))
+			}
+			args = append(args, fmt.Sprintf("%s:%s", input, strings.Join(sliceArgs, ",")))
+			continue
+		}
+
+		args = append(args, fmt.Sprintf("%s:%s", input, stringify(actionInputs[i])))
 	}
 	return args, nil
 }

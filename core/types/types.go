@@ -70,6 +70,6 @@ type VotableEvent struct {
 	Body []byte `json:"body"`
 }
 
-func (e *VotableEvent) ID() UUID {
+func (e *VotableEvent) ID() *UUID {
 	return NewUUIDV5(append([]byte(e.Type), e.Body...))
 }

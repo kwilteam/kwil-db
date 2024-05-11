@@ -77,13 +77,13 @@ func Test_Routes(t *testing.T) {
 				deleteCount := 0
 
 				// override the functions with mocks
-				deleteEvent = func(ctx context.Context, db sql.Executor, id types.UUID) error {
+				deleteEvent = func(ctx context.Context, db sql.Executor, id *types.UUID) error {
 					deleteCount++
 
 					return nil
 				}
 
-				approveResolution = func(ctx context.Context, db sql.TxMaker, resolutionID types.UUID, from []byte) error {
+				approveResolution = func(ctx context.Context, db sql.TxMaker, resolutionID *types.UUID, from []byte) error {
 					approveCount++
 
 					return nil
@@ -100,7 +100,7 @@ func Test_Routes(t *testing.T) {
 				assert.Equal(t, 1, deleteCount)
 			},
 			payload: &transactions.ValidatorVoteIDs{
-				ResolutionIDs: []types.UUID{
+				ResolutionIDs: []*types.UUID{
 					types.NewUUIDV5([]byte("test")),
 				},
 			},
@@ -115,12 +115,12 @@ func Test_Routes(t *testing.T) {
 				deleteCount := 0
 
 				// override the functions with mocks
-				deleteEvent = func(ctx context.Context, db sql.Executor, id types.UUID) error {
+				deleteEvent = func(ctx context.Context, db sql.Executor, id *types.UUID) error {
 					deleteCount++
 
 					return nil
 				}
-				approveResolution = func(_ context.Context, _ sql.TxMaker, _ types.UUID, _ []byte) error {
+				approveResolution = func(_ context.Context, _ sql.TxMaker, _ *types.UUID, _ []byte) error {
 					approveCount++
 
 					return nil
@@ -138,7 +138,7 @@ func Test_Routes(t *testing.T) {
 				assert.Equal(t, 0, deleteCount)
 			},
 			payload: &transactions.ValidatorVoteIDs{
-				ResolutionIDs: []types.UUID{
+				ResolutionIDs: []*types.UUID{
 					types.NewUUIDV5([]byte("test")),
 				},
 			},
@@ -159,7 +159,7 @@ func Test_Routes(t *testing.T) {
 				})
 			},
 			payload: &transactions.ValidatorVoteIDs{
-				ResolutionIDs: []types.UUID{
+				ResolutionIDs: []*types.UUID{
 					types.NewUUIDV5([]byte("test")),
 				},
 			},
@@ -173,7 +173,7 @@ func Test_Routes(t *testing.T) {
 				deleteCount := 0
 
 				// override the functions with mocks
-				deleteEvent = func(ctx context.Context, db sql.Executor, id types.UUID) error {
+				deleteEvent = func(ctx context.Context, db sql.Executor, id *types.UUID) error {
 					deleteCount++
 
 					return nil
@@ -211,7 +211,7 @@ func Test_Routes(t *testing.T) {
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				deleteCount := 0
 
-				deleteEvent = func(_ context.Context, _ sql.Executor, _ types.UUID) error {
+				deleteEvent = func(_ context.Context, _ sql.Executor, _ *types.UUID) error {
 					deleteCount++
 
 					return nil

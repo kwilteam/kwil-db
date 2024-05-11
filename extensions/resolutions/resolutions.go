@@ -103,7 +103,7 @@ type Resolution struct {
 	// ID is the unique identifier for the resolution. It is a UUID
 	// that is deterministically generated from the body of the
 	// resolution.
-	ID types.UUID
+	ID *types.UUID
 	// Body is the content of the resolution. It can hold any
 	// arbitrary data that is relevant to the resolution.
 	Body []byte

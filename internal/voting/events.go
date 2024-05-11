@@ -53,7 +53,7 @@ const (
 	// broadcasted: true if the event has been broadcasted by the validator.
 	// It may or may not have been received by the network.
 	eventsTable = `CREATE TABLE IF NOT EXISTS ` + schemaName + `.events (
-		id BYTEA PRIMARY KEY, -- uuid
+		id uuid PRIMARY KEY, -- uuid
 		data BYTEA NOT NULL,
 		event_type TEXT NOT NULL,
 		received BOOLEAN NOT NULL DEFAULT FALSE, -- received is set to true if the network has received the vote for this event
@@ -222,7 +222,7 @@ func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) e
 		return nil // on changes, just rollback
 	}
 
-	_, err = tx.Execute(ctx, insertEventIdempotent, id[:], data, eventType)
+	_, err = tx.Execute(ctx, insertEventIdempotent, id, data, eventType)
 	if err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) e
 }
 
 // GetUnbroadcastedEvents filters out the events observed by the validator that are not previously broadcasted.
-func (e *EventStore) GetUnbroadcastedEvents(ctx context.Context) ([]types.UUID, error) {
+func (e *EventStore) GetUnbroadcastedEvents(ctx context.Context) ([]*types.UUID, error) {
 	readTx, err := e.eventWriter.BeginReadTx(ctx)
 	if err != nil {
 		return nil, err
@@ -244,24 +244,24 @@ func (e *EventStore) GetUnbroadcastedEvents(ctx context.Context) ([]types.UUID, 
 		return nil, err
 	}
 
-	var ids []types.UUID
+	var ids []*types.UUID
 	for _, row := range res.Rows {
 		if len(row) != 1 {
 			return nil, fmt.Errorf("expected 1 column, got %d", len(row))
 		}
 
-		id, ok := row[0].([]byte)
+		id, ok := row[0].(*types.UUID)
 		if !ok {
 			return nil, fmt.Errorf("expected id to be types.UUID, got %T", row[0])
 		}
-		ids = append(ids, types.UUID(slices.Clone(id)))
+		ids = append(ids, id)
 	}
 
 	return ids, nil
 }
 
 // MarkBroadcasted marks the event as broadcasted.
-func (e *EventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) error {
+func (e *EventStore) MarkBroadcasted(ctx context.Context, ids []*types.UUID) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -269,13 +269,13 @@ func (e *EventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) erro
 	e.writerMtx.Lock()
 	defer e.writerMtx.Unlock()
 
-	_, err := e.eventWriter.Execute(ctx, markBroadcasted, types.UUIDArray(ids))
+	_, err := e.eventWriter.Execute(ctx, markBroadcasted, ids)
 	return err
 }
 
 // MarkRebroadcast marks the event to be rebroadcasted. Usually in scenarios where
 // the transaction was rejected by mempool due to invalid nonces.
-func (e *EventStore) MarkRebroadcast(ctx context.Context, ids []types.UUID) error {
+func (e *EventStore) MarkRebroadcast(ctx context.Context, ids []*types.UUID) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -283,7 +283,7 @@ func (e *EventStore) MarkRebroadcast(ctx context.Context, ids []types.UUID) erro
 	e.writerMtx.Lock()
 	defer e.writerMtx.Unlock()
 
-	_, err := e.eventWriter.Execute(ctx, markRebroadcast, types.UUIDArray(ids))
+	_, err := e.eventWriter.Execute(ctx, markRebroadcast, ids)
 	return err
 }
 
@@ -321,19 +321,19 @@ func GetEvents(ctx context.Context, db sql.Executor) ([]*types.VotableEvent, err
 
 // DeleteEvent deletes an event from the event store.
 // It is idempotent. If the event does not exist, it will not return an error.
-func DeleteEvent(ctx context.Context, db sql.Executor, id types.UUID) error {
-	_, err := db.Execute(ctx, deleteEvent, id[:])
+func DeleteEvent(ctx context.Context, db sql.Executor, id *types.UUID) error {
+	_, err := db.Execute(ctx, deleteEvent, id)
 	return err
 }
 
 // DeleteEvents deletes a list of events from the event store.
 // It is idempotent. If the event does not exist, it will not return an error.
-func DeleteEvents(ctx context.Context, db sql.DB, ids ...types.UUID) error {
+func DeleteEvents(ctx context.Context, db sql.DB, ids ...*types.UUID) error {
 	if len(ids) == 0 {
 		return nil
 	}
 
-	_, err := db.Execute(ctx, deleteEvents, types.UUIDArray(ids))
+	_, err := db.Execute(ctx, deleteEvents, ids)
 	return err
 }
 

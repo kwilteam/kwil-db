@@ -2,11 +2,15 @@ package transactions
 
 import (
 	"encoding"
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"reflect"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 )
 
@@ -136,10 +140,10 @@ type RawValue = rlp.RawValue
 type ActionExecution struct {
 	DBID      string
 	Action    string
-	Arguments [][]string
+	Arguments [][]*EncodedValue
 	// NilArg indicates for each of the elements in Arguments if the value is
 	// nil rather than just empty.
-	NilArg [][]bool `rlp:"optional"`
+	// NilArg [][]bool `rlp:"optional"`
 }
 
 var _ Payload = (*ActionExecution)(nil)
@@ -166,10 +170,284 @@ func (a *ActionExecution) Type() PayloadType {
 type ActionCall struct {
 	DBID      string
 	Action    string
-	Arguments []string
+	Arguments []*EncodedValue
 	// NilArg indicates for each of the elements in Arguments if the value is
 	// nil rather than just empty.
-	NilArg []bool `rlp:"optional"`
+	// NilArg []bool `rlp:"optional"`
+}
+
+// EncodedValue is used to encode a value with its type specified
+type EncodedValue struct {
+	Type DataType
+	// The double slice handles arrays of encoded values.
+	// If there is only one element, the outer slice will have length 1.
+	Data [][]byte `rlp:"optional"`
+}
+
+// Decode decodes the encoded value to its native Go type.
+func (e *EncodedValue) Decode() (any, error) {
+	// decodeScalar decodes a scalar value from a byte slice.
+	decodeScalar := func(data []byte, typeName string, isArr bool) (any, error) {
+		if data == nil {
+			if typeName != types.NullType.Name {
+				// this is not super clean, but gives a much more helpful error message
+				pref := ""
+				if isArr {
+					pref = "[]"
+				}
+				return nil, fmt.Errorf("cannot decode nil data into type %s"+pref, typeName)
+			}
+			return nil, nil
+		}
+
+		switch typeName {
+		case types.TextType.Name:
+			return string(data), nil
+		case types.IntType.Name:
+			if len(data) != 8 {
+				return nil, fmt.Errorf("int must be 8 bytes")
+			}
+			return int64(binary.BigEndian.Uint64(data)), nil
+		case types.BlobType.Name:
+			return data, nil
+		case types.UUIDType.Name:
+			if len(data) != 16 {
+				return nil, fmt.Errorf("uuid must be 16 bytes")
+			}
+			var uuid types.UUID
+			copy(uuid[:], data)
+			return &uuid, nil
+		case types.BoolType.Name:
+			return data[0] == 1, nil
+		case types.NullType.Name:
+			return nil, nil
+		case types.Uint256Type.Name:
+			return types.Uint256FromBytes(data)
+		case types.DecimalStr:
+			return decimal.NewFromString(string(data))
+		default:
+			return nil, fmt.Errorf("cannot decode type %s", typeName)
+		}
+	}
+
+	if e.Type.IsArray {
+		var arrAny any
+
+		// postgres requires arrays to be of the correct type, not of []any
+		switch e.Type.Name {
+		case types.NullType.Name:
+			return nil, fmt.Errorf("cannot decode array of type 'null'")
+		case types.TextType.Name:
+			arr := make([]string, 0, len(e.Data))
+			for _, elem := range e.Data {
+				dec, err := decodeScalar(elem, e.Type.Name, true)
+				if err != nil {
+					return nil, err
+				}
+
+				arr = append(arr, dec.(string))
+			}
+			arrAny = arr
+		case types.IntType.Name:
+			arr := make([]int64, 0, len(e.Data))
+			for _, elem := range e.Data {
+				dec, err := decodeScalar(elem, e.Type.Name, true)
+				if err != nil {
+					return nil, err
+				}
+
+				arr = append(arr, dec.(int64))
+			}
+			arrAny = arr
+		case types.BlobType.Name:
+			arr := make([][]byte, 0, len(e.Data))
+			for _, elem := range e.Data {
+				dec, err := decodeScalar(elem, e.Type.Name, true)
+				if err != nil {
+					return nil, err
+				}
+
+				arr = append(arr, dec.([]byte))
+			}
+			arrAny = arr
+		case types.UUIDType.Name:
+			arr := make(types.UUIDArray, 0, len(e.Data))
+			for _, elem := range e.Data {
+				dec, err := decodeScalar(elem, e.Type.Name, true)
+				if err != nil {
+					return nil, err
+				}
+
+				arr = append(arr, dec.(*types.UUID))
+			}
+			arrAny = arr
+		case types.BoolType.Name:
+			arr := make([]bool, 0, len(e.Data))
+			for _, elem := range e.Data {
+				dec, err := decodeScalar(elem, e.Type.Name, true)
+				if err != nil {
+					return nil, err
+				}
+
+				arr = append(arr, dec.(bool))
+			}
+			arrAny = arr
+		case types.Uint256Type.Name:
+			arr := make(types.Uint256Array, 0, len(e.Data))
+			for _, elem := range e.Data {
+				dec, err := decodeScalar(elem, e.Type.Name, true)
+				if err != nil {
+					return nil, err
+				}
+
+				arr = append(arr, dec.(*types.Uint256))
+			}
+			arrAny = arr
+		case types.DecimalStr:
+			arr := make(decimal.DecimalArray, 0, len(e.Data))
+			for _, elem := range e.Data {
+				dec, err := decodeScalar(elem, e.Type.Name, true)
+				if err != nil {
+					return nil, err
+				}
+
+				arr = append(arr, dec.(*decimal.Decimal))
+			}
+			arrAny = arr
+		default:
+			return nil, fmt.Errorf("unknown type `%s`", e.Type.Name)
+		}
+		return arrAny, nil
+	}
+
+	if e.Type.Name == types.NullType.Name {
+		return nil, nil
+	}
+	if len(e.Data) != 1 {
+		return nil, fmt.Errorf("expected 1 element, got %d", len(e.Data))
+	}
+
+	return decodeScalar(e.Data[0], e.Type.Name, false)
+}
+
+// EncodeValue encodes a value to its detected type.
+// It will reflect the value of the passed argument to determine its type.
+func EncodeValue(v any) (*EncodedValue, error) {
+	if v == nil {
+		return &EncodedValue{
+			Type: DataType{
+				Name: types.NullType.Name,
+			},
+			Data: nil,
+		}, nil
+	}
+
+	// encodeScalar encodes a scalar value into a byte slice.
+	// It also returns the data type of the value.
+	encodeScalar := func(v any) ([]byte, *types.DataType, error) {
+		switch t := v.(type) {
+		case string:
+			return []byte(t), types.TextType, nil
+		case int, int16, int32, int64, int8, uint, uint16, uint32, uint64: // intentionally ignore uint8 since it is an alias for byte
+			i64, err := strconv.ParseInt(fmt.Sprint(t), 10, 64)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			var buf [8]byte
+			binary.BigEndian.PutUint64(buf[:], uint64(i64))
+			return buf[:], types.IntType, nil
+		case []byte:
+			return t, types.BlobType, nil
+		case [16]byte:
+			return t[:], types.UUIDType, nil
+		case types.UUID:
+			return t[:], types.UUIDType, nil
+		case *types.UUID:
+			return t[:], types.UUIDType, nil
+		case bool:
+			if t {
+				return []byte{1}, types.BoolType, nil
+			}
+			return []byte{0}, types.BoolType, nil
+		case nil: // since we quick return for nil, we can only reach this point if the type is nil
+			// and we are in an array
+			return nil, nil, fmt.Errorf("cannot encode nil in type array")
+		case *decimal.Decimal:
+			decTyp, err := types.NewDecimalType(t.Precision(), t.Scale())
+			if err != nil {
+				return nil, nil, err
+			}
+
+			return []byte(t.String()), decTyp, nil
+		case decimal.Decimal:
+			decTyp, err := types.NewDecimalType(t.Precision(), t.Scale())
+			if err != nil {
+				return nil, nil, err
+			}
+
+			return []byte(t.String()), decTyp, nil
+		case *types.Uint256:
+			return t.Bytes(), types.Uint256Type, nil
+		case types.Uint256:
+			return t.Bytes(), types.Uint256Type, nil
+		default:
+			return nil, nil, fmt.Errorf("cannot encode type %T", v)
+		}
+	}
+
+	dt := &types.DataType{}
+	// check if it is an array
+	typeOf := reflect.TypeOf(v)
+	if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 { // ignore byte slices
+		// encode each element of the array
+		encoded := make([][]byte, 0)
+		// it can be of any slice type, e.g. []any, []string, []int, etc.
+		valueOf := reflect.ValueOf(v)
+		for i := 0; i < valueOf.Len(); i++ {
+			elem := valueOf.Index(i).Interface()
+			enc, t, err := encodeScalar(elem)
+			if err != nil {
+				return nil, err
+			}
+
+			if !t.EqualsStrict(types.NullType) {
+				if dt.Name == "" {
+					*dt = *t
+				} else if !dt.EqualsStrict(t) {
+					return nil, fmt.Errorf("array contains elements of different types")
+				}
+			}
+
+			encoded = append(encoded, enc)
+		}
+
+		// edge case where all elements are nil
+		if dt.Name == "" {
+			dt.Name = types.NullType.Name
+		}
+
+		dt.IsArray = true
+
+		localDt := DataType{}
+		localDt.fromTypes(dt)
+		return &EncodedValue{
+			Type: localDt,
+			Data: encoded,
+		}, nil
+	}
+
+	enc, t, err := encodeScalar(v)
+	if err != nil {
+		return nil, err
+	}
+
+	localDt := DataType{}
+	localDt.fromTypes(t)
+	return &EncodedValue{
+		Type: localDt,
+		Data: [][]byte{enc},
+	}, nil
 }
 
 var _ Payload = (*ActionCall)(nil)
@@ -301,7 +579,7 @@ func (v *ValidatorLeave) MarshalBinary() ([]byte, error) {
 // ValidatorVoteIDs is a payload for submitting approvals for any pending resolution, by ID.
 type ValidatorVoteIDs struct {
 	// ResolutionIDs is an array of all resolution IDs the caller is approving.
-	ResolutionIDs []types.UUID
+	ResolutionIDs []*types.UUID
 }
 
 var _ Payload = (*ValidatorVoteIDs)(nil)

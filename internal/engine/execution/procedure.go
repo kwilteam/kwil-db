@@ -11,6 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/internal/conv"
 	"github.com/kwilteam/kwil-db/internal/engine/generate"
@@ -329,8 +330,8 @@ var _ instructionFunc = (&dmlStmt{}).execute
 func (e *dmlStmt) execute(scope *precompiles.ProcedureContext, _ *GlobalContext, db sql.DB) error {
 	// Expend the arguments based on the ordered parameters for the DML statement.
 	params := orderAndCleanValueMap(scope.Values(), e.OrderedParameters)
-	args := append([]any{pg.QueryModeExec}, params...)
-	results, err := db.Execute(scope.Ctx, e.SQLStatement, args...)
+	// args := append([]any{pg.QueryModeExec}, params...)
+	results, err := db.Execute(scope.Ctx, e.SQLStatement, append([]any{pg.QueryModeExec}, params...)...)
 	if err != nil {
 		return err
 	}
@@ -402,6 +403,69 @@ func makeExecutables(params []*generate.InlineExpression) []evaluatable {
 			record := result.Rows[0]
 			if len(record) != 1 {
 				return nil, fmt.Errorf("expected 1 value for in-line expression, got %d", len(record))
+			}
+
+			// Kwil supports nils in in-line expressions, so we need to check for nils
+			if record[0] == nil {
+				return nil, nil
+			}
+			// there is an edge case here where if the value is an array, it needs to be of the exact array type.
+			// For example, pgx only understands []string, and not []any, however it will return arrays to us as
+			// []any. If the returned type here is an array, we need to convert it to an array of the correct type.
+			typeOf := reflect.TypeOf(record[0])
+			if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 {
+				// if it is an array, we need to convert it to the correct type.
+				// if of length 0, we can simply set it to a text array
+				if len(record[0].([]any)) == 0 {
+					return []string{}, nil
+				}
+
+				switch v := record[0].([]any)[0].(type) {
+				case string:
+					textArr := make([]string, len(record[0].([]any)))
+					for i, val := range record[0].([]any) {
+						textArr[i] = val.(string)
+					}
+					return textArr, nil
+				case int64:
+					intArr := make([]int64, len(record[0].([]any)))
+					for i, val := range record[0].([]any) {
+						intArr[i] = val.(int64)
+					}
+					return intArr, nil
+				case []byte:
+					blobArr := make([][]byte, len(record[0].([]any)))
+					for i, val := range record[0].([]any) {
+						blobArr[i] = val.([]byte)
+					}
+					return blobArr, nil
+				case bool:
+					boolArr := make([]bool, len(record[0].([]any)))
+					for i, val := range record[0].([]any) {
+						boolArr[i] = val.(bool)
+					}
+					return boolArr, nil
+				case *types.UUID:
+					uuidArr := make(types.UUIDArray, len(record[0].([]any)))
+					for i, val := range record[0].([]any) {
+						uuidArr[i] = val.(*types.UUID)
+					}
+					return uuidArr, nil
+				case *types.Uint256:
+					uint256Arr := make(types.Uint256Array, len(record[0].([]any)))
+					for i, val := range record[0].([]any) {
+						uint256Arr[i] = val.(*types.Uint256)
+					}
+					return uint256Arr, nil
+				case *decimal.Decimal:
+					decArr := make(decimal.DecimalArray, len(record[0].([]any)))
+					for i, val := range record[0].([]any) {
+						decArr[i] = val.(*decimal.Decimal)
+					}
+					return decArr, nil
+				default:
+					return nil, fmt.Errorf("unsupported in-line array type %T", v)
+				}
 			}
 
 			return record[0], nil
@@ -492,66 +556,6 @@ func (p *preparedProcedure) callString(schema string) string {
 	str.WriteString(");")
 
 	return str.String()
-}
-
-// coerceInputs takes an array of any type, and attempts to coerce
-// them to the types specified in the procedure's parameters.
-func (p *preparedProcedure) coerceInputs(inputs []any) ([]any, error) {
-	outs := make([]any, len(p.parameters))
-
-	// coerceScalar is a helper function that coerces a scalar value to the
-	// type specified in the procedure's parameters.
-	coerceScalar := func(typ *types.DataType, val any) (any, error) {
-		if typ.IsArray {
-			panic("passed array to coerceScalar")
-		}
-
-		if typ.EqualsStrict(types.IntType) {
-			return conv.Int(val)
-		} else if typ.EqualsStrict(types.TextType) {
-			return conv.String(val)
-		} else if typ.EqualsStrict(types.BoolType) {
-			return conv.Bool(val)
-		} else if typ.EqualsStrict(types.BlobType) {
-			return conv.Blob(val)
-		} else if typ.EqualsStrict(types.UUIDType) {
-			return conv.UUID(val)
-		}
-
-		return nil, fmt.Errorf("cannot encode arg type %s", typ)
-	}
-
-	for i, param := range p.parameters {
-		if !param.Type.IsArray {
-			val := inputs[i]
-			coerced, err := coerceScalar(param.Type, val)
-			if err != nil {
-				return nil, err
-			}
-
-			outs[i] = coerced
-			continue
-		}
-
-		// if we reach here the parameter is an array, we need to coerce each element
-		val := reflect.ValueOf(inputs[i])
-		if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
-			return nil, fmt.Errorf("expected array for parameter %s, got %T", param.Name, inputs[i])
-		}
-
-		coerced := make([]any, val.Len())
-		for j := 0; j < val.Len(); j++ {
-			var err error
-			coerced[j], err = coerceScalar(param.Type, val.Index(j).Interface())
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		outs[i] = coerced
-	}
-
-	return outs, nil
 }
 
 // shapeReturn takes a sql result and ensures it matches the expected return shape

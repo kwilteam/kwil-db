@@ -134,6 +134,11 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 		}
 		return defaultOnPgError(c, n) // automatically close any fatal errors (default we are overridding)
 	}
+
+	pCfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		return registerTypes(ctx, conn)
+	}
+
 	db, err := pgxpool.NewWithConfig(ctx, pCfg)
 	if err != nil {
 		return nil, err
@@ -143,6 +148,7 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	if err != nil {
 		return nil, err
 	}
+	registerTypes(ctx, writer.Conn())
 
 	pool := &Pool{
 		pgxp:   db,
@@ -150,6 +156,28 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	}
 
 	return pool, db.Ping(ctx)
+}
+
+func registerTypes(ctx context.Context, conn *pgx.Conn) error {
+	err := ensureUint256Domain(ctx, conn)
+	if err != nil {
+		return err
+	}
+
+	pt, err := conn.LoadType(ctx, "uint256")
+	if err != nil {
+		return err
+	}
+
+	conn.TypeMap().RegisterType(pt)
+
+	pt, err = conn.LoadType(ctx, "uint256[]")
+	if err != nil {
+		return err
+	}
+
+	conn.TypeMap().RegisterType(pt)
+	return nil
 }
 
 // Query performs a read-only query using the read connection pool. It is

@@ -217,3 +217,33 @@ func TestKwildAcceptance(t *testing.T) {
 		})
 	}
 }
+
+// TestTypes checks that type serialization works correctly over RLP, JSON,
+// and Postgres.
+func TestTypes(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	ctx := context.Background()
+	testDrivers := strings.Split(*drivers, ",")
+	for _, driverType := range testDrivers {
+		t.Run(driverType+"_driver", func(t *testing.T) {
+			// setup for each driver
+			helper := acceptance.NewActHelper(t)
+			helper.LoadConfig()
+			if !*remote {
+				helper.Setup(ctx)
+			}
+			creatorDriver := helper.GetDriver(driverType, "creator")
+
+			// we only test nils if using json rpc driver, becase the cli driver cannot support nil
+			// args to actions/procedures
+			specifications.ExecuteTypesSpecification(ctx, t, creatorDriver, driverType == "jsonrpc")
+		})
+	}
+}

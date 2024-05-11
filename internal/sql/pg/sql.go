@@ -69,7 +69,7 @@ END$$;`
 	// have to run this in a DO block because you cannot do CREATE DOMAIN IF NOT EXISTS
 	sqlCreateUint256Domain = `
 	DO $$ BEGIN
-		CREATE DOMAIN uint256 AS NUMERIC(78) NOT NULL
+		CREATE DOMAIN uint256 AS NUMERIC(78)
 		CHECK (VALUE >= 0 AND VALUE < 2^256)
 		CHECK (SCALE(VALUE) = 0);
 	EXCEPTION
