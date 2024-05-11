@@ -3,9 +3,13 @@ package types
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var namespace = uuid.MustParse("cc1cd90f-b4db-47f4-b6df-4bbe5fca88eb")
@@ -50,8 +54,29 @@ func (u UUID) Bytes() []byte {
 	return u[:]
 }
 
+// Over json, we want to send uuids as strings
+func (u UUID) MarshalJSON() ([]byte, error) {
+	return json.Marshal(u.String())
+}
+
+func (u UUID) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+
+	uu, err := ParseUUID(s)
+	if err != nil {
+		return err
+	}
+
+	copy(u[:], uu[:])
+	return nil
+}
+
 var _ driver.Valuer = UUID{}
 var _ driver.Valuer = (*UUID)(nil)
+var _ pgtype.Codec = &UUID{}
 
 func (u *UUID) Scan(src any) error {
 	switch s := src.(type) {
@@ -60,6 +85,134 @@ func (u *UUID) Scan(src any) error {
 		return nil
 	}
 	return errors.New("not a byte slice")
+}
+
+func (u *UUID) FormatSupported(format int16) bool {
+	return format == pgtype.TextFormatCode || format == pgtype.BinaryFormatCode
+}
+
+func (u *UUID) PreferredFormat() int16 {
+	return pgtype.TextFormatCode
+}
+
+func (u *UUID) PlanEncode(m *pgtype.Map, oid uint32, format int16, value any) pgtype.EncodePlan {
+	if _, ok := value.(*UUID); !ok {
+		return nil // not sure why we do this, but pgx does it
+	}
+
+	switch format {
+	// given our uuid type, I believe it will always come binary
+	case pgtype.BinaryFormatCode:
+		return encodePlanFunc(func(value any, buf []byte) (newBuf []byte, err error) {
+			uuid, ok := value.(*UUID)
+			if !ok {
+				return nil, errors.New("internal error: expected UUID")
+			}
+
+			return append(buf, uuid[:]...), nil
+		})
+	case pgtype.TextFormatCode:
+		return encodePlanFunc(func(value any, buf []byte) (newBuf []byte, err error) {
+			uuid, ok := value.(*UUID)
+			if !ok {
+				return nil, errors.New("internal error: expected *UUID")
+			}
+
+			return append(buf, uuid.String()...), nil
+		})
+	}
+
+	return nil
+}
+
+type encodePlanFunc func(value any, buf []byte) (newBuf []byte, err error)
+
+func (e encodePlanFunc) Encode(value any, buf []byte) (newBuf []byte, err error) {
+	return e(value, buf)
+}
+
+func (u *UUID) PlanScan(m *pgtype.Map, oid uint32, format int16, target any) pgtype.ScanPlan {
+	switch format {
+	case pgtype.BinaryFormatCode:
+		return scanPlanFunc(func(src []byte, target any) error {
+			if target == nil {
+				return nil
+			}
+
+			if len(src) == 0 {
+				return nil
+			}
+
+			uuid, ok := target.(*UUID)
+			if !ok {
+				if len(src) != 16 {
+					return fmt.Errorf("expected 16 bytes, got %d", len(src))
+				}
+
+				uuid := UUID{}
+				copy(uuid[:], src)
+				reflect.ValueOf(target).Elem().Set(reflect.ValueOf(uuid))
+
+				return nil
+			}
+
+			copy(uuid[:], src)
+			return nil
+		})
+	case pgtype.TextFormatCode:
+		return scanPlanFunc(func(src []byte, target any) error {
+			if target == nil {
+				return nil
+			}
+
+			if len(src) == 0 {
+				return nil
+			}
+
+			u, err := ParseUUID(string(src))
+			if err != nil {
+				return err
+			}
+
+			uuid, ok := target.(*UUID)
+			if !ok {
+				reflect.ValueOf(target).Elem().Set(reflect.ValueOf(uuid))
+				return nil
+			}
+			copy(uuid[:], u[:])
+			return nil
+		})
+	}
+
+	return nil
+}
+
+type scanPlanFunc func(src []byte, target any) error
+
+func (s scanPlanFunc) Scan(src []byte, target any) error {
+	return s(src, target)
+}
+
+func (u *UUID) DecodeDatabaseSQLValue(m *pgtype.Map, oid uint32, format int16, src []byte) (driver.Value, error) {
+	if src == nil {
+		return nil, nil
+	}
+
+	uuid := UUID{}
+	copy(uuid[:], src)
+
+	return uuid, nil
+}
+
+func (u *UUID) DecodeValue(m *pgtype.Map, oid uint32, format int16, src []byte) (any, error) {
+	if src == nil {
+		return &UUID{}, nil
+	}
+
+	uuid := UUID{}
+	copy(uuid[:], src)
+
+	return &uuid, nil
 }
 
 var _ sql.Scanner = (*UUID)(nil)
@@ -94,6 +247,33 @@ func (u *UUIDArray) Scan(src any) error {
 		return nil
 	}
 	return errors.New("not a byte slice slice")
+}
+
+func (u *UUIDArray) UnmarshalJSON(b []byte) error {
+	var s []string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+
+	ux := make(UUIDArray, len(s))
+	for i, si := range s {
+		uui, err := ParseUUID(si)
+		if err != nil {
+			return err
+		}
+		copy(ux[i][:], uui[:])
+	}
+
+	*u = ux
+	return nil
+}
+
+func (u UUIDArray) MarshalJSON() ([]byte, error) {
+	s := make([]string, len(u))
+	for i, ui := range u {
+		s[i] = ui.String()
+	}
+	return json.Marshal(s)
 }
 
 var _ sql.Scanner = (*UUIDArray)(nil)

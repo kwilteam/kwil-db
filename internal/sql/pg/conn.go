@@ -11,9 +11,11 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/types"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -116,6 +118,10 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 		logger.Warnf("%v [%v]: %v / %v", n.Severity, n.Code, n.Message, n.Detail)
 		return defaultOnPgError(c, n) // automatically close any fatal errors (default we are overridding)
 	}
+	pCfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		registerKwilTypes(conn.TypeMap())
+		return nil
+	}
 	db, err := pgxpool.NewWithConfig(ctx, pCfg)
 	if err != nil {
 		return nil, err
@@ -132,6 +138,15 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	}
 
 	return pool, db.Ping(ctx)
+}
+
+// registerKwilTypes registers kwil's types with a typemap
+func registerKwilTypes(m *pgtype.Map) {
+	m.RegisterType(&pgtype.Type{
+		Codec: &types.UUID{},
+		Name:  "uuid",
+		OID:   pgtype.UUIDOID,
+	})
 }
 
 // Query performs a read-only query using the read connection pool. It is
