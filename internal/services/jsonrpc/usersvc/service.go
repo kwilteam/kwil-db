@@ -307,7 +307,7 @@ func checkEngineError(err error) (jsonrpc.ErrorCode, string) {
 		return jsonrpc.ErrorEngineInvalidSchema, execution.ErrInvalidSchema.Error()
 	}
 
-	return jsonrpc.ErrorEngineInternal, "internal engine error"
+	return jsonrpc.ErrorEngineInternal, err.Error()
 }
 
 func engineError(err error) *jsonrpc.Error {
