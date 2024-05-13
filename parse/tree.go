@@ -355,7 +355,10 @@ func (e *ExpressionUnary) Accept(v Visitor) any {
 type UnaryOperator string
 
 const (
+	// Not can be either NOT or !
 	UnaryOperatorNot UnaryOperator = "not"
+	UnaryOperatorNeg UnaryOperator = "-"
+	UnaryOperatorPos UnaryOperator = "+"
 )
 
 // ExpressionColumn is a column in a table.

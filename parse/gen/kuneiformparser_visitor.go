@@ -274,6 +274,9 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#procedure_expr_arithmetic.
 	VisitProcedure_expr_arithmetic(ctx *Procedure_expr_arithmeticContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#unary_procedure_expr.
+	VisitUnary_procedure_expr(ctx *Unary_procedure_exprContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#comparison_procedure_expr.
 	VisitComparison_procedure_expr(ctx *Comparison_procedure_exprContext) interface{}
 

@@ -363,6 +363,10 @@ func (v *BaseKuneiformParserVisitor) VisitProcedure_expr_arithmetic(ctx *Procedu
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitUnary_procedure_expr(ctx *Unary_procedure_exprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitComparison_procedure_expr(ctx *Comparison_procedure_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }

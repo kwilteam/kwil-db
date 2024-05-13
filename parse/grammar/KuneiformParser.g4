@@ -278,7 +278,7 @@ sql_expr:
     | left=sql_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) right=sql_expr # comparison_sql_expr
     | sql_expr NOT? IN LPAREN (sql_expr_list|select_statement) RPAREN # in_sql_expr
     | left=sql_expr NOT? LIKE right=sql_expr # like_sql_expr
-    | <assoc=right> NOT sql_expr # unary_sql_expr
+    | <assoc=right> (NOT|PLUS|MINUS) sql_expr # unary_sql_expr
     | element=sql_expr (NOT)? BETWEEN lower=sql_expr AND upper=sql_expr # between_sql_expr
     | LPAREN sql_expr_list RPAREN # list_sql_expr
     | left=sql_expr IS NOT? ((DISTINCT FROM right=sql_expr) | NULL | TRUE | FALSE) # is_sql_expr
@@ -341,6 +341,7 @@ procedure_expr:
     | LPAREN procedure_expr RPAREN type_cast? # paren_procedure_expr
     | procedure_expr PERIOD IDENTIFIER type_cast? # field_access_procedure_expr
     | procedure_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) procedure_expr # comparison_procedure_expr
+    | (MINUS|PLUS|EXCL) procedure_expr # unary_procedure_expr
     // setting precedence for arithmetic operations:
     | procedure_expr CONCAT procedure_expr # procedure_expr_arithmetic
     | procedure_expr (STAR | DIV | MOD) procedure_expr # procedure_expr_arithmetic
@@ -357,7 +358,7 @@ statement:
     | ((variable_or_underscore) (COMMA (variable_or_underscore))* ASSIGN)? procedure_function_call SCOL # stmt_procedure_call
     | variable ASSIGN procedure_expr SCOL # stmt_variable_assignment
     | variable type ASSIGN procedure_expr SCOL # stmt_variable_assignment_with_declaration
-    | FOR receiver=variable IN (range|procedure_function_call|target_variable=variable|sql_statement) LBRACE statement* RBRACE # stmt_for_loop
+    | FOR receiver=variable IN (range|target_variable=variable|sql_statement) LBRACE statement* RBRACE # stmt_for_loop
     | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE statement* RBRACE)? # stmt_if
     | sql_statement SCOL # stmt_sql
     | BREAK SCOL # stmt_break
@@ -381,5 +382,5 @@ if_then_block:
 
 // range used for for loops
 range:
-    procedure_expr COL procedure_expr
+    procedure_expr RANGE procedure_expr
 ;

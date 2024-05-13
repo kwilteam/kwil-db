@@ -1342,6 +1342,10 @@ func (s *schemaVisitor) VisitUnary_sql_expr(ctx *gen.Unary_sql_exprContext) any 
 	switch {
 	case ctx.NOT() != nil:
 		e.Operator = UnaryOperatorNot
+	case ctx.MINUS() != nil:
+		e.Operator = UnaryOperatorNeg
+	case ctx.PLUS() != nil:
+		e.Operator = UnaryOperatorPos
 	default:
 		panic("unknown unary operator")
 	}
@@ -1644,6 +1648,27 @@ func (s *schemaVisitor) VisitArray_access_procedure_expr(ctx *gen.Array_access_p
 	return e
 }
 
+func (s *schemaVisitor) VisitUnary_procedure_expr(ctx *gen.Unary_procedure_exprContext) any {
+	e := &ExpressionUnary{
+		Expression: ctx.Procedure_expr().Accept(s).(ProcedureExpression),
+	}
+
+	// this is the only known unary right now
+	switch {
+	case ctx.EXCL() != nil:
+		e.Operator = UnaryOperatorNot
+	case ctx.MINUS() != nil:
+		e.Operator = UnaryOperatorNeg
+	case ctx.PLUS() != nil:
+		e.Operator = UnaryOperatorPos
+	default:
+		panic("unknown unary operator")
+	}
+
+	e.Set(ctx)
+	return e
+}
+
 func (s *schemaVisitor) VisitMake_array_procedure_expr(ctx *gen.Make_array_procedure_exprContext) any {
 	e := &ExpressionMakeArray{
 		// golang interface assertions do not work for slices, so we simply
@@ -1750,8 +1775,6 @@ func (s *schemaVisitor) VisitStmt_for_loop(ctx *gen.Stmt_for_loopContext) any {
 	switch {
 	case ctx.Range_() != nil:
 		stmt.LoopTerm = ctx.Range_().Accept(s).(*LoopTermRange)
-	case ctx.Procedure_function_call() != nil:
-		stmt.LoopTerm = ctx.Procedure_function_call().Accept(s).(*LoopTermCall)
 	case ctx.GetTarget_variable() != nil:
 		stmt.LoopTerm = ctx.GetTarget_variable().Accept(s).(*LoopTermVariable)
 	case ctx.Sql_statement() != nil:

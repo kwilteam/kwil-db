@@ -18,6 +18,7 @@ LPAREN:     '(';
 RPAREN:     ')';
 COMMA:      ',';
 AT:         '@';
+EXCL:       '!';
 PERIOD:     '.';
 CONCAT:     '||';
 STAR:       '*';
@@ -37,6 +38,7 @@ GTE:        '>=';
 TYPE_CAST:  '::';
 UNDERSCORE: '_';
 ASSIGN:     ':=';
+RANGE:      '..';
 
 
 // top-level blocks
