@@ -101,6 +101,7 @@ func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, err
 			BestBlockHash:   strings.ToLower(si.LatestBlockHash.String()),
 			BestBlockHeight: si.LatestBlockHeight,
 			BestBlockTime:   si.LatestBlockTime.UTC(),
+			Syncing:         si.CatchingUp,
 		},
 		Validator: &types.ValidatorInfo{
 			PubKey: vi.PubKey.Bytes(),
