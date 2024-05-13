@@ -315,7 +315,7 @@ type ExpressionBlobLiteral struct {
 }
 
 // fixed point literal
-type ExpressionFixedLiteral struct {
+type ExpressionDecimalLiteral struct {
 	baseExpression
 	parseTypes.Node
 	// Value is the value of the fixed point number.
@@ -323,8 +323,8 @@ type ExpressionFixedLiteral struct {
 	TypeCastable
 }
 
-func (e *ExpressionFixedLiteral) Accept(v Visitor) interface{} {
-	return v.VisitExpressionFixedLiteral(e)
+func (e *ExpressionDecimalLiteral) Accept(v Visitor) interface{} {
+	return v.VisitExpressionDecimalLiteral(e)
 }
 
 type ExpressionUint256Literal struct {
@@ -534,7 +534,7 @@ type Visitor interface {
 	VisitExpressionIntLiteral(*ExpressionIntLiteral) interface{}
 	VisitExpressionNullLiteral(*ExpressionNullLiteral) interface{}
 	VisitExpressionBlobLiteral(*ExpressionBlobLiteral) interface{}
-	VisitExpressionFixedLiteral(*ExpressionFixedLiteral) interface{}
+	VisitExpressionDecimalLiteral(*ExpressionDecimalLiteral) interface{}
 	VisitExpressionUint256Literal(*ExpressionUint256Literal) interface{}
 	VisitExpressionMakeArray(*ExpressionMakeArray) interface{}
 	VisitExpressionCall(*ExpressionCall) interface{}
@@ -582,10 +582,12 @@ func (v *BaseVisitor) VisitExpressionTextLiteral(*ExpressionTextLiteral) interfa
 func (v *BaseVisitor) VisitExpressionBooleanLiteral(*ExpressionBooleanLiteral) interface{} {
 	return nil
 }
-func (v *BaseVisitor) VisitExpressionIntLiteral(*ExpressionIntLiteral) interface{}     { return nil }
-func (v *BaseVisitor) VisitExpressionNullLiteral(*ExpressionNullLiteral) interface{}   { return nil }
-func (v *BaseVisitor) VisitExpressionBlobLiteral(*ExpressionBlobLiteral) interface{}   { return nil }
-func (v *BaseVisitor) VisitExpressionFixedLiteral(*ExpressionFixedLiteral) interface{} { return nil }
+func (v *BaseVisitor) VisitExpressionIntLiteral(*ExpressionIntLiteral) interface{}   { return nil }
+func (v *BaseVisitor) VisitExpressionNullLiteral(*ExpressionNullLiteral) interface{} { return nil }
+func (v *BaseVisitor) VisitExpressionBlobLiteral(*ExpressionBlobLiteral) interface{} { return nil }
+func (v *BaseVisitor) VisitExpressionDecimalLiteral(*ExpressionDecimalLiteral) interface{} {
+	return nil
+}
 func (v *BaseVisitor) VisitExpressionUint256Literal(*ExpressionUint256Literal) interface{} {
 	return nil
 }

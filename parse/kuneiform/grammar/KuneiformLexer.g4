@@ -8,18 +8,18 @@ lexer grammar KuneiformLexer;
 options { caseInsensitive = true; }
 
 // symbols
-LBRACE: '{';
-RBRACE: '}';
-LBRACKET: '[';
-RBRACKET: ']';
-COL:       ':';
-SCOL:      ';';
-LPAREN:   '(';
-RPAREN:   ')';
-COMMA:     ',';
-AT:        '@';
-PERIOD:    '.';
-EQUALS: '=';
+LBRACE:     '{';
+RBRACE:     '}';
+LBRACKET:   '[';
+RBRACKET:   ']';
+COL:        ':';
+SCOL:       ';';
+LPAREN:     '(';
+RPAREN:     ')';
+COMMA:      ',';
+AT:         '@';
+PERIOD:     '.';
+EQUALS:     '=';
 
 
 // keywords

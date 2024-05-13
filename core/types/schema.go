@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/core/types/validation"
 	"github.com/kwilteam/kwil-db/core/utils"
 )
@@ -1074,7 +1075,7 @@ func (c *DataType) String() string {
 		return str.String() + "[]"
 	}
 
-	if c.Name == FixedStr {
+	if c.Name == DecimalStr {
 		data, ok := c.Metadata.([2]uint16)
 		if ok {
 			str.WriteString("(")
@@ -1104,7 +1105,7 @@ func (c *DataType) PGString() (string, error) {
 		scalar = "UUID"
 	case uint256Str:
 		scalar = "UINT256"
-	case FixedStr:
+	case DecimalStr:
 		data, ok := c.Metadata.([2]uint16)
 		if !ok {
 			// should never happen, since Clean() should have caught this
@@ -1128,20 +1129,21 @@ func (c *DataType) PGString() (string, error) {
 }
 
 func (c *DataType) Clean() error {
-	switch name := strings.ToLower(c.Name); name {
+	c.Name = strings.ToLower(c.Name)
+	switch c.Name {
 	case intStr, textStr, boolStr, blobStr, uuidStr, uint256Str: // ok
 		if c.Metadata != nil {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
 		}
-		c.Name = name
+
 		return nil
-	case FixedStr:
+	case DecimalStr:
 		data, ok := c.Metadata.([2]uint16)
 		if !ok {
 			return fmt.Errorf("fixed type must have metadata of type [2]uint8")
 		}
 
-		err := checkFixedTypeMetdata(data[0], data[1])
+		err := decimal.CheckPrecisionAndScale(data[0], data[1])
 		if err != nil {
 			return err
 		}
@@ -1149,7 +1151,7 @@ func (c *DataType) Clean() error {
 		return nil
 	case nullStr, unknownStr:
 		if c.IsArray {
-			return fmt.Errorf("array type cannot be null or unknown")
+			return fmt.Errorf("type %s cannot be an array", c.Name)
 		}
 
 		if c.Metadata != nil {
@@ -1178,17 +1180,13 @@ func (c *DataType) Equals(other *DataType) bool {
 	if c.Name == unknownStr || other.Name == unknownStr {
 		return true
 	}
-	// if null, check if the other is null
-	if c.Name == nullStr {
-		return other.Name == nullStr
-	}
 
 	if c.IsArray != other.IsArray {
 		return false
 	}
 
-	if c.Name == FixedStr && other.Name == FixedStr {
-		return c.Metadata == other.Metadata
+	if c.Metadata != other.Metadata {
+		return false
 	}
 
 	return strings.EqualFold(c.Name, other.Name)
@@ -1233,42 +1231,21 @@ const (
 	blobStr    = "blob"
 	uuidStr    = "uuid"
 	uint256Str = "uint256"
-	// FixedStr is a fixed point number.
-	FixedStr   = "fixed"
+	// DecimalStr is a fixed point number.
+	DecimalStr = "fixed"
 	nullStr    = "null"
 	unknownStr = "unknown"
 )
 
-// NewFixedType creates a new fixed type.
-func NewFixedType(precision, scale uint16) (*DataType, error) {
-	err := checkFixedTypeMetdata(precision, scale)
+// NewDecimalType creates a new fixed point decimal type.
+func NewDecimalType(precision, scale uint16) (*DataType, error) {
+	err := decimal.CheckPrecisionAndScale(precision, scale)
 	if err != nil {
 		return nil, err
 	}
 
 	return &DataType{
-		Name:     FixedStr,
+		Name:     DecimalStr,
 		Metadata: [2]uint16{precision, scale},
 	}, nil
-}
-
-// checkFixedTypeMetdata checks the metadata of a fixed type.
-// It checks that precision and scale are less than 1000, that precision is greater than 0,
-// and that scale is less than or equal to precision.
-func checkFixedTypeMetdata(precision, scale uint16) error {
-	if precision > 1000 {
-		return fmt.Errorf("fixed type precision cannot exceed 500 digits")
-	}
-	if scale > 1000 {
-		return fmt.Errorf("fixed type scale cannot exceed 500 digits")
-	}
-	if precision == 0 {
-		return fmt.Errorf("fixed type precision must be greater than 0")
-	}
-
-	if scale > precision {
-		return fmt.Errorf("fixed type scale cannot exceed precision")
-	}
-
-	return nil
 }

@@ -13,6 +13,8 @@ type AstVisitor interface {
 	VisitExpressionBooleanLiteral(*ExpressionBooleanLiteral) any
 	VisitExpressionNullLiteral(*ExpressionNullLiteral) any
 	VisitExpressionBlobLiteral(*ExpressionBlobLiteral) any
+	VisitExpressionUint256Literal(*ExpressionUint256Literal) any
+	VisitExpressionDecimalLiteral(*ExpressionDecimalLiteral) any
 	VisitExpressionBindParameter(*ExpressionBindParameter) any
 	VisitExpressionColumn(*ExpressionColumn) any
 	VisitExpressionUnary(*ExpressionUnary) any
@@ -102,6 +104,14 @@ func (v *BaseAstVisitor) VisitExpressionNullLiteral(node *ExpressionNullLiteral)
 }
 
 func (v *BaseAstVisitor) VisitExpressionBlobLiteral(node *ExpressionBlobLiteral) any {
+	return nil
+}
+
+func (v *BaseAstVisitor) VisitExpressionUint256Literal(node *ExpressionUint256Literal) any {
+	return nil
+}
+
+func (v *BaseAstVisitor) VisitExpressionDecimalLiteral(node *ExpressionDecimalLiteral) any {
 	return nil
 }
 

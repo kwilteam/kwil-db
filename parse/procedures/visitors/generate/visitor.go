@@ -174,6 +174,14 @@ func (g *generatorVisitor) VisitExpressionTextLiteral(p0 *parser.ExpressionTextL
 	return typeCast(fmt.Sprintf("'%s'", p0.Value), p0.TypeCast)
 }
 
+func (g *generatorVisitor) VisitExpressionDecimalLiteral(p0 *parser.ExpressionDecimalLiteral) any {
+	return typeCast(p0.Value.String(), p0.TypeCast)
+}
+
+func (g *generatorVisitor) VisitExpressionUint256Literal(p0 *parser.ExpressionUint256Literal) any {
+	return typeCast(p0.Value.String(), p0.TypeCast)
+}
+
 func (g *generatorVisitor) VisitExpressionVariable(p0 *parser.ExpressionVariable) any {
 	return typeCast(p0.Name, p0.TypeCast)
 }
@@ -401,7 +409,7 @@ func (g *generatorVisitor) VisitStatementReturn(p0 *parser.StatementReturn) any 
 				Type: g.currentProcedure.Returns.Fields[i].Type,
 			}
 
-			// we will assign the value to the out var
+			// we will assign the value to the out var, and type assert it.
 			str.WriteString(fmt.Sprintf("%s := %s;\n", outVars[i].Name, s))
 			g.returnedVariables = append(g.returnedVariables, &types.NamedType{
 				Name: outVars[i].Name,

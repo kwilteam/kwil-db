@@ -354,7 +354,7 @@ func Test_Typing(t *testing.T) {
 		},
 		{
 			name: "string comparison with escape",
-			stmt: `SELECT id FROM users WHERE name LIKE 'satoshi\%' ESCAPE '\';`,
+			stmt: `SELECT id FROM users WHERE name LIKE 'satoshi\%' ESCAPE '\\';`,
 			relation: map[string]*types.DataType{
 				"id": types.IntType,
 			},

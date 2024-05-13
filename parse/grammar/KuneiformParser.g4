@@ -1,0 +1,385 @@
+/*
+ * A ANTLR4 grammar for Kuneiform.
+ * Developed by the Kwil team.
+*/
+parser grammar KuneiformParser;
+
+options {
+    tokenVocab = KuneiformLexer;
+}
+
+// entry is the entrypoint for the parser.
+// The parser is capable of parsing full Kuneiform schemas,
+// sql statements, and action and procedure bodies.
+entry:
+    (schema | sql | action_block | procedure_block)
+    EOF
+;
+
+/*
+    The following section includes the parser rules that are commonly
+    used among all sections of the grammar. These include literals,
+*/
+
+literal:
+    STRING_ # string_literal
+    | (PLUS | MINUS)? DIGITS_ # integer_literal
+    | (PLUS | MINUS)? DIGITS_ PERIOD DIGITS_ # decimal_literal
+    | (TRUE | FALSE) # boolean_literal
+    | NULL # null_literal
+    | BINARY_ # binary_literal
+;
+
+identifier_list:
+    IDENTIFIER (COMMA IDENTIFIER)*
+;
+
+type:
+    IDENTIFIER (LPAREN DIGITS_ COMMA DIGITS_ RPAREN)? (LBRACKET RBRACKET)? // Handles arrays of any type, including nested arrays
+;
+
+type_cast:
+    TYPE_CAST type
+;
+
+variable:
+    VARIABLE | CONTEXTUAL_VARIABLE
+;
+
+variable_list:
+    variable (COMMA variable)*
+;
+
+/*
+    The following section includes parser rules for top-level Kuneiform.
+    These are the rules that parse the schema / DDL, and are used pre-consensus.
+*/
+
+// schema is the parser entrypoint for an entire
+// Kuneiform schema.
+schema:
+    database_declaration
+    (use_declaration | table_declaration
+     | action_declaration | procedure_declaration
+     | foreign_procedure_declaration
+    )*
+;
+
+annotation:
+    // sort've a hack; annotations don't technically use contextual variables, but they have
+    // the same syntax of @identifier
+    CONTEXTUAL_VARIABLE LPAREN (IDENTIFIER EQUALS literal (COMMA IDENTIFIER EQUALS literal)*)? RPAREN
+;
+
+database_declaration:
+    DATABASE IDENTIFIER SCOL
+;
+
+use_declaration:
+    USE IDENTIFIER
+    (LBRACE IDENTIFIER COL literal (COMMA IDENTIFIER COL literal)* RBRACE)?
+    AS IDENTIFIER SCOL
+;
+
+table_declaration:
+     TABLE IDENTIFIER LBRACE
+     column_def (COMMA (column_def | index_def | foreign_key_def))*
+     RBRACE
+ ;
+
+column_def:
+    name=IDENTIFIER type constraint*
+;
+
+index_def:
+    HASH_IDENTIFIER
+    (UNIQUE | INDEX | PRIMARY)
+    LPAREN  columns=identifier_list RPAREN
+;
+
+foreign_key_def:
+    (FOREIGN KEY|LEGACY_FOREIGN_KEY) // for backwards compatibility
+    LPAREN child_keys=identifier_list RPAREN
+    (REFERENCES|REF) parent_table=IDENTIFIER LPAREN parent_keys=identifier_list RPAREN
+    foreign_key_action*
+;
+
+// variability here is to support legacy syntax
+foreign_key_action:
+    ((ON UPDATE|LEGACY_ON_UPDATE)|(ON DELETE|LEGACY_ON_DELETE)) DO? ((NO ACTION|LEGACY_NO_ACTION)|CASCADE|(SET NULL|LEGACY_SET_NULL)|(SET DEFAULT|LEGACY_SET_DEFAULT)|RESTRICT)
+;
+
+type_list:
+    type (COMMA type)*
+;
+
+named_type_list:
+    IDENTIFIER type (COMMA IDENTIFIER type)*
+;
+
+typed_variable_list:
+    variable type (COMMA variable type)*
+;
+
+constraint:
+    MIN LPAREN literal RPAREN # MIN
+    | MAX LPAREN literal RPAREN # MAX
+    | MINLEN LPAREN literal RPAREN # MIN_LEN
+    | MAXLEN LPAREN literal RPAREN # MAX_LEN
+    | (NOTNULL|NOT NULL) # NOT_NULL
+    | (LEGACY_PRIMARY_KEY|PRIMARY KEY?) # PRIMARY_KEY
+    | DEFAULT LPAREN literal RPAREN # DEFAULT
+    | UNIQUE # UNIQUE
+;
+
+access_modifier:
+    PUBLIC | PRIVATE | VIEW | OWNER
+;
+
+action_declaration:
+    annotation*
+    ACTION IDENTIFIER
+    LPAREN variable_list? RPAREN
+    (access_modifier)+
+    LBRACE action_block RBRACE
+;
+
+procedure_declaration:
+    annotation*
+    PROCEDURE IDENTIFIER
+    LPAREN (typed_variable_list)? RPAREN
+    (access_modifier)+
+    (procedure_return)?
+    LBRACE procedure_block RBRACE
+;
+
+
+foreign_procedure_declaration:
+    FOREIGN PROCEDURE IDENTIFIER
+    LPAREN (unnamed_params=type_list|named_params=typed_variable_list)? RPAREN
+    (procedure_return)?
+;
+
+procedure_return:
+    RETURNS (TABLE? LPAREN return_columns=named_type_list RPAREN
+    | LPAREN unnamed_return_types=type_list RPAREN)
+;
+
+/*
+    The following section includes parser rules for SQL.
+*/
+
+// sql is a top-level SQL statement.
+sql:
+    sql_statement SCOL
+;
+
+sql_statement:
+    (WITH common_table_expression (COMMA common_table_expression)*)?
+    (select_statement | update_statement | insert_statement | delete_statement)
+;
+
+common_table_expression:
+    IDENTIFIER LPAREN (IDENTIFIER (COMMA IDENTIFIER)*)? RPAREN AS LPAREN select_statement RPAREN
+;
+
+select_statement:
+    select_core
+    (compound_operator select_core)*
+    (ORDER BY ordering_term (COMMA ordering_term)*)?
+    (LIMIT limit=sql_expr)?
+    (OFFSET offset=sql_expr)?
+;
+
+compound_operator:
+    UNION ALL? | INTERSECT | EXCEPT
+;
+
+ordering_term:
+    sql_expr (ASC | DESC)? (NULLS (FIRST | LAST))?
+;
+
+select_core:
+    SELECT DISTINCT?
+    result_column (COMMA result_column)*
+    (FROM relation join*)?
+    (WHERE where=sql_expr)?
+    (
+        GROUP BY group_by=sql_expr_list
+        (HAVING having=sql_expr)?
+    )?
+;
+
+relation:
+    table_name=IDENTIFIER (AS alias=IDENTIFIER)? # table_relation
+    | LPAREN select_statement RPAREN (AS alias=IDENTIFIER)? # subquery_relation
+    | sql_function_call (AS alias=IDENTIFIER)? # function_relation
+;
+
+join:
+    (INNER| LEFT | RIGHT | FULL) JOIN
+    relation ON sql_expr
+;
+
+result_column:
+    sql_expr (AS IDENTIFIER)? # expression_result_column
+    | (table_name=IDENTIFIER PERIOD)? STAR # wildcard_result_column
+;
+
+update_statement:
+    UPDATE table_name=IDENTIFIER (AS alias=IDENTIFIER)?
+    SET update_set_clause (COMMA update_set_clause)*
+    (FROM relation join*)?
+    (WHERE where=sql_expr)?
+    returning_clause?
+;
+
+update_set_clause:
+   (column=IDENTIFIER | LPAREN identifier_list RPAREN) EQUALS sql_expr
+;
+
+returning_clause:
+    RETURNING result_column (COMMA result_column)*
+;
+
+insert_statement:
+    INSERT INTO table_name=IDENTIFIER (AS alias=IDENTIFIER)?
+    (LPAREN target_columns=identifier_list RPAREN)?
+    VALUES LPAREN sql_expr_list RPAREN
+    upsert_clause?
+    returning_clause?
+;
+
+upsert_clause:
+    ON CONFLICT
+    (LPAREN conflict_columns=identifier_list RPAREN (WHERE conflict_where=sql_expr)?)?
+    DO (
+        NOTHING
+        | UPDATE SET update_set_clause (COMMA update_set_clause)*
+        (WHERE update_where=sql_expr)?
+    )
+;
+
+delete_statement:
+    DELETE FROM table_name=IDENTIFIER (AS alias=IDENTIFIER)?
+    // (USING relation join*)?
+    (WHERE where=sql_expr)?
+    returning_clause?
+;
+
+sql_expr:
+    literal type_cast? # literal_sql_expr
+    | sql_function_call type_cast? # function_call_sql_expr
+    | variable type_cast? # variable_sql_expr
+    | (table=IDENTIFIER PERIOD)? column=IDENTIFIER type_cast? # column_sql_expr
+    | sql_expr LBRACKET sql_expr RBRACKET type_cast? # array_access_sql_expr
+    | sql_expr PERIOD IDENTIFIER type_cast? # field_access_sql_expr
+    | LPAREN sql_expr RPAREN type_cast? # paren_sql_expr
+    | left=sql_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) right=sql_expr # comparison_sql_expr
+    | sql_expr NOT? IN LPAREN (sql_expr_list|select_statement) RPAREN # in_sql_expr
+    | left=sql_expr NOT? LIKE right=sql_expr # like_sql_expr
+    | <assoc=right> NOT sql_expr # unary_sql_expr
+    | element=sql_expr (NOT)? BETWEEN lower=sql_expr AND upper=sql_expr # between_sql_expr
+    | LPAREN sql_expr_list RPAREN # list_sql_expr
+    | left=sql_expr IS NOT? ((DISTINCT FROM right=sql_expr) | NULL | TRUE | FALSE) # is_sql_expr
+    | sql_expr COLLATE IDENTIFIER # collate_sql_expr
+    | CASE case_clause=sql_expr?
+        (WHEN when_condition=sql_expr THEN then=sql_expr)+
+        (ELSE else_clause=sql_expr)? END            #case_expr
+    | (NOT? EXISTS)? LPAREN select_statement RPAREN type_cast? # subquery_sql_expr
+    // setting precedence for arithmetic operations:
+    | left=sql_expr CONCAT right=sql_expr # arithmetic_sql_expr
+    | left=sql_expr (STAR | DIV | MOD) right=sql_expr # arithmetic_sql_expr
+    | left=sql_expr (PLUS | MINUS) right=sql_expr # arithmetic_sql_expr
+    // setting precedence for logical operations:
+    | left=sql_expr AND right=sql_expr # logical_sql_expr
+    | left=sql_expr OR right=sql_expr # logical_sql_expr
+;
+
+sql_expr_list:
+    sql_expr (COMMA sql_expr)*
+;
+
+sql_function_call:
+    IDENTIFIER LPAREN (DISTINCT? sql_expr_list|STAR)? RPAREN #normal_call_sql
+    | IDENTIFIER LBRACKET dbid=sql_expr COMMA procedure=sql_expr RBRACKET LPAREN (sql_expr_list)? RPAREN #foreign_call_sql
+;
+
+/*
+    The following section includes parser rules for action blocks.
+*/
+// action_block is the top-level rule for an action block.
+action_block:
+    (action_statement SCOL)*
+;
+
+// action statements can only be 3 things:
+// 1. a sql statement
+// 2. a local action/procedure call.
+// 3. an extension call
+action_statement:
+    sql_statement # sql_action
+    | IDENTIFIER LPAREN (procedure_expr_list)? RPAREN # local_action
+    | (variable_list EQUALS)? IDENTIFIER PERIOD IDENTIFIER LPAREN (procedure_expr_list)? RPAREN # extension_action
+;
+
+/*
+    This section includes parser rules for procedures
+*/
+
+// procedure_block is the top-level rule for a procedure.
+procedure_block:
+    statement*
+;
+
+procedure_expr:
+    literal type_cast? # literal_procedure_expr
+    | procedure_function_call type_cast? # function_call_procedure_expr
+    | variable type_cast? # variable_procedure_expr
+    | LBRACKET (procedure_expr_list)? RBRACKET type_cast? # make_array_procedure_expr
+    | procedure_expr LBRACKET procedure_expr RBRACKET type_cast? # array_access_procedure_expr
+    | LPAREN procedure_expr RPAREN type_cast? # paren_procedure_expr
+    | procedure_expr PERIOD IDENTIFIER type_cast? # field_access_procedure_expr
+    | procedure_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) procedure_expr # comparison_procedure_expr
+    // setting precedence for arithmetic operations:
+    | procedure_expr CONCAT procedure_expr # procedure_expr_arithmetic
+    | procedure_expr (STAR | DIV | MOD) procedure_expr # procedure_expr_arithmetic
+    | procedure_expr (PLUS | MINUS) procedure_expr # procedure_expr_arithmetic
+;
+
+procedure_expr_list:
+    procedure_expr (COMMA procedure_expr)*
+;
+
+statement:
+    variable type SCOL # stmt_variable_declaration
+    // stmt_procedure_call must go above stmt_variable_assignment due to lexer ambiguity
+    | ((variable_or_underscore) (COMMA (variable_or_underscore))* ASSIGN)? procedure_function_call SCOL # stmt_procedure_call
+    | variable ASSIGN procedure_expr SCOL # stmt_variable_assignment
+    | variable type ASSIGN procedure_expr SCOL # stmt_variable_assignment_with_declaration
+    | FOR receiver=variable IN (range|procedure_function_call|target_variable=variable|sql_statement) LBRACE statement* RBRACE # stmt_for_loop
+    | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE statement* RBRACE)? # stmt_if
+    | sql_statement SCOL # stmt_sql
+    | BREAK SCOL # stmt_break
+    | RETURN (procedure_expr_list|sql_statement) SCOL # stmt_return
+    | RETURN NEXT procedure_expr_list SCOL # stmt_return_next
+;
+
+// unfortunately necessary to preserve order in generated code
+variable_or_underscore:
+    VARIABLE | UNDERSCORE
+;
+
+procedure_function_call:
+    IDENTIFIER LPAREN (procedure_expr_list)? RPAREN #normal_call_procedure
+    | IDENTIFIER LBRACKET dbid=procedure_expr COMMA procedure=procedure_expr RBRACKET LPAREN (procedure_expr_list)? RPAREN #foreign_call_procedure
+;
+
+if_then_block:
+    procedure_expr LBRACE statement* RBRACE
+;
+
+// range used for for loops
+range:
+    procedure_expr COL procedure_expr
+;

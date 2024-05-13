@@ -224,8 +224,9 @@ func prepareInlineExpressions(exprs []tree.Expression, schema *types.Schema, err
 			// This could be a special one that returns an evaluatable that
 			// ignores the passed ResultSetFunc since the value is
 		case *tree.ExpressionTextLiteral, *tree.ExpressionIntLiteral, *tree.ExpressionBooleanLiteral,
-			*tree.ExpressionNullLiteral, *tree.ExpressionBlobLiteral, *tree.ExpressionUnary,
-			*tree.ExpressionBinaryComparison, *tree.ExpressionFunction, *tree.ExpressionArithmetic:
+			*tree.ExpressionNullLiteral, *tree.ExpressionBlobLiteral, *tree.ExpressionUint256Literal,
+			*tree.ExpressionDecimalLiteral, *tree.ExpressionUnary, *tree.ExpressionBinaryComparison,
+			*tree.ExpressionFunction, *tree.ExpressionArithmetic:
 			// Acceptable expression type.
 		default:
 			return nil, fmt.Errorf("unsupported expression type: %T", e)

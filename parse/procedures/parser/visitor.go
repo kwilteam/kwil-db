@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"strconv"
 	"strings"
@@ -121,14 +122,13 @@ func (p *proceduralLangVisitor) VisitExpr_literal(ctx *gen.Expr_literalContext) 
 }
 
 var (
-	maxInt64 = big.NewInt(9223372036854775807)
-	minInt64 = big.NewInt(-9223372036854775808)
+	maxInt64 = big.NewInt(math.MaxInt64)
+	minInt64 = big.NewInt(math.MinInt64)
 )
 
 func (p *proceduralLangVisitor) VisitLiteral(ctx *gen.LiteralContext) any {
 	switch {
 	case ctx.INT_LITERAL() != nil:
-		// TODO: we should conditionally parse for uint256 here too
 		txt := ctx.INT_LITERAL().GetText()
 
 		// parse as big int, then if it is too large for int64, we will
@@ -208,13 +208,13 @@ func (p *proceduralLangVisitor) VisitLiteral(ctx *gen.LiteralContext) any {
 			return &ExpressionNullLiteral{}
 		}
 
-		dec, err := decimal.New(txt, int16(len(parts[0])), int16(len(parts[1])))
+		dec, err := decimal.NewFromString(ctx.FIXED_LITERAL().GetText())
 		if err != nil {
-			p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, err)
+			p.errs.TokenErr(ctx.FIXED_LITERAL().GetSymbol(), parseTypes.ParseErrorTypeSemantic, err)
 			return &ExpressionNullLiteral{}
 		}
 
-		return &ExpressionFixedLiteral{
+		return &ExpressionDecimalLiteral{
 			Value: dec,
 		}
 	default:
@@ -656,7 +656,7 @@ func (p *proceduralLangVisitor) VisitType(ctx *gen.TypeContext) any {
 		literals := ctx.Literal_list().Accept(p).([]Expression)
 
 		// check here that the data type can support metadata
-		if strings.ToLower(dt.Name) == types.FixedStr {
+		if strings.ToLower(dt.Name) == types.DecimalStr {
 			if len(literals) != 2 {
 				p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("invalid metadata for type"))
 			}
@@ -673,7 +673,7 @@ func (p *proceduralLangVisitor) VisitType(ctx *gen.TypeContext) any {
 
 			// create a new fixed data type, which will validate the metadata
 			var err error
-			dt, err = types.NewFixedType(uint16(precision.Value), uint16(scale.Value))
+			dt, err = types.NewDecimalType(uint16(precision.Value), uint16(scale.Value))
 			if err != nil {
 				p.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, err)
 			}

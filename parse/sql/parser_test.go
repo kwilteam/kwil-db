@@ -561,7 +561,7 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 					},
 				}}},
 		// unary op
-		{"expr unary op +", "select +1", genSelectUnaryExprTree(tree.UnaryOperatorPlus, "1")},
+		{"expr unary op +", "select +1", genLiteralExpression("1")},
 		{"expr unary op -", "select -1", genSelectUnaryExprTree(tree.UnaryOperatorMinus, "1")},
 		{"expr unary op - twice, right associative", "select - -1",
 			&tree.SelectStmt{

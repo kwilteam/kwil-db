@@ -150,13 +150,28 @@ func (t *typingVisitor) VisitExpressionBooleanLiteral(p0 *parser.ExpressionBoole
 	return coreTypes.BoolType
 }
 
-func (t *typingVisitor) VisitExpressionFixedLiteral(p0 *parser.ExpressionFixedLiteral) any {
+func (t *typingVisitor) VisitExpressionDecimalLiteral(p0 *parser.ExpressionDecimalLiteral) any {
 	// return type cast as the type if it exists
 	if p0.TypeCast != nil {
 		return p0.TypeCast
 	}
 
-	return coreTypes.NewFixedType()
+	dt, err := coreTypes.NewDecimalType(p0.Value.Precision(), p0.Value.Scale())
+	if err != nil {
+		t.errs.NodeErr(p0.GetNode(), types.ParseErrorTypeSemantic, err)
+		return coreTypes.UnknownType
+	}
+
+	return dt
+}
+
+func (t *typingVisitor) VisitExpressionUint256Literal(p0 *parser.ExpressionUint256Literal) any {
+	// return type cast as the type if it exists
+	if p0.TypeCast != nil {
+		return p0.TypeCast
+	}
+
+	return coreTypes.Uint256Type
 }
 
 func (t *typingVisitor) VisitExpressionCall(p0 *parser.ExpressionCall) any {

@@ -7,7 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/holiman/uint256"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 	sqlwriter "github.com/kwilteam/kwil-db/parse/sql/tree/sql-writer"
 	parseTypes "github.com/kwilteam/kwil-db/parse/types"
 )
@@ -174,6 +176,68 @@ func (e *ExpressionBlobLiteral) ToSQL() string {
 	}
 
 	stmt.WriteString(fmt.Sprintf("'\\%s'", hex.EncodeToString(e.Value)))
+
+	return castSuffix(stmt.String(), e.TypeCast)
+}
+
+type ExpressionUint256Literal struct {
+	parseTypes.Node
+
+	Wrapped
+	Value    *uint256.Int
+	TypeCast *types.DataType
+}
+
+func (e *ExpressionUint256Literal) Accept(v AstVisitor) any {
+	return v.VisitExpressionUint256Literal(e)
+}
+
+func (e *ExpressionUint256Literal) Walk(w AstListener) error {
+	return run(
+		w.EnterExpressionUint256Literal(e),
+		w.ExitExpressionUint256Literal(e),
+	)
+}
+
+func (e *ExpressionUint256Literal) ToSQL() string {
+	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
+	stmt.WriteString(e.Value.String())
+	return castSuffix(stmt.String(), e.TypeCast)
+}
+
+type ExpressionDecimalLiteral struct {
+	parseTypes.Node
+
+	Wrapped
+
+	Value    *decimal.Decimal
+	TypeCast *types.DataType
+}
+
+func (e *ExpressionDecimalLiteral) Accept(v AstVisitor) any {
+	return v.VisitExpressionDecimalLiteral(e)
+}
+
+func (e *ExpressionDecimalLiteral) Walk(w AstListener) error {
+	return run(
+		w.EnterExpressionDecimalLiteral(e),
+		w.ExitExpressionDecimalLiteral(e),
+	)
+}
+
+func (e *ExpressionDecimalLiteral) ToSQL() string {
+	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
+	stmt.WriteString(e.Value.String())
 
 	return castSuffix(stmt.String(), e.TypeCast)
 }

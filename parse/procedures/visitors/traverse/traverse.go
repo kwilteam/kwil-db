@@ -23,6 +23,8 @@ type Traverser struct {
 	ExpressionIntLiteral                       func(*parser.ExpressionIntLiteral)
 	ExpressionNullLiteral                      func(*parser.ExpressionNullLiteral)
 	ExpressionBlobLiteral                      func(*parser.ExpressionBlobLiteral)
+	ExpressionDecimalLiteral                   func(*parser.ExpressionDecimalLiteral)
+	ExpressionUint256Literal                   func(*parser.ExpressionUint256Literal)
 	ExpressionMakeArray                        func(*parser.ExpressionMakeArray)
 	ExpressionCall                             func(*parser.ExpressionCall)
 	ExpressionForeignCall                      func(*parser.ExpressionForeignCall)
@@ -166,6 +168,18 @@ func (v *Traverser) VisitExpressionNullLiteral(s *parser.ExpressionNullLiteral) 
 func (v *Traverser) VisitExpressionBlobLiteral(s *parser.ExpressionBlobLiteral) interface{} {
 	if v.ExpressionBlobLiteral != nil {
 		v.ExpressionBlobLiteral(s)
+	}
+	return nil
+}
+func (v *Traverser) VisitExpressionUint256Literal(s *parser.ExpressionUint256Literal) interface{} {
+	if v.ExpressionUint256Literal != nil {
+		v.ExpressionUint256Literal(s)
+	}
+	return nil
+}
+func (v *Traverser) VisitExpressionDecimalLiteral(s *parser.ExpressionDecimalLiteral) interface{} {
+	if v.ExpressionDecimalLiteral != nil {
+		v.ExpressionDecimalLiteral(s)
 	}
 	return nil
 }

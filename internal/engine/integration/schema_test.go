@@ -183,10 +183,6 @@ func Test_Schemas(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx)
 
-			readonly, err := db.BeginReadTx(ctx)
-			require.NoError(t, err)
-			defer readonly.Rollback(ctx)
-
 			tc.fn(t, global, tx)
 		})
 	}

@@ -124,11 +124,7 @@ func (s *StatementCleaner) EnterExpressionFunction(node *tree.ExpressionFunction
 
 	_, ok := metadata.Functions[node.Function]
 	if !ok {
-		// check if it's a procedure
-		if _, ok := s.schema.FindProcedure(node.Function); ok {
-			return nil
-		}
-
+		// check if it is a procedure or foreign procedure
 		_, _, err := util.FindProcOrForeign(s.schema, node.Function)
 		if err != nil {
 			return err

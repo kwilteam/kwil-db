@@ -78,6 +78,14 @@ func (e *ExpressionBooleanLiteral) joinable() joinableStatus {
 	return joinableStatusInvalid
 }
 
+func (e *ExpressionUint256Literal) joinable() joinableStatus {
+	return joinableStatusInvalid
+}
+
+func (e *ExpressionDecimalLiteral) joinable() joinableStatus {
+	return joinableStatusInvalid
+}
+
 func (e *ExpressionBindParameter) joinable() joinableStatus {
 	return joinableStatusInvalid
 }

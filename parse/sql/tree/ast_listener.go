@@ -20,6 +20,10 @@ type AstListener interface {
 	ExitExpressionNullLiteral(*ExpressionNullLiteral) error
 	EnterExpressionBlobLiteral(*ExpressionBlobLiteral) error
 	ExitExpressionBlobLiteral(*ExpressionBlobLiteral) error
+	EnterExpressionUint256Literal(*ExpressionUint256Literal) error
+	ExitExpressionUint256Literal(*ExpressionUint256Literal) error
+	EnterExpressionDecimalLiteral(*ExpressionDecimalLiteral) error
+	ExitExpressionDecimalLiteral(*ExpressionDecimalLiteral) error
 	EnterExpressionBindParameter(*ExpressionBindParameter) error
 	ExitExpressionBindParameter(*ExpressionBindParameter) error
 	EnterExpressionColumn(*ExpressionColumn) error
@@ -265,6 +269,22 @@ func (b *BaseListener) EnterExpressionBlobLiteral(p0 *ExpressionBlobLiteral) err
 }
 
 func (b *BaseListener) ExitExpressionBlobLiteral(p0 *ExpressionBlobLiteral) error {
+	return nil
+}
+
+func (b *BaseListener) EnterExpressionUint256Literal(p0 *ExpressionUint256Literal) error {
+	return nil
+}
+
+func (b *BaseListener) ExitExpressionUint256Literal(p0 *ExpressionUint256Literal) error {
+	return nil
+}
+
+func (b *BaseListener) EnterExpressionDecimalLiteral(p0 *ExpressionDecimalLiteral) error {
+	return nil
+}
+
+func (b *BaseListener) ExitExpressionDecimalLiteral(p0 *ExpressionDecimalLiteral) error {
 	return nil
 }
 
@@ -593,6 +613,10 @@ type ImplementedListener struct {
 	FuncExitUpdateCore                  func(p0 *UpdateCore) error
 	FuncEnterUpsert                     func(p0 *Upsert) error
 	FuncExitUpsert                      func(p0 *Upsert) error
+	FuncEnterExpressionUint256Literal   func(p0 *ExpressionUint256Literal) error
+	FuncExitExpressionUint256Literal    func(p0 *ExpressionUint256Literal) error
+	FuncEnterExpressionDecimalLiteral   func(p0 *ExpressionDecimalLiteral) error
+	FuncExitExpressionDecimalLiteral    func(p0 *ExpressionDecimalLiteral) error
 }
 
 var _ AstListener = &ImplementedListener{}
@@ -1363,4 +1387,36 @@ func (b *ImplementedListener) ExitUpsert(p0 *Upsert) error {
 	}
 
 	return b.FuncExitUpsert(p0)
+}
+
+func (b *ImplementedListener) EnterExpressionUint256Literal(p0 *ExpressionUint256Literal) error {
+	if b.FuncEnterExpressionUint256Literal == nil {
+		return nil
+	}
+
+	return b.FuncEnterExpressionUint256Literal(p0)
+}
+
+func (b *ImplementedListener) ExitExpressionUint256Literal(p0 *ExpressionUint256Literal) error {
+	if b.FuncExitExpressionUint256Literal == nil {
+		return nil
+	}
+
+	return b.FuncExitExpressionUint256Literal(p0)
+}
+
+func (b *ImplementedListener) EnterExpressionDecimalLiteral(p0 *ExpressionDecimalLiteral) error {
+	if b.FuncEnterExpressionDecimalLiteral == nil {
+		return nil
+	}
+
+	return b.FuncEnterExpressionDecimalLiteral(p0)
+}
+
+func (b *ImplementedListener) ExitExpressionDecimalLiteral(p0 *ExpressionDecimalLiteral) error {
+	if b.FuncExitExpressionDecimalLiteral == nil {
+		return nil
+	}
+
+	return b.FuncExitExpressionDecimalLiteral(p0)
 }

@@ -70,7 +70,7 @@ type ParseResult struct {
 	SchemaInfo *parseTypes.SchemaInfo `json:"schema_info,omitempty"`
 }
 
-// Err returns the first error in the parse result.
+// Err returns all the errors as a single error.
 func (r *ParseResult) Err() error {
 	if r == nil {
 		return nil

@@ -16,7 +16,8 @@ func SearchResultColumns(expr tree.Expression) []*tree.ExpressionColumn {
 
 	switch e := expr.(type) {
 	case *tree.ExpressionTextLiteral, *tree.ExpressionIntLiteral, *tree.ExpressionBooleanLiteral,
-		*tree.ExpressionNullLiteral, *tree.ExpressionBlobLiteral:
+		*tree.ExpressionNullLiteral, *tree.ExpressionBlobLiteral, *tree.ExpressionUint256Literal,
+		*tree.ExpressionDecimalLiteral:
 		return nil
 	case *tree.ExpressionBindParameter:
 		return nil

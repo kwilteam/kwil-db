@@ -150,7 +150,7 @@ expr:
     | INT_LITERAL type_cast?                                             #int_literal_expr
     | NULL_LITERAL type_cast?                                            #null_literal_expr
     | BLOB_LITERAL type_cast?                                            #blob_literal_expr
-    | FIXED_LITERAL type_cast?                                           #fixed_literal_expr
+    | DECIMAL_LITERAL type_cast?                                         #decimal_literal_expr
     | variable type_cast?                                                #variable_expr
     | column_ref type_cast?                                              #column_expr
     | <assoc=right>  operator=(MINUS | PLUS) expr                        #unary_expr

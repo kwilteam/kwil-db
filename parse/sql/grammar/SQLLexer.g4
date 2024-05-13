@@ -126,10 +126,10 @@ BOOLEAN_LITERAL:
 ;
 
 INT_LITERAL:
-    ('-'|'+')?[0-9]+
+    [0-9]+
 ;
 
-FIXED_LITERAL:
+DECIMAL_LITERAL:
     ('-'|'+')?[0-9]+ '.' [0-9]+
 ;
 

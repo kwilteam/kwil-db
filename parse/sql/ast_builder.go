@@ -4,13 +4,17 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
+	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
+	"github.com/holiman/uint256"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 	grammar "github.com/kwilteam/kwil-db/parse/sql/gen"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 	parseTypes "github.com/kwilteam/kwil-db/parse/types"
@@ -118,17 +122,39 @@ func (v *astBuilder) VisitText_literal_expr(ctx *grammar.Text_literal_exprContex
 	return expr
 }
 
+var (
+	maxInt64 = big.NewInt(math.MaxInt64)
+	minInt64 = big.NewInt(math.MinInt64)
+)
+
+// IntLiteral handles both ints and uint256s
 func (v *astBuilder) VisitInt_literal_expr(ctx *grammar.Int_literal_exprContext) interface{} {
-	t := ctx.INT_LITERAL().GetText()
-	val, err := strconv.ParseInt(t, 10, 64)
-	if err != nil {
+	bigNum := new(big.Int)
+	_, ok := bigNum.SetString(ctx.INT_LITERAL().GetText(), 10)
+	if !ok {
 		// this shouldn't happen, and should be caught by the lexer
-		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, fmt.Errorf("failed to parse numeric literal %s: %w", t, err))
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("failed to parse numeric literal"))
+		return &tree.ExpressionIntLiteral{}
+	}
+	if bigNum.Cmp(maxInt64) > 0 {
+		// make it a uint256
+		u256, ok := uint256.FromBig(bigNum)
+		if !ok {
+			v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("failed to parse numeric literal"))
+			return &tree.ExpressionIntLiteral{}
+		}
+
+		return &tree.ExpressionUint256Literal{
+			Value: u256,
+		}
+	} else if bigNum.Cmp(minInt64) < 0 {
+		// error
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSyntax, errors.New("failed to parse numeric literal"))
 		return &tree.ExpressionIntLiteral{}
 	}
 
 	expr := &tree.ExpressionIntLiteral{
-		Value: val,
+		Value: bigNum.Int64(),
 	}
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
@@ -186,6 +212,25 @@ func (v *astBuilder) VisitBlob_literal_expr(ctx *grammar.Blob_literal_exprContex
 
 	expr := &tree.ExpressionBlobLiteral{
 		Value: decoded,
+	}
+	if ctx.Type_cast() != nil {
+		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)
+	}
+	expr.Set(ctx)
+
+	return expr
+}
+
+func (v *astBuilder) VisitDecimal_literal_expr(ctx *grammar.Decimal_literal_exprContext) interface{} {
+	dec, err := decimal.NewFromString(ctx.DECIMAL_LITERAL().GetText())
+	if err != nil {
+		// this shouldn't happen, and should be caught by the lexer
+		v.errs.RuleErr(ctx, parseTypes.ParseErrorTypeSemantic, err)
+		return &tree.ExpressionNullLiteral{}
+	}
+
+	expr := &tree.ExpressionDecimalLiteral{
+		Value: dec,
 	}
 	if ctx.Type_cast() != nil {
 		expr.TypeCast = v.Visit(ctx.Type_cast()).(*types.DataType)

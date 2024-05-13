@@ -652,6 +652,33 @@ func (t *typeVisitor) VisitExpressionBlobLiteral(p0 *tree.ExpressionBlobLiteral)
 	})
 }
 
+func (t *typeVisitor) VisitExpressionUint256Literal(p0 *tree.ExpressionUint256Literal) any {
+	return attributeFn(func(ev *evaluationContext) *QualifiedAttribute {
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast)
+		}
+
+		return anonAttr(types.Uint256Type)
+	})
+}
+
+func (t *typeVisitor) VisitExpressionDecimalLiteral(p0 *tree.ExpressionDecimalLiteral) any {
+	return attributeFn(func(ev *evaluationContext) *QualifiedAttribute {
+		if p0.TypeCast != nil {
+			return anonAttr(p0.TypeCast)
+		}
+
+		dt, err := types.NewDecimalType(p0.Value.Precision(), p0.Value.Scale())
+		if err != nil {
+			t.ErrorListener.NodeErr(p0.GetNode(), parseTypes.ParseErrorTypeSemantic, err)
+			return unknownAttr()
+		}
+
+		return anonAttr(dt)
+	})
+
+}
+
 func (t *typeVisitor) VisitExpressionSelect(p0 *tree.ExpressionSelect) any {
 	return attributeFn(func(ev *evaluationContext) *QualifiedAttribute {
 		r := p0.Select.Accept(t).(returnFunc)(ev)

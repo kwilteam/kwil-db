@@ -55,20 +55,14 @@ type SQLParserVisitor interface {
 	// Visit a parse tree produced by SQLParser#logical_not_expr.
 	VisitLogical_not_expr(ctx *Logical_not_exprContext) interface{}
 
-	// Visit a parse tree produced by SQLParser#boolean_literal_expr.
-	VisitBoolean_literal_expr(ctx *Boolean_literal_exprContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#comparison_expr.
-	VisitComparison_expr(ctx *Comparison_exprContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#like_expr.
-	VisitLike_expr(ctx *Like_exprContext) interface{}
-
 	// Visit a parse tree produced by SQLParser#null_expr.
 	VisitNull_expr(ctx *Null_exprContext) interface{}
 
 	// Visit a parse tree produced by SQLParser#column_expr.
 	VisitColumn_expr(ctx *Column_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#decimal_literal_expr.
+	VisitDecimal_literal_expr(ctx *Decimal_literal_exprContext) interface{}
 
 	// Visit a parse tree produced by SQLParser#in_subquery_expr.
 	VisitIn_subquery_expr(ctx *In_subquery_exprContext) interface{}
@@ -78,6 +72,36 @@ type SQLParserVisitor interface {
 
 	// Visit a parse tree produced by SQLParser#logical_binary_expr.
 	VisitLogical_binary_expr(ctx *Logical_binary_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#parenthesized_expr.
+	VisitParenthesized_expr(ctx *Parenthesized_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#between_expr.
+	VisitBetween_expr(ctx *Between_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#expr_list_expr.
+	VisitExpr_list_expr(ctx *Expr_list_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#null_literal_expr.
+	VisitNull_literal_expr(ctx *Null_literal_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#case_expr.
+	VisitCase_expr(ctx *Case_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#function_expr.
+	VisitFunction_expr(ctx *Function_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#blob_literal_expr.
+	VisitBlob_literal_expr(ctx *Blob_literal_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#boolean_literal_expr.
+	VisitBoolean_literal_expr(ctx *Boolean_literal_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#comparison_expr.
+	VisitComparison_expr(ctx *Comparison_exprContext) interface{}
+
+	// Visit a parse tree produced by SQLParser#like_expr.
+	VisitLike_expr(ctx *Like_exprContext) interface{}
 
 	// Visit a parse tree produced by SQLParser#variable_expr.
 	VisitVariable_expr(ctx *Variable_exprContext) interface{}
@@ -94,32 +118,11 @@ type SQLParserVisitor interface {
 	// Visit a parse tree produced by SQLParser#collate_expr.
 	VisitCollate_expr(ctx *Collate_exprContext) interface{}
 
-	// Visit a parse tree produced by SQLParser#parenthesized_expr.
-	VisitParenthesized_expr(ctx *Parenthesized_exprContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#between_expr.
-	VisitBetween_expr(ctx *Between_exprContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#expr_list_expr.
-	VisitExpr_list_expr(ctx *Expr_list_exprContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#null_literal_expr.
-	VisitNull_literal_expr(ctx *Null_literal_exprContext) interface{}
-
 	// Visit a parse tree produced by SQLParser#in_list_expr.
 	VisitIn_list_expr(ctx *In_list_exprContext) interface{}
 
 	// Visit a parse tree produced by SQLParser#is_expr.
 	VisitIs_expr(ctx *Is_exprContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#case_expr.
-	VisitCase_expr(ctx *Case_exprContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#function_expr.
-	VisitFunction_expr(ctx *Function_exprContext) interface{}
-
-	// Visit a parse tree produced by SQLParser#blob_literal_expr.
-	VisitBlob_literal_expr(ctx *Blob_literal_exprContext) interface{}
 
 	// Visit a parse tree produced by SQLParser#subquery.
 	VisitSubquery(ctx *SubqueryContext) interface{}
