@@ -12,10 +12,10 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/client"
-	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
+	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/gateway"
-	jsonrpcGateway "github.com/kwilteam/kwil-db/core/rpc/client/gateway/jsonrpc"
-	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
+	gwClient "github.com/kwilteam/kwil-db/core/rpc/client/gateway/jsonrpc"
+	userClient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 )
@@ -25,7 +25,7 @@ import (
 // authentication cookies to the gateway.
 // It automatically handles the authentication process with the gateway.
 type GatewayClient struct {
-	client.Client // user client
+	client.Client // core client
 
 	target *url.URL
 
@@ -93,25 +93,27 @@ func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*Gatew
 		return nil, fmt.Errorf("parse target: %w", err)
 	}
 
-	jsonrpcClientOpts := []rpcclient.Opts{}
+	jsonrpcClientOpts := []rpcclient.RPCClientOpts{
+		// so txClient and gatewayClient can share the connection
+		rpcclient.WithHTTPClient(httpConn),
+	}
+
 	if options != nil {
 		jsonrpcClientOpts = append(jsonrpcClientOpts,
 			rpcclient.WithLogger(options.Logger),
-			// so txClient and gatewayClient can share the connection
-			rpcclient.WithHTTPClient(httpConn),
 		)
 	}
 
-	// NOTE: we are not using client.NewClient here, so we can configure
-	// it to use same http connection as gatewayClient.
-	txClient := rpcclient.NewClient(parsedTarget, jsonrpcClientOpts...)
+	txClient := userClient.NewClient(parsedTarget, jsonrpcClientOpts...)
 	userClient, err := client.WrapClient(ctx, txClient, &options.Options)
 	if err != nil {
 		return nil, fmt.Errorf("wrap client: %w", err)
 	}
 
-	gatewayClient, err := jsonrpcGateway.NewClient(parsedTarget,
-		gateway.WithHTTPClient(httpConn))
+	gatewayClient, err := gwClient.NewClient(parsedTarget,
+		// reuse the same http connection
+		gateway.WithJSONRPCClient(txClient.JSONRPCClient),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("create gateway rpc client: %w", err)
 	}
@@ -160,10 +162,6 @@ func (c *GatewayClient) Call(ctx context.Context, dbid string, action string, in
 		}
 	}
 
-	//if !errors.Is(err, rpcClient.ErrUnauthorized) {
-	//	return nil, err
-	//}
-
 	// we need to authenticate
 	err = c.authenticate(ctx)
 	if err != nil {
@@ -178,7 +176,7 @@ func (c *GatewayClient) Call(ctx context.Context, dbid string, action string, in
 func (c *GatewayClient) authenticate(ctx context.Context) error {
 	authParam, err := c.gatewayClient.GetAuthnParameter(ctx)
 	if err != nil {
-		if errors.Is(err, rpcClient.ErrNotFound) {
+		if errors.Is(err, rpcclient.ErrNotFound) {
 			return fmt.Errorf("failed to get auth parameter. are you sure you're talking to a gateway? err: %w", err)
 		}
 		return fmt.Errorf("get authn parameter: %w", err)

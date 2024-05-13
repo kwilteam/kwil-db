@@ -15,9 +15,9 @@ import (
 	"github.com/cstockton/go-conv"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
+	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
-	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
+	userClient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -66,11 +66,11 @@ func NewClient(ctx context.Context, target string, options *clientType.Options) 
 	// 	}
 	// }
 
-	jsonrpcClientOpts := []rpcclient.Opts{}
+	jsonrpcClientOpts := []rpcclient.RPCClientOpts{}
 	if options != nil && options.Logger.L != nil {
 		jsonrpcClientOpts = append(jsonrpcClientOpts, rpcclient.WithLogger(options.Logger))
 	}
-	client := rpcclient.NewClient(parsedURL, jsonrpcClientOpts...)
+	client := userClient.NewClient(parsedURL, jsonrpcClientOpts...)
 
 	clt, err := WrapClient(ctx, client, options)
 	if err != nil {
@@ -113,10 +113,10 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 	return c, nil
 }
 
-func syncBcastFlag(syncBcast bool) rpcClient.BroadcastWait {
-	syncFlag := rpcClient.BroadcastWaitSync
+func syncBcastFlag(syncBcast bool) rpcclient.BroadcastWait {
+	syncFlag := rpcclient.BroadcastWaitSync
 	if syncBcast { // the bool really means wait for commit in cometbft terms
-		syncFlag = rpcClient.BroadcastWaitCommit
+		syncFlag = rpcclient.BroadcastWaitCommit
 	}
 	return syncFlag
 }
@@ -379,7 +379,7 @@ func (c *Client) WaitTx(ctx context.Context, txHash []byte, interval time.Durati
 		resp, err := c.TxQuery(ctx, txHash)
 		if err != nil {
 			// Only error out if it's something other than not found.
-			if !errors.Is(err, rpcClient.ErrNotFound) {
+			if !errors.Is(err, rpcclient.ErrNotFound) {
 				return nil, err
 			} // else not found, try again next time
 		} else if resp.Height > 0 {

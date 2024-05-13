@@ -12,7 +12,7 @@ import (
 	ec "github.com/ethereum/go-ethereum/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
+	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -60,7 +60,7 @@ func (d *KwildClientDriver) GetUserPublicKey() []byte {
 func (d *KwildClientDriver) TxSuccess(ctx context.Context, txHash []byte) error {
 	resp, err := d.clt.TxQuery(ctx, txHash)
 	if err != nil {
-		if errors.Is(err, rpcClient.ErrNotFound) {
+		if errors.Is(err, rpcclient.ErrNotFound) {
 			return ErrTxNotConfirmed // not quite, but for this driver it's a retry condition
 		}
 		return fmt.Errorf("failed to query: %w", err)

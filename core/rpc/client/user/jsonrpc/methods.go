@@ -1,4 +1,6 @@
-package rpcclient
+// Package jsonrpc implements the core/rpc/client/user.TxSvcClient interface
+// that is required by core/client.Client.
+package jsonrpc
 
 import (
 	"context"
@@ -6,14 +8,28 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/url"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/core/rpc/client"
+	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
+
+// Client is a JSON-RPC client for the Kwil user service. It use the JSONRPCClient
+// from the rpcclient package for the actual JSON-RPC communication, and implements
+// the user.TxSvcClient interface.
+type Client struct {
+	*rpcclient.JSONRPCClient
+}
+
+func NewClient(url *url.URL, opts ...rpcclient.RPCClientOpts) *Client {
+	return &Client{
+		JSONRPCClient: rpcclient.NewJSONRPCClient(url, opts...),
+	}
+}
 
 var _ user.TxSvcClient = (*Client)(nil)
 
@@ -29,7 +45,7 @@ func (cl *Client) Ping(ctx context.Context) (string, error) {
 	return res.Message, nil
 }
 
-func (cl *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, sync client.BroadcastWait) ([]byte, error) {
+func (cl *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, sync rpcclient.BroadcastWait) ([]byte, error) {
 	cmd := &jsonrpc.BroadcastRequest{
 		Tx:   tx,
 		Sync: (*jsonrpc.BroadcastSync)(&sync),
@@ -88,7 +104,7 @@ func unmarshalMapResults(b []byte) ([]map[string]any, error) {
 	return result, nil
 }
 
-func (cl *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...client.ActionCallOption) ([]map[string]any, error) {
+func (cl *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...rpcclient.ActionCallOption) ([]map[string]any, error) {
 	cmd := &jsonrpc.CallRequest{
 		Body:     msg.Body,
 		AuthType: msg.AuthType,

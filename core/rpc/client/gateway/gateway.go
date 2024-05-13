@@ -47,5 +47,5 @@ type AuthnParameterResponse struct {
 const (
 	MethodAuthn      = "kgw.authn"
 	MethodAuthnParam = "kgw.authn_param"
-	MethodLogout     = "kgw.logout"
+	//MethodLogout     = "kgw.logout"
 )

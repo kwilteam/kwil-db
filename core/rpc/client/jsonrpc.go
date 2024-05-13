@@ -1,8 +1,7 @@
-// Package rpcclient provides a Kwil JSON-RPC (API v1) client. It supports only
-// HTTP POST, no WebSockets yet. The Client type implements the
-// core/rpc/client/user.TxSvcClient interface that is required by
-// core/client.Client.
-package rpcclient
+// Package client provides some base Kwil rpc clients.
+// JSONRPCClient is a JSON-RPC (API v1) client supports only HTTP POST, no
+// WebSockets yet.
+package client
 
 import (
 	"bytes"
@@ -17,11 +16,10 @@ import (
 	"sync/atomic"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/core/rpc/client"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 )
 
-// client will use the commands to make certain requests
+// JSONRPCClient will use the commands to make certain requests
 //  - "params" field is set to the marshalled request structs
 //  - the "method" in the outer request type is instead of the endpoint, all POST
 //  - "id" is set to a counter's value
@@ -39,18 +37,22 @@ import (
 //    message (pb) types sent in POST, or just GET with endpoint implying method.
 //  - the "method" in the outer request type is instead of the endpoint, all POST
 
-type Client struct {
-	client   *http.Client
+// JSONRPCClient is a JSON-RPC client that handles JSON RPC communication.
+// It is a low-level client that does not care about the specifics of the
+// JSON-RPC methods or responses.
+type JSONRPCClient struct {
+	conn *http.Client
+
 	endpoint string
 	log      log.Logger
 
 	reqID atomic.Uint64
 }
 
-// NewClient creates a new v1 JSON-RPC Client for a provider at a given base URL
+// NewJSONRPCClient creates a new JSONRPCClient for a provider at a given base URL
 // of an HTTP server where the "/rpc/v1" rooted. i.e. The URL should not include
 // "/rpc/v1" as that is appended automatically.
-func NewClient(url *url.URL, opts ...Opts) *Client {
+func NewJSONRPCClient(url *url.URL, opts ...RPCClientOpts) *JSONRPCClient {
 	// This client uses API v1 methods and request/response types.
 	url = url.JoinPath("/rpc/v1")
 
@@ -62,42 +64,42 @@ func NewClient(url *url.URL, opts ...Opts) *Client {
 		opt(clientOpts)
 	}
 
-	cl := &Client{
+	cl := &JSONRPCClient{
 		endpoint: url.String(),
-		client:   clientOpts.client,
+		conn:     clientOpts.client,
 		log:      clientOpts.log,
 	}
 
 	return cl
 }
 
-type Opts func(*clientOptions)
+type RPCClientOpts func(*clientOptions)
 
 type clientOptions struct {
 	client *http.Client
 	log    log.Logger
 }
 
-func WithLogger(log log.Logger) Opts {
+func WithLogger(log log.Logger) RPCClientOpts {
 	return func(c *clientOptions) {
 		c.log = log
 	}
 }
 
-func WithHTTPClient(client *http.Client) Opts {
+func WithHTTPClient(client *http.Client) RPCClientOpts {
 	return func(c *clientOptions) {
 		c.client = client
 	}
 }
 
-func (cl *Client) nextReqID() string {
+func (cl *JSONRPCClient) nextReqID() string {
 	id := cl.reqID.Add(1)
 	return strconv.FormatUint(id, 10)
 }
 
 // NOTE: make a BaseClient with CallMethod only.
 
-func (cl *Client) CallMethod(ctx context.Context, method string, cmd, res any) error {
+func (cl *JSONRPCClient) CallMethod(ctx context.Context, method string, cmd, res any) error {
 	// res needs to be a pointer otherwise we can't unmarshal into it.
 	if rtp := reflect.TypeOf(res); rtp.Kind() != reflect.Ptr {
 		return errors.New("result must be a pointer")
@@ -129,7 +131,7 @@ func (cl *Client) CallMethod(ctx context.Context, method string, cmd, res any) e
 	httpReq.Header.Set("Content-Type", "application/json")
 	// httpReq.SetBasicAuth(c.User, c.Pass)
 
-	httpResponse, err := cl.client.Do(httpReq)
+	httpResponse, err := cl.conn.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("http post failed: %w", err)
 	}
@@ -142,9 +144,9 @@ func (cl *Client) CallMethod(ctx context.Context, method string, cmd, res any) e
 	switch status := httpResponse.StatusCode; status {
 	case http.StatusOK: // expected with nil resp.Error
 	case http.StatusUnauthorized:
-		httpErr = client.ErrUnauthorized
+		httpErr = ErrUnauthorized
 	case http.StatusNotFound:
-		httpErr = client.ErrNotFound
+		httpErr = ErrNotFound
 	case http.StatusInternalServerError:
 		httpErr = errors.New("server error")
 	default:
@@ -187,7 +189,7 @@ func (cl *Client) CallMethod(ctx context.Context, method string, cmd, res any) e
 // clientError joins a jsonrpc.Error with a client.RPCError and any appropriate
 // named error kind like ErrNotFound, ErrUnauthorized, etc. based on the code.
 func clientError(jsonRPCErr *jsonrpc.Error) error {
-	rpcErr := &client.RPCError{
+	rpcErr := &RPCError{
 		Msg:  jsonRPCErr.Message,
 		Code: int32(jsonRPCErr.Code),
 	}
@@ -195,11 +197,11 @@ func clientError(jsonRPCErr *jsonrpc.Error) error {
 
 	switch jsonRPCErr.Code {
 	case jsonrpc.ErrorEngineDatasetNotFound, jsonrpc.ErrorTxNotFound, jsonrpc.ErrorValidatorNotFound:
-		return errors.Join(client.ErrNotFound, err)
+		return errors.Join(ErrNotFound, err)
 	case jsonrpc.ErrorUnknownMethod:
 		// TODO: change to client.ErrMethodNotFound. This should be different
 		// from other "not found" conditions
-		return errors.Join(client.ErrNotFound, err)
+		return errors.Join(ErrNotFound, err)
 	// case jsonrpc.ErrorUnauthorized: // not yet used on server
 	// 	return errors.Join(client.ErrUnauthorized, err)
 	// case jsonrpc.ErrorInvalidSignature: // or leave this to core/client.Client to detect and report
