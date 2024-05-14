@@ -17,6 +17,7 @@ const (
 	// ErrorResultEncoding is when the application handles the request without
 	// error, but a result structure fails to encode to JSON.
 	ErrorResultEncoding ErrorCode = -32000
+	ErrorTimeout        ErrorCode = -32001
 
 	// Application errors get the rest of the code space.
 

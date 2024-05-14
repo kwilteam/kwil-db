@@ -1,6 +1,16 @@
 package rpcserver
 
-import "testing"
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func ptrTo[T any](x T) *T {
 	return &x
@@ -33,4 +43,27 @@ func Test_zeroID(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_timeout(t *testing.T) {
+	// This handler will simulate a request that exceeds the timeout.
+	var h http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(5 * time.Second)
+		w.WriteHeader(http.StatusOK) // if test passes, should not get this!
+	})
+
+	// Wrap that handler with a 500ms timeout.
+	h = jsonRPCTimeoutHandler(h, 500*time.Millisecond)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	h.ServeHTTP(w, r)
+
+	// Expect http.TimeoutHandler to have responded...
+	assert.Equal(t, http.StatusServiceUnavailable, w.Result().StatusCode)
+
+	// ...with our jsonrpc.Error.Code
+	var resp jsonrpc.Response
+	err := json.NewDecoder(w.Body).Decode(&resp)
+	require.NoError(t, err)
+	assert.Equal(t, resp.Error.Code, jsonrpc.ErrorTimeout)
 }

@@ -3,6 +3,7 @@ package txsvc
 import (
 	"context"
 	"math/big"
+	"time"
 
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/kwilteam/kwil-db/common"
@@ -15,12 +16,15 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
+const defaultReadTxTimeout = 5 * time.Second
+
 type Service struct {
 	txpb.UnimplementedTxServiceServer
 
 	log log.Logger
 
-	engine EngineReader
+	readTxTimeout time.Duration
+	engine        EngineReader
 
 	db sql.ReadTxMaker // this should only ever make a read-only tx
 
@@ -31,11 +35,12 @@ type Service struct {
 func NewService(db sql.ReadTxMaker, engine EngineReader,
 	chainClient BlockchainTransactor, nodeApp NodeApplication, opts ...TxSvcOpt) *Service {
 	s := &Service{
-		log:         log.NewNoOp(),
-		engine:      engine,
-		nodeApp:     nodeApp,
-		chainClient: chainClient,
-		db:          db,
+		log:           log.NewNoOp(),
+		readTxTimeout: defaultReadTxTimeout,
+		engine:        engine,
+		nodeApp:       nodeApp,
+		chainClient:   chainClient,
+		db:            db,
 	}
 
 	for _, opt := range opts {

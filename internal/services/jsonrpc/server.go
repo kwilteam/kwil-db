@@ -42,6 +42,7 @@ type Server struct {
 type serverConfig struct {
 	pass      string
 	tlsConfig *tls.Config
+	timeout   time.Duration
 }
 
 type Opt func(*serverConfig)
@@ -60,6 +61,14 @@ func WithPass(pass string) Opt {
 func WithTLS(cfg *tls.Config) Opt {
 	return func(c *serverConfig) {
 		c.tlsConfig = cfg
+	}
+}
+
+// WithTimeout specifies a timeout on all RPC requests that when exceeded will
+// cancel the request.
+func WithTimeout(timeout time.Duration) Opt {
+	return func(c *serverConfig) {
+		c.timeout = timeout
 	}
 }
 
@@ -90,6 +99,9 @@ func checkAddr(addr string) (string, bool, error) {
 	return net.JoinHostPort(host, port), false, nil
 }
 
+// defaultWriteTimeout is the default WriteTimeout for the http.Server.
+const defaultWriteTimeout = 45 * time.Second
+
 // NewServer creates a new JSON-RPC server. Use RegisterMethodHandler or
 // RegisterSvc to add method handlers.
 func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
@@ -110,7 +122,9 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		}
 	}
 
-	cfg := &serverConfig{}
+	cfg := &serverConfig{
+		timeout: defaultWriteTimeout,
+	}
 	for _, opt := range opts {
 		opt(cfg)
 	}
@@ -121,8 +135,15 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		Addr:              addr, // only used with srv.ListenAndServe, not Serve
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      60 * time.Second,
+		ReadTimeout:       30 * time.Second, // receiving request body should not take longer
+		WriteTimeout:      cfg.timeout,      // full request handling: receive request, handle request, AND send response
+	}
+
+	if srv.ReadTimeout > srv.WriteTimeout {
+		srv.ReadTimeout = srv.WriteTimeout
+	}
+	if srv.ReadHeaderTimeout > srv.ReadTimeout {
+		srv.ReadHeaderTimeout = srv.ReadTimeout
 	}
 
 	s := &Server{
@@ -141,11 +162,23 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	var h http.Handler
 	h = http.HandlerFunc(s.handlerV1)
 	h = http.MaxBytesHandler(h, 1<<22)
+	// amazingly, exceeding the server's write timeout does not cancel request
+	// contexts: https://github.com/golang/go/issues/59602
+	// So, we add a timeout to the Request's context.
+	h = jsonRPCTimeoutHandler(h, srv.WriteTimeout)
 	h = recoverer(h, log)
 
 	mux.Handle(pathV1, h)
 
 	return s, nil
+}
+
+func jsonRPCTimeoutHandler(h http.Handler, timeout time.Duration) http.Handler {
+	// We'll respond with a jsonrpc.Response type, but the request handler is
+	// downstream and we don't have the request ID.
+	resp := jsonrpc.NewErrorResponse(-1, jsonrpc.NewError(jsonrpc.ErrorTimeout, "timeout", nil))
+	respMsg, _ := json.Marshal(resp)
+	return http.TimeoutHandler(h, timeout, string(respMsg))
 }
 
 func recoverer(h http.Handler, log log.Logger) http.Handler {

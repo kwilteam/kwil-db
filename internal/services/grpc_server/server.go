@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"net"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
 
@@ -12,18 +14,46 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// unaryTimeoutInterceptor is a unary server interceptor that sets a timeout for each request.
+func unaryTimeoutInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		ctx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+
+		done := make(chan struct{})
+		var res any
+		var err error
+
+		go func() {
+			res, err = handler(ctx, req)
+			close(done)
+		}()
+
+		select {
+		case <-ctx.Done(): // canceled, handler should return soon, but don't wait
+			return nil, status.Errorf(codes.DeadlineExceeded, "request timed out")
+		case <-done: // finished before timeout
+			return res, err
+		}
+	}
+}
+
 type Server struct {
 	server   *grpc.Server
 	logger   log.Logger
 	listener net.Listener
 
+	// config used only in constructor :(
 	srvOpts []grpc.ServerOption
+	timeout time.Duration
 }
+
+const defaultTimeout = 30 * time.Second
 
 func New(logger log.Logger, lis net.Listener, opts ...Option) *Server {
 	l := *logger.WithOptions(zap.WithCaller(false))
 
-	recoveryFunc := func(p interface{}) error {
+	recoveryFunc := func(p any) error {
 		l.Error("panic triggered", zap.Any("panic", p))
 		return status.Errorf(codes.Unknown, "unknown error")
 	}
@@ -34,6 +64,7 @@ func New(logger log.Logger, lis net.Listener, opts ...Option) *Server {
 	s := &Server{
 		logger:   l,
 		listener: lis,
+		timeout:  defaultTimeout,
 	}
 
 	for _, opt := range opts {
@@ -41,6 +72,7 @@ func New(logger log.Logger, lis net.Listener, opts ...Option) *Server {
 	}
 	srvOpts := append(s.srvOpts, grpc.ChainUnaryInterceptor(
 		recovery.UnaryServerInterceptor(recoveryOpts...),
+		unaryTimeoutInterceptor(s.timeout),
 		SimpleInterceptorLogger(&l),
 	))
 

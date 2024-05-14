@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	// BlockchainTransactor returns have some big structs from cometbft.
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types" // :(
@@ -27,7 +28,8 @@ import (
 
 // Service is the "user" RPC service, also known as txsvc in other contexts.
 type Service struct {
-	log log.Logger
+	log           log.Logger
+	readTxTimeout time.Duration
 
 	engine      EngineReader
 	db          sql.ReadTxMaker // this should only ever make a read-only tx
@@ -35,15 +37,39 @@ type Service struct {
 	chainClient BlockchainTransactor
 }
 
+type serviceCfg struct {
+	readTxTimeout time.Duration
+}
+
+// Opt is a Service option.
+type Opt func(*serviceCfg)
+
+// WithReadTxTimeout sets a timeout for read-only DB transactions, as used by
+// the Query and Call methods of Service.
+func WithReadTxTimeout(timeout time.Duration) Opt {
+	return func(cfg *serviceCfg) {
+		cfg.readTxTimeout = timeout
+	}
+}
+
+const defaultReadTxTimeout = 5 * time.Second
+
 // NewService creates a new instance of the user RPC service.
-func NewService(db sql.ReadTxMaker, engine EngineReader,
-	chainClient BlockchainTransactor, nodeApp NodeApplication, logger log.Logger) *Service {
+func NewService(db sql.ReadTxMaker, engine EngineReader, chainClient BlockchainTransactor,
+	nodeApp NodeApplication, logger log.Logger, opts ...Opt) *Service {
+	cfg := &serviceCfg{
+		readTxTimeout: defaultReadTxTimeout,
+	}
+	for _, opt := range opts {
+		opt(cfg)
+	}
 	return &Service{
-		log:         logger,
-		engine:      engine,
-		nodeApp:     nodeApp,
-		chainClient: chainClient,
-		db:          db,
+		log:           logger,
+		readTxTimeout: cfg.readTxTimeout,
+		engine:        engine,
+		nodeApp:       nodeApp,
+		chainClient:   chainClient,
+		db:            db,
 	}
 }
 
@@ -223,7 +249,10 @@ func (svc *Service) Query(ctx context.Context, req *jsonrpc.QueryRequest) (*json
 	}
 	defer tx.Rollback(ctx)
 
-	result, err := svc.engine.Execute(ctx, tx, req.DBID, req.Query, nil)
+	ctxExec, cancel := context.WithTimeout(ctx, svc.readTxTimeout)
+	defer cancel()
+
+	result, err := svc.engine.Execute(ctxExec, tx, req.DBID, req.Query, nil)
 	if err != nil {
 		// We don't know for sure that it's an invalid argument, but an invalid
 		// user-provided query isn't an internal server error.
@@ -403,7 +432,10 @@ func (svc *Service) Call(ctx context.Context, req *jsonrpc.CallRequest) (*jsonrp
 	}
 	defer tx.Rollback(ctx)
 
-	executeResult, err := svc.engine.Procedure(ctx, tx, &common.ExecutionData{
+	ctxExec, cancel := context.WithTimeout(ctx, svc.readTxTimeout)
+	defer cancel()
+
+	executeResult, err := svc.engine.Procedure(ctxExec, tx, &common.ExecutionData{
 		Dataset:   body.DBID,
 		Procedure: body.Action,
 		Args:      args,
