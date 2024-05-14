@@ -169,6 +169,43 @@ func Example_respTxQuery_json() {
 	// }
 }
 
+func Example_empty_respTxQuery_text() {
+	txResp := getExampleTxQueryResponse()
+	txResp.Tx = transactions.Transaction{}
+	Print(&RespTxQuery{Msg: txResp}, nil, "text")
+	// Output:
+	// Transaction ID: 31303234
+	// Status: success
+	// Height: 10
+	// Log: This is log
+}
+
+func Example_empty_respTxQuery_json() {
+	txResp := getExampleTxQueryResponse()
+	txResp.Tx = transactions.Transaction{}
+	Print(&RespTxQuery{Msg: txResp}, nil, "json")
+	// Output:
+	// {
+	//   "result": {
+	//     "hash": "31303234",
+	//     "height": 10,
+	//     "tx": {
+	//       "Signature": null,
+	//       "Body": null,
+	//       "Serialization": "",
+	//       "Sender": null
+	//     },
+	//     "tx_result": {
+	//       "code": 0,
+	//       "log": "This is log",
+	//       "gas_used": 10,
+	//       "gas_wanted": 10
+	//     }
+	//   },
+	//   "error": ""
+	// }
+}
+
 func Test_TxHashAndExecResponse(t *testing.T) {
 	hash := []byte{1, 2, 3, 4, 5}
 	qr := getExampleTxQueryResponse()

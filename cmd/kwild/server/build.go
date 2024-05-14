@@ -199,7 +199,10 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
 	cometBftClient := buildCometBftClient(cometBftNode)
-	wrappedCmtClient := &wrappedCometBFTClient{cometBftClient}
+	wrappedCmtClient := &wrappedCometBFTClient{
+		cl:    cometBftClient,
+		cache: abciApp,
+	}
 
 	eventBroadcaster := buildEventBroadcaster(d, ev, wrappedCmtClient, txApp)
 	abciApp.SetEventBroadcaster(eventBroadcaster.RunBroadcast)
