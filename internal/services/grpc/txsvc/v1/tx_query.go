@@ -29,13 +29,15 @@ func (s *Service) TxQuery(ctx context.Context, req *txpb.TxQueryRequest) (*txpb.
 		return nil, status.Error(codes.Unknown, "failed to query transaction")
 	}
 
-	originalTx := &transactions.Transaction{}
-	if err := originalTx.UnmarshalBinary(cmtResult.Tx); err != nil {
-		logger.Error("failed to deserialize transaction", zap.Error(err))
-		return nil, status.Error(codes.Internal, "failed to deserialize transaction")
+	var tx *txpb.Transaction
+	if len(cmtResult.Tx) > 0 {
+		originalTx := &transactions.Transaction{}
+		if err := originalTx.UnmarshalBinary(cmtResult.Tx); err != nil {
+			logger.Error("failed to deserialize transaction", zap.Error(err))
+			return nil, status.Error(codes.Internal, "failed to deserialize transaction")
+		}
+		tx = conversion.ConvertToPBTx(originalTx)
 	}
-
-	tx := conversion.ConvertToPBTx(originalTx)
 
 	txResult := &txpb.TransactionResult{
 		Code:      cmtResult.TxResult.Code,
