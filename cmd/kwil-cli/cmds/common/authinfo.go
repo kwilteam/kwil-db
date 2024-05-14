@@ -19,7 +19,7 @@ const (
 	kgwAuthTokenFileName = "auth.json"
 )
 
-// KGWAuthTokenFilePath returns the path to the file that stores the Gateway Auth cookies.
+// KGWAuthTokenFilePath returns the path to the file that stores the Gateway Authn cookies.
 func KGWAuthTokenFilePath() string {
 	return filepath.Join(config.DefaultConfigDir, kgwAuthTokenFileName)
 }
@@ -79,6 +79,7 @@ func convertToHttpCookie(c cookie) *http.Cookie {
 	}
 }
 
+// PersistedCookies is a set of Gateway Authn cookies that can be saved to a file.
 // getDomain returns the domain of the URL.
 func getDomain(target string) (string, error) {
 	if target == "" {
@@ -108,7 +109,7 @@ func getCookieIdentifier(domain string, userIdentifier []byte) string {
 // It uses a custom cookie type that is json serializable.
 type PersistedCookies map[string]cookie
 
-// LoadPersistedCookie loads a persisted cookie from the auth file.
+// LoadPersistedCookie loads a persisted cookie from the authn file.
 // It will look up the cookie for the given user identifier.
 // If nothing is found, it returns nil, nil.
 func LoadPersistedCookie(authFile string, domain string, userIdentifier []byte) (*http.Cookie, error) {
@@ -118,13 +119,13 @@ func LoadPersistedCookie(authFile string, domain string, userIdentifier []byte) 
 
 	file, err := utils.CreateOrOpenFile(authFile)
 	if err != nil {
-		return nil, fmt.Errorf("open kgw auth file: %w", err)
+		return nil, fmt.Errorf("open kgw authn file: %w", err)
 	}
 
 	var aInfo PersistedCookies
 	err = json.NewDecoder(file).Decode(&aInfo)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal kgw auth file: %w", err)
+		return nil, fmt.Errorf("unmarshal kgw authn file: %w", err)
 	}
 
 	b64Identifier := getCookieIdentifier(domain, userIdentifier)
@@ -133,7 +134,7 @@ func LoadPersistedCookie(authFile string, domain string, userIdentifier []byte) 
 	return convertToHttpCookie(cookie), nil
 }
 
-// SaveCookie saves the cookie to auth file.
+// SaveCookie saves the cookie to authn file.
 // It will overwrite the cookie if the address already exists.
 func SaveCookie(authFile string, domain string, userIdentifier []byte, originCookie *http.Cookie) error {
 	b64Identifier := getCookieIdentifier(domain, userIdentifier)
@@ -141,7 +142,7 @@ func SaveCookie(authFile string, domain string, userIdentifier []byte, originCoo
 
 	authInfoBytes, err := utils.ReadOrCreateFile(authFile)
 	if err != nil {
-		return fmt.Errorf("read kgw auth file: %w", err)
+		return fmt.Errorf("read kgw authn file: %w", err)
 	}
 
 	var aInfo PersistedCookies
@@ -150,19 +151,19 @@ func SaveCookie(authFile string, domain string, userIdentifier []byte, originCoo
 	} else {
 		err = json.Unmarshal(authInfoBytes, &aInfo)
 		if err != nil {
-			return fmt.Errorf("unmarshal kgw auth file: %w", err)
+			return fmt.Errorf("unmarshal kgw authn file: %w", err)
 		}
 	}
 	aInfo[b64Identifier] = cookie
 
 	jsonBytes, err := json.MarshalIndent(&aInfo, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal kgw auth info: %w", err)
+		return fmt.Errorf("marshal kgw authn info: %w", err)
 	}
 
 	err = os.WriteFile(authFile, jsonBytes, 0600)
 	if err != nil {
-		return fmt.Errorf("write kgw auth file: %w", err)
+		return fmt.Errorf("write kgw authn file: %w", err)
 	}
 	return nil
 }
@@ -172,7 +173,7 @@ func SaveCookie(authFile string, domain string, userIdentifier []byte, originCoo
 func DeleteCookie(authFile string, domain string, userIdentifier []byte) error {
 	authInfoBytes, err := utils.ReadOrCreateFile(authFile)
 	if err != nil {
-		return fmt.Errorf("read kgw auth file: %w", err)
+		return fmt.Errorf("read kgw authn file: %w", err)
 	}
 
 	var aInfo PersistedCookies
@@ -181,7 +182,7 @@ func DeleteCookie(authFile string, domain string, userIdentifier []byte) error {
 	} else {
 		err = json.Unmarshal(authInfoBytes, &aInfo)
 		if err != nil {
-			return fmt.Errorf("unmarshal kgw auth file: %w", err)
+			return fmt.Errorf("unmarshal kgw authn file: %w", err)
 		}
 	}
 
@@ -190,12 +191,12 @@ func DeleteCookie(authFile string, domain string, userIdentifier []byte) error {
 
 	jsonBytes, err := json.MarshalIndent(&aInfo, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal kgw auth info: %w", err)
+		return fmt.Errorf("marshal kgw authn info: %w", err)
 	}
 
 	err = utils.WriteFile(authFile, jsonBytes)
 	if err != nil {
-		return fmt.Errorf("write kgw auth file: %w", err)
+		return fmt.Errorf("write kgw authn file: %w", err)
 	}
 	return nil
 }

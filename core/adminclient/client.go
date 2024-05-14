@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
+	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client"
 	adminRpc "github.com/kwilteam/kwil-db/core/rpc/client/admin"
 	adminjson "github.com/kwilteam/kwil-db/core/rpc/client/admin/jsonrpc"
-	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
 	"github.com/kwilteam/kwil-db/core/rpc/transport"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils/url"

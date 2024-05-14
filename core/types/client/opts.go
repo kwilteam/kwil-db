@@ -2,6 +2,7 @@ package client
 
 import (
 	"math/big"
+	"net/http"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -25,6 +26,9 @@ type Options struct {
 
 	// Silence silences warnings logged from the client.
 	Silence bool
+
+	// Conn is the http client to use.
+	Conn *http.Client
 }
 
 // Apply applies the passed options to the receiver.
@@ -45,6 +49,10 @@ func (c *Options) Apply(opts *Options) {
 		c.ChainID = opts.ChainID
 	}
 
+	if opts.Conn != nil {
+		c.Conn = opts.Conn
+	}
+
 	c.Silence = opts.Silence
 }
 
@@ -52,6 +60,7 @@ func (c *Options) Apply(opts *Options) {
 func DefaultOptions() *Options {
 	return &Options{
 		Logger: log.NewNoOp(),
+		Conn:   &http.Client{},
 	}
 }
 
@@ -80,6 +89,13 @@ func WithSigner(signer auth.Signer) Option {
 func WithChainID(chainID string) Option {
 	return func(c *Options) {
 		c.ChainID = chainID
+	}
+}
+
+// WithHTTPClient sets the http client for the client.
+func WithHTTPClient(client *http.Client) Option {
+	return func(c *Options) {
+		c.Conn = client
 	}
 }
 

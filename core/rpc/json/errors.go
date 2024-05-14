@@ -41,6 +41,15 @@ const (
 
 	ErrorValidatorsInternal ErrorCode = -800
 	ErrorValidatorNotFound  ErrorCode = -801
+
+	// reserve -900 to -999 for the KGW
+	ErrorKGWInternal         ErrorCode = -900
+	ErrorKGWNotAuthorized    ErrorCode = -901
+	ErrorKGWInvalidPayload   ErrorCode = -902
+	ErrorKGWNotAllowed       ErrorCode = -903
+	ErrorKGWNotFound         ErrorCode = -904
+	ErrorKGWTooManyRequests  ErrorCode = -905
+	ErrorKGWMethodNotAllowed ErrorCode = -906
 )
 
 // More detailed errors use a structured error type in the "data" field of the

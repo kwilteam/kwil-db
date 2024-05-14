@@ -443,7 +443,7 @@ services:
       --log-level ${LOG_LEVEL:-info}
       --log-outputs stdout /app/kgwlog/kgw.log
       --cors-allow-origins *
-      --backends node0:8080 node1:8080 node2:8080 node3:8080
+      --backends node0:8484 node1:8484 node2:8484 node3:8484
       --domain http://localhost:8090
       --statement "Trust me ok?"
       --session-secret "kgwtest"
