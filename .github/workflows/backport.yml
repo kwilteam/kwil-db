@@ -4,12 +4,15 @@ on:
   pull_request_target:
     types:
       - closed
+      - labeled # so labels will be updated if PR is labeled after creation
 
 jobs:
   backport:
     name: Backport PR
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.labels.*.name, 'backport-to-')
+    #NOTE: condition on labels will make this workflow not run, don't do it.
+    #if: github.event.pull_request.merged && contains(github.event.pull_request.labels.*.name, 'backport-to-')
+    if: github.event.pull_request.merged
     steps:
       - name: Backport Action
         uses: kwilteam/backport-github-action@b3eae3fb1be75da400e9d7094282dfcd9bc6ffa1 # kwil branch
