@@ -284,7 +284,7 @@ func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTx
 	return &transactions.TcTxQueryResponse{
 		Hash:     decodedHash,
 		Height:   decodedHeight,
-		Tx:       *convertedTx,
+		Tx:       convertedTx,
 		TxResult: *convertedTxResult,
 	}, nil
 }

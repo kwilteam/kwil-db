@@ -117,7 +117,7 @@ func ConvertFromPBTxQueryResp(resp *txpb.TxQueryResponse) (*transactions.TcTxQue
 	return &transactions.TcTxQueryResponse{
 		Hash:     resp.Hash,
 		Height:   resp.Height,
-		Tx:       *tx,
+		Tx:       tx,
 		TxResult: *txResult,
 	}, nil
 }
