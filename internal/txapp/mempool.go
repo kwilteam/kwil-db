@@ -79,7 +79,7 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 	// reject the transactions from unfunded user accounts in gasEnabled mode
 	if m.gasEnabled && acct.Nonce == 0 && acct.Balance.Sign() == 0 {
 		delete(m.accounts, string(tx.Sender))
-		return fmt.Errorf("account %s does not exist", hex.EncodeToString(tx.Sender))
+		return transactions.ErrInsufficientBalance
 	}
 
 	// It is normally permissible to accept a transaction with the same nonce as
