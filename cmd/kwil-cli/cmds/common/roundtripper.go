@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/client"
@@ -63,6 +64,11 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 	// if we reach here, we are talking to a gateway
 
+	providerDomain, err := getDomain(conf.Provider)
+	if err != nil {
+		return err
+	}
+
 	client, err := gatewayclient.NewClient(ctx, conf.Provider, &gatewayclient.GatewayOptions{
 		Options: clientConfig,
 		AuthSignFunc: func(message string, signer auth.Signer) (*auth.Signature, error) {
@@ -86,9 +92,10 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 			return sig, nil
 		},
-		// AuthCookieHandler: func(c *http.Cookie) error {
-		// 	return SaveCookie(KGWAuthTokenFilePath(), clientConfig.Signer.Identity(), c)
-		// },
+		AuthCookieHandler: func(c *http.Cookie) error {
+			// persist the cookie
+			return SaveCookie(KGWAuthTokenFilePath(), providerDomain, clientConfig.Signer.Identity(), c)
+		},
 	})
 	if err != nil {
 		return err
@@ -96,11 +103,6 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 	if clientConfig.Signer == nil {
 		return fn(ctx, client, conf)
-	}
-
-	providerDomain, err := getDomain(conf.Provider)
-	if err != nil {
-		return err
 	}
 
 	cookie, err := LoadPersistedCookie(KGWAuthTokenFilePath(), providerDomain, clientConfig.Signer.Identity())
@@ -120,17 +122,6 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 	err = fn(ctx, client, conf)
 	if err != nil {
 		return err
-	}
-
-	// persist the cookie
-	cookie, found := client.GetAuthCookie()
-	if !found {
-		return nil
-	}
-
-	err = SaveCookie(KGWAuthTokenFilePath(), providerDomain, clientConfig.Signer.Identity(), cookie)
-	if err != nil {
-		return fmt.Errorf("save cookie: %w", err)
 	}
 
 	// NOTE: if we set GatewayOptions.AuthCookieHandler, we would remove the
