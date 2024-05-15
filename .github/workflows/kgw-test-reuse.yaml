@@ -205,30 +205,26 @@ jobs:
           # clone kwil-js
           git clone https://github.com/kwilteam/kwil-js.git /tmp/kwil-js
           cd /tmp/kwil-js
-          # find the latest tag if kjs-ref is a tag
-          if [[ ${{ inputs.kjs-ref }} == v0.* ]]; then
-            kjs_ref=`git tag -l | grep ${{ inputs.kjs-ref }} | sort | tail -n 1`
-          else
-            kjs_ref=${{ inputs.kjs-ref }}
-          fi
+          # kwil-js release branch is v0.x
+          kjs_ref=${{ inputs.kjs-ref }}
           echo "====== checkout kwil-js ref: $kjs_ref"
           git checkout $kjs_ref
           # build kwil-js
           npm install
           npm run build
           # run tests
-          chain_id=`curl -s http://localhost:8080/api/v1/chain_info | jq -r .chain_id`
+          chain_id=`curl -s -H "content-type: application/json" -d '{"jsonrpc":"2.0","method":"user.chain_info","params":null,"id":1}' http://localhost:8484/rpc/v1 | jq -r .result.chain_id`
           echo "run kgw in docker"
           docker run --name kgwcontainer -d --rm  --network kwil_kwilnet0 -p 8090:8090 kgw:latest \
             --devmode -d "http://localhost:8090" \
             --cors-allow-origins "*" \
-            -b "http://kwild:8080" \
+            -b "http://kwild:8484" \
             --chain-id $chain_id \
             --allow-adhoc-query \
             --allow-deploy-db \
             --log-level debug
-          echo "run KWIL-JS TEST against kwild(http:localhost:8080),  with $chain_id"
-          PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001 CHAIN_ID=$chain_id GATEWAY_ON=false GAS_ON=false KWIL_PROVIDER=http://localhost:8080 npm run integration
+          echo "run KWIL-JS TEST against kwild(http:localhost:8484),  with $chain_id"
+          PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001 CHAIN_ID=$chain_id GATEWAY_ON=false GAS_ON=false KWIL_PROVIDER=http://localhost:8484 npm run integration
           echo "run KWIL-JS TEST against kgw(http://localhost:8090),  with $chain_id"
           # assume the test above will drop the database, so we can deploy again
           PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001 CHAIN_ID=$chain_id GATEWAY_ON=true GAS_ON=false KWIL_PROVIDER=http://localhost:8090 npm run integration

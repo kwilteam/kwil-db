@@ -161,10 +161,12 @@ func DeployDbInsufficientFundsSpecification(ctx context.Context, t *testing.T, d
 	txHash, err := deployer.DeployDatabase(ctx, db)
 	require.NoError(t, err, "failed to send deploy database tx")
 
-	// Then i expect success
+	// Then i expect failure
 	expectTxFail(t, deployer, ctx, txHash, defaultTxQueryTimeout)()
 
-	// And i expect database should exist
+	time.Sleep(2 * time.Second) // ensure sync from other nodes
+
+	// And i expect database should not exist
 	err = deployer.DatabaseExists(ctx, deployer.DBID(db.Name))
 	require.Error(t, err)
 
@@ -241,7 +243,7 @@ func DeployDbSuccessSpecification(ctx context.Context, t *testing.T, deployer De
 	require.NoError(t, err)
 	senderAddr := ec.PubkeyToAddress(sender.PublicKey).Bytes()
 
-	// I approve 10 tokens
+	// I approve deployPrice+10 tokens
 	amount := big.NewInt(0).Add(deployPrice, big.NewInt(10))
 	err = deployer.Approve(ctx, sender, amount)
 	require.NoError(t, err)
@@ -270,7 +272,7 @@ func DeployDbSuccessSpecification(ctx context.Context, t *testing.T, deployer De
 	// Then i expect success
 	expectTxSuccess(t, deployer, ctx, txHash, defaultTxQueryTimeout)()
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(2 * time.Second) // ensure sync from other nodes
 
 	// And i expect database should exist
 	err = deployer.DatabaseExists(ctx, deployer.DBID(db.Name))
@@ -281,7 +283,7 @@ func DeployDbSuccessSpecification(ctx context.Context, t *testing.T, deployer De
 	require.NoError(t, err)
 
 	var diff = big.NewInt(0)
-	// User balance reduced to 0, as it submitted a deploy request without sufficient funds
+	// assume deployPrice is spent
 	require.Equal(t, diff.Sub(postDeployBalance, preUserBalance), big.NewInt(10))
 }
 
