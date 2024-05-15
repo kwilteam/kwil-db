@@ -898,7 +898,7 @@ type Procedure struct {
 	Body string `json:"body"`
 
 	// Returns is the return type of the procedure.
-	Returns *ProcedureReturn `json:"return_types"`
+	Returns *ProcedureReturn `json:"returns"`
 	// Annotations are the annotations of the procedure.
 	Annotations []string `json:"annotations"`
 }
@@ -963,6 +963,10 @@ type ProcedureReturn struct {
 func (p *ProcedureReturn) Clean() error {
 	for _, t := range p.Fields {
 		return t.Clean()
+	}
+
+	if len(p.Fields) == 0 {
+		return fmt.Errorf("procedure return must have at least one field, or be nil")
 	}
 
 	return nil

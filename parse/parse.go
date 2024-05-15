@@ -43,7 +43,7 @@ func ParseKuneiform(kf string) (*ParseResult, error) {
 		return nil, err
 	}
 
-	_, actionErrs, err := actions.AnalyzeActions(schema, &actions.AnalyzeOpts{
+	acs, actionErrs, err := actions.AnalyzeActions(schema, &actions.AnalyzeOpts{
 		PGSchemaName: schema.DBID(),
 		SchemaInfo:   info,
 	})
@@ -52,7 +52,7 @@ func ParseKuneiform(kf string) (*ParseResult, error) {
 	}
 	res.Errs.Add(actionErrs...)
 
-	_, procErrs, err := procedures.AnalyzeProcedures(schema, schema.DBID(), &procedures.AnalyzeOptions{
+	procs, procErrs, err := procedures.AnalyzeProcedures(schema, schema.DBID(), &procedures.AnalyzeOptions{
 		SchemaInfo: info,
 	})
 	if err != nil {
@@ -60,14 +60,19 @@ func ParseKuneiform(kf string) (*ParseResult, error) {
 	}
 	res.Errs.Add(procErrs...)
 
+	res.Actions = acs
+	res.Procedures = procs
+
 	return res, nil
 }
 
 // ParseResult is the result of parsing a Kuneiform schema.
 type ParseResult struct {
-	Schema     *types.Schema          `json:"schema"`
-	Errs       parseTypes.ParseErrors `json:"errors,omitempty"`
-	SchemaInfo *parseTypes.SchemaInfo `json:"schema_info,omitempty"`
+	Schema     *types.Schema                   `json:"schema"`
+	Errs       parseTypes.ParseErrors          `json:"errors,omitempty"`
+	SchemaInfo *parseTypes.SchemaInfo          `json:"schema_info,omitempty"`
+	Actions    []*actions.AnalyzedAction       `json:"actions,omitempty"`
+	Procedures []*procedures.AnalyzedProcedure `json:"procedures,omitempty"`
 }
 
 // Err returns the first error in the parse result.

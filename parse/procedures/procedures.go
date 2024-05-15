@@ -132,22 +132,22 @@ func AnalyzeProcedures(schema *types.Schema, pgSchemaName string, options *Analy
 // AnalyzedProcedure is the result of analyzing a procedure.
 type AnalyzedProcedure struct {
 	// Name is the name of the procedure.
-	Name string
+	Name string `json:"name"`
 	// Parameters are the parameters, in order, that the procedure is expecting.
 	// If no parameters are expected, this will be nil.
-	Parameters []*types.NamedType
+	Parameters []*types.NamedType `json:"parameters"`
 	// Returns is the expected return type(s) of the procedure.
 	// If no return is expected, this will be nil.
-	Returns types.ProcedureReturn
+	Returns types.ProcedureReturn `json:"returns"`
 	// DeclaredVariables are the variables that need to be declared.
-	DeclaredVariables []*types.NamedType
+	DeclaredVariables []*types.NamedType `json:"declared_variables"`
 	// LoopTargets is a list of all variables that are loop targets.
 	// They should be declared as RECORD in plpgsql.
-	LoopTargets []string
+	LoopTargets []string `json:"loop_targets"`
 	// Body is the plpgsql code for the procedure.
-	Body string
+	Body string `json:"body"`
 	// IsView is true if the procedure is a view.
-	IsView bool
+	IsView bool `json:"is_view"`
 	// OwnerOnly is true if the procedure is owner-only.
-	OwnerOnly bool
+	OwnerOnly bool `json:"owner_only"`
 }

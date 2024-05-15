@@ -25,6 +25,10 @@ func parseAndMarshal(input string) (jsonStr string, err error) {
 		e.Node.EndLine++
 	}
 
+	// remove unwanted outputs
+	schema.Actions = nil
+	schema.Procedures = nil
+
 	jsonBytes, err := json.Marshal(schema)
 	if err != nil {
 		return "", err

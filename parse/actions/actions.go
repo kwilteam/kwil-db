@@ -149,17 +149,17 @@ func convertStatement(stmt actparser.ActionStmt, schema *types.Schema, pgSchemaN
 // AnalyzedAction contains the results of analyzing an action.
 type AnalyzedAction struct {
 	// Name is the name of the action.
-	Name string
+	Name string `json:"name"`
 	// Public is true if the action is public.
-	Public bool
+	Public bool `json:"public"`
 	// IsView is true if the action is a view.
-	IsView bool
+	IsView bool `json:"is_view"`
 	// OwnerOnly is true if the action is owner-only.
-	OwnerOnly bool
+	OwnerOnly bool `json:"owner_only"`
 	// Parameters is a list of parameters for the action.
-	Parameters []string
+	Parameters []string `json:"parameters"`
 	// Statements are the statements in the action.
-	Statements []AnalyzedStatement
+	Statements []AnalyzedStatement `json:"statements"`
 }
 
 // AnalyzedStatement is an interface for analyzed statements.
