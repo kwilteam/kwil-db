@@ -117,7 +117,7 @@ func main() {
 		// entries, which we can do because of the action's "owner" modifier.
 		deleteAllAction := "delete_all"
 		fmt.Printf("Executing action %q to clear database %q...\n", deleteAllAction, dbName)
-		txHash, err := cl.ExecuteAction(ctx, dbid, deleteAllAction, nil, ctypes.WithSyncBroadcast(true))
+		txHash, err := cl.Execute(ctx, dbid, deleteAllAction, nil, ctypes.WithSyncBroadcast(true))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -127,7 +127,7 @@ func main() {
 	// Insert some data with this schema's "tag" action.
 	const tagAction = "tag"
 	fmt.Printf("Executing action %q to insert data...\n", tagAction)
-	txHash, err := cl.ExecuteAction(ctx, dbid, tagAction, [][]any{{"jon was here"}}, txOpts...)
+	txHash, err := cl.Execute(ctx, dbid, tagAction, [][]any{{"jon was here"}}, txOpts...)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func main() {
 
 	// Use a read-only view call (no blockchain transaction) to list all entries
 	const getAllAction = "get_all"
-	records, err := cl.CallAction(ctx, dbid, getAllAction, nil)
+	records, err := cl.Call(ctx, dbid, getAllAction, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
