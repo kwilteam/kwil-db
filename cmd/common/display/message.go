@@ -107,11 +107,11 @@ func (r *RespTxQuery) MarshalJSON() ([]byte, error) {
 		TxResult: r.Msg.TxResult,
 	}
 	// Always try to serialize to verify hash, but only show raw if requested.
-	raw, err := r.Msg.Tx.MarshalBinary()
-	if err != nil {
-		out.Warn = "ERROR encoding transaction: " + err.Error()
-	} else {
-		if r.WithRaw {
+	if r.Msg.Tx != nil {
+		raw, err := r.Msg.Tx.MarshalBinary()
+		if err != nil {
+			out.Warn = "ERROR encoding transaction: " + err.Error()
+		} else if r.WithRaw {
 			out.Raw = hex.EncodeToString(raw)
 			hash := sha256.Sum256(raw)
 			if !bytes.Equal(hash[:], r.Msg.Hash) {
@@ -145,6 +145,10 @@ Log: %s`,
 	)
 
 	// Always try to serialize to verify hash, but only show raw if requested.
+	if r.Msg.Tx == nil {
+		return []byte(msg), nil
+	}
+
 	raw, err := r.Msg.Tx.MarshalBinary()
 	if err != nil {
 		msg += "\nERROR encoding transaction: " + err.Error()
