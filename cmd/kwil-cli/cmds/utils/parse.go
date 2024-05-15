@@ -55,6 +55,6 @@ func (s *schemaDisplay) MarshalText() (text []byte, err error) {
 	if err := s.Result.Err(); err != nil {
 		return []byte(err.Error()), nil
 	} else {
-		return json.MarshalIndent(s.Result, "", "  ")
+		return json.MarshalIndent(s.Result.Schema, "", "  ")
 	}
 }
