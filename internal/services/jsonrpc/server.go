@@ -131,12 +131,13 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 
 	mux := http.NewServeMux() // http.DefaultServeMux has the pprof endpoints mounted
 
+	disconnectTimeout := cfg.timeout + 5*time.Second // for jsonRPCTimeoutHandler to respond, don't disconnect immediately
 	srv := &http.Server{
 		Addr:              addr, // only used with srv.ListenAndServe, not Serve
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       30 * time.Second, // receiving request body should not take longer
-		WriteTimeout:      cfg.timeout,      // full request handling: receive request, handle request, AND send response
+		ReadTimeout:       30 * time.Second,  // receiving request body should not take longer
+		WriteTimeout:      disconnectTimeout, // full request handling: receive request, handle request, AND send response
 	}
 
 	if srv.ReadTimeout > srv.WriteTimeout {
@@ -165,7 +166,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	// amazingly, exceeding the server's write timeout does not cancel request
 	// contexts: https://github.com/golang/go/issues/59602
 	// So, we add a timeout to the Request's context.
-	h = jsonRPCTimeoutHandler(h, srv.WriteTimeout)
+	h = jsonRPCTimeoutHandler(h, cfg.timeout)
 	h = recoverer(h, log)
 
 	mux.Handle(pathV1, h)
@@ -176,7 +177,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 func jsonRPCTimeoutHandler(h http.Handler, timeout time.Duration) http.Handler {
 	// We'll respond with a jsonrpc.Response type, but the request handler is
 	// downstream and we don't have the request ID.
-	resp := jsonrpc.NewErrorResponse(-1, jsonrpc.NewError(jsonrpc.ErrorTimeout, "timeout", nil))
+	resp := jsonrpc.NewErrorResponse(-1, jsonrpc.NewError(jsonrpc.ErrorTimeout, "RPC timeout", nil))
 	respMsg, _ := json.Marshal(resp)
 	return http.TimeoutHandler(h, timeout, string(respMsg))
 }
