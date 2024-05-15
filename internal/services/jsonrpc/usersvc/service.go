@@ -326,6 +326,9 @@ func checkEngineError(err error) (jsonrpc.ErrorCode, string) {
 	if err == nil {
 		return 0, "" // would not be constructing a jsonrpc.Error
 	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return jsonrpc.ErrorTimeout, "db timeout"
+	}
 	if errors.Is(err, execution.ErrDatasetExists) {
 		return jsonrpc.ErrorEngineDatasetExists, execution.ErrDatasetExists.Error()
 	}
