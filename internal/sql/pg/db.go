@@ -243,13 +243,13 @@ func (db *DB) BeginTx(ctx context.Context) (sql.Tx, error) {
 // It obtains a read connection from the pool, which will be returned
 // to the pool when the transaction is closed.
 func (db *DB) BeginReadTx(ctx context.Context) (sql.Tx, error) {
-	return db.beginTx(ctx, pgx.RepeatableRead)
+	return db.beginReadTx(ctx, pgx.RepeatableRead)
 }
 
 // BeginSnapshotTx creates a read-only transaction with serializable isolation
 // level. This is used for taking a snapshot of the database.
 func (db *DB) BeginSnapshotTx(ctx context.Context) (sql.Tx, string, error) {
-	tx, err := db.beginTx(ctx, pgx.Serializable)
+	tx, err := db.beginReadTx(ctx, pgx.Serializable)
 	if err != nil {
 		return nil, "", err
 	}
@@ -269,7 +269,9 @@ func (db *DB) BeginSnapshotTx(ctx context.Context) (sql.Tx, string, error) {
 	return tx, snapshotID, err
 }
 
-func (db *DB) beginTx(ctx context.Context, iso pgx.TxIsoLevel) (sql.Tx, error) {
+func (db *DB) beginReadTx(ctx context.Context, iso pgx.TxIsoLevel) (sql.Tx, error) {
+	// stat := db.pool.pgxp.Stat()
+	// fmt.Printf("total / max cons: %d / %d\n", stat.TotalConns(), stat.MaxConns())
 	conn, err := db.pool.pgxp.Acquire(ctx) // ensure we have a connection
 	if err != nil {
 		return nil, err
