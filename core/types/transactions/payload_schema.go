@@ -148,7 +148,7 @@ type Procedure struct {
 	Body string
 
 	// Returns is the return type of the procedure.
-	Returns *ProcedureReturn `rlp:"optional"`
+	Returns *ProcedureReturn `rlp:"nil"`
 	// Annotations are the annotations of the procedure.
 	Annotations []string `rlp:"optional"`
 }
@@ -194,7 +194,7 @@ type ForeignProcedure struct {
 	// Parameters are the parameters of the procedure.
 	Parameters []*DataType
 	// Returns is the return type of the procedure.
-	Returns *ProcedureReturn
+	Returns *ProcedureReturn `rlp:"nil"`
 }
 
 // ToTypes converts the type to the core type
