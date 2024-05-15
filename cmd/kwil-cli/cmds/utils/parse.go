@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse"
 	"github.com/spf13/cobra"
 )
@@ -31,7 +32,11 @@ func newParseCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			return display.PrintCmd(cmd, &schemaDisplay{Result: res})
+			if res.Err() != nil {
+				return display.PrintErr(cmd, res.Err())
+			}
+
+			return display.PrintCmd(cmd, &schemaDisplay{Result: res.Schema})
 		},
 	}
 
@@ -39,9 +44,8 @@ func newParseCmd() *cobra.Command {
 }
 
 // schemaDisplay is a struct that will be used to display the schema.
-// It includes an error because the parser can return a schema even if there is an error.
 type schemaDisplay struct {
-	Result *parse.SchemaParseResult
+	Result *types.Schema
 }
 
 func (s *schemaDisplay) MarshalJSON() ([]byte, error) {
@@ -49,12 +53,5 @@ func (s *schemaDisplay) MarshalJSON() ([]byte, error) {
 }
 
 func (s *schemaDisplay) MarshalText() (text []byte, err error) {
-	// we set the schema info to nil because it is not needed for users
-	// who are just looking at the schema.type ParseResult struct {
-	s.Result.SchemaInfo = nil
-	if err := s.Result.Err(); err != nil {
-		return []byte(err.Error()), nil
-	} else {
-		return json.MarshalIndent(s.Result.Schema, "", "  ")
-	}
+	return json.MarshalIndent(s.Result, "", "  ")
 }
