@@ -43,7 +43,7 @@ type serverConfig struct {
 	pass       string
 	tlsConfig  *tls.Config
 	timeout    time.Duration
-	enabelCORS bool
+	enableCORS bool
 }
 
 type Opt func(*serverConfig)
@@ -75,7 +75,7 @@ func WithTimeout(timeout time.Duration) Opt {
 
 func WithCORS() Opt {
 	return func(c *serverConfig) {
-		c.enabelCORS = true
+		c.enableCORS = true
 	}
 }
 
@@ -174,7 +174,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	// contexts: https://github.com/golang/go/issues/59602
 	// So, we add a timeout to the Request's context.
 	h = jsonRPCTimeoutHandler(h, cfg.timeout)
-	if cfg.enabelCORS {
+	if cfg.enableCORS {
 		h = corsHandler(h)
 	}
 	h = recoverer(h, log)
@@ -207,7 +207,7 @@ func corsHandler(h http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		// Preflight request
-		if r.Method == "OPTIONS" {
+		if r.Method == http.MethodOptions {
 			return
 		}
 
