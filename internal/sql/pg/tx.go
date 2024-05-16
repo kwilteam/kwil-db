@@ -84,31 +84,23 @@ func (tx *dbTx) AccessMode() common.AccessMode {
 
 // readTx is a tx that handles a read-only transaction.
 // It will release the connection back to the reader pool
-// when it is closed.
+// when it is committed or rolled back.
 type readTx struct {
 	*nestedTx
 	release func()
 }
 
 // Commit is a no-op for read-only transactions.
-// It will return the connection to the pool.
+// It will unconditionally return the connection to the pool.
 func (tx *readTx) Commit(ctx context.Context) error {
-	err := tx.nestedTx.Commit(ctx)
-	if err != nil {
-		return err
-	}
+	defer tx.release()
 
-	tx.release()
-	return nil
+	return tx.nestedTx.Commit(ctx)
 }
 
-// Rollback will return the connection to the pool.
+// Rollback will unconditionally return the connection to the pool.
 func (tx *readTx) Rollback(ctx context.Context) error {
-	err := tx.nestedTx.Rollback(ctx)
-	if err != nil {
-		return err
-	}
+	defer tx.release()
 
-	tx.release()
-	return nil
+	return tx.nestedTx.Rollback(ctx)
 }
