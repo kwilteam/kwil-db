@@ -71,6 +71,8 @@ type AppConfig struct {
 	DBPass string `mapstructure:"pg_db_pass"`
 	DBName string `mapstructure:"pg_db_name"`
 
+	RPCTimeout         Duration                     `mapstructure:"rpc_timeout"`
+	ReadTxTimeout      Duration                     `mapstructure:"db_read_timeout"`
 	ExtensionEndpoints []string                     `mapstructure:"extension_endpoints"`
 	TLSCertFile        string                       `mapstructure:"tls_cert_file"`
 	TLSKeyFile         string                       `mapstructure:"tls_key_file"`
@@ -486,6 +488,8 @@ func DefaultConfig() *KwildConfig {
 			DBPort:             "5432", // ignored with unix socket, but applies if IP used for DBHost
 			DBUser:             "kwild",
 			DBName:             "kwild",
+			RPCTimeout:         Duration(45 * time.Second),
+			ReadTxTimeout:      Duration(5 * time.Second),
 			// SnapshotConfig: SnapshotConfig{
 			// 	Enabled:         false,
 			// 	RecurringHeight: uint64(10000),

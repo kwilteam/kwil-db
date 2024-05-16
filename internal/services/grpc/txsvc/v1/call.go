@@ -45,7 +45,10 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 		}
 	}
 
-	executeResult, err := s.engine.Procedure(ctx, tx, &common.ExecutionData{
+	ctxExec, cancel := context.WithTimeout(ctx, s.readTxTimeout)
+	defer cancel()
+
+	executeResult, err := s.engine.Procedure(ctxExec, tx, &common.ExecutionData{
 		Dataset:   body.DBID,
 		Procedure: body.Action,
 		Args:      args,
