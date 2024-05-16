@@ -8,6 +8,64 @@ import (
 	"github.com/kwilteam/kwil-db/parse/types"
 )
 
+/*
+	this file performs analysis of SQL and procedures. It performs several main types of validation:
+	1. Type checking: it ensures that all all statements and expressions return correct types.
+	This is critical because plpgsql only throws type errors at runtime, which is really bad
+	for a smart contract language.
+	2. Deterministic ordering: it ensures that all queries have deterministic ordering, even if
+	not specified by the query writer. It adds necessary ordering clauses to achieve this.
+	3. Aggregate checks: it ensures that aggregate functions are used correctly, and that they
+	can not be used to create non-determinism, and also that they return errors that would otherwise
+	be thrown by Postgres at runtime.
+	4. Mutative checks: it analyzes whether or not a procedure / sql statement is attempting to
+	modify state. It does not return an error if it does, but will return a boolean indicating
+	whether or not it is mutative. This can be used by callers to ensure that VIEW procedures
+	are not mutative, which would otherwise only be checked at runtime when executing them with
+	a read-only transaction.
+	5. Contextual statement checks: Procedure statements that can only be used in certain contexts
+	(e.g. loop breaks and RETURN NEXT) are checked to ensure that they are only used in loops.
+	6. PLPGSQL Variable Declarations: It analyzes what variables should be declared at the top
+	of a PLPGSQL statement, and what types they should be.
+	7. Cartesian Join Checks: All joins must be joined using =, and one side of the join condition
+	must be a unique column with no other math applied to it. Primary keys are also counted as unique,
+	unless it is a compound primary key.
+
+	DETERMINISTIC ORDERING RULES:
+	If a SELECT statement is a simple select (e.g. does not use compound operators):
+
+		1. All joined tables that are physical (and not subqueries or procedure calls) are ordered by their primary keys,
+		in the order they are joined.
+
+		2. If a SELECT has a DISTINCT clause, it will order by all columns being returned. The reason
+		for this can be seen here: https://stackoverflow.com/questions/3492093/does-postgresql-support-distinct-on-multiple-columns.
+		All previous rules do not apply.
+
+		3. If a SELECT has a GROUP BY clause, all columns specified in the GROUP BY clause will be ordered.
+		All previous rules do not apply.
+
+	If a SELECT statement is a compound select (e.g. uses UNION, UNION ALL INTERSECT, EXCEPT):
+
+		1. All returned columns are ordered by their position in the SELECT statement.
+
+		2. If any compound SELECT statement has a GROUP BY, then it will return an error.
+		This is a remnant of SQLite's rudimentary indexing, but these queries are fairly uncommon,
+		and therefore not allowed for the time being
+
+
+	AGGREGATE FUNCTION RULES:
+
+		1. Aggregate functions can only be used in the SELECT clause, and not in the WHERE clause.
+
+		2. All columns referenced in HAVING or return columns must be in the GROUP BY clause, unless they are
+		in an aggregate function.
+
+		3. All columns used within aggregate functions cannot be specified in the GROUP BY clause.
+
+		4. If there is an aggregate in the return columns and no GROUP BY clause, then there can only
+		be one column in the return columns (the column with the aggregate function).
+*/
+
 // blockContext is the context for the current block. This is can be an action, procedure,
 // or sql block.
 type blockContext struct {
@@ -1151,7 +1209,6 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 		// If table aliases are used, they will be used instead of the name.
 		// 2. If the select core contains DISTINCT, then the above does not apply, and
 		// we order by all columns returned, in the order they are returned.
-		// see: https://stackoverflow.com/questions/9795660/postgresql-distinct-on-with-different-order-by
 		// 3. If there is a group by clause, none of the above apply, and instead we order by
 		// all columns specified in the group by.
 		if p0.SelectCores[0].GroupBy != nil {
@@ -1260,13 +1317,22 @@ func (s *sqlAnalyzer) VisitSelectCore(p0 *SelectCore) any {
 		j.Accept(s)
 	}
 
-	whereType, ok := p0.Where.Accept(s).(*coreTypes.DataType)
-	if !ok {
-		return s.expressionTypeErr(p0.Where)
-	}
+	if p0.Where != nil {
+		s.sqlCtx.setTempValuesToZero()
+		whereType, ok := p0.Where.Accept(s).(*coreTypes.DataType)
+		if !ok {
+			return s.expressionTypeErr(p0.Where)
+		}
 
-	if !whereType.Equals(coreTypes.BoolType) {
-		s.errs.AddErr(p0.Where, types.ErrType, "expected boolean type, received %s", whereType.String())
+		// if it contains an aggregate, throw an error
+		if s.sqlCtx._containsAggregate {
+			s.errs.AddErr(p0.Where, types.ErrAggregate, "cannot use aggregate function in WHERE")
+			return []*types.Attribute{}
+		}
+
+		if !whereType.Equals(coreTypes.BoolType) {
+			s.errs.AddErr(p0.Where, types.ErrType, "expected boolean type, received %s", whereType.String())
+		}
 	}
 
 	hasGroupBy := false
@@ -1298,22 +1364,36 @@ func (s *sqlAnalyzer) VisitSelectCore(p0 *SelectCore) any {
 			return []*types.Attribute{}
 		}
 		colsInGroupBy[s.sqlCtx._columnsOutsideAggregate[0]] = struct{}{}
+
+		if p0.Having != nil {
+			s.sqlCtx.setTempValuesToZero()
+			havingType, ok := p0.Having.Accept(s).(*coreTypes.DataType)
+			if !ok {
+				return s.expressionTypeErr(p0.Having)
+			}
+
+			// columns in having must be in the group by if not in aggregate
+			for _, col := range s.sqlCtx._columnsOutsideAggregate {
+				if _, ok := colsInGroupBy[col]; !ok {
+					s.errs.AddErr(p0.Having, types.ErrAggregate, "column used in having must be in group by")
+				}
+			}
+
+			if s.sqlCtx._columnInAggregate != nil {
+				if _, ok := colsInGroupBy[*s.sqlCtx._columnInAggregate]; !ok {
+					s.errs.AddErr(p0.Having, types.ErrAggregate, "cannot use column in aggregate if not in group by")
+				}
+			}
+
+			if !havingType.Equals(coreTypes.BoolType) {
+				s.errs.AddErr(p0.Having, types.ErrType, "expected boolean type, received %s", havingType.String())
+			}
+		}
 	}
 
 	if hasGroupBy && p0.Distinct {
 		s.errs.AddErr(p0, types.ErrAggregate, "cannot use DISTINCT with GROUP BY")
 		return []*types.Attribute{}
-	}
-
-	if p0.Having != nil {
-		havingType, ok := p0.Having.Accept(s).(*coreTypes.DataType)
-		if !ok {
-			return s.expressionTypeErr(p0.Having)
-		}
-
-		if !havingType.Equals(coreTypes.BoolType) {
-			s.errs.AddErr(p0.Having, types.ErrType, "expected boolean type, received %s", havingType.String())
-		}
 	}
 
 	var res []*types.Attribute
