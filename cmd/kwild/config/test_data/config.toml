@@ -40,6 +40,12 @@ admin_listen_addr="localhost:50151"
 # TCP address for the KWILD App's HTTP server to listen on
 http_listen_addr = "localhost:8080"
 
+# Timeout on requests on the user RPC servers
+rpc_timeout = "45s"
+
+# Timeout on database reads initiated by the user RPC service
+db_read_timeout = "5s"
+
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = ["localhost:50052", "localhost:50053", "localhost:50054"]
 
