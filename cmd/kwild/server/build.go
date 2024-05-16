@@ -213,7 +213,8 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp,
 		*d.log.Named("user-json-svc"), usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)))
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppCfg.JSONRPCListenAddress,
-		*d.log.Named("user-jsonrpc-server"), rpcserver.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)))
+		*d.log.Named("user-jsonrpc-server"), rpcserver.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)),
+		rpcserver.WithCORS())
 	if err != nil {
 		failBuild(err, "unable to create json-rpc server")
 	}

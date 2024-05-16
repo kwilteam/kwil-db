@@ -40,9 +40,10 @@ type Server struct {
 }
 
 type serverConfig struct {
-	pass      string
-	tlsConfig *tls.Config
-	timeout   time.Duration
+	pass       string
+	tlsConfig  *tls.Config
+	timeout    time.Duration
+	enabelCORS bool
 }
 
 type Opt func(*serverConfig)
@@ -69,6 +70,12 @@ func WithTLS(cfg *tls.Config) Opt {
 func WithTimeout(timeout time.Duration) Opt {
 	return func(c *serverConfig) {
 		c.timeout = timeout
+	}
+}
+
+func WithCORS() Opt {
+	return func(c *serverConfig) {
+		c.enabelCORS = true
 	}
 }
 
@@ -167,6 +174,9 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	// contexts: https://github.com/golang/go/issues/59602
 	// So, we add a timeout to the Request's context.
 	h = jsonRPCTimeoutHandler(h, cfg.timeout)
+	if cfg.enabelCORS {
+		h = corsHandler(h)
+	}
 	h = recoverer(h, log)
 
 	mux.Handle(pathV1, h)
@@ -182,6 +192,30 @@ func jsonRPCTimeoutHandler(h http.Handler, timeout time.Duration) http.Handler {
 	return http.TimeoutHandler(h, timeout, string(respMsg))
 }
 
+// corsHandler adds CORS headers to the response. We don't need sophisticated
+// cors handling here (not really kwild's concern, there should be other services
+// like LBs or KGW do that), so we just allow them.
+// NOTE: if this server is served behind KGW, those headers will be stripped.
+func corsHandler(h http.Handler) http.Handler {
+	allowMethods := "GET, POST, OPTIONS"
+	allowHeaders := "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType, Range"
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		w.Header().Set("Access-Control-Allow-Methods", allowMethods)
+		w.Header().Set("Access-Control-Allow-Headers", allowHeaders)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+		// Preflight request
+		if r.Method == "OPTIONS" {
+			return
+		}
+
+		// Other SIMPLE requests and non-cors requests
+		h.ServeHTTP(w, r)
+	})
+
+}
 func recoverer(h http.Handler, log log.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
