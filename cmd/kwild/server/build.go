@@ -211,9 +211,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	// user service and server
 	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp,
-		*d.log.Named("user-json-svc"))
+		*d.log.Named("user-json-svc"), usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)))
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppCfg.JSONRPCListenAddress,
-		*d.log.Named("user-jsonrpc-server"))
+		*d.log.Named("user-jsonrpc-server"), rpcserver.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)))
 	if err != nil {
 		failBuild(err, "unable to create json-rpc server")
 	}
@@ -393,6 +393,7 @@ func buildEventStore(d *coreDependencies, closers *closeFuncs) *voting.EventStor
 func buildTxSvc(d *coreDependencies, db *pg.DB, txsvc txSvc.EngineReader, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication) *txSvc.Service {
 	return txSvc.NewService(db, txsvc, cometBftClient, nodeApp,
 		txSvc.WithLogger(*d.log.Named("tx-service")),
+		txSvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)),
 	)
 }
 
@@ -708,7 +709,7 @@ func buildJRPCAdminServer(d *coreDependencies) *rpcserver.Server {
 		}
 	}
 
-	var opts []rpcserver.Opt
+	opts := []rpcserver.Opt{rpcserver.WithTimeout(10 * time.Minute)} // this is an administrator
 
 	adminPass := d.cfg.AppCfg.AdminRPCPass
 	if adminPass != "" {
@@ -794,7 +795,10 @@ func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *kwilgrpc.
 	// size plus a very generous 16KiB buffer for message overhead.
 	const msgOverHeadBuffer = 16384
 	recvLimit := d.cfg.ChainCfg.Mempool.MaxTxBytes + msgOverHeadBuffer
-	grpcServer := kwilgrpc.New(*d.log.Named("grpc-server"), lis, kwilgrpc.WithSrvOpt(grpc.MaxRecvMsgSize(recvLimit)))
+	grpcServer := kwilgrpc.New(*d.log.Named("grpc-server"), lis,
+		kwilgrpc.WithSrvOpt(grpc.MaxRecvMsgSize(recvLimit)),
+		kwilgrpc.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)),
+	)
 	txpb.RegisterTxServiceServer(grpcServer, txsvc)
 
 	// right now, the function service is just registered to the public tx service

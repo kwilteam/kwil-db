@@ -39,6 +39,12 @@ http_listen_addr = "0.0.0.0:8080"
 # Unix socket or TCP address for the KWILD App's Admin GRPC server to listen on
 admin_listen_addr = "/tmp/kwild.socket"
 
+# Timeout on requests on the user RPC servers
+rpc_timeout = "45s"
+
+# Timeout on database reads initiated by the user RPC service
+db_read_timeout = "5s"
+
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = []
 

@@ -18,7 +18,10 @@ func (s *Service) Query(ctx context.Context, req *txpb.QueryRequest) (*txpb.Quer
 	}
 	defer tx.Rollback(ctx)
 
-	result, err := s.engine.Execute(ctx, tx, req.Dbid, req.Query, nil)
+	ctxExec, cancel := context.WithTimeout(ctx, s.readTxTimeout)
+	defer cancel()
+
+	result, err := s.engine.Execute(ctxExec, tx, req.Dbid, req.Query, nil)
 	if err != nil {
 		// We don't know for sure that it's an invalid argument, but an invalid
 		// user-provided query isn't an internal server error.

@@ -104,6 +104,12 @@ http_listen_addr = "{{ .AppCfg.HTTPListenAddress }}"
 # Unix socket or TCP address for the KWILD App's Admin GRPC server to listen on
 admin_listen_addr = "{{ .AppCfg.AdminListenAddress }}"
 
+# Timeout on requests on the user RPC servers
+rpc_timeout = "{{ .AppCfg.RPCTimeout }}"
+
+# Timeout on database reads initiated by the user RPC service
+db_read_timeout = "{{ .AppCfg.ReadTxTimeout }}"
+
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = {{arrayFormatter .AppCfg.ExtensionEndpoints}}
 
