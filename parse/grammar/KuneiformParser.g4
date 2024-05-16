@@ -212,8 +212,8 @@ select_core:
 
 relation:
     table_name=IDENTIFIER (AS alias=IDENTIFIER)? # table_relation
-    | LPAREN select_statement RPAREN (AS alias=IDENTIFIER)? # subquery_relation
-    | sql_function_call (AS alias=IDENTIFIER)? # function_relation
+    | LPAREN select_statement RPAREN AS alias=IDENTIFIER # subquery_relation
+    | sql_function_call AS alias=IDENTIFIER # function_relation
 ;
 
 join:
@@ -231,23 +231,17 @@ update_statement:
     SET update_set_clause (COMMA update_set_clause)*
     (FROM relation join*)?
     (WHERE where=sql_expr)?
-    returning_clause?
 ;
 
 update_set_clause:
-   (column=IDENTIFIER | LPAREN identifier_list RPAREN) EQUALS sql_expr
-;
-
-returning_clause:
-    RETURNING result_column (COMMA result_column)*
+   column=IDENTIFIER EQUALS sql_expr
 ;
 
 insert_statement:
     INSERT INTO table_name=IDENTIFIER (AS alias=IDENTIFIER)?
     (LPAREN target_columns=identifier_list RPAREN)?
-    VALUES LPAREN sql_expr_list RPAREN
+    VALUES LPAREN sql_expr_list RPAREN (COMMA LPAREN sql_expr_list RPAREN)*
     upsert_clause?
-    returning_clause?
 ;
 
 upsert_clause:
@@ -264,7 +258,6 @@ delete_statement:
     DELETE FROM table_name=IDENTIFIER (AS alias=IDENTIFIER)?
     // (USING relation join*)?
     (WHERE where=sql_expr)?
-    returning_clause?
 ;
 
 sql_expr:
@@ -280,7 +273,6 @@ sql_expr:
     | left=sql_expr NOT? LIKE right=sql_expr # like_sql_expr
     | <assoc=right> (NOT|PLUS|MINUS) sql_expr # unary_sql_expr
     | element=sql_expr (NOT)? BETWEEN lower=sql_expr AND upper=sql_expr # between_sql_expr
-    | LPAREN sql_expr_list RPAREN # list_sql_expr
     | left=sql_expr IS NOT? ((DISTINCT FROM right=sql_expr) | NULL | TRUE | FALSE) # is_sql_expr
     | sql_expr COLLATE IDENTIFIER # collate_sql_expr
     | CASE case_clause=sql_expr?
@@ -353,12 +345,12 @@ procedure_expr_list:
 ;
 
 statement:
-    variable type SCOL # stmt_variable_declaration
+    VARIABLE type SCOL # stmt_variable_declaration
     // stmt_procedure_call must go above stmt_variable_assignment due to lexer ambiguity
     | ((variable_or_underscore) (COMMA (variable_or_underscore))* ASSIGN)? procedure_function_call SCOL # stmt_procedure_call
-    | variable ASSIGN procedure_expr SCOL # stmt_variable_assignment
-    | variable type ASSIGN procedure_expr SCOL # stmt_variable_assignment_with_declaration
-    | FOR receiver=variable IN (range|target_variable=variable|sql_statement) LBRACE statement* RBRACE # stmt_for_loop
+    | VARIABLE ASSIGN procedure_expr SCOL # stmt_variable_assignment
+    | VARIABLE type? ASSIGN procedure_expr SCOL # stmt_variable_assignment_with_declaration
+    | FOR receiver=VARIABLE IN (range|target_variable=variable|sql_statement) LBRACE statement* RBRACE # stmt_for_loop
     | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE statement* RBRACE)? # stmt_if
     | sql_statement SCOL # stmt_sql
     | BREAK SCOL # stmt_break

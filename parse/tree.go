@@ -28,56 +28,19 @@ func (t *typecastable) Cast(t2 *types.DataType) {
 	t.TypeCast = t2
 }
 
-type baseExpression struct{}
-
-func (baseExpression) expr() {}
-
-type baseSQLNode struct{}
-
-func (baseSQLNode) sqlNode() {}
-
-type baseProcedureNode struct{}
-
-func (baseProcedureNode) procedureNode() {}
+func (t *typecastable) GetTypeCast() *types.DataType {
+	return t.TypeCast
+}
 
 // Expression is an interface for all expressions.
 type Expression interface {
 	Node
-	Cast(*types.DataType)
-	expr()
-}
-
-// SQLNode is an interface for all nodes that can
-// be used in SQL.
-type SQLNode interface {
-	Node
-	sqlNode()
-}
-
-// ProcedureNode is an interface for all nodes that can
-// be used in procedures.
-type ProcedureNode interface {
-	Node
-	procedureNode()
-}
-
-// TODO: I'm not sure if we need SQLExpression and ProcedureExpression,
-// or if we can simply treat them all the same.
-
-// ProcedureExpression is an interface for all expressions that can
-// be used in procedures. It is a subset of all expressions.
-type ProcedureExpression interface {
-	Expression
-	ProcedureNode
 }
 
 // ExpressionLiteral is a literal expression.
 type ExpressionLiteral struct {
 	parseTypes.Node
-	baseExpression
 	typecastable
-	baseSQLNode
-	baseProcedureNode
 	Type *types.DataType
 	// Value is the value of the literal.
 	// It must be of type string, int64, bool, *uint256.Int, *decimal.Decimal,
@@ -111,6 +74,7 @@ func (e *ExpressionLiteral) String() string {
 
 type ExpressionCall interface {
 	Expression
+	Cast(*types.DataType)
 	isCall()
 }
 
@@ -118,9 +82,6 @@ type ExpressionCall interface {
 type ExpressionFunctionCall struct {
 	parseTypes.Node
 	typecastable
-	baseExpression
-	baseSQLNode
-	baseProcedureNode
 	// Name is the name of the function.
 	Name string
 	// Args are the arguments to the function call.
@@ -133,7 +94,7 @@ type ExpressionFunctionCall struct {
 	Star bool
 }
 
-func (e *ExpressionFunctionCall) Accept(v Visitor) any {
+func (e *ExpressionFunctionCall) Accept(v SQLVisitor) any {
 	return v.VisitExpressionFunctionCall(e)
 }
 
@@ -143,9 +104,6 @@ func (e *ExpressionFunctionCall) isCall() {}
 type ExpressionForeignCall struct {
 	parseTypes.Node
 	typecastable
-	baseExpression
-	baseSQLNode
-	baseProcedureNode
 	// Name is the name of the function.
 	Name string
 	// ContextualArgs are arguments that are contextual to the function call.
@@ -167,9 +125,6 @@ func (e *ExpressionForeignCall) isCall()
 type ExpressionVariable struct {
 	parseTypes.Node
 	typecastable
-	baseExpression
-	baseSQLNode
-	baseProcedureNode
 	// Name is the naem of the variable,
 	// without the $ or @.
 	Name string
@@ -196,9 +151,6 @@ const (
 type ExpressionArrayAccess struct {
 	parseTypes.Node
 	typecastable
-	baseExpression
-	baseSQLNode
-	baseProcedureNode
 	// Array is the array that is being accessed.
 	Array Expression
 	// Index is the index that is being accessed.
@@ -212,10 +164,7 @@ func (e *ExpressionArrayAccess) Accept(v Visitor) any {
 // ExpressionMakeArray makes a new array.
 type ExpressionMakeArray struct {
 	parseTypes.Node
-	baseExpression
 	typecastable
-	baseSQLNode
-	baseProcedureNode
 	Values []Expression
 }
 
@@ -226,10 +175,7 @@ func (e *ExpressionMakeArray) Accept(v Visitor) any {
 // ExpressionFieldAccess accesses a field in a record.
 type ExpressionFieldAccess struct {
 	parseTypes.Node
-	baseExpression
 	typecastable
-	baseSQLNode
-	baseProcedureNode
 	// Record is the record that is being accessed.
 	Record Expression
 	// Field is the field that is being accessed.
@@ -243,10 +189,7 @@ func (e *ExpressionFieldAccess) Accept(v Visitor) any {
 // ExpressionParenthesized is a parenthesized expression.
 type ExpressionParenthesized struct {
 	parseTypes.Node
-	baseExpression
 	typecastable
-	baseSQLNode
-	baseProcedureNode
 	// Inner is the inner expression.
 	Inner Expression
 }
@@ -258,9 +201,6 @@ func (e *ExpressionParenthesized) Accept(v Visitor) any {
 // ExpressionComparison is a comparison expression.
 type ExpressionComparison struct {
 	parseTypes.Node
-	baseExpression
-	baseSQLNode
-	baseProcedureNode
 	// Left is the left side of the comparison.
 	Left Expression
 	// Right is the right side of the comparison.
@@ -287,8 +227,6 @@ const (
 // ExpressionLogical is a logical expression.
 type ExpressionLogical struct {
 	parseTypes.Node
-	baseExpression
-	baseSQLNode
 	// Left is the left side of the logical expression.
 	Left Expression
 	// Right is the right side of the logical expression.
@@ -311,9 +249,6 @@ const (
 // ExpressionArithmetic is an arithmetic expression.
 type ExpressionArithmetic struct {
 	parseTypes.Node
-	baseExpression
-	baseSQLNode
-	baseProcedureNode
 	// Left is the left side of the arithmetic expression.
 	Left Expression
 	// Right is the right side of the arithmetic expression.
@@ -339,9 +274,6 @@ const (
 
 type ExpressionUnary struct {
 	parseTypes.Node
-	baseExpression
-	baseSQLNode
-	baseProcedureNode
 	// Expression is the expression that is being operated on.
 	Expression Expression
 	// Operator is the operator of the unary expression.
@@ -364,12 +296,9 @@ const (
 // ExpressionColumn is a column in a table.
 type ExpressionColumn struct {
 	parseTypes.Node
-	baseExpression
 	typecastable
-	baseSQLNode
 	// Table is the table that the column is in.
-	// It can be empty if the table has not been specified.
-	Table string
+	Table string // can be empty
 	// Column is the name of the column.
 	Column string
 }
@@ -378,23 +307,9 @@ func (e *ExpressionColumn) Accept(v Visitor) any {
 	return v.VisitExpressionColumn(e)
 }
 
-// ExpressionList is a list of expressions.
-type ExpressionList struct {
-	parseTypes.Node
-	baseExpression
-	baseSQLNode
-	Expressions []Expression
-}
-
-func (e *ExpressionList) Accept(v Visitor) any {
-	return v.VisitExpressionList(e)
-}
-
 // ExpressionCollate is an expression with a collation.
 type ExpressionCollate struct {
 	parseTypes.Node
-	baseExpression
-	baseSQLNode
 	// Expression is the expression that is being collated.
 	Expression Expression
 	// Collation is the collation that is being used.
@@ -408,8 +323,6 @@ func (e *ExpressionCollate) Accept(v Visitor) any {
 // ExpressionStringComparison is a string comparison expression.
 type ExpressionStringComparison struct {
 	parseTypes.Node
-	baseExpression
-	baseSQLNode
 	// Left is the left side of the comparison.
 	Left Expression
 	// Right is the right side of the comparison.
@@ -432,8 +345,6 @@ const (
 // ExpressionIs is an IS expression.
 type ExpressionIs struct {
 	parseTypes.Node
-	baseExpression
-	baseSQLNode
 	// Left is the left side of the IS expression.
 	Left Expression
 	// Right is the right side of the IS expression.
@@ -451,8 +362,6 @@ func (e *ExpressionIs) Accept(v Visitor) any {
 // ExpressionBetween is a BETWEEN expression.
 type ExpressionBetween struct {
 	parseTypes.Node
-	baseExpression
-	baseSQLNode
 	// Expression is the expression that is being compared.
 	Expression Expression
 	// Lower is the left side of the BETWEEN expression.
@@ -469,8 +378,6 @@ func (e *ExpressionBetween) Accept(v Visitor) any {
 
 type ExpressionIn struct {
 	parseTypes.Node
-	baseExpression
-	baseSQLNode
 	// Expression is the expression that is being compared.
 	Expression Expression
 	// List is the list of expressions that the expression is being compared to.
@@ -490,9 +397,7 @@ func (e *ExpressionIn) Accept(v Visitor) any {
 // ExpressionSubquery is a subquery expression.
 type ExpressionSubquery struct {
 	parseTypes.Node
-	baseExpression
 	typecastable
-	baseSQLNode
 	Not      bool
 	Exists   bool
 	Subquery *SelectStatement
@@ -505,8 +410,6 @@ func (e *ExpressionSubquery) Accept(v Visitor) any {
 // ExpressionCase is a CASE expression.
 type ExpressionCase struct {
 	parseTypes.Node
-	baseExpression
-	baseSQLNode
 	Case     Expression
 	WhenThen [][2]Expression
 	Else     Expression
@@ -546,7 +449,7 @@ func (s *SQLStatement) Accept(v Visitor) any {
 // SQLCore is a top-level statement.
 // It can be INSERT, UPDATE, DELETE, SELECT.
 type SQLCore interface {
-	SQLNode
+	Node
 	StmtType() SQLStatementType
 }
 
@@ -562,7 +465,6 @@ const (
 // SelectStatement is a SELECT statement.
 type SelectStatement struct {
 	parseTypes.Node
-	baseSQLNode
 	SelectCores       []*SelectCore
 	CompoundOperators []CompoundOperator
 	Ordering          []*OrderingTerm
@@ -590,10 +492,13 @@ const (
 // OrderingTerm is a term in an order by clause
 type OrderingTerm struct {
 	parseTypes.Node
-	baseSQLNode
 	Expression Expression
 	Order      OrderType
 	Nulls      NullOrder
+}
+
+func (o *OrderingTerm) Accept(v Visitor) any {
+	return v.VisitOrderingTerm(o)
 }
 
 type OrderType string
@@ -612,7 +517,6 @@ const (
 
 type SelectCore struct {
 	parseTypes.Node
-	baseSQLNode
 	// Distinct is true if the SELECT statement is a DISTINCT SELECT statement.
 	Distinct bool
 	Columns  []ResultColumn
@@ -641,7 +545,6 @@ const (
 
 type ResultColumnExpression struct {
 	parseTypes.Node
-	baseSQLNode
 
 	Expression Expression
 	Alias      string // can be empty
@@ -657,7 +560,6 @@ func (r *ResultColumnExpression) ResultColumnType() ResultColumnType {
 
 type ResultColumnWildcard struct {
 	parseTypes.Node
-	baseSQLNode
 	Table string // can be empty
 }
 
@@ -670,13 +572,12 @@ func (r *ResultColumnWildcard) ResultColumnType() ResultColumnType {
 }
 
 type Relation interface {
-	SQLNode
+	Node
 	relation()
 }
 
 type RelationTable struct {
 	parseTypes.Node
-	baseSQLNode
 	Table string
 	Alias string // can be empty
 }
@@ -689,9 +590,10 @@ func (RelationTable) relation() {}
 
 type RelationSubquery struct {
 	parseTypes.Node
-	baseSQLNode
 	Subquery *SelectStatement
-	Alias    string // can be empty
+	// Alias cannot be empty, as our syntax
+	// forces it for subqueries.
+	Alias string
 }
 
 func (r *RelationSubquery) Accept(v Visitor) any {
@@ -702,9 +604,10 @@ func (RelationSubquery) relation() {}
 
 type RelationFunctionCall struct {
 	parseTypes.Node
-	baseSQLNode
 	FunctionCall ExpressionCall
-	Alias        string // can be empty
+	// The alias cannot be empty, as our syntax forces
+	// it for function calls
+	Alias string
 }
 
 func (r *RelationFunctionCall) Accept(v Visitor) any {
@@ -716,7 +619,6 @@ func (RelationFunctionCall) relation() {}
 // Join is a join in a SELECT statement.
 type Join struct {
 	parseTypes.Node
-	baseSQLNode
 	Type     JoinType
 	Relation Relation
 	On       Expression
@@ -737,14 +639,12 @@ const (
 
 type UpdateStatement struct {
 	parseTypes.Node
-	baseSQLNode
 	Table     string
 	Alias     string // can be empty
 	SetClause []*UpdateSetClause
-	From      Relation         // can be nil
-	Joins     []*Join          // can be nil
-	Where     Expression       // can be nil
-	Returning *ReturningClause // can be nil
+	From      Relation   // can be nil
+	Joins     []*Join    // can be nil
+	Where     Expression // can be nil
 }
 
 func (u *UpdateStatement) Accept(v Visitor) any {
@@ -757,37 +657,22 @@ func (u *UpdateStatement) StmtType() SQLStatementType {
 
 type UpdateSetClause struct {
 	parseTypes.Node
-	baseSQLNode
-	// Either Column or ColumnList is set, but not both.
-	Column     string
-	ColumnList []string
-	Value      Expression
+	Column string
+	Value  Expression
 }
 
 func (u *UpdateSetClause) Accept(v Visitor) any {
 	return v.VisitUpdateSetClause(u)
 }
 
-type ReturningClause struct {
-	parseTypes.Node
-	baseSQLNode
-	Columns []ResultColumn
-}
-
-func (r *ReturningClause) Accept(v Visitor) any {
-	return v.VisitReturningClause(r)
-}
-
 type DeleteStatement struct {
 	parseTypes.Node
-	baseSQLNode
 
-	Table     string
-	Alias     string           // can be empty
-	From      Relation         // can be nil
-	Joins     []*Join          // can be nil
-	Where     Expression       // can be nil
-	Returning *ReturningClause // can be nil
+	Table string
+	Alias string     // can be empty
+	From  Relation   // can be nil
+	Joins []*Join    // can be nil
+	Where Expression // can be nil
 }
 
 func (d *DeleteStatement) StmtType() SQLStatementType {
@@ -800,13 +685,11 @@ func (d *DeleteStatement) Accept(v Visitor) any {
 
 type InsertStatement struct {
 	parseTypes.Node
-	baseSQLNode
-	Table     string
-	Alias     string   // can be empty
-	Columns   []string // can be empty
-	Values    []Expression
-	Upsert    *UpsertClause    // can be nil
-	Returning *ReturningClause // can be nil
+	Table   string
+	Alias   string   // can be empty
+	Columns []string // can be empty
+	Values  [][]Expression
+	Upsert  *UpsertClause // can be nil
 }
 
 func (i *InsertStatement) Accept(v Visitor) any {
@@ -819,7 +702,6 @@ func (i *InsertStatement) StmtType() SQLStatementType {
 
 type UpsertClause struct {
 	parseTypes.Node
-	baseSQLNode
 	ConflictColumns []string           // can be empty
 	ConflictWhere   Expression         // can be nil
 	DoUpdate        []*UpdateSetClause // if nil, then do nothing
@@ -862,7 +744,7 @@ type ActionStmtExtensionCall struct {
 	Receivers []string
 	Extension string
 	Method    string
-	Args      []ProcedureExpression
+	Args      []Expression
 }
 
 func (a *ActionStmtExtensionCall) Accept(v Visitor) any {
@@ -876,7 +758,7 @@ func (a *ActionStmtExtensionCall) ActionStmt() ActionStatementTypes {
 type ActionStmtActionCall struct {
 	parseTypes.Node
 	Action string
-	Args   []ProcedureExpression
+	Args   []Expression
 }
 
 func (a *ActionStmtActionCall) Accept(v Visitor) any {
@@ -890,7 +772,7 @@ func (a *ActionStmtActionCall) ActionStmt() ActionStatementTypes {
 // procedure ast:
 
 type ProcedureStmt interface {
-	ProcedureNode
+	Node
 	procedureStmt()
 }
 
@@ -904,7 +786,7 @@ func (baseProcedureStmt) procedureStmt() {}
 type ProcedureStmtDeclaration struct {
 	baseProcedureStmt
 	// Variable is the variable that is being declared.
-	Variable string
+	Variable *ExpressionVariable
 	Type     *types.DataType
 }
 
@@ -917,9 +799,9 @@ func (p *ProcedureStmtDeclaration) Accept(v Visitor) any {
 type ProcedureStmtAssignment struct {
 	baseProcedureStmt
 	// Variable is the variable that is being assigned.
-	Variable string
+	Variable *ExpressionVariable
 	// Value is the value that is being assigned.
-	Value ProcedureExpression
+	Value Expression
 }
 
 func (p *ProcedureStmtAssignment) Accept(v Visitor) any {
@@ -930,11 +812,12 @@ func (p *ProcedureStmtAssignment) Accept(v Visitor) any {
 type ProcedureStmtDeclareAndAssign struct {
 	baseProcedureStmt
 	// Variable is the variable that is being declared and assigned.
-	Variable string
+	Variable *ExpressionVariable
 	// Type is the type of the variable.
-	Type *types.DataType
+	// If not set, the type will be inferred from the value.
+	Type *types.DataType // can be nil
 	// Value is the value that is being assigned.
-	Value ProcedureExpression
+	Value Expression
 }
 
 func (p *ProcedureStmtDeclareAndAssign) Accept(v Visitor) any {
@@ -946,7 +829,7 @@ type ProcedureStmtCall struct {
 	baseProcedureStmt
 	// Receivers are the variables being assigned. If nil, then the
 	// receiver can be ignored.
-	Receivers []*string
+	Receivers []*ExpressionVariable
 	Call      ExpressionCall
 }
 
@@ -957,7 +840,7 @@ func (p *ProcedureStmtCall) Accept(v Visitor) any {
 type ProcedureStmtForLoop struct {
 	baseProcedureStmt
 	// Receiver is the variable that is assigned on each iteration.
-	Receiver string
+	Receiver *ExpressionVariable
 	// LoopTerm is what the loop is looping through.
 	LoopTerm LoopTerm
 	// Body is the body of the loop.
@@ -976,7 +859,6 @@ type LoopTerm interface {
 
 type baseLoopTerm struct {
 	parseTypes.Node
-	baseProcedureNode
 }
 
 func (baseLoopTerm) loopTerm() {}
@@ -984,24 +866,13 @@ func (baseLoopTerm) loopTerm() {}
 type LoopTermRange struct {
 	baseLoopTerm
 	// Start is the start of the range.
-	Start ProcedureExpression
+	Start Expression
 	// End is the end of the range.
-	End ProcedureExpression
+	End Expression
 }
 
 func (e *LoopTermRange) Accept(v Visitor) interface{} {
 	return v.VisitLoopTermRange(e)
-}
-
-type LoopTermCall struct {
-	baseLoopTerm
-	// Call is the procedure call to loop through.
-	// It must return either an array or a table.
-	Call ExpressionCall
-}
-
-func (e *LoopTermCall) Accept(v Visitor) interface{} {
-	return v.VisitLoopTermCall(e)
 }
 
 type LoopTermSQL struct {
@@ -1018,7 +889,7 @@ type LoopTermVariable struct {
 	baseLoopTerm
 	// Variable is the variable to loop through.
 	// It must be an array.
-	Variable string
+	Variable *ExpressionVariable
 }
 
 func (e *LoopTermVariable) Accept(v Visitor) interface{} {
@@ -1043,7 +914,6 @@ func (p *ProcedureStmtIf) Accept(v Visitor) any {
 
 type IfThen struct {
 	parseTypes.Node
-	baseProcedureNode
 	If   Expression
 	Then []ProcedureStmt
 }
@@ -1073,7 +943,7 @@ type ProcedureStmtReturn struct {
 	baseProcedureStmt
 	// Values are the values to return.
 	// Either values is set or SQL is set, but not both.
-	Values []ProcedureExpression
+	Values []Expression
 	// SQL is the SQL statement to return.
 	// Either values is set or SQL is set, but not both.
 	SQL *SQLStatement
@@ -1086,15 +956,51 @@ func (p *ProcedureStmtReturn) Accept(v Visitor) any {
 type ProcedureStmtReturnNext struct {
 	baseProcedureStmt
 	// Values are the values to return.
-	Values []ProcedureExpression
+	Values []Expression
 }
 
 func (p *ProcedureStmtReturnNext) Accept(v Visitor) any {
 	return v.VisitProcedureStmtReturnNext(p)
 }
 
+/*
+	There are three types of visitors, all which compose on each other:
+	- Visitor: top-level visitor capable of visiting actions, procedures, and SQL.
+	- ProcedureVisitor: a visitor capable of only visiting procedures and SQL. It must include
+	SQL because procedures themselves rely on SQL/
+	- SQLVisitor: a visitor capable of only visiting SQL.
+*/
+
 // Visitor is an interface for visiting nodes in the parse tree.
 type Visitor interface {
+	ProcedureVisitor
+	VisitActionStmtSQL(*ActionStmtSQL) any
+	VisitExtensionCallStmt(*ActionStmtExtensionCall) any
+	VisitActionCallStmt(*ActionStmtActionCall) any
+}
+
+// ProcedureVisitor includes visit methods only needed to analyze procedures.
+// It does not need visit methods for structs that are for the schema or actions
+type ProcedureVisitor interface {
+	SQLVisitor
+	VisitProcedureStmtDeclaration(*ProcedureStmtDeclaration) any
+	VisitProcedureStmtAssignment(*ProcedureStmtAssignment) any
+	VisitProcedureStmtDeclareAndAssign(*ProcedureStmtDeclareAndAssign) any
+	VisitProcedureStmtCall(*ProcedureStmtCall) any
+	VisitProcedureStmtForLoop(*ProcedureStmtForLoop) any
+	VisitLoopTermRange(*LoopTermRange) any
+	VisitLoopTermSQL(*LoopTermSQL) any
+	VisitLoopTermVariable(*LoopTermVariable) any
+	VisitProcedureStmtIf(*ProcedureStmtIf) any
+	VisitIfThen(*IfThen) any
+	VisitProcedureStmtSQL(*ProcedureStmtSQL) any
+	VisitProcedureStmtBreak(*ProcedureStmtBreak) any
+	VisitProcedureStmtReturn(*ProcedureStmtReturn) any
+	VisitProcedureStmtReturnNext(*ProcedureStmtReturnNext) any
+}
+
+// SQLVisitor is a visitor that only has methods for SQL nodes.
+type SQLVisitor interface {
 	VisitExpressionLiteral(*ExpressionLiteral) any
 	VisitExpressionFunctionCall(*ExpressionFunctionCall) any
 	VisitExpressionForeignCall(*ExpressionForeignCall) any
@@ -1108,7 +1014,6 @@ type Visitor interface {
 	VisitExpressionArithmetic(*ExpressionArithmetic) any
 	VisitExpressionUnary(*ExpressionUnary) any
 	VisitExpressionColumn(*ExpressionColumn) any
-	VisitExpressionList(*ExpressionList) any
 	VisitExpressionCollate(*ExpressionCollate) any
 	VisitExpressionStringComparison(*ExpressionStringComparison) any
 	VisitExpressionIs(*ExpressionIs) any
@@ -1128,26 +1033,90 @@ type Visitor interface {
 	VisitJoin(*Join) any
 	VisitUpdateStatement(*UpdateStatement) any
 	VisitUpdateSetClause(*UpdateSetClause) any
-	VisitReturningClause(*ReturningClause) any
 	VisitDeleteStatement(*DeleteStatement) any
 	VisitInsertStatement(*InsertStatement) any
 	VisitUpsertClause(*UpsertClause) any
-	VisitActionStmtSQL(*ActionStmtSQL) any
-	VisitExtensionCallStmt(*ActionStmtExtensionCall) any
-	VisitActionCallStmt(*ActionStmtActionCall) any
-	VisitProcedureStmtDeclaration(*ProcedureStmtDeclaration) any
-	VisitProcedureStmtAssignment(*ProcedureStmtAssignment) any
-	VisitProcedureStmtDeclareAndAssign(*ProcedureStmtDeclareAndAssign) any
-	VisitProcedureStmtCall(*ProcedureStmtCall) any
-	VisitProcedureStmtForLoop(*ProcedureStmtForLoop) any
-	VisitLoopTermRange(*LoopTermRange) any
-	VisitLoopTermCall(*LoopTermCall) any
-	VisitLoopTermSQL(*LoopTermSQL) any
-	VisitLoopTermVariable(*LoopTermVariable) any
-	VisitProcedureStmtIf(*ProcedureStmtIf) any
-	VisitIfThen(*IfThen) any
-	VisitProcedureStmtSQL(*ProcedureStmtSQL) any
-	VisitProcedureStmtBreak(*ProcedureStmtBreak) any
-	VisitProcedureStmtReturn(*ProcedureStmtReturn) any
-	VisitProcedureStmtReturnNext(*ProcedureStmtReturnNext) any
+	VisitOrderingTerm(*OrderingTerm) any
+}
+
+// sqlVisitorImplementer is meant to be used when an implementing visitor only intends
+// to implement the SQLVisitor interface. It will implement the full visitor interface,
+// but will panic if any of the methods are called. It does not implement the SQLVisitor
+// interface, so it alone cannot be used as a visitor.
+type sqlVisitorImplementer struct {
+	procedureVisitorImplementer
+}
+
+func (s *sqlVisitorImplementer) VisitActionStmtSQL(p0 *ActionStmtSQL) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *sqlVisitorImplementer) VisitExtensionCallStmt(p0 *ActionStmtExtensionCall) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *sqlVisitorImplementer) VisitActionCallStmt(p0 *ActionStmtActionCall) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+// procedureVisitorImplementer is meant to be used when an implementing visitor only intends
+// to implement the ProcedureVisitor interface. It will implement the full visitor interface,
+// but will panic if any of the methods are called. It does not implement the SQLVisitor or
+// ProcedureVisitor interfaces, so it alone cannot be used as a visitor.
+type procedureVisitorImplementer struct{}
+
+func (s *procedureVisitorImplementer) VisitProcedureStmtDeclaration(p0 *ProcedureStmtDeclaration) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssignment) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitProcedureStmtDeclareAndAssign(p0 *ProcedureStmtDeclareAndAssign) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitLoopTermRange(p0 *LoopTermRange) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitLoopTermSQL(p0 *LoopTermSQL) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitLoopTermVariable(p0 *LoopTermVariable) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitProcedureStmtIf(p0 *ProcedureStmtIf) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitIfThen(p0 *IfThen) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitProcedureStmtSQL(p0 *ProcedureStmtSQL) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitProcedureStmtBreak(p0 *ProcedureStmtBreak) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitProcedureStmtReturn(p0 *ProcedureStmtReturn) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+func (s *procedureVisitorImplementer) VisitProcedureStmtReturnNext(p0 *ProcedureStmtReturnNext) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }

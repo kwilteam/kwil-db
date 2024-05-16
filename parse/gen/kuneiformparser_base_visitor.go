@@ -215,10 +215,6 @@ func (v *BaseKuneiformParserVisitor) VisitUpdate_set_clause(ctx *Update_set_clau
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitReturning_clause(ctx *Returning_clauseContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseKuneiformParserVisitor) VisitInsert_statement(ctx *Insert_statementContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -260,10 +256,6 @@ func (v *BaseKuneiformParserVisitor) VisitBetween_sql_expr(ctx *Between_sql_expr
 }
 
 func (v *BaseKuneiformParserVisitor) VisitFunction_call_sql_expr(ctx *Function_call_sql_exprContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitList_sql_expr(ctx *List_sql_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

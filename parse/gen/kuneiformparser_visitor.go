@@ -163,9 +163,6 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#update_set_clause.
 	VisitUpdate_set_clause(ctx *Update_set_clauseContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#returning_clause.
-	VisitReturning_clause(ctx *Returning_clauseContext) interface{}
-
 	// Visit a parse tree produced by KuneiformParser#insert_statement.
 	VisitInsert_statement(ctx *Insert_statementContext) interface{}
 
@@ -198,9 +195,6 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#function_call_sql_expr.
 	VisitFunction_call_sql_expr(ctx *Function_call_sql_exprContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#list_sql_expr.
-	VisitList_sql_expr(ctx *List_sql_exprContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#paren_sql_expr.
 	VisitParen_sql_expr(ctx *Paren_sql_exprContext) interface{}

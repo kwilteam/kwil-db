@@ -38,9 +38,16 @@ type NativeErrorListener interface {
 	BaseErrorListener
 	// NodeErr adds an error where our native node type is identifiable.
 	NodeErr(node *Node, errType ParseErrorType, err error)
+	// AddErr adds an error to the error listener.
+	AddErr(node GetNoder, err error, msg string, v ...any)
 	// Child creates a new error listener. It will not have any of the errors from the parent,
 	// and should simply be used for nested parsing.
 	Child(name string, startLine, startCol int) *ErrorListener
+}
+
+// GetNoder is an interface for types that can return a node.
+type GetNoder interface {
+	GetNode() *Node
 }
 
 // ErrorListener listens to errors emitted by Antlr, and also collects
@@ -97,6 +104,19 @@ func (e *ErrorListener) NodeErr(node *Node, errType ParseErrorType, err error) {
 		Type:       errType,
 		Err:        ErrMsg{err},
 		Node:       e.adjustNode(node),
+	})
+}
+
+// AddErr adds an error to the error listener.
+// TODO: delete NodeErr in favor of this once we have refactored all the code.
+func (e *ErrorListener) AddErr(node GetNoder, err error, msg string, v ...any) {
+	// TODO: we should change the ParseError struct. It should use the passed error as the "Type",
+	// and replace the Err field with message.
+	e.Errs = append(e.Errs, &ParseError{
+		ParserName: e.name,
+		Type:       ParseErrorTypeSemantic,
+		Err:        ErrMsg{fmt.Errorf("%w: %s", err, fmt.Sprintf(msg, v...))},
+		Node:       e.adjustNode(node.GetNode()),
 	})
 }
 

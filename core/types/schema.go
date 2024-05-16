@@ -326,6 +326,17 @@ func (c *Column) Copy() *Column {
 	return res
 }
 
+// HasAttribute returns true if the column has the given attribute.
+func (c *Column) HasAttribute(attr AttributeType) bool {
+	for _, a := range c.Attributes {
+		if a.Type == attr {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (c *Column) hasPrimary() bool {
 	for _, attr := range c.Attributes {
 		if attr.Type == PRIMARY_KEY {
@@ -1190,6 +1201,10 @@ func (c *DataType) Equals(other *DataType) bool {
 	}
 
 	return strings.EqualFold(c.Name, other.Name)
+}
+
+func (c *DataType) IsNumeric() bool {
+	return c.Name == intStr || c.Name == DecimalStr || c.Name == uint256Str
 }
 
 // declared DataType constants.
