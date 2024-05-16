@@ -159,11 +159,22 @@ hostname = "{{ .AppCfg.Hostname }}"
 # Path to the snapshot file to restore the database from.
 # Used during the network migration process.
 snapshot_file = "{{ .AppCfg.SnapshotFile }}"
+
 #######################################################################
 ###                     Extension Configuration                     ###
 #######################################################################
 
 [app.extensions]
+
+# Oracle extensions can be enabled by adding the following configuration
+# Each oracle extension configuration is defined under a subsection identified by the 
+# oracle extension name [app.extensions.<oracle_extension-name>]
+# The configuration options for each oracle extension are defined as key-value pairs under the subsection.
+# Only string values are supported for these configuration options.
+# For example, to enable the Ethereum listener extension, the configuration would look like:
+# [app.extensions.eth_listener]
+# rpc_provider = "https://mainnet.infura.io/v3/YOUR_INFURA_API_KEY"
+# contract_address = "0xYOUR_CONTRACT_ADDRESS"
 
 {{- range $extensionName, $configs := .AppCfg.Extensions }}
 [app.extensions.{{$extensionName}}]
@@ -322,14 +333,15 @@ enable = {{ .ChainCfg.StateSync.Enable }}
 snapshot_dir = "{{ .ChainCfg.StateSync.SnapshotDir }}"
 
 # Trusted snapshot providers (comma-separated chain RPC servers) are the source-of-truth for the snapshot integrity.
-# Snapshots are accepted for statesync only after verifying it with these trusted snapshot providers.
-# Atleast 1 trusted rpc server is required for enabling state sync.
+# Snapshots are accepted for statesync only after verifying the snapshot metadata (snapshot hash, chunk count, height etc.) 
+# with these trusted snapshot providers. At least 1 trusted snapshot provider is required for enabling state sync.
 rpc_servers = "{{ .ChainCfg.StateSync.RPCServers }}"
 
-# Time to spend discovering snapshots before offering the best(latest) snapshot to the application. (default: 60 seconds)
-# If no snapshots are discovered within this time, the node will restart the discovery process and request snapshots from other peers.
-# The node is forever in the discovery mode until it discovers a snapshot.
+# Time spent discovering snapshots before offering the best(latest) snapshot to the application.
+# If no snapshots are discovered, the node will redo the discovery process until snapshots are found.
 # If network has no snapshots, restart the node with state sync disabled to sync with the network.
+# Current default is 15s, as only snapshot metadata is requested in the discovery process. 
+# Adjust this value according to the network latencies of your peers.
 discovery_time = "{{ .ChainCfg.StateSync.DiscoveryTime }}"
 
 # The timeout duration before re-requesting a chunk, possibly from a different

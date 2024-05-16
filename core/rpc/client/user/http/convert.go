@@ -44,6 +44,10 @@ func convertTx(tx *transactions.Transaction) *httpTx.TxTransaction {
 
 // convertHttpTx converts a httpTx.TxTransaction to a transactions.Transaction
 func convertHttpTx(tx *httpTx.TxTransaction) (*transactions.Transaction, error) {
+	if tx == nil {
+		return nil, nil
+	}
+
 	decodedSender, err := base64.StdEncoding.DecodeString(tx.Sender)
 	if err != nil {
 		return nil, err
