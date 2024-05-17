@@ -199,6 +199,7 @@ var (
 	ErrTableDefinition            = errors.New("table definition error")
 	ErrUnknownColumn              = errors.New("unknown column reference")
 	ErrAmbiguousColumn            = errors.New("ambiguous column reference")
+	ErrDuplicateResultColumnName  = errors.New("duplicate result column name")
 	ErrUnknownFunctionOrProcedure = errors.New("unknown function or procedure")
 	// ErrFunctionSignature is returned when a function/procedure is called with the wrong number of arguments,
 	// or returns an unexpected number of values / table.
@@ -218,4 +219,5 @@ var (
 	ErrActionNotFound            = errors.New("action not found")
 	ErrViewMutatesState          = errors.New("view mutates state")
 	ErrInvalidActionExpression   = errors.New("invalid action expression")
+	ErrOrdering                  = errors.New("ordering error")
 )

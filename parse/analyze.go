@@ -133,6 +133,10 @@ type sqlContext struct {
 	// It is set in ExpressionColumn, and accessed/reset in
 	// SelectCore
 	_columnsOutsideAggregate [][2]string
+	// inOrdering is true if we are in an ordering clause
+	_inOrdering bool
+	// result is the result of a query. It is only set when analyzing the ordering clause
+	_result []*Attribute
 }
 
 func newSQLContext() *sqlContext {
@@ -147,6 +151,8 @@ func (s *sqlContext) setTempValuesToZero() {
 	s._containsAggregate = false
 	s._columnInAggregate = nil
 	s._columnsOutsideAggregate = nil
+	s._inOrdering = false
+	s._result = nil
 }
 
 // copy copies the sqlContext.
@@ -358,6 +364,7 @@ func (c *sqlContext) scope() {
 
 	c.outerRelations = outerTbls
 	c.joinedRelations = nil
+	c.joinedTables = make(map[string]*types.Table)
 	c.setTempValuesToZero()
 
 	// ctes don't need to be copied since they are not modified,
@@ -503,6 +510,11 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 		}
 
 		return s.returnProcedureReturnExpr(p0, p0.Name, proc.Returns)
+	}
+
+	if s.sqlCtx._inOrdering && s.sqlCtx._inAggregate {
+		s.errs.AddErr(p0, ErrOrdering, "cannot use aggregate functions in ORDER BY clause")
+		return cast(p0, types.UnknownType)
 	}
 
 	// the function is a built in function. If using DISTINCT, it needs to be an aggregate
@@ -858,6 +870,18 @@ func (s *sqlAnalyzer) VisitExpressionUnary(p0 *ExpressionUnary) any {
 }
 
 func (s *sqlAnalyzer) VisitExpressionColumn(p0 *ExpressionColumn) any {
+	// there is a special case, where if we are within an ORDER BY clause,
+	// we can access columns in the result set. We should search that first
+	// before searching all joined tables, as result set columns with conflicting
+	// names are given precedence over joined tables.
+	if s.sqlCtx._inOrdering && p0.Table == "" {
+		attr := findAttribute(s.sqlCtx._result, p0.Column)
+		// short-circuit if we find the column, otherwise proceed to normal search
+		if attr != nil {
+			return cast(p0, attr.Type)
+		}
+	}
+
 	// findColumn accounts for empty tables in search, so we do not have to
 	// worry about it being qualified or not.
 	relName, col, msg, err := s.sqlCtx.findAttribute(p0.Table, p0.Column)
@@ -1252,7 +1276,7 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 					},
 				})
 			}
-		} else if !p0.SelectCores[0].Distinct {
+		} else if p0.SelectCores[0].Distinct {
 			// if distinct, order by all columns returned
 			for _, attr := range rel1 {
 				p0.Ordering = append(p0.Ordering, &OrderingTerm{
@@ -1286,10 +1310,18 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 	s.sqlCtx = rel1Scope
 	defer func() { s.sqlCtx = &oldScope }()
 
+	// we need to inform the analyzer that we are in ordering
+	s.sqlCtx._inOrdering = true
+	s.sqlCtx._result = rel1
+
 	// analyze the ordering, limit, and offset
 	for _, o := range p0.Ordering {
 		o.Accept(s)
 	}
+
+	// unset the ordering context
+	s.sqlCtx._inOrdering = false
+	s.sqlCtx._result = nil
 
 	if p0.Limit != nil {
 		dt, ok := p0.Limit.Accept(s).(*types.DataType)
@@ -1434,7 +1466,7 @@ func (s *sqlAnalyzer) VisitSelectCore(p0 *SelectCore) any {
 			if len(p0.Columns) != 1 {
 				s.errs.AddErr(c, ErrAggregate, "cannot return multiple values in SELECT that uses aggregate function and no group by")
 			}
-		} else {
+		} else if hasGroupBy {
 			// if column used in aggregate, ensure it is not in group by
 			if s.sqlCtx._columnInAggregate != nil {
 				if _, ok := colsInGroupBy[*s.sqlCtx._columnInAggregate]; ok {
@@ -1644,7 +1676,7 @@ func (s *sqlAnalyzer) VisitUpdateStatement(p0 *UpdateStatement) any {
 	tbl, msg, err := s.joinTableFromSchema(p0.Table, p0.Alias)
 	if err != nil {
 		s.errs.AddErr(p0, err, msg)
-		return nil
+		return []*Attribute{}
 	}
 
 	// we visit from and joins first to fill out the context, since those tables can be
@@ -1674,16 +1706,16 @@ func (s *sqlAnalyzer) VisitUpdateStatement(p0 *UpdateStatement) any {
 	whereType, ok := p0.Where.Accept(s).(*types.DataType)
 	if !ok {
 		s.expressionTypeErr(p0.Where)
-		return nil
+		return []*Attribute{}
 
 	}
 
 	if !whereType.Equals(types.BoolType) {
 		s.errs.AddErr(p0.Where, ErrType, "expected boolean type, received %s", whereType.String())
-		return nil
+		return []*Attribute{}
 	}
 
-	return nil
+	return []*Attribute{}
 }
 
 // UpdateSetClause will map the updated column to the type it is being
@@ -1756,7 +1788,7 @@ func (s *sqlAnalyzer) VisitDeleteStatement(p0 *DeleteStatement) any {
 	_, msg, err := s.joinTableFromSchema(p0.Table, p0.Alias)
 	if err != nil {
 		s.errs.AddErr(p0, err, msg)
-		return nil
+		return []*Attribute{}
 
 	}
 
@@ -1768,17 +1800,17 @@ func (s *sqlAnalyzer) VisitDeleteStatement(p0 *DeleteStatement) any {
 	whereType, ok := p0.Where.Accept(s).(*types.DataType)
 	if !ok {
 		s.expressionTypeErr(p0.Where)
-		return nil
+		return []*Attribute{}
 
 	}
 
 	if !whereType.Equals(types.BoolType) {
 		s.errs.AddErr(p0.Where, ErrType, "expected boolean type, received %s", whereType.String())
-		return nil
+		return []*Attribute{}
 
 	}
 
-	return nil
+	return []*Attribute{}
 
 }
 
@@ -1788,7 +1820,7 @@ func (s *sqlAnalyzer) VisitInsertStatement(p0 *InsertStatement) any {
 	tbl, msg, err := s.joinTableFromSchema(p0.Table, p0.Alias)
 	if err != nil {
 		s.errs.AddErr(p0, err, msg)
-		return nil
+		return []*Attribute{}
 	}
 
 	// all columns specified need to exist within the table
@@ -1805,7 +1837,7 @@ func (s *sqlAnalyzer) VisitInsertStatement(p0 *InsertStatement) any {
 			c, ok := tbl.FindColumn(col)
 			if !ok {
 				s.errs.AddErr(p0, ErrUnknownColumn, col)
-				return nil
+				return []*Attribute{}
 			}
 			colTypes = append(colTypes, c.Type)
 		}
@@ -1814,14 +1846,14 @@ func (s *sqlAnalyzer) VisitInsertStatement(p0 *InsertStatement) any {
 	for _, valList := range p0.Values {
 		if len(valList) != len(colTypes) {
 			s.errs.AddErr(p0, ErrResultShape, "expected %d values, received %d", len(colTypes), len(valList))
-			return nil
+			return []*Attribute{}
 		}
 
 		for i, val := range valList {
 			dt, ok := val.Accept(s).(*types.DataType)
 			if !ok {
 				s.expressionTypeErr(val)
-				return nil
+				return []*Attribute{}
 			}
 
 			if !dt.Equals(colTypes[i]) {
@@ -1834,7 +1866,7 @@ func (s *sqlAnalyzer) VisitInsertStatement(p0 *InsertStatement) any {
 		p0.Upsert.Accept(s)
 	}
 
-	return nil
+	return []*Attribute{}
 
 }
 

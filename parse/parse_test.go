@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse"
 	"github.com/stretchr/testify/require"
@@ -824,4 +825,250 @@ var (
 			},
 		},
 	}
+
+	tblPosts = &types.Table{
+		Name: "posts",
+		Columns: []*types.Column{
+			{
+				Name: "id",
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.PRIMARY_KEY,
+					},
+				},
+			},
+			{
+				Name: "author_id",
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.NOT_NULL,
+					},
+				},
+			},
+		},
+		Indexes: []*types.Index{
+			{
+				Name:    "idx",
+				Type:    types.BTREE,
+				Columns: []string{"author_id"},
+			},
+		},
+		ForeignKeys: []*types.ForeignKey{
+			{
+				ChildKeys:   []string{"author_id"},
+				ParentTable: "users",
+				ParentKeys:  []string{"id"},
+				Actions: []*types.ForeignKeyAction{
+					{
+						On: types.ON_DELETE,
+						Do: types.DO_CASCADE,
+					},
+					{
+						On: types.ON_UPDATE,
+						Do: types.DO_CASCADE,
+					},
+				},
+			},
+		},
+	}
 )
+
+func Test_SQL(t *testing.T) {
+	type testCase struct {
+		name string
+		sql  string
+		want *parse.SQLStatement
+		err  error
+	}
+
+	tests := []testCase{
+		// {
+		// 	name: "simple select",
+		// 	sql:  "select *, id i, length(username) as name_len from users u where u.id = 1;",
+		// 	want: &parse.SQLStatement{
+		// 		SQL: &parse.SelectStatement{
+		// 			SelectCores: []*parse.SelectCore{
+		// 				{
+		// 					Columns: []parse.ResultColumn{
+		// 						&parse.ResultColumnWildcard{},
+		// 						&parse.ResultColumnExpression{
+		// 							Expression: &parse.ExpressionColumn{
+		// 								Column: "id",
+		// 							},
+		// 							Alias: "i",
+		// 						},
+		// 						&parse.ResultColumnExpression{
+		// 							Expression: &parse.ExpressionFunctionCall{
+		// 								Name: "length",
+		// 								Args: []parse.Expression{
+		// 									&parse.ExpressionColumn{
+		// 										Column: "username",
+		// 									},
+		// 								},
+		// 							},
+		// 							Alias: "name_len",
+		// 						},
+		// 					},
+		// 					From: &parse.RelationTable{
+		// 						Table: "users",
+		// 						Alias: "u",
+		// 					},
+		// 					Where: &parse.ExpressionComparison{
+		// 						Left: &parse.ExpressionColumn{
+		// 							Table:  "u",
+		// 							Column: "id",
+		// 						},
+		// 						Operator: parse.ComparisonOperatorEqual,
+		// 						Right: &parse.ExpressionLiteral{
+		// 							Type:  types.IntType,
+		// 							Value: int64(1),
+		// 						},
+		// 					},
+		// 				},
+		// 			},
+		// 			// apply default ordering
+		// 			Ordering: []*parse.OrderingTerm{
+		// 				{
+		// 					Expression: &parse.ExpressionColumn{
+		// 						Table:  "u",
+		// 						Column: "id",
+		// 					},
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// },
+		{
+			name: "insert",
+			sql: `insert into posts (id, author_id) values (1, 1),
+			(2, (SELECT id from users where username = 'user2' LIMIT 1));`,
+			want: &parse.SQLStatement{
+				SQL: &parse.InsertStatement{
+					Table:   "posts",
+					Columns: []string{"id", "author_id"},
+					Values: [][]parse.Expression{
+						{
+							&parse.ExpressionLiteral{
+								Type:  types.IntType,
+								Value: int64(1),
+							},
+							&parse.ExpressionLiteral{
+								Type:  types.IntType,
+								Value: int64(1),
+							},
+						},
+						{
+							&parse.ExpressionLiteral{
+								Type:  types.IntType,
+								Value: int64(2),
+							},
+							&parse.ExpressionSubquery{
+								Subquery: &parse.SelectStatement{
+									SelectCores: []*parse.SelectCore{
+										{
+											Columns: []parse.ResultColumn{
+												&parse.ResultColumnExpression{
+													Expression: &parse.ExpressionColumn{
+														Column: "id",
+													},
+												},
+											},
+											From: &parse.RelationTable{
+												Table: "users",
+											},
+											Where: &parse.ExpressionComparison{
+												Left: &parse.ExpressionColumn{
+													Column: "username",
+												},
+												Operator: parse.ComparisonOperatorEqual,
+												Right: &parse.ExpressionLiteral{
+													Type:  types.TextType,
+													Value: "user2",
+												},
+											},
+										},
+									},
+									Limit: &parse.ExpressionLiteral{
+										Type:  types.IntType,
+										Value: int64(1),
+									},
+									// apply default ordering
+									Ordering: []*parse.OrderingTerm{
+										{
+											Expression: &parse.ExpressionColumn{
+												Table:  "users",
+												Column: "id",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := parse.ParseSQL(tt.sql, &types.Schema{
+				Name: "mydb",
+				Tables: []*types.Table{
+					tblUsers,
+					tblPosts,
+				},
+			})
+			require.NoError(t, err)
+
+			if res.ParseErrs.Err() != nil {
+				if tt.err == nil {
+					t.Errorf("unexpected error: %v", res.ParseErrs.Err())
+				} else {
+					require.ErrorIs(t, res.ParseErrs.Err(), tt.err)
+				}
+
+				return
+			}
+
+			if !deepCompare(res.AST, tt.want) {
+				t.Errorf("unexpected AST:\n%s", diff(res.AST, tt.want))
+			}
+		})
+	}
+}
+
+// deepCompare deep compares the values of two nodes.
+// It ignores the parseTypes.Node field.
+func deepCompare(node1, node2 any) bool {
+	// we return true for the parseTypes.Node field,
+	// we also need to ignore the unexported "schema" fields
+	return cmp.Equal(node1, node2, cmpOpts()...)
+}
+
+// diff returns the diff between two nodes.
+func diff(node1, node2 any) string {
+	return cmp.Diff(node1, node2, cmpOpts()...)
+}
+
+func cmpOpts() []cmp.Option {
+	return []cmp.Option{
+		cmp.AllowUnexported(
+			parse.ExpressionLiteral{},
+			parse.ExpressionFunctionCall{},
+			parse.ExpressionForeignCall{},
+			parse.ExpressionVariable{},
+			parse.ExpressionArrayAccess{},
+			parse.ExpressionMakeArray{},
+			parse.ExpressionFieldAccess{},
+			parse.ExpressionParenthesized{},
+			parse.ExpressionColumn{},
+			parse.ExpressionSubquery{},
+		),
+		cmp.Comparer(func(x, y parse.Position) bool {
+			return true
+		}),
+	}
+}

@@ -20,12 +20,12 @@ var (
 	}
 )
 
-// copySessionVars copies the session variables.
-// The returned map can be modified without affecting the original.
-func copySessionVars() map[string]*types.DataType {
+// makeSessionVars creates a new map of session variables.
+// It includes the @ symbol in the keys.
+func makeSessionVars() map[string]*types.DataType {
 	newMap := make(map[string]*types.DataType)
 	for k, v := range SessionVars {
-		newMap[k] = v.Copy()
+		newMap["@"+k] = v.Copy()
 	}
 	return newMap
 }

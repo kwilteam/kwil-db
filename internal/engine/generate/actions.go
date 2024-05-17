@@ -1,6 +1,8 @@
 package generate
 
 import (
+	"fmt"
+
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse"
 )
@@ -66,7 +68,22 @@ type InlineExpression struct {
 
 // GenerateActionBody generates the body of an action.
 // If the action is a VIEW and contains mutative SQL, it will return an error.
-func GenerateActionBody(action *types.Action, schema *types.Schema) ([]GeneratedActionStmt, error) {
+func GenerateActionBody(action *types.Action, schema *types.Schema) (stmts []GeneratedActionStmt, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			var ok bool
+			err, ok = r.(error)
+			if !ok {
+				err = fmt.Errorf("panic: %v", r)
+			}
+		}
+
+		// add action name to error
+		if err != nil {
+			err = fmt.Errorf("action %s: %w", action.Name, err)
+		}
+	}()
+
 	res, err := parse.ParseAction(action, schema)
 	if err != nil {
 		return nil, err

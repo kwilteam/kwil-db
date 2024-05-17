@@ -168,7 +168,7 @@ func Coalesce(attrs ...*Attribute) (res []*Attribute, ambigousCol string, err er
 
 	for _, a := range attrs {
 		if _, ok := colNames[a.Name]; ok {
-			return nil, a.Name, ErrAmbiguousColumn
+			return nil, a.Name, ErrDuplicateResultColumnName
 		}
 
 		colNames[a.Name] = struct{}{}
@@ -179,4 +179,14 @@ func Coalesce(attrs ...*Attribute) (res []*Attribute, ambigousCol string, err er
 	}
 
 	return res, "", nil
+}
+
+// findAttribute finds an attribute by name.
+func findAttribute(attrs []*Attribute, name string) *Attribute {
+	for _, a := range attrs {
+		if a.Name == name {
+			return a
+		}
+	}
+	return nil
 }

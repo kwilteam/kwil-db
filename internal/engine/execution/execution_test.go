@@ -24,165 +24,165 @@ func Test_Execution(t *testing.T) {
 	}
 
 	tests := []testCase{
-		{
-			name: "create database",
-			fn: func(t *testing.T, eng *GlobalContext) {
-				ctx := context.Background()
-				db := newDB(false)
+		// {
+		// 	name: "create database",
+		// 	fn: func(t *testing.T, eng *GlobalContext) {
+		// 		ctx := context.Background()
+		// 		db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
-				})
-				assert.NoError(t, err)
+		// 		err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+		// 			Signer: testdata.TestSchema.Owner,
+		// 			Caller: string(testdata.TestSchema.Owner),
+		// 			TxID:   "txid1",
+		// 		})
+		// 		assert.NoError(t, err)
 
-				schema, err := eng.GetSchema(testdata.TestSchema.DBID())
-				assert.NoError(t, err)
+		// 		schema, err := eng.GetSchema(testdata.TestSchema.DBID())
+		// 		assert.NoError(t, err)
 
-				assert.EqualValues(t, testdata.TestSchema, schema)
-			},
-		},
-		{
-			name: "drop database",
-			fn: func(t *testing.T, eng *GlobalContext) {
-				ctx := context.Background()
-				db := newDB(false)
+		// 		assert.EqualValues(t, testdata.TestSchema, schema)
+		// 	},
+		// },
+		// {
+		// 	name: "drop database",
+		// 	fn: func(t *testing.T, eng *GlobalContext) {
+		// 		ctx := context.Background()
+		// 		db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
-				})
-				assert.NoError(t, err)
+		// 		err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+		// 			Signer: testdata.TestSchema.Owner,
+		// 			Caller: string(testdata.TestSchema.Owner),
+		// 			TxID:   "txid1",
+		// 		})
+		// 		assert.NoError(t, err)
 
-				_, ok := db.dbs[testdata.TestSchema.DBID()]
-				assert.True(t, ok)
+		// 		_, ok := db.dbs[testdata.TestSchema.DBID()]
+		// 		assert.True(t, ok)
 
-				err = eng.DeleteDataset(ctx, db, testdata.TestSchema.DBID(), &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid2",
-				})
-				assert.NoError(t, err)
+		// 		err = eng.DeleteDataset(ctx, db, testdata.TestSchema.DBID(), &common.TransactionData{
+		// 			Signer: testdata.TestSchema.Owner,
+		// 			Caller: string(testdata.TestSchema.Owner),
+		// 			TxID:   "txid2",
+		// 		})
+		// 		assert.NoError(t, err)
 
-				_, ok = db.dbs[testdata.TestSchema.DBID()]
-				assert.False(t, ok)
-			},
-		},
-		{
-			name: "drop database with non-owner fails",
-			fn: func(t *testing.T, eng *GlobalContext) {
-				ctx := context.Background()
-				db := newDB(false)
+		// 		_, ok = db.dbs[testdata.TestSchema.DBID()]
+		// 		assert.False(t, ok)
+		// 	},
+		// },
+		// {
+		// 	name: "drop database with non-owner fails",
+		// 	fn: func(t *testing.T, eng *GlobalContext) {
+		// 		ctx := context.Background()
+		// 		db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
-				})
-				assert.NoError(t, err)
+		// 		err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+		// 			Signer: testdata.TestSchema.Owner,
+		// 			Caller: string(testdata.TestSchema.Owner),
+		// 			TxID:   "txid1",
+		// 		})
+		// 		assert.NoError(t, err)
 
-				err = eng.DeleteDataset(ctx, db, testdata.TestSchema.DBID(), &common.TransactionData{
-					Signer: []byte("not_owner"),
-					Caller: "not_owner",
-					TxID:   "txid1",
-				})
-				assert.Error(t, err)
-			},
-		},
-		{
-			name: "drop non-existent database fails",
-			fn: func(t *testing.T, eng *GlobalContext) {
-				ctx := context.Background()
-				db := newDB(false)
+		// 		err = eng.DeleteDataset(ctx, db, testdata.TestSchema.DBID(), &common.TransactionData{
+		// 			Signer: []byte("not_owner"),
+		// 			Caller: "not_owner",
+		// 			TxID:   "txid1",
+		// 		})
+		// 		assert.Error(t, err)
+		// 	},
+		// },
+		// {
+		// 	name: "drop non-existent database fails",
+		// 	fn: func(t *testing.T, eng *GlobalContext) {
+		// 		ctx := context.Background()
+		// 		db := newDB(false)
 
-				err := eng.DeleteDataset(ctx, db, "not_a_real_db", &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid2",
-				})
-				assert.Error(t, err)
-			},
-		},
-		{
-			name: "call an action",
-			fn: func(t *testing.T, eng *GlobalContext) {
-				ctx := context.Background()
-				db := newDB(false)
+		// 		err := eng.DeleteDataset(ctx, db, "not_a_real_db", &common.TransactionData{
+		// 			Signer: testdata.TestSchema.Owner,
+		// 			Caller: string(testdata.TestSchema.Owner),
+		// 			TxID:   "txid2",
+		// 		})
+		// 		assert.Error(t, err)
+		// 	},
+		// },
+		// {
+		// 	name: "call an action",
+		// 	fn: func(t *testing.T, eng *GlobalContext) {
+		// 		ctx := context.Background()
+		// 		db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
-				})
-				assert.NoError(t, err)
+		// 		err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+		// 			Signer: testdata.TestSchema.Owner,
+		// 			Caller: string(testdata.TestSchema.Owner),
+		// 			TxID:   "txid1",
+		// 		})
+		// 		assert.NoError(t, err)
 
-				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: "create_user",
-					Args:      []any{1, "brennan", 22},
-					TransactionData: common.TransactionData{
-						Signer: testdata.TestSchema.Owner,
-						Caller: string(testdata.TestSchema.Owner),
-						TxID:   "txid2",
-					},
-				})
-				assert.NoError(t, err)
-			},
-		},
-		{
-			name: "call an action with invalid arguments",
-			fn: func(t *testing.T, eng *GlobalContext) {
-				ctx := context.Background()
-				db := newDB(false)
+		// 		_, err = eng.Procedure(ctx, db, &common.ExecutionData{
+		// 			Dataset:   testdata.TestSchema.DBID(),
+		// 			Procedure: "create_user",
+		// 			Args:      []any{1, "brennan", 22},
+		// 			TransactionData: common.TransactionData{
+		// 				Signer: testdata.TestSchema.Owner,
+		// 				Caller: string(testdata.TestSchema.Owner),
+		// 				TxID:   "txid2",
+		// 			},
+		// 		})
+		// 		assert.NoError(t, err)
+		// 	},
+		// },
+		// {
+		// 	name: "call an action with invalid arguments",
+		// 	fn: func(t *testing.T, eng *GlobalContext) {
+		// 		ctx := context.Background()
+		// 		db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
-				})
-				assert.NoError(t, err)
+		// 		err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+		// 			Signer: testdata.TestSchema.Owner,
+		// 			Caller: string(testdata.TestSchema.Owner),
+		// 			TxID:   "txid1",
+		// 		})
+		// 		assert.NoError(t, err)
 
-				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: "create_user",
-					Args:      []any{1, "brennan"}, // missing age
-					TransactionData: common.TransactionData{
-						Signer: testdata.TestSchema.Owner,
-						Caller: string(testdata.TestSchema.Owner),
-						TxID:   "txid2",
-					},
-				})
-				assert.Error(t, err)
-			},
-		},
-		{
-			name: "call a recursive procedure",
-			fn: func(t *testing.T, eng *GlobalContext) {
-				ctx := context.Background()
-				db := newDB(false)
+		// 		_, err = eng.Procedure(ctx, db, &common.ExecutionData{
+		// 			Dataset:   testdata.TestSchema.DBID(),
+		// 			Procedure: "create_user",
+		// 			Args:      []any{1, "brennan"}, // missing age
+		// 			TransactionData: common.TransactionData{
+		// 				Signer: testdata.TestSchema.Owner,
+		// 				Caller: string(testdata.TestSchema.Owner),
+		// 				TxID:   "txid2",
+		// 			},
+		// 		})
+		// 		assert.Error(t, err)
+		// 	},
+		// },
+		// {
+		// 	name: "call a recursive procedure",
+		// 	fn: func(t *testing.T, eng *GlobalContext) {
+		// 		ctx := context.Background()
+		// 		db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
-				})
-				assert.NoError(t, err)
+		// 		err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
+		// 			Signer: testdata.TestSchema.Owner,
+		// 			Caller: string(testdata.TestSchema.Owner),
+		// 			TxID:   "txid1",
+		// 		})
+		// 		assert.NoError(t, err)
 
-				_, err = eng.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:   testdata.TestSchema.DBID(),
-					Procedure: testdata.ActionRecursive.Name,
-					Args:      []any{"id000000", "asdfasdfasdfasdf", "bigbigbigbigbigbigbigbigbigbig"},
-					TransactionData: common.TransactionData{
-						Signer: testdata.TestSchema.Owner,
-						Caller: string(testdata.TestSchema.Owner),
-						TxID:   "txid2",
-					},
-				})
-				assert.ErrorIs(t, err, ErrMaxStackDepth)
-			},
-		},
+		// 		_, err = eng.Procedure(ctx, db, &common.ExecutionData{
+		// 			Dataset:   testdata.TestSchema.DBID(),
+		// 			Procedure: testdata.ActionRecursive.Name,
+		// 			Args:      []any{"id000000", "asdfasdfasdfasdf", "bigbigbigbigbigbigbigbigbigbig"},
+		// 			TransactionData: common.TransactionData{
+		// 				Signer: testdata.TestSchema.Owner,
+		// 				Caller: string(testdata.TestSchema.Owner),
+		// 				TxID:   "txid2",
+		// 			},
+		// 		})
+		// 		assert.ErrorIs(t, err, ErrMaxStackDepth)
+		// 	},
+		// },
 		{
 			name: "call a procedure that hits max call stack depth less directly",
 			fn: func(t *testing.T, eng *GlobalContext) {

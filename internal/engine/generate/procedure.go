@@ -77,13 +77,20 @@ func GenerateProcedure(proc *types.Procedure, schema *types.Schema, pgSchema str
 	}
 
 	// we need to visit the AST to get the generated body
-	sqlGen := &sqlGenerator{
-		pgSchema: pgSchema,
+	sqlGen := &procedureGenerator{
+		sqlGenerator: sqlGenerator{
+			pgSchema: pgSchema,
+		},
 	}
 
 	str := strings.Builder{}
 	for _, stmt := range res.AST {
 		str.WriteString(stmt.Accept(sqlGen).(string))
+	}
+
+	// little sanity check:
+	if len(res.AnonymousVariables) != sqlGen.anonymousReceivers {
+		return "", fmt.Errorf("internal bug: expected %d anonymous variables, got %d", sqlGen.anonymousReceivers, len(res.AnonymousVariables))
 	}
 
 	analyzed.Body = str.String()

@@ -75,7 +75,7 @@ func ParseSchema(kf []byte) (res *SchemaParseResult, err error) {
 		err = deferFn(recover())
 	}()
 
-	schema, ok := parser.Entry().Accept(visitor).(*types.Schema)
+	schema, ok := parser.Schema().Accept(visitor).(*types.Schema)
 	if !ok {
 		err = fmt.Errorf("error parsing schema: could not detect return schema. this is likely a bug in the parser")
 	}
@@ -112,7 +112,7 @@ func ParseProcedure(proc *types.Procedure, schema *types.Schema) (res *Procedure
 	errLis, stream, parser, deferFn := setupParser(proc.Body, "procedure")
 	res = &ProcedureParseResult{
 		ParseErrs:          errLis,
-		Variables:          copySessionVars(),
+		Variables:          makeSessionVars(),
 		AnonymousVariables: make(map[string]map[string]*types.DataType),
 	}
 
@@ -140,7 +140,7 @@ func ParseProcedure(proc *types.Procedure, schema *types.Schema) (res *Procedure
 
 	schemaVisitor := newSchemaVisitor(stream, errLis)
 	// first parse the body, then visit it.
-	res.AST = parser.Entry().Accept(schemaVisitor).([]ProcedureStmt)
+	res.AST = parser.Procedure_block().Accept(schemaVisitor).([]ProcedureStmt)
 
 	// if there are expected errors, return the parse errors.
 	if errLis.Err() != nil {
@@ -195,7 +195,7 @@ func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error)
 
 	schemaVisitor := newSchemaVisitor(stream, errLis)
 
-	res.AST = parser.Entry().Accept(schemaVisitor).(*SQLStatement)
+	res.AST = parser.Sql().Accept(schemaVisitor).(*SQLStatement)
 
 	if errLis.Err() != nil {
 		return res, nil
@@ -227,7 +227,7 @@ func ParseAction(action *types.Action, schema *types.Schema) (res *ActionParseRe
 		ParseErrs: errLis,
 	}
 
-	vars := copySessionVars()
+	vars := makeSessionVars()
 	for _, v := range action.Parameters {
 		vars[v] = types.UnknownType
 	}
@@ -251,7 +251,7 @@ func ParseAction(action *types.Action, schema *types.Schema) (res *ActionParseRe
 
 	schemaVisitor := newSchemaVisitor(stream, errLis)
 
-	res.AST = parser.Entry().Accept(schemaVisitor).([]ActionStmt)
+	res.AST = parser.Action_block().Accept(schemaVisitor).([]ActionStmt)
 
 	if errLis.Err() != nil {
 		return res, nil
@@ -284,9 +284,8 @@ func setupParser(inputStream string, errLisName string) (errLis *errorListener,
 
 	parser.BuildParseTrees = true
 
-	deferFn = func(e any) error {
-		var err error
-		if e := recover(); e != nil {
+	deferFn = func(e any) (err error) {
+		if e != nil {
 			var ok bool
 			err, ok = e.(error)
 			if !ok {
