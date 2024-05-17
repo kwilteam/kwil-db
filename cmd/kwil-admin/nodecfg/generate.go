@@ -446,10 +446,11 @@ func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivK
 
 // applyUniqueAddresses applies unique addresses to the config.
 // it will begin at the default port and increment by 1 for each node.
-// it does not apply to the admin address.
+// it does not apply to the admin address. This does NOT change the
+// admin service address.
 func addressSpecificConfig(c *config.KwildConfig) error {
 
-	jsonrpcAddr, err := incrementPort(c.AppCfg.JSONRPCListenAddress, 1)
+	jsonrpcAddr, err := incrementPort(c.AppCfg.JSONRPCListenAddress, -1) // decrement to avoid collision with admin rpc at 8485
 	if err != nil {
 		return err
 	}
@@ -476,42 +477,43 @@ func addressSpecificConfig(c *config.KwildConfig) error {
 	return nil
 }
 
-// uniqueAdminAddress applies a unique address to the config.
+// uniqueAdminAddress applies a unique address to the config. This only works
+// for host:port or unix socket paths, not URLs.
 func uniqueAdminAddress(cfg *config.KwildConfig) error {
-	s := cfg.AppCfg.AdminListenAddress
+	addr := cfg.AppCfg.AdminListenAddress
 
-	res, err := url.Parse(s)
+	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), "missing port in address") {
+			host = addr   // this may be a unix path, checked below
+			port = "8485" // for sequential addresses, use 8485 to make collision with 8484 unlikely
+		} else if strings.Contains(err.Error(), "too many colons in address") {
+			u, err := url.Parse(addr)
+			if err != nil {
+				return fmt.Errorf("unknown admin service address: %w", err)
+			}
+			host, port = u.Hostname(), u.Port()
+		} else {
+			return fmt.Errorf("unknown admin service address: %w", err)
+		}
 	}
 
-	if res.Scheme != "unix" {
-		s, err = incrementPort(s, 1)
+	if isUNIX := strings.HasPrefix(host, "/"); !isUNIX {
+		addr = net.JoinHostPort(host, port)
+		addr, err = incrementPort(addr, 1)
 		if err != nil {
 			return err
 		}
 
-		cfg.AppCfg.AdminListenAddress = s
+		cfg.AppCfg.AdminListenAddress = addr
 		return nil
 	}
 
-	// if scheme is unix, it will use Host if it is path/to/sock, but Path if it is /path/to/sock
-	// if unix:///socket, it will set the value to be unix:///socket_0, then unix:///socket_1, etc.
-	var path string
-	var set *string
-	if res.Host != "" {
-		path = res.Host
-		set = &res.Host
-	} else {
-		path = res.Path
-		set = &res.Path
-	}
-
-	extension := filepath.Ext(path)
-	fileWithoutExt := strings.TrimSuffix(path, extension)
+	extension := filepath.Ext(host)
+	fileWithoutExt := strings.TrimSuffix(host, extension)
 
 	// see if the file already has a number appended to it
-	numerToUse := 0
+	numberToUse := 0
 
 	nums := strings.Split(fileWithoutExt, "_")
 	if len(nums) > 1 {
@@ -520,13 +522,11 @@ func uniqueAdminAddress(cfg *config.KwildConfig) error {
 		num, err := strconv.Atoi(last)
 		if err == nil {
 			fileWithoutExt = strings.TrimSuffix(fileWithoutExt, "_"+last)
-			numerToUse = num + 1
+			numberToUse = num + 1
 		}
 	}
 
-	*set = fileWithoutExt + "_" + strconv.Itoa(numerToUse) + extension
-
-	cfg.AppCfg.AdminListenAddress = res.String()
+	cfg.AppCfg.AdminListenAddress = fileWithoutExt + "_" + strconv.Itoa(numberToUse) + extension
 
 	return nil
 }

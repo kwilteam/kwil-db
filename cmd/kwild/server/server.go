@@ -22,6 +22,7 @@ import (
 	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
+	"github.com/kwilteam/kwil-db/internal/version"
 
 	// internalize
 	"go.uber.org/zap"
@@ -115,10 +116,12 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.Genesi
 
 func (s *Server) Start(ctx context.Context) error {
 	defer func() {
+		s.log.Info("Closing server resources...")
 		err := s.closers.closeAll()
 		if err != nil {
 			s.log.Error("failed to close resource:", zap.Error(err))
 		}
+		s.log.Info("Server is now shut down.")
 	}()
 	defer func() {
 		if err := recover(); err != nil {
@@ -126,7 +129,7 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 
-	s.log.Info("starting server...")
+	s.log.Infof("Starting server (kwild version %v)...", version.KwilVersion)
 
 	cancelCtx, done := context.WithCancel(ctx)
 	s.cancelCtxFunc = done
