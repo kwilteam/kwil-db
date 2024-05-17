@@ -26,7 +26,7 @@ func newParseCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			res, err := parse.ParseKuneiform(string(file))
+			res, err := parse.ParseAndValidate(file)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -41,7 +41,7 @@ func newParseCmd() *cobra.Command {
 // schemaDisplay is a struct that will be used to display the schema.
 // It includes an error because the parser can return a schema even if there is an error.
 type schemaDisplay struct {
-	Result *parse.ParseResult
+	Result *parse.SchemaParseResult
 }
 
 func (s *schemaDisplay) MarshalJSON() ([]byte, error) {

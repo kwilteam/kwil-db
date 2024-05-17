@@ -211,9 +211,9 @@ select_core:
 ;
 
 relation:
-    table_name=IDENTIFIER (AS alias=IDENTIFIER)? # table_relation
-    | LPAREN select_statement RPAREN AS alias=IDENTIFIER # subquery_relation
-    | sql_function_call AS alias=IDENTIFIER # function_relation
+    table_name=IDENTIFIER (AS? alias=IDENTIFIER)? # table_relation
+    | LPAREN select_statement RPAREN AS? alias=IDENTIFIER # subquery_relation
+    | sql_function_call AS? alias=IDENTIFIER # function_relation
 ;
 
 join:
@@ -222,7 +222,7 @@ join:
 ;
 
 result_column:
-    sql_expr (AS IDENTIFIER)? # expression_result_column
+    sql_expr (AS? IDENTIFIER)? # expression_result_column
     | (table_name=IDENTIFIER PERIOD)? STAR # wildcard_result_column
 ;
 

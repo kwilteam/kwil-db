@@ -7,8 +7,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/parse/kuneiform"
-	parseTypes "github.com/kwilteam/kwil-db/parse/types"
+	"github.com/kwilteam/kwil-db/parse"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,7 +37,7 @@ func Test_Deployment(t *testing.T) {
 		procedure mutate_in_view() public view {
 		    INSERT INTO users (id) VALUES (1);
 		}`,
-			err: parseTypes.ErrReadOnlyProcedureContainsDML,
+			err: parse.ErrViewMutatesState,
 		},
 		{
 			name: "view procedure calls non-view",
@@ -56,7 +55,7 @@ func Test_Deployment(t *testing.T) {
 		procedure not_a_view() public {
 			INSERT INTO users (id) VALUES (1);
 		}`,
-			err: parseTypes.ErrReadOnlyProcedureCallsMutative,
+			err: parse.ErrViewMutatesState,
 		},
 		{
 			name: "empty procedure",
@@ -68,25 +67,24 @@ func Test_Deployment(t *testing.T) {
 		},
 		{
 			name:      "untyped variable",
-			procedure: `$intval := 1;`,
-			err:       parseTypes.ErrUntypedVariable,
+			procedure: `$intval := 1;`, // this can infer the type
 		},
 		{
 			name:      "undeclared variable",
 			procedure: `$intval int := $a;`,
-			err:       parseTypes.ErrUndeclaredVariable,
+			err:       parse.ErrUndeclaredVariable,
 		},
 		{
 			name:      "non-existent @ variable",
 			procedure: `$id int := @ethereum_height;`,
-			err:       parseTypes.ErrUnknownContextualVariable,
+			err:       parse.ErrUnknownContextualVariable,
 		},
 		{
 			name: "unknown function",
 			procedure: `
 			$int int := unknown_function();
 			`,
-			err: parseTypes.ErrUnknownFunctionOrProcedure,
+			err: parse.ErrUnknownFunctionOrProcedure,
 		},
 		{
 			name: "known procedure",
@@ -111,7 +109,7 @@ func Test_Deployment(t *testing.T) {
 				break;
 			}
 			`,
-			err: parseTypes.ErrUnknownFunctionOrProcedure,
+			err: parse.ErrUnknownFunctionOrProcedure,
 		},
 		{
 			name: "various foreign procedures",
@@ -181,7 +179,7 @@ func Test_Deployment(t *testing.T) {
 				select * from get_tbl['dbid', 'get_tbl']();
 			}
 			`,
-			err: parseTypes.ErrUnknownFunctionOrProcedure,
+			err: parse.ErrUnknownFunctionOrProcedure,
 		},
 	}
 
@@ -219,10 +217,10 @@ func Test_Deployment(t *testing.T) {
 			// we intentionally use the bare kuneiform parser and don't
 			// perform extra checks because we want to test that the engine
 			// catches these errors
-			parsed, _, _, err := kuneiform.Parse(schema)
+			parsed, err := parse.ParseSchema([]byte(schema))
 			require.NoError(t, err)
 
-			err = global.CreateDataset(ctx, tx, parsed, &common.TransactionData{
+			err = global.CreateDataset(ctx, tx, parsed.Schema, &common.TransactionData{
 				Signer: owner,
 				Caller: string(owner),
 				TxID:   "test",

@@ -98,7 +98,7 @@ func UnmarshalKf(file *os.File) (*types.Schema, error) {
 		return nil, fmt.Errorf("failed to read Kuneiform source file: %w", err)
 	}
 
-	res, err := parse.ParseKuneiform(string(source))
+	res, err := parse.ParseAndValidate(source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Kuneiform source file: %w", err)
 	}

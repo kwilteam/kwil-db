@@ -24,7 +24,7 @@ const (
 )
 
 func loadTestSchema() (*types.Schema, error) {
-	res, err := parse.ParseKuneiform(testScheme)
+	res, err := parse.ParseAndValidate([]byte(testScheme))
 	if err != nil {
 		return nil, err
 	}

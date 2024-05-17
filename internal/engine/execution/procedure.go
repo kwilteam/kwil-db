@@ -13,8 +13,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/internal/conv"
+	"github.com/kwilteam/kwil-db/internal/engine/generate"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
-	"github.com/kwilteam/kwil-db/parse/actions"
 )
 
 // MaxStackDepth is the limit on the number of nested procedure calls allowed.
@@ -79,23 +79,16 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 
 	preparedActions := make([]*preparedAction, len(schema.Actions))
 
-	// converting statements to instructions
-
-	parsedActions, parseErrs, err := actions.AnalyzeActions(schema, &actions.AnalyzeOpts{
-		PGSchemaName: dbidSchema(schema.DBID()),
-	})
-	if err != nil {
-		return nil, err
-	}
-	if parseErrs.Err() != nil {
-		return nil, parseErrs.Err()
-	}
-
-	for idx, analyzedAction := range parsedActions {
+	for idx, action := range schema.Actions {
 		instructions := make([]instruction, 0)
 
+		actionStmt, err := generate.GenerateActionBody(action, schema)
+		if err != nil {
+			return nil, err
+		}
+
 		// add instructions for both owner only and view procedures
-		if analyzedAction.OwnerOnly {
+		if action.IsOwnerOnly() {
 			instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
 				if !bytes.Equal(scope.Signer, owner) {
 					return fmt.Errorf("cannot call owner procedure, not owner")
@@ -105,7 +98,7 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 			}))
 		}
 
-		if !analyzedAction.IsView {
+		if !action.IsView() {
 			instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
 				tx, ok := db.(sql.AccessModer)
 				if !ok {
@@ -119,12 +112,11 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 			}))
 		}
 
-		for _, parsedStmt := range analyzedAction.Statements {
+		for _, parsedStmt := range actionStmt {
 			switch stmt := parsedStmt.(type) {
 			default:
 				return nil, fmt.Errorf("unknown statement type %T", stmt)
-			case *actions.ExtensionCall:
-
+			case *generate.ActionExtensionCall:
 				i := &callMethod{
 					Namespace: stmt.Extension,
 					Method:    stmt.Method,
@@ -132,20 +124,13 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 					Receivers: stmt.Receivers,
 				}
 				instructions = append(instructions, i)
-			case *actions.SQLStatement:
-				if stmt.Mutative && analyzedAction.IsView {
-					return nil, fmt.Errorf("view procedure cannot contain mutative statements")
-				}
-
+			case *generate.ActionSQL:
 				i := &dmlStmt{
 					SQLStatement:      stmt.Statement,
 					OrderedParameters: stmt.ParameterOrder,
 				}
 				instructions = append(instructions, i)
-			case *actions.ActionCall:
-
-				// we must check if it is calling a view procedure or not
-				callingViewProcedure := false // callingViewProcedure tracks whether the called procedure is a view
+			case *generate.ActionCall:
 
 				var calledAction *types.Action
 				for _, p := range schema.Actions {
@@ -156,17 +141,6 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 				}
 				if calledAction == nil {
 					return nil, fmt.Errorf(`procedure "%s" not found`, stmt.Action)
-				}
-
-				for _, mod := range calledAction.Modifiers {
-					if mod == types.ModifierView {
-						callingViewProcedure = true
-						break
-					}
-				}
-
-				if analyzedAction.IsView && !callingViewProcedure {
-					return nil, fmt.Errorf("view procedures cannot call non-view procedures")
 				}
 
 				// we leave the namespace and receivers empty, since action calls can only
@@ -180,10 +154,10 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 		}
 
 		preparedActions[idx] = &preparedAction{
-			name:         analyzedAction.Name,
-			public:       analyzedAction.Public,
-			parameters:   analyzedAction.Parameters,
-			view:         analyzedAction.IsView,
+			name:         action.Name,
+			public:       action.Public,
+			parameters:   action.Parameters,
+			view:         action.IsView(),
 			instructions: instructions,
 		}
 	}
@@ -396,12 +370,12 @@ type evaluatable func(ctx context.Context, exec dbQueryFn, values map[string]any
 // See their execution in (*callMethod).execute inside the `range e.Args` to
 // collect the `inputs` passed to the call of a dataset method or other
 // "namespace" method, such as an extension method.
-func makeExecutables(params []*actions.InlineExpression) []evaluatable {
+func makeExecutables(params []*generate.InlineExpression) []evaluatable {
 	var evaluatables []evaluatable
 
 	for _, param := range params {
 		// copy the param to avoid loop variable capture
-		param2 := &actions.InlineExpression{
+		param2 := &generate.InlineExpression{
 			Statement:     param.Statement,
 			OrderedParams: param.OrderedParams,
 		}

@@ -195,7 +195,7 @@ func loadSchema(file string) (*types.Schema, error) {
 		return nil, err
 	}
 
-	db, err := parse.ParseKuneiform(string(d))
+	db, err := parse.ParseAndValidate(d)
 	if err != nil {
 		return nil, err
 	}

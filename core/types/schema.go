@@ -119,6 +119,18 @@ func (s *Schema) FindTable(name string) (table *Table, found bool) {
 	return nil, false
 }
 
+// FindAction finds an action based on its name.
+// It returns false if the action is not found.
+func (s *Schema) FindAction(name string) (action *Action, found bool) {
+	for _, act := range s.Actions {
+		if strings.EqualFold(act.Name, name) {
+			return act, true
+		}
+	}
+
+	return nil, false
+}
+
 // FindProcedure finds a procedure based on its name.
 // It returns false if the procedure is not found.
 func (s *Schema) FindProcedure(name string) (procedure *Procedure, found bool) {
@@ -137,6 +149,18 @@ func (s *Schema) FindForeignProcedure(name string) (procedure *ForeignProcedure,
 	for _, proc := range s.ForeignProcedures {
 		if strings.EqualFold(proc.Name, name) {
 			return proc, true
+		}
+	}
+
+	return nil, false
+}
+
+// FindExtensionImport finds an extension based on its alias.
+// It returns false if the extension is not found.
+func (s *Schema) FindExtensionImport(alias string) (extension *Extension, found bool) {
+	for _, ext := range s.Extensions {
+		if strings.EqualFold(ext.Alias, alias) {
+			return ext, true
 		}
 	}
 

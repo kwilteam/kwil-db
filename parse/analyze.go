@@ -3,9 +3,8 @@ package parse
 import (
 	"fmt"
 
-	coreTypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils/order"
-	"github.com/kwilteam/kwil-db/parse/types"
 )
 
 /*
@@ -70,17 +69,19 @@ import (
 // or sql block.
 type blockContext struct {
 	// schema is the current schema
-	schema *coreTypes.Schema
+	schema *types.Schema
 	// variables holds information about all variable declarations in the block
 	// It holds both user variables like $arg1, $arg2, and contextual variables,
-	// like @caller and @txid.
-	variables map[string]*coreTypes.DataType
+	// like @caller and @txid. It will be populated while the analyzer is running,
+	// but is prepopulated with the procedure's arguments and contextual variables.
+	variables map[string]*types.DataType
 	// anonymousVariables holds information about all anonymous variable declarations in the block.
 	// Anonymous variables are objects with fields, such as the receiver of loops.
 	// The map maps the name to the fields to their data types.
-	anonymousVariables map[string]map[string]*coreTypes.DataType
+	// The map will be populated while the analyzer is running.
+	anonymousVariables map[string]map[string]*types.DataType
 	// errs is used for passing errors back to the caller.
-	errs types.NativeErrorListener
+	errs *errorListener
 }
 
 // variableExists checks if a variable exists in the current block.
@@ -98,18 +99,18 @@ func (b *blockContext) variableExists(name string) bool {
 // sqlContext is the context of the current SQL statement
 type sqlContext struct {
 	// joinedRelations tracks all relations joined on the current SQL statement.
-	joinedRelations []*types.Relation
+	joinedRelations []*Relation
 	// outerRelations are relations that are not joined on the scope, but are available.
 	// These are typically outer queries in a subquery. Calling these will be a correlated subquery.
-	outerRelations []*types.Relation
+	outerRelations []*Relation
 	// joinedTables maps all used table names/aliases to their table definitions.
 	// The tables named here are also included in joinedRelations, but not
 	// all joinedRelations are in this map. This map ONLY includes actual SQL
 	// tables joined in this context, not joined subqueries or procedure calls.
 	// These are used for default ordering.
-	joinedTables map[string]*coreTypes.Table
+	joinedTables map[string]*types.Table
 	// ctes are the common table expressions in the current scope.
-	ctes []*types.Relation
+	ctes []*Relation
 	// outerScope is the scope of the outer query.
 	outerScope *sqlContext
 
@@ -134,6 +135,12 @@ type sqlContext struct {
 	_columnsOutsideAggregate [][2]string
 }
 
+func newSQLContext() *sqlContext {
+	return &sqlContext{
+		joinedTables: make(map[string]*types.Table),
+	}
+}
+
 // setTempValuesToZero resets all temp values to their zero values.
 func (s *sqlContext) setTempValuesToZero() {
 	s._inAggregate = false
@@ -145,12 +152,12 @@ func (s *sqlContext) setTempValuesToZero() {
 // copy copies the sqlContext.
 // it does not copy the outer scope.
 func (c *sqlContext) copy() *sqlContext {
-	joinedRelations := make([]*types.Relation, len(c.joinedRelations))
+	joinedRelations := make([]*Relation, len(c.joinedRelations))
 	for i, r := range c.joinedRelations {
 		joinedRelations[i] = r.Copy()
 	}
 
-	outerRelations := make([]*types.Relation, len(c.outerRelations))
+	outerRelations := make([]*Relation, len(c.outerRelations))
 	for i, r := range c.outerRelations {
 		outerRelations[i] = r.Copy()
 	}
@@ -168,11 +175,11 @@ func (c *sqlContext) copy() *sqlContext {
 }
 
 // joinRelation adds a relation to the context.
-func (c *sqlContext) joinRelation(r *types.Relation) error {
+func (c *sqlContext) joinRelation(r *Relation) error {
 	// check if the relation is already joined
 	_, ok := c.getJoinedRelation(r.Name)
 	if ok {
-		return types.ErrTableAlreadyJoined
+		return ErrTableAlreadyJoined
 	}
 
 	c.joinedRelations = append(c.joinedRelations, r)
@@ -180,10 +187,10 @@ func (c *sqlContext) joinRelation(r *types.Relation) error {
 }
 
 // join joins a table. It will return an error if the table is already joined.
-func (c *sqlContext) join(name string, t *coreTypes.Table) error {
+func (c *sqlContext) join(name string, t *types.Table) error {
 	_, ok := c.joinedTables[name]
 	if ok {
-		return types.ErrTableAlreadyJoined
+		return ErrTableAlreadyJoined
 	}
 
 	c.joinedTables[name] = t
@@ -191,7 +198,7 @@ func (c *sqlContext) join(name string, t *coreTypes.Table) error {
 }
 
 // getJoinedRelation returns the relation with the given name.
-func (c *sqlContext) getJoinedRelation(name string) (*types.Relation, bool) {
+func (c *sqlContext) getJoinedRelation(name string) (*Relation, bool) {
 	for _, r := range c.joinedRelations {
 		if r.Name == name {
 			return r, true
@@ -202,7 +209,7 @@ func (c *sqlContext) getJoinedRelation(name string) (*types.Relation, bool) {
 }
 
 // getOuterRelation returns the relation with the given name.
-func (c *sqlContext) getOuterRelation(name string) (*types.Relation, bool) {
+func (c *sqlContext) getOuterRelation(name string) (*Relation, bool) {
 	for _, r := range c.outerRelations {
 		if r.Name == name {
 			return r, true
@@ -217,9 +224,9 @@ func (c *sqlContext) getOuterRelation(name string) (*types.Relation, bool) {
 // If the relation is empty and many columns are found, it will return an error.
 // It returns both an error and an error message in case of an error.
 // This is because it is meant to pass errors back to the error listener.
-func (c *sqlContext) findAttribute(relation string, column string) (relName string, attr *types.Attribute, err error, msg string) {
+func (c *sqlContext) findAttribute(relation string, column string) (relName string, attr *Attribute, msg string, err error) {
 	if relation == "" {
-		foundAttrs := make([]*types.Attribute, 0)
+		foundAttrs := make([]*Attribute, 0)
 
 		for _, r := range c.joinedRelations {
 			for _, a := range r.Attributes {
@@ -241,11 +248,11 @@ func (c *sqlContext) findAttribute(relation string, column string) (relName stri
 
 		switch len(foundAttrs) {
 		case 0:
-			return "", nil, types.ErrUnknownColumn, column
+			return "", nil, column, ErrUnknownColumn
 		case 1:
-			return relName, foundAttrs[0], nil, ""
+			return relName, foundAttrs[0], "", nil
 		default:
-			return "", nil, types.ErrAmbiguousColumn, column
+			return "", nil, column, ErrAmbiguousColumn
 		}
 	}
 
@@ -253,96 +260,96 @@ func (c *sqlContext) findAttribute(relation string, column string) (relName stri
 	if !ok {
 		r, ok = c.getOuterRelation(relation)
 		if !ok {
-			return "", nil, types.ErrUnknownTable, relation
+			return "", nil, relation, ErrUnknownTable
 		}
 	}
 
 	for _, a := range r.Attributes {
 		if a.Name == column {
-			return r.Name, a, nil, ""
+			return r.Name, a, "", nil
 		}
 	}
 
-	return "", nil, types.ErrUnknownColumn, relation + "." + column
+	return "", nil, relation + "." + column, ErrUnknownColumn
 }
 
 // findColumn searches for a column and table in the tables of joinedTables.
 // It works similar to findAttribute, where if the table is empty, it will search all tables.
 // If the table is empty and many columns are found, it will return an error.
 // It returns both an error and an error message in case of an error.
-func (c *sqlContext) findColumn(table string, column string) (*coreTypes.Table, *coreTypes.Column, error, string) {
+func (c *sqlContext) findColumn(table string, column string) (*types.Table, *types.Column, string, error) {
 	if table == "" {
 		found := make([]struct {
-			table *coreTypes.Table
-			col   *coreTypes.Column
+			table *types.Table
+			col   *types.Column
 		}, 0)
 
 		for _, t := range c.joinedTables {
 			col, ok := t.FindColumn(column)
 			if ok {
 				found = append(found, struct {
-					table *coreTypes.Table
-					col   *coreTypes.Column
+					table *types.Table
+					col   *types.Column
 				}{table: t, col: col})
 			}
 		}
 
 		switch len(found) {
 		case 0:
-			return nil, nil, types.ErrUnknownColumn, column
+			return nil, nil, column, ErrUnknownColumn
 		case 1:
-			return found[0].table, found[0].col, nil, ""
+			return found[0].table, found[0].col, "", nil
 		default:
-			return nil, nil, types.ErrAmbiguousColumn, column
+			return nil, nil, column, ErrAmbiguousColumn
 		}
 	}
 
 	t, ok := c.joinedTables[table]
 	if !ok {
-		return nil, nil, types.ErrUnknownTable, table
+		return nil, nil, table, ErrUnknownTable
 	}
 
 	col, found := t.FindColumn(column)
 	if !found {
-		return nil, nil, types.ErrUnknownColumn, column
+		return nil, nil, column, ErrUnknownColumn
 	}
 
-	return t, col, nil, ""
+	return t, col, "", nil
 }
 
 // colIsUnique checks if the given column is unique. It also requires the column's
 // table to be passed, because it will return true if the column is the sole primary key.
 // It the table is passed as an empty string, it will search all joined tables.
 // it will return an error and a message for the error if one is encountered.
-func (s *sqlContext) colIsUnique(tblStr string, colStr string) (bool, error, string) {
-	tbl, col, err, msg := s.findColumn(tblStr, colStr)
+func (s *sqlContext) colIsUnique(tblStr string, colStr string) (bool, string, error) {
+	tbl, col, msg, err := s.findColumn(tblStr, colStr)
 	if err != nil {
-		return false, err, msg
+		return false, msg, err
 	}
 
-	if col.HasAttribute(coreTypes.UNIQUE) {
-		return true, nil, ""
+	if col.HasAttribute(types.UNIQUE) {
+		return true, "", nil
 	}
 
 	pks, err := tbl.GetPrimaryKey()
 	if err != nil {
 		// error shouldn't ever happen because we should have validated
 		// the schema already, but just in case
-		return false, types.ErrTableDefinition, err.Error()
+		return false, err.Error(), ErrTableDefinition
 	}
 
 	if len(pks) != 1 {
-		return false, nil, ""
+		return false, "", nil
 	}
 
-	return pks[0] == col.Name, nil, ""
+	return pks[0] == col.Name, "", nil
 }
 
 // scope moves the current scope to outer scope,
 // and sets the current scope to a new scope.
 func (c *sqlContext) scope() {
 	// copy the outer tables and joined tables to avoid modifying the outer scope.
-	outerTbls := make([]*types.Relation, len(c.joinedRelations)+len(c.outerRelations))
+	outerTbls := make([]*Relation, len(c.joinedRelations)+len(c.outerRelations))
 	copy(outerTbls, c.joinedRelations)
 	copy(outerTbls[len(c.joinedRelations):], c.outerRelations)
 
@@ -364,17 +371,17 @@ func (c *sqlContext) popScope() {
 
 /*
 	this visitor breaks down nodes into 4 different types:
-	- Expressions: expressions simply return *types.Attribute. The name on all of these will be empty UNLESS it is a column reference.
+	- Expressions: expressions simply return *Attribute. The name on all of these will be empty UNLESS it is a column reference.
 	- CommonTableExpressions: the only node that can directly add tables to outerRelations slice.
 
 */
 
 // sqlAnalyzer visits SQL nodes and analyzes them.
 type sqlAnalyzer struct {
-	sqlVisitorImplementer
+	UnimplementedSqlVisitor
 	blockContext
 	sqlCtx    *sqlContext
-	sqlResult *sqlAnalyzeResult
+	sqlResult sqlAnalyzeResult
 }
 
 type sqlAnalyzeResult struct {
@@ -384,65 +391,64 @@ type sqlAnalyzeResult struct {
 // startSQLAnalyze initializes all fields of the sqlAnalyzer.
 func (s *sqlAnalyzer) startSQLAnalyze() {
 	s.sqlCtx = &sqlContext{
-		joinedTables: make(map[string]*coreTypes.Table),
+		joinedTables: make(map[string]*types.Table),
 	}
-	s.sqlResult = &sqlAnalyzeResult{}
 }
 
 // endSQLAnalyze is called at the end of the analysis.
 func (s *sqlAnalyzer) endSQLAnalyze() *sqlAnalyzeResult {
 	res := s.sqlResult
 	s.sqlCtx = nil
-	return res
+	return &res
 }
 
 var _ Visitor = (*sqlAnalyzer)(nil)
 
 // typeErr should be used when a type error is encountered.
 // It returns an unknown attribute and adds an error to the error listener.
-func (s *sqlAnalyzer) typeErr(node types.GetNoder, t1, t2 *coreTypes.DataType) *coreTypes.DataType {
-	s.errs.AddErr(node, types.ErrType, fmt.Sprintf("%s != %s", t1.String(), t2.String()))
-	return cast(node, coreTypes.UnknownType)
+func (s *sqlAnalyzer) typeErr(node Node, t1, t2 *types.DataType) *types.DataType {
+	s.errs.AddErr(node, ErrType, fmt.Sprintf("%s != %s", t1.String(), t2.String()))
+	return cast(node, types.UnknownType)
 }
 
 // expressionTypeErr should be used if we expect an expression to return a *types.DataType,
 // but it returns something else. It will attempt to read the actual type and create an error
 // message that is helpful for the end user.
-func (s *sqlAnalyzer) expressionTypeErr(e Expression) *coreTypes.DataType {
+func (s *sqlAnalyzer) expressionTypeErr(e Expression) *types.DataType {
 	// if expression is a receiver from a loop, it will be a map
-	_, ok := e.Accept(s).(map[string]*coreTypes.DataType)
+	_, ok := e.Accept(s).(map[string]*types.DataType)
 	if ok {
-		s.errs.AddErr(e, types.ErrType, "invalid usage of compound type, expected scalar value")
-		return cast(e, coreTypes.UnknownType)
+		s.errs.AddErr(e, ErrType, "invalid usage of compound type, expected scalar value")
+		return cast(e, types.UnknownType)
 	}
 
 	// if expression is a procedure call that returns a table, it will be a slice of attributes
-	_, ok = e.Accept(s).([]*types.Attribute)
+	_, ok = e.Accept(s).([]*Attribute)
 	if ok {
-		s.errs.AddErr(e, types.ErrType, "procedure returns table, not a scalar value")
-		return cast(e, coreTypes.UnknownType)
+		s.errs.AddErr(e, ErrType, "procedure returns table, not a scalar value")
+		return cast(e, types.UnknownType)
 	}
 
 	// if it iis a procedure call that returns many values, it will be a slice of data types
-	vals, ok := e.Accept(s).([]*coreTypes.DataType)
+	vals, ok := e.Accept(s).([]*types.DataType)
 	if ok {
-		s.errs.AddErr(e, types.ErrType, "expected procedure to return a single value, returns %d", len(vals))
-		return cast(e, coreTypes.UnknownType)
+		s.errs.AddErr(e, ErrType, "expected procedure to return a single value, returns %d", len(vals))
+		return cast(e, types.UnknownType)
 
 	}
 
-	s.errs.AddErr(e, types.ErrType, "could not infer expected type")
-	return cast(e, coreTypes.UnknownType)
+	s.errs.AddErr(e, ErrType, "could not infer expected type")
+	return cast(e, types.UnknownType)
 }
 
 // cast will return the type case if one exists. If not, it will simply
 // return the passed type.
-func cast(castable any, fallback *coreTypes.DataType) *coreTypes.DataType {
+func cast(castable any, fallback *types.DataType) *types.DataType {
 	if castable == nil {
 		return fallback
 	}
 
-	c, ok := castable.(interface{ GetTypeCast() *coreTypes.DataType })
+	c, ok := castable.(interface{ GetTypeCast() *types.DataType })
 	if !ok {
 		return fallback
 	}
@@ -465,28 +471,28 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 		// if not found, it might be a schema procedure.
 		proc, found := s.schema.FindProcedure(p0.Name)
 		if !found {
-			s.errs.AddErr(p0, types.ErrUnknownFunctionOrProcedure, p0.Name)
-			return cast(p0, coreTypes.UnknownType)
+			s.errs.AddErr(p0, ErrUnknownFunctionOrProcedure, p0.Name)
+			return cast(p0, types.UnknownType)
 		}
 
 		// if it is a procedure, it cannot use distinct or *
 		if p0.Distinct {
-			s.errs.AddErr(p0, types.ErrFunctionSignature, "cannot use DISTINCT when calling procedure", p0.Name)
-			return cast(p0, coreTypes.UnknownType)
+			s.errs.AddErr(p0, ErrFunctionSignature, "cannot use DISTINCT when calling procedure %s", p0.Name)
+			return cast(p0, types.UnknownType)
 		}
 		if p0.Star {
-			s.errs.AddErr(p0, types.ErrFunctionSignature, "cannot use * when calling procedure", p0.Name)
-			return cast(p0, coreTypes.UnknownType)
+			s.errs.AddErr(p0, ErrFunctionSignature, "cannot use * when calling procedure %s", p0.Name)
+			return cast(p0, types.UnknownType)
 		}
 
 		// verify the inputs
 		if len(p0.Args) != len(proc.Parameters) {
-			s.errs.AddErr(p0, types.ErrFunctionSignature, "expected %d arguments, received %d", len(proc.Parameters), len(p0.Args))
-			return cast(p0, coreTypes.UnknownType)
+			s.errs.AddErr(p0, ErrFunctionSignature, "expected %d arguments, received %d", len(proc.Parameters), len(p0.Args))
+			return cast(p0, types.UnknownType)
 		}
 
 		for i, arg := range p0.Args {
-			dt, ok := arg.Accept(s).(*coreTypes.DataType)
+			dt, ok := arg.Accept(s).(*types.DataType)
 			if !ok {
 				return s.expressionTypeErr(arg)
 			}
@@ -502,8 +508,8 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 	// the function is a built in function. If using DISTINCT, it needs to be an aggregate
 	// if using *, it needs to support it.
 	if p0.Distinct && !fn.IsAggregate {
-		s.errs.AddErr(p0, types.ErrFunctionSignature, "DISTINCT can only be used with aggregate functions")
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0, ErrFunctionSignature, "DISTINCT can only be used with aggregate functions")
+		return cast(p0, types.UnknownType)
 	}
 
 	if fn.IsAggregate {
@@ -514,24 +520,24 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 
 	// if the function is called with *, we need to ensure it supports it.
 	// If not, then we validate all args and return the type.
-	var returnType *coreTypes.DataType
+	var returnType *types.DataType
 	if p0.Star {
 		if fn.StarArgReturn == nil {
-			s.errs.AddErr(p0, types.ErrFunctionSignature, "function does not support *")
-			return cast(p0, coreTypes.UnknownType)
+			s.errs.AddErr(p0, ErrFunctionSignature, "function does not support *")
+			return cast(p0, types.UnknownType)
 		}
 
 		// if calling with *, it must have no args
 		if len(p0.Args) != 0 {
-			s.errs.AddErr(p0, types.ErrFunctionSignature, "function does not accept arguments when using *")
-			return cast(p0, coreTypes.UnknownType)
+			s.errs.AddErr(p0, ErrFunctionSignature, "function does not accept arguments when using *")
+			return cast(p0, types.UnknownType)
 		}
 
 		returnType = fn.StarArgReturn
 	} else {
-		argTyps := make([]*coreTypes.DataType, len(p0.Args))
+		argTyps := make([]*types.DataType, len(p0.Args))
 		for i, arg := range p0.Args {
-			dt, ok := arg.Accept(s).(*coreTypes.DataType)
+			dt, ok := arg.Accept(s).(*types.DataType)
 			if !ok {
 				return s.expressionTypeErr(arg)
 			}
@@ -542,8 +548,8 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 		var err error
 		returnType, err = fn.ValidateArgs(argTyps)
 		if err != nil {
-			s.errs.AddErr(p0, types.ErrFunctionSignature, err.Error())
-			return cast(p0, coreTypes.UnknownType)
+			s.errs.AddErr(p0, ErrFunctionSignature, err.Error())
+			return cast(p0, types.UnknownType)
 		}
 	}
 
@@ -554,36 +560,36 @@ func (s *sqlAnalyzer) VisitExpressionForeignCall(p0 *ExpressionForeignCall) any 
 	// foreign call must be defined as a foreign procedure
 	proc, found := s.schema.FindForeignProcedure(p0.Name)
 	if !found {
-		s.errs.AddErr(p0, types.ErrUnknownFunctionOrProcedure, p0.Name)
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0, ErrUnknownFunctionOrProcedure, p0.Name)
+		return cast(p0, types.UnknownType)
 	}
 
 	if len(p0.ContextualArgs) != 2 {
-		s.errs.AddErr(p0, types.ErrFunctionSignature, "expected 2 contextual arguments, received %d", len(p0.ContextualArgs))
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0, ErrFunctionSignature, "expected 2 contextual arguments, received %d", len(p0.ContextualArgs))
+		return cast(p0, types.UnknownType)
 	}
 
 	// contextual args have to be strings
 	for _, ctxArgs := range p0.ContextualArgs {
-		dt, ok := ctxArgs.Accept(s).(*coreTypes.DataType)
+		dt, ok := ctxArgs.Accept(s).(*types.DataType)
 		if !ok {
 			return s.expressionTypeErr(ctxArgs)
 		}
 
-		if !dt.Equals(coreTypes.TextType) {
-			s.errs.AddErr(ctxArgs, types.ErrFunctionSignature, "expected text type, received %s", dt.String())
-			return cast(p0, coreTypes.UnknownType)
+		if !dt.Equals(types.TextType) {
+			s.errs.AddErr(ctxArgs, ErrFunctionSignature, "expected text type, received %s", dt.String())
+			return cast(p0, types.UnknownType)
 		}
 	}
 
 	// verify the inputs
 	if len(p0.Args) != len(proc.Parameters) {
-		s.errs.AddErr(p0, types.ErrFunctionSignature, "expected %d arguments, received %d", len(proc.Parameters), len(p0.Args))
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0, ErrFunctionSignature, "expected %d arguments, received %d", len(proc.Parameters), len(p0.Args))
+		return cast(p0, types.UnknownType)
 	}
 
 	for i, arg := range p0.Args {
-		dt, ok := arg.Accept(s).(*coreTypes.DataType)
+		dt, ok := arg.Accept(s).(*types.DataType)
 		if !ok {
 			return s.expressionTypeErr(arg)
 		}
@@ -598,21 +604,18 @@ func (s *sqlAnalyzer) VisitExpressionForeignCall(p0 *ExpressionForeignCall) any 
 
 // returnProcedureReturnExpr handles a procedure return used as an expression return. It mandates
 // that the procedure returns a single value, or a table.
-func (s *sqlAnalyzer) returnProcedureReturnExpr(p0 interface {
-	types.GetNoder
-	GetTypeCast() *coreTypes.DataType
-}, procedureName string, ret *coreTypes.ProcedureReturn) any {
+func (s *sqlAnalyzer) returnProcedureReturnExpr(p0 Node, procedureName string, ret *types.ProcedureReturn) any {
 	// if an expression calls a function, it should return exactly one value or a table.
 	if ret == nil {
-		s.errs.AddErr(p0, types.ErrFunctionSignature, "procedure %s does not return a value", procedureName)
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0, ErrFunctionSignature, "procedure %s does not return a value", procedureName)
+		return cast(p0, types.UnknownType)
 	}
 
 	// if it returns a table, we need to return it as a set of attributes.
 	if ret.IsTable {
-		attrs := make([]*types.Attribute, len(ret.Fields))
+		attrs := make([]*Attribute, len(ret.Fields))
 		for i, f := range ret.Fields {
-			attrs[i] = &types.Attribute{
+			attrs[i] = &Attribute{
 				Name: f.Name,
 				Type: f.Type,
 			}
@@ -623,16 +626,19 @@ func (s *sqlAnalyzer) returnProcedureReturnExpr(p0 interface {
 
 	switch len(ret.Fields) {
 	case 0:
-		s.errs.AddErr(p0, types.ErrFunctionSignature, "procedure %s does not return a value", procedureName)
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0, ErrFunctionSignature, "procedure %s does not return a value", procedureName)
+		return cast(p0, types.UnknownType)
 	case 1:
 		return cast(p0, ret.Fields[0].Type)
 	default:
-		if p0.GetTypeCast() != nil {
-			s.errs.AddErr(p0, types.ErrType, "cannot type cast multiple return values")
+		castable, ok := p0.(interface{ GetTypeCast() *types.DataType })
+		if ok {
+			if castable.GetTypeCast() != nil {
+				s.errs.AddErr(p0, ErrType, "cannot type cast multiple return values")
+			}
 		}
 
-		retVals := make([]*coreTypes.DataType, len(ret.Fields))
+		retVals := make([]*types.DataType, len(ret.Fields))
 		for i, f := range ret.Fields {
 			retVals[i] = f.Type.Copy()
 		}
@@ -649,40 +655,40 @@ func (s *sqlAnalyzer) VisitExpressionVariable(p0 *ExpressionVariable) any {
 		if ok {
 			// if it is anonymous, we cannot type cast, since it is a compound type.
 			if p0.GetTypeCast() != nil {
-				s.errs.AddErr(p0, types.ErrType, "cannot type cast compound variable")
+				s.errs.AddErr(p0, ErrType, "cannot type cast compound variable")
 			}
 
 			return anonVar
 		}
 
 		// if not found, then var does not exist.
-		s.errs.AddErr(p0, types.ErrUndeclaredVariable, p0.String())
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0, ErrUndeclaredVariable, p0.String())
+		return cast(p0, types.UnknownType)
 	}
 
 	return cast(p0, dt)
 }
 
 func (s *sqlAnalyzer) VisitExpressionArrayAccess(p0 *ExpressionArrayAccess) any {
-	idxAttr, ok := p0.Index.Accept(s).(*coreTypes.DataType)
+	idxAttr, ok := p0.Index.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Index)
 	}
-	if !idxAttr.Equals(coreTypes.IntType) {
-		return s.typeErr(p0.Index, idxAttr, coreTypes.IntType)
+	if !idxAttr.Equals(types.IntType) {
+		return s.typeErr(p0.Index, idxAttr, types.IntType)
 	}
 
-	arrAttr, ok := p0.Array.Accept(s).(*coreTypes.DataType)
+	arrAttr, ok := p0.Array.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Array)
 	}
 
 	if !arrAttr.IsArray {
-		s.errs.AddErr(p0.Array, types.ErrType, "expected array")
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0.Array, ErrType, "expected array")
+		return cast(p0, types.UnknownType)
 	}
 
-	return cast(p0, &coreTypes.DataType{
+	return cast(p0, &types.DataType{
 		Name:     arrAttr.Name,
 		Metadata: arrAttr.Metadata,
 		// leave IsArray as false since we are accessing an element.
@@ -691,17 +697,17 @@ func (s *sqlAnalyzer) VisitExpressionArrayAccess(p0 *ExpressionArrayAccess) any 
 
 func (s *sqlAnalyzer) VisitExpressionMakeArray(p0 *ExpressionMakeArray) any {
 	if len(p0.Values) == 0 {
-		s.errs.AddErr(p0, types.ErrAssignment, "array instantiation must have at least one element")
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0, ErrAssignment, "array instantiation must have at least one element")
+		return cast(p0, types.UnknownType)
 	}
 
-	first, ok := p0.Values[0].Accept(s).(*coreTypes.DataType)
+	first, ok := p0.Values[0].Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Values[0])
 	}
 
 	for _, v := range p0.Values {
-		typ, ok := v.Accept(s).(*coreTypes.DataType)
+		typ, ok := v.Accept(s).(*types.DataType)
 		if !ok {
 			return s.expressionTypeErr(v)
 		}
@@ -711,7 +717,7 @@ func (s *sqlAnalyzer) VisitExpressionMakeArray(p0 *ExpressionMakeArray) any {
 		}
 	}
 
-	return cast(p0, &coreTypes.DataType{
+	return cast(p0, &types.DataType{
 		Name:     first.Name,
 		Metadata: first.Metadata,
 		IsArray:  true,
@@ -722,23 +728,23 @@ func (s *sqlAnalyzer) VisitExpressionFieldAccess(p0 *ExpressionFieldAccess) any 
 	// field access needs to be accessing a compound type.
 	// currently, compound types can only be anonymous variables declared
 	// as loop receivers.
-	anonType, ok := p0.Record.Accept(s).(map[string]*coreTypes.DataType)
+	anonType, ok := p0.Record.Accept(s).(map[string]*types.DataType)
 	if !ok {
-		s.errs.AddErr(p0.Record, types.ErrType, "cannot access field on non-compound type")
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0.Record, ErrType, "cannot access field on non-compound type")
+		return cast(p0, types.UnknownType)
 	}
 
 	dt, ok := anonType[p0.Field]
 	if !ok {
-		s.errs.AddErr(p0, types.ErrType, fmt.Sprintf("unknown field %s", p0.Field))
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0, ErrType, fmt.Sprintf("unknown field %s", p0.Field))
+		return cast(p0, types.UnknownType)
 	}
 
 	return cast(p0, dt)
 }
 
 func (s *sqlAnalyzer) VisitExpressionParenthesized(p0 *ExpressionParenthesized) any {
-	dt, ok := p0.Inner.Accept(s).(*coreTypes.DataType)
+	dt, ok := p0.Inner.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Inner)
 	}
@@ -747,12 +753,12 @@ func (s *sqlAnalyzer) VisitExpressionParenthesized(p0 *ExpressionParenthesized) 
 }
 
 func (s *sqlAnalyzer) VisitExpressionComparison(p0 *ExpressionComparison) any {
-	left, ok := p0.Left.Accept(s).(*coreTypes.DataType)
+	left, ok := p0.Left.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Left)
 	}
 
-	right, ok := p0.Right.Accept(s).(*coreTypes.DataType)
+	right, ok := p0.Right.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Right)
 	}
@@ -761,38 +767,38 @@ func (s *sqlAnalyzer) VisitExpressionComparison(p0 *ExpressionComparison) any {
 		return s.typeErr(p0.Right, right, left)
 	}
 
-	return cast(p0, coreTypes.BoolType)
+	return cast(p0, types.BoolType)
 }
 
 func (s *sqlAnalyzer) VisitExpressionLogical(p0 *ExpressionLogical) any {
-	left, ok := p0.Left.Accept(s).(*coreTypes.DataType)
+	left, ok := p0.Left.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Left)
 	}
 
-	right, ok := p0.Right.Accept(s).(*coreTypes.DataType)
+	right, ok := p0.Right.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Right)
 	}
 
-	if !left.Equals(coreTypes.BoolType) {
-		return s.typeErr(p0.Left, left, coreTypes.BoolType)
+	if !left.Equals(types.BoolType) {
+		return s.typeErr(p0.Left, left, types.BoolType)
 	}
 
-	if !right.Equals(coreTypes.BoolType) {
-		return s.typeErr(p0.Right, right, coreTypes.BoolType)
+	if !right.Equals(types.BoolType) {
+		return s.typeErr(p0.Right, right, types.BoolType)
 	}
 
-	return cast(p0, coreTypes.BoolType)
+	return cast(p0, types.BoolType)
 }
 
 func (s *sqlAnalyzer) VisitExpressionArithmetic(p0 *ExpressionArithmetic) any {
-	left, ok := p0.Left.Accept(s).(*coreTypes.DataType)
+	left, ok := p0.Left.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Left)
 	}
 
-	right, ok := p0.Right.Accept(s).(*coreTypes.DataType)
+	right, ok := p0.Right.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Right)
 	}
@@ -801,16 +807,24 @@ func (s *sqlAnalyzer) VisitExpressionArithmetic(p0 *ExpressionArithmetic) any {
 		return s.typeErr(p0.Right, right, left)
 	}
 
-	if !left.IsNumeric() {
-		s.errs.AddErr(p0.Left, types.ErrType, "expected numeric type, received %s", left.String())
-		return cast(p0, coreTypes.UnknownType)
+	// both must be numeric UNLESS it is a concat
+	if p0.Operator == ArithmeticOperatorConcat {
+		if !left.Equals(types.TextType) {
+			s.errs.AddErr(p0.Left, ErrType, "expected text type, received %s", left.String())
+			return cast(p0, types.UnknownType)
+		}
+	} else {
+		if !left.IsNumeric() {
+			s.errs.AddErr(p0.Left, ErrType, "expected numeric type, received %s", left.String())
+			return cast(p0, types.UnknownType)
+		}
 	}
 
 	return cast(p0, left)
 }
 
 func (s *sqlAnalyzer) VisitExpressionUnary(p0 *ExpressionUnary) any {
-	e, ok := p0.Expression.Accept(s).(*coreTypes.DataType)
+	e, ok := p0.Expression.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Expression)
 	}
@@ -820,23 +834,23 @@ func (s *sqlAnalyzer) VisitExpressionUnary(p0 *ExpressionUnary) any {
 		panic("unknown unary operator")
 	case UnaryOperatorPos:
 		if !e.IsNumeric() {
-			s.errs.AddErr(p0.Expression, types.ErrType, "expected numeric type, received %s", e.String())
-			return cast(p0, coreTypes.UnknownType)
+			s.errs.AddErr(p0.Expression, ErrType, "expected numeric type, received %s", e.String())
+			return cast(p0, types.UnknownType)
 		}
 	case UnaryOperatorNeg:
 		if !e.IsNumeric() {
-			s.errs.AddErr(p0.Expression, types.ErrType, "expected numeric type, received %s", e.String())
-			return cast(p0, coreTypes.UnknownType)
+			s.errs.AddErr(p0.Expression, ErrType, "expected numeric type, received %s", e.String())
+			return cast(p0, types.UnknownType)
 		}
 
-		if e.Equals(coreTypes.Uint256Type) {
-			s.errs.AddErr(p0.Expression, types.ErrType, "cannot negate uint256")
-			return cast(p0, coreTypes.UnknownType)
+		if e.Equals(types.Uint256Type) {
+			s.errs.AddErr(p0.Expression, ErrType, "cannot negate uint256")
+			return cast(p0, types.UnknownType)
 		}
 	case UnaryOperatorNot:
-		if !e.Equals(coreTypes.BoolType) {
-			s.errs.AddErr(p0.Expression, types.ErrType, "expected boolean type, received %s", e.String())
-			return cast(p0, coreTypes.UnknownType)
+		if !e.Equals(types.BoolType) {
+			s.errs.AddErr(p0.Expression, ErrType, "expected boolean type, received %s", e.String())
+			return cast(p0, types.UnknownType)
 		}
 	}
 
@@ -846,16 +860,16 @@ func (s *sqlAnalyzer) VisitExpressionUnary(p0 *ExpressionUnary) any {
 func (s *sqlAnalyzer) VisitExpressionColumn(p0 *ExpressionColumn) any {
 	// findColumn accounts for empty tables in search, so we do not have to
 	// worry about it being qualified or not.
-	relName, col, err, msg := s.sqlCtx.findAttribute(p0.Table, p0.Column)
+	relName, col, msg, err := s.sqlCtx.findAttribute(p0.Table, p0.Column)
 	if err != nil {
 		s.errs.AddErr(p0, err, msg)
-		return cast(p0, coreTypes.UnknownType)
+		return cast(p0, types.UnknownType)
 	}
 
 	if s.sqlCtx._inAggregate {
 		if s.sqlCtx._columnInAggregate != nil {
-			s.errs.AddErr(p0, types.ErrAggregate, "cannot use multiple columns in aggregate function args")
-			return cast(p0, coreTypes.UnknownType)
+			s.errs.AddErr(p0, ErrAggregate, "cannot use multiple columns in aggregate function args")
+			return cast(p0, types.UnknownType)
 		}
 
 		s.sqlCtx._columnInAggregate = &[2]string{relName, col.Name}
@@ -867,48 +881,48 @@ func (s *sqlAnalyzer) VisitExpressionColumn(p0 *ExpressionColumn) any {
 }
 
 func (s *sqlAnalyzer) VisitExpressionCollate(p0 *ExpressionCollate) any {
-	e, ok := p0.Expression.Accept(s).(*coreTypes.DataType)
+	e, ok := p0.Expression.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Expression)
 	}
 
-	if !e.Equals(coreTypes.TextType) {
-		s.errs.AddErr(p0.Expression, types.ErrType, "expected text type, received %s", e.String())
-		return cast(p0, coreTypes.UnknownType)
+	if !e.Equals(types.TextType) {
+		s.errs.AddErr(p0.Expression, ErrType, "expected text type, received %s", e.String())
+		return cast(p0, types.UnknownType)
 	}
 
 	return cast(p0, e)
 }
 
 func (s *sqlAnalyzer) VisitExpressionStringComparison(p0 *ExpressionStringComparison) any {
-	left, ok := p0.Left.Accept(s).(*coreTypes.DataType)
+	left, ok := p0.Left.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Left)
 	}
 
-	right, ok := p0.Right.Accept(s).(*coreTypes.DataType)
+	right, ok := p0.Right.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Right)
 	}
 
-	if !left.Equals(coreTypes.TextType) {
-		return s.typeErr(p0.Left, left, coreTypes.TextType)
+	if !left.Equals(types.TextType) {
+		return s.typeErr(p0.Left, left, types.TextType)
 	}
 
-	if !right.Equals(coreTypes.TextType) {
-		return s.typeErr(p0.Right, right, coreTypes.TextType)
+	if !right.Equals(types.TextType) {
+		return s.typeErr(p0.Right, right, types.TextType)
 	}
 
-	return cast(p0, coreTypes.BoolType)
+	return cast(p0, types.BoolType)
 }
 
 func (s *sqlAnalyzer) VisitExpressionIs(p0 *ExpressionIs) any {
-	left, ok := p0.Left.Accept(s).(*coreTypes.DataType)
+	left, ok := p0.Left.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Left)
 	}
 
-	right, ok := p0.Right.Accept(s).(*coreTypes.DataType)
+	right, ok := p0.Right.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Right)
 	}
@@ -920,16 +934,16 @@ func (s *sqlAnalyzer) VisitExpressionIs(p0 *ExpressionIs) any {
 			return s.typeErr(p0.Right, right, left)
 		}
 	} else {
-		if !right.Equals(coreTypes.NullType) {
-			return s.typeErr(p0.Right, right, coreTypes.NullType)
+		if !right.Equals(types.NullType) {
+			return s.typeErr(p0.Right, right, types.NullType)
 		}
 	}
 
-	return cast(p0, coreTypes.BoolType)
+	return cast(p0, types.BoolType)
 }
 
 func (s *sqlAnalyzer) VisitExpressionIn(p0 *ExpressionIn) any {
-	exprType, ok := p0.Expression.Accept(s).(*coreTypes.DataType)
+	exprType, ok := p0.Expression.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Expression)
 	}
@@ -937,7 +951,7 @@ func (s *sqlAnalyzer) VisitExpressionIn(p0 *ExpressionIn) any {
 	switch {
 	case len(p0.List) > 0:
 		for _, e := range p0.List {
-			dt, ok := e.Accept(s).(*coreTypes.DataType)
+			dt, ok := e.Accept(s).(*types.DataType)
 			if !ok {
 				return s.expressionTypeErr(e)
 			}
@@ -947,14 +961,14 @@ func (s *sqlAnalyzer) VisitExpressionIn(p0 *ExpressionIn) any {
 			}
 		}
 	case p0.Subquery != nil:
-		rel, ok := p0.Subquery.Accept(s).([]*types.Attribute)
+		rel, ok := p0.Subquery.Accept(s).([]*Attribute)
 		if !ok {
 			panic("expected query to return attributes")
 		}
 
 		if len(rel) != 1 {
-			s.errs.AddErr(p0.Subquery, types.ErrResultShape, "subquery expressions must return exactly 1 column, received %d", len(rel))
-			return cast(p0, coreTypes.UnknownType)
+			s.errs.AddErr(p0.Subquery, ErrResultShape, "subquery expressions must return exactly 1 column, received %d", len(rel))
+			return cast(p0, types.UnknownType)
 		}
 
 		if !rel[0].Type.Equals(exprType) {
@@ -964,21 +978,21 @@ func (s *sqlAnalyzer) VisitExpressionIn(p0 *ExpressionIn) any {
 		panic("list or subquery must be set for in expression")
 	}
 
-	return cast(p0, coreTypes.BoolType)
+	return cast(p0, types.BoolType)
 }
 
 func (s *sqlAnalyzer) VisitExpressionBetween(p0 *ExpressionBetween) any {
-	between, ok := p0.Expression.Accept(s).(*coreTypes.DataType)
+	between, ok := p0.Expression.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Expression)
 	}
 
-	lower, ok := p0.Lower.Accept(s).(*coreTypes.DataType)
+	lower, ok := p0.Lower.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Lower)
 	}
 
-	upper, ok := p0.Upper.Accept(s).(*coreTypes.DataType)
+	upper, ok := p0.Upper.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Upper)
 	}
@@ -992,27 +1006,30 @@ func (s *sqlAnalyzer) VisitExpressionBetween(p0 *ExpressionBetween) any {
 	}
 
 	if !between.IsNumeric() {
-		s.errs.AddErr(p0.Expression, types.ErrType, "expected numeric type, received %s", between.String())
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0.Expression, ErrType, "expected numeric type, received %s", between.String())
+		return cast(p0, types.UnknownType)
 	}
 
-	return cast(p0, coreTypes.BoolType)
+	return cast(p0, types.BoolType)
 }
 
 func (s *sqlAnalyzer) VisitExpressionSubquery(p0 *ExpressionSubquery) any {
 	// subquery should return a table
-	rel, ok := p0.Subquery.Accept(s).([]*types.Attribute)
+	rel, ok := p0.Subquery.Accept(s).([]*Attribute)
 	if !ok {
 		panic("expected query to return attributes")
 	}
 
 	if len(rel) != 1 {
-		s.errs.AddErr(p0, types.ErrResultShape, "subquery expressions must return exactly 1 column, received %d", len(rel))
-		return cast(p0, coreTypes.UnknownType)
+		s.errs.AddErr(p0, ErrResultShape, "subquery expressions must return exactly 1 column, received %d", len(rel))
+		return cast(p0, types.UnknownType)
 	}
 
 	if p0.Not || p0.Exists {
-		return cast(p0, coreTypes.BoolType)
+		if p0.GetTypeCast() != nil {
+			s.errs.AddErr(p0, ErrType, "cannot type cast subquery with EXISTS")
+		}
+		return types.BoolType
 	}
 
 	return cast(p0, rel[0].Type)
@@ -1021,9 +1038,9 @@ func (s *sqlAnalyzer) VisitExpressionSubquery(p0 *ExpressionSubquery) any {
 func (s *sqlAnalyzer) VisitExpressionCase(p0 *ExpressionCase) any {
 	// all whens in a case statement must be bool, unless there is an expression
 	// that occurs after CASE. In that case, whens all must match the case expression type.
-	expectedWhenType := coreTypes.BoolType
+	expectedWhenType := types.BoolType
 	if p0.Case != nil {
-		caseType, ok := p0.Case.Accept(s).(*coreTypes.DataType)
+		caseType, ok := p0.Case.Accept(s).(*types.DataType)
 		if !ok {
 			return s.expressionTypeErr(p0.Case)
 		}
@@ -1032,9 +1049,9 @@ func (s *sqlAnalyzer) VisitExpressionCase(p0 *ExpressionCase) any {
 	}
 
 	// all thens and else must return the same type.
-	var returnType *coreTypes.DataType
+	var returnType *types.DataType
 	for _, w := range p0.WhenThen {
-		when, ok := w[0].Accept(s).(*coreTypes.DataType)
+		when, ok := w[0].Accept(s).(*types.DataType)
 		if !ok {
 			return s.expressionTypeErr(w[0])
 		}
@@ -1043,7 +1060,7 @@ func (s *sqlAnalyzer) VisitExpressionCase(p0 *ExpressionCase) any {
 			return s.typeErr(w[0], when, expectedWhenType)
 		}
 
-		then, ok := w[1].Accept(s).(*coreTypes.DataType)
+		then, ok := w[1].Accept(s).(*types.DataType)
 		if !ok {
 			return s.expressionTypeErr(w[1])
 		}
@@ -1058,7 +1075,7 @@ func (s *sqlAnalyzer) VisitExpressionCase(p0 *ExpressionCase) any {
 	}
 
 	if p0.Else != nil {
-		elseType, ok := p0.Else.Accept(s).(*coreTypes.DataType)
+		elseType, ok := p0.Else.Accept(s).(*types.DataType)
 		if !ok {
 			return s.expressionTypeErr(p0.Else)
 		}
@@ -1078,17 +1095,17 @@ func (s *sqlAnalyzer) VisitCommonTableExpression(p0 *CommonTableExpression) any 
 	// check that the table does not already exist
 	_, ok := s.sqlCtx.getOuterRelation(p0.Name)
 	if ok {
-		s.errs.AddErr(p0, types.ErrTableAlreadyExists, p0.Name)
+		s.errs.AddErr(p0, ErrTableAlreadyExists, p0.Name)
 		return nil
 	}
 
 	_, ok = s.schema.FindTable(p0.Name)
 	if ok {
-		s.errs.AddErr(p0, types.ErrTableAlreadyExists, p0.Name)
+		s.errs.AddErr(p0, ErrTableAlreadyExists, p0.Name)
 		return nil
 	}
 
-	rel, ok := p0.Query.Accept(s).([]*types.Attribute)
+	rel, ok := p0.Query.Accept(s).([]*Attribute)
 	if !ok {
 		// panic because it is an internal error.
 		// I guess we could just let it panic without ok,
@@ -1097,7 +1114,7 @@ func (s *sqlAnalyzer) VisitCommonTableExpression(p0 *CommonTableExpression) any 
 	}
 
 	if len(p0.Columns) != len(rel) {
-		s.errs.AddErr(p0, types.ErrResultShape, "expected %d columns, received %d", len(p0.Columns), len(rel))
+		s.errs.AddErr(p0, ErrResultShape, "expected %d columns, received %d", len(p0.Columns), len(rel))
 		return nil
 	}
 
@@ -1106,7 +1123,7 @@ func (s *sqlAnalyzer) VisitCommonTableExpression(p0 *CommonTableExpression) any 
 		rel[i].Name = col
 	}
 
-	s.sqlCtx.outerRelations = append(s.sqlCtx.outerRelations, &types.Relation{
+	s.sqlCtx.outerRelations = append(s.sqlCtx.outerRelations, &Relation{
 		Name:       p0.Name,
 		Attributes: rel,
 	})
@@ -1119,7 +1136,7 @@ func (s *sqlAnalyzer) VisitSQLStatement(p0 *SQLStatement) any {
 		cte.Accept(s)
 	}
 
-	rel, ok := p0.SQL.Accept(s).([]*types.Attribute)
+	rel, ok := p0.SQL.Accept(s).([]*Attribute)
 	if !ok {
 		panic("expected query to return attributes")
 	}
@@ -1133,7 +1150,7 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 	// all select cores will need their own scope. They all also need to have the
 	// same shape as each other
 	s.sqlCtx.scope()
-	rel1, ok := p0.SelectCores[0].Accept(s).([]*types.Attribute)
+	rel1, ok := p0.SelectCores[0].Accept(s).([]*Attribute)
 	if !ok {
 		panic("expected query to return attributes")
 	}
@@ -1152,14 +1169,14 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 		}
 
 		s.sqlCtx.scope()
-		rel2, ok := core.Accept(s).([]*types.Attribute)
+		rel2, ok := core.Accept(s).([]*Attribute)
 		if !ok {
 			panic("expected query to return attributes")
 		}
 		s.sqlCtx.popScope()
 
-		if !types.ShapesMatch(rel1, rel2) {
-			s.errs.AddErr(core, types.ErrResultShape, "expected shape to match previous select core")
+		if !ShapesMatch(rel1, rel2) {
+			s.errs.AddErr(core, ErrResultShape, "expected shape to match previous select core")
 			return rel1
 		}
 	}
@@ -1171,7 +1188,7 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 	// we should return an error, since there will be no way for us to inform postgres of our default ordering.
 	if isCompound {
 		// if compound, flatten
-		flattened, conflictCol, err := types.Flatten(rel1Scope.joinedRelations...)
+		flattened, conflictCol, err := Flatten(rel1Scope.joinedRelations...)
 		if err != nil {
 			s.errs.AddErr(p0, err, conflictCol)
 			return rel1
@@ -1179,7 +1196,7 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 
 		// we can simply assign this to the rel1Scope, since we we will not
 		// need it past this point. We can add it as an unnamed relation.
-		rel1Scope.joinedRelations = []*types.Relation{{Attributes: flattened}}
+		rel1Scope.joinedRelations = []*Relation{{Attributes: flattened}}
 
 		// if a compound select, then we have the following default ordering rules:
 		// 1. All columns returned will be ordered in the order they are returned.
@@ -1188,7 +1205,7 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 		// since it is such an uncommon query anyways, we have decided to not support it
 		// until we have time for more testing.
 		if compoundHasGroupBy || p0.SelectCores[0].GroupBy != nil {
-			s.errs.AddErr(p0, types.ErrAggregate, "cannot use group by in compound select")
+			s.errs.AddErr(p0, ErrAggregate, "cannot use group by in compound select")
 			return rel1
 		}
 
@@ -1219,7 +1236,7 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 				g.Accept(s)
 
 				if len(s.sqlCtx._columnsOutsideAggregate) > 1 {
-					s.errs.AddErr(g, types.ErrAggregate, "cannot use multiple columns in group by")
+					s.errs.AddErr(g, ErrAggregate, "cannot use multiple columns in group by")
 					return rel1
 				}
 
@@ -1275,26 +1292,26 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 	}
 
 	if p0.Limit != nil {
-		dt, ok := p0.Limit.Accept(s).(*coreTypes.DataType)
+		dt, ok := p0.Limit.Accept(s).(*types.DataType)
 		if !ok {
 			s.expressionTypeErr(p0.Limit)
 			return rel1
 		}
 
 		if !dt.IsNumeric() {
-			s.errs.AddErr(p0.Limit, types.ErrType, "expected numeric type, received %s", dt.String())
+			s.errs.AddErr(p0.Limit, ErrType, "expected numeric type, received %s", dt.String())
 		}
 	}
 
 	if p0.Offset != nil {
-		dt, ok := p0.Offset.Accept(s).(*coreTypes.DataType)
+		dt, ok := p0.Offset.Accept(s).(*types.DataType)
 		if !ok {
 			s.expressionTypeErr(p0.Offset)
 			return rel1
 		}
 
 		if !dt.IsNumeric() {
-			s.errs.AddErr(p0.Offset, types.ErrType, "expected numeric type, received %s", dt.String())
+			s.errs.AddErr(p0.Offset, ErrType, "expected numeric type, received %s", dt.String())
 		}
 	}
 
@@ -1319,19 +1336,19 @@ func (s *sqlAnalyzer) VisitSelectCore(p0 *SelectCore) any {
 
 	if p0.Where != nil {
 		s.sqlCtx.setTempValuesToZero()
-		whereType, ok := p0.Where.Accept(s).(*coreTypes.DataType)
+		whereType, ok := p0.Where.Accept(s).(*types.DataType)
 		if !ok {
 			return s.expressionTypeErr(p0.Where)
 		}
 
 		// if it contains an aggregate, throw an error
 		if s.sqlCtx._containsAggregate {
-			s.errs.AddErr(p0.Where, types.ErrAggregate, "cannot use aggregate function in WHERE")
-			return []*types.Attribute{}
+			s.errs.AddErr(p0.Where, ErrAggregate, "cannot use aggregate function in WHERE")
+			return []*Attribute{}
 		}
 
-		if !whereType.Equals(coreTypes.BoolType) {
-			s.errs.AddErr(p0.Where, types.ErrType, "expected boolean type, received %s", whereType.String())
+		if !whereType.Equals(types.BoolType) {
+			s.errs.AddErr(p0.Where, ErrType, "expected boolean type, received %s", whereType.String())
 		}
 	}
 
@@ -1350,24 +1367,24 @@ func (s *sqlAnalyzer) VisitSelectCore(p0 *SelectCore) any {
 		g.Accept(s)
 
 		if s.sqlCtx._containsAggregate {
-			s.errs.AddErr(g, types.ErrAggregate, "cannot use aggregate function in group by")
-			return []*types.Attribute{}
+			s.errs.AddErr(g, ErrAggregate, "cannot use aggregate function in group by")
+			return []*Attribute{}
 		}
 		if len(s.sqlCtx._columnsOutsideAggregate) != 1 {
-			s.errs.AddErr(g, types.ErrAggregate, "group by must reference exactly one column")
-			return []*types.Attribute{}
+			s.errs.AddErr(g, ErrAggregate, "group by must reference exactly one column")
+			return []*Attribute{}
 		}
 
 		_, ok := colsInGroupBy[s.sqlCtx._columnsOutsideAggregate[0]]
 		if ok {
-			s.errs.AddErr(g, types.ErrAggregate, "cannot use column in group by more than once")
-			return []*types.Attribute{}
+			s.errs.AddErr(g, ErrAggregate, "cannot use column in group by more than once")
+			return []*Attribute{}
 		}
 		colsInGroupBy[s.sqlCtx._columnsOutsideAggregate[0]] = struct{}{}
 
 		if p0.Having != nil {
 			s.sqlCtx.setTempValuesToZero()
-			havingType, ok := p0.Having.Accept(s).(*coreTypes.DataType)
+			havingType, ok := p0.Having.Accept(s).(*types.DataType)
 			if !ok {
 				return s.expressionTypeErr(p0.Having)
 			}
@@ -1375,28 +1392,28 @@ func (s *sqlAnalyzer) VisitSelectCore(p0 *SelectCore) any {
 			// columns in having must be in the group by if not in aggregate
 			for _, col := range s.sqlCtx._columnsOutsideAggregate {
 				if _, ok := colsInGroupBy[col]; !ok {
-					s.errs.AddErr(p0.Having, types.ErrAggregate, "column used in having must be in group by")
+					s.errs.AddErr(p0.Having, ErrAggregate, "column used in having must be in group by")
 				}
 			}
 
 			if s.sqlCtx._columnInAggregate != nil {
 				if _, ok := colsInGroupBy[*s.sqlCtx._columnInAggregate]; !ok {
-					s.errs.AddErr(p0.Having, types.ErrAggregate, "cannot use column in aggregate if not in group by")
+					s.errs.AddErr(p0.Having, ErrAggregate, "cannot use column in aggregate if not in group by")
 				}
 			}
 
-			if !havingType.Equals(coreTypes.BoolType) {
-				s.errs.AddErr(p0.Having, types.ErrType, "expected boolean type, received %s", havingType.String())
+			if !havingType.Equals(types.BoolType) {
+				s.errs.AddErr(p0.Having, ErrType, "expected boolean type, received %s", havingType.String())
 			}
 		}
 	}
 
 	if hasGroupBy && p0.Distinct {
-		s.errs.AddErr(p0, types.ErrAggregate, "cannot use DISTINCT with GROUP BY")
-		return []*types.Attribute{}
+		s.errs.AddErr(p0, ErrAggregate, "cannot use DISTINCT with GROUP BY")
+		return []*Attribute{}
 	}
 
-	var res []*types.Attribute
+	var res []*Attribute
 	for _, c := range p0.Columns {
 		// for each result column, we need to check that:
 		// IF THERE IS A GROUP BY:
@@ -1408,34 +1425,34 @@ func (s *sqlAnalyzer) VisitSelectCore(p0 *SelectCore) any {
 		// reset to be sure
 		s.sqlCtx.setTempValuesToZero()
 
-		attrs, ok := c.Accept(s).([]*types.Attribute)
+		attrs, ok := c.Accept(s).([]*Attribute)
 		if !ok {
 			panic("expected query to return attributes")
 		}
 
 		if !hasGroupBy && s.sqlCtx._containsAggregate {
 			if len(p0.Columns) != 1 {
-				s.errs.AddErr(c, types.ErrAggregate, "cannot return multiple values in SELECT that uses aggregate function and no group by")
+				s.errs.AddErr(c, ErrAggregate, "cannot return multiple values in SELECT that uses aggregate function and no group by")
 			}
 		} else {
 			// if column used in aggregate, ensure it is not in group by
 			if s.sqlCtx._columnInAggregate != nil {
 				if _, ok := colsInGroupBy[*s.sqlCtx._columnInAggregate]; ok {
-					s.errs.AddErr(c, types.ErrAggregate, "cannot use column in aggregate function and in group by")
+					s.errs.AddErr(c, ErrAggregate, "cannot use column in aggregate function and in group by")
 				}
 			}
 
 			// ensure all columns used outside aggregate are in group by
 			for _, col := range s.sqlCtx._columnsOutsideAggregate {
 				if _, ok := colsInGroupBy[col]; !ok {
-					s.errs.AddErr(c, types.ErrAggregate, "column used outside aggregate must be included in group by")
+					s.errs.AddErr(c, ErrAggregate, "column used outside aggregate must be included in group by")
 				}
 			}
 		}
 
 		var amiguousCol string
 		var err error
-		res, amiguousCol, err = types.Coalesce(append(res, attrs...)...)
+		res, amiguousCol, err = Coalesce(append(res, attrs...)...)
 		if err != nil {
 			s.errs.AddErr(c, err, amiguousCol)
 			return res
@@ -1447,13 +1464,13 @@ func (s *sqlAnalyzer) VisitSelectCore(p0 *SelectCore) any {
 
 func (s *sqlAnalyzer) VisitRelationTable(p0 *RelationTable) any {
 	// table must either be a common table expression, or a table in the schema.
-	var rel *types.Relation
+	var rel *Relation
 	tbl, ok := s.schema.FindTable(p0.Table)
 	if !ok {
 		cte, ok := s.sqlCtx.getOuterRelation(p0.Table)
 		if !ok {
-			s.errs.AddErr(p0, types.ErrUnknownTable, p0.Table)
-			return []*types.Attribute{}
+			s.errs.AddErr(p0, ErrUnknownTable, p0.Table)
+			return []*Attribute{}
 		}
 
 		rel = cte.Copy()
@@ -1462,7 +1479,7 @@ func (s *sqlAnalyzer) VisitRelationTable(p0 *RelationTable) any {
 		rel, err = tableToRelation(tbl)
 		if err != nil {
 			s.errs.AddErr(p0, err, "table: %s", p0.Table)
-			return []*types.Attribute{}
+			return []*Attribute{}
 		}
 
 		// since we have joined a new table, we need to add it to the joined tables.
@@ -1474,7 +1491,7 @@ func (s *sqlAnalyzer) VisitRelationTable(p0 *RelationTable) any {
 		err = s.sqlCtx.join(name, tbl)
 		if err != nil {
 			s.errs.AddErr(p0, err, name)
-			return []*types.Attribute{}
+			return []*Attribute{}
 		}
 	}
 
@@ -1486,57 +1503,57 @@ func (s *sqlAnalyzer) VisitRelationTable(p0 *RelationTable) any {
 	err := s.sqlCtx.joinRelation(rel)
 	if err != nil {
 		s.errs.AddErr(p0, err, p0.Table)
-		return []*types.Attribute{}
+		return []*Attribute{}
 	}
 
 	return nil
 }
 
 func (s *sqlAnalyzer) VisitRelationSubquery(p0 *RelationSubquery) any {
-	relation, ok := p0.Subquery.Accept(s).([]*types.Attribute)
+	relation, ok := p0.Subquery.Accept(s).([]*Attribute)
 	if !ok {
 		panic("expected query to return attributes")
 	}
 
 	// alias is required for subquery joins
 	if p0.Alias == "" {
-		s.errs.AddErr(p0, types.ErrUnnamedJoin, "subquery must have an alias")
-		return []*types.Attribute{}
+		s.errs.AddErr(p0, ErrUnnamedJoin, "subquery must have an alias")
+		return []*Attribute{}
 	}
 
-	err := s.sqlCtx.joinRelation(&types.Relation{
+	err := s.sqlCtx.joinRelation(&Relation{
 		Name:       p0.Alias,
 		Attributes: relation,
 	})
 	if err != nil {
 		s.errs.AddErr(p0, err, p0.Alias)
-		return []*types.Attribute{}
+		return []*Attribute{}
 	}
 
 	return nil
 }
 
 func (s *sqlAnalyzer) VisitRelationFunctionCall(p0 *RelationFunctionCall) any {
-	// the function call here must return []*types.Attribute
+	// the function call here must return []*Attribute
 	// this logic is handled in returnProcedureReturnExpr.
-	ret, ok := p0.FunctionCall.Accept(s).([]*types.Attribute)
+	ret, ok := p0.FunctionCall.Accept(s).([]*Attribute)
 	if !ok {
-		s.errs.AddErr(p0, types.ErrType, "cannot join procedure that does not return type table")
+		s.errs.AddErr(p0, ErrType, "cannot join procedure that does not return type table")
 	}
 
 	// alias is required for function call joins
 	if p0.Alias == "" {
-		s.errs.AddErr(p0, types.ErrUnnamedJoin, "function call must have an alias")
-		return []*types.Attribute{}
+		s.errs.AddErr(p0, ErrUnnamedJoin, "function call must have an alias")
+		return []*Attribute{}
 	}
 
-	err := s.sqlCtx.joinRelation(&types.Relation{
+	err := s.sqlCtx.joinRelation(&Relation{
 		Name:       p0.Alias,
 		Attributes: ret,
 	})
 	if err != nil {
 		s.errs.AddErr(p0, err, p0.Alias)
-		return []*types.Attribute{}
+		return []*Attribute{}
 	}
 
 	return nil
@@ -1550,13 +1567,13 @@ func (s *sqlAnalyzer) VisitJoin(p0 *Join) any {
 
 	compare, ok := p0.On.(*ExpressionComparison)
 	if !ok {
-		s.errs.AddErr(p0.On, types.ErrJoin, "join conditions must be comparison expressions")
-		return []*types.Attribute{}
+		s.errs.AddErr(p0.On, ErrJoin, "join conditions must be comparison expressions")
+		return []*Attribute{}
 	}
 
 	if compare.Operator != ComparisonOperatorEqual {
-		s.errs.AddErr(p0.On, types.ErrJoin, "join conditions must be use = operator")
-		return []*types.Attribute{}
+		s.errs.AddErr(p0.On, ErrJoin, "join conditions must be use = operator")
+		return []*Attribute{}
 	}
 
 	// get the cols to check if they are unique
@@ -1575,17 +1592,17 @@ func (s *sqlAnalyzer) VisitJoin(p0 *Join) any {
 	var msg string
 	switch len(cols) {
 	case 0:
-		s.errs.AddErr(p0.On, types.ErrJoin, "join condition must have at least one column")
-		return []*types.Attribute{}
+		s.errs.AddErr(p0.On, ErrJoin, "join condition must have at least one column")
+		return []*Attribute{}
 	case 1:
 		// if there is only one column, we need to check if it is unique
-		hasUnique, err, msg = s.sqlCtx.colIsUnique(cols[0].Table, cols[0].Column)
+		hasUnique, msg, err = s.sqlCtx.colIsUnique(cols[0].Table, cols[0].Column)
 	case 2:
 		// if there are two columns, we need to check if one is unique
-		hasUnique, err, msg = s.sqlCtx.colIsUnique(cols[0].Table, cols[0].Column)
+		hasUnique, msg, err = s.sqlCtx.colIsUnique(cols[0].Table, cols[0].Column)
 		if err != nil {
 			s.errs.AddErr(p0.On, err, msg)
-			return []*types.Attribute{}
+			return []*Attribute{}
 		}
 
 		// if it is unique, we do not have to check the second column
@@ -1593,38 +1610,38 @@ func (s *sqlAnalyzer) VisitJoin(p0 *Join) any {
 			break
 		}
 
-		hasUnique, err, msg = s.sqlCtx.colIsUnique(cols[1].Table, cols[1].Column)
+		hasUnique, msg, err = s.sqlCtx.colIsUnique(cols[1].Table, cols[1].Column)
 	default:
 		panic("expected 1 or 2 columns")
 	}
 	if err != nil {
 		s.errs.AddErr(p0.On, err, msg)
-		return []*types.Attribute{}
+		return []*Attribute{}
 	}
 
 	if !hasUnique {
-		s.errs.AddErr(p0.On, types.ErrJoin, "join condition must have at least one unique column")
-		return []*types.Attribute{}
+		s.errs.AddErr(p0.On, ErrJoin, "join condition must have at least one unique column")
+		return []*Attribute{}
 	}
 
 	// call visit on the comparison to perform regular type checking
 	p0.Relation.Accept(s)
-	dt, ok := p0.On.Accept(s).(*coreTypes.DataType)
+	dt, ok := p0.On.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.On)
 	}
 
-	if !dt.Equals(coreTypes.BoolType) {
-		s.errs.AddErr(p0.On, types.ErrType, "expected boolean type for comparison, received %s", dt.String())
+	if !dt.Equals(types.BoolType) {
+		s.errs.AddErr(p0.On, ErrType, "expected boolean type for comparison, received %s", dt.String())
 	}
 
-	return []*types.Attribute{}
+	return []*Attribute{}
 }
 
 func (s *sqlAnalyzer) VisitUpdateStatement(p0 *UpdateStatement) any {
 	s.sqlResult.Mutative = true
 
-	tbl, err, msg := s.joinTableFromSchema(p0.Table, p0.Alias)
+	tbl, msg, err := s.joinTableFromSchema(p0.Table, p0.Alias)
 	if err != nil {
 		s.errs.AddErr(p0, err, msg)
 		return nil
@@ -1639,30 +1656,30 @@ func (s *sqlAnalyzer) VisitUpdateStatement(p0 *UpdateStatement) any {
 
 	for _, set := range p0.SetClause {
 		// this calls VisitUpdateSetClause, defined directly below.
-		attr := set.Accept(s).(*types.Attribute)
+		attr := set.Accept(s).(*Attribute)
 
 		// we will see if the table being updated has this column, and if it
 		// is of the correct type.
 		col, ok := tbl.FindColumn(attr.Name)
 		if !ok {
-			s.errs.AddErr(set, types.ErrUnknownColumn, attr.Name)
+			s.errs.AddErr(set, ErrUnknownColumn, attr.Name)
 			continue
 		}
 
 		if !col.Type.Equals(attr.Type) {
-			s.errs.AddErr(set, types.ErrType, "expected %s, received %s", col.Type.String(), attr.Type.String())
+			s.errs.AddErr(set, ErrType, "expected %s, received %s", col.Type.String(), attr.Type.String())
 		}
 	}
 
-	whereType, ok := p0.Where.Accept(s).(*coreTypes.DataType)
+	whereType, ok := p0.Where.Accept(s).(*types.DataType)
 	if !ok {
 		s.expressionTypeErr(p0.Where)
 		return nil
 
 	}
 
-	if !whereType.Equals(coreTypes.BoolType) {
-		s.errs.AddErr(p0.Where, types.ErrType, "expected boolean type, received %s", whereType.String())
+	if !whereType.Equals(types.BoolType) {
+		s.errs.AddErr(p0.Where, ErrType, "expected boolean type, received %s", whereType.String())
 		return nil
 	}
 
@@ -1674,25 +1691,25 @@ func (s *sqlAnalyzer) VisitUpdateStatement(p0 *UpdateStatement) any {
 // it is the responsibility of the caller to validate the types. It will simply
 // return the column and the type it is being set to, as an attribute.
 func (s *sqlAnalyzer) VisitUpdateSetClause(p0 *UpdateSetClause) any {
-	dt, ok := p0.Value.Accept(s).(*coreTypes.DataType)
+	dt, ok := p0.Value.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Value)
 	}
 
-	return &types.Attribute{
+	return &Attribute{
 		Name: p0.Column,
 		Type: dt,
 	}
 }
 
-// result columns return []*types.Attribute
+// result columns return []*Attribute
 func (s *sqlAnalyzer) VisitResultColumnExpression(p0 *ResultColumnExpression) any {
-	e, ok := p0.Expression.Accept(s).(*coreTypes.DataType)
+	e, ok := p0.Expression.Accept(s).(*types.DataType)
 	if !ok {
 		return s.expressionTypeErr(p0.Expression)
 	}
 
-	attr := &types.Attribute{
+	attr := &Attribute{
 		Name: p0.Alias,
 		Type: e,
 	}
@@ -1702,13 +1719,13 @@ func (s *sqlAnalyzer) VisitResultColumnExpression(p0 *ResultColumnExpression) an
 	if attr.Name == "" {
 		col, ok := p0.Expression.(*ExpressionColumn)
 		if !ok {
-			s.errs.AddErr(p0, types.ErrUnnamedResultColumn, "results must either be column references or have an alias")
+			s.errs.AddErr(p0, ErrUnnamedResultColumn, "results must either be column references or have an alias")
 		}
 
 		attr.Name = col.Column
 	}
 
-	return []*types.Attribute{attr}
+	return []*Attribute{attr}
 }
 
 func (s *sqlAnalyzer) VisitResultColumnWildcard(p0 *ResultColumnWildcard) any {
@@ -1716,18 +1733,18 @@ func (s *sqlAnalyzer) VisitResultColumnWildcard(p0 *ResultColumnWildcard) any {
 	if p0.Table != "" {
 		tbl, ok := s.sqlCtx.getJoinedRelation(p0.Table)
 		if !ok {
-			s.errs.AddErr(p0, types.ErrUnknownTable, p0.Table)
-			return []*types.Attribute{}
+			s.errs.AddErr(p0, ErrUnknownTable, p0.Table)
+			return []*Attribute{}
 		}
 
 		return tbl.Attributes
 	}
 
 	// if table is empty, we flatten all joined relations.
-	flattened, conflictCol, err := types.Flatten(s.sqlCtx.joinedRelations...)
+	flattened, conflictCol, err := Flatten(s.sqlCtx.joinedRelations...)
 	if err != nil {
 		s.errs.AddErr(p0, err, conflictCol)
-		return []*types.Attribute{}
+		return []*Attribute{}
 	}
 
 	return flattened
@@ -1736,7 +1753,7 @@ func (s *sqlAnalyzer) VisitResultColumnWildcard(p0 *ResultColumnWildcard) any {
 func (s *sqlAnalyzer) VisitDeleteStatement(p0 *DeleteStatement) any {
 	s.sqlResult.Mutative = true
 
-	_, err, msg := s.joinTableFromSchema(p0.Table, p0.Alias)
+	_, msg, err := s.joinTableFromSchema(p0.Table, p0.Alias)
 	if err != nil {
 		s.errs.AddErr(p0, err, msg)
 		return nil
@@ -1748,15 +1765,15 @@ func (s *sqlAnalyzer) VisitDeleteStatement(p0 *DeleteStatement) any {
 		j.Accept(s)
 	}
 
-	whereType, ok := p0.Where.Accept(s).(*coreTypes.DataType)
+	whereType, ok := p0.Where.Accept(s).(*types.DataType)
 	if !ok {
 		s.expressionTypeErr(p0.Where)
 		return nil
 
 	}
 
-	if !whereType.Equals(coreTypes.BoolType) {
-		s.errs.AddErr(p0.Where, types.ErrType, "expected boolean type, received %s", whereType.String())
+	if !whereType.Equals(types.BoolType) {
+		s.errs.AddErr(p0.Where, ErrType, "expected boolean type, received %s", whereType.String())
 		return nil
 
 	}
@@ -1768,7 +1785,7 @@ func (s *sqlAnalyzer) VisitDeleteStatement(p0 *DeleteStatement) any {
 func (s *sqlAnalyzer) VisitInsertStatement(p0 *InsertStatement) any {
 	s.sqlResult.Mutative = true
 
-	tbl, err, msg := s.joinTableFromSchema(p0.Table, p0.Alias)
+	tbl, msg, err := s.joinTableFromSchema(p0.Table, p0.Alias)
 	if err != nil {
 		s.errs.AddErr(p0, err, msg)
 		return nil
@@ -1778,7 +1795,7 @@ func (s *sqlAnalyzer) VisitInsertStatement(p0 *InsertStatement) any {
 	// we will keep track of the types of columns in the order
 	// they are specified, to match against the values. If columns
 	// are not specified, we simply get call the table's columns.
-	var colTypes []*coreTypes.DataType
+	var colTypes []*types.DataType
 	if len(p0.Columns) == 0 {
 		for _, col := range tbl.Columns {
 			colTypes = append(colTypes, col.Type)
@@ -1787,7 +1804,7 @@ func (s *sqlAnalyzer) VisitInsertStatement(p0 *InsertStatement) any {
 		for _, col := range p0.Columns {
 			c, ok := tbl.FindColumn(col)
 			if !ok {
-				s.errs.AddErr(p0, types.ErrUnknownColumn, col)
+				s.errs.AddErr(p0, ErrUnknownColumn, col)
 				return nil
 			}
 			colTypes = append(colTypes, c.Type)
@@ -1796,19 +1813,19 @@ func (s *sqlAnalyzer) VisitInsertStatement(p0 *InsertStatement) any {
 
 	for _, valList := range p0.Values {
 		if len(valList) != len(colTypes) {
-			s.errs.AddErr(p0, types.ErrResultShape, "expected %d values, received %d", len(colTypes), len(valList))
+			s.errs.AddErr(p0, ErrResultShape, "expected %d values, received %d", len(colTypes), len(valList))
 			return nil
 		}
 
 		for i, val := range valList {
-			dt, ok := val.Accept(s).(*coreTypes.DataType)
+			dt, ok := val.Accept(s).(*types.DataType)
 			if !ok {
 				s.expressionTypeErr(val)
 				return nil
 			}
 
 			if !dt.Equals(colTypes[i]) {
-				s.errs.AddErr(val, types.ErrType, "expected %s, received %s", colTypes[i].String(), dt.String())
+				s.errs.AddErr(val, ErrType, "expected %s, received %s", colTypes[i].String(), dt.String())
 			}
 		}
 	}
@@ -1826,10 +1843,10 @@ func (s *sqlAnalyzer) VisitInsertStatement(p0 *InsertStatement) any {
 // is not in the schema. Optionally, an alias can be passed, which will join
 // the table with the alias name. If there is an error, it returns the error
 // and a message.
-func (s *sqlAnalyzer) joinTableFromSchema(table string, alias string) (*coreTypes.Table, error, string) {
+func (s *sqlAnalyzer) joinTableFromSchema(table string, alias string) (*types.Table, string, error) {
 	tbl, ok := s.schema.FindTable(table)
 	if !ok {
-		return nil, types.ErrUnknownTable, table
+		return nil, table, ErrUnknownTable
 	}
 
 	name := tbl.Name
@@ -1839,10 +1856,10 @@ func (s *sqlAnalyzer) joinTableFromSchema(table string, alias string) (*coreType
 
 	err := s.sqlCtx.join(name, tbl)
 	if err != nil {
-		return nil, err, name
+		return nil, name, err
 	}
 
-	return tbl, nil, ""
+	return tbl, "", nil
 }
 
 func (s *sqlAnalyzer) VisitUpsertClause(p0 *UpsertClause) any {
@@ -1860,48 +1877,48 @@ func (s *sqlAnalyzer) VisitUpsertClause(p0 *UpsertClause) any {
 	for _, col := range p0.ConflictColumns {
 		_, ok := rel.FindAttribute(col)
 		if !ok {
-			s.errs.AddErr(p0, types.ErrUnknownColumn, "conflict column %s", col)
+			s.errs.AddErr(p0, ErrUnknownColumn, "conflict column %s", col)
 			return nil
 		}
 	}
 
 	for _, set := range p0.DoUpdate {
-		attr := set.Accept(s).(*types.Attribute)
+		attr := set.Accept(s).(*Attribute)
 
 		foundAttr, ok := rel.FindAttribute(attr.Name)
 		if !ok {
-			s.errs.AddErr(p0, types.ErrUnknownColumn, "update column %s", attr.Name)
+			s.errs.AddErr(p0, ErrUnknownColumn, "update column %s", attr.Name)
 			continue
 		}
 
 		if !foundAttr.Type.Equals(attr.Type) {
-			s.errs.AddErr(p0, types.ErrType, "expected %s, received %s", foundAttr.Type.String(), attr.Type.String())
+			s.errs.AddErr(p0, ErrType, "expected %s, received %s", foundAttr.Type.String(), attr.Type.String())
 			return nil
 		}
 	}
 
 	if p0.ConflictWhere != nil {
-		dt, ok := p0.ConflictWhere.Accept(s).(*coreTypes.DataType)
+		dt, ok := p0.ConflictWhere.Accept(s).(*types.DataType)
 		if !ok {
 			s.expressionTypeErr(p0.ConflictWhere)
 			return nil
 		}
 
-		if !dt.Equals(coreTypes.BoolType) {
-			s.errs.AddErr(p0.ConflictWhere, types.ErrType, "expected boolean type, received %s", dt.String())
+		if !dt.Equals(types.BoolType) {
+			s.errs.AddErr(p0.ConflictWhere, ErrType, "expected boolean type, received %s", dt.String())
 			return nil
 		}
 	}
 
 	if p0.UpdateWhere != nil {
-		dt, ok := p0.UpdateWhere.Accept(s).(*coreTypes.DataType)
+		dt, ok := p0.UpdateWhere.Accept(s).(*types.DataType)
 		if !ok {
 			s.expressionTypeErr(p0.UpdateWhere)
 			return nil
 		}
 
-		if !dt.Equals(coreTypes.BoolType) {
-			s.errs.AddErr(p0.UpdateWhere, types.ErrType, "expected boolean type, received %s", dt.String())
+		if !dt.Equals(types.BoolType) {
+			s.errs.AddErr(p0.UpdateWhere, ErrType, "expected boolean type, received %s", dt.String())
 			return nil
 		}
 	}
@@ -1917,16 +1934,16 @@ func (s *sqlAnalyzer) VisitOrderingTerm(p0 *OrderingTerm) any {
 }
 
 // tableToRelation converts a table to a relation.
-func tableToRelation(t *coreTypes.Table) (*types.Relation, error) {
-	attrs := make([]*types.Attribute, len(t.Columns))
+func tableToRelation(t *types.Table) (*Relation, error) {
+	attrs := make([]*Attribute, len(t.Columns))
 	for i, col := range t.Columns {
-		attrs[i] = &types.Attribute{
+		attrs[i] = &Attribute{
 			Name: col.Name,
 			Type: col.Type.Copy(),
 		}
 	}
 
-	return &types.Relation{
+	return &Relation{
 		Name:       t.Name,
 		Attributes: attrs,
 	}, nil
@@ -1936,7 +1953,7 @@ func tableToRelation(t *coreTypes.Table) (*types.Relation, error) {
 type procedureContext struct {
 	// procedureDefinition is the definition for the procedure that we are
 	// currently analyzing.
-	procedureDefinition *coreTypes.Procedure
+	procedureDefinition *types.Procedure
 	// activeLoopReceivers track the variable name for the current loop.
 	// The innermost nested loop will be at the 0-index. If we are
 	// not in a loop, the slice will be empty.
@@ -1951,7 +1968,13 @@ type procedureContext struct {
 	// the anonymous receiver. This slice tracks the types for each of the
 	// receivers as it encounters them, so that it can generate a throw-away
 	// variable in plpgsql
-	anonymousReceivers []*coreTypes.DataType
+	anonymousReceivers []*types.DataType
+}
+
+func newProcedureContext(proc *types.Procedure) *procedureContext {
+	return &procedureContext{
+		procedureDefinition: proc,
+	}
 }
 
 // loopTargetTracker is used to track the target of a loop.
@@ -1960,15 +1983,14 @@ type loopTargetTracker struct {
 	name *ExpressionVariable
 	// dataType is the data type of the loop target.
 	// If the loop target is an anonymous variable, then it will be nil.
-	dataType *coreTypes.DataType
+	dataType *types.DataType
 }
 
 // procedureAnalyzer analyes the procedural language. Since the procedural
 // language can execute sql statements, it uses the sqlAnalyzer.
 type procedureAnalyzer struct {
 	sqlAnalyzer
-	procCtx    *procedureContext
-	procResult *procedureResult
+	procCtx *procedureContext
 }
 
 // startProcedureAnalyze starts the analysis of a procedure.
@@ -1977,15 +1999,13 @@ func (p *procedureAnalyzer) startSQLAnalyze() {
 }
 
 // endProcedureAnalyze ends the analysis of a procedure.
-func (p *procedureAnalyzer) endSQLAnalyze() {
+func (p *procedureAnalyzer) endSQLAnalyze(node Node) {
 	sqlRes := p.sqlAnalyzer.endSQLAnalyze()
 	if sqlRes.Mutative {
-		p.procResult.Mutative = true
+		if p.procCtx.procedureDefinition.IsView() {
+			p.errs.AddErr(node, ErrViewMutatesState, "SQL statement mutates state in view procedure")
+		}
 	}
-}
-
-type procedureResult struct {
-	Mutative bool
 }
 
 var _ Visitor = (*procedureAnalyzer)(nil)
@@ -1994,7 +2014,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtDeclaration(p0 *ProcedureStmtDecla
 	// we will check if the variable has already been declared, and if so, error.
 
 	if p.variableExists(p0.Variable.String()) {
-		p.errs.AddErr(p0, types.ErrVariableAlreadyDeclared, p0.Variable.String())
+		p.errs.AddErr(p0, ErrVariableAlreadyDeclared, p0.Variable.String())
 		return nil
 	}
 
@@ -2005,7 +2025,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtDeclaration(p0 *ProcedureStmtDecla
 
 func (p *procedureAnalyzer) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssignment) any {
 	// ensure the variable already exists, and we are assigning the correct type.
-	dt, ok := p0.Variable.Accept(p).(*coreTypes.DataType)
+	dt, ok := p0.Variable.Accept(p).(*types.DataType)
 	if !ok {
 		p.expressionTypeErr(p0.Variable)
 		return nil
@@ -2015,12 +2035,12 @@ func (p *procedureAnalyzer) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssign
 	// We do not need to check anonymous variables here because they cannot be assigned to.
 	v, ok := p.variables[p0.Variable.String()]
 	if !ok {
-		p.errs.AddErr(p0, types.ErrUndeclaredVariable, p0.Variable.String())
+		p.errs.AddErr(p0, ErrUndeclaredVariable, p0.Variable.String())
 		return nil
 	}
 
 	if !v.Equals(dt) {
-		p.errs.AddErr(p0, types.ErrType, "expected %s, received %s", v.String(), dt.String())
+		p.errs.AddErr(p0, ErrType, "expected %s, received %s", v.String(), dt.String())
 	}
 
 	return nil
@@ -2029,11 +2049,11 @@ func (p *procedureAnalyzer) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssign
 func (p *procedureAnalyzer) VisitProcedureStmtDeclareAndAssign(p0 *ProcedureStmtDeclareAndAssign) any {
 	// we will check if the variable has already been declared, and if so, error.
 	if p.variableExists(p0.Variable.String()) {
-		p.errs.AddErr(p0, types.ErrVariableAlreadyDeclared, p0.Variable.String())
+		p.errs.AddErr(p0, ErrVariableAlreadyDeclared, p0.Variable.String())
 		return nil
 	}
 
-	dt, ok := p0.Value.Accept(p).(*coreTypes.DataType)
+	dt, ok := p0.Value.Accept(p).(*types.DataType)
 	if !ok {
 		p.expressionTypeErr(p0.Value)
 		return nil
@@ -2044,7 +2064,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtDeclareAndAssign(p0 *ProcedureStmt
 	// type should match
 	if p0.Type != nil {
 		if !p0.Type.Equals(dt) {
-			p.errs.AddErr(p0, types.ErrType, "declared type: %s, inferred type: %s", p0.Type.String(), dt.String())
+			p.errs.AddErr(p0, ErrType, "declared type: %s, inferred type: %s", p0.Type.String(), dt.String())
 			return nil
 		}
 	}
@@ -2055,16 +2075,16 @@ func (p *procedureAnalyzer) VisitProcedureStmtDeclareAndAssign(p0 *ProcedureStmt
 }
 
 func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
-	var callReturns []*coreTypes.DataType
+	var callReturns []*types.DataType
 	// it might return a single value
-	returns1, ok := p0.Call.Accept(p).(*coreTypes.DataType)
+	returns1, ok := p0.Call.Accept(p).(*types.DataType)
 	if ok {
 		callReturns = append(callReturns, returns1)
 	} else {
 		// or it might return multiple values
-		returns2, ok := p0.Call.Accept(p).([]*coreTypes.DataType)
+		returns2, ok := p0.Call.Accept(p).([]*types.DataType)
 		if !ok {
-			p.errs.AddErr(p0.Call, types.ErrType, "expected function/procedure to return one or more variables")
+			p.errs.AddErr(p0.Call, ErrType, "expected function/procedure to return one or more variables")
 			return nil
 		}
 
@@ -2072,7 +2092,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 	}
 
 	if len(p0.Receivers) != len(callReturns) {
-		p.errs.AddErr(p0, types.ErrResultShape, "function/procedure returns %d value(s), statement has %d receiver(s)", len(callReturns), len(p0.Receivers))
+		p.errs.AddErr(p0, ErrResultShape, "function/procedure returns %d value(s), statement has %d receiver(s)", len(callReturns), len(p0.Receivers))
 		return nil
 	}
 
@@ -2086,7 +2106,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 
 		// ensure the receiver is not already an anonymous variable
 		if _, ok := p.anonymousVariables[r.String()]; ok {
-			p.errs.AddErr(r, types.ErrVariableAlreadyDeclared, r.String())
+			p.errs.AddErr(r, ErrVariableAlreadyDeclared, r.String())
 			continue
 		}
 
@@ -2094,7 +2114,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 		declaredType, ok := p.variables[r.String()]
 		if ok {
 			if !declaredType.Equals(callReturns[i]) {
-				p.errs.AddErr(r, types.ErrType, "expected %s, received %s", declaredType.String(), callReturns[i].String())
+				p.errs.AddErr(r, ErrType, "expected %s, received %s", declaredType.String(), callReturns[i].String())
 				continue
 			}
 		} else {
@@ -2114,7 +2134,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 func (p *procedureAnalyzer) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) any {
 	// check to make sure the receiver has not already been declared
 	if p.variableExists(p0.Receiver.String()) {
-		p.errs.AddErr(p0.Receiver, types.ErrVariableAlreadyDeclared, p0.Receiver.String())
+		p.errs.AddErr(p0.Receiver, ErrVariableAlreadyDeclared, p0.Receiver.String())
 		return nil
 	}
 
@@ -2125,12 +2145,12 @@ func (p *procedureAnalyzer) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) 
 	// get the type from the loop term.
 	// can be a scalar if the term is a range or array,
 	// and an object if it is a sql statement.
-	scalarVal, ok := p0.LoopTerm.Accept(p).(*coreTypes.DataType)
+	scalarVal, ok := p0.LoopTerm.Accept(p).(*types.DataType)
 	if ok {
 		p.variables[p0.Receiver.String()] = scalarVal
 		tracker.dataType = scalarVal
 	} else {
-		compound, ok := p0.LoopTerm.Accept(p).(map[string]*coreTypes.DataType)
+		compound, ok := p0.LoopTerm.Accept(p).(map[string]*types.DataType)
 		if !ok {
 			panic("expected loop term to return scalar or compound type")
 		}
@@ -2142,7 +2162,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) 
 	// if it already has been used, we will error.
 	for _, t := range p.procCtx.allLoopReceivers {
 		if t.name.String() == p0.Receiver.String() {
-			p.errs.AddErr(p0.Receiver, types.ErrVariableAlreadyDeclared, p0.Receiver.String())
+			p.errs.AddErr(p0.Receiver, ErrVariableAlreadyDeclared, p0.Receiver.String())
 			return nil
 		}
 	}
@@ -2173,39 +2193,39 @@ func (p *procedureAnalyzer) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) 
 
 func (p *procedureAnalyzer) VisitLoopTermRange(p0 *LoopTermRange) any {
 	// range loops are always integers
-	start, ok := p0.Start.Accept(p).(*coreTypes.DataType)
+	start, ok := p0.Start.Accept(p).(*types.DataType)
 	if !ok {
 		return p.expressionTypeErr(p0.Start)
 	}
 
-	end, ok := p0.End.Accept(p).(*coreTypes.DataType)
+	end, ok := p0.End.Accept(p).(*types.DataType)
 	if !ok {
 		return p.expressionTypeErr(p0.End)
 	}
 
 	// the types have to be ints
 
-	if !start.Equals(coreTypes.IntType) {
-		p.errs.AddErr(p0.Start, types.ErrType, "expected int, received %s", start.String())
+	if !start.Equals(types.IntType) {
+		p.errs.AddErr(p0.Start, ErrType, "expected int, received %s", start.String())
 	}
 
-	if !end.Equals(coreTypes.IntType) {
-		p.errs.AddErr(p0.End, types.ErrType, "expected int, received %s", end.String())
+	if !end.Equals(types.IntType) {
+		p.errs.AddErr(p0.End, ErrType, "expected int, received %s", end.String())
 	}
 
-	return coreTypes.IntType
+	return types.IntType
 }
 
 func (p *procedureAnalyzer) VisitLoopTermSQL(p0 *LoopTermSQL) any {
 	p.startSQLAnalyze()
-	rels, ok := p0.Statement.Accept(p).([]*types.Attribute)
+	rels, ok := p0.Statement.Accept(p).([]*Attribute)
 	if !ok {
 		panic("expected query to return attributes")
 	}
-	p.endSQLAnalyze()
+	p.endSQLAnalyze(p0.Statement)
 
 	// we need to convert the attributes into an object
-	obj := make(map[string]*coreTypes.DataType)
+	obj := make(map[string]*types.DataType)
 	for _, rel := range rels {
 		obj[rel.Name] = rel.Type
 	}
@@ -2215,7 +2235,7 @@ func (p *procedureAnalyzer) VisitLoopTermSQL(p0 *LoopTermSQL) any {
 
 func (p *procedureAnalyzer) VisitLoopTermVariable(p0 *LoopTermVariable) any {
 	// we need to ensure the variable exists
-	dt, ok := p0.Variable.Accept(p).(*coreTypes.DataType)
+	dt, ok := p0.Variable.Accept(p).(*types.DataType)
 	if !ok {
 		return p.expressionTypeErr(p0.Variable)
 	}
@@ -2238,14 +2258,14 @@ func (p *procedureAnalyzer) VisitProcedureStmtIf(p0 *ProcedureStmtIf) any {
 }
 
 func (p *procedureAnalyzer) VisitIfThen(p0 *IfThen) any {
-	dt, ok := p0.If.Accept(p).(*coreTypes.DataType)
+	dt, ok := p0.If.Accept(p).(*types.DataType)
 	if !ok {
 		p.expressionTypeErr(p0.If)
 		return nil
 	}
 
-	if !dt.Equals(coreTypes.BoolType) {
-		p.errs.AddErr(p0.If, types.ErrType, "expected boolean type, received %s", dt.String())
+	if !dt.Equals(types.BoolType) {
+		p.errs.AddErr(p0.If, ErrType, "expected boolean type, received %s", dt.String())
 		return nil
 	}
 
@@ -2258,9 +2278,9 @@ func (p *procedureAnalyzer) VisitIfThen(p0 *IfThen) any {
 
 func (p *procedureAnalyzer) VisitProcedureStmtSQL(p0 *ProcedureStmtSQL) any {
 	p.startSQLAnalyze()
-	defer p.endSQLAnalyze()
+	defer p.endSQLAnalyze(p0.SQL)
 
-	_, ok := p0.SQL.Accept(p).([]*types.Attribute)
+	_, ok := p0.SQL.Accept(p).([]*Attribute)
 	if !ok {
 		panic("expected query to return attributes")
 	}
@@ -2270,7 +2290,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtSQL(p0 *ProcedureStmtSQL) any {
 
 func (p *procedureAnalyzer) VisitProcedureStmtBreak(p0 *ProcedureStmtBreak) any {
 	if len(p.procCtx.activeLoopReceivers) == 0 {
-		p.errs.AddErr(p0, types.ErrBreak, "break statement outside of loop")
+		p.errs.AddErr(p0, ErrBreak, "break statement outside of loop")
 	}
 
 	return nil
@@ -2278,27 +2298,27 @@ func (p *procedureAnalyzer) VisitProcedureStmtBreak(p0 *ProcedureStmtBreak) any 
 
 func (p *procedureAnalyzer) VisitProcedureStmtReturn(p0 *ProcedureStmtReturn) any {
 	if p.procCtx.procedureDefinition.Returns == nil {
-		p.errs.AddErr(p0, types.ErrFunctionSignature, "procedure does not return any values")
+		p.errs.AddErr(p0, ErrFunctionSignature, "procedure does not return any values")
 		return nil
 	}
 	returns := p.procCtx.procedureDefinition.Returns
 
 	if p0.SQL != nil {
 		if !returns.IsTable {
-			p.errs.AddErr(p0, types.ErrReturn, "procedure expects scalar returns, cannot return SQL statement")
+			p.errs.AddErr(p0, ErrReturn, "procedure expects scalar returns, cannot return SQL statement")
 			return nil
 		}
 
 		p.startSQLAnalyze()
-		defer p.endSQLAnalyze()
+		defer p.endSQLAnalyze(p0.SQL)
 
-		res, ok := p0.SQL.Accept(p).([]*types.Attribute)
+		res, ok := p0.SQL.Accept(p).([]*Attribute)
 		if !ok {
 			panic("expected query to return attributes")
 		}
 
 		if len(res) != len(returns.Fields) {
-			p.errs.AddErr(p0, types.ErrReturn, "expected %d return table columns, received %d", len(returns.Fields), len(res))
+			p.errs.AddErr(p0, ErrReturn, "expected %d return table columns, received %d", len(returns.Fields), len(res))
 			return nil
 		}
 
@@ -2306,34 +2326,34 @@ func (p *procedureAnalyzer) VisitProcedureStmtReturn(p0 *ProcedureStmtReturn) an
 		for i, r := range res {
 			retField := returns.Fields[i]
 			if !r.Type.Equals(retField.Type) {
-				p.errs.AddErr(p0, types.ErrReturn, "expected column type %s, received column type %s", retField.Type.String(), r.Type.String())
+				p.errs.AddErr(p0, ErrReturn, "expected column type %s, received column type %s", retField.Type.String(), r.Type.String())
 			}
 
 			if r.Name != retField.Name {
-				p.errs.AddErr(p0, types.ErrReturn, "expected column name %s, received column name %s", retField.Name, r.Name)
+				p.errs.AddErr(p0, ErrReturn, "expected column name %s, received column name %s", retField.Name, r.Name)
 			}
 		}
 
 		return nil
 	}
 	if returns.IsTable {
-		p.errs.AddErr(p0, types.ErrReturn, "procedure expects table returns, cannot return scalar values")
+		p.errs.AddErr(p0, ErrReturn, "procedure expects table returns, cannot return scalar values")
 		return nil
 	}
 
 	if len(p0.Values) != len(returns.Fields) {
-		p.errs.AddErr(p0, types.ErrReturn, "expected %d return values, received %d", len(returns.Fields), len(p0.Values))
+		p.errs.AddErr(p0, ErrReturn, "expected %d return values, received %d", len(returns.Fields), len(p0.Values))
 		return nil
 	}
 
 	for i, v := range p0.Values {
-		dt, ok := v.Accept(p).(*coreTypes.DataType)
+		dt, ok := v.Accept(p).(*types.DataType)
 		if !ok {
 			return p.expressionTypeErr(v)
 		}
 
 		if !dt.Equals(returns.Fields[i].Type) {
-			p.errs.AddErr(p0, types.ErrReturn, "expected %s, received %s", returns.Fields[i].Type.String(), dt.String())
+			p.errs.AddErr(p0, ErrReturn, "expected %s, received %s", returns.Fields[i].Type.String(), dt.String())
 		}
 	}
 
@@ -2342,28 +2362,28 @@ func (p *procedureAnalyzer) VisitProcedureStmtReturn(p0 *ProcedureStmtReturn) an
 
 func (p *procedureAnalyzer) VisitProcedureStmtReturnNext(p0 *ProcedureStmtReturnNext) any {
 	if p.procCtx.procedureDefinition.Returns == nil {
-		p.errs.AddErr(p0, types.ErrFunctionSignature, "procedure does not return any values")
+		p.errs.AddErr(p0, ErrFunctionSignature, "procedure does not return any values")
 		return nil
 	}
 
 	if !p.procCtx.procedureDefinition.Returns.IsTable {
-		p.errs.AddErr(p0, types.ErrReturn, "procedure expects scalar returns, cannot return next")
+		p.errs.AddErr(p0, ErrReturn, "procedure expects scalar returns, cannot return next")
 		return nil
 	}
 
 	if len(p0.Values) != len(p.procCtx.procedureDefinition.Returns.Fields) {
-		p.errs.AddErr(p0, types.ErrReturn, "expected %d return values, received %d", len(p.procCtx.procedureDefinition.Returns.Fields), len(p0.Values))
+		p.errs.AddErr(p0, ErrReturn, "expected %d return values, received %d", len(p.procCtx.procedureDefinition.Returns.Fields), len(p0.Values))
 		return nil
 	}
 
 	for i, v := range p0.Values {
-		dt, ok := v.Accept(p).(*coreTypes.DataType)
+		dt, ok := v.Accept(p).(*types.DataType)
 		if !ok {
 			return p.expressionTypeErr(v)
 		}
 
 		if !dt.Equals(p.procCtx.procedureDefinition.Returns.Fields[i].Type) {
-			p.errs.AddErr(p0, types.ErrReturn, "expected %s, received %s", p.procCtx.procedureDefinition.Returns.Fields[i].Type.String(), dt.String())
+			p.errs.AddErr(p0, ErrReturn, "expected %s, received %s", p.procCtx.procedureDefinition.Returns.Fields[i].Type.String(), dt.String())
 		}
 	}
 
