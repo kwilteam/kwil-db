@@ -35,7 +35,7 @@
 jsonrpc_listen_addr = "192.168.1.1:8484"
 
 # Unix socket or TCP address for the KWILD App's Admin GRPC server to listen on
-admin_listen_addr="127.0.0.1:8485"
+admin_listen_addr="127.0.0.1:8585"
 
 # TCP address for the KWILD App's HTTP server to listen on
 http_listen_addr = "localhost:8080"

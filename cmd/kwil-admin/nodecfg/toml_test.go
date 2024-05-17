@@ -62,7 +62,17 @@ func Test_GenerateTestnetConfig(t *testing.T) {
 		P2pPort:                 26656,
 	}
 
-	err := GenerateTestnetConfig(&genCfg, nil)
+	err := GenerateTestnetConfig(&genCfg, &ConfigOpts{
+		UniquePorts: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.RemoveAll(genCfg.OutputDir)
+
+	// not unique ports
+	err = GenerateTestnetConfig(&genCfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
