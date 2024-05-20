@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/log"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -109,11 +110,28 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	// NOTE: we can consider changing the default exec mode at construction e.g.:
 	// pCfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 	pCfg.ConnConfig.OnNotice = func(_ *pgconn.PgConn, n *pgconn.Notice) {
-		logger.Infof("%v [%v]: %v / %v", n.Severity, n.Code, n.Message, n.Detail)
+		level := log.InfoLevel
+		if n.Code == "42710" || strings.HasPrefix(n.Code, "42P") { // duplicate something ignored: https://www.postgresql.org/docs/16/errcodes-appendix.html
+			level = log.DebugLevel
+		}
+		if n.Detail == "" {
+			logger.Logf(level, "%v [%v]: %v", n.Severity, n.Code, n.Message)
+		} else {
+			logger.Logf(level, "%v [%v]: %v / %v", n.Severity, n.Code, n.Message, n.Detail)
+		}
 	}
 	defaultOnPgError := pCfg.ConnConfig.OnPgError
 	pCfg.ConnConfig.OnPgError = func(c *pgconn.PgConn, n *pgconn.PgError) bool {
-		logger.Warnf("%v [%v]: %v / %v", n.Severity, n.Code, n.Message, n.Detail)
+		level := log.WarnLevel
+		switch sev := strings.ToUpper(n.Severity); sev {
+		case "FATAL", "PANIC":
+			level = log.ErrorLevel
+		} // otherwise it would be "ERROR"
+		if n.Detail == "" {
+			logger.Logf(level, "%v [%v]: %v", n.Severity, n.Code, n.Message)
+		} else {
+			logger.Logf(level, "%v [%v]: %v / %v", n.Severity, n.Code, n.Message, n.Detail)
+		}
 		return defaultOnPgError(c, n) // automatically close any fatal errors (default we are overridding)
 	}
 	db, err := pgxpool.NewWithConfig(ctx, pCfg)
