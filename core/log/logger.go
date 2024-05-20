@@ -95,6 +95,12 @@ func (l *Logger) WithOptions(opts ...zap.Option) *Logger {
 	return &Logger{l.L.WithOptions(opts...)}
 }
 
+// IncreasedLevel creates a logger clone with a higher log level threshold,
+// which is ignored if it is lower than the parent logger's level.
+func (l *Logger) IncreasedLevel(lvl Level) *Logger {
+	return l.WithOptions(zap.IncreaseLevel(zap.NewAtomicLevelAt(lvl)))
+}
+
 func (l *Logger) Sync() error {
 	return l.L.Sync()
 }
@@ -200,6 +206,16 @@ const (
 	PanicLevel        = zap.PanicLevel
 	FatalLevel        = zap.FatalLevel
 )
+
+// ParseLevel parses a log level string, which is useful for reading level
+// settings from a config file or other text source.
+func ParseLevel(lvl string) (Level, error) {
+	l, err := zapcore.ParseLevel(lvl)
+	if err != nil {
+		return zapcore.InvalidLevel, err
+	}
+	return l, nil
+}
 
 func NewStdOut(level Level) Logger {
 	return New(Config{

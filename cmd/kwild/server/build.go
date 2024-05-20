@@ -210,10 +210,13 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	listeners := buildListenerManager(d, ev, cometBftNode, txApp)
 
 	// user service and server
+	rpcSvcLogger := increaseLogLevel("user-json-svc", &d.log, d.cfg.Logging.RPCLevel)
+	rpcServerLogger := increaseLogLevel("user-jsonrpc-server", &d.log, d.cfg.Logging.RPCLevel)
+
 	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp,
-		*d.log.Named("user-json-svc"), usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)))
+		*rpcSvcLogger, usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)))
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppCfg.JSONRPCListenAddress,
-		*d.log.Named("user-jsonrpc-server"), rpcserver.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)),
+		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)),
 		rpcserver.WithCORS())
 	if err != nil {
 		failBuild(err, "unable to create json-rpc server")
@@ -848,7 +851,7 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 	// I'm simply using this because we know it fsyncs the data to disk
 	db, err := badger.NewBadgerDB(d.ctx, filepath.Join(d.cfg.RootDir, signingDirName), &badger.Options{
 		GuaranteeFSync: true,
-		Logger:         *d.log.Named("private-validator-signature-store"),
+		Logger:         *increaseLogLevel("private-validator-signature-store", &d.log, log.WarnLevel.String()), // badger is too noisy for an internal component
 	})
 	if err != nil {
 		failBuild(err, "failed to open comet node KV store")
@@ -874,8 +877,9 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 		}
 	}
 
+	nodeLogger := increaseLogLevel("cometbft", &d.log, d.cfg.Logging.ConsensusLevel)
 	node, err := cometbft.NewCometBftNode(d.ctx, abciApp, nodeCfg, genDoc, d.privKey,
-		readWriter, &d.log)
+		readWriter, nodeLogger)
 	if err != nil {
 		failBuild(err, "failed to build comet node")
 	}

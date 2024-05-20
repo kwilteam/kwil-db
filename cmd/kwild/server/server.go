@@ -95,7 +95,8 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.Genesi
 		return nil, err
 	}
 
-	pg.UseLogger(*logger.Named("pg"))
+	dbLogger := increaseLogLevel("pg", &logger, cfg.Logging.DBLevel)
+	pg.UseLogger(*dbLogger)
 
 	host, port, user, pass := cfg.AppCfg.DBHost, cfg.AppCfg.DBPort, cfg.AppCfg.DBUser, cfg.AppCfg.DBPass
 
