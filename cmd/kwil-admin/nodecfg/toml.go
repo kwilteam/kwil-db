@@ -77,6 +77,15 @@ const defaultConfigTemplate = `
 # Output level for logging, default is "info". Other options are "debug", "error", "warn", "trace"
 level = "{{ .Logging.Level }}"
 
+# RPC systems' logging level. Must be higher than log.level.
+rpc_level = "{{ .Logging.RPCLevel }}"
+
+# Consensus engine's logging level. Must be higher than log.level.
+consensus_level = "{{ .Logging.ConsensusLevel }}"
+
+# DB driver's logging level. Must be higher than log.level.
+db_level = "{{ .Logging.DBLevel }}"
+
 # Output paths for the logger, can be stdout or a file path
 output_paths = {{arrayFormatter .Logging.OutputPaths }}
 

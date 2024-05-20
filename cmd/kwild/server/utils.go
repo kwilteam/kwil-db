@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/core/log"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/internal/abci"
@@ -19,6 +20,27 @@ import (
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 )
+
+func increaseLogLevel(name string, logger *log.Logger, level string) *log.Logger {
+	logger = logger.Named(name)
+	if level == "" {
+		return logger
+	}
+
+	lvl, err := log.ParseLevel(level)
+	if err != nil {
+		logger.Warnf("invalid log level %q for logger %q: %v", level, name, err)
+		return logger
+	}
+
+	if parentLevel := logger.Level(); lvl < parentLevel {
+		logger.Warnf("cannot increase logger level for %q to %v from %v", name, level, parentLevel)
+	} else { // this would be a no-op
+		logger = logger.IncreasedLevel(lvl)
+	}
+
+	return logger
+}
 
 // getExtensions returns both the local and remote extensions. Remote extensions are identified by
 // connecting to the specified extension URLs.

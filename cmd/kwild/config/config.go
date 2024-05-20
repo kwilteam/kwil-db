@@ -41,10 +41,13 @@ type KwildConfig struct {
 }
 
 type Logging struct {
-	Level        string   `mapstructure:"level"`
-	Format       string   `mapstructure:"format"`
-	TimeEncoding string   `mapstructure:"time_format"`
-	OutputPaths  []string `mapstructure:"output_paths"`
+	Level          string   `mapstructure:"level"`
+	RPCLevel       string   `mapstructure:"rpc_level"`
+	ConsensusLevel string   `mapstructure:"consensus_level"`
+	DBLevel        string   `mapstructure:"db_level"`
+	Format         string   `mapstructure:"format"`
+	TimeEncoding   string   `mapstructure:"time_format"`
+	OutputPaths    []string `mapstructure:"output_paths"`
 }
 
 type AppConfig struct {
@@ -572,7 +575,7 @@ func DefaultConfig() *KwildConfig {
 			Level:        "info",
 			Format:       log.FormatJSON,
 			TimeEncoding: log.TimeEncodingEpochFloat,
-			OutputPaths:  []string{"stdout"},
+			OutputPaths:  []string{"stdout", "kwild.log"},
 		},
 
 		ChainCfg: &ChainConfig{

@@ -120,11 +120,21 @@ snapshot_dir = "snapshots"
 ###                    Logging Config Options                       ###
 #######################################################################
 [log]
+
 # Output level for logging, default is "info". Other options are "debug", "error", "warn", "trace"
-level = "info" 
+level = "info"
+
+# RPC systems' logging level. Must be higher than log.level.
+rpc_level = "info"
+
+# Consensus engine's logging level. Must be higher than log.level.
+consensus_level = "warn"
+
+# DB driver's logging level. Must be higher than log.level.
+db_level = "info"
 
 # Output paths for the logger, can be stdout or a file path
-output_paths = ["stdout"]
+output_paths = ["stdout","kwild.log"]
 
 # Output format: 'plain' or 'json'
 format = "plain"

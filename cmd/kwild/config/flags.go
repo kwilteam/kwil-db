@@ -8,6 +8,9 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 
 	// logging
 	flagSet.StringVarP(&cfg.Logging.Level, "log.level", "l", cfg.Logging.Level, "kwild log level")
+	flagSet.StringVar(&cfg.Logging.RPCLevel, "log.rpc_level", cfg.Logging.RPCLevel, "user rpc server log level")
+	flagSet.StringVar(&cfg.Logging.ConsensusLevel, "log.consensus_level", cfg.Logging.ConsensusLevel, "consensus (cometbft) log level")
+	flagSet.StringVar(&cfg.Logging.DBLevel, "log.db_level", cfg.Logging.DBLevel, "database backend (postgres) log level")
 	flagSet.StringVar(&cfg.Logging.Format, "log.format", cfg.Logging.Format, "kwild log format")
 	flagSet.StringVar(&cfg.Logging.TimeEncoding, "log.time-format", cfg.Logging.TimeEncoding, "kwild time log format")
 	flagSet.StringSliceVar(&cfg.Logging.OutputPaths, "log.output-paths", cfg.Logging.OutputPaths, "kwild log output paths")

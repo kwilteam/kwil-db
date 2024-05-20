@@ -31,6 +31,7 @@ var demotedInfoMsgs = map[string]string{
 	"received proposal":                "",
 	"received complete proposal block": "",
 	"executed block":                   "",
+	"Starting localClient service":     "proxy",
 	"Timed out":                        "consensus", // only the one from consensus.(*timeoutTicker).timeoutRoutine, which seems to be normal
 }
 
@@ -164,7 +165,9 @@ WARNING: These files are overwritten on kwild startup.`
 }
 
 // NewCometBftNode creates a new CometBFT node.
-func NewCometBftNode(ctx context.Context, app abciTypes.Application, conf *cometConfig.Config, genDoc *types.GenesisDoc, privateKey cometEd25519.PrivKey, atomicStore privval.AtomicReadWriter, log *log.Logger) (*CometBftNode, error) {
+func NewCometBftNode(ctx context.Context, app abciTypes.Application, conf *cometConfig.Config,
+	genDoc *types.GenesisDoc, privateKey cometEd25519.PrivKey, atomicStore privval.AtomicReadWriter,
+	logger *log.Logger) (*CometBftNode, error) {
 	if err := writeCometBFTConfigs(conf, genDoc); err != nil {
 		return nil, fmt.Errorf("failed to write the effective cometbft config files: %w", err)
 	}
@@ -173,8 +176,6 @@ func NewCometBftNode(ctx context.Context, app abciTypes.Application, conf *comet
 	if err != nil {
 		return nil, fmt.Errorf("invalid node config: %w", err)
 	}
-
-	logger := NewLogWrapper(log.Named("cometbft"))
 
 	privateValidator, err := privval.NewValidatorSigner(privateKey, atomicStore)
 	if err != nil {
@@ -192,7 +193,7 @@ func NewCometBftNode(ctx context.Context, app abciTypes.Application, conf *comet
 		genesisDocProvider(genDoc),
 		cometConfig.DefaultDBProvider,
 		cometNodes.DefaultMetricsProvider(conf.Instrumentation),
-		logger,
+		NewLogWrapper(logger),
 	)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
