@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,7 +54,7 @@ func Test_timeout(t *testing.T) {
 	})
 
 	// Wrap that handler with a 500ms timeout.
-	h = jsonRPCTimeoutHandler(h, 500*time.Millisecond)
+	h = jsonRPCTimeoutHandler(h, 500*time.Millisecond, log.NewStdOut(log.DebugLevel))
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	h.ServeHTTP(w, r)

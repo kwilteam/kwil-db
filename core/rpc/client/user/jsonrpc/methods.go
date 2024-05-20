@@ -61,6 +61,8 @@ func (cl *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, s
 				return nil, errors.Join(jsonErr, err)
 			}
 
+			err = errors.Join(berr, err)
+
 			switch transactions.TxCode(berr.TxCode) {
 			case transactions.CodeWrongChain:
 				return nil, errors.Join(transactions.ErrWrongChain, err)
