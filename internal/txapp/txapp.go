@@ -942,7 +942,7 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 				return nil, transactions.CodeUnknownError, err2
 			}
 
-			return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
+			return account.Balance, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
 		}
 		if err != nil {
 			if errors.Is(err, accounts.ErrAccountNotFound) {
@@ -951,7 +951,7 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 			return nil, transactions.CodeUnknownError, err
 		}
 
-		return nil, transactions.CodeInsufficientFee, fmt.Errorf("transaction does not consent to spending enough tokens. transaction fee: %s, required fee: %s", tx.Body.Fee.String(), amt.String())
+		return tx.Body.Fee, transactions.CodeInsufficientFee, fmt.Errorf("transaction does not consent to spending enough tokens. transaction fee: %s, required fee: %s", tx.Body.Fee.String(), amt.String())
 	}
 
 	// spend the tokens
@@ -967,7 +967,7 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 		if err2 != nil {
 			return nil, transactions.CodeUnknownError, err2
 		}
-		return nil, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account has %s tokens", amt.String(), account.Balance.String())
+		return account.Balance, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account has %s tokens", amt.String(), account.Balance.String())
 	}
 	if err != nil {
 		if errors.Is(err, accounts.ErrAccountNotFound) { // probably wouldn't have passed the fee check
