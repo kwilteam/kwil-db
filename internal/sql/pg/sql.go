@@ -116,7 +116,9 @@ func rollbackPreparedTxns(ctx context.Context, conn *pgx.Conn) (int, error) {
 	}
 	var closed int
 	connectedDB := conn.Config().Database
-	logger.Warnf("Found %d orphaned prepared transactions", len(preparedTxns))
+	if len(preparedTxns) > 0 {
+		logger.Warnf("Found %d orphaned prepared transactions", len(preparedTxns))
+	}
 	for _, ptx := range preparedTxns {
 		if connectedDB != ptx.Database {
 			logger.Infof(`Not rolling back prepared transaction %v on foreign database %v. `+
@@ -132,7 +134,7 @@ func rollbackPreparedTxns(ctx context.Context, conn *pgx.Conn) (int, error) {
 		}
 		closed++
 	}
-	return closed, err
+	return closed, nil
 }
 
 const (
