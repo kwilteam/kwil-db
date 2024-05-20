@@ -412,7 +412,7 @@ func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 	// If yes, restore the database from the snapshot
 	restoreDB(d)
 
-	db, err := d.dbOpener(d.ctx, d.cfg.AppCfg.DBName, 11)
+	db, err := d.dbOpener(d.ctx, d.cfg.AppCfg.DBName, 24)
 	if err != nil {
 		failBuild(err, "kwild database open failed")
 	}
@@ -428,10 +428,10 @@ func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 // DB restoration from snapshot is skipped in the following scenarios:
 //   - If the DB is already initialized (i.e this is not a new node)
 //   - If the genesis apphash is not specified
-//   - If statesync is enabled. Statesync will take care of rapildly syncing the database
+//   - If statesync is enabled. Statesync will take care of syncing the database
 //     to the network state using statesync snapshots.
 func restoreDB(d *coreDependencies) {
-	if isDbInitialized(d) || d.genesisCfg.DataAppHash == nil || d.cfg.ChainCfg.StateSync.Enable {
+	if d.cfg.ChainCfg.StateSync.Enable || len(d.genesisCfg.DataAppHash) == 0 || isDbInitialized(d) {
 		return
 	}
 
@@ -476,7 +476,7 @@ func restoreDB(d *coreDependencies) {
 
 // isDbInitialized checks if the database is already initialized.
 func isDbInitialized(d *coreDependencies) bool {
-	db, err := d.dbOpener(d.ctx, d.cfg.AppCfg.DBName, 11)
+	db, err := d.poolOpener(d.ctx, d.cfg.AppCfg.DBName, 3)
 	if err != nil {
 		failBuild(err, "kwild database open failed")
 	}
@@ -484,16 +484,10 @@ func isDbInitialized(d *coreDependencies) bool {
 
 	// Check if the database is empty or initialized previously
 	// If the database is empty, we need to restore the database from the snapshot
-	initTx, err := db.BeginTx(d.ctx)
-	if err != nil {
-		failBuild(err, "could not start app initialization DB transaction")
-	}
-	defer initTx.Rollback(d.ctx)
-
-	_, err = voting.GetValidators(d.ctx, initTx)
+	vals, _ := voting.GetValidators(d.ctx, db)
 	// ERROR: relation "kwild_voting.voters" does not exist
 	// assumption that error is due to the missing table and schema.
-	return err == nil
+	return len(vals) > 0
 }
 
 func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
