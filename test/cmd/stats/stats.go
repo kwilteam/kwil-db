@@ -238,9 +238,10 @@ func (s *statsMonitor) retrieveMetrics() error {
 
 		// Fetch and update the round number for the previous block
 		round := block.Block.LastCommit.Round
-		bl, ok := s.stats.Blocks[i-1]
-		if ok {
-			bl.Rounds = round
+		if i != s.stats.StartBlock {
+			prevBlock := s.stats.Blocks[i-1]
+			prevBlock.Rounds = round
+			s.stats.Blocks[i-1] = prevBlock
 		}
 	}
 

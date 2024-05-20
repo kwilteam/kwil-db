@@ -33,6 +33,7 @@ var demotedInfoMsgs = map[string]string{
 	"executed block":                   "",
 	"Starting localClient service":     "proxy",
 	"Timed out":                        "consensus", // only the one from consensus.(*timeoutTicker).timeoutRoutine, which seems to be normal
+	"Could not check tx":               "mempool",
 }
 
 // demotedErrMsgs contain error-level messages that should not be logged as
