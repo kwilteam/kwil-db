@@ -71,10 +71,8 @@ func updateConsensusParams(p *chain.ConsensusParams, up *consensus.ParamUpdates)
 			p.Votes.MaxVotesPerTx = mv
 		}
 	}
-	if up.ABCI != nil {
-		// Disabling this after it was enabled is impossible under cometbft
-		// design. Only define an update that disables it if it had never
-		// reached a previously configured enable height.
-		p.ABCI.VoteExtensionsEnableHeight = up.ABCI.VoteExtensionsEnableHeight
+	// if up.Synchrony != nil {		// ...	}
+	if up.Feature != nil {
+		p.Feature.VoteExtensionsEnableHeight = up.Feature.VoteExtensionsEnableHeight
 	}
 }

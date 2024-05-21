@@ -37,6 +37,7 @@ import (
 	"github.com/kwilteam/kwil-db/parse"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
+	cmtAPIabci "github.com/cometbft/cometbft/api/cometbft/abci/v1"
 	"github.com/cometbft/cometbft/crypto/tmhash"
 	"go.uber.org/zap"
 )
@@ -369,13 +370,13 @@ var _ abciTypes.Application = &AbciApp{}
 // It is important to use this method rather than include failing transactions
 // in blocks, particularly if the failure mode involves the transaction author
 // spending no gas or achieving including in the block with little effort.
-func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckTx) (*abciTypes.ResponseCheckTx, error) {
-	newTx := incoming.Type == abciTypes.CheckTxType_New
+func (a *AbciApp) CheckTx(ctx context.Context, incoming *cmtAPIabci.CheckTxRequest) (*cmtAPIabci.CheckTxResponse, error) {
+	newTx := incoming.Type == cmtAPIabci.CHECK_TX_TYPE_CHECK
 	logger := a.log.With(zap.Bool("recheck", !newTx))
 
 	// If the network is halted for migration, we reject all transactions.
 	if a.halted.Load() || a.chainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
-		return &abciTypes.ResponseCheckTx{Code: codeInvalidTxType.Uint32(), Log: "network is halted for migration"}, nil
+		return &cmtAPIabci.CheckTxResponse{Code: codeInvalidTxType.Uint32(), Log: "network is halted for migration"}, nil
 	}
 
 	var err error
@@ -391,7 +392,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	if err != nil {
 		code = codeEncodingError
 		logger.Debug("failed to unmarshal transaction", zap.Error(err))
-		return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil // return error now or is it still all about code?
+		return &cmtAPIabci.CheckTxResponse{Code: code.Uint32(), Log: err.Error()}, nil // return error now or is it still all about code?
 	}
 
 	logger.Debug("check tx",
@@ -407,7 +408,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 			code = codeWrongChain
 			logger.Info("wrong chain ID",
 				zap.String("payloadType", tx.Body.PayloadType.String()))
-			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "wrong chain ID"}, nil
+			return &cmtAPIabci.CheckTxResponse{Code: code.Uint32(), Log: "wrong chain ID"}, nil
 		}
 
 		// Verify Signature
@@ -415,7 +416,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		if err != nil {
 			code = codeInvalidSignature
 			logger.Debug("failed to verify transaction", zap.Error(err))
-			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil
+			return &cmtAPIabci.CheckTxResponse{Code: code.Uint32(), Log: err.Error()}, nil
 		}
 	} else {
 		logger.Debug("Recheck", zap.String("sender", hex.EncodeToString(tx.Sender)), zap.Uint64("nonce", tx.Body.Nonce), zap.String("payloadType", tx.Body.PayloadType.String()))
@@ -468,7 +469,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		a.verifiedTxnsMtx.Lock()
 		delete(a.verifiedTxns, txHash)
 		a.verifiedTxnsMtx.Unlock()
-		return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil
+		return &cmtAPIabci.CheckTxResponse{Code: code.Uint32(), Log: err.Error()}, nil
 	}
 
 	// Cache the transaction hash
@@ -478,7 +479,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		a.verifiedTxns[txHash] = struct{}{}
 		a.verifiedTxnsMtx.Unlock()
 	}
-	return &abciTypes.ResponseCheckTx{Code: code.Uint32()}, nil
+	return &cmtAPIabci.CheckTxResponse{Code: code.Uint32()}, nil
 }
 
 // cometTXID gets the cometbft transaction ID.
@@ -489,7 +490,7 @@ func cometTXID(tx []byte) []byte {
 // FinalizeBlock is on the consensus connection. Note that according to CometBFT
 // docs, "ResponseFinalizeBlock.app_hash is included as the Header.AppHash in
 // the next block."
-func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinalizeBlock) (*abciTypes.ResponseFinalizeBlock, error) {
+func (a *AbciApp) FinalizeBlock(ctx context.Context, req *cmtAPIabci.FinalizeBlockRequest) (*cmtAPIabci.FinalizeBlockResponse, error) {
 	logger := a.log.With(zap.String("stage", "ABCI FinalizeBlock"), zap.Int64("height", req.Height))
 
 	if a.genesisTx != nil {
@@ -564,7 +565,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	// Note that in the !ok case, empty Txs is required, and the proposerPubKey
 	// may be empty!
 
-	res := &abciTypes.ResponseFinalizeBlock{}
+	res := &cmtAPIabci.FinalizeBlockResponse{}
 
 	blockCtx := common.BlockContext{
 		ChainContext: a.chainContext,
@@ -674,7 +675,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			Caller:        ident,
 		}, a.consensusTx, decoded)
 
-		abciRes := &abciTypes.ExecTxResult{}
+		abciRes := &cmtAPIabci.ExecTxResult{}
 		if txRes.Error != nil {
 			abciRes.Log = txRes.Error.Error()
 			a.log.Debug("failed to execute transaction", zap.Error(txRes.Error))
@@ -810,7 +811,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	valUpdates := validatorUpdates(initialValidators, finalValidators)
 
-	res.ValidatorUpdates = make([]abciTypes.ValidatorUpdate, len(valUpdates))
+	res.ValidatorUpdates = make([]cmtAPIabci.ValidatorUpdate, len(valUpdates))
 	for i, up := range valUpdates {
 		addr, err := cometbft.PubkeyToAddr(up.PubKey)
 		if err != nil {
@@ -833,7 +834,16 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			}
 		}
 
-		res.ValidatorUpdates[i] = abciTypes.Ed25519ValidatorUpdate(up.PubKey, up.Power)
+		pubkey, err := cometbft.PubkeyFromBytes(up.PubKey)
+		if err != nil {
+			return nil, fmt.Errorf("parse pubkey bytes: %w", err)
+		}
+
+		res.ValidatorUpdates[i] = cmtAPIabci.ValidatorUpdate{
+			Power:       up.Power,
+			PubKeyType:  pubkey.Type(),
+			PubKeyBytes: pubkey.Bytes(),
+		}
 	}
 
 	// Join requests approved by this node are added to the peer list.
@@ -945,7 +955,7 @@ func validatorUpdates(initial, final []*types.Validator) []*types.Validator {
 
 // Commit persists the state changes. This is called under mempool lock in
 // cometbft, unlike FinalizeBlock.
-func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abciTypes.ResponseCommit, error) {
+func (a *AbciApp) Commit(ctx context.Context, _ *cmtAPIabci.CommitRequest) (*cmtAPIabci.CommitResponse, error) {
 	err := a.consensusTx.Commit(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction app: %w", err)
@@ -1007,7 +1017,7 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		snapshotTx, snapshotId, err := a.db.BeginSnapshotTx(ctx)
 		if err != nil {
 			a.log.Error("failed to begin snapshot tx", zap.Error(err))
-			return &abciTypes.ResponseCommit{}, nil
+			return &cmtAPIabci.CommitResponse{}, nil
 		}
 		defer snapshotTx.Rollback(ctx) // always rollback, since this is just for view isolation
 
@@ -1022,7 +1032,7 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 	// If a broadcast was accepted during execution of that block, it will be
 	// rechecked and possibly evicted immediately following our commit Response.
 
-	return &abciTypes.ResponseCommit{}, nil // RetainHeight stays 0 to not prune any blocks
+	return &cmtAPIabci.CommitResponse{}, nil // RetainHeight stays 0 to not prune any blocks
 }
 
 // lastCommitInfo is a struct to store the last commit info such as
@@ -1073,11 +1083,11 @@ func loadLastCommitInfo(filename string) (*lastCommitInfo, error) {
 // returned height. Our meta data store has to track the above values, where the
 // stored app hash corresponds to the block at height+1. This is simple, but the
 // discrepancy is worth noting.
-func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciTypes.ResponseInfo, error) {
+func (a *AbciApp) Info(ctx context.Context, _ *cmtAPIabci.InfoRequest) (*cmtAPIabci.InfoResponse, error) {
 	a.stateMtx.Lock()
 	if a.height > 0 { // has already been set and stored in FinalizeBlock
 		defer a.stateMtx.Unlock()
-		return &abciTypes.ResponseInfo{
+		return &cmtAPIabci.InfoResponse{
 			LastBlockHeight:  a.height,
 			LastBlockAppHash: a.appHash,
 			Version:          version.KwilVersion, // the *software* semver string
@@ -1104,7 +1114,7 @@ func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciType
 
 	a.log.Info("ABCI application is ready", zap.Int64("height", height))
 
-	return &abciTypes.ResponseInfo{
+	return &cmtAPIabci.InfoResponse{
 		LastBlockHeight:  height,
 		LastBlockAppHash: appHash,
 		Version:          version.KwilVersion, // the *software* semver string
@@ -1112,7 +1122,7 @@ func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciType
 	}, nil
 }
 
-func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain) (*abciTypes.ResponseInitChain, error) {
+func (a *AbciApp) InitChain(ctx context.Context, req *cmtAPIabci.InitChainRequest) (*cmtAPIabci.InitChainResponse, error) {
 	logger := a.log.With(zap.String("stage", "ABCI InitChain"), zap.Int64("height", req.InitialHeight))
 	logger.Debug("", zap.String("ChainId", req.ChainId))
 	// maybe verify a.cfg.ChainID against the one in the request
@@ -1141,7 +1151,7 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 	vldtrs := make([]*types.Validator, len(req.Validators))
 	for i := range req.Validators {
 		vi := &req.Validators[i]
-		pk := vi.PubKey.GetEd25519()
+		pk := vi.PubKeyBytes
 		vldtrs[i] = &types.Validator{
 			PubKey: pk,
 			Power:  vi.Power,
@@ -1182,21 +1192,30 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 		return nil, fmt.Errorf("failed to store network params diff: %w", err)
 	}
 
-	valUpdates := make([]abciTypes.ValidatorUpdate, len(vldtrs))
+	valUpdates := make([]cmtAPIabci.ValidatorUpdate, len(vldtrs))
 	for i, validator := range vldtrs {
-		valUpdates[i] = abciTypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
+		pubkey, err := cometbft.PubkeyFromBytes(validator.PubKey)
+		if err != nil {
+			return nil, fmt.Errorf("parse pubkey bytes: %w", err)
+		}
+
+		valUpdates[i] = cmtAPIabci.ValidatorUpdate{
+			Power:       validator.Power,
+			PubKeyType:  pubkey.Type(),
+			PubKeyBytes: pubkey.Bytes(),
+		}
 	}
 
 	logger.Info("initialized chain", zap.String("app hash", fmt.Sprintf("%x", a.cfg.GenesisAppHash)))
 
-	return &abciTypes.ResponseInitChain{
+	return &cmtAPIabci.InitChainResponse{
 		Validators: valUpdates,
 		AppHash:    a.cfg.GenesisAppHash, // doesn't matter what we gave the node in GenesisDoc, this is it
 	}, nil
 }
 
 // ApplySnapshotChunk is on the state sync connection
-func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.RequestApplySnapshotChunk) (*abciTypes.ResponseApplySnapshotChunk, error) {
+func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *cmtAPIabci.ApplySnapshotChunkRequest) (*cmtAPIabci.ApplySnapshotChunkResponse, error) {
 	if a.statesyncer == nil {
 		return nil, fmt.Errorf("mismatched statesync configuration between CometBFT and ABCI app")
 	}
@@ -1210,7 +1229,7 @@ func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.Request
 			refetchChunks = append(refetchChunks, req.Index)
 		}
 		a.log.Errorf("Failed to apply snapshot chunk: %v", err)
-		return &abciTypes.ResponseApplySnapshotChunk{
+		return &cmtAPIabci.ApplySnapshotChunkResponse{
 			Result:        statesync.ToABCIApplySnapshotChunkResponse(err),
 			RefetchChunks: refetchChunks,
 		}, nil
@@ -1227,7 +1246,7 @@ func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.Request
 		// Update the engine's in-memory info with the new database state
 		err = a.txApp.Reload(ctx, readTx)
 		if err != nil {
-			return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ABORT}, err
+			return &cmtAPIabci.ApplySnapshotChunkResponse{Result: cmtAPIabci.APPLY_SNAPSHOT_CHUNK_RESULT_ABORT}, err
 		}
 
 		// Cache the pubkey in the validatorAddressToPubKey map, as the map is not previously populated
@@ -1256,25 +1275,25 @@ func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.Request
 		a.stateMtx.Unlock()
 	}
 
-	return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ACCEPT, RefetchChunks: nil}, nil
+	return &cmtAPIabci.ApplySnapshotChunkResponse{Result: cmtAPIabci.APPLY_SNAPSHOT_CHUNK_RESULT_ACCEPT, RefetchChunks: nil}, nil
 }
 
 // ListSnapshots is on the state sync connection
-func (a *AbciApp) ListSnapshots(ctx context.Context, req *abciTypes.RequestListSnapshots) (*abciTypes.ResponseListSnapshots, error) {
+func (a *AbciApp) ListSnapshots(ctx context.Context, req *cmtAPIabci.ListSnapshotsRequest) (*cmtAPIabci.ListSnapshotsResponse, error) {
 	if a.snapshotter == nil {
-		return &abciTypes.ResponseListSnapshots{}, nil
+		return &cmtAPIabci.ListSnapshotsResponse{}, nil
 	}
 
 	snapshots := a.snapshotter.ListSnapshots()
 
-	var res []*abciTypes.Snapshot
+	var res []*cmtAPIabci.Snapshot
 	for _, snapshot := range snapshots {
 		bts, err := json.Marshal(snapshot)
 		if err != nil {
 			return nil, err
 		}
 
-		sp := &abciTypes.Snapshot{
+		sp := &cmtAPIabci.Snapshot{
 			Height:   snapshot.Height,
 			Format:   snapshot.Format,
 			Chunks:   snapshot.ChunkCount,
@@ -1285,41 +1304,41 @@ func (a *AbciApp) ListSnapshots(ctx context.Context, req *abciTypes.RequestListS
 
 		res = append(res, sp)
 	}
-	return &abciTypes.ResponseListSnapshots{Snapshots: res}, nil
+	return &cmtAPIabci.ListSnapshotsResponse{Snapshots: res}, nil
 }
 
 // LoadSnapshotChunk is on the state sync connection
-func (a *AbciApp) LoadSnapshotChunk(ctx context.Context, req *abciTypes.RequestLoadSnapshotChunk) (*abciTypes.ResponseLoadSnapshotChunk, error) {
+func (a *AbciApp) LoadSnapshotChunk(ctx context.Context, req *cmtAPIabci.LoadSnapshotChunkRequest) (*cmtAPIabci.LoadSnapshotChunkResponse, error) {
 	if a.snapshotter == nil {
-		return &abciTypes.ResponseLoadSnapshotChunk{}, nil
+		return &cmtAPIabci.LoadSnapshotChunkResponse{}, nil
 	}
 
 	chunk, err := a.snapshotter.LoadSnapshotChunk(req.Height, req.Format, req.Chunk)
 	if err != nil {
 		return nil, err
 	}
-	return &abciTypes.ResponseLoadSnapshotChunk{Chunk: chunk}, nil
+	return &cmtAPIabci.LoadSnapshotChunkResponse{Chunk: chunk}, nil
 }
 
 // OfferSnapshot is on the state sync connection
-func (a *AbciApp) OfferSnapshot(ctx context.Context, req *abciTypes.RequestOfferSnapshot) (*abciTypes.ResponseOfferSnapshot, error) {
+func (a *AbciApp) OfferSnapshot(ctx context.Context, req *cmtAPIabci.OfferSnapshotRequest) (*cmtAPIabci.OfferSnapshotResponse, error) {
 	if a.statesyncer == nil {
-		return &abciTypes.ResponseOfferSnapshot{
-				Result: abciTypes.ResponseOfferSnapshot_REJECT},
+		return &cmtAPIabci.OfferSnapshotResponse{
+				Result: cmtAPIabci.OFFER_SNAPSHOT_RESULT_REJECT},
 			fmt.Errorf("mismatched statesync configuration between CometBFT and ABCI app")
 	}
 
 	var snapshot statesync.Snapshot
 	err := json.Unmarshal(req.Snapshot.Metadata, &snapshot)
 	if err != nil {
-		return &abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_REJECT}, err
+		return &cmtAPIabci.OfferSnapshotResponse{Result: cmtAPIabci.OFFER_SNAPSHOT_RESULT_REJECT}, err
 	}
 
 	err = a.statesyncer.OfferSnapshot(ctx, &snapshot)
 	if err != nil {
-		return &abciTypes.ResponseOfferSnapshot{Result: statesync.ToABCIOfferSnapshotResponse(err)}, nil
+		return &cmtAPIabci.OfferSnapshotResponse{Result: statesync.ToABCIOfferSnapshotResult(err)}, nil
 	}
-	return &abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_ACCEPT}, nil
+	return &cmtAPIabci.OfferSnapshotResponse{Result: cmtAPIabci.OFFER_SNAPSHOT_RESULT_ACCEPT}, nil
 }
 
 // ExtendVote creates an application specific vote extension.
@@ -1333,20 +1352,20 @@ func (a *AbciApp) OfferSnapshot(ctx context.Context, req *abciTypes.RequestOffer
 //     Precommit message. If the consensus algorithm is to precommit nil, it will
 //     not call RequestExtendVote.
 //   - The Application logic that creates the extension can be non-deterministic.
-func (a *AbciApp) ExtendVote(ctx context.Context, req *abciTypes.RequestExtendVote) (*abciTypes.ResponseExtendVote, error) {
-	return &abciTypes.ResponseExtendVote{}, nil
+func (a *AbciApp) ExtendVote(ctx context.Context, req *cmtAPIabci.ExtendVoteRequest) (*cmtAPIabci.ExtendVoteResponse, error) {
+	return &cmtAPIabci.ExtendVoteResponse{}, nil
 }
 
 // Verify application's vote extension data
-func (a *AbciApp) VerifyVoteExtension(ctx context.Context, req *abciTypes.RequestVerifyVoteExtension) (*abciTypes.ResponseVerifyVoteExtension, error) {
+func (a *AbciApp) VerifyVoteExtension(ctx context.Context, req *cmtAPIabci.VerifyVoteExtensionRequest) (*cmtAPIabci.VerifyVoteExtensionResponse, error) {
 	if len(req.VoteExtension) > 0 {
 		// We recognize no vote extensions yet.
-		return &abciTypes.ResponseVerifyVoteExtension{
-			Status: abciTypes.ResponseVerifyVoteExtension_REJECT,
+		return &cmtAPIabci.VerifyVoteExtensionResponse{
+			Status: cmtAPIabci.VERIFY_VOTE_EXTENSION_STATUS_REJECT,
 		}, nil
 	}
-	return &abciTypes.ResponseVerifyVoteExtension{
-		Status: abciTypes.ResponseVerifyVoteExtension_ACCEPT,
+	return &cmtAPIabci.VerifyVoteExtensionResponse{
+		Status: cmtAPIabci.VERIFY_VOTE_EXTENSION_STATUS_ACCEPT,
 	}, nil
 }
 
@@ -1555,13 +1574,13 @@ func (a *AbciApp) prepareBlockTransactions(ctx context.Context, txs [][]byte, lo
 	return finalTxs
 }
 
-func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPrepareProposal) (*abciTypes.ResponsePrepareProposal, error) {
+func (a *AbciApp) PrepareProposal(ctx context.Context, req *cmtAPIabci.PrepareProposalRequest) (*cmtAPIabci.PrepareProposalResponse, error) {
 	logger := a.log.With(zap.String("stage", "ABCI PrepareProposal"),
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
 	if a.forks.IsHalt(uint64(req.Height)) || a.chainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
-		return &abciTypes.ResponsePrepareProposal{}, nil // No more transactions.
+		return &cmtAPIabci.PrepareProposalResponse{}, nil // No more transactions.
 	}
 
 	pubKey, ok := a.validatorAddressToPubKey[proposerAddrToString(req.ProposerAddress)]
@@ -1570,7 +1589,7 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		// even if it is not a validator, if it was a validator in the most recent block
 		// we check for this here and simply propose an empty block, since it will be rejected
 		a.log.Warn("local node was made proposer, but is no longer a validator")
-		return &abciTypes.ResponsePrepareProposal{}, nil
+		return &cmtAPIabci.PrepareProposalResponse{}, nil
 	}
 
 	okTxns := a.prepareBlockTransactions(ctx, req.Txs, &a.log, req.MaxTxBytes, pubKey, req.Height)
@@ -1585,7 +1604,7 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		}
 	}
 
-	return &abciTypes.ResponsePrepareProposal{
+	return &cmtAPIabci.PrepareProposalResponse{
 		Txs: okTxns,
 	}, nil
 }
@@ -1679,16 +1698,16 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 // 3. duplicates or gaps in the nonces
 // 4. transaction size is greater than the max_tx_bytes
 // else accept the proposed block.
-func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestProcessProposal) (*abciTypes.ResponseProcessProposal, error) {
+func (a *AbciApp) ProcessProposal(ctx context.Context, req *cmtAPIabci.ProcessProposalRequest) (*cmtAPIabci.ProcessProposalResponse, error) {
 	logger := a.log.With(zap.String("stage", "ABCI ProcessProposal"),
 		log.Int("height", req.Height), log.Int("txs", len(req.Txs)))
 
 	if a.forks.IsHalt(uint64(req.Height)) || a.chainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
 		if len(req.Txs) != 0 { // This network is done.  No more transactions.
-			return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
+			return &cmtAPIabci.ProcessProposalResponse{Status: cmtAPIabci.PROCESS_PROPOSAL_STATUS_REJECT}, nil
 		}
 		// Empty block == OK.
-		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_ACCEPT}, nil
+		return &cmtAPIabci.ProcessProposalResponse{Status: cmtAPIabci.PROCESS_PROPOSAL_STATUS_ACCEPT}, nil
 	}
 
 	proposerPubKey, ok := a.validatorAddressToPubKey[proposerAddrToString(req.ProposerAddress)]
@@ -1700,28 +1719,28 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 
 		if len(req.Txs) == 0 {
 			a.log.Info("proposer is not a validator and submitted an empty block, accepting proposal")
-			return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_ACCEPT}, nil
+			return &cmtAPIabci.ProcessProposalResponse{Status: cmtAPIabci.PROCESS_PROPOSAL_STATUS_ACCEPT}, nil
 		}
 
 		a.log.Warn("proposer is not a validator and submitted a non-empty block, rejecting proposal", zap.String("proposer", proposerAddrToString(req.ProposerAddress)))
-		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
+		return &cmtAPIabci.ProcessProposalResponse{Status: cmtAPIabci.PROCESS_PROPOSAL_STATUS_REJECT}, nil
 	}
 
 	if err := a.validateProposalTransactions(ctx, req.Txs, proposerPubKey); err != nil {
 		logger.Warn("rejecting block proposal", zap.Error(err))
-		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
+		return &cmtAPIabci.ProcessProposalResponse{Status: cmtAPIabci.PROCESS_PROPOSAL_STATUS_REJECT}, nil
 	}
 
 	// TODO: Verify the Tx and Block sizes based on the genesis configuration
-	return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_ACCEPT}, nil
+	return &cmtAPIabci.ProcessProposalResponse{Status: cmtAPIabci.PROCESS_PROPOSAL_STATUS_ACCEPT}, nil
 }
 
-func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abciTypes.ResponseQuery, error) {
+func (a *AbciApp) Query(ctx context.Context, req *cmtAPIabci.QueryRequest) (*cmtAPIabci.QueryResponse, error) {
 	a.log.Debug("ABCI Query", zap.String("path", req.Path), zap.String("data", string(req.Data)))
 	switch {
 	case req.Path == statesync.ABCISnapshotQueryPath:
 		if a.snapshotter == nil {
-			return nil, fmt.Errorf("this node is not configured to serve snapshots")
+			return &cmtAPIabci.QueryResponse{}, nil
 		}
 
 		var snapshot *statesync.Snapshot
@@ -1745,7 +1764,7 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 		if err != nil {
 			return nil, err
 		}
-		return &abciTypes.ResponseQuery{Value: bts}, nil
+		return &cmtAPIabci.QueryResponse{Value: bts}, nil
 	case req.Path == statesync.ABCILatestSnapshotHeightPath:
 		if a.snapshotter == nil {
 			return nil, fmt.Errorf("this node is not configured to serve snapshots")
@@ -1766,7 +1785,7 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 			return nil, err
 		}
 
-		return &abciTypes.ResponseQuery{Value: bts}, nil
+		return &cmtAPIabci.QueryResponse{Value: bts}, nil
 	case strings.HasPrefix(req.Path, ABCIPeerFilterPath):
 		// When CometBFT connects to a peer, it sends two queries to the ABCI application
 		// using the following paths, with no additional data:
@@ -1785,13 +1804,13 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 		case "id":
 			if a.p2p.IsPeerWhitelisted(paths[1]) {
 				a.log.Info("Connection attempt accepted, peer is allowed to connect", zap.String("peerID", paths[1]))
-				return &abciTypes.ResponseQuery{Code: abciTypes.CodeTypeOK}, nil
+				return &cmtAPIabci.QueryResponse{Code: abciTypes.CodeTypeOK}, nil
 			}
 			// ID is not in the allowed list of peers, so reject the connection
 			a.log.Warn("Connection attempt rejected, peer is not allowed to connect", zap.String("peerID", paths[1]))
 			return nil, fmt.Errorf("node rejected connection attempt from peer %s", paths[1])
 		case "addr":
-			return &abciTypes.ResponseQuery{Code: abciTypes.CodeTypeOK}, nil
+			return &cmtAPIabci.QueryResponse{Code: abciTypes.CodeTypeOK}, nil
 		default:
 			return nil, fmt.Errorf("invalid path: %s", req.Path)
 		}

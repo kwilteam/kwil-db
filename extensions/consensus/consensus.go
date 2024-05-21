@@ -144,7 +144,8 @@ type ParamUpdates struct {
 	Version   *VersionParams         `json:"version,omitempty"`
 	Validator *chain.ValidatorParams `json:"validator,omitempty"`
 	Votes     *chain.VoteParams      `json:"votes,omitempty"`
-	ABCI      *chain.ABCIParams      `json:"abci,omitempty"`
+	Synchrony *chain.SynchronyParams `json:"synchrony,omitempty"`
+	Feature   *chain.FeatureParams   `json:"feature,omitempty"`
 }
 
 // VersionParams contains an update to the application protocol version to give
@@ -257,13 +258,19 @@ func MergeConsensusUpdates(params, update *ParamUpdates) {
 			params.Version.App = update.Version.App
 		}
 	}
-	if update.ABCI != nil {
-		if params.ABCI == nil {
-			params.ABCI = new(chain.ABCIParams)
+	if update.Synchrony != nil {
+		if params.Synchrony == nil {
+			params.Synchrony = new(chain.SynchronyParams)
+		}
+		// ...
+	}
+	if update.Feature != nil {
+		if params.Feature == nil {
+			params.Feature = new(chain.FeatureParams)
 		}
 		// NOTE: this will allow changing it from non-zero to zero. However,
 		// vote extensions may not be disabled once enabled, so this should only
 		// be done to "cancel" a planned upgrade that would enable them at a future height.
-		params.ABCI.VoteExtensionsEnableHeight = update.ABCI.VoteExtensionsEnableHeight
+		params.Feature.VoteExtensionsEnableHeight = update.Feature.VoteExtensionsEnableHeight
 	}
 }

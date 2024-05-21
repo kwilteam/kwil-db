@@ -73,7 +73,8 @@ type BaseConsensusParams struct {
 	Evidence  EvidenceParams  `json:"evidence"`
 	Validator ValidatorParams `json:"validator"`
 	Votes     VoteParams      `json:"votes"`
-	ABCI      ABCIParams      `json:"abci"`
+	Feature   FeatureParams   `json:"feature"`
+	Synchrony SynchronyParams `json:"synchrony"`
 	Migration MigrationParams `json:"migration"`
 }
 
@@ -135,6 +136,45 @@ func (m *MigrationParams) IsMigration() bool {
 	return m.StartHeight != 0 && m.EndHeight != 0
 }
 
+type SynchronyParams struct {
+	// Bound for how skewed a proposer's clock may be from any validator on the
+	// network while still producing valid proposals.
+
+	//Precision *time.Duration `json:"precision,omitempty"`
+
+	// Bound for how long a proposal message may take to reach all validators on
+	// a network and still be considered valid.
+
+	//MessageDelay *time.Duration `json:"message_delay,omitempty"`
+}
+
+type FeatureParams struct {
+	// VoteExtensionsEnableHeight is the first height during which vote
+	// extensions will be enabled.
+	//
+	// During the specified height, and for all subsequent heights, precommit
+	// messages that do not contain valid extension data will be considered
+	// invalid. Prior to this height, or when this height is set to 0, vote
+	// extensions will not be used or accepted by validators on the network.
+	//
+	// Once enabled, vote extensions will be created by the application in
+	// ExtendVote, validated by the application in VerifyVoteExtension, and used
+	// by the application in PrepareProposal, when proposing the next block.
+	//
+	// Cannot be set to heights lower or equal to the current blockchain height.
+	VoteExtensionsEnableHeight *int64 `json:"vote_extensions_enable_height,omitempty"`
+
+	// Height at which Proposer-Based Timestamps (PBTS) will be enabled.
+	//
+	// From the specified height, and for all subsequent heights, the PBTS
+	// algorithm will be used to produce and validate block timestamps. Prior to
+	// this height, or when this height is set to 0, the legacy BFT Time
+	// algorithm is used to produce and validate timestamps.
+	//
+	// Cannot be set to heights lower or equal to the current blockchain height.
+	PbtsEnableHeight *int64 `json:"pbts_enable_height,omitempty"`
+}
+
 func defaultConsensusParams() *ConsensusParams {
 	return &ConsensusParams{
 		BaseConsensusParams: BaseConsensusParams{
@@ -158,8 +198,10 @@ func defaultConsensusParams() *ConsensusParams {
 				VoteExpiry:    14400, // approx 1 day considering block rate of 6 sec/blk
 				MaxVotesPerTx: 100,
 			},
-			ABCI: ABCIParams{
-				VoteExtensionsEnableHeight: 0, // disabled, needs coordinated upgrade to enable
+			Synchrony: SynchronyParams{},
+			Feature: FeatureParams{
+				VoteExtensionsEnableHeight: nil,
+				PbtsEnableHeight:           nil,
 			},
 		},
 		WithoutGasCosts: true,

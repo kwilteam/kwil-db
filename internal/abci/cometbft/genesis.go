@@ -3,8 +3,9 @@ package cometbft
 import (
 	"path/filepath"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtAPITypes "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	cmtTypes "github.com/cometbft/cometbft/types"
+	gogotypes "github.com/cosmos/gogoproto/types" // c'mon
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/chain"
@@ -46,8 +47,10 @@ func ExtractConsensusParams(cp *chain.BaseConsensusParams, appVersion uint64) *c
 		Validator: cmtTypes.ValidatorParams{
 			PubKeyTypes: cp.Validator.PubKeyTypes,
 		},
-		ABCI: cmtTypes.ABCIParams{
-			VoteExtensionsEnableHeight: cp.ABCI.VoteExtensionsEnableHeight,
+		Synchrony: cmtTypes.DefaultSynchronyParams(),
+		Feature: cmtTypes.FeatureParams{
+			VoteExtensionsEnableHeight: 0, // disabled for now
+			// PbtsEnableHeight: ,
 		},
 	}
 }
@@ -55,6 +58,8 @@ func ExtractConsensusParams(cp *chain.BaseConsensusParams, appVersion uint64) *c
 // MergeConsensusParams merges cometbft's ConsensusParams with kwild's NetworkParameters
 // to create a unified representation of the chain's consensus parameters.
 func MergeConsensusParams(cometbftParams *cmtTypes.ConsensusParams, abciParams *common.NetworkParameters) *chain.ConsensusParams {
+	veeHeight := cometbftParams.Feature.VoteExtensionsEnableHeight
+	pbsteHeight := cometbftParams.Feature.PbtsEnableHeight
 	return &chain.ConsensusParams{
 		BaseConsensusParams: chain.BaseConsensusParams{
 			Block: chain.BlockParams{
@@ -74,46 +79,57 @@ func MergeConsensusParams(cometbftParams *cmtTypes.ConsensusParams, abciParams *
 				VoteExpiry:    abciParams.VoteExpiry,
 				MaxVotesPerTx: abciParams.MaxVotesPerTx,
 			},
-			ABCI: chain.ABCIParams{
-				VoteExtensionsEnableHeight: cometbftParams.ABCI.VoteExtensionsEnableHeight,
+			Feature: chain.FeatureParams{
+				VoteExtensionsEnableHeight: &veeHeight,
+				PbtsEnableHeight:           &pbsteHeight,
 			},
+			Synchrony: chain.SynchronyParams{},
 		},
 		WithoutGasCosts: abciParams.DisabledGasCosts,
 	}
 }
 
 // ParamUpdatesToComet converts the parameter updates to cometBFT's
-func ParamUpdatesToComet(up *consensus.ParamUpdates) *cmtproto.ConsensusParams {
-	var params cmtproto.ConsensusParams
+func ParamUpdatesToComet(up *consensus.ParamUpdates) *cmtAPITypes.ConsensusParams {
+	var params cmtAPITypes.ConsensusParams
 	if up.Block != nil {
-		params.Block = &cmtproto.BlockParams{
+		params.Block = &cmtAPITypes.BlockParams{
 			MaxBytes: up.Block.MaxBytes,
 			MaxGas:   up.Block.MaxGas,
 		}
 	}
 	if up.Evidence != nil {
-		params.Evidence = &cmtproto.EvidenceParams{
+		params.Evidence = &cmtAPITypes.EvidenceParams{
 			MaxAgeNumBlocks: up.Evidence.MaxAgeNumBlocks,
 			MaxAgeDuration:  up.Evidence.MaxAgeDuration,
 			MaxBytes:        up.Evidence.MaxBytes,
 		}
 	}
 	if up.Version != nil {
-		params.Version = &cmtproto.VersionParams{
+		params.Version = &cmtAPITypes.VersionParams{
 			App: up.Version.App,
 		}
 	}
 	if up.Validator != nil {
-		params.Validator = &cmtproto.ValidatorParams{
+		params.Validator = &cmtAPITypes.ValidatorParams{
 			PubKeyTypes: up.Validator.PubKeyTypes,
 		}
 	}
 	// NOTE: comet doesn't have a Vote field, nor Validator.JoinExpiry, etc.
 	// We handle those.
-	if up.ABCI != nil {
-		params.Abci = &cmtproto.ABCIParams{
-			VoteExtensionsEnableHeight: up.ABCI.VoteExtensionsEnableHeight,
+	if up.Feature != nil {
+		params.Feature = new(cmtAPITypes.FeatureParams)
+		if veeh := up.Feature.VoteExtensionsEnableHeight; veeh != nil {
+			params.Feature.VoteExtensionsEnableHeight = &gogotypes.Int64Value{
+				Value: *veeh,
+			}
+		}
+		if pbsteh := up.Feature.PbtsEnableHeight; pbsteh != nil {
+			params.Feature.PbtsEnableHeight = &gogotypes.Int64Value{
+				Value: *pbsteh,
+			}
 		}
 	}
+	// TODO: sychrony
 	return &params
 }

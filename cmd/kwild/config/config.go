@@ -46,9 +46,6 @@ func defaultMoniker() string {
 // 3. Env vars
 // 4. Command line flags
 // It takes the config generated from the command line flags to override default.
-// It also takes a flag to indicate if the caller wants to modify the defaults
-// for "quickstart" mode. Presently this just makes the HTTP RPC service listen
-// on all interfaces instead of the default of localhost.
 func GetCfg(flagCfg *config.KwildConfig) (*config.KwildConfig, bool, error) {
 	/*
 		the process here is:

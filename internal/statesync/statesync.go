@@ -319,7 +319,7 @@ func ChainRPCClient(server string) (*rpchttp.HTTP, error) {
 	if !strings.Contains(server, "://") {
 		server = "http://" + server
 	}
-	c, err := rpchttp.New(server, "/websocket")
+	c, err := rpchttp.New(server)
 	if err != nil {
 		return nil, err
 	}

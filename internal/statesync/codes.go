@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	abciTypes "github.com/cometbft/cometbft/abci/types"
+	cmtAPIabci "github.com/cometbft/cometbft/api/cometbft/abci/v1"
 )
 
 var (
@@ -23,53 +23,53 @@ var (
 	// ErrRetrySnapshot        = fmt.Errorf("retry snapshot") // request full retry of snapshot ==> ResponseApplySnapshotChunk_RETRY_SNAPSHOT
 )
 
-func ToABCIOfferSnapshotResponse(err error) abciTypes.ResponseOfferSnapshot_Result {
+func ToABCIOfferSnapshotResult(err error) cmtAPIabci.OfferSnapshotResult {
 	if err == nil {
-		return abciTypes.ResponseOfferSnapshot_ACCEPT
+		return cmtAPIabci.OFFER_SNAPSHOT_RESULT_ACCEPT
 	}
 
 	if errors.Is(err, ErrAbortSnapshot) {
-		return abciTypes.ResponseOfferSnapshot_ABORT
+		return cmtAPIabci.OFFER_SNAPSHOT_RESULT_ABORT
 	}
 
 	if errors.Is(err, ErrRejectSnapshot) {
-		return abciTypes.ResponseOfferSnapshot_REJECT
+		return cmtAPIabci.OFFER_SNAPSHOT_RESULT_REJECT
 	}
 
 	if errors.Is(err, ErrUnsupportedSnapshotFormat) {
-		return abciTypes.ResponseOfferSnapshot_REJECT_FORMAT
+		return cmtAPIabci.OFFER_SNAPSHOT_RESULT_REJECT_FORMAT
 	}
 
-	return abciTypes.ResponseOfferSnapshot_UNKNOWN
+	return cmtAPIabci.OFFER_SNAPSHOT_RESULT_UNKNOWN
 }
 
-func ToABCIApplySnapshotChunkResponse(err error) abciTypes.ResponseApplySnapshotChunk_Result {
+func ToABCIApplySnapshotChunkResponse(err error) cmtAPIabci.ApplySnapshotChunkResult {
 
 	if err == nil {
-		return abciTypes.ResponseApplySnapshotChunk_ACCEPT
+		return cmtAPIabci.APPLY_SNAPSHOT_CHUNK_RESULT_ACCEPT
 	}
 
 	if errors.Is(err, ErrAbortSnapshotChunk) {
-		return abciTypes.ResponseApplySnapshotChunk_ABORT
+		return cmtAPIabci.APPLY_SNAPSHOT_CHUNK_RESULT_ABORT
 	}
 
 	if errors.Is(err, ErrRetrySnapshotChunk) {
-		return abciTypes.ResponseApplySnapshotChunk_RETRY
+		return cmtAPIabci.APPLY_SNAPSHOT_CHUNK_RESULT_RETRY
 	}
 
 	if errors.Is(err, ErrRefetchSnapshotChunk) {
-		return abciTypes.ResponseApplySnapshotChunk_RETRY
+		return cmtAPIabci.APPLY_SNAPSHOT_CHUNK_RESULT_RETRY
 	}
 
 	if errors.Is(err, ErrRejectSnapshotChunk) {
-		return abciTypes.ResponseApplySnapshotChunk_REJECT_SNAPSHOT
+		return cmtAPIabci.APPLY_SNAPSHOT_CHUNK_RESULT_REJECT_SNAPSHOT
 	}
 
 	// if errors.Is(err, ErrRetrySnapshot) {
-	// 	return abciTypes.ResponseApplySnapshotChunk_RETRY_SNAPSHOT
+	// 	return cmtAPIabci.APPLY_SNAPSHOT_CHUNK_RESULT_RETRY_SNAPSHOT
 	// }
 
 	// If the error is unrecognized, fall back to rejecting the snapshot.
 	// Returning UNKNOWN is fatal to cometbft.
-	return abciTypes.ResponseApplySnapshotChunk_REJECT_SNAPSHOT
+	return cmtAPIabci.APPLY_SNAPSHOT_CHUNK_RESULT_REJECT_SNAPSHOT
 }
