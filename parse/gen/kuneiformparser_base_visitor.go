@@ -35,6 +35,10 @@ func (v *BaseKuneiformParserVisitor) VisitBinary_literal(ctx *Binary_literalCont
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitIdentifier(ctx *IdentifierContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitIdentifier_list(ctx *Identifier_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -103,35 +107,35 @@ func (v *BaseKuneiformParserVisitor) VisitTyped_variable_list(ctx *Typed_variabl
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitMIN(ctx *MINContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitMin_constraint(ctx *Min_constraintContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitMAX(ctx *MAXContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitMax_constraint(ctx *Max_constraintContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitMIN_LEN(ctx *MIN_LENContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitMin_len_constraint(ctx *Min_len_constraintContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitMAX_LEN(ctx *MAX_LENContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitMax_len_constraint(ctx *Max_len_constraintContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitNOT_NULL(ctx *NOT_NULLContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitNot_null_constraint(ctx *Not_null_constraintContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitPRIMARY_KEY(ctx *PRIMARY_KEYContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitPrimary_key_constraint(ctx *Primary_key_constraintContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitDEFAULT(ctx *DEFAULTContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitDefault_constraint(ctx *Default_constraintContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitUNIQUE(ctx *UNIQUEContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitUnique_constraint(ctx *Unique_constraintContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -384,10 +388,6 @@ func (v *BaseKuneiformParserVisitor) VisitStmt_procedure_call(ctx *Stmt_procedur
 }
 
 func (v *BaseKuneiformParserVisitor) VisitStmt_variable_assignment(ctx *Stmt_variable_assignmentContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitStmt_variable_assignment_with_declaration(ctx *Stmt_variable_assignment_with_declarationContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

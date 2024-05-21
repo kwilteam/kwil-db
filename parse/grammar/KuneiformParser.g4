@@ -22,16 +22,21 @@ entry:
 */
 
 literal:
-    STRING_ # string_literal
-    | (PLUS | MINUS)? DIGITS_ # integer_literal
-    | (PLUS | MINUS)? DIGITS_ PERIOD DIGITS_ # decimal_literal
-    | (TRUE | FALSE) # boolean_literal
-    | NULL # null_literal
-    | BINARY_ # binary_literal
+    STRING_                                     # string_literal
+    | (PLUS | MINUS)? DIGITS_                   # integer_literal
+    | (PLUS | MINUS)? DIGITS_ PERIOD DIGITS_    # decimal_literal
+    | (TRUE | FALSE)                            # boolean_literal
+    | NULL                                      # null_literal
+    | BINARY_                                   # binary_literal
+;
+
+// identifier is used for table / column names
+identifier:
+    (DOUBLE_QUOTE IDENTIFIER DOUBLE_QUOTE) | IDENTIFIER
 ;
 
 identifier_list:
-    IDENTIFIER (COMMA IDENTIFIER)*
+    identifier (COMMA identifier)*
 ;
 
 type:
@@ -122,14 +127,14 @@ typed_variable_list:
 ;
 
 constraint:
-    MIN LPAREN literal RPAREN # MIN
-    | MAX LPAREN literal RPAREN # MAX
-    | MINLEN LPAREN literal RPAREN # MIN_LEN
-    | MAXLEN LPAREN literal RPAREN # MAX_LEN
-    | (NOTNULL|NOT NULL) # NOT_NULL
-    | (LEGACY_PRIMARY_KEY|PRIMARY KEY?) # PRIMARY_KEY
-    | DEFAULT LPAREN literal RPAREN # DEFAULT
-    | UNIQUE # UNIQUE
+    MIN LPAREN literal RPAREN           # min_constraint
+    | MAX LPAREN literal RPAREN         # max_constraint
+    | MINLEN LPAREN literal RPAREN      # min_len_constraint
+    | MAXLEN LPAREN literal RPAREN      # max_len_constraint
+    | (NOTNULL|NOT NULL)                # not_null_constraint
+    | (LEGACY_PRIMARY_KEY|PRIMARY KEY?) # primary_key_constraint
+    | DEFAULT LPAREN literal RPAREN     # default_constraint
+    | UNIQUE                            # unique_constraint
 ;
 
 access_modifier:
@@ -180,7 +185,7 @@ sql_statement:
 ;
 
 common_table_expression:
-    IDENTIFIER LPAREN (IDENTIFIER (COMMA IDENTIFIER)*)? RPAREN AS LPAREN select_statement RPAREN
+    identifier LPAREN (identifier (COMMA identifier)*)? RPAREN AS LPAREN select_statement RPAREN
 ;
 
 select_statement:
@@ -211,9 +216,12 @@ select_core:
 ;
 
 relation:
-    table_name=IDENTIFIER (AS? alias=IDENTIFIER)? # table_relation
-    | LPAREN select_statement RPAREN AS? alias=IDENTIFIER # subquery_relation
-    | sql_function_call AS? alias=IDENTIFIER # function_relation
+    table_name=identifier (AS? alias=identifier)?               # table_relation
+    // aliases are technically required in Kuneiform for subquery and function calls,
+    // but we allow it to pass here since it is standard SQL to not require it, and
+    // we can throw a better error message after parsing.
+    | LPAREN select_statement RPAREN (AS? alias=identifier)?    # subquery_relation
+    | sql_function_call (AS? alias=identifier?)                 # function_relation
 ;
 
 join:
@@ -222,23 +230,23 @@ join:
 ;
 
 result_column:
-    sql_expr (AS? IDENTIFIER)? # expression_result_column
-    | (table_name=IDENTIFIER PERIOD)? STAR # wildcard_result_column
+    sql_expr (AS? identifier)?              # expression_result_column
+    | (table_name=identifier PERIOD)? STAR  # wildcard_result_column
 ;
 
 update_statement:
-    UPDATE table_name=IDENTIFIER (AS alias=IDENTIFIER)?
+    UPDATE table_name=identifier (AS alias=identifier)?
     SET update_set_clause (COMMA update_set_clause)*
     (FROM relation join*)?
     (WHERE where=sql_expr)?
 ;
 
 update_set_clause:
-   column=IDENTIFIER EQUALS sql_expr
+   column=identifier EQUALS sql_expr
 ;
 
 insert_statement:
-    INSERT INTO table_name=IDENTIFIER (AS alias=IDENTIFIER)?
+    INSERT INTO table_name=identifier (AS alias=identifier)?
     (LPAREN target_columns=identifier_list RPAREN)?
     VALUES LPAREN sql_expr_list RPAREN (COMMA LPAREN sql_expr_list RPAREN)*
     upsert_clause?
@@ -255,37 +263,37 @@ upsert_clause:
 ;
 
 delete_statement:
-    DELETE FROM table_name=IDENTIFIER (AS alias=IDENTIFIER)?
+    DELETE FROM table_name=identifier (AS alias=identifier)?
     // (USING relation join*)?
     (WHERE where=sql_expr)?
 ;
 
 sql_expr:
-    literal type_cast? # literal_sql_expr
-    | sql_function_call type_cast? # function_call_sql_expr
-    | variable type_cast? # variable_sql_expr
-    | (table=IDENTIFIER PERIOD)? column=IDENTIFIER type_cast? # column_sql_expr
-    | sql_expr LBRACKET sql_expr RBRACKET type_cast? # array_access_sql_expr
-    | sql_expr PERIOD IDENTIFIER type_cast? # field_access_sql_expr
-    | LPAREN sql_expr RPAREN type_cast? # paren_sql_expr
-    | left=sql_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) right=sql_expr # comparison_sql_expr
-    | sql_expr NOT? IN LPAREN (sql_expr_list|select_statement) RPAREN # in_sql_expr
-    | left=sql_expr NOT? LIKE right=sql_expr # like_sql_expr
-    | <assoc=right> (NOT|PLUS|MINUS) sql_expr # unary_sql_expr
-    | element=sql_expr (NOT)? BETWEEN lower=sql_expr AND upper=sql_expr # between_sql_expr
-    | left=sql_expr IS NOT? ((DISTINCT FROM right=sql_expr) | NULL | TRUE | FALSE) # is_sql_expr
-    | sql_expr COLLATE IDENTIFIER # collate_sql_expr
+    literal type_cast?                                                              # literal_sql_expr
+    | sql_function_call type_cast?                                                  # function_call_sql_expr
+    | variable type_cast?                                                           # variable_sql_expr
+    | (table=identifier PERIOD)? column=identifier type_cast?                       # column_sql_expr
+    | sql_expr LBRACKET sql_expr RBRACKET type_cast?                                # array_access_sql_expr
+    | sql_expr PERIOD identifier type_cast?                                         # field_access_sql_expr
+    | LPAREN sql_expr RPAREN type_cast?                                             # paren_sql_expr
+    | left=sql_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) right=sql_expr    # comparison_sql_expr
+    | sql_expr NOT? IN LPAREN (sql_expr_list|select_statement) RPAREN               # in_sql_expr
+    | left=sql_expr NOT? LIKE right=sql_expr                                        # like_sql_expr
+    | <assoc=right> (NOT|PLUS|MINUS) sql_expr                                       # unary_sql_expr
+    | element=sql_expr (NOT)? BETWEEN lower=sql_expr AND upper=sql_expr             # between_sql_expr
+    | left=sql_expr IS NOT? ((DISTINCT FROM right=sql_expr) | NULL | TRUE | FALSE)  # is_sql_expr
+    | sql_expr COLLATE identifier                                                   # collate_sql_expr
     | CASE case_clause=sql_expr?
         (WHEN when_condition=sql_expr THEN then=sql_expr)+
-        (ELSE else_clause=sql_expr)? END            #case_expr
-    | (NOT? EXISTS)? LPAREN select_statement RPAREN type_cast? # subquery_sql_expr
+        (ELSE else_clause=sql_expr)? END                                            #case_expr
+    | (NOT? EXISTS)? LPAREN select_statement RPAREN type_cast?                      # subquery_sql_expr
     // setting precedence for arithmetic operations:
-    | left=sql_expr CONCAT right=sql_expr # arithmetic_sql_expr
-    | left=sql_expr (STAR | DIV | MOD) right=sql_expr # arithmetic_sql_expr
-    | left=sql_expr (PLUS | MINUS) right=sql_expr # arithmetic_sql_expr
+    | left=sql_expr CONCAT right=sql_expr                                           # arithmetic_sql_expr
+    | left=sql_expr (STAR | DIV | MOD) right=sql_expr                               # arithmetic_sql_expr
+    | left=sql_expr (PLUS | MINUS) right=sql_expr                                   # arithmetic_sql_expr
     // setting precedence for logical operations:
-    | left=sql_expr AND right=sql_expr # logical_sql_expr
-    | left=sql_expr OR right=sql_expr # logical_sql_expr
+    | left=sql_expr AND right=sql_expr                                              # logical_sql_expr
+    | left=sql_expr OR right=sql_expr                                               # logical_sql_expr
 ;
 
 sql_expr_list:
@@ -293,8 +301,8 @@ sql_expr_list:
 ;
 
 sql_function_call:
-    IDENTIFIER LPAREN (DISTINCT? sql_expr_list|STAR)? RPAREN #normal_call_sql
-    | IDENTIFIER LBRACKET dbid=sql_expr COMMA procedure=sql_expr RBRACKET LPAREN (sql_expr_list)? RPAREN #foreign_call_sql
+    identifier LPAREN (DISTINCT? sql_expr_list|STAR)? RPAREN                                                #normal_call_sql
+    | identifier LBRACKET dbid=sql_expr COMMA procedure=sql_expr RBRACKET LPAREN (sql_expr_list)? RPAREN    #foreign_call_sql
 ;
 
 /*
@@ -310,8 +318,8 @@ action_block:
 // 2. a local action/procedure call.
 // 3. an extension call
 action_statement:
-    sql_statement # sql_action
-    | IDENTIFIER LPAREN (procedure_expr_list)? RPAREN # local_action
+    sql_statement                                                                               # sql_action
+    | IDENTIFIER LPAREN (procedure_expr_list)? RPAREN                                           # local_action
     | (variable_list EQUALS)? IDENTIFIER PERIOD IDENTIFIER LPAREN (procedure_expr_list)? RPAREN # extension_action
 ;
 
@@ -321,55 +329,53 @@ action_statement:
 
 // procedure_block is the top-level rule for a procedure.
 procedure_block:
-    statement*
+    proc_statement*
 ;
 
 procedure_expr:
-    literal type_cast? # literal_procedure_expr
-    | procedure_function_call type_cast? # function_call_procedure_expr
-    | variable type_cast? # variable_procedure_expr
-    | LBRACKET (procedure_expr_list)? RBRACKET type_cast? # make_array_procedure_expr
-    | procedure_expr LBRACKET procedure_expr RBRACKET type_cast? # array_access_procedure_expr
-    | LPAREN procedure_expr RPAREN type_cast? # paren_procedure_expr
-    | procedure_expr PERIOD IDENTIFIER type_cast? # field_access_procedure_expr
-    | procedure_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) procedure_expr # comparison_procedure_expr
-    | (MINUS|PLUS|EXCL) procedure_expr # unary_procedure_expr
+    literal type_cast?                                                              # literal_procedure_expr
+    | procedure_function_call type_cast?                                            # function_call_procedure_expr
+    | variable type_cast?                                                           # variable_procedure_expr
+    | LBRACKET (procedure_expr_list)? RBRACKET type_cast?                           # make_array_procedure_expr
+    | procedure_expr LBRACKET procedure_expr RBRACKET type_cast?                    # array_access_procedure_expr
+    | LPAREN procedure_expr RPAREN type_cast?                                       # paren_procedure_expr
+    | procedure_expr PERIOD IDENTIFIER type_cast?                                   # field_access_procedure_expr
+    | procedure_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) procedure_expr   # comparison_procedure_expr
+    | (MINUS|PLUS|EXCL) procedure_expr                                              # unary_procedure_expr
     // setting precedence for arithmetic operations:
-    | procedure_expr CONCAT procedure_expr # procedure_expr_arithmetic
-    | procedure_expr (STAR | DIV | MOD) procedure_expr # procedure_expr_arithmetic
-    | procedure_expr (PLUS | MINUS) procedure_expr # procedure_expr_arithmetic
+    | procedure_expr CONCAT procedure_expr                                          # procedure_expr_arithmetic
+    | procedure_expr (STAR | DIV | MOD) procedure_expr                              # procedure_expr_arithmetic
+    | procedure_expr (PLUS | MINUS) procedure_expr                                  # procedure_expr_arithmetic
 ;
 
 procedure_expr_list:
     procedure_expr (COMMA procedure_expr)*
 ;
 
-statement:
-    VARIABLE type SCOL # stmt_variable_declaration
+proc_statement:
+    VARIABLE type SCOL                                                                                  # stmt_variable_declaration
     // stmt_procedure_call must go above stmt_variable_assignment due to lexer ambiguity
     | ((variable_or_underscore) (COMMA (variable_or_underscore))* ASSIGN)? procedure_function_call SCOL # stmt_procedure_call
-    | VARIABLE ASSIGN procedure_expr SCOL # stmt_variable_assignment
-    | VARIABLE type? ASSIGN procedure_expr SCOL # stmt_variable_assignment_with_declaration
-    | FOR receiver=VARIABLE IN (range|target_variable=variable|sql_statement) LBRACE statement* RBRACE # stmt_for_loop
-    | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE statement* RBRACE)? # stmt_if
-    | sql_statement SCOL # stmt_sql
-    | BREAK SCOL # stmt_break
-    | RETURN (procedure_expr_list|sql_statement) SCOL # stmt_return
-    | RETURN NEXT procedure_expr_list SCOL # stmt_return_next
+    | VARIABLE type? ASSIGN procedure_expr SCOL                                                         # stmt_variable_assignment
+    | FOR receiver=VARIABLE IN (range|target_variable=variable|sql_statement) LBRACE proc_statement* RBRACE  # stmt_for_loop
+    | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE proc_statement* RBRACE)?                         # stmt_if
+    | sql_statement SCOL                                                                                # stmt_sql
+    | BREAK SCOL                                                                                        # stmt_break
+    | RETURN (procedure_expr_list|sql_statement) SCOL                                                   # stmt_return
+    | RETURN NEXT procedure_expr_list SCOL                                                              # stmt_return_next
 ;
 
-// unfortunately necessary to preserve order in generated code
 variable_or_underscore:
     VARIABLE | UNDERSCORE
 ;
 
 procedure_function_call:
-    IDENTIFIER LPAREN (procedure_expr_list)? RPAREN #normal_call_procedure
-    | IDENTIFIER LBRACKET dbid=procedure_expr COMMA procedure=procedure_expr RBRACKET LPAREN (procedure_expr_list)? RPAREN #foreign_call_procedure
+    IDENTIFIER LPAREN (procedure_expr_list)? RPAREN                                                                         #normal_call_procedure
+    | IDENTIFIER LBRACKET dbid=procedure_expr COMMA procedure=procedure_expr RBRACKET LPAREN (procedure_expr_list)? RPAREN  #foreign_call_procedure
 ;
 
 if_then_block:
-    procedure_expr LBRACE statement* RBRACE
+    procedure_expr LBRACE proc_statement* RBRACE
 ;
 
 // range used for for loops

@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var schemaName = "schema"
+
 func Test_ForeignProcedureGen(t *testing.T) {
 	type testcase struct {
 		name      string
@@ -23,7 +25,7 @@ func Test_ForeignProcedureGen(t *testing.T) {
 				Name: "test",
 			},
 			want: `
-CREATE OR REPLACE FUNCTION _fp_test(_dbid TEXT, _procedure TEXT) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION schema._fp_test(_dbid TEXT, _procedure TEXT) RETURNS VOID AS $$
 DECLARE
     _schema_owner BYTEA;
     _is_view BOOLEAN;
@@ -73,7 +75,7 @@ $$ LANGUAGE plpgsql;`,
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := GenerateForeignProcedure(test.procedure)
+			got, err := GenerateForeignProcedure(test.procedure, schemaName)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

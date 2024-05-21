@@ -39,6 +39,7 @@ TYPE_CAST:  '::';
 UNDERSCORE: '_';
 ASSIGN:     ':=';
 RANGE:      '..';
+DOUBLE_QUOTE: '"';
 
 
 // top-level blocks

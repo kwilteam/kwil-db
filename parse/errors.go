@@ -74,7 +74,7 @@ func (p ParseError) Unwrap() error {
 func (p *ParseError) Error() string {
 	// Add 1 to the column numbers to make them 1-indexed, since antlr-go is 0-indexed
 	// for columns.
-	return fmt.Sprintf("(%s) %s error: %s\nstart %d:%d end %d:%d", p.ParserName, p.Err.Error(), p.Message,
+	return fmt.Sprintf("(%s) %s: %s\nstart %d:%d end %d:%d", p.ParserName, p.Err.Error(), p.Message,
 		p.Position.StartLine, p.Position.StartCol+1,
 		p.Position.EndLine, p.Position.EndCol+1)
 }
@@ -131,7 +131,7 @@ func (e *errorListener) AddErr(node Node, err error, msg string, v ...any) {
 		ParserName: e.name,
 		Err:        err,
 		Message:    fmt.Sprintf(msg, v...),
-		Position:   node.GetNode(),
+		Position:   node.GetPosition(),
 	})
 }
 
@@ -190,7 +190,6 @@ func (e *errorListener) ReportContextSensitivity(recognizer antlr.Parser, dfa *a
 var (
 	ErrSyntax                     = errors.New("syntax error")
 	ErrDuplicateBlock             = errors.New("duplicate block name")
-	ErrInvalidIterable            = errors.New("invalid iterable")
 	ErrUndeclaredVariable         = errors.New("undeclared variable")
 	ErrVariableAlreadyDeclared    = errors.New("variable already declared")
 	ErrType                       = errors.New("type error")
@@ -210,7 +209,6 @@ var (
 	ErrUnnamedResultColumn       = errors.New("unnamed result column")
 	ErrTableAlreadyJoined        = errors.New("table already joined")
 	ErrUnnamedJoin               = errors.New("unnamed join")
-	ErrJoin                      = errors.New("join error")
 	ErrBreak                     = errors.New("break error")
 	ErrReturn                    = errors.New("return type error")
 	ErrAggregate                 = errors.New("aggregate error")
@@ -218,6 +216,9 @@ var (
 	ErrIdentifier                = errors.New("identifier error")
 	ErrActionNotFound            = errors.New("action not found")
 	ErrViewMutatesState          = errors.New("view mutates state")
-	ErrInvalidActionExpression   = errors.New("invalid action expression")
 	ErrOrdering                  = errors.New("ordering error")
+	ErrCrossScopeDeclaration     = errors.New("cross-scope declaration")
+	ErrInvalidExcludedTable      = errors.New("invalid excluded table usage")
+	ErrAmbiguousConflictTable    = errors.New("ambiguous conflict table")
+	ErrCollation                 = errors.New("collation error")
 )

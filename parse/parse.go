@@ -22,6 +22,10 @@ type SchemaParseResult struct {
 	ParseErrs ParseErrs
 	// SchemaInfo is the information about the schema.
 	SchemaInfo *SchemaInfo
+	// ParsedActions is the ASTs of the parsed actions.
+	ParsedActions map[string][]ActionStmt
+	// ParsedProcedures is the ASTs of the parsed procedures.
+	ParsedProcedures map[string][]ProcedureStmt
 }
 
 func (r *SchemaParseResult) Err() error {
@@ -40,7 +44,8 @@ func ParseAndValidate(kf []byte) (*SchemaParseResult, error) {
 	}
 
 	for _, proc := range res.Schema.Procedures {
-		procRes, err := ParseProcedure(proc, res.Schema)
+		ast := res.ParsedProcedures[proc.Name]
+		procRes, err := analyzeProcedureAST(proc, res.Schema, ast)
 		if err != nil {
 			return nil, err
 		}
@@ -49,7 +54,8 @@ func ParseAndValidate(kf []byte) (*SchemaParseResult, error) {
 	}
 
 	for _, act := range res.Schema.Actions {
-		actRes, err := ParseAction(act, res.Schema)
+		ast := res.ParsedActions[act.Name]
+		actRes, err := analyzeActionAST(act, res.Schema, ast)
 		if err != nil {
 			return nil, err
 		}
@@ -61,15 +67,20 @@ func ParseAndValidate(kf []byte) (*SchemaParseResult, error) {
 }
 
 // ParseSchema parses a Kuneiform schema.
-// TODO: we should delete ParseKuneiform, in favor of ParseSchema.
+// It will not perform validations on the actions and procedures.
+// Most users should use ParseAndValidate instead.
 func ParseSchema(kf []byte) (res *SchemaParseResult, err error) {
 	errLis, stream, parser, deferFn := setupParser(string(kf), "schema")
 
 	res = &SchemaParseResult{
-		ParseErrs: errLis,
+		ParseErrs:        errLis,
+		ParsedActions:    make(map[string][]ActionStmt),
+		ParsedProcedures: make(map[string][]ProcedureStmt),
 	}
 
 	visitor := newSchemaVisitor(stream, errLis)
+	visitor.actions = res.ParsedActions
+	visitor.procedures = res.ParsedProcedures
 
 	defer func() {
 		err = deferFn(recover())
@@ -101,46 +112,69 @@ type ProcedureParseResult struct {
 	ParseErrs ParseErrs
 	// Variables are all variables that are used in the procedure.
 	Variables map[string]*types.DataType
-	// AnonymousVariables are variables that are created in the procedure.
-	AnonymousVariables map[string]map[string]*types.DataType
+	// CompoundVariables are variables that are created in the procedure.
+	CompoundVariables map[string]struct{}
+	// AnonymousReceivers are the anonymous receivers that are used in the procedure,
+	// in the order they appear
+	AnonymousReceivers []*types.DataType
 }
 
 // ParseProcedure parses a procedure.
 // It takes the procedure definition, as well as the schema.
 // It performs type and semantic checks on the procedure.
 func ParseProcedure(proc *types.Procedure, schema *types.Schema) (res *ProcedureParseResult, err error) {
+	return analyzeProcedureAST(proc, schema, nil)
+}
+
+// analyzeProcedureAST analyzes the AST of a procedure.
+// If AST is nil, it will parse it from the provided body. This is useful because ASTs
+// with custom error positions can be passed in.
+func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []ProcedureStmt) (res *ProcedureParseResult, err error) {
 	errLis, stream, parser, deferFn := setupParser(proc.Body, "procedure")
+
 	res = &ProcedureParseResult{
-		ParseErrs:          errLis,
-		Variables:          makeSessionVars(),
-		AnonymousVariables: make(map[string]map[string]*types.DataType),
+		ParseErrs:         errLis,
+		Variables:         make(map[string]*types.DataType),
+		CompoundVariables: make(map[string]struct{}),
+	}
+
+	if ast == nil {
+		schemaVisitor := newSchemaVisitor(stream, errLis)
+		// first parse the body, then visit it.
+		res.AST = parser.Procedure_block().Accept(schemaVisitor).([]ProcedureStmt)
+	} else {
+		res.AST = ast
 	}
 
 	// set the parameters as the initial vars
+	vars := makeSessionVars()
 	for _, v := range proc.Parameters {
-		res.Variables[v.Name] = v.Type
+		vars[v.Name] = v.Type
 	}
 
 	visitor := &procedureAnalyzer{
 		sqlAnalyzer: sqlAnalyzer{
 			blockContext: blockContext{
 				schema:             schema,
-				variables:          res.Variables,
-				anonymousVariables: res.AnonymousVariables,
+				variables:          vars,
+				anonymousVariables: make(map[string]map[string]*types.DataType),
 				errs:               errLis,
 			},
 			sqlCtx: newSQLContext(),
 		},
 		procCtx: newProcedureContext(proc),
+		procResult: struct {
+			allLoopReceivers   []*loopTargetTracker
+			anonymousReceivers []*types.DataType
+			allVariables       map[string]*types.DataType
+		}{
+			allVariables: make(map[string]*types.DataType),
+		},
 	}
 
 	defer func() {
 		err = deferFn(recover())
 	}()
-
-	schemaVisitor := newSchemaVisitor(stream, errLis)
-	// first parse the body, then visit it.
-	res.AST = parser.Procedure_block().Accept(schemaVisitor).([]ProcedureStmt)
 
 	// if there are expected errors, return the parse errors.
 	if errLis.Err() != nil {
@@ -151,6 +185,27 @@ func ParseProcedure(proc *types.Procedure, schema *types.Schema) (res *Procedure
 	for _, stmt := range res.AST {
 		stmt.Accept(visitor)
 	}
+
+	for k, v := range visitor.procResult.allVariables {
+		res.Variables[k] = v
+	}
+
+	for _, v := range visitor.procResult.allLoopReceivers {
+		// if type is nil, it is a compound variable, and we add it to the loop variables
+		// if not nil, it is a value, and we add it to the other variables
+		if v.dataType == nil {
+			res.CompoundVariables[v.name.String()] = struct{}{}
+		} else {
+			res.Variables[v.name.String()] = v.dataType
+		}
+	}
+
+	// we also need to add all input variables to the variables list
+	for _, v := range proc.Parameters {
+		res.Variables[v.Name] = v.Type
+	}
+
+	res.AnonymousReceivers = visitor.procResult.anonymousReceivers
 
 	return res, err
 }
@@ -221,10 +276,24 @@ type ActionParseResult struct {
 // It requires a schema to be passed in, since actions may reference
 // schema objects.
 func ParseAction(action *types.Action, schema *types.Schema) (res *ActionParseResult, err error) {
+	return analyzeActionAST(action, schema, nil)
+}
+
+// analyzeActionAST analyzes the AST of an action.
+// If AST is nil, it will parse it from the provided body. This is useful because ASTs
+// with custom error positions can be passed in.
+func analyzeActionAST(action *types.Action, schema *types.Schema, ast []ActionStmt) (res *ActionParseResult, err error) {
 	errLis, stream, parser, deferFn := setupParser(action.Body, "action")
 
 	res = &ActionParseResult{
 		ParseErrs: errLis,
+	}
+
+	if ast == nil {
+		schemaVisitor := newSchemaVisitor(stream, errLis)
+		res.AST = parser.Action_block().Accept(schemaVisitor).([]ActionStmt)
+	} else {
+		res.AST = ast
 	}
 
 	vars := makeSessionVars()
@@ -248,10 +317,6 @@ func ParseAction(action *types.Action, schema *types.Schema) (res *ActionParseRe
 	defer func() {
 		err = deferFn(recover())
 	}()
-
-	schemaVisitor := newSchemaVisitor(stream, errLis)
-
-	res.AST = parser.Action_block().Accept(schemaVisitor).([]ActionStmt)
 
 	if errLis.Err() != nil {
 		return res, nil

@@ -200,6 +200,10 @@ func loadSchema(file string) (*types.Schema, error) {
 		return nil, err
 	}
 
+	if db.Err() != nil {
+		return nil, db.Err()
+	}
+
 	return db.Schema, nil
 }
 

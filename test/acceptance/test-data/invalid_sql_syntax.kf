@@ -8,6 +8,8 @@ table users {
     wallet text unique
 }
 
+// invalid_sql is invalid because it returns ambigous columns,
+// as it returns the same table twice.
 action invalid_sql() public {
     SELECT *
     FROM users AS u1

@@ -16,20 +16,20 @@ import (
 // Node is a node in the AST.
 type Node interface {
 	Accept(Visitor) any
-	GetNode() *Position
+	GetPosition() *Position
 	Set(r antlr.ParserRuleContext)
 	SetToken(t antlr.Token)
 }
 
-type typecastable struct {
+type Typecastable struct {
 	TypeCast *types.DataType
 }
 
-func (t *typecastable) Cast(t2 *types.DataType) {
+func (t *Typecastable) Cast(t2 *types.DataType) {
 	t.TypeCast = t2
 }
 
-func (t *typecastable) GetTypeCast() *types.DataType {
+func (t *Typecastable) GetTypeCast() *types.DataType {
 	return t.TypeCast
 }
 
@@ -41,7 +41,7 @@ type Expression interface {
 // ExpressionLiteral is a literal expression.
 type ExpressionLiteral struct {
 	Position
-	typecastable
+	Typecastable
 	Type *types.DataType
 	// Value is the value of the literal.
 	// It must be of type string, int64, bool, *uint256.Int, *decimal.Decimal,
@@ -95,12 +95,14 @@ func literalToString(value any) (string, error) {
 type ExpressionCall interface {
 	Expression
 	Cast(*types.DataType)
+	GetTypeCast() *types.DataType
+	FunctionName() string
 }
 
 // ExpressionFunctionCall is a function call expression.
 type ExpressionFunctionCall struct {
 	Position
-	typecastable
+	Typecastable
 	// Name is the name of the function.
 	Name string
 	// Args are the arguments to the function call.
@@ -119,10 +121,14 @@ func (e *ExpressionFunctionCall) Accept(v Visitor) any {
 	return v.VisitExpressionFunctionCall(e)
 }
 
+func (e *ExpressionFunctionCall) FunctionName() string {
+	return e.Name
+}
+
 // ExpressionForeignCall is a call to an external procedure.
 type ExpressionForeignCall struct {
 	Position
-	typecastable
+	Typecastable
 	// Name is the name of the function.
 	Name string
 	// ContextualArgs are arguments that are contextual to the function call.
@@ -137,13 +143,17 @@ func (e *ExpressionForeignCall) Accept(v Visitor) any {
 	return v.VisitExpressionForeignCall(e)
 }
 
+func (e *ExpressionForeignCall) FunctionName() string {
+	return e.Name
+}
+
 var _ ExpressionCall = (*ExpressionForeignCall)(nil)
 
 // ExpressionVariable is a variable.
 // This can either be $ or @ variables.
 type ExpressionVariable struct {
 	Position
-	typecastable
+	Typecastable
 	// Name is the naem of the variable,
 	// without the $ or @.
 	Name string
@@ -171,7 +181,7 @@ const (
 // ExpressionArrayAccess accesses an array value.
 type ExpressionArrayAccess struct {
 	Position
-	typecastable
+	Typecastable
 	// Array is the array that is being accessed.
 	Array Expression
 	// Index is the index that is being accessed.
@@ -185,7 +195,7 @@ func (e *ExpressionArrayAccess) Accept(v Visitor) any {
 // ExpressionMakeArray makes a new array.
 type ExpressionMakeArray struct {
 	Position
-	typecastable
+	Typecastable
 	Values []Expression
 }
 
@@ -196,7 +206,7 @@ func (e *ExpressionMakeArray) Accept(v Visitor) any {
 // ExpressionFieldAccess accesses a field in a record.
 type ExpressionFieldAccess struct {
 	Position
-	typecastable
+	Typecastable
 	// Record is the record that is being accessed.
 	Record Expression
 	// Field is the field that is being accessed.
@@ -210,7 +220,7 @@ func (e *ExpressionFieldAccess) Accept(v Visitor) any {
 // ExpressionParenthesized is a parenthesized expression.
 type ExpressionParenthesized struct {
 	Position
-	typecastable
+	Typecastable
 	// Inner is the inner expression.
 	Inner Expression
 }
@@ -317,7 +327,7 @@ const (
 // ExpressionColumn is a column in a table.
 type ExpressionColumn struct {
 	Position
-	typecastable
+	Typecastable
 	// Table is the table that the column is in.
 	Table string // can be empty
 	// Column is the name of the column.
@@ -418,7 +428,7 @@ func (e *ExpressionIn) Accept(v Visitor) any {
 // ExpressionSubquery is a subquery expression.
 type ExpressionSubquery struct {
 	Position
-	typecastable
+	Typecastable
 	Not      bool
 	Exists   bool
 	Subquery *SelectStatement
@@ -754,7 +764,7 @@ type ActionStmtSQL struct {
 }
 
 func (a *ActionStmtSQL) Accept(v Visitor) any {
-	return v.VisitSQLStatement(a.SQL)
+	return v.VisitActionStmtSQL(a)
 }
 
 func (a *ActionStmtSQL) ActionStmt() ActionStatementTypes {
@@ -770,7 +780,7 @@ type ActionStmtExtensionCall struct {
 }
 
 func (a *ActionStmtExtensionCall) Accept(v Visitor) any {
-	return v.VisitExtensionCallStmt(a)
+	return v.VisitActionStmtExtensionCall(a)
 }
 
 func (a *ActionStmtExtensionCall) ActionStmt() ActionStatementTypes {
@@ -784,7 +794,7 @@ type ActionStmtActionCall struct {
 }
 
 func (a *ActionStmtActionCall) Accept(v Visitor) any {
-	return v.VisitActionCallStmt(a)
+	return v.VisitActionStmtActionCall(a)
 }
 
 func (a *ActionStmtActionCall) ActionStmt() ActionStatementTypes {
@@ -818,34 +828,22 @@ func (p *ProcedureStmtDeclaration) Accept(v Visitor) any {
 	return v.VisitProcedureStmtDeclaration(p)
 }
 
-// ProcedureStmtAssignment is a variable assignment in a procedure.
+// ProcedureStmtAssign is a variable assignment in a procedure.
 // It should only be called on variables that have already been declared.
-type ProcedureStmtAssignment struct {
+type ProcedureStmtAssign struct {
 	baseProcedureStmt
 	// Variable is the variable that is being assigned.
 	Variable *ExpressionVariable
-	// Value is the value that is being assigned.
-	Value Expression
-}
-
-func (p *ProcedureStmtAssignment) Accept(v Visitor) any {
-	return v.VisitProcedureStmtAssignment(p)
-}
-
-// ProcedureStmtDeclareAndAssign declares and assigns a variable in a procedure.
-type ProcedureStmtDeclareAndAssign struct {
-	baseProcedureStmt
-	// Variable is the variable that is being declared and assigned.
-	Variable *ExpressionVariable
 	// Type is the type of the variable.
-	// If not set, the type will be inferred from the value.
-	Type *types.DataType // can be nil
+	// It can be nil if the variable is not being assigned,
+	// or if the type should be inferred.
+	Type *types.DataType
 	// Value is the value that is being assigned.
 	Value Expression
 }
 
-func (p *ProcedureStmtDeclareAndAssign) Accept(v Visitor) any {
-	return v.VisitProcedureStmtDeclareAndAssign(p)
+func (p *ProcedureStmtAssign) Accept(v Visitor) any {
+	return v.VisitProcedureStmtAssignment(p)
 }
 
 // ProcedureStmtCall is a call to another procedure or built-in function.
@@ -999,8 +997,8 @@ func (p *ProcedureStmtReturnNext) Accept(v Visitor) any {
 type Visitor interface {
 	ProcedureVisitor
 	VisitActionStmtSQL(*ActionStmtSQL) any
-	VisitExtensionCallStmt(*ActionStmtExtensionCall) any
-	VisitActionCallStmt(*ActionStmtActionCall) any
+	VisitActionStmtExtensionCall(*ActionStmtExtensionCall) any
+	VisitActionStmtActionCall(*ActionStmtActionCall) any
 }
 
 // ProcedureVisitor includes visit methods only needed to analyze procedures.
@@ -1008,8 +1006,7 @@ type Visitor interface {
 type ProcedureVisitor interface {
 	SQLVisitor
 	VisitProcedureStmtDeclaration(*ProcedureStmtDeclaration) any
-	VisitProcedureStmtAssignment(*ProcedureStmtAssignment) any
-	VisitProcedureStmtDeclareAndAssign(*ProcedureStmtDeclareAndAssign) any
+	VisitProcedureStmtAssignment(*ProcedureStmtAssign) any
 	VisitProcedureStmtCall(*ProcedureStmtCall) any
 	VisitProcedureStmtForLoop(*ProcedureStmtForLoop) any
 	VisitLoopTermRange(*LoopTermRange) any
@@ -1075,11 +1072,11 @@ func (s *UnimplementedSqlVisitor) VisitActionStmtSQL(p0 *ActionStmtSQL) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedSqlVisitor) VisitExtensionCallStmt(p0 *ActionStmtExtensionCall) any {
+func (s *UnimplementedSqlVisitor) VisitActionStmtExtensionCall(p0 *ActionStmtExtensionCall) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedSqlVisitor) VisitActionCallStmt(p0 *ActionStmtActionCall) any {
+func (s *UnimplementedSqlVisitor) VisitActionStmtActionCall(p0 *ActionStmtActionCall) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
@@ -1093,11 +1090,7 @@ func (s *UnimplementedProcedureVisitor) VisitProcedureStmtDeclaration(p0 *Proced
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssignment) any {
-	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
-}
-
-func (s *UnimplementedProcedureVisitor) VisitProcedureStmtDeclareAndAssign(p0 *ProcedureStmtDeclareAndAssign) any {
+func (s *UnimplementedProcedureVisitor) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssign) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 

@@ -211,7 +211,7 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema, txi
 	// The function ensures that, whatever target procedure is chosen at runtime, that
 	// its input and output types are compatible with the expected types.
 	for _, proc := range schema.ForeignProcedures {
-		stmt, err := generate.GenerateForeignProcedure(proc)
+		stmt, err := generate.GenerateForeignProcedure(proc, schemaName)
 		if err != nil {
 			return err
 		}

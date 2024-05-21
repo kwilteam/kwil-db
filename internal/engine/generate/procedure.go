@@ -15,6 +15,11 @@ func GenerateProcedure(proc *types.Procedure, schema *types.Schema, pgSchema str
 		if e := recover(); e != nil {
 			err = fmt.Errorf("panic: %v", e)
 		}
+
+		// annotate the error with the procedure name
+		if err != nil {
+			err = fmt.Errorf("procedure %s: %w", proc.Name, err)
+		}
 	}()
 
 	res, err := parse.ParseProcedure(proc, schema)
@@ -44,7 +49,6 @@ func GenerateProcedure(proc *types.Procedure, schema *types.Schema, pgSchema str
 		ret.IsTable = proc.Returns.IsTable
 		ret.Fields = make([]*types.NamedType, len(proc.Returns.Fields))
 		for i, field := range proc.Returns.Fields {
-
 			if ret.IsTable {
 				ret.Fields[i] = field
 			} else {
@@ -66,14 +70,24 @@ func GenerateProcedure(proc *types.Procedure, schema *types.Schema, pgSchema str
 
 	// we need to get the variables and anonymous variables (loop targets)
 	for _, v := range order.OrderMap(res.Variables) {
+		if v.Key[0] != '$' {
+			panic(fmt.Sprintf("internal bug: expected variable name to start with $, got name %s", v.Key))
+		}
+
 		analyzed.DeclaredVariables = append(analyzed.DeclaredVariables, &types.NamedType{
-			Name: v.Key,
+			Name: formatParameterName(v.Key[1:]),
 			Type: v.Value,
 		})
 	}
 
-	for _, v := range order.OrderMap(res.AnonymousVariables) {
-		analyzed.LoopTargets = append(analyzed.LoopTargets, v.Key)
+	for _, v := range order.OrderMap(res.CompoundVariables) {
+		// TODO: this isn't a perfect solution. Only loop targets for
+		// SQL statements are put here. Loops targets over ranges and arrays
+		// would be raw variables. These should be declared as their base types, not RECORD.
+		if v.Key[0] != '$' {
+			panic(fmt.Sprintf("internal bug: expected variable name to start with $, got name %s", v.Key))
+		}
+		analyzed.LoopTargets = append(analyzed.LoopTargets, formatParameterName(v.Key[1:]))
 	}
 
 	// we need to visit the AST to get the generated body
@@ -81,6 +95,7 @@ func GenerateProcedure(proc *types.Procedure, schema *types.Schema, pgSchema str
 		sqlGenerator: sqlGenerator{
 			pgSchema: pgSchema,
 		},
+		procedure: proc,
 	}
 
 	str := strings.Builder{}
@@ -89,8 +104,15 @@ func GenerateProcedure(proc *types.Procedure, schema *types.Schema, pgSchema str
 	}
 
 	// little sanity check:
-	if len(res.AnonymousVariables) != sqlGen.anonymousReceivers {
-		return "", fmt.Errorf("internal bug: expected %d anonymous variables, got %d", sqlGen.anonymousReceivers, len(res.AnonymousVariables))
+	if len(res.AnonymousReceivers) != sqlGen.anonymousReceivers {
+		return "", fmt.Errorf("internal bug: expected %d anonymous variables, got %d", sqlGen.anonymousReceivers, len(res.CompoundVariables))
+	}
+	// append all anonymous variables to the declared variables
+	for i, v := range res.AnonymousReceivers {
+		analyzed.DeclaredVariables = append(analyzed.DeclaredVariables, &types.NamedType{
+			Name: formatAnonymousReceiver(i),
+			Type: v,
+		})
 	}
 
 	analyzed.Body = str.String()
@@ -196,6 +218,12 @@ func generateProcedureWrapper(proc *analyzedProcedure, pgSchema string) (string,
 	}
 
 	str.WriteString("AS $$\n")
+
+	// we can only have conflict if we use RETURN TABLE. Since we don't allow
+	// direct assignment to columns like plpgsql, we always want these conflicts
+	// to refer to the columns.
+	// see: https://www.postgresql.org/docs/current/plpgsql-implementation.html
+	str.WriteString("#variable_conflict use_column\n")
 
 	// writing the variable declarations
 

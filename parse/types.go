@@ -35,9 +35,9 @@ func (n *Position) SetToken(t antlr.Token) {
 	n.EndCol = t.GetColumn()
 }
 
-// GetNode returns the Position.
+// GetPosition returns the Position.
 // It is useful if the Position is embedded in another struct.
-func (n Position) GetNode() *Position {
+func (n Position) GetPosition() *Position {
 	return &n
 }
 
@@ -150,11 +150,14 @@ func ShapesMatch(a1, a2 []*Attribute) bool {
 // and the name that caused the conflict. It will also discard any
 // primary keys, and will unmark any unique columns.
 func Flatten(rels ...*Relation) (res []*Attribute, col string, err error) {
+	var attrs []*Attribute
 	for _, r := range rels {
-		res, col, err = Coalesce(append(res, r.Attributes...)...)
-		if err != nil {
-			return nil, col, err
-		}
+		attrs = append(attrs, r.Attributes...)
+	}
+
+	res, col, err = Coalesce(attrs...)
+	if err != nil {
+		return nil, col, err
 	}
 
 	return res, "", nil

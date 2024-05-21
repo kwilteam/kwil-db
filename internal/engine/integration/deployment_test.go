@@ -96,7 +96,7 @@ func Test_Deployment(t *testing.T) {
 			}
 
 			procedure known_procedure_2() public {
-				for $row in select * from known_procedure() {
+				for $row in select * from known_procedure() as k {
 
 				}
 			}
@@ -123,7 +123,7 @@ func Test_Deployment(t *testing.T) {
 				$int1 int := get_scalar['dbid', 'get_scalar'](1);
 				$int2 int := get_named_scalar['dbid', 'get_scalar'](1);
 
-				return select * from get_tbl['dbid', 'get_table']();
+				return select * from get_tbl['dbid', 'get_table']() as u;
 			}
 			`,
 		},
@@ -174,7 +174,7 @@ func Test_Deployment(t *testing.T) {
 		{
 			name: "action references unknown foreign procedure",
 			schema: `database select_join;
-			
+
 			action get_all() public view {
 				select * from get_tbl['dbid', 'get_tbl']();
 			}

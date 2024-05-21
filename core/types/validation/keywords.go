@@ -113,4 +113,7 @@ var reservedWords = map[string]struct{}{
 	"where":             {},
 	"window":            {},
 	"with":              {},
+	// below are keywords that are not restricted by postgres, but are
+	// restricted by kwil
+	"excluded": {},
 }

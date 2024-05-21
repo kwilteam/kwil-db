@@ -25,8 +25,8 @@ type Schema struct {
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
-func (s *Schema) Clean() error {
-	err := cleanIdent(&s.Name)
+func (s *Schema) Clean() (err error) {
+	err = cleanIdent(&s.Name)
 	if err != nil {
 		return err
 	}
@@ -1228,7 +1228,7 @@ func (c *DataType) Equals(other *DataType) bool {
 }
 
 func (c *DataType) IsNumeric() bool {
-	return c.Name == intStr || c.Name == DecimalStr || c.Name == uint256Str
+	return c.Name == intStr || c.Name == DecimalStr || c.Name == uint256Str || c.Name == unknownStr
 }
 
 // declared DataType constants.

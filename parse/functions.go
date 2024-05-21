@@ -21,8 +21,15 @@ var (
 
 				return types.IntType, nil
 			},
-			PGFormat: func(inputs []string) string {
-				return fmt.Sprintf("abs(%s)", inputs[0])
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("abs")
+				}
+				if distinct {
+					return "", errDistinct("abs")
+				}
+
+				return fmt.Sprintf("abs(%s)", inputs[0]), nil
 			},
 		},
 		"error": {
@@ -37,8 +44,15 @@ var (
 
 				return types.NullType, nil
 			},
-			PGFormat: func(inputs []string) string {
-				return fmt.Sprintf("error(%s)", inputs[0])
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("error")
+				}
+				if distinct {
+					return "", errDistinct("error")
+				}
+
+				return fmt.Sprintf("error(%s)", inputs[0]), nil
 			},
 		},
 		"length": {
@@ -53,8 +67,15 @@ var (
 
 				return types.IntType, nil
 			},
-			PGFormat: func(inputs []string) string {
-				return fmt.Sprintf("length(%s)", inputs[0])
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", fmt.Errorf("cannot use * with length")
+				}
+				if distinct {
+					return "", fmt.Errorf("cannot use distinct with length")
+				}
+
+				return fmt.Sprintf("length(%s)", inputs[0]), nil
 			},
 		},
 		"lower": {
@@ -69,8 +90,15 @@ var (
 
 				return types.TextType, nil
 			},
-			PGFormat: func(inputs []string) string {
-				return fmt.Sprintf("lower(%s)", inputs[0])
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("lower")
+				}
+				if distinct {
+					return "", errDistinct("lower")
+				}
+
+				return fmt.Sprintf("lower(%s)", inputs[0]), nil
 			},
 		},
 		"upper": {
@@ -85,8 +113,15 @@ var (
 
 				return types.TextType, nil
 			},
-			PGFormat: func(inputs []string) string {
-				return fmt.Sprintf("upper(%s)", inputs[0])
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("upper")
+				}
+				if distinct {
+					return "", errDistinct("upper")
+				}
+
+				return fmt.Sprintf("upper(%s)", inputs[0]), nil
 			},
 		},
 		"format": {
@@ -101,8 +136,15 @@ var (
 
 				return types.TextType, nil
 			},
-			PGFormat: func(inputs []string) string {
-				return fmt.Sprintf("format(%s)", strings.Join(inputs, ", "))
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("format")
+				}
+				if distinct {
+					return "", errDistinct("format")
+				}
+
+				return fmt.Sprintf("format(%s)", strings.Join(inputs, ", ")), nil
 			},
 		},
 		"uuid_generate_v5": {
@@ -122,8 +164,15 @@ var (
 
 				return types.UUIDType, nil
 			},
-			PGFormat: func(inputs []string) string {
-				return fmt.Sprintf("uuid_generate_v5(%s)", strings.Join(inputs, ", "))
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("uuid_generate_v5")
+				}
+				if distinct {
+					return "", errDistinct("uuid_generate_v5")
+				}
+
+				return fmt.Sprintf("uuid_generate_v5(%s)", strings.Join(inputs, ", ")), nil
 			},
 		},
 		// array functions
@@ -147,8 +196,15 @@ var (
 
 				return args[0], nil
 			},
-			PGFormat: func(inputs []string) string {
-				return fmt.Sprintf("array_append(%s)", strings.Join(inputs, ", "))
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("array_append")
+				}
+				if distinct {
+					return "", errDistinct("array_append")
+				}
+
+				return fmt.Sprintf("array_append(%s)", strings.Join(inputs, ", ")), nil
 			},
 		},
 		"array_prepend": {
@@ -171,8 +227,15 @@ var (
 
 				return args[1], nil
 			},
-			PGFormat: func(inputs []string) string {
-				return fmt.Sprintf("array_prepend(%s)", strings.Join(inputs, ", "))
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("array_prepend")
+				}
+				if distinct {
+					return "", errDistinct("array_prepend")
+				}
+
+				return fmt.Sprintf("array_prepend(%s)", strings.Join(inputs, ", ")), nil
 			},
 		},
 		"array_cat": {
@@ -195,8 +258,15 @@ var (
 
 				return args[0], nil
 			},
-			PGFormat: func(inputs []string) string {
-				return fmt.Sprintf("array_cat(%s)", strings.Join(inputs, ", "))
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("array_cat")
+				}
+				if distinct {
+					return "", errDistinct("array_cat")
+				}
+
+				return fmt.Sprintf("array_cat(%s)", strings.Join(inputs, ", ")), nil
 			},
 		},
 		"array_length": {
@@ -211,8 +281,15 @@ var (
 
 				return types.IntType, nil
 			},
-			PGFormat: func(inputs []string) string {
-				return fmt.Sprintf("array_length(%s, 1)", inputs[0])
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("array_length")
+				}
+				if distinct {
+					return "", errDistinct("array_length")
+				}
+
+				return fmt.Sprintf("array_length(%s, 1)", inputs[0]), nil
 			},
 		},
 		// Aggregate functions
@@ -225,12 +302,15 @@ var (
 				return types.IntType, nil
 			},
 			IsAggregate: true,
-			PGFormat: func(inputs []string) string {
-				if len(inputs) == 0 {
-					return "count(*)"
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "count(*)", nil
+				}
+				if distinct {
+					return fmt.Sprintf("count(DISTINCT %s)", inputs[0]), nil
 				}
 
-				return fmt.Sprintf("count(%s)", inputs[0])
+				return fmt.Sprintf("count(%s)", inputs[0]), nil
 			},
 			StarArgReturn: types.IntType,
 		},
@@ -247,13 +327,28 @@ var (
 				return types.IntType, nil
 			},
 			IsAggregate: true,
-			PGFormat: func(inputs []string) string {
-				return fmt.Sprintf("sum(%s)", inputs[0])
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("sum")
+				}
+				if distinct {
+					return "sum(DISTINCT %s)", nil
+				}
+
+				return fmt.Sprintf("sum(%s)", inputs[0]), nil
 			},
 			StarArgReturn: types.IntType,
 		},
 	}
 )
+
+func errDistinct(funcName string) error {
+	return fmt.Errorf(`%w: cannot use DISTINCT with function "%s"`, ErrFunctionSignature, funcName)
+}
+
+func errStar(funcName string) error {
+	return fmt.Errorf(`%w: cannot use * with function "%s"`, ErrFunctionSignature, funcName)
+}
 
 // FunctionDefinition defines a function that can be used in the database.
 type FunctionDefinition struct {
@@ -270,8 +365,11 @@ type FunctionDefinition struct {
 	// For example, the function `sum` would format the inputs as `sum($1)`.
 	// It will be given the same amount of inputs as ValidateArgs() was given.
 	// ValidateArgs will always be called first.
-	PGFormat func(inputs []string) string
+	PGFormat FormatFunc
 }
+
+// FormatFunc is a function that formats a string of inputs for a SQL function.
+type FormatFunc func(inputs []string, distinct bool, star bool) (string, error)
 
 func wrapErrArgumentNumber(expected, got int) error {
 	return fmt.Errorf("%w: expected %d, got %d", ErrFunctionSignature, expected, got)

@@ -99,11 +99,11 @@ $$ LANGUAGE plpgsql;
 // GenerateForeignProcedure generates a plpgsql function that allows the schema to dynamically
 // call procedures in other schemas, expecting certain inputs and return values. It will prefix
 // the generated function with _fp_ (for "foreign procedure").
-func GenerateForeignProcedure(proc *types.ForeignProcedure) (string, error) {
+func GenerateForeignProcedure(proc *types.ForeignProcedure, pgSchema string) (string, error) {
 	str := strings.Builder{}
 
 	// first write the header
-	str.WriteString(fmt.Sprintf(`CREATE OR REPLACE FUNCTION _fp_%s(_dbid TEXT, _procedure TEXT`, proc.Name))
+	str.WriteString(fmt.Sprintf(`CREATE OR REPLACE FUNCTION %s._fp_%s(_dbid TEXT, _procedure TEXT`, pgSchema, proc.Name))
 
 	// we now need to format the inputs. Inputs will be named _arg1, _arg2, etc.
 	// we start at 1 since postgres is 1-indexed.

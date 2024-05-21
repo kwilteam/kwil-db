@@ -82,7 +82,7 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 	for idx, action := range schema.Actions {
 		instructions := make([]instruction, 0)
 
-		actionStmt, err := generate.GenerateActionBody(action, schema)
+		actionStmt, err := generate.GenerateActionBody(action, schema, dbidSchema(schema.DBID()))
 		if err != nil {
 			return nil, err
 		}

@@ -68,7 +68,7 @@ type InlineExpression struct {
 
 // GenerateActionBody generates the body of an action.
 // If the action is a VIEW and contains mutative SQL, it will return an error.
-func GenerateActionBody(action *types.Action, schema *types.Schema) (stmts []GeneratedActionStmt, err error) {
+func GenerateActionBody(action *types.Action, schema *types.Schema, pgSchema string) (stmts []GeneratedActionStmt, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			var ok bool
@@ -94,7 +94,12 @@ func GenerateActionBody(action *types.Action, schema *types.Schema) (stmts []Gen
 		return nil, res.ParseErrs.Err()
 	}
 
-	g := &actionGenerator{}
+	g := &actionGenerator{
+		sqlGenerator: sqlGenerator{
+			pgSchema:         pgSchema,
+			numberParameters: true,
+		},
+	}
 	for _, stmt := range res.AST {
 		stmt.Accept(g)
 	}
@@ -106,28 +111,27 @@ func GenerateActionBody(action *types.Action, schema *types.Schema) (stmts []Gen
 // it totally relies on the SQL generator, except for the action-specific
 // visits and Variables, since it needs to rewrite the variables to be numbered.
 type actionGenerator struct {
-	sqlParamRewriter
+	sqlGenerator
 	// actions is the order of all actions that are generated.
 	actions []GeneratedActionStmt
-	// paramOrder is the name of the parameters in the order they appear in the action.
-	// Since the actionGenerator rewrites actions from named parameters to numbered parameters,
-	// the order of the named parameters is stored here.
-	paramOrder []string
 }
 
 func (a *actionGenerator) VisitActionStmtSQL(p0 *parse.ActionStmtSQL) any {
-	a.paramOrder = nil
+	a.sqlGenerator.orderedParams = nil // reset order since it is a new statement
 	stmt := p0.SQL.Accept(a).(string)
+
+	params := make([]string, len(a.sqlGenerator.orderedParams))
+	copy(params, a.sqlGenerator.orderedParams)
 
 	a.actions = append(a.actions, &ActionSQL{
 		Statement:      stmt + ";",
-		ParameterOrder: a.paramOrder,
+		ParameterOrder: params,
 	})
 
 	return nil
 }
 
-func (a *actionGenerator) VisitExtensionCallStmt(p0 *parse.ActionStmtExtensionCall) any {
+func (a *actionGenerator) VisitActionStmtExtensionCall(p0 *parse.ActionStmtExtensionCall) any {
 	inlines := make([]*InlineExpression, len(p0.Args))
 	for i, arg := range p0.Args {
 		inlines[i] = a.createInline(arg)
@@ -143,7 +147,7 @@ func (a *actionGenerator) VisitExtensionCallStmt(p0 *parse.ActionStmtExtensionCa
 	return nil
 }
 
-func (a *actionGenerator) VisitActionCallStmt(p0 *parse.ActionStmtActionCall) any {
+func (a *actionGenerator) VisitActionStmtActionCall(p0 *parse.ActionStmtActionCall) any {
 	inlines := make([]*InlineExpression, len(p0.Args))
 	for i, arg := range p0.Args {
 		inlines[i] = a.createInline(arg)
@@ -159,12 +163,12 @@ func (a *actionGenerator) VisitActionCallStmt(p0 *parse.ActionStmtActionCall) an
 
 // createInline creates an inline from an expression
 func (a *actionGenerator) createInline(p0 parse.Expression) *InlineExpression {
-	a.paramOrder = nil
+	a.sqlGenerator.orderedParams = nil // reset order since it is a new statement
 
 	str := p0.Accept(a).(string)
 
-	params := make([]string, len(a.paramOrder))
-	copy(params, a.paramOrder)
+	params := make([]string, len(a.sqlGenerator.orderedParams))
+	copy(params, a.sqlGenerator.orderedParams)
 
 	return &InlineExpression{
 		Statement:     "SELECT " + str + ";",

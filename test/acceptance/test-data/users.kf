@@ -63,7 +63,9 @@ procedure get_user_by_owner($address text) public view returns (id uuid, age int
 // increment_post_count increments a user's post count, identified by the owner.
 // it returns the user id and the new post count
 procedure increment_post_count($address text) private returns (id uuid, post_count int) {
-    for $row in UPDATE users SET post_count = post_count+1 WHERE address = $address returning id, post_count {
+    UPDATE users SET post_count = post_count+1 WHERE address = $address;
+
+    for $row in select id, post_count from users where address = $address {
         return $row.id, $row.post_count;
     }
 
@@ -107,7 +109,7 @@ procedure get_recent_posts_by_size($username text, $size int, $limit int) public
     }
 
     $count int := 0;
-    for $row in get_recent_posts($username) {
+    for $row in select * from get_recent_posts($username) {
         if $count == $limit {
             break;
         }
@@ -124,7 +126,7 @@ procedure get_recent_posts_by_size($username text, $size int, $limit int) public
 procedure reverse_latest_posts($username text, $limit int) public view returns (content text[]) {
     $content text[];
 
-    for $post in get_recent_posts($username) {
+    for $post in select * from get_recent_posts($username) {
         $content := array_append($content, $post.content);
     }
 
@@ -136,7 +138,7 @@ procedure reverse_latest_posts($username text, $limit int) public view returns (
 procedure reverse_array($arr text[]) public view returns (reversed text[]) {
     $rev text[];
 
-    for $i in 1:array_length($arr) {
+    for $i in 1..array_length($arr) {
         $rev := array_prepend($arr[$i], $rev);
     }
 

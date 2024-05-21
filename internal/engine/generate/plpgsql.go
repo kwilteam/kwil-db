@@ -17,7 +17,16 @@ import (
 // sqlVisitor creates Postgres compatible SQL from an AST
 type sqlGenerator struct {
 	parse.UnimplementedSqlVisitor
+	// pgSchema is the schema name to prefix to the table names
 	pgSchema string
+	// numberParameters is a flag that indicates if we should number parameters as $1, $2, etc.,
+	// instead of formatting their variable names. It should be set to true if we want to execute
+	// SQL directly against postgres, instead of using it in a procedure.
+	numberParameters bool
+	// orderedParams is the order of parameters in the order they appear in the statement.
+	// It is only set if numberParameters is true. For example, the statement SELECT $1, $2
+	// would have orderedParams = ["$1", "$2"]
+	orderedParams []string
 }
 
 func (s *sqlGenerator) VisitExpressionLiteral(p0 *parse.ExpressionLiteral) any {
@@ -40,30 +49,36 @@ func (s *sqlGenerator) VisitExpressionLiteral(p0 *parse.ExpressionLiteral) any {
 func (s *sqlGenerator) VisitExpressionFunctionCall(p0 *parse.ExpressionFunctionCall) any {
 	str := strings.Builder{}
 
-	// if this is not a built-in function, we need to prefix it with
-	// the schema name, since it is a local procedure
-	_, ok := parse.Functions[p0.Name]
-	if !ok {
-		str.WriteString(s.pgSchema)
-		str.WriteString(".")
+	args := make([]string, len(p0.Args))
+	for i, arg := range p0.Args {
+		args[i] = arg.Accept(s).(string)
 	}
 
-	str.WriteString(p0.Name)
-	str.WriteString("(")
-	if p0.Star {
-		str.WriteString("*")
-	} else {
-		if p0.Distinct {
-			str.WriteString("DISTINCT ")
-		}
-		for i, arg := range p0.Args {
+	// if this is not a built-in function, we need to prefix it with
+	// the schema name, since it is a local procedure
+	fn, ok := parse.Functions[p0.Name]
+	if !ok {
+		// if not found, it is a local procedure
+		str.WriteString(s.pgSchema)
+		str.WriteString(".")
+		str.WriteString(p0.Name)
+		str.WriteString("(")
+		for i, arg := range args {
 			if i > 0 {
 				str.WriteString(", ")
 			}
-			str.WriteString(arg.Accept(s).(string))
+			str.WriteString(arg)
 		}
+		str.WriteString(")")
+		typeCast(p0, &str)
+		return str.String()
 	}
-	str.WriteString(")")
+
+	pgFmt, err := fn.PGFormat(args, p0.Distinct, p0.Star)
+	if err != nil {
+		panic(err)
+	}
+	str.WriteString(pgFmt)
 
 	typeCast(p0, &str)
 
@@ -104,6 +119,23 @@ func (s *sqlGenerator) VisitExpressionForeignCall(p0 *parse.ExpressionForeignCal
 }
 
 func (s *sqlGenerator) VisitExpressionVariable(p0 *parse.ExpressionVariable) any {
+	if s.numberParameters {
+		str := p0.String()
+
+		// if it already exists, we write it as that index.
+		for i, v := range s.orderedParams {
+			if v == str {
+				return "$" + fmt.Sprint(i+1)
+			}
+		}
+
+		// otherwise, we add it to the list.
+		// Postgres uses $1, $2, etc. for numbered parameters.
+
+		s.orderedParams = append(s.orderedParams, str)
+		return "$" + fmt.Sprint(len(s.orderedParams))
+	}
+
 	str := strings.Builder{}
 	str.WriteString(formatVariable(p0))
 	typeCast(p0, &str)
@@ -455,8 +487,10 @@ func (s *sqlGenerator) VisitResultColumnWildcard(p0 *parse.ResultColumnWildcard)
 
 func (s *sqlGenerator) VisitRelationTable(p0 *parse.RelationTable) any {
 	str := strings.Builder{}
-	str.WriteString(s.pgSchema)
-	str.WriteString(".")
+	if s.pgSchema != "" {
+		str.WriteString(s.pgSchema)
+		str.WriteString(".")
+	}
 	str.WriteString(p0.Table)
 	if p0.Alias != "" {
 		str.WriteString(" AS ")
@@ -469,16 +503,22 @@ func (s *sqlGenerator) VisitRelationSubquery(p0 *parse.RelationSubquery) any {
 	str := strings.Builder{}
 	str.WriteString("(")
 	str.WriteString(p0.Subquery.Accept(s).(string))
-	str.WriteString(") AS ")
-	str.WriteString(p0.Alias)
+	str.WriteString(") ")
+	if p0.Alias != "" {
+		str.WriteString("AS ")
+		str.WriteString(p0.Alias)
+	}
 	return str.String()
 }
 
 func (s *sqlGenerator) VisitRelationFunctionCall(p0 *parse.RelationFunctionCall) any {
 	str := strings.Builder{}
 	str.WriteString(p0.FunctionCall.Accept(s).(string))
-	str.WriteString(" AS ")
-	str.WriteString(p0.Alias)
+	str.WriteString(" ")
+	if p0.Alias != "" {
+		str.WriteString("AS ")
+		str.WriteString(p0.Alias)
+	}
 	return str.String()
 }
 
@@ -498,6 +538,10 @@ func (s *sqlGenerator) VisitJoin(p0 *parse.Join) any {
 func (s *sqlGenerator) VisitUpdateStatement(p0 *parse.UpdateStatement) any {
 	str := strings.Builder{}
 	str.WriteString("UPDATE ")
+	if s.pgSchema != "" {
+		str.WriteString(s.pgSchema)
+		str.WriteString(".")
+	}
 	str.WriteString(p0.Table)
 	if p0.Alias != "" {
 		str.WriteString(" AS ")
@@ -540,6 +584,12 @@ func (s *sqlGenerator) VisitUpdateSetClause(p0 *parse.UpdateSetClause) any {
 func (s *sqlGenerator) VisitDeleteStatement(p0 *parse.DeleteStatement) any {
 	str := strings.Builder{}
 	str.WriteString("DELETE FROM ")
+
+	if s.pgSchema != "" {
+		str.WriteString(s.pgSchema)
+		str.WriteString(".")
+	}
+
 	str.WriteString(p0.Table)
 	if p0.Alias != "" {
 		str.WriteString(" AS ")
@@ -567,6 +617,11 @@ func (s *sqlGenerator) VisitDeleteStatement(p0 *parse.DeleteStatement) any {
 func (s *sqlGenerator) VisitInsertStatement(p0 *parse.InsertStatement) any {
 	str := strings.Builder{}
 	str.WriteString("INSERT INTO ")
+	if s.pgSchema != "" {
+		str.WriteString(s.pgSchema)
+		str.WriteString(".")
+	}
+
 	str.WriteString(p0.Table)
 	if p0.Alias != "" {
 		str.WriteString(" AS ")
@@ -674,6 +729,8 @@ type procedureGenerator struct {
 	// we should declare. This will be cross-referenced with the
 	// analyzer to ensure we declare the correct amount.
 	anonymousReceivers int
+	// procedure is the procedure we are generating code for
+	procedure *types.Procedure
 }
 
 var _ parse.ProcedureVisitor = &procedureGenerator{}
@@ -683,17 +740,18 @@ func (p *procedureGenerator) VisitProcedureStmtDeclaration(p0 *parse.ProcedureSt
 	return ""
 }
 
-func (p *procedureGenerator) VisitProcedureStmtAssignment(p0 *parse.ProcedureStmtAssignment) any {
-	varName := p0.Variable.Accept(p).(string)
-	return varName + " := " + p0.Value.Accept(p).(string) + ";\n"
-}
-
-func (p *procedureGenerator) VisitProcedureStmtDeclareAndAssign(p0 *parse.ProcedureStmtDeclareAndAssign) any {
+func (p *procedureGenerator) VisitProcedureStmtAssignment(p0 *parse.ProcedureStmtAssign) any {
 	varName := p0.Variable.Accept(p).(string)
 	return varName + " := " + p0.Value.Accept(p).(string) + ";\n"
 }
 
 func (p *procedureGenerator) VisitProcedureStmtCall(p0 *parse.ProcedureStmtCall) any {
+	call := p0.Call.Accept(p).(string)
+
+	if len(p0.Receivers) == 0 {
+		return "PERFORM " + call + ";\n"
+	}
+
 	s := strings.Builder{}
 	s.WriteString("SELECT * INTO ")
 
@@ -710,7 +768,7 @@ func (p *procedureGenerator) VisitProcedureStmtCall(p0 *parse.ProcedureStmtCall)
 	}
 
 	s.WriteString(" FROM ")
-	s.WriteString(p0.Call.Accept(p).(string))
+	s.WriteString(call)
 	s.WriteString(";\n")
 	return s.String()
 }
@@ -823,7 +881,9 @@ func (p *procedureGenerator) VisitProcedureStmtReturn(p0 *parse.ProcedureStmtRet
 func (p *procedureGenerator) VisitProcedureStmtReturnNext(p0 *parse.ProcedureStmtReturnNext) any {
 	s := strings.Builder{}
 	for i, expr := range p0.Values {
-		s.WriteString(formatReturnVar(i))
+		// we do not format the return var for return next, but instead
+		// assign it to the column name directly
+		s.WriteString(p.procedure.Returns.Fields[i].Name)
 		s.WriteString(" := ")
 		s.WriteString(expr.Accept(p).(string))
 		s.WriteString(";\n")

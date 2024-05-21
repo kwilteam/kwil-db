@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/utils/order"
 	"github.com/kwilteam/kwil-db/parse"
 	"github.com/stretchr/testify/require"
 )
@@ -786,7 +787,7 @@ func Test_Kuneiform(t *testing.T) {
 	}
 }
 
-// some default tables for testing
+// some default tables and procedures for testing
 var (
 	tblUsers = &types.Table{
 		Name: "users",
@@ -873,7 +874,267 @@ var (
 			},
 		},
 	}
+
+	procGetAllUserIds = &types.Procedure{
+		Name:   "get_all_user_ids",
+		Public: true,
+		Modifiers: []types.Modifier{
+			types.ModifierView,
+		},
+		Returns: &types.ProcedureReturn{
+			IsTable: true,
+			Fields: []*types.NamedType{
+				{
+					Name: "id",
+					Type: types.IntType,
+				},
+			},
+		},
+		Body: `return select id from users;`,
+	}
 )
+
+func Test_Procedure(t *testing.T) {
+	type testCase struct {
+		name string
+		proc string
+		// inputs should be a map of $var to type
+		inputs map[string]*types.DataType
+		// returns is the expected return type
+		// it can be left nil if there is no return type.
+		returns *types.ProcedureReturn
+		// want is the desired output.
+		// Errs should be left nil for this test,
+		// and passed in the test case.
+		// inputs will automatically be added
+		// to the expected output as variables.
+		want *parse.ProcedureParseResult
+		err  error
+	}
+
+	tests := []testCase{
+		{
+			name: "simple procedure",
+			proc: `$a int := 1;`,
+			want: &parse.ProcedureParseResult{
+				Variables: map[string]*types.DataType{
+					"$a": types.IntType,
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$a"),
+						Type:     types.IntType,
+						Value:    exprLit(1),
+					},
+				},
+			},
+		},
+		{
+			name: "for loop",
+			proc: `
+			$found := false;
+			for $row in SELECT * FROM users {
+				$found := true;
+				INSERT INTO posts (id, author_id) VALUES ($row.id, $row.username::int);
+			}
+			if !$found {
+				error('no users found');
+			}
+			`,
+			want: &parse.ProcedureParseResult{
+				CompoundVariables: map[string]struct{}{
+					"$row": {},
+				},
+				Variables: map[string]*types.DataType{
+					"$found": types.BoolType,
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$found"),
+						Value:    exprLit(false),
+					},
+					&parse.ProcedureStmtForLoop{
+						Receiver: exprVar("$row"),
+						LoopTerm: &parse.LoopTermSQL{
+							Statement: &parse.SQLStatement{
+								SQL: &parse.SelectStatement{
+									SelectCores: []*parse.SelectCore{
+										{
+											Columns: []parse.ResultColumn{
+												&parse.ResultColumnWildcard{},
+											},
+											From: &parse.RelationTable{
+												Table: "users",
+											},
+										},
+									},
+									// apply default ordering
+									Ordering: []*parse.OrderingTerm{
+										{
+											Expression: &parse.ExpressionColumn{
+												Table:  "users",
+												Column: "id",
+											},
+										},
+									},
+								},
+							},
+						},
+						Body: []parse.ProcedureStmt{
+							&parse.ProcedureStmtAssign{
+								Variable: exprVar("$found"),
+								Value:    exprLit(true),
+							},
+							&parse.ProcedureStmtSQL{
+								SQL: &parse.SQLStatement{
+									SQL: &parse.InsertStatement{
+										Table:   "posts",
+										Columns: []string{"id", "author_id"},
+										Values: [][]parse.Expression{
+											{
+												&parse.ExpressionFieldAccess{
+													Record: exprVar("$row"),
+													Field:  "id",
+												},
+												&parse.ExpressionFieldAccess{
+													Record: exprVar("$row"),
+													Field:  "username",
+													Typecastable: parse.Typecastable{
+														TypeCast: types.IntType,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					&parse.ProcedureStmtIf{
+						IfThens: []*parse.IfThen{
+							{
+								If: &parse.ExpressionUnary{
+									Operator:   parse.UnaryOperatorNot,
+									Expression: exprVar("$found"),
+								},
+								Then: []parse.ProcedureStmt{
+									&parse.ProcedureStmtCall{
+										Call: &parse.ExpressionFunctionCall{
+											Name: "error",
+											Args: []parse.Expression{
+												exprLit("no users found"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var params []*types.ProcedureParameter
+			for _, in := range order.OrderMap(tt.inputs) {
+				params = append(params, &types.ProcedureParameter{
+					Name: in.Key,
+					Type: in.Value,
+				})
+			}
+
+			proc := &types.Procedure{
+				Name:       "test",
+				Parameters: params,
+				Public:     true,
+				Returns:    tt.returns,
+				Body:       tt.proc,
+			}
+
+			res, err := parse.ParseProcedure(proc, &types.Schema{
+				Name: "mydb",
+				Tables: []*types.Table{
+					tblUsers,
+					tblPosts,
+				},
+				Procedures: []*types.Procedure{
+					proc,
+					procGetAllUserIds,
+				},
+			})
+			require.NoError(t, err)
+
+			if tt.err != nil {
+				require.Equal(t, tt.err, res.ParseErrs.Err())
+				return
+			}
+			require.NoError(t, res.ParseErrs.Err())
+
+			// set res errs to nil to match test
+			res.ParseErrs = nil
+
+			if tt.want.CompoundVariables == nil {
+				tt.want.CompoundVariables = make(map[string]struct{})
+			}
+			if tt.want.Variables == nil {
+				tt.want.Variables = make(map[string]*types.DataType)
+			}
+
+			// add the inputs to the expected output
+			for k, v := range tt.inputs {
+				tt.want.Variables[k] = v
+			}
+
+			if !deepCompare(tt.want, res) {
+				t.Errorf("unexpected output: %s", diff(tt.want, res))
+			}
+		})
+	}
+}
+
+// exprVar makes an ExpressionVariable.
+func exprVar(n string) *parse.ExpressionVariable {
+	if n[0] != '$' && n[0] != '@' {
+		panic("TEST ERROR: variable name must start with $ or @")
+	}
+	pref := parse.VariablePrefix(n[0])
+
+	return &parse.ExpressionVariable{
+		Name:   n[1:],
+		Prefix: pref,
+	}
+}
+
+// exprLit makes an ExpressionLiteral.
+// it can only make strings and ints
+func exprLit(v any) *parse.ExpressionLiteral {
+	switch t := v.(type) {
+	case int:
+		return &parse.ExpressionLiteral{
+			Type:  types.IntType,
+			Value: int64(t),
+		}
+	case int64:
+		return &parse.ExpressionLiteral{
+			Type:  types.IntType,
+			Value: t,
+		}
+	case string:
+		return &parse.ExpressionLiteral{
+			Type:  types.TextType,
+			Value: t,
+		}
+	case bool:
+		return &parse.ExpressionLiteral{
+			Type:  types.BoolType,
+			Value: t,
+		}
+	default:
+		panic("TEST ERROR: invalid type for literal")
+	}
+}
 
 func Test_SQL(t *testing.T) {
 	type testCase struct {
@@ -884,62 +1145,62 @@ func Test_SQL(t *testing.T) {
 	}
 
 	tests := []testCase{
-		// {
-		// 	name: "simple select",
-		// 	sql:  "select *, id i, length(username) as name_len from users u where u.id = 1;",
-		// 	want: &parse.SQLStatement{
-		// 		SQL: &parse.SelectStatement{
-		// 			SelectCores: []*parse.SelectCore{
-		// 				{
-		// 					Columns: []parse.ResultColumn{
-		// 						&parse.ResultColumnWildcard{},
-		// 						&parse.ResultColumnExpression{
-		// 							Expression: &parse.ExpressionColumn{
-		// 								Column: "id",
-		// 							},
-		// 							Alias: "i",
-		// 						},
-		// 						&parse.ResultColumnExpression{
-		// 							Expression: &parse.ExpressionFunctionCall{
-		// 								Name: "length",
-		// 								Args: []parse.Expression{
-		// 									&parse.ExpressionColumn{
-		// 										Column: "username",
-		// 									},
-		// 								},
-		// 							},
-		// 							Alias: "name_len",
-		// 						},
-		// 					},
-		// 					From: &parse.RelationTable{
-		// 						Table: "users",
-		// 						Alias: "u",
-		// 					},
-		// 					Where: &parse.ExpressionComparison{
-		// 						Left: &parse.ExpressionColumn{
-		// 							Table:  "u",
-		// 							Column: "id",
-		// 						},
-		// 						Operator: parse.ComparisonOperatorEqual,
-		// 						Right: &parse.ExpressionLiteral{
-		// 							Type:  types.IntType,
-		// 							Value: int64(1),
-		// 						},
-		// 					},
-		// 				},
-		// 			},
-		// 			// apply default ordering
-		// 			Ordering: []*parse.OrderingTerm{
-		// 				{
-		// 					Expression: &parse.ExpressionColumn{
-		// 						Table:  "u",
-		// 						Column: "id",
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
+		{
+			name: "simple select",
+			sql:  "select *, id i, length(username) as name_len from users u where u.id = 1;",
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnWildcard{},
+								&parse.ResultColumnExpression{
+									Expression: &parse.ExpressionColumn{
+										Column: "id",
+									},
+									Alias: "i",
+								},
+								&parse.ResultColumnExpression{
+									Expression: &parse.ExpressionFunctionCall{
+										Name: "length",
+										Args: []parse.Expression{
+											&parse.ExpressionColumn{
+												Column: "username",
+											},
+										},
+									},
+									Alias: "name_len",
+								},
+							},
+							From: &parse.RelationTable{
+								Table: "users",
+								Alias: "u",
+							},
+							Where: &parse.ExpressionComparison{
+								Left: &parse.ExpressionColumn{
+									Table:  "u",
+									Column: "id",
+								},
+								Operator: parse.ComparisonOperatorEqual,
+								Right: &parse.ExpressionLiteral{
+									Type:  types.IntType,
+									Value: int64(1),
+								},
+							},
+						},
+					},
+					// apply default ordering
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: &parse.ExpressionColumn{
+								Table:  "u",
+								Column: "id",
+							},
+						},
+					},
+				},
+			},
+		},
 		{
 			name: "insert",
 			sql: `insert into posts (id, author_id) values (1, 1),
@@ -1010,6 +1271,183 @@ func Test_SQL(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "select join",
+			sql: `SELECT p.id as id, u.username as author FROM posts AS p
+			INNER JOIN users AS u ON p.author_id = u.id
+			WHERE u.username = 'satoshi' order by u.username DESC NULLS LAST;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnExpression{
+									Expression: &parse.ExpressionColumn{
+										Column: "id",
+										Table:  "p",
+									},
+									Alias: "id",
+								},
+								&parse.ResultColumnExpression{
+									Expression: &parse.ExpressionColumn{
+										Column: "username",
+										Table:  "u",
+									},
+									Alias: "author",
+								},
+							},
+							From: &parse.RelationTable{
+								Table: "posts",
+								Alias: "p",
+							},
+							Joins: []*parse.Join{
+								{
+									Type: parse.JoinTypeInner,
+									Relation: &parse.RelationTable{
+										Table: "users",
+										Alias: "u",
+									},
+									On: &parse.ExpressionComparison{
+										Left: &parse.ExpressionColumn{
+											Column: "author_id",
+											Table:  "p",
+										},
+										Operator: parse.ComparisonOperatorEqual,
+										Right: &parse.ExpressionColumn{
+											Column: "id",
+											Table:  "u",
+										},
+									},
+								},
+							},
+							Where: &parse.ExpressionComparison{
+								Left: &parse.ExpressionColumn{
+									Column: "username",
+									Table:  "u",
+								},
+								Operator: parse.ComparisonOperatorEqual,
+								Right: &parse.ExpressionLiteral{
+									Type:  types.TextType,
+									Value: "satoshi",
+								},
+							},
+						},
+					},
+
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: &parse.ExpressionColumn{
+								Table:  "u",
+								Column: "username",
+							},
+							Order: parse.OrderTypeDesc,
+							Nulls: parse.NullOrderLast,
+						},
+						// apply default ordering
+						{
+							Expression: &parse.ExpressionColumn{
+								Table:  "p",
+								Column: "id",
+							},
+						},
+						{
+							Expression: &parse.ExpressionColumn{
+								Table:  "u",
+								Column: "id",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "delete",
+			sql:  "delete from users where id = 1;",
+			want: &parse.SQLStatement{
+				SQL: &parse.DeleteStatement{
+					Table: "users",
+					Where: &parse.ExpressionComparison{
+						Left: &parse.ExpressionColumn{
+							Column: "id",
+						},
+						Operator: parse.ComparisonOperatorEqual,
+						Right: &parse.ExpressionLiteral{
+							Type:  types.IntType,
+							Value: int64(1),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "upsert with conflict - success",
+			sql:  `INSERT INTO users (id) VALUES (1) ON CONFLICT (id) DO UPDATE SET id = users.id + excluded.id;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.InsertStatement{
+					Table:   "users",
+					Columns: []string{"id"},
+					Values: [][]parse.Expression{
+						{
+							&parse.ExpressionLiteral{
+								Type:  types.IntType,
+								Value: int64(1),
+							},
+						},
+					},
+					Upsert: &parse.UpsertClause{
+						ConflictColumns: []string{"id"},
+						DoUpdate: []*parse.UpdateSetClause{
+							{
+								Column: "id",
+								Value: &parse.ExpressionArithmetic{
+									Left: &parse.ExpressionColumn{
+										Column: "id",
+										Table:  "users",
+									},
+									Operator: parse.ArithmeticOperatorAdd,
+									Right: &parse.ExpressionColumn{
+										Column: "id",
+										Table:  "excluded",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "upsert with conflict - ambiguous error",
+			sql:  `INSERT INTO users (id) VALUES (1) ON CONFLICT (id) DO UPDATE SET id = id + 1;`,
+			err:  parse.ErrAmbiguousConflictTable,
+		},
+		{
+			name: "select against unnamed procedure",
+			sql:  "select * from get_all_user_ids();",
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnWildcard{},
+							},
+							From: &parse.RelationFunctionCall{
+								FunctionCall: &parse.ExpressionFunctionCall{
+									Name: "get_all_user_ids",
+								},
+							},
+						},
+					},
+					// no ordering since the procedure implementation is ordered
+				},
+			},
+		},
+		{
+			name: "select join with unnamed subquery",
+			sql: `SELECT p.id as id, u.username as author FROM posts AS p
+			INNER JOIN (SELECT id as uid FROM users WHERE id = 1) ON p.author_id = uid;`,
+			err: parse.ErrUnnamedJoin,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1019,6 +1457,9 @@ func Test_SQL(t *testing.T) {
 				Tables: []*types.Table{
 					tblUsers,
 					tblPosts,
+				},
+				Procedures: []*types.Procedure{
+					procGetAllUserIds,
 				},
 			})
 			require.NoError(t, err)
@@ -1066,6 +1507,18 @@ func cmpOpts() []cmp.Option {
 			parse.ExpressionParenthesized{},
 			parse.ExpressionColumn{},
 			parse.ExpressionSubquery{},
+			parse.ProcedureStmtDeclaration{},
+			parse.ProcedureStmtAssign{},
+			parse.ProcedureStmtCall{},
+			parse.ProcedureStmtForLoop{},
+			parse.ProcedureStmtIf{},
+			parse.ProcedureStmtSQL{},
+			parse.ProcedureStmtBreak{},
+			parse.ProcedureStmtReturn{},
+			parse.ProcedureStmtReturnNext{},
+			parse.LoopTermRange{},
+			parse.LoopTermSQL{},
+			parse.LoopTermVariable{},
 		),
 		cmp.Comparer(func(x, y parse.Position) bool {
 			return true
