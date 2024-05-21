@@ -17,15 +17,15 @@ import (
 type SchemaParseResult struct {
 	// Schema is the parsed schema.
 	// The schema can be nil if there are errors.
-	Schema *types.Schema
+	Schema *types.Schema `json:"schema"`
 	// ParseErrs is the error listener that contains all the errors that occurred during parsing.
-	ParseErrs ParseErrs
+	ParseErrs ParseErrs `json:"parse_errs,omitempty"`
 	// SchemaInfo is the information about the schema.
-	SchemaInfo *SchemaInfo
+	SchemaInfo *SchemaInfo `json:"schema_info,omitempty"`
 	// ParsedActions is the ASTs of the parsed actions.
-	ParsedActions map[string][]ActionStmt
+	ParsedActions map[string][]ActionStmt `json:"parsed_actions,omitempty"`
 	// ParsedProcedures is the ASTs of the parsed procedures.
-	ParsedProcedures map[string][]ProcedureStmt
+	ParsedProcedures map[string][]ProcedureStmt `json:"parsed_procedures,omitempty"`
 }
 
 func (r *SchemaParseResult) Err() error {

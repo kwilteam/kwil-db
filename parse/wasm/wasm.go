@@ -12,18 +12,14 @@ import (
 )
 
 func parseAndMarshal(input string) (jsonStr string, err error) {
-	schema, err := parse.ParseKuneiform(input)
+	schema, err := parse.ParseAndValidate([]byte(input))
 	if err != nil {
 		return "", err
 	}
 
-	// convert all errors to be 1-indexed
-	for _, e := range schema.Errs {
-		e.Node.StartCol++
-		e.Node.StartLine++
-		e.Node.EndCol++
-		e.Node.EndLine++
-	}
+	// remove parsed action and procedure asts
+	schema.ParsedActions = nil
+	schema.ParsedProcedures = nil
 
 	jsonBytes, err := json.Marshal(schema)
 	if err != nil {

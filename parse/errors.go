@@ -1,6 +1,7 @@
 package parse
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -65,6 +66,29 @@ type ParseError struct {
 	Position   *Position `json:"position,omitempty"`
 }
 
+// MarshalJSON marshals the error to JSON.
+func (p *ParseError) MarshalJSON() ([]byte, error) {
+	type Alias struct {
+		ParserName string    `json:"parser_name,omitempty"`
+		Message    string    `json:"message,omitempty"`
+		Position   *Position `json:"position,omitempty"`
+	}
+
+	a := &Alias{
+		ParserName: p.ParserName,
+		Message:    p.Message,
+		Position:   p.Position,
+	}
+
+	return json.Marshal(struct {
+		Error *error `json:"error,omitempty"`
+		*Alias
+	}{
+		Error: &p.Err,
+		Alias: a,
+	})
+}
+
 // Unwrap() allows errors.Is and errors.As to find wrapped errors.
 func (p ParseError) Unwrap() error {
 	return p.Err
@@ -84,6 +108,7 @@ type ParseErrs interface {
 	Err() error
 	Errors() []*ParseError
 	Add(...*ParseError)
+	MarshalJSON() ([]byte, error)
 }
 
 // errorListener listens to errors emitted by Antlr, and also collects
@@ -121,6 +146,11 @@ func (e *errorListener) Add(errs ...*ParseError) {
 // Errors returns the errors that have been collected.
 func (e *errorListener) Errors() []*ParseError {
 	return e.errs
+}
+
+// MarshalJSON marshals the errors to JSON.
+func (e *errorListener) MarshalJSON() ([]byte, error) {
+	return json.Marshal(e.errs)
 }
 
 // AddErr adds an error to the error listener.
