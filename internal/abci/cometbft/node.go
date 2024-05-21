@@ -13,6 +13,8 @@ import (
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cometConfig "github.com/cometbft/cometbft/config"
 	cometEd25519 "github.com/cometbft/cometbft/crypto/ed25519"
+	"github.com/cometbft/cometbft/crypto/tmhash"
+	cmtjson "github.com/cometbft/cometbft/libs/json"
 	cometLog "github.com/cometbft/cometbft/libs/log"
 	cometNodes "github.com/cometbft/cometbft/node"
 	"github.com/cometbft/cometbft/p2p"
@@ -130,8 +132,13 @@ type CometBftNode struct {
 
 // Parses genesis file to extract cometbft specific config
 func genesisDocProvider(genDoc *types.GenesisDoc) cometNodes.GenesisDocProvider {
-	return func() (*types.GenesisDoc, error) {
-		return genDoc, nil
+	return func() (cometNodes.ChecksummedGenesisDoc, error) {
+		jsonBlob, err := cmtjson.MarshalIndent(genDoc, "", "  ")
+		if err != nil {
+			return cometNodes.ChecksummedGenesisDoc{}, fmt.Errorf("couldn't read GenesisDoc file: %w", err)
+		}
+		incomingChecksum := tmhash.Sum(jsonBlob)
+		return cometNodes.ChecksummedGenesisDoc{GenesisDoc: genDoc, Sha256Checksum: incomingChecksum}, nil
 	}
 }
 
@@ -187,7 +194,7 @@ func NewCometBftNode(ctx context.Context, app abciTypes.Application, conf *comet
 		return nil, fmt.Errorf("failed to create private validator: %v", err)
 	}
 
-	node, err := cometNodes.NewNodeWithContext(
+	node, err := cometNodes.NewNode(
 		ctx,
 		conf,
 		privateValidator,
