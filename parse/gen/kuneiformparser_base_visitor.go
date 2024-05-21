@@ -303,6 +303,10 @@ func (v *BaseKuneiformParserVisitor) VisitIn_sql_expr(ctx *In_sql_exprContext) i
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitWhen_then_clause(ctx *When_then_clauseContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitSql_expr_list(ctx *Sql_expr_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }

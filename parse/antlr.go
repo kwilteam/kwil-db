@@ -1397,13 +1397,10 @@ func (s *schemaVisitor) VisitCase_expr(ctx *gen.Case_exprContext) any {
 		e.Case = ctx.GetCase_clause().Accept(s).(Expression)
 	}
 
-	for i := range ctx.AllWHEN() {
-		when := ctx.WHEN(i).Accept(s).(Expression)
-		then := ctx.THEN(i).Accept(s).(Expression)
+	for i := range ctx.AllWhen_then_clause() {
+		wt := ctx.AllWhen_then_clause()[i].Accept(s).([2]Expression)
 
-		e.WhenThen = append(e.WhenThen, [2]Expression{
-			when, then,
-		})
+		e.WhenThen = append(e.WhenThen, wt)
 	}
 
 	if ctx.GetElse_clause() != nil {
@@ -1412,6 +1409,12 @@ func (s *schemaVisitor) VisitCase_expr(ctx *gen.Case_exprContext) any {
 
 	e.Set(ctx)
 	return e
+}
+
+func (s *schemaVisitor) VisitWhen_then_clause(ctx *gen.When_then_clauseContext) any {
+	when := ctx.Sql_expr(0).Accept(s).(Expression)
+	then := ctx.Sql_expr(1).Accept(s).(Expression)
+	return [2]Expression{when, then}
 }
 
 func (s *schemaVisitor) VisitIn_sql_expr(ctx *gen.In_sql_exprContext) any {

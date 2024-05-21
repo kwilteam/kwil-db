@@ -506,15 +506,15 @@ func (p *preparedProcedure) coerceInputs(inputs []any) ([]any, error) {
 			panic("passed array to coerceScalar")
 		}
 
-		if typ.Equals(types.IntType) {
+		if typ.EqualsStrict(types.IntType) {
 			return conv.Int(val)
-		} else if typ.Equals(types.TextType) {
+		} else if typ.EqualsStrict(types.TextType) {
 			return conv.String(val)
-		} else if typ.Equals(types.BoolType) {
+		} else if typ.EqualsStrict(types.BoolType) {
 			return conv.Bool(val)
-		} else if typ.Equals(types.BlobType) {
+		} else if typ.EqualsStrict(types.BlobType) {
 			return conv.Blob(val)
-		} else if typ.Equals(types.UUIDType) {
+		} else if typ.EqualsStrict(types.UUIDType) {
 			return conv.UUID(val)
 		}
 

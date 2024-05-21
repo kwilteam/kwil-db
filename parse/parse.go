@@ -83,7 +83,10 @@ func ParseSchema(kf []byte) (res *SchemaParseResult, err error) {
 	visitor.procedures = res.ParsedProcedures
 
 	defer func() {
-		err = deferFn(recover())
+		err2 := deferFn(recover())
+		if err2 != nil {
+			err = err2
+		}
 	}()
 
 	schema, ok := parser.Schema().Accept(visitor).(*types.Schema)
@@ -131,6 +134,12 @@ func ParseProcedure(proc *types.Procedure, schema *types.Schema) (res *Procedure
 // with custom error positions can be passed in.
 func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []ProcedureStmt) (res *ProcedureParseResult, err error) {
 	errLis, stream, parser, deferFn := setupParser(proc.Body, "procedure")
+	defer func() {
+		err2 := deferFn(recover())
+		if err2 != nil {
+			err = err2
+		}
+	}()
 
 	res = &ProcedureParseResult{
 		ParseErrs:         errLis,
@@ -171,10 +180,6 @@ func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []Proc
 			allVariables: make(map[string]*types.DataType),
 		},
 	}
-
-	defer func() {
-		err = deferFn(recover())
-	}()
 
 	// if there are expected errors, return the parse errors.
 	if errLis.Err() != nil {
@@ -245,7 +250,10 @@ func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error)
 	}
 
 	defer func() {
-		err = deferFn(recover())
+		err2 := deferFn(recover())
+		if err2 != nil {
+			err = err2
+		}
 	}()
 
 	schemaVisitor := newSchemaVisitor(stream, errLis)
@@ -289,6 +297,13 @@ func analyzeActionAST(action *types.Action, schema *types.Schema, ast []ActionSt
 		ParseErrs: errLis,
 	}
 
+	defer func() {
+		err2 := deferFn(recover())
+		if err2 != nil {
+			err = err2
+		}
+	}()
+
 	if ast == nil {
 		schemaVisitor := newSchemaVisitor(stream, errLis)
 		res.AST = parser.Action_block().Accept(schemaVisitor).([]ActionStmt)
@@ -314,16 +329,13 @@ func analyzeActionAST(action *types.Action, schema *types.Schema, ast []ActionSt
 		schema: schema,
 	}
 
-	defer func() {
-		err = deferFn(recover())
-	}()
-
 	if errLis.Err() != nil {
 		return res, nil
 	}
 
 	for _, stmt := range res.AST {
 		stmt.Accept(visitor)
+		visitor.sqlAnalyzer.reset()
 	}
 
 	return res, err

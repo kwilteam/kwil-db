@@ -381,11 +381,11 @@ type Attribute struct {
 func (a *Attribute) Clean(col *Column) error {
 	switch a.Type {
 	case MIN, MAX:
-		if !col.Type.Equals(IntType) {
+		if !col.Type.EqualsStrict(IntType) {
 			return fmt.Errorf("attribute %s is only valid for int columns", a.Type)
 		}
 	case MIN_LENGTH, MAX_LENGTH:
-		if !col.Type.Equals(TextType) {
+		if !col.Type.EqualsStrict(TextType) {
 			return fmt.Errorf("attribute %s is only valid for text columns", a.Type)
 		}
 	}
@@ -1208,10 +1208,11 @@ func (c *DataType) Copy() *DataType {
 	}
 }
 
-// Equals returns true if the type is equal to the other type.
-// If either type is Unknown, it will return true.
-func (c *DataType) Equals(other *DataType) bool {
-	// if unknown, return true
+// EqualsStrict returns true if the type is equal to the other type.
+// The types must be exactly the same, including metadata.
+func (c *DataType) EqualsStrict(other *DataType) bool {
+	// if unknown, return true. unknown is a special case used
+	// internally when type checking is disabled.
 	if c.Name == unknownStr || other.Name == unknownStr {
 		return true
 	}
@@ -1225,6 +1226,15 @@ func (c *DataType) Equals(other *DataType) bool {
 	}
 
 	return strings.EqualFold(c.Name, other.Name)
+}
+
+// Equals returns true if the type is equal to the other type, or if either type is null.
+func (c *DataType) Equals(other *DataType) bool {
+	if c.Name == nullStr || other.Name == nullStr {
+		return true
+	}
+
+	return c.EqualsStrict(other)
 }
 
 func (c *DataType) IsNumeric() bool {
@@ -1262,6 +1272,19 @@ var (
 		Name: unknownStr,
 	}
 )
+
+// ArrayType creates an array type of the given type.
+// It panics if the type is already an array.
+func ArrayType(t *DataType) *DataType {
+	if t.IsArray {
+		panic("cannot create an array of an array")
+	}
+	return &DataType{
+		Name:     t.Name,
+		IsArray:  true,
+		Metadata: t.Metadata,
+	}
+}
 
 const (
 	textStr    = "text"

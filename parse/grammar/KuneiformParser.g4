@@ -270,6 +270,7 @@ delete_statement:
 
 sql_expr:
     literal type_cast?                                                              # literal_sql_expr
+    | sql_expr COLLATE identifier                                                   # collate_sql_expr
     | sql_function_call type_cast?                                                  # function_call_sql_expr
     | variable type_cast?                                                           # variable_sql_expr
     | (table=identifier PERIOD)? column=identifier type_cast?                       # column_sql_expr
@@ -282,10 +283,9 @@ sql_expr:
     | <assoc=right> (NOT|PLUS|MINUS) sql_expr                                       # unary_sql_expr
     | element=sql_expr (NOT)? BETWEEN lower=sql_expr AND upper=sql_expr             # between_sql_expr
     | left=sql_expr IS NOT? ((DISTINCT FROM right=sql_expr) | NULL | TRUE | FALSE)  # is_sql_expr
-    | sql_expr COLLATE identifier                                                   # collate_sql_expr
     | CASE case_clause=sql_expr?
-        (WHEN when_condition=sql_expr THEN then=sql_expr)+
-        (ELSE else_clause=sql_expr)? END                                            #case_expr
+        (when_then_clause)+
+        (ELSE else_clause=sql_expr)? END                                            # case_expr
     | (NOT? EXISTS)? LPAREN select_statement RPAREN type_cast?                      # subquery_sql_expr
     // setting precedence for arithmetic operations:
     | left=sql_expr CONCAT right=sql_expr                                           # arithmetic_sql_expr
@@ -294,6 +294,10 @@ sql_expr:
     // setting precedence for logical operations:
     | left=sql_expr AND right=sql_expr                                              # logical_sql_expr
     | left=sql_expr OR right=sql_expr                                               # logical_sql_expr
+;
+
+when_then_clause:
+    WHEN when_condition=sql_expr THEN then=sql_expr
 ;
 
 sql_expr_list:

@@ -2,10 +2,6 @@ package parse
 
 import "github.com/kwilteam/kwil-db/core/types"
 
-// TODO: this does not actually do what we think it does.
-// Recursive calls in the embedded sqlAnalyzer will call local sqlAnalyzer methods.
-// This means that users can call unallowed expressions in actions.
-// actionAnalyzer analyzes actions.
 type actionAnalyzer struct {
 	sqlAnalyzer
 	// Mutative is true if the action mutates state.

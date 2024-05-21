@@ -1033,6 +1033,73 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "arrays",
+			proc: `
+			$arr2 := array_append($arr, 2);
+			$arr3 int[] := array_prepend(3, $arr2);
+			$arr4 := [4,5];
+
+			$arr5 := array_cat($arr3, $arr4);
+			`,
+			inputs: map[string]*types.DataType{
+				"$arr": types.ArrayType(types.IntType),
+			},
+			want: &parse.ProcedureParseResult{
+				Variables: map[string]*types.DataType{
+					"$arr2": types.ArrayType(types.IntType),
+					"$arr3": types.ArrayType(types.IntType),
+					"$arr4": types.ArrayType(types.IntType),
+					"$arr5": types.ArrayType(types.IntType),
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtCall{
+						Receivers: []*parse.ExpressionVariable{
+							exprVar("$arr2"),
+						},
+						Call: &parse.ExpressionFunctionCall{
+							Name: "array_append",
+							Args: []parse.Expression{
+								exprVar("$arr"),
+								exprLit(2),
+							},
+						},
+					},
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$arr3"),
+						Type:     types.ArrayType(types.IntType),
+						Value: &parse.ExpressionFunctionCall{
+							Name: "array_prepend",
+							Args: []parse.Expression{
+								exprLit(3),
+								exprVar("$arr2"),
+							},
+						},
+					},
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$arr4"),
+						Value: &parse.ExpressionMakeArray{
+							Values: []parse.Expression{
+								exprLit(4),
+								exprLit(5),
+							},
+						},
+					},
+					&parse.ProcedureStmtCall{
+						Receivers: []*parse.ExpressionVariable{
+							exprVar("$arr5"),
+						},
+						Call: &parse.ExpressionFunctionCall{
+							Name: "array_cat",
+							Args: []parse.Expression{
+								exprVar("$arr3"),
+								exprVar("$arr4"),
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

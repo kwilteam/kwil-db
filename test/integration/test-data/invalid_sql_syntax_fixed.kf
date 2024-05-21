@@ -9,7 +9,7 @@ table users {
 }
 
 action invalid_sql() public {
-    SELECT *
+    SELECT u1.*
     FROM users AS u1
     INNER JOIN users AS u2 ON u1.id = u2.id;
 }

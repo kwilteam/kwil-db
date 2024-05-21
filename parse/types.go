@@ -138,7 +138,7 @@ func ShapesMatch(a1, a2 []*Attribute) bool {
 		return false
 	}
 	for i := range a1 {
-		if !a1[i].Type.Equals(a2[i].Type) {
+		if !a1[i].Type.EqualsStrict(a2[i].Type) {
 			return false
 		}
 	}
@@ -170,6 +170,17 @@ func Coalesce(attrs ...*Attribute) (res []*Attribute, ambigousCol string, err er
 	colNames := make(map[string]struct{})
 
 	for _, a := range attrs {
+		// if unnamed, then we can just add and not worry about conflicts,
+		// since it cannot be referenced
+		if a.Name == "" {
+			res = append(res, &Attribute{
+				Name: a.Name,
+				Type: a.Type.Copy(),
+			})
+
+			continue
+		}
+
 		if _, ok := colNames[a.Name]; ok {
 			return nil, a.Name, ErrDuplicateResultColumnName
 		}

@@ -229,6 +229,9 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#in_sql_expr.
 	VisitIn_sql_expr(ctx *In_sql_exprContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#when_then_clause.
+	VisitWhen_then_clause(ctx *When_then_clauseContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#sql_expr_list.
 	VisitSql_expr_list(ctx *Sql_expr_listContext) interface{}
 

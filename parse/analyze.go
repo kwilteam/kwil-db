@@ -364,6 +364,13 @@ type sqlAnalyzer struct {
 	sqlResult sqlAnalyzeResult
 }
 
+// reset resets the sqlAnalyzer.
+func (s *sqlAnalyzer) reset() {
+	// we don't need to touch the block context, since it does not change here.
+	s.sqlCtx = newSQLContext()
+	s.sqlResult = sqlAnalyzeResult{}
+}
+
 type sqlAnalyzeResult struct {
 	Mutative bool
 }
@@ -1133,7 +1140,13 @@ func (s *sqlAnalyzer) VisitExpressionCase(p0 *ExpressionCase) any {
 			return s.expressionTypeErr(w[1])
 		}
 
+		// if return type is not set, set it to the first then
 		if returnType == nil {
+			returnType = then
+		}
+		// if the return type is of type null, we should keep trying
+		// to reset until we get a non-null type
+		if returnType.EqualsStrict(types.NullType) {
 			returnType = then
 		}
 
@@ -1763,11 +1776,11 @@ func (s *sqlAnalyzer) VisitResultColumnExpression(p0 *ResultColumnExpression) an
 	// is a column.
 	if attr.Name == "" {
 		col, ok := p0.Expression.(*ExpressionColumn)
-		if !ok {
-			s.errs.AddErr(p0, ErrUnnamedResultColumn, "results must either be column references or have an alias")
+		// if returning a column and not aliased, we give it the column name.
+		// otherwise, we simply leave the name blank. It will not be referenceable
+		if ok {
+			attr.Name = col.Column
 		}
-
-		attr.Name = col.Column
 	}
 
 	return []*Attribute{attr}
@@ -2155,7 +2168,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 	returns1, ok := p0.Call.Accept(p).(*types.DataType)
 	if ok {
 		// if it returns null, then we do not need to assign it to a variable.
-		if !returns1.Equals(types.NullType) {
+		if !returns1.EqualsStrict(types.NullType) {
 			callReturns = append(callReturns, returns1)
 		}
 	} else {
@@ -2178,7 +2191,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 	// we do not have to capture all return values, but we need to ensure
 	// we do not have more receivers than return values.
 	if len(p0.Receivers) != len(callReturns) {
-		p.errs.AddErr(p0, ErrResultShape, `function/procedure "%s" returns %d value(s), statement has %d receiver(s)`, p0.Call.FunctionName(), len(callReturns), len(p0.Receivers))
+		p.errs.AddErr(p0, ErrResultShape, `function/procedure "%s" returns %d value(s), statement expects %d value(s)`, p0.Call.FunctionName(), len(callReturns), len(p0.Receivers))
 		return nil
 	}
 

@@ -15,7 +15,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].Equals(types.IntType) {
+				if !args[0].EqualsStrict(types.IntType) {
 					return nil, wrapErrArgumentType(types.IntType, args[0])
 				}
 
@@ -38,7 +38,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].Equals(types.TextType) {
+				if !args[0].EqualsStrict(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -61,7 +61,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].Equals(types.TextType) {
+				if !args[0].EqualsStrict(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -84,7 +84,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].Equals(types.TextType) {
+				if !args[0].EqualsStrict(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -107,7 +107,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].Equals(types.TextType) {
+				if !args[0].EqualsStrict(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -130,7 +130,7 @@ var (
 					return nil, fmt.Errorf("invalid number of arguments: expected at least 1, got %d", len(args))
 				}
 
-				if !args[0].Equals(types.TextType) {
+				if !args[0].EqualsStrict(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -154,11 +154,11 @@ var (
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
 
-				if !args[0].Equals(types.UUIDType) {
+				if !args[0].EqualsStrict(types.UUIDType) {
 					return nil, wrapErrArgumentType(types.UUIDType, args[0])
 				}
 
-				if !args[1].Equals(types.TextType) {
+				if !args[1].EqualsStrict(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[1])
 				}
 
@@ -320,7 +320,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].Equals(types.IntType) {
+				if !args[0].EqualsStrict(types.IntType) {
 					return nil, wrapErrArgumentType(types.IntType, args[0])
 				}
 
