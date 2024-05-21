@@ -557,7 +557,11 @@ func (p *preparedProcedure) coerceInputs(inputs []any) ([]any, error) {
 // shapeReturn takes a sql result and ensures it matches the expected return shape
 // of the procedure. It will modify the passed result to match the expected shape.
 func (p *preparedProcedure) shapeReturn(result *sql.ResultSet) error {
+	// in postgres, `select * from proc()`, where proc() returns nothing,
+	// will return a single empty column and row. We need to remove this.
 	if p.returns == nil {
+		result.Columns = nil
+		result.Rows = nil
 		return nil
 	}
 

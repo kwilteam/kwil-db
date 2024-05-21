@@ -2041,7 +2041,7 @@ type loopTargetTracker struct {
 	dataType *types.DataType
 }
 
-// procedureAnalyzer analyes the procedural language. Since the procedural
+// procedureAnalyzer analyzes the procedural language. Since the procedural
 // language can execute sql statements, it uses the sqlAnalyzer.
 type procedureAnalyzer struct {
 	sqlAnalyzer

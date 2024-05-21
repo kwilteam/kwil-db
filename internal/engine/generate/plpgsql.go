@@ -913,8 +913,9 @@ func formatPGLiteral(value any) (string, error) {
 	case bool: // for bool type
 		if v {
 			str.WriteString("true")
+		} else {
+			str.WriteString("false")
 		}
-		str.WriteString("false")
 	case []byte: // for blob type: https://dba.stackexchange.com/questions/203358/how-do-i-write-a-hex-literal-in-postgresql
 		str.WriteString(fmt.Sprintf("E'\\\\x%x'", v))
 	case nil:
