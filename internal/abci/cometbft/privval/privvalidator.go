@@ -17,10 +17,10 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/protoadapt"
 
-	abciTypes "github.com/cometbft/cometbft/abci/types"
+	abciTypes "github.com/cometbft/cometbft/abci/types" // use api/cometbft/abci/v1 instead!
+	cmtAPITypes "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	"github.com/cometbft/cometbft/crypto"
 	cometEd25519 "github.com/cometbft/cometbft/crypto/ed25519"
-	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types" // will be api/cometbft/types/v1 in the api(/v1) module
 	"github.com/cometbft/cometbft/types"
 
 	coreTypes "github.com/kwilteam/kwil-db/core/types"
@@ -68,7 +68,7 @@ func (v *ValidatorSigner) GetPubKey() (crypto.PubKey, error) {
 
 // SignProposal signs a proposal message
 // It is part of the cometTypes.PrivValidator interface
-func (v *ValidatorSigner) SignProposal(chainID string, proposal *tendermintTypes.Proposal) error {
+func (v *ValidatorSigner) SignProposal(chainID string, proposal *cmtAPITypes.Proposal) error {
 	height, round, step := proposal.Height, proposal.Round, stepPropose
 
 	sameHRS, err := v.lastSignedState.checkHRS(height, round, step)
@@ -107,9 +107,14 @@ func (v *ValidatorSigner) SignProposal(chainID string, proposal *tendermintTypes
 	return nil
 }
 
+// SignBytes signs the given bytes. Implements PrivValidator.
+func (v *ValidatorSigner) SignBytes(bytes []byte) ([]byte, error) {
+	return v.privateKey.Sign(bytes)
+}
+
 // SignVote signs a vote message
 // It is part of the cometTypes.PrivValidator interface
-func (v *ValidatorSigner) SignVote(chainID string, vote *tendermintTypes.Vote) error {
+func (v *ValidatorSigner) SignVote(chainID string, vote *cmtAPITypes.Vote, signExtension bool) error {
 	step, err := voteToStep(vote)
 	if err != nil {
 		return err
@@ -123,20 +128,24 @@ func (v *ValidatorSigner) SignVote(chainID string, vote *tendermintTypes.Vote) e
 
 	signBytes := types.VoteSignBytes(chainID, vote)
 
-	// Vote extensions are non-deterministic, so it is possible that an
-	// application may have created a different extension. We therefore always
-	// re-sign the vote extensions of precommits. For prevotes and nil
-	// precommits, the extension signature will always be empty.
-	// Even if the signed over data is empty, we still add the signature.
-	var extSig []byte
-	if vote.Type == tendermintTypes.PrecommitType && !types.ProtoBlockIDIsNil(&vote.BlockID) {
-		extSignBytes := types.VoteExtensionSignBytes(chainID, vote)
-		extSig, err = v.privateKey.Sign(extSignBytes)
-		if err != nil {
-			return err
+	if signExtension {
+		// Vote extensions are non-deterministic, so it is possible that an
+		// application may have created a different extension. We therefore always
+		// re-sign the vote extensions of precommits. For prevotes and nil
+		// precommits, the extension signature will always be empty.
+		// Even if the signed over data is empty, we still add the signature.
+		var extSig []byte
+		if vote.Type == cmtAPITypes.PrecommitType && !types.ProtoBlockIDIsNil(&vote.BlockID) {
+			extSignBytes := types.VoteExtensionSignBytes(chainID, vote)
+			extSig, err = v.privateKey.Sign(extSignBytes)
+			if err != nil {
+				return err
+			}
+		} else if len(vote.Extension) > 0 {
+			return errors.New("unexpected vote extension - extensions are only allowed in non-nil precommits")
 		}
-	} else if len(vote.Extension) > 0 {
-		return errors.New("unexpected vote extension - extensions are only allowed in non-nil precommits")
+
+		vote.ExtensionSignature = extSig
 	}
 
 	// We might crash before writing to the wal, causing us to try to re-sign
@@ -153,8 +162,6 @@ func (v *ValidatorSigner) SignVote(chainID string, vote *tendermintTypes.Vote) e
 			err = fmt.Errorf("conflicting data")
 		}
 
-		vote.ExtensionSignature = extSig
-
 		return err
 	}
 
@@ -166,7 +173,6 @@ func (v *ValidatorSigner) SignVote(chainID string, vote *tendermintTypes.Vote) e
 
 	// Set the vote signature
 	vote.Signature = signature
-	vote.ExtensionSignature = extSig
 
 	return nil
 }
@@ -287,7 +293,7 @@ func (lss *LastSignState) checkHRS(height int64, round int32, step int8) (bool, 
 // Performs these checks on the canonical votes (excluding the vote extension
 // and vote extension signatures).
 func checkVotesOnlyDifferByTimestamp(lastSignBytes, newSignBytes []byte) (time.Time, bool) {
-	var lastVote, newVote tendermintTypes.CanonicalVote
+	var lastVote, newVote cmtAPITypes.CanonicalVote
 	if err := abciTypes.ReadMessage(bytes.NewReader(lastSignBytes), &lastVote); err != nil {
 		panic(fmt.Sprintf("LastSignBytes cannot be unmarshalled into vote: %v", err))
 	}
@@ -307,7 +313,7 @@ func checkVotesOnlyDifferByTimestamp(lastSignBytes, newSignBytes []byte) (time.T
 // returns the timestamp from the lastSignBytes.
 // returns true if the only difference in the proposals is their timestamp
 func checkProposalsOnlyDifferByTimestamp(lastSignBytes, newSignBytes []byte) (time.Time, bool) {
-	var lastProposal, newProposal tendermintTypes.CanonicalProposal
+	var lastProposal, newProposal cmtAPITypes.CanonicalProposal
 	if err := abciTypes.ReadMessage(bytes.NewReader(lastSignBytes), &lastProposal); err != nil {
 		panic(fmt.Sprintf("LastSignBytes cannot be unmarshalled into proposal: %v", err))
 	}
@@ -325,11 +331,11 @@ func checkProposalsOnlyDifferByTimestamp(lastSignBytes, newSignBytes []byte) (ti
 }
 
 // A vote is either stepPrevote or stepPrecommit.
-func voteToStep(vote *tendermintTypes.Vote) (int8, error) {
+func voteToStep(vote *cmtAPITypes.Vote) (int8, error) {
 	switch vote.Type {
-	case tendermintTypes.PrevoteType:
+	case cmtAPITypes.PrevoteType:
 		return stepPrevote, nil
-	case tendermintTypes.PrecommitType:
+	case cmtAPITypes.PrecommitType:
 		return stepPrecommit, nil
 	default:
 		return 0, fmt.Errorf("%w: %v", ErrUnknownVoteType, vote.Type)
