@@ -1,4 +1,5 @@
-// TODO: pglive build tag
+//go:build pglive
+
 package integration_test
 
 import (
