@@ -59,12 +59,12 @@ func (r *Records) Reset() {
 }
 
 // Record returns the current Record. Use Next to iterate through the records.
-func (r *Records) Record() *Record {
+func (r *Records) Record() Record {
 	if r.records == nil {
-		return &Record{}
+		return Record{}
 	}
 
-	return r.records[r.index]
+	return *r.records[r.index]
 }
 
 // Export returns all of the records in a slice. The map in each slice is

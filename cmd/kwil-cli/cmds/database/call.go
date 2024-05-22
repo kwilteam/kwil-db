@@ -118,7 +118,7 @@ func buildExecutionInputs(ctx context.Context, client clientType.Client, dbid st
 
 	for _, p := range schema.Procedures {
 		if strings.EqualFold(p.Name, proc) {
-			return buildProcedureInputs(p, inputs), nil
+			return buildProcedureInputs(p, inputs)
 		}
 	}
 
@@ -139,16 +139,70 @@ func buildActionInputs(a *types.Action, inputs []map[string]any) [][]any {
 	return tuples
 }
 
-func buildProcedureInputs(p *types.Procedure, inputs []map[string]any) [][]any {
+func buildProcedureInputs(p *types.Procedure, inputs []map[string]any) ([][]any, error) {
 	tuples := [][]any{}
 	for _, input := range inputs {
 		newTuple := []any{}
 		for _, inputField := range p.Parameters {
+			// if the input is an array, split it by commas
+			if inputField.Type.IsArray {
+				split, err := splitIgnoringQuotedCommas(input[inputField.Name].(string))
+				if err != nil {
+					return nil, err
+				}
+
+				newTuple = append(newTuple, split)
+				continue
+			}
 			newTuple = append(newTuple, input[inputField.Name])
 		}
 
 		tuples = append(tuples, newTuple)
 	}
 
-	return tuples
+	return tuples, nil
+}
+
+// splitIgnoringQuotedCommas splits a string by commas, but ignores commas that are inside single or double quotes.
+// It will return an error if there are unclosed quotes.
+func splitIgnoringQuotedCommas(input string) ([]string, error) {
+	var result []string
+	var currentToken []rune
+	inSingleQuote := false
+	inDoubleQuote := false
+
+	for _, char := range input {
+		switch char {
+		case '\'':
+			if !inDoubleQuote { // Toggle single quote flag if not inside double quotes
+				inSingleQuote = !inSingleQuote
+				continue // Skip appending this quote character to token
+			}
+			currentToken = append(currentToken, char)
+		case '"':
+			if !inSingleQuote { // Toggle double quote flag if not inside single quotes
+				inDoubleQuote = !inDoubleQuote
+				continue // Skip appending this quote character to token
+			}
+			currentToken = append(currentToken, char)
+		case ',':
+			if inSingleQuote || inDoubleQuote { // If inside quotes, treat comma as a normal character
+				currentToken = append(currentToken, char)
+			} else { // Otherwise, it's a delimiter
+				result = append(result, string(currentToken))
+				currentToken = []rune{}
+			}
+		default:
+			currentToken = append(currentToken, char)
+		}
+	}
+
+	// Append the last token
+	result = append(result, string(currentToken))
+
+	if inSingleQuote || inDoubleQuote {
+		return nil, fmt.Errorf("unclosed quote in array inputs")
+	}
+
+	return result, nil
 }

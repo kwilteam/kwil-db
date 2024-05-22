@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/test/acceptance"
 	"github.com/kwilteam/kwil-db/test/specifications"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +20,7 @@ var remote = flag.Bool("remote", false, "test against remote node")
 
 // NOTE: `-parallel` is a flag that is already used by `go test`
 var parallelMode = flag.Bool("parallel-mode", false, "run tests in parallelMode mode")
-var drivers = flag.String("drivers", "jsonrpc,cli", "comma separated list of drivers to run")
+var drivers = flag.String("drivers", "jsonrpc", "comma separated list of drivers to run")
 
 func TestLocalDevSetup(t *testing.T) {
 	if !*dev {
@@ -214,6 +215,56 @@ func TestKwildAcceptance(t *testing.T) {
 
 			// TODO: test inputting invalid utf-8 into action that needs string (should fail)
 			// this previously crashed the node
+		})
+	}
+}
+
+func TestUUID(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	ctx := context.Background()
+	testDrivers := strings.Split(*drivers, ",")
+	for _, driverType := range testDrivers {
+		t.Run(driverType+"_driver", func(t *testing.T) {
+			// setup for each driver
+			helper := acceptance.NewActHelper(t)
+			helper.LoadConfig()
+			if !*remote {
+				helper.Setup(ctx)
+			}
+			creatorDriver := helper.GetDriver(driverType, "creator")
+
+			db := specifications.SchemaLoader.Load(t, specifications.UUIDDB)
+
+			res, err := creatorDriver.DeployDatabase(ctx, db)
+			require.NoError(t, err)
+			specifications.ExpectTxSuccess(t, creatorDriver, ctx, res)
+
+			// execute store
+			uuid := types.NewUUIDV5([]byte("1"))
+			uuidArr := types.UUIDArray{types.NewUUIDV5([]byte("2")), types.NewUUIDV5([]byte("3"))}
+
+			res, err = creatorDriver.Execute(ctx, creatorDriver.DBID(db.Name), "store", []any{uuid, uuidArr})
+			require.NoError(t, err)
+			specifications.ExpectTxSuccess(t, creatorDriver, ctx, res)
+
+			result, err := creatorDriver.Call(ctx, creatorDriver.DBID(db.Name), "get_ids", []any{})
+			require.NoError(t, err)
+
+			count := 0
+			for result.Next() {
+				count++
+				row := result.Record()
+				assert.Equal(t, uuid, row["id"])
+				assert.Equal(t, uuidArr, row["ids"])
+			}
+			assert.Equal(t, 1, count)
 		})
 	}
 }

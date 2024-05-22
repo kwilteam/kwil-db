@@ -1,6 +1,7 @@
 package transactions_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // this simply test that they all serialize and comply with RLP
@@ -92,14 +94,14 @@ func Test_Types(t *testing.T) {
 			obj: &transactions.ActionExecution{
 				DBID:   "db_id",
 				Action: "action",
-				Arguments: [][]string{
+				Arguments: [][]*transactions.EncodedValue{
 					{
-						"arg1",
-						"arg2",
+						mustDetect("arg1"),
+						mustDetect("arg2"),
 					},
 					{
-						"arg3",
-						"arg4",
+						mustDetect("arg3"),
+						mustDetect("arg4"),
 					},
 				},
 			},
@@ -109,19 +111,15 @@ func Test_Types(t *testing.T) {
 			obj: &transactions.ActionExecution{
 				DBID:   "db_id",
 				Action: "action",
-				Arguments: [][]string{
+				Arguments: [][]*transactions.EncodedValue{
 					{
-						"",
-						"arg2",
+						mustDetect(nil),
+						mustDetect("arg2"),
 					},
 					{
-						"arg3",
-						"",
+						mustDetect("arg3"),
+						mustDetect(nil),
 					},
-				},
-				NilArg: [][]bool{
-					{true, false},
-					{false, true},
 				},
 			},
 		},
@@ -130,9 +128,9 @@ func Test_Types(t *testing.T) {
 			obj: &transactions.ActionCall{
 				DBID:   "db_id",
 				Action: "action",
-				Arguments: []string{
-					"arg1",
-					"arg2",
+				Arguments: []*transactions.EncodedValue{
+					mustDetect("arg1"),
+					mustDetect("arg2"),
 				},
 			},
 		},
@@ -141,11 +139,10 @@ func Test_Types(t *testing.T) {
 			obj: &transactions.ActionCall{
 				DBID:   "db_id",
 				Action: "action",
-				Arguments: []string{
-					"",
-					"arg2",
+				Arguments: []*transactions.EncodedValue{
+					mustDetect(nil),
+					mustDetect("arg2"),
 				},
-				NilArg: []bool{true, false},
 			},
 		},
 		{
@@ -295,6 +292,81 @@ func TestUnmarshalPayload(t *testing.T) {
 			if !cmp.Equal(got, tt, cmpopts.EquateEmpty()) {
 				t.Error("objects are not equal")
 				assert.EqualValuesf(t, got, tt, "objects are not equal") // for the diff
+			}
+		})
+	}
+}
+
+func mustDetect(v any) *transactions.EncodedValue {
+	ev, err := transactions.EncodeValue(v)
+	if err != nil {
+		panic(err)
+	}
+	return ev
+}
+
+func Test_EncodeValue(t *testing.T) {
+	type testCase struct {
+		val     any
+		want    any // if want is nil, it will try to compare with val
+		wantErr bool
+	}
+
+	tests := []testCase{
+		{
+			val: "hello",
+		},
+		{
+			val: int64(123),
+		},
+		{
+			val:  []string{"hello", "world"},
+			want: []any{"hello", "world"},
+		},
+		{
+			val:  types.UUIDArray{types.NewUUIDV5([]byte("1")), types.NewUUIDV5([]byte("2"))},
+			want: []any{types.NewUUIDV5([]byte("1")), types.NewUUIDV5([]byte("2"))},
+		},
+		{
+			val: []any{nil, nil},
+		},
+		{
+			val:  []bool{true, false},
+			want: []any{true, false},
+		},
+		{
+			val:  [][]byte{{1, 2, 3}, {4, 5, 6}},
+			want: []any{[]byte{1, 2, 3}, []byte{4, 5, 6}},
+		},
+		{
+			val: []any{nil, int64(1)},
+		},
+		{
+			val:     []any{"1", true},
+			wantErr: true,
+		},
+		{
+			val:     []float64{1.1, 2.2},
+			wantErr: true,
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
+			res, err := transactions.EncodeValue(tt.val)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			decoded, err := res.Decode()
+			require.NoError(t, err)
+
+			if tt.want == nil {
+				assert.Equal(t, tt.val, decoded)
+			} else {
+				assert.Equal(t, tt.want, decoded)
 			}
 		})
 	}

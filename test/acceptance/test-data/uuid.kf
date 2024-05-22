@@ -1,0 +1,18 @@
+database uuid_db;
+
+table ids {
+    id uuid primary key,
+    arr uuid[]
+}
+// store stores uuids, validating that we can send and store
+// uuids and array uuids
+procedure store($u uuid, $u2 uuid[]) public {
+    insert into ids (id, arr) values ($u, $u2);
+}
+
+// get_ids gets the first id stored
+procedure get_ids() public view returns (id uuid, ids uuid[]) {
+    for $row in select * from ids {
+        return $row.id, $row.arr;
+    }
+}

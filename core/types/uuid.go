@@ -92,33 +92,41 @@ func (u *UUID) FormatSupported(format int16) bool {
 }
 
 func (u *UUID) PreferredFormat() int16 {
-	return pgtype.TextFormatCode
+	return pgtype.BinaryFormatCode
 }
 
 func (u *UUID) PlanEncode(m *pgtype.Map, oid uint32, format int16, value any) pgtype.EncodePlan {
-	if _, ok := value.(*UUID); !ok {
-		return nil // not sure why we do this, but pgx does it
+	var val *UUID
+	switch t := value.(type) {
+	case UUID:
+		val = &t
+	case *UUID:
+		val = t
+	case []byte:
+		if len(t) != 16 && len(t) != 0 {
+			return nil
+		}
+
+		uuid := UUID{}
+		copy(uuid[:], t)
+		val = &uuid
+	case [16]byte:
+		uuid := UUID{}
+		copy(uuid[:], t[:])
+		val = &uuid
+	default:
+		return nil
 	}
 
 	switch format {
 	// given our uuid type, I believe it will always come binary
 	case pgtype.BinaryFormatCode:
 		return encodePlanFunc(func(value any, buf []byte) (newBuf []byte, err error) {
-			uuid, ok := value.(*UUID)
-			if !ok {
-				return nil, errors.New("internal error: expected UUID")
-			}
-
-			return append(buf, uuid[:]...), nil
+			return append(buf, val[:]...), nil
 		})
 	case pgtype.TextFormatCode:
 		return encodePlanFunc(func(value any, buf []byte) (newBuf []byte, err error) {
-			uuid, ok := value.(*UUID)
-			if !ok {
-				return nil, errors.New("internal error: expected *UUID")
-			}
-
-			return append(buf, uuid.String()...), nil
+			return append(buf, val.String()...), nil
 		})
 	}
 

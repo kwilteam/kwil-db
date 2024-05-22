@@ -31,4 +31,7 @@ var (
 	userDB = &testSchema{
 		FileName: "users",
 	}
+	UUIDDB = &testSchema{
+		FileName: "uuid",
+	}
 )
