@@ -11,10 +11,9 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/engine/ddl"
+	"github.com/kwilteam/kwil-db/internal/engine/generate"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
-	"github.com/kwilteam/kwil-db/parse/metadata"
-	procedural "github.com/kwilteam/kwil-db/parse/procedures"
+	"github.com/kwilteam/kwil-db/parse"
 )
 
 var (
@@ -183,7 +182,7 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema, txi
 	}
 
 	for _, table := range schema.Tables {
-		statements, err := ddl.GenerateDDL(schemaName, table)
+		statements, err := generate.GenerateDDL(schemaName, table)
 		if err != nil {
 			return err
 		}
@@ -196,21 +195,8 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema, txi
 		}
 	}
 
-	// for each procedure, we will sanitize it,
-	// type check, generate the PLPGSQL code,
-	// and then execute the generated code.
-	procs, errs, err := procedural.AnalyzeProcedures(schema, schemaName, &procedural.AnalyzeOptions{
-		LogProcedureNameOnError: true,
-	})
-	if err != nil {
-		return err
-	}
-	if errs.Err() != nil {
-		return errs.Err()
-	}
-
-	for _, proc := range procs {
-		stmt, err := ddl.GenerateProcedure(proc, schemaName)
+	for _, proc := range schema.Procedures {
+		stmt, err := generate.GenerateProcedure(proc, schema, schemaName)
 		if err != nil {
 			return err
 		}
@@ -225,7 +211,7 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema, txi
 	// The function ensures that, whatever target procedure is chosen at runtime, that
 	// its input and output types are compatible with the expected types.
 	for _, proc := range schema.ForeignProcedures {
-		stmt, err := ddl.GenerateForeignProcedure(proc)
+		stmt, err := generate.GenerateForeignProcedure(proc, schemaName)
 		if err != nil {
 			return err
 		}
@@ -338,17 +324,17 @@ func setContextualVars(ctx context.Context, db sql.DB, data *common.ExecutionDat
 	// feature for setting session variables. For example, @caller
 	// is accessed via current_setting('ctx.caller')
 
-	_, err := db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, metadata.PgSessionPrefix, metadata.CallerVar, data.Caller))
+	_, err := db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.CallerVar, data.Caller))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, metadata.PgSessionPrefix, metadata.TxidVar, data.TxID))
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.TxidVar, data.TxID))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, metadata.PgSessionPrefix, metadata.SignerVar, hex.EncodeToString(data.Signer)))
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.SignerVar, hex.EncodeToString(data.Signer)))
 	if err != nil {
 		return err
 	}

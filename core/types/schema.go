@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/core/types/validation"
 	"github.com/kwilteam/kwil-db/core/utils"
 )
@@ -24,8 +25,8 @@ type Schema struct {
 }
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
-func (s *Schema) Clean() error {
-	err := cleanIdent(&s.Name)
+func (s *Schema) Clean() (err error) {
+	err = cleanIdent(&s.Name)
 	if err != nil {
 		return err
 	}
@@ -118,6 +119,18 @@ func (s *Schema) FindTable(name string) (table *Table, found bool) {
 	return nil, false
 }
 
+// FindAction finds an action based on its name.
+// It returns false if the action is not found.
+func (s *Schema) FindAction(name string) (action *Action, found bool) {
+	for _, act := range s.Actions {
+		if strings.EqualFold(act.Name, name) {
+			return act, true
+		}
+	}
+
+	return nil, false
+}
+
 // FindProcedure finds a procedure based on its name.
 // It returns false if the procedure is not found.
 func (s *Schema) FindProcedure(name string) (procedure *Procedure, found bool) {
@@ -136,6 +149,18 @@ func (s *Schema) FindForeignProcedure(name string) (procedure *ForeignProcedure,
 	for _, proc := range s.ForeignProcedures {
 		if strings.EqualFold(proc.Name, name) {
 			return proc, true
+		}
+	}
+
+	return nil, false
+}
+
+// FindExtensionImport finds an extension based on its alias.
+// It returns false if the extension is not found.
+func (s *Schema) FindExtensionImport(alias string) (extension *Extension, found bool) {
+	for _, ext := range s.Extensions {
+		if strings.EqualFold(ext.Alias, alias) {
+			return ext, true
 		}
 	}
 
@@ -325,6 +350,17 @@ func (c *Column) Copy() *Column {
 	return res
 }
 
+// HasAttribute returns true if the column has the given attribute.
+func (c *Column) HasAttribute(attr AttributeType) bool {
+	for _, a := range c.Attributes {
+		if a.Type == attr {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (c *Column) hasPrimary() bool {
 	for _, attr := range c.Attributes {
 		if attr.Type == PRIMARY_KEY {
@@ -345,11 +381,11 @@ type Attribute struct {
 func (a *Attribute) Clean(col *Column) error {
 	switch a.Type {
 	case MIN, MAX:
-		if !col.Type.Equals(IntType) {
+		if !col.Type.EqualsStrict(IntType) {
 			return fmt.Errorf("attribute %s is only valid for int columns", a.Type)
 		}
 	case MIN_LENGTH, MAX_LENGTH:
-		if !col.Type.Equals(TextType) {
+		if !col.Type.EqualsStrict(TextType) {
 			return fmt.Errorf("attribute %s is only valid for text columns", a.Type)
 		}
 	}
@@ -1062,14 +1098,30 @@ type DataType struct {
 	Name string `json:"name"`
 	// IsArray is true if the type is an array.
 	IsArray bool `json:"is_array"`
+	// Metadata is the metadata of the type.
+	Metadata any `json:"metadata"`
 }
 
 // String returns the string representation of the type.
 func (c *DataType) String() string {
+	str := strings.Builder{}
+	str.WriteString(c.Name)
 	if c.IsArray {
-		return c.Name + "[]"
+		return str.String() + "[]"
 	}
-	return c.Name
+
+	if c.Name == DecimalStr {
+		data, ok := c.Metadata.([2]uint16)
+		if ok {
+			str.WriteString("(")
+			str.WriteString(fmt.Sprint(data[0]))
+			str.WriteString(",")
+			str.WriteString(fmt.Sprint(data[1]))
+			str.WriteString(")")
+		}
+	}
+
+	return str.String()
 }
 
 // PGString returns the string representation of the type in Postgres.
@@ -1086,6 +1138,16 @@ func (c *DataType) PGString() (string, error) {
 		scalar = "BYTEA"
 	case uuidStr:
 		scalar = "UUID"
+	case uint256Str:
+		scalar = "UINT256"
+	case DecimalStr:
+		data, ok := c.Metadata.([2]uint16)
+		if !ok {
+			// should never happen, since Clean() should have caught this
+			return "", fmt.Errorf("fixed type must have metadata of type [2]uint8")
+		}
+
+		scalar = fmt.Sprintf("NUMERIC(%d,%d)", data[0], data[1])
 	case nullStr:
 		return "", fmt.Errorf("cannot have null column type")
 	case unknownStr:
@@ -1102,9 +1164,35 @@ func (c *DataType) PGString() (string, error) {
 }
 
 func (c *DataType) Clean() error {
-	switch name := strings.ToLower(c.Name); name {
-	case intStr, textStr, boolStr, blobStr, uuidStr: // ok
-		c.Name = name
+	c.Name = strings.ToLower(c.Name)
+	switch c.Name {
+	case intStr, textStr, boolStr, blobStr, uuidStr, uint256Str: // ok
+		if c.Metadata != nil {
+			return fmt.Errorf("type %s cannot have metadata", c.Name)
+		}
+
+		return nil
+	case DecimalStr:
+		data, ok := c.Metadata.([2]uint16)
+		if !ok {
+			return fmt.Errorf("fixed type must have metadata of type [2]uint8")
+		}
+
+		err := decimal.CheckPrecisionAndScale(data[0], data[1])
+		if err != nil {
+			return err
+		}
+
+		return nil
+	case nullStr, unknownStr:
+		if c.IsArray {
+			return fmt.Errorf("type %s cannot be an array", c.Name)
+		}
+
+		if c.Metadata != nil {
+			return fmt.Errorf("type %s cannot have metadata", c.Name)
+		}
+
 		return nil
 	default:
 		return fmt.Errorf("unknown type: %s", c.Name)
@@ -1114,20 +1202,47 @@ func (c *DataType) Clean() error {
 // Copy returns a copy of the type.
 func (c *DataType) Copy() *DataType {
 	return &DataType{
-		Name:    c.Name,
-		IsArray: c.IsArray,
+		Name:     c.Name,
+		IsArray:  c.IsArray,
+		Metadata: c.Metadata,
 	}
 }
 
-// Equals returns true if the type is equal to the other type.
-// If either type is Unknown, it will return true.
-func (c *DataType) Equals(other *DataType) bool {
+// EqualsStrict returns true if the type is equal to the other type.
+// The types must be exactly the same, including metadata.
+func (c *DataType) EqualsStrict(other *DataType) bool {
+	// if unknown, return true. unknown is a special case used
+	// internally when type checking is disabled.
 	if c.Name == unknownStr || other.Name == unknownStr {
 		return true
 	}
-	return strings.EqualFold(c.Name, other.Name) && c.IsArray == other.IsArray
+
+	if c.IsArray != other.IsArray {
+		return false
+	}
+
+	if c.Metadata != other.Metadata {
+		return false
+	}
+
+	return strings.EqualFold(c.Name, other.Name)
 }
 
+// Equals returns true if the type is equal to the other type, or if either type is null.
+func (c *DataType) Equals(other *DataType) bool {
+	if c.Name == nullStr || other.Name == nullStr {
+		return true
+	}
+
+	return c.EqualsStrict(other)
+}
+
+func (c *DataType) IsNumeric() bool {
+	return c.Name == intStr || c.Name == DecimalStr || c.Name == uint256Str || c.Name == unknownStr
+}
+
+// declared DataType constants.
+// We do not have one for fixed because fixed types require metadata.
 var (
 	IntType = &DataType{
 		Name: intStr,
@@ -1144,6 +1259,9 @@ var (
 	UUIDType = &DataType{
 		Name: uuidStr,
 	}
+	Uint256Type = &DataType{
+		Name: uint256Str,
+	}
 	// NullType is a special type used internally
 	NullType = &DataType{
 		Name: nullStr,
@@ -1155,12 +1273,41 @@ var (
 	}
 )
 
+// ArrayType creates an array type of the given type.
+// It panics if the type is already an array.
+func ArrayType(t *DataType) *DataType {
+	if t.IsArray {
+		panic("cannot create an array of an array")
+	}
+	return &DataType{
+		Name:     t.Name,
+		IsArray:  true,
+		Metadata: t.Metadata,
+	}
+}
+
 const (
 	textStr    = "text"
 	intStr     = "int"
 	boolStr    = "bool"
 	blobStr    = "blob"
 	uuidStr    = "uuid"
+	uint256Str = "uint256"
+	// DecimalStr is a fixed point number.
+	DecimalStr = "fixed"
 	nullStr    = "null"
 	unknownStr = "unknown"
 )
+
+// NewDecimalType creates a new fixed point decimal type.
+func NewDecimalType(precision, scale uint16) (*DataType, error) {
+	err := decimal.CheckPrecisionAndScale(precision, scale)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DataType{
+		Name:     DecimalStr,
+		Metadata: [2]uint16{precision, scale},
+	}, nil
+}

@@ -22,13 +22,13 @@ action create_user($id, $username, $age) public {
 }
 
 action update_user($id, $username, $age) public {
-    UPDATE [users]
+    UPDATE users
     SET id = $id, username = $username, age = $age
     WHERE wallet = @caller;
 }
 
 action update_username($username) public {
-    UPDATE `users`
+    UPDATE users
     SET username = $username
     WHERE wallet = @caller;
 }

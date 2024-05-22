@@ -12,10 +12,10 @@ import (
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
+	"github.com/kwilteam/kwil-db/internal/engine/generate"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
-	"github.com/kwilteam/kwil-db/parse/sql/sqlanalyzer"
-	parseTypes "github.com/kwilteam/kwil-db/parse/types"
+	"github.com/kwilteam/kwil-db/parse"
 )
 
 // GlobalContext is the context for the entire execution.
@@ -328,22 +328,31 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 		return nil, ErrDatasetNotFound
 	}
 
-	errLis := parseTypes.NewErrorListener()
+	// errLis := parseTypes.NewErrorListener()
 
-	// We have to parse the query and ensure the dbid is used to derive schema.
-	// OR do we permit (or require) the schema to be specified in the query? It
-	// could go either way, but this ad hoc query function is questionable anyway.
-	parsed, err := sqlanalyzer.ApplyRules(query,
-		sqlanalyzer.AllRules,
-		dataset.schema, dbidSchema(dbid), errLis)
+	// // We have to parse the query and ensure the dbid is used to derive schema.
+	// // OR do we permit (or require) the schema to be specified in the query? It
+	// // could go either way, but this ad hoc query function is questionable anyway.
+	// parsed, err := sqlanalyzer.ApplyRules(query,
+	// 	sqlanalyzer.AllRules,
+	// 	dataset.schema, dbidSchema(dbid), errLis)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// if errLis.Err() != nil {
+	// 	return nil, errLis.Err()
+	// }
+	res, err := parse.ParseSQL(query, dataset.schema)
 	if err != nil {
 		return nil, err
 	}
-	if errLis.Err() != nil {
-		return nil, errLis.Err()
+
+	sqlStmt, params, err := generate.WriteSQL(res.AST, true, dbidSchema(dbid))
+	if err != nil {
+		return nil, err
 	}
 
-	if parsed.Mutative {
+	if res.Mutative {
 		txm, ok := tx.(sql.AccessModer)
 		if !ok {
 			return nil, errors.New("DB does not provide access mode needed for mutative statement")
@@ -353,10 +362,10 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 		}
 	}
 
-	args := orderAndCleanValueMap(values, parsed.ParameterOrder)
+	args := orderAndCleanValueMap(values, params)
 	args = append([]any{pg.QueryModeExec}, args...)
 
-	return tx.Execute(ctx, parsed.Statement, args...)
+	return tx.Execute(ctx, sqlStmt, args...)
 }
 
 type dbQueryFn func(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error)

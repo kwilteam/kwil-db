@@ -183,10 +183,6 @@ func Test_Schemas(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx)
 
-			readonly, err := db.BeginReadTx(ctx)
-			require.NoError(t, err)
-			defer readonly.Rollback(ctx)
-
 			tc.fn(t, global, tx)
 		})
 	}
@@ -199,9 +195,13 @@ func loadSchema(file string) (*types.Schema, error) {
 		return nil, err
 	}
 
-	db, err := parse.ParseKuneiform(string(d))
+	db, err := parse.ParseAndValidate(d)
 	if err != nil {
 		return nil, err
+	}
+
+	if db.Err() != nil {
+		return nil, db.Err()
 	}
 
 	return db.Schema, nil

@@ -23,11 +23,12 @@ table posts {
 // its user_id. It returns the user id and the new post count. If the user has not
 // yet posted, it will set the post count to 1
 procedure increment_post_count($user_id uuid) private returns (post_count int) {
-    FOR $row IN insert into post_counts (user_id, post_count)
+    insert into post_counts (user_id, post_count)
     values ($user_id, 1)
     on conflict (user_id) do update
-        set post_count = post_count + 1
-    returning post_count {
+        set post_count = post_counts.post_count + 1;
+
+    for $row IN select post_count from post_counts where user_id = $user_id limit 1 {
         return $row.post_count;
     }
 }
@@ -70,7 +71,7 @@ procedure get_recent_posts_by_size($username text, $size int, $limit int) public
     }
 
     $count int := 0;
-    for $row in get_recent_posts($username) {
+    for $row in select * from get_recent_posts($username) as a {
         if $count == $limit {
             break;
         }
@@ -90,22 +91,22 @@ foreign procedure get_user($address text) returns (uuid, text)
 // table keyvalue is a kv table to track metadata
 // for foreign calls.
 table keyvalue {
-    key text primary,
+    k text primary, // key is a reserved word
     value text not null
 }
 
 procedure admin_set($key text, $value text) public owner {
-    insert into keyvalue (key, value)
+    insert into keyvalue (k, value)
     values ($key, $value)
-    on conflict (key) do update set value = $value;
+    on conflict (k) do update set value = $value;
 }
 
 procedure admin_get($key text) public view returns (value text) {
-    for $row in select value from keyvalue where key = $key {
+    for $row in select value from keyvalue where k = $key {
         return $row.value;
     }
 
-    error(format('admin has not set a value for key %s', $key));
+    error(format('admin has not set a value for k %s', $key));
 }
 
 // gets the user's id

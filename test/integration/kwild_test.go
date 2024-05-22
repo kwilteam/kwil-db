@@ -18,7 +18,7 @@ var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
 var spamTest = flag.Bool("spam", false, "run the spam test that requires a special docker image to be built")
 
-var drivers = flag.String("drivers", "jsonrpc,cli", "comma separated list of drivers to run")
+var drivers = flag.String("drivers", "jsonrpc", "comma separated list of drivers to run")
 
 // NOTE: `-parallel` is a flag that is already used by `go test`
 var parallelMode = flag.Bool("parallel-mode", false, "run tests in parallel mode")

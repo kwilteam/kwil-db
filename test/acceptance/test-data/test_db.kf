@@ -36,7 +36,7 @@ action update_user($id, $username, $age) public {
 }
 
 action update_username($username) public {
-    UPDATE `users`
+    UPDATE users
     SET username = $username
     WHERE wallet = @caller;
 }
@@ -132,15 +132,15 @@ action create_post_nested($id, $title, $content) public {
 
 @kgw(authn='true')
 action owner_only() public owner view {
-    select 'owner only';
+    select 'owner only' as result;
 }
 
 @kgw(authn='true')
 action authn_only_action() public view {
-    select 'authn only action';
+    select 'authn only action' as result;
 }
 
 @kgw(authn='true')
 action authn_only_procedure() public view {
-    select 'authn only procedure';
+    select 'authn only procedure' as result;
 }

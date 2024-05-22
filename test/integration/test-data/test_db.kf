@@ -36,7 +36,7 @@ action update_user($id, $username, $age) public {
 }
 
 action update_username($username) public {
-    UPDATE `users`
+    UPDATE users
     SET username = $username
     WHERE wallet = @caller;
 }
