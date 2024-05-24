@@ -817,7 +817,8 @@ func (p *procedureGenerator) VisitLoopTermSQL(p0 *parse.LoopTermSQL) any {
 }
 
 func (p *procedureGenerator) VisitLoopTermVariable(p0 *parse.LoopTermVariable) any {
-	return fmt.Sprintf("ARRAY %s", p0.Variable.Accept(p).(string))
+	// we use coalesce here so that we do not error when looping on null arrays
+	return fmt.Sprintf("ARRAY COALESCE(%s, '{}')", p0.Variable.Accept(p).(string))
 }
 
 func (p *procedureGenerator) VisitProcedureStmtIf(p0 *parse.ProcedureStmtIf) any {

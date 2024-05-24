@@ -157,6 +157,38 @@ func Test_Procedures(t *testing.T) {
 			}`,
 			outputs: [][]any{{int64(11)}},
 		},
+		{
+			name: "return next from a non-table",
+			procedure: `procedure return_next($vals int[]) public view returns table(val int) {
+				for $i in $vals {
+					return next $i*2;
+				}
+			}`,
+			inputs:  []any{[]int64{1, 2, 3}},
+			outputs: [][]any{{int64(2)}, {int64(4)}, {int64(6)}},
+		},
+		{
+			name: "table return with no hits doesn't return postgres no-return error",
+			procedure: `procedure return_next($vals int[]) public view returns table(val int) {
+				for $i in $vals {
+					error('unreachable');
+				}
+			}`,
+			inputs:  []any{[]int64{}},
+			outputs: [][]any{},
+		},
+		{
+			name: "loop over null array",
+			procedure: `procedure loop_over_null() public view returns (count int) {
+				$vals int[];
+				$count := 0;
+				for $i in $vals {
+					$count := $count + 1;
+				}
+				return $count;
+			}`,
+			outputs: [][]any{{int64(0)}},
+		},
 	}
 
 	for _, test := range tests {
