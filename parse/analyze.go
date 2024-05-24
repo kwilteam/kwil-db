@@ -136,6 +136,9 @@ type sqlContext struct {
 	// containsAggregate is true if the current expression contains an aggregate function.
 	// it is set in ExpressionFunctionCall, and accessed/reset in SelectCore.
 	_containsAggregate bool
+	// containsAggregateWithoutGroupBy is true if the current expression contains an aggregate function,
+	// but there is no GROUP BY clause. This is set in SelectCore, and accessed in SelectStatement.
+	_containsAggregateWithoutGroupBy bool
 	// columnInAggregate is the column found within an aggregate function,
 	// comprised of the relation and attribute.
 	// It is set in ExpressionColumn, and accessed/reset in
@@ -185,10 +188,11 @@ func (c *sqlContext) copy() sqlContext {
 	copy(colsOutsideAgg, c._columnsOutsideAggregate)
 
 	return sqlContext{
-		joinedRelations: joinedRelations,
-		outerRelations:  outerRelations,
-		ctes:            c.ctes,
-		joinedTables:    c.joinedTables,
+		joinedRelations:                  joinedRelations,
+		outerRelations:                   outerRelations,
+		ctes:                             c.ctes,
+		joinedTables:                     c.joinedTables,
+		_containsAggregateWithoutGroupBy: c._containsAggregateWithoutGroupBy, // we want to carry this over
 	}
 }
 
@@ -1317,7 +1321,12 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 		// we order by all columns returned, in the order they are returned.
 		// 3. If there is a group by clause, none of the above apply, and instead we order by
 		// all columns specified in the group by.
-		if p0.SelectCores[0].GroupBy != nil {
+		// 4. If there is an aggregate clause with no group by, then no ordering is applied.
+
+		// addressing point 4: if there is an aggregate clause with no group by, then no ordering is applied.
+		if s.sqlCtx._containsAggregateWithoutGroupBy {
+			// do nothing.
+		} else if p0.SelectCores[0].GroupBy != nil {
 			// reset and visit the group by to get the columns
 			var colsToOrder [][2]string
 			for _, g := range p0.SelectCores[0].GroupBy {
@@ -1375,6 +1384,11 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 	s.sqlCtx._inOrdering = true
 	s.sqlCtx._result = rel1
 
+	// if the user is trying to order and there is an aggregate without group by, we should throw an error.
+	if s.sqlCtx._containsAggregateWithoutGroupBy && len(p0.Ordering) > 0 {
+		s.errs.AddErr(p0, ErrAggregate, "cannot use order by with aggregate function without group by")
+		return rel1
+	}
 	// analyze the ordering, limit, and offset
 	for _, o := range p0.Ordering {
 		o.Accept(s)
@@ -1523,6 +1537,7 @@ func (s *sqlAnalyzer) VisitSelectCore(p0 *SelectCore) any {
 			if len(p0.Columns) != 1 {
 				s.errs.AddErr(c, ErrAggregate, "cannot return multiple values in SELECT that uses aggregate function and no group by")
 			}
+			s.sqlCtx._containsAggregateWithoutGroupBy = true
 		} else if hasGroupBy {
 			// if column used in aggregate, ensure it is not in group by
 			if s.sqlCtx._columnInAggregate != nil {

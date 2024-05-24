@@ -1957,6 +1957,34 @@ func Test_SQL(t *testing.T) {
 			sql:  `SELECT count(u.id), u.username FROM users as u;`,
 			err:  parse.ErrAggregate,
 		},
+		{
+			name: "aggregate with no group by returns one column",
+			sql:  `SELECT count(*) FROM users;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnExpression{
+									Expression: &parse.ExpressionFunctionCall{
+										Name: "count",
+										Star: true,
+									},
+								},
+							},
+							From: &parse.RelationTable{
+								Table: "users",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "aggregate with no group by and ordering fails",
+			sql:  `SELECT count(*) FROM users order by count(*) DESC;`,
+			err:  parse.ErrAggregate,
+		},
 	}
 
 	for _, tt := range tests {
