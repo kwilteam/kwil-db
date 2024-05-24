@@ -17,8 +17,6 @@ import (
 // All tests are given the same schema with a few tables and procedures, as well
 // as mock data. The test is then able to define its own procedure, the inputs,
 // outputs, and expected error (if any).
-// TODO: we need to fix this test, which is currently not working. Since the parsing will
-// be changing, I will leave it as is for now.
 func Test_Procedures(t *testing.T) {
 	schema := `
 	database ecclesia;
@@ -100,6 +98,19 @@ func Test_Procedures(t *testing.T) {
 				);
 			}`,
 			inputs: []any{"test_user"},
+		},
+		{
+			name: "for loop",
+			procedure: `procedure get_all_users($ints int[]) public view returns (ints int[]) {
+				$result int[];
+				for $i in $ints {
+					$result := array_append($result, $i*2);
+				}
+				return $result;
+			}
+				`,
+			inputs:  []any{[]int64{1, 2, 3}},
+			outputs: [][]any{{[]any{int64(2), int64(4), int64(6)}}}, // returns 1 row, 1 column, with an array of ints
 		},
 	}
 

@@ -1703,8 +1703,14 @@ func (s *schemaVisitor) VisitMake_array_procedure_expr(ctx *gen.Make_array_proce
 		// golang interface assertions do not work for slices, so we simply
 		// cast the result to []Expression. This comes from VisitProcedure_expr_list,
 		// directly below.
-		Values: ctx.Procedure_expr_list().Accept(s).([]Expression),
 	}
+
+	// we could enforce this in the parser, but it is not super intuitive,
+	// so we want to control the error message
+	if ctx.Procedure_expr_list() == nil {
+		s.errs.RuleErr(ctx, ErrSyntax, "cannot assign empty arrays. declare using `$arr type[];` instead`")
+	}
+	e.Values = ctx.Procedure_expr_list().Accept(s).([]Expression)
 
 	if ctx.Type_cast() != nil {
 		e.TypeCast = ctx.Type_cast().Accept(s).(*types.DataType)
