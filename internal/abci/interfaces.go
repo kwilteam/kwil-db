@@ -37,18 +37,37 @@ type StateSyncModule interface {
 // It has methods for beginning and ending blocks, applying transactions,
 // and managing a mempool
 type TxApp interface {
+	// GenesisInit is used outside of the consensus thread, creating it's own
+	// transient outer DB transaction.
 	GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*types.Account, initialHeight int64, appHash []byte) error
+
+	// Read-only methods. Do NOT use these from consensus connection methods.
 	ChainInfo(ctx context.Context) (int64, []byte, error)
+	GetValidators(ctx context.Context) ([]*types.Validator, error)
+	AccountInfo(ctx context.Context, acctID []byte, unconfirmed bool) (balance *big.Int, nonce int64, err error)
 	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
-	// Begin signals that a new block has begun.
+
+	// ProposerTxs is used when a validator prepares a block proposal This is
+	// prior to the Begin->Commit cycle, and as such does not use the DB
+	// transaction or a writer connection.
+	ProposerTxs(ctx context.Context, txNonce uint64, maxTxSize int64, proposerAddr []byte) ([][]byte, error)
+
+	// Begin signals that a new block has begun. The following methods are
+	// expected to use either an encompassing DB transaction started with Begin
+	// and ended with Commit.
 	Begin(ctx context.Context) error
+	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
+	UpdateValidator(ctx context.Context, validator []byte, power int64) error
 	Finalize(ctx context.Context, blockHeight int64) (appHash []byte, validatorUpgrades []*types.Validator, err error)
 	Commit(ctx context.Context) error
-	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
-	ProposerTxs(ctx context.Context, txNonce uint64, maxTxSize int64, proposerAddr []byte) ([][]byte, error)
-	UpdateValidator(ctx context.Context, validator []byte, power int64) error
-	GetValidators(ctx context.Context) ([]*types.Validator, error)
-	AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
+
+	// ConsensusAccountInfo and ConsensusValidators are used in two different
+	// contexts, but always from the ABCI consensus connection. During block
+	// execution (between Begin and Commit) the active write transaction is used
+	// to read uncommitted data. From PrepareProposal and ProcessProposal, an
+	// ephemeral read-only transaction is created.
+	ConsensusAccountInfo(ctx context.Context, acctID []byte) (balance *big.Int, nonce int64, err error)
+	ConsensusValidators(ctx context.Context) ([]*types.Validator, error)
 
 	// Reload reloads the state of engine and txapp.
 	Reload(ctx context.Context) error

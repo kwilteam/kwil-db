@@ -23,6 +23,12 @@ type DB interface {
 	sql.OuterTxMaker
 	sql.ReadTxMaker
 	sql.SnapshotTxMaker
+	// BeginReservedReadTx creates a read-only transaction on a reserved
+	// connection that does not contend with readers in the pool that services
+	// RPC requests. NOTE: I think the read tx could use the writer conn given
+	// the concurrency guarantees of the consensus connection, but I'm working
+	// with a more general assumption in the pg package.
+	BeginReservedReadTx(context.Context) (sql.Tx, error)
 }
 
 type Snapshotter interface {

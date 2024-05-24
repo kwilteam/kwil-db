@@ -49,10 +49,7 @@ tasks:
         goimports -format-only -w ./cmd ./internal ./test ./core/client \
           ./core/crypto ./core/log ./core/rpc/client \
           ./core/rpc/transport ./core/types ./core/utils \
-          ./parse/parse.go ./parse/metadata ./parse/kuneiform/*.go \
-          ./parse/procedures/*.go ./parse/procedures/parser ./parse/procedures/visitors \
-          ./parse/sql/*.go ./parse/sql/postgres ./parse/sql/sqlanalyzer ./parse/sql/tree \
-          ./parse/actions/*.go ./parse/actions/parser \
+          ./parse/*.go ./parse/wasm ./parse/postgres
 
   tidy:
     desc: go mod tidy each module

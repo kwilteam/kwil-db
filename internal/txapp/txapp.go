@@ -292,8 +292,32 @@ func (r *TxApp) announceValidators() {
 	}
 }
 
+// ConsensusValidators gets the current validator set from the database. It will
+// use the active write transaction if it exists (meaning it is called from
+// FinalizeBlock, etc. between Commit and Begin), otherwise it uses a reserved
+// reader connection to avoid contention with user requests.
+func (r *TxApp) ConsensusValidators(ctx context.Context) ([]*types.Validator, error) {
+	// NOTE: this method is meant ONLY for use from methods on ABCI's consensus
+	// connection, which ensures no use (no data race on r.currentTx).
+	var tx sql.Executor
+	if r.currentTx == nil { // coming from PrepareProposal / ProcessProposal, which does not happen presently
+		rtx, err := r.Database.BeginReservedReadTx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer rtx.Rollback(ctx)
+		tx = rtx
+	} else { // coming from FinalizeBlock
+		tx = r.currentTx
+		// We're not making a nested tx since an error in the consensus thread
+		// will halt the node (and rollback) anyway.
+	}
+
+	return getAllVoters(ctx, tx)
+}
+
 // GetValidators returns a shallow copy of the current validator set.
-// It will not return uncommitted changes.
+// It will return ONLY committed changes.
 func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
 	r.valMtx.Lock()
 	defer r.valMtx.Unlock()
@@ -314,19 +338,22 @@ func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
 	return getAllVoters(ctx, readTx)
 }
 
-// GetValidatorsPower returns the total power of the current validator set.
-func (r *TxApp) GetValidatorSetPower(ctx context.Context) (int64, error) {
-	validators, err := r.GetValidators(ctx)
-	if err != nil {
-		return 0, err
-	}
-
+func validatorSetPower(validators []*types.Validator) int64 {
 	var totalPower int64
 	for _, v := range validators {
 		totalPower += v.Power
 	}
+	return totalPower
+}
 
-	return totalPower, nil
+// validatorsPower returns the total power of the current validator set
+// according to the DB.
+func (r *TxApp) validatorSetPower(ctx context.Context, tx sql.Executor) (int64, error) {
+	validators, err := getAllVoters(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
+	return validatorSetPower(validators), nil
 }
 
 // Execute executes a transaction.  It will route the transaction to the
@@ -442,13 +469,13 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (appHash []byte
 
 // processVotes confirms resolutions that have been approved by the network,
 // expires resolutions that have expired, and properly credits proposers and voters.
-func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
+func (r *TxApp) processVotes(ctx context.Context, blockHeight int64) error {
 	credits := make(creditMap)
 
-	var finalizedIds []*types.UUID
-	// markedProcessedIds is a separate list for marking processed, since we do not want to process validator resolutions
+	var finalizedIDs []*types.UUID
+	// markedProcessedIDs is a separate list for marking processed, since we do not want to process validator resolutions
 	// validator vote IDs are not unique, so we cannot mark them as processed, in case a validator leaves and joins again
-	var markProcessedIds []*types.UUID
+	var markProcessedIDs []*types.UUID
 	// resolveFuncs tracks the resolve function for each resolution, in the order they are queried.
 	// we track this and execute all of these functions after we have found all confirmed resolutions
 	// because a resolve function can change a validator's power. This would then change the required power
@@ -458,7 +485,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 		ResolveFunc func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error
 	}
 
-	totalPower, err := r.GetValidatorSetPower(ctx)
+	totalPower, err := r.validatorSetPower(ctx, r.currentTx)
 	if err != nil {
 		return err
 	}
@@ -476,11 +503,11 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 
 		for _, resolution := range finalized {
 			credits.applyResolution(resolution)
-			finalizedIds = append(finalizedIds, resolution.ID)
+			finalizedIDs = append(finalizedIDs, resolution.ID)
 
 			// we do not want to mark processed for validator join and remove events, as they can occur again
 			if resolution.Type != voting.ValidatorJoinEventType && resolution.Type != voting.ValidatorRemoveEventType {
-				markProcessedIds = append(markProcessedIds, resolution.ID)
+				markProcessedIDs = append(markProcessedIDs, resolution.ID)
 			}
 
 			resolveFuncs = append(resolveFuncs, &struct {
@@ -525,17 +552,17 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 	}
 
 	// now we will expire resolutions
-	expired, err := getExpired(ctx, r.currentTx, blockheight)
+	expired, err := getExpired(ctx, r.currentTx, blockHeight)
 	if err != nil {
 		return err
 	}
 
-	expiredIds := make([]*types.UUID, 0, len(expired))
+	expiredIDs := make([]*types.UUID, 0, len(expired))
 	requiredPowerMap := make(map[string]int64) // map of resolution type to required power
 	for _, resolution := range expired {
-		expiredIds = append(expiredIds, resolution.ID)
+		expiredIDs = append(expiredIDs, resolution.ID)
 		if resolution.Type != voting.ValidatorJoinEventType && resolution.Type != voting.ValidatorRemoveEventType {
-			markProcessedIds = append(markProcessedIds, resolution.ID)
+			markProcessedIDs = append(markProcessedIDs, resolution.ID)
 		}
 
 		threshold, ok := requiredPowerMap[resolution.Type]
@@ -548,23 +575,23 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 			// we need to use each configured resolutions refund threshold
 			requiredPowerMap[resolution.Type] = requiredPower(ctx, r.currentTx, cfg.RefundThreshold, totalPower)
 		}
-		refunded := false
 		// if it has enough power, we will still refund
-		if resolution.ApprovedPower >= threshold {
-			refunded = true
+		refunded := resolution.ApprovedPower >= threshold
+		if refunded {
 			credits.applyResolution(resolution)
 		}
 
-		r.log.Debug("expiring resolution", log.String("type", resolution.Type), log.String("id", resolution.ID.String()), log.Bool("refunded", refunded))
+		r.log.Debug("expiring resolution", log.String("type", resolution.Type),
+			log.String("id", resolution.ID.String()), log.Bool("refunded", refunded))
 	}
 
-	allIds := append(finalizedIds, expiredIds...)
-	err = deleteResolutions(ctx, r.currentTx, allIds...)
+	allIDs := append(finalizedIDs, expiredIDs...)
+	err = deleteResolutions(ctx, r.currentTx, allIDs...)
 	if err != nil {
 		return err
 	}
 
-	err = markProcessed(ctx, r.currentTx, markProcessedIds...)
+	err = markProcessed(ctx, r.currentTx, markProcessedIDs...)
 	if err != nil {
 		return err
 	}
@@ -573,7 +600,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 	// per block vote sizes, they never get to vote and essentially delete the event
 	// So this is handled instead when the nodes are approved.
 	// TODO: We need to figure out the consequences of resolutions getting expired due to the vote limits set per block. There can be scenarios where the events are observed by the nodes, but before they can vote, the event gets expired. rare but possible in the situations with higher event traffic.
-	err = deleteEvents(ctx, r.currentTx, markProcessedIds...)
+	err = deleteEvents(ctx, r.currentTx, markProcessedIDs...)
 	if err != nil {
 		return err
 	}
@@ -718,9 +745,31 @@ func (r *TxApp) ApplyMempool(ctx context.Context, tx *transactions.Transaction) 
 	return r.mempool.applyTransaction(ctx, tx, readTx, r.events)
 }
 
+func (r *TxApp) ConsensusAccountInfo(ctx context.Context, acctID []byte) (balance *big.Int, nonce int64, err error) {
+	// NOTE: this method is meant ONLY for use from methods on ABCI's consensus
+	// connection, which ensures no use (no data race on r.currentTx).
+	var tx sql.Executor
+	if r.currentTx == nil { // coming from PrepareProposal / ProcessProposal, which is always the case presently
+		rtx, err := r.Database.BeginReservedReadTx(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer rtx.Rollback(ctx)
+		tx = rtx
+	} else { // coming from FinalizeBlock
+		tx = r.currentTx
+	}
+
+	acct, err := getAccount(ctx, tx, acctID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return acct.Balance, acct.Nonce, nil
+}
+
 // AccountInfo gets account info from either the mempool or the account store.
 // It takes a flag to indicate whether it should check the mempool first.
-func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
+func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUnconfirmed bool) (balance *big.Int, nonce int64, err error) {
 	readTx, err := r.Database.BeginReadTx(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -728,7 +777,7 @@ func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted b
 	defer readTx.Rollback(ctx) // always rollback read tx
 
 	var a *types.Account
-	if getUncommitted {
+	if getUnconfirmed {
 		a, err = r.mempool.accountInfoSafe(ctx, readTx, acctID)
 	} else {
 		a, err = getAccount(ctx, readTx, acctID)
@@ -748,10 +797,17 @@ func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted b
 // This transaction only includes voteBodies for events whose bodies have not been received by the network.
 // Therefore, there won't be more than 1 VoteBody transaction per event.
 func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int64, proposerAddr []byte) ([][]byte, error) {
-	bal, nonce, err := r.AccountInfo(ctx, proposerAddr, false)
+	readTx, err := r.Database.BeginReservedReadTx(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get proposer account: %w", err)
+		return nil, err
 	}
+	defer readTx.Rollback(ctx) // always rollback read tx
+
+	acct, err := getAccount(ctx, readTx, proposerAddr)
+	if err != nil {
+		return nil, err
+	}
+	bal, nonce := acct.Balance, acct.Nonce
 
 	if r.GasEnabled && nonce == 0 && bal.Sign() == 0 {
 		r.log.Debug("proposer account has no balance, not allowed to propose any new transactions")
@@ -761,12 +817,6 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 	if txNonce == 0 {
 		txNonce = uint64(nonce) + 1
 	}
-
-	readTx, err := r.Database.BeginReadTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer readTx.Rollback(ctx) // always rollback read tx
 
 	maxTxsSize -= r.emptyVoteBodyTxSize + 1000 // empty payload size + 1000 safety buffer
 	events, err := getEvents(ctx, readTx)
@@ -855,7 +905,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 
 // eventRLPSize is the extra size added to an event from RLP
 // encoding. It is the same regardless of event data.
-var eventRLPSize int64 = func() int64 {
+var eventRLPSize = func() int64 {
 	event := &types.VotableEvent{
 		Body: []byte("body"),
 		Type: "type",

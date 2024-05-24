@@ -228,7 +228,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("begin tx commit failed: %w", err)
 	}
 
-	initialValidators, err := a.txApp.GetValidators(ctx)
+	initialValidators, err := a.txApp.ConsensusValidators(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current validators: %w", err)
 	}
@@ -672,7 +672,7 @@ type indexedTxn struct {
 // This also includes the proposer's transactions, which are not in the mempool.
 // The transaction ordering is as follows:
 // MempoolProposerTxns, ProposerInjectedTxns, MempoolTxns by other senders
-func (a *AbciApp) prepareBlockTransactions(txs [][]byte, log *log.Logger, maxTxBytes int64, proposerAddr []byte) [][]byte {
+func (a *AbciApp) prepareBlockTransactions(ctx context.Context, txs [][]byte, log *log.Logger, maxTxBytes int64, proposerAddr []byte) [][]byte {
 	// Unmarshal and index the transactions.
 	var okTxns []*indexedTxn
 	var i int
@@ -703,7 +703,6 @@ func (a *AbciApp) prepareBlockTransactions(txs [][]byte, log *log.Logger, maxTxB
 	// Grab the bytes rather than re-marshalling.
 	nonces := make([]uint64, 0, len(okTxns))
 	var propTxs, otherTxns []*indexedTxn
-	// otherTxns := make(map[string][]*indexedTxn)
 	i = 0
 	proposerNonce := uint64(0)
 
@@ -716,7 +715,7 @@ func (a *AbciApp) prepareBlockTransactions(txs [][]byte, log *log.Logger, maxTxB
 
 		// Drop transactions from unfunded accounts in gasEnabled mode
 		if a.cfg.GasEnabled {
-			balance, nonce, err := a.txApp.AccountInfo(context.Background(), tx.Sender, false)
+			balance, nonce, err := a.txApp.ConsensusAccountInfo(context.Background(), tx.Sender)
 			if err != nil {
 				log.Error("failed to get account info", zap.Error(err))
 				continue
@@ -732,9 +731,7 @@ func (a *AbciApp) prepareBlockTransactions(txs [][]byte, log *log.Logger, maxTxB
 			propTxs = append(propTxs, tx)
 		} else {
 			// Append the transaction to the final list.
-			// sender := string(tx.Sender)
 			otherTxns = append(otherTxns, tx)
-			// otherTxns[sender] = append(otherTxns[sender], tx)
 		}
 		nonces = append(nonces, tx.Body.Nonce)
 		i++
@@ -817,7 +814,7 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		return &abciTypes.ResponsePrepareProposal{}, nil
 	}
 
-	okTxns := a.prepareBlockTransactions(req.Txs, &a.log, req.MaxTxBytes, pubKey)
+	okTxns := a.prepareBlockTransactions(ctx, req.Txs, &a.log, req.MaxTxBytes, pubKey)
 	if len(okTxns) != len(req.Txs) {
 		logger.Info("PrepareProposal: number of transactions in proposed block has changed!",
 			zap.Int("in", len(req.Txs)), zap.Int("out", len(okTxns)))
@@ -846,7 +843,7 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 	// execution does not update an accounts nonce in state unless it is the
 	// next nonce. Delivering transactions to a block in that way cannot happen.
 	for sender, txs := range grouped {
-		_, nonce, err := a.txApp.AccountInfo(ctx, []byte(sender), false)
+		_, nonce, err := a.txApp.ConsensusAccountInfo(ctx, []byte(sender))
 		if err != nil {
 			return fmt.Errorf("failed to get account: %w", err)
 		}
