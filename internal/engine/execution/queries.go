@@ -2,7 +2,7 @@ package execution
 
 import (
 	"context"
-	"encoding/hex"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -334,7 +334,12 @@ func setContextualVars(ctx context.Context, db sql.DB, data *common.ExecutionDat
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.SignerVar, hex.EncodeToString(data.Signer)))
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.SignerVar, base64.StdEncoding.EncodeToString(data.Signer)))
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = %d;`, generate.PgSessionPrefix, parse.HeightVar, data.Height))
 	if err != nil {
 		return err
 	}

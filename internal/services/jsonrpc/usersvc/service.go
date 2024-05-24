@@ -438,6 +438,7 @@ func (svc *Service) Call(ctx context.Context, req *jsonrpc.CallRequest) (*jsonrp
 		TransactionData: common.TransactionData{
 			Signer: signer,
 			Caller: caller,
+			Height: -1, // not available
 		},
 	})
 	if err != nil {

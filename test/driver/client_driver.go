@@ -215,3 +215,11 @@ func (d *KwildClientDriver) Allowance(ctx context.Context, sender *ecdsa.Private
 	senderAddr := ec.PubkeyToAddress(sender.PublicKey)
 	return d.deployer.Allowance(ctx, senderAddr)
 }
+
+func (d *KwildClientDriver) Signer() []byte {
+	return d.signer.Identity()
+}
+
+func (d *KwildClientDriver) Identifier() (string, error) {
+	return auth.EthSecp256k1Authenticator{}.Identifier(d.Signer())
+}

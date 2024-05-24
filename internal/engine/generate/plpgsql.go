@@ -118,7 +118,9 @@ func (s *sqlGenerator) VisitExpressionForeignCall(p0 *parse.ExpressionForeignCal
 }
 
 func (s *sqlGenerator) VisitExpressionVariable(p0 *parse.ExpressionVariable) any {
-	if s.numberParameters {
+	// if a user param $, then we need to number it.
+	// Vars using @ get set and accessed using postgres's current_setting function
+	if s.numberParameters && p0.Prefix == parse.VariablePrefixDollar {
 		str := p0.String()
 
 		// if it already exists, we write it as that index.
@@ -978,7 +980,7 @@ func formatContextualVariableName(name string) string {
 
 	switch dataType {
 	case types.BlobType:
-		return fmt.Sprintf("%s::bytea", str)
+		return fmt.Sprintf("decode(%s, 'base64')", str)
 	case types.IntType:
 		return fmt.Sprintf("%s::int8", str)
 	case types.BoolType:

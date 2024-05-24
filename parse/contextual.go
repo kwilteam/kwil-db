@@ -11,12 +11,15 @@ var (
 	TxidVar = "txid"
 	// signer is the session variable for the signer.
 	SignerVar = "signer"
+	// height is the session variable for the block height.
+	HeightVar = "height"
 	// SessionVars are the session variables that are available in the engine.
 	// It maps the variable name to its type.
 	SessionVars = map[string]*types.DataType{
 		CallerVar: types.TextType,
 		TxidVar:   types.TextType,
 		SignerVar: types.BlobType,
+		HeightVar: types.IntType,
 	}
 )
 

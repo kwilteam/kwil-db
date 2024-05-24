@@ -68,6 +68,8 @@ type ProcedureContext struct {
 	Procedure string
 	// Result is the result of the most recent SQL query.
 	Result *sql.ResultSet
+	// Height is the block height of the current execution.
+	Height int64
 
 	// StackDepth tracks the current depth of the procedure call stack. It is
 	// incremented each time a procedure calls another procedure.
@@ -104,6 +106,7 @@ func (p *ProcedureContext) Values() map[string]any {
 	values["@caller"] = p.Caller
 	values["@txid"] = p.TxID
 	values["@signer"] = p.Signer
+	values["@height"] = p.Height
 
 	return values
 }
@@ -122,6 +125,7 @@ func (p *ProcedureContext) NewScope() *ProcedureContext {
 		Procedure:  p.Procedure,
 		StackDepth: p.StackDepth,
 		UsedGas:    p.UsedGas,
+		Height:     p.Height,
 	}
 }
 

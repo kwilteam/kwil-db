@@ -52,6 +52,7 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 		TransactionData: common.TransactionData{
 			Signer: signer,
 			Caller: caller,
+			Height: -1, // not available
 		},
 	})
 	if err != nil {

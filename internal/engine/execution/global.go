@@ -256,6 +256,7 @@ func (g *GlobalContext) Procedure(ctx context.Context, tx sql.DB, options *commo
 		DBID:      options.Dataset,
 		Procedure: options.Procedure,
 		TxID:      options.TxID,
+		Height:    options.Height,
 		// starting with stack depth 0, increment in each action call
 	}
 

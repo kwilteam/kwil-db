@@ -18,10 +18,12 @@ import (
 	"time"
 
 	ec "github.com/ethereum/go-ethereum/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/utils"
+	jsonUtil "github.com/kwilteam/kwil-db/core/utils/json"
 	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
 
 	"go.uber.org/zap"
@@ -575,17 +577,13 @@ func parseRespGetSchema(data any) (*types.Schema, error) {
 	return &resp, nil
 }
 
-// respQueryDb represents the query db response(json) from the cli response
-type respQueryDb []map[string]any
-
 func parseRespQueryDb(data any) (*clientType.Records, error) {
 	bts, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal query db resp: %w", err)
 	}
 
-	var resp respQueryDb
-	err = json.Unmarshal(bts, &resp)
+	resp, err := jsonUtil.UnmarshalMapWithoutFloat(bts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal query db: %w", err)
 	}
@@ -685,4 +683,12 @@ func (d *KwilCliDriver) Allowance(ctx context.Context, sender *ecdsa.PrivateKey)
 
 	senderAddr := ec.PubkeyToAddress(sender.PublicKey)
 	return d.deployer.Allowance(ctx, senderAddr)
+}
+
+func (d *KwilCliDriver) Signer() []byte {
+	return d.identity
+}
+
+func (d *KwilCliDriver) Identifier() (string, error) {
+	return auth.EthSecp256k1Authenticator{}.Identifier(d.Signer())
 }
