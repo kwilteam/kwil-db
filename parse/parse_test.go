@@ -1198,6 +1198,231 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "missing return values",
+			returns: &types.ProcedureReturn{
+				Fields: []*types.NamedType{
+					{
+						Name: "id",
+						Type: types.IntType,
+					},
+					{
+						Name: "name",
+						Type: types.TextType,
+					},
+				},
+			},
+			proc: `return 1;`,
+			err:  parse.ErrReturn,
+		},
+		{
+			name: "no return values",
+			returns: &types.ProcedureReturn{
+				Fields: []*types.NamedType{{
+					Name: "id",
+					Type: types.IntType,
+				}},
+			},
+			proc: `$a := 1;`,
+			err:  parse.ErrReturn,
+		},
+		{
+			name: "if/then missing return in one branch",
+			returns: &types.ProcedureReturn{
+				Fields: []*types.NamedType{{
+					Name: "id",
+					Type: types.IntType,
+				}},
+			},
+			proc: `
+			if true {
+				return 1;
+			} else {
+				$a := 1;
+			}
+			`,
+			err: parse.ErrReturn,
+		},
+		{
+			name: "for loop with if return",
+			returns: &types.ProcedureReturn{
+				Fields: []*types.NamedType{{
+					Name: "id",
+					Type: types.IntType,
+				}},
+			},
+			proc: `
+			$arr := [1,2,3];
+			for $i in $arr {
+				if $i == -1 {
+					break;
+				}
+				return $i;
+			}
+			`,
+			err: parse.ErrReturn,
+		},
+		{
+			name: "nested for loop",
+			returns: &types.ProcedureReturn{
+				Fields: []*types.NamedType{{
+					Name: "id",
+					Type: types.IntType,
+				}},
+			},
+			proc: `
+			$arr int[];
+			for $i in $arr {
+				for $j in 1..$i {
+					break; // only breaks the inner loop
+				}
+
+				return $i; // this will always exit on first $i iteration
+			}
+			`,
+			want: &parse.ProcedureParseResult{
+				Variables: map[string]*types.DataType{
+					"$arr": types.ArrayType(types.IntType),
+					"$i":   types.IntType,
+					"$j":   types.IntType,
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtDeclaration{
+						Variable: exprVar("$arr"),
+						Type:     types.ArrayType(types.IntType),
+					},
+					&parse.ProcedureStmtForLoop{
+						Receiver: exprVar("$i"),
+						LoopTerm: &parse.LoopTermVariable{
+							Variable: exprVar("$arr"),
+						},
+						Body: []parse.ProcedureStmt{
+							&parse.ProcedureStmtForLoop{
+								Receiver: exprVar("$j"),
+								LoopTerm: &parse.LoopTermRange{
+									Start: exprLit(1),
+									End:   exprVar("$i"),
+								},
+								Body: []parse.ProcedureStmt{
+									&parse.ProcedureStmtBreak{},
+								},
+							},
+							&parse.ProcedureStmtReturn{
+								Values: []parse.Expression{exprVar("$i")},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "returns table incorrect",
+			returns: &types.ProcedureReturn{
+				Fields: []*types.NamedType{{
+					Name: "id",
+					Type: types.IntType,
+				}},
+			},
+			proc: `return select id from users;`,
+			err:  parse.ErrReturn,
+		},
+		{
+			name: "returns table correct",
+			returns: &types.ProcedureReturn{
+				IsTable: true,
+				Fields: []*types.NamedType{{
+					Name: "id",
+					Type: types.IntType,
+				}},
+			},
+			proc: `return select 1 as id;`,
+			want: &parse.ProcedureParseResult{
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtReturn{
+						SQL: &parse.SQLStatement{
+							SQL: &parse.SelectStatement{
+								SelectCores: []*parse.SelectCore{
+									{
+										Columns: []parse.ResultColumn{
+											&parse.ResultColumnExpression{
+												Expression: exprLit(1),
+												Alias:      "id",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "returns next incorrect",
+			returns: &types.ProcedureReturn{
+				Fields: []*types.NamedType{{
+					Name: "id",
+					Type: types.IntType,
+				}},
+			},
+			proc: `$a int[];
+			for $row in $a {
+				return next $row;
+			}
+			`,
+			err: parse.ErrReturn,
+		},
+		{
+			name: "returns next correct",
+			returns: &types.ProcedureReturn{
+				IsTable: true,
+				Fields: []*types.NamedType{{
+					Name: "id",
+					Type: types.IntType,
+				}},
+			},
+			proc: `
+			for $row in select * from get_all_user_ids() {
+				return next $row.id;
+			}
+			`,
+			want: &parse.ProcedureParseResult{
+				CompoundVariables: map[string]struct{}{
+					"$row": {},
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtForLoop{
+						Receiver: exprVar("$row"),
+						LoopTerm: &parse.LoopTermSQL{
+							Statement: &parse.SQLStatement{
+								SQL: &parse.SelectStatement{
+									SelectCores: []*parse.SelectCore{
+										{
+											Columns: []parse.ResultColumn{&parse.ResultColumnWildcard{}},
+											From: &parse.RelationFunctionCall{
+												FunctionCall: &parse.ExpressionFunctionCall{
+													Name: "get_all_user_ids",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						Body: []parse.ProcedureStmt{
+							&parse.ProcedureStmtReturnNext{
+								Values: []parse.Expression{
+									&parse.ExpressionFieldAccess{
+										Record: exprVar("$row"),
+										Field:  "id",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1320,18 +1545,14 @@ func Test_SQL(t *testing.T) {
 							Columns: []parse.ResultColumn{
 								&parse.ResultColumnWildcard{},
 								&parse.ResultColumnExpression{
-									Expression: &parse.ExpressionColumn{
-										Column: "id",
-									},
-									Alias: "i",
+									Expression: exprColumn("", "id"),
+									Alias:      "i",
 								},
 								&parse.ResultColumnExpression{
 									Expression: &parse.ExpressionFunctionCall{
 										Name: "length",
 										Args: []parse.Expression{
-											&parse.ExpressionColumn{
-												Column: "username",
-											},
+											exprColumn("", "username"),
 										},
 									},
 									Alias: "name_len",
@@ -1342,10 +1563,7 @@ func Test_SQL(t *testing.T) {
 								Alias: "u",
 							},
 							Where: &parse.ExpressionComparison{
-								Left: &parse.ExpressionColumn{
-									Table:  "u",
-									Column: "id",
-								},
+								Left:     exprColumn("u", "id"),
 								Operator: parse.ComparisonOperatorEqual,
 								Right: &parse.ExpressionLiteral{
 									Type:  types.IntType,
@@ -1357,10 +1575,7 @@ func Test_SQL(t *testing.T) {
 					// apply default ordering
 					Ordering: []*parse.OrderingTerm{
 						{
-							Expression: &parse.ExpressionColumn{
-								Table:  "u",
-								Column: "id",
-							},
+							Expression: exprColumn("u", "id"),
 						},
 					},
 				},
@@ -1396,18 +1611,14 @@ func Test_SQL(t *testing.T) {
 										{
 											Columns: []parse.ResultColumn{
 												&parse.ResultColumnExpression{
-													Expression: &parse.ExpressionColumn{
-														Column: "id",
-													},
+													Expression: exprColumn("", "id"),
 												},
 											},
 											From: &parse.RelationTable{
 												Table: "users",
 											},
 											Where: &parse.ExpressionComparison{
-												Left: &parse.ExpressionColumn{
-													Column: "username",
-												},
+												Left:     exprColumn("", "username"),
 												Operator: parse.ComparisonOperatorEqual,
 												Right: &parse.ExpressionLiteral{
 													Type:  types.TextType,
@@ -1423,10 +1634,7 @@ func Test_SQL(t *testing.T) {
 									// apply default ordering
 									Ordering: []*parse.OrderingTerm{
 										{
-											Expression: &parse.ExpressionColumn{
-												Table:  "users",
-												Column: "id",
-											},
+											Expression: exprColumn("users", "id"),
 										},
 									},
 								},
@@ -1447,18 +1655,12 @@ func Test_SQL(t *testing.T) {
 						{
 							Columns: []parse.ResultColumn{
 								&parse.ResultColumnExpression{
-									Expression: &parse.ExpressionColumn{
-										Column: "id",
-										Table:  "p",
-									},
-									Alias: "id",
+									Expression: exprColumn("p", "id"),
+									Alias:      "id",
 								},
 								&parse.ResultColumnExpression{
-									Expression: &parse.ExpressionColumn{
-										Column: "username",
-										Table:  "u",
-									},
-									Alias: "author",
+									Expression: exprColumn("u", "username"),
+									Alias:      "author",
 								},
 							},
 							From: &parse.RelationTable{
@@ -1473,23 +1675,14 @@ func Test_SQL(t *testing.T) {
 										Alias: "u",
 									},
 									On: &parse.ExpressionComparison{
-										Left: &parse.ExpressionColumn{
-											Column: "author_id",
-											Table:  "p",
-										},
+										Left:     exprColumn("p", "author_id"),
 										Operator: parse.ComparisonOperatorEqual,
-										Right: &parse.ExpressionColumn{
-											Column: "id",
-											Table:  "u",
-										},
+										Right:    exprColumn("u", "id"),
 									},
 								},
 							},
 							Where: &parse.ExpressionComparison{
-								Left: &parse.ExpressionColumn{
-									Column: "username",
-									Table:  "u",
-								},
+								Left:     exprColumn("u", "username"),
 								Operator: parse.ComparisonOperatorEqual,
 								Right: &parse.ExpressionLiteral{
 									Type:  types.TextType,
@@ -1501,25 +1694,16 @@ func Test_SQL(t *testing.T) {
 
 					Ordering: []*parse.OrderingTerm{
 						{
-							Expression: &parse.ExpressionColumn{
-								Table:  "u",
-								Column: "username",
-							},
-							Order: parse.OrderTypeDesc,
-							Nulls: parse.NullOrderLast,
+							Expression: exprColumn("u", "username"),
+							Order:      parse.OrderTypeDesc,
+							Nulls:      parse.NullOrderLast,
 						},
 						// apply default ordering
 						{
-							Expression: &parse.ExpressionColumn{
-								Table:  "p",
-								Column: "id",
-							},
+							Expression: exprColumn("p", "id"),
 						},
 						{
-							Expression: &parse.ExpressionColumn{
-								Table:  "u",
-								Column: "id",
-							},
+							Expression: exprColumn("u", "id"),
 						},
 					},
 				},
@@ -1532,9 +1716,7 @@ func Test_SQL(t *testing.T) {
 				SQL: &parse.DeleteStatement{
 					Table: "users",
 					Where: &parse.ExpressionComparison{
-						Left: &parse.ExpressionColumn{
-							Column: "id",
-						},
+						Left:     exprColumn("", "id"),
 						Operator: parse.ComparisonOperatorEqual,
 						Right: &parse.ExpressionLiteral{
 							Type:  types.IntType,
@@ -1565,15 +1747,9 @@ func Test_SQL(t *testing.T) {
 							{
 								Column: "id",
 								Value: &parse.ExpressionArithmetic{
-									Left: &parse.ExpressionColumn{
-										Column: "id",
-										Table:  "users",
-									},
+									Left:     exprColumn("users", "id"),
 									Operator: parse.ArithmeticOperatorAdd,
-									Right: &parse.ExpressionColumn{
-										Column: "id",
-										Table:  "excluded",
-									},
+									Right:    exprColumn("excluded", "id"),
 								},
 							},
 						},
@@ -1613,6 +1789,152 @@ func Test_SQL(t *testing.T) {
 			INNER JOIN (SELECT id as uid FROM users WHERE id = 1) ON p.author_id = uid;`,
 			err: parse.ErrUnnamedJoin,
 		},
+		{
+			name: "compound select",
+			sql:  `SELECT * FROM users union SELECT * FROM users;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnWildcard{},
+							},
+							From: &parse.RelationTable{
+								Table: "users",
+							},
+						},
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnWildcard{},
+							},
+							From: &parse.RelationTable{
+								Table: "users",
+							},
+						},
+					},
+					CompoundOperators: []parse.CompoundOperator{
+						parse.CompoundOperatorUnion,
+					},
+					// apply default ordering
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: exprColumn("", "id"),
+						},
+						{
+							Expression: exprColumn("", "username"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "compound with mismatched shape",
+			sql:  `SELECT username, id FROM users union SELECT id, username FROM users;`,
+			err:  parse.ErrResultShape,
+		},
+		{
+			name: "group by",
+			sql:  `SELECT u.username, count(u.id) FROM users as u GROUP BY u.username HAVING count(u.id) > 1;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnExpression{
+									Expression: exprColumn("u", "username"),
+								},
+								&parse.ResultColumnExpression{
+									Expression: &parse.ExpressionFunctionCall{
+										Name: "count",
+										Args: []parse.Expression{
+											exprColumn("u", "id"),
+										},
+									},
+								},
+							},
+							From: &parse.RelationTable{
+								Table: "users",
+								Alias: "u",
+							},
+							GroupBy: []parse.Expression{
+								exprColumn("u", "username"),
+							},
+							Having: &parse.ExpressionComparison{
+								Left: &parse.ExpressionFunctionCall{
+									Name: "count",
+									Args: []parse.Expression{
+										exprColumn("u", "id"),
+									},
+								},
+								Operator: parse.ComparisonOperatorGreaterThan,
+								Right:    exprLit(1),
+							},
+						},
+					},
+					// apply default ordering
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: exprColumn("u", "username"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "group by with having, having is in group by clause",
+			// there's a much easier way to write this query, but this is just to test the parser
+			sql: `SELECT username FROM users GROUP BY username HAVING length(username) > 1;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnExpression{
+									Expression: exprColumn("", "username"),
+								},
+							},
+							From: &parse.RelationTable{
+								Table: "users",
+							},
+							GroupBy: []parse.Expression{
+								exprColumn("", "username"),
+							},
+							Having: &parse.ExpressionComparison{
+								Left: &parse.ExpressionFunctionCall{
+									Name: "length",
+									Args: []parse.Expression{
+										exprColumn("", "username"),
+									},
+								},
+								Operator: parse.ComparisonOperatorGreaterThan,
+								Right:    exprLit(1),
+							},
+						},
+					},
+					// apply default ordering
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: exprColumn("users", "username"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "group by with having, invalid column without aggregate",
+			sql:  `SELECT u.username, count(u.id) FROM users as u GROUP BY u.username HAVING u.id > 1;`,
+			err:  parse.ErrAggregate,
+		},
+		{
+			name: "compound select with group by",
+			sql:  `SELECT u.username, count(u.id) FROM users as u GROUP BY u.username HAVING count(u.id) > 1 UNION SELECT u.username, count(u.id) FROM users as u GROUP BY u.username HAVING count(u.id) > 1;`,
+			err:  parse.ErrAggregate,
+		},
+		{
+			name: "aggregate with no group by returns many columns",
+			sql:  `SELECT count(u.id), u.username FROM users as u;`,
+			err:  parse.ErrAggregate,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1643,6 +1965,13 @@ func Test_SQL(t *testing.T) {
 				t.Errorf("unexpected AST:\n%s", diff(res.AST, tt.want))
 			}
 		})
+	}
+}
+
+func exprColumn(t, c string) *parse.ExpressionColumn {
+	return &parse.ExpressionColumn{
+		Table:  t,
+		Column: c,
 	}
 }
 

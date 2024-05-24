@@ -419,7 +419,7 @@ func (s *sqlAnalyzer) expressionTypeErr(e Expression) *types.DataType {
 	// if expression is a receiver from a loop, it will be a map
 	_, ok := e.Accept(s).(map[string]*types.DataType)
 	if ok {
-		s.errs.AddErr(e, ErrType, "invalid usage of compound type, expected scalar value")
+		s.errs.AddErr(e, ErrType, "invalid usage of compound type. you must reference a field using $compound.field notation")
 		return cast(e, types.UnknownType)
 	}
 
@@ -1263,6 +1263,13 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 		}
 	}
 
+	// we want to re-set the rel1 scope, since it is used in ordering,
+	// as well as grouping re-checks if the statement is not a compound select.
+	// e.g. "select a, b from t1 union select c, d from t2 order by a"
+	oldScope := s.sqlCtx
+	s.sqlCtx = rel1Scope
+	defer func() { s.sqlCtx = oldScope }()
+
 	// If it is not a compound select, we should use the scope from the first select core,
 	// so that we can analyze joined tables in the order and limit clauses. It if is a compound
 	// select, then we should flatten all joined tables into a single anonymous table. This can
@@ -1363,10 +1370,6 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 			}
 		}
 	}
-
-	oldScope := s.sqlCtx
-	s.sqlCtx = rel1Scope
-	defer func() { s.sqlCtx = oldScope }()
 
 	// we need to inform the analyzer that we are in ordering
 	s.sqlCtx._inOrdering = true
@@ -1479,15 +1482,16 @@ func (s *sqlAnalyzer) VisitSelectCore(p0 *SelectCore) any {
 			// columns in having must be in the group by if not in aggregate
 			for _, col := range s.sqlCtx._columnsOutsideAggregate {
 				if _, ok := colsInGroupBy[col]; !ok {
-					s.errs.AddErr(p0.Having, ErrAggregate, "column used in having must be in group by")
+					s.errs.AddErr(p0.Having, ErrAggregate, "column used in having must be in group by, or must be in aggregate function")
 				}
 			}
 
-			if s.sqlCtx._columnInAggregate != nil {
-				if _, ok := colsInGroupBy[*s.sqlCtx._columnInAggregate]; !ok {
-					s.errs.AddErr(p0.Having, ErrAggregate, "cannot use column in aggregate if not in group by")
-				}
-			}
+			// COMMENTING THIS OUT: if a column is in an aggregate in the having, then it is ok if it is not in the group by
+			// if s.sqlCtx._columnInAggregate != nil {
+			// 	if _, ok := colsInGroupBy[*s.sqlCtx._columnInAggregate]; !ok {
+			// 		s.errs.AddErr(p0.Having, ErrAggregate, "cannot use column in having if not in group by or in aggregate function")
+			// 	}
+			// }
 
 			s.expect(p0.Having, havingType, types.BoolType)
 		}
@@ -2045,7 +2049,9 @@ type loopTargetTracker struct {
 // language can execute sql statements, it uses the sqlAnalyzer.
 type procedureAnalyzer struct {
 	sqlAnalyzer
-	procCtx    *procedureContext
+	procCtx *procedureContext
+	// procResult stores data that the analyzer will return with the parsed procedure.
+	// The information is used by the code generator to generate the plpgsql code.
 	procResult struct {
 		// allLoopReceivers tracks all loop receivers that have occurred over the lifetime
 		// of the procedure. This is used to generate variables to hold the loop target
@@ -2104,7 +2110,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtDeclaration(p0 *ProcedureStmtDecla
 
 	if p.variableExists(p0.Variable.String()) {
 		p.errs.AddErr(p0, ErrVariableAlreadyDeclared, p0.Variable.String())
-		return nil
+		return zeroProcedureReturn()
 	}
 
 	// TODO: we need to figure out how to undeclare a variable if it is declared in a loop/if block
@@ -2115,7 +2121,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtDeclaration(p0 *ProcedureStmtDecla
 	// now that it is declared, we can visit it
 	p0.Variable.Accept(p)
 
-	return nil
+	return zeroProcedureReturn()
 }
 
 func (p *procedureAnalyzer) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssign) any {
@@ -2123,7 +2129,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssign
 	dt, ok := p0.Value.Accept(p).(*types.DataType)
 	if !ok {
 		p.expressionTypeErr(p0.Value)
-		return nil
+		return zeroProcedureReturn()
 	}
 
 	_, ok = p.variables[p0.Variable.String()]
@@ -2131,7 +2137,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssign
 		// if it does not exist, we can declare it here.
 		p.variables[p0.Variable.String()] = dt
 		p.markDeclared(p0.Variable, p0.Variable.String(), dt)
-		return nil
+		return zeroProcedureReturn()
 	}
 
 	// the type can be inferred from the value.
@@ -2140,7 +2146,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssign
 	if p0.Type != nil {
 		if !p0.Type.Equals(dt) {
 			p.errs.AddErr(p0, ErrType, "declared type: %s, inferred type: %s", p0.Type.String(), dt.String())
-			return nil
+			return zeroProcedureReturn()
 		}
 	}
 
@@ -2148,14 +2154,14 @@ func (p *procedureAnalyzer) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssign
 	dt2, ok := p0.Variable.Accept(p).(*types.DataType)
 	if !ok {
 		p.expressionTypeErr(p0.Variable)
-		return nil
+		return zeroProcedureReturn()
 	}
 
 	if !dt2.Equals(dt) {
 		p.typeErr(p0, dt2, dt)
 	}
 
-	return nil
+	return zeroProcedureReturn()
 }
 
 func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
@@ -2176,7 +2182,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 		returns2, ok := p0.Call.Accept(p).([]*types.DataType)
 		if !ok {
 			p.errs.AddErr(p0.Call, ErrType, "expected function/procedure to return one or more variables")
-			return nil
+			return zeroProcedureReturn()
 		}
 
 		callReturns = returns2
@@ -2192,7 +2198,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 	// we do not have more receivers than return values.
 	if len(p0.Receivers) != len(callReturns) {
 		p.errs.AddErr(p0, ErrResultShape, `function/procedure "%s" returns %d value(s), statement expects %d value(s)`, p0.Call.FunctionName(), len(callReturns), len(p0.Receivers))
-		return nil
+		return zeroProcedureReturn()
 	}
 
 	for i, r := range p0.Receivers {
@@ -2222,7 +2228,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 		}
 	}
 
-	return nil
+	return zeroProcedureReturn()
 }
 
 // VisitProcedureStmtForLoop visits a for loop statement.
@@ -2236,7 +2242,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) 
 	// check to make sure the receiver has not already been declared
 	if p.variableExists(p0.Receiver.String()) {
 		p.errs.AddErr(p0.Receiver, ErrVariableAlreadyDeclared, p0.Receiver.String())
-		return nil
+		return zeroProcedureReturn()
 	}
 
 	tracker := &loopTargetTracker{
@@ -2272,16 +2278,31 @@ func (p *procedureAnalyzer) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) 
 	for _, t := range p.procResult.allLoopReceivers {
 		if t.name.String() == p0.Receiver.String() {
 			p.errs.AddErr(p0.Receiver, ErrVariableAlreadyDeclared, p0.Receiver.String())
-			return nil
+			return zeroProcedureReturn()
 		}
 	}
 
 	p.procCtx.activeLoopReceivers = append([]string{tracker.name.String()}, p.procCtx.activeLoopReceivers...)
 	p.procResult.allLoopReceivers = append(p.procResult.allLoopReceivers, tracker)
 
+	// returns tracks whether this loop is guaranteed to exit.
+	returns := false
+	canBreakPrematurely := false
 	// we will now visit the statements in the loop.
 	for _, stmt := range p0.Body {
-		stmt.Accept(p)
+		res := stmt.Accept(p).(*procedureStmtResult)
+		if res.canBreak {
+			canBreakPrematurely = true
+		}
+		if res.willReturn {
+			returns = true
+		}
+	}
+	// if it is possible for a for loop to break prematurely, then it is possible
+	// that it does not include a return, and so we need to inform the caller
+	// that it does not guarantee a return.
+	if canBreakPrematurely {
+		returns = false
 	}
 
 	// pop the loop target
@@ -2297,7 +2318,9 @@ func (p *procedureAnalyzer) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) 
 		delete(p.variables, p0.Receiver.String())
 	}
 
-	return nil
+	return &procedureStmtResult{
+		willReturn: returns,
+	}
 }
 
 func (p *procedureAnalyzer) VisitLoopTermRange(p0 *LoopTermRange) any {
@@ -2348,33 +2371,66 @@ func (p *procedureAnalyzer) VisitLoopTermVariable(p0 *LoopTermVariable) any {
 }
 
 func (p *procedureAnalyzer) VisitProcedureStmtIf(p0 *ProcedureStmtIf) any {
-	for _, c := range p0.IfThens {
-		c.Accept(p)
-	}
+	canBreak := false
 
-	if p0.Else != nil {
-		for _, stmt := range p0.Else {
-			stmt.Accept(p)
+	allThensReturn := true
+	for _, c := range p0.IfThens {
+		res := c.Accept(p).(*procedureStmtResult)
+		if !res.willReturn {
+			allThensReturn = false
+		}
+		if res.canBreak {
+			canBreak = true
 		}
 	}
 
-	return nil
+	// initialize to true, so that if else does not exist, we know we still exit.
+	// It gets set to false if we encounter an else block.
+	elseReturns := true
+	if p0.Else != nil {
+		elseReturns = false
+		for _, stmt := range p0.Else {
+			res := stmt.Accept(p).(*procedureStmtResult)
+			if res.willReturn {
+				elseReturns = true
+			}
+			if res.canBreak {
+				canBreak = true
+			}
+		}
+	}
+
+	return &procedureStmtResult{
+		willReturn: allThensReturn && elseReturns,
+		canBreak:   canBreak,
+	}
 }
 
 func (p *procedureAnalyzer) VisitIfThen(p0 *IfThen) any {
 	dt, ok := p0.If.Accept(p).(*types.DataType)
 	if !ok {
 		p.expressionTypeErr(p0.If)
-		return nil
+		return zeroProcedureReturn()
 	}
 
 	p.expect(p0.If, dt, types.BoolType)
 
+	canBreak := false
+	returns := false
 	for _, stmt := range p0.Then {
-		stmt.Accept(p)
+		res := stmt.Accept(p).(*procedureStmtResult)
+		if res.willReturn {
+			returns = true
+		}
+		if res.canBreak {
+			canBreak = true
+		}
 	}
 
-	return nil
+	return &procedureStmtResult{
+		willReturn: returns,
+		canBreak:   canBreak,
+	}
 }
 
 func (p *procedureAnalyzer) VisitProcedureStmtSQL(p0 *ProcedureStmtSQL) any {
@@ -2386,7 +2442,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtSQL(p0 *ProcedureStmtSQL) any {
 		panic("expected query to return attributes")
 	}
 
-	return nil
+	return zeroProcedureReturn()
 }
 
 func (p *procedureAnalyzer) VisitProcedureStmtBreak(p0 *ProcedureStmtBreak) any {
@@ -2394,20 +2450,26 @@ func (p *procedureAnalyzer) VisitProcedureStmtBreak(p0 *ProcedureStmtBreak) any 
 		p.errs.AddErr(p0, ErrBreak, "break statement outside of loop")
 	}
 
-	return nil
+	return &procedureStmtResult{
+		canBreak: true,
+	}
 }
 
 func (p *procedureAnalyzer) VisitProcedureStmtReturn(p0 *ProcedureStmtReturn) any {
 	if p.procCtx.procedureDefinition.Returns == nil {
 		p.errs.AddErr(p0, ErrFunctionSignature, "procedure does not return any values")
-		return nil
+		return &procedureStmtResult{
+			willReturn: true,
+		}
 	}
 	returns := p.procCtx.procedureDefinition.Returns
 
 	if p0.SQL != nil {
 		if !returns.IsTable {
 			p.errs.AddErr(p0, ErrReturn, "procedure expects scalar returns, cannot return SQL statement")
-			return nil
+			return &procedureStmtResult{
+				willReturn: true,
+			}
 		}
 
 		p.startSQLAnalyze()
@@ -2420,7 +2482,9 @@ func (p *procedureAnalyzer) VisitProcedureStmtReturn(p0 *ProcedureStmtReturn) an
 
 		if len(res) != len(returns.Fields) {
 			p.errs.AddErr(p0, ErrReturn, "expected %d return table columns, received %d", len(returns.Fields), len(res))
-			return nil
+			return &procedureStmtResult{
+				willReturn: true,
+			}
 		}
 
 		// we will compare the return types to the procedure definition
@@ -2435,22 +2499,31 @@ func (p *procedureAnalyzer) VisitProcedureStmtReturn(p0 *ProcedureStmtReturn) an
 			}
 		}
 
-		return nil
+		return &procedureStmtResult{
+			willReturn: true,
+		}
 	}
 	if returns.IsTable {
 		p.errs.AddErr(p0, ErrReturn, "procedure expects table returns, cannot return scalar values")
-		return nil
+		return &procedureStmtResult{
+			willReturn: true,
+		}
 	}
 
 	if len(p0.Values) != len(returns.Fields) {
 		p.errs.AddErr(p0, ErrReturn, "expected %d return values, received %d", len(returns.Fields), len(p0.Values))
-		return nil
+		return &procedureStmtResult{
+			willReturn: true,
+		}
 	}
 
 	for i, v := range p0.Values {
 		dt, ok := v.Accept(p).(*types.DataType)
 		if !ok {
-			return p.expressionTypeErr(v)
+			p.expressionTypeErr(v)
+			return &procedureStmtResult{
+				willReturn: true,
+			}
 		}
 
 		if !dt.Equals(returns.Fields[i].Type) {
@@ -2458,29 +2531,40 @@ func (p *procedureAnalyzer) VisitProcedureStmtReturn(p0 *ProcedureStmtReturn) an
 		}
 	}
 
-	return nil
+	return &procedureStmtResult{
+		willReturn: true,
+	}
 }
 
 func (p *procedureAnalyzer) VisitProcedureStmtReturnNext(p0 *ProcedureStmtReturnNext) any {
 	if p.procCtx.procedureDefinition.Returns == nil {
 		p.errs.AddErr(p0, ErrFunctionSignature, "procedure does not return any values")
-		return nil
+		return &procedureStmtResult{
+			willReturn: true,
+		}
 	}
 
 	if !p.procCtx.procedureDefinition.Returns.IsTable {
 		p.errs.AddErr(p0, ErrReturn, "procedure expects scalar returns, cannot return next")
-		return nil
+		return &procedureStmtResult{
+			willReturn: true,
+		}
 	}
 
 	if len(p0.Values) != len(p.procCtx.procedureDefinition.Returns.Fields) {
 		p.errs.AddErr(p0, ErrReturn, "expected %d return values, received %d", len(p.procCtx.procedureDefinition.Returns.Fields), len(p0.Values))
-		return nil
+		return &procedureStmtResult{
+			willReturn: true,
+		}
 	}
 
 	for i, v := range p0.Values {
 		dt, ok := v.Accept(p).(*types.DataType)
 		if !ok {
-			return p.expressionTypeErr(v)
+			p.expressionTypeErr(v)
+			return &procedureStmtResult{
+				willReturn: true,
+			}
 		}
 
 		if !dt.Equals(p.procCtx.procedureDefinition.Returns.Fields[i].Type) {
@@ -2488,5 +2572,26 @@ func (p *procedureAnalyzer) VisitProcedureStmtReturnNext(p0 *ProcedureStmtReturn
 		}
 	}
 
-	return nil
+	return &procedureStmtResult{
+		willReturn: true,
+	}
+}
+
+// zeroProcedureReturn creates a new procedure return with all 0 values.
+func zeroProcedureReturn() *procedureStmtResult {
+	return &procedureStmtResult{}
+}
+
+// procedureStmtResult is returned from each procedure statement visit.
+type procedureStmtResult struct {
+	// willReturn is true if the statement contains a return statement that it will
+	// always hit. This is used to determine if a path will exit a procedure.
+	// it is used to tell whether or not a statement can potentially exit a procedure,
+	// since all procedures that have an expected return must always return that value.
+	// It only tells us whether or not a return is guaranteed to be hit from a statement.
+	// The return types are checked at the point of the return statement.
+	willReturn bool
+	// canBreak is true if the statement that can break a for loop it is in.
+	// For example, an IF statement that breaks a for loop will set canBreak to true.
+	canBreak bool
 }

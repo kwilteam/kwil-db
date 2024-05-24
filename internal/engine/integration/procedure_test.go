@@ -157,6 +157,16 @@ func Test_Procedures(t *testing.T) {
 			}`,
 			outputs: [][]any{{int64(11)}},
 		},
+		{
+			name: "return next from a non-table",
+			procedure: `procedure return_next($vals int[]) public view returns table(val int) {
+				for $i in $vals {
+					return next $i*2;
+				}
+			}`,
+			inputs:  []any{[]int64{1, 2, 3}},
+			outputs: [][]any{{int64(2)}, {int64(4)}, {int64(6)}},
+		},
 	}
 
 	for _, test := range tests {

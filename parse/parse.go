@@ -187,8 +187,16 @@ func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []Proc
 	}
 
 	// visit the AST
+	returns := false
 	for _, stmt := range res.AST {
-		stmt.Accept(visitor)
+		res := stmt.Accept(visitor).(*procedureStmtResult)
+		if res.willReturn {
+			returns = true
+		}
+	}
+
+	if proc.Returns != nil && !returns {
+		errLis.AddErr(res.AST[len(res.AST)-1], ErrReturn, "procedure does not return a value")
 	}
 
 	for k, v := range visitor.procResult.allVariables {
