@@ -1,6 +1,7 @@
 package decimal_test
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types/decimal"
@@ -465,6 +466,76 @@ func Test_DecimalCmp(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, tt.want, cmp)
+		})
+	}
+}
+
+// Testing setting a decimal from a big int and an exponent
+func Test_BigAndExp(t *testing.T) {
+	type testcase struct {
+		name     string
+		big      string // will be converted to a big.Int
+		exp      int32
+		out      string
+		outPrec  uint16
+		outScale uint16
+		wantErr  bool
+	}
+
+	tests := []testcase{
+		{
+			name:     "basic",
+			big:      "123456",
+			exp:      -3,
+			out:      "123.456",
+			outPrec:  6,
+			outScale: 3,
+		},
+		{
+			name:     "negative",
+			big:      "-123456",
+			exp:      -2,
+			out:      "-1234.56",
+			outPrec:  6,
+			outScale: 2,
+		},
+		{
+			name:     "0 exponent",
+			big:      "123456",
+			exp:      0,
+			out:      "123456",
+			outPrec:  6,
+			outScale: 0,
+		},
+		{
+			name:    "positive exp",
+			big:     "123",
+			exp:     4,
+			wantErr: true,
+		},
+		{
+			name:    "exp too low",
+			big:     "123",
+			exp:     -4,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bigInt, ok := new(big.Int).SetString(tt.big, 10)
+			require.True(t, ok)
+
+			d, err := decimal.NewFromBigInt(bigInt, tt.exp)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			require.Equal(t, tt.out, d.String())
+			require.Equal(t, tt.outPrec, d.Precision())
+			require.Equal(t, tt.outScale, d.Scale())
 		})
 	}
 }

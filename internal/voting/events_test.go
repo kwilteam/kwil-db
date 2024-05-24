@@ -117,7 +117,7 @@ func Test_EventStore(t *testing.T) {
 				require.NoError(t, err)
 
 				// Mark event as broadcasted
-				err = e.MarkBroadcasted(ctx, []types.UUID{id})
+				err = e.MarkBroadcasted(ctx, []*types.UUID{id})
 				require.NoError(t, err)
 
 				err = tx.Commit(ctx)
@@ -132,7 +132,7 @@ func Test_EventStore(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, events, 1)
 
-				err = e.MarkRebroadcast(ctx, []types.UUID{id})
+				err = e.MarkRebroadcast(ctx, []*types.UUID{id})
 				require.NoError(t, err)
 
 				err = tx2.Commit(ctx)

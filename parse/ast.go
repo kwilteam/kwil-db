@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
-	"github.com/holiman/uint256"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
@@ -72,7 +71,7 @@ func literalToString(value any) (string, error) {
 		str.WriteString(fmt.Sprint(v))
 	case types.UUID:
 		str.WriteString(v.String())
-	case *uint256.Int:
+	case *types.Uint256:
 		str.WriteString(v.String())
 	case *decimal.Decimal:
 		str.WriteString(v.String())

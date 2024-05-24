@@ -89,7 +89,7 @@ func Test_TransactionBodyMarshalJSON(t *testing.T) {
 type actionExecutionV0 struct {
 	DBID      string
 	Action    string
-	Arguments [][]string
+	Arguments [][]*transactions.EncodedValue
 	// No other optional or tail fields defined.
 }
 
@@ -114,20 +114,19 @@ func TestActionExecution_Marshal(t *testing.T) {
 	ae := &transactions.ActionExecution{
 		DBID:   "dbid",
 		Action: "insert_thing",
-		Arguments: [][]string{
-			{"", "b"},
-			{"c", ""},
-		},
-		NilArg: [][]bool{
-			{true, false},
-			{false, false}, // this one is an empty string, not nil
+		Arguments: [][]*transactions.EncodedValue{
+			{
+				mustDetect(nil),
+				mustDetect("b"),
+			},
+			{
+				mustDetect("c"),
+				mustDetect(nil),
+			},
 		},
 	}
 
 	testRoundTrip(nil, ae)
-
-	// NilArg empty, unmarshals empty but no nil
-	ae.NilArg = [][]bool{}
 	testRoundTrip(nil, ae)
 
 	// Forward compat without the NilArg field at all. This is the main benefit
@@ -138,9 +137,6 @@ func TestActionExecution_Marshal(t *testing.T) {
 		Arguments: ae.Arguments,
 		// NilArg not a field
 	}
-
-	// expect to unmarshal to nil in forward compat scenario
-	ae.NilArg = nil
 
 	dat, err := serialize.Encode(aeOld)
 	require.NoError(t, err)
@@ -156,7 +152,7 @@ func TestTransaction_Sign(t *testing.T) {
 
 	ethPersonalSigner := auth.EthPersonalSigner{Key: *secp256k1PrivateKey}
 
-	expectPersonalSignConcatSigHex := "e62c8257dba118196fd9f09c636e452e42c9ac796ac6f318491f0d34e5e1b3c52dd9e90442a98ea04716adac74293cc66420a13e660873f0b9dfc0fe55ee513500"
+	expectPersonalSignConcatSigHex := "e09459d0dc078f12bb176da6ec52764ac457e322644f4031a6c498979795eff16163edbfe2c68ba60e25d6a76a283f63662245555caecf68889fbfad786ae52801"
 	expectPersonalSignConcatSigBytes, _ := hex.DecodeString(expectPersonalSignConcatSigHex)
 	expectPersonalSignConcatSig := &auth.Signature{
 		Signature: expectPersonalSignConcatSigBytes,
@@ -166,8 +162,11 @@ func TestTransaction_Sign(t *testing.T) {
 	rawPayload := transactions.ActionExecution{
 		DBID:   "xf617af1ca774ebbd6d23e8fe12c56d41d25a22d81e88f67c6c6ee0d4",
 		Action: "create_user",
-		Arguments: [][]string{
-			{"foo", "32"},
+		Arguments: [][]*transactions.EncodedValue{
+			{
+				mustDetect("foo"),
+				mustDetect(32),
+			},
 		},
 		// NOTE: With NilArg unset (and optional), the expectPersonalSignConcatSigHex
 		// is the same as if it were not a defined field at all.
@@ -243,8 +242,11 @@ func TestTransactionBody_SerializeMsg(t *testing.T) {
 	rawPayload := transactions.ActionExecution{
 		DBID:   "xf617af1ca774ebbd6d23e8fe12c56d41d25a22d81e88f67c6c6ee0d4",
 		Action: "create_user",
-		Arguments: [][]string{
-			{"foo", "32"},
+		Arguments: [][]*transactions.EncodedValue{
+			{
+				mustDetect("foo"),
+				mustDetect(32),
+			},
 		},
 	}
 
@@ -293,7 +295,7 @@ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 				mst:         transactions.SignedMsgConcat,
 				description: defaultDescription,
 			},
-			wantMsg: "4279207369676e696e672074686973206d6573736167652c20796f75276c6c2072657665616c20796f75722078787820746f207a7a7a0a0a5061796c6f6164547970653a20657865637574650a5061796c6f61644469676573743a20386531326432386530313665316139306331386662333037316331316137663038306462383764330a4665653a203130300a4e6f6e63653a20310a0a4b77696c20436861696e2049443a2030303030303030303030300a",
+			wantMsg: "4279207369676e696e672074686973206d6573736167652c20796f75276c6c2072657665616c20796f75722078787820746f207a7a7a0a0a5061796c6f6164547970653a20657865637574650a5061796c6f61644469676573743a20323038623838653133656336313866313836376564333534366131343861656335633835316631310a4665653a203130300a4e6f6e63653a20310a0a4b77696c20436861696e2049443a2030303030303030303030300a",
 			wantErr: false,
 		},
 	}

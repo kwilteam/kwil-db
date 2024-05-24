@@ -212,7 +212,7 @@ func Test_Voting(t *testing.T) {
 				ctx := context.Background()
 
 				events := make([]*types.VotableEvent, 3)
-				ids := make([]types.UUID, 3)
+				ids := make([]*types.UUID, 3)
 				for i := 0; i < 3; i++ {
 					events[i] = &types.VotableEvent{
 						Body: []byte("test" + fmt.Sprint(i)),
@@ -263,7 +263,7 @@ func Test_Voting(t *testing.T) {
 			fn: func(t *testing.T, db sql.DB) {
 				ctx := context.Background()
 
-				processed, err := FilterNotProcessed(ctx, db, []types.UUID{types.NewUUIDV5([]byte("ss"))})
+				processed, err := FilterNotProcessed(ctx, db, []*types.UUID{types.NewUUIDV5([]byte("ss"))})
 				require.NoError(t, err)
 
 				require.Equal(t, len(processed), 1)

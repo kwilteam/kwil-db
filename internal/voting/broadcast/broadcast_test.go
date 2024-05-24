@@ -152,12 +152,12 @@ type mockEventStore struct {
 	events []*types.VotableEvent
 }
 
-func (m *mockEventStore) MarkBroadcasted(ctx context.Context, ids []types.UUID) error {
+func (m *mockEventStore) MarkBroadcasted(ctx context.Context, ids []*types.UUID) error {
 	return nil
 }
 
-func (m *mockEventStore) GetUnbroadcastedEvents(ctx context.Context) ([]types.UUID, error) {
-	var ids []types.UUID
+func (m *mockEventStore) GetUnbroadcastedEvents(ctx context.Context) ([]*types.UUID, error) {
+	var ids []*types.UUID
 	for _, event := range m.events {
 		ids = append(ids, event.ID())
 	}

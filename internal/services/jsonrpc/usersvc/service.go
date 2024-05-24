@@ -374,11 +374,6 @@ func convertActionCall(req *jsonrpc.CallRequest) (*transactions.ActionCall, *tra
 		return nil, nil, err
 	}
 
-	if nArg := len(actionPayload.NilArg); nArg > 0 && nArg != len(actionPayload.Arguments) {
-		return nil, nil, fmt.Errorf("input arguments of length %d but nil args of length %d",
-			len(actionPayload.Arguments), len(actionPayload.NilArg))
-	}
-
 	return &actionPayload, &transactions.CallMessage{
 		Body: &transactions.CallMessageBody{
 			Payload: req.Body.Payload,
@@ -412,11 +407,9 @@ func (svc *Service) Call(ctx context.Context, req *jsonrpc.CallRequest) (*jsonrp
 
 	args := make([]any, len(body.Arguments))
 	for i, arg := range body.Arguments {
-		args[i] = arg
-	}
-	for i, isNil := range body.NilArg { // length validation in convertActionCall
-		if isNil {
-			args[i] = nil
+		args[i], err = arg.Decode()
+		if err != nil {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to decode argument: "+err.Error(), nil)
 		}
 	}
 

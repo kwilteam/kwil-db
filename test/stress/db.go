@@ -128,7 +128,7 @@ func (h *harness) getOrCreateUser(ctx context.Context, dbid string) (int, string
 	var userID int
 	var userName string
 	for recs.Next() {
-		rec := *recs.Record()
+		rec := recs.Record()
 		uid, user, wallet := rec["id"].(int), rec["username"].(string), rec["wallet"].([]byte)
 		if bytes.Equal(wallet, h.acctID) {
 			userName = user
@@ -158,7 +158,7 @@ func (h *harness) nextPostID(ctx context.Context, dbid string, userID int) (int,
 	h.printRecs(ctx, recs)
 	var nextPostID int
 	for recs.Next() {
-		rec := *recs.Record()
+		rec := recs.Record()
 		if postID := rec["id"].(int); postID >= nextPostID {
 			nextPostID = postID + 1
 		}

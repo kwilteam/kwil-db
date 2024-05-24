@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/cstockton/go-conv"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client"
@@ -228,16 +227,19 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 // It can take any number of inputs, and if multiple tuples of inputs are passed,
 // it will execute them in the same transaction.
 func (c *Client) Execute(ctx context.Context, dbid string, procedure string, tuples [][]any, opts ...clientType.TxOpt) (transactions.TxHash, error) {
-	stringTuples, isNil, err := convertTuples(tuples)
-	if err != nil {
-		return nil, err
+	encodedTuples := make([][]*transactions.EncodedValue, len(tuples))
+	for i, tuple := range tuples {
+		encoded, err := encodeTuple(tuple)
+		if err != nil {
+			return nil, err
+		}
+		encodedTuples[i] = encoded
 	}
 
 	executionBody := &transactions.ActionExecution{
 		Action:    procedure,
 		DBID:      dbid,
-		Arguments: stringTuples,
-		NilArg:    isNil,
+		Arguments: encodedTuples,
 	}
 
 	txOpts := clientType.GetTxOpts(opts)
@@ -262,7 +264,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 
 // Call calls a procedure or action. It returns the result records.
 func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs []any) (*clientType.Records, error) {
-	stringInputs, isNil, err := convertTuple(inputs)
+	encoded, err := encodeTuple(inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -270,8 +272,7 @@ func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs
 	payload := &transactions.ActionCall{
 		DBID:      dbid,
 		Action:    procedure,
-		Arguments: stringInputs,
-		NilArg:    isNil,
+		Arguments: encoded,
 	}
 
 	msg, err := transactions.CreateCallMessage(payload)
@@ -319,45 +320,18 @@ func (c *Client) GetAccount(ctx context.Context, acctID []byte, status types.Acc
 	return c.txClient.GetAccount(ctx, acctID, status)
 }
 
-// convertTuples converts user passed tuples to strings.
-// this is necessary for RLP encoding
-func convertTuples(tuples [][]any) ([][]string, [][]bool, error) {
-	ins := make([][]string, 0, len(tuples))
-	nils := make([][]bool, 0, len(tuples))
-	for _, tuple := range tuples {
-		stringTuple, isNil, err := convertTuple(tuple)
+// encodeTuple encodes a tuple for usage in a transaction.
+func encodeTuple(tup []any) ([]*transactions.EncodedValue, error) {
+	encoded := make([]*transactions.EncodedValue, 0, len(tup))
+	for _, val := range tup {
+		ev, err := transactions.EncodeValue(val)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		ins = append(ins, stringTuple)
-		nils = append(nils, isNil)
+		encoded = append(encoded, ev)
 	}
 
-	return ins, nils, nil
-}
-
-// convertTuple converts user passed tuple to strings.
-func convertTuple(tuple []any) ([]string, []bool, error) {
-	stringTuple := make([]string, 0, len(tuple))
-	isNil := make([]bool, 0, len(tuple))
-	for _, val := range tuple {
-		if val == nil {
-			stringTuple = append(stringTuple, "")
-			isNil = append(isNil, true)
-			continue
-		}
-
-		// conv.String would make it "<null>", which could very well be an intended string
-		stringVal, err := conv.String(val)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		stringTuple = append(stringTuple, stringVal)
-		isNil = append(isNil, false)
-	}
-
-	return stringTuple, isNil, nil
+	return encoded, nil
 }
 
 // TxQuery get transaction by hash.

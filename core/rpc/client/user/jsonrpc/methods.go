@@ -96,9 +96,21 @@ func unmarshalMapResults(b []byte) ([]map[string]any, error) {
 			if num, ok := v.(json.Number); ok {
 				i, err := num.Int64()
 				if err != nil {
-					return nil, err
+					record[k] = num.String()
+				} else {
+					record[k] = i
 				}
-				record[k] = i
+			} else if num, ok := v.([]any); ok {
+				for j, n := range num {
+					if n, ok := n.(json.Number); ok {
+						i, err := n.Int64()
+						if err != nil {
+							num[j] = n.String()
+						} else {
+							num[j] = i
+						}
+					}
+				}
 			}
 		}
 	}

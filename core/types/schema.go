@@ -1099,7 +1099,7 @@ type DataType struct {
 	// IsArray is true if the type is an array.
 	IsArray bool `json:"is_array"`
 	// Metadata is the metadata of the type.
-	Metadata any `json:"metadata"`
+	Metadata *[2]uint16 `json:"metadata"`
 }
 
 // String returns the string representation of the type.
@@ -1111,14 +1111,11 @@ func (c *DataType) String() string {
 	}
 
 	if c.Name == DecimalStr {
-		data, ok := c.Metadata.([2]uint16)
-		if ok {
-			str.WriteString("(")
-			str.WriteString(fmt.Sprint(data[0]))
-			str.WriteString(",")
-			str.WriteString(fmt.Sprint(data[1]))
-			str.WriteString(")")
-		}
+		str.WriteString("(")
+		str.WriteString(fmt.Sprint(c.Metadata[0]))
+		str.WriteString(",")
+		str.WriteString(fmt.Sprint(c.Metadata[1]))
+		str.WriteString(")")
 	}
 
 	return str.String()
@@ -1141,13 +1138,11 @@ func (c *DataType) PGString() (string, error) {
 	case uint256Str:
 		scalar = "UINT256"
 	case DecimalStr:
-		data, ok := c.Metadata.([2]uint16)
-		if !ok {
-			// should never happen, since Clean() should have caught this
-			return "", fmt.Errorf("fixed type must have metadata of type [2]uint8")
+		if c.Metadata == nil {
+			return "", fmt.Errorf("decimal type must have metadata")
 		}
 
-		scalar = fmt.Sprintf("NUMERIC(%d,%d)", data[0], data[1])
+		scalar = fmt.Sprintf("NUMERIC(%d,%d)", c.Metadata[0], c.Metadata[1])
 	case nullStr:
 		return "", fmt.Errorf("cannot have null column type")
 	case unknownStr:
@@ -1173,12 +1168,11 @@ func (c *DataType) Clean() error {
 
 		return nil
 	case DecimalStr:
-		data, ok := c.Metadata.([2]uint16)
-		if !ok {
-			return fmt.Errorf("fixed type must have metadata of type [2]uint8")
+		if c.Metadata == nil {
+			return fmt.Errorf("decimal type must have metadata")
 		}
 
-		err := decimal.CheckPrecisionAndScale(data[0], data[1])
+		err := decimal.CheckPrecisionAndScale(c.Metadata[0], c.Metadata[1])
 		if err != nil {
 			return err
 		}
@@ -1221,8 +1215,13 @@ func (c *DataType) EqualsStrict(other *DataType) bool {
 		return false
 	}
 
-	if c.Metadata != other.Metadata {
+	if (c.Metadata == nil) != (other.Metadata == nil) {
 		return false
+	}
+	if c.Metadata != nil {
+		if c.Metadata[0] != other.Metadata[0] || c.Metadata[1] != other.Metadata[1] {
+			return false
+		}
 	}
 
 	return strings.EqualFold(c.Name, other.Name)
@@ -1294,7 +1293,7 @@ const (
 	uuidStr    = "uuid"
 	uint256Str = "uint256"
 	// DecimalStr is a fixed point number.
-	DecimalStr = "fixed"
+	DecimalStr = "decimal"
 	nullStr    = "null"
 	unknownStr = "unknown"
 )
@@ -1308,6 +1307,6 @@ func NewDecimalType(precision, scale uint16) (*DataType, error) {
 
 	return &DataType{
 		Name:     DecimalStr,
-		Metadata: [2]uint16{precision, scale},
+		Metadata: &[2]uint16{precision, scale},
 	}, nil
 }

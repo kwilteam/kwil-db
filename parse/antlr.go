@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
-	"github.com/holiman/uint256"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/core/types/validation"
@@ -117,8 +116,8 @@ func (s *schemaVisitor) VisitInteger_literal(ctx *gen.Integer_literalContext) an
 
 	if bigNum.Cmp(maxInt64) > 0 {
 		// it is a uint256
-		u256, ok := uint256.FromBig(bigNum)
-		if !ok {
+		u256, err := types.Uint256FromBig(bigNum)
+		if err != nil {
 			s.errs.RuleErr(ctx, ErrSyntax, "invalid integer literal: %s", i)
 			return unknownExpression(ctx)
 		}
@@ -253,7 +252,7 @@ func (s *schemaVisitor) VisitType(ctx *gen.TypeContext) any {
 			return types.UnknownType
 		}
 
-		dt.Metadata = [2]uint16{uint16(prec), uint16(scale)}
+		dt.Metadata = &[2]uint16{uint16(prec), uint16(scale)}
 	}
 
 	if ctx.LBRACKET() != nil {

@@ -9,6 +9,7 @@ import (
 	"database/sql/driver"
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/cockroachdb/apd/v3"
@@ -60,6 +61,32 @@ func NewFromString(s string) (*Decimal, error) {
 	return NewExplicit(s, inferredPrecision, inferredScale)
 }
 
+// NewFromBigInt creates a new Decimal from a big.Int and an exponent.
+// The negative of the exponent is the scale of the decimal.
+func NewFromBigInt(i *big.Int, exp int32) (*Decimal, error) {
+	b := &apd.BigInt{}
+	b.SetMathBigInt(i)
+
+	if exp > 0 {
+		return nil, fmt.Errorf("exponent must be negative: %d", exp)
+	}
+
+	apdDec := apd.NewWithBigInt(b, exp)
+
+	dec := &Decimal{
+		dec:   *apdDec,
+		scale: uint16(-apdDec.Exponent),
+		// to get the scale, we need to remove + or -
+		precision: uint16(len(strings.TrimLeft(i.String(), "-+"))),
+	}
+
+	if err := CheckPrecisionAndScale(dec.precision, dec.scale); err != nil {
+		return nil, err
+	}
+
+	return dec, nil
+}
+
 // SetString sets the value of the decimal from a string.
 func (d *Decimal) SetString(s string) error {
 	res, _, err := d.context().NewFromString(s)
@@ -107,6 +134,11 @@ func (d *Decimal) Precision() uint16 {
 	return d.precision
 }
 
+// Exp is the exponent of the decimal.
+func (d *Decimal) Exp() int32 {
+	return d.dec.Exponent
+}
+
 // IsNegative returns true if the decimal is negative.
 func (d *Decimal) IsNegative() bool {
 	return d.dec.Negative
@@ -128,7 +160,6 @@ func (d *Decimal) setPrecision(precision uint16) error {
 // The scale must be between 0 and the precision.
 func (d *Decimal) setScale(scale uint16) error {
 	d.scale = scale
-	//d.dec.Exponent = -int32(scale)
 	return d.enforceScale()
 }
 
@@ -239,7 +270,7 @@ func (d *Decimal) Sign() int {
 
 // Value implements the database/sql/driver.Valuer interface. It converts d to a
 // string.
-func (d *Decimal) Value() (driver.Value, error) {
+func (d Decimal) Value() (driver.Value, error) {
 	return d.dec.Value()
 }
 
@@ -275,8 +306,15 @@ func (d *Decimal) Round(scale uint16) error {
 }
 
 // Int64 returns the decimal as an int64.
+// If it cannot be represented as an int64, it will return an error.
 func (d *Decimal) Int64() (int64, error) {
 	return d.dec.Int64()
+}
+
+// BigInt returns the underlying big int of the decimal.
+// This is the unscaled value of the decimal.
+func (d *Decimal) BigInt() *big.Int {
+	return d.dec.Coeff.MathBigInt()
 }
 
 // Float64 returns the decimal as a float64.
@@ -284,8 +322,18 @@ func (d *Decimal) Float64() (float64, error) {
 	return d.dec.Float64()
 }
 
+// MarshalJSON implements the json.Marshaler interface.
+func (d Decimal) MarshalJSON() ([]byte, error) {
+	return []byte(d.dec.String()), nil
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface.
+func (d *Decimal) UnmarshalJSON(data []byte) error {
+	return d.SetString(string(data))
+}
+
 // MarshalBinary implements the encoding.BinaryMarshaler interface.
-func (d *Decimal) MarshalBinary() ([]byte, error) {
+func (d Decimal) MarshalBinary() ([]byte, error) {
 	bts, err := d.dec.MarshalText()
 	if err != nil {
 		return nil, err
@@ -383,4 +431,40 @@ func CheckPrecisionAndScale(precision, scale uint16) error {
 	}
 
 	return nil
+}
+
+// DecimalArray is an array of decimals.
+// It is primarily used to store arrays of decimals in Postgres.
+type DecimalArray []*Decimal
+
+// Value implements the driver.Valuer interface.
+func (da DecimalArray) Value() (driver.Value, error) {
+	var res []string
+	for _, d := range da {
+		res = append(res, d.String())
+	}
+
+	return res, nil
+}
+
+var _ driver.Valuer = (*DecimalArray)(nil)
+
+// Scan implements the sql.Scanner interface.
+func (da *DecimalArray) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []string:
+		*da = make(DecimalArray, len(s))
+		for i, str := range s {
+			d, err := NewFromString(str)
+			if err != nil {
+				return err
+			}
+
+			(*da)[i] = d
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("cannot convert %T to DecimalArray", src)
 }

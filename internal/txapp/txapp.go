@@ -445,10 +445,10 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (appHash []byte
 func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 	credits := make(creditMap)
 
-	var finalizedIds []types.UUID
+	var finalizedIds []*types.UUID
 	// markedProcessedIds is a separate list for marking processed, since we do not want to process validator resolutions
 	// validator vote IDs are not unique, so we cannot mark them as processed, in case a validator leaves and joins again
-	var markProcessedIds []types.UUID
+	var markProcessedIds []*types.UUID
 	// resolveFuncs tracks the resolve function for each resolution, in the order they are queried.
 	// we track this and execute all of these functions after we have found all confirmed resolutions
 	// because a resolve function can change a validator's power. This would then change the required power
@@ -530,7 +530,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockheight int64) error {
 		return err
 	}
 
-	expiredIds := make([]types.UUID, 0, len(expired))
+	expiredIds := make([]*types.UUID, 0, len(expired))
 	requiredPowerMap := make(map[string]int64) // map of resolution type to required power
 	for _, resolution := range expired {
 		expiredIds = append(expiredIds, resolution.ID)
@@ -777,7 +777,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 		return nil, nil
 	}
 
-	ids := make([]types.UUID, 0, len(events))
+	ids := make([]*types.UUID, 0, len(events))
 	for _, event := range events {
 		ids = append(ids, event.ID())
 	}
@@ -791,12 +791,12 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 
 	eventMap := make(map[types.UUID]*types.VotableEvent)
 	for _, evt := range events {
-		eventMap[evt.ID()] = evt
+		eventMap[*evt.ID()] = evt
 	}
 
 	finalEvents := make([]*transactions.VotableEvent, 0)
 	for _, id := range ids {
-		event, ok := eventMap[id]
+		event, ok := eventMap[*id]
 		if !ok {
 			// this should never happen
 			return nil, fmt.Errorf("internal bug: event with id %s not found", id.String())

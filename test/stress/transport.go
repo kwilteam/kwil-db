@@ -67,7 +67,7 @@ func (tc *timedClient) ExecuteAction(ctx context.Context, dbid string, action st
 	if tc.showReqDur {
 		defer tc.printDur(time.Now(), "ExecuteAction")
 	}
-	return tc.Client.ExecuteAction(ctx, dbid, action, tuples, opts...)
+	return tc.Client.Execute(ctx, dbid, action, tuples, opts...)
 }
 
 func (tc *timedClient) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {

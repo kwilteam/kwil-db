@@ -1,0 +1,284 @@
+database types;
+
+table ids {
+    id uuid primary key,
+    arr uuid[]
+}
+
+table decimals {
+    id decimal(10,5) primary key,
+    arr decimal(10,5)[]
+}
+
+table uint256s {
+    id uint256 primary key,
+    arr uint256[]
+}
+
+// store_uuids stores uuids, validating that we can send and store
+// uuids and array uuids
+procedure proc_store_uuids($u uuid, $u2 uuid[]) public {
+    insert into ids (id, arr) values ($u, $u2);
+}
+
+action act_store_uuids($u, $u2) public {
+    nested($u);
+    nested($u2);
+    insert into ids (id, arr) values ($u, $u2);
+}
+
+// get_ids gets the first id stored
+procedure proc_get_uuids() public view returns (id uuid, arr uuid[]) {
+    for $row in select * from ids {
+        return $row.id, $row.arr;
+    }
+}
+
+action act_get_uuids() public view {
+    select * from ids;
+}
+
+procedure proc_store_decimals($d decimal(10,5), $d2 decimal(10,5)[]) public {
+    insert into decimals (id, arr) values ($d, $d2);
+}
+
+action act_store_decimals($d, $d2) public {
+    nested($d);
+    nested($d2);
+    insert into decimals (id, arr) values ($d, $d2);
+}
+
+procedure proc_get_decimals() public view returns (id decimal(10,5), arr decimal(10,5)[]) {
+    for $row in select * from decimals {
+        return $row.id, $row.arr;
+    }
+}
+
+action act_get_decimals() public view {
+    select * from decimals;
+}
+
+procedure proc_store_uint256s($d uint256, $d2 uint256[]) public {
+    insert into uint256s (id, arr) values ($d, $d2);
+}
+
+action act_store_uint256s($d, $d2) public {
+    nested($d);
+    nested($d2);
+    insert into uint256s (id, arr) values ($d, $d2);
+}
+
+procedure proc_get_uint256s() public view returns (id uint256, arr uint256[]) {
+    for $row in select * from uint256s {
+        return $row.id, $row.arr;
+    }
+}
+
+action act_get_uint256s() public view {
+    select * from uint256s;
+}
+
+table texts {
+    id text primary key,
+    arr text[]
+}
+
+action act_store_texts($d, $d2) public {
+    nested($d);
+    nested($d2);
+    insert into texts values ($d, $d2);
+}
+
+procedure proc_store_texts($d text, $d2 text[]) public {
+    insert into texts values ($d, $d2);
+}
+
+action act_get_texts() public view {
+    select * from texts;
+}
+
+procedure proc_get_texts() public view returns (id text, arr text[]) {
+    for $row in select * from texts {
+        return $row.id, $row.arr;
+    }
+}
+
+table bools {
+    id bool primary key,
+    arr bool[]
+}
+
+procedure proc_store_bools($b bool, $b2 bool[]) public {
+    insert into bools (id, arr) values ($b, $b2);
+}
+
+procedure proc_get_bools() public view returns (id bool, arr bool[]) {
+    for $row in select * from bools {
+        return $row.id, $row.arr;
+    }
+}
+
+action act_store_bools($b, $b2) public {
+    nested($b);
+    nested($b2);
+    insert into bools (id, arr) values ($b, $b2);
+}
+
+action act_get_bools() public view {
+    select * from bools;
+}
+
+table blobs {
+    id blob primary key,
+    arr blob[]
+}
+
+procedure proc_store_blobs($d blob, $d2 blob[]) public {
+    insert into blobs (id, arr) values ($d, $d2);
+}
+
+procedure proc_get_blobs() public view returns (id blob, arr blob[]) {
+    for $row in select * from blobs {
+        return $row.id, $row.arr;
+    }
+}
+
+action act_store_blobs($d, $d2) public {
+    nested($d);
+    nested($d2);
+    insert into blobs (id, arr) values ($d, $d2);
+}
+
+action act_get_blobs() public view {
+    select * from blobs;
+}
+
+table ints {
+    id int primary key,
+    arr int[]
+}
+
+procedure proc_store_ints($i int, $i2 int[]) public {
+    insert into ints (id, arr) values ($i, $i2);
+}
+
+procedure proc_get_ints() public view returns (id int, arr int[]) {
+    for $row in select * from ints {
+        return $row.id, $row.arr;
+    }
+}
+
+action act_store_ints($i, $i2) public {
+    nested($i);
+    nested($i2);
+    insert into ints (id, arr) values ($i, $i2);
+}
+
+action act_get_ints() public view {
+    select * from ints;
+}
+
+// nested is simply a way for us to test in-line statements
+action nested($val) public view {
+    select $val;
+}
+
+
+procedure delete_all() public {
+    delete from ids;
+    delete from decimals;
+    delete from uint256s;
+    delete from texts;
+    delete from bools;
+    delete from blobs;
+    delete from ints;
+    delete from nils;
+}
+
+table nils {
+    id uuid primary key,
+    text_s text,
+    text_a text[],
+    int_s int,
+    int_a int[],
+    bool_s bool,
+    bool_a bool[],
+    blob_s blob,
+    blob_a blob[],
+    decimal_s decimal(10,5),
+    decimal_a decimal(10,5)[],
+    uint256_s uint256,
+    uint256_a uint256[],
+    uuid_s uuid,
+    uuid_a uuid[]
+}
+
+procedure proc_store_nils($text_s text, $text_a text[], $int_s int, $int_a int[], $bool_s bool,
+$bool_a bool[], $blob_s blob, $blob_a blob[], $decimal_s decimal(10,5), $decimal_a decimal(10,5)[],
+$uint256_s uint256, $uint256_a uint256[], $uuid_s uuid, $uuid_a uuid[]) public {
+    insert into nils values (
+        uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid),
+        $text_s,
+        $text_a,
+        $int_s,
+        $int_a,
+        $bool_s,
+        $bool_a,
+        $blob_s,
+        $blob_a,
+        $decimal_s,
+        $decimal_a,
+        $uint256_s,
+        $uint256_a,
+        $uuid_s,
+        $uuid_a
+    );
+}
+
+action act_store_nils($text_s, $text_a, $int_s, $int_a, $bool_s, $bool_a, $blob_s, $blob_a,
+$decimal_s, $decimal_a, $uint256_s, $uint256_a, $uuid_s, $uuid_a) public {
+    nested($text_s);
+    nested($text_a);
+    nested($int_s);
+    nested($int_a);
+    nested($bool_s);
+    nested($bool_a);
+    nested($blob_s);
+    nested($blob_a);
+    nested($decimal_s);
+    nested($decimal_a);
+    nested($uint256_s);
+    nested($uint256_a);
+    nested($uuid_s);
+    nested($uuid_a);
+
+        insert into nils values (
+        uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid),
+        $text_s,
+        $text_a,
+        $int_s,
+        $int_a,
+        $bool_s,
+        $bool_a,
+        $blob_s,
+        $blob_a,
+        $decimal_s,
+        $decimal_a,
+        $uint256_s,
+        $uint256_a,
+        $uuid_s,
+        $uuid_a
+    );
+}
+
+procedure proc_get_nils() public view returns table(text_s text, text_a text[], int_s int, int_a int[],
+bool_s bool, bool_a bool[], blob_s blob, blob_a blob[], decimal_s decimal(10,5), decimal_a decimal(10,5)[],
+uint256_s uint256, uint256_a uint256[], uuid_s uuid, uuid_a uuid[]) {
+    return select text_s, text_a, int_s, int_a, bool_s, bool_a, blob_s, blob_a, decimal_s, decimal_a, uint256_s, uint256_a, uuid_s, uuid_a
+    from nils;
+}
+
+action act_get_nils() public view {
+    select text_s, text_a, int_s, int_a, bool_s, bool_a, blob_s, blob_a, decimal_s, decimal_a, uint256_s, uint256_a, uuid_s, uuid_a
+    from nils;
+}

@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/internal/conv"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInt(t *testing.T) {
@@ -260,6 +262,130 @@ func Test_UUID(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_Uint256(t *testing.T) {
+	tests := []struct {
+		name    string
+		arg     any
+		want    *types.Uint256
+		wantErr bool
+	}{
+		{
+			name:    "string - invalid",
+			arg:     "6ba7b8109dad11d180b400c04fd430c8",
+			wantErr: true,
+		},
+		{
+			name: "string",
+			arg:  "58292472827384374328378382394367238126421",
+			want: mustParseUint256("58292472827384374328378382394367238126421"),
+		},
+		{
+			name: "uint256",
+			arg:  mustParseUint256("58292472827384374328378382394367238126421"),
+			want: mustParseUint256("58292472827384374328378382394367238126421"),
+		},
+		{
+			name: "bytes",
+			arg:  []byte{0x00, 0x01},
+			want: mustParseUint256("1"),
+		},
+		{
+			name:    "bool",
+			arg:     true,
+			wantErr: true,
+		},
+		{
+			name:    "struct",
+			arg:     struct{}{},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := conv.Uint256(tt.arg)
+			hasErr := err != nil
+			if hasErr != tt.wantErr {
+				t.Errorf("Uint256() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if hasErr {
+				return
+			}
+
+			if got.String() != tt.want.String() {
+				t.Errorf("Uint256() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_Decimal(t *testing.T) {
+	tests := []struct {
+		name    string
+		arg     any
+		want    *decimal.Decimal
+		wantErr bool
+	}{
+		{
+			name: "string",
+			arg:  "1.234",
+			want: mustDecimal("1.234"),
+		},
+		{
+			name: "int",
+			arg:  1234,
+			want: mustDecimal("1234"),
+		},
+		{
+			name: "int8",
+			arg:  int8(123),
+			want: mustDecimal("123"),
+		},
+		{
+			name:    "struct",
+			arg:     struct{}{},
+			wantErr: true,
+		},
+		{
+			name:    "bool",
+			arg:     true,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := conv.Decimal(tt.arg)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			if got.String() != tt.want.String() {
+				t.Errorf("Decimal() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func mustDecimal(s string) *decimal.Decimal {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
+
+}
+
+func mustParseUint256(s string) *types.Uint256 {
+	u, err := types.Uint256FromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return u
 }
 
 func mustParseUUID(s string) *types.UUID {

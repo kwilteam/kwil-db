@@ -184,6 +184,8 @@ type DataType struct {
 	Name string
 	// IsArray is true if the type is an array.
 	IsArray bool
+	// Metadata is the metadata of the type.
+	Metadata *[2]uint16 `rlp:"optional"`
 }
 
 // ForeignProcedure is a foreign procedure call in a database
@@ -259,10 +261,7 @@ func (t *Table) toTypes() *types.Table {
 func (c *Column) toTypes() *types.Column {
 	c2 := &types.Column{
 		Name: c.Name,
-		Type: &types.DataType{
-			Name:    c.Type.Name,
-			IsArray: c.Type.IsArray,
-		},
+		Type: c.Type.toTypes(),
 	}
 
 	for _, attr := range c.Attributes {
@@ -395,8 +394,9 @@ func (p *NamedType) parameterType() *types.ProcedureParameter {
 
 func (c *DataType) toTypes() *types.DataType {
 	return &types.DataType{
-		Name:    c.Name,
-		IsArray: c.IsArray,
+		Name:     c.Name,
+		IsArray:  c.IsArray,
+		Metadata: c.Metadata,
 	}
 }
 
@@ -569,18 +569,14 @@ func (p *Procedure) fromTypes(p2 *types.Procedure) {
 
 func (p *NamedType) fromTypes(p2 *types.NamedType) {
 	p.Name = p2.Name
-	p.Type = &DataType{
-		Name:    p2.Type.Name,
-		IsArray: p2.Type.IsArray,
-	}
+	p.Type = &DataType{}
+	p.Type.fromTypes(p2.Type)
 }
 
 func (p *NamedType) fromParameter(p2 *types.ProcedureParameter) {
 	p.Name = p2.Name
-	p.Type = &DataType{
-		Name:    p2.Type.Name,
-		IsArray: p2.Type.IsArray,
-	}
+	p.Type = &DataType{}
+	p.Type.fromTypes(p2.Type)
 }
 
 func (p *ProcedureReturn) fromTypes(p2 *types.ProcedureReturn) {
@@ -596,6 +592,7 @@ func (p *ProcedureReturn) fromTypes(p2 *types.ProcedureReturn) {
 func (c *DataType) fromTypes(c2 *types.DataType) {
 	c.Name = c2.Name
 	c.IsArray = c2.IsArray
+	c.Metadata = c2.Metadata
 }
 
 func (f *ForeignProcedure) fromTypes(f2 *types.ForeignProcedure) {

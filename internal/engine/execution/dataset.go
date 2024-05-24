@@ -6,6 +6,7 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
 )
 
 // baseDataset is a deployed database schema.
@@ -37,12 +38,12 @@ func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App
 	// check if it is a procedure
 	proc, ok := d.procedures[method]
 	if ok {
-		inputs, err := proc.coerceInputs(inputs)
-		if err != nil {
-			return nil, err
-		}
+		// inputs, err := proc.coerceInputs(inputs)
+		// if err != nil {
+		// 	return nil, err
+		// }
 
-		res, err := app.DB.Execute(caller.Ctx, proc.callString(d.schema.DBID()), inputs...)
+		res, err := app.DB.Execute(caller.Ctx, proc.callString(d.schema.DBID()), append([]any{pg.QueryModeExec}, inputs...)...)
 		if err != nil {
 			return nil, err
 		}

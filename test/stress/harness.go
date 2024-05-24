@@ -122,7 +122,7 @@ func (h *harness) executeActionAsync(ctx context.Context, dbid, action string,
 	var txHash transactions.TxHash
 	err := h.underNonceLock(ctx, func(nonce int64) error {
 		var err error
-		txHash, err = h.ExecuteAction(ctx, dbid, action, inputs,
+		txHash, err = h.Execute(ctx, dbid, action, inputs,
 			clientType.WithNonce(nonce) /*, clientType.WithFee(&big.Int{})*/) // TODO: badFee mode
 		return err
 	})

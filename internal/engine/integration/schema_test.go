@@ -49,7 +49,7 @@ func Test_Schemas(t *testing.T) {
 				_, err := global.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:         usersDBID,
 					Procedure:       "create_user",
-					Args:            []any{"satoshi", "42"},
+					Args:            []any{"satoshi"},
 					TransactionData: txData(),
 				})
 				require.NoError(t, err)
@@ -135,7 +135,7 @@ func Test_Schemas(t *testing.T) {
 				_, err := global.Procedure(ctx, db, &common.ExecutionData{
 					Dataset:         usersDBID,
 					Procedure:       "create_user",
-					Args:            []any{"satoshi", "42"},
+					Args:            []any{"satoshi"},
 					TransactionData: txData(),
 				})
 				require.NoError(t, err)

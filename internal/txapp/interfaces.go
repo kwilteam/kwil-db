@@ -13,7 +13,7 @@ import (
 // Rebroadcaster is a service that marks events for rebroadcasting.
 type Rebroadcaster interface {
 	// MarkRebroadcast marks events for rebroadcasting.
-	MarkRebroadcast(ctx context.Context, ids []types.UUID) error
+	MarkRebroadcast(ctx context.Context, ids []*types.UUID) error
 }
 
 // DB is the interface for the main SQL database. All queries must be executed

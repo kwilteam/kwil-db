@@ -10,6 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/stretchr/testify/require"
 	// "github.com/kwilteam/kwil-db/internal/conv"
 )
@@ -367,4 +369,190 @@ func TestReadTxs(t *testing.T) {
 
 	err = tx2.Commit(ctx)
 	require.NoError(t, err)
+}
+
+// TestTypeRoundtrip tests roundtripping different data types to and from Postgres.
+func TestTypeRoundtrip(t *testing.T) {
+	type testcase struct {
+		// typ specifies the postgres type to use in the test.
+		typ string
+		// val is the value to pass to the query.
+		val any
+		// want is the expected value to be returned from the query.
+		// if nil, val is expected to be returned
+		want any
+		// skipInferred skips the inferred arg types test.
+		skipInferred bool
+		// skipTbl skips the table test. This is used if we are testing
+		// a value that isn't directly applicable to postgres.
+		skipTbl bool
+	}
+
+	for _, v := range []testcase{
+		{
+			typ: "int8",
+			val: int64(1),
+		},
+		{
+			typ: "bool",
+			val: true,
+		},
+		{
+			typ: "text",
+			val: "hello",
+		},
+		{
+			typ: "bytea",
+			val: []byte("world"),
+		},
+		{
+			typ: "uuid",
+			val: types.NewUUIDV5([]byte("1")),
+		},
+		{
+			typ: "decimal(6,3)",
+			val: mustDecimal("123.456"),
+		},
+		{
+			typ: "decimal(5,0)",
+			val: mustDecimal("12300"),
+		},
+		{
+			typ:  "decimal(3,0)",
+			val:  types.Uint256FromInt(100),
+			want: mustDecimal("100"),
+		},
+		{
+			typ:  "uint256",
+			val:  types.Uint256FromInt(100),
+			want: mustDecimal("100"),
+		},
+		{
+			typ:  "int8[]",
+			val:  []int64{1, 2, 3},
+			want: []any{int64(1), int64(2), int64(3)},
+		},
+		{
+			typ:  "bool[]",
+			val:  []bool{true, false, true},
+			want: []any{true, false, true},
+		},
+		{
+			typ:  "text[]",
+			val:  []string{"a", "b", "c"},
+			want: []any{"a", "b", "c"},
+		},
+		{
+			typ:  "bytea[]",
+			val:  [][]byte{[]byte("a"), []byte("b"), []byte("c")},
+			want: []any{[]byte("a"), []byte("b"), []byte("c")},
+		},
+		{
+			typ:  "uuid[]",
+			val:  types.UUIDArray{types.NewUUIDV5([]byte("2")), types.NewUUIDV5([]byte("3"))},
+			want: []any{types.NewUUIDV5([]byte("2")), types.NewUUIDV5([]byte("3"))},
+		},
+		{
+			typ:  "decimal(6,4)[]",
+			val:  decimal.DecimalArray{mustDecimal("12.4223"), mustDecimal("22.4425"), mustDecimal("23.7423")},
+			want: []any{mustDecimal("12.4223"), mustDecimal("22.4425"), mustDecimal("23.7423")},
+		},
+		{
+			typ:  "decimal(3,0)[]",
+			val:  types.Uint256Array{types.Uint256FromInt(100), types.Uint256FromInt(200), types.Uint256FromInt(300)},
+			want: []any{mustDecimal("100"), mustDecimal("200"), mustDecimal("300")},
+		},
+		{
+			typ:  "text[]",
+			val:  []string{},
+			want: []any{},
+		},
+		{
+			typ:  "int8[]",
+			val:  []int64{},
+			want: []any{},
+		},
+		{
+			typ:     "nil",
+			val:     nil,
+			skipTbl: true,
+		},
+		{
+			typ:     "[]uuid",
+			val:     []any{"3146857c-8671-4f4e-99bd-fcc621f9d3d1", "3146857c-8671-4f4e-99bd-fcc621f9d3d1"},
+			want:    []any{"3146857c-8671-4f4e-99bd-fcc621f9d3d1", "3146857c-8671-4f4e-99bd-fcc621f9d3d1"},
+			skipTbl: true,
+		},
+		{
+			typ:          "int8[]",
+			val:          []string{"1", "2"},
+			want:         []any{int64(1), int64(2)},
+			skipInferred: true,
+		},
+	} {
+		t.Run(v.typ, func(t *testing.T) {
+			ctx := context.Background()
+			db, err := NewDB(ctx, cfg)
+			require.NoError(t, err)
+			defer db.Close()
+
+			want := v.val
+			if v.want != nil {
+				want = v.want
+			}
+
+			if !v.skipInferred {
+				res, err := db.Query(ctx, "SELECT $1", QueryModeInferredArgTypes, v.val)
+				require.NoError(t, err)
+
+				require.Len(t, res.Columns, 1)
+				require.Len(t, res.Rows, 1)
+				require.Len(t, res.Rows[0], 1)
+
+				require.EqualValues(t, want, res.Rows[0][0])
+			}
+
+			if v.skipTbl {
+				return
+			}
+
+			// here, we test without the QueryModeInferredArgTypes
+
+			tx, err := db.BeginOuterTx(ctx)
+			require.NoError(t, err)
+			defer tx.Rollback(ctx) // always rollback
+
+			_, err = tx.Execute(ctx, "CREATE TEMP TABLE test (val "+v.typ+")", QueryModeExec)
+			require.NoError(t, err)
+
+			_, err = tx.Execute(ctx, "INSERT INTO test (val) VALUES ($1)", QueryModeExec, v.val)
+			require.NoError(t, err)
+
+			res, err := tx.Execute(ctx, "SELECT val FROM test", QueryModeExec)
+			require.NoError(t, err)
+
+			require.Len(t, res.Columns, 1)
+			require.Len(t, res.Rows, 1)
+			require.Len(t, res.Rows[0], 1)
+
+			require.EqualValues(t, want, res.Rows[0][0])
+		})
+	}
+}
+
+// mustDecimal panics if the string cannot be converted to a decimal.
+func mustDecimal(s string) *decimal.Decimal {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
+}
+
+func mustParseUUID(s string) *types.UUID {
+	u, err := types.ParseUUID(s)
+	if err != nil {
+		panic(err)
+	}
+	return u
 }

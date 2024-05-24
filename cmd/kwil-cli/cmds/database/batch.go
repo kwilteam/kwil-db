@@ -88,7 +88,7 @@ func batchCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
 				}
 
-				txHash, err := cl.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples,
+				txHash, err := cl.Execute(ctx, dbid, strings.ToLower(action), tuples,
 					clientType.WithNonce(nonceOverride), clientType.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error executing action: %w", err))
@@ -121,7 +121,7 @@ func batchCmd() *cobra.Command {
 }
 
 // buildInputs builds the inputs for the file
-func buildInputs(file *os.File, fileType string, columnMappingFlag []string, inputMappings []string) ([]map[string]any, error) {
+func buildInputs(file *os.File, fileType string, columnMappingFlag []string, inputMappings []string) ([]map[string]string, error) {
 	switch fileType {
 	case "csv":
 		return buildCsvInputs(file, columnMappingFlag, inputMappings)
@@ -130,7 +130,7 @@ func buildInputs(file *os.File, fileType string, columnMappingFlag []string, inp
 	}
 }
 
-func addInputMappings(inputs []map[string]any, inputMappings []string) ([]map[string]any, error) {
+func addInputMappings(inputs []map[string]string, inputMappings []string) ([]map[string]string, error) {
 	for _, inputMapping := range inputMappings {
 		parts := strings.SplitN(inputMapping, ":", 2)
 		if len(parts) != 2 {
@@ -148,7 +148,7 @@ func addInputMappings(inputs []map[string]any, inputMappings []string) ([]map[st
 }
 
 // buildCsvInputs builds the inputs for a csv file
-func buildCsvInputs(file *os.File, columnMappings []string, inputMappings []string) ([]map[string]any, error) {
+func buildCsvInputs(file *os.File, columnMappings []string, inputMappings []string) ([]map[string]string, error) {
 	data, err := csv.Read(file, csv.ContainsHeader)
 	if err != nil {
 		return nil, fmt.Errorf("error reading csv: %w", err)
