@@ -296,6 +296,7 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 				Signer: tx.Sender,
 				Caller: identifier,
 				TxID:   hex.EncodeToString(ctx.TxID),
+				Height: ctx.BlockHeight,
 			},
 		})
 		if err != nil {

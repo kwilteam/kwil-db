@@ -95,6 +95,11 @@ type TxQueryDsl interface {
 // to usage in the TxSvc
 type InfoDsl interface {
 	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
+	// Signer returns the wallet's signer. This is the bytes address for eth signers.
+	Signer() []byte
+	// Identifier returns the identifier derived from the authenticator.
+	// This is a hex address for eth signers.
+	Identifier() (string, error)
 }
 
 // ValidatorStatusDsl is the dsl for checking validator status, including

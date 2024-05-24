@@ -244,6 +244,9 @@ func TestTypes(t *testing.T) {
 			// we only test nils if using json rpc driver, becase the cli driver cannot support nil
 			// args to actions/procedures
 			specifications.ExecuteTypesSpecification(ctx, t, creatorDriver, driverType == "jsonrpc")
+
+			// test contextual vars
+			specifications.ExecuteContextualVarsSpecification(ctx, t, creatorDriver)
 		})
 	}
 }

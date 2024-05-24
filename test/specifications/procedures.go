@@ -12,6 +12,7 @@ import (
 type ProcedureDSL interface {
 	DatabaseDeployDsl
 	ExecuteActionsDsl
+	InfoDsl
 }
 
 // ExecuteProcedureSpecification tests that procedures for a specific schema

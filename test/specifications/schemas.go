@@ -34,4 +34,7 @@ var (
 	TypesDB = &testSchema{
 		FileName: "types",
 	}
+	ContextualVarsDB = &testSchema{
+		FileName: "contextual_vars",
+	}
 )

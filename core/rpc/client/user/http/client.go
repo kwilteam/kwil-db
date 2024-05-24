@@ -4,7 +4,6 @@ package http
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -18,6 +17,7 @@ import (
 	httpTx "github.com/kwilteam/kwil-db/core/rpc/http/tx"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	jsonUtil "github.com/kwilteam/kwil-db/core/utils/json"
 
 	"github.com/antihax/optional"
 )
@@ -113,7 +113,7 @@ func (c *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts .
 		return nil, err
 	}
 
-	return unmarshalMapResults(decodedResult)
+	return jsonUtil.UnmarshalMapWithoutFloat(decodedResult)
 }
 
 func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
@@ -249,7 +249,7 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 		return nil, err
 	}
 
-	return unmarshalMapResults(decodedResult)
+	return jsonUtil.UnmarshalMapWithoutFloat(decodedResult)
 }
 
 func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
@@ -287,31 +287,4 @@ func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTx
 		Tx:       convertedTx,
 		TxResult: *convertedTxResult,
 	}, nil
-}
-
-func unmarshalMapResults(b []byte) ([]map[string]any, error) {
-	d := json.NewDecoder(strings.NewReader(string(b)))
-	d.UseNumber()
-
-	// unmashal result
-	var result []map[string]any
-	err := d.Decode(&result)
-	if err != nil {
-		return nil, err
-	}
-
-	// convert numbers to int64
-	for _, record := range result {
-		for k, v := range record {
-			if num, ok := v.(json.Number); ok {
-				i, err := num.Int64()
-				if err != nil {
-					return nil, err
-				}
-				record[k] = i
-			}
-		}
-	}
-
-	return result, nil
 }

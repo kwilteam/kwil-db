@@ -9,13 +9,13 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
-	"strings"
 
 	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	jsonUtil "github.com/kwilteam/kwil-db/core/utils/json"
 )
 
 // Client is a JSON-RPC client for the Kwil user service. It use the JSONRPCClient
@@ -79,45 +79,6 @@ func (cl *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, s
 	return res.TxHash, nil
 }
 
-func unmarshalMapResults(b []byte) ([]map[string]any, error) {
-	d := json.NewDecoder(strings.NewReader(string(b)))
-	d.UseNumber()
-
-	// unmashal result
-	var result []map[string]any
-	err := d.Decode(&result)
-	if err != nil {
-		return nil, err
-	}
-
-	// convert numbers to int64
-	for _, record := range result {
-		for k, v := range record {
-			if num, ok := v.(json.Number); ok {
-				i, err := num.Int64()
-				if err != nil {
-					record[k] = num.String()
-				} else {
-					record[k] = i
-				}
-			} else if num, ok := v.([]any); ok {
-				for j, n := range num {
-					if n, ok := n.(json.Number); ok {
-						i, err := n.Int64()
-						if err != nil {
-							num[j] = n.String()
-						} else {
-							num[j] = i
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return result, nil
-}
-
 func (cl *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...rpcclient.ActionCallOption) ([]map[string]any, error) {
 	cmd := &jsonrpc.CallRequest{
 		Body:     msg.Body,
@@ -129,7 +90,7 @@ func (cl *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts 
 	if err != nil {
 		return nil, err
 	}
-	return unmarshalMapResults(res.Result)
+	return jsonUtil.UnmarshalMapWithoutFloat(res.Result)
 }
 
 func (cl *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
@@ -230,7 +191,7 @@ func (cl *Client) Query(ctx context.Context, dbid, query string) ([]map[string]a
 	if err != nil {
 		return nil, err
 	}
-	return unmarshalMapResults(res.Result)
+	return jsonUtil.UnmarshalMapWithoutFloat(res.Result)
 }
 
 func (cl *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {

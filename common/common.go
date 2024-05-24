@@ -76,6 +76,9 @@ type TransactionData struct {
 
 	// TxID is the transaction ID of the incoming transaction.
 	TxID string
+
+	// Height is the block height of the incoming transaction.
+	Height int64
 }
 
 // ExecutionOptions is contextual data that is passed to a procedure
