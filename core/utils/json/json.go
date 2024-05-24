@@ -31,6 +31,9 @@ func UnmarshalMapWithoutFloat(b []byte) ([]map[string]any, error) {
 // convertJsonNumbers recursively converts json.Number to int64.
 // It traverses through the map and array and converts all json.Number to int64.
 func convertJsonNumbers(val any) any {
+	if val == nil {
+		return nil
+	}
 	switch val := val.(type) {
 	case map[string]any:
 		for k, v := range val {
