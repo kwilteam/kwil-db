@@ -126,13 +126,14 @@ func buildExecutionInputs(ctx context.Context, client clientType.Client, dbid st
 	return nil, fmt.Errorf("procedure/action not found")
 }
 
-func decodeManyB64(inputs []string) ([][]byte, bool) {
+// decodeMany attempts to parse command-line inputs as base64 encoded values.
+func decodeMany(inputs []string) ([][]byte, bool) {
 	b64Arr := [][]byte{}
 	b64Ok := true
 	for _, s := range inputs {
 		// in the CLI, if data has suffix ;b64, it is base64 encoded
-		if strings.HasSuffix(s, ";b64") {
-			s = strings.TrimSuffix(s, ";b64")
+		if strings.HasSuffix(s, "[b64]") {
+			s = strings.TrimSuffix(s, "[b64]")
 		} else {
 			b64Ok = false
 			break
@@ -171,7 +172,7 @@ func buildActionInputs(a *types.Action, inputs []map[string]string) ([][]any, er
 			}
 
 			// attempt to decode base64 encoded values
-			b64Arr, b64Ok := decodeManyB64(split)
+			b64Arr, b64Ok := decodeMany(split)
 			if b64Ok {
 				// additional check here in case user is sending a single base64 value, we don't
 				// want to encode it as an array.
@@ -217,7 +218,7 @@ func buildProcedureInputs(p *types.Procedure, inputs []map[string]string) ([][]a
 				}
 
 				// attempt to decode base64 encoded values
-				b64Arr, b64Ok := decodeManyB64(split)
+				b64Arr, b64Ok := decodeMany(split)
 				if b64Ok {
 					newTuple = append(newTuple, b64Arr)
 				} else {
@@ -228,7 +229,7 @@ func buildProcedureInputs(p *types.Procedure, inputs []map[string]string) ([][]a
 
 			// attempt to decode base64 encoded values
 
-			bts, ok := decodeManyB64([]string{v})
+			bts, ok := decodeMany([]string{v})
 			if ok {
 				newTuple = append(newTuple, bts[0])
 			} else {
