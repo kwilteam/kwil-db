@@ -287,7 +287,7 @@ func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, a
 	stringify := func(v any) string {
 		switch v := v.(type) {
 		case []byte:
-			return base64.StdEncoding.EncodeToString(v) + "[b64]"
+			return base64.StdEncoding.EncodeToString(v) + "#b64"
 		case fmt.Stringer:
 			return v.String()
 		default:

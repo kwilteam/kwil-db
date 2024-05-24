@@ -132,8 +132,8 @@ func decodeMany(inputs []string) ([][]byte, bool) {
 	b64Ok := true
 	for _, s := range inputs {
 		// in the CLI, if data has suffix ;b64, it is base64 encoded
-		if strings.HasSuffix(s, "[b64]") {
-			s = strings.TrimSuffix(s, "[b64]")
+		if strings.HasSuffix(s, "#b64") {
+			s = strings.TrimSuffix(s, "#b64")
 		} else {
 			b64Ok = false
 			break
