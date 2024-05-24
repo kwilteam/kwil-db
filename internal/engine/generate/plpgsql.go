@@ -264,9 +264,8 @@ func (s *sqlGenerator) VisitExpressionIs(p0 *parse.ExpressionIs) any {
 		str.WriteString("NOT ")
 	}
 	if p0.Distinct {
-		str.WriteString("DISTINCT ")
+		str.WriteString("DISTINCT FROM ")
 	}
-	str.WriteString("FROM ")
 	str.WriteString(p0.Right.Accept(s).(string))
 	// cannot be typecasted
 	return str.String()
