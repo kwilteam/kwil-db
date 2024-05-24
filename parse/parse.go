@@ -195,7 +195,9 @@ func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []Proc
 		}
 	}
 
-	if proc.Returns != nil && !returns {
+	// if the procedure is expecting a return that is not a table, and it does not guarantee
+	// returning a value, we should add an error.
+	if proc.Returns != nil && !returns && !proc.Returns.IsTable {
 		errLis.AddErr(res.AST[len(res.AST)-1], ErrReturn, "procedure does not return a value")
 	}
 

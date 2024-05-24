@@ -1423,6 +1423,28 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "error func exits",
+			proc: `error('error message');`,
+			returns: &types.ProcedureReturn{
+				Fields: []*types.NamedType{{
+					Name: "id",
+					Type: types.IntType,
+				}},
+			},
+			want: &parse.ProcedureParseResult{
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtCall{
+						Call: &parse.ExpressionFunctionCall{
+							Name: "error",
+							Args: []parse.Expression{
+								exprLit("error message"),
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

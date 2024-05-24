@@ -2187,6 +2187,11 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 
 		callReturns = returns2
 	}
+	// if calling the `error` function, then this branch will return
+	exits := false
+	if p0.Call.FunctionName() == "error" {
+		exits = true
+	}
 
 	// if calling a non-view procedure, the above will set the sqlResult to be mutative
 	// if this procedure is a view, we should throw an error.
@@ -2228,7 +2233,9 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 		}
 	}
 
-	return zeroProcedureReturn()
+	return &procedureStmtResult{
+		willReturn: exits,
+	}
 }
 
 // VisitProcedureStmtForLoop visits a for loop statement.
