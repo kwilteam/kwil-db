@@ -10,7 +10,7 @@ replace (
 require (
 	dario.cat/mergo v1.0.0
 	github.com/alexliesenfeld/health v0.8.0
-	github.com/cometbft/cometbft v0.38.7
+	github.com/cometbft/cometbft v0.38.8-0.20240520074150-51884f9baf5a
 	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/ethereum/go-ethereum v1.14.3
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.1.0
@@ -90,6 +90,7 @@ require (
 	github.com/google/orderedcode v0.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.1 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect

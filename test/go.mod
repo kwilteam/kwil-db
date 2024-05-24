@@ -11,7 +11,7 @@ replace (
 )
 
 require (
-	github.com/cometbft/cometbft v0.38.7
+	github.com/cometbft/cometbft v0.38.8-0.20240520074150-51884f9baf5a
 	github.com/cstockton/go-conv v1.0.0
 	github.com/docker/go-connections v0.5.0
 	github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246
@@ -138,6 +138,7 @@ require (
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/holiman/uint256 v1.2.4 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
