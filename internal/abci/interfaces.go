@@ -49,8 +49,7 @@ type TxApp interface {
 
 	// ProposerTxs is used when a validator prepares a block proposal This is
 	// prior to the Begin->Commit cycle, and as such does not use the DB
-	// transaction or a writer connection. TODO: The contention with other
-	// readers, such as RPC requests, may be something to resolve.
+	// transaction or a writer connection.
 	ProposerTxs(ctx context.Context, txNonce uint64, maxTxSize int64, proposerAddr []byte) ([][]byte, error)
 
 	// Begin signals that a new block has begun. The following methods are

@@ -309,16 +309,15 @@ func (r *TxApp) ConsensusValidators(ctx context.Context) ([]*types.Validator, er
 		tx = rtx
 	} else { // coming from FinalizeBlock
 		tx = r.currentTx
+		// We're not making a nested tx since an error in the consensus thread
+		// will halt the node (and rollback) anyway.
 	}
-
-	// We're not making a nested tx since an error in the consensus thread will
-	// halt the node (and rollback) anyway.
 
 	return getAllVoters(ctx, tx)
 }
 
 // GetValidators returns a shallow copy of the current validator set.
-// It will not return ONLY committed changes.
+// It will return ONLY committed changes.
 func (r *TxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
 	r.valMtx.Lock()
 	defer r.valMtx.Unlock()
