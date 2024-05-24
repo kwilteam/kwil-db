@@ -1323,7 +1323,7 @@ func Test_Procedure(t *testing.T) {
 					Type: types.IntType,
 				}},
 			},
-			proc: `return select id from users;`,
+			proc: `return select id from users;`, // this is intentional- plpgsql treats this as a table return
 			err:  parse.ErrReturn,
 		},
 		{
