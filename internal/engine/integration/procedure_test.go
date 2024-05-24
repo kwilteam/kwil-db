@@ -167,6 +167,16 @@ func Test_Procedures(t *testing.T) {
 			inputs:  []any{[]int64{1, 2, 3}},
 			outputs: [][]any{{int64(2)}, {int64(4)}, {int64(6)}},
 		},
+		{
+			name: "table return with no hits doesn't return postgres no-return error",
+			procedure: `procedure return_next($vals int[]) public view returns table(val int) {
+				for $i in $vals {
+					error('unreachable');
+				}
+			}`,
+			inputs:  []any{[]int64{}},
+			outputs: [][]any{},
+		},
 	}
 
 	for _, test := range tests {
