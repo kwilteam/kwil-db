@@ -2152,7 +2152,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssign
 	}
 
 	if !dt2.Equals(dt) {
-		p.typeErr(p0, dt, dt2)
+		p.typeErr(p0, dt2, dt)
 	}
 
 	return nil
@@ -2252,8 +2252,12 @@ func (p *procedureAnalyzer) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) 
 	// we do not mark declared here since these are loop receivers,
 	// and they get tracked in a separate slice than other variables.
 	if ok {
-		p.variables[p0.Receiver.String()] = scalarVal
-		tracker.dataType = scalarVal
+		// if here, we are likely looping over an array.
+		// we need to use the returned type, but remove the IsArray
+		rec := scalarVal.Copy()
+		rec.IsArray = false
+		p.variables[p0.Receiver.String()] = rec
+		tracker.dataType = rec
 	} else {
 		compound, ok := res.(map[string]*types.DataType)
 		if !ok {
