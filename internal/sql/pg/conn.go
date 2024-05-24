@@ -70,8 +70,17 @@ type ConnConfig struct {
 // building block or for testing individual systems outside of the context of a
 // session.
 type Pool struct {
-	pgxp   *pgxpool.Pool
-	writer *pgx.Conn // hijacked from the pool
+	readers  *pgxpool.Pool
+	writer   *pgx.Conn // hijacked from the pool
+	reserved *pgx.Conn // reserved reader so validator operations (block proposal) aren't blocked by RPC readers
+	// NOTE: Instead of the hijacked "reserved" connection, we could also have a
+	// reserved/superuser connection pool in a manner similar to how postgres
+	// itself reserves connections with the reserved_connections and
+	// superuser_reserved_connections system settings.
+	// https://www.postgresql.org/docs/current/runtime-config-connection.html#GUC-RESERVED-CONNECTIONS
+	// For now, I'm keeping these outside of a pool to avoid the overhead and
+	// complexity of connection pooling since we have a well-defined use case
+	// where there is no concurrent access.
 }
 
 // PoolConfig combines a connection config with additional options for a pool of
@@ -97,7 +106,7 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	if cfg.User == "" {
 		return nil, errors.New("db user must not be empty")
 	}
-	if cfg.MaxConns < 2 {
+	if cfg.MaxConns < 3 {
 		return nil, errors.New("at least two total connections are required")
 	}
 	const repl = false
@@ -150,9 +159,16 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	}
 	registerTypes(ctx, writer.Conn())
 
+	reserved, err := db.Acquire(ctx) // could be a reserved pool instead - see comments in Pool declaration
+	if err != nil {
+		return nil, err
+	}
+	registerTypes(ctx, reserved.Conn())
+
 	pool := &Pool{
-		pgxp:   db,
-		writer: writer.Hijack(),
+		readers:  db,
+		writer:   writer.Hijack(),
+		reserved: reserved.Hijack(),
 	}
 
 	return pool, db.Ping(ctx)
@@ -184,7 +200,7 @@ func registerTypes(ctx context.Context, conn *pgx.Conn) error {
 // executed in a transaction with read only access mode to ensure there can be
 // no modifications.
 func (p *Pool) Query(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
-	return queryTx(ctx, p.pgxp, stmt, args...)
+	return queryTx(ctx, p.readers, stmt, args...)
 }
 
 // WARNING: The Execute method is for completeness and helping tests, but is not
@@ -197,7 +213,7 @@ func (p *Pool) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resu
 }
 
 func (p *Pool) Close() error {
-	p.pgxp.Close()
+	p.readers.Close()
 	return p.writer.Close(context.TODO())
 }
 
@@ -219,7 +235,7 @@ func (p *Pool) BeginTx(ctx context.Context) (sql.Tx, error) {
 
 // BeginReadTx starts a read-only transaction.
 func (p *Pool) BeginReadTx(ctx context.Context) (sql.Tx, error) {
-	tx, err := p.pgxp.BeginTx(ctx, pgx.TxOptions{
+	tx, err := p.readers.BeginTx(ctx, pgx.TxOptions{
 		AccessMode: pgx.ReadOnly,
 		IsoLevel:   pgx.RepeatableRead,
 	})

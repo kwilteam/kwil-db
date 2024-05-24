@@ -216,7 +216,7 @@ func Test_prepareMempoolTxns(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := abciApp.prepareBlockTransactions(tt.txs, &logger, 1e6, []byte("proposer"))
+			got := abciApp.prepareBlockTransactions(context.Background(), tt.txs, &logger, 1e6, []byte("proposer"))
 			if len(got) != len(tt.want) {
 				t.Errorf("got %d txns, expected %d", len(got), len(tt.want))
 			}
@@ -246,7 +246,7 @@ func Test_ProcessProposal_UnfundedAccount(t *testing.T) {
 	txA1 := newTxBts(t, 1, signerA)
 
 	// Unfunded account
-	txs := abciApp.prepareBlockTransactions([][]byte{txA1}, &logger, 1e6, []byte("proposer"))
+	txs := abciApp.prepareBlockTransactions(context.Background(), [][]byte{txA1}, &logger, 1e6, []byte("proposer"))
 	assert.Len(t, txs, 0)
 
 }
@@ -391,6 +391,10 @@ func (m *mockTxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitt
 	return big.NewInt(0), 0, nil
 }
 
+func (m *mockTxApp) ConsensusAccountInfo(ctx context.Context, acctID []byte) (balance *big.Int, nonce int64, err error) {
+	return big.NewInt(0), 0, nil
+}
+
 func (m *mockTxApp) ApplyMempool(ctx context.Context, tx *transactions.Transaction) error {
 	return nil
 }
@@ -421,6 +425,10 @@ func (m *mockTxApp) ChainInfo(ctx context.Context) (height int64, appHash []byte
 }
 
 func (m *mockTxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
+	return nil, nil
+}
+
+func (m *mockTxApp) ConsensusValidators(ctx context.Context) ([]*types.Validator, error) {
 	return nil, nil
 }
 

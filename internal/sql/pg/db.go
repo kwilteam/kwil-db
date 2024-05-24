@@ -270,13 +270,12 @@ func (db *DB) BeginSnapshotTx(ctx context.Context) (sql.Tx, string, error) {
 }
 
 func (db *DB) beginReadTx(ctx context.Context, iso pgx.TxIsoLevel) (sql.Tx, error) {
-	// stat := db.pool.pgxp.Stat()
+	// stat := db.pool.readers.Stat()
 	// fmt.Printf("total / max cons: %d / %d\n", stat.TotalConns(), stat.MaxConns())
-	conn, err := db.pool.pgxp.Acquire(ctx) // ensure we have a connection
+	conn, err := db.pool.readers.Acquire(ctx) // ensure we have a connection
 	if err != nil {
 		return nil, err
 	}
-
 	tx, err := conn.BeginTx(ctx, pgx.TxOptions{
 		AccessMode: pgx.ReadOnly,
 		IsoLevel:   iso, // only for read-only as repeatable ready can fail a write tx commit
@@ -294,6 +293,26 @@ func (db *DB) beginReadTx(ctx context.Context, iso pgx.TxIsoLevel) (sql.Tx, erro
 	return &readTx{
 		nestedTx: ntx,
 		release:  sync.OnceFunc(conn.Release),
+	}, nil
+}
+
+// BeginReservedReadTx starts a read-only transaction using a reserved reader
+// connection. This is to allow read-only consensus operations that operate
+// outside of the write transaction's lifetime, such as proposal preparation and
+// approval, to function without contention on the reader pool that services
+// user requests.
+func (db *DB) BeginReservedReadTx(ctx context.Context) (sql.Tx, error) {
+	tx, err := db.pool.reserved.BeginTx(ctx, pgx.TxOptions{
+		AccessMode: pgx.ReadOnly,
+		IsoLevel:   pgx.RepeatableRead,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &nestedTx{
+		Tx:         tx,
+		accessMode: sql.ReadOnly,
 	}, nil
 }
 
