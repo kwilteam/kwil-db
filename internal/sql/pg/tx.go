@@ -9,6 +9,10 @@ import (
 	common "github.com/kwilteam/kwil-db/common/sql"
 )
 
+type releaser interface {
+	Release()
+}
+
 // nestedTx is returned from the BeginTx method of both dbTx or another
 // nestedTx. The underlying pgx.Tx is embedded so we do not need to redefine the
 // Commit and Rollback methods.
@@ -69,11 +73,17 @@ func (tx *dbTx) Precommit(ctx context.Context) ([]byte, error) {
 
 // Commit commits the transaction. This partly satisfies sql.Tx.
 func (tx *dbTx) Commit(ctx context.Context) error {
+	if rel, ok := tx.nestedTx.Tx.(releaser); ok {
+		defer rel.Release()
+	}
 	return tx.db.commit(ctx)
 }
 
 // Rollback rolls back the transaction. This partly satisfies sql.Tx.
 func (tx *dbTx) Rollback(ctx context.Context) error {
+	if rel, ok := tx.nestedTx.Tx.(releaser); ok {
+		defer rel.Release()
+	}
 	return tx.db.rollback(ctx)
 }
 

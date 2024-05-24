@@ -71,16 +71,12 @@ type ConnConfig struct {
 // session.
 type Pool struct {
 	readers  *pgxpool.Pool
-	writer   *pgx.Conn // hijacked from the pool
-	reserved *pgx.Conn // reserved reader so validator operations (block proposal) aren't blocked by RPC readers
-	// NOTE: Instead of the hijacked "reserved" connection, we could also have a
-	// reserved/superuser connection pool in a manner similar to how postgres
-	// itself reserves connections with the reserved_connections and
-	// superuser_reserved_connections system settings.
+	writer   *pgxpool.Pool // a pool for auto-reconnect on Acquire, but should only be one actual writer
+	reserved *pgxpool.Pool // reserved readers so validator operations (block proposal) aren't blocked by RPC readers
+	// The above is a reserved/superuser connection pool in a manner similar to
+	// how postgres itself reserves connections with the reserved_connections
+	// and superuser_reserved_connections system settings.
 	// https://www.postgresql.org/docs/current/runtime-config-connection.html#GUC-RESERVED-CONNECTIONS
-	// For now, I'm keeping these outside of a pool to avoid the overhead and
-	// complexity of connection pooling since we have a well-defined use case
-	// where there is no concurrent access.
 }
 
 // PoolConfig combines a connection config with additional options for a pool of
@@ -106,7 +102,7 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	if cfg.User == "" {
 		return nil, errors.New("db user must not be empty")
 	}
-	if cfg.MaxConns < 3 {
+	if cfg.MaxConns < 2 {
 		return nil, errors.New("at least two total connections are required")
 	}
 	const repl = false
@@ -153,22 +149,24 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 		return nil, err
 	}
 
-	writer, err := db.Acquire(ctx)
+	writerCfg := pCfg.Copy()
+	writerCfg.MaxConns = 2 // just one should be fine, but keep a pair for faster reconnect if it needs reconnect
+	writer, err := pgxpool.NewWithConfig(ctx, writerCfg)
 	if err != nil {
 		return nil, err
 	}
-	registerTypes(ctx, writer.Conn())
 
-	reserved, err := db.Acquire(ctx) // could be a reserved pool instead - see comments in Pool declaration
+	reservedCfg := pCfg.Copy()
+	reservedCfg.MaxConns = 2 // just one should be fine, but keep a pair for faster reconnect if it needs reconnect
+	reserved, err := pgxpool.NewWithConfig(ctx, reservedCfg)
 	if err != nil {
 		return nil, err
 	}
-	registerTypes(ctx, reserved.Conn())
 
 	pool := &Pool{
 		readers:  db,
-		writer:   writer.Hijack(),
-		reserved: reserved.Hijack(),
+		writer:   writer,
+		reserved: reserved,
 	}
 
 	return pool, db.Ping(ctx)
@@ -209,12 +207,23 @@ func (p *Pool) Query(ctx context.Context, stmt string, args ...any) (*sql.Result
 
 // Execute performs a read-write query on the writer connection.
 func (p *Pool) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
-	return query(ctx, &cqWrapper{p.writer}, stmt, args...)
+	var res *sql.ResultSet
+	err := p.writer.AcquireFunc(ctx, func(c *pgxpool.Conn) error {
+		var err error
+		res, err = query(ctx, &cqWrapper{c.Conn()}, stmt, args...)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func (p *Pool) Close() error {
 	p.readers.Close()
-	return p.writer.Close(context.TODO())
+	p.reserved.Close()
+	p.writer.Close()
+	return nil
 }
 
 // BeginTx starts a read-write transaction. It is an error to call this twice

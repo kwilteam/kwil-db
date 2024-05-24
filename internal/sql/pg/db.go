@@ -96,14 +96,21 @@ var defaultSchemaFilter = func(schema string) bool {
 // database. Transactions that use the Precommit method update an internal table
 // used to sequence transactions.
 func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
-	// Create the unrestricted connection pool.
+	// Create the connection pool.
 	pool, err := NewPool(ctx, &cfg.PoolConfig)
 	if err != nil {
 		return nil, err
 	}
 
+	writer, err := pool.writer.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer writer.Release()
+	conn := writer.Conn()
+
 	// Ensure that the postgres host is running with an acceptable version.
-	pgVer, pgVerNum, err := pgVersion(ctx, pool.writer)
+	pgVer, pgVerNum, err := pgVersion(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -116,42 +123,42 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 	}
 
 	// Now check system settings, including logical replication and prepared transactions.
-	if err = verifySettings(ctx, pool.writer); err != nil {
+	if err = verifySettings(ctx, conn); err != nil {
 		return nil, err
 	}
 
 	// Verify that the db user/role is superuser with replication privileges.
-	if err = checkSuperuser(ctx, pool.writer); err != nil {
+	if err = checkSuperuser(ctx, conn); err != nil {
 		return nil, err
 	}
 
-	if err = setTimezoneUTC(ctx, pool.writer); err != nil {
+	if err = setTimezoneUTC(ctx, conn); err != nil {
 		return nil, err
 	}
 
 	// Clean up orphaned prepared transaction that may have been left over from
 	// an unclean shutdown. If we don't, postgres will hang on query.
-	if _, err = rollbackPreparedTxns(ctx, pool.writer); err != nil {
+	if _, err = rollbackPreparedTxns(ctx, conn); err != nil {
 		return nil, fmt.Errorf("failed to create publication: %w", err)
 	}
 
 	// Create the NOCASE collation to emulate SQLite's collation.
-	if err = ensureCollation(ctx, pool.writer); err != nil {
+	if err = ensureCollation(ctx, conn); err != nil {
 		return nil, fmt.Errorf("failed to create custom collations: %w", err)
 	}
 
 	// Ensure all tables that are created with no primary key or unique index
 	// are altered to have "full replication identity" for UPDATE and DELETES.
-	if err = ensureTriggerReplIdentity(ctx, pool.writer); err != nil {
+	if err = ensureTriggerReplIdentity(ctx, conn); err != nil {
 		return nil, fmt.Errorf("failed to create replication identity trigger: %w", err)
 	}
 
 	// Create the publication that is required for logical replication.
-	if err = ensurePublication(ctx, pool.writer); err != nil {
+	if err = ensurePublication(ctx, conn); err != nil {
 		return nil, fmt.Errorf("failed to create publication: %w", err)
 	}
 
-	if err = ensureUUIDExtension(ctx, pool.writer); err != nil {
+	if err = ensureUUIDExtension(ctx, conn); err != nil {
 		return nil, fmt.Errorf("failed to create UUID extension: %w", err)
 	}
 
@@ -166,13 +173,13 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 	}
 
 	// Create the tx sequence table with single row if it doesn't exists.
-	if err = ensureSentryTable(ctx, pool.writer); err != nil {
+	if err = ensureSentryTable(ctx, conn); err != nil {
 		return nil, fmt.Errorf("failed to create transaction sequencing table: %w", err)
 	}
 
 	// Register the error function so a statement like `SELECT error('boom');`
 	// will raise an exception and cause the query to error.
-	if err = ensureErrorPLFunc(ctx, pool.writer); err != nil {
+	if err = ensureErrorPLFunc(ctx, conn); err != nil {
 		return nil, fmt.Errorf("failed to create ERROR function: %w", err)
 	}
 
@@ -316,6 +323,25 @@ func (db *DB) BeginReservedReadTx(ctx context.Context) (sql.Tx, error) {
 	}, nil
 }
 
+type writeTxWrapper struct {
+	pgx.Tx
+	release func()
+}
+
+func (txw *writeTxWrapper) Release() {
+	txw.release()
+}
+
+func (txw *writeTxWrapper) Commit(ctx context.Context) error {
+	defer txw.release()
+	return txw.Tx.Commit(ctx)
+}
+
+func (txw *writeTxWrapper) Rollback(ctx context.Context) error {
+	defer txw.release()
+	return txw.Tx.Rollback(ctx)
+}
+
 // beginWriterTx is the critical section of BeginTx.
 // It creates a new transaction on the write connection, and stores it in the
 // DB's tx field. It is not exported, and is only called from BeginTx.
@@ -327,18 +353,27 @@ func (db *DB) beginWriterTx(ctx context.Context) (pgx.Tx, error) {
 		return nil, errors.New("writer tx exists")
 	}
 
-	tx, err := db.pool.writer.BeginTx(ctx, pgx.TxOptions{
-		AccessMode: pgx.ReadWrite,
-		IsoLevel:   pgx.ReadUncommitted, // consider if ReadCommitted would be fine. uncommitted refers to other transactions, not needed
-	})
+	writer, err := db.pool.writer.Acquire(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Make the tx available to Execute and QueryPending.
-	db.tx = tx
+	tx, err := writer.BeginTx(ctx, pgx.TxOptions{
+		AccessMode: pgx.ReadWrite,
+		IsoLevel:   pgx.ReadUncommitted, // consider if ReadCommitted would be fine. uncommitted refers to other transactions, not needed
+	})
+	if err != nil {
+		writer.Release()
+		return nil, err
+	}
 
-	return tx, nil
+	// Make the tx available to Execute and QueryPending.
+	db.tx = &writeTxWrapper{
+		Tx:      tx,
+		release: writer.Release,
+	}
+
+	return db.tx, nil
 }
 
 // precommit finalizes the transaction with a prepared transaction and returns
@@ -412,6 +447,10 @@ func (db *DB) commit(ctx context.Context) error {
 		if _, err := db.tx.Exec(ctx, sqlRollback); err != nil {
 			logger.Warnf("ROLLBACK PREPARED failed: %v", err)
 		}
+		// We don't use Commit, which normally releases automatically.
+		if rel, ok := db.tx.(releaser); ok {
+			rel.Release()
+		}
 		db.tx = nil
 	}()
 
@@ -446,9 +485,15 @@ func (db *DB) rollback(ctx context.Context) error {
 
 	// If precommit not yet done, do a regular rollback.
 	if db.txid == "" {
-		db.tx.Rollback(ctx)
-		return nil
+		return db.tx.Rollback(ctx)
 	}
+
+	defer func() {
+		// We don't use Rollback, which normally releases automatically.
+		if rel, ok := db.tx.(releaser); ok {
+			rel.Release()
+		}
+	}()
 
 	// With precommit already done, rollback the prepared transaction, and do
 	// not do the regular rollback, which is a no-op that emits a warning

@@ -16,9 +16,15 @@ func TestVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn := pool.writer
+	defer pool.Close()
 
-	ver, verNum, err := pgVersion(ctx, conn)
+	conn, err := pool.writer.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Release()
+
+	ver, verNum, err := pgVersion(ctx, conn.Conn())
 	if err != nil {
 		t.Fatal(err)
 	}
