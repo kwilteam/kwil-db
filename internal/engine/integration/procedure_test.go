@@ -177,6 +177,18 @@ func Test_Procedures(t *testing.T) {
 			inputs:  []any{[]int64{}},
 			outputs: [][]any{},
 		},
+		{
+			name: "loop over null array",
+			procedure: `procedure loop_over_null() public view returns (count int) {
+				$vals int[];
+				$count := 0;
+				for $i in $vals {
+					$count := $count + 1;
+				}
+				return $count;
+			}`,
+			outputs: [][]any{{int64(0)}},
+		},
 	}
 
 	for _, test := range tests {
