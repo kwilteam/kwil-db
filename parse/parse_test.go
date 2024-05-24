@@ -913,193 +913,193 @@ func Test_Procedure(t *testing.T) {
 	}
 
 	tests := []testCase{
-		// {
-		// 	name: "simple procedure",
-		// 	proc: `$a int := 1;`,
-		// 	want: &parse.ProcedureParseResult{
-		// 		Variables: map[string]*types.DataType{
-		// 			"$a": types.IntType,
-		// 		},
-		// 		AST: []parse.ProcedureStmt{
-		// 			&parse.ProcedureStmtAssign{
-		// 				Variable: exprVar("$a"),
-		// 				Type:     types.IntType,
-		// 				Value:    exprLit(1),
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	name: "for loop",
-		// 	proc: `
-		// 	$found := false;
-		// 	for $row in SELECT * FROM users {
-		// 		$found := true;
-		// 		INSERT INTO posts (id, author_id) VALUES ($row.id, $row.username::int);
-		// 	}
-		// 	if !$found {
-		// 		error('no users found');
-		// 	}
-		// 	`,
-		// 	want: &parse.ProcedureParseResult{
-		// 		CompoundVariables: map[string]struct{}{
-		// 			"$row": {},
-		// 		},
-		// 		Variables: map[string]*types.DataType{
-		// 			"$found": types.BoolType,
-		// 		},
-		// 		AST: []parse.ProcedureStmt{
-		// 			&parse.ProcedureStmtAssign{
-		// 				Variable: exprVar("$found"),
-		// 				Value:    exprLit(false),
-		// 			},
-		// 			&parse.ProcedureStmtForLoop{
-		// 				Receiver: exprVar("$row"),
-		// 				LoopTerm: &parse.LoopTermSQL{
-		// 					Statement: &parse.SQLStatement{
-		// 						SQL: &parse.SelectStatement{
-		// 							SelectCores: []*parse.SelectCore{
-		// 								{
-		// 									Columns: []parse.ResultColumn{
-		// 										&parse.ResultColumnWildcard{},
-		// 									},
-		// 									From: &parse.RelationTable{
-		// 										Table: "users",
-		// 									},
-		// 								},
-		// 							},
-		// 							// apply default ordering
-		// 							Ordering: []*parse.OrderingTerm{
-		// 								{
-		// 									Expression: &parse.ExpressionColumn{
-		// 										Table:  "users",
-		// 										Column: "id",
-		// 									},
-		// 								},
-		// 							},
-		// 						},
-		// 					},
-		// 				},
-		// 				Body: []parse.ProcedureStmt{
-		// 					&parse.ProcedureStmtAssign{
-		// 						Variable: exprVar("$found"),
-		// 						Value:    exprLit(true),
-		// 					},
-		// 					&parse.ProcedureStmtSQL{
-		// 						SQL: &parse.SQLStatement{
-		// 							SQL: &parse.InsertStatement{
-		// 								Table:   "posts",
-		// 								Columns: []string{"id", "author_id"},
-		// 								Values: [][]parse.Expression{
-		// 									{
-		// 										&parse.ExpressionFieldAccess{
-		// 											Record: exprVar("$row"),
-		// 											Field:  "id",
-		// 										},
-		// 										&parse.ExpressionFieldAccess{
-		// 											Record: exprVar("$row"),
-		// 											Field:  "username",
-		// 											Typecastable: parse.Typecastable{
-		// 												TypeCast: types.IntType,
-		// 											},
-		// 										},
-		// 									},
-		// 								},
-		// 							},
-		// 						},
-		// 					},
-		// 				},
-		// 			},
-		// 			&parse.ProcedureStmtIf{
-		// 				IfThens: []*parse.IfThen{
-		// 					{
-		// 						If: &parse.ExpressionUnary{
-		// 							Operator:   parse.UnaryOperatorNot,
-		// 							Expression: exprVar("$found"),
-		// 						},
-		// 						Then: []parse.ProcedureStmt{
-		// 							&parse.ProcedureStmtCall{
-		// 								Call: &parse.ExpressionFunctionCall{
-		// 									Name: "error",
-		// 									Args: []parse.Expression{
-		// 										exprLit("no users found"),
-		// 									},
-		// 								},
-		// 							},
-		// 						},
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	name: "arrays",
-		// 	proc: `
-		// 	$arr2 := array_append($arr, 2);
-		// 	$arr3 int[] := array_prepend(3, $arr2);
-		// 	$arr4 := [4,5];
+		{
+			name: "simple procedure",
+			proc: `$a int := 1;`,
+			want: &parse.ProcedureParseResult{
+				Variables: map[string]*types.DataType{
+					"$a": types.IntType,
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$a"),
+						Type:     types.IntType,
+						Value:    exprLit(1),
+					},
+				},
+			},
+		},
+		{
+			name: "for loop",
+			proc: `
+			$found := false;
+			for $row in SELECT * FROM users {
+				$found := true;
+				INSERT INTO posts (id, author_id) VALUES ($row.id, $row.username::int);
+			}
+			if !$found {
+				error('no users found');
+			}
+			`,
+			want: &parse.ProcedureParseResult{
+				CompoundVariables: map[string]struct{}{
+					"$row": {},
+				},
+				Variables: map[string]*types.DataType{
+					"$found": types.BoolType,
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$found"),
+						Value:    exprLit(false),
+					},
+					&parse.ProcedureStmtForLoop{
+						Receiver: exprVar("$row"),
+						LoopTerm: &parse.LoopTermSQL{
+							Statement: &parse.SQLStatement{
+								SQL: &parse.SelectStatement{
+									SelectCores: []*parse.SelectCore{
+										{
+											Columns: []parse.ResultColumn{
+												&parse.ResultColumnWildcard{},
+											},
+											From: &parse.RelationTable{
+												Table: "users",
+											},
+										},
+									},
+									// apply default ordering
+									Ordering: []*parse.OrderingTerm{
+										{
+											Expression: &parse.ExpressionColumn{
+												Table:  "users",
+												Column: "id",
+											},
+										},
+									},
+								},
+							},
+						},
+						Body: []parse.ProcedureStmt{
+							&parse.ProcedureStmtAssign{
+								Variable: exprVar("$found"),
+								Value:    exprLit(true),
+							},
+							&parse.ProcedureStmtSQL{
+								SQL: &parse.SQLStatement{
+									SQL: &parse.InsertStatement{
+										Table:   "posts",
+										Columns: []string{"id", "author_id"},
+										Values: [][]parse.Expression{
+											{
+												&parse.ExpressionFieldAccess{
+													Record: exprVar("$row"),
+													Field:  "id",
+												},
+												&parse.ExpressionFieldAccess{
+													Record: exprVar("$row"),
+													Field:  "username",
+													Typecastable: parse.Typecastable{
+														TypeCast: types.IntType,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					&parse.ProcedureStmtIf{
+						IfThens: []*parse.IfThen{
+							{
+								If: &parse.ExpressionUnary{
+									Operator:   parse.UnaryOperatorNot,
+									Expression: exprVar("$found"),
+								},
+								Then: []parse.ProcedureStmt{
+									&parse.ProcedureStmtCall{
+										Call: &parse.ExpressionFunctionCall{
+											Name: "error",
+											Args: []parse.Expression{
+												exprLit("no users found"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "arrays",
+			proc: `
+			$arr2 := array_append($arr, 2);
+			$arr3 int[] := array_prepend(3, $arr2);
+			$arr4 := [4,5];
 
-		// 	$arr5 := array_cat($arr3, $arr4);
-		// 	`,
-		// 	inputs: map[string]*types.DataType{
-		// 		"$arr": types.ArrayType(types.IntType),
-		// 	},
-		// 	want: &parse.ProcedureParseResult{
-		// 		Variables: map[string]*types.DataType{
-		// 			"$arr2": types.ArrayType(types.IntType),
-		// 			"$arr3": types.ArrayType(types.IntType),
-		// 			"$arr4": types.ArrayType(types.IntType),
-		// 			"$arr5": types.ArrayType(types.IntType),
-		// 		},
-		// 		AST: []parse.ProcedureStmt{
-		// 			&parse.ProcedureStmtCall{
-		// 				Receivers: []*parse.ExpressionVariable{
-		// 					exprVar("$arr2"),
-		// 				},
-		// 				Call: &parse.ExpressionFunctionCall{
-		// 					Name: "array_append",
-		// 					Args: []parse.Expression{
-		// 						exprVar("$arr"),
-		// 						exprLit(2),
-		// 					},
-		// 				},
-		// 			},
-		// 			&parse.ProcedureStmtAssign{
-		// 				Variable: exprVar("$arr3"),
-		// 				Type:     types.ArrayType(types.IntType),
-		// 				Value: &parse.ExpressionFunctionCall{
-		// 					Name: "array_prepend",
-		// 					Args: []parse.Expression{
-		// 						exprLit(3),
-		// 						exprVar("$arr2"),
-		// 					},
-		// 				},
-		// 			},
-		// 			&parse.ProcedureStmtAssign{
-		// 				Variable: exprVar("$arr4"),
-		// 				Value: &parse.ExpressionMakeArray{
-		// 					Values: []parse.Expression{
-		// 						exprLit(4),
-		// 						exprLit(5),
-		// 					},
-		// 				},
-		// 			},
-		// 			&parse.ProcedureStmtCall{
-		// 				Receivers: []*parse.ExpressionVariable{
-		// 					exprVar("$arr5"),
-		// 				},
-		// 				Call: &parse.ExpressionFunctionCall{
-		// 					Name: "array_cat",
-		// 					Args: []parse.Expression{
-		// 						exprVar("$arr3"),
-		// 						exprVar("$arr4"),
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
+			$arr5 := array_cat($arr3, $arr4);
+			`,
+			inputs: map[string]*types.DataType{
+				"$arr": types.ArrayType(types.IntType),
+			},
+			want: &parse.ProcedureParseResult{
+				Variables: map[string]*types.DataType{
+					"$arr2": types.ArrayType(types.IntType),
+					"$arr3": types.ArrayType(types.IntType),
+					"$arr4": types.ArrayType(types.IntType),
+					"$arr5": types.ArrayType(types.IntType),
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtCall{
+						Receivers: []*parse.ExpressionVariable{
+							exprVar("$arr2"),
+						},
+						Call: &parse.ExpressionFunctionCall{
+							Name: "array_append",
+							Args: []parse.Expression{
+								exprVar("$arr"),
+								exprLit(2),
+							},
+						},
+					},
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$arr3"),
+						Type:     types.ArrayType(types.IntType),
+						Value: &parse.ExpressionFunctionCall{
+							Name: "array_prepend",
+							Args: []parse.Expression{
+								exprLit(3),
+								exprVar("$arr2"),
+							},
+						},
+					},
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$arr4"),
+						Value: &parse.ExpressionMakeArray{
+							Values: []parse.Expression{
+								exprLit(4),
+								exprLit(5),
+							},
+						},
+					},
+					&parse.ProcedureStmtCall{
+						Receivers: []*parse.ExpressionVariable{
+							exprVar("$arr5"),
+						},
+						Call: &parse.ExpressionFunctionCall{
+							Name: "array_cat",
+							Args: []parse.Expression{
+								exprVar("$arr3"),
+								exprVar("$arr4"),
+							},
+						},
+					},
+				},
+			},
+		},
 		{
 			name: "loop",
 			proc: `
@@ -1145,6 +1145,59 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "and/or",
+			proc: `
+			if $a and $b or $c {}
+			`,
+			inputs: map[string]*types.DataType{
+				"$a": types.BoolType,
+				"$b": types.BoolType,
+				"$c": types.BoolType,
+			},
+			want: &parse.ProcedureParseResult{
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtIf{
+						IfThens: []*parse.IfThen{
+							{
+								If: &parse.ExpressionLogical{
+									Left: &parse.ExpressionLogical{
+										Left:     exprVar("$a"),
+										Operator: parse.LogicalOperatorAnd,
+										Right:    exprVar("$b"),
+									},
+									Operator: parse.LogicalOperatorOr,
+									Right:    exprVar("$c"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "is distinct",
+			proc: `
+			$a := 1 is distinct from null;
+			`,
+			want: &parse.ProcedureParseResult{
+				Variables: map[string]*types.DataType{
+					"$a": types.BoolType,
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$a"),
+						Value: &parse.ExpressionIs{
+							Left: exprLit(1),
+							Right: &parse.ExpressionLiteral{
+								Type: types.NullType,
+							},
+							Distinct: true,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1179,7 +1232,7 @@ func Test_Procedure(t *testing.T) {
 			require.NoError(t, err)
 
 			if tt.err != nil {
-				require.Equal(t, tt.err, res.ParseErrs.Err())
+				require.ErrorIs(t, res.ParseErrs.Err(), tt.err)
 				return
 			}
 			require.NoError(t, res.ParseErrs.Err())

@@ -359,6 +359,10 @@ func (v *BaseKuneiformParserVisitor) VisitMake_array_procedure_expr(ctx *Make_ar
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitIs_procedure_expr(ctx *Is_procedure_exprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitProcedure_expr_arithmetic(ctx *Procedure_expr_arithmeticContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -372,6 +376,10 @@ func (v *BaseKuneiformParserVisitor) VisitComparison_procedure_expr(ctx *Compari
 }
 
 func (v *BaseKuneiformParserVisitor) VisitFunction_call_procedure_expr(ctx *Function_call_procedure_exprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitLogical_procedure_expr(ctx *Logical_procedure_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

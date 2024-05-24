@@ -271,6 +271,9 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#make_array_procedure_expr.
 	VisitMake_array_procedure_expr(ctx *Make_array_procedure_exprContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#is_procedure_expr.
+	VisitIs_procedure_expr(ctx *Is_procedure_exprContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#procedure_expr_arithmetic.
 	VisitProcedure_expr_arithmetic(ctx *Procedure_expr_arithmeticContext) interface{}
 
@@ -282,6 +285,9 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#function_call_procedure_expr.
 	VisitFunction_call_procedure_expr(ctx *Function_call_procedure_exprContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#logical_procedure_expr.
+	VisitLogical_procedure_expr(ctx *Logical_procedure_exprContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#array_access_procedure_expr.
 	VisitArray_access_procedure_expr(ctx *Array_access_procedure_exprContext) interface{}
