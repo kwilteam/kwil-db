@@ -43,6 +43,12 @@ func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App
 		// 	return nil, err
 		// }
 
+		// this is not a strictly necessary check, as postgres will throw an error, but this gives a more
+		// helpful error message
+		if len(inputs) != len(proc.parameters) {
+			return nil, fmt.Errorf(`procedure "%s" expects %d argument(s), got %d`, method, len(proc.parameters), len(inputs))
+		}
+
 		res, err := app.DB.Execute(caller.Ctx, proc.callString(d.schema.DBID()), append([]any{pg.QueryModeExec}, inputs...)...)
 		if err != nil {
 			return nil, err

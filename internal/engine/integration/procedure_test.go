@@ -112,6 +112,51 @@ func Test_Procedures(t *testing.T) {
 			inputs:  []any{[]int64{1, 2, 3}},
 			outputs: [][]any{{[]any{int64(2), int64(4), int64(6)}}}, // returns 1 row, 1 column, with an array of ints
 		},
+		{
+			name: "is (null)",
+			procedure: `procedure is_null($val text) public view returns (is_null bool, is_null2 bool, is_null3 bool, is_null4 bool) {
+				$val2 := 1;
+				return $val is not distinct from null, $val2 is not distinct from null, $val is distinct from null, $val2 is distinct from null;
+			}`,
+			inputs:  []any{nil},
+			outputs: [][]any{{true, false, false, true}},
+		},
+		{
+			name: "is (concrete)",
+			procedure: `procedure is_equal() public view returns (is_equal bool, is_equal2 bool, is_equal3 bool, is_equal4 bool) {
+				$val := 'hello';
+				return $val is not distinct from 'hello', $val is not distinct from 'world', $val is distinct from 'hello', $val is distinct from 'world';
+			}`,
+			outputs: [][]any{{true, false, false, true}},
+		},
+		{
+			name: "equals",
+			procedure: `procedure equals($val text) public view returns (is_equal bool, is_equal2 bool, is_equal3 bool, is_equal4 bool) {
+				$val2 text;
+				return $val = 'hello', $val = 'world', $val != null, $val2 != null;
+			}`,
+			inputs:  []any{"hello"},
+			outputs: [][]any{{true, false, nil, nil}}, // equals with null should return null
+		},
+		{
+			name: "and/or",
+			procedure: `procedure and_or() public view returns (count int) {
+				$count := 0;
+				if true and true {
+					$count := $count + 1;
+				}
+				if true and false {
+					$count := $count + 100;
+				}
+
+				if (true or false) or (true or true) {
+					$count := $count + 10;
+				}
+
+				return $count;
+			}`,
+			outputs: [][]any{{int64(11)}},
+		},
 	}
 
 	for _, test := range tests {

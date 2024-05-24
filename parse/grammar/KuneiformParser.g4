@@ -337,19 +337,21 @@ procedure_block:
 ;
 
 procedure_expr:
-    literal type_cast?                                                              # literal_procedure_expr
-    | procedure_function_call type_cast?                                            # function_call_procedure_expr
-    | variable type_cast?                                                           # variable_procedure_expr
-    | LBRACKET (procedure_expr_list)? RBRACKET type_cast?                           # make_array_procedure_expr
-    | procedure_expr LBRACKET procedure_expr RBRACKET type_cast?                    # array_access_procedure_expr
-    | LPAREN procedure_expr RPAREN type_cast?                                       # paren_procedure_expr
-    | procedure_expr PERIOD IDENTIFIER type_cast?                                   # field_access_procedure_expr
-    | procedure_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) procedure_expr   # comparison_procedure_expr
-    | (MINUS|PLUS|EXCL) procedure_expr                                              # unary_procedure_expr
+    literal type_cast?                                                                          # literal_procedure_expr
+    | procedure_function_call type_cast?                                                        # function_call_procedure_expr
+    | variable type_cast?                                                                       # variable_procedure_expr
+    | LBRACKET (procedure_expr_list)? RBRACKET type_cast?                                       # make_array_procedure_expr
+    | procedure_expr LBRACKET procedure_expr RBRACKET type_cast?                                # array_access_procedure_expr
+    | LPAREN procedure_expr RPAREN type_cast?                                                   # paren_procedure_expr
+    | procedure_expr PERIOD IDENTIFIER type_cast?                                               # field_access_procedure_expr
+    | procedure_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) procedure_expr               # comparison_procedure_expr
+    | (MINUS|PLUS|EXCL) procedure_expr                                                          # unary_procedure_expr
+    | left=procedure_expr IS NOT? ((DISTINCT FROM right=procedure_expr) | NULL | TRUE | FALSE)  # is_procedure_expr
+    | procedure_expr (AND | OR) procedure_expr                                                  # logical_procedure_expr
     // setting precedence for arithmetic operations:
-    | procedure_expr CONCAT procedure_expr                                          # procedure_expr_arithmetic
-    | procedure_expr (STAR | DIV | MOD) procedure_expr                              # procedure_expr_arithmetic
-    | procedure_expr (PLUS | MINUS) procedure_expr                                  # procedure_expr_arithmetic
+    | procedure_expr CONCAT procedure_expr                                                      # procedure_expr_arithmetic
+    | procedure_expr (STAR | DIV | MOD) procedure_expr                                          # procedure_expr_arithmetic
+    | procedure_expr (PLUS | MINUS) procedure_expr                                              # procedure_expr_arithmetic
 ;
 
 procedure_expr_list:

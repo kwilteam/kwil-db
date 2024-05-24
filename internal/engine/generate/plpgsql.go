@@ -190,6 +190,7 @@ func (s *sqlGenerator) VisitExpressionComparison(p0 *parse.ExpressionComparison)
 	str.WriteString(p0.Left.Accept(s).(string))
 	str.WriteString(" ")
 	str.WriteString(string(p0.Operator))
+	str.WriteString(" ")
 	str.WriteString(p0.Right.Accept(s).(string))
 	// compare cannot be typecasted
 	return str.String()
@@ -263,7 +264,7 @@ func (s *sqlGenerator) VisitExpressionIs(p0 *parse.ExpressionIs) any {
 		str.WriteString("NOT ")
 	}
 	if p0.Distinct {
-		str.WriteString("DISTINCT ")
+		str.WriteString("DISTINCT FROM ")
 	}
 	str.WriteString(p0.Right.Accept(s).(string))
 	// cannot be typecasted

@@ -1597,6 +1597,66 @@ func (s *schemaVisitor) VisitVariable_procedure_expr(ctx *gen.Variable_procedure
 	return e
 }
 
+func (s *schemaVisitor) VisitIs_procedure_expr(ctx *gen.Is_procedure_exprContext) any {
+	e := &ExpressionIs{
+		Left: ctx.Procedure_expr(0).Accept(s).(Expression),
+	}
+
+	if ctx.NOT() != nil {
+		e.Not = true
+	}
+
+	if ctx.DISTINCT() != nil {
+		e.Distinct = true
+	}
+
+	switch {
+	case ctx.NULL() != nil:
+		e.Right = &ExpressionLiteral{
+			Type: types.NullType,
+		}
+		e.Right.SetToken(ctx.NULL().GetSymbol())
+	case ctx.TRUE() != nil:
+		e.Right = &ExpressionLiteral{
+			Type:  types.BoolType,
+			Value: true,
+		}
+		e.Right.SetToken(ctx.TRUE().GetSymbol())
+	case ctx.FALSE() != nil:
+		e.Right = &ExpressionLiteral{
+			Type:  types.BoolType,
+			Value: false,
+		}
+		e.Right.SetToken(ctx.FALSE().GetSymbol())
+	case ctx.GetRight() != nil:
+		e.Right = ctx.GetRight().Accept(s).(Expression)
+	default:
+		panic("unknown right side of IS")
+	}
+
+	e.Set(ctx)
+	return e
+}
+
+func (s *schemaVisitor) VisitLogical_procedure_expr(ctx *gen.Logical_procedure_exprContext) any {
+	e := &ExpressionLogical{
+		Left:  ctx.Procedure_expr(0).Accept(s).(Expression),
+		Right: ctx.Procedure_expr(1).Accept(s).(Expression),
+	}
+
+	switch {
+	case ctx.AND() != nil:
+		e.Operator = LogicalOperatorAnd
+	case ctx.OR() != nil:
+		e.Operator = LogicalOperatorOr
+	default:
+		panic("unknown logical operator")
+	}
+
+	e.Set(ctx)
+	return e
+}
+
 func (s *schemaVisitor) VisitProcedure_expr_arithmetic(ctx *gen.Procedure_expr_arithmeticContext) any {
 	e := &ExpressionArithmetic{
 		Left:  ctx.Procedure_expr(0).Accept(s).(Expression),
