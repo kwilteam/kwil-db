@@ -162,6 +162,10 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to create UUID extension: %w", err)
 	}
 
+	if err = ensurePgCryptoExtension(ctx, conn); err != nil {
+		return nil, fmt.Errorf("failed to create pgcrypto extension: %w", err)
+	}
+
 	okSchema := cfg.SchemaFilter
 	if okSchema == nil {
 		okSchema = defaultSchemaFilter

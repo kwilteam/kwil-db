@@ -175,6 +175,90 @@ var (
 				return fmt.Sprintf("uuid_generate_v5(%s)", strings.Join(inputs, ", ")), nil
 			},
 		},
+		"encode": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// first must be blob, second must be text
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.BlobType) {
+					return nil, wrapErrArgumentType(types.BlobType, args[0])
+				}
+
+				if !args[1].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[1])
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("encode")
+				}
+				if distinct {
+					return "", errDistinct("encode")
+				}
+
+				return fmt.Sprintf("encode(%s)", strings.Join(inputs, ", ")), nil
+			},
+		},
+		"decode": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// first must be text, second must be text
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				if !args[1].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[1])
+				}
+
+				return types.BlobType, nil
+			},
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("decode")
+				}
+				if distinct {
+					return "", errDistinct("decode")
+				}
+
+				return fmt.Sprintf("decode(%s)", strings.Join(inputs, ", ")), nil
+			},
+		},
+		"digest": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// first must be either text or blob, second must be text
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) && !args[0].EqualsStrict(types.BlobType) {
+					return nil, fmt.Errorf("expected first argument to be text or blob, got %s", args[0].String())
+				}
+
+				if !args[1].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[1])
+				}
+
+				return types.BlobType, nil
+			},
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("digest")
+				}
+				if distinct {
+					return "", errDistinct("digest")
+				}
+
+				return fmt.Sprintf("digest(%s)", strings.Join(inputs, ", ")), nil
+			},
+		},
 		// array functions
 		"array_append": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {

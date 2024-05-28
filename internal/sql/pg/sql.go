@@ -110,6 +110,11 @@ func ensureUUIDExtension(ctx context.Context, conn *pgx.Conn) error {
 	return err
 }
 
+func ensurePgCryptoExtension(ctx context.Context, conn *pgx.Conn) error {
+	_, err := conn.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS pgcrypto;`)
+	return err
+}
+
 func ensureUint256Domain(ctx context.Context, conn *pgx.Conn) error {
 	_, err := conn.Exec(ctx, sqlCreateUint256Domain)
 	return err
