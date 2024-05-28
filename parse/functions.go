@@ -42,7 +42,7 @@ var (
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
-				return types.NullType, nil
+				return nil, nil
 			},
 			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
 				if star {
