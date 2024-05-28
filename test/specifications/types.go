@@ -142,7 +142,8 @@ func testDecimal(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid s
 
 func testUint256(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid string, callType string) {
 	// execute store
-	uint256 := types.Uint256FromInt(123)
+	uint256, err := types.Uint256FromString("115792089237316195423570985008687907853269984665640564039457584007913129639935") // max uint256
+	require.NoError(t, err)
 	uint256Arr := []any{types.Uint256FromInt(456), types.Uint256FromInt(789)}
 
 	signMu.Lock()
@@ -167,6 +168,13 @@ func testUint256(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid s
 		}
 	}
 	assert.Equal(t, 1, count)
+
+	// test that greater than max uint256 is not allowed.
+	// we pass it as a string since our uint256 type will also error if it exceeds max uint256
+	res, err = execute.Execute(ctx, dbid, callType+"_store_uint256s", []any{"115792089237316195423570985008687907853269984665640564039457584007913129639936", uint256Arr})
+	require.NoError(t, err)
+
+	ExpectTxfail(t, execute, ctx, res)
 }
 
 func testText(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid string, callType string) {

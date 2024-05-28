@@ -66,11 +66,13 @@ END$$;`
 
 	sqlCreateUUIDExtension = `CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`
 
-	// have to run this in a DO block because you cannot do CREATE DOMAIN IF NOT EXISTS
+	// have to run this in a DO block because you cannot do CREATE DOMAIN IF NOT EXISTS.
+	// We have to hard-code the string and then convert to numeric instead of using 2^256-1,
+	// because Postgres will not precisely evaluate 2^256-1.
 	sqlCreateUint256Domain = `
 	DO $$ BEGIN
 		CREATE DOMAIN uint256 AS NUMERIC(78)
-		CHECK (VALUE >= 0 AND VALUE < 2^256)
+		CHECK (VALUE >= 0 AND VALUE <= '115792089237316195423570985008687907853269984665640564039457584007913129639935'::NUMERIC(78))
 		CHECK (SCALE(VALUE) = 0);
 	EXCEPTION
 		WHEN duplicate_object THEN null;
