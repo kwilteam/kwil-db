@@ -99,6 +99,9 @@ func (cl *JSONRPCClient) nextReqID() string {
 
 // NOTE: make a BaseClient with CallMethod only.
 
+// CallMethod makes a JSON-RPC request to the server. The method is the name of
+// the method to call, cmd is the request parameter, and res is the response object.
+// If the server returns a jsonrpc.Error, it's a business logic error.
 func (cl *JSONRPCClient) CallMethod(ctx context.Context, method string, cmd, res any) error {
 	// res needs to be a pointer otherwise we can't unmarshal into it.
 	if rtp := reflect.TypeOf(res); rtp.Kind() != reflect.Ptr {

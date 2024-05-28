@@ -25,9 +25,6 @@ type Client struct {
 // of the gateway server, and should not include "/rpc/v1" as that is appended
 // automatically. If the client does not have a cookie jar, an error is returned.
 func NewClient(target *url.URL, opts ...gateway.ClientOption) (*Client, error) {
-	// This client uses API v1 methods and request/response types.
-	target = target.JoinPath("/rpc/v1")
-
 	c := gateway.DefaultClientOptions()
 	c.JSONRPCClient = rpcclient.NewJSONRPCClient(target)
 	for _, o := range opts {
@@ -53,13 +50,13 @@ var _ gateway.Client = (*Client)(nil)
 // It sets the returned cookie in the client's cookie jar.
 func (g *Client) Authn(ctx context.Context, auth *gateway.AuthnRequest) error {
 	res := &gateway.AuthnResponse{}
-	err := g.CallMethod(ctx, gateway.MethodAuthn, auth, res)
+	err := g.CallMethod(ctx, string(gateway.MethodAuthn), auth, res)
 	return err
 }
 
 // GetAuthnParameter returns the auth parameter for the client.
 func (g *Client) GetAuthnParameter(ctx context.Context) (*gateway.AuthnParameterResponse, error) {
 	res := &gateway.AuthnParameterResponse{}
-	err := g.CallMethod(ctx, gateway.MethodAuthnParam, &gateway.AuthnParameterRequest{}, res)
+	err := g.CallMethod(ctx, string(gateway.MethodAuthnParam), &gateway.AuthnParameterRequest{}, res)
 	return res, err
 }
