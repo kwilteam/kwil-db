@@ -25,6 +25,9 @@ func TestMain(m *testing.M) {
 
 // cleanup deletes all schemas and closes the database
 func cleanup(t *testing.T, db *pg.DB) {
+	txCounter = 0 // reset the global tx counter, which is necessary to properly
+	// encapsulate each test and make their results independent of each other
+
 	db.AutoCommit(true)
 	defer db.AutoCommit(false)
 	defer db.Close()

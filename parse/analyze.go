@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/utils/order"
 )
 
 /*
@@ -420,29 +419,30 @@ func (s *sqlAnalyzer) expectedNumeric(node Node, t *types.DataType) {
 // but it returns something else. It will attempt to read the actual type and create an error
 // message that is helpful for the end user.
 func (s *sqlAnalyzer) expressionTypeErr(e Expression) *types.DataType {
-	// if expression is a receiver from a loop, it will be a map
-	_, ok := e.Accept(s).(map[string]*types.DataType)
-	if ok {
+	switch v := e.Accept(s).(type) {
+	case *types.DataType:
+		// if it is a basic expression returning a scalar (e.g. "'hello'" or "abs(-1)"),
+		// or a procedure that returns exactly one scalar value.
+		// This should never happen, since expressionTypeErr is called when the expression
+		// does not return a *types.DataType.
+		panic("api misuse: expressionTypeErr should only be called when the expression does not return a *types.DataType")
+	case map[string]*types.DataType:
+		// if it is a loop receiver on a select statement (e.g. "for $row in select * from table")
 		s.errs.AddErr(e, ErrType, "invalid usage of compound type. you must reference a field using $compound.field notation")
-		return cast(e, types.UnknownType)
+	case []*types.DataType:
+		// if it is a procedure than returns several scalar values
+		s.errs.AddErr(e, ErrType, "expected procedure to return a single value, returns %d values", len(v))
+	case *returnsTable:
+		// if it is a procedure that returns a table
+		s.errs.AddErr(e, ErrType, "procedure returns table, not scalar values")
+	case nil:
+		// if it is a procedure that returns nothing
+		s.errs.AddErr(e, ErrType, "procedure does not return any value")
+	default:
+		// unknown
+		s.errs.AddErr(e, ErrType, "internal bug: could not infer expected type")
 	}
 
-	// if expression is a procedure call that returns a table, it will be a slice of attributes
-	_, ok = e.Accept(s).([]*Attribute)
-	if ok {
-		s.errs.AddErr(e, ErrType, "procedure returns table, not a scalar value")
-		return cast(e, types.UnknownType)
-	}
-
-	// if it is a procedure call that returns many values, it will be a slice of data types
-	vals, ok := e.Accept(s).([]*types.DataType)
-	if ok {
-		s.errs.AddErr(e, ErrType, "expected procedure to return a single value, returns %d", len(vals))
-		return cast(e, types.UnknownType)
-
-	}
-
-	s.errs.AddErr(e, ErrType, "could not infer expected type")
 	return cast(e, types.UnknownType)
 }
 
@@ -567,6 +567,12 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 		}
 	}
 
+	// callers of this visitor know that a nil return means a function does not
+	// return anything. We explicitly return nil instead of a nil *types.DataType
+	if returnType == nil {
+		return nil
+	}
+
 	return cast(p0, returnType)
 }
 
@@ -625,7 +631,7 @@ func (s *sqlAnalyzer) returnProcedureReturnExpr(p0 ExpressionCall, procedureName
 		if p0.GetTypeCast() != nil {
 			s.errs.AddErr(p0, ErrType, "cannot typecast procedure %s because does not return a value", procedureName)
 		}
-		return types.NullType
+		return nil
 	}
 
 	// if it returns a table, we need to return it as a set of attributes.
@@ -638,7 +644,9 @@ func (s *sqlAnalyzer) returnProcedureReturnExpr(p0 ExpressionCall, procedureName
 			}
 		}
 
-		return attrs
+		return &returnsTable{
+			attrs: attrs,
+		}
 	}
 
 	switch len(ret.Fields) {
@@ -659,6 +667,13 @@ func (s *sqlAnalyzer) returnProcedureReturnExpr(p0 ExpressionCall, procedureName
 
 		return retVals
 	}
+}
+
+// returnsTable is a special struct returned by returnProcedureReturnExpr when a procedure returns a table.
+// It is used internally to detect when a procedure returns a table, so that we can properly throw type errors
+// with helpful messages when a procedure returning a table is used in a position where a scalar value is expected.
+type returnsTable struct {
+	attrs []*Attribute
 }
 
 func (s *sqlAnalyzer) VisitExpressionVariable(p0 *ExpressionVariable) any {
@@ -1316,7 +1331,13 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 		// if it is not a compound, then we apply the following default ordering rules (after the user defined):
 		// 1. Each primary key for each schema table joined is ordered in ascending order.
 		// The tables and columns for all joined tables will be sorted alphabetically.
-		// If table aliases are used, they will be used instead of the name.
+		// If table aliases are used, they will be used instead of the name. This must include
+		// subqueries and function joins; even though those are ordered, they still need to
+		// be ordered in the outermost select.
+		// see: https://www.reddit.com/r/PostgreSQL/comments/u6icv9/is_original_sort_order_preserve_after_joining/
+		// TODO: we can likely make some significant optimizations here by only applying ordering
+		// on the outermost query UNLESS aggregates are used in the subquery, but that is a future
+		// optimization.
 		// 2. If the select core contains DISTINCT, then the above does not apply, and
 		// we order by all columns returned, in the order they are returned.
 		// 3. If there is a group by clause, none of the above apply, and instead we order by
@@ -1362,17 +1383,34 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 			}
 		} else {
 			// if not distinct, order by primary keys in all joined tables
-			for _, tbl := range order.OrderMap(rel1Scope.joinedTables) {
-				pks, err := tbl.Value.GetPrimaryKey()
-				if err != nil {
-					s.errs.AddErr(p0, err, "could not get primary key for table %s", tbl.Key)
+			for _, rel := range rel1Scope.joinedRelations {
+				// if it is a table, we only order by primary key.
+				// otherwise, order by all columns.
+				tbl, ok := rel1Scope.joinedTables[rel.Name]
+				if ok {
+					pks, err := tbl.GetPrimaryKey()
+					if err != nil {
+						s.errs.AddErr(p0, err, "could not get primary key for table %s", rel.Name)
+					}
+
+					for _, pk := range pks {
+						p0.Ordering = append(p0.Ordering, &OrderingTerm{
+							Expression: &ExpressionColumn{
+								Table:  rel.Name,
+								Column: pk,
+							},
+						})
+					}
+
+					continue
 				}
 
-				for _, pk := range pks {
+				// if not a table, order by all columns
+				for _, attr := range rel.Attributes {
 					p0.Ordering = append(p0.Ordering, &OrderingTerm{
 						Expression: &ExpressionColumn{
-							Table:  tbl.Key,
-							Column: pk,
+							Table:  rel.Name,
+							Column: attr.Name,
 						},
 					})
 				}
@@ -1666,7 +1704,7 @@ func (s *sqlAnalyzer) VisitRelationFunctionCall(p0 *RelationFunctionCall) any {
 
 	// the function call here must return []*Attribute
 	// this logic is handled in returnProcedureReturnExpr.
-	ret, ok := p0.FunctionCall.Accept(s).([]*Attribute)
+	ret, ok := p0.FunctionCall.Accept(s).(*returnsTable)
 	if !ok {
 		s.errs.AddErr(p0, ErrType, "cannot join procedure that does not return type table")
 	}
@@ -1690,7 +1728,7 @@ func (s *sqlAnalyzer) VisitRelationFunctionCall(p0 *RelationFunctionCall) any {
 
 	err := s.sqlCtx.joinRelation(&Relation{
 		Name:       p0.Alias,
-		Attributes: ret,
+		Attributes: ret.attrs,
 	})
 	if err != nil {
 		s.errs.AddErr(p0, err, p0.Alias)
@@ -1754,7 +1792,6 @@ func (s *sqlAnalyzer) VisitUpdateStatement(p0 *UpdateStatement) any {
 		if !ok {
 			s.expressionTypeErr(p0.Where)
 			return []*Attribute{}
-
 		}
 
 		s.expect(p0.Where, whereType, types.BoolType)
@@ -2185,23 +2222,30 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 	alreadyMutative := p.sqlResult.Mutative
 
 	var callReturns []*types.DataType
-	// it might return a single value
-	returns1, ok := p0.Call.Accept(p).(*types.DataType)
-	if ok {
-		// if it returns null, then we do not need to assign it to a variable.
-		if !returns1.EqualsStrict(types.NullType) {
-			callReturns = append(callReturns, returns1)
-		}
-	} else {
-		// or it might return multiple values
-		returns2, ok := p0.Call.Accept(p).([]*types.DataType)
-		if !ok {
-			p.errs.AddErr(p0.Call, ErrType, "expected function/procedure to return one or more variables")
+
+	// procedure calls can return many different types of values.
+	switch v := p0.Call.Accept(p).(type) {
+	case *types.DataType:
+		callReturns = []*types.DataType{v}
+	case []*types.DataType:
+		callReturns = v
+	case *returnsTable:
+		// if a procedure that returns a table is being called in a
+		// procedure, we need to ensure there are no receivers, since
+		// it is impossible to assign a table to a variable.
+		// we will also not add these to the callReturns, since they are
+		// table columns, and not assignable variables
+		if len(p0.Receivers) != 0 {
+			p.errs.AddErr(p0, ErrResultShape, "procedure returns table, cannot assign to variable(s)")
 			return zeroProcedureReturn()
 		}
-
-		callReturns = returns2
+	case nil:
+		// do nothing
+	default:
+		p.expressionTypeErr(p0.Call)
+		return zeroProcedureReturn()
 	}
+
 	// if calling the `error` function, then this branch will return
 	exits := false
 	if p0.Call.FunctionName() == "error" {
@@ -2212,6 +2256,14 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 	// if this procedure is a view, we should throw an error.
 	if !alreadyMutative && p.sqlResult.Mutative && p.procCtx.procedureDefinition.IsView() {
 		p.errs.AddErr(p0, ErrViewMutatesState, `view procedure calls non-view procedure "%s"`, p0.Call.FunctionName())
+	}
+
+	// users can discard returns by simply not having receivers.
+	// if there are no receivers, we can return early.
+	if len(p0.Receivers) == 0 {
+		return &procedureStmtResult{
+			willReturn: exits,
+		}
 	}
 
 	// we do not have to capture all return values, but we need to ensure
@@ -2280,16 +2332,18 @@ func (p *procedureAnalyzer) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) 
 	// we do not mark declared here since these are loop receivers,
 	// and they get tracked in a separate slice than other variables.
 	if ok {
-		// if here, we are likely looping over an array.
+		// if here, we are looping over an array or range.
 		// we need to use the returned type, but remove the IsArray
 		rec := scalarVal.Copy()
 		rec.IsArray = false
 		p.variables[p0.Receiver.String()] = rec
 		tracker.dataType = rec
 	} else {
+		// if we are here, we are looping over a select.
 		compound, ok := res.(map[string]*types.DataType)
 		if !ok {
-			panic("expected loop term to return scalar or compound type")
+			p.expressionTypeErr(p0.LoopTerm)
+			return zeroProcedureReturn()
 		}
 		p.anonymousVariables[p0.Receiver.String()] = compound
 		// we do not set the tracker type here, since it is an anonymous variable.

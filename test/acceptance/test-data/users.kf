@@ -92,8 +92,8 @@ procedure create_post($content text) public {
     );
 }
 
-procedure get_recent_posts($username text) public view returns table(id uuid, content text) {
-return SELECT p.id, p.content from posts as p
+procedure get_recent_posts($username text) public view returns table(id uuid, content text, post_num int) {
+return SELECT p.id, p.content, p.post_num from posts as p
     inner join users as u on p.author_id = u.id
     WHERE u.name = $username
     ORDER BY p.post_num DESC;
@@ -109,7 +109,7 @@ procedure get_recent_posts_by_size($username text, $size int, $limit int) public
     }
 
     $count int := 0;
-    for $row in select * from get_recent_posts($username) {
+    for $row in select * from get_recent_posts($username) order by post_num DESC {
         if $count == $limit {
             break;
         }
@@ -126,7 +126,9 @@ procedure get_recent_posts_by_size($username text, $size int, $limit int) public
 procedure reverse_latest_posts($username text, $limit int) public view returns (content text[]) {
     $content text[];
 
-    for $post in select * from get_recent_posts($username) {
+    // we need to re-apply ordering here since Postgres doesn't guarantee ordering
+    // propagates from subqueries and procedures.
+    for $post in select * from get_recent_posts($username) order by post_num DESC {
         $content := array_append($content, $post.content);
     }
 

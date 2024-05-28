@@ -82,11 +82,11 @@ procedure get_recent_posts_by_size($username text, $size int, $limit int) public
     }
 }
 
-
 // the following foreign procedures define procedures
 // that the users db has. It returns redundant data since it needs
 // to match the procedure signature defines in users.
 foreign procedure get_user($address text) returns (uuid, text)
+foreign procedure foreign_create_user(text)
 
 // table keyvalue is a kv table to track metadata
 // for foreign calls.
@@ -119,4 +119,12 @@ procedure get_user_id($address text) public view returns (id uuid) {
     $user_id, _ := get_user[$dbid, $procedure](@caller);
 
     return $user_id;
+}
+
+// this simply tests that we can write data to foreign procedures.
+procedure create_user($name text) public {
+    $dbid text := admin_get('dbid');
+    $procedure text := admin_get('userbyowner');
+
+    foreign_create_user[$dbid, 'create_user']($name);
 }

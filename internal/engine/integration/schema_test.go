@@ -167,6 +167,40 @@ func Test_Schemas(t *testing.T) {
 				require.Equal(t, int64(100), res.Rows[0][0])
 			},
 		},
+		{
+			name: "write data to foreign procedure",
+			fn: func(t *testing.T, global *execution.GlobalContext, db sql.DB) {
+				usersDBID, social_media, _ := deployAllSchemas(t, global, db)
+
+				ctx := context.Background()
+
+				// create user. we do this in the social_media db to ensure the
+				// procedure can write to a foreign dataset
+				_, err := global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:         social_media,
+					Procedure:       "create_user",
+					Args:            []any{"satoshi"},
+					TransactionData: txData(),
+				})
+				require.NoError(t, err)
+
+				// get the user by name
+				res, err := global.Procedure(ctx, db, &common.ExecutionData{
+					Dataset:         usersDBID,
+					Procedure:       "get_user_by_name",
+					Args:            []any{"satoshi"},
+					TransactionData: txData(),
+				})
+				require.NoError(t, err)
+
+				// check the columns. should be owner, name
+				require.Len(t, res.Columns, 2)
+
+				// check the values
+				require.Len(t, res.Rows, 1)
+				require.Equal(t, "test_owner", res.Rows[0][1])
+			},
+		},
 	}
 
 	for _, tc := range testCases {

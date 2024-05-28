@@ -892,6 +892,29 @@ var (
 		},
 		Body: `return select id from users;`,
 	}
+
+	foreignProcGetUser = &types.ForeignProcedure{
+		Name: "get_user_id",
+		Parameters: []*types.DataType{
+			types.TextType,
+		},
+		Returns: &types.ProcedureReturn{
+			Fields: []*types.NamedType{
+				{
+					Name: "id",
+					Type: types.IntType,
+				},
+			},
+		},
+	}
+
+	foreignProcCreateUser = &types.ForeignProcedure{
+		Name: "foreign_create_user",
+		Parameters: []*types.DataType{
+			types.IntType,
+			types.TextType,
+		},
+	}
 )
 
 func Test_Procedure(t *testing.T) {
@@ -925,6 +948,37 @@ func Test_Procedure(t *testing.T) {
 						Variable: exprVar("$a"),
 						Type:     types.IntType,
 						Value:    exprLit(1),
+					},
+				},
+			},
+		},
+		{
+			name: "procedure applies default ordering to selects",
+			proc: `
+			select * from users;
+			`,
+			want: &parse.ProcedureParseResult{
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtSQL{
+						SQL: &parse.SQLStatement{
+							SQL: &parse.SelectStatement{
+								SelectCores: []*parse.SelectCore{
+									{
+										Columns: []parse.ResultColumn{
+											&parse.ResultColumnWildcard{},
+										},
+										From: &parse.RelationTable{
+											Table: "users",
+										},
+									},
+								},
+								Ordering: []*parse.OrderingTerm{
+									{
+										Expression: exprColumn("users", "id"),
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -1406,6 +1460,11 @@ func Test_Procedure(t *testing.T) {
 											},
 										},
 									},
+									Ordering: []*parse.OrderingTerm{
+										{
+											Expression: exprColumn("", "id"),
+										},
+									},
 								},
 							},
 						},
@@ -1445,6 +1504,68 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 		},
+		{
+			// this tests for regression on a previously known bug
+			name: "foreign procedure returning nothing to a variable",
+			returns: &types.ProcedureReturn{
+				Fields: []*types.NamedType{
+					{
+						Name: "id",
+						Type: types.IntType,
+					},
+				},
+			},
+			proc: `
+			return foreign_create_user['xbd', 'create_user'](1, 'user1');
+			`,
+			err: parse.ErrType,
+		},
+		{
+			// regression test for a previously known bug
+			name: "calling a procedure that returns nothing works fine",
+			proc: `
+			foreign_create_user['xbd', 'create_user'](1, 'user1');
+			`,
+			want: &parse.ProcedureParseResult{
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtCall{
+						Call: &parse.ExpressionForeignCall{
+							Name: "foreign_create_user",
+							ContextualArgs: []parse.Expression{
+								exprLit("xbd"),
+								exprLit("create_user"),
+							},
+							Args: []parse.Expression{
+								exprLit(1),
+								exprLit("user1"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "assigning a variable with error is invalid",
+			proc: `$a := error('error message');`,
+			err:  parse.ErrResultShape,
+		},
+		{
+			// this is a regression test for a previous bug
+			name: "discarding return values of a function is ok",
+			proc: `abs(-1);`,
+			want: &parse.ProcedureParseResult{
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtCall{
+						Call: &parse.ExpressionFunctionCall{
+							Name: "abs",
+							Args: []parse.Expression{
+								exprLit(-1),
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1474,6 +1595,10 @@ func Test_Procedure(t *testing.T) {
 				Procedures: []*types.Procedure{
 					proc,
 					procGetAllUserIds,
+				},
+				ForeignProcedures: []*types.ForeignProcedure{
+					foreignProcGetUser,
+					foreignProcCreateUser,
 				},
 			})
 			require.NoError(t, err)
@@ -1801,7 +1926,12 @@ func Test_SQL(t *testing.T) {
 							},
 						},
 					},
-					// no ordering since the procedure implementation is ordered
+					// apply default ordering
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: exprColumn("", "id"),
+						},
+					},
 				},
 			},
 		},
@@ -1985,6 +2115,125 @@ func Test_SQL(t *testing.T) {
 			sql:  `SELECT count(*) FROM users order by count(*) DESC;`,
 			err:  parse.ErrAggregate,
 		},
+		{
+			name: "ordering for subqueries",
+			sql:  `SELECT u.username, p.id FROM (SELECT * FROM users) as u inner join (SELECT * FROM posts) as p on u.id = p.author_id;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnExpression{
+									Expression: exprColumn("u", "username"),
+								},
+								&parse.ResultColumnExpression{
+									Expression: exprColumn("p", "id"),
+								},
+							},
+							From: &parse.RelationSubquery{
+								Subquery: &parse.SelectStatement{
+									SelectCores: []*parse.SelectCore{
+										{
+											Columns: []parse.ResultColumn{
+												&parse.ResultColumnWildcard{},
+											},
+											From: &parse.RelationTable{
+												Table: "users",
+											},
+										},
+									},
+									Ordering: []*parse.OrderingTerm{
+										{
+											Expression: exprColumn("users", "id"),
+										},
+									},
+								},
+								Alias: "u",
+							},
+							Joins: []*parse.Join{
+								{
+									Type: parse.JoinTypeInner,
+									Relation: &parse.RelationSubquery{
+										Subquery: &parse.SelectStatement{
+											SelectCores: []*parse.SelectCore{
+												{
+													Columns: []parse.ResultColumn{
+														&parse.ResultColumnWildcard{},
+													},
+													From: &parse.RelationTable{
+														Table: "posts",
+													},
+												},
+											},
+											Ordering: []*parse.OrderingTerm{
+												{
+													Expression: exprColumn("posts", "id"),
+												},
+											},
+										},
+										Alias: "p",
+									},
+									On: &parse.ExpressionComparison{
+										Left:     exprColumn("u", "id"),
+										Operator: parse.ComparisonOperatorEqual,
+										Right:    exprColumn("p", "author_id"),
+									},
+								},
+							},
+						},
+					},
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: exprColumn("u", "id"),
+						},
+						{
+							Expression: exprColumn("u", "username"),
+						},
+						{
+							Expression: exprColumn("p", "id"),
+						},
+						{
+							Expression: exprColumn("p", "author_id"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "select against subquery with table join",
+			sql:  `SELECT u.username, p.id FROM (SELECT * FROM users) inner join posts as p on users.id = p.author_id;`,
+			err:  parse.ErrUnnamedJoin,
+		},
+		{
+			name: "default ordering on procedure call",
+			sql:  `SELECT * FROM get_all_user_ids();`,
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnWildcard{},
+							},
+							From: &parse.RelationFunctionCall{
+								FunctionCall: &parse.ExpressionFunctionCall{
+									Name: "get_all_user_ids",
+								},
+							},
+						},
+					},
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: exprColumn("", "id"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "join against unnamed function call fails",
+			sql:  `SELECT * FROM users inner join get_all_user_ids() on users.id = u.id;`,
+			err:  parse.ErrUnnamedJoin,
+		},
 	}
 
 	for _, tt := range tests {
@@ -2011,8 +2260,8 @@ func Test_SQL(t *testing.T) {
 				return
 			}
 
-			if !deepCompare(res.AST, tt.want) {
-				t.Errorf("unexpected AST:\n%s", diff(res.AST, tt.want))
+			if !deepCompare(tt.want, res.AST) {
+				t.Errorf("unexpected AST:\n%s", diff(tt.want, res.AST))
 			}
 		})
 	}
