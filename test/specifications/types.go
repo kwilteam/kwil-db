@@ -168,6 +168,15 @@ func testUint256(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid s
 		}
 	}
 	assert.Equal(t, 1, count)
+
+	// test that greater than max uint256 is not allowed
+	uint256, err = types.Uint256FromString("115792089237316195423570985008687907853269984665640564039457584007913129639936")
+	require.Error(t, err)
+
+	res, err = execute.Execute(ctx, dbid, callType+"_store_uint256s", []any{uint256, uint256Arr})
+	require.Error(t, err)
+
+	ExpectTxfail(t, execute, ctx, res)
 }
 
 func testText(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid string, callType string) {
