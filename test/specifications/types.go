@@ -142,7 +142,8 @@ func testDecimal(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid s
 
 func testUint256(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid string, callType string) {
 	// execute store
-	uint256 := types.Uint256FromInt(123)
+	uint256, err := types.Uint256FromString("115792089237316195423570985008687907853269984665640564039457584007913129639935") // max uint256
+	require.NoError(t, err)
 	uint256Arr := []any{types.Uint256FromInt(456), types.Uint256FromInt(789)}
 
 	signMu.Lock()
