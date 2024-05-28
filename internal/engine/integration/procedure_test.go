@@ -4,11 +4,14 @@ package integration_test
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/parse"
 	"github.com/stretchr/testify/require"
 )
@@ -188,6 +191,17 @@ func Test_Procedures(t *testing.T) {
 				return $count;
 			}`,
 			outputs: [][]any{{int64(0)}},
+		},
+		{
+			name: "encode, decode, and digest functions",
+			procedure: `procedure encode_decode_digest($hex text) public view returns (encoded text, decoded blob, digest blob) {
+				$decoded := decode($hex, 'hex');
+				$encoded := encode($decoded, 'base64');
+				$digest := digest($decoded, 'sha256');
+				return $encoded, $decoded, $digest;
+			}`,
+			inputs:  []any{hex.EncodeToString([]byte("hello"))},
+			outputs: [][]any{{base64.StdEncoding.EncodeToString([]byte("hello")), []byte("hello"), crypto.Sha256([]byte("hello"))}},
 		},
 	}
 
