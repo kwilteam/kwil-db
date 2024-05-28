@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -45,7 +46,7 @@ type AuthnParameterResponse struct {
 }
 
 const (
-	MethodAuthn      = "kgw.authn"
-	MethodAuthnParam = "kgw.authn_param"
-	//MethodLogout     = "kgw.logout"
+	MethodAuthn      jsonrpc.Method = "kgw.authn"
+	MethodAuthnParam jsonrpc.Method = "kgw.authn_param"
+	//MethodLogout    jsonrpc.Method = "kgw.logout"
 )

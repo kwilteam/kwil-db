@@ -33,7 +33,7 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 			req := &jsonrpc.VersionRequest{}
 			return req, func() (any, *jsonrpc.Error) {
 				return &jsonrpc.VersionResponse{
-					Service:     "user",
+					Service:     "function",
 					Version:     apiSemver,
 					Major:       apiVerMajor,
 					Minor:       apiVerMinor,

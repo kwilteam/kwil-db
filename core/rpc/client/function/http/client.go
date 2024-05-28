@@ -3,17 +3,15 @@ package http
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/rpc/client/function"
 	httpFunction "github.com/kwilteam/kwil-db/core/rpc/http/function"
 )
-
-var ErrInvalidSignature = errors.New("invalid signature")
 
 type Client struct {
 	conn *httpFunction.APIClient
@@ -45,6 +43,8 @@ func NewClient(target *url.URL, opts ...ClientOption) *Client {
 	return c
 }
 
+var _ function.FunctionServiceClient = (*Client)(nil)
+
 func (c *Client) VerifySignature(ctx context.Context, sender []byte, signature *auth.Signature, message []byte) error {
 	result, res, err := c.conn.FunctionServiceApi.FunctionServiceVerifySignature(ctx, httpFunction.FunctionVerifySignatureRequest{
 		Sender: base64.StdEncoding.EncodeToString(sender),
@@ -61,14 +61,14 @@ func (c *Client) VerifySignature(ctx context.Context, sender []byte, signature *
 
 	// server logic error
 	if result.Error_ != "" {
-		return fmt.Errorf("%w: %s", ErrInvalidSignature, result.Error_)
+		return fmt.Errorf("%w: %s", function.ErrInvalidSignature, result.Error_)
 	}
 
 	// NOTE: Forget why I put both `valid` and `error` in the response.
 	// if `valid` is false, `error` should not be empty.
 	// This might be not needed, but I just keep it here.
 	if !result.Valid {
-		return ErrInvalidSignature
+		return function.ErrInvalidSignature
 	}
 
 	return nil

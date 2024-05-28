@@ -3,6 +3,7 @@ package function
 
 import (
 	"context"
+	"errors"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 )
@@ -10,3 +11,5 @@ import (
 type FunctionServiceClient interface {
 	VerifySignature(ctx context.Context, sender []byte, signature *auth.Signature, message []byte) error
 }
+
+var ErrInvalidSignature = errors.New("invalid signature")
