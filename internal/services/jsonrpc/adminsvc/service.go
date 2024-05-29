@@ -13,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	adminjson "github.com/kwilteam/kwil-db/core/rpc/json/admin"
+	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
@@ -62,65 +63,64 @@ var (
 	apiSemver = fmt.Sprintf("%d.%d.%d", apiVerMajor, apiVerMinor, apiVerPatch)
 )
 
+func verHandler(context.Context, *userjson.VersionRequest) (*userjson.VersionResponse, *jsonrpc.Error) {
+	return &userjson.VersionResponse{
+		Service:     "user",
+		Version:     apiSemver,
+		Major:       apiVerMajor,
+		Minor:       apiVerMinor,
+		Patch:       apiVerPatch,
+		KwilVersion: version.KwilVersion,
+	}, nil
+}
+
 // The admin Service must be usable as a Svc registered with a JSON-RPC Server.
 var _ rpcserver.Svc = (*Service)(nil)
 
-func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
-	return map[jsonrpc.Method]rpcserver.MethodHandler{
-		adminjson.MethodVersion: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.VersionRequest{}
-			return req, func() (any, *jsonrpc.Error) {
-				return &jsonrpc.VersionResponse{
-					Service:     "user",
-					Version:     apiSemver,
-					Major:       apiVerMajor,
-					Minor:       apiVerMinor,
-					Patch:       apiVerPatch,
-					KwilVersion: version.KwilVersion,
-				}, nil
-			}
-		},
-		adminjson.MethodStatus: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &adminjson.StatusRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.Status(ctx, req) }
-		},
-		adminjson.MethodPeers: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &adminjson.PeersRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.Peers(ctx, req) }
-		},
-		adminjson.MethodConfig: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &adminjson.GetConfigRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.GetConfig(ctx, req) }
-		},
-		adminjson.MethodValApprove: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &adminjson.ApproveRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.Approve(ctx, req) }
-		},
-		adminjson.MethodValJoin: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &adminjson.JoinRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.Join(ctx, req) }
-		},
-		adminjson.MethodValJoinStatus: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &adminjson.JoinStatusRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.JoinStatus(ctx, req) }
-		},
-		adminjson.MethodValRemove: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &adminjson.RemoveRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.Remove(ctx, req) }
-		},
-		adminjson.MethodValLeave: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &adminjson.LeaveRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.Leave(ctx, req) }
-		},
-		adminjson.MethodValList: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &adminjson.ListValidatorsRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.ListValidators(ctx, req) }
-		},
-		adminjson.MethodValListJoins: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &adminjson.ListJoinRequestsRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.ListPendingJoins(ctx, req) }
-		},
+func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
+	return map[jsonrpc.Method]rpcserver.MethodDef{
+		adminjson.MethodVersion: rpcserver.MakeMethodDef(verHandler,
+			"retrieve the API version of the admin service",    // method description
+			"service info including semver and kwild version"), // return value description
+		adminjson.MethodStatus: rpcserver.MakeMethodDef(svc.Status,
+			"retrieve node status",
+			"node information including name, chain id, sync, identity, etc."),
+		adminjson.MethodPeers: rpcserver.MakeMethodDef(svc.Peers,
+			"get the current peers of the node",
+			"a list of the node's current peers"),
+		adminjson.MethodConfig: rpcserver.MakeMethodDef(svc.GetConfig,
+			"retrieve the current effective node config",
+			"the raw bytes of the effective config TOML document"),
+		adminjson.MethodValApprove: rpcserver.MakeMethodDef(svc.Approve,
+			"approve a validator join request",
+			"the hash of the broadcasted validator approve transaction"),
+		adminjson.MethodValJoin: rpcserver.MakeMethodDef(svc.Join,
+			"request the node to become a validator",
+			"the hash of the broadcasted validator join transaction"),
+		adminjson.MethodValJoinStatus: rpcserver.MakeMethodDef(svc.JoinStatus,
+			"query for the status of a validator join request",
+			"the pending join request details, if it exists"),
+		adminjson.MethodValListJoins: rpcserver.MakeMethodDef(svc.ListPendingJoins,
+			"list active validator join requests",
+			"all pending join requests including the current approvals and the join expiry"),
+		adminjson.MethodValList: rpcserver.MakeMethodDef(svc.ListValidators,
+			"list the current validators",
+			"the list of current validators and their power"),
+		adminjson.MethodValLeave: rpcserver.MakeMethodDef(svc.Leave,
+			"leave the validator set",
+			"the hash of the broadcasted validator leave transaction"),
+		adminjson.MethodValRemove: rpcserver.MakeMethodDef(svc.Remove,
+			"vote to remote a validator",
+			"the hash of the broadcasted validator remove transaction"),
 	}
+}
+
+func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
+	handlers := make(map[jsonrpc.Method]rpcserver.MethodHandler)
+	for method, def := range svc.Methods() {
+		handlers[method] = def.Handler
+	}
+	return handlers
 }
 
 // NewService constructs a new Service.
@@ -181,7 +181,7 @@ func (svc *Service) Peers(ctx context.Context, _ *adminjson.PeersRequest) (*admi
 }
 
 // sendTx makes a transaction and sends it to the local node.
-func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*jsonrpc.BroadcastResponse, *jsonrpc.Error) {
+func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*userjson.BroadcastResponse, *jsonrpc.Error) {
 	// Get the latest nonce for the account, if it exists.
 	_, nonce, err := svc.TxApp.AccountInfo(ctx, svc.signer.Identity(), true)
 	if err != nil {
@@ -211,7 +211,7 @@ func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to serialize transaction data", nil)
 	}
 
-	res, err := svc.blockchain.BroadcastTx(ctx, encodedTx, uint8(jsonrpc.BroadcastSyncSync))
+	res, err := svc.blockchain.BroadcastTx(ctx, encodedTx, uint8(userjson.BroadcastSyncSync))
 	if err != nil {
 		svc.log.Error("failed to broadcast tx", log.Error(err))
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to broadcast transaction", nil)
@@ -220,7 +220,7 @@ func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*
 	code, txHash := res.Code, res.Hash.Bytes()
 
 	if txCode := transactions.TxCode(code); txCode != transactions.CodeOk {
-		errData := &jsonrpc.BroadcastError{
+		errData := &userjson.BroadcastError{
 			TxCode:  txCode.Uint32(), // e.g. invalid nonce, wrong chain, etc.
 			Hash:    hex.EncodeToString(txHash),
 			Message: res.Log,
@@ -230,25 +230,25 @@ func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*
 	}
 
 	svc.log.Info("broadcast transaction", log.String("TxHash", hex.EncodeToString(txHash)), log.Uint("nonce", tx.Body.Nonce))
-	return &jsonrpc.BroadcastResponse{
+	return &userjson.BroadcastResponse{
 		TxHash: txHash,
 	}, nil
 
 }
 
-func (svc *Service) Approve(ctx context.Context, req *adminjson.ApproveRequest) (*jsonrpc.BroadcastResponse, *jsonrpc.Error) {
+func (svc *Service) Approve(ctx context.Context, req *adminjson.ApproveRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
 	return svc.sendTx(ctx, &transactions.ValidatorApprove{
 		Candidate: req.PubKey,
 	})
 }
 
-func (svc *Service) Join(ctx context.Context, req *adminjson.JoinRequest) (*jsonrpc.BroadcastResponse, *jsonrpc.Error) {
+func (svc *Service) Join(ctx context.Context, req *adminjson.JoinRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
 	return svc.sendTx(ctx, &transactions.ValidatorJoin{
 		Power: 1,
 	})
 }
 
-func (svc *Service) Remove(ctx context.Context, req *adminjson.RemoveRequest) (*jsonrpc.BroadcastResponse, *jsonrpc.Error) {
+func (svc *Service) Remove(ctx context.Context, req *adminjson.RemoveRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
 	return svc.sendTx(ctx, &transactions.ValidatorRemove{
 		Validator: req.PubKey,
 	})
@@ -288,7 +288,7 @@ func (svc *Service) JoinStatus(ctx context.Context, req *adminjson.JoinStatusReq
 	}, nil
 }
 
-func (svc *Service) Leave(ctx context.Context, req *adminjson.LeaveRequest) (*jsonrpc.BroadcastResponse, *jsonrpc.Error) {
+func (svc *Service) Leave(ctx context.Context, req *adminjson.LeaveRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
 	return svc.sendTx(ctx, &transactions.ValidatorLeave{})
 }
 

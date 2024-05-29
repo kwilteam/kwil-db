@@ -1,4 +1,4 @@
-package jsonrpc
+package userjson
 
 import (
 	"github.com/kwilteam/kwil-db/core/types"

@@ -190,7 +190,7 @@ type TransactionBody struct {
 	PayloadType PayloadType `json:"type"`
 
 	// Fee is the fee the sender is willing to pay for the transaction
-	Fee *big.Int // MarshalJSON and UnmarshalJSON handle this field.
+	Fee *big.Int `json:"fee"` // MarshalJSON and UnmarshalJSON handle this field, but still tagged for reflection
 
 	// Nonce is the next nonce of the sender
 	Nonce uint64 `json:"nonce"`

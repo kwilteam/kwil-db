@@ -13,6 +13,9 @@ import (
 	"fmt"
 )
 
+// Method is a type used for all recognized JSON-RPC method names.
+type Method string
+
 // Error is the "error" object defined by JSON-RPC 2.0
 type Error struct {
 	// Code is an integer error code. Values on [-32768,-32000] are reserved by

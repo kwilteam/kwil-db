@@ -1,4 +1,4 @@
-package jsonrpc
+package userjson
 
 import (
 	"github.com/kwilteam/kwil-db/core/types"
@@ -22,13 +22,13 @@ type VersionRequest struct{}
 
 // SchemaRequest contains the request parameters for MethodSchema.
 type SchemaRequest struct {
-	DBID string `json:"dbid,omitempty"`
+	DBID string `json:"dbid"`
 }
 
 // AccountRequest contains the request parameters for MethodAccount.
 type AccountRequest struct {
-	Identifier types.HexBytes `json:"identifier,omitempty"`
-	Status     *AccountStatus `json:"status,omitempty"` // Mapped to URL query parameter `status`.
+	Identifier types.HexBytes `json:"identifier" desc:"account identifier"`
+	Status     *AccountStatus `json:"status,omitempty" desc:"blockchain status (confirmed or unconfirmed)"` // Mapped to URL query parameter `status`.
 }
 
 // AccountStatus is the type used to enumerate the different account status
@@ -45,7 +45,7 @@ var (
 
 // BroadcastRequest contains the request parameters for MethodBroadcast.
 type BroadcastRequest struct {
-	Tx   *transactions.Transaction `json:"tx,omitempty"`
+	Tx   *transactions.Transaction `json:"tx"`
 	Sync *BroadcastSync            `json:"sync,omitempty"`
 }
 
@@ -84,16 +84,16 @@ type PingRequest struct {
 
 // EstimatePriceRequest contains the request parameters for MethodPrice.
 type EstimatePriceRequest struct {
-	Tx *transactions.Transaction `json:"tx,omitempty"`
+	Tx *transactions.Transaction `json:"tx"`
 }
 
 // QueryRequest contains the request parameters for MethodQuery.
 type QueryRequest struct {
-	DBID  string `json:"dbid,omitempty"`
-	Query string `json:"query,omitempty"`
+	DBID  string `json:"dbid"`
+	Query string `json:"query"`
 }
 
 // TxQueryRequest contains the request parameters for MethodTxQuery.
 type TxQueryRequest struct {
-	TxHash types.HexBytes `json:"tx_hash,omitempty"`
+	TxHash types.HexBytes `json:"tx_hash"`
 }

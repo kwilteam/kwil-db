@@ -9,8 +9,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/rpc/client/admin"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
 	userClient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
-	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	adminjson "github.com/kwilteam/kwil-db/core/rpc/json/admin"
+	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 	"github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 )
@@ -46,7 +46,7 @@ func (cl *Client) Approve(ctx context.Context, publicKey []byte) ([]byte, error)
 	cmd := &adminjson.ApproveRequest{
 		PubKey: publicKey,
 	}
-	res := &jsonrpc.BroadcastResponse{}
+	res := &userjson.BroadcastResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodValApprove), cmd, res)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func (cl *Client) Approve(ctx context.Context, publicKey []byte) ([]byte, error)
 // transaction hash for the broadcasted join transaction is returned.
 func (cl *Client) Join(ctx context.Context) ([]byte, error) {
 	cmd := &adminjson.JoinRequest{}
-	res := &jsonrpc.BroadcastResponse{}
+	res := &userjson.BroadcastResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodValJoin), cmd, res)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func (cl *Client) JoinStatus(ctx context.Context, pubkey []byte) (*types.JoinReq
 // transaction hash for the broadcasted leave transaction is returned.
 func (cl *Client) Leave(ctx context.Context) ([]byte, error) {
 	cmd := &adminjson.LeaveRequest{}
-	res := &jsonrpc.BroadcastResponse{}
+	res := &userjson.BroadcastResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodValLeave), cmd, res)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func (cl *Client) Remove(ctx context.Context, publicKey []byte) ([]byte, error) 
 	cmd := &adminjson.RemoveRequest{
 		PubKey: publicKey,
 	}
-	res := &jsonrpc.BroadcastResponse{}
+	res := &userjson.BroadcastResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodValRemove), cmd, res)
 	if err != nil {
 		return nil, err
@@ -155,8 +155,8 @@ func (cl *Client) Status(ctx context.Context) (*adminTypes.Status, error) {
 
 // Version reports the version of the running node.
 func (cl *Client) Version(ctx context.Context) (string, error) {
-	cmd := &jsonrpc.VersionRequest{}
-	res := &jsonrpc.VersionResponse{}
+	cmd := &userjson.VersionRequest{}
+	res := &userjson.VersionResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodVersion), cmd, res)
 	if err != nil {
 		return "", err
@@ -189,11 +189,11 @@ func (cl *Client) GetConfig(ctx context.Context) ([]byte, error) {
 
 // Ping just tests RPC connectivity. The expected response is "pong".
 func (cl *Client) Ping(ctx context.Context) (string, error) {
-	cmd := &jsonrpc.PingRequest{
+	cmd := &userjson.PingRequest{
 		Message: "ping",
 	}
-	res := &jsonrpc.PingResponse{}
-	err := cl.CallMethod(ctx, string(jsonrpc.MethodPing), cmd, res)
+	res := &userjson.PingResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodPing), cmd, res)
 	if err != nil {
 		return "", err
 	}

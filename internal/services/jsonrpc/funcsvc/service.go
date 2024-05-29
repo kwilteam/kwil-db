@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	"github.com/kwilteam/kwil-db/core/rpc/json/function"
+	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/version"
@@ -27,26 +28,34 @@ var (
 // The admin Service must be usable as a Svc registered with a JSON-RPC Server.
 var _ rpcserver.Svc = (*Service)(nil)
 
-func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
-	return map[jsonrpc.Method]rpcserver.MethodHandler{
-		function.MethodVersion: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.VersionRequest{}
-			return req, func() (any, *jsonrpc.Error) {
-				return &jsonrpc.VersionResponse{
-					Service:     "function",
-					Version:     apiSemver,
-					Major:       apiVerMajor,
-					Minor:       apiVerMinor,
-					Patch:       apiVerPatch,
-					KwilVersion: version.KwilVersion,
-				}, nil
-			}
-		},
-		function.MethodVerifySig: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &function.VerifySignatureRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.VerifySignature(ctx, req) }
-		},
+func verHandler(context.Context, *userjson.VersionRequest) (*userjson.VersionResponse, *jsonrpc.Error) {
+	return &userjson.VersionResponse{
+		Service:     "function",
+		Version:     apiSemver,
+		Major:       apiVerMajor,
+		Minor:       apiVerMinor,
+		Patch:       apiVerPatch,
+		KwilVersion: version.KwilVersion,
+	}, nil
+}
+
+func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
+	return map[jsonrpc.Method]rpcserver.MethodDef{
+		function.MethodVersion: rpcserver.MakeMethodDef(verHandler,
+			"retrieve the API version of the function service",
+			"service info including semver and kwild version"),
+		function.MethodVerifySig: rpcserver.MakeMethodDef(svc.VerifySignature,
+			"verify a message signature",
+			"validity of the signature and any reason for failure"),
 	}
+}
+
+func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
+	handlers := make(map[jsonrpc.Method]rpcserver.MethodHandler)
+	for method, def := range svc.Methods() {
+		handlers[method] = def.Handler
+	}
+	return handlers
 }
 
 // VerifySignature checks the signature with the given public key and message.

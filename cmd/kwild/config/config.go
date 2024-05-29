@@ -592,7 +592,7 @@ func DefaultConfig() *KwildConfig {
 			},
 			RPC: &ChainRPCConfig{
 				ListenAddress:      "tcp://127.0.0.1:26657",
-				BroadcastTxTimeout: Duration(10 * time.Second),
+				BroadcastTxTimeout: Duration(15 * time.Second), // 2.5x default TimeoutCommit (6s)
 			},
 			Mempool: &MempoolConfig{
 				Size:        5000,

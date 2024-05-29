@@ -217,7 +217,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		*rpcSvcLogger, usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)))
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppCfg.JSONRPCListenAddress,
 		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)),
-		rpcserver.WithCORS())
+		rpcserver.WithCORS(), rpcserver.WithServerInfo(&usersvc.SpecInfo))
 	if err != nil {
 		failBuild(err, "unable to create json-rpc server")
 	}
@@ -748,7 +748,7 @@ func buildJRPCAdminServer(d *coreDependencies) *rpcserver.Server {
 	// Note that rpcserver.WithPass is not mutually exclusive with TLS in
 	// general, only mutual TLS. It could be a simpler alternative to mutual
 	// TLS, or just coupled with TLS termination on a local reverse proxy.
-
+	opts = append(opts, rpcserver.WithServerInfo(&adminsvc.SpecInfo))
 	jsonRPCAdminServer, err := rpcserver.NewServer(addr, *d.log.Named("admin-jsonrpc-server"),
 		opts...)
 	if err != nil {

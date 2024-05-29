@@ -16,6 +16,7 @@ import (
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
+	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 	"github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -91,62 +92,83 @@ var (
 // The user Service must be usable as a Svc registered with a JSON-RPC Server.
 var _ rpcserver.Svc = (*Service)(nil)
 
-func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
-	return map[jsonrpc.Method]rpcserver.MethodHandler{
-		jsonrpc.MethodUserVersion: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.VersionRequest{}
-			return req, func() (any, *jsonrpc.Error) {
-				return &jsonrpc.VersionResponse{
-					Service:     "user",
-					Version:     apiVerUserSemver,
-					Major:       apiVerUserMajor,
-					Minor:       apiVerUserMinor,
-					Patch:       apiVerUserPatch,
-					KwilVersion: version.KwilVersion,
-				}, nil
-			}
-		},
-		jsonrpc.MethodAccount: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.AccountRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.Account(ctx, req) }
-		},
-		jsonrpc.MethodBroadcast: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.BroadcastRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.Broadcast(ctx, req) }
-		},
-		jsonrpc.MethodCall: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.CallRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.Call(ctx, req) }
-		},
-		jsonrpc.MethodChainInfo: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.ChainInfoRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.ChainInfo(ctx, req) }
-		},
-		jsonrpc.MethodDatabases: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.ListDatabasesRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.ListDatabases(ctx, req) }
-		},
-		jsonrpc.MethodPing: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.PingRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.Ping(ctx, req) }
-		},
-		jsonrpc.MethodPrice: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.EstimatePriceRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.EstimatePrice(ctx, req) }
-		},
-		jsonrpc.MethodQuery: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.QueryRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.Query(ctx, req) }
-		},
-		jsonrpc.MethodSchema: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.SchemaRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.Schema(ctx, req) }
-		},
-		jsonrpc.MethodTxQuery: func(ctx context.Context, s *rpcserver.Server) (any, func() (any, *jsonrpc.Error)) {
-			req := &jsonrpc.TxQueryRequest{}
-			return req, func() (any, *jsonrpc.Error) { return svc.TxQuery(ctx, req) }
-		},
+func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
+	return map[jsonrpc.Method]rpcserver.MethodDef{
+		userjson.MethodUserVersion: rpcserver.MakeMethodDef(
+			verHandler,
+			"retrieve the API version of the user service",
+			"service info including semver and kwild version",
+		),
+		userjson.MethodAccount: rpcserver.MakeMethodDef(
+			svc.Account,
+			"get an account's status",
+			"balance and nonce of an accounts",
+		),
+		userjson.MethodBroadcast: rpcserver.MakeMethodDef(
+			svc.Broadcast,
+			"broadcast a transaction",
+			"the hash of the transaction",
+		),
+		userjson.MethodCall: rpcserver.MakeMethodDef(
+			svc.Call,
+			"call an action or procedure",
+			"the result of the action/procedure call as a encoded records",
+		),
+		userjson.MethodChainInfo: rpcserver.MakeMethodDef(
+			svc.ChainInfo,
+			"get current blockchain info",
+			"chain info including chain ID and best block",
+		),
+		userjson.MethodDatabases: rpcserver.MakeMethodDef(
+			svc.ListDatabases,
+			"list databases",
+			"an array of matching databases",
+		),
+		userjson.MethodPing: rpcserver.MakeMethodDef(
+			svc.Ping,
+			"ping the server",
+			"a message back from the server",
+		),
+		userjson.MethodPrice: rpcserver.MakeMethodDef(
+			svc.EstimatePrice,
+			"estimate the price of a transaction",
+			"balance and nonce of an accounts",
+		),
+		userjson.MethodQuery: rpcserver.MakeMethodDef(
+			svc.Query,
+			"perform an ad-hoc SQL query",
+			"the result of the query as a encoded records",
+		),
+		userjson.MethodSchema: rpcserver.MakeMethodDef(
+			svc.Schema,
+			"get a deployed database's kuneiform schema definition",
+			"the kuneiform schema",
+		),
+		userjson.MethodTxQuery: rpcserver.MakeMethodDef(
+			svc.TxQuery,
+			"query for the status of a transaction",
+			"the execution status of a transaction",
+		),
 	}
+}
+
+func verHandler(context.Context, *userjson.VersionRequest) (*userjson.VersionResponse, *jsonrpc.Error) {
+	return &userjson.VersionResponse{
+		Service:     "user",
+		Version:     apiVerUserSemver,
+		Major:       apiVerUserMajor,
+		Minor:       apiVerUserMinor,
+		Patch:       apiVerUserPatch,
+		KwilVersion: version.KwilVersion,
+	}, nil
+}
+
+func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
+	handlers := make(map[jsonrpc.Method]rpcserver.MethodHandler)
+	for method, def := range svc.Methods() {
+		handlers[method] = def.Handler
+	}
+	return handlers
 }
 
 type EngineReader interface {
@@ -171,20 +193,20 @@ type NodeApplication interface {
 	Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
 }
 
-func (svc *Service) ChainInfo(ctx context.Context, req *jsonrpc.ChainInfoRequest) (*jsonrpc.ChainInfoResponse, *jsonrpc.Error) {
+func (svc *Service) ChainInfo(ctx context.Context, req *userjson.ChainInfoRequest) (*userjson.ChainInfoResponse, *jsonrpc.Error) {
 	status, err := svc.chainClient.Status(ctx)
 	if err != nil {
 		svc.log.Error("chain status error", log.Error(err))
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "status failure", nil)
 	}
-	return &jsonrpc.ChainInfoResponse{
+	return &userjson.ChainInfoResponse{
 		ChainID:     status.Node.ChainID,
 		BlockHeight: uint64(status.Sync.BestBlockHeight),
 		BlockHash:   status.Sync.BestBlockHash,
 	}, nil
 }
 
-func (svc *Service) Broadcast(ctx context.Context, req *jsonrpc.BroadcastRequest) (*jsonrpc.BroadcastResponse, *jsonrpc.Error) {
+func (svc *Service) Broadcast(ctx context.Context, req *userjson.BroadcastRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
 	logger := svc.log.With(log.String("rpc", "Broadcast"), // new logger each time, ick
 		log.String("PayloadType", req.Tx.Body.PayloadType))
 	svc.log.Debug("incoming transaction")
@@ -199,7 +221,7 @@ func (svc *Service) Broadcast(ctx context.Context, req *jsonrpc.BroadcastRequest
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to serialize transaction data", nil)
 	}
 
-	var sync = jsonrpc.BroadcastSyncSync // default to sync, not async or commit
+	var sync = userjson.BroadcastSyncSync // default to sync, not async or commit
 	if req.Sync != nil {
 		sync = *req.Sync
 	}
@@ -212,7 +234,7 @@ func (svc *Service) Broadcast(ctx context.Context, req *jsonrpc.BroadcastRequest
 	code, txHash := res.Code, res.Hash.Bytes()
 
 	if txCode := transactions.TxCode(code); txCode != transactions.CodeOk {
-		errData := &jsonrpc.BroadcastError{
+		errData := &userjson.BroadcastError{
 			TxCode:  txCode.Uint32(), // e.g. invalid nonce, wrong chain, etc.
 			Hash:    hex.EncodeToString(txHash),
 			Message: res.Log,
@@ -223,12 +245,12 @@ func (svc *Service) Broadcast(ctx context.Context, req *jsonrpc.BroadcastRequest
 
 	logger.Info("broadcast transaction", log.String("TxHash", hex.EncodeToString(txHash)),
 		log.Uint("sync", sync), log.Uint("nonce", req.Tx.Body.Nonce))
-	return &jsonrpc.BroadcastResponse{
+	return &userjson.BroadcastResponse{
 		TxHash: txHash,
 	}, nil
 }
 
-func (svc *Service) EstimatePrice(ctx context.Context, req *jsonrpc.EstimatePriceRequest) (*jsonrpc.EstimatePriceResponse, *jsonrpc.Error) {
+func (svc *Service) EstimatePrice(ctx context.Context, req *userjson.EstimatePriceRequest) (*userjson.EstimatePriceResponse, *jsonrpc.Error) {
 	svc.log.Debug("Estimating price", log.String("payload_type", req.Tx.Body.PayloadType))
 
 	price, err := svc.nodeApp.Price(ctx, req.Tx)
@@ -237,12 +259,12 @@ func (svc *Service) EstimatePrice(ctx context.Context, req *jsonrpc.EstimatePric
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to estimate price", nil)
 	}
 
-	return &jsonrpc.EstimatePriceResponse{
+	return &userjson.EstimatePriceResponse{
 		Price: price.String(),
 	}, nil
 }
 
-func (svc *Service) Query(ctx context.Context, req *jsonrpc.QueryRequest) (*jsonrpc.QueryResponse, *jsonrpc.Error) {
+func (svc *Service) Query(ctx context.Context, req *userjson.QueryRequest) (*userjson.QueryResponse, *jsonrpc.Error) {
 	tx, err := svc.db.BeginReadTx(ctx)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to create read tx", nil)
@@ -264,12 +286,12 @@ func (svc *Service) Query(ctx context.Context, req *jsonrpc.QueryRequest) (*json
 		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to marshal call result", nil)
 	}
 
-	return &jsonrpc.QueryResponse{
+	return &userjson.QueryResponse{
 		Result: bts,
 	}, nil
 }
 
-func (svc *Service) Account(ctx context.Context, req *jsonrpc.AccountRequest) (*jsonrpc.AccountResponse, *jsonrpc.Error) {
+func (svc *Service) Account(ctx context.Context, req *userjson.AccountRequest) (*userjson.AccountResponse, *jsonrpc.Error) {
 	// Status is presently just 0 for confirmed and 1 for pending, but there may
 	// be others such as finalized and safe.
 	uncommitted := req.Status != nil && *req.Status > 0
@@ -288,36 +310,36 @@ func (svc *Service) Account(ctx context.Context, req *jsonrpc.AccountRequest) (*
 		ident = req.Identifier
 	}
 
-	return &jsonrpc.AccountResponse{
+	return &userjson.AccountResponse{
 		Identifier: ident, // nil for non-existent account
 		Nonce:      nonce,
 		Balance:    balance.String(),
 	}, nil
 }
 
-func (svc *Service) Ping(ctx context.Context, req *jsonrpc.PingRequest) (*jsonrpc.PingResponse, *jsonrpc.Error) {
-	return &jsonrpc.PingResponse{
+func (svc *Service) Ping(ctx context.Context, req *userjson.PingRequest) (*userjson.PingResponse, *jsonrpc.Error) {
+	return &userjson.PingResponse{
 		Message: "pong",
 	}, nil
 }
 
-func (svc *Service) ListDatabases(ctx context.Context, req *jsonrpc.ListDatabasesRequest) (*jsonrpc.ListDatabasesResponse, *jsonrpc.Error) {
+func (svc *Service) ListDatabases(ctx context.Context, req *userjson.ListDatabasesRequest) (*userjson.ListDatabasesResponse, *jsonrpc.Error) {
 	dbs, err := svc.engine.ListDatasets(req.Owner)
 	if err != nil {
 		svc.log.Error("ListDatasets failed", log.Error(err))
 		return nil, engineError(err)
 	}
 
-	pbDatasets := make([]*jsonrpc.DatasetInfo, len(dbs))
+	pbDatasets := make([]*userjson.DatasetInfo, len(dbs))
 	for i, db := range dbs {
-		pbDatasets[i] = &jsonrpc.DatasetInfo{
+		pbDatasets[i] = &userjson.DatasetInfo{
 			DBID:  db.DBID,
 			Name:  db.Name,
 			Owner: db.Owner,
 		}
 	}
 
-	return &jsonrpc.ListDatabasesResponse{
+	return &userjson.ListDatabasesResponse{
 		Databases: pbDatasets,
 	}, nil
 }
@@ -353,7 +375,7 @@ func engineError(err error) *jsonrpc.Error {
 	}
 }
 
-func (svc *Service) Schema(ctx context.Context, req *jsonrpc.SchemaRequest) (*jsonrpc.SchemaResponse, *jsonrpc.Error) {
+func (svc *Service) Schema(ctx context.Context, req *userjson.SchemaRequest) (*userjson.SchemaResponse, *jsonrpc.Error) {
 	logger := svc.log.With(log.String("rpc", "GetSchema"), log.String("dbid", req.DBID))
 	schema, err := svc.engine.GetSchema(req.DBID)
 	if err != nil {
@@ -361,12 +383,12 @@ func (svc *Service) Schema(ctx context.Context, req *jsonrpc.SchemaRequest) (*js
 		return nil, engineError(err)
 	}
 
-	return &jsonrpc.SchemaResponse{
+	return &userjson.SchemaResponse{
 		Schema: schema,
 	}, nil
 }
 
-func convertActionCall(req *jsonrpc.CallRequest) (*transactions.ActionCall, *transactions.CallMessage, error) {
+func convertActionCall(req *userjson.CallRequest) (*transactions.ActionCall, *transactions.CallMessage, error) {
 	var actionPayload transactions.ActionCall
 
 	err := actionPayload.UnmarshalBinary(req.Body.Payload)
@@ -397,7 +419,7 @@ func resultMap(r *sql.ResultSet) []map[string]any {
 	return m
 }
 
-func (svc *Service) Call(ctx context.Context, req *jsonrpc.CallRequest) (*jsonrpc.CallResponse, *jsonrpc.Error) {
+func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userjson.CallResponse, *jsonrpc.Error) {
 	body, msg, err := convertActionCall(req)
 	if err != nil {
 		// NOTE: http api needs to be able to get the error message
@@ -451,12 +473,12 @@ func (svc *Service) Call(ctx context.Context, req *jsonrpc.CallRequest) (*jsonrp
 		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to marshal call result", nil)
 	}
 
-	return &jsonrpc.CallResponse{
+	return &userjson.CallResponse{
 		Result: btsResult,
 	}, nil
 }
 
-func (svc *Service) TxQuery(ctx context.Context, req *jsonrpc.TxQueryRequest) (*jsonrpc.TxQueryResponse, *jsonrpc.Error) {
+func (svc *Service) TxQuery(ctx context.Context, req *userjson.TxQueryRequest) (*userjson.TxQueryResponse, *jsonrpc.Error) {
 	logger := svc.log.With(log.String("rpc", "TxQuery"),
 		log.String("TxHash", hex.EncodeToString(req.TxHash)))
 
@@ -490,7 +512,7 @@ func (svc *Service) TxQuery(ctx context.Context, req *jsonrpc.TxQueryRequest) (*
 
 	logger.Debug("tx query result", log.Any("result", txResult))
 
-	return &jsonrpc.TxQueryResponse{
+	return &userjson.TxQueryResponse{
 		Hash:     cmtResult.Hash.Bytes(),
 		Height:   cmtResult.Height,
 		Tx:       tx,
