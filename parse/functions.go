@@ -15,22 +15,13 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.IntType) {
-					return nil, wrapErrArgumentType(types.IntType, args[0])
+				if !args[0].EqualsStrict(types.IntType) && args[0].Name != types.DecimalStr {
+					return nil, fmt.Errorf("expected argument to be int or decimal, got %s", args[0].String())
 				}
 
-				return types.IntType, nil
+				return args[0], nil
 			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", errStar("abs")
-				}
-				if distinct {
-					return "", errDistinct("abs")
-				}
-
-				return fmt.Sprintf("abs(%s)", inputs[0]), nil
-			},
+			PGFormat: defaultFormat("abs"),
 		},
 		"error": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
@@ -44,108 +35,7 @@ var (
 
 				return nil, nil
 			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", errStar("error")
-				}
-				if distinct {
-					return "", errDistinct("error")
-				}
-
-				return fmt.Sprintf("error(%s)", inputs[0]), nil
-			},
-		},
-		"length": {
-			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
-				if len(args) != 1 {
-					return nil, wrapErrArgumentNumber(1, len(args))
-				}
-
-				if !args[0].EqualsStrict(types.TextType) {
-					return nil, wrapErrArgumentType(types.TextType, args[0])
-				}
-
-				return types.IntType, nil
-			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", fmt.Errorf("cannot use * with length")
-				}
-				if distinct {
-					return "", fmt.Errorf("cannot use distinct with length")
-				}
-
-				return fmt.Sprintf("length(%s)", inputs[0]), nil
-			},
-		},
-		"lower": {
-			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
-				if len(args) != 1 {
-					return nil, wrapErrArgumentNumber(1, len(args))
-				}
-
-				if !args[0].EqualsStrict(types.TextType) {
-					return nil, wrapErrArgumentType(types.TextType, args[0])
-				}
-
-				return types.TextType, nil
-			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", errStar("lower")
-				}
-				if distinct {
-					return "", errDistinct("lower")
-				}
-
-				return fmt.Sprintf("lower(%s)", inputs[0]), nil
-			},
-		},
-		"upper": {
-			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
-				if len(args) != 1 {
-					return nil, wrapErrArgumentNumber(1, len(args))
-				}
-
-				if !args[0].EqualsStrict(types.TextType) {
-					return nil, wrapErrArgumentType(types.TextType, args[0])
-				}
-
-				return types.TextType, nil
-			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", errStar("upper")
-				}
-				if distinct {
-					return "", errDistinct("upper")
-				}
-
-				return fmt.Sprintf("upper(%s)", inputs[0]), nil
-			},
-		},
-		"format": {
-			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
-				if len(args) < 1 {
-					return nil, fmt.Errorf("invalid number of arguments: expected at least 1, got %d", len(args))
-				}
-
-				if !args[0].EqualsStrict(types.TextType) {
-					return nil, wrapErrArgumentType(types.TextType, args[0])
-				}
-
-				return types.TextType, nil
-			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", errStar("format")
-				}
-				if distinct {
-					return "", errDistinct("format")
-				}
-
-				return fmt.Sprintf("format(%s)", strings.Join(inputs, ", ")), nil
-			},
+			PGFormat: defaultFormat("error"),
 		},
 		"uuid_generate_v5": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
@@ -164,16 +54,7 @@ var (
 
 				return types.UUIDType, nil
 			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", errStar("uuid_generate_v5")
-				}
-				if distinct {
-					return "", errDistinct("uuid_generate_v5")
-				}
-
-				return fmt.Sprintf("uuid_generate_v5(%s)", strings.Join(inputs, ", ")), nil
-			},
+			PGFormat: defaultFormat("uuid_generate_v5"),
 		},
 		"encode": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
@@ -192,16 +73,7 @@ var (
 
 				return types.TextType, nil
 			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", errStar("encode")
-				}
-				if distinct {
-					return "", errDistinct("encode")
-				}
-
-				return fmt.Sprintf("encode(%s)", strings.Join(inputs, ", ")), nil
-			},
+			PGFormat: defaultFormat("encode"),
 		},
 		"decode": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
@@ -220,16 +92,7 @@ var (
 
 				return types.BlobType, nil
 			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", errStar("decode")
-				}
-				if distinct {
-					return "", errDistinct("decode")
-				}
-
-				return fmt.Sprintf("decode(%s)", strings.Join(inputs, ", ")), nil
-			},
+			PGFormat: defaultFormat("decode"),
 		},
 		"digest": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
@@ -248,16 +111,7 @@ var (
 
 				return types.BlobType, nil
 			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", errStar("digest")
-				}
-				if distinct {
-					return "", errDistinct("digest")
-				}
-
-				return fmt.Sprintf("digest(%s)", strings.Join(inputs, ", ")), nil
-			},
+			PGFormat: defaultFormat("digest"),
 		},
 		// array functions
 		"array_append": {
@@ -280,16 +134,7 @@ var (
 
 				return args[0], nil
 			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", errStar("array_append")
-				}
-				if distinct {
-					return "", errDistinct("array_append")
-				}
-
-				return fmt.Sprintf("array_append(%s)", strings.Join(inputs, ", ")), nil
-			},
+			PGFormat: defaultFormat("array_append"),
 		},
 		"array_prepend": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
@@ -311,16 +156,7 @@ var (
 
 				return args[1], nil
 			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", errStar("array_prepend")
-				}
-				if distinct {
-					return "", errDistinct("array_prepend")
-				}
-
-				return fmt.Sprintf("array_prepend(%s)", strings.Join(inputs, ", ")), nil
-			},
+			PGFormat: defaultFormat("array_prepend"),
 		},
 		"array_cat": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
@@ -342,16 +178,7 @@ var (
 
 				return args[0], nil
 			},
-			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
-				if star {
-					return "", errStar("array_cat")
-				}
-				if distinct {
-					return "", errDistinct("array_cat")
-				}
-
-				return fmt.Sprintf("array_cat(%s)", strings.Join(inputs, ", ")), nil
-			},
+			PGFormat: defaultFormat("array_cat"),
 		},
 		"array_length": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
@@ -375,6 +202,355 @@ var (
 
 				return fmt.Sprintf("array_length(%s, 1)", inputs[0]), nil
 			},
+		},
+		// string functions
+		// the main SQL string functions defined here: https://www.postgresql.org/docs/16.1/functions-string.html
+		"bit_length": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				return types.IntType, nil
+			},
+			PGFormat: defaultFormat("bit_length"),
+		},
+		"char_length": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				return types.IntType, nil
+			},
+			PGFormat: defaultFormat("char_length"),
+		},
+		"character_length": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				return types.IntType, nil
+			},
+			PGFormat: defaultFormat("character_length"),
+		},
+		"length": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				return types.IntType, nil
+			},
+			PGFormat: defaultFormat("length"),
+		},
+		"lower": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: defaultFormat("lower"),
+		},
+		"lpad": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				//can have 2-3 args. 1 and 3 must be text, 2 must be int
+				if len(args) < 2 || len(args) > 3 {
+					return nil, fmt.Errorf("invalid number of arguments: expected 2 or 3, got %d", len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				if !args[1].EqualsStrict(types.IntType) {
+					return nil, wrapErrArgumentType(types.IntType, args[1])
+				}
+
+				if len(args) == 3 && !args[2].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[2])
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: defaultFormat("lpad"),
+		},
+		"ltrim": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				//can have 1 or 2 args. both must be text
+				if len(args) < 1 || len(args) > 2 {
+					return nil, fmt.Errorf("invalid number of arguments: expected 1 or 2, got %d", len(args))
+				}
+
+				for _, arg := range args {
+					if !arg.EqualsStrict(types.TextType) {
+						return nil, wrapErrArgumentType(types.TextType, arg)
+					}
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: defaultFormat("ltrim"),
+		},
+		"octet_length": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				return types.IntType, nil
+			},
+			PGFormat: defaultFormat("octet_length"),
+		},
+		"overlay": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// 3-4 arguments. 1 and 2 must be text, 3 must be int, 4 must be int
+				if len(args) < 3 || len(args) > 4 {
+					return nil, fmt.Errorf("invalid number of arguments: expected 3 or 4, got %d", len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				if !args[1].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[1])
+				}
+
+				if !args[2].EqualsStrict(types.IntType) {
+					return nil, wrapErrArgumentType(types.IntType, args[2])
+				}
+
+				if len(args) == 4 && !args[3].EqualsStrict(types.IntType) {
+					return nil, wrapErrArgumentType(types.IntType, args[3])
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if distinct {
+					return "", errDistinct("overlay")
+				}
+
+				if star {
+					return "", errStar("overlay")
+				}
+
+				str := strings.Builder{}
+				str.WriteString("overlay(")
+				str.WriteString(inputs[0])
+				str.WriteString(" placing ")
+				str.WriteString(inputs[1])
+				str.WriteString(" from ")
+				str.WriteString(inputs[2])
+				if len(inputs) == 4 {
+					str.WriteString(" for ")
+					str.WriteString(inputs[3])
+				}
+				str.WriteString(")")
+
+				return str.String(), nil
+			},
+		},
+		"position": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// 2 arguments. both must be text
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				for _, arg := range args {
+					if !arg.EqualsStrict(types.TextType) {
+						return nil, wrapErrArgumentType(types.TextType, arg)
+					}
+				}
+
+				return types.IntType, nil
+			},
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if distinct {
+					return "", errDistinct("position")
+				}
+
+				if star {
+					return "", errStar("position")
+				}
+
+				return fmt.Sprintf("position(%s in %s)", inputs[0], inputs[1]), nil
+			},
+		},
+		"rpad": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// 2-3 args, 1 and 3 must be text, 2 must be int
+				if len(args) < 2 || len(args) > 3 {
+					return nil, fmt.Errorf("invalid number of arguments: expected 2 or 3, got %d", len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				if !args[1].EqualsStrict(types.IntType) {
+					return nil, wrapErrArgumentType(types.IntType, args[1])
+				}
+
+				if len(args) == 3 && !args[2].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[2])
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: defaultFormat("rpad"),
+		},
+		"rtrim": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// 1-2 args, both must be text
+				if len(args) < 1 || len(args) > 2 {
+					return nil, fmt.Errorf("invalid number of arguments: expected 1 or 2, got %d", len(args))
+				}
+
+				for _, arg := range args {
+					if !arg.EqualsStrict(types.TextType) {
+						return nil, wrapErrArgumentType(types.TextType, arg)
+					}
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: defaultFormat("rtrim"),
+		},
+		"substring": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// 2-3 args, 1 must be text, 2 and 3 must be int
+				// since Postgres supports many different usages of substring, there are a few
+				// different cases to handle here:
+				// 1. text FROM int (FOR int)? ; we do not support text FOR int, the user should simply set FROM to 1 in that case.
+				// 2. text FROM text (FOR text)? ; matches to FROM, and escapes the FOR.
+				// Kwil does not support substring(text SIMILAR text ESCAPE text), so we do not need to handle that case.
+				if len(args) < 2 || len(args) > 3 {
+					return nil, fmt.Errorf("invalid number of arguments: expected 2 or 3, got %d", len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				secondArgOk := false
+
+				if args[1].EqualsStrict(types.IntType) {
+					secondArgOk = true
+					if len(args) == 3 && !args[2].EqualsStrict(types.IntType) {
+						return nil, wrapErrArgumentType(types.IntType, args[2])
+					}
+				}
+
+				if args[1].EqualsStrict(types.TextType) {
+					secondArgOk = true
+					if len(args) == 3 && !args[2].EqualsStrict(types.TextType) {
+						return nil, wrapErrArgumentType(types.TextType, args[2])
+					}
+				}
+
+				if !secondArgOk {
+					return nil, wrapErrArgumentType(types.IntType, args[1])
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if distinct {
+					return "", errDistinct("substring")
+				}
+
+				if star {
+					return "", errStar("substring")
+				}
+
+				str := strings.Builder{}
+				str.WriteString("substring(")
+				str.WriteString(inputs[0])
+				str.WriteString(" from ")
+				str.WriteString(inputs[1])
+				if len(inputs) == 3 {
+					str.WriteString(" for ")
+					str.WriteString(inputs[2])
+				}
+				str.WriteString(")")
+
+				return str.String(), nil
+			},
+		},
+		"trim": { // kwil only supports trim both
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// 1-2 args, both must be text
+				if len(args) < 1 || len(args) > 2 {
+					return nil, fmt.Errorf("invalid number of arguments: expected 1 or 2, got %d", len(args))
+				}
+
+				for _, arg := range args {
+					if !arg.EqualsStrict(types.TextType) {
+						return nil, wrapErrArgumentType(types.TextType, arg)
+					}
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: defaultFormat("trim"),
+		},
+		"upper": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: defaultFormat("upper"),
+		},
+		"format": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) < 1 {
+					return nil, fmt.Errorf("invalid number of arguments: expected at least 1, got %d", len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: defaultFormat("format"),
 		},
 		// Aggregate functions
 		"count": {
@@ -425,6 +601,20 @@ var (
 		},
 	}
 )
+
+// defaultFormat is the default PGFormat function for functions that do not have a custom one.
+func defaultFormat(name string) FormatFunc {
+	return func(inputs []string, distinct bool, star bool) (string, error) {
+		if star {
+			return "", errStar(name)
+		}
+		if distinct {
+			return "", errDistinct(name)
+		}
+
+		return fmt.Sprintf("%s(%s)", name, strings.Join(inputs, ", ")), nil
+	}
+}
 
 func errDistinct(funcName string) error {
 	return fmt.Errorf(`%w: cannot use DISTINCT with function "%s"`, ErrFunctionSignature, funcName)

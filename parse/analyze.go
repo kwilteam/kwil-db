@@ -848,15 +848,23 @@ func (s *sqlAnalyzer) VisitExpressionArithmetic(p0 *ExpressionArithmetic) any {
 		return s.expressionTypeErr(p0.Right)
 	}
 
-	if !left.Equals(right) {
-		return s.typeErr(p0.Right, right, left)
-	}
-
 	// both must be numeric UNLESS it is a concat
 	if p0.Operator == ArithmeticOperatorConcat {
-		s.expect(p0.Left, left, types.TextType)
+		if !left.Equals(types.TextType) || !right.Equals(types.TextType) {
+			// Postgres supports concatenation on non-text types, but we do not,
+			// so we give a more descriptive error here.
+			// see the note at the top of: https://www.postgresql.org/docs/16.1/functions-string.html
+			s.errs.AddErr(p0.Left, ErrType, "concatenation only allowed on text types. received %s and %s", left.String(), right.String())
+			return cast(p0, types.UnknownType)
+		}
 	} else {
 		s.expectedNumeric(p0.Left, left)
+	}
+
+	// we check this after to return a more helpful error message if
+	// the user is not concatenating strings.
+	if !left.Equals(right) {
+		return s.typeErr(p0.Right, right, left)
 	}
 
 	return cast(p0, left)
