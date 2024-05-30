@@ -187,30 +187,56 @@ func Test_Procedures(t *testing.T) {
 				if $val != 'hello world' {
 					error('rtrim failed');
 				}
+				if rtrim($val||' ') != 'hello world' {
+					error('rtrim 2 failed');
+				}
+
 				$val := ltrim($val, 'h');
 				if $val != 'ello world' {
 					error('ltrim failed');
 				}
+				if ltrim(' '||$val) != 'ello world' { // add a space and trim it off
+					error('ltrim 2 failed');
+				}
+
 				$val := lpad($val, 11, 'h');
 				if $val != 'hello world' {
 					error('lpad failed');
 				}
+				if lpad($val, 12) != ' hello world' {
+					error('lpad 2 failed');
+				}
+
 				$val := rpad($val, 12, '!');
 				if $val != 'hello world!' {
 					error('rpad failed');
 				}
+				if rpad($val, 13) != 'hello world! ' {
+					error('rpad 2 failed');
+				}
+
 				if overlay($val, 'xx', 2, 5) != 'hxxworld!' {
 					error('overlay failed');
 				}
+				if overlay($val, 'xx', 2) != 'hxxlo world!' {
+					error('overlay 2 failed');
+				}
+
 				if position('world', $val) != 7 {
 					error('position failed');
 				}
 				if substring($val, 7, 5) != 'world' {
 					error('substring failed');
 				}
-				$val := ' ' || $val || ' ';
-				if trim($val) != 'hello world!' {
+				if substring($val, 7) != 'world!' {
+					error('substring 2 failed');
+				}
+
+				if trim(' ' || $val || ' ') != 'hello world!' {
 					error('trim failed');
+				}
+				if trim('a'||$val||'a', 'a') != 'hello world!' {
+					error('trim 2 failed');
 				}
 			}`,
 		},
