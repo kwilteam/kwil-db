@@ -187,7 +187,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// to get the comet node, we need the abci app
 	// to get the abci app, we need the tx router
 	// but the tx router needs the cometbft client
-	txApp := buildTxApp(d, db, e, ev, snapshotter)
+	txApp := buildTxApp(d, db, e, ev, snapshotter, closers)
 
 	abciApp := buildAbci(d, txApp, snapshotter, statesyncer)
 
@@ -333,7 +333,8 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
-func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext, ev *voting.EventStore, snapshotter *statesync.SnapshotStore) *txapp.TxApp {
+func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext, ev *voting.EventStore,
+	snapshotter *statesync.SnapshotStore, closers *closeFuncs) *txapp.TxApp {
 	var sh txapp.Snapshotter
 	if snapshotter != nil {
 		sh = snapshotter
@@ -344,6 +345,8 @@ func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext,
 	if err != nil {
 		failBuild(err, "failed to build new TxApp")
 	}
+
+	closers.addCloser(txApp.Close, "ending any active txApp transactions")
 	return txApp
 }
 

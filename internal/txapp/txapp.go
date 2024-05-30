@@ -114,6 +114,21 @@ func (r *TxApp) Log() *log.Logger {
 	return &r.log
 }
 
+// Close is used to end any active database transaction that may exist if the
+// application tries to shut down before closing the transaction with a call to
+// Commit. Neglecting to rollback such a transaction may prevent the DB
+// connection from being closed and released to the connection pool.
+func (r *TxApp) Close() error {
+	var err error
+	if r.genesisTx != nil {
+		err = errors.Join(err, r.genesisTx.Rollback(context.Background()))
+	}
+	if r.currentTx != nil {
+		err = errors.Join(err, r.currentTx.Rollback(context.Background()))
+	}
+	return err
+}
+
 // GenesisInit initializes the TxApp. It must be called outside of a session,
 // and before any session is started.
 // It can assign the initial validator set and initial account balances.
