@@ -160,18 +160,6 @@ type v07Index struct {
 // v07IndexType is a type of index (e.g. BTREE, UNIQUE_BTREE, PRIMARY)
 type v07IndexType string
 
-// index types
-const (
-	// BTREE is the default index type.
-	v07BTREE v07IndexType = "BTREE"
-	// UNIQUE_BTREE is a unique BTREE index.
-	v07UNIQUE_BTREE v07IndexType = "UNIQUE_BTREE"
-	// PRIMARY is a primary index.
-	// Only one primary index is allowed per table.
-	// A primary index cannot exist on a table that also has a primary key.
-	v07PRIMARY v07IndexType = "PRIMARY"
-)
-
 // v07ForeignKey is a foreign key in a table.
 type v07ForeignKey struct {
 	// ChildKeys are the columns that are referencing another.
@@ -212,34 +200,8 @@ type v07ForeignKeyAction struct {
 // It can be either "UPDATE" or "DELETE".
 type v07ForeignKeyActionOn string
 
-// v07ForeignKeyActionOn types
-const (
-	// ON_UPDATE is used to specify an action should occur when a parent key is updated
-	v07ON_UPDATE v07ForeignKeyActionOn = "UPDATE"
-	// ON_DELETE is used to specify an action should occur when a parent key is deleted
-	v07ON_DELETE v07ForeignKeyActionOn = "DELETE"
-)
-
 // v07ForeignKeyActionDo specifies what should be done when a foreign key action is triggered.
 type v07ForeignKeyActionDo string
-
-// v07ForeignKeyActionDo types
-const (
-	// DO_NO_ACTION does nothing when a parent key is altered
-	v07DO_NO_ACTION v07ForeignKeyActionDo = "NO ACTION"
-
-	// DO_RESTRICT prevents the parent key from being altered
-	v07DO_RESTRICT v07ForeignKeyActionDo = "RESTRICT"
-
-	// DO_SET_NULL sets the child key(s) to NULL
-	v07DO_SET_NULL v07ForeignKeyActionDo = "SET NULL"
-
-	// DO_SET_DEFAULT sets the child key(s) to their default values
-	v07DO_SET_DEFAULT v07ForeignKeyActionDo = "SET v07DEFAULT"
-
-	// DO_CASCADE updates the child key(s) or deletes the records (depending on the action type)
-	v07DO_CASCADE v07ForeignKeyActionDo = "CASCADE"
-)
 
 // v07Extension defines what extensions the schema uses, and how they are initialized.
 type v07Extension struct {
@@ -260,15 +222,6 @@ type v07ExtensionConfig struct {
 // v07DataType is a type of data (e.g. NULL, TEXT, INT, BLOB, BOOLEAN)
 type v07DataType string
 
-// Data types
-const (
-	v07NULL v07DataType = "NULL"
-	v07TEXT v07DataType = "TEXT"
-	v07INT  v07DataType = "INT"
-	v07BLOB v07DataType = "BLOB"
-	v07BOOL v07DataType = "BOOLEAN"
-)
-
 // v07Procedure is a procedure in a database schema.
 // These are defined by Kuneiform's `action` keyword.
 type v07Procedure struct {
@@ -283,25 +236,5 @@ type v07Procedure struct {
 // v07Modifier modifies the access to a procedure.
 type v07Modifier string
 
-const (
-	// View means that an action does not modify the database.
-	v07ModifierView v07Modifier = "VIEW"
-
-	// Owner requires that the caller is the owner of the database.
-	v07ModifierOwner v07Modifier = "OWNER"
-)
-
 // v07AttributeType is a type of attribute (e.g. v07PRIMARY_KEY, v07UNIQUE, v07NOT_NULL, v07DEFAULT, v07MIN, v07MAX, v07MIN_LENGTH, v07MAX_LENGTH)
 type v07AttributeType string
-
-// Attribute Types
-const (
-	v07PRIMARY_KEY v07AttributeType = "PRIMARY_KEY"
-	v07UNIQUE      v07AttributeType = "UNIQUE"
-	v07NOT_NULL    v07AttributeType = "NOT_NULL"
-	v07DEFAULT     v07AttributeType = "DEFAULT"
-	v07MIN         v07AttributeType = "MIN"
-	v07MAX         v07AttributeType = "MAX"
-	v07MIN_LENGTH  v07AttributeType = "MIN_LENGTH"
-	v07MAX_LENGTH  v07AttributeType = "MAX_LENGTH"
-)
