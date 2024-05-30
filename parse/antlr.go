@@ -448,16 +448,128 @@ func (s *schemaVisitor) VisitTable_declaration(ctx *gen.Table_declarationContext
 
 func (s *schemaVisitor) VisitColumn_def(ctx *gen.Column_defContext) any {
 	col := &types.Column{
-		Name:       s.getIdent(ctx.IDENTIFIER()),
-		Type:       ctx.Type_().Accept(s).(*types.DataType),
-		Attributes: arr[*types.Attribute](len(ctx.AllConstraint())),
+		Name: s.getIdent(ctx.IDENTIFIER()),
+		Type: ctx.Type_().Accept(s).(*types.DataType),
 	}
 
-	for i, a := range ctx.AllConstraint() {
-		col.Attributes[i] = a.Accept(s).(*types.Attribute)
+	// due to unfortunate lexing edge cases to support min/max, we
+	// have to parse the constraints here. Each constraint is a text, and should be
+	// one of:
+	// MIN/MAX/MINLEN/MAXLEN/MIN_LENGTH/MAX_LENGTH/NOTNULL/NOT/NULL/PRIMARY/KEY/PRIMARY_KEY/PK/DEFAULT/UNIQUE
+	// If NOT is present, it needs to be followed by NULL; similarly, if NULL is present, it needs to be preceded by NOT.
+	// If PRIMARY is present, it can be followed by key, but does not have to be. key must be preceded by primary.
+	// MIN, MAX, MINLEN, MAXLEN, MIN_LENGTH, MAX_LENGTH, and DEFAULT must also have a literal following them.
+	type constraint struct {
+		ident string
+		lit   *string
+	}
+	constraints := make([]constraint, len(ctx.AllConstraint()))
+	for i, c := range ctx.AllConstraint() {
+		con := constraint{}
+		switch {
+		case c.IDENTIFIER() != nil:
+			con.ident = c.IDENTIFIER().GetText()
+		case c.PRIMARY() != nil:
+			con.ident = "primary_key"
+		case c.NOT() != nil:
+			con.ident = "notnull"
+		case c.DEFAULT() != nil:
+			con.ident = "default"
+		case c.UNIQUE() != nil:
+			con.ident = "unique"
+		default:
+			panic("unknown constraint")
+		}
+
+		if c.Literal() != nil {
+			l := strings.ToLower(c.Literal().Accept(s).(*ExpressionLiteral).String())
+			con.lit = &l
+		}
+		constraints[i] = con
+	}
+
+	for i := 0; i < len(constraints); i++ {
+		switch constraints[i].ident {
+		case "min":
+			if constraints[i].lit == nil {
+				s.errs.RuleErr(ctx, ErrSyntax, "missing literal for min constraint")
+				return col
+			}
+			col.Attributes = append(col.Attributes, &types.Attribute{
+				Type:  types.MIN,
+				Value: *constraints[i].lit,
+			})
+		case "max":
+			if constraints[i].lit == nil {
+				s.errs.RuleErr(ctx, ErrSyntax, "missing literal for max constraint")
+				return col
+			}
+			col.Attributes = append(col.Attributes, &types.Attribute{
+				Type:  types.MAX,
+				Value: *constraints[i].lit,
+			})
+		case "minlen", "min_length":
+			if constraints[i].lit == nil {
+				s.errs.RuleErr(ctx, ErrSyntax, "missing literal for min length constraint")
+				return col
+			}
+			col.Attributes = append(col.Attributes, &types.Attribute{
+				Type:  types.MIN_LENGTH,
+				Value: *constraints[i].lit,
+			})
+		case "maxlen", "max_length":
+			if constraints[i].lit == nil {
+				s.errs.RuleErr(ctx, ErrSyntax, "missing literal for max length constraint")
+				return col
+			}
+			col.Attributes = append(col.Attributes, &types.Attribute{
+				Type:  types.MAX_LENGTH,
+				Value: *constraints[i].lit,
+			})
+		case "notnull":
+			if constraints[i].lit != nil {
+				s.errs.RuleErr(ctx, ErrSyntax, "unexpected literal for not null constraint")
+				return col
+			}
+			col.Attributes = append(col.Attributes, &types.Attribute{
+				Type: types.NOT_NULL,
+			})
+		case "primary_key", "pk":
+			if constraints[i].lit != nil {
+				s.errs.RuleErr(ctx, ErrSyntax, "unexpected literal for primary key constraint")
+				return col
+			}
+			col.Attributes = append(col.Attributes, &types.Attribute{
+				Type: types.PRIMARY_KEY,
+			})
+		case "default":
+			if constraints[i].lit == nil {
+				s.errs.RuleErr(ctx, ErrSyntax, "missing literal for default constraint")
+				return col
+			}
+			col.Attributes = append(col.Attributes, &types.Attribute{
+				Type:  types.DEFAULT,
+				Value: *constraints[i].lit,
+			})
+		case "unique":
+			if constraints[i].lit != nil {
+				s.errs.RuleErr(ctx, ErrSyntax, "unexpected literal for unique constraint")
+				return col
+			}
+			col.Attributes = append(col.Attributes, &types.Attribute{
+				Type: types.UNIQUE,
+			})
+		default:
+			s.errs.RuleErr(ctx, ErrSyntax, "unknown constraint: %s", constraints[i].ident)
+			return col
+		}
 	}
 
 	return col
+}
+
+func (s *schemaVisitor) VisitConstraint(ctx *gen.ConstraintContext) any {
+	panic("VisitConstraint should not be called, as the logic should be implemented in VisitColumn_def")
 }
 
 func (s *schemaVisitor) VisitIndex_def(ctx *gen.Index_defContext) any {
@@ -560,59 +672,6 @@ func (s *schemaVisitor) VisitTyped_variable_list(ctx *gen.Typed_variable_listCon
 	}
 
 	return vars
-}
-
-func (s *schemaVisitor) VisitMin_constraint(ctx *gen.Min_constraintContext) any {
-	return &types.Attribute{
-		Type:  types.MIN,
-		Value: ctx.Literal().Accept(s).(*ExpressionLiteral).String(),
-	}
-}
-
-func (s *schemaVisitor) VisitMax_constraint(ctx *gen.Max_constraintContext) any {
-	return &types.Attribute{
-		Type:  types.MAX,
-		Value: ctx.Literal().Accept(s).(*ExpressionLiteral).String(),
-	}
-}
-
-func (s *schemaVisitor) VisitMin_len_constraint(ctx *gen.Min_len_constraintContext) any {
-	return &types.Attribute{
-		Type:  types.MIN_LENGTH,
-		Value: ctx.Literal().Accept(s).(*ExpressionLiteral).String(),
-	}
-}
-
-func (s *schemaVisitor) VisitMax_len_constraint(ctx *gen.Max_len_constraintContext) any {
-	return &types.Attribute{
-		Type:  types.MAX_LENGTH,
-		Value: ctx.Literal().Accept(s).(*ExpressionLiteral).String(),
-	}
-}
-
-func (s *schemaVisitor) VisitNot_null_constraint(ctx *gen.Not_null_constraintContext) any {
-	return &types.Attribute{
-		Type: types.NOT_NULL,
-	}
-}
-
-func (s *schemaVisitor) VisitPrimary_key_constraint(ctx *gen.Primary_key_constraintContext) any {
-	return &types.Attribute{
-		Type: types.PRIMARY_KEY,
-	}
-}
-
-func (s *schemaVisitor) VisitDefault_constraint(ctx *gen.Default_constraintContext) any {
-	return &types.Attribute{
-		Type:  types.DEFAULT,
-		Value: ctx.Literal().Accept(s).(*ExpressionLiteral).String(),
-	}
-}
-
-func (s *schemaVisitor) VisitUnique_constraint(ctx *gen.Unique_constraintContext) any {
-	return &types.Attribute{
-		Type: types.UNIQUE,
-	}
 }
 
 func (s *schemaVisitor) VisitAccess_modifier(ctx *gen.Access_modifierContext) any {

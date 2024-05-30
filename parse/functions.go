@@ -586,6 +586,56 @@ var (
 			},
 			StarArgReturn: types.IntType,
 		},
+		"min": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// as per postgres docs, min can take any numeric or string type: https://www.postgresql.org/docs/8.0/functions-aggregate.html
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if !args[0].IsNumeric() && !args[0].EqualsStrict(types.TextType) {
+					return nil, fmt.Errorf("expected argument to be numeric or text, got %s", args[0].String())
+				}
+
+				return args[0], nil
+			},
+			IsAggregate: true,
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("min")
+				}
+				if distinct {
+					return "min(DISTINCT %s)", nil
+				}
+
+				return fmt.Sprintf("min(%s)", inputs[0]), nil
+			},
+		},
+		"max": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// as per postgres docs, max can take any numeric or string type: https://www.postgresql.org/docs/8.0/functions-aggregate.html
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if !args[0].IsNumeric() && !args[0].EqualsStrict(types.TextType) {
+					return nil, fmt.Errorf("expected argument to be numeric or text, got %s", args[0].String())
+				}
+
+				return args[0], nil
+			},
+			IsAggregate: true,
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("max")
+				}
+				if distinct {
+					return "max(DISTINCT %s)", nil
+				}
+
+				return fmt.Sprintf("max(%s)", inputs[0]), nil
+			},
+		},
 	}
 )
 

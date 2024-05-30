@@ -54,19 +54,13 @@ PRIVATE:    'private';
 VIEW:       'view';
 OWNER:      'owner';
 
-// column attributes
-MIN:        'min';
-MAX:        'max';
-MINLEN: 'minlen';
-MAXLEN: 'maxlen';
-UNIQUE:     'unique';
-
 // keywords
 FOREIGN:    'foreign';
 PRIMARY:    'primary';
 KEY:        'key';
 ON:         'on';
 DO:         'do';
+UNIQUE:     'unique';
 CASCADE:    'cascade';
 RESTRICT:   'restrict';
 SET:        'set';
@@ -102,7 +96,6 @@ GROUP:      'group';
 HAVING:     'having';
 RETURNS:    'returns';
 NO:         'no';
-NOTNULL:    'notnull';
 WITH:       'with';
 CASE:       'case';
 WHEN:       'when';
@@ -150,7 +143,6 @@ BINARY_:
 
 // for backwards compatibility, constraints that support underscores
 // are kept here
-LEGACY_PRIMARY_KEY: 'primary_key' | 'pk';
 LEGACY_FOREIGN_KEY: 'foreign_key' | 'fk';
 LEGACY_ON_UPDATE: 'on_update';
 LEGACY_ON_DELETE: 'on_delete';
