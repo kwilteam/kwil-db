@@ -26,7 +26,7 @@ func Test_Kuneiform(t *testing.T) {
 			database mydb;
 
 			table users {
-				id int primary key not null,
+				id int primary_key notnull,
 				username text not null unique minlen(5) maxlen(32)
 			}
 
@@ -84,7 +84,7 @@ func Test_Kuneiform(t *testing.T) {
 			database mydb;
 
 			table users {
-				id int primary key not null,
+				id int primary not null,
 				username text not null unique minlen(5) maxlen(32)
 			}
 
@@ -244,7 +244,7 @@ func Test_Kuneiform(t *testing.T) {
 			database mydb;
 
 			table other_users {
-				id int primary key,
+				id int pk,
 				username text not null unique minlen(5) maxlen(32),
 				age int max(100) min(18) default(18)
 			}

@@ -82,29 +82,8 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#typed_variable_list.
 	VisitTyped_variable_list(ctx *Typed_variable_listContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#min_constraint.
-	VisitMin_constraint(ctx *Min_constraintContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#max_constraint.
-	VisitMax_constraint(ctx *Max_constraintContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#min_len_constraint.
-	VisitMin_len_constraint(ctx *Min_len_constraintContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#max_len_constraint.
-	VisitMax_len_constraint(ctx *Max_len_constraintContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#not_null_constraint.
-	VisitNot_null_constraint(ctx *Not_null_constraintContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#primary_key_constraint.
-	VisitPrimary_key_constraint(ctx *Primary_key_constraintContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#default_constraint.
-	VisitDefault_constraint(ctx *Default_constraintContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#unique_constraint.
-	VisitUnique_constraint(ctx *Unique_constraintContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#constraint.
+	VisitConstraint(ctx *ConstraintContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#access_modifier.
 	VisitAccess_modifier(ctx *Access_modifierContext) interface{}

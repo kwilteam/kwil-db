@@ -36,14 +36,15 @@ func Test_Procedures(t *testing.T) {
 	tests := []testcase{
 		{
 			name: "basic test",
-			procedure: `procedure create_user2($name text) public {
-				INSERT INTO users (id, name, wallet_address)
+			procedure: `procedure create_user2($name text, $usernum int) public {
+				INSERT INTO users (id, name, wallet_address, user_num)
 				VALUES (uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid),
 					$name,
-					@caller
+					@caller,
+					$usernum
 				);
 			}`,
-			inputs: []any{"test_user"},
+			inputs: []any{"test_user", 4},
 		},
 		{
 			name: "for loop",
@@ -239,6 +240,21 @@ func Test_Procedures(t *testing.T) {
 					error('trim 2 failed');
 				}
 			}`,
+		},
+		{
+			name: "min/max",
+			procedure: `procedure min_max() public view returns (min int, max int) {
+				$max := 0;
+				for $row in select max(user_num) as m from users {
+					$max := $row.m;
+				}
+				$min := 0;
+				for $row2 in select min(user_num) as m from users {
+					$min := $row2.m;
+				}
+				return $min, $max;
+			}`,
+			outputs: [][]any{{int64(1), int64(3)}},
 		},
 	}
 
@@ -486,7 +502,8 @@ database ecclesia;
 table users {
 	id uuid primary key,
 	name text not null maxlen(100) minlen(4) unique,
-	wallet_address text not null
+	wallet_address text not null,
+	user_num int unique notnull // this could be the primary key, but it's more for testing than to be useful
 }
 
 table posts {
@@ -497,10 +514,20 @@ table posts {
 }
 
 procedure create_user($name text) public {
-	INSERT INTO users (id, name, wallet_address)
+	$max int;
+	for $row in select max(user_num) as m from users {
+		$max := $row.m;
+	}
+
+	if $max is null  {
+		$max := 0;
+	}
+
+	INSERT INTO users (id, name, wallet_address, user_num)
 	VALUES (uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid),
 		$name,
-		@caller
+		@caller,
+		$max + 1
 	);
 }
 
@@ -540,7 +567,7 @@ procedure delete_users() public {
 }
 
 procedure get_users() public returns table(id uuid, name text, wallet_address text) {
-	return SELECT * FROM users;
+	return SELECT id, name, wallet_address FROM users;
 }
 `
 

@@ -127,14 +127,8 @@ typed_variable_list:
 ;
 
 constraint:
-    MIN LPAREN literal RPAREN           # min_constraint
-    | MAX LPAREN literal RPAREN         # max_constraint
-    | MINLEN LPAREN literal RPAREN      # min_len_constraint
-    | MAXLEN LPAREN literal RPAREN      # max_len_constraint
-    | (NOTNULL|NOT NULL)                # not_null_constraint
-    | (LEGACY_PRIMARY_KEY|PRIMARY KEY?) # primary_key_constraint
-    | DEFAULT LPAREN literal RPAREN     # default_constraint
-    | UNIQUE                            # unique_constraint
+    // conditionally allow some tokens, since they are used elsewhere
+    (IDENTIFIER| PRIMARY KEY? | NOT NULL | DEFAULT | UNIQUE) (LPAREN literal RPAREN)?
 ;
 
 access_modifier:
