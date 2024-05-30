@@ -160,6 +160,86 @@ func Test_Procedures(t *testing.T) {
 				{"satoshi", "hello world"},
 			},
 		},
+		{
+			name: "string functions",
+			procedure: `procedure string_funcs() public view {
+				$val := 'hello world';
+				$val := $val || '!!!';
+				$val := upper($val);
+				if $val != 'HELLO WORLD!!!' {
+					error('upper failed');
+				}
+				$val := lower($val);
+				if $val != 'hello world!!!' {
+					error('lower failed');
+				}
+
+				if bit_length($val) != 112 {
+					error('bit_length failed');
+				}
+				if char_length($val) != 14 or character_length($val) != 14 or length($val) != 14 {
+					error('length failed');
+				}
+				if octet_length($val) != 14 {
+					error('octet_length failed');
+				}
+				$val := rtrim($val, '!');
+				if $val != 'hello world' {
+					error('rtrim failed');
+				}
+				if rtrim($val||' ') != 'hello world' {
+					error('rtrim 2 failed');
+				}
+
+				$val := ltrim($val, 'h');
+				if $val != 'ello world' {
+					error('ltrim failed');
+				}
+				if ltrim(' '||$val) != 'ello world' { // add a space and trim it off
+					error('ltrim 2 failed');
+				}
+
+				$val := lpad($val, 11, 'h');
+				if $val != 'hello world' {
+					error('lpad failed');
+				}
+				if lpad($val, 12) != ' hello world' {
+					error('lpad 2 failed');
+				}
+
+				$val := rpad($val, 12, '!');
+				if $val != 'hello world!' {
+					error('rpad failed');
+				}
+				if rpad($val, 13) != 'hello world! ' {
+					error('rpad 2 failed');
+				}
+
+				if overlay($val, 'xx', 2, 5) != 'hxxworld!' {
+					error('overlay failed');
+				}
+				if overlay($val, 'xx', 2) != 'hxxlo world!' {
+					error('overlay 2 failed');
+				}
+
+				if position('world', $val) != 7 {
+					error('position failed');
+				}
+				if substring($val, 7, 5) != 'world' {
+					error('substring failed');
+				}
+				if substring($val, 7) != 'world!' {
+					error('substring 2 failed');
+				}
+
+				if trim(' ' || $val || ' ') != 'hello world!' {
+					error('trim failed');
+				}
+				if trim('a'||$val||'a', 'a') != 'hello world!' {
+					error('trim 2 failed');
+				}
+			}`,
+		},
 	}
 
 	for _, test := range tests {
