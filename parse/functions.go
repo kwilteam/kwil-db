@@ -449,11 +449,10 @@ var (
 		"substring": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				// 2-3 args, 1 must be text, 2 and 3 must be int
-				// since Postgres supports many different usages of substring, there are a few
-				// different cases to handle here:
-				// 1. text FROM int (FOR int)? ; we do not support text FOR int, the user should simply set FROM to 1 in that case.
-				// 2. text FROM text (FOR text)? ; matches to FROM, and escapes the FOR.
-				// Kwil does not support substring(text SIMILAR text ESCAPE text), so we do not need to handle that case.
+				// Postgres supports several different usages of substring, however Kwil only supports 1.
+				// In Postgres, substring can be used to both impose a string over a range, or to perform
+				// regex matching. Kwil only supports the former, as regex matching is not supported.
+				// Therefore, the second and third arguments must be integers.
 				if len(args) < 2 || len(args) > 3 {
 					return nil, fmt.Errorf("invalid number of arguments: expected 2 or 3, got %d", len(args))
 				}
@@ -462,24 +461,12 @@ var (
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
-				secondArgOk := false
-
-				if args[1].EqualsStrict(types.IntType) {
-					secondArgOk = true
-					if len(args) == 3 && !args[2].EqualsStrict(types.IntType) {
-						return nil, wrapErrArgumentType(types.IntType, args[2])
-					}
-				}
-
-				if args[1].EqualsStrict(types.TextType) {
-					secondArgOk = true
-					if len(args) == 3 && !args[2].EqualsStrict(types.TextType) {
-						return nil, wrapErrArgumentType(types.TextType, args[2])
-					}
-				}
-
-				if !secondArgOk {
+				if !args[1].EqualsStrict(types.IntType) {
 					return nil, wrapErrArgumentType(types.IntType, args[1])
+				}
+
+				if len(args) == 3 && !args[2].EqualsStrict(types.IntType) {
+					return nil, wrapErrArgumentType(types.IntType, args[2])
 				}
 
 				return types.TextType, nil
