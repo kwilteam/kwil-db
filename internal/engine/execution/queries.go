@@ -263,11 +263,20 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema, txi
 	return sp.Commit(ctx)
 }
 
-// getSchemas returns all schemas in the kwil_schemas table
-func getSchemas(ctx context.Context, tx sql.Executor) ([]*types.Schema, error) {
+// getSchemas returns all schemas in the kwil_schemas table.
+// convertFunc converts bytes into a schema. If nil, it will simply unmarshal the bytes.
+func getSchemas(ctx context.Context, tx sql.Executor, convertFunc func([]byte) (*types.Schema, error)) ([]*types.Schema, error) {
 	res, err := tx.Execute(ctx, sqlListSchemaContent)
 	if err != nil {
 		return nil, err
+	}
+
+	if convertFunc == nil {
+		convertFunc = func(b []byte) (*types.Schema, error) {
+			schema := &types.Schema{}
+			err := json.Unmarshal(b, schema)
+			return schema, err
+		}
 	}
 
 	schemas := make([]*types.Schema, len(res.Rows))
@@ -281,10 +290,9 @@ func getSchemas(ctx context.Context, tx sql.Executor) ([]*types.Schema, error) {
 			return nil, fmt.Errorf("expected []byte, got %T", row[0])
 		}
 
-		schema := &types.Schema{}
-		err := json.Unmarshal(bts, schema)
+		schema, err := convertFunc(bts)
 		if err != nil {
-			return nil, fmt.Errorf("unmarshaling schema: %w", err)
+			return nil, err
 		}
 
 		schemas[i] = schema

@@ -95,7 +95,7 @@ func InitializeEngine(ctx context.Context, tx sql.DB) error {
 			// - upgrading the version of the schema
 			// - setting the owner of the schema
 			// - setting the name of the schema
-			schemas, err := getSchemas(ctx, db)
+			schemas, err := getSchemas(ctx, db, convertV07Schema)
 			if err != nil {
 				return err
 			}
@@ -140,7 +140,7 @@ func NewGlobalContext(ctx context.Context, db sql.Executor, extensionInitializer
 		service:      service,
 	}
 
-	schemas, err := getSchemas(ctx, db)
+	schemas, err := getSchemas(ctx, db, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func (g *GlobalContext) Reload(ctx context.Context, db sql.Executor) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	schemas, err := getSchemas(ctx, db)
+	schemas, err := getSchemas(ctx, db, nil)
 	if err != nil {
 		return err
 	}
