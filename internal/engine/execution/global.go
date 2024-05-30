@@ -3,6 +3,7 @@ package execution
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -101,7 +102,12 @@ func InitializeEngine(ctx context.Context, tx sql.DB) error {
 			}
 
 			for _, schema := range schemas {
-				_, err := db.Execute(ctx, sqlBackfillSchemaTableV1, schema.Owner, schema.Name, schema.DBID())
+				bts, err := json.Marshal(schema)
+				if err != nil {
+					return err
+				}
+
+				_, err = db.Execute(ctx, sqlBackfillSchemaTableV1, schema.Owner, schema.Name, schema.DBID(), bts)
 				if err != nil {
 					return err
 				}

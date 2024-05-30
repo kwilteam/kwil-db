@@ -97,7 +97,7 @@ var (
 	// sqlBackfillSchemaTableV1 adds the owner and name to all existing schemas,
 	// and updates the version to 1.
 	sqlBackfillSchemaTableV1 = fmt.Sprintf(`
-	UPDATE %s.kwil_schemas SET owner = $1, name = $2, version = 1 WHERE dbid = $3;
+	UPDATE %s.kwil_schemas SET owner = $1, name = $2, version = 1, schema_content = $4 WHERE dbid = $3;
 	`, pg.InternalSchemaName)
 
 	sqlAddProceduresTableV1 = fmt.Sprintf(`
