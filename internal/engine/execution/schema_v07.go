@@ -146,19 +146,16 @@ type v07Column struct {
 // v07Attribute is a column attribute.
 // These are constraints and default values.
 type v07Attribute struct {
-	Type  v07AttributeType `json:"type"`
-	Value string           `json:"value,omitempty"`
+	Type  string `json:"type"`
+	Value string `json:"value,omitempty"`
 }
 
 // v07Index is an index on a table.
 type v07Index struct {
-	Name    string       `json:"name"`
-	Columns []string     `json:"columns"`
-	Type    v07IndexType `json:"type"`
+	Name    string   `json:"name"`
+	Columns []string `json:"columns"`
+	Type    string   `json:"type"`
 }
-
-// v07IndexType is a type of index (e.g. BTREE, UNIQUE_BTREE, PRIMARY)
-type v07IndexType string
 
 // v07ForeignKey is a foreign key in a table.
 type v07ForeignKey struct {
@@ -190,18 +187,11 @@ type v07ForeignKey struct {
 // if a parent key is updated or deleted
 type v07ForeignKeyAction struct {
 	// On can be either "UPDATE" or "DELETE"
-	On v07ForeignKeyActionOn `json:"on"`
+	On string `json:"on"`
 
 	// Do specifies what a foreign key action should do
-	Do v07ForeignKeyActionDo `json:"do"`
+	Do string `json:"do"`
 }
-
-// v07ForeignKeyActionOn specifies when a foreign key action should occur.
-// It can be either "UPDATE" or "DELETE".
-type v07ForeignKeyActionOn string
-
-// v07ForeignKeyActionDo specifies what should be done when a foreign key action is triggered.
-type v07ForeignKeyActionDo string
 
 // v07Extension defines what extensions the schema uses, and how they are initialized.
 type v07Extension struct {
@@ -225,16 +215,10 @@ type v07DataType string
 // v07Procedure is a procedure in a database schema.
 // These are defined by Kuneiform's `action` keyword.
 type v07Procedure struct {
-	Name        string        `json:"name"`
-	Annotations []string      `json:"annotations,omitempty"`
-	Args        []string      `json:"inputs"`
-	Public      bool          `json:"public"`
-	Modifiers   []v07Modifier `json:"modifiers"`
-	Statements  []string      `json:"statements"`
+	Name        string   `json:"name"`
+	Annotations []string `json:"annotations,omitempty"`
+	Args        []string `json:"inputs"`
+	Public      bool     `json:"public"`
+	Modifiers   []string `json:"modifiers"`
+	Statements  []string `json:"statements"`
 }
-
-// v07Modifier modifies the access to a procedure.
-type v07Modifier string
-
-// v07AttributeType is a type of attribute (e.g. v07PRIMARY_KEY, v07UNIQUE, v07NOT_NULL, v07DEFAULT, v07MIN, v07MAX, v07MIN_LENGTH, v07MAX_LENGTH)
-type v07AttributeType string
