@@ -5,6 +5,7 @@ package parse
 import (
 	"fmt"
 	"runtime"
+	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -263,6 +264,14 @@ type SQLParseResult struct {
 // It requires a schema to be passed in, since SQL statements may reference
 // schema objects.
 func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error) {
+	if sql == "" {
+		return nil, fmt.Errorf("empty SQL statement")
+	}
+	// add semicolon to the end of the statement, if it is not there
+	if !strings.HasSuffix(sql, ";") {
+		sql += ";"
+	}
+
 	errLis, stream, parser, deferFn := setupParser(sql, "sql")
 
 	res = &SQLParseResult{

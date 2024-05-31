@@ -357,6 +357,7 @@ type ExpressionStringComparison struct {
 	Left Expression
 	// Right is the right side of the comparison.
 	Right Expression
+	Not   bool
 	// Operator is the operator of the comparison.
 	Operator StringComparisonOperator
 }
@@ -368,8 +369,8 @@ func (e *ExpressionStringComparison) Accept(v Visitor) any {
 type StringComparisonOperator string
 
 const (
-	StringComparisonOperatorLike    StringComparisonOperator = "LIKE"
-	StringComparisonOperatorNotLike StringComparisonOperator = "NOT LIKE"
+	StringComparisonOperatorLike  StringComparisonOperator = "LIKE"
+	StringComparisonOperatorILike StringComparisonOperator = "ILIKE"
 )
 
 // ExpressionIs is an IS expression.

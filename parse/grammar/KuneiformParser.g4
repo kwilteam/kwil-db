@@ -229,7 +229,7 @@ result_column:
 ;
 
 update_statement:
-    UPDATE table_name=identifier (AS alias=identifier)?
+    UPDATE table_name=identifier (AS? alias=identifier)?
     SET update_set_clause (COMMA update_set_clause)*
     (FROM relation join*)?
     (WHERE where=sql_expr)?
@@ -240,7 +240,7 @@ update_set_clause:
 ;
 
 insert_statement:
-    INSERT INTO table_name=identifier (AS alias=identifier)?
+    INSERT INTO table_name=identifier (AS? alias=identifier)?
     (LPAREN target_columns=identifier_list RPAREN)?
     VALUES LPAREN sql_expr_list RPAREN (COMMA LPAREN sql_expr_list RPAREN)*
     upsert_clause?
@@ -257,7 +257,7 @@ upsert_clause:
 ;
 
 delete_statement:
-    DELETE FROM table_name=identifier (AS alias=identifier)?
+    DELETE FROM table_name=identifier (AS? alias=identifier)?
     // (USING relation join*)?
     (WHERE where=sql_expr)?
 ;
@@ -273,7 +273,7 @@ sql_expr:
     | LPAREN sql_expr RPAREN type_cast?                                             # paren_sql_expr
     | left=sql_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) right=sql_expr    # comparison_sql_expr
     | sql_expr NOT? IN LPAREN (sql_expr_list|select_statement) RPAREN               # in_sql_expr
-    | left=sql_expr NOT? LIKE right=sql_expr                                        # like_sql_expr
+    | left=sql_expr NOT? (LIKE|ILIKE) right=sql_expr                                # like_sql_expr
     | <assoc=right> (NOT|PLUS|MINUS) sql_expr                                       # unary_sql_expr
     | element=sql_expr (NOT)? BETWEEN lower=sql_expr AND upper=sql_expr             # between_sql_expr
     | left=sql_expr IS NOT? ((DISTINCT FROM right=sql_expr) | NULL | TRUE | FALSE)  # is_sql_expr

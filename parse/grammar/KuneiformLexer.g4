@@ -75,6 +75,7 @@ INDEX:      'index';
 AND:        'and';
 OR:         'or';
 LIKE:       'like';
+ILIKE:      'ilike';
 IN:         'in';
 BETWEEN:    'between';
 IS:         'is';

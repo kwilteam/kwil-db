@@ -249,6 +249,9 @@ func (s *sqlGenerator) VisitExpressionStringComparison(p0 *parse.ExpressionStrin
 	str := strings.Builder{}
 	str.WriteString(p0.Left.Accept(s).(string))
 	str.WriteString(" ")
+	if p0.Not {
+		str.WriteString("NOT ")
+	}
 	str.WriteString(string(p0.Operator))
 	str.WriteString(" ")
 	str.WriteString(p0.Right.Accept(s).(string))

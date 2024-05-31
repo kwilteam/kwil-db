@@ -1367,13 +1367,21 @@ func (s *schemaVisitor) VisitIs_sql_expr(ctx *gen.Is_sql_exprContext) any {
 
 func (s *schemaVisitor) VisitLike_sql_expr(ctx *gen.Like_sql_exprContext) any {
 	e := &ExpressionStringComparison{
-		Left:     ctx.GetLeft().Accept(s).(Expression),
-		Right:    ctx.GetRight().Accept(s).(Expression),
-		Operator: StringComparisonOperatorLike,
+		Left:  ctx.GetLeft().Accept(s).(Expression),
+		Right: ctx.GetRight().Accept(s).(Expression),
 	}
 
 	if ctx.NOT() != nil {
-		e.Operator = StringComparisonOperatorNotLike
+		e.Not = true
+	}
+
+	switch {
+	case ctx.LIKE() != nil:
+		e.Operator = StringComparisonOperatorLike
+	case ctx.ILIKE() != nil:
+		e.Operator = StringComparisonOperatorILike
+	default:
+		panic("unknown string comparison operator")
 	}
 
 	e.Set(ctx)

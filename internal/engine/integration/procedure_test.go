@@ -278,7 +278,24 @@ func Test_Procedures(t *testing.T) {
 			outputs: [][]any{{[]any{mustDecimal("2.5", 2, 1), mustDecimal("3.5", 2, 1), mustDecimal("0.7", 2, 1)}}},
 		},
 		{
-			name: "early return",
+			name: "decimal",
+			procedure: `procedure d() public view {
+				$i := 100.423;
+				$j decimal(16,8) := 46728954.23743892;
+				$k := $i::decimal(16,8) + $j;
+				if $k != 46729054.66043892 {
+					error('decimal failed');
+				}
+				if $k::text != '46729054.66043892' {
+					error('decimal text failed');
+				}
+				if ($k::decimal(16,2))::text != '46729054.66' {
+					error('decimal 2 failed');
+				}
+			}`,
+		},
+		{
+			name: "early empty return",
 			procedure: `procedure return_early() public view {
 				$exit := true;
 				if $exit {
