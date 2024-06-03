@@ -25,7 +25,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
-	"github.com/kwilteam/kwil-db/core/rpc/json/openrpc"
+	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/openrpc"
 )
 
 // The endpoint path is constant for now.

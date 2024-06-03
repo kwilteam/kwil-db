@@ -104,18 +104,36 @@ func lowerFirstChar(s string) string {
 	return strings.ToLower(string(r)) + s[sz:]
 }
 
+// typeFor returns the reflect.Type that represents the type argument T. TODO:
+// Remove this in favor of reflect.TypeFor when Go 1.22 becomes the minimum
+// required version since it is not available in Go 1.21.
+func typeFor[T any]() reflect.Type {
+	return reflect.TypeOf((*T)(nil)).Elem()
+}
+
+// var stringerType = typeFor[fmt.Stringer]()
+// t.Implements(stringerType)
+
 func typeToSchemaType(t reflect.Type) string {
-	// Some special cases first.
+	// Some special cases first. These are types that our JSON-RPC service
+	// should marshal as a JSON string. In some cases this is by virtue of the
+	// type implementing json.Marshaller. In other cases, a different type that
+	// has a field of this type has it's own MarshalJSON method for special
+	// handling of that field. The special case of []byte reflects the behavior
+	// of the encoding/json package that uses a base64 string rather than a JSON
+	// "array".
 	switch t {
-	case reflect.TypeOf((*big.Int)(nil)), reflect.TypeFor[big.Int]():
+	case reflect.TypeOf((*big.Int)(nil)), typeFor[big.Int]():
+		// A big.Int field should marshal to/from a string.
 		return "string"
-	case reflect.TypeFor[types.HexBytes]():
+	case typeFor[types.HexBytes]():
+		// HexBytes defines MarshalJSON/UnmarshalJSON methods to represent
+		// []byte as a hexadecimal string.
 		return "string"
-	case reflect.TypeFor[[]byte]():
+	case typeFor[[]byte]():
+		// A regular []byte field is a base64 string.
 		return "string"
 	}
-
-	// t.AssignableTo // underlying types equivalent
 
 	switch t.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
@@ -128,7 +146,9 @@ func typeToSchemaType(t reflect.Type) string {
 	case reflect.String:
 		return "string"
 	case reflect.Slice:
-		if t.Elem().Kind() == reflect.Uint8 { // Special case for []byte
+		// []byte should be caught above, but it could be a []uint8 or
+		// something else where the element type is an underlying uint8.
+		if t.Elem().Kind() == reflect.Uint8 {
 			return "string" // Treat []byte as a base64 encoded string
 		}
 		return "array"
