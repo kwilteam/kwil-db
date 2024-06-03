@@ -55,4 +55,10 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	viper.BindPFlag(viperPrivateKeyName, fs.Lookup(globalPrivateKeyFlag))
 	viper.BindPFlag(viperProviderName, fs.Lookup(globalProviderFlag))
 	viper.BindPFlag(viperChainID, fs.Lookup(globalChainIDFlag))
+
+	// for backwards compatibility, we add kwil-provider but mark it as deprecated
+	fs.String("kwil-provider", cliCfg.Provider, "the Kwil provider RPC endpoint")
+	fs.MarkDeprecated("kwil-provider", "use '--provider' instead")
+	// we also need to alias using the viper key name
+	viper.BindPFlag(viperProviderName, fs.Lookup("kwil-provider"))
 }
