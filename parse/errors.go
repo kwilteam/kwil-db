@@ -98,7 +98,7 @@ func (p ParseError) Unwrap() error {
 func (p *ParseError) Error() string {
 	// Add 1 to the column numbers to make them 1-indexed, since antlr-go is 0-indexed
 	// for columns.
-	return fmt.Sprintf("(%s) %s: %s\nstart %d:%d end %d:%d", p.ParserName, p.Err.Error(), p.Message,
+	return fmt.Sprintf("(%s) %s: %s\n start %d:%d end %d:%d", p.ParserName, p.Err.Error(), p.Message,
 		p.Position.StartLine, p.Position.StartCol+1,
 		p.Position.EndLine, p.Position.EndCol+1)
 }
