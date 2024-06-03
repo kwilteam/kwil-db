@@ -28,6 +28,7 @@ func initializeVoteStore(ctx context.Context, db sql.TxMaker) error {
 		0: initVotingTables,
 		1: dropHeight,
 		2: dropExtraVoteIDColumn,
+		3: dropUniqueNameConstraints,
 	}
 
 	err := versioning.Upgrade(ctx, db, votingSchemaName, upgradeFns, voteStoreVersion)
@@ -80,6 +81,15 @@ func dropHeight(ctx context.Context, db sql.DB) error {
 
 func dropExtraVoteIDColumn(ctx context.Context, db sql.DB) error {
 	_, err := db.Execute(ctx, dropExtraVoteID)
+	return err
+}
+
+func dropUniqueNameConstraints(ctx context.Context, db sql.DB) error {
+	if _, err := db.Execute(ctx, removeResolutionTypesUniqueNameConstraint); err != nil {
+		return err
+	}
+
+	_, err := db.Execute(ctx, removeVotersUniqueNameConstraint)
 	return err
 }
 

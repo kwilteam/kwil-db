@@ -5,34 +5,34 @@ package voting
 */
 
 /*
-	Final schema after all the upgrades:
-	resolutions:
-		- id: uuid
-		- body: bytea
-		- type: bytea
-		- vote_body_proposer: bytea
-		- expiration: int8
+Final schema after all the upgrades:
+resolutions:
+  - id: uuid
+  - body: bytea
+  - type: bytea
+  - vote_body_proposer: bytea
+  - expiration: int8
 
-	resolution_types:
-		- id: uuid
+resolution_types:
+  - id: uuid
+  - name: text
 
-	voters:
-		- id: uuid
-		- name: bytea
-		- power: int8
+voters:
+  - id: uuid
+  - name: bytea
+  - power: int8
 
-	votes:
-		- resolution_id: uuid
-		- voter_id: uuid
+votes:
+  - resolution_id: uuid
+  - voter_id: uuid
 
-	processed:
-		- id: uuid
+processed:
+  - id: uuid
 */
-
 const (
 	votingSchemaName = `kwild_voting`
 
-	voteStoreVersion = 2
+	voteStoreVersion = 3
 
 	// tableResolutions is the sql table used to store resolutions that can be voted on.
 	// the vote_body_proposer is the BYTEA of the public key of the submitter, NOT the UUID
@@ -198,4 +198,12 @@ const (
 // upgrades V1 -> V2
 const (
 	dropExtraVoteID = `ALTER TABLE ` + votingSchemaName + `.resolutions DROP COLUMN extra_vote_id;`
+)
+
+// upgrades V2 -> V3
+const (
+	// remove unique constraint on name on both resolution_types and voters as id is derived from name and is unique.
+	removeResolutionTypesUniqueNameConstraint = `ALTER TABLE ` + votingSchemaName + `.resolution_types DROP CONSTRAINT resolution_types_name_key;`
+
+	removeVotersUniqueNameConstraint = `ALTER TABLE ` + votingSchemaName + `.voters DROP CONSTRAINT voters_name_key;`
 )
