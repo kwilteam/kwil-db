@@ -24,16 +24,7 @@ const (
 )
 
 func loadTestSchema() (*types.Schema, error) {
-	res, err := parse.ParseAndValidate([]byte(testScheme))
-	if err != nil {
-		return nil, err
-	}
-	if res.Err() != nil {
-		return nil, res.Err()
-	}
-
-	return res.Schema, nil
-
+	return parse.Parse([]byte(testScheme))
 }
 
 func init() {

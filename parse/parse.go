@@ -11,6 +11,21 @@ import (
 	"github.com/kwilteam/kwil-db/parse/gen"
 )
 
+// Parse parses a Kuneiform schema. It will perform syntax, semantic, and type
+// analysis, and return any errors.
+func Parse(kf []byte) (*types.Schema, error) {
+	res, err := ParseAndValidate(kf)
+	if err != nil {
+		return nil, err
+	}
+
+	if res.Err() != nil {
+		return nil, res.Err()
+	}
+
+	return res.Schema, nil
+}
+
 // SchemaParseResult is the result of parsing a schema.
 // It returns the resulting schema, as well as any expected errors that occurred during parsing.
 // Unexpected errors will not be returned here, but instead in the function returning this type.
@@ -33,12 +48,17 @@ func (r *SchemaParseResult) Err() error {
 }
 
 // ParseAndValidate parses and validates an entire schema.
+// It returns the parsed schema, as well as any errors that occurred during parsing and validation.
+// It is meant to be used by parsing tools and the CLI. Most external users should use Parse instead.
 func ParseAndValidate(kf []byte) (*SchemaParseResult, error) {
-	res, err := ParseSchema(kf)
+	res, err := ParseSchemaWithoutValidation(kf)
 	if err != nil {
 		return nil, err
 	}
 
+	// if there is a syntax error, we shouldn't continue with validation.
+	// We should still return a nil error, as the caller should read the error
+	// from the ParseErrs field.
 	if res.ParseErrs.Err() != nil {
 		return res, nil
 	}
@@ -66,10 +86,10 @@ func ParseAndValidate(kf []byte) (*SchemaParseResult, error) {
 	return res, nil
 }
 
-// ParseSchema parses a Kuneiform schema.
+// ParseSchemaWithoutValidation parses a Kuneiform schema.
 // It will not perform validations on the actions and procedures.
 // Most users should use ParseAndValidate instead.
-func ParseSchema(kf []byte) (res *SchemaParseResult, err error) {
+func ParseSchemaWithoutValidation(kf []byte) (res *SchemaParseResult, err error) {
 	errLis, stream, parser, deferFn := setupParser(string(kf), "schema")
 
 	res = &SchemaParseResult{

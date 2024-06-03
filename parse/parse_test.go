@@ -762,7 +762,7 @@ func Test_Kuneiform(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, err := parse.ParseSchema([]byte(tt.kf))
+			res, err := parse.ParseSchemaWithoutValidation([]byte(tt.kf))
 			require.NoError(t, err)
 			require.NoError(t, res.ParseErrs.Err())
 

@@ -229,16 +229,12 @@ func loadSchema(file string) (*types.Schema, error) {
 		return nil, err
 	}
 
-	db, err := parse.ParseAndValidate(d)
+	db, err := parse.Parse(d)
 	if err != nil {
 		return nil, err
 	}
 
-	if db.Err() != nil {
-		return nil, db.Err()
-	}
-
-	return db.Schema, nil
+	return db, nil
 }
 
 // deployAllSchemas deploys all schemas in the schemas directory.
