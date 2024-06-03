@@ -7,6 +7,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine/generate"
 	"github.com/kwilteam/kwil-db/parse"
 	"github.com/spf13/cobra"
 )
@@ -60,11 +61,17 @@ func newParseCmd() *cobra.Command {
 			}
 
 			// if in debug mode, output the schema and the debug information.
-			if out == "" {
-				return display.PrintCmd(cmd, &debugDisplay{Result: res})
+			// We also want to attempt to generate plpgsql functions.
+			dis := &debugDisplay{
+				Result:    res,
+				Generated: generateAll(res.Schema),
 			}
 
-			bts, err := json.MarshalIndent(res, "", "  ")
+			if out == "" {
+				return display.PrintCmd(cmd, dis)
+			}
+
+			bts, err := dis.MarshalText()
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -100,13 +107,77 @@ func (s *schemaDisplay) MarshalText() (text []byte, err error) {
 // debugDisplay is a struct that will be used to display the schema.
 // It is used to display the debug information.
 type debugDisplay struct {
-	Result *parse.SchemaParseResult
+	Result    *parse.SchemaParseResult `json:"parse_result"`
+	Generated *genResult               `json:"generated"`
 }
 
 func (d *debugDisplay) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.Result)
+	type res debugDisplay // prevent recursion
+	return json.Marshal((*res)(d))
 }
 
 func (d *debugDisplay) MarshalText() (text []byte, err error) {
-	return json.MarshalIndent(d.Result, "", "  ")
+	type res debugDisplay // prevent recursion
+	return json.MarshalIndent((*res)(d), "", "  ")
+}
+
+// generateAll attempts to generate all ddl statements, sql, and plpgsql functions.
+func generateAll(schema *types.Schema) *genResult {
+	r := genResult{
+		Tables:            make(map[string][]string),
+		Actions:           make(map[string][]generate.GeneratedActionStmt),
+		Procedures:        make(map[string]string),
+		ForeignProcedures: make(map[string]string),
+		Errors:            make([]error, 0),
+	}
+	defer func() {
+		// catch any panics
+		if e := recover(); e != nil {
+			e2, ok := e.(error)
+			if !ok {
+				r.Errors = append(r.Errors, fmt.Errorf("panic: %v", e))
+			} else {
+				r.Errors = append(r.Errors, e2)
+			}
+		}
+	}()
+
+	var err error
+	for _, table := range schema.Tables {
+		r.Tables[table.Name], err = generate.GenerateDDL(schema.Name, table)
+		if err != nil {
+			r.Errors = append(r.Errors, err)
+		}
+	}
+
+	for _, action := range schema.Actions {
+		r.Actions[action.Name], err = generate.GenerateActionBody(action, schema, schema.Name)
+		if err != nil {
+			r.Errors = append(r.Errors, err)
+		}
+	}
+
+	for _, proc := range schema.Procedures {
+		r.Procedures[proc.Name], err = generate.GenerateProcedure(proc, schema, schema.Name)
+		if err != nil {
+			r.Errors = append(r.Errors, err)
+		}
+	}
+
+	for _, proc := range schema.ForeignProcedures {
+		r.ForeignProcedures[proc.Name], err = generate.GenerateForeignProcedure(proc, schema.Name)
+		if err != nil {
+			r.Errors = append(r.Errors, err)
+		}
+	}
+
+	return &r
+}
+
+type genResult struct {
+	Tables            map[string][]string                       `json:"tables"`
+	Actions           map[string][]generate.GeneratedActionStmt `json:"actions"`
+	Procedures        map[string]string                         `json:"procedures"`
+	ForeignProcedures map[string]string                         `json:"foreign_procedures"`
+	Errors            []error                                   `json:"gen_errors"`
 }
