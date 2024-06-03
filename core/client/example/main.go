@@ -237,10 +237,10 @@ func unmarshalKf(file io.Reader) (*types.Schema, error) {
 		return nil, fmt.Errorf("failed to read Kuneiform source file: %w", err)
 	}
 
-	parseRes, err := parse.ParseKuneiform(string(source))
+	schema, err := parse.Parse(source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse file: %w", err)
 	} // kfSchema := astSchema.(*schema.Schema); j, _ := json.Marshal(kfSchema)
 
-	return parseRes.Schema, nil
+	return schema, nil
 }
