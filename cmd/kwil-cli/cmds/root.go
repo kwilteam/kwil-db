@@ -1,6 +1,8 @@
 package cmds
 
 import (
+	"fmt"
+
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/common/version"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/account"
@@ -10,6 +12,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/utils"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func NewRootCmd() *cobra.Command {
@@ -40,4 +43,18 @@ The Kwil CLI can be configured with a persistent configuration file.  This file 
 	`,
 	SilenceUsage:      true,
 	DisableAutoGenTag: true,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// for backwards compatibility, we need to check if the deprecated flag is set.
+		// If the new flag is set and the deprecated flag is not, we can proceed.
+		// If both are set, we should return an error.
+		if cmd.Flags().Changed("kwil-provider") {
+			if cmd.Flags().Changed(config.GlobalProviderFlag) {
+				return fmt.Errorf("cannot use both --provider and --kwil-provider flags")
+			} else {
+				viper.BindPFlag(config.GlobalProviderFlag, cmd.Flags().Lookup("kwil-provider"))
+			}
+		}
+
+		return nil
+	},
 }
