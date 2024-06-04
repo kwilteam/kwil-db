@@ -2541,7 +2541,12 @@ func (p *procedureAnalyzer) VisitProcedureStmtBreak(p0 *ProcedureStmtBreak) any 
 
 func (p *procedureAnalyzer) VisitProcedureStmtReturn(p0 *ProcedureStmtReturn) any {
 	if p.procCtx.procedureDefinition.Returns == nil {
-		p.errs.AddErr(p0, ErrFunctionSignature, "procedure does not return any values")
+		if len(p0.Values) != 0 {
+			p.errs.AddErr(p0, ErrFunctionSignature, "procedure does not return any values")
+		}
+		if p0.SQL != nil {
+			p.errs.AddErr(p0, ErrFunctionSignature, "cannot return SQL statement from procedure that does not return any values")
+		}
 		return &procedureStmtResult{
 			willReturn: true,
 		}

@@ -1648,6 +1648,18 @@ func Test_Procedure(t *testing.T) {
 			`,
 			err: parse.ErrType,
 		},
+		{
+			// this is a regression test for a previous bug
+			name: "early return",
+			proc: `
+			return;
+			`,
+			want: &parse.ProcedureParseResult{
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtReturn{},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -277,6 +277,16 @@ func Test_Procedures(t *testing.T) {
 			}`,
 			outputs: [][]any{{[]any{mustDecimal("2.5", 2, 1), mustDecimal("3.5", 2, 1), mustDecimal("0.7", 2, 1)}}},
 		},
+		{
+			name: "early return",
+			procedure: `procedure return_early() public view {
+				$exit := true;
+				if $exit {
+					return;
+				}
+				error('should not reach here');
+			}`,
+		},
 	}
 
 	for _, test := range tests {
