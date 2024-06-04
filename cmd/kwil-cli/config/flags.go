@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var CliCfg = DefaultKwilCliPersistedConfig()
+var cliCfg = DefaultKwilCliPersistedConfig()
 
 const (
 	defaultConfigDirName      = ".kwil-cli"
@@ -46,9 +46,9 @@ func init() {
 
 func BindGlobalFlags(fs *pflag.FlagSet) {
 	// Bind flags to environment variables
-	fs.String(globalPrivateKeyFlag, CliCfg.PrivateKey, "the private key of the wallet that will be used for signing")
-	fs.String(GlobalProviderFlag, CliCfg.Provider, "the Kwil provider RPC endpoint")
-	fs.String(globalChainIDFlag, CliCfg.ChainID, "the expected/intended Kwil Chain ID")
+	fs.String(globalPrivateKeyFlag, cliCfg.PrivateKey, "the private key of the wallet that will be used for signing")
+	fs.String(GlobalProviderFlag, cliCfg.Provider, "the Kwil provider RPC endpoint")
+	fs.String(globalChainIDFlag, cliCfg.ChainID, "the expected/intended Kwil Chain ID")
 	fs.StringVar(&configFile, globalConfigFileFlag, defaultConfigFile, "the path to the Kwil CLI persistent global settings file")
 
 	// Bind flags to viper, named by the flag name
@@ -57,6 +57,6 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	viper.BindPFlag(viperChainID, fs.Lookup(globalChainIDFlag))
 
 	// Add deprecated flag
-	fs.String("kwil-provider", CliCfg.Provider, "the Kwil provider RPC endpoint")
+	fs.String("kwil-provider", cliCfg.Provider, "the Kwil provider RPC endpoint")
 	fs.MarkDeprecated("kwil-provider", "use '--provider' instead")
 }
