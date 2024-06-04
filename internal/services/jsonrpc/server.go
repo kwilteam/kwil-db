@@ -352,7 +352,7 @@ func (s *Server) ServeOn(ctx context.Context, ln net.Listener) error {
 
 	s.RegisterMethodHandler(
 		"rpc.discover",
-		MakeMethodHandler(func(context.Context, *struct{}) (*json.RawMessage, *jsonrpc.Error) {
+		MakeMethodHandler(func(context.Context, *any) (*json.RawMessage, *jsonrpc.Error) {
 			return &s.spec, nil
 		}),
 	)
