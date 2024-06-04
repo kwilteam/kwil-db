@@ -1638,6 +1638,16 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 		},
+		{
+			// this is a regression test for a previous bug
+			name: "adding arrays",
+			proc: `
+			$arr1 := [1,2,3];
+			$arr2 := [4,5,6];
+			$arr3 := $arr1 + $arr2;
+			`,
+			err: parse.ErrType,
+		},
 	}
 
 	for _, tt := range tests {
