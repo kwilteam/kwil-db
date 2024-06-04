@@ -584,12 +584,19 @@ func (p *preparedProcedure) shapeReturn(result *sql.ResultSet) error {
 			// if it is an array, we need to convert each value in the array
 			if col.Type.IsArray {
 				for _, row := range result.Rows {
+					if row[i] == nil {
+						continue
+					}
+
 					arr, ok := row[i].([]any)
 					if !ok {
 						return fmt.Errorf("shapeReturn: expected decimal array, got %T", row[i])
 					}
 
 					for _, v := range arr {
+						if v == nil {
+							continue
+						}
 						dec, ok := v.(*decimal.Decimal)
 						if !ok {
 							return fmt.Errorf("shapeReturn: expected decimal, got %T", dec)
@@ -602,6 +609,10 @@ func (p *preparedProcedure) shapeReturn(result *sql.ResultSet) error {
 				}
 			} else {
 				for _, row := range result.Rows {
+					if row[i] == nil {
+						continue
+					}
+
 					dec, ok := row[i].(*decimal.Decimal)
 					if !ok {
 						return fmt.Errorf("shapeReturn: expected decimal, got %T", row[i])
