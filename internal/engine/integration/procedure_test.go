@@ -1,4 +1,4 @@
-//go:build pglive
+// go:build pglive
 
 package integration_test
 
@@ -14,9 +14,11 @@ import (
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/core/utils/order"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/parse"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -256,6 +258,25 @@ func Test_Procedures(t *testing.T) {
 			}`,
 			outputs: [][]any{{int64(1), int64(3)}},
 		},
+		{
+			name: "sum",
+			procedure: `procedure sum() public view returns (sum decimal(1000,0)) {
+				for $row in select sum(user_num) as s from users {
+					return $row.s;
+				}
+			}`,
+			outputs: [][]any{{mustDecimal("6", 1000, 0)}},
+		},
+		{
+			name: "decimal array",
+			procedure: `procedure decimal_array() public view returns (decimals decimal(2,1)[]) {
+				$a := 2.5;
+				$b := 3.5;
+				$c := $a/$b;
+				return [$a, $b, $c];
+			}`,
+			outputs: [][]any{{[]any{mustDecimal("2.5", 2, 1), mustDecimal("3.5", 2, 1), mustDecimal("0.7", 2, 1)}}},
+		},
 	}
 
 	for _, test := range tests {
@@ -301,11 +322,29 @@ func Test_Procedures(t *testing.T) {
 			for i, output := range test.outputs {
 				require.Len(t, res.Rows[i], len(output))
 				for j, val := range output {
+					if dec, ok := val.(*decimal.Decimal); ok {
+						received := res.Rows[i][j].(*decimal.Decimal)
+
+						assert.Equal(t, dec.String(), received.String())
+						assert.Equal(t, dec.Precision(), received.Precision())
+						assert.Equal(t, dec.Scale(), received.Scale())
+						continue
+					}
+
 					require.Equal(t, val, res.Rows[i][j])
 				}
 			}
 		})
 	}
+}
+
+func mustDecimal(val string, precision, scale uint16) *decimal.Decimal {
+	d, err := decimal.NewExplicit(val, precision, scale)
+	if err != nil {
+		panic(err)
+	}
+
+	return d
 }
 
 func Test_ForeignProcedures(t *testing.T) {

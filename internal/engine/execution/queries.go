@@ -318,7 +318,6 @@ func deleteSchema(ctx context.Context, tx sql.TxMaker, dbid string) error {
 }
 
 // setContextualVars sets the contextual variables for the given postgres session.
-// TODO: use this function for actions too.
 func setContextualVars(ctx context.Context, db sql.DB, data *common.ExecutionData) error {
 	// for contextual parameters, we use postgres's current_setting()
 	// feature for setting session variables. For example, @caller
