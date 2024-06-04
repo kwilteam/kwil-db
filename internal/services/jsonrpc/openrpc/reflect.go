@@ -77,6 +77,7 @@ func InventoryAPI(handlerDefs map[string]*MethodDefinition, knownSchemas map[ref
 			Description: def.RespTypeDesc,
 		}
 
+		byNameOnly := ParamsByName
 		methods = append(methods, Method{
 			Name:        method,
 			Params:      params,
@@ -84,6 +85,7 @@ func InventoryAPI(handlerDefs map[string]*MethodDefinition, knownSchemas map[ref
 			Description: def.Description,
 			// Summary: , ???
 			// Errors...
+			ParamFmt: &byNameOnly,
 		})
 	}
 
