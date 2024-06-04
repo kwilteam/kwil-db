@@ -623,12 +623,11 @@ var satoshisUUID = &types.UUID{0x38, 0xeb, 0x77, 0xcb, 0x1e, 0x5a, 0x56, 0xc0, 0
 func deploy(t *testing.T, global *execution.GlobalContext, db sql.DB, schema string) (dbid string) {
 	ctx := context.Background()
 
-	parsed, err := parse.ParseAndValidate([]byte(schema))
+	parsed, err := parse.Parse([]byte(schema))
 	require.NoError(t, err)
-	require.NoError(t, parsed.Err())
 
 	d := txData()
-	err = global.CreateDataset(ctx, db, parsed.Schema, &d)
+	err = global.CreateDataset(ctx, db, parsed, &d)
 	require.NoError(t, err)
 
 	// get dbid
@@ -636,7 +635,7 @@ func deploy(t *testing.T, global *execution.GlobalContext, db sql.DB, schema str
 	require.NoError(t, err)
 
 	for _, db := range dbs {
-		if db.Name == parsed.Schema.Name {
+		if db.Name == parsed.Name {
 			dbid = db.DBID
 			break
 		}

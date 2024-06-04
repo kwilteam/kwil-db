@@ -186,41 +186,31 @@ the transaction is included in a block and executed, the database will become
 available for use.
 
 Before deploying a database, the schema definition is required. This is modeled
-by the `core/types/transactions.Schema` type. We can parse a Kuneiform `.kf`
-file using `github.com/kwilteam/kuneiform/kfparser` as follows:
+by the `core/types.Schema` type. We can parse a Kuneiform `.kf`
+file using `github.com/kwilteam/kwil-db/parse` as follows:
 
 ```go
-import "github.com/kwilteam/kuneiform/kfparser"
+import (
+	"github.com/kwilteam/kwil-db/parse"
+	ctypes "github.com/kwilteam/kwil-db/core/types/client"
+)
 
-// unmarshalKf parses the contents of a Kuneiform schema file.
-func unmarshalKf(content string) (*transactions.Schema, error) {
-	astSchema, err := kfparser.Parse(content)
+// parseAndDeploy parses a Kuneiform schema and deploys it.
+// The Kuneiform schema should be passed in as a raw string.
+// e.g. `database mydb; table my_table {...}`
+func parseAndDeploy(client ctypes.Client, kf string) {
+	// Use the kuneiform packages to load the schema.
+	schema, err := parse.Parse([]byte(kf))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse file: %w", err)
+		log.Fatal(err)
 	}
-	schemaJSON, err := astSchema.ToJSON()
+
+	txHash, err := client.DeployDatabase(ctx, schema)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal schema: %w", err)
+		log.Fatal(err)
 	}
-	var db transactions.Schema
-	return &db, json.Unmarshal(schemaJSON, &db)
+	fmt.Printf("DeployDatabase succeeded! txHash = %x", txHash)
 }
-```
-
-In our example app, we can now use `DeployDatabase`:
-
-```go
-// Use the kuneiform packages to load the schema.
-schema, err := unmarshalKf(testKf)
-if err != nil {
-	log.Fatal(err)
-}
-
-txHash, err := cl.DeployDatabase(ctx, schema)
-if err != nil {
-	log.Fatal(err)
-}
-fmt.Printf("DeployDatabase succeeded! txHash = %x", txHash)
 ```
 
 If that succeeded, the database deployment transaction was successfully

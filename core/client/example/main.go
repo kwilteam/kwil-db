@@ -3,11 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"math/big"
 	"slices"
-	"strings"
 
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -96,7 +94,7 @@ func main() {
 
 	if !deployed { // need to deploy the "was_here" database
 		// Use the kuneiform packages to load the schema.
-		schema, err := unmarshalKf(strings.NewReader(testKf))
+		schema, err := parse.Parse([]byte(testKf))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -227,20 +225,3 @@ action get_all() public view {
     SELECT * FROM tags;
 }
 `
-
-// go:embed test.json
-// var testJSON []byte
-
-func unmarshalKf(file io.Reader) (*types.Schema, error) {
-	source, err := io.ReadAll(file)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read Kuneiform source file: %w", err)
-	}
-
-	parseRes, err := parse.ParseKuneiform(string(source))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse file: %w", err)
-	} // kfSchema := astSchema.(*schema.Schema); j, _ := json.Marshal(kfSchema)
-
-	return parseRes.Schema, nil
-}

@@ -217,7 +217,7 @@ func Test_Deployment(t *testing.T) {
 			// we intentionally use the bare kuneiform parser and don't
 			// perform extra checks because we want to test that the engine
 			// catches these errors
-			parsed, err := parse.ParseSchema([]byte(schema))
+			parsed, err := parse.ParseSchemaWithoutValidation([]byte(schema))
 			require.NoError(t, err)
 
 			err = global.CreateDataset(ctx, tx, parsed.Schema, &common.TransactionData{
