@@ -32,14 +32,14 @@ processed:
 const (
 	votingSchemaName = `kwild_voting`
 
-	voteStoreVersion = 3
+	voteStoreVersion = 2
 
 	// tableResolutions is the sql table used to store resolutions that can be voted on.
 	// the vote_body_proposer is the BYTEA of the public key of the submitter, NOT the UUID
 	tableResolutions = `CREATE TABLE IF NOT EXISTS ` + votingSchemaName + `.resolutions (
-		id UUID PRIMARY KEY, -- id is an rfc4122 uuid derived from the body
+		id BYTEA PRIMARY KEY, -- id is an rfc4122 uuid derived from the body
 		body BYTEA, -- body is the actual resolution info
-		type uuid, -- type is the type of resolution
+		type BYTEA, -- type is the type of resolution
 		vote_body_proposer BYTEA, -- vote_body_proposer is the identifier of the node that supplied the vote body
 		expiration INT8 NOT NULL, -- expiration is the blockheight at which the resolution expires
 		extra_vote_id BOOLEAN NOT NULL DEFAULT FALSE, -- If vote_body_proposer had sent VoteID before VoteBody, this is set to true
@@ -52,20 +52,20 @@ const (
 	// resolution_types.type is already indexed...
 
 	tableResolutionTypes = `CREATE TABLE IF NOT EXISTS ` + votingSchemaName + `.resolution_types (
-		id UUID PRIMARY KEY, -- id is an rfc4122 uuid derived from the name
+		id BYTEA PRIMARY KEY, -- id is an rfc4122 uuid derived from the name
 		name TEXT UNIQUE NOT NULL -- name is the name of the resolution type
 	);`
 
 	tableVoters = `CREATE TABLE IF NOT EXISTS ` + votingSchemaName + `.voters (
-		id UUID PRIMARY KEY, -- id is an rfc4122 uuid derived from the voter
+		id BYTEA PRIMARY KEY, -- id is an rfc4122 uuid derived from the voter
 		name BYTEA UNIQUE NOT NULL, -- voter is the identifier of the voter
 		power INT8 NOT NULL CHECK(power > 0) -- power is the voting power of the voter
 	);`
 
 	// votes tracks whether a voter has voted on a resolution
 	tableVotes = `CREATE TABLE IF NOT EXISTS ` + votingSchemaName + `.votes (
-		resolution_id UUID NOT NULL, 
-		voter_id UUID NOT NULL,
+		resolution_id BYTEA NOT NULL, 
+		voter_id BYTEA NOT NULL,
 		FOREIGN KEY(resolution_id) REFERENCES ` + votingSchemaName + `.resolutions(id) ON UPDATE CASCADE ON DELETE CASCADE,
 		FOREIGN KEY(voter_id) REFERENCES ` + votingSchemaName + `.voters(id) ON UPDATE CASCADE ON DELETE CASCADE,
 		PRIMARY KEY(resolution_id, voter_id) -- makes compound unique index
@@ -73,7 +73,7 @@ const (
 
 	// tableProcessed contains all processed resolution ids
 	tableProcessed = `CREATE TABLE IF NOT EXISTS ` + votingSchemaName + `.processed (
-		id UUID PRIMARY KEY
+		id BYTEA PRIMARY KEY
 	);`
 
 	tableHeight = `CREATE TABLE IF NOT EXISTS ` + votingSchemaName + `.height (
@@ -115,7 +115,7 @@ const (
 		ON CONFLICT(id) DO NOTHING;`
 
 	// markManyProcessed marks many resolutions as processed
-	markManyProcessed = `INSERT INTO ` + votingSchemaName + `.processed (id) SELECT unnest($1::UUID[]);`
+	markManyProcessed = `INSERT INTO ` + votingSchemaName + `.processed (id) SELECT unnest($1::BYTEA[]);`
 
 	// alreadyProcessed checks if a resolution has already been processed
 	alreadyProcessed = `SELECT id FROM ` + votingSchemaName + `.processed WHERE id = $1;`
@@ -198,12 +198,4 @@ const (
 // upgrades V1 -> V2
 const (
 	dropExtraVoteID = `ALTER TABLE ` + votingSchemaName + `.resolutions DROP COLUMN extra_vote_id;`
-)
-
-// upgrades V2 -> V3
-const (
-	// remove unique constraint on name on both resolution_types and voters as id is derived from name and is unique.
-	removeResolutionTypesUniqueNameConstraint = `ALTER TABLE ` + votingSchemaName + `.resolution_types DROP CONSTRAINT resolution_types_name_key;`
-
-	removeVotersUniqueNameConstraint = `ALTER TABLE ` + votingSchemaName + `.voters DROP CONSTRAINT voters_name_key;`
 )
