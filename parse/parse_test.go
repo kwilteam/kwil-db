@@ -1566,6 +1566,88 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "sum types - failure",
+			proc: `
+			$sum := 0;
+			for $row in select sum(id) as id from users {
+				$sum := $sum + $row.id;
+			}
+			`,
+			// this should error, since sum returns numeric
+			err: parse.ErrType,
+		},
+		{
+			name: "sum types - success",
+			proc: `
+			$sum decimal(1000,0);
+			for $row in select sum(id) as id from users {
+				$sum := $sum + $row.id;
+			}
+			`,
+			want: &parse.ProcedureParseResult{
+				Variables: map[string]*types.DataType{
+					"$sum": mustNewDecimal(1000, 0),
+				},
+				CompoundVariables: map[string]struct{}{
+					"$row": {},
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtDeclaration{
+						Variable: exprVar("$sum"),
+						Type:     mustNewDecimal(1000, 0),
+					},
+					&parse.ProcedureStmtForLoop{
+						Receiver: exprVar("$row"),
+						LoopTerm: &parse.LoopTermSQL{
+							Statement: &parse.SQLStatement{
+								SQL: &parse.SelectStatement{
+									SelectCores: []*parse.SelectCore{
+										{
+											Columns: []parse.ResultColumn{
+												&parse.ResultColumnExpression{
+													Expression: &parse.ExpressionFunctionCall{
+														Name: "sum",
+														Args: []parse.Expression{
+															exprColumn("", "id"),
+														},
+													},
+													Alias: "id",
+												},
+											},
+											From: &parse.RelationTable{
+												Table: "users",
+											},
+										},
+									},
+									// If there is an aggregate clause with no group by, then no ordering is applied.
+								},
+							},
+						},
+						Body: []parse.ProcedureStmt{
+							&parse.ProcedureStmtAssign{
+								Variable: exprVar("$sum"),
+								Value: &parse.ExpressionArithmetic{
+									Left:     exprVar("$sum"),
+									Operator: parse.ArithmeticOperatorAdd,
+									Right:    &parse.ExpressionFieldAccess{Record: exprVar("$row"), Field: "id"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			// this is a regression test for a previous bug
+			name: "adding arrays",
+			proc: `
+			$arr1 := [1,2,3];
+			$arr2 := [4,5,6];
+			$arr3 := $arr1 + $arr2;
+			`,
+			err: parse.ErrType,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1642,6 +1724,14 @@ func exprVar(n string) *parse.ExpressionVariable {
 		Name:   n[1:],
 		Prefix: pref,
 	}
+}
+
+func mustNewDecimal(precision, scale uint16) *types.DataType {
+	dt, err := types.NewDecimalType(precision, scale)
+	if err != nil {
+		panic(err)
+	}
+	return dt
 }
 
 // exprLit makes an ExpressionLiteral.

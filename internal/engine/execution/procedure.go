@@ -577,6 +577,54 @@ func (p *preparedProcedure) shapeReturn(result *sql.ResultSet) error {
 
 	for i, col := range p.returns.Fields {
 		result.Columns[i] = col.Name
+
+		// if the column is a decimal or a decimal array, we need to convert the values to
+		// the specified scale and precision
+		if col.Type.Name == types.DecimalStr {
+			// if it is an array, we need to convert each value in the array
+			if col.Type.IsArray {
+				for _, row := range result.Rows {
+					if row[i] == nil {
+						continue
+					}
+
+					arr, ok := row[i].([]any)
+					if !ok {
+						return fmt.Errorf("shapeReturn: expected decimal array, got %T", row[i])
+					}
+
+					for _, v := range arr {
+						if v == nil {
+							continue
+						}
+						dec, ok := v.(*decimal.Decimal)
+						if !ok {
+							return fmt.Errorf("shapeReturn: expected decimal, got %T", dec)
+						}
+						err := dec.SetPrecisionAndScale(col.Type.Metadata[0], col.Type.Metadata[1])
+						if err != nil {
+							return err
+						}
+					}
+				}
+			} else {
+				for _, row := range result.Rows {
+					if row[i] == nil {
+						continue
+					}
+
+					dec, ok := row[i].(*decimal.Decimal)
+					if !ok {
+						return fmt.Errorf("shapeReturn: expected decimal, got %T", row[i])
+					}
+
+					err := dec.SetPrecisionAndScale(col.Type.Metadata[0], col.Type.Metadata[1])
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
 	}
 
 	return nil

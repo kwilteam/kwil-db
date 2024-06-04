@@ -563,15 +563,36 @@ var (
 		},
 		"sum": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// per https://www.postgresql.org/docs/current/datatype-numeric.html#DATATYPE-NUMERIC-TABLE
+				// the result of sum will be made a decimal(1000, 0)
 				if len(args) != 1 {
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.IntType) {
-					return nil, wrapErrArgumentType(types.IntType, args[0])
+				if !args[0].IsNumeric() {
+					return nil, fmt.Errorf("expected argument to be numeric, got %s", args[0].String())
 				}
 
-				return types.IntType, nil
+				// we check if it is an unknown type before the switch,
+				// as unknown will be true for all EqualsStrict checks
+				if args[0] == types.UnknownType {
+					return types.UnknownType, nil
+				}
+
+				var retType *types.DataType
+				switch {
+				case args[0].EqualsStrict(types.IntType):
+					retType = decimal1000.Copy()
+				case args[0].Name == types.DecimalStr:
+					retType = args[0].Copy()
+					retType.Metadata[0] = 1000 // max precision
+				case args[0].EqualsStrict(types.Uint256Type):
+					retType = decimal1000.Copy()
+				default:
+					panic(fmt.Sprintf("unexpected numeric type: %s", retType.String()))
+				}
+
+				return retType, nil
 			},
 			IsAggregate: true,
 			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
@@ -650,6 +671,17 @@ func defaultFormat(name string) FormatFunc {
 		}
 
 		return fmt.Sprintf("%s(%s)", name, strings.Join(inputs, ", ")), nil
+	}
+}
+
+// decimal1000 is a decimal type with a precision of 1000.
+var decimal1000 *types.DataType
+
+func init() {
+	var err error
+	decimal1000, err = types.NewDecimalType(1000, 0)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create decimal type: 1000, 0: %v", err))
 	}
 }
 

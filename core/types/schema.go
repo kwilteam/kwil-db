@@ -1237,6 +1237,10 @@ func (c *DataType) Equals(other *DataType) bool {
 }
 
 func (c *DataType) IsNumeric() bool {
+	if c.IsArray {
+		return false
+	}
+
 	return c.Name == intStr || c.Name == DecimalStr || c.Name == uint256Str || c.Name == unknownStr
 }
 
