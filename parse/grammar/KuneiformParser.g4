@@ -361,7 +361,7 @@ proc_statement:
     | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE proc_statement* RBRACE)?                         # stmt_if
     | sql_statement SCOL                                                                                # stmt_sql
     | BREAK SCOL                                                                                        # stmt_break
-    | RETURN (procedure_expr_list|sql_statement) SCOL                                                   # stmt_return
+    | RETURN (procedure_expr_list|sql_statement)? SCOL                                                   # stmt_return
     | RETURN NEXT procedure_expr_list SCOL                                                              # stmt_return_next
 ;
 

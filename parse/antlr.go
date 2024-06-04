@@ -2036,8 +2036,7 @@ func (s *schemaVisitor) VisitStmt_return(ctx *gen.Stmt_returnContext) any {
 		// loop through and add since these are Expressions, not Expressions
 		exprs := ctx.Procedure_expr_list().Accept(s).([]Expression)
 		stmt.Values = append(stmt.Values, exprs...)
-	default:
-		panic("unknown return type")
+		// return can be nil if a procedure simply wants to exit early
 	}
 
 	stmt.Set(ctx)
