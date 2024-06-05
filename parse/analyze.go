@@ -2,6 +2,7 @@ package parse
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/kwilteam/kwil-db/core/types"
 )
@@ -93,6 +94,16 @@ func (b *blockContext) variableExists(name string) bool {
 
 	_, ok = b.anonymousVariables[name]
 	return ok
+}
+
+// copyVariables copies both the user variables and anonymous variables.
+func (b *blockContext) copyVariables() (map[string]*types.DataType, map[string]map[string]*types.DataType) {
+	// we do not need to deep copy anonymousVariables because anonymousVariables maps an object name
+	// to an objects fields and their data types. The only way to declare an object in Kuneiform
+	// is for $row in SELECT ..., the $row will have fields. Since these variables can only be declared once
+	// per procedure, we do not need to worry about the object having different fields throughout the
+	// procedure.
+	return maps.Clone(b.variables), maps.Clone(b.anonymousVariables)
 }
 
 // sqlContext is the context of the current SQL statement
@@ -1303,16 +1314,9 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 	// then be referenced in order bys and limits. If there are column conflicts in the flattened column,
 	// we should return an error, since there will be no way for us to inform postgres of our default ordering.
 	if isCompound {
-		// if compound, flatten
-		flattened, conflictCol, err := Flatten(rel1Scope.joinedRelations...)
-		if err != nil {
-			s.errs.AddErr(p0, err, conflictCol)
-			return rel1
-		}
-
 		// we can simply assign this to the rel1Scope, since we we will not
 		// need it past this point. We can add it as an unnamed relation.
-		rel1Scope.joinedRelations = []*Relation{{Attributes: flattened}}
+		rel1Scope.joinedRelations = []*Relation{{Attributes: rel1}}
 
 		// if a compound select, then we have the following default ordering rules:
 		// 1. All columns returned will be ordered in the order they are returned.
@@ -1326,7 +1330,7 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 		}
 
 		// order all flattened returns
-		for _, attr := range flattened {
+		for _, attr := range rel1 {
 			p0.Ordering = append(p0.Ordering, &OrderingTerm{
 				Expression: &ExpressionColumn{
 					// leave column blank, since we are referencing a column that no
@@ -1988,6 +1992,8 @@ func (s *sqlAnalyzer) setTargetTable(table string, alias string) (*types.Table, 
 		return nil, name, err
 	}
 
+	rel.Name = name
+
 	err = s.sqlCtx.joinRelation(rel)
 	if err != nil {
 		return nil, name, err
@@ -2337,6 +2343,13 @@ func (p *procedureAnalyzer) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) 
 	res := p0.LoopTerm.Accept(p)
 	scalarVal, ok := res.(*types.DataType)
 
+	// we copy the variables to ensure that the loop target is only accessible in the loop.
+	vars, anonVars := p.copyVariables()
+	defer func() {
+		p.variables = vars
+		p.anonymousVariables = anonVars
+	}()
+
 	// we do not mark declared here since these are loop receivers,
 	// and they get tracked in a separate slice than other variables.
 	if ok {
@@ -2394,12 +2407,6 @@ func (p *procedureAnalyzer) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) 
 		p.procCtx.activeLoopReceivers = nil
 	} else {
 		p.procCtx.activeLoopReceivers = p.procCtx.activeLoopReceivers[1:]
-	}
-
-	if tracker.dataType != nil {
-		delete(p.anonymousVariables, p0.Receiver.String())
-	} else {
-		delete(p.variables, p0.Receiver.String())
 	}
 
 	return &procedureStmtResult{
@@ -2472,6 +2479,12 @@ func (p *procedureAnalyzer) VisitProcedureStmtIf(p0 *ProcedureStmtIf) any {
 	// It gets set to false if we encounter an else block.
 	elseReturns := true
 	if p0.Else != nil {
+		vars, anonVars := p.copyVariables()
+		defer func() {
+			p.variables = vars
+			p.anonymousVariables = anonVars
+		}()
+
 		elseReturns = false
 		for _, stmt := range p0.Else {
 			res := stmt.Accept(p).(*procedureStmtResult)
@@ -2501,6 +2514,13 @@ func (p *procedureAnalyzer) VisitIfThen(p0 *IfThen) any {
 
 	canBreak := false
 	returns := false
+
+	vars, anonVars := p.copyVariables()
+	defer func() {
+		p.variables = vars
+		p.anonymousVariables = anonVars
+	}()
+
 	for _, stmt := range p0.Then {
 		res := stmt.Accept(p).(*procedureStmtResult)
 		if res.willReturn {

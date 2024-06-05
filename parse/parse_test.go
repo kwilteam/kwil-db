@@ -1652,13 +1652,53 @@ func Test_Procedure(t *testing.T) {
 			// this is a regression test for a previous bug
 			name: "early return",
 			proc: `
-			return;
-			`,
+						return;
+						`,
 			want: &parse.ProcedureParseResult{
 				AST: []parse.ProcedureStmt{
 					&parse.ProcedureStmtReturn{},
 				},
 			},
+		},
+		{
+			name: "variable scoping",
+			proc: `
+			for $i in 1..10 {
+			}
+			$j := $i;
+			`,
+			err: parse.ErrUndeclaredVariable,
+		},
+		{
+			name: "scoping 2",
+			proc: `
+			for $i in 1..10 {
+				$j := $i;
+			}
+			$k := $j;
+			`,
+			err: parse.ErrUndeclaredVariable,
+		},
+		{
+			name: "if scoping",
+			proc: `
+			if true {
+				$i := 1;
+			}
+			$j := $i;
+			`,
+			err: parse.ErrUndeclaredVariable,
+		},
+		{
+			name: "else scoping",
+			proc: `
+			if false {
+			} else {
+				$i := 1;
+			}
+			$j := $i;
+		}`,
+			err: parse.ErrUndeclaredVariable,
 		},
 	}
 
@@ -2087,6 +2127,43 @@ func Test_SQL(t *testing.T) {
 			err:  parse.ErrResultShape,
 		},
 		{
+			name: "compound selecting 1 column",
+			sql:  `SELECT username FROM users union SELECT username FROM users;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnExpression{
+									Expression: exprColumn("", "username"),
+								},
+							},
+							From: &parse.RelationTable{
+								Table: "users",
+							},
+						},
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnExpression{
+									Expression: exprColumn("", "username"),
+								},
+							},
+							From: &parse.RelationTable{
+								Table: "users",
+							},
+						},
+					},
+					CompoundOperators: []parse.CompoundOperator{parse.CompoundOperatorUnion},
+					// apply default ordering
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: exprColumn("", "username"),
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "group by",
 			sql:  `SELECT u.username, count(u.id) FROM users as u GROUP BY u.username HAVING count(u.id) > 1;`,
 			want: &parse.SQLStatement{
@@ -2336,6 +2413,7 @@ func Test_SQL(t *testing.T) {
 			sql:  `SELECT * FROM users inner join get_all_user_ids() on users.id = u.id;`,
 			err:  parse.ErrUnnamedJoin,
 		},
+		{name: "non utf-8", sql: "\xbd\xb2\x3d\xbc\x20\xe2\x8c\x98;", err: parse.ErrSyntax},
 	}
 
 	for _, tt := range tests {
