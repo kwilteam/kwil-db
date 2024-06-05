@@ -218,7 +218,6 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 // docs, "ResponseFinalizeBlock.app_hash is included as the Header.AppHash in
 // the next block."
 func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinalizeBlock) (*abciTypes.ResponseFinalizeBlock, error) {
-	fmt.Printf("\n\n")
 	logger := a.log.With(zap.String("stage", "ABCI FinalizeBlock"), zap.Int64("height", req.Height))
 
 	res := &abciTypes.ResponseFinalizeBlock{}
