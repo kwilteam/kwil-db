@@ -7,7 +7,19 @@ type BaseKuneiformParserVisitor struct {
 	*antlr.BaseParseTreeVisitor
 }
 
-func (v *BaseKuneiformParserVisitor) VisitEntry(ctx *EntryContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitSchema_entry(ctx *Schema_entryContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitSql_entry(ctx *Sql_entryContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitAction_entry(ctx *Action_entryContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitProcedure_entry(ctx *Procedure_entryContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

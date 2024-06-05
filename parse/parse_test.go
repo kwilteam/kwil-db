@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils/order"
 	"github.com/kwilteam/kwil-db/parse"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,6 +18,10 @@ func Test_Kuneiform(t *testing.T) {
 		name string
 		kf   string
 		want *types.Schema
+		err  error // can be nil
+		// checkAfterErr will continue with the schema comparison
+		// after an error is encountered.
+		checkAfterErr bool
 	}
 
 	tests := []testCase{
@@ -598,7 +603,7 @@ func Test_Kuneiform(t *testing.T) {
 			name: "case insensitive",
 			kf: `
 			database myDB;
-			
+
 			table UsErS {
 				iD inT pRimaRy kEy nOt nUll
 			}
@@ -609,7 +614,7 @@ func Test_Kuneiform(t *testing.T) {
 				ForEign key (author_ID) references usErs (Id) On delEte cAscade on Update cascadE,
 				#iDx inDex(author_iD)
 			}
-			
+
 			uSe myeXt As dB1;
 
 			pRoceDure get_Users($nAme tExt) Public viEw ReTURNS tablE(iD iNt) {
@@ -758,13 +763,59 @@ func Test_Kuneiform(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "two database blocks",
+			kf: `database a;
+			database b;`,
+			err: parse.ErrSyntax,
+		},
+		{
+			// tests for https://github.com/kwilteam/kwil-db/issues/752
+			name:          "incomplete database block",
+			kf:            `datab`,
+			want:          &types.Schema{},
+			err:           parse.ErrSyntax,
+			checkAfterErr: true,
+		},
+		{
+			// similar to the aboive test, the same edge case existed for foreign procedures
+			name: "incomplete foreign procedure",
+			kf: `database a;
+			foreign proce`,
+			want: &types.Schema{
+				Name: "a",
+				ForeignProcedures: []*types.ForeignProcedure{
+					{}, // there will be one empty foreign procedure
+				},
+			},
+			err:           parse.ErrSyntax,
+			checkAfterErr: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res, err := parse.ParseSchemaWithoutValidation([]byte(tt.kf))
 			require.NoError(t, err)
-			require.NoError(t, res.ParseErrs.Err())
+			if tt.err != nil {
+				parseErrs := res.ParseErrs.Errors()
+				if len(parseErrs) == 0 {
+					require.Fail(t, "expected parse errors")
+				}
+
+				require.ErrorIs(t, parseErrs[0], tt.err)
+				if !tt.checkAfterErr {
+					return
+				}
+			} else {
+				require.NoError(t, res.ParseErrs.Err())
+				if tt.checkAfterErr {
+					panic("cannot use checkAfterErr without an error")
+				}
+			}
+
+			assertPositionsAreSet(t, res.ParsedActions)
+			assertPositionsAreSet(t, res.ParsedProcedures)
 
 			require.EqualValues(t, tt.want, res.Schema)
 
@@ -777,14 +828,27 @@ func Test_Kuneiform(t *testing.T) {
 			err = json.Unmarshal(bts, &got2)
 			require.NoError(t, err)
 
-			err = got2.Clean()
-			require.NoError(t, err)
+			// since checkAfterErr means we expect a parser error, we shouldn't clean since
+			// it will likely fail since the schema is invalid anyways
+			if !tt.checkAfterErr {
+				err = got2.Clean()
+				require.NoError(t, err)
+			}
 
 			got2.Owner = nil // unmarshal sets Owner to empty array, so we need to set it to nil to compare
 
 			require.EqualValues(t, res.Schema, &got2)
 		})
 	}
+}
+
+// assertPositionsAreSet asserts that all positions in the ast are set.
+func assertPositionsAreSet(t *testing.T, v any) {
+	parse.RecursivelyVisitPositions(v, func(gp parse.GetPositioner) {
+		pos := gp.GetPosition()
+		// if not set, this will tell us the struct
+		assert.True(t, pos.IsSet, "position is not set. struct type: %T", gp)
+	})
 }
 
 // some default tables and procedures for testing
@@ -1697,7 +1761,7 @@ func Test_Procedure(t *testing.T) {
 				$i := 1;
 			}
 			$j := $i;
-		}`,
+		`,
 			err: parse.ErrUndeclaredVariable,
 		},
 	}
@@ -1742,6 +1806,8 @@ func Test_Procedure(t *testing.T) {
 				return
 			}
 			require.NoError(t, res.ParseErrs.Err())
+
+			assertPositionsAreSet(t, res.AST)
 
 			// set res errs to nil to match test
 			res.ParseErrs = nil
@@ -2439,6 +2505,8 @@ func Test_SQL(t *testing.T) {
 
 				return
 			}
+
+			assertPositionsAreSet(t, res.AST)
 
 			if !deepCompare(tt.want, res.AST) {
 				t.Errorf("unexpected AST:\n%s", diff(tt.want, res.AST))

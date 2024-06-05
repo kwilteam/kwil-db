@@ -14,10 +14,15 @@ import (
 
 // Node is a node in the AST.
 type Node interface {
+	GetPositioner
 	Accept(Visitor) any
-	GetPosition() *Position
 	Set(r antlr.ParserRuleContext)
 	SetToken(t antlr.Token)
+}
+
+type GetPositioner interface {
+	GetPosition() *Position
+	Clear()
 }
 
 type Typecastable struct {

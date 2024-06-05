@@ -7,8 +7,17 @@ import "github.com/antlr4-go/antlr/v4"
 type KuneiformParserVisitor interface {
 	antlr.ParseTreeVisitor
 
-	// Visit a parse tree produced by KuneiformParser#entry.
-	VisitEntry(ctx *EntryContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#schema_entry.
+	VisitSchema_entry(ctx *Schema_entryContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#sql_entry.
+	VisitSql_entry(ctx *Sql_entryContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#action_entry.
+	VisitAction_entry(ctx *Action_entryContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#procedure_entry.
+	VisitProcedure_entry(ctx *Procedure_entryContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#string_literal.
 	VisitString_literal(ctx *String_literalContext) interface{}

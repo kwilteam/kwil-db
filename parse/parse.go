@@ -4,6 +4,7 @@ package parse
 
 import (
 	"fmt"
+	"reflect"
 	"runtime"
 	"strings"
 
@@ -64,6 +65,15 @@ func ParseAndValidate(kf []byte) (*SchemaParseResult, error) {
 		return res, nil
 	}
 
+	// we clean the schema only after checking for parser errors, since parser errors
+	// might be the reason the schema is invalid in the first place.
+	err = res.Schema.Clean()
+	if err != nil {
+		// all clean validations should get caught before this point, however if they don't
+		// this will throw an error during parsing, instead of during transaction execution.
+		return nil, err
+	}
+
 	for _, proc := range res.Schema.Procedures {
 		ast := res.ParsedProcedures[proc.Name]
 		procRes, err := analyzeProcedureAST(proc, res.Schema, ast)
@@ -110,7 +120,7 @@ func ParseSchemaWithoutValidation(kf []byte) (res *SchemaParseResult, err error)
 		}
 	}()
 
-	schema, ok := parser.Schema().Accept(visitor).(*types.Schema)
+	schema, ok := parser.Schema_entry().Accept(visitor).(*types.Schema)
 	if !ok {
 		err = fmt.Errorf("error parsing schema: could not detect return schema. this is likely a bug in the parser")
 	}
@@ -171,7 +181,7 @@ func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []Proc
 	if ast == nil {
 		schemaVisitor := newSchemaVisitor(stream, errLis)
 		// first parse the body, then visit it.
-		res.AST = parser.Procedure_block().Accept(schemaVisitor).([]ProcedureStmt)
+		res.AST = parser.Procedure_entry().Accept(schemaVisitor).([]ProcedureStmt)
 	} else {
 		res.AST = ast
 	}
@@ -297,7 +307,7 @@ func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error)
 
 	schemaVisitor := newSchemaVisitor(stream, errLis)
 
-	res.AST = parser.Sql().Accept(schemaVisitor).(*SQLStatement)
+	res.AST = parser.Sql_entry().Accept(schemaVisitor).(*SQLStatement)
 
 	if errLis.Err() != nil {
 		return res, nil
@@ -345,7 +355,7 @@ func analyzeActionAST(action *types.Action, schema *types.Schema, ast []ActionSt
 
 	if ast == nil {
 		schemaVisitor := newSchemaVisitor(stream, errLis)
-		res.AST = parser.Action_block().Accept(schemaVisitor).([]ActionStmt)
+		res.AST = parser.Action_entry().Accept(schemaVisitor).([]ActionStmt)
 	} else {
 		res.AST = ast
 	}
@@ -430,4 +440,47 @@ func setupParser(inputStream string, errLisName string) (errLis *errorListener,
 	}
 
 	return errLis, stream, parser, deferFn
+}
+
+// RecursivelyVisitPositions traverses a structure recursively, visiting all position struct types.
+// It is used in both parsing tools, as well as in tests.
+// WARNING: This function should NEVER be used in consensus, since it is non-deterministic.
+func RecursivelyVisitPositions(v any, fn func(GetPositioner)) {
+	visitRecursive(reflect.ValueOf(v), reflect.TypeOf((*GetPositioner)(nil)).Elem(), func(v reflect.Value) {
+		if v.CanInterface() {
+			a := v.Interface().(GetPositioner)
+			fn(a)
+		}
+	})
+}
+
+// visitRecursive is a recursive function that visits all types that implement the target interface.
+func visitRecursive(v reflect.Value, target reflect.Type, fn func(reflect.Value)) {
+	if v.Type().Implements(target) {
+		// check if the value is nil
+		if !v.IsNil() {
+			fn(v)
+		}
+	}
+
+	switch v.Kind() {
+	case reflect.Ptr, reflect.Interface:
+		if v.IsNil() {
+			return
+		}
+
+		visitRecursive(v.Elem(), target, fn)
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			visitRecursive(v.Field(i), target, fn)
+		}
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < v.Len(); i++ {
+			visitRecursive(v.Index(i), target, fn)
+		}
+	case reflect.Map:
+		for _, key := range v.MapKeys() {
+			visitRecursive(v.MapIndex(key), target, fn)
+		}
+	}
 }
