@@ -42,8 +42,10 @@ var demotedInfoMsgs = map[string]string{
 // cometbft/p2p.(*Switch) are the most egregious, but most of cometbft uses
 // error logging quite liberally, probably because they have no Warn.
 var demotedErrMsgs = map[string]string{
-	"Stopping peer for error":   "p2p",
-	"error while stopping peer": "p2p",
+	"Stopping peer for error":                        "p2p",
+	"error while stopping peer":                      "p2p",
+	"Error stopping pool":                            "blocksync", // this almost always happens on shutdown
+	"Stopped accept routine, as transport is closed": "p2p",
 }
 
 // LogWrapper that implements cometbft's Logger interface.

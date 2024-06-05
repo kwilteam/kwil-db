@@ -38,11 +38,13 @@ func RootCmd() *cobra.Command {
 		DisableAutoGenTag: true,
 		Args:              cobra.NoArgs, // just flags
 		Version:           version.KwilVersion,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		SilenceUsage:      true, // not all errors imply cli misuse
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			fmt.Printf("kwild version %v (Go version %s)\n", version.KwilVersion, runtime.Version())
 
 			kwildCfg, configFileExists, err := config.GetCfg(flagCfg, autoGen)
 			if err != nil {
+				cmd.Usage()
 				return err
 			}
 
@@ -62,6 +64,7 @@ func RootCmd() *cobra.Command {
 
 			stopProfiler, err := startProfilers(kwildCfg)
 			if err != nil {
+				cmd.Usage()
 				return err
 			}
 			defer stopProfiler()
@@ -78,7 +81,7 @@ func RootCmd() *cobra.Command {
 			svr, err := server.New(ctx, kwildCfg, genesisConfig, nodeKey, autoGen)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
-					return nil // clean shutdown
+					return nil // early but clean shutdown
 				}
 				return err
 			}

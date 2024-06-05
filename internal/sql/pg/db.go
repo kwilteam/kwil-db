@@ -40,6 +40,11 @@ type DB struct {
 	pool *Pool    // raw connection pool
 	repl *replMon // logical replication monitor for collecting commit IDs
 
+	// This context is not passed anywhere. It is just used as a convenient way
+	// to implements Done and Err methods for the DB consumer.
+	cancel context.CancelCauseFunc
+	ctx    context.Context
+
 	// Guarantee that we are in-session by tracking and using a Tx for the write methods.
 	mtx        sync.Mutex
 	autoCommit bool   // skip the explicit transaction (begin/commit automatically)
@@ -187,17 +192,51 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to create ERROR function: %w", err)
 	}
 
-	return &DB{
-		pool: pool,
-		repl: repl,
-	}, nil
+	runCtx, cancel := context.WithCancelCause(context.Background())
+
+	db := &DB{
+		pool:   pool,
+		repl:   repl,
+		cancel: cancel,
+		ctx:    runCtx,
+	}
+
+	// Supervise the replication stream monitor. If it dies (repl.done chan
+	// closed), we should close the DB connections, signal the failure to
+	// consumers, and offer the cause.
+	go func() {
+		<-db.repl.done      // wait for capture goroutine to end (broadcast channel)
+		cancel(db.repl.err) // set the cause
+
+		db.pool.Close()
+
+		// Potentially we can have a newReplMon restart loop here instead of
+		// shutdown. However, this proved complex and unlikely to succeed.
+	}()
+
+	return db, nil
 }
 
 // Close shuts down the Kwil DB. This stops all connections and the WAL data
 // receiver.
 func (db *DB) Close() error {
+	db.cancel(nil)
 	db.repl.stop()
 	return db.pool.Close()
+}
+
+// Done allows higher level systems to monitor the state of the DB backend
+// connection and shutdown (or restart) the application if necessary. Without
+// this, the application hits an error the next time it uses the DB, which may
+// be confusing and inopportune.
+func (db *DB) Done() <-chan struct{} {
+	return db.ctx.Done()
+}
+
+// Err provides any error that caused the DB to shutdown. This will return
+// context.Canceled after Close has been called.
+func (db *DB) Err() error {
+	return context.Cause(db.ctx)
 }
 
 // AutoCommit toggles auto-commit mode, in which the Execute method may be used
@@ -399,7 +438,10 @@ func (db *DB) precommit(ctx context.Context) ([]byte, error) {
 	}
 	logger.Debugf("updated seq to %d", seq)
 
-	resChan := db.repl.recvID(seq)
+	resChan, ok := db.repl.recvID(seq)
+	if !ok { // commitID will not be available, error. There is no recovery presently.
+		return nil, errors.New("replication connection is down")
+	}
 
 	db.txid = random.String(10)
 	sqlPrepareTx := fmt.Sprintf(`PREPARE TRANSACTION '%s'`, db.txid)
@@ -419,8 +461,8 @@ func (db *DB) precommit(ctx context.Context) ([]byte, error) {
 		// The transaction is ready to commit, stored in a file with postgres in
 		// the pg_twophase folder of the pg cluster data_directory.
 		return commitID, nil
-	case err = <-db.repl.errChan: // the replMon has died, so probably DB should close too...
-		return nil, err
+	case <-db.repl.done: // the replMon has died after we executed PREPARE TRANSACTION
+		return nil, errors.New("replication stream interrupted")
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
@@ -565,7 +607,11 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 			if err != nil {
 				return err
 			}
-			resChan = db.repl.recvID(seq)
+			var ok bool
+			resChan, ok = db.repl.recvID(seq)
+			if !ok {
+				return errors.New("replication connection is down")
+			}
 			res, err = query(ctx, tx, stmt, args...)
 			return err
 		},

@@ -16,6 +16,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
@@ -127,6 +128,8 @@ func createRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotN
 	return sysident.XLogPos, nil
 }
 
+var zeroHash, _ = hex.DecodeString("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+
 // captureRepl begins receiving and decoding messages. Consider the conn to be
 // hijacked after calling captureRepl, and do not use it or the stream can be
 // broken.
@@ -147,6 +150,21 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
 
 	stats := new(walStats)
 
+	// The following loop receives messages from the replication receiver
+	// connection. This includes ALL message types, not just replication
+	// messages. The message types are:
+	//
+	//  - CopyData includes data that may pertain to logical replication
+	//    or just keepalive messages. This is the expected type.
+	//  - CommandComplete is the signal from postgres that it is terminating
+	//    the connection, such as if it is shutting down.
+	//  - ErrorResponse is a fatal error that may contain any of the common
+	//    "SQLSTATE" codes.
+	//
+	// Any other message type is logged, but the loop is otherwise
+	// uninterrupted. A loop is required since there may be no concurrent use of
+	// this low level connection.
+
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -156,27 +174,32 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
 			if err != nil {
 				return fmt.Errorf("SendStandbyStatusUpdate failed: %w", err)
 			}
-			logger.Debugf("Sent Standby status message at %s (%d)\n", clientXLogPos.String(), uint64(clientXLogPos))
+			logger.Debugf("Sent Standby status message at %s (%d)\n", clientXLogPos, uint64(clientXLogPos))
 			nextStandbyMessageDeadline = time.Now().Add(standbyMessageTimeout)
 		}
 
+		// Timeout ReceiveMessage to send the next standby status message.
 		ctxStandby, cancel := context.WithDeadline(ctx, nextStandbyMessageDeadline)
 		rawMsg, err := conn.ReceiveMessage(ctxStandby)
 		cancel()
 		if err != nil {
-			if pgconn.Timeout(err) {
-				continue // nextStandbyMessageDeadline hit
+			if pgconn.Timeout(err) || errors.Is(err, context.DeadlineExceeded) {
+				continue // nextStandbyMessageDeadline hit, time to send next standby status message
 			}
 			return fmt.Errorf("ReceiveMessage failed: %w", err)
 		}
 
-		if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
-			return fmt.Errorf("received Postgres WAL error: %+v", errMsg)
-		}
+		var msg *pgproto3.CopyData
 
-		msg, ok := rawMsg.(*pgproto3.CopyData)
-		if !ok {
-			logger.Errorf("Received unexpected message: %T\n", rawMsg)
+		switch msgT := rawMsg.(type) {
+		case *pgproto3.CopyData:
+			msg = msgT
+		case *pgproto3.CommandComplete:
+			return fmt.Errorf("postgresql has been prematurely stopped")
+		case *pgproto3.ErrorResponse:
+			return fmt.Errorf("received Postgres WAL stream error: %+v", msgT)
+		default:
+			logger.Warnf("Received unexpected message: %T\n", rawMsg)
 			continue
 		}
 
@@ -241,7 +264,11 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
 					return fmt.Errorf("commit hash channel full")
 				}
 
-				logger.Infof("Commit hash %x, seq %d, LSN %v (%d) delta %d",
+				lvl := log.DebugLevel
+				if !bytes.Equal(cHash, zeroHash) {
+					lvl = log.InfoLevel
+				}
+				logger.Logf(lvl, "Commit hash %x, seq %d, LSN %v (%d) delta %d",
 					cHash, seq, xld.WALStart, xld.WALStart, lsnDelta)
 
 				logger.Debug("wal commit stats", log.Uint("inserts", stats.inserts), log.Uint("updates", stats.updates),

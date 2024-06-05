@@ -40,6 +40,11 @@ type Server struct {
 	closers            *closeFuncs
 	log                log.Logger
 
+	dbCtx interface {
+		Done() <-chan struct{}
+		Err() error
+	}
+
 	cfg *config.KwildConfig
 
 	cancelCtxFunc context.CancelFunc
@@ -138,6 +143,16 @@ func (s *Server) Start(ctx context.Context) error {
 	group, groupCtx := errgroup.WithContext(cancelCtx)
 
 	group.Go(func() error {
+		// If the DB dies unexpectedly, stop the entire error group.
+		select {
+		case <-s.dbCtx.Done(): // DB died
+			return s.dbCtx.Err() // shutdown the server
+		case <-groupCtx.Done(): // something else died or was shut down
+			return nil
+		}
+	})
+
+	group.Go(func() error {
 		go func() {
 			<-groupCtx.Done()
 			s.log.Info("stop http server")
@@ -194,7 +209,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 			return err
 		}
-		// If you create DB errors from start, note that this is neds db writes
+		// If you create DB errors from start, note that this needs DB writes
 		// in InitChain before transactional block processing begins! Further,
 		// it will immediately start replaying blocks if ABCI app indicates it
 		// is behind, causing FinalizeBlock+Commit calls right away.
