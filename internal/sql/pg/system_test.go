@@ -2,6 +2,8 @@ package pg
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func Test_validateVersion(t *testing.T) {
@@ -216,6 +218,128 @@ func Test_wantMinIntFn(t *testing.T) {
 			err := tt.fn(tt.check)
 			if gotErr := err != nil; tt.wantErr != gotErr {
 				t.Errorf("want err %v, got %v", tt.wantErr, gotErr)
+			}
+		})
+	}
+}
+
+func TestSettingValidFnAND(t *testing.T) {
+	tests := []struct {
+		name    string
+		fns     []settingValidFn
+		val     string
+		wantErr bool
+	}{
+		{
+			name:    "no conditions",
+			fns:     []settingValidFn{},
+			val:     "any",
+			wantErr: false,
+		},
+		{
+			name:    "one condition satisfied",
+			fns:     []settingValidFn{wantStringFn("abc")},
+			val:     "abc",
+			wantErr: false,
+		},
+		{
+			name:    "one condition not satisfied",
+			fns:     []settingValidFn{wantStringFn("abc")},
+			val:     "xyz",
+			wantErr: true,
+		},
+		{
+			name:    "multiple conditions, one satisfied",
+			fns:     []settingValidFn{wantStringFn("abc"), wantStringFn("xyz")},
+			val:     "xyz",
+			wantErr: true,
+		},
+		{
+			name:    "multiple conditions, none satisfied",
+			fns:     []settingValidFn{wantStringFn("invalid"), wantOnFn(false)},
+			val:     "on",
+			wantErr: true,
+		},
+		{
+			name:    "multiple int conditions, all satisfied",
+			fns:     []settingValidFn{wantMinIntFn(20), wantMaxIntFn(30)},
+			val:     "25",
+			wantErr: false,
+		},
+		{
+			name:    "multiple int conditions, first satisfied",
+			fns:     []settingValidFn{wantMinIntFn(20), wantMaxIntFn(30)},
+			val:     "31",
+			wantErr: true,
+		},
+		{
+			name:    "multiple int conditions, last satisfied",
+			fns:     []settingValidFn{wantMinIntFn(20), wantMaxIntFn(30)},
+			val:     "19",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fn := andValidFn(tt.fns...)
+			err := fn(tt.val)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSettingValidFnOR(t *testing.T) {
+	tests := []struct {
+		name    string
+		fns     []settingValidFn
+		val     string
+		wantErr bool
+	}{
+		{
+			name:    "no conditions",
+			fns:     []settingValidFn{},
+			val:     "any",
+			wantErr: true,
+		},
+		{
+			name:    "one condition satisfied",
+			fns:     []settingValidFn{wantStringFn("abc")},
+			val:     "abc",
+			wantErr: false,
+		},
+		{
+			name:    "one condition not satisfied",
+			fns:     []settingValidFn{wantStringFn("abc")},
+			val:     "xyz",
+			wantErr: true,
+		},
+		{
+			name:    "multiple conditions, one satisfied",
+			fns:     []settingValidFn{wantStringFn("abc"), wantStringFn("xyz")},
+			val:     "xyz",
+			wantErr: false,
+		},
+		{
+			name:    "multiple conditions, none satisfied",
+			fns:     []settingValidFn{wantStringFn("invalid"), wantOnFn(false)},
+			val:     "on",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fn := orValidFn(tt.fns...)
+			err := fn(tt.val)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
