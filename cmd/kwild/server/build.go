@@ -247,6 +247,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		log:                *d.log.Named("server"),
 		closers:            closers,
 		cfg:                d.cfg,
+		dbCtx:              db,
 	}
 }
 

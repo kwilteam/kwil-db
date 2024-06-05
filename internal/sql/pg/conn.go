@@ -84,8 +84,9 @@ type Pool struct {
 type PoolConfig struct {
 	ConnConfig
 
-	// MaxConns is the maximum number of allowable connections, including the
-	// one write connection. Thus there will be MaxConns-1 readers.
+	// MaxConns is the maximum number of allowable connections in the read pool.
+	// This does not include the reserved connections for the consensus thread,
+	// one of which is a writer.
 	MaxConns uint32
 }
 
@@ -177,6 +178,9 @@ func registerTypes(ctx context.Context, conn *pgx.Conn) error {
 	if err != nil {
 		return err
 	}
+
+	// PostgreSQL "domains" will use codec of the underlying type, but the
+	// dynamic OID of the custom domain needs to be registered with pgx.
 
 	pt, err := conn.LoadType(ctx, "uint256")
 	if err != nil {

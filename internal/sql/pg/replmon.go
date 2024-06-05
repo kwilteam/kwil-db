@@ -40,10 +40,10 @@ func decodeCommitPayload(cid []byte) (int64, []byte, error) {
 // exported for general use, but a consumer will use the recvID method, the
 // errChan, and the done chan to interact.
 type replMon struct {
-	conn    *pgconn.PgConn
-	errChan chan error
-	quit    context.CancelFunc
-	done    chan struct{}
+	conn *pgconn.PgConn
+	quit context.CancelFunc
+	done chan struct{} // termination broadcast channel
+	err  error         // specific error, safe to read after done is closed
 
 	mtx      sync.Mutex
 	results  map[int64][]byte // results should generally be unused as pg.DB will request a promise before commit
@@ -70,7 +70,6 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 
 	rm := &replMon{
 		conn:     conn,
-		errChan:  errChan,
 		quit:     quit,
 		done:     make(chan struct{}),
 		results:  make(map[int64][]byte),
@@ -80,14 +79,14 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 	go func() {
 		defer close(rm.done)
 		defer quit()
-		defer conn.Close(ctx)
+		defer conn.Close(context.Background())
 
 		for cid := range commitChan { // until commitChan is closed
 			// decode seq,chash
 			seq, cHash, err := decodeCommitPayload(cid)
 			if err != nil {
-				rm.errChan <- fmt.Errorf("invalid commit payload encoding: %w", err)
-				return
+				rm.err = fmt.Errorf("invalid commit payload encoding: %w", err)
+				return // quit() will terminate startRepl
 			}
 			// if promise exists, send it, otherwise put it in the results map
 			rm.mtx.Lock()
@@ -102,6 +101,11 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 			}
 			rm.mtx.Unlock()
 		}
+
+		// commitChan was closed by the replication stream goroutine, so we
+		// expect a cause from its errChan. It could just be context.Canceled
+		// from a clean shutdown, or it could be something pathological.
+		rm.err = <-errChan // send guaranteed before commitChan closed
 	}()
 
 	return rm, nil
@@ -109,16 +113,15 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 
 // this channel-based approach is so that the commit ID is guaranteed to pertain
 // to the requested sequence number.
-func (rm *replMon) recvID(seq int64) chan []byte {
-	c := make(chan []byte, 1)
-
+func (rm *replMon) recvID(seq int64) (chan []byte, bool) {
 	// Ensure a commit ID can be promised before we give one.
 	select {
 	case <-rm.done:
-		close(c)
-		return c
+		return nil, false
 	default:
 	}
+
+	c := make(chan []byte, 1)
 
 	// first check if the results is already in the map, otherwise make the
 	// promise and store it
@@ -129,7 +132,7 @@ func (rm *replMon) recvID(seq int64) chan []byte {
 		logger.Warnf("recvID with EXISTING result for sequence %d", seq)
 		delete(rm.results, seq)
 		c <- cHash
-		return c
+		return c, true
 	}
 
 	if _, have := rm.promises[seq]; have {
@@ -137,7 +140,7 @@ func (rm *replMon) recvID(seq int64) chan []byte {
 	}
 	rm.promises[seq] = c // maybe panic if one already exists, indicating program logic error
 
-	return c
+	return c, true
 }
 
 func (rm *replMon) stop() {
