@@ -86,9 +86,9 @@ func expandPath(path string) (string, error) {
 	return filepath.Abs(path)
 }
 
-func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort, snapshotDir string) error {
+func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort, snapshotDir string) (err error) {
 	// Check if the snapshot directory exists, if not create it
-	err := os.MkdirAll(snapshotDir, 0755)
+	err = os.MkdirAll(snapshotDir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot directory: %w", err)
 	}
@@ -98,7 +98,13 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort, snapsho
 	if err != nil {
 		return fmt.Errorf("failed to create dump file: %w", err)
 	}
-	defer outputFile.Close()
+	// delete the dump file if an error occurs anywhere during the snapshot process
+	defer func() {
+		outputFile.Close()
+		if err != nil {
+			os.Remove(dumpFile)
+		}
+	}()
 
 	gzipWriter := gzip.NewWriter(outputFile)
 	defer gzipWriter.Close()
@@ -233,7 +239,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort, snapsho
 
 	// Close the writer when pg_dump completes to signal EOF to sed
 	if err := pgDumpCmd.Wait(); err != nil {
-		return fmt.Errorf("pg_dump failed with error: %s, err: %w", stderr.String(), err)
+		return fmt.Errorf(stderr.String())
 	}
 
 	gzipWriter.Flush()
