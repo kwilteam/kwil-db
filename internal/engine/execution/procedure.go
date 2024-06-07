@@ -619,5 +619,4 @@ func (p *preparedProcedure) shapeReturn(result *sql.ResultSet) error {
 	}
 
 	return nil
-
 }

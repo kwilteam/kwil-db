@@ -52,7 +52,7 @@ func Test_StoringSchemas(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	schemas, err := getSchemas(ctx, tx)
+	schemas, err := getSchemas(ctx, tx, nil)
 	require.NoError(t, err)
 
 	require.Len(t, schemas, 1)
