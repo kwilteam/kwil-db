@@ -2,6 +2,8 @@ module github.com/kwilteam/kwil-db/parse
 
 go 1.21.0
 
+replace github.com/kwilteam/kwil-db/core => ../core
+
 require (
 	github.com/antlr4-go/antlr/v4 v4.13.0
 	github.com/google/go-cmp v0.6.0
