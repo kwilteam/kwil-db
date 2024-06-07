@@ -450,19 +450,19 @@ func restoreDB(d *coreDependencies) {
 	// Ensure that the snapshot file exists and the snapshot hash matches the genesis apphash.
 
 	// Ensure that the snapshot file exists, if node is supposed to start with a snapshot state
-	if genCfg.DataAppHash != nil && appCfg.SnapshotFile == "" {
+	if genCfg.DataAppHash != nil && appCfg.GenesisState == "" {
 		failBuild(nil, "snapshot file not provided")
 	}
 
 	// Snapshot file exists
-	snapFile, err := os.Open(appCfg.SnapshotFile)
+	snapFile, err := os.Open(appCfg.GenesisState)
 	if err != nil {
 		failBuild(err, "failed to open snapshot file")
 	}
 
 	// Check if the snapshot file is compressed, if yes decompress it
 	var reader io.Reader
-	if strings.HasSuffix(appCfg.SnapshotFile, ".gz") {
+	if strings.HasSuffix(appCfg.GenesisState, ".gz") {
 		// Decompress the snapshot file
 		gzipReader, err := gzip.NewReader(snapFile)
 		if err != nil {

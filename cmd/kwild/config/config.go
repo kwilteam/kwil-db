@@ -90,10 +90,10 @@ type AppConfig struct {
 
 	Snapshots SnapshotConfig `mapstructure:"snapshots"`
 
-	// SnapshotFile is the path to the snapshot file to load on startup
-	// during network initialization. If genesis app_hash is not provided,
-	// this snapshot file is not used.
-	SnapshotFile string `mapstructure:"snapshot_file"`
+	// GenesisState is the path to the snapshot file containing genesis state
+	// to be loaded on startup during network initialization. If genesis app_hash
+	// is not provided, this snapshot file is not used.
+	GenesisState string `mapstructure:"genesis_state"`
 }
 
 type SnapshotConfig struct {
@@ -570,7 +570,7 @@ func DefaultConfig() *KwildConfig {
 				MaxSnapshots:    3,
 				SnapshotDir:     SnapshotDirName,
 			},
-			SnapshotFile: "",
+			GenesisState: "",
 		},
 		Logging: &Logging{
 			Level:        "info",
@@ -706,13 +706,13 @@ func (cfg *KwildConfig) sanitizeCfgPaths() error {
 		fmt.Println("State sync received snapshots directory:", cfg.ChainCfg.StateSync.SnapshotDir)
 	}
 
-	if cfg.AppCfg.SnapshotFile != "" {
-		path, err := ExpandPath(cfg.AppCfg.SnapshotFile)
+	if cfg.AppCfg.GenesisState != "" {
+		path, err := ExpandPath(cfg.AppCfg.GenesisState)
 		if err != nil {
-			return fmt.Errorf("failed to expand snapshot file path \"%v\": %v", cfg.AppCfg.SnapshotFile, err)
+			return fmt.Errorf("failed to expand snapshot file path \"%v\": %v", cfg.AppCfg.GenesisState, err)
 		}
-		cfg.AppCfg.SnapshotFile = path
-		fmt.Println("Snapshot file to initialize database from:", cfg.AppCfg.SnapshotFile)
+		cfg.AppCfg.GenesisState = path
+		fmt.Println("Snapshot file to initialize database from:", cfg.AppCfg.GenesisState)
 	}
 	return nil
 }

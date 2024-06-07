@@ -167,7 +167,7 @@ hostname = "{{ .AppCfg.Hostname }}"
 
 # Path to the snapshot file to restore the database from.
 # Used during the network migration process.
-snapshot_file = "{{ .AppCfg.SnapshotFile }}"
+genesis_state = "{{ .AppCfg.GenesisState }}"
 
 #######################################################################
 ###                     Extension Configuration                     ###
