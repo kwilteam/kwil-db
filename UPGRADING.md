@@ -10,9 +10,11 @@ Kwil v0.8 introduces substantial changes to the Kuneiform language (SQL smart co
 
 Nodes running `kwild` v0.8 are not compatible with nodes running `kwild` v0.7.
 
-If a v0.7 network uses schemas that **are** compatible with v0.8, follow the [network migrations guide](https://docs.kwil.com/docs/node/network-migrations) to export the network data (CometBFT and Postgres) and import it into a new v0.8 network.
+If a v0.7 network uses schemas that **are** compatible with v0.8, follow the [network migrations guide](https://docs.kwil.com/docs/node/network-migrations) to export the network data (schemas, accounts, and data within schemas) and import it into a new v0.8 network.
 
 If a v0.7 network uses schemas that **are not** compatible with v0.8, you will need to deploy a fresh v0.8 network and migrate the Postgres data manually using the [batch command](https://docs.kwil.com/docs/ref/kwil-cli/database/batch).
+
+To check if your schemas are compatible with v0.8, use the `kwil-cli utils parse` command in the v0.8 Kwil CLI to parse the schema files and output the schema as JSON. If the command fails, the schema is not compatible with v0.8.
 
 ### Kuneiform
 
@@ -33,7 +35,7 @@ If a v0.7 network uses schemas that **are not** compatible with v0.8, you will n
 
 ### Network Migrations
 
-- Kwil has a network migration process that allows for exporting network data (CometBFT and Postgres) and importing it into a new network. This can be used to upgrade a network to a new version (assuming the old version does not use features that are incompatible with the new version) or to create a new network with the same data. - **[Learn more](https://docs.kwil.com/docs/node/network-migrations)**
+- Kwil has a network migration process that allows for exporting Postgres Data (schemas, accounts, and data within schemas) and importing it into a new network. This can be used to upgrade a network to a new version (assuming the old version does not use features that are incompatible with the new version) or to create a new network with the same data. - **[Learn more](https://docs.kwil.com/docs/node/network-migrations)**
 
 ### Coordinated Consensus Rules Changes
 
@@ -56,10 +58,11 @@ If a v0.7 network uses schemas that **are not** compatible with v0.8, you will n
 In the node's `config.toml` file, the following changes have been made:
 
 - Added `app.rpc_timeout`, which imposes a timeout on RPC requests. The default is 45 seconds.
-- Added `app.db_read_timeout`, which imposes a timout on read-only DB transactions (i.e. actions/procedures with a [`view` tag](https://docs.kwil.com/docs/kuneiform/supported-features#access-tags) or an ad-hoc SELECT query). The default 5 seconds.
+- Added `app.db_read_timeout`, which imposes a timout on read-only DB transactions (i.e. actions/procedures with a `view` tag or an ad-hoc SELECT query). The default 5 seconds.
 - Added `rpc.broadcast_tx_timout`, which imposes a timeout for awaiting transaction confirmation when using the `--sync` flag in `kwil-cli`. The default is 10 seconds.
-- Added `app.snapshots` to support snapshot creation. See the `StateSyncConfig` struct for more information.
+- Added `app.snapshots` to support snapshot creation. See the `SnapshotConfig` struct for more information.
 - Added `app.snapshot_file` to suport starting a network with a state at genesis. This is to support the Network Migrations feature.
+- Added `chain.statesync` to enable new nodes syncing with snapshots instead of replaying each block. See the `StateSyncConfig` struct for more information.
 
 ### CLI Changes
 
@@ -75,7 +78,7 @@ In the node's `config.toml` file, the following changes have been made:
 
 ### Kwil Admin
 
-- Added `kwil-admin snapshot create` command for creating network snapshots (both CometBFT and Postgres data).
+- Added `kwil-admin snapshot create` command for creating network snapshots (schemas, accounts, and data within schemas).
 
 #### Breaking Changes
 
@@ -102,7 +105,7 @@ type Signature struct {
 
 #### `core/types`
 
-- The `Schema` struct and all of it's composing types are now mirrored in `core/types/transactions`.
+- The `Schema` struct and all of it's composing types are now mirrored in `core/types.Schema`.
 - Added many new type definitions to support procedures and strongly typed values. See `core/types/transactions/payload_schema.go`.
 
 ##### Breaking Changes
@@ -115,7 +118,7 @@ type Signature struct {
 
 #### `core/types/transactions`
 
-- **Note**: Most users do not need to be concserned with these changes as the `core/client` and `core/rpc/...` packages handle their use.
+- **Note**: Most users do not need to be concerned with these changes as the `core/client` and `core/rpc/...` packages handle their use.
 - Added the helper function `UnmarshalPayload` to assist in unmarshaling payloads from `byte[]` give its `PayloadType`.
 - Added new `TxCode` values:
 
