@@ -346,7 +346,7 @@ func TestKwildNetworkHardfork(t *testing.T) {
 		}),
 	}
 
-	driverType := "http"
+	driverType := "jsonrpc"
 
 	t.Run(driverType+"_driver", func(t *testing.T) {
 		helper := integration.NewIntHelper(t, opts...)

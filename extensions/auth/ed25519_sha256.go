@@ -1,5 +1,3 @@
-//go:build auth_ed25519_sha256 || ext_test
-
 package auth
 
 import (
@@ -11,13 +9,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 )
-
-func init() {
-	err := RegisterAuthenticator(ModAdd, Ed25519Sha256Auth, Ed22519Sha256Authenticator{})
-	if err != nil {
-		panic(err)
-	}
-}
 
 const (
 	// Ed25519Sha256Auth is the authenticator name

@@ -13,7 +13,10 @@ import (
 	"github.com/kwilteam/kwil-db/common/functions"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/extensions/consensus"
+	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/extensions/resolutions/credit"
 )
 
 func init() {
@@ -27,6 +30,27 @@ func init() {
 		//    account with a small but observable amount
 
 		Name: "gremlin", // the name is not exported for this test fork
+
+		AuthUpdates: []*consensus.AuthMod{
+			{
+				Name:      "ed25519+sha256",
+				Operation: auth.ModAdd,
+				Authn:     auth.Ed22519Sha256Authenticator{},
+			},
+		},
+
+		// modify the "credit_account" resolution used by the eth event oracle
+		// so that it takes only >1/6 of the validators to affect a credit.
+		ResolutionUpdates: []*consensus.ResolutionMod{
+			{
+				Name:      credit.CreditAccountEventType,
+				Operation: resolutions.ModUpdate,
+				Config: &resolutions.ResolutionConfig{
+					RefundThreshold:       big.NewRat(1, 6),
+					ConfirmationThreshold: big.NewRat(1, 12),
+				},
+			},
+		},
 
 		ParamsUpdates: &consensus.ParamUpdates{
 			Version: &chain.VersionParams{
