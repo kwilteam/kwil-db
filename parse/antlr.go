@@ -52,21 +52,21 @@ func newSchemaVisitor(stream *antlr.InputStream, errLis *errorListener) *schemaV
 
 var _ gen.KuneiformParserVisitor = (*schemaVisitor)(nil)
 
-// VisitEntry visits the top-level entry in the schema.
-// It can be a schema, action, procedure, or sql statement.
-func (s *schemaVisitor) VisitEntry(ctx *gen.EntryContext) any {
-	switch {
-	case ctx.Schema() != nil:
-		return s.VisitSchema(ctx.Schema().(*gen.SchemaContext))
-	case ctx.Sql() != nil:
-		return s.VisitSql(ctx.Sql().(*gen.SqlContext))
-	case ctx.Action_block() != nil:
-		return s.VisitAction_block(ctx.Action_block().(*gen.Action_blockContext))
-	case ctx.Procedure_block() != nil:
-		return s.VisitProcedure_block(ctx.Procedure_block().(*gen.Procedure_blockContext))
-	default:
-		panic("unknown entry")
-	}
+// below are the 4 top-level entry points for the visitor.
+func (s *schemaVisitor) VisitSchema_entry(ctx *gen.Schema_entryContext) any {
+	return ctx.Schema().Accept(s)
+}
+
+func (s *schemaVisitor) VisitAction_entry(ctx *gen.Action_entryContext) any {
+	return ctx.Action_block().Accept(s)
+}
+
+func (s *schemaVisitor) VisitProcedure_entry(ctx *gen.Procedure_entryContext) any {
+	return ctx.Procedure_block().Accept(s)
+}
+
+func (s *schemaVisitor) VisitSql_entry(ctx *gen.Sql_entryContext) any {
+	return ctx.Sql().Accept(s)
 }
 
 // unknownExpression creates a new literal with an unknown type and null value.
@@ -398,7 +398,18 @@ func (s *schemaVisitor) VisitAnnotation(ctx *gen.AnnotationContext) any {
 	return str.String()
 }
 
+// isErrNode is true if an antlr terminal node is an error node.
+func isErrNode(node antlr.TerminalNode) bool {
+	_, ok := node.(antlr.ErrorNode)
+	return ok
+}
+
 func (s *schemaVisitor) VisitDatabase_declaration(ctx *gen.Database_declarationContext) any {
+	// needed to avoid https://github.com/kwilteam/kwil-db/issues/752
+	if isErrNode(ctx.DATABASE()) {
+		return ""
+	}
+
 	return s.getIdent(ctx.IDENTIFIER())
 }
 
@@ -763,9 +774,18 @@ func (s *schemaVisitor) VisitProcedure_declaration(ctx *gen.Procedure_declaratio
 }
 
 func (s *schemaVisitor) VisitForeign_procedure_declaration(ctx *gen.Foreign_procedure_declarationContext) any {
-	fp := &types.ForeignProcedure{
-		Name: s.getIdent(ctx.IDENTIFIER()),
+	// similar to https://github.com/kwilteam/kwil-db/issues/752, the parser will recognize
+	// `foreign proced`` as a foreign procedure named `proced`. it will throw an error, but we
+	// don't want to return this to the client either.
+	fp := &types.ForeignProcedure{}
+	if isErrNode(ctx.FOREIGN()) {
+		return fp
 	}
+	if isErrNode(ctx.PROCEDURE()) {
+		return fp
+	}
+
+	fp.Name = s.getIdent(ctx.IDENTIFIER())
 
 	if ctx.Procedure_return() != nil {
 		fp.Returns = ctx.Procedure_return().Accept(s).(*types.ProcedureReturn)
@@ -1911,7 +1931,7 @@ func (s *schemaVisitor) VisitStmt_procedure_call(ctx *gen.Stmt_procedure_callCon
 		Call: ctx.Procedure_function_call().Accept(s).(ExpressionCall),
 	}
 
-	for _, v := range ctx.AllVariable_or_underscore() {
+	for i, v := range ctx.AllVariable_or_underscore() {
 		// check for nil since nil pointer will fail *string type assertion
 		if v.Accept(s) == nil {
 			stmt.Receivers = append(stmt.Receivers, nil)
@@ -1919,6 +1939,7 @@ func (s *schemaVisitor) VisitStmt_procedure_call(ctx *gen.Stmt_procedure_callCon
 		}
 
 		stmt.Receivers = append(stmt.Receivers, varFromString(*v.Accept(s).(*string)))
+		stmt.Receivers[i].Set(v)
 	}
 
 	stmt.Set(ctx)

@@ -11,10 +11,10 @@ type Position struct {
 	// Set is true if the position of the Position has been set.
 	// This is useful for testing parsers.
 	IsSet     bool `json:"-"`
-	StartLine int  `json:"-"`
-	StartCol  int  `json:"-"`
-	EndLine   int  `json:"-"`
-	EndCol    int  `json:"-"`
+	StartLine int  `json:"start_line,omitempty"`
+	StartCol  int  `json:"start_col,omitempty"`
+	EndLine   int  `json:"end_line,omitempty"`
+	EndCol    int  `json:"end_col,omitempty"`
 }
 
 // Set sets the position of the Position based on the given parser rule context.
@@ -37,8 +37,17 @@ func (n *Position) SetToken(t antlr.Token) {
 
 // GetPosition returns the Position.
 // It is useful if the Position is embedded in another struct.
-func (n Position) GetPosition() *Position {
-	return &n
+func (n *Position) GetPosition() *Position {
+	return n
+}
+
+// Clear clears the position of the Position.
+func (n *Position) Clear() {
+	n.IsSet = false
+	n.StartLine = 0
+	n.StartCol = 0
+	n.EndLine = 0
+	n.EndCol = 0
 }
 
 // unaryNode creates a Position with the same start and end position.

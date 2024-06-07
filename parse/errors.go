@@ -4,58 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
 )
 
-// ParseErrors is a collection of parse errors.
-type ParseErrors []*ParseError
-
-var _ interface{ Unwrap() []error } = (*ParseErrors)(nil)
-
-// Unwrap allows errors.Is and error.As to identify wrapped errors.
-func (p ParseErrors) Unwrap() []error {
-	errs := make([]error, len(p))
-	for i := range p {
-		errs[i] = p[i]
-	}
-	return errs
-}
-
-// Err returns all the errors as a single error.
-func (p ParseErrors) Err() error {
-	if len(p) == 0 {
-		return nil
-	}
-	return &p
-}
-
-// The zero value of a ParseErrors instance intentionally does not implement the
-// error interface. The Err method will return nil if the length is zero.
-var _ error = (*ParseErrors)(nil)
-
-// Error implements the error interface.
-func (p *ParseErrors) Error() string {
-	errs := *p
-	switch len(errs) {
-	case 0: // use Err and this won't happen
-		return "<nil>"
-	case 1:
-		return errs[0].Error()
-	default:
-		var str strings.Builder
-		str.WriteString("detected multiple parse errors:")
-		for i, err := range errs {
-			str.WriteString(fmt.Sprintf("\n%d: %s", i, err.Error()))
-		}
-		return str.String()
-	}
-}
-
-// Add adds errors to the collection.
-func (p *ParseErrors) Add(errs ...*ParseError) {
-	*p = append(*p, errs...)
+// WrapErrors wraps a collection of ParseErrors
+func WrapErrors(errs ...*ParseError) ParseErrs {
+	return &errorListener{errs: errs}
 }
 
 // ParseError is an error that occurred during parsing.
@@ -134,8 +89,21 @@ func (e *errorListener) Err() error {
 	if len(e.errs) == 0 {
 		return nil
 	}
-	pe := ParseErrors(e.errs)
-	return &pe
+	switch len(e.errs) {
+	case 1:
+		return e.errs[0]
+	default:
+		var errChain error
+		for i, err := range e.errs {
+			if i == 0 {
+				errChain = err
+				continue
+			}
+			errChain = fmt.Errorf("%w\n %w", errChain, err)
+		}
+
+		return fmt.Errorf("detected multiple parse errors:\n %w", errChain)
+	}
 }
 
 // Add adds errors to the collection.

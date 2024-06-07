@@ -13,7 +13,7 @@ import (
 )
 
 func newParseCmd() *cobra.Command {
-	var debug bool
+	var debug, includePositions bool
 	var out string
 
 	cmd := &cobra.Command{
@@ -24,6 +24,10 @@ func newParseCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if args[0] == "" {
 				return display.PrintErr(cmd, fmt.Errorf("file path is required"))
+			}
+
+			if includePositions && !debug {
+				return display.PrintErr(cmd, fmt.Errorf("include-positions flag can only be used with debug"))
 			}
 
 			file, err := os.ReadFile(args[0])
@@ -67,6 +71,12 @@ func newParseCmd() *cobra.Command {
 				Generated: generateAll(res.Schema),
 			}
 
+			if !includePositions {
+				parse.RecursivelyVisitPositions(dis, func(gp parse.GetPositioner) {
+					gp.Clear()
+				})
+			}
+
 			if out == "" {
 				return display.PrintCmd(cmd, dis)
 			}
@@ -86,6 +96,7 @@ func newParseCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&debug, "debug", "d", false, "Display debug information")
+	cmd.Flags().BoolVarP(&includePositions, "include-positions", "p", false, "Include positions in the debug output")
 	cmd.Flags().StringVarP(&out, "out", "o", "", "Output file. If debug is true, errors will also be written to this file")
 
 	return cmd
@@ -142,32 +153,36 @@ func generateAll(schema *types.Schema) *genResult {
 		}
 	}()
 
+	wrapErr := func(s string, e error) error {
+		return fmt.Errorf("%s: %w", s, e)
+	}
+
 	var err error
 	for _, table := range schema.Tables {
 		r.Tables[table.Name], err = generate.GenerateDDL(schema.Name, table)
 		if err != nil {
-			r.Errors = append(r.Errors, err)
+			r.Errors = append(r.Errors, wrapErr("table "+table.Name, err))
 		}
 	}
 
 	for _, action := range schema.Actions {
 		r.Actions[action.Name], err = generate.GenerateActionBody(action, schema, schema.Name)
 		if err != nil {
-			r.Errors = append(r.Errors, err)
+			r.Errors = append(r.Errors, wrapErr("action "+action.Name, err))
 		}
 	}
 
 	for _, proc := range schema.Procedures {
 		r.Procedures[proc.Name], err = generate.GenerateProcedure(proc, schema, schema.Name)
 		if err != nil {
-			r.Errors = append(r.Errors, err)
+			r.Errors = append(r.Errors, wrapErr("procedure "+proc.Name, err))
 		}
 	}
 
 	for _, proc := range schema.ForeignProcedures {
 		r.ForeignProcedures[proc.Name], err = generate.GenerateForeignProcedure(proc, schema.Name)
 		if err != nil {
-			r.Errors = append(r.Errors, err)
+			r.Errors = append(r.Errors, wrapErr("foreign procedure "+proc.Name, err))
 		}
 	}
 

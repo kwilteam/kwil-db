@@ -65,6 +65,19 @@ import (
 		be one column in the return columns (the column with the aggregate function).
 */
 
+// unknownPosition is used to signal that a position is unknown in the AST because
+// it was not present in the parse statement. This is used for when we make modifications
+// to the ast, e.g. for enforcing ordering.
+func unknownPosition() Position {
+	return Position{
+		IsSet:     true,
+		StartLine: -1,
+		StartCol:  -1,
+		EndLine:   -1,
+		EndCol:    -1,
+	}
+}
+
 // blockContext is the context for the current block. This is can be an action, procedure,
 // or sql block.
 type blockContext struct {
@@ -1332,7 +1345,9 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 		// order all flattened returns
 		for _, attr := range rel1 {
 			p0.Ordering = append(p0.Ordering, &OrderingTerm{
+				Position: unknownPosition(),
 				Expression: &ExpressionColumn{
+					Position: unknownPosition(),
 					// leave column blank, since we are referencing a column that no
 					// longer knows what table it is from due to the compound.
 					Column: attr.Name,
@@ -1377,9 +1392,11 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 			// order the columns
 			for _, col := range colsToOrder {
 				p0.Ordering = append(p0.Ordering, &OrderingTerm{
+					Position: unknownPosition(),
 					Expression: &ExpressionColumn{
-						Table:  col[0],
-						Column: col[1],
+						Position: unknownPosition(),
+						Table:    col[0],
+						Column:   col[1],
 					},
 				})
 			}
@@ -1387,9 +1404,11 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 			// if distinct, order by all columns returned
 			for _, attr := range rel1 {
 				p0.Ordering = append(p0.Ordering, &OrderingTerm{
+					Position: unknownPosition(),
 					Expression: &ExpressionColumn{
-						Table:  "",
-						Column: attr.Name,
+						Position: unknownPosition(),
+						Table:    "",
+						Column:   attr.Name,
 					},
 				})
 			}
@@ -1407,9 +1426,11 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 
 					for _, pk := range pks {
 						p0.Ordering = append(p0.Ordering, &OrderingTerm{
+							Position: unknownPosition(),
 							Expression: &ExpressionColumn{
-								Table:  rel.Name,
-								Column: pk,
+								Position: unknownPosition(),
+								Table:    rel.Name,
+								Column:   pk,
 							},
 						})
 					}
@@ -1420,9 +1441,11 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 				// if not a table, order by all columns
 				for _, attr := range rel.Attributes {
 					p0.Ordering = append(p0.Ordering, &OrderingTerm{
+						Position: unknownPosition(),
 						Expression: &ExpressionColumn{
-							Table:  rel.Name,
-							Column: attr.Name,
+							Position: unknownPosition(),
+							Table:    rel.Name,
+							Column:   attr.Name,
 						},
 					})
 				}

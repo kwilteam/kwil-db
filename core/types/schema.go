@@ -1065,7 +1065,7 @@ type ForeignProcedure struct {
 	// Returns specifies what the foreign procedure returns.
 	// If it does not return a table, the names of the return
 	// values are not needed, and should be left empty.
-	Returns *ProcedureReturn `json:"returns"`
+	Returns *ProcedureReturn `json:"return_types"`
 }
 
 func (f *ForeignProcedure) Clean() error {

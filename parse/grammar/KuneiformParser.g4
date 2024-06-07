@@ -8,12 +8,29 @@ options {
     tokenVocab = KuneiformLexer;
 }
 
-// entry is the entrypoint for the parser.
-// The parser is capable of parsing full Kuneiform schemas,
-// sql statements, and action and procedure bodies.
-entry:
-    (schema | sql | action_block | procedure_block)
-    EOF
+// there are 4 top-level entry points for the parser:
+// 1. schema_entry
+// 2. sql_entry
+// 3. action_entry
+// 4. procedure_entry
+// It is necessary to keep each type of entry separate, since some statements
+// can be ambiguous between the different types of entries. Callers will know
+// which entry to use based on when they are parsing.
+
+schema_entry:
+    schema EOF
+;
+
+sql_entry:
+    sql EOF
+;
+
+action_entry:
+    action_block EOF
+;
+
+procedure_entry:
+    procedure_block EOF
 ;
 
 /*
