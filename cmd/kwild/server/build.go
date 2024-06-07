@@ -19,6 +19,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
@@ -301,7 +302,7 @@ type coreDependencies struct {
 	ctx        context.Context
 	autogen    bool
 	cfg        *config.KwildConfig
-	genesisCfg *config.GenesisConfig
+	genesisCfg *chain.GenesisConfig
 	privKey    cmtEd.PrivKey
 	log        log.Logger
 	dbOpener   dbOpener
@@ -341,8 +342,8 @@ func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext,
 		sh = snapshotter
 	}
 
-	txApp, err := txapp.NewTxApp(db, engine, buildSigner(d), ev, sh, d.genesisCfg.ChainID,
-		!d.genesisCfg.ConsensusParams.WithoutGasCosts, d.cfg.AppCfg.Extensions, *d.log.Named("tx-router"))
+	txApp, err := txapp.NewTxApp(d.ctx, db, engine, buildSigner(d), ev, sh, d.genesisCfg,
+		d.cfg.AppCfg.Extensions, *d.log.Named("tx-router"))
 	if err != nil {
 		failBuild(err, "failed to build new TxApp")
 	}
@@ -368,14 +369,14 @@ func buildAbci(d *coreDependencies, txApp abci.TxApp, snapshotter *statesync.Sna
 		ApplicationVersion: d.genesisCfg.ConsensusParams.Version.App,
 		GenesisAllocs:      d.genesisCfg.Alloc,
 		GasEnabled:         !d.genesisCfg.ConsensusParams.WithoutGasCosts,
+		ForkHeights:        d.genesisCfg.ForkHeights,
 	}
-	return abci.NewAbciApp(cfg, sh, ss, txApp,
-		&txapp.ConsensusParams{
-			VotingPeriod:       d.genesisCfg.ConsensusParams.Votes.VoteExpiry,
-			JoinVoteExpiration: d.genesisCfg.ConsensusParams.Validator.JoinExpiry,
-		},
-		*d.log.Named("abci"),
-	)
+	app, err := abci.NewAbciApp(d.ctx, cfg, sh, ss, txApp,
+		d.genesisCfg.ConsensusParams, *d.log.Named("abci"))
+	if err != nil {
+		failBuild(err, "failed to build ABCI application")
+	}
+	return app
 }
 
 func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broadcast.Broadcaster, txapp *txapp.TxApp) *broadcast.EventBroadcaster {

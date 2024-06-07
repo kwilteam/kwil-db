@@ -15,11 +15,6 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
-	// internal/ident is home to the Authenticator registry used by kwild, as
-	// well as the registry-powered verification functions used by kwild. The
-	// RegisterAuthenticator helper is provided here so that extension
-	// implementations may register themselves on import, but it would be fine
-	// to shift that responsibility to the importing code in kwild (these stubs)
 )
 
 var (
@@ -32,14 +27,39 @@ var (
 // registeredAuthenticators is the Authenticator registry used by kwild.
 var registeredAuthenticators = make(map[string]auth.Authenticator)
 
-// RegisterAuthenticator registers an authenticator with a given name
-func RegisterAuthenticator(name string, auth auth.Authenticator) error {
+// ModOperation is the type used to enumerate authenticator modifications.
+type ModOperation int8
+
+// Resolutions may be removed, updated, or added.
+const (
+	ModRemove ModOperation = iota - 1
+	ModUpdate
+	ModAdd
+)
+
+// RegisterAuthenticator registers, removes, or updates an authenticator with
+// the Kwil network.
+func RegisterAuthenticator(mod ModOperation, name string, auth auth.Authenticator) error {
 	name = strings.ToLower(name)
 	if _, ok := registeredAuthenticators[name]; ok {
-		return fmt.Errorf("%w: %s", ErrAuthenticatorExists, name)
+		switch mod {
+		case ModAdd:
+			return fmt.Errorf("%w: %s", ErrAuthenticatorExists, name)
+		case ModRemove:
+			delete(registeredAuthenticators, name)
+		case ModUpdate:
+			registeredAuthenticators[name] = auth
+		}
+		return nil
+	}
+	switch mod {
+	case ModRemove, ModUpdate:
+		return fmt.Errorf("resolution does not exist to modify (%d)", mod)
+	default: // add
 	}
 
 	registeredAuthenticators[name] = auth
+
 	return nil
 }
 

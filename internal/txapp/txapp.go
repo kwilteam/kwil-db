@@ -12,6 +12,8 @@ import (
 	"sync"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/chain"
+	"github.com/kwilteam/kwil-db/common/chain/forks"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -19,15 +21,18 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
+	"github.com/kwilteam/kwil-db/extensions/consensus"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 // NewTxApp creates a new router.
-func NewTxApp(db DB, engine common.Engine, signer *auth.Ed25519Signer,
-	events Rebroadcaster, snapshotter Snapshotter, chainID string, GasEnabled bool, extensionConfigs map[string]map[string]string, log log.Logger) (*TxApp, error) {
-	voteBodyTxSize, err := computeEmptyVoteBodyTxSize(chainID)
+func NewTxApp(ctx context.Context, db DB, engine common.Engine, signer *auth.Ed25519Signer,
+	events Rebroadcaster, snapshotter Snapshotter, chainParams *chain.GenesisConfig,
+	extensionConfigs map[string]map[string]string, log log.Logger) (*TxApp, error) {
+	voteBodyTxSize, err := computeEmptyVoteBodyTxSize(chainParams.ChainID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute empty vote body tx size: %w", err)
 	}
@@ -42,18 +47,19 @@ func NewTxApp(db DB, engine common.Engine, signer *auth.Ed25519Signer,
 		log:      log,
 		mempool: &mempool{
 			accounts:   make(map[string]*types.Account),
-			gasEnabled: GasEnabled,
+			gasEnabled: !chainParams.ConsensusParams.WithoutGasCosts,
 			nodeAddr:   signer.Identity(),
 		},
 		signer:              signer,
 		snapshotter:         snapshotter,
-		chainID:             chainID,
-		GasEnabled:          GasEnabled,
+		chainID:             chainParams.ChainID,
+		GasEnabled:          !chainParams.ConsensusParams.WithoutGasCosts,
 		extensionConfigs:    extensionConfigs,
 		emptyVoteBodyTxSize: voteBodyTxSize,
 		resTypes:            resTypes,
 	}
-	t.height, t.appHash, err = t.ChainInfo(context.TODO())
+	t.forks.FromMap(chainParams.ForkHeights)
+	t.height, t.appHash, err = t.ChainInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain info: %w", err)
 	}
@@ -69,6 +75,8 @@ type TxApp struct {
 	Engine   common.Engine // tracks deployed schemas
 	// The various internal stores (accounts, votes, etc.) are accessed through
 	// the Database via the functions defined in relevant packages.
+
+	forks forks.Forks
 
 	GasEnabled bool
 	events     Rebroadcaster
@@ -194,9 +202,10 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 	return nil
 }
 
-// ChainInfo is called be the ABCI applications' Info method, which is called
+// ChainInfo is called be the ABCI application's Info method, which is called
 // once on startup except when the node is at genesis, in which case GenesisInit
-// is called by the application's ChainInit method.
+// is called by the application's ChainInit method. At genesis, when there are
+// no blocks yet, the height will be zero, never negative.
 func (r *TxApp) ChainInfo(ctx context.Context) (int64, []byte, error) {
 	tx, err := r.Database.BeginReadTx(ctx)
 	if err != nil {
@@ -372,9 +381,11 @@ func (r *TxApp) validatorSetPower(ctx context.Context, tx sql.Executor) (int64, 
 }
 
 // Execute executes a transaction.  It will route the transaction to the
-// appropriate module(s) and return the response.
+// appropriate module(s) and return the response. This method must only be
+// called from the consensus engine, sequentially, when executing transactions
+// in a block.
 func (r *TxApp) Execute(ctx TxContext, tx *transactions.Transaction) *TxResponse {
-	route, ok := routes[tx.Body.PayloadType.String()]
+	route, ok := routes[tx.Body.PayloadType.String()] // and RegisterRoute call is not concurrent
 	if !ok {
 		return txRes(nil, transactions.CodeInvalidTxType, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String()))
 	}
@@ -385,17 +396,12 @@ func (r *TxApp) Execute(ctx TxContext, tx *transactions.Transaction) *TxResponse
 		return txRes(nil, transactions.CodeUnknownError, errors.New("txapp misuse: cannot execute a blockchain transaction without a db transaction in progress"))
 	}
 
-	res := route.Execute(ctx, r, tx)
-	if res.Error != nil {
-		return res
-	}
-
-	return res
+	return route.Execute(ctx, r, tx)
 }
 
-// Begin signals that a new block has begun.
-// It contains information on any validators whose power should be updated.
-func (r *TxApp) Begin(ctx context.Context) error {
+// Begin signals that a new block has begun. This creates an outer database
+// transaction that may be committed, or rolled back on error or crash.
+func (r *TxApp) Begin(ctx context.Context, height int64) error {
 	if r.currentTx != nil {
 		return errors.New("txapp misuse: cannot begin a new block while a transaction is in progress")
 	}
@@ -403,6 +409,35 @@ func (r *TxApp) Begin(ctx context.Context) error {
 	if r.genesisTx != nil {
 		r.currentTx = r.genesisTx
 		return nil
+	}
+
+	// Before executing transaction in this block, add/remove/update functionality.
+	forks := r.Activations(height)
+	if len(forks) > 0 {
+		r.log.Infof("Forks activating at height %d: %v", height, len(forks))
+	}
+	for _, fork := range forks {
+		r.log.Info("Hardfork activating", log.String("fork", fork.Name))
+
+		// Update transaction payloads.
+		for _, newPayload := range fork.TxPayloads {
+			r.log.Infof("Registering transaction route for payload type %s", newPayload.Type)
+			if err := RegisterRouteImpl(newPayload.Type, newPayload.Route); err != nil {
+				return fmt.Errorf("failed to register route for payload %v: %w", newPayload.Type, err)
+			}
+		}
+		// Update authenticators.
+		for _, authMod := range fork.AuthUpdates {
+			authExt.RegisterAuthenticator(authMod.Operation, authMod.Name, authMod.Authn)
+		}
+		// Update resolutions.
+		for _, resMod := range fork.ResolutionUpdates {
+			resolutions.RegisterResolution(resMod.Name, resMod.Operation, *resMod.Config)
+		}
+		// Update serialization codecs.
+		for _, enc := range fork.Encoders {
+			serialize.RegisterCodec(enc)
+		}
 	}
 
 	tx, err := r.Database.BeginOuterTx(ctx)
@@ -415,8 +450,27 @@ func (r *TxApp) Begin(ctx context.Context) error {
 	return nil
 }
 
+// Activations consults chain config for the names of hard forks that activate
+// *at* the given block height, and retrieves the associated changes from the
+// consensus package that contains the canonical and extended fork definitions.
+func (r *TxApp) Activations(height int64) []*consensus.Hardfork {
+	var activations []*consensus.Hardfork
+	activationNames := r.forks.ActivatesAt(uint64(height)) // chain.Forks.ActivatesAt()
+	for _, name := range activationNames {
+		fork := consensus.Hardforks[name]
+		if fork == nil {
+			r.log.Errorf("hardfork %v at height %d has no definition", name, height)
+			continue // really could be a panic
+		}
+		activations = append(activations, fork) // how to handle multiple at same height? alphabetical??
+	}
+	return activations
+}
+
 // Finalize signals that a block has been finalized. No more changes can be
-// applied to the database. It returns the apphash and the validator set.
+// applied to the database. It returns the apphash and the validator set. And
+// state modifications specified by hardforks activating at this height are
+// applied.
 func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (appHash []byte, finalValidators []*types.Validator, err error) {
 	if r.currentTx == nil {
 		return nil, nil, errors.New("txapp misuse: cannot finalize a block without a transaction in progress")
@@ -449,6 +503,26 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (appHash []byte
 	finalValidators, err = getAllVoters(ctx, r.currentTx)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// Execute state modifications for the hard forks that activate at this
+	// height. These changes are associated with other consensus logic or
+	// parameters changes, otherwise a resolution might be more sensible.
+	for _, fork := range r.Activations(blockHeight) {
+		if fork.StateMod == nil {
+			continue
+		}
+		r.log.Info("running StateMod", log.String("hardfork", fork.Name))
+		if err := fork.StateMod(ctx, &common.App{
+			Service: &common.Service{
+				Logger:           r.log.Sugar(),
+				ExtensionConfigs: r.extensionConfigs,
+			},
+			DB:     r.currentTx,
+			Engine: r.Engine,
+		}); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// While still in the DB transaction, update to this next height but dummy
@@ -672,9 +746,9 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) {
 }
 
 // Commit signals that a block's state changes should be committed.
-func (r *TxApp) Commit(ctx context.Context) error {
+func (r *TxApp) Commit(ctx context.Context) (int64, error) {
 	if r.currentTx == nil {
-		return errors.New("txapp misuse: cannot commit a block without a transaction in progress")
+		return 0, errors.New("txapp misuse: cannot commit a block without a transaction in progress")
 	}
 	defer r.mempool.reset()
 
@@ -682,7 +756,7 @@ func (r *TxApp) Commit(ctx context.Context) error {
 
 	err := r.currentTx.Commit(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	r.currentTx = nil
@@ -699,18 +773,18 @@ func (r *TxApp) Commit(ctx context.Context) error {
 	ctx = context.Background() // don't let them cancel us now, we need consistency with consensus tx commit
 	tx, err := r.Database.BeginOuterTx(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer tx.Rollback(ctx)
 
 	err = setChainState(ctx, tx, r.height, r.appHash) // unchanged height, known appHash
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	err = tx.Commit(ctx) // no Precommit for this one
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	r.announceValidators()
@@ -720,10 +794,10 @@ func (r *TxApp) Commit(ctx context.Context) error {
 		r.snapshotter.IsSnapshotDue(uint64(r.height)) && !r.replayStatusFn() {
 		err = r.snapshotDatabase(ctx)
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
-	return nil
+	return r.height, nil
 }
 
 func (r *TxApp) snapshotDatabase(ctx context.Context) error {
@@ -747,8 +821,7 @@ func (r *TxApp) snapshotDatabase(ctx context.Context) error {
 // If it returns an error, then the transaction is invalid.
 func (r *TxApp) ApplyMempool(ctx context.Context, tx *transactions.Transaction) error {
 	// check that payload type is valid
-	_, ok := routes[tx.Body.PayloadType.String()]
-	if !ok {
+	if getRoute(tx.Body.PayloadType.String()) == nil {
 		return fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
 	}
 	readTx, err := r.Database.BeginReadTx(ctx)
@@ -859,11 +932,10 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxsSize int6
 		eventMap[*evt.ID()] = evt
 	}
 
-	finalEvents := make([]*transactions.VotableEvent, 0)
+	var finalEvents []*transactions.VotableEvent
 	for _, id := range ids {
 		event, ok := eventMap[*id]
-		if !ok {
-			// this should never happen
+		if !ok { // this should never happen
 			return nil, fmt.Errorf("internal bug: event with id %s not found", id.String())
 		}
 
@@ -956,8 +1028,8 @@ func (r *TxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.I
 		return big.NewInt(0), nil
 	}
 
-	route, ok := routes[tx.Body.PayloadType.String()]
-	if !ok {
+	route := getRoute(tx.Body.PayloadType.String())
+	if route == nil {
 		return nil, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
 	}
 

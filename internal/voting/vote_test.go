@@ -19,7 +19,7 @@ import (
 const testType = "test"
 
 func init() {
-	err := resolutions.RegisterResolution(testType, resolutions.ResolutionConfig{})
+	err := resolutions.RegisterResolution(testType, resolutions.ModAdd, resolutions.ResolutionConfig{})
 	if err != nil {
 		panic(err)
 	}

@@ -14,6 +14,11 @@ import (
 	"syscall"
 	"time"
 
+	// kwild's "root" command package assumes the responsibility of initializing
+	// certain packages, including the extensions and the chain config package.
+	// After loading the genesis.json file, the global chain.Forks instance is
+	// initialized with the hardfork activations defined in the file.
+	"github.com/kwilteam/kwil-db/common/chain"
 	_ "github.com/kwilteam/kwil-db/extensions" // a base location where all extensions can be registered
 	_ "github.com/kwilteam/kwil-db/extensions/auth"
 
@@ -52,6 +57,12 @@ func RootCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to initialize private key and genesis: %w", err)
 			}
+			// Set the chain package's active forks variable. This provides easy
+			// access to important chain config to other high level app packages.
+			chain.SetForks(genesisConfig.ForkHeights)
+
+			fmt.Printf("Started with %d configured hard fork heights:\n%v\n",
+				len(genesisConfig.ForkHeights), genesisConfig.Forks())
 
 			if autoGen && !configFileExists { // write config.toml if it didn't exist, and doing autogen
 				cfgPath := filepath.Join(kwildCfg.RootDir, config.ConfigFileName)

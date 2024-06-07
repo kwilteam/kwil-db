@@ -7,35 +7,39 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/ident"
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/extensions/consensus"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
-	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 func init() {
 	err := errors.Join(
-		registerRoute(transactions.PayloadTypeDeploySchema.String(), &deployDatasetRoute{}),
-		registerRoute(transactions.PayloadTypeDropSchema.String(), &dropDatasetRoute{}),
-		registerRoute(transactions.PayloadTypeExecute.String(), &executeActionRoute{}),
-		registerRoute(transactions.PayloadTypeTransfer.String(), &transferRoute{}),
-		registerRoute(transactions.PayloadTypeValidatorJoin.String(), &validatorJoinRoute{}),
-		registerRoute(transactions.PayloadTypeValidatorApprove.String(), &validatorApproveRoute{}),
-		registerRoute(transactions.PayloadTypeValidatorRemove.String(), &validatorRemoveRoute{}),
-		registerRoute(transactions.PayloadTypeValidatorLeave.String(), &validatorLeaveRoute{}),
-		registerRoute(transactions.PayloadTypeValidatorVoteIDs.String(), &validatorVoteIDsRoute{}),
-		registerRoute(transactions.PayloadTypeValidatorVoteBodies.String(), &validatorVoteBodiesRoute{}),
+		RegisterRoute(transactions.PayloadTypeDeploySchema, NewRoute(&deployDatasetRoute{})),
+		RegisterRoute(transactions.PayloadTypeDropSchema, NewRoute(&dropDatasetRoute{})),
+		RegisterRoute(transactions.PayloadTypeExecute, NewRoute(&executeActionRoute{})),
+		RegisterRoute(transactions.PayloadTypeTransfer, NewRoute(&transferRoute{})),
+		RegisterRoute(transactions.PayloadTypeValidatorJoin, NewRoute(&validatorJoinRoute{})),
+		RegisterRoute(transactions.PayloadTypeValidatorApprove, NewRoute(&validatorApproveRoute{})),
+		RegisterRoute(transactions.PayloadTypeValidatorRemove, NewRoute(&validatorRemoveRoute{})),
+		RegisterRoute(transactions.PayloadTypeValidatorLeave, NewRoute(&validatorLeaveRoute{})),
+		RegisterRoute(transactions.PayloadTypeValidatorVoteIDs, NewRoute(&validatorVoteIDsRoute{})),
+		RegisterRoute(transactions.PayloadTypeValidatorVoteBodies, NewRoute(&validatorVoteBodiesRoute{})),
 	)
 	if err != nil {
 		panic(fmt.Sprintf("failed to register routes: %s", err))
 	}
 }
 
+// Route is a type that the router uses to handle a certain payload type.
 type Route interface {
 	Pricer
 	// Execute is responsible for committing or rolling back transactions.
@@ -45,20 +49,20 @@ type Route interface {
 	Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse
 }
 
-// TxContext is the context for transaction execution.
-type TxContext struct {
-	Ctx context.Context
-	// BlockHeight gets the height of the current block.
-	BlockHeight int64
-	// Proposer gets the proposer public key of the current block.
-	Proposer []byte
-	// ConsensusParams holds network level parameters that can be evolved
-	// over the lifetime of a network.
-	ConsensusParams ConsensusParams
-	// TxID is the ID of the current transaction.
-	// It is defined by CometBFT.
-	TxID []byte
+// NewRoute creates a complete Route for the TxApp from a consensus.Route.
+func NewRoute(impl consensus.Route) Route {
+	return &baseRoute{impl}
 }
+
+// RegisterRouteImpl associates a consensus.Route with a payload type. This is
+// shorthand for RegisterRoute(payloadType, NewRoute(route)).
+func RegisterRouteImpl(payloadType transactions.PayloadType, route consensus.Route) error {
+	return RegisterRoute(payloadType, NewRoute(route))
+}
+
+// TxContext is the context for transaction execution. It is a type alias for
+// common.TxContext (same type) for convenience.
+type TxContext = common.TxContext
 
 // ConsensusParams holds network level parameters that may evolve over time.
 type ConsensusParams struct {
@@ -78,19 +82,6 @@ type Pricer interface {
 	Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error)
 }
 
-// routes is a map of transaction payload types to their respective routes
-var routes = map[string]Route{}
-
-func registerRoute(payloadType string, route Route) error {
-	_, ok := routes[payloadType]
-	if ok {
-		return fmt.Errorf("route for payload type %s already exists", payloadType)
-	}
-
-	routes[payloadType] = route
-	return nil
-}
-
 func codeForEngineError(err error) transactions.TxCode {
 	if err == nil {
 		return transactions.CodeOk
@@ -108,9 +99,63 @@ func codeForEngineError(err error) transactions.TxCode {
 	return transactions.CodeUnknownError
 }
 
-type deployDatasetRoute struct{}
+// routes is a map of transaction payload types to their respective routes. This
+// should be updated if a coordinated height-based update introduces new routes
+// (or removes existing routes).
+var (
+	routeMtx sync.RWMutex // rare writes, frequent reads
+	routes   = map[string]Route{}
+)
 
-func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+func getRoute(name string) Route {
+	routeMtx.RLock()
+	defer routeMtx.RUnlock()
+	return routes[name]
+}
+
+// RegisterRoute associates a Route with a payload type. See also
+// RegisterRouteImpl to register a consensus.Route.
+func RegisterRoute(payloadType transactions.PayloadType, route Route) error {
+	typeName := payloadType.String()
+
+	routeMtx.Lock()
+	defer routeMtx.Unlock()
+	_, ok := routes[typeName]
+	if ok {
+		return fmt.Errorf("route for payload type %s already exists", typeName)
+	}
+
+	routes[typeName] = route
+	return nil
+}
+
+// baseRoute provides the Price and Execute methods used by TxApp, and embeds a
+// consensus.Route, which provides the implementation for the route in a way
+// that does not require a pointer to the TxApp instance as an input.
+//
+// The Execute method is essentially boilerplate code that creates a DB
+// transaction, performs the pricing and spending using the Routes Price method,
+// runs route-specific operations implemented in the PreTx method, creates a new
+// nested DB transaction, and runs more route-specific operations in the InTx
+// method inside this inner DB transaction. Finally, the transaction is either
+// committed or rolled back.
+type baseRoute struct {
+	consensus.Route
+}
+
+func (d *baseRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+	return d.Route.Price(ctx, &common.App{
+		Service: &common.Service{
+			Logger:           router.log.Named("route_" + d.Name()).Sugar(),
+			ExtensionConfigs: router.extensionConfigs,
+			Identity:         router.signer.Identity(),
+		},
+		DB:     router.currentTx,
+		Engine: router.Engine,
+	}, tx)
+}
+
+func (d *baseRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
@@ -118,8 +163,6 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 
 	spend, code, err := router.checkAndSpend(ctx, tx, d, dbTx)
 	if err != nil {
-		// if insufficient balance / spend amount, still commit the tx
-		// otherwise, it is some internal database error, and should fail.
 		switch code {
 		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
 			logErr(router.log, dbTx.Commit(ctx.Ctx))
@@ -128,37 +171,42 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		}
 		return txRes(spend, code, err)
 	}
-	defer dbTx.Commit(ctx.Ctx)
+	defer func() {
+		// Always Commit the outer transaction to ensure account updates.
+		// Failures in route-specific queries are isolated with a nested
+		// transaction (tx2 below).
+		err := dbTx.Commit(ctx.Ctx) // must not fail this or user spend is reverted
+		if err != nil {
+			router.log.Error("failed to commit DB tx for the spend", log.Error(err))
+		}
+	}()
 
-	schemaPayload := &transactions.Schema{}
-	err = schemaPayload.UnmarshalBinary(tx.Body.Payload)
-	if err != nil {
-		return txRes(spend, transactions.CodeEncodingError, err)
+	svc := &common.Service{
+		Logger:           router.log.Named("route_" + d.Name()).Sugar(),
+		ExtensionConfigs: router.extensionConfigs,
+		Identity:         router.signer.Identity(),
 	}
 
-	schema, err := schemaPayload.ToTypes()
+	code, err = d.PreTx(ctx, svc, tx)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	identifier, err := ident.Identifier(tx.Signature.Type, tx.Sender)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return txRes(spend, code, err)
 	}
 
 	tx2, err := dbTx.BeginTx(ctx.Ctx)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
-	defer tx2.Rollback(ctx.Ctx)
+	defer tx2.Rollback(ctx.Ctx) // no-op if Commit succeeded
 
-	err = router.Engine.CreateDataset(ctx.Ctx, tx2, schema, &common.TransactionData{
-		Signer: tx.Sender,
-		Caller: identifier,
-		TxID:   hex.EncodeToString(ctx.TxID),
-	})
+	app := &common.App{
+		Service: svc,
+		DB:      tx2,
+		Engine:  router.Engine,
+	}
+
+	code, err = d.InTx(ctx, app, tx)
 	if err != nil {
-		return txRes(spend, codeForEngineError(err), err)
+		return txRes(spend, code, err)
 	}
 
 	err = tx2.Commit(ctx.Ctx)
@@ -169,97 +217,134 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (d *deployDatasetRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+// ========================== route implementations ==========================
+// Each of the following route implementation satisfy the consensus.Route
+// interface, which is embedded by the baseRoute for used by TxApp.
+
+// How would we change price? The Price method would store the value in a field
+// of the route, which is modified by the app. Alternatively, create a new
+// route or replace the route entirely (same payload type, new impl).
+
+type deployDatasetRoute struct {
+	schema     *types.Schema // set by PreTx
+	identifier string
+}
+
+var _ consensus.Route = (*deployDatasetRoute)(nil)
+
+func (d *deployDatasetRoute) Name() string {
+	return transactions.PayloadTypeDeploySchema.String()
+}
+
+func (d *deployDatasetRoute) Price(ctx context.Context, app *common.App, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(1000000000000000000), nil
 }
 
-type dropDatasetRoute struct{}
-
-func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
-	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+func (d *deployDatasetRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	schemaPayload := &transactions.Schema{}
+	err := schemaPayload.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
-		return txRes(nil, transactions.CodeUnknownError, err)
+		return transactions.CodeEncodingError, err
 	}
 
-	spend, code, err := router.checkAndSpend(ctx, tx, d, dbTx)
+	d.schema, err = schemaPayload.ToTypes()
 	if err != nil {
-		switch code {
-		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
-			logErr(router.log, dbTx.Commit(ctx.Ctx))
-		default:
-			logErr(router.log, dbTx.Rollback(ctx.Ctx))
-		}
-		return txRes(spend, code, err)
-	}
-	defer dbTx.Commit(ctx.Ctx)
-
-	drop := &transactions.DropSchema{}
-	err = drop.UnmarshalBinary(tx.Body.Payload)
-	if err != nil {
-		return txRes(spend, transactions.CodeEncodingError, err)
+		return transactions.CodeUnknownError, err
 	}
 
-	identifier, err := ident.Identifier(tx.Signature.Type, tx.Sender)
+	d.identifier, err = ident.Identifier(tx.Signature.Type, tx.Sender)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
-
-	tx2, err := dbTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-	defer tx2.Rollback(ctx.Ctx)
-
-	err = router.Engine.DeleteDataset(ctx.Ctx, tx2, drop.DBID, &common.TransactionData{
-		Signer: tx.Sender,
-		Caller: identifier,
-		TxID:   hex.EncodeToString(ctx.TxID),
-	})
-	if err != nil {
-		return txRes(spend, codeForEngineError(err), err)
-	}
-
-	err = tx2.Commit(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	return txRes(spend, transactions.CodeOk, nil)
+	return 0, nil
 }
 
-func (d *dropDatasetRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (d *deployDatasetRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+	err := app.Engine.CreateDataset(ctx.Ctx, app.DB, d.schema,
+		&common.TransactionData{
+			Signer: tx.Sender,
+			Caller: d.identifier,
+			TxID:   hex.EncodeToString(ctx.TxID),
+		})
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+	return 0, nil
+}
+
+type dropDatasetRoute struct {
+	dbid       string
+	identifier string
+}
+
+var _ consensus.Route = (*dropDatasetRoute)(nil)
+
+func (d *dropDatasetRoute) Name() string {
+	return transactions.PayloadTypeDropSchema.String()
+}
+
+func (d *dropDatasetRoute) Price(ctx context.Context, app *common.App, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
-type executeActionRoute struct{}
-
-func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
-	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+func (d *dropDatasetRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	drop := &transactions.DropSchema{}
+	err := drop.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
-		return txRes(nil, transactions.CodeUnknownError, err)
+		return transactions.CodeEncodingError, err
 	}
 
-	spend, code, err := router.checkAndSpend(ctx, tx, e, dbTx)
+	d.identifier, err = ident.Identifier(tx.Signature.Type, tx.Sender)
 	if err != nil {
-		switch code {
-		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
-			logErr(router.log, dbTx.Commit(ctx.Ctx))
-		default:
-			logErr(router.log, dbTx.Rollback(ctx.Ctx))
-		}
-		return txRes(spend, code, err)
+		return transactions.CodeUnknownError, err
 	}
-	defer dbTx.Commit(ctx.Ctx)
 
+	d.dbid = drop.DBID
+	return 0, nil
+}
+
+func (d *dropDatasetRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+	err := app.Engine.DeleteDataset(ctx.Ctx, app.DB, d.dbid, &common.TransactionData{
+		Signer: tx.Sender,
+		Caller: d.identifier,
+		TxID:   hex.EncodeToString(ctx.TxID),
+	})
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+	return 0, nil
+}
+
+type executeActionRoute struct {
+	identifier string
+	dbid       string
+	action     string
+	args       [][]any
+}
+
+var _ consensus.Route = (*executeActionRoute)(nil)
+
+func (d *executeActionRoute) Name() string {
+	return transactions.PayloadTypeExecute.String()
+}
+
+func (d *executeActionRoute) Price(ctx context.Context, app *common.App, tx *transactions.Transaction) (*big.Int, error) {
+	return big.NewInt(2000000000000000), nil
+}
+
+func (d *executeActionRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	action := &transactions.ActionExecution{}
-	err = action.UnmarshalBinary(tx.Body.Payload)
+	err := action.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
-		return txRes(spend, transactions.CodeEncodingError, err)
+		return transactions.CodeEncodingError, err
 	}
 
-	identifier, err := ident.Identifier(tx.Signature.Type, tx.Sender)
+	d.action = action.Action
+	d.dbid = action.DBID
+
+	d.identifier, err = ident.Identifier(tx.Signature.Type, tx.Sender)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
 
 	// here, we decode the [][]transactions.EncodedTypes into [][]any
@@ -269,7 +354,7 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		for j, val := range arg {
 			decoded, err := val.Decode()
 			if err != nil {
-				return txRes(spend, transactions.CodeEncodingError, err)
+				return transactions.CodeEncodingError, err
 			}
 			args[i][j] = decoded
 		}
@@ -281,166 +366,136 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		args = make([][]any, 1)
 	}
 
-	tx2, err := dbTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-	defer tx2.Rollback(ctx.Ctx)
+	d.args = args
 
-	for i := range args {
-		_, err = router.Engine.Procedure(ctx.Ctx, tx2, &common.ExecutionData{
-			Dataset:   action.DBID,
-			Procedure: action.Action,
-			Args:      args[i],
+	return 0, nil
+}
+
+func (d *executeActionRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+	for i := range d.args {
+		_, err := app.Engine.Procedure(ctx.Ctx, app.DB, &common.ExecutionData{
+			Dataset:   d.dbid,
+			Procedure: d.action,
+			Args:      d.args[i],
 			TransactionData: common.TransactionData{
 				Signer: tx.Sender,
-				Caller: identifier,
+				Caller: d.identifier,
 				TxID:   hex.EncodeToString(ctx.TxID),
 				Height: ctx.BlockHeight,
 			},
 		})
 		if err != nil {
-			return txRes(spend, codeForEngineError(err), err)
+			return codeForEngineError(err), err
 		}
 	}
-
-	err = tx2.Commit(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	return txRes(spend, transactions.CodeOk, nil)
+	return 0, nil
 }
 
-func (e *executeActionRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
-	return big.NewInt(2000000000000000), nil
+type transferRoute struct {
+	to  []byte
+	amt *big.Int
 }
 
-type transferRoute struct{}
+var _ consensus.Route = (*transferRoute)(nil)
 
-func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
-	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(nil, transactions.CodeUnknownError, err)
-	}
+func (d *transferRoute) Name() string {
+	return transactions.PayloadTypeTransfer.String()
+}
 
-	spend, code, err := router.checkAndSpend(ctx, tx, t, dbTx)
-	if err != nil {
-		switch code {
-		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
-			logErr(router.log, dbTx.Commit(ctx.Ctx))
-		default:
-			logErr(router.log, dbTx.Rollback(ctx.Ctx))
-		}
-		return txRes(spend, code, err)
-	}
-	defer dbTx.Commit(ctx.Ctx)
+func (d *transferRoute) Price(ctx context.Context, app *common.App, tx *transactions.Transaction) (*big.Int, error) {
+	return big.NewInt(210_000), nil
+}
 
+func (d *transferRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	transferBody := &transactions.Transfer{}
-	err = transferBody.UnmarshalBinary(tx.Body.Payload)
+	err := transferBody.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
-		return txRes(spend, transactions.CodeEncodingError, err)
+		return transactions.CodeEncodingError, err
 	}
 
 	bigAmt, ok := new(big.Int).SetString(transferBody.Amount, 10)
 	if !ok {
-		return txRes(spend, transactions.CodeInvalidAmount, fmt.Errorf("failed to parse amount: %s", transferBody.Amount))
+		return transactions.CodeInvalidAmount, fmt.Errorf("failed to parse amount: %s", transferBody.Amount)
 	}
 
 	// Negative send amounts should be blocked at various levels, so we should
 	// never get this, but be extra defensive since we cannot allow thievery.
 	if bigAmt.Sign() < 0 {
-		return txRes(spend, transactions.CodeInvalidAmount, fmt.Errorf("invalid transfer amount: %s", transferBody.Amount))
+		return transactions.CodeInvalidAmount, fmt.Errorf("invalid transfer amount: %s", transferBody.Amount)
 	}
 
-	tx2, err := dbTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-	defer tx2.Rollback(ctx.Ctx)
+	d.to = transferBody.To
+	d.amt = bigAmt
+	return 0, nil
+}
 
-	err = transfer(ctx.Ctx, tx2, tx.Sender, transferBody.To, bigAmt)
+func (d *transferRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+	err := transfer(ctx.Ctx, app.DB, tx.Sender, d.to, d.amt)
 	if err != nil {
 		if errors.Is(err, accounts.ErrInsufficientFunds) {
-			return txRes(spend, transactions.CodeInsufficientBalance, err)
+			return transactions.CodeInsufficientBalance, err
 		}
 		if errors.Is(err, accounts.ErrNegativeBalance) {
-			return txRes(spend, transactions.CodeInvalidAmount, err)
+			return transactions.CodeInvalidAmount, err
 		}
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
-
-	err = tx2.Commit(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	return txRes(spend, transactions.CodeOk, nil)
+	return 0, nil
 }
 
-func (t *transferRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
-	return big.NewInt(210_000), nil
+type validatorJoinRoute struct {
+	power uint64
 }
 
-type validatorJoinRoute struct{}
+var _ consensus.Route = (*validatorJoinRoute)(nil)
 
-func (v *validatorJoinRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
-	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(nil, transactions.CodeUnknownError, err)
-	}
+func (d *validatorJoinRoute) Name() string {
+	return transactions.PayloadTypeValidatorJoin.String()
+}
 
-	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
-	if err != nil {
-		switch code {
-		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
-			logErr(router.log, dbTx.Commit(ctx.Ctx))
-		default:
-			logErr(router.log, dbTx.Rollback(ctx.Ctx))
-		}
-		return txRes(spend, code, err)
-	}
-	defer dbTx.Commit(ctx.Ctx)
+func (d *validatorJoinRoute) Price(ctx context.Context, app *common.App, tx *transactions.Transaction) (*big.Int, error) {
+	return big.NewInt(10000000000000), nil
+}
 
+func (d *validatorJoinRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	join := &transactions.ValidatorJoin{}
-	err = join.UnmarshalBinary(tx.Body.Payload)
+	err := join.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
-		return txRes(spend, transactions.CodeEncodingError, err)
+		return transactions.CodeEncodingError, err
 	}
 
-	tx2, err := dbTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-	defer tx2.Rollback(ctx.Ctx)
+	d.power = join.Power
+	return 0, nil
+}
 
+func (d *validatorJoinRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	// ensure this candidate is not already a validator
-	power, err := getVoterPower(ctx.Ctx, tx2, tx.Sender)
+	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
 	if power > 0 {
-		return txRes(spend, transactions.CodeInvalidSender, ErrCallerIsValidator)
+		return transactions.CodeInvalidSender, ErrCallerIsValidator
 	}
 
 	// we first need to ensure that this validator does not have a pending join request
 	// if it does, we should not allow it to join again
-	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, tx2, voting.ValidatorJoinEventType, tx.Sender)
+	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, app.DB, voting.ValidatorJoinEventType, tx.Sender)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
 	if len(pending) > 0 {
-		return txRes(spend, transactions.CodeInvalidSender, fmt.Errorf("validator already has a pending join request"))
+		return transactions.CodeInvalidSender, fmt.Errorf("validator already has a pending join request")
 	}
 
 	// there are no pending join requests, so we can create a new one
 	joinReq := &voting.UpdatePowerRequest{
 		PubKey: tx.Sender,
-		Power:  int64(join.Power),
+		Power:  int64(d.power),
 	}
 	bts, err := joinReq.MarshalBinary()
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
 
 	event := &types.VotableEvent{
@@ -448,139 +503,108 @@ func (v *validatorJoinRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 		Type: voting.ValidatorJoinEventType,
 	}
 
-	err = createResolution(ctx.Ctx, tx2, event, ctx.BlockHeight+ctx.ConsensusParams.JoinVoteExpiration, tx.Sender)
+	err = createResolution(ctx.Ctx, app.DB, event, ctx.BlockHeight+ctx.ConsensusParams.Validator.JoinExpiry, tx.Sender)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
 	// we do not approve, because a joiner is presumably not a voter
-
-	err = tx2.Commit(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	return txRes(spend, transactions.CodeOk, nil)
+	return 0, nil
 }
 
-func (v *validatorJoinRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+type validatorApproveRoute struct {
+	candidate []byte
+}
+
+var _ consensus.Route = (*validatorApproveRoute)(nil)
+
+func (d *validatorApproveRoute) Name() string {
+	return transactions.PayloadTypeValidatorApprove.String()
+}
+
+func (d *validatorApproveRoute) Price(ctx context.Context, app *common.App, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
-type validatorApproveRoute struct{}
-
-func (v *validatorApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
-	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(nil, transactions.CodeUnknownError, err)
-	}
-
-	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
-	if err != nil {
-		switch code {
-		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
-			logErr(router.log, dbTx.Commit(ctx.Ctx))
-		default:
-			logErr(router.log, dbTx.Rollback(ctx.Ctx))
-		}
-		return txRes(spend, code, err)
-	}
-	defer dbTx.Commit(ctx.Ctx)
-
+func (d *validatorApproveRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	approve := &transactions.ValidatorApprove{}
-	err = approve.UnmarshalBinary(tx.Body.Payload)
+	err := approve.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
-		return txRes(spend, transactions.CodeEncodingError, err)
+		return transactions.CodeEncodingError, err
 	}
-
-	tx2, err := dbTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-	defer tx2.Rollback(ctx.Ctx)
 
 	if bytes.Equal(approve.Candidate, tx.Sender) {
-		return txRes(spend, transactions.CodeInvalidSender, errors.New("cannot approve own join request"))
+		return transactions.CodeInvalidSender, errors.New("cannot approve own join request")
 	}
 
+	d.candidate = approve.Candidate
+	return 0, nil
+}
+
+func (d *validatorApproveRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	// each pending validator can only have one active join request at a time
 	// we need to retrieve the join request and ensure that it is still pending
-	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, tx2, voting.ValidatorJoinEventType, approve.Candidate)
+	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, app.DB, voting.ValidatorJoinEventType, d.candidate)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
 	if len(pending) == 0 {
-		return txRes(spend, transactions.CodeInvalidSender, fmt.Errorf("validator does not have a pending join request"))
+		return transactions.CodeInvalidSender, fmt.Errorf("validator does not have a pending join request")
 	}
 	if len(pending) > 1 {
 		// this should never happen, but if it does, we should not allow it
-		return txRes(spend, transactions.CodeUnknownError, fmt.Errorf("validator has more than one pending join request. this is an internal bug"))
+		return transactions.CodeUnknownError, fmt.Errorf("validator has more than one pending join request. this is an internal bug")
 	}
 
 	// ensure that sender is a validator
-	power, err := getVoterPower(ctx.Ctx, tx2, tx.Sender)
+	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
 	if power <= 0 {
-		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotValidator)
+		return transactions.CodeInvalidSender, ErrCallerNotValidator
 	}
 
-	err = approveResolution(ctx.Ctx, tx2, pending[0], tx.Sender)
+	err = approveResolution(ctx.Ctx, app.DB, pending[0], tx.Sender)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
 
-	err = tx2.Commit(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	return txRes(spend, transactions.CodeOk, nil)
+	return 0, nil
 }
 
-func (v *validatorApproveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
-	return big.NewInt(10000000000000), nil
+type validatorRemoveRoute struct {
+	target []byte
 }
 
-type validatorRemoveRoute struct{}
+var _ consensus.Route = (*validatorRemoveRoute)(nil)
 
-func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
-	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(nil, transactions.CodeUnknownError, err)
-	}
+func (d *validatorRemoveRoute) Name() string {
+	return transactions.PayloadTypeValidatorRemove.String()
+}
 
-	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
-	if err != nil {
-		switch code {
-		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
-			logErr(router.log, dbTx.Commit(ctx.Ctx))
-		default:
-			logErr(router.log, dbTx.Rollback(ctx.Ctx))
-		}
-		return txRes(spend, code, err)
-	}
-	defer dbTx.Commit(ctx.Ctx)
+func (d *validatorRemoveRoute) Price(ctx context.Context, app *common.App, tx *transactions.Transaction) (*big.Int, error) {
+	return big.NewInt(100_000), nil
+}
 
+func (d *validatorRemoveRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	remove := &transactions.ValidatorRemove{}
-	err = remove.UnmarshalBinary(tx.Body.Payload)
+	err := remove.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
-		return txRes(spend, transactions.CodeEncodingError, err)
+		return transactions.CodeEncodingError, err
 	}
 
-	tx2, err := dbTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-	defer tx2.Rollback(ctx.Ctx)
+	d.target = remove.Validator
+	return 0, nil
+}
 
+func (d *validatorRemoveRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	removeReq := &voting.UpdatePowerRequest{
-		PubKey: remove.Validator,
+		PubKey: d.target,
 		Power:  0,
 	}
 	bts, err := removeReq.MarshalBinary()
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
 
 	event := &types.VotableEvent{
@@ -589,177 +613,78 @@ func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transac
 	}
 
 	// ensure the sender is a validator
-	power, err := getVoterPower(ctx.Ctx, tx2, tx.Sender)
+	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
 	if power <= 0 {
-		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotValidator)
+		return transactions.CodeInvalidSender, ErrCallerNotValidator
 	}
 
 	// we should try to create the resolution, since validator removals are never
 	// officially "started" by the user. If it fails because it already exists,
 	// then we should do nothing
 
-	err = createResolution(ctx.Ctx, tx2, event, ctx.BlockHeight+ctx.ConsensusParams.JoinVoteExpiration, tx.Sender)
+	err = createResolution(ctx.Ctx, app.DB, event, ctx.BlockHeight+ctx.ConsensusParams.Validator.JoinExpiry, tx.Sender)
 	if errors.Is(err, voting.ErrResolutionAlreadyHasBody) {
-		router.log.Debug("validator removal resolution already exists")
+		app.Service.Logger.Debug("validator removal resolution already exists")
 	} else if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
 
 	// we need to approve the resolution as well
-	err = approveResolution(ctx.Ctx, tx2, event.ID(), tx.Sender)
+	err = approveResolution(ctx.Ctx, app.DB, event.ID(), tx.Sender)
 	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
 	}
 
-	err = tx2.Commit(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	return txRes(spend, transactions.CodeOk, nil)
-}
-
-func (v *validatorRemoveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
-	return big.NewInt(100_000), nil
+	return 0, nil
 }
 
 type validatorLeaveRoute struct{}
 
-func (v *validatorLeaveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
-	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(nil, transactions.CodeUnknownError, err)
-	}
+var _ consensus.Route = (*validatorLeaveRoute)(nil)
 
-	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
-	if err != nil {
-		switch code {
-		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
-			logErr(router.log, dbTx.Commit(ctx.Ctx))
-		default:
-			logErr(router.log, dbTx.Rollback(ctx.Ctx))
-		}
-		return txRes(spend, code, err)
-	}
-	defer dbTx.Commit(ctx.Ctx)
-
-	// don't touch the DB or start another RW tx is sender isn't a validator
-	power, err := getVoterPower(ctx.Ctx, dbTx, tx.Sender)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-	if power <= 0 {
-		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotValidator)
-	}
-
-	tx2, err := dbTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-	defer tx2.Rollback(ctx.Ctx)
-
-	err = setVoterPower(ctx.Ctx, tx2, tx.Sender, 0)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	err = tx2.Commit(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	return txRes(spend, transactions.CodeOk, nil)
+func (d *validatorLeaveRoute) Name() string {
+	return transactions.PayloadTypeValidatorLeave.String()
 }
 
-func (v *validatorLeaveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (d *validatorLeaveRoute) Price(ctx context.Context, app *common.App, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
+}
+
+func (d *validatorLeaveRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	return 0, nil // no payload to decode or validate for this route
+}
+
+func (d *validatorLeaveRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+	if power <= 0 {
+		return transactions.CodeInvalidSender, ErrCallerNotValidator
+	}
+
+	const noPower = 0
+	err = setVoterPower(ctx.Ctx, app.DB, tx.Sender, noPower)
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+
+	return 0, nil
 }
 
 // validatorVoteIDsRoute is a route for approving a set of votes based on their IDs.
 type validatorVoteIDsRoute struct{}
 
-// Execute will approve the votes for the given IDs.
-// If the event already has a body in the event store, and the vote
-// is from the local validator, the event will be deleted from the event store.
-func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
-	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(nil, transactions.CodeUnknownError, err)
-	}
+var _ consensus.Route = (*validatorVoteIDsRoute)(nil)
 
-	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
-	if err != nil {
-		switch code {
-		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
-			logErr(router.log, dbTx.Commit(ctx.Ctx))
-		default:
-			logErr(router.log, dbTx.Rollback(ctx.Ctx))
-		}
-		return txRes(spend, code, err)
-	}
-	defer dbTx.Commit(ctx.Ctx)
-
-	tx2, err := dbTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-	defer tx2.Rollback(ctx.Ctx)
-
-	// if the caller has 0 power, they are not a validator, and should not be able to vote
-	power, err := getVoterPower(ctx.Ctx, tx2, tx.Sender)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-	if power == 0 {
-		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotValidator)
-	}
-
-	approve := &transactions.ValidatorVoteIDs{}
-	err = approve.UnmarshalBinary(tx.Body.Payload)
-	if err != nil {
-		return txRes(spend, transactions.CodeEncodingError, err)
-	}
-
-	// filter out the vote IDs that have already been processed
-	ids, err := voting.FilterNotProcessed(ctx.Ctx, tx2, approve.ResolutionIDs)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	fromLocalValidator := bytes.Equal(tx.Sender, router.signer.Identity())
-
-	for _, voteID := range ids {
-		err = approveResolution(ctx.Ctx, tx2, voteID, tx.Sender)
-		if err != nil {
-			return txRes(spend, transactions.CodeUnknownError, err)
-		}
-
-		// if from local validator, delete the event now that we have voted on it and network already has the event body
-		if fromLocalValidator {
-			err = deleteEvent(ctx.Ctx, tx2, voteID)
-			if err != nil {
-				return txRes(spend, transactions.CodeUnknownError, err)
-			}
-		}
-	}
-
-	if tooLate := len(approve.ResolutionIDs) - len(ids); tooLate > 0 {
-		// TODO: probably refund these votes??
-		router.Log().Warnf("vote contains %d resolution IDs that are already done. too late, no refund!", tooLate)
-	}
-
-	err = tx2.Commit(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	return txRes(spend, transactions.CodeOk, nil)
+func (d *validatorVoteIDsRoute) Name() string {
+	return transactions.PayloadTypeValidatorVoteIDs.String()
 }
 
-func (v *validatorVoteIDsRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (d *validatorVoteIDsRoute) Price(ctx context.Context, app *common.App, tx *transactions.Transaction) (*big.Int, error) {
 	// VoteID pricing is based on the number of vote IDs.
 	ids := &transactions.ValidatorVoteIDs{}
 	err := ids.UnmarshalBinary(tx.Body.Payload)
@@ -769,93 +694,68 @@ func (v *validatorVoteIDsRoute) Price(ctx context.Context, router *TxApp, tx *tr
 	return big.NewInt(int64(len(ids.ResolutionIDs)) * ValidatorVoteIDPrice.Int64()), nil
 }
 
-// validatorVoteBodiesRoute is a route for handling votes for a set of vote bodies.
-type validatorVoteBodiesRoute struct{}
+func (d *validatorVoteIDsRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	return 0, nil
+}
 
-// Execute will add the event bodies to the event store.
-// For each event, if the local validator has already voted on the event,
-// the event will be deleted from the event store.
-func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
-	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+func (d *validatorVoteIDsRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+	// if the caller has 0 power, they are not a validator, and should not be able to vote
+	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
 	if err != nil {
-		return txRes(nil, transactions.CodeUnknownError, err)
+		return transactions.CodeUnknownError, err
+	}
+	if power == 0 {
+		return transactions.CodeInvalidSender, ErrCallerNotValidator
 	}
 
-	spend, code, err := router.checkAndSpend(ctx, tx, v, dbTx)
+	approve := &transactions.ValidatorVoteIDs{}
+	err = approve.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
-		switch code {
-		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
-			logErr(router.log, dbTx.Commit(ctx.Ctx))
-		default:
-			logErr(router.log, dbTx.Rollback(ctx.Ctx))
-		}
-		return txRes(spend, code, err)
-	}
-	defer dbTx.Commit(ctx.Ctx)
-
-	// Only proposer can issue a VoteBody transaction.
-	if !bytes.Equal(tx.Sender, ctx.Proposer) {
-		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotProposer)
+		return transactions.CodeEncodingError, err
 	}
 
-	vote := &transactions.ValidatorVoteBodies{}
-	err = vote.UnmarshalBinary(tx.Body.Payload)
+	// filter out the vote IDs that have already been processed
+	ids, err := voting.FilterNotProcessed(ctx.Ctx, app.DB, approve.ResolutionIDs)
 	if err != nil {
-		return txRes(spend, transactions.CodeEncodingError, err)
+		return transactions.CodeUnknownError, err
 	}
 
-	fromLocalValidator := bytes.Equal(tx.Sender, router.signer.Identity())
+	fromLocalValidator := bytes.Equal(tx.Sender, app.Service.Identity)
 
-	tx2, err := dbTx.BeginTx(ctx.Ctx)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-	defer tx2.Rollback(ctx.Ctx)
-
-	// Expectation:
-	// 1. VoteBody should only include the events for which the resolutions are not yet created. Maybe filter out the events for which the resolutions are already created and ignore them.
-	// 2. If the node is the proposer, delete the event from the event store
-	for _, event := range vote.Events {
-		ev := &types.VotableEvent{
-			Type: event.Type,
-			Body: event.Body,
-		}
-
-		resCfg, err := resolutions.GetResolution(event.Type)
+	for _, voteID := range ids {
+		err = approveResolution(ctx.Ctx, app.DB, voteID, tx.Sender)
 		if err != nil {
-			return txRes(spend, transactions.CodeUnknownError, err)
+			return transactions.CodeUnknownError, err
 		}
 
-		expiryHeight := ctx.BlockHeight + resCfg.ExpirationPeriod
-		err = createResolution(ctx.Ctx, tx2, ev, expiryHeight, tx.Sender)
-		if err != nil {
-			return txRes(spend, transactions.CodeUnknownError, err)
-		}
-
-		// since the vote body proposer is implicitly voting for the event,
-		// we need to approve the newly created vote body here
-		err = approveResolution(ctx.Ctx, tx2, ev.ID(), tx.Sender)
-		if err != nil {
-			return txRes(spend, transactions.CodeUnknownError, err)
-		}
-
-		// If the local validator is the proposer, then we should delete the event from the event store.
+		// if from local validator, delete the event now that we have voted on it and network already has the event body
 		if fromLocalValidator {
-			err = deleteEvent(ctx.Ctx, tx2, ev.ID())
+			err = deleteEvent(ctx.Ctx, app.DB, voteID)
 			if err != nil {
-				return txRes(spend, transactions.CodeUnknownError, err)
+				return transactions.CodeUnknownError, err
 			}
 		}
 	}
 
-	if err = tx2.Commit(ctx.Ctx); err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
+	if tooLate := len(approve.ResolutionIDs) - len(ids); tooLate > 0 {
+		app.Service.Logger.Warn("vote contains resolution IDs that are already done. too late, no refund!", log.Int("num", tooLate))
 	}
 
-	return txRes(spend, transactions.CodeOk, nil)
+	return 0, nil
 }
 
-func (v *validatorVoteBodiesRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+// validatorVoteIDsRoute is a route for approving a set of votes based on their IDs.
+type validatorVoteBodiesRoute struct {
+	events []*transactions.VotableEvent
+}
+
+var _ consensus.Route = (*validatorVoteBodiesRoute)(nil)
+
+func (d *validatorVoteBodiesRoute) Name() string {
+	return transactions.PayloadTypeValidatorVoteBodies.String()
+}
+
+func (d *validatorVoteBodiesRoute) Price(ctx context.Context, _ *common.App, tx *transactions.Transaction) (*big.Int, error) {
 	// VoteBody pricing is based on the size of the vote bodies of all the events in the tx payload.
 	votes := &transactions.ValidatorVoteBodies{}
 	err := votes.UnmarshalBinary(tx.Body.Payload)
@@ -869,4 +769,63 @@ func (v *validatorVoteBodiesRoute) Price(ctx context.Context, router *TxApp, tx 
 	}
 
 	return big.NewInt(totalSize * ValidatorVoteBodyBytePrice), nil
+}
+
+func (d *validatorVoteBodiesRoute) PreTx(ctx common.TxContext, _ *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	// Only proposer can issue a VoteBody transaction.
+	if !bytes.Equal(tx.Sender, ctx.Proposer) {
+		return transactions.CodeInvalidSender, ErrCallerNotProposer
+	}
+
+	vote := &transactions.ValidatorVoteBodies{}
+	err := vote.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return transactions.CodeEncodingError, err
+	}
+
+	d.events = vote.Events
+
+	return 0, nil
+}
+
+func (d *validatorVoteBodiesRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+	fromLocalValidator := bytes.Equal(tx.Sender, app.Service.Identity)
+
+	// Expectation:
+	// 1. VoteBody should only include the events for which the resolutions are not yet created. Maybe filter out the events for which the resolutions are already created and ignore them.
+	// 2. If the node is the proposer, delete the event from the event store
+	for _, event := range d.events {
+		resCfg, err := resolutions.GetResolution(event.Type)
+		if err != nil {
+			return transactions.CodeUnknownError, err
+		}
+
+		ev := &types.VotableEvent{
+			Type: event.Type,
+			Body: event.Body,
+		}
+
+		expiryHeight := ctx.BlockHeight + resCfg.ExpirationPeriod
+		err = createResolution(ctx.Ctx, app.DB, ev, expiryHeight, tx.Sender)
+		if err != nil {
+			return transactions.CodeUnknownError, err
+		}
+
+		// since the vote body proposer is implicitly voting for the event,
+		// we need to approve the newly created vote body here
+		err = approveResolution(ctx.Ctx, app.DB, ev.ID(), tx.Sender)
+		if err != nil {
+			return transactions.CodeUnknownError, err
+		}
+
+		// If the local validator is the proposer, then we should delete the event from the event store.
+		if fromLocalValidator {
+			err = deleteEvent(ctx.Ctx, app.DB, ev.ID())
+			if err != nil {
+				return transactions.CodeUnknownError, err
+			}
+		}
+	}
+
+	return 0, nil
 }

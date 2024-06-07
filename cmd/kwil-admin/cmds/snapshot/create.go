@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"github.com/kwilteam/kwil-db/common/chain"
 
 	"github.com/spf13/cobra"
 )
@@ -158,7 +158,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort, snapsho
 	hasher := sha256.New()
 	var inVotersBlock bool
 	var validatorCount int64
-	genCfg := config.DefaultGenesisConfig()
+	genCfg := chain.DefaultGenesisConfig()
 	genCfg.Alloc = make(map[string]*big.Int)
 	multiWriter := io.MultiWriter(gzipWriter, hasher)
 	var totalBytes int64
@@ -196,7 +196,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort, snapsho
 				return fmt.Errorf("failed to parse power: %w", err)
 			}
 
-			genCfg.Validators = append(genCfg.Validators, &config.GenesisValidator{
+			genCfg.Validators = append(genCfg.Validators, &chain.GenesisValidator{
 				PubKey: voterID,
 				Power:  power,
 				Name:   fmt.Sprintf("validator-%d", validatorCount),

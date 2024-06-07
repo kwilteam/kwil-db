@@ -101,6 +101,7 @@ type IntTestConfig struct {
 	BlockInterval time.Duration // timeout_commit i.e. minimum block interval
 
 	Allocs map[string]*big.Int
+	Forks  map[string]*uint64
 
 	NValidator    int
 	NNonValidator int
@@ -108,7 +109,10 @@ type IntTestConfig struct {
 	VoteExpiry    int64
 	WithGas       bool
 
+	// The following options are mutually exclusive, as they are used to use
+	// alternate docker images with kwild variants with differnet extensions.
 	SpamOracleEnabled bool
+	ForkNodes         bool
 
 	Snapshots SnapshotConfig
 }
@@ -237,6 +241,12 @@ func WithGenesisAlloc(allocs map[string]*big.Int) HelperOpt {
 	}
 }
 
+func WithForks(forks map[string]*uint64) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.Forks = forks
+	}
+}
+
 func WithNumByzantineExpiryNodes(n int) HelperOpt {
 	return func(r *IntHelper) {
 		r.ethDeposit.NumByzantineExpiryNodes = n
@@ -252,6 +262,12 @@ func WithETHDevNet() HelperOpt {
 func WithSpamOracle() HelperOpt {
 	return func(r *IntHelper) {
 		r.cfg.SpamOracleEnabled = true
+	}
+}
+
+func WithForkNode() HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.ForkNodes = true
 	}
 }
 
@@ -308,6 +324,14 @@ func (r *IntHelper) LoadConfig() {
 	// Overwritten using helperOpts
 	r.cfg.VoteExpiry = 14400
 	r.cfg.JoinExpiry = 14400
+}
+
+func (r *IntHelper) Config() *IntTestConfig {
+	return r.cfg
+}
+
+func (r *IntHelper) ChainID() string {
+	return testChainID
 }
 
 func (r *IntHelper) updateEnv(k, v string) {
@@ -375,13 +399,13 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 		JoinExpiry:        r.cfg.JoinExpiry,
 		WithoutGasCosts:   !r.cfg.WithGas,
 		VoteExpiry:        r.cfg.VoteExpiry,
-		WithoutNonces:     false,
 		Allocs:            allocs,
 		FundNonValidators: r.cfg.WithGas, // when gas is required, also give the non-validators some for tests
 		Extensions:        extensionConfigs,
 		SnapshotsEnabled:  r.cfg.Snapshots.Enabled,
 		MaxSnapshots:      r.cfg.Snapshots.MaxSnapshots,
 		SnapshotHeights:   r.cfg.Snapshots.RecurringHeight,
+		Forks:             r.cfg.Forks,
 	}, &nodecfg.ConfigOpts{
 		DnsHost: true,
 	})
@@ -609,6 +633,8 @@ func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 	dockerImageName := utils.DefaultDockerImage
 	if r.cfg.SpamOracleEnabled {
 		dockerImageName = "kwild-spammer:latest"
+	} else if r.cfg.ForkNodes {
+		dockerImageName = "kwild-forker:latest"
 	}
 	err = utils.CreateComposeFile(composeFile, "./docker-compose.yml.template",
 		utils.ComposeConfig{

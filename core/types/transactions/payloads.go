@@ -20,27 +20,7 @@ func (p PayloadType) String() string {
 	return string(p)
 }
 
-func (p PayloadType) Valid() bool {
-	switch p {
-	case PayloadTypeDeploySchema,
-		PayloadTypeDropSchema,
-		PayloadTypeExecute,
-		PayloadTypeCallAction,
-		PayloadTypeValidatorJoin,
-		PayloadTypeValidatorApprove,
-		PayloadTypeValidatorRemove,
-		PayloadTypeValidatorLeave,
-		PayloadTypeTransfer,
-		// These should not come in user transactions, but they are not invalid
-		// payload types in general.
-		PayloadTypeValidatorVoteIDs,
-		PayloadTypeValidatorVoteBodies:
-		return true
-	default:
-		return false
-	}
-}
-
+// Native payload types
 const (
 	PayloadTypeDeploySchema        PayloadType = "deploy_schema"
 	PayloadTypeDropSchema          PayloadType = "drop_schema"
@@ -83,7 +63,7 @@ func UnmarshalPayload(payloadType PayloadType, payload []byte) (Payload, error) 
 	elem := reflect.New(t)       // reflect.Type => reflect.Value
 	instance := elem.Interface() // reflect.Type => any
 
-	err := serialize.DecodeInto(payload, instance)
+	err := serialize.Decode(payload, instance)
 	if err != nil {
 		return nil, err
 	}
@@ -92,6 +72,56 @@ func UnmarshalPayload(payloadType PayloadType, payload []byte) (Payload, error) 
 		return nil, errors.New("instance not a payload")
 	}
 	return payloadIface, nil
+}
+
+// Valid says if the payload type is known. This does not mean that the node
+// will execute the transaction, e.g. not yet activated, or removed.
+func (p PayloadType) Valid() bool {
+	// native types first for speed
+	switch p {
+	case PayloadTypeDeploySchema,
+		PayloadTypeDropSchema,
+		PayloadTypeExecute,
+		PayloadTypeCallAction,
+		PayloadTypeValidatorJoin,
+		PayloadTypeValidatorApprove,
+		PayloadTypeValidatorRemove,
+		PayloadTypeValidatorLeave,
+		PayloadTypeTransfer,
+		// These should not come in user transactions, but they are not invalid
+		// payload types in general.
+		PayloadTypeValidatorVoteIDs,
+		PayloadTypeValidatorVoteBodies:
+		return true
+	default: // check map that includes registered payloads from extensions
+		return payloadTypes[p]
+	}
+}
+
+// payloadTypes includes native types and types registered from extensions.
+var payloadTypes = map[PayloadType]bool{
+	PayloadTypeDeploySchema:        true,
+	PayloadTypeDropSchema:          true,
+	PayloadTypeExecute:             true,
+	PayloadTypeCallAction:          true,
+	PayloadTypeTransfer:            true,
+	PayloadTypeValidatorJoin:       true,
+	PayloadTypeValidatorLeave:      true,
+	PayloadTypeValidatorRemove:     true,
+	PayloadTypeValidatorApprove:    true,
+	PayloadTypeValidatorVoteIDs:    true,
+	PayloadTypeValidatorVoteBodies: true,
+}
+
+// RegisterPayload registers a new payload type. This should be done on
+// application initialization. A known payload type does not require a
+// corresponding route handler to be registered with extensions/consensus so
+// that they become available for consensus according to chain config.
+func RegisterPayload(pType PayloadType) {
+	if _, have := payloadTypes[pType]; have {
+		panic(fmt.Sprintf("already have payload type %v", pType))
+	}
+	payloadTypes[pType] = true
 }
 
 // Payload is the interface that all payloads must implement
@@ -116,14 +146,7 @@ func (s *DropSchema) MarshalBinary() (serialize.SerializedData, error) {
 }
 
 func (s *DropSchema) UnmarshalBinary(b serialize.SerializedData) error {
-	res, err := serialize.Decode[DropSchema](b)
-	if err != nil {
-		return err
-	}
-
-	*s = *res
-
-	return nil
+	return serialize.Decode(b, s)
 }
 
 func (s *DropSchema) Type() PayloadType {
@@ -144,13 +167,7 @@ func (a *ActionExecution) MarshalBinary() (serialize.SerializedData, error) {
 }
 
 func (a *ActionExecution) UnmarshalBinary(b serialize.SerializedData) error {
-	res, err := serialize.Decode[ActionExecution](b)
-	if err != nil {
-		return err
-	}
-
-	*a = *res
-	return nil
+	return serialize.Decode(b, a)
 }
 
 func (a *ActionExecution) Type() PayloadType {
@@ -445,13 +462,7 @@ func (a *ActionCall) MarshalBinary() (serialize.SerializedData, error) {
 }
 
 func (a *ActionCall) UnmarshalBinary(b serialize.SerializedData) error {
-	res, err := serialize.Decode[ActionCall](b)
-	if err != nil {
-		return err
-	}
-
-	*a = *res
-	return nil
+	return serialize.Decode(b, a)
 }
 
 var _ encoding.BinaryUnmarshaler = (*ActionCall)(nil)
@@ -475,7 +486,7 @@ var _ encoding.BinaryUnmarshaler = (*Transfer)(nil)
 var _ encoding.BinaryMarshaler = (*Transfer)(nil)
 
 func (v *Transfer) UnmarshalBinary(b []byte) error {
-	return serialize.DecodeInto(b, v)
+	return serialize.Decode(b, v)
 }
 
 func (v *Transfer) MarshalBinary() ([]byte, error) {
@@ -496,7 +507,7 @@ var _ encoding.BinaryUnmarshaler = (*ValidatorJoin)(nil)
 var _ encoding.BinaryMarshaler = (*ValidatorJoin)(nil)
 
 func (v *ValidatorJoin) UnmarshalBinary(b []byte) error {
-	return serialize.DecodeInto(b, v)
+	return serialize.Decode(b, v)
 }
 
 func (v *ValidatorJoin) MarshalBinary() ([]byte, error) {
@@ -516,7 +527,7 @@ var _ encoding.BinaryUnmarshaler = (*ValidatorApprove)(nil)
 var _ encoding.BinaryMarshaler = (*ValidatorApprove)(nil)
 
 func (v *ValidatorApprove) UnmarshalBinary(b []byte) error {
-	return serialize.DecodeInto(b, v)
+	return serialize.Decode(b, v)
 }
 
 func (v *ValidatorApprove) MarshalBinary() ([]byte, error) {
@@ -536,7 +547,7 @@ var _ encoding.BinaryUnmarshaler = (*ValidatorRemove)(nil)
 var _ encoding.BinaryMarshaler = (*ValidatorRemove)(nil)
 
 func (v *ValidatorRemove) UnmarshalBinary(b []byte) error {
-	return serialize.DecodeInto(b, v)
+	return serialize.Decode(b, v)
 }
 
 func (v *ValidatorRemove) MarshalBinary() ([]byte, error) {
@@ -554,7 +565,7 @@ var _ encoding.BinaryUnmarshaler = (*ValidatorLeave)(nil)
 var _ encoding.BinaryMarshaler = (*ValidatorLeave)(nil)
 
 func (v *ValidatorLeave) UnmarshalBinary(b []byte) error {
-	return serialize.DecodeInto(b, v)
+	return serialize.Decode(b, v)
 }
 
 func (v *ValidatorLeave) MarshalBinary() ([]byte, error) {
@@ -581,7 +592,7 @@ func (v *ValidatorVoteIDs) Type() PayloadType {
 }
 
 func (v *ValidatorVoteIDs) UnmarshalBinary(p0 serialize.SerializedData) error {
-	return serialize.DecodeInto(p0, v)
+	return serialize.Decode(p0, v)
 }
 
 // ValidatorVoteBodies is a payload for submitting the full vote bodies for any resolution.
@@ -608,5 +619,5 @@ func (v *ValidatorVoteBodies) Type() PayloadType {
 }
 
 func (v *ValidatorVoteBodies) UnmarshalBinary(p0 serialize.SerializedData) error {
-	return serialize.DecodeInto(p0, v)
+	return serialize.Decode(p0, v)
 }

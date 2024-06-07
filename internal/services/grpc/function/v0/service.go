@@ -6,9 +6,9 @@ package v0
 import (
 	"context"
 
+	"github.com/kwilteam/kwil-db/common/ident"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	functionpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/function/v0"
-	"github.com/kwilteam/kwil-db/internal/ident"
 )
 
 type FunctionService struct {

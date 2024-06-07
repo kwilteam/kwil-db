@@ -10,12 +10,12 @@ import (
 // must correspond exactly in their message handling.
 
 func init() {
-	err := authExt.RegisterAuthenticator(auth.Ed25519Auth, auth.Ed25519Authenticator{})
+	err := authExt.RegisterAuthenticator(authExt.ModAdd, auth.Ed25519Auth, auth.Ed25519Authenticator{})
 	if err != nil {
 		panic(err)
 	}
 
-	err = authExt.RegisterAuthenticator(auth.EthPersonalSignAuth, auth.EthSecp256k1Authenticator{})
+	err = authExt.RegisterAuthenticator(authExt.ModAdd, auth.EthPersonalSignAuth, auth.EthSecp256k1Authenticator{})
 	if err != nil {
 		panic(err)
 	}

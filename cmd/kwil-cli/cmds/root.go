@@ -3,6 +3,9 @@ package cmds
 import (
 	"fmt"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/common/version"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/account"
@@ -11,8 +14,6 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/database"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/utils"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func NewRootCmd() *cobra.Command {

@@ -4,7 +4,8 @@ import (
 	"context"
 	"strings"
 
-	sql "github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/common/chain"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 )
@@ -18,6 +19,8 @@ type Service struct {
 	// configurations.
 	// It maps: extension_name -> config_key -> config_value
 	ExtensionConfigs map[string]map[string]string
+	// Identity is the node/validator identity (pubkey).
+	Identity []byte
 }
 
 // App is an application that can modify and query the local database
@@ -31,6 +34,22 @@ type App struct {
 	// executing against
 	// Kuneiform schemas
 	Engine Engine
+}
+
+// TxContext is contextual information provided to a transaction execution Route
+// handler. This is defined in common as it is used by both the internal txapp
+// router and extension implementations in extensions/consensus.
+type TxContext struct {
+	Ctx context.Context
+	// BlockHeight gets the height of the current block.
+	BlockHeight int64
+	// Proposer gets the proposer public key of the current block.
+	Proposer []byte
+	// ConsensusParams holds network level parameters that can be evolved
+	// over the lifetime of a network.
+	ConsensusParams *chain.ConsensusParams
+	// TxID is the ID of the current transaction.
+	TxID []byte
 }
 
 type Engine interface {

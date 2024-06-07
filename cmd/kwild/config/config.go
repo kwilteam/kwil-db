@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 
@@ -712,7 +713,8 @@ func (cfg *KwildConfig) sanitizeCfgPaths() error {
 	return nil
 }
 
-func (cfg *KwildConfig) InitPrivateKeyAndGenesis(autogen bool) (privateKey *crypto.Ed25519PrivateKey, genConfig *GenesisConfig, err error) {
+func (cfg *KwildConfig) InitPrivateKeyAndGenesis(autogen bool) (privateKey *crypto.Ed25519PrivateKey,
+	genConfig *chain.GenesisConfig, err error) {
 	return loadGenesisAndPrivateKey(autogen, cfg.AppCfg.PrivateKeyPath, cfg.RootDir)
 }
 

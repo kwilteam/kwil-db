@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/ident"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/ident"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

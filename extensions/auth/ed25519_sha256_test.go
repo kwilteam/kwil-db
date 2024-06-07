@@ -1,5 +1,3 @@
-//go:build auth_ed25519_sha256 || ext_test
-
 package auth_test
 
 import (

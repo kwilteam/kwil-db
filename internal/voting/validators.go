@@ -18,7 +18,7 @@ const (
 )
 
 func init() {
-	err := resolutions.RegisterResolution(ValidatorJoinEventType, resolutions.ResolutionConfig{
+	err := resolutions.RegisterResolution(ValidatorJoinEventType, resolutions.ModAdd, resolutions.ResolutionConfig{
 		ConfirmationThreshold: big.NewRat(2, 3),
 		ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error {
 			joinReq := &UpdatePowerRequest{}
@@ -33,7 +33,7 @@ func init() {
 		panic(err)
 	}
 
-	err = resolutions.RegisterResolution(ValidatorRemoveEventType, resolutions.ResolutionConfig{
+	err = resolutions.RegisterResolution(ValidatorRemoveEventType, resolutions.ModAdd, resolutions.ResolutionConfig{
 		ConfirmationThreshold: big.NewRat(2, 3),
 		ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error {
 			removeReq := &UpdatePowerRequest{}
