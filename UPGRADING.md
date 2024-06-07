@@ -61,7 +61,7 @@ In the node's `config.toml` file, the following changes have been made:
 - Added `app.db_read_timeout`, which imposes a timout on read-only DB transactions (i.e. actions/procedures with a `view` tag or an ad-hoc SELECT query). The default 5 seconds.
 - Added `rpc.broadcast_tx_timout`, which imposes a timeout for awaiting transaction confirmation when using the `--sync` flag in `kwil-cli`. The default is 10 seconds.
 - Added `app.snapshots` to support snapshot creation. See the `SnapshotConfig` struct for more information.
-- Added `app.snapshot_file` to suport starting a network with a state at genesis. This is to support the Network Migrations feature.
+- Added `app.genesis_state` to suport starting a network with a state at genesis. This is to support the Network Migrations feature.
 - Added `chain.statesync` to enable new nodes syncing with snapshots instead of replaying each block. See the `StateSyncConfig` struct for more information.
 
 ### CLI Changes
