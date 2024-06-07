@@ -1195,11 +1195,16 @@ func (c *DataType) Clean() error {
 
 // Copy returns a copy of the type.
 func (c *DataType) Copy() *DataType {
-	return &DataType{
-		Name:     c.Name,
-		IsArray:  c.IsArray,
-		Metadata: c.Metadata,
+	d := &DataType{
+		Name:    c.Name,
+		IsArray: c.IsArray,
 	}
+
+	if c.Metadata != nil {
+		d.Metadata = &[2]uint16{c.Metadata[0], c.Metadata[1]}
+	}
+
+	return d
 }
 
 // EqualsStrict returns true if the type is equal to the other type.

@@ -518,6 +518,7 @@ func prepareProcedure(proc *types.Procedure) (*preparedProcedure, error) {
 		name:       proc.Name,
 		public:     proc.Public,
 		parameters: proc.Parameters,
+		ownerOnly:  proc.IsOwnerOnly(),
 		view:       proc.IsView(),
 		returns:    proc.Returns,
 	}, nil
@@ -530,6 +531,8 @@ type preparedProcedure struct {
 
 	// public indicates whether the procedure is public or privately scoped.
 	public bool
+	// ownerOnly indicates whether the procedure is owner only.
+	ownerOnly bool
 
 	// parameters are the parameters of the procedure.
 	parameters []*types.ProcedureParameter

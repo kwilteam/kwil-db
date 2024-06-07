@@ -1,9 +1,11 @@
 package execution
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
@@ -31,6 +33,11 @@ type baseDataset struct {
 
 var _ precompiles.Instance = (*baseDataset)(nil)
 
+var (
+	ErrPrivate   = fmt.Errorf("procedure/action is not public")
+	ErrOwnerOnly = fmt.Errorf("procedure/action is owner only")
+)
+
 // Call calls a procedure from the dataset.
 // If the procedure is not public, it will return an error.
 // It satisfies precompiles.Instance.
@@ -38,10 +45,15 @@ func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App
 	// check if it is a procedure
 	proc, ok := d.procedures[method]
 	if ok {
-		// inputs, err := proc.coerceInputs(inputs)
-		// if err != nil {
-		// 	return nil, err
-		// }
+		if !proc.public {
+			return nil, fmt.Errorf(`%w: "%s"`, ErrPrivate, method)
+		}
+		if proc.ownerOnly && !bytes.Equal(caller.Signer, d.schema.Owner) {
+			return nil, fmt.Errorf(`%w: "%s"`, ErrOwnerOnly, method)
+		}
+		if !proc.view && app.DB.(sql.AccessModer).AccessMode() == sql.ReadOnly {
+			return nil, fmt.Errorf(`%w: "%s"`, ErrMutativeProcedure, method)
+		}
 
 		// this is not a strictly necessary check, as postgres will throw an error, but this gives a more
 		// helpful error message
@@ -66,11 +78,11 @@ func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App
 	// otherwise, it is an action
 	act, ok := d.actions[method]
 	if !ok {
-		return nil, fmt.Errorf(`procedure "%s" not found`, method)
+		return nil, fmt.Errorf(`action "%s" not found`, method)
 	}
 
 	if !act.public {
-		return nil, fmt.Errorf(`procedure "%s" is not public`, method)
+		return nil, fmt.Errorf(`%w: "%s"`, ErrPrivate, method)
 	}
 
 	newCtx := caller.NewScope()
