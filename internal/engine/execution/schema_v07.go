@@ -29,10 +29,8 @@ func convertV07Schema(bts []byte) (*types.Schema, error) {
 				}
 			}
 			columns[j] = &types.Column{
-				Name: c.Name,
-				Type: &types.DataType{
-					Name: string(c.Type),
-				},
+				Name:       c.Name,
+				Type:       c.Type.convert(),
 				Attributes: attrs,
 			}
 		}
@@ -211,6 +209,23 @@ type v07ExtensionConfig struct {
 
 // v07DataType is a type of data (e.g. NULL, TEXT, INT, BLOB, BOOLEAN)
 type v07DataType string
+
+func (d v07DataType) convert() *types.DataType {
+	switch d {
+	case "NULL":
+		return types.NullType
+	case "TEXT":
+		return types.TextType
+	case "INT":
+		return types.IntType
+	case "BLOB":
+		return types.BlobType
+	case "BOOLEAN", "BOOL":
+		return types.BoolType
+	default:
+		panic("unknown data type")
+	}
+}
 
 // v07Procedure is a procedure in a database schema.
 // These are defined by Kuneiform's `action` keyword.
