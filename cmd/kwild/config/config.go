@@ -185,7 +185,7 @@ type StateSyncConfig struct {
 	SnapshotDir string `mapstructure:"snapshot_dir"`
 
 	// Trusted snapshot servers to fetch/validate the snapshots from.
-	// Atleast 2 servers are required for the state sync to work.
+	// At least 1 server is required for the state sync to work.
 	RPCServers string `mapstructure:"rpc_servers"`
 
 	// Time to spend discovering snapshots before initiating starting
@@ -707,7 +707,11 @@ func (cfg *KwildConfig) sanitizeCfgPaths() error {
 	}
 
 	if cfg.AppCfg.SnapshotFile != "" {
-		cfg.AppCfg.SnapshotFile = rootify(cfg.AppCfg.SnapshotFile, rootDir)
+		path, err := ExpandPath(cfg.AppCfg.SnapshotFile)
+		if err != nil {
+			return fmt.Errorf("failed to expand snapshot file path \"%v\": %v", cfg.AppCfg.SnapshotFile, err)
+		}
+		cfg.AppCfg.SnapshotFile = path
 		fmt.Println("Snapshot file to initialize database from:", cfg.AppCfg.SnapshotFile)
 	}
 	return nil
