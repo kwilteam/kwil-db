@@ -2,13 +2,9 @@ module mykwilapp
 
 go 1.22.1
 
-replace github.com/kwilteam/kwil-db/core => ../..
-
-replace github.com/kwilteam/kwil-db/parse => ../../../parse
-
 require (
-	github.com/kwilteam/kwil-db/core v0.2.0-beta.1
-	github.com/kwilteam/kwil-db/parse v0.2.0-beta
+	github.com/kwilteam/kwil-db/core v0.2.0
+	github.com/kwilteam/kwil-db/parse v0.2.0
 )
 
 require (
