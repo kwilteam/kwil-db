@@ -2,11 +2,6 @@ module github.com/kwilteam/kwil-db
 
 go 1.21.0
 
-replace (
-	github.com/kwilteam/kwil-db/core => ./core
-	github.com/kwilteam/kwil-db/parse => ./parse
-)
-
 require (
 	dario.cat/mergo v1.0.0
 	github.com/alexliesenfeld/health v0.8.0
@@ -19,7 +14,7 @@ require (
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/jpillora/backoff v1.0.0
 	github.com/kwilteam/kwil-db/core v0.2.0
-	github.com/kwilteam/kwil-db/parse v0.2.0-beta.1
+	github.com/kwilteam/kwil-db/parse v0.2.0
 	github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/mapstructure v1.5.0
