@@ -1,6 +1,7 @@
 package rpcserver
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -24,10 +25,14 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
+	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/openrpc"
 )
 
 // The endpoint path is constant for now.
-const pathV1 = "/rpc/v1"
+const (
+	pathRPCV1  = "/rpc/v1"
+	pathSpecV1 = "/spec/v1"
+)
 
 // Server is a JSON-RPC server.
 type Server struct {
@@ -35,6 +40,9 @@ type Server struct {
 	unix           bool // the listener's network should be "unix" instead of "tcp"
 	log            log.Logger
 	methodHandlers map[jsonrpc.Method]MethodHandler
+	methodDefs     map[string]*openrpc.MethodDefinition
+	specInfo       *openrpc.Info
+	spec           json.RawMessage
 	authSHA        []byte
 	tlsCfg         *tls.Config
 }
@@ -44,6 +52,7 @@ type serverConfig struct {
 	tlsConfig  *tls.Config
 	timeout    time.Duration
 	enableCORS bool
+	specInfo   *openrpc.Info
 }
 
 type Opt func(*serverConfig)
@@ -62,6 +71,15 @@ func WithPass(pass string) Opt {
 func WithTLS(cfg *tls.Config) Opt {
 	return func(c *serverConfig) {
 		c.tlsConfig = cfg
+	}
+}
+
+// WithServerInfo sets the OpenRPC "info" section to use when serving the
+// OpenRPC JSON specification either via a spec REST endpoint or the
+// rpc.discover JSON-RPC method.
+func WithServerInfo(specInfo *openrpc.Info) Opt {
+	return func(c *serverConfig) {
+		c.specInfo = specInfo
 	}
 }
 
@@ -109,6 +127,18 @@ func checkAddr(addr string) (string, bool, error) {
 // defaultWriteTimeout is the default WriteTimeout for the http.Server.
 const defaultWriteTimeout = 45 * time.Second
 
+var (
+	defaultSpecInfo = &openrpc.Info{
+		Title:       "Kwil DB RPC service",
+		Description: `The JSON-RPC service for Kwil DB.`,
+		License: &openrpc.License{ // the spec file's license
+			Name: "CC0-1.0",
+			URL:  "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
+		},
+		Version: "0.1.0",
+	}
+)
+
 // NewServer creates a new JSON-RPC server. Use RegisterMethodHandler or
 // RegisterSvc to add method handlers.
 func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
@@ -130,7 +160,8 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	}
 
 	cfg := &serverConfig{
-		timeout: defaultWriteTimeout,
+		timeout:  defaultWriteTimeout,
+		specInfo: defaultSpecInfo,
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -159,6 +190,8 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		unix:           isUNIX,
 		log:            log,
 		methodHandlers: make(map[jsonrpc.Method]MethodHandler),
+		methodDefs:     make(map[string]*openrpc.MethodDefinition),
+		specInfo:       cfg.specInfo,
 		tlsCfg:         cfg.tlsConfig,
 	}
 
@@ -179,7 +212,19 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	}
 	h = recoverer(h, log)
 
-	mux.Handle(pathV1, h)
+	mux.Handle(pathRPCV1, h)
+
+	var specHandler http.Handler
+	specHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("content-type", "application/json; charset=utf-8")
+		http.ServeContent(w, r, "openrpc.json", time.Time{}, bytes.NewReader(s.spec))
+	})
+	specHandler = corsHandler(specHandler)
+	mux.Handle(pathSpecV1, specHandler)
 
 	return s, nil
 }
@@ -279,7 +324,39 @@ func (s *Server) Serve(ctx context.Context) error {
 	return s.ServeOn(ctx, ln)
 }
 
+func openRPCSpec(specInfo *openrpc.Info, methodDefs map[string]*openrpc.MethodDefinition) *openrpc.Spec {
+	knownSchemas := make(map[reflect.Type]openrpc.Schema)
+	methods := openrpc.InventoryAPI(methodDefs, knownSchemas)
+	schemas := make(map[string]openrpc.Schema)
+	for _, schema := range knownSchemas {
+		schemas[schema.Name()] = schema
+	}
+	return &openrpc.Spec{
+		OpenRPC: "1.2.4",
+		Info:    *specInfo,
+		Methods: methods,
+		Components: openrpc.Components{
+			Schemas: schemas,
+		},
+	}
+}
+
 func (s *Server) ServeOn(ctx context.Context, ln net.Listener) error {
+	// With all services registered, only now can we generate the RPC spec.
+	spec := openRPCSpec(s.specInfo, s.methodDefs)
+	var err error
+	s.spec, err = json.Marshal(spec)
+	if err != nil {
+		return err
+	}
+
+	s.RegisterMethodHandler(
+		"rpc.discover",
+		MakeMethodHandler(func(context.Context, *any) (*json.RawMessage, *jsonrpc.Error) {
+			return &s.spec, nil
+		}),
+	)
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -297,7 +374,7 @@ func (s *Server) ServeOn(ctx context.Context, ln net.Listener) error {
 	s.log.Infof("JSON-RPC server shutting down...")
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	err := s.srv.Shutdown(ctxTimeout)
+	err = s.srv.Shutdown(ctxTimeout)
 	if err != nil {
 		err = fmt.Errorf("http.Server.Shutdown: %v", err)
 	}

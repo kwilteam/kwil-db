@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
@@ -131,19 +130,11 @@ func (s *DropSchema) Type() PayloadType {
 	return PayloadTypeDropSchema
 }
 
-// RawValue is used to swallow RLP data, and is intended to be used with "tail"
-// tagged rlp struct fields at the end of a struct, to provide forward
-// compatibility.
-type RawValue = rlp.RawValue
-
 // ActionExecution is the payload that is used to execute an action
 type ActionExecution struct {
 	DBID      string
 	Action    string
 	Arguments [][]*EncodedValue
-	// NilArg indicates for each of the elements in Arguments if the value is
-	// nil rather than just empty.
-	// NilArg [][]bool `rlp:"optional"`
 }
 
 var _ Payload = (*ActionExecution)(nil)
@@ -171,9 +162,6 @@ type ActionCall struct {
 	DBID      string
 	Action    string
 	Arguments []*EncodedValue
-	// NilArg indicates for each of the elements in Arguments if the value is
-	// nil rather than just empty.
-	// NilArg []bool `rlp:"optional"`
 }
 
 // EncodedValue is used to encode a value with its type specified

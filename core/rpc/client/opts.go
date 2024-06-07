@@ -3,7 +3,7 @@ package client
 import (
 	"net/http"
 
-	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
+	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 )
 
 // ActionCallOpts is the options for action call.
@@ -35,7 +35,7 @@ func WithAuthCookie(cookie *http.Cookie) ActionCallOption {
 type BroadcastWait uint8
 
 const (
-	BroadcastWaitAsync  = BroadcastWait(jsonrpc.BroadcastSyncAsync)
-	BroadcastWaitSync   = BroadcastWait(jsonrpc.BroadcastSyncSync)
-	BroadcastWaitCommit = BroadcastWait(jsonrpc.BroadcastSyncCommit)
+	BroadcastWaitAsync  = BroadcastWait(userjson.BroadcastSyncAsync)
+	BroadcastWaitSync   = BroadcastWait(userjson.BroadcastSyncSync)
+	BroadcastWaitCommit = BroadcastWait(userjson.BroadcastSyncCommit)
 )

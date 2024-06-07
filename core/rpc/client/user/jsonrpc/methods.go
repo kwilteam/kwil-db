@@ -13,6 +13,7 @@ import (
 	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
+	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	jsonUtil "github.com/kwilteam/kwil-db/core/utils/json"
@@ -34,11 +35,11 @@ func NewClient(url *url.URL, opts ...rpcclient.RPCClientOpts) *Client {
 var _ user.TxSvcClient = (*Client)(nil)
 
 func (cl *Client) Ping(ctx context.Context) (string, error) {
-	cmd := &jsonrpc.PingRequest{
+	cmd := &userjson.PingRequest{
 		Message: "ping",
 	}
-	res := &jsonrpc.PingResponse{}
-	err := cl.CallMethod(ctx, string(jsonrpc.MethodPing), cmd, res)
+	res := &userjson.PingResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodPing), cmd, res)
 	if err != nil {
 		return "", err
 	}
@@ -46,16 +47,16 @@ func (cl *Client) Ping(ctx context.Context) (string, error) {
 }
 
 func (cl *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, sync rpcclient.BroadcastWait) ([]byte, error) {
-	cmd := &jsonrpc.BroadcastRequest{
+	cmd := &userjson.BroadcastRequest{
 		Tx:   tx,
-		Sync: (*jsonrpc.BroadcastSync)(&sync),
+		Sync: (*userjson.BroadcastSync)(&sync),
 	}
-	res := &jsonrpc.BroadcastResponse{}
-	err := cl.CallMethod(ctx, string(jsonrpc.MethodBroadcast), cmd, res)
+	res := &userjson.BroadcastResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodBroadcast), cmd, res)
 	if err != nil {
 		var jsonRPCErr *jsonrpc.Error
 		if errors.As(err, &jsonRPCErr) && jsonRPCErr.Code == jsonrpc.ErrorTxExecFailure && len(jsonRPCErr.Data) > 0 {
-			var berr jsonrpc.BroadcastError
+			var berr userjson.BroadcastError
 			jsonErr := json.Unmarshal(jsonRPCErr.Data, &berr)
 			if jsonErr != nil {
 				return nil, errors.Join(jsonErr, err)
@@ -80,13 +81,13 @@ func (cl *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, s
 }
 
 func (cl *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...rpcclient.ActionCallOption) ([]map[string]any, error) {
-	cmd := &jsonrpc.CallRequest{
+	cmd := &userjson.CallRequest{
 		Body:     msg.Body,
 		AuthType: msg.AuthType,
 		Sender:   msg.Sender,
 	}
-	res := &jsonrpc.CallResponse{}
-	err := cl.CallMethod(ctx, string(jsonrpc.MethodCall), cmd, res)
+	res := &userjson.CallResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodCall), cmd, res)
 	if err != nil {
 		return nil, err
 	}
@@ -94,9 +95,9 @@ func (cl *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts 
 }
 
 func (cl *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
-	cmd := &jsonrpc.ChainInfoRequest{}
-	res := &jsonrpc.ChainInfoResponse{}
-	err := cl.CallMethod(ctx, string(jsonrpc.MethodChainInfo), cmd, res)
+	cmd := &userjson.ChainInfoRequest{}
+	res := &userjson.ChainInfoResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodChainInfo), cmd, res)
 	if err != nil {
 		return nil, err
 	}
@@ -105,11 +106,11 @@ func (cl *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 }
 
 func (cl *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
-	cmd := &jsonrpc.EstimatePriceRequest{
+	cmd := &userjson.EstimatePriceRequest{
 		Tx: tx,
 	}
-	res := &jsonrpc.EstimatePriceResponse{}
-	err := cl.CallMethod(ctx, string(jsonrpc.MethodPrice), cmd, res)
+	res := &userjson.EstimatePriceResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodPrice), cmd, res)
 	if err != nil {
 		return nil, err
 	}
@@ -124,12 +125,12 @@ func (cl *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction
 }
 
 func (cl *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
-	cmd := &jsonrpc.AccountRequest{
+	cmd := &userjson.AccountRequest{
 		Identifier: pubKey,
 		Status:     &status,
 	}
-	res := &jsonrpc.AccountResponse{}
-	err := cl.CallMethod(ctx, string(jsonrpc.MethodAccount), cmd, res)
+	res := &userjson.AccountResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodAccount), cmd, res)
 	if err != nil {
 		return nil, err
 	}
@@ -154,11 +155,11 @@ func (cl *Client) GetAccount(ctx context.Context, pubKey []byte, status types.Ac
 }
 
 func (cl *Client) GetSchema(ctx context.Context, dbid string) (*types.Schema, error) {
-	cmd := &jsonrpc.SchemaRequest{
+	cmd := &userjson.SchemaRequest{
 		DBID: dbid,
 	}
-	res := &jsonrpc.SchemaResponse{}
-	err := cl.CallMethod(ctx, string(jsonrpc.MethodSchema), cmd, res)
+	res := &userjson.SchemaResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodSchema), cmd, res)
 	if err != nil {
 		return nil, err
 	}
@@ -166,11 +167,11 @@ func (cl *Client) GetSchema(ctx context.Context, dbid string) (*types.Schema, er
 }
 
 func (cl *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]*types.DatasetIdentifier, error) {
-	cmd := &jsonrpc.ListDatabasesRequest{
+	cmd := &userjson.ListDatabasesRequest{
 		Owner: ownerPubKey,
 	}
-	res := &jsonrpc.ListDatabasesResponse{}
-	err := cl.CallMethod(ctx, string(jsonrpc.MethodDatabases), cmd, res)
+	res := &userjson.ListDatabasesResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodDatabases), cmd, res)
 	if err != nil {
 		return nil, err
 	}
@@ -182,12 +183,12 @@ func (cl *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]*typ
 }
 
 func (cl *Client) Query(ctx context.Context, dbid, query string) ([]map[string]any, error) {
-	cmd := &jsonrpc.QueryRequest{
+	cmd := &userjson.QueryRequest{
 		DBID:  dbid,
 		Query: query,
 	}
-	res := &jsonrpc.QueryResponse{}
-	err := cl.CallMethod(ctx, string(jsonrpc.MethodQuery), cmd, res)
+	res := &userjson.QueryResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodQuery), cmd, res)
 	if err != nil {
 		return nil, err
 	}
@@ -195,11 +196,11 @@ func (cl *Client) Query(ctx context.Context, dbid, query string) ([]map[string]a
 }
 
 func (cl *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
-	cmd := &jsonrpc.TxQueryRequest{
+	cmd := &userjson.TxQueryRequest{
 		TxHash: txHash,
 	}
-	res := &jsonrpc.TxQueryResponse{}
-	err := cl.CallMethod(ctx, string(jsonrpc.MethodTxQuery), cmd, res)
+	res := &userjson.TxQueryResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodTxQuery), cmd, res)
 	if err != nil {
 		return nil, err
 	}

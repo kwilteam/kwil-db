@@ -1,6 +1,7 @@
 package transactions_test
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -49,6 +50,14 @@ func Test_TransactionMarshal(t *testing.T) {
 
 	serialized, err := tx.MarshalBinary()
 	require.NoError(t, err)
+
+	// For this version of the Transaction and TransactionBody, ensure the
+	// serialization is stable.
+	wantHash := [32]byte{0x71, 0xce, 0x11, 0xa4, 0xb1, 0xfc, 0x38, 0xe6, 0xe6, 0xe8,
+		0xcd, 0x27, 0x9b, 0x2d, 0xc, 0xbd, 0x95, 0xea, 0xe, 0x8d, 0xe0, 0x46, 0x8c,
+		0x35, 0x64, 0x21, 0x70, 0x31, 0x50, 0x92, 0x4, 0xf0}
+	gotHash := sha256.Sum256(serialized)
+	require.Equal(t, wantHash, gotHash)
 
 	tx2 := &transactions.Transaction{}
 	err = tx2.UnmarshalBinary(serialized)
