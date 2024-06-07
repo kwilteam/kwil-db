@@ -107,7 +107,7 @@ func (f Fork) String() string {
 // ForkSortFunc is used with slices.SortFunc or slices.SortStableFunc to sort a
 // []*Fork in ascending order by height.
 func ForkSortFunc(a, b *Fork) int {
-	return int(a.Height) - int(b.Height)
+	return cmp.Compare(a.Height, b.Height) // int(a.Height) - int(b.Height)
 }
 
 // matchForks is the primary helper method for returning for names and

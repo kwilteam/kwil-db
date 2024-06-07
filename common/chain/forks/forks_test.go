@@ -218,3 +218,70 @@ func TestForks_sort(t *testing.T) {
 	slices.SortStableFunc(activeForks, forks.ForkSortFunc)
 	assert.Equal(t, activeForks, wantSorted)
 }
+
+func TestForkSortFunc(t *testing.T) {
+	tests := []struct {
+		name     string
+		forks    []*forks.Fork
+		expected []*forks.Fork
+	}{
+		{
+			name:     "empty",
+			forks:    []*forks.Fork{},
+			expected: []*forks.Fork{},
+		},
+		{
+			name:     "single",
+			forks:    []*forks.Fork{{Name: "a", Height: 1}},
+			expected: []*forks.Fork{{Name: "a", Height: 1}},
+		},
+		{
+			name: "sorted",
+			forks: []*forks.Fork{
+				{Name: "a", Height: 1},
+				{Name: "b", Height: 2},
+				{Name: "c", Height: 3},
+			},
+			expected: []*forks.Fork{
+				{Name: "a", Height: 1},
+				{Name: "b", Height: 2},
+				{Name: "c", Height: 3},
+			},
+		},
+		{
+			name: "unsorted",
+			forks: []*forks.Fork{
+				{Name: "c", Height: 3},
+				{Name: "a", Height: 1},
+				{Name: "b", Height: 2},
+			},
+			expected: []*forks.Fork{
+				{Name: "a", Height: 1},
+				{Name: "b", Height: 2},
+				{Name: "c", Height: 3},
+			},
+		},
+		{
+			name: "duplicate heights",
+			forks: []*forks.Fork{
+				{Name: "a", Height: 1},
+				{Name: "b", Height: 2},
+				{Name: "c", Height: 2},
+				{Name: "d", Height: 3},
+			},
+			expected: []*forks.Fork{
+				{Name: "a", Height: 1},
+				{Name: "b", Height: 2},
+				{Name: "c", Height: 2},
+				{Name: "d", Height: 3},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			slices.SortStableFunc(tt.forks, forks.ForkSortFunc)
+			assert.Equal(t, tt.expected, tt.forks)
+		})
+	}
+}
