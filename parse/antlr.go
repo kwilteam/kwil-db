@@ -252,7 +252,7 @@ func (s *schemaVisitor) VisitType(ctx *gen.TypeContext) any {
 			return types.UnknownType
 		}
 
-		dt.Metadata = &[2]uint16{uint16(prec), uint16(scale)}
+		dt.Metadata = [2]uint16{uint16(prec), uint16(scale)}
 	}
 
 	if ctx.LBRACKET() != nil {

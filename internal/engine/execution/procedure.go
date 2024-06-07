@@ -106,7 +106,7 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 					return errors.New("DB does not provide access mode needed for mutative action")
 				}
 				if tx.AccessMode() != sql.ReadWrite {
-					return fmt.Errorf("cannot call non-view procedure, not in a chain transaction")
+					return fmt.Errorf("%w, not in a chain transaction", ErrMutativeProcedure)
 				}
 
 				return nil
@@ -170,18 +170,6 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 func (p *preparedAction) call(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB, inputs []any) error {
 	if len(inputs) != len(p.parameters) {
 		return fmt.Errorf(`%w: procedure "%s" requires %d arguments, but %d were provided`, ErrIncorrectNumberOfArguments, p.name, len(p.parameters), len(inputs))
-	}
-
-	// if procedure does not have view tag, then it can mutate state
-	// this means that we must have a readwrite connection
-	if !p.view {
-		tx, ok := db.(sql.AccessModer)
-		if !ok {
-			return errors.New("DB does not provide access mode needed for mutative action")
-		}
-		if tx.AccessMode() != sql.ReadWrite {
-			return fmt.Errorf(`%w: mutable procedure "%s" called with non-mutative scope`, ErrMutativeProcedure, p.name)
-		}
 	}
 
 	for i, param := range p.parameters {
