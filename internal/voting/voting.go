@@ -49,7 +49,8 @@ func initializeVoteStore(ctx context.Context, db sql.TxMaker) error {
 	resolutions := resolutions.ListResolutions()
 	for _, name := range resolutions {
 		uuid := types.NewUUIDV5([]byte(name))
-		_, err := tx.Execute(ctx, createResolutionType, uuid, name)
+		fmt.Println("Creating resolution type", name, " with UUID: ", uuid, " value: ", *uuid, " uuid[:] ", uuid[:])
+		_, err := tx.Execute(ctx, createResolutionType, uuid[:], name)
 		if err != nil {
 			return err
 		}
@@ -105,7 +106,7 @@ func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID *types.
 	// if the vote from the voter already exists, nothing will happen
 	// if the resolution doesn't exist, the following would error
 	userID := types.NewUUIDV5(from)
-	_, err = tx.Execute(ctx, addVote, resolutionID, userID)
+	_, err = tx.Execute(ctx, addVote, resolutionID[:], userID[:])
 	if err != nil {
 		return err
 	}
@@ -126,7 +127,8 @@ func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableE
 
 	// NOTE: could check IsProcessed() here and skip the insert.
 
-	_, err = tx.Execute(ctx, insertResolution, event.ID(), event.Body, event.Type, expiration, voteBodyProposer)
+	id := event.ID()
+	_, err = tx.Execute(ctx, insertResolution, id[:], event.Body, event.Type, expiration, voteBodyProposer)
 	if err != nil {
 		return err
 	}
@@ -144,11 +146,16 @@ func fromRow(row []any) (*resolutions.Resolution, error) {
 
 	v := &resolutions.Resolution{}
 
-	uid, ok := row[0].(*types.UUID)
+	bts, ok := row[0].([]byte)
 	if !ok {
 		return nil, fmt.Errorf("invalid type for id (%T)", row[0])
 	}
-	v.ID = uid
+	if len(bts) != 16 {
+		return nil, fmt.Errorf("invalid length for id, required 16, got (%d)", len(bts))
+	}
+
+	uid := types.UUID(slices.Clone(bts))
+	v.ID = &uid
 
 	if row[1] == nil {
 		v.Body = nil
@@ -325,11 +332,17 @@ func GetResolutionIDsByTypeAndProposer(ctx context.Context, db sql.Executor, res
 	}
 
 	for i, row := range res.Rows {
-		id, ok := row[0].(*types.UUID)
+		id, ok := row[0].([]byte)
 		if !ok {
 			return nil, fmt.Errorf("internal bug: invalid type for id (%T)", row[0])
 		}
-		ids[i] = id
+		if len(id) != 16 {
+			// this should never happen, just for safety
+			return nil, fmt.Errorf("internal bug: invalid length for id. required 16 bytes, got %d", len(id))
+		}
+
+		uuid := types.UUID(slices.Clone(id))
+		ids[i] = &uuid
 	}
 
 	return ids, nil
@@ -341,7 +354,7 @@ func DeleteResolutions(ctx context.Context, db sql.Executor, ids ...*types.UUID)
 	if len(ids) == 0 {
 		return nil
 	}
-	_, err := db.Execute(ctx, deleteResolutions, ids)
+	_, err := db.Execute(ctx, deleteResolutions, types.UUIDArray(ids).Bytes())
 	return err
 }
 
@@ -350,13 +363,13 @@ func MarkProcessed(ctx context.Context, db sql.Executor, ids ...*types.UUID) err
 	if len(ids) == 0 {
 		return nil
 	}
-	_, err := db.Execute(ctx, markManyProcessed, ids)
+	_, err := db.Execute(ctx, markManyProcessed, types.UUIDArray(ids).Bytes())
 	return err
 }
 
 // IsProcessed checks if a vote has been marked as processed.
 func IsProcessed(ctx context.Context, tx sql.Executor, resolutionID *types.UUID) (bool, error) {
-	res, err := tx.Execute(ctx, alreadyProcessed, resolutionID)
+	res, err := tx.Execute(ctx, alreadyProcessed, resolutionID[:])
 	if err != nil {
 		return false, err
 	}
@@ -371,7 +384,7 @@ func FilterNotProcessed(ctx context.Context, db sql.Executor, ids []*types.UUID)
 		return nil, nil
 	}
 
-	res, err := db.Execute(ctx, returnProcessed, ids)
+	res, err := db.Execute(ctx, returnProcessed, types.UUIDArray(ids).Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -382,8 +395,8 @@ func FilterNotProcessed(ctx context.Context, db sql.Executor, ids []*types.UUID)
 			// this should never happen, just for safety
 			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 		}
-		idBts := row[0].(*types.UUID)
-		processed[*idBts] = true
+		idBts := slices.Clone(row[0].([]byte))
+		processed[types.UUID(idBts)] = true
 	}
 
 	var notProcessed []*types.UUID
@@ -400,7 +413,7 @@ func FilterNotProcessed(ctx context.Context, db sql.Executor, ids []*types.UUID)
 func GetValidatorPower(ctx context.Context, db sql.Executor, identifier []byte) (power int64, err error) {
 	uuid := types.NewUUIDV5(identifier)
 
-	res, err := db.Execute(ctx, getVoterPower, uuid)
+	res, err := db.Execute(ctx, getVoterPower, uuid[:])
 	if err != nil {
 		return 0, err
 	}
@@ -475,11 +488,11 @@ func SetValidatorPower(ctx context.Context, db sql.Executor, recipient []byte, p
 	uuid := types.NewUUIDV5(recipient)
 
 	if power == 0 {
-		_, err := db.Execute(ctx, removeVoter, uuid)
+		_, err := db.Execute(ctx, removeVoter, uuid[:])
 		return err
 	}
 
-	_, err := db.Execute(ctx, upsertVoter, uuid, recipient, power)
+	_, err := db.Execute(ctx, upsertVoter, uuid[:], recipient, power)
 	return err
 }
 

@@ -131,3 +131,11 @@ func (u *UUIDArray) Scan(src any) error {
 	}
 	return errors.New("not a byte slice slice")
 }
+
+func (u UUIDArray) Bytes() [][]byte {
+	v := make([][]byte, len(u))
+	for i, ui := range u {
+		v[i] = ui.Bytes()
+	}
+	return v
+}
