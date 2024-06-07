@@ -186,6 +186,11 @@ func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []Proc
 		res.AST = ast
 	}
 
+	// if there are expected errors, return the parse errors.
+	if errLis.Err() != nil {
+		return res, nil
+	}
+
 	// set the parameters as the initial vars
 	vars := makeSessionVars()
 	for _, v := range proc.Parameters {
@@ -210,11 +215,6 @@ func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []Proc
 		}{
 			allVariables: make(map[string]*types.DataType),
 		},
-	}
-
-	// if there are expected errors, return the parse errors.
-	if errLis.Err() != nil {
-		return res, nil
 	}
 
 	// visit the AST

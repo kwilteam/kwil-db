@@ -33,6 +33,8 @@ func Test_Procedures(t *testing.T) {
 		inputs    []any   // can be nil
 		outputs   [][]any // can be nil
 		err       error   // can be nil
+		caller    string  // can be empty, if set it will override the default caller in the transaction data
+		readOnly  bool    // if true, the procedure will be executed in a read-only transaction
 	}
 
 	tests := []testcase{
@@ -304,6 +306,36 @@ func Test_Procedures(t *testing.T) {
 				error('should not reach here');
 			}`,
 		},
+		{
+			name: "private procedure",
+			procedure: `procedure private_proc() private view {
+				error('should not reach here');
+			}`,
+			err: execution.ErrPrivate,
+		},
+		{
+			name: "owner procedure - success",
+			procedure: `procedure owner_proc() public owner view returns (is_owner bool) {
+				return true;
+			}`,
+			outputs: [][]any{{true}},
+		},
+		{
+			name: "owner procedure - fail",
+			procedure: `procedure owner_proc() public owner view returns (is_owner bool) {
+				return false;
+			}`,
+			err:    execution.ErrOwnerOnly,
+			caller: "some_other_wallet",
+		},
+		{
+			name: "mutative procedure in read-only tx",
+			procedure: `procedure mutative() public {
+				return;
+			}`,
+			err:      execution.ErrMutativeProcedure,
+			readOnly: true,
+		},
 	}
 
 	for _, test := range tests {
@@ -326,16 +358,25 @@ func Test_Procedures(t *testing.T) {
 			// parse out procedure name
 			procedureName := parseProcedureName(test.procedure)
 
+			d := txData()
+			if test.caller != "" {
+				d.Caller = test.caller
+				d.Signer = []byte(test.caller)
+			}
+
+			var execTx sql.Tx = tx
+			if test.readOnly {
+				execTx, err = db.BeginReadTx(ctx)
+				require.NoError(t, err)
+				defer execTx.Rollback(ctx)
+			}
+
 			// execute test procedure
-			res, err := global.Procedure(ctx, tx, &common.ExecutionData{
-				TransactionData: common.TransactionData{
-					Signer: []byte("test_signer"),
-					Caller: "test_caller",
-					TxID:   "test",
-				},
-				Dataset:   dbid,
-				Procedure: procedureName,
-				Args:      test.inputs,
+			res, err := global.Procedure(ctx, execTx, &common.ExecutionData{
+				TransactionData: d,
+				Dataset:         dbid,
+				Procedure:       procedureName,
+				Args:            test.inputs,
 			})
 			if test.err != nil {
 				require.Error(t, err)
@@ -389,6 +430,8 @@ func Test_ForeignProcedures(t *testing.T) {
 		inputs []any
 		// outputs are the expected outputs from the test procedure.
 		outputs [][]any
+		// caller is the calling address. If empty, it defaults to the package default.
+		caller string
 		// if wantErr is not empty, the test will expect an error containing this string.
 		// We use a string, instead go Go's error type, because we are reading errors raised
 		// from Postgres, which are strings.
@@ -505,6 +548,30 @@ func Test_ForeignProcedures(t *testing.T) {
 			}`,
 			wantErr: "returns id",
 		},
+		{
+			name:    "private procedure via foreign call",
+			foreign: `foreign procedure is_private($name text)`,
+			otherProc: `procedure call_foreign() public {
+				is_private['%s', 'is_private']('satoshi');
+			}`,
+			wantErr: "not public",
+		},
+		// {
+		// 	name:    "foreign call owner - fail",
+		// 	foreign: `foreign procedure is_owner($name text)`,
+		// 	otherProc: `procedure call_foreign() public owner {
+		// 		is_owner['%s', 'is_owner']('satoshi');
+		// 	}`,
+		// 	caller:  "some_other_wallet",
+		// 	wantErr: "is owner-only",
+		// },
+		{
+			name:    "foreign call owner - success",
+			foreign: `foreign procedure is_owner($name text)`,
+			otherProc: `procedure call_foreign() public owner {
+				is_owner['%s', 'is_owner']('satoshi');
+			}`,
+		},
 	}
 
 	for _, test := range tests {
@@ -527,21 +594,24 @@ func Test_ForeignProcedures(t *testing.T) {
 			// deploy the new schema that will call the main one
 			// first, format the procedure with the foreign DBID
 			otherProc := fmt.Sprintf(test.otherProc, foreignDBID)
+
 			// deploy the new schema
 			mainDBID := deploy(t, global, tx, fmt.Sprintf("database db2;\n%s\n%s", test.foreign, otherProc))
 
 			procedureName := parseProcedureName(otherProc)
 
+			d := txData()
+			if test.caller != "" {
+				d.Caller = test.caller
+				d.Signer = []byte(test.caller)
+			}
+
 			// execute test procedure
 			res, err := global.Procedure(ctx, tx, &common.ExecutionData{
-				TransactionData: common.TransactionData{
-					Signer: []byte("test_signer"),
-					Caller: "test_caller",
-					TxID:   "test",
-				},
-				Dataset:   mainDBID,
-				Procedure: procedureName,
-				Args:      test.inputs,
+				TransactionData: d,
+				Dataset:         mainDBID,
+				Procedure:       procedureName,
+				Args:            test.inputs,
 			})
 			if test.wantErr != "" {
 				require.Error(t, err)
@@ -635,6 +705,15 @@ procedure delete_users() public {
 procedure get_users() public returns table(id uuid, name text, wallet_address text) {
 	return SELECT id, name, wallet_address FROM users;
 }
+
+// matches create_user signature
+procedure is_private($name text) private {
+	error('should not reach here');
+}
+
+procedure is_owner($name text) public owner view {
+	$exists bool := false;
+}
 `
 
 // maps usernames to post content.
@@ -646,7 +725,8 @@ var initialData = map[string][]string{
 
 var satoshisUUID = &types.UUID{0x38, 0xeb, 0x77, 0xcb, 0x1e, 0x5a, 0x56, 0xc0, 0x85, 0x63, 0x2e, 0x25, 0x34, 0xd6, 0x7b, 0x96}
 
-// deploy deploys a schema
+// deploy deploys a schema.
+// if deployer is not "", it will set the deployer as the owner.
 func deploy(t *testing.T, global *execution.GlobalContext, db sql.DB, schema string) (dbid string) {
 	ctx := context.Background()
 
@@ -654,6 +734,7 @@ func deploy(t *testing.T, global *execution.GlobalContext, db sql.DB, schema str
 	require.NoError(t, err)
 
 	d := txData()
+
 	err = global.CreateDataset(ctx, db, parsed, &d)
 	require.NoError(t, err)
 

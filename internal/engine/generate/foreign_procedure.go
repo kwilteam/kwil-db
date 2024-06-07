@@ -113,8 +113,8 @@ func GenerateForeignProcedure(proc *types.ForeignProcedure, pgSchema string) (st
 		RAISE EXCEPTION 'Non-view procedure "%" called in view-only connection', _procedure;
 	END IF;
 
-	IF _is_owner_only = TRUE AND _schema_owner != current_setting('ctx.signer')::BYTEA THEN
-		RAISE EXCEPTION 'Procedure "%" is owner-only and cannot be called by signer "%" in schema "%"', _procedure, current_setting('ctx.signer'), _dbid;
+	IF _is_owner_only = TRUE AND _schema_owner != decode(current_setting('ctx.signer'), 'base64') THEN
+		RAISE EXCEPTION 'Procedure "%" is owner-only and cannot be called by signer "%" in schema "%", expected signer "%"', _procedure, decode(current_setting('ctx.signer'), 'base64'), _dbid, _schema_owner;
 	END IF;
 
 	IF _is_public = FALSE THEN

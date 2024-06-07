@@ -1099,7 +1099,7 @@ type DataType struct {
 	// IsArray is true if the type is an array.
 	IsArray bool `json:"is_array"`
 	// Metadata is the metadata of the type.
-	Metadata *[2]uint16 `json:"metadata"`
+	Metadata [2]uint16 `json:"metadata"`
 }
 
 // String returns the string representation of the type.
@@ -1121,6 +1121,8 @@ func (c *DataType) String() string {
 	return str.String()
 }
 
+var ZeroMetadata = [2]uint16{}
+
 // PGString returns the string representation of the type in Postgres.
 func (c *DataType) PGString() (string, error) {
 	var scalar string
@@ -1138,7 +1140,7 @@ func (c *DataType) PGString() (string, error) {
 	case uint256Str:
 		scalar = "UINT256"
 	case DecimalStr:
-		if c.Metadata == nil {
+		if c.Metadata == ZeroMetadata {
 			return "", fmt.Errorf("decimal type must have metadata")
 		}
 
@@ -1162,13 +1164,13 @@ func (c *DataType) Clean() error {
 	c.Name = strings.ToLower(c.Name)
 	switch c.Name {
 	case intStr, textStr, boolStr, blobStr, uuidStr, uint256Str: // ok
-		if c.Metadata != nil {
+		if c.Metadata != ZeroMetadata {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
 		}
 
 		return nil
 	case DecimalStr:
-		if c.Metadata == nil {
+		if c.Metadata == ZeroMetadata {
 			return fmt.Errorf("decimal type must have metadata")
 		}
 
@@ -1183,7 +1185,7 @@ func (c *DataType) Clean() error {
 			return fmt.Errorf("type %s cannot be an array", c.Name)
 		}
 
-		if c.Metadata != nil {
+		if c.Metadata != ZeroMetadata {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
 		}
 
@@ -1195,11 +1197,13 @@ func (c *DataType) Clean() error {
 
 // Copy returns a copy of the type.
 func (c *DataType) Copy() *DataType {
-	return &DataType{
+	d := &DataType{
 		Name:     c.Name,
 		IsArray:  c.IsArray,
 		Metadata: c.Metadata,
 	}
+
+	return d
 }
 
 // EqualsStrict returns true if the type is equal to the other type.
@@ -1215,10 +1219,10 @@ func (c *DataType) EqualsStrict(other *DataType) bool {
 		return false
 	}
 
-	if (c.Metadata == nil) != (other.Metadata == nil) {
+	if (c.Metadata == ZeroMetadata) != (other.Metadata == ZeroMetadata) {
 		return false
 	}
-	if c.Metadata != nil {
+	if c.Metadata != ZeroMetadata {
 		if c.Metadata[0] != other.Metadata[0] || c.Metadata[1] != other.Metadata[1] {
 			return false
 		}
@@ -1311,6 +1315,6 @@ func NewDecimalType(precision, scale uint16) (*DataType, error) {
 
 	return &DataType{
 		Name:     DecimalStr,
-		Metadata: &[2]uint16{precision, scale},
+		Metadata: [2]uint16{precision, scale},
 	}, nil
 }
