@@ -2,7 +2,6 @@ version: "3"
 
 includes:
   pb: ./Taskfile-pb.yml
-  antlr: ./Taskfile-antlr.yml
 
 tasks:
   default:
@@ -117,6 +116,16 @@ tasks:
       - rm -rf ./parse/wasm/*.{wasm,tar.gz}
       - go generate ./parse/wasm/wasm.go
       - tar -czvf ./parse/wasm/kuneiform_wasm.tar.gz ./parse/wasm/kuneiform.wasm
+
+  kuneiform:grammar:
+    desc: Generate kuneiform grammar go code.
+    cmds:
+      - rm -rf parse/gen/*
+      - cd parse/grammar/ && ./generate.sh
+    sources:
+      - parse/grammar/*.g4
+    generates:
+      - parse/gen/*.{go,interp,tokens}
 
   # ************ docker ************
   vendor:
