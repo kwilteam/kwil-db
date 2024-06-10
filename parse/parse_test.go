@@ -822,6 +822,26 @@ func Test_Kuneiform(t *testing.T) {
 			},
 			err: parse.ErrNoPrimaryKey,
 		},
+		{
+			name: "empty body",
+			kf: `
+			database mydb;
+
+			procedure get_users() public view {}
+			`,
+			want: &types.Schema{
+				Name: "mydb",
+				Procedures: []*types.Procedure{
+					{
+						Name:   "get_users",
+						Public: true,
+						Modifiers: []types.Modifier{
+							types.ModifierView,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

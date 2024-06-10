@@ -39,6 +39,19 @@ type schemaVisitor struct {
 	actions map[string][]ActionStmt
 }
 
+// getTextFromStream gets the text from the input stream for a given range.
+// This is a hack over a bug in the generated antlr code, where it will try
+// to access index out of bounds.
+func (s *schemaVisitor) getTextFromStream(start, stop int) (str string) {
+	defer func() {
+		if r := recover(); r != nil {
+			str = ""
+		}
+	}()
+
+	return s.stream.GetText(start, stop)
+}
+
 // newSchemaVisitor creates a new schema visitor.
 func newSchemaVisitor(stream *antlr.InputStream, errLis *errorListener) *schemaVisitor {
 	return &schemaVisitor{
@@ -741,7 +754,7 @@ func (s *schemaVisitor) VisitAction_declaration(ctx *gen.Action_declarationConte
 		act.Parameters = paramStrs
 	}
 
-	act.Body = s.stream.GetText(ctx.Action_block().GetStart().GetStart(), ctx.Action_block().GetStop().GetStop())
+	act.Body = s.getTextFromStream(ctx.Action_block().GetStart().GetStart(), ctx.Action_block().GetStop().GetStop())
 
 	ast := ctx.Action_block().Accept(s).([]ActionStmt)
 	s.actions[act.Name] = ast
@@ -770,10 +783,11 @@ func (s *schemaVisitor) VisitProcedure_declaration(ctx *gen.Procedure_declaratio
 	public, mods := getModifiersAndPublicity(ctx.AllAccess_modifier())
 	proc.Public = public
 	proc.Modifiers = mods
+
 	ast := ctx.Procedure_block().Accept(s).([]ProcedureStmt)
 	s.procedures[proc.Name] = ast
 
-	proc.Body = s.stream.GetText(ctx.Procedure_block().GetStart().GetStart(), ctx.Procedure_block().GetStop().GetStop())
+	proc.Body = s.getTextFromStream(ctx.Procedure_block().GetStart().GetStart(), ctx.Procedure_block().GetStop().GetStop())
 
 	return proc
 }
