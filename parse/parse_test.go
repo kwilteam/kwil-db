@@ -2689,6 +2689,15 @@ func Test_Actions(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "action in-line statement calls select",
+			action: &types.Action{
+				Name:       "check_balance",
+				Parameters: []string{"$arg"},
+				Body:       "$res = my_ext.my_method($arg[0]);",
+			},
+			err: parse.ErrAssignment,
+		},
 	}
 
 	for _, tt := range tests {

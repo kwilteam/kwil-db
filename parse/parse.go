@@ -360,6 +360,10 @@ func analyzeActionAST(action *types.Action, schema *types.Schema, ast []ActionSt
 		res.AST = ast
 	}
 
+	if errLis.Err() != nil {
+		return res, nil
+	}
+
 	vars := makeSessionVars()
 	for _, v := range action.Parameters {
 		vars[v] = types.UnknownType
@@ -376,10 +380,6 @@ func analyzeActionAST(action *types.Action, schema *types.Schema, ast []ActionSt
 			sqlCtx: newSQLContext(),
 		},
 		schema: schema,
-	}
-
-	if errLis.Err() != nil {
-		return res, nil
 	}
 
 	for _, stmt := range res.AST {

@@ -29,9 +29,11 @@ func (a *actionAnalyzer) VisitActionStmtSQL(p0 *ActionStmtSQL) any {
 }
 
 func (a *actionAnalyzer) VisitActionStmtExtensionCall(p0 *ActionStmtExtensionCall) any {
+	a.sqlCtx.isInlineAction = true
 	for _, arg := range p0.Args {
 		arg.Accept(&a.sqlAnalyzer)
 	}
+	a.sqlCtx.isInlineAction = false
 
 	_, ok := a.schema.FindExtensionImport(p0.Extension)
 	if !ok {
@@ -47,9 +49,11 @@ func (a *actionAnalyzer) VisitActionStmtExtensionCall(p0 *ActionStmtExtensionCal
 }
 
 func (a *actionAnalyzer) VisitActionStmtActionCall(p0 *ActionStmtActionCall) any {
+	a.sqlCtx.isInlineAction = true
 	for _, arg := range p0.Args {
 		arg.Accept(&a.sqlAnalyzer)
 	}
+	a.sqlCtx.isInlineAction = false
 
 	act, ok := a.schema.FindAction(p0.Action)
 	if !ok {
