@@ -183,6 +183,13 @@ func Test_SQL(t *testing.T) {
 				{"zeus"},
 			},
 		},
+		{
+			name: "select constant",
+			sql:  "select 1",
+			want: [][]any{
+				{int64(1)},
+			},
+		},
 	}
 
 	for _, tt := range tests {

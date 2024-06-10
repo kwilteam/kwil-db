@@ -136,8 +136,9 @@ type sqlContext struct {
 	ctes []*Relation
 	// outerScope is the scope of the outer query.
 	outerScope *sqlContext
-	// isAction is true if the visitor is analyzing SQL within an action.
-	isAction bool
+	// isInlineAction is true if the visitor is analyzing a SQL expression within an in-line
+	// statement in an action
+	isInlineAction bool
 	// inConflict is true if we are in an ON CONFLICT clause
 	inConflict bool
 	// targetTable is the name (or alias) of the table being inserted, updated, or deleted to/from.
@@ -335,7 +336,7 @@ func (c *sqlContext) scope() {
 		joinedTables:    make(map[string]*types.Table),
 		// we do not need to copy ctes since they are not ever modified.
 		targetTable:       c.targetTable,
-		isAction:          c.isAction,
+		isInlineAction:    c.isInlineAction,
 		inConflict:        c.inConflict,
 		inSelect:          c.inSelect,
 		hasAnonymousTable: c.hasAnonymousTable,
@@ -443,6 +444,18 @@ func (s *sqlAnalyzer) expectedNumeric(node Node, t *types.DataType) {
 // but it returns something else. It will attempt to read the actual type and create an error
 // message that is helpful for the end user.
 func (s *sqlAnalyzer) expressionTypeErr(e Expression) *types.DataType {
+
+	// prefixMsg is a function used to attempt to infer more information about
+	// the error. expressionTypeErr is typically triggered when someone uses a function/procedure
+	// with an incompatible return type. prefixMsg will attempt to get the name of the function/procedure
+	prefixMsg := func() string {
+		msg := "expression"
+		if call, ok := e.(ExpressionCall); ok {
+			msg = fmt.Sprintf(`function/procedure "%s"`, call.FunctionName())
+		}
+		return msg
+	}
+
 	switch v := e.Accept(s).(type) {
 	case *types.DataType:
 		// if it is a basic expression returning a scalar (e.g. "'hello'" or "abs(-1)"),
@@ -455,13 +468,13 @@ func (s *sqlAnalyzer) expressionTypeErr(e Expression) *types.DataType {
 		s.errs.AddErr(e, ErrType, "invalid usage of compound type. you must reference a field using $compound.field notation")
 	case []*types.DataType:
 		// if it is a procedure than returns several scalar values
-		s.errs.AddErr(e, ErrType, "expected procedure to return a single value, returns %d values", len(v))
+		s.errs.AddErr(e, ErrType, "expected %s to return a single value, returns %d values", prefixMsg(), len(v))
 	case *returnsTable:
 		// if it is a procedure that returns a table
-		s.errs.AddErr(e, ErrType, "procedure returns table, not scalar values")
+		s.errs.AddErr(e, ErrType, "%s returns table, not scalar values", prefixMsg())
 	case nil:
 		// if it is a procedure that returns nothing
-		s.errs.AddErr(e, ErrType, "procedure does not return any value")
+		s.errs.AddErr(e, ErrType, "%s does not return any value", prefixMsg())
 	default:
 		// unknown
 		s.errs.AddErr(e, ErrType, "internal bug: could not infer expected type")
@@ -601,7 +614,7 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 }
 
 func (s *sqlAnalyzer) VisitExpressionForeignCall(p0 *ExpressionForeignCall) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrFunctionSignature, "foreign calls are not supported in in-line action statements")
 	}
 
@@ -723,7 +736,7 @@ func (s *sqlAnalyzer) VisitExpressionVariable(p0 *ExpressionVariable) any {
 }
 
 func (s *sqlAnalyzer) VisitExpressionArrayAccess(p0 *ExpressionArrayAccess) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrAssignment, "array access is not supported in in-line action statements")
 	}
 
@@ -753,7 +766,7 @@ func (s *sqlAnalyzer) VisitExpressionArrayAccess(p0 *ExpressionArrayAccess) any 
 }
 
 func (s *sqlAnalyzer) VisitExpressionMakeArray(p0 *ExpressionMakeArray) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrAssignment, "array instantiation is not supported in in-line action statements")
 	}
 
@@ -786,7 +799,7 @@ func (s *sqlAnalyzer) VisitExpressionMakeArray(p0 *ExpressionMakeArray) any {
 }
 
 func (s *sqlAnalyzer) VisitExpressionFieldAccess(p0 *ExpressionFieldAccess) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrAssignment, "field access is not supported in in-line action statements")
 	}
 
@@ -836,7 +849,7 @@ func (s *sqlAnalyzer) VisitExpressionComparison(p0 *ExpressionComparison) any {
 }
 
 func (s *sqlAnalyzer) VisitExpressionLogical(p0 *ExpressionLogical) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrAssignment, "logical expressions are not supported in in-line action statements")
 	}
 
@@ -920,7 +933,7 @@ func (s *sqlAnalyzer) VisitExpressionUnary(p0 *ExpressionUnary) any {
 }
 
 func (s *sqlAnalyzer) VisitExpressionColumn(p0 *ExpressionColumn) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrAssignment, "column references are not supported in in-line action statements")
 	}
 
@@ -978,7 +991,7 @@ var supportedCollations = map[string]struct{}{
 }
 
 func (s *sqlAnalyzer) VisitExpressionCollate(p0 *ExpressionCollate) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrAssignment, "collate is not supported in in-line action statements")
 	}
 
@@ -1000,7 +1013,7 @@ func (s *sqlAnalyzer) VisitExpressionCollate(p0 *ExpressionCollate) any {
 }
 
 func (s *sqlAnalyzer) VisitExpressionStringComparison(p0 *ExpressionStringComparison) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrAssignment, "string comparison is not supported in in-line action statements")
 	}
 
@@ -1026,7 +1039,7 @@ func (s *sqlAnalyzer) VisitExpressionStringComparison(p0 *ExpressionStringCompar
 }
 
 func (s *sqlAnalyzer) VisitExpressionIs(p0 *ExpressionIs) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrAssignment, "IS expression is not supported in in-line action statements")
 	}
 
@@ -1056,7 +1069,7 @@ func (s *sqlAnalyzer) VisitExpressionIs(p0 *ExpressionIs) any {
 }
 
 func (s *sqlAnalyzer) VisitExpressionIn(p0 *ExpressionIn) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrAssignment, "IN expression is not supported in in-line action statements")
 	}
 
@@ -1099,7 +1112,7 @@ func (s *sqlAnalyzer) VisitExpressionIn(p0 *ExpressionIn) any {
 }
 
 func (s *sqlAnalyzer) VisitExpressionBetween(p0 *ExpressionBetween) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrAssignment, "BETWEEN expression is not supported in in-line action statements")
 	}
 
@@ -1132,7 +1145,7 @@ func (s *sqlAnalyzer) VisitExpressionBetween(p0 *ExpressionBetween) any {
 }
 
 func (s *sqlAnalyzer) VisitExpressionSubquery(p0 *ExpressionSubquery) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrAssignment, "subquery is not supported in in-line action statements")
 	}
 
@@ -1158,7 +1171,7 @@ func (s *sqlAnalyzer) VisitExpressionSubquery(p0 *ExpressionSubquery) any {
 }
 
 func (s *sqlAnalyzer) VisitExpressionCase(p0 *ExpressionCase) any {
-	if s.sqlCtx.isAction {
+	if s.sqlCtx.isInlineAction {
 		s.errs.AddErr(p0, ErrAssignment, "CASE expression is not supported in in-line action statements")
 	}
 
