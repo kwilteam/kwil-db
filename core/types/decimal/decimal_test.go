@@ -85,6 +85,20 @@ func Test_NewParsedDecimal(t *testing.T) {
 			scale:   1,
 			want:    "123.4",
 		},
+		{
+			name:    "scale exceeds precision",
+			decimal: "123.456",
+			prec:    6,
+			scale:   7,
+			err:     true,
+		},
+		{
+			name:    "precision too large",
+			decimal: "123.456",
+			prec:    1001,
+			scale:   3,
+			err:     true,
+		},
 	}
 
 	// test cases for decimal creation
