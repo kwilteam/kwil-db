@@ -99,6 +99,10 @@ jobs:
         run: |
           ./scripts/swagger/check_up
 
+      - name: Ensure generate antlr Go code is up-to-date
+        run: |
+          ./scripts/kuneiform/check_tidy
+
       - name: Compile packages, apps, and specs
         run: | # enter workspace mode to do this on one line
           go work init . ./test ./core ./parse
