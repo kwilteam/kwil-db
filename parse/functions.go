@@ -33,7 +33,9 @@ var (
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
-				return nil, nil
+				// technically error returns nothing, but for backwards compatibility with SELECT CASE we return null.
+				// It doesn't really matter, since error will cancel execution anyways.
+				return types.NullType, nil
 			},
 			PGFormat: defaultFormat("error"),
 		},

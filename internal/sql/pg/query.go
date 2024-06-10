@@ -337,6 +337,26 @@ func decodeFromPGType(vals ...any) ([]any, error) {
 		switch v := v.(type) {
 		default:
 			return v, nil
+
+		// we need to handle all ints as int64 since Kwil treats all
+		// ints as int64, but an integer literal in postgres can get
+		// returned as an int32
+		case int:
+			return int64(v), nil
+		case int8:
+			return int64(v), nil
+		case int16:
+			return int64(v), nil
+		case int32:
+			return int64(v), nil
+		case int64:
+			return v, nil
+		case uint:
+			return int64(v), nil
+		case uint16:
+			return int64(v), nil
+		case uint32:
+			return int64(v), nil
 		case pgtype.UUID:
 			u := types.UUID(v.Bytes)
 			return &u, nil

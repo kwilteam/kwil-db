@@ -11,10 +11,10 @@ type Position struct {
 	// Set is true if the position of the Position has been set.
 	// This is useful for testing parsers.
 	IsSet     bool `json:"-"`
-	StartLine int  `json:"start_line,omitempty"`
-	StartCol  int  `json:"start_col,omitempty"`
-	EndLine   int  `json:"end_line,omitempty"`
-	EndCol    int  `json:"end_col,omitempty"`
+	StartLine int  `json:"start_line"`
+	StartCol  int  `json:"start_col"`
+	EndLine   int  `json:"end_line"`
+	EndCol    int  `json:"end_col"`
 }
 
 // Set sets the position of the Position based on the given parser rule context.
