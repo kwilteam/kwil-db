@@ -85,6 +85,27 @@ func Test_NewParsedDecimal(t *testing.T) {
 			scale:   1,
 			want:    "123.4",
 		},
+		{
+			name:    "<1",
+			decimal: "0.000123",
+			prec:    6,
+			scale:   6,
+			want:    "0.000123",
+		},
+		{
+			name:    "scale exceeds precision",
+			decimal: "123.456",
+			prec:    6,
+			scale:   7,
+			err:     true,
+		},
+		{
+			name:    "precision too large",
+			decimal: "123.456",
+			prec:    1001,
+			scale:   3,
+			err:     true,
+		},
 	}
 
 	// test cases for decimal creation
@@ -514,10 +535,12 @@ func Test_BigAndExp(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "exp too low",
-			big:     "123",
-			exp:     -4,
-			wantErr: true,
+			name:     "exp less than precision properly adjusts precision",
+			big:      "123",
+			exp:      -4,
+			out:      "0.0123",
+			outPrec:  4,
+			outScale: 4,
 		},
 	}
 
