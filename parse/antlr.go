@@ -454,6 +454,11 @@ func (s *schemaVisitor) VisitTable_declaration(ctx *gen.Table_declarationContext
 		t.ForeignKeys[i] = fk.Accept(s).(*types.ForeignKey)
 	}
 
+	_, err := t.GetPrimaryKey()
+	if err != nil {
+		s.errs.RuleErr(ctx, ErrNoPrimaryKey, err.Error())
+	}
+
 	return t
 }
 

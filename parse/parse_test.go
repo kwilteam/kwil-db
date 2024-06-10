@@ -778,7 +778,7 @@ func Test_Kuneiform(t *testing.T) {
 			checkAfterErr: true,
 		},
 		{
-			// similar to the aboive test, the same edge case existed for foreign procedures
+			// similar to the above test, the same edge case existed for foreign procedures
 			name: "incomplete foreign procedure",
 			kf: `database a;
 			foreign proce`,
@@ -790,6 +790,37 @@ func Test_Kuneiform(t *testing.T) {
 			},
 			err:           parse.ErrSyntax,
 			checkAfterErr: true,
+		},
+		{
+			// this test tests for properly handling errors for missing primary keys
+			name: "missing primary key",
+			kf: `
+			database mydb;
+
+			table users {
+				id int not null
+			}
+			`,
+			want: &types.Schema{
+				Name: "mydb",
+				Tables: []*types.Table{
+					{
+						Name: "users",
+						Columns: []*types.Column{
+							{
+								Name: "id",
+								Type: types.IntType,
+								Attributes: []*types.Attribute{
+									{
+										Type: types.NOT_NULL,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			err: parse.ErrNoPrimaryKey,
 		},
 	}
 
