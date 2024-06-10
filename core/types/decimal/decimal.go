@@ -20,12 +20,15 @@ var (
 	// We can change this to have different precision/speed properties,
 	// but for now have it set to favor precision.
 	context = apd.Context{
-		Precision:   1000,
+		Precision:   uint32(maxPrecision),
 		MaxExponent: 2000,
 		MinExponent: -2000,
 		Traps:       apd.DefaultTraps,
 		Rounding:    apd.RoundHalfUp,
 	}
+
+	// maxPrecision is the maximum supported precision.
+	maxPrecision = uint16(1000)
 )
 
 // Decimal is a decimal number. It has a set precision and scale that
@@ -197,7 +200,7 @@ func mathOp(x, y *Decimal, op func(z, x, y *apd.Decimal) (apd.Condition, error))
 	dec := &Decimal{
 		dec:       *z,
 		scale:     uint16(-z.Exponent),
-		precision: 1000,
+		precision: maxPrecision,
 	}
 
 	return dec, nil
@@ -305,7 +308,7 @@ func (d *Decimal) Neg() error {
 
 // Round rounds the decimal to the specified scale.
 func (d *Decimal) Round(scale uint16) error {
-	if scale > 1000 {
+	if scale > maxPrecision {
 		return fmt.Errorf("scale too large: %d", scale)
 	}
 
@@ -430,7 +433,7 @@ func CheckPrecisionAndScale(precision, scale uint16) error {
 		return fmt.Errorf("precision must be at least 1: %d", precision)
 	}
 
-	if precision > 1000 {
+	if precision > maxPrecision {
 		return fmt.Errorf("precision too large: %d", precision)
 	}
 
