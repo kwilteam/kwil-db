@@ -80,6 +80,14 @@ func NewFromBigInt(i *big.Int, exp int32) (*Decimal, error) {
 		precision: uint16(len(strings.TrimLeft(i.String(), "-+"))),
 	}
 
+	// It is possible for scale to be greater than precision here, if for example
+	// we were given the number .0001, which would be big int 1 and exponent -4.
+	// To account for this, if the scale is greater than the precision, we set the
+	// precision to the scale.
+	if dec.scale > dec.precision {
+		dec.precision = dec.scale
+	}
+
 	if err := CheckPrecisionAndScale(dec.precision, dec.scale); err != nil {
 		return nil, err
 	}
