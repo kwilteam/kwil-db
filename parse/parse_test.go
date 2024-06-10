@@ -778,7 +778,7 @@ func Test_Kuneiform(t *testing.T) {
 			checkAfterErr: true,
 		},
 		{
-			// similar to the aboive test, the same edge case existed for foreign procedures
+			// similar to the above test, the same edge case existed for foreign procedures
 			name: "incomplete foreign procedure",
 			kf: `database a;
 			foreign proce`,
@@ -790,6 +790,57 @@ func Test_Kuneiform(t *testing.T) {
 			},
 			err:           parse.ErrSyntax,
 			checkAfterErr: true,
+		},
+		{
+			// this test tests for properly handling errors for missing primary keys
+			name: "missing primary key",
+			kf: `
+			database mydb;
+
+			table users {
+				id int not null
+			}
+			`,
+			want: &types.Schema{
+				Name: "mydb",
+				Tables: []*types.Table{
+					{
+						Name: "users",
+						Columns: []*types.Column{
+							{
+								Name: "id",
+								Type: types.IntType,
+								Attributes: []*types.Attribute{
+									{
+										Type: types.NOT_NULL,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			err: parse.ErrNoPrimaryKey,
+		},
+		{
+			name: "empty body",
+			kf: `
+			database mydb;
+
+			procedure get_users() public view {}
+			`,
+			want: &types.Schema{
+				Name: "mydb",
+				Procedures: []*types.Procedure{
+					{
+						Name:   "get_users",
+						Public: true,
+						Modifiers: []types.Modifier{
+							types.ModifierView,
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -1609,11 +1660,6 @@ func Test_Procedure(t *testing.T) {
 			},
 		},
 		{
-			name: "assigning a variable with error is invalid",
-			proc: `$a := error('error message');`,
-			err:  parse.ErrResultShape,
-		},
-		{
 			// this is a regression test for a previous bug
 			name: "discarding return values of a function is ok",
 			proc: `abs(-1);`,
@@ -1878,6 +1924,13 @@ func exprLit(v any) *parse.ExpressionLiteral {
 		}
 	default:
 		panic("TEST ERROR: invalid type for literal")
+	}
+}
+
+func exprFunctionCall(name string, args ...parse.Expression) *parse.ExpressionFunctionCall {
+	return &parse.ExpressionFunctionCall{
+		Name: name,
+		Args: args,
 	}
 }
 
@@ -2509,7 +2562,7 @@ func Test_SQL(t *testing.T) {
 			assertPositionsAreSet(t, res.AST)
 
 			if !deepCompare(tt.want, res.AST) {
-				t.Errorf("unexpected AST:\n%s", diff(tt.want, res.AST))
+				t.Errorf("unexpected AST:%s", diff(tt.want, res.AST))
 			}
 		})
 	}
@@ -2565,4 +2618,130 @@ func cmpOpts() []cmp.Option {
 			return true
 		}),
 	}
+}
+
+func Test_Actions(t *testing.T) {
+	type testcase struct {
+		name   string
+		tables []*types.Table
+		action *types.Action
+		want   *parse.ActionParseResult
+		err    error
+	}
+
+	tests := []testcase{
+		{
+			name:   "return value",
+			tables: []*types.Table{tableBalances},
+			action: &types.Action{
+				Name:   "check_balance",
+				Public: false,
+				Modifiers: []types.Modifier{
+					types.ModifierView,
+				},
+				Body: "SELECT        CASE            WHEN balance < 10 THEN ERROR('insufficient balance')            ELSE null        END    FROM balances WHERE wallet = @caller;",
+			},
+			want: &parse.ActionParseResult{
+				AST: []parse.ActionStmt{
+					&parse.ActionStmtSQL{
+						SQL: &parse.SQLStatement{
+							SQL: &parse.SelectStatement{
+								SelectCores: []*parse.SelectCore{
+									{
+										Columns: []parse.ResultColumn{
+											&parse.ResultColumnExpression{
+												Expression: &parse.ExpressionCase{
+													WhenThen: [][2]parse.Expression{
+														{
+															&parse.ExpressionComparison{
+																Left:     exprColumn("", "balance"),
+																Operator: parse.ComparisonOperatorLessThan,
+																Right:    exprLit(10),
+															},
+															exprFunctionCall("error", exprLit("insufficient balance")),
+														},
+													},
+													Else: &parse.ExpressionLiteral{
+														Value: nil,
+														Type:  types.NullType,
+													},
+												},
+											},
+										},
+										From: &parse.RelationTable{
+											Table: "balances",
+										},
+										Where: &parse.ExpressionComparison{
+											Left:     exprColumn("", "wallet"),
+											Operator: parse.ComparisonOperatorEqual,
+											Right:    exprVar("@caller"),
+										},
+									},
+								},
+								Ordering: []*parse.OrderingTerm{
+									{
+										Expression: exprColumn("balances", "wallet"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "action in-line statement calls select",
+			action: &types.Action{
+				Name:       "check_balance",
+				Parameters: []string{"$arg"},
+				Body:       "$res = my_ext.my_method($arg[0]);",
+			},
+			err: parse.ErrAssignment,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := parse.ParseAction(tt.action, &types.Schema{
+				Name:   "mydb",
+				Tables: tt.tables,
+				Procedures: []*types.Procedure{
+					procGetAllUserIds,
+				},
+			})
+			require.NoError(t, err)
+
+			if tt.err != nil {
+				require.ErrorIs(t, res.ParseErrs.Err(), tt.err)
+				return
+			}
+			require.NoError(t, res.ParseErrs.Err())
+			res.ParseErrs = nil
+
+			assertPositionsAreSet(t, res.AST)
+
+			if !deepCompare(tt.want, res) {
+				t.Errorf("unexpected output: %s", diff(tt.want, res))
+			}
+		})
+	}
+}
+
+var tableBalances = &types.Table{
+	Name: "balances",
+	Columns: []*types.Column{
+		{
+			Name: "wallet",
+			Type: types.TextType,
+			Attributes: []*types.Attribute{
+				{
+					Type: types.PRIMARY_KEY,
+				},
+			},
+		},
+		{
+			Name: "balance",
+			Type: types.IntType,
+		},
+	},
 }

@@ -128,8 +128,7 @@ func (d *debugDisplay) MarshalJSON() ([]byte, error) {
 }
 
 func (d *debugDisplay) MarshalText() (text []byte, err error) {
-	type res debugDisplay // prevent recursion
-	return json.MarshalIndent((*res)(d), "", "  ")
+	return json.MarshalIndent(d, "", "  ")
 }
 
 // generateAll attempts to generate all ddl statements, sql, and plpgsql functions.

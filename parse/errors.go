@@ -24,9 +24,9 @@ type ParseError struct {
 // MarshalJSON marshals the error to JSON.
 func (p *ParseError) MarshalJSON() ([]byte, error) {
 	type Alias struct {
-		ParserName string    `json:"parser_name,omitempty"`
-		Message    string    `json:"message,omitempty"`
-		Position   *Position `json:"position,omitempty"`
+		ParserName string    `json:"parser_name"`
+		Message    string    `json:"message"`
+		Position   *Position `json:"position"`
 	}
 
 	a := &Alias{
@@ -36,10 +36,10 @@ func (p *ParseError) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(struct {
-		Error *error `json:"error,omitempty"`
+		Error string `json:"error"`
 		*Alias
 	}{
-		Error: &p.Err,
+		Error: p.Err.Error(),
 		Alias: a,
 	})
 }
@@ -219,4 +219,5 @@ var (
 	ErrInvalidExcludedTable      = errors.New("invalid excluded table usage")
 	ErrAmbiguousConflictTable    = errors.New("ambiguous conflict table")
 	ErrCollation                 = errors.New("collation error")
+	ErrNoPrimaryKey              = errors.New("missing primary key")
 )
