@@ -608,24 +608,31 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 	for _, p := range providers {
 		clt, err := statesync.ChainRPCClient(p)
 		if err != nil {
+			d.log.Warnf("failed to make chain RPC client to snap provider: %v", err)
 			continue
 		}
 
 		// Try to fetch the status of the remote server.
 		res, err := clt.Header(d.ctx, nil)
 		if err != nil {
+			d.log.Warnf("failed to get header from snap provider: %v", err)
 			continue
 		}
 
 		// If the remote server is in the same chain, we can trust it.
 		if res.Header.ChainID != d.genesisCfg.ChainID {
+			d.log.Warnf("snap provider has wrong chain ID: want %v, got %v", d.genesisCfg.ChainID, res.Header.ChainID)
 			continue
 		}
 
 		// Get the trust height and trust hash from the remote server
 		d.cfg.ChainCfg.StateSync.TrustHeight = res.Header.Height
 		d.cfg.ChainCfg.StateSync.TrustHash = res.Header.Hash().String()
+
+		d.log.Infof("trust height %v, hash %v", d.cfg.ChainCfg.StateSync.TrustHeight, d.cfg.ChainCfg.StateSync.TrustHash)
+
 		configDone = true
+
 		break
 	}
 
