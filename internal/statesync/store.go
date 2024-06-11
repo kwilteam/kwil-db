@@ -225,7 +225,10 @@ func (s *SnapshotStore) loadSnapshots() error {
 	// Scan the snapshot directory and load all the snapshots
 	files, err := os.ReadDir(s.cfg.SnapshotDir)
 	if err != nil {
-		return nil
+		if os.IsNotExist(err) {
+			return os.MkdirAll(s.cfg.SnapshotDir, 0755)
+		}
+		return err
 	}
 
 	for _, file := range files {
