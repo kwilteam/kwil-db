@@ -126,31 +126,33 @@ func RootCmd() *cobra.Command {
 func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 	exts := make(map[string]map[string]string)
 	for i := 0; i < len(args); i++ {
-		if !strings.HasPrefix(args[i], "--extension.") {
+		if !strings.HasPrefix(args[i], "--") {
 			return nil, fmt.Errorf("expected extension flag, got %q", args[i])
 		}
 		// split the flag into the extension name and the flag name
 		// we intentionally do not use SplitN because we want to verify
-		// there are exactly 3 parts.
+		// there are exactly 2 parts.
 		parts := strings.Split(args[i], ".")
-		if len(parts) != 3 {
+		if len(parts) != 2 {
 			return nil, fmt.Errorf("invalid extension flag %q", args[i])
 		}
 
+		extName := strings.TrimPrefix(parts[0], "--")
+
 		// get the extension map for the extension name.
 		// if it doesn't exist, create it.
-		ext, ok := exts[parts[1]]
+		ext, ok := exts[extName]
 		if !ok {
 			ext = make(map[string]string)
-			exts[parts[1]] = ext
+			exts[extName] = ext
 		}
 
 		// we now need to get the flag value. Flags can be passed
 		// as either "--extension.extname.flagname value" or
 		// "--extension.extname.flagname=value"
-		if strings.Contains(parts[2], "=") {
+		if strings.Contains(parts[1], "=") {
 			// flag value is in the same argument
-			val := strings.SplitN(parts[2], "=", 2)
+			val := strings.SplitN(parts[1], "=", 2)
 			ext[val[0]] = val[1]
 		} else {
 			// flag value is in the next argument
@@ -162,7 +164,7 @@ func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 				return nil, fmt.Errorf("missing value for extension flag %q", args[i])
 			}
 
-			ext[parts[2]] = args[i+1]
+			ext[parts[1]] = args[i+1]
 			i++
 		}
 	}
