@@ -354,10 +354,6 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 		return nil, err
 	}
 
-	if res.ParseErrs.Err() != nil {
-		return nil, res.ParseErrs.Err()
-	}
-
 	sqlStmt, params, err := generate.WriteSQL(res.AST, true, dbidSchema(dbid))
 	if err != nil {
 		return nil, err
