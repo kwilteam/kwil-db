@@ -146,7 +146,7 @@ func RootCmd() *cobra.Command {
 func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 	exts := make(map[string]map[string]string)
 	for i := 0; i < len(args); i++ {
-		if !strings.HasPrefix(args[i], "--extensions.") {
+		if !strings.HasPrefix(args[i], "--extension.") {
 			return nil, fmt.Errorf("expected extension flag, got %q", args[i])
 		}
 		// split the flag into the extension name and the flag name
