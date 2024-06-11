@@ -157,7 +157,7 @@ func NewGlobalContext(ctx context.Context, db sql.Executor, extensionInitializer
 	for _, schema := range orderSchemas(schemas) {
 		err := g.loadDataset(ctx, schema)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: schema (%s / %s / %s)", err, schema.Name, schema.DBID(), schema.Owner)
 		}
 	}
 
