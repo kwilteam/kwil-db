@@ -2533,9 +2533,35 @@ func Test_SQL(t *testing.T) {
 			err:  parse.ErrUnnamedJoin,
 		},
 		{name: "non utf-8", sql: "\xbd\xb2\x3d\xbc\x20\xe2\x8c\x98;", err: parse.ErrSyntax},
-		// {
-		// 	name: "order by",
-		// },
+		{
+			// this select doesn't make much sense, however
+			// it is a regression test for a previously known bug
+			// https://github.com/kwilteam/kwil-db/pull/810
+			name: "offset and limit",
+			sql:  `SELECT * FROM users LIMIT id OFFSET id;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnWildcard{},
+							},
+							From: &parse.RelationTable{
+								Table: "users",
+							},
+						},
+					},
+					Offset: exprColumn("", "id"),
+					Limit:  exprColumn("", "id"),
+					// apply default ordering
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: exprColumn("users", "id"),
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
