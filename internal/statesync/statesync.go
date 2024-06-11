@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -135,7 +136,7 @@ func (ss *StateSyncer) ApplySnapshotChunk(ctx context.Context, chunk []byte, ind
 	err := os.WriteFile(chunkFileName, chunk, 0755)
 	if err != nil {
 		os.Remove(chunkFileName)
-		return false, ErrRetrySnapshotChunk
+		return false, errors.Join(err, ErrRetrySnapshotChunk)
 	}
 
 	ss.log.Info("Applied snapshot chunk", log.Uint("height", ss.snapshot.Height), log.Uint("index", index))
@@ -152,7 +153,7 @@ func (ss *StateSyncer) ApplySnapshotChunk(ctx context.Context, chunk []byte, ind
 		reader, err := gzip.NewReader(streamer)
 		if err != nil {
 			ss.resetStateSync()
-			return false, ErrRejectSnapshot
+			return false, errors.Join(err, ErrRejectSnapshot)
 		}
 		defer reader.Close()
 
@@ -161,7 +162,7 @@ func (ss *StateSyncer) ApplySnapshotChunk(ctx context.Context, chunk []byte, ind
 			ss.snapshot.SnapshotHash, ss.log)
 		if err != nil {
 			ss.resetStateSync()
-			return false, ErrRejectSnapshot
+			return false, errors.Join(err, ErrRejectSnapshot)
 		}
 		ss.log.Info("DB restored")
 
