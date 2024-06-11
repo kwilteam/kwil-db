@@ -32,6 +32,26 @@ import (
 	"github.com/spf13/viper"
 )
 
+var long = `kwild is the Kwil blockchain node and RPC server.
+
+kwild is a full-node implementation of the Kwil protocol. It provides the
+ability to fully participate in the Kwil network, and can run as either a
+validator or a non-validating node.
+
+Extensions can be configured by passing flags delimited by a double dash, e.g.
+"kwild --autogen -- --extension.extension1.flag1 value1 --extension.extension2.flag2 value2"
+This follows the POSIX guidelines for additional operands.
+`
+
+var example = `# Start kwild and auto-generate a private key, genesis file, and config file
+kwild --autogen
+
+# Start kwild from a root directory with a config file
+kwild --root-dir /path/to/root
+
+# Start kwild with extensions
+kwild -- --extension.extension1.flag1=value1 --extension.extension2.flag2=value2`
+
 func RootCmd() *cobra.Command {
 	// we use an empty config because this config gets merged later, and should only contain flag values
 	flagCfg := config.EmptyConfig()
@@ -126,7 +146,7 @@ func RootCmd() *cobra.Command {
 func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 	exts := make(map[string]map[string]string)
 	for i := 0; i < len(args); i++ {
-		if !strings.HasPrefix(args[i], "--") {
+		if !strings.HasPrefix(args[i], "--extensions.") {
 			return nil, fmt.Errorf("expected extension flag, got %q", args[i])
 		}
 		// split the flag into the extension name and the flag name
@@ -137,7 +157,7 @@ func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 			return nil, fmt.Errorf("invalid extension flag %q", args[i])
 		}
 
-		extName := strings.TrimPrefix(parts[1], "--extension.")
+		extName := parts[1]
 
 		// get the extension map for the extension name.
 		// if it doesn't exist, create it.
