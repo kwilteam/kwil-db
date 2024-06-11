@@ -96,14 +96,15 @@ hostname = ""
 ###                Snapshot store Config Options                    ###
 #######################################################################
 [app.snapshots]
+
 # Toggle to enable snapshot store
-# This would snapshot the application state at every snapshot_heights blocks
+# This would snapshot the application state at every recurring_height blocks
 # and keep max_snapshots number of snapshots in the snapshot_dir
 # Application state includes the databases deployed, accounts and the Validators db
 enabled = false
 
 # The height at which the snapshot is taken
-snapshot_heights = 100000
+recurring_height = 100000
 
 # Maximum number of snapshots to be kept in the snapshot_dir.
 # If max limit is reached, the oldest would be deleted and replaced by the latest snapshot
