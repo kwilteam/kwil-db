@@ -47,6 +47,8 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	flagSet.Uint64Var(&cfg.AppCfg.Snapshots.MaxSnapshots, "app.snapshots.max-snapshots", cfg.AppCfg.Snapshots.MaxSnapshots, "Maximum snapshots to store on disk. Default is 3. If max snapshots is reached, the oldest snapshot is deleted.")
 	flagSet.StringVar(&cfg.AppCfg.Snapshots.SnapshotDir, "app.snapshots.snapshot-dir", cfg.AppCfg.Snapshots.SnapshotDir, "Snapshot directory path")
 
+	flagSet.StringVar(&cfg.AppCfg.GenesisState, "app.genesis-state", cfg.AppCfg.GenesisState, "Path to the genesis state file")
+
 	// Basic Chain Config flags
 	flagSet.StringVar(&cfg.ChainCfg.Moniker, "chain.moniker", cfg.ChainCfg.Moniker, "Node moniker")
 
