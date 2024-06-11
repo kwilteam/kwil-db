@@ -629,7 +629,7 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 		d.cfg.ChainCfg.StateSync.TrustHeight = res.Header.Height
 		d.cfg.ChainCfg.StateSync.TrustHash = res.Header.Hash().String()
 
-		d.log.Infof("trust height %v, hash %v", d.cfg.ChainCfg.StateSync.TrustHeight, d.cfg.ChainCfg.StateSync.TrustHash)
+		d.log.Infof("Provider %q: trust height %v, hash %v", p, d.cfg.ChainCfg.StateSync.TrustHeight, d.cfg.ChainCfg.StateSync.TrustHash)
 
 		configDone = true
 

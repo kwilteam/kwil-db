@@ -604,6 +604,7 @@ func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.Request
 		if errors.Is(err, statesync.ErrRefetchSnapshotChunk) {
 			refetchChunks = append(refetchChunks, req.Index)
 		}
+		a.log.Errorf("Failed to apply snapshot chunk: %v", err)
 		return &abciTypes.ResponseApplySnapshotChunk{
 			Result:        statesync.ToABCIApplySnapshotChunkResponse(err),
 			RefetchChunks: refetchChunks,
