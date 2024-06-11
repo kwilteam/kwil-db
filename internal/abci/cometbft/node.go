@@ -175,6 +175,8 @@ func NewCometBftNode(ctx context.Context, app abciTypes.Application, conf *comet
 		return nil, fmt.Errorf("failed to write the effective cometbft config files: %w", err)
 	}
 
+	logger.Debugf("%#v", *conf.StateSync)
+
 	err := conf.ValidateBasic()
 	if err != nil {
 		return nil, fmt.Errorf("invalid node config: %w", err)
