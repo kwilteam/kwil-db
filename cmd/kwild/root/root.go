@@ -48,7 +48,7 @@ func RootCmd() *cobra.Command {
 			fmt.Printf("kwild version %v (Go version %s)\n", version.KwilVersion, runtime.Version())
 
 			// args can be passed to kwild in the form of extension flags.
-			// These are delimited using a double dash, e.g. `kwild -- --extension1.flag1=value1 --extension2.flag2=value2`
+			// These are delimited using a double dash, e.g. `kwild -- --extension.extension1.flag1=value1 --extension.extension2.flag2=value2`
 			// This is in-line with guideline 10 of the POSIX guidelines: https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap12.html#tag_12_02
 			extensionConfig, err := parseExtensionFlags(args)
 			if err != nil {
@@ -131,13 +131,13 @@ func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 		}
 		// split the flag into the extension name and the flag name
 		// we intentionally do not use SplitN because we want to verify
-		// there are exactly 2 parts.
+		// there are exactly 3 parts.
 		parts := strings.Split(args[i], ".")
-		if len(parts) != 2 {
+		if len(parts) != 3 {
 			return nil, fmt.Errorf("invalid extension flag %q", args[i])
 		}
 
-		extName := strings.TrimPrefix(parts[0], "--")
+		extName := strings.TrimPrefix(parts[1], "--")
 
 		// get the extension map for the extension name.
 		// if it doesn't exist, create it.
@@ -150,9 +150,9 @@ func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 		// we now need to get the flag value. Flags can be passed
 		// as either "--extension.extname.flagname value" or
 		// "--extension.extname.flagname=value"
-		if strings.Contains(parts[1], "=") {
+		if strings.Contains(parts[2], "=") {
 			// flag value is in the same argument
-			val := strings.SplitN(parts[1], "=", 2)
+			val := strings.SplitN(parts[2], "=", 2)
 			ext[val[0]] = val[1]
 		} else {
 			// flag value is in the next argument
@@ -164,7 +164,7 @@ func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 				return nil, fmt.Errorf("missing value for extension flag %q", args[i])
 			}
 
-			ext[parts[1]] = args[i+1]
+			ext[parts[2]] = args[i+1]
 			i++
 		}
 	}

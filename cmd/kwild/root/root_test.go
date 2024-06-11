@@ -22,7 +22,7 @@ func Test_ExtensionFlags(t *testing.T) {
 		},
 		{
 			name:    "single flag",
-			flagset: []string{"--extname.flagname", "value"},
+			flagset: []string{"--extension.extname.flagname", "value"},
 			want: map[string]map[string]string{
 				"extname": {
 					"flagname": "value",
@@ -31,7 +31,7 @@ func Test_ExtensionFlags(t *testing.T) {
 		},
 		{
 			name:    "multiple flags",
-			flagset: []string{"--extname.flagname", "value", "--extname2.flagname2=value2"},
+			flagset: []string{"--extension.extname.flagname", "value", "--extension.extname2.flagname2=value2"},
 			want: map[string]map[string]string{
 				"extname": {
 					"flagname": "value",
@@ -44,14 +44,14 @@ func Test_ExtensionFlags(t *testing.T) {
 		{
 			name: "missing value",
 			flagset: []string{
-				"--extname.flagname",
+				"--extension.extname.flagname",
 			},
 			wantErr: true,
 		},
 		{
 			name: "pass flag as a value errors",
 			flagset: []string{
-				"--extname.flagname", "--extname2.flagname2=value2",
+				"--extension.extname.flagname", "--extension.extname2.flagname2=value2",
 			},
 			wantErr: true,
 		},
