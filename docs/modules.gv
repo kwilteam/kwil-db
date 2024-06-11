@@ -9,18 +9,11 @@ digraph {
 
 	{rank=min core}
 	{rank=max test}
-	{rank=same core}
-
-	// sqlgrammargo [label="sql-grammar-go" fillcolor=lightgray]
-	// actgrammargo [label="action-grammar-go" fillcolor=lightgray]
-	kuneiform [label="kuneiform" fillcolor=lightgray]
+	{rank=same core parse}
 
 	core -> kwildb [dir=back color=black]
+	core -> parse [dir=back color=black]
 	core -> test [dir=back color=black]
 	kwildb -> test [dir=back color=black]
 	parse -> kwildb [dir=back color=black]
-
-	parse -> kuneiform [dir=back color=gray]
-	// sqlgrammargo -> parse [dir=back color=gray]
-	// actgrammargo -> parse [dir=back color=gray]
 }
