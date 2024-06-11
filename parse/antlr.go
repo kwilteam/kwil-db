@@ -920,10 +920,10 @@ func (s *schemaVisitor) VisitSelect_statement(ctx *gen.Select_statementContext) 
 	}
 
 	if ctx.GetLimit() != nil {
-		stmt.Limit = ctx.GetLimit().Accept(s).(*ExpressionLiteral)
+		stmt.Limit = ctx.GetLimit().Accept(s).(Expression)
 	}
 	if ctx.GetOffset() != nil {
-		stmt.Offset = ctx.GetOffset().Accept(s).(*ExpressionLiteral)
+		stmt.Offset = ctx.GetOffset().Accept(s).(Expression)
 	}
 
 	stmt.Set(ctx)

@@ -2533,6 +2533,9 @@ func Test_SQL(t *testing.T) {
 			err:  parse.ErrUnnamedJoin,
 		},
 		{name: "non utf-8", sql: "\xbd\xb2\x3d\xbc\x20\xe2\x8c\x98;", err: parse.ErrSyntax},
+		// {
+		// 	name: "order by",
+		// },
 	}
 
 	for _, tt := range tests {
