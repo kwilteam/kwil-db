@@ -49,7 +49,7 @@ func initializeVoteStore(ctx context.Context, db sql.TxMaker) error {
 	resolutions := resolutions.ListResolutions()
 	for _, name := range resolutions {
 		uuid := types.NewUUIDV5([]byte(name))
-		fmt.Println("Creating resolution type", name, " with UUID: ", uuid, " value: ", *uuid, " uuid[:] ", uuid[:])
+		fmt.Printf("Creating resolution type %q with UUID %v\n", name, uuid)
 		_, err := tx.Execute(ctx, createResolutionType, uuid[:], name)
 		if err != nil {
 			return err
