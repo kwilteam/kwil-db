@@ -60,7 +60,8 @@ func RootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "kwild",
 		Short:             "kwild node and rpc server",
-		Long:              "kwild: the Kwil blockchain node and RPC server",
+		Long:              long,
+		Example:           example,
 		DisableAutoGenTag: true,
 		Version:           version.KwilVersion,
 		SilenceUsage:      true, // not all errors imply cli misuse
