@@ -634,7 +634,7 @@ func (r *TxApp) processVotes(ctx context.Context, blockHeight int64) error {
 
 			// if the resolveFunc fails, we should still continue on, since it simply means
 			// some business logic failed in a deployed schema.
-			r.log.Error("error resolving resolution", log.String("type", resolveFunc.Resolution.Type), log.String("id", resolveFunc.Resolution.ID.String()), log.Error(err))
+			r.log.Warn("error resolving resolution", log.String("type", resolveFunc.Resolution.Type), log.String("id", resolveFunc.Resolution.ID.String()), log.Error(err))
 			continue
 		}
 
