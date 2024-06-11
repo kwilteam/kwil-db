@@ -25,6 +25,7 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	flagSet.StringVar(&cfg.AppCfg.TLSCertFile, "app.tls-cert-file", cfg.AppCfg.TLSCertFile, "TLS certificate file path for the admin and consensus RPC server (optional)")
 	flagSet.StringVar(&cfg.AppCfg.TLSKeyFile, "app.tls-key-file", cfg.AppCfg.TLSKeyFile, "TLS key file path for the admin and consensus RPC servers (optional)")
 	flagSet.StringVar(&cfg.AppCfg.Hostname, "app.hostname", cfg.AppCfg.Hostname, "kwild Server hostname")
+	flagSet.StringVar(&cfg.AppCfg.GenesisState, "app.genesis-state", cfg.AppCfg.GenesisState, "snapshot file path for the genesis state of the chain")
 
 	flagSet.StringVar(&cfg.AppCfg.DBHost, "app.pg-db-host", cfg.AppCfg.DBHost, "PostgreSQL host address (no port)")
 	flagSet.StringVar(&cfg.AppCfg.DBPort, "app.pg-db-port", cfg.AppCfg.DBPort, "PostgreSQL port")
