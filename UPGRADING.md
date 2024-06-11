@@ -24,14 +24,13 @@ To check if your schemas are compatible with v0.8, use the `kwil-cli utils parse
 
 - Kuneiform is now handled in kwil-db's `parse` module. Previously, Kuneiform was handled in a separate repository. The `parse` module will be tagged as `parse/v0.2.0` for the v0.8 release of Kwil DB.
 
-#### Breaking Changes:
+#### Breaking Changes
 
 - SQL statements that are valid SQL but have invalid predicates will fail during parse, instead of at runtime.
 - Fixed edge cases where users could perform cartesian joins. Now, one side of a join must be a column of unique values.
 - Fixed a handful of cases that could lead to non-deterministic query results:
-    - Disallowing conflicting column names when returned from a query.
-    - Not returning unnamed columns in query results.
-    - Applying deterministic ordering for joins against subqueries.
+  - Disallowing conflicting column names when returned from a query.
+  - Applying deterministic ordering for joins against subqueries.
 
 ### Network Migrations
 
@@ -48,7 +47,7 @@ To check if your schemas are compatible with v0.8, use the `kwil-cli utils parse
 - The JSON-RPC listen address can be set with `jsonrpc_listen_addr` in the node's `config.toml` file. By default, the JSON-RPC server listens on port 8484.
 - Kwil CLI, GO SDK, and JS SDK have been updated to use the JSON-RPC server.
 
-#### Breaking Changes:
+#### Breaking Changes
 
 - The HTTP server (`http_listen_addr`) is DEPRECATED and will be removed in the susbequent release.
 - The gRPC server (`grpc_listen_addr`) is no longer exposed.
@@ -82,7 +81,8 @@ In the node's `config.toml` file, the following changes have been made:
 
 #### Breaking Changes
 
-- The admin service now listens on `"/tmp/kwild.socket"` by default. Previously, the admin service listened on `"unix:///tmp/kwil_admin.sock"`.
+- The `kwild` admin service now listens on `"/tmp/kwild.socket"` by default. Previously, the admin service listened on `"/tmp/kwil_admin.sock"`.
+- The `rpcserver` setting may be either an IP address (host:port format) or a UNIX socket path. URLs are not accepted, and any scheme such as `"http://"` or `"unix://"` should be omitted. The transport (TCP or UNIX) is inferred by the host format, and the protocol is always JSON-RPC over HTTP.
 
 ### Core Module (Go SDK)
 
@@ -94,7 +94,7 @@ The `core` module is tagged as `core/v0.2.0` for the Kwil DB v0.8 release.
 
 ##### Breaking Changes
 
-- The JSON tags on the `Signature` struct have changed:
+The JSON tags on the `Signature` struct have changed:
 
 ```go
 type Signature struct {
@@ -111,14 +111,15 @@ type Signature struct {
 ##### Breaking Changes
 
 - There are many new types and fields on the `Schema` struct to support procedures and strongly typed values. Changes include:
-    - `Owner` is now `HexBytes` instead of `byte[]`. `HexBytes` is an alias for `byte[]`; however, when marshaled to JSON, it is represented as a hex string.
-    - `Table.Column.Type` now uses the `DataType` struct instead of a `string` to support strongly typed values.
-    - Added the `Procedures` field to the `Schema` struct to support procedures.
-    - Added the `ForeignProcedures` field to the `Schema` struct to support calling procedures that are defined in other schemas.
+  - `Owner` is now `HexBytes` instead of `byte[]`. `HexBytes` is an alias for `byte[]`; however, when marshaled to JSON, it is represented as a hex string.
+  - `Table.Column.Type` now uses the `DataType` struct instead of a `string` to support strongly typed values.
+  - Added the `Procedures` field to the `Schema` struct to support procedures.
+  - Added the `ForeignProcedures` field to the `Schema` struct to support calling procedures that are defined in other schemas.
 
 #### `core/types/transactions`
 
-- **Note**: Most users do not need to be concerned with these changes as the `core/client` and `core/rpc/...` packages handle their use.
+**Note**: Most users do not need to be concerned with these changes as the `core/client` and `core/rpc/...` packages handle their use.
+
 - Added the helper function `UnmarshalPayload` to assist in unmarshaling payloads from `byte[]` give its `PayloadType`.
 - Added new `TxCode` values:
 
