@@ -137,7 +137,7 @@ func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 			return nil, fmt.Errorf("invalid extension flag %q", args[i])
 		}
 
-		extName := strings.TrimPrefix(parts[1], "--")
+		extName := strings.TrimPrefix(parts[1], "--extension.")
 
 		// get the extension map for the extension name.
 		// if it doesn't exist, create it.
