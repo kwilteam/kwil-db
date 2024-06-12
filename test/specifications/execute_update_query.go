@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cstockton/go-conv"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
@@ -41,9 +41,15 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	}
 
 	returnedUser1 := results[0]
-	user1Id, _ := conv.Int32(returnedUser1["id"])
-	user1Username := returnedUser1["username"].(string)
-	user1Age, _ := conv.Int32(returnedUser1["age"])
+
+	user1Id, ok := returnedUser1["id"].(int64)
+	require.Truef(t, ok, "expected a int64, got a %T", returnedUser1["id"])
+
+	user1Username, ok := returnedUser1["username"].(string)
+	require.Truef(t, ok, "expected a string, got a %T", returnedUser1["username"])
+
+	user1Age, ok := returnedUser1["age"].(int64)
+	require.Truef(t, ok, "expected a int64, got a %T", returnedUser1["age"])
 
 	assert.EqualValues(t, userQ.ID, user1Id)
 	assert.EqualValues(t, userQ.UserName, user1Username)

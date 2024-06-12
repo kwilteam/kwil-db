@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/cstockton/go-conv"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func ExecuteDBDeleteSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
@@ -28,8 +28,8 @@ func ExecuteDBDeleteSpecification(ctx context.Context, t *testing.T, execute Exe
 		t.Errorf("must have at least 1 user to test delete specification")
 	}
 
-	user1Id, err := conv.Int32(records[0]["id"])
-	assert.NoError(t, err)
+	user1Id, ok := records[0]["id"].(int64)
+	require.Truef(t, ok, "expected a int64, got a %T", records[0]["id"])
 
 	txHash, err := execute.Execute(ctx, dbID, actionName, []any{user1Id})
 	assert.NoError(t, err)
