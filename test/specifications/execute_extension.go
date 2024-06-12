@@ -2,10 +2,11 @@ package specifications
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
-	"github.com/cstockton/go-conv"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -36,14 +37,18 @@ func ExecuteExtensionSpecification(ctx context.Context, t *testing.T, execute Ex
 	upper, ok := results[0]["upper_value"]
 	assert.True(t, ok)
 
-	upperInt, err := conv.Int64(upper)
-	assert.NoError(t, err)
+	upperText, ok := upper.(string)
+	require.Truef(t, ok, "expected a string, got a %T", upper)
+	upperInt, err := strconv.ParseInt(upperText, 10, 64)
+	require.NoError(t, err)
 
 	lower, ok := results[0]["lower_value"]
 	assert.True(t, ok)
 
-	lowerInt, err := conv.Int64(lower)
-	assert.NoError(t, err)
+	lowerText, ok := lower.(string)
+	require.Truef(t, ok, "expected a string, got a %T", lower)
+	lowerInt, err := strconv.ParseInt(lowerText, 10, 64)
+	require.NoError(t, err)
 
 	if upperInt != 2 {
 		t.Fatalf("expected upper_value to be 2, got %d", upperInt)
