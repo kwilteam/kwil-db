@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cstockton/go-conv"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl, visitor ExecuteCallDsl) {
@@ -65,7 +65,8 @@ func checkGetPostResults(t *testing.T, results []map[string]any) {
 
 	returnedPost := results[0]
 
-	postId, _ := conv.Int32(returnedPost["id"])
+	postId, ok := returnedPost["id"].(int64)
+	require.Truef(t, ok, "expected a int64, got a %T", returnedPost["id"])
 
 	if postId != 1111 {
 		t.Errorf("expected post id to be 1111, got %d", postId)
