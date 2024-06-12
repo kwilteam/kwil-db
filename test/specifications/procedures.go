@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cstockton/go-conv"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,9 +48,10 @@ func ExecuteProcedureSpecification(ctx context.Context, t *testing.T, caller Pro
 
 	user := res[0]
 
-	// we use conv here because the cli returns all numbers as strings
-	age, err = conv.Int64(user["age"])
-	require.NoError(t, err)
+	// the cli returns all numbers as strings
+	var ok bool
+	age, ok = user["age"].(int64)
+	require.Truef(t, ok, "expected an int64, got a %T", user["age"])
 	require.Equal(t, age, int64(42))
 
 	// get owned users, returns a table
@@ -62,8 +62,8 @@ func ExecuteProcedureSpecification(ctx context.Context, t *testing.T, caller Pro
 
 	user = res[0]
 
-	name, err = conv.String(user["name"])
-	require.NoError(t, err)
+	name, ok = user["name"].(string)
+	require.Truef(t, ok, "expected a string, got a %T", user["name"])
 	require.Equal(t, name, "satoshi")
 
 	testPosts(ctx, t, ex)
@@ -144,8 +144,8 @@ func testPosts(ctx context.Context, t *testing.T, caller *executor) {
 	// latest posts, it is expected that the posts are in the order
 	// they were created
 	for i, c := range content {
-		con, err := conv.String(c)
-		require.NoError(t, err)
+		con, ok := c.(string)
+		require.Truef(t, ok, "wanted a string element, got a %T", c)
 
 		require.Equal(t, con, posts[i])
 	}
