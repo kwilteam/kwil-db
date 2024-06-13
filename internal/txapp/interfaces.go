@@ -69,6 +69,7 @@ var (
 	setChainState = meta.SetChainState
 	storeDiff     = meta.StoreDiff
 	loadParams    = meta.LoadParams
+	storeParams   = meta.StoreParams
 
 	// account functions
 	getAccount = accounts.GetAccount

@@ -1185,3 +1185,20 @@ func (r *TxApp) NetworkParams(ctx context.Context) (*common.NetworkParameters, e
 
 	return params, nil
 }
+
+// StoreNetworkParams stores the consensus parameters in the database.
+// It should be called when the node is started. It will make and commit
+// a transaction to store the parameters.
+func (r *TxApp) StoreNetworkParams(ctx context.Context, params *common.NetworkParameters) error {
+	tx, err := r.Database.BeginOuterTx(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = storeParams(ctx, tx, params)
+	if err != nil {
+		return errors.Join(err, tx.Rollback(ctx))
+	}
+
+	return tx.Commit(ctx)
+}

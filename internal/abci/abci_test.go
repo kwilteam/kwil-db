@@ -452,3 +452,7 @@ func (m *mockTxApp) Reload(ctx context.Context) error {
 func (m *mockTxApp) NetworkParams(ctx context.Context) (*common.NetworkParameters, error) {
 	return nil, nil
 }
+
+func (m *mockTxApp) StoreNetworkParams(ctx context.Context, params *common.NetworkParameters) error {
+	return nil
+}

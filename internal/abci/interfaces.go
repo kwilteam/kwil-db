@@ -74,6 +74,8 @@ type TxApp interface {
 	Reload(ctx context.Context) error
 	// NetworkParams returns the current network parameters.
 	NetworkParams(ctx context.Context) (*common.NetworkParameters, error)
+	// StoreNetworkParams stores the consensus params in the store.
+	StoreNetworkParams(ctx context.Context, params *common.NetworkParameters) error
 }
 
 // ConsensusParams returns kwil specific consensus parameters.

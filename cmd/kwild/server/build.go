@@ -363,6 +363,23 @@ func buildAbci(d *coreDependencies, txApp abci.TxApp, snapshotter *statesync.Sna
 		ss = statesyncer
 	}
 
+	// we need to persist the genesis consensus params if they are not already
+	_, err := txApp.NetworkParams(d.ctx)
+	if err == meta.ErrParamsNotFound {
+		err = txApp.StoreNetworkParams(d.ctx, &common.NetworkParameters{
+			MaxBlockSize:     d.genesisCfg.ConsensusParams.Block.MaxBytes,
+			JoinExpiry:       d.genesisCfg.ConsensusParams.Validator.JoinExpiry,
+			VoteExpiry:       d.genesisCfg.ConsensusParams.Votes.VoteExpiry,
+			DisabledGasCosts: d.genesisCfg.ConsensusParams.WithoutGasCosts,
+		})
+
+		if err != nil {
+			failBuild(err, "failed to persist genesis consensus params")
+		}
+	} else if err != nil {
+		failBuild(err, "failed to get genesis consensus params")
+	}
+
 	cfg := &abci.AbciConfig{
 		GenesisAppHash:     d.genesisCfg.ComputeGenesisHash(),
 		ChainID:            d.genesisCfg.ChainID,
