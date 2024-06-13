@@ -286,7 +286,7 @@ func defaultMoniker() string {
 // It also takes a flag to indicate if the caller wants to modify the defaults
 // for "quickstart" mode. Presently this just makes the HTTP RPC service listen
 // on all interfaces instead of the default of localhost.
-func GetCfg(flagCfg *KwildConfig, quickStart bool) (*KwildConfig, bool, error) {
+func GetCfg(flagCfg *KwildConfig) (*KwildConfig, bool, error) {
 	/*
 		the process here is:
 		1. identify the root dir.  This requires reading in the env and command line flags
