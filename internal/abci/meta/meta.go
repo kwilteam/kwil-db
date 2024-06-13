@@ -17,7 +17,7 @@ import (
 const (
 	chainSchemaName = `kwild_chain`
 
-	chainStoreVersion = 0
+	chainStoreVersion = 1
 
 	initChainTable = `CREATE TABLE IF NOT EXISTS ` + chainSchemaName + `.chain (
 		height INT8 NOT NULL,
@@ -44,29 +44,21 @@ const (
 )
 
 func initTables(ctx context.Context, tx sql.DB) error {
-	tx2, err := tx.BeginTx(ctx)
+	_, err := tx.Execute(ctx, initChainTable)
 	if err != nil {
 		return err
 	}
-	defer tx2.Rollback(ctx)
-
-	_, err = tx.Execute(ctx, initChainTable)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Execute(ctx, initConsensusParamsTable)
-	if err != nil {
-		return err
-	}
-
-	return tx2.Commit(ctx)
+	return err
 }
 
 // InitializeMetaStore initializes the chain metadata store schema.
 func InitializeMetaStore(ctx context.Context, db sql.DB) error {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initTables,
+		1: func(ctx context.Context, db sql.DB) error {
+			_, err := db.Execute(ctx, initConsensusParamsTable)
+			return err
+		},
 	}
 
 	return versioning.Upgrade(ctx, db, chainSchemaName, upgradeFns, chainStoreVersion)
@@ -129,6 +121,29 @@ func SetChainState(ctx context.Context, db sql.DB, height int64, appHash []byte)
 	return tx.Commit(ctx)
 }
 
+// StoreParams stores the consensus params in the store.
+func StoreParams(ctx context.Context, db sql.DB, params *common.NetworkParameters) error {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	for param, value := range map[string][]byte{
+		`max_block_size`:     {byte(params.MaxBlockSize)},
+		`join_expiry`:        {byte(params.JoinExpiry)},
+		`vote_expiry`:        {byte(params.VoteExpiry)},
+		`disabled_gas_costs`: {0},
+	} {
+		_, err = tx.Execute(ctx, upsertParam, param, value)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
 // StoreDiff stores the difference between two sets of consensus params.
 // If the parameters are equal, no action is taken.
 func StoreDiff(ctx context.Context, db sql.DB, original, new *common.NetworkParameters) error {
@@ -153,11 +168,21 @@ func StoreDiff(ctx context.Context, db sql.DB, original, new *common.NetworkPara
 	return tx.Commit(ctx)
 }
 
+var ErrParamsNotFound = fmt.Errorf("params not found")
+
 // LoadParams loads the consensus params from the store.
 func LoadParams(ctx context.Context, db sql.Executor) (*common.NetworkParameters, error) {
 	res, err := db.Execute(ctx, getParams)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(res.Rows) == 0 {
+		return nil, ErrParamsNotFound
+	}
+
+	if len(res.Rows) != 4 {
+		return nil, fmt.Errorf("expected four rows, got %d", len(res.Rows))
 	}
 
 	params := &common.NetworkParameters{}
