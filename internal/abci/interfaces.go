@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
@@ -58,7 +59,7 @@ type TxApp interface {
 	Begin(ctx context.Context, height int64) error
 	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
 	UpdateValidator(ctx context.Context, validator []byte, power int64) error
-	Finalize(ctx context.Context, height int64) (appHash []byte, validatorUpgrades []*types.Validator, err error)
+	Finalize(ctx context.Context, height int64, oldNetworkParams, newNetworkParams *common.NetworkParameters) (appHash []byte, validatorUpgrades []*types.Validator, err error)
 	Commit(ctx context.Context) (int64, error)
 
 	// ConsensusAccountInfo and ConsensusValidators are used in two different
@@ -71,6 +72,8 @@ type TxApp interface {
 
 	// Reload reloads the state of engine and txapp.
 	Reload(ctx context.Context) error
+	// NetworkParams returns the current network parameters.
+	NetworkParams(ctx context.Context) (*common.NetworkParameters, error)
 }
 
 // ConsensusParams returns kwil specific consensus parameters.

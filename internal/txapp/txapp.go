@@ -401,6 +401,8 @@ func (r *TxApp) Execute(ctx TxContext, tx *transactions.Transaction) *TxResponse
 
 // Begin signals that a new block has begun. This creates an outer database
 // transaction that may be committed, or rolled back on error or crash.
+// It is given the starting networkParams, and is expected to use them to
+// use them to store any changes to the network parameters in the database during Finalize.
 func (r *TxApp) Begin(ctx context.Context, height int64) error {
 	if r.currentTx != nil {
 		return errors.New("txapp misuse: cannot begin a new block while a transaction is in progress")
@@ -470,8 +472,9 @@ func (r *TxApp) Activations(height int64) []*consensus.Hardfork {
 // Finalize signals that a block has been finalized. No more changes can be
 // applied to the database. It returns the apphash and the validator set. And
 // state modifications specified by hardforks activating at this height are
-// applied.
-func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (appHash []byte, finalValidators []*types.Validator, err error) {
+// applied. It is given the old and new network parameters, and is expected to
+// use them to store any changes to the network parameters in the database.
+func (r *TxApp) Finalize(ctx context.Context, blockHeight int64, oldNetworkParams, newNetworkParams *common.NetworkParameters) (appHash []byte, finalValidators []*types.Validator, err error) {
 	if r.currentTx == nil {
 		return nil, nil, errors.New("txapp misuse: cannot finalize a block without a transaction in progress")
 	}
@@ -535,6 +538,8 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (appHash []byte
 	if err != nil {
 		return nil, nil, err
 	}
+
+	err = storeDiff(ctx, r.currentTx, oldNetworkParams, newNetworkParams)
 
 	engineHash, err := r.currentTx.Precommit(ctx)
 	if err != nil {
@@ -1164,4 +1169,19 @@ type ReplayStatusChecker func() bool
 // SetreplayStatusChecker sets the function to check if the node is in replay mode
 func (r *TxApp) SetReplayStatusChecker(fn ReplayStatusChecker) {
 	r.replayStatusFn = fn
+}
+
+// NetworkParams returns the network parameters for the current block height.
+func (r *TxApp) NetworkParams(ctx context.Context) (*common.NetworkParameters, error) {
+	readTx, err := r.Database.BeginReadTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	params, err := loadParams(ctx, readTx)
+	if err != nil {
+		return nil, err
+	}
+
+	return params, nil
 }

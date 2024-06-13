@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/common/chain/forks"
 	"github.com/kwilteam/kwil-db/common/ident"
@@ -112,6 +113,17 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 	}
 
 	app.height.Store(height)
+
+	netParams, err := app.txApp.NetworkParams(ctx) // ensure the network params are loaded
+	if err != nil {
+		return nil, fmt.Errorf("failed to load network params: %w", err)
+	}
+
+	// we will apply the netParams to the consensus params
+	app.consensusParams.Block.MaxBytes = netParams.MaxBlockSize
+	app.consensusParams.Validator.JoinExpiry = netParams.JoinExpiry
+	app.consensusParams.Votes.VoteExpiry = netParams.VoteExpiry
+	app.consensusParams.WithoutGasCosts = netParams.DisabledGasCosts
 
 	return app, nil
 }
@@ -309,6 +321,16 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("begin tx commit failed: %w", err)
 	}
 
+	// we copy the Kwil consensus params to ensure we persist any changes
+	// made during the block execution
+	networkParams := &common.NetworkParameters{
+		MaxBlockSize:     a.consensusParams.Block.MaxBytes,
+		JoinExpiry:       a.consensusParams.Validator.JoinExpiry,
+		VoteExpiry:       a.consensusParams.Votes.VoteExpiry,
+		DisabledGasCosts: a.consensusParams.WithoutGasCosts,
+	}
+	oldNetworkParams := networkParams.Copy()
+
 	initialValidators, err := a.txApp.ConsensusValidators(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current validators: %w", err)
@@ -391,6 +413,12 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	// Merge, including kwil-specific params like join expiry.
 	updateConsensusParams(a.consensusParams, &paramUpdates)
 
+	// merge the Kwil-specific params into the network params
+	networkParams.MaxBlockSize = a.consensusParams.Block.MaxBytes
+	networkParams.JoinExpiry = a.consensusParams.Validator.JoinExpiry
+	networkParams.VoteExpiry = a.consensusParams.Votes.VoteExpiry
+	networkParams.DisabledGasCosts = a.consensusParams.WithoutGasCosts
+
 	// cometbft wants its api/tendermint type
 	res.ConsensusParamUpdates = cometbft.ParamUpdatesToComet(&paramUpdates)
 
@@ -403,7 +431,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// Get the new validator set and apphash from txApp.
-	appHash, finalValidators, err := a.txApp.Finalize(ctx, req.Height)
+	appHash, finalValidators, err := a.txApp.Finalize(ctx, req.Height, oldNetworkParams, networkParams)
 	if err != nil {
 		return nil, fmt.Errorf("failed to finalize transaction app: %w", err)
 	}

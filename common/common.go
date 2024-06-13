@@ -124,3 +124,28 @@ func (e *ExecutionData) Clean() error {
 	e.Procedure = strings.ToLower(e.Procedure)
 	return nil
 }
+
+// NetworkParameters are network level configurations that can be
+// evolved over the lifetime of a network.
+type NetworkParameters struct {
+	// MaxBlockSize is the maximum size of a block in bytes.
+	MaxBlockSize int64
+	// JoinExpiry is the number of blocks after which the validators
+	// join request expires if not approved.
+	JoinExpiry int64
+	// VoteExpiry is the default number of blocks after which the validators
+	// vote expires if not approved.
+	VoteExpiry int64
+	// DisabledGasCosts dictates whether gas costs are disabled.
+	DisabledGasCosts bool
+}
+
+// Copy returns a deep copy of the network parameters.
+func (n *NetworkParameters) Copy() *NetworkParameters {
+	return &NetworkParameters{
+		MaxBlockSize:     n.MaxBlockSize,
+		JoinExpiry:       n.JoinExpiry,
+		VoteExpiry:       n.VoteExpiry,
+		DisabledGasCosts: n.DisabledGasCosts,
+	}
+}
