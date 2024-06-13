@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -411,7 +412,7 @@ func (m *mockTxApp) Execute(ctx txapp.TxContext, tx *transactions.Transaction) *
 	return nil
 }
 
-func (m *mockTxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
+func (m *mockTxApp) Finalize(ctx context.Context, blockHeight int64, oldNetworkParams, newNetworkParams *common.NetworkParameters) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
 	return nil, nil, nil
 }
 
@@ -446,4 +447,8 @@ func (m *mockTxApp) UpdateValidator(ctx context.Context, validator []byte, power
 
 func (m *mockTxApp) Reload(ctx context.Context) error {
 	return nil
+}
+
+func (m *mockTxApp) NetworkParams(ctx context.Context) (*common.NetworkParameters, error) {
+	return nil, nil
 }
