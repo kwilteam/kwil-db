@@ -1036,6 +1036,19 @@ func (a *AbciApp) prepareBlockTransactions(ctx context.Context, txs [][]byte, lo
 			continue // mempool recheck should have removed this
 		}
 
+		// Enforce the maxVotesPerTx limit for ValidatorVoteIDs transactions
+		if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteIDs {
+			voteIDs := &transactions.ValidatorVoteIDs{}
+			if err := voteIDs.UnmarshalBinary(tx.Body.Payload); err != nil {
+				log.Warn("Dropping tx: failed to unmarshal ValidatorVoteIDs payload", zap.Error(err))
+				continue
+			}
+			if len(voteIDs.ResolutionIDs) > int(a.consensusParams.Votes.MaxVotesPerTx) {
+				log.Warn("Dropping tx: ValidatorVoteIDs payload exceeds max votes per tx limits", zap.Int64("max vote limit", a.consensusParams.Votes.MaxVotesPerTx), zap.Int("votes in tx", len(voteIDs.ResolutionIDs)))
+				continue
+			}
+		}
+
 		// Drop transactions from unfunded accounts in gasEnabled mode
 		if a.cfg.GasEnabled {
 			balance, nonce, err := a.txApp.AccountInfo(ctx, readTx, tx.Sender, false)
@@ -1201,11 +1214,33 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 
 			// if it is a vote body payload, then only the proposer can propose it
 			// this is a hard consensus rule for block building, and is protected by
-			// the mempool.
-			// it seems like this should somehow be in the same package as mempool since this is inter-related
-			// logically, but I am putting it here for now.
-			if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteBodies && !bytes.Equal(proposer, tx.Sender) {
-				return fmt.Errorf("only proposer can propose validator vote bodies")
+			// the mempool. The number of Votes in this transaction must not exceed the
+			// maxVotesPerTx limits
+			if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteBodies {
+				if !bytes.Equal(proposer, tx.Sender) {
+					return fmt.Errorf("only proposer can propose validator vote bodies")
+				}
+
+				voteBodies := &transactions.ValidatorVoteBodies{}
+				if err := voteBodies.UnmarshalBinary(tx.Body.Payload); err != nil {
+					return fmt.Errorf("failed to unmarshal vote bodies: %w", err)
+				}
+
+				if len(voteBodies.Events) > int(a.consensusParams.Votes.MaxVotesPerTx) {
+					return fmt.Errorf("number of votes %d in a transaction exceeds the limit %d", len(voteBodies.Events), a.consensusParams.Votes.MaxVotesPerTx)
+				}
+			}
+
+			// The number of votes in the ValidatorVoteID payload must not be more than
+			// maxVotesPerTx limits
+			if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteIDs {
+				voteIDs := &transactions.ValidatorVoteIDs{}
+				if err := voteIDs.UnmarshalBinary(tx.Body.Payload); err != nil {
+					return fmt.Errorf("failed to unmarshal vote ids: %w", err)
+				}
+				if len(voteIDs.ResolutionIDs) > int(a.consensusParams.Votes.MaxVotesPerTx) {
+					return fmt.Errorf("number of votes [%d] in a transaction exceeds the limit %d", len(voteIDs.ResolutionIDs), a.consensusParams.Votes.MaxVotesPerTx)
+				}
 			}
 
 			// This block proposal may include transactions that did not pass

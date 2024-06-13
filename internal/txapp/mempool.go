@@ -16,10 +16,14 @@ import (
 )
 
 type mempool struct {
-	accounts   map[string]*types.Account
-	gasEnabled bool
-	mu         sync.Mutex
-	nodeAddr   []byte
+	accounts map[string]*types.Account
+
+	// consensus parameters
+	gasEnabled    bool
+	maxVotesPerTx int64
+
+	mu       sync.Mutex
+	nodeAddr []byte
 }
 
 // accountInfo retrieves the account info from the mempool state or the account store.
@@ -64,7 +68,18 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 		if power == 0 {
 			return fmt.Errorf("only validators can submit validator vote transactions")
 		}
+
+		// reject the transaction if the number of voteIDs exceeds the limit
+		voteID := &transactions.ValidatorVoteIDs{}
+		err = voteID.UnmarshalBinary(tx.Body.Payload)
+		if err != nil {
+			return err
+		}
+		if (int64)(len(voteID.ResolutionIDs)) > m.maxVotesPerTx {
+			return fmt.Errorf("number of voteIDs exceeds the limit of %d", m.maxVotesPerTx)
+		}
 	}
+
 	if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteBodies {
 		// not sure if this is the right error code
 		return fmt.Errorf("validator vote bodies can not enter the mempool, and can only be submitted during block proposal")
