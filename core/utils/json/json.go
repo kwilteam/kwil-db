@@ -10,7 +10,7 @@ import (
 // UnmarshalMapWithoutFloat unmarshals a JSON byte slice into a slice of maps.
 // It will try to convert all return values into ints, but will keep them as strings if it fails.
 // It ensures they aren't returned as floats, which is important for maintaining consistency
-// with Kwil's decimal types. All returned types will be string or int64.
+// with Kwil's decimal types. All returned types will be string, int64, or a []any.
 func UnmarshalMapWithoutFloat(b []byte) ([]map[string]any, error) {
 	d := json.NewDecoder(strings.NewReader(string(b)))
 	d.UseNumber()
@@ -59,6 +59,10 @@ func convertJsonNumbers(val any) any {
 			return val.String()
 		}
 		return i
+	case string:
+		return val
+	case int64:
+		return val
 	default:
 		// in case we are unmarshalling something crazy like a double nested slice,
 		// we reflect on the value and recursively call convertJsonNumbers if it's a slice.
