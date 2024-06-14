@@ -20,6 +20,7 @@ var (
 	host            string
 	gatewayProvider bool
 	key             string
+	quiet           bool
 
 	chainId string
 
@@ -32,13 +33,16 @@ var (
 	fastDropRate       int
 	noDrop             bool
 
-	maxPosters    int
-	postInterval  time.Duration
-	maxContentLen int
+	noErrActs bool
+
+	maxPosters   int
+	postInterval time.Duration
+	contentLen   int
+	variableLen  bool
 
 	txPollInterval time.Duration
 
-	sequentialBroadcast bool
+	concurrentBroadcast bool
 	nonceChaos          int
 	rpcTiming           bool
 
@@ -50,8 +54,9 @@ func main() {
 	flag.BoolVar(&gatewayProvider, "gw", false, "gateway provider instead of vanilla provider, "+
 		"need to make sure host is same as gateway's domain")
 	flag.StringVar(&key, "key", "", "existing key to use instead of generating a new one")
+	flag.BoolVar(&quiet, "q", false, "only print errors")
 
-	flag.StringVar(&chainId, "chain", "kwil-test-chain", "chain ID")
+	flag.StringVar(&chainId, "chain", "", "chain ID to require (default is any)")
 
 	flag.DurationVar(&runTime, "run", 30*time.Minute, "terminate after running this long")
 
@@ -61,17 +66,20 @@ func main() {
 	flag.IntVar(&fastDropRate, "ddn", 0, "immediately drop new dbs at a rate of 1/ddn (disable with <1)")
 	flag.BoolVar(&noDrop, "nodrop", false, "don't drop the datasets deployed in the deploy/drop program")
 
-	flag.IntVar(&maxPosters, "ec", 2, "max concurrent unconfirmed action executions (to get multiple tx in a block)")
+	flag.BoolVar(&noErrActs, "ne", false, "don't make intentionally failed txns")
+
+	flag.IntVar(&maxPosters, "ec", 4, "max concurrent unconfirmed action and procedure executions (to get multiple tx in a block), split between actions and procedures")
 	flag.DurationVar(&postInterval, "ei", 10*time.Millisecond,
 		"initiate non-view action execution at this interval (limited by max concurrency setting)")
 	flag.DurationVar(&viewInterval, "vi", -1, "make view action call at this interval")
-	flag.IntVar(&maxContentLen, "el", 50_000, "maximum content length in an executed post action")
+	flag.IntVar(&contentLen, "el", 50_000, "content length in an executed post action")
+	flag.BoolVar(&variableLen, "vl", false, "pseudorandom variable content lengths, on (0,el]")
 
-	flag.BoolVar(&sequentialBroadcast, "sb", false, "sequential broadcast (disallow concurrent broadcast, waiting for broadcast result before releasing nonce lock)")
+	flag.BoolVar(&concurrentBroadcast, "cb", false, "concurrent broadcast (do not wait for broadcast result before releasing nonce lock, will cause nonce errors due to goroutine race)")
 	flag.IntVar(&nonceChaos, "nc", 0, "nonce chaos rate (apply nonce jitter every 1/nc times)")
 	flag.BoolVar(&rpcTiming, "v", false, "print RPC durations")
 
-	flag.DurationVar(&txPollInterval, "pollint", 200*time.Millisecond, "polling interval when waiting for tx confirmation")
+	flag.DurationVar(&txPollInterval, "pollint", 400*time.Millisecond, "polling interval when waiting for tx confirmation")
 
 	flag.Parse()
 

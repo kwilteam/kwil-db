@@ -14,7 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
-// harness is a Client driver designed around an embedded dataset Kuniform
+// harness is a Client driver designed around an embedded dataset Kuneiform
 // schema. It has methods to execute actions asynchronously, while track it's
 // used nonces so it can correctly make multiple unconfirmed transactions with
 // increasing nonces. See underNonceLock and recoverNonce.
@@ -32,6 +32,10 @@ type harness struct {
 	nonceChaos          int  // apply random nonce-jitter every 1/n times
 
 	nestedLogger *log.Logger
+
+	quiet bool
+
+	// asc actSchemaClient
 }
 
 // for about 1 in every f times, produce a non-zero nonce jitter:
@@ -70,6 +74,7 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 		return nil
 	}
 
+	// -sb
 	h.nonceMtx.Lock()
 	defer h.nonceMtx.Unlock()
 	h.nonce++
@@ -84,7 +89,7 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 				return err
 			}
 			h.nonce = acct.Nonce
-			h.printf("RESET NONCE TO LATEST REPORTED: %d", h.nonce)
+			h.printf("RESET NONCE TO LATEST REPORTED (underNonceLock): %d", h.nonce)
 		}
 		return err
 	}
@@ -100,12 +105,26 @@ func (h *harness) recoverNonce(ctx context.Context) error {
 		return err
 	}
 	h.nonce = acct.Nonce
-	h.printf("RESET NONCE TO LATEST CONFIRMED: %d", h.nonce)
+	h.printf("RESET NONCE TO LATEST CONFIRMED (recoverNonce): %d", h.nonce)
 	return nil
 }
 
 func (h *harness) printf(msg string, args ...any) {
-	h.nestedLogger.Info(fmt.Sprintf(msg, args...))
+	var hasErr bool
+	for _, arg := range args {
+		if err, isErr := arg.(error); isErr && !errors.Is(err, ErrExpected) {
+			hasErr = true
+			break
+		}
+	}
+
+	fun := h.nestedLogger.Info
+	if hasErr {
+		fun = h.nestedLogger.Error
+	} else if h.quiet {
+		return
+	}
+	fun(fmt.Sprintf(msg, args...))
 }
 
 func (h *harness) printRecs(ctx context.Context, recs *clientType.Records) {
@@ -117,7 +136,7 @@ func (h *harness) printRecs(ctx context.Context, recs *clientType.Records) {
 	}
 }
 
-func (h *harness) executeActionAsync(ctx context.Context, dbid, action string,
+func (h *harness) executeAsync(ctx context.Context, dbid, action string,
 	inputs [][]any) (transactions.TxHash, error) {
 	var txHash transactions.TxHash
 	err := h.underNonceLock(ctx, func(nonce int64) error {
@@ -132,9 +151,9 @@ func (h *harness) executeActionAsync(ctx context.Context, dbid, action string,
 	return txHash, nil
 }
 
-func (h *harness) executeAction(ctx context.Context, dbid string, action string,
+func (h *harness) execute(ctx context.Context, dbid string, action string,
 	inputs [][]any) error {
-	txHash, err := h.executeActionAsync(ctx, dbid, action, inputs)
+	txHash, err := h.executeAsync(ctx, dbid, action, inputs)
 	if err != nil {
 		return err
 	}

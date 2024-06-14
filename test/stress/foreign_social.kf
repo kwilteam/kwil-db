@@ -1,0 +1,139 @@
+database foreign_social_media;
+
+// This schema is meant to compose with the user.kf, and implement a basic
+// social media / blogging platform
+
+// non-view public procs:
+//  1. create_post
+//  2. create_user
+
+// non-view public *owner* procs:
+//  1. admin_set
+
+// to init, must do admin_set('dbid', <xDBID_of_foreign_users>) and admin_set('userbyowner', 'get_user_by_owner')
+
+table post_counts {
+    user_id uuid primary key,
+    post_count int not null default(0)
+}
+
+table posts {
+    id uuid primary key,
+    content text maxlen(300) not null,
+    author_id uuid not null, // references users db
+    // post_num is the index of the post for the author
+    // the first post for a user will be 1, then 2, 3, etc.
+    // it is used for chronological ordering
+    post_num int not null,
+    #author_idx index(author_id)
+}
+
+// increment_post_count increments the post count for the user, identified by
+// its user_id. It returns the user id and the new post count. If the user has not
+// yet posted, it will set the post count to 1
+procedure increment_post_count($user_id uuid) private returns (post_count int) {
+    insert into post_counts (user_id, post_count)
+    values ($user_id, 1)
+    on conflict (user_id) do update
+        set post_count = post_counts.post_count + 1;
+
+    for $row IN select post_count from post_counts where user_id = $user_id limit 1 {
+        return $row.post_count;
+    }
+}
+
+// create_post creates a post
+procedure create_post($content text) public {
+    $user_id uuid := get_user_id(@caller);
+
+    // increment the post count
+    $post_count int := increment_post_count($user_id);
+
+    INSERT INTO posts (id, content, author_id, post_num)
+    VALUES (
+        uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid),
+        $content,
+        $user_id,
+        $post_count
+    );
+}
+
+// get_recent_posts gets a users most recent posts,
+// in descending order
+procedure get_recent_posts($username text) public view returns table(id uuid, content text) {
+    // get the configured dbid and procedure
+    $user_id uuid := get_user_id(@caller);
+
+    return SELECT id, content from posts
+        WHERE author_id = $user_id
+        ORDER BY post_num DESC
+        LIMIT 10;
+}
+
+// get_recent_posts_by_size gets the $limit most recent posts from a user larger than size $size
+// this obviously could be written more simply and efficiently with pure SQL.
+// but the intent is to test RETURN NEXT and loops over procedures
+procedure get_recent_posts_by_size($username text, $size int, $limit int) public view returns table(id uuid, content text) {
+    // set max limit of 50
+    if $limit > 50 {
+        $limit := 50;
+    }
+
+    $count int := 0;
+    for $row in select * from get_recent_posts($username) as a {
+        if $count == $limit {
+            break;
+        }
+        if length($row.content) >= $size {
+            $count := $count + 1;
+            return next $row.id, $row.content;
+        }
+    }
+}
+
+// the following foreign procedures define procedures
+// that the users db has. It returns redundant data since it needs
+// to match the procedure signature defines in users.
+foreign procedure get_user($address text) returns (uuid, text)
+foreign procedure foreign_create_user(text)
+
+// table keyvalue is a kv table to track metadata
+// for foreign calls.
+table keyvalue {
+    k text primary, // key is a reserved word
+    value text not null
+}
+
+procedure admin_set($key text, $value text) public owner {
+    insert into keyvalue (k, value)
+    values ($key, $value)
+    on conflict (k) do update set value = $value;
+}
+
+procedure admin_get($key text) public view returns (value text) {
+    for $row in select value from keyvalue where k = $key {
+        return $row.value;
+    }
+
+    error(format('admin has not set a value for k %s', $key));
+}
+
+// gets the user's id
+procedure get_user_id($address text) public view returns (id uuid) {
+    $dbid text := admin_get('dbid');
+    $procedure text := admin_get('userbyowner');
+
+    // get the user id
+    $user_id uuid;
+    $user_id, _ := get_user[$dbid, $procedure](@caller);
+
+    return $user_id;
+}
+
+// this simply tests that we can write data to foreign procedures.
+procedure create_user($name text) public {
+    $dbid text := admin_get('dbid');
+    $procedure text := admin_get('userbyowner');
+
+    foreign_create_user[$dbid, 'create_user']($name);
+}

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math/rand"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -19,8 +18,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
+	"golang.org/x/sync/errgroup"
 
-	lorem "github.com/drhodes/golorem"
 	"go.uber.org/zap"
 )
 
@@ -76,7 +75,7 @@ func hammer(ctx context.Context) error {
 		Level:       log.InfoLevel.String(),
 		OutputPaths: []string{"stdout"},
 		Format:      log.FormatPlain,
-		EncodeTime:  log.TimeEncodingEpochMilli, // for readability, log.TimeEncodingRFC3339Milli
+		EncodeTime:  log.TimeEncodingRFC3339Milli,
 	})
 	logger = *logger.WithOptions(zap.AddStacktrace(zap.FatalLevel))
 	trLogger := *logger.WithOptions(zap.AddCallerSkip(1))
@@ -115,11 +114,12 @@ func hammer(ctx context.Context) error {
 	// Bring up the DB test harness with a fresh test database.
 	h := &harness{
 		Client:              kwilClt,
-		concurrentBroadcast: !sequentialBroadcast,
+		concurrentBroadcast: concurrentBroadcast,
 		logger:              &logger,
 		acctID:              acctID,
 		signer:              signer,
 		nestedLogger:        logger.WithOptions(zap.AddCallerSkip(1)),
+		quiet:               quiet,
 	}
 
 	if acct, err := kwilClt.GetAccount(ctx, acctID, types.AccountStatusPending); err != nil {
@@ -128,16 +128,48 @@ func hammer(ctx context.Context) error {
 		h.nonce = acct.Nonce
 	}
 
-	dbid, err := h.deployDB(ctx) // getOrCreateDB(ctx)
-	if err != nil {
+	// procedure spammer
+	psc := procSchemaClient{h}
+
+	// action spammer
+	asc := actSchemaClient{h}
+
+	var dbid, dbidProc string
+	var userIDact int
+	grp, ctxg := errgroup.WithContext(ctx)
+	grp.Go(func() error {
+		var err error
+		dbidProc, err = psc.deployDB(ctxg)
+		if err != nil {
+			return err
+		}
+
+		uidProc, unameProc, err := psc.getOrCreateUser(ctxg, dbidProc)
+		if err != nil {
+			return fmt.Errorf("getOrCreateUser: %w", err)
+		}
+		h.printf("proc schema: user ID = %s / user name = %v", uidProc, unameProc)
+		return nil
+	})
+	grp.Go(func() error {
+		var err error
+		dbid, err = asc.deployDB(ctxg)
+		if err != nil {
+			return err
+		}
+
+		var userName string
+		userIDact, userName, err = asc.getOrCreateUser(ctxg, dbid)
+		if err != nil {
+			return fmt.Errorf("getOrCreateUser: %w", err)
+		}
+		h.printf("act schema: user ID = %d / user name = %v", userIDact, userName)
+		return nil
+	})
+
+	if err = grp.Wait(); err != nil {
 		return err
 	}
-
-	userID, userName, err := h.getOrCreateUser(ctx, dbid)
-	if err != nil {
-		return fmt.Errorf("getOrCreateUser: %w", err)
-	}
-	h.printf("user ID = %d / user name = %v", userID, userName)
 
 	h.nonceChaos = nonceChaos // after successfully deploying the test db and creating a user in it
 
@@ -167,7 +199,7 @@ func hammer(ctx context.Context) error {
 	// bother the authn&kgw
 	wg.Add(1)
 	go runLooped(ctx, func() error {
-		_, err := kwilClt.CallAction(ctx, dbid, actAuthnOnly, []any{})
+		_, err := kwilClt.Call(ctx, dbid, actAuthnOnly, []any{})
 		return err
 	}, "call authn action", viewInterval, &logger)
 
@@ -178,7 +210,7 @@ func hammer(ctx context.Context) error {
 
 	wg.Add(1)
 	go runLooped(ctx, func() error {
-		newDBID, promise, err := h.deployDBAsync(ctx)
+		newDBID, promise, err := asc.deployDBAsync(ctx)
 		if err != nil {
 			return err
 		}
@@ -217,7 +249,7 @@ func hammer(ctx context.Context) error {
 
 	var pid atomic.Int64 // post ID accessed by separate goroutines
 
-	nextPostID, err := h.nextPostID(ctx, dbid, userID)
+	nextPostID, err := asc.nextPostID(ctx, dbid, userIDact)
 	if err != nil {
 		return fmt.Errorf("nextPostID: %w", err)
 	}
@@ -227,90 +259,70 @@ func hammer(ctx context.Context) error {
 	wg.Add(1)
 	go runLooped(ctx, func() error {
 		postID := strconv.Itoa(rand.Intn(int(pid.Load() + 1)))
-		_, err := kwilClt.CallAction(ctx, dbid, actGetPost, []any{postID})
+		_, err := kwilClt.Call(ctx, dbid, actGetPost, []any{postID})
 		if err != nil {
 			return err
 		}
 		return nil
 	}, "get post", viewInterval, &logger)
 
-	// post
+	// Content length is limited by multiple things: message size, max transaction size, block size e.g.:
+	//  - "rpc error: code = ResourceExhausted desc = grpc: received message larger than max (5000168 vs. 4194304)"
+	//  - "Tx too large. Max size is 1048576, but got 4192304" a little less than 1MiB would be 1<<20 - 1e3
+	bigData := makeBigData(contentLen, h.printf)
 
-	if maxPosters > 0 {
-		// Content length is limited by multiple things: message size, max transaction size, block size e.g.:
-		//  - "rpc error: code = ResourceExhausted desc = grpc: received message larger than max (5000168 vs. 4194304)"
-		//  - "Tx too large. Max size is 1048576, but got 4192304" a little less than 1MiB would be 1<<20 - 1e3
-		// bigData := random.String(maxContentLen) // pregenerate some random data for post content
-		var bigDataBuilder strings.Builder
-		var sentences int
-		for bigDataBuilder.Len() < maxContentLen {
-			words := min(16, maxContentLen/16+1)
-			bigDataBuilder.WriteString(lorem.Sentence(words, words)) // this may be far considerably than needed because words vary in length, but that's fine
-			bigDataBuilder.WriteString(" ")
-			sentences++
-		}
-		h.printf("Generated post content from %d lorem ipsum sentences.", sentences)
-		bigData := bigDataBuilder.String()
-
-		posters := make(chan struct{}, maxPosters)
-		wg.Add(1)
-		go runLooped(ctx, func() error {
-			posters <- struct{}{}
-			t0 := time.Now()
-			next := int(pid.Add(1))
-			defer func() {
-				since := time.Since(t0)
-				var slow string
-				if since > 200*time.Millisecond {
-					slow = " (SLOW)"
-				}
-				h.printf("new post id = %d, took %vms%s", next, float64(since.Microseconds())/1e3, slow)
-			}()
-
-			content := bigData[:rand.Intn(maxContentLen)+1] // random.String(rand.Intn(maxContentLen) + 1) // randomBytes(maxContentLen)
-			h.printf("beginning createPostAsync id = %d, content len = %d (concurrent with %d others)",
-				next, len(content), len(posters)-1)
-			promise, err := h.createPostAsync(ctx, dbid, next, "title_"+strconv.Itoa(next), content)
-			if err != nil {
-				// Continue runLooped if it was a timeout as these are typically
-				// transient and we don't want to let up.
-				if errors.Is(err, context.DeadlineExceeded) {
-					h.printf("Timeout creating post!")
-					err = nil // just keep trying
-				}
-				<-posters
-				return err
-			}
-
-			go func() {
-				timer := time.NewTimer(10 * time.Second)
-				defer timer.Stop()
-				select {
-				case res := <-promise:
-					if err := res.Error(); err != nil {
-						h.printf("createPost failed: %v", err)
-					}
-				case <-timer.C:
-					logger.Error("timed out waiting for create post tx to be mined")
-				}
-
-				<-posters
-			}()
-			return nil
-		}, "create post", postInterval, &logger)
+	if maxPosters%2 != 0 {
+		maxPosters++
 	}
 
-	// Some other things to consider
+	// post (actions)
+	if maxPosters > 0 {
+		maxActPost := maxPosters / 2
+		operation := "create post (act)"
+		posters := make(chan struct{}, maxActPost)
+		wg.Add(1)
+		go runLooped(ctx,
+			asyncFn(ctx, posters, h.printf, operation,
+				func() (<-chan asyncResp, error) {
+					next := int(pid.Add(1))
+					var content string
+					if variableLen {
+						content = bigData[:rand.Intn(contentLen)+1] // random.String(rand.Intn(maxContentLen) + 1) // randomBytes(maxContentLen)
+					} else {
+						content = bigData[:contentLen]
+					}
+					h.printf("beginning createPostAsync id = %d, content len = %d (concurrent with %d others)",
+						next, len(content), len(posters)-1)
+					return asc.createPostAsync(ctx, dbid, next, "title_"+strconv.Itoa(next), content)
+				},
+			),
+			operation, postInterval, &logger,
+		)
+	}
 
-	// action delete_post($id) public
-	// action delete_user_by_id ($id) public owner
-	// action delete_user() public
-	// action update_user($id, $username, $age) public
-
-	// action list_users() public
-	// action get_user_posts($username) public
-	// action get_user_posts_by_userid($id) public
-	// action multi_select() public
+	// post (procedures)
+	if maxPosters > 0 {
+		maxProcPost := maxPosters / 2
+		operation := "create post (proc)"
+		posters := make(chan struct{}, maxProcPost)
+		wg.Add(1)
+		go runLooped(ctx,
+			asyncFn(ctx, posters, h.printf, operation,
+				func() (<-chan asyncResp, error) {
+					var content string
+					if variableLen {
+						content = bigData[:rand.Intn(contentLen)+1] // random.String(rand.Intn(maxContentLen) + 1) // randomBytes(maxContentLen)
+					} else {
+						content = bigData[:contentLen]
+					}
+					h.printf("beginning createPostAsync (proc), content len = %d (concurrent with %d others)",
+						len(content), len(posters)-1)
+					return psc.createPostAsync(ctx, dbidProc, content)
+				},
+			),
+			operation, postInterval, &logger,
+		)
+	}
 
 	wg.Wait()
 

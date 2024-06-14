@@ -1,0 +1,144 @@
+database proc_social;
+
+// public non-view actions:
+//  1. create_user
+//  2. create_post
+
+table users {
+    id uuid primary key,
+    name text maxlen(30) not null unique,
+    age int max(150),
+    address text not null unique,
+    
+    // post_count tracks the amount of posts a user has
+    // it is kept as a separate table for quick lookup times
+    post_count int not null default(0),
+    #age_idx index(age)
+}
+
+table posts {
+    id uuid primary key,
+    content text maxlen(5000000) not null, // 5 MB // To support tests with max supported payload size
+    author_id uuid not null,
+    // post_num is the index of the post for the author
+    // the first post for a user will be 1, then 2, 3, etc.
+    // it is used for chronological ordering
+    post_num int not null,
+    foreign key (author_id) references users(id) on update cascade on delete cascade,
+    #author_idx index(author_id)
+}
+
+// create_user creates a user in the database.
+// It is assigned a unique uuid.
+// MUTABLE
+procedure create_user($name text, $age int) public {
+    // we will generate a uuid from the txid
+    INSERT INTO users (id, name, age, address)
+    VALUES (uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid), $name, $age, @caller);
+}
+
+action list_users() public owner view {
+    SELECT * FROM users;
+}
+
+// get_user gets a user id, age, and address from a username
+procedure get_user($name text) public view returns (id uuid, age int, address text, post_count int) {
+    for $row in SELECT id, age, address, post_count FROM users WHERE name = $name {
+        return $row.id, $row.age, $row.address, $row.post_count; // will return on the first iteration
+    }
+
+    error(format('user "%s" not found', $name));
+}
+
+// get_user_by_address gets a user id, age, and name by the owner's address
+procedure get_user_by_address($address text) public view returns (id uuid, age int, name text, post_count int) {
+    for $row in SELECT id, age, name, post_count FROM users WHERE address = $address {
+        return $row.id, $row.age, $row.name, $row.post_count; // will return on the first iteration
+    }
+
+    error(format('user owned by "%s" not found', $address));
+}
+
+// increment_post_count increments a user's post count, identified by the owner.
+// it returns the user id and the new post count
+// MUTABLE
+procedure increment_post_count($address text) private returns (id uuid, post_count int) {
+    UPDATE users SET post_count = post_count+1 WHERE address = $address;
+
+    for $row in select id, post_count from users where address = $address {
+        return $row.id, $row.post_count;
+    }
+
+    error(format('user owned by "%s" not found', $address));
+}
+
+// create_post creates a post
+// MUTABLE
+procedure create_post($content text) public {
+    $user_id uuid;
+    $post_count int;
+    $user_id, $post_count := increment_post_count(@caller);
+
+    INSERT INTO posts (id, content, author_id, post_num)
+    VALUES (uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid), $content, $user_id, $post_count);
+}
+
+// get_users by age gets users of a certain age
+procedure get_users_by_age($age int) public view returns table(id uuid, name text, address text, post_count int) {
+    return SELECT id, name, address, post_count FROM users WHERE age = $age;
+}
+
+procedure get_recent_posts($username text) public view returns table(id uuid, content text, post_num int) {
+    return SELECT p.id, p.content, p.post_num
+        FROM posts AS p INNER JOIN users AS u ON p.author_id = u.id
+        WHERE u.name = $username
+        ORDER BY p.post_num DESC;
+}
+
+// get_recent_posts_by_size gets the $limit most recent posts from a user larger than size $size
+// this obviously could be written more simply and efficiently with pure SQL.
+// but the intent is to test RETURN NEXT and loops over procedures
+procedure get_recent_posts_by_size($username text, $size int, $limit int) public view returns table(id uuid, content text) {
+    // set max limit of 50
+    if $limit > 50 {
+        $limit := 50;
+    }
+
+    $count int := 0;
+    for $row in SELECT * FROM get_recent_posts($username) ORDER BY post_num DESC {
+        if $count == $limit {
+            break;
+        }
+        if length($row.content) >= $size {
+            $count := $count + 1;
+            return next $row.id, $row.content;
+        }
+    }
+}
+
+// reverse_latest_posts gets the $limit most recent posts,
+// but returns them in the order of oldest first. This is very useless
+// and inefficient, but it is intended to test arrays.
+procedure reverse_latest_posts($username text, $limit int) public view returns (content text[]) {
+    $content text[];
+
+    // we need to re-apply ordering here since Postgres doesn't guarantee ordering
+    // propagates from subqueries and procedures.
+    for $post in select * from get_recent_posts($username) order by post_num DESC {
+        $content := array_append($content, $post.content);
+    }
+
+    return reverse_array($content);
+}
+
+// reverse_array reverses the order of an array.
+// This is intended to test array operations
+procedure reverse_array($arr text[]) public view returns (reversed text[]) {
+    $rev text[];
+
+    for $i in 1..array_length($arr) {
+        $rev := array_prepend($arr[$i], $rev);
+    }
+
+    return $rev;
+}

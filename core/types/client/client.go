@@ -16,7 +16,7 @@ import (
 
 // Client defines methods are used to talk to a Kwil provider.
 type Client interface {
-	// DEPRECATED: Use Call instead.
+	// CallAction. Deprecated: Use Call instead.
 	CallAction(ctx context.Context, dbid string, action string, inputs []any) (*Records, error)
 	Call(ctx context.Context, dbid string, procedure string, inputs []any) (*Records, error)
 	ChainID() string
