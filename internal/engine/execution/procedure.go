@@ -92,7 +92,7 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 		if action.IsOwnerOnly() {
 			instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
 				if !bytes.Equal(scope.Signer, owner) {
-					return fmt.Errorf("cannot call owner procedure, not owner")
+					return fmt.Errorf("cannot call owner action, not owner")
 				}
 
 				return nil
@@ -141,7 +141,7 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 					}
 				}
 				if calledAction == nil {
-					return nil, fmt.Errorf(`procedure "%s" not found`, stmt.Action)
+					return nil, fmt.Errorf(`action "%s" not found`, stmt.Action)
 				}
 
 				// we leave the namespace and receivers empty, since action calls can only
@@ -169,7 +169,7 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 // Call executes an action.
 func (p *preparedAction) call(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB, inputs []any) error {
 	if len(inputs) != len(p.parameters) {
-		return fmt.Errorf(`%w: procedure "%s" requires %d arguments, but %d were provided`, ErrIncorrectNumberOfArguments, p.name, len(p.parameters), len(inputs))
+		return fmt.Errorf(`%w: action "%s" requires %d arguments, but %d were provided`, ErrIncorrectNumberOfArguments, p.name, len(p.parameters), len(inputs))
 	}
 
 	for i, param := range p.parameters {
@@ -262,7 +262,7 @@ func (e *callMethod) execute(scope *precompiles.ProcedureContext, global *Global
 	if e.Namespace == "" {
 		procedure, ok := dataset.actions[e.Method]
 		if !ok {
-			return fmt.Errorf(`procedure "%s" not found`, e.Method)
+			return fmt.Errorf(`action "%s" not found`, e.Method)
 		}
 
 		err = procedure.call(newScope, global, db, inputs)
@@ -286,7 +286,7 @@ func (e *callMethod) execute(scope *precompiles.ProcedureContext, global *Global
 	scope.Result = newScope.Result
 
 	if len(e.Receivers) > len(results) {
-		return fmt.Errorf(`%w: procedure "%s" returned %d values, but only %d receivers were specified`, ErrIncorrectNumberOfArguments, e.Method, len(results), len(e.Receivers))
+		return fmt.Errorf(`%w: action "%s" returned %d values, but only %d receivers were specified`, ErrIncorrectNumberOfArguments, e.Method, len(results), len(e.Receivers))
 	}
 
 	// Make the result available to either subsequent instructions or as the FinalResult.
