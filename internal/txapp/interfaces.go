@@ -5,7 +5,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/abci/meta"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
@@ -63,13 +62,6 @@ var (
 	createResolution                 = voting.CreateResolution
 	approveResolution                = voting.ApproveResolution
 	getVoterPower                    = voting.GetValidatorPower
-
-	// chain metadata
-	getChainState = meta.GetChainState
-	setChainState = meta.SetChainState
-	storeDiff     = meta.StoreDiff
-	loadParams    = meta.LoadParams
-	storeParams   = meta.StoreParams
 
 	// account functions
 	getAccount = accounts.GetAccount

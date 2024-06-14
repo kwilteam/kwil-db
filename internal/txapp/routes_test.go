@@ -7,6 +7,7 @@ import (
 
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -199,7 +200,9 @@ func Test_Routes(t *testing.T) {
 				},
 			},
 			ctx: TxContext{
-				Proposer: validatorSigner1().Identity(),
+				BlockContext: &common.BlockContext{
+					Proposer: validatorSigner1().Identity(),
+				},
 			},
 			from: validatorSigner1(),
 		},
@@ -235,7 +238,9 @@ func Test_Routes(t *testing.T) {
 				},
 			},
 			ctx: TxContext{
-				Proposer: validatorSigner1().Identity(),
+				BlockContext: &common.BlockContext{
+					Proposer: validatorSigner1().Identity(),
+				},
 			},
 			from: validatorSigner2(),
 			err:  ErrCallerNotProposer,
@@ -277,7 +282,7 @@ func Test_Routes(t *testing.T) {
 			}
 
 			tc.fn(t, func(app *TxApp) {
-				app.currentTx = &mockOuterTx{&mockTx{&mockDb{}}} // hack to trick txapp that we are in a session
+				db := &mockTx{&mockDb{}}
 
 				// since every test case needs an account store, we'll just create a mock one here
 				// if one isn't provided
@@ -288,7 +293,7 @@ func Test_Routes(t *testing.T) {
 					app.signer = validatorSigner1()
 				}
 
-				res := app.Execute(tc.ctx, tx)
+				res := app.Execute(tc.ctx, db, tx)
 				if tc.err != nil {
 					require.ErrorIs(t, tc.err, res.Error)
 				} else {

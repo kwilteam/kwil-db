@@ -21,6 +21,8 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/common/sql"
+
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -53,43 +55,44 @@ type Broadcaster interface {
 // TxApp is the main Kwil application.
 type TxApp interface {
 	// AccountInfo gets uncommitted information about an account.
-	AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
+	AccountInfo(ctx context.Context, db sql.DB, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
 	// Price gets the estimated fee for a transaction.
-	Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
+	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
+	GetValidators(ctx context.Context, db sql.DB) ([]*types.Validator, error)
 }
 
-// ValidatorStore gets data about the local validators.
-type ValidatorStore interface {
-	GetValidators(ctx context.Context) ([]*types.Validator, error)
-}
-
-func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, app TxApp, validatorStore ValidatorStore, signer *auth.Ed25519Signer, chainID string) *EventBroadcaster {
+func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, app TxApp, signer *auth.Ed25519Signer, chainID string) *EventBroadcaster {
 	return &EventBroadcaster{
-		store:          store,
-		broadcaster:    broadcaster,
-		validatorStore: validatorStore,
-		signer:         signer,
-		chainID:        chainID,
-		app:            app,
+		store:       store,
+		broadcaster: broadcaster,
+		signer:      signer,
+		chainID:     chainID,
+		app:         app,
 	}
 }
 
 // EventBroadcaster manages broadcasting events to the Kwil network.
 type EventBroadcaster struct {
-	store          EventStore
-	broadcaster    Broadcaster
-	validatorStore ValidatorStore
-	signer         *auth.Ed25519Signer
-	chainID        string
-	app            TxApp
+	store       EventStore
+	broadcaster Broadcaster
+	signer      *auth.Ed25519Signer
+	chainID     string
+	app         TxApp
 }
 
 // RunBroadcast tells the EventBroadcaster to broadcast any events it wishes.
 // It implements Kwil's abci.CommitHook function signature.
 // If the node is not a validator, it will do nothing.
 // It broadcasts votes for the existing resolutions.
-func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) error {
-	validators, err := e.validatorStore.GetValidators(ctx)
+func (e *EventBroadcaster) RunBroadcast(ctx context.Context, db sql.DB, proposer []byte) error {
+	readTx, err := db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	// even though this can technically write data, we always want to rollback here
+	defer readTx.Rollback(ctx)
+
+	validators, err := e.app.GetValidators(ctx, readTx)
 	if err != nil {
 		return err
 	}
@@ -114,7 +117,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) er
 	// in the on-going block. This probably is a temporary restriction until
 	// we figure out a better way to track both
 	// mempool(uncommitted), committed and proposer introduced txns.
-	if bytes.Equal(Proposer, e.signer.Identity()) {
+	if bytes.Equal(proposer, e.signer.Identity()) {
 		return nil
 	}
 
@@ -134,7 +137,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) er
 		ids = ids[:maxVoteIDsPerTx]
 	}
 
-	bal, nonce, err := e.app.AccountInfo(ctx, e.signer.Identity(), true)
+	bal, nonce, err := e.app.AccountInfo(ctx, readTx, e.signer.Identity(), true)
 	if err != nil {
 		return err
 	}
@@ -145,7 +148,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, Proposer []byte) er
 	}
 
 	// Get the fee estimate
-	fee, err := e.app.Price(ctx, tx)
+	fee, err := e.app.Price(ctx, readTx, tx)
 	if err != nil {
 		return err
 	}

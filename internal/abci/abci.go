@@ -3,6 +3,7 @@ package abci
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/common/chain/forks"
 	"github.com/kwilteam/kwil-db/common/ident"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
@@ -26,6 +28,7 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/consensus"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
+	"github.com/kwilteam/kwil-db/internal/abci/meta"
 	"github.com/kwilteam/kwil-db/internal/statesync"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/version"
@@ -50,13 +53,15 @@ type AbciConfig struct {
 }
 
 func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule, statesyncer StateSyncModule,
-	txRouter TxApp, consensusParams *chain.ConsensusParams, log log.Logger) (*AbciApp, error) {
+	txRouter TxApp, consensusParams *chain.ConsensusParams, db DB, log log.Logger) (*AbciApp, error) {
 	app := &AbciApp{
+		db:              db,
 		cfg:             *cfg,
 		statesyncer:     statesyncer,
 		snapshotter:     snapshotter,
 		txApp:           txRouter,
 		consensusParams: consensusParams,
+		appHash:         cfg.GenesisAppHash,
 
 		log: log,
 
@@ -64,13 +69,19 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		txCache:                  make(map[string]bool),
 	}
 
+	tx, err := db.BeginOuterTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin outer tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	app.forks.FromMap(cfg.ForkHeights)
 
 	// Enable any dynamically registered payloads, encoders, etc. from
 	// extension-defined forks that must be enabled by the current height. In
 	// addition to node restart, this is where forks with genesis height (0)
 	// activation are enabled since the first FinalizeBlock is for height 1.
-	height, appHash, err := app.txApp.ChainInfo(ctx)
+	height, appHash, err := meta.GetChainState(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -112,18 +123,38 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		// height, these updates would already have been applied.
 	}
 
-	app.height.Store(height)
-
-	netParams, err := app.txApp.NetworkParams(ctx) // ensure the network params are loaded
-	if err != nil {
+	// we need to persist the genesis consensus params if they are not already
+	networkParams, err := meta.LoadParams(ctx, tx)
+	if err == meta.ErrParamsNotFound {
+		// we need to store the genesis network params
+		err = meta.StoreParams(ctx, tx, &common.NetworkParameters{
+			MaxBlockSize:     app.consensusParams.Block.MaxBytes,
+			JoinExpiry:       app.consensusParams.Validator.JoinExpiry,
+			VoteExpiry:       app.consensusParams.Votes.VoteExpiry,
+			DisabledGasCosts: app.consensusParams.WithoutGasCosts,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to store network params: %w", err)
+		}
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to load network params: %w", err)
 	}
 
 	// we will apply the netParams to the consensus params
-	app.consensusParams.Block.MaxBytes = netParams.MaxBlockSize
-	app.consensusParams.Validator.JoinExpiry = netParams.JoinExpiry
-	app.consensusParams.Votes.VoteExpiry = netParams.VoteExpiry
-	app.consensusParams.WithoutGasCosts = netParams.DisabledGasCosts
+	app.consensusParams.Block.MaxBytes = networkParams.MaxBlockSize
+	app.consensusParams.Validator.JoinExpiry = networkParams.JoinExpiry
+	app.consensusParams.Votes.VoteExpiry = networkParams.VoteExpiry
+	app.consensusParams.WithoutGasCosts = networkParams.DisabledGasCosts
+
+	app.chainContext = &common.ChainContext{
+		ChainID:           cfg.ChainID,
+		NetworkParameters: networkParams,
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit outer tx: %w", err)
+	}
 
 	return app, nil
 }
@@ -149,11 +180,26 @@ func proposerAddrToString(addr []byte) string {
 }
 
 type AbciApp struct {
-	cfg   AbciConfig
-	forks forks.Forks
+	// db is a connection to the database
+	db DB
+	// consensusTx is the outermost transaction that wraps all other transactions
+	// that can modify state. It should be set in FinalizeBlock and committed in Commit.
+	consensusTx sql.OuterTx
+	// genesisTx is the transaction that is used at genesis, and in the first block.
+	genesisTx sql.OuterTx
+	// appHash is the hash of the application state
+	appHash []byte
+	// height is the current block height
+	height int64
+	cfg    AbciConfig
+	forks  forks.Forks
 
 	// snapshotter is the snapshotter module that handles snapshotting
 	snapshotter SnapshotModule
+
+	// replayingBlocks is a function that tells us whether we are in replay mode (syncing with the network),
+	// or whether we are in normal operation mode.
+	replayingBlocks func() bool
 
 	// bootstrapper is the bootstrapper module that handles bootstrapping the database
 	statesyncer StateSyncModule
@@ -163,10 +209,7 @@ type AbciApp struct {
 	txApp TxApp
 
 	consensusParams *chain.ConsensusParams
-
-	// height corresponds to the latest committed block. It is set in: the
-	// constructor, InitChain, and Commit.
-	height atomic.Int64
+	chainContext    *common.ChainContext
 
 	broadcastFn EventBroadcaster
 
@@ -179,6 +222,8 @@ type AbciApp struct {
 	// https://github.com/kwilteam/kwil-db/issues/714
 	txCache   map[string]bool
 	txCacheMu sync.RWMutex
+	// halted is set to true when the network is halted for migration.
+	halted atomic.Bool
 }
 
 func (a *AbciApp) ChainID() string {
@@ -235,7 +280,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	logger := a.log.With(zap.Bool("recheck", !newTx))
 	logger.Debug("check tx")
 
-	if a.forks.IsHalt(uint64(a.height.Load())) {
+	if a.halted.Load() {
 		return &abciTypes.ResponseCheckTx{Code: codeInvalidTxType.Uint32(), Log: "network is halted for migration"}, nil
 	}
 
@@ -282,7 +327,13 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		logger.Info("Recheck", zap.String("sender", hex.EncodeToString(tx.Sender)), zap.Uint64("nonce", tx.Body.Nonce), zap.String("payloadType", tx.Body.PayloadType.String()))
 	}
 
-	err = a.txApp.ApplyMempool(ctx, tx)
+	readTx, err := a.db.BeginReadTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin read tx: %w", err)
+	}
+	defer readTx.Rollback(ctx) // always rollback since we are read-only
+
+	err = a.txApp.ApplyMempool(ctx, readTx, tx)
 	if err != nil {
 		if errors.Is(err, transactions.ErrInvalidNonce) {
 			code = codeInvalidNonce
@@ -316,6 +367,20 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinalizeBlock) (*abciTypes.ResponseFinalizeBlock, error) {
 	logger := a.log.With(zap.String("stage", "ABCI FinalizeBlock"), zap.Int64("height", req.Height))
 
+	if a.genesisTx != nil {
+		// if we are in the first block, we use the genesisTx.
+		// This is to prevent a bug where a node crashing between InitChain and
+		// genesis is unable to recover.
+		a.consensusTx = a.genesisTx
+		a.genesisTx = nil
+	} else {
+		var err error
+		a.consensusTx, err = a.db.BeginOuterTx(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("begin outer tx failed: %w", err)
+		}
+	}
+
 	err := a.txApp.Begin(ctx, req.Height)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx commit failed: %w", err)
@@ -331,7 +396,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 	oldNetworkParams := networkParams.Copy()
 
-	initialValidators, err := a.txApp.ConsensusValidators(ctx)
+	initialValidators, err := a.txApp.GetValidators(ctx, a.consensusTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current validators: %w", err)
 	}
@@ -350,7 +415,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 		const punishDelta = 1
 		newPower := ev.Validator.Power - punishDelta
-		if err = a.txApp.UpdateValidator(ctx, pubkey, newPower); err != nil {
+		if err = a.txApp.UpdateValidator(ctx, a.consensusTx, pubkey, newPower); err != nil {
 			return nil, fmt.Errorf("failed to punish validator: %w", err)
 		}
 	}
@@ -365,6 +430,12 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	res := &abciTypes.ResponseFinalizeBlock{}
 
+	blockCtx := common.BlockContext{
+		ChainContext: a.chainContext,
+		Height:       req.Height,
+		Proposer:     proposerPubKey,
+	}
+
 	for _, tx := range req.Txs {
 		decoded := &transactions.Transaction{}
 		err := decoded.UnmarshalBinary(tx)
@@ -373,12 +444,11 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 
 		txRes := a.txApp.Execute(txapp.TxContext{
-			BlockHeight:     req.Height,
-			Proposer:        proposerPubKey,
 			ConsensusParams: a.consensusParams,
 			Ctx:             ctx,
 			TxID:            tmhash.Sum(tx), // use cometbft TmHash to get the same hash as is indexed
-		}, decoded)
+			BlockContext:    &blockCtx,
+		}, a.consensusTx, decoded)
 
 		abciRes := &abciTypes.ExecTxResult{}
 		if txRes.Error != nil {
@@ -424,21 +494,50 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	// Broadcast any events that have not been broadcasted yet
 	if a.broadcastFn != nil && len(proposerPubKey) > 0 {
-		err := a.broadcastFn(ctx, proposerPubKey)
+		err := a.broadcastFn(ctx, a.consensusTx, proposerPubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to broadcast events: %w", err)
 		}
 	}
 
+	a.log.Debug("Finalize(start)", log.Int("height", a.height), log.String("appHash", hex.EncodeToString(a.appHash)))
 	// Get the new validator set and apphash from txApp.
-	appHash, finalValidators, err := a.txApp.Finalize(ctx, req.Height, oldNetworkParams, networkParams)
+	finalValidators, err := a.txApp.Finalize(ctx, a.consensusTx, &blockCtx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to finalize transaction app: %w", err)
 	}
-	res.AppHash = appHash
+
+	// store any changes to the network params
+	err = meta.StoreDiff(ctx, a.consensusTx, oldNetworkParams, networkParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to store network params diff: %w", err)
+	}
+
+	// While still in the DB transaction, update to this next height but dummy
+	// app hash. If we crash before Commit can store the next app hash that we
+	// get after Precommit, the startup handshake's call to Info will detect the
+	// mismatch. That requires manual recovery (drop state and reapply), but it
+	// at least detects this recorded height rather than not recognizing that we
+	// have committed the data for this block at all.
+	err = meta.SetChainState(ctx, a.consensusTx, req.Height, []byte{0x42})
+	if err != nil {
+		return nil, err
+	}
+
+	// we now get the apphash by calling precommit on the transaction
+	appHash, err := a.consensusTx.Precommit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to precommit transaction: %w", err)
+	}
+
+	newAppHash := sha256.Sum256(append(a.appHash, appHash...))
+	res.AppHash = newAppHash[:]
+	a.appHash = newAppHash[:]
+	a.height = req.Height
 
 	if a.forks.BeginsHalt(uint64(req.Height) - 1) {
 		a.log.Info("This is the last block before halt.")
+		a.halted.Store(true)
 	}
 
 	valUpdates := validatorUpdates(initialValidators, finalValidators)
@@ -504,11 +603,55 @@ func validatorUpdates(initial, final []*types.Validator) []*types.Validator {
 // Commit persists the state changes. This is called under mempool lock in
 // cometbft, unlike FinalizeBlock.
 func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abciTypes.ResponseCommit, error) {
-	height, err := a.txApp.Commit(ctx)
+	err := a.consensusTx.Commit(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction app: %w", err)
 	}
-	a.height.Store(height)
+
+	// we need to re-open a new transaction just to write the apphash
+	// TODO: it would be great to have a way to commit the apphash without
+	// opening a new transaction. This could leave us in a state where data is
+	// committed but the apphash is not, which would essentially nuke the chain.
+	tx, err := a.db.BeginOuterTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin outer tx: %w", err)
+	}
+
+	err = meta.SetChainState(ctx, tx, a.height, a.appHash)
+	if err != nil {
+		err2 := tx.Rollback(ctx)
+		if err2 != nil {
+			return nil, fmt.Errorf("failed to rollback transaction app: %w", err2)
+		}
+		return nil, fmt.Errorf("failed to set chain state: %w", err)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction app: %w", err)
+	}
+
+	a.txApp.Commit(ctx)
+
+	if a.snapshotter != nil && a.replayingBlocks != nil &&
+		a.snapshotter.IsSnapshotDue(uint64(a.height)) && !a.replayingBlocks() {
+		// we make a snapshot tx but don't directly use it. This is because under the hood,
+		// we are using the pg_dump executable to create the snapshot, and we are simply
+		// giving pg_dump the snapshot ID to guarantee it has an isolated view of the database.
+		snapshotTx, snapshotId, err := a.db.BeginSnapshotTx(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to begin snapshot tx: %w", err)
+		}
+		defer snapshotTx.Rollback(ctx) // always rollback, since this is just for view isolation
+
+		err = a.snapshotter.CreateSnapshot(ctx, uint64(a.height), snapshotId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create snapshot: %w", err)
+		}
+
+		a.log.Info("created snapshot", zap.Uint64("height", uint64(a.height)), zap.String("snapshot_id", snapshotId))
+	}
+
 	// If a broadcast was accepted during execution of that block, it will be
 	// rechecked and possibly evicted immediately following our commit Response.
 
@@ -532,12 +675,21 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 // stored app hash corresponds to the block at height+1. This is simple, but the
 // discrepancy is worth noting.
 func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciTypes.ResponseInfo, error) {
-	height, appHash, err := a.txApp.ChainInfo(ctx)
+	readTx, err := a.db.BeginReadTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin read tx: %w", err)
+	}
+	defer readTx.Rollback(ctx) // always rollback since we are read-only
+
+	height, appHash, err := meta.GetChainState(ctx, readTx)
 	if err != nil {
 		return nil, fmt.Errorf("chainInfo: %w", err)
 	}
+	if height == -1 {
+		height = 0 // for ChainInfo caller, non-negative is expected for genesis
+	}
 
-	validators, err := a.txApp.GetValidators(ctx)
+	validators, err := a.txApp.GetValidators(ctx, readTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get validators: %w", err)
 	}
@@ -565,6 +717,11 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 	logger := a.log.With(zap.String("stage", "ABCI InitChain"), zap.Int64("height", req.InitialHeight))
 	logger.Debug("", zap.String("ChainId", req.ChainId))
 	// maybe verify a.cfg.ChainID against the one in the request
+	var err error
+	a.genesisTx, err = a.db.BeginOuterTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin outer tx failed: %w", err)
+	}
 
 	// Store the genesis account allocations to the datastore. These are
 	// reflected in the genesis app hash.
@@ -599,8 +756,22 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 		a.validatorAddressToPubKey[addr] = pk
 	}
 
-	if err := a.txApp.GenesisInit(ctx, vldtrs, genesisAllocs, req.InitialHeight,
-		a.cfg.GenesisAppHash); err != nil {
+	// With the genesisTx not being committed until the first FinalizeBlock, we
+	// expect no existing chain state in the application (postgres).
+	height, appHash, err := meta.GetChainState(ctx, a.genesisTx)
+	if err != nil {
+		return nil, fmt.Errorf("error getting database height: %s", err.Error())
+	}
+
+	// First app hash and height are stored in FinalizeBlock for first block.
+	if height != -1 {
+		return nil, fmt.Errorf("expected database to be uninitialized, but had height %d", height)
+	}
+	if len(appHash) != 0 {
+		return nil, fmt.Errorf("expected NULL app hash, got %x", appHash)
+	}
+
+	if err := a.txApp.GenesisInit(ctx, a.genesisTx, vldtrs, genesisAllocs, req.InitialHeight); err != nil {
 		return nil, fmt.Errorf("txApp.GenesisInit failed: %w", err)
 	}
 
@@ -610,7 +781,6 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 	}
 
 	logger.Info("initialized chain", zap.String("app hash", fmt.Sprintf("%x", a.cfg.GenesisAppHash)))
-	a.height.Store(req.InitialHeight)
 
 	return &abciTypes.ResponseInitChain{
 		Validators: valUpdates,
@@ -640,9 +810,15 @@ func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.Request
 	}
 
 	if dbRestored {
+		readTx, err := a.db.BeginReadTx(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to begin read tx: %w", err)
+		}
+		defer readTx.Rollback(ctx) // always rollback since we are read-only
+
 		// DB restored successfully from the snapshot
 		// Update the engine's in-memory info with the new database state
-		err := a.txApp.Reload(ctx)
+		err = a.txApp.Reload(ctx, readTx)
 		if err != nil {
 			return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ABORT}, err
 		}
@@ -795,7 +971,7 @@ type indexedTxn struct {
 // This also includes the proposer's transactions, which are not in the mempool.
 // The transaction ordering is as follows:
 // MempoolProposerTxns, ProposerInjectedTxns, MempoolTxns by other senders
-func (a *AbciApp) prepareBlockTransactions(ctx context.Context, txs [][]byte, log *log.Logger, maxTxBytes int64, proposerAddr []byte) [][]byte {
+func (a *AbciApp) prepareBlockTransactions(ctx context.Context, txs [][]byte, log *log.Logger, maxTxBytes int64, proposerAddr []byte, height int64) [][]byte {
 	// Unmarshal and index the transactions.
 	var okTxns []*indexedTxn
 	var i int
@@ -829,6 +1005,13 @@ func (a *AbciApp) prepareBlockTransactions(ctx context.Context, txs [][]byte, lo
 	i = 0
 	proposerNonce := uint64(0)
 
+	readTx, err := a.db.BeginReadTx(ctx)
+	if err != nil {
+		log.Error("failed to begin read tx", zap.Error(err))
+		return nil
+	}
+	defer readTx.Rollback(ctx) // always rollback since we are read-only
+
 	// Enforce nonce ordering and remove transactions from unfunded accounts.
 	for _, tx := range okTxns {
 		if i > 0 && tx.Body.Nonce == nonces[i-1] && bytes.Equal(tx.Sender, okTxns[i-1].Sender) {
@@ -838,7 +1021,7 @@ func (a *AbciApp) prepareBlockTransactions(ctx context.Context, txs [][]byte, lo
 
 		// Drop transactions from unfunded accounts in gasEnabled mode
 		if a.cfg.GasEnabled {
-			balance, nonce, err := a.txApp.ConsensusAccountInfo(context.Background(), tx.Sender)
+			balance, nonce, err := a.txApp.AccountInfo(ctx, readTx, tx.Sender, false)
 			if err != nil {
 				log.Error("failed to get account info", zap.Error(err))
 				continue
@@ -881,7 +1064,11 @@ func (a *AbciApp) prepareBlockTransactions(ctx context.Context, txs [][]byte, lo
 		finalTxs = append(finalTxs, txBts)
 	}
 
-	proposerTxs, err := a.txApp.ProposerTxs(context.Background(), proposerNonce, maxTxBytes, proposerAddr)
+	proposerTxs, err := a.txApp.ProposerTxs(ctx, readTx, proposerNonce, maxTxBytes, &common.BlockContext{
+		ChainContext: a.chainContext,
+		Height:       height,
+		Proposer:     proposerAddr,
+	})
 	if err != nil {
 		log.Error("failed to get proposer transactions", zap.Error(err))
 	}
@@ -941,7 +1128,7 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		return &abciTypes.ResponsePrepareProposal{}, nil
 	}
 
-	okTxns := a.prepareBlockTransactions(ctx, req.Txs, &a.log, req.MaxTxBytes, pubKey)
+	okTxns := a.prepareBlockTransactions(ctx, req.Txs, &a.log, req.MaxTxBytes, pubKey, req.Height)
 	if len(okTxns) != len(req.Txs) {
 		logger.Info("PrepareProposal: number of transactions in proposed block has changed!",
 			zap.Int("in", len(req.Txs)), zap.Int("out", len(okTxns)))
@@ -965,12 +1152,18 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 		return fmt.Errorf("failed to group transaction by sender: %w", err)
 	}
 
+	readTx, err := a.db.BeginReadTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin read tx: %w", err)
+	}
+	defer readTx.Rollback(ctx) // always rollback since we are read-only
+
 	// ensure there are no gaps in an account's nonce, either from the
 	// previous best confirmed or within this block. Our current transaction
 	// execution does not update an accounts nonce in state unless it is the
 	// next nonce. Delivering transactions to a block in that way cannot happen.
 	for sender, txs := range grouped {
-		_, nonce, err := a.txApp.ConsensusAccountInfo(ctx, []byte(sender))
+		_, nonce, err := a.txApp.AccountInfo(ctx, readTx, []byte(sender), false)
 		if err != nil {
 			return fmt.Errorf("failed to get account: %w", err)
 		}
@@ -1083,7 +1276,7 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 	return &abciTypes.ResponseQuery{}, nil
 }
 
-type EventBroadcaster func(ctx context.Context, proposer []byte) error
+type EventBroadcaster func(ctx context.Context, db sql.DB, proposer []byte) error
 
 func (a *AbciApp) SetEventBroadcaster(fn EventBroadcaster) {
 	a.broadcastFn = fn
@@ -1094,4 +1287,12 @@ func (a *AbciApp) TxInMempool(txHash []byte) bool {
 	defer a.txCacheMu.Unlock()
 	_, ok := a.txCache[string(txHash)]
 	return ok
+}
+
+// SetReplayStatusChecker sets the function to check if the node is in replay mode.
+// This has to be set here because it is a CometBFT node function. Since ABCI is
+// a dependency to CometBFT, this is a circular dependency, so we have to set it
+// here.
+func (a *AbciApp) SetReplayStatusChecker(fn func() bool) {
+	a.replayingBlocks = fn
 }

@@ -189,8 +189,8 @@ type BlockchainTransactor interface {
 }
 
 type NodeApplication interface {
-	AccountInfo(ctx context.Context, identifier []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
-	Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
+	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
+	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
 }
 
 func (svc *Service) ChainInfo(ctx context.Context, req *userjson.ChainInfoRequest) (*userjson.ChainInfoResponse, *jsonrpc.Error) {
@@ -298,7 +298,13 @@ func (svc *Service) BroadcastRaw(ctx context.Context, req *BroadcastRawRequest) 
 func (svc *Service) EstimatePrice(ctx context.Context, req *userjson.EstimatePriceRequest) (*userjson.EstimatePriceResponse, *jsonrpc.Error) {
 	svc.log.Debug("Estimating price", log.String("payload_type", req.Tx.Body.PayloadType))
 
-	price, err := svc.nodeApp.Price(ctx, req.Tx)
+	readTx, err := svc.db.BeginReadTx(ctx)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to create read tx", nil)
+	}
+	defer readTx.Rollback(ctx)
+
+	price, err := svc.nodeApp.Price(ctx, readTx, req.Tx)
 	if err != nil {
 		svc.log.Error("failed to estimate price", log.Error(err)) // why not tell the client though?
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to estimate price", nil)
@@ -345,7 +351,13 @@ func (svc *Service) Account(ctx context.Context, req *userjson.AccountRequest) (
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "missing account identifier", nil)
 	}
 
-	balance, nonce, err := svc.nodeApp.AccountInfo(ctx, req.Identifier, uncommitted)
+	readTx, err := svc.db.BeginReadTx(ctx)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to create read tx", nil)
+	}
+	defer readTx.Rollback(ctx)
+
+	balance, nonce, err := svc.nodeApp.AccountInfo(ctx, readTx, req.Identifier, uncommitted)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
 	}
