@@ -41,13 +41,11 @@ type App struct {
 // router and extension implementations in extensions/consensus.
 type TxContext struct {
 	Ctx context.Context
-	// BlockHeight gets the height of the current block.
-	BlockHeight int64
-	// Proposer gets the proposer public key of the current block.
-	Proposer []byte
 	// ConsensusParams holds network level parameters that can be evolved
 	// over the lifetime of a network.
 	ConsensusParams *chain.ConsensusParams
+	// BlockContext is the context of the current block.
+	BlockContext *BlockContext
 	// TxID is the ID of the current transaction.
 	TxID []byte
 }

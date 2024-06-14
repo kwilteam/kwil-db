@@ -11,6 +11,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/ident"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -46,7 +47,7 @@ type Route interface {
 	// All transactions should spend, regardless of success or failure.
 	// Therefore, a nested transaction should be used for all database
 	// operations after the initial checkAndSpend.
-	Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse
+	Execute(ctx TxContext, router *TxApp, db sql.DB, tx *transactions.Transaction) *TxResponse
 }
 
 // NewRoute creates a complete Route for the TxApp from a consensus.Route.
@@ -79,7 +80,7 @@ type ConsensusParams struct {
 }
 
 type Pricer interface {
-	Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error)
+	Price(ctx context.Context, router *TxApp, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
 }
 
 func codeForEngineError(err error) transactions.TxCode {
@@ -143,20 +144,20 @@ type baseRoute struct {
 	consensus.Route
 }
 
-func (d *baseRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (d *baseRoute) Price(ctx context.Context, router *TxApp, db sql.DB, tx *transactions.Transaction) (*big.Int, error) {
 	return d.Route.Price(ctx, &common.App{
 		Service: &common.Service{
 			Logger:           router.log.Named("route_" + d.Name()).Sugar(),
 			ExtensionConfigs: router.extensionConfigs,
 			Identity:         router.signer.Identity(),
 		},
-		DB:     router.currentTx,
+		DB:     db,
 		Engine: router.Engine,
 	}, tx)
 }
 
-func (d *baseRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
-	dbTx, err := router.currentTx.BeginTx(ctx.Ctx)
+func (d *baseRoute) Execute(ctx TxContext, router *TxApp, db sql.DB, tx *transactions.Transaction) *TxResponse {
+	dbTx, err := db.BeginTx(ctx.Ctx)
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
 	}
@@ -381,7 +382,7 @@ func (d *executeActionRoute) InTx(ctx common.TxContext, app *common.App, tx *tra
 				Signer: tx.Sender,
 				Caller: d.identifier,
 				TxID:   hex.EncodeToString(ctx.TxID),
-				Height: ctx.BlockHeight,
+				Height: ctx.BlockContext.Height,
 			},
 		})
 		if err != nil {
@@ -503,7 +504,7 @@ func (d *validatorJoinRoute) InTx(ctx common.TxContext, app *common.App, tx *tra
 		Type: voting.ValidatorJoinEventType,
 	}
 
-	err = createResolution(ctx.Ctx, app.DB, event, ctx.BlockHeight+ctx.ConsensusParams.Validator.JoinExpiry, tx.Sender)
+	err = createResolution(ctx.Ctx, app.DB, event, ctx.BlockContext.Height+ctx.BlockContext.ChainContext.NetworkParameters.JoinExpiry, tx.Sender)
 	if err != nil {
 		return transactions.CodeUnknownError, err
 	}
@@ -625,7 +626,7 @@ func (d *validatorRemoveRoute) InTx(ctx common.TxContext, app *common.App, tx *t
 	// officially "started" by the user. If it fails because it already exists,
 	// then we should do nothing
 
-	err = createResolution(ctx.Ctx, app.DB, event, ctx.BlockHeight+ctx.ConsensusParams.Validator.JoinExpiry, tx.Sender)
+	err = createResolution(ctx.Ctx, app.DB, event, ctx.BlockContext.Height+ctx.BlockContext.ChainContext.NetworkParameters.JoinExpiry, tx.Sender)
 	if errors.Is(err, voting.ErrResolutionAlreadyHasBody) {
 		app.Service.Logger.Debug("validator removal resolution already exists")
 	} else if err != nil {
@@ -773,7 +774,7 @@ func (d *validatorVoteBodiesRoute) Price(ctx context.Context, _ *common.App, tx 
 
 func (d *validatorVoteBodiesRoute) PreTx(ctx common.TxContext, _ *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	// Only proposer can issue a VoteBody transaction.
-	if !bytes.Equal(tx.Sender, ctx.Proposer) {
+	if !bytes.Equal(tx.Sender, ctx.BlockContext.Proposer) {
 		return transactions.CodeInvalidSender, ErrCallerNotProposer
 	}
 
@@ -805,7 +806,7 @@ func (d *validatorVoteBodiesRoute) InTx(ctx common.TxContext, app *common.App, t
 			Body: event.Body,
 		}
 
-		expiryHeight := ctx.BlockHeight + resCfg.ExpirationPeriod
+		expiryHeight := ctx.BlockContext.Height + resCfg.ExpirationPeriod
 		err = createResolution(ctx.Ctx, app.DB, ev, expiryHeight, tx.Sender)
 		if err != nil {
 			return transactions.CodeUnknownError, err

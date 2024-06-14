@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
@@ -23,6 +24,12 @@ type SnapshotModule interface {
 
 	// Returns the snapshot chunk of index chunkId at a given height
 	LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) ([]byte, error)
+
+	// CreateSnapshot creates a snapshot of the current state.
+	CreateSnapshot(ctx context.Context, height uint64, snapshotID string) error
+
+	// IsSnapshotDue returns true if a snapshot is due at the given height.
+	IsSnapshotDue(height uint64) bool
 }
 
 // DBBootstrapModule is an interface for a struct that implements bootstrapping
@@ -38,44 +45,17 @@ type StateSyncModule interface {
 // It has methods for beginning and ending blocks, applying transactions,
 // and managing a mempool
 type TxApp interface {
-	// GenesisInit is used outside of the consensus thread, creating it's own
-	// transient outer DB transaction.
-	GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*types.Account, initialHeight int64, appHash []byte) error
-
-	// Read-only methods. Do NOT use these from consensus connection methods.
-	ChainInfo(ctx context.Context) (int64, []byte, error)
-	GetValidators(ctx context.Context) ([]*types.Validator, error)
-	AccountInfo(ctx context.Context, acctID []byte, unconfirmed bool) (balance *big.Int, nonce int64, err error)
-	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
-
-	// ProposerTxs is used when a validator prepares a block proposal This is
-	// prior to the Begin->Commit cycle, and as such does not use the DB
-	// transaction or a writer connection.
-	ProposerTxs(ctx context.Context, txNonce uint64, maxTxSize int64, proposerAddr []byte) ([][]byte, error)
-
-	// Begin signals that a new block has begun. The following methods are
-	// expected to use either an encompassing DB transaction started with Begin
-	// and ended with Commit.
+	AccountInfo(ctx context.Context, db sql.DB, acctID []byte, getUnconfirmed bool) (balance *big.Int, nonce int64, err error)
+	ApplyMempool(ctx context.Context, db sql.DB, tx *transactions.Transaction) error
 	Begin(ctx context.Context, height int64) error
-	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
-	UpdateValidator(ctx context.Context, validator []byte, power int64) error
-	Finalize(ctx context.Context, height int64, oldNetworkParams, newNetworkParams *common.NetworkParameters) (appHash []byte, validatorUpgrades []*types.Validator, err error)
-	Commit(ctx context.Context) (int64, error)
-
-	// ConsensusAccountInfo and ConsensusValidators are used in two different
-	// contexts, but always from the ABCI consensus connection. During block
-	// execution (between Begin and Commit) the active write transaction is used
-	// to read uncommitted data. From PrepareProposal and ProcessProposal, an
-	// ephemeral read-only transaction is created.
-	ConsensusAccountInfo(ctx context.Context, acctID []byte) (balance *big.Int, nonce int64, err error)
-	ConsensusValidators(ctx context.Context) ([]*types.Validator, error)
-
-	// Reload reloads the state of engine and txapp.
-	Reload(ctx context.Context) error
-	// NetworkParams returns the current network parameters.
-	NetworkParams(ctx context.Context) (*common.NetworkParameters, error)
-	// StoreNetworkParams stores the consensus params in the store.
-	StoreNetworkParams(ctx context.Context, params *common.NetworkParameters) error
+	Commit(ctx context.Context)
+	Execute(ctx txapp.TxContext, db sql.DB, tx *transactions.Transaction) *txapp.TxResponse
+	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators []*types.Validator, err error)
+	GenesisInit(ctx context.Context, db sql.DB, validators []*types.Validator, genesisAccounts []*types.Account, initialHeight int64) error
+	GetValidators(ctx context.Context, db sql.DB) ([]*types.Validator, error)
+	ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxTxsSize int64, block *common.BlockContext) ([][]byte, error)
+	Reload(ctx context.Context, db sql.DB) error
+	UpdateValidator(ctx context.Context, db sql.DB, validator []byte, power int64) error
 }
 
 // ConsensusParams returns kwil specific consensus parameters.
@@ -86,4 +66,16 @@ type ConsensusParams interface {
 	// for validator joins and resolutions.
 	// We may want these to be separate in the future.
 	VotingPeriod() int64
+}
+
+// DB is the interface for the main SQL database. All queries must be executed
+// from within a transaction. A DB can create read transactions or the special
+// two-phase outer write transaction.
+type DB interface {
+	sql.OuterTxMaker
+	sql.ReadTxMaker
+	sql.SnapshotTxMaker
+	sql.Executor
+	sql.TxMaker
+	AutoCommit(auto bool)
 }
