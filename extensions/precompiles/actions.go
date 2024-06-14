@@ -41,7 +41,7 @@ type DeploymentContext struct {
 	Schema *types.Schema
 }
 
-// ProcedureContext is the context for a procedure execution.
+// ProcedureContext is the context for a procedure and action execution.
 type ProcedureContext struct {
 	// Ctx is the context of the current execution.
 	Ctx context.Context
