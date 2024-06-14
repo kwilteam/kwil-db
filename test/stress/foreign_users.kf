@@ -1,0 +1,36 @@
+database foreign_users;
+
+// This schema implements a basic username registry, where a wallet can register one a unique
+// username.
+
+table users {
+    id uuid primary key,
+    name text maxlen(90) not null unique,
+    address text not null unique
+}
+
+// create_user creates a user in the database.
+// It is assigned a unique uuid.
+procedure create_user($name text) public {
+    // we will generate a uuid from the txid
+    INSERT INTO users (id, name, address)
+    VALUES (uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid), $name, @caller);
+}
+
+// get_user_by_name gets a user id  and address from a username
+procedure get_user_by_name($name text) public view returns (id uuid, address text) {
+    for $row in SELECT id, address FROM users WHERE name = $name {
+        return $row.id, $row.address; // will return on the first iteration
+    }
+
+    error(format('user "%s" not found', $name));
+}
+
+// get_user_by_owner gets a user id  and name by the owner
+procedure get_user_by_owner($address text) public view returns (id uuid, name text) {
+    for $row in SELECT id, name FROM users WHERE address = $address {
+        return $row.id, $row.name; // will return on the first iteration
+    }
+
+    error(format('user owned by "%s" not found', $address));
+}
