@@ -129,16 +129,32 @@ func StoreParams(ctx context.Context, db sql.DB, params *common.NetworkParameter
 	}
 	defer tx.Rollback(ctx)
 
-	for param, value := range map[string][]byte{
-		`max_block_size`:     {byte(params.MaxBlockSize)},
-		`join_expiry`:        {byte(params.JoinExpiry)},
-		`vote_expiry`:        {byte(params.VoteExpiry)},
-		`disabled_gas_costs`: {0},
-	} {
-		_, err = tx.Execute(ctx, upsertParam, param, value)
-		if err != nil {
-			return err
-		}
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, uint64(params.MaxBlockSize))
+	_, err = tx.Execute(ctx, upsertParam, `max_block_size`, buf)
+	if err != nil {
+		return err
+	}
+
+	binary.LittleEndian.PutUint64(buf, uint64(params.JoinExpiry))
+	_, err = tx.Execute(ctx, upsertParam, `join_expiry`, buf)
+	if err != nil {
+		return err
+	}
+
+	binary.LittleEndian.PutUint64(buf, uint64(params.VoteExpiry))
+	_, err = tx.Execute(ctx, upsertParam, `vote_expiry`, buf)
+	if err != nil {
+		return err
+	}
+
+	buf = make([]byte, 1)
+	if params.DisabledGasCosts {
+		buf[0] = 1
+	}
+	_, err = tx.Execute(ctx, upsertParam, `disabled_gas_costs`, buf)
+	if err != nil {
+		return err
 	}
 
 	return tx.Commit(ctx)
