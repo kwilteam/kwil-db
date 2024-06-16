@@ -454,10 +454,9 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 
 		txRes := a.txApp.Execute(txapp.TxContext{
-			ConsensusParams: a.consensusParams,
-			Ctx:             ctx,
-			TxID:            tmhash.Sum(tx), // use cometbft TmHash to get the same hash as is indexed
-			BlockContext:    &blockCtx,
+			Ctx:          ctx,
+			TxID:         tmhash.Sum(tx), // use cometbft TmHash to get the same hash as is indexed
+			BlockContext: &blockCtx,
 		}, a.consensusTx, decoded)
 
 		abciRes := &abciTypes.ExecTxResult{}
