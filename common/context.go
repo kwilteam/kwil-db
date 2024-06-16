@@ -1,6 +1,9 @@
 package common
 
 // ChainContext provides context for all chain operations.
+// Fields in ChainContext should never be mutated, except
+// NetworkParameters can be deterministically mutated as part
+// of block execution.
 type ChainContext struct {
 	// ChainID is the unique identifier for the chain.
 	ChainID string
