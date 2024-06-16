@@ -123,7 +123,10 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		// height, these updates would already have been applied.
 	}
 
-	// we need to persist the genesis consensus params if they are not already
+	// if the network params have never been stored (which is the case for a fresh network),
+	// we need to persist them for the first time. If they are found, we need to update our consensus params
+	// with whatever the value is, since the consensus params here are read from the genesis file, and
+	// may have been altered if this is not a new network.
 	networkParams, err := meta.LoadParams(ctx, tx)
 	if err == meta.ErrParamsNotFound {
 		// we need to store the genesis network params
@@ -136,15 +139,22 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		if err != nil {
 			return nil, fmt.Errorf("failed to store network params: %w", err)
 		}
+
+		networkParams = &common.NetworkParameters{
+			MaxBlockSize:     app.consensusParams.Block.MaxBytes,
+			JoinExpiry:       app.consensusParams.Validator.JoinExpiry,
+			VoteExpiry:       app.consensusParams.Votes.VoteExpiry,
+			DisabledGasCosts: app.consensusParams.WithoutGasCosts,
+		}
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to load network params: %w", err)
+	} else {
+		// we will apply the netParams to the consensus params
+		app.consensusParams.Block.MaxBytes = networkParams.MaxBlockSize
+		app.consensusParams.Validator.JoinExpiry = networkParams.JoinExpiry
+		app.consensusParams.Votes.VoteExpiry = networkParams.VoteExpiry
+		app.consensusParams.WithoutGasCosts = networkParams.DisabledGasCosts
 	}
-
-	// we will apply the netParams to the consensus params
-	app.consensusParams.Block.MaxBytes = networkParams.MaxBlockSize
-	app.consensusParams.Validator.JoinExpiry = networkParams.JoinExpiry
-	app.consensusParams.Votes.VoteExpiry = networkParams.VoteExpiry
-	app.consensusParams.WithoutGasCosts = networkParams.DisabledGasCosts
 
 	app.chainContext = &common.ChainContext{
 		ChainID:           cfg.ChainID,
