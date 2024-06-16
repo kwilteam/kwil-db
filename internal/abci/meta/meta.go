@@ -131,19 +131,19 @@ func StoreParams(ctx context.Context, db sql.DB, params *common.NetworkParameter
 
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, uint64(params.MaxBlockSize))
-	_, err = tx.Execute(ctx, upsertParam, `max_block_size`, buf)
+	_, err = tx.Execute(ctx, upsertParam, maxBlockSizeKey, buf)
 	if err != nil {
 		return err
 	}
 
 	binary.LittleEndian.PutUint64(buf, uint64(params.JoinExpiry))
-	_, err = tx.Execute(ctx, upsertParam, `join_expiry`, buf)
+	_, err = tx.Execute(ctx, upsertParam, joinExpiryKey, buf)
 	if err != nil {
 		return err
 	}
 
 	binary.LittleEndian.PutUint64(buf, uint64(params.VoteExpiry))
-	_, err = tx.Execute(ctx, upsertParam, `vote_expiry`, buf)
+	_, err = tx.Execute(ctx, upsertParam, voteExpiryKey, buf)
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func StoreParams(ctx context.Context, db sql.DB, params *common.NetworkParameter
 	if params.DisabledGasCosts {
 		buf[0] = 1
 	}
-	_, err = tx.Execute(ctx, upsertParam, `disabled_gas_costs`, buf)
+	_, err = tx.Execute(ctx, upsertParam, disabledGasKey, buf)
 	if err != nil {
 		return err
 	}
@@ -218,13 +218,13 @@ func LoadParams(ctx context.Context, db sql.Executor) (*common.NetworkParameters
 		}
 
 		switch param {
-		case `max_block_size`:
+		case maxBlockSizeKey:
 			params.MaxBlockSize = int64(binary.LittleEndian.Uint64(value))
-		case `join_expiry`:
+		case joinExpiryKey:
 			params.JoinExpiry = int64(binary.LittleEndian.Uint64(value))
-		case `vote_expiry`:
+		case voteExpiryKey:
 			params.VoteExpiry = int64(binary.LittleEndian.Uint64(value))
-		case `disabled_gas_costs`:
+		case disabledGasKey:
 			params.DisabledGasCosts = value[0] == 1
 		default:
 			return nil, fmt.Errorf("internal bug: unknown param name: %s", param)
@@ -240,19 +240,19 @@ func diff(original, new *common.NetworkParameters) map[string][]byte {
 	if original.MaxBlockSize != new.MaxBlockSize {
 		buf := make([]byte, 8)
 		binary.LittleEndian.PutUint64(buf, uint64(new.MaxBlockSize))
-		d[`max_block_size`] = buf
+		d[maxBlockSizeKey] = buf
 	}
 
 	if original.JoinExpiry != new.JoinExpiry {
 		buf := make([]byte, 8)
 		binary.LittleEndian.PutUint64(buf, uint64(new.JoinExpiry))
-		d[`join_expiry`] = buf
+		d[joinExpiryKey] = buf
 	}
 
 	if original.VoteExpiry != new.VoteExpiry {
 		buf := make([]byte, 8)
 		binary.LittleEndian.PutUint64(buf, uint64(new.VoteExpiry))
-		d[`vote_expiry`] = buf
+		d[voteExpiryKey] = buf
 	}
 
 	if original.DisabledGasCosts != new.DisabledGasCosts {
@@ -260,8 +260,15 @@ func diff(original, new *common.NetworkParameters) map[string][]byte {
 		if new.DisabledGasCosts {
 			buf[0] = 1
 		}
-		d[`disabled_gas_costs`] = buf
+		d[disabledGasKey] = buf
 	}
 
 	return d
 }
+
+const (
+	maxBlockSizeKey = `max_block_size`
+	joinExpiryKey   = `join_expiry`
+	voteExpiryKey   = `vote_expiry`
+	disabledGasKey  = `disabled_gas_costs`
+)
