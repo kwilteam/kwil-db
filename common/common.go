@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -41,9 +40,6 @@ type App struct {
 // router and extension implementations in extensions/consensus.
 type TxContext struct {
 	Ctx context.Context
-	// ConsensusParams holds network level parameters that can be evolved
-	// over the lifetime of a network.
-	ConsensusParams *chain.ConsensusParams
 	// BlockContext is the context of the current block.
 	BlockContext *BlockContext
 	// TxID is the ID of the current transaction.
