@@ -297,8 +297,10 @@ func (svc *Service) BroadcastRaw(ctx context.Context, req *BroadcastRawRequest) 
 
 func (svc *Service) EstimatePrice(ctx context.Context, req *userjson.EstimatePriceRequest) (*userjson.EstimatePriceResponse, *jsonrpc.Error) {
 	svc.log.Debug("Estimating price", log.String("payload_type", req.Tx.Body.PayloadType))
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
 
-	price, err := svc.nodeApp.Price(ctx, svc.db.BeginDelayedReadTx(), req.Tx)
+	price, err := svc.nodeApp.Price(ctx, readTx, req.Tx)
 	if err != nil {
 		svc.log.Error("failed to estimate price", log.Error(err)) // why not tell the client though?
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to estimate price", nil)
@@ -313,7 +315,10 @@ func (svc *Service) Query(ctx context.Context, req *userjson.QueryRequest) (*use
 	ctxExec, cancel := context.WithTimeout(ctx, svc.readTxTimeout)
 	defer cancel()
 
-	result, err := svc.engine.Execute(ctxExec, svc.db.BeginDelayedReadTx(), req.DBID, req.Query, nil)
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	result, err := svc.engine.Execute(ctxExec, readTx, req.DBID, req.Query, nil)
 	if err != nil {
 		// We don't know for sure that it's an invalid argument, but an invalid
 		// user-provided query isn't an internal server error.
@@ -339,7 +344,10 @@ func (svc *Service) Account(ctx context.Context, req *userjson.AccountRequest) (
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "missing account identifier", nil)
 	}
 
-	balance, nonce, err := svc.nodeApp.AccountInfo(ctx, svc.db.BeginDelayedReadTx(), req.Identifier, uncommitted)
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	balance, nonce, err := svc.nodeApp.AccountInfo(ctx, readTx, req.Identifier, uncommitted)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
 	}
@@ -486,7 +494,10 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 	ctxExec, cancel := context.WithTimeout(ctx, svc.readTxTimeout)
 	defer cancel()
 
-	executeResult, err := svc.engine.Procedure(ctxExec, svc.db.BeginDelayedReadTx(), &common.ExecutionData{
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	executeResult, err := svc.engine.Procedure(ctxExec, readTx, &common.ExecutionData{
 		Dataset:   body.DBID,
 		Procedure: body.Action,
 		Args:      args,
