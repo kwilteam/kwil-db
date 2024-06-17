@@ -9,6 +9,7 @@ import (
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -100,6 +101,7 @@ func Test_Broadcaster(t *testing.T) {
 					balance: tc.balance,
 				}
 			}
+			txapp.mockValidatorStore = *v
 
 			e := &mockEventStore{}
 			for _, event := range tc.events {
@@ -127,7 +129,7 @@ func Test_Broadcaster(t *testing.T) {
 				}
 			}
 
-			bc := broadcast.NewEventBroadcaster(e, b, txapp, v, validatorSigner(), "test-chain")
+			bc := broadcast.NewEventBroadcaster(e, b, txapp, validatorSigner(), "test-chain")
 
 			// create resolutions for the events
 			for _, event := range e.events {
@@ -135,7 +137,7 @@ func Test_Broadcaster(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			err = bc.RunBroadcast(ctx, []byte("proposer"))
+			err = bc.RunBroadcast(ctx, &mockDB{}, []byte("proposer"))
 			if tc.err != nil {
 				require.Equal(t, tc.err, err)
 				return
@@ -177,13 +179,15 @@ type mockTxApp struct {
 	nonce   int64    // the nonce to return for AccountInfo
 
 	price *big.Int // the price to return for Price
+
+	mockValidatorStore
 }
 
-func (m *mockTxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
+func (m *mockTxApp) AccountInfo(ctx context.Context, db sql.DB, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
 	return m.balance, m.nonce, nil
 }
 
-func (m *mockTxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+func (m *mockTxApp) Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error) {
 	if m.price == nil {
 		return big.NewInt(0), nil
 	}
@@ -206,7 +210,7 @@ type mockValidatorStore struct {
 	pubkey      []byte
 }
 
-func (m *mockValidatorStore) GetValidators(ctx context.Context) ([]*types.Validator, error) {
+func (m *mockValidatorStore) GetValidators(ctx context.Context, db sql.DB) ([]*types.Validator, error) {
 	if m.isValidator {
 		return []*types.Validator{
 			{
@@ -216,4 +220,32 @@ func (m *mockValidatorStore) GetValidators(ctx context.Context) ([]*types.Valida
 		}, nil
 	}
 	return nil, nil
+}
+
+type mockDB struct{}
+
+func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
+	return nil, nil
+}
+
+func (m *mockDB) BeginTx(ctx context.Context) (sql.Tx, error) {
+	return &mockTX{}, nil
+}
+
+type mockTX struct{}
+
+func (m *mockTX) Rollback(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockTX) Commit(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockTX) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
+	return nil, nil
+}
+
+func (m *mockTX) BeginTx(ctx context.Context) (sql.Tx, error) {
+	return &mockTX{}, nil
 }

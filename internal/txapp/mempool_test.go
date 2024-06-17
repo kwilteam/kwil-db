@@ -117,14 +117,6 @@ func (m *mockTx) Rollback(ctx context.Context) error {
 	return nil
 }
 
-type mockOuterTx struct {
-	*mockTx
-}
-
-func (m *mockOuterTx) Precommit(ctx context.Context) ([]byte, error) {
-	return nil, nil
-}
-
 type mockRebroadcast struct{}
 
 func (m *mockRebroadcast) MarkRebroadcast(ctx context.Context, ids []*types.UUID) error {

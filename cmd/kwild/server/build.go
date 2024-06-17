@@ -57,6 +57,7 @@ import (
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
+	"github.com/kwilteam/kwil-db/core/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
@@ -188,9 +189,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// to get the comet node, we need the abci app
 	// to get the abci app, we need the tx router
 	// but the tx router needs the cometbft client
-	txApp := buildTxApp(d, db, e, ev, snapshotter, closers)
+	txApp := buildTxApp(d, db, e, ev)
 
-	abciApp := buildAbci(d, txApp, snapshotter, statesyncer)
+	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer, closers)
 
 	// NOTE: buildCometNode immediately starts talking to the abciApp and
 	// replaying blocks (and using atomic db tx commits), i.e. calling
@@ -202,13 +203,13 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		cl:    cometBftClient,
 		cache: abciApp,
 	}
-	txApp.SetReplayStatusChecker(cometBftNode.IsCatchup)
+	abciApp.SetReplayStatusChecker(cometBftNode.IsCatchup)
 
 	eventBroadcaster := buildEventBroadcaster(d, ev, wrappedCmtClient, txApp)
 	abciApp.SetEventBroadcaster(eventBroadcaster.RunBroadcast)
 
 	// listener manager
-	listeners := buildListenerManager(d, ev, cometBftNode, txApp)
+	listeners := buildListenerManager(d, ev, cometBftNode, txApp, db)
 
 	// user service and server
 	rpcSvcLogger := increaseLogLevel("user-json-svc", &d.log, d.cfg.Logging.RPCLevel)
@@ -335,24 +336,17 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
-func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext, ev *voting.EventStore,
-	snapshotter *statesync.SnapshotStore, closers *closeFuncs) *txapp.TxApp {
-	var sh txapp.Snapshotter
-	if snapshotter != nil {
-		sh = snapshotter
-	}
+func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext, ev *voting.EventStore) *txapp.TxApp {
 
-	txApp, err := txapp.NewTxApp(d.ctx, db, engine, buildSigner(d), ev, sh, d.genesisCfg,
+	txApp, err := txapp.NewTxApp(d.ctx, db, engine, buildSigner(d), ev, d.genesisCfg,
 		d.cfg.AppCfg.Extensions, *d.log.Named("tx-router"))
 	if err != nil {
 		failBuild(err, "failed to build new TxApp")
 	}
-
-	closers.addCloser(txApp.Close, "ending any active txApp transactions")
 	return txApp
 }
 
-func buildAbci(d *coreDependencies, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer) *abci.AbciApp {
+func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, closers *closeFuncs) *abci.AbciApp {
 	var sh abci.SnapshotModule
 	if snapshotter != nil {
 		sh = snapshotter
@@ -372,15 +366,18 @@ func buildAbci(d *coreDependencies, txApp abci.TxApp, snapshotter *statesync.Sna
 		ForkHeights:        d.genesisCfg.ForkHeights,
 	}
 	app, err := abci.NewAbciApp(d.ctx, cfg, sh, ss, txApp,
-		d.genesisCfg.ConsensusParams, *d.log.Named("abci"))
+		d.genesisCfg.ConsensusParams, db, *d.log.Named("abci"))
 	if err != nil {
 		failBuild(err, "failed to build ABCI application")
 	}
+
+	closers.addCloser(app.Close, "closing ABCI app")
+
 	return app
 }
 
 func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broadcast.Broadcaster, txapp *txapp.TxApp) *broadcast.EventBroadcaster {
-	return broadcast.NewEventBroadcaster(ev, b, txapp, txapp, buildSigner(d), d.genesisCfg.ChainID)
+	return broadcast.NewEventBroadcaster(ev, b, txapp, buildSigner(d), d.genesisCfg.ChainID)
 }
 
 func buildEventStore(d *coreDependencies, closers *closeFuncs) *voting.EventStore {
@@ -921,6 +918,34 @@ func failBuild(err error, msg string) {
 	}
 }
 
-func buildListenerManager(d *coreDependencies, ev *voting.EventStore, node *cometbft.CometBftNode, txapp *txapp.TxApp) *listeners.ListenerManager {
-	return listeners.NewListenerManager(d.cfg.AppCfg.Extensions, ev, node, d.privKey.PubKey().Bytes(), txapp, *d.log.Named("listener-manager"))
+func buildListenerManager(d *coreDependencies, ev *voting.EventStore, node *cometbft.CometBftNode, txapp *txapp.TxApp, db sql.ReadTxMaker) *listeners.ListenerManager {
+	vr := &validatorReader{db: db, txApp: txapp}
+
+	return listeners.NewListenerManager(d.cfg.AppCfg.Extensions, ev, node, d.privKey.PubKey().Bytes(), vr, *d.log.Named("listener-manager"))
+}
+
+// validatorReader reads the validator set from the chain state.
+type validatorReader struct {
+	db    sql.ReadTxMaker
+	txApp *txapp.TxApp
+}
+
+func (v *validatorReader) GetValidators(ctx context.Context) ([]*types.Validator, error) {
+	cached, ok := v.txApp.CachedValidators()
+	if ok {
+		return cached, nil
+	}
+
+	// if we don't have a cached validator set, we need to fetch it from the db
+	readTx, err := v.db.BeginReadTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer readTx.Rollback(ctx)
+
+	return v.txApp.GetValidators(ctx, readTx)
+}
+
+func (v *validatorReader) SubscribeValidators() <-chan []*types.Validator {
+	return v.txApp.SubscribeValidators()
 }

@@ -64,6 +64,6 @@ type BlockchainTransactor interface {
 }
 
 type NodeApplication interface {
-	AccountInfo(ctx context.Context, identifier []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
-	Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
+	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
+	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
 }

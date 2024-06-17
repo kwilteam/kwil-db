@@ -34,11 +34,11 @@ type BlockchainTransactor interface {
 }
 
 type TxApp interface {
-	Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
+	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
 	// AccountInfo returns the unconfirmed account info for the given identifier.
 	// If unconfirmed is true, the account found in the mempool is returned.
 	// Otherwise, the account found in the blockchain is returned.
-	AccountInfo(ctx context.Context, identifier []byte, unconfirmed bool) (balance *big.Int, nonce int64, err error)
+	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, unconfirmed bool) (balance *big.Int, nonce int64, err error)
 }
 
 type Service struct {
@@ -46,7 +46,7 @@ type Service struct {
 
 	blockchain BlockchainTransactor // node is the local node that can accept transactions.
 	TxApp      TxApp
-	db         sql.ReadTxMaker
+	db         sql.DelayedReadTxMaker
 
 	cfg     *config.KwildConfig
 	chainID string
@@ -124,7 +124,7 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 }
 
 // NewService constructs a new Service.
-func NewService(db sql.ReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, signer auth.Signer, cfg *config.KwildConfig,
+func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, signer auth.Signer, cfg *config.KwildConfig,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,
@@ -182,8 +182,11 @@ func (svc *Service) Peers(ctx context.Context, _ *adminjson.PeersRequest) (*admi
 
 // sendTx makes a transaction and sends it to the local node.
 func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*userjson.BroadcastResponse, *jsonrpc.Error) {
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
 	// Get the latest nonce for the account, if it exists.
-	_, nonce, err := svc.TxApp.AccountInfo(ctx, svc.signer.Identity(), true)
+	_, nonce, err := svc.TxApp.AccountInfo(ctx, readTx, svc.signer.Identity(), true)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
 	}
@@ -193,7 +196,7 @@ func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "unable to create transaction", nil)
 	}
 
-	fee, err := svc.TxApp.Price(ctx, tx)
+	fee, err := svc.TxApp.Price(ctx, readTx, tx)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "unable to price transaction", nil)
 	}
@@ -255,13 +258,8 @@ func (svc *Service) Remove(ctx context.Context, req *adminjson.RemoveRequest) (*
 }
 
 func (svc *Service) JoinStatus(ctx context.Context, req *adminjson.JoinStatusRequest) (*adminjson.JoinStatusResponse, *jsonrpc.Error) {
-	readTx, err := svc.db.BeginReadTx(ctx)
-	if err != nil {
-		svc.log.Error("failed to start read transaction", zap.Error(err))
-		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to start read transaction", nil)
-	}
-	defer readTx.Rollback(ctx) // always rollback, the readTx is read-only
-
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
 	ids, err := voting.GetResolutionIDsByTypeAndProposer(ctx, readTx, voting.ValidatorJoinEventType, req.PubKey)
 	if err != nil {
 		svc.log.Error("failed to retrieve join request", zap.Error(err))
@@ -293,13 +291,8 @@ func (svc *Service) Leave(ctx context.Context, req *adminjson.LeaveRequest) (*us
 }
 
 func (svc *Service) ListValidators(ctx context.Context, req *adminjson.ListValidatorsRequest) (*adminjson.ListValidatorsResponse, *jsonrpc.Error) {
-	readTx, err := svc.db.BeginReadTx(ctx)
-	if err != nil {
-		svc.log.Error("failed to start read transaction", zap.Error(err))
-		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to start read transaction", nil)
-	}
-	defer readTx.Rollback(ctx) // always rollback, the readTx is read-only
-
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
 	vals, err := voting.GetValidators(ctx, readTx)
 	if err != nil {
 		svc.log.Error("failed to retrieve voters", zap.Error(err))
@@ -320,12 +313,8 @@ func (svc *Service) ListValidators(ctx context.Context, req *adminjson.ListValid
 }
 
 func (svc *Service) ListPendingJoins(ctx context.Context, req *adminjson.ListJoinRequestsRequest) (*adminjson.ListJoinRequestsResponse, *jsonrpc.Error) {
-	readTx, err := svc.db.BeginReadTx(ctx)
-	if err != nil {
-		svc.log.Error("failed to start read transaction", zap.Error(err))
-		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to start read transaction", nil)
-	}
-	defer readTx.Rollback(ctx) // always rollback, the readTx is read-only
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
 
 	activeJoins, err := voting.GetResolutionsByType(ctx, readTx, voting.ValidatorJoinEventType)
 	if err != nil {

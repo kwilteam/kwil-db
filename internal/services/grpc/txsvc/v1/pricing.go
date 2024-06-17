@@ -15,7 +15,14 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
-	price, err := s.nodeApp.Price(ctx, tx)
+
+	readTx, err := s.db.BeginReadTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin read tx: %w", err)
+	}
+	defer readTx.Rollback(ctx)
+
+	price, err := s.nodeApp.Price(ctx, readTx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate price: %w", err)
 	}

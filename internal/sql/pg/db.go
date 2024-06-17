@@ -366,6 +366,14 @@ func (db *DB) BeginReservedReadTx(ctx context.Context) (sql.Tx, error) {
 	}, nil
 }
 
+// BeginDelayedReadTx returns a valid SQL transaction, but will only
+// start the transaction once the first query is executed. This is useful
+// for when a calling module is expected to control the lifetime of a read
+// transaction, but the implementation might not need to use the transaction.
+func (db *DB) BeginDelayedReadTx() sql.Tx {
+	return &delayedReadTx{db: db}
+}
+
 type writeTxWrapper struct {
 	pgx.Tx
 	release func()

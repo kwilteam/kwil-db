@@ -556,3 +556,24 @@ func mustParseUUID(s string) *types.UUID {
 	}
 	return u
 }
+
+func Test_DelayedTx(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewDB(ctx, cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx := db.BeginDelayedReadTx()
+	defer tx.Rollback(ctx)
+
+	tx2, err := tx.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx2.Rollback(ctx)
+
+	_, err = tx2.Execute(ctx, pingStmt)
+	require.NoError(t, err)
+
+	err = tx2.Commit(ctx)
+	require.NoError(t, err)
+}
