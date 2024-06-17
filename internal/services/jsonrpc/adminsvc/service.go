@@ -186,7 +186,7 @@ func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*
 	defer readTx.Rollback(ctx)
 
 	// Get the latest nonce for the account, if it exists.
-	_, nonce, err := svc.TxApp.AccountInfo(ctx, svc.db.BeginDelayedReadTx(), svc.signer.Identity(), true)
+	_, nonce, err := svc.TxApp.AccountInfo(ctx, readTx, svc.signer.Identity(), true)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
 	}
