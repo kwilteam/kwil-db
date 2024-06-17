@@ -15,7 +15,7 @@ import (
 // GenerateForeignProcedure generates a plpgsql function that allows the schema to dynamically
 // call procedures in other schemas, expecting certain inputs and return values. It will prefix
 // the generated function with _fp_ (for "foreign procedure").
-func GenerateForeignProcedure(proc *types.ForeignProcedure, pgSchema string) (string, error) {
+func GenerateForeignProcedure(proc *types.ForeignProcedure, pgSchema string, dbid string) (string, error) {
 	str := strings.Builder{}
 
 	// first write the header
@@ -92,7 +92,8 @@ func GenerateForeignProcedure(proc *types.ForeignProcedure, pgSchema string) (st
 	_returns_table BOOLEAN;
     _expected_input_types TEXT[];
 	_expected_return_names TEXT[];
-    _expected_return_types TEXT[];`)
+    _expected_return_types TEXT[];
+	__old_foreign_caller TEXT;`)
 
 	// begin block
 	str.WriteString("\nBEGIN")
@@ -202,6 +203,13 @@ func GenerateForeignProcedure(proc *types.ForeignProcedure, pgSchema string) (st
 		END IF;`, proc.Name))
 	}
 
+	// we need to set the @foreign_caller variable to the schema calling this,
+	// and then set it back to what it was originally after the call.
+	str.WriteString(`
+	__old_foreign_caller := current_setting('ctx.foreign_caller');
+	SET LOCAL ctx.foreign_caller =`)
+	str.WriteString(fmt.Sprintf(` '%s';`, dbid))
+
 	// now we call the procedure.
 	// If we are calling a table procedure, we need to use RETURN QUERY EXECUTE.
 	// Otherwise, we can just use EXECUTE INTO.
@@ -231,8 +239,12 @@ func GenerateForeignProcedure(proc *types.ForeignProcedure, pgSchema string) (st
 		str.WriteString(formatStringList(argList))
 	}
 
+	// set the foreign caller back to what it was
+	str.WriteString(`;`)
+	str.WriteString(`PERFORM set_config('ctx.foreign_caller', __old_foreign_caller, true);`)
+
 	// end block
-	str.WriteString(`; END; $$ LANGUAGE plpgsql;`)
+	str.WriteString(` END; $$ LANGUAGE plpgsql;`)
 
 	return str.String(), nil
 }

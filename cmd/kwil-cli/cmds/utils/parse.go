@@ -179,7 +179,7 @@ func generateAll(schema *types.Schema) *genResult {
 	}
 
 	for _, proc := range schema.ForeignProcedures {
-		r.ForeignProcedures[proc.Name], err = generate.GenerateForeignProcedure(proc, schema.Name)
+		r.ForeignProcedures[proc.Name], err = generate.GenerateForeignProcedure(proc, schema.Name, schema.DBID())
 		if err != nil {
 			r.Errors = append(r.Errors, wrapErr("foreign procedure "+proc.Name, err))
 		}
