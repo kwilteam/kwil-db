@@ -126,9 +126,9 @@ type delayedReadTx struct {
 	tx *readTx
 }
 
-func (d *delayedReadTx) ensureTx() error {
+func (d *delayedReadTx) ensureTx(ctx context.Context) error {
 	if d.tx == nil {
-		tx, err := d.db.BeginReadTx(context.Background())
+		tx, err := d.db.BeginReadTx(ctx)
 		if err != nil {
 			return err
 		}
@@ -140,7 +140,7 @@ func (d *delayedReadTx) ensureTx() error {
 }
 
 func (d *delayedReadTx) Execute(ctx context.Context, stmt string, args ...any) (*common.ResultSet, error) {
-	if err := d.ensureTx(); err != nil {
+	if err := d.ensureTx(ctx); err != nil {
 		return nil, err
 	}
 
@@ -165,7 +165,7 @@ func (d *delayedReadTx) Rollback(ctx context.Context) error {
 
 // BeginTx starts a read transaction.
 func (d *delayedReadTx) BeginTx(ctx context.Context) (common.Tx, error) {
-	if err := d.ensureTx(); err != nil {
+	if err := d.ensureTx(ctx); err != nil {
 		return nil, err
 	}
 
