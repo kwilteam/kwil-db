@@ -114,3 +114,65 @@ func (tx *readTx) Rollback(ctx context.Context) error {
 
 	return tx.nestedTx.Rollback(ctx)
 }
+
+// delayedReadTx is a tx that handles a read-only transaction.
+// It is delayed, meaning that the tx will only be actually started
+// when the first query is executed. This is useful for when a calling
+// module is expected to control the lifetime of a read transaction, but
+// the implementation might not need to use the transaction.
+type delayedReadTx struct {
+	db *DB
+
+	tx *readTx
+}
+
+func (d *delayedReadTx) ensureTx() error {
+	if d.tx == nil {
+		tx, err := d.db.BeginReadTx(context.Background())
+		if err != nil {
+			return err
+		}
+
+		d.tx = tx.(*readTx)
+	}
+
+	return nil
+}
+
+func (d *delayedReadTx) Execute(ctx context.Context, stmt string, args ...any) (*common.ResultSet, error) {
+	if err := d.ensureTx(); err != nil {
+		return nil, err
+	}
+
+	return d.tx.Execute(ctx, stmt, args...)
+}
+
+func (d *delayedReadTx) Commit(ctx context.Context) error {
+	if d.tx == nil {
+		return nil
+	}
+
+	return d.tx.Commit(ctx)
+}
+
+func (d *delayedReadTx) Rollback(ctx context.Context) error {
+	if d.tx == nil {
+		return nil
+	}
+
+	return d.tx.Rollback(ctx)
+}
+
+// BeginTx starts a read transaction.
+func (d *delayedReadTx) BeginTx(ctx context.Context) (common.Tx, error) {
+	if err := d.ensureTx(); err != nil {
+		return nil, err
+	}
+
+	return d.tx.BeginTx(ctx)
+}
+
+// AccessMode returns the access mode of the transaction.
+func (d *delayedReadTx) AccessMode() common.AccessMode {
+	return common.ReadOnly
+}

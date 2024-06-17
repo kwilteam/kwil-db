@@ -33,8 +33,8 @@ type Service struct {
 	readTxTimeout time.Duration
 
 	engine      EngineReader
-	db          sql.ReadTxMaker // this should only ever make a read-only tx
-	nodeApp     NodeApplication // so we don't have to do ABCIQuery (indirect)
+	db          sql.DelayedReadTxMaker // this should only ever make a read-only tx
+	nodeApp     NodeApplication        // so we don't have to do ABCIQuery (indirect)
 	chainClient BlockchainTransactor
 }
 
@@ -56,7 +56,7 @@ func WithReadTxTimeout(timeout time.Duration) Opt {
 const defaultReadTxTimeout = 5 * time.Second
 
 // NewService creates a new instance of the user RPC service.
-func NewService(db sql.ReadTxMaker, engine EngineReader, chainClient BlockchainTransactor,
+func NewService(db sql.DelayedReadTxMaker, engine EngineReader, chainClient BlockchainTransactor,
 	nodeApp NodeApplication, logger log.Logger, opts ...Opt) *Service {
 	cfg := &serviceCfg{
 		readTxTimeout: defaultReadTxTimeout,
@@ -298,13 +298,7 @@ func (svc *Service) BroadcastRaw(ctx context.Context, req *BroadcastRawRequest) 
 func (svc *Service) EstimatePrice(ctx context.Context, req *userjson.EstimatePriceRequest) (*userjson.EstimatePriceResponse, *jsonrpc.Error) {
 	svc.log.Debug("Estimating price", log.String("payload_type", req.Tx.Body.PayloadType))
 
-	readTx, err := svc.db.BeginReadTx(ctx)
-	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to create read tx", nil)
-	}
-	defer readTx.Rollback(ctx)
-
-	price, err := svc.nodeApp.Price(ctx, readTx, req.Tx)
+	price, err := svc.nodeApp.Price(ctx, svc.db.BeginDelayedReadTx(), req.Tx)
 	if err != nil {
 		svc.log.Error("failed to estimate price", log.Error(err)) // why not tell the client though?
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to estimate price", nil)
@@ -316,16 +310,10 @@ func (svc *Service) EstimatePrice(ctx context.Context, req *userjson.EstimatePri
 }
 
 func (svc *Service) Query(ctx context.Context, req *userjson.QueryRequest) (*userjson.QueryResponse, *jsonrpc.Error) {
-	tx, err := svc.db.BeginReadTx(ctx)
-	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to create read tx", nil)
-	}
-	defer tx.Rollback(ctx)
-
 	ctxExec, cancel := context.WithTimeout(ctx, svc.readTxTimeout)
 	defer cancel()
 
-	result, err := svc.engine.Execute(ctxExec, tx, req.DBID, req.Query, nil)
+	result, err := svc.engine.Execute(ctxExec, svc.db.BeginDelayedReadTx(), req.DBID, req.Query, nil)
 	if err != nil {
 		// We don't know for sure that it's an invalid argument, but an invalid
 		// user-provided query isn't an internal server error.
@@ -351,13 +339,7 @@ func (svc *Service) Account(ctx context.Context, req *userjson.AccountRequest) (
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "missing account identifier", nil)
 	}
 
-	readTx, err := svc.db.BeginReadTx(ctx)
-	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to create read tx", nil)
-	}
-	defer readTx.Rollback(ctx)
-
-	balance, nonce, err := svc.nodeApp.AccountInfo(ctx, readTx, req.Identifier, uncommitted)
+	balance, nonce, err := svc.nodeApp.AccountInfo(ctx, svc.db.BeginDelayedReadTx(), req.Identifier, uncommitted)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
 	}
@@ -501,16 +483,10 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		}
 	}
 
-	tx, err := svc.db.BeginReadTx(ctx)
-	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to create read tx", nil)
-	}
-	defer tx.Rollback(ctx)
-
 	ctxExec, cancel := context.WithTimeout(ctx, svc.readTxTimeout)
 	defer cancel()
 
-	executeResult, err := svc.engine.Procedure(ctxExec, tx, &common.ExecutionData{
+	executeResult, err := svc.engine.Procedure(ctxExec, svc.db.BeginDelayedReadTx(), &common.ExecutionData{
 		Dataset:   body.DBID,
 		Procedure: body.Action,
 		Args:      args,
