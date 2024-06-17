@@ -649,7 +649,8 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		// giving pg_dump the snapshot ID to guarantee it has an isolated view of the database.
 		snapshotTx, snapshotId, err := a.db.BeginSnapshotTx(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to begin snapshot tx: %w", err)
+			a.log.Error("failed to begin snapshot tx", zap.Error(err))
+			return &abciTypes.ResponseCommit{}, nil
 		}
 		defer snapshotTx.Rollback(ctx) // always rollback, since this is just for view isolation
 
