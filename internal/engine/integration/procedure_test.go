@@ -572,6 +572,20 @@ func Test_ForeignProcedures(t *testing.T) {
 				is_owner['%s', 'is_owner']('satoshi');
 			}`,
 		},
+		// this test tests that foreign caller properly works, and is unset at the end of the
+		// foreign call.
+		{
+			name:    "testing foreign caller",
+			foreign: `foreign procedure return_foreign_caller() returns (caller text)`,
+			otherProc: `procedure call_foreign() public returns (one text, two text, three text) {
+			$one := @foreign_caller;
+			$two := return_foreign_caller['%s', 'return_foreign_caller']();
+			$three := @foreign_caller;
+
+			return $one, $two, $three;
+		}`,
+			outputs: [][]any{{"", "x93c803781453c866b8e1277d6d13eaa17935d891544fd223e0ea75b0", ""}},
+		},
 	}
 
 	for _, test := range tests {
@@ -713,6 +727,10 @@ procedure is_private($name text) private {
 
 procedure is_owner($name text) public owner view {
 	$exists bool := false;
+}
+
+procedure return_foreign_caller() public returns (caller text) {
+	return @foreign_caller;
 }
 `
 
