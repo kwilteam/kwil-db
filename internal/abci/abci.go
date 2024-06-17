@@ -1305,3 +1305,14 @@ func (a *AbciApp) TxInMempool(txHash []byte) bool {
 func (a *AbciApp) SetReplayStatusChecker(fn func() bool) {
 	a.replayingBlocks = fn
 }
+
+// Close cleans up the application.
+func (a *AbciApp) Close() error {
+	if a.genesisTx != nil {
+		err := a.genesisTx.Rollback(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to rollback genesis transaction: %w", err)
+		}
+	}
+	return nil
+}

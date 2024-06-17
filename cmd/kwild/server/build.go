@@ -191,7 +191,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// but the tx router needs the cometbft client
 	txApp := buildTxApp(d, db, e, ev)
 
-	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer)
+	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer, closers)
 
 	// NOTE: buildCometNode immediately starts talking to the abciApp and
 	// replaying blocks (and using atomic db tx commits), i.e. calling
@@ -346,7 +346,7 @@ func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext,
 	return txApp
 }
 
-func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer) *abci.AbciApp {
+func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, closers *closeFuncs) *abci.AbciApp {
 	var sh abci.SnapshotModule
 	if snapshotter != nil {
 		sh = snapshotter
@@ -370,6 +370,9 @@ func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *st
 	if err != nil {
 		failBuild(err, "failed to build ABCI application")
 	}
+
+	closers.addCloser(app.Close, "closing ABCI app")
+
 	return app
 }
 
