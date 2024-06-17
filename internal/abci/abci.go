@@ -1307,12 +1307,21 @@ func (a *AbciApp) SetReplayStatusChecker(fn func() bool) {
 	a.replayingBlocks = fn
 }
 
-// Close cleans up the application.
+// Close is used to end any active database transaction that may exist if the
+// application tries to shut down before closing the transaction with a call to
+// Commit. Neglecting to rollback such a transaction may prevent the DB
+// connection from being closed and released to the connection pool.
 func (a *AbciApp) Close() error {
 	if a.genesisTx != nil {
 		err := a.genesisTx.Rollback(context.Background())
 		if err != nil {
 			return fmt.Errorf("failed to rollback genesis transaction: %w", err)
+		}
+	}
+	if a.consensusTx != nil {
+		err := a.consensusTx.Rollback(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to rollback consensus transaction: %w", err)
 		}
 	}
 	return nil
