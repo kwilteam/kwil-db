@@ -2,6 +2,7 @@ package txsvc
 
 import (
 	"context"
+	"fmt"
 
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 )
@@ -11,7 +12,13 @@ func (s *Service) GetAccount(ctx context.Context, req *txpb.GetAccountRequest) (
 	// be others such as finalized and safe.
 	uncommitted := req.Status != nil && *req.Status > 0
 
-	balance, nonce, err := s.nodeApp.AccountInfo(ctx, req.Identifier, uncommitted)
+	readTx, err := s.db.BeginReadTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin read tx: %w", err)
+	}
+	defer readTx.Rollback(ctx)
+
+	balance, nonce, err := s.nodeApp.AccountInfo(ctx, readTx, req.Identifier, uncommitted)
 	if err != nil {
 		return nil, err
 	}

@@ -79,7 +79,7 @@ var resolutionConfig = resolutions.ResolutionConfig{
 	// ResolveFunc defines what will happen if the resolution is approved by the network.
 	// For the credit_account resolution, we will credit the account with the given amount.
 	// The amount cannot be negative.
-	ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error {
+	ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
 		// Unmarshal the resolution payload into an AccountCreditResolution
 		var credit AccountCreditResolution
 		err := credit.UnmarshalBinary(resolution.Body)

@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -84,6 +86,7 @@ func Test_prepareMempoolTxns(t *testing.T) {
 
 	abciApp := &AbciApp{
 		txApp: &mockTxApp{},
+		db:    &mockDB{},
 	}
 	logger := log.NewStdOut(log.DebugLevel)
 
@@ -216,7 +219,7 @@ func Test_prepareMempoolTxns(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := abciApp.prepareBlockTransactions(context.Background(), tt.txs, &logger, 1e6, []byte("proposer"))
+			got := abciApp.prepareBlockTransactions(context.Background(), tt.txs, &logger, 1e6, []byte("proposer"), 0)
 			if len(got) != len(tt.want) {
 				t.Errorf("got %d txns, expected %d", len(got), len(tt.want))
 			}
@@ -235,6 +238,7 @@ func Test_ProcessProposal_UnfundedAccount(t *testing.T) {
 		cfg: AbciConfig{
 			GasEnabled: true,
 		},
+		db: &mockDB{},
 	}
 	logger := log.NewStdOut(log.DebugLevel)
 
@@ -246,7 +250,7 @@ func Test_ProcessProposal_UnfundedAccount(t *testing.T) {
 	txA1 := newTxBts(t, 1, signerA)
 
 	// Unfunded account
-	txs := abciApp.prepareBlockTransactions(context.Background(), [][]byte{txA1}, &logger, 1e6, []byte("proposer"))
+	txs := abciApp.prepareBlockTransactions(context.Background(), [][]byte{txA1}, &logger, 1e6, []byte("proposer"), 0)
 	assert.Len(t, txs, 0)
 
 }
@@ -255,6 +259,7 @@ func Test_ProcessProposal_TxValidation(t *testing.T) {
 	ctx := context.Background()
 	abciApp := &AbciApp{
 		txApp: &mockTxApp{},
+		db:    &mockDB{},
 	}
 	logger := log.NewStdOut(log.DebugLevel)
 
@@ -387,15 +392,11 @@ func (m *mockTxApp) MarkBroadcasted(ctx context.Context, ids []types.UUID) error
 	return nil
 }
 
-func (m *mockTxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
+func (m *mockTxApp) AccountInfo(ctx context.Context, db sql.DB, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
 	return big.NewInt(0), 0, nil
 }
 
-func (m *mockTxApp) ConsensusAccountInfo(ctx context.Context, acctID []byte) (balance *big.Int, nonce int64, err error) {
-	return big.NewInt(0), 0, nil
-}
-
-func (m *mockTxApp) ApplyMempool(ctx context.Context, tx *transactions.Transaction) error {
+func (m *mockTxApp) ApplyMempool(ctx context.Context, db sql.DB, tx *transactions.Transaction) error {
 	return nil
 }
 
@@ -403,47 +404,79 @@ func (m *mockTxApp) Begin(ctx context.Context, height int64) error {
 	return nil
 }
 
-func (m *mockTxApp) Commit(ctx context.Context) (int64, error) {
-	return 1, nil
-}
+func (m *mockTxApp) Commit(ctx context.Context) {}
 
-func (m *mockTxApp) Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse {
+func (m *mockTxApp) Execute(ctx txapp.TxContext, db sql.DB, tx *transactions.Transaction) *txapp.TxResponse {
 	return nil
 }
 
-func (m *mockTxApp) Finalize(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
-	return nil, nil, nil
-}
-
-func (m *mockTxApp) GenesisInit(ctx context.Context, validators []*types.Validator, accounts []*types.Account,
-	initialHeight int64, appHash []byte) error {
-	return nil
-}
-
-func (m *mockTxApp) ChainInfo(ctx context.Context) (height int64, appHash []byte, err error) {
-	return 1, nil, nil
-}
-
-func (m *mockTxApp) GetValidators(ctx context.Context) ([]*types.Validator, error) {
+func (m *mockTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (validatorUpgrades []*types.Validator, err error) {
 	return nil, nil
 }
 
-func (m *mockTxApp) ConsensusValidators(ctx context.Context) ([]*types.Validator, error) {
-	return nil, nil
-}
-
-func (m *mockTxApp) ProposerTxs(ctx context.Context, txNonce uint64, maxTxSz int64, proposerAddr []byte) ([][]byte, error) {
-	return nil, nil
-}
-
-func (m *mockTxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
-	return big.NewInt(0), nil
-}
-
-func (m *mockTxApp) UpdateValidator(ctx context.Context, validator []byte, power int64) error {
+func (m *mockTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.Validator, accounts []*types.Account,
+	initialHeight int64) error {
 	return nil
 }
 
-func (m *mockTxApp) Reload(ctx context.Context) error {
+func (m *mockTxApp) GetValidators(ctx context.Context, db sql.DB) ([]*types.Validator, error) {
+	return nil, nil
+}
+
+func (m *mockTxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxTxSz int64, block *common.BlockContext) ([][]byte, error) {
+	return nil, nil
+}
+
+func (m *mockTxApp) UpdateValidator(ctx context.Context, db sql.DB, validator []byte, power int64) error {
 	return nil
+}
+
+func (m *mockTxApp) Reload(ctx context.Context, db sql.DB) error {
+	return nil
+}
+
+type mockDB struct{}
+
+func (m *mockDB) BeginOuterTx(ctx context.Context) (sql.OuterTx, error) {
+	return &mockTx{}, nil
+}
+
+func (m *mockDB) BeginReadTx(ctx context.Context) (sql.Tx, error) {
+	return &mockTx{}, nil
+}
+
+func (m *mockDB) BeginSnapshotTx(ctx context.Context) (sql.Tx, string, error) {
+	return &mockTx{}, "", nil
+}
+
+func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
+	return nil, nil
+}
+
+func (m *mockDB) BeginTx(ctx context.Context) (sql.Tx, error) {
+	return &mockTx{}, nil
+}
+
+func (m *mockDB) AutoCommit(on bool) {}
+
+type mockTx struct{}
+
+func (m *mockTx) Rollback(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockTx) Commit(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockTx) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
+	return nil, nil
+}
+
+func (m *mockTx) BeginTx(ctx context.Context) (sql.Tx, error) {
+	return &mockTx{}, nil
+}
+
+func (m *mockTx) Precommit(ctx context.Context) ([]byte, error) {
+	return nil, nil
 }

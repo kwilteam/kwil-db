@@ -20,7 +20,7 @@ const (
 func init() {
 	err := resolutions.RegisterResolution(ValidatorJoinEventType, resolutions.ModAdd, resolutions.ResolutionConfig{
 		ConfirmationThreshold: big.NewRat(2, 3),
-		ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error {
+		ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
 			joinReq := &UpdatePowerRequest{}
 			if err := joinReq.UnmarshalBinary(resolution.Body); err != nil {
 				return fmt.Errorf("failed to unmarshal join request: %w", err)
@@ -35,7 +35,7 @@ func init() {
 
 	err = resolutions.RegisterResolution(ValidatorRemoveEventType, resolutions.ModAdd, resolutions.ResolutionConfig{
 		ConfirmationThreshold: big.NewRat(2, 3),
-		ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution) error {
+		ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
 			removeReq := &UpdatePowerRequest{}
 			if err := removeReq.UnmarshalBinary(resolution.Body); err != nil {
 				return fmt.Errorf("failed to unmarshal remove request: %w", err)

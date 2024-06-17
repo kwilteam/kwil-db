@@ -71,6 +71,13 @@ type ReadTxMaker interface {
 	BeginReadTx(ctx context.Context) (Tx, error)
 }
 
+// DelayedReadTxMaker is an interface that creates a transaction for reading
+// from the database. The transaction won't actually be created until it is used
+// for the first time, which is useful for avoiding unnecessary transactions.
+type DelayedReadTxMaker interface {
+	BeginDelayedReadTx() Tx
+}
+
 // OuterTx is the outermost database transaction.
 //
 // NOTE: An OuterTx may be used where only a Tx or DB is required since those

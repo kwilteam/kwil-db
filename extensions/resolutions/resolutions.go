@@ -117,7 +117,7 @@ type ResolutionConfig struct {
 	// been confirmed. All nodes will call this function as a part of
 	// block execution. It is therefore expected that the function is
 	// deterministic, regardless of a node's local configuration.
-	ResolveFunc func(ctx context.Context, app *common.App, resolution *Resolution) error
+	ResolveFunc func(ctx context.Context, app *common.App, resolution *Resolution, block *common.BlockContext) error
 }
 
 // Resolution contains information for a resolution that can be voted
