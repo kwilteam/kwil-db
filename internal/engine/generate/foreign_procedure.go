@@ -241,9 +241,7 @@ func GenerateForeignProcedure(proc *types.ForeignProcedure, pgSchema string, dbi
 
 	// set the foreign caller back to what it was
 	str.WriteString(`;`)
-	// this is a hack, since simply running SET LOCAL ctx.foreign_caller = __old_foreign_caller
-	// will set it to the string "__old_foreign_caller", not the value of the variable.
-	str.WriteString(`EXECUTE 'SET LOCAL ctx.foreign_caller = ' || quote_literal(__old_foreign_caller);`)
+	str.WriteString(`PERFORM set_config('ctx.foreign_caller', __old_foreign_caller, true);`)
 
 	// end block
 	str.WriteString(` END; $$ LANGUAGE plpgsql;`)
