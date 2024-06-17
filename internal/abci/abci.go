@@ -655,10 +655,10 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 
 		err = a.snapshotter.CreateSnapshot(ctx, uint64(a.height), snapshotId)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create snapshot: %w", err)
+			a.log.Error("failed to create snapshot", zap.Error(err))
+		} else {
+			a.log.Info("created snapshot", zap.Uint64("height", uint64(a.height)), zap.String("snapshot_id", snapshotId))
 		}
-
-		a.log.Info("created snapshot", zap.Uint64("height", uint64(a.height)), zap.String("snapshot_id", snapshotId))
 	}
 
 	// If a broadcast was accepted during execution of that block, it will be
