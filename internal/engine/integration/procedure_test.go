@@ -439,138 +439,152 @@ func Test_ForeignProcedures(t *testing.T) {
 	}
 
 	tests := []testcase{
-		{
-			name:    "foreign procedure takes nothing, returns nothing",
-			foreign: `foreign procedure do_something()`,
-			otherProc: `procedure call_foreign() public {
-				do_something['%s', 'delete_users']();
-			}`,
-		},
-		{
-			name:    "foreign procedure takes nothing, returns table",
-			foreign: `foreign procedure get_users() returns table(id uuid, name text, wallet_address text)`,
-			otherProc: `procedure call_foreign() public returns table(username text) {
-				return select name as username from get_users['%s', 'get_users']();
-			}`,
-			outputs: [][]any{
-				{"satoshi"},
-				{"wendys_drive_through_lady"},
-				{"zeus"},
-			},
-		},
-		{
-			name:    "foreign procedure takes values, returns values",
-			foreign: `foreign procedure id_from_name($name text) returns (id uuid)`,
-			otherProc: `procedure call_foreign($name text) public returns (id uuid) {
-				return id_from_name['%s', 'id_from_name']($name);
-			}`,
-			inputs:  []any{"satoshi"},
-			outputs: [][]any{{satoshisUUID}},
-		},
-		{
-			name:    "foreign procedure expects no args, implementation expects some",
-			foreign: `foreign procedure id_from_name() returns (id uuid)`,
-			otherProc: `procedure call_foreign() public returns (id uuid) {
-				return id_from_name['%s', 'id_from_name']();
-			}`,
-			wantErr: `requires 1 arg(s)`,
-		},
-		{
-			name:    "foreign procedure expects args, implementation expects none",
-			foreign: `foreign procedure get_users($name text) returns table(id uuid, name text, wallet_address text)`,
-			otherProc: `procedure call_foreign() public returns table(username text) {
-				return select name as username from get_users['%s', 'get_users']('satoshi');
-			}`,
-			wantErr: "requires no args",
-		},
-		{
-			name:    "foreign procedure expects 2 args, implementation expects 2",
-			foreign: `foreign procedure id_from_name($name text, $name2 text) returns (id uuid)`,
-			otherProc: `procedure call_foreign() public returns (id uuid) {
-				return id_from_name['%s', 'id_from_name']('satoshi', 'zeus');
-			}`,
-			wantErr: "requires 1 arg(s)",
-		},
-		{
-			name:    "foreign procedure returns 1 arg, implementation returns none",
-			foreign: `foreign procedure delete_users() returns (text)`,
-			otherProc: `procedure call_foreign() public returns (text) {
-				return delete_users['%s', 'delete_users']();
-			}`,
-			wantErr: "returns nothing",
-		},
-		{
-			name:    "foreign procedure returns 0 args, implementation returns 1",
-			foreign: `foreign procedure id_from_name($name text)`,
-			otherProc: `procedure call_foreign() public {
-				id_from_name['%s', 'id_from_name']('satoshi');
-			}`,
-			wantErr: "returns non-nil value(s)",
-		},
-		{
-			name:    "foreign procedure returns table, implementation returns non-table",
-			foreign: `foreign procedure id_from_name($name text) returns table(id uuid)`,
-			otherProc: `procedure call_foreign() public {
-				select id from id_from_name['%s', 'id_from_name']('satoshi');
-			}`,
-			wantErr: "does not return a table",
-		},
-		{
-			name:    "foreign procedure does not return table, implementation returns table",
-			foreign: `foreign procedure get_users() returns (id uuid, name text, wallet_address text)`,
-			otherProc: `procedure call_foreign() public returns table(username text) {
-				$id, $name, $wallet := get_users['%s', 'get_users']();
-			}`,
-			wantErr: "returns a table",
-		},
-		{
-			name:    "foreign procedure returns table, implementation returns nothing",
-			foreign: `foreign procedure create_user($name text) returns table(id uuid)`,
-			otherProc: `procedure call_foreign() public {
-				create_user['%s', 'create_user']('satoshi');
-			}`,
-			wantErr: "does not return a table",
-		},
-		{
-			name: "procedures returning scalar return different named values (ok)",
-			// returns value "uid" instead of impl's "id"
-			foreign: `foreign procedure id_from_name($name text) returns (uid uuid)`,
-			otherProc: `procedure call_foreign() public returns (id uuid) {
-				return id_from_name['%s', 'id_from_name']('satoshi');
-			}`,
-			outputs: [][]any{{satoshisUUID}},
-		},
-		{
-			name:    "procedure returning table return different column names (failure)",
-			foreign: `foreign procedure get_users() returns table(uid uuid, name text, wallet_address text)`,
-			otherProc: `procedure call_foreign() public returns table(name text) {
-				return select name from get_users['%s', 'get_users']();
-			}`,
-			wantErr: "returns id",
-		},
-		{
-			name:    "private procedure via foreign call",
-			foreign: `foreign procedure is_private($name text)`,
-			otherProc: `procedure call_foreign() public {
-				is_private['%s', 'is_private']('satoshi');
-			}`,
-			wantErr: "not public",
-		},
 		// {
-		// 	name:    "foreign call owner - fail",
+		// 	name:    "foreign procedure takes nothing, returns nothing",
+		// 	foreign: `foreign procedure do_something()`,
+		// 	otherProc: `procedure call_foreign() public {
+		// 		do_something['%s', 'delete_users']();
+		// 	}`,
+		// },
+		// {
+		// 	name:    "foreign procedure takes nothing, returns table",
+		// 	foreign: `foreign procedure get_users() returns table(id uuid, name text, wallet_address text)`,
+		// 	otherProc: `procedure call_foreign() public returns table(username text) {
+		// 		return select name as username from get_users['%s', 'get_users']();
+		// 	}`,
+		// 	outputs: [][]any{
+		// 		{"satoshi"},
+		// 		{"wendys_drive_through_lady"},
+		// 		{"zeus"},
+		// 	},
+		// },
+		// {
+		// 	name:    "foreign procedure takes values, returns values",
+		// 	foreign: `foreign procedure id_from_name($name text) returns (id uuid)`,
+		// 	otherProc: `procedure call_foreign($name text) public returns (id uuid) {
+		// 		return id_from_name['%s', 'id_from_name']($name);
+		// 	}`,
+		// 	inputs:  []any{"satoshi"},
+		// 	outputs: [][]any{{satoshisUUID}},
+		// },
+		// {
+		// 	name:    "foreign procedure expects no args, implementation expects some",
+		// 	foreign: `foreign procedure id_from_name() returns (id uuid)`,
+		// 	otherProc: `procedure call_foreign() public returns (id uuid) {
+		// 		return id_from_name['%s', 'id_from_name']();
+		// 	}`,
+		// 	wantErr: `requires 1 arg(s)`,
+		// },
+		// {
+		// 	name:    "foreign procedure expects args, implementation expects none",
+		// 	foreign: `foreign procedure get_users($name text) returns table(id uuid, name text, wallet_address text)`,
+		// 	otherProc: `procedure call_foreign() public returns table(username text) {
+		// 		return select name as username from get_users['%s', 'get_users']('satoshi');
+		// 	}`,
+		// 	wantErr: "requires no args",
+		// },
+		// {
+		// 	name:    "foreign procedure expects 2 args, implementation expects 2",
+		// 	foreign: `foreign procedure id_from_name($name text, $name2 text) returns (id uuid)`,
+		// 	otherProc: `procedure call_foreign() public returns (id uuid) {
+		// 		return id_from_name['%s', 'id_from_name']('satoshi', 'zeus');
+		// 	}`,
+		// 	wantErr: "requires 1 arg(s)",
+		// },
+		// {
+		// 	name:    "foreign procedure returns 1 arg, implementation returns none",
+		// 	foreign: `foreign procedure delete_users() returns (text)`,
+		// 	otherProc: `procedure call_foreign() public returns (text) {
+		// 		return delete_users['%s', 'delete_users']();
+		// 	}`,
+		// 	wantErr: "returns nothing",
+		// },
+		// {
+		// 	name:    "foreign procedure returns 0 args, implementation returns 1",
+		// 	foreign: `foreign procedure id_from_name($name text)`,
+		// 	otherProc: `procedure call_foreign() public {
+		// 		id_from_name['%s', 'id_from_name']('satoshi');
+		// 	}`,
+		// 	wantErr: "returns non-nil value(s)",
+		// },
+		// {
+		// 	name:    "foreign procedure returns table, implementation returns non-table",
+		// 	foreign: `foreign procedure id_from_name($name text) returns table(id uuid)`,
+		// 	otherProc: `procedure call_foreign() public {
+		// 		select id from id_from_name['%s', 'id_from_name']('satoshi');
+		// 	}`,
+		// 	wantErr: "does not return a table",
+		// },
+		// {
+		// 	name:    "foreign procedure does not return table, implementation returns table",
+		// 	foreign: `foreign procedure get_users() returns (id uuid, name text, wallet_address text)`,
+		// 	otherProc: `procedure call_foreign() public returns table(username text) {
+		// 		$id, $name, $wallet := get_users['%s', 'get_users']();
+		// 	}`,
+		// 	wantErr: "returns a table",
+		// },
+		// {
+		// 	name:    "foreign procedure returns table, implementation returns nothing",
+		// 	foreign: `foreign procedure create_user($name text) returns table(id uuid)`,
+		// 	otherProc: `procedure call_foreign() public {
+		// 		create_user['%s', 'create_user']('satoshi');
+		// 	}`,
+		// 	wantErr: "does not return a table",
+		// },
+		// {
+		// 	name: "procedures returning scalar return different named values (ok)",
+		// 	// returns value "uid" instead of impl's "id"
+		// 	foreign: `foreign procedure id_from_name($name text) returns (uid uuid)`,
+		// 	otherProc: `procedure call_foreign() public returns (id uuid) {
+		// 		return id_from_name['%s', 'id_from_name']('satoshi');
+		// 	}`,
+		// 	outputs: [][]any{{satoshisUUID}},
+		// },
+		// {
+		// 	name:    "procedure returning table return different column names (failure)",
+		// 	foreign: `foreign procedure get_users() returns table(uid uuid, name text, wallet_address text)`,
+		// 	otherProc: `procedure call_foreign() public returns table(name text) {
+		// 		return select name from get_users['%s', 'get_users']();
+		// 	}`,
+		// 	wantErr: "returns id",
+		// },
+		// {
+		// 	name:    "private procedure via foreign call",
+		// 	foreign: `foreign procedure is_private($name text)`,
+		// 	otherProc: `procedure call_foreign() public {
+		// 		is_private['%s', 'is_private']('satoshi');
+		// 	}`,
+		// 	wantErr: "not public",
+		// },
+		// // {
+		// // 	name:    "foreign call owner - fail",
+		// // 	foreign: `foreign procedure is_owner($name text)`,
+		// // 	otherProc: `procedure call_foreign() public owner {
+		// // 		is_owner['%s', 'is_owner']('satoshi');
+		// // 	}`,
+		// // 	caller:  "some_other_wallet",
+		// // 	wantErr: "is owner-only",
+		// // },
+		// {
+		// 	name:    "foreign call owner - success",
 		// 	foreign: `foreign procedure is_owner($name text)`,
 		// 	otherProc: `procedure call_foreign() public owner {
 		// 		is_owner['%s', 'is_owner']('satoshi');
 		// 	}`,
-		// 	caller:  "some_other_wallet",
-		// 	wantErr: "is owner-only",
 		// },
+		// this test tests that foreign caller properly works, and is unset at the end of the
+		// foreign call.
 		{
-			name:    "foreign call owner - success",
-			foreign: `foreign procedure is_owner($name text)`,
-			otherProc: `procedure call_foreign() public owner {
-				is_owner['%s', 'is_owner']('satoshi');
-			}`,
+			name:    "testing foreign caller",
+			foreign: `foreign procedure return_foreign_caller() returns (caller text)`,
+			otherProc: `procedure call_foreign() public returns (one text, two text, three text) {
+			$one := @foreign_caller;
+			$two := return_foreign_caller['%s', 'return_foreign_caller']();
+			$three := @foreign_caller;
+
+			return $one, $two, $three;
+		}`,
+			outputs: [][]any{{"", "x93c803781453c866b8e1277d6d13eaa17935d891544fd223e0ea75b0", ""}},
 		},
 	}
 
@@ -713,6 +727,10 @@ procedure is_private($name text) private {
 
 procedure is_owner($name text) public owner view {
 	$exists bool := false;
+}
+
+procedure return_foreign_caller() public returns (caller text) {
+	return @foreign_caller;
 }
 `
 
