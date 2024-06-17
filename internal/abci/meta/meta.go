@@ -45,9 +45,6 @@ const (
 
 func initTables(ctx context.Context, tx sql.DB) error {
 	_, err := tx.Execute(ctx, initChainTable)
-	if err != nil {
-		return err
-	}
 	return err
 }
 
@@ -99,7 +96,7 @@ func GetChainState(ctx context.Context, db sql.Executor) (int64, []byte, error) 
 }
 
 // SetChainState will update the current height and app hash.
-func SetChainState(ctx context.Context, db sql.DB, height int64, appHash []byte) error {
+func SetChainState(ctx context.Context, db sql.TxMaker, height int64, appHash []byte) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -122,7 +119,7 @@ func SetChainState(ctx context.Context, db sql.DB, height int64, appHash []byte)
 }
 
 // StoreParams stores the consensus params in the store.
-func StoreParams(ctx context.Context, db sql.DB, params *common.NetworkParameters) error {
+func StoreParams(ctx context.Context, db sql.TxMaker, params *common.NetworkParameters) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -162,7 +159,7 @@ func StoreParams(ctx context.Context, db sql.DB, params *common.NetworkParameter
 
 // StoreDiff stores the difference between two sets of consensus params.
 // If the parameters are equal, no action is taken.
-func StoreDiff(ctx context.Context, db sql.DB, original, new *common.NetworkParameters) error {
+func StoreDiff(ctx context.Context, db sql.TxMaker, original, new *common.NetworkParameters) error {
 	diff := diff(original, new)
 	if len(diff) == 0 {
 		return nil

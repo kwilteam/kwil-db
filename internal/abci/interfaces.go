@@ -75,7 +75,4 @@ type DB interface {
 	sql.OuterTxMaker
 	sql.ReadTxMaker
 	sql.SnapshotTxMaker
-	sql.Executor
-	sql.TxMaker
-	AutoCommit(auto bool)
 }
