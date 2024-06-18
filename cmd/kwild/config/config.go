@@ -557,6 +557,7 @@ func DefaultConfig() *KwildConfig {
 			JSONRPCListenAddress: "0.0.0.0:8484",
 			HTTPListenAddress:    "0.0.0.0:8080",
 			AdminListenAddress:   "/tmp/kwild.socket", // Or, suggested, 127.0.0.1:8485
+			PrivateKeyPath:       PrivateKeyFileName,
 			DBHost:               "127.0.0.1",
 			DBPort:               "5432", // ignored with unix socket, but applies if IP used for DBHost
 			DBUser:               "kwild",
@@ -638,7 +639,7 @@ func EmptyConfig() *KwildConfig {
 	}
 }
 
-func (cfg *KwildConfig) LogConfig() *log.Config {
+func (cfg *KwildConfig) LogConfig() (*log.Config, error) {
 	// Rootify any relative paths.
 	outputPaths := make([]string, 0, len(cfg.Logging.OutputPaths))
 	for _, path := range cfg.Logging.OutputPaths {
@@ -646,7 +647,11 @@ func (cfg *KwildConfig) LogConfig() *log.Config {
 		case "stdout", "stderr":
 			outputPaths = append(outputPaths, path)
 		default:
-			outputPaths = append(outputPaths, rootify(path, cfg.RootDir))
+			updatedPath, err := rootify(path, cfg.RootDir)
+			if err != nil {
+				return nil, err
+			}
+			outputPaths = append(outputPaths, updatedPath)
 		}
 	}
 	// log.Config <== config.Logging
@@ -655,59 +660,60 @@ func (cfg *KwildConfig) LogConfig() *log.Config {
 		OutputPaths: outputPaths,
 		Format:      cfg.Logging.Format,
 		EncodeTime:  cfg.Logging.TimeEncoding,
-	}
+	}, nil
 }
 
-func (cfg *KwildConfig) configureCerts() {
+func (cfg *KwildConfig) configureCerts() error {
 	if cfg.AppCfg.TLSCertFile == "" {
 		cfg.AppCfg.TLSCertFile = DefaultTLSCertFile
 	}
-	cfg.AppCfg.TLSCertFile = rootify(cfg.AppCfg.TLSCertFile, cfg.RootDir)
+	path, err := rootify(cfg.AppCfg.TLSCertFile, cfg.RootDir)
+	if err != nil {
+		return err
+	}
+	cfg.AppCfg.TLSCertFile = path
 
 	if cfg.AppCfg.TLSKeyFile == "" {
 		cfg.AppCfg.TLSKeyFile = defaultTLSKeyFile
 	}
-	cfg.AppCfg.TLSKeyFile = rootify(cfg.AppCfg.TLSKeyFile, cfg.RootDir)
+	path, err = rootify(cfg.AppCfg.TLSKeyFile, cfg.RootDir)
+	if err != nil {
+		return err
+	}
+	cfg.AppCfg.TLSKeyFile = path
+	return nil
 }
 
 func (cfg *KwildConfig) sanitizeCfgPaths() error {
 	rootDir := cfg.RootDir
 
-	if cfg.AppCfg.PrivateKeyPath != "" {
-		cfg.AppCfg.PrivateKeyPath = rootify(cfg.AppCfg.PrivateKeyPath, rootDir)
-	} else {
-		cfg.AppCfg.PrivateKeyPath = filepath.Join(rootDir, PrivateKeyFileName)
+	path, err := rootify(cfg.AppCfg.PrivateKeyPath, rootDir)
+	if err != nil {
+		return fmt.Errorf("failed to expand private key path \"%v\": %v", cfg.AppCfg.PrivateKeyPath, err)
 	}
+	cfg.AppCfg.PrivateKeyPath = path
 	fmt.Println("Private key path:", cfg.AppCfg.PrivateKeyPath)
 
 	if cfg.AppCfg.Snapshots.Enabled {
-		if cfg.AppCfg.Snapshots.SnapshotDir == "" {
-			cfg.AppCfg.Snapshots.SnapshotDir = filepath.Join(rootDir, SnapshotDirName)
-		} else {
-			dir, err := ExpandPath(cfg.AppCfg.Snapshots.SnapshotDir)
-			if err != nil {
-				return fmt.Errorf("failed to expand snapshot directory \"%v\": %v", cfg.AppCfg.Snapshots.SnapshotDir, err)
-			}
-			cfg.AppCfg.Snapshots.SnapshotDir = dir
+		path, err := rootify(cfg.AppCfg.Snapshots.SnapshotDir, rootDir)
+		if err != nil {
+			return fmt.Errorf("failed to expand snapshot directory \"%v\": %v", cfg.AppCfg.Snapshots.SnapshotDir, err)
 		}
+		cfg.AppCfg.Snapshots.SnapshotDir = path
 		fmt.Println("Snapshot directory:", cfg.AppCfg.Snapshots.SnapshotDir)
 	}
 
 	if cfg.ChainCfg.StateSync.Enable {
-		if cfg.ChainCfg.StateSync.SnapshotDir == "" {
-			cfg.ChainCfg.StateSync.SnapshotDir = filepath.Join(rootDir, ReceivedSnapsDirName)
-		} else {
-			dir, err := ExpandPath(cfg.ChainCfg.StateSync.SnapshotDir)
-			if err != nil {
-				return fmt.Errorf("failed to expand snapshot directory \"%v\": %v", cfg.ChainCfg.StateSync.SnapshotDir, err)
-			}
-			cfg.ChainCfg.StateSync.SnapshotDir = dir
+		path, err := rootify(cfg.ChainCfg.StateSync.SnapshotDir, rootDir)
+		if err != nil {
+			return fmt.Errorf("failed to expand state sync snapshots directory \"%v\": %v", cfg.ChainCfg.StateSync.SnapshotDir, err)
 		}
+		cfg.ChainCfg.StateSync.SnapshotDir = path
 		fmt.Println("State sync received snapshots directory:", cfg.ChainCfg.StateSync.SnapshotDir)
 	}
 
 	if cfg.AppCfg.GenesisState != "" {
-		path, err := ExpandPath(cfg.AppCfg.GenesisState)
+		path, err := rootify(cfg.AppCfg.GenesisState, rootDir)
 		if err != nil {
 			return fmt.Errorf("failed to expand snapshot file path \"%v\": %v", cfg.AppCfg.GenesisState, err)
 		}

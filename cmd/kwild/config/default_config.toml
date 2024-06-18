@@ -1,9 +1,7 @@
 # The is an example config file for kwild.
 
-# NOTE: Any path below can be absolute (e.g. "/var/myawesomeapp/data") or
-# relative to the root directory (e.g. "data"). The root directory is
-# "$HOME/.kwild" by default, but could be changed via $KWILD_HOME env variable
-# or via --home command line flag.
+# NOTE: Any path below can be absolute (e.g. "/app/data", "~/app/data) or
+# relative to the root directory (e.g. "data")
 # Order of preference: command line flag, env variable, default value.
 
 # Root Directory Structure:
@@ -91,6 +89,11 @@ tls_key_file = ""
 # Kwild Server hostname
 hostname = ""
 
+# Path to the snapshot file to restore the database from.
+# Used during the network migration process.
+# Might be either absolute path or path related to the kwild root directory.
+genesis_state = ""
+
 #######################################################################
 ###                     Extension Configuration                     ###
 #######################################################################
@@ -101,21 +104,18 @@ hostname = ""
 #######################################################################
 [app.snapshots]
 
-# Toggle to enable snapshot store
-# This would snapshot the application state at every recurring_height blocks
-# and keep max_snapshots number of snapshots in the snapshot_dir
-# Application state includes the databases deployed, accounts and the Validators db
+# Enables snapshots
 enabled = false
 
-# The height at which the snapshot is taken
-recurring_height = 100000
-
-# Maximum number of snapshots to be kept in the snapshot_dir.
-# If max limit is reached, the oldest would be deleted and replaced by the latest snapshot
-max_snapshots = 3
-
-# The directory where the snapshots are stored. Can be absolute or relative to the kwild root directory
+# Path to the snapshots directory
+# Might be either absolute path or path related to the kwild root directory.
 snapshot_dir = "snapshots"
+
+# Specifies the block heights(multiples of recurring_height) at which the snapshot should be taken
+recurring_height = 10000
+
+# Maximum number of snapshots to store
+max_snapshots = 3
 
 #######################################################################
 ###                    Logging Config Options                       ###
@@ -264,21 +264,25 @@ cache_size = 10000
 # starting from the height of the snapshot.
 enable = false
 
-# RPC servers (comma-separated) for light client verification of the synced state machine and
-# retrieval of state data for node bootstrapping. Also needs a trusted height and corresponding
-# header hash obtained from a trusted source, and a period during which validators can be trusted.
-#
-# For Cosmos SDK-based chains, trust_period should usually be about 2/3 of the unbonding time (~2
-# weeks) during which they can be financially punished (slashed) for misbehavior.
+# SnapshotDir is the directory to store the received snapshot chunks.
+# Might be either absolute path or path related to the kwild root directory.
+snapshot_dir = "rcvdSnaps"
+
+# Trusted snapshot providers (comma-separated chain RPC servers) are the source-of-truth for the snapshot integrity.
+# Snapshots are accepted for statesync only after verifying the snapshot metadata (snapshot hash, chunk count, height etc.) 
+# with these trusted snapshot providers. At least 1 trusted snapshot provider is required for enabling state sync.
 rpc_servers = ""
 
-# Temporary directory for state sync snapshot chunks, defaults to the OS tempdir (typically /tmp).
-# Will create a new, randomly named directory within, and remove it when done.
-temp_dir = ""
-
-# Time to spend discovering snapshots before initiating a restore.
+# Time spent discovering snapshots before offering the best(latest) snapshot to the application.
+# If no snapshots are discovered, the node will redo the discovery process until snapshots are found.
+# If network has no snapshots, restart the node with state sync disabled to sync with the network.
+# Current default is 15s, as only snapshot metadata is requested in the discovery process. 
+# Adjust this value according to the network latencies of your peers.
 discovery_time = "15s"
 
 # The timeout duration before re-requesting a chunk, possibly from a different
-# peer (default: 1 minute).
+# peer (default: 1 minute), if the current peer is unresponsive to the chunk request.
 chunk_request_timeout = "10s"
+
+# Note: If the requested chunk is not received for a duration of 2 minutes (hard-coded default), 
+# the state sync process is aborted and the node will fall back to the regular block sync process.
