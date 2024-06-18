@@ -5,6 +5,7 @@ package sql
 import (
 	"context"
 	"errors"
+	"io"
 )
 
 var (
@@ -82,9 +83,11 @@ type DelayedReadTxMaker interface {
 //
 // NOTE: An OuterTx may be used where only a Tx or DB is required since those
 // interfaces are a subset of the OuterTx method set.
+// It takes a writer to write the full changeset to.
+// If the writer is nil, the changeset will not be written.
 type OuterTx interface {
 	Tx
-	Precommit(ctx context.Context) ([]byte, error)
+	Precommit(ctx context.Context, writer io.Writer) ([]byte, error)
 }
 
 // OuterTxMaker is the special kind of transaction that creates a transaction

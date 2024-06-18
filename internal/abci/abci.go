@@ -35,6 +35,7 @@ import (
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
+	"github.com/cometbft/cometbft/crypto/tmhash"
 	"go.uber.org/zap"
 )
 
@@ -365,7 +366,15 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	}
 	defer readTx.Rollback(ctx) // always rollback since we are read-only
 
-	err = a.txApp.ApplyMempool(ctx, readTx, tx)
+	err = a.txApp.ApplyMempool(&common.TxContext{
+		Ctx: ctx,
+		BlockContext: &common.BlockContext{
+			ChainContext: a.chainContext,
+			Height:       a.height + 1, // height increments at the start of FinalizeBlock,
+			Proposer:     nil,          // we don't know the proposer here
+		},
+		TxID: cometTXID(incoming.Tx),
+	}, readTx, tx)
 	if err != nil {
 		if errors.Is(err, transactions.ErrInvalidNonce) {
 			code = codeInvalidNonce
@@ -396,6 +405,11 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		a.verifiedTxnsMtx.Unlock()
 	}
 	return &abciTypes.ResponseCheckTx{Code: code.Uint32()}, nil
+}
+
+// cometTXID gets the cometbft transaction ID.
+func cometTXID(tx []byte) []byte {
+	return tmhash.Sum(tx)
 }
 
 // FinalizeBlock is on the consensus connection. Note that according to CometBFT
@@ -431,7 +445,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		VoteExpiry:       a.consensusParams.Votes.VoteExpiry,
 		DisabledGasCosts: a.consensusParams.WithoutGasCosts,
 	}
-	oldNetworkParams := networkParams.Copy()
+	oldNetworkParams := *networkParams
 
 	initialValidators, err := a.txApp.GetValidators(ctx, a.consensusTx)
 	if err != nil {
@@ -531,7 +545,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	// Broadcast any events that have not been broadcasted yet
 	if a.broadcastFn != nil && len(proposerPubKey) > 0 {
-		err := a.broadcastFn(ctx, a.consensusTx, proposerPubKey)
+		err := a.broadcastFn(ctx, a.consensusTx, &blockCtx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to broadcast events: %w", err)
 		}
@@ -545,7 +559,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// store any changes to the network params
-	err = meta.StoreDiff(ctx, a.consensusTx, oldNetworkParams, networkParams)
+	err = meta.StoreDiff(ctx, a.consensusTx, &oldNetworkParams, networkParams)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store network params diff: %w", err)
 	}
@@ -562,7 +576,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// we now get the apphash by calling precommit on the transaction
-	appHash, err := a.consensusTx.Precommit(ctx)
+	appHash, err := a.consensusTx.Precommit(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to precommit transaction: %w", err)
 	}
@@ -796,14 +810,14 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 		return nil, fmt.Errorf("expected NULL app hash, got %x", appHash)
 	}
 
-	startParams := a.chainContext.NetworkParameters.Copy()
+	startParams := *a.chainContext.NetworkParameters
 
 	if err := a.txApp.GenesisInit(ctx, a.genesisTx, vldtrs, genesisAllocs, req.InitialHeight, a.chainContext); err != nil {
 		return nil, fmt.Errorf("txApp.GenesisInit failed: %w", err)
 	}
 
 	// persist any diff to the network params
-	err = meta.StoreDiff(ctx, a.genesisTx, startParams, a.chainContext.NetworkParameters)
+	err = meta.StoreDiff(ctx, a.genesisTx, &startParams, a.chainContext.NetworkParameters)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store network params diff: %w", err)
 	}
@@ -1349,7 +1363,7 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 	return &abciTypes.ResponseQuery{}, nil
 }
 
-type EventBroadcaster func(ctx context.Context, db sql.DB, proposer []byte) error
+type EventBroadcaster func(ctx context.Context, db sql.DB, block *common.BlockContext) error
 
 func (a *AbciApp) SetEventBroadcaster(fn EventBroadcaster) {
 	a.broadcastFn = fn
@@ -1406,4 +1420,12 @@ func (a *AbciApp) Close() error {
 		}
 	}
 	return nil
+}
+
+// Price estimates the price for a transaction.
+// Consumers who do not have information about the current chain parameters /
+// who wanmt a guarantee that they have the most up-to-date parameters without
+// reading from the DB can use this method.
+func (a *AbciApp) Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error) {
+	return a.txApp.Price(ctx, db, tx, a.chainContext)
 }

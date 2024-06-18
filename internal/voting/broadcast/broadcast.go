@@ -21,6 +21,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
@@ -50,7 +51,7 @@ type TxApp interface {
 	// AccountInfo gets uncommitted information about an account.
 	AccountInfo(ctx context.Context, db sql.DB, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
 	// Price gets the estimated fee for a transaction.
-	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
+	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction, chain *common.ChainContext) (*big.Int, error)
 	GetValidators(ctx context.Context, db sql.DB) ([]*types.Validator, error)
 }
 
@@ -83,7 +84,7 @@ type EventBroadcaster struct {
 // It implements Kwil's abci.CommitHook function signature.
 // If the node is not a validator, it will do nothing.
 // It broadcasts votes for the existing resolutions.
-func (e *EventBroadcaster) RunBroadcast(ctx context.Context, db sql.DB, proposer []byte) error {
+func (e *EventBroadcaster) RunBroadcast(ctx context.Context, db sql.DB, block *common.BlockContext) error {
 	readTx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -116,7 +117,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, db sql.DB, proposer
 	// in the on-going block. This probably is a temporary restriction until
 	// we figure out a better way to track both
 	// mempool(uncommitted), committed and proposer introduced txns.
-	if bytes.Equal(proposer, e.signer.Identity()) {
+	if bytes.Equal(block.Proposer, e.signer.Identity()) {
 		return nil
 	}
 
@@ -147,7 +148,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, db sql.DB, proposer
 	}
 
 	// Get the fee estimate
-	fee, err := e.app.Price(ctx, readTx, tx)
+	fee, err := e.app.Price(ctx, readTx, tx, block.ChainContext)
 	if err != nil {
 		return err
 	}

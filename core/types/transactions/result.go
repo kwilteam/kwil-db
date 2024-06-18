@@ -44,6 +44,8 @@ const (
 	CodeDatasetMissing TxCode = 110
 	CodeDatasetExists  TxCode = 120
 
+	CodeNetworkInMigration TxCode = 200
+
 	CodeUnknownError TxCode = math.MaxUint32
 )
 
@@ -71,6 +73,18 @@ func (c TxCode) String() string {
 		return "insufficient fee"
 	case CodeInvalidAmount:
 		return "invalid amount"
+	case CodeInvalidSender:
+		return "invalid sender"
+	case CodeInvalidSchema:
+		return "invalid schema"
+	case CodeDatasetMissing:
+		return "dataset missing"
+	case CodeDatasetExists:
+		return "dataset exists"
+	case CodeNetworkInMigration:
+		return "network in migration"
+	case CodeUnknownError:
+		return "unknown error"
 	default:
 		return "unknown tx error"
 	}

@@ -242,6 +242,10 @@ func (d *deployDatasetRoute) Price(ctx context.Context, app *common.App, tx *tra
 }
 
 func (d *deployDatasetRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot deploy dataset during migration")
+	}
+
 	schemaPayload := &transactions.Schema{}
 	err := schemaPayload.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
@@ -289,6 +293,10 @@ func (d *dropDatasetRoute) Price(ctx context.Context, app *common.App, tx *trans
 }
 
 func (d *dropDatasetRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot drop dataset during migration")
+	}
+
 	drop := &transactions.DropSchema{}
 	err := drop.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
@@ -414,6 +422,10 @@ func (d *transferRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *tra
 		return transactions.CodeEncodingError, err
 	}
 
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot transfer during migration")
+	}
+
 	bigAmt, ok := new(big.Int).SetString(transferBody.Amount, 10)
 	if !ok {
 		return transactions.CodeInvalidAmount, fmt.Errorf("failed to parse amount: %s", transferBody.Amount)
@@ -459,6 +471,10 @@ func (d *validatorJoinRoute) Price(ctx context.Context, app *common.App, tx *tra
 }
 
 func (d *validatorJoinRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot join validator during migration")
+	}
+
 	join := &transactions.ValidatorJoin{}
 	err := join.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
@@ -527,6 +543,10 @@ func (d *validatorApproveRoute) Price(ctx context.Context, app *common.App, tx *
 }
 
 func (d *validatorApproveRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot approve validator join during migration")
+	}
+
 	approve := &transactions.ValidatorApprove{}
 	err := approve.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
@@ -588,6 +608,10 @@ func (d *validatorRemoveRoute) Price(ctx context.Context, app *common.App, tx *t
 }
 
 func (d *validatorRemoveRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot remove validator during migration")
+	}
+
 	remove := &transactions.ValidatorRemove{}
 	err := remove.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
@@ -655,6 +679,9 @@ func (d *validatorLeaveRoute) Price(ctx context.Context, app *common.App, tx *tr
 }
 
 func (d *validatorLeaveRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot leave validator during migration")
+	}
 	return 0, nil // no payload to decode or validate for this route
 }
 
@@ -696,6 +723,9 @@ func (d *validatorVoteIDsRoute) Price(ctx context.Context, app *common.App, tx *
 }
 
 func (d *validatorVoteIDsRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot vote during migration")
+	}
 	return 0, nil
 }
 
@@ -773,6 +803,11 @@ func (d *validatorVoteBodiesRoute) Price(ctx context.Context, _ *common.App, tx 
 }
 
 func (d *validatorVoteBodiesRoute) PreTx(ctx common.TxContext, _ *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot vote during migration")
+
+	}
+
 	// Only proposer can issue a VoteBody transaction.
 	if !bytes.Equal(tx.Sender, ctx.BlockContext.Proposer) {
 		return transactions.CodeInvalidSender, ErrCallerNotProposer

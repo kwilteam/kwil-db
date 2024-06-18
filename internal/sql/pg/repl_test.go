@@ -57,7 +57,7 @@ func Test_repl(t *testing.T) {
 
 	const publicationName = "kwild_repl"
 	var slotName = publicationName + random.String(8)
-	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter)
+	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter, &changesetIoWriter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func Test_repl(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wantCommitHash, _ := hex.DecodeString("cb390afbf808256307ee0927999805ee3d5af193772e2c9b71823fbc1fe8867f")
+	wantCommitHash, _ := hex.DecodeString("1fd01e9d38e322285723643f27123762c3d7fd22761f7ab4de57e0a947f8127b")
 
 	var wg sync.WaitGroup
 	wg.Add(1)

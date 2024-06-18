@@ -155,6 +155,22 @@ func StoreParams(ctx context.Context, db sql.TxMaker, params *common.NetworkPara
 		return err
 	}
 
+	buf = make([]byte, 1)
+	if params.InMigration {
+		buf[0] = 1
+	}
+	_, err = tx.Execute(ctx, upsertParam, inMigration, buf)
+	if err != nil {
+		return err
+	}
+
+	buf = make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, uint64(params.MaxVotesPerTx))
+	_, err = tx.Execute(ctx, upsertParam, maxVotesPerTx, buf)
+	if err != nil {
+		return err
+	}
+
 	return tx.Commit(ctx)
 }
 
@@ -195,8 +211,8 @@ func LoadParams(ctx context.Context, db sql.Executor) (*common.NetworkParameters
 		return nil, ErrParamsNotFound
 	}
 
-	if len(res.Rows) != 4 {
-		return nil, fmt.Errorf("expected four rows, got %d", len(res.Rows))
+	if len(res.Rows) != 6 {
+		return nil, fmt.Errorf("internal bug: expected 6 rows, got %d", len(res.Rows))
 	}
 
 	params := &common.NetworkParameters{}
@@ -224,6 +240,10 @@ func LoadParams(ctx context.Context, db sql.Executor) (*common.NetworkParameters
 			params.VoteExpiry = int64(binary.LittleEndian.Uint64(value))
 		case disabledGasKey:
 			params.DisabledGasCosts = value[0] == 1
+		case inMigration:
+			params.InMigration = value[0] == 1
+		case maxVotesPerTx:
+			params.MaxVotesPerTx = int64(binary.LittleEndian.Uint64(value))
 		default:
 			return nil, fmt.Errorf("internal bug: unknown param name: %s", param)
 		}
@@ -261,6 +281,20 @@ func diff(original, new *common.NetworkParameters) map[string][]byte {
 		d[disabledGasKey] = buf
 	}
 
+	if original.InMigration != new.InMigration {
+		buf := make([]byte, 1)
+		if new.InMigration {
+			buf[0] = 1
+		}
+		d[inMigration] = buf
+	}
+
+	if original.MaxVotesPerTx != new.MaxVotesPerTx {
+		buf := make([]byte, 8)
+		binary.LittleEndian.PutUint64(buf, uint64(new.MaxVotesPerTx))
+		d[maxVotesPerTx] = buf
+	}
+
 	return d
 }
 
@@ -269,4 +303,6 @@ const (
 	joinExpiryKey   = `join_expiry`
 	voteExpiryKey   = `vote_expiry`
 	disabledGasKey  = `disabled_gas_costs`
+	inMigration     = `in_migration`
+	maxVotesPerTx   = `max_votes_per_tx`
 )
