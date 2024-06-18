@@ -1,9 +1,11 @@
-//go:build pglive
+// go:build pglive
 
 package pg
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -177,6 +179,11 @@ func TestSelectLiteralType(t *testing.T) {
 		}
 	})
 
+	err = registerTypes(ctx, conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// var arg any = int64(1)
 	// args := []any{arg, arg}
 	argMap := map[string]any{
@@ -232,7 +239,7 @@ func TestSelectLiteralType(t *testing.T) {
 
 	// Now with our high level func and mode.
 	args2 := append([]any{QueryModeInferredArgTypes}, args...)
-	results, err := query(ctx, &cqWrapper{conn}, stmt, args2...)
+	results, err := query(ctx, oidTypesMap(conn.TypeMap()), &cqWrapper{conn}, stmt, args2...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +335,7 @@ func TestNestedTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	id, err := tx.Precommit(ctx)
+	id, err := tx.Precommit(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,47 +437,47 @@ func TestTypeRoundtrip(t *testing.T) {
 		{
 			typ:  "int8[]",
 			val:  []int64{1, 2, 3},
-			want: []any{int64(1), int64(2), int64(3)},
+			want: []int64{int64(1), int64(2), int64(3)},
 		},
 		{
 			typ:  "bool[]",
 			val:  []bool{true, false, true},
-			want: []any{true, false, true},
+			want: []bool{true, false, true},
 		},
 		{
 			typ:  "text[]",
 			val:  []string{"a", "b", "c"},
-			want: []any{"a", "b", "c"},
+			want: []string{"a", "b", "c"},
 		},
 		{
 			typ:  "bytea[]",
 			val:  [][]byte{[]byte("a"), []byte("b"), []byte("c")},
-			want: []any{[]byte("a"), []byte("b"), []byte("c")},
+			want: [][]byte{[]byte("a"), []byte("b"), []byte("c")},
 		},
 		{
 			typ:  "uuid[]",
 			val:  types.UUIDArray{types.NewUUIDV5([]byte("2")), types.NewUUIDV5([]byte("3"))},
-			want: []any{types.NewUUIDV5([]byte("2")), types.NewUUIDV5([]byte("3"))},
+			want: types.UUIDArray{types.NewUUIDV5([]byte("2")), types.NewUUIDV5([]byte("3"))},
 		},
 		{
 			typ:  "decimal(6,4)[]",
 			val:  decimal.DecimalArray{mustDecimal("12.4223"), mustDecimal("22.4425"), mustDecimal("23.7423")},
-			want: []any{mustDecimal("12.4223"), mustDecimal("22.4425"), mustDecimal("23.7423")},
+			want: decimal.DecimalArray{mustDecimal("12.4223"), mustDecimal("22.4425"), mustDecimal("23.7423")},
 		},
 		{
-			typ:  "decimal(3,0)[]",
+			typ:  "uint256[]",
 			val:  types.Uint256Array{types.Uint256FromInt(100), types.Uint256FromInt(200), types.Uint256FromInt(300)},
-			want: []any{mustDecimal("100"), mustDecimal("200"), mustDecimal("300")},
+			want: types.Uint256Array{types.Uint256FromInt(100), types.Uint256FromInt(200), types.Uint256FromInt(300)},
 		},
 		{
 			typ:  "text[]",
 			val:  []string{},
-			want: []any{},
+			want: []string{},
 		},
 		{
 			typ:  "int8[]",
 			val:  []int64{},
-			want: []any{},
+			want: []int64{},
 		},
 		{
 			typ:     "nil",
@@ -480,13 +487,13 @@ func TestTypeRoundtrip(t *testing.T) {
 		{
 			typ:     "[]uuid",
 			val:     []any{"3146857c-8671-4f4e-99bd-fcc621f9d3d1", "3146857c-8671-4f4e-99bd-fcc621f9d3d1"},
-			want:    []any{"3146857c-8671-4f4e-99bd-fcc621f9d3d1", "3146857c-8671-4f4e-99bd-fcc621f9d3d1"},
+			want:    []string{"3146857c-8671-4f4e-99bd-fcc621f9d3d1", "3146857c-8671-4f4e-99bd-fcc621f9d3d1"},
 			skipTbl: true,
 		},
 		{
 			typ:          "int8[]",
 			val:          []string{"1", "2"},
-			want:         []any{int64(1), int64(2)},
+			want:         []int64{int64(1), int64(2)},
 			skipInferred: true,
 		},
 	} {
@@ -557,6 +564,15 @@ func mustParseUUID(s string) *types.UUID {
 	return u
 }
 
+// mustUint256 panics if the string cannot be converted to a Uint256.
+func mustUint256(s string) *types.Uint256 {
+	u, err := types.Uint256FromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
+
 func Test_DelayedTx(t *testing.T) {
 	ctx := context.Background()
 
@@ -575,5 +591,219 @@ func Test_DelayedTx(t *testing.T) {
 	require.NoError(t, err)
 
 	err = tx2.Commit(ctx)
+	require.NoError(t, err)
+}
+
+// This test tests changesets, and that they are properly encoded+decoded
+func Test_Changesets(t *testing.T) {
+	for i, tc := range []interface {
+		run(t *testing.T)
+	}{
+		&changesetTestcase[string, []string]{ // basic string test
+			datatype:  "text",
+			val:       "hello",
+			arrayVal:  []string{"a", "b", "c"},
+			val2:      "world",
+			arrayVal2: []string{"d", "e", "f"},
+		},
+		&changesetTestcase[string, []string]{ // test with special characters and escaping
+			datatype:  "text",
+			val:       "heldcsklk;le''\"';",
+			arrayVal:  []string{"hel,dcsklk;le','\",';", `";\\sdsw,"''"\',\""`},
+			val2:      "world",
+			arrayVal2: []string{"'\"", "heldcsklk;le''\"';"},
+		},
+		&changesetTestcase[int64, []int64]{
+			datatype:  "int8",
+			val:       1,
+			arrayVal:  []int64{1, 2, 3987654},
+			val2:      2,
+			arrayVal2: []int64{3, 4, 5},
+		},
+		&changesetTestcase[bool, []bool]{
+			datatype:  "bool",
+			val:       true,
+			arrayVal:  []bool{true, false, true},
+			val2:      false,
+			arrayVal2: []bool{false, true, false},
+		},
+		&changesetTestcase[[]byte, [][]byte]{
+			datatype:  "bytea",
+			val:       []byte("hello"),
+			arrayVal:  [][]byte{[]byte("a"), []byte("b"), []byte("c")},
+			val2:      []byte("world"),
+			arrayVal2: [][]byte{[]byte("d"), []byte("e"), []byte("f")},
+		},
+		&changesetTestcase[*decimal.Decimal, decimal.DecimalArray]{
+			datatype:  "decimal(6,3)",
+			val:       mustDecimal("123.456"),
+			arrayVal:  decimal.DecimalArray{mustDecimal("123.456"), mustDecimal("123.456"), mustDecimal("123.456")},
+			val2:      mustDecimal("123.457"),
+			arrayVal2: decimal.DecimalArray{mustDecimal("123.457"), mustDecimal("123.457"), mustDecimal("123.457")},
+		},
+		&changesetTestcase[*types.UUID, types.UUIDArray]{
+			datatype:  "uuid",
+			val:       mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d1"),
+			arrayVal:  types.UUIDArray{mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d1"), mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d1")},
+			val2:      mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2"),
+			arrayVal2: types.UUIDArray{mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2"), mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2")},
+		},
+		&changesetTestcase[*types.Uint256, types.Uint256Array]{
+			datatype:  "uint256",
+			val:       mustUint256("18446744073709551615000000"),
+			arrayVal:  types.Uint256Array{mustUint256("184467440737095516150000002"), mustUint256("184467440737095516150000001")},
+			val2:      mustUint256("18446744073709551615000001"),
+			arrayVal2: types.Uint256Array{mustUint256("184467440737095516150000012"), mustUint256("1844674407370955161500000123")},
+		},
+	} {
+		t.Run(fmt.Sprint(i), tc.run)
+	}
+}
+
+// this is a hack to use generics in the test
+type changesetTestcase[T any, T2 any] struct {
+	datatype string // the postgres datatype to test
+	// the first vals will be inserted.
+	// val will be the primary key
+	val      T  // the value to test
+	arrayVal T2 // the array value to test
+	// the second vals will update the first vals
+	val2      T  // the second value to test
+	arrayVal2 T2 // the second array value to test
+}
+
+func (c *changesetTestcase[T, T2]) run(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewDB(ctx, cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	cleanup := func() {
+		db.AutoCommit(true)
+		_, err = db.Execute(ctx, "drop table if exists ds_test.test", QueryModeExec)
+		require.NoError(t, err)
+		_, err = db.Execute(ctx, "drop schema if exists ds_test", QueryModeExec)
+		db.AutoCommit(false)
+	}
+	// attempt to clean up any old failed tests
+	cleanup()
+	defer cleanup()
+
+	regularTx, err := db.BeginOuterTx(ctx)
+	require.NoError(t, err)
+	defer regularTx.Rollback(ctx)
+
+	_, err = regularTx.Execute(ctx, "create schema ds_test", QueryModeExec)
+	require.NoError(t, err)
+
+	_, err = regularTx.Execute(ctx, "create table ds_test.test (val "+c.datatype+" primary key, array_val "+c.datatype+"[])", QueryModeExec)
+	require.NoError(t, err)
+
+	err = regularTx.Commit(ctx)
+	require.NoError(t, err)
+
+	/*
+		Block 1: Insert
+	*/
+
+	writer := new(bytes.Buffer)
+
+	tx, err := db.BeginOuterTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Execute(ctx, "insert into ds_test.test (val, array_val) values ($1, $2)", QueryModeExec, c.val, c.arrayVal)
+	require.NoError(t, err)
+
+	// get the changeset
+	_, err = tx.Precommit(ctx, writer)
+	require.NoError(t, err)
+
+	cs, err := DeserializeChangeset(writer.Bytes())
+	require.NoError(t, err)
+
+	require.Len(t, cs.Changesets, 1)
+	require.Len(t, cs.Changesets[0].Inserts, 1)
+
+	insertVals, err := cs.Changesets[0].DecodeTuple(cs.Changesets[0].Inserts[0])
+	require.NoError(t, err)
+
+	// verify the insert vals are equal to the first vals
+	require.EqualValues(t, c.val, insertVals[0])
+	require.EqualValues(t, c.arrayVal, insertVals[1])
+
+	err = tx.Commit(ctx)
+	require.NoError(t, err)
+
+	/*
+		Block 2: Update
+	*/
+
+	writer = new(bytes.Buffer)
+
+	tx, err = db.BeginOuterTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Execute(ctx, "update ds_test.test set val = $1, array_val = $2", QueryModeExec, c.val2, c.arrayVal2)
+	require.NoError(t, err)
+
+	_, err = tx.Precommit(ctx, writer)
+	require.NoError(t, err)
+
+	cs, err = DeserializeChangeset(writer.Bytes())
+	require.NoError(t, err)
+
+	require.Len(t, cs.Changesets, 1)
+	require.Len(t, cs.Changesets[0].Updates, 1)
+
+	oldVals, err := cs.Changesets[0].DecodeTuple(cs.Changesets[0].Updates[0][0])
+	require.NoError(t, err)
+
+	newVals, err := cs.Changesets[0].DecodeTuple(cs.Changesets[0].Updates[0][1])
+	require.NoError(t, err)
+
+	// verify the old vals are equal to the first vals
+	require.EqualValues(t, c.val, oldVals[0])
+	require.EqualValues(t, c.arrayVal, oldVals[1])
+
+	// verify the new vals are equal to the second vals
+	require.EqualValues(t, c.val2, newVals[0])
+	require.EqualValues(t, c.arrayVal2, newVals[1])
+
+	err = tx.Commit(ctx)
+	require.NoError(t, err)
+
+	/*
+		Block 3: Delete
+	*/
+
+	writer = new(bytes.Buffer)
+
+	tx, err = db.BeginOuterTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Execute(ctx, "delete from ds_test.test", QueryModeExec)
+	require.NoError(t, err)
+
+	_, err = tx.Precommit(ctx, writer)
+	require.NoError(t, err)
+
+	cs, err = DeserializeChangeset(writer.Bytes())
+	require.NoError(t, err)
+
+	require.Len(t, cs.Changesets, 1)
+	require.Len(t, cs.Changesets[0].Deletes, 1)
+
+	deleteVals, err := cs.Changesets[0].DecodeTuple(cs.Changesets[0].Deletes[0])
+	require.NoError(t, err)
+
+	// verify the delete vals are equal to the second vals
+	require.EqualValues(t, c.val2, deleteVals[0])
+	require.EqualValues(t, c.arrayVal2, deleteVals[1])
+
+	err = tx.Commit(ctx)
 	require.NoError(t, err)
 }

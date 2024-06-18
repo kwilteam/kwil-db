@@ -29,16 +29,18 @@ type Service struct {
 	db sql.ReadTxMaker // this should only ever make a read-only tx
 
 	nodeApp     NodeApplication // so we don't have to do ABCIQuery (indirect)
+	pricer      Pricer
 	chainClient BlockchainTransactor
 }
 
 func NewService(db sql.ReadTxMaker, engine EngineReader,
-	chainClient BlockchainTransactor, nodeApp NodeApplication, opts ...TxSvcOpt) *Service {
+	chainClient BlockchainTransactor, nodeApp NodeApplication, pricer Pricer, opts ...TxSvcOpt) *Service {
 	s := &Service{
 		log:           log.NewNoOp(),
 		readTxTimeout: defaultReadTxTimeout,
 		engine:        engine,
 		nodeApp:       nodeApp,
+		pricer:        pricer,
 		chainClient:   chainClient,
 		db:            db,
 	}
@@ -65,5 +67,8 @@ type BlockchainTransactor interface {
 
 type NodeApplication interface {
 	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
+}
+
+type Pricer interface {
 	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
 }

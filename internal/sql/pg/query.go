@@ -4,15 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
-	"reflect"
 
 	"github.com/kwilteam/kwil-db/common/sql"
-	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func queryImpliedArgTypes(ctx context.Context, conn *pgx.Conn, stmt string, args ...any) (pgx.Rows, error) {
@@ -42,7 +37,7 @@ optionLoop:
 	}
 
 	// convert all types to types registered in pgx's type map
-	args, oids, err := encodeToPGType(args...)
+	args, oids, err := encodeToPGType(conn.TypeMap(), args...)
 	if err != nil {
 		return nil, fmt.Errorf("encode to pg type failed: %w", err)
 	}
@@ -163,7 +158,7 @@ func (cq *cqWrapper) Query(ctx context.Context, sql string, args ...any) (pgx.Ro
 	return cq.c.Query(ctx, sql, args...)
 }
 
-func query(ctx context.Context, cq connQueryer, stmt string, args ...any) (*sql.ResultSet, error) {
+func query(ctx context.Context, oidToDataType map[uint32]*datatype, cq connQueryer, stmt string, args ...any) (*sql.ResultSet, error) {
 	q := cq.Query
 	if mustInferArgs(args) {
 		// return nil, errors.New("cannot use QueryModeInferredArgTypes with query")
@@ -200,7 +195,11 @@ func query(ctx context.Context, cq connQueryer, stmt string, args ...any) (*sql.
 		if err != nil {
 			return nil, err
 		}
-		return decodeFromPGType(pgxVals...)
+		oids := make([]uint32, len(pgxVals))
+		for i, v := range row.FieldDescriptions() {
+			oids[i] = v.DataTypeOID
+		}
+		return decodeFromPG(pgxVals, oids, oidToDataType)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, sql.ErrNoRows
@@ -215,223 +214,11 @@ func query(ctx context.Context, cq connQueryer, stmt string, args ...any) (*sql.
 	return resSet, err
 }
 
-// oidArrMap maps oids to their corresponding array oids.
-// It only includes types that we care about in Kwil.
-var oidArrMap = map[int]int{
-	pgtype.BoolOID:    pgtype.BoolArrayOID,
-	pgtype.ByteaOID:   pgtype.ByteaArrayOID,
-	pgtype.Int8OID:    pgtype.Int8ArrayOID,
-	pgtype.TextOID:    pgtype.TextArrayOID,
-	pgtype.UUIDOID:    pgtype.UUIDArrayOID,
-	pgtype.NumericOID: pgtype.NumericArrayOID,
-}
-
-// encodeToPGType encodes several Go types to their corresponding pgx types.
-// It is capable of detecting special Kwil types and encoding them to their
-// corresponding pgx types. It is only used if using inferred argument types.
-// If not using inferred argument types, pgx will rely on the Valuer interface
-// to encode the Go types to their corresponding pgx types.
-// It also returns the pgx type OIDs for each value.
-func encodeToPGType(vals ...any) ([]any, []uint32, error) {
-	// encodeScalar is a helper function that converts a single value to a pgx.
-	encodeScalar := func(v any) (any, int, error) {
-		switch v := v.(type) {
-		case nil:
-			return nil, pgtype.TextOID, nil
-		case bool:
-			return v, pgtype.BoolOID, nil
-		case int, int8, int16, int32, int64:
-			return v, pgtype.Int8OID, nil
-		case string:
-			return v, pgtype.TextOID, nil
-		case []byte:
-			return v, pgtype.ByteaOID, nil
-		case *types.UUID:
-			return pgtype.UUID{Bytes: [16]byte(v.Bytes()), Valid: true}, pgtype.UUIDOID, nil
-		case types.UUID:
-			return pgtype.UUID{Bytes: [16]byte(v.Bytes()), Valid: true}, pgtype.UUIDOID, nil
-		case [16]byte:
-			return pgtype.UUID{Bytes: v, Valid: true}, pgtype.UUIDOID, nil
-		case decimal.Decimal:
-			return pgtype.Numeric{
-				Int:   v.BigInt(),
-				Exp:   v.Exp(),
-				Valid: true,
-			}, pgtype.NumericOID, nil
-		case *decimal.Decimal:
-			return pgtype.Numeric{
-				Int:   v.BigInt(),
-				Exp:   v.Exp(),
-				Valid: true,
-			}, pgtype.NumericOID, nil
-		case types.Uint256:
-			return pgtype.Numeric{
-				Int:   v.ToBig(),
-				Exp:   0,
-				Valid: true,
-			}, pgtype.NumericOID, nil
-		case *types.Uint256:
-			return pgtype.Numeric{
-				Int:   v.ToBig(),
-				Exp:   0,
-				Valid: true,
-			}, pgtype.NumericOID, nil
-		}
-
-		return nil, 0, fmt.Errorf("unsupported type: %T", v)
-	}
-
-	// we convert all types to postgres's type. If the underlying type is an
-	// array, we will set it as that so that pgx can handle it properly.
-	// The one exception is []byte, which is handled by pgx as a bytea.
-	pgxVals := make([]any, len(vals))
-	oids := make([]uint32, len(vals))
-	for i, val := range vals {
-		// if nil, we just set it to text.
-		if val == nil {
-			pgxVals[i] = nil
-			oids[i] = pgtype.TextOID
-			continue
-		}
-
-		dt := reflect.TypeOf(vals[i])
-		if (dt.Kind() == reflect.Slice || dt.Kind() == reflect.Array) && dt.Elem().Kind() != reflect.Uint8 {
-			valueOf := reflect.ValueOf(val)
-			arr := make([]any, valueOf.Len())
-			var oid int
-			var err error
-			for j := 0; j < valueOf.Len(); j++ {
-				arr[j], oid, err = encodeScalar(valueOf.Index(j).Interface())
-				if err != nil {
-					return nil, nil, err
-				}
-			}
-			pgxVals[i] = arr
-
-			// the oid can be 0 if the array is empty. In that case, we just
-			// set it to text array, since we cannot infer it from an empty array.
-			if oid == 0 {
-				oids[i] = pgtype.TextArrayOID
-			} else {
-				oids[i] = uint32(oidArrMap[oid])
-			}
-		} else {
-			var err error
-			var oid int
-			pgxVals[i], oid, err = encodeScalar(val)
-			if err != nil {
-				return nil, nil, err
-			}
-			oids[i] = uint32(oid)
-		}
-	}
-
-	return pgxVals, oids, nil
-}
-
-// decodeFromPGType decodes several pgx types to their corresponding Go types.
-// It is capable of detecting special Kwil types and decoding them to their
-// corresponding Go types.
-func decodeFromPGType(vals ...any) ([]any, error) {
-	decodeScalar := func(v any) (any, error) {
-		switch v := v.(type) {
-		default:
-			return v, nil
-
-		// we need to handle all ints as int64 since Kwil treats all
-		// ints as int64, but an integer literal in postgres can get
-		// returned as an int32
-		case int:
-			return int64(v), nil
-		case int8:
-			return int64(v), nil
-		case int16:
-			return int64(v), nil
-		case int32:
-			return int64(v), nil
-		case int64:
-			return v, nil
-		case uint:
-			return int64(v), nil
-		case uint16:
-			return int64(v), nil
-		case uint32:
-			return int64(v), nil
-		case pgtype.UUID:
-			u := types.UUID(v.Bytes)
-			return &u, nil
-		case [16]byte:
-			u := types.UUID(v)
-			return &u, nil
-		case pgtype.Numeric:
-			if v.NaN {
-				return "NaN", nil
-			}
-
-			// if we give postgres a number 5000, it will return it as 5 with exponent 3.
-			// Since kwil's decimal semantics do not allow negative scale, we need to multiply
-			// the number by 10^exp to get the correct value.
-			if v.Exp > 0 {
-				z := new(big.Int)
-				z.Exp(big.NewInt(10), big.NewInt(int64(v.Exp)), nil)
-				z.Mul(z, v.Int)
-				v.Int = z
-				v.Exp = 0
-			}
-
-			// there is a bit of an edge case here, where uint256 can be returned.
-			// since most results simply get returned to the user via JSON, it doesn't
-			// matter too much right now, so we'll leave it as-is.
-			return decimal.NewFromBigInt(v.Int, v.Exp)
-		}
-	}
-
-	goVals := make([]any, len(vals))
-	for i, val := range vals {
-		if val == nil {
-			goVals[i] = nil
-			continue
-		}
-
-		dt := reflect.TypeOf(vals[i])
-		if (dt.Kind() == reflect.Slice || dt.Kind() == reflect.Array) && dt.Elem().Kind() != reflect.Uint8 {
-			// we need to reflect the first type of the slice to determine what type the slice is.
-			// if empty, we return the slice as is.
-			valueOf := reflect.ValueOf(val)
-
-			length := valueOf.Len()
-			if length == 0 {
-				goVals[i] = val
-				continue
-			}
-
-			arr := make([]any, length)
-			for j := 0; j < length; j++ {
-				var err error
-				arr[j], err = decodeScalar(valueOf.Index(j).Interface())
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			goVals[i] = arr
-		} else {
-			var err error
-			goVals[i], err = decodeScalar(val)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	return goVals, nil
-}
-
 type txBeginner interface {
 	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
 }
 
-func queryTx(ctx context.Context, dbTx txBeginner, stmt string, args ...any) (*sql.ResultSet, error) {
+func queryTx(ctx context.Context, oidToDataType map[uint32]*datatype, dbTx txBeginner, stmt string, args ...any) (*sql.ResultSet, error) {
 	var resSet *sql.ResultSet
 	err := pgx.BeginTxFunc(ctx, dbTx,
 		pgx.TxOptions{
@@ -440,7 +227,7 @@ func queryTx(ctx context.Context, dbTx txBeginner, stmt string, args ...any) (*s
 		},
 		func(tx pgx.Tx) error {
 			var err error
-			resSet, err = query(ctx, tx, stmt, args...)
+			resSet, err = query(ctx, oidToDataType, tx, stmt, args...)
 			return err
 		},
 	)

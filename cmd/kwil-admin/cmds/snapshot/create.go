@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
@@ -16,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/common/chain"
 
 	"github.com/spf13/cobra"
@@ -34,8 +36,6 @@ kwil-admin snapshot create --dbname kwildb --user user1 --password pass1 --host 
 # Snapshot and genesis files will be created in the snapshot directory
 ls /path/to/snapshot/dir
 genesis.json    kwildb-snapshot.sql.gz`
-
-	createDatabase = `CREATE DATABASE `
 )
 
 /*
@@ -59,10 +59,16 @@ func createCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			snapshotDir, err := expandPath(snapshotDir)
 			if err != nil {
-				return fmt.Errorf("failed to expand snapshot directory path: %w", err)
+				return display.PrintErr(cmd, fmt.Errorf("failed to expand snapshot directory path: %v", err))
 			}
 
-			return pgDump(cmd.Context(), dbName, dbUser, dbPass, dbHost, dbPort, maxRowSize, snapshotDir)
+			logs, err := pgDump(cmd.Context(), dbName, dbUser, dbPass, dbHost, dbPort, maxRowSize, snapshotDir)
+			if err != nil {
+				return display.PrintErr(cmd, fmt.Errorf("failed to create database snapshot: %v", err))
+			}
+
+			r := &createSnapshotRes{Logs: logs}
+			return display.PrintCmd(cmd, r)
 		},
 	}
 
@@ -77,6 +83,18 @@ func createCmd() *cobra.Command {
 	return cmd
 }
 
+type createSnapshotRes struct {
+	Logs []string `json:"logs"`
+}
+
+func (c *createSnapshotRes) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c)
+}
+
+func (c *createSnapshotRes) MarshalText() (text []byte, err error) {
+	return []byte(fmt.Sprintf("Snapshot created successfully\n%s", strings.Join(c.Logs, "\n"))), nil
+}
+
 func expandPath(path string) (string, error) {
 	if strings.HasPrefix(path, "~") {
 		home, err := os.UserHomeDir()
@@ -88,17 +106,19 @@ func expandPath(path string) (string, error) {
 	return filepath.Abs(path)
 }
 
-func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, maxRowSize int, snapshotDir string) (err error) {
+// PGDump uses pg_dump to create a snapshot of the database.
+// It returns messages to log and an error if any.
+func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, maxRowSize int, snapshotDir string) (logs []string, err error) {
 	// Check if the snapshot directory exists, if not create it
 	err = os.MkdirAll(snapshotDir, 0755)
 	if err != nil {
-		return fmt.Errorf("failed to create snapshot directory: %w", err)
+		return nil, fmt.Errorf("failed to create snapshot directory: %w", err)
 	}
 
 	dumpFile := filepath.Join(snapshotDir, "kwildb-snapshot.sql.gz")
 	outputFile, err := os.Create(dumpFile)
 	if err != nil {
-		return fmt.Errorf("failed to create dump file: %w", err)
+		return nil, fmt.Errorf("failed to create dump file: %w", err)
 	}
 	// delete the dump file if an error occurs anywhere during the snapshot process
 	defer func() {
@@ -154,12 +174,12 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 	var stderr bytes.Buffer
 	pgDumpOutput, err := pgDumpCmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("failed to get stdout pipe: %w", err)
+		return nil, fmt.Errorf("failed to get stdout pipe: %w", err)
 	}
 	pgDumpCmd.Stderr = &stderr
 
 	if err := pgDumpCmd.Start(); err != nil {
-		return fmt.Errorf("failed to start pg_dump command: %w", err)
+		return nil, fmt.Errorf("failed to start pg_dump command: %w", err)
 	}
 	defer pgDumpOutput.Close()
 
@@ -187,7 +207,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				inVotersBlock = false
 				n, err := multiWriter.Write([]byte(line + "\n"))
 				if err != nil {
-					return fmt.Errorf("failed to write to gzip writer: %w", err)
+					return nil, fmt.Errorf("failed to write to gzip writer: %w", err)
 				}
 				totalBytes += int64(n)
 				continue
@@ -195,16 +215,16 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 
 			strs := strings.Split(line, "\t")
 			if len(strs) != 3 {
-				return fmt.Errorf("invalid voter line: %s", line)
+				return nil, fmt.Errorf("invalid voter line: %s", line)
 			}
 			voterID, err := hex.DecodeString(strs[1][3:]) // Remove the leading \\x
 			if err != nil {
-				return fmt.Errorf("failed to decode voter ID: %w", err)
+				return nil, fmt.Errorf("failed to decode voter ID: %w", err)
 			}
 
 			power, err := strconv.ParseInt(strs[2], 10, 64)
 			if err != nil {
-				return fmt.Errorf("failed to parse power: %w", err)
+				return nil, fmt.Errorf("failed to parse power: %w", err)
 			}
 
 			genCfg.Validators = append(genCfg.Validators, &chain.GenesisValidator{
@@ -221,7 +241,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 			} else if strings.HasPrefix(line, "SET") || strings.HasPrefix(line, "SELECT") || strings.HasPrefix(line[1:], "connect") {
 				// Skip SET and SELECT and connect statements
 				continue
-			} else if strings.HasPrefix(line, createDatabase) {
+			} else if strings.HasPrefix(line, `CREATE DATABASE `) {
 				// Skip CREATE DATABASE statement
 			} else {
 				if strings.HasPrefix(line, "COPY kwild_voting.voters") && strings.Contains(line, "FROM stdin;") {
@@ -231,7 +251,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				// Write the sanitized line to the gzip writer
 				n, err := multiWriter.Write([]byte(line + "\n"))
 				if err != nil {
-					return fmt.Errorf("failed to write to gzip writer: %w", err)
+					return nil, fmt.Errorf("failed to write to gzip writer: %w", err)
 				}
 				totalBytes += int64(n)
 			}
@@ -239,12 +259,12 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("failed to scan pg_dump output: %w", err)
+		return nil, fmt.Errorf("failed to scan pg_dump output: %w", err)
 	}
 
 	// Close the writer when pg_dump completes to signal EOF to sed
 	if err := pgDumpCmd.Wait(); err != nil {
-		return fmt.Errorf(stderr.String())
+		return nil, fmt.Errorf(stderr.String())
 	}
 
 	gzipWriter.Flush()
@@ -254,10 +274,9 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 	// Write the genesis config to a file
 	genesisFile := filepath.Join(snapshotDir, "genesis.json")
 	if err := genCfg.SaveAs(genesisFile); err != nil {
-		return fmt.Errorf("failed to save genesis config: %w", err)
+		return nil, fmt.Errorf("failed to save genesis config: %w", err)
 	}
 
-	fmt.Println("Snapshot created at: ", dumpFile, " Total bytes written: ", totalBytes)
-	fmt.Println("Genesis config created at: ", genesisFile, " Genesis hash: ", fmt.Sprintf("%x", hash))
-	return nil
+	return []string{fmt.Sprintf("Snapshot created at: %s, Total bytes written: %d", dumpFile, totalBytes),
+		fmt.Sprintf("Genesis config created at: %s, Genesis hash: %s", genesisFile, fmt.Sprintf("%x", hash))}, nil
 }

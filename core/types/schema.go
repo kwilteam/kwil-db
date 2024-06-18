@@ -1254,21 +1254,35 @@ var (
 	IntType = &DataType{
 		Name: intStr,
 	}
-	TextType = &DataType{
+	IntArrayType = ArrayType(IntType)
+	TextType     = &DataType{
 		Name: textStr,
 	}
-	BoolType = &DataType{
+	TextArrayType = ArrayType(TextType)
+	BoolType      = &DataType{
 		Name: boolStr,
 	}
-	BlobType = &DataType{
+	BoolArrayType = ArrayType(BoolType)
+	BlobType      = &DataType{
 		Name: blobStr,
 	}
-	UUIDType = &DataType{
+	BlobArrayType = ArrayType(BlobType)
+	UUIDType      = &DataType{
 		Name: uuidStr,
 	}
-	Uint256Type = &DataType{
+	UUIDArrayType = ArrayType(UUIDType)
+	// DecimalType contains 1,0 metadata.
+	// For type detection, users should prefer compare a datatype
+	// name with the DecimalStr constant.
+	DecimalType = &DataType{
+		Name:     DecimalStr,
+		Metadata: [2]uint16{1, 0}, // the minimum precision and scale
+	}
+	DecimalArrayType = ArrayType(DecimalType)
+	Uint256Type      = &DataType{
 		Name: uint256Str,
 	}
+	Uint256ArrayType = ArrayType(Uint256Type)
 	// NullType is a special type used internally
 	NullType = &DataType{
 		Name: nullStr,
