@@ -622,6 +622,11 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 			continue
 		}
 
+		if res.Header.Height == 0 {
+			d.log.Warnf("zero height from provider %v", p)
+			continue
+		}
+
 		// Get the trust height and trust hash from the remote server
 		d.cfg.ChainCfg.StateSync.TrustHeight = res.Header.Height
 		d.cfg.ChainCfg.StateSync.TrustHash = res.Header.Hash().String()
