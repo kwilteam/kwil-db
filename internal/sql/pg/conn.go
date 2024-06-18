@@ -77,6 +77,9 @@ type Pool struct {
 	// how postgres itself reserves connections with the reserved_connections
 	// and superuser_reserved_connections system settings.
 	// https://www.postgresql.org/docs/current/runtime-config-connection.html#GUC-RESERVED-CONNECTIONS
+	// oidTypes maps an OID to the datatype it represents. Since Kwil has data types such as uint256,
+	// which are registered as Postgres Domains, each pg instance will have its own random OID for it.
+	idTypes map[uint32]*datatype
 }
 
 // PoolConfig combines a connection config with additional options for a pool of
@@ -164,15 +167,26 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 		return nil, err
 	}
 
+	// aquire a writer to determine the OID of the custom types
+	writerConn, err := writer.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer writerConn.Release()
+	oidTypes := oidTypesMap(writerConn.Conn().TypeMap())
+
 	pool := &Pool{
 		readers:  db,
 		writer:   writer,
 		reserved: reserved,
+		idTypes:  oidTypes,
 	}
 
 	return pool, db.Ping(ctx)
 }
 
+// registerTypes ensures that the custom types used by Kwil are registered with
+// the pgx connection.
 func registerTypes(ctx context.Context, conn *pgx.Conn) error {
 	err := ensureUint256Domain(ctx, conn)
 	if err != nil {
@@ -202,7 +216,7 @@ func registerTypes(ctx context.Context, conn *pgx.Conn) error {
 // executed in a transaction with read only access mode to ensure there can be
 // no modifications.
 func (p *Pool) Query(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {
-	return queryTx(ctx, p.readers, stmt, args...)
+	return queryTx(ctx, p.idTypes, p.readers, stmt, args...)
 }
 
 // WARNING: The Execute method is for completeness and helping tests, but is not
@@ -214,7 +228,7 @@ func (p *Pool) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resu
 	var res *sql.ResultSet
 	err := p.writer.AcquireFunc(ctx, func(c *pgxpool.Conn) error {
 		var err error
-		res, err = query(ctx, &cqWrapper{c.Conn()}, stmt, args...)
+		res, err = query(ctx, p.idTypes, &cqWrapper{c.Conn()}, stmt, args...)
 		return err
 	})
 	if err != nil {
@@ -243,6 +257,7 @@ func (p *Pool) BeginTx(ctx context.Context) (sql.Tx, error) {
 	return &nestedTx{
 		Tx:         tx,
 		accessMode: sql.ReadWrite,
+		oidTypes:   p.idTypes,
 	}, nil
 }
 
@@ -258,5 +273,6 @@ func (p *Pool) BeginReadTx(ctx context.Context) (sql.Tx, error) {
 	return &nestedTx{
 		Tx:         tx,
 		accessMode: sql.ReadOnly,
+		oidTypes:   p.idTypes,
 	}, nil
 }

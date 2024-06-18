@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -158,6 +159,11 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to create replication identity trigger: %w", err)
 	}
 
+	// TODO: I believe we do not need ensureTriggerReplIdentity anymore.
+	if err = ensureFullReplicaIdentityTrigger(ctx, conn); err != nil {
+		return nil, fmt.Errorf("failed to create full replication identity trigger: %w", err)
+	}
+
 	// Create the publication that is required for logical replication.
 	if err = ensurePublication(ctx, conn); err != nil {
 		return nil, fmt.Errorf("failed to create publication: %w", err)
@@ -176,7 +182,7 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		okSchema = defaultSchemaFilter
 	}
 
-	repl, err := newReplMon(ctx, cfg.Host, cfg.Port, cfg.User, cfg.Pass, cfg.DBName, okSchema)
+	repl, err := newReplMon(ctx, cfg.Host, cfg.Port, cfg.User, cfg.Pass, cfg.DBName, okSchema, pool.idTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -274,11 +280,34 @@ func (db *DB) BeginOuterTx(ctx context.Context) (sql.OuterTx, error) {
 	ntx := &nestedTx{
 		Tx:         tx,
 		accessMode: sql.ReadWrite,
+		oidTypes:   db.pool.idTypes,
 	}
 	return &dbTx{
 		nestedTx:   ntx,
 		db:         db,
 		accessMode: sql.ReadWrite,
+	}, nil
+}
+
+// BeginChangesetTx starts a transaction that will return the entire changeset.
+// It works exactly like BeginOuterTx, but returns the full changeset body along
+// with the commit hash.
+func (db *DB) BeginChangesetTx(ctx context.Context, writer io.Writer) (*ChangesetTx, error) {
+	dbtx, err := db.BeginOuterTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	db.repl.changesetWriter.writer = writer
+	db.repl.changesetWriter.writable.Store(true)
+
+	// db.repl.returnFullWal.Store(true)
+
+	return &ChangesetTx{
+		dbTx: dbtx.(*dbTx),
+		release: func() {
+			db.repl.changesetWriter.writable.Store(false)
+		},
 	}, nil
 }
 
@@ -338,6 +367,7 @@ func (db *DB) beginReadTx(ctx context.Context, iso pgx.TxIsoLevel) (sql.Tx, erro
 	ntx := &nestedTx{
 		Tx:         tx,
 		accessMode: sql.ReadOnly,
+		oidTypes:   db.pool.idTypes,
 	}
 
 	return &readTx{
@@ -363,6 +393,7 @@ func (db *DB) BeginReservedReadTx(ctx context.Context) (sql.Tx, error) {
 	return &nestedTx{
 		Tx:         tx,
 		accessMode: sql.ReadOnly,
+		oidTypes:   db.pool.idTypes,
 	}, nil
 }
 
@@ -473,6 +504,69 @@ func (db *DB) precommit(ctx context.Context) ([]byte, error) {
 		return nil, errors.New("replication stream interrupted")
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	}
+}
+
+// precommitWithChangeset is a precommit that returns the entire repl changeset, instead of the hash.
+func (db *DB) precommitWithChangeset(ctx context.Context) ([]byte, *ChangesetGroup, error) {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
+	if db.tx == nil {
+		return nil, nil, errors.New("no tx exists")
+	}
+
+	// Do the seq update in sentry table. This ensures a replication message
+	// sequence is emitted from this transaction, and that the data returned
+	// from it includes the expected seq value.
+	seq, err := incrementSeq(ctx, db.tx)
+	if err != nil {
+		return nil, nil, err
+	}
+	logger.Debugf("updated seq to %d", seq)
+
+	resChan, ok := db.repl.recvID(seq)
+	if !ok { // commitID will not be available, error. There is no recovery presently.
+		return nil, nil, errors.New("replication connection is down")
+	}
+
+	db.txid = random.String(10)
+	sqlPrepareTx := fmt.Sprintf(`PREPARE TRANSACTION '%s'`, db.txid)
+	if _, err = db.tx.Exec(ctx, sqlPrepareTx); err != nil {
+		return nil, nil, err
+	}
+
+	logger.Debugf("prepared transaction %q", db.txid)
+
+	// Wait for the "commit id" from the replication monitor.
+	select {
+	case commitData, ok := <-resChan:
+		if !ok {
+			return nil, nil, errors.New("resChan unexpectedly closed")
+		}
+
+		// The transaction is ready to commit, stored in a file with postgres in
+		// the pg_twophase folder of the pg cluster data_directory.
+
+		// separate the commitID from the changeset, and deserialize the changeset
+		if len(commitData) < 32 {
+			return nil, nil, errors.New("invalid commit ID length")
+		}
+		commitID := commitData[:32]
+		changeset := commitData[32:]
+
+		logger.Debugf("received commit ID with changeset %x", commitID)
+
+		cs := &ChangesetGroup{}
+		if err := cs.UnmarshalBinary(changeset); err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal changeset: %w", err)
+		}
+
+		return commitID, cs, nil
+	case <-db.repl.done: // the replMon has died after we executed PREPARE TRANSACTION
+		return nil, nil, errors.New("replication stream interrupted")
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
 }
 
@@ -595,7 +689,7 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 		if db.autoCommit {
 			return nil, errors.New("tx already created, cannot use auto commit")
 		}
-		return query(ctx, db.tx, stmt, args...)
+		return query(ctx, db.pool.idTypes, db.tx, stmt, args...)
 	}
 	if !db.autoCommit {
 		return nil, sql.ErrNoTransaction
@@ -620,7 +714,7 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 			if !ok {
 				return errors.New("replication connection is down")
 			}
-			res, err = query(ctx, tx, stmt, args...)
+			res, err = query(ctx, db.pool.idTypes, tx, stmt, args...)
 			return err
 		},
 	)

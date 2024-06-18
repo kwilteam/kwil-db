@@ -43,9 +43,10 @@ func replConn(ctx context.Context, host, port, user, pass, dbName string) (*pgco
 
 // startRepl creates a replication slot and begins receiving data. Cancelling
 // the context only cancels creation of the connection. Use the quit function to
-// terminate the monitoring goroutine.
+// terminate the monitoring goroutine. It decodeFullWal is true, it will return
+// the entire wal serialized, instead of just the commit hash.
 func startRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotName string,
-	schemaFilter func(string) bool) (chan []byte, chan error, context.CancelFunc, error) {
+	schemaFilter func(string) bool, writer *changesetIoWriter) (chan []byte, chan error, context.CancelFunc, error) {
 	// Create the replication slot and start postgres sending WAL data.
 	startLSN, err := createRepl(ctx, conn, publicationName, slotName)
 	if err != nil {
@@ -68,7 +69,7 @@ func startRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotNa
 	ctx2, cancel := context.WithCancel(context.Background())
 	go func() {
 		defer close(commitHash)
-		done <- captureRepl(ctx2, conn, uint64(startLSN), commitHash, schemaFilter)
+		done <- captureRepl(ctx2, conn, uint64(startLSN), commitHash, schemaFilter, writer)
 	}()
 
 	return commitHash, done, cancel, nil
@@ -132,9 +133,10 @@ var zeroHash, _ = hex.DecodeString("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b
 
 // captureRepl begins receiving and decoding messages. Consider the conn to be
 // hijacked after calling captureRepl, and do not use it or the stream can be
-// broken.
-func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
-	commitHash chan []byte, schemaFilter func(string) bool) error {
+// broken. It decodeFullWal is true, it will return the entire wal serialized,
+// instead of just the commit hash.
+func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, commitHash chan []byte,
+	schemaFilter func(string) bool, writer *changesetIoWriter) error {
 	if cap(commitHash) == 0 {
 		return errors.New("buffered commit hash channel required")
 	}
@@ -224,7 +226,7 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
 				return fmt.Errorf("ParseXLogData failed: %w", err)
 			}
 
-			commit, anySeq, err := decodeWALData(hasher, xld.WALData, relations, &inStream, stats, schemaFilter)
+			commit, anySeq, err := decodeWALData(hasher, xld.WALData, relations, &inStream, stats, schemaFilter, writer)
 			if err != nil {
 				return fmt.Errorf("decodeWALData failed: %w", err)
 			}
@@ -244,6 +246,10 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
 			if commit {
 				cHash := hasher.Sum(nil)
 				hasher.Reset() // hasher = sha256.New()
+				err := writer.commit()
+				if err != nil {
+					return fmt.Errorf("commit changeset: %w", err)
+				}
 
 				// Only send the commit ID on the commitHash channel if this was
 				// a tracked commit, which includes a sequence number update on
@@ -258,6 +264,14 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
 
 				cid := binary.BigEndian.AppendUint64(nil, uint64(seq))
 				cid = append(cid, cHash...)
+
+				// // if nil changeset writer, this will simply be empty
+				// changeset, err := cs.MarshalBinary()
+				// if err != nil {
+				// 	return fmt.Errorf("marshal changeset: %w", err)
+				// }
+				// cid = append(cid, changeset...)
+
 				select {
 				case commitHash <- cid:
 				default: // don't block if the receiver has choked
@@ -298,7 +312,7 @@ func (ws *walStats) reset() {
 // true if it was a commit message, or a non-negative seq value if it was a
 // special update message on the internal sentry table
 func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglogrepl.RelationMessageV2,
-	inStream *bool, stats *walStats, okSchema func(schema string) bool) (bool, int64, error) {
+	inStream *bool, stats *walStats, okSchema func(schema string) bool, changesetWriter *changesetIoWriter) (bool, int64, error) {
 	logicalMsg, err := parseV3(walData, *inStream)
 	if err != nil {
 		return false, 0, fmt.Errorf("parse logical replication message: %w", err)
@@ -338,6 +352,11 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 			break
 		}
 
+		err = changesetWriter.decodeInsert(logicalMsg, rel)
+		if err != nil {
+			return false, 0, fmt.Errorf("decode insert: %w", err)
+		}
+
 		insertData := encodeInsertMsg(relName, &logicalMsg.InsertMessage)
 		// logger.Debugf("insertData %x", insertData)
 		hasher.Write(insertData)
@@ -374,6 +393,11 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 			break
 		}
 
+		err = changesetWriter.decodeUpdate(logicalMsg, rel)
+		if err != nil {
+			return false, 0, fmt.Errorf("decode update: %w", err)
+		}
+
 		updateData := encodeUpdateMsg(relName, &logicalMsg.UpdateMessage)
 		// logger.Debugf("updateData %x", updateData)
 		hasher.Write(updateData)
@@ -397,6 +421,11 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 		if !okSchema(rel.Namespace) {
 			// logger.Debugf("ignoring update to relation %v", relName)
 			break
+		}
+
+		err = changesetWriter.decodeDelete(logicalMsg, rel)
+		if err != nil {
+			return false, 0, fmt.Errorf("decode delete: %w", err)
 		}
 
 		deleteData := encodeDeleteMsg(relName, &logicalMsg.DeleteMessage)
@@ -466,6 +495,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 			logicalMsg.EndLSN, uint64(logicalMsg.EndLSN))
 
 		hasher.Reset()
+		changesetWriter.fail() // discard changeset
 
 	// v2 Stream control messages.  Not expected for kwil
 	case *pglogrepl.StreamStartMessageV2:

@@ -132,6 +132,15 @@ type NetworkParameters struct {
 	VoteExpiry int64
 	// DisabledGasCosts dictates whether gas costs are disabled.
 	DisabledGasCosts bool
+	// InMigration is true if the network is being migrated to a new network.
+	// Once this is set to true, it can never be set to false. If true,
+	// new databases cannot be created, old databases cannot be deleted,
+	// balances cannot be transferred
+	// and the vote store is paused.
+	InMigration bool
+	// MaxVotesPerTx is the maximum number of votes that can be included in a
+	// single transaction.
+	MaxVotesPerTx int64
 }
 
 // Copy returns a deep copy of the network parameters.
@@ -141,5 +150,6 @@ func (n *NetworkParameters) Copy() *NetworkParameters {
 		JoinExpiry:       n.JoinExpiry,
 		VoteExpiry:       n.VoteExpiry,
 		DisabledGasCosts: n.DisabledGasCosts,
+		InMigration:      n.InMigration,
 	}
 }

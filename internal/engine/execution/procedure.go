@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -397,64 +396,65 @@ func makeExecutables(params []*generate.InlineExpression) []evaluatable {
 			if record[0] == nil {
 				return nil, nil
 			}
+			// TODO: I am currently making changes to PG that will remove the need for this (I think)
 			// there is an edge case here where if the value is an array, it needs to be of the exact array type.
 			// For example, pgx only understands []string, and not []any, however it will return arrays to us as
 			// []any. If the returned type here is an array, we need to convert it to an array of the correct type.
-			typeOf := reflect.TypeOf(record[0])
-			if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 {
-				// if it is an array, we need to convert it to the correct type.
-				// if of length 0, we can simply set it to a text array
-				if len(record[0].([]any)) == 0 {
-					return []string{}, nil
-				}
+			// typeOf := reflect.TypeOf(record[0])
+			// if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 {
+			// 	// if it is an array, we need to convert it to the correct type.
+			// 	// if of length 0, we can simply set it to a text array
+			// 	if len(record[0].([]any)) == 0 {
+			// 		return []string{}, nil
+			// 	}
 
-				switch v := record[0].([]any)[0].(type) {
-				case string:
-					textArr := make([]string, len(record[0].([]any)))
-					for i, val := range record[0].([]any) {
-						textArr[i] = val.(string)
-					}
-					return textArr, nil
-				case int64:
-					intArr := make([]int64, len(record[0].([]any)))
-					for i, val := range record[0].([]any) {
-						intArr[i] = val.(int64)
-					}
-					return intArr, nil
-				case []byte:
-					blobArr := make([][]byte, len(record[0].([]any)))
-					for i, val := range record[0].([]any) {
-						blobArr[i] = val.([]byte)
-					}
-					return blobArr, nil
-				case bool:
-					boolArr := make([]bool, len(record[0].([]any)))
-					for i, val := range record[0].([]any) {
-						boolArr[i] = val.(bool)
-					}
-					return boolArr, nil
-				case *types.UUID:
-					uuidArr := make(types.UUIDArray, len(record[0].([]any)))
-					for i, val := range record[0].([]any) {
-						uuidArr[i] = val.(*types.UUID)
-					}
-					return uuidArr, nil
-				case *types.Uint256:
-					uint256Arr := make(types.Uint256Array, len(record[0].([]any)))
-					for i, val := range record[0].([]any) {
-						uint256Arr[i] = val.(*types.Uint256)
-					}
-					return uint256Arr, nil
-				case *decimal.Decimal:
-					decArr := make(decimal.DecimalArray, len(record[0].([]any)))
-					for i, val := range record[0].([]any) {
-						decArr[i] = val.(*decimal.Decimal)
-					}
-					return decArr, nil
-				default:
-					return nil, fmt.Errorf("unsupported in-line array type %T", v)
-				}
-			}
+			// 	switch v := record[0].([]any)[0].(type) {
+			// 	case string:
+			// 		textArr := make([]string, len(record[0].([]any)))
+			// 		for i, val := range record[0].([]any) {
+			// 			textArr[i] = val.(string)
+			// 		}
+			// 		return textArr, nil
+			// 	case int64:
+			// 		intArr := make([]int64, len(record[0].([]any)))
+			// 		for i, val := range record[0].([]any) {
+			// 			intArr[i] = val.(int64)
+			// 		}
+			// 		return intArr, nil
+			// 	case []byte:
+			// 		blobArr := make([][]byte, len(record[0].([]any)))
+			// 		for i, val := range record[0].([]any) {
+			// 			blobArr[i] = val.([]byte)
+			// 		}
+			// 		return blobArr, nil
+			// 	case bool:
+			// 		boolArr := make([]bool, len(record[0].([]any)))
+			// 		for i, val := range record[0].([]any) {
+			// 			boolArr[i] = val.(bool)
+			// 		}
+			// 		return boolArr, nil
+			// 	case *types.UUID:
+			// 		uuidArr := make(types.UUIDArray, len(record[0].([]any)))
+			// 		for i, val := range record[0].([]any) {
+			// 			uuidArr[i] = val.(*types.UUID)
+			// 		}
+			// 		return uuidArr, nil
+			// 	case *types.Uint256:
+			// 		uint256Arr := make(types.Uint256Array, len(record[0].([]any)))
+			// 		for i, val := range record[0].([]any) {
+			// 			uint256Arr[i] = val.(*types.Uint256)
+			// 		}
+			// 		return uint256Arr, nil
+			// 	case *decimal.Decimal:
+			// 		decArr := make(decimal.DecimalArray, len(record[0].([]any)))
+			// 		for i, val := range record[0].([]any) {
+			// 			decArr[i] = val.(*decimal.Decimal)
+			// 		}
+			// 		return decArr, nil
+			// 	default:
+			// 		return nil, fmt.Errorf("unsupported in-line array type %T", v)
+			// 	}
+			// }
 
 			return record[0], nil
 		})
@@ -579,7 +579,7 @@ func (p *preparedProcedure) shapeReturn(result *sql.ResultSet) error {
 						continue
 					}
 
-					arr, ok := row[i].([]any)
+					arr, ok := row[i].(decimal.DecimalArray)
 					if !ok {
 						return fmt.Errorf("shapeReturn: expected decimal array, got %T", row[i])
 					}
@@ -588,11 +588,7 @@ func (p *preparedProcedure) shapeReturn(result *sql.ResultSet) error {
 						if v == nil {
 							continue
 						}
-						dec, ok := v.(*decimal.Decimal)
-						if !ok {
-							return fmt.Errorf("shapeReturn: expected decimal, got %T", dec)
-						}
-						err := dec.SetPrecisionAndScale(col.Type.Metadata[0], col.Type.Metadata[1])
+						err := v.SetPrecisionAndScale(col.Type.Metadata[0], col.Type.Metadata[1])
 						if err != nil {
 							return err
 						}

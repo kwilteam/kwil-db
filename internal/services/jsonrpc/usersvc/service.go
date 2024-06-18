@@ -36,6 +36,7 @@ type Service struct {
 	db          sql.DelayedReadTxMaker // this should only ever make a read-only tx
 	nodeApp     NodeApplication        // so we don't have to do ABCIQuery (indirect)
 	chainClient BlockchainTransactor
+	pricer      Pricer
 }
 
 type serviceCfg struct {
@@ -57,7 +58,7 @@ const defaultReadTxTimeout = 5 * time.Second
 
 // NewService creates a new instance of the user RPC service.
 func NewService(db sql.DelayedReadTxMaker, engine EngineReader, chainClient BlockchainTransactor,
-	nodeApp NodeApplication, logger log.Logger, opts ...Opt) *Service {
+	nodeApp NodeApplication, pricer Pricer, logger log.Logger, opts ...Opt) *Service {
 	cfg := &serviceCfg{
 		readTxTimeout: defaultReadTxTimeout,
 	}
@@ -69,6 +70,7 @@ func NewService(db sql.DelayedReadTxMaker, engine EngineReader, chainClient Bloc
 		readTxTimeout: cfg.readTxTimeout,
 		engine:        engine,
 		nodeApp:       nodeApp,
+		pricer:        pricer,
 		chainClient:   chainClient,
 		db:            db,
 	}
@@ -190,6 +192,9 @@ type BlockchainTransactor interface {
 
 type NodeApplication interface {
 	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
+}
+
+type Pricer interface {
 	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
 }
 
@@ -300,7 +305,7 @@ func (svc *Service) EstimatePrice(ctx context.Context, req *userjson.EstimatePri
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
-	price, err := svc.nodeApp.Price(ctx, readTx, req.Tx)
+	price, err := svc.pricer.Price(ctx, readTx, req.Tx)
 	if err != nil {
 		svc.log.Error("failed to estimate price", log.Error(err)) // why not tell the client though?
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to estimate price", nil)

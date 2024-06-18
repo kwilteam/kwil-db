@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -48,20 +49,33 @@ type replMon struct {
 	mtx      sync.Mutex
 	results  map[int64][]byte // results should generally be unused as pg.DB will request a promise before commit
 	promises map[int64]chan []byte
+
+	// returnFullWal   *atomic.Bool
+	changesetWriter *changesetIoWriter
 }
 
 // newReplMon creates a new connection and logical replication data monitor, and
 // immediately starts receiving messages from the host. A consumer should
 // request a commit ID promise using the recvID method prior to committing a
 // transaction.
-func newReplMon(ctx context.Context, host, port, user, pass, dbName string, schemaFilter func(string) bool) (*replMon, error) {
+func newReplMon(ctx context.Context, host, port, user, pass, dbName string, schemaFilter func(string) bool, oidToTypes map[uint32]*datatype) (*replMon, error) {
 	conn, err := replConn(ctx, host, port, user, pass, dbName)
 	if err != nil {
 		return nil, err
 	}
 
+	// we set the changeset io.Writer to nil, as the changesetIoWriter will skip all writes
+	// until enabled by setting the atomic.Bool to true.
+	cs := &changesetIoWriter{
+		writable: atomic.Bool{}, // zero value is false
+		metadata: &changesetMetadata{
+			relationIdx: map[[2]string]int{},
+		},
+		oidToType: oidToTypes,
+	}
+
 	var slotName = publicationName + random.String(8) // arbitrary, so just avoid collisions
-	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter)
+	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter, cs)
 	if err != nil {
 		quit()
 		conn.Close(ctx)
@@ -69,11 +83,12 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 	}
 
 	rm := &replMon{
-		conn:     conn,
-		quit:     quit,
-		done:     make(chan struct{}),
-		results:  make(map[int64][]byte),
-		promises: make(map[int64]chan []byte),
+		conn:            conn,
+		quit:            quit,
+		done:            make(chan struct{}),
+		results:         make(map[int64][]byte),
+		promises:        make(map[int64]chan []byte),
+		changesetWriter: cs,
 	}
 
 	go func() {

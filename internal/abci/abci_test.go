@@ -396,7 +396,7 @@ func (m *mockTxApp) AccountInfo(ctx context.Context, db sql.DB, acctID []byte, g
 	return big.NewInt(0), 0, nil
 }
 
-func (m *mockTxApp) ApplyMempool(ctx context.Context, db sql.DB, tx *transactions.Transaction) error {
+func (m *mockTxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *transactions.Transaction) error {
 	return nil
 }
 
@@ -433,6 +433,10 @@ func (m *mockTxApp) UpdateValidator(ctx context.Context, db sql.DB, validator []
 
 func (m *mockTxApp) Reload(ctx context.Context, db sql.DB) error {
 	return nil
+}
+
+func (m *mockTxApp) Price(ctx context.Context, db sql.DB, tx *transactions.Transaction, c *common.ChainContext) (*big.Int, error) {
+	return big.NewInt(0), nil
 }
 
 type mockDB struct{}

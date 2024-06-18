@@ -61,7 +61,7 @@ func Test_Procedures(t *testing.T) {
 			}
 				`,
 			inputs:  []any{[]int64{1, 2, 3}},
-			outputs: [][]any{{[]any{int64(2), int64(4), int64(6)}}}, // returns 1 row, 1 column, with an array of ints
+			outputs: [][]any{{[]int64{int64(2), int64(4), int64(6)}}}, // returns 1 row, 1 column, with an array of ints
 		},
 		{
 			name: "is (null)",
@@ -277,62 +277,62 @@ func Test_Procedures(t *testing.T) {
 				$c := $a/$b;
 				return [$a, $b, $c];
 			}`,
-			outputs: [][]any{{[]any{mustDecimal("2.5", 2, 1), mustDecimal("3.5", 2, 1), mustDecimal("0.7", 2, 1)}}},
+			outputs: [][]any{{decimal.DecimalArray{mustDecimal("2.5", 2, 1), mustDecimal("3.5", 2, 1), mustDecimal("0.7", 2, 1)}}},
 		},
 		{
 			name: "decimal",
 			procedure: `procedure d() public view {
-				$i := 100.423;
-				$j decimal(16,8) := 46728954.23743892;
-				$k := $i::decimal(16,8) + $j;
-				if $k != 46729054.66043892 {
-					error('decimal failed');
-				}
-				if $k::text != '46729054.66043892' {
-					error('decimal text failed');
-				}
-				if ($k::decimal(16,2))::text != '46729054.66' {
-					error('decimal 2 failed');
-				}
-			}`,
+					$i := 100.423;
+					$j decimal(16,8) := 46728954.23743892;
+					$k := $i::decimal(16,8) + $j;
+					if $k != 46729054.66043892 {
+						error('decimal failed');
+					}
+					if $k::text != '46729054.66043892' {
+						error('decimal text failed');
+					}
+					if ($k::decimal(16,2))::text != '46729054.66' {
+						error('decimal 2 failed');
+					}
+				}`,
 		},
 		{
 			name: "early empty return",
 			procedure: `procedure return_early() public view {
-				$exit := true;
-				if $exit {
-					return;
-				}
-				error('should not reach here');
-			}`,
+					$exit := true;
+					if $exit {
+						return;
+					}
+					error('should not reach here');
+				}`,
 		},
 		{
 			name: "private procedure",
 			procedure: `procedure private_proc() private view {
-				error('should not reach here');
-			}`,
+					error('should not reach here');
+				}`,
 			err: execution.ErrPrivate,
 		},
 		{
 			name: "owner procedure - success",
 			procedure: `procedure owner_proc() public owner view returns (is_owner bool) {
-				return true;
-			}`,
+					return true;
+				}`,
 			outputs: [][]any{{true}},
 		},
 		{
 			name: "owner procedure - fail",
 			procedure: `procedure owner_proc() public owner view returns (is_owner bool) {
-				return false;
-			}`,
+					return false;
+				}`,
 			err:    execution.ErrOwnerOnly,
 			caller: "some_other_wallet",
 		},
 		{
 			name: "mutative procedure in read-only tx",
 			procedure: `procedure mutative() public {
-				return;
-			}`,
+					return;
+				}`,
 			err:      execution.ErrMutativeProcedure,
 			readOnly: true,
 		},

@@ -56,12 +56,12 @@ func Test_Routes(t *testing.T) {
 	// we can have scoped data in our mock implementations
 	type testcase struct {
 		name    string
-		fn      func(t *testing.T, callback func(*TxApp)) // required, uses callback to allow for scoped data
-		payload transactions.Payload                      // required
-		fee     int64                                     // optional, if nil, will automatically use 0
-		ctx     TxContext                                 // optional, if nil, will automatically create a mock
-		from    auth.Signer                               // optional, if nil, will automatically use default validatorSigner1
-		err     error                                     // if not nil, expect this error
+		fn      func(t *testing.T, callback func()) // required, uses callback to control when the test is run
+		payload transactions.Payload                // required
+		fee     int64                               // optional, if nil, will automatically use 0
+		ctx     TxContext                           // optional, if nil, will automatically create a mock
+		from    auth.Signer                         // optional, if nil, will automatically use default validatorSigner1
+		err     error                               // if not nil, expect this error
 	}
 
 	// due to the relative simplicity of routes and pricing, I have only tested a few complex ones.
@@ -73,7 +73,7 @@ func Test_Routes(t *testing.T) {
 			// we expect that it will approve and then attempt to delete the event
 			name: "validator_vote_id, as local validator",
 			fee:  voting.ValidatorVoteIDPrice,
-			fn: func(t *testing.T, callback func(*TxApp)) {
+			fn: func(t *testing.T, callback func()) {
 				approveCount := 0
 				deleteCount := 0
 
@@ -93,9 +93,7 @@ func Test_Routes(t *testing.T) {
 					return 1, nil
 				}
 
-				callback(&TxApp{
-					GasEnabled: true,
-				})
+				callback()
 
 				assert.Equal(t, 1, approveCount)
 				assert.Equal(t, 1, deleteCount)
@@ -111,7 +109,7 @@ func Test_Routes(t *testing.T) {
 			// we expect that it will approve and not attempt to delete the event
 			name: "validator_vote_id, as non-local validator",
 			fee:  voting.ValidatorVoteIDPrice,
-			fn: func(t *testing.T, callback func(*TxApp)) {
+			fn: func(t *testing.T, callback func()) {
 				approveCount := 0
 				deleteCount := 0
 
@@ -131,9 +129,7 @@ func Test_Routes(t *testing.T) {
 					return 1, nil
 				}
 
-				callback(&TxApp{
-					GasEnabled: true,
-				})
+				callback()
 
 				assert.Equal(t, 1, approveCount)
 				assert.Equal(t, 0, deleteCount)
@@ -150,14 +146,12 @@ func Test_Routes(t *testing.T) {
 			// we expect that it will fail
 			name: "validator_vote_id, as non-validator",
 			fee:  voting.ValidatorVoteIDPrice,
-			fn: func(t *testing.T, callback func(*TxApp)) {
+			fn: func(t *testing.T, callback func()) {
 				getVoterPower = func(ctx context.Context, db sql.Executor, identifier []byte) (int64, error) {
 					return 0, nil
 				}
 
-				callback(&TxApp{
-					GasEnabled: true,
-				})
+				callback()
 			},
 			payload: &transactions.ValidatorVoteIDs{
 				ResolutionIDs: []*types.UUID{
@@ -170,7 +164,7 @@ func Test_Routes(t *testing.T) {
 			// testing validator_vote_bodies, as the proposer
 			name: "validator_vote_bodies, as proposer",
 			fee:  voting.ValidatorVoteIDPrice,
-			fn: func(t *testing.T, callback func(*TxApp)) {
+			fn: func(t *testing.T, callback func()) {
 				deleteCount := 0
 
 				// override the functions with mocks
@@ -186,9 +180,7 @@ func Test_Routes(t *testing.T) {
 					return 1, nil
 				}
 
-				callback(&TxApp{
-					GasEnabled: true,
-				})
+				callback()
 				assert.Equal(t, 1, deleteCount)
 			},
 			payload: &transactions.ValidatorVoteBodies{
@@ -211,7 +203,7 @@ func Test_Routes(t *testing.T) {
 			// should fail
 			name: "validator_vote_bodies, as non-proposer",
 			fee:  voting.ValidatorVoteIDPrice,
-			fn: func(t *testing.T, callback func(*TxApp)) {
+			fn: func(t *testing.T, callback func()) {
 				deleteCount := 0
 
 				deleteEvent = func(_ context.Context, _ sql.Executor, _ *types.UUID) error {
@@ -224,9 +216,7 @@ func Test_Routes(t *testing.T) {
 					return 1, nil
 				}
 
-				callback(&TxApp{
-					GasEnabled: true,
-				})
+				callback()
 				assert.Equal(t, 0, deleteCount) // 0, since this does not go through
 			},
 			payload: &transactions.ValidatorVoteBodies{
@@ -281,8 +271,9 @@ func Test_Routes(t *testing.T) {
 				require.Fail(t, "no callback provided")
 			}
 
-			tc.fn(t, func(app *TxApp) {
+			tc.fn(t, func() {
 				db := &mockTx{&mockDb{}}
+				app := &TxApp{}
 
 				// since every test case needs an account store, we'll just create a mock one here
 				// if one isn't provided
@@ -291,6 +282,22 @@ func Test_Routes(t *testing.T) {
 				}
 				if app.signer == nil {
 					app.signer = validatorSigner1()
+				}
+
+				if tc.ctx.BlockContext == nil {
+					tc.ctx.BlockContext = &common.BlockContext{
+						ChainContext: &common.ChainContext{
+							NetworkParameters: &common.NetworkParameters{
+								DisabledGasCosts: false,
+							},
+						},
+					}
+				} else if tc.ctx.BlockContext.ChainContext == nil {
+					tc.ctx.BlockContext.ChainContext = &common.ChainContext{
+						NetworkParameters: &common.NetworkParameters{
+							DisabledGasCosts: false,
+						},
+					}
 				}
 
 				res := app.Execute(tc.ctx, db, tx)

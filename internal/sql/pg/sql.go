@@ -77,6 +77,30 @@ END$$;`
 	EXCEPTION
 		WHEN duplicate_object THEN null;
 	END $$;`
+
+	sqlCreateOrReplaceReplicaIdentity = `CREATE OR REPLACE FUNCTION set_replica_identity()
+RETURNS event_trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    obj record;
+BEGIN
+    FOR obj IN
+        SELECT * FROM pg_event_trigger_ddl_commands()
+    LOOP
+        IF obj.command_tag = 'CREATE TABLE' THEN
+            EXECUTE 'ALTER TABLE ' || obj.object_identity || ' REPLICA IDENTITY FULL';
+        END IF;
+    END LOOP;
+END;
+$$;`
+
+	sqlDropSetReplicaIdentity = `DROP EVENT TRIGGER IF EXISTS set_replica_identity_on_create;`
+
+	sqlCreateSetReplicaIdentity = `CREATE EVENT TRIGGER set_replica_identity_on_create
+ON ddl_command_end
+WHEN TAG IN ('CREATE TABLE')
+EXECUTE FUNCTION set_replica_identity();`
 )
 
 func checkSuperuser(ctx context.Context, conn *pgx.Conn) error {
@@ -205,6 +229,24 @@ func ensureTriggerReplIdentity(ctx context.Context, conn *pgx.Conn) error {
 		return nil
 	}
 	_, err = conn.Exec(ctx, sqlCreateEvtTriggerReplIdent)
+	return err
+}
+
+// ensureFullReplicaIdentityTrigger creates an event trigger to set the replica
+// identity to "full" for all tables that are created.
+func ensureFullReplicaIdentityTrigger(ctx context.Context, conn *pgx.Conn) error {
+	_, err := conn.Exec(ctx, sqlCreateOrReplaceReplicaIdentity)
+	if err != nil {
+		return err
+	}
+
+	// drop in case we update the logic, new nodes will automatically get the new logic
+	_, err = conn.Exec(ctx, sqlDropSetReplicaIdentity)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, sqlCreateSetReplicaIdentity)
 	return err
 }
 

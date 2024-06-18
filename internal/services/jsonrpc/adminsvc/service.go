@@ -34,11 +34,14 @@ type BlockchainTransactor interface {
 }
 
 type TxApp interface {
-	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
 	// AccountInfo returns the unconfirmed account info for the given identifier.
 	// If unconfirmed is true, the account found in the mempool is returned.
 	// Otherwise, the account found in the blockchain is returned.
 	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, unconfirmed bool) (balance *big.Int, nonce int64, err error)
+}
+
+type Pricer interface {
+	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
 }
 
 type Service struct {
@@ -47,6 +50,7 @@ type Service struct {
 	blockchain BlockchainTransactor // node is the local node that can accept transactions.
 	TxApp      TxApp
 	db         sql.DelayedReadTxMaker
+	pricer     Pricer
 
 	cfg     *config.KwildConfig
 	chainID string
@@ -124,13 +128,14 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 }
 
 // NewService constructs a new Service.
-func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, signer auth.Signer, cfg *config.KwildConfig,
+func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, signer auth.Signer, cfg *config.KwildConfig,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,
 		TxApp:      txApp,
 		signer:     signer,
 		chainID:    chainID,
+		pricer:     pricer,
 		cfg:        cfg,
 		log:        logger,
 		db:         db,
@@ -196,7 +201,7 @@ func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "unable to create transaction", nil)
 	}
 
-	fee, err := svc.TxApp.Price(ctx, readTx, tx)
+	fee, err := svc.pricer.Price(ctx, readTx, tx)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "unable to price transaction", nil)
 	}

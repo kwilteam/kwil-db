@@ -9,6 +9,7 @@ import (
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -139,7 +140,9 @@ func Test_Broadcaster(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			err = bc.RunBroadcast(ctx, &mockDB{}, []byte("proposer"))
+			err = bc.RunBroadcast(ctx, &mockDB{}, &common.BlockContext{
+				Proposer: []byte("proposer"),
+			})
 			if tc.err != nil {
 				require.Equal(t, tc.err, err)
 				return
@@ -189,7 +192,7 @@ func (m *mockTxApp) AccountInfo(ctx context.Context, db sql.DB, acctID []byte, g
 	return m.balance, m.nonce, nil
 }
 
-func (m *mockTxApp) Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error) {
+func (m *mockTxApp) Price(ctx context.Context, db sql.DB, tx *transactions.Transaction, c *common.ChainContext) (*big.Int, error) {
 	if m.price == nil {
 		return big.NewInt(0), nil
 	}

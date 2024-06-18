@@ -43,16 +43,13 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer
 		Engine: engine,
 		events: events,
 		log:    log,
-		mempool: &mempool{
-			accounts:      make(map[string]*types.Account),
+		mempool: &mempool{accounts: make(map[string]*types.Account),
 			gasEnabled:    !chainParams.ConsensusParams.WithoutGasCosts,
 			maxVotesPerTx: chainParams.ConsensusParams.Votes.MaxVotesPerTx,
 			nodeAddr:      signer.Identity(),
 		},
 		signer:              signer,
 		chainID:             chainParams.ChainID,
-		GasEnabled:          !chainParams.ConsensusParams.WithoutGasCosts,
-		maxVotesPerTx:       chainParams.ConsensusParams.Votes.MaxVotesPerTx,
 		extensionConfigs:    extensionConfigs,
 		emptyVoteBodyTxSize: voteBodyTxSize,
 		resTypes:            resTypes,
@@ -71,10 +68,6 @@ type TxApp struct {
 	// the Database via the functions defined in relevant packages.
 
 	forks forks.Forks
-
-	// Genesis config
-	GasEnabled    bool
-	maxVotesPerTx int64
 
 	events Rebroadcaster
 
@@ -482,7 +475,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 
 	// now we will apply credits if gas is enabled.
 	// Since it is a map, we need to order it for deterministic results.
-	if r.GasEnabled {
+	if !block.ChainContext.NetworkParameters.DisabledGasCosts {
 		for _, kv := range order.OrderMap(credits) {
 			err = credit(ctx, db, []byte(kv.Key), kv.Value)
 			if err != nil {
@@ -540,7 +533,7 @@ func (r *TxApp) Commit(ctx context.Context) {
 
 // ApplyMempool applies the transactions in the mempool.
 // If it returns an error, then the transaction is invalid.
-func (r *TxApp) ApplyMempool(ctx context.Context, db sql.DB, tx *transactions.Transaction) error {
+func (r *TxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *transactions.Transaction) error {
 	// check that payload type is valid
 	if getRoute(tx.Body.PayloadType.String()) == nil {
 		return fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
@@ -579,7 +572,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 	}
 	bal, nonce := acct.Balance, acct.Nonce
 
-	if r.GasEnabled && nonce == 0 && bal.Sign() == 0 {
+	if !block.ChainContext.NetworkParameters.DisabledGasCosts && nonce == 0 && bal.Sign() == 0 {
 		r.log.Debug("proposer account has no balance, not allowed to propose any new transactions")
 		return nil, nil
 	}
@@ -605,8 +598,8 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 	// Is thre any reason to check for notProcessed events here? Becase event store will never have events that are already processed.
 
 	// Limit upto only 50 VoteBodies per block
-	if len(ids) > int(r.maxVotesPerTx) {
-		ids = ids[:r.maxVotesPerTx]
+	if len(ids) > int(block.ChainContext.NetworkParameters.MaxVotesPerTx) {
+		ids = ids[:block.ChainContext.NetworkParameters.MaxVotesPerTx]
 	}
 
 	eventMap := make(map[types.UUID]*types.VotableEvent)
@@ -646,7 +639,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 	}
 
 	// Fee Estimate
-	amt, err := r.Price(ctx, db, tx)
+	amt, err := r.Price(ctx, db, tx, block.ChainContext)
 	if err != nil {
 		return nil, err
 	}
@@ -705,8 +698,8 @@ type TxResponse struct {
 
 // Price estimates the price of a transaction.
 // It returns the estimated price in tokens.
-func (r *TxApp) Price(ctx context.Context, dbTx sql.DB, tx *transactions.Transaction) (*big.Int, error) {
-	if !r.GasEnabled {
+func (r *TxApp) Price(ctx context.Context, dbTx sql.DB, tx *transactions.Transaction, chainContext *common.ChainContext) (*big.Int, error) {
+	if chainContext.NetworkParameters.DisabledGasCosts {
 		return big.NewInt(0), nil
 	}
 
@@ -734,7 +727,7 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 	amt := big.NewInt(0)
 	var err error
 
-	if r.GasEnabled {
+	if !ctx.BlockContext.ChainContext.NetworkParameters.DisabledGasCosts {
 		amt, err = pricer.Price(ctx.Ctx, r, dbTx, tx)
 		if err != nil {
 			return nil, transactions.CodeUnknownError, err
