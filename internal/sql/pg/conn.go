@@ -117,7 +117,8 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	// pCfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 	pCfg.ConnConfig.OnNotice = func(_ *pgconn.PgConn, n *pgconn.Notice) {
 		level := log.InfoLevel
-		if n.Code == "42710" || strings.HasPrefix(n.Code, "42P") { // duplicate something ignored: https://www.postgresql.org/docs/16/errcodes-appendix.html
+		if n.Code == "42710" || strings.HasPrefix(n.Code, "42P") || // duplicate something ignored: https://www.postgresql.org/docs/16/errcodes-appendix.html
+			strings.HasPrefix(n.SchemaName, "ds_") { // user query error
 			level = log.DebugLevel
 		}
 		if n.Detail == "" {
@@ -129,6 +130,9 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	defaultOnPgError := pCfg.ConnConfig.OnPgError
 	pCfg.ConnConfig.OnPgError = func(c *pgconn.PgConn, n *pgconn.PgError) bool {
 		level := log.WarnLevel
+		if strings.HasPrefix(n.SchemaName, "ds_") { // user query error
+			level = log.DebugLevel
+		}
 		switch sev := strings.ToUpper(n.Severity); sev {
 		case "FATAL", "PANIC":
 			level = log.ErrorLevel
