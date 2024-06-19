@@ -235,7 +235,7 @@ seed_mode = false
 #######################################################
 [chain.mempool]
 # Maximum number of transactions in the mempool
-size = 5000
+size = 50000
 
 # Limit the total size of all txs in the mempool.
 # This only accounts for raw transactions (e.g. given 1MB transactions and
@@ -246,7 +246,7 @@ max_txs_bytes = 536870912
 max_tx_bytes = 4194304
 
 # Size of the cache (used to filter transactions we saw earlier) in transactions
-cache_size = 10000
+cache_size = 60000
 
 #######################################################
 ###         State Sync Configuration Options        ###
