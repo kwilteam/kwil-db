@@ -127,12 +127,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 // Reload reloads the database state into the engine.
 func (r *TxApp) Reload(ctx context.Context, db sql.DB) error {
 	// Reload the engine internal state from the updated database state
-	err := r.Engine.Reload(ctx, db)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return r.Engine.Reload(ctx, db)
 }
 
 // UpdateValidator updates a validator's power.

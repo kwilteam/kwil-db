@@ -6,6 +6,7 @@ package meta
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -181,7 +182,7 @@ func StoreDiff(ctx context.Context, db sql.TxMaker, original, new *common.Networ
 	return tx.Commit(ctx)
 }
 
-var ErrParamsNotFound = fmt.Errorf("params not found")
+var ErrParamsNotFound = errors.New("params not found")
 
 // LoadParams loads the consensus params from the store.
 func LoadParams(ctx context.Context, db sql.Executor) (*common.NetworkParameters, error) {
