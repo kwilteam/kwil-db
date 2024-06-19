@@ -597,8 +597,8 @@ func DefaultConfig() *KwildConfig {
 				BroadcastTxTimeout: Duration(15 * time.Second), // 2.5x default TimeoutCommit (6s)
 			},
 			Mempool: &MempoolConfig{
-				Size:        5000,
-				CacheSize:   10000,
+				Size:        50000,
+				CacheSize:   60000,
 				MaxTxBytes:  1024 * 1024 * 4,   // 4 MiB
 				MaxTxsBytes: 1024 * 1024 * 512, // 512 MiB
 			},
