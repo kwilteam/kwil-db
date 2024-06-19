@@ -18,6 +18,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/voting/broadcast"
 )
 
+const maxVoteIDsPerTx = 100
+
 func Test_Broadcaster(t *testing.T) {
 	type testCase struct {
 		name          string
@@ -127,7 +129,7 @@ func Test_Broadcaster(t *testing.T) {
 				}
 			}
 
-			bc := broadcast.NewEventBroadcaster(e, b, txapp, v, validatorSigner(), "test-chain")
+			bc := broadcast.NewEventBroadcaster(e, b, txapp, v, validatorSigner(), "test-chain", maxVoteIDsPerTx)
 
 			// create resolutions for the events
 			for _, event := range e.events {

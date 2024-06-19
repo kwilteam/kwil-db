@@ -16,10 +16,14 @@ import (
 )
 
 type mempool struct {
-	accounts   map[string]*types.Account
-	gasEnabled bool
-	mu         sync.Mutex
-	nodeAddr   []byte
+	accounts map[string]*types.Account
+	acctsMtx sync.Mutex
+
+	// consensus parameters
+	gasEnabled    bool
+	maxVotesPerTx int64
+
+	nodeAddr []byte
 }
 
 // accountInfo retrieves the account info from the mempool state or the account store.
@@ -42,16 +46,16 @@ func (m *mempool) accountInfo(ctx context.Context, tx sql.Executor, acctID []byt
 
 // accountInfoSafe is wraps accountInfo in a mutex lock.
 func (m *mempool) accountInfoSafe(ctx context.Context, tx sql.Executor, acctID []byte) (*types.Account, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.acctsMtx.Lock()
+	defer m.acctsMtx.Unlock()
 
 	return m.accountInfo(ctx, tx, acctID)
 }
 
 // applyTransaction validates account specific info and applies valid transactions to the mempool state.
 func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transaction, dbTx sql.Executor, rebroadcaster Rebroadcaster) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.acctsMtx.Lock()
+	defer m.acctsMtx.Unlock()
 
 	// seems like maybe this should go in the switch statement below,
 	// but I put it here to avoid extra db call for account info
@@ -64,7 +68,18 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 		if power == 0 {
 			return fmt.Errorf("only validators can submit validator vote transactions")
 		}
+
+		// reject the transaction if the number of voteIDs exceeds the limit
+		voteID := &transactions.ValidatorVoteIDs{}
+		err = voteID.UnmarshalBinary(tx.Body.Payload)
+		if err != nil {
+			return err
+		}
+		if (int64)(len(voteID.ResolutionIDs)) > m.maxVotesPerTx {
+			return fmt.Errorf("number of voteIDs exceeds the limit of %d", m.maxVotesPerTx)
+		}
 	}
+
 	if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteBodies {
 		// not sure if this is the right error code
 		return fmt.Errorf("validator vote bodies can not enter the mempool, and can only be submitted during block proposal")
@@ -166,8 +181,8 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 // reset clears the in-memory unconfirmed account states.
 // This should be done at the end of block commit.
 func (m *mempool) reset() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.acctsMtx.Lock()
+	defer m.acctsMtx.Unlock()
 
 	m.accounts = make(map[string]*types.Account)
 }
