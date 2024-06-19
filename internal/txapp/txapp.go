@@ -44,13 +44,15 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer
 		events: events,
 		log:    log,
 		mempool: &mempool{
-			accounts:   make(map[string]*types.Account),
-			gasEnabled: !chainParams.ConsensusParams.WithoutGasCosts,
-			nodeAddr:   signer.Identity(),
+			accounts:      make(map[string]*types.Account),
+			gasEnabled:    !chainParams.ConsensusParams.WithoutGasCosts,
+			maxVotesPerTx: chainParams.ConsensusParams.Votes.MaxVotesPerTx,
+			nodeAddr:      signer.Identity(),
 		},
 		signer:              signer,
 		chainID:             chainParams.ChainID,
 		GasEnabled:          !chainParams.ConsensusParams.WithoutGasCosts,
+		maxVotesPerTx:       chainParams.ConsensusParams.Votes.MaxVotesPerTx,
 		extensionConfigs:    extensionConfigs,
 		emptyVoteBodyTxSize: voteBodyTxSize,
 		resTypes:            resTypes,
@@ -70,8 +72,11 @@ type TxApp struct {
 
 	forks forks.Forks
 
-	GasEnabled bool
-	events     Rebroadcaster
+	// Genesis config
+	GasEnabled    bool
+	maxVotesPerTx int64
+
+	events Rebroadcaster
 
 	chainID string
 	signer  *auth.Ed25519Signer
@@ -600,8 +605,8 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 	// Is thre any reason to check for notProcessed events here? Becase event store will never have events that are already processed.
 
 	// Limit upto only 50 VoteBodies per block
-	if len(ids) > 50 {
-		ids = ids[:50]
+	if len(ids) > int(r.maxVotesPerTx) {
+		ids = ids[:r.maxVotesPerTx]
 	}
 
 	eventMap := make(map[types.UUID]*types.VotableEvent)

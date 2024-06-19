@@ -29,13 +29,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
-var (
-	// Until the votestore is properly optimized, we limit the number of voteIDs that can be included in a single transaction.
-	// This is to limit the long external roundtrips to the postgres database
-	// 10k voteIDs in a block takes around 30s to process, which is too long.
-	maxVoteIDsPerTx = 100
-)
-
 // EventStore allows the EventBroadcaster to read events
 // from the event store.
 type EventStore interface {
@@ -61,13 +54,14 @@ type TxApp interface {
 	GetValidators(ctx context.Context, db sql.DB) ([]*types.Validator, error)
 }
 
-func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, app TxApp, signer *auth.Ed25519Signer, chainID string) *EventBroadcaster {
+func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, app TxApp, signer *auth.Ed25519Signer, chainID string, voteLimit int64) *EventBroadcaster {
 	return &EventBroadcaster{
-		store:       store,
-		broadcaster: broadcaster,
-		signer:      signer,
-		chainID:     chainID,
-		app:         app,
+		store:           store,
+		broadcaster:     broadcaster,
+		signer:          signer,
+		chainID:         chainID,
+		app:             app,
+		maxVoteIDsPerTx: voteLimit,
 	}
 }
 
@@ -78,6 +72,11 @@ type EventBroadcaster struct {
 	signer      *auth.Ed25519Signer
 	chainID     string
 	app         TxApp
+
+	// Until the votestore is properly optimized, we limit the number of voteIDs that can be included in a single transaction.
+	// This is to limit the long external roundtrips to the postgres database
+	// 10k voteIDs in a block takes around 30s to process, which is too long.
+	maxVoteIDsPerTx int64
 }
 
 // RunBroadcast tells the EventBroadcaster to broadcast any events it wishes.
@@ -133,8 +132,8 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, db sql.DB, proposer
 	}
 
 	// consider only the first maxVoteIDsPerTx events, to limit the postgres access roundtrips per block execution.
-	if len(ids) > maxVoteIDsPerTx {
-		ids = ids[:maxVoteIDsPerTx]
+	if len(ids) > int(e.maxVoteIDsPerTx) {
+		ids = ids[:e.maxVoteIDsPerTx]
 	}
 
 	bal, nonce, err := e.app.AccountInfo(ctx, readTx, e.signer.Identity(), true)
