@@ -116,6 +116,9 @@ type VoteParams struct {
 	// VoteExpiry is the number of blocks after which the resolution expires if
 	// consensus is not reached.
 	VoteExpiry int64 `json:"vote_expiry"`
+
+	// MaxVotesPerTx is the maximum number of votes to include in the voteID and voteBody transactions.
+	MaxVotesPerTx int64 `json:"max_votes_per_tx"`
 }
 
 type VersionParams struct {
@@ -145,7 +148,8 @@ func defaultConsensusParams() *ConsensusParams {
 				JoinExpiry:  14400, // approx 1 day considering block rate of 6 sec/blk
 			},
 			Votes: VoteParams{
-				VoteExpiry: 14400, // approx 1 day considering block rate of 6 sec/blk
+				VoteExpiry:    14400, // approx 1 day considering block rate of 6 sec/blk
+				MaxVotesPerTx: 100,
 			},
 			ABCI: ABCIParams{
 				VoteExtensionsEnableHeight: 0, // disabled, needs coordinated upgrade to enable

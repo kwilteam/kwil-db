@@ -380,7 +380,7 @@ func buildAbci(d *coreDependencies, txApp abci.TxApp, snapshotter *statesync.Sna
 }
 
 func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broadcast.Broadcaster, txapp *txapp.TxApp) *broadcast.EventBroadcaster {
-	return broadcast.NewEventBroadcaster(ev, b, txapp, txapp, buildSigner(d), d.genesisCfg.ChainID)
+	return broadcast.NewEventBroadcaster(ev, b, txapp, txapp, buildSigner(d), d.genesisCfg.ChainID, d.genesisCfg.ConsensusParams.Votes.MaxVotesPerTx)
 }
 
 func buildEventStore(d *coreDependencies, closers *closeFuncs) *voting.EventStore {
