@@ -253,7 +253,6 @@ func (gc *GenesisConfig) ComputeGenesisHash() []byte {
 
 	// Vote params
 	binary.Write(hasher, binary.LittleEndian, gc.ConsensusParams.Votes.VoteExpiry)
-	binary.Write(hasher, binary.LittleEndian, gc.ConsensusParams.Votes.MaxVotesPerTx)
 
 	// Note: Do not consider gc.Forks(): There is an upgrade window, where
 	// software and genesis.json file updates may be applied prior to a deadline
