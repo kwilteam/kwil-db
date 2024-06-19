@@ -85,7 +85,13 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 	if err != nil {
 		return nil, err
 	}
+	if height == -1 {
+		height = 0 // negative means first start (no state table yet), but need non-negative for below logic
+	}
+	app.appHash = appHash
+
 	app.log.Infof("Preparing ABCI application at height %v, appHash %x", height, appHash)
+
 	activeForks := app.forks.ActivatedBy(uint64(height))
 	slices.SortStableFunc(activeForks, forks.ForkSortFunc)
 	for _, fork := range activeForks {
@@ -128,7 +134,7 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 	// with whatever the value is, since the consensus params here are read from the genesis file, and
 	// may have been altered if this is not a new network.
 	networkParams, err := meta.LoadParams(ctx, tx)
-	if err == meta.ErrParamsNotFound {
+	if errors.Is(err, meta.ErrParamsNotFound) {
 		// we need to store the genesis network params
 		err = meta.StoreParams(ctx, tx, &common.NetworkParameters{
 			MaxBlockSize:     app.consensusParams.Block.MaxBytes,
@@ -621,21 +627,22 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 	// TODO: it would be great to have a way to commit the apphash without
 	// opening a new transaction. This could leave us in a state where data is
 	// committed but the apphash is not, which would essentially nuke the chain.
-	tx, err := a.db.BeginOuterTx(ctx)
+	ctx0 := context.Background() // badly timed shutdown MUST NOT cancel now, we need consistency with consensus tx commit
+	tx, err := a.db.BeginOuterTx(ctx0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin outer tx: %w", err)
 	}
 
-	err = meta.SetChainState(ctx, tx, a.height, a.appHash)
+	err = meta.SetChainState(ctx0, tx, a.height, a.appHash)
 	if err != nil {
-		err2 := tx.Rollback(ctx)
+		err2 := tx.Rollback(ctx0)
 		if err2 != nil {
 			return nil, fmt.Errorf("failed to rollback transaction app: %w", err2)
 		}
 		return nil, fmt.Errorf("failed to set chain state: %w", err)
 	}
 
-	err = tx.Commit(ctx)
+	err = tx.Commit(ctx0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction app: %w", err)
 	}
@@ -693,7 +700,7 @@ func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciType
 
 	height, appHash, err := meta.GetChainState(ctx, readTx)
 	if err != nil {
-		return nil, fmt.Errorf("chainInfo: %w", err)
+		return nil, fmt.Errorf("GetChainState: %w", err)
 	}
 	if height == -1 {
 		height = 0 // for ChainInfo caller, non-negative is expected for genesis
