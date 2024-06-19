@@ -1227,7 +1227,7 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 				}
 
 				if len(voteBodies.Events) > int(a.consensusParams.Votes.MaxVotesPerTx) {
-					return fmt.Errorf("number of votes %d in a transaction exceeds the limit %d", len(voteBodies.Events), a.consensusParams.Votes.MaxVotesPerTx)
+					return fmt.Errorf("number of events %d in a votebody transaction exceeds the limit %d", len(voteBodies.Events), a.consensusParams.Votes.MaxVotesPerTx)
 				}
 			}
 
@@ -1239,7 +1239,7 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 					return fmt.Errorf("failed to unmarshal vote ids: %w", err)
 				}
 				if len(voteIDs.ResolutionIDs) > int(a.consensusParams.Votes.MaxVotesPerTx) {
-					return fmt.Errorf("number of votes [%d] in a transaction exceeds the limit %d", len(voteIDs.ResolutionIDs), a.consensusParams.Votes.MaxVotesPerTx)
+					return fmt.Errorf("number of resolution votes [%d] in a voteid transaction exceeds the limit %d", len(voteIDs.ResolutionIDs), a.consensusParams.Votes.MaxVotesPerTx)
 				}
 			}
 

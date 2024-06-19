@@ -17,12 +17,12 @@ import (
 
 type mempool struct {
 	accounts map[string]*types.Account
+	acctsMtx sync.Mutex // protects accounts
 
 	// consensus parameters
 	gasEnabled    bool
 	maxVotesPerTx int64
 
-	mu       sync.Mutex
 	nodeAddr []byte
 }
 
@@ -46,16 +46,16 @@ func (m *mempool) accountInfo(ctx context.Context, tx sql.Executor, acctID []byt
 
 // accountInfoSafe is wraps accountInfo in a mutex lock.
 func (m *mempool) accountInfoSafe(ctx context.Context, tx sql.Executor, acctID []byte) (*types.Account, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.acctsMtx.Lock()
+	defer m.acctsMtx.Unlock()
 
 	return m.accountInfo(ctx, tx, acctID)
 }
 
 // applyTransaction validates account specific info and applies valid transactions to the mempool state.
 func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transaction, dbTx sql.Executor, rebroadcaster Rebroadcaster) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.acctsMtx.Lock()
+	defer m.acctsMtx.Unlock()
 
 	// seems like maybe this should go in the switch statement below,
 	// but I put it here to avoid extra db call for account info
@@ -181,8 +181,8 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 // reset clears the in-memory unconfirmed account states.
 // This should be done at the end of block commit.
 func (m *mempool) reset() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.acctsMtx.Lock()
+	defer m.acctsMtx.Unlock()
 
 	m.accounts = make(map[string]*types.Account)
 }
