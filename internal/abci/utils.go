@@ -1,14 +1,21 @@
 package abci
 
 import (
+	"crypto/sha256"
+
 	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/extensions/consensus"
 )
 
+type txOut struct {
+	tx   *transactions.Transaction
+	hash [32]byte
+}
+
 // groupTransactions groups the transactions by sender.
-func groupTxsBySender(txns [][]byte) (map[string][]*transactions.Transaction, error) {
-	grouped := make(map[string][]*transactions.Transaction)
+func groupTxsBySender(txns [][]byte) (map[string][]*txOut, error) {
+	grouped := make(map[string][]*txOut)
 	for _, tx := range txns {
 		t := &transactions.Transaction{}
 		err := t.UnmarshalBinary(tx)
@@ -16,16 +23,19 @@ func groupTxsBySender(txns [][]byte) (map[string][]*transactions.Transaction, er
 			return nil, err
 		}
 		key := string(t.Sender)
-		grouped[key] = append(grouped[key], t)
+		grouped[key] = append(grouped[key], &txOut{
+			tx:   t,
+			hash: sha256.Sum256(tx),
+		})
 	}
 	return grouped, nil
 }
 
 // nonceList is for debugging
-func nonceList(txns []*transactions.Transaction) []uint64 {
+func nonceList(txns []*txOut) []uint64 {
 	nonces := make([]uint64, len(txns))
 	for i, tx := range txns {
-		nonces[i] = tx.Body.Nonce
+		nonces[i] = tx.tx.Body.Nonce
 	}
 	return nonces
 }
