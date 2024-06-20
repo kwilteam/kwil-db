@@ -2,7 +2,6 @@ package pg
 
 import (
 	"context"
-	_ "embed"
 	"errors"
 	"fmt"
 	"time"
@@ -16,32 +15,17 @@ var (
 	// table's "replication identity" is explicitly set to "full". We ensure
 	// that is the case by creating an event trigger to perform the ALTER TABLE
 	// command whenever a DDL command with the "CREATE TABLE" tag is processed
-	// for a table with neither a primary key or unique index. These are the
-	// embedded plpgsql functions below.
+	// for a table with neither a primary key or unique index. We also do this
+	// for all tables that even have a primary key or unique index so that we
+	// can get a full changeset with the old values that are updated or deleted,
+	// not just the primary keys.
 
-	//go:embed trigger_repl1.sql
-	sqlFuncReplIfNeeded string
-
-	//go:embed trigger_repl2.sql
-	sqlFuncReplIfNeeded2 string //nolint:unused
-	// (I'm still deciding which to use)
-
-	//nolint:unused
-	sqlCreateFuncReplIdentExists = `SELECT EXISTS (
-		SELECT 1 FROM pg_proc 
-		WHERE proname = 'set_replica_identity_full'
-	);`
-	// (replace might be brute; this checks if the repl trigger created in sqlFuncReplIfNeeded exists)
-
-	sqlCreateEvtTriggerReplIdentExists = `SELECT EXISTS (
-		SELECT 1 FROM pg_event_trigger 
-		WHERE evtname = 'trg_set_replica_identity_full'
-	);`
-
-	sqlCreateEvtTriggerReplIdent = `CREATE EVENT TRIGGER trg_set_replica_identity_full ON ddl_command_end
+	sqlCreateEvtTriggerReplIdent = `CREATE EVENT TRIGGER set_replica_identity_on_create
+		ON ddl_command_end
 		WHEN TAG IN ('CREATE TABLE')
-		EXECUTE FUNCTION set_replica_identity_full();`
-	// TIP for node reset/cleanup: DROP EVENT TRIGGER IF EXISTS trg_set_replica_identity_full;
+		EXECUTE FUNCTION set_replica_identity();`
+
+	sqlDropEvtTriggerReplIdent = `DROP EVENT TRIGGER IF EXISTS set_replica_identity_on_create;`
 
 	sqlCreatePublicationINE = `DO $$
 BEGIN
@@ -94,13 +78,6 @@ BEGIN
     END LOOP;
 END;
 $$;`
-
-	sqlDropSetReplicaIdentity = `DROP EVENT TRIGGER IF EXISTS set_replica_identity_on_create;`
-
-	sqlCreateSetReplicaIdentity = `CREATE EVENT TRIGGER set_replica_identity_on_create
-ON ddl_command_end
-WHEN TAG IN ('CREATE TABLE')
-EXECUTE FUNCTION set_replica_identity();`
 )
 
 func checkSuperuser(ctx context.Context, conn *pgx.Conn) error {
@@ -212,41 +189,23 @@ func tableExists(ctx context.Context, schema, table string, conn *pgx.Conn) (boo
 	return pgx.CollectExactlyOneRow(rows, pgx.RowTo[bool])
 }
 
-func ensureTriggerReplIdentity(ctx context.Context, conn *pgx.Conn) error {
-	// First create the function if needed.
-	_, err := conn.Exec(ctx, sqlFuncReplIfNeeded)
-	if err != nil {
-		return err
-	}
-
-	// Create the trigger for the function if needed.
-	rows, _ := conn.Query(ctx, sqlCreateEvtTriggerReplIdentExists)
-	triggerExists, err := pgx.CollectExactlyOneRow(rows, pgx.RowTo[bool])
-	if err != nil {
-		return err
-	}
-	if triggerExists {
-		return nil
-	}
-	_, err = conn.Exec(ctx, sqlCreateEvtTriggerReplIdent)
-	return err
-}
-
 // ensureFullReplicaIdentityTrigger creates an event trigger to set the replica
 // identity to "full" for all tables that are created.
 func ensureFullReplicaIdentityTrigger(ctx context.Context, conn *pgx.Conn) error {
+	// Create the function for the even trigger
 	_, err := conn.Exec(ctx, sqlCreateOrReplaceReplicaIdentity)
 	if err != nil {
 		return err
 	}
 
-	// drop in case we update the logic, new nodes will automatically get the new logic
-	_, err = conn.Exec(ctx, sqlDropSetReplicaIdentity)
+	// Create the event trigger that calls the function.
+	// Drop it always in case we update the logic, new nodes will automatically get the new logic
+	_, err = conn.Exec(ctx, sqlDropEvtTriggerReplIdent)
 	if err != nil {
 		return err
 	}
 
-	_, err = conn.Exec(ctx, sqlCreateSetReplicaIdentity)
+	_, err = conn.Exec(ctx, sqlCreateEvtTriggerReplIdent)
 	return err
 }
 

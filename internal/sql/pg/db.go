@@ -155,11 +155,6 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 
 	// Ensure all tables that are created with no primary key or unique index
 	// are altered to have "full replication identity" for UPDATE and DELETES.
-	if err = ensureTriggerReplIdentity(ctx, conn); err != nil {
-		return nil, fmt.Errorf("failed to create replication identity trigger: %w", err)
-	}
-
-	// TODO: I believe we do not need ensureTriggerReplIdentity anymore.
 	if err = ensureFullReplicaIdentityTrigger(ctx, conn); err != nil {
 		return nil, fmt.Errorf("failed to create full replication identity trigger: %w", err)
 	}
@@ -504,69 +499,6 @@ func (db *DB) precommit(ctx context.Context) ([]byte, error) {
 		return nil, errors.New("replication stream interrupted")
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	}
-}
-
-// precommitWithChangeset is a precommit that returns the entire repl changeset, instead of the hash.
-func (db *DB) precommitWithChangeset(ctx context.Context) ([]byte, *ChangesetGroup, error) {
-	db.mtx.Lock()
-	defer db.mtx.Unlock()
-
-	if db.tx == nil {
-		return nil, nil, errors.New("no tx exists")
-	}
-
-	// Do the seq update in sentry table. This ensures a replication message
-	// sequence is emitted from this transaction, and that the data returned
-	// from it includes the expected seq value.
-	seq, err := incrementSeq(ctx, db.tx)
-	if err != nil {
-		return nil, nil, err
-	}
-	logger.Debugf("updated seq to %d", seq)
-
-	resChan, ok := db.repl.recvID(seq)
-	if !ok { // commitID will not be available, error. There is no recovery presently.
-		return nil, nil, errors.New("replication connection is down")
-	}
-
-	db.txid = random.String(10)
-	sqlPrepareTx := fmt.Sprintf(`PREPARE TRANSACTION '%s'`, db.txid)
-	if _, err = db.tx.Exec(ctx, sqlPrepareTx); err != nil {
-		return nil, nil, err
-	}
-
-	logger.Debugf("prepared transaction %q", db.txid)
-
-	// Wait for the "commit id" from the replication monitor.
-	select {
-	case commitData, ok := <-resChan:
-		if !ok {
-			return nil, nil, errors.New("resChan unexpectedly closed")
-		}
-
-		// The transaction is ready to commit, stored in a file with postgres in
-		// the pg_twophase folder of the pg cluster data_directory.
-
-		// separate the commitID from the changeset, and deserialize the changeset
-		if len(commitData) < 32 {
-			return nil, nil, errors.New("invalid commit ID length")
-		}
-		commitID := commitData[:32]
-		changeset := commitData[32:]
-
-		logger.Debugf("received commit ID with changeset %x", commitID)
-
-		cs := &ChangesetGroup{}
-		if err := cs.UnmarshalBinary(changeset); err != nil {
-			return nil, nil, fmt.Errorf("failed to unmarshal changeset: %w", err)
-		}
-
-		return commitID, cs, nil
-	case <-db.repl.done: // the replMon has died after we executed PREPARE TRANSACTION
-		return nil, nil, errors.New("replication stream interrupted")
-	case <-ctx.Done():
-		return nil, nil, ctx.Err()
 	}
 }
 

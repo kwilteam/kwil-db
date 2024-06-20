@@ -43,8 +43,7 @@ func replConn(ctx context.Context, host, port, user, pass, dbName string) (*pgco
 
 // startRepl creates a replication slot and begins receiving data. Cancelling
 // the context only cancels creation of the connection. Use the quit function to
-// terminate the monitoring goroutine. It decodeFullWal is true, it will return
-// the entire wal serialized, instead of just the commit hash.
+// terminate the monitoring goroutine.
 func startRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotName string,
 	schemaFilter func(string) bool, writer *changesetIoWriter) (chan []byte, chan error, context.CancelFunc, error) {
 	// Create the replication slot and start postgres sending WAL data.
