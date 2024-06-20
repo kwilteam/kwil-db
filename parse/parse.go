@@ -102,7 +102,6 @@ func ParseAndValidate(kf []byte) (*SchemaParseResult, error) {
 // Most users should use ParseAndValidate instead.
 func ParseSchemaWithoutValidation(kf []byte) (res *SchemaParseResult, err error) {
 	errLis, stream, parser, deferFn := setupParser(string(kf), "schema")
-
 	res = &SchemaParseResult{
 		ParseErrs:        errLis,
 		ParsedActions:    make(map[string][]ActionStmt),
@@ -400,7 +399,9 @@ func setupParser(inputStream string, errLisName string) (errLis *errorListener,
 	stream = antlr.NewInputStream(inputStream)
 
 	lexer := gen.NewKuneiformLexer(stream)
-	parser = gen.NewKuneiformParser(antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel))
+	tokens := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+	parser = gen.NewKuneiformParser(tokens)
+	errLis.toks = tokens
 
 	// remove defaults
 	lexer.RemoveErrorListeners()
