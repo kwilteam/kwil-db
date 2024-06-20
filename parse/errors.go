@@ -71,6 +71,7 @@ type ParseErrs interface {
 type errorListener struct {
 	errs []*ParseError
 	name string
+	toks *antlr.CommonTokenStream
 }
 
 var _ antlr.ErrorListener = (*errorListener)(nil)
@@ -158,11 +159,22 @@ func (e *errorListener) RuleErr(ctx antlr.ParserRuleContext, err error, msg stri
 // SyntaxError implements the Antlr error listener interface.
 func (e *errorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol interface{}, line, column int,
 	msg string, ex antlr.RecognitionException) {
+
+	pos := unaryNode(line, column)
+	// if there is a previous token, we should note the error starting from there
+	if e.toks != nil {
+		prev := e.toks.LB(1)
+		if prev != nil {
+			pos.StartCol = prev.GetColumn()
+			pos.StartLine = prev.GetLine()
+		}
+	}
+
 	e.errs = append(e.errs, &ParseError{
 		ParserName: e.name,
 		Err:        ErrSyntax,
 		Message:    msg,
-		Position:   unaryNode(line, column),
+		Position:   pos,
 	})
 }
 
