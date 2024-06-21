@@ -47,8 +47,8 @@ func WriteConfigFile(configFilePath string, cfg *config.KwildConfig) error {
 }
 
 const defaultConfigTemplate = `
-# NOTE: Any path below can be absolute (e.g. "/var/myawesomeapp/data") or
-# relative to the home directory (e.g. "data")
+# NOTE: Any path below can be absolute (e.g. "/app/data", "~/app/data) or
+# relative to the root directory (e.g. "data")
 
 # Root Directory Structure:
 # RootDir/
@@ -167,6 +167,7 @@ hostname = "{{ .AppCfg.Hostname }}"
 
 # Path to the snapshot file to restore the database from.
 # Used during the network migration process.
+# Might be either absolute path or path related to the kwild root directory.
 genesis_state = "{{ .AppCfg.GenesisState }}"
 
 #######################################################################
@@ -202,6 +203,7 @@ genesis_state = "{{ .AppCfg.GenesisState }}"
 enabled = {{.AppCfg.Snapshots.Enabled}}
 
 # Path to the snapshots directory
+# Might be either absolute path or path related to the kwild root directory.
 snapshot_dir = "{{.AppCfg.Snapshots.SnapshotDir}}"
 
 # Specifies the block heights(multiples of recurring_height) at which the snapshot should be taken
@@ -339,6 +341,7 @@ cache_size = {{ .ChainCfg.Mempool.CacheSize }}
 enable = {{ .ChainCfg.StateSync.Enable }}
 
 # SnapshotDir is the directory to store the received snapshot chunks.
+# Might be either absolute path or path related to the kwild root directory.
 snapshot_dir = "{{ .ChainCfg.StateSync.SnapshotDir }}"
 
 # Trusted snapshot providers (comma-separated chain RPC servers) are the source-of-truth for the snapshot integrity.

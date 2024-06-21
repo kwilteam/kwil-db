@@ -59,7 +59,12 @@ const (
 // New builds the kwild server.
 func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *chain.GenesisConfig,
 	nodeKey *crypto.Ed25519PrivateKey, autogen bool) (svr *Server, err error) {
-	logger, err := log.NewChecked(*cfg.LogConfig())
+	logCfg, err := cfg.LogConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	logger, err := log.NewChecked(*logCfg)
 	if err != nil {
 		return nil, fmt.Errorf("invalid logger config: %w", err)
 	}
