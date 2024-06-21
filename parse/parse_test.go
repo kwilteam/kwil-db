@@ -2774,3 +2774,44 @@ var tableBalances = &types.Table{
 		},
 	},
 }
+
+// this tests full end-to-end parsing of a schema, with full validation.
+// It is mostly necessary to test for bugs that slip through the cracks
+// of testing individual components.
+func Test_FullParse(t *testing.T) {
+	type testcase struct {
+		name string
+		kf   string
+		err  error // if nil, no error is expected
+	}
+
+	tests := []testcase{
+		{
+			// this is a regression test for a previous bug where the parser would panic
+			// when a procedure had a return statement with no body.
+			name: "empty body with returns",
+			kf: `database proxy;
+// admin simply tracks the schema admins
+table admin {
+  address text primary key
+}
+// add_admin adds a new admin to the schema.
+// only current admins can add new admins
+procedure add_admin ($address text) public  {}
+procedure is_admin ($address text) public view returns (bool) {}
+			`,
+			err: parse.ErrReturn,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parse.Parse([]byte(tt.kf))
+			if tt.err != nil {
+				require.ErrorIs(t, err, tt.err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
