@@ -73,3 +73,8 @@ func ListEndBlockHooks() []EndBlockHook {
 
 	return hooks
 }
+
+func init() {
+	genesisHooks = make(map[string]GenesisHook)
+	endBlockHooks = make(map[string]EndBlockHook)
+}
