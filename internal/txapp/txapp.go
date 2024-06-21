@@ -130,7 +130,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 
 	// genesis hooks
 	for _, hook := range hooks.ListGenesisHooks() {
-		err := hook(&ctx, &common.App{
+		err := hook(ctx, &common.App{
 			Service: &common.Service{
 				Logger:           r.log.Sugar(),
 				ExtensionConfigs: r.extensionConfigs,
@@ -352,7 +352,7 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockCont
 
 	// end block hooks
 	for _, hook := range hooks.ListEndBlockHooks() {
-		err := hook(&ctx, &common.App{
+		err := hook(ctx, &common.App{
 			Service: &common.Service{
 				Logger:           r.log.Sugar(),
 				ExtensionConfigs: r.extensionConfigs,
