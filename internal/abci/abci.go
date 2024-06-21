@@ -796,8 +796,16 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 		return nil, fmt.Errorf("expected NULL app hash, got %x", appHash)
 	}
 
-	if err := a.txApp.GenesisInit(ctx, a.genesisTx, vldtrs, genesisAllocs, req.InitialHeight); err != nil {
+	startParams := a.chainContext.NetworkParameters.Copy()
+
+	if err := a.txApp.GenesisInit(ctx, a.genesisTx, vldtrs, genesisAllocs, req.InitialHeight, a.chainContext); err != nil {
 		return nil, fmt.Errorf("txApp.GenesisInit failed: %w", err)
+	}
+
+	// persist any diff to the network params
+	err = meta.StoreDiff(ctx, a.genesisTx, startParams, a.chainContext.NetworkParameters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to store network params diff: %w", err)
 	}
 
 	valUpdates := make([]abciTypes.ValidatorUpdate, len(vldtrs))

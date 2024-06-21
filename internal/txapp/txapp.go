@@ -22,6 +22,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/utils/order"
 	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/extensions/consensus"
+	"github.com/kwilteam/kwil-db/extensions/hooks"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/voting"
@@ -103,7 +104,7 @@ type TxApp struct {
 // It can assign the initial validator set and initial account balances.
 // It is only called once for a new chain.
 func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.Validator, genesisAccounts []*types.Account,
-	initialHeight int64) error {
+	initialHeight int64, chain *common.ChainContext) error {
 
 	// Add Genesis Validators
 	var voters []*types.Validator
@@ -126,6 +127,23 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 			return err
 		}
 	}
+
+	// genesis hooks
+	for _, hook := range hooks.ListGenesisHooks() {
+		err := hook(&ctx, &common.App{
+			Service: &common.Service{
+				Logger:           r.log.Sugar(),
+				ExtensionConfigs: r.extensionConfigs,
+				Identity:         r.signer.Identity(),
+			},
+			DB:     db,
+			Engine: r.Engine,
+		}, chain)
+		if err != nil {
+			return fmt.Errorf("error running genesis hook: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -323,11 +341,28 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockCont
 			Service: &common.Service{
 				Logger:           r.log.Sugar(),
 				ExtensionConfigs: r.extensionConfigs,
+				Identity:         r.signer.Identity(),
 			},
 			DB:     db,
 			Engine: r.Engine,
 		}); err != nil {
 			return nil, err
+		}
+	}
+
+	// end block hooks
+	for _, hook := range hooks.ListEndBlockHooks() {
+		err := hook(&ctx, &common.App{
+			Service: &common.Service{
+				Logger:           r.log.Sugar(),
+				ExtensionConfigs: r.extensionConfigs,
+				Identity:         r.signer.Identity(),
+			},
+			DB:     db,
+			Engine: r.Engine,
+		}, block)
+		if err != nil {
+			return nil, fmt.Errorf("error running end block hook: %w", err)
 		}
 	}
 
@@ -404,6 +439,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 			Service: &common.Service{
 				Logger:           r.log.Named("resolution_" + resolveFunc.Resolution.Type).Sugar(),
 				ExtensionConfigs: r.extensionConfigs,
+				Identity:         r.signer.Identity(),
 			},
 			DB:     tx,
 			Engine: r.Engine,
