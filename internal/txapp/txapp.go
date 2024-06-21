@@ -20,6 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/extensions/hooks"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/voting"
@@ -159,6 +160,26 @@ func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator, 
 			return err
 		}
 	}
+
+	// genesis hooks
+	for _, hook := range hooks.ListGenesisHooks() {
+		err := hook(&ctx, &common.App{
+			Service: &common.Service{
+				Logger:           r.log.Sugar(),
+				ExtensionConfigs: r.extensionConfigs,
+			},
+			DB:     tx,
+			Engine: r.Engine,
+		})
+		if err != nil {
+			err2 := tx.Rollback(ctx)
+			if err2 != nil {
+				return fmt.Errorf("error rolling back transaction: %s, error: %s", err.Error(), err2.Error())
+			}
+			return fmt.Errorf("error running genesis hook: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -316,6 +337,21 @@ func (r *TxApp) Finalize(ctx context.Context, blockHeight int64) (appHash []byte
 	finalValidators, err = getAllVoters(ctx, r.currentTx)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// end block hooks
+	for _, hook := range hooks.ListEndBlockHooks() {
+		err := hook(&ctx, &common.App{
+			Service: &common.Service{
+				Logger:           r.log.Sugar(),
+				ExtensionConfigs: r.extensionConfigs,
+			},
+			DB:     r.currentTx,
+			Engine: r.Engine,
+		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("error running end block hook: %w", err)
+		}
 	}
 
 	// While still in the DB transaction, update to this next height but dummy
