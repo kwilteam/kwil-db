@@ -76,7 +76,9 @@ func ParseAndValidate(kf []byte) (*SchemaParseResult, error) {
 
 	for _, proc := range res.Schema.Procedures {
 		ast := res.ParsedProcedures[proc.Name]
-		procRes, err := analyzeProcedureAST(proc, res.Schema, ast)
+		block := res.SchemaInfo.Blocks[proc.Name]
+
+		procRes, err := analyzeProcedureAST(proc, res.Schema, ast, &block.Position)
 		if err != nil {
 			return nil, err
 		}
@@ -156,13 +158,13 @@ type ProcedureParseResult struct {
 // It takes the procedure definition, as well as the schema.
 // It performs type and semantic checks on the procedure.
 func ParseProcedure(proc *types.Procedure, schema *types.Schema) (res *ProcedureParseResult, err error) {
-	return analyzeProcedureAST(proc, schema, nil)
+	return analyzeProcedureAST(proc, schema, nil, &Position{}) // zero position is fine here
 }
 
 // analyzeProcedureAST analyzes the AST of a procedure.
 // If AST is nil, it will parse it from the provided body. This is useful because ASTs
 // with custom error positions can be passed in.
-func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []ProcedureStmt) (res *ProcedureParseResult, err error) {
+func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []ProcedureStmt, procPos *Position) (res *ProcedureParseResult, err error) {
 	errLis, stream, parser, deferFn := setupParser(proc.Body, "procedure")
 	defer func() {
 		err2 := deferFn(recover())
@@ -228,7 +230,11 @@ func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []Proc
 	// if the procedure is expecting a return that is not a table, and it does not guarantee
 	// returning a value, we should add an error.
 	if proc.Returns != nil && !returns && !proc.Returns.IsTable {
-		errLis.AddErr(res.AST[len(res.AST)-1], ErrReturn, "procedure does not return a value")
+		if len(res.AST) == 0 {
+			errLis.AddErr(procPos, ErrReturn, "procedure does not return a value")
+		} else {
+			errLis.AddErr(res.AST[len(res.AST)-1], ErrReturn, "procedure does not return a value")
+		}
 	}
 
 	for k, v := range visitor.procResult.allVariables {
