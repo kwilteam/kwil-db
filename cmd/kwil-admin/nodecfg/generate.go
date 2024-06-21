@@ -160,8 +160,6 @@ func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silenc
 		return nil, fmt.Errorf("failed to get absolute path for output directory: %w", err)
 	}
 	cfg.RootDir = rootDir
-	// output logs to file, this will be located in given root dir
-	//cfg.Logging.OutputPaths = append(cfg.Logging.OutputPaths, "kwild.log")
 
 	cometbftRoot := filepath.Join(outputDir, abciDir)
 
@@ -256,7 +254,6 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 			return fmt.Errorf("failed to merge config file %s: %w", genCfg.ConfigFile, err)
 		}
 	}
-	//cfg.Logging.OutputPaths = append(cfg.Logging.OutputPaths, "kwild.log")
 
 	privateKeys := make([]cmtEd.PrivKey, nNodes)
 	for i := range privateKeys {
