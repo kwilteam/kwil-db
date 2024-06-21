@@ -123,7 +123,7 @@ func (e *errorListener) MarshalJSON() ([]byte, error) {
 }
 
 // AddErr adds an error to the error listener.
-func (e *errorListener) AddErr(node Node, err error, msg string, v ...any) {
+func (e *errorListener) AddErr(node GetPositioner, err error, msg string, v ...any) {
 	// TODO: we should change the ParseError struct. It should use the passed error as the "Type",
 	// and replace the Err field with message.
 	e.errs = append(e.errs, &ParseError{
@@ -163,11 +163,18 @@ func (e *errorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol
 	pos := unaryNode(line, column)
 	// if there is a previous token, we should note the error starting from there
 	if e.toks != nil {
-		prev := e.toks.LB(1)
-		if prev != nil {
-			pos.StartCol = prev.GetColumn()
-			pos.StartLine = prev.GetLine()
-		}
+		// since we are somewhat hacking the error position, we should catch panics and ignore them
+		// all we are doing here is adding extra info to the error position, so if it fails, we can ignore it
+		func() {
+			defer func() {
+				recover()
+			}()
+			prev := e.toks.LB(1)
+			if prev != nil {
+				pos.StartCol = prev.GetColumn()
+				pos.StartLine = prev.GetLine()
+			}
+		}()
 	}
 
 	e.errs = append(e.errs, &ParseError{
