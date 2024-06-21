@@ -77,7 +77,7 @@ func RootCmd() *cobra.Command {
 			}
 			flagCfg.AppCfg.Extensions = extensionConfig
 
-			kwildCfg, configFileExists, err := config.GetCfg(flagCfg, autoGen)
+			kwildCfg, configFileExists, err := config.GetCfg(flagCfg)
 			if err != nil {
 				cmd.Usage()
 				return err
