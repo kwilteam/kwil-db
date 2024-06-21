@@ -13,7 +13,7 @@ import (
 // If it returns an error, the network will immediately halt. Any state
 // changed or error returned should be deterministic, as all nodes will
 // run the same GenesisHooks in the same order.
-type GenesisHook func(ctx *context.Context, app *common.App) error
+type GenesisHook func(ctx context.Context, app *common.App) error
 
 // RegisterGenesisHook registers a GenesisHook to be run at network genesis.
 // The name can be anything, as long as it is unique. It is used to deterministically
@@ -47,7 +47,7 @@ func ListGenesisHooks() []GenesisHook {
 // An error returned will halt the local node. All state changes and errors
 // should be deterministic, as all nodes will run the same EndBlockHooks in
 // the same order.
-type EndBlockHook func(ctx *context.Context, app *common.App) error
+type EndBlockHook func(ctx context.Context, app *common.App) error
 
 // RegisterEndBlockHook registers an EndBlockHook to be run at the end of each block.
 // The name can be anything, as long as it is unique. It is used to deterministically
