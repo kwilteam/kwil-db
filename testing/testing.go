@@ -82,7 +82,7 @@ type SchemaTest struct {
 // testcontainer to run the test.
 func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 	if opts == nil {
-		opts = opts
+		opts = &Options{}
 
 		// doing this here since doing it outside
 		// of the nil check would make it impossible to tell if
@@ -117,7 +117,7 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 	for _, schema := range schemas {
 		s, err := parse.Parse([]byte(schema))
 		if err != nil {
-			return fmt.Errorf(`error parsing schema "%s": %w`, err)
+			return fmt.Errorf(`error parsing schema: %w`, err)
 		}
 		parsedSchemas = append(parsedSchemas, s)
 

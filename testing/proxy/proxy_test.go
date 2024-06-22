@@ -100,7 +100,7 @@ func Test_Proxy(t *testing.T) {
 			},
 		},
 		// since this is a more complex test, we use the function test to
-		// allow us to code abritrary logic against the engine.
+		// allow us to code arbitrary logic against the engine.
 		FunctionTests: []kwilTesting.TestFunc{
 			func(ctx context.Context, platform *kwilTesting.Platform) error {
 				proxyDbid := utils.GenerateDBID("proxy", platform.Deployer)
