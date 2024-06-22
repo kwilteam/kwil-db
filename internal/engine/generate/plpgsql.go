@@ -221,6 +221,7 @@ func (s *sqlGenerator) VisitExpressionArithmetic(p0 *parse.ExpressionArithmetic)
 func (s *sqlGenerator) VisitExpressionUnary(p0 *parse.ExpressionUnary) any {
 	str := strings.Builder{}
 	str.WriteString(string(p0.Operator))
+	str.WriteString(" ")
 	str.WriteString(p0.Expression.Accept(s).(string))
 	// cannot be typecasted
 	return str.String()
@@ -802,7 +803,7 @@ func (p *procedureGenerator) VisitProcedureStmtForLoop(p0 *parse.ProcedureStmtFo
 		s.WriteString(stmt.Accept(p).(string))
 	}
 
-	s.WriteString("END LOOP;\n")
+	s.WriteString(" END LOOP;\n")
 
 	return s.String()
 }
@@ -855,6 +856,7 @@ func (p *procedureGenerator) VisitIfThen(p0 *parse.IfThen) any {
 	for _, stmt := range p0.Then {
 		s.WriteString(stmt.Accept(p).(string))
 	}
+	s.WriteString("\n")
 
 	return s.String()
 }
