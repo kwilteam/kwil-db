@@ -119,11 +119,16 @@ func testCmd() *cobra.Command {
 				}
 
 				if err = schemaTest.Run(cmd.Context(), &opts); err != nil {
-					return display.PrintErr(cmd, err)
+					return display.PrintCmd(cmd, &testsPassed{
+						Passing: false,
+						Reason:  err.Error(),
+					})
 				}
 			}
 
-			return display.PrintCmd(cmd, &testsPassed{})
+			return display.PrintCmd(cmd, &testsPassed{
+				Passing: true,
+			})
 		},
 	}
 
@@ -138,14 +143,24 @@ func testCmd() *cobra.Command {
 	return cmd
 }
 
-type testsPassed struct{}
+type testsPassed struct {
+	// Message should not be set by the test itself, but intstead
+	// by the MarshalText method.
+	Message string `json:"message"`
+	Passing bool   `json:"passing"`
+	Reason  string `json:"reason,omitempty"`
+}
 
 func (t *testsPassed) MarshalJSON() ([]byte, error) {
-	return []byte("All tests passed successfully."), nil
+	return json.Marshal(t)
 }
 
 func (t *testsPassed) MarshalText() (text []byte, err error) {
-	return []byte("\nAll tests passed successfully."), nil
+	if t.Passing {
+		t.Message = "\nAll tests passed successfully."
+	}
+
+	return json.MarshalIndent(t, "", "  ")
 }
 
 // adjustPath expands a path relative to another path.
