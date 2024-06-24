@@ -32,7 +32,7 @@ func Test_Impl_1(t *testing.T) {
 			{
 				// should create a user - happy case
 				Name:     "create user - success",
-				Database: "impl_12crencjke",
+				Database: "impl_1",
 				Target:   "create_user",
 				Args:     []any{"gilgamesh"},
 			},

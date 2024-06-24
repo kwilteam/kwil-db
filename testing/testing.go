@@ -500,7 +500,6 @@ func (d *Options) valid() error {
 // as well as Go's stdlib test package
 type Logger interface {
 	Logf(string, ...any)
-	Errorf(format string, args ...interface{})
 }
 
 // LoggerFromKwilLogger wraps the Kwil standard logger so
@@ -517,8 +516,4 @@ type kwilLoggerWrapper struct {
 
 func (k *kwilLoggerWrapper) Logf(s string, a ...any) {
 	k.Logger.Logf(k.L.Level(), s, a...)
-}
-
-func (k *kwilLoggerWrapper) Errorf(s string, a ...any) {
-	k.Logger.Errorf(s, a...)
 }
