@@ -609,12 +609,18 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 			continue
 		}
 
-		// Try to fetch the status of the remote server.
-		res, err := clt.Header(d.ctx, nil)
+		// Try to fetch the status of the remote server. Set a timeout on the
+		// initial RPC so this doesn't hang for a very long time. Although
+		// arbitrary, 10s is a reasonable time out for a http server regardless
+		// of the location and network routes.
+		ctx, cancel := context.WithTimeout(d.ctx, 10*time.Second)
+		res, err := clt.Header(ctx, nil)
 		if err != nil {
+			cancel()
 			d.log.Warnf("failed to get header from snap provider: %v", err)
 			continue
 		}
+		cancel()
 
 		// If the remote server is in the same chain, we can trust it.
 		if res.Header.ChainID != d.genesisCfg.ChainID {
