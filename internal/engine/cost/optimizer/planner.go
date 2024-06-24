@@ -3,9 +3,8 @@ package optimizer
 import (
 	"fmt"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/virtual_plan"
-
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/virtual_plan"
 )
 
 type plannerCtx struct {
@@ -48,8 +47,15 @@ func (q *defaultVirtualPlanner) ToPlan(logicalPlan logical_plan.LogicalPlan) vir
 		// maybe change VSelection to accept multiple filters
 		filterExpr := q.ToExpr(p.Exprs()[0], p.Inputs()[0])
 		return virtual_plan.VSelection(input, filterExpr)
+	case *logical_plan.SortOp:
+		input := q.ToPlan(p.Inputs()[0])
+		sortExprs := make([]virtual_plan.VirtualExpr, 0, len(p.Exprs()))
+		for _, expr := range p.Exprs() {
+			sortExprs = append(sortExprs, q.ToExpr(expr, p.Inputs()[0]))
+		}
+		return virtual_plan.VSortSTUB(input, sortExprs...)
 	default:
-		panic(fmt.Sprintf("unknown logical plan type %T", p))
+		panic(fmt.Sprintf("ToPlan: unknown logical plan type %T", p))
 	}
 }
 
@@ -103,7 +109,8 @@ func (q *defaultVirtualPlanner) ToExpr(expr logical_plan.LogicalExpr,
 		default:
 			panic(fmt.Sprintf("unknown logical operator %s", e.Op()))
 		}
-
+	case *logical_plan.SortExpression:
+		return virtual_plan.VSortExpr(q.ToExpr(e.Expr, input))
 	default:
 		panic(fmt.Sprintf("unknown logical expression type %T", e))
 	}

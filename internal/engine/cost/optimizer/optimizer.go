@@ -23,9 +23,20 @@ func NewOptimizer() *Optimizer {
 	}
 }
 
-func (o *Optimizer) virtualRewrite(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
-	panic("not implemented")
-}
+//// Optimize transforms a logical plan into a virtual plan.
+//func (o *Optimizer) Optimize(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
+//	// NOTE: or we should just use rules to select a plan?
+//	// memo is definitely better IMO, and we also can maintain the determinism
+//
+//	for _, rule := range o.rules {
+//		// TODO: check if the rule can be applied
+//		plan = rule.Transform(plan)
+//	}
+//
+//	// for demo purpose, we use logical plan cost
+//
+//	return plan
+//}
 
 // Optimize transforms a logical plan into a virtual plan.
 func (o *Optimizer) Optimize(plan logical_plan.LogicalPlan) virtual_plan.VirtualPlan {
@@ -81,6 +92,10 @@ func (o *Optimizer) Optimize(plan logical_plan.LogicalPlan) virtual_plan.Virtual
 
 	o.virtualRewrite(plan)
 
+	panic("not implemented")
+}
+
+func (o *Optimizer) virtualRewrite(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
 	panic("not implemented")
 }
 

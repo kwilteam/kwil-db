@@ -63,8 +63,10 @@ func ExtractColumns(expr LogicalExpr,
 		seen[e.Name] = true
 	case *ColumnIdxExpr:
 		seen[schema.Fields[e.Idx].Name] = true
+	case *SortExpression:
+		ExtractColumns(e.Expr, schema, seen)
 	default:
-		panic(fmt.Sprintf("unknown expression type %T", e))
+		panic(fmt.Sprintf("ExtractColumns: unknown expression type %T", e))
 	}
 }
 
@@ -171,7 +173,7 @@ func inferExprType(expr LogicalExpr, schema *ds.Schema) string {
 	case *AliasExpr:
 		panic("implement me")
 	default:
-		panic(fmt.Sprintf("unknown expression type %T", e))
+		panic(fmt.Sprintf("inferExprType: unknown expression type %T", e))
 	}
 }
 
@@ -180,7 +182,7 @@ func inferNullable(expr LogicalExpr, schema *ds.Schema) bool {
 	case *ColumnExpr:
 		panic("implement me")
 	default:
-		panic(fmt.Sprintf("unknown expression type %T", e))
+		panic(fmt.Sprintf("inferNUllable: unknown expression type %T", e))
 	}
 }
 

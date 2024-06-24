@@ -9,6 +9,8 @@ import (
 
 var stubTable = &dt.TableRef{Table: "users"}
 
+// Example_ExecutionContext_execute demonstrates how to use the ExecutionContext
+// to execute a logical plan.
 func Example_ExecutionContext_execute() {
 	ctx := NewExecutionContext()
 	df := ctx.Csv("users", "../testdata/users.csv").

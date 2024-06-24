@@ -2,6 +2,7 @@ package testkit
 
 import (
 	"fmt"
+	"github.com/kwilteam/kwil-db/core/types"
 
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
@@ -44,3 +45,70 @@ func InitMockCatalog() *mockCatalog {
 		},
 	}
 }
+
+var (
+	MockUsersSchemaTable = &types.Table{
+		Name: "users",
+		Columns: []*types.Column{
+			{
+				Name: "id",
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.PRIMARY_KEY,
+					},
+					{
+						Type: types.NOT_NULL,
+					},
+				},
+			},
+			{
+				Name: "username",
+				Type: types.TextType,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.NOT_NULL,
+					},
+					{
+						Type: types.UNIQUE,
+					},
+					{
+						Type:  types.MIN_LENGTH,
+						Value: "5",
+					},
+					{
+						Type:  types.MAX_LENGTH,
+						Value: "32",
+					},
+				},
+			},
+			{
+				Name: "age",
+				Type: types.IntType,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.NOT_NULL,
+					},
+				},
+			},
+			{
+				Name: "state",
+				Type: types.TextType,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.NOT_NULL,
+					},
+				},
+			},
+			{
+				Name: "wallet",
+				Type: types.TextType,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.NOT_NULL,
+					},
+				},
+			},
+		},
+	}
+)

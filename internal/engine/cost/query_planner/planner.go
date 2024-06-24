@@ -2,17 +2,19 @@ package query_planner
 
 import (
 	"fmt"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/catalog"
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	tree "github.com/kwilteam/kwil-db/parse"
+
 	"slices"
 )
 
 type LogicalPlanner interface {
 	ToExpr(expr tree.Expression, schema *ds.Schema) lp.LogicalExpr
-	ToPlan(node tree.Statement) lp.LogicalPlan
+	ToPlan(node tree.SQLStatement) lp.LogicalPlan
 }
 
 type queryPlanner struct {
@@ -29,16 +31,24 @@ func NewPlanner(catalog catalog.Catalog) *queryPlanner {
 // TODO: use iterator or stack to traverse the tree, instead of recursive, to avoid stack overflow.
 func (q *queryPlanner) ToExpr(expr tree.Expression, schema *ds.Schema) lp.LogicalExpr {
 	switch e := expr.(type) {
-	case *tree.ExpressionBlobLiteral:
-		return lp.LiteralBlob(e.Value)
-	case *tree.ExpressionBooleanLiteral:
-		return lp.LiteralBool(e.Value)
-	case *tree.ExpressionNumericLiteral:
-		return lp.LiteralNumeric(e.Value)
-	case *tree.ExpressionTextLiteral:
-		return lp.LiteralText(e.Value)
-	case *tree.ExpressionNullLiteral:
-		return lp.LiteralNull()
+	case *tree.ExpressionLiteral:
+		switch e.Type {
+		case types.IntType:
+			// NOTE: I think planner will need to acknowledge the types that engine supports
+			v, _ := e.Value.(int64)
+			return lp.LiteralNumeric(v)
+		case types.TextType:
+			v, _ := e.Value.(string)
+			return lp.LiteralText(v)
+		case types.BlobType:
+			v, _ := e.Value.([]byte)
+			return lp.LiteralBlob(v)
+		case types.BoolType:
+			v, _ := e.Value.(bool)
+			return lp.LiteralBool(v)
+		case types.NullType:
+			return lp.LiteralNull()
+		}
 	case *tree.ExpressionColumn:
 		// TODO: handle relation
 		return lp.ColumnUnqualified(e.Column)
@@ -48,7 +58,7 @@ func (q *queryPlanner) ToExpr(expr tree.Expression, schema *ds.Schema) lp.Logica
 		//case tree.UnaryOperatorMinus:
 		//case tree.UnaryOperatorPlus:
 		case tree.UnaryOperatorNot:
-			return lp.Not(q.ToExpr(e.Operand, schema))
+			return lp.Not(q.ToExpr(e.Expression, schema))
 		default:
 			panic("unknown unary operator")
 		}
@@ -68,7 +78,7 @@ func (q *queryPlanner) ToExpr(expr tree.Expression, schema *ds.Schema) lp.Logica
 		default:
 			panic("unknown arithmetic operator")
 		}
-	case *tree.ExpressionBinaryComparison:
+	case *tree.ExpressionComparison:
 		l := q.ToExpr(e.Left, schema)
 		r := q.ToExpr(e.Right, schema)
 		switch e.Operator {
@@ -85,28 +95,37 @@ func (q *queryPlanner) ToExpr(expr tree.Expression, schema *ds.Schema) lp.Logica
 		case tree.ComparisonOperatorLessThanOrEqual:
 			return lp.Lte(l, r)
 		// TODO: make this a separate LogicalExpression?
+
+		default:
+			panic("unknown comparison operator")
+		}
+	case *tree.ExpressionLogical:
+		l := q.ToExpr(e.Left, schema)
+		r := q.ToExpr(e.Right, schema)
+		switch e.Operator {
 		case tree.LogicalOperatorAnd:
 			return lp.And(l, r)
 		case tree.LogicalOperatorOr:
 			return lp.Or(l, r)
 		default:
-			panic("unknown comparison operator")
+			panic("unknown logical operator")
 		}
-	case *tree.ExpressionFunction:
+	case *tree.ExpressionFunctionCall:
 		var inputs []lp.LogicalExpr
-		for _, arg := range e.Inputs {
+		for _, arg := range e.Args {
 			inputs = append(inputs, q.ToExpr(arg, schema))
 		}
 
 		// use catalog? since there will be user-defined/kwil-defined functions
+		fn, ok := tree.Functions[e.FunctionName()]
+		if !ok {
+			panic(fmt.Sprintf("function %s not found", e.FunctionName()))
+		}
 
-		switch t := e.Function.(type) {
-		case *tree.ScalarFunction:
-			return lp.ScalarFunc(t, inputs...)
-		case *tree.AggregateFunc:
-			return lp.AggregateFunc(t, inputs, t.Distinct, nil)
-		default:
-			panic(fmt.Sprintf("unknown function type %T", t))
+		if fn.IsAggregate {
+			return lp.AggregateFunc(e, inputs, e.Distinct, nil)
+		} else {
+			return lp.ScalarFunc(e, inputs...)
 		}
 	//case *tree.ExpressionStringCompare:
 	//	switch e.Operator {
@@ -120,22 +139,28 @@ func (q *queryPlanner) ToExpr(expr tree.Expression, schema *ds.Schema) lp.Logica
 	//case *tree.ExpressionBetween:
 	//case *tree.ExpressionCase:
 	default:
-		panic("unknown expression type")
+		panic("ToExpr: unknown expression type")
 	}
+
+	panic("unreachable")
 }
 
-func (q *queryPlanner) ToPlan(node tree.Statement) lp.LogicalPlan {
+func (q *queryPlanner) ToPlan(node *tree.SQLStatement) lp.LogicalPlan {
 	return q.planStatement(node)
 }
 
-func (q *queryPlanner) planStatement(node tree.Statement) lp.LogicalPlan {
+func (q *queryPlanner) planStatement(node *tree.SQLStatement) lp.LogicalPlan {
 	return q.planStatementWithContext(node, NewPlannerContext())
 }
 
-func (q *queryPlanner) planStatementWithContext(node tree.Statement, ctx *PlannerContext) lp.LogicalPlan {
-	switch n := node.(type) {
-	case *tree.SelectStmt:
-		return q.planSelectStmt(n, ctx)
+func (q *queryPlanner) planStatementWithContext(node *tree.SQLStatement, ctx *PlannerContext) lp.LogicalPlan {
+	if len(node.CTEs) > 0 {
+		q.buildCTEs(node.CTEs, ctx)
+	}
+
+	switch n := node.SQL.(type) {
+	case *tree.SelectStatement:
+		return q.buildSelectStmt(n, ctx)
 		//case *tree.Insert:
 		//case *tree.Update:
 		//case *tree.Delete:
@@ -143,96 +168,143 @@ func (q *queryPlanner) planStatementWithContext(node tree.Statement, ctx *Planne
 	return nil
 }
 
-// planSelectStmt plans a select statement.
+// buildSelectStmt build a logical plan from a select statement.
 // NOTE: we don't support nested select with CTE.
-func (q *queryPlanner) planSelectStmt(node *tree.SelectStmt, ctx *PlannerContext) lp.LogicalPlan {
-	if len(node.CTE) > 0 {
-		q.buildCTEs(node.CTE, ctx)
-	}
+func (q *queryPlanner) buildSelectStmt(node *tree.SelectStatement, ctx *PlannerContext) lp.LogicalPlan {
+	//if len(node.CTEs) > 0 {
+	//	q.buildCTEs(node.CTEs, ctx)
+	//}
 
-	return q.buildSelect(node.Stmt, ctx)
-}
+	//return q.buildSelect(node.Stmt, ctx)
 
-func (q *queryPlanner) buildSelect(node *tree.SelectCore, ctx *PlannerContext) lp.LogicalPlan {
 	var plan lp.LogicalPlan
-	if len(node.SimpleSelects) > 1 { // set operation
-		left := q.buildSimpleSelect(node.SimpleSelects[0], ctx)
-		for _, rSelect := range node.SimpleSelects[1:] {
+	if len(node.SelectCores) > 1 { // set operation
+		left := q.buildSelectCore(node.SelectCores[0], ctx)
+		for i, rSelect := range node.SelectCores[1:] {
 			// TODO: change AST tree to represent as left and right?
-			setOp := rSelect.Compound.Operator
-			right := q.buildSimpleSelect(rSelect, ctx)
-			switch setOp {
-			case tree.CompoundOperatorTypeUnion:
+			//setOp := rSelect.Compound.Operator
+			setOP := node.CompoundOperators[i]
+			right := q.buildSelectCore(rSelect, ctx)
+			switch setOP {
+			case tree.CompoundOperatorUnion:
 				plan = lp.Builder.From(left).Union(right).Distinct().Build()
-			case tree.CompoundOperatorTypeUnionAll:
+			case tree.CompoundOperatorUnionAll:
 				plan = lp.Builder.From(left).Union(right).Build()
-			case tree.CompoundOperatorTypeIntersect:
+			case tree.CompoundOperatorIntersect:
 				plan = lp.Builder.From(left).Intersect(right).Build()
-			case tree.CompoundOperatorTypeExcept:
+			case tree.CompoundOperatorExcept:
 				plan = lp.Builder.From(left).Except(right).Build()
 			default:
-				panic(fmt.Sprintf("unknown set operation %s", setOp.ToSQL()))
+				panic(fmt.Sprintf("unknown set operation %s", setOP))
 			}
 			left = plan
 		}
 	} else { // plain select
-		plan = q.buildSimpleSelect(node.SimpleSelects[0], ctx)
+		plan = q.buildSelectCore(node.SelectCores[0], ctx)
 	}
 
 	// NOTE: we don't support use index of an output column as sort_expression
 	// only support column name or alias
 	// actually, it's allowed in parser
 	// TODO: support this? @brennan: thought?
-	plan = q.buildOrderBy(plan, node.OrderBy, ctx)
+	plan = q.buildOrderBy(plan, node.Ordering, nil, ctx)
 
 	// TODO: change/unwrap tree.OrderBy,use []*tree.OrderingTerm directly ?
-	plan = q.buildLimit(plan, node.Limit)
+	plan = q.buildLimit(plan, node.Limit, node.Offset)
 	return plan
 }
 
-func (q *queryPlanner) buildOrderBy(plan lp.LogicalPlan, node *tree.OrderBy, ctx *PlannerContext) lp.LogicalPlan {
-	if node == nil {
+//
+//func (q *queryPlanner) buildSelect(node *tree.SelectCore, ctx *PlannerContext) lp.LogicalPlan {
+//	var plan lp.LogicalPlan
+//	if len(node.SimpleSelects) > 1 { // set operation
+//		left := q.buildSelectCore(node.SimpleSelects[0], ctx)
+//		for _, rSelect := range node.SimpleSelects[1:] {
+//			// TODO: change AST tree to represent as left and right?
+//			setOp := rSelect.Compound.Operator
+//			right := q.buildSelectCore(rSelect, ctx)
+//			switch setOp {
+//			case tree.CompoundOperatorTypeUnion:
+//				plan = lp.Builder.From(left).Union(right).Distinct().Build()
+//			case tree.CompoundOperatorTypeUnionAll:
+//				plan = lp.Builder.From(left).Union(right).Build()
+//			case tree.CompoundOperatorTypeIntersect:
+//				plan = lp.Builder.From(left).Intersect(right).Build()
+//			case tree.CompoundOperatorTypeExcept:
+//				plan = lp.Builder.From(left).Except(right).Build()
+//			default:
+//				panic(fmt.Sprintf("unknown set operation %s", setOp.ToSQL()))
+//			}
+//			left = plan
+//		}
+//	} else { // plain select
+//		plan = q.buildSelectCore(node.SimpleSelects[0], ctx)
+//	}
+//
+//	// NOTE: we don't support use index of an output column as sort_expression
+//	// only support column name or alias
+//	// actually, it's allowed in parser
+//	// TODO: support this? @brennan: thought?
+//	plan = q.buildOrderBy(plan, node.OrderBy, ctx)
+//
+//	// TODO: change/unwrap tree.OrderBy,use []*tree.OrderingTerm directly ?
+//	plan = q.buildLimit(plan, node.Limit)
+//	return plan
+//}
+
+func (q *queryPlanner) buildOrderBy(plan lp.LogicalPlan, nodes []*tree.OrderingTerm, schema *ds.Schema, ctx *PlannerContext) lp.LogicalPlan {
+	if nodes == nil {
 		return plan
 	}
 
 	// handle (select) distinct?
 
-	sortExprs := q.orderByToExprs(node, nil, ctx)
+	//sortExprs := q.orderByToExprs(nodes, nil, ctx)
 
-	return lp.Builder.From(plan).Sort(sortExprs...).Build()
-}
+	sortExprs := make([]lp.LogicalExpr, 0, len(nodes))
 
-// buildProjection converts tree.OrderBy to []logical_plan.LogicalExpr
-func (q *queryPlanner) orderByToExprs(node *tree.OrderBy, schema *ds.Schema, ctx *PlannerContext) []lp.LogicalExpr {
-	if node == nil {
-		return []lp.LogicalExpr{}
-	}
-
-	exprs := make([]lp.LogicalExpr, 0, len(node.OrderingTerms))
-
-	for _, order := range node.OrderingTerms {
-		asc := order.OrderType != tree.OrderTypeDesc
-		var nullsFirst bool
-		// From PostgreSQL documentation:
-		// By default, null values sort as if larger than any non-null value;
-		// that is, NULLS FIRST is the default for DESC order, and NULLS LAST otherwise.
-		if order.NullOrdering == tree.NullOrderingTypeNone {
-			if order.OrderType == tree.OrderTypeDesc {
-				nullsFirst = true
-			}
-		} else {
-			nullsFirst = order.NullOrdering == tree.NullOrderingTypeFirst
-		}
-		exprs = append(exprs, lp.SortExpr(
+	for _, order := range nodes {
+		asc := order.Order != tree.OrderTypeDesc
+		nullsFirst := order.Nulls == tree.NullOrderFirst
+		sortExprs = append(sortExprs, lp.SortExpr(
 			q.ToExpr(order.Expression, schema),
 			asc, nullsFirst))
 	}
 
-	return exprs
+	return lp.Builder.From(plan).Sort(sortExprs...).Build()
 }
 
-func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.LogicalPlan {
-	if node == nil {
+//// buildProjection converts tree.OrderBy to []logical_plan.LogicalExpr
+//func (q *queryPlanner) orderByToExprs(node *tree.OrderBy, schema *ds.Schema, ctx *PlannerContext) []lp.LogicalExpr {
+//	if node == nil {
+//		return []lp.LogicalExpr{}
+//	}
+//
+//	exprs := make([]lp.LogicalExpr, 0, len(node.OrderingTerms))
+//
+//	for _, order := range node.OrderingTerms {
+//		asc := order.OrderType != tree.OrderTypeDesc
+//		var nullsFirst bool
+//		// From PostgreSQL documentation:
+//		// By default, null values sort as if larger than any non-null value;
+//		// that is, NULLS FIRST is the default for DESC order, and NULLS LAST otherwise.
+//		if order.NullOrdering == tree.NullOrderingTypeNone {
+//			if order.OrderType == tree.OrderTypeDesc {
+//				nullsFirst = true
+//			}
+//		} else {
+//			nullsFirst = order.NullOrdering == tree.NullOrderingTypeFirst
+//		}
+//		exprs = append(exprs, lp.SortExpr(
+//			q.ToExpr(order.Expression, schema),
+//			asc, nullsFirst))
+//	}
+//
+//	return exprs
+//}
+
+func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, limit tree.Expression, offset tree.Expression) lp.LogicalPlan {
+	if limit == nil {
 		return plan
 	}
 
@@ -240,9 +312,9 @@ func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.Logi
 
 	var skip, fetch int64
 
-	if node.Offset != nil {
-		switch t := node.Offset.(type) {
-		case *tree.ExpressionNumericLiteral:
+	if offset != nil {
+		switch t := offset.(type) {
+		case *tree.ExpressionLiteral:
 			offsetExpr := q.ToExpr(t, plan.Schema())
 			e, ok := offsetExpr.(*lp.LiteralNumericExpr)
 			if !ok {
@@ -259,12 +331,8 @@ func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.Logi
 		}
 	}
 
-	if node.Expression == nil {
-		panic("fetch expression is not provided")
-	}
-
-	switch t := node.Expression.(type) {
-	case *tree.ExpressionNumericLiteral:
+	switch t := limit.(type) {
+	case *tree.ExpressionLiteral:
 		limitExpr := q.ToExpr(t, plan.Schema())
 		e, ok := limitExpr.(*lp.LiteralNumericExpr)
 		if !ok {
@@ -279,7 +347,7 @@ func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.Logi
 	return lp.Builder.From(plan).Limit(skip, fetch).Build()
 }
 
-// buildSimpleSelect builds a logical plan for a simple select statement.
+// buildSelectCore builds a logical plan for a simple select statement.
 // The order of building is:
 // 1. from
 // 2. where
@@ -289,11 +357,11 @@ func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, node *tree.Limit) lp.Logi
 // 6. distinct
 // 7. order by, done in buildSelect
 // 8. limit, done in buildSelect
-func (q *queryPlanner) buildSimpleSelect(node *tree.SimpleSelect, ctx *PlannerContext) lp.LogicalPlan {
+func (q *queryPlanner) buildSelectCore(node *tree.SelectCore, ctx *PlannerContext) lp.LogicalPlan {
 	var plan lp.LogicalPlan
 
 	// from clause
-	plan = q.buildFrom(node.From, ctx)
+	plan = q.buildFrom(node.From, node.Joins, ctx)
 
 	noFrom := false
 	if _, ok := plan.(*lp.NoRelationOp); ok {
@@ -309,7 +377,7 @@ func (q *queryPlanner) buildSimpleSelect(node *tree.SimpleSelect, ctx *PlannerCo
 
 	// aggregation
 	planAfterAggr, projectedExpsAfterAggr, err :=
-		q.buildAggregation(node.GroupBy, sourcePlan, projectExprs, ctx)
+		q.buildAggregation(node.GroupBy, node.Having, sourcePlan, projectExprs, ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -318,38 +386,39 @@ func (q *queryPlanner) buildSimpleSelect(node *tree.SimpleSelect, ctx *PlannerCo
 	plan = q.buildProjection(planAfterAggr, projectedExpsAfterAggr)
 
 	// distinct
-	if node.SelectType == tree.SelectTypeDistinct {
+	if node.Distinct {
 		plan = lp.Builder.From(plan).Distinct().Build()
 	}
 
 	return plan
 }
 
-func (q *queryPlanner) buildFrom(node tree.Relation, ctx *PlannerContext) lp.LogicalPlan {
+// buildFrom builds a logical plan for a from clause.
+// NOTE: our AST uses `From` and `Joins` together represent a relation.
+func (q *queryPlanner) buildFrom(node tree.Table, joins []*tree.Join, ctx *PlannerContext) lp.LogicalPlan {
 	if node == nil {
 		return lp.Builder.NoRelation().Build()
 	}
 
-	return q.buildRelation(node, ctx)
+	left := q.buildRelation(node, ctx)
+	for _, join := range joins {
+		right := q.buildRelation(join.Relation, ctx)
+		joinSchema := left.Schema().Join(right.Schema())
+		expr := q.ToExpr(join.On, joinSchema)
+		left = lp.Builder.JoinOn(string(join.Type), left, expr).Build()
+	}
+
+	return left
 }
 
-func (q *queryPlanner) buildRelation(relation tree.Relation, ctx *PlannerContext) lp.LogicalPlan {
+func (q *queryPlanner) buildRelation(relation tree.Table, ctx *PlannerContext) lp.LogicalPlan {
 	var left lp.LogicalPlan
 
 	switch t := relation.(type) {
 	case *tree.RelationTable:
 		left = q.buildTableSource(t, ctx)
 	case *tree.RelationSubquery:
-		left = q.buildSelect(t.Select, ctx)
-	case *tree.RelationJoin:
-		left = q.buildRelation(t.Relation, ctx)
-		for _, join := range t.Joins {
-			right := q.buildRelation(join.Table, ctx)
-			joinSchema := left.Schema().Join(right.Schema())
-			expr := q.ToExpr(join.Constraint, joinSchema)
-			left = lp.Builder.JoinOn(
-				join.JoinOperator.ToSQL(), left, expr).Build()
-		}
+		left = q.buildSelectStmt(t.Subquery, ctx)
 	default:
 		panic(fmt.Sprintf("unknown relation type %T", t))
 	}
@@ -357,20 +426,20 @@ func (q *queryPlanner) buildRelation(relation tree.Relation, ctx *PlannerContext
 	return left
 }
 
-func (q *queryPlanner) buildCTEs(ctes []*tree.CTE, ctx *PlannerContext) lp.LogicalPlan {
+func (q *queryPlanner) buildCTEs(ctes []*tree.CommonTableExpression, ctx *PlannerContext) lp.LogicalPlan {
 	for _, cte := range ctes {
 		q.buildCTE(cte, ctx)
 	}
 	return nil
 }
 
-func (q *queryPlanner) buildCTE(cte *tree.CTE, ctx *PlannerContext) lp.LogicalPlan {
+func (q *queryPlanner) buildCTE(cte *tree.CommonTableExpression, ctx *PlannerContext) lp.LogicalPlan {
 	return nil
 }
 
 func (q *queryPlanner) buildTableSource(node *tree.RelationTable, ctx *PlannerContext) lp.LogicalPlan {
 	//tableRef := ds.TableRefQualified(node.Schema, node.Name)   // TODO: handle schema
-	tableRef := ds.TableRefQualified("", node.Name)
+	tableRef := ds.TableRefQualified("", node.Table)
 
 	// TODO: handle cte
 	//relName := tableRef.String()
@@ -415,7 +484,8 @@ func (q *queryPlanner) buildHaving(node tree.Expression, schema *ds.Schema,
 
 // buildAggregation builds a logical plan for an aggregate, returns the new plan
 // and projected exprs.
-func (q *queryPlanner) buildAggregation(groupBy *tree.GroupBy,
+func (q *queryPlanner) buildAggregation(groupBy []tree.Expression,
+	having tree.Expression,
 	sourcePlan lp.LogicalPlan, projectExprs []lp.LogicalExpr,
 	ctx *PlannerContext) (lp.LogicalPlan, []lp.LogicalExpr, error) {
 	if groupBy == nil {
@@ -427,7 +497,7 @@ func (q *queryPlanner) buildAggregation(groupBy *tree.GroupBy,
 	projectedPlan := q.buildProjection(sourcePlan, projectExprs)
 	combinedSchema := sourcePlan.Schema().Clone().Merge(projectedPlan.Schema())
 
-	havingExpr := q.buildHaving(groupBy.Having, combinedSchema, aliasMap, ctx)
+	havingExpr := q.buildHaving(having, combinedSchema, aliasMap, ctx)
 
 	aggrExprs := slices.Clone(projectExprs) // shallow copy
 	if havingExpr != nil {
@@ -436,7 +506,7 @@ func (q *queryPlanner) buildAggregation(groupBy *tree.GroupBy,
 	aggrExprs = extractAggrExprs(aggrExprs)
 
 	var groupByExprs []lp.LogicalExpr
-	for _, gbExpr := range groupBy.Expressions {
+	for _, gbExpr := range groupBy {
 		groupByExpr := q.ToExpr(gbExpr, combinedSchema)
 
 		// avoid conflict
@@ -555,14 +625,16 @@ func (q *queryPlanner) projectColumnToExpr(col tree.ResultColumn,
 			}
 		}
 		return []lp.LogicalExpr{column}
-	case *tree.ResultColumnStar: // expand *
+	case *tree.ResultColumnWildcard: // expand *
 		if noFrom {
 			panic("cannot use * in select list without FROM clause")
 		}
 
-		return expandStar(localSchema)
-	case *tree.ResultColumnTable: // expand table.*
-		return expandQualifiedStar(localSchema, t.TableName)
+		if t.Table == "" { // *
+			return expandStar(localSchema)
+		} else { // table.*
+			return expandQualifiedStar(localSchema, t.Table)
+		}
 	default:
 		panic(fmt.Sprintf("unknown result column type %T", t))
 	}

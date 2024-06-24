@@ -1,11 +1,14 @@
 package costmodel
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/testkit"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/query_planner"
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
-	"github.com/stretchr/testify/assert"
-	"testing"
+	"github.com/kwilteam/kwil-db/parse"
 )
 
 func Test_RelExpr_String(t *testing.T) {
@@ -17,7 +20,7 @@ func Test_RelExpr_String(t *testing.T) {
 		{
 			name: "test",
 			r:    &RelExpr{},
-			want: "test\n\n  stat: &{0 []}\n  cost: 0",
+			want: "Unknown LogicalPlan type <nil>, Stat: (<nil>), Cost: 0",
 		},
 	}
 	for _, tt := range tests {
@@ -67,8 +70,9 @@ func Test_NewRelExpr(t *testing.T) {
 		{
 			name: "select wildcard",
 			sql:  "SELECT * FROM users",
-			wt: "Projection: users.id, users.username, users.age, users.state, users.wallet, Stat: (RowCount: 5), Cost: 0\n" +
-				"  Scan: users, Stat: (RowCount: 5), Cost: 0\n",
+			wt: "Sort: id ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Projection: users.id, users.username, users.age, users.state, users.wallet, Stat: (RowCount: 5), Cost: 0\n" +
+				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		//{ // TODO?
 		//	name: "select wildcard, deduplication",
@@ -79,34 +83,39 @@ func Test_NewRelExpr(t *testing.T) {
 		{
 			name: "select columns",
 			sql:  "select username, age from users",
-			wt: "Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
-				"  Scan: users, Stat: (RowCount: 5), Cost: 0\n",
+			wt: "Sort: id ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select column with alias",
 			sql:  "select username as name from users",
-			wt: "Projection: users.username AS name, Stat: (RowCount: 5), Cost: 0\n" +
-				"  Scan: users, Stat: (RowCount: 5), Cost: 0\n",
+			wt: "Sort: id ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Projection: users.username AS name, Stat: (RowCount: 5), Cost: 0\n" +
+				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select column expression",
 			sql:  "select username, age+10 from users",
-			wt: "Projection: users.username, users.age + 10, Stat: (RowCount: 5), Cost: 0\n" +
-				"  Scan: users, Stat: (RowCount: 5), Cost: 0\n",
+			wt: "Sort: id ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Projection: users.username, users.age + 10, Stat: (RowCount: 5), Cost: 0\n" +
+				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select with where",
 			sql:  "select username, age from users where age > 20",
-			wt: "Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
-				"  Filter: users.age > 20, Stat: (RowCount: 5), Cost: 0\n" +
-				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
+			wt: "Sort: id ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+				"    Filter: users.age > 20, Stat: (RowCount: 5), Cost: 0\n" +
+				"      Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select with multiple where",
 			sql:  "select username, age from users where age > 20 and state = 'CA'",
-			wt: "Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
-				"  Filter: users.age > 20 AND users.state = 'CA', Stat: (RowCount: 5), Cost: 0\n" +
-				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
+			wt: "Sort: id ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+				"    Filter: users.age > 20 AND users.state = 'CA', Stat: (RowCount: 5), Cost: 0\n" +
+				"      Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		//{
 		//	name: "select with group by",
@@ -117,27 +126,29 @@ func Test_NewRelExpr(t *testing.T) {
 			name: "select with limit, without offset",
 			sql:  "select username, age from users limit 10",
 			wt: "Limit: skip=0, fetch=10, Stat: (RowCount: 0), Cost: 0\n" +
-				"  Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
-				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
+				"  Sort: id ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+				"    Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+				"      Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select with limit and offset",
 			sql:  "select username, age from users limit 10 offset 5",
 			wt: "Limit: skip=5, fetch=10, Stat: (RowCount: 0), Cost: 0\n" +
-				"  Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
-				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
+				"  Sort: id ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+				"    Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+				"      Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select with order by default",
 			sql:  "select username, age from users order by age",
-			wt: "Sort: age ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+			wt: "Sort: age ASC NULLS LAST, id ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
 				"  Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
 				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select with order by desc",
 			sql:  "select username, age from users order by age desc",
-			wt: "Sort: age DESC NULLS FIRST, Stat: (RowCount: 0), Cost: 0\n" +
+			wt: "Sort: age DESC NULLS LAST, id ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
 				"  Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
 				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
@@ -145,20 +156,26 @@ func Test_NewRelExpr(t *testing.T) {
 		{
 			name: "select with subquery",
 			sql:  "select username, age from (select * from users) as u",
-			wt: "Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
-				"  Projection: users.id, users.username, users.age, users.state, users.wallet, Stat: (RowCount: 5), Cost: 0\n" +
-				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
+			wt: "Sort: id ASC NULLS LAST, username ASC NULLS LAST, age ASC NULLS LAST, state ASC NULLS LAST, wallet ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Projection: users.username, users.age, Stat: (RowCount: 0), Cost: 0\n" +
+				"    Sort: id ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+				"      Projection: users.id, users.username, users.age, users.state, users.wallet, Stat: (RowCount: 5), Cost: 0\n        Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		/////////////////////// two relations
 
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(tt.sql)
+			pr, err := parse.ParseSQL(tt.sql, &types.Schema{
+				Name:   "",
+				Tables: []*types.Table{testkit.MockUsersSchemaTable},
+			})
+
 			assert.NoError(t, err)
+			assert.NoError(t, pr.ParseErrs.Err())
 
 			q := query_planner.NewPlanner(cat)
-			plan := q.ToPlan(stmt)
+			plan := q.ToPlan(pr.AST)
 			rel := BuildRelExpr(plan)
 			assert.Equal(t, tt.wt, Format(rel, 0))
 		})

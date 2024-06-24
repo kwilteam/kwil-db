@@ -83,10 +83,12 @@ func extractColumnsFromFilterExpr(expr lp.LogicalExpr, seen map[*lp.ColumnExpr]b
 		extractColumnsFromFilterExpr(e.R(), seen)
 	case *lp.ColumnExpr:
 		seen[e] = true
+	case *lp.SortExpression:
+		extractColumnsFromFilterExpr(e.Expr, seen)
 	//case *.ColumnIdxExpr:
 	//	seen[input.Schema().Fields[e.Idx].Name] = true
 	default:
-		panic(fmt.Sprintf("unknown expression type %T", e))
+		panic(fmt.Sprintf("extractColumns: unknown expression type %T", e))
 	}
 }
 

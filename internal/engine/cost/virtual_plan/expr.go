@@ -200,3 +200,23 @@ func VDiv(left VirtualExpr, right VirtualExpr) VirtualExpr {
 //func (e *VAggregateExpr) evaluate(row datasource.Row) datasource.ColumnValue {
 //
 //}
+
+type VSortExprSTUB struct {
+	exprs []VirtualExpr
+}
+
+func (e *VSortExprSTUB) Resolve(input VirtualPlan) string {
+	var fields []string
+	for _, expr := range e.exprs {
+		fields = append(fields, expr.Resolve(input))
+	}
+	return fmt.Sprintf("sort(%s)", fields)
+}
+
+func (e *VSortExprSTUB) evaluate(row datasource.Row) datasource.ColumnValue {
+	return datasource.NewLiteralColumnValue("TODO")
+}
+
+func VSortExpr(exprs ...VirtualExpr) VirtualExpr {
+	return &VSortExprSTUB{exprs: exprs}
+}

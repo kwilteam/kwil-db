@@ -4,7 +4,7 @@ import (
 	"fmt"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
-	"github.com/kwilteam/kwil-db/parse/sql/tree"
+	tree "github.com/kwilteam/kwil-db/parse"
 )
 
 //
@@ -640,15 +640,15 @@ func (b *binaryExprBuilderImpl) Div(r LogicalExpr) BinaryExpr {
 	return Div(b.l, r)
 }
 
-type sortExpr struct {
+type SortExpression struct {
 	*pt.BaseTreeNode
 
-	expr       LogicalExpr
+	Expr       LogicalExpr
 	asc        bool
 	nullsFirst bool
 }
 
-func (e *sortExpr) String() string {
+func (e *SortExpression) String() string {
 	order := "DESC"
 	if e.asc {
 		order = "ASC"
@@ -657,17 +657,17 @@ func (e *sortExpr) String() string {
 	if e.nullsFirst {
 		nullsOrder = "NULLS FIRST"
 	}
-	return fmt.Sprintf("%s %s %s", e.expr, order, nullsOrder)
+	return fmt.Sprintf("%s %s %s", e.Expr, order, nullsOrder)
 }
 
-func (e *sortExpr) Resolve(schema *dt.Schema) dt.Field {
-	return e.expr.Resolve(schema)
+func (e *SortExpression) Resolve(schema *dt.Schema) dt.Field {
+	return e.Expr.Resolve(schema)
 }
 
-func SortExpr(expr LogicalExpr, asc, nullsFirst bool) *sortExpr {
-	return &sortExpr{
+func SortExpr(expr LogicalExpr, asc, nullsFirst bool) *SortExpression {
+	return &SortExpression{
 		BaseTreeNode: pt.NewBaseTreeNode(),
-		expr:         expr,
+		Expr:         expr,
 		asc:          asc,
 		nullsFirst:   nullsFirst,
 	}
@@ -694,12 +694,12 @@ type AggregateFuncExpr interface {
 type scalarFuncExpr struct {
 	*pt.BaseTreeNode
 
-	fn   tree.SQLFunction // could be built-in or user-defined
+	fn   *tree.ExpressionFunctionCall // could be built-in or user-defined
 	args []LogicalExpr
 }
 
 func (e *scalarFuncExpr) String() string {
-	return fmt.Sprintf("%s(%s)", e.fn.Name(), PpList(e.args))
+	return fmt.Sprintf("%s(%s)", e.fn.FunctionName(), PpList(e.args))
 }
 
 func (e *scalarFuncExpr) Resolve(schema *dt.Schema) dt.Field {
@@ -707,19 +707,19 @@ func (e *scalarFuncExpr) Resolve(schema *dt.Schema) dt.Field {
 }
 
 func (e *scalarFuncExpr) FuncName() string {
-	return e.fn.Name()
+	return e.fn.FunctionName()
 }
 
 func (e *scalarFuncExpr) scalarFn() {}
 
-func ScalarFunc(fn tree.SQLFunction, args ...LogicalExpr) *scalarFuncExpr {
+func ScalarFunc(fn *tree.ExpressionFunctionCall, args ...LogicalExpr) *scalarFuncExpr {
 	return &scalarFuncExpr{BaseTreeNode: pt.NewBaseTreeNode(), fn: fn, args: args}
 }
 
 type aggregateFuncExpr struct {
 	*pt.BaseTreeNode
 
-	fn       tree.SQLFunction // could be built-in or user-defined
+	fn       *tree.ExpressionFunctionCall // could be built-in or user-defined
 	args     []LogicalExpr
 	distinct bool
 
@@ -729,7 +729,7 @@ type aggregateFuncExpr struct {
 }
 
 func (e *aggregateFuncExpr) String() string {
-	return fmt.Sprintf("%s(%s)", e.fn.Name(), PpList(e.args))
+	return fmt.Sprintf("%s(%s)", e.fn.FunctionName(), PpList(e.args))
 }
 
 func (e *aggregateFuncExpr) Resolve(schema *dt.Schema) dt.Field {
@@ -737,12 +737,12 @@ func (e *aggregateFuncExpr) Resolve(schema *dt.Schema) dt.Field {
 }
 
 func (e *aggregateFuncExpr) FuncName() string {
-	return e.fn.Name()
+	return e.fn.FunctionName()
 }
 
 func (e *aggregateFuncExpr) aggregateFn() {}
 
-func AggregateFunc(fn tree.SQLFunction, args []LogicalExpr, distinct bool,
+func AggregateFunc(fn *tree.ExpressionFunctionCall, args []LogicalExpr, distinct bool,
 	filter LogicalExpr, orderBy ...LogicalExpr) *aggregateFuncExpr {
 	return &aggregateFuncExpr{
 		BaseTreeNode: pt.NewBaseTreeNode(),
@@ -799,8 +799,8 @@ func (e *aggregateIntExpr) Children() []pt.TreeNode {
 	return []pt.TreeNode{e.expr}
 }
 
-func (e *sortExpr) Children() []pt.TreeNode {
-	return []pt.TreeNode{e.expr}
+func (e *SortExpression) Children() []pt.TreeNode {
+	return []pt.TreeNode{e.Expr}
 }
 
 func (e *scalarFuncExpr) Children() []pt.TreeNode {
@@ -883,10 +883,10 @@ func (e *aggregateIntExpr) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
 	}
 }
 
-func (e *sortExpr) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
-	return &sortExpr{
+func (e *SortExpression) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
+	return &SortExpression{
 		BaseTreeNode: pt.NewBaseTreeNode(),
-		expr:         fn(e.expr).(LogicalExpr),
+		Expr:         fn(e.Expr).(LogicalExpr),
 		asc:          e.asc,
 		nullsFirst:   e.nullsFirst,
 	}
@@ -933,4 +933,4 @@ func (e *boolBinaryExpr) ExprNode()       {}
 func (e *arithmeticBinaryExpr) ExprNode() {}
 func (e *aggregateExpr) ExprNode()        {}
 func (e *aggregateIntExpr) ExprNode()     {}
-func (e *sortExpr) ExprNode()             {}
+func (e *SortExpression) ExprNode()       {}

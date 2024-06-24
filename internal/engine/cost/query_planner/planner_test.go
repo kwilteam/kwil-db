@@ -2,32 +2,20 @@ package query_planner
 
 import (
 	"flag"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/testkit"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/kwilteam/kwil-db/internal/engine/cost/catalog"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/testkit"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
-	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
+	"github.com/kwilteam/kwil-db/parse"
 )
 
 var (
 	testData        = flag.String("test_data", "testdata/[^.]*", "test data glob")
 	updateTestFiles = flag.Bool("update", false, "update test golden files")
 )
-
-func runToPlan(t *testing.T, sql string, cat catalog.Catalog) string {
-	t.Helper()
-
-	stmt, err := sqlparser.Parse(sql)
-	assert.NoError(t, err)
-
-	q := NewPlanner(cat)
-	plan := q.ToPlan(stmt)
-	return logical_plan.Format(plan, 0)
-	//
-}
 
 //func Test_queryPlanner_ToPlan_golden(t *testing.T) {
 //	// test with golden files, located in ./testdata
@@ -99,8 +87,9 @@ func Test_queryPlanner_ToPlan(t *testing.T) {
 		{
 			name: "select wildcard",
 			sql:  "SELECT * FROM users",
-			wt: "Projection: users.id, users.username, users.age, users.state, users.wallet\n" +
-				"  Scan: users\n",
+			wt: "Sort: id ASC NULLS LAST\n" +
+				"  Projection: users.id, users.username, users.age, users.state, users.wallet\n" +
+				"    Scan: users\n",
 		},
 		//{ // TODO?
 		//	name: "select wildcard, deduplication",
@@ -111,34 +100,39 @@ func Test_queryPlanner_ToPlan(t *testing.T) {
 		{
 			name: "select columns",
 			sql:  "select username, age from users",
-			wt: "Projection: users.username, users.age\n" +
-				"  Scan: users\n",
+			wt: "Sort: id ASC NULLS LAST\n" +
+				"  Projection: users.username, users.age\n" +
+				"    Scan: users\n",
 		},
 		{
 			name: "select column with alias",
 			sql:  "select username as name from users",
-			wt: "Projection: users.username AS name\n" +
-				"  Scan: users\n",
+			wt: "Sort: id ASC NULLS LAST\n" +
+				"  Projection: users.username AS name\n" +
+				"    Scan: users\n",
 		},
 		{
 			name: "select column expression",
 			sql:  "select username, age+10 from users",
-			wt: "Projection: users.username, users.age + 10\n" +
-				"  Scan: users\n",
+			wt: "Sort: id ASC NULLS LAST\n" +
+				"  Projection: users.username, users.age + 10\n" +
+				"    Scan: users\n",
 		},
 		{
 			name: "select with where",
 			sql:  "select username, age from users where age > 20",
-			wt: "Projection: users.username, users.age\n" +
-				"  Filter: users.age > 20\n" +
-				"    Scan: users\n",
+			wt: "Sort: id ASC NULLS LAST\n" +
+				"  Projection: users.username, users.age\n" +
+				"    Filter: users.age > 20\n" +
+				"      Scan: users\n",
 		},
 		{
 			name: "select with multiple where",
 			sql:  "select username, age from users where age > 20 and state = 'CA'",
-			wt: "Projection: users.username, users.age\n" +
-				"  Filter: users.age > 20 AND users.state = 'CA'\n" +
-				"    Scan: users\n",
+			wt: "Sort: id ASC NULLS LAST\n" +
+				"  Projection: users.username, users.age\n" +
+				"    Filter: users.age > 20 AND users.state = 'CA'\n" +
+				"      Scan: users\n",
 		},
 		//{
 		//	name: "select with group by",
@@ -149,27 +143,29 @@ func Test_queryPlanner_ToPlan(t *testing.T) {
 			name: "select with limit, without offset",
 			sql:  "select username, age from users limit 10",
 			wt: "Limit: skip=0, fetch=10\n" +
-				"  Projection: users.username, users.age\n" +
-				"    Scan: users\n",
+				"  Sort: id ASC NULLS LAST\n" +
+				"    Projection: users.username, users.age\n" +
+				"      Scan: users\n",
 		},
 		{
 			name: "select with limit and offset",
 			sql:  "select username, age from users limit 10 offset 5",
 			wt: "Limit: skip=5, fetch=10\n" +
-				"  Projection: users.username, users.age\n" +
-				"    Scan: users\n",
+				"  Sort: id ASC NULLS LAST\n" +
+				"    Projection: users.username, users.age\n" +
+				"      Scan: users\n",
 		},
 		{
 			name: "select with order by default",
 			sql:  "select username, age from users order by age",
-			wt: "Sort: age ASC NULLS LAST\n" +
+			wt: "Sort: age ASC NULLS LAST, id ASC NULLS LAST\n" +
 				"  Projection: users.username, users.age\n" +
 				"    Scan: users\n",
 		},
 		{
 			name: "select with order by desc",
 			sql:  "select username, age from users order by age desc",
-			wt: "Sort: age DESC NULLS FIRST\n" +
+			wt: "Sort: age DESC NULLS LAST, id ASC NULLS LAST\n" +
 				"  Projection: users.username, users.age\n" +
 				"    Scan: users\n",
 		},
@@ -177,20 +173,29 @@ func Test_queryPlanner_ToPlan(t *testing.T) {
 		{
 			name: "select with subquery",
 			sql:  "select username, age from (select * from users) as u",
-			wt: "Projection: users.username, users.age\n" +
-				"  Projection: users.id, users.username, users.age, users.state, users.wallet\n" +
-				"    Scan: users\n",
+			wt: "Sort: id ASC NULLS LAST, username ASC NULLS LAST, age ASC NULLS LAST, state ASC NULLS LAST, wallet ASC NULLS LAST\n" +
+				"  Projection: users.username, users.age\n" +
+				"    Sort: id ASC NULLS LAST\n" +
+				"      Projection: users.id, users.username, users.age, users.state, users.wallet\n" +
+				"        Scan: users\n",
 		},
 		/////////////////////// two relations
 
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(tt.sql)
+
+			pr, err := parse.ParseSQL(tt.sql, &types.Schema{
+				Name:   "",
+				Tables: []*types.Table{testkit.MockUsersSchemaTable},
+			})
+
 			assert.NoError(t, err)
+			assert.NoError(t, pr.ParseErrs.Err())
 
 			q := NewPlanner(cat)
-			plan := q.ToPlan(stmt)
+			plan := q.ToPlan(pr.AST)
 			got := logical_plan.Format(plan, 0)
 			assert.Equal(t, tt.wt, got)
 		})

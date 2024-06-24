@@ -172,3 +172,43 @@ func (s *VFilterOp) Cost() int64 {
 func VSelection(input VirtualPlan, expr VirtualExpr) VirtualPlan {
 	return &VFilterOp{input: input, expr: expr}
 }
+
+// VSortOp represents a sort operation.
+// NOTE: this is only a stub implementation.
+type VSortOp struct {
+	input VirtualPlan
+	exprs []VirtualExpr
+}
+
+func (s *VSortOp) String() string {
+	exprsStr := make([]string, 0, len(s.exprs))
+	for _, expr := range s.exprs {
+		exprsStr = append(exprsStr, expr.Resolve(s.input))
+	}
+	return fmt.Sprintf("VSort: %s", exprsStr)
+}
+
+func (s *VSortOp) Schema() *datatypes.Schema {
+	return s.input.Schema()
+}
+
+func (s *VSortOp) Inputs() []VirtualPlan {
+	return []VirtualPlan{s.input}
+}
+
+func (s *VSortOp) Execute(ctx context.Context) *ds.Result {
+	input := s.input.Execute(ctx)
+	return ds.ResultFromStream(s.input.Schema(), input.Stream)
+}
+
+func (s *VSortOp) Statistics() *datatypes.Statistics {
+	return s.input.Statistics()
+}
+
+func (s *VSortOp) Cost() int64 {
+	return s.input.Cost()
+}
+
+func VSortSTUB(input VirtualPlan, expr ...VirtualExpr) VirtualPlan {
+	return &VSortOp{input: input, exprs: expr}
+}
