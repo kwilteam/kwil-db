@@ -232,6 +232,12 @@ func (d *Duration) UnmarshalText(b []byte) error {
 }
 
 func (d *Duration) String() string {
+	if d == nil {
+		return ""
+	}
+	if *d == 0 {
+		return ""
+	}
 	return time.Duration(*d).String()
 }
 
