@@ -214,44 +214,6 @@ func (q *queryPlanner) buildSelectStmt(node *tree.SelectStatement, ctx *PlannerC
 	return plan
 }
 
-//
-//func (q *queryPlanner) buildSelect(node *tree.SelectCore, ctx *PlannerContext) lp.LogicalPlan {
-//	var plan lp.LogicalPlan
-//	if len(node.SimpleSelects) > 1 { // set operation
-//		left := q.buildSelectCore(node.SimpleSelects[0], ctx)
-//		for _, rSelect := range node.SimpleSelects[1:] {
-//			// TODO: change AST tree to represent as left and right?
-//			setOp := rSelect.Compound.Operator
-//			right := q.buildSelectCore(rSelect, ctx)
-//			switch setOp {
-//			case tree.CompoundOperatorTypeUnion:
-//				plan = lp.Builder.From(left).Union(right).Distinct().Build()
-//			case tree.CompoundOperatorTypeUnionAll:
-//				plan = lp.Builder.From(left).Union(right).Build()
-//			case tree.CompoundOperatorTypeIntersect:
-//				plan = lp.Builder.From(left).Intersect(right).Build()
-//			case tree.CompoundOperatorTypeExcept:
-//				plan = lp.Builder.From(left).Except(right).Build()
-//			default:
-//				panic(fmt.Sprintf("unknown set operation %s", setOp.ToSQL()))
-//			}
-//			left = plan
-//		}
-//	} else { // plain select
-//		plan = q.buildSelectCore(node.SimpleSelects[0], ctx)
-//	}
-//
-//	// NOTE: we don't support use index of an output column as sort_expression
-//	// only support column name or alias
-//	// actually, it's allowed in parser
-//	// TODO: support this? @brennan: thought?
-//	plan = q.buildOrderBy(plan, node.OrderBy, ctx)
-//
-//	// TODO: change/unwrap tree.OrderBy,use []*tree.OrderingTerm directly ?
-//	plan = q.buildLimit(plan, node.Limit)
-//	return plan
-//}
-
 func (q *queryPlanner) buildOrderBy(plan lp.LogicalPlan, nodes []*tree.OrderingTerm, schema *ds.Schema, ctx *PlannerContext) lp.LogicalPlan {
 	if nodes == nil {
 		return plan
@@ -273,35 +235,6 @@ func (q *queryPlanner) buildOrderBy(plan lp.LogicalPlan, nodes []*tree.OrderingT
 
 	return lp.Builder.From(plan).Sort(sortExprs...).Build()
 }
-
-//// buildProjection converts tree.OrderBy to []logical_plan.LogicalExpr
-//func (q *queryPlanner) orderByToExprs(node *tree.OrderBy, schema *ds.Schema, ctx *PlannerContext) []lp.LogicalExpr {
-//	if node == nil {
-//		return []lp.LogicalExpr{}
-//	}
-//
-//	exprs := make([]lp.LogicalExpr, 0, len(node.OrderingTerms))
-//
-//	for _, order := range node.OrderingTerms {
-//		asc := order.OrderType != tree.OrderTypeDesc
-//		var nullsFirst bool
-//		// From PostgreSQL documentation:
-//		// By default, null values sort as if larger than any non-null value;
-//		// that is, NULLS FIRST is the default for DESC order, and NULLS LAST otherwise.
-//		if order.NullOrdering == tree.NullOrderingTypeNone {
-//			if order.OrderType == tree.OrderTypeDesc {
-//				nullsFirst = true
-//			}
-//		} else {
-//			nullsFirst = order.NullOrdering == tree.NullOrderingTypeFirst
-//		}
-//		exprs = append(exprs, lp.SortExpr(
-//			q.ToExpr(order.Expression, schema),
-//			asc, nullsFirst))
-//	}
-//
-//	return exprs
-//}
 
 func (q *queryPlanner) buildLimit(plan lp.LogicalPlan, limit tree.Expression, offset tree.Expression) lp.LogicalPlan {
 	if limit == nil {

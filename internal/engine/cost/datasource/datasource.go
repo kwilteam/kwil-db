@@ -9,6 +9,7 @@ import (
 type SourceType string
 
 // DataSource represents a data source.
+// NOTE: maybe should move to catalog package?
 type DataSource interface {
 	// Schema returns the schema for the underlying data source
 	Schema() *datatypes.Schema

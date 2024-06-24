@@ -38,31 +38,6 @@ func qualifyExpr(expr lp.LogicalExpr, schemas ...*dt.Schema) lp.LogicalExpr {
 
 		}
 	}).(lp.LogicalExpr)
-	//return expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
-	//	c, ok := expr.(*lp.ColumnExpr)
-	//	if !ok {
-	//		return expr
-	//	} else {
-	//		return c.QualifyWithSchemas(schemas...)
-	//
-	//	}
-	//}).(lp.LogicalExpr)
-
-	//c, ok := expr.(*lp.ColumnExpr)
-	//if !ok {
-	//	return expr
-	//}
-	//
-	////// TODO: make all lp.LogicalExpr to implement pt.Node ?
-	////return c.TransformUp(func(n pt.Node) pt.Node {
-	////	if c, ok := n.(*lp.ColumnExpr); ok {
-	////		c.QualifyWithSchema(seen, schemas...)
-	////	}
-	////	return n
-	////
-	////}).(*lp.ColumnExpr)
-	//
-	//return c.QualifyWithSchemas(schemas...)
 }
 
 // extractColumnsFromFilterExpr extracts the columns are references by the filter expression.
@@ -125,35 +100,6 @@ func resolveAlias(expr lp.LogicalExpr, aliases map[string]lp.LogicalExpr) lp.Log
 		// otherwise, return the original node
 		return n
 	}).(lp.LogicalExpr)
-	//return expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
-	//	if c, ok := n.(*lp.ColumnExpr); ok {
-	//		if e, ok := aliases[c.Name]; ok {
-	//			return e
-	//		} else {
-	//			return c
-	//		}
-	//	}
-	//	// otherwise, return the original node
-	//	return n
-	//}).(lp.LogicalExpr)
-
-	//_, e := pt.PostOrderApply(expr, func(n pt.TreeNode) (bool, any) {
-	//	if e, ok := n.(*lp.ColumnExpr); ok {
-	//		if e.Relation == nil {
-	//			return true, nil
-	//		}
-	//
-	//		if aliasExpr, ok := aliases[e.Name]; ok {
-	//			return true, aliasExpr
-	//		} else {
-	//			return true, e
-	//		}
-	//	} else {
-	//		return true, n
-	//	}
-	//})
-
-	//return e.(lp.LogicalExpr)
 }
 
 func extractAggrExprs(exprs []lp.LogicalExpr) []lp.LogicalExpr {
@@ -210,19 +156,6 @@ func rebaseExprs(expr lp.LogicalExpr, baseExprs []lp.LogicalExpr, plan lp.Logica
 			return n
 		}
 	}).(lp.LogicalExpr)
-
-	//return expr.TransformDown(func(n pt.TreeNode) pt.TreeNode {
-	//	contains := slices.ContainsFunc(baseExprs, func(e lp.LogicalExpr) bool {
-	//		// TODO: String() may not work
-	//		return e.String() == n.String()
-	//	})
-	//
-	//	if contains {
-	//		return exprAsColumn(n.(lp.LogicalExpr), plan)
-	//	} else {
-	//		return n
-	//	}
-	//}).(lp.LogicalExpr)
 }
 
 // checkExprsProjectFromColumns checks if the expression can be projected from the columns.
