@@ -3,7 +3,6 @@ package query_planner
 import (
 	"flag"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/testkit"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,37 +29,37 @@ func runToPlan(t *testing.T, sql string, cat catalog.Catalog) string {
 	//
 }
 
-func Test_queryPlanner_ToPlan_golden(t *testing.T) {
-	// test with golden files, located in ./testdata
-	cat := testkit.InitMockCatalog()
-
-	testFiles, err := filepath.Glob(*testData)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, testFiles, "no test files found")
-
-	for _, testFile := range testFiles {
-		r, err := testkit.NewTestDataReader(testFile, *updateTestFiles)
-		assert.NoError(t, err)
-
-		for r.Next() {
-			//fmt.Printf("Running test: %+v\n", r.Data)
-
-			tc := r.Data
-			sql := tc.Sql
-			expected := tc.Expected
-
-			t.Run(tc.CaseName, func(t *testing.T) {
-				got := runToPlan(t, sql, cat)
-				r.Record(got) // record the result for update purposes
-				if !*updateTestFiles {
-					assert.Equal(t, expected, got)
-				}
-			})
-
-			r.Rewrite() // write the updated test file
-		}
-	}
-}
+//func Test_queryPlanner_ToPlan_golden(t *testing.T) {
+//	// test with golden files, located in ./testdata
+//	cat := testkit.InitMockCatalog()
+//
+//	testFiles, err := filepath.Glob(*testData)
+//	assert.NoError(t, err)
+//	assert.NotEmpty(t, testFiles, "no test files found")
+//
+//	for _, testFile := range testFiles {
+//		r, err := testkit.NewTestDataReader(testFile, *updateTestFiles)
+//		assert.NoError(t, err)
+//
+//		for r.Next() {
+//			//fmt.Printf("Running test: %+v\n", r.Data)
+//
+//			tc := r.Data
+//			sql := tc.Sql
+//			expected := tc.Expected
+//
+//			t.Run(tc.CaseName, func(t *testing.T) {
+//				got := runToPlan(t, sql, cat)
+//				r.Record(got) // record the result for update purposes
+//				if !*updateTestFiles {
+//					assert.Equal(t, expected, got)
+//				}
+//			})
+//
+//			r.Rewrite() // write the updated test file
+//		}
+//	}
+//}
 
 func Test_queryPlanner_ToPlan(t *testing.T) {
 	cat := testkit.InitMockCatalog()

@@ -21,9 +21,9 @@ func (n *mockTreeNode) Children() []pt.TreeNode {
 	return n.children
 }
 
-func (n *mockTreeNode) Accept(v pt.TreeNodeVisitor) (bool, any) {
-	return v.Visit(n)
-}
+//func (n *mockTreeNode) Accept(v pt.TreeNodeVisitor) (bool, any) {
+//	return v.Visit(n)
+//}
 
 func (n *mockTreeNode) TransformChildren(fn pt.TransformFunc) pt.TreeNode {
 	newChildren := make([]pt.TreeNode, 0, len(n.children))

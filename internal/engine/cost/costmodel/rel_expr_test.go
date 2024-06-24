@@ -67,7 +67,7 @@ func Test_NewRelExpr(t *testing.T) {
 		{
 			name: "select wildcard",
 			sql:  "SELECT * FROM users",
-			wt: "Projection: users.id, users.username, users.age, users.state, users.wallet, Stat: (RowCount: 0), Cost: 0\n" +
+			wt: "Projection: users.id, users.username, users.age, users.state, users.wallet, Stat: (RowCount: 5), Cost: 0\n" +
 				"  Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		//{ // TODO?
@@ -79,34 +79,34 @@ func Test_NewRelExpr(t *testing.T) {
 		{
 			name: "select columns",
 			sql:  "select username, age from users",
-			wt: "Projection: users.username, users.age, Stat: (RowCount: 0), Cost: 0\n" +
+			wt: "Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
 				"  Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select column with alias",
 			sql:  "select username as name from users",
-			wt: "Projection: users.username AS name\n" +
-				"  Scan: users\n",
+			wt: "Projection: users.username AS name, Stat: (RowCount: 5), Cost: 0\n" +
+				"  Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select column expression",
 			sql:  "select username, age+10 from users",
-			wt: "Projection: users.username, users.age + 10\n" +
-				"  Scan: users\n",
+			wt: "Projection: users.username, users.age + 10, Stat: (RowCount: 5), Cost: 0\n" +
+				"  Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select with where",
 			sql:  "select username, age from users where age > 20",
-			wt: "Projection: users.username, users.age\n" +
-				"  Filter: users.age > 20\n" +
-				"    Scan: users\n",
+			wt: "Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+				"  Filter: users.age > 20, Stat: (RowCount: 5), Cost: 0\n" +
+				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select with multiple where",
 			sql:  "select username, age from users where age > 20 and state = 'CA'",
-			wt: "Projection: users.username, users.age\n" +
-				"  Filter: users.age > 20 AND users.state = 'CA'\n" +
-				"    Scan: users\n",
+			wt: "Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+				"  Filter: users.age > 20 AND users.state = 'CA', Stat: (RowCount: 5), Cost: 0\n" +
+				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		//{
 		//	name: "select with group by",
@@ -116,38 +116,38 @@ func Test_NewRelExpr(t *testing.T) {
 		{
 			name: "select with limit, without offset",
 			sql:  "select username, age from users limit 10",
-			wt: "Limit: skip=0, fetch=10\n" +
-				"  Projection: users.username, users.age\n" +
-				"    Scan: users\n",
+			wt: "Limit: skip=0, fetch=10, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select with limit and offset",
 			sql:  "select username, age from users limit 10 offset 5",
-			wt: "Limit: skip=5, fetch=10\n" +
-				"  Projection: users.username, users.age\n" +
-				"    Scan: users\n",
+			wt: "Limit: skip=5, fetch=10, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select with order by default",
 			sql:  "select username, age from users order by age",
-			wt: "Sort: age ASC NULLS LAST\n" +
-				"  Projection: users.username, users.age\n" +
-				"    Scan: users\n",
+			wt: "Sort: age ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		{
 			name: "select with order by desc",
 			sql:  "select username, age from users order by age desc",
-			wt: "Sort: age DESC NULLS FIRST\n" +
-				"  Projection: users.username, users.age\n" +
-				"    Scan: users\n",
+			wt: "Sort: age DESC NULLS FIRST, Stat: (RowCount: 0), Cost: 0\n" +
+				"  Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		/////////////////////// subquery
 		{
 			name: "select with subquery",
 			sql:  "select username, age from (select * from users) as u",
-			wt: "Projection: users.username, users.age\n" +
-				"  Projection: users.id, users.username, users.age, users.state, users.wallet\n" +
-				"    Scan: users\n",
+			wt: "Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+				"  Projection: users.id, users.username, users.age, users.state, users.wallet, Stat: (RowCount: 5), Cost: 0\n" +
+				"    Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 		},
 		/////////////////////// two relations
 

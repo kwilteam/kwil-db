@@ -32,12 +32,12 @@ func (r *RelExpr) String() string {
 		logical_plan.PlanString(r.LogicalPlan), r.stat, r.cost)
 }
 
-// reorderColStat reorders the columns in the statistics according to the schema.
-// Schema can be changed by the projection/join, so we need to reorder the columns in
-// the statistics.
-func reorderColStat(oldStat *datatypes.Statistics, schema *datatypes.Schema) *datatypes.Statistics {
-
-}
+//// reorderColStat reorders the columns in the statistics according to the schema.
+//// Schema can be changed by the projection/join, so we need to reorder the columns in
+//// the statistics.
+//func reorderColStat(oldStat *datatypes.Statistics, schema *datatypes.Schema) *datatypes.Statistics {
+//
+//}
 
 // BuildRelExpr builds a RelExpr from a logical plan, also build the statistics.
 // TODO: using iterator to traverse the plan tree.
@@ -62,7 +62,7 @@ func BuildRelExpr(plan logical_plan.LogicalPlan) *RelExpr {
 		exprs := p.Exprs()
 		fields := make([]datatypes.Field, len(exprs))
 		for i, expr := range exprs {
-			fields[i] = expr.Resolve()
+			fields[i] = expr.Resolve(plan.Schema())
 		}
 
 	default:
