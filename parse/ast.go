@@ -74,8 +74,6 @@ func literalToString(value any) (string, error) {
 		str.WriteString("'" + v + "'")
 	case int64, int, int32: // for int type
 		str.WriteString(fmt.Sprint(v))
-	case types.UUID:
-		str.WriteString(v.String())
 	case *types.Uint256:
 		str.WriteString(v.String())
 	case *decimal.Decimal:
