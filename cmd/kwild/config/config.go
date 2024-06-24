@@ -232,6 +232,9 @@ func (d *Duration) UnmarshalText(b []byte) error {
 }
 
 func (d *Duration) String() string {
+	// if not set, we need to return an empty string,
+	// so that the -h flag does not show it as a default
+	// value of 0s
 	if d == nil {
 		return ""
 	}
