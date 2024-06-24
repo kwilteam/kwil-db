@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"io"
 	"time"
 
 	"github.com/jackc/pglogrepl"
@@ -46,7 +45,7 @@ func replConn(ctx context.Context, host, port, user, pass, dbName string) (*pgco
 // the context only cancels creation of the connection. Use the quit function to
 // terminate the monitoring goroutine.
 func startRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotName string,
-	schemaFilter func(string) bool, writer *changesetIoWriter, changetWriters map[int64]io.Writer) (chan []byte, chan error, context.CancelFunc, error) {
+	schemaFilter func(string) bool, writer *changesetIoWriter) (chan []byte, chan error, context.CancelFunc, error) {
 	// Create the replication slot and start postgres sending WAL data.
 	startLSN, err := createRepl(ctx, conn, publicationName, slotName)
 	if err != nil {
@@ -69,7 +68,7 @@ func startRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotNa
 	ctx2, cancel := context.WithCancel(context.Background())
 	go func() {
 		defer close(commitHash)
-		done <- captureRepl(ctx2, conn, uint64(startLSN), commitHash, schemaFilter, writer, changetWriters)
+		done <- captureRepl(ctx2, conn, uint64(startLSN), commitHash, schemaFilter, writer)
 	}()
 
 	return commitHash, done, cancel, nil
@@ -136,7 +135,7 @@ var zeroHash, _ = hex.DecodeString("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b
 // broken. It decodeFullWal is true, it will return the entire wal serialized,
 // instead of just the commit hash.
 func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, commitHash chan []byte,
-	schemaFilter func(string) bool, writer *changesetIoWriter, changetWriters map[int64]io.Writer) error {
+	schemaFilter func(string) bool, writer *changesetIoWriter) error {
 	if cap(commitHash) == 0 {
 		return errors.New("buffered commit hash channel required")
 	}
@@ -235,24 +234,11 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 			if err != nil {
 				return fmt.Errorf("decodeWALData failed: %w", err)
 			}
-			if anySeq != -1 {
-				seq = anySeq // the magic sentry table UPDATE that precedes commit
-
-				// if not a sentry update, we should see if an io.Writer is expecting
-				// the changeset, and if so, write it
-				// TODO: this doesn't work. anySeq is only != -1 on commit, but we need to stream
-				// all changes.
-
-				if writer.writable.Load() {
-					changeset, ok := changetWriters[seq]
-					if !ok {
-						return fmt.Errorf("no changeset writer for seq %d", seq) // indicates a logic bug
-					}
-					_, err := changeset.Write(writer.flushData())
-					if err != nil {
-						return fmt.Errorf("write changeset: %w", err)
-					}
+			if anySeq != -1 { // the seq update at the beginning of a transaction
+				if seq != -1 {
+					return fmt.Errorf("sequence already set")
 				}
+				seq = anySeq // the magic sentry table UPDATE that precedes commit
 			}
 
 			var lsnDelta uint64
@@ -267,10 +253,6 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 			if commit {
 				cHash := hasher.Sum(nil)
 				hasher.Reset() // hasher = sha256.New()
-				err := writer.commit()
-				if err != nil {
-					return fmt.Errorf("commit changeset: %w", err)
-				}
 
 				// Only send the commit ID on the commitHash channel if this was
 				// a tracked commit, which includes a sequence number update on
@@ -283,28 +265,8 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 					break // switch => continue loop
 				}
 
-				// if seq != -1, we need to ensure we write the changeset to the
-				// io.Writer before sending the commit hash, if it exists
-				if writer.writable.Load() {
-					changeset, ok := changetWriters[seq]
-					if !ok {
-						return fmt.Errorf("no changeset writer for seq %d", seq) // indicates a logic bug
-					}
-					_, err := changeset.Write(writer.flushData())
-					if err != nil {
-						return fmt.Errorf("write changeset: %w", err)
-					}
-				}
-
 				cid := binary.BigEndian.AppendUint64(nil, uint64(seq))
 				cid = append(cid, cHash...)
-
-				// // if nil changeset writer, this will simply be empty
-				// changeset, err := cs.MarshalBinary()
-				// if err != nil {
-				// 	return fmt.Errorf("marshal changeset: %w", err)
-				// }
-				// cid = append(cid, changeset...)
 
 				select {
 				case commitHash <- cid:
@@ -368,9 +330,9 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 		// from rolled back transactions.
 
 	case *pglogrepl.CommitMessage:
-		logger.Debugf(" [msg] Commit: Commit LSN %v (%d), End LSN %v (%d), seq = %d",
+		logger.Debugf(" [msg] Commit: Commit LSN %v (%d), End LSN %v (%d)",
 			logicalMsg.CommitLSN, uint64(logicalMsg.CommitLSN),
-			logicalMsg.TransactionEndLSN, uint64(logicalMsg.TransactionEndLSN), seq)
+			logicalMsg.TransactionEndLSN, uint64(logicalMsg.TransactionEndLSN))
 
 		done = true
 
@@ -516,6 +478,11 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 		// - COMMIT PREPARED 'uid';
 		//  * msgs: Commit Prepared (NO regular "Commit" message)
 		done = true // there will be a commit or a rollback, but this is the end of the update stream
+
+		err = changesetWriter.commit()
+		if err != nil {
+			return false, 0, fmt.Errorf("changeset commit error: %w", err)
+		}
 
 	case *CommitPreparedMessageV3:
 		logger.Debugf(" [msg] COMMIT PREPARED TRANSACTION (id %v): Commit LSN %v (%d), End LSN %v (%d) \n",

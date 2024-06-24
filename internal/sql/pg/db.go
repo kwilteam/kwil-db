@@ -51,6 +51,7 @@ type DB struct {
 	autoCommit bool   // skip the explicit transaction (begin/commit automatically)
 	tx         pgx.Tx // interface
 	txid       string // uid of the prepared transaction
+	seq        int64
 
 	// NOTE: this was initially designed for a single ongoing write transaction,
 	// held in the tx field, and the (*DB).Execute method using it *implicitly*.
@@ -200,6 +201,7 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		repl:   repl,
 		cancel: cancel,
 		ctx:    runCtx,
+		seq:    -1,
 	}
 
 	// Supervise the replication stream monitor. If it dies (repl.done chan
@@ -422,6 +424,16 @@ func (db *DB) beginWriterTx(ctx context.Context) (pgx.Tx, error) {
 		return nil, err
 	}
 
+	// Do the seq update in sentry table. This ensures a replication message
+	// sequence is emitted from this transaction, and that the data returned
+	// from it includes the expected seq value.
+	seq, err := incrementSeq(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	logger.Debugf("updated seq to %d", seq)
+	db.seq = seq
+
 	// Make the tx available to Execute and QueryPending.
 	db.tx = &writeTxWrapper{
 		Tx:      tx,
@@ -439,33 +451,18 @@ func (db *DB) precommit(ctx context.Context, writer io.Writer) ([]byte, error) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
-	if db.tx == nil {
+	if db.tx == nil || db.seq == -1 {
 		return nil, errors.New("no tx exists")
 	}
 
-	// Do the seq update in sentry table. This ensures a replication message
-	// sequence is emitted from this transaction, and that the data returned
-	// from it includes the expected seq value.
-	seq, err := incrementSeq(ctx, db.tx)
-	if err != nil {
-		return nil, err
-	}
-	logger.Debugf("updated seq to %d", seq)
-
-	resChan, ok := db.repl.recvID(seq, writer)
+	resChan, ok := db.repl.recvID(db.seq, writer)
 	if !ok { // commitID will not be available, error. There is no recovery presently.
 		return nil, errors.New("replication connection is down")
 	}
 
-	// If we have a changeset writer, we need to signal that it is writable.
-	if writer != nil {
-		db.repl.changesetWriter.writable.Store(true)
-		defer db.repl.changesetWriter.writable.Store(false)
-	}
-
 	db.txid = random.String(10)
 	sqlPrepareTx := fmt.Sprintf(`PREPARE TRANSACTION '%s'`, db.txid)
-	if _, err = db.tx.Exec(ctx, sqlPrepareTx); err != nil {
+	if _, err := db.tx.Exec(ctx, sqlPrepareTx); err != nil {
 		return nil, err
 	}
 
@@ -501,6 +498,7 @@ func (db *DB) commit(ctx context.Context) error {
 		// Allow commit without two-phase prepare
 		err := db.tx.Commit(ctx)
 		db.tx = nil
+		db.seq = -1
 		return err
 	}
 
@@ -510,6 +508,7 @@ func (db *DB) commit(ctx context.Context) error {
 		}
 		sqlRollback := fmt.Sprintf(`ROLLBACK PREPARED '%s'`, db.txid)
 		db.txid = ""
+		db.seq = -1
 		if _, err := db.tx.Exec(ctx, sqlRollback); err != nil {
 			logger.Warnf("ROLLBACK PREPARED failed: %v", err)
 		}
@@ -530,6 +529,7 @@ func (db *DB) commit(ctx context.Context) error {
 	// prepare will try to rollback this old prepared txn.
 	db.tx = nil
 	db.txid = ""
+	db.seq = -1
 
 	return nil
 }
@@ -547,6 +547,7 @@ func (db *DB) rollback(ctx context.Context) error {
 	defer func() {
 		db.tx = nil
 		db.txid = ""
+		db.seq = -1
 	}()
 
 	// If precommit not yet done, do a regular rollback.

@@ -3,7 +3,7 @@ package pg
 import (
 	"encoding/binary"
 	"fmt"
-	"sync/atomic"
+	"io"
 
 	"github.com/jackc/pglogrepl"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -11,14 +11,10 @@ import (
 )
 
 type changesetIoWriter struct {
-	// writable is an atomic boolean that is true if the changeset is writable.
-	writable atomic.Bool
-
-	metadata *changesetMetadata
-
+	metadata  *changesetMetadata
 	oidToType map[uint32]*datatype
-	// data keeps track of the serialized data.
-	data []byte
+
+	writer io.Writer
 }
 
 var (
@@ -61,7 +57,7 @@ func (c *changesetIoWriter) registerMetadata(relation *pglogrepl.RelationMessage
 }
 
 func (c *changesetIoWriter) decodeInsert(insert *pglogrepl.InsertMessageV2, relation *pglogrepl.RelationMessageV2) error {
-	if !c.writable.Load() {
+	if c == nil || c.writer == nil { // !c.writable.Load()
 		return nil
 	}
 
@@ -78,12 +74,13 @@ func (c *changesetIoWriter) decodeInsert(insert *pglogrepl.InsertMessageV2, rela
 		return err
 	}
 
-	c.data = append(c.data, append([]byte{changesetInsertByte}, bts...)...)
+	_, err = c.writer.Write(append([]byte{changesetInsertByte}, bts...))
+	// c.data = append(c.data, append([]byte{changesetInsertByte}, bts...)...)
 	return err
 }
 
 func (c *changesetIoWriter) decodeUpdate(update *pglogrepl.UpdateMessageV2, relation *pglogrepl.RelationMessageV2) error {
-	if !c.writable.Load() {
+	if c == nil || c.writer == nil {
 		return nil
 	}
 
@@ -111,12 +108,13 @@ func (c *changesetIoWriter) decodeUpdate(update *pglogrepl.UpdateMessageV2, rela
 		return err
 	}
 
-	c.data = append(c.data, append([]byte{changesetUpdateByte}, append(bts, bts2...)...)...)
+	_, err = c.writer.Write(append([]byte{changesetUpdateByte}, append(bts, bts2...)...))
+	// c.data = append(c.data, append([]byte{changesetUpdateByte}, append(bts, bts2...)...)...)
 	return err
 }
 
 func (c *changesetIoWriter) decodeDelete(delete *pglogrepl.DeleteMessageV2, relation *pglogrepl.RelationMessageV2) error {
-	if !c.writable.Load() {
+	if c == nil || c.writer == nil {
 		return nil
 	}
 
@@ -133,7 +131,8 @@ func (c *changesetIoWriter) decodeDelete(delete *pglogrepl.DeleteMessageV2, rela
 		return err
 	}
 
-	c.data = append(c.data, append([]byte{changesetDeleteByte}, bts...)...)
+	_, err = c.writer.Write(append([]byte{changesetDeleteByte}, bts...))
+	// c.data = append(c.data, append([]byte{changesetDeleteByte}, bts...)...)
 	return err
 }
 
@@ -142,7 +141,7 @@ func (c *changesetIoWriter) decodeDelete(delete *pglogrepl.DeleteMessageV2, rela
 // It zeroes the metadata, so that the changeset can be reused,
 // and send a finish signal to the writer.
 func (c *changesetIoWriter) commit() error {
-	if !c.writable.Load() {
+	if c == nil || c.writer == nil {
 		return nil
 	}
 
@@ -151,36 +150,28 @@ func (c *changesetIoWriter) commit() error {
 		return err
 	}
 
-	c.data = append(c.data, append([]byte{changesetMetadataByte}, bts...)...)
-	if err != nil {
-		return err
-	}
+	_, err = c.writer.Write(append([]byte{changesetMetadataByte}, bts...))
+	// c.data = append(c.data, append([]byte{changesetMetadataByte}, bts...)...)
 
 	c.metadata = &changesetMetadata{
 		relationIdx: map[[2]string]int{},
 	}
+	c.writer = nil
 
-	return nil
-}
-
-// flushData flushes the data to the writer.
-// It zeroes the data, so that the changeset can be reused.
-func (c *changesetIoWriter) flushData() []byte {
-	d := c.data
-	c.data = nil
-	return d
+	return err
 }
 
 // fail is called when the changeset is incomplete.
-// It zeroes the metadata, so that the changeset can be reused.
+// It zeroes the metadata and writer, so that another changeset may be collected.
 func (c *changesetIoWriter) fail() {
-	if !c.writable.Load() {
-		return
-	}
+	// if !c.writable.Load() {
+	// 	return
+	// }
 
 	c.metadata = &changesetMetadata{
 		relationIdx: map[[2]string]int{},
 	}
+	c.writer = nil
 }
 
 // ChangesetGroup is a group of changesets.
@@ -249,7 +240,7 @@ func (c *ChangesetGroup) UnmarshalBinary(data []byte) error {
 }
 
 // DeserializeChangeset deserializes a changeset a serialized changeset stream.
-func DeserializeChangeset(data []byte) (*ChangesetGroup, error) {
+func DeserializeChangeset(data []byte) (*ChangesetGroup, error) { // todo: convert to io.Reader
 	var inserts []*Tuple
 	var updates [][2]*Tuple
 	var deletes []*Tuple
@@ -398,7 +389,7 @@ func (m *changesetMetadata) serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	buf := make([]byte, 4)
+	buf := make([]byte, 4, 4+len(bts))
 	binary.LittleEndian.PutUint32(buf, uint32(len(bts)))
 
 	return append(buf, bts...), nil
@@ -458,7 +449,7 @@ func (t *Tuple) serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	buf := make([]byte, 4)
+	buf := make([]byte, 4, 4+(len(bts)))
 	binary.LittleEndian.PutUint32(buf, uint32(len(bts)))
 
 	return append(buf, bts...), nil

@@ -553,7 +553,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// we now get the apphash by calling precommit on the transaction
-	appHash, err := a.consensusTx.Precommit(ctx)
+	appHash, err := a.consensusTx.Precommit(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to precommit transaction: %w", err)
 	}

@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"testing"
 	"time"
@@ -58,7 +57,7 @@ func Test_repl(t *testing.T) {
 
 	const publicationName = "kwild_repl"
 	var slotName = publicationName + random.String(8)
-	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter, &changesetIoWriter{}, make(map[int64]io.Writer))
+	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter, &changesetIoWriter{})
 	if err != nil {
 		t.Fatal(err)
 	}

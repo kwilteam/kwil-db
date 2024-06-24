@@ -3,6 +3,7 @@ package abci
 import (
 	"bytes"
 	"context"
+	"io"
 	"math/big"
 	"testing"
 
@@ -481,6 +482,6 @@ func (m *mockTx) BeginTx(ctx context.Context) (sql.Tx, error) {
 	return &mockTx{}, nil
 }
 
-func (m *mockTx) Precommit(ctx context.Context) ([]byte, error) {
+func (m *mockTx) Precommit(ctx context.Context, w io.Writer) ([]byte, error) {
 	return nil, nil
 }

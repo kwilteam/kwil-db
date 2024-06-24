@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"sync/atomic"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -47,18 +46,23 @@ type replMon struct {
 	done chan struct{} // termination broadcast channel
 	err  error         // specific error, safe to read after done is closed
 
-	mtx              sync.Mutex
-	results          map[int64][]byte // results should generally be unused as pg.DB will request a promise before commit
-	promises         map[int64]chan []byte
-	changesetWriters map[int64]io.Writer // maps the sequence number to the changeset writer
-	changesetWriter  *changesetIoWriter
+	mtx      sync.Mutex
+	promises map[int64]chan []byte
+	// the map above was used to support multiple concurrent write txns, but
+	// this is never the case where one replMon is only used by one pg.DB since
+	// pg.DB disallows multiple outer write transactions. consider just making
+	// this a chan field
+
+	// changesetWriters map[int64]io.Writer // maps the sequence number to the changeset writer
+	changesetWriter *changesetIoWriter
 }
 
 // newReplMon creates a new connection and logical replication data monitor, and
 // immediately starts receiving messages from the host. A consumer should
 // request a commit ID promise using the recvID method prior to committing a
 // transaction.
-func newReplMon(ctx context.Context, host, port, user, pass, dbName string, schemaFilter func(string) bool, oidToTypes map[uint32]*datatype) (*replMon, error) {
+func newReplMon(ctx context.Context, host, port, user, pass, dbName string, schemaFilter func(string) bool,
+	oidToTypes map[uint32]*datatype) (*replMon, error) {
 	conn, err := replConn(ctx, host, port, user, pass, dbName)
 	if err != nil {
 		return nil, err
@@ -67,17 +71,15 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 	// we set the changeset io.Writer to nil, as the changesetIoWriter will skip all writes
 	// until enabled by setting the atomic.Bool to true.
 	cs := &changesetIoWriter{
-		writable: atomic.Bool{}, // zero value is false
 		metadata: &changesetMetadata{
 			relationIdx: map[[2]string]int{},
 		},
 		oidToType: oidToTypes,
+		// writer is nil, set in caller prior to preparing txns, ignored if left nil
 	}
 
-	writers := make(map[int64]io.Writer)
-
 	var slotName = publicationName + random.String(8) // arbitrary, so just avoid collisions
-	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter, cs, writers)
+	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter, cs)
 	if err != nil {
 		quit()
 		conn.Close(ctx)
@@ -85,13 +87,11 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 	}
 
 	rm := &replMon{
-		conn:             conn,
-		quit:             quit,
-		done:             make(chan struct{}),
-		results:          make(map[int64][]byte),
-		promises:         make(map[int64]chan []byte),
-		changesetWriters: writers,
-		changesetWriter:  cs,
+		conn:            conn,
+		quit:            quit,
+		done:            make(chan struct{}),
+		promises:        make(map[int64]chan []byte),
+		changesetWriter: cs,
 	}
 
 	go func() {
@@ -111,12 +111,10 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 			if p, ok := rm.promises[seq]; ok {
 				p <- cHash
 				delete(rm.promises, seq)
-				delete(rm.changesetWriters, seq)
 			} else {
 				// This is unexpected since pg.DB will call recvID first. If we are
 				// in this `else`, it is to be discarded, from another connection.
 				logger.Warnf("Received commit ID for seq %d BEFORE recvID", seq)
-				rm.results[seq] = cHash
 			}
 			rm.mtx.Unlock()
 		}
@@ -142,23 +140,14 @@ func (rm *replMon) recvID(seq int64, w io.Writer) (chan []byte, bool) {
 
 	c := make(chan []byte, 1)
 
-	// first check if the results is already in the map, otherwise make the
-	// promise and store it
 	rm.mtx.Lock()
 	defer rm.mtx.Unlock()
-	if cHash, ok := rm.results[seq]; ok {
-		// The intended use is to do recvID BEFORE
-		logger.Warnf("recvID with EXISTING result for sequence %d", seq)
-		delete(rm.results, seq)
-		c <- cHash
-		return c, true
-	}
-
 	if _, have := rm.promises[seq]; have {
-		logger.Errorf("Commit ID promise for sequence %d ALREADY EXISTS", seq)
+		panic(fmt.Sprintf("Commit ID promise for sequence %d ALREADY EXISTS", seq))
 	}
-	rm.promises[seq] = c // maybe panic if one already exists, indicating program logic error
-	rm.changesetWriters[seq] = w
+	rm.promises[seq] = c
+
+	rm.changesetWriter.writer = w // could be a map write, just starting simple
 
 	return c, true
 }
