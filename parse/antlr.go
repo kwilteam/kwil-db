@@ -341,6 +341,33 @@ func (s *schemaVisitor) VisitSchema(ctx *gen.SchemaContext) any {
 		s.registerBlock(t, s.schema.Tables[i].Name)
 	}
 
+	// only now that we have visited all tables can we validate
+	// foreign keys
+	for _, t := range s.schema.Tables {
+		for _, fk := range t.ForeignKeys {
+			// the best we can do is get the position of the full
+			// table.
+			pos, ok := s.schemaInfo.Blocks[strings.ToLower(fk.ParentTable)]
+			if !ok {
+				s.errs.RuleErr(ctx, ErrUnknownTable, fk.ParentTable)
+				continue
+			}
+
+			// check that all ParentKeys exist
+			parentTable, ok := s.schema.FindTable(fk.ParentTable)
+			if !ok {
+				s.errs.AddErr(pos, ErrUnknownTable, fk.ParentTable)
+				continue
+			}
+
+			for _, col := range fk.ParentKeys {
+				if _, ok := parentTable.FindColumn(col); !ok {
+					s.errs.AddErr(pos, ErrUnknownColumn, col)
+				}
+			}
+		}
+	}
+
 	for i, e := range ctx.AllUse_declaration() {
 		s.schema.Extensions[i] = e.Accept(s).(*types.Extension)
 		s.registerBlock(e, s.schema.Extensions[i].Alias)
@@ -461,10 +488,26 @@ func (s *schemaVisitor) VisitTable_declaration(ctx *gen.Table_declarationContext
 
 	for i, idx := range ctx.AllIndex_def() {
 		t.Indexes[i] = idx.Accept(s).(*types.Index)
+
+		// check that all columns in indexes and foreign key children exist
+		for _, col := range t.Indexes[i].Columns {
+			if _, ok := t.FindColumn(col); !ok {
+				s.errs.RuleErr(idx, ErrUnknownColumn, col)
+			}
+		}
 	}
 
 	for i, fk := range ctx.AllForeign_key_def() {
 		t.ForeignKeys[i] = fk.Accept(s).(*types.ForeignKey)
+
+		// check that all ChildKeys exist.
+		// we will have to check for parent keys in a later stage,
+		// since not all tables are parsed yet.
+		for _, col := range t.ForeignKeys[i].ChildKeys {
+			if _, ok := t.FindColumn(col); !ok {
+				s.errs.RuleErr(fk, ErrUnknownColumn, col)
+			}
+		}
 	}
 
 	_, err := t.GetPrimaryKey()
