@@ -336,6 +336,14 @@ func Test_Procedures(t *testing.T) {
 			err:      execution.ErrMutativeProcedure,
 			readOnly: true,
 		},
+		{
+			// this is a regression test for a previous bug
+			name: "unary",
+			procedure: `procedure unary() public view returns (bool) {
+				return !true;
+			}`,
+			outputs: [][]any{{false}},
+		},
 	}
 
 	for _, test := range tests {
