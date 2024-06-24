@@ -27,7 +27,7 @@ schema filepaths specified in the JSON will be accessed relative to the
 respective JSON file.
 
 Test cases can be run by specyfing the path to the JSON using the
-` + "`" + `case` + "`" + ` flag. Multiple test cases can be specified by simply
+` + "`" + `file` + "`" + ` flag. Multiple test files can be specified by simply
 using the flag many times.
 
 The tests need an active PostgreSQL instance to run against. Users can
@@ -37,10 +37,10 @@ Alternatively, users can specify a PostgreSQL connection using the
  ` + "`--host`, `--port`, `--user`, `--password`, and `--database` " + `flags.`
 
 	testExample = `# Run tests with a test container
-kwil-cli utils test --case ./test1.json --case ./test2.json --test-container
+kwil-cli utils test --file ./test1.json --file ./test2.json --test-container
 
 # Run tests against a manually set up local Postgres instance
-kwil-cli utils test --case ./test1.json --host localhost --port 5432 \
+kwil-cli utils test --file ./test1.json --host localhost --port 5432 \
 --user postgres --password password --database postgres`
 )
 
@@ -55,7 +55,8 @@ func testCmd() *cobra.Command {
 		Example: testExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			l := log.New(log.Config{
-				Level: "info",
+				Level:  log.InfoLevel.String(),
+				Format: log.FormatPlain,
 			})
 			opts := testing.Options{
 				Logger: testing.LoggerFromKwilLogger(&l),
@@ -132,7 +133,7 @@ func testCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringSliceVarP(&testCases, "case", "c", nil, "filepaths of tests to run")
+	cmd.Flags().StringSliceVarP(&testCases, "file", "f", nil, "filepaths of tests to run")
 	cmd.Flags().BoolVar(&useTestContainer, "test-container", false, "runs the tests with a Docker testcontainer")
 	cmd.Flags().StringVar(&dbName, "database", "kwild", "name of the database to snapshot")
 	cmd.Flags().StringVar(&user, "user", "postgres", "user with administrative privileges on the database")
@@ -144,23 +145,25 @@ func testCmd() *cobra.Command {
 }
 
 type testsPassed struct {
-	// Message should not be set by the test itself, but intstead
-	// by the MarshalText method.
-	Message string `json:"message"`
 	Passing bool   `json:"passing"`
 	Reason  string `json:"reason,omitempty"`
 }
 
 func (t *testsPassed) MarshalJSON() ([]byte, error) {
-	return json.Marshal(t)
+	type Alias testsPassed
+	return json.Marshal(&struct {
+		*Alias
+	}{
+		Alias: (*Alias)(t),
+	})
 }
 
 func (t *testsPassed) MarshalText() (text []byte, err error) {
-	if t.Passing {
-		t.Message = "\nAll tests passed successfully."
+	if !t.Passing {
+		return []byte(fmt.Sprintf("\nTests failed:\n%s", t.Reason)), nil
 	}
 
-	return json.MarshalIndent(t, "", "  ")
+	return []byte("\nAll tests passed successfully."), nil
 }
 
 // adjustPath expands a path relative to another path.

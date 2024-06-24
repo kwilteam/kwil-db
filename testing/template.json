@@ -10,8 +10,8 @@
             "name": "test case 1 - expecting success",
             "database": "schema1",
             "target": "procedure_or_action_name",
-            "inputs": [1, "foo"],
-            "outputs": [
+            "args": [1, "foo"],
+            "returns": [
                 ["row1_col_1", "row_1_col_2"],
                 ["row2_col_1", "row_2_col_2"]
             ],
@@ -22,8 +22,8 @@
             "name": "test case 2 - expecting an error",
             "database": "schema1",
             "target": "procedure_or_action_name",
-            "inputs": [1, "foo"],
-            "error_msg": "I expect this error"
+            "args": [1, "foo"],
+            "error": "I expect this error"
         }
     ]
 }

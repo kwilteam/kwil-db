@@ -131,6 +131,7 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 	return runWithPostgres(ctx, opts, func(ctx context.Context, d *pg.DB, logger Logger) error {
 		testFns := tc.FunctionTests
 		var testFnIdentifiers []string // tracks an identifier for each sub test
+		var testNames []string         // tracks the names of each sub test
 
 		// identify the functions
 		for i := range tc.FunctionTests {
@@ -139,8 +140,10 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 
 		// identify the executions
 		for _, tc := range tc.TestCases {
-			testFns = append(testFns, tc.runExecution)
-			testFnIdentifiers = append(testFnIdentifiers, fmt.Sprintf("TestCase.Execution: %s", tc.Name))
+			tc2 := tc // copy to avoid loop variable capture
+			testFns = append(testFns, tc2.runExecution)
+			testFnIdentifiers = append(testFnIdentifiers, fmt.Sprintf("TestCase.Execution: %s", tc2.Name))
+			testNames = append(testNames, tc2.Name)
 		}
 
 		var errs []error
@@ -222,7 +225,11 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 				}
 
 				// run test function
-				return testFn(ctx, platform)
+				err = testFn(ctx, platform)
+				if err != nil {
+					return fmt.Errorf(`test "%s" failed: %w`, testNames[i], err)
+				}
+				return nil
 			}()
 			if err != nil {
 				errs = append(errs, err)
@@ -268,7 +275,7 @@ type TestCase struct {
 	// ErrMsg will search the error returned by the action/procedure for
 	// the given substring. If no error is expected, this should be an
 	// empty string.
-	ErrMsg string `json:"error_msg"`
+	ErrMsg string `json:"error"`
 	// Signer sets the @caller, and the bytes will be used as the @signer.
 	// If empty, the test case schema deployer will be used.
 	Caller string `json:"caller"`
@@ -335,7 +342,7 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 		}
 
 		for j, col := range row {
-			if !assert.EqualValues(platform.Logger, e.Returns[i][j], col) {
+			if !assert.ObjectsAreEqualValues(e.Returns[i][j], col) {
 				return fmt.Errorf("incorrect value for expected result: row %d, column %d", i, j)
 			}
 		}
