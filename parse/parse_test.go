@@ -842,6 +842,58 @@ func Test_Kuneiform(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "foreign key to non-existent table",
+			kf: `database mydb;
+
+			table a {
+				id int primary key,
+				foreign key (id) references b (id)
+			}
+			`,
+			err: parse.ErrUnknownTable,
+		},
+		{
+			name: "foreign key to non-existent column",
+			kf: `database mydb;
+
+			table a {
+				id int primary key
+			}
+
+			table b {
+				id int primary key,
+				foreign key (id) references a (id_not_exist)
+			}
+			`,
+			err: parse.ErrUnknownColumn,
+		},
+		{
+			name: "foreign key on non-existent column",
+			kf: `database mydb;
+
+			table a {
+				id int primary key
+			}
+
+			table b {
+				id int primary key,
+				foreign key (id_not_exist) references a (id)
+			}
+			`,
+			err: parse.ErrUnknownColumn,
+		},
+		{
+			name: "index on non-existent column",
+			kf: `database mydb;
+
+			table a {
+				id int primary key,
+				#idx index(id_not_exist)
+			}
+			`,
+			err: parse.ErrUnknownColumn,
+		},
 	}
 
 	for _, tt := range tests {
