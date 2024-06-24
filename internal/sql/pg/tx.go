@@ -4,6 +4,7 @@ package pg
 
 import (
 	"context"
+	"io"
 
 	"github.com/jackc/pgx/v5"
 	common "github.com/kwilteam/kwil-db/common/sql"
@@ -68,9 +69,10 @@ type dbTx struct {
 
 // Precommit creates a prepared transaction for a two-phase commit. An ID
 // derived from the updates is return. This must be called before Commit. Either
-// Commit or Rollback must follow.
-func (tx *dbTx) Precommit(ctx context.Context) ([]byte, error) {
-	return tx.db.precommit(ctx)
+// Commit or Rollback must follow. It takes a writer to write the full changeset to.
+// If the writer is nil, the changeset will not be written.
+func (tx *dbTx) Precommit(ctx context.Context, writer io.Writer) ([]byte, error) {
+	return tx.db.precommit(ctx, writer)
 }
 
 // Commit commits the transaction. This partly satisfies sql.Tx.
@@ -112,9 +114,10 @@ type ChangesetTx struct {
 
 // Precommit creates a prepared transaction for a two-phase commit. An ID
 // derived from the updates is return. This must be called before Commit. Either
-// Commit or Rollback must follow.
-func (tx *ChangesetTx) Precommit(ctx context.Context) ([]byte, error) {
-	return tx.dbTx.Precommit(ctx)
+// Commit or Rollback must follow. It takes a writer to write the full changeset to.
+// If the writer is nil, the changeset will not be written.
+func (tx *ChangesetTx) Precommit(ctx context.Context, w io.Writer) ([]byte, error) {
+	return tx.dbTx.Precommit(ctx, w)
 }
 
 // Commit commits the transaction. This partly satisfies sql.Tx.

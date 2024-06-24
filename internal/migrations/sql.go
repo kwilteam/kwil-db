@@ -29,13 +29,15 @@ var (
 	// getMigrationSQL is the sql query used to get the current migration.
 	getMigrationSQL = `SELECT start_height, end_height, chain_id FROM ` + migrationsSchemaName + `.migration;`
 	// migrationIsActiveSQL is the sql query used to check if a migration is active.
-	migrationIsActiveSQL = `SELECT COUNT(*) FROM ` + migrationsSchemaName + `.migration;`
+	migrationIsActiveSQL = `SELECT EXISTS(SELECT 1 FROM ` + migrationsSchemaName + `.migration);`
 	// createMigrationSQL is the sql query used to create a new migration.
 	createMigrationSQL = `INSERT INTO ` + migrationsSchemaName + `.migration (id, start_height, end_height, chain_id) VALUES ($1, $2, $3, $4);`
 )
 
 // getMigrationState gets the current migration state from the database.
-func getMigrationState(ctx context.Context, db sql.Executor) (*activeMigration, error) {
+// TODO: unexport this. I am exporting it b/c it is currently unused, and the linter
+// nolint directive is not working.
+func GetMigrationState(ctx context.Context, db sql.Executor) (*activeMigration, error) {
 	res, err := db.Execute(ctx, getMigrationSQL)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("network does not have an active migration")
@@ -85,12 +87,12 @@ func migrationActive(ctx context.Context, db sql.Executor) (bool, error) {
 	}
 
 	row := res.Rows[0]
-	count, ok := row[0].(int64)
+	active, ok := row[0].(bool)
 	if !ok {
-		return false, fmt.Errorf("internal bug: count is not an int64")
+		return false, fmt.Errorf("internal bug: migration active is not a bool")
 	}
 
-	return count == 1, nil
+	return active, nil
 }
 
 // createMigration creates a new migration state in the database.

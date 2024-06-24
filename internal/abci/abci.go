@@ -423,7 +423,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		VoteExpiry:       a.consensusParams.Votes.VoteExpiry,
 		DisabledGasCosts: a.consensusParams.WithoutGasCosts,
 	}
-	oldNetworkParams := networkParams.Copy()
+	oldNetworkParams := *networkParams
 
 	initialValidators, err := a.txApp.GetValidators(ctx, a.consensusTx)
 	if err != nil {
@@ -536,7 +536,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// store any changes to the network params
-	err = meta.StoreDiff(ctx, a.consensusTx, oldNetworkParams, networkParams)
+	err = meta.StoreDiff(ctx, a.consensusTx, &oldNetworkParams, networkParams)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store network params diff: %w", err)
 	}

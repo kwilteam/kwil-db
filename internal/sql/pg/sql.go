@@ -70,11 +70,9 @@ DECLARE
     obj record;
 BEGIN
     FOR obj IN
-        SELECT * FROM pg_event_trigger_ddl_commands()
+        SELECT * FROM pg_event_trigger_ddl_commands() WHERE command_tag = 'CREATE TABLE'
     LOOP
-        IF obj.command_tag = 'CREATE TABLE' THEN
-            EXECUTE 'ALTER TABLE ' || obj.object_identity || ' REPLICA IDENTITY FULL';
-        END IF;
+        EXECUTE 'ALTER TABLE ' || obj.object_identity || ' REPLICA IDENTITY FULL';
     END LOOP;
 END;
 $$;`

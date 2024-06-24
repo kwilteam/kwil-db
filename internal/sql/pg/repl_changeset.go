@@ -3,7 +3,6 @@ package pg
 import (
 	"encoding/binary"
 	"fmt"
-	"io"
 	"sync/atomic"
 
 	"github.com/jackc/pglogrepl"
@@ -15,11 +14,11 @@ type changesetIoWriter struct {
 	// writable is an atomic boolean that is true if the changeset is writable.
 	writable atomic.Bool
 
-	writer io.Writer
-
 	metadata *changesetMetadata
 
 	oidToType map[uint32]*datatype
+	// data keeps track of the serialized data.
+	data []byte
 }
 
 var (
@@ -79,7 +78,7 @@ func (c *changesetIoWriter) decodeInsert(insert *pglogrepl.InsertMessageV2, rela
 		return err
 	}
 
-	_, err = c.writer.Write(append([]byte{changesetInsertByte}, bts...))
+	c.data = append(c.data, append([]byte{changesetInsertByte}, bts...)...)
 	return err
 }
 
@@ -112,7 +111,7 @@ func (c *changesetIoWriter) decodeUpdate(update *pglogrepl.UpdateMessageV2, rela
 		return err
 	}
 
-	_, err = c.writer.Write(append([]byte{changesetUpdateByte}, append(bts, bts2...)...))
+	c.data = append(c.data, append([]byte{changesetUpdateByte}, append(bts, bts2...)...)...)
 	return err
 }
 
@@ -134,7 +133,7 @@ func (c *changesetIoWriter) decodeDelete(delete *pglogrepl.DeleteMessageV2, rela
 		return err
 	}
 
-	_, err = c.writer.Write(append([]byte{changesetDeleteByte}, bts...))
+	c.data = append(c.data, append([]byte{changesetDeleteByte}, bts...)...)
 	return err
 }
 
@@ -152,7 +151,7 @@ func (c *changesetIoWriter) commit() error {
 		return err
 	}
 
-	_, err = c.writer.Write(append([]byte{changesetMetadataByte}, bts...))
+	c.data = append(c.data, append([]byte{changesetMetadataByte}, bts...)...)
 	if err != nil {
 		return err
 	}
@@ -162,6 +161,14 @@ func (c *changesetIoWriter) commit() error {
 	}
 
 	return nil
+}
+
+// flushData flushes the data to the writer.
+// It zeroes the data, so that the changeset can be reused.
+func (c *changesetIoWriter) flushData() []byte {
+	d := c.data
+	c.data = nil
+	return d
 }
 
 // fail is called when the changeset is incomplete.

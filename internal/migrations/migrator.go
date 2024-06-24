@@ -69,11 +69,22 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext)
 		return nil
 	}
 
+	// if not in a migration, we can return early
+	if block.Height < m.activeMigration.StartHeight {
+		return nil
+	}
+
+	if block.Height > m.activeMigration.EndHeight {
+		panic("internal bug: block height is greater than end height of migration")
+	}
+
 	/*
 		I previously thought to make this run asynchronously, since PG dump can take a significant amount of time,
 		however I decided againast it, because nodes are required to agree on the height of the old chain during the
 		migration on the new chain. Im not sure of a way to guarantee this besdies literally enforcing that the old
-		chain runs the migration syncrhonously as part of consensus.
+		chain runs the migration synchronously as part of consensus.
+
+		NOTE: https://github.com/kwilteam/kwil-db/pull/837#discussion_r1648036539
 	*/
 
 	// if the current block height is the height at which the migration starts, then
@@ -106,15 +117,6 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext)
 		// an error here will halt the node.
 		// there might be a more elegant way to handle this, but for now, this is fine.
 		return fmt.Errorf(`NETWORK HALTED: migration to chain "%s" has completed`, m.activeMigration.ChainID)
-	}
-
-	// if not in a migration, we can return early
-	if block.Height < m.activeMigration.StartHeight {
-		return nil
-	}
-
-	if block.Height > m.activeMigration.EndHeight {
-		panic("internal bug: block height is greater than end height of migration")
 	}
 
 	// if we reach here, we are in a block that must be migrated.
@@ -202,7 +204,7 @@ func (m *Migrator) GetChangeset(height int64) (*Changeset, error) {
 
 // storeChangeset persists a changeset to the migration directory.
 func (m *Migrator) storeChangeset(c *Changeset) error {
-	bts, err := c.MarshalBinary()
+	bts, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
@@ -240,14 +242,6 @@ func (m *Migrator) loadChangeset(height int64) (*Changeset, error) {
 
 type Changeset struct {
 	Height int64 `json:"height"`
-}
-
-func (c *Changeset) MarshalBinary() ([]byte, error) {
-	return json.Marshal(c)
-}
-
-func (c *Changeset) UnmarshalBinary(data []byte) error {
-	return json.Unmarshal(data, c)
 }
 
 func formatChangesetFilename(height int64) string {

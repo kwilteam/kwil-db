@@ -142,14 +142,3 @@ type NetworkParameters struct {
 	// single transaction.
 	MaxVotesPerTx int64
 }
-
-// Copy returns a deep copy of the network parameters.
-func (n *NetworkParameters) Copy() *NetworkParameters {
-	return &NetworkParameters{
-		MaxBlockSize:     n.MaxBlockSize,
-		JoinExpiry:       n.JoinExpiry,
-		VoteExpiry:       n.VoteExpiry,
-		DisabledGasCosts: n.DisabledGasCosts,
-		InMigration:      n.InMigration,
-	}
-}

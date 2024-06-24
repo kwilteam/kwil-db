@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"sync/atomic"
 
@@ -46,12 +47,11 @@ type replMon struct {
 	done chan struct{} // termination broadcast channel
 	err  error         // specific error, safe to read after done is closed
 
-	mtx      sync.Mutex
-	results  map[int64][]byte // results should generally be unused as pg.DB will request a promise before commit
-	promises map[int64]chan []byte
-
-	// returnFullWal   *atomic.Bool
-	changesetWriter *changesetIoWriter
+	mtx              sync.Mutex
+	results          map[int64][]byte // results should generally be unused as pg.DB will request a promise before commit
+	promises         map[int64]chan []byte
+	changesetWriters map[int64]io.Writer // maps the sequence number to the changeset writer
+	changesetWriter  *changesetIoWriter
 }
 
 // newReplMon creates a new connection and logical replication data monitor, and
@@ -74,8 +74,10 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 		oidToType: oidToTypes,
 	}
 
+	writers := make(map[int64]io.Writer)
+
 	var slotName = publicationName + random.String(8) // arbitrary, so just avoid collisions
-	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter, cs)
+	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter, cs, writers)
 	if err != nil {
 		quit()
 		conn.Close(ctx)
@@ -83,12 +85,13 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 	}
 
 	rm := &replMon{
-		conn:            conn,
-		quit:            quit,
-		done:            make(chan struct{}),
-		results:         make(map[int64][]byte),
-		promises:        make(map[int64]chan []byte),
-		changesetWriter: cs,
+		conn:             conn,
+		quit:             quit,
+		done:             make(chan struct{}),
+		results:          make(map[int64][]byte),
+		promises:         make(map[int64]chan []byte),
+		changesetWriters: writers,
+		changesetWriter:  cs,
 	}
 
 	go func() {
@@ -108,6 +111,7 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 			if p, ok := rm.promises[seq]; ok {
 				p <- cHash
 				delete(rm.promises, seq)
+				delete(rm.changesetWriters, seq)
 			} else {
 				// This is unexpected since pg.DB will call recvID first. If we are
 				// in this `else`, it is to be discarded, from another connection.
@@ -128,7 +132,7 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 
 // this channel-based approach is so that the commit ID is guaranteed to pertain
 // to the requested sequence number.
-func (rm *replMon) recvID(seq int64) (chan []byte, bool) {
+func (rm *replMon) recvID(seq int64, w io.Writer) (chan []byte, bool) {
 	// Ensure a commit ID can be promised before we give one.
 	select {
 	case <-rm.done:
@@ -154,6 +158,7 @@ func (rm *replMon) recvID(seq int64) (chan []byte, bool) {
 		logger.Errorf("Commit ID promise for sequence %d ALREADY EXISTS", seq)
 	}
 	rm.promises[seq] = c // maybe panic if one already exists, indicating program logic error
+	rm.changesetWriters[seq] = w
 
 	return c, true
 }

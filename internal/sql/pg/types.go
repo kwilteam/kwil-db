@@ -94,7 +94,7 @@ type datatype struct {
 	OID func(*pgtype.Map) uint32
 	// ExtraOIDs returns any additional OIDs which the data type can be decoded from.
 	// This is useful for int types, which can be decoded from int2, int4, and int8.
-	// These will be used in addition to the OID returned by OID.
+	// These will be used in addition to the OID returned by OID().
 	// This can be nil if there are no additional OIDs.
 	ExtraOIDs []uint32
 	// EncodeInferred encodes a value into a byte slice, given the type of the value.
@@ -114,9 +114,8 @@ type datatype struct {
 	// with null values, but it may be called with empty strings / 0 values.
 	// https://github.com/jackc/pglogrepl/blob/828fbfe908e97cfeb409a17e4ec339dede1f1a17/message.go#L379
 	SerializeChangeset func(value string) ([]byte, error)
-	// DeserializeChangeset encodes a data type from a changeset to its native Go/Kwil type. This can then be used
-	// to execute an incoming changeset against a database.
-	// TODO: I will have to circle back to actually implement this once I am doing the 2nd half of migrations
+	// DeserializeChangeset encodes a data type from a changeset to its native Go/Kwil type.
+	// This can then be used to execute an incoming changeset against a database.
 	DeserializeChangeset func([]byte) (any, error)
 }
 
@@ -155,20 +154,36 @@ var (
 			// we need to split on "," but not on "\",\""
 			inQuote := false
 			var strs []string
-			currentStr := ""
-			for _, char := range value {
-				if char == '"' {
+			currentStr := strings.Builder{}
+			i := 0
+			for i < len(value) {
+				v := value[i]
+				switch v {
+				case '\\':
+					if len(value) <= i+1 {
+						return nil, fmt.Errorf("invalid text array: %s", value)
+					}
+					// add the next character to the string
+					currentStr.WriteByte(value[i+1])
+					i++
+				case '"':
+					// toggle inQuote
 					inQuote = !inQuote
-				} else if char == ',' && !inQuote {
-					strs = append(strs, currentStr)
-					currentStr = ""
-				} else {
-					currentStr += string(char)
+				case ',':
+					if inQuote {
+						currentStr.WriteByte(v)
+					} else {
+						strs = append(strs, currentStr.String())
+						currentStr.Reset()
+					}
+				default:
+					currentStr.WriteByte(v)
 				}
+				i++
 			}
 
 			// add the last string
-			strs = append(strs, currentStr)
+			strs = append(strs, currentStr.String())
 
 			return serializeArray(strs, 4, textType.SerializeChangeset)
 		},
@@ -216,16 +231,20 @@ var (
 			binary.LittleEndian.PutUint64(buf, uint64(intVal))
 			return buf, nil
 		},
+		DeserializeChangeset: func(b []byte) (any, error) {
+			return int64(binary.LittleEndian.Uint64(b)), nil
+		},
 	}
 
 	intArrayType = &datatype{
-		KwilType:           types.IntArrayType,
-		Matches:            []reflect.Type{reflect.TypeOf([]int{}), reflect.TypeOf([]int8{}), reflect.TypeOf([]int16{}), reflect.TypeOf([]int32{}), reflect.TypeOf([]int64{}), reflect.TypeOf([]uint{}), reflect.TypeOf([]uint16{}), reflect.TypeOf([]uint32{}), reflect.TypeOf([]uint64{})},
-		OID:                func(m *pgtype.Map) uint32 { return pgtype.Int8ArrayOID },
-		ExtraOIDs:          []uint32{pgtype.Int2ArrayOID, pgtype.Int4ArrayOID},
-		EncodeInferred:     defaultEncodeDecode,
-		Decode:             decodeArray[int64](intType.Decode),
-		SerializeChangeset: arrayFromChildFunc(1, intType.SerializeChangeset),
+		KwilType:             types.IntArrayType,
+		Matches:              []reflect.Type{reflect.TypeOf([]int{}), reflect.TypeOf([]int8{}), reflect.TypeOf([]int16{}), reflect.TypeOf([]int32{}), reflect.TypeOf([]int64{}), reflect.TypeOf([]uint{}), reflect.TypeOf([]uint16{}), reflect.TypeOf([]uint32{}), reflect.TypeOf([]uint64{})},
+		OID:                  func(m *pgtype.Map) uint32 { return pgtype.Int8ArrayOID },
+		ExtraOIDs:            []uint32{pgtype.Int2ArrayOID, pgtype.Int4ArrayOID},
+		EncodeInferred:       defaultEncodeDecode,
+		Decode:               decodeArray[int64](intType.Decode),
+		SerializeChangeset:   arrayFromChildFunc(1, intType.SerializeChangeset),
+		DeserializeChangeset: deserializeArrayFn[int64](1, intType.DeserializeChangeset),
 	}
 
 	boolType = &datatype{
@@ -243,15 +262,19 @@ var (
 			}
 			return nil, fmt.Errorf("invalid boolean value: %s", value)
 		},
+		DeserializeChangeset: func(b []byte) (any, error) {
+			return b[0] == 1, nil
+		},
 	}
 
 	boolArrayType = &datatype{
-		KwilType:           types.BoolArrayType,
-		Matches:            []reflect.Type{reflect.TypeOf([]bool{})},
-		OID:                func(m *pgtype.Map) uint32 { return pgtype.BoolArrayOID },
-		EncodeInferred:     defaultEncodeDecode,
-		Decode:             decodeArray[bool](boolType.Decode),
-		SerializeChangeset: arrayFromChildFunc(1, boolType.SerializeChangeset),
+		KwilType:             types.BoolArrayType,
+		Matches:              []reflect.Type{reflect.TypeOf([]bool{})},
+		OID:                  func(m *pgtype.Map) uint32 { return pgtype.BoolArrayOID },
+		EncodeInferred:       defaultEncodeDecode,
+		Decode:               decodeArray[bool](boolType.Decode),
+		SerializeChangeset:   arrayFromChildFunc(1, boolType.SerializeChangeset),
+		DeserializeChangeset: deserializeArrayFn[bool](1, boolType.DeserializeChangeset),
 	}
 
 	blobType = &datatype{
@@ -273,15 +296,61 @@ var (
 
 			return hex.DecodeString(value[2:])
 		},
+		DeserializeChangeset: func(b []byte) (any, error) {
+			return b, nil
+		},
 	}
 
 	blobArrayType = &datatype{
-		KwilType:           types.BlobArrayType,
-		Matches:            []reflect.Type{reflect.TypeOf([][]byte{})},
-		OID:                func(m *pgtype.Map) uint32 { return pgtype.ByteaArrayOID },
-		EncodeInferred:     defaultEncodeDecode,
-		Decode:             decodeArray[[]byte](blobType.Decode),
-		SerializeChangeset: arrayFromChildFunc(4, blobType.SerializeChangeset),
+		KwilType:       types.BlobArrayType,
+		Matches:        []reflect.Type{reflect.TypeOf([][]byte{})},
+		OID:            func(m *pgtype.Map) uint32 { return pgtype.ByteaArrayOID },
+		EncodeInferred: defaultEncodeDecode,
+		Decode:         decodeArray[[]byte](blobType.Decode),
+		SerializeChangeset: func(value string) ([]byte, error) {
+			// postgres wraps each hex encoded blob in double quotes, so we need to remove them
+			var ok bool
+			value, ok = trimCurlys(value)
+			if !ok {
+				return nil, fmt.Errorf("invalid blob array: %s", value)
+			}
+
+			// each blob is now wrapped in double quotes in the text literal,
+			vals := strings.Split(value, ",")
+
+			bts := make([][]byte, len(vals))
+			for i, v := range vals {
+				if !strings.HasPrefix(v, `"`) || !strings.HasSuffix(v, `"`) {
+					return nil, fmt.Errorf("invalid blob array: %s", value)
+				}
+
+				vals[i] = v[1 : len(v)-1]
+
+				// for some reason, postgres adds an additional escape character to the hex in an array
+				// that is not present in a single value. We need to remove it.
+				// This irregularity is tested in db_live_test.go
+				if len(vals[i]) == 0 {
+					return nil, fmt.Errorf("invalid blob array, expected some value: %s", value)
+				}
+
+				if vals[i][0] != '\\' {
+					return nil, fmt.Errorf("invalid blob array, expected \\: %s", value)
+				}
+
+				// decode the hex
+				b, err := blobType.SerializeChangeset(vals[i][1:])
+				if err != nil {
+					return nil, err
+				}
+
+				bts[i] = b
+			}
+
+			return serializeArray(bts, 4, func(b []byte) ([]byte, error) {
+				return b, nil
+			})
+		},
+		DeserializeChangeset: deserializeArrayFn[[]byte](4, blobType.DeserializeChangeset),
 	}
 
 	uuidType = &datatype{
@@ -323,6 +392,10 @@ var (
 			}
 			return u.Bytes(), nil
 		},
+		DeserializeChangeset: func(b []byte) (any, error) {
+			u := types.UUID(b)
+			return &u, nil
+		},
 	}
 
 	uuidArrayType = &datatype{
@@ -363,7 +436,8 @@ var (
 
 			return vals, nil
 		},
-		SerializeChangeset: arrayFromChildFunc(1, uuidType.SerializeChangeset),
+		SerializeChangeset:   arrayFromChildFunc(1, uuidType.SerializeChangeset),
+		DeserializeChangeset: deserializeArrayFn[*types.UUID](1, uuidType.DeserializeChangeset),
 	}
 
 	decimalType = &datatype{
@@ -422,6 +496,9 @@ var (
 
 			return []byte(dec.String()), nil
 		},
+		DeserializeChangeset: func(b []byte) (any, error) {
+			return decimal.NewFromString(string(b))
+		},
 	}
 
 	decimalArrayType = &datatype{
@@ -462,7 +539,8 @@ var (
 
 			return vals, nil
 		},
-		SerializeChangeset: arrayFromChildFunc(2, decimalType.SerializeChangeset),
+		SerializeChangeset:   arrayFromChildFunc(2, decimalType.SerializeChangeset),
+		DeserializeChangeset: deserializeArrayFn[*decimal.Decimal](2, decimalType.DeserializeChangeset),
 	}
 
 	uint256Type = &datatype{
@@ -524,6 +602,9 @@ var (
 
 			return u.Bytes(), nil
 		},
+		DeserializeChangeset: func(b []byte) (any, error) {
+			return types.Uint256FromBytes(b)
+		},
 	}
 
 	uint256ArrayType = &datatype{
@@ -574,7 +655,8 @@ var (
 
 			return vals, nil
 		},
-		SerializeChangeset: arrayFromChildFunc(2, uint256Type.SerializeChangeset),
+		SerializeChangeset:   arrayFromChildFunc(2, uint256Type.SerializeChangeset),
+		DeserializeChangeset: deserializeArrayFn[*types.Uint256](2, uint256Type.DeserializeChangeset),
 	}
 )
 

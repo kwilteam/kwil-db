@@ -284,28 +284,6 @@ func (db *DB) BeginOuterTx(ctx context.Context) (sql.OuterTx, error) {
 	}, nil
 }
 
-// BeginChangesetTx starts a transaction that will return the entire changeset.
-// It works exactly like BeginOuterTx, but returns the full changeset body along
-// with the commit hash.
-func (db *DB) BeginChangesetTx(ctx context.Context, writer io.Writer) (*ChangesetTx, error) {
-	dbtx, err := db.BeginOuterTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	db.repl.changesetWriter.writer = writer
-	db.repl.changesetWriter.writable.Store(true)
-
-	// db.repl.returnFullWal.Store(true)
-
-	return &ChangesetTx{
-		dbTx: dbtx.(*dbTx),
-		release: func() {
-			db.repl.changesetWriter.writable.Store(false)
-		},
-	}, nil
-}
-
 var _ sql.TxMaker = (*DB)(nil)
 var _ sql.DB = (*DB)(nil)
 
@@ -454,8 +432,10 @@ func (db *DB) beginWriterTx(ctx context.Context) (pgx.Tx, error) {
 }
 
 // precommit finalizes the transaction with a prepared transaction and returns
-// the ID of the commit. The transaction is not yet committed.
-func (db *DB) precommit(ctx context.Context) ([]byte, error) {
+// the ID of the commit. The transaction is not yet committed. It takes an io.Writer
+// to write the changeset to, and returns the commit ID. If the io.Writer is nil,
+// it won't write the changeset anywhere.
+func (db *DB) precommit(ctx context.Context, writer io.Writer) ([]byte, error) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
@@ -472,9 +452,15 @@ func (db *DB) precommit(ctx context.Context) ([]byte, error) {
 	}
 	logger.Debugf("updated seq to %d", seq)
 
-	resChan, ok := db.repl.recvID(seq)
+	resChan, ok := db.repl.recvID(seq, writer)
 	if !ok { // commitID will not be available, error. There is no recovery presently.
 		return nil, errors.New("replication connection is down")
+	}
+
+	// If we have a changeset writer, we need to signal that it is writable.
+	if writer != nil {
+		db.repl.changesetWriter.writable.Store(true)
+		defer db.repl.changesetWriter.writable.Store(false)
 	}
 
 	db.txid = random.String(10)
@@ -642,7 +628,7 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 				return err
 			}
 			var ok bool
-			resChan, ok = db.repl.recvID(seq)
+			resChan, ok = db.repl.recvID(seq, nil) // nil changeset writer since we are in auto-commit mode
 			if !ok {
 				return errors.New("replication connection is down")
 			}

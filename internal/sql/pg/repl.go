@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"io"
 	"time"
 
 	"github.com/jackc/pglogrepl"
@@ -45,7 +46,7 @@ func replConn(ctx context.Context, host, port, user, pass, dbName string) (*pgco
 // the context only cancels creation of the connection. Use the quit function to
 // terminate the monitoring goroutine.
 func startRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotName string,
-	schemaFilter func(string) bool, writer *changesetIoWriter) (chan []byte, chan error, context.CancelFunc, error) {
+	schemaFilter func(string) bool, writer *changesetIoWriter, changetWriters map[int64]io.Writer) (chan []byte, chan error, context.CancelFunc, error) {
 	// Create the replication slot and start postgres sending WAL data.
 	startLSN, err := createRepl(ctx, conn, publicationName, slotName)
 	if err != nil {
@@ -68,7 +69,7 @@ func startRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotNa
 	ctx2, cancel := context.WithCancel(context.Background())
 	go func() {
 		defer close(commitHash)
-		done <- captureRepl(ctx2, conn, uint64(startLSN), commitHash, schemaFilter, writer)
+		done <- captureRepl(ctx2, conn, uint64(startLSN), commitHash, schemaFilter, writer, changetWriters)
 	}()
 
 	return commitHash, done, cancel, nil
@@ -135,7 +136,7 @@ var zeroHash, _ = hex.DecodeString("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b
 // broken. It decodeFullWal is true, it will return the entire wal serialized,
 // instead of just the commit hash.
 func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, commitHash chan []byte,
-	schemaFilter func(string) bool, writer *changesetIoWriter) error {
+	schemaFilter func(string) bool, writer *changesetIoWriter, changetWriters map[int64]io.Writer) error {
 	if cap(commitHash) == 0 {
 		return errors.New("buffered commit hash channel required")
 	}
@@ -225,12 +226,33 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 				return fmt.Errorf("ParseXLogData failed: %w", err)
 			}
 
+			// TODO: delete this check. This is a sanity check for some new logic
+			// if len(writer.data) != 0 {
+			// 	panic("DELETEME: changesetIoWriter not empty")
+			// }
+
 			commit, anySeq, err := decodeWALData(hasher, xld.WALData, relations, &inStream, stats, schemaFilter, writer)
 			if err != nil {
 				return fmt.Errorf("decodeWALData failed: %w", err)
 			}
 			if anySeq != -1 {
 				seq = anySeq // the magic sentry table UPDATE that precedes commit
+
+				// if not a sentry update, we should see if an io.Writer is expecting
+				// the changeset, and if so, write it
+				// TODO: this doesn't work. anySeq is only != -1 on commit, but we need to stream
+				// all changes.
+
+				if writer.writable.Load() {
+					changeset, ok := changetWriters[seq]
+					if !ok {
+						return fmt.Errorf("no changeset writer for seq %d", seq) // indicates a logic bug
+					}
+					_, err := changeset.Write(writer.flushData())
+					if err != nil {
+						return fmt.Errorf("write changeset: %w", err)
+					}
+				}
 			}
 
 			var lsnDelta uint64
@@ -259,6 +281,19 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 						cHash, xld.WALStart, xld.WALStart, lsnDelta)
 					stats.reset()
 					break // switch => continue loop
+				}
+
+				// if seq != -1, we need to ensure we write the changeset to the
+				// io.Writer before sending the commit hash, if it exists
+				if writer.writable.Load() {
+					changeset, ok := changetWriters[seq]
+					if !ok {
+						return fmt.Errorf("no changeset writer for seq %d", seq) // indicates a logic bug
+					}
+					_, err := changeset.Write(writer.flushData())
+					if err != nil {
+						return fmt.Errorf("write changeset: %w", err)
+					}
 				}
 
 				cid := binary.BigEndian.AppendUint64(nil, uint64(seq))

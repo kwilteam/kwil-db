@@ -6,7 +6,7 @@
 //
 //  1. A network votes to create a new network. If enough votes are attained, the process is started.
 //
-//  2. Once the process is started, validators should create a new node to run the new network, which will
+//  2. Once the process is started, each validator should create a new node to run the new network, which will
 //     connect to their current node. This new node will forward all changes from the old network to the new network.
 //
 //  3. The two networks will run in parallel until the old network reaches the scheduled shutdown block. At this point,

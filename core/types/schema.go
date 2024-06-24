@@ -1271,7 +1271,7 @@ var (
 		Name: uuidStr,
 	}
 	UUIDArrayType = ArrayType(UUIDType)
-	// DecimalType contains 0,0 metadata.
+	// DecimalType contains 1,0 metadata.
 	// For type detection, users should prefer compare a datatype
 	// name with the DecimalStr constant.
 	DecimalType = &DataType{

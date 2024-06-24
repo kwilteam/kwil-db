@@ -335,7 +335,7 @@ func TestNestedTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	id, err := tx.Precommit(ctx)
+	id, err := tx.Precommit(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -564,6 +564,15 @@ func mustParseUUID(s string) *types.UUID {
 	return u
 }
 
+// mustUint256 panics if the string cannot be converted to a Uint256.
+func mustUint256(s string) *types.Uint256 {
+	u, err := types.Uint256FromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
+
 func Test_DelayedTx(t *testing.T) {
 	ctx := context.Background()
 
@@ -590,12 +599,61 @@ func Test_Changesets(t *testing.T) {
 	for i, tc := range []interface {
 		run(t *testing.T)
 	}{
-		&changesetTestcase[string]{
+		&changesetTestcase[string, []string]{ // basic string test
 			datatype:  "text",
 			val:       "hello",
 			arrayVal:  []string{"a", "b", "c"},
 			val2:      "world",
 			arrayVal2: []string{"d", "e", "f"},
+		},
+		&changesetTestcase[string, []string]{ // test with special characters and escaping
+			datatype:  "text",
+			val:       "heldcsklk;le''\"';",
+			arrayVal:  []string{"hel,dcsklk;le','\",';", `";\\sdsw,"''"\',\""`},
+			val2:      "world",
+			arrayVal2: []string{"'\"", "heldcsklk;le''\"';"},
+		},
+		&changesetTestcase[int64, []int64]{
+			datatype:  "int8",
+			val:       1,
+			arrayVal:  []int64{1, 2, 3987654},
+			val2:      2,
+			arrayVal2: []int64{3, 4, 5},
+		},
+		&changesetTestcase[bool, []bool]{
+			datatype:  "bool",
+			val:       true,
+			arrayVal:  []bool{true, false, true},
+			val2:      false,
+			arrayVal2: []bool{false, true, false},
+		},
+		&changesetTestcase[[]byte, [][]byte]{
+			datatype:  "bytea",
+			val:       []byte("hello"),
+			arrayVal:  [][]byte{[]byte("a"), []byte("b"), []byte("c")},
+			val2:      []byte("world"),
+			arrayVal2: [][]byte{[]byte("d"), []byte("e"), []byte("f")},
+		},
+		&changesetTestcase[*decimal.Decimal, decimal.DecimalArray]{
+			datatype:  "decimal(6,3)",
+			val:       mustDecimal("123.456"),
+			arrayVal:  decimal.DecimalArray{mustDecimal("123.456"), mustDecimal("123.456"), mustDecimal("123.456")},
+			val2:      mustDecimal("123.457"),
+			arrayVal2: decimal.DecimalArray{mustDecimal("123.457"), mustDecimal("123.457"), mustDecimal("123.457")},
+		},
+		&changesetTestcase[*types.UUID, types.UUIDArray]{
+			datatype:  "uuid",
+			val:       mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d1"),
+			arrayVal:  types.UUIDArray{mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d1"), mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d1")},
+			val2:      mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2"),
+			arrayVal2: types.UUIDArray{mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2"), mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2")},
+		},
+		&changesetTestcase[*types.Uint256, types.Uint256Array]{
+			datatype:  "uint256",
+			val:       mustUint256("18446744073709551615000000"),
+			arrayVal:  types.Uint256Array{mustUint256("184467440737095516150000002"), mustUint256("184467440737095516150000001")},
+			val2:      mustUint256("18446744073709551615000001"),
+			arrayVal2: types.Uint256Array{mustUint256("184467440737095516150000012"), mustUint256("1844674407370955161500000123")},
 		},
 	} {
 		t.Run(fmt.Sprint(i), tc.run)
@@ -603,18 +661,18 @@ func Test_Changesets(t *testing.T) {
 }
 
 // this is a hack to use generics in the test
-type changesetTestcase[T any] struct {
+type changesetTestcase[T any, T2 any] struct {
 	datatype string // the postgres datatype to test
 	// the first vals will be inserted.
 	// val will be the primary key
-	val      T   // the value to test
-	arrayVal []T // the array value to test
+	val      T  // the value to test
+	arrayVal T2 // the array value to test
 	// the second vals will update the first vals
-	val2      T   // the second value to test
-	arrayVal2 []T // the second array value to test
+	val2      T  // the second value to test
+	arrayVal2 T2 // the second array value to test
 }
 
-func (c *changesetTestcase[T]) run(t *testing.T) {
+func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	ctx := context.Background()
 
 	db, err := NewDB(ctx, cfg)
@@ -651,7 +709,7 @@ func (c *changesetTestcase[T]) run(t *testing.T) {
 
 	writer := new(bytes.Buffer)
 
-	tx, err := db.BeginChangesetTx(ctx, writer)
+	tx, err := db.BeginOuterTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
@@ -659,7 +717,7 @@ func (c *changesetTestcase[T]) run(t *testing.T) {
 	require.NoError(t, err)
 
 	// get the changeset
-	_, err = tx.Precommit(ctx)
+	_, err = tx.Precommit(ctx, writer)
 	require.NoError(t, err)
 
 	cs, err := DeserializeChangeset(writer.Bytes())
@@ -684,14 +742,14 @@ func (c *changesetTestcase[T]) run(t *testing.T) {
 
 	writer = new(bytes.Buffer)
 
-	tx, err = db.BeginChangesetTx(ctx, writer)
+	tx, err = db.BeginOuterTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
 	_, err = tx.Execute(ctx, "update ds_test.test set val = $1, array_val = $2", QueryModeExec, c.val2, c.arrayVal2)
 	require.NoError(t, err)
 
-	_, err = tx.Precommit(ctx)
+	_, err = tx.Precommit(ctx, writer)
 	require.NoError(t, err)
 
 	cs, err = DeserializeChangeset(writer.Bytes())
@@ -723,14 +781,14 @@ func (c *changesetTestcase[T]) run(t *testing.T) {
 
 	writer = new(bytes.Buffer)
 
-	tx, err = db.BeginChangesetTx(ctx, writer)
+	tx, err = db.BeginOuterTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
 	_, err = tx.Execute(ctx, "delete from ds_test.test", QueryModeExec)
 	require.NoError(t, err)
 
-	_, err = tx.Precommit(ctx)
+	_, err = tx.Precommit(ctx, writer)
 	require.NoError(t, err)
 
 	cs, err = DeserializeChangeset(writer.Bytes())
