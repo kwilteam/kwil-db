@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"strings"
 
@@ -467,6 +468,24 @@ func makeExecutables(params []*generate.InlineExpression) []evaluatable {
 // a slice of values in the order of the keys. If a value can be converted to an
 // int, it will be. If a value does not exist, it will be set to nil.
 func orderAndCleanValueMap(values map[string]any, keys []string) []any {
+	// we need to iterate over all values, and see if it has a $. If not,
+	// we need to add one so that the keys (which have $) match the values
+	// (which do not have $)
+	cloned := false
+	for k, v := range values {
+		if k[0] != '$' {
+			// we need to copy the values map to ensure
+			// we do not modify the original map
+			if !cloned {
+				values = maps.Clone(values)
+				cloned = true
+			}
+
+			delete(values, k)
+			values["$"+k] = v
+		}
+	}
+
 	ordered := make([]any, 0, len(keys))
 	for _, key := range keys {
 		val, ok := values[key]
