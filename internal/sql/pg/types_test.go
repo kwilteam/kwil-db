@@ -1,6 +1,7 @@
 package pg
 
 import (
+	"encoding/binary"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -20,14 +21,16 @@ func Test_ArrayEncodeDecode(t *testing.T) {
 
 	require.EqualValues(t, arr, res2)
 
-	arr2 := []int{1, 2, 3}
-	res, err = serializeArray(arr2, 1, func(i int) ([]byte, error) {
-		return []byte{byte(i)}, nil
+	arr2 := []int64{1, 2, 3}
+	res, err = serializeArray(arr2, 1, func(i int64) ([]byte, error) {
+		buf := make([]byte, 8)
+		binary.LittleEndian.PutUint64(buf, uint64(i))
+		return buf, nil
 	})
 	require.NoError(t, err)
 
 	res3, err := deserializeArray[int64](res, 1, func(b []byte) (any, error) {
-		return int(b[0]), nil
+		return int64(binary.LittleEndian.Uint64(b)), nil
 	})
 	require.NoError(t, err)
 

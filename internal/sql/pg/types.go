@@ -680,6 +680,11 @@ func decodeArray[T any](decode func(any) (any, error)) func(any) (any, error) {
 			if err != nil {
 				return nil, err
 			}
+
+			if val == nil {
+				continue // leaving it as nil / zero value
+			}
+
 			vals[i] = val.(T)
 		}
 

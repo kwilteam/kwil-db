@@ -352,7 +352,7 @@ func Test_Procedures(t *testing.T) {
 				$arr[2] := 4;
 				return $arr;
 			}`,
-			outputs: [][]any{{[]any{int64(1), int64(4), int64(3)}}},
+			outputs: [][]any{{[]int64{int64(1), int64(4), int64(3)}}},
 		},
 	}
 
