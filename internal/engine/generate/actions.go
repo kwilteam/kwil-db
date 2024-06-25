@@ -50,8 +50,8 @@ type ActionSQL struct {
 	Statement string
 	// ParameterOrder is a list of the parameters in the order they appear in the statement.
 	// This is set if the ReplaceNamedParameters flag is set.
-	// For example, if the statement is "SELECT * FROM table WHERE id = $id AND name = @caller",
-	// then the parameter order would be ["$id", "@caller"]
+	// For example, if the statement is "SELECT * FROM table WHERE id = $id AND name = $name",
+	// then the parameter order would be ["$id", "$name"]
 	ParameterOrder []string
 }
 
