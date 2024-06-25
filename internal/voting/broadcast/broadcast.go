@@ -26,6 +26,7 @@ import (
 
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
@@ -55,7 +56,7 @@ type TxApp interface {
 	GetValidators(ctx context.Context, db sql.DB) ([]*types.Validator, error)
 }
 
-func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, app TxApp, signer *auth.Ed25519Signer, chainID string, voteLimit int64) *EventBroadcaster {
+func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, app TxApp, signer *auth.Ed25519Signer, chainID string, voteLimit int64, logger log.Logger) *EventBroadcaster {
 	return &EventBroadcaster{
 		store:           store,
 		broadcaster:     broadcaster,
@@ -63,6 +64,7 @@ func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, app TxApp, s
 		chainID:         chainID,
 		app:             app,
 		maxVoteIDsPerTx: voteLimit,
+		logger:          logger,
 	}
 }
 
@@ -78,6 +80,8 @@ type EventBroadcaster struct {
 	// This is to limit the long external roundtrips to the postgres database
 	// 10k voteIDs in a block takes around 30s to process, which is too long.
 	maxVoteIDsPerTx int64
+
+	logger log.Logger
 }
 
 // RunBroadcast tells the EventBroadcaster to broadcast any events it wishes.
@@ -106,6 +110,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, db sql.DB, block *c
 	}
 
 	if !isCurrent {
+		e.logger.Debug("local node is not a validator, skipping voteID broadcast")
 		return nil
 	}
 
@@ -118,6 +123,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, db sql.DB, block *c
 	// we figure out a better way to track both
 	// mempool(uncommitted), committed and proposer introduced txns.
 	if bytes.Equal(block.Proposer, e.signer.Identity()) {
+		e.logger.Debug("local node is current block proposer, skipping voteID broadcast")
 		return nil
 	}
 
@@ -129,6 +135,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, db sql.DB, block *c
 	}
 
 	if len(ids) == 0 {
+		e.logger.Debug("no voteIDs to broadcast")
 		return nil
 	}
 
@@ -157,6 +164,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, db sql.DB, block *c
 
 	if bal.Cmp(fee) < 0 {
 		// Not enough balance to pay for the tx fee
+		e.logger.Warnf("skipping voteID broadcast: not enough balance to pay for the tx fee, balance: %s, fee: %s", bal.String(), fee.String())
 		return nil
 	}
 
@@ -174,6 +182,8 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, db sql.DB, block *c
 	if err != nil {
 		return err
 	}
+
+	e.logger.Infof("broadcasted %d voteIDs", len(ids))
 
 	// mark these events as broadcasted
 	return e.store.MarkBroadcasted(ctx, ids)

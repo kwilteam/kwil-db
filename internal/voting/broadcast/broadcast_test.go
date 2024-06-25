@@ -13,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
@@ -132,7 +133,7 @@ func Test_Broadcaster(t *testing.T) {
 				}
 			}
 
-			bc := broadcast.NewEventBroadcaster(e, b, txapp, validatorSigner(), "test-chain", maxVoteIDsPerTx)
+			bc := broadcast.NewEventBroadcaster(e, b, txapp, validatorSigner(), "test-chain", maxVoteIDsPerTx, log.NewNoOp())
 
 			// create resolutions for the events
 			for _, event := range e.events {

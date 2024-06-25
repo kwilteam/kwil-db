@@ -153,6 +153,7 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 			JoinExpiry:       app.consensusParams.Validator.JoinExpiry,
 			VoteExpiry:       app.consensusParams.Votes.VoteExpiry,
 			DisabledGasCosts: app.consensusParams.WithoutGasCosts,
+			MaxVotesPerTx:    app.consensusParams.Votes.MaxVotesPerTx,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to store network params: %w", err)
@@ -163,6 +164,7 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 			JoinExpiry:       app.consensusParams.Validator.JoinExpiry,
 			VoteExpiry:       app.consensusParams.Votes.VoteExpiry,
 			DisabledGasCosts: app.consensusParams.WithoutGasCosts,
+			MaxVotesPerTx:    app.consensusParams.Votes.MaxVotesPerTx,
 		}
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to load network params: %w", err)

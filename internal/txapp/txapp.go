@@ -609,7 +609,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 	bal, nonce := acct.Balance, acct.Nonce
 
 	if !block.ChainContext.NetworkParameters.DisabledGasCosts && nonce == 0 && bal.Sign() == 0 {
-		r.log.Debug("proposer account has no balance, not allowed to propose any new transactions")
+		r.log.Debug("proposer account has no balance, not allowed to propose any new transactions", log.Int("height", block.Height))
 		return nil, nil
 	}
 
@@ -623,6 +623,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 		return nil, err
 	}
 	if len(events) == 0 {
+		r.log.Debug("no events to propose", log.Int("height", block.Height))
 		return nil, nil
 	}
 
@@ -652,6 +653,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 
 		evtSz := int64(len(event.Type)) + int64(len(event.Body)) + eventRLPSize
 		if evtSz > maxTxsSize {
+			r.log.Debug("reached maximum proposer tx size", log.Int("height", block.Height))
 			break
 		}
 		maxTxsSize -= evtSz
@@ -662,6 +664,13 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 	}
 
 	if len(finalEvents) == 0 {
+		r.log.Debug("found proposer events to propose, but cannot fit them in a block",
+			log.Int("height", block.Height),
+			log.Int("maxTxsSize", maxTxsSize),
+			log.Int("emptyVoteBodyTxSize", r.emptyVoteBodyTxSize),
+			log.Int("foundEvents", len(events)),
+			log.Int("maxVotesPerTx", block.ChainContext.NetworkParameters.MaxVotesPerTx),
+		)
 		return nil, nil
 	}
 
