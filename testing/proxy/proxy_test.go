@@ -1,3 +1,5 @@
+//go:build rely_docker
+
 // package proxy is an example of how the testing package can be used. It tests
 // three contracts that are used to form a proxy pattern. An explanation of
 // proxy contracts in Solidity can be found here:
