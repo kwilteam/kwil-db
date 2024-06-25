@@ -2018,10 +2018,17 @@ func (s *schemaVisitor) VisitVariable_or_underscore(ctx *gen.Variable_or_undersc
 }
 
 func (s *schemaVisitor) VisitStmt_variable_assignment(ctx *gen.Stmt_variable_assignmentContext) any {
-	stmt := &ProcedureStmtAssign{
-		Variable: varFromTerminalNode(ctx.VARIABLE()),
-		Value:    ctx.Procedure_expr().Accept(s).(Expression),
+	stmt := &ProcedureStmtAssign{}
+
+	stmt.Variable = ctx.Procedure_expr(0).Accept(s).(Expression)
+	// this can either be a variable or an array access
+	switch v := stmt.Variable.(type) {
+	case *ExpressionVariable, *ExpressionArrayAccess:
+		// ok
+	default:
+		s.errs.RuleErr(ctx.Procedure_expr(0), ErrSyntax, "cannot assign to %T", v)
 	}
+	stmt.Value = ctx.Procedure_expr(1).Accept(s).(Expression)
 
 	if ctx.Type_() != nil {
 		stmt.Type = ctx.Type_().Accept(s).(*types.DataType)
