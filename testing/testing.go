@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cometbft/cometbft/test/e2e/pkg/exec"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -26,8 +27,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/parse"
 	"github.com/stretchr/testify/assert"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // RunSchemaTest runs a SchemaTest.
@@ -393,7 +392,7 @@ func (p *Platform) Txid() string {
 }
 
 // runWithPostgres runs the callback function with a postgres container.
-func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context, *pg.DB, Logger) error) error {
+func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context, *pg.DB, Logger) error) (err error) {
 	if !opts.UseTestContainer {
 		db, err := pg.NewDB(ctx, &pg.DBConfig{
 			PoolConfig: pg.PoolConfig{
@@ -416,35 +415,35 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 		return fn(ctx, db, opts.Logger)
 	}
 
-	req := testcontainers.ContainerRequest{
-		Image:        "kwildb/postgres:latest",
-		ExposedPorts: []string{"5432/tcp"},
-		Env: map[string]string{
-			"POSTGRES_HOST_AUTH_METHOD": "trust",
-		},
-		WaitingFor: wait.ForLog("database system is ready to accept connections"),
-	}
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
+	// check if the user has docker
+	err = exec.Command(ctx, "docker")
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), "not found") {
+			return fmt.Errorf("docker not found. Please ensure Docker is installed and running")
+		}
+		return fmt.Errorf("error checking for Docker installation: %w", err)
 	}
 
-	defer container.Terminate(ctx)
+	port := "52853"
 
-	host, err := container.Host(ctx)
+	// Run the container
+	bts, err := exec.CommandOutput(ctx, "docker", "run", "-d", "-p", fmt.Sprintf("%s:5432", port), "--name", "kwil-testing-postgres", "-e",
+		"POSTGRES_HOST_AUTH_METHOD=trust", "kwildb/postgres:latest")
 	if err != nil {
-		return err
+		return fmt.Errorf("error running test container: %w", err)
 	}
+	defer func() {
+		err2 := exec.Command(ctx, "docker", "rm", "-f", "kwil-testing-postgres")
+		if err2 != nil {
+			if err == nil {
+				err = err2
+			} else {
+				err = errors.Join(err, err2)
+			}
+		}
+	}()
 
-	port, err := container.MappedPort(ctx, "5432")
-	if err != nil {
-		return err
-	}
-
-	p := port.Port()
+	opts.Logger.Logf("running test container: %s", string(bts))
 
 	time.Sleep(1 * time.Second) // stupid hack needed for the container to be ready
 
@@ -452,8 +451,8 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 		PoolConfig: pg.PoolConfig{
 			MaxConns: 11,
 			ConnConfig: pg.ConnConfig{
-				Host:   host,
-				Port:   p,
+				Host:   "localhost",
+				Port:   port,
 				User:   "kwild",
 				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
 				DBName: "kwil_test_db",
