@@ -582,7 +582,7 @@ func kuneiformparserParserInit() {
 		1024, 1, 0, 0, 0, 1024, 1026, 1, 0, 0, 0, 1025, 1023, 1, 0, 0, 0, 1026,
 		1027, 5, 30, 0, 0, 1027, 1029, 1, 0, 0, 0, 1028, 1018, 1, 0, 0, 0, 1028,
 		1029, 1, 0, 0, 0, 1029, 1030, 1, 0, 0, 0, 1030, 1031, 3, 110, 55, 0, 1031,
-		1032, 5, 6, 0, 0, 1032, 1095, 1, 0, 0, 0, 1033, 1035, 5, 126, 0, 0, 1034,
+		1032, 5, 6, 0, 0, 1032, 1095, 1, 0, 0, 0, 1033, 1035, 3, 102, 51, 0, 1034,
 		1036, 3, 14, 7, 0, 1035, 1034, 1, 0, 0, 0, 1035, 1036, 1, 0, 0, 0, 1036,
 		1037, 1, 0, 0, 0, 1037, 1038, 5, 30, 0, 0, 1038, 1039, 3, 102, 51, 0, 1039,
 		1040, 5, 6, 0, 0, 1040, 1095, 1, 0, 0, 0, 1041, 1042, 5, 107, 0, 0, 1042,
@@ -16171,7 +16171,7 @@ func (p *KuneiformParser) Procedure_block() (localctx IProcedure_blockContext) {
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&27021598301093888) != 0) || ((int64((_la-84)) & ^0x3f) == 0 && ((int64(1)<<(_la-84))&6597497587201) != 0) {
+	for ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&31525197931612296) != 0) || ((int64((_la-84)) & ^0x3f) == 0 && ((int64(1)<<(_la-84))&15426876605953) != 0) {
 		{
 			p.SetState(923)
 			p.Proc_statement()
@@ -18547,20 +18547,37 @@ func (s *Stmt_variable_assignmentContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
 
-func (s *Stmt_variable_assignmentContext) VARIABLE() antlr.TerminalNode {
-	return s.GetToken(KuneiformParserVARIABLE, 0)
+func (s *Stmt_variable_assignmentContext) AllProcedure_expr() []IProcedure_exprContext {
+	children := s.GetChildren()
+	len := 0
+	for _, ctx := range children {
+		if _, ok := ctx.(IProcedure_exprContext); ok {
+			len++
+		}
+	}
+
+	tst := make([]IProcedure_exprContext, len)
+	i := 0
+	for _, ctx := range children {
+		if t, ok := ctx.(IProcedure_exprContext); ok {
+			tst[i] = t.(IProcedure_exprContext)
+			i++
+		}
+	}
+
+	return tst
 }
 
-func (s *Stmt_variable_assignmentContext) ASSIGN() antlr.TerminalNode {
-	return s.GetToken(KuneiformParserASSIGN, 0)
-}
-
-func (s *Stmt_variable_assignmentContext) Procedure_expr() IProcedure_exprContext {
+func (s *Stmt_variable_assignmentContext) Procedure_expr(i int) IProcedure_exprContext {
 	var t antlr.RuleContext
+	j := 0
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(IProcedure_exprContext); ok {
-			t = ctx.(antlr.RuleContext)
-			break
+			if j == i {
+				t = ctx.(antlr.RuleContext)
+				break
+			}
+			j++
 		}
 	}
 
@@ -18569,6 +18586,10 @@ func (s *Stmt_variable_assignmentContext) Procedure_expr() IProcedure_exprContex
 	}
 
 	return t.(IProcedure_exprContext)
+}
+
+func (s *Stmt_variable_assignmentContext) ASSIGN() antlr.TerminalNode {
+	return s.GetToken(KuneiformParserASSIGN, 0)
 }
 
 func (s *Stmt_variable_assignmentContext) SCOL() antlr.TerminalNode {
@@ -18758,11 +18779,7 @@ func (p *KuneiformParser) Proc_statement() (localctx IProc_statementContext) {
 		p.EnterOuterAlt(localctx, 3)
 		{
 			p.SetState(1033)
-			p.Match(KuneiformParserVARIABLE)
-			if p.HasError() {
-				// Recognition error - abort rule
-				goto errorExit
-			}
+			p.procedure_expr(0)
 		}
 		p.SetState(1035)
 		p.GetErrorHandler().Sync(p)
@@ -18875,7 +18892,7 @@ func (p *KuneiformParser) Proc_statement() (localctx IProc_statementContext) {
 		}
 		_la = p.GetTokenStream().LA(1)
 
-		for ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&27021598301093888) != 0) || ((int64((_la-84)) & ^0x3f) == 0 && ((int64(1)<<(_la-84))&6597497587201) != 0) {
+		for ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&31525197931612296) != 0) || ((int64((_la-84)) & ^0x3f) == 0 && ((int64(1)<<(_la-84))&15426876605953) != 0) {
 			{
 				p.SetState(1050)
 				p.Proc_statement()
@@ -18971,7 +18988,7 @@ func (p *KuneiformParser) Proc_statement() (localctx IProc_statementContext) {
 			}
 			_la = p.GetTokenStream().LA(1)
 
-			for ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&27021598301093888) != 0) || ((int64((_la-84)) & ^0x3f) == 0 && ((int64(1)<<(_la-84))&6597497587201) != 0) {
+			for ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&31525197931612296) != 0) || ((int64((_la-84)) & ^0x3f) == 0 && ((int64(1)<<(_la-84))&15426876605953) != 0) {
 				{
 					p.SetState(1069)
 					p.Proc_statement()
@@ -19764,7 +19781,7 @@ func (p *KuneiformParser) If_then_block() (localctx IIf_then_blockContext) {
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&27021598301093888) != 0) || ((int64((_la-84)) & ^0x3f) == 0 && ((int64(1)<<(_la-84))&6597497587201) != 0) {
+	for ((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&31525197931612296) != 0) || ((int64((_la-84)) & ^0x3f) == 0 && ((int64(1)<<(_la-84))&15426876605953) != 0) {
 		{
 			p.SetState(1120)
 			p.Proc_statement()
