@@ -171,7 +171,7 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 		return nil, err
 	}
 
-	// aquire a writer to determine the OID of the custom types
+	// acquire a writer to determine the OID of the custom types
 	writerConn, err := writer.Acquire(ctx)
 	if err != nil {
 		return nil, err

@@ -80,7 +80,7 @@ func registerDatatype(scalar *datatype, array *datatype) {
 // to support new data types).
 type datatype struct {
 	// KwilType is the Kwil-native data type that is tied to this data type.
-	// There must be exaclty one. It will ignore all metadata (e.g. for decimal, any
+	// There must be exactly one. It will ignore all metadata (e.g. for decimal, any
 	// precision/scale is ignore).
 	KwilType *types.DataType
 	// Matches is the list of all data types that this type matches.
