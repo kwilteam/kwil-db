@@ -836,7 +836,7 @@ func (p *ProcedureStmtDeclaration) Accept(v Visitor) any {
 type ProcedureStmtAssign struct {
 	baseProcedureStmt
 	// Variable is the variable that is being assigned.
-	Variable *ExpressionVariable
+	Variable Expression
 	// Type is the type of the variable.
 	// It can be nil if the variable is not being assigned,
 	// or if the type should be inferred.
