@@ -69,7 +69,7 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 	}
 	app.forks.FromMap(cfg.ForkHeights)
 
-	tx, err := db.BeginOuterTx(ctx)
+	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin outer tx: %w", err)
 	}
@@ -216,9 +216,9 @@ type AbciApp struct {
 	db DB
 	// consensusTx is the outermost transaction that wraps all other transactions
 	// that can modify state. It should be set in FinalizeBlock and committed in Commit.
-	consensusTx sql.OuterTx
+	consensusTx sql.PreparedTx
 	// genesisTx is the transaction that is used at genesis, and in the first block.
-	genesisTx sql.OuterTx
+	genesisTx sql.PreparedTx
 	// appHash is the hash of the application state
 	appHash []byte
 	// height is the current block height
@@ -428,7 +428,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		a.genesisTx = nil
 	} else {
 		var err error
-		a.consensusTx, err = a.db.BeginOuterTx(ctx)
+		a.consensusTx, err = a.db.BeginPreparedTx(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("begin outer tx failed: %w", err)
 		}
@@ -666,7 +666,7 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 	// opening a new transaction. This could leave us in a state where data is
 	// committed but the apphash is not, which would essentially nuke the chain.
 	ctx0 := context.Background() // badly timed shutdown MUST NOT cancel now, we need consistency with consensus tx commit
-	tx, err := a.db.BeginOuterTx(ctx0)
+	tx, err := a.db.BeginTx(ctx0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin outer tx: %w", err)
 	}
@@ -759,7 +759,7 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 	logger.Debug("", zap.String("ChainId", req.ChainId))
 	// maybe verify a.cfg.ChainID against the one in the request
 	var err error
-	a.genesisTx, err = a.db.BeginOuterTx(ctx)
+	a.genesisTx, err = a.db.BeginPreparedTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin outer tx failed: %w", err)
 	}

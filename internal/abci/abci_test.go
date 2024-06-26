@@ -442,7 +442,7 @@ func (m *mockTxApp) Price(ctx context.Context, db sql.DB, tx *transactions.Trans
 
 type mockDB struct{}
 
-func (m *mockDB) BeginOuterTx(ctx context.Context) (sql.OuterTx, error) {
+func (m *mockDB) BeginPreparedTx(ctx context.Context) (sql.PreparedTx, error) {
 	return &mockTx{}, nil
 }
 

@@ -366,7 +366,7 @@ func Test_Procedures(t *testing.T) {
 
 			ctx := context.Background()
 
-			tx, err := db.BeginOuterTx(ctx)
+			tx, err := db.BeginTx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback(ctx)
 
@@ -616,7 +616,7 @@ func Test_ForeignProcedures(t *testing.T) {
 
 			ctx := context.Background()
 
-			tx, err := db.BeginOuterTx(ctx)
+			tx, err := db.BeginTx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback(ctx)
 

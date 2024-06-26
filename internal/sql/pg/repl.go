@@ -225,11 +225,6 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 				return fmt.Errorf("ParseXLogData failed: %w", err)
 			}
 
-			// TODO: delete this check. This is a sanity check for some new logic
-			// if len(writer.data) != 0 {
-			// 	panic("DELETEME: changesetIoWriter not empty")
-			// }
-
 			commit, anySeq, err := decodeWALData(hasher, xld.WALData, relations, &inStream, stats, schemaFilter, writer)
 			if err != nil {
 				return fmt.Errorf("decodeWALData failed: %w", err)
@@ -488,7 +483,9 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 		logger.Debugf(" [msg] COMMIT PREPARED TRANSACTION (id %v): Commit LSN %v (%d), End LSN %v (%d) \n",
 			logicalMsg.UserGID, logicalMsg.CommitLSN, uint64(logicalMsg.CommitLSN),
 			logicalMsg.EndCommitLSN, uint64(logicalMsg.EndCommitLSN))
-		// done = true
+		// With a prepared transaction, we're ready for the commit ID and
+		// changeset once a PREPARE TRANSACTION message is received. This case
+		// just indicates that the second stage of commit is done.
 
 	case *RollbackPreparedMessageV3:
 		logger.Debugf(" [msg] ROLLBACK PREPARED TRANSACTION (id %v): Rollback LSN %v (%d), End LSN %v (%d) \n",

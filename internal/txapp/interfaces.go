@@ -19,7 +19,7 @@ type Rebroadcaster interface {
 // from within a transaction. A DB can create read transactions or the special
 // two-phase outer write transaction.
 type DB interface {
-	sql.OuterTxMaker
+	sql.PreparedTxMaker
 	sql.ReadTxMaker
 	sql.SnapshotTxMaker
 	// BeginReservedReadTx creates a read-only transaction on a reserved

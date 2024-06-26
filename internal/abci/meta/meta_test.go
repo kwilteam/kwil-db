@@ -30,7 +30,7 @@ func Test_NetworkParams(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	tx, err := db.BeginOuterTx(ctx)
+	tx, err := db.BeginTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx) // always rollback to reset the test
 
