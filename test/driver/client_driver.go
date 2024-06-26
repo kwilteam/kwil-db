@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
+	"time"
 
 	ec "github.com/ethereum/go-ethereum/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -169,7 +171,7 @@ func (d *KwildClientDriver) QueryDatabase(ctx context.Context, dbid, query strin
 	return d.clt.Query(ctx, dbid, query)
 }
 
-func (d *KwildClientDriver) Call(ctx context.Context, dbid, action string, inputs []any) (*clientType.Records, error) {
+func (d *KwildClientDriver) Call(ctx context.Context, dbid, action string, inputs []any) (*clientType.CallResult, error) {
 	return d.clt.Call(ctx, dbid, action, inputs)
 }
 
@@ -226,4 +228,18 @@ func (d *KwildClientDriver) Signer() []byte {
 
 func (d *KwildClientDriver) Identifier() (string, error) {
 	return auth.EthSecp256k1Authenticator{}.Identifier(d.Signer())
+}
+
+func (d *KwildClientDriver) TxInfo(ctx context.Context, hash []byte) (*transactions.TcTxQueryResponse, error) {
+	res, err := d.clt.TxQuery(ctx, hash)
+	if err != nil {
+		if strings.Contains(err.Error(), "transaction not found") {
+			// try again, hacking around comet's mempool inconsistency
+			time.Sleep(500 * time.Millisecond)
+			return d.clt.TxQuery(ctx, hash)
+		}
+		return nil, err
+	}
+
+	return res, nil
 }

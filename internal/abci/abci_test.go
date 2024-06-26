@@ -441,7 +441,7 @@ func (m *mockDB) BeginOuterTx(ctx context.Context) (sql.OuterTx, error) {
 	return &mockTx{}, nil
 }
 
-func (m *mockDB) BeginReadTx(ctx context.Context) (sql.Tx, error) {
+func (m *mockDB) BeginReadTx(ctx context.Context) (sql.OuterReadTx, error) {
 	return &mockTx{}, nil
 }
 
@@ -460,6 +460,10 @@ func (m *mockDB) BeginTx(ctx context.Context) (sql.Tx, error) {
 func (m *mockDB) AutoCommit(on bool) {}
 
 type mockTx struct{}
+
+func (m *mockTx) Subscribe(ctx context.Context) (<-chan string, func(context.Context) error, error) {
+	return make(<-chan string), func(ctx context.Context) error { return nil }, nil
+}
 
 func (m *mockTx) Rollback(ctx context.Context) error {
 	return nil

@@ -92,7 +92,7 @@ func (e *executor) Call(ctx context.Context, action string, inputs []any) ([]map
 		return nil, err
 	}
 
-	return res.Export(), nil
+	return res.Records.Export(), nil
 }
 
 // executeProcedureReturnNextSpecification tests that procedures properly handle
