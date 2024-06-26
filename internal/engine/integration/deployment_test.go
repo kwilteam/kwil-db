@@ -206,7 +206,7 @@ func Test_Deployment(t *testing.T) {
 
 			ctx := context.Background()
 
-			tx, err := db.BeginOuterTx(ctx)
+			tx, err := db.BeginTx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback(ctx)
 

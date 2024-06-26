@@ -73,7 +73,8 @@ type ConsensusParams interface {
 // from within a transaction. A DB can create read transactions or the special
 // two-phase outer write transaction.
 type DB interface {
-	sql.OuterTxMaker
+	sql.TxMaker // for out-of-consensus writes e.g. setup and meta table writes
+	sql.PreparedTxMaker
 	sql.ReadTxMaker
 	sql.SnapshotTxMaker
 }

@@ -1,4 +1,4 @@
-// go:build pglive
+//go:build pglive
 
 package pg
 
@@ -263,7 +263,7 @@ func TestNestedTx(t *testing.T) {
 	}
 
 	// Start the outer transaction.
-	tx, err := db.BeginOuterTx(ctx)
+	tx, err := db.BeginPreparedTx(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -525,7 +525,7 @@ func TestTypeRoundtrip(t *testing.T) {
 
 			// here, we test without the QueryModeInferredArgTypes
 
-			tx, err := db.BeginOuterTx(ctx)
+			tx, err := db.BeginPreparedTx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
@@ -690,7 +690,7 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	cleanup()
 	defer cleanup()
 
-	regularTx, err := db.BeginOuterTx(ctx)
+	regularTx, err := db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
 	defer regularTx.Rollback(ctx)
 
@@ -709,7 +709,7 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 
 	writer := new(bytes.Buffer)
 
-	tx, err := db.BeginOuterTx(ctx)
+	tx, err := db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
@@ -742,7 +742,7 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 
 	writer = new(bytes.Buffer)
 
-	tx, err = db.BeginOuterTx(ctx)
+	tx, err = db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
@@ -781,7 +781,7 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 
 	writer = new(bytes.Buffer)
 
-	tx, err = db.BeginOuterTx(ctx)
+	tx, err = db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 

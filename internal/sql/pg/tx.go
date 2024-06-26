@@ -96,52 +96,6 @@ func (tx *dbTx) AccessMode() common.AccessMode {
 	return tx.accessMode
 }
 
-// ChangesetTx is a special transaction type that is used for reading changesets.
-// It works exactly like a dbTx with its Precommit method, but it returns both
-// the commit hash and the full changeset body.
-type ChangesetTx struct {
-	dbTx    *dbTx
-	release func()
-}
-
-// // PrecommitWithChangeset creates a prepared transaction for a two-phase commit.
-// // It returns both the ID of the prepared transaction and the changeset that
-// // will be applied. This must be called before Commit. Either Commit or Rollback
-// // must follow.
-// func (tx *ChangesetTx) PrecommitWithChangeset(ctx context.Context) ([]byte, *ChangesetGroup, error) {
-// 	return tx.dbTx.db.precommitWithChangeset(ctx)
-// }
-
-// Precommit creates a prepared transaction for a two-phase commit. An ID
-// derived from the updates is return. This must be called before Commit. Either
-// Commit or Rollback must follow. It takes a writer to write the full changeset to.
-// If the writer is nil, the changeset will not be written.
-func (tx *ChangesetTx) Precommit(ctx context.Context, w io.Writer) ([]byte, error) {
-	return tx.dbTx.Precommit(ctx, w)
-}
-
-// Commit commits the transaction. This partly satisfies sql.Tx.
-func (tx *ChangesetTx) Commit(ctx context.Context) error {
-	tx.release()
-	return tx.dbTx.Commit(ctx)
-}
-
-// Rollback rolls back the transaction. This partly satisfies sql.Tx.
-func (tx *ChangesetTx) Rollback(ctx context.Context) error {
-	tx.release()
-	return tx.dbTx.Rollback(ctx)
-}
-
-// AccessMode returns the access mode of the transaction.
-func (tx *ChangesetTx) AccessMode() common.AccessMode {
-	return tx.dbTx.AccessMode()
-}
-
-// Execute executes a query and returns the result set.
-func (tx *ChangesetTx) Execute(ctx context.Context, stmt string, args ...any) (*common.ResultSet, error) {
-	return tx.dbTx.Execute(ctx, stmt, args...)
-}
-
 // readTx is a tx that handles a read-only transaction.
 // It will release the connection back to the reader pool
 // when it is committed or rolled back.

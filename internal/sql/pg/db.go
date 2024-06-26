@@ -56,7 +56,7 @@ type DB struct {
 	// NOTE: this was initially designed for a single ongoing write transaction,
 	// held in the tx field, and the (*DB).Execute method using it *implicitly*.
 	// We have moved toward using the Execute method of the transaction returned
-	// by BeginTx/BeginOuterTx/BeginReadTx, and we can potentially allow
+	// by BeginTx/BeginPreparedTx/BeginReadTx, and we can potentially allow
 	// multiple uncommitted write transactions to support a 2 phase commit of
 	// different stores using the same pg.DB instance. This will take refactoring
 	// of the DB and concrete transaction type methods.
@@ -258,18 +258,17 @@ func (db *DB) AutoCommit(auto bool) {
 // For {accounts,validators}.Datasets / registry.DB
 var _ sql.Executor = (*DB)(nil)
 
-var _ sql.OuterTxMaker = (*DB)(nil) // for dataset Registry
+var _ sql.PreparedTxMaker = (*DB)(nil) // for dataset Registry
 
-// BeginTx makes the DB's singular transaction, which is used automatically by
-// consumers of the Query and Execute methods. This is the mode of operation
-// used by Kwil to have one system coordinating transaction lifetime, with one
-// or more other systems implicitly using the transaction for their queries.
-//
-// The returned transaction is also capable of creating nested transactions.
-// This functionality is used to prevent user dataset query errors from rolling
-// back the outermost transaction.
-func (db *DB) BeginOuterTx(ctx context.Context) (sql.OuterTx, error) {
-	tx, err := db.beginWriterTx(ctx)
+// beginTx starts a read-write transaction, returning a dbTx. It will be for a
+// prepared transaction if sequenced is true, incrementing the seq value of the
+// internal sentry table to allow obtaining a commit ID with Precommit. If
+// sequenced is false, the precommit method will hang (use commit only). If
+// sequenced is true and the precommit method is not used (straight to commit),
+// it will work as intended, but the replication monitor will warn about an
+// unexpected sequence update in the transaction.
+func (db *DB) beginTx(ctx context.Context, sequenced bool) (*dbTx, error) {
+	tx, err := db.beginWriterTx(ctx, sequenced)
 	if err != nil {
 		return nil, err
 	}
@@ -286,11 +285,29 @@ func (db *DB) BeginOuterTx(ctx context.Context) (sql.OuterTx, error) {
 	}, nil
 }
 
+// BeginPreparedTx makes the DB's singular transaction, which is used automatically
+// by consumers of the Query and Execute methods. This is the mode of operation
+// used by Kwil to have one system coordinating transaction lifetime, with one
+// or more other systems implicitly using the transaction for their queries.
+//
+// This method creates a sequenced transaction, and it should be committed with
+// a prepared transaction (two-phase commit) using Precommit. Use BeginTx for a
+// regular outer transaction without sequencing or a prepared transaction.
+//
+// The returned transaction is also capable of creating nested transactions.
+// This functionality is used to prevent user dataset query errors from rolling
+// back the outermost transaction.
+func (db *DB) BeginPreparedTx(ctx context.Context) (sql.PreparedTx, error) {
+	return db.beginTx(ctx, true) // sequenced, expose Precommit
+}
+
 var _ sql.TxMaker = (*DB)(nil)
 var _ sql.DB = (*DB)(nil)
 
+// BeginTx starts a regular read-write transaction. For a sequenced two-phase
+// transaction, use BeginPreparedTx.
 func (db *DB) BeginTx(ctx context.Context) (sql.Tx, error) {
-	return db.BeginOuterTx(ctx) // slice off the Precommit method from sql.OuterTx
+	return db.beginTx(ctx, false) // slice off the Precommit method from sql.PreparedTx
 }
 
 // ReadTx creates a read-only transaction for the database.
@@ -402,7 +419,7 @@ func (txw *writeTxWrapper) Rollback(ctx context.Context) error {
 // beginWriterTx is the critical section of BeginTx.
 // It creates a new transaction on the write connection, and stores it in the
 // DB's tx field. It is not exported, and is only called from BeginTx.
-func (db *DB) beginWriterTx(ctx context.Context) (pgx.Tx, error) {
+func (db *DB) beginWriterTx(ctx context.Context, sequenced bool) (pgx.Tx, error) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
@@ -424,6 +441,17 @@ func (db *DB) beginWriterTx(ctx context.Context) (pgx.Tx, error) {
 		return nil, err
 	}
 
+	// Make the tx available to Execute and QueryPending.
+	db.tx = &writeTxWrapper{
+		Tx:      tx,
+		release: writer.Release,
+	}
+
+	if !sequenced {
+		db.seq = -1 // should already be
+		return db.tx, nil
+	}
+
 	// Do the seq update in sentry table. This ensures a replication message
 	// sequence is emitted from this transaction, and that the data returned
 	// from it includes the expected seq value.
@@ -433,12 +461,6 @@ func (db *DB) beginWriterTx(ctx context.Context) (pgx.Tx, error) {
 	}
 	logger.Debugf("updated seq to %d", seq)
 	db.seq = seq
-
-	// Make the tx available to Execute and QueryPending.
-	db.tx = &writeTxWrapper{
-		Tx:      tx,
-		release: writer.Release,
-	}
 
 	return db.tx, nil
 }

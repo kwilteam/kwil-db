@@ -584,7 +584,7 @@ func Test_Engine(t *testing.T) {
 
 			ctx := context.Background()
 
-			tx, err := db.BeginOuterTx(ctx)
+			tx, err := db.BeginPreparedTx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback(ctx)
 

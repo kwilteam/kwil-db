@@ -82,9 +82,6 @@ type TxApp struct {
 	valMtx     sync.RWMutex       // protects validators access
 	valChans   []chan []*types.Validator
 
-	// transaction that exists between Begin and Commit
-	// currentTx sql.OuterTx
-
 	extensionConfigs map[string]map[string]string
 
 	// precomputed variables
