@@ -149,6 +149,10 @@ type sqlContext struct {
 	hasAnonymousTable bool
 	// inSelect is true if we are in a select statement.
 	inSelect bool
+	// inLoneSQL is true if this is being parsed as a lone SQL query, and
+	// not as part of an action or procedure. This allows us to bypass certain
+	// checks, such as that variables are declared as part of the procedure.
+	inLoneSQL bool
 
 	// temp are values that are temporary and not even saved within the same scope.
 	// they are used in highly specific contexts, and shouldn't be relied on unless
@@ -728,7 +732,10 @@ func (s *sqlAnalyzer) VisitExpressionVariable(p0 *ExpressionVariable) any {
 		}
 
 		// if not found, then var does not exist.
-		s.errs.AddErr(p0, ErrUndeclaredVariable, p0.String())
+		// for raw SQL queries, this is ok. For procedures and actions, this is an error.
+		if !s.sqlCtx.inLoneSQL {
+			s.errs.AddErr(p0, ErrUndeclaredVariable, p0.String())
+		}
 		return cast(p0, types.UnknownType)
 	}
 
