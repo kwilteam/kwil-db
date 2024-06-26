@@ -190,6 +190,18 @@ func Test_SQL(t *testing.T) {
 				{int64(1)},
 			},
 		},
+		{
+			// this is a regression test for a bug introduced
+			// in v0.8
+			name: "values",
+			sql:  "select $id",
+			values: map[string]any{
+				"id": "4a67d6ea-7ac8-453c-964e-5a144f9e3004",
+			},
+			want: [][]any{
+				{"4a67d6ea-7ac8-453c-964e-5a144f9e3004"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
