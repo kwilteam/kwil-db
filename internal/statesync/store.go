@@ -245,6 +245,7 @@ func (s *SnapshotStore) loadSnapshots() error {
 		heightInt, err := strconv.ParseUint(height, 10, 64)
 		if err != nil {
 			s.log.Debug("invalid snapshot height, ignoring the snapshot", log.String("height", height))
+			continue
 		}
 
 		// Load snapshot header
@@ -252,6 +253,7 @@ func (s *SnapshotStore) loadSnapshots() error {
 		header, err := loadSnapshot(headerFile)
 		if err != nil {
 			s.log.Debug("Invalid snapshot header file, ignoring the snapshot", log.String("height", height), log.String("Error", err.Error()))
+			continue
 		}
 
 		// Ensure that the chunk files exist
@@ -259,6 +261,7 @@ func (s *SnapshotStore) loadSnapshots() error {
 			chunkFile := snapshotChunkFile(s.cfg.SnapshotDir, heightInt, DefaultSnapshotFormat, i)
 			if _, err := os.Open(chunkFile); err != nil { // chunk file doesn't exist
 				s.log.Debug("Invalid snapshot chunk file, ignoring the snapshot", log.String("chunk-file", chunkFile))
+				continue
 			}
 		}
 
