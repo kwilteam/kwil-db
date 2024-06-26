@@ -302,6 +302,7 @@ func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error)
 		},
 		sqlCtx: newSQLContext(),
 	}
+	visitor.sqlCtx.inLoneSQL = true
 
 	defer func() {
 		err2 := deferFn(recover())
