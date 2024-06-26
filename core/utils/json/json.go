@@ -3,29 +3,37 @@ package json
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 )
+
+type UnmarshalObject interface {
+	map[string]any | []map[string]any | []any | string | int64
+}
 
 // UnmarshalMapWithoutFloat unmarshals a JSON byte slice into a slice of maps.
 // It will try to convert all return values into ints, but will keep them as strings if it fails.
 // It ensures they aren't returned as floats, which is important for maintaining consistency
 // with Kwil's decimal types. All returned types will be string, int64, or a []any.
-func UnmarshalMapWithoutFloat(b []byte) ([]map[string]any, error) {
+func UnmarshalMapWithoutFloat[T UnmarshalObject](b []byte) (T, error) {
 	d := json.NewDecoder(strings.NewReader(string(b)))
 	d.UseNumber()
 
 	// unmashal result
-	var result []map[string]any
-	err := d.Decode(&result)
+	result := new(T)
+	err := d.Decode(result)
 	if err != nil {
-		return nil, err
+		return *result, err
 	}
 
 	// convert numbers to int64
-	result = convertJsonNumbers(result).([]map[string]any)
+	res, ok := convertJsonNumbers(*result).(T)
+	if !ok {
+		return *result, fmt.Errorf("failed to convert result to %T", result)
+	}
 
-	return result, nil
+	return res, nil
 }
 
 // convertJsonNumbers recursively converts json.Number to int64.
@@ -61,7 +69,7 @@ func convertJsonNumbers(val any) any {
 		return i
 	case string:
 		return val
-	case int64:
+	case int64, int32, int16, int8, int:
 		return val
 	default:
 		// in case we are unmarshalling something crazy like a double nested slice,

@@ -68,14 +68,14 @@ type DB interface {
 // ReadTxMaker can make read-only transactions.
 // Many read-only transactions can be made at once.
 type ReadTxMaker interface {
-	BeginReadTx(ctx context.Context) (Tx, error)
+	BeginReadTx(ctx context.Context) (OuterReadTx, error)
 }
 
 // DelayedReadTxMaker is an interface that creates a transaction for reading
 // from the database. The transaction won't actually be created until it is used
 // for the first time, which is useful for avoiding unnecessary transactions.
 type DelayedReadTxMaker interface {
-	BeginDelayedReadTx() Tx
+	BeginDelayedReadTx() OuterReadTx
 }
 
 // OuterTx is the outermost database transaction.
@@ -84,7 +84,14 @@ type DelayedReadTxMaker interface {
 // interfaces are a subset of the OuterTx method set.
 type OuterTx interface {
 	Tx
+	Subscriber
 	Precommit(ctx context.Context) ([]byte, error)
+}
+
+// OuterReadTx is the outermost read-only database transaction.
+type OuterReadTx interface {
+	Tx
+	Subscriber
 }
 
 // OuterTxMaker is the special kind of transaction that creates a transaction
@@ -120,4 +127,16 @@ const (
 type AccessModer interface {
 	// AccessMode gets the access mode of the database or transaction.
 	AccessMode() AccessMode
+}
+
+// Subscriber is a transaction that can be subscribed to.
+// When subscribed, the passed channel will receive notifications.
+// Only one subscription is allowed per transaction.
+type Subscriber interface {
+	// Subscribe subscribes to notifications passed using the special
+	// `notice()` function. Only `notice()` calls made after the subscription,
+	// on this tx, will be received. It returns a done function that should be
+	// called when the subscription is no longer needed. It is the callers
+	// responsibility to call done and close the channel.
+	Subscribe(ctx context.Context) (ch <-chan string, done func(context.Context) error, err error)
 }

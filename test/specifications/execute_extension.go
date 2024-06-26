@@ -28,7 +28,7 @@ func ExecuteExtensionSpecification(ctx context.Context, t *testing.T, execute Ex
 	records, err := execute.Call(ctx, dbID, divideActionName, []any{2, 1, 2})
 	assert.NoError(t, err)
 
-	results := records.Export()
+	results := records.Records.Export()
 
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))

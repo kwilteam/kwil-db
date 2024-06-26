@@ -17,6 +17,13 @@ type Map[K comparable, V any] struct {
 	m  map[K]V
 }
 
+// New creates a new map.
+func New[K comparable, V any]() *Map[K, V] {
+	return &Map[K, V]{
+		m: make(map[K]V),
+	}
+}
+
 // Get gets a value from the map.
 // It returns the value, and whether it was found.
 func (m *Map[K, V]) Get(key K) (value V, ok bool) {
@@ -40,15 +47,23 @@ func (m *Map[K, V]) Set(key K, value V) {
 	m.mu.Unlock()
 }
 
-// Delete deletes a value from the map.
-func (m *Map[K, V]) Delete(key K) {
-	m.mu.Lock()
+// Extract removes and returns the key's value, and whether it was found.
+func (m *Map[K, V]) Extract(key K) (value V, ok bool) {
+	m.mu.RLock()
 	if m.m == nil {
-		m.mu.Unlock()
+		m.mu.RUnlock()
 		return
 	}
+	value, ok = m.m[key]
 	delete(m.m, key)
-	m.mu.Unlock()
+	m.mu.RUnlock()
+	return
+}
+
+// Delete deletes a value from the map.
+func (m *Map[K, V]) Delete(key K) bool {
+	_, ok := m.Extract(key)
+	return ok
 }
 
 // Exclusive calls a callback with exclusive access to the map.
@@ -71,7 +86,7 @@ func (m *Map[K, V]) ExclusiveRead(f func(map[K]V)) {
 	defer m.mu.RUnlock()
 
 	if m.m == nil {
-		m.m = make(map[K]V)
+		return
 	}
 
 	f(m.m)
