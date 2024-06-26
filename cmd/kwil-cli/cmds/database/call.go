@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -43,7 +44,7 @@ kwil-cli database call --action get_user --dbid 0x9228624C3185FCBcf24c1c9dB76D8B
 
 func callCmd() *cobra.Command {
 	var action string
-	var authenticate bool
+	var authenticate, logs bool
 
 	cmd := &cobra.Command{
 		Use:     "call <parameter_1:value_1> <parameter_2:value_2> ...",
@@ -85,10 +86,13 @@ func callCmd() *cobra.Command {
 				}
 
 				if data == nil {
-					data = &clientType.Records{}
+					data = &clientType.CallResult{}
 				}
 
-				return display.PrintCmd(cmd, &respRelations{Data: data})
+				return display.PrintCmd(cmd, &respCall{
+					Data:      data,
+					PrintLogs: logs,
+				})
 			})
 		},
 	}
@@ -98,9 +102,45 @@ func callCmd() *cobra.Command {
 	cmd.Flags().StringP(dbidFlag, "i", "", "the target database id")
 	cmd.Flags().StringVarP(&action, actionNameFlag, "a", "", "the target action name (required)")
 	cmd.Flags().BoolVar(&authenticate, "authenticate", false, "authenticate signals that the call is being made to a gateway and should be authenticated with the private key")
+	cmd.Flags().BoolVar(&logs, "logs", false, "result will include logs from notices raised during the call")
 
 	cmd.MarkFlagRequired(actionNameFlag)
 	return cmd
+}
+
+type respCall struct {
+	Data      *clientType.CallResult
+	PrintLogs bool
+}
+
+func (r *respCall) MarshalJSON() ([]byte, error) {
+	if !r.PrintLogs {
+		return json.Marshal(r.Data.Records.ExportString()) // this is for backwards compatibility
+	}
+
+	bts, err := json.Marshal(r.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	return bts, nil
+}
+
+func (r *respCall) MarshalText() (text []byte, err error) {
+	if !r.PrintLogs {
+		return recordsToTable(r.Data.Records), nil
+	}
+
+	bts := recordsToTable(r.Data.Records)
+
+	if len(r.Data.Logs) > 0 {
+		bts = append(bts, []byte("\n\nLogs:")...)
+		for _, log := range r.Data.Logs {
+			bts = append(bts, []byte("\n  "+log)...)
+		}
+	}
+
+	return bts, nil
 }
 
 // buildProcedureInputs will build the inputs for either

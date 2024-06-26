@@ -77,6 +77,34 @@ var (
 			},
 			PGFormat: defaultFormat("format_unix_timestamp"),
 		},
+		"notice": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				// technically error returns nothing, but for backwards compatibility with SELECT CASE we return null.
+				// It doesn't really matter, since error will cancel execution anyways.
+				return types.NullType, nil
+			},
+			PGFormat: func(inputs []string, distinct, star bool) (string, error) {
+				if star {
+					return "", errStar("notice")
+				}
+				if distinct {
+					return "", errDistinct("notice")
+				}
+
+				// TODO: this is implicitly coupled to internal/engine/generate, and should be moved there.
+				// we can only move this there once we move all PGFormat, which will also be affected by
+				// v0.9 changes, so leaving it here for now.
+				return fmt.Sprintf("notice('txid:' || current_setting('ctx.txid') || ' ' || %s)", inputs[0]), nil
+			},
+		},
 		"uuid_generate_v5": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				// first argument must be a uuid, second argument must be text
@@ -760,6 +788,8 @@ type FunctionDefinition struct {
 	// It will be given the same amount of inputs as ValidateArgs() was given.
 	// ValidateArgs will always be called first.
 	PGFormat FormatFunc
+	// TODO: PGFormat is related to the plpgsql generation, and therefore should be moved to
+	// internal/engine/generate. There is some implicit coupling here.
 }
 
 // FormatFunc is a function that formats a string of inputs for a SQL function.
@@ -771,4 +801,20 @@ func wrapErrArgumentNumber(expected, got int) error {
 
 func wrapErrArgumentType(expected, got *types.DataType) error {
 	return fmt.Errorf("%w: expected %s, got %s", ErrType, expected.String(), got.String())
+}
+
+// ParseNotice parses a log raised from a notice() function.
+// It returns an error if the log is not in the expected format.
+func ParseNotice(log string) (txID string, notice string, err error) {
+	_, after, found := strings.Cut(log, "txid:")
+	if !found {
+		return "", "", fmt.Errorf("notice log does not contain txid prefix: %s", log)
+	}
+
+	parts := strings.SplitN(after, " ", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("notice log does not contain txid and notice separated by space: %s", log)
+	}
+
+	return parts[0], parts[1], nil
 }

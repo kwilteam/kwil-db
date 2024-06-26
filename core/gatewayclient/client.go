@@ -142,12 +142,17 @@ func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*Gatew
 // CallAction calls an action. It returns the result records.  If authentication is needed,
 // Deprecated: Use Call instead.
 func (c *GatewayClient) CallAction(ctx context.Context, dbid string, action string, inputs []any) (*clientType.Records, error) {
-	return c.Call(ctx, dbid, action, inputs)
+	r, err := c.Call(ctx, dbid, action, inputs)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Records, nil
 }
 
 // Call call an action. It returns the result records.  If authentication is needed,
 // it will call the gatewaySigner to sign the authentication message.
-func (c *GatewayClient) Call(ctx context.Context, dbid string, action string, inputs []any) (*clientType.Records, error) {
+func (c *GatewayClient) Call(ctx context.Context, dbid string, action string, inputs []any) (*clientType.CallResult, error) {
 	// we will try to call with the current cookies set.  If we receive an error and it is an auth error,
 	// we will re-auth and retry.  We will only retry once.
 	res, err := c.Client.Call(ctx, dbid, action, inputs)

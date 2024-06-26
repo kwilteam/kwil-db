@@ -21,7 +21,7 @@ func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteC
 		t.Fatalf("error calling action: %s", err.Error())
 	}
 
-	checkGetPostResults(t, res.Export())
+	checkGetPostResults(t, res.Records.Export())
 
 	// try calling mutable action, should fail
 	_, err = caller.Call(ctx, dbID, "delete_user", nil)

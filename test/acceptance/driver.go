@@ -12,4 +12,5 @@ type KwilAcceptanceDriver interface {
 	specifications.InfoDsl
 	specifications.AccountBalanceDsl
 	specifications.TransferAmountDsl
+	specifications.TxInfoer
 }

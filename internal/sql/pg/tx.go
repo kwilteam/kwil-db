@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	common "github.com/kwilteam/kwil-db/common/sql"
+	syncmap "github.com/kwilteam/kwil-db/internal/utils/sync_map"
 )
 
 type releaser interface {
@@ -75,6 +76,11 @@ func (tx *dbTx) Precommit(ctx context.Context, writer io.Writer) ([]byte, error)
 	return tx.db.precommit(ctx, writer)
 }
 
+// Subscribe subscribes to notifications passed using the special `notice()`
+func (tx *dbTx) Subscribe(ctx context.Context) (ch <-chan string, done func(context.Context) error, err error) {
+	return subscribe(ctx, tx, tx.db.pool.subscribers)
+}
+
 // Commit commits the transaction. This partly satisfies sql.Tx.
 func (tx *dbTx) Commit(ctx context.Context) error {
 	if rel, ok := tx.nestedTx.Tx.(releaser); ok {
@@ -101,7 +107,8 @@ func (tx *dbTx) AccessMode() common.AccessMode {
 // when it is committed or rolled back.
 type readTx struct {
 	*nestedTx
-	release func()
+	release     func()
+	subscribers *syncmap.Map[int64, chan<- string]
 }
 
 // Commit is a no-op for read-only transactions.
@@ -117,6 +124,11 @@ func (tx *readTx) Rollback(ctx context.Context) error {
 	defer tx.release()
 
 	return tx.nestedTx.Rollback(ctx)
+}
+
+// Subscribe subscribes to notifications passed using the special `notice()`
+func (tx *readTx) Subscribe(ctx context.Context) (ch <-chan string, done func(context.Context) error, err error) {
+	return subscribe(ctx, tx, tx.subscribers)
 }
 
 // delayedReadTx is a tx that handles a read-only transaction.
@@ -179,4 +191,13 @@ func (d *delayedReadTx) BeginTx(ctx context.Context) (common.Tx, error) {
 // AccessMode returns the access mode of the transaction.
 func (d *delayedReadTx) AccessMode() common.AccessMode {
 	return common.ReadOnly
+}
+
+// Subscribe subscribes to notifications passed using the special `notice()`
+func (d *delayedReadTx) Subscribe(ctx context.Context) (ch <-chan string, done func(context.Context) error, err error) {
+	if err := d.ensureTx(ctx); err != nil {
+		return nil, nil, err
+	}
+
+	return subscribe(ctx, d.tx, d.db.pool.subscribers)
 }

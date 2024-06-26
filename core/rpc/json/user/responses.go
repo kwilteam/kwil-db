@@ -34,7 +34,10 @@ type Result struct { // for other types, but embedding it is kinda annoying when
 }
 
 // CallResponse contains the response object for MethodCall.
-type CallResponse Result
+type CallResponse struct {
+	Result []byte   `json:"result,omitempty"`
+	Logs   []string `json:"logs,omitempty"`
+}
 
 // QueryResponse contains the response object for MethodQuery.
 type QueryResponse Result

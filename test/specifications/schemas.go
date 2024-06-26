@@ -37,4 +37,7 @@ var (
 	ContextualVarsDB = &testSchema{
 		FileName: "contextual_vars",
 	}
+	LogDB = &testSchema{
+		FileName: "logs",
+	}
 )

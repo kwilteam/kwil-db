@@ -7,6 +7,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 // A Dsl describes a set of interactions that could achieve a specific goal
@@ -59,7 +60,7 @@ type DatabaseDropDsl interface {
 // ExecuteCallDsl is dsl for call specification
 type ExecuteCallDsl interface {
 	DatabaseIdentifier
-	Call(ctx context.Context, dbid, action string, inputs []any) (*clientType.Records, error)
+	Call(ctx context.Context, dbid, action string, inputs []any) (*clientType.CallResult, error)
 }
 
 // ExecuteExtensionDsl is dsl for extension specification
@@ -135,4 +136,8 @@ type DeployerDsl interface {
 	EscrowBalance(ctx context.Context, sender *ecdsa.PrivateKey) (*big.Int, error)
 	UserBalance(ctx context.Context, sender *ecdsa.PrivateKey) (*big.Int, error)
 	Allowance(ctx context.Context, sender *ecdsa.PrivateKey) (*big.Int, error)
+}
+
+type TxInfoer interface {
+	TxInfo(ctx context.Context, hash []byte) (*transactions.TcTxQueryResponse, error)
 }

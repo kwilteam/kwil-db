@@ -90,9 +90,9 @@ func testUUID(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid stri
 	require.NoError(t, err)
 
 	count := 0
-	for result.Next() {
+	for result.Records.Next() {
 		count++
-		row := result.Record()
+		row := result.Records.Record()
 		assert.Equal(t, uuid.String(), fmt.Sprint(row["id"]))
 
 		ids := row["arr"]
@@ -125,9 +125,9 @@ func testDecimal(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid s
 
 	count := 0
 
-	for result.Next() {
+	for result.Records.Next() {
 		count++
-		row := result.Record()
+		row := result.Records.Record()
 		id := row["id"].(string)
 		// trim off extra precision
 		// this is not ideal, but unfortunately necessary since we json marshal results and have several drivers.
@@ -156,9 +156,9 @@ func testUint256(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid s
 	require.NoError(t, err)
 
 	count := 0
-	for result.Next() {
+	for result.Records.Next() {
 		count++
-		row := result.Record()
+		row := result.Records.Record()
 		// uint256 values should be convertable to int64s here
 		assert.Equal(t, uint256.String(), fmt.Sprint(row["id"]))
 
@@ -192,9 +192,9 @@ func testText(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid stri
 	require.NoError(t, err)
 
 	count := 0
-	for result.Next() {
+	for result.Records.Next() {
 		count++
-		row := result.Record()
+		row := result.Records.Record()
 		assert.Equal(t, text, row["id"])
 
 		ids := row["arr"]
@@ -220,9 +220,9 @@ func testBool(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid stri
 	require.NoError(t, err)
 
 	count := 0
-	for result.Next() {
+	for result.Records.Next() {
 		count++
-		row := result.Record()
+		row := result.Records.Record()
 		assert.Equal(t, fmt.Sprint(boolean), fmt.Sprint(row["id"]))
 
 		ids := row["arr"]
@@ -248,9 +248,9 @@ func testBlob(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid stri
 	require.NoError(t, err)
 
 	count := 0
-	for result.Next() {
+	for result.Records.Next() {
 		count++
-		row := result.Record()
+		row := result.Records.Record()
 		// we use base64 since we are reading this after querying with jsonrpc
 		assert.Equal(t, base64.StdEncoding.EncodeToString(blob), row["id"])
 
@@ -275,9 +275,9 @@ func testInts(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid stri
 	require.NoError(t, err)
 
 	count := 0
-	for result.Next() {
+	for result.Records.Next() {
 		count++
-		row := result.Record()
+		row := result.Records.Record()
 		assert.Equal(t, fmt.Sprint(1), fmt.Sprint(row["id"]))
 
 		ids := row["arr"]
@@ -321,9 +321,9 @@ func testNils(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid stri
 	require.NoError(t, err)
 
 	count := 0
-	for result.Next() {
+	for result.Records.Next() {
 		count++
-		row := result.Record()
+		row := result.Records.Record()
 		assert.Nil(t, row["text_s"])
 		assert.Nil(t, row["text_a"])
 		assert.Nil(t, row["int_s"])

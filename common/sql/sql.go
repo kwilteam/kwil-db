@@ -70,14 +70,14 @@ type DB interface {
 // transaction since nested transactions inherit their access mode from their
 // parent. Many read-only transactions can be made at once.
 type ReadTxMaker interface {
-	BeginReadTx(ctx context.Context) (Tx, error)
+	BeginReadTx(ctx context.Context) (OuterReadTx, error)
 }
 
 // DelayedReadTxMaker is an interface that creates a transaction for reading
 // from the database. The transaction won't actually be created until it is used
 // for the first time, which is useful for avoiding unnecessary transactions.
 type DelayedReadTxMaker interface {
-	BeginDelayedReadTx() Tx
+	BeginDelayedReadTx() OuterReadTx
 }
 
 // PreparedTx is an outermost database transaction that uses two-phase commit
@@ -89,11 +89,18 @@ type DelayedReadTxMaker interface {
 // If the writer is nil, the changeset will not be written.
 type PreparedTx interface {
 	Tx
+	Subscriber
 	Precommit(ctx context.Context, writer io.Writer) ([]byte, error)
 }
 
+// OuterReadTx is the outermost read-only database transaction.
+type OuterReadTx interface {
+	Tx
+	Subscriber
+}
+
 // PreparedTxMaker is the special kind of transaction that creates a transaction
-// that has a Precommit method (see PreparedTx), which supports obtaining a commit
+// that has a Precommit method (see OuterTx), which supports obtaining a commit
 // ID using a (two-phase) prepared transaction prior to Commit. This is a
 // different method name so that an implementation may satisfy both PreparedTxMaker
 // and TxMaker.
@@ -125,4 +132,16 @@ const (
 type AccessModer interface {
 	// AccessMode gets the access mode of the database or transaction.
 	AccessMode() AccessMode
+}
+
+// Subscriber is a transaction that can be subscribed to.
+// When subscribed, the passed channel will receive notifications.
+// Only one subscription is allowed per transaction.
+type Subscriber interface {
+	// Subscribe subscribes to notifications passed using the special
+	// `notice()` function. Only `notice()` calls made after the subscription,
+	// on this tx, will be received. It returns a done function that should be
+	// called when the subscription is no longer needed. It is the callers
+	// responsibility to call done and close the channel.
+	Subscribe(ctx context.Context) (ch <-chan string, done func(context.Context) error, err error)
 }

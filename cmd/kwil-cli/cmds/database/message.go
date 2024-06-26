@@ -63,10 +63,16 @@ func (r *respRelations) MarshalJSON() ([]byte, error) {
 }
 
 func (r *respRelations) MarshalText() ([]byte, error) {
-	data := r.Data.ExportString()
+	return recordsToTable(r.Data), nil
+}
+
+// recordsToTable converts records to a formatted table structure
+// that can be printed
+func recordsToTable(r *clientType.Records) []byte {
+	data := r.ExportString()
 
 	if len(data) == 0 {
-		return []byte("No data to display."), nil
+		return []byte("No data to display.")
 	}
 
 	// collect headers
@@ -94,7 +100,7 @@ func (r *respRelations) MarshalText() ([]byte, error) {
 	}
 
 	table.Render()
-	return buf.Bytes(), nil
+	return buf.Bytes()
 }
 
 // respSchema is used to represent a database schema in cli
