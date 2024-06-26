@@ -2614,6 +2614,25 @@ func Test_SQL(t *testing.T) {
 				},
 			},
 		},
+		{
+			// this is a regression test for a previous bug.
+			// when parsing just SQL, we can have unknown variables
+			name: "unknown variable is ok",
+			sql:  `SELECT $id;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnExpression{
+									Expression: exprVar("$id"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
