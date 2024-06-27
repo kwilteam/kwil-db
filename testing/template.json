@@ -1,0 +1,29 @@
+{
+    "name": "my schema test",
+    "schema_files": ["./schema1.kf", "./schema2.kf"],
+    "seed_statements": {
+        "schema1": ["INSERT INTO tbl..."],
+        "schema2": ["INSERT INTO ...", "INSERT INTO ..."]
+    },
+    "test_cases": [
+        {
+            "name": "test case 1 - expecting success",
+            "database": "schema1",
+            "target": "procedure_or_action_name",
+            "args": [1, "foo"],
+            "returns": [
+                ["row1_col_1", "row_1_col_2"],
+                ["row2_col_1", "row_2_col_2"]
+            ],
+            "caller": "0xTestUserAddress",
+            "height": 100
+        },
+        {
+            "name": "test case 2 - expecting an error",
+            "database": "schema1",
+            "target": "procedure_or_action_name",
+            "args": [1, "foo"],
+            "error": "I expect this error"
+        }
+    ]
+}

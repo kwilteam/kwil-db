@@ -1,0 +1,89 @@
+database proxy;
+
+// admin simply tracks the schema admins
+table admin {
+  address text primary key
+}
+
+// add_admin adds a new admin to the schema.
+// only current admins can add new admins
+procedure add_admin ($address text) public  {
+  if !is_admin(@caller) {
+    error('caller is not an admin');
+  }
+
+  insert into admin (address)
+  values ($address);
+}
+
+// register_owner allows the owner to register themselves
+// as a user if there are no admins
+procedure register_owner() public owner {
+  $count int;
+  for $row in SELECT COUNT(*) as count FROM admin {
+    $count := $row.count;
+  }
+
+  if $count != 0 {
+    error('register_owner can only be called if there are no admins');
+  }
+
+  insert into admin (address)
+  values (@caller);
+}
+
+
+procedure is_admin ($address text) public view returns (bool) {
+  $found := false;
+  for $row in select address from admin where address = $address {
+    $found := true;
+  }
+
+  return $found;
+}
+
+// metadata tracks info set by admins
+table metadata {
+  config text primary key,
+  value text
+}
+
+// set_target allows an admin to configure the target contract
+// that the proxy refers to
+procedure set_target($value text) public {
+  if !is_admin(@caller) {
+    error('caller is not an admin');
+  }
+
+  insert into metadata (config, value)
+  values ('target', $value)
+    on conflict (config) do update
+      set value = $value;
+}
+
+// get_target gets the target set by the admin
+procedure get_target() public view returns (text) {
+  for $row in SELECT value from metadata where config = 'target' {
+    return $row.value; // return on the first row
+  }
+
+  // if no row is hit, it is not configured
+  error('admin has not yet configured a target');
+}
+
+// the foreign procedures specify the procedures that exist in any valid
+// implementation contract
+foreign procedure proxy_create_user($name text)
+foreign procedure proxy_get_users() returns table(name text, address text)
+
+procedure create_user($name text) public {
+  // this will call the procedure named 'create_user'
+  // that exists on the dbid returned from get_target().
+  // It is also possible to allow the procedure name to be
+  // configurable, but for now we just hard core 'create_user'
+  proxy_create_user[get_target(), 'create_user']($name);
+}
+
+procedure get_users () public view returns table(name text, address text) {
+  return select * from proxy_get_users[get_target(), 'get_users']();
+}

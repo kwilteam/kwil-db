@@ -20,7 +20,7 @@ require (
 	github.com/kwilteam/kwil-db/core v0.2.1
 	github.com/kwilteam/kwil-db/parse v0.2.3
 	github.com/stretchr/testify v1.9.0
-	github.com/testcontainers/testcontainers-go v0.29.1
+	github.com/testcontainers/testcontainers-go v0.31.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.29.2-0.20240321072901-c83b93cb1eff
 	go.uber.org/zap v1.27.0
 )
