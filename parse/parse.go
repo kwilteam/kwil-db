@@ -279,8 +279,60 @@ type SQLParseResult struct {
 // It requires a schema to be passed in, since SQL statements may reference
 // schema objects.
 func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error) {
+	parser, errLis, sqlVis, parseVis, err := setupSQLParser(sql, schema)
+
+	res = &SQLParseResult{
+		ParseErrs: errLis,
+	}
+
+	defer func() {
+		err2 := recover()
+		if err2 != nil {
+			err = fmt.Errorf("panic: %v", err2)
+		}
+	}()
+
+	res.AST = parser.Sql_entry().Accept(parseVis).(*SQLStatement)
+
+	if errLis.Err() != nil {
+		return res, nil
+	}
+
+	res.AST.Accept(sqlVis)
+	res.Mutative = sqlVis.sqlResult.Mutative
+
+	return res, err
+}
+
+// ParseSQLWithoutValidation parses a SQL AST, but does not perform any validation
+// or analysis. ASTs returned from this should not be used in production, as they
+// might contain errors, and are not deterministically ordered.
+func ParseSQLWithoutValidation(sql string, schema *types.Schema) (res *SQLStatement, err error) {
+	defer func() {
+		err2 := recover()
+		if err2 != nil {
+			err = fmt.Errorf("panic: %v", err2)
+		}
+	}()
+
+	parser, errLis, _, parseVis, err := setupSQLParser(sql, schema)
+	if err != nil {
+		return nil, err
+	}
+
+	res = parser.Sql_entry().Accept(parseVis).(*SQLStatement)
+
+	if errLis.Err() != nil {
+		return nil, errLis.Err()
+	}
+
+	return res, nil
+}
+
+// setupSQLParser sets up the SQL parser.
+func setupSQLParser(sql string, schema *types.Schema) (parser *gen.KuneiformParser, errLis *errorListener, sqlVisitor *sqlAnalyzer, parserVisitor *schemaVisitor, err error) {
 	if sql == "" {
-		return nil, fmt.Errorf("empty SQL statement")
+		return nil, nil, nil, nil, fmt.Errorf("empty SQL statement")
 	}
 	// add semicolon to the end of the statement, if it is not there
 	if !strings.HasSuffix(sql, ";") {
@@ -289,11 +341,7 @@ func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error)
 
 	errLis, stream, parser, deferFn := setupParser(sql, "sql")
 
-	res = &SQLParseResult{
-		ParseErrs: errLis,
-	}
-
-	visitor := &sqlAnalyzer{
+	sqlVisitor = &sqlAnalyzer{
 		blockContext: blockContext{
 			schema:             schema,
 			variables:          make(map[string]*types.DataType), // no variables exist for pure SQL calls
@@ -302,7 +350,7 @@ func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error)
 		},
 		sqlCtx: newSQLContext(),
 	}
-	visitor.sqlCtx.inLoneSQL = true
+	sqlVisitor.sqlCtx.inLoneSQL = true
 
 	defer func() {
 		err2 := deferFn(recover())
@@ -311,18 +359,9 @@ func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error)
 		}
 	}()
 
-	schemaVisitor := newSchemaVisitor(stream, errLis)
+	parserVisitor = newSchemaVisitor(stream, errLis)
 
-	res.AST = parser.Sql_entry().Accept(schemaVisitor).(*SQLStatement)
-
-	if errLis.Err() != nil {
-		return res, nil
-	}
-
-	res.AST.Accept(visitor)
-	res.Mutative = visitor.sqlResult.Mutative
-
-	return res, err
+	return parser, errLis, sqlVisitor, parserVisitor, err
 }
 
 // ActionParseResult is the result of parsing an action.
