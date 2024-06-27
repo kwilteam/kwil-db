@@ -9,9 +9,11 @@ import (
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
@@ -131,7 +133,7 @@ func Test_Broadcaster(t *testing.T) {
 				}
 			}
 
-			bc := broadcast.NewEventBroadcaster(e, b, txapp, validatorSigner(), "test-chain", maxVoteIDsPerTx)
+			bc := broadcast.NewEventBroadcaster(e, b, txapp, validatorSigner(), "test-chain", maxVoteIDsPerTx, log.NewNoOp())
 
 			// create resolutions for the events
 			for _, event := range e.events {
@@ -139,7 +141,9 @@ func Test_Broadcaster(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			err = bc.RunBroadcast(ctx, &mockDB{}, []byte("proposer"))
+			err = bc.RunBroadcast(ctx, &mockDB{}, &common.BlockContext{
+				Proposer: []byte("proposer"),
+			})
 			if tc.err != nil {
 				require.Equal(t, tc.err, err)
 				return
@@ -189,7 +193,7 @@ func (m *mockTxApp) AccountInfo(ctx context.Context, db sql.DB, acctID []byte, g
 	return m.balance, m.nonce, nil
 }
 
-func (m *mockTxApp) Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error) {
+func (m *mockTxApp) Price(ctx context.Context, db sql.DB, tx *transactions.Transaction, c *common.ChainContext) (*big.Int, error) {
 	if m.price == nil {
 		return big.NewInt(0), nil
 	}

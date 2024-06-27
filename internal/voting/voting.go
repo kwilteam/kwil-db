@@ -186,8 +186,8 @@ func fromRow(row []any) (*resolutions.Resolution, error) {
 		}
 	}
 
-	var voters []any
-	voters, ok = row[5].([]any)
+	var voters [][]byte
+	voters, ok = row[5].([][]byte)
 	if !ok {
 		return nil, fmt.Errorf("invalid type for voters (%T)", row[5])
 	}
@@ -199,26 +199,21 @@ func fromRow(row []any) (*resolutions.Resolution, error) {
 			continue // pgx returns nil aggregates as length one []interface{} with a nil element
 		}
 
-		voterBts, ok := voter.([]byte)
-		if !ok {
-			return nil, fmt.Errorf("invalid type for voter (%T)", voter)
-		}
-
 		// the first 8 bytes are the power
-		if len(voterBts) < 8 {
+		if len(voter) < 8 {
 			// this should never happen, just for safety
-			return nil, fmt.Errorf("invalid length for voter (%d)", len(voterBts))
+			return nil, fmt.Errorf("invalid length for voter (%d)", len(voter))
 		}
 
 		var num uint64
-		err := binary.Read(bytes.NewReader(voterBts[:8]), binary.BigEndian, &num)
+		err := binary.Read(bytes.NewReader(voter[:8]), binary.BigEndian, &num)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read bigendian int64 from voter: %w", err)
 		}
 
 		v.Voters = append(v.Voters, &types.Validator{
 			Power:  int64(num),
-			PubKey: slices.Clone(voterBts[8:]),
+			PubKey: slices.Clone(voter[8:]),
 		})
 	}
 

@@ -45,7 +45,7 @@ func replConn(ctx context.Context, host, port, user, pass, dbName string) (*pgco
 // the context only cancels creation of the connection. Use the quit function to
 // terminate the monitoring goroutine.
 func startRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotName string,
-	schemaFilter func(string) bool) (chan []byte, chan error, context.CancelFunc, error) {
+	schemaFilter func(string) bool, writer *changesetIoWriter) (chan []byte, chan error, context.CancelFunc, error) {
 	// Create the replication slot and start postgres sending WAL data.
 	startLSN, err := createRepl(ctx, conn, publicationName, slotName)
 	if err != nil {
@@ -68,7 +68,7 @@ func startRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotNa
 	ctx2, cancel := context.WithCancel(context.Background())
 	go func() {
 		defer close(commitHash)
-		done <- captureRepl(ctx2, conn, uint64(startLSN), commitHash, schemaFilter)
+		done <- captureRepl(ctx2, conn, uint64(startLSN), commitHash, schemaFilter, writer)
 	}()
 
 	return commitHash, done, cancel, nil
@@ -132,9 +132,10 @@ var zeroHash, _ = hex.DecodeString("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b
 
 // captureRepl begins receiving and decoding messages. Consider the conn to be
 // hijacked after calling captureRepl, and do not use it or the stream can be
-// broken.
-func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
-	commitHash chan []byte, schemaFilter func(string) bool) error {
+// broken. It decodeFullWal is true, it will return the entire wal serialized,
+// instead of just the commit hash.
+func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, commitHash chan []byte,
+	schemaFilter func(string) bool, writer *changesetIoWriter) error {
 	if cap(commitHash) == 0 {
 		return errors.New("buffered commit hash channel required")
 	}
@@ -224,11 +225,14 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
 				return fmt.Errorf("ParseXLogData failed: %w", err)
 			}
 
-			commit, anySeq, err := decodeWALData(hasher, xld.WALData, relations, &inStream, stats, schemaFilter)
+			commit, anySeq, err := decodeWALData(hasher, xld.WALData, relations, &inStream, stats, schemaFilter, writer)
 			if err != nil {
 				return fmt.Errorf("decodeWALData failed: %w", err)
 			}
-			if anySeq != -1 {
+			if anySeq != -1 { // the seq update at the beginning of a transaction
+				if seq != -1 {
+					return fmt.Errorf("sequence already set")
+				}
 				seq = anySeq // the magic sentry table UPDATE that precedes commit
 			}
 
@@ -258,6 +262,7 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
 
 				cid := binary.BigEndian.AppendUint64(nil, uint64(seq))
 				cid = append(cid, cHash...)
+
 				select {
 				case commitHash <- cid:
 				default: // don't block if the receiver has choked
@@ -298,7 +303,7 @@ func (ws *walStats) reset() {
 // true if it was a commit message, or a non-negative seq value if it was a
 // special update message on the internal sentry table
 func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglogrepl.RelationMessageV2,
-	inStream *bool, stats *walStats, okSchema func(schema string) bool) (bool, int64, error) {
+	inStream *bool, stats *walStats, okSchema func(schema string) bool, changesetWriter *changesetIoWriter) (bool, int64, error) {
 	logicalMsg, err := parseV3(walData, *inStream)
 	if err != nil {
 		return false, 0, fmt.Errorf("parse logical replication message: %w", err)
@@ -320,9 +325,9 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 		// from rolled back transactions.
 
 	case *pglogrepl.CommitMessage:
-		logger.Debugf(" [msg] Commit: Commit LSN %v (%d), End LSN %v (%d), seq = %d",
+		logger.Debugf(" [msg] Commit: Commit LSN %v (%d), End LSN %v (%d)",
 			logicalMsg.CommitLSN, uint64(logicalMsg.CommitLSN),
-			logicalMsg.TransactionEndLSN, uint64(logicalMsg.TransactionEndLSN), seq)
+			logicalMsg.TransactionEndLSN, uint64(logicalMsg.TransactionEndLSN))
 
 		done = true
 
@@ -336,6 +341,11 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 		if !okSchema(rel.Namespace) {
 			// logger.Debugf("ignoring update to relation %v", relName)
 			break
+		}
+
+		err = changesetWriter.decodeInsert(logicalMsg, rel)
+		if err != nil {
+			return false, 0, fmt.Errorf("decode insert: %w", err)
 		}
 
 		insertData := encodeInsertMsg(relName, &logicalMsg.InsertMessage)
@@ -374,6 +384,11 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 			break
 		}
 
+		err = changesetWriter.decodeUpdate(logicalMsg, rel)
+		if err != nil {
+			return false, 0, fmt.Errorf("decode update: %w", err)
+		}
+
 		updateData := encodeUpdateMsg(relName, &logicalMsg.UpdateMessage)
 		// logger.Debugf("updateData %x", updateData)
 		hasher.Write(updateData)
@@ -397,6 +412,11 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 		if !okSchema(rel.Namespace) {
 			// logger.Debugf("ignoring update to relation %v", relName)
 			break
+		}
+
+		err = changesetWriter.decodeDelete(logicalMsg, rel)
+		if err != nil {
+			return false, 0, fmt.Errorf("decode delete: %w", err)
 		}
 
 		deleteData := encodeDeleteMsg(relName, &logicalMsg.DeleteMessage)
@@ -454,11 +474,18 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 		//  * msgs: Commit Prepared (NO regular "Commit" message)
 		done = true // there will be a commit or a rollback, but this is the end of the update stream
 
+		err = changesetWriter.commit()
+		if err != nil {
+			return false, 0, fmt.Errorf("changeset commit error: %w", err)
+		}
+
 	case *CommitPreparedMessageV3:
 		logger.Debugf(" [msg] COMMIT PREPARED TRANSACTION (id %v): Commit LSN %v (%d), End LSN %v (%d) \n",
 			logicalMsg.UserGID, logicalMsg.CommitLSN, uint64(logicalMsg.CommitLSN),
 			logicalMsg.EndCommitLSN, uint64(logicalMsg.EndCommitLSN))
-		// done = true
+		// With a prepared transaction, we're ready for the commit ID and
+		// changeset once a PREPARE TRANSACTION message is received. This case
+		// just indicates that the second stage of commit is done.
 
 	case *RollbackPreparedMessageV3:
 		logger.Debugf(" [msg] ROLLBACK PREPARED TRANSACTION (id %v): Rollback LSN %v (%d), End LSN %v (%d) \n",
@@ -466,6 +493,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 			logicalMsg.EndLSN, uint64(logicalMsg.EndLSN))
 
 		hasher.Reset()
+		changesetWriter.fail() // discard changeset
 
 	// v2 Stream control messages.  Not expected for kwil
 	case *pglogrepl.StreamStartMessageV2:

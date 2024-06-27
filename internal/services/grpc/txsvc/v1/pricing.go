@@ -22,7 +22,7 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 	}
 	defer readTx.Rollback(ctx)
 
-	price, err := s.nodeApp.Price(ctx, readTx, tx)
+	price, err := s.pricer.Price(ctx, readTx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate price: %w", err)
 	}

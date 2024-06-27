@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -50,11 +51,12 @@ type DB struct {
 	autoCommit bool   // skip the explicit transaction (begin/commit automatically)
 	tx         pgx.Tx // interface
 	txid       string // uid of the prepared transaction
+	seq        int64
 
 	// NOTE: this was initially designed for a single ongoing write transaction,
 	// held in the tx field, and the (*DB).Execute method using it *implicitly*.
 	// We have moved toward using the Execute method of the transaction returned
-	// by BeginTx/BeginOuterTx/BeginReadTx, and we can potentially allow
+	// by BeginTx/BeginPreparedTx/BeginReadTx, and we can potentially allow
 	// multiple uncommitted write transactions to support a 2 phase commit of
 	// different stores using the same pg.DB instance. This will take refactoring
 	// of the DB and concrete transaction type methods.
@@ -154,8 +156,8 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 
 	// Ensure all tables that are created with no primary key or unique index
 	// are altered to have "full replication identity" for UPDATE and DELETES.
-	if err = ensureTriggerReplIdentity(ctx, conn); err != nil {
-		return nil, fmt.Errorf("failed to create replication identity trigger: %w", err)
+	if err = ensureFullReplicaIdentityTrigger(ctx, conn); err != nil {
+		return nil, fmt.Errorf("failed to create full replication identity trigger: %w", err)
 	}
 
 	// Create the publication that is required for logical replication.
@@ -176,7 +178,7 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		okSchema = defaultSchemaFilter
 	}
 
-	repl, err := newReplMon(ctx, cfg.Host, cfg.Port, cfg.User, cfg.Pass, cfg.DBName, okSchema)
+	repl, err := newReplMon(ctx, cfg.Host, cfg.Port, cfg.User, cfg.Pass, cfg.DBName, okSchema, pool.idTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -199,6 +201,7 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		repl:   repl,
 		cancel: cancel,
 		ctx:    runCtx,
+		seq:    -1,
 	}
 
 	// Supervise the replication stream monitor. If it dies (repl.done chan
@@ -255,18 +258,17 @@ func (db *DB) AutoCommit(auto bool) {
 // For {accounts,validators}.Datasets / registry.DB
 var _ sql.Executor = (*DB)(nil)
 
-var _ sql.OuterTxMaker = (*DB)(nil) // for dataset Registry
+var _ sql.PreparedTxMaker = (*DB)(nil) // for dataset Registry
 
-// BeginTx makes the DB's singular transaction, which is used automatically by
-// consumers of the Query and Execute methods. This is the mode of operation
-// used by Kwil to have one system coordinating transaction lifetime, with one
-// or more other systems implicitly using the transaction for their queries.
-//
-// The returned transaction is also capable of creating nested transactions.
-// This functionality is used to prevent user dataset query errors from rolling
-// back the outermost transaction.
-func (db *DB) BeginOuterTx(ctx context.Context) (sql.OuterTx, error) {
-	tx, err := db.beginWriterTx(ctx)
+// beginTx starts a read-write transaction, returning a dbTx. It will be for a
+// prepared transaction if sequenced is true, incrementing the seq value of the
+// internal sentry table to allow obtaining a commit ID with Precommit. If
+// sequenced is false, the precommit method will hang (use commit only). If
+// sequenced is true and the precommit method is not used (straight to commit),
+// it will work as intended, but the replication monitor will warn about an
+// unexpected sequence update in the transaction.
+func (db *DB) beginTx(ctx context.Context, sequenced bool) (*dbTx, error) {
+	tx, err := db.beginWriterTx(ctx, sequenced)
 	if err != nil {
 		return nil, err
 	}
@@ -274,6 +276,7 @@ func (db *DB) BeginOuterTx(ctx context.Context) (sql.OuterTx, error) {
 	ntx := &nestedTx{
 		Tx:         tx,
 		accessMode: sql.ReadWrite,
+		oidTypes:   db.pool.idTypes,
 	}
 	return &dbTx{
 		nestedTx:   ntx,
@@ -282,11 +285,29 @@ func (db *DB) BeginOuterTx(ctx context.Context) (sql.OuterTx, error) {
 	}, nil
 }
 
+// BeginPreparedTx makes the DB's singular transaction, which is used automatically
+// by consumers of the Query and Execute methods. This is the mode of operation
+// used by Kwil to have one system coordinating transaction lifetime, with one
+// or more other systems implicitly using the transaction for their queries.
+//
+// This method creates a sequenced transaction, and it should be committed with
+// a prepared transaction (two-phase commit) using Precommit. Use BeginTx for a
+// regular outer transaction without sequencing or a prepared transaction.
+//
+// The returned transaction is also capable of creating nested transactions.
+// This functionality is used to prevent user dataset query errors from rolling
+// back the outermost transaction.
+func (db *DB) BeginPreparedTx(ctx context.Context) (sql.PreparedTx, error) {
+	return db.beginTx(ctx, true) // sequenced, expose Precommit
+}
+
 var _ sql.TxMaker = (*DB)(nil)
 var _ sql.DB = (*DB)(nil)
 
+// BeginTx starts a regular read-write transaction. For a sequenced two-phase
+// transaction, use BeginPreparedTx.
 func (db *DB) BeginTx(ctx context.Context) (sql.Tx, error) {
-	return db.BeginOuterTx(ctx) // slice off the Precommit method from sql.OuterTx
+	return db.beginTx(ctx, false) // slice off the Precommit method from sql.PreparedTx
 }
 
 // ReadTx creates a read-only transaction for the database.
@@ -338,6 +359,7 @@ func (db *DB) beginReadTx(ctx context.Context, iso pgx.TxIsoLevel) (sql.Tx, erro
 	ntx := &nestedTx{
 		Tx:         tx,
 		accessMode: sql.ReadOnly,
+		oidTypes:   db.pool.idTypes,
 	}
 
 	return &readTx{
@@ -363,6 +385,7 @@ func (db *DB) BeginReservedReadTx(ctx context.Context) (sql.Tx, error) {
 	return &nestedTx{
 		Tx:         tx,
 		accessMode: sql.ReadOnly,
+		oidTypes:   db.pool.idTypes,
 	}, nil
 }
 
@@ -396,7 +419,7 @@ func (txw *writeTxWrapper) Rollback(ctx context.Context) error {
 // beginWriterTx is the critical section of BeginTx.
 // It creates a new transaction on the write connection, and stores it in the
 // DB's tx field. It is not exported, and is only called from BeginTx.
-func (db *DB) beginWriterTx(ctx context.Context) (pgx.Tx, error) {
+func (db *DB) beginWriterTx(ctx context.Context, sequenced bool) (pgx.Tx, error) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
@@ -424,36 +447,44 @@ func (db *DB) beginWriterTx(ctx context.Context) (pgx.Tx, error) {
 		release: writer.Release,
 	}
 
-	return db.tx, nil
-}
-
-// precommit finalizes the transaction with a prepared transaction and returns
-// the ID of the commit. The transaction is not yet committed.
-func (db *DB) precommit(ctx context.Context) ([]byte, error) {
-	db.mtx.Lock()
-	defer db.mtx.Unlock()
-
-	if db.tx == nil {
-		return nil, errors.New("no tx exists")
+	if !sequenced {
+		db.seq = -1 // should already be
+		return db.tx, nil
 	}
 
 	// Do the seq update in sentry table. This ensures a replication message
 	// sequence is emitted from this transaction, and that the data returned
 	// from it includes the expected seq value.
-	seq, err := incrementSeq(ctx, db.tx)
+	seq, err := incrementSeq(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 	logger.Debugf("updated seq to %d", seq)
+	db.seq = seq
 
-	resChan, ok := db.repl.recvID(seq)
+	return db.tx, nil
+}
+
+// precommit finalizes the transaction with a prepared transaction and returns
+// the ID of the commit. The transaction is not yet committed. It takes an io.Writer
+// to write the changeset to, and returns the commit ID. If the io.Writer is nil,
+// it won't write the changeset anywhere.
+func (db *DB) precommit(ctx context.Context, writer io.Writer) ([]byte, error) {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
+	if db.tx == nil || db.seq == -1 {
+		return nil, errors.New("no tx exists")
+	}
+
+	resChan, ok := db.repl.recvID(db.seq, writer)
 	if !ok { // commitID will not be available, error. There is no recovery presently.
 		return nil, errors.New("replication connection is down")
 	}
 
 	db.txid = random.String(10)
 	sqlPrepareTx := fmt.Sprintf(`PREPARE TRANSACTION '%s'`, db.txid)
-	if _, err = db.tx.Exec(ctx, sqlPrepareTx); err != nil {
+	if _, err := db.tx.Exec(ctx, sqlPrepareTx); err != nil {
 		return nil, err
 	}
 
@@ -489,6 +520,7 @@ func (db *DB) commit(ctx context.Context) error {
 		// Allow commit without two-phase prepare
 		err := db.tx.Commit(ctx)
 		db.tx = nil
+		db.seq = -1
 		return err
 	}
 
@@ -498,6 +530,7 @@ func (db *DB) commit(ctx context.Context) error {
 		}
 		sqlRollback := fmt.Sprintf(`ROLLBACK PREPARED '%s'`, db.txid)
 		db.txid = ""
+		db.seq = -1
 		if _, err := db.tx.Exec(ctx, sqlRollback); err != nil {
 			logger.Warnf("ROLLBACK PREPARED failed: %v", err)
 		}
@@ -518,6 +551,7 @@ func (db *DB) commit(ctx context.Context) error {
 	// prepare will try to rollback this old prepared txn.
 	db.tx = nil
 	db.txid = ""
+	db.seq = -1
 
 	return nil
 }
@@ -535,6 +569,7 @@ func (db *DB) rollback(ctx context.Context) error {
 	defer func() {
 		db.tx = nil
 		db.txid = ""
+		db.seq = -1
 	}()
 
 	// If precommit not yet done, do a regular rollback.
@@ -595,7 +630,7 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 		if db.autoCommit {
 			return nil, errors.New("tx already created, cannot use auto commit")
 		}
-		return query(ctx, db.tx, stmt, args...)
+		return query(ctx, db.pool.idTypes, db.tx, stmt, args...)
 	}
 	if !db.autoCommit {
 		return nil, sql.ErrNoTransaction
@@ -616,11 +651,11 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 				return err
 			}
 			var ok bool
-			resChan, ok = db.repl.recvID(seq)
+			resChan, ok = db.repl.recvID(seq, nil) // nil changeset writer since we are in auto-commit mode
 			if !ok {
 				return errors.New("replication connection is down")
 			}
-			res, err = query(ctx, tx, stmt, args...)
+			res, err = query(ctx, db.pool.idTypes, tx, stmt, args...)
 			return err
 		},
 	)

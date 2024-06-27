@@ -215,7 +215,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	rpcSvcLogger := increaseLogLevel("user-json-svc", &d.log, d.cfg.Logging.RPCLevel)
 	rpcServerLogger := increaseLogLevel("user-jsonrpc-server", &d.log, d.cfg.Logging.RPCLevel)
 
-	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp,
+	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp, abciApp,
 		*rpcSvcLogger, usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)))
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppCfg.JSONRPCListenAddress,
 		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)),
@@ -228,7 +228,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	// admin service and server
 	signer := buildSigner(d)
-	jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, signer, d.cfg,
+	jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, signer, d.cfg,
 		d.genesisCfg.ChainID, *d.log.Named("admin-json-svc"))
 	jsonRPCAdminServer := buildJRPCAdminServer(d)
 	jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)
@@ -236,7 +236,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	jsonRPCAdminServer.RegisterSvc(&funcsvc.Service{})
 
 	// legacy tx service and grpc server
-	txsvc := buildTxSvc(d, db, e, wrappedCmtClient, txApp)
+	txsvc := buildTxSvc(d, db, e, wrappedCmtClient, txApp, abciApp)
 	grpcServer := buildGrpcServer(d, txsvc)
 
 	return &Server{
@@ -377,7 +377,7 @@ func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *st
 }
 
 func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broadcast.Broadcaster, txapp *txapp.TxApp) *broadcast.EventBroadcaster {
-	return broadcast.NewEventBroadcaster(ev, b, txapp, buildSigner(d), d.genesisCfg.ChainID, d.genesisCfg.ConsensusParams.Votes.MaxVotesPerTx)
+	return broadcast.NewEventBroadcaster(ev, b, txapp, buildSigner(d), d.genesisCfg.ChainID, d.genesisCfg.ConsensusParams.Votes.MaxVotesPerTx, *d.log.Named("event-broadcaster"))
 }
 
 func buildEventStore(d *coreDependencies, closers *closeFuncs) *voting.EventStore {
@@ -396,8 +396,8 @@ func buildEventStore(d *coreDependencies, closers *closeFuncs) *voting.EventStor
 	return e
 }
 
-func buildTxSvc(d *coreDependencies, db *pg.DB, txsvc txSvc.EngineReader, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication) *txSvc.Service {
-	return txSvc.NewService(db, txsvc, cometBftClient, nodeApp,
+func buildTxSvc(d *coreDependencies, db *pg.DB, txsvc txSvc.EngineReader, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication, pricer txSvc.Pricer) *txSvc.Service {
+	return txSvc.NewService(db, txsvc, cometBftClient, nodeApp, pricer,
 		txSvc.WithLogger(*d.log.Named("tx-service")),
 		txSvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)),
 	)

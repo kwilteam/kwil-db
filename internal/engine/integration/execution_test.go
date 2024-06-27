@@ -5,6 +5,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -583,13 +584,14 @@ func Test_Engine(t *testing.T) {
 
 			ctx := context.Background()
 
-			tx, err := db.BeginOuterTx(ctx)
+			tx, err := db.BeginPreparedTx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback(ctx)
 
 			test.ses1(t, global, tx)
 
-			id, err := tx.Precommit(ctx) // not needed, but test how txApp would use the engine
+			w := os.Stdout
+			id, err := tx.Precommit(ctx, w) // not needed, but test how txApp would use the engine
 			require.NoError(t, err)
 			require.NotEmpty(t, id)
 
