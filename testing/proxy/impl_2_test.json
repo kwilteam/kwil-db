@@ -1,0 +1,20 @@
+{
+    "name": "impl_2 test",
+    "schema_files": ["impl_1.kf", "impl_2.kf"],
+    "seed_statements": {
+        "impl_1": ["INSERT INTO users (id, name, address) VALUES ('42f856df-b212-4bdc-a396-f8fb6eae6901'::uuid, 'satoshi', '0xAddress')"]
+    },
+    "test_cases": [
+        {
+            "name": "migrate from schema 1 - success",
+            "database": "impl_2",
+            "target": "migrate",
+            "args": ["x9f6687895d32a12f4c65e8ad847fb3a1e8eb3bc38524e5b8a0475a1b", "get_users"],
+            "returns": [
+                [
+                    1
+                ]
+            ]
+        }
+    ]
+}

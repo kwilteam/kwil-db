@@ -37,13 +37,13 @@ func getEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context,
 		return
 	}
 
-	ctrName, err := ctr.Name(ctx)
+	ctrInspect, err := ctr.Inspect(ctx)
 	if err != nil {
 		return
 	}
 
 	// NOTE: sometime the container name is returned with leading slash
-	ctrName = strings.TrimPrefix(ctrName, "/")
+	ctrName := strings.TrimPrefix(ctrInspect.Name, "/")
 	unexposed = fmt.Sprintf("%s://%s:%s", proto, ctrName, port.Port())
 	return
 }

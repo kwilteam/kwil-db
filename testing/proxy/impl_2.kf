@@ -1,0 +1,50 @@
+database impl_2;
+
+// in impl_2, we change the impl_1 schema a bit.
+// we rename one of the columns, and add a new column
+// "created_at" which is the height an account was created
+// at
+
+table users {
+  id uuid primary key,
+  name text not null unique,
+  wallet_address text not null unique, // wallet_address is renamed from address
+  created_at int not null
+}
+
+procedure create_user ($name text) public  {
+  // derive a deterministic uuid from the blockchain transaction ID
+  // https://www.postgresql.org/docs/16.1/uuid-ossp.html#UUID-OSSP-FUNCTIONS-SECT
+  $uuid := uuid_generate_v5('f541de32-5ede-4083-bdbc-b29c3f02be9e'::uuid, @txid);
+
+  insert into users (id, name, wallet_address, created_at)
+  values ($uuid, $name, @caller, @height);
+}
+
+procedure get_users() public view returns table (name text, address text) {
+  // we alias "wallet_address as address" to match the interface defined
+  // in the proxy
+  return SELECT name, wallet_address AS address FROM users;
+}
+
+// migrate migrates the data from schema 1.
+procedure migrate($old_dbid text, $old_procedure_name text) public owner returns (count int) {
+  $migrate_count := 0;
+  for $user in SELECT * FROM get_old_users[$old_dbid, $old_procedure_name]() {
+    // generate a uuid for each user based on its username.
+    // we cannot use the txid as above, because it would give all
+    // migrated users the same uuid, since this whole migration runs
+    // as one tx
+    $uuid := uuid_generate_v5('f541de32-5ede-4083-bdbc-b29c3f02be9e'::uuid, $user.name);
+
+    insert into users (id, name, wallet_address, created_at)
+    values ($uuid, $user.name, $user.address, @height);
+
+    $migrate_count := $migrate_count + 1;
+  }
+
+  return $migrate_count;
+}
+
+
+foreign procedure get_old_users() returns table(name text, address text)
