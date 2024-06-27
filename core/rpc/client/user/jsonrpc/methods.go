@@ -80,7 +80,7 @@ func (cl *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, s
 	return res.TxHash, nil
 }
 
-func (cl *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...rpcclient.ActionCallOption) ([]map[string]any, error) {
+func (cl *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...rpcclient.ActionCallOption) ([]map[string]any, []string, error) {
 	cmd := &userjson.CallRequest{
 		Body:     msg.Body,
 		AuthType: msg.AuthType,
@@ -89,9 +89,14 @@ func (cl *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts 
 	res := &userjson.CallResponse{}
 	err := cl.CallMethod(ctx, string(userjson.MethodCall), cmd, res)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return jsonUtil.UnmarshalMapWithoutFloat(res.Result)
+	records, err := jsonUtil.UnmarshalMapWithoutFloat[[]map[string]any](res.Result)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return records, res.Logs, nil
 }
 
 func (cl *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
@@ -192,7 +197,7 @@ func (cl *Client) Query(ctx context.Context, dbid, query string) ([]map[string]a
 	if err != nil {
 		return nil, err
 	}
-	return jsonUtil.UnmarshalMapWithoutFloat(res.Result)
+	return jsonUtil.UnmarshalMapWithoutFloat[[]map[string]any](res.Result)
 }
 
 func (cl *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {

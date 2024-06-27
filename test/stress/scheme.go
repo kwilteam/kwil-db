@@ -81,13 +81,13 @@ func (asc *actSchemaClient) getOrCreateUser(ctx context.Context, dbid string) (i
 	if err != nil {
 		return 0, "", fmt.Errorf("%s: %w", actListUsers, err)
 	}
-	h.printRecs(ctx, recs)
-	recs.Reset()
+	h.printRecs(ctx, recs.Records)
+	recs.Records.Reset()
 
 	var userID int
 	var userName string
-	for recs.Next() {
-		rec := recs.Record()
+	for recs.Records.Next() {
+		rec := recs.Records.Record()
 		uid, user, wallet := rec["id"].(int64), rec["username"].(string), rec["wallet"].(string)
 		acctID, err := hex.DecodeString(strings.TrimPrefix(wallet, "0x"))
 		if err != nil {
@@ -119,10 +119,10 @@ func (asc *actSchemaClient) nextPostID(ctx context.Context, dbid string, userID 
 	if err != nil {
 		return 0, fmt.Errorf("get_user_posts_by_userid: %w", err)
 	}
-	h.printRecs(ctx, recs)
+	h.printRecs(ctx, recs.Records)
 	var nextPostID int
-	for recs.Next() {
-		rec := recs.Record()
+	for recs.Records.Next() {
+		rec := recs.Records.Record()
 		if postID := rec["id"].(int); postID >= nextPostID {
 			nextPostID = postID + 1
 		}

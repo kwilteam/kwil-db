@@ -98,10 +98,10 @@ func (psc *procSchemaClient) getUser(ctx context.Context, dbid string) (string, 
 		return "", fmt.Errorf("%s: %w", procGetUser, err)
 	}
 
-	recs.Reset()
+	recs.Records.Reset()
 
-	for recs.Next() {
-		rec := recs.Record()
+	for recs.Records.Next() {
+		rec := recs.Records.Record()
 		uid, _ /*age*/ := rec["id"].(string), rec["age"].(int64)
 		address, _ := rec["address"].(string), rec["post_count"].(int64)
 		wallet, err := hex.DecodeString(strings.TrimPrefix(address, "0x"))
@@ -158,8 +158,8 @@ func (psc *procSchemaClient) getOrCreateUser(ctx context.Context, dbid string) (
 // 	}
 // 	h.printRecs(ctx, recs)
 // 	var nextPostID int
-// 	for recs.Next() {
-// 		rec := recs.Record()
+// 	for recs.Records.Next() {
+// 		rec := recs.Records.Record()
 // 		if postID := rec["id"].(int); postID >= nextPostID {
 // 			nextPostID = postID + 1
 // 		}
