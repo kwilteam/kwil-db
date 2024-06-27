@@ -2,6 +2,7 @@ package statesync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -205,16 +206,17 @@ func (s *SnapshotStore) LoadSnapshotChunk(height uint64, format uint32, chunkIdx
 		return nil, fmt.Errorf("chunk %d does not exist in snapshot at height %d", chunkIdx, height)
 	}
 
-	chunkFile := snapshotChunkFile(s.cfg.SnapshotDir, height, format, chunkIdx)
-	if _, err := os.Open(chunkFile); err != nil {
-		return nil, fmt.Errorf("chunk %d does not exist in snapshot at height %d", chunkIdx, height)
-	}
-
 	// Read the chunk file
+	chunkFile := snapshotChunkFile(s.cfg.SnapshotDir, height, format, chunkIdx)
 	bts, err := os.ReadFile(chunkFile)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("chunk %d does not exist in snapshot at height %d", chunkIdx, height)
+		}
 		return nil, fmt.Errorf("failed to read chunk %d at height %d: %w", chunkIdx, height, err)
 	}
+	// TODO: cache chunk bytes by file name (with last used vacuum timer) so
+	// many peers don't force us to load the same chunk into memory many times.
 
 	return bts, nil
 }
@@ -238,27 +240,32 @@ func (s *SnapshotStore) loadSnapshots() error {
 		fileName := file.Name() // format: block-<height>
 		names := strings.Split(fileName, "-")
 		if len(names) != 2 {
-			s.log.Debug("invalid snapshot directory name, ignoring the snapshot", log.String("dir", fileName))
+			s.log.Warn("invalid snapshot directory name, ignoring the snapshot", log.String("dir", fileName))
 			continue
 		}
 		height := names[1]
 		heightInt, err := strconv.ParseUint(height, 10, 64)
 		if err != nil {
-			s.log.Debug("invalid snapshot height, ignoring the snapshot", log.String("height", height))
+			s.log.Warn("invalid snapshot height, ignoring the snapshot", log.String("height", height))
+			continue
 		}
 
 		// Load snapshot header
 		headerFile := snapshotHeaderFile(s.cfg.SnapshotDir, heightInt, DefaultSnapshotFormat)
 		header, err := loadSnapshot(headerFile)
 		if err != nil {
-			s.log.Debug("Invalid snapshot header file, ignoring the snapshot", log.String("height", height), log.String("Error", err.Error()))
+			s.log.Warn("Invalid snapshot header file, ignoring the snapshot",
+				log.String("height", height), log.Error(err))
+			continue
 		}
 
 		// Ensure that the chunk files exist
 		for i := uint32(0); i < header.ChunkCount; i++ {
 			chunkFile := snapshotChunkFile(s.cfg.SnapshotDir, heightInt, DefaultSnapshotFormat, i)
-			if _, err := os.Open(chunkFile); err != nil { // chunk file doesn't exist
-				s.log.Debug("Invalid snapshot chunk file, ignoring the snapshot", log.String("chunk-file", chunkFile))
+			if _, err := os.Stat(chunkFile); err != nil { // chunk file doesn't exist
+				s.log.Warn("Invalid snapshot chunk file, ignoring the snapshot",
+					log.String("chunk_file", chunkFile), log.Error(err))
+				continue
 			}
 		}
 
