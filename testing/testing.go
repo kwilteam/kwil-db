@@ -424,7 +424,7 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 		return fmt.Errorf("error checking for Docker installation: %w", err)
 	}
 
-	port := "52853"
+	port := "52853" // random port
 
 	// Run the container
 	bts, err := exec.CommandOutput(ctx, "docker", "run", "-d", "-p", fmt.Sprintf("%s:5432", port), "--name", "kwil-testing-postgres", "-e",
@@ -445,27 +445,46 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 
 	opts.Logger.Logf("running test container: %s", string(bts))
 
-	time.Sleep(1 * time.Second) // stupid hack needed for the container to be ready
-
-	db, err := pg.NewDB(ctx, &pg.DBConfig{
-		PoolConfig: pg.PoolConfig{
-			MaxConns: 11,
-			ConnConfig: pg.ConnConfig{
-				Host:   "localhost",
-				Port:   port,
-				User:   "kwild",
-				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
-				DBName: "kwil_test_db",
-			},
-		},
-	})
+	db, err := connectWithRetry(ctx, port, 10) // might take a while to start up on slower machines
 	if err != nil {
-		return err
+		return fmt.Errorf("error connecting to database: %w", err)
 	}
 
 	defer db.Close()
 
 	return fn(ctx, db, opts.Logger)
+}
+
+// connectWithRetry tries to connect to Postgres, and will retry n times at
+// 1 second intervals if it fails.
+func connectWithRetry(ctx context.Context, port string, n int) (*pg.DB, error) {
+	var db *pg.DB
+	var err error
+
+	for i := 0; i < n; i++ {
+		db, err = pg.NewDB(ctx, &pg.DBConfig{
+			PoolConfig: pg.PoolConfig{
+				MaxConns: 11,
+				ConnConfig: pg.ConnConfig{
+					Host:   "localhost",
+					Port:   port,
+					User:   "kwild",
+					Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
+					DBName: "kwil_test_db",
+				},
+			},
+		})
+		if err == nil {
+			return db, nil
+		}
+		if !strings.Contains(err.Error(), "failed to connect to") {
+			return nil, err
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	return nil, err
 }
 
 // Options configures optional parameters for running the test.
