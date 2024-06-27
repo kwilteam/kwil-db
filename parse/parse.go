@@ -279,16 +279,16 @@ type SQLParseResult struct {
 // It requires a schema to be passed in, since SQL statements may reference
 // schema objects.
 func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error) {
-	parser, errLis, sqlVis, parseVis, err := setupSQLParser(sql, schema)
+	parser, errLis, sqlVis, parseVis, deferFn, err := setupSQLParser(sql, schema)
 
 	res = &SQLParseResult{
 		ParseErrs: errLis,
 	}
 
 	defer func() {
-		err2 := recover()
+		err2 := deferFn(recover())
 		if err2 != nil {
-			err = fmt.Errorf("panic: %v", err2)
+			err = err2
 		}
 	}()
 
@@ -315,10 +315,17 @@ func ParseSQLWithoutValidation(sql string, schema *types.Schema) (res *SQLStatem
 		}
 	}()
 
-	parser, errLis, _, parseVis, err := setupSQLParser(sql, schema)
+	parser, errLis, _, parseVis, deferFn, err := setupSQLParser(sql, schema)
 	if err != nil {
 		return nil, err
 	}
+
+	defer func() {
+		err2 := deferFn(recover())
+		if err2 != nil {
+			err = err2
+		}
+	}()
 
 	res = parser.Sql_entry().Accept(parseVis).(*SQLStatement)
 
@@ -330,9 +337,9 @@ func ParseSQLWithoutValidation(sql string, schema *types.Schema) (res *SQLStatem
 }
 
 // setupSQLParser sets up the SQL parser.
-func setupSQLParser(sql string, schema *types.Schema) (parser *gen.KuneiformParser, errLis *errorListener, sqlVisitor *sqlAnalyzer, parserVisitor *schemaVisitor, err error) {
+func setupSQLParser(sql string, schema *types.Schema) (parser *gen.KuneiformParser, errLis *errorListener, sqlVisitor *sqlAnalyzer, parserVisitor *schemaVisitor, deferFn func(any) error, err error) {
 	if sql == "" {
-		return nil, nil, nil, nil, fmt.Errorf("empty SQL statement")
+		return nil, nil, nil, nil, nil, fmt.Errorf("empty SQL statement")
 	}
 	// add semicolon to the end of the statement, if it is not there
 	if !strings.HasSuffix(sql, ";") {
@@ -352,16 +359,9 @@ func setupSQLParser(sql string, schema *types.Schema) (parser *gen.KuneiformPars
 	}
 	sqlVisitor.sqlCtx.inLoneSQL = true
 
-	defer func() {
-		err2 := deferFn(recover())
-		if err2 != nil {
-			err = err2
-		}
-	}()
-
 	parserVisitor = newSchemaVisitor(stream, errLis)
 
-	return parser, errLis, sqlVisitor, parserVisitor, err
+	return parser, errLis, sqlVisitor, parserVisitor, deferFn, err
 }
 
 // ActionParseResult is the result of parsing an action.
