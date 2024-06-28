@@ -17,12 +17,13 @@ require (
 	github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246
 	github.com/ethereum/go-ethereum v1.14.3
 	github.com/kwilteam/kwil-db v0.7.2
-	github.com/kwilteam/kwil-db/core v0.2.1
-	github.com/kwilteam/kwil-db/parse v0.2.3
+	github.com/kwilteam/kwil-db/core v0.8.3-preview.1
+	github.com/kwilteam/kwil-db/parse v0.8.3-preview.1
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go v0.31.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.29.2-0.20240321072901-c83b93cb1eff
 	go.uber.org/zap v1.27.0
+	golang.org/x/sync v0.7.0
 )
 
 require (
@@ -267,7 +268,6 @@ require (
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/oauth2 v0.19.0 // indirect
-	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/term v0.20.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
