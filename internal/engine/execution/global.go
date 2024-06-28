@@ -235,7 +235,7 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 
 	args := orderAndCleanValueMap(values, parsed.ParameterOrder)
 
-	return tx.Execute(ctx, parsed.Statement, args...)
+	return tx.Execute(ctx, parsed.Statement, append([]any{pg.QueryModeInferredArgTypes}, args...))
 }
 
 type dbQueryFn func(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error)
