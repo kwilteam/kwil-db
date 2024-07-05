@@ -134,7 +134,12 @@ func (s *sqlGenerator) VisitExpressionVariable(p0 *parse.ExpressionVariable) any
 		// Postgres uses $1, $2, etc. for numbered parameters.
 
 		s.orderedParams = append(s.orderedParams, str)
-		return "$" + fmt.Sprint(len(s.orderedParams))
+
+		res := strings.Builder{}
+		res.WriteString("$")
+		res.WriteString(fmt.Sprint(len(s.orderedParams)))
+		typeCast(p0, &res)
+		return res.String()
 	}
 
 	str := strings.Builder{}
