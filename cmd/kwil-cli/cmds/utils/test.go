@@ -8,10 +8,13 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/testing"
+	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 var (
@@ -54,12 +57,24 @@ func testCmd() *cobra.Command {
 		Long:    testLong,
 		Example: testExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			l := log.New(log.Config{
-				Level:  log.InfoLevel.String(),
-				Format: log.FormatPlain,
-			})
+
+			confg := zap.NewProductionConfig()
+			confg.EncoderConfig.TimeKey = ""
+			confg.EncoderConfig.EncodeTime = nil
+			confg.Encoding = "console"
+			confg.DisableCaller = true
+
+			l, err := confg.Build()
+			if err != nil {
+				return display.PrintErr(cmd, err)
+			}
+
+			l2 := log.Logger{
+				L: l,
+			}
+
 			opts := testing.Options{
-				Logger: testing.LoggerFromKwilLogger(&l),
+				Logger: testing.LoggerFromKwilLogger(&l2),
 			}
 
 			userHasSetPgConn := false
@@ -96,6 +111,34 @@ func testCmd() *cobra.Command {
 					Pass:   pass,
 					DBName: dbName,
 				}
+			}
+
+			opts.ReplaceExistingContainer = func() (bool, error) {
+				//if common
+				assumeYes, err := common.GetAssumeYesFlag(cmd)
+				if err != nil {
+					return false, err
+				}
+
+				if assumeYes {
+					return true, nil
+				}
+
+				sel := promptui.Prompt{
+					Label:   fmt.Sprintf(`Existing Docker contains found with name "%s". Wipe the existing container and create a new one? (y/n)`, testing.ContainerName),
+					Default: "N",
+				}
+
+				res, err := sel.Run()
+				if err != nil {
+					return false, err
+				}
+
+				if res == "Y" || res == "y" {
+					return true, nil
+				}
+
+				return false, nil
 			}
 
 			// run the tests
@@ -140,6 +183,7 @@ func testCmd() *cobra.Command {
 	cmd.Flags().StringVar(&pass, "password", "", "password for the database user")
 	cmd.Flags().StringVar(&host, "host", "localhost", "host of the database")
 	cmd.Flags().StringVar(&port, "port", "5432", "port of the database")
+	common.BindAssumeYesFlag(cmd)
 
 	return cmd
 }

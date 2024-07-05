@@ -151,7 +151,7 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 			// each test case is named after the index it is for its type.
 			// It is run in a function to allow defers
 			err := func() error {
-				logger.Logf(`running test "%s"`, testFnIdentifiers[i])
+				logger.Logf(`running test %s`, testFnIdentifiers[i])
 
 				// setup a tx and execution engine
 				outerTx, err := d.BeginPreparedTx(ctx)
@@ -293,7 +293,7 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 	dbid := utils.GenerateDBID(e.Database, deployer)
 
 	// log to help users debug failed tests
-	platform.Logger.Logf(`executing action/procedure "%s" against schema "%s" (DBID: "%s")`, e.Target, e.Database, dbid)
+	platform.Logger.Logf(`executing action/procedure "%s" against schema "%s" (DBID: %s)`, e.Target, e.Database, dbid)
 
 	res, err := platform.Engine.Procedure(ctx, platform.DB, &common.ExecutionData{
 		TransactionData: common.TransactionData{
@@ -415,25 +415,43 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 		return fn(ctx, db, opts.Logger)
 	}
 
-	// check if the user has docker
-	err = exec.Command(ctx, "docker")
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			return fmt.Errorf("docker not found. Please ensure Docker is installed and running")
-		}
-		return fmt.Errorf("error checking for Docker installation: %w", err)
-	}
-
 	port := "52853" // random port
 
 	// Run the container
-	bts, err := exec.CommandOutput(ctx, "docker", "run", "-d", "-p", fmt.Sprintf("%s:5432", port), "--name", "kwil-testing-postgres", "-e",
-		"POSTGRES_HOST_AUTH_METHOD=trust", "kwildb/postgres:latest")
-	if err != nil {
+	bts, err := exec.CommandOutput(ctx, startCommand(port)...)
+	switch {
+	case err == nil:
+		// do nothing
+	case strings.Contains(err.Error(), "command not found"):
+		{
+			return fmt.Errorf("docker not found. Please ensure Docker is installed and running")
+		}
+	case strings.Contains(err.Error(), "Conflict. The container name") && opts.ReplaceExistingContainer != nil:
+		// check if the container is in use
+		use, err := opts.ReplaceExistingContainer()
+		if err != nil {
+			return err
+		}
+
+		if !use {
+			return fmt.Errorf(`cannot create test-container: conflicting container name: "%s"`, ContainerName)
+		}
+
+		err = exec.Command(ctx, "docker", "rm", "-f", ContainerName)
+		if err != nil {
+			return fmt.Errorf("error removing conflicting container: %w", err)
+		}
+
+		bts, err = exec.CommandOutput(ctx, startCommand(port)...)
+		if err != nil {
+			return fmt.Errorf("error running test container: %w", err)
+		}
+	default:
 		return fmt.Errorf("error running test container: %w", err)
 	}
+
 	defer func() {
-		err2 := exec.Command(ctx, "docker", "rm", "-f", "kwil-testing-postgres")
+		err2 := exec.Command(ctx, "docker", "rm", "-f", ContainerName)
 		if err2 != nil {
 			if err == nil {
 				err = err2
@@ -453,6 +471,14 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 	defer db.Close()
 
 	return fn(ctx, db, opts.Logger)
+}
+
+// ContainerName is the name of the test container
+const ContainerName = "kwil-testing-postgres"
+
+// startCommand returns the docker start command
+func startCommand(port string) []string {
+	return []string{"docker", "run", "-d", "-p", fmt.Sprintf("%s:5432", port), "--name", ContainerName, "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "kwildb/postgres:latest"}
 }
 
 // connectWithRetry tries to connect to Postgres, and will retry n times at
@@ -499,6 +525,11 @@ type Options struct {
 	Conn *pg.ConnConfig
 	// Logger is a logger to be used in the test
 	Logger Logger
+	// ReplaceExistingContainer is a callback function that is called when
+	// a conflicting container name is already in use. If it returns
+	// true, then the container will be removed and recreated. If it
+	// returns false, then the test will fail.
+	ReplaceExistingContainer func() (bool, error)
 }
 
 func (d *Options) valid() error {
