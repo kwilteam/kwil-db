@@ -314,6 +314,21 @@ type dmlStmt struct {
 	OrderedParameters []string
 }
 
+var ErrCannotInferType = errors.New("cannot infer type")
+
+// decorateExecuteErr parses an execute error from postgres and tries to give a more helpful error message.
+// this allows us to give a more helpful error message when users hit this,
+// since the Postgres error message is not helpful, and this is a common error.
+func decorateExecuteErr(err error, stmt string) error {
+	// this catches a common error case when execution in-line expressions in actions.
+	_, after, cut := strings.Cut(err.Error(), "could not determine data type of parameter ")
+	if cut {
+		return fmt.Errorf(`%w: could not dynamically determine the data type of the %sth parameter in statement "%s". try type casting using ::, e.g. $id::text`, ErrCannotInferType, strings.Split(after[1:], " ")[0], stmt)
+	}
+
+	return err
+}
+
 var _ instructionFunc = (&dmlStmt{}).execute
 
 func (e *dmlStmt) execute(scope *precompiles.ProcedureContext, _ *GlobalContext, db sql.DB) error {
@@ -322,7 +337,7 @@ func (e *dmlStmt) execute(scope *precompiles.ProcedureContext, _ *GlobalContext,
 	// args := append([]any{pg.QueryModeExec}, params...)
 	results, err := db.Execute(scope.Ctx, e.SQLStatement, append([]any{pg.QueryModeExec}, params...)...)
 	if err != nil {
-		return err
+		return decorateExecuteErr(err, e.SQLStatement)
 	}
 
 	// we need to check for any pg numeric types returned, and convert them to int64
