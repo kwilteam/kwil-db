@@ -207,7 +207,7 @@ func Test_SQL(t *testing.T) {
 			name: "inferred type - failure",
 			sql:  "select $id is null",
 			values: map[string]any{
-				"id": "4a67d6ea-7ac8-453c-964e-5a144f9e3004",
+				"$id": "4a67d6ea-7ac8-453c-964e-5a144f9e3004",
 			},
 			err: execution.ErrCannotInferType,
 		},
@@ -215,7 +215,7 @@ func Test_SQL(t *testing.T) {
 			name: "inferred type - success",
 			sql:  "select $id::text is null",
 			values: map[string]any{
-				"id": "4a67d6ea-7ac8-453c-964e-5a144f9e3004",
+				"$id": "4a67d6ea-7ac8-453c-964e-5a144f9e3004",
 			},
 			want: [][]any{{false}},
 		},
@@ -258,7 +258,6 @@ func Test_SQL(t *testing.T) {
 					require.Equal(t, tt.want[i][j], col)
 				}
 			}
-
 		})
 	}
 }
