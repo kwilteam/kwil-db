@@ -2,11 +2,12 @@ package memo
 
 import (
 	"fmt"
+	"testing"
+
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/testkit"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
-	"testing"
 )
 
 var stubDS, _ = ds.NewCSVDataSource("../testdata/users.csv")
@@ -20,7 +21,7 @@ func TestMemo(t *testing.T) {
 	}
 
 	df := lp.NewDataFrame(
-		lp.Scan(stubTable, dataSrc, nil))
+		lp.ScanPlan(stubTable, dataSrc, nil))
 
 	plan := df.
 		Filter(lp.Eq(lp.Column(stubTable, "age"),

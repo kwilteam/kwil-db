@@ -2,6 +2,7 @@ package logical_plan
 
 import (
 	"fmt"
+
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
 )
@@ -45,18 +46,19 @@ func Conjunction(exprs ...LogicalExpr) (expr LogicalExpr) {
 
 // ExtractColumns extracts the columns from the expression.
 // It keeps track of the columns that have been seen in the 'seen' map.
-func ExtractColumns(expr LogicalExpr,
-	schema *ds.Schema, seen map[string]bool) {
+// Expressions that terminate with a ColumnExpr or ColumnIdxExpr will make an
+// entry in the seen map.
+func ExtractColumns(expr LogicalExpr, schema *ds.Schema, seen map[string]bool) {
 	switch e := expr.(type) {
 	case *LiteralTextExpr:
 	case *LiteralNumericExpr:
 	case *AliasExpr:
 		ExtractColumns(e.Expr, schema, seen)
-	case UnaryExpr:
+	case UnaryExpr: // e.g. NOT (expr)
 		ExtractColumns(e.E(), schema, seen)
 	case AggregateExpr:
 		ExtractColumns(e.E(), schema, seen)
-	case BinaryExpr:
+	case BinaryExpr: // e.g. AND, OR, LT, etc.
 		ExtractColumns(e.L(), schema, seen)
 		ExtractColumns(e.R(), schema, seen)
 	case *ColumnExpr:
@@ -70,16 +72,19 @@ func ExtractColumns(expr LogicalExpr,
 	}
 }
 
-// NormalizeColumn qualifies a column with gaven logical plan.
-func NormalizeColumn(plan LogicalPlan, column *ColumnExpr) *ColumnExpr {
-	return column.QualifyWithSchemas(plan.Schema())
-}
+// NormalizeColumn qualifies a column with schema from a given logical plan.
+// i.e. This creates a new ColumnExpr with the Relation field set.
+// func NormalizeColumn(plan LogicalPlan, column *ColumnExpr) *ColumnExpr {
+// 	return column.QualifyWithSchemas(plan.Schema())
+// }
 
 // NormalizeExpr normalizes the given expression with the given logical plan.
+// That is, if the expression is a ColumnExpr, it uses the plan's Schema to set
+// the Relation field.
 func NormalizeExpr(expr LogicalExpr, plan LogicalPlan) LogicalExpr {
 	return pt.TransformPostOrder(expr, func(n pt.TreeNode) pt.TreeNode {
 		if c, ok := n.(*ColumnExpr); ok {
-			return NormalizeColumn(plan, c)
+			return c.QualifyWithSchemas(plan.Schema()) // NormalizeColumn(plan, c)
 		}
 		return n
 	}).(LogicalExpr)
@@ -98,22 +103,6 @@ func NormalizeExprs(exprs []LogicalExpr, plan LogicalPlan) []LogicalExpr {
 		normalized[i] = NormalizeExpr(e, plan)
 	}
 	return normalized
-}
-
-func ResolveColumns(expr LogicalExpr, plan LogicalPlan) LogicalExpr {
-	return pt.TransformPostOrder(expr, func(n pt.TreeNode) pt.TreeNode {
-		if c, ok := n.(*ColumnExpr); ok {
-			c.QualifyWithSchemas(plan.Schema())
-		}
-		return n
-	}).(LogicalExpr)
-
-	//return expr.TransformUp(func(n pt.TreeNode) pt.TreeNode {
-	//	if c, ok := n.(*ColumnExpr); ok {
-	//		c.QualifyWithSchemas(plan.Schema())
-	//	}
-	//	return n
-	//}).(LogicalExpr)
 }
 
 func ColumnFromDefToExpr(column *ds.ColumnDef) *ColumnExpr {
@@ -200,34 +189,4 @@ func PpList[T any](l []T) string {
 		}
 	}
 	return str
-}
-
-func PlanString(p LogicalPlan) string {
-	var ps string
-	switch t := p.(type) {
-	case *NoRelationOp:
-		ps = t.String()
-	case *ScanOp:
-		ps = t.String()
-	case *ProjectionOp:
-		ps = t.String()
-	case *FilterOp:
-		ps = t.String()
-	case *JoinOp:
-		ps = t.String()
-	case *LimitOp:
-		ps = t.String()
-	case *AggregateOp:
-		ps = t.String()
-	case *SortOp:
-		ps = t.String()
-	case *SubqueryOp:
-		ps = t.String()
-	case *DistinctOp:
-		ps = t.String()
-	default:
-		ps = fmt.Sprintf("Unknown LogicalPlan type %T", t)
-	}
-
-	return ps
 }

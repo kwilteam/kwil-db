@@ -6,47 +6,41 @@ import (
 	"strings"
 )
 
+// TableRef is a PostgreSQL-schema-qualified table name.
 type TableRef struct {
-	// NOTE: Does the comment clearly explain the purpose of the struct?
-	//
-	// In Kwil, the database name user specifies in Kuneiform is mapped to
-	// underlying database/schema(dbid) in Postgres.
-	// So the schema is transparent to the user, to avoid confusion (the term
-	// schema is used mostly for the schema of the table, in the context of
-	// cost model.), we use the term db.
-	DB    string // e.g. schema in Postgres. All schemas are in same database.
-	Table string
+	Namespace string // e.g. schema in Postgres, derived from Kwil dataset schema DBID
+	Table     string
 }
 
 func (t *TableRef) String() string {
-	if t.DB != "" {
-		return fmt.Sprintf("%s.%s", t.DB, t.Table)
+	if t.Namespace != "" {
+		return fmt.Sprintf("%s.%s", t.Namespace, t.Table)
 	}
 	return t.Table
 }
 
 // Resolve resolves the table reference to a fully qualified table name.
 func (t *TableRef) Resolve(defaultDB string) string {
-	db := t.DB
-	if db == "" {
-		db = defaultDB
+	ns := t.Namespace
+	if ns == "" {
+		ns = defaultDB
 	}
-	return fmt.Sprintf("%s.%s", db, t.Table)
+	return fmt.Sprintf("%s.%s", ns, t.Table)
 }
 
 func TableRefUnqualified(table string) *TableRef {
 	return &TableRef{Table: table}
 }
 
-func TableRefQualified(db, table string) *TableRef {
-	return &TableRef{DB: db, Table: table}
+func TableRefQualified(namespace, table string) *TableRef {
+	return &TableRef{Namespace: namespace, Table: table}
 }
 
 // Match checks if the given table reference matches the current table reference.
 // Not set fields are ignored, meaning it's optimistic to assume equal.
 func (t *TableRef) Match(other *TableRef) bool {
-	if t.DB != "" {
-		return t.DB == other.DB && t.Table == other.Table
+	if t.Namespace != "" {
+		return t.Namespace == other.Namespace && t.Table == other.Table
 	} else {
 		return t.Table == other.Table
 	}
@@ -57,14 +51,13 @@ type OfRelation interface {
 	Relation() *TableRef
 }
 
-// Field represents a field in a schema.
+// Field represents a field (column) in a schema.
 type Field struct {
 	Rel *TableRef // relation, maybe not pointer?
 
 	Name     string
 	Type     string
 	Nullable bool
-
 	HasIndex bool
 }
 
@@ -84,6 +77,8 @@ func (f *Field) QualifiedColumn() *ColumnDef {
 	return Column(f.Rel, f.Name)
 }
 
+// Schema represents a database as a slice of all columns in all relations. See
+// also Field.
 type Schema struct {
 	Fields []Field
 	// index
@@ -109,28 +104,38 @@ func (s *Schema) String() string {
 	return fmt.Sprintf("[%s]", strings.Join(fields, ", "))
 }
 
+// Project filters the Schema to include only the given column/field names.
+// What about the relation? Is the assumption that all fields in the schema are the same table?
 func (s *Schema) Project(projection ...string) *Schema {
 	if len(projection) == 0 {
 		return NewSchema(s.Fields...)
 	}
 
-	fieldIndex := s.MapProjection(projection)
-
-	newFields := make([]Field, len(projection))
-	for i, idx := range fieldIndex {
-		newFields[i] = s.Fields[idx]
+	newFields := make([]Field, 0, len(projection))
+	for _, proj := range projection {
+		idx := slices.IndexFunc(s.Fields, func(f Field) bool {
+			return f.Name == proj
+		})
+		if idx == -1 {
+			panic("invalid projection")
+		}
+		newFields = append(newFields, s.Fields[idx])
 	}
 
 	return NewSchema(newFields...)
 }
 
-func (s *Schema) Field(i int) Field {
-	return s.Fields[i]
-}
-
 // MapProjection maps the projection to the index of the fields in the schema.
 // NOTE: originally it's not exported, should come back to this later.
 func (s *Schema) MapProjection(projection []string) []int {
+	/* newFieldsIndex := make([]int, len(projection))
+	for i, name := range projection {
+		idx := slices.IndexFunc(s.Fields, func(f Field) bool {
+			return f.Name == name
+		})
+		newFieldsIndex[i] = idx
+	}*/
+
 	fieldIndexMap := make(map[string]int)
 	for i, field := range s.Fields {
 		fieldIndexMap[field.Name] = i
@@ -207,11 +212,16 @@ func (s *Schema) fieldByUnqualifiedName(name string) Field {
 	}
 }
 
-func (s *Schema) FieldFromColumn(column *ColumnDef) Field {
-	if column.Relation == nil {
-		return s.fieldByUnqualifiedName(column.Name)
+// Field gets the Field for the specified column name and optional relation.
+func (s *Schema) Field(relation *TableRef, colName string) Field {
+	if relation == nil {
+		return s.fieldByUnqualifiedName(colName)
 	}
-	return s.fieldByQualifiedName(column.Relation, column.Name)
+	return s.fieldByQualifiedName(relation, colName)
+}
+
+func (s *Schema) FieldFromColumn(column *ColumnDef) Field {
+	return s.Field(column.Relation, column.Name)
 }
 
 // Merge modifies the current schema by merging it with another schema, any

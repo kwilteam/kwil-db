@@ -7,8 +7,12 @@ import (
 
 var Builder = newLogicalPlanBuilder()
 
+func NewBuilder(plan LogicalPlan) *logicalPlanBuilder {
+	return Builder.FromPlan(plan)
+}
+
 // logicalPlanBuilder is a helper to build logical plans.
-// Method From and NoRelationOp return a new logicalPlanBuilder, other methods
+// Method `FromPlan`, `Scan`, and `NoRelationOp` return a new logicalPlanBuilder, other methods
 // modify the current builder.
 type logicalPlanBuilder struct {
 	plan LogicalPlan
@@ -23,22 +27,26 @@ func (b *logicalPlanBuilder) NoRelation() *logicalPlanBuilder {
 	return &logicalPlanBuilder{plan: NoSource()}
 }
 
-// From creates a new logicalPlanBuilder with a logical plan.
-func (b *logicalPlanBuilder) From(plan LogicalPlan) *logicalPlanBuilder {
+// FromPlan creates a new logicalPlanBuilder with a logical plan.
+func (b *logicalPlanBuilder) FromPlan(plan LogicalPlan) *logicalPlanBuilder {
 	return &logicalPlanBuilder{plan: plan}
 }
 
+// Scan is shorthand for Builder.FromPlan(ScanPlan(...))
 func (b *logicalPlanBuilder) Scan(relation *datatypes.TableRef,
 	source datasource.DataSource, projection ...string) *logicalPlanBuilder {
-	b.plan = Scan(relation, source, []LogicalExpr{}, projection...)
-	return b
+
+	scanPlan := ScanPlan(relation, source, []LogicalExpr{}, projection...)
+	return b.FromPlan(scanPlan)
 }
 
-func (b *logicalPlanBuilder) JoinOn(_type string, right LogicalPlan, on LogicalExpr) *logicalPlanBuilder {
+func (b *logicalPlanBuilder) JoinOn(jType JoinType, right LogicalPlan, on LogicalExpr) *logicalPlanBuilder {
+	b.plan = JoinPlan(jType, b.plan, right, on)
 	return b
 }
 
 // Project applies a projection to the logical plan.
+// This applies to HAVING, which is like WHERE for a GROUP BY???
 func (b *logicalPlanBuilder) Project(exprs ...LogicalExpr) *logicalPlanBuilder {
 	b.plan = Projection(b.plan, exprs...)
 	return b

@@ -3,6 +3,7 @@ package memo
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
@@ -95,8 +96,8 @@ func (r *LogicalRel) InputGroups() []*Group {
 	return r.inputs
 }
 
-func (r *LogicalRel) Inputs() []GroupExpr {
-	var rels []GroupExpr
+func (r *LogicalRel) Inputs() []GroupExpression {
+	var rels []GroupExpression
 	for _, input := range r.inputs {
 		rels = append(rels, input.logical...)
 		rels = append(rels, input.virtual...)
@@ -153,8 +154,8 @@ func (r *VirtualRel) InputGroups() []*Group {
 	return r.inputs
 }
 
-func (r *VirtualRel) Inputs() []GroupExpr {
-	var rels []GroupExpr
+func (r *VirtualRel) Inputs() []GroupExpression {
+	var rels []GroupExpression
 	for _, input := range r.inputs {
 		rels = append(rels, input.logical...)
 		rels = append(rels, input.virtual...)
@@ -175,7 +176,7 @@ func (r *VirtualRel) Cost() int64 {
 	return r.cost
 }
 
-func Format(plan GroupExpr, indent int) string {
+func Format(plan GroupExpression, indent int) string {
 	var msg bytes.Buffer
 	msg.WriteString(plan.String())
 	msg.WriteString("\n")

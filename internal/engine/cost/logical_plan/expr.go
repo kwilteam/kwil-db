@@ -2,6 +2,7 @@ package logical_plan
 
 import (
 	"fmt"
+
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
 	tree "github.com/kwilteam/kwil-db/parse"
@@ -25,6 +26,9 @@ type LogicalExpr interface {
 
 	// Resolve returns the field that this expression represents from the schema
 	Resolve(*dt.Schema) dt.Field
+
+	// how about some base cost?
+	// Cost() int64
 }
 
 // ColumnExpr represents a column in a schema.
@@ -45,11 +49,14 @@ func (e *ColumnExpr) String() string {
 	return e.Name
 }
 
+// Resolve returns the Field from the provided Schema that corresponds to the
+// this column.
 func (e *ColumnExpr) Resolve(schema *dt.Schema) dt.Field {
 	// TODO: use just one Column definition, right now we have:
 	// - ColumnExpr
 	// - dt.ColumnDef, to avoid circular import
-	return schema.FieldFromColumn(dt.Column(e.Relation, e.Name))
+	// return schema.FieldFromColumn(dt.Column(e.Relation, e.Name))
+	return schema.Field(e.Relation, e.Name) // why use dt.Column at all?
 }
 
 // QualifyWithSchemas returns a new ColumnExpr with the relation set, i.e. qualified.
@@ -62,10 +69,11 @@ func (e *ColumnExpr) QualifyWithSchemas(schemas ...*dt.Schema) *ColumnExpr {
 	}
 
 	var schemaToUse *dt.Schema
+SCHEMAS:
 	for _, schema := range schemas {
 		var matchedFields []dt.Field
 		for _, field := range schema.Fields {
-			if field.Name == e.Name {
+			if field.Name == e.Name { // ignore relation (TableRef) when matching???
 				matchedFields = append(matchedFields, field)
 			}
 		}
@@ -75,7 +83,7 @@ func (e *ColumnExpr) QualifyWithSchemas(schemas ...*dt.Schema) *ColumnExpr {
 			continue
 		case 1:
 			schemaToUse = schema
-			break
+			break SCHEMAS // not just the switch
 		default:
 			// handle ambiguous column, e.g. same column name in different tables
 			// This can only happen when Join with USING clause, kwil doesn't support it yet.
@@ -294,6 +302,8 @@ func Not(expr LogicalExpr) *unaryExpr {
 		expr: expr,
 	}
 }
+
+// TODO: Pos (+) and Neg (-) unary ops
 
 type BinaryExpr interface {
 	OpExpr
@@ -640,6 +650,9 @@ func (b *binaryExprBuilderImpl) Div(r LogicalExpr) BinaryExpr {
 	return Div(b.l, r)
 }
 
+// SortExpression is any expression qualified by ASC/DESC and NULLS FIRST. Why
+// does this exist instead of having asc/nullsFirst as part of the sort logical
+// plan?
 type SortExpression struct {
 	*pt.BaseTreeNode
 

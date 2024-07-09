@@ -113,7 +113,9 @@ func TransformPreOrder(node TreeNode, fn TransformFunc) TreeNode {
 	})
 }
 
-type BaseTreeNode struct{}
+type BaseTreeNode struct {
+	// impl TreeNode
+}
 
 func (n *BaseTreeNode) String() string {
 	return fmt.Sprintf("%T", n)
@@ -124,7 +126,7 @@ func (n *BaseTreeNode) Children() []TreeNode {
 }
 
 func (n *BaseTreeNode) Accept(v TreeNodeVisitor) any {
-	return n.Accept(v)
+	return n.Accept(v) // infinite recursive call ???
 }
 
 func (n *BaseTreeNode) TransformChildren(fn TransformFunc) TreeNode {

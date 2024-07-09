@@ -2,6 +2,7 @@ package logical_plan_test
 
 import (
 	"fmt"
+
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
@@ -11,14 +12,14 @@ var stubDS, _ = ds.NewCSVDataSource("../testdata/users.csv")
 var stubTable = &dt.TableRef{Table: "users"}
 
 func ExampleScanOp_String_no_filter() {
-	op := lp.Scan(stubTable, stubDS, nil, "username", "age")
+	op := lp.ScanPlan(stubTable, stubDS, nil, "username", "age")
 	fmt.Println(op.String())
 	// Output:
 	// Scan: users; projection=[username, age]
 }
 
 func ExampleScanOp_String_with_filter() {
-	op := lp.Scan(stubTable, stubDS,
+	op := lp.ScanPlan(stubTable, stubDS,
 		[]lp.LogicalExpr{
 			lp.Gt(lp.ColumnUnqualified("age"),
 				lp.LiteralNumeric(20)),
@@ -52,7 +53,7 @@ func ExampleFilterOp_String() {
 
 func ExampleAggregateOp_String() {
 	op := lp.Aggregate(
-		lp.Scan(stubTable, stubDS, nil),
+		lp.ScanPlan(stubTable, stubDS, nil),
 		[]lp.LogicalExpr{lp.ColumnUnqualified("state")},
 		[]lp.LogicalExpr{lp.Count(lp.ColumnUnqualified("username"))})
 	fmt.Println(op.String())
@@ -62,7 +63,7 @@ func ExampleAggregateOp_String() {
 
 func ExampleAggregateOp_String_without_groupby() {
 	op := lp.Aggregate(
-		lp.Scan(stubTable, stubDS, nil),
+		lp.ScanPlan(stubTable, stubDS, nil),
 		nil,
 		[]lp.LogicalExpr{lp.Count(lp.ColumnUnqualified("username"))})
 	fmt.Println(op.String())
@@ -97,7 +98,8 @@ func ExampleSortOp_String() {
 }
 
 func ExampleLogicalPlan_Projection() {
-	plan := lp.Scan(stubTable, stubDS, nil)
+	var plan lp.LogicalPlan
+	plan = lp.ScanPlan(stubTable, stubDS, nil)
 	plan = lp.Projection(plan,
 		lp.ColumnUnqualified("username"),
 		lp.ColumnUnqualified("age"))
@@ -108,7 +110,7 @@ func ExampleLogicalPlan_Projection() {
 }
 
 func ExampleLogicalPlan_DataFrame() {
-	aop := lp.NewDataFrame(lp.Scan(stubTable, stubDS, nil))
+	aop := lp.NewDataFrame(lp.ScanPlan(stubTable, stubDS, nil))
 	plan := aop.Filter(lp.Eq(lp.ColumnUnqualified("age"), lp.LiteralNumeric(20))).
 		Aggregate([]lp.LogicalExpr{lp.ColumnUnqualified("state")},
 			[]lp.LogicalExpr{lp.Count(lp.ColumnUnqualified("username"))}).

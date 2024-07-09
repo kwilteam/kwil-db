@@ -1,8 +1,9 @@
 package optimizer
 
 import (
-	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	"slices"
+
+	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 )
 
 type PredicatePushDownRule struct{}
@@ -27,19 +28,18 @@ func (r *PredicatePushDownRule) pushDown(plan logical_plan.LogicalPlan) logical_
 	switch p := plan.(type) {
 	case *logical_plan.FilterOp:
 		input := p.Inputs()[0]
+
 		switch input := input.(type) {
 		case *logical_plan.ScanOp:
 			// all predicates can be pushed down if the input is a scan
 			preds := logical_plan.SplitConjunction(p.Exprs()[0])
-			newScan := logical_plan.Scan(input.Table(), input.DataSource(), preds, input.Projection()...)
+			newScan := logical_plan.ScanPlan(input.Table(), input.DataSource(), preds, input.Projection()...)
 			// NOTE: should keep the original selection? e.g. return a new selection, not a scan
 			// we return a selection in case some of the datasource doesn't
 			// support predicate push down in scan
+
 			return logical_plan.Filter(newScan, logical_plan.Conjunction(preds...))
-		//case *logical_plan.JoinOp:
-		//case *logical_plan.BagOp:
-		//case *logical_plan.AggregateOp:
-		//case *logical_plan.ProjectionOp:
+
 		case *logical_plan.FilterOp:
 			// nested selection, then merge the predicates
 			outerPreds := logical_plan.SplitConjunction(p.Exprs()[0])
@@ -52,14 +52,23 @@ func (r *PredicatePushDownRule) pushDown(plan logical_plan.LogicalPlan) logical_
 			}
 			newPred := logical_plan.Conjunction(newPreds...)
 			newSelection := logical_plan.Filter(input.Inputs()[0], newPred)
+
 			return r.pushDown(newSelection)
+
+		//case *logical_plan.JoinOp:
+		//case *logical_plan.BagOp:
+		//case *logical_plan.AggregateOp:
+		//case *logical_plan.ProjectionOp:
+
 		default:
 			// NOTE: this is just placeholder
 			return plan
 		}
+
 	case *logical_plan.JoinOp:
 		// TODO: implement
 		panic("not implemented")
+
 	default:
 		panic("logical plan type not supported")
 	}

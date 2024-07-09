@@ -9,12 +9,16 @@ import (
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
 )
 
+// expandStar makes an expression slice for all fields in the schema.
 func expandStar(schema *dt.Schema) []lp.LogicalExpr {
 	// is there columns to skip?
 	var exprs []lp.LogicalExpr
 	for _, field := range schema.Fields {
 		// TODO: better way to get column expr?
-		exprs = append(exprs, &lp.ColumnExpr{Relation: field.Relation(), Name: field.Name})
+		exprs = append(exprs, &lp.ColumnExpr{
+			Relation: field.Relation(),
+			Name:     field.Name,
+		})
 	}
 	return exprs
 }
@@ -30,13 +34,10 @@ func expandQualifiedStar(schema *dt.Schema, table string) []lp.LogicalExpr {
 func qualifyExpr(expr lp.LogicalExpr, schemas ...*dt.Schema) lp.LogicalExpr {
 	return pt.TransformPostOrder(expr, func(n pt.TreeNode) pt.TreeNode {
 		c, ok := n.(*lp.ColumnExpr)
-		if !ok {
-			return n
-		} else {
-			newNode := c.QualifyWithSchemas(schemas...)
-			return newNode
-
+		if ok {
+			return c.QualifyWithSchemas(schemas...)
 		}
+		return n
 	}).(lp.LogicalExpr)
 }
 
@@ -112,7 +113,7 @@ func extractAggrExprs(exprs []lp.LogicalExpr) []lp.LogicalExpr {
 	return aggrExprs
 }
 
-// allReferredColumns returns all the columns that are referenced by the expression.
+// allReferredColumns returns all the columns that are referenced by the expressions.
 func allReferredColumns(exprs []lp.LogicalExpr) []*lp.ColumnExpr {
 	var columns []*lp.ColumnExpr
 	for _, expr := range exprs {
@@ -126,14 +127,14 @@ func allReferredColumns(exprs []lp.LogicalExpr) []*lp.ColumnExpr {
 	return columns
 }
 
-// ensureSchemaSatifiesExprs ensures that the schema contains all the columns
+// ensureSchemaSatisfiesExprs ensures that the schema contains all the columns
 // referenced by the expression.
-func ensureSchemaSatifiesExprs(schema *dt.Schema, exprs []lp.LogicalExpr) error {
+func ensureSchemaSatisfiesExprs(schema *dt.Schema, exprs []lp.LogicalExpr) error {
 	referredCols := allReferredColumns(exprs)
 
 	for _, col := range referredCols {
 		if !schema.ContainsColumn(col.Relation, col.Name) {
-			return fmt.Errorf("column %s not found in schema", col.Name)
+			return fmt.Errorf("column not found in schema: %s", col.Name)
 		}
 	}
 
@@ -183,16 +184,15 @@ func checkExprProjectFromColumns(expr lp.LogicalExpr, columns []lp.LogicalExpr) 
 	if !valid {
 		return fmt.Errorf(
 			"expression %s cannot be resolved from available columns: %s",
-			expr.String(), columns)
-	} else {
-		return nil
+			expr, columns)
 	}
+
+	return nil
 }
 
 func exprAsColumn(expr lp.LogicalExpr, plan lp.LogicalPlan) *lp.ColumnExpr {
 	if c, ok := expr.(*lp.ColumnExpr); ok {
-		colDef := lp.ColumnFromExprToDef(c)
-		field := plan.Schema().FieldFromColumn(colDef)
+		field := plan.Schema().Field(c.Relation, c.Name) // possibly qualify based on schema
 		return lp.ColumnFromDefToExpr(field.QualifiedColumn())
 	} else {
 		// use the expression as the column name

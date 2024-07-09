@@ -2,6 +2,7 @@ package optimizer
 
 import (
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
@@ -11,7 +12,7 @@ var stubDS, _ = datasource.NewCSVDataSource("../testdata/users.csv")
 var stubTable = &dt.TableRef{Table: "users"}
 
 func ExamplePredicateRule_optimize_pushDown() {
-	aop := logical_plan.NewDataFrame(logical_plan.Scan(stubTable, stubDS, nil))
+	aop := logical_plan.NewDataFrame(logical_plan.ScanPlan(stubTable, stubDS, nil))
 	plan := aop.
 		Filter(logical_plan.Eq(logical_plan.ColumnUnqualified("age"),
 			logical_plan.LiteralNumeric(20))).
@@ -38,7 +39,7 @@ func ExamplePredicateRule_optimize_pushDown() {
 }
 
 func ExamplePredicateRule_optimize_pushDown_with_nested_filter() {
-	aop := logical_plan.NewDataFrame(logical_plan.Scan(stubTable, stubDS, nil))
+	aop := logical_plan.NewDataFrame(logical_plan.ScanPlan(stubTable, stubDS, nil))
 	plan := aop.
 		Filter(logical_plan.Gt(logical_plan.ColumnUnqualified("age"),
 			logical_plan.LiteralNumeric(20))).

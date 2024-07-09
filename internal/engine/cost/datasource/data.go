@@ -18,6 +18,7 @@ type LiteralColumnValue struct {
 }
 
 func (c *LiteralColumnValue) Type() string {
+	// reflect.TypeOf(c.value).String()
 	return fmt.Sprintf("%T", c.value)
 }
 
@@ -71,7 +72,7 @@ func ResultFromRaw(s *datatypes.Schema, rows []Row) *Result {
 func (r *Result) ToCsv() string {
 	var sb strings.Builder
 	for _, f := range r.Schema.Fields {
-		sb.WriteString(fmt.Sprintf("%s", f.Name))
+		sb.WriteString(f.Name)
 		if f != r.Schema.Fields[len(r.Schema.Fields)-1] {
 			sb.WriteString(",")
 		}

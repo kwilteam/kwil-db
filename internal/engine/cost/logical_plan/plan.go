@@ -1,8 +1,8 @@
 package logical_plan
 
 import (
-	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
@@ -26,7 +26,7 @@ type LogicalPlan interface {
 }
 
 func Format(plan LogicalPlan, indent int) string {
-	var msg bytes.Buffer
+	var msg strings.Builder
 	for i := 0; i < indent; i++ {
 		msg.WriteString(" ")
 	}

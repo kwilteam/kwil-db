@@ -2,14 +2,16 @@ package logical_plan
 
 import (
 	"fmt"
+
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
+	"github.com/kwilteam/kwil-db/parse"
 
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
-// NoRelationOp represents a no from operator.
-// It corresponds to select without any from clause in SQL.
+// NoRelationOp represents an omitted FROM operator.
+// It corresponds to select without any FROM clause in SQL.
 type NoRelationOp struct {
 	*pt.BaseTreeNode
 }
@@ -95,9 +97,10 @@ func (o *ScanOp) Exprs() []LogicalExpr {
 	return []LogicalExpr{}
 }
 
-// Scan creates a table scan logical plan.
-func Scan(table *dt.TableRef, ds ds.DataSource,
-	filter []LogicalExpr, projection ...string) LogicalPlan {
+// ScanPlan creates a table scan logical plan. This is the plan that will bring
+// in an actual DataSource.
+func ScanPlan(table *dt.TableRef, ds ds.DataSource,
+	filter []LogicalExpr, projection ...string) *ScanOp {
 	projectedSchema := ds.Schema().Project(projection...)
 	qualifiedSchema := dt.NewSchemaQualified(table, projectedSchema.Fields...)
 	return &ScanOp{
@@ -116,7 +119,7 @@ func Scan(table *dt.TableRef, ds ds.DataSource,
 type ProjectionOp struct {
 	*pt.BaseTreeNode
 
-	input LogicalPlan
+	input LogicalPlan // e.g. a ScanOp or a FilterOp
 	exprs []LogicalExpr
 }
 
@@ -124,6 +127,8 @@ func (o *ProjectionOp) String() string {
 	return fmt.Sprintf("Projection: %s", PpList(o.exprs))
 }
 
+// Schema for a ProjectionOp is the expressions resolved using the input plan
+// schema.
 func (o *ProjectionOp) Schema() *dt.Schema {
 	fs := make([]dt.Field, len(o.exprs))
 	schema := o.input.Schema()
@@ -157,7 +162,7 @@ type FilterOp struct {
 	*pt.BaseTreeNode
 
 	input LogicalPlan
-	expr  LogicalExpr
+	expr  LogicalExpr // like Lt
 }
 
 func (o *FilterOp) String() string {
@@ -243,18 +248,13 @@ func (o *AggregateOp) Exprs() []LogicalExpr {
 	// NOTE: should copy
 	lenGroup := len(o.groupBy)
 	es := make([]LogicalExpr, lenGroup+len(o.aggregate))
-	for i, e := range o.groupBy {
-		es[i] = e
-	}
-	for i, e := range o.aggregate {
-		es[i+lenGroup] = e
-	}
+	copy(es, o.groupBy)
+	copy(es[lenGroup:], o.aggregate) // for i, e := range o.aggregate { es[i+lenGroup] = e }
 	return es
 }
 
 // Aggregate creates an aggregation logical plan.
-func Aggregate(plan LogicalPlan, groupBy []LogicalExpr,
-	aggrExpr []LogicalExpr) LogicalPlan {
+func Aggregate(plan LogicalPlan, groupBy, aggrExpr []LogicalExpr) *AggregateOp {
 
 	// TODO: create new schema for aggregation
 	//fields := exprListToFields(groupBy)
@@ -375,7 +375,31 @@ func (j JoinType) String() string {
 	case FullJoin:
 		return "FullJoin"
 	default:
-		return "Unknown"
+		return "UnknownJoin"
+	}
+}
+
+func JoinTypeFromParseType(pType parse.JoinType) JoinType {
+	switch pType {
+	case parse.JoinTypeFull:
+		return FullJoin
+	case parse.JoinTypeInner:
+		return InnerJoin
+	case parse.JoinTypeLeft:
+		return LeftJoin
+	case parse.JoinTypeRight:
+		return RightJoin
+	default:
+		panic(fmt.Sprintf("unknown join type %s", string(pType)))
+	}
+}
+
+func JoinPlan(jType JoinType, left, right LogicalPlan, on LogicalExpr) *JoinOp {
+	return &JoinOp{
+		left:   left,
+		right:  right,
+		opType: jType,
+		On:     on,
 	}
 }
 
@@ -389,6 +413,8 @@ type JoinOp struct {
 	opType JoinType
 	On     LogicalExpr
 }
+
+var _ LogicalPlan = (*JoinOp)(nil)
 
 func (o *JoinOp) String() string {
 	return fmt.Sprintf("%s: %s", o.opType, o.On)
@@ -558,6 +584,8 @@ type DistinctOp struct {
 
 	input LogicalPlan
 }
+
+var _ LogicalPlan = (*DistinctOp)(nil)
 
 func (d *DistinctOp) String() string {
 	return "Distinct"

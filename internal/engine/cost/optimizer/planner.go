@@ -2,13 +2,13 @@ package optimizer
 
 import (
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/virtual_plan"
 )
 
-type plannerCtx struct {
-}
+// type plannerCtx struct {}
 
 type VirtualPlanner interface {
 	ToPlan(logicalPlan logical_plan.LogicalPlan) virtual_plan.VirtualPlan
@@ -26,8 +26,9 @@ func (q *defaultVirtualPlanner) ToPlan(logicalPlan logical_plan.LogicalPlan) vir
 	switch p := logicalPlan.(type) {
 	case *logical_plan.ScanOp:
 		dataSrc := p.DataSource()
-		//dataSrc.Schema()
+
 		return virtual_plan.VSeqScan(dataSrc, p.Projection()...)
+
 	case *logical_plan.ProjectionOp:
 		input := q.ToPlan(p.Inputs()[0])
 		selectExprs := make([]virtual_plan.VirtualExpr, 0, len(p.Exprs()))
@@ -39,21 +40,27 @@ func (q *defaultVirtualPlanner) ToPlan(logicalPlan logical_plan.LogicalPlan) vir
 			projectedFields = append(projectedFields, expr.Resolve(p.Inputs()[0].Schema()))
 		}
 		projectedSchema := datatypes.NewSchema(projectedFields...)
+
 		return virtual_plan.VProjection(input, projectedSchema, selectExprs...)
+
 	case *logical_plan.FilterOp:
 		input := q.ToPlan(p.Inputs()[0])
 		// NOTE: we break the predicates into individual filters
 		// TODO: p.Exprs()[0] is not correct,
 		// maybe change VSelection to accept multiple filters
 		filterExpr := q.ToExpr(p.Exprs()[0], p.Inputs()[0])
+
 		return virtual_plan.VSelection(input, filterExpr)
+
 	case *logical_plan.SortOp:
 		input := q.ToPlan(p.Inputs()[0])
 		sortExprs := make([]virtual_plan.VirtualExpr, 0, len(p.Exprs()))
 		for _, expr := range p.Exprs() {
 			sortExprs = append(sortExprs, q.ToExpr(expr, p.Inputs()[0]))
 		}
+
 		return virtual_plan.VSortSTUB(input, sortExprs...)
+
 	default:
 		panic(fmt.Sprintf("ToPlan: unknown logical plan type %T", p))
 	}
@@ -61,11 +68,12 @@ func (q *defaultVirtualPlanner) ToPlan(logicalPlan logical_plan.LogicalPlan) vir
 
 func (q *defaultVirtualPlanner) ToExpr(expr logical_plan.LogicalExpr,
 	input logical_plan.LogicalPlan) virtual_plan.VirtualExpr {
+
 	switch e := expr.(type) {
 	case *logical_plan.LiteralNumericExpr:
-		return &virtual_plan.VLiteralNumericExpr{e.Value}
+		return &virtual_plan.VLiteralNumericExpr{Value: e.Value}
 	case *logical_plan.LiteralTextExpr:
-		return &virtual_plan.VLiteralStringExpr{e.Value}
+		return &virtual_plan.VLiteralStringExpr{Value: e.Value}
 	case *logical_plan.AliasExpr:
 		return q.ToExpr(e.Expr, input)
 	case *logical_plan.ColumnExpr:
@@ -75,7 +83,7 @@ func (q *defaultVirtualPlanner) ToExpr(expr logical_plan.LogicalExpr,
 				return virtual_plan.VColumn(i)
 			}
 		}
-		panic(fmt.Sprintf("field %s not found", e.Name))
+		panic(fmt.Sprintf("field %s not found", e.Name)) // need projection with sort / order by?
 	case *logical_plan.ColumnIdxExpr:
 		return virtual_plan.VColumn(e.Idx)
 	case logical_plan.BinaryExpr:

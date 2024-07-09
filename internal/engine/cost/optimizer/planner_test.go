@@ -2,6 +2,7 @@ package optimizer
 
 import (
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/testkit"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/virtual_plan"
@@ -15,7 +16,7 @@ func Example_QueryPlanner_CreateVirtualPlan() {
 	}
 
 	df := lp.NewDataFrame(
-		lp.Scan(stubTable, dataSrc, nil))
+		lp.ScanPlan(stubTable, dataSrc, nil))
 
 	plan := df.
 		Filter(lp.Eq(lp.Column(stubTable, "age"),

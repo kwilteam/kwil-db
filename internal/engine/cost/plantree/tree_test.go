@@ -1,11 +1,11 @@
 package plantree_test
 
 import (
-	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
 )
 

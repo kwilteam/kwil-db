@@ -13,6 +13,8 @@ type Optimizer struct {
 	rules []LogicalOptimizeRule
 }
 
+// NewOptimizer creates a new optimizer with some default rules, including
+// ProjectionRule and PredicatePushDownRule.
 func NewOptimizer() *Optimizer {
 	return &Optimizer{
 		rules: []LogicalOptimizeRule{
@@ -95,6 +97,7 @@ func (o *Optimizer) Optimize(plan logical_plan.LogicalPlan) virtual_plan.Virtual
 	panic("not implemented")
 }
 
+// virtualRewrite does ???
 func (o *Optimizer) virtualRewrite(plan logical_plan.LogicalPlan) logical_plan.LogicalPlan {
 	panic("not implemented")
 }

@@ -19,6 +19,11 @@ type DataFrameAPI interface {
 	LogicalPlan() LogicalPlan
 }
 
+// DataFrame adapts a LogicalPlan with methods to project, filter, and apply
+// aggregation with a chained syntax.
+//
+// NOTE: You can use the package level functions directly instead: Projection,
+// Filter, Aggregate.
 type DataFrame struct {
 	plan LogicalPlan
 }

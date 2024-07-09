@@ -2,11 +2,12 @@ package optimizer
 
 import (
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 )
 
 func ExampleProjectionRule_optimize_pushDown() {
-	aop := logical_plan.NewDataFrame(logical_plan.Scan(stubTable, stubDS, nil))
+	aop := logical_plan.NewDataFrame(logical_plan.ScanPlan(stubTable, stubDS, nil))
 	plan := aop.
 		Project(logical_plan.ColumnUnqualified("state"),
 			logical_plan.Alias(logical_plan.ColumnUnqualified("username"), "name")).
@@ -32,7 +33,7 @@ func ExampleProjectionRule_optimize_pushDown() {
 }
 
 func ExampleProjectionRule_optimize_pushDown_with_selection() {
-	aop := logical_plan.NewDataFrame(logical_plan.Scan(stubTable, stubDS, nil))
+	aop := logical_plan.NewDataFrame(logical_plan.ScanPlan(stubTable, stubDS, nil))
 	plan := aop.
 		Filter(logical_plan.Eq(logical_plan.ColumnUnqualified("age"),
 			logical_plan.LiteralNumeric(20))).
@@ -61,7 +62,7 @@ func ExampleProjectionRule_optimize_pushDown_with_selection() {
 }
 
 func ExampleProjectionRule_optimize_pushDown_with_aggregate() {
-	aop := logical_plan.NewDataFrame(logical_plan.Scan(stubTable, stubDS, nil))
+	aop := logical_plan.NewDataFrame(logical_plan.ScanPlan(stubTable, stubDS, nil))
 	plan := aop.
 		Aggregate(
 			[]logical_plan.LogicalExpr{logical_plan.ColumnUnqualified("state")},
@@ -93,7 +94,7 @@ func ExampleProjectionRule_optimize_pushDown_with_aggregate() {
 }
 
 func ExampleProjectionRule_optimize_pushDown_all_operators() {
-	aop := logical_plan.NewDataFrame(logical_plan.Scan(stubTable, stubDS, nil))
+	aop := logical_plan.NewDataFrame(logical_plan.ScanPlan(stubTable, stubDS, nil))
 	plan := aop.
 		Filter(logical_plan.Eq(logical_plan.ColumnUnqualified("age"),
 			logical_plan.LiteralNumeric(20))).

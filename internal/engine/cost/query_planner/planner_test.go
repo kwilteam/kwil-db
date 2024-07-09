@@ -65,6 +65,18 @@ func Test_queryPlanner_ToPlan(t *testing.T) {
 				"  NoRelationOp\n",
 		},
 		{
+			name: "select int union",
+			sql:  "SELECT 1 UNION SELECT 2",
+			wt: `Sort:  ASC NULLS LAST
+  Distinct
+    UNION: Projection: 1, Projection: 2
+      Projection: 1
+        NoRelationOp
+      Projection: 2
+        NoRelationOp
+`, // is this right?
+		},
+		{
 			name: "select string",
 			sql:  "SELECT 'hello'",
 			wt: "Projection: 'hello'\n" +
@@ -186,6 +198,9 @@ func Test_queryPlanner_ToPlan(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
+			// NOTE: These tests' expected plans are assuming the ORDER BY added
+			// by ParseSQL. With ParseSQLWithoutValidation, the "Sort:" would
+			// not be there unless it was in the origin al SQL statement.
 			pr, err := parse.ParseSQL(tt.sql, &types.Schema{
 				Name:   "",
 				Tables: []*types.Table{testkit.MockUsersSchemaTable},

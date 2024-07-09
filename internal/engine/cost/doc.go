@@ -23,13 +23,13 @@ source. It also implements two types of data sources for testing purposes:
 
 The `datatypes` package defines the data types used in logical plan and cost model.
 
-The `demo` pakcage is a demo for how a SQL got planned and executed. It helped me
+The `demo` package is a demo for how a SQL got planned and executed. It helped me
 to understand the whole lifetime of a SQL query. It uses virtual plan to actual
 get the data out from somewhere(like a CSV file).
 
 The `internal` package has some helper functions for testing.
 
-The `logical_plan` package defines the logical plan, it has it's own expressions
+The `logical_plan` package defines the logical plan, it has its own expressions
 to represent the transformation of the columns. It also defines several operators
 to represent the logical plan.
 

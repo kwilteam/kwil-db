@@ -2,12 +2,13 @@ package catalog
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
 // RelationName is the name of a relation in the catalog.
-// It can be an unqualified name(table) or a fully qualified name (database.table).
+// It can be an unqualified name (table) or a fully qualified name (schema.table).
 type RelationName string
 
 func (t RelationName) String() string {
@@ -15,11 +16,11 @@ func (t RelationName) String() string {
 }
 
 func (t RelationName) Segments() []string {
-	return strings.Split(string(t), ".")
+	return strings.Split(string(t), ".") // schema.relation
 }
 
 func (t RelationName) IsQualified() bool {
-	return len(t.Segments()) > 1
+	return strings.ContainsRune(string(t), '.') // len(t.Segments()) > 1
 }
 
 func (t RelationName) Parse() (*datatypes.TableRef, error) {
@@ -28,12 +29,8 @@ func (t RelationName) Parse() (*datatypes.TableRef, error) {
 	case 1:
 		return &datatypes.TableRef{Table: segments[0]}, nil
 	case 2:
-		return &datatypes.TableRef{DB: segments[0], Table: segments[1]}, nil
+		return &datatypes.TableRef{Namespace: segments[0], Table: segments[1]}, nil
 	default:
 		return nil, fmt.Errorf("invalid relation name: %s", t)
 	}
-}
-
-func RelationNameFromString(s string) RelationName {
-	return RelationName(s)
 }

@@ -605,6 +605,7 @@ func (r *ResultColumnWildcard) ResultColumnType() ResultColumnType {
 	return ResultColumnTypeWildcard
 }
 
+// Table is a table e.g. from a relation, subquery, function call, etc.
 type Table interface {
 	Node
 	table()

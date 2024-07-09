@@ -3,6 +3,7 @@ package virtual_plan
 import (
 	"context"
 	"fmt"
+
 	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
@@ -20,7 +21,7 @@ type VSeqScanOp struct {
 }
 
 func (s *VSeqScanOp) String() string {
-	return fmt.Sprintf("VSeqScan: schema=%s, projection=%s",
+	return fmt.Sprintf("VSeqScan: schema=%s, projection=%v",
 		s.ds.Schema(), s.projection)
 }
 
@@ -37,7 +38,7 @@ func (s *VSeqScanOp) Execute(ctx context.Context) *ds.Result {
 }
 
 func (s *VSeqScanOp) Statistics() *datatypes.Statistics {
-	return &datatypes.Statistics{}
+	return &datatypes.Statistics{} // TODO: pull from real source
 }
 
 func (s *VSeqScanOp) Cost() int64 {
@@ -166,7 +167,7 @@ func (s *VFilterOp) Statistics() *datatypes.Statistics {
 }
 
 func (s *VFilterOp) Cost() int64 {
-	return s.input.Cost() + FilterEqCost
+	return s.input.Cost() + FilterEqCost // use real filter type. also split conjunctions or does input.Cost handle that?
 }
 
 func VSelection(input VirtualPlan, expr VirtualExpr) VirtualPlan {
@@ -212,3 +213,5 @@ func (s *VSortOp) Cost() int64 {
 func VSortSTUB(input VirtualPlan, expr ...VirtualExpr) VirtualPlan {
 	return &VSortOp{input: input, exprs: expr}
 }
+
+// VLimitOp ?

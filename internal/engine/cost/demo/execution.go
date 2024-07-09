@@ -2,6 +2,7 @@ package demo
 
 import (
 	"context"
+
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
@@ -17,13 +18,13 @@ func NewExecutionContext() *ExecutionContext {
 }
 
 func (e *ExecutionContext) Csv(table string, filepath string) *logical_plan.DataFrame {
-	datasource, err := datasource.NewCSVDataSource(filepath)
+	dataSrc, err := datasource.NewCSVDataSource(filepath)
 	if err != nil {
 		panic(err)
 	}
 
 	return logical_plan.NewDataFrame(
-		logical_plan.Scan(&dt.TableRef{Table: table}, datasource, nil))
+		logical_plan.ScanPlan(&dt.TableRef{Table: table}, dataSrc, nil))
 }
 
 func (e *ExecutionContext) registerBuilder(name string, builder *logical_plan.DataFrame) {
@@ -32,7 +33,7 @@ func (e *ExecutionContext) registerBuilder(name string, builder *logical_plan.Da
 
 func (e *ExecutionContext) registerDataSource(name string, ds datasource.DataSource) {
 	e.tables[name] = logical_plan.NewDataFrame(
-		logical_plan.Scan(&dt.TableRef{Table: name}, ds, nil))
+		logical_plan.ScanPlan(&dt.TableRef{Table: name}, ds, nil))
 }
 
 func (e *ExecutionContext) registerCsv(name string, filepath string) {

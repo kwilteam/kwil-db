@@ -32,7 +32,38 @@ func Test_RelExpr_String(t *testing.T) {
 	}
 }
 
-func Test_NewRelExpr(t *testing.T) {
+func TestEstimateCost(t *testing.T) {
+	cat := testkit.InitMockCatalog()
+
+	// {
+	// 	name: "select with where",
+	// 	sql:  "select username, age from users where age > 20",
+	// 	wt: "Sort: id ASC NULLS LAST, Stat: (RowCount: 0), Cost: 0\n" +
+	// 		"  Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0\n" +
+	// 		"    Filter: users.age > 20, Stat: (RowCount: 5), Cost: 0\n" +
+	// 		"      Scan: users, Stat: (RowCount: 5), Cost: 0\n",
+	// },
+
+	sql := "select username, age from users where age > 20"
+
+	pr, err := parse.ParseSQL(sql, &types.Schema{
+		Name:   "mock",
+		Tables: []*types.Table{testkit.MockUsersSchemaTable},
+	})
+
+	assert.NoError(t, err)
+	assert.NoError(t, pr.ParseErrs.Err())
+
+	q := query_planner.NewPlanner(cat)
+	plan := q.ToPlan(pr.AST)
+
+	relExpr := BuildRelExpr(plan)
+	cost := EstimateCost(relExpr)
+
+	t.Log(cost)
+}
+
+func TestBuildRelExpr(t *testing.T) {
 	cat := testkit.InitMockCatalog()
 
 	tests := []struct {
