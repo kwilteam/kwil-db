@@ -117,6 +117,8 @@ recurring_height = 10000
 # Maximum number of snapshots to store
 max_snapshots = 3
 
+# Max row size that can be parsed by the snapshot store
+max_row_size = 4194304
 #######################################################################
 ###                    Logging Config Options                       ###
 #######################################################################
