@@ -564,6 +564,7 @@ func buildSnapshotter(d *coreDependencies) *statesync.SnapshotStore {
 		SnapshotDir:     cfg.Snapshots.SnapshotDir,
 		RecurringHeight: cfg.Snapshots.RecurringHeight,
 		MaxSnapshots:    int(cfg.Snapshots.MaxSnapshots),
+		MaxRowSize:      cfg.Snapshots.MaxRowSize,
 	}
 
 	ss, err := statesync.NewSnapshotStore(snapshotCfg, dbCfg, *d.log.Named("snapshot-store"))
