@@ -43,13 +43,15 @@ const (
 type Snapshotter struct {
 	dbConfig    *DBConfig
 	snapshotDir string
+	maxRowSize  int
 	log         log.Logger
 }
 
-func NewSnapshotter(cfg *DBConfig, dir string, logger log.Logger) *Snapshotter {
+func NewSnapshotter(cfg *DBConfig, dir string, MaxRowSize int, logger log.Logger) *Snapshotter {
 	return &Snapshotter{
 		dbConfig:    cfg,
 		snapshotDir: dir,
+		maxRowSize:  MaxRowSize,
 		log:         logger,
 	}
 }
@@ -190,7 +192,10 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 	defer outputFile.Close()
 
 	// Scanner to read the dump file line by line
+	buf := make([]byte, s.maxRowSize)
 	scanner := bufio.NewScanner(dumpInst1)
+	scanner.Buffer(buf, s.maxRowSize)
+
 	var inCopyBlock bool
 	var lineHashes []hashedLine
 	var offset int64
