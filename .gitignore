@@ -32,6 +32,7 @@ api/openapi-spec/api/v0/api.swagger.json
 .goreleaser.yaml
 .env
 test/stress/stress
+**/debug.test*
 
 gen/
 # helm charts deps

@@ -50,6 +50,7 @@ WHERE pg_stat_activity.datname = 'kwild'
 
 func createCmd() *cobra.Command {
 	var snapshotDir, dbName, dbUser, dbPass, dbHost, dbPort string
+	var maxRowSize int
 	cmd := &cobra.Command{
 		Use:     "create",
 		Short:   "Creates a snapshot of the database.",
@@ -61,7 +62,7 @@ func createCmd() *cobra.Command {
 				return fmt.Errorf("failed to expand snapshot directory path: %w", err)
 			}
 
-			return pgDump(cmd.Context(), dbName, dbUser, dbPass, dbHost, dbPort, snapshotDir)
+			return pgDump(cmd.Context(), dbName, dbUser, dbPass, dbHost, dbPort, maxRowSize, snapshotDir)
 		},
 	}
 
@@ -71,6 +72,7 @@ func createCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dbPass, "password", "", "Password for the database user")
 	cmd.Flags().StringVar(&dbHost, "host", "localhost", "Host of the database")
 	cmd.Flags().StringVar(&dbPort, "port", "5432", "Port of the database")
+	cmd.Flags().IntVar(&maxRowSize, "max-row-size", 4*1024*1024, "Maximum row size to read from pg_dump (default: 4MB). Adjust this accordingly if you encounter 'bufio.Scanner: token too long' error.")
 
 	return cmd
 }
@@ -86,7 +88,7 @@ func expandPath(path string) (string, error) {
 	return filepath.Abs(path)
 }
 
-func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort, snapshotDir string) (err error) {
+func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, maxRowSize int, snapshotDir string) (err error) {
 	// Check if the snapshot directory exists, if not create it
 	err = os.MkdirAll(snapshotDir, 0755)
 	if err != nil {
@@ -170,7 +172,10 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort, snapsho
 	var totalBytes int64
 
 	// Pass the output of pg_dump through scanner to sanitize it
+	buf := make([]byte, maxRowSize)
 	scanner := bufio.NewScanner(pgDumpOutput)
+	scanner.Buffer(buf, maxRowSize)
+
 	for scanner.Scan() {
 		line := scanner.Text()
 

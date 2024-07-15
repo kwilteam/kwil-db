@@ -113,6 +113,8 @@ max_snapshots = 3
 # The directory where the snapshots are stored. Can be absolute or relative to the kwild root directory
 snapshot_dir = "data/snapshots"
 
+max_row_size = 4194304
+
 #######################################################################
 ###                    Logging Config Options                       ###
 #######################################################################

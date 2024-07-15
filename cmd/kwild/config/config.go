@@ -101,6 +101,7 @@ type SnapshotConfig struct {
 	RecurringHeight uint64 `mapstructure:"recurring_height"`
 	MaxSnapshots    uint64 `mapstructure:"max_snapshots"`
 	SnapshotDir     string `mapstructure:"snapshot_dir"`
+	MaxRowSize      int    `mapstructure:"max_row_size"`
 }
 
 type ChainRPCConfig struct {
@@ -569,6 +570,7 @@ func DefaultConfig() *KwildConfig {
 				RecurringHeight: 14400, // 1 day at 6s block time
 				MaxSnapshots:    3,
 				SnapshotDir:     SnapshotDirName,
+				MaxRowSize:      4 * 1024 * 1024,
 			},
 			GenesisState: "",
 		},
