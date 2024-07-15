@@ -4,7 +4,7 @@ go 1.22.1
 
 require (
 	github.com/kwilteam/kwil-db/core v0.2.1
-	github.com/kwilteam/kwil-db/parse v0.2.3
+	github.com/kwilteam/kwil-db/parse v0.2.4
 )
 
 require (
