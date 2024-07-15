@@ -12,7 +12,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -130,7 +129,7 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 
 // this channel-based approach is so that the commit ID is guaranteed to pertain
 // to the requested sequence number.
-func (rm *replMon) recvID(seq int64, w io.Writer) (chan []byte, bool) {
+func (rm *replMon) recvID(seq int64, changes chan<- any) (chan []byte, bool) {
 	// Ensure a commit ID can be promised before we give one.
 	select {
 	case <-rm.done:
@@ -147,8 +146,7 @@ func (rm *replMon) recvID(seq int64, w io.Writer) (chan []byte, bool) {
 	}
 	rm.promises[seq] = c
 
-	rm.changesetWriter.writer = w // could be a map write, just starting simple
-
+	rm.changesetWriter.csChan = changes // set the changeset writer to the changes channel
 	return c, true
 }
 

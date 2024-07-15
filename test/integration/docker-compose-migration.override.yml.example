@@ -1,0 +1,19 @@
+version: "3"
+
+services:
+  new-node0:
+    user: "${UID}:${GID}"
+  new-node1:
+    user: "${UID}:${GID}"
+  new-node2:
+    user: "${UID}:${GID}"
+  new-node3:
+    user: "${UID}:${GID}"
+  new-node4:
+    user: "${UID}:${GID}"
+  new-node5:
+    user: "${UID}:${GID}"
+  ext1:
+    user: "${UID}:${GID}"
+  ext3:
+    user: "${UID}:${GID}"

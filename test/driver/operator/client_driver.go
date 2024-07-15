@@ -3,10 +3,12 @@ package operator
 import (
 	"context"
 	"fmt"
+	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/adminclient"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/internal/migrations"
 	"github.com/kwilteam/kwil-db/test/driver"
 )
 
@@ -82,4 +84,42 @@ func (a *AdminClientDriver) ConnectedPeers(ctx context.Context) ([]string, error
 	}
 
 	return peers, nil
+}
+
+func (a *AdminClientDriver) SubmitMigrationProposal(ctx context.Context, activationPeriod, migrationDuration *big.Int, chainID string) ([]byte, error) {
+	// return a.Client.SubmitMigrationProposal(ctx, activationHeight, migrationDuration, chainID)
+	activationHeight := activationPeriod.Uint64()
+	dur := migrationDuration.Uint64()
+
+	res := migrations.MigrationDeclaration{
+		ActivationPeriod: activationHeight,
+		Duration:         dur,
+		ChainID:          chainID,
+	}
+	proposalBts, err := res.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	return a.Client.CreateResolution(ctx, proposalBts, migrations.StartMigrationEventType)
+}
+
+func (a *AdminClientDriver) ApproveMigration(ctx context.Context, migrationResolutionID *types.UUID) ([]byte, error) {
+	return a.Client.ApproveResolution(ctx, migrationResolutionID)
+}
+
+func (a *AdminClientDriver) DeleteMigration(ctx context.Context, migrationResolutionID *types.UUID) ([]byte, error) {
+	return a.Client.DeleteResolution(ctx, migrationResolutionID)
+}
+
+func (a *AdminClientDriver) GenesisState(ctx context.Context) (*types.MigrationMetadata, error) {
+	return a.Client.GenesisState(ctx)
+}
+
+func (a *AdminClientDriver) ListMigrations(ctx context.Context) ([]*types.Migration, error) {
+	return a.Client.ListMigrations(ctx)
+}
+
+func (a *AdminClientDriver) GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error) {
+	return a.Client.GenesisSnapshotChunk(ctx, height, chunkIdx)
 }

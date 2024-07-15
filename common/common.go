@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -18,6 +19,8 @@ type Service struct {
 	// configurations.
 	// It maps: extension_name -> config_key -> config_value
 	ExtensionConfigs map[string]map[string]string
+	// GenesisConfig is the genesis configuration of the network.
+	GenesisConfig *chain.GenesisConfig
 	// Identity is the node/validator identity (pubkey).
 	Identity []byte
 }

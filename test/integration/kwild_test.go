@@ -39,6 +39,10 @@ var allServices = []string{integration.ExtContainer, integration.Ext3Container,
 	"pg0", "pg1", "pg2", "pg3", "node0", "node1", "node2", "node3",
 }
 
+var migrationServices = []string{"new-ext1", "new-pg0", "new-pg1", "new-pg2", "new-node0", "new-node1", "new-node2"}
+
+var migrationServices2 = []string{"new-ext3", "new-pg3", "new-node3"}
+
 var singleNodeServices = []string{integration.ExtContainer, "pg0", "node0"}
 
 var byzAllServices = []string{integration.ExtContainer, integration.Ext3Container, "pg0", "pg1", "pg2", "pg3", "pg4", "pg5", "node0", "node1", "node2", "node3", "node4", "node5"}
@@ -296,8 +300,8 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 			node3Driver := helper.GetUserDriver(ctx, "node3", driverType, nil)
 
 			/*
-			   1. This checks if the database exists on the new node
-			   2. Verify if the user and posts are synced to the new node
+				1. This checks if the database exists on the new node
+				2. Verify if the user and posts are synced to the new node
 			*/
 			time.Sleep(time.Second * 4) // need time to catch up
 			specifications.DatabaseVerifySpecification(ctx, t, node3Driver, true)
@@ -846,5 +850,178 @@ func TestKwildPrivateNetworks(t *testing.T) {
 		time.Sleep(expiryWait)
 		// as join request expires, node1 removes node2 from its peer list
 		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node0})
+	})
+}
+
+func TestStatesync(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	ctx := context.Background()
+
+	opts := []integration.HelperOpt{
+		integration.WithValidators(4),
+		integration.WithBlockInterval(time.Second),
+		integration.WithSnapshots(),
+		integration.WithRecurringHeight(5),
+	}
+
+	/*
+		Node 1, 2, 3 has snapshots enabled
+		Node 4 tries to sync with the network, with statesync enabled.
+		Node4 should be able to sync with the network and catch up with the latest state (maybe check for the database existence)
+	*/
+	testDrivers := strings.Split(*drivers, ",")
+	for _, driverType := range testDrivers {
+		t.Run(driverType+"_driver", func(t *testing.T) {
+			helper := integration.NewIntHelper(t, opts...)
+			helper.Setup(ctx, basicServices)
+
+			node0Driver := helper.GetUserDriver(ctx, "node0", driverType, nil)
+			node1Driver := helper.GetUserDriver(ctx, "node1", driverType, nil)
+			node2Driver := helper.GetUserDriver(ctx, "node2", driverType, nil)
+
+			// Create a new database and verify that the database exists on other nodes
+			specifications.DatabaseDeploySpecification(ctx, t, node0Driver)
+			time.Sleep(time.Second * 2) // need time to sync
+			specifications.DatabaseVerifySpecification(ctx, t, node1Driver, true)
+			specifications.DatabaseVerifySpecification(ctx, t, node2Driver, true)
+
+			// Insert 1 User and 1or2 Posts
+
+			// Wait for atleast 5 secs for the snapshots to be created
+			time.Sleep(7 * time.Second)
+
+			// Spin up node 4 and ensure that the database is synced to node4
+			/*
+				1. Generate config for node 4: place it in the homedir/newNode
+				2. Run docker compose up on the new node and get the container
+				3. Get the node driver
+				4. Verify that the database exists on the new node
+			*/
+
+			rootDir, err := helper.TestnetDir()
+			require.NoError(t, err)
+
+			helper.EnableStatesync(ctx, rootDir, "node3", []string{"node0", "node1", "node2"})
+			helper.RunDockerComposeWithServices(ctx, newServices)
+
+			// Let the node catch up with the network
+			time.Sleep(10 * time.Second)
+
+			node3Driver := helper.GetUserDriver(ctx, "node3", driverType, nil)
+
+			/*
+				1. This checks if the database exists on the new node
+				2. Verify if the user and posts are synced to the new node
+			*/
+			time.Sleep(time.Second * 4) // need time to catch up
+			specifications.DatabaseVerifySpecification(ctx, t, node3Driver, true)
+
+			specifications.ExecuteDBInsertSpecification(ctx, t, node3Driver)
+
+			expectPosts := 1
+			specifications.ExecuteDBRecordsVerifySpecification(ctx, t, node3Driver, expectPosts)
+			specifications.ExecuteDBRecordsVerifySpecification(ctx, t, node0Driver, expectPosts)
+		})
+	}
+}
+
+func TestLongRunningNetworkMigrations(t *testing.T) {
+
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	ctx := context.Background()
+
+	opts := []integration.HelperOpt{
+		integration.WithValidators(4),
+		integration.WithBlockInterval(time.Second),
+		integration.WithAdminRPC("0.0.0.0:8485"),
+		integration.WithSnapshots(),
+		integration.WithRecurringHeight(5),
+	}
+
+	t.Run("jsonrpc_driver", func(t *testing.T) {
+		helper := integration.NewIntHelper(t, opts...)
+		helper.Setup(ctx, allServices)
+
+		// Prepare the network for migration
+		var addresses []string
+		for i := 0; i < 4; i++ {
+			_, addr, err := helper.JSONRPCListenAddress(ctx, fmt.Sprintf("node%d", i))
+			require.NoError(t, err)
+			addresses = append(addresses, addr)
+		}
+
+		user0Driver := helper.GetUserDriver(ctx, "node0", "jsonrpc", nil)
+		user1Driver := helper.GetUserDriver(ctx, "node1", "jsonrpc", nil)
+		user2Driver := helper.GetUserDriver(ctx, "node2", "jsonrpc", nil)
+
+		node0Driver := helper.GetOperatorDriver(ctx, "node0", "jsonrpc")
+		node1Driver := helper.GetOperatorDriver(ctx, "node1", "jsonrpc")
+		node2Driver := helper.GetOperatorDriver(ctx, "node2", "jsonrpc")
+
+		// Create a new database and verify that the database exists on other nodes
+		specifications.DatabaseDeploySpecification(ctx, t, user0Driver)
+		time.Sleep(time.Second * 5) // need time to syncx
+		specifications.DatabaseVerifySpecification(ctx, t, user1Driver, true)
+		specifications.DatabaseVerifySpecification(ctx, t, user2Driver, true)
+
+		newDir := helper.MigrationSetup(ctx)
+
+		// Trigger a network migration request
+		specifications.SubmitMigrationProposal(ctx, t, node0Driver, integration.MigrationChainID)
+
+		// node1 approves the migration and verifies that the migration is still pending
+		specifications.ApproveMigration(ctx, t, node1Driver, true)
+
+		// node1 approves again and verifies that the migration is still pending as duplicate approvals are not allowed
+		specifications.ApproveMigration(ctx, t, node1Driver, true)
+
+		// node2 approves the migration and verifies that the migration is approved
+		specifications.ApproveMigration(ctx, t, node2Driver, false)
+
+		// Wait for the migration to start
+		time.Sleep(10 * time.Second)
+
+		// Retrieve the genesis state and update the config for the new network
+		specifications.InstallGenesisState(ctx, t, node0Driver, newDir, 4, addresses)
+
+		// Bring up the new network using the genesis state and the genesis file installed from the old network
+		helper.RunDockerComposeWithServices(ctx, migrationServices)
+
+		// Insert 1 User and 1or2 Posts
+		specifications.ExecuteDBInsertSpecification(ctx, t, user0Driver)
+
+		/*
+			1. This checks if the database exists on the new node
+			2. Verify if the user and posts are synced to the new node
+		*/
+		time.Sleep(time.Second * 20) // This is for the changesets to be synced and voted and resolved in the new network
+
+		newNodeDriver := helper.GetMigrationUserDriver(ctx, "new-node0", "jsonrpc", nil)
+		specifications.DatabaseVerifySpecification(ctx, t, newNodeDriver, true)
+
+		// The user and posts should be synced to the new node through the changeset_listener extension
+		// Below specification checks if the user and posts are synced to the new node correctly
+		expectPosts := 1
+		specifications.ExecuteDBRecordsVerifySpecification(ctx, t, newNodeDriver, expectPosts)
+
+		// Bring up node3-1 using statesync
+		helper.EnableStatesync(ctx, newDir, "new-node3", []string{"new-node0", "new-node1", "new-node2"})
+		helper.RunDockerComposeWithServices(ctx, migrationServices2)
+
+		newNode3Driver := helper.GetMigrationUserDriver(ctx, "new-node3", "jsonrpc", nil)
+
+		specifications.DatabaseVerifySpecificationEventually(ctx, t, newNode3Driver)
+
+		time.Sleep(30 * time.Second) // need time to catch up on changesets
+
+		specifications.ExecuteDBRecordsVerifySpecification(ctx, t, newNode3Driver, expectPosts)
+
+		t.Logf("Long Running Network Migration Test: Completed Successfully")
 	})
 }

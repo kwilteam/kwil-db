@@ -33,7 +33,7 @@ func resetStateCmd() *cobra.Command {
 				rootDir = common.DefaultKwildRoot()
 			}
 
-			expandedDir, err := expandPath(rootDir)
+			expandedDir, err := common.ExpandPath(rootDir)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}

@@ -217,3 +217,73 @@ func (cl *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcT
 		TxResult: *res.TxResult,
 	}, nil
 }
+
+// ListMigrations lists all migrations that have been proposed that are still in the pending state.
+func (cl *Client) ListMigrations(ctx context.Context) ([]*types.Migration, error) {
+	cmd := &userjson.ListMigrationsRequest{}
+	res := &userjson.ListMigrationsResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodListMigrations), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Migrations, nil
+}
+
+// LoadChangesets loads changesets from the node's database at the given height.
+func (cl *Client) LoadChangeset(ctx context.Context, height int64, index int64) ([]byte, error) {
+	cmd := &userjson.ChangesetRequest{
+		Height: height,
+		Index:  index,
+	}
+	res := &userjson.ChangesetsResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodLoadChangeset), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Changesets, nil
+}
+
+// ChangesetMetadata gets metadata about the changesets at the given height.
+func (cl *Client) ChangesetMetadata(ctx context.Context, height int64) (numChangesets int64, changesetsSizes []int64, err error) {
+	cmd := &userjson.ChangesetMetadataRequest{
+		Height: height,
+	}
+	res := &userjson.ChangesetMetadataResponse{}
+	err = cl.CallMethod(ctx, string(userjson.MethodLoadChangesetMetadata), cmd, res)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	if res.Height != height {
+		return -1, nil, fmt.Errorf("received incorrect block's metadata: got %d, expected %d", res.Height, height)
+	}
+
+	return res.Changesets, res.ChunkSizes, nil
+}
+
+// GenesisState returns the genesis state of the chain.
+func (cl *Client) GenesisState(ctx context.Context) (*types.MigrationMetadata, error) {
+	cmd := &userjson.MigrationMetadataRequest{}
+	res := &userjson.MigrationMetadataResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodMigrationMetadata), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res.Metadata, nil
+}
+
+// GenesisSnapshotChunk returns a chunk of the genesis snapshot at the given height and chunkIdx.
+func (cl *Client) GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error) {
+	cmd := &userjson.MigrationSnapshotChunkRequest{
+		ChunkIndex: chunkIdx,
+		Height:     height,
+	}
+	res := &userjson.MigrationSnapshotChunkResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodMigrationGenesisChunk), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res.Chunk, nil
+}

@@ -81,6 +81,13 @@ func ResetAll(rootDir, snapshotDir string) error {
 		fmt.Println("Error removing all rcvdSnaps", "dir", rcvdSnaps, "err", err)
 	}
 
+	migrationDir := filepath.Join(rootDir, MigrationsDirName)
+	if err := os.RemoveAll(migrationDir); err == nil {
+		fmt.Println("Removed all migrations", "dir", migrationDir)
+	} else {
+		fmt.Println("Error removing all migrations", "dir", migrationDir, "err", err)
+	}
+
 	// The user-configurable paths
 
 	// TODO: support postgres database drop or schema drops

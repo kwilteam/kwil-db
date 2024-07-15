@@ -5,7 +5,6 @@ package sql
 import (
 	"context"
 	"errors"
-	"io"
 )
 
 var (
@@ -109,7 +108,7 @@ type DelayedReadTxMaker interface {
 type PreparedTx interface {
 	Tx
 	Subscriber
-	Precommit(ctx context.Context, writer io.Writer) ([]byte, error)
+	Precommit(ctx context.Context, changes chan<- any) ([]byte, error)
 }
 
 // OuterReadTx is the outermost read-only database transaction.

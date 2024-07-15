@@ -7,9 +7,14 @@ package common
 type ChainContext struct {
 	// ChainID is the unique identifier for the chain.
 	ChainID string
+
 	// NetworkParams holds network level parameters that can be evolved
 	// over the lifetime of a network.
 	NetworkParameters *NetworkParameters
+
+	// MigrationParams holds the context for all migration operations such as
+	// block info to poll for the changesets from the old chain during migration.
+	MigrationParams *MigrationContext
 }
 
 // BlockContext provides context for all block operations.
@@ -25,4 +30,11 @@ type BlockContext struct {
 	BlockTimestamp int64
 	// Proposer gets the proposer public key of the current block.
 	Proposer []byte
+}
+
+// MigrationContext provides context for all migration operations.
+// Fields in MigrationContext should never be mutated till the migration is completed.
+type MigrationContext struct {
+	StartHeight int64
+	EndHeight   int64
 }

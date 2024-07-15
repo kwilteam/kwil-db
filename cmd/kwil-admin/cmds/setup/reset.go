@@ -39,7 +39,7 @@ func resetCmd() *cobra.Command {
 				snapPath = config.SnapshotDirName
 			}
 
-			expandedRoot, err := expandPath(rootDir)
+			expandedRoot, err := common.ExpandPath(rootDir)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}

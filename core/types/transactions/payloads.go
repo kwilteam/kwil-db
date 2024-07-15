@@ -33,6 +33,9 @@ const (
 	PayloadTypeValidatorApprove    PayloadType = "validator_approve"
 	PayloadTypeValidatorVoteIDs    PayloadType = "validator_vote_ids"
 	PayloadTypeValidatorVoteBodies PayloadType = "validator_vote_bodies"
+	PayloadTypeCreateResolution    PayloadType = "create_resolution"
+	PayloadTypeApproveResolution   PayloadType = "approve_resolution"
+	PayloadTypeDeleteResolution    PayloadType = "delete_resolution"
 )
 
 // payloadConcreteTypes associates a payload type with the concrete type of
@@ -49,6 +52,9 @@ var payloadConcreteTypes = map[PayloadType]Payload{
 	PayloadTypeTransfer:            &Transfer{},
 	PayloadTypeValidatorVoteIDs:    &ValidatorVoteIDs{},
 	PayloadTypeValidatorVoteBodies: &ValidatorVoteBodies{},
+	PayloadTypeCreateResolution:    &CreateResolution{},
+	PayloadTypeApproveResolution:   &ApproveResolution{},
+	PayloadTypeDeleteResolution:    &DeleteResolution{},
 }
 
 // UnmarshalPayload unmarshals a serialized transaction payload into an instance
@@ -88,10 +94,14 @@ func (p PayloadType) Valid() bool {
 		PayloadTypeValidatorRemove,
 		PayloadTypeValidatorLeave,
 		PayloadTypeTransfer,
+		PayloadTypeCreateResolution,
+		PayloadTypeApproveResolution,
+		PayloadTypeDeleteResolution,
 		// These should not come in user transactions, but they are not invalid
 		// payload types in general.
 		PayloadTypeValidatorVoteIDs,
 		PayloadTypeValidatorVoteBodies:
+
 		return true
 	default: // check map that includes registered payloads from extensions
 		return payloadTypes[p]
@@ -111,6 +121,9 @@ var payloadTypes = map[PayloadType]bool{
 	PayloadTypeValidatorApprove:    true,
 	PayloadTypeValidatorVoteIDs:    true,
 	PayloadTypeValidatorVoteBodies: true,
+	PayloadTypeCreateResolution:    true,
+	PayloadTypeApproveResolution:   true,
+	PayloadTypeDeleteResolution:    true,
 }
 
 // RegisterPayload registers a new payload type. This should be done on
@@ -620,4 +633,61 @@ func (v *ValidatorVoteBodies) Type() PayloadType {
 
 func (v *ValidatorVoteBodies) UnmarshalBinary(p0 serialize.SerializedData) error {
 	return serialize.Decode(p0, v)
+}
+
+// CreateResolution is a payload for creating a new resolution.
+type CreateResolution struct {
+	Resolution *VotableEvent
+}
+
+var _ Payload = (*CreateResolution)(nil)
+
+func (v *CreateResolution) MarshalBinary() (serialize.SerializedData, error) {
+	return serialize.Encode(v)
+}
+
+func (v *CreateResolution) Type() PayloadType {
+	return PayloadTypeCreateResolution
+}
+
+func (v *CreateResolution) UnmarshalBinary(p0 serialize.SerializedData) error {
+	return serialize.Decode(p0, v)
+}
+
+// ApproveResolution is a payload for approving on a resolution.
+type ApproveResolution struct {
+	ResolutionID *types.UUID
+}
+
+var _ Payload = (*ApproveResolution)(nil)
+
+func (v *ApproveResolution) MarshalBinary() (serialize.SerializedData, error) {
+	return serialize.Encode(v)
+}
+
+func (v *ApproveResolution) Type() PayloadType {
+	return PayloadTypeApproveResolution
+}
+
+func (v *ApproveResolution) UnmarshalBinary(p0 serialize.SerializedData) error {
+	return serialize.Decode(p0, v)
+}
+
+// DeleteResolution is a payload for deleting a resolution.
+type DeleteResolution struct {
+	ResolutionID *types.UUID
+}
+
+var _ Payload = (*DeleteResolution)(nil)
+
+func (d *DeleteResolution) MarshalBinary() (serialize.SerializedData, error) {
+	return serialize.Encode(d)
+}
+
+func (d *DeleteResolution) Type() PayloadType {
+	return PayloadTypeDeleteResolution
+}
+
+func (d *DeleteResolution) UnmarshalBinary(p0 serialize.SerializedData) error {
+	return serialize.Decode(p0, d)
 }

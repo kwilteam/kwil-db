@@ -149,3 +149,18 @@ type PeersDsl interface {
 
 	ConnectedPeers(ctx context.Context) ([]string, error)
 }
+
+// type ResolutionDsl interface {
+// 	CreateResolution(ctx context.Context, resolutionType string, resolutionData []byte) ([]byte, error)
+// 	ApproveResolution(ctx context.Context, resolutionID string) ([]byte, error)
+// 	DeleteResolution(ctx context.Context, resolutionID string) ([]byte, error)
+// }
+
+type MigrationOpsDsl interface {
+	TxQueryDsl
+	SubmitMigrationProposal(ctx context.Context, activationHeight *big.Int, migrationDuration *big.Int, chainID string) ([]byte, error)
+	ApproveMigration(ctx context.Context, migrationResolutionID *types.UUID) ([]byte, error)
+	ListMigrations(ctx context.Context) ([]*types.Migration, error)
+	GenesisState(ctx context.Context) (*types.MigrationMetadata, error)
+	GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error)
+}

@@ -4,7 +4,6 @@ package pg
 
 import (
 	"context"
-	"io"
 
 	"github.com/jackc/pgx/v5"
 	common "github.com/kwilteam/kwil-db/common/sql"
@@ -91,8 +90,8 @@ var _ conner = (*nestedTx)(nil)
 // derived from the updates is return. This must be called before Commit. Either
 // Commit or Rollback must follow. It takes a writer to write the full changeset to.
 // If the writer is nil, the changeset will not be written.
-func (tx *dbTx) Precommit(ctx context.Context, writer io.Writer) ([]byte, error) {
-	return tx.db.precommit(ctx, writer)
+func (tx *dbTx) Precommit(ctx context.Context, changes chan<- any) ([]byte, error) {
+	return tx.db.precommit(ctx, changes)
 }
 
 // Subscribe subscribes to notifications passed using the special `notice()`

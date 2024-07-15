@@ -97,3 +97,25 @@ type QueryRequest struct {
 type TxQueryRequest struct {
 	TxHash types.HexBytes `json:"tx_hash"`
 }
+
+// LoadChangesetsRequest contains the request parameters for MethodLoadChangesets.
+type ChangesetMetadataRequest struct {
+	Height int64 `json:"height"`
+}
+
+type ChangesetRequest struct {
+	Height int64 `json:"height"`
+	Index  int64 `json:"index"`
+}
+
+type MigrationSnapshotChunkRequest struct {
+	Height     uint64 `json:"height"`
+	ChunkIndex uint32 `json:"chunk_index"`
+}
+
+type MigrationMetadataRequest struct{}
+type ListMigrationsRequest struct{}
+
+type MigrationStatusRequest struct {
+	Id string `json:"id"` // Id is the migration proposal ID
+}

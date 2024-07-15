@@ -40,8 +40,10 @@ import (
 )
 
 var (
-	ABCIPeerFilterPath    = "/p2p/filter/"
-	ABCIPeerFilterPathLen = len(ABCIPeerFilterPath)
+	ABCIPeerFilterPath       = "/p2p/filter/"
+	ABCIPeerFilterPathLen    = len(ABCIPeerFilterPath)
+	statesyncSnapshotSchemas = []string{"kwild_voting", "kwild_internal", "kwild_chain", "kwild_accts", "kwild_migrations", "ds_*"}
+	statsyncExcludedTables   = []string{"kwild_internal.sentry"}
 )
 
 // AbciConfig includes data that defines the chain and allow the application to
@@ -56,14 +58,72 @@ type AbciConfig struct {
 	ForkHeights        map[string]*uint64
 }
 
+type AbciApp struct {
+	// db is a connection to the database
+	db DB
+	// consensusTx is the outermost transaction that wraps all other transactions
+	// that can modify state. It should be set in FinalizeBlock and committed in Commit.
+	consensusTx sql.PreparedTx
+	// genesisTx is the transaction that is used at genesis, and in the first block.
+	genesisTx sql.PreparedTx
+	// appHash is the hash of the application state
+	appHash []byte
+	// height is the current block height
+	height int64
+	cfg    AbciConfig
+	forks  forks.Forks
+
+	// snapshotter is the snapshotter module that handles snapshotting
+	snapshotter SnapshotModule
+
+	// replayingBlocks is a function that tells us whether we are in replay mode (syncing with the network),
+	// or whether we are in normal operation mode.
+	replayingBlocks func() bool
+
+	// bootstrapper is the bootstrapper module that handles bootstrapping the database
+	statesyncer StateSyncModule
+
+	log log.Logger
+
+	txApp TxApp
+
+	consensusParams *chain.ConsensusParams
+	chainContext    *common.ChainContext
+
+	broadcastFn EventBroadcaster
+
+	// validatorAddressToPubKey is a map of validator addresses to their public
+	// keys. It should only be accessed from consensus connection methods, which
+	// are not called concurrently, or the constructor.
+	validatorAddressToPubKey map[string][]byte
+
+	// verifiedTxns stores hashes of all the transactions currently in the
+	// mempool, which have passed signature verification. This is used to avoid
+	// recomputing the hash for all mempool transactions on every TxQuery
+	// request (to mitigate Potential DDOS attack vector).
+	// https://github.com/kwilteam/kwil-db/issues/714
+	verifiedTxnsMtx sync.RWMutex
+	verifiedTxns    map[chainHash]struct{}
+
+	// halted is set to true when the network is halted for migration.
+	halted atomic.Bool
+
+	// p2p is the whitelist of peers
+	p2p WhitelistPeersModule
+
+	// Migrator is the migrator module that handles migrations
+	migrator MigratorModule
+}
+
 func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule, statesyncer StateSyncModule,
-	txRouter TxApp, consensusParams *chain.ConsensusParams, peers WhitelistPeersModule, db DB, log log.Logger) (*AbciApp, error) {
+	txRouter TxApp, consensusParams *chain.ConsensusParams, peers WhitelistPeersModule, migrator MigratorModule, db DB, log log.Logger) (*AbciApp, error) {
 	app := &AbciApp{
 		db:              db,
 		cfg:             *cfg,
 		statesyncer:     statesyncer,
 		snapshotter:     snapshotter,
 		txApp:           txRouter,
+		migrator:        migrator,
 		consensusParams: consensusParams,
 		appHash:         cfg.GenesisAppHash,
 		p2p:             peers,
@@ -181,9 +241,26 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		app.consensusParams.WithoutGasCosts = networkParams.DisabledGasCosts
 	}
 
+	networkParams.InMigration = app.migrator.InMigration(height)
+
+	var migrationParams *common.MigrationContext
+
+	if (app.consensusParams.Migration.StartHeight != -1 && app.consensusParams.Migration.EndHeight == -1) ||
+		(app.consensusParams.Migration.StartHeight == -1 && app.consensusParams.Migration.EndHeight != -1) {
+		return nil, fmt.Errorf("migration start and end heights must both be set or both be unset")
+	}
+
+	if app.consensusParams.Migration.StartHeight != -1 && app.consensusParams.Migration.EndHeight != -1 {
+		migrationParams = &common.MigrationContext{
+			StartHeight: app.consensusParams.Migration.StartHeight,
+			EndHeight:   app.consensusParams.Migration.EndHeight,
+		}
+	}
+
 	app.chainContext = &common.ChainContext{
 		ChainID:           cfg.ChainID,
 		NetworkParameters: networkParams,
+		MigrationParams:   migrationParams,
 	}
 
 	err = tx.Commit(ctx)
@@ -202,60 +279,6 @@ func proposerAddrToString(addr []byte) string {
 }
 
 type chainHash = [32]byte
-
-type AbciApp struct {
-	// db is a connection to the database
-	db DB
-	// consensusTx is the outermost transaction that wraps all other transactions
-	// that can modify state. It should be set in FinalizeBlock and committed in Commit.
-	consensusTx sql.PreparedTx
-	// genesisTx is the transaction that is used at genesis, and in the first block.
-	genesisTx sql.PreparedTx
-	// appHash is the hash of the application state
-	appHash []byte
-	// height is the current block height
-	height int64
-	cfg    AbciConfig
-	forks  forks.Forks
-
-	// snapshotter is the snapshotter module that handles snapshotting
-	snapshotter SnapshotModule
-
-	// replayingBlocks is a function that tells us whether we are in replay mode (syncing with the network),
-	// or whether we are in normal operation mode.
-	replayingBlocks func() bool
-
-	// bootstrapper is the bootstrapper module that handles bootstrapping the database
-	statesyncer StateSyncModule
-
-	// p2p is the p2p module that handles peer management
-	p2p WhitelistPeersModule
-
-	log log.Logger
-
-	txApp TxApp
-
-	consensusParams *chain.ConsensusParams
-	chainContext    *common.ChainContext
-
-	broadcastFn EventBroadcaster
-
-	// validatorAddressToPubKey is a map of validator addresses to their public
-	// keys. It should only be accessed from consensus connection methods, which
-	// are not called concurrently, or the constructor.
-	validatorAddressToPubKey map[string][]byte
-
-	// verifiedTxns stores hashes of all the transactions currently in the
-	// mempool, which have passed signature verification. This is used to avoid
-	// recomputing the hash for all mempool transactions on every TxQuery
-	// request (to mitigate Potential DDOS attack vector).
-	// https://github.com/kwilteam/kwil-db/issues/714
-	verifiedTxnsMtx sync.RWMutex
-	verifiedTxns    map[chainHash]struct{}
-
-	// halted is set to true when the network is halted for migration.
-	halted atomic.Bool
-}
 
 func (a *AbciApp) ChainID() string {
 	return a.cfg.ChainID
@@ -375,7 +398,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	if err != nil {
 		if errors.Is(err, transactions.ErrInvalidNonce) {
 			code = codeInvalidNonce
-			logger.Info("received transaction with invalid nonce", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
+			logger.Info("received transaction with invalid nonce", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err), zap.String("payloadType", tx.Body.PayloadType.String()))
 		} else if errors.Is(err, transactions.ErrInvalidAmount) {
 			code = codeInvalidAmount
 			logger.Info("received transaction with invalid amount", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
@@ -484,6 +507,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		BlockTimestamp: req.Time.Unix(),
 		Proposer:       proposerPubKey,
 	}
+	inMigration := blockCtx.ChainContext.NetworkParameters.InMigration
 
 	// since notifications are returned async from postgres, we will construct
 	// a map to track them in, and wait at the end of the function to add them
@@ -645,8 +669,27 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, err
 	}
 
+	// Create a new changeset processor
+	csp := newChangesetProcessor()
+	// "migrator" module subscribes to the changeset processor to store changesets during the migration
+	if inMigration {
+		csChanMigrator, err := csp.Subscribe(ctx, "migrator")
+		if err != nil {
+			return nil, fmt.Errorf("failed to subscribe to changeset processor: %w", err)
+		}
+		// migrator go routine will receive changesets from the changeset processor
+		// give the new channel to the migrator to store changesets
+		go a.migrator.StoreChangesets(req.Height, csChanMigrator)
+	}
+
+	// statistics module can subscribe to the changeset processor to listen for changesets for updating statistics
+	// statsChan := csp.Subscribe(ctx, "statistics")
+
+	// changeset processor is not ready to receive changesets and  broadcast them to subscribers
+	go csp.BroadcastChangesets(ctx)
+
 	// we now get the apphash by calling precommit on the transaction
-	appHash, err := a.consensusTx.Precommit(ctx, nil)
+	appHash, err := a.consensusTx.Precommit(ctx, csp.csChan)
 	if err != nil {
 		return nil, fmt.Errorf("failed to precommit transaction: %w", err)
 	}
@@ -664,6 +707,12 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	if a.forks.BeginsHalt(uint64(req.Height) - 1) {
 		a.log.Info("This is the last block before halt.")
 		a.halted.Store(true)
+	}
+
+	// Notify the migrator of the changeset
+	err = a.migrator.NotifyHeight(ctx, &blockCtx, a.db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to notify migrator of changeset: %w", err)
 	}
 
 	valUpdates := validatorUpdates(initialValidators, finalValidators)
@@ -800,6 +849,15 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		return nil, fmt.Errorf("failed to set chain state: %w", err)
 	}
 
+	err = a.migrator.PersistLastChangesetHeight(ctx0, tx)
+	if err != nil {
+		err2 := tx.Rollback(ctx0)
+		if err2 != nil {
+			return nil, fmt.Errorf("failed to rollback transaction app: %w", err2)
+		}
+		return nil, fmt.Errorf("failed to persist last changeset height: %w", err)
+	}
+
 	err = tx.Commit(ctx0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction app: %w", err)
@@ -819,7 +877,7 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		}
 		defer snapshotTx.Rollback(ctx) // always rollback, since this is just for view isolation
 
-		err = a.snapshotter.CreateSnapshot(ctx, uint64(a.height), snapshotId)
+		err = a.snapshotter.CreateSnapshot(ctx, uint64(a.height), snapshotId, statesyncSnapshotSchemas, statsyncExcludedTables, nil)
 		if err != nil {
 			a.log.Error("failed to create snapshot", zap.Error(err))
 		} else {
@@ -991,6 +1049,28 @@ func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.Request
 		if err != nil {
 			return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ABORT}, err
 		}
+
+		// Cache the pubkey in the validatorAddressToPubKey map, as the map is not previously populated
+		validators, err := a.txApp.GetValidators(ctx, readTx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current validators: %w", err)
+		}
+		for _, val := range validators {
+			addr, err := cometbft.PubkeyToAddr(val.PubKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert pubkey to address: %w", err)
+			}
+
+			a.validatorAddressToPubKey[addr] = val.PubKey
+		}
+
+		// Update the app Hash
+		_, appHash, err := meta.GetChainState(ctx, readTx)
+		if err != nil {
+			return nil, fmt.Errorf("GetChainState: %w", err)
+		}
+
+		a.appHash = appHash
 	}
 
 	return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ACCEPT, RefetchChunks: nil}, nil
@@ -1582,4 +1662,76 @@ func (a *AbciApp) Close() error {
 // reading from the DB can use this method.
 func (a *AbciApp) Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error) {
 	return a.txApp.Price(ctx, db, tx, a.chainContext)
+}
+
+// ChangesetProcessor is a PubSub that listens for changesets and broadcasts them to the receivers.
+// Subscribers can be added and removed to listen for changesets.
+// Statistics receiver might listen for changesets to update the statistics every block.
+// Whereas Network migrations listen for the changesets only during the migration. (that's when you register)
+// ABCI --> CS Processor ---> [Subscribers]
+// Once all the changesets are processed, all the channels are closed [every block]
+// The channels are reset for the next block.
+type changesetProcessor struct {
+	// channel to receive changesets
+	// closed by the pgRepl layer after all the block changes have been pushed to the processor
+	csChan chan any
+
+	// subscribers to the changeset processor are the receivers of the changesets
+	// Examples: Statistics receiver, Network migration receiver
+	subscribers map[string]chan<- any
+}
+
+func newChangesetProcessor() *changesetProcessor {
+	return &changesetProcessor{
+		csChan:      make(chan any, 1), // buffered channel to avoid blocking
+		subscribers: make(map[string]chan<- any),
+	}
+}
+
+// Subscribe adds a subscriber to the changeset processor's subscribers list.
+// The receiver can subscribe to the changeset processor using a unique id.
+func (c *changesetProcessor) Subscribe(ctx context.Context, id string) (<-chan any, error) {
+	_, ok := c.subscribers[id]
+	if ok {
+		return nil, fmt.Errorf("subscriber with id %s already exists", id)
+	}
+
+	ch := make(chan any, 1) // buffered channel to avoid blocking
+	c.subscribers[id] = ch
+	return ch, nil
+}
+
+// Unsubscribe removes the subscriber from the changeset processor.
+func (c *changesetProcessor) Unsubscribe(ctx context.Context, id string) error {
+	if ch, ok := c.subscribers[id]; ok {
+		// close the channel to signal the subscriber to stop listening
+		close(ch)
+		delete(c.subscribers, id)
+		return nil
+	}
+
+	return fmt.Errorf("subscriber with id %s does not exist", id)
+}
+
+// Broadcast sends changesets to all the subscribers through their channels.
+func (c *changesetProcessor) BroadcastChangesets(ctx context.Context) {
+	defer c.Close() // All the block changesets have been processed, signal subscribers to stop listening.
+
+	// Listen on the csChan for changesets and broadcast them to all subscribers.
+	for cs := range c.csChan {
+		for _, ch := range c.subscribers {
+			select {
+			case ch <- cs:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+}
+
+func (c *changesetProcessor) Close() {
+	// c.CsChan is closed by the repl layer (sender closes the channel)
+	for _, ch := range c.subscribers {
+		close(ch)
+	}
 }

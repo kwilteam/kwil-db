@@ -56,10 +56,14 @@ var (
 	createResolution                 = voting.CreateResolution
 	approveResolution                = voting.ApproveResolution
 	getVoterPower                    = voting.GetValidatorPower
+	resolutionExists                 = voting.ResolutionExists
+	resolutionByID                   = voting.GetResolutionInfo
+	deleteResolution                 = voting.DeleteResolution
 
 	// account functions
 	getAccount = accounts.GetAccount
 	credit     = accounts.Credit
 	spend      = accounts.Spend
+	applySpend = accounts.ApplySpend
 	transfer   = accounts.Transfer
 )

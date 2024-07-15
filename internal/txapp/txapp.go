@@ -57,6 +57,9 @@ type TxApp struct {
 	emptyVoteBodyTxSize int64
 	resTypes            []string
 
+	// Tracks spends during migration
+	spends []*Spend
+
 	// list of pubkeys of join candidates approved by this node in the current block
 	approvedJoins [][]byte
 }
@@ -597,6 +600,7 @@ func (r *TxApp) Commit(ctx context.Context) {
 	r.announceValidators()
 	r.mempool.reset()
 	r.approvedJoins = nil
+	r.spends = nil // reset spends for the next block
 }
 
 // ApplyMempool applies the transactions in the mempool.
@@ -788,6 +792,30 @@ func (r *TxApp) Price(ctx context.Context, dbTx sql.DB, tx *transactions.Transac
 	return route.Price(ctx, r, dbTx, tx)
 }
 
+type Spend struct {
+	Account []byte
+	Amount  *big.Int
+	Nonce   uint64
+}
+
+// ApplySpend applies a spend to the accounts database.
+func (s *Spend) ApplySpend(ctx context.Context, db sql.DB) error {
+	return applySpend(ctx, db, s.Account, s.Amount, int64(s.Nonce))
+}
+
+// recordSpend records a spend occurred during the block execution.
+// This only records spends during migrations.
+func (r *TxApp) recordSpend(ctx TxContext, spend *Spend) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		r.spends = append(r.spends, spend)
+	}
+}
+
+// GetBlockSpends returns the spends that occurred during the block.
+func (r *TxApp) GetBlockSpends() []*Spend {
+	return r.spends
+}
+
 // checkAndSpend checks the price of a transaction.
 // It requires a tx, so that spends can be made transactional with other database interactions.
 // it returns the price it will cost to execute the transaction.
@@ -831,6 +859,9 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 				return nil, transactions.CodeUnknownError, err2
 			}
 
+			// Record spend here as a spend has occurred
+			r.recordSpend(ctx, &Spend{Account: tx.Sender, Amount: account.Balance, Nonce: tx.Body.Nonce})
+
 			return account.Balance, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
 		}
 		if err != nil {
@@ -839,6 +870,9 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 			}
 			return nil, transactions.CodeUnknownError, err
 		}
+
+		// Record spend here if in a migration
+		r.recordSpend(ctx, &Spend{Account: tx.Sender, Amount: tx.Body.Fee, Nonce: tx.Body.Nonce})
 
 		return tx.Body.Fee, transactions.CodeInsufficientFee, fmt.Errorf("transaction does not consent to spending enough tokens. transaction fee: %s, required fee: %s", tx.Body.Fee.String(), amt.String())
 	}
@@ -856,6 +890,10 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 		if err2 != nil {
 			return nil, transactions.CodeUnknownError, err2
 		}
+
+		// Record spend here
+		r.recordSpend(ctx, &Spend{Account: tx.Sender, Amount: account.Balance, Nonce: tx.Body.Nonce})
+
 		return account.Balance, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account has %s tokens", amt.String(), account.Balance.String())
 	}
 	if err != nil {
@@ -865,6 +903,8 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 		return nil, transactions.CodeUnknownError, err
 	}
 
+	// Record spend here
+	r.recordSpend(ctx, &Spend{Account: tx.Sender, Amount: amt, Nonce: tx.Body.Nonce})
 	return amt, transactions.CodeOk, nil
 }
 

@@ -30,6 +30,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/kv"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
 	"github.com/kwilteam/kwil-db/internal/listeners"
+	"github.com/kwilteam/kwil-db/internal/migrations"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/adminsvc"
 	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/funcsvc"
@@ -182,7 +183,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// but the tx router needs the cometbft client
 	txApp := buildTxApp(d, db, e, ev)
 
-	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer, p2p, closers)
+	// migrator
+	migrator := buildMigrator(d, db, txApp)
+	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer, p2p, migrator, closers)
 
 	// NOTE: buildCometNode immediately starts talking to the abciApp and
 	// replaying blocks (and using atomic db tx commits), i.e. calling
@@ -209,7 +212,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	rpcSvcLogger := increaseLogLevel("user-json-svc", &d.log, d.cfg.Logging.RPCLevel)
 	rpcServerLogger := increaseLogLevel("user-jsonrpc-server", &d.log, d.cfg.Logging.RPCLevel)
 
-	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp, abciApp,
+	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp, abciApp, migrator,
 		*rpcSvcLogger, usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)))
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppCfg.JSONRPCListenAddress,
 		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)),
@@ -222,9 +225,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	// admin service and server
 	signer := buildSigner(d)
-	// TODO: db? should this be the same as the consensus db connection? As the updates can occur
-	// outside the block context. should be used similar to the event store.
-	jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, signer, p2p, d.cfg,
+	jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, p2p, migrator, signer, d.cfg,
 		d.genesisCfg.ChainID, *d.log.Named("admin-json-svc"))
 	jsonRPCAdminServer := buildJRPCAdminServer(d)
 	jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)
@@ -455,7 +456,50 @@ func getPendingValidatorsApprovedByNode(ctx context.Context, db sql.ReadTxMaker,
 	return validators, nil
 }
 
-func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, p2p *cometbft.PeerWhiteList, closers *closeFuncs) *abci.AbciApp {
+func buildMigrator(d *coreDependencies, db *pg.DB, txApp *txapp.TxApp) *migrations.Migrator {
+	cfg := d.cfg.AppCfg
+	migrationsDir := filepath.Join(d.cfg.RootDir, config.MigrationsDirName)
+
+	err := os.MkdirAll(filepath.Join(migrationsDir, config.ChangesetsDirName), 0755)
+	if err != nil {
+		failBuild(err, "failed to create changesets directory")
+	}
+
+	err = os.MkdirAll(filepath.Join(migrationsDir, config.SnapshotDirName), 0755)
+	if err != nil {
+		failBuild(err, "failed to create migrations snapshots directory")
+	}
+
+	// snapshot store
+	dbCfg := &statesync.DBConfig{
+		DBUser: cfg.DBUser,
+		DBPass: cfg.DBPass,
+		DBHost: cfg.DBHost,
+		DBPort: cfg.DBPort,
+		DBName: cfg.DBName,
+	}
+
+	snapshotCfg := &statesync.SnapshotConfig{
+		SnapshotDir:     filepath.Join(migrationsDir, config.SnapshotDirName),
+		RecurringHeight: 0,
+		MaxSnapshots:    1, // only one snapshot is needed for network migrations, taken at the activation height
+		MaxRowSize:      cfg.Snapshots.MaxRowSize,
+	}
+
+	ss, err := statesync.NewSnapshotStore(snapshotCfg, dbCfg, *d.log.Named("migrations-snapshots"))
+	if err != nil {
+		failBuild(err, "failed to build snapshot store for migrations")
+	}
+
+	migrator, err := migrations.SetupMigrator(d.ctx, db, ss, txApp, migrationsDir, *d.log.Named("migrator"))
+	if err != nil {
+		failBuild(err, "failed to build migrator")
+	}
+
+	return migrator
+}
+
+func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, p2p *cometbft.PeerWhiteList, migrator *migrations.Migrator, closers *closeFuncs) *abci.AbciApp {
 	var sh abci.SnapshotModule
 	if snapshotter != nil {
 		sh = snapshotter
@@ -475,7 +519,7 @@ func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *st
 		ForkHeights:        d.genesisCfg.ForkHeights,
 	}
 	app, err := abci.NewAbciApp(d.ctx, cfg, sh, ss, txApp,
-		d.genesisCfg.ConsensusParams, p2p, db, *d.log.Named("abci"))
+		d.genesisCfg.ConsensusParams, p2p, migrator, db, *d.log.Named("abci"))
 	if err != nil {
 		failBuild(err, "failed to build ABCI application")
 	}
@@ -987,7 +1031,7 @@ func failBuild(err error, msg string) {
 func buildListenerManager(d *coreDependencies, ev *voting.EventStore, node *cometbft.CometBftNode, txapp *txapp.TxApp, db sql.ReadTxMaker) *listeners.ListenerManager {
 	vr := &validatorReader{db: db, txApp: txapp}
 
-	return listeners.NewListenerManager(d.cfg.AppCfg.Extensions, ev, node, d.privKey.PubKey().Bytes(), vr, *d.log.Named("listener-manager"))
+	return listeners.NewListenerManager(d.cfg.AppCfg.Extensions, d.genesisCfg, ev, node, d.privKey.PubKey().Bytes(), vr, *d.log.Named("listener-manager"))
 }
 
 // validatorReader reads the validator set from the chain state.

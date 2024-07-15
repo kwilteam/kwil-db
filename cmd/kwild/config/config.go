@@ -93,6 +93,9 @@ type AppConfig struct {
 	// to be loaded on startup during network initialization. If genesis app_hash
 	// is not provided, this snapshot file is not used.
 	GenesisState string `mapstructure:"genesis_state"`
+
+	// MigrateFrom is the JSON-RPC listening address of the node to replicate the state from.
+	MigrateFrom string `mapstructure:"migrate_from"`
 }
 
 type SnapshotConfig struct {
@@ -700,6 +703,29 @@ func (cfg *KwildConfig) configureCerts() error {
 	return nil
 }
 
+// configureExtensions sets up the extensions for the node.
+func (cfg *KwildConfig) ConfigureExtensions(genCfg *chain.GenesisConfig) error {
+	extensions := cfg.AppCfg.Extensions
+
+	// Migrations extension configuration
+	// sets the listener address from the migrate_from flag
+	if cfg.AppCfg.MigrateFrom != "" {
+		if genCfg.ConsensusParams.Migration.StartHeight == -1 || genCfg.ConsensusParams.Migration.EndHeight == -1 {
+			return fmt.Errorf("migrate_from flag requires migration start and end heights in the genesis file")
+		}
+
+		extensions["migrations"] = map[string]string{
+			"listen_address": cfg.AppCfg.MigrateFrom,
+			"start_height":   fmt.Sprintf("%d", genCfg.ConsensusParams.Migration.StartHeight),
+			"end_height":     fmt.Sprintf("%d", genCfg.ConsensusParams.Migration.EndHeight),
+		}
+	}
+
+	// other extensions can be configured here
+	cfg.AppCfg.Extensions = extensions
+	return nil
+}
+
 func (cfg *KwildConfig) sanitizeCfgPaths() error {
 	rootDir := cfg.RootDir
 
@@ -735,6 +761,20 @@ func (cfg *KwildConfig) sanitizeCfgPaths() error {
 		}
 		cfg.AppCfg.GenesisState = path
 		fmt.Println("Snapshot file to initialize database from:", cfg.AppCfg.GenesisState)
+	}
+
+	migrations, ok := cfg.AppCfg.Extensions["migrations"]
+	if ok {
+		path, ok := migrations["kwild_tls_cert_file"]
+		if ok {
+			rootPath, err := rootify(path, rootDir)
+			if err != nil {
+				return fmt.Errorf("failed to expand tls cert file path \"%v\": %v", path, err)
+			}
+
+			migrations["kwild_tls_cert_file"] = rootPath
+			fmt.Println("Migrations extension Kwild TLS cert file:", path)
+		}
 	}
 	return nil
 }

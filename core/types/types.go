@@ -73,3 +73,30 @@ type VotableEvent struct {
 func (e *VotableEvent) ID() *UUID {
 	return NewUUIDV5(append([]byte(e.Type), e.Body...))
 }
+
+type PendingResolution struct {
+	ResolutionID *UUID    `json:"resolution_id"` // Resolution ID
+	ExpiresAt    int64    `json:"expires_at"`    // ExpiresAt is the block height at which the resolution expires
+	Board        [][]byte `json:"board"`         // Board is the list of validators who are eligible to vote on the resolution
+	Approved     []bool   `json:"approved"`      // Approved is the list of bools indicating if the corresponding validator approved the resolution
+}
+
+// Migration is a migration resolution that is proposed by a validator
+// for initiating the migration process.
+type Migration struct {
+	ID               *UUID  `json:"id"`                 // ID is the UUID of the migration resolution/proposal
+	ActivationPeriod int64  `json:"activation_height"`  // ActivationPeriod is the amount of blocks before the migration is activated.
+	Duration         int64  `json:"migration_duration"` // MigrationDuration is the duration of the migration process starting from the ActivationHeight
+	ChainID          string `json:"chain_id"`           // ChainID of the new network
+}
+
+// MigrationMetadata holds metadata about a migration, informing
+// consumers of what information the current node has available
+// for the migration.
+type MigrationMetadata struct {
+	InMigration      bool   `json:"in_migration"`      // InMigration is true if the node is in migration state i.e current height is between StartHeight and EndHeight
+	StartHeight      int64  `json:"start_height"`      // StartHeight is the block height at which the migration starts
+	EndHeight        int64  `json:"end_height"`        // EndHeight is the block height at which the migration ends
+	GenesisConfig    []byte `json:"genesis_config"`    // GenesisConfig is the genesis file data
+	SnapshotMetadata []byte `json:"snapshot_metadata"` // SnapshotMetadata is the snapshot metadata
+}

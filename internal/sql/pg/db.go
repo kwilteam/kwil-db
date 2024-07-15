@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 
@@ -479,7 +478,7 @@ func (db *DB) beginWriterTx(ctx context.Context, sequenced bool) (pgx.Tx, error)
 // the ID of the commit. The transaction is not yet committed. It takes an io.Writer
 // to write the changeset to, and returns the commit ID. If the io.Writer is nil,
 // it won't write the changeset anywhere.
-func (db *DB) precommit(ctx context.Context, writer io.Writer) ([]byte, error) {
+func (db *DB) precommit(ctx context.Context, changes chan<- any) ([]byte, error) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
@@ -487,7 +486,7 @@ func (db *DB) precommit(ctx context.Context, writer io.Writer) ([]byte, error) {
 		return nil, errors.New("no tx exists")
 	}
 
-	resChan, ok := db.repl.recvID(db.seq, writer)
+	resChan, ok := db.repl.recvID(db.seq, changes)
 	if !ok { // commitID will not be available, error. There is no recovery presently.
 		return nil, errors.New("replication connection is down")
 	}

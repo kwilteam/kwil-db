@@ -167,6 +167,10 @@ hostname = "{{ .AppCfg.Hostname }}"
 # Might be either absolute path or path related to the kwild root directory.
 genesis_state = "{{ .AppCfg.GenesisState }}"
 
+# The listening address of the node to migrate the app state from.
+# mandatory if the start_height and end_height are provided in the genesis file.
+migrate_from = "{{ .AppCfg.MigrateFrom }}"
+
 #######################################################################
 ###                     Extension Configuration                     ###
 #######################################################################

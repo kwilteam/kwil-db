@@ -180,7 +180,9 @@ jobs:
           testUserID=$(id -u)
           testGroupID=$(id -g)
           cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
+          cp test/integration/docker-compose-migration.override.yml.example test/integration/docker-compose-migration.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
+          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose-migration.override.yml
           KIT_LOG_LEVEL=warn task test:it:nb
 
       - name: Move cache

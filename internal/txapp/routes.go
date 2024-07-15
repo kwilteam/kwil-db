@@ -34,6 +34,8 @@ func init() {
 		RegisterRoute(transactions.PayloadTypeValidatorLeave, NewRoute(&validatorLeaveRoute{})),
 		RegisterRoute(transactions.PayloadTypeValidatorVoteIDs, NewRoute(&validatorVoteIDsRoute{})),
 		RegisterRoute(transactions.PayloadTypeValidatorVoteBodies, NewRoute(&validatorVoteBodiesRoute{})),
+		RegisterRoute(transactions.PayloadTypeCreateResolution, NewRoute(&createResolutionRoute{})),
+		RegisterRoute(transactions.PayloadTypeApproveResolution, NewRoute(&approveResolutionRoute{})),
 	)
 	if err != nil {
 		panic(fmt.Sprintf("failed to register routes: %s", err))
@@ -433,14 +435,14 @@ func (d *transferRoute) Price(ctx context.Context, app *common.App, tx *transact
 }
 
 func (d *transferRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot transfer during migration")
+	}
+
 	transferBody := &transactions.Transfer{}
 	err := transferBody.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
 		return transactions.CodeEncodingError, err
-	}
-
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
-		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot transfer during migration")
 	}
 
 	bigAmt, ok := new(big.Int).SetString(transferBody.Amount, 10)
@@ -878,6 +880,198 @@ func (d *validatorVoteBodiesRoute) InTx(ctx common.TxContext, app *common.App, t
 				return transactions.CodeUnknownError, err
 			}
 		}
+	}
+
+	return 0, nil
+}
+
+type createResolutionRoute struct {
+	resolution *types.VotableEvent
+	expiry     int64
+}
+
+var _ consensus.Route = (*createResolutionRoute)(nil)
+
+func (d *createResolutionRoute) Name() string {
+	return transactions.PayloadTypeCreateResolution.String()
+}
+
+func (d *createResolutionRoute) Price(ctx context.Context, app *common.App, tx *transactions.Transaction) (*big.Int, error) {
+	res := &transactions.CreateResolution{}
+	err := res.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal create resolution payload: %w", err)
+	}
+
+	if res.Resolution == nil {
+		return nil, fmt.Errorf("resolution is nil")
+	}
+
+	// similar to the vote body route, pricing is based on the size of the resolution body
+	return big.NewInt(int64(len(res.Resolution.Body)) * ValidatorVoteBodyBytePrice), nil
+}
+
+func (d *createResolutionRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, errors.New("cannot create resolution during migration")
+	}
+
+	res := &transactions.CreateResolution{}
+	err := res.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return transactions.CodeEncodingError, err
+	}
+
+	// Check if its a valid event type
+	resCfg, err := resolutions.GetResolution(res.Resolution.Type)
+	if err != nil {
+		return transactions.CodeInvalidResolutionType, err
+	}
+
+	d.resolution = (*types.VotableEvent)(res.Resolution)
+	d.expiry = resCfg.ExpirationPeriod + ctx.BlockContext.Height
+
+	return 0, nil
+}
+
+func (d *createResolutionRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+	// ensure the sender is a validator
+	// only validators can create resolutions
+	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+	if power <= 0 {
+		return transactions.CodeInvalidSender, ErrCallerNotValidator
+	}
+
+	// create the resolution
+	err = createResolution(ctx.Ctx, app.DB, d.resolution, d.expiry, tx.Sender)
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+
+	// approve the resolution
+	err = approveResolution(ctx.Ctx, app.DB, d.resolution.ID(), tx.Sender)
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+
+	return 0, nil
+}
+
+type approveResolutionRoute struct {
+	resolutionID *types.UUID
+}
+
+var _ consensus.Route = (*approveResolutionRoute)(nil)
+
+func (d *approveResolutionRoute) Name() string {
+	return transactions.PayloadTypeApproveResolution.String()
+}
+
+func (d *approveResolutionRoute) Price(ctx context.Context, app *common.App, tx *transactions.Transaction) (*big.Int, error) {
+	return ValidatorVoteIDPrice, nil
+}
+
+func (d *approveResolutionRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, errors.New("cannot approve a resolution during migration")
+	}
+
+	res := &transactions.ApproveResolution{}
+	err := res.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return transactions.CodeEncodingError, err
+	}
+
+	d.resolutionID = res.ResolutionID
+	return 0, nil
+}
+
+func (d *approveResolutionRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+	// ensure the sender is a validator
+	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+	if power <= 0 {
+		return transactions.CodeInvalidSender, ErrCallerNotValidator
+	}
+
+	// Check if the resolution exists and is still pending
+	// You can only vote on a resolution that already exists
+	exists, err := resolutionExists(ctx.Ctx, app.DB, d.resolutionID)
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+	if !exists {
+		return transactions.CodeUnknownError, fmt.Errorf("resolution with ID %s does not exist", d.resolutionID)
+	}
+
+	// vote on the resolution
+	err = approveResolution(ctx.Ctx, app.DB, d.resolutionID, tx.Sender)
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+
+	return 0, nil
+}
+
+type deleteResolutionRoute struct {
+	resolutionID *types.UUID
+}
+
+var _ consensus.Route = (*deleteResolutionRoute)(nil)
+
+func (d *deleteResolutionRoute) Name() string {
+	return transactions.PayloadTypeDeleteResolution.String()
+}
+
+func (d *deleteResolutionRoute) Price(ctx context.Context, app *common.App, tx *transactions.Transaction) (*big.Int, error) {
+	return ValidatorVoteIDPrice, nil
+}
+
+func (d *deleteResolutionRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		return transactions.CodeNetworkInMigration, errors.New("cannot vote during migration")
+	}
+
+	res := &transactions.DeleteResolution{}
+	err := res.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return transactions.CodeEncodingError, err
+	}
+
+	d.resolutionID = res.ResolutionID
+	return 0, nil
+}
+
+// deleteResolutionRoute is a route for deleting a resolution.
+func (d *deleteResolutionRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+	// ensure the sender is a validator
+	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+	if power <= 0 {
+		return transactions.CodeInvalidSender, ErrCallerNotValidator
+	}
+
+	// only the resolution proposer can delete the resolution
+	resolution, err := resolutionByID(ctx.Ctx, app.DB, d.resolutionID)
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+
+	if !bytes.Equal(resolution.Proposer, tx.Sender) {
+		return transactions.CodeInvalidSender, errors.New("only the resolution proposer can delete the resolution")
+	}
+
+	// delete the resolution
+	err = deleteResolution(ctx.Ctx, app.DB, d.resolutionID)
+	if err != nil {
+		return transactions.CodeUnknownError, err
 	}
 
 	return 0, nil

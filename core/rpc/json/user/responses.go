@@ -75,3 +75,29 @@ type TxQueryResponse struct { // transactions.TcTxQueryResponse but pointers
 	Tx       *transactions.Transaction       `json:"tx,omitempty"`
 	TxResult *transactions.TransactionResult `json:"tx_result,omitempty"`
 }
+
+type ChangesetsResponse struct {
+	Changesets []byte `json:"changesets"`
+}
+
+type ChangesetMetadataResponse struct {
+	Height     int64   `json:"height"`
+	Changesets int64   `json:"changesets"`
+	ChunkSizes []int64 `json:"chunk_sizes"`
+}
+
+type MigrationMetadataResponse struct {
+	Metadata *types.MigrationMetadata `json:"metadata"`
+}
+
+type MigrationSnapshotChunkResponse struct {
+	Chunk []byte `json:"chunk"`
+}
+
+type ListMigrationsResponse struct {
+	Migrations []*types.Migration `json:"migrations"`
+}
+
+type MigrationStatusResponse struct {
+	Status *types.PendingResolution `json:"status"`
+}

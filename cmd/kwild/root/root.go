@@ -87,6 +87,11 @@ func RootCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to initialize private key and genesis: %w", err)
 			}
+
+			if err := kwildCfg.ConfigureExtensions(genesisConfig); err != nil {
+				return err
+			}
+
 			// Set the chain package's active forks variable. This provides easy
 			// access to important chain config to other high level app packages.
 			chain.SetForks(genesisConfig.ForkHeights)

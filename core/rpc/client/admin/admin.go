@@ -19,6 +19,7 @@ type AdminClient interface {
 	Status(ctx context.Context) (*adminTypes.Status, error)
 	Version(ctx context.Context) (string, error)
 	ListPendingJoins(ctx context.Context) ([]*types.JoinRequest, error)
+
 	// GetConfig gets the current config from the node.
 	// It returns the config serialized as JSON.
 	GetConfig(ctx context.Context) ([]byte, error)
@@ -26,4 +27,10 @@ type AdminClient interface {
 	AddPeer(ctx context.Context, peerID string) error
 	RemovePeer(ctx context.Context, peerID string) error
 	ListPeers(ctx context.Context) ([]string, error)
+
+	// Resolutions
+	CreateResolution(ctx context.Context, resolution []byte, resolutionType string) ([]byte, error)
+	ApproveResolution(ctx context.Context, resolutionID *types.UUID) ([]byte, error)
+	DeleteResolution(ctx context.Context, resolutionID *types.UUID) ([]byte, error)
+	ResolutionStatus(ctx context.Context, resolutionID *types.UUID) (*types.PendingResolution, error)
 }

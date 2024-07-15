@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	"github.com/spf13/cobra"
 )
@@ -34,7 +35,7 @@ func initCmd() *cobra.Command {
 		Long:    initLong,
 		Example: initExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			expandedDir, err := expandPath(out)
+			expandedDir, err := common.ExpandPath(out)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}

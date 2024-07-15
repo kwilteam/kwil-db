@@ -1,0 +1,295 @@
+version: "3"
+
+services:
+  # TODO: generate correspond number of nodes and exts by configuration
+  new-node0:
+    image: {{ .DockerImage }}
+    ports:
+      - "{{with .ExposedRPCPorts}}{{index . 0}}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 0}}:{{end}}8485"
+      - "26656"
+      - "26657"
+    #env_file:
+      # NOTE: docker compose by default will use `.env` file if presented
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/new-node0
+        target: /app/kwil
+    networks:
+      - {{ .Network }}
+    depends_on:
+      new-ext1:
+        condition: service_started
+      new-pg0:
+        condition: service_healthy
+    command: |
+      --root-dir=/app/kwil
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
+      --app.extension-endpoints=new-ext1:50051
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg-db-host=new-pg0
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD-SHELL", "/app/kwil-cli utils chain-info"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  new-pg0:
+    image: postgres:16.2
+    ports:
+      - "5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+      -c track_commit_timestamp=true
+      -c wal_sender_timeout=0
+    volumes:
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
+    networks:
+      - {{ .Network }}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 && sleep 1"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  new-node1:
+    image: {{ .DockerImage }}
+    ports:
+      - "{{with .ExposedRPCPorts}}{{index . 1}}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 1}}:{{end}}8485"
+      - "26656"
+      - "26657"
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/new-node1
+        target: /app/kwil
+    networks:
+      - {{ .Network }}
+    depends_on:
+      new-ext1:
+        condition: service_started
+      new-pg1:
+        condition: service_healthy
+    command: |
+      --root-dir=/app/kwil
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
+      --app.extension-endpoints=new-ext1:50051
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg-db-host=new-pg1
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD-SHELL", "/app/kwil-cli utils chain-info"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  new-pg1:
+    image: postgres:16.2
+    ports:
+      - "5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+      -c track_commit_timestamp=true
+      -c wal_sender_timeout=0
+    volumes:
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
+    networks:
+      - {{ .Network }}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 && sleep 1"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  new-node2:
+    image: {{ .DockerImage }}
+    ports:
+      - "{{with .ExposedRPCPorts}}{{index . 2}}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 2}}:{{end}}8485"
+      - "26656"
+      - "26657"
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/new-node2
+        target: /app/kwil
+    networks:
+      - {{ .Network }}
+    depends_on:
+      new-ext1:
+        condition: service_started
+      new-pg2:
+        condition: service_healthy
+    command: |
+      --root-dir=/app/kwil
+      --log.level=${LOG_LEVEL:-info}
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --app.extension-endpoints=new-ext1:50051
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg-db-host=new-pg2
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD-SHELL", "/app/kwil-cli utils chain-info"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  new-pg2:
+    image: postgres:16.2
+    ports:
+      - "5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+      -c track_commit_timestamp=true
+      -c wal_sender_timeout=0
+    volumes:
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
+    networks:
+      - {{ .Network }}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 && sleep 1"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  # This node is used to test the scenario where new node join the network & sync the blocks
+  # Removing the ext dependency as test-container docker compose creates a new project everytime we run
+  # docker compose, and the ext is defined in a seperate project, so service lookup is hard.
+  new-node3:
+    image: {{ .DockerImage }}
+    ports:
+      - "{{with .ExposedRPCPorts}}{{index . 3}}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 3}}:{{end}}8485"
+      - "26656"
+      - "26657"
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/new-node3
+        target: /app/kwil
+    networks:
+      - {{ .Network }}
+    depends_on:
+      new-ext3:
+        condition: service_started
+      new-pg3:
+        condition: service_healthy
+    command: |
+      --root-dir=/app/kwil
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
+      --app.extension-endpoints=new-ext3:50051
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg-db-host=new-pg3
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD-SHELL", "/app/kwil-cli utils chain-info"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  new-pg3:
+    image: postgres:16.2
+    ports:
+      - "5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+    command: |
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_prepared_transactions=2
+      -c track_commit_timestamp=true
+      -c wal_sender_timeout=0
+    volumes:
+      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
+    networks:
+      - {{ .Network }}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 && sleep 1"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  # this ext is shared by all nodes
+  # we can make a separate ext for each node if we want
+  new-ext1:
+    image: kwilbrennan/extensions-math:multi-arch
+    ports:
+      - "50051"
+    networks:
+      - {{ .Network }}
+    healthcheck:
+      test: [ "CMD", "nc", "-vz", "localhost", "50051" ]
+      interval: 1s
+      timeout: 6s
+      retries: 20
+
+  # this one is just for node3, which is started in a separate compose project in some tests
+  new-ext3:
+    image: kwilbrennan/extensions-math:multi-arch
+    ports:
+      - "50051"
+    networks:
+      - {{ .Network }}
+    healthcheck:
+      test: [ "CMD", "nc", "-vz", "localhost", "50051" ]
+      interval: 1s
+      timeout: 6s
+      retries: 20
+
+networks:
+  {{ .Network }}:
+    external: true

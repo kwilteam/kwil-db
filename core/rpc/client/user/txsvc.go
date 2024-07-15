@@ -24,4 +24,15 @@ type TxSvcClient interface {
 	Ping(ctx context.Context) (string, error)
 	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
 	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)
+
+	// Migration methods
+	ListMigrations(ctx context.Context) ([]*types.Migration, error)
+
+	// Active Migration State
+	GenesisState(ctx context.Context) (*types.MigrationMetadata, error)
+	GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error)
+
+	// Changesets
+	LoadChangeset(ctx context.Context, height int64, index int64) ([]byte, error)
+	ChangesetMetadata(ctx context.Context, height int64) (int64, []int64, error)
 }
