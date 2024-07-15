@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -41,6 +42,7 @@ var (
 	ErrPrivateProcedure           = errors.New("procedure is private")
 	ErrMutativeProcedure          = errors.New("procedure is mutative")
 	ErrMaxStackDepth              = errors.New("max call stack depth reached")
+	ErrCannotInferType            = errors.New("cannot infer type")
 )
 
 // instruction is an instruction that can be executed.
@@ -314,16 +316,15 @@ type dmlStmt struct {
 	OrderedParameters []string
 }
 
-var ErrCannotInferType = errors.New("cannot infer type")
-
 // decorateExecuteErr parses an execute error from postgres and tries to give a more helpful error message.
 // this allows us to give a more helpful error message when users hit this,
 // since the Postgres error message is not helpful, and this is a common error.
 func decorateExecuteErr(err error, stmt string) error {
-	// this catches a common error case when execution in-line expressions in actions.
-	_, after, cut := strings.Cut(err.Error(), "could not determine data type of parameter ")
-	if cut {
-		return fmt.Errorf(`%w: could not dynamically determine the data type of the %sth parameter in statement "%s". try type casting using ::, e.g. $id::text`, ErrCannotInferType, strings.Split(after[1:], " ")[0], stmt)
+	// this catches a common error case for in-line expressions, where the type cannot be inferred
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "42P08" || pgErr.Code == "42P18" {
+		return fmt.Errorf(`%w: could not dynamically determine the data type in statement "%s". try type casting using ::, e.g. $id::text`,
+			ErrCannotInferType, stmt)
 	}
 
 	return err
