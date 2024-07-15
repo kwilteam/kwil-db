@@ -376,7 +376,12 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 	args := orderAndCleanValueMap(values, params)
 	args = append([]any{pg.QueryModeExec}, args...)
 
-	return tx.Execute(ctx, sqlStmt, args...)
+	result, err := tx.Execute(ctx, sqlStmt, args...)
+	if err != nil {
+		return nil, decorateExecuteErr(err, query)
+	}
+
+	return result, nil
 }
 
 type dbQueryFn func(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error)
