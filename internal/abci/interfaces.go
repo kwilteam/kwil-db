@@ -2,6 +2,7 @@ package abci
 
 import (
 	"context"
+	"io"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -13,6 +14,7 @@ import (
 	// packages that provide the concrete implementations. This is a bit
 	// backwards, but it at least allows us to stub out for testing.
 
+	"github.com/kwilteam/kwil-db/internal/migrations"
 	"github.com/kwilteam/kwil-db/internal/statesync"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 )
@@ -26,7 +28,7 @@ type SnapshotModule interface {
 	LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) ([]byte, error)
 
 	// CreateSnapshot creates a snapshot of the current state.
-	CreateSnapshot(ctx context.Context, height uint64, snapshotID string) error
+	CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludedTables []string, excludeTableData []string) error
 
 	// IsSnapshotDue returns true if a snapshot is due at the given height.
 	IsSnapshotDue(height uint64) bool
@@ -77,4 +79,8 @@ type DB interface {
 	sql.PreparedTxMaker
 	sql.ReadTxMaker
 	sql.SnapshotTxMaker
+}
+
+type MigratorModule interface {
+	NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database, csReader io.Reader) error
 }

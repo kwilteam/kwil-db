@@ -73,3 +73,13 @@ type VotableEvent struct {
 func (e *VotableEvent) ID() *UUID {
 	return NewUUIDV5(append([]byte(e.Type), e.Body...))
 }
+
+// Migration is a migration resolution that is proposed by a validator
+// for initiating the migration process.
+type Migration struct {
+	ID                string   `json:"id"`                  // ID is the UUID of the migration resolution
+	ActivationHeight  *big.Int `json:"activation_height"`   // ActivationHeight is the block height at which the migration is activated
+	MigrationDuration *big.Int `json:"migration_duration"`  // MigrationDuration is the duration of the migration process starting from the ActivationHeight
+	ChainID           string   `json:"chain_id"`            // ChainID of the new network
+	Timestamp         string   `json:"timestamp,omitempty"` // Timestamp when the migration was proposed, maintained for uniqueness
+}

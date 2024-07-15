@@ -188,6 +188,9 @@ const (
 	INNER JOIN ` + votingSchemaName + `.resolution_types AS t ON r.type = t.id
 	WHERE t.name = $1 AND vote_body_proposer = $2
 	ORDER BY r.id;` // order by id for determinism
+
+	// resolutionExists checks if a resolution exists
+	resolutionExists = `SELECT id FROM ` + votingSchemaName + `.resolutions WHERE id = $1;`
 )
 
 // upgrades V0 -> V1

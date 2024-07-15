@@ -2,6 +2,8 @@ package adminclient
 
 import (
 	"context"
+	"fmt"
+	"math/big"
 	"net/url"
 	"time"
 
@@ -198,4 +200,109 @@ func (cl *Client) Ping(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return res.Message, nil
+}
+
+// LoadChangesets loads changesets from the node's database at the given height.
+func (cl *Client) LoadChangeset(ctx context.Context, height int64, index int64) ([]byte, error) {
+	cmd := &adminjson.ChangesetRequest{
+		Height: height,
+		Index:  index,
+	}
+	res := &adminjson.ChangesetsResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodLoadChangeset), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Changesets, nil
+}
+
+// ChangesetMetadata gets metadata about the changesets at the given height.
+func (cl *Client) ChangesetMetadata(ctx context.Context, height int64) (numChangesets int64, changesetsSize int64, err error) {
+	cmd := &adminjson.ChangesetMetadataRequest{
+		Height: height,
+	}
+	res := &adminjson.ChangesetMetadataResponse{}
+	err = cl.CallMethod(ctx, string(adminjson.MethodLoadChangesetMetadata), cmd, res)
+	if err != nil {
+		return -1, -1, err
+	}
+
+	if res.Height != height {
+		return -1, -1, fmt.Errorf("received incorrect block's metadata: got %d, expected %d", res.Height, height)
+	}
+
+	return res.Changesets, res.ChangesetSize, nil
+}
+
+// GenesisState returns the genesis state of the chain.
+func (cl *Client) GenesisState(ctx context.Context) (bool, []byte, error) {
+	cmd := &adminjson.MigrationMetadataRequest{}
+	res := &adminjson.MigrationMetadataResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodMigrationMetadata), cmd, res)
+	if err != nil {
+		return false, nil, err
+	}
+	return res.InMigration, res.Metadata, nil
+}
+
+// GenesisSnapshotChunk returns a chunk of the genesis snapshot at the given height and chunkIdx.
+func (cl *Client) GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error) {
+	cmd := &adminjson.MigrationSnapshotChunkRequest{
+		ChunkIndex: chunkIdx,
+		Height:     height,
+	}
+	res := &adminjson.MigrationSnapshotChunkResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodMigrationGenesisChunk), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res.Chunk, nil
+}
+
+// TriggerMigration triggers a migration proposal.
+func (cl *Client) TriggerMigration(ctx context.Context, activationHeight *big.Int, migrationDuration *big.Int, chainID string) ([]byte, error) {
+	cmd := &adminjson.TriggerMigrationRequest{
+		Migration: types.Migration{
+			ActivationHeight:  activationHeight,
+			MigrationDuration: migrationDuration,
+			ChainID:           chainID,
+			Timestamp:         "", // Let the server set the timestamp when it receives the request?
+		},
+	}
+
+	res := &userjson.BroadcastResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodTriggerMigration), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+// ApproveMigration approves a migration proposal.
+func (cl *Client) ApproveMigration(ctx context.Context, id string) ([]byte, error) {
+	cmd := &adminjson.ApproveMigrationRequest{
+		Id: id,
+	}
+
+	res := &userjson.BroadcastResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodApproveMigration), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+// ListMigrations lists all migrations that have been proposed that are still in the pending state.
+func (cl *Client) ListMigrations(ctx context.Context) ([]*types.Migration, error) {
+	cmd := &adminjson.ListMigrationsRequest{}
+	res := &adminjson.ListMigrationsResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodListMigrations), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Migrations, nil
 }

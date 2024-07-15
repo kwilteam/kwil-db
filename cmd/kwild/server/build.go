@@ -29,6 +29,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/kv"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
 	"github.com/kwilteam/kwil-db/internal/listeners"
+	"github.com/kwilteam/kwil-db/internal/migrations"
 	functionSvc "github.com/kwilteam/kwil-db/internal/services/grpc/function/v0"
 	"github.com/kwilteam/kwil-db/internal/services/grpc/healthsvc/v0"
 	txSvc "github.com/kwilteam/kwil-db/internal/services/grpc/txsvc/v1"
@@ -191,7 +192,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// but the tx router needs the cometbft client
 	txApp := buildTxApp(d, db, e, ev)
 
-	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer, closers)
+	// migrator
+	migrator := buildMigrator(d, db, txApp)
+	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer, migrator, closers)
 
 	// NOTE: buildCometNode immediately starts talking to the abciApp and
 	// replaying blocks (and using atomic db tx commits), i.e. calling
@@ -228,7 +231,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	// admin service and server
 	signer := buildSigner(d)
-	jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, signer, d.cfg,
+	jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, migrator, signer, d.cfg,
 		d.genesisCfg.ChainID, *d.log.Named("admin-json-svc"))
 	jsonRPCAdminServer := buildJRPCAdminServer(d)
 	jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)
@@ -346,7 +349,50 @@ func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext,
 	return txApp
 }
 
-func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, closers *closeFuncs) *abci.AbciApp {
+func buildMigrator(d *coreDependencies, db *pg.DB, txApp *txapp.TxApp) *migrations.Migrator {
+	cfg := d.cfg.AppCfg
+	migrationsDir := filepath.Join(d.cfg.RootDir, config.MigrationsDirName)
+
+	err := os.MkdirAll(filepath.Join(migrationsDir, config.ChangesetsDirName), 0755)
+	if err != nil {
+		failBuild(err, "failed to create changesets directory")
+	}
+
+	err = os.MkdirAll(filepath.Join(migrationsDir, config.SnapshotDirName), 0755)
+	if err != nil {
+		failBuild(err, "failed to create migrations snapshots directory")
+	}
+
+	// snapshot store
+	dbCfg := &statesync.DBConfig{
+		DBUser: cfg.DBUser,
+		DBPass: cfg.DBPass,
+		DBHost: cfg.DBHost,
+		DBPort: cfg.DBPort,
+		DBName: cfg.DBName,
+	}
+
+	snapshotCfg := &statesync.SnapshotConfig{
+		SnapshotDir:     filepath.Join(migrationsDir, config.SnapshotDirName),
+		RecurringHeight: 0,
+		MaxSnapshots:    1, // only one snapshot is needed for network migrations, taken at the activation height
+		MaxRowSize:      cfg.Snapshots.MaxRowSize,
+	}
+
+	ss, err := statesync.NewSnapshotStore(snapshotCfg, dbCfg, *d.log.Named("migrations-snapshots"))
+	if err != nil {
+		failBuild(err, "failed to build snapshot store for migrations")
+	}
+
+	migrator, err := migrations.SetupMigrator(d.ctx, db, ss, txApp, migrationsDir, *d.log.Named("migrator"))
+	if err != nil {
+		failBuild(err, "failed to build migrator")
+	}
+
+	return migrator
+}
+
+func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, migrator *migrations.Migrator, closers *closeFuncs) *abci.AbciApp {
 	var sh abci.SnapshotModule
 	if snapshotter != nil {
 		sh = snapshotter
@@ -366,7 +412,7 @@ func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *st
 		ForkHeights:        d.genesisCfg.ForkHeights,
 	}
 	app, err := abci.NewAbciApp(d.ctx, cfg, sh, ss, txApp,
-		d.genesisCfg.ConsensusParams, db, *d.log.Named("abci"))
+		d.genesisCfg.ConsensusParams, migrator, db, *d.log.Named("abci"))
 	if err != nil {
 		failBuild(err, "failed to build ABCI application")
 	}

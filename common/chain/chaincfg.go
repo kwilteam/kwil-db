@@ -171,6 +171,7 @@ func DefaultGenesisConfig() *GenesisConfig {
 		DataAppHash:     nil,
 		Validators:      nil,
 		ConsensusParams: defaultConsensusParams(),
+		Alloc:           make(map[string]*big.Int),
 	}
 }
 

@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common/sql"
@@ -14,9 +16,11 @@ import (
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	adminjson "github.com/kwilteam/kwil-db/core/rpc/json/admin"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
+	coretypes "github.com/kwilteam/kwil-db/core/types"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/internal/migrations"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/version"
 	"github.com/kwilteam/kwil-db/internal/voting"
@@ -44,6 +48,14 @@ type Pricer interface {
 	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
 }
 
+type Migrator interface {
+	ListPendingMigrations(ctx context.Context) ([]*coretypes.Migration, error)
+	GetChangesetMetadata(height int64) (*migrations.ChangesetMetdata, error)
+	GetChangeset(height int64, index int64) ([]byte, error)
+	GetMigrationMetadata() (*migrations.MigrationMetadata, error)
+	GetGenesisSnapshotChunk(height int64, format uint32, chunkIdx uint32) ([]byte, error)
+}
+
 type Service struct {
 	log log.Logger
 
@@ -51,6 +63,7 @@ type Service struct {
 	TxApp      TxApp
 	db         sql.DelayedReadTxMaker
 	pricer     Pricer
+	migrator   Migrator
 
 	cfg     *config.KwildConfig
 	chainID string
@@ -116,6 +129,36 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		adminjson.MethodValRemove: rpcserver.MakeMethodDef(svc.Remove,
 			"vote to remote a validator",
 			"the hash of the broadcasted validator remove transaction"),
+
+		// Migration methods
+		adminjson.MethodTriggerMigration: rpcserver.MakeMethodDef(svc.TriggerMigration,
+			"create a migration resolution",
+			"the hash of the broadcasted migration transaction",
+		),
+		adminjson.MethodApproveMigration: rpcserver.MakeMethodDef(svc.ApproveMigration,
+			"approve a migration resolution",
+			"the hash of the broadcasted migration approval transaction",
+		),
+		adminjson.MethodListMigrations: rpcserver.MakeMethodDef(svc.ListPendingMigrations,
+			"list active migration resolutions",
+			"the list of all the pending migration resolutions",
+		),
+		adminjson.MethodLoadChangesetMetadata: rpcserver.MakeMethodDef(svc.LoadChangesetMetadata,
+			"get the changeset metadata for a given height",
+			"the changesets metadata for the given height",
+		),
+		adminjson.MethodLoadChangeset: rpcserver.MakeMethodDef(svc.LoadChangeset,
+			"load a changeset for a given height and index",
+			"the changeset for the given height and index",
+		),
+		adminjson.MethodMigrationMetadata: rpcserver.MakeMethodDef(svc.MigrationMetadata,
+			"get the migration information",
+			"the metadata for the given migration",
+		),
+		adminjson.MethodMigrationGenesisChunk: rpcserver.MakeMethodDef(svc.MigrationGenesisChunk,
+			"get a genesis snapshot chunk of given idx",
+			"the genesis chunk for the given index",
+		),
 	}
 }
 
@@ -128,7 +171,7 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 }
 
 // NewService constructs a new Service.
-func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, signer auth.Signer, cfg *config.KwildConfig,
+func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, migrator Migrator, signer auth.Signer, cfg *config.KwildConfig,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,
@@ -136,6 +179,7 @@ func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txAp
 		signer:     signer,
 		chainID:    chainID,
 		pricer:     pricer,
+		migrator:   migrator,
 		cfg:        cfg,
 		log:        logger,
 		db:         db,
@@ -395,5 +439,112 @@ func (svc *Service) GetConfig(ctx context.Context, req *adminjson.GetConfigReque
 
 	return &adminjson.GetConfigResponse{
 		Config: bts,
+	}, nil
+}
+
+func (svc *Service) LoadChangeset(ctx context.Context, req *adminjson.ChangesetRequest) (*adminjson.ChangesetsResponse, *jsonrpc.Error) {
+	bts, err := svc.migrator.GetChangeset(req.Height, req.Index)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load changesets", nil)
+	}
+
+	return &adminjson.ChangesetsResponse{
+		Changesets: bts,
+	}, nil
+}
+
+func (svc *Service) LoadChangesetMetadata(ctx context.Context, req *adminjson.ChangesetMetadataRequest) (*adminjson.ChangesetMetadataResponse, *jsonrpc.Error) {
+	metadata, err := svc.migrator.GetChangesetMetadata(req.Height)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load changeset metadata", nil)
+	}
+
+	return &adminjson.ChangesetMetadataResponse{
+		Height:        metadata.Height,
+		Changesets:    metadata.Chunks,
+		ChangesetSize: metadata.ChangesetSize,
+	}, nil
+}
+
+func (svc *Service) MigrationMetadata(ctx context.Context, req *adminjson.MigrationMetadataRequest) (*adminjson.MigrationMetadataResponse, *jsonrpc.Error) {
+	metadata, err := svc.migrator.GetMigrationMetadata()
+	if errors.Is(err, migrations.ErrNoActiveMigration) {
+		return &adminjson.MigrationMetadataResponse{
+			InMigration: false,
+		}, nil
+	} else if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load migration metadata", nil)
+	}
+
+	bts, err := metadata.MarshalBinary()
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to encode migration metadata", nil)
+	}
+
+	return &adminjson.MigrationMetadataResponse{
+		InMigration: true,
+		Metadata:    bts,
+	}, nil
+
+}
+
+func (svc *Service) MigrationGenesisChunk(ctx context.Context, req *adminjson.MigrationSnapshotChunkRequest) (*adminjson.MigrationSnapshotChunkResponse, *jsonrpc.Error) {
+	bts, err := svc.migrator.GetGenesisSnapshotChunk(int64(req.Height), 0, uint32(req.ChunkIndex))
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load genesis chunk", nil)
+	}
+
+	return &adminjson.MigrationSnapshotChunkResponse{
+		Chunk: bts,
+	}, nil
+}
+
+func (svc *Service) TriggerMigration(ctx context.Context, req *adminjson.TriggerMigrationRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
+	timestamp := time.Now().GoString()
+
+	migrationEvt := &migrations.MigrationDeclaration{
+		ActivationPeriod: req.Migration.ActivationHeight,
+		Duration:         req.Migration.MigrationDuration,
+		ChainID:          req.Migration.ChainID,
+		Timestamp:        timestamp,
+	}
+
+	bts, err := migrationEvt.MarshalBinary()
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to encode migration declaration", nil)
+	}
+
+	res := &transactions.CreateResolution{
+		Resolution: &transactions.VotableEvent{
+			Type: migrations.StartMigrationEventType,
+			Body: bts,
+		},
+	}
+
+	return svc.sendTx(ctx, res)
+}
+
+func (svc *Service) ApproveMigration(ctx context.Context, req *adminjson.ApproveMigrationRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
+	uuid, err := coretypes.ParseUUID(req.Id)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "invalid migration ID", nil)
+	}
+
+	res := &transactions.VoteResolution{
+		ResolutionType: migrations.StartMigrationEventType,
+		ResolutionID:   uuid,
+	}
+
+	return svc.sendTx(ctx, res)
+}
+
+func (svc *Service) ListPendingMigrations(ctx context.Context, req *adminjson.ListMigrationsRequest) (*adminjson.ListMigrationsResponse, *jsonrpc.Error) {
+	migrations, err := svc.migrator.ListPendingMigrations(ctx)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to list migrations", nil)
+	}
+
+	return &adminjson.ListMigrationsResponse{
+		Migrations: migrations,
 	}, nil
 }

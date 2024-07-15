@@ -1,11 +1,13 @@
 package pg
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
 
 	"github.com/jackc/pglogrepl"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 )
@@ -69,14 +71,13 @@ func (c *changesetIoWriter) decodeInsert(insert *pglogrepl.InsertMessageV2, rela
 	}
 	tup.RelationIdx = idx
 
-	bts, err := tup.serialize()
+	// write changesetInsertByte
+	_, err = c.writer.Write([]byte{changesetInsertByte})
 	if err != nil {
 		return err
 	}
 
-	_, err = c.writer.Write(append([]byte{changesetInsertByte}, bts...))
-	// c.data = append(c.data, append([]byte{changesetInsertByte}, bts...)...)
-	return err
+	return tup.serialize(c.writer)
 }
 
 func (c *changesetIoWriter) decodeUpdate(update *pglogrepl.UpdateMessageV2, relation *pglogrepl.RelationMessageV2) error {
@@ -86,31 +87,32 @@ func (c *changesetIoWriter) decodeUpdate(update *pglogrepl.UpdateMessageV2, rela
 
 	idx := c.registerMetadata(relation)
 
+	// write changesetUpdateByte
+	_, err := c.writer.Write([]byte{changesetUpdateByte})
+	if err != nil {
+		return err
+	}
+
+	// write old tuple
 	tup, err := convertPgxTuple(update.OldTuple, relation, c.oidToType)
 	if err != nil {
 		return err
 	}
 	tup.RelationIdx = idx
 
-	bts, err := tup.serialize()
+	err = tup.serialize(c.writer)
 	if err != nil {
 		return err
 	}
 
+	// write new tuple
 	tup, err = convertPgxTuple(update.NewTuple, relation, c.oidToType)
 	if err != nil {
 		return err
 	}
 	tup.RelationIdx = idx
 
-	bts2, err := tup.serialize()
-	if err != nil {
-		return err
-	}
-
-	_, err = c.writer.Write(append([]byte{changesetUpdateByte}, append(bts, bts2...)...))
-	// c.data = append(c.data, append([]byte{changesetUpdateByte}, append(bts, bts2...)...)...)
-	return err
+	return tup.serialize(c.writer)
 }
 
 func (c *changesetIoWriter) decodeDelete(delete *pglogrepl.DeleteMessageV2, relation *pglogrepl.RelationMessageV2) error {
@@ -120,20 +122,20 @@ func (c *changesetIoWriter) decodeDelete(delete *pglogrepl.DeleteMessageV2, rela
 
 	idx := c.registerMetadata(relation)
 
+	// write changesetDeleteByte
+	_, err := c.writer.Write([]byte{changesetDeleteByte})
+	if err != nil {
+		return err
+	}
+
+	// write old tuple
 	tup, err := convertPgxTuple(delete.OldTuple, relation, c.oidToType)
 	if err != nil {
 		return err
 	}
 	tup.RelationIdx = idx
 
-	bts, err := tup.serialize()
-	if err != nil {
-		return err
-	}
-
-	_, err = c.writer.Write(append([]byte{changesetDeleteByte}, bts...))
-	// c.data = append(c.data, append([]byte{changesetDeleteByte}, bts...)...)
-	return err
+	return tup.serialize(c.writer)
 }
 
 // commit is called when the changeset is complete.
@@ -145,13 +147,17 @@ func (c *changesetIoWriter) commit() error {
 		return nil
 	}
 
-	bts, err := c.metadata.serialize()
+	// write changesetMetadataByte
+	_, err := c.writer.Write([]byte{changesetMetadataByte})
 	if err != nil {
 		return err
 	}
 
-	_, err = c.writer.Write(append([]byte{changesetMetadataByte}, bts...))
-	// c.data = append(c.data, append([]byte{changesetMetadataByte}, bts...)...)
+	// serialize metadata
+	err = c.metadata.serialize(c.writer)
+	if err != nil {
+		return err
+	}
 
 	c.metadata = &changesetMetadata{
 		relationIdx: map[[2]string]int{},
@@ -239,31 +245,211 @@ func (c *ChangesetGroup) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-// DeserializeChangeset deserializes a changeset a serialized changeset stream.
-func DeserializeChangeset(data []byte) (*ChangesetGroup, error) { // todo: convert to io.Reader
+// applyInserts applies all inserts in the changeset to the database.
+// any conflicts during migration will be ignored in favor of whatever already exists on the new network.
+func (c *Changeset) applyInserts(ctx context.Context, tx sql.DB) error {
+	// If no inserts, return
+	if len(c.Inserts) == 0 {
+		return nil
+	}
+
+	var columnStr, placeholderStr string
+	if len(c.Columns) > 0 {
+		columnStr = c.Columns[0].Name
+		placeholderStr = "$1"
+		for i := 1; i < len(c.Columns); i++ {
+			columnStr += ", " + c.Columns[i].Name
+			placeholderStr += ", $" + fmt.Sprint(i+1)
+		}
+	}
+
+	// Conflict resolution: DO NOTHING
+	// Any conflicts will be ignored, in favor of whatever already exists on the new network.
+	insertSql := fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s) ON CONFLICT DO NOTHING", c.Schema, c.Table, columnStr, placeholderStr)
+
+	for _, insertOp := range c.Inserts {
+		values, err := c.DecodeTuple(insertOp)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Execute(ctx, insertSql, values...)
+		if err != nil {
+			return err
+		}
+		// Insert a row
+	}
+
+	return nil
+}
+
+// applyUpdates applies all updates in the changeset to the database.
+// Apply updates only if the oldValues in the old network are same as the current record in the new network.
+// If not, discard the update in favor of whatever data exists on the new network
+func (c *Changeset) applyUpdates(ctx context.Context, tx sql.DB) error {
+	// If no updates, return
+	if len(c.Updates) == 0 {
+		return nil
+	}
+
+	updateSql := fmt.Sprintf("UPDATE %s.%s SET ", c.Schema, c.Table)
+	for i, col := range c.Columns {
+		if i > 0 {
+			updateSql += ", "
+		}
+		updateSql += col.Name + " = $" + fmt.Sprint(i+1)
+	}
+
+	// Conflict resolution:
+	// If new network's current record is same as the oldValues in the old network, then update the record
+	// Else, discard the update in favor of whatever data exists on the new network
+	for _, updateOp := range c.Updates {
+		newValues, err := c.DecodeTuple(updateOp[1])
+		if err != nil {
+			return err
+		}
+
+		oldValues, err := c.DecodeTuple(updateOp[0])
+		if err != nil {
+			return err
+		}
+
+		var oldArgs []any
+		cnt := 1
+		whereClause := ""
+		for i, v := range oldValues {
+			if i > 0 {
+				whereClause += " AND "
+			}
+			if v == nil {
+				whereClause += fmt.Sprintf("%s IS NULL", c.Columns[i].Name)
+			} else {
+				whereClause += fmt.Sprintf("%s = $%d", c.Columns[i].Name, cnt+len(newValues))
+				oldArgs = append(oldArgs, v)
+				cnt++
+			}
+		}
+
+		_, err = tx.Execute(ctx, updateSql+" WHERE "+whereClause, append(newValues, oldArgs...)...)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// applyDeletes applies all deletes in the changeset to the database.
+// If the record in the new network is same as the oldValues in the old network, then delete the record
+// Else, discard the delete in favor of whatever data exists on the new network
+func (c *Changeset) applyDeletes(ctx context.Context, tx sql.DB) error {
+	// If no deletes, return
+	if len(c.Deletes) == 0 {
+		return nil
+	}
+
+	deleteSql := fmt.Sprintf("DELETE FROM %s.%s WHERE ", c.Schema, c.Table)
+
+	for _, deleteOp := range c.Deletes {
+		record, err := c.DecodeTuple(deleteOp)
+		if err != nil {
+			return err
+		}
+
+		whereClause := ""
+		var args []any
+		cnt := 1
+		for i, v := range record {
+			if i > 0 {
+				whereClause += " AND "
+			}
+			if v == nil {
+				whereClause += fmt.Sprintf("%s IS NULL", c.Columns[i].Name)
+			} else {
+				whereClause += fmt.Sprintf("%s = $%d", c.Columns[i].Name, cnt)
+				args = append(args, v)
+				cnt++
+			}
+		}
+
+		_, err = tx.Execute(ctx, deleteSql+whereClause, args...)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *Changeset) ApplyChangeset(ctx context.Context, tx sql.DB) error {
+	// Apply Inserts
+	err := c.applyInserts(ctx, tx)
+	if err != nil {
+		return err
+	}
+
+	// Apply Updates
+	err = c.applyUpdates(ctx, tx)
+	if err != nil {
+		return err
+	}
+
+	// 	Apply Deletes
+	err = c.applyDeletes(ctx, tx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ApplyChangesets applies all changesets in the group to the database.
+func (c *ChangesetGroup) ApplyChangesets(ctx context.Context, tx sql.DB) error {
+	for _, changeset := range c.Changesets {
+		err := changeset.ApplyChangeset(ctx, tx)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// DeserializeChangeset deserializes a changeset stream.
+func DeserializeChangeset(data io.Reader) (*ChangesetGroup, error) {
 	var inserts []*Tuple
 	var updates [][2]*Tuple
 	var deletes []*Tuple
 	metadata := &changesetMetadata{}
 	var err error
+	buf := make([]byte, 1)
+
 	for {
-		switch data[0] {
+		_, err = data.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+
+		switch buf[0] {
 		case changesetInsertByte:
 			tup := &Tuple{}
-			data, err = tup.deserialize(data[1:])
+			err = tup.deserialize(data)
 			if err != nil {
 				return nil, err
 			}
 			inserts = append(inserts, tup)
 		case changesetUpdateByte:
 			tup1 := &Tuple{}
-			data, err = tup1.deserialize(data[1:])
+			err = tup1.deserialize(data)
 			if err != nil {
 				return nil, err
 			}
 
 			tup2 := &Tuple{}
-			data, err = tup2.deserialize(data)
+			err = tup2.deserialize(data)
 			if err != nil {
 				return nil, err
 			}
@@ -271,27 +457,24 @@ func DeserializeChangeset(data []byte) (*ChangesetGroup, error) { // todo: conve
 			updates = append(updates, [2]*Tuple{tup1, tup2})
 		case changesetDeleteByte:
 			tup := &Tuple{}
-			data, err = tup.deserialize(data[1:])
+			err = tup.deserialize(data)
 			if err != nil {
 				return nil, err
 			}
 			deletes = append(deletes, tup)
 		case changesetMetadataByte:
-			data, err = metadata.deserialize(data[1:])
+			err = metadata.deserialize(data)
 			if err != nil {
 				return nil, err
 			}
 
-			// this is the end of the changeset
-			if len(data) != 0 {
-				return nil, fmt.Errorf("unexpected data after metadata: %v", data)
+			// this is the end of the changeset, check that there is no more data
+			_, err = data.Read(buf)
+			if err != io.EOF {
+				return nil, fmt.Errorf("expected end of changeset, got %d", buf[0])
 			}
 		default:
-			return nil, fmt.Errorf("unknown changeset byte %d", data[0])
-		}
-
-		if len(data) == 0 {
-			break
+			return nil, fmt.Errorf("unknown changeset byte %d", buf[0])
 		}
 	}
 
@@ -383,33 +566,44 @@ type changesetMetadata struct {
 
 // serialize serializes the metadata with the length of the serialized data
 // as a 4-byte prefix.
-func (m *changesetMetadata) serialize() ([]byte, error) {
+func (m *changesetMetadata) serialize(w io.Writer) error {
 	bts, err := serialize.Encode(m.Relations)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	buf := make([]byte, 4, 4+len(bts))
-	binary.LittleEndian.PutUint32(buf, uint32(len(bts)))
+	size := uint32(len(bts))
+	err = binary.Write(w, binary.LittleEndian, size)
+	if err != nil {
+		return fmt.Errorf("failed to write size: %w", err)
+	}
 
-	return append(buf, bts...), nil
+	_, err = w.Write(bts)
+	if err != nil {
+		return fmt.Errorf("failed to write tuple data: %w", err)
+	}
+
+	return nil
 }
 
 // deserialize deserializes the metadata.
 // It returns the remaining data after the metadata.
-func (m *changesetMetadata) deserialize(data []byte) ([]byte, error) {
-	if len(data) < 4 {
-		return nil, fmt.Errorf("data too short")
-	}
-
-	size := binary.LittleEndian.Uint32(data[:4])
-	if len(data) < int(size)+4 {
-		return nil, fmt.Errorf("data too short")
-	}
-
-	err := serialize.Decode(data[4:4+size], &m.Relations)
+func (m *changesetMetadata) deserialize(data io.Reader) error {
+	var size uint32
+	err := binary.Read(data, binary.LittleEndian, &size)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to read size: %w", err)
+	}
+
+	buf := make([]byte, size)
+	_, err = io.ReadFull(data, buf)
+	if err != nil {
+		return fmt.Errorf("failed to read tuple data: %w", err)
+	}
+
+	err = serialize.Decode(buf, &m.Relations)
+	if err != nil {
+		return err
 	}
 
 	m.relationIdx = make(map[[2]string]int)
@@ -417,7 +611,7 @@ func (m *changesetMetadata) deserialize(data []byte) ([]byte, error) {
 		m.relationIdx[[2]string{rel.Schema, rel.Name}] = i
 	}
 
-	return data[4+size:], nil
+	return nil
 }
 
 // Relation is a table in a schema.
@@ -443,36 +637,42 @@ type Tuple struct {
 
 // serialize serializes the tuple with the length of the serialized data
 // as a 4-byte prefix.
-func (t *Tuple) serialize() ([]byte, error) {
+func (t *Tuple) serialize(w io.Writer) error {
 	bts, err := serialize.Encode(t)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	buf := make([]byte, 4, 4+(len(bts)))
-	binary.LittleEndian.PutUint32(buf, uint32(len(bts)))
+	size := uint32(len(bts))
+	err = binary.Write(w, binary.LittleEndian, size)
+	if err != nil {
+		return fmt.Errorf("failed to write size: %w", err)
+	}
 
-	return append(buf, bts...), nil
+	_, err = w.Write(bts)
+	if err != nil {
+		return fmt.Errorf("failed to write tuple data: %w", err)
+	}
+
+	return nil
 }
 
 // deserialize deserializes the tuple.
 // It returns the remaining data after the tuple.
-func (t *Tuple) deserialize(data []byte) ([]byte, error) {
-	if len(data) < 4 {
-		return nil, fmt.Errorf("data too short")
-	}
-
-	size := binary.LittleEndian.Uint32(data[:4])
-	if len(data) < int(size)+4 {
-		return nil, fmt.Errorf("data too short")
-	}
-
-	err := serialize.Decode(data[4:4+size], &t)
+func (t *Tuple) deserialize(data io.Reader) error {
+	var size uint32
+	err := binary.Read(data, binary.LittleEndian, &size)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to read size: %w", err)
 	}
 
-	return data[4+size:], nil
+	buf := make([]byte, size)
+	_, err = io.ReadFull(data, buf)
+	if err != nil {
+		return fmt.Errorf("failed to read tuple data: %w", err)
+	}
+
+	return serialize.Decode(buf, &t)
 }
 
 // TupleColumn is a column within a tuple.

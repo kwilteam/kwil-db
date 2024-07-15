@@ -88,8 +88,45 @@ func Spend(ctx context.Context, tx sql.Executor, account []byte, amount *big.Int
 
 	newBal := new(big.Int).Sub(acct.Balance, amount)
 	// if negative, spend the entire balance and increment the nonce
+	// this is handled by checkAndSpend in txapp.go
 	if newBal.Sign() < 0 {
 		return errInsufficientFunds(account, amount, acct.Balance)
+	}
+
+	return updateAccount(ctx, tx, account, newBal, nonce)
+}
+
+// ApplySpend spends an amount from an account and records nonces. It blocks until the spend is written to the database.
+// This is used by the new nodes during migration to replicate spends from the old network to the new network.
+// If the account does not have enough funds to spend the amount, spend the entire balance and increment the nonce.
+// Nonces on the new network take precedence over the old network. If nonces are too low, ignore the nonce update and spend the balance.
+func ApplySpend(ctx context.Context, tx sql.Executor, account []byte, amount *big.Int, nonce int64) error {
+	acct, err := getAccount(ctx, tx, account)
+	if err != nil {
+		// if amount is 0 and account not found, create the account
+		// we check that nonce is 1, since this is the first tx
+		if errors.Is(err, ErrAccountNotFound) && amount.Sign() == 0 && nonce == 1 {
+			return createAccountWithNonce(ctx, tx, account, amount, nonce)
+		}
+
+		return err
+	}
+
+	// If the balance is insufficient, spend the entire balance, else spend the amount
+	newBal := new(big.Int).Sub(acct.Balance, amount)
+	if newBal.Sign() < 0 {
+		newBal = big.NewInt(0)
+	}
+
+	if nonce < acct.Nonce {
+		// if the spend consists of stale nonces, ignore the nonce update and spend the balance.
+		// Nonces on the new network nonces take precedence over the old network.
+		nonce = acct.Nonce
+	} else if nonce > acct.Nonce+1 {
+		// if the nonce is greater than the account nonce + 1, return an error
+		// This should not happen, as these spends are valid spends from the old network
+		// and shouldn't have out-of-order nonces.
+		return fmt.Errorf("%w: expected %d, got %d", ErrInvalidNonce, acct.Nonce+1, nonce)
 	}
 
 	return updateAccount(ctx, tx, account, newBal, nonce)

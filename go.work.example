@@ -1,4 +1,5 @@
-go 1.21
+go 1.22
+
 
 use (
 	.
@@ -9,4 +10,4 @@ use (
 
 // replace github.com/kwilteam/kuneiform => ../kuneiform
 // replace github.com/kwilteam/kwil-extensions => ../../kwil-extensions
-// replace github.com/cometbft/cometbft => ../../../github/cometbft/cometbft
+// replace github.com/cometbft/cometbft => ../../../github/cometbft/cometbf

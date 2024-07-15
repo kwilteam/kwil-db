@@ -82,3 +82,26 @@ type ListJoinRequestsResponse struct {
 type GetConfigResponse struct {
 	Config []byte `json:"config,omitempty"`
 }
+
+type ChangesetsResponse struct {
+	Changesets []byte `json:"changesets"`
+}
+
+type ChangesetMetadataResponse struct {
+	Height        int64 `json:"height"`
+	Changesets    int64 `json:"changesets"`
+	ChangesetSize int64 `json:"changeset_size"`
+}
+
+type MigrationMetadataResponse struct {
+	InMigration bool   `json:"in_migration"`
+	Metadata    []byte `json:"metadata,omitempty"`
+}
+
+type MigrationSnapshotChunkResponse struct {
+	Chunk []byte `json:"chunk"`
+}
+
+type ListMigrationsResponse struct {
+	Migrations []*types.Migration `json:"migrations"`
+}

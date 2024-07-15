@@ -40,6 +40,11 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	statesyncSnapshotSchemas = []string{"kwild_voting", "kwild_internal", "kwild_chain", "kwild_accts", "kwild_migrations", "ds_*"}
+	statsyncExcludedTables   = []string{"kwild_internal.sentry"}
+)
+
 // AbciConfig includes data that defines the chain and allow the application to
 // satisfy the ABCI Application interface.
 type AbciConfig struct {
@@ -52,18 +57,72 @@ type AbciConfig struct {
 	ForkHeights        map[string]*uint64
 }
 
+type AbciApp struct {
+	// db is a connection to the database
+	db DB
+	// consensusTx is the outermost transaction that wraps all other transactions
+	// that can modify state. It should be set in FinalizeBlock and committed in Commit.
+	consensusTx sql.PreparedTx
+	// genesisTx is the transaction that is used at genesis, and in the first block.
+	genesisTx sql.PreparedTx
+	// appHash is the hash of the application state
+	appHash []byte
+	// height is the current block height
+	height int64
+	cfg    AbciConfig
+	forks  forks.Forks
+
+	// snapshotter is the snapshotter module that handles snapshotting
+	snapshotter SnapshotModule
+
+	// replayingBlocks is a function that tells us whether we are in replay mode (syncing with the network),
+	// or whether we are in normal operation mode.
+	replayingBlocks func() bool
+
+	// bootstrapper is the bootstrapper module that handles bootstrapping the database
+	statesyncer StateSyncModule
+
+	log log.Logger
+
+	txApp TxApp
+
+	consensusParams *chain.ConsensusParams
+	chainContext    *common.ChainContext
+
+	broadcastFn EventBroadcaster
+
+	// validatorAddressToPubKey is a map of validator addresses to their public
+	// keys. It should only be accessed from consensus connection methods, which
+	// are not called concurrently, or the constructor.
+	validatorAddressToPubKey map[string][]byte
+
+	// verifiedTxns stores hashes of all the transactions currently in the
+	// mempool, which have passed signature verification. This is used to avoid
+	// recomputing the hash for all mempool transactions on every TxQuery
+	// request (to mitigate Potential DDOS attack vector).
+	// https://github.com/kwilteam/kwil-db/issues/714
+	verifiedTxnsMtx sync.RWMutex
+	verifiedTxns    map[chainHash]struct{}
+
+	// halted is set to true when the network is halted for migration.
+	halted atomic.Bool
+
+	// Migrator is the migrator module that handles migrations
+	migrator MigratorModule
+}
+
 func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule, statesyncer StateSyncModule,
-	txRouter TxApp, consensusParams *chain.ConsensusParams, db DB, log log.Logger) (*AbciApp, error) {
+	txRouter TxApp, consensusParams *chain.ConsensusParams, migrator MigratorModule, db DB, log log.Logger) (*AbciApp, error) {
 	app := &AbciApp{
 		db:              db,
 		cfg:             *cfg,
 		statesyncer:     statesyncer,
 		snapshotter:     snapshotter,
 		txApp:           txRouter,
+		migrator:        migrator,
 		consensusParams: consensusParams,
 		appHash:         cfg.GenesisAppHash,
-
-		log: log,
+		log:             log,
 
 		validatorAddressToPubKey: make(map[string][]byte),
 		verifiedTxns:             make(map[chainHash]struct{}),
@@ -211,57 +270,6 @@ func proposerAddrToString(addr []byte) string {
 }
 
 type chainHash = [32]byte
-
-type AbciApp struct {
-	// db is a connection to the database
-	db DB
-	// consensusTx is the outermost transaction that wraps all other transactions
-	// that can modify state. It should be set in FinalizeBlock and committed in Commit.
-	consensusTx sql.PreparedTx
-	// genesisTx is the transaction that is used at genesis, and in the first block.
-	genesisTx sql.PreparedTx
-	// appHash is the hash of the application state
-	appHash []byte
-	// height is the current block height
-	height int64
-	cfg    AbciConfig
-	forks  forks.Forks
-
-	// snapshotter is the snapshotter module that handles snapshotting
-	snapshotter SnapshotModule
-
-	// replayingBlocks is a function that tells us whether we are in replay mode (syncing with the network),
-	// or whether we are in normal operation mode.
-	replayingBlocks func() bool
-
-	// bootstrapper is the bootstrapper module that handles bootstrapping the database
-	statesyncer StateSyncModule
-
-	log log.Logger
-
-	txApp TxApp
-
-	consensusParams *chain.ConsensusParams
-	chainContext    *common.ChainContext
-
-	broadcastFn EventBroadcaster
-
-	// validatorAddressToPubKey is a map of validator addresses to their public
-	// keys. It should only be accessed from consensus connection methods, which
-	// are not called concurrently, or the constructor.
-	validatorAddressToPubKey map[string][]byte
-
-	// verifiedTxns stores hashes of all the transactions currently in the
-	// mempool, which have passed signature verification. This is used to avoid
-	// recomputing the hash for all mempool transactions on every TxQuery
-	// request (to mitigate Potential DDOS attack vector).
-	// https://github.com/kwilteam/kwil-db/issues/714
-	verifiedTxnsMtx sync.RWMutex
-	verifiedTxns    map[chainHash]struct{}
-
-	// halted is set to true when the network is halted for migration.
-	halted atomic.Bool
-}
 
 func (a *AbciApp) ChainID() string {
 	return a.cfg.ChainID
@@ -652,7 +660,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// we now get the apphash by calling precommit on the transaction
-	appHash, err := a.consensusTx.Precommit(ctx, nil)
+	writer := new(bytes.Buffer)
+	appHash, err := a.consensusTx.Precommit(ctx, writer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to precommit transaction: %w", err)
 	}
@@ -670,6 +679,12 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	if a.forks.BeginsHalt(uint64(req.Height) - 1) {
 		a.log.Info("This is the last block before halt.")
 		a.halted.Store(true)
+	}
+
+	// Notify the migrator of the changeset
+	err = a.migrator.NotifyHeight(ctx, &blockCtx, a.db, writer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to notify migrator of changeset: %w", err)
 	}
 
 	valUpdates := validatorUpdates(initialValidators, finalValidators)
@@ -788,7 +803,7 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		}
 		defer snapshotTx.Rollback(ctx) // always rollback, since this is just for view isolation
 
-		err = a.snapshotter.CreateSnapshot(ctx, uint64(a.height), snapshotId)
+		err = a.snapshotter.CreateSnapshot(ctx, uint64(a.height), snapshotId, statesyncSnapshotSchemas, statsyncExcludedTables, nil)
 		if err != nil {
 			a.log.Error("failed to create snapshot", zap.Error(err))
 		} else {
