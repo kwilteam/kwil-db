@@ -2633,6 +2633,51 @@ func Test_SQL(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "select JOIN, with no specified INNER/OUTER",
+			sql: `SELECT u.* FROM users as u
+			JOIN posts as p ON u.id = p.author_id;`, // default is INNER
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnWildcard{
+									Table: "u",
+								},
+							},
+							From: &parse.RelationTable{
+								Table: "users",
+								Alias: "u",
+							},
+							Joins: []*parse.Join{
+								{
+									Type: parse.JoinTypeInner,
+									Relation: &parse.RelationTable{
+										Table: "posts",
+										Alias: "p",
+									},
+									On: &parse.ExpressionComparison{
+										Left:     exprColumn("u", "id"),
+										Operator: parse.ComparisonOperatorEqual,
+										Right:    exprColumn("p", "author_id"),
+									},
+								},
+							},
+						},
+					},
+					// apply default ordering
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: exprColumn("u", "id"),
+						},
+						{
+							Expression: exprColumn("p", "id"),
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
