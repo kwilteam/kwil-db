@@ -454,16 +454,18 @@ func setupParser(inputStream string, errLisName string) (errLis *errorListener,
 // It is used in both parsing tools, as well as in tests.
 // WARNING: This function should NEVER be used in consensus, since it is non-deterministic.
 func RecursivelyVisitPositions(v any, fn func(GetPositioner)) {
+
+	visited := make(map[uintptr]struct{})
 	visitRecursive(reflect.ValueOf(v), reflect.TypeOf((*GetPositioner)(nil)).Elem(), func(v reflect.Value) {
 		if v.CanInterface() {
 			a := v.Interface().(GetPositioner)
 			fn(a)
 		}
-	})
+	}, visited)
 }
 
 // visitRecursive is a recursive function that visits all types that implement the target interface.
-func visitRecursive(v reflect.Value, target reflect.Type, fn func(reflect.Value)) {
+func visitRecursive(v reflect.Value, target reflect.Type, fn func(reflect.Value), visited map[uintptr]struct{}) {
 	if v.Type().Implements(target) {
 		// check if the value is nil
 		if !v.IsNil() {
@@ -472,23 +474,36 @@ func visitRecursive(v reflect.Value, target reflect.Type, fn func(reflect.Value)
 	}
 
 	switch v.Kind() {
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Interface:
 		if v.IsNil() {
 			return
 		}
 
-		visitRecursive(v.Elem(), target, fn)
+		visitRecursive(v.Elem(), target, fn, visited)
+	case reflect.Ptr:
+		if v.IsNil() {
+			return
+		}
+
+		// check if we have visited this pointer before
+		ptr := v.Pointer()
+		if _, ok := visited[ptr]; ok {
+			return
+		}
+		visited[ptr] = struct{}{}
+
+		visitRecursive(v.Elem(), target, fn, visited)
 	case reflect.Struct:
 		for i := 0; i < v.NumField(); i++ {
-			visitRecursive(v.Field(i), target, fn)
+			visitRecursive(v.Field(i), target, fn, visited)
 		}
 	case reflect.Slice, reflect.Array:
 		for i := 0; i < v.Len(); i++ {
-			visitRecursive(v.Index(i), target, fn)
+			visitRecursive(v.Index(i), target, fn, visited)
 		}
 	case reflect.Map:
 		for _, key := range v.MapKeys() {
-			visitRecursive(v.MapIndex(key), target, fn)
+			visitRecursive(v.MapIndex(key), target, fn, visited)
 		}
 	}
 }
