@@ -130,7 +130,7 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 				return nil, fmt.Errorf("chain_info: %w", err)
 			}
 
-			if chainInfo.ChainID == c.chainID {
+			if chainInfo.ChainID != c.chainID {
 				return nil, fmt.Errorf("remote host chain ID %q != client configured %q", chainInfo.ChainID, c.chainID)
 			}
 		}
