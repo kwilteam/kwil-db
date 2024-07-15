@@ -134,7 +134,7 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 
 		// if this is the final log for a transaction, send a notice to the subscribers
 		if txid, isFin := isFinishTxid(n.Message); isFin {
-			subscribers.ExclusiveRead(func(m map[int64]chan<- string) {
+			subscribers.Exclusive(func(m map[int64]chan<- string) {
 				sub, ok := m[txid]
 				if !ok {
 					logger.Errorf("pgtx %d has no subscriber", txid) // this will likely cause a deadlock.
@@ -151,6 +151,8 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 			subscribers.ExclusiveRead(func(m map[int64]chan<- string) {
 				sub, ok := m[txid]
 				if !ok {
+					// if the txid is not found, this indicates some sort of internal error
+					logger.Errorf("[INTERNAL ERROR] pgtx %d has no subscriber", txid) // this will likely cause a deadlock.
 					return
 				}
 				sub <- log
@@ -347,6 +349,9 @@ func subscribe(ctx context.Context, exec sql.Executor, subscribers *syncmap.Map[
 
 		m[txid] = ch
 	})
+	if err != nil {
+		return nil, nil, err
+	}
 
 	ran := atomic.Bool{}
 	ran.Store(false)
