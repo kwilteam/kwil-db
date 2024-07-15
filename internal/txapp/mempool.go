@@ -20,10 +20,6 @@ type mempool struct {
 	accounts map[string]*types.Account
 	acctsMtx sync.Mutex // protects accounts
 
-	// consensus parameters
-	gasEnabled    bool
-	maxVotesPerTx int64
-
 	nodeAddr []byte
 }
 
@@ -102,8 +98,8 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *transactions.Trans
 		if err != nil {
 			return err
 		}
-		if (int64)(len(voteID.ResolutionIDs)) > m.maxVotesPerTx {
-			return fmt.Errorf("number of voteIDs exceeds the limit of %d", m.maxVotesPerTx)
+		if maxVotes := ctx.BlockContext.ChainContext.NetworkParameters.MaxVotesPerTx; (int64)(len(voteID.ResolutionIDs)) > maxVotes {
+			return fmt.Errorf("number of voteIDs exceeds the limit of %d", maxVotes)
 		}
 	}
 

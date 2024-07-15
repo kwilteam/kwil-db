@@ -154,7 +154,7 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 				logger.Logf(`running test "%s"`, testFnIdentifiers[i])
 
 				// setup a tx and execution engine
-				outerTx, err := d.BeginOuterTx(ctx)
+				outerTx, err := d.BeginPreparedTx(ctx)
 				if err != nil {
 					return err
 				}
