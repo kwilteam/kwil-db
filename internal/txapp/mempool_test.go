@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -21,53 +22,73 @@ func Test_MempoolWithoutGas(t *testing.T) {
 	db := &mockDb{}
 	rebroadcast := &mockRebroadcast{}
 
+	txCtx := &common.TxContext{
+		Ctx: ctx,
+		BlockContext: &common.BlockContext{
+			ChainContext: &common.ChainContext{
+				NetworkParameters: &common.NetworkParameters{
+					DisabledGasCosts: true,
+				},
+			},
+		},
+	}
+
 	// Successful transaction A: 1
-	err := m.applyTransaction(ctx, newTx(t, 1, "A"), db, rebroadcast)
+	err := m.applyTransaction(txCtx, newTx(t, 1, "A"), db, rebroadcast)
 	assert.NoError(t, err)
 	assert.EqualValues(t, m.accounts["A"].Nonce, 1)
 
 	// Successful transaction A: 2
-	err = m.applyTransaction(ctx, newTx(t, 2, "A"), db, rebroadcast)
+	err = m.applyTransaction(txCtx, newTx(t, 2, "A"), db, rebroadcast)
 	assert.NoError(t, err)
 	assert.EqualValues(t, m.accounts["A"].Nonce, 2)
 
 	// Duplicate nonce failure
-	err = m.applyTransaction(ctx, newTx(t, 2, "A"), db, rebroadcast)
+	err = m.applyTransaction(txCtx, newTx(t, 2, "A"), db, rebroadcast)
 	assert.Error(t, err)
 	assert.EqualValues(t, m.accounts["A"].Nonce, 2)
 
 	// Invalid order
-	err = m.applyTransaction(ctx, newTx(t, 4, "A"), db, rebroadcast)
+	err = m.applyTransaction(txCtx, newTx(t, 4, "A"), db, rebroadcast)
 	assert.Error(t, err)
 	assert.EqualValues(t, m.accounts["A"].Nonce, 2)
 
-	err = m.applyTransaction(ctx, newTx(t, 3, "A"), db, rebroadcast)
+	err = m.applyTransaction(txCtx, newTx(t, 3, "A"), db, rebroadcast)
 	assert.NoError(t, err)
 	assert.EqualValues(t, m.accounts["A"].Nonce, 3)
 
 	// Recheck nonce 4 transaction
-	err = m.applyTransaction(ctx, newTx(t, 4, "A"), db, rebroadcast)
+	err = m.applyTransaction(txCtx, newTx(t, 4, "A"), db, rebroadcast)
 	assert.NoError(t, err)
 	assert.EqualValues(t, m.accounts["A"].Nonce, 4)
 }
 
 func Test_MempoolWithGas(t *testing.T) {
 	m := &mempool{
-		accounts:   make(map[string]*types.Account),
-		gasEnabled: true,
+		accounts: make(map[string]*types.Account),
 	}
 
-	ctx := context.Background()
+	txCtx := &common.TxContext{
+		Ctx: context.Background(),
+		BlockContext: &common.BlockContext{
+			ChainContext: &common.ChainContext{
+				NetworkParameters: &common.NetworkParameters{
+					DisabledGasCosts: false,
+				},
+			},
+		},
+	}
+
 	db := &mockDb{}
 	rebroadcast := &mockRebroadcast{}
 
 	// Transaction from Unknown sender should fail
 	tx := newTx(t, 1, "A")
-	err := m.applyTransaction(ctx, tx, db, rebroadcast)
+	err := m.applyTransaction(txCtx, tx, db, rebroadcast)
 	assert.Error(t, err)
 
 	// Resubmitting the same transaction should fail
-	err = m.applyTransaction(ctx, tx, db, rebroadcast)
+	err = m.applyTransaction(txCtx, tx, db, rebroadcast)
 	assert.Error(t, err)
 
 	// Credit account A
@@ -78,7 +99,7 @@ func Test_MempoolWithGas(t *testing.T) {
 	}
 
 	// Successful transaction A: 1
-	err = m.applyTransaction(ctx, tx, db, rebroadcast)
+	err = m.applyTransaction(txCtx, tx, db, rebroadcast)
 	assert.NoError(t, err)
 }
 

@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/kwilteam/kwil-db/common"
 	sql "github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -18,10 +19,6 @@ import (
 type mempool struct {
 	accounts map[string]*types.Account
 	acctsMtx sync.Mutex // protects accounts
-
-	// consensus parameters
-	gasEnabled    bool
-	maxVotesPerTx int64
 
 	nodeAddr []byte
 }
@@ -53,14 +50,40 @@ func (m *mempool) accountInfoSafe(ctx context.Context, tx sql.Executor, acctID [
 }
 
 // applyTransaction validates account specific info and applies valid transactions to the mempool state.
-func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transaction, dbTx sql.Executor, rebroadcaster Rebroadcaster) error {
+func (m *mempool) applyTransaction(ctx *common.TxContext, tx *transactions.Transaction, dbTx sql.Executor, rebroadcaster Rebroadcaster) error {
 	m.acctsMtx.Lock()
 	defer m.acctsMtx.Unlock()
+
+	// if the network is in a migration, there are numerous
+	// transaction types we must disallow.
+	// see [internal/migrations/migrations.go] for more info
+	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+		switch tx.Body.PayloadType {
+		case transactions.PayloadTypeValidatorJoin:
+			return fmt.Errorf("validator joins are not allowed during migration")
+		case transactions.PayloadTypeValidatorLeave:
+			return fmt.Errorf("validator leaves are not allowed during migration")
+		case transactions.PayloadTypeValidatorApprove:
+			return fmt.Errorf("validator approvals are not allowed during migration")
+		case transactions.PayloadTypeValidatorRemove:
+			return fmt.Errorf("validator removals are not allowed during migration")
+		case transactions.PayloadTypeValidatorVoteIDs:
+			return fmt.Errorf("validator vote ids are not allowed during migration")
+		case transactions.PayloadTypeValidatorVoteBodies:
+			return fmt.Errorf("validator vote bodies are not allowed during migration")
+		case transactions.PayloadTypeDeploySchema:
+			return fmt.Errorf("deploy schema transactions are not allowed during migration")
+		case transactions.PayloadTypeDropSchema:
+			return fmt.Errorf("drop schema transactions are not allowed during migration")
+		case transactions.PayloadTypeTransfer:
+			return fmt.Errorf("transfer transactions are not allowed during migration")
+		}
+	}
 
 	// seems like maybe this should go in the switch statement below,
 	// but I put it here to avoid extra db call for account info
 	if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteIDs {
-		power, err := voting.GetValidatorPower(ctx, dbTx, tx.Sender)
+		power, err := voting.GetValidatorPower(ctx.Ctx, dbTx, tx.Sender)
 		if err != nil {
 			return err
 		}
@@ -75,8 +98,8 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 		if err != nil {
 			return err
 		}
-		if (int64)(len(voteID.ResolutionIDs)) > m.maxVotesPerTx {
-			return fmt.Errorf("number of voteIDs exceeds the limit of %d", m.maxVotesPerTx)
+		if maxVotes := ctx.BlockContext.ChainContext.NetworkParameters.MaxVotesPerTx; (int64)(len(voteID.ResolutionIDs)) > maxVotes {
+			return fmt.Errorf("number of voteIDs exceeds the limit of %d", maxVotes)
 		}
 	}
 
@@ -86,13 +109,13 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 	}
 
 	// get account info from mempool state or account store
-	acct, err := m.accountInfo(ctx, dbTx, tx.Sender)
+	acct, err := m.accountInfo(ctx.Ctx, dbTx, tx.Sender)
 	if err != nil {
 		return err
 	}
 
 	// reject the transactions from unfunded user accounts in gasEnabled mode
-	if m.gasEnabled && acct.Nonce == 0 && acct.Balance.Sign() == 0 {
+	if !ctx.BlockContext.ChainContext.NetworkParameters.DisabledGasCosts && acct.Nonce == 0 && acct.Balance.Sign() == 0 {
 		delete(m.accounts, string(tx.Sender))
 		return transactions.ErrInsufficientBalance
 	}
@@ -116,7 +139,7 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 				return err
 			}
 
-			err = rebroadcaster.MarkRebroadcast(ctx, voteID.ResolutionIDs)
+			err = rebroadcaster.MarkRebroadcast(ctx.Ctx, voteID.ResolutionIDs)
 			if err != nil {
 				return err
 			}

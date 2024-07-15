@@ -72,7 +72,9 @@ const (
 	LEFT JOIN ` + votingSchemaName + `.resolutions AS r ON e.id = r.id
 	WHERE r.id IS NULL;`
 
-	// eventsToBroadcast returns the list of the resolutionIDs observed by the validator that are not previously broadcasted
+	// eventsToBroadcast returns the list of the resolutionIDs observed by the validator that are not previously broadcasted.
+	// It will only search for votes from which resolutions exist (it achieves this by inner joining against the existing resolutions,
+	// effectively filtering out events that do not have resolutions yet).
 	eventsToBroadcast = `SELECT e.id
 	FROM ` + votingSchemaName + `.resolutions AS r
 	INNER JOIN ` + schemaName + `.events AS e ON r.id = e.id

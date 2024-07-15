@@ -30,7 +30,7 @@ func Test_NetworkParams(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	tx, err := db.BeginOuterTx(ctx)
+	tx, err := db.BeginTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx) // always rollback to reset the test
 
@@ -48,6 +48,7 @@ func Test_NetworkParams(t *testing.T) {
 		JoinExpiry:       100,
 		VoteExpiry:       100,
 		DisabledGasCosts: true,
+		MaxVotesPerTx:    100,
 	}
 
 	err = meta.StoreParams(ctx, tx, param)
@@ -62,6 +63,7 @@ func Test_NetworkParams(t *testing.T) {
 	param2.MaxBlockSize = 2000
 	param2.JoinExpiry = 200
 	param2.DisabledGasCosts = false
+	param2.InMigration = true
 
 	err = meta.StoreDiff(ctx, tx, param, param2)
 	require.NoError(t, err)

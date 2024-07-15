@@ -4,6 +4,7 @@ package pg
 
 import (
 	"context"
+	"io"
 
 	"github.com/jackc/pgx/v5"
 	common "github.com/kwilteam/kwil-db/common/sql"
@@ -19,6 +20,7 @@ type releaser interface {
 type nestedTx struct {
 	pgx.Tx
 	accessMode common.AccessMode
+	oidTypes   map[uint32]*datatype
 }
 
 var _ common.Tx = (*nestedTx)(nil)
@@ -36,17 +38,18 @@ func (tx *nestedTx) BeginTx(ctx context.Context) (common.Tx, error) {
 	return &nestedTx{
 		Tx:         pgtx,
 		accessMode: tx.accessMode,
+		oidTypes:   tx.oidTypes,
 	}, nil
 }
 
 func (tx *nestedTx) Query(ctx context.Context, stmt string, args ...any) (*common.ResultSet, error) {
-	return query(ctx, tx.Tx, stmt, args...)
+	return query(ctx, tx.oidTypes, tx.Tx, stmt, args...)
 }
 
 // Execute is now literally identical to Query in both semantics and syntax. We
 // might remove one or the other in this context (transaction methods).
 func (tx *nestedTx) Execute(ctx context.Context, stmt string, args ...any) (*common.ResultSet, error) {
-	return query(ctx, tx.Tx, stmt, args...)
+	return query(ctx, tx.oidTypes, tx.Tx, stmt, args...)
 }
 
 // AccessMode returns the access mode of the transaction.
@@ -66,9 +69,10 @@ type dbTx struct {
 
 // Precommit creates a prepared transaction for a two-phase commit. An ID
 // derived from the updates is return. This must be called before Commit. Either
-// Commit or Rollback must follow.
-func (tx *dbTx) Precommit(ctx context.Context) ([]byte, error) {
-	return tx.db.precommit(ctx)
+// Commit or Rollback must follow. It takes a writer to write the full changeset to.
+// If the writer is nil, the changeset will not be written.
+func (tx *dbTx) Precommit(ctx context.Context, writer io.Writer) ([]byte, error) {
+	return tx.db.precommit(ctx, writer)
 }
 
 // Commit commits the transaction. This partly satisfies sql.Tx.

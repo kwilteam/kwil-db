@@ -3,6 +3,7 @@ package abci
 import (
 	"bytes"
 	"context"
+	"io"
 	"math/big"
 	"testing"
 
@@ -396,7 +397,7 @@ func (m *mockTxApp) AccountInfo(ctx context.Context, db sql.DB, acctID []byte, g
 	return big.NewInt(0), 0, nil
 }
 
-func (m *mockTxApp) ApplyMempool(ctx context.Context, db sql.DB, tx *transactions.Transaction) error {
+func (m *mockTxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *transactions.Transaction) error {
 	return nil
 }
 
@@ -435,9 +436,13 @@ func (m *mockTxApp) Reload(ctx context.Context, db sql.DB) error {
 	return nil
 }
 
+func (m *mockTxApp) Price(ctx context.Context, db sql.DB, tx *transactions.Transaction, c *common.ChainContext) (*big.Int, error) {
+	return big.NewInt(0), nil
+}
+
 type mockDB struct{}
 
-func (m *mockDB) BeginOuterTx(ctx context.Context) (sql.OuterTx, error) {
+func (m *mockDB) BeginPreparedTx(ctx context.Context) (sql.PreparedTx, error) {
 	return &mockTx{}, nil
 }
 
@@ -477,6 +482,6 @@ func (m *mockTx) BeginTx(ctx context.Context) (sql.Tx, error) {
 	return &mockTx{}, nil
 }
 
-func (m *mockTx) Precommit(ctx context.Context) ([]byte, error) {
+func (m *mockTx) Precommit(ctx context.Context, w io.Writer) ([]byte, error) {
 	return nil, nil
 }

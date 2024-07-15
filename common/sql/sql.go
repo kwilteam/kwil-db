@@ -5,6 +5,7 @@ package sql
 import (
 	"context"
 	"errors"
+	"io"
 )
 
 var (
@@ -58,15 +59,16 @@ type Tx interface {
 // create transactions, which may be closed or create additional nested
 // transactions.
 //
-// Some implementations may also be an OuterTxMaker and/or a ReadTxMaker. Embed
+// Some implementations may also be an PreparedTxMaker and/or a ReadTxMaker. Embed
 // with those interfaces to compose the minimal interface required.
 type DB interface {
 	Executor
 	TxMaker
 }
 
-// ReadTxMaker can make read-only transactions.
-// Many read-only transactions can be made at once.
+// ReadTxMaker can make read-only transactions. This is necessarily an outermost
+// transaction since nested transactions inherit their access mode from their
+// parent. Many read-only transactions can be made at once.
 type ReadTxMaker interface {
 	BeginReadTx(ctx context.Context) (Tx, error)
 }
@@ -78,22 +80,25 @@ type DelayedReadTxMaker interface {
 	BeginDelayedReadTx() Tx
 }
 
-// OuterTx is the outermost database transaction.
+// PreparedTx is an outermost database transaction that uses two-phase commit
+// with the Precommit method.
 //
-// NOTE: An OuterTx may be used where only a Tx or DB is required since those
-// interfaces are a subset of the OuterTx method set.
-type OuterTx interface {
+// NOTE: A PreparedTx may be used where only a Tx or DB is required since those
+// interfaces are a subset of the PreparedTx method set.
+// It takes a writer to write the full changeset to.
+// If the writer is nil, the changeset will not be written.
+type PreparedTx interface {
 	Tx
-	Precommit(ctx context.Context) ([]byte, error)
+	Precommit(ctx context.Context, writer io.Writer) ([]byte, error)
 }
 
-// OuterTxMaker is the special kind of transaction that creates a transaction
-// that has a Precommit method (see OuterTx), which supports obtaining a commit
+// PreparedTxMaker is the special kind of transaction that creates a transaction
+// that has a Precommit method (see PreparedTx), which supports obtaining a commit
 // ID using a (two-phase) prepared transaction prior to Commit. This is a
-// different method name so that an implementation may satisfy both OuterTxMaker
+// different method name so that an implementation may satisfy both PreparedTxMaker
 // and TxMaker.
-type OuterTxMaker interface {
-	BeginOuterTx(ctx context.Context) (OuterTx, error)
+type PreparedTxMaker interface {
+	BeginPreparedTx(ctx context.Context) (PreparedTx, error)
 }
 
 // SnapshotTxMaker is an interface that creates a transaction for taking a

@@ -46,7 +46,7 @@ type StateSyncModule interface {
 // and managing a mempool
 type TxApp interface {
 	AccountInfo(ctx context.Context, db sql.DB, acctID []byte, getUnconfirmed bool) (balance *big.Int, nonce int64, err error)
-	ApplyMempool(ctx context.Context, db sql.DB, tx *transactions.Transaction) error
+	ApplyMempool(ctx *common.TxContext, db sql.DB, tx *transactions.Transaction) error
 	Begin(ctx context.Context, height int64) error
 	Commit(ctx context.Context)
 	Execute(ctx txapp.TxContext, db sql.DB, tx *transactions.Transaction) *txapp.TxResponse
@@ -56,6 +56,7 @@ type TxApp interface {
 	ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxTxsSize int64, block *common.BlockContext) ([][]byte, error)
 	Reload(ctx context.Context, db sql.DB) error
 	UpdateValidator(ctx context.Context, db sql.DB, validator []byte, power int64) error
+	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction, chainCtx *common.ChainContext) (*big.Int, error)
 }
 
 // ConsensusParams returns kwil specific consensus parameters.
@@ -72,7 +73,8 @@ type ConsensusParams interface {
 // from within a transaction. A DB can create read transactions or the special
 // two-phase outer write transaction.
 type DB interface {
-	sql.OuterTxMaker
+	sql.TxMaker // for out-of-consensus writes e.g. setup and meta table writes
+	sql.PreparedTxMaker
 	sql.ReadTxMaker
 	sql.SnapshotTxMaker
 }
