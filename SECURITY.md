@@ -5,8 +5,8 @@
 | Version | Supported |
 | ------- | --------- |
 | Latest beta or release candidate    | ✅        |
-| v0.6.x  | ✅        |
-| < v0.6  | ❌        |
+| v0.8.x  | ✅        |
+| < v0.8  | ❌        |
 
 ## Reporting a Vulnerability
 
