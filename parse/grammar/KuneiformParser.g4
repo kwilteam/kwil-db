@@ -236,7 +236,7 @@ relation:
 ;
 
 join:
-    (INNER| LEFT | RIGHT | FULL) JOIN
+    (INNER| LEFT | RIGHT | FULL)? JOIN
     relation ON sql_expr
 ;
 

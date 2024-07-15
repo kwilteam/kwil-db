@@ -1106,7 +1106,8 @@ func (s *schemaVisitor) VisitJoin(ctx *gen.JoinContext) any {
 	case ctx.INNER() != nil:
 		j.Type = JoinTypeInner
 	default:
-		panic("unknown join type")
+		// default to inner join
+		j.Type = JoinTypeInner
 	}
 
 	j.Set(ctx)
