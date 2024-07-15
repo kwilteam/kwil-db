@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/stretchr/testify/require"
 )
 
@@ -201,6 +202,22 @@ func Test_SQL(t *testing.T) {
 			want: [][]any{
 				{"4a67d6ea-7ac8-453c-964e-5a144f9e3004"},
 			},
+		},
+		{
+			name: "inferred type - failure",
+			sql:  "select $id is null",
+			values: map[string]any{
+				"$id": "4a67d6ea-7ac8-453c-964e-5a144f9e3004",
+			},
+			err: execution.ErrCannotInferType,
+		},
+		{
+			name: "inferred type - success",
+			sql:  "select $id::text is null",
+			values: map[string]any{
+				"$id": "4a67d6ea-7ac8-453c-964e-5a144f9e3004",
+			},
+			want: [][]any{{false}},
 		},
 	}
 

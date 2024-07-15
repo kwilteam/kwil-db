@@ -2,6 +2,7 @@ package generate
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -126,7 +127,7 @@ func (s *sqlGenerator) VisitExpressionVariable(p0 *parse.ExpressionVariable) any
 		// if it already exists, we write it as that index.
 		for i, v := range s.orderedParams {
 			if v == str {
-				return "$" + fmt.Sprint(i+1)
+				return "$" + strconv.Itoa(i+1)
 			}
 		}
 
@@ -134,7 +135,12 @@ func (s *sqlGenerator) VisitExpressionVariable(p0 *parse.ExpressionVariable) any
 		// Postgres uses $1, $2, etc. for numbered parameters.
 
 		s.orderedParams = append(s.orderedParams, str)
-		return "$" + fmt.Sprint(len(s.orderedParams))
+
+		res := strings.Builder{}
+		res.WriteString("$")
+		res.WriteString(strconv.Itoa(len(s.orderedParams)))
+		typeCast(p0, &res)
+		return res.String()
 	}
 
 	str := strings.Builder{}
