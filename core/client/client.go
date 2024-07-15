@@ -33,9 +33,9 @@ type Client struct {
 	// signatures will only be valid on this network.
 	chainID string
 
-	// skipCheckChainID skip checking chain ID against remote node's chain ID.
-	// This is only effective when chain ID is set.
-	skipCheckChainID bool
+	// skipVerifyChainID skip checking chain ID against remote node's chain ID.
+	// This is only effective when chainID is set.
+	skipVerifyChainID bool
 
 	noWarnings bool // silence warning logs
 }
@@ -99,12 +99,12 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 	clientOptions.Apply(options)
 
 	c := &Client{
-		txClient:         client,
-		Signer:           clientOptions.Signer,
-		logger:           clientOptions.Logger,
-		chainID:          clientOptions.ChainID,
-		noWarnings:       clientOptions.Silence,
-		skipCheckChainID: clientOptions.TrustLocalChainID,
+		txClient:          client,
+		Signer:            clientOptions.Signer,
+		logger:            clientOptions.Logger,
+		chainID:           clientOptions.ChainID,
+		noWarnings:        clientOptions.Silence,
+		skipVerifyChainID: clientOptions.SkipVerifyChainID,
 	}
 
 	if c.chainID == "" { // always use chain ID from remote host
@@ -120,7 +120,7 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 
 		c.chainID = chainInfo.ChainID
 	} else {
-		if c.skipCheckChainID {
+		if c.skipVerifyChainID {
 			if !c.noWarnings {
 				c.logger.Warn("chain ID is set, skip check against remote chain ID", zap.String("chainID", c.chainID))
 			}

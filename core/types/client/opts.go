@@ -24,9 +24,9 @@ type Options struct {
 	// communication with a trusted node (using TLS or Unix sockets).
 	ChainID string
 
-	// TrustLocalChainID will trust the chain ID passed from the user, i.e. no check
-	// against remote node's chain ID. This option is only be effective when ChainID is set.
-	TrustLocalChainID bool
+	// SkipVerifyChainID will skip check against remote node's chain ID.
+	// This option is only effective when ChainID is set.
+	SkipVerifyChainID bool
 
 	// Silence silences warnings logged from the client.
 	Silence bool
@@ -57,7 +57,7 @@ func (c *Options) Apply(opts *Options) {
 		c.Conn = opts.Conn
 	}
 
-	c.TrustLocalChainID = opts.TrustLocalChainID
+	c.SkipVerifyChainID = opts.SkipVerifyChainID
 
 	c.Silence = opts.Silence
 }
