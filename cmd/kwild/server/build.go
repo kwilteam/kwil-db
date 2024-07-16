@@ -922,12 +922,17 @@ func (pe panicErr) Unwrap() error {
 }
 
 func failBuild(err error, msg string) {
-	if err != nil {
+	if err == nil {
 		panic(panicErr{
-			err: err,
-			msg: fmt.Sprintf("%s: %s", msg, err),
+			err: errors.New(msg),
+			msg: msg,
 		})
 	}
+
+	panic(panicErr{
+		err: err,
+		msg: fmt.Sprintf("%s: %s", msg, err),
+	})
 }
 
 func buildListenerManager(d *coreDependencies, ev *voting.EventStore, node *cometbft.CometBftNode, txapp *txapp.TxApp, db sql.ReadTxMaker) *listeners.ListenerManager {
