@@ -1,10 +1,11 @@
 package logical_plan
 
 import (
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSplitConjunction(t *testing.T) {

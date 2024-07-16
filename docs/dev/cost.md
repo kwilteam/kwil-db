@@ -1,6 +1,24 @@
 # Transaction cost and pricing
 
+## Qs for G
+
+- blueprint for buildInsertStmt, buildUpdateStmt etc?
+- in costmodel.EstimateCost, which ops/plans add cost? where does a filter reduce row count?
+- how can we do selectivity from a condition with arg placeholders like $1? Do all placeholders need to be replaced with literals before plan/cost?
+- PredicatePushDownRule does not support a projection plan? I added it, but it does nothing only rewrap it with source plan possibly transformed.
+- how should projection pushdown reduce cost?
+- Schema from a DataSource should be all columns from all tables?
+
 ## issue items
+
+in engine, for an action
+
+- each sql statement is converted to a LogicalPlan (ast to plan tree)
+- in prepareActions (internal/engine/execution/procedure.go) for generate.ActionSQL it sets dmlStmt.SQLStatement
+- query_planner.NewPlanner(catalog).ToPlan(ast)
+- need a catalog impl. that returns a DataSource for some table, with only Statistics() and Schema()
+
+- what about cost of inline?  free or const based on number of vars?
 
 -[] update query_planner for insert/update/delete. Does howqueryengineswork.com describe how, or we just do it based on expected AST for these? buildInsertStmt, buildUpdateStmt
 -[] complete `costmodel` functions for computing cost from `LogicalPlan`, similar to virtual_plan pkg

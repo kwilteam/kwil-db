@@ -49,7 +49,7 @@ func (e *VColumnExpr) evaluate(row datasource.Row) datasource.ColumnValue {
 	return row[e.idx]
 }
 
-func compare(op string, a datasource.ColumnValue, b datasource.ColumnValue) bool {
+func compare(op string, a, b datasource.ColumnValue) bool {
 	if a.Type() != b.Type() {
 		panic(fmt.Sprintf("cannot compare %s and %s", a.Type(), b.Type()))
 	}

@@ -50,7 +50,7 @@ type ScanOp struct {
 	projection []string // TODO: use index?
 	// schema after projection(i.e. only keep the projected columns in the schema)
 	projectedSchema *dt.Schema
-	// used for selection push down optimization
+	// used for filter/predicate push down optimization
 	filter []LogicalExpr
 }
 

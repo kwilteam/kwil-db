@@ -3,6 +3,7 @@ package optimizer
 import (
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/virtual_plan"
@@ -25,8 +26,8 @@ func NewPlanner() *defaultVirtualPlanner {
 func (q *defaultVirtualPlanner) ToPlan(logicalPlan logical_plan.LogicalPlan) virtual_plan.VirtualPlan {
 	switch p := logicalPlan.(type) {
 	case *logical_plan.ScanOp:
-		dataSrc := p.DataSource()
-
+		dataSrc := p.DataSource().(datasource.FullDataSource)
+		// what about any p.Filter()?
 		return virtual_plan.VSeqScan(dataSrc, p.Projection()...)
 
 	case *logical_plan.ProjectionOp:

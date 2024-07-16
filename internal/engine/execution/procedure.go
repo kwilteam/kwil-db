@@ -178,6 +178,8 @@ func (p *preparedAction) call(scope *precompiles.ProcedureContext, global *Globa
 	}
 
 	for _, inst := range p.instructions {
+		// inst.cost()
+
 		if err := inst.execute(scope, global, db); err != nil {
 			return err
 		}
@@ -251,7 +253,7 @@ func (e *callMethod) execute(scope *precompiles.ProcedureContext, global *Global
 	var err error
 
 	scope.UsedGas += 10
-	if scope.UsedGas >= 10000000 {
+	if scope.UsedGas >= scope.GasLimit {
 		return fmt.Errorf("out of gas")
 	}
 
@@ -316,9 +318,17 @@ type dmlStmt struct {
 
 var _ instructionFunc = (&dmlStmt{}).execute
 
+func (e *dmlStmt) cost(scope *precompiles.ProcedureContext, _ *GlobalContext,
+	db sql.DB) (int64, error) {
+	return 0, nil
+}
+
 func (e *dmlStmt) execute(scope *precompiles.ProcedureContext, _ *GlobalContext, db sql.DB) error {
 	// Expend the arguments based on the ordered parameters for the DML statement.
 	params := orderAndCleanValueMap(scope.Values(), e.OrderedParameters)
+
+	// query plan and cost require substituting variables for literals for values
+
 	// args := append([]any{pg.QueryModeExec}, params...)
 	results, err := db.Execute(scope.Ctx, e.SQLStatement, append([]any{pg.QueryModeExec}, params...)...)
 	if err != nil {

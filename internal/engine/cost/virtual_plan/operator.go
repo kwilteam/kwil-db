@@ -16,7 +16,7 @@ const (
 )
 
 type VSeqScanOp struct {
-	ds         ds.DataSource
+	ds         ds.FullDataSource
 	projection []string
 }
 
@@ -34,23 +34,23 @@ func (s *VSeqScanOp) Inputs() []VirtualPlan {
 }
 
 func (s *VSeqScanOp) Execute(ctx context.Context) *ds.Result {
-	return s.ds.Scan(ctx, s.projection...)
+	return s.ds.Scan(ctx, s.projection...) // no-go with actual postgresql (can't touch storage) unless we really want to scan with no filter
 }
 
 func (s *VSeqScanOp) Statistics() *datatypes.Statistics {
 	return &datatypes.Statistics{} // TODO: pull from real source
 }
 
-func (s *VSeqScanOp) Cost() int64 {
+func (s *VSeqScanOp) Cost() int64 { // what about pushed down predicate?
 	return SeqScanRowCost * s.Statistics().RowCount
 }
 
-func VSeqScan(datasource ds.DataSource, projection ...string) VirtualPlan {
+func VSeqScan(datasource ds.FullDataSource, projection ...string) VirtualPlan {
 	return &VSeqScanOp{ds: datasource, projection: projection}
 }
 
 type VIndexScanOp struct {
-	ds         ds.DataSource
+	ds         ds.FullDataSource
 	projection []string
 }
 
@@ -79,7 +79,7 @@ func (s *VIndexScanOp) Cost() int64 {
 	return IndexScanRowCost
 }
 
-func VIndexScan(dataSrc ds.DataSource, projection ...string) VirtualPlan {
+func VIndexScan(dataSrc ds.FullDataSource, projection ...string) VirtualPlan {
 	return &VIndexScanOp{ds: dataSrc, projection: projection}
 }
 

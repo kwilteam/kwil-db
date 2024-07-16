@@ -7,6 +7,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/testkit"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/optimizer"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/query_planner"
 	"github.com/kwilteam/kwil-db/parse"
 )
@@ -44,22 +45,41 @@ func TestEstimateCost(t *testing.T) {
 	// 		"      Scan: users, Stat: (RowCount: 5), Cost: 0\n",
 	// },
 
+	// Without ORDER BY:
+	//
+	// Projection: users.username, users.age, Stat: (RowCount: 5), Cost: 0
+	//       Filter: users.age > 20, Stat: (RowCount: 5), Cost: 0
+	//         Scan: users, Stat: (RowCount: 5), Cost: 0
+
+	// TODO: also test and inspect with pushdown rules
+
 	sql := "select username, age from users where age > 20"
 
-	pr, err := parse.ParseSQL(sql, &types.Schema{
+	pr, err := parse.ParseSQLWithoutValidation(sql, &types.Schema{ // with ParseSQL: ORDER BY added!!!
 		Name:   "mock",
 		Tables: []*types.Table{testkit.MockUsersSchemaTable},
 	})
 
 	assert.NoError(t, err)
-	assert.NoError(t, pr.ParseErrs.Err())
+	// assert.NoError(t, pr.ParseErrs.Err())
 
 	q := query_planner.NewPlanner(cat)
-	plan := q.ToPlan(pr.AST)
+	plan := q.ToPlan(pr)
 
 	relExpr := BuildRelExpr(plan)
 	cost := EstimateCost(relExpr)
+	str := Format(relExpr, 0)
+	t.Log(str)
+	t.Log(cost)
 
+	// now with pushdown
+	pd := &optimizer.PredicatePushDownRule{}
+	plan = pd.Transform(plan)
+
+	relExpr = BuildRelExpr(plan)
+	cost = EstimateCost(relExpr)
+	str = Format(relExpr, 0)
+	t.Log(str)
 	t.Log(cost)
 }
 

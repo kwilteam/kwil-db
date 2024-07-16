@@ -15,7 +15,7 @@ const (
 	SeqAccessCost  = 1 // sequential access disk cost
 	RandAccessCost = 3 // random access disk cost, i.e., index scan (? if the index doesn't also store the projected or filtered data ?)
 
-	ProjectionCost = 10
+	ProjectionCost = 2 // cost for returning the data?
 	FilterEqCost   = 2
 )
 
@@ -26,8 +26,8 @@ type RelExpr struct {
 	logical_plan.LogicalPlan
 
 	stat   *datatypes.Statistics // current node's statistics
-	cost   int64
-	inputs []*RelExpr // LogicalPlan.Inputs() each converted into a RelExpr
+	cost   int64                 // ??? remove?
+	inputs []*RelExpr            // LogicalPlan.Inputs() each converted into a RelExpr
 }
 
 func (r *RelExpr) Inputs() []*RelExpr {
@@ -61,10 +61,10 @@ func BuildRelExpr(plan logical_plan.LogicalPlan) *RelExpr {
 		stat = p.DataSource().Statistics()
 
 	case *logical_plan.ProjectionOp:
-		stat = inputs[0].stat
+		stat = inputs[0].stat // up
 
 	case *logical_plan.FilterOp:
-		stat = inputs[0].stat
+		stat = inputs[0].stat // up
 		// with filter, we can make uniformity assumption to simplify the cost model
 		exprs := p.Exprs()
 		fields := make([]datatypes.Field, len(exprs))
@@ -112,25 +112,34 @@ func EstimateCost(plan *RelExpr) int64 {
 	case *logical_plan.ScanOp:
 		rows := plan.stat.RowCount // all the way from the scan
 		// TODO: index scan
-		cost += SeqScanRowCost * rows
+		plan.cost = SeqScanRowCost * rows // set plan.cost for printing?
+		cost += plan.cost
+
+		// if pushdown ran, ScanOp will have filter and/or projections
+		// ... so reduce the cost??? how?
 
 		// TODO: other cases based on Cost() methods of types in virtual_plan/operator.go
 
 	case *logical_plan.ProjectionOp:
 		// p.Exprs() ??? what about the cost of an expression like Add/+
-		cost += ProjectionCost // * int64(len(p.Exprs()))
+		plan.cost = ProjectionCost * int64(len(p.Exprs()))
+		cost += plan.cost
 
 	case *logical_plan.FilterOp:
 		// Cost of the filter depends on type and number of operations applied
 		// in the expressions.
 		exp := p.Exprs()[0] // FilterOp has one, which may nest others via logical
-		cost += ExprCost(exp, p)
+
+		plan.cost = ExprCost(exp, p)
+		cost += plan.cost
 
 		// now how does filter selectivity get applied to RowCount up in ScanOp???
 
 		// also, if we want selectivity, we can't have arg placeholders like $1,
 		// we need an actual value. Do we need to rewrite the AST with literals
 		// substituted for the arguments first?
+		// Maybe let's allow variables but make that result in no cost reduction,
+		// (assuming it would filter out nothing i.e. high selectivity).
 
 	case *logical_plan.AggregateOp:
 	case *logical_plan.BagOp:
@@ -144,6 +153,9 @@ func EstimateCost(plan *RelExpr) int64 {
 	return cost
 }
 
+// ExprCost returns the cost for an expression.  The idea is that evaluation of
+// the expression is not free e.g. arithmetic. So stringing together a massive
+// formula or logical expressions isn't for free.
 func ExprCost(expr logical_plan.LogicalExpr, input logical_plan.LogicalPlan) int64 {
 	switch e := expr.(type) {
 	case *logical_plan.LiteralNumericExpr:

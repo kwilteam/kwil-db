@@ -26,6 +26,10 @@ func (r *PredicatePushDownRule) pushDown(plan logical_plan.LogicalPlan) logical_
 	//   from the same table as the scan
 
 	switch p := plan.(type) {
+	case *logical_plan.ProjectionOp: // ? skip this and go to the input plans?
+		pl := logical_plan.Projection(r.pushDown(p.Inputs()[0]), p.Exprs()...)
+		return pl
+
 	case *logical_plan.FilterOp:
 		input := p.Inputs()[0]
 

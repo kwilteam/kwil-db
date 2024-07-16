@@ -13,6 +13,8 @@ import (
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/catalog"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/generate"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
@@ -37,6 +39,8 @@ type GlobalContext struct {
 	datasets map[string]*baseDataset
 
 	service *common.Service
+
+	catalog catalog.Catalog
 }
 
 var (
@@ -155,9 +159,14 @@ func NewGlobalContext(ctx context.Context, db sql.Executor, extensionInitializer
 	// if one schema is dependent on another, it must be loaded after the other
 	// this is handled by the orderSchemas function
 	for _, schema := range orderSchemas(schemas) {
-		err := g.loadDataset(ctx, schema)
+		dataset, err := g.loadDataset(ctx, schema)
 		if err != nil {
 			return nil, fmt.Errorf("%w: schema (%s / %s / %s)", err, schema.Name, schema.DBID(), schema.Owner)
+		}
+
+		// Statistics. Check statistics tables? Recompute full on start?
+		if err = dataset.buildStats(ctx, db); err != nil {
+			return nil, err
 		}
 	}
 
@@ -176,7 +185,7 @@ func (g *GlobalContext) Reload(ctx context.Context, db sql.Executor) error {
 	}
 
 	for _, schema := range orderSchemas(schemas) {
-		err := g.loadDataset(ctx, schema)
+		_, err := g.loadDataset(ctx, schema)
 		if err != nil {
 			return err
 		}
@@ -197,7 +206,7 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *ty
 	}
 	schema.Owner = txdata.Signer
 
-	err = g.loadDataset(ctx, schema)
+	dataset, err := g.loadDataset(ctx, schema)
 	if err != nil {
 		return err
 	}
@@ -210,7 +219,8 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *ty
 		return err
 	}
 
-	return nil
+	// update the catalog (fields and stats)
+	return dataset.buildStats(ctx, tx)
 }
 
 // DeleteDataset deletes a dataset.
@@ -383,11 +393,26 @@ type dbQueryFn func(ctx context.Context, stmt string, args ...any) (*sql.ResultS
 
 // loadDataset loads a dataset into the global context.
 // It does not create the dataset in the datastore.
-func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) error {
+func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) (*baseDataset, error) {
 	dbid := schema.DBID()
 	_, ok := g.initializers[dbid]
 	if ok {
-		return fmt.Errorf("%w: %s", ErrDatasetExists, dbid)
+		return nil, fmt.Errorf("%w: %s", ErrDatasetExists, dbid)
+	}
+
+	fields := map[string]*datatypes.Schema{}
+	for _, table := range schema.Tables {
+		rel := &datatypes.TableRef{
+			Namespace: dbid, // actually "ds_<dbid>"
+			Table:     table.Name,
+		}
+		tableFields := make([]datatypes.Field, len(table.Columns))
+		for i, col := range table.Columns {
+			dataType := col.Type.Name // TODO: convert or standardize across
+			nullable := !col.HasAttribute(types.NOT_NULL)
+			tableFields[i] = datatypes.NewFieldWithRelation(col.Name, dataType, nullable, rel)
+		}
+		fields[table.Name] = &datatypes.Schema{Fields: tableFields}
 	}
 
 	datasetCtx := &baseDataset{
@@ -396,17 +421,21 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 		actions:    make(map[string]*preparedAction),
 		procedures: make(map[string]*preparedProcedure),
 		global:     g,
+		stats:      map[string]*datatypes.Statistics{}, // set by buildStats method after tables are created
+		fields:     fields,
 	}
+
+	// query_planner.NewPlanner(cat)
 
 	preparedActions, err := prepareActions(schema)
 	if err != nil {
-		return errors.Join(err, ErrInvalidSchema)
+		return nil, errors.Join(err, ErrInvalidSchema)
 	}
 
 	for _, prepared := range preparedActions {
 		_, ok := datasetCtx.actions[prepared.name]
 		if ok {
-			return fmt.Errorf(`%w: duplicate action name: "%s"`, ErrInvalidSchema, prepared.name)
+			return nil, fmt.Errorf(`%w: duplicate action name: "%s"`, ErrInvalidSchema, prepared.name)
 		}
 
 		datasetCtx.actions[prepared.name] = prepared
@@ -415,12 +444,12 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 	for _, unprepared := range schema.Procedures {
 		prepared, err := prepareProcedure(unprepared)
 		if err != nil {
-			return errors.Join(err, ErrInvalidSchema)
+			return nil, errors.Join(err, ErrInvalidSchema)
 		}
 
 		_, ok := datasetCtx.procedures[prepared.name]
 		if ok {
-			return fmt.Errorf(`%w: duplicate procedure name: "%s"`, ErrInvalidSchema, prepared.name)
+			return nil, fmt.Errorf(`%w: duplicate procedure name: "%s"`, ErrInvalidSchema, prepared.name)
 		}
 
 		datasetCtx.procedures[prepared.name] = prepared
@@ -429,12 +458,12 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 	for _, ext := range schema.Extensions {
 		_, ok := datasetCtx.extensions[ext.Alias]
 		if ok {
-			return fmt.Errorf(`%w duplicate namespace assignment: "%s"`, ErrInvalidSchema, ext.Alias)
+			return nil, fmt.Errorf(`%w duplicate namespace assignment: "%s"`, ErrInvalidSchema, ext.Alias)
 		}
 
 		initializer, ok := g.initializers[ext.Name]
 		if !ok {
-			return fmt.Errorf(`namespace "%s" not found`, ext.Name) // ErrMissingExtension?
+			return nil, fmt.Errorf(`namespace "%s" not found`, ext.Name) // ErrMissingExtension?
 		}
 
 		namespace, err := initializer(&precompiles.DeploymentContext{
@@ -442,7 +471,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 			Schema: schema,
 		}, g.service, ext.CleanMap())
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		datasetCtx.extensions[ext.Alias] = namespace
@@ -453,7 +482,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 	}
 	g.datasets[dbid] = datasetCtx
 
-	return nil
+	return datasetCtx, nil
 }
 
 // unloadDataset unloads a dataset from the global context.

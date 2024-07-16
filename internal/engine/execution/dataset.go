@@ -2,12 +2,14 @@ package execution
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 )
 
@@ -29,6 +31,9 @@ type baseDataset struct {
 
 	// global is the global context.
 	global *GlobalContext
+
+	stats  map[string]*datatypes.Statistics
+	fields map[string]*datatypes.Schema
 }
 
 var _ precompiles.Instance = (*baseDataset)(nil)
@@ -37,6 +42,38 @@ var (
 	ErrPrivate   = fmt.Errorf("procedure/action is not public")
 	ErrOwnerOnly = fmt.Errorf("procedure/action is owner only")
 )
+
+func (d *baseDataset) buildStats(ctx context.Context, db sql.Executor) error {
+	// Statistics. Check statistics tables? Recompute full on start?
+	pgSchema := dbidSchema(d.schema.DBID())
+	for _, table := range d.schema.Tables {
+		res, err := db.Execute(ctx, `SELECT count(*) FROM %s.%s`, pgSchema, table.Name)
+		if err != nil {
+			return err
+		}
+		count, ok := sql.Int64(res.Rows[0][0])
+		if !ok {
+			return fmt.Errorf("no row count for %s.%s", pgSchema, table.Name)
+		}
+		// We needs a schema-table stats database so we don't ever have to do a
+		// full table scan for column stats.
+		//   datatypes.ColumnStatistics{min, max, nullcount, ... }
+		d.stats[table.Name] = &datatypes.Statistics{
+			RowCount: count,
+			// ColumnStatistics: ,
+		}
+	}
+	return nil
+}
+
+func (d *baseDataset) extCall(scope *precompiles.ProcedureContext,
+	app *common.App, ext, method string, inputs []any) ([]any, error) {
+	ex, ok := d.extensions[ext]
+	if !ok {
+		return nil, fmt.Errorf(`extension "%s" not found`, ext)
+	}
+	return ex.Call(scope, app, method, inputs)
+}
 
 // Call calls a procedure from the dataset.
 // If the procedure is not public, it will return an error.

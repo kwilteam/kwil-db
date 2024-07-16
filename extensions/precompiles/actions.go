@@ -75,7 +75,9 @@ type ProcedureContext struct {
 	// incremented each time a procedure calls another procedure.
 	StackDepth int
 	// UsedGas is the amount of gas used in the current execution.
-	UsedGas uint64
+	UsedGas uint64 // TODO: *big.Int
+
+	GasLimit uint64 // TODO: *big.Int
 }
 
 // SetValue sets a value in the scope.

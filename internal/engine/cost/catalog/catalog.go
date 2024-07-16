@@ -11,5 +11,5 @@ type Catalog interface {
 
 type defaultCatalogProvider struct {
 	dbidAliases map[string]string // alias -> dbid
-	srcs map[string]ds.DataSource
+	srcs        map[string]ds.DataSource
 }
