@@ -39,6 +39,25 @@ var (
 			},
 			PGFormat: defaultFormat("error"),
 		},
+		"parse_unix_timestamp": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// two args, both text
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				if !args[1].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[1])
+				}
+
+				return types.NewDecimalType(16, 6) // see internal/sql/pg/sql.go/sqlCreateParseUnixTimestampFunc for more info
+			},
+			PGFormat: defaultFormat("parse_unix_timestamp"),
+		},
 		"uuid_generate_v5": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				// first argument must be a uuid, second argument must be text
