@@ -74,6 +74,14 @@ END$$;`
 	END;
 	$$ LANGUAGE plpgsql;`
 
+	// this is the inverse of parse_unix_timestamp
+	sqlCreateFormatUnixTimestampFunc = `CREATE OR REPLACE FUNCTION format_unix_timestamp(unix_timestamp NUMERIC(16, 6), format_string text)
+	RETURNS TEXT AS $$
+	BEGIN
+		RETURN TO_CHAR(TO_TIMESTAMP(unix_timestamp), format_string);
+	END;
+	$$ LANGUAGE plpgsql;`
+
 	sqlCreateOrReplaceReplicaIdentity = `CREATE OR REPLACE FUNCTION set_replica_identity()
 RETURNS event_trigger
 LANGUAGE plpgsql
@@ -133,8 +141,13 @@ func ensureUint256Domain(ctx context.Context, conn *pgx.Conn) error {
 	return err
 }
 
-func ensureParseUnixTimestamp(ctx context.Context, conn *pgx.Conn) error {
+func ensureUnixTimestampFuncs(ctx context.Context, conn *pgx.Conn) error {
 	_, err := conn.Exec(ctx, sqlCreateParseUnixTimestampFunc)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, sqlCreateFormatUnixTimestampFunc)
 	return err
 }
 

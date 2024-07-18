@@ -247,6 +247,10 @@ func Test_Procedures(t *testing.T) {
 				if parse_unix_timestamp('2021-01-01 00:00:00:123456', 'YYYY-MM-DD HH24:MI:SS:US') != 1609459200.123456 {
 					error('parse_unix_timestamp failed');
 				}
+
+				if format_unix_timestamp(1609459200.123456, 'YYYY-MM-DD HH24:MI:SS:US') != '2021-01-01 00:00:00:123456' {
+					error('format_unix_timestamp failed');
+				}
 			}`,
 		},
 		{

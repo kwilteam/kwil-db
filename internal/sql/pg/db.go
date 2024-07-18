@@ -194,7 +194,7 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to create ERROR function: %w", err)
 	}
 
-	if err = ensureParseUnixTimestamp(ctx, conn); err != nil {
+	if err = ensureUnixTimestampFuncs(ctx, conn); err != nil {
 		return nil, fmt.Errorf("failed to create parse_unix_timestamp function: %w", err)
 	}
 

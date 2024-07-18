@@ -830,4 +830,13 @@ func Test_ParseUnixTimestamp(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, expected, res.Rows[0][0])
+
+	// reverse it
+	res, err = tx.Execute(ctx, "select format_unix_timestamp(1718114052.123456::numeric(16,6), 'YYYY-MM-DD HH24:MI:SS.US')", QueryModeExec)
+	require.NoError(t, err)
+
+	require.Len(t, res.Rows, 1)
+	require.Len(t, res.Rows[0], 1)
+
+	require.EqualValues(t, "2024-06-11 13:54:12.123456", res.Rows[0][0])
 }
