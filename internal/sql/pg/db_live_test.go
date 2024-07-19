@@ -807,3 +807,36 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	err = tx.Commit(ctx)
 	require.NoError(t, err)
 }
+
+// tests the custom parse_unix_timestamp function
+func Test_ParseUnixTimestamp(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewDB(ctx, cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx, err := db.BeginPreparedTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
+
+	res, err := tx.Execute(ctx, "select parse_unix_timestamp('2024-06-11 13:54:12.123456', 'YYYY-MM-DD HH24:MI:SS.US')", QueryModeExec)
+	require.NoError(t, err)
+
+	require.Len(t, res.Rows, 1)
+	require.Len(t, res.Rows[0], 1)
+
+	expected, err := decimal.NewFromString("1718114052.123456")
+	require.NoError(t, err)
+
+	require.EqualValues(t, expected, res.Rows[0][0])
+
+	// reverse it
+	res, err = tx.Execute(ctx, "select format_unix_timestamp(1718114052.123456::numeric(16,6), 'YYYY-MM-DD HH24:MI:SS.US')", QueryModeExec)
+	require.NoError(t, err)
+
+	require.Len(t, res.Rows, 1)
+	require.Len(t, res.Rows[0], 1)
+
+	require.EqualValues(t, "2024-06-11 13:54:12.123456", res.Rows[0][0])
+}

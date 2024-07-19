@@ -62,6 +62,26 @@ END$$;`
 		WHEN duplicate_object THEN null;
 	END $$;`
 
+	// postgres returns EXTRACT as a double precision, but will only at most have 6
+	// decimal places of precision (to measure microseconds). We cast to numeric(16, 6)
+	// which should allow for up to 6 decimal places of precision.
+	// Since max unix timestamp is 2147483648, we can cast to numeric(16, 6) to allow 10 digits
+	// before the decimal and 6 after.
+	sqlCreateParseUnixTimestampFunc = `CREATE OR REPLACE FUNCTION parse_unix_timestamp(timestamp_string text, format_string text)
+	RETURNS NUMERIC(16, 6) AS $$
+	BEGIN
+		RETURN EXTRACT(EPOCH FROM TO_TIMESTAMP(timestamp_string, format_string))::numeric(16, 6);
+	END;
+	$$ LANGUAGE plpgsql;`
+
+	// this is the inverse of parse_unix_timestamp
+	sqlCreateFormatUnixTimestampFunc = `CREATE OR REPLACE FUNCTION format_unix_timestamp(unix_timestamp NUMERIC(16, 6), format_string text)
+	RETURNS TEXT AS $$
+	BEGIN
+		RETURN TO_CHAR(TO_TIMESTAMP(unix_timestamp), format_string);
+	END;
+	$$ LANGUAGE plpgsql;`
+
 	sqlCreateOrReplaceReplicaIdentity = `CREATE OR REPLACE FUNCTION set_replica_identity()
 RETURNS event_trigger
 LANGUAGE plpgsql
@@ -118,6 +138,16 @@ func ensurePgCryptoExtension(ctx context.Context, conn *pgx.Conn) error {
 
 func ensureUint256Domain(ctx context.Context, conn *pgx.Conn) error {
 	_, err := conn.Exec(ctx, sqlCreateUint256Domain)
+	return err
+}
+
+func ensureUnixTimestampFuncs(ctx context.Context, conn *pgx.Conn) error {
+	_, err := conn.Exec(ctx, sqlCreateParseUnixTimestampFunc)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, sqlCreateFormatUnixTimestampFunc)
 	return err
 }
 
