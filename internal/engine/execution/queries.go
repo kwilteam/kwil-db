@@ -192,6 +192,7 @@ func createSchema(ctx context.Context, tx sql.TxMaker, schema *types.Schema, txi
 			if err != nil {
 				return err
 			}
+			// change tracking on tables must begin here.
 		}
 	}
 

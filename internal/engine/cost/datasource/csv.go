@@ -167,7 +167,7 @@ func (ds *CsvDataSource) Statistics() *datatypes.Statistics {
 }
 
 func (ds *CsvDataSource) Scan(ctx context.Context, projection ...string) *Result {
-	return dsScan(ctx, ds.schema, ds.records, projection)
+	return ScanData(ctx, ds.schema, ds.records, projection)
 }
 
 func (ds *CsvDataSource) SourceType() SourceType {

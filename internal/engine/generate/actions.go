@@ -48,6 +48,7 @@ type ActionSQL struct {
 	// Statement is the Statement statement that should be executed.
 	// It is deterministic.
 	Statement string
+	Mutative  bool
 	// ParameterOrder is a list of the parameters in the order they appear in the statement.
 	// This is set if the ReplaceNamedParameters flag is set.
 	// For example, if the statement is "SELECT * FROM table WHERE id = $id AND name = $name",
@@ -125,6 +126,7 @@ func (a *actionGenerator) VisitActionStmtSQL(p0 *parse.ActionStmtSQL) any {
 
 	a.actions = append(a.actions, &ActionSQL{
 		Statement:      stmt + ";",
+		Mutative:       p0.Mutative,
 		ParameterOrder: params,
 	})
 

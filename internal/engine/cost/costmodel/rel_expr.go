@@ -115,6 +115,17 @@ func EstimateCost(plan *RelExpr) int64 {
 		plan.cost = SeqScanRowCost * rows // set plan.cost for printing?
 		cost += plan.cost
 
+		// totalCols := p.DataSource().Schema().Fields
+		// len(p.Projection()) / totalCols
+
+		// select age from people where height >  50;
+
+		// p.Filter()
+
+		// max height = 40 => sel 0
+
+		// rows = sel * card // card is total rows in table
+
 		// if pushdown ran, ScanOp will have filter and/or projections
 		// ... so reduce the cost??? how?
 
@@ -125,6 +136,8 @@ func EstimateCost(plan *RelExpr) int64 {
 		plan.cost = ProjectionCost * int64(len(p.Exprs()))
 		cost += plan.cost
 
+		// plan.stat.RowCount // from scan op
+
 	case *logical_plan.FilterOp:
 		// Cost of the filter depends on type and number of operations applied
 		// in the expressions.
@@ -132,6 +145,8 @@ func EstimateCost(plan *RelExpr) int64 {
 
 		plan.cost = ExprCost(exp, p)
 		cost += plan.cost
+
+		// plan.stat => selectivity, reduce
 
 		// now how does filter selectivity get applied to RowCount up in ScanOp???
 
@@ -141,13 +156,17 @@ func EstimateCost(plan *RelExpr) int64 {
 		// Maybe let's allow variables but make that result in no cost reduction,
 		// (assuming it would filter out nothing i.e. high selectivity).
 
+		// these?
 	case *logical_plan.AggregateOp:
+		// cost += 10
 	case *logical_plan.BagOp:
 	case *logical_plan.DistinctOp:
 	case *logical_plan.JoinOp:
-	case *logical_plan.LimitOp:
+		// projection push down for:
+		// select a from (select x from t1 join t2 on t1.a = t2.b);
+	case *logical_plan.LimitOp: // important
 	case *logical_plan.NoRelationOp:
-	case *logical_plan.SortOp:
+	// case *logical_plan.SortOp:
 	case *logical_plan.SubqueryOp:
 	}
 	return cost

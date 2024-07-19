@@ -4,14 +4,17 @@ package pg
 // and system settings of a postgres instance to be used by kwild.
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/kwilteam/kwil-db/common/sql"
 )
 
 const (
@@ -196,6 +199,191 @@ var settingValidations = map[string]settingValidFn{
 	// Or it can be set for a new data base like
 	//   CREATE DATABASE ... WITH ENCODING 'UTF8'
 	"server_encoding": wantStringFn("UTF8"),
+}
+
+type QueryScanner interface {
+	QueryScanFn(ctx context.Context, sql string,
+		scans []any, fn func() error, args ...any) error
+}
+
+func queryRowFunc(ctx context.Context, conn *pgx.Conn, sql string,
+	scans []any, fn func() error, args ...any) error {
+	rows, _ := conn.Query(ctx, sql, args...)
+	_, err := pgx.ForEachRow(rows, scans, fn)
+	return err
+}
+
+func QueryRowFunc(ctx context.Context, tx sql.Executor, sql string,
+	scans []any, fn func() error, args ...any) error {
+	conner, ok := tx.(conner)
+	if !ok {
+		return errors.New("no conn access")
+	}
+	conn := conner.Conn()
+	return queryRowFunc(ctx, conn, sql, scans, fn, args...)
+}
+
+func (tx *nestedTx) QueryScanFn(ctx context.Context, sql string,
+	scans []any, fn func() error, args ...any) error {
+
+	conn := tx.Conn()
+	return queryRowFunc(ctx, conn, sql, scans, fn, args...)
+}
+
+type FieldDesc struct {
+	Name                 string
+	TableOID             uint32
+	TableAttributeNumber uint16
+	DataTypeOID          uint32
+	DataTypeSize         int16
+	TypeModifier         int32
+	Format               int16
+}
+
+func queryRowFuncAny(ctx context.Context, conn *pgx.Conn, sql string,
+	fn func(fields []FieldDesc, vals []any) error, args ...any) error {
+	rows, _ := conn.Query(ctx, sql, args...)
+	fields := rows.FieldDescriptions()
+	pgFields := make([]FieldDesc, len(fields))
+	for i, f := range fields {
+		pgFields[i] = FieldDesc(f)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		vals, err := rows.Values()
+		if err != nil {
+			return err
+		}
+
+		err = fn(pgFields, vals)
+		if err != nil {
+			return err
+		}
+	}
+
+	return rows.Err()
+}
+
+func QueryRowFuncAny(ctx context.Context, tx sql.Executor, sql string,
+	fn func([]FieldDesc, []any) error, args ...any) error {
+	conner, ok := tx.(conner)
+	if !ok {
+		return errors.New("no conn access")
+	}
+	conn := conner.Conn()
+	return queryRowFuncAny(ctx, conn, sql, fn, args...)
+}
+
+func TextValue(val any) (string, bool) {
+	switch str := val.(type) {
+	case string:
+		return str, true
+	case pgtype.Text:
+		return str.String, str.Valid
+	case *pgtype.Text:
+		return str.String, str.Valid
+	}
+	return "", false
+}
+
+type ColInfo struct {
+	Pos      int
+	Name     string
+	DataType string
+	Nullable bool
+	Default  any
+}
+
+func (ci *ColInfo) ScanVal() any {
+	if ci.IsInt() {
+		var v pgtype.Int8 // int64
+		return &v
+	}
+	if ci.IsText() {
+		var v pgtype.Text // string
+		return &v
+	}
+	if ci.IsByteA() {
+		var v []byte
+		return &v
+	}
+	if ci.IsNumeric() {
+		var v pgtype.Numeric
+		return &v
+	}
+	var v any
+	return &v
+}
+
+func (ci *ColInfo) IsInt() bool {
+	switch strings.ToLower(ci.DataType) {
+	case "bigint", "integer", "int", "int2", "int4", "int8":
+		return true
+	}
+	return false
+}
+
+func (ci *ColInfo) IsText() bool {
+	switch strings.ToLower(ci.DataType) {
+	case "text", "varchar":
+		return true
+	}
+	return false
+}
+
+func (ci *ColInfo) IsByteA() bool {
+	switch strings.ToLower(ci.DataType) {
+	case "bytea":
+		return true
+	}
+	return false
+}
+
+func (ci *ColInfo) IsNumeric() bool {
+	dt := strings.ToLower(ci.DataType)
+	if strings.HasPrefix(dt, "numeric") {
+		return true
+	}
+	return dt == "uint256"
+}
+
+func columnInfo(ctx context.Context, conn *pgx.Conn, tbl string) ([]ColInfo, error) {
+	var colInfo []ColInfo
+
+	// get column data types
+	sql := `SELECT ordinal_position, column_name, data_type, is_nullable, column_default
+        FROM information_schema.columns
+        WHERE table_name = '` + tbl + `'`
+
+	var pos int
+	var colName, dataType string
+	var isNullable string
+	var colDefault any
+	scans := []any{&pos, &colName, &dataType, &isNullable, &colDefault}
+	err := queryRowFunc(ctx, conn, sql, scans, func() error {
+		colInfo = append(colInfo, ColInfo{pos, colName, dataType,
+			strings.EqualFold(isNullable, "yes"), colDefault})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	slices.SortFunc(colInfo, func(a, b ColInfo) int {
+		return cmp.Compare(a.Pos, b.Pos)
+	})
+
+	return colInfo, nil
+}
+
+func ColumnInfo(ctx context.Context, tx sql.Executor, tbl string) ([]ColInfo, error) {
+	conner, ok := tx.(conner)
+	if !ok {
+		return nil, errors.New("no conn access")
+	}
+	conn := conner.Conn()
+	return columnInfo(ctx, conn, tbl)
 }
 
 func verifySettings(ctx context.Context, conn *pgx.Conn) error {

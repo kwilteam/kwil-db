@@ -7,7 +7,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/testkit"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/optimizer"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/optimizer/rules"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/query_planner"
 	"github.com/kwilteam/kwil-db/parse"
 )
@@ -73,7 +73,7 @@ func TestEstimateCost(t *testing.T) {
 	t.Log(cost)
 
 	// now with pushdown
-	pd := &optimizer.PredicatePushDownRule{}
+	pd := &rules.PredicatePushDownRule{}
 	plan = pd.Transform(plan)
 
 	relExpr = BuildRelExpr(plan)

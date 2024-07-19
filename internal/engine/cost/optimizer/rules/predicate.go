@@ -1,4 +1,4 @@
-package optimizer
+package rules
 
 import (
 	"slices"

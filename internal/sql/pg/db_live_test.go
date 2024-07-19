@@ -3,15 +3,19 @@
 package pg
 
 import (
+	"cmp"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	// "github.com/kwilteam/kwil-db/internal/conv"
 )
@@ -42,6 +46,157 @@ var (
 		},
 	}
 )
+
+func TestColumnInfo(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewDB(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+
+	tbl := "colcheck"
+	_, err = tx.Execute(ctx, `drop table if exists `+tbl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
+		` (a int8 not null, b int4 default 42, c text, d bytea, e numeric(20,5))`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cols, err := ColumnInfo(ctx, tx, tbl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantCols := []ColInfo{
+		{Pos: 1, Name: "a", DataType: "bigint", Nullable: false, Default: nil},
+		{Pos: 2, Name: "b", DataType: "integer", Nullable: true, Default: "42"},
+		{Pos: 3, Name: "c", DataType: "text", Nullable: true, Default: nil},
+		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true, Default: nil},
+		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true, Default: nil},
+	}
+
+	assert.Equal(t, wantCols, cols)
+	// t.Logf("%#v", cols)
+
+	_, err = tx.Execute(ctx, `insert into `+tbl+
+		` values (5, null, 'a', '\xabab', 12)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var scans []any
+	for _, col := range cols {
+		scans = append(scans, col.ScanVal())
+	}
+	for _, val := range scans {
+		t.Logf("%#v (%T)", val, val)
+	}
+	err = QueryRowFunc(ctx, tx, `SELECT * FROM `+tbl, scans,
+		func() error {
+			for _, val := range scans {
+				t.Logf("%#v (%T)", val, val)
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestQueryScan(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewDB(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+
+	tbl := "colcheck"
+	_, err = tx.Execute(ctx, `drop table if exists `+tbl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
+		` (a int8, b int4, c text, d bytea, e numeric(20,5))`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = tx.Execute(ctx, `insert into `+tbl+
+		` values (5, null, 'a', '\xabab', 12)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = QueryRowFuncAny(ctx, tx, `SELECT * FROM `+tbl,
+		func(_ []FieldDesc, vals []any) error {
+			for _, val := range vals {
+				t.Logf("%#v (%T)", val, val)
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var colInfo []ColInfo
+
+	// get column data types
+	sql := `SELECT ordinal_position, column_name, data_type, is_nullable, column_default
+        FROM information_schema.columns
+        WHERE table_name = '` + tbl + `'`
+
+	scanner := tx.(QueryScanner)
+	var pos int
+	var colName, dataType string
+	var isNullable string
+	var colDefault any
+	scans := []any{&pos, &colName, &dataType, &isNullable, &colDefault}
+	err = scanner.QueryScanFn(ctx, sql, scans, func() error {
+		colInfo = append(colInfo, ColInfo{pos, colName, dataType,
+			strings.EqualFold(isNullable, "yes"), colDefault})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	slices.SortFunc(colInfo, func(a, b ColInfo) int {
+		return cmp.Compare(a.Pos, b.Pos)
+	})
+
+	// t.Log(colInfo)
+	// [{1 a bigint true <nil>} {2 b integer true <nil>} {3 c text true <nil>} {4 d bytea true <nil>} {5 e numeric true <nil>}]
+
+	err = QueryRowFuncAny(ctx, tx, sql, func(fields []FieldDesc, vals []any) error {
+		// t.Logf("%#v", vals) // e.g. []interface {}{1, "a", "bigint", "YES", interface {}(nil)}
+		spew.Dump(vals)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
 
 // TestRollbackPreparedTxns tests the rollbackPreparedTxns in the following
 // cases:

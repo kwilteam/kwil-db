@@ -2,6 +2,8 @@ package datasource
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
@@ -29,4 +31,36 @@ type FullDataSource interface {
 	// postgres backend unless we really want to ask for `SCAN projection... `
 	// with NO FILTERS.
 	Scan(ctx context.Context, projection ...string) *Result
+}
+
+type ColumnValue interface {
+	Type() string
+	Value() any
+}
+
+type LiteralColumnValue struct {
+	value any
+}
+
+func (c *LiteralColumnValue) Type() string {
+	// reflect.TypeOf(c.value).String()
+	return fmt.Sprintf("%T", c.value)
+}
+
+func (c *LiteralColumnValue) Value() any {
+	return c.value
+}
+
+func NewLiteralColumnValue(v any) *LiteralColumnValue {
+	return &LiteralColumnValue{value: v}
+}
+
+type Row []ColumnValue
+
+func (r Row) String() string {
+	var cols []string
+	for _, c := range r {
+		cols = append(cols, fmt.Sprintf("%v", c.Value()))
+	}
+	return fmt.Sprintf("[%s]", strings.Join(cols, ", "))
 }

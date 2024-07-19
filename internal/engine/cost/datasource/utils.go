@@ -7,8 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
-// dsScan read the data source, return selected columns.
-func dsScan(ctx context.Context, dsSchema *datatypes.Schema, dsRecords []Row, projection []string) *Result {
+// ScanData read the data source, return selected columns.
+func ScanData(ctx context.Context, dsSchema *datatypes.Schema, dsRecords []Row, projection []string) *Result {
 	if len(projection) == 0 {
 		return ResultFromRaw(dsSchema, dsRecords)
 	}

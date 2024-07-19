@@ -327,13 +327,19 @@ func (e *dmlStmt) execute(scope *precompiles.ProcedureContext, _ *GlobalContext,
 	// Expend the arguments based on the ordered parameters for the DML statement.
 	params := orderAndCleanValueMap(scope.Values(), e.OrderedParameters)
 
-	// query plan and cost require substituting variables for literals for values
+	// query plan and cost that use selectivity to reduce cost require
+	// substituting variables for literals for values. we can get a cost with a
+	// variable, but a filter that uses that variable can't be combined with
+	// statistics to infer selectivity. a literal value is needed to do that.
 
 	// args := append([]any{pg.QueryModeExec}, params...)
 	results, err := db.Execute(scope.Ctx, e.SQLStatement, append([]any{pg.QueryModeExec}, params...)...)
 	if err != nil {
 		return err
 	}
+
+	// here can we check an audit table for the added/removed/updated values
+	// needed to update statistics? if not mutable SQL, do not bother
 
 	// we need to check for any pg numeric types returned, and convert them to int64
 	for i, row := range results.Rows {

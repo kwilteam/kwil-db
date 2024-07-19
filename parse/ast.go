@@ -473,7 +473,8 @@ type SQLStatement struct {
 	Position
 	CTEs []*CommonTableExpression
 	// SQL can be an insert, update, delete, or select statement.
-	SQL SQLCore
+	SQL      SQLCore
+	Mutative bool
 }
 
 func (s *SQLStatement) Accept(v Visitor) any {
@@ -764,7 +765,8 @@ const (
 
 type ActionStmtSQL struct {
 	Position
-	SQL *SQLStatement
+	SQL      *SQLStatement
+	Mutative bool
 }
 
 func (a *ActionStmtSQL) Accept(v Visitor) any {

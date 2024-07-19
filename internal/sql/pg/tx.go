@@ -64,6 +64,11 @@ type dbTx struct {
 	accessMode common.AccessMode
 }
 
+type conner interface{ Conn() *pgx.Conn }
+
+var _ conner = (*dbTx)(nil)
+var _ conner = (*nestedTx)(nil)
+
 // Precommit creates a prepared transaction for a two-phase commit. An ID
 // derived from the updates is return. This must be called before Commit. Either
 // Commit or Rollback must follow.
@@ -99,6 +104,8 @@ type readTx struct {
 	*nestedTx
 	release func()
 }
+
+var _ interface{ Conn() *pgx.Conn } = (*readTx)(nil)
 
 // Commit is a no-op for read-only transactions.
 // It will unconditionally return the connection to the pool.
@@ -145,6 +152,12 @@ func (d *delayedReadTx) Execute(ctx context.Context, stmt string, args ...any) (
 	}
 
 	return d.tx.Execute(ctx, stmt, args...)
+}
+
+var _ interface{ Conn() *pgx.Conn } = (*nestedTx)(nil)
+
+func (d *delayedReadTx) Conn() *pgx.Conn {
+	return d.tx.Conn()
 }
 
 func (d *delayedReadTx) Commit(ctx context.Context) error {

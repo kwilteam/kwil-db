@@ -3,10 +3,14 @@ package optimizer
 import (
 	"fmt"
 
+	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/testkit"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/virtual_plan"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/optimizer/rules"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/optimizer/virtual_plan"
 )
+
+var stubTable = &dt.TableRef{Table: "users"}
 
 func Example_QueryPlanner_CreateVirtualPlan() {
 	catalog := testkit.InitMockCatalog()
@@ -28,7 +32,7 @@ func Example_QueryPlanner_CreateVirtualPlan() {
 
 	fmt.Println(lp.Format(plan, 0))
 
-	r := &ProjectionRule{}
+	r := &rules.ProjectionRule{}
 	got := r.Transform(plan)
 
 	fmt.Printf("---After optimization---\n\n")

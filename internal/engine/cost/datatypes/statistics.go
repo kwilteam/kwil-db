@@ -19,9 +19,11 @@ func (s *Statistics) String() string {
 
 // ColumnStatistics contains statistics about a column.
 type ColumnStatistics struct {
-	NullCount     int64
-	Min           any
-	Max           any
+	NullCount int64
+	Min       any
+	Max       any
+
+	// These are harder
 	DistinctCount int64
 	AvgSize       int64
 

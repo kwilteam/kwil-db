@@ -225,6 +225,7 @@ func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []Proc
 		if res.willReturn {
 			returns = true
 		}
+		// visitor.sqlAnalyzer.reset() // only want to reset mutative
 	}
 
 	// if the procedure is expecting a return that is not a table, and it does not guarantee
@@ -429,6 +430,9 @@ func analyzeActionAST(action *types.Action, schema *types.Schema, ast []ActionSt
 
 	for _, stmt := range res.AST {
 		stmt.Accept(visitor)
+		if sqlStmt, ok := stmt.(*ActionStmtSQL); ok {
+			sqlStmt.Mutative = visitor.sqlResult.Mutative
+		}
 		visitor.sqlAnalyzer.reset()
 	}
 

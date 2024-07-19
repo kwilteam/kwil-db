@@ -9,12 +9,14 @@ import (
 	"sort"
 	"sync"
 
+	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	costtypes "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/query_planner"
+
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/catalog"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/generate"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
@@ -40,7 +42,34 @@ type GlobalContext struct {
 
 	service *common.Service
 
-	catalog catalog.Catalog
+	catalog catalog // dt.Catalog
+}
+
+type tableMeta struct {
+	schema *costtypes.Schema
+	stats  *costtypes.Statistics
+}
+
+func (tm tableMeta) Statistics() *costtypes.Statistics {
+	return tm.stats
+}
+func (tm tableMeta) Schema() *costtypes.Schema {
+	return tm.schema
+}
+
+var _ ds.DataSource = tableMeta{}
+var _ ds.DataSource = (*tableMeta)(nil)
+
+type catalog struct {
+	// fields   map[costtypes.TableRef]*costtypes.Schema
+	// dataSrcs map[costtypes.TableRef]*costtypes.Statistics
+	meta map[costtypes.TableRef]*tableMeta
+}
+
+var _ query_planner.Catalog = (*catalog)(nil)
+
+func (m *catalog) GetDataSource(tableRef *costtypes.TableRef) (ds.DataSource, error) {
+	return nil, nil
 }
 
 var (
@@ -159,15 +188,20 @@ func NewGlobalContext(ctx context.Context, db sql.Executor, extensionInitializer
 	// if one schema is dependent on another, it must be loaded after the other
 	// this is handled by the orderSchemas function
 	for _, schema := range orderSchemas(schemas) {
-		dataset, err := g.loadDataset(ctx, schema)
+		_, err := g.loadDataset(ctx, schema, db)
 		if err != nil {
 			return nil, fmt.Errorf("%w: schema (%s / %s / %s)", err, schema.Name, schema.DBID(), schema.Owner)
 		}
 
 		// Statistics. Check statistics tables? Recompute full on start?
-		if err = dataset.buildStats(ctx, db); err != nil {
-			return nil, err
-		}
+		// stats, err := dataset.buildStats(ctx, db)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// for tableRef, meta := range g.catalog.meta {
+		// 	stats[tableRef.Table]
+		// }
+		// g.catalog.
 	}
 
 	return g, nil
@@ -185,7 +219,7 @@ func (g *GlobalContext) Reload(ctx context.Context, db sql.Executor) error {
 	}
 
 	for _, schema := range orderSchemas(schemas) {
-		_, err := g.loadDataset(ctx, schema)
+		_, err := g.loadDataset(ctx, schema, db)
 		if err != nil {
 			return err
 		}
@@ -206,7 +240,7 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *ty
 	}
 	schema.Owner = txdata.Signer
 
-	dataset, err := g.loadDataset(ctx, schema)
+	_, err = g.loadDataset(ctx, schema, tx)
 	if err != nil {
 		return err
 	}
@@ -219,8 +253,8 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *ty
 		return err
 	}
 
-	// update the catalog (fields and stats)
-	return dataset.buildStats(ctx, tx)
+	// update the catalog (fields and stats), the tables should be empty though
+	return nil // dataset.buildStats(ctx, tx)
 }
 
 // DeleteDataset deletes a dataset.
@@ -393,26 +427,45 @@ type dbQueryFn func(ctx context.Context, stmt string, args ...any) (*sql.ResultS
 
 // loadDataset loads a dataset into the global context.
 // It does not create the dataset in the datastore.
-func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) (*baseDataset, error) {
+func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema, db sql.Executor) (*baseDataset, error) {
 	dbid := schema.DBID()
 	_, ok := g.initializers[dbid]
 	if ok {
 		return nil, fmt.Errorf("%w: %s", ErrDatasetExists, dbid)
 	}
 
-	fields := map[string]*datatypes.Schema{}
+	// The query_planner.Catalog must a costtypes.Schema and a
+	// datasource.DataSource for a pg schema-qualified table.
 	for _, table := range schema.Tables {
-		rel := &datatypes.TableRef{
+		rel := &costtypes.TableRef{
 			Namespace: dbid, // actually "ds_<dbid>"
 			Table:     table.Name,
 		}
-		tableFields := make([]datatypes.Field, len(table.Columns))
+		tableFields := make([]costtypes.Field, len(table.Columns))
 		for i, col := range table.Columns {
 			dataType := col.Type.Name // TODO: convert or standardize across
 			nullable := !col.HasAttribute(types.NOT_NULL)
-			tableFields[i] = datatypes.NewFieldWithRelation(col.Name, dataType, nullable, rel)
+			tableFields[i] = costtypes.NewFieldWithRelation(col.Name, dataType, nullable, rel)
 		}
-		fields[table.Name] = &datatypes.Schema{Fields: tableFields}
+
+		pgSchema := dbidSchema(dbid)
+
+		costSchema := &costtypes.Schema{Fields: tableFields}
+		stats, err := buildTableStats(ctx, pgSchema, table.Name, db)
+		if err != nil {
+			return nil, err
+		}
+
+		tableRef := costtypes.TableRef{
+			Namespace: pgSchema, // or just dbid?
+			Table:     table.Name,
+		}
+
+		g.catalog.meta[tableRef] = &tableMeta{
+			schema: costSchema,
+			stats:  stats,
+		}
+		// query_planner.NewPlanner(cat)
 	}
 
 	datasetCtx := &baseDataset{
@@ -421,11 +474,7 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) (
 		actions:    make(map[string]*preparedAction),
 		procedures: make(map[string]*preparedProcedure),
 		global:     g,
-		stats:      map[string]*datatypes.Statistics{}, // set by buildStats method after tables are created
-		fields:     fields,
 	}
-
-	// query_planner.NewPlanner(cat)
 
 	preparedActions, err := prepareActions(schema)
 	if err != nil {

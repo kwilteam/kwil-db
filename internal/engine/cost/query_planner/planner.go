@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/kwilteam/kwil-db/internal/engine/cost/catalog"
-	ds "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
+	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
 
@@ -14,15 +14,24 @@ import (
 )
 
 type LogicalPlanner interface {
-	ToExpr(expr tree.Expression, schema *ds.Schema) lp.LogicalExpr
+	ToExpr(expr tree.Expression, schema *dt.Schema) lp.LogicalExpr
 	ToPlan(node tree.SQLStatement) lp.LogicalPlan
 }
 
-type queryPlanner struct {
-	catalog catalog.Catalog
+type Catalog interface {
+	GetDataSource(tableRef *dt.TableRef) (datasource.DataSource, error)
 }
 
-func NewPlanner(catalog catalog.Catalog) *queryPlanner {
+// type defaultCatalogProvider struct {
+// 	dbidAliases map[string]string // alias -> dbid
+// 	srcs        map[string]datasource.DataSource
+// }
+
+type queryPlanner struct {
+	catalog Catalog
+}
+
+func NewPlanner(catalog Catalog) *queryPlanner {
 	return &queryPlanner{
 		catalog: catalog,
 	}
@@ -30,7 +39,7 @@ func NewPlanner(catalog catalog.Catalog) *queryPlanner {
 
 // ToExpr converts a tree.Expression to a logical expression.
 // TODO: use iterator or stack to traverse the tree, instead of recursive, to avoid stack overflow.
-func (q *queryPlanner) ToExpr(expr tree.Expression, schema *ds.Schema) lp.LogicalExpr {
+func (q *queryPlanner) ToExpr(expr tree.Expression, schema *dt.Schema) lp.LogicalExpr {
 	switch e := expr.(type) {
 	case *tree.ExpressionLiteral:
 		switch e.Type {
@@ -163,6 +172,8 @@ func (q *queryPlanner) planStatementWithContext(node *tree.SQLStatement, ctx *Pl
 		return q.buildSelectStmt(n, ctx)
 
 	case *tree.InsertStatement:
+		// INSERT INTO table VALUES ...
+
 		// Values [][]Expression => [][]LogicalExpr
 
 		// plan for UpsertClause too, as it might be costly
@@ -252,7 +263,7 @@ func (q *queryPlanner) buildSelectStmt(node *tree.SelectStatement, ctx *PlannerC
 	return plan
 }
 
-func (q *queryPlanner) buildOrderBy(plan lp.LogicalPlan, nodes []*tree.OrderingTerm, schema *ds.Schema, ctx *PlannerContext) lp.LogicalPlan {
+func (q *queryPlanner) buildOrderBy(plan lp.LogicalPlan, nodes []*tree.OrderingTerm, schema *dt.Schema, ctx *PlannerContext) lp.LogicalPlan {
 	if nodes == nil {
 		return plan
 	}
@@ -412,8 +423,8 @@ func (q *queryPlanner) buildCTE(cte *tree.CommonTableExpression, ctx *PlannerCon
 }
 
 func (q *queryPlanner) buildTableSource(node *tree.RelationTable, ctx *PlannerContext) lp.LogicalPlan {
-	//tableRef := ds.TableRefQualified(node.Schema, node.Name)   // TODO: handle schema
-	tableRef := ds.TableRefQualified("", node.Table)
+	//tableRef := dt.TableRefQualified(node.Schema, node.Name)   // TODO: handle schema
+	tableRef := dt.TableRefQualified("", node.Table)
 
 	// TODO: handle cte
 	//relName := tableRef.String()
@@ -446,7 +457,7 @@ func (q *queryPlanner) buildProjection(plan lp.LogicalPlan, exprs []lp.LogicalEx
 	return lp.Builder.FromPlan(plan).Project(exprs...).Build()
 }
 
-func (q *queryPlanner) buildHaving(node tree.Expression, schema *ds.Schema,
+func (q *queryPlanner) buildHaving(node tree.Expression, schema *dt.Schema,
 	aliasMap map[string]lp.LogicalExpr, ctx *PlannerContext) lp.LogicalExpr {
 	if node == nil {
 		return nil

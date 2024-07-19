@@ -21,7 +21,7 @@ func (ds *memDataSource) Schema() *datatypes.Schema {
 }
 
 func (ds *memDataSource) Scan(ctx context.Context, projection ...string) *Result {
-	return dsScan(ctx, ds.schema, ds.records, projection)
+	return ScanData(ctx, ds.schema, ds.records, projection)
 }
 
 func (ds *memDataSource) Statistics() *datatypes.Statistics {

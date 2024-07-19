@@ -23,9 +23,10 @@ func (a *actionAnalyzer) VisitActionStmtSQL(p0 *ActionStmtSQL) any {
 
 	if a.sqlAnalyzer.sqlResult.Mutative {
 		a.Mutative = true
+		p0.Mutative = true
 	}
 
-	return nil
+	return a.Mutative
 }
 
 func (a *actionAnalyzer) VisitActionStmtExtensionCall(p0 *ActionStmtExtensionCall) any {

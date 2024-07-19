@@ -1,9 +1,10 @@
-package optimizer
+package rules
 
 import (
 	"slices"
 
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
+
 	"golang.org/x/exp/maps"
 )
 

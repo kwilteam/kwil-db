@@ -7,7 +7,6 @@
 - how can we do selectivity from a condition with arg placeholders like $1? Do all placeholders need to be replaced with literals before plan/cost?
 - PredicatePushDownRule does not support a projection plan? I added it, but it does nothing only rewrap it with source plan possibly transformed.
 - how should projection pushdown reduce cost?
-- Schema from a DataSource should be all columns from all tables?
 
 ## issue items
 

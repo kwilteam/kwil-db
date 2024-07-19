@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/cost/internal/testkit"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/optimizer"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/optimizer/rules"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/query_planner"
 	"github.com/kwilteam/kwil-db/parse"
 )
@@ -53,7 +54,7 @@ func ExampleDemo() {
 
 	fmt.Printf("---Original plan---\n\n")
 	fmt.Println(logical_plan.Format(plan, 0))
-	r := &optimizer.ProjectionRule{}
+	r := &rules.ProjectionRule{}
 	optPlan := r.Transform(plan)
 
 	fmt.Printf("---After optimization---\n\n")

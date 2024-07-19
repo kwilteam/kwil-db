@@ -6,7 +6,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datasource"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 	"github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
-	"github.com/kwilteam/kwil-db/internal/engine/cost/virtual_plan"
+	"github.com/kwilteam/kwil-db/internal/engine/cost/optimizer/virtual_plan"
 )
 
 // type plannerCtx struct {}
