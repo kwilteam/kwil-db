@@ -103,6 +103,9 @@ func buildTableStats(ctx context.Context, pgSchema, table string, db sql.Executo
 	numCols := len(colInfo)
 	colStats := make([]costtypes.ColumnStatistics, numCols)
 
+	// NOTE: this code is not going to be here.  I'm just coding it here so the
+	// goal is in focus.
+
 	// iterate over all rows (select *)
 	// var scans []any
 	// for _, col := range colInfo {
