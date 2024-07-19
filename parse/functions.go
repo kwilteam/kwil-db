@@ -39,6 +39,44 @@ var (
 			},
 			PGFormat: defaultFormat("error"),
 		},
+		"parse_unix_timestamp": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// two args, both text
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				if !args[1].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[1])
+				}
+
+				return decimal16_6, nil
+			},
+			PGFormat: defaultFormat("parse_unix_timestamp"),
+		},
+		"format_unix_timestamp": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// first arg must be decimal(16, 6), second arg must be text
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				if !args[0].EqualsStrict(decimal16_6) {
+					return nil, wrapErrArgumentType(decimal16_6, args[0])
+				}
+
+				if !args[1].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[1])
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: defaultFormat("format_unix_timestamp"),
+		},
 		"uuid_generate_v5": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
 				// first argument must be a uuid, second argument must be text
@@ -676,14 +714,25 @@ func defaultFormat(name string) FormatFunc {
 	}
 }
 
-// decimal1000 is a decimal type with a precision of 1000.
-var decimal1000 *types.DataType
+var (
+	// decimal1000 is a decimal type with a precision of 1000.
+	decimal1000 *types.DataType
+	// decimal16_6 is a decimal type with a precision of 16 and a scale of 6.
+	// it is used to represent UNIX timestamps, allowing microsecond precision.
+	// see internal/sql/pg/sql.go/sqlCreateParseUnixTimestampFunc for more info
+	decimal16_6 *types.DataType
+)
 
 func init() {
 	var err error
 	decimal1000, err = types.NewDecimalType(1000, 0)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create decimal type: 1000, 0: %v", err))
+	}
+
+	decimal16_6, err = types.NewDecimalType(16, 6)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create decimal type: 16, 6: %v", err))
 	}
 }
 
