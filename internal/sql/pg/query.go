@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"reflect"
 
 	"github.com/kwilteam/kwil-db/common/sql"
@@ -364,25 +363,9 @@ func decodeFromPGType(vals ...any) ([]any, error) {
 			u := types.UUID(v)
 			return &u, nil
 		case pgtype.Numeric:
-			if v.NaN {
-				return "NaN", nil
-			}
-
-			// if we give postgres a number 5000, it will return it as 5 with exponent 3.
-			// Since kwil's decimal semantics do not allow negative scale, we need to multiply
-			// the number by 10^exp to get the correct value.
-			if v.Exp > 0 {
-				z := new(big.Int)
-				z.Exp(big.NewInt(10), big.NewInt(int64(v.Exp)), nil)
-				z.Mul(z, v.Int)
-				v.Int = z
-				v.Exp = 0
-			}
-
-			// there is a bit of an edge case here, where uint256 can be returned.
-			// since most results simply get returned to the user via JSON, it doesn't
-			// matter too much right now, so we'll leave it as-is.
-			return decimal.NewFromBigInt(v.Int, v.Exp)
+			dec, err := pgNumericToDecimal(v)
+			// if errors.Is(err, ErrNaN) { return "NaN", nil } // ??
+			return dec, err
 		}
 	}
 

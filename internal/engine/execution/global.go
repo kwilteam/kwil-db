@@ -69,7 +69,11 @@ type catalog struct {
 var _ query_planner.Catalog = (*catalog)(nil)
 
 func (m *catalog) GetDataSource(tableRef *costtypes.TableRef) (ds.DataSource, error) {
-	return nil, nil
+	meta, ok := m.meta[*tableRef]
+	if !ok {
+		return nil, errors.New("table not found in catalog")
+	}
+	return &tableMeta{meta.schema, meta.stats}, nil
 }
 
 var (
@@ -449,12 +453,14 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema, d
 		}
 
 		pgSchema := dbidSchema(dbid)
+		qualifiedTable := pgSchema + "." + table.Name
 
-		costSchema := &costtypes.Schema{Fields: tableFields}
-		stats, err := buildTableStats(ctx, pgSchema, table.Name, db)
+		stats, err := pg.TableStats(ctx, qualifiedTable, db)
 		if err != nil {
 			return nil, err
 		}
+
+		costSchema := &costtypes.Schema{Fields: tableFields}
 
 		tableRef := costtypes.TableRef{
 			Namespace: pgSchema, // or just dbid?

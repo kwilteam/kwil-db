@@ -3,7 +3,6 @@ package execution
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -62,145 +61,14 @@ func buildStats(ctx context.Context, schema *types.Schema, db sql.Executor) (map
 	stats := map[string]*costtypes.Statistics{}
 	pgSchema := dbidSchema(schema.DBID())
 	for _, table := range schema.Tables {
-		// *datatypes.ColumnStatistics{min, max, nullcount, ... }
-		tblStats, err := buildTableStats(ctx, pgSchema, table.Name, db)
+		qualifiedTable := pgSchema + "." + table.Name
+		tblStats, err := pg.TableStats(ctx, qualifiedTable, db)
 		if err != nil {
 			return nil, err
 		}
 		stats[table.Name] = tblStats
 	}
 	return stats, nil
-}
-
-func buildTableStats(ctx context.Context, pgSchema, table string, db sql.Executor) (*costtypes.Statistics, error) {
-	// table stats:
-	//  1. row count
-	//  2. per-column stats
-	//		a. min and max
-	//		b. null count
-	//		c. unique value count ?
-	//		d. average record size ?
-	//		e. ???
-
-	qualifiedTable := pgSchema + "." + table
-
-	// row count
-	res, err := db.Execute(ctx, `SELECT count(*) FROM %s`, qualifiedTable)
-	if err != nil {
-		return nil, err
-	}
-	count, ok := sql.Int64(res.Rows[0][0])
-	if !ok {
-		return nil, fmt.Errorf("no row count for %s", qualifiedTable)
-	}
-	// TODO: We needs a schema-table stats database so we don't ever have to do
-	// a full table scan for column stats.
-
-	colInfo, err := pg.ColumnInfo(ctx, db, qualifiedTable)
-	if err != nil {
-		return nil, err
-	}
-	numCols := len(colInfo)
-	colStats := make([]costtypes.ColumnStatistics, numCols)
-
-	// NOTE: this code is not going to be here.  I'm just coding it here so the
-	// goal is in focus.
-
-	// iterate over all rows (select *)
-	// var scans []any
-	// for _, col := range colInfo {
-	// 	scans = append(scans, col.ScanVal()) // for QueryRowFunc
-	// }
-	err = pg.QueryRowFuncAny(ctx, db, `SELECT * FROM `+qualifiedTable,
-		func(_ []pg.FieldDesc, vals []any) error {
-			for i, val := range vals {
-				stat := &colStats[i]
-				if val == nil {
-					stat.NullCount++
-					continue
-				}
-
-				if colInfo[i].IsInt() {
-					valInt, ok := sql.Int64(val)
-					if !ok {
-						return errors.New("not int")
-					}
-					if stat.Min == nil {
-						stat.Min = valInt
-						stat.Max = valInt
-						continue
-					}
-					if valInt < stat.Min.(int64) {
-						stat.Min = valInt
-					}
-					if valInt > stat.Max.(int64) {
-						stat.Max = valInt
-					}
-					continue
-				}
-
-				if colInfo[i].IsText() {
-					valStr, ok := val.(string)
-					if !ok {
-						return errors.New("not string")
-					}
-					if stat.Min == nil {
-						stat.Min = valStr
-						stat.Max = valStr
-						continue
-					}
-					if valStr < stat.Min.(string) {
-						stat.Min = valStr
-					}
-					if valStr > stat.Max.(string) {
-						stat.Max = valStr
-					}
-					continue
-				}
-
-				// if colInfo[i].IsNumeric() { // TODO
-
-				if colInfo[i].IsByteA() {
-					valBytea, ok := val.([]byte)
-					if !ok {
-						return errors.New("not string")
-					}
-					if stat.Min == nil {
-						stat.Min = valBytea
-						stat.Max = valBytea
-						continue
-					}
-					switch bytes.Compare(valBytea, stat.Min.([]byte)) {
-					case -1:
-						stat.Min = valBytea
-					case 1:
-						stat.Max = valBytea
-					}
-					continue
-				}
-
-			}
-
-			return nil
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	//   datatypes.ColumnStatistics{min, max, nullcount, ... }
-	return &costtypes.Statistics{
-		RowCount:         count,
-		ColumnStatistics: colStats,
-	}, nil
-}
-
-type ColInfo struct {
-	Pos      int
-	Name     string
-	DataType string
-	Nullable bool
-	Default  any
 }
 
 func (d *baseDataset) extCall(scope *precompiles.ProcedureContext,

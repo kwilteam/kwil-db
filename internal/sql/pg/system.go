@@ -312,8 +312,50 @@ func (ci *ColInfo) ScanVal() any {
 		var v pgtype.Numeric
 		return &v
 	}
+	if ci.IsFloat() {
+		var v pgtype.Float8
+		return &v
+	}
+	if ci.IsUUID() {
+		var v pgtype.UUID // wrongish default. user could manually go with our types.UUID instead
+		return &v
+	}
 	var v any
 	return &v
+}
+
+type ColType string
+
+const (
+	ColTypeInt     ColType = "int"
+	ColTypeText    ColType = "text"
+	ColTypeByteA   ColType = "bytea"
+	ColTypeUUID    ColType = "uuid"
+	ColTypeNumeric ColType = "numeric"
+	ColTypeFloat   ColType = "float"
+	ColTypeUnknown ColType = "unknown"
+)
+
+func (ci *ColInfo) Type() ColType {
+	if ci.IsInt() {
+		return ColTypeInt
+	}
+	if ci.IsText() {
+		return ColTypeText
+	}
+	if ci.IsByteA() {
+		return ColTypeByteA
+	}
+	if ci.IsNumeric() {
+		return ColTypeNumeric
+	}
+	if ci.IsFloat() {
+		return ColTypeFloat
+	}
+	if ci.IsUUID() {
+		return ColTypeUUID
+	}
+	return ColTypeUnknown
 }
 
 func (ci *ColInfo) IsInt() bool {
@@ -330,6 +372,23 @@ func (ci *ColInfo) IsText() bool {
 		return true
 	}
 	return false
+}
+
+func (ci *ColInfo) IsFloat() bool {
+	switch strings.ToLower(ci.DataType) {
+	case "float32", "float64":
+		return true
+	}
+	return false
+}
+
+func (ci *ColInfo) IsUUID() bool {
+	switch strings.ToLower(ci.DataType) {
+	case "uuid":
+		return true
+	}
+	return false
+
 }
 
 func (ci *ColInfo) IsByteA() bool {

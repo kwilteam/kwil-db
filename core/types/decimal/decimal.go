@@ -258,14 +258,14 @@ func (z *Decimal) Mod(x, y *Decimal) (*Decimal, error) {
 
 // Cmp compares two decimals.
 // It returns -1 if x < y, 0 if x == y, and 1 if x > y.
-// It also sets z to the result of the comparison.
 func (z *Decimal) Cmp(x *Decimal) (int, error) {
-	_, err := z.context().Cmp(&z.dec, &z.dec, &x.dec)
+	d := apd.New(0, 0)
+	_, err := z.context().Cmp(d, &z.dec, &x.dec)
 	if err != nil {
 		return 0, err
 	}
 
-	i64, err := z.Int64()
+	i64, err := d.Int64()
 	if err != nil {
 		return 0, err
 	}

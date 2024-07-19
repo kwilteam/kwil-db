@@ -1,7 +1,5 @@
 package datatypes
 
-import "fmt"
-
 // Statistics contains statistics about a table or a Plan. A Statistics can be
 // derived directly from the underlying table, or derived from the statistics of
 // its children.
@@ -13,9 +11,9 @@ type Statistics struct {
 	//Selectivity, for plan statistics
 }
 
-func (s *Statistics) String() string {
-	return fmt.Sprintf("RowCount: %d", s.RowCount)
-}
+// func (s *Statistics) String() string {
+// 	return fmt.Sprintf("RowCount: %d", s.RowCount)
+// }
 
 // ColumnStatistics contains statistics about a column.
 type ColumnStatistics struct {
