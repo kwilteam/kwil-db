@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	// "github.com/kwilteam/kwil-db/internal/conv"
+
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
 func TestMain(m *testing.M) {
@@ -50,7 +50,7 @@ var (
 func TestColumnInfo(t *testing.T) {
 	ctx := context.Background()
 
-	db, err := NewDB(ctx, cfg)
+	db, err := NewPool(ctx, &cfg.PoolConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestColumnInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
-		` (a int8 not null, b int4 default 42, c text, d bytea, e numeric(20,5))`)
+		` (a int8 not null, b int4 default 42, c text, d bytea, e numeric(20,5), f int8[])`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,13 +84,14 @@ func TestColumnInfo(t *testing.T) {
 		{Pos: 3, Name: "c", DataType: "text", Nullable: true, Default: nil},
 		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true, Default: nil},
 		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true, Default: nil},
+		{Pos: 6, Name: "f", DataType: "bigint", Array: true, Nullable: true, Default: nil},
 	}
 
 	assert.Equal(t, wantCols, cols)
 	// t.Logf("%#v", cols)
 
 	_, err = tx.Execute(ctx, `insert into `+tbl+
-		` values (5, null, 'a', '\xabab', 12)`)
+		` values (5, null, 'a', '\xabab', 12, '{2,3,4}')`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,9 +99,6 @@ func TestColumnInfo(t *testing.T) {
 	var scans []any
 	for _, col := range cols {
 		scans = append(scans, col.ScanVal())
-	}
-	for _, val := range scans {
-		t.Logf("%#v (%T)", val, val)
 	}
 	err = QueryRowFunc(ctx, tx, `SELECT * FROM `+tbl, scans,
 		func() error {
@@ -113,6 +111,49 @@ func TestColumnInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestScanVal(t *testing.T) {
+	cols := []ColInfo{
+		{Pos: 1, Name: "a", DataType: "bigint", Nullable: false, Default: nil},
+		{Pos: 2, Name: "b", DataType: "integer", Nullable: true, Default: "42"},
+		{Pos: 3, Name: "c", DataType: "text", Nullable: true, Default: nil},
+		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true, Default: nil},
+		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true, Default: nil},
+		{Pos: 6, Name: "aa", DataType: "bigint", Array: true, Nullable: false, Default: nil},
+		{Pos: 7, Name: "ba", DataType: "integer", Array: true, Nullable: true, Default: nil},
+		{Pos: 8, Name: "ca", DataType: "text", Array: true, Nullable: true, Default: nil},
+		{Pos: 9, Name: "da", DataType: "bytea", Array: true, Nullable: true, Default: nil},
+		{Pos: 10, Name: "ea", DataType: "numeric", Array: true, Nullable: true, Default: nil},
+	}
+	var scans []any
+	for _, col := range cols {
+		scans = append(scans, col.ScanVal())
+	}
+	// for _, val := range scans {
+	// 	t.Logf("%#v (%T)", val, val)
+	// }
+
+	// want pointers to these base types
+	var ba []byte
+	var i8 pgtype.Int8
+	var txt pgtype.Text
+	var num pgtype.Numeric
+
+	// want pointers to these slices for array types
+	// var ia []pgtype.Int8
+	// var ta []pgtype.Text
+	// var baa [][]byte
+	// var na []pgtype.Numeric
+	var ia pgtype.Array[pgtype.Int8]
+	var ta pgtype.Array[pgtype.Text]
+	var baa pgtype.Array[[]byte]
+	var na pgtype.Array[pgtype.Numeric]
+
+	wantScans := []any{&i8, &i8, &txt, &ba, &num,
+		&ia, &ia, &ta, &baa, &na}
+
+	assert.Equal(t, wantScans, scans)
 }
 
 func TestQueryScan(t *testing.T) {
@@ -136,13 +177,13 @@ func TestQueryScan(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
-		` (a int8, b int4, c text, d bytea, e numeric(20,5))`)
+		` (a int8, b int4, c text, d bytea, e numeric(20,5), f int8[])`)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = tx.Execute(ctx, `insert into `+tbl+
-		` values (5, null, 'a', '\xabab', 12)`)
+		` values (5, null, 'a', '\xabab', 12, '{2,3,4}')`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +214,7 @@ func TestQueryScan(t *testing.T) {
 	var colDefault any
 	scans := []any{&pos, &colName, &dataType, &isNullable, &colDefault}
 	err = scanner.QueryScanFn(ctx, sql, scans, func() error {
-		colInfo = append(colInfo, ColInfo{pos, colName, dataType,
+		colInfo = append(colInfo, ColInfo{pos, colName, dataType, false,
 			strings.EqualFold(isNullable, "yes"), colDefault})
 		return nil
 	})
@@ -189,8 +230,8 @@ func TestQueryScan(t *testing.T) {
 	// [{1 a bigint true <nil>} {2 b integer true <nil>} {3 c text true <nil>} {4 d bytea true <nil>} {5 e numeric true <nil>}]
 
 	err = QueryRowFuncAny(ctx, tx, sql, func(fields []FieldDesc, vals []any) error {
-		// t.Logf("%#v", vals) // e.g. []interface {}{1, "a", "bigint", "YES", interface {}(nil)}
-		spew.Dump(vals)
+		t.Logf("%#v", vals) // e.g. []interface {}{1, "a", "bigint", "YES", interface {}(nil)}
+		// spew.Dump(vals)
 		return nil
 	})
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -58,6 +57,7 @@ func TestTableStats(t *testing.T) {
 		`(5, null, '', '\xabab', 12.6), `+
 		`(-1, 0, 'B', '\x01', -7), `+
 		`(3, 1, null, '\x', 8.1), `+
+		`(0, 0, 'Q', NULL, NULL), `+
 		`(7, -4, 'c', '\x0001', 0.3333)`)
 	if err != nil {
 		t.Fatal(err)
@@ -68,8 +68,48 @@ func TestTableStats(t *testing.T) {
 
 	// spew.Config.DisableMethods = true
 	// defer func() { spew.Config.DisableMethods = false }()
-	spew.Dump(stats)
+	t.Log(stats)
 
 	fmt.Println(stats.ColumnStatistics[4].Min)
 	fmt.Println(stats.ColumnStatistics[4].Max)
 }
+
+/*func TestScanBig(t *testing.T) {
+	ctx := context.Background()
+
+	cfg := *cfg
+	cfg.User = "dcrdata"
+	cfg.Pass = "dcrdata"
+	cfg.DBName = "dcrdata"
+
+	db, err := NewPool(ctx, &cfg.PoolConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+
+	tbl := `addresses`
+	cols, err := ColumnInfo(ctx, tx, tbl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%#v", cols)
+
+	// scanner, ok :=  tx.(QueryScanner)
+	// if !ok {
+	// 	t.Fatal("tx not a QueryScanner")
+	// }
+	// scanner.QueryScanFn(ctx, fmt.Sprintf(`SELECT * FROM %s`, tlb))
+	stats, err := TableStats(ctx, tbl, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(stats)
+}*/

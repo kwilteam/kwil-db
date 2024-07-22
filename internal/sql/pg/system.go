@@ -275,53 +275,100 @@ func QueryRowFuncAny(ctx context.Context, tx sql.Executor, sql string,
 	return queryRowFuncAny(ctx, conn, sql, fn, args...)
 }
 
-func TextValue(val any) (string, bool) {
+func TextValue(val any) (txt string, null bool, bad bool) {
 	switch str := val.(type) {
 	case string:
-		return str, true
+		return str, false, true
 	case pgtype.Text:
-		return str.String, str.Valid
+		return str.String, !str.Valid, true
 	case *pgtype.Text:
-		return str.String, str.Valid
+		return str.String, !str.Valid, true
 	}
-	return "", false
+	return "", false, false
 }
 
+// ColInfo is used when ingesting column descriptions from Postgresql, such as
+// from information_schema.column. Use the Type method to return a known
+// ColType. Use ScanVal to return a pointer to an instance of the appropriate Go
+// type to scan a row containing this column type in an SQL statement
 type ColInfo struct {
 	Pos      int
 	Name     string
 	DataType string
+	Array    bool
 	Nullable bool
 	Default  any
 }
 
+func scanVal(ct ColType) any {
+	switch ct {
+	case ColTypeInt:
+		return new(pgtype.Int8)
+	case ColTypeText:
+		return new(pgtype.Text)
+	case ColTypeBool:
+		return new(pgtype.Bool)
+	case ColTypeByteA:
+		return new([]byte)
+	case ColTypeUUID:
+		return new(pgtype.UUID)
+	case ColTypeNumeric:
+		return new(pgtype.Numeric)
+	case ColTypeFloat:
+		return new(pgtype.Float8)
+	case ColTypeTime:
+		return new(pgtype.Timestamp)
+	default:
+		var v any
+		return &v
+	}
+}
+
+func scanArrayVal(ct ColType) any {
+	switch ct {
+	case ColTypeInt:
+		return pgArray[pgtype.Int8]()
+	case ColTypeText:
+		return pgArray[pgtype.Text]()
+	case ColTypeBool:
+		return pgArray[pgtype.Bool]()
+	case ColTypeByteA: // [][]byte
+		return pgArray[[]byte]()
+	case ColTypeUUID:
+		return pgArray[pgtype.UUID]()
+	case ColTypeNumeric:
+		return pgArray[pgtype.Numeric]()
+	case ColTypeFloat:
+		return pgArray[pgtype.Float8]()
+	case ColTypeTime:
+		return pgArray[pgtype.Timestamp]()
+	default:
+		return new([]any)
+	}
+}
+
+func (ci *ColInfo) scanVal() any {
+	return scanVal(ci.baseType())
+}
+
+func pgArray[T any]() *pgtype.Array[T] {
+	return &pgtype.Array[T]{}
+}
+
 func (ci *ColInfo) ScanVal() any {
-	if ci.IsInt() {
-		var v pgtype.Int8 // int64
-		return &v
+	val := ci.scanVal() // pointer to instance of the type
+	if ci.Array {       // return pointer to slice of the type
+		return scanArrayVal(ci.baseType())
+
+		// rt := reflect.TypeOf(val).Elem()
+		// st := reflect.SliceOf(rt)
+		// return reflect.New(st).Interface()
+
+		// sl := reflect.MakeSlice(st, 0, 0)
+		// return sl.Interface()
+		// return mkSlice(rv.Interface())
 	}
-	if ci.IsText() {
-		var v pgtype.Text // string
-		return &v
-	}
-	if ci.IsByteA() {
-		var v []byte
-		return &v
-	}
-	if ci.IsNumeric() {
-		var v pgtype.Numeric
-		return &v
-	}
-	if ci.IsFloat() {
-		var v pgtype.Float8
-		return &v
-	}
-	if ci.IsUUID() {
-		var v pgtype.UUID // wrongish default. user could manually go with our types.UUID instead
-		return &v
-	}
-	var v any
-	return &v
+	return val
 }
 
 type ColType string
@@ -329,19 +376,69 @@ type ColType string
 const (
 	ColTypeInt     ColType = "int"
 	ColTypeText    ColType = "text"
+	ColTypeBool    ColType = "bool"
 	ColTypeByteA   ColType = "bytea"
 	ColTypeUUID    ColType = "uuid"
 	ColTypeNumeric ColType = "numeric"
 	ColTypeFloat   ColType = "float"
+	ColTypeTime    ColType = "timestamp"
+
+	ColTypeIntArray     ColType = "int[]"
+	ColTypeTextArray    ColType = "text[]"
+	ColTypeBoolArray    ColType = "bool[]"
+	ColTypeByteAArray   ColType = "bytea[]"
+	ColTypeUUIDArray    ColType = "uuid[]"
+	ColTypeNumericArray ColType = "numeric[]"
+	ColTypeFloatArray   ColType = "float[]"
+	ColTypeTimeArray    ColType = "timestamp[]"
+
 	ColTypeUnknown ColType = "unknown"
 )
 
+func arrayType(ct ColType) ColType {
+	switch ct {
+	case ColTypeInt:
+		return ColTypeIntArray
+	case ColTypeText:
+		return ColTypeTextArray
+	case ColTypeBool:
+		return ColTypeBoolArray
+	case ColTypeByteA:
+		return ColTypeByteAArray
+	case ColTypeUUID:
+		return ColTypeUUIDArray
+	case ColTypeNumeric:
+		return ColTypeNumericArray
+	case ColTypeFloat:
+		return ColTypeFloatArray
+	case ColTypeTime:
+		return ColTypeTimeArray
+	default:
+		return ColTypeUnknown
+	}
+}
+
+// Type returns the canonical ColType based on the DataType, which is the
+// type string reported by PostgreSQL from information_schema.columns.
 func (ci *ColInfo) Type() ColType {
+	// For an array, standardize the base type and arrayify.
+	// dt, array := strings.CutSuffix(ci.DataType, "[]")
+	if ci.Array {
+		// ct := (&ColInfo{DataType: ci.DataType}).Type()
+		return arrayType(ci.baseType())
+	}
+	return ci.baseType()
+}
+
+func (ci *ColInfo) baseType() ColType {
 	if ci.IsInt() {
 		return ColTypeInt
 	}
 	if ci.IsText() {
 		return ColTypeText
+	}
+	if ci.IsBool() {
+		return ColTypeBool
 	}
 	if ci.IsByteA() {
 		return ColTypeByteA
@@ -355,12 +452,15 @@ func (ci *ColInfo) Type() ColType {
 	if ci.IsUUID() {
 		return ColTypeUUID
 	}
+	if ci.IsTime() {
+		return ColTypeTime
+	}
 	return ColTypeUnknown
 }
 
 func (ci *ColInfo) IsInt() bool {
 	switch strings.ToLower(ci.DataType) {
-	case "bigint", "integer", "int", "int2", "int4", "int8":
+	case "bigint", "integer", "smallint", "int", "int2", "int4", "int8":
 		return true
 	}
 	return false
@@ -376,7 +476,15 @@ func (ci *ColInfo) IsText() bool {
 
 func (ci *ColInfo) IsFloat() bool {
 	switch strings.ToLower(ci.DataType) {
-	case "float32", "float64":
+	case "double precision", "single precision", "float32", "float64":
+		return true
+	}
+	return false
+}
+
+func (ci *ColInfo) IsBool() bool {
+	switch strings.ToLower(ci.DataType) {
+	case "boolean", "bool":
 		return true
 	}
 	return false
@@ -407,22 +515,33 @@ func (ci *ColInfo) IsNumeric() bool {
 	return dt == "uint256"
 }
 
+func (ci *ColInfo) IsTime() bool {
+	dt := strings.ToLower(ci.DataType)
+	return strings.HasPrefix(dt, "timestamp")
+}
+
 func columnInfo(ctx context.Context, conn *pgx.Conn, tbl string) ([]ColInfo, error) {
 	var colInfo []ColInfo
 
 	// get column data types
-	sql := `SELECT ordinal_position, column_name, data_type, is_nullable, column_default
+	sql := `SELECT ordinal_position, column_name, data_type, udt_name::regtype, is_nullable, column_default
         FROM information_schema.columns
         WHERE table_name = '` + tbl + `'`
 
 	var pos int
-	var colName, dataType string
-	var isNullable string
+	var colName, dataType, typeOrArray, isNullable string
 	var colDefault any
-	scans := []any{&pos, &colName, &dataType, &isNullable, &colDefault}
+	scans := []any{&pos, &colName, &typeOrArray, &dataType, &isNullable, &colDefault}
 	err := queryRowFunc(ctx, conn, sql, scans, func() error {
+		isArray := strings.EqualFold(typeOrArray, "ARRAY")
+		var wasArr bool
+		dataType, wasArr = strings.CutSuffix(dataType, "[]")
+		if isArray && !wasArr {
+			return errors.New("inconsistent array typing")
+		}
 		colInfo = append(colInfo, ColInfo{pos, colName, dataType,
-			strings.EqualFold(isNullable, "yes"), colDefault})
+			isArray,
+			strings.EqualFold(isNullable, "YES"), colDefault})
 		return nil
 	})
 	if err != nil {

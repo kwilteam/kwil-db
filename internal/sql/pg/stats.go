@@ -6,12 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
-	costtypes "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 
 	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
+	costtypes "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
 )
 
 func TableStats(ctx context.Context, table string, db sql.Executor) (*costtypes.Statistics, error) {
@@ -47,28 +48,49 @@ func TableStats(ctx context.Context, table string, db sql.Executor) (*costtypes.
 	for i := range colInfo {
 		colTypes[i] = colInfo[i].Type()
 	}
+	// fmt.Println(colTypes)
 	colStats := make([]costtypes.ColumnStatistics, numCols)
 
 	// iterate over all rows (select *)
-	// var scans []any
-	// for _, col := range colInfo {
-	// 	scans = append(scans, col.ScanVal()) // for QueryRowFunc
-	// }
-	err = QueryRowFuncAny(ctx, db, `SELECT * FROM `+qualifiedTable,
-		func(_ []FieldDesc, vals []any) error {
-			for i, val := range vals {
+	var scans []any
+	for _, col := range colInfo {
+		scans = append(scans, col.ScanVal()) // for QueryRowFunc
+	}
+	err = QueryRowFunc(ctx, db, `SELECT * FROM `+qualifiedTable, scans,
+		// func(_ []FieldDesc, vals []any) error { // for QueryRowFuncAny
+		func() error {
+			for i, val := range scans {
 				stat := &colStats[i]
-				if val == nil {
+				if val == nil { // with QueryRowFuncAny and vals []any, or with QueryRowFunc where scans are native type pointers
 					stat.NullCount++
 					continue
 				}
 
+				// TODO: do something with array types (num elements stats????)
+
 				switch colTypes[i] {
 				case ColTypeInt:
-					valInt, ok := sql.Int64(val)
-					if !ok {
-						return errors.New("not int")
+					var valInt int64
+					switch it := val.(type) {
+					case interface{ Int64Value() (pgtype.Int8, error) }: // several of the pgtypes int types
+						i8, err := it.Int64Value()
+						if err != nil {
+							return fmt.Errorf("bad int64: %T", val)
+						}
+						if !i8.Valid {
+							stat.NullCount++
+							continue
+						}
+						valInt = i8.Int64
+
+					default:
+						var ok bool
+						valInt, ok = sql.Int64(val)
+						if !ok {
+							return fmt.Errorf("not int: %T", val)
+						}
 					}
+
 					if stat.Min == nil {
 						stat.Min = valInt
 						stat.Max = valInt
@@ -82,9 +104,13 @@ func TableStats(ctx context.Context, table string, db sql.Executor) (*costtypes.
 					continue
 
 				case ColTypeText:
-					valStr, ok := TextValue(val) // val.(string)
+					valStr, invalid, ok := TextValue(val) // val.(string)
 					if !ok {
-						return errors.New("not string")
+						return fmt.Errorf("not string: %T", val)
+					}
+					if invalid {
+						stat.NullCount++
+						continue
 					}
 					if stat.Min == nil {
 						stat.Min = valStr
@@ -99,27 +125,109 @@ func TableStats(ctx context.Context, table string, db sql.Executor) (*costtypes.
 					continue
 
 				case ColTypeByteA:
-					valBytea, ok := val.([]byte)
-					if !ok {
-						return errors.New("not bytea")
+					var valBytea []byte
+					switch vt := val.(type) {
+					// case *pgtype.Array[byte]:
+					// 	if !vt.Valid {
+					// 		stat.NullCount++
+					// 		continue
+					// 	}
+					// 	valBytea = vt.Elements
+					// case pgtype.Array[byte]:
+					// 	if !vt.Valid {
+					// 		stat.NullCount++
+					// 		continue
+					// 	}
+					// 	valBytea = vt.Elements
+					case *[]byte:
+						if vt == nil || *vt == nil {
+							stat.NullCount++
+							continue
+						}
+						valBytea = *vt
+					case []byte:
+						if vt == nil {
+							stat.NullCount++
+							continue
+						}
+						valBytea = vt
+					default:
+						return fmt.Errorf("not bytea: %T", val)
 					}
+
 					if stat.Min == nil {
+						valBytea = slices.Clone(valBytea)
 						stat.Min = valBytea
 						stat.Max = valBytea
 						continue
 					}
 
 					if bytes.Compare(valBytea, stat.Min.([]byte)) == -1 {
-						stat.Min = valBytea
+						stat.Min = slices.Clone(valBytea)
 					} else if bytes.Compare(valBytea, stat.Max.([]byte)) == 1 {
-						stat.Max = valBytea
+						stat.Max = slices.Clone(valBytea)
 					}
 					continue
+
+				case ColTypeBool:
+					var b bool
+					switch v := val.(type) {
+					case *pgtype.Bool:
+						if !v.Valid {
+							stat.NullCount++
+							continue
+						}
+						b = v.Bool
+					case pgtype.Bool:
+						if !v.Valid {
+							stat.NullCount++
+							continue
+						}
+						b = v.Bool
+					case *bool:
+						b = *v
+					case bool:
+						b = v
+
+					default:
+						return fmt.Errorf("invalid bool (%T)", val)
+					}
+
+					if stat.Min == nil {
+						stat.Min = b
+						stat.Max = b
+						continue
+					}
+
+					if b && !stat.Max.(bool) {
+						stat.Max = b // true
+					}
+					if !b && stat.Min.(bool) {
+						stat.Min = b // false
+					}
 
 				case ColTypeNumeric:
 					var dec *decimal.Decimal
 					switch v := val.(type) {
+					case *pgtype.Numeric:
+						if !v.Valid {
+							stat.NullCount++
+							continue
+						}
+						if v.NaN {
+							continue
+						}
+
+						dec, err = pgNumericToDecimal(*v)
+						if err != nil {
+							continue
+						}
+
 					case pgtype.Numeric:
+						if !v.Valid {
+							stat.NullCount++
+							continue
+						}
 						if v.NaN {
 							continue
 						}
@@ -130,13 +238,15 @@ func TableStats(ctx context.Context, table string, db sql.Executor) (*costtypes.
 						}
 						// fmt.Println("A", dec)
 
+					case *decimal.Decimal:
+						dec = v
 					case decimal.Decimal:
 						v2 := v
 						dec = &v2
 						// fmt.Println("B", dec)
 					}
 
-					fmt.Println(dec)
+					// fmt.Println(dec)
 
 					if stat.Min == nil {
 						stat.Min = dec
@@ -161,10 +271,41 @@ func TableStats(ctx context.Context, table string, db sql.Executor) (*costtypes.
 				case ColTypeFloat: // we don't want, don't have
 					var varFloat float64
 					switch v := val.(type) {
+					case *pgtype.Float8:
+						if !v.Valid {
+							stat.NullCount++
+							continue
+						}
+						varFloat = v.Float64
+					case *pgtype.Float4:
+						if !v.Valid {
+							stat.NullCount++
+							continue
+						}
+						varFloat = float64(v.Float32)
+					case pgtype.Float8:
+						if !v.Valid {
+							stat.NullCount++
+							continue
+						}
+						varFloat = v.Float64
+					case pgtype.Float4:
+						if !v.Valid {
+							stat.NullCount++
+							continue
+						}
+						varFloat = float64(v.Float32)
 					case float32:
 						varFloat = float64(v)
 					case float64:
 						varFloat = v
+					case *float32:
+						varFloat = float64(*v)
+					case *float64:
+						varFloat = *v
+
+					default:
+						return fmt.Errorf("invalid float (%T)", val)
 					}
 
 					if stat.Min == nil {
@@ -179,6 +320,9 @@ func TableStats(ctx context.Context, table string, db sql.Executor) (*costtypes.
 					}
 
 				case ColTypeUUID:
+					fallthrough
+				default: // arrays and such
+					// fmt.Println("unknown", colTypes[i])
 				}
 			}
 
