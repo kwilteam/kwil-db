@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -839,4 +841,124 @@ func Test_ParseUnixTimestamp(t *testing.T) {
 	require.Len(t, res.Rows[0], 1)
 
 	require.EqualValues(t, "2024-06-11 13:54:12.123456", res.Rows[0][0])
+}
+
+func Test_Listen(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewDB(ctx, cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	/*
+		we test writing to two different txs at the same time,
+		ensuring that both listeners receive their respective
+		notifications.
+	*/
+
+	tx, err := db.BeginPreparedTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
+
+	// allocating 20 to allow it to potentially receive
+	// notifications from the other tx. We are testing
+	// that this does not happen
+	ch1, done, err := tx.Subscribe(ctx)
+	require.NoError(t, err)
+	defer done(ctx)
+
+	// create a readTx that will also notify
+	readTx, err := db.BeginReadTx(ctx)
+	require.NoError(t, err)
+	defer readTx.Rollback(ctx)
+
+	ch2, done2, err := readTx.Subscribe(ctx)
+	require.NoError(t, err)
+	defer done2(ctx)
+
+	var received []string
+	var received2 []string
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		for s := range ch1 {
+			received = append(received, s)
+		}
+
+		wg.Done()
+	}()
+
+	go func() {
+		for s := range ch2 {
+			received2 = append(received2, s)
+		}
+
+		wg.Done()
+	}()
+
+	// notify 10 times to each
+	for i := 0; i < 10; i++ {
+		_, err = tx.Execute(ctx, "SELECT NOTICE($1);", fmt.Sprint(i))
+		require.NoError(t, err)
+
+		_, err = readTx.Execute(ctx, "SELECT NOTICE($1);", fmt.Sprint(-i))
+		require.NoError(t, err)
+	}
+
+	err = done(ctx)
+	require.NoError(t, err)
+	err = done2(ctx)
+	require.NoError(t, err)
+
+	wg.Wait()
+
+	require.Len(t, received, 10)
+	require.Len(t, received2, 10)
+
+	for i := 0; i < 10; i++ {
+		require.Equal(t, strconv.Itoa(i), received[i])
+		require.Equal(t, strconv.Itoa(-i), received2[i])
+	}
+}
+
+func Test_CancelListen(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewDB(ctx, cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx, err := db.BeginPreparedTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
+
+	collected, done, err := tx.Subscribe(ctx)
+	require.NoError(t, err)
+	defer done(ctx)
+
+	var received []string
+
+	go func() {
+		for s := range collected {
+			received = append(received, s)
+		}
+	}()
+
+	for i := 0; i < 10; i++ {
+		_, err = tx.Execute(ctx, "SELECT NOTICE($1);", fmt.Sprint(i))
+		require.NoError(t, err)
+	}
+
+	// we stop mid way through, we should see no events since events
+	// are sent on commit
+	err = done(ctx)
+	require.NoError(t, err)
+
+	for i := 0; i < 10; i++ {
+		_, err = tx.Execute(ctx, "SELECT NOTICE($1);", fmt.Sprint(-(i + 1)))
+		require.NoError(t, err)
+	}
+
+	require.Len(t, received, 10)
 }

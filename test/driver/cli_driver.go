@@ -22,8 +22,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
-	jsonUtil "github.com/kwilteam/kwil-db/core/utils/json"
 	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
 
 	"go.uber.org/zap"
@@ -95,13 +95,13 @@ func (d *KwilCliDriver) SupportBatch() bool {
 
 func (d *KwilCliDriver) account(_ context.Context, acctID []byte) (*types.Account, error) {
 	cmd := d.newKwilCliCmd("account", "balance", hex.EncodeToString(acctID))
-	out, err := mustRun(cmd, d.logger)
+	out, err := mustRun[respAccount](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get account balance: %w", err)
 	}
 
-	d.logger.Debug("account balance result", zap.Any("result", out.Result))
-	acct, err := parseRespAccount(out.Result)
+	d.logger.Debug("account balance result", zap.Any("result", out))
+	acct, err := parseRespAccount(out)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse account balance response: %w", err)
 	}
@@ -120,11 +120,12 @@ func (d *KwilCliDriver) AccountBalance(ctx context.Context, acctID []byte) (*big
 
 func (d *KwilCliDriver) TransferAmt(ctx context.Context, to []byte, amt *big.Int) (txHash []byte, err error) {
 	cmd := d.newKwilCliCmd("account", "transfer", hex.EncodeToString(to), amt.String())
-	out, err := mustRun(cmd, d.logger)
+	out, err := mustRun[respTxHash](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to do acct transfer: %w", err)
 	}
-	txHash, err = parseRespTxHash(out.Result)
+
+	txHash, err = parseRespTxHash(out)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
 	}
@@ -138,18 +139,13 @@ func (d *KwilCliDriver) DBID(name string) string {
 
 func (d *KwilCliDriver) listDatabase() ([]*types.DatasetIdentifier, error) {
 	cmd := d.newKwilCliCmd("database", "list", "--owner", hex.EncodeToString(d.identity))
-	out, err := mustRun(cmd, d.logger)
+	out, err := mustRun[[]*types.DatasetIdentifier](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list databases: %w", err)
 	}
 
-	d.logger.Debug("list database result", zap.Any("result", out.Result))
-	dbs, err := parseRespListDatabases(out.Result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse list databases response: %w", err)
-	}
-
-	return dbs, nil
+	d.logger.Debug("list database result", zap.Any("result", out))
+	return out, nil
 }
 
 func (d *KwilCliDriver) DatabaseExists(_ context.Context, dbid string) error {
@@ -194,12 +190,12 @@ func (d *KwilCliDriver) DeployDatabase(_ context.Context, db *types.Schema) (txH
 	}
 
 	cmd := d.newKwilCliCmd("database", "deploy", "-p", schemaFile, "-t", "json")
-	out, err := mustRun(cmd, d.logger)
+	out, err := mustRun[respTxHash](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deploy database: %w", err)
 	}
 
-	txHash, err = parseRespTxHash(out.Result)
+	txHash, err = parseRespTxHash(out)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
 	}
@@ -209,7 +205,7 @@ func (d *KwilCliDriver) DeployDatabase(_ context.Context, db *types.Schema) (txH
 
 func (d *KwilCliDriver) TxSuccess(_ context.Context, txHash []byte) error {
 	cmd := d.newKwilCliCmd("utils", "query-tx", hex.EncodeToString(txHash))
-	out, err := mustRun(cmd, d.logger)
+	out, err := mustRun[respTxQuery](cmd, d.logger)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			return ErrTxNotConfirmed // not quite, but for this driver it's a retry condition
@@ -217,36 +213,30 @@ func (d *KwilCliDriver) TxSuccess(_ context.Context, txHash []byte) error {
 		return fmt.Errorf("failed to query tx: %w", err)
 	}
 
-	resp, err := parseRespTxQuery(out.Result)
-	if err != nil {
-		d.logger.Debug("tx query failed", zap.String("error", err.Error()))
-		return fmt.Errorf("query failed: %w", err)
-	}
-
-	d.logger.Debug("tx info", zap.Int64("height", resp.Height),
+	d.logger.Debug("tx info", zap.Int64("height", out.Height),
 		zap.String("txHash", hex.EncodeToString(txHash)),
-		zap.Any("result", resp.TxResult))
+		zap.Any("result", out.TxResult))
 
 	// NOTE: this should not be considered a failure, should retry
-	if resp.Height < 0 {
+	if out.Height < 0 {
 		return ErrTxNotConfirmed
 	}
 
-	if resp.TxResult.Code != 0 {
-		return fmt.Errorf("tx failed: %s", resp.TxResult.Log)
+	if out.TxResult.Code != 0 {
+		return fmt.Errorf("tx failed: %s", out.TxResult.Log)
 	}
 	return nil
 }
 
 func (d *KwilCliDriver) DropDatabase(_ context.Context, dbName string) (txHash []byte, err error) {
 	cmd := d.newKwilCliCmd("database", "drop", dbName)
-	out, err := mustRun(cmd, d.logger)
+	out, err := mustRun[respTxHash](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to drop database: %w", err)
 	}
 
-	d.logger.Debug("drop database tx", zap.Any("result", out.Result))
-	txHash, err = parseRespTxHash(out.Result)
+	d.logger.Debug("drop database tx", zap.Any("result", out))
+	txHash, err = parseRespTxHash(out)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
 	}
@@ -256,17 +246,14 @@ func (d *KwilCliDriver) DropDatabase(_ context.Context, dbName string) (txHash [
 
 func (d *KwilCliDriver) getSchema(dbid string) (*types.Schema, error) {
 	cmd := d.newKwilCliCmd("database", "read-schema", "--dbid", dbid)
-	out, err := mustRun(cmd, d.logger)
+	out, err := mustRun[*types.Schema](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to getSchema: %w", err)
 	}
 
-	d.logger.Debug("get schema result", zap.Any("result", out.Result))
-	schema, err := parseRespGetSchema(out.Result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse getSchema response: %w", err)
-	}
-	return schema, nil
+	d.logger.Debug("get schema result", zap.Any("result", out))
+
+	return out, nil
 }
 
 // prepareCliActionParams returns the named action args for the given action name, in
@@ -354,12 +341,12 @@ func (d *KwilCliDriver) Execute(_ context.Context, dbid string, action string, i
 	args = append(args, actionInputs...)
 
 	cmd := d.newKwilCliCmd(args...)
-	out, err := mustRun(cmd, d.logger)
+	out, err := mustRun[respTxHash](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute action: %w", err)
 	}
 
-	txHash, err := parseRespTxHash(out.Result)
+	txHash, err := parseRespTxHash(out)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
 	}
@@ -369,27 +356,23 @@ func (d *KwilCliDriver) Execute(_ context.Context, dbid string, action string, i
 
 func (d *KwilCliDriver) QueryDatabase(_ context.Context, dbid, query string) (*clientType.Records, error) {
 	cmd := d.newKwilCliCmd("database", "query", "--dbid", dbid, query)
-	out, err := mustRun(cmd, d.logger)
+	out, err := mustRun[*clientType.Records](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database: %w", err)
 	}
 
-	d.logger.Debug("query result", zap.Any("result", out.Result))
-	records, err := parseRespQueryDb(out.Result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse query result: %w", err)
-	}
-	return records, nil
+	d.logger.Debug("query result", zap.Any("result", out))
+	return out, nil
 }
 
-func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []any) (*clientType.Records, error) {
+func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []any) (*clientType.CallResult, error) {
 	// NOTE: kwil-cli does not support batched inputs
 	actionInputs, err := d.prepareCliActionParams(dbid, action, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare action params: %w", err)
 	}
 
-	args := []string{"database", "call", "--dbid", dbid, "--action", action}
+	args := []string{"database", "call", "--dbid", dbid, "--action", action, "--logs"}
 	args = append(args, actionInputs...)
 
 	if d.gatewayProvider {
@@ -397,79 +380,77 @@ func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []an
 	}
 
 	cmd := d.newKwilCliCmdWithYes(args...)
-	out, err := mustRunCallIgnorePrompt(cmd, d.logger)
+
+	out, err := mustRunCallIgnorePrompt[*clientType.CallResult](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call action: %w", err)
 	}
-	d.logger.Debug("call result", zap.Any("result", out.Result))
+	d.logger.Debug("call result", zap.Any("result", out))
 
-	return parseRespQueryDb(out.Result)
+	return out, nil
 }
 
 func (d *KwilCliDriver) ChainInfo(_ context.Context) (*types.ChainInfo, error) {
 	cmd := d.newKwilCliCmd("utils", "chain-info")
-	out, err := mustRun(cmd, d.logger)
+	out, err := mustRun[*types.ChainInfo](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain info: %w", err)
 	}
 
-	d.logger.Debug("chain info", zap.Any("Resp", out.Result))
-	var chainInfo types.ChainInfo
+	d.logger.Debug("chain info", zap.Any("Resp", out))
 
-	bts, err := json.Marshal(out.Result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal chain info: %w", err)
-	}
-
-	err = json.Unmarshal(bts, &chainInfo)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse chain info: %w", err)
-	}
-
-	return &chainInfo, nil
+	return out, nil
 }
 
 ///////// helper functions
 
 // mustRun runs the give command, and parse stdout
-func mustRun(cmd *exec.Cmd, logger log.Logger) (*cliResponse, error) {
+func mustRun[T any](cmd *exec.Cmd, logger log.Logger) (T, error) {
 	cmd.Stderr = os.Stderr
-	//// here we capture the stdout
+	t := new(T)
+	// here we capture the stdout
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
-		return nil, err
+		return *t, err
 	}
 
 	output := out.Bytes()
 	logger.Debug("cmd output", zap.String("output", string(output)))
 
-	var result *cliResponse
+	var result cliResponse[T]
 	err = json.Unmarshal(output, &result)
 	if err != nil {
 		logger.Error("bad cmd output", zap.String("output", string(output)))
-		return nil, err
+
+		// if an error message is in the result, return it
+		if result.Error != "" {
+			return *t, errors.New(result.Error)
+		}
+
+		return *t, err
 	}
 
 	if result.Error != "" {
-		return nil, errors.New(result.Error)
+		return *t, errors.New(result.Error)
 	}
 
-	return result, nil
+	return result.Result, nil
 }
 
 // mustRunCallIgnorePrompt runs the given `kwil-cli database call` command, and
 // throw away the prompt output. This is necessary for authn call, because
 // kwil-cli will prompt for confirmation.
-func mustRunCallIgnorePrompt(cmd *exec.Cmd, logger log.Logger) (*cliResponse, error) {
+func mustRunCallIgnorePrompt[T any](cmd *exec.Cmd, logger log.Logger) (T, error) {
 	cmd.Stderr = os.Stderr
-	//// here we capture the stdout
+	t := new(T)
+	// here we capture the stdout
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
-		return nil, err
+		return *t, err
 	}
 
 	output := out.Bytes()
@@ -483,21 +464,21 @@ func mustRunCallIgnorePrompt(cmd *exec.Cmd, logger log.Logger) (*cliResponse, er
 		output = []byte(delimiter + strings.SplitN(string(output), delimiter, 2)[1])
 	}
 
-	var result *cliResponse
+	var result *cliResponse[T]
 	err = json.Unmarshal(output, &result)
 	if err != nil {
-		return nil, err
+		return *t, err
 	}
 
 	if result.Error != "" {
-		return nil, errors.New(result.Error)
+		return *t, errors.New(result.Error)
 	}
 
-	return result, nil
+	return result.Result, nil
 }
 
-type cliResponse struct {
-	Result any    `json:"result"` // json.RawMessage
+type cliResponse[T any] struct {
+	Result T      `json:"result"`
 	Error  string `json:"error"`
 }
 
@@ -516,19 +497,8 @@ type respTxHash struct {
 }
 
 // parseRespTxHash parses the tx hash response(json) from the cli response
-func parseRespTxHash(data any) ([]byte, error) {
-	bts, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal tx resp: %w", err)
-	}
-
-	var resp respTxHash
-	err = json.Unmarshal(bts, &resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal tx hash: %w", err)
-	}
-
-	txHash, err := hex.DecodeString(resp.TxHash)
+func parseRespTxHash(data respTxHash) ([]byte, error) {
+	txHash, err := hex.DecodeString(data.TxHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode tx hash: %w", err)
 	}
@@ -545,91 +515,19 @@ type respTxQuery struct {
 	} `json:"tx_result"`
 }
 
-// parserRespTxQuery parses the tx query response(json) from the cli response
-func parseRespTxQuery(data any) (*respTxQuery, error) {
-	bts, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal tx query resp: %w", err)
-	}
-
-	var resp respTxQuery
-	err = json.Unmarshal(bts, &resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal tx query: %w", err)
-	}
-
-	return &resp, nil
-}
-
-// parseRespGetSchema parses the get schema response(json) from the cli response
-func parseRespGetSchema(data any) (*types.Schema, error) {
-	bts, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal get schema resp: %w", err)
-	}
-
-	var resp types.Schema
-	err = json.Unmarshal(bts, &resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal get sceham: %w", err)
-	}
-
-	return &resp, nil
-}
-
-func parseRespQueryDb(data any) (*clientType.Records, error) {
-	bts, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal query db resp: %w", err)
-	}
-
-	resp, err := jsonUtil.UnmarshalMapWithoutFloat(bts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal query db: %w", err)
-	}
-
-	return clientType.NewRecordsFromMaps(resp), nil
-}
-
-func parseRespListDatabases(data any) ([]*types.DatasetIdentifier, error) {
-	bts, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal list databases resp: %w", err)
-	}
-
-	var resp []*types.DatasetIdentifier
-	err = json.Unmarshal(bts, &resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal list databases: %w", err)
-	}
-
-	return resp, nil
-}
-
 type respAccount struct {
 	Identifier string `json:"identifier"`
 	Balance    string `json:"balance"`
 	Nonce      int64  `json:"nonce"`
 }
 
-func parseRespAccount(data any) (*types.Account, error) {
-	bts, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal list databases resp: %w", err)
-	}
-
-	var resp respAccount
-	err = json.Unmarshal(bts, &resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal list databases: %w", err)
-	}
-
-	acctID, err := hex.DecodeString(resp.Identifier)
+func parseRespAccount(data respAccount) (*types.Account, error) {
+	acctID, err := hex.DecodeString(data.Identifier)
 	if err != nil {
 		return nil, fmt.Errorf("invalid identifier hex string: %w", err)
 	}
 
-	bal, ok := big.NewInt(0).SetString(resp.Balance, 10)
+	bal, ok := big.NewInt(0).SetString(data.Balance, 10)
 	if !ok {
 		return nil, errors.New("invalid decimal string balance")
 	}
@@ -637,7 +535,7 @@ func parseRespAccount(data any) (*types.Account, error) {
 	acct := &types.Account{
 		Identifier: acctID,
 		Balance:    bal,
-		Nonce:      resp.Nonce,
+		Nonce:      data.Nonce,
 	}
 	return acct, nil
 }
@@ -691,4 +589,26 @@ func (d *KwilCliDriver) Signer() []byte {
 
 func (d *KwilCliDriver) Identifier() (string, error) {
 	return auth.EthSecp256k1Authenticator{}.Identifier(d.Signer())
+}
+
+func (d *KwilCliDriver) TxInfo(ctx context.Context, hash []byte) (*transactions.TcTxQueryResponse, error) {
+
+	args := []string{"utils", "query-tx", hex.EncodeToString(hash), "--full"}
+
+	cmd := d.newKwilCliCmd(args...)
+	out, err := mustRun[*transactions.TcTxQueryResponse](cmd, d.logger)
+	if err != nil {
+		if strings.Contains(err.Error(), "transaction not found") {
+			// try again, hacking around comet's mempool inconsistency
+			time.Sleep(500 * time.Millisecond)
+			res2, err := mustRun[*transactions.TcTxQueryResponse](cmd, d.logger)
+			if err != nil {
+				return nil, err
+			}
+			return res2, nil
+		}
+		return nil, err
+	}
+
+	return out, nil
 }

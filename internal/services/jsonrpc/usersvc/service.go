@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	// BlockchainTransactor returns have some big structs from cometbft.
@@ -25,6 +26,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/execution" // errors from engine
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/version"
+	"github.com/kwilteam/kwil-db/parse"
 )
 
 // Service is the "user" RPC service, also known as txsvc in other contexts.
@@ -33,10 +35,15 @@ type Service struct {
 	readTxTimeout time.Duration
 
 	engine      EngineReader
-	db          sql.DelayedReadTxMaker // this should only ever make a read-only tx
-	nodeApp     NodeApplication        // so we don't have to do ABCIQuery (indirect)
+	db          DB              // this should only ever make a read-only tx
+	nodeApp     NodeApplication // so we don't have to do ABCIQuery (indirect)
 	chainClient BlockchainTransactor
 	pricer      Pricer
+}
+
+type DB interface {
+	sql.ReadTxMaker
+	sql.DelayedReadTxMaker
 }
 
 type serviceCfg struct {
@@ -57,7 +64,7 @@ func WithReadTxTimeout(timeout time.Duration) Opt {
 const defaultReadTxTimeout = 5 * time.Second
 
 // NewService creates a new instance of the user RPC service.
-func NewService(db sql.DelayedReadTxMaker, engine EngineReader, chainClient BlockchainTransactor,
+func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
 	nodeApp NodeApplication, pricer Pricer, logger log.Logger, opts ...Opt) *Service {
 	cfg := &serviceCfg{
 		readTxTimeout: defaultReadTxTimeout,
@@ -499,8 +506,45 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 	ctxExec, cancel := context.WithTimeout(ctx, svc.readTxTimeout)
 	defer cancel()
 
-	readTx := svc.db.BeginDelayedReadTx()
+	// we use a basic read tx since we are subscribing to notices,
+	// and it is therefore pointless to use a delayed tx
+	readTx, err := svc.db.BeginReadTx(ctx)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to start read tx", nil)
+	}
 	defer readTx.Rollback(ctx)
+
+	logCh, done, err := readTx.Subscribe(ctx)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to subscribe to notices", nil)
+	}
+	defer done(ctx)
+
+	var logs []string
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		for {
+			select {
+			case <-ctxExec.Done():
+				wg.Done()
+				return
+			case logMsg, ok := <-logCh:
+				if !ok {
+					wg.Done()
+					return
+				}
+
+				_, notc, err := parse.ParseNotice(logMsg)
+				if err != nil {
+					svc.log.Error("failed to parse notice", log.Error(err))
+					continue
+				}
+
+				logs = append(logs, notc)
+			}
+		}
+	}()
 
 	executeResult, err := svc.engine.Procedure(ctxExec, readTx, &common.ExecutionData{
 		Dataset:   body.DBID,
@@ -516,14 +560,22 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		return nil, engineError(err)
 	}
 
+	err = done(ctx)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to unsubscribe from notices", nil)
+	}
+
 	// marshalling the map is less efficient, but necessary for backwards compatibility
 	btsResult, err := json.Marshal(resultMap(executeResult))
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to marshal call result", nil)
 	}
 
+	wg.Wait()
+
 	return &userjson.CallResponse{
 		Result: btsResult,
+		Logs:   logs,
 	}, nil
 }
 

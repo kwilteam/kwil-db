@@ -8,10 +8,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/utils/random"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // DB is a session-aware wrapper that creates and stores a write Tx on request,
@@ -194,6 +193,12 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to create ERROR function: %w", err)
 	}
 
+	// Register the notice function so a statement like `SELECT notice('boom');`
+	// will raise a notice that can be captured by a subscriber
+	if err = ensureNoticePLFuncs(ctx, conn); err != nil {
+		return nil, fmt.Errorf("failed to create NOTICE function: %w", err)
+	}
+
 	if err = ensureUnixTimestampFuncs(ctx, conn); err != nil {
 		return nil, fmt.Errorf("failed to create parse_unix_timestamp function: %w", err)
 	}
@@ -317,7 +322,7 @@ func (db *DB) BeginTx(ctx context.Context) (sql.Tx, error) {
 // ReadTx creates a read-only transaction for the database.
 // It obtains a read connection from the pool, which will be returned
 // to the pool when the transaction is closed.
-func (db *DB) BeginReadTx(ctx context.Context) (sql.Tx, error) {
+func (db *DB) BeginReadTx(ctx context.Context) (sql.OuterReadTx, error) {
 	return db.beginReadTx(ctx, pgx.RepeatableRead)
 }
 
@@ -344,7 +349,7 @@ func (db *DB) BeginSnapshotTx(ctx context.Context) (sql.Tx, string, error) {
 	return tx, snapshotID, err
 }
 
-func (db *DB) beginReadTx(ctx context.Context, iso pgx.TxIsoLevel) (sql.Tx, error) {
+func (db *DB) beginReadTx(ctx context.Context, iso pgx.TxIsoLevel) (sql.OuterReadTx, error) {
 	// stat := db.pool.readers.Stat()
 	// fmt.Printf("total / max cons: %d / %d\n", stat.TotalConns(), stat.MaxConns())
 	conn, err := db.pool.readers.Acquire(ctx) // ensure we have a connection
@@ -367,8 +372,9 @@ func (db *DB) beginReadTx(ctx context.Context, iso pgx.TxIsoLevel) (sql.Tx, erro
 	}
 
 	return &readTx{
-		nestedTx: ntx,
-		release:  sync.OnceFunc(conn.Release),
+		nestedTx:    ntx,
+		release:     sync.OnceFunc(conn.Release),
+		subscribers: db.pool.subscribers,
 	}, nil
 }
 
@@ -397,7 +403,7 @@ func (db *DB) BeginReservedReadTx(ctx context.Context) (sql.Tx, error) {
 // start the transaction once the first query is executed. This is useful
 // for when a calling module is expected to control the lifetime of a read
 // transaction, but the implementation might not need to use the transaction.
-func (db *DB) BeginDelayedReadTx() sql.Tx {
+func (db *DB) BeginDelayedReadTx() sql.OuterReadTx {
 	return &delayedReadTx{db: db}
 }
 

@@ -32,6 +32,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/statesync"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/version"
+	"github.com/kwilteam/kwil-db/parse"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
@@ -489,7 +490,74 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		Proposer:     proposerPubKey,
 	}
 
-	for _, tx := range req.Txs {
+	// since notifications are returned async from postgres, we will construct
+	// a map to track them in, and wait at the end of the function to add them
+	// to the ResponseFinalizeBlock
+
+	// maps the transaction hash to the logs for that transaction
+	type logTracker struct {
+		logs      string
+		truncated bool
+	}
+	logMap := make(map[string]*logTracker)
+	// resultArr tracks the txHash and the abci result for each tx.
+	// This is necessary to avoid recomputing the hash for all txs
+	type txResult struct {
+		TxHash []byte
+		Result *abciTypes.ExecTxResult
+	}
+	resultArr := make([]*txResult, len(req.Txs))
+
+	// subscribe to any notifications
+	logs, done, err := a.consensusTx.Subscribe(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to subscribe to notifications: %w", err)
+	}
+	defer done(ctx)
+
+	// wait group to wait at the end of the function for all logs to be received
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		// we enforce that the cumulative size of logs is less than 1KB
+		// per tx. This is a work-around until we have gas costs to protect
+		// against log spam.
+		for {
+			log, ok := <-logs
+			if !ok {
+				break
+			}
+			txid, notice, err := parse.ParseNotice(log)
+			if err != nil {
+				// should be deterministic so nbd to not halt here
+				a.log.Errorf("failed to parse notice: %v", err)
+			}
+
+			currentLog, ok := logMap[txid]
+			if !ok {
+				logMap[txid] = &logTracker{
+					logs:      "",
+					truncated: false,
+				}
+				currentLog = logMap[txid]
+			}
+			if len(currentLog.logs)+len(notice) > 1024 {
+				if !currentLog.truncated {
+					currentLog.logs += "\n[truncated]"
+					currentLog.truncated = true
+				}
+				// else, we have already truncated the log
+			} else {
+				currentLog.logs += "\n" + notice
+			}
+		}
+
+		// logs channel will be closed when the tx is precommitted,
+		// so finish the wait group
+		wg.Done()
+	}()
+
+	for i, tx := range req.Txs {
 		decoded := &transactions.Transaction{}
 		err := decoded.UnmarshalBinary(tx)
 		if err != nil {
@@ -513,6 +581,11 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 		abciRes.Code = txRes.ResponseCode.Uint32()
 		abciRes.GasUsed = txRes.Spend
+
+		resultArr[i] = &txResult{
+			TxHash: txHash[:],
+			Result: abciRes,
+		}
 
 		res.TxResults = append(res.TxResults, abciRes)
 
@@ -583,6 +656,11 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("failed to precommit transaction: %w", err)
 	}
 
+	err = done(ctx) // inform pg that no more logs are needed
+	if err != nil {
+		return nil, fmt.Errorf("failed to close subscription: %w", err)
+	}
+
 	newAppHash := sha256.Sum256(append(a.appHash, appHash...))
 	res.AppHash = newAppHash[:]
 	a.appHash = newAppHash[:]
@@ -608,6 +686,16 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 
 		res.ValidatorUpdates[i] = abciTypes.Ed25519ValidatorUpdate(up.PubKey, up.Power)
+	}
+
+	// wait for all logs to be received
+	wg.Wait()
+	for _, result := range resultArr {
+		logs, ok := logMap[hex.EncodeToString(result.TxHash)]
+		if !ok {
+			continue
+		}
+		result.Result.Log += logs.logs
 	}
 
 	return res, nil

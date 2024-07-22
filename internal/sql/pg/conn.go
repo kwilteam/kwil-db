@@ -9,9 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
+	syncmap "github.com/kwilteam/kwil-db/internal/utils/sync_map"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -80,6 +82,12 @@ type Pool struct {
 	// oidTypes maps an OID to the datatype it represents. Since Kwil has data types such as uint256,
 	// which are registered as Postgres Domains, each pg instance will have its own random OID for it.
 	idTypes map[uint32]*datatype
+
+	// subscribers is a map of channels that are subscribed to notifices.
+	// When a notifice is received via the special NOTICE() function, it will search
+	// for any subscribers that map to the channel name and send the notice to the
+	// subscriber.
+	subscribers *syncmap.Map[int64, chan<- string]
 }
 
 // PoolConfig combines a connection config with additional options for a pool of
@@ -116,9 +124,41 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	subscribers := syncmap.New[int64, chan<- string]()
+
 	// NOTE: we can consider changing the default exec mode at construction e.g.:
 	// pCfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 	pCfg.ConnConfig.OnNotice = func(_ *pgconn.PgConn, n *pgconn.Notice) {
+		// Handling the Listen system.
+
+		// if this is the final log for a transaction, send a notice to the subscribers
+		if txid, isFin := isFinishTxid(n.Message); isFin {
+			subscribers.Exclusive(func(m map[int64]chan<- string) {
+				sub, ok := m[txid]
+				if !ok {
+					logger.Errorf("pgtx %d has no subscriber", txid) // this will likely cause a deadlock.
+					return
+				}
+				close(sub)
+				delete(m, txid)
+			})
+			return
+		}
+
+		// parse off any leading txid indicator. If successful, send the notice to the subscribers
+		if txid, log, ok := containsTxid(n.Message); ok {
+			subscribers.ExclusiveRead(func(m map[int64]chan<- string) {
+				sub, ok := m[txid]
+				if !ok {
+					// if the txid is not found, this indicates some sort of internal error
+					logger.Errorf("[INTERNAL ERROR] pgtx %d has no subscriber", txid) // this will likely cause a deadlock.
+					return
+				}
+				sub <- log
+			})
+		} // else if not a txid, just log like normal
+
 		level := log.InfoLevel
 		if n.Code == "42710" || strings.HasPrefix(n.Code, "42P") || // duplicate something ignored: https://www.postgresql.org/docs/16/errcodes-appendix.html
 			strings.HasPrefix(n.SchemaName, "ds_") { // user query error
@@ -180,10 +220,11 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	oidTypes := oidTypesMap(writerConn.Conn().TypeMap())
 
 	pool := &Pool{
-		readers:  db,
-		writer:   writer,
-		reserved: reserved,
-		idTypes:  oidTypes,
+		readers:     db,
+		writer:      writer,
+		reserved:    reserved,
+		idTypes:     oidTypes,
+		subscribers: subscribers,
 	}
 
 	return pool, db.Ping(ctx)
@@ -266,7 +307,7 @@ func (p *Pool) BeginTx(ctx context.Context) (sql.Tx, error) {
 }
 
 // BeginReadTx starts a read-only transaction.
-func (p *Pool) BeginReadTx(ctx context.Context) (sql.Tx, error) {
+func (p *Pool) BeginReadTx(ctx context.Context) (sql.OuterReadTx, error) {
 	tx, err := p.readers.BeginTx(ctx, pgx.TxOptions{
 		AccessMode: pgx.ReadOnly,
 		IsoLevel:   pgx.RepeatableRead,
@@ -274,9 +315,55 @@ func (p *Pool) BeginReadTx(ctx context.Context) (sql.Tx, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &nestedTx{
+	ntx := &nestedTx{
 		Tx:         tx,
 		accessMode: sql.ReadOnly,
 		oidTypes:   p.idTypes,
+	}
+
+	return &readTx{
+		nestedTx: ntx,
+		// pgx handles releasing when txs are acquired from the pool,
+		// so we don't need to do anything special here.
+		release:     func() {},
+		subscribers: p.subscribers,
+	}, nil
+}
+
+// subscribe subscribes a channel to notifications from the passed tx.
+func subscribe(ctx context.Context, exec sql.Executor, subscribers *syncmap.Map[int64, chan<- string]) (<-chan string, func(context.Context) error, error) {
+	// get the txid of the current transaction
+	txid, err := getTxID(ctx, exec)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ch := make(chan string, 1)
+
+	subscribers.Exclusive(func(m map[int64]chan<- string) {
+		_, ok := m[txid]
+		if ok {
+			err = fmt.Errorf("pgtx %d already has a subscriber", txid)
+			return
+		}
+
+		m[txid] = ch
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ran := atomic.Bool{}
+	ran.Store(false)
+
+	return ch, func(ctx2 context.Context) error {
+		// using ran to ensure that the function is only called once
+		if !ran.CompareAndSwap(false, true) {
+			return nil
+		}
+
+		// send a notice to postgres that we are done for notices for this tx
+		_, err := exec.Execute(ctx2, "SELECT end_notices($1);", txid)
+		return err
 	}, nil
 }

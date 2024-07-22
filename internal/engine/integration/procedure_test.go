@@ -30,11 +30,12 @@ func Test_Procedures(t *testing.T) {
 	type testcase struct {
 		name      string
 		procedure string
-		inputs    []any   // can be nil
-		outputs   [][]any // can be nil
-		err       error   // can be nil
-		caller    string  // can be empty, if set it will override the default caller in the transaction data
-		readOnly  bool    // if true, the procedure will be executed in a read-only transaction
+		inputs    []any    // can be nil
+		outputs   [][]any  // can be nil
+		err       error    // can be nil
+		caller    string   // can be empty, if set it will override the default caller in the transaction data
+		readOnly  bool     // if true, the procedure will be executed in a read-only transaction
+		notices   []string // expected notices, if any
 	}
 
 	tests := []testcase{
@@ -362,6 +363,15 @@ func Test_Procedures(t *testing.T) {
 			}`,
 			outputs: [][]any{{[]int64{int64(1), int64(4), int64(3)}}},
 		},
+		{
+			name: "notice",
+			procedure: `procedure notice_fn() public {
+				for $i in 1..3 {
+					notice($i::text);
+				}
+			}`,
+			notices: []string{"1", "2", "3"},
+		},
 	}
 
 	for _, test := range tests {
@@ -374,7 +384,7 @@ func Test_Procedures(t *testing.T) {
 
 			ctx := context.Background()
 
-			tx, err := db.BeginTx(ctx)
+			tx, err := db.BeginPreparedTx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback(ctx)
 
@@ -390,12 +400,29 @@ func Test_Procedures(t *testing.T) {
 				d.Signer = []byte(test.caller)
 			}
 
-			var execTx sql.Tx = tx
+			var execTx interface {
+				sql.Tx
+				sql.Subscriber
+			} = tx
 			if test.readOnly {
 				execTx, err = db.BeginReadTx(ctx)
 				require.NoError(t, err)
 				defer execTx.Rollback(ctx)
 			}
+
+			// listen for notices
+			notice, done, err := execTx.Subscribe(ctx)
+			require.NoError(t, err)
+			defer done(ctx)
+
+			var rec []string
+			go func() {
+				for n := range notice {
+					_, notc, err := parse.ParseNotice(n)
+					require.NoError(t, err)
+					rec = append(rec, notc)
+				}
+			}()
 
 			// execute test procedure
 			res, err := global.Procedure(ctx, execTx, &common.ExecutionData{
@@ -428,6 +455,9 @@ func Test_Procedures(t *testing.T) {
 					require.Equal(t, val, res.Rows[i][j])
 				}
 			}
+
+			// check notices
+			require.Equal(t, test.notices, rec)
 		})
 	}
 }

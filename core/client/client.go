@@ -286,11 +286,16 @@ func (c *Client) Execute(ctx context.Context, dbid string, procedure string, tup
 
 // DEPRECATED: Use Call instead.
 func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any) (*clientType.Records, error) {
-	return c.Call(ctx, dbid, action, inputs)
+	r, err := c.Call(ctx, dbid, action, inputs)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Records, nil
 }
 
 // Call calls a procedure or action. It returns the result records.
-func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs []any) (*clientType.Records, error) {
+func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs []any) (*clientType.CallResult, error) {
 	encoded, err := encodeTuple(inputs)
 	if err != nil {
 		return nil, err
@@ -312,12 +317,15 @@ func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs
 		msg.Sender = c.Signer.Identity()
 	}
 
-	res, err := c.txClient.Call(ctx, msg)
+	res, logs, err := c.txClient.Call(ctx, msg)
 	if err != nil {
 		return nil, fmt.Errorf("call action: %w", err)
 	}
 
-	return clientType.NewRecordsFromMaps(res), nil
+	return &clientType.CallResult{
+		Records: clientType.NewRecordsFromMaps(res),
+		Logs:    logs,
+	}, nil
 }
 
 // Query executes a query.

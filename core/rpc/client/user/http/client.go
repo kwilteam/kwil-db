@@ -94,7 +94,7 @@ func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, sy
 	return decodedTxHash, nil
 }
 
-func (c *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...client.ActionCallOption) ([]map[string]any, error) {
+func (c *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...client.ActionCallOption) ([]map[string]any, []string, error) {
 	result, res, err := c.conn.TxServiceApi.TxServiceCall(ctx, httpTx.TxCallRequest{
 		AuthType: msg.AuthType,
 		Sender:   base64.StdEncoding.EncodeToString(msg.Sender),
@@ -103,17 +103,23 @@ func (c *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts .
 		},
 	})
 	if err != nil {
-		return nil, wrapResponseError(err, res)
+		return nil, nil, wrapResponseError(err, res)
 	}
 	defer res.Body.Close()
 
 	// result is []map[string]any encoded in base64
 	decodedResult, err := base64.StdEncoding.DecodeString(result.Result)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return jsonUtil.UnmarshalMapWithoutFloat(decodedResult)
+	records, err := jsonUtil.UnmarshalMapWithoutFloat[[]map[string]any](decodedResult)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// http does not support logs, so we return an empty slice
+	return records, nil, nil
 }
 
 func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
@@ -249,7 +255,7 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 		return nil, err
 	}
 
-	return jsonUtil.UnmarshalMapWithoutFloat(decodedResult)
+	return jsonUtil.UnmarshalMapWithoutFloat[[]map[string]any](decodedResult)
 }
 
 func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {

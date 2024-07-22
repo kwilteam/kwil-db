@@ -177,7 +177,7 @@ func TestKwildAcceptance(t *testing.T) {
 			specifications.DatabaseDeployInvalidExtensionSpecification(ctx, t, creatorDriver)
 			specifications.DatabaseDeploySpecification(ctx, t, creatorDriver)
 
-			//Then user should be able to execute database
+			// Then user should be able to execute database
 			specifications.ExecuteOwnerActionSpecification(ctx, t, creatorDriver)
 
 			// TODO: This test doesn't looks good, the spec suppose to expect
@@ -214,6 +214,9 @@ func TestKwildAcceptance(t *testing.T) {
 
 			// TODO: test inputting invalid utf-8 into action that needs string (should fail)
 			// this previously crashed the node
+
+			// Test notices
+			specifications.ExecuteNoticeSpecification(ctx, t, creatorDriver)
 		})
 	}
 }

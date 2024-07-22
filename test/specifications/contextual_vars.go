@@ -40,9 +40,9 @@ func testCtxVars(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid, 
 	require.NoError(t, err)
 
 	count := 0
-	for results.Next() {
+	for results.Records.Next() {
 		count++
-		rec := results.Record()
+		rec := results.Records.Record()
 		require.NotNil(t, rec)
 		require.Len(t, rec, 4)
 

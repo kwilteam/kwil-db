@@ -18,7 +18,7 @@ import (
 type Client interface {
 	// CallAction. Deprecated: Use Call instead.
 	CallAction(ctx context.Context, dbid string, action string, inputs []any) (*Records, error)
-	Call(ctx context.Context, dbid string, procedure string, inputs []any) (*Records, error)
+	Call(ctx context.Context, dbid string, procedure string, inputs []any) (*CallResult, error)
 	ChainID() string
 	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
 	DeployDatabase(ctx context.Context, payload *types.Schema, opts ...TxOpt) (transactions.TxHash, error)
@@ -35,4 +35,10 @@ type Client interface {
 	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)
 	WaitTx(ctx context.Context, txHash []byte, interval time.Duration) (*transactions.TcTxQueryResponse, error)
 	Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...TxOpt) (transactions.TxHash, error)
+}
+
+// CallResult is the result of a call to a procedure.
+type CallResult struct {
+	Records *Records `json:"records"`
+	Logs    []string `json:"logs,omitempty"`
 }

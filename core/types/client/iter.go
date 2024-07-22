@@ -1,6 +1,12 @@
 package client
 
-import "fmt"
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+
+	jsonUtil "github.com/kwilteam/kwil-db/core/utils/json"
+)
 
 // Records providers an iterator over a set of records.
 type Records struct {
@@ -97,6 +103,29 @@ func (r *Records) ExportString() []map[string]string {
 	}
 
 	return records
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface.
+func (r *Records) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(data, []byte("{}")) {
+		*r = *NewRecords(nil)
+		return nil
+	}
+
+	// expects data to be of []map[string]any\
+	rec, err := jsonUtil.UnmarshalMapWithoutFloat[[]map[string]any](data)
+	if err != nil {
+		return err
+	}
+
+	*r = *NewRecordsFromMaps(rec)
+
+	return nil
+}
+
+// MarshalJSON implements the json.Marshaler interface.
+func (r Records) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.Export())
 }
 
 // Map returns the record as a map. This is equivalent to map[string]any(r).
