@@ -24,6 +24,10 @@ type Options struct {
 	// communication with a trusted node (using TLS or Unix sockets).
 	ChainID string
 
+	// SkipVerifyChainID will skip check against remote node's chain ID.
+	// This option is only effective when ChainID is set.
+	SkipVerifyChainID bool
+
 	// Silence silences warnings logged from the client.
 	Silence bool
 
@@ -53,6 +57,8 @@ func (c *Options) Apply(opts *Options) {
 		c.Conn = opts.Conn
 	}
 
+	c.SkipVerifyChainID = opts.SkipVerifyChainID
+
 	c.Silence = opts.Silence
 }
 
@@ -61,48 +67,6 @@ func DefaultOptions() *Options {
 	return &Options{
 		Logger: log.NewNoOp(),
 		Conn:   &http.Client{},
-	}
-}
-
-type Option func(*Options)
-
-func WithLogger(logger log.Logger) Option {
-	return func(c *Options) {
-		c.Logger = logger
-	}
-}
-
-// WithSigner sets a signer to use when authoring transactions.
-func WithSigner(signer auth.Signer) Option {
-	return func(c *Options) {
-		c.Signer = signer
-	}
-}
-
-// WithChainID sets the chain ID to use when authoring transactions. The chain ID
-// will be used in all transactions, which helps prevent replay attacks on
-// different chains. On the initial connection, the remote node's chain ID is
-// checked against ours to ensure were are on the right network. If the chain ID
-// is empty, we will create and sign transactions for whatever network the
-// remote node claims, which should only be done for testing or when in secure
-// communication with a trusted node (using TLS or Unix sockets).
-func WithChainID(chainID string) Option {
-	return func(c *Options) {
-		c.ChainID = chainID
-	}
-}
-
-// WithHTTPClient sets the http client for the client.
-func WithHTTPClient(client *http.Client) Option {
-	return func(c *Options) {
-		c.Conn = client
-	}
-}
-
-// SilenceWarnings silences warnings from the client.
-func SilenceWarnings() Option {
-	return func(c *Options) {
-		c.Silence = true
 	}
 }
 

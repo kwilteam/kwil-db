@@ -33,6 +33,10 @@ type Client struct {
 	// signatures will only be valid on this network.
 	chainID string
 
+	// skipVerifyChainID skip checking chain ID against remote node's chain ID.
+	// This is only effective when chainID is set.
+	skipVerifyChainID bool
+
 	noWarnings bool // silence warning logs
 }
 
@@ -95,25 +99,41 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 	clientOptions.Apply(options)
 
 	c := &Client{
-		txClient:   client,
-		Signer:     clientOptions.Signer,
-		logger:     clientOptions.Logger,
-		chainID:    clientOptions.ChainID,
-		noWarnings: clientOptions.Silence,
+		txClient:          client,
+		Signer:            clientOptions.Signer,
+		logger:            clientOptions.Logger,
+		chainID:           clientOptions.ChainID,
+		noWarnings:        clientOptions.Silence,
+		skipVerifyChainID: clientOptions.SkipVerifyChainID,
 	}
 
-	chainInfo, err := c.ChainInfo(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("chain_info: %w", err)
-	}
-	chainID := chainInfo.ChainID
-	if c.chainID == "" {
-		if !c.noWarnings {
-			c.logger.Warn("chain ID not set, trusting chain ID from remote host!", zap.String("chainID", chainID))
+	if c.chainID == "" { // always use chain ID from remote host
+		chainInfo, err := c.ChainInfo(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("chain_info: %w", err)
 		}
-		c.chainID = chainID
-	} else if c.chainID != chainID {
-		return nil, fmt.Errorf("remote host chain ID %q != client configured %q", chainID, c.chainID)
+
+		if !c.noWarnings {
+			c.logger.Warn("chain ID not set, trusting chain ID from remote host!",
+				zap.String("chainID", chainInfo.ChainID))
+		}
+
+		c.chainID = chainInfo.ChainID
+	} else {
+		if c.skipVerifyChainID {
+			if !c.noWarnings {
+				c.logger.Warn("chain ID is set, skip check against remote chain ID", zap.String("chainID", c.chainID))
+			}
+		} else {
+			chainInfo, err := c.ChainInfo(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("chain_info: %w", err)
+			}
+
+			if chainInfo.ChainID != c.chainID {
+				return nil, fmt.Errorf("remote host chain ID %q != client configured %q", chainInfo.ChainID, c.chainID)
+			}
+		}
 	}
 
 	return c, nil
