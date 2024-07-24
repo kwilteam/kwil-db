@@ -49,7 +49,7 @@ type ExpressionLiteral struct {
 	Type *types.DataType
 	// Value is the value of the literal.
 	// It must be of type string, int64, bool, *uint256.Int, *decimal.Decimal,
-	// or nil
+	// *types.UUID, or nil
 	Value any
 }
 
@@ -75,6 +75,8 @@ func literalToString(value any) (string, error) {
 	case int64, int, int32: // for int type
 		str.WriteString(fmt.Sprint(v))
 	case *types.Uint256:
+		str.WriteString(v.String())
+	case *types.UUID:
 		str.WriteString(v.String())
 	case *decimal.Decimal:
 		str.WriteString(v.String())
