@@ -3,13 +3,28 @@ package planner3
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/parse"
 )
 
+func Format(plan LogicalPlan, indent int) string {
+	var msg strings.Builder
+	for i := 0; i < indent; i++ {
+		msg.WriteString(" ")
+	}
+	msg.WriteString(plan.String())
+	msg.WriteString("\n")
+	for _, child := range plan.Children() {
+		msg.WriteString(Format(child, indent+2))
+	}
+	return msg.String()
+}
+
 type LogicalPlan interface {
+	fmt.Stringer
 	Children() []LogicalPlan
 	Schema() *Schema
 }
@@ -22,6 +37,10 @@ func (n *Noop) Children() []LogicalPlan {
 
 func (n *Noop) Schema() *Schema {
 	return &Schema{}
+}
+
+func (n *Noop) String() string {
+	return "NOOP"
 }
 
 // TableScan represents a scan of a physical table.
@@ -38,11 +57,15 @@ func (t *TableScan) Schema() *Schema {
 	return t.TableSchema
 }
 
-// FunctionScan represents a scan of a function.
+func (t *TableScan) String() string {
+	return fmt.Sprintf("SCAN TABLE %s", t.TableName)
+}
+
+// ProcedureScan represents a scan of a function.
 // It can call either a local procedure or foreign procedure
 // that returns a table.
-type FunctionScan struct {
-	FunctionName string
+type ProcedureScan struct {
+	ProcedureName string
 	// Args are the base arguments to the procedure.
 	Args []LogicalExpr
 	// ContextualArgs are the arguments that are passed in if
@@ -54,15 +77,34 @@ type FunctionScan struct {
 	FunctionSchema *Schema
 }
 
-func (f *FunctionScan) Children() []LogicalPlan {
+func (f *ProcedureScan) Children() []LogicalPlan {
 	return []LogicalPlan{}
 }
 
-func (f *FunctionScan) Schema() *Schema {
+func (f *ProcedureScan) Schema() *Schema {
 	return f.FunctionSchema
 }
 
-type Scan struct {
+func (f *ProcedureScan) String() string {
+	str := strings.Builder{}
+	str.WriteString("SCAN ")
+	if f.IsForeign {
+		str.WriteString("FOREIGN ")
+	}
+	str.WriteString("PROCEDURE ")
+	str.WriteString(f.ProcedureName)
+	str.WriteString("(")
+	for i, arg := range f.Args {
+		if i > 0 {
+			str.WriteString(", ")
+		}
+		str.WriteString(arg.String())
+	}
+	str.WriteString(")")
+	return str.String()
+}
+
+type ScanAlias struct {
 	Child LogicalPlan
 	// Alias will always be set.
 	// If the scan is a table scan and no alias was specified,
@@ -71,12 +113,16 @@ type Scan struct {
 	Alias string
 }
 
-func (s *Scan) Children() []LogicalPlan {
+func (s *ScanAlias) Children() []LogicalPlan {
 	return []LogicalPlan{s.Child}
 }
 
-func (s *Scan) Schema() *Schema {
+func (s *ScanAlias) Schema() *Schema {
 	return s.Child.Schema()
+}
+
+func (s *ScanAlias) String() string {
+	return fmt.Sprintf("ALIAS %s", s.Alias)
 }
 
 type Project struct {
@@ -100,6 +146,20 @@ func (p *Project) Schema() *Schema {
 	// return &Schema{Columns: columns}
 }
 
+func (p *Project) String() string {
+	str := strings.Builder{}
+	str.WriteString("PROJECT ")
+
+	for i, expr := range p.Expressions {
+		if i > 0 {
+			str.WriteString(", ")
+		}
+		str.WriteString(expr.String())
+	}
+
+	return str.String()
+}
+
 type Filter struct {
 	Condition LogicalExpr
 	Child     LogicalPlan
@@ -111,6 +171,10 @@ func (f *Filter) Children() []LogicalPlan {
 
 func (f *Filter) Schema() *Schema {
 	return f.Child.Schema()
+}
+
+func (f *Filter) String() string {
+	return fmt.Sprintf("FILTER %s", f.Condition.String())
 }
 
 type Join struct {
@@ -131,6 +195,19 @@ func (j *Join) Schema() *Schema {
 	return &Schema{Columns: columns}
 }
 
+func (j *Join) String() string {
+	str := strings.Builder{}
+	str.WriteString(j.JoinType.String())
+	str.WriteString(" JOIN: left: ")
+	str.WriteString(j.Left.String())
+	str.WriteString(", right: ")
+	str.WriteString(j.Right.String())
+	str.WriteString(", on: ")
+	str.WriteString(j.Condition.String())
+	return str.String()
+
+}
+
 type Sort struct {
 	SortExpressions []*SortExpression
 	Child           LogicalPlan
@@ -140,6 +217,32 @@ type SortExpression struct {
 	Expr      LogicalExpr
 	Ascending bool
 	NullsLast bool
+}
+
+func (s *Sort) String() string {
+	str := strings.Builder{}
+	str.WriteString("SORT BY ")
+	for i, sortExpr := range s.SortExpressions {
+		if i > 0 {
+			str.WriteString("; ")
+		}
+		str.WriteString(sortExpr.Expr.String())
+
+		str.WriteString("order=")
+		if !sortExpr.Ascending {
+			str.WriteString("desc ")
+		} else {
+			str.WriteString("asc ")
+		}
+
+		str.WriteString("nulls=")
+		if sortExpr.NullsLast {
+			str.WriteString("last")
+		} else {
+			str.WriteString("first")
+		}
+	}
+	return str.String()
 }
 
 func (s *Sort) Children() []LogicalPlan {
@@ -164,6 +267,19 @@ func (l *Limit) Schema() *Schema {
 	return l.Child.Schema()
 }
 
+func (l *Limit) String() string {
+	str := strings.Builder{}
+	str.WriteString("LIMIT [")
+	str.WriteString(l.Limit.String())
+	str.WriteString("]")
+	if l.Offset != nil {
+		str.WriteString("; offset=[")
+		str.WriteString(l.Offset.String())
+		str.WriteString("]")
+	}
+	return str.String()
+}
+
 type Distinct struct {
 	Child LogicalPlan
 }
@@ -174,6 +290,10 @@ func (d *Distinct) Children() []LogicalPlan {
 
 func (d *Distinct) Schema() *Schema {
 	return d.Child.Schema()
+}
+
+func (d *Distinct) String() string {
+	return "DISTINCT"
 }
 
 type SetOperation struct {
@@ -190,6 +310,18 @@ func (s *SetOperation) Children() []LogicalPlan {
 func (s *SetOperation) Schema() *Schema {
 	// Assuming set operations require compatible schemas
 	return s.Left.Schema()
+}
+
+func (s *SetOperation) String() string {
+	str := strings.Builder{}
+	str.WriteString("SET: op=")
+	str.WriteString(s.OpType.String())
+	str.WriteString("; left=[")
+	str.WriteString(s.Left.String())
+	str.WriteString("]; right=[")
+	str.WriteString(s.Right.String())
+	str.WriteString("]")
+	return str.String()
 }
 
 type Aggregate struct {
@@ -231,17 +363,24 @@ func (a *Aggregate) Schema() *Schema {
 	// return &Schema{Columns: columns}
 }
 
-type Having struct {
-	Condition LogicalExpr
-	Child     LogicalPlan
-}
-
-func (h *Having) Children() []LogicalPlan {
-	return []LogicalPlan{h.Child}
-}
-
-func (h *Having) Schema() *Schema {
-	return h.Child.Schema()
+func (a *Aggregate) String() string {
+	str := strings.Builder{}
+	str.WriteString("AGGREGATE: group_by=[")
+	for i, expr := range a.GroupingExpressions {
+		if i > 0 {
+			str.WriteString(", ")
+		}
+		str.WriteString(expr.String())
+	}
+	str.WriteString("]; aggregates=[")
+	for i, expr := range a.AggregateExpressions {
+		if i > 0 {
+			str.WriteString(", ")
+		}
+		str.WriteString(expr.String())
+	}
+	str.WriteString("]")
+	return str.String()
 }
 
 type JoinType int
@@ -253,6 +392,21 @@ const (
 	FullOuterJoin
 )
 
+func (j JoinType) String() string {
+	switch j {
+	case InnerJoin:
+		return "INNER"
+	case LeftOuterJoin:
+		return "LEFT OUTER"
+	case RightOuterJoin:
+		return "RIGHT OUTER"
+	case FullOuterJoin:
+		return "FULL OUTER"
+	default:
+		panic(fmt.Sprintf("unknown join type %d", j))
+	}
+}
+
 type SetOperationType int
 
 const (
@@ -261,6 +415,21 @@ const (
 	Intersect
 	Except
 )
+
+func (s SetOperationType) String() string {
+	switch s {
+	case Union:
+		return "UNION"
+	case UnionAll:
+		return "UNION ALL"
+	case Intersect:
+		return "INTERSECT"
+	case Except:
+		return "EXCEPT"
+	default:
+		panic(fmt.Sprintf("unknown set operation type %d", s))
+	}
+}
 
 /*
 	###########################
@@ -271,6 +440,7 @@ const (
 */
 
 type LogicalExpr interface {
+	fmt.Stringer
 	// Name returns the name of the expression.
 	// This can be empty, and is generally only set for ColumnRef
 	// or aliased expressions.
@@ -284,8 +454,6 @@ type LogicalExpr interface {
 	Project(*Schema) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error)
 	// Equal compares two expressions for equality.
 	Equal(LogicalExpr) bool
-	// String returns a string representation of the expression.
-	String() string
 }
 
 // baseExpr is a helper struct that implements the default behavior for an Expression.
@@ -749,26 +917,26 @@ func (t *TypeCast) String() string {
 	return fmt.Sprintf("(%s::%s)", t.Expr.String(), t.Type.Name)
 }
 
-type Alias struct {
+type AliasExpr struct {
 	baseExpr
 	Expr  LogicalExpr
 	Alias string
 }
 
-func (a *Alias) Name() string {
+func (a *AliasExpr) Name() string {
 	return a.Alias
 }
 
-func (a *Alias) IsAggregate() bool {
+func (a *AliasExpr) IsAggregate() bool {
 	return a.Expr.IsAggregate()
 }
 
-func (a *Alias) Project(s *Schema) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (a *AliasExpr) Project(s *Schema) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	return a.Expr.Project(s)
 }
 
-func (a *Alias) Equal(other LogicalExpr) bool {
-	otherAlias, ok := other.(*Alias)
+func (a *AliasExpr) Equal(other LogicalExpr) bool {
+	otherAlias, ok := other.(*AliasExpr)
 	if !ok {
 		return false
 	}
@@ -776,6 +944,6 @@ func (a *Alias) Equal(other LogicalExpr) bool {
 	return a.Alias == otherAlias.Alias && a.Expr.Equal(otherAlias.Expr)
 }
 
-func (a *Alias) String() string {
+func (a *AliasExpr) String() string {
 	return fmt.Sprintf("%s AS %s", a.Expr.String(), a.Alias)
 }

@@ -302,7 +302,7 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 			case *parse.ResultColumnExpression:
 				expr2 := resultCol.Expression.Accept(p).(LogicalExpr)
 				if resultCol.Alias != "" {
-					expr2 = &Alias{
+					expr2 = &AliasExpr{
 						Expr:  expr2,
 						Alias: resultCol.Alias,
 					}
@@ -351,7 +351,7 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 			// if expression, we need to ensure it is an aggregate
 			expr := resultCol.Expression.Accept(p).(LogicalExpr)
 			if resultCol.Alias != "" {
-				expr = &Alias{
+				expr = &AliasExpr{
 					Expr:  expr,
 					Alias: resultCol.Alias,
 				}
@@ -517,7 +517,7 @@ func (p *plannerVisitor) VisitRelationTable(node *parse.RelationTable) any {
 		alias = node.Alias
 	}
 
-	return &Scan{
+	return &ScanAlias{
 		Child: &TableScan{
 			TableName:   node.Table,
 			TableSchema: schemaFromTable(tbl),
@@ -531,7 +531,7 @@ func (p *plannerVisitor) VisitRelationSubquery(node *parse.RelationSubquery) any
 		panic("subquery must have an alias")
 	}
 
-	return &Scan{
+	return &ScanAlias{
 		Child: node.Subquery.Accept(p).(LogicalPlan),
 		Alias: node.Alias,
 	}
@@ -592,9 +592,9 @@ func (p *plannerVisitor) VisitRelationFunctionCall(node *parse.RelationFunctionC
 		contextualArgs = p.exprs(t.ContextualArgs)
 	}
 
-	return &Scan{
-		Child: &FunctionScan{
-			FunctionName:   node.FunctionCall.FunctionName(),
+	return &ScanAlias{
+		Child: &ProcedureScan{
+			ProcedureName:  node.FunctionCall.FunctionName(),
 			Args:           args,
 			ContextualArgs: contextualArgs,
 			IsForeign:      isForeign,
