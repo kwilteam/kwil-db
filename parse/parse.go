@@ -282,6 +282,10 @@ func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error)
 	if sql == "" {
 		return nil, fmt.Errorf("empty SQL statement")
 	}
+
+	// trim whitespace
+	sql = strings.TrimSpace(sql)
+
 	// add semicolon to the end of the statement, if it is not there
 	if !strings.HasSuffix(sql, ";") {
 		sql += ";"
