@@ -341,6 +341,10 @@ func setupSQLParser(sql string, schema *types.Schema) (parser *gen.KuneiformPars
 	if sql == "" {
 		return nil, nil, nil, nil, nil, fmt.Errorf("empty SQL statement")
 	}
+
+	// trim whitespace
+	sql = strings.TrimSpace(sql)
+
 	// add semicolon to the end of the statement, if it is not there
 	if !strings.HasSuffix(sql, ";") {
 		sql += ";"

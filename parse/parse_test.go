@@ -2678,6 +2678,25 @@ func Test_SQL(t *testing.T) {
 				},
 			},
 		},
+		{
+			// regression tests for a previous bug, where whitespace after
+			// the semicolon would cause the parser to add an extra semicolon
+			name: "whitespace after semicolon",
+			sql:  "SELECT 1;     ",
+			want: &parse.SQLStatement{
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnExpression{
+									Expression: exprLit(1),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
