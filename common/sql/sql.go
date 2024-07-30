@@ -35,6 +35,25 @@ type Executor interface {
 	Execute(ctx context.Context, stmt string, args ...any) (*ResultSet, error)
 }
 
+// QueryScanner represents a type that provides the ability to execute an SQL
+// statement, where for each row:
+//
+//  1. result values are scanned into the variables in the scans slice
+//  2. the provided function is then called
+//
+// The function would typically capture the variables in the scans slice,
+// allowing it to operator on the values. For instance, append the values to
+// slices allocated by the caller, or perform reduction operations like
+// sum/mean/min/etc.
+//
+// NOTE: This method may end up being included in the Tx interface alongside
+// Executor since all of the concrete transaction implementations provided by
+// this package implement this method.
+type QueryScanner interface {
+	QueryScanFn(ctx context.Context, stmt string,
+		scans []any, fn func() error, args ...any) error
+}
+
 // TxMaker is an interface that creates a new transaction. In the context of the
 // recursive Tx interface, is creates a nested transaction.
 type TxMaker interface {

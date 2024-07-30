@@ -182,13 +182,12 @@ func query(ctx context.Context, oidToDataType map[uint32]*datatype, cq connQuery
 	resSet := &sql.ResultSet{}
 	var oids []uint32
 	for _, colInfo := range rows.FieldDescriptions() {
-		// fmt.Println(colInfo.DataTypeOID, colInfo.DataTypeSize)
-
 		// NOTE: if the column Name is "?column?", then colInfo.TableOID is
 		// probably zero, meaning not a column of a table, e.g. the result of an
 		// aggregate function, or just returning the a bound argument directly.
 		// AND no AS was used.
 		resSet.Columns = append(resSet.Columns, colInfo.Name)
+		// NOTE: for a domain (alias) this will be the OID of the underlying type
 		oids = append(oids, colInfo.DataTypeOID)
 	}
 

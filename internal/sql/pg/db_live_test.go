@@ -4,8 +4,12 @@ package pg
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
+	"math/big"
+	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,10 +18,13 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
-	"github.com/stretchr/testify/require"
-	// "github.com/kwilteam/kwil-db/internal/conv"
 )
 
 func TestMain(m *testing.M) {
@@ -46,6 +53,342 @@ var (
 		},
 	}
 )
+
+func TestColumnInfo(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewPool(ctx, &cfg.PoolConfig)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
+
+	// Make a temporary table to describe with ColumnInfo.
+
+	tbl := "colcheck"
+	_, err = tx.Execute(ctx, `drop table if exists `+tbl)
+	require.NoError(t, err)
+	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
+		` (a int8 not null, b int4 default 42, c text,
+		   d bytea, e numeric(20,5), f int8[], g uint256)`)
+	require.NoError(t, err)
+
+	cols, err := ColumnInfo(ctx, tx, "", tbl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantCols := []ColInfo{
+		{Pos: 1, Name: "a", DataType: "bigint", Nullable: false, Default: nil},
+		{Pos: 2, Name: "b", DataType: "integer", Nullable: true, Default: "42"},
+		{Pos: 3, Name: "c", DataType: "text", Nullable: true, Default: nil},
+		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true, Default: nil},
+		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true, Default: nil},
+		{Pos: 6, Name: "f", DataType: "bigint", Array: true, Nullable: true, Default: nil},
+		{Pos: 7, Name: "g", DataType: "uint256", Nullable: true, Default: nil},
+	}
+
+	assert.Equal(t, wantCols, cols) // t.Logf("%#v", cols)
+}
+
+func TestQueryRowFunc(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewPool(ctx, &cfg.PoolConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+
+	tbl := "colcheck"
+	_, err = tx.Execute(ctx, `drop table if exists `+tbl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
+		` (a int8 not null, b int4 default 42, c text,
+		   d bytea, e numeric(20,5), f int8[], g uint256)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cols, err := ColumnInfo(ctx, tx, "", tbl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = tx.Execute(ctx, `insert into `+tbl+
+		` values (5, null, 'a', '\xabab', 12, '{2,3,4}', 123456789)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// First get the scan values with (*ColInfo).ScanVal.
+
+	wantRTs := []reflect.Type{
+		typeFor[*pgtype.Int8](),
+		typeFor[*pgtype.Int8](),
+		typeFor[*pgtype.Text](),
+		typeFor[*[]uint8](),
+		typeFor[*pgtype.Numeric](),
+		typeFor[*pgtype.Array[pgtype.Int8]](),
+		typeFor[*types.Uint256](),
+	}
+
+	var scans []any
+	for i, col := range cols {
+		sv := col.ScanVal()
+		// t.Logf("scanval: %v (%T)", sv, sv)
+		scans = append(scans, sv)
+
+		gotRT := reflect.TypeOf(sv)
+		if wantRTs[i] != gotRT {
+			t.Errorf("wrong type %v, wanted %v", gotRT, wantRTs[i])
+		}
+	}
+
+	// Then use QueryRowFunc with the scan vals.
+
+	wantScans := []any{
+		&pgtype.Int8{Int64: 5, Valid: true},
+		&pgtype.Int8{Int64: 0, Valid: false},
+		&pgtype.Text{String: "a", Valid: true},
+		&[]uint8{0xab, 0xab},
+		&pgtype.Numeric{Int: big.NewInt(1200000), Exp: -5, NaN: false, InfinityModifier: 0, Valid: true},
+		&pgtype.Array[pgtype.Int8]{
+			Elements: []pgtype.Int8{{Int64: 2, Valid: true}, {Int64: 3, Valid: true}, {Int64: 4, Valid: true}},
+			Dims:     []pgtype.ArrayDimension{{Length: 3, LowerBound: 1}},
+			Valid:    true,
+		},
+		types.Uint256FromInt(123456789),
+	}
+
+	err = QueryRowFunc(ctx, tx, `SELECT * FROM `+tbl, scans,
+		func() error {
+			for i, val := range scans {
+				// t.Logf("%#v (%T)", val, val)
+				assert.Equal(t, wantScans[i], val)
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNULL(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewPool(ctx, &cfg.PoolConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	tx, err := db.begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+
+	tbl := "colcheck"
+	_, err = tx.Execute(ctx, `drop table if exists `+tbl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Execute(ctx, `create table if not exists `+tbl+` (a int8, b int4)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	insB := int64(6)
+	_, err = tx.Execute(ctx, fmt.Sprintf(`insert into `+tbl+` values (null, %d)`, insB))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sql := `select a, b from ` + tbl
+
+	res, err := tx.Execute(ctx, sql)
+	require.NoError(t, err)
+
+	// no type for NULL values, just a nil interface{}
+	a := res.Rows[0][0]
+	t.Logf("%v (%T)", a, a) // <nil> (<nil>)
+	require.Equal(t, reflect.TypeOf(a), reflect.Type(nil))
+
+	// only non-NULL values get a type
+	b := res.Rows[0][1]
+	t.Logf("%v (%T)", b, b) // 6 (int64)
+	require.Equal(t, reflect.TypeOf(b), typeFor[int64]())
+
+	// Now with scan vals
+
+	// Cannot select a NULL value with pointers to vanilla types
+	var av, bv int64
+	scans := []any{&av, &bv}
+	err = tx.QueryScanFn(ctx, sql, scans, func() error { return nil })
+	// require.Error(t, err)
+	require.ErrorContains(t, err, "cannot scan NULL into *int64")
+
+	// Can Scan NULL values with pgtype.Int8 with a Valid bool field.
+	var avn, bvn pgtype.Int8
+	scans = []any{&avn, &bvn}
+	err = tx.QueryScanFn(ctx, sql, scans, func() error { return nil })
+	require.NoError(t, err)
+
+	require.False(t, avn.Valid) // Valid=false for NULL
+	require.True(t, bvn.Valid)
+
+	require.Equal(t, avn.Int64, int64(0))
+	require.Equal(t, bvn.Int64, insB)
+}
+
+// typeFor returns the reflect.Type that represents the type argument T. TODO:
+// Remove this in favor of reflect.TypeFor when Go 1.22 becomes the minimum
+// required version since it is not available in Go 1.21.
+func typeFor[T any]() reflect.Type {
+	return reflect.TypeOf((*T)(nil)).Elem()
+}
+
+func TestScanVal(t *testing.T) {
+	cols := []ColInfo{
+		{Pos: 1, Name: "a", DataType: "bigint", Nullable: false, Default: nil},
+		{Pos: 2, Name: "b", DataType: "integer", Nullable: true, Default: "42"},
+		{Pos: 3, Name: "c", DataType: "text", Nullable: true, Default: nil},
+		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true, Default: nil},
+		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true, Default: nil},
+		{Pos: 6, Name: "f", DataType: "uint256", Nullable: true, Default: nil},
+
+		{Pos: 7, Name: "aa", DataType: "bigint", Array: true, Nullable: false, Default: nil},
+		{Pos: 8, Name: "ba", DataType: "integer", Array: true, Nullable: true, Default: nil},
+		{Pos: 9, Name: "ca", DataType: "text", Array: true, Nullable: true, Default: nil},
+		{Pos: 10, Name: "da", DataType: "bytea", Array: true, Nullable: true, Default: nil},
+		{Pos: 11, Name: "ea", DataType: "numeric", Array: true, Nullable: true, Default: nil},
+		{Pos: 12, Name: "fa", DataType: "uint256", Array: true, Nullable: true, Default: nil},
+	}
+	var scans []any
+	for _, col := range cols {
+		scans = append(scans, col.ScanVal())
+	}
+	// for _, val := range scans { t.Logf("%#v (%T)", val, val) }
+
+	// want pointers to these base types
+	var ba []byte
+	var i8 pgtype.Int8
+	var txt pgtype.Text
+	var num pgtype.Numeric
+	var u256 types.Uint256
+
+	// want pointers to these slices for array types
+	// var ia []pgtype.Int8
+	// var ta []pgtype.Text
+	// var baa [][]byte
+	// var na []pgtype.Numeric
+	var ia pgtype.Array[pgtype.Int8]
+	var ta pgtype.Array[pgtype.Text]
+	var baa pgtype.Array[[]byte]
+	var na pgtype.Array[pgtype.Numeric]
+	var u256a types.Uint256Array
+
+	wantScans := []any{&i8, &i8, &txt, &ba, &num, &u256,
+		&ia, &ia, &ta, &baa, &na, &u256a}
+
+	assert.Equal(t, wantScans, scans)
+}
+
+func TestQueryRowFuncAny(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewDB(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+
+	tbl := "colcheck"
+	_, err = tx.Execute(ctx, `drop table if exists `+tbl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
+		` (a int8, b int4, c text, d bytea, e numeric(20,5), f int8[])`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = tx.Execute(ctx, `insert into `+tbl+
+		` values (5, null, 'a', '\xabab', 12, '{2,3,4}')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = QueryRowFuncAny(ctx, tx, `SELECT * FROM `+tbl,
+		func(_ []FieldDesc, vals []any) error {
+			for _, val := range vals {
+				t.Logf("%#v (%T)", val, val)
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var colInfo []ColInfo
+
+	// To test QueryRowFuncAny, get some column info.
+	stmt := `SELECT ordinal_position, column_name, is_nullable
+        FROM information_schema.columns
+        WHERE table_name = '` + tbl + `'`
+
+	err = QueryRowFuncAny(ctx, tx, stmt, func(fields []FieldDesc, vals []any) error {
+		t.Logf("%#v", vals) // e.g. []interface {}{1, "a", "bigint", "YES", interface {}(nil)}
+		// spew.Dump(vals)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Now the QueryScanFn method and QueryScanner interface with scan vars.
+	scanner := tx.(sql.QueryScanner)
+	var pos int
+	var colName, isNullable string
+	scans := []any{&pos, &colName, &isNullable}
+	err = scanner.QueryScanFn(ctx, stmt, scans, func() error {
+		colInfo = append(colInfo, ColInfo{
+			Pos:      pos,
+			Name:     colName,
+			Nullable: strings.EqualFold(isNullable, "yes"),
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	slices.SortFunc(colInfo, func(a, b ColInfo) int {
+		return cmp.Compare(a.Pos, b.Pos)
+	})
+
+	// now actually check the expected values!
+}
 
 // TestRollbackPreparedTxns tests the rollbackPreparedTxns in the following
 // cases:
@@ -543,6 +886,22 @@ func TestTypeRoundtrip(t *testing.T) {
 			require.Len(t, res.Rows[0], 1)
 
 			require.EqualValues(t, want, res.Rows[0][0])
+
+			// verify NULL value handling
+			_, err = tx.Execute(ctx, "DELETE FROM test", QueryModeExec)
+			require.NoError(t, err)
+
+			_, err = tx.Execute(ctx, "INSERT INTO test (val) VALUES (NULL)")
+			require.NoError(t, err)
+
+			res, err = tx.Execute(ctx, "SELECT val FROM test", QueryModeExec)
+			require.NoError(t, err)
+
+			require.Len(t, res.Columns, 1)
+			require.Len(t, res.Rows, 1)
+			require.Len(t, res.Rows[0], 1)
+
+			require.EqualValues(t, nil, res.Rows[0][0])
 		})
 	}
 }
