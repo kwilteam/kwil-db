@@ -426,11 +426,9 @@ func TestTypeRoundtrip(t *testing.T) {
 			typ: "decimal(5,0)",
 			val: mustDecimal("12300"),
 		},
-		{
-			typ:  "decimal(3,0)",
-			val:  types.Uint256FromInt(100),
-			want: mustDecimal("100"),
-		},
+		// this is an unavoidable issue with Postgres. We need to decode data into
+		// a value, rather than decode based on the OID
+		// https://www.postgresql.org/message-id/87fvoydtxx.fsf%40locaine.bese.it
 		{
 			typ:  "uint256",
 			val:  types.Uint256FromInt(100),

@@ -180,6 +180,7 @@ func query(ctx context.Context, oidToDataType map[uint32]*datatype, cq connQuery
 
 	// res := rows.CommandTag() // RowsAffected, bool for Select etc.
 	resSet := &sql.ResultSet{}
+	var oids []uint32
 	for _, colInfo := range rows.FieldDescriptions() {
 		// fmt.Println(colInfo.DataTypeOID, colInfo.DataTypeSize)
 
@@ -188,16 +189,13 @@ func query(ctx context.Context, oidToDataType map[uint32]*datatype, cq connQuery
 		// aggregate function, or just returning the a bound argument directly.
 		// AND no AS was used.
 		resSet.Columns = append(resSet.Columns, colInfo.Name)
+		oids = append(oids, colInfo.DataTypeOID)
 	}
 
 	resSet.Rows, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) ([]any, error) {
 		pgxVals, err := row.Values()
 		if err != nil {
 			return nil, err
-		}
-		oids := make([]uint32, len(pgxVals))
-		for i, v := range row.FieldDescriptions() {
-			oids[i] = v.DataTypeOID
 		}
 		return decodeFromPG(pgxVals, oids, oidToDataType)
 	})
