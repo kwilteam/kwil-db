@@ -292,6 +292,13 @@ func (p *Pool) Close() error {
 // BeginTx starts a read-write transaction. It is an error to call this twice
 // without first closing the initial transaction.
 func (p *Pool) BeginTx(ctx context.Context) (sql.Tx, error) {
+	return p.begin(ctx)
+}
+
+// begin is the unexported version of BeginTx that returns a concrete type
+// instead of an interface, which is required of the exported method to satisfy
+// the sql.TxMaker interface.
+func (p *Pool) begin(ctx context.Context) (*nestedTx, error) {
 	tx, err := p.writer.BeginTx(ctx, pgx.TxOptions{
 		AccessMode: pgx.ReadWrite,
 		IsoLevel:   pgx.ReadCommitted,

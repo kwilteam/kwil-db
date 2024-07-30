@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/kwilteam/kwil-db/common/sql"
 
@@ -182,13 +183,12 @@ func query(ctx context.Context, oidToDataType map[uint32]*datatype, cq connQuery
 	resSet := &sql.ResultSet{}
 	var oids []uint32
 	for _, colInfo := range rows.FieldDescriptions() {
-		// fmt.Println(colInfo.DataTypeOID, colInfo.DataTypeSize)
-
 		// NOTE: if the column Name is "?column?", then colInfo.TableOID is
 		// probably zero, meaning not a column of a table, e.g. the result of an
 		// aggregate function, or just returning the a bound argument directly.
 		// AND no AS was used.
 		resSet.Columns = append(resSet.Columns, colInfo.Name)
+		// NOTE: for a domain (alias) this will be the OID of the underlying type
 		oids = append(oids, colInfo.DataTypeOID)
 	}
 
@@ -234,4 +234,93 @@ func queryTx(ctx context.Context, oidToDataType map[uint32]*datatype, dbTx txBeg
 	}
 
 	return resSet, err
+}
+
+func queryRowFunc(ctx context.Context, conn *pgx.Conn, sql string,
+	scans []any, fn func() error, args ...any) error {
+	rows, _ := conn.Query(ctx, sql, args...)
+	_, err := pgx.ForEachRow(rows, scans, fn)
+	return err
+}
+
+// QueryRowFunc will attempt to execute an SQL statement, handling the rows and
+// returned values as described by the sql.QueryScanner interface. If the
+// provided Executor is also a sql.QueryScanner, that method will be used,
+// otherwise, it will attempt to use the underlying DB connection. The latter is
+// supported for all concrete transaction types in this package as well as
+// instances of the pgx.Tx interface.
+func QueryRowFunc(ctx context.Context, tx sql.Executor, stmt string,
+	scans []any, fn func() error, args ...any) error {
+	switch ti := tx.(type) {
+	case sql.QueryScanner:
+		return ti.QueryScanFn(ctx, stmt, scans, fn, args...)
+	case conner:
+		conn := ti.Conn()
+		return queryRowFunc(ctx, conn, stmt, scans, fn, args...)
+	}
+	return errors.New("cannot query with scan values")
+}
+
+// QueryRowFuncAny is similar to QueryRowFunc, except that no scan values slice
+// is provided. The provided function is called for each row of the result. The
+// caller does not determine the types of the Go variables in the values slice.
+// In this way it behaves similar to Execute, but providing "for each row"
+// functionality so that every row does not need to be loaded into memory. See
+// also QueryRowFunc, which allows the caller to provide a scan values slice.
+func QueryRowFuncAny(ctx context.Context, tx sql.Executor, stmt string,
+	fn func([]any) error, args ...any) error {
+	conner, ok := tx.(conner)
+	if !ok {
+		return errors.New("no conn access")
+	}
+	conn := conner.Conn()
+	return queryRowFuncAny(ctx, conn, stmt, fn, args...)
+}
+
+func queryRowFuncAny(ctx context.Context, conn *pgx.Conn, stmt string,
+	fn func(vals []any) error, args ...any) error {
+	oidTypes := oidTypesMap(conn.TypeMap())
+
+	rows, _ := conn.Query(ctx, stmt, args...)
+	fields := rows.FieldDescriptions()
+	var oids []uint32
+	for _, f := range fields {
+		// NOTE: for a domain (constrained alias) this will be the OID of the underlying type
+		oids = append(oids, f.DataTypeOID)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		pgxVals, err := rows.Values()
+		if err != nil {
+			return err
+		}
+
+		// Decode the values into Kwil or native types.
+		decVals := make([]any, len(pgxVals))
+		for i, pgVal := range pgxVals {
+			decVal, err := decodeFromPGVal(pgVal, oids[i], oidTypes)
+			if err != nil {
+				if !errors.Is(err, ErrUnsupportedOID) {
+					return err
+				}
+
+				switch pgVal.(type) { // let native (sql/driver.Value) types pass
+				case int64, float64, bool, []byte, string, time.Time, nil:
+				default: // reject anything else unrecognized
+					return err
+				}
+				decVal = pgVal // use as-is
+			}
+
+			decVals[i] = decVal
+		}
+
+		err = fn(decVals)
+		if err != nil {
+			return err
+		}
+	}
+
+	return rows.Err()
 }

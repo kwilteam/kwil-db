@@ -3,6 +3,7 @@ package pg
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
@@ -30,6 +32,8 @@ var (
 	datatypes          = map[*datatype]struct{}{}  // a set of all data types (used for iteration)
 	kwilTypeToDataType = map[types.DataType]*datatype{}
 )
+
+var ErrUnsupportedOID = errors.New("unsupported OID")
 
 // registerOIDs registers all of the data types that we support in Postgres.
 func registerDatatype(scalar *datatype, array *datatype) {
@@ -119,11 +123,39 @@ type datatype struct {
 	DeserializeChangeset func([]byte) (any, error)
 }
 
+var ErrNaN = errors.New("NaN")
+
+func pgNumericToDecimal(num pgtype.Numeric) (*decimal.Decimal, error) {
+	if num.NaN { // TODO: create a decimal.Decimal that supports NaN
+		return nil, ErrNaN
+	}
+	if !num.Valid {
+		return nil, errors.New("invalid or null") // TODO: create a decimal.Decimal that supports NULL
+	}
+
+	i, e := num.Int, num.Exp
+
+	// Kwil's decimal semantics do not allow negative scale (only shift decimal
+	// left), so if the exponent is positive we need to apply it to the integer.
+	if e > 0 {
+		// i * 10^e
+		z := new(big.Int)
+		z.Exp(big.NewInt(10), big.NewInt(int64(e)), nil)
+		z.Mul(z, i)
+		i, e = z, 0
+	}
+
+	// Really this could be uint256, which is same underlying type (a domain) as
+	// Numeric. If the caller needs to know, that has to happen differently.
+	return decimal.NewFromBigInt(i, e)
+}
+
 var (
 	textType = &datatype{
 		KwilType:       types.TextType,
 		Matches:        []reflect.Type{reflect.TypeOf("")},
 		OID:            func(*pgtype.Map) uint32 { return pgtype.TextOID },
+		ExtraOIDs:      []uint32{pgtype.VarcharOID},
 		EncodeInferred: defaultEncodeDecode,
 		Decode:         defaultEncodeDecode,
 		SerializeChangeset: func(value string) ([]byte, error) {
@@ -198,28 +230,11 @@ var (
 		ExtraOIDs:      []uint32{pgtype.Int2OID, pgtype.Int4OID},
 		EncodeInferred: defaultEncodeDecode,
 		Decode: func(a any) (any, error) {
-			switch v := a.(type) {
-			case int:
-				return int64(v), nil
-			case int8:
-				return int64(v), nil
-			case int16:
-				return int64(v), nil
-			case int32:
-				return int64(v), nil
-			case int64:
-				return v, nil
-			case uint:
-				return int64(v), nil
-			case uint16:
-				return int64(v), nil
-			case uint32:
-				return int64(v), nil
-			case uint64:
-				return int64(v), nil
-			default:
+			v, ok := sql.Int64(a)
+			if !ok {
 				return nil, fmt.Errorf("unexpected type %T", a)
 			}
+			return v, nil
 		},
 		SerializeChangeset: func(value string) ([]byte, error) {
 			intVal, err := strconv.ParseInt(value, 10, 64)
@@ -467,25 +482,7 @@ var (
 				return nil, fmt.Errorf("expected pgtype.Numeric, got %T", a)
 			}
 
-			if pgType.NaN {
-				return "NaN", nil
-			}
-
-			// if we give postgres a number such as 5000, it will return it as 5 with exponent 3.
-			// Since kwil's decimal semantics do not allow negative scale, we need to multiply
-			// the number by 10^exp to get the correct value.
-			if pgType.Exp > 0 {
-				z := new(big.Int)
-				z.Exp(big.NewInt(10), big.NewInt(int64(pgType.Exp)), nil)
-				z.Mul(z, pgType.Int)
-				pgType.Int = z
-				pgType.Exp = 0
-			}
-
-			// there is a bit of an edge case here, where uint256 can be returned.
-			// since most results simply get returned to the user via JSON, it doesn't
-			// matter too much right now, so we'll leave it as-is.
-			return decimal.NewFromBigInt(pgType.Int, pgType.Exp)
+			return pgNumericToDecimal(pgType)
 		},
 		SerializeChangeset: func(value string) ([]byte, error) {
 			// parse to ensure it is a valid decimal, then re-encode it to ensure it is in the correct format.
@@ -581,17 +578,18 @@ var (
 				return nil, fmt.Errorf("expected pgtype.Numeric, got %T", a)
 			}
 
-			// if the number ends in 0s, it will have an exponent, so we need to multiply
-			// the number by 10^exp to get the correct value.
-			if pgType.Exp > 0 {
-				z := new(big.Int)
-				z.Exp(big.NewInt(10), big.NewInt(int64(pgType.Exp)), nil)
-				z.Mul(z, pgType.Int)
-				pgType.Int = z
-				pgType.Exp = 0
+			if pgType.Exp == 0 {
+				return types.Uint256FromBig(pgType.Int)
 			}
 
-			return types.Uint256FromBig(pgType.Int)
+			dec, err := pgNumericToDecimal(pgType)
+			if err != nil {
+				return nil, err
+			}
+			if dec.Exp() != 0 {
+				return nil, errors.New("fractional numeric")
+			}
+			return types.Uint256FromBig(dec.BigInt())
 		},
 		SerializeChangeset: func(value string) ([]byte, error) {
 			// parse to ensure it is a valid uint256, then re-encode it to ensure it is in the correct format.
@@ -771,7 +769,20 @@ func encodeToPGType(oids *pgtype.Map, values ...any) ([]any, []uint32, error) {
 // a nil value with the void OID.
 var voidOID = uint32(2278)
 
-// decodeFromPGType decodes several pgx types to their corresponding Go types.
+func decodeFromPGVal(val any, oid uint32, oidToDataType map[uint32]*datatype) (any, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	dt, ok := oidToDataType[oid]
+	if !ok {
+		return nil, fmt.Errorf("%w: %d", ErrUnsupportedOID, oid)
+	}
+
+	return dt.Decode(val)
+}
+
+// decodeFromPG decodes several pgx types to their corresponding Go types.
 // It is capable of detecting special Kwil types and decoding them to their
 // corresponding Go types.
 func decodeFromPG(vals []any, oids []uint32, oidToDataType map[uint32]*datatype) ([]any, error) {
@@ -781,17 +792,7 @@ func decodeFromPG(vals []any, oids []uint32, oidToDataType map[uint32]*datatype)
 			continue
 		}
 
-		if vals[i] == nil {
-			results = append(results, nil)
-			continue
-		}
-
-		dt, ok := oidToDataType[oid]
-		if !ok {
-			return nil, fmt.Errorf("unsupported oid %d", oid)
-		}
-
-		decoded, err := dt.Decode(vals[i])
+		decoded, err := decodeFromPGVal(vals[i], oid, oidToDataType)
 		if err != nil {
 			return nil, err
 		}
