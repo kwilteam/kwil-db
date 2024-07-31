@@ -21,11 +21,13 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
+	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/core/adminclient"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -38,6 +40,7 @@ import (
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/kwilteam/kwil-db/test/driver/operator"
 	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
+	"github.com/kwilteam/kwil-db/test/specifications"
 	"github.com/kwilteam/kwil-db/test/utils"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
@@ -71,9 +74,10 @@ var logWaitStrategies = map[string]string{
 }
 
 const (
-	ExtContainer  = "ext1"
-	Ext3Container = "ext3"
-	testChainID   = "kwil-test-chain"
+	ExtContainer     = "ext1"
+	Ext3Container    = "ext3"
+	testChainID      = "kwil-test-chain"
+	MigrationChainID = "kwil-migration-chain"
 )
 
 // IntTestConfig is the config for integration test
@@ -179,6 +183,12 @@ func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 }
 
 type HelperOpt func(*IntHelper)
+
+func WithAdminRPC(addr string) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.AdminRPC = addr
+	}
+}
 
 func WithBlockInterval(d time.Duration) HelperOpt {
 	return func(r *IntHelper) {
@@ -326,6 +336,14 @@ func (r *IntHelper) LoadConfig() {
 	r.cfg.JoinExpiry = 14400
 }
 
+func (r *IntHelper) TestnetDir() (string, error) {
+	homeDir, ok := r.envs["KWIL_HOME"]
+	if !ok {
+		return "", fmt.Errorf("KWIL_HOME not set")
+	}
+	return homeDir, nil
+}
+
 func (r *IntHelper) Config() *IntTestConfig {
 	return r.cfg
 }
@@ -366,6 +384,14 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 		extensionConfigs[i]["spammer"] = map[string]string{
 			"enabled": strconv.FormatBool(r.cfg.SpamOracleEnabled),
 		}
+
+		if r.cfg.Snapshots.Enabled {
+			extensionConfigs[i]["snapshots"] = map[string]string{
+				"enabled":          "true",
+				"max_snapshots":    strconv.FormatUint(r.cfg.Snapshots.MaxSnapshots, 10),
+				"recurring_height": strconv.FormatUint(r.cfg.Snapshots.RecurringHeight, 10),
+			}
+		}
 	}
 
 	var allocs map[string]*big.Int
@@ -383,6 +409,8 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 	err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
 		ChainID:       testChainID,
 		BlockInterval: r.cfg.BlockInterval,
+		AdminAddress:  r.cfg.AdminRPC,
+		AdminNoTLS:    true,
 		// InitialHeight:           0,
 		NValidators:             r.cfg.NValidator,
 		NNonValidators:          r.cfg.NNonValidator,
@@ -560,9 +588,12 @@ func (r *IntHelper) Setup(ctx context.Context, services []string) {
 		os.RemoveAll(tmpDir)
 	})
 
+	localNetworkName := r.createLocalNetwork(ctx)
+	r.updateEnv("KWIL_NETWORK", localNetworkName)
+
 	r.t.Logf("create test directory: %s for %s", tmpDir, r.t.Name())
 
-	r.prepareDockerCompose(ctx, tmpDir)
+	r.prepareDockerCompose(ctx, tmpDir, "./docker-compose.yml.template", "./docker-compose.override.yml.template")
 
 	if r.cfg.WithETHDevNet {
 		// NOTE: it's more natural and easier if able to configure oracle
@@ -573,6 +604,67 @@ func (r *IntHelper) Setup(ctx context.Context, services []string) {
 	r.generateNodeConfig(tmpDir)
 
 	r.RunDockerComposeWithServices(ctx, services)
+}
+
+// MigrationSetup sets up the test environment for network migration
+// by setting up the new network with the new configuration based on the old network
+func (r *IntHelper) MigrationSetup(ctx context.Context, services []string) string {
+	tmpDir, err := os.MkdirTemp("", "TestKwilInt")
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	r.t.Cleanup(func() {
+		if r.t.Failed() {
+			r.t.Logf("Retaining data for failed test at path %v", tmpDir)
+			return
+		}
+		os.RemoveAll(tmpDir)
+	})
+
+	oldRootDir, err := r.TestnetDir()
+	require.NoError(r.t, err, "failed to get testnet dir")
+
+	r.t.Logf("create test directory for migration: %s for %s", tmpDir, r.t.Name())
+
+	for i := 0; i < r.cfg.NNonValidator+r.cfg.NValidator; i++ {
+		// Create sub nodes
+		oldNodeDir := filepath.Join(oldRootDir, fmt.Sprintf("node%d", i))
+		newNodeDir := filepath.Join(tmpDir, fmt.Sprintf("node%d", i))
+
+		err = os.MkdirAll(newNodeDir, 0755)
+		require.NoError(r.t, err)
+
+		// copy private key
+		err = specifications.CopyFiles(filepath.Join(oldNodeDir, "private_key"), filepath.Join(newNodeDir, "private_key"))
+		require.NoError(r.t, err)
+
+		// copy config file
+		err = specifications.CopyFiles(filepath.Join(oldNodeDir, "config.toml"), filepath.Join(newNodeDir, "config.toml"))
+		require.NoError(r.t, err)
+
+		// update the config file when we have the migration info
+	}
+
+	r.prepareDockerCompose(ctx, tmpDir, "./docker-compose-migration.yml.template", "./docker-compose-migration.override.yml.template")
+
+	// r.RunDockerComposeWithServices(ctx, services)
+	return tmpDir
+}
+
+func (r *IntHelper) createLocalNetwork(ctx context.Context) string {
+	testName := r.t.Name()
+	localNetwork, err := utils.EnsureNetworkExist(ctx, testName)
+	require.NoError(r.t, err, "failed to create network")
+
+	r.t.Cleanup(func() {
+		if localNetwork != nil && !r.t.Failed() {
+			r.t.Logf("teardown docker network %s from %s", localNetwork.Name, testName)
+			err := localNetwork.Remove(ctx)
+			require.NoError(r.t, err, "failed to remove network")
+		}
+	})
+
+	return localNetwork.Name
 }
 
 // prepareDockerCompose prepares the docker-compose.yml file for the test.
@@ -598,22 +690,14 @@ func (r *IntHelper) Setup(ctx context.Context, services []string) {
 // Another approach to make parallel tests work is using the same network for all tests,
 // assuming the subnet pool is big enough for all containers at a time. It's still
 // relevant to `default-address-pools` setting, so I'll leave it as is for now.
-func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
+func (r *IntHelper) prepareDockerCompose(_ context.Context, tmpDir string, templateFilename, overrideFilename string) {
 	// create a new network for each test to avoid container DNS name conflicts
 	// for parallel running
 	testName := r.t.Name()
-	localNetwork, err := utils.EnsureNetworkExist(context.Background(), testName)
-	require.NoError(r.t, err, "failed to create network")
-	localNetworkName := localNetwork.Name
+	localNetworkName, ok := r.envs["KWIL_NETWORK"]
+	require.True(r.t, ok, "failed to get KWIL_NETWORK env")
 
-	r.t.Cleanup(func() {
-		if localNetwork != nil && !r.t.Failed() {
-			r.t.Logf("teardown docker network %s from %s", localNetworkName, testName)
-			err := localNetwork.Remove(ctx)
-			require.NoError(r.t, err, "failed to remove network")
-		}
-	})
-
+	r.updateEnv("KWIL_HOME", tmpDir)
 	// another seemingly possible way to do this is instead of using template
 	// docker-compose file is to use envs in docker-compose.yml, but it doesn't work
 	//r.updateEnv("KWIL_NETWORK", localNetworkName)
@@ -636,7 +720,7 @@ func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 	} else if r.cfg.ForkNodes {
 		dockerImageName = "kwild-forker:latest"
 	}
-	err = utils.CreateComposeFile(composeFile, "./docker-compose.yml.template",
+	err := utils.CreateComposeFile(composeFile, templateFilename,
 		utils.ComposeConfig{
 			Network:          localNetworkName,
 			ExposedHTTPPorts: exposedHTTPPorts,
@@ -656,9 +740,9 @@ func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 	require.NoError(r.t, err, "failed to write pginit.sql")
 
 	// copy docker-compose.override.yml if exists
-	if fileExists(r.cfg.DockerComposeOverrideFile) {
-		overrideCompose, err := os.ReadFile(r.cfg.DockerComposeOverrideFile)
-		require.NoError(r.t, err, "failed to read docker-compose.override.yml")
+	if fileExists(overrideFilename) {
+		overrideCompose, err := os.ReadFile(overrideFilename)
+		require.NoError(r.t, err, "failed to read ", overrideFilename)
 		overrideFile := filepath.Join(tmpDir, "docker-compose.override.yml")
 		err = os.WriteFile(overrideFile, overrideCompose, 0644)
 		require.NoError(r.t, err, "failed to write docker-compose.override.yml")
@@ -698,6 +782,35 @@ func (r *IntHelper) ExtractPrivateKeys(home string) {
 	}
 }
 
+// EnableStatesync enables statesync for the given node and sets the snapshot providers
+func (r *IntHelper) EnableStatesync(ctx context.Context, homeDir string, nodeIdx int, snapshotProviders []string) {
+	// read from the config.toml file
+	tomlFile := filepath.Join(homeDir, fmt.Sprintf("node%d", nodeIdx), "config.toml")
+	cfg, err := kwildcfg.LoadConfigFile(tomlFile)
+	require.NoError(r.t, err, "failed to load config file")
+
+	// Check if statesync is enabled for the node and update the config
+	cfg.ChainCfg.StateSync.Enable = true
+
+	providers := []string{}
+	for _, provider := range snapshotProviders {
+		ctr, ok := r.containers[provider]
+		require.True(r.t, ok, "failed to get container for node%d", provider)
+
+		_, rpcURL, err := utils.KwildTcpRpcEndpoints(ctr, ctx)
+		require.NoError(r.t, err, "failed to get rpc url for node%d", provider)
+
+		providers = append(providers, rpcURL)
+	}
+
+	// join the snapshot providers with comma
+	cfg.ChainCfg.StateSync.RPCServers = strings.Join(providers, ",")
+
+	// write back to the config.toml file
+	err = nodecfg.WriteConfigFile(tomlFile, cfg)
+	require.NoError(r.t, err, "failed to write config file")
+}
+
 func decodePrivateKey(pkey string) (ed25519.PrivKey, error) {
 	privB, err := hex.DecodeString(pkey)
 	if err != nil {
@@ -726,7 +839,7 @@ func (r *IntHelper) GetUserGatewayDriver(ctx context.Context, driverType string,
 
 	switch driverType { // NOTE: REST api(for kwild) is discarded since kgw v0.3
 	case "jsonrpc":
-		return r.getJSONRPCClientDriver(signer, gatewayURL, gatewayProvider, nil)
+		return r.getJSONRPCClientDriver(signer, gatewayURL, gatewayProvider, nil, testChainID)
 	case "cli":
 		return r.getCliDriver(gatewayURL, pk, signer.Identity(), gatewayProvider, nil)
 	default:
@@ -737,6 +850,14 @@ func (r *IntHelper) GetUserGatewayDriver(ctx context.Context, driverType string,
 // GetUserDriver returns an integration driver connected to the given rpc node
 // using the private key
 func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverType string, deployer *ethdeployer.Deployer) KwilIntDriver {
+	return r.getUserDriver(ctx, nodeName, driverType, deployer, testChainID)
+}
+
+func (r *IntHelper) GetMigrationUserDriver(ctx context.Context, nodeName string, driverType string, deployer *ethdeployer.Deployer) KwilIntDriver {
+	return r.getUserDriver(ctx, nodeName, driverType, deployer, MigrationChainID)
+}
+
+func (r *IntHelper) getUserDriver(ctx context.Context, nodeName string, driverType string, deployer *ethdeployer.Deployer, chainID string) KwilIntDriver {
 	gatewayProvider := false
 
 	ctr := r.containers[nodeName]
@@ -754,7 +875,7 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverTy
 
 	switch driverType {
 	case "jsonrpc":
-		return r.getJSONRPCClientDriver(signer, jsonrpcURL, gatewayProvider, deployer)
+		return r.getJSONRPCClientDriver(signer, jsonrpcURL, gatewayProvider, deployer, chainID)
 	case "http":
 		return r.getHTTPClientDriver(signer, httpURL, gatewayProvider, deployer)
 	case "cli":
@@ -805,7 +926,7 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driv
 	}
 }
 
-func (r *IntHelper) getJSONRPCClientDriver(signer auth.Signer, endpoint string, gatewayProvider bool, deployer *ethdeployer.Deployer) *driver.KwildClientDriver {
+func (r *IntHelper) getJSONRPCClientDriver(signer auth.Signer, endpoint string, gatewayProvider bool, deployer *ethdeployer.Deployer, chainID string) *driver.KwildClientDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 	logger = *logger.With(log.String("testCase", r.t.Name()))
 
@@ -817,14 +938,14 @@ func (r *IntHelper) getJSONRPCClientDriver(signer auth.Signer, endpoint string, 
 		kwilClt, err = gatewayclient.NewClient(context.TODO(), endpoint, &gatewayclient.GatewayOptions{
 			Options: clientType.Options{
 				Signer:  signer,
-				ChainID: testChainID,
+				ChainID: chainID,
 				Logger:  logger,
 			},
 		})
 	} else {
 		kwilClt, err = client.NewClient(context.TODO(), endpoint, &clientType.Options{
 			Signer:  signer,
-			ChainID: testChainID,
+			ChainID: chainID,
 			Logger:  logger,
 		})
 	}
@@ -913,4 +1034,9 @@ func (r *IntHelper) NodeKeys() map[string]ed25519.PrivKey {
 
 func (r *IntHelper) ServiceContainer(name string) *testcontainers.DockerContainer {
 	return r.containers[name]
+}
+
+func (r *IntHelper) AdminListenAddress(ctx context.Context, name string) (string, string, error) {
+	ctr := r.containers[name]
+	return utils.KwildAdminEndpoints(ctr, ctx)
 }

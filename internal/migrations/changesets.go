@@ -41,10 +41,10 @@ type ChangesetMigration struct {
 	Height *big.Int
 
 	// ChangesetIdx is the index of the changeset chunk in the block.
-	ChunkIdx int
+	ChunkIdx *big.Int
 
 	// TotalChunks is the total number of chunks in the changeset.
-	TotalChunks int
+	TotalChunks *big.Int
 
 	// Changeset is the serialized changeset chunk.
 	Changeset []byte
@@ -91,7 +91,7 @@ var ChangesetMigrationResolution = resolutions.ResolutionConfig{
 		}
 
 		// insert the changeset into the database
-		app.Service.Logger.Info("insert changeset chunk", log.Int("height", migration.Height.Int64()), log.Int("chunkIndex", migration.ChunkIdx))
+		app.Service.Logger.Info("insert changeset chunk", log.Int("height", migration.Height.Int64()), log.Int("chunkIndex", migration.ChunkIdx.Int64()))
 		tx, err := app.DB.BeginTx(ctx)
 		if err != nil {
 			return err
@@ -194,13 +194,13 @@ func (cm *ChangesetMigration) insertChangeset(ctx context.Context, db sql.TxMake
 	defer tx.Rollback(ctx)
 
 	//  Check if the changeset metadata entry exists, if not, create it
-	if err := insertChangesetMetadata(ctx, tx, cm.Height.Int64(), cm.TotalChunks); err != nil {
+	if err := insertChangesetMetadata(ctx, tx, cm.Height.Int64(), int(cm.TotalChunks.Int64())); err != nil {
 		return err
 	}
 
 	// check if this is not previously received
 	var exists bool
-	if exists, err = changesetChunkExists(ctx, tx, cm.Height.Int64(), cm.ChunkIdx); err != nil {
+	if exists, err = changesetChunkExists(ctx, tx, cm.Height.Int64(), int(cm.ChunkIdx.Int64())); err != nil {
 		return err
 	}
 
@@ -209,7 +209,7 @@ func (cm *ChangesetMigration) insertChangeset(ctx context.Context, db sql.TxMake
 	}
 
 	// insert the changeset
-	if err = insertChangesetChunk(ctx, tx, cm.Height.Int64(), cm.ChunkIdx, cm.Changeset); err != nil {
+	if err = insertChangesetChunk(ctx, tx, cm.Height.Int64(), int(cm.ChunkIdx.Int64()), cm.Changeset); err != nil {
 		return err
 	}
 

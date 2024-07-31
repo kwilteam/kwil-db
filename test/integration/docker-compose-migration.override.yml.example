@@ -1,0 +1,22 @@
+version: "3"
+
+services:
+  node0-1:
+    user: "${UID}:${GID}"
+  node1-1:
+    user: "${UID}:${GID}"
+  node2-1:
+    user: "${UID}:${GID}"
+  node3-1:
+    user: "${UID}:${GID}"
+  node4-1:
+    user: "${UID}:${GID}"
+  node5-1:
+    user: "${UID}:${GID}"
+  ext1-1:
+    user: "${UID}:${GID}"
+  ext3-1:
+    user: "${UID}:${GID}"
+  kgw-1:
+    user: "${UID}:${GID}"
+  

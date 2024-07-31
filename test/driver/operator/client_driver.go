@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"fmt"
+	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/adminclient"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -56,4 +57,24 @@ func (a *AdminClientDriver) ValidatorNodeRemove(ctx context.Context, target []by
 
 func (a *AdminClientDriver) ValidatorsList(ctx context.Context) ([]*types.Validator, error) {
 	return a.Client.ListValidators(ctx)
+}
+
+func (a *AdminClientDriver) TriggerMigration(ctx context.Context, activationHeight, migrationDuration *big.Int, chainID string) ([]byte, error) {
+	return a.Client.TriggerMigration(ctx, activationHeight, migrationDuration, chainID)
+}
+
+func (a *AdminClientDriver) ApproveMigration(ctx context.Context, migrationResolutionID string) ([]byte, error) {
+	return a.Client.ApproveMigration(ctx, migrationResolutionID)
+}
+
+func (a *AdminClientDriver) GenesisState(ctx context.Context) (bool, []byte, error) {
+	return a.Client.GenesisState(ctx)
+}
+
+func (a *AdminClientDriver) ListMigrations(ctx context.Context) ([]*types.Migration, error) {
+	return a.Client.ListMigrations(ctx)
+}
+
+func (a *AdminClientDriver) GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error) {
+	return a.Client.GenesisSnapshotChunk(ctx, height, chunkIdx)
 }

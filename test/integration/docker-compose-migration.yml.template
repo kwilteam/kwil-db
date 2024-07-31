@@ -2,7 +2,7 @@ version: "3"
 
 services:
   # TODO: generate correspond number of nodes and exts by configuration
-  node0:
+  node0-1:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 0}}:{{end}}8080"
@@ -21,20 +21,20 @@ services:
     networks:
       - {{ .Network }}
     depends_on:
-      ext1:
+      ext1-1:
         condition: service_started
-      pg0:
+      pg0-1:
         condition: service_healthy
     command: |
       --root-dir=/app/kwil
       --log.format=plain
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
-      --app.extension-endpoints=ext1:50051
+      --app.extension-endpoints=ext1-1:50051
       --app.http-listen-addr=:8080
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg-db-host=pg0
+      --app.pg-db-host=pg0-1
       --app.pg-db-port=5432
       --app.pg-db-user=kwild
       --app.pg-db-pass=kwild
@@ -44,7 +44,7 @@ services:
       timeout: 6s
       retries: 10
 
-  pg0:
+  pg0-1:
     image: postgres:16.2
     ports:
       - "5432"
@@ -70,7 +70,7 @@ services:
       timeout: 6s
       retries: 10
 
-  node1:
+  node1-1:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 1}}:{{end}}8080"
@@ -87,20 +87,20 @@ services:
     networks:
       - {{ .Network }}
     depends_on:
-      ext1:
+      ext1-1:
         condition: service_started
-      pg1:
+      pg1-1:
         condition: service_healthy
     command: |
       --root-dir=/app/kwil
       --log.format=plain
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
-      --app.extension-endpoints=ext1:50051
+      --app.extension-endpoints=ext1-1:50051
       --app.http-listen-addr=:8080
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg-db-host=pg1
+      --app.pg-db-host=pg1-1
       --app.pg-db-port=5432
       --app.pg-db-user=kwild
       --app.pg-db-pass=kwild
@@ -110,7 +110,7 @@ services:
       timeout: 6s
       retries: 10
 
-  pg1:
+  pg1-1:
     image: postgres:16.2
     ports:
       - "5432"
@@ -136,7 +136,7 @@ services:
       timeout: 6s
       retries: 10
 
-  node2:
+  node2-1:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 2}}:{{end}}8080"
@@ -153,20 +153,20 @@ services:
     networks:
       - {{ .Network }}
     depends_on:
-      ext1:
+      ext1-1:
         condition: service_started
-      pg2:
+      pg2-1:
         condition: service_healthy
     command: |
       --root-dir=/app/kwil
       --log.level=${LOG_LEVEL:-info}
       --log.format=plain
       --log.time-format=rfc3339milli
-      --app.extension-endpoints=ext1:50051
+      --app.extension-endpoints=ext1-1:50051
       --app.http-listen-addr=:8080
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg-db-host=pg2
+      --app.pg-db-host=pg2-1
       --app.pg-db-port=5432
       --app.pg-db-user=kwild
       --app.pg-db-pass=kwild
@@ -176,7 +176,7 @@ services:
       timeout: 6s
       retries: 10
 
-  pg2:
+  pg2-1:
     image: postgres:16.2
     ports:
       - "5432"
@@ -205,7 +205,7 @@ services:
   # This node is used to test the scenario where new node join the network & sync the blocks
   # Removing the ext dependency as test-container docker compose creates a new project everytime we run
   # docker compose, and the ext is defined in a seperate project, so service lookup is hard.
-  node3:
+  node3-1:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 3}}:{{end}}8080"
@@ -222,20 +222,20 @@ services:
     networks:
       - {{ .Network }}
     depends_on:
-      ext3:
+      ext3-1:
         condition: service_started
-      pg3:
+      pg3-1:
         condition: service_healthy
     command: |
       --root-dir=/app/kwil
       --log.format=plain
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
-      --app.extension-endpoints=ext3:50051
+      --app.extension-endpoints=ext3-1:50051
       --app.http-listen-addr=:8080
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg-db-host=pg3
+      --app.pg-db-host=pg3-1
       --app.pg-db-port=5432
       --app.pg-db-user=kwild
       --app.pg-db-pass=kwild
@@ -245,7 +245,7 @@ services:
       timeout: 6s
       retries: 10
 
-  pg3:
+  pg3-1:
     image: postgres:16.2
     ports:
       - "5432"
@@ -271,7 +271,7 @@ services:
       timeout: 6s
       retries: 10
 
-  node4:
+  node4-1:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 4}}:{{end}}8080"
@@ -288,20 +288,20 @@ services:
     networks:
       - {{ .Network }}
     depends_on:
-      ext1:
+      ext1-1:
         condition: service_started
-      pg4:
+      pg4-1:
         condition: service_healthy
     command: |
       --root-dir=/app/kwil
       --log.format=plain
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
-      --app.extension-endpoints=ext1:50051
+      --app.extension-endpoints=ext1-1:50051
       --app.http-listen-addr=:8080
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg-db-host=pg4
+      --app.pg-db-host=pg4-1
       --app.pg-db-port=5432
       --app.pg-db-user=kwild
       --app.pg-db-pass=kwild
@@ -311,7 +311,7 @@ services:
       timeout: 6s
       retries: 10
 
-  pg4:
+  pg4-1:
     image: postgres:16.2
     ports:
       - "5432"
@@ -337,7 +337,7 @@ services:
       timeout: 6s
       retries: 10
 
-  node5:
+  node5-1:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedHTTPPorts}}{{index . 5}}:{{end}}8080"
@@ -354,20 +354,20 @@ services:
     networks:
       - {{ .Network }}
     depends_on:
-        ext1:
+        ext1-1:
           condition: service_started
-        pg5:
+        pg5-1:
           condition: service_healthy
     command: |
       --root-dir=/app/kwil
       --log.format=plain
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
-      --app.extension-endpoints=ext1:50051
+      --app.extension-endpoints=ext1-1:50051
       --app.http-listen-addr=:8080
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg-db-host=pg5
+      --app.pg-db-host=pg5-1
       --app.pg-db-port=5432
       --app.pg-db-user=kwild
       --app.pg-db-pass=kwild
@@ -377,7 +377,7 @@ services:
       timeout: 6s
       retries: 10
 
-  pg5:
+  pg5-1:
     image: postgres:16.2
     ports:
       - "5432"
@@ -405,7 +405,7 @@ services:
 
   # this ext is shared by all nodes
   # we can make a separate ext for each node if we want
-  ext1:
+  ext1-1:
     image: kwilbrennan/extensions-math:multi-arch
     ports:
       - "50051"
@@ -418,7 +418,7 @@ services:
       retries: 20
 
   # this one is just for node3, which is started in a separate compose project in some tests
-  ext3:
+  ext3-1:
     image: kwilbrennan/extensions-math:multi-arch
     ports:
       - "50051"
@@ -431,7 +431,7 @@ services:
       retries: 20
 
   # for kgw tests, to run locally, you need to build this image in kgw repo
-  kgw:
+  kgw-1:
     image: kgw:latest
     ports:
       - "8090:8090"

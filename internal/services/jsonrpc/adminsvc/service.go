@@ -489,7 +489,7 @@ func (svc *Service) MigrationMetadata(ctx context.Context, req *adminjson.Migrat
 }
 
 func (svc *Service) MigrationGenesisChunk(ctx context.Context, req *adminjson.MigrationSnapshotChunkRequest) (*adminjson.MigrationSnapshotChunkResponse, *jsonrpc.Error) {
-	bts, err := svc.migrator.GetGenesisSnapshotChunk(int64(req.Height), 0, uint32(req.ChunkIndex))
+	bts, err := svc.migrator.GetGenesisSnapshotChunk(int64(req.Height), 0, req.ChunkIndex)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load genesis chunk", nil)
 	}

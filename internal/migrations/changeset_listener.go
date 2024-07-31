@@ -39,21 +39,8 @@ type MigrationConfig struct {
 	// End height is the block height at which the migration ended on the old chain.
 	EndHeight int64
 
-	// ChainID is the chain ID of the new chain.
-	ChainID string
-
-	// OldChainID is the chain ID of the old chain.
-	OldChainID string
-
 	// AdminListenAddress is the address of the admin server to receive changesets from.
 	AdminListenAddress string
-
-	// WithTLS provides the required files for the admin client to use TLS, and
-	// possibly client authenticated TLS. kwildCertFile may be omitted if the
-	// service is issued a TLS certificate by a root CA. The client files may be
-	// omitted if not using TLS for client authentication, only for transport
-	// encryption and server authentication. The server must be configured
-	// appropriately.
 
 	// TLSCertFile is the path to the Kwil-Admin's TLS certificate file for the admin server.
 	TLSCertFile string
@@ -136,6 +123,7 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 				wg.Add(1)
 				go func(chunkIdx int64) {
 					for {
+						// Load the changeset from the admin server
 						cs, err := adminClient.LoadChangeset(ctx, currentHeight, chunkIdx)
 						if err != nil {
 							// If no changeset is found, wait and try again
@@ -146,8 +134,8 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 						// Create the changeset migration event
 						evt := &ChangesetMigration{
 							Height:      big.NewInt(currentHeight),
-							TotalChunks: int(numChunks),
-							ChunkIdx:    int(chunkIdx),
+							TotalChunks: big.NewInt(numChunks),
+							ChunkIdx:    big.NewInt(chunkIdx),
 							Changeset:   cs,
 						}
 
@@ -158,7 +146,7 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 							return
 						}
 
-						service.Logger.Debug("broadcasting changeset migration event", log.Int("height", currentHeight), log.Int("chunk", chunkIdx))
+						service.Logger.Info("broadcasting changeset migration event", log.Int("height", currentHeight), log.Int("chunk", chunkIdx))
 
 						// Broadcast the changeset migration event to the event store for voting
 						err = eventStore.Broadcast(ctx, ChangesetMigrationEventType, csEvt)
@@ -225,16 +213,6 @@ func (c *MigrationConfig) ExtractConfig(cfg map[string]string) error {
 		return err
 	}
 
-	c.ChainID, ok = cfg["chain_id"]
-	if !ok {
-		return errors.New("migration chain_id not provided")
-	}
-
-	c.OldChainID, ok = cfg["old_chain_id"]
-	if !ok {
-		return errors.New("migration old_chain_id not provided")
-	}
-
 	c.AdminListenAddress, ok = cfg["admin_listen_address"]
 	if !ok {
 		return errors.New("migration admin_listen_address not provided")
@@ -246,6 +224,17 @@ func (c *MigrationConfig) ExtractConfig(cfg map[string]string) error {
 	c.KwildTLSCertFile = cfg["kwild_tls_cert_file"]
 
 	return nil
+}
+
+func (c *MigrationConfig) Map() map[string]string {
+	return map[string]string{
+		"start_height":         strconv.FormatInt(c.StartHeight, 10),
+		"end_height":           strconv.FormatInt(c.EndHeight, 10),
+		"admin_listen_address": c.AdminListenAddress,
+		"client_tls_cert_file": c.TLSCertFile,
+		"client_tls_key_file":  c.TLSKeyFile,
+		"kwild_tls_cert_file":  c.KwildTLSCertFile,
+	}
 }
 
 var (

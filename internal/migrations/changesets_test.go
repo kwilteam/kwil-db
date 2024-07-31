@@ -67,8 +67,8 @@ func TestChangesetMigration(t *testing.T) {
 		}
 		csMigrations = append(csMigrations, &ChangesetMigration{
 			Height:      height,
-			ChunkIdx:    idx,
-			TotalChunks: totalChunks,
+			ChunkIdx:    big.NewInt(int64(idx)),
+			TotalChunks: big.NewInt(int64(totalChunks)),
 			Changeset:   bts[i:end],
 		})
 		idx++

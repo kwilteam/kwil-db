@@ -110,7 +110,7 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 	migrator.accounts = accounts
 	migrator.lastChangeset = -1
 
-	// Intialize the DB
+	// Initialize the DB
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initializeMigrationSchema,
 	}
@@ -230,6 +230,7 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 
 		genCfg.Validators = genesisVals
 		genCfg.DataAppHash = snapshots[0].SnapshotHash
+		genCfg.ChainID = m.activeMigration.ChainID
 
 		// Save the genesis file
 		err = genCfg.SaveAs(formatGenesisFilename(m.dir))
@@ -547,7 +548,7 @@ func (m *Migrator) storeChangesets(height int64, csReader io.Reader) error {
 	// save the metadata for the changeset
 	metadata := &ChangesetMetdata{
 		Height:        height,
-		Chunks:        int64(idx),
+		Chunks:        idx,
 		ChangesetSize: int64(len(bts)),
 	}
 	return metadata.saveAs(formatChangesetMetadataFilename(m.dir, height))

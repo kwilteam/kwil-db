@@ -975,6 +975,28 @@ func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.Request
 		if err != nil {
 			return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ABORT}, err
 		}
+
+		// Cache the pubkey in the validatorAddressToPubKey map, as the map is not previously populated
+		validators, err := a.txApp.GetValidators(ctx, readTx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current validators: %w", err)
+		}
+		for _, val := range validators {
+			addr, err := pubkeyToAddr(val.PubKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert pubkey to address: %w", err)
+			}
+
+			a.validatorAddressToPubKey[addr] = val.PubKey
+		}
+
+		// Update the app Hash
+		_, appHash, err := meta.GetChainState(ctx, readTx)
+		if err != nil {
+			return nil, fmt.Errorf("GetChainState: %w", err)
+		}
+
+		a.appHash = appHash
 	}
 
 	return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ACCEPT, RefetchChunks: nil}, nil

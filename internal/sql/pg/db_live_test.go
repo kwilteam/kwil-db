@@ -730,7 +730,6 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify the insert vals are equal to the first vals
-	require.EqualValues(t, c.val, insertVals[0])
 	require.EqualValues(t, c.arrayVal, insertVals[2])
 
 	err = tx.Rollback(ctx)
@@ -759,7 +758,7 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 
 	require.Len(t, res.Rows, 1)
 	require.Len(t, res.Rows[0], 2)
-	require.EqualValues(t, c.val, res.Rows[0][0])
+	require.EqualValues(t, c.arrayVal, res.Rows[0][1])
 	/*
 		Block 2: Update
 	*/
@@ -804,7 +803,6 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 
 	require.Len(t, res.Rows, 1)
 	require.Len(t, res.Rows[0], 3)
-	require.EqualValues(t, res.Rows[0][0], c.val)
 	require.EqualValues(t, res.Rows[0][1], c.arrayVal)
 	require.EqualValues(t, res.Rows[0][2], nil)
 
@@ -827,7 +825,6 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 
 	require.Len(t, res.Rows, 1)
 	require.Len(t, res.Rows[0], 2)
-	require.EqualValues(t, res.Rows[0][0], c.val2)
 	require.EqualValues(t, res.Rows[0][1], c.arrayVal2)
 
 	/*

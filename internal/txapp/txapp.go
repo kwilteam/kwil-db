@@ -766,7 +766,7 @@ func (s *Spend) ApplySpend(ctx context.Context, db sql.DB) error {
 	return applySpend(ctx, db, s.Account, s.Amount, int64(s.Nonce))
 }
 
-// recordSpend records a spend occured during the block execution.
+// recordSpend records a spend occurred during the block execution.
 // This only records spends during migrations.
 func (r *TxApp) recordSpend(ctx TxContext, spend *Spend) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
@@ -822,7 +822,7 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, price
 				return nil, transactions.CodeUnknownError, err2
 			}
 
-			// Record spend here as a spend has occured
+			// Record spend here as a spend has occurred
 			r.recordSpend(ctx, &Spend{Account: tx.Sender, Amount: account.Balance, Nonce: tx.Body.Nonce})
 
 			return account.Balance, transactions.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())

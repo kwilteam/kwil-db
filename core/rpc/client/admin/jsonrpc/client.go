@@ -277,7 +277,7 @@ func (cl *Client) TriggerMigration(ctx context.Context, activationHeight *big.In
 		return nil, err
 	}
 
-	return nil, nil
+	return res.TxHash, nil
 }
 
 // ApproveMigration approves a migration proposal.
@@ -292,7 +292,7 @@ func (cl *Client) ApproveMigration(ctx context.Context, id string) ([]byte, erro
 		return nil, err
 	}
 
-	return nil, nil
+	return res.TxHash, nil
 }
 
 // ListMigrations lists all migrations that have been proposed that are still in the pending state.

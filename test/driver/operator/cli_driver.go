@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -146,4 +147,51 @@ type respTxQuery struct {
 		Code uint32 `json:"code"`
 		Log  string `json:"log"`
 	} `json:"tx_result"`
+}
+
+func (o *OperatorCLIDriver) TriggerMigration(ctx context.Context, activationHeight, migrationDuration *big.Int, chainID string) ([]byte, error) {
+	var res display.TxHashResponse
+	err := o.runCommand(ctx, &res, "migration", "trigger", activationHeight.String(), migrationDuration.String(), chainID)
+	if err != nil {
+		return nil, err
+	}
+
+	return hex.DecodeString(res.TxHash)
+}
+
+func (o *OperatorCLIDriver) ApproveMigration(ctx context.Context, migrationResolutionID string) ([]byte, error) {
+	var res display.TxHashResponse
+	err := o.runCommand(ctx, &res, "migration", "approve", migrationResolutionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return hex.DecodeString(res.TxHash)
+}
+
+func (o *OperatorCLIDriver) GenesisState(ctx context.Context) (bool, []byte, error) {
+	var res struct {
+		InMigration bool   `json:"in_migration"`
+		Metadata    []byte `json:"metadata"`
+	}
+	err := o.runCommand(ctx, &res, "migration", "genesis-state")
+	if err != nil {
+		return false, nil, err
+	}
+
+	return res.InMigration, res.Metadata, nil
+}
+
+func (o *OperatorCLIDriver) ListMigrations(ctx context.Context) ([]*types.Migration, error) {
+	var res []*types.Migration
+	err := o.runCommand(ctx, &res, "migration", "list")
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (o *OperatorCLIDriver) GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error) {
+	panic("not implemented")
 }

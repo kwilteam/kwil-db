@@ -54,16 +54,6 @@ func (m *MigrationsList) MarshalText() ([]byte, error) {
 	var msg bytes.Buffer
 	msg.WriteString("Migrations:\n")
 
-	// Migrations:
-	// id1:
-	// 		activationHeight:
-	// 		migrationDuration:
-	// 		chainID:
-	// 		status:
-	// 		proposer: ??
-	// id2:
-	// 		activationHeight:
-
 	for _, migration := range m.migrations {
 		msg.WriteString(fmt.Sprintf("%s:\n", migration.ID))
 		msg.WriteString(fmt.Sprintf("\tactivationHeight: %s\n", migration.ActivationHeight.String()))
