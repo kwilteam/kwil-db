@@ -43,11 +43,11 @@ func TestTableStats(t *testing.T) {
 	}
 
 	wantCols := []ColInfo{
-		{Pos: 1, Name: "a", DataType: "bigint", Nullable: false, Default: nil},
-		{Pos: 2, Name: "b", DataType: "integer", Nullable: true, Default: "42"},
-		{Pos: 3, Name: "c", DataType: "text", Nullable: true, Default: nil},
-		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true, Default: nil},
-		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true, Default: nil},
+		{Pos: 1, Name: "a", DataType: "bigint", Nullable: false},
+		{Pos: 2, Name: "b", DataType: "integer", Nullable: true, defaultVal: "42"},
+		{Pos: 3, Name: "c", DataType: "text", Nullable: true},
+		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true},
+		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true},
 	}
 
 	assert.Equal(t, wantCols, cols)

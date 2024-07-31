@@ -81,13 +81,13 @@ func TestColumnInfo(t *testing.T) {
 	}
 
 	wantCols := []ColInfo{
-		{Pos: 1, Name: "a", DataType: "bigint", Nullable: false, Default: nil},
-		{Pos: 2, Name: "b", DataType: "integer", Nullable: true, Default: "42"},
-		{Pos: 3, Name: "c", DataType: "text", Nullable: true, Default: nil},
-		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true, Default: nil},
-		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true, Default: nil},
-		{Pos: 6, Name: "f", DataType: "bigint", Array: true, Nullable: true, Default: nil},
-		{Pos: 7, Name: "g", DataType: "uint256", Nullable: true, Default: nil},
+		{Pos: 1, Name: "a", DataType: "bigint", Nullable: false},
+		{Pos: 2, Name: "b", DataType: "integer", Nullable: true, defaultVal: "42"},
+		{Pos: 3, Name: "c", DataType: "text", Nullable: true},
+		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true},
+		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true},
+		{Pos: 6, Name: "f", DataType: "bigint", Array: true, Nullable: true},
+		{Pos: 7, Name: "g", DataType: "uint256", Nullable: true},
 	}
 
 	assert.Equal(t, wantCols, cols) // t.Logf("%#v", cols)
@@ -145,7 +145,7 @@ func TestQueryRowFunc(t *testing.T) {
 
 	var scans []any
 	for i, col := range cols {
-		sv := col.ScanVal()
+		sv := col.scanVal()
 		// t.Logf("scanval: %v (%T)", sv, sv)
 		scans = append(scans, sv)
 
@@ -262,23 +262,23 @@ func typeFor[T any]() reflect.Type {
 
 func TestScanVal(t *testing.T) {
 	cols := []ColInfo{
-		{Pos: 1, Name: "a", DataType: "bigint", Nullable: false, Default: nil},
-		{Pos: 2, Name: "b", DataType: "integer", Nullable: true, Default: "42"},
-		{Pos: 3, Name: "c", DataType: "text", Nullable: true, Default: nil},
-		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true, Default: nil},
-		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true, Default: nil},
-		{Pos: 6, Name: "f", DataType: "uint256", Nullable: true, Default: nil},
+		{Pos: 1, Name: "a", DataType: "bigint", Nullable: false},
+		{Pos: 2, Name: "b", DataType: "integer", Nullable: true, defaultVal: "42"},
+		{Pos: 3, Name: "c", DataType: "text", Nullable: true},
+		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true},
+		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true},
+		{Pos: 6, Name: "f", DataType: "uint256", Nullable: true},
 
-		{Pos: 7, Name: "aa", DataType: "bigint", Array: true, Nullable: false, Default: nil},
-		{Pos: 8, Name: "ba", DataType: "integer", Array: true, Nullable: true, Default: nil},
-		{Pos: 9, Name: "ca", DataType: "text", Array: true, Nullable: true, Default: nil},
-		{Pos: 10, Name: "da", DataType: "bytea", Array: true, Nullable: true, Default: nil},
-		{Pos: 11, Name: "ea", DataType: "numeric", Array: true, Nullable: true, Default: nil},
-		{Pos: 12, Name: "fa", DataType: "uint256", Array: true, Nullable: true, Default: nil},
+		{Pos: 7, Name: "aa", DataType: "bigint", Array: true, Nullable: false},
+		{Pos: 8, Name: "ba", DataType: "integer", Array: true, Nullable: true},
+		{Pos: 9, Name: "ca", DataType: "text", Array: true, Nullable: true},
+		{Pos: 10, Name: "da", DataType: "bytea", Array: true, Nullable: true},
+		{Pos: 11, Name: "ea", DataType: "numeric", Array: true, Nullable: true},
+		{Pos: 12, Name: "fa", DataType: "uint256", Array: true, Nullable: true},
 	}
 	var scans []any
 	for _, col := range cols {
-		scans = append(scans, col.ScanVal())
+		scans = append(scans, col.scanVal())
 	}
 	// for _, val := range scans { t.Logf("%#v (%T)", val, val) }
 
@@ -339,7 +339,7 @@ func TestQueryRowFuncAny(t *testing.T) {
 	}
 
 	err = QueryRowFuncAny(ctx, tx, `SELECT * FROM `+tbl,
-		func(_ []FieldDesc, vals []any) error {
+		func(vals []any) error {
 			for _, val := range vals {
 				t.Logf("%#v (%T)", val, val)
 			}
@@ -357,7 +357,10 @@ func TestQueryRowFuncAny(t *testing.T) {
         FROM information_schema.columns
         WHERE table_name = '` + tbl + `'`
 
-	err = QueryRowFuncAny(ctx, tx, stmt, func(fields []FieldDesc, vals []any) error {
+	// NOTE:
+	// - NameOID = 19 pertains to information_schema.sql_identifier, which scans as text
+	// - NameOID = 1043 pertains to varchar, which can scan as text
+	err = QueryRowFuncAny(ctx, tx, stmt, func(vals []any) error {
 		t.Logf("%#v", vals) // e.g. []interface {}{1, "a", "bigint", "YES", interface {}(nil)}
 		// spew.Dump(vals)
 		return nil

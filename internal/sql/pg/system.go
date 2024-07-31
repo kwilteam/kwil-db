@@ -202,84 +202,6 @@ var settingValidations = map[string]settingValidFn{
 	"server_encoding": wantStringFn("UTF8"),
 }
 
-func queryRowFunc(ctx context.Context, conn *pgx.Conn, sql string,
-	scans []any, fn func() error, args ...any) error {
-	rows, _ := conn.Query(ctx, sql, args...)
-	_, err := pgx.ForEachRow(rows, scans, fn)
-	return err
-}
-
-// QueryRowFunc will attempt to execute an SQL statement, handling the rows and
-// returned values as described by the sql.QueryScanner interface. If the
-// provided Executor is also a sql.QueryScanner, that method will be used,
-// otherwise, it will attempt to use the underlying DB connection. The latter is
-// supported for all concrete transaction types in this package as well as
-// instances of the pgx.Tx interface.
-func QueryRowFunc(ctx context.Context, tx sql.Executor, stmt string,
-	scans []any, fn func() error, args ...any) error {
-	switch ti := tx.(type) {
-	case sql.QueryScanner:
-		return ti.QueryScanFn(ctx, stmt, scans, fn, args...)
-	case conner:
-		conn := ti.Conn()
-		return queryRowFunc(ctx, conn, stmt, scans, fn, args...)
-	}
-	return errors.New("cannot query with scan values")
-}
-
-// FieldDesc describes result value from a query. This is used to convey
-// information on the values passed to the closure given to QueryRowFuncAny.
-type FieldDesc struct {
-	Name                 string
-	TableOID             uint32
-	TableAttributeNumber uint16
-	DataTypeOID          uint32
-	DataTypeSize         int16
-	TypeModifier         int32
-	Format               int16
-}
-
-// QueryRowFuncAny is similar to QueryRowFunc, except that no scan values slice
-// is provided. The provided function is called for each row of the result. The
-// caller does not determine the types of the Go variables in the values slice.
-// In this way it behaves similar to Execute, but providing "for each row"
-// functionality so that every row does not need to be loaded into memory. See
-// also QueryRowFunc, which allows the caller to provide a scan values slice.
-func QueryRowFuncAny(ctx context.Context, tx sql.Executor, sql string,
-	fn func([]FieldDesc, []any) error, args ...any) error {
-	conner, ok := tx.(conner)
-	if !ok {
-		return errors.New("no conn access")
-	}
-	conn := conner.Conn()
-	return queryRowFuncAny(ctx, conn, sql, fn, args...)
-}
-
-func queryRowFuncAny(ctx context.Context, conn *pgx.Conn, sql string,
-	fn func(fields []FieldDesc, vals []any) error, args ...any) error {
-	rows, _ := conn.Query(ctx, sql, args...)
-	fields := rows.FieldDescriptions()
-	pgFields := make([]FieldDesc, len(fields))
-	for i, f := range fields {
-		pgFields[i] = FieldDesc(f)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		vals, err := rows.Values()
-		if err != nil {
-			return err
-		}
-
-		err = fn(pgFields, vals)
-		if err != nil {
-			return err
-		}
-	}
-
-	return rows.Err()
-}
-
 // TextValue recognizes types used to return SQL TEXT values from SQL queries.
 // Depending on the type and value, the value may represent a NULL as indicated
 // by the null return.
@@ -302,16 +224,23 @@ func TextValue(val any) (txt string, null bool, ok bool) {
 
 // ColInfo is used when ingesting column descriptions from PostgreSQL, such as
 // from information_schema.column. Use the Type method to return a canonical
-// ColType. Use the ScanVal method to return a pointer to an instance of the
-// appropriate Go type to scan a row containing this column type in an SQL
-// statement.
+// ColType.
 type ColInfo struct {
-	Pos      int
-	Name     string
+	Pos  int
+	Name string
+	// DataType is the string reported by information_schema.column for the
+	// column. Use the Type() method to return the ColType.
 	DataType string
 	Array    bool
 	Nullable bool
-	Default  any
+
+	// The default value is not a Kwil type, so not exported. We could remove
+	// this, but it is helpful for debugging in this package. A bool like
+	// HasDefault could be good for export. Getting the actual OID for decoding
+	// into a Kwil type involves messier queries that join on several pg_*
+	// tables, so unless this would be particularly helpful for consumers we
+	// won't go that route yet.
+	defaultVal any
 }
 
 func scanVal(ct ColType) any {
@@ -365,7 +294,7 @@ func scanArrayVal(ct ColType) any {
 	}
 }
 
-func (ci *ColInfo) scanVal() any {
+func (ci *ColInfo) baseScanVal() any {
 	return scanVal(ci.baseType())
 }
 
@@ -382,9 +311,9 @@ func pgArray[T any]() *pgtype.Array[T] {
 // expressions rather than other expressions like arithmetic or aggregates. When
 // using QueryRowFunc in such cases, the appropriate type would be determined
 // based on prior knowledge of the statement.
-func (ci *ColInfo) ScanVal() any {
-	val := ci.scanVal() // pointer to instance of the type
-	if ci.Array {       // return pointer to slice of the type
+func (ci *ColInfo) scanVal() any {
+	val := ci.baseScanVal() // pointer to instance of the type
+	if ci.Array {           // return pointer to slice of the type
 		return scanArrayVal(ci.baseType())
 
 		// A pgtype.Array is the best option overall, particularly for handling
@@ -602,9 +531,15 @@ func columnInfo(ctx context.Context, conn *pgx.Conn, schema, tbl string) ([]ColI
 		if isArray && !wasArr {
 			return errors.New("inconsistent array typing")
 		}
-		colInfo = append(colInfo, ColInfo{pos, colName, dataType,
-			isArray,
-			strings.EqualFold(isNullable, "YES"), colDefault})
+
+		colInfo = append(colInfo, ColInfo{
+			Pos:        pos,
+			Name:       colName,
+			DataType:   dataType,
+			Array:      isArray,
+			Nullable:   strings.EqualFold(isNullable, "YES"),
+			defaultVal: colDefault,
+		})
 
 		worked = true
 		return nil
@@ -624,26 +559,17 @@ func columnInfo(ctx context.Context, conn *pgx.Conn, schema, tbl string) ([]ColI
 	return colInfo, nil
 }
 
-// ColumnInfoer is satisfied by a type that is capable of describing tables.
-// This permits testing higher level packages with a stub DB.
-type ColumnInfoer interface {
-	ColumnInfo(ctx context.Context, schema, tbl string) ([]ColInfo, error)
-}
-
 // ColumnInfo attempts to describe the columns of a table in a specified
-// PostgreSQL schema.
+// PostgreSQL schema. The results are **as reported by information_schema.column**.
 //
 // If the provided sql.Executor is also a ColumnInfoer, its ColumnInfo method
 // will be used. This is primarily for testing with a mocked DB transaction.
 // Otherwise, the Executor must be one of the transaction types created by this
 // package, which provide access to the underlying DB connection.
 func ColumnInfo(ctx context.Context, tx sql.Executor, schema, tbl string) ([]ColInfo, error) {
-	switch ti := tx.(type) {
-	case conner:
+	if ti, ok := tx.(conner); ok {
 		conn := ti.Conn()
 		return columnInfo(ctx, conn, schema, tbl)
-	case ColumnInfoer:
-		return ti.ColumnInfo(ctx, schema, tbl)
 	}
 	return nil, errors.New("cannot get column info")
 }

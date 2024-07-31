@@ -13,20 +13,10 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
-// RowCounter represents a type that is able to return an exact row count for a
-// given table. This is primarily used for testing with a mock DB.
-type RowCounter interface {
-	RowCount(ctx context.Context, qualifiedTable string) (int64, error)
-}
-
 // RowCount gets a precise row count for the named fully qualified table. If the
 // Executor satisfies the RowCounter interface, that method will be used
 // directly. Otherwise a simple select query is used.
 func RowCount(ctx context.Context, qualifiedTable string, db sql.Executor) (int64, error) {
-	if rc, ok := db.(RowCounter); ok {
-		return rc.RowCount(ctx, qualifiedTable)
-	}
-
 	stmt := fmt.Sprintf(`SELECT count(1) FROM %s`, qualifiedTable)
 	res, err := db.Execute(ctx, stmt)
 	if err != nil {
@@ -42,11 +32,23 @@ func RowCount(ctx context.Context, qualifiedTable string, db sql.Executor) (int6
 	return count, nil
 }
 
+// TableStatser is an interface that the implementation of a sql.Executor may
+// implement.
+type TableStatser interface {
+	TableStats(ctx context.Context, schema, table string) (*sql.Statistics, error)
+}
+
 // TableStats collects deterministic statistics for a table. If schema is empty,
 // the "public" schema is assumed. This method is used to obtain the ground
 // truth statistics for a table; incremental statistics updates should be
-// preferred when possible.
+// preferred when possible. If the sql.Executor implementation is a
+// TableStatser, it's method is used directly. This is primarily to allow a stub
+// DB for testing.
 func TableStats(ctx context.Context, schema, table string, db sql.Executor) (*sql.Statistics, error) {
+	if ts, ok := db.(TableStatser); ok {
+		return ts.TableStats(ctx, schema, table)
+	}
+
 	if schema == "" {
 		schema = "public"
 	}
@@ -76,18 +78,17 @@ func TableStats(ctx context.Context, schema, table string, db sql.Executor) (*sq
 	}, nil
 }
 
-type ColStatser interface {
-	ColStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo) ([]sql.ColumnStatistics, error)
-}
+// rough outline for postgresql extension w/ a full stats function:
+//
+//  - function: collect_stats(tablename)
+//  - iterate over each row, perform computations defined in the extension code
+//  - SPI_connect() -> SPI_cursor_open(... query ...) -> SPI_cursor_fetch ->
+//    SPI_processed -> SPI_tuptable -> SPI_getbinval
 
 // colStats collects column-wise statistics for the specified table, using the
 // provided column definitions to instantiate scan values used by the full scan
 // that iterates over all rows of the table.
 func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db sql.Executor) ([]sql.ColumnStatistics, error) {
-	if cs, ok := db.(ColStatser); ok {
-		return cs.ColStats(ctx, qualifiedTable, colInfo)
-	}
-
 	numCols := len(colInfo)
 	colTypes := make([]ColType, numCols)
 	for i := range colInfo {
@@ -99,7 +100,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 	// iterate over all rows (select *)
 	var scans []any
 	for _, col := range colInfo {
-		scans = append(scans, col.ScanVal()) // for QueryRowFunc
+		scans = append(scans, col.scanVal())
 	}
 	// IMPORTANT NOTE: the following iteration over all rows of the table
 	// involves *no* ORDER BY clause. As such, the scan order is not guaranteed
@@ -108,7 +109,6 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 	// precision floating point), but we can with integer or NUMERIC types,
 	// issues of overflow aside.
 	err := QueryRowFunc(ctx, db, `SELECT * FROM `+qualifiedTable, scans,
-		// func(_ []FieldDesc, vals []any) error { // for QueryRowFuncAny
 		func() error {
 			var err error
 			for i, val := range scans {

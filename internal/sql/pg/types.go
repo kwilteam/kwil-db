@@ -33,6 +33,8 @@ var (
 	kwilTypeToDataType = map[types.DataType]*datatype{}
 )
 
+var ErrUnsupportedOID = errors.New("unsupported OID")
+
 // registerOIDs registers all of the data types that we support in Postgres.
 func registerDatatype(scalar *datatype, array *datatype) {
 	for _, match := range scalar.Matches {
@@ -153,6 +155,7 @@ var (
 		KwilType:       types.TextType,
 		Matches:        []reflect.Type{reflect.TypeOf("")},
 		OID:            func(*pgtype.Map) uint32 { return pgtype.TextOID },
+		ExtraOIDs:      []uint32{pgtype.VarcharOID},
 		EncodeInferred: defaultEncodeDecode,
 		Decode:         defaultEncodeDecode,
 		SerializeChangeset: func(value string) ([]byte, error) {
@@ -766,7 +769,20 @@ func encodeToPGType(oids *pgtype.Map, values ...any) ([]any, []uint32, error) {
 // a nil value with the void OID.
 var voidOID = uint32(2278)
 
-// decodeFromPGType decodes several pgx types to their corresponding Go types.
+func decodeFromPGVal(val any, oid uint32, oidToDataType map[uint32]*datatype) (any, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	dt, ok := oidToDataType[oid]
+	if !ok {
+		return nil, fmt.Errorf("%w: %d", ErrUnsupportedOID, oid)
+	}
+
+	return dt.Decode(val)
+}
+
+// decodeFromPG decodes several pgx types to their corresponding Go types.
 // It is capable of detecting special Kwil types and decoding them to their
 // corresponding Go types.
 func decodeFromPG(vals []any, oids []uint32, oidToDataType map[uint32]*datatype) ([]any, error) {
@@ -776,17 +792,7 @@ func decodeFromPG(vals []any, oids []uint32, oidToDataType map[uint32]*datatype)
 			continue
 		}
 
-		if vals[i] == nil {
-			results = append(results, nil)
-			continue
-		}
-
-		dt, ok := oidToDataType[oid]
-		if !ok {
-			return nil, fmt.Errorf("unsupported oid %d", oid)
-		}
-
-		decoded, err := dt.Decode(vals[i])
+		decoded, err := decodeFromPGVal(vals[i], oid, oidToDataType)
 		if err != nil {
 			return nil, err
 		}
