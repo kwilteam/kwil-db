@@ -153,6 +153,35 @@ var (
 			},
 			PGFormat: defaultFormat("digest"),
 		},
+		"generate_dbid": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				// first should be text, second should be blob
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				if !args[0].EqualsStrict(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				if !args[1].EqualsStrict(types.BlobType) {
+					return nil, wrapErrArgumentType(types.BlobType, args[1])
+				}
+
+				return types.TextType, nil
+			},
+			PGFormat: func(inputs []string, distinct, star bool) (string, error) {
+				if star {
+					return "", errStar("generate_dbid")
+				}
+
+				if distinct {
+					return "", errDistinct("generate_dbid")
+				}
+
+				return fmt.Sprintf(`('x' || encode(sha224(lower(%s)::bytea || %s), 'hex'))`, inputs[0], inputs[1]), nil
+			},
+		},
 		// array functions
 		"array_append": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {

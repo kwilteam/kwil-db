@@ -251,6 +251,10 @@ func Test_Procedures(t *testing.T) {
 				if format_unix_timestamp(1609459200.123456, 'YYYY-MM-DD HH24:MI:SS:US') != '2021-01-01 00:00:00:123456' {
 					error('format_unix_timestamp failed');
 				}
+
+				if generate_dbid('aa', decode('B7E2d6DABaf3B0038cFAaf09688Fa104f4409697', 'hex')) != 'xacfa19c2d4af530c6225ea139d611f91e7a55222a362dfd5eb70a826' {
+					error('generate_dbid failed');
+				}
 			}`,
 		},
 		{
