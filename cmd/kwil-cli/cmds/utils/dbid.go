@@ -64,11 +64,7 @@ type dbidOutput struct {
 func (d *dbidOutput) MarshalJSON() ([]byte, error) {
 	// Alias is used to avoid infinite recursion when calling json.Marshal
 	type Alias dbidOutput
-	return json.Marshal(&struct {
-		Alias
-	}{
-		Alias: (Alias)(*d),
-	})
+	return json.Marshal((Alias)(*d))
 }
 
 func (d *dbidOutput) MarshalText() (text []byte, err error) {
