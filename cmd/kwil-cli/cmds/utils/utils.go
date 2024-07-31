@@ -21,6 +21,7 @@ func NewCmdUtils() *cobra.Command {
 		kgwAuthnCmd(),
 		newParseCmd(),
 		testCmd(),
+		dbidCmd(),
 	)
 
 	return cmd
