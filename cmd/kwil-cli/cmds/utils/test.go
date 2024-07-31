@@ -178,7 +178,7 @@ func testCmd() *cobra.Command {
 
 	cmd.Flags().StringSliceVarP(&testCases, "file", "f", nil, "filepaths of tests to run")
 	cmd.Flags().BoolVar(&useTestContainer, "test-container", false, "runs the tests with a Docker testcontainer")
-	cmd.Flags().StringVar(&dbName, "database", "kwild", "name of the database to snapshot")
+	cmd.Flags().StringVar(&dbName, "database", "kwild", "name of the Postgres database to manually connect to")
 	cmd.Flags().StringVar(&user, "user", "postgres", "user with administrative privileges on the database")
 	cmd.Flags().StringVar(&pass, "password", "", "password for the database user")
 	cmd.Flags().StringVar(&host, "host", "localhost", "host of the database")
