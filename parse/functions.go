@@ -179,7 +179,7 @@ var (
 					return "", errDistinct("generate_dbid")
 				}
 
-				return fmt.Sprintf(`('x' || encode(sha224(lower(%s)::bytea || %s), 'hex'))`, inputs[0], inputs[1]), nil
+				return fmt.Sprintf(`(select 'x' || encode(sha224(lower(%s)::bytea || %s), 'hex'))`, inputs[0], inputs[1]), nil
 			},
 		},
 		// array functions
