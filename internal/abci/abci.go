@@ -485,9 +485,10 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	res := &abciTypes.ResponseFinalizeBlock{}
 
 	blockCtx := common.BlockContext{
-		ChainContext: a.chainContext,
-		Height:       req.Height,
-		Proposer:     proposerPubKey,
+		ChainContext:   a.chainContext,
+		Height:         req.Height,
+		BlockTimestamp: req.Time.Unix(),
+		Proposer:       proposerPubKey,
 	}
 
 	// since notifications are returned async from postgres, we will construct
