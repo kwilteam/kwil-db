@@ -18,6 +18,11 @@ type BlockContext struct {
 	ChainContext *ChainContext
 	// Height gets the height of the current block.
 	Height int64
+	// BlockTimestamp is a timestamp of the current block.
+	// It is set by the block proposer, and therefore may not be accurate.
+	// It should not be used for time-sensitive operations where incorrect
+	// timestamps could result in security vulnerabilities.
+	BlockTimestamp int64
 	// Proposer gets the proposer public key of the current block.
 	Proposer []byte
 }

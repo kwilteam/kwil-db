@@ -351,6 +351,11 @@ func setContextualVars(ctx context.Context, db sql.DB, data *common.ExecutionDat
 		return err
 	}
 
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = %d;`, generate.PgSessionPrefix, parse.BlockTimestamp, data.BlockTimestamp))
+	if err != nil {
+		return err
+	}
+
 	// we have to set the foreign caller to the empty string if it is nil.
 	// We can't leave it nil because once a config parameter is set, it cannot be unset.
 	// This means that we cannot properly handle scoping of the foreign caller in the outermost

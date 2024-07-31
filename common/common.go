@@ -92,6 +92,9 @@ type TransactionData struct {
 
 	// Height is the block height of the incoming transaction.
 	Height int64
+
+	// BlockTimestamp is the unix timestamp of the block, set by the block proposer.
+	BlockTimestamp int64
 }
 
 // ExecutionOptions is contextual data that is passed to a procedure

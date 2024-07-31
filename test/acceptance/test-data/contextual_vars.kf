@@ -5,37 +5,40 @@ table vars {
     caller text,
     signer blob,
     txid text,
-    height int
+    height int,
+    block_timestamp int
 }
 
 // act_store_vars checks that contextual variables work as expected
 // in actions
 action act_store_vars() public {
-    insert into vars (id, caller, signer, txid, height)
+    insert into vars (id, caller, signer, txid, height, block_timestamp)
     values (
         uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid),
         @caller,
         @signer,
         @txid,
-        @height
+        @height,
+        @block_timestamp
     );
 }
 
 // proc_store_vars checks that contextual variables work as expected
 // in procedures
 procedure proc_store_vars() public {
-    insert into vars (id, caller, signer, txid, height)
+    insert into vars (id, caller, signer, txid, height, block_timestamp)
     values (
         uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid),
         @caller,
         @signer,
         @txid,
-        @height
+        @height,
+        @block_timestamp
     );
 }
 
-procedure get_stored() public view returns table(caller text, signer blob, txid text, height int) {
-    return select caller, signer, txid, height from vars;
+procedure get_stored() public view returns table(caller text, signer blob, txid text, height int, block_timestamp int) {
+    return select caller, signer, txid, height, block_timestamp from vars;
 }
 
 procedure delete_all() public {

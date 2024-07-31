@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,7 +45,7 @@ func testCtxVars(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid, 
 		count++
 		rec := results.Records.Record()
 		require.NotNil(t, rec)
-		require.Len(t, rec, 4)
+		require.Len(t, rec, 5)
 
 		// check caller
 		ident, err := execute.Identifier()
@@ -64,6 +65,19 @@ func testCtxVars(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid, 
 		height := rec["height"]
 		if height.(int64) <= 0 {
 			t.Errorf("height should be greater than 0")
+		}
+
+		// block_timestamp
+		// We don't know the exact timestamp, but it should be greater than 1722439321
+		// (the time I am writing this test), and less than the current time.
+		blockTimestamp := rec["block_timestamp"]
+		if blockTimestamp.(int64) <= 1722439321 {
+			t.Errorf("block_timestamp should be greater than 1722439321")
+		}
+
+		// since our test node is acting honestly
+		if blockTimestamp.(int64) >= time.Now().Unix()+100 {
+			t.Errorf("block_timestamp should be less than the current time")
 		}
 	}
 	require.Equal(t, 1, count)
