@@ -49,7 +49,7 @@ func dbidCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&schema, "schema", "", "Schema name")
 	cmd.Flags().StringVar(&deployer, "deployer", "", "Deployer address")
-	cmd.Flags().BoolVar(&noTrim, "no-trim", false, "Maintain the exact deployer address")
+	cmd.Flags().BoolVar(&noTrim, "no-trim", false, "Do not trim off the 0x prefix of the deployer address")
 	// mark required flags
 	cmd.MarkFlagRequired("schema")
 	cmd.MarkFlagRequired("deployer")
