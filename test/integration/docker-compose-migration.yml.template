@@ -430,30 +430,6 @@ services:
       timeout: 6s
       retries: 20
 
-  # for kgw tests, to run locally, you need to build this image in kgw repo
-  kgw-1:
-    image: kgw:latest
-    ports:
-      - "8090:8090"
-    networks:
-      - {{ .Network }}
-    volumes:
-      - ${KWIL_HOME:-/tmp}:/app/kgwlog
-    command: |
-      --log-level ${LOG_LEVEL:-info}
-      --log-outputs stdout /app/kgwlog/kgw.log
-      --cors-allow-origins *
-      --backends node0:8484 node1:8484 node2:8484 node3:8484
-      --domain http://localhost:8090
-      --statement "Trust me ok?"
-      --session-secret "kgwtest"
-      --chain-id ${CHAIN_ID:-kwil-test-chain}
-      --allow-deploy-db
-      --allow-adhoc-query
-      --devmode
-      --schema-sync-interval 2
-    # domain should not be changed, and client should use 'domain' value as the provider, otherwise the test will fail
-
   hardhat:
     image: kwildb/hardhat:latest
     ports:

@@ -17,6 +17,4 @@ services:
     user: "${UID}:${GID}"
   ext3-1:
     user: "${UID}:${GID}"
-  kgw-1:
-    user: "${UID}:${GID}"
   
