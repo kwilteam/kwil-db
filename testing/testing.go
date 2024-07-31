@@ -342,7 +342,8 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 
 		for j, col := range row {
 			if !assert.ObjectsAreEqualValues(e.Returns[i][j], col) {
-				return fmt.Errorf("incorrect value for expected result: row %d, column %d", i, j)
+				// add 1 to row and column index since they are 0 indexed.
+				return fmt.Errorf(`incorrect value for expected result: row %d, column %d. expected "%s", received "%s"`, i+1, j+1, e.Returns[i][j], col)
 			}
 		}
 	}
