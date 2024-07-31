@@ -352,6 +352,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 		txRes := a.txApp.Execute(txapp.TxContext{
 			BlockHeight:     req.Height,
+			BlockTimestamp:  req.Time.Unix(),
 			Proposer:        proposerPubKey,
 			ConsensusParams: a.consensusParams,
 			Ctx:             ctx,

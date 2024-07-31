@@ -43,6 +43,11 @@ type TxContext struct {
 	Ctx context.Context
 	// BlockHeight gets the height of the current block.
 	BlockHeight int64
+	// BlockTimestamp is a timestamp of the current block.
+	// It is set by the block proposer, and therefore may not be accurate.
+	// It should not be used for time-sensitive operations where incorrect
+	// timestamps could result in security vulnerabilities.
+	BlockTimestamp int64
 	// Proposer gets the proposer public key of the current block.
 	Proposer []byte
 	// ConsensusParams holds network level parameters that can be evolved
@@ -98,6 +103,9 @@ type TransactionData struct {
 
 	// Height is the block height of the incoming transaction.
 	Height int64
+
+	// BlockTimestamp is the unix timestamp of the block, set by the block proposer.
+	BlockTimestamp int64
 }
 
 // ExecutionOptions is contextual data that is passed to a procedure

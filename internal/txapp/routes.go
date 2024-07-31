@@ -262,9 +262,11 @@ func (d *deployDatasetRoute) PreTx(ctx common.TxContext, svc *common.Service, tx
 func (d *deployDatasetRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	err := app.Engine.CreateDataset(ctx.Ctx, app.DB, d.schema,
 		&common.TransactionData{
-			Signer: tx.Sender,
-			Caller: d.identifier,
-			TxID:   hex.EncodeToString(ctx.TxID),
+			Signer:         tx.Sender,
+			Caller:         d.identifier,
+			TxID:           hex.EncodeToString(ctx.TxID),
+			Height:         ctx.BlockHeight,
+			BlockTimestamp: ctx.BlockTimestamp,
 		})
 	if err != nil {
 		return transactions.CodeUnknownError, err
@@ -305,9 +307,11 @@ func (d *dropDatasetRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *
 
 func (d *dropDatasetRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	err := app.Engine.DeleteDataset(ctx.Ctx, app.DB, d.dbid, &common.TransactionData{
-		Signer: tx.Sender,
-		Caller: d.identifier,
-		TxID:   hex.EncodeToString(ctx.TxID),
+		Signer:         tx.Sender,
+		Caller:         d.identifier,
+		TxID:           hex.EncodeToString(ctx.TxID),
+		Height:         ctx.BlockHeight,
+		BlockTimestamp: ctx.BlockTimestamp,
 	})
 	if err != nil {
 		return transactions.CodeUnknownError, err
@@ -378,10 +382,11 @@ func (d *executeActionRoute) InTx(ctx common.TxContext, app *common.App, tx *tra
 			Procedure: d.action,
 			Args:      d.args[i],
 			TransactionData: common.TransactionData{
-				Signer: tx.Sender,
-				Caller: d.identifier,
-				TxID:   hex.EncodeToString(ctx.TxID),
-				Height: ctx.BlockHeight,
+				Signer:         tx.Sender,
+				Caller:         d.identifier,
+				TxID:           hex.EncodeToString(ctx.TxID),
+				Height:         ctx.BlockHeight,
+				BlockTimestamp: ctx.BlockTimestamp,
 			},
 		})
 		if err != nil {
