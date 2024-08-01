@@ -1,0 +1,202 @@
+package query_planner
+
+import (
+	"fmt"
+	"slices"
+
+	dt "github.com/kwilteam/kwil-db/internal/engine/cost/datatypes"
+	lp "github.com/kwilteam/kwil-db/internal/engine/cost/logical_plan"
+	pt "github.com/kwilteam/kwil-db/internal/engine/cost/plantree"
+)
+
+func expandStar(schema *dt.Schema) []lp.LogicalExpr {
+	// is there columns to skip?
+	var exprs []lp.LogicalExpr
+	for _, field := range schema.Fields {
+		// TODO: better way to get column expr?
+		exprs = append(exprs, &lp.ColumnExpr{Relation: field.Relation(), Name: field.Name})
+	}
+	return exprs
+}
+
+func expandQualifiedStar(schema *dt.Schema, table string) []lp.LogicalExpr {
+	panic("not implemented")
+}
+
+// qualifyExpr returns a new expression qualified with the given relation.
+// It won't change the original expression if it's not ColumnExpr.
+// func qualifyExpr(expr lp.LogicalExpr, seen map[string] lp.LogicalExpr, schemas ...*dt.Schema) lp.LogicalExpr {
+// It's the same as logical_plan.NormalizeExpr.
+func qualifyExpr(expr lp.LogicalExpr, schemas ...*dt.Schema) lp.LogicalExpr {
+	return pt.TransformPostOrder(expr, func(n pt.TreeNode) pt.TreeNode {
+		c, ok := n.(*lp.ColumnExpr)
+		if !ok {
+			return n
+		} else {
+			newNode := c.QualifyWithSchemas(schemas...)
+			return newNode
+
+		}
+	}).(lp.LogicalExpr)
+}
+
+// extractColumnsFromFilterExpr extracts the columns are references by the filter expression.
+// It keeps track of the columns that have been seen in the 'seen' map.
+// TODO: use visitor
+func extractColumnsFromFilterExpr(expr lp.LogicalExpr, seen map[*lp.ColumnExpr]bool) {
+	switch e := expr.(type) {
+	case *lp.LiteralTextExpr:
+	case *lp.LiteralNumericExpr:
+	case *lp.AliasExpr:
+		extractColumnsFromFilterExpr(e.Expr, seen)
+	case lp.UnaryExpr:
+		extractColumnsFromFilterExpr(e.E(), seen)
+	case lp.AggregateExpr:
+		extractColumnsFromFilterExpr(e.E(), seen)
+	case lp.BinaryExpr:
+		extractColumnsFromFilterExpr(e.L(), seen)
+		extractColumnsFromFilterExpr(e.R(), seen)
+	case *lp.ColumnExpr:
+		seen[e] = true
+	case *lp.SortExpression:
+		extractColumnsFromFilterExpr(e.Expr, seen)
+	//case *.ColumnIdxExpr:
+	//	seen[input.Schema().Fields[e.Idx].Name] = true
+	default:
+		panic(fmt.Sprintf("extractColumns: unknown expression type %T", e))
+	}
+}
+
+// extractAliases extracts the mapping of alias to its expression
+func extractAliases(exprs []lp.LogicalExpr) map[string]lp.LogicalExpr {
+	aliases := make(map[string]lp.LogicalExpr)
+	for _, expr := range exprs {
+		if e, ok := expr.(*lp.AliasExpr); ok {
+			aliases[e.Alias] = e.Expr
+		}
+	}
+	return aliases
+}
+
+func cloneAliases(aliases map[string]lp.LogicalExpr) map[string]lp.LogicalExpr {
+	clone := make(map[string]lp.LogicalExpr)
+	for k, v := range aliases {
+		clone[k] = v
+	}
+	return clone
+}
+
+// resolveAliases resolves the expr to its un-aliased expression.
+// It's used to resolve the alias in the select list to the actual expression.
+func resolveAlias(expr lp.LogicalExpr, aliases map[string]lp.LogicalExpr) lp.LogicalExpr {
+	return pt.TransformPostOrder(expr, func(n pt.TreeNode) pt.TreeNode {
+		if c, ok := n.(*lp.ColumnExpr); ok {
+			if e, ok := aliases[c.Name]; ok {
+				return e
+			} else {
+				return c
+			}
+		}
+		// otherwise, return the original node
+		return n
+	}).(lp.LogicalExpr)
+}
+
+func extractAggrExprs(exprs []lp.LogicalExpr) []lp.LogicalExpr {
+	var aggrExprs []lp.LogicalExpr
+	for _, expr := range exprs {
+		if e, ok := expr.(lp.AggregateExpr); ok {
+			aggrExprs = append(aggrExprs, e)
+		}
+	}
+	return aggrExprs
+}
+
+// allReferredColumns returns all the columns that are referenced by the expression.
+func allReferredColumns(exprs []lp.LogicalExpr) []*lp.ColumnExpr {
+	var columns []*lp.ColumnExpr
+	for _, expr := range exprs {
+		pt.PreOrderApply(expr, func(n pt.TreeNode) (bool, any) {
+			if c, ok := n.(*lp.ColumnExpr); ok {
+				columns = append(columns, c)
+			}
+			return true, nil
+		})
+	}
+	return columns
+}
+
+// ensureSchemaSatifiesExprs ensures that the schema contains all the columns
+// referenced by the expression.
+func ensureSchemaSatifiesExprs(schema *dt.Schema, exprs []lp.LogicalExpr) error {
+	referredCols := allReferredColumns(exprs)
+
+	for _, col := range referredCols {
+		if !schema.ContainsColumn(col.Relation, col.Name) {
+			return fmt.Errorf("column %s not found in schema", col.Name)
+		}
+	}
+
+	return nil
+}
+
+// rebaseExprs builds the expression on top of the base expressions.
+// This is useful in the context of a query like:
+// SELECT a + b < 1 ... GROUP BY a + b
+func rebaseExprs(expr lp.LogicalExpr, baseExprs []lp.LogicalExpr, plan lp.LogicalPlan) lp.LogicalExpr {
+	return pt.TransformPreOrder(expr, func(n pt.TreeNode) pt.TreeNode {
+		contains := slices.ContainsFunc(baseExprs, func(e lp.LogicalExpr) bool {
+			// TODO: String() may not work
+			return e.String() == n.String()
+		})
+
+		if contains {
+			return exprAsColumn(n.(lp.LogicalExpr), plan)
+		} else {
+			return n
+		}
+	}).(lp.LogicalExpr)
+}
+
+// checkExprsProjectFromColumns checks if the expression can be projected from the columns.
+func checkExprsProjectFromColumns(exprs []lp.LogicalExpr, columns []lp.LogicalExpr) error {
+	for _, col := range columns {
+		if _, ok := col.(*lp.ColumnExpr); !ok {
+			return fmt.Errorf("expression %s is not a column", col.String())
+		}
+	}
+
+	colExprs := allReferredColumns(exprs)
+	for _, col := range colExprs {
+		if err := checkExprProjectFromColumns(col, columns); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkExprProjectFromColumns(expr lp.LogicalExpr, columns []lp.LogicalExpr) error {
+	valid := slices.ContainsFunc(columns, func(c lp.LogicalExpr) bool {
+		return c.String() == expr.String()
+	})
+
+	if !valid {
+		return fmt.Errorf(
+			"expression %s cannot be resolved from available columns: %s",
+			expr.String(), columns)
+	} else {
+		return nil
+	}
+}
+
+func exprAsColumn(expr lp.LogicalExpr, plan lp.LogicalPlan) *lp.ColumnExpr {
+	if c, ok := expr.(*lp.ColumnExpr); ok {
+		colDef := lp.ColumnFromExprToDef(c)
+		field := plan.Schema().FieldFromColumn(colDef)
+		return lp.ColumnFromDefToExpr(field.QualifiedColumn())
+	} else {
+		// use the expression as the column name
+		// TODO: String() may not work
+		return lp.ColumnUnqualified(expr.String())
+	}
+}
