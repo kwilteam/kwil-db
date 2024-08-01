@@ -77,9 +77,16 @@ func (e *VotableEvent) ID() *UUID {
 // Migration is a migration resolution that is proposed by a validator
 // for initiating the migration process.
 type Migration struct {
-	ID                string   `json:"id"`                  // ID is the UUID of the migration resolution
+	ID                string   `json:"id"`                  // ID is the UUID of the migration resolution/proposal
 	ActivationHeight  *big.Int `json:"activation_height"`   // ActivationHeight is the block height at which the migration is activated
 	MigrationDuration *big.Int `json:"migration_duration"`  // MigrationDuration is the duration of the migration process starting from the ActivationHeight
 	ChainID           string   `json:"chain_id"`            // ChainID of the new network
 	Timestamp         string   `json:"timestamp,omitempty"` // Timestamp when the migration was proposed, maintained for uniqueness
+}
+
+type MigrationStatus struct {
+	Proposal  string   `json:"proposal"`   // Proposal is the migration proposal ID
+	ExpiresAt int64    `json:"expires_at"` // ExpiresAt is the block height at which the migration proposal expires
+	Board     [][]byte `json:"board"`      // Board is the list of validators who are eligible to vote on the migration proposal
+	Approved  []bool   `json:"approved"`   // Approved is the list of bools indicating if the corresponding validator approved the migration proposal
 }

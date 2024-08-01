@@ -10,4 +10,4 @@ use (
 
 // replace github.com/kwilteam/kuneiform => ../kuneiform
 // replace github.com/kwilteam/kwil-extensions => ../../kwil-extensions
-// replace github.com/cometbft/cometbft => ../../../github/cometbft/cometbf
+// replace github.com/cometbft/cometbft => ../../../github/cometbft/cometbft

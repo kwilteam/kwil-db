@@ -16,6 +16,7 @@ func NewMigrationCmd() *cobra.Command {
 		triggerCmd(),
 		voteCmd(),
 		listCmd(),
+		statusCmd(),
 		genesisStateCmd(),
 	)
 

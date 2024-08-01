@@ -137,7 +137,7 @@ type MigrationState struct {
 
 func (m *MigrationState) MarshalText() ([]byte, error) {
 	if !m.InMigration {
-		return []byte("No active migration in progress."), nil
+		return []byte(fmt.Sprintf("No genesis state to download yet. Migration is set to start at block height: %d", m.StartHeight)), nil
 	}
 
 	if m.GenesisFile == "" {

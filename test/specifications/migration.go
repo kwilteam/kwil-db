@@ -94,7 +94,7 @@ func InstallGenesisState(ctx context.Context, t *testing.T, netops MigrationOpsD
 
 	for i := 0; i < numNodes; i++ {
 		// Create sub nodes
-		nodeDir := filepath.Join(rootDir, fmt.Sprintf("node%d", i))
+		nodeDir := filepath.Join(rootDir, fmt.Sprintf("new-node%d", i))
 		err = os.MkdirAll(nodeDir, 0755)
 		require.NoError(t, err)
 
@@ -178,7 +178,7 @@ func updatePersistentPeers(peers string) string {
 		peerParts := strings.Split(peer, "@")
 		nodeId := peerParts[0]
 		address := strings.Split(peerParts[1], ":")
-		updatedPeers += fmt.Sprintf("%s@%s-1:%s", nodeId, address[0], address[1])
+		updatedPeers += fmt.Sprintf("%s@new-%s:%s", nodeId, address[0], address[1])
 	}
 	return updatedPeers
 }

@@ -39,9 +39,9 @@ var allServices = []string{integration.ExtContainer, integration.Ext3Container,
 	"pg0", "pg1", "pg2", "pg3", "node0", "node1", "node2", "node3",
 }
 
-var migrationServices = []string{"ext1-1", "pg0-1", "pg1-1", "pg2-1", "node0-1", "node1-1", "node2-1"}
+var migrationServices = []string{"new-ext1", "new-pg0", "new-pg1", "new-pg2", "new-node0", "new-node1", "new-node2"}
 
-var migrationServices2 = []string{"ext3-1", "pg3-1", "node3-1"}
+var migrationServices2 = []string{"new-ext3", "new-pg3", "new-node3"}
 
 var singleNodeServices = []string{integration.ExtContainer, "pg0", "node0"}
 
@@ -300,8 +300,8 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 			node3Driver := helper.GetUserDriver(ctx, "node3", driverType, nil)
 
 			/*
-			   1. This checks if the database exists on the new node
-			   2. Verify if the user and posts are synced to the new node
+				1. This checks if the database exists on the new node
+				2. Verify if the user and posts are synced to the new node
 			*/
 			time.Sleep(time.Second * 4) // need time to catch up
 			specifications.DatabaseVerifySpecification(ctx, t, node3Driver, true)
@@ -766,7 +766,7 @@ func TestStatesync(t *testing.T) {
 			rootDir, err := helper.TestnetDir()
 			require.NoError(t, err)
 
-			helper.EnableStatesync(ctx, rootDir, 3, []string{"node0", "node1", "node2"})
+			helper.EnableStatesync(ctx, rootDir, "node3", []string{"node0", "node1", "node2"})
 			helper.RunDockerComposeWithServices(ctx, newServices)
 
 			// Let the node catch up with the network
@@ -831,12 +831,15 @@ func TestNetworkMigrationWithoutDowntime(t *testing.T) {
 		specifications.DatabaseVerifySpecification(ctx, t, user1Driver, true)
 		specifications.DatabaseVerifySpecification(ctx, t, user2Driver, true)
 
-		newDir := helper.MigrationSetup(ctx, migrationServices)
+		newDir := helper.MigrationSetup(ctx)
 
 		// Trigger a network migration request
 		specifications.TriggerMigration(ctx, t, node0Driver, integration.MigrationChainID)
 
 		// node1 approves the migration and verifies that the migration is still pending
+		specifications.ApproveMigration(ctx, t, node1Driver, true)
+
+		// node1 approves again and verifies that the migration is still pending as duplicate approvals are not allowed
 		specifications.ApproveMigration(ctx, t, node1Driver, true)
 
 		// node2 approves the migration and verifies that the migration is approved
@@ -860,7 +863,7 @@ func TestNetworkMigrationWithoutDowntime(t *testing.T) {
 		*/
 		time.Sleep(time.Second * 20) // This is for the changesets to be synced and voted and resolved in the new network
 
-		newNodeDriver := helper.GetMigrationUserDriver(ctx, "node0-1", "jsonrpc", nil)
+		newNodeDriver := helper.GetMigrationUserDriver(ctx, "new-node0", "jsonrpc", nil)
 		specifications.DatabaseVerifySpecification(ctx, t, newNodeDriver, true)
 
 		// The user and posts should be synced to the new node through the changeset_listener extension
@@ -869,12 +872,17 @@ func TestNetworkMigrationWithoutDowntime(t *testing.T) {
 		specifications.ExecuteDBRecordsVerifySpecification(ctx, t, newNodeDriver, expectPosts)
 
 		// Bring up node3-1 using statesync
-		helper.EnableStatesync(ctx, newDir, 3, []string{"node0-1", "node1-1", "node2-1"})
+		helper.EnableStatesync(ctx, newDir, "new-node3", []string{"new-node0", "new-node1", "new-node2"})
 		helper.RunDockerComposeWithServices(ctx, migrationServices2)
 
-		time.Sleep(10 * time.Second)
-		newNode3Driver := helper.GetMigrationUserDriver(ctx, "node3-1", "jsonrpc", nil)
-		specifications.DatabaseVerifySpecification(ctx, t, newNode3Driver, true)
+		newNode3Driver := helper.GetMigrationUserDriver(ctx, "new-node3", "jsonrpc", nil)
+
+		specifications.DatabaseVerifySpecificationEventually(ctx, t, newNode3Driver)
+
+		time.Sleep(15 * time.Second) // need time to catch up on changesets
+
 		specifications.ExecuteDBRecordsVerifySpecification(ctx, t, newNode3Driver, expectPosts)
+
+		t.Logf("Network migration without downtime test completed")
 	})
 }

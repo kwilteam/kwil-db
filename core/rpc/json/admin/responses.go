@@ -105,3 +105,7 @@ type MigrationSnapshotChunkResponse struct {
 type ListMigrationsResponse struct {
 	Migrations []*types.Migration `json:"migrations"`
 }
+
+type MigrationStatusResponse struct {
+	Status *types.MigrationStatus `json:"status"`
+}

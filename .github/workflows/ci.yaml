@@ -85,23 +85,29 @@ jobs:
         run: |
           go version
           task install:deps
+
       # checks
       - name: Check tidiness of go.mod and go.sum
         run: |
           ./scripts/mods/check_tidy
+
       - name: Ensure generated protobuf Go source is up-to-date
         run: |
           ./scripts/proto/check_up
+
       - name: Ensure generated swagger Go code is up-to-date
         run: |
           ./scripts/swagger/check_up
+
       - name: Ensure generate antlr Go code is up-to-date
         run: |
           ./scripts/kuneiform/check_tidy
+
       - name: Compile packages, apps, and specs
         run: | # enter workspace mode to do this on one line
           go work init . ./test ./core ./parse
           go build -mod=readonly ./... ./core/... ./parse/... ./test/specifications/
+
       - name: Lint
         uses: golangci/golangci-lint-action@v6.0.0
         with:
@@ -109,11 +115,17 @@ jobs:
           version: "latest"
           args: ./... ./core/... ./parse/... ./test/... --timeout=10m --config=.golangci.yml
 
+      # unit test
+      - name: Run unit test
+        run: |
+          task test:unit
+
       # integration test
       - name: Generate go vendor
         #for faster builds and private repos, need to run this after pb:compile:v1
         run: |
           task vendor
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -124,6 +136,7 @@ jobs:
           key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-kwild
+
       - name: manual git tag
         run: |
           version=`echo ${{ github.sha }} | cut -c 1-7`
@@ -134,13 +147,16 @@ jobs:
         run: |
           build_time=`TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ"`
           echo "BUILD_TIME=$build_time" >> $GITHUB_ENV
+
       - name: Build cli binaries
         run: |
           task build:cli
           task build:admin
+
       - name: Pull math extension docker image
         run: |
           docker pull kwilbrennan/extensions-math:multi-arch --platform linux/amd64
+
       - name: Build kwild image
         id: docker_build_kwild
         uses: docker/build-push-action@v5
@@ -159,6 +175,14 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-kwild
           cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
 
+      - name: Run acceptance test
+        run: |
+          testUserID=$(id -u)
+          testGroupID=$(id -g)
+          cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
+          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/acceptance/docker-compose.override.yml
+          KACT_LOG_LEVEL=warn task test:act:nb
+
       - name: Run integration test
         run: |
           testUserID=$(id -u)
@@ -167,12 +191,13 @@ jobs:
           cp test/integration/docker-compose-migration.override.yml.example test/integration/docker-compose-migration.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose-migration.override.yml
-          KIT_LOG_LEVEL=warn KIT_LOG_LEVEL=warn task test:it:nb
+          KIT_LOG_LEVEL=warn task test:it:nb
 
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache-kwild
           mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
+
       - name: Prune Docker
         if: ${{ always() }}
         run: docker rm $(docker ps -a -q) -f ; docker network prune -f ; docker volume prune -f || true

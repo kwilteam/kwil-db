@@ -3,6 +3,7 @@ package specifications
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -81,4 +82,16 @@ func DatabaseVerifySpecification(ctx context.Context, t *testing.T, deploy Datab
 	} else {
 		require.Error(t, err)
 	}
+}
+
+func DatabaseVerifySpecificationEventually(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
+	t.Logf("Executing database verify specification")
+
+	// Given a valid database schema
+	db := SchemaLoader.Load(t, SchemaTestDB)
+
+	require.Eventually(t, func() bool {
+		err := deploy.DatabaseExists(ctx, deploy.DBID(db.Name))
+		return err == nil
+	}, 1*time.Minute, 500*time.Millisecond)
 }

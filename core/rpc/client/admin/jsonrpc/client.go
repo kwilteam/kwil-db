@@ -306,3 +306,17 @@ func (cl *Client) ListMigrations(ctx context.Context) ([]*types.Migration, error
 
 	return res.Migrations, nil
 }
+
+// MigrationStatus gets the status of a migration proposal.
+func (cl *Client) MigrationStatus(ctx context.Context, id string) (*types.MigrationStatus, error) {
+	cmd := &adminjson.MigrationStatusRequest{
+		Id: id,
+	}
+	res := &adminjson.MigrationStatusResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodMigrationStatus), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Status, nil
+}

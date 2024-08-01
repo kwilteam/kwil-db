@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -49,7 +48,6 @@ type Pricer interface {
 }
 
 type Migrator interface {
-	ListPendingMigrations(ctx context.Context) ([]*coretypes.Migration, error)
 	GetChangesetMetadata(height int64) (*migrations.ChangesetMetdata, error)
 	GetChangeset(height int64, index int64) ([]byte, error)
 	GetMigrationMetadata() (*migrations.MigrationMetadata, error)
@@ -138,6 +136,10 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		adminjson.MethodApproveMigration: rpcserver.MakeMethodDef(svc.ApproveMigration,
 			"approve a migration resolution",
 			"the hash of the broadcasted migration approval transaction",
+		),
+		adminjson.MethodMigrationStatus: rpcserver.MakeMethodDef(svc.MigrationStatus,
+			"get the status of a migration resolution",
+			"the status of the migration resolution",
 		),
 		adminjson.MethodListMigrations: rpcserver.MakeMethodDef(svc.ListPendingMigrations,
 			"list active migration resolutions",
@@ -392,40 +394,15 @@ func toPendingInfo(ctx context.Context, db sql.DB, resolution *resolutions.Resol
 		return nil, fmt.Errorf("failed to unmarshal join request")
 	}
 
-	allVoters, err := voting.GetValidators(ctx, db)
+	expiresAt, board, approvals, err := resolutionStatus(ctx, db, resolution)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve voters")
-	}
-
-	// to create the board, we will take a list of all approvers and append the voters.
-	// we will then remove any duplicates the second time we see them.
-	// this will result with all approvers at the start of the list, and all voters at the end.
-	// finally, the approvals will be true for the length of the approvers, and false for found.length - voters.length
-	board := make([][]byte, 0, len(allVoters))
-	approvals := make([]bool, len(allVoters))
-	for i, v := range resolution.Voters {
-		board = append(board, v.PubKey)
-		approvals[i] = true
-	}
-	for _, v := range allVoters {
-		board = append(board, v.PubKey)
-	}
-
-	// we will now remove duplicates from the board.
-	found := make(map[string]struct{})
-	for i := 0; i < len(board); i++ {
-		if _, ok := found[string(board[i])]; ok {
-			board = append(board[:i], board[i+1:]...)
-			i--
-			continue
-		}
-		found[string(board[i])] = struct{}{}
+		return nil, fmt.Errorf("failed to retrieve join request status")
 	}
 
 	return &adminjson.PendingJoin{
 		Candidate: resolution.Proposer,
 		Power:     resolutionBody.Power,
-		ExpiresAt: resolution.ExpirationHeight,
+		ExpiresAt: expiresAt,
 		Board:     board,
 		Approved:  approvals,
 	}, nil
@@ -468,12 +445,8 @@ func (svc *Service) LoadChangesetMetadata(ctx context.Context, req *adminjson.Ch
 
 func (svc *Service) MigrationMetadata(ctx context.Context, req *adminjson.MigrationMetadataRequest) (*adminjson.MigrationMetadataResponse, *jsonrpc.Error) {
 	metadata, err := svc.migrator.GetMigrationMetadata()
-	if errors.Is(err, migrations.ErrNoActiveMigration) {
-		return &adminjson.MigrationMetadataResponse{
-			InMigration: false,
-		}, nil
-	} else if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load migration metadata", nil)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, fmt.Sprintf("failed to load migration metadata: %s", err.Error()), nil)
 	}
 
 	bts, err := metadata.MarshalBinary()
@@ -539,12 +512,96 @@ func (svc *Service) ApproveMigration(ctx context.Context, req *adminjson.Approve
 }
 
 func (svc *Service) ListPendingMigrations(ctx context.Context, req *adminjson.ListMigrationsRequest) (*adminjson.ListMigrationsResponse, *jsonrpc.Error) {
-	migrations, err := svc.migrator.ListPendingMigrations(ctx)
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	resolutions, err := voting.GetResolutionsByType(ctx, readTx, migrations.StartMigrationEventType)
 	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to list migrations", nil)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to get migration resolutions", nil)
+	}
+
+	var pendingMigrations []*coretypes.Migration
+
+	for _, res := range resolutions {
+		mig := &migrations.MigrationDeclaration{}
+		if err := mig.UnmarshalBinary(res.Body); err != nil {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to unmarshal migration declaration", nil)
+		}
+		pendingMigrations = append(pendingMigrations, &coretypes.Migration{
+			ID:                res.ID.String(),
+			ActivationHeight:  mig.ActivationPeriod,
+			MigrationDuration: mig.Duration,
+			ChainID:           mig.ChainID,
+			Timestamp:         mig.Timestamp,
+		})
 	}
 
 	return &adminjson.ListMigrationsResponse{
-		Migrations: migrations,
+		Migrations: pendingMigrations,
 	}, nil
+}
+
+func (svc *Service) MigrationStatus(ctx context.Context, req *adminjson.MigrationStatusRequest) (*adminjson.MigrationStatusResponse, *jsonrpc.Error) {
+	uuid, err := coretypes.ParseUUID(req.Id)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "invalid migration ID", nil)
+	}
+
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	resolution, err := voting.GetResolutionInfo(ctx, readTx, uuid)
+	if err != nil {
+		svc.log.Error("failed to retrieve migration resolution", zap.Error(err))
+		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve migration proposal status, it might have already been approved.", nil)
+	}
+
+	expiresAt, board, approvals, err := resolutionStatus(ctx, readTx, resolution)
+	if err != nil {
+		svc.log.Error("failed to retrieve migration resolution status", zap.Error(err))
+		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve migration proposal status", nil)
+	}
+
+	return &adminjson.MigrationStatusResponse{
+		Status: &coretypes.MigrationStatus{
+			Proposal:  req.Id,
+			ExpiresAt: expiresAt,
+			Board:     board,
+			Approved:  approvals,
+		},
+	}, nil
+}
+
+func resolutionStatus(ctx context.Context, db sql.DB, resolution *resolutions.Resolution) (expiresAt int64, board [][]byte, approvals []bool, err error) {
+	allVoters, err := voting.GetValidators(ctx, db)
+	if err != nil {
+		return 0, nil, nil, fmt.Errorf("failed to retrieve voters")
+	}
+
+	// to create the board, we will take a list of all approvers and append the voters.
+	// we will then remove any duplicates the second time we see them.
+	// this will result with all approvers at the start of the list, and all voters at the end.
+	// finally, the approvals will be true for the length of the approvers, and false for found.length - voters.length
+	board = make([][]byte, 0, len(allVoters))
+	approvals = make([]bool, len(allVoters))
+	for i, v := range resolution.Voters {
+		board = append(board, v.PubKey)
+		approvals[i] = true
+	}
+	for _, v := range allVoters {
+		board = append(board, v.PubKey)
+	}
+
+	// we will now remove duplicates from the board.
+	found := make(map[string]struct{})
+	for i := 0; i < len(board); i++ {
+		if _, ok := found[string(board[i])]; ok {
+			board = append(board[:i], board[i+1:]...)
+			i--
+			continue
+		}
+		found[string(board[i])] = struct{}{}
+	}
+
+	return resolution.ExpirationHeight, board, approvals, nil
 }

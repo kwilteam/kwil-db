@@ -52,6 +52,11 @@ import (
 
 var (
 	getEnv = driver.GetEnv
+
+	dockerComposeFile                  = "./docker-compose.yml.template"
+	dockerComposeOverrideFile          = "./docker-compose.override.yml.template"
+	migrationDockerComposeFile         = "./docker-compose-migration.yml.template"
+	migrationDockerComposeOverrideFile = "./docker-compose-migration.override.yml.template"
 )
 
 var logWaitStrategies = map[string]string{
@@ -88,11 +93,14 @@ type IntTestConfig struct {
 	ChainEndpoint   string
 	AdminRPC        string // Should be of form /var/run/kwil/admin.sock or 127.0.0.1:8485
 
-	SchemaFile                string
-	DockerComposeFile         string
-	DockerComposeOverrideFile string
-	WithETHDevNet             bool
-	ExposedHTTPPorts          bool
+	SchemaFile                         string
+	DockerComposeFile                  string
+	DockerComposeOverrideFile          string
+	MigrationDockerComposeFile         string
+	MigrationDockerComposeOverrideFile string
+
+	WithETHDevNet    bool
+	ExposedHTTPPorts bool
 
 	WaitTimeout time.Duration
 	LogLevel    string
@@ -500,10 +508,14 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 	r.t.Logf("run in docker compose")
 	time.Sleep(time.Second) // sometimes docker compose fails if previous test had some slow async clean up (no idea)
 
-	composeFiles := []string{r.cfg.DockerComposeFile}
+	composeFiles := []string{r.cfg.DockerComposeFile, r.cfg.MigrationDockerComposeFile}
 	if r.cfg.DockerComposeOverrideFile != "" && fileExists(r.cfg.DockerComposeOverrideFile) {
 		composeFiles = append(composeFiles, r.cfg.DockerComposeOverrideFile)
 	}
+	if r.cfg.MigrationDockerComposeOverrideFile != "" && fileExists(r.cfg.MigrationDockerComposeOverrideFile) {
+		composeFiles = append(composeFiles, r.cfg.MigrationDockerComposeOverrideFile)
+	}
+
 	r.t.Logf("use compose files: %v", composeFiles)
 	dc, err := compose.NewDockerCompose(composeFiles...)
 	require.NoError(r.t, err, "failed to create docker compose object for kwild cluster")
@@ -593,7 +605,7 @@ func (r *IntHelper) Setup(ctx context.Context, services []string) {
 
 	r.t.Logf("create test directory: %s for %s", tmpDir, r.t.Name())
 
-	r.prepareDockerCompose(ctx, tmpDir, "./docker-compose.yml.template", "./docker-compose.override.yml.template")
+	r.prepareDockerCompose(ctx, tmpDir)
 
 	if r.cfg.WithETHDevNet {
 		// NOTE: it's more natural and easier if able to configure oracle
@@ -608,28 +620,14 @@ func (r *IntHelper) Setup(ctx context.Context, services []string) {
 
 // MigrationSetup sets up the test environment for network migration
 // by setting up the new network with the new configuration based on the old network
-func (r *IntHelper) MigrationSetup(ctx context.Context, services []string) string {
-	tmpDir, err := os.MkdirTemp("", "TestKwilInt")
-	if err != nil {
-		r.t.Fatal(err)
-	}
-	r.t.Cleanup(func() {
-		if r.t.Failed() {
-			r.t.Logf("Retaining data for failed test at path %v", tmpDir)
-			return
-		}
-		os.RemoveAll(tmpDir)
-	})
-
-	oldRootDir, err := r.TestnetDir()
+func (r *IntHelper) MigrationSetup(ctx context.Context) string {
+	tmpDir, err := r.TestnetDir()
 	require.NoError(r.t, err, "failed to get testnet dir")
-
-	r.t.Logf("create test directory for migration: %s for %s", tmpDir, r.t.Name())
 
 	for i := 0; i < r.cfg.NNonValidator+r.cfg.NValidator; i++ {
 		// Create sub nodes
-		oldNodeDir := filepath.Join(oldRootDir, fmt.Sprintf("node%d", i))
-		newNodeDir := filepath.Join(tmpDir, fmt.Sprintf("node%d", i))
+		oldNodeDir := filepath.Join(tmpDir, fmt.Sprintf("node%d", i))
+		newNodeDir := filepath.Join(tmpDir, fmt.Sprintf("new-node%d", i))
 
 		err = os.MkdirAll(newNodeDir, 0755)
 		require.NoError(r.t, err)
@@ -645,9 +643,6 @@ func (r *IntHelper) MigrationSetup(ctx context.Context, services []string) strin
 		// update the config file when we have the migration info
 	}
 
-	r.prepareDockerCompose(ctx, tmpDir, "./docker-compose-migration.yml.template", "./docker-compose-migration.override.yml.template")
-
-	// r.RunDockerComposeWithServices(ctx, services)
 	return tmpDir
 }
 
@@ -690,14 +685,13 @@ func (r *IntHelper) createLocalNetwork(ctx context.Context) string {
 // Another approach to make parallel tests work is using the same network for all tests,
 // assuming the subnet pool is big enough for all containers at a time. It's still
 // relevant to `default-address-pools` setting, so I'll leave it as is for now.
-func (r *IntHelper) prepareDockerCompose(_ context.Context, tmpDir string, templateFilename, overrideFilename string) {
+func (r *IntHelper) prepareDockerCompose(_ context.Context, tmpDir string) {
 	// create a new network for each test to avoid container DNS name conflicts
 	// for parallel running
 	testName := r.t.Name()
 	localNetworkName, ok := r.envs["KWIL_NETWORK"]
 	require.True(r.t, ok, "failed to get KWIL_NETWORK env")
 
-	r.updateEnv("KWIL_HOME", tmpDir)
 	// another seemingly possible way to do this is instead of using template
 	// docker-compose file is to use envs in docker-compose.yml, but it doesn't work
 	//r.updateEnv("KWIL_NETWORK", localNetworkName)
@@ -720,7 +714,7 @@ func (r *IntHelper) prepareDockerCompose(_ context.Context, tmpDir string, templ
 	} else if r.cfg.ForkNodes {
 		dockerImageName = "kwild-forker:latest"
 	}
-	err := utils.CreateComposeFile(composeFile, templateFilename,
+	err := utils.CreateComposeFile(composeFile, dockerComposeFile,
 		utils.ComposeConfig{
 			Network:          localNetworkName,
 			ExposedHTTPPorts: exposedHTTPPorts,
@@ -731,6 +725,19 @@ func (r *IntHelper) prepareDockerCompose(_ context.Context, tmpDir string, templ
 	r.t.Logf("generated compose file: %s, network: %s, test: %s",
 		composeFile, localNetworkName, testName)
 
+	// generate compose files for migration services
+	migrationComposeFile := filepath.Join(tmpDir, "docker-compose-migration.yml")
+	err = utils.CreateComposeFile(migrationComposeFile, migrationDockerComposeFile,
+		utils.ComposeConfig{
+			Network:          localNetworkName,
+			ExposedHTTPPorts: exposedHTTPPorts,
+			DockerImage:      dockerImageName,
+		})
+	require.NoError(r.t, err, "failed to create docker compose file")
+
+	r.t.Logf("generated compose file: %s, network: %s, test: %s",
+		migrationComposeFile, localNetworkName, testName)
+
 	// copy pginit.sql to same directory as docker-compose.yml
 	// so it can be mounted into the pg containers
 	pgInitSQL, err := os.ReadFile("./pginit.sql")
@@ -740,17 +747,28 @@ func (r *IntHelper) prepareDockerCompose(_ context.Context, tmpDir string, templ
 	require.NoError(r.t, err, "failed to write pginit.sql")
 
 	// copy docker-compose.override.yml if exists
-	if fileExists(overrideFilename) {
-		overrideCompose, err := os.ReadFile(overrideFilename)
-		require.NoError(r.t, err, "failed to read ", overrideFilename)
+	if fileExists(dockerComposeOverrideFile) {
+		overrideCompose, err := os.ReadFile(dockerComposeOverrideFile)
+		require.NoError(r.t, err, "failed to read ", dockerComposeOverrideFile)
 		overrideFile := filepath.Join(tmpDir, "docker-compose.override.yml")
 		err = os.WriteFile(overrideFile, overrideCompose, 0644)
 		require.NoError(r.t, err, "failed to write docker-compose.override.yml")
 		r.cfg.DockerComposeOverrideFile = overrideFile
 	}
 
+	// copy docker-compose-migration.override.yml if exists
+	if fileExists(migrationDockerComposeOverrideFile) {
+		overrideCompose, err := os.ReadFile(migrationDockerComposeOverrideFile)
+		require.NoError(r.t, err, "failed to read ", migrationDockerComposeOverrideFile)
+		overrideFile := filepath.Join(tmpDir, "docker-compose-migration.override.yml")
+		err = os.WriteFile(overrideFile, overrideCompose, 0644)
+		require.NoError(r.t, err, "failed to write docker-compose-migration.override.yml")
+		r.cfg.MigrationDockerComposeOverrideFile = overrideFile
+	}
+
 	//config to use generated compose file
 	r.cfg.DockerComposeFile = composeFile
+	r.cfg.MigrationDockerComposeFile = migrationComposeFile
 }
 
 func (r *IntHelper) WaitForSignals(t *testing.T) {
@@ -783,9 +801,9 @@ func (r *IntHelper) ExtractPrivateKeys(home string) {
 }
 
 // EnableStatesync enables statesync for the given node and sets the snapshot providers
-func (r *IntHelper) EnableStatesync(ctx context.Context, homeDir string, nodeIdx int, snapshotProviders []string) {
+func (r *IntHelper) EnableStatesync(ctx context.Context, homeDir string, node string, snapshotProviders []string) {
 	// read from the config.toml file
-	tomlFile := filepath.Join(homeDir, fmt.Sprintf("node%d", nodeIdx), "config.toml")
+	tomlFile := filepath.Join(homeDir, node, "config.toml")
 	cfg, err := kwildcfg.LoadConfigFile(tomlFile)
 	require.NoError(r.t, err, "failed to load config file")
 

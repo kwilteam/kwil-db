@@ -3,7 +3,6 @@ package migrations
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,7 +14,6 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
@@ -255,39 +253,6 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 	return nil
 }
 
-// ListPendingMigrations lists the pending migrations waiting for approvals.
-func (m *Migrator) ListPendingMigrations(ctx context.Context) ([]*types.Migration, error) {
-	// Request votestore for migration resolutions
-	tx, err := m.DB.BeginReadTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-
-	resolutions, err := voting.GetResolutionsByType(ctx, tx, StartMigrationEventType)
-	if err != nil {
-		return nil, errors.New("failed to get resolutions: " + err.Error())
-	}
-
-	// Convert resolutions to MigrationDeclarations
-	var migrations []*types.Migration
-	for _, res := range resolutions {
-		mig := &MigrationDeclaration{}
-		if err := mig.UnmarshalBinary(res.Body); err != nil {
-			m.Logger.Errorf("failed to unmarshal migration declaration: %s", err.Error())
-			return nil, err
-		}
-		migrations = append(migrations, &types.Migration{
-			ID:                res.ID.String(),
-			ActivationHeight:  mig.ActivationPeriod,
-			MigrationDuration: mig.Duration,
-			ChainID:           mig.ChainID,
-			Timestamp:         mig.Timestamp,
-		})
-	}
-	return migrations, nil
-}
-
 // MigrationMetadata holds metadata about a migration, informing
 // consumers of what information the current node has available
 // for the migration.
@@ -332,9 +297,7 @@ func (m *Migrator) GetMigrationMetadata() (*MigrationMetadata, error) {
 
 	// if there is no planned migration, return
 	if m.activeMigration == nil {
-		return &MigrationMetadata{
-			InMigration: false,
-		}, nil
+		return nil, ErrNoActiveMigration
 	}
 
 	// Migration is triggered but not yet started
