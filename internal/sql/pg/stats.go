@@ -293,6 +293,10 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						}
 
 					case *decimal.Decimal:
+						if v != nil {
+							v2 := *v
+							v = &v2
+						}
 						dec = v
 					case decimal.Decimal:
 						v2 := v

@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
 const (
@@ -256,7 +257,10 @@ func scanVal(ct ColType) any {
 	case ColTypeUUID:
 		return new(pgtype.UUID)
 	case ColTypeNumeric:
-		return new(pgtype.Numeric) // or decimal.Decimal
+		// pgtype.Numeric or decimal.Decimal would work. pgtype.Numeric is way
+		// easier to work with and instantiate, but using our types here helps
+		// test their scanners/valuers.
+		return new(decimal.Decimal)
 	case ColTypeUINT256:
 		return new(types.Uint256)
 	case ColTypeFloat:
@@ -282,7 +286,9 @@ func scanArrayVal(ct ColType) any {
 	case ColTypeUUID:
 		return pgArray[pgtype.UUID]()
 	case ColTypeNumeric:
-		return pgArray[pgtype.Numeric]()
+		// pgArray is also simpler and more efficient, but as long as we
+		// explicitly define array types, we should test them.
+		return new(decimal.DecimalArray)
 	case ColTypeUINT256:
 		return new(types.Uint256Array)
 	case ColTypeFloat:

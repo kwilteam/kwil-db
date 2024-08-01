@@ -7,7 +7,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"math/big"
 	"reflect"
 	"slices"
 	"strconv"
@@ -115,7 +114,7 @@ func TestQueryRowFunc(t *testing.T) {
 	}
 	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
 		` (a int8 not null, b int4 default 42, c text,
-		   d bytea, e numeric(20,5), f int8[], g uint256)`)
+		   d bytea, e numeric(20,3), f int8[], g uint256, h uint256[])`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,22 +124,29 @@ func TestQueryRowFunc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = tx.Execute(ctx, `insert into `+tbl+
-		` values (5, null, 'a', '\xabab', 12, '{2,3,4}', 123456789)`)
+	// 10 * math.MaxUint64
+	hugeIntStr := "184467440737095516150"
+	hugeInt, err := types.Uint256FromString(hugeIntStr)
+	require.NoError(t, err)
+
+	stmt := fmt.Sprintf(`insert into %[1]s values (5, null, 'a', '\xabab', 12.5, `+
+		`'{2,3,4}', %[2]s::uint256, '{%[2]s,4,3}'::uint256[])`, tbl, hugeIntStr)
+	_, err = tx.Execute(ctx, stmt)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// First get the scan values with (*ColInfo).ScanVal.
+	// First get the scan values with (*ColInfo).scanVal.
 
 	wantRTs := []reflect.Type{
 		typeFor[*pgtype.Int8](),
 		typeFor[*pgtype.Int8](),
 		typeFor[*pgtype.Text](),
 		typeFor[*[]uint8](),
-		typeFor[*pgtype.Numeric](),
+		typeFor[*decimal.Decimal](),
 		typeFor[*pgtype.Array[pgtype.Int8]](),
 		typeFor[*types.Uint256](),
+		typeFor[*types.Uint256Array](),
 	}
 
 	var scans []any
@@ -157,18 +163,25 @@ func TestQueryRowFunc(t *testing.T) {
 
 	// Then use QueryRowFunc with the scan vals.
 
+	wantDec, err := decimal.NewFromString("12.500") // numeric(x,3)!
+	require.NoError(t, err)
+	if wantDec.Scale() != 3 {
+		t.Fatalf("scale of decimal does not match column def: %v", wantDec)
+	}
+
 	wantScans := []any{
 		&pgtype.Int8{Int64: 5, Valid: true},
 		&pgtype.Int8{Int64: 0, Valid: false},
 		&pgtype.Text{String: "a", Valid: true},
 		&[]uint8{0xab, 0xab},
-		&pgtype.Numeric{Int: big.NewInt(1200000), Exp: -5, NaN: false, InfinityModifier: 0, Valid: true},
+		wantDec, // this seems way easier as long as we're internal: &pgtype.Numeric{Int: big.NewInt(1200000), Exp: -5, NaN: false, InfinityModifier: 0, Valid: true},
 		&pgtype.Array[pgtype.Int8]{
 			Elements: []pgtype.Int8{{Int64: 2, Valid: true}, {Int64: 3, Valid: true}, {Int64: 4, Valid: true}},
 			Dims:     []pgtype.ArrayDimension{{Length: 3, LowerBound: 1}},
 			Valid:    true,
 		},
-		types.Uint256FromInt(123456789),
+		hugeInt,
+		&types.Uint256Array{hugeInt, types.Uint256FromInt(4), types.Uint256FromInt(3)},
 	}
 
 	err = QueryRowFunc(ctx, tx, `SELECT * FROM `+tbl, scans,
@@ -286,7 +299,7 @@ func TestScanVal(t *testing.T) {
 	var ba []byte
 	var i8 pgtype.Int8
 	var txt pgtype.Text
-	var num pgtype.Numeric
+	var num decimal.Decimal // pgtype.Numeric
 	var u256 types.Uint256
 
 	// want pointers to these slices for array types
@@ -297,7 +310,7 @@ func TestScanVal(t *testing.T) {
 	var ia pgtype.Array[pgtype.Int8]
 	var ta pgtype.Array[pgtype.Text]
 	var baa pgtype.Array[[]byte]
-	var na pgtype.Array[pgtype.Numeric]
+	var na decimal.DecimalArray // pgtype.Array[pgtype.Numeric]
 	var u256a types.Uint256Array
 
 	wantScans := []any{&i8, &i8, &txt, &ba, &num, &u256,
