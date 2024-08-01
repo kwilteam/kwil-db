@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -80,34 +79,26 @@ func Test_repl(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for {
-			select {
-			case cid := <-commitChan:
-				_, commitHash, err := decodeCommitPayload(cid)
-				if err != nil {
-					t.Errorf("invalid commit payload encoding: %v", err)
-					return
-				}
-				// t.Logf("Commit HASH: %x\n", commitHash)
-				if !bytes.Equal(commitHash, wantCommitHash) {
-					t.Errorf("commit hash mismatch, got %x, wanted %x", commitHash, wantCommitHash)
-				}
-				quit()
-			case err := <-errChan:
-				if errors.Is(err, context.Canceled) {
-					return
-				}
-				if errors.Is(err, context.DeadlineExceeded) {
-					t.Error("timeout")
-					return
-				}
-				if err != nil {
-					t.Error(err)
-					quit()
-				}
+		defer quit()
+
+		for cid := range commitChan {
+			_, commitHash, err := decodeCommitPayload(cid)
+			if err != nil {
+				t.Errorf("invalid commit payload encoding: %v", err)
 				return
 			}
+			// t.Logf("Commit HASH: %x\n", commitHash)
+			if !bytes.Equal(commitHash, wantCommitHash) {
+				t.Errorf("commit hash mismatch, got %x, wanted %x", commitHash, wantCommitHash)
+			}
+
+			return // receive only once in this test
 		}
+
+		// commitChan was closed before receive (not expected in this test)
+		t.Error(<-errChan)
+
+		return
 	}()
 
 	tx, err := connQ.Begin(ctx)
@@ -131,6 +122,6 @@ func Test_repl(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wg.Wait()
+	wg.Wait() // to receive the commit id or an error
 	connQ.Close(ctx)
 }
