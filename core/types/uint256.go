@@ -1,6 +1,7 @@
 package types
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"fmt"
 	"math/big"
@@ -60,6 +61,7 @@ func (u Uint256) Value() (driver.Value, error) {
 }
 
 var _ driver.Valuer = Uint256{}
+var _ driver.Valuer = (*Uint256)(nil)
 
 // Scan implements the sql.Scanner interface.
 func (u *Uint256) Scan(src interface{}) error {
@@ -77,14 +79,15 @@ func (u *Uint256) Scan(src interface{}) error {
 	return fmt.Errorf("cannot convert %T to Uint256", src)
 }
 
-var _ driver.Valuer = (*Uint256)(nil)
-var _ driver.Valuer = (*Uint256)(nil)
+var _ sql.Scanner = (*Uint256)(nil)
 
 // Uint256Array is an array of Uint256s.
 type Uint256Array []*Uint256
 
 // Value implements the driver.Valuer interface.
 func (ua Uint256Array) Value() (driver.Value, error) {
+	// Even when implementing pgtype.ArrayGetter we still need this, so that the
+	// pgx driver can use it's wrapSliceEncodePlan.
 	strs := make([]string, len(ua))
 	for i, u := range ua {
 		strs[i] = u.String()
@@ -95,21 +98,55 @@ func (ua Uint256Array) Value() (driver.Value, error) {
 
 var _ driver.Valuer = (*Uint256Array)(nil)
 
-// Scan implements the sql.Scanner interface.
-func (ua *Uint256Array) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []string:
-		*ua = make(Uint256Array, len(s))
-		for i, str := range s {
-			u, err := Uint256FromString(str)
-			if err != nil {
-				return err
-			}
+// Uint256Array is a slice of Scanners. pgx at least is smart enough to make
+// this work automatically!
+// Another approach is to implement pgx.ArraySetter and pgx.ArrayGetter like
+// similar in effect to:
+//   type Uint256Array pgtype.FlatArray[*Uint256]
 
-			(*ua)[i] = u
-		}
+// Well, as long as Uint256Array is just an underlying []*Uint256, pgx works fine
+// without implementing these interfaces. Also, these methods have pgtype types on
+// them, so I'm commenting it for now, may delete.
+/*
+var _ pgtype.ArrayGetter = Uint256Array{}
+var _ pgtype.ArrayGetter = (*Uint256Array)(nil)
+
+func (ua Uint256Array) Dimensions() []pgtype.ArrayDimension {
+	if ua == nil {
 		return nil
 	}
-
-	return fmt.Errorf("cannot convert %T to Uint256Array", src)
+	return []pgtype.ArrayDimension{{Length: int32(len(ua)), LowerBound: 1}}
 }
+
+func (ua Uint256Array) Index(i int) any { return ua[i] }
+
+func (ua Uint256Array) IndexType() any {
+	return (*Uint256)(nil) // &Uint256{}
+}
+
+func pgDimCard(dimensions []pgtype.ArrayDimension) int {
+	if len(dimensions) == 0 {
+		return 0
+	}
+	elementCount := int(dimensions[0].Length)
+	for _, d := range dimensions[1:] {
+		elementCount *= int(d.Length)
+	}
+	return elementCount
+}
+
+var _ pgtype.ArraySetter = (*Uint256Array)(nil)
+
+func (ua *Uint256Array) SetDimensions(dimensions []pgtype.ArrayDimension) error {
+	if dimensions == nil {
+		*ua = nil
+		return nil
+	}
+	*ua = make(Uint256Array, pgDimCard(dimensions))
+	return nil
+}
+
+func (ua Uint256Array) ScanIndex(i int) any { return &ua[i] }
+
+func (ua Uint256Array) ScanIndexType() any { return new(Uint256) }
+*/
