@@ -26,7 +26,7 @@ type AdminClient interface {
 	GetConfig(ctx context.Context) ([]byte, error)
 
 	// Migrations
-	TriggerMigration(ctx context.Context, activationHeight *big.Int, migrationDuration *big.Int, chainID string) ([]byte, error)
+	SubmitMigrationProposal(ctx context.Context, activationHeight *big.Int, migrationDuration *big.Int, chainID string) ([]byte, error)
 	ApproveMigration(ctx context.Context, id string) ([]byte, error)
 	MigrationStatus(ctx context.Context, id string) (*types.MigrationStatus, error)
 	ListMigrations(ctx context.Context) ([]*types.Migration, error)

@@ -12,12 +12,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	statusExample = `# Get the status of the pending migration.
+kwil-admin migration status <proposalID>`
+)
+
 func statusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status",
-		Short: "Get the status of the pending migration.",
-		Long:  "Get the status of the pending migration.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "status",
+		Short:   "Get the status of the pending migration proposal.",
+		Long:    "Get the status of the pending migration proposal.",
+		Example: statusExample,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 

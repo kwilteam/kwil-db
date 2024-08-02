@@ -7,13 +7,13 @@ import (
 
 var migrationCmd = &cobra.Command{
 	Use:   "migration",
-	Short: "The `migration` command provides functions for triggering and voting on migration transactions.",
-	Long:  "The `migration` command provides functions for triggering and voting on migration transactions.",
+	Short: "The `migration` command provides functions for managing migration proposals.",
+	Long:  "The `migration` command provides functions for managing migration proposals.",
 }
 
 func NewMigrationCmd() *cobra.Command {
 	migrationCmd.AddCommand(
-		triggerCmd(),
+		proposeCmd(),
 		voteCmd(),
 		listCmd(),
 		statusCmd(),

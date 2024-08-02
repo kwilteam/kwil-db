@@ -149,7 +149,7 @@ type respTxQuery struct {
 	} `json:"tx_result"`
 }
 
-func (o *OperatorCLIDriver) TriggerMigration(ctx context.Context, activationHeight, migrationDuration *big.Int, chainID string) ([]byte, error) {
+func (o *OperatorCLIDriver) SubmitMigrationProposal(ctx context.Context, activationHeight, migrationDuration *big.Int, chainID string) ([]byte, error) {
 	var res display.TxHashResponse
 	err := o.runCommand(ctx, &res, "migration", "trigger", activationHeight.String(), migrationDuration.String(), chainID)
 	if err != nil {

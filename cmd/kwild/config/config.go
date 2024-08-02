@@ -731,6 +731,45 @@ func (cfg *KwildConfig) sanitizeCfgPaths() error {
 		cfg.AppCfg.GenesisState = path
 		fmt.Println("Snapshot file to initialize database from:", cfg.AppCfg.GenesisState)
 	}
+
+	migrations, ok := cfg.AppCfg.Extensions["migrations"]
+	if ok {
+		path, ok := migrations["kwild_tls_cert_file"]
+		if ok {
+			rootPath, err := rootify(path, rootDir)
+			if err != nil {
+				return fmt.Errorf("failed to expand tls cert file path \"%v\": %v", path, err)
+			}
+
+			migrations["kwild_tls_cert_file"] = rootPath
+			fmt.Println("Migrations extension Kwild TLS cert file:", path)
+		}
+
+		path, ok = migrations["client_tls_cert_file"]
+		if ok {
+			rootPath, err := rootify(path, rootDir)
+			if err != nil {
+				return fmt.Errorf("failed to expand client tls cert file path \"%v\": %v", path, err)
+			}
+
+			migrations["client_tls_cert_file"] = rootPath
+			fmt.Println("Migrations extension client TLS cert file:", path)
+		}
+
+		path, ok = migrations["client_tls_key_file"]
+		if ok {
+			rootPath, err := rootify(path, rootDir)
+			if err != nil {
+				return fmt.Errorf("failed to expand client tls key file path \"%v\": %v", path, err)
+			}
+
+			migrations["client_tls_key_file"] = rootPath
+			fmt.Println("Migrations extension client TLS key file:", path)
+		}
+
+		cfg.AppCfg.Extensions["migrations"] = migrations
+	}
+
 	return nil
 }
 

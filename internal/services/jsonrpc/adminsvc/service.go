@@ -129,7 +129,7 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 			"the hash of the broadcasted validator remove transaction"),
 
 		// Migration methods
-		adminjson.MethodTriggerMigration: rpcserver.MakeMethodDef(svc.TriggerMigration,
+		adminjson.MethodProposeMigration: rpcserver.MakeMethodDef(svc.SubmitMigrationProposal,
 			"create a migration resolution",
 			"the hash of the broadcasted migration transaction",
 		),
@@ -472,7 +472,7 @@ func (svc *Service) MigrationGenesisChunk(ctx context.Context, req *adminjson.Mi
 	}, nil
 }
 
-func (svc *Service) TriggerMigration(ctx context.Context, req *adminjson.TriggerMigrationRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
+func (svc *Service) SubmitMigrationProposal(ctx context.Context, req *adminjson.MigrationProposalRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
 	timestamp := time.Now().GoString()
 
 	migrationEvt := &migrations.MigrationDeclaration{

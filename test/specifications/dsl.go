@@ -144,7 +144,7 @@ type TxInfoer interface {
 
 type MigrationOpsDsl interface {
 	TxQueryDsl
-	TriggerMigration(ctx context.Context, activationHeight *big.Int, migrationDuration *big.Int, chainID string) ([]byte, error)
+	SubmitMigrationProposal(ctx context.Context, activationHeight *big.Int, migrationDuration *big.Int, chainID string) ([]byte, error)
 	ApproveMigration(ctx context.Context, migrationResolutionID string) ([]byte, error)
 	ListMigrations(ctx context.Context) ([]*types.Migration, error)
 	GenesisState(ctx context.Context) (bool, []byte, error)

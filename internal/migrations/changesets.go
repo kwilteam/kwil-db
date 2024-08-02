@@ -164,7 +164,7 @@ var ChangesetMigrationResolution = resolutions.ResolutionConfig{
 				}
 			}
 
-			app.Service.Logger.Info("Applied changesets", log.Int("height", currentHeight))
+			app.Service.Logger.Info("Applied changesets", log.Int("height", currentHeight), log.Int("size", len(cs)))
 
 			// Delete the changeset after it has been applied
 			if err = deleteChangesets(ctx, tx, currentHeight); err != nil {

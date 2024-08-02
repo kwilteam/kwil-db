@@ -17,15 +17,22 @@ var (
 	genesisFileName  = "genesis.json"
 	snapshotFileName = "snapshot.sql.gz"
 
-	genesisStateLong = "Download the genesis state corresponding to the on-going migration. The genesis state includes the genesis config file(`genesis.json`), genesis snapshot(`snapshot.sql.gz`), and the migration info such as the start and end heights, if migration is active etc. The genesis state is saved in the root directory specified by the `--root-dir` flag. If there is no migration in progress, the command will log `no active migration` and no files will be downloaded in this scenario."
+	genesisStateLong = "Download the genesis state. The genesis state includes the genesis config file(`genesis.json`), genesis snapshot(`snapshot.sql.gz`), and the migration info such as the start and end heights. The genesis state is saved in the root directory specified by the `--root-dir` flag. If there is no approved migration or if the migration has not started yet, the command will return a message indicating that there is no genesis state to download."
+
+	genesisStateExample = `# Download the genesis state to the default root directory (~/.kwild)
+	kwil-admin migration genesis-state
+	
+	# Download the genesis state to a custom root directory
+	kwil-admin migration genesis-state --root-dir /path/to/root/dir.`
 )
 
 func genesisStateCmd() *cobra.Command {
 	var rootDir string
 	cmd := &cobra.Command{
-		Use:   "genesis-state",
-		Short: "Download the genesis state corresponding to the on-going migration.",
-		Long:  genesisStateLong,
+		Use:     "genesis-state",
+		Short:   "Download the genesis state corresponding to the on-going migration.",
+		Long:    genesisStateLong,
+		Example: genesisStateExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			clt, err := common.GetAdminSvcClient(ctx, cmd)

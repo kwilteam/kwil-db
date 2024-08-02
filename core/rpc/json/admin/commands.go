@@ -38,7 +38,7 @@ type MigrationSnapshotChunkRequest struct {
 
 type MigrationMetadataRequest struct{}
 
-type TriggerMigrationRequest struct {
+type MigrationProposalRequest struct {
 	Migration types.Migration `json:"migration"`
 }
 

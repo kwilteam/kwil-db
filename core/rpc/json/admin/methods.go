@@ -16,7 +16,7 @@ const (
 	MethodValJoinStatus         jsonrpc.Method = "admin.val_join_status"
 	MethodValList               jsonrpc.Method = "admin.val_list"
 	MethodValListJoins          jsonrpc.Method = "admin.val_list_joins"
-	MethodTriggerMigration      jsonrpc.Method = "admin.trigger_migration"
+	MethodProposeMigration      jsonrpc.Method = "admin.propose_migration"
 	MethodApproveMigration      jsonrpc.Method = "admin.approve_migration"
 	MethodMigrationStatus       jsonrpc.Method = "admin.migration_status"
 	MethodListMigrations        jsonrpc.Method = "admin.list_migrations"

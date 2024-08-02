@@ -59,8 +59,8 @@ func (a *AdminClientDriver) ValidatorsList(ctx context.Context) ([]*types.Valida
 	return a.Client.ListValidators(ctx)
 }
 
-func (a *AdminClientDriver) TriggerMigration(ctx context.Context, activationHeight, migrationDuration *big.Int, chainID string) ([]byte, error) {
-	return a.Client.TriggerMigration(ctx, activationHeight, migrationDuration, chainID)
+func (a *AdminClientDriver) SubmitMigrationProposal(ctx context.Context, activationHeight, migrationDuration *big.Int, chainID string) ([]byte, error) {
+	return a.Client.SubmitMigrationProposal(ctx, activationHeight, migrationDuration, chainID)
 }
 
 func (a *AdminClientDriver) ApproveMigration(ctx context.Context, migrationResolutionID string) ([]byte, error) {

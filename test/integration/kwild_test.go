@@ -790,7 +790,7 @@ func TestStatesync(t *testing.T) {
 	}
 }
 
-func TestNetworkMigrationWithoutDowntime(t *testing.T) {
+func TestLongRunningNetworkMigrations(t *testing.T) {
 	if *parallelMode {
 		t.Parallel()
 	}
@@ -834,7 +834,7 @@ func TestNetworkMigrationWithoutDowntime(t *testing.T) {
 		newDir := helper.MigrationSetup(ctx)
 
 		// Trigger a network migration request
-		specifications.TriggerMigration(ctx, t, node0Driver, integration.MigrationChainID)
+		specifications.SubmitMigrationProposal(ctx, t, node0Driver, integration.MigrationChainID)
 
 		// node1 approves the migration and verifies that the migration is still pending
 		specifications.ApproveMigration(ctx, t, node1Driver, true)
@@ -883,6 +883,6 @@ func TestNetworkMigrationWithoutDowntime(t *testing.T) {
 
 		specifications.ExecuteDBRecordsVerifySpecification(ctx, t, newNode3Driver, expectPosts)
 
-		t.Logf("Network migration without downtime test completed")
+		t.Logf("Long Running Network Migration Test: Completed Successfully")
 	})
 }

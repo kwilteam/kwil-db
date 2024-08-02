@@ -116,6 +116,7 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 			}
 			btsReceived := int64(0)
 
+			service.Logger.Info("received changeset metadata", log.Int("height", currentHeight), log.Int("numChunks", numChunks), log.Int("size", size))
 			wg := sync.WaitGroup{}
 			errChan := make(chan error, numChunks)
 
@@ -146,7 +147,7 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 							return
 						}
 
-						service.Logger.Info("broadcasting changeset migration event", log.Int("height", currentHeight), log.Int("chunk", chunkIdx))
+						service.Logger.Info("broadcasting changeset migration event", log.Int("height", currentHeight), log.Int("chunk", chunkIdx), log.Int("size", len(cs)))
 
 						// Broadcast the changeset migration event to the event store for voting
 						err = eventStore.Broadcast(ctx, ChangesetMigrationEventType, csEvt)

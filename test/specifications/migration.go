@@ -18,11 +18,11 @@ import (
 )
 
 // Trigger migration
-func TriggerMigration(ctx context.Context, t *testing.T, netops MigrationOpsDsl, chainID string) {
+func SubmitMigrationProposal(ctx context.Context, t *testing.T, netops MigrationOpsDsl, chainID string) {
 	t.Log("Executing migration trigger specification")
 
 	// Trigger migration"
-	txHash, err := netops.TriggerMigration(ctx, big.NewInt(5), big.NewInt(200), chainID)
+	txHash, err := netops.SubmitMigrationProposal(ctx, big.NewInt(5), big.NewInt(200), chainID)
 	require.NoError(t, err)
 
 	// Ensure that the Tx is mined.

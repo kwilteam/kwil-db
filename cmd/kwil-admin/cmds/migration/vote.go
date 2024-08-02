@@ -11,9 +11,9 @@ import (
 func voteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "vote",
-		Short:   "Vote on a migration transaction.",
-		Long:    "Vote on a migration transaction.",
-		Example: "voteExample",
+		Short:   "Vote on a migration proposal.",
+		Long:    "Vote on a migration proposal.",
+		Example: "kwil-admin migration vote <proposal-id>",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()

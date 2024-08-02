@@ -260,9 +260,9 @@ func (cl *Client) GenesisSnapshotChunk(ctx context.Context, height uint64, chunk
 	return res.Chunk, nil
 }
 
-// TriggerMigration triggers a migration proposal.
-func (cl *Client) TriggerMigration(ctx context.Context, activationHeight *big.Int, migrationDuration *big.Int, chainID string) ([]byte, error) {
-	cmd := &adminjson.TriggerMigrationRequest{
+// SubmitMigrationProposal submits a migration proposal.
+func (cl *Client) SubmitMigrationProposal(ctx context.Context, activationHeight *big.Int, migrationDuration *big.Int, chainID string) ([]byte, error) {
+	cmd := &adminjson.MigrationProposalRequest{
 		Migration: types.Migration{
 			ActivationHeight:  activationHeight,
 			MigrationDuration: migrationDuration,
@@ -272,7 +272,7 @@ func (cl *Client) TriggerMigration(ctx context.Context, activationHeight *big.In
 	}
 
 	res := &userjson.BroadcastResponse{}
-	err := cl.CallMethod(ctx, string(adminjson.MethodTriggerMigration), cmd, res)
+	err := cl.CallMethod(ctx, string(adminjson.MethodProposeMigration), cmd, res)
 	if err != nil {
 		return nil, err
 	}
