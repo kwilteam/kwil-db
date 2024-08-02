@@ -339,23 +339,53 @@ func TestQueryRowFuncAny(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
-		` (a int8, b int4, c text, d bytea, e numeric(20,5), f int8[])`)
+		` (a int8 not null, b int4, c text, d bytea, e numeric(20,5), f int8[])`)
 	if err != nil {
 		t.Fatal(err)
 	}
+	numCols := 6
 
 	_, err = tx.Execute(ctx, `insert into `+tbl+
-		` values (5, null, 'a', '\xabab', 12, '{2,3,4}')`)
+		` values (5, null, 'a', '\xabab', 12, '{2,3,4}'), `+
+		`        (9, 2, 'b', '\xee', 0.9876, '{99}')`)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	wantTypes := []reflect.Type{ // same for each row scanned, when non-null
+		typeFor[int64](),
+		typeFor[int64](),
+		typeFor[string](),
+		typeFor[[]byte](),
+		typeFor[*decimal.Decimal](),
+		typeFor[[]int64](),
+	}
+	mustDec := func(s string) *decimal.Decimal {
+		d, err := decimal.NewFromString(s)
+		require.NoError(t, err)
+		return d
+	}
+	wantVals := [][]any{
+		{int64(5), nil, "a", []byte{0xab, 0xab}, mustDec("12.00000"), []int64{2, 3, 4}},
+		{int64(9), int64(2), "b", []byte{0xee}, mustDec("0.98760"), []int64{99}},
+	}
+
+	var rowNum int
 	err = QueryRowFuncAny(ctx, tx, `SELECT * FROM `+tbl,
 		func(vals []any) error {
-			for _, val := range vals {
-				t.Logf("%#v (%T)", val, val)
+			require.Len(t, vals, numCols)
+			t.Logf("%#v", vals) // e.g. []interface {}{1, "a", "bigint", "YES", interface {}(nil)}
+			for i, v := range vals {
+				if v != nil {
+					require.Equal(t, wantTypes[i], reflect.TypeOf(v),
+						"it was %T not %v", v, wantTypes[i].String())
+				}
+				require.Equal(t, wantVals[rowNum][i], v)
+				// t.Logf("%d: %v (%T)", i, v, v)
 			}
+			rowNum++
 			return nil
 		},
 	)
@@ -368,14 +398,36 @@ func TestQueryRowFuncAny(t *testing.T) {
 	// To test QueryRowFuncAny, get some column info.
 	stmt := `SELECT ordinal_position, column_name, is_nullable
         FROM information_schema.columns
-        WHERE table_name = '` + tbl + `'`
+        WHERE table_name = '` + tbl + `' ORDER BY ordinal_position ASC`
+	numCols = 3 //based on stmt
 
 	// NOTE:
-	// - NameOID = 19 pertains to information_schema.sql_identifier, which scans as text
-	// - NameOID = 1043 pertains to varchar, which can scan as text
+	// - OID 19 pertains to information_schema.sql_identifier, which scans as text
+	// - OID 1043 pertains to varchar, which can scan as text
+	wantTypes = []reflect.Type{ // same for each row scanned
+		typeFor[int64](),  // ordinal_position
+		typeFor[string](), // column_name
+		typeFor[string](), // is_nullable has boolean semantics but values of "YES"/"NO"
+	}
+	wantVals = [][]any{
+		{int64(1), "a", "NO"},
+		{int64(2), "b", "YES"},
+		{int64(3), "c", "YES"},
+		{int64(4), "d", "YES"},
+		{int64(5), "e", "YES"},
+		{int64(6), "f", "YES"},
+	}
+
+	rowNum = 0
 	err = QueryRowFuncAny(ctx, tx, stmt, func(vals []any) error {
-		t.Logf("%#v", vals) // e.g. []interface {}{1, "a", "bigint", "YES", interface {}(nil)}
-		// spew.Dump(vals)
+		require.Len(t, vals, numCols)
+		// t.Logf("%#v", vals) // e.g. []interface {}{1, "a", "bigint", "YES", interface {}(nil)}
+		for i, v := range vals {
+			require.Equal(t, reflect.TypeOf(v), wantTypes[i])
+			require.Equal(t, v, wantVals[rowNum][i])
+			// t.Logf("%d: %v (%T)", i, v, v)
+		}
+		rowNum++
 		return nil
 	})
 	if err != nil {
