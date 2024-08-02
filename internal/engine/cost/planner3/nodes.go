@@ -17,9 +17,15 @@ import (
 	The nodes are purely representative of a transformed query, and natively do not have any
 	understanding of the underlying data or schema. When context of the underlying data is needed
 	(e.g. to determine the data type of a column reference), a SchemaContext is passed in.
+
+	The Relation() method of LogicalPlan returns the structure of the relation that the plan represents.
+	This is NOT equivalent to the set of reference-able columns in the plan. Reference-able columns are
+	tracked in the passed context, where the called method will modify the passed ctx. For example, if we were
+	evaluating the query "SELECT name from users where id = 1", the returned relation would be a single
+	column "name", but the reference-able columns would be "name" and "id" (and any other columns in the "users" table).
 */
 
-func Format(plan LogicalPlan, indent int) string {
+func Format(plan LogicalNode, indent int) string {
 	var msg strings.Builder
 	for i := 0; i < indent; i++ {
 		msg.WriteString(" ")
@@ -32,25 +38,28 @@ func Format(plan LogicalPlan, indent int) string {
 	return msg.String()
 }
 
-type LogicalPlan interface {
-	Accepter
+type LogicalNode interface {
 	fmt.Stringer
-	// TODO: I dont know if we need Children().
-	Children() []LogicalPlan
-	Relation(*SchemaContext) *Relation
+	Accepter
+	Children() []LogicalNode
+}
+
+type LogicalPlan interface {
+	LogicalNode
+	Relation(*PlanContext) *Relation
 }
 
 type Noop struct{}
 
-func (n *Noop) Children() []LogicalPlan {
-	return []LogicalPlan{}
+func (n *Noop) Children() []LogicalNode {
+	return []LogicalNode{}
 }
 
 func (f *Noop) Accept(v Visitor) any {
 	return v.VisitNoop(f)
 }
 
-func (n *Noop) Relation(ctx *SchemaContext) *Relation {
+func (n *Noop) Relation(ctx *PlanContext) *Relation {
 	return &Relation{}
 }
 
@@ -58,20 +67,29 @@ func (n *Noop) String() string {
 	return "NOOP"
 }
 
-// TableScan represents a scan of a physical table or a CTE.
-type TableScan struct {
+// ScanSource is a source of data that a Scan can be performed on.
+// This is either a physical table, a procedure call that returns a table,
+// or a subquery. Scan sources themselves are logical plans, however their
+// implementations should NOT alter the schema context.
+type ScanSource interface {
+	LogicalPlan
+	scanSource()
+}
+
+// TableScanSource represents a scan of a physical table or a CTE.
+type TableScanSource struct {
 	TableName string
 }
 
-func (t *TableScan) Children() []LogicalPlan {
-	return []LogicalPlan{}
+func (t *TableScanSource) Children() []LogicalNode {
+	return []LogicalNode{}
 }
 
-func (f *TableScan) Accept(v Visitor) any {
-	return v.VisitTableScan(f)
+func (f *TableScanSource) Accept(v Visitor) any {
+	return v.VisitTableScanSource(f)
 }
 
-func (t *TableScan) Relation(ctx *SchemaContext) *Relation {
+func (t *TableScanSource) Relation(ctx *PlanContext) *Relation {
 	tbl, found := ctx.Schema.FindTable(t.TableName)
 	if found {
 		// if found, we convert the table to a relation
@@ -87,14 +105,16 @@ func (t *TableScan) Relation(ctx *SchemaContext) *Relation {
 	return cteRel
 }
 
-func (t *TableScan) String() string {
+func (t *TableScanSource) String() string {
 	return fmt.Sprintf("SCAN TABLE %s", t.TableName)
 }
 
-// ProcedureScan represents a scan of a function.
+func (t *TableScanSource) scanSource() {}
+
+// ProcedureScanSource represents a scan of a function.
 // It can call either a local procedure or foreign procedure
 // that returns a table.
-type ProcedureScan struct {
+type ProcedureScanSource struct {
 	// ProcedureName is the name of the procedure being targeted.
 	ProcedureName string
 	// Args are the base arguments to the procedure.
@@ -106,15 +126,24 @@ type ProcedureScan struct {
 	IsForeign bool
 }
 
-func (f *ProcedureScan) Children() []LogicalPlan {
-	return []LogicalPlan{}
+func (f *ProcedureScanSource) Children() []LogicalNode {
+	var c []LogicalNode
+	for _, arg := range f.Args {
+		c = append(c, arg)
+	}
+
+	for _, arg := range f.ContextualArgs {
+		c = append(c, arg)
+	}
+
+	return c
 }
 
-func (f *ProcedureScan) Accept(v Visitor) any {
-	return v.VisitProcedureScan(f)
+func (f *ProcedureScanSource) Accept(v Visitor) any {
+	return v.VisitProcedureScanSource(f)
 }
 
-func (f *ProcedureScan) Relation(ctx *SchemaContext) *Relation {
+func (f *ProcedureScanSource) Relation(ctx *PlanContext) *Relation {
 	var procReturns *types.ProcedureReturn
 
 	if f.IsForeign {
@@ -139,21 +168,19 @@ func (f *ProcedureScan) Relation(ctx *SchemaContext) *Relation {
 		panic(fmt.Sprintf(`procedure "%s" does not return a table`, f.ProcedureName))
 	}
 
-	var cols []*Column
+	var cols []*ReferenceableColumn
 	for _, field := range procReturns.Fields {
-		cols = append(cols, &Column{
+		cols = append(cols, &ReferenceableColumn{
 			// the Parent will get set by the ScanAlias
 			Name:     field.Name,
 			DataType: field.Type.Copy(),
-			Nullable: true,
-			// not unique or indexed
 		})
 	}
 
 	return &Relation{Columns: cols}
 }
 
-func (f *ProcedureScan) String() string {
+func (f *ProcedureScanSource) String() string {
 	str := strings.Builder{}
 	str.WriteString("SCAN ")
 	if f.IsForeign {
@@ -172,36 +199,76 @@ func (f *ProcedureScan) String() string {
 	return str.String()
 }
 
-type ScanAlias struct {
-	Child LogicalPlan
-	// Alias will always be set.
-	// If the scan is a table scan and no alias was specified,
-	// the alias will be the table name.
-	// All other scan types (functions and subqueries) require an alias.
-	Alias string
+func (f *ProcedureScanSource) scanSource() {}
+
+// SubqueryScanSource represents a scan of a subquery.
+// This is used, for example, in the query "SELECT * FROM (SELECT * FROM users) AS subquery".
+type SubqueryScanSource struct {
+	Subquery LogicalPlan
 }
 
-func (s *ScanAlias) Children() []LogicalPlan {
-	return []LogicalPlan{s.Child}
+func (s *SubqueryScanSource) Children() []LogicalNode {
+	return []LogicalNode{s.Subquery}
 }
 
-func (f *ScanAlias) Accept(v Visitor) any {
-	return v.VisitScanAlias(f)
+func (f *SubqueryScanSource) Accept(v Visitor) any {
+	return v.VisitSubqueryScanSource(f)
 }
 
-func (s *ScanAlias) Relation(ctx *SchemaContext) *Relation {
-	rel := s.Child.Relation(ctx)
-
-	// apply the alias to all scanned columns
-	for _, col := range rel.Columns {
-		col.Parent = s.Alias
+func (s *SubqueryScanSource) Relation(ctx *PlanContext) *Relation {
+	// we create a new shallow-copied context, and also create new
+	// current and outer relations. The passed current relation is
+	// added to the outer relation, and the current relation is emptied.
+	// This doesn't affect the schema context passed in.
+	newCtx := *ctx
+	newCtx.CurrentRelation = &Relation{}
+	newCtx.OuterRelation = &Relation{
+		Columns: append(ctx.CurrentRelation.Columns, ctx.OuterRelation.Columns...),
 	}
+
+	rel := s.Subquery.Relation(&newCtx)
 
 	return rel
 }
 
-func (s *ScanAlias) String() string {
-	return fmt.Sprintf("ALIAS %s", s.Alias)
+func (s *SubqueryScanSource) String() string {
+	return "SCAN SUBQUERY"
+}
+
+func (s *SubqueryScanSource) scanSource() {}
+
+type Scan struct {
+	Child ScanSource
+	// RelationName will always be set.
+	// If the scan is a table scan and no alias was specified,
+	// the RelationName will be the table name.
+	// All other scan types (functions and subqueries) require an alias.
+	RelationName string
+}
+
+func (s *Scan) Children() []LogicalNode {
+	return []LogicalNode{s.Child}
+}
+
+func (f *Scan) Accept(v Visitor) any {
+	return v.VisitScanAlias(f)
+}
+
+func (s *Scan) Relation(ctx *PlanContext) *Relation {
+	rel := s.Child.Relation(ctx)
+
+	// apply the name to all scanned columns
+	for _, col := range rel.Columns {
+		col.Parent = s.RelationName
+	}
+
+	ctx.Join(rel)
+
+	return rel
+}
+
+func (s *Scan) String() string {
+	return fmt.Sprintf("ALIAS %s", s.RelationName)
 }
 
 type Project struct {
@@ -209,27 +276,35 @@ type Project struct {
 	Child       LogicalPlan
 }
 
-func (p *Project) Children() []LogicalPlan {
-	return []LogicalPlan{p.Child}
+func (p *Project) Children() []LogicalNode {
+	var c []LogicalNode
+	for _, expr := range p.Expressions {
+		c = append(c, expr)
+	}
+	c = append(c, p.Child)
+
+	return c
 }
 
 func (f *Project) Accept(v Visitor) any {
 	return v.VisitProject(f)
 }
 
-func (p *Project) Relation(ctx *SchemaContext) *Relation {
-	rel := p.Child.Relation(ctx)
+func (p *Project) Relation(ctx *PlanContext) *Relation {
+	// we can ignore the childs relation, since the returned relation
+	// from this method will be the columns projected on the ctx.CurrenRelation
+	p.Child.Relation(ctx)
 
-	ctx2 := ctx.Join(rel)
-
-	columns := make([]*Column, len(p.Expressions))
+	columns := make([]*ReferenceableColumn, len(p.Expressions))
 	for i, expr := range p.Expressions {
-		dt, err := expr.DataType(ctx2).Scalar()
+		dt, err := expr.Analyze(ctx).Scalar()
 		if err != nil {
 			panic(err)
 		}
 
-		columns[i] = &Column{
+		// TODO: this might end up causing issues because
+		// the column is not fully qualified
+		columns[i] = &ReferenceableColumn{
 			Name:     expr.Name(),
 			DataType: dt,
 		}
@@ -256,15 +331,25 @@ type Filter struct {
 	Child     LogicalPlan
 }
 
-func (f *Filter) Children() []LogicalPlan {
-	return []LogicalPlan{f.Child}
+func (f *Filter) Children() []LogicalNode {
+	return []LogicalNode{f.Child, f.Condition}
 }
 
 func (f *Filter) Accept(v Visitor) any {
 	return v.VisitFilter(f)
 }
 
-func (f *Filter) Relation(ctx *SchemaContext) *Relation {
+func (f *Filter) Relation(ctx *PlanContext) *Relation {
+	// we don't care about the result, just that it is a scalar, and is a boolean
+	dt, err := f.Condition.Analyze(ctx).Scalar()
+	if err != nil {
+		panic(err)
+	}
+
+	if !dt.Equals(types.BoolType) {
+		panic(fmt.Errorf("filter condition evaluate to a boolean, got %s", dt.String()))
+	}
+
 	return f.Child.Relation(ctx)
 }
 
@@ -279,18 +364,34 @@ type Join struct {
 	Condition LogicalExpr
 }
 
-func (j *Join) Children() []LogicalPlan {
-	return []LogicalPlan{j.Left, j.Right}
+func (j *Join) Children() []LogicalNode {
+	return []LogicalNode{j.Left, j.Right, j.Condition}
 }
 
 func (f *Join) Accept(v Visitor) any {
 	return v.VisitJoin(f)
 }
 
-func (j *Join) Relation(ctx *SchemaContext) *Relation {
+// With a Join, the schema context is modified to include the columns from both relations.
+// These can then be referenced by all callers of the join, as well as in the join condition.
+func (j *Join) Relation(ctx *PlanContext) *Relation {
+	// we don't need to worry about modifying the passed context, since the
+	// the tables being joined within Left and Right will already have been
+	// joined in the schema context.
 	leftRel := j.Left.Relation(ctx)
 	rightRel := j.Right.Relation(ctx)
 	columns := append(leftRel.Columns, rightRel.Columns...)
+
+	// we need to check that the join condition is a boolean
+	dt, err := j.Condition.Analyze(ctx).Scalar()
+	if err != nil {
+		panic(err)
+	}
+
+	if !dt.Equals(types.BoolType) {
+		panic(fmt.Errorf("join condition evaluate to a boolean, got %s", dt.String()))
+	}
+
 	return &Relation{Columns: columns}
 }
 
@@ -344,16 +445,33 @@ func (s *Sort) String() string {
 	return str.String()
 }
 
-func (s *Sort) Children() []LogicalPlan {
-	return []LogicalPlan{s.Child}
+func (s *Sort) Children() []LogicalNode {
+	var c []LogicalNode
+	for _, sortExpr := range s.SortExpressions {
+		c = append(c, sortExpr.Expr)
+	}
+	c = append(c, s.Child)
+
+	return c
 }
 
 func (f *Sort) Accept(v Visitor) any {
 	return v.VisitSort(f)
 }
 
-func (s *Sort) Relation(ctx *SchemaContext) *Relation {
-	return s.Child.Relation(ctx)
+func (s *Sort) Relation(ctx *PlanContext) *Relation {
+	// we need to visit the child first before sorting, so that
+	// the expressions in the sort can be validated against the current schema context.
+	rel := s.Child.Relation(ctx)
+
+	for _, sortExpr := range s.SortExpressions {
+		_, err := sortExpr.Expr.Analyze(ctx).Scalar()
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return rel
 }
 
 type Limit struct {
@@ -362,16 +480,41 @@ type Limit struct {
 	Offset LogicalExpr
 }
 
-func (l *Limit) Children() []LogicalPlan {
-	return []LogicalPlan{l.Child}
+func (l *Limit) Children() []LogicalNode {
+	return []LogicalNode{l.Child, l.Limit, l.Offset}
 }
 
 func (f *Limit) Accept(v Visitor) any {
 	return v.VisitLimit(f)
 }
 
-func (l *Limit) Relation(ctx *SchemaContext) *Relation {
-	return l.Child.Relation(ctx)
+func (l *Limit) Relation(ctx *PlanContext) *Relation {
+	// we need to visit the child first before limiting, so that
+	// the expressions in the limit can be validated against the current schema context.
+	rel := l.Child.Relation(ctx)
+
+	// the limit and offset must evaluate to integers
+	dt, err := l.Limit.Analyze(ctx).Scalar()
+	if err != nil {
+		panic(err)
+	}
+
+	if !dt.Equals(types.IntType) {
+		panic(fmt.Errorf("limit must evaluate to an integer, got %s", dt.String()))
+	}
+
+	if l.Offset != nil {
+		dt, err := l.Offset.Analyze(ctx).Scalar()
+		if err != nil {
+			panic(err)
+		}
+
+		if !dt.Equals(types.IntType) {
+			panic(fmt.Errorf("offset must evaluate to an integer, got %s", dt.String()))
+		}
+	}
+
+	return rel
 }
 
 func (l *Limit) String() string {
@@ -391,15 +534,15 @@ type Distinct struct {
 	Child LogicalPlan
 }
 
-func (d *Distinct) Children() []LogicalPlan {
-	return []LogicalPlan{d.Child}
+func (d *Distinct) Children() []LogicalNode {
+	return []LogicalNode{d.Child}
 }
 
 func (f *Distinct) Accept(v Visitor) any {
 	return v.VisitDistinct(f)
 }
 
-func (d *Distinct) Relation(ctx *SchemaContext) *Relation {
+func (d *Distinct) Relation(ctx *PlanContext) *Relation {
 	return d.Child.Relation(ctx)
 }
 
@@ -414,17 +557,44 @@ type SetOperation struct {
 }
 
 // SetOperation
-func (s *SetOperation) Children() []LogicalPlan {
-	return []LogicalPlan{s.Left, s.Right}
+func (s *SetOperation) Children() []LogicalNode {
+	return []LogicalNode{s.Left, s.Right}
 }
 
 func (f *SetOperation) Accept(v Visitor) any {
 	return v.VisitSetOperation(f)
 }
 
-func (s *SetOperation) Relation(ctx *SchemaContext) *Relation {
-	// Assuming set operations require compatible schemas
-	return s.Left.Relation(ctx)
+func (s *SetOperation) Relation(ctx *PlanContext) *Relation {
+	// a set operation is pretty unique, and modifies the schema context.
+	// Any query that relies on a set operation can only reference elements
+	// that are present in the returned left-most relation. For example, say
+	// we have a table "users" with 3 columns: id, name, age. If we have
+	// "SELECT name, age FROM users UNION SELECT other_text, other_int FROM table2",
+	// the calling relation can only reference columns "name" and "age". They cannot be
+	// referenced as part of the "users" relation, and no other columns from "users"
+	// or "table2" can be referenced.
+
+	leftRel := s.Left.Relation(ctx)
+	rightRel := s.Right.Relation(ctx)
+
+	if len(leftRel.Columns) != len(rightRel.Columns) {
+		panic("compound operations must have the same number of columns")
+	}
+
+	for i, col := range rightRel.Columns {
+		if !leftRel.Columns[i].DataType.Equals(col.DataType) {
+			panic(fmt.Errorf("cannot use compound query: mismatched data types %s and %s at index %d", leftRel.Columns[i].DataType.String(), col.DataType.String(), i+1))
+		}
+	}
+
+	// modify the schema context to only include the left relation, unqualified
+	for _, col := range leftRel.Columns {
+		col.Parent = ""
+	}
+	ctx.CurrentRelation = leftRel
+
+	return leftRel
 }
 
 func (s *SetOperation) String() string {
@@ -451,30 +621,65 @@ type Aggregate struct {
 	Child LogicalPlan
 }
 
-func (a *Aggregate) Children() []LogicalPlan {
-	return []LogicalPlan{a.Child}
+func (a *Aggregate) Children() []LogicalNode {
+	var c []LogicalNode
+	for _, expr := range a.GroupingExpressions {
+		c = append(c, expr)
+	}
+	for _, expr := range a.AggregateExpressions {
+		c = append(c, expr)
+	}
+	c = append(c, a.Child)
+
+	return c
 }
 
 func (f *Aggregate) Accept(v Visitor) any {
 	return v.VisitAggregate(f)
 }
 
-func (a *Aggregate) Relation(ctx *SchemaContext) *Relation {
-	childRel := a.Child.Relation(ctx)
+func (a *Aggregate) Relation(ctx *PlanContext) *Relation {
+	// aggregate is another tricky one, because while it doesn't change the columns
+	// that can be referenced, it does change how they can be referenced. If an aggregate
+	// expression is present (which is implied if we are in this method), then all columns
+	// referenced above the aggregate must be part of the GROUP BY clause OR be within
+	// an aggregate function.
 
-	ctx2 := ctx.Join(childRel)
+	a.Child.Relation(ctx)
 
-	columns := make([]*Column, len(a.AggregateExpressions))
+	for _, expr := range a.GroupingExpressions {
+		_, err := expr.Analyze(ctx).Scalar()
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// TODO: we need projections after this to use the aggChecker, so that it can
+	// be used in projection, having, limit, etc.
+	aggChecker, err := newAggregateChecker(a.GroupingExpressions)
+	if err != nil {
+		panic(err)
+	}
+
+	// In an aggregate, only expressions that are part of the GROUP BY clause
+	// or are within an aggregate function can be referenced.
+
+	columns := make([]*ReferenceableColumn, len(a.AggregateExpressions))
 	for i, aggExpr := range a.AggregateExpressions {
-		dt, err := aggExpr.DataType(ctx2).Scalar()
+		dt, err := aggExpr.Analyze(ctx).Scalar()
 		if err != nil {
 			panic(err)
 		}
 
-		columns[i] = &Column{
+		columns[i] = &ReferenceableColumn{
 			Name:     aggExpr.Name(),
 			DataType: dt,
 		}
+	}
+
+	err = aggChecker.checkMany(a.AggregateExpressions)
+	if err != nil {
+		panic(err)
 	}
 
 	return &Relation{Columns: columns}
@@ -557,8 +762,7 @@ func (s SetOperationType) String() string {
 */
 
 type LogicalExpr interface {
-	Accepter
-	fmt.Stringer
+	LogicalNode
 	// Name returns the name of the expression.
 	// This can be empty, and is generally only set for ColumnRef
 	// or aliased expressions.
@@ -569,9 +773,9 @@ type LogicalExpr interface {
 	// any aggregation expressions that are used.
 	// If the projection results in an ambiguous column name or an unknown column,
 	// an error is returned. The returned columns will be fully qualified.
-	UsedColumns(*SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error)
+	UsedColumns(*PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error)
 	// DataType returns the data type of the expression.
-	DataType(*SchemaContext) *ReturnedType
+	Analyze(*PlanContext) *ReturnedType
 }
 
 // baseExpr is a helper struct that implements the default behavior for an Expression.
@@ -581,12 +785,12 @@ func (b *baseExpr) Name() string { return "" }
 
 func (b *baseExpr) IsAggregate() bool { return false }
 
-func (b *baseExpr) UsedColumns(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (b *baseExpr) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	return nil, nil, nil
 }
 
 // projectMany is a helper function that projects multiple expressions and combines the results.
-func projectMany(ctx *SchemaContext, exprs ...LogicalExpr) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func projectMany(ctx *PlanContext, exprs ...LogicalExpr) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	var columns []*ProjectedColumn
 	var exprsToProject []LogicalExpr
 	for _, expr := range exprs {
@@ -615,8 +819,12 @@ func (n *Literal) Accept(v Visitor) any {
 	return v.VisitLiteral(n)
 }
 
-func (l *Literal) DataType(ctx *SchemaContext) *ReturnedType {
+func (l *Literal) Analyze(ctx *PlanContext) *ReturnedType {
 	return &ReturnedType{val: l.Type}
+}
+
+func (l *Literal) Children() []LogicalNode {
+	return []LogicalNode{}
 }
 
 // Variable reference
@@ -634,13 +842,23 @@ func (n *Variable) Accept(v Visitor) any {
 	return v.VisitVariable(n)
 }
 
-func (v *Variable) DataType(ctx *SchemaContext) *ReturnedType {
+func (v *Variable) Analyze(ctx *PlanContext) *ReturnedType {
 	varType, ok := ctx.Variables[v.VarName]
 	if !ok {
-		return &ReturnedType{err: fmt.Errorf(`variable "%s" not found`, v.VarName)}
+		// could also be an object
+		obj, ok := ctx.Objects[v.VarName]
+		if !ok {
+			return &ReturnedType{err: fmt.Errorf(`unknown variable "%s"`, v.VarName)}
+		}
+
+		return &ReturnedType{val: obj}
 	}
 
 	return &ReturnedType{val: varType}
+}
+
+func (v *Variable) Children() []LogicalNode {
+	return []LogicalNode{}
 }
 
 // Column reference
@@ -654,12 +872,16 @@ func (c *ColumnRef) Name() string {
 	return c.ColumnName
 }
 
-func (c *ColumnRef) UsedColumns(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (c *ColumnRef) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	column, err := ctx.OuterRelation.Search(c.Parent, c.ColumnName)
 	if err != nil {
 		return nil, nil, err
 	}
-	return []*ProjectedColumn{column}, nil, nil
+	return []*ProjectedColumn{{
+		Parent:   c.Parent,
+		Name:     c.ColumnName,
+		DataType: column.DataType,
+	}}, nil, nil
 }
 
 func (c *ColumnRef) String() string {
@@ -673,12 +895,22 @@ func (n *ColumnRef) Accept(v Visitor) any {
 	return v.VisitColumnRef(n)
 }
 
-func (c *ColumnRef) DataType(ctx *SchemaContext) *ReturnedType {
+func (c *ColumnRef) Analyze(ctx *PlanContext) *ReturnedType {
 	col, err := ctx.OuterRelation.Search(c.Parent, c.ColumnName)
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
+
+	// qualify the column reference
+	if c.Parent == "" {
+		c.Parent = col.Parent
+	}
+
 	return &ReturnedType{val: col.DataType}
+}
+
+func (c *ColumnRef) Children() []LogicalNode {
+	return []LogicalNode{}
 }
 
 type AggregateFunctionCall struct {
@@ -720,6 +952,41 @@ func (n *AggregateFunctionCall) Accept(v Visitor) any {
 	return v.VisitAggregateFunctionCall(n)
 }
 
+func (a *AggregateFunctionCall) Children() []LogicalNode {
+	var c []LogicalNode
+	for _, arg := range a.Args {
+		c = append(c, arg)
+	}
+	return c
+}
+
+func (a *AggregateFunctionCall) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+	panic("not implemented")
+}
+
+func (a *AggregateFunctionCall) Analyze(ctx *PlanContext) *ReturnedType {
+	fn, ok := parse.Functions[a.FunctionName]
+	if !ok {
+		return &ReturnedType{err: fmt.Errorf(`unknown function "%s"`, a.FunctionName)}
+	}
+
+	argTypes := make([]*types.DataType, len(a.Args))
+	for i, arg := range a.Args {
+		var err error
+		argTypes[i], err = arg.Analyze(ctx).Scalar()
+		if err != nil {
+			return &ReturnedType{err: err}
+		}
+	}
+
+	retType, err := fn.ValidateArgs(argTypes)
+	if err != nil {
+		return &ReturnedType{err: err}
+	}
+
+	return &ReturnedType{val: retType}
+}
+
 // Function call
 // TODO: we should split this into: ScalarFunctionCall, AggregateFunctionCall, ProcedureCall (which would include foreign procedures)
 type FunctionCall struct {
@@ -756,7 +1023,7 @@ func (f *FunctionCall) String() string {
 	return buf.String()
 }
 
-func (f *FunctionCall) UsedColumns(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (f *FunctionCall) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	args, aggs, err := projectMany(ctx, f.Args...)
 	if err != nil {
 		return nil, nil, err
@@ -780,13 +1047,13 @@ func (n *FunctionCall) Accept(v Visitor) any {
 	return v.VisitFunctionCall(n)
 }
 
-func (f *FunctionCall) DataType(ctx *SchemaContext) *ReturnedType {
+func (f *FunctionCall) Analyze(ctx *PlanContext) *ReturnedType {
 	fn, ok := parse.Functions[f.FunctionName]
 	if ok {
 		argTypes := make([]*types.DataType, len(f.Args))
 		for i, arg := range f.Args {
 			var err error
-			argTypes[i], err = arg.DataType(ctx).Scalar()
+			argTypes[i], err = arg.Analyze(ctx).Scalar()
 			if err != nil {
 				return &ReturnedType{err: err}
 			}
@@ -820,6 +1087,14 @@ func (f *FunctionCall) DataType(ctx *SchemaContext) *ReturnedType {
 	return &ReturnedType{val: proc.Returns.Fields[0].Type.Copy()}
 }
 
+func (f *FunctionCall) Children() []LogicalNode {
+	var c []LogicalNode
+	for _, arg := range f.Args {
+		c = append(c, arg)
+	}
+	return c
+}
+
 type ArithmeticOp struct {
 	baseExpr
 	Left  LogicalExpr
@@ -841,7 +1116,7 @@ func (a *ArithmeticOp) IsAggregate() bool {
 	return a.Left.IsAggregate() || a.Right.IsAggregate()
 }
 
-func (a *ArithmeticOp) Project(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (a *ArithmeticOp) Project(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	return projectMany(ctx, a.Left, a.Right)
 }
 
@@ -849,13 +1124,13 @@ func (n *ArithmeticOp) Accept(v Visitor) any {
 	return v.VisitArithmeticOp(n)
 }
 
-func (a *ArithmeticOp) DataType(ctx *SchemaContext) *ReturnedType {
-	left, err := a.Left.DataType(ctx).Scalar()
+func (a *ArithmeticOp) Analyze(ctx *PlanContext) *ReturnedType {
+	left, err := a.Left.Analyze(ctx).Scalar()
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
 
-	right, err := a.Right.DataType(ctx).Scalar()
+	right, err := a.Right.Analyze(ctx).Scalar()
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
@@ -886,6 +1161,10 @@ func (a *ArithmeticOp) String() string {
 	}
 
 	return fmt.Sprintf("(%s %s %s)", a.Left.String(), op, a.Right.String())
+}
+
+func (a *ArithmeticOp) Children() []LogicalNode {
+	return []LogicalNode{a.Left, a.Right}
 }
 
 type ComparisonOp struct {
@@ -950,7 +1229,7 @@ func (c *ComparisonOp) IsAggregate() bool {
 	return c.Left.IsAggregate() || c.Right.IsAggregate()
 }
 
-func (c *ComparisonOp) UsedColumns(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (c *ComparisonOp) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	return projectMany(ctx, c.Left, c.Right)
 }
 
@@ -958,13 +1237,13 @@ func (n *ComparisonOp) Accept(v Visitor) any {
 	return v.VisitComparisonOp(n)
 }
 
-func (c *ComparisonOp) DataType(ctx *SchemaContext) *ReturnedType {
-	left, err := c.Left.DataType(ctx).Scalar()
+func (c *ComparisonOp) Analyze(ctx *PlanContext) *ReturnedType {
+	left, err := c.Left.Analyze(ctx).Scalar()
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
 
-	right, err := c.Right.DataType(ctx).Scalar()
+	right, err := c.Right.Analyze(ctx).Scalar()
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
@@ -979,6 +1258,10 @@ func (c *ComparisonOp) DataType(ctx *SchemaContext) *ReturnedType {
 func (c *ComparisonOp) String() string {
 
 	return fmt.Sprintf("(%s %s %s)", c.Left.String(), c.Op.String(), c.Right.String())
+}
+
+func (c *ComparisonOp) Children() []LogicalNode {
+	return []LogicalNode{c.Left, c.Right}
 }
 
 type LogicalOp struct {
@@ -999,7 +1282,7 @@ func (l *LogicalOp) IsAggregate() bool {
 	return l.Left.IsAggregate() || l.Right.IsAggregate()
 }
 
-func (l *LogicalOp) Project(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (l *LogicalOp) Project(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	return projectMany(ctx, l.Left, l.Right)
 }
 
@@ -1007,13 +1290,13 @@ func (n *LogicalOp) Accept(v Visitor) any {
 	return v.VisitLogicalOp(n)
 }
 
-func (l *LogicalOp) DataType(ctx *SchemaContext) *ReturnedType {
-	left, err := l.Left.DataType(ctx).Scalar()
+func (l *LogicalOp) Analyze(ctx *PlanContext) *ReturnedType {
+	left, err := l.Left.Analyze(ctx).Scalar()
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
 
-	right, err := l.Right.DataType(ctx).Scalar()
+	right, err := l.Right.Analyze(ctx).Scalar()
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
@@ -1038,6 +1321,10 @@ func (l *LogicalOp) String() string {
 	}
 
 	return fmt.Sprintf("(%s %s %s)", l.Left.String(), op, l.Right.String())
+}
+
+func (l *LogicalOp) Children() []LogicalNode {
+	return []LogicalNode{l.Left, l.Right}
 }
 
 type UnaryOp struct {
@@ -1075,7 +1362,7 @@ func (u *UnaryOp) IsAggregate() bool {
 	return u.Expr.IsAggregate()
 }
 
-func (u *UnaryOp) Project(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (u *UnaryOp) Project(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	return u.Expr.UsedColumns(ctx)
 }
 
@@ -1083,8 +1370,8 @@ func (n *UnaryOp) Accept(v Visitor) any {
 	return v.VisitUnaryOp(n)
 }
 
-func (u *UnaryOp) DataType(ctx *SchemaContext) *ReturnedType {
-	dt, err := u.Expr.DataType(ctx).Scalar()
+func (u *UnaryOp) Analyze(ctx *PlanContext) *ReturnedType {
+	dt, err := u.Expr.Analyze(ctx).Scalar()
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
@@ -1106,6 +1393,10 @@ func (u *UnaryOp) DataType(ctx *SchemaContext) *ReturnedType {
 	return &ReturnedType{val: dt}
 }
 
+func (u *UnaryOp) Children() []LogicalNode {
+	return []LogicalNode{u.Expr}
+}
+
 type TypeCast struct {
 	Expr LogicalExpr
 	Type *types.DataType
@@ -1119,7 +1410,7 @@ func (t *TypeCast) Name() string {
 	return t.Expr.Name()
 }
 
-func (t *TypeCast) UsedColumns(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (t *TypeCast) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	return t.Expr.UsedColumns(ctx)
 }
 
@@ -1127,9 +1418,9 @@ func (n *TypeCast) Accept(v Visitor) any {
 	return v.VisitTypeCast(n)
 }
 
-func (t *TypeCast) DataType(ctx *SchemaContext) *ReturnedType {
+func (t *TypeCast) Analyze(ctx *PlanContext) *ReturnedType {
 	// to enforce validation of the child, we call it but ignore the result
-	_, err := t.Expr.DataType(ctx).Scalar()
+	_, err := t.Expr.Analyze(ctx).Scalar()
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
@@ -1139,6 +1430,10 @@ func (t *TypeCast) DataType(ctx *SchemaContext) *ReturnedType {
 
 func (t *TypeCast) String() string {
 	return fmt.Sprintf("(%s::%s)", t.Expr.String(), t.Type.Name)
+}
+
+func (t *TypeCast) Children() []LogicalNode {
+	return []LogicalNode{t.Expr}
 }
 
 type AliasExpr struct {
@@ -1154,7 +1449,7 @@ func (a *AliasExpr) IsAggregate() bool {
 	return a.Expr.IsAggregate()
 }
 
-func (a *AliasExpr) UsedColumns(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (a *AliasExpr) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	return a.Expr.UsedColumns(ctx)
 }
 
@@ -1162,12 +1457,16 @@ func (n *AliasExpr) Accept(v Visitor) any {
 	return v.VisitAliasExpr(n)
 }
 
-func (a *AliasExpr) DataType(ctx *SchemaContext) *ReturnedType {
-	return a.Expr.DataType(ctx)
+func (a *AliasExpr) Analyze(ctx *PlanContext) *ReturnedType {
+	return a.Expr.Analyze(ctx)
 }
 
 func (a *AliasExpr) String() string {
 	return fmt.Sprintf("%s AS %s", a.Expr.String(), a.Alias)
+}
+
+func (a *AliasExpr) Children() []LogicalNode {
+	return []LogicalNode{a.Expr}
 }
 
 type ArrayAccess struct {
@@ -1180,7 +1479,7 @@ func (a *ArrayAccess) IsAggregate() bool {
 	return a.Array.IsAggregate() || a.Index.IsAggregate()
 }
 
-func (a *ArrayAccess) UsedColumns(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (a *ArrayAccess) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	return projectMany(ctx, a.Array, a.Index)
 }
 
@@ -1188,8 +1487,8 @@ func (n *ArrayAccess) Accept(v Visitor) any {
 	return v.VisitArrayAccess(n)
 }
 
-func (a *ArrayAccess) DataType(ctx *SchemaContext) *ReturnedType {
-	arrayType, err := a.Array.DataType(ctx).Scalar()
+func (a *ArrayAccess) Analyze(ctx *PlanContext) *ReturnedType {
+	arrayType, err := a.Array.Analyze(ctx).Scalar()
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
@@ -1198,7 +1497,7 @@ func (a *ArrayAccess) DataType(ctx *SchemaContext) *ReturnedType {
 		return &ReturnedType{err: fmt.Errorf("non-array type %s used in array access", arrayType.String())}
 	}
 
-	idxType, err := a.Index.DataType(ctx).Scalar()
+	idxType, err := a.Index.Analyze(ctx).Scalar()
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
@@ -1216,6 +1515,10 @@ func (a *ArrayAccess) String() string {
 	return fmt.Sprintf("%s[%s]", a.Array.String(), a.Index.String())
 }
 
+func (a *ArrayAccess) Children() []LogicalNode {
+	return []LogicalNode{a.Array, a.Index}
+}
+
 type ArrayConstructor struct {
 	baseExpr
 	Elements []LogicalExpr
@@ -1230,7 +1533,7 @@ func (a *ArrayConstructor) IsAggregate() bool {
 	return false
 }
 
-func (a *ArrayConstructor) UsedColumns(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (a *ArrayConstructor) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	return projectMany(ctx, a.Elements...)
 }
 
@@ -1238,18 +1541,18 @@ func (n *ArrayConstructor) Accept(v Visitor) any {
 	return v.VisitArrayConstructor(n)
 }
 
-func (a *ArrayConstructor) DataType(ctx *SchemaContext) *ReturnedType {
+func (a *ArrayConstructor) Analyze(ctx *PlanContext) *ReturnedType {
 	if len(a.Elements) == 0 {
 		return &ReturnedType{err: fmt.Errorf("empty array constructor")}
 	}
 
-	elemType, err := a.Elements[0].DataType(ctx).Scalar()
+	elemType, err := a.Elements[0].Analyze(ctx).Scalar()
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
 
 	for _, elem := range a.Elements[1:] {
-		elem2Type, err := elem.DataType(ctx).Scalar()
+		elem2Type, err := elem.Analyze(ctx).Scalar()
 		if err != nil {
 			return &ReturnedType{err: err}
 		}
@@ -1277,6 +1580,14 @@ func (a *ArrayConstructor) String() string {
 	return buf.String()
 }
 
+func (a *ArrayConstructor) Children() []LogicalNode {
+	var c []LogicalNode
+	for _, elem := range a.Elements {
+		c = append(c, elem)
+	}
+	return c
+}
+
 type FieldAccess struct {
 	baseExpr
 	Object LogicalExpr
@@ -1287,7 +1598,7 @@ func (f *FieldAccess) IsAggregate() bool {
 	return f.Object.IsAggregate()
 }
 
-func (f *FieldAccess) UsedColumns(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (f *FieldAccess) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	return f.Object.UsedColumns(ctx)
 }
 
@@ -1295,8 +1606,8 @@ func (n *FieldAccess) Accept(v Visitor) any {
 	return v.VisitFieldAccess(n)
 }
 
-func (f *FieldAccess) DataType(ctx *SchemaContext) *ReturnedType {
-	objType, err := f.Object.DataType(ctx).Object()
+func (f *FieldAccess) Analyze(ctx *PlanContext) *ReturnedType {
+	objType, err := f.Object.Analyze(ctx).Object()
 	if err != nil {
 		return &ReturnedType{err: err}
 	}
@@ -1312,6 +1623,81 @@ func (f *FieldAccess) DataType(ctx *SchemaContext) *ReturnedType {
 func (f *FieldAccess) String() string {
 	return fmt.Sprintf("%s.%s", f.Object.String(), f.Field)
 }
+
+func (f *FieldAccess) Children() []LogicalNode {
+	return []LogicalNode{f.Object}
+}
+
+type Subquery struct {
+	SubqueryType SubqueryType
+	Query        LogicalPlan
+}
+
+var _ LogicalExpr = (*Subquery)(nil)
+
+func (n *Subquery) Accept(v Visitor) any {
+	return v.VisitSubquery(n)
+}
+
+func (s *Subquery) Analyze(ctx *PlanContext) *ReturnedType {
+	ctx2 := ctx.Copy() // copy to not pollute the outer context
+	// TODO: this wont work, since the subquery wont think we are in an aggregate,
+	// but a subquery that is a result column that is also not an aggregate will
+	// need to check for invalid aggregate correlated column references
+	childRel := s.Query.Relation(ctx2)
+
+	// subqueries must only return 1 column
+	if s.SubqueryType == ScalarSubquery {
+		if len(childRel.Columns) != 1 {
+			return &ReturnedType{err: fmt.Errorf("scalar subquery must return exactly one column")}
+		}
+
+		return &ReturnedType{val: childRel.Columns[0].DataType}
+
+	}
+
+	// EXISTS and NOT EXISTS subqueries always return a boolean.
+	// They can have as many underlying columns as they want.
+	return &ReturnedType{val: types.BoolType}
+}
+
+func (s *Subquery) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+	panic("not implemented")
+}
+
+func (s *Subquery) String() string {
+	var subqueryType string
+	switch s.SubqueryType {
+	case ScalarSubquery:
+		subqueryType = "SCALAR"
+	case ExistsSubquery:
+		subqueryType = "EXISTS"
+	case NotExistsSubquery:
+		subqueryType = "NOT EXISTS"
+	}
+
+	return fmt.Sprintf("%s SUBQUERY %s", subqueryType, s.Query.String())
+}
+
+func (s *Subquery) IsAggregate() bool {
+	return false
+}
+
+func (s *Subquery) Name() string {
+	return ""
+}
+
+func (s *Subquery) Children() []LogicalNode {
+	return []LogicalNode{s.Query}
+}
+
+type SubqueryType uint8
+
+const (
+	ScalarSubquery SubqueryType = iota
+	ExistsSubquery
+	NotExistsSubquery
+)
 
 // ReturnedType is a struct that is returned from the Scalar() method
 // of LogicalExpr implementations. It can be used to coerce the return type,
@@ -1371,69 +1757,6 @@ func (r *ReturnedType) Object() (map[string]*types.DataType, error) {
 	return obj, nil
 }
 
-type Subquery struct {
-	SubqueryType SubqueryType
-	Query        LogicalPlan
-}
-
-var _ LogicalExpr = (*Subquery)(nil)
-
-func (n *Subquery) Accept(v Visitor) any {
-	return v.VisitSubquery(n)
-}
-
-func (s *Subquery) DataType(ctx *SchemaContext) *ReturnedType {
-	childRel := s.Query.Relation(ctx)
-
-	// subqueries must only return 1 column
-	if s.SubqueryType == ScalarSubquery {
-		if len(childRel.Columns) != 1 {
-			return &ReturnedType{err: fmt.Errorf("scalar subquery must return exactly one column")}
-		}
-
-		return &ReturnedType{val: childRel.Columns[0].DataType}
-
-	}
-
-	// EXISTS and NOT EXISTS subqueries always return a boolean.
-	// They can have as many underlying columns as they want.
-	return &ReturnedType{val: types.BoolType}
-}
-
-func (s *Subquery) UsedColumns(ctx *SchemaContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
-	panic("not implemented")
-}
-
-func (s *Subquery) String() string {
-	var subqueryType string
-	switch s.SubqueryType {
-	case ScalarSubquery:
-		subqueryType = "SCALAR"
-	case ExistsSubquery:
-		subqueryType = "EXISTS"
-	case NotExistsSubquery:
-		subqueryType = "NOT EXISTS"
-	}
-
-	return fmt.Sprintf("%s SUBQUERY %s", subqueryType, s.Query.String())
-}
-
-func (s *Subquery) IsAggregate() bool {
-	return false
-}
-
-func (s *Subquery) Name() string {
-	return ""
-}
-
-type SubqueryType uint8
-
-const (
-	ScalarSubquery SubqueryType = iota
-	ExistsSubquery
-	NotExistsSubquery
-)
-
 type Accepter interface {
 	Accept(Visitor) any
 }
@@ -1444,9 +1767,10 @@ type Accepter interface {
 // For postorder traversal, state can be passed up the tree via the return value of the Visit method.
 type Visitor interface {
 	VisitNoop(*Noop) any
-	VisitTableScan(*TableScan) any
-	VisitProcedureScan(*ProcedureScan) any
-	VisitScanAlias(*ScanAlias) any
+	VisitTableScanSource(*TableScanSource) any
+	VisitProcedureScanSource(*ProcedureScanSource) any
+	VisitSubqueryScanSource(*SubqueryScanSource) any
+	VisitScanAlias(*Scan) any
 	VisitProject(*Project) any
 	VisitFilter(*Filter) any
 	VisitJoin(*Join) any
@@ -1470,4 +1794,26 @@ type Visitor interface {
 	VisitArrayConstructor(*ArrayConstructor) any
 	VisitFieldAccess(*FieldAccess) any
 	VisitSubquery(*Subquery) any
+}
+
+// flatten flattens a logical plan into a slice of nodes.
+func flatten(node LogicalNode) []LogicalNode {
+	nodes := []LogicalNode{node}
+	for _, child := range node.Children() {
+		nodes = append(nodes, flatten(child)...)
+	}
+	return nodes
+}
+
+// traverse traverses a logical plan in preorder.
+// It will call the callback function for each node in the plan.
+// If the callback function returns false, the traversal will not
+// continue to the children of the node.
+func traverse(node LogicalNode, callback func(node LogicalNode) bool) {
+	if !callback(node) {
+		return
+	}
+	for _, child := range node.Children() {
+		traverse(child, callback)
+	}
 }

@@ -321,6 +321,12 @@ func (p *plannerVisitor) VisitSelectStatement(node *parse.SelectStatement) any {
 		}
 	}
 
+	// TODO: if there is more than 1 select core, then the passed context needs to be updated
+	// to only have the relation of the RETURN VALUE of the first select core.
+	// For example, "SELECT id from users order by name" is valid, but
+	// "SELECT id from users UNION SELECT id from users2 order by name" is not.
+	// ? Should this instead go into the relational algebra that represents compound operations? - yes
+
 	if len(node.Ordering) > 0 {
 		sort := Sort{
 			Child: plan,
@@ -355,17 +361,18 @@ func (p *plannerVisitor) VisitSelectStatement(node *parse.SelectStatement) any {
 
 // schemaCtx returns a schema context based on the current schema and the cte relations.
 // All passed relations will be joined into the schema context.
-func (p *plannerVisitor) schemaCtx(relations ...*Relation) *SchemaContext {
+func (p *plannerVisitor) schemaCtx(relations ...*Relation) *PlanContext {
 	rel := &Relation{}
 	for _, rel := range relations {
 		rel.Columns = append(rel.Columns, rel.Columns...)
 	}
 
 	// we need to calculate the cte relations
-	ctx := &SchemaContext{
+	ctx := &PlanContext{
 		Schema:        p.schema,
 		CTEs:          make(map[string]*Relation),
 		OuterRelation: rel,
+		// TODO: how can we get info on variables and objects
 	}
 
 	for _, cte := range p.ctes {
@@ -393,7 +400,7 @@ func (p *plannerVisitor) schemaCtx(relations ...*Relation) *SchemaContext {
 // 2. where
 // 3. group by(can use reference from select)
 // 4. having(can use reference from select)
-// 5. select
+// 5. select (project)
 // 6. distinct
 func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 	// if there is no from, then we will simply return a projection
@@ -464,7 +471,7 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 
 			results = append(results, expr)
 		case *parse.ResultColumnWildcard:
-			var cols []*Column
+			var cols []Column
 			// expand the wildcard
 			if resultCol.Table != "" {
 				cols = plan.Relation(p.schemaCtx()).ColumnsByParent(resultCol.Table)
@@ -558,7 +565,7 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 
 // checkAggregation checks that all terms (and their projected columns) are in the
 // groupByTerms, or aggregated in an aggregate function. It returns all aggregated terms
-func checkAggregation(ctx *SchemaContext, groupByTerms, termsToCheck []LogicalExpr) ([]LogicalExpr, error) {
+func checkAggregation(ctx *PlanContext, groupByTerms, termsToCheck []LogicalExpr) ([]LogicalExpr, error) {
 	// we construct a map for better lookup on the terms included in
 	// the grouping expressions
 
@@ -626,11 +633,11 @@ func (p *plannerVisitor) VisitRelationTable(node *parse.RelationTable) any {
 		alias = node.Alias
 	}
 
-	return &ScanAlias{
-		Child: &TableScan{
+	return &Scan{
+		Child: &TableScanSource{
 			TableName: node.Table,
 		},
-		Alias: alias,
+		RelationName: alias,
 	}
 }
 
@@ -639,9 +646,9 @@ func (p *plannerVisitor) VisitRelationSubquery(node *parse.RelationSubquery) any
 		panic("subquery must have an alias")
 	}
 
-	return &ScanAlias{
-		Child: node.Subquery.Accept(p).(LogicalPlan),
-		Alias: node.Alias,
+	return &Scan{
+		Child:        node.Subquery.Accept(p).(ScanSource), // TODO: we do not have subquery scan sources implemented
+		RelationName: node.Alias,
 	}
 }
 
@@ -687,14 +694,14 @@ func (p *plannerVisitor) VisitRelationFunctionCall(node *parse.RelationFunctionC
 		contextualArgs = p.exprs(t.ContextualArgs)
 	}
 
-	return &ScanAlias{
-		Child: &ProcedureScan{
+	return &Scan{
+		Child: &ProcedureScanSource{
 			ProcedureName:  node.FunctionCall.FunctionName(),
 			Args:           args,
 			ContextualArgs: contextualArgs,
 			IsForeign:      isForeign,
 		},
-		Alias: node.Alias,
+		RelationName: node.Alias,
 	}
 }
 
