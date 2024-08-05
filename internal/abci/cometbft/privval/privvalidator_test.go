@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtAPITypes "github.com/cometbft/cometbft/api/cometbft/types/v1"
 	"github.com/cometbft/cometbft/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -21,12 +21,12 @@ func Test_PrivValidatorVote(t *testing.T) {
 		name string
 		// lastSigned is the last signed vote.
 		// it can be nil.
-		lastSigned *cmtproto.Vote
+		lastSigned *cmtAPITypes.Vote
 		// vote is the vote to sign.
-		vote *cmtproto.Vote
+		vote *cmtAPITypes.Vote
 		// secondVote is the second vote to sign.
 		// it can be nil.
-		secondVote *cmtproto.Vote
+		secondVote *cmtAPITypes.Vote
 
 		// chainid is the default chain ID to use.
 		chainID string
@@ -105,15 +105,15 @@ func Test_PrivValidatorVote(t *testing.T) {
 		},
 		{
 			name:       "test step regression",
-			lastSigned: testVote(step(cmtproto.PrecommitType)),
-			vote:       testVote(step(cmtproto.PrevoteType)),
+			lastSigned: testVote(step(cmtAPITypes.PrecommitType)),
+			vote:       testVote(step(cmtAPITypes.PrevoteType)),
 			chainID:    defaultChainID,
 			privKey:    defaultPrivateKey,
 			err:        ErrStepRegression,
 		},
 		{
 			name:       "test invalid vote type",
-			lastSigned: testVote(step(cmtproto.ProposalType)),
+			lastSigned: testVote(step(cmtAPITypes.ProposalType)),
 			vote:       testVote(),
 			chainID:    defaultChainID,
 			privKey:    defaultPrivateKey,
@@ -148,7 +148,7 @@ func Test_PrivValidatorVote(t *testing.T) {
 				}
 
 				// sign the vote
-				err = privVal.SignVote(tc.chainID, tc.vote)
+				err = privVal.SignVote(tc.chainID, tc.vote, true)
 				if err != nil {
 					return err
 				}
@@ -157,7 +157,7 @@ func Test_PrivValidatorVote(t *testing.T) {
 
 				if tc.secondVote != nil {
 					// sign the second vote
-					err = privVal.SignVote(tc.chainID, tc.secondVote)
+					err = privVal.SignVote(tc.chainID, tc.secondVote, true)
 					if err != nil {
 						return err
 					}
@@ -192,12 +192,12 @@ func Test_Proposals(t *testing.T) {
 		name string
 		// lastSigned is the last signed vote.
 		// it can be nil.
-		lastSigned *cmtproto.Proposal
+		lastSigned *cmtAPITypes.Proposal
 		// vote is the vote to sign.
-		vote *cmtproto.Proposal
+		vote *cmtAPITypes.Proposal
 		// secondVote is the second vote to sign.
 		// it can be nil.
-		secondVote *cmtproto.Proposal
+		secondVote *cmtAPITypes.Proposal
 
 		// err is the expected error.
 		// if nil, no error is expected.
@@ -352,19 +352,19 @@ func newMockStore() *mockStore {
 }
 
 // testVote is a valid vote for height 1
-func testVote(opts ...testVotOpt) *cmtproto.Vote {
+func testVote(opts ...testVotOpt) *cmtAPITypes.Vote {
 	options := defaultOptions()
 	for _, opt := range opts {
 		opt(options)
 	}
 
-	return &cmtproto.Vote{
+	return &cmtAPITypes.Vote{
 		Type:   options.step,
 		Height: options.height,
 		Round:  options.round,
-		BlockID: cmtproto.BlockID{
+		BlockID: cmtAPITypes.BlockID{
 			Hash: hash("hash1"),
-			PartSetHeader: cmtproto.PartSetHeader{
+			PartSetHeader: cmtAPITypes.PartSetHeader{
 				Total: 1,
 				Hash:  hash("hash12"),
 			},
@@ -376,7 +376,7 @@ func testVote(opts ...testVotOpt) *cmtproto.Vote {
 	}
 }
 
-func testProposal(opts ...testVotOpt) *cmtproto.Proposal {
+func testProposal(opts ...testVotOpt) *cmtAPITypes.Proposal {
 	options := defaultOptions()
 	for _, opt := range opts {
 		opt(options)
@@ -385,14 +385,14 @@ func testProposal(opts ...testVotOpt) *cmtproto.Proposal {
 		panic("cannot create proposal with step != 1")
 	}
 
-	return &cmtproto.Proposal{
+	return &cmtAPITypes.Proposal{
 		Type:     1,
 		Height:   options.height,
 		Round:    options.round,
 		PolRound: 0,
-		BlockID: cmtproto.BlockID{
+		BlockID: cmtAPITypes.BlockID{
 			Hash: hash("hash1"),
-			PartSetHeader: cmtproto.PartSetHeader{
+			PartSetHeader: cmtAPITypes.PartSetHeader{
 				Total: 1,
 				Hash:  hash("hash12"),
 			},
@@ -407,7 +407,7 @@ func defaultOptions() *testVoteOptions {
 		timestamp: 500,
 		height:    10,
 		round:     0,
-		step:      cmtproto.PrevoteType,
+		step:      cmtAPITypes.PrevoteType,
 	}
 }
 
@@ -416,7 +416,7 @@ type testVoteOptions struct {
 	signature []byte
 	height    int64
 	round     int32
-	step      cmtproto.SignedMsgType
+	step      cmtAPITypes.SignedMsgType
 }
 
 type testVotOpt func(*testVoteOptions)
@@ -445,7 +445,7 @@ func round(r int32) testVotOpt {
 	}
 }
 
-func step(s cmtproto.SignedMsgType) testVotOpt {
+func step(s cmtAPITypes.SignedMsgType) testVotOpt {
 	return func(opts *testVoteOptions) {
 		opts.step = s
 	}
