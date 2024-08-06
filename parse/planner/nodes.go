@@ -2,7 +2,9 @@ package planner
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -24,26 +26,61 @@ import (
 	column "name", but the reference-able columns would be "name" and "id" (and any other columns in the "users" table).
 */
 
-func Format(plan LogicalNode, indent int) string {
+// Traversable is an interface for nodes that can be traversed.
+type Traversable interface {
+	Children() []LogicalNode
+	Plans() []LogicalPlan
+}
+
+func Format(plan LogicalNode) string {
+	str := strings.Builder{}
+	inner, topLevel := innerFormat(plan, 0)
+	str.WriteString(inner)
+
+	printSubplans(&str, topLevel)
+
+	return str.String()
+}
+
+// printSubplans is a recursive function that prints the subplans
+func printSubplans(str *strings.Builder, subplans []*Subplan) {
+	for _, sub := range subplans {
+		str.WriteString(sub.String())
+		str.WriteString("\n")
+		strs, subs := innerFormat(sub.Plan, 2)
+		str.WriteString(strs)
+		printSubplans(str, subs)
+	}
+}
+
+// innerFormat is a function that allows us to give more complex
+// formatting logic.
+// It returns subplans that should be added to the top level.
+func innerFormat(plan LogicalNode, indent int) (string, []*Subplan) {
+	if sub, ok := plan.(*Subplan); ok {
+		return "", []*Subplan{sub}
+	}
+
 	var msg strings.Builder
 	for i := 0; i < indent; i++ {
 		msg.WriteString(" ")
 	}
 	msg.WriteString(plan.String())
 	msg.WriteString("\n")
-	for _, child := range plan.Children() {
-		if _, ok := child.(LogicalPlan); ok {
-			msg.WriteString(Format(child, indent+2))
-		}
+	var topLevel []*Subplan
+	for _, child := range plan.Plans() {
+		str, children := innerFormat(child, indent+2)
+		msg.WriteString(str)
+		topLevel = append(topLevel, children...)
 	}
-	return msg.String()
+	return msg.String(), topLevel
 }
 
 // ScanSource is a source of data that a Scan can be performed on.
 // This is either a physical table, a procedure call that returns a table,
 // or a subquery.
 type ScanSource interface {
-	Children() []LogicalNode
+	Traversable
 	FormatScan() string
 }
 
@@ -53,15 +90,15 @@ type TableScanSource struct {
 }
 
 func (t *TableScanSource) Children() []LogicalNode {
-	return []LogicalNode{}
-}
-
-func (f *TableScanSource) Accept(v Visitor) any {
-	return v.VisitTableScanSource(f)
+	return nil
 }
 
 func (t *TableScanSource) FormatScan() string {
 	return t.TableName
+}
+
+func (t *TableScanSource) Plans() []LogicalPlan {
+	return nil
 }
 
 // ProcedureScanSource represents a scan of a function.
@@ -92,10 +129,6 @@ func (f *ProcedureScanSource) Children() []LogicalNode {
 	return c
 }
 
-func (f *ProcedureScanSource) Accept(v Visitor) any {
-	return v.VisitProcedureScanSource(f)
-}
-
 func (f *ProcedureScanSource) FormatScan() string {
 	str := strings.Builder{}
 	if f.IsForeign {
@@ -113,6 +146,20 @@ func (f *ProcedureScanSource) FormatScan() string {
 	return str.String()
 }
 
+func (f *ProcedureScanSource) Plans() []LogicalPlan {
+	var plans []LogicalPlan
+
+	for _, arg := range f.Args {
+		plans = append(plans, arg.Plans()...)
+	}
+
+	for _, arg := range f.ContextualArgs {
+		plans = append(plans, arg.Plans()...)
+	}
+
+	return plans
+}
+
 // SubqueryScanSource represents a scan of a subquery.
 // This is used, for example, in the query "SELECT * FROM (SELECT * FROM users) AS subquery".
 type SubqueryScanSource struct {
@@ -123,17 +170,20 @@ func (s *SubqueryScanSource) Children() []LogicalNode {
 	return []LogicalNode{s.Subquery}
 }
 
-func (f *SubqueryScanSource) Accept(v Visitor) any {
-	return v.VisitSubqueryScanSource(f)
-}
-
 func (s *SubqueryScanSource) FormatScan() string {
 	return ""
 }
 
+func (s *SubqueryScanSource) Plans() []LogicalPlan {
+	return []LogicalPlan{s.Subquery}
+}
+
 type LogicalNode interface {
 	fmt.Stringer
-	Children() []LogicalNode
+	Traversable
+	// Subplan returns the children of the node that are
+	// logical plans.
+	Plans() []LogicalPlan
 }
 
 type LogicalPlan interface {
@@ -150,11 +200,11 @@ type EmptyScan struct {
 }
 
 func (n *EmptyScan) Children() []LogicalNode {
-	return []LogicalNode{}
+	return nil
 }
 
-func (f *EmptyScan) Accept(v Visitor) any {
-	return v.VisitNoop(f)
+func (n *EmptyScan) Plans() []LogicalPlan {
+	return nil
 }
 
 func (n *EmptyScan) String() string {
@@ -175,8 +225,8 @@ func (s *Scan) Children() []LogicalNode {
 	return s.Source.Children()
 }
 
-func (f *Scan) Accept(v Visitor) any {
-	return v.VisitScanAlias(f)
+func (s *Scan) Plans() []LogicalPlan {
+	return s.Source.Plans()
 }
 
 func (s *Scan) String() string {
@@ -208,8 +258,13 @@ func (p *Project) Children() []LogicalNode {
 	return c
 }
 
-func (f *Project) Accept(v Visitor) any {
-	return v.VisitProject(f)
+func (p *Project) Plans() []LogicalPlan {
+	c := []LogicalPlan{p.Child}
+	for _, expr := range p.Expressions {
+		c = append(c, expr.Plans()...)
+	}
+
+	return c
 }
 
 func (p *Project) String() string {
@@ -236,12 +291,12 @@ func (f *Filter) Children() []LogicalNode {
 	return []LogicalNode{f.Child, f.Condition}
 }
 
-func (f *Filter) Accept(v Visitor) any {
-	return v.VisitFilter(f)
-}
-
 func (f *Filter) String() string {
 	return fmt.Sprintf("Filter: %s", f.Condition.String())
+}
+
+func (f *Filter) Plans() []LogicalPlan {
+	return append([]LogicalPlan{f.Child}, f.Condition.Plans()...)
 }
 
 type Join struct {
@@ -256,17 +311,16 @@ func (j *Join) Children() []LogicalNode {
 	return []LogicalNode{j.Left, j.Right, j.Condition}
 }
 
-func (f *Join) Accept(v Visitor) any {
-	return v.VisitJoin(f)
-}
-
 func (j *Join) String() string {
 	str := strings.Builder{}
 	str.WriteString(j.JoinType.String())
 	str.WriteString(" Join: ")
 	str.WriteString(j.Condition.String())
 	return str.String()
+}
 
+func (j *Join) Plans() []LogicalPlan {
+	return append([]LogicalPlan{j.Left, j.Right}, j.Condition.Plans()...)
 }
 
 type Sort struct {
@@ -317,8 +371,13 @@ func (s *Sort) Children() []LogicalNode {
 	return c
 }
 
-func (f *Sort) Accept(v Visitor) any {
-	return v.VisitSort(f)
+func (s *Sort) Plans() []LogicalPlan {
+	c := []LogicalPlan{s.Child}
+	for _, sortExpr := range s.SortExpressions {
+		c = append(c, sortExpr.Expr.Plans()...)
+	}
+
+	return c
 }
 
 type Limit struct {
@@ -330,10 +389,6 @@ type Limit struct {
 
 func (l *Limit) Children() []LogicalNode {
 	return []LogicalNode{l.Child, l.Limit, l.Offset}
-}
-
-func (f *Limit) Accept(v Visitor) any {
-	return v.VisitLimit(f)
 }
 
 func (l *Limit) String() string {
@@ -349,6 +404,17 @@ func (l *Limit) String() string {
 	return str.String()
 }
 
+func (l *Limit) Plans() []LogicalPlan {
+	c := []LogicalPlan{l.Child}
+	if l.Limit != nil {
+		c = append(c, l.Limit.Plans()...)
+	}
+	if l.Offset != nil {
+		c = append(c, l.Offset.Plans()...)
+	}
+	return c
+}
+
 type Distinct struct {
 	baseLogicalPlan
 	Child LogicalPlan
@@ -358,12 +424,12 @@ func (d *Distinct) Children() []LogicalNode {
 	return []LogicalNode{d.Child}
 }
 
-func (f *Distinct) Accept(v Visitor) any {
-	return v.VisitDistinct(f)
-}
-
 func (d *Distinct) String() string {
 	return "DISTINCT"
+}
+
+func (d *Distinct) Plans() []LogicalPlan {
+	return []LogicalPlan{d.Child}
 }
 
 type SetOperation struct {
@@ -378,8 +444,8 @@ func (s *SetOperation) Children() []LogicalNode {
 	return []LogicalNode{s.Left, s.Right}
 }
 
-func (f *SetOperation) Accept(v Visitor) any {
-	return v.VisitSetOperation(f)
+func (s *SetOperation) Plans() []LogicalPlan {
+	return append([]LogicalPlan{s.Left, s.Right})
 }
 
 func (s *SetOperation) String() string {
@@ -420,8 +486,17 @@ func (a *Aggregate) Children() []LogicalNode {
 	return c
 }
 
-func (f *Aggregate) Accept(v Visitor) any {
-	return v.VisitAggregate(f)
+func (a *Aggregate) Plans() []LogicalPlan {
+	c := []LogicalPlan{a.Child}
+	for _, expr := range a.GroupingExpressions {
+		c = append(c, expr.Plans()...)
+	}
+
+	for _, expr := range a.AggregateExpressions {
+		c = append(c, expr.Plans()...)
+	}
+
+	return c
 }
 
 func (a *Aggregate) String() string {
@@ -492,6 +567,24 @@ func (s SetOperationType) String() string {
 	}
 }
 
+type Subplan struct {
+	baseLogicalPlan
+	Plan LogicalPlan
+	ID   int
+}
+
+func (s *Subplan) Children() []LogicalNode {
+	return []LogicalNode{s.Plan}
+}
+
+func (s *Subplan) Plans() []LogicalPlan {
+	return []LogicalPlan{s.Plan}
+}
+
+func (s *Subplan) String() string {
+	return fmt.Sprintf("Subplan [id=%d]", s.ID)
+}
+
 /*
 	###########################
 	#                         #
@@ -517,11 +610,22 @@ type Literal struct {
 }
 
 func (l *Literal) String() string {
-	return fmt.Sprintf("%v", l.Value)
+	switch c := l.Value.(type) {
+	case string:
+		return "'" + c + "'"
+	case []byte:
+		return "0x" + hex.EncodeToString(c)
+	default:
+		return fmt.Sprintf("%v", l.Value)
+	}
 }
 
 func (l *Literal) Children() []LogicalNode {
-	return []LogicalNode{}
+	return nil
+}
+
+func (l *Literal) Plans() []LogicalPlan {
+	return nil
 }
 
 // Variable reference
@@ -536,13 +640,20 @@ func (v *Variable) String() string {
 }
 
 func (v *Variable) Children() []LogicalNode {
-	return []LogicalNode{}
+	return nil
+}
+
+func (v *Variable) Plans() []LogicalPlan {
+	return nil
 }
 
 // Column reference
 type ColumnRef struct {
 	baseLogicalExpr
-	Parent     string // Parent relation name, can be empty
+	// Parent relation name, can be empty.
+	// If not specified by user, it will be qualified
+	// during the planning phase.
+	Parent     string
 	ColumnName string
 }
 
@@ -554,7 +665,11 @@ func (c *ColumnRef) String() string {
 }
 
 func (c *ColumnRef) Children() []LogicalNode {
-	return []LogicalNode{}
+	return nil
+}
+
+func (c *ColumnRef) Plans() []LogicalPlan {
+	return nil
 }
 
 type AggregateFunctionCall struct {
@@ -593,6 +708,14 @@ func (a *AggregateFunctionCall) Children() []LogicalNode {
 	return c
 }
 
+func (a *AggregateFunctionCall) Plans() []LogicalPlan {
+	var c []LogicalPlan
+	for _, arg := range a.Args {
+		c = append(c, arg.Plans()...)
+	}
+	return c
+}
+
 // Function call
 type ScalarFunctionCall struct {
 	baseLogicalExpr
@@ -618,6 +741,14 @@ func (f *ScalarFunctionCall) Children() []LogicalNode {
 	var c []LogicalNode
 	for _, arg := range f.Args {
 		c = append(c, arg)
+	}
+	return c
+}
+
+func (f *ScalarFunctionCall) Plans() []LogicalPlan {
+	var c []LogicalPlan
+	for _, arg := range f.Args {
+		c = append(c, arg.Plans()...)
 	}
 	return c
 }
@@ -659,6 +790,14 @@ func (p *ProcedureCall) Children() []LogicalNode {
 	return c
 }
 
+func (p *ProcedureCall) Plans() []LogicalPlan {
+	var c []LogicalPlan
+	for _, arg := range p.Args {
+		c = append(c, arg.Plans()...)
+	}
+	return c
+}
+
 type ArithmeticOp struct {
 	baseLogicalExpr
 	Left  LogicalExpr
@@ -696,6 +835,10 @@ func (a *ArithmeticOp) String() string {
 
 func (a *ArithmeticOp) Children() []LogicalNode {
 	return []LogicalNode{a.Left, a.Right}
+}
+
+func (a *ArithmeticOp) Plans() []LogicalPlan {
+	return append(a.Left.Plans(), a.Right.Plans()...)
 }
 
 type ComparisonOp struct {
@@ -760,6 +903,10 @@ func (c *ComparisonOp) Children() []LogicalNode {
 	return []LogicalNode{c.Left, c.Right}
 }
 
+func (c *ComparisonOp) Plans() []LogicalPlan {
+	return append(c.Left.Plans(), c.Right.Plans()...)
+}
+
 func (c *ComparisonOp) String() string {
 	return fmt.Sprintf("%s %s %s", c.Left.String(), c.Op.String(), c.Right.String())
 }
@@ -792,6 +939,10 @@ func (l *LogicalOp) String() string {
 
 func (l *LogicalOp) Children() []LogicalNode {
 	return []LogicalNode{l.Left, l.Right}
+}
+
+func (l *LogicalOp) Plans() []LogicalPlan {
+	return append(l.Left.Plans(), l.Right.Plans()...)
 }
 
 type UnaryOp struct {
@@ -829,6 +980,10 @@ func (u *UnaryOp) Children() []LogicalNode {
 	return []LogicalNode{u.Expr}
 }
 
+func (u *UnaryOp) Plans() []LogicalPlan {
+	return u.Expr.Plans()
+}
+
 type TypeCast struct {
 	baseLogicalExpr
 	Expr LogicalExpr
@@ -841,6 +996,10 @@ func (t *TypeCast) String() string {
 
 func (t *TypeCast) Children() []LogicalNode {
 	return []LogicalNode{t.Expr}
+}
+
+func (t *TypeCast) Plans() []LogicalPlan {
+	return t.Expr.Plans()
 }
 
 type AliasExpr struct {
@@ -857,6 +1016,10 @@ func (a *AliasExpr) Children() []LogicalNode {
 	return []LogicalNode{a.Expr}
 }
 
+func (a *AliasExpr) Plans() []LogicalPlan {
+	return a.Expr.Plans()
+}
+
 type ArrayAccess struct {
 	baseLogicalExpr
 	Array LogicalExpr
@@ -869,6 +1032,10 @@ func (a *ArrayAccess) String() string {
 
 func (a *ArrayAccess) Children() []LogicalNode {
 	return []LogicalNode{a.Array, a.Index}
+}
+
+func (a *ArrayAccess) Plans() []LogicalPlan {
+	return append(a.Array.Plans(), a.Index.Plans()...)
 }
 
 type ArrayConstructor struct {
@@ -897,6 +1064,14 @@ func (a *ArrayConstructor) Children() []LogicalNode {
 	return c
 }
 
+func (a *ArrayConstructor) Plans() []LogicalPlan {
+	var c []LogicalPlan
+	for _, elem := range a.Elements {
+		c = append(c, elem.Plans()...)
+	}
+	return c
+}
+
 type FieldAccess struct {
 	baseLogicalExpr
 	Object LogicalExpr
@@ -911,90 +1086,69 @@ func (f *FieldAccess) Children() []LogicalNode {
 	return []LogicalNode{f.Object}
 }
 
+func (f *FieldAccess) Plans() []LogicalPlan {
+	return f.Object.Plans()
+}
+
 type Subquery struct {
 	baseLogicalExpr
 	SubqueryType SubqueryType
 	Query        LogicalPlan
+	// ID is the number of the subquery in the query.
+	ID int
+
+	// The fields below this point are set in evalRelation, instead
+	// of in the planner / parse ast visitor.
+
 	// Correlated indicates whether the subquery is correlated.
-	// It is set during planning
 	Correlated bool
 }
 
 var _ LogicalExpr = (*Subquery)(nil)
 
 func (s *Subquery) String() string {
-	var subqueryType string
-	switch s.SubqueryType {
-	case ScalarSubquery:
-		subqueryType = "SCALAR"
-	case ExistsSubquery:
-		subqueryType = "EXISTS"
-	case NotExistsSubquery:
-		subqueryType = "NOT EXISTS"
+	str := strings.Builder{}
+	if s.Correlated {
+		str.WriteString("correlated ")
 	}
+	str.WriteString("subquery ")
 
-	return fmt.Sprintf("%s SUBQUERY %s", subqueryType, s.Query.String())
+	str.WriteString("[")
+	str.WriteString(s.SubqueryType.String())
+	str.WriteString("] [subplan_id=")
+	str.WriteString(strconv.FormatInt(int64(s.ID), 10))
+	str.WriteString("]")
+
+	return str.String()
 }
 
 func (s *Subquery) Children() []LogicalNode {
 	return []LogicalNode{s.Query}
 }
 
+func (s *Subquery) Plans() []LogicalPlan {
+	return []LogicalPlan{s.Query}
+}
+
 type SubqueryType uint8
 
 const (
-	ScalarSubquery SubqueryType = iota
+	RegularSubquery SubqueryType = iota
 	ExistsSubquery
 	NotExistsSubquery
 )
 
-type Accepter interface {
-	Accept(Visitor) any
-}
-
-// Visitor is an interface that can be implemented to visit all nodes in a logical plan.
-// It allows easy construction of both pre and post-order traversal of the logical plan.
-// For preorder traversal, state can be passed down the tree via the struct that implements Visitor.
-// For postorder traversal, state can be passed up the tree via the return value of the Visit method.
-type Visitor interface {
-	VisitNoop(*EmptyScan) any
-	VisitTableScanSource(*TableScanSource) any
-	VisitProcedureScanSource(*ProcedureScanSource) any
-	VisitSubqueryScanSource(*SubqueryScanSource) any
-	VisitScanAlias(*Scan) any
-	VisitProject(*Project) any
-	VisitFilter(*Filter) any
-	VisitJoin(*Join) any
-	VisitSort(*Sort) any
-	VisitLimit(*Limit) any
-	VisitDistinct(*Distinct) any
-	VisitSetOperation(*SetOperation) any
-	VisitAggregate(*Aggregate) any
-	VisitLiteral(*Literal) any
-	VisitVariable(*Variable) any
-	VisitColumnRef(*ColumnRef) any
-	VisitAggregateFunctionCall(*AggregateFunctionCall) any
-	VisitFunctionCall(*ScalarFunctionCall) any
-	VisitProcedureCall(*ProcedureCall) any
-	VisitArithmeticOp(*ArithmeticOp) any
-	VisitComparisonOp(*ComparisonOp) any
-	VisitLogicalOp(*LogicalOp) any
-	VisitUnaryOp(*UnaryOp) any
-	VisitTypeCast(*TypeCast) any
-	VisitAliasExpr(*AliasExpr) any
-	VisitArrayAccess(*ArrayAccess) any
-	VisitArrayConstructor(*ArrayConstructor) any
-	VisitFieldAccess(*FieldAccess) any
-	VisitSubquery(*Subquery) any
-}
-
-// flatten flattens a logical plan into a slice of nodes.
-func flatten(node LogicalNode) []LogicalNode {
-	nodes := []LogicalNode{node}
-	for _, child := range node.Children() {
-		nodes = append(nodes, flatten(child)...)
+func (s SubqueryType) String() string {
+	switch s {
+	case RegularSubquery:
+		return "regular"
+	case ExistsSubquery:
+		return "exists"
+	case NotExistsSubquery:
+		return "not exists"
+	default:
+		panic(fmt.Sprintf("unknown subquery type %d", s))
 	}
-	return nodes
 }
 
 // traverse traverses a logical plan in preorder.

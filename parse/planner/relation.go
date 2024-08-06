@@ -192,6 +192,8 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 			}
 		}
 		return left, nil
+	case *Subplan:
+		return s.evalRelation(n.Plan)
 	}
 }
 
@@ -313,8 +315,12 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 				return nil, err
 			}
 			field.Correlated = true
+
+			n.Parent = field.Parent
+
 			return field, nil
 		}
+		n.Parent = field.Parent
 		return field, err
 	case *AggregateFunctionCall:
 		fn, ok := parse.Functions[n.FunctionName]
@@ -683,7 +689,7 @@ func (s *Relation) Search(parent, name string) (*Field, error) {
 
 		// return a new instance since we are qualifying the column
 		return &Field{
-			Parent: parent, // fully qualify the column
+			Parent: column.Parent, // fully qualify the column
 			Name:   column.Name,
 			val:    column.val,
 		}, nil

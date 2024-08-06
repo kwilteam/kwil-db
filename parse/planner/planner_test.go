@@ -2,6 +2,7 @@ package planner_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -30,19 +31,30 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "select with filter",
 			sql:  "select id, name from users where age > 18",
-			wt: "Projection: id, name\n" +
-				"  Filter: age > 18\n" +
+			wt: "Projection: users.id, users.name\n" +
+				"  Filter: users.age > 18\n" +
 				"    Scan Table [alias=users]: users\n",
 		},
 		{
 			name: "subquery join",
 			sql:  "select name from users u inner join (select owner_id from posts) p on u.id = p.owner_id",
-			wt: "Projection: name\n" +
+			wt: "Projection: u.name\n" +
 				"  Inner Join: u.id = p.owner_id\n" +
 				"    Scan Table [alias=u]: users\n" +
 				"    Scan Subquery [alias=p]: \n" +
-				"      Projection: owner_id\n" +
+				"      Projection: posts.owner_id\n" +
 				"        Scan Table [alias=posts]: posts\n",
+		},
+		{
+			name: "scalar subquery in where clause",
+			sql:  "select name from users where id = (select id from posts where content = 'hello')",
+			wt: "Projection: users.name\n" +
+				"  Filter: users.id = subquery [regular] [subplan_id=0]\n" +
+				"    Scan Table [alias=users]: users\n" +
+				"Subplan [id=0]\n" +
+				"  Projection: posts.id\n" +
+				"    Filter: posts.content = 'hello'\n" +
+				"      Scan Table [alias=posts]: posts\n",
 		},
 	}
 
@@ -66,7 +78,16 @@ func Test_Planner(t *testing.T) {
 				require.ErrorIs(t, err, test.err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, test.wt, planner.Format(plan, 0))
+
+				// TODO: delete this block once I am done debugging
+				rec := planner.Format(plan)
+				if test.wt != rec {
+					fmt.Println(rec)
+					require.Equal(t, test.wt, planner.Format(plan))
+				}
+				// TODO: end delete here
+
+				require.Equal(t, test.wt, planner.Format(plan))
 			}
 		})
 	}

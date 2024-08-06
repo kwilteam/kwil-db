@@ -147,7 +147,7 @@ func Test_Aggregate(t *testing.T) {
 			name: "subquery",
 			exprs: []LogicalExpr{
 				&Subquery{
-					SubqueryType: ScalarSubquery,
+					SubqueryType: RegularSubquery,
 					Query: &Project{
 						Expressions: []LogicalExpr{
 							arithExpr(colExpr("a", "b"), litInt(1)),

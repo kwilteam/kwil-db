@@ -27,7 +27,17 @@ func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*
 		schema:  schema,
 	}
 
-	return statement.Accept(visitor).(LogicalPlan), nil
+	lp := statement.Accept(visitor).(LogicalPlan)
+
+	// TODO: call plan
+
+	evalCtx := newEvalCtx(ctx)
+	_, err := evalCtx.evalRelation(lp)
+	if err != nil {
+		return nil, err
+	}
+
+	return lp, nil
 }
 
 // the planner file converts the parse AST into a logical query plan.
@@ -55,6 +65,10 @@ type planContext struct {
 	// Kwil supports one-dimensional objects, so this would be
 	// accessible via objname.fieldname.
 	Objects map[string]map[string]*types.DataType
+	// SubqueryCount is the number of subqueries in the query.
+	// This field should be updated as the query planner
+	// processes the query.
+	SubqueryCount int
 }
 
 // the following maps map constants from parse to their logical
@@ -354,7 +368,7 @@ func (p *plannerVisitor) VisitExpressionBetween(node *parse.ExpressionBetween) a
 }
 
 func (p *plannerVisitor) VisitExpressionSubquery(node *parse.ExpressionSubquery) any {
-	subqType := ScalarSubquery
+	subqType := RegularSubquery
 	if node.Exists {
 		subqType = ExistsSubquery
 		if node.Not {
@@ -363,10 +377,17 @@ func (p *plannerVisitor) VisitExpressionSubquery(node *parse.ExpressionSubquery)
 	}
 
 	stmt := node.Subquery.Accept(p).(LogicalPlan)
-	return cast(&Subquery{
+	v := cast(&Subquery{
 		SubqueryType: subqType,
-		Query:        stmt,
+		Query: &Subplan{
+			Plan: stmt,
+			ID:   p.planCtx.SubqueryCount,
+		},
+		ID: p.planCtx.SubqueryCount,
 	}, node)
+
+	p.planCtx.SubqueryCount++
+	return v
 }
 
 func (p *plannerVisitor) VisitExpressionCase(node *parse.ExpressionCase) any {
