@@ -51,12 +51,38 @@ func Test_Planner(t *testing.T) {
 			wt: "Projection: users.name\n" +
 				"└-Filter: users.id = subquery [regular] [subplan_id=0]\n" +
 				"  └-Scan Table [alias=users]: users\n" +
-				"Subplan [id=0]\n" +
+				"Subplan [id=0]: [scalar]\n" +
 				"└-Projection: posts.id\n" +
 				"  └-Filter: posts.content = 'hello'\n" +
 				"    └-Scan Table [alias=posts]: posts\n",
 		},
-		// TODO: correlated subquery
+		{
+			name: "correlated subquery in where clause",
+			sql:  "select name from users u where exists (select 1 from posts p where p.owner_id = u.id)",
+			wt: "Projection: u.name\n" +
+				"└-Filter: subquery [exists] [subplan_id=0]\n" +
+				"  └-Scan Table [alias=u]: users\n" +
+				"Subplan [id=0]: [correlated=u.id]\n" +
+				"└-Projection: 1\n" +
+				"  └-Filter: p.owner_id = u.id\n" +
+				"    └-Scan Table [alias=p]: posts\n",
+		},
+		{
+			// tests that correlation is propagated across multiple subqueries
+			name: "double nested correlated subquery",
+			sql:  "select name from users u where exists (select 1 from posts p where exists (select 1 from posts p2 where p2.owner_id = u.id))",
+			wt: "Projection: u.name\n" +
+				"└-Filter: subquery [exists] [subplan_id=1]\n" +
+				"  └-Scan Table [alias=u]: users\n" +
+				"Subplan [id=1]: [correlated=u.id]\n" +
+				"└-Projection: 1\n" +
+				"  └-Filter: subquery [exists] [subplan_id=0]\n" +
+				"    └-Scan Table [alias=p]: posts\n" +
+				"Subplan [id=0]: [correlated=u.id]\n" +
+				"└-Projection: 1\n" +
+				"  └-Filter: p2.owner_id = u.id\n" +
+				"    └-Scan Table [alias=p2]: posts\n",
+		},
 		{
 			name: "aggregate without group by",
 			sql:  "select sum(age) from users",
@@ -72,7 +98,14 @@ func Test_Planner(t *testing.T) {
 				"  └-Aggregate [group=users.name]: sum(users.age)\n" +
 				"    └-Scan Table [alias=users]: users\n",
 		},
-		// TODO: complex group by
+		{
+			name: "complex group by",
+			sql:  "select age/2, age*3 from users group by age/2, age*3",
+			wt: "Projection: users.age / 2, users.age * 3\n" +
+				"└-Aggregate [group=users.age / 2] [group=users.age * 3]: \n" +
+				"  └-Scan Table [alias=users]: users\n",
+		},
+		// TODO: negative case of the above
 		{
 			name: "complex having",
 			sql:  "select name, sum(age/2)+sum(age*10) from users group by name having sum(age)::int > 100 or sum(age/2)::int > 10",

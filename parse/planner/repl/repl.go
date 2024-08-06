@@ -32,7 +32,7 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Kuneiform Logical Planner REPL")
-	fmt.Println("Type 'exit' to exit")
+	fmt.Println("Use ctrl+c to exit")
 	fmt.Println("-----------------------------")
 
 	for {

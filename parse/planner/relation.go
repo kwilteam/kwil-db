@@ -19,6 +19,8 @@ type EvaluateContext struct {
 	// from a subquery (correlated subquery). These columns
 	// can be used in both expressions, but not in returns.
 	OuterRelation *Relation
+	// Correlations are the columns that are correlated in the query.
+	Correlations []*ColumnRef
 }
 
 func newEvalCtx(plan *planContext) *EvaluateContext {
@@ -193,7 +195,12 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 		}
 		return left, nil
 	case *Subplan:
-		return s.evalRelation(n.Plan)
+		rel, err := s.evalRelation(n.Plan)
+		if err != nil {
+			return nil, err
+		}
+
+		return rel, nil
 	}
 }
 
@@ -314,7 +321,12 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 			if err != nil {
 				return nil, err
 			}
-			field.Correlated = true
+
+			// add a copy of the column to the correlations
+			s.Correlations = append(s.Correlations, &ColumnRef{
+				Parent:     n.Parent,
+				ColumnName: n.ColumnName,
+			})
 
 			n.Parent = field.Parent
 
@@ -552,10 +564,18 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 		// for a subquery, we will add the current relation to the outer relation,
 		// to allow for correlated subqueries
 		oldOuter := s.OuterRelation
-		newOuter := append(s.OuterRelation.Fields, currentRel.Fields...)
-		s.OuterRelation = &Relation{Fields: newOuter}
+		oldCorrelations := s.Correlations
+
+		s.OuterRelation = &Relation{
+			Fields: append(s.OuterRelation.Fields, currentRel.Fields...),
+		}
+		// we don't need access to the old correlations since we will simply
+		// recognize them as correlated again if they are used in the subquery
+		s.Correlations = []*ColumnRef{}
+
 		defer func() {
 			s.OuterRelation = oldOuter
+			s.Correlations = oldCorrelations
 		}()
 
 		rel, err := s.evalRelation(n.Query)
@@ -563,21 +583,52 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 			return nil, err
 		}
 
+		// for all new correlations, we need to check if they are present on
+		// the oldOuter relation. If so, then we simply add them as correlated
+		// to the subplan. If not, then we also need to pass them back to the
+		// oldCorrelations so that they can be used in the outer query (in the case
+		// of a multi-level correlated subquery)
+		oldMap := make(map[[2]string]struct{})
+		for _, cor := range oldCorrelations {
+			oldMap[[2]string{cor.Parent, cor.ColumnName}] = struct{}{}
+		}
+
+		for _, cor := range s.Correlations {
+			_, err = currentRel.Search(cor.Parent, cor.ColumnName)
+			// if the column is not found in the current relation, then we need to
+			// pass it back to the oldCorrelations
+			if errors.Is(err, errColumnNotFound) {
+				// if not known to the outer correlation, then add it
+				_, ok := oldMap[[2]string{cor.Parent, cor.ColumnName}]
+				if !ok {
+					oldCorrelations = append(oldCorrelations, cor)
+					continue
+				}
+			} else if err != nil {
+				// some other error occurred
+				return nil, err
+			}
+			// if no error, it is correlated to this query, do nothing
+		}
+		if len(n.Query.Correlated) > 0 {
+			// TODO: delete this. this is a sanity check
+			panic("correlated subqueries should not have correlated columns")
+		}
+		n.Query.Correlated = s.Correlations
+
+		// subquery must return exactly one column
+
 		if len(rel.Fields) != 1 {
 			return nil, fmt.Errorf("subquery must return exactly one column, got %d", len(rel.Fields))
 		}
 
-		n.Correlated = rel.Fields[0].Correlated
-
-		scalar, err := rel.Fields[0].Scalar()
+		_, err = rel.Fields[0].Scalar()
 		if err != nil {
 			return nil, err
 		}
 
 		if n.SubqueryType == ExistsSubquery || n.SubqueryType == NotExistsSubquery {
-			if !scalar.Equals(types.BoolType) {
-				return nil, fmt.Errorf("subquery must return a boolean, got %s", scalar)
-			}
+			return anonField(types.BoolType), nil
 		}
 
 		return rel.Fields[0], nil
@@ -754,8 +805,6 @@ type Field struct {
 	// depending on the field type.
 	// This value should be accessed using the Scalar() or Object()
 	val any
-	// Correlated is true if the field is correlated.
-	Correlated bool
 }
 
 func anonField(dt *types.DataType) *Field {
@@ -794,78 +843,6 @@ func (f *Field) Object() (map[string]*types.DataType, error) {
 
 		// this is an internal bug
 		panic(fmt.Sprintf("unexpected return type %T", f.val))
-	}
-	return obj, nil
-}
-
-// ! (8/1/2024)
-// ProjectedColumn is _maybe_ on the right track, but should probably be rethought.
-// It was created when I was trying to enforce aggregation rules in the planner.
-
-// ProjectedColumn represents a column in a projection.
-type ProjectedColumn struct {
-	Parent string // the parent relation name
-	Name   string // the column name
-	// If the column is referenced inside of an aggregate function,
-	// (e.g. sum(col_name)), then Aggregated will be true.
-	Aggregated bool
-	DataType   *types.DataType
-}
-
-// ReturnedType is a struct that is returned from the Scalar() method
-// of LogicalExpr implementations. It can be used to coerce the return type,
-// and to handle error returns. Callers should never access the fields directly.
-type ReturnedType struct {
-	// val is the data type that is returned by the expression.
-	// It is either a single data type or a map of data types.
-	val any
-	// err is the error that was returned during the evaluation of the expression.
-	// It is added here as a convenience so that DataType itself does not have to
-	// return an error, requiring the callers to check for errors twice.
-	err error
-}
-
-// Scalar attempts to coerce the return type to a single data type.
-func (r *ReturnedType) Scalar() (*types.DataType, error) {
-	if r.err != nil {
-		return nil, r.err
-	}
-
-	dt, ok := r.val.(*types.DataType)
-	if !ok {
-		// this can be triggered by a user if they try to directly use an object
-		// in an expression
-		_, ok = r.val.(map[string]*types.DataType)
-		if ok {
-			return nil, fmt.Errorf("referenced expression is an object, expected scalar or array. specify a field to access using the . operator")
-		}
-
-		// this is an internal bug
-		panic(fmt.Sprintf("unexpected return type %T", r.val))
-	}
-	return dt, nil
-}
-
-// Object attempts to coerce the return type to a map of data types.
-func (r *ReturnedType) Object() (map[string]*types.DataType, error) {
-	if r.err != nil {
-		return nil, r.err
-	}
-
-	obj, ok := r.val.(map[string]*types.DataType)
-	if !ok {
-		// this can be triggered by a user if they try to use dot notation
-		// on a scalar
-		v, ok := r.val.(*types.DataType)
-		if ok {
-			if v.IsArray {
-				return nil, fmt.Errorf("referenced expression is an array, expected object")
-			}
-			return nil, fmt.Errorf("referenced expression is a scalar, expected object")
-		}
-
-		// this is an internal bug
-		panic(fmt.Sprintf("unexpected return type %T", r.val))
 	}
 	return obj, nil
 }

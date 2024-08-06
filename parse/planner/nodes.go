@@ -32,71 +32,6 @@ type Traversable interface {
 	Plans() []LogicalPlan
 }
 
-func Format(plan LogicalNode) string {
-	str := strings.Builder{}
-	inner, topLevel := innerFormat(plan, 0, []bool{})
-	str.WriteString(inner)
-
-	printSubplans(&str, topLevel)
-
-	return str.String()
-}
-
-// printSubplans is a recursive function that prints the subplans
-func printSubplans(str *strings.Builder, subplans []*Subplan) {
-	for i, sub := range subplans {
-		printLong := i < len(subplans)-1
-
-		str.WriteString(sub.String())
-		str.WriteString("\n")
-		strs, subs := innerFormat(sub.Plan, 1, []bool{printLong})
-		str.WriteString(strs)
-		printSubplans(str, subs)
-	}
-}
-
-// innerFormat is a function that allows us to give more complex
-// formatting logic.
-// It returns subplans that should be added to the top level.
-func innerFormat(plan LogicalNode, count int, printLong []bool) (string, []*Subplan) {
-	if sub, ok := plan.(*Subplan); ok {
-		return "", []*Subplan{sub}
-	}
-
-	var msg strings.Builder
-	for i := 0; i < count; i++ {
-		//msg.WriteString("∟-")
-		if i == count-1 && len(printLong) > i && !printLong[i] {
-			msg.WriteString("└-")
-		} else if i == count-1 && len(printLong) > i && printLong[i] {
-			msg.WriteString("|-")
-		} else if i > 0 && len(printLong) > i && printLong[i] {
-			msg.WriteString("| ")
-		} else {
-			msg.WriteString("  ")
-		}
-	}
-	msg.WriteString(plan.String())
-	msg.WriteString("\n")
-	var topLevel []*Subplan
-	plans := plan.Plans()
-	for i, child := range plans {
-		showLong := true
-		// if it is the last plan, or if the next plan is a subplan,
-		// we should not show the long line
-		if i == len(plans)-1 {
-			showLong = false
-		} else if _, ok := plans[i+1].(*Subplan); ok {
-			showLong = false
-		}
-
-		str, children := innerFormat(child, count+1, append(printLong, showLong))
-		msg.WriteString(str)
-		topLevel = append(topLevel, children...)
-	}
-	return msg.String(), topLevel
-}
-
 // ScanSource is a source of data that a Scan can be performed on.
 // This is either a physical table, a procedure call that returns a table,
 // or a subquery.
@@ -601,6 +536,11 @@ type Subplan struct {
 	baseLogicalPlan
 	Plan LogicalPlan
 	ID   int
+	// Correlated is the list of fields that are correlated
+	// to the outer query. If empty, the subplan is scalar.
+	// It is set when the subquery expression encapsulating
+	// this node is planned.
+	Correlated []*ColumnRef
 }
 
 func (s *Subplan) Children() []LogicalNode {
@@ -612,7 +552,24 @@ func (s *Subplan) Plans() []LogicalPlan {
 }
 
 func (s *Subplan) String() string {
-	return fmt.Sprintf("Subplan [id=%d]", s.ID)
+	str := strings.Builder{}
+	str.WriteString("Subplan [id=")
+	str.WriteString(strconv.Itoa(s.ID))
+	str.WriteString("]:")
+	if len(s.Correlated) == 0 {
+		str.WriteString(" [scalar]")
+		return str.String()
+	}
+
+	for _, field := range s.Correlated {
+		str.WriteString(" [correlated=")
+		str.WriteString(field.Parent)
+		str.WriteString(".")
+		str.WriteString(field.ColumnName)
+		str.WriteString("]")
+	}
+
+	return str.String()
 }
 
 /*
@@ -1123,24 +1080,15 @@ func (f *FieldAccess) Plans() []LogicalPlan {
 type Subquery struct {
 	baseLogicalExpr
 	SubqueryType SubqueryType
-	Query        LogicalPlan
+	Query        *Subplan
 	// ID is the number of the subquery in the query.
 	ID int
-
-	// The fields below this point are set in evalRelation, instead
-	// of in the planner / parse ast visitor.
-
-	// Correlated indicates whether the subquery is correlated.
-	Correlated bool
 }
 
 var _ LogicalExpr = (*Subquery)(nil)
 
 func (s *Subquery) String() string {
 	str := strings.Builder{}
-	if s.Correlated {
-		str.WriteString("correlated ")
-	}
 	str.WriteString("subquery ")
 
 	str.WriteString("[")
@@ -1192,4 +1140,69 @@ func traverse(node LogicalNode, callback func(node LogicalNode) bool) {
 	for _, child := range node.Children() {
 		traverse(child, callback)
 	}
+}
+
+func Format(plan LogicalNode) string {
+	str := strings.Builder{}
+	inner, topLevel := innerFormat(plan, 0, []bool{})
+	str.WriteString(inner)
+
+	printSubplans(&str, topLevel)
+
+	return str.String()
+}
+
+// printSubplans is a recursive function that prints the subplans
+func printSubplans(str *strings.Builder, subplans []*Subplan) {
+	for i, sub := range subplans {
+		printLong := i < len(subplans)-1
+
+		str.WriteString(sub.String())
+		str.WriteString("\n")
+		strs, subs := innerFormat(sub.Plan, 1, []bool{printLong})
+		str.WriteString(strs)
+		printSubplans(str, subs)
+	}
+}
+
+// innerFormat is a function that allows us to give more complex
+// formatting logic.
+// It returns subplans that should be added to the top level.
+func innerFormat(plan LogicalNode, count int, printLong []bool) (string, []*Subplan) {
+	if sub, ok := plan.(*Subplan); ok {
+		return "", []*Subplan{sub}
+	}
+
+	var msg strings.Builder
+	for i := 0; i < count; i++ {
+		//msg.WriteString("∟-")
+		if i == count-1 && len(printLong) > i && !printLong[i] {
+			msg.WriteString("└-")
+		} else if i == count-1 && len(printLong) > i && printLong[i] {
+			msg.WriteString("|-")
+		} else if i > 0 && len(printLong) > i && printLong[i] {
+			msg.WriteString("| ")
+		} else {
+			msg.WriteString("  ")
+		}
+	}
+	msg.WriteString(plan.String())
+	msg.WriteString("\n")
+	var topLevel []*Subplan
+	plans := plan.Plans()
+	for i, child := range plans {
+		showLong := true
+		// if it is the last plan, or if the next plan is a subplan,
+		// we should not show the long line
+		if i == len(plans)-1 {
+			showLong = false
+		} else if _, ok := plans[i+1].(*Subplan); ok {
+			showLong = false
+		}
+
+		str, children := innerFormat(child, count+1, append(printLong, showLong))
+		msg.WriteString(str)
+		topLevel = append(topLevel, children...)
+	}
+	return msg.String(), topLevel
 }
