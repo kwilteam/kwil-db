@@ -33,11 +33,33 @@ func (s *Statistics) String() string {
 	return st.String()
 }
 
+type ValCount struct {
+	Val   any
+	Count int
+}
+
 // ColumnStatistics contains statistics about a column.
 type ColumnStatistics struct {
 	NullCount int64
-	Min       any
-	Max       any
+
+	Min      any
+	MinCount int
+
+	Max      any
+	MaxCount int
+
+	// MCVs are the most common values. It should be sorted by the value. It
+	// should also be limited capacity, which means scan order has to be
+	// deterministic since we have to throw out same-frequency observations.
+	// (crap) Solution: multi-pass scan, merge lists, continue until no higher
+	// freq values observed? OR when capacity reached, use a histogram? Do not
+	// throw away MCVs, just start putting additional observations in to the
+	// histogram instead.
+	// MCVs []ValCount
+	// MCVs map[cmp.Ordered]
+
+	// MCVals  []any
+	// MCFreqs []int
 
 	// DistinctCount is harder. For example, unless we sub-sample
 	// (deterministically), tracking distinct values could involve a data

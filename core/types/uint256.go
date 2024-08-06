@@ -13,12 +13,13 @@ import (
 // It is mostly a wrapper around github.com/holiman/uint256.Int, but includes
 // extra methods for usage in Postgres.
 type Uint256 struct {
-	uint256.Int
+	base uint256.Int // not exporting massive method set, which also has params and returns of holiman types
+	Null bool
 }
 
 // Uint256FromInt creates a new Uint256 from an int.
 func Uint256FromInt(i uint64) *Uint256 {
-	return &Uint256{Int: *uint256.NewInt(i)}
+	return &Uint256{base: *uint256.NewInt(i)}
 }
 
 // Uint256FromString creates a new Uint256 from a string.
@@ -27,7 +28,7 @@ func Uint256FromString(s string) (*Uint256, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Uint256{Int: *i}, nil
+	return &Uint256{base: *i}, nil
 }
 
 // Uint256FromBig creates a new Uint256 from a big.Int.
@@ -41,8 +42,33 @@ func Uint256FromBytes(b []byte) (*Uint256, error) {
 	return Uint256FromBig(bigInt)
 }
 
+func (u Uint256) String() string {
+	return u.base.String()
+}
+
+func (u Uint256) Bytes() []byte {
+	return u.base.Bytes()
+}
+
+func (u Uint256) ToBig() *big.Int {
+	return u.base.ToBig()
+}
+
 func (u Uint256) MarshalJSON() ([]byte, error) {
-	return []byte(u.String()), nil
+	return []byte(u.base.String()), nil // ? json ?
+}
+
+func (u *Uint256) Clone() *Uint256 {
+	v := *u
+	return &v
+}
+
+func (u *Uint256) Cmp(v *Uint256) int {
+	return u.base.Cmp(&v.base)
+}
+
+func CmpUint256(u, v *Uint256) int {
+	return u.Cmp(v)
 }
 
 func (u *Uint256) UnmarshalJSON(b []byte) error {
@@ -51,12 +77,15 @@ func (u *Uint256) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	u.Int = u2.Int
+	u.base = u2.base
 	return nil
 }
 
 // Value implements the driver.Valuer interface.
 func (u Uint256) Value() (driver.Value, error) {
+	if u.Null {
+		return nil, nil
+	}
 	return u.String(), nil
 }
 
@@ -72,7 +101,13 @@ func (u *Uint256) Scan(src interface{}) error {
 			return err
 		}
 
-		u.Int = u2.Int
+		u.base = u2.base
+		u.Null = false
+		return nil
+
+	case nil:
+		u.Null = true
+		u.base.Clear()
 		return nil
 	}
 

@@ -2,14 +2,17 @@ package pg
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
@@ -67,7 +70,7 @@ func TableStats(ctx context.Context, schema, table string, db sql.Executor) (*sq
 	}
 
 	// Column statistics
-	colStats, err := colStats(ctx, qualifiedTable, colInfo, db)
+	colStats, err := colStats(ctx, count, qualifiedTable, colInfo, db)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +91,35 @@ func TableStats(ctx context.Context, schema, table string, db sql.Executor) (*sq
 // colStats collects column-wise statistics for the specified table, using the
 // provided column definitions to instantiate scan values used by the full scan
 // that iterates over all rows of the table.
-func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db sql.Executor) ([]sql.ColumnStatistics, error) {
+func colStats(ctx context.Context, rowCount int64, qualifiedTable string, colInfo []ColInfo, db sql.Executor) ([]sql.ColumnStatistics, error) {
+	// rowCount is unused now, and can seemingly be computed via the scan
+	// itself, but I intend to use it in for more complex statistics building algos.
+
+	// https://wiki.postgresql.org/wiki/Retrieve_primary_key_columns
+	getIndBase := `SELECT a.attname::text, i.indexrelid::int8
+		FROM pg_index i
+		JOIN pg_attribute a ON a.attnum = ANY(i.indkey) AND a.attrelid = i.indrelid
+		WHERE i.indrelid = '` + qualifiedTable + `'::regclass`
+	// use primary key columns first
+	getPK := getIndBase + ` AND i.indisprimary;`
+	// then unique+not-null index cols?
+	// getUniqueInds := getIndBase + ` AND i.indisunique;`
+	res, err := db.Execute(ctx, getPK)
+	if err != nil {
+		return nil, err
+	}
+	// IMPORTANT NOTE: if the iteration over all rows of the table involves *no*
+	// ORDER BY clause, the scan order is not guaranteed. This should be an
+	// error for tables where stats must be deterministic.
+	//
+	// if len(res.Rows) == 0 {
+	// 	return nil, errors.New("no suitable orderby column")
+	// }
+	pkCols := make([]string, len(res.Rows))
+	for i, row := range res.Rows {
+		pkCols[i] = row[0].(string)
+	}
+
 	numCols := len(colInfo)
 	colTypes := make([]ColType, numCols)
 	for i := range colInfo {
@@ -102,13 +133,11 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 	for _, col := range colInfo {
 		scans = append(scans, col.scanVal())
 	}
-	// IMPORTANT NOTE: the following iteration over all rows of the table
-	// involves *no* ORDER BY clause. As such, the scan order is not guaranteed
-	// to be deterministic, and the any aggregation code should be commutative.
-	// For example, we can't naively perform summation of float64 (double
-	// precision floating point), but we can with integer or NUMERIC types,
-	// issues of overflow aside.
-	err := QueryRowFunc(ctx, db, `SELECT * FROM `+qualifiedTable, scans,
+	stmt := `SELECT * FROM ` + qualifiedTable
+	if len(pkCols) > 0 {
+		stmt += ` ORDER BY ` + strings.Join(pkCols, ",")
+	}
+	err = QueryRowFunc(ctx, db, stmt, scans,
 		func() error {
 			var err error
 			for i, val := range scans {
@@ -121,7 +150,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 				// TODO: do something with array types (num elements stats????)
 
 				switch colTypes[i] {
-				case ColTypeInt:
+				case ColTypeInt: // use int64 in stats
 					var valInt int64
 					switch it := val.(type) {
 					case interface{ Int64Value() (pgtype.Int8, error) }: // several of the pgtypes int types
@@ -143,19 +172,9 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						}
 					}
 
-					if stat.Min == nil {
-						stat.Min = valInt
-						stat.Max = valInt
-						continue
-					}
-					if valInt < stat.Min.(int64) {
-						stat.Min = valInt
-					} else if valInt > stat.Max.(int64) {
-						stat.Max = valInt
-					}
-					continue
+					casMinMax(stat, valInt, cmp.Compare[int64])
 
-				case ColTypeText:
+				case ColTypeText: // use string in stats
 					valStr, null, ok := TextValue(val) // val.(string)
 					if !ok {
 						return fmt.Errorf("not string: %T", val)
@@ -164,19 +183,10 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						stat.NullCount++
 						continue
 					}
-					if stat.Min == nil {
-						stat.Min = valStr
-						stat.Max = valStr
-						continue
-					}
-					if valStr < stat.Min.(string) {
-						stat.Min = valStr
-					} else if valStr > stat.Max.(string) {
-						stat.Max = valStr
-					}
-					continue
 
-				case ColTypeByteA:
+					casMinMax(stat, valStr, strings.Compare)
+
+				case ColTypeByteA: // use []byte in stats
 					var valBytea []byte
 					switch vt := val.(type) {
 					// Presently we're just using []byte, not pgtype.Array, but
@@ -199,32 +209,20 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 							stat.NullCount++
 							continue
 						}
-						valBytea = *vt
+						valBytea = slices.Clone(*vt)
 					case []byte:
 						if vt == nil {
 							stat.NullCount++
 							continue
 						}
-						valBytea = vt
+						valBytea = slices.Clone(vt)
 					default:
 						return fmt.Errorf("not bytea: %T", val)
 					}
 
-					if stat.Min == nil {
-						valBytea = slices.Clone(valBytea)
-						stat.Min = valBytea
-						stat.Max = valBytea
-						continue
-					}
+					casMinMax(stat, valBytea, bytes.Compare)
 
-					if bytes.Compare(valBytea, stat.Min.([]byte)) == -1 {
-						stat.Min = slices.Clone(valBytea)
-					} else if bytes.Compare(valBytea, stat.Max.([]byte)) == 1 {
-						stat.Max = slices.Clone(valBytea)
-					}
-					continue
-
-				case ColTypeBool:
+				case ColTypeBool: // use bool in stats
 					var b bool
 					switch v := val.(type) {
 					case *pgtype.Bool:
@@ -248,20 +246,9 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						return fmt.Errorf("invalid bool (%T)", val)
 					}
 
-					if stat.Min == nil {
-						stat.Min = b
-						stat.Max = b
-						continue
-					}
+					casMinMax(stat, b, cmpBool)
 
-					if b && !stat.Max.(bool) {
-						stat.Max = b // true
-					}
-					if !b && stat.Min.(bool) {
-						stat.Min = b // false
-					}
-
-				case ColTypeNumeric:
+				case ColTypeNumeric: // use *decimal.Decimal in stats
 					var dec *decimal.Decimal
 					switch v := val.(type) {
 					case *pgtype.Numeric:
@@ -293,34 +280,38 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						}
 
 					case *decimal.Decimal:
+						if v.NaN() { // we're pretending this is NULL by our sql.Scanner's convetion
+							stat.NullCount++
+							continue
+						}
 						if v != nil {
-							v2 := *v
+							v2 := *v // clone!
 							v = &v2
 						}
 						dec = v
 					case decimal.Decimal:
+						if v.NaN() { // we're pretending this is NULL by our sql.Scanner's convetion
+							stat.NullCount++
+							continue
+						}
 						v2 := v
 						dec = &v2
 					}
 
-					if stat.Min == nil {
-						stat.Min = dec
-						stat.Max = dec
+					casMinMax(stat, dec, cmpDecimal)
+
+				case ColTypeUINT256:
+					v, ok := val.(*types.Uint256)
+					if !ok {
+						return fmt.Errorf("not a *types.Uint256: %T", val)
+					}
+
+					if v.Null {
+						stat.NullCount++
 						continue
 					}
 
-					// we may need to worry about NaNs here, not sure
-					cm, _ := dec.Cmp(stat.Min.(*decimal.Decimal))
-					if cm == -1 {
-						stat.Min = dec
-						continue
-					}
-					cm, _ = dec.Cmp(stat.Max.(*decimal.Decimal))
-					if cm == 1 {
-						stat.Max = dec
-					}
-
-					continue
+					casMinMax(stat, v.Clone(), types.CmpUint256)
 
 				case ColTypeFloat: // we don't want, don't have
 					var varFloat float64
@@ -362,16 +353,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						return fmt.Errorf("invalid float (%T)", val)
 					}
 
-					if stat.Min == nil {
-						stat.Min = varFloat
-						stat.Max = varFloat
-						continue
-					}
-					if varFloat < stat.Min.(float64) {
-						stat.Min = varFloat
-					} else if varFloat > stat.Max.(float64) {
-						stat.Max = varFloat
-					}
+					casMinMax(stat, varFloat, cmp.Compare[float64])
 
 				case ColTypeUUID:
 					fallthrough // TODO
@@ -388,4 +370,59 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 	}
 
 	return colStats, nil
+}
+
+func cmpBool(a, b bool) int {
+	if b {
+		if a { // true == true
+			return 0
+		}
+		return -1 // false < true
+	}
+	if a {
+		return 1 // true > false
+	}
+	return 0 // false == false
+}
+
+func cmpDecimal(val, mm *decimal.Decimal) int {
+	d, err := val.Cmp(mm)
+	if err != nil {
+		panic(fmt.Sprintf("%s: (nan decimal?) %v or %v", err, val, mm))
+	}
+	return d
+}
+
+func casMinMax[T any](stats *sql.ColumnStatistics, val T, comp func(v, m T) int) error {
+	if stats.Min == nil {
+		stats.Min = val
+		stats.MinCount = 1
+	} else if mn, ok := stats.Min.(T); ok {
+		switch comp(val, mn) {
+		case -1: // new MINimum
+			stats.Min = val
+			stats.MinCount = 1
+		case 0: // another of the same
+			stats.MinCount++
+		}
+	} else {
+		return fmt.Errorf("invalid stats value type %T for tuple of type %T", val, stats.Min)
+	}
+
+	if stats.Max == nil {
+		stats.Max = val
+		stats.MaxCount = 1
+	} else if mx, ok := stats.Max.(T); ok {
+		switch comp(val, mx) {
+		case 1: // new MAXimum
+			stats.Max = val
+			stats.MaxCount = 1
+		case 0: // another of the same
+			stats.MaxCount++
+		}
+	} else {
+		return fmt.Errorf("invalid stats value type %T for tuple of type %T", val, stats.Max)
+	}
+
+	return nil
 }

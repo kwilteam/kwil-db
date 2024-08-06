@@ -279,6 +279,18 @@ func (d *Decimal) Sign() int {
 	return d.dec.Sign()
 }
 
+func (d Decimal) NaN() bool {
+	switch d.dec.Form {
+	case apd.NaN, apd.NaNSignaling:
+		return true
+	}
+	return false
+}
+
+func (d Decimal) Inf() bool {
+	return d.dec.Form == apd.Infinite
+}
+
 // Value implements the database/sql/driver.Valuer interface. It converts d to a
 // string.
 func (d Decimal) Value() (driver.Value, error) {
@@ -453,6 +465,7 @@ func Cmp(x, y *Decimal) (int64, error) {
 	}
 
 	return z.Int64()
+	// return x.dec.Cmp(&y.dec)
 }
 
 // CheckPrecisionAndScale checks if the precision and scale are valid.
