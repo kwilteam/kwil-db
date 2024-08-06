@@ -279,10 +279,10 @@ type SQLParseResult struct {
 // ParseSQL parses an SQL statement.
 // It requires a schema to be passed in, since SQL statements may reference
 // schema objects.
-// SkipDefaultOrdering is used to skip the default ordering of the SQL statement.
-// TODO: remove this. Default ordering will be moved to the planner to allow for
+// skipValidation is used to skip the sql validatoion.
+// TODO: remove this. Default ordering and validation will be moved to the planner to enable
 // better accuracy.
-func ParseSQL(sql string, schema *types.Schema, skipDefaultOrdering bool) (res *SQLParseResult, err error) {
+func ParseSQL(sql string, schema *types.Schema, skipValidation bool) (res *SQLParseResult, err error) {
 	parser, errLis, sqlVis, parseVis, deferFn, err := setupSQLParser(sql, schema, true)
 
 	res = &SQLParseResult{
@@ -299,6 +299,10 @@ func ParseSQL(sql string, schema *types.Schema, skipDefaultOrdering bool) (res *
 	res.AST = parser.Sql_entry().Accept(parseVis).(*SQLStatement)
 
 	if errLis.Err() != nil {
+		return res, nil
+	}
+
+	if skipValidation {
 		return res, nil
 	}
 

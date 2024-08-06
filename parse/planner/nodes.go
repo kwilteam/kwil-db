@@ -34,7 +34,7 @@ type Traversable interface {
 
 func Format(plan LogicalNode) string {
 	str := strings.Builder{}
-	inner, topLevel := innerFormat(plan, 0)
+	inner, topLevel := innerFormat(plan, 0, []bool{})
 	str.WriteString(inner)
 
 	printSubplans(&str, topLevel)
@@ -44,10 +44,12 @@ func Format(plan LogicalNode) string {
 
 // printSubplans is a recursive function that prints the subplans
 func printSubplans(str *strings.Builder, subplans []*Subplan) {
-	for _, sub := range subplans {
+	for i, sub := range subplans {
+		printLong := i < len(subplans)-1
+
 		str.WriteString(sub.String())
 		str.WriteString("\n")
-		strs, subs := innerFormat(sub.Plan, 2)
+		strs, subs := innerFormat(sub.Plan, 1, []bool{printLong})
 		str.WriteString(strs)
 		printSubplans(str, subs)
 	}
@@ -56,20 +58,39 @@ func printSubplans(str *strings.Builder, subplans []*Subplan) {
 // innerFormat is a function that allows us to give more complex
 // formatting logic.
 // It returns subplans that should be added to the top level.
-func innerFormat(plan LogicalNode, indent int) (string, []*Subplan) {
+func innerFormat(plan LogicalNode, count int, printLong []bool) (string, []*Subplan) {
 	if sub, ok := plan.(*Subplan); ok {
 		return "", []*Subplan{sub}
 	}
 
 	var msg strings.Builder
-	for i := 0; i < indent; i++ {
-		msg.WriteString(" ")
+	for i := 0; i < count; i++ {
+		//msg.WriteString("∟-")
+		if i == count-1 && len(printLong) > i && !printLong[i] {
+			msg.WriteString("└-")
+		} else if i == count-1 && len(printLong) > i && printLong[i] {
+			msg.WriteString("|-")
+		} else if i > 0 && len(printLong) > i && printLong[i] {
+			msg.WriteString("| ")
+		} else {
+			msg.WriteString("  ")
+		}
 	}
 	msg.WriteString(plan.String())
 	msg.WriteString("\n")
 	var topLevel []*Subplan
-	for _, child := range plan.Plans() {
-		str, children := innerFormat(child, indent+2)
+	plans := plan.Plans()
+	for i, child := range plans {
+		showLong := true
+		// if it is the last plan, or if the next plan is a subplan,
+		// we should not show the long line
+		if i == len(plans)-1 {
+			showLong = false
+		} else if _, ok := plans[i+1].(*Subplan); ok {
+			showLong = false
+		}
+
+		str, children := innerFormat(child, count+1, append(printLong, showLong))
 		msg.WriteString(str)
 		topLevel = append(topLevel, children...)
 	}
@@ -131,8 +152,16 @@ func (f *ProcedureScanSource) Children() []LogicalNode {
 
 func (f *ProcedureScanSource) FormatScan() string {
 	str := strings.Builder{}
+	str.WriteString("[foreign=")
+	str.WriteString(strconv.FormatBool(f.IsForeign))
+	str.WriteString("] ")
 	if f.IsForeign {
-		str.WriteString("[foreign] ")
+		str.WriteString("[dbid=")
+		str.WriteString(f.ContextualArgs[0].String())
+		str.WriteString("] ")
+		str.WriteString("[proc=")
+		str.WriteString(f.ContextualArgs[1].String())
+		str.WriteString("] ")
 	}
 	str.WriteString(f.ProcedureName)
 	str.WriteString("(")
@@ -236,7 +265,7 @@ func (s *Scan) String() string {
 	case *ProcedureScanSource:
 		return fmt.Sprintf("Scan Procedure [alias=%s]: %s", s.RelationName, s.Source.FormatScan())
 	case *SubqueryScanSource:
-		return fmt.Sprintf("Scan Subquery [alias=%s]: %s", s.RelationName, s.Source.FormatScan())
+		return fmt.Sprintf("Scan Subquery [alias=%s]:", s.RelationName)
 	default:
 		panic(fmt.Sprintf("unknown scan source type %T", s.Source))
 	}
@@ -445,7 +474,7 @@ func (s *SetOperation) Children() []LogicalNode {
 }
 
 func (s *SetOperation) Plans() []LogicalPlan {
-	return append([]LogicalPlan{s.Left, s.Right})
+	return []LogicalPlan{s.Left, s.Right}
 }
 
 func (s *SetOperation) String() string {
@@ -501,21 +530,22 @@ func (a *Aggregate) Plans() []LogicalPlan {
 
 func (a *Aggregate) String() string {
 	str := strings.Builder{}
-	str.WriteString("AGGREGATE: group_by=[")
-	for i, expr := range a.GroupingExpressions {
-		if i > 0 {
-			str.WriteString(", ")
-		}
+	str.WriteString("Aggregate")
+
+	for _, expr := range a.GroupingExpressions {
+		str.WriteString(" [group=")
 		str.WriteString(expr.String())
+		str.WriteString("]")
 	}
-	str.WriteString("]; aggregates=[")
+	str.WriteString(": ")
+
 	for i, expr := range a.AggregateExpressions {
 		if i > 0 {
 			str.WriteString(", ")
 		}
 		str.WriteString(expr.String())
 	}
-	str.WriteString("]")
+
 	return str.String()
 }
 
@@ -830,7 +860,7 @@ func (a *ArithmeticOp) String() string {
 		op = "%"
 	}
 
-	return fmt.Sprintf("(%s %s %s)", a.Left.String(), op, a.Right.String())
+	return fmt.Sprintf("%s %s %s", a.Left.String(), op, a.Right.String())
 }
 
 func (a *ArithmeticOp) Children() []LogicalNode {
@@ -991,7 +1021,7 @@ type TypeCast struct {
 }
 
 func (t *TypeCast) String() string {
-	return fmt.Sprintf("(%s::%s)", t.Expr.String(), t.Type.Name)
+	return fmt.Sprintf("%s::%s", t.Expr.String(), t.Type.Name)
 }
 
 func (t *TypeCast) Children() []LogicalNode {

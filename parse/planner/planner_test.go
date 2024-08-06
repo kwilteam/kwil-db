@@ -26,35 +26,88 @@ func Test_Planner(t *testing.T) {
 			name: "basic select",
 			sql:  "select 1",
 			wt: "Projection: 1\n" +
-				"  Empty Scan\n",
+				"└-Empty Scan\n",
 		},
 		{
 			name: "select with filter",
 			sql:  "select id, name from users where age > 18",
 			wt: "Projection: users.id, users.name\n" +
-				"  Filter: users.age > 18\n" +
-				"    Scan Table [alias=users]: users\n",
+				"└-Filter: users.age > 18\n" +
+				"  └-Scan Table [alias=users]: users\n",
 		},
 		{
 			name: "subquery join",
 			sql:  "select name from users u inner join (select owner_id from posts) p on u.id = p.owner_id",
 			wt: "Projection: u.name\n" +
-				"  Inner Join: u.id = p.owner_id\n" +
-				"    Scan Table [alias=u]: users\n" +
-				"    Scan Subquery [alias=p]: \n" +
-				"      Projection: posts.owner_id\n" +
-				"        Scan Table [alias=posts]: posts\n",
+				"└-Inner Join: u.id = p.owner_id\n" +
+				"  |-Scan Table [alias=u]: users\n" +
+				"  └-Scan Subquery [alias=p]:\n" +
+				"    └-Projection: posts.owner_id\n" +
+				"      └-Scan Table [alias=posts]: posts\n",
 		},
 		{
 			name: "scalar subquery in where clause",
 			sql:  "select name from users where id = (select id from posts where content = 'hello')",
 			wt: "Projection: users.name\n" +
-				"  Filter: users.id = subquery [regular] [subplan_id=0]\n" +
-				"    Scan Table [alias=users]: users\n" +
+				"└-Filter: users.id = subquery [regular] [subplan_id=0]\n" +
+				"  └-Scan Table [alias=users]: users\n" +
 				"Subplan [id=0]\n" +
-				"  Projection: posts.id\n" +
-				"    Filter: posts.content = 'hello'\n" +
-				"      Scan Table [alias=posts]: posts\n",
+				"└-Projection: posts.id\n" +
+				"  └-Filter: posts.content = 'hello'\n" +
+				"    └-Scan Table [alias=posts]: posts\n",
+		},
+		// TODO: correlated subquery
+		{
+			name: "aggregate without group by",
+			sql:  "select sum(age) from users",
+			wt: "Projection: sum(users.age)\n" +
+				"└-Aggregate: sum(users.age)\n" +
+				"  └-Scan Table [alias=users]: users\n",
+		},
+		{
+			name: "aggregate with group by",
+			sql:  "select name, sum(age) from users group by name having sum(age)::int > 100",
+			wt: "Projection: users.name, sum(users.age)\n" +
+				"└-Filter: sum(users.age)::int > 100\n" +
+				"  └-Aggregate [group=users.name]: sum(users.age)\n" +
+				"    └-Scan Table [alias=users]: users\n",
+		},
+		// TODO: complex group by
+		{
+			name: "complex having",
+			sql:  "select name, sum(age/2)+sum(age*10) from users group by name having sum(age)::int > 100 or sum(age/2)::int > 10",
+			wt: "Projection: users.name, sum(users.age / 2) + sum(users.age * 10)\n" +
+				"└-Filter: (sum(users.age)::int > 100 OR sum(users.age / 2)::int > 10)\n" +
+				"  └-Aggregate [group=users.name]: sum(users.age / 2), sum(users.age * 10), sum(users.age)\n" +
+				"    └-Scan Table [alias=users]: users\n",
+		},
+		// TODO: test that we cannot use aggregates in where clause
+		{
+			name: "every type of join",
+			vars: map[string]*types.DataType{
+				"$id":   types.IntType,
+				"$name": types.TextType,
+			},
+			sql: `select c.brand, pu.content, u.name, u2.id, count(p.id) from users u
+				inner join posts p on u.id = p.owner_id
+				left join owned_cars['dbid', 'proc']($id) c on c.owner_name = u.name
+				right join posts_by_user($name) pu on pu.content = p.content
+				full join (select id from users where age > 18) u2 on u2.id = u.id
+				group by c.brand, pu.content, u.name, u2.id;`,
+			wt: "Projection: c.brand, pu.content, u.name, u2.id, count(p.id)\n" +
+				"└-Aggregate [group=c.brand] [group=pu.content] [group=u.name] [group=u2.id]: count(p.id)\n" +
+				"  └-Full Outer Join: u2.id = u.id\n" +
+				"    |-Right Outer Join: pu.content = p.content\n" +
+				"    | |-Left Outer Join: c.owner_name = u.name\n" +
+				"    | | |-Inner Join: u.id = p.owner_id\n" +
+				"    | | | |-Scan Table [alias=u]: users\n" +
+				"    | | | └-Scan Table [alias=p]: posts\n" +
+				"    | | └-Scan Procedure [alias=c]: [foreign=true] [dbid='dbid'] [proc='proc'] owned_cars($id)\n" +
+				"    | └-Scan Procedure [alias=pu]: [foreign=false] posts_by_user($name)\n" +
+				"    └-Scan Subquery [alias=u2]:\n" +
+				"      └-Projection: users.id\n" +
+				"        └-Filter: users.age > 18\n" +
+				"          └-Scan Table [alias=users]: users\n",
 		},
 	}
 
@@ -110,4 +163,12 @@ table posts {
 	content text maxlen(300),
 	foreign key (owner_id) references users(id) on delete cascade on update cascade
 }
+
+procedure posts_by_user($name text) public view returns table(content text) {
+	return select p.content from posts p
+		inner join users u on p.owner_id = u.id
+		where u.name = $name;
+}
+
+foreign procedure owned_cars($id int) returns table(owner_name text, brand text, model text)
 `

@@ -7,7 +7,13 @@ import (
 	"github.com/kwilteam/kwil-db/parse"
 )
 
-func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType, objects map[string]map[string]*types.DataType) (LogicalPlan, error) {
+func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType, objects map[string]map[string]*types.DataType) (lp LogicalPlan, err error) {
+	// defer func() {
+	// 	if r := recover(); r != nil {
+	// 		err = fmt.Errorf("panic: %v", r)
+	// 	}
+	// }()
+
 	if vars == nil {
 		vars = make(map[string]*types.DataType)
 	}
@@ -27,12 +33,12 @@ func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*
 		schema:  schema,
 	}
 
-	lp := statement.Accept(visitor).(LogicalPlan)
+	lp = statement.Accept(visitor).(LogicalPlan)
 
 	// TODO: call plan
 
 	evalCtx := newEvalCtx(ctx)
-	_, err := evalCtx.evalRelation(lp)
+	_, err = evalCtx.evalRelation(lp)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +251,7 @@ func (p *plannerVisitor) VisitExpressionForeignCall(node *parse.ExpressionForeig
 
 func (p *plannerVisitor) VisitExpressionVariable(node *parse.ExpressionVariable) any {
 	return cast(&Variable{
-		VarName: node.Name,
+		VarName: node.String(),
 	}, node)
 }
 
@@ -688,7 +694,7 @@ func (p *plannerVisitor) VisitRelationFunctionCall(node *parse.RelationFunctionC
 	if procReturns == nil {
 		panic(fmt.Sprintf(`procedure "%s" does not return a table`, node.FunctionCall.FunctionName()))
 	}
-	if !proc.Returns.IsTable {
+	if !procReturns.IsTable {
 		panic(fmt.Sprintf(`procedure "%s" does not return a table`, node.FunctionCall.FunctionName()))
 	}
 
