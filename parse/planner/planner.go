@@ -1,4 +1,4 @@
-package planner3
+package planner
 
 import (
 	"fmt"
@@ -7,20 +7,54 @@ import (
 	"github.com/kwilteam/kwil-db/parse"
 )
 
+func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType, objects map[string]map[string]*types.DataType) (LogicalPlan, error) {
+	if vars == nil {
+		vars = make(map[string]*types.DataType)
+	}
+	if objects == nil {
+		objects = make(map[string]map[string]*types.DataType)
+	}
+
+	ctx := &planContext{
+		Schema:    schema,
+		CTEs:      make(map[string]*Relation),
+		Variables: vars,
+		Objects:   objects,
+	}
+
+	visitor := &plannerVisitor{
+		planCtx: ctx,
+		schema:  schema,
+	}
+
+	return statement.Accept(visitor).(LogicalPlan), nil
+}
+
 // the planner file converts the parse AST into a logical query plan.
 
 type plannerVisitor struct {
 	parse.UnimplementedSqlVisitor
+	planCtx *planContext
 
 	// schema is the underlying schema that the AST was parsed against.
 	schema *types.Schema
+}
 
-	// ctes is a slice of CTEs and their logical plans, in the order they were defined.
-	ctes []struct {
-		alias       string
-		columnNames []string
-		plan        LogicalPlan
-	}
+// planContext holds information that is needed during the planning process.
+type planContext struct {
+	// Schema is the underlying database schema that the query should
+	// be evaluated against.
+	Schema *types.Schema
+	// CTEs are the common table expressions in the query.
+	// This field should be updated as the query planner
+	// processes the query.
+	CTEs map[string]*Relation
+	// Variables are the variables in the query.
+	Variables map[string]*types.DataType
+	// Objects are the objects in the query.
+	// Kwil supports one-dimensional objects, so this would be
+	// accessible via objname.fieldname.
+	Objects map[string]map[string]*types.DataType
 }
 
 // the following maps map constants from parse to their logical
@@ -320,7 +354,19 @@ func (p *plannerVisitor) VisitExpressionBetween(node *parse.ExpressionBetween) a
 }
 
 func (p *plannerVisitor) VisitExpressionSubquery(node *parse.ExpressionSubquery) any {
-	panic("TODO: Implement")
+	subqType := ScalarSubquery
+	if node.Exists {
+		subqType = ExistsSubquery
+		if node.Not {
+			subqType = NotExistsSubquery
+		}
+	}
+
+	stmt := node.Subquery.Accept(p).(LogicalPlan)
+	return cast(&Subquery{
+		SubqueryType: subqType,
+		Query:        stmt,
+	}, node)
 }
 
 func (p *plannerVisitor) VisitExpressionCase(node *parse.ExpressionCase) any {
@@ -332,22 +378,21 @@ func (p *plannerVisitor) VisitExpressionCase(node *parse.ExpressionCase) any {
 */
 
 func (p *plannerVisitor) VisitCommonTableExpression(node *parse.CommonTableExpression) any {
+	// still have a bit to do here.
+	panic("CTE not yet supported")
 	plan := node.Query.Accept(p).(LogicalPlan)
 
-	rel := plan.Relation(p.schemaCtx()) // we need to check that the columns are valid
-	if len(node.Columns) != len(rel.Columns) {
-		panic(fmt.Sprintf(`cte "%s" has %d columns, but %d were specified`, node.Name, len(rel.Columns), len(node.Columns)))
+	rel, err := newEvalCtx(p.planCtx).evalRelation(plan)
+	if err != nil {
+		panic(err)
 	}
 
-	p.ctes = append(p.ctes, struct {
-		alias       string
-		columnNames []string
-		plan        LogicalPlan
-	}{
-		alias:       node.Name,
-		columnNames: node.Columns,
-		plan:        plan,
-	})
+	// we need to check that the columns are valid
+	if len(node.Columns) != len(rel.Fields) {
+		panic(fmt.Sprintf(`cte "%s" has %d columns, but %d were specified`, node.Name, len(rel.Fields), len(node.Columns)))
+	}
+
+	p.planCtx.CTEs[node.Name] = rel
 
 	// I am unsure if we need to return this plan, since all that matters
 	// is that it is added to the ctes slice.
@@ -355,7 +400,11 @@ func (p *plannerVisitor) VisitCommonTableExpression(node *parse.CommonTableExpre
 }
 
 func (p *plannerVisitor) VisitSQLStatement(node *parse.SQLStatement) any {
-	panic("TODO: Implement")
+	for _, cte := range node.CTEs {
+		cte.Accept(p)
+	}
+
+	return node.SQL.Accept(p)
 }
 
 // The order of building is:
@@ -415,42 +464,6 @@ func (p *plannerVisitor) VisitSelectStatement(node *parse.SelectStatement) any {
 	return plan
 }
 
-// schemaCtx returns a schema context based on the current schema and the cte relations.
-// All passed relations will be joined into the schema context.
-func (p *plannerVisitor) schemaCtx(relations ...*Relation) *PlanContext {
-	rel := &Relation{}
-	for _, rel := range relations {
-		rel.Columns = append(rel.Columns, rel.Columns...)
-	}
-
-	// we need to calculate the cte relations
-	ctx := &PlanContext{
-		Schema:        p.schema,
-		CTEs:          make(map[string]*Relation),
-		OuterRelation: rel,
-		// TODO: how can we get info on variables and objects
-	}
-
-	for _, cte := range p.ctes {
-		rel := cte.plan.Relation(ctx)
-
-		if len(cte.columnNames) != len(rel.Columns) {
-			// this should get caught during construction of the cte
-			panic(fmt.Sprintf(`cte "%s" has %d columns, but %d were specified`, cte.alias, len(rel.Columns), len(cte.columnNames)))
-		}
-
-		// we need to rename the columns to match the cte column names
-		for i, col := range rel.Columns {
-			col.Parent = cte.alias
-			col.Name = cte.columnNames[i]
-		}
-
-		ctx.CTEs[cte.alias] = rel
-	}
-
-	return ctx
-}
-
 // The order of building is:
 // 1. from (combining any joins into single source plan)
 // 2. where
@@ -485,7 +498,7 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 
 		return &Project{
 			Expressions: exprs,
-			Child:       &Noop{},
+			Child:       &EmptyScan{},
 		}
 	}
 
@@ -508,8 +521,45 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 		}
 	}
 
-	// despite this being out of order, we will analyze the returned columns,
-	// since they are needed for building aggregation
+	// we analyze the returned columns to see if there are any aggregates
+	// we will revisit them later for the full analysis after GROUP BY
+	var aggs []*AggregateFunctionCall
+	for _, resultCol := range node.Columns {
+		if resultCol, ok := resultCol.(*parse.ResultColumnExpression); ok {
+			logicalExpr := resultCol.Expression.Accept(p).(LogicalExpr)
+			found := getAggregateTerms(logicalExpr)
+			aggs = append(aggs, found...)
+		}
+	}
+
+	if node.GroupBy != nil {
+		agg := &Aggregate{
+			GroupingExpressions:  p.exprs(node.GroupBy),
+			AggregateExpressions: aggs,
+			Child:                plan,
+		}
+
+		plan = agg
+
+		if node.Having != nil {
+			havingExpr := node.Having.Accept(p).(LogicalExpr)
+			havingAggs := getAggregateTerms(havingExpr)
+			agg.AggregateExpressions = mergeAggregates(agg.AggregateExpressions, havingAggs)
+
+			plan = &Filter{
+				Condition: havingExpr,
+				Child:     plan,
+			}
+		}
+	} else if len(aggs) > 0 { // otherwise, still need to see if we have any aggregates without grouping
+		plan = &Aggregate{
+			GroupingExpressions:  nil,
+			AggregateExpressions: aggs,
+			Child:                plan,
+		}
+	}
+
+	// now, we re-analyze results and expand wildcards
 	var results []LogicalExpr
 	for _, resultCol := range node.Columns {
 		switch resultCol := resultCol.(type) {
@@ -527,80 +577,25 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 
 			results = append(results, expr)
 		case *parse.ResultColumnWildcard:
-			var cols []*ReferenceableColumn
 			// expand the wildcard
-			if resultCol.Table != "" {
-				cols = plan.Relation(p.schemaCtx()).ColumnsByParent(resultCol.Table)
-				if len(cols) == 0 {
-					panic(fmt.Sprintf(`table "%s" not found`, resultCol.Table))
-				}
-			} else {
-				cols = plan.Relation(p.schemaCtx()).Columns
+			rel, err := newEvalCtx(p.planCtx).evalRelation(plan)
+			if err != nil {
+				panic(err)
 			}
 
-			for _, col := range cols {
+			var fields []*Field
+			if resultCol.Table != "" {
+				fields = rel.ColumnsByParent(resultCol.Table)
+			} else {
+				fields = rel.Fields
+			}
+
+			for _, col := range fields {
 				results = append(results, &ColumnRef{
 					Parent:     col.Parent,
 					ColumnName: col.Name,
 				})
 			}
-		}
-	}
-
-	if node.GroupBy != nil {
-		agg := &Aggregate{
-			GroupingExpressions: p.exprs(node.GroupBy),
-			Child:               plan,
-		}
-
-		// get the current relation prior to analyzing the aggregation
-		currentRel := plan.Relation(p.schemaCtx())
-
-		// now we need to check that each unaggregated result is in the grouping expressions
-		aggregatedExprs, err := checkAggregation(p.schemaCtx(currentRel), agg.GroupingExpressions, results)
-		if err != nil {
-			panic(err)
-		}
-
-		// set the found aggregated expressions to the aggregation plan.
-		agg.AggregateExpressions = aggregatedExprs
-		plan = agg
-
-		if node.Having != nil {
-			// get the relation of the query after the aggregation
-			// to analyze the having clause
-			currentRel := plan.Relation(p.schemaCtx())
-
-			// we must also check for aggregation in the grouping expressions.
-			// The aggregated expressions will be added to the aggregation plan.
-			aggs, err := checkAggregation(p.schemaCtx(currentRel), agg.GroupingExpressions, []LogicalExpr{node.Having.Accept(p).(LogicalExpr)})
-			if err != nil {
-				panic(err)
-			}
-
-			// we need to add any used aggregate functions to the aggregation plan
-			agg.AggregateExpressions = mergeEquals(agg.AggregateExpressions, aggs)
-
-			plan = &Filter{
-				Condition: node.Having.Accept(p).(LogicalExpr),
-				Child:     plan,
-			}
-		}
-	} else {
-		currentRel := plan.Relation(p.schemaCtx())
-
-		// we can still have aggregation without grouping, e.g.
-		// SELECT COUNT(*) FROM table;
-		// in this case, we need to check that all columns are aggregated.
-		aggregatedExprs, err := checkAggregation(p.schemaCtx(currentRel), nil, results)
-		if err != nil {
-			panic(err)
-		}
-
-		plan = &Aggregate{
-			GroupingExpressions:  nil,
-			AggregateExpressions: aggregatedExprs,
-			Child:                plan,
 		}
 	}
 
@@ -619,70 +614,6 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 	return plan
 }
 
-// checkAggregation checks that all terms (and their projected columns) are in the
-// groupByTerms, or aggregated in an aggregate function. It returns all aggregated terms
-func checkAggregation(ctx *PlanContext, groupByTerms, termsToCheck []LogicalExpr) ([]LogicalExpr, error) {
-	// we construct a map for better lookup on the terms included in
-	// the grouping expressions
-
-	groupedBy := make(map[[2]string]struct{})
-	for _, term := range groupByTerms {
-		projected, _, err := term.UsedColumns(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, p := range projected {
-			// we do not care about duplicates, since we are just checking for inclusion
-			groupedBy[[2]string{p.Parent, p.Name}] = struct{}{}
-		}
-	}
-
-	var allAggregatedTerms []LogicalExpr
-	for _, term := range termsToCheck {
-		projected, aggs, err := term.UsedColumns(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		allAggregatedTerms = append(allAggregatedTerms, aggs...)
-
-		for _, p := range projected {
-			if !p.Aggregated {
-				// if the term is not in an aggregate function, it must be in the group by clause
-				_, ok := groupedBy[[2]string{p.Parent, p.Name}]
-				if !ok {
-					return nil, fmt.Errorf(`unaggregated column "%s" must be included in group by clause`, p.Name)
-				}
-			}
-			// if used in an aggregate, then we do not need to care, since both grouped and ungrouped columns are allowed
-		}
-	}
-
-	return allAggregatedTerms, nil
-}
-
-// mergeEquals merges two slices of expressions, and returns a slice of all unique expressions.
-// We could use the LogicalExpr.Equals method, but that would be O(n^2) in the worst case,
-// and could very easily be attacked by submitted a query with a lot of slightly different expressions.
-func mergeEquals(a, b []LogicalExpr) []LogicalExpr {
-	// we will use a map to ensure uniqueness
-	exprs := make(map[LogicalExpr]struct{})
-	for _, expr := range a {
-		exprs[expr] = struct{}{}
-	}
-	for _, expr := range b {
-		exprs[expr] = struct{}{}
-	}
-
-	// now we convert the map back to a slice
-	var result []LogicalExpr
-	for expr := range exprs {
-		result = append(result, expr)
-	}
-	return result
-}
-
 func (p *plannerVisitor) VisitRelationTable(node *parse.RelationTable) any {
 	alias := node.Table
 	if node.Alias != "" {
@@ -690,7 +621,7 @@ func (p *plannerVisitor) VisitRelationTable(node *parse.RelationTable) any {
 	}
 
 	return &Scan{
-		Child: &TableScanSource{
+		Source: &TableScanSource{
 			TableName: node.Table,
 		},
 		RelationName: alias,
@@ -702,8 +633,10 @@ func (p *plannerVisitor) VisitRelationSubquery(node *parse.RelationSubquery) any
 		panic("subquery must have an alias")
 	}
 
+	subq := node.Subquery.Accept(p).(LogicalPlan)
+
 	return &Scan{
-		Child:        node.Subquery.Accept(p).(ScanSource), // TODO: we do not have subquery scan sources implemented
+		Source:       &SubqueryScanSource{Subquery: subq},
 		RelationName: node.Alias,
 	}
 }
@@ -751,7 +684,7 @@ func (p *plannerVisitor) VisitRelationFunctionCall(node *parse.RelationFunctionC
 	}
 
 	return &Scan{
-		Child: &ProcedureScanSource{
+		Source: &ProcedureScanSource{
 			ProcedureName:  node.FunctionCall.FunctionName(),
 			Args:           args,
 			ContextualArgs: contextualArgs,
@@ -802,6 +735,3 @@ func (p *plannerVisitor) VisitJoin(node *parse.Join) any {
 	// for safety, since it is easier to iterate over the joins in the select core
 	panic("internal bug: VisitJoin should not be called directly while building relational algebra")
 }
-
-// planRelation plans a relation node, and returns the logical plan.
-func planRelation(node LogicalPlan)

@@ -87,30 +87,6 @@ type PlanContext struct {
 	OuterRelation *Relation
 }
 
-// ExpressionContext is the context for an expression in the query.
-// TODO: I think I need to change all of these descriptions from
-// referencing PlanContext.AggregatedColumns to instead using
-// ReferenceableColumn.InGroup.
-type ExpressionContext struct {
-	// PlanContext is the context for the query plan.
-	PlanContext *PlanContext
-	// InGroupingExpr is set if the expression is in a GROUP BY.
-	// If true, any column referenced will be added to the
-	// PlanContext.Aggregates map.
-	// This field should be set and unset in the Aggregate LogicalPlan
-	InGroupingExpr bool
-
-	// If AggregatesOnly is set, then only columns that are in the PlanContext.Aggregates
-	// map, or columns that are captured within an aggregate function, can be
-	// referenced in the query.
-	AggregatesOnly bool
-
-	// InAggregate is set if the expression is in an aggregate function.
-	// If false, and AggregatesOnly is true, then any reference to a column
-	// will be an error.
-	InAggregate bool
-}
-
 // NewScope returns a shallow copied context where the current relation
 // has become part of the outer relation. It also creates new aggregate
 // metadata for the new context.
@@ -153,6 +129,135 @@ func (s *PlanContext) Copy() *PlanContext {
 	return &newContext
 }
 
+// planRelation takes a LogicalPlan and updates the context based on the contents
+// of the plan. It returns the relation that the plan represents.
+// It will perform type validations.
+func (s *PlanContext) planRelation(rel LogicalPlan) (*Relation, error) {
+	switch n := rel.(type) {
+	default:
+		panic(fmt.Sprintf("unexpected node type %T", n))
+	case *TableScanSource:
+		// TODO: idk if the below comment will be true. REVISIT
+		// we will add the table to the context in scan plan
+		tbl, ok := s.Schema.FindTable(n.TableName)
+		if !ok {
+			return nil, fmt.Errorf(`table "%s" not found`, n.TableName)
+		}
+
+		return relationFromTable(tbl), nil
+	case *ProcedureScanSource:
+		// TODO: idk if the below comment will be true. REVISIT
+		// we will add the procedure relation to the context in scan plan
+
+		// should either be a foreign procedure or a local procedure
+		var expectedArgs []*types.DataType
+		var returns *types.ProcedureReturn
+		if n.IsForeign {
+			proc, ok := s.Schema.FindForeignProcedure(n.ProcedureName)
+			if !ok {
+				return nil, fmt.Errorf(`foreign procedure "%s" not found`, n.ProcedureName)
+			}
+			returns = proc.Returns
+			expectedArgs = proc.Parameters
+
+			if len(n.ContextualArgs) != 2 {
+				return nil, fmt.Errorf("foreign procedure requires 2 arguments")
+			}
+
+			// both arguments should be strings
+			if err := s.evaluatesTo(n.ContextualArgs, []*types.DataType{types.TextType, types.TextType}, &Relation{}); err != nil {
+				return nil, err
+			}
+		} else {
+			proc, ok := s.Schema.FindProcedure(n.ProcedureName)
+			if !ok {
+				return nil, fmt.Errorf(`procedure "%s" not found`, n.ProcedureName)
+			}
+
+			returns = proc.Returns
+			for _, arg := range proc.Parameters {
+				expectedArgs = append(expectedArgs, arg.Type)
+			}
+		}
+		if returns == nil {
+			return nil, fmt.Errorf(`procedure "%s" does not return anything`, n.ProcedureName)
+		}
+		if !returns.IsTable {
+			return nil, fmt.Errorf(`procedure "%s" does not return a table`, n.ProcedureName)
+		}
+
+		// there is no current relation that exprs can be evaluated against
+		// because we are in a scan
+		if err := s.evaluatesTo(n.Args, expectedArgs, &Relation{}); err != nil {
+			return nil, err
+		}
+
+		var cols []*ReferenceableColumn
+		for _, field := range returns.Fields {
+			cols = append(cols, &ReferenceableColumn{
+				// the Parent will get set by the ScanAlias
+				Name:     field.Name,
+				DataType: field.Type.Copy(),
+			})
+		}
+
+		return &Relation{Columns: cols}, nil
+	case *SubqueryScanSource:
+		return s.planRelation(n.Subquery)
+	case *Scan:
+		rel, err := s.planRelation(n.Child)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, col := range rel.Columns {
+			col.Parent = n.RelationName
+		}
+
+		return rel, nil
+	case *Project:
+		rel, err := s.planRelation(n.Child)
+		if err != nil {
+			return nil, err
+		}
+
+		var fields []*Field
+	}
+}
+
+// areOfType is a helper method that checks if a slice of LogicalExprs will evaluate
+// to the slice of data types.
+func (s *PlanContext) evaluatesTo(exprs []LogicalExpr, types []*types.DataType, currentRel *Relation) error {
+	if len(exprs) != len(types) {
+		return fmt.Errorf("expected %d expressions, got %d", len(types), len(exprs))
+	}
+
+	for i, expr := range exprs {
+		dt, err := s.planExpression(expr, currentRel)
+		if err != nil {
+			return err
+		}
+
+		scalar, err := dt.Scalar()
+		if err != nil {
+			return err
+		}
+
+		if !scalar.Equals(types[i]) {
+			return fmt.Errorf("expected expression %d to be of type %s, got %s", i+1, types[i], scalar)
+		}
+	}
+
+	return nil
+}
+
+// planExpression takes a LogicalExpr and updates the context based on the contents
+// of the expression. It returns the ReturnableType of the expression.
+// the currentRel is the relation that the expression is being evaluated in.
+func (s *PlanContext) planExpression(expr LogicalExpr, currentRel *Relation) (*Field, error) {
+
+}
+
 // Join returns a new shallow copied context that joins the given
 // relation with the current relation.
 func (s *PlanContext) Join(relation *Relation) *PlanContext {
@@ -166,6 +271,15 @@ func (s *PlanContext) Join(relation *Relation) *PlanContext {
 	}
 	newContext.OuterRelation = newRel
 	return &newContext
+}
+
+// join joins the current relation with the given relation.
+func (s *PlanContext) join(relation *Relation) {
+	if s.CurrentRelation == nil {
+		s.CurrentRelation = &Relation{}
+	}
+
+	s.CurrentRelation.Columns = append(s.CurrentRelation.Columns, relation.Columns...)
 }
 
 // Relation is the current relation in the query plan.
@@ -209,7 +323,6 @@ func (s *Relation) Search(parent, name string) (*ReferenceableColumn, error) {
 			Parent:   parent, // fully qualify the column
 			Name:     column.Name,
 			DataType: column.DataType.Copy(),
-			InGroup:  column.InGroup,
 		}, nil
 	}
 
@@ -220,6 +333,12 @@ func (s *Relation) Search(parent, name string) (*ReferenceableColumn, error) {
 	}
 
 	return nil, fmt.Errorf(`column "%s" not found in table "%s"`, name, parent)
+}
+
+// Relation2 is a relation that is returned from a query.
+// TODO: delete Relation in favor of Relation2
+type Relation2 struct {
+	Fields []*Field
 }
 
 func relationFromTable(tbl *types.Table) *Relation {
@@ -293,11 +412,53 @@ type ReferenceableColumn struct {
 	Parent   string          // the parent relation name
 	Name     string          // the column name
 	DataType *types.DataType // the column data type
-	// if the column is in a group by, InGroup will be true.
-	// It is set when analyzing an aggregate expression to determine
-	// if a column can be referenced directly, or only through an
-	// aggregate function.
-	InGroup bool
+}
+
+// Field is a field in a relation.
+// Parent and Name can be empty, if the expression
+// is a constant.
+type Field struct {
+	Parent string // the parent relation name
+	Name   string // the field name
+	// val is the value of the field.
+	// it can be either a single value or a map of values,
+	// depending on the field type.
+	// This value should be accessed using the Scalar() or Object()
+	val any
+}
+
+func (f *Field) Scalar() (*types.DataType, error) {
+	dt, ok := f.val.(*types.DataType)
+	if !ok {
+		// can be triggered by a user if they try to directly use an object
+		_, ok = f.val.(map[string]*types.DataType)
+		if ok {
+			return nil, fmt.Errorf("referenced field is an object, expected scalar or array. specify a field to access using the . operator")
+		}
+
+		// not user error
+		panic(fmt.Sprintf("unexpected return type %T", f.val))
+	}
+	return dt, nil
+}
+
+func (f *Field) Object() (map[string]*types.DataType, error) {
+	obj, ok := f.val.(map[string]*types.DataType)
+	if !ok {
+		// this can be triggered by a user if they try to use dot notation
+		// on a scalar
+		v, ok := f.val.(*types.DataType)
+		if ok {
+			if v.IsArray {
+				return nil, fmt.Errorf("referenced expression is an array, expected object")
+			}
+			return nil, fmt.Errorf("referenced expression is a scalar, expected object")
+		}
+
+		// this is an internal bug
+		panic(fmt.Sprintf("unexpected return type %T", f.val))
+	}
+	return obj, nil
 }
 
 // ! (8/1/2024)
@@ -312,4 +473,62 @@ type ProjectedColumn struct {
 	// (e.g. sum(col_name)), then Aggregated will be true.
 	Aggregated bool
 	DataType   *types.DataType
+}
+
+// ReturnedType is a struct that is returned from the Scalar() method
+// of LogicalExpr implementations. It can be used to coerce the return type,
+// and to handle error returns. Callers should never access the fields directly.
+type ReturnedType struct {
+	// val is the data type that is returned by the expression.
+	// It is either a single data type or a map of data types.
+	val any
+	// err is the error that was returned during the evaluation of the expression.
+	// It is added here as a convenience so that DataType itself does not have to
+	// return an error, requiring the callers to check for errors twice.
+	err error
+}
+
+// Scalar attempts to coerce the return type to a single data type.
+func (r *ReturnedType) Scalar() (*types.DataType, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+
+	dt, ok := r.val.(*types.DataType)
+	if !ok {
+		// this can be triggered by a user if they try to directly use an object
+		// in an expression
+		_, ok = r.val.(map[string]*types.DataType)
+		if ok {
+			return nil, fmt.Errorf("referenced expression is an object, expected scalar or array. specify a field to access using the . operator")
+		}
+
+		// this is an internal bug
+		panic(fmt.Sprintf("unexpected return type %T", r.val))
+	}
+	return dt, nil
+}
+
+// Object attempts to coerce the return type to a map of data types.
+func (r *ReturnedType) Object() (map[string]*types.DataType, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+
+	obj, ok := r.val.(map[string]*types.DataType)
+	if !ok {
+		// this can be triggered by a user if they try to use dot notation
+		// on a scalar
+		v, ok := r.val.(*types.DataType)
+		if ok {
+			if v.IsArray {
+				return nil, fmt.Errorf("referenced expression is an array, expected object")
+			}
+			return nil, fmt.Errorf("referenced expression is a scalar, expected object")
+		}
+
+		// this is an internal bug
+		panic(fmt.Sprintf("unexpected return type %T", r.val))
+	}
+	return obj, nil
 }

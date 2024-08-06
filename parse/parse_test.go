@@ -2646,7 +2646,7 @@ func Test_SQL(t *testing.T) {
 				Procedures: []*types.Procedure{
 					procGetAllUserIds,
 				},
-			})
+			}, false)
 			require.NoError(t, err)
 
 			if res.ParseErrs.Err() != nil {

@@ -279,8 +279,11 @@ type SQLParseResult struct {
 // ParseSQL parses an SQL statement.
 // It requires a schema to be passed in, since SQL statements may reference
 // schema objects.
-func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error) {
-	parser, errLis, sqlVis, parseVis, deferFn, err := setupSQLParser(sql, schema)
+// SkipDefaultOrdering is used to skip the default ordering of the SQL statement.
+// TODO: remove this. Default ordering will be moved to the planner to allow for
+// better accuracy.
+func ParseSQL(sql string, schema *types.Schema, skipDefaultOrdering bool) (res *SQLParseResult, err error) {
+	parser, errLis, sqlVis, parseVis, deferFn, err := setupSQLParser(sql, schema, true)
 
 	res = &SQLParseResult{
 		ParseErrs: errLis,
@@ -316,7 +319,7 @@ func ParseSQLWithoutValidation(sql string, schema *types.Schema) (res *SQLStatem
 		}
 	}()
 
-	parser, errLis, _, parseVis, deferFn, err := setupSQLParser(sql, schema)
+	parser, errLis, _, parseVis, deferFn, err := setupSQLParser(sql, schema, false)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +341,7 @@ func ParseSQLWithoutValidation(sql string, schema *types.Schema) (res *SQLStatem
 }
 
 // setupSQLParser sets up the SQL parser.
-func setupSQLParser(sql string, schema *types.Schema) (parser *gen.KuneiformParser, errLis *errorListener, sqlVisitor *sqlAnalyzer, parserVisitor *schemaVisitor, deferFn func(any) error, err error) {
+func setupSQLParser(sql string, schema *types.Schema, skipDefaultOrdering bool) (parser *gen.KuneiformParser, errLis *errorListener, sqlVisitor *sqlAnalyzer, parserVisitor *schemaVisitor, deferFn func(any) error, err error) {
 	if sql == "" {
 		return nil, nil, nil, nil, nil, fmt.Errorf("empty SQL statement")
 	}
@@ -356,7 +359,8 @@ func setupSQLParser(sql string, schema *types.Schema) (parser *gen.KuneiformPars
 			anonymousVariables: make(map[string]map[string]*types.DataType),
 			errs:               errLis,
 		},
-		sqlCtx: newSQLContext(),
+		sqlCtx:              newSQLContext(),
+		skipDefaultOrdering: skipDefaultOrdering,
 	}
 	sqlVisitor.sqlCtx.inLoneSQL = true
 

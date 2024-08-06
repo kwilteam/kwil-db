@@ -1,5 +1,9 @@
 package planner3
 
+import (
+	planner3 "github.com/kwilteam/kwil-db/parse/planner"
+)
+
 /*
 	This file handles enforcement of aggregation rules in the logical plan.
 	Our aggregations rules are as follows:
@@ -12,7 +16,7 @@ package planner3
 // it returns all values passed in the "exprs" parameter that are aggregate functions.
 // It only applies these validations on the top-level SELECT; e.g., for any nested selects / subqueries, the caller
 // is responsible for calling this function again.
-func checkAggregationsFromGroupBy(groupBy []LogicalExpr, exprs []LogicalExpr, ctx *SchemaContext) (aggregateFuncs []*AggregateFunctionCall, err error) {
+func checkAggregationsFromGroupBy(groupBy []planner3.LogicalExpr, exprs []planner3.LogicalExpr, ctx *SchemaContext) (aggregateFuncs []*planner3.AggregateFunctionCall, err error) {
 	visitor := &columnVisitor{ctx: ctx}
 
 }
@@ -22,7 +26,7 @@ func checkAggregationsFromGroupBy(groupBy []LogicalExpr, exprs []LogicalExpr, ct
 // It gives information as to whether a column was used within
 // an aggregate or not.
 type usedColumn struct {
-	*Column
+	*planner3.Column
 	// If the column is referenced inside of an aggregate function,
 	// (e.g. sum(col_name)), then Aggregated will be true.
 	Aggregated bool
@@ -81,25 +85,25 @@ func (c *columnVisitor) handleErr(err error) {
 	the used columns to determine if the subquery is correlated.
 */
 
-func (c *columnVisitor) VisitNoop(p0 *Noop) any {
+func (c *columnVisitor) VisitNoop(p0 *planner3.Noop) any {
 	return &exprColumnResult{}
 }
 
-func (c *columnVisitor) VisitTableScan(p0 *TableScanSource) any {
+func (c *columnVisitor) VisitTableScan(p0 *planner3.TableScanSource) any {
 	// scanning a table will never reference any columns from
 	// an outer context, so we can safely return nil here.
 	return &exprColumnResult{}
 }
 
-func (c *columnVisitor) VisitProcedureScan(p0 *ProcedureScanSource) any {
+func (c *columnVisitor) VisitProcedureScan(p0 *planner3.ProcedureScanSource) any {
 	return projectMany2(c, append(p0.Args, p0.ContextualArgs...)...)
 }
 
-func (c *columnVisitor) VisitScanAlias(p0 *Scan) any {
+func (c *columnVisitor) VisitScanAlias(p0 *planner3.Scan) any {
 	return p0.Child.Accept(c)
 }
 
-func (c *columnVisitor) VisitProject(p0 *Project) any {
+func (c *columnVisitor) VisitProject(p0 *planner3.Project) any {
 	res := p0.Child.Accept(c).(*exprColumnResult)
 
 	oldCtx := c.ctx
@@ -114,31 +118,31 @@ func (c *columnVisitor) VisitProject(p0 *Project) any {
 	return res
 }
 
-func (c *columnVisitor) VisitFilter(p0 *Filter) any {
+func (c *columnVisitor) VisitFilter(p0 *planner3.Filter) any {
 	panic("TODO: Implement")
 }
 
-func (c *columnVisitor) VisitJoin(p0 *Join) any {
+func (c *columnVisitor) VisitJoin(p0 *planner3.Join) any {
 	panic("TODO: Implement")
 }
 
-func (c *columnVisitor) VisitSort(p0 *Sort) any {
+func (c *columnVisitor) VisitSort(p0 *planner3.Sort) any {
 	panic("TODO: Implement")
 }
 
-func (c *columnVisitor) VisitLimit(p0 *Limit) any {
+func (c *columnVisitor) VisitLimit(p0 *planner3.Limit) any {
 	panic("TODO: Implement")
 }
 
-func (c *columnVisitor) VisitDistinct(p0 *Distinct) any {
+func (c *columnVisitor) VisitDistinct(p0 *planner3.Distinct) any {
 	panic("TODO: Implement")
 }
 
-func (c *columnVisitor) VisitSetOperation(p0 *SetOperation) any {
+func (c *columnVisitor) VisitSetOperation(p0 *planner3.SetOperation) any {
 	panic("TODO: Implement")
 }
 
-func (c *columnVisitor) VisitAggregate(p0 *Aggregate) any {
+func (c *columnVisitor) VisitAggregate(p0 *planner3.Aggregate) any {
 	panic("TODO: Implement")
 }
 
@@ -152,7 +156,7 @@ func (c *columnVisitor) VisitAggregate(p0 *Aggregate) any {
 // column visitor.
 type exprColumnResult struct {
 	usedCols           []*usedColumn
-	usedAggregateTerms []*AggregateFunctionCall
+	usedAggregateTerms []*planner3.AggregateFunctionCall
 }
 
 // add adds another exprColumnResult to this one.
@@ -161,15 +165,15 @@ func (e *exprColumnResult) add(other *exprColumnResult) {
 	e.usedAggregateTerms = append(e.usedAggregateTerms, other.usedAggregateTerms...)
 }
 
-func (c *columnVisitor) VisitLiteral(p0 *Literal) any {
+func (c *columnVisitor) VisitLiteral(p0 *planner3.Literal) any {
 	return &exprColumnResult{}
 }
 
-func (c *columnVisitor) VisitVariable(p0 *Variable) any {
+func (c *columnVisitor) VisitVariable(p0 *planner3.Variable) any {
 	return &exprColumnResult{}
 }
 
-func (c *columnVisitor) VisitColumnRef(p0 *ColumnRef) any {
+func (c *columnVisitor) VisitColumnRef(p0 *planner3.ColumnRef) any {
 	col, err := c.ctx.OuterRelation.Search(p0.Parent, p0.ColumnName)
 	c.handleErr(err)
 
@@ -180,7 +184,7 @@ func (c *columnVisitor) VisitColumnRef(p0 *ColumnRef) any {
 	}
 }
 
-func (c *columnVisitor) VisitAggregateFunctionCall(p0 *AggregateFunctionCall) any {
+func (c *columnVisitor) VisitAggregateFunctionCall(p0 *planner3.AggregateFunctionCall) any {
 	res := projectMany2(c, p0.Args...)
 
 	// set all columns as aggregated
@@ -195,45 +199,45 @@ func (c *columnVisitor) VisitFunctionCall(p0 *FunctionCall) any {
 	return projectMany2(c, p0.Args...)
 }
 
-func (c *columnVisitor) VisitArithmeticOp(p0 *ArithmeticOp) any {
+func (c *columnVisitor) VisitArithmeticOp(p0 *planner3.ArithmeticOp) any {
 	return projectMany2(c, p0.Left, p0.Right)
 }
 
-func (c *columnVisitor) VisitComparisonOp(p0 *ComparisonOp) any {
+func (c *columnVisitor) VisitComparisonOp(p0 *planner3.ComparisonOp) any {
 	return projectMany2(c, p0.Left, p0.Right)
 }
 
-func (c *columnVisitor) VisitLogicalOp(p0 *LogicalOp) any {
+func (c *columnVisitor) VisitLogicalOp(p0 *planner3.LogicalOp) any {
 	return projectMany2(c, p0.Left, p0.Right)
 }
 
-func (c *columnVisitor) VisitUnaryOp(p0 *UnaryOp) any {
+func (c *columnVisitor) VisitUnaryOp(p0 *planner3.UnaryOp) any {
 	return p0.Expr.Accept(c)
 }
 
-func (c *columnVisitor) VisitTypeCast(p0 *TypeCast) any {
+func (c *columnVisitor) VisitTypeCast(p0 *planner3.TypeCast) any {
 	return p0.Expr.Accept(c)
 }
 
-func (c *columnVisitor) VisitAliasExpr(p0 *AliasExpr) any {
+func (c *columnVisitor) VisitAliasExpr(p0 *planner3.AliasExpr) any {
 	return p0.Expr.Accept(c)
 }
 
-func (c *columnVisitor) VisitArrayAccess(p0 *ArrayAccess) any {
+func (c *columnVisitor) VisitArrayAccess(p0 *planner3.ArrayAccess) any {
 	return projectMany2(c, p0.Array, p0.Index)
 }
 
-func (c *columnVisitor) VisitArrayConstructor(p0 *ArrayConstructor) any {
+func (c *columnVisitor) VisitArrayConstructor(p0 *planner3.ArrayConstructor) any {
 	return projectMany2(c, p0.Elements...)
 }
 
-func (c *columnVisitor) VisitFieldAccess(p0 *FieldAccess) any {
+func (c *columnVisitor) VisitFieldAccess(p0 *planner3.FieldAccess) any {
 	return p0.Object.Accept(c)
 }
 
 // we don't care about what a subquery does (e.g. it can do anything it wants)
 // UNLESS it is correlated to our current scope.
-func (c *columnVisitor) VisitSubquery(p0 *Subquery) any {
+func (c *columnVisitor) VisitSubquery(p0 *planner3.Subquery) any {
 	cols := p0.Query.Accept(c).([]*usedColumn)
 
 	return &exprColumnResult{
@@ -243,12 +247,12 @@ func (c *columnVisitor) VisitSubquery(p0 *Subquery) any {
 
 // projectMany is a helper function that projects multiple expressions and combines the results.
 // TODO: rename once I delete the old one
-func projectMany2[T Accepter](c *columnVisitor, accs ...T) *exprColumnResult {
+func projectMany2[T planner3.Accepter](c *columnVisitor, accs ...T) *exprColumnResult {
 	// I use a generic here to allow using a spread operator with an interface where
 	// the slices themselves are of a concrete type.
 
 	var columns []*usedColumn
-	var exprsToProject []*AggregateFunctionCall
+	var exprsToProject []*planner3.AggregateFunctionCall
 	for _, acc := range accs {
 		res := acc.Accept(c).(*exprColumnResult)
 
@@ -263,7 +267,7 @@ func projectMany2[T Accepter](c *columnVisitor, accs ...T) *exprColumnResult {
 }
 
 // flattenRelToUsed returns a list of used columns from a relation.
-func flattenRelToUsed(rel *Relation) []*usedColumn {
+func flattenRelToUsed(rel *planner3.Relation) []*usedColumn {
 	var cols []*usedColumn
 	for _, col := range rel.Columns {
 		cols = append(cols, &usedColumn{Column: col})

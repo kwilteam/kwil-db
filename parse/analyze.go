@@ -392,8 +392,9 @@ func (c *sqlContext) popScope() {
 type sqlAnalyzer struct {
 	UnimplementedSqlVisitor
 	blockContext
-	sqlCtx    sqlContext
-	sqlResult sqlAnalyzeResult
+	sqlCtx              sqlContext
+	sqlResult           sqlAnalyzeResult
+	skipDefaultOrdering bool
 }
 
 // reset resets the sqlAnalyzer.
@@ -1362,17 +1363,19 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 			return rel1
 		}
 
-		// order all flattened returns
-		for _, attr := range rel1 {
-			p0.Ordering = append(p0.Ordering, &OrderingTerm{
-				Position: unknownPosition(),
-				Expression: &ExpressionColumn{
+		if !s.skipDefaultOrdering {
+			// order all flattened returns
+			for _, attr := range rel1 {
+				p0.Ordering = append(p0.Ordering, &OrderingTerm{
 					Position: unknownPosition(),
-					// leave column blank, since we are referencing a column that no
-					// longer knows what table it is from due to the compound.
-					Column: attr.Name,
-				},
-			})
+					Expression: &ExpressionColumn{
+						Position: unknownPosition(),
+						// leave column blank, since we are referencing a column that no
+						// longer knows what table it is from due to the compound.
+						Column: attr.Name,
+					},
+				})
+			}
 		}
 	} else {
 		// if it is not a compound, then we apply the following default ordering rules (after the user defined):
@@ -1410,29 +1413,33 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 			}
 
 			// order the columns
-			for _, col := range colsToOrder {
-				p0.Ordering = append(p0.Ordering, &OrderingTerm{
-					Position: unknownPosition(),
-					Expression: &ExpressionColumn{
+			if !s.skipDefaultOrdering {
+				for _, col := range colsToOrder {
+					p0.Ordering = append(p0.Ordering, &OrderingTerm{
 						Position: unknownPosition(),
-						Table:    col[0],
-						Column:   col[1],
-					},
-				})
+						Expression: &ExpressionColumn{
+							Position: unknownPosition(),
+							Table:    col[0],
+							Column:   col[1],
+						},
+					})
+				}
 			}
 		} else if p0.SelectCores[0].Distinct {
 			// if distinct, order by all columns returned
-			for _, attr := range rel1 {
-				p0.Ordering = append(p0.Ordering, &OrderingTerm{
-					Position: unknownPosition(),
-					Expression: &ExpressionColumn{
+			if !s.skipDefaultOrdering {
+				for _, attr := range rel1 {
+					p0.Ordering = append(p0.Ordering, &OrderingTerm{
 						Position: unknownPosition(),
-						Table:    "",
-						Column:   attr.Name,
-					},
-				})
+						Expression: &ExpressionColumn{
+							Position: unknownPosition(),
+							Table:    "",
+							Column:   attr.Name,
+						},
+					})
+				}
 			}
-		} else {
+		} else if !s.skipDefaultOrdering {
 			// if not distinct, order by primary keys in all joined tables
 			for _, rel := range rel1Scope.joinedRelations {
 				// if it is a table, we only order by primary key.

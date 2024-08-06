@@ -1,4 +1,4 @@
-package planner3
+package planner
 
 import (
 	"fmt"
@@ -119,10 +119,6 @@ func (a *aggregateChecker) check(e LogicalExpr) error {
 	// e.g. if we have [a,b,c,d,e], and [b,c] would be a matching plan,
 	// while [b,d] would not be.
 
-	// TODO: is there a way to trick the planner by giving it [a,b,c,d,e],
-	// cutting [b,c], and then checking for [a,d,e]? TODO: add a test for this
-	// if this is is the case, we can add a noop deliting node to the plan
-
 	// we track foundCols in a slice because if the same column is referenced twice,
 	// we need to cut for it twice
 	var foundCols [][2]string
@@ -237,6 +233,9 @@ func cutFrom[T any](a *[]T, b []T, equal func(T, T) bool) bool {
 // equalExpr checks if two expressions are equal.
 func equalExpr(a, b LogicalExpr) bool {
 	return reflect.DeepEqual(a, b)
+	// TODO: once we include position info in the expressions,
+	// deep equality will not be enough, initial work is done below
+
 	// switch a := a.(type) {
 	// case *ColumnRef:
 	// 	b, ok := b.(*ColumnRef)
@@ -279,6 +278,8 @@ func equalExpr(a, b LogicalExpr) bool {
 
 // getAggregateTerms takes an expression and gets all used aggregate terms.
 // It will not get aggregate terms from subqueries, or aggregates within aggregates.
+// TODO: we need a more sophisticated way of detecting aggregation usage for
+// correlated subqueries
 func getAggregateTerms(e LogicalExpr) []*AggregateFunctionCall {
 	var aggs []*AggregateFunctionCall
 	traverse(e, func(node LogicalNode) bool {
@@ -297,4 +298,69 @@ func getAggregateTerms(e LogicalExpr) []*AggregateFunctionCall {
 	})
 
 	return aggs
+}
+
+// mergeAggregates merges two arrays of exprs
+// It does this by flattening the expressions, and then
+// checking that each node is equal to another node in the other list.
+// To avoid making this O(n^2), we will convert each element to a string,
+// and check that their string representations are equal. Only if this
+// is the case will we then compare the actual nodes.
+func mergeAggregates(a []*AggregateFunctionCall, b []*AggregateFunctionCall) []*AggregateFunctionCall {
+	flattenWithoutSubqueries := func(a *AggregateFunctionCall) []LogicalExpr {
+		var flat []LogicalExpr
+		traverse(a, func(n LogicalNode) bool {
+			switch n := n.(type) {
+			case *Subquery:
+				return false
+			default:
+				expr, ok := n.(LogicalExpr)
+				if !ok {
+					return false
+				}
+
+				flat = append(flat, expr)
+				return true
+			}
+		})
+		return flat
+	}
+
+	aMap := make(map[string][]LogicalExpr)
+	for _, node := range a {
+		aMap[node.String()] = flattenWithoutSubqueries(node)
+	}
+
+	unique := a
+	for _, node := range b {
+		key := node.String()
+		plan, ok := aMap[key]
+		if !ok {
+			// if not found, it is a new node
+			unique = append(unique, node)
+			continue
+		}
+
+		// if found, we need to check that the plans are equal
+		bFlat := flattenWithoutSubqueries(node)
+
+		if len(plan) != len(bFlat) {
+			unique = append(unique, node)
+			continue
+		}
+
+		equal := true
+		for i := range plan {
+			if !equalExpr(plan[i], bFlat[i]) {
+				equal = false
+				break
+			}
+		}
+
+		if !equal {
+			unique = append(unique, node)
+		}
+	}
+
+	return unique
 }

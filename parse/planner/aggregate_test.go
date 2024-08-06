@@ -1,4 +1,4 @@
-package planner3
+package planner
 
 import (
 	"testing"
@@ -152,7 +152,7 @@ func Test_Aggregate(t *testing.T) {
 						Expressions: []LogicalExpr{
 							arithExpr(colExpr("a", "b"), litInt(1)),
 						},
-						Child: &Noop{},
+						Child: &EmptyScan{},
 					},
 				},
 			},

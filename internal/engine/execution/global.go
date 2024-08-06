@@ -397,7 +397,7 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 	// if errLis.Err() != nil {
 	// 	return nil, errLis.Err()
 	// }
-	res, err := parse.ParseSQL(query, dataset.schema)
+	res, err := parse.ParseSQL(query, dataset.schema, false)
 	if err != nil {
 		return nil, err
 	}

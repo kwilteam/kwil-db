@@ -654,8 +654,6 @@ func (a *Aggregate) Relation(ctx *PlanContext) *Relation {
 		}
 	}
 
-	// TODO: we need projections after this to use the aggChecker, so that it can
-	// be used in projection, having, limit, etc.
 	aggChecker, err := newAggregateChecker(a.GroupingExpressions)
 	if err != nil {
 		panic(err)
@@ -832,6 +830,8 @@ type Variable struct {
 	baseExpr
 	// name is something like $id, @caller, etc.
 	VarName string
+	// DataType is the data type of the variable.
+	Type *types.DataType // TODO: make sure the planner adds this
 }
 
 func (v *Variable) String() string {
@@ -988,19 +988,16 @@ func (a *AggregateFunctionCall) Analyze(ctx *PlanContext) *ReturnedType {
 }
 
 // Function call
-// TODO: we should split this into: ScalarFunctionCall, AggregateFunctionCall, ProcedureCall (which would include foreign procedures)
-type FunctionCall struct {
+type ScalarFunctionCall struct {
 	FunctionName string
 	Args         []LogicalExpr
-	Star         bool
-	Distinct     bool
 }
 
-func (f *FunctionCall) Name() string {
+func (f *ScalarFunctionCall) Name() string {
 	return f.FunctionName
 }
 
-func (f *FunctionCall) IsAggregate() bool {
+func (f *ScalarFunctionCall) IsAggregate() bool {
 	fn, ok := parse.Functions[f.FunctionName]
 	if !ok {
 		panic(fmt.Errorf("function %s not found", f.FunctionName))
@@ -1009,7 +1006,7 @@ func (f *FunctionCall) IsAggregate() bool {
 	return fn.IsAggregate
 }
 
-func (f *FunctionCall) String() string {
+func (f *ScalarFunctionCall) String() string {
 	var buf bytes.Buffer
 	buf.WriteString(f.FunctionName)
 	buf.WriteString("(")
@@ -1023,7 +1020,7 @@ func (f *FunctionCall) String() string {
 	return buf.String()
 }
 
-func (f *FunctionCall) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+func (f *ScalarFunctionCall) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
 	args, aggs, err := projectMany(ctx, f.Args...)
 	if err != nil {
 		return nil, nil, err
@@ -1043,11 +1040,11 @@ func (f *FunctionCall) UsedColumns(ctx *PlanContext) (projectedColumns []*Projec
 	return args, append(aggs, f), nil
 }
 
-func (n *FunctionCall) Accept(v Visitor) any {
+func (n *ScalarFunctionCall) Accept(v Visitor) any {
 	return v.VisitFunctionCall(n)
 }
 
-func (f *FunctionCall) Analyze(ctx *PlanContext) *ReturnedType {
+func (f *ScalarFunctionCall) Analyze(ctx *PlanContext) *ReturnedType {
 	fn, ok := parse.Functions[f.FunctionName]
 	if ok {
 		argTypes := make([]*types.DataType, len(f.Args))
@@ -1087,9 +1084,127 @@ func (f *FunctionCall) Analyze(ctx *PlanContext) *ReturnedType {
 	return &ReturnedType{val: proc.Returns.Fields[0].Type.Copy()}
 }
 
-func (f *FunctionCall) Children() []LogicalNode {
+func (f *ScalarFunctionCall) Children() []LogicalNode {
 	var c []LogicalNode
 	for _, arg := range f.Args {
+		c = append(c, arg)
+	}
+	return c
+}
+
+// ProcedureCall is a call to a procedure.
+// This can be a call to either a procedure in the same schema, or
+// to a foreign procedure.
+type ProcedureCall struct {
+	ProcedureName string
+	Foreign       bool
+	Args          []LogicalExpr
+	ContextArgs   []LogicalExpr
+}
+
+func (p *ProcedureCall) Name() string {
+	return p.ProcedureName
+}
+
+func (p *ProcedureCall) IsAggregate() bool {
+	return false
+}
+
+func (p *ProcedureCall) String() string {
+	var buf bytes.Buffer
+	if p.Foreign {
+		buf.WriteString("FOREIGN ")
+	}
+	buf.WriteString("PROCEDURE ")
+	buf.WriteString(p.ProcedureName)
+	buf.WriteString("(")
+	for i, arg := range p.Args {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(arg.String())
+	}
+	buf.WriteString(")")
+	return buf.String()
+}
+
+func (p *ProcedureCall) UsedColumns(ctx *PlanContext) (projectedColumns []*ProjectedColumn, aggregationExprs []LogicalExpr, err error) {
+	panic("not implemented")
+}
+
+func (n *ProcedureCall) Accept(v Visitor) any {
+	return v.VisitProcedureCall(n)
+}
+
+func (p *ProcedureCall) Analyze(ctx *PlanContext) *ReturnedType {
+	// must be either a procedure or a foreign procedure
+	var neededArgs []*types.DataType
+	var returns *types.ProcedureReturn
+	if p.Foreign {
+		foreignProc, ok := ctx.Schema.FindForeignProcedure(p.ProcedureName)
+		if !ok {
+			return &ReturnedType{err: fmt.Errorf(`foreign procedure "%s" not found`, p.ProcedureName)}
+		}
+		neededArgs = foreignProc.Parameters
+		returns = foreignProc.Returns
+
+		// if it is foreign, there must be 2 contextual variables, both evaluating to strings
+		if len(p.ContextArgs) != 2 {
+			return &ReturnedType{err: fmt.Errorf(`foreign procedure "%s" expects 2 contextual arguments, got %d`, p.ProcedureName, len(p.ContextArgs))}
+		}
+
+		for i, arg := range p.ContextArgs {
+			argType, err := arg.Analyze(ctx).Scalar()
+			if err != nil {
+				return &ReturnedType{err: err}
+			}
+
+			if !argType.Equals(types.TextType) {
+				return &ReturnedType{err: fmt.Errorf(`contextual argument %d to foreign procedure "%s" expects type %s, got %s`, i+1, p.ProcedureName, types.TextType.String(), argType.String())}
+			}
+		}
+	} else {
+		proc, ok := ctx.Schema.FindProcedure(p.ProcedureName)
+		if !ok {
+			return &ReturnedType{err: fmt.Errorf(`procedure "%s" not found`, p.ProcedureName)}
+		}
+		for _, param := range proc.Parameters {
+			neededArgs = append(neededArgs, param.Type)
+		}
+		returns = proc.Returns
+	}
+
+	if returns == nil {
+		return &ReturnedType{err: fmt.Errorf(`procedure "%s" does not return a value`, p.ProcedureName)}
+	}
+	if returns.IsTable {
+		return &ReturnedType{err: fmt.Errorf(`procedure used in an expression "%s" cannot return a table`, p.ProcedureName)}
+	}
+	if len(returns.Fields) != 1 {
+		return &ReturnedType{err: fmt.Errorf(`procedure expression needs to return exactly one value, got %d`, len(returns.Fields))}
+	}
+
+	if len(p.Args) != len(neededArgs) {
+		return &ReturnedType{err: fmt.Errorf(`procedure "%s" expects %d arguments, got %d`, p.ProcedureName, len(neededArgs), len(p.Args))}
+	}
+
+	for i, arg := range p.Args {
+		argType, err := arg.Analyze(ctx).Scalar()
+		if err != nil {
+			return &ReturnedType{err: err}
+		}
+
+		if !argType.Equals(neededArgs[i]) {
+			return &ReturnedType{err: fmt.Errorf(`argument %d to procedure "%s" expects type %s, got %s`, i+1, p.ProcedureName, neededArgs[i].String(), argType.String())}
+		}
+	}
+
+	return &ReturnedType{val: returns.Fields[0].Type.Copy()}
+}
+
+func (p *ProcedureCall) Children() []LogicalNode {
+	var c []LogicalNode
+	for _, arg := range p.Args {
 		c = append(c, arg)
 	}
 	return c
@@ -1699,64 +1814,6 @@ const (
 	NotExistsSubquery
 )
 
-// ReturnedType is a struct that is returned from the Scalar() method
-// of LogicalExpr implementations. It can be used to coerce the return type,
-// and to handle error returns. Callers should never access the fields directly.
-type ReturnedType struct {
-	// val is the data type that is returned by the expression.
-	// It is either a single data type or a map of data types.
-	val any
-	// err is the error that was returned during the evaluation of the expression.
-	// It is added here as a convenience so that DataType itself does not have to
-	// return an error, requiring the callers to check for errors twice.
-	err error
-}
-
-// Scalar attempts to coerce the return type to a single data type.
-func (r *ReturnedType) Scalar() (*types.DataType, error) {
-	if r.err != nil {
-		return nil, r.err
-	}
-
-	dt, ok := r.val.(*types.DataType)
-	if !ok {
-		// this can be triggered by a user if they try to directly use an object
-		// in an expression
-		_, ok = r.val.(map[string]*types.DataType)
-		if ok {
-			return nil, fmt.Errorf("referenced expression is an object, expected scalar or array. specify a field to access using the . operator")
-		}
-
-		// this is an internal bug
-		panic(fmt.Sprintf("unexpected return type %T", r.val))
-	}
-	return dt, nil
-}
-
-// Object attempts to coerce the return type to a map of data types.
-func (r *ReturnedType) Object() (map[string]*types.DataType, error) {
-	if r.err != nil {
-		return nil, r.err
-	}
-
-	obj, ok := r.val.(map[string]*types.DataType)
-	if !ok {
-		// this can be triggered by a user if they try to use dot notation
-		// on a scalar
-		v, ok := r.val.(*types.DataType)
-		if ok {
-			if v.IsArray {
-				return nil, fmt.Errorf("referenced expression is an array, expected object")
-			}
-			return nil, fmt.Errorf("referenced expression is a scalar, expected object")
-		}
-
-		// this is an internal bug
-		panic(fmt.Sprintf("unexpected return type %T", r.val))
-	}
-	return obj, nil
-}
-
 type Accepter interface {
 	Accept(Visitor) any
 }
@@ -1783,7 +1840,8 @@ type Visitor interface {
 	VisitVariable(*Variable) any
 	VisitColumnRef(*ColumnRef) any
 	VisitAggregateFunctionCall(*AggregateFunctionCall) any
-	VisitFunctionCall(*FunctionCall) any
+	VisitFunctionCall(*ScalarFunctionCall) any
+	VisitProcedureCall(*ProcedureCall) any
 	VisitArithmeticOp(*ArithmeticOp) any
 	VisitComparisonOp(*ComparisonOp) any
 	VisitLogicalOp(*LogicalOp) any
