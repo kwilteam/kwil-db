@@ -1265,14 +1265,17 @@ func (s *sqlAnalyzer) VisitCommonTableExpression(p0 *CommonTableExpression) any 
 		panic("expected query to return attributes")
 	}
 
-	if len(p0.Columns) != len(rel) {
-		s.errs.AddErr(p0, ErrResultShape, "expected %d columns, received %d", len(p0.Columns), len(rel))
-		return nil
-	}
+	// cte columns are optional
+	if len(p0.Columns) > 0 {
+		if len(p0.Columns) != len(rel) {
+			s.errs.AddErr(p0, ErrResultShape, "expected %d columns, received %d", len(p0.Columns), len(rel))
+			return nil
+		}
 
-	// rename the columns and add the relation to the outer scope
-	for i, col := range p0.Columns {
-		rel[i].Name = col
+		// rename the columns and add the relation to the outer scope
+		for i, col := range p0.Columns {
+			rel[i].Name = col
+		}
 	}
 
 	s.sqlCtx.outerRelations = append(s.sqlCtx.outerRelations, &Relation{
