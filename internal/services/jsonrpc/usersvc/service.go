@@ -503,9 +503,10 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		Procedure: body.Action,
 		Args:      args,
 		TransactionData: common.TransactionData{
-			Signer: signer,
-			Caller: caller,
-			Height: -1, // not available
+			Signer:        signer,
+			Caller:        caller,
+			Height:        -1, // not available
+			Authenticator: msg.AuthType,
 		},
 	})
 	if err != nil {

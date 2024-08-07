@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,7 +46,7 @@ func testCtxVars(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid, 
 		count++
 		rec := results.Record()
 		require.NotNil(t, rec)
-		require.Len(t, rec, 5)
+		require.Len(t, rec, 6)
 
 		// check caller
 		ident, err := execute.Identifier()
@@ -79,6 +80,10 @@ func testCtxVars(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid, 
 		if blockTimestamp.(int64) >= time.Now().Unix()+100 {
 			t.Errorf("block_timestamp should be less than the current time")
 		}
+
+		// authenticator
+		authen := rec["authenticator"]
+		assert.Equal(t, auth.EthPersonalSignAuth, authen)
 	}
 	require.Equal(t, 1, count)
 }

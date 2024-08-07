@@ -106,6 +106,9 @@ type TransactionData struct {
 
 	// BlockTimestamp is the unix timestamp of the block, set by the block proposer.
 	BlockTimestamp int64
+
+	// Authenticator is the authenticator used to sign the transaction.
+	Authenticator string
 }
 
 // ExecutionOptions is contextual data that is passed to a procedure

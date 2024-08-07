@@ -228,6 +228,7 @@ func (d *baseRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Trans
 type deployDatasetRoute struct {
 	schema     *types.Schema // set by PreTx
 	identifier string
+	authType   string
 }
 
 var _ consensus.Route = (*deployDatasetRoute)(nil)
@@ -256,6 +257,9 @@ func (d *deployDatasetRoute) PreTx(ctx common.TxContext, svc *common.Service, tx
 	if err != nil {
 		return transactions.CodeUnknownError, err
 	}
+
+	d.authType = tx.Signature.Type
+
 	return 0, nil
 }
 
@@ -267,6 +271,7 @@ func (d *deployDatasetRoute) InTx(ctx common.TxContext, app *common.App, tx *tra
 			TxID:           hex.EncodeToString(ctx.TxID),
 			Height:         ctx.BlockHeight,
 			BlockTimestamp: ctx.BlockTimestamp,
+			Authenticator:  d.authType,
 		})
 	if err != nil {
 		return transactions.CodeUnknownError, err
@@ -277,6 +282,7 @@ func (d *deployDatasetRoute) InTx(ctx common.TxContext, app *common.App, tx *tra
 type dropDatasetRoute struct {
 	dbid       string
 	identifier string
+	authType   string
 }
 
 var _ consensus.Route = (*dropDatasetRoute)(nil)
@@ -301,6 +307,8 @@ func (d *dropDatasetRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *
 		return transactions.CodeUnknownError, err
 	}
 
+	d.authType = tx.Signature.Type
+
 	d.dbid = drop.DBID
 	return 0, nil
 }
@@ -312,6 +320,7 @@ func (d *dropDatasetRoute) InTx(ctx common.TxContext, app *common.App, tx *trans
 		TxID:           hex.EncodeToString(ctx.TxID),
 		Height:         ctx.BlockHeight,
 		BlockTimestamp: ctx.BlockTimestamp,
+		Authenticator:  d.authType,
 	})
 	if err != nil {
 		return transactions.CodeUnknownError, err
@@ -321,6 +330,7 @@ func (d *dropDatasetRoute) InTx(ctx common.TxContext, app *common.App, tx *trans
 
 type executeActionRoute struct {
 	identifier string
+	authType   string
 	dbid       string
 	action     string
 	args       [][]any
@@ -345,6 +355,7 @@ func (d *executeActionRoute) PreTx(ctx common.TxContext, svc *common.Service, tx
 
 	d.action = action.Action
 	d.dbid = action.DBID
+	d.authType = tx.Signature.Type
 
 	d.identifier, err = ident.Identifier(tx.Signature.Type, tx.Sender)
 	if err != nil {
@@ -387,6 +398,7 @@ func (d *executeActionRoute) InTx(ctx common.TxContext, app *common.App, tx *tra
 				TxID:           hex.EncodeToString(ctx.TxID),
 				Height:         ctx.BlockHeight,
 				BlockTimestamp: ctx.BlockTimestamp,
+				Authenticator:  d.authType,
 			},
 		})
 		if err != nil {
