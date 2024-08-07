@@ -6,39 +6,42 @@ table vars {
     signer blob,
     txid text,
     height int,
-    block_timestamp int
+    block_timestamp int,
+    authenticator text
 }
 
 // act_store_vars checks that contextual variables work as expected
 // in actions
 action act_store_vars() public {
-    insert into vars (id, caller, signer, txid, height, block_timestamp)
+    insert into vars (id, caller, signer, txid, height, block_timestamp, authenticator)
     values (
         uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid),
         @caller,
         @signer,
         @txid,
         @height,
-        @block_timestamp
+        @block_timestamp,
+        @authenticator
     );
 }
 
 // proc_store_vars checks that contextual variables work as expected
 // in procedures
 procedure proc_store_vars() public {
-    insert into vars (id, caller, signer, txid, height, block_timestamp)
+    insert into vars (id, caller, signer, txid, height, block_timestamp, authenticator)
     values (
         uuid_generate_v5('985b93a4-2045-44d6-bde4-442a4e498bc6'::uuid, @txid),
         @caller,
         @signer,
         @txid,
         @height,
-        @block_timestamp
+        @block_timestamp,
+        @authenticator
     );
 }
 
-procedure get_stored() public view returns table(caller text, signer blob, txid text, height int, block_timestamp int) {
-    return select caller, signer, txid, height, block_timestamp from vars;
+procedure get_stored() public view returns table(caller text, signer blob, txid text, height int, block_timestamp int, authenticator text) {
+    return select caller, signer, txid, height, block_timestamp, authenticator from vars;
 }
 
 procedure delete_all() public {
