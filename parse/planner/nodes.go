@@ -277,8 +277,10 @@ func (j *Join) Children() []LogicalNode {
 
 func (j *Join) String() string {
 	str := strings.Builder{}
+	str.WriteString("Join [")
 	str.WriteString(j.JoinType.String())
-	str.WriteString(" Join: ")
+	str.WriteString("]: ")
+
 	str.WriteString(j.Condition.String())
 	return str.String()
 }
@@ -468,7 +470,7 @@ func (a *Aggregate) String() string {
 	str.WriteString("Aggregate")
 
 	for _, expr := range a.GroupingExpressions {
-		str.WriteString(" [group=")
+		str.WriteString(" [")
 		str.WriteString(expr.String())
 		str.WriteString("]")
 	}
@@ -496,13 +498,13 @@ const (
 func (j JoinType) String() string {
 	switch j {
 	case InnerJoin:
-		return "Inner"
+		return "inner"
 	case LeftOuterJoin:
-		return "Left Outer"
+		return "left"
 	case RightOuterJoin:
-		return "Right Outer"
+		return "right"
 	case FullOuterJoin:
-		return "Full Outer"
+		return "outer"
 	default:
 		panic(fmt.Sprintf("unknown join type %d", j))
 	}

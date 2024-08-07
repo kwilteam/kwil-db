@@ -51,7 +51,7 @@ func Test_Planner(t *testing.T) {
 			name: "subquery join",
 			sql:  "select name from users u inner join (select owner_id from posts) p on u.id = p.owner_id",
 			wt: "Projection: u.name\n" +
-				"└-Inner Join: u.id = p.owner_id\n" +
+				"└-Join [inner]: u.id = p.owner_id\n" +
 				"  |-Scan Table [alias=u]: users\n" +
 				"  └-Scan Subquery [alias=p]:\n" +
 				"    └-Projection: posts.owner_id\n" +
@@ -107,14 +107,14 @@ func Test_Planner(t *testing.T) {
 			sql:  "select name, sum(age) from users group by name having sum(age)::int > 100",
 			wt: "Projection: users.name, sum(users.age)\n" +
 				"└-Filter: sum(users.age)::int > 100\n" +
-				"  └-Aggregate [group=users.name]: sum(users.age)\n" +
+				"  └-Aggregate [users.name]: sum(users.age)\n" +
 				"    └-Scan Table [alias=users]: users\n",
 		},
 		{
 			name: "complex group by",
 			sql:  "select age/2, age*3 from users group by age/2, age*3",
 			wt: "Projection: users.age / 2, users.age * 3\n" +
-				"└-Aggregate [group=users.age / 2] [group=users.age * 3]: \n" +
+				"└-Aggregate [users.age / 2] [users.age * 3]: \n" +
 				"  └-Scan Table [alias=users]: users\n",
 		},
 		// TODO: negative case of the above
@@ -123,7 +123,7 @@ func Test_Planner(t *testing.T) {
 			sql:  "select name, sum(age/2)+sum(age*10) from users group by name having sum(age)::int > 100 or sum(age/2)::int > 10",
 			wt: "Projection: users.name, sum(users.age / 2) + sum(users.age * 10)\n" +
 				"└-Filter: (sum(users.age)::int > 100 OR sum(users.age / 2)::int > 10)\n" +
-				"  └-Aggregate [group=users.name]: sum(users.age / 2), sum(users.age * 10), sum(users.age)\n" +
+				"  └-Aggregate [users.name]: sum(users.age / 2), sum(users.age * 10), sum(users.age)\n" +
 				"    └-Scan Table [alias=users]: users\n",
 		},
 		// TODO: test that we cannot use aggregates in where clause
@@ -140,11 +140,11 @@ func Test_Planner(t *testing.T) {
 				full join (select id from users where age > 18) u2 on u2.id = u.id
 				group by c.brand, pu.content, u.name, u2.id;`,
 			wt: "Projection: c.brand, pu.content, u.name, u2.id, count(p.id)\n" +
-				"└-Aggregate [group=c.brand] [group=pu.content] [group=u.name] [group=u2.id]: count(p.id)\n" +
-				"  └-Full Outer Join: u2.id = u.id\n" +
-				"    |-Right Outer Join: pu.content = p.content\n" +
-				"    | |-Left Outer Join: c.owner_name = u.name\n" +
-				"    | | |-Inner Join: u.id = p.owner_id\n" +
+				"└-Aggregate [c.brand] [pu.content] [u.name] [u2.id]: count(p.id)\n" +
+				"  └-Join [outer]: u2.id = u.id\n" +
+				"    |-Join [right]: pu.content = p.content\n" +
+				"    | |-Join [left]: c.owner_name = u.name\n" +
+				"    | | |-Join [inner]: u.id = p.owner_id\n" +
 				"    | | | |-Scan Table [alias=u]: users\n" +
 				"    | | | └-Scan Table [alias=p]: posts\n" +
 				"    | | └-Scan Procedure [alias=c]: [foreign=true] [dbid='dbid'] [proc='proc'] owned_cars($id)\n" +
@@ -169,7 +169,8 @@ func Test_Planner(t *testing.T) {
 			if test.err != nil {
 				require.Error(t, err)
 
-				if errors.Is(err, anyErr) {
+				// special case for testing
+				if errors.Is(test.err, errAny) {
 					return
 				}
 
@@ -191,8 +192,8 @@ func Test_Planner(t *testing.T) {
 	}
 }
 
-// special error for testing
-var anyErr = errors.New("any error")
+// special error for testing that will match any error
+var errAny = errors.New("any error")
 
 var testSchema = `database planner;
 
