@@ -16,8 +16,8 @@ func Test_Planner(t *testing.T) {
 		name    string
 		sql     string
 		wt      string                                // want, abbreviated for formatting test cases
-		vars    map[string]*types.DataType            // can be nil if no vars are expected
-		objects map[string]map[string]*types.DataType // can be nil if no objects are expected
+		vars    map[string]*types.DataType            // variables that can be accessed, can be nil
+		objects map[string]map[string]*types.DataType // objects that can be referenced, can be nil
 		err     error                                 // can be nil if no error is expected
 	}
 
@@ -26,6 +26,18 @@ func Test_Planner(t *testing.T) {
 			name: "basic select",
 			sql:  "select 1",
 			wt: "Projection: 1\n" +
+				"└-Empty Scan\n",
+		},
+		{
+			name: "array and object",
+			sql:  "select $a.b, $c[1]",
+			vars: map[string]*types.DataType{
+				"$c": types.ArrayType(types.IntType),
+			},
+			objects: map[string]map[string]*types.DataType{
+				"$a": {"b": types.IntType},
+			},
+			wt: "Projection: $a.b, $c[1]\n" +
 				"└-Empty Scan\n",
 		},
 		{

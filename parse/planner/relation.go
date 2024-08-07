@@ -309,7 +309,15 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 	case *Variable:
 		dt, ok := s.plan.Variables[n.VarName]
 		if !ok {
-			return nil, fmt.Errorf(`variable "%s" not found`, n.VarName)
+			// might be an object
+			obj, ok := s.plan.Objects[n.VarName]
+			if !ok {
+				return nil, fmt.Errorf(`variable "%s" not found`, n.VarName)
+			}
+			return &Field{
+				Name: n.VarName,
+				val:  obj,
+			}, nil
 		}
 
 		return anonField(dt), nil
