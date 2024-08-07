@@ -196,7 +196,7 @@ sql_statement:
 ;
 
 common_table_expression:
-    identifier LPAREN (identifier (COMMA identifier)*)? RPAREN AS LPAREN select_statement RPAREN
+    identifier (LPAREN (identifier (COMMA identifier)*)? RPAREN)? AS LPAREN select_statement RPAREN
 ;
 
 select_statement:

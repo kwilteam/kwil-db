@@ -2697,6 +2697,105 @@ func Test_SQL(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "cte",
+			sql:  `WITH cte AS (SELECT id FROM users) SELECT * FROM cte;`,
+			want: &parse.SQLStatement{
+				CTEs: []*parse.CommonTableExpression{
+					{
+						Name: "cte",
+						Query: &parse.SelectStatement{
+							SelectCores: []*parse.SelectCore{
+								{
+									Columns: []parse.ResultColumn{
+										&parse.ResultColumnExpression{
+											Expression: exprColumn("", "id"),
+										},
+									},
+									From: &parse.RelationTable{
+										Table: "users",
+									},
+								},
+							},
+							// apply default ordering
+							Ordering: []*parse.OrderingTerm{
+								{
+									Expression: exprColumn("users", "id"),
+								},
+							},
+						},
+					},
+				},
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnWildcard{},
+							},
+							From: &parse.RelationTable{
+								Table: "cte",
+							},
+						},
+					},
+					// apply default ordering
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: exprColumn("cte", "id"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "cte with columns",
+			sql:  `WITH cte (id2) AS (SELECT id FROM users) SELECT * FROM cte;`,
+			want: &parse.SQLStatement{
+				CTEs: []*parse.CommonTableExpression{
+					{
+						Name:    "cte",
+						Columns: []string{"id2"},
+						Query: &parse.SelectStatement{
+							SelectCores: []*parse.SelectCore{
+								{
+									Columns: []parse.ResultColumn{
+										&parse.ResultColumnExpression{
+											Expression: exprColumn("", "id"),
+										},
+									},
+									From: &parse.RelationTable{
+										Table: "users",
+									},
+								},
+							},
+							// apply default ordering
+							Ordering: []*parse.OrderingTerm{
+								{
+									Expression: exprColumn("users", "id"),
+								},
+							},
+						},
+					},
+				},
+				SQL: &parse.SelectStatement{
+					SelectCores: []*parse.SelectCore{
+						{
+							Columns: []parse.ResultColumn{
+								&parse.ResultColumnWildcard{},
+							},
+							From: &parse.RelationTable{
+								Table: "cte",
+							},
+						},
+					},
+					// apply default ordering
+					Ordering: []*parse.OrderingTerm{
+						{
+							Expression: exprColumn("cte", "id2"),
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
