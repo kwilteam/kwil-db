@@ -175,8 +175,6 @@ var orderNullsLast = map[parse.NullOrder]bool{
 // it is used to catch internal errors if we add new nodes to the AST
 // without updating the planner.
 func get[A comparable, B any](m map[A]B, a A) B {
-	// overall, not worried about the marginal overhead of this, since plans will
-	// probably be cached.
 	if v, ok := m[a]; ok {
 		return v
 	}
@@ -505,12 +503,34 @@ func (p *plannerVisitor) VisitSelectStatement(node *parse.SelectStatement) any {
 		panic("no select cores")
 	}
 
-	plan := node.SelectCores[0].Accept(p).(LogicalPlan)
-	for i, core := range node.SelectCores[1:] {
-		plan = &SetOperation{
-			Left:   plan,
-			Right:  core.Accept(p).(LogicalPlan),
-			OpType: get(compoundTypes, node.CompoundOperators[i]),
+	var plan LogicalPlan
+
+	selectCore := node.SelectCores[0].Accept(p).(*selectCoreResult)
+
+	// finish is a function that is called at the end of the function.
+	// Normally, we would handle this with a defer, but since the visitor has
+	// to return "any", this is not an option. By default, it does nothing,
+	// but in the logic directly below, we might set it to apply a projection
+	finish := func(pln LogicalPlan) LogicalPlan {
+		return pln
+	}
+
+	// see the documentation for selectCoreResult for an explanation as to why
+	// we perform this if statement.
+	if len(node.SelectCores) == 1 {
+		plan = selectCore.plan
+		finish = selectCore.projectFunc
+	} else {
+		// otherwise, apply immediately
+		plan = selectCore.projectFunc(selectCore.plan)
+		for i, core := range node.SelectCores[1:] {
+			right := core.Accept(p).(*selectCoreResult)
+
+			plan = &SetOperation{
+				Left:   plan,
+				Right:  right.projectFunc(right.plan),
+				OpType: get(compoundTypes, node.CompoundOperators[i]),
+			}
 		}
 	}
 
@@ -543,7 +563,7 @@ func (p *plannerVisitor) VisitSelectStatement(node *parse.SelectStatement) any {
 		plan = lim
 	}
 
-	return plan
+	return finish(plan)
 }
 
 // The order of building is:
@@ -578,9 +598,14 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 			}
 		}
 
-		return &Project{
-			Expressions: exprs,
-			Child:       &EmptyScan{},
+		return &selectCoreResult{
+			plan: &EmptyScan{},
+			projectFunc: func(newPlan LogicalPlan) LogicalPlan {
+				return &Project{
+					Expressions: exprs,
+					Child:       newPlan,
+				}
+			},
 		}
 	}
 
@@ -681,19 +706,43 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 		}
 	}
 
-	// we need to project the results
-	plan = &Project{
-		Expressions: results,
-		Child:       plan,
-	}
+	// see the selectCoreResult documentation below for an explanation as to
+	// why this is returned instead of just the plan.
+	return &selectCoreResult{
+		plan: plan,
+		projectFunc: func(newPlan LogicalPlan) LogicalPlan {
+			var plan2 LogicalPlan = &Project{
+				Expressions: results,
+				Child:       newPlan,
+			}
 
-	if node.Distinct {
-		plan = &Distinct{
-			Child: plan,
-		}
-	}
+			if node.Distinct {
+				plan2 = &Distinct{
+					Child: plan2,
+				}
+			}
 
-	return plan
+			return plan2
+		},
+	}
+}
+
+// selectCoreResult is a helper struct that is only returned from VisitSelectCore.
+// It is returned from VisitSelectCore because we need to handle conditionally
+// adding projection. If a query has a SET (a.k.a. compound) operation, we want to project before performing
+// the set. If a query has one select, then we want to project after sorting and limiting.
+// To give a concrete example of this, imagine a table users (id int, name text) with the queries:
+// 1.
+// "SELECT name FROM users ORDER BY id" - this is valid in Postgres, and since we can access "id", projection
+// should be done after sorting.
+// 2.
+// "SELECT name FROM users UNION 'hello' ORDER BY id" - this is invalid in Postgres, since "id" is not in the
+// result set. We need to project before the UNION.
+//
+// This struct allows us to conditionally handle this logic in the calling VisitSelectStatement method.
+type selectCoreResult struct {
+	plan        LogicalPlan
+	projectFunc func(LogicalPlan) LogicalPlan
 }
 
 func (p *plannerVisitor) VisitRelationTable(node *parse.RelationTable) any {

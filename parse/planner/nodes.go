@@ -28,7 +28,12 @@ import (
 
 // Traversable is an interface for nodes that can be traversed.
 type Traversable interface {
+	// Children returns the children of the node.
+	// These are all LogicalPlans and LogicalExprs that are
+	// referenced by the node.
 	Children() []LogicalNode
+	// Plans returns all the logical plans that are referenced
+	// by the node (or the nearest node that contains them).
 	Plans() []LogicalPlan
 }
 
@@ -263,7 +268,7 @@ func (p *Project) String() string {
 
 	for i, expr := range p.Expressions {
 		if i > 0 {
-			str.WriteString(", ")
+			str.WriteString("; ")
 		}
 		str.WriteString(expr.String())
 	}
@@ -329,25 +334,24 @@ type SortExpression struct {
 
 func (s *Sort) String() string {
 	str := strings.Builder{}
-	str.WriteString("SORT BY ")
+	str.WriteString("Sort:")
 	for i, sortExpr := range s.SortExpressions {
 		if i > 0 {
-			str.WriteString("; ")
+			str.WriteString(";")
 		}
+
+		str.WriteString(" [")
 		str.WriteString(sortExpr.Expr.String())
-
-		str.WriteString("order=")
-		if !sortExpr.Ascending {
-			str.WriteString("desc ")
-		} else {
+		str.WriteString("] ")
+		if sortExpr.Ascending {
 			str.WriteString("asc ")
-		}
-
-		str.WriteString("nulls=")
-		if sortExpr.NullsLast {
-			str.WriteString("last")
 		} else {
-			str.WriteString("first")
+			str.WriteString("desc ")
+		}
+		if sortExpr.NullsLast {
+			str.WriteString("nulls last")
+		} else {
+			str.WriteString("nulls first")
 		}
 	}
 	return str.String()
@@ -385,14 +389,15 @@ func (l *Limit) Children() []LogicalNode {
 
 func (l *Limit) String() string {
 	str := strings.Builder{}
-	str.WriteString("LIMIT [")
-	str.WriteString(l.Limit.String())
-	str.WriteString("]")
+	str.WriteString("Limit")
 	if l.Offset != nil {
-		str.WriteString("; offset=[")
+		str.WriteString(" [offset=")
 		str.WriteString(l.Offset.String())
 		str.WriteString("]")
 	}
+	str.WriteString(": ")
+	str.WriteString(l.Limit.String())
+
 	return str.String()
 }
 
@@ -417,7 +422,7 @@ func (d *Distinct) Children() []LogicalNode {
 }
 
 func (d *Distinct) String() string {
-	return "DISTINCT"
+	return "Distinct"
 }
 
 func (d *Distinct) Plans() []LogicalPlan {
@@ -442,13 +447,8 @@ func (s *SetOperation) Plans() []LogicalPlan {
 
 func (s *SetOperation) String() string {
 	str := strings.Builder{}
-	str.WriteString("SET: op=")
+	str.WriteString("Set: ")
 	str.WriteString(s.OpType.String())
-	str.WriteString("; left=[")
-	str.WriteString(s.Left.String())
-	str.WriteString("]; right=[")
-	str.WriteString(s.Right.String())
-	str.WriteString("]")
 	return str.String()
 }
 
@@ -504,7 +504,7 @@ func (a *Aggregate) String() string {
 
 	for i, expr := range a.AggregateExpressions {
 		if i > 0 {
-			str.WriteString(", ")
+			str.WriteString("; ")
 		}
 		str.WriteString(expr.String())
 	}
@@ -548,13 +548,13 @@ const (
 func (s SetOperationType) String() string {
 	switch s {
 	case Union:
-		return "UNION"
+		return "union"
 	case UnionAll:
-		return "UNION ALL"
+		return "union all"
 	case Intersect:
-		return "INTERSECT"
+		return "intersect"
 	case Except:
-		return "EXCEPT"
+		return "except"
 	default:
 		panic(fmt.Sprintf("unknown set operation type %d", s))
 	}
@@ -684,7 +684,7 @@ type ColumnRef struct {
 
 func (c *ColumnRef) String() string {
 	if c.Parent != "" {
-		return fmt.Sprintf("%s.%s", c.Parent, c.ColumnName)
+		return fmt.Sprintf(`%s.%s`, c.Parent, c.ColumnName)
 	}
 	return c.ColumnName
 }
@@ -707,6 +707,7 @@ type AggregateFunctionCall struct {
 
 func (a *AggregateFunctionCall) String() string {
 	var buf bytes.Buffer
+
 	buf.WriteString(a.FunctionName)
 	buf.WriteString("(")
 	if a.Star {
@@ -716,7 +717,7 @@ func (a *AggregateFunctionCall) String() string {
 			if i > 0 {
 				buf.WriteString(", ")
 			} else if a.Distinct {
-				buf.WriteString("DISTINCT ")
+				buf.WriteString("distinct ")
 			}
 			buf.WriteString(arg.String())
 		}
@@ -791,11 +792,14 @@ type ProcedureCall struct {
 
 func (p *ProcedureCall) String() string {
 	var buf bytes.Buffer
-	if p.Foreign {
-		buf.WriteString("FOREIGN ")
-	}
-	buf.WriteString("PROCEDURE ")
 	buf.WriteString(p.ProcedureName)
+	if p.Foreign {
+		buf.WriteString("[")
+		buf.WriteString(p.ContextArgs[0].String())
+		buf.WriteString(", ")
+		buf.WriteString(p.ContextArgs[1].String())
+		buf.WriteString("]")
+	}
 	buf.WriteString("(")
 	for i, arg := range p.Args {
 		if i > 0 {
@@ -804,6 +808,7 @@ func (p *ProcedureCall) String() string {
 		buf.WriteString(arg.String())
 	}
 	buf.WriteString(")")
+
 	return buf.String()
 }
 
@@ -1130,26 +1135,33 @@ var _ LogicalExpr = (*Subquery)(nil)
 
 func (s *Subquery) String() string {
 	str := strings.Builder{}
-	str.WriteString("subquery ")
+	str.WriteString("[subquery (")
 
-	str.WriteString("[")
 	str.WriteString(s.SubqueryType.String())
-	str.WriteString("] [subplan_id=")
+	str.WriteString(") (subplan_id=")
 	str.WriteString(s.ID)
-	str.WriteString("]")
+	str.WriteString(") ")
 
 	if len(s.Correlated) == 0 {
-		str.WriteString(" [uncorrelated]")
-		return str.String()
+		str.WriteString("(uncorrelated)")
+	} else {
+		str.WriteString("(correlated: ")
+
+		for i, field := range s.Correlated {
+			if i > 0 {
+				str.WriteString(", ")
+			}
+			if field.Parent != "" {
+				str.WriteString(field.Parent)
+				str.WriteString(".")
+			}
+
+			str.WriteString(field.ColumnName)
+		}
+		str.WriteString(")")
 	}
 
-	for _, field := range s.Correlated {
-		str.WriteString(" [correlated=")
-		str.WriteString(field.Parent)
-		str.WriteString(".")
-		str.WriteString(field.ColumnName)
-		str.WriteString("]")
-	}
+	str.WriteString("]")
 
 	return str.String()
 }
@@ -1227,13 +1239,12 @@ func innerFormat(plan LogicalNode, count int, printLong []bool) (string, []*Subp
 
 	var msg strings.Builder
 	for i := 0; i < count; i++ {
-		//msg.WriteString("∟-")
 		if i == count-1 && len(printLong) > i && !printLong[i] {
-			msg.WriteString("└-")
+			msg.WriteString("└─")
 		} else if i == count-1 && len(printLong) > i && printLong[i] {
-			msg.WriteString("|-")
-		} else if i > 0 && len(printLong) > i && printLong[i] {
-			msg.WriteString("| ")
+			msg.WriteString("├─")
+		} else if len(printLong) > i && printLong[i] {
+			msg.WriteString("│ ")
 		} else {
 			msg.WriteString("  ")
 		}
