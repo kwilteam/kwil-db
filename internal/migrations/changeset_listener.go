@@ -120,7 +120,7 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 			wg := sync.WaitGroup{}
 			errChan := make(chan error, numChunks)
 
-			for i := int64(1); i <= numChunks; i++ {
+			for i := int64(0); i < numChunks; i++ {
 				wg.Add(1)
 				go func(chunkIdx int64) {
 					for {

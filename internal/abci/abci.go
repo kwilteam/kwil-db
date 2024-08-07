@@ -236,6 +236,8 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		app.consensusParams.WithoutGasCosts = networkParams.DisabledGasCosts
 	}
 
+	networkParams.InMigration = app.migrator.InMigration(height)
+
 	app.chainContext = &common.ChainContext{
 		ChainID:           cfg.ChainID,
 		NetworkParameters: networkParams,
@@ -389,7 +391,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	if err != nil {
 		if errors.Is(err, transactions.ErrInvalidNonce) {
 			code = codeInvalidNonce
-			logger.Info("received transaction with invalid nonce", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
+			logger.Info("received transaction with invalid nonce", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err), zap.String("payloadType", tx.Body.PayloadType.String()))
 		} else if errors.Is(err, transactions.ErrInvalidAmount) {
 			code = codeInvalidAmount
 			logger.Info("received transaction with invalid amount", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
@@ -498,6 +500,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		BlockTimestamp: req.Time.Unix(),
 		Proposer:       proposerPubKey,
 	}
+	inMigration := blockCtx.ChainContext.NetworkParameters.InMigration
 
 	// since notifications are returned async from postgres, we will construct
 	// a map to track them in, and wait at the end of the function to add them
@@ -659,9 +662,24 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, err
 	}
 
+	// Create a new changeset processor
+	csp := newChangesetProcessor()
+	// "migrator" module subscribes to the changeset processor to store changesets during the migration
+	if inMigration {
+		csChanMigrator := csp.Subscribe(ctx, "migrator")
+		// migrator go routine will receive changesets from the changeset processor
+		// give the new channel to the migrator to store changesets
+		go a.migrator.StoreChangesets(req.Height, csChanMigrator)
+	}
+
+	// statistics module can subscribe to the changeset processor to listen for changesets for updating statistics
+	// statsChan := csp.Subscribe(ctx, "statistics")
+
+	// changeset processor is not ready to receive changesets and  broadcast them to subscribers
+	go csp.BroadcastChangesets(ctx)
+
 	// we now get the apphash by calling precommit on the transaction
-	writer := new(bytes.Buffer)
-	appHash, err := a.consensusTx.Precommit(ctx, writer)
+	appHash, err := a.consensusTx.Precommit(ctx, csp.csChan)
 	if err != nil {
 		return nil, fmt.Errorf("failed to precommit transaction: %w", err)
 	}
@@ -682,7 +700,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// Notify the migrator of the changeset
-	err = a.migrator.NotifyHeight(ctx, &blockCtx, a.db, writer)
+	err = a.migrator.NotifyHeight(ctx, &blockCtx, a.db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to notify migrator of changeset: %w", err)
 	}
@@ -1556,4 +1574,92 @@ func (a *AbciApp) Close() error {
 // reading from the DB can use this method.
 func (a *AbciApp) Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error) {
 	return a.txApp.Price(ctx, db, tx, a.chainContext)
+}
+
+// ChangesetProcessor is a PubSub that listens for changesets and broadcasts them to the receivers.
+// Subscribers can be added and removed to listen for changesets.
+// Statistics receiver might listen for changesets to update the statistics every block.
+// Whereas Network migrations listen for the changesets only during the migration. (that's when you register)
+// ABCI --> CS Processor ---> [Subscribers]
+// Once all the changesets are processed, all the channels are closed [every block]
+// The channels are reset for the next block.
+type changesetProcessor struct {
+	csChan      chan any // channel to receive changesets
+	subscribers map[string]chan<- any
+	// TODO: do we need this mutex?
+	// mtx         sync.RWMutex // protects subscribers ?
+	closed bool // Is this needed ??
+}
+
+func newChangesetProcessor() *changesetProcessor {
+	return &changesetProcessor{
+		csChan:      make(chan any, 1), // buffered channel to avoid blocking
+		subscribers: make(map[string]chan<- any),
+	}
+}
+
+// Subscribe adds a subscriber to the changeset processor.
+// The receiver can subscribe to the changeset processor using its name as tge id
+func (c *changesetProcessor) Subscribe(ctx context.Context, id string) <-chan any {
+	// c.mtx.Lock()
+	// defer c.mtx.Unlock()
+
+	if c.closed {
+		return nil
+	}
+
+	ch := make(chan any, 1) // buffered channel to avoid blocking
+	c.subscribers[id] = ch
+	return ch
+}
+
+// Unsubscribe removes the subscriber from the changeset processor.
+func (c *changesetProcessor) Unsubscribe(ctx context.Context, id string) {
+	// c.mtx.Lock()
+	// defer c.mtx.Unlock()
+
+	if c.closed {
+		return
+	}
+
+	if ch, ok := c.subscribers[id]; ok {
+		close(ch) // close the channel to signal the subscriber to stop listening
+		delete(c.subscribers, id)
+	}
+}
+
+// Broadcast sends changesets to all the subscribers through their channels.
+func (c *changesetProcessor) BroadcastChangesets(ctx context.Context) {
+	// c.mtx.RLock()
+	// defer c.mtx.RUnlock()
+	defer c.Close() // All the block changesets have been processed, close the subscribers.
+	if c.closed {
+		return
+	}
+
+	// Listen on the csChan for changesets and broadcast them to all subscribers.
+	for cs := range c.csChan {
+		for _, ch := range c.subscribers {
+			select {
+			case ch <- cs:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+}
+
+func (c *changesetProcessor) Close() {
+	// c.mtx.Lock()
+	// defer c.mtx.Unlock()
+
+	if c.closed {
+		return
+	}
+
+	c.closed = true
+	// c.CsChan is closed by the repl layer (sender closes the channel)
+	for _, ch := range c.subscribers {
+		close(ch)
+	}
 }

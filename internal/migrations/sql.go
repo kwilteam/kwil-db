@@ -143,7 +143,7 @@ var (
 	tableChangesetsMetadataSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.changesets_metadata (
 		height INT PRIMARY KEY,
 		total_chunks INT, -- total number of chunks in the changeset
-		chunks_to_receive INT -- number of chunks left to receive
+		received INT -- number of chunks received
 	)`
 
 	// tableChangesetsSQL is the table that stores changeset chunks. These are identified by height and index.
@@ -156,22 +156,22 @@ var (
 	)`
 
 	// insertChangesetMetadataSQL is the sql query used to insert changeset metadata.
-	insertChangesetMetadataSQL = `INSERT INTO ` + migrationsSchemaName + `.changesets_metadata (height, total_chunks, chunks_to_receive) VALUES ($1, $2, $3) ON CONFLICT (height) DO NOTHING;`
+	insertChangesetMetadataSQL = `INSERT INTO ` + migrationsSchemaName + `.changesets_metadata (height, total_chunks, received) VALUES ($1, $2, $3) ON CONFLICT (height) DO NOTHING;`
 
 	// updateChangesetMetadataSQL is the sql query used to update changeset metadata.
-	updateChangesetMetadataSQL = `UPDATE ` + migrationsSchemaName + `.changesets_metadata SET chunks_to_receive = chunks_to_receive - 1 WHERE height = $1;`
+	updateChangesetMetadataSQL = `UPDATE ` + migrationsSchemaName + `.changesets_metadata SET received = received + 1 WHERE height = $1;`
 
 	// deleteChangesetMetadataSQL is the sql query used to delete changeset metadata.
 	deleteChangesetMetadataSQL = `DELETE FROM ` + migrationsSchemaName + `.changesets_metadata WHERE height = $1;`
 
+	// getChangesetMetadataSQL is the sql query used to get changeset metadata.
+	getChangesetMetadataSQL = `SELECT total_chunks, received FROM ` + migrationsSchemaName + `.changesets_metadata WHERE height = $1;`
+
 	// insertChangesetSQL is the sql query used to insert changeset.
 	insertChangesetSQL = `INSERT INTO ` + migrationsSchemaName + `.changesets (height, index, changeset) VALUES ($1, $2, $3) ON CONFLICT (height, index) DO NOTHING;`
 
-	// allChunksReceivedSQL is the sql query used to check if all chunks are received.
-	allChunksReceivedSQL = `SELECT chunks_to_receive FROM ` + migrationsSchemaName + `.changesets_metadata WHERE height = $1;`
-
 	// getChangesetsSQL is the sql query used to get changeset.
-	getChangesetsSQL = `SELECT changeset FROM ` + migrationsSchemaName + `.changesets WHERE height = $1 ORDER BY index;`
+	getChangesetsSQL = `SELECT changeset FROM ` + migrationsSchemaName + `.changesets WHERE height = $1 AND index = $2;`
 
 	// changesetExistsSQL is the sql query used to check if a changeset exists.
 	changesetExistsSQL = `SELECT 1 FROM ` + migrationsSchemaName + `.changesets WHERE height = $1 AND index = $2;`
@@ -213,7 +213,7 @@ func getLastChangeset(ctx context.Context, db sql.Executor) (int64, error) {
 
 // insertChangesetMetadata inserts the changeset metadata into the database.
 func insertChangesetMetadata(ctx context.Context, db sql.Executor, height int64, totalChunks int) error {
-	_, err := db.Execute(ctx, insertChangesetMetadataSQL, height, totalChunks, totalChunks)
+	_, err := db.Execute(ctx, insertChangesetMetadataSQL, height, totalChunks, 0)
 	return err
 }
 
@@ -230,30 +230,40 @@ func insertChangesetChunk(ctx context.Context, db sql.Executor, height int64, in
 	return err
 }
 
-// allChunksReceived checks if all chunks for a given height have been received.
-func allChunksReceived(ctx context.Context, db sql.Executor, height int64) (bool, error) {
-	res, err := db.Execute(ctx, allChunksReceivedSQL, height)
+// getChangesetMetadata gets the changeset metadata from the database.
+func getChangesetMetadata(ctx context.Context, db sql.Executor, height int64) (int64, int64, error) {
+	res, err := db.Execute(ctx, getChangesetMetadataSQL, height)
 	if err != nil {
-		return false, err
+		return 0, 0, err
 	}
 
 	// row doesnt exist.
 	if len(res.Rows) == 0 {
-		return false, nil
+		return 0, 0, fmt.Errorf("changeset metadata not found")
 	}
 
 	if len(res.Rows) != 1 {
 		// should never happen
-		return false, fmt.Errorf("internal bug: expected one row for changeset metadata, got %d", len(res.Rows))
+		return 0, 0, fmt.Errorf("internal bug: expected one row for changeset metadata, got %d", len(res.Rows))
+	}
+
+	if len(res.Rows[0]) != 2 {
+		// should never happen
+		return 0, 0, fmt.Errorf("internal bug: expected two columns for changeset metadata, got %d", len(res.Rows[0]))
 	}
 
 	row := res.Rows[0]
 	chunksToReceive, ok := row[0].(int64)
 	if !ok {
-		return false, fmt.Errorf("internal bug: chunks to receive is not an int64")
+		return 0, 0, fmt.Errorf("internal bug: chunks to receive is not an int64")
 	}
 
-	return chunksToReceive == 0, nil
+	totalChunks, ok := row[1].(int64)
+	if !ok {
+		return 0, 0, fmt.Errorf("internal bug: total chunks is not an int64")
+	}
+
+	return totalChunks, chunksToReceive, nil
 }
 
 // changesetChunkExists checks if a changeset chunk already exists in the database.
@@ -266,23 +276,31 @@ func changesetChunkExists(ctx context.Context, db sql.Executor, height int64, in
 	return len(res.Rows) == 1, nil
 }
 
-// getChangesets gets the changesets from the database.
-// It returns a byte slice of all changeset chunks in the order of chunk indexes.
-func getChangesets(ctx context.Context, db sql.Executor, height int64) ([]byte, error) {
-	res, err := db.Execute(ctx, getChangesetsSQL, height)
+// getChangeset gets the changeset corresponding to a given height and index from the database.
+func getChangeset(ctx context.Context, db sql.Executor, height int64, index int64) ([]byte, error) {
+	res, err := db.Execute(ctx, getChangesetsSQL, height, index)
 	if err != nil {
 		return nil, err
 	}
 
-	var changesets []byte
-	for _, row := range res.Rows {
-		changeset, ok := row[0].([]byte)
-		if !ok {
-			return nil, fmt.Errorf("internal bug: changeset is not a byte slice")
-		}
-
-		changesets = append(changesets, changeset...)
+	if len(res.Rows) == 0 {
+		return nil, fmt.Errorf("changeset not found height: %d, Index: %d", height, index)
 	}
 
-	return changesets, nil
+	if len(res.Rows) != 1 {
+		// should never happen
+		return nil, fmt.Errorf("internal bug: expected one row for changeset, got %d", len(res.Rows))
+	}
+
+	if len(res.Rows[0]) != 1 {
+		return nil, fmt.Errorf("internal bug: expected one column for changeset, got %d", len(res.Rows[0]))
+	}
+
+	row := res.Rows[0]
+	changeset, ok := row[0].([]byte)
+	if !ok {
+		return nil, fmt.Errorf("internal bug: changeset is not a byte slice")
+	}
+
+	return changeset, nil
 }

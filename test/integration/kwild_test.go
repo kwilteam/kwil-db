@@ -827,7 +827,7 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 
 		// Create a new database and verify that the database exists on other nodes
 		specifications.DatabaseDeploySpecification(ctx, t, user0Driver)
-		time.Sleep(time.Second * 2) // need time to sync
+		time.Sleep(time.Second * 5) // need time to sync
 		specifications.DatabaseVerifySpecification(ctx, t, user1Driver, true)
 		specifications.DatabaseVerifySpecification(ctx, t, user2Driver, true)
 
@@ -879,7 +879,7 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 
 		specifications.DatabaseVerifySpecificationEventually(ctx, t, newNode3Driver)
 
-		time.Sleep(15 * time.Second) // need time to catch up on changesets
+		time.Sleep(30 * time.Second) // need time to catch up on changesets
 
 		specifications.ExecuteDBRecordsVerifySpecification(ctx, t, newNode3Driver, expectPosts)
 

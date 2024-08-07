@@ -2,6 +2,7 @@ package migrations
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"math/big"
 
@@ -20,6 +21,8 @@ const (
 
 var (
 	migrationCfg *MigrationConfig
+
+	ErrNoMoreChunksToRead = errors.New("no more chunks to read")
 )
 
 func init() {
@@ -41,6 +44,7 @@ type ChangesetMigration struct {
 	Height *big.Int
 
 	// ChangesetIdx is the index of the changeset chunk in the block.
+	// Indexes starts from 0.
 	ChunkIdx *big.Int
 
 	// TotalChunks is the total number of chunks in the changeset.
@@ -108,10 +112,12 @@ var ChangesetMigrationResolution = resolutions.ResolutionConfig{
 		// get the last changeset height applied
 		lastChangeset, err := getLastChangeset(ctx, tx)
 		if err != nil {
-			return err
+			return tx.Commit(ctx)
 		}
 
-		if lastChangeset == -1 {
+		if lastChangeset == migrationCfg.EndHeight {
+			return nil
+		} else if lastChangeset == -1 {
 			currentHeight = migrationCfg.StartHeight
 		} else {
 			currentHeight = lastChangeset + 1
@@ -122,58 +128,35 @@ var ChangesetMigrationResolution = resolutions.ResolutionConfig{
 			// If the current height is greater than the migration end height, break
 			if currentHeight >= migrationCfg.EndHeight {
 				app.Service.Logger.Info("changeset migration completed", log.Int("height", currentHeight))
-				return nil
+				break
 			}
 
-			// Check if all chunks have been received for the current height
-			rcvd, err := allChunksReceived(ctx, tx, currentHeight)
+			// Check if all chunks have been received for the current height, if not, break
+			totalChunks, chunksReceived, err := getChangesetMetadata(ctx, tx, currentHeight)
 			if err != nil {
-				return err
+				break
 			}
 
-			if !rcvd {
+			if totalChunks != chunksReceived {
 				app.Service.Logger.Info("waiting for all chunks to be received", log.Int("height", currentHeight))
 				break // all chunks are not received, wait for them
 			}
 
-			// retrieve the complete changeset for the current height
-			cs, err := getChangesets(ctx, tx, currentHeight)
-			if err != nil {
-				return err
+			// Apply the changeset
+			if err = applyChangeset(ctx, tx, currentHeight, totalChunks); err != nil {
+				return errors.Join(err, tx.Commit(ctx))
 			}
 
-			blockChangesets := &BlockChangesets{}
-			err = blockChangesets.UnmarshalBinary(cs)
-			if err != nil {
-				return err
-			}
-
-			// Apply the changeset to the database
-			changesetGroup := &pg.ChangesetGroup{
-				Changesets: blockChangesets.Changesets,
-			}
-			if err = changesetGroup.ApplyChangesets(ctx, tx); err != nil {
-				app.Service.Logger.Error("failed to apply changesets", log.Int("height", currentHeight), log.String("error", err.Error()))
-				return err
-			}
-
-			// Apply the spends to the database
-			for _, spend := range blockChangesets.Spends {
-				if err = spend.ApplySpend(ctx, tx); err != nil {
-					app.Service.Logger.Warn("failed to apply spend", log.Int("height", currentHeight), log.String("error", err.Error()))
-				}
-			}
-
-			app.Service.Logger.Info("Applied changesets", log.Int("height", currentHeight), log.Int("size", len(cs)))
+			app.Service.Logger.Info("Applied changesets", log.Int("height", currentHeight))
 
 			// Delete the changeset after it has been applied
 			if err = deleteChangesets(ctx, tx, currentHeight); err != nil {
-				return err
+				return errors.Join(err, tx.Commit(ctx))
 			}
 
 			// Increment the last changeset
 			if err = setLastChangeset(ctx, tx, currentHeight); err != nil {
-				return err
+				return errors.Join(err, tx.Commit(ctx))
 			}
 
 			currentHeight += 1 // move to the next height
@@ -181,6 +164,108 @@ var ChangesetMigrationResolution = resolutions.ResolutionConfig{
 
 		return tx.Commit(ctx)
 	},
+}
+
+func applyChangeset(ctx context.Context, db sql.TxMaker, height int64, totalChunks int64) error {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	csReader := newChangesetReader(height, totalChunks)
+	var data []byte
+
+	var relations []*pg.Relation
+	for {
+		data, err = csReader.Read(ctx, tx, 5)
+		if err != nil {
+			if errors.Is(err, ErrNoMoreChunksToRead) {
+				break
+			}
+			return err
+		}
+
+		csType := data[0]
+		csSize := binary.LittleEndian.Uint32(data[1:5])
+
+		data, err = csReader.Read(ctx, tx, int(csSize))
+		if err != nil {
+			return err
+		}
+		// Read the changeset type
+		switch csType {
+		case pg.RelationType:
+			rel := &pg.Relation{}
+			if err = rel.Deserialize(data); err != nil {
+				return err
+			}
+			relations = append(relations, rel)
+
+		case pg.ChangesetEntryType:
+			ce := &pg.ChangesetEntry{}
+			if err = ce.Deserialize(data); err != nil {
+				return err
+			}
+
+			// apply the changeset entry
+			if err = ce.ApplyChangesetEntry(ctx, tx, relations[ce.RelationIdx]); err != nil {
+				return err
+			}
+
+		case pg.BlockSpendsType:
+			bs := &BlockSpends{}
+			if err = bs.Deserialize(data); err != nil {
+				return err
+			}
+
+			// apply the block spends
+			for _, spend := range bs.Spends {
+				if err = spend.ApplySpend(ctx, tx); err != nil {
+					return err
+				}
+			}
+
+		default:
+			return errors.New("unknown changeset type")
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+type changesetReader struct {
+	height      int64
+	chunkIdx    int64
+	totalChunks int64
+	data        []byte
+}
+
+func newChangesetReader(height int64, totalChunks int64) *changesetReader {
+	return &changesetReader{
+		height:      height,
+		totalChunks: totalChunks,
+	}
+}
+
+func (r *changesetReader) Read(ctx context.Context, tx sql.Executor, numBytesToRead int) ([]byte, error) {
+	for len(r.data) < numBytesToRead {
+		if r.chunkIdx >= r.totalChunks {
+			return nil, ErrNoMoreChunksToRead
+		}
+
+		bts, err := getChangeset(ctx, tx, r.height, r.chunkIdx)
+		if err != nil {
+			return nil, err
+		}
+
+		r.data = append(r.data, bts...)
+		r.chunkIdx += 1
+	}
+
+	data := r.data[:numBytesToRead]
+	r.data = r.data[numBytesToRead:]
+
+	return data, nil
 }
 
 // insertChangesetMigration inserts the changeset migration into the database.

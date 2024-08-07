@@ -1,13 +1,14 @@
 package migrations
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
@@ -46,7 +47,7 @@ var (
 )
 
 const (
-	ChunkSize = 4 * 1000 * 1000 // around 4MB
+	MaxChunkSize = 4 * 1000 * 1000 // around 4MB
 )
 
 // migrator is responsible for managing the migrations.
@@ -54,7 +55,7 @@ const (
 // at the appropriate height, persisting changesets for the migration for each
 // block as it occurs, and making that data available via RPC for the new node.
 // Similarly, if the local process is the new node, it is responsible for reading
-// changesets from the external node and applying them to the local database.
+// changesets from the external node and applying them   to the local database.
 type Migrator struct {
 	// mu is the mutex for the migrator.
 	mu sync.RWMutex
@@ -87,6 +88,12 @@ type Migrator struct {
 	// dir is the directory where the migration data is stored.
 	// It is expected to be a full path.
 	dir string
+
+	// doneChan is a channel that is closed when all the block changes have been written to disk.
+	doneChan chan bool
+
+	// errChan is a channel that receives errors from the changeset storage routine.
+	errChan chan error
 }
 
 // activeMigration is an in-process migration.
@@ -107,6 +114,7 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 	migrator.DB = db
 	migrator.accounts = accounts
 	migrator.lastChangeset = -1
+	migrator.doneChan = make(chan bool, 1)
 
 	// Initialize the DB
 	upgradeFns := map[int64]versioning.UpgradeFunc{
@@ -136,7 +144,7 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 // NotifyHeight notifies the migrator that a new block has been committed.
 // It is called at the end of the block being applied, but before the block is
 // committed to the database, in between tx.PreCommit and tx.Commit.
-func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext, db Database, csReader io.Reader) error {
+func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext, db Database) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -159,6 +167,7 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 		// set the migration in progress, so that we record the changesets starting from the next block
 		m.inProgress = true
 		block.ChainContext.NetworkParameters.InMigration = true
+		return nil
 	}
 
 	/*
@@ -243,14 +252,29 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 		return fmt.Errorf(`NETWORK HALTED: migration to chain "%s" has completed`, m.activeMigration.ChainID)
 	}
 
-	// if we reach here, we are in a block that must be migrated.
-	err := m.storeChangesets(block.Height, csReader)
-	if err != nil {
+	// wait for signal on doneChan, indicating that all changesets have been written to disk
+	select {
+	case <-m.doneChan:
+		break
+	case err := <-m.errChan:
 		return err
+	case <-ctx.Done():
+		return nil
 	}
 
 	m.lastChangeset = block.Height
 	return nil
+}
+
+func (m *Migrator) InMigration(height int64) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.activeMigration == nil {
+		return false
+	}
+
+	return height >= m.activeMigration.StartHeight
 }
 
 // MigrationMetadata holds metadata about a migration, informing
@@ -348,9 +372,9 @@ func (m *Migrator) GetGenesisSnapshotChunk(height int64, format uint32, chunkIdx
 	if height > m.activeMigration.EndHeight {
 		return nil, fmt.Errorf("requested changeset height is after the end of the migration")
 	}
-	if height > m.lastChangeset {
-		return nil, fmt.Errorf("requested changeset height has not been recorded by the node yet")
-	}
+	// if height > m.lastChangeset {
+	// 	return nil, fmt.Errorf("requested changeset height has not been recorded by the node yet")
+	// }
 
 	return m.snapshotter.LoadSnapshotChunk(uint64(height), format, chunkIdx)
 }
@@ -369,9 +393,9 @@ func (m *Migrator) GetChangesetMetadata(height int64) (*ChangesetMetdata, error)
 	if height > m.activeMigration.EndHeight {
 		return nil, fmt.Errorf("requested changeset height is after the end of the migration")
 	}
-	if height > m.lastChangeset {
-		return nil, fmt.Errorf("requested changeset height has not been recorded by the node yet")
-	}
+	// if height > m.lastChangeset {
+	// 	return nil, fmt.Errorf("requested changeset height has not been recorded by the node yet")
+	// }
 
 	return loadChangesetMetadata(formatChangesetMetadataFilename(m.dir, height))
 }
@@ -383,7 +407,7 @@ func (m *Migrator) GetChangeset(height int64, index int64) ([]byte, error) {
 		return nil, err
 	}
 
-	if index < 1 || index > metadata.Chunks {
+	if index < 0 || index >= metadata.Chunks {
 		return nil, fmt.Errorf("requested changeset index is out of bounds")
 	}
 
@@ -438,83 +462,201 @@ func loadChangesetMetadata(metadatafile string) (*ChangesetMetdata, error) {
 	return &metadata, nil
 }
 
-type BlockChangesets struct {
-	Changesets []*pg.Changeset
-	Spends     []*txapp.Spend
+type BlockSpends struct {
+	Spends []*txapp.Spend
 }
 
-func (b *BlockChangesets) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(b)
+func (bs *BlockSpends) Serialize() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	buf.WriteByte(pg.BlockSpendsType)
+
+	// serialize the spends
+	bts, err := serialize.Encode(bs)
+	if err != nil {
+		return nil, err
+	}
+
+	// write the length of the spends
+	size := uint32(len(bts))
+	if err = binary.Write(buf, binary.LittleEndian, size); err != nil {
+		return nil, err
+	}
+
+	// write the spends
+	if _, err = buf.Write(bts); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
 
-func (b *BlockChangesets) UnmarshalBinary(bts []byte) error {
-	return serialize.Decode(bts, b)
+func (bs *BlockSpends) Deserialize(bts []byte) error {
+	return serialize.Decode(bts, bs)
 }
 
-// storeChangeset persists a changeset to the migrations/changesets directory.
-func (m *Migrator) storeChangesets(height int64, csReader io.Reader) error {
-	if csReader == nil {
-		// no changesets to store, since we are not in a migration
+type chunkWriter struct {
+	dir      string
+	height   int64
+	chunkIdx int64
+
+	chunkFile         *os.File
+	chunkSize         int64 // number of bytes written to the current chunk file
+	totalBytesWritten int64 // total number of bytes written
+}
+
+func newChunkWriter(dir string, height int64) *chunkWriter {
+	return &chunkWriter{
+		dir:    dir,
+		height: height,
+	}
+}
+
+func (cw *chunkWriter) Write(bts []byte) error {
+	if len(bts) == 0 {
 		return nil
 	}
 
-	// Deserialize the changesets
-	cs, err := pg.DeserializeChangeset(csReader)
-	if err != nil {
-		return err
-	}
-
-	var filteredChangesets []*pg.Changeset
-
-	// filter changesets to only include the changes in the user deployed schemas
-	for _, changeset := range cs.Changesets {
-		// changeset.Schema should start with ds_ to be included
-		if strings.HasPrefix(changeset.Schema, "ds_") {
-			filteredChangesets = append(filteredChangesets, changeset)
-			continue
+	if cw.chunkFile == nil {
+		filename := formatChangesetFilename(cw.dir, cw.height, cw.chunkIdx)
+		file, err := os.Create(filename)
+		if err != nil {
+			return err
 		}
+		cw.chunkFile = file
 	}
 
-	blockChangesets := &BlockChangesets{
-		Changesets: filteredChangesets,
-		Spends:     m.accounts.GetBlockSpends(),
-	}
-
-	bts, err := blockChangesets.MarshalBinary()
-	if err != nil {
-		return err
-	}
-
-	// ensure the changeset directory exists
-	err = ensureChangesetDir(m.dir, height)
-	if err != nil {
-		return err
-	}
-
-	idx := int64(0)
-	// split the changeset into chunks and save them to disk
-	for startIdx := 0; startIdx < len(bts); startIdx += ChunkSize {
-		endIdx := startIdx + ChunkSize
-		idx++
-		if endIdx > len(bts) {
-			endIdx = len(bts)
+	// write the data to the file, the file can only hold a maximum of ChunkSize bytes
+	maxBytesToWrite := MaxChunkSize - cw.chunkSize
+	if int64(len(bts)) >= maxBytesToWrite {
+		// write the maximum number of bytes that can be written to the file
+		n, err := cw.chunkFile.Write(bts[:maxBytesToWrite])
+		if err != nil {
+			return err
 		}
+		cw.totalBytesWritten += int64(n)
 
-		chunkFilename := formatChangesetFilename(m.dir, height, idx)
-		err = os.WriteFile(chunkFilename, bts[startIdx:endIdx], 0644)
+		// close the current file
+		err = cw.chunkFile.Close()
 		if err != nil {
 			return err
 		}
 
+		// increment the chunk index
+		cw.chunkIdx++
+		cw.chunkSize = 0
+		cw.chunkFile = nil
+
+		// write the remaining bytes to the next file
+		return cw.Write(bts[maxBytesToWrite:])
 	}
 
-	// save the metadata for the changeset
-	metadata := &ChangesetMetdata{
-		Height:        height,
-		Chunks:        idx,
-		ChangesetSize: int64(len(bts)),
+	// write the data to the file
+	n, err := cw.chunkFile.Write(bts)
+	if err != nil {
+		return err
 	}
-	return metadata.saveAs(formatChangesetMetadataFilename(m.dir, height))
+	cw.chunkSize += int64(n)
+	cw.totalBytesWritten += int64(n)
+	return nil
+}
+
+func (cw *chunkWriter) Close() error {
+	if cw.chunkFile != nil {
+		return cw.chunkFile.Close()
+	}
+	return nil
+}
+
+func (cw *chunkWriter) SaveMetadata() error {
+	filename := formatChangesetMetadataFilename(cw.dir, cw.height)
+	metadata := &ChangesetMetdata{
+		Height:        cw.height,
+		Chunks:        cw.chunkIdx + 1,
+		ChangesetSize: cw.totalBytesWritten,
+	}
+	return metadata.saveAs(filename)
+}
+
+// storeChangeset persists a changeset to the migrations/changesets directory.
+func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
+	if changes == nil {
+		// no changesets to store, not in a migration
+		return
+	}
+
+	err := ensureChangesetDir(m.dir, height)
+	if err != nil {
+		m.errChan <- err
+		return
+	}
+
+	// create a chunk writer
+	chunkWriter := newChunkWriter(m.dir, height)
+	defer chunkWriter.Close()
+
+	for ch := range changes {
+		switch ct := ch.(type) {
+		case *pg.ChangesetEntry:
+			// write the changeset to disk
+			ce := (*pg.ChangesetEntry)(ct)
+			if !ce.UserSchema {
+				// skip changesets that are not part of the user schema
+				continue
+			}
+
+			// serialize the changeset entry and write it to disk
+			bts, err := ce.Serialize()
+			if err != nil {
+				m.errChan <- err
+				return
+			}
+
+			// Write the changeset bts to disk
+			if err = chunkWriter.Write(bts); err != nil {
+				m.errChan <- err
+				return
+			}
+		case *pg.Relation:
+			// write the relation to disk
+			relation := (*pg.Relation)(ct)
+			// serialize the relation and write it to disk
+			bts, err := relation.Serialize()
+			if err != nil {
+				m.errChan <- err
+				return
+			}
+
+			// Write the relation bts to disk
+			if err = chunkWriter.Write(bts); err != nil {
+				m.errChan <- err
+				return
+			}
+		}
+	}
+
+	// write the block spends to disk
+	bs := &BlockSpends{
+		Spends: m.accounts.GetBlockSpends(),
+	}
+
+	bts, err := bs.Serialize()
+	if err != nil {
+		m.errChan <- err
+		return
+	}
+
+	if err = chunkWriter.Write(bts); err != nil {
+		m.errChan <- err
+		return
+	}
+
+	if err = chunkWriter.SaveMetadata(); err != nil {
+		m.errChan <- err
+		return
+	}
+
+	// signal NotifyHeight that all changesets have been written to disk
+	m.doneChan <- true
 }
 
 // LoadChangesets loads changesets at a given height from the migration directory.
@@ -542,7 +684,7 @@ func ensureChangesetDir(dir string, height int64) error {
 
 func formatChangesetFilename(mdir string, height int64, index int64) string {
 	chunkDir := formatChangsetBlockDir(mdir, height)
-	return filepath.Join(chunkDir, fmt.Sprintf("changeset-%d.json", index))
+	return filepath.Join(chunkDir, fmt.Sprintf("changeset-%d", index))
 }
 
 func formatChangsetBlockDir(mdir string, height int64) string {

@@ -3,7 +3,6 @@
 package pg
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/stretchr/testify/require"
@@ -672,6 +672,32 @@ type changesetTestcase[T any, T2 any] struct {
 	arrayVal2 T2 // the second array value to test
 }
 
+func processChangesets(csChan chan any, changesetEntries *[]*ChangesetEntry, relations *[]*Relation, done chan struct{}) {
+	defer close(done)
+
+	for ch := range csChan {
+		switch v := ch.(type) {
+		case *ChangesetEntry:
+			*changesetEntries = append(*changesetEntries, v)
+		case *Relation:
+			*relations = append(*relations, v)
+		}
+	}
+}
+
+func applyChangesets(ctx context.Context, tx sql.DB, csEntries []*ChangesetEntry, relations []*Relation) error {
+	for _, entry := range csEntries {
+		if int(entry.RelationIdx) >= len(relations) {
+			return fmt.Errorf("relation not found")
+		}
+
+		if err := entry.ApplyChangesetEntry(ctx, tx, relations[entry.RelationIdx]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	ctx := context.Background()
 
@@ -707,8 +733,6 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 		Block 1: Insert
 	*/
 
-	writer := new(bytes.Buffer)
-
 	tx, err := db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
@@ -717,19 +741,24 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	require.NoError(t, err)
 
 	// get the changeset
-	_, err = tx.Precommit(ctx, writer)
+	changes := make(chan any, 1)
+	var changesetEntries []*ChangesetEntry
+	var relations []*Relation
+	done := make(chan struct{})
+	go processChangesets(changes, &changesetEntries, &relations, done)
+
+	_, err = tx.Precommit(ctx, changes)
 	require.NoError(t, err)
 
-	cs, err := DeserializeChangeset(writer)
+	// Get changeset entries
+	<-done
+	fmt.Println(changesetEntries, relations)
+	require.Len(t, relations, 1)
+	require.Len(t, changesetEntries, 1)
+
+	csEntry := changesetEntries[0]
+	_, insertVals, err := csEntry.DecodeTuples(relations[0])
 	require.NoError(t, err)
-
-	require.Len(t, cs.Changesets, 1)
-	require.Len(t, cs.Changesets[0].Inserts, 1)
-
-	insertVals, err := cs.Changesets[0].DecodeTuple(cs.Changesets[0].Inserts[0])
-	require.NoError(t, err)
-
-	// verify the insert vals are equal to the first vals
 	require.EqualValues(t, c.arrayVal, insertVals[2])
 
 	err = tx.Rollback(ctx)
@@ -744,11 +773,8 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
-	err = cs.ApplyChangesets(ctx, tx)
-	require.NoError(t, err)
-
-	writer = new(bytes.Buffer)
-	_, err = tx.Precommit(ctx, writer)
+	require.NoError(t, applyChangesets(ctx, tx, changesetEntries, relations))
+	_, err = tx.Precommit(ctx, nil)
 	require.NoError(t, err)
 	err = tx.Commit(ctx)
 	require.NoError(t, err)
@@ -763,8 +789,6 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 		Block 2: Update
 	*/
 
-	writer = new(bytes.Buffer)
-
 	tx, err = db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
@@ -772,19 +796,19 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	_, err = tx.Execute(ctx, "update ds_test.test set val = $1, array_val = $2", QueryModeExec, c.val2, c.arrayVal2)
 	require.NoError(t, err)
 
-	_, err = tx.Precommit(ctx, writer)
+	changes = make(chan any, 1)
+	changesetEntries, relations = nil, nil
+	done = make(chan struct{})
+
+	go processChangesets(changes, &changesetEntries, &relations, done)
+	_, err = tx.Precommit(ctx, changes)
 	require.NoError(t, err)
 
-	cs, err = DeserializeChangeset(writer)
-	require.NoError(t, err)
+	<-done
+	require.Len(t, changesetEntries, 1)
+	require.Len(t, relations, 1)
 
-	require.Len(t, cs.Changesets, 1)
-	require.Len(t, cs.Changesets[0].Updates, 1)
-
-	oldVals, err := cs.Changesets[0].DecodeTuple(cs.Changesets[0].Updates[0][0])
-	require.NoError(t, err)
-
-	newVals, err := cs.Changesets[0].DecodeTuple(cs.Changesets[0].Updates[0][1])
+	oldVals, newVals, err := changesetEntries[0].DecodeTuples(relations[0])
 	require.NoError(t, err)
 
 	// verify the old vals are equal to the first vals
@@ -810,11 +834,9 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
-	err = cs.ApplyChangesets(ctx, tx)
-	require.NoError(t, err)
+	require.NoError(t, applyChangesets(ctx, tx, changesetEntries, relations))
 
-	writer = new(bytes.Buffer)
-	_, err = tx.Precommit(ctx, writer)
+	_, err = tx.Precommit(ctx, nil)
 	require.NoError(t, err)
 
 	err = tx.Commit(ctx)
@@ -831,8 +853,6 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 		Block 3: Delete
 	*/
 
-	writer = new(bytes.Buffer)
-
 	tx, err = db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
@@ -840,16 +860,20 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	_, err = tx.Execute(ctx, "delete from ds_test.test", QueryModeExec)
 	require.NoError(t, err)
 
-	_, err = tx.Precommit(ctx, writer)
+	changes = make(chan any, 1)
+	changesetEntries, relations = nil, nil
+	done = make(chan struct{})
+
+	go processChangesets(changes, &changesetEntries, &relations, done)
+
+	_, err = tx.Precommit(ctx, changes)
 	require.NoError(t, err)
 
-	cs, err = DeserializeChangeset(writer)
-	require.NoError(t, err)
+	<-done
+	require.Len(t, changesetEntries, 1)
+	require.Len(t, relations, 1)
 
-	require.Len(t, cs.Changesets, 1)
-	require.Len(t, cs.Changesets[0].Deletes, 1)
-
-	deleteVals, err := cs.Changesets[0].DecodeTuple(cs.Changesets[0].Deletes[0])
+	deleteVals, _, err := changesetEntries[0].DecodeTuples(relations[0])
 	require.NoError(t, err)
 
 	// verify the delete vals are equal to the second vals
@@ -868,11 +892,9 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
-	err = cs.ApplyChangesets(ctx, tx)
-	require.NoError(t, err)
+	require.NoError(t, applyChangesets(ctx, tx, changesetEntries, relations))
 
-	writer = new(bytes.Buffer)
-	_, err = tx.Precommit(ctx, writer)
+	_, err = tx.Precommit(ctx, nil)
 	require.NoError(t, err)
 
 	err = tx.Commit(ctx)
@@ -919,8 +941,6 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 		Insert
 	*/
 
-	writer := new(bytes.Buffer)
-
 	tx, err := db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
@@ -931,21 +951,34 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	_, err = tx.Execute(ctx, "insert into ds_test.test (val, name, array_val) values ($1, $2, $3)", QueryModeExec, 2, "mellow", []int64{11, 22, 33})
 	require.NoError(t, err)
 
-	_, err = tx.Precommit(ctx, writer)
+	changes := make(chan any, 1)
+	var changesetEntries []*ChangesetEntry
+	var relations []*Relation
+	done := make(chan struct{})
+	go processChangesets(changes, &changesetEntries, &relations, done)
+
+	_, err = tx.Precommit(ctx, changes)
 	require.NoError(t, err)
 
-	cs, err := DeserializeChangeset(writer)
-	require.NoError(t, err)
+	<-done
+	require.Len(t, changesetEntries, 2)
+	require.Len(t, relations, 1)
 
-	require.Len(t, cs.Changesets, 1)
-	require.Len(t, cs.Changesets[0].Inserts, 2)
-
-	insertVals, err := cs.Changesets[0].DecodeTuple(cs.Changesets[0].Inserts[0])
+	_, insertVals, err := changesetEntries[0].DecodeTuples(relations[0])
 	require.NoError(t, err)
 
 	// verify the insert vals are equal to the first vals
 	require.EqualValues(t, 1, insertVals[0])
+	require.EqualValues(t, "hello", insertVals[1])
 	require.EqualValues(t, []int64{1, 2, 3}, insertVals[2])
+
+	_, insertVals, err = changesetEntries[1].DecodeTuples(relations[0])
+	require.NoError(t, err)
+
+	// verify the insert vals are equal to the second vals
+	require.EqualValues(t, 2, insertVals[0])
+	require.EqualValues(t, "mellow", insertVals[1])
+	require.EqualValues(t, []int64{11, 22, 33}, insertVals[2])
 
 	// Rollback the changes
 	err = tx.Rollback(ctx)
@@ -963,7 +996,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	_, err = tx.Execute(ctx, "insert into ds_test.test (val, name, array_val) values ($1, $2, $3)", QueryModeExec, 1, "world", []int{4, 5, 6})
 	require.NoError(t, err)
 
-	_, err = tx.Precommit(ctx, writer)
+	_, err = tx.Precommit(ctx, nil)
 	require.NoError(t, err)
 
 	err = tx.Commit(ctx)
@@ -983,8 +1016,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
-	err = cs.ApplyChangesets(ctx, tx)
-	require.NoError(t, err)
+	require.NoError(t, applyChangesets(ctx, tx, changesetEntries, relations))
 
 	// Ensure that the record is not updated due to conflict resolution: Do Nothing for inserts
 	res, err = tx.Execute(ctx, "select val, name from ds_test.test")
@@ -998,7 +1030,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	require.EqualValues(t, "mellow", res.Rows[1][1])
 
 	// commit the changes
-	_, err = tx.Precommit(ctx, writer)
+	_, err = tx.Precommit(ctx, nil)
 	require.NoError(t, err)
 
 	err = tx.Commit(ctx)
@@ -1012,8 +1044,6 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 		2, mellow, {11, 22, 33}
 	*/
 
-	writer = new(bytes.Buffer)
-
 	tx, err = db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
@@ -1026,14 +1056,17 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	_, err = tx.Execute(ctx, "update ds_test.test set name = $1 where val = $2", QueryModeExec, "yellow", 2)
 	require.NoError(t, err)
 
-	_, err = tx.Precommit(ctx, writer)
+	changes = make(chan any, 1)
+	changesetEntries, relations = nil, nil
+	done = make(chan struct{})
+
+	go processChangesets(changes, &changesetEntries, &relations, done)
+	_, err = tx.Precommit(ctx, changes)
 	require.NoError(t, err)
 
-	cs, err = DeserializeChangeset(writer)
-	require.NoError(t, err)
-
-	require.Len(t, cs.Changesets, 1)
-	require.Len(t, cs.Changesets[0].Updates, 2)
+	<-done
+	require.Len(t, relations, 1)
+	require.Len(t, changesetEntries, 2)
 
 	// Rollback the changes
 	err = tx.Rollback(ctx)
@@ -1048,7 +1081,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	require.NoError(t, err)
 
 	// commit
-	_, err = tx.Precommit(ctx, writer)
+	_, err = tx.Precommit(ctx, nil)
 	require.NoError(t, err)
 
 	err = tx.Commit(ctx)
@@ -1067,8 +1100,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	tx, err = db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
 
-	err = cs.ApplyChangesets(ctx, tx)
-	require.NoError(t, err)
+	require.NoError(t, applyChangesets(ctx, tx, changesetEntries, relations))
 
 	// Ensure that the record with id 2 is updated and 1 is not updated due to conflict resolution
 	// Expected entries:
@@ -1087,7 +1119,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	require.EqualValues(t, []int64{11, 22, 33}, res.Rows[1][2])
 
 	// commit the changes
-	_, err = tx.Precommit(ctx, writer)
+	_, err = tx.Precommit(ctx, nil)
 	require.NoError(t, err)
 
 	err = tx.Commit(ctx)
@@ -1096,8 +1128,6 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	/*
 		Delete
 	*/
-
-	writer = new(bytes.Buffer)
 
 	tx, err = db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
@@ -1109,14 +1139,18 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	_, err = tx.Execute(ctx, "delete from ds_test.test where val = $1", QueryModeExec, 2)
 	require.NoError(t, err)
 
-	_, err = tx.Precommit(ctx, writer)
+	changes = make(chan any, 1)
+	changesetEntries, relations = nil, nil
+	done = make(chan struct{})
+
+	go processChangesets(changes, &changesetEntries, &relations, done)
+
+	_, err = tx.Precommit(ctx, changes)
 	require.NoError(t, err)
 
-	cs, err = DeserializeChangeset(writer)
-	require.NoError(t, err)
-
-	require.Len(t, cs.Changesets, 1)
-	require.Len(t, cs.Changesets[0].Deletes, 2)
+	<-done
+	require.Len(t, changesetEntries, 2)
+	require.Len(t, relations, 1)
 
 	// Rollback the changes
 	err = tx.Rollback(ctx)
@@ -1130,7 +1164,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	require.NoError(t, err)
 
 	// commit
-	_, err = tx.Precommit(ctx, writer)
+	_, err = tx.Precommit(ctx, nil)
 	require.NoError(t, err)
 
 	err = tx.Commit(ctx)
@@ -1140,8 +1174,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	tx, err = db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
 
-	err = cs.ApplyChangesets(ctx, tx)
-	require.NoError(t, err)
+	require.NoError(t, applyChangesets(ctx, tx, changesetEntries, relations))
 
 	// Ensure that the record with id 1 is not deleted and id 2 is deleted
 	res, err = tx.Execute(ctx, "select val, name, array_val from ds_test.test")
@@ -1154,7 +1187,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	require.EqualValues(t, []int64{1, 2, 3}, res.Rows[0][2])
 
 	// commit the changes
-	_, err = tx.Precommit(ctx, writer)
+	_, err = tx.Precommit(ctx, nil)
 	require.NoError(t, err)
 
 	err = tx.Commit(ctx)

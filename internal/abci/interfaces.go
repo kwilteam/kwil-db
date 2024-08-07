@@ -2,7 +2,6 @@ package abci
 
 import (
 	"context"
-	"io"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -82,5 +81,7 @@ type DB interface {
 }
 
 type MigratorModule interface {
-	NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database, csReader io.Reader) error
+	NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database) error
+	StoreChangesets(height int64, changes <-chan any)
+	InMigration(height int64) bool
 }
