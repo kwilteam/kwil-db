@@ -45,62 +45,62 @@ func Test_Planner(t *testing.T) {
 			sql:  "select id, name from users where age > 18",
 			wt: "Projection: users.id, users.name\n" +
 				"└-Filter: users.age > 18\n" +
-				"  └-Scan Table [alias=users]: users\n",
+				"  └-Scan Table [alias=\"users\"]: users\n",
 		},
 		{
 			name: "subquery join",
 			sql:  "select name from users u inner join (select owner_id from posts) p on u.id = p.owner_id",
 			wt: "Projection: u.name\n" +
 				"└-Join [inner]: u.id = p.owner_id\n" +
-				"  |-Scan Table [alias=u]: users\n" +
-				"  └-Scan Subquery [alias=p]:\n" +
+				"  |-Scan Table [alias=\"u\"]: users\n" +
+				"  └-Scan Subquery [alias=\"p\"]:\n" +
 				"    └-Projection: posts.owner_id\n" +
-				"      └-Scan Table [alias=posts]: posts\n",
+				"      └-Scan Table [alias=\"posts\"]: posts\n",
 		},
 		{
 			name: "scalar subquery in where clause",
 			sql:  "select name from users where id = (select id from posts where content = 'hello')",
 			wt: "Projection: users.name\n" +
-				"└-Filter: users.id = subquery [regular] [subplan_id=0]\n" +
-				"  └-Scan Table [alias=users]: users\n" +
-				"Subplan [id=0]: [scalar]\n" +
+				"└-Filter: users.id = subquery [scalar] [subplan_id=0] [uncorrelated]\n" +
+				"  └-Scan Table [alias=\"users\"]: users\n" +
+				"Subplan [subquery] [id=0]\n" +
 				"└-Projection: posts.id\n" +
 				"  └-Filter: posts.content = 'hello'\n" +
-				"    └-Scan Table [alias=posts]: posts\n",
+				"    └-Scan Table [alias=\"posts\"]: posts\n",
 		},
 		{
 			name: "correlated subquery in where clause",
 			sql:  "select name from users u where exists (select 1 from posts p where p.owner_id = u.id)",
 			wt: "Projection: u.name\n" +
-				"└-Filter: subquery [exists] [subplan_id=0]\n" +
-				"  └-Scan Table [alias=u]: users\n" +
-				"Subplan [id=0]: [correlated=u.id]\n" +
+				"└-Filter: subquery [exists] [subplan_id=0] [correlated=u.id]\n" +
+				"  └-Scan Table [alias=\"u\"]: users\n" +
+				"Subplan [subquery] [id=0]\n" +
 				"└-Projection: 1\n" +
 				"  └-Filter: p.owner_id = u.id\n" +
-				"    └-Scan Table [alias=p]: posts\n",
+				"    └-Scan Table [alias=\"p\"]: posts\n",
 		},
 		{
 			// tests that correlation is propagated across multiple subqueries
 			name: "double nested correlated subquery",
 			sql:  "select name from users u where exists (select 1 from posts p where exists (select 1 from posts p2 where p2.owner_id = u.id))",
 			wt: "Projection: u.name\n" +
-				"└-Filter: subquery [exists] [subplan_id=1]\n" +
-				"  └-Scan Table [alias=u]: users\n" +
-				"Subplan [id=1]: [correlated=u.id]\n" +
+				"└-Filter: subquery [exists] [subplan_id=1] [correlated=u.id]\n" +
+				"  └-Scan Table [alias=\"u\"]: users\n" +
+				"Subplan [subquery] [id=1]\n" +
 				"└-Projection: 1\n" +
-				"  └-Filter: subquery [exists] [subplan_id=0]\n" +
-				"    └-Scan Table [alias=p]: posts\n" +
-				"Subplan [id=0]: [correlated=u.id]\n" +
+				"  └-Filter: subquery [exists] [subplan_id=0] [correlated=u.id]\n" +
+				"    └-Scan Table [alias=\"p\"]: posts\n" +
+				"Subplan [subquery] [id=0]\n" +
 				"└-Projection: 1\n" +
 				"  └-Filter: p2.owner_id = u.id\n" +
-				"    └-Scan Table [alias=p2]: posts\n",
+				"    └-Scan Table [alias=\"p2\"]: posts\n",
 		},
 		{
 			name: "aggregate without group by",
 			sql:  "select sum(age) from users",
 			wt: "Projection: sum(users.age)\n" +
 				"└-Aggregate: sum(users.age)\n" +
-				"  └-Scan Table [alias=users]: users\n",
+				"  └-Scan Table [alias=\"users\"]: users\n",
 		},
 		{
 			name: "aggregate with group by",
@@ -108,14 +108,14 @@ func Test_Planner(t *testing.T) {
 			wt: "Projection: users.name, sum(users.age)\n" +
 				"└-Filter: sum(users.age)::int > 100\n" +
 				"  └-Aggregate [users.name]: sum(users.age)\n" +
-				"    └-Scan Table [alias=users]: users\n",
+				"    └-Scan Table [alias=\"users\"]: users\n",
 		},
 		{
 			name: "complex group by",
 			sql:  "select age/2, age*3 from users group by age/2, age*3",
 			wt: "Projection: users.age / 2, users.age * 3\n" +
 				"└-Aggregate [users.age / 2] [users.age * 3]: \n" +
-				"  └-Scan Table [alias=users]: users\n",
+				"  └-Scan Table [alias=\"users\"]: users\n",
 		},
 		// TODO: negative case of the above
 		{
@@ -124,7 +124,7 @@ func Test_Planner(t *testing.T) {
 			wt: "Projection: users.name, sum(users.age / 2) + sum(users.age * 10)\n" +
 				"└-Filter: (sum(users.age)::int > 100 OR sum(users.age / 2)::int > 10)\n" +
 				"  └-Aggregate [users.name]: sum(users.age / 2), sum(users.age * 10), sum(users.age)\n" +
-				"    └-Scan Table [alias=users]: users\n",
+				"    └-Scan Table [alias=\"users\"]: users\n",
 		},
 		// TODO: test that we cannot use aggregates in where clause
 		{
@@ -145,14 +145,20 @@ func Test_Planner(t *testing.T) {
 				"    |-Join [right]: pu.content = p.content\n" +
 				"    | |-Join [left]: c.owner_name = u.name\n" +
 				"    | | |-Join [inner]: u.id = p.owner_id\n" +
-				"    | | | |-Scan Table [alias=u]: users\n" +
-				"    | | | └-Scan Table [alias=p]: posts\n" +
-				"    | | └-Scan Procedure [alias=c]: [foreign=true] [dbid='dbid'] [proc='proc'] owned_cars($id)\n" +
-				"    | └-Scan Procedure [alias=pu]: [foreign=false] posts_by_user($name)\n" +
-				"    └-Scan Subquery [alias=u2]:\n" +
+				"    | | | |-Scan Table [alias=\"u\"]: users\n" +
+				"    | | | └-Scan Table [alias=\"p\"]: posts\n" +
+				"    | | └-Scan Procedure [alias=\"c\"]: [foreign=true] [dbid='dbid'] [proc='proc'] owned_cars($id)\n" +
+				"    | └-Scan Procedure [alias=\"pu\"]: [foreign=false] posts_by_user($name)\n" +
+				"    └-Scan Subquery [alias=\"u2\"]:\n" +
 				"      └-Projection: users.id\n" +
 				"        └-Filter: users.age > 18\n" +
-				"          └-Scan Table [alias=users]: users\n",
+				"          └-Scan Table [alias=\"users\"]: users\n",
+		},
+		{
+			name: "common table expressions",
+			sql: `with a (id2, name2) as (select id, name from users),
+				b as (select * from a)
+				select * from b;`,
 		},
 	}
 
@@ -179,14 +185,14 @@ func Test_Planner(t *testing.T) {
 				require.NoError(t, err)
 
 				// TODO: delete this block once I am done debugging
-				rec := planner.Format(plan)
+				rec := plan.Format()
 				if test.wt != rec {
 					fmt.Println(rec)
-					require.Equal(t, test.wt, planner.Format(plan))
+					require.Equal(t, test.wt, rec)
 				}
 				// TODO: end delete here
 
-				require.Equal(t, test.wt, planner.Format(plan))
+				require.Equal(t, test.wt, plan.Format())
 			}
 		})
 	}

@@ -60,5 +60,5 @@ func printLogical(schema *types.Schema, sql string) {
 		return
 	}
 
-	fmt.Println(planner.Format(plan))
+	fmt.Println(plan.Format())
 }

@@ -618,11 +618,7 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 			}
 			// if no error, it is correlated to this query, do nothing
 		}
-		if len(n.Query.Correlated) > 0 {
-			// TODO: delete this. this is a sanity check
-			panic("correlated subqueries should not have correlated columns")
-		}
-		n.Query.Correlated = s.Correlations
+		n.Correlated = s.Correlations
 
 		// subquery must return exactly one column
 

@@ -2,12 +2,14 @@ package planner
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse"
 )
 
-func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType, objects map[string]map[string]*types.DataType) (lp LogicalPlan, err error) {
+func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType, objects map[string]map[string]*types.DataType) (analyzed *AnalyzedPlan, err error) {
 	// defer func() {
 	// 	if r := recover(); r != nil {
 	// 		err = fmt.Errorf("panic: %v", r)
@@ -33,9 +35,7 @@ func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*
 		schema:  schema,
 	}
 
-	lp = statement.Accept(visitor).(LogicalPlan)
-
-	// TODO: call plan
+	lp := statement.Accept(visitor).(LogicalPlan)
 
 	evalCtx := newEvalCtx(ctx)
 	_, err = evalCtx.evalRelation(lp)
@@ -43,7 +43,30 @@ func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*
 		return nil, err
 	}
 
-	return lp, nil
+	return &AnalyzedPlan{
+		Plan: lp,
+		CTEs: ctx.CTEPlans,
+	}, nil
+}
+
+// AnalyzedPlan is the full result of a logical plan that has been analyzed.
+type AnalyzedPlan struct {
+	// Plan is the plan of the query.
+	Plan LogicalPlan
+	// CTEs are plans for the common table expressions in the query.
+	// They are in the order that they were defined.
+	CTEs []*Subplan
+}
+
+// Format formats the plan into a human-readable string.
+func (a *AnalyzedPlan) Format() string {
+	res := Format(a.Plan)
+
+	str := strings.Builder{}
+	str.WriteString(res)
+	printSubplans(&str, a.CTEs)
+
+	return str.String()
 }
 
 // the planner file converts the parse AST into a logical query plan.
@@ -65,6 +88,10 @@ type planContext struct {
 	// This field should be updated as the query planner
 	// processes the query.
 	CTEs map[string]*Relation
+	// CTEPlans are the logical plans for the common table expressions
+	// in the query. This field should be updated as the query planner
+	// processes the query.
+	CTEPlans []*Subplan
 	// Variables are the variables in the query.
 	Variables map[string]*types.DataType
 	// Objects are the objects in the query.
@@ -374,7 +401,7 @@ func (p *plannerVisitor) VisitExpressionBetween(node *parse.ExpressionBetween) a
 }
 
 func (p *plannerVisitor) VisitExpressionSubquery(node *parse.ExpressionSubquery) any {
-	subqType := RegularSubquery
+	subqType := ScalarSubquery
 	if node.Exists {
 		subqType = ExistsSubquery
 		if node.Not {
@@ -387,9 +414,10 @@ func (p *plannerVisitor) VisitExpressionSubquery(node *parse.ExpressionSubquery)
 		SubqueryType: subqType,
 		Query: &Subplan{
 			Plan: stmt,
-			ID:   p.planCtx.SubqueryCount,
+			ID:   strconv.Itoa(p.planCtx.SubqueryCount),
+			Type: SubplanTypeSubquery,
 		},
-		ID: p.planCtx.SubqueryCount,
+		ID: strconv.Itoa(p.planCtx.SubqueryCount),
 	}, node)
 
 	p.planCtx.SubqueryCount++
@@ -406,7 +434,6 @@ func (p *plannerVisitor) VisitExpressionCase(node *parse.ExpressionCase) any {
 
 func (p *plannerVisitor) VisitCommonTableExpression(node *parse.CommonTableExpression) any {
 	// still have a bit to do here.
-	panic("CTE not yet supported")
 	plan := node.Query.Accept(p).(LogicalPlan)
 
 	rel, err := newEvalCtx(p.planCtx).evalRelation(plan)
@@ -414,12 +441,30 @@ func (p *plannerVisitor) VisitCommonTableExpression(node *parse.CommonTableExpre
 		panic(err)
 	}
 
-	// we need to check that the columns are valid
-	if len(node.Columns) != len(rel.Fields) {
-		panic(fmt.Sprintf(`cte "%s" has %d columns, but %d were specified`, node.Name, len(rel.Fields), len(node.Columns)))
+	// if there are columns specific, we need to check that the columns are valid
+	// and rename the relation fields
+	if len(node.Columns) > 0 {
+		if len(node.Columns) != len(rel.Fields) {
+			panic(fmt.Sprintf(`cte "%s" has %d columns, but %d were specified`, node.Name, len(rel.Fields), len(node.Columns)))
+		}
+
+		for i, col := range node.Columns {
+			rel.Fields[i].Parent = node.Name
+			rel.Fields[i].Name = col
+		}
+	} else {
+		// otherwise, we need to rename the relation fields to the cte name
+		for _, field := range rel.Fields {
+			field.Parent = node.Name
+		}
 	}
 
 	p.planCtx.CTEs[node.Name] = rel
+	p.planCtx.CTEPlans = append(p.planCtx.CTEPlans, &Subplan{
+		Plan: plan,
+		ID:   node.Name,
+		Type: SubplanTypeCTE,
+	})
 
 	// I am unsure if we need to return this plan, since all that matters
 	// is that it is added to the ctes slice.

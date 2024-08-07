@@ -196,11 +196,11 @@ func (s *Scan) Plans() []LogicalPlan {
 func (s *Scan) String() string {
 	switch s.Source.(type) {
 	case *TableScanSource:
-		return fmt.Sprintf("Scan Table [alias=%s]: %s", s.RelationName, s.Source.FormatScan())
+		return fmt.Sprintf(`Scan Table [alias="%s"]: %s`, s.RelationName, s.Source.FormatScan())
 	case *ProcedureScanSource:
-		return fmt.Sprintf("Scan Procedure [alias=%s]: %s", s.RelationName, s.Source.FormatScan())
+		return fmt.Sprintf(`Scan Procedure [alias="%s"]: %s`, s.RelationName, s.Source.FormatScan())
 	case *SubqueryScanSource:
-		return fmt.Sprintf("Scan Subquery [alias=%s]:", s.RelationName)
+		return fmt.Sprintf(`Scan Subquery [alias="%s"]:`, s.RelationName)
 	default:
 		panic(fmt.Sprintf("unknown scan source type %T", s.Source))
 	}
@@ -537,12 +537,8 @@ func (s SetOperationType) String() string {
 type Subplan struct {
 	baseLogicalPlan
 	Plan LogicalPlan
-	ID   int
-	// Correlated is the list of fields that are correlated
-	// to the outer query. If empty, the subplan is scalar.
-	// It is set when the subquery expression encapsulating
-	// this node is planned.
-	Correlated []*ColumnRef
+	ID   string
+	Type SubplanType
 }
 
 func (s *Subplan) Children() []LogicalNode {
@@ -555,23 +551,31 @@ func (s *Subplan) Plans() []LogicalPlan {
 
 func (s *Subplan) String() string {
 	str := strings.Builder{}
-	str.WriteString("Subplan [id=")
-	str.WriteString(strconv.Itoa(s.ID))
-	str.WriteString("]:")
-	if len(s.Correlated) == 0 {
-		str.WriteString(" [scalar]")
-		return str.String()
-	}
-
-	for _, field := range s.Correlated {
-		str.WriteString(" [correlated=")
-		str.WriteString(field.Parent)
-		str.WriteString(".")
-		str.WriteString(field.ColumnName)
-		str.WriteString("]")
-	}
+	str.WriteString("Subplan [")
+	str.WriteString(s.Type.String())
+	str.WriteString("] [id=")
+	str.WriteString(s.ID)
+	str.WriteString("]")
 
 	return str.String()
+}
+
+type SubplanType int
+
+const (
+	SubplanTypeSubquery SubplanType = iota
+	SubplanTypeCTE
+)
+
+func (s SubplanType) String() string {
+	switch s {
+	case SubplanTypeSubquery:
+		return "subquery"
+	case SubplanTypeCTE:
+		return "cte"
+	default:
+		panic(fmt.Sprintf("unknown subplan type %d", s))
+	}
 }
 
 /*
@@ -1084,7 +1088,10 @@ type Subquery struct {
 	SubqueryType SubqueryType
 	Query        *Subplan
 	// ID is the number of the subquery in the query.
-	ID int
+	ID string
+	// Correlated is the list of columns that are correlated
+	// to the outer query. If empty, the subquery is uncorrelated.
+	Correlated []*ColumnRef
 }
 
 var _ LogicalExpr = (*Subquery)(nil)
@@ -1096,8 +1103,21 @@ func (s *Subquery) String() string {
 	str.WriteString("[")
 	str.WriteString(s.SubqueryType.String())
 	str.WriteString("] [subplan_id=")
-	str.WriteString(strconv.FormatInt(int64(s.ID), 10))
+	str.WriteString(s.ID)
 	str.WriteString("]")
+
+	if len(s.Correlated) == 0 {
+		str.WriteString(" [uncorrelated]")
+		return str.String()
+	}
+
+	for _, field := range s.Correlated {
+		str.WriteString(" [correlated=")
+		str.WriteString(field.Parent)
+		str.WriteString(".")
+		str.WriteString(field.ColumnName)
+		str.WriteString("]")
+	}
 
 	return str.String()
 }
@@ -1113,15 +1133,15 @@ func (s *Subquery) Plans() []LogicalPlan {
 type SubqueryType uint8
 
 const (
-	RegularSubquery SubqueryType = iota
+	ScalarSubquery SubqueryType = iota
 	ExistsSubquery
 	NotExistsSubquery
 )
 
 func (s SubqueryType) String() string {
 	switch s {
-	case RegularSubquery:
-		return "regular"
+	case ScalarSubquery:
+		return "scalar"
 	case ExistsSubquery:
 		return "exists"
 	case NotExistsSubquery:
