@@ -13,6 +13,14 @@ func WithLogger(logger log.Logger) Opt {
 	}
 }
 
+// WithPass specifies a password to use, if password authentication is enable on
+// the server.
+func WithPass(pass string) Opt {
+	return func(c *AdminClient) {
+		c.pass = pass
+	}
+}
+
 // WithTLS provides the required files for the admin client to use TLS, and
 // possibly client authenticated TLS. kwildCertFile may be omitted if the
 // service is issued a TLS certificate by a root CA. The client files may be

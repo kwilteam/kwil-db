@@ -400,8 +400,7 @@ func (s *Server) handlerV1(w http.ResponseWriter, r *http.Request) {
 	r.Close = true
 
 	if s.authSHA != nil {
-		// r.SetBasicAuth("", "passwords")
-		_, pass, haveAuth := r.Response.Request.BasicAuth() // r.Header.Get("Authorization")
+		_, pass, haveAuth := r.BasicAuth() // r.Header.Get("Authorization")
 		if !haveAuth {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return

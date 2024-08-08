@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -19,7 +20,8 @@ import (
 func BindRPCFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP("rpcserver", "s", "/tmp/kwild.socket", "admin RPC server address (either unix or tcp)")
 
-	cmd.PersistentFlags().String("authrpc-cert", "", "kwild's TLS certificate")
+	cmd.PersistentFlags().String("authrpc-cert", "", "kwild's TLS certificate, required for HTTPS server")
+	cmd.PersistentFlags().String("pass", "", "admin server password (alternative to mTLS with tlskey/tlscert). May be set in ~/.kwil-admin/rpc-admin-pass instead.")
 	cmd.PersistentFlags().String("tlskey", "auth.key", "kwil-admin's TLS key file to establish a mTLS (authenticated) connection")
 	cmd.PersistentFlags().String("tlscert", "auth.cert", "kwil-admin's TLS certificate file for server to authenticate us")
 }
@@ -32,7 +34,7 @@ func GetRPCServerFlag(cmd *cobra.Command) (string, error) {
 // GetAdminSvcClient will return an admin service client based on the flags.
 // The flags should be bound using the BindRPCFlags function.
 func GetAdminSvcClient(ctx context.Context, cmd *cobra.Command) (*adminclient.AdminClient, error) {
-	dialOpt := []adminclient.Opt{}
+	adminOpts := []adminclient.Opt{}
 
 	rpcServer, err := GetRPCServerFlag(cmd)
 	if err != nil {
@@ -48,10 +50,25 @@ func GetAdminSvcClient(ctx context.Context, cmd *cobra.Command) (*adminclient.Ad
 			return nil, err
 		}
 
-		dialOpt = append(dialOpt, adminclient.WithTLS(kwildTLSCertFile, clientTLSKeyFile, clientTLSCertFile))
+		adminOpts = append(adminOpts, adminclient.WithTLS(kwildTLSCertFile, clientTLSKeyFile, clientTLSCertFile))
 	}
 
-	return adminclient.NewClient(ctx, rpcServer, dialOpt...)
+	if pass, err := cmd.Flags().GetString("pass"); err != nil {
+		return nil, err
+	} else if pass != "" {
+		adminOpts = append(adminOpts, adminclient.WithPass(pass))
+	} else {
+		passFile := filepath.Join(DefaultKwilAdminRoot(), "rpc-admin-pass")
+		passBytes, err := os.ReadFile(passFile)
+		if err == nil {
+			passBytes = bytes.TrimSpace(passBytes)
+			adminOpts = append(adminOpts, adminclient.WithPass(string(passBytes)))
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		} // else the file doesn't exist and we're not sending a password
+	}
+
+	return adminclient.NewClient(ctx, rpcServer, adminOpts...)
 }
 
 const (
