@@ -80,6 +80,17 @@ func Test_Planner(t *testing.T) {
 				"    └─Scan Table [alias=\"p\"]: posts [physical]\n",
 		},
 		{
+			name: "subquery exists",
+			sql:  "select name from users where exists (select 1 from posts where owner_id = users.id)",
+			wt: "Projection: users.name\n" +
+				"└─Filter: [subquery (exists) (subplan_id=0) (correlated: users.id)]\n" +
+				"  └─Scan Table: users [physical]\n" +
+				"Subplan [subquery] [id=0]\n" +
+				"└─Projection: 1\n" +
+				"  └─Filter: posts.owner_id = users.id\n" +
+				"    └─Scan Table: posts [physical]\n",
+		},
+		{
 			// tests that correlation is propagated across multiple subqueries
 			name: "double nested correlated subquery",
 			sql:  "select name from users u where exists (select 1 from posts p where exists (select 1 from posts p2 where p2.owner_id = u.id))",
@@ -122,7 +133,7 @@ func Test_Planner(t *testing.T) {
 			name: "complex having",
 			sql:  "select name, sum(age/2)+sum(age*10) from users group by name having sum(age)::int > 100 or sum(age/2)::int > 10",
 			wt: "Projection: users.name; sum(users.age / 2) + sum(users.age * 10)\n" +
-				"└─Filter: (sum(users.age)::int > 100 OR sum(users.age / 2)::int > 10)\n" +
+				"└─Filter: sum(users.age)::int > 100 OR sum(users.age / 2)::int > 10\n" +
 				"  └─Aggregate [users.name]: sum(users.age / 2); sum(users.age * 10); sum(users.age)\n" +
 				"    └─Scan Table: users [physical]\n",
 		},
@@ -235,6 +246,43 @@ func Test_Planner(t *testing.T) {
 			sql:  "select -age as neg_age, age from users",
 			wt: "Projection: -users.age AS neg_age; users.age\n" +
 				"└─Scan Table: users [physical]\n",
+		},
+		{
+			name: "collate",
+			sql:  "select name collate nocase from users where name = 'SATOSHI' collate nocase",
+			wt: "Projection: users.name COLLATE nocase\n" +
+				"└─Filter: users.name = 'SATOSHI' COLLATE nocase\n" +
+				"  └─Scan Table: users [physical]\n",
+		}, // TODO: invalid collation name / invalid column type
+		{
+			name: "in",
+			sql:  "select name from users where name not in ('satoshi', 'wendys_drive_through_lady')",
+			wt: "Projection: users.name\n" +
+				// planner rewrites NOT IN to a unary NOT(IN) for simplicity, since it's equivalent
+				"└─Filter: NOT users.name IN ('satoshi', 'wendys_drive_through_lady')\n" +
+				"  └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "like and ilike",
+			// planner rewrite NOT LIKE/ILIKE to unary NOT(LIKE/ILIKE) for simplicity
+			sql: "select name from users where name like 's%' or name not ilike 'w_Nd%'",
+			wt: "Projection: users.name\n" +
+				"└─Filter: users.name LIKE 's%' OR NOT users.name ILIKE 'w_Nd%'\n" +
+				"  └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "case",
+			sql:  `select name from users where case age when 20 then true else false end`,
+			wt: "Projection: users.name\n" +
+				"└─Filter: CASE [users.age] WHEN [20] THEN [true] ELSE [false] END\n" +
+				"  └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "case (no expression)",
+			sql:  `select name from users where case when age = 20 then true else false end`,
+			wt: "Projection: users.name\n" +
+				"└─Filter: CASE WHEN [users.age = 20] THEN [true] ELSE [false] END\n" +
+				"  └─Scan Table: users [physical]\n",
 		},
 	}
 
