@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common/sql"
@@ -14,9 +15,11 @@ import (
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	adminjson "github.com/kwilteam/kwil-db/core/rpc/json/admin"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
+	coretypes "github.com/kwilteam/kwil-db/core/types"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/internal/migrations"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/version"
 	"github.com/kwilteam/kwil-db/internal/voting"
@@ -44,6 +47,13 @@ type Pricer interface {
 	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
 }
 
+type Migrator interface {
+	GetChangesetMetadata(height int64) (*migrations.ChangesetMetdata, error)
+	GetChangeset(height int64, index int64) ([]byte, error)
+	GetMigrationMetadata() (*migrations.MigrationMetadata, error)
+	GetGenesisSnapshotChunk(height int64, format uint32, chunkIdx uint32) ([]byte, error)
+}
+
 type Service struct {
 	log log.Logger
 
@@ -51,6 +61,7 @@ type Service struct {
 	TxApp      TxApp
 	db         sql.DelayedReadTxMaker
 	pricer     Pricer
+	migrator   Migrator
 
 	cfg     *config.KwildConfig
 	chainID string
@@ -116,6 +127,40 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		adminjson.MethodValRemove: rpcserver.MakeMethodDef(svc.Remove,
 			"vote to remote a validator",
 			"the hash of the broadcasted validator remove transaction"),
+
+		// Migration methods
+		adminjson.MethodProposeMigration: rpcserver.MakeMethodDef(svc.SubmitMigrationProposal,
+			"create a migration resolution",
+			"the hash of the broadcasted migration transaction",
+		),
+		adminjson.MethodApproveMigration: rpcserver.MakeMethodDef(svc.ApproveMigration,
+			"approve a migration resolution",
+			"the hash of the broadcasted migration approval transaction",
+		),
+		adminjson.MethodMigrationStatus: rpcserver.MakeMethodDef(svc.MigrationStatus,
+			"get the status of a migration resolution",
+			"the status of the migration resolution",
+		),
+		adminjson.MethodListMigrations: rpcserver.MakeMethodDef(svc.ListPendingMigrations,
+			"list active migration resolutions",
+			"the list of all the pending migration resolutions",
+		),
+		adminjson.MethodLoadChangesetMetadata: rpcserver.MakeMethodDef(svc.LoadChangesetMetadata,
+			"get the changeset metadata for a given height",
+			"the changesets metadata for the given height",
+		),
+		adminjson.MethodLoadChangeset: rpcserver.MakeMethodDef(svc.LoadChangeset,
+			"load a changeset for a given height and index",
+			"the changeset for the given height and index",
+		),
+		adminjson.MethodMigrationMetadata: rpcserver.MakeMethodDef(svc.MigrationMetadata,
+			"get the migration information",
+			"the metadata for the given migration",
+		),
+		adminjson.MethodMigrationGenesisChunk: rpcserver.MakeMethodDef(svc.MigrationGenesisChunk,
+			"get a genesis snapshot chunk of given idx",
+			"the genesis chunk for the given index",
+		),
 	}
 }
 
@@ -128,7 +173,7 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 }
 
 // NewService constructs a new Service.
-func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, signer auth.Signer, cfg *config.KwildConfig,
+func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, migrator Migrator, signer auth.Signer, cfg *config.KwildConfig,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,
@@ -136,6 +181,7 @@ func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txAp
 		signer:     signer,
 		chainID:    chainID,
 		pricer:     pricer,
+		migrator:   migrator,
 		cfg:        cfg,
 		log:        logger,
 		db:         db,
@@ -348,17 +394,196 @@ func toPendingInfo(ctx context.Context, db sql.DB, resolution *resolutions.Resol
 		return nil, fmt.Errorf("failed to unmarshal join request")
 	}
 
+	expiresAt, board, approvals, err := resolutionStatus(ctx, db, resolution)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve join request status")
+	}
+
+	return &adminjson.PendingJoin{
+		Candidate: resolution.Proposer,
+		Power:     resolutionBody.Power,
+		ExpiresAt: expiresAt,
+		Board:     board,
+		Approved:  approvals,
+	}, nil
+}
+
+func (svc *Service) GetConfig(ctx context.Context, req *adminjson.GetConfigRequest) (*adminjson.GetConfigResponse, *jsonrpc.Error) {
+	bts, err := svc.cfg.MarshalBinary()
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to encode node config", nil)
+	}
+
+	return &adminjson.GetConfigResponse{
+		Config: bts,
+	}, nil
+}
+
+func (svc *Service) LoadChangeset(ctx context.Context, req *adminjson.ChangesetRequest) (*adminjson.ChangesetsResponse, *jsonrpc.Error) {
+	bts, err := svc.migrator.GetChangeset(req.Height, req.Index)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load changesets", nil)
+	}
+
+	return &adminjson.ChangesetsResponse{
+		Changesets: bts,
+	}, nil
+}
+
+func (svc *Service) LoadChangesetMetadata(ctx context.Context, req *adminjson.ChangesetMetadataRequest) (*adminjson.ChangesetMetadataResponse, *jsonrpc.Error) {
+	metadata, err := svc.migrator.GetChangesetMetadata(req.Height)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load changeset metadata", nil)
+	}
+
+	return &adminjson.ChangesetMetadataResponse{
+		Height:        metadata.Height,
+		Changesets:    metadata.Chunks,
+		ChangesetSize: metadata.ChangesetSize,
+	}, nil
+}
+
+func (svc *Service) MigrationMetadata(ctx context.Context, req *adminjson.MigrationMetadataRequest) (*adminjson.MigrationMetadataResponse, *jsonrpc.Error) {
+	metadata, err := svc.migrator.GetMigrationMetadata()
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, err.Error(), nil)
+	}
+
+	bts, err := metadata.MarshalBinary()
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to encode migration metadata", nil)
+	}
+
+	return &adminjson.MigrationMetadataResponse{
+		InMigration: true,
+		Metadata:    bts,
+	}, nil
+
+}
+
+func (svc *Service) MigrationGenesisChunk(ctx context.Context, req *adminjson.MigrationSnapshotChunkRequest) (*adminjson.MigrationSnapshotChunkResponse, *jsonrpc.Error) {
+	bts, err := svc.migrator.GetGenesisSnapshotChunk(int64(req.Height), 0, req.ChunkIndex)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load genesis chunk", nil)
+	}
+
+	return &adminjson.MigrationSnapshotChunkResponse{
+		Chunk: bts,
+	}, nil
+}
+
+func (svc *Service) SubmitMigrationProposal(ctx context.Context, req *adminjson.MigrationProposalRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
+	timestamp := time.Now().GoString()
+
+	migrationEvt := &migrations.MigrationDeclaration{
+		ActivationPeriod: req.Migration.ActivationHeight,
+		Duration:         req.Migration.MigrationDuration,
+		ChainID:          req.Migration.ChainID,
+		Timestamp:        timestamp,
+	}
+
+	bts, err := migrationEvt.MarshalBinary()
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to encode migration declaration", nil)
+	}
+
+	res := &transactions.CreateResolution{
+		Resolution: &transactions.VotableEvent{
+			Type: migrations.StartMigrationEventType,
+			Body: bts,
+		},
+	}
+
+	return svc.sendTx(ctx, res)
+}
+
+func (svc *Service) ApproveMigration(ctx context.Context, req *adminjson.ApproveMigrationRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
+	uuid, err := coretypes.ParseUUID(req.Id)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "invalid migration ID", nil)
+	}
+
+	res := &transactions.VoteResolution{
+		ResolutionType: migrations.StartMigrationEventType,
+		ResolutionID:   uuid,
+	}
+
+	return svc.sendTx(ctx, res)
+}
+
+func (svc *Service) ListPendingMigrations(ctx context.Context, req *adminjson.ListMigrationsRequest) (*adminjson.ListMigrationsResponse, *jsonrpc.Error) {
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	resolutions, err := voting.GetResolutionsByType(ctx, readTx, migrations.StartMigrationEventType)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to get migration resolutions", nil)
+	}
+
+	var pendingMigrations []*coretypes.Migration
+
+	for _, res := range resolutions {
+		mig := &migrations.MigrationDeclaration{}
+		if err := mig.UnmarshalBinary(res.Body); err != nil {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to unmarshal migration declaration", nil)
+		}
+		pendingMigrations = append(pendingMigrations, &coretypes.Migration{
+			ID:                res.ID.String(),
+			ActivationHeight:  mig.ActivationPeriod,
+			MigrationDuration: mig.Duration,
+			ChainID:           mig.ChainID,
+			Timestamp:         mig.Timestamp,
+		})
+	}
+
+	return &adminjson.ListMigrationsResponse{
+		Migrations: pendingMigrations,
+	}, nil
+}
+
+func (svc *Service) MigrationStatus(ctx context.Context, req *adminjson.MigrationStatusRequest) (*adminjson.MigrationStatusResponse, *jsonrpc.Error) {
+	uuid, err := coretypes.ParseUUID(req.Id)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "invalid migration ID", nil)
+	}
+
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	resolution, err := voting.GetResolutionInfo(ctx, readTx, uuid)
+	if err != nil {
+		svc.log.Error("failed to retrieve migration resolution", zap.Error(err))
+		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve migration proposal status, it might have already been approved.", nil)
+	}
+
+	expiresAt, board, approvals, err := resolutionStatus(ctx, readTx, resolution)
+	if err != nil {
+		svc.log.Error("failed to retrieve migration resolution status", zap.Error(err))
+		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve migration proposal status", nil)
+	}
+
+	return &adminjson.MigrationStatusResponse{
+		Status: &coretypes.MigrationStatus{
+			Proposal:  req.Id,
+			ExpiresAt: expiresAt,
+			Board:     board,
+			Approved:  approvals,
+		},
+	}, nil
+}
+
+func resolutionStatus(ctx context.Context, db sql.DB, resolution *resolutions.Resolution) (expiresAt int64, board [][]byte, approvals []bool, err error) {
 	allVoters, err := voting.GetValidators(ctx, db)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve voters")
+		return 0, nil, nil, fmt.Errorf("failed to retrieve voters")
 	}
 
 	// to create the board, we will take a list of all approvers and append the voters.
 	// we will then remove any duplicates the second time we see them.
 	// this will result with all approvers at the start of the list, and all voters at the end.
 	// finally, the approvals will be true for the length of the approvers, and false for found.length - voters.length
-	board := make([][]byte, 0, len(allVoters))
-	approvals := make([]bool, len(allVoters))
+	board = make([][]byte, 0, len(allVoters))
+	approvals = make([]bool, len(allVoters))
 	for i, v := range resolution.Voters {
 		board = append(board, v.PubKey)
 		approvals[i] = true
@@ -378,22 +603,5 @@ func toPendingInfo(ctx context.Context, db sql.DB, resolution *resolutions.Resol
 		found[string(board[i])] = struct{}{}
 	}
 
-	return &adminjson.PendingJoin{
-		Candidate: resolution.Proposer,
-		Power:     resolutionBody.Power,
-		ExpiresAt: resolution.ExpirationHeight,
-		Board:     board,
-		Approved:  approvals,
-	}, nil
-}
-
-func (svc *Service) GetConfig(ctx context.Context, req *adminjson.GetConfigRequest) (*adminjson.GetConfigResponse, *jsonrpc.Error) {
-	bts, err := svc.cfg.MarshalBinary()
-	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to encode node config", nil)
-	}
-
-	return &adminjson.GetConfigResponse{
-		Config: bts,
-	}, nil
+	return resolution.ExpirationHeight, board, approvals, nil
 }

@@ -2,6 +2,8 @@
 // and response objects.
 package adminjson
 
+import "github.com/kwilteam/kwil-db/core/types"
+
 type StatusRequest struct{}
 type PeersRequest struct{}
 type GetConfigRequest struct{}
@@ -18,3 +20,34 @@ type JoinStatusRequest struct {
 }
 type ListValidatorsRequest struct{}
 type ListJoinRequestsRequest struct{}
+
+// LoadChangesetsRequest contains the request parameters for MethodLoadChangesets.
+type ChangesetMetadataRequest struct {
+	Height int64 `json:"height"`
+}
+
+type ChangesetRequest struct {
+	Height int64 `json:"height"`
+	Index  int64 `json:"index"`
+}
+
+type MigrationSnapshotChunkRequest struct {
+	Height     uint64 `json:"height"`
+	ChunkIndex uint32 `json:"chunk_index"`
+}
+
+type MigrationMetadataRequest struct{}
+
+type MigrationProposalRequest struct {
+	Migration types.Migration `json:"migration"`
+}
+
+type ApproveMigrationRequest struct {
+	Id string `json:"id"` // Id is the migration proposal ID
+}
+
+type ListMigrationsRequest struct{}
+
+type MigrationStatusRequest struct {
+	Id string `json:"id"` // Id is the migration proposal ID
+}

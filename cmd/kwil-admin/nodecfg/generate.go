@@ -54,6 +54,9 @@ type TestnetGenerateConfig struct {
 	ChainID       string
 	BlockInterval time.Duration
 	// InitialHeight           int64
+	AdminAddress string
+	AdminNoTLS   bool
+
 	NValidators             int
 	NNonValidators          int
 	ConfigFile              string
@@ -254,6 +257,11 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 			return fmt.Errorf("failed to merge config file %s: %w", genCfg.ConfigFile, err)
 		}
 	}
+
+	if genCfg.AdminAddress != "" {
+		cfg.AppCfg.AdminListenAddress = genCfg.AdminAddress
+	}
+	cfg.AppCfg.NoTLS = genCfg.AdminNoTLS
 
 	privateKeys := make([]cmtEd.PrivKey, nNodes)
 	for i := range privateKeys {

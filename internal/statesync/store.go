@@ -77,7 +77,7 @@ type SnapshotStore struct {
 }
 
 type DBSnapshotter interface {
-	CreateSnapshot(ctx context.Context, height uint64, snapshotID string) (*Snapshot, error)
+	CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludeTables []string, excludeTableData []string) (*Snapshot, error)
 }
 
 func NewSnapshotStore(cfg *SnapshotConfig, dbCfg *DBConfig, logger log.Logger) (*SnapshotStore, error) {
@@ -99,6 +99,10 @@ func NewSnapshotStore(cfg *SnapshotConfig, dbCfg *DBConfig, logger log.Logger) (
 
 // IsSnapshotDue checks if a snapshot is due at the given height.
 func (s *SnapshotStore) IsSnapshotDue(height uint64) bool {
+	if s.cfg.RecurringHeight == 0 {
+		return false
+	}
+
 	return (height % s.cfg.RecurringHeight) == 0
 }
 
@@ -118,9 +122,13 @@ func (s *SnapshotStore) ListSnapshots() []*Snapshot {
 // CreateSnapshot creates a new snapshot at the given height and snapshot ID.
 // SnapshotStore ensures that the number of snapshots does not exceed the maximum configured snapshots.
 // If exceeds, it deletes the oldest snapshot.
-func (s *SnapshotStore) CreateSnapshot(ctx context.Context, height uint64, snapshotID string) error {
+// It takes a list of schemas, excludedTables and excludeTableData args to specify the contents of the snapshot.
+// schemas: list of schemas to include in the snapshot
+// excludedTables: list of tables to exclude from the snapshot
+// excludeTableData: list of tables to include schema but exclude data from the snapshot
+func (s *SnapshotStore) CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludedTables []string, excludeTableData []string) error {
 	// Create a snapshot of the database at the given height
-	snapshot, err := s.snapshotter.CreateSnapshot(ctx, height, snapshotID)
+	snapshot, err := s.snapshotter.CreateSnapshot(ctx, height, snapshotID, schemas, excludedTables, excludeTableData)
 	if err != nil {
 		os.RemoveAll(snapshotHeightDir(s.cfg.SnapshotDir, height))
 		return fmt.Errorf("failed to create snapshot at height %d: %w", height, err)

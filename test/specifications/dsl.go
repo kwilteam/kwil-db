@@ -141,3 +141,12 @@ type DeployerDsl interface {
 type TxInfoer interface {
 	TxInfo(ctx context.Context, hash []byte) (*transactions.TcTxQueryResponse, error)
 }
+
+type MigrationOpsDsl interface {
+	TxQueryDsl
+	SubmitMigrationProposal(ctx context.Context, activationHeight *big.Int, migrationDuration *big.Int, chainID string) ([]byte, error)
+	ApproveMigration(ctx context.Context, migrationResolutionID string) ([]byte, error)
+	ListMigrations(ctx context.Context) ([]*types.Migration, error)
+	GenesisState(ctx context.Context) (bool, []byte, error)
+	GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error)
+}

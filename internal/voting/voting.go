@@ -343,6 +343,16 @@ func GetResolutionIDsByTypeAndProposer(ctx context.Context, db sql.Executor, res
 	return ids, nil
 }
 
+// ResolutionExists checks if a resolution of the given ID exists.
+func ResolutionExists(ctx context.Context, db sql.Executor, id *types.UUID) (bool, error) {
+	res, err := db.Execute(ctx, resolutionExists, id[:])
+	if err != nil {
+		return false, err
+	}
+
+	return len(res.Rows) == 1, nil
+}
+
 // DeleteResolutions deletes a slice of resolution IDs from the database.
 // It will mark the resolutions as processed in the processed table.
 func DeleteResolutions(ctx context.Context, db sql.Executor, ids ...*types.UUID) error {

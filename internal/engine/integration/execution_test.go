@@ -5,7 +5,6 @@ package integration_test
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -13,6 +12,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/testdata"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -590,8 +590,18 @@ func Test_Engine(t *testing.T) {
 
 			test.ses1(t, global, tx)
 
-			w := os.Stdout
-			id, err := tx.Precommit(ctx, w) // not needed, but test how txApp would use the engine
+			changes := make(chan any, 1)
+			go func() {
+				for ch := range changes {
+					switch ch.(type) {
+					case *pg.ChangesetEntry:
+						// t.Log("entry", ct)
+					case *pg.Relation:
+						// t.Log("relation")
+					}
+				}
+			}()
+			id, err := tx.Precommit(ctx, changes) // not needed, but test how txApp would use the engine
 			require.NoError(t, err)
 			require.NotEmpty(t, id)
 

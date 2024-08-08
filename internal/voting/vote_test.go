@@ -105,8 +105,18 @@ func Test_Voting(t *testing.T) {
 				err := CreateResolution(ctx, db, testEvent, 10, []byte("a"))
 				require.NoError(t, err)
 
+				// verify that the resolution exists
+				exists, err := ResolutionExists(ctx, db, testEvent.ID())
+				require.NoError(t, err)
+				require.True(t, exists)
+
 				err = DeleteResolutions(ctx, db, testEvent.ID())
 				require.NoError(t, err)
+
+				// verify that the resolution no longer exists
+				exists, err = ResolutionExists(ctx, db, testEvent.ID())
+				require.NoError(t, err)
+				require.False(t, exists)
 
 				processed, err := IsProcessed(ctx, db, testEvent.ID())
 				require.NoError(t, err)
@@ -137,6 +147,11 @@ func Test_Voting(t *testing.T) {
 
 				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"))
 				require.NoError(t, err)
+
+				// verify that the resolution exists
+				exists, err := ResolutionExists(ctx, db, testEvent.ID())
+				require.NoError(t, err)
+				require.True(t, exists)
 
 				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("a"))
 				require.NoError(t, err)

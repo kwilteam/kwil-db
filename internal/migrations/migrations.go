@@ -23,9 +23,26 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 )
+
+const (
+	StartMigrationEventType = "migration"
+)
+
+// migrator instance responsible for managing zero downtime migrations.
+var migrator *Migrator
+
+func init() {
+	migrator = &Migrator{}
+
+	err := resolutions.RegisterResolution(StartMigrationEventType, resolutions.ModAdd, MigrationResolution)
+	if err != nil {
+		panic(err)
+	}
+}
 
 // MigrationDeclaration creates a new migration. It is used to agree on terms of a migration,
 // and is voted on using Kwil's vote store.
@@ -33,9 +50,9 @@ type MigrationDeclaration struct {
 	// ActivationPeriod is the amount of blocks before the migration is activated.
 	// It starts after the migration is approved via the voting system.
 	// The intention is to allow validators to prepare for the migration.
-	ActivationPeriod int64
+	ActivationPeriod *big.Int
 	// Duration is the amount of blocks the migration will take to complete.
-	Duration int64
+	Duration *big.Int
 	// ChainID is the new chain ID that the network will migrate to.
 	// A new chain ID should always be used for a new network, to avoid
 	// cross-network replay attacks.
@@ -62,42 +79,42 @@ var MigrationResolution = resolutions.ResolutionConfig{
 	ConfirmationThreshold: big.NewRat(2, 3),
 	ExpirationPeriod:      100800, // 1 week
 	ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
-		// The resolve func is responsible for:
-		// - Pausing all deploys and drops
-		// - Pausing all validator transactions
-		// - Pausing all votes
-		alreadyHasMigration, err := migrationActive(ctx, app.DB)
-		if err != nil {
-			return err
-		}
-
-		if alreadyHasMigration {
-			return fmt.Errorf("failed to start migration: only one migration can be active at a time")
-		}
-
-		mig := &MigrationDeclaration{}
-		if err := mig.UnmarshalBinary(resolution.Body); err != nil {
-			return err
-		}
-
-		// the start height for the migration is whatever the height the migration
-		// resolution passed + the activation period, which allows validators to prepare
-		// for the migration. End height is the same, + the duration of the migration.
-		active := &activeMigration{
-			StartHeight: block.Height + mig.ActivationPeriod,
-			EndHeight:   block.Height + mig.ActivationPeriod + mig.Duration,
-			ChainID:     mig.ChainID,
-		}
-
-		err = createMigration(ctx, app.DB, active)
-		if err != nil {
-			return err
-		}
-
-		block.ChainContext.NetworkParameters.InMigration = true
-
-		// TODO: there are certainly other things we need to do on activation. I am unsure how to handle this.
-		// For example, we need to snapshot the network at the activation block.
-		return nil
+		return migrator.startMigration(ctx, app, resolution, block)
 	},
+}
+
+func (m *Migrator) startMigration(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
+	alreadyHasMigration, err := migrationActive(ctx, app.DB)
+	if err != nil {
+		return err
+	}
+
+	if alreadyHasMigration {
+		return fmt.Errorf("failed to start migration: only one migration can be active at a time")
+	}
+
+	mig := &MigrationDeclaration{}
+	if err := mig.UnmarshalBinary(resolution.Body); err != nil {
+		return err
+	}
+
+	// the start height for the migration is whatever the height the migration
+	// resolution passed + the activation period, which allows validators to prepare
+	// for the migration. End height is the same, + the duration of the migration.
+	active := &activeMigration{
+		StartHeight: block.Height + mig.ActivationPeriod.Int64(),
+		EndHeight:   block.Height + mig.ActivationPeriod.Int64() + mig.Duration.Int64(),
+		ChainID:     mig.ChainID,
+	}
+
+	err = createMigration(ctx, app.DB, active)
+	if err != nil {
+		return err
+	}
+
+	m.activeMigration = active
+
+	app.Service.Logger.Info("migration started", log.Int("start_height", active.StartHeight), log.Int("end_height", active.EndHeight))
+
+	return nil
 }

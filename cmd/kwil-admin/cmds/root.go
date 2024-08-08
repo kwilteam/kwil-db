@@ -4,6 +4,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/common/version"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/key"
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/migration"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/node"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/setup"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/snapshot"
@@ -21,6 +22,7 @@ func NewRootCmd() *cobra.Command {
 		validators.NewValidatorsCmd(),
 		utils.NewUtilsCmd(),
 		snapshot.NewSnapshotCmd(),
+		migration.NewMigrationCmd(),
 	)
 
 	display.BindOutputFormatFlag(rootCmd)

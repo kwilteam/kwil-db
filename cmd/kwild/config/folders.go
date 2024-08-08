@@ -14,7 +14,9 @@ const (
 	ConfigFileName     = "config.toml"
 	PrivateKeyFileName = "private_key"
 
-	SnapshotDirName = "snapshots"
-
+	SnapshotDirName   = "snapshots"
+	MigrationsDirName = "migrations"
+	ChangesetsDirName = "changesets"
+	ChunksDirName     = "chunks"
 	// Note that the sqlLite file path is user-configurable e.g. "data/kwil.db"
 )
