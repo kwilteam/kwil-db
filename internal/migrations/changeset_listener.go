@@ -42,13 +42,11 @@ type MigrationConfig struct {
 	// AdminListenAddress is the address of the admin server to receive changesets from.
 	AdminListenAddress string
 
-	// TLSCertFile is the path to the Kwil-Admin's TLS certificate file for the admin server.
-	TLSCertFile string //auth,cert
-
-	// TLSKeyFile is the path to the Kwil-Admin's TLS key file for the admin server.
-	TLSKeyFile string
+	// AdminPass is the admin server password.
+	AdminPass string
 
 	// KwildTLSCertFile is the path to the TLS certificate file for the Kwil node.
+	// The path should be an absolute path or relative to the node's root directory.
 	KwildTLSCertFile string
 }
 
@@ -67,8 +65,12 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 	}
 
 	var dialOpt []adminclient.Opt
-	if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
-		dialOpt = append(dialOpt, adminclient.WithTLS(cfg.KwildTLSCertFile, cfg.TLSKeyFile, cfg.TLSCertFile))
+	if cfg.KwildTLSCertFile != "" {
+		dialOpt = append(dialOpt, adminclient.WithTLS(cfg.KwildTLSCertFile, "", ""))
+	}
+
+	if cfg.AdminPass != "" {
+		dialOpt = append(dialOpt, adminclient.WithPass(cfg.AdminPass))
 	}
 
 	// Admin RPC client connection to the old chain
@@ -111,6 +113,7 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 			// Get the changeset metadata from the admin server
 			numChunks, size, err := adminClient.ChangesetMetadata(ctx, currentHeight)
 			if err != nil {
+				fmt.Println("Couldnt fetch changesets", err)
 				time.Sleep(retryDelay) // If no changeset is found, wait and try again
 				continue
 			}
@@ -219,8 +222,7 @@ func (c *MigrationConfig) ExtractConfig(cfg map[string]string) error {
 		return errors.New("migration admin_listen_address not provided")
 	}
 
-	c.TLSCertFile = cfg["client_tls_cert_file"]
-	c.TLSKeyFile = cfg["client_tls_key_file"]
+	c.AdminPass = cfg["admin_pass"]
 	c.KwildTLSCertFile = cfg["kwild_tls_cert_file"]
 
 	return nil
@@ -231,8 +233,7 @@ func (c *MigrationConfig) Map() map[string]string {
 		"start_height":         strconv.FormatInt(c.StartHeight, 10),
 		"end_height":           strconv.FormatInt(c.EndHeight, 10),
 		"admin_listen_address": c.AdminListenAddress,
-		"client_tls_cert_file": c.TLSCertFile,
-		"client_tls_key_file":  c.TLSKeyFile,
+		"admin_pass":           c.AdminPass,
 		"kwild_tls_cert_file":  c.KwildTLSCertFile,
 	}
 }
