@@ -119,7 +119,7 @@ func inferPrecisionAndScale(s string) (precision, scale uint16) {
 	s = strings.TrimLeft(s, "-+")
 	parts := strings.Split(s, ".")
 
-	// remove 0s from the left part, siince 001.23 is the same as 1.23
+	// remove 0s from the left part, since 001.23 is the same as 1.23
 	parts[0] = strings.TrimLeft(parts[0], "0")
 
 	intPart := uint16(len(parts[0]))
@@ -279,9 +279,26 @@ func (d *Decimal) Sign() int {
 	return d.dec.Sign()
 }
 
+func (d Decimal) NaN() bool {
+	switch d.dec.Form {
+	case apd.NaN, apd.NaNSignaling:
+		return true
+	}
+	return false
+}
+
+func (d Decimal) Inf() bool {
+	return d.dec.Form == apd.Infinite
+}
+
 // Value implements the database/sql/driver.Valuer interface. It converts d to a
 // string.
 func (d Decimal) Value() (driver.Value, error) {
+	// NOTE: we're currently (ab)using the NaN case to handle scanning of NULL
+	// values. Match that here. We may want something different though.
+	if d.dec.Form == apd.NaN {
+		return nil, nil
+	}
 	return d.dec.Value()
 }
 
@@ -289,7 +306,30 @@ var _ driver.Valuer = &Decimal{}
 
 // Scan implements the database/sql.Scanner interface.
 func (d *Decimal) Scan(src interface{}) error {
-	return d.dec.Scan(src)
+	if src == nil {
+		*d = Decimal{
+			dec: apd.Decimal{Form: apd.NaN},
+		}
+		return nil
+	}
+
+	s, ok := src.(string)
+	if !ok {
+		var dec apd.Decimal
+		err := dec.Scan(src)
+		if err != nil {
+			return err
+		}
+		s = dec.String()
+	}
+
+	// set scale and prec from the string
+	d2, err := NewFromString(s)
+	if err != nil {
+		return err
+	}
+	*d = *d2
+	return nil
 }
 
 var _ sql.Scanner = &Decimal{}
@@ -425,6 +465,7 @@ func Cmp(x, y *Decimal) (int64, error) {
 	}
 
 	return z.Int64()
+	// return x.dec.Cmp(&y.dec)
 }
 
 // CheckPrecisionAndScale checks if the precision and scale are valid.
@@ -459,23 +500,3 @@ func (da DecimalArray) Value() (driver.Value, error) {
 }
 
 var _ driver.Valuer = (*DecimalArray)(nil)
-
-// Scan implements the sql.Scanner interface.
-func (da *DecimalArray) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []string:
-		*da = make(DecimalArray, len(s))
-		for i, str := range s {
-			d, err := NewFromString(str)
-			if err != nil {
-				return err
-			}
-
-			(*da)[i] = d
-		}
-
-		return nil
-	}
-
-	return fmt.Errorf("cannot convert %T to DecimalArray", src)
-}

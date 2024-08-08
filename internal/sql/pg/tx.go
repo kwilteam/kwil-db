@@ -25,6 +25,7 @@ type nestedTx struct {
 }
 
 var _ common.Tx = (*nestedTx)(nil)
+var _ common.QueryScanner = (*nestedTx)(nil)
 
 // BeginTx creates a new transaction with the same access mode as the parent.
 // Internally this is savepoint, which allows rollback to the innermost
@@ -53,6 +54,14 @@ func (tx *nestedTx) Execute(ctx context.Context, stmt string, args ...any) (*com
 	return query(ctx, tx.oidTypes, tx.Tx, stmt, args...)
 }
 
+// QueryScanFn satisfies sql.QueryScanner.
+func (tx *nestedTx) QueryScanFn(ctx context.Context, sql string,
+	scans []any, fn func() error, args ...any) error {
+
+	conn := tx.Conn()
+	return queryRowFunc(ctx, conn, sql, scans, fn, args...)
+}
+
 // AccessMode returns the access mode of the transaction.
 func (tx *nestedTx) AccessMode() common.AccessMode {
 	return tx.accessMode
@@ -67,6 +76,16 @@ type dbTx struct {
 	db         *DB // for top level DB lifetime mgmt
 	accessMode common.AccessMode
 }
+
+// conner is a db or tx type that provides access to the underlying *pgx.Conn.
+// All of the transaction types in this package should be conners. This is a
+// subset of the pg.Tx interface.
+type conner interface{ Conn() *pgx.Conn }
+
+var _ conner = (pgx.Tx)(nil)
+
+var _ conner = (*dbTx)(nil)
+var _ conner = (*nestedTx)(nil)
 
 // Precommit creates a prepared transaction for a two-phase commit. An ID
 // derived from the updates is return. This must be called before Commit. Either
@@ -110,6 +129,8 @@ type readTx struct {
 	release     func()
 	subscribers *syncmap.Map[int64, chan<- string]
 }
+
+var _ conner = (*readTx)(nil)
 
 // Commit is a no-op for read-only transactions.
 // It will unconditionally return the connection to the pool.
@@ -161,6 +182,12 @@ func (d *delayedReadTx) Execute(ctx context.Context, stmt string, args ...any) (
 	}
 
 	return d.tx.Execute(ctx, stmt, args...)
+}
+
+var _ conner = (*nestedTx)(nil)
+
+func (d *delayedReadTx) Conn() *pgx.Conn {
+	return d.tx.Conn()
 }
 
 func (d *delayedReadTx) Commit(ctx context.Context) error {
