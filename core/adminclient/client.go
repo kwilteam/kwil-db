@@ -30,6 +30,8 @@ type AdminClient struct {
 
 	log log.Logger
 
+	pass string
+
 	// optional TLS files
 	kwildCertFile  string
 	clientKeyFile  string
@@ -178,6 +180,7 @@ func NewClient(ctx context.Context, target string, opts ...Opt) (*AdminClient, e
 			Transport: trans,
 		}),
 		rpcclient.WithLogger(c.log),
+		rpcclient.WithPass(c.pass),
 	)
 	c.adminSvcClient = cl
 

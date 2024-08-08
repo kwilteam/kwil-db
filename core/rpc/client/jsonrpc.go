@@ -6,6 +6,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -46,6 +47,8 @@ type JSONRPCClient struct {
 	endpoint string
 	log      log.Logger
 
+	basicAuthHdr string
+
 	reqID atomic.Uint64
 }
 
@@ -64,13 +67,17 @@ func NewJSONRPCClient(url *url.URL, opts ...RPCClientOpts) *JSONRPCClient {
 		opt(clientOpts)
 	}
 
-	cl := &JSONRPCClient{
-		endpoint: url.String(),
-		conn:     clientOpts.client,
-		log:      clientOpts.log,
+	var basicAuthHdr string
+	if clientOpts.pass != "" { // user is ignored on server verification
+		basicAuthHdr = "Basic " + base64.StdEncoding.EncodeToString([]byte("user:"+clientOpts.pass))
 	}
 
-	return cl
+	return &JSONRPCClient{
+		endpoint:     url.String(),
+		conn:         clientOpts.client,
+		log:          clientOpts.log,
+		basicAuthHdr: basicAuthHdr,
+	}
 }
 
 type RPCClientOpts func(*clientOptions)
@@ -78,11 +85,18 @@ type RPCClientOpts func(*clientOptions)
 type clientOptions struct {
 	client *http.Client
 	log    log.Logger
+	pass   string
 }
 
 func WithLogger(log log.Logger) RPCClientOpts {
 	return func(c *clientOptions) {
 		c.log = log
+	}
+}
+
+func WithPass(pass string) RPCClientOpts {
+	return func(c *clientOptions) {
+		c.pass = pass
 	}
 }
 
@@ -132,7 +146,9 @@ func (cl *JSONRPCClient) CallMethod(ctx context.Context, method string, cmd, res
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	// httpReq.SetBasicAuth(c.User, c.Pass)
+	if cl.basicAuthHdr != "" {
+		httpReq.Header.Set("Authorization", cl.basicAuthHdr) // httpReq.SetBasicAuth("user", cl.pass)
+	}
 
 	httpResponse, err := cl.conn.Do(httpReq)
 	if err != nil {
