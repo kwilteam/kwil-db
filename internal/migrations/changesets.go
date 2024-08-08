@@ -95,7 +95,7 @@ var ChangesetMigrationResolution = resolutions.ResolutionConfig{
 		}
 
 		// insert the changeset into the database
-		app.Service.Logger.Info("insert changeset chunk", log.Int("height", migration.Height.Int64()), log.Int("chunkIndex", migration.ChunkIdx.Int64()))
+		app.Service.Logger.Debug("insert changeset chunk", log.Int("height", migration.Height.Int64()), log.Int("chunkIndex", migration.ChunkIdx.Int64()))
 		tx, err := app.DB.BeginTx(ctx)
 		if err != nil {
 			return err
@@ -107,6 +107,18 @@ var ChangesetMigrationResolution = resolutions.ResolutionConfig{
 		if err != nil {
 			return err
 		}
+
+		// Commit the changeset chunk to the database, so that it is persisted
+		// even if the resolution fails later
+		if err = tx.Commit(ctx); err != nil {
+			return err
+		}
+
+		tx, err = app.DB.BeginTx(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
 
 		var currentHeight int64
 		// get the last changeset height applied
@@ -138,25 +150,25 @@ var ChangesetMigrationResolution = resolutions.ResolutionConfig{
 			}
 
 			if totalChunks != chunksReceived {
-				app.Service.Logger.Info("waiting for all chunks to be received", log.Int("height", currentHeight))
-				break // all chunks are not received, wait for them
+				// app.Service.Logger.Info("waiting for all chunks to be received", log.Int("height", currentHeight))
+				break
 			}
 
 			// Apply the changeset
 			if err = applyChangeset(ctx, tx, currentHeight, totalChunks); err != nil {
-				return errors.Join(err, tx.Commit(ctx))
+				return err
 			}
 
 			app.Service.Logger.Info("Applied changesets", log.Int("height", currentHeight))
 
 			// Delete the changeset after it has been applied
 			if err = deleteChangesets(ctx, tx, currentHeight); err != nil {
-				return errors.Join(err, tx.Commit(ctx))
+				return err
 			}
 
 			// Increment the last changeset
 			if err = setLastChangeset(ctx, tx, currentHeight); err != nil {
-				return errors.Join(err, tx.Commit(ctx))
+				return err
 			}
 
 			currentHeight += 1 // move to the next height

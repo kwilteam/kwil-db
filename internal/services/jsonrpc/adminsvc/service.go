@@ -446,7 +446,7 @@ func (svc *Service) LoadChangesetMetadata(ctx context.Context, req *adminjson.Ch
 func (svc *Service) MigrationMetadata(ctx context.Context, req *adminjson.MigrationMetadataRequest) (*adminjson.MigrationMetadataResponse, *jsonrpc.Error) {
 	metadata, err := svc.migrator.GetMigrationMetadata()
 	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, fmt.Sprintf("failed to load migration metadata: %s", err.Error()), nil)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, err.Error(), nil)
 	}
 
 	bts, err := metadata.MarshalBinary()

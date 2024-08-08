@@ -399,7 +399,7 @@ func (c *changesetIoWriter) commit() error {
 		relationIdx: map[[2]string]int{},
 	}
 
-	// close the changes chan
+	// close the changes chan to signal the end of the changeset
 	close(c.csChan)
 	c.csChan = nil
 
@@ -418,9 +418,7 @@ func (c *changesetIoWriter) fail() {
 		relationIdx: map[[2]string]int{},
 	}
 
-	if c.csChan != nil {
-		close(c.csChan)
-	}
+	close(c.csChan)
 	c.csChan = nil
 }
 

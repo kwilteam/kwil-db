@@ -43,7 +43,7 @@ type MigrationConfig struct {
 	AdminListenAddress string
 
 	// TLSCertFile is the path to the Kwil-Admin's TLS certificate file for the admin server.
-	TLSCertFile string
+	TLSCertFile string //auth,cert
 
 	// TLSKeyFile is the path to the Kwil-Admin's TLS key file for the admin server.
 	TLSKeyFile string
@@ -116,7 +116,7 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 			}
 			btsReceived := int64(0)
 
-			service.Logger.Info("received changeset metadata", log.Int("height", currentHeight), log.Int("numChunks", numChunks), log.Int("size", size))
+			service.Logger.Debug("received changeset metadata", log.Int("height", currentHeight), log.Int("numChunks", numChunks), log.Int("size", size))
 			wg := sync.WaitGroup{}
 			errChan := make(chan error, numChunks)
 
@@ -219,7 +219,6 @@ func (c *MigrationConfig) ExtractConfig(cfg map[string]string) error {
 		return errors.New("migration admin_listen_address not provided")
 	}
 
-	// TODO: Sanitize the TLS file paths, expand them or rootify them?
 	c.TLSCertFile = cfg["client_tls_cert_file"]
 	c.TLSKeyFile = cfg["client_tls_key_file"]
 	c.KwildTLSCertFile = cfg["kwild_tls_cert_file"]

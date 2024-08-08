@@ -9,11 +9,18 @@ import (
 
 // InitializeMigrationSchema initializes the migration schema in the database.
 func initializeMigrationSchema(ctx context.Context, db sql.DB) error {
+	// Tables used by the old node in the migration process.
 	_, err := db.Execute(ctx, tableMigrationsSQL)
 	if err != nil {
 		return err
 	}
 
+	_, err = db.Execute(ctx, tableLastStoredChangesetSQL)
+	if err != nil {
+		return err
+	}
+
+	// Tables used by the new node in the migration process.
 	_, err = db.Execute(ctx, tableChangesetsMetadataSQL)
 	if err != nil {
 		return err
@@ -54,6 +61,20 @@ var (
 	migrationIsActiveSQL = `SELECT EXISTS(SELECT 1 FROM ` + migrationsSchemaName + `.migration);`
 	// createMigrationSQL is the sql query used to create a new migration.
 	createMigrationSQL = `INSERT INTO ` + migrationsSchemaName + `.migration (id, start_height, end_height, chain_id) VALUES ($1, $2, $3, $4);`
+
+	lastStoreChangeset = `last_stored_changeset`
+
+	// tableLastChangesetSQL is the table that tracks last stored changeset. It is a single row table with the row name as "last_stored_changeset".
+	tableLastStoredChangesetSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.last_stored_changeset (
+			name TEXT PRIMARY KEY,
+			height INT -- height of the last stored changeset
+		)`
+
+	// upsertLastChangesetSQL is the sql query used to set the last changeset.
+	upsertLastStoredChangesetSQL = `INSERT INTO ` + migrationsSchemaName + `.last_stored_changeset (name, height) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET height = $2;`
+
+	// getLastChangesetSQL is the sql query used to get the last changeset.
+	getLastStoredChangesetSQL = `SELECT height FROM ` + migrationsSchemaName + `.last_stored_changeset WHERE name = $1;`
 )
 
 // getMigrationState gets the current migration state from the database.
@@ -120,6 +141,37 @@ func migrationActive(ctx context.Context, db sql.Executor) (bool, error) {
 func createMigration(ctx context.Context, db sql.Executor, md *activeMigration) error {
 	_, err := db.Execute(ctx, createMigrationSQL, 1, md.StartHeight, md.EndHeight, md.ChainID)
 	return err
+}
+
+// setLastStoredChangeset sets the last changeset in the database.
+func setLastStoredChangeset(ctx context.Context, db sql.Executor, height int64) error {
+	_, err := db.Execute(ctx, upsertLastStoredChangesetSQL, lastStoreChangeset, height)
+	return err
+}
+
+// getLastStoredChangeset gets the last changeset from the database.
+func getLastStoredChangeset(ctx context.Context, db sql.Executor) (int64, error) {
+	res, err := db.Execute(ctx, getLastStoredChangesetSQL, lastStoreChangeset)
+	if err != nil {
+		return -1, err
+	}
+
+	if len(res.Rows) == 0 {
+		return -1, nil
+	}
+
+	if len(res.Rows) != 1 {
+		// should never happen
+		return -1, fmt.Errorf("internal bug: expected one row for last changeset, got %d", len(res.Rows))
+	}
+
+	row := res.Rows[0]
+	height, ok := row[0].(int64)
+	if !ok {
+		return -1, fmt.Errorf("internal bug: last changeset height is not an int64")
+	}
+
+	return height, nil
 }
 
 // Changeset Resolutions

@@ -14,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/chain"
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
@@ -60,12 +61,12 @@ type Migrator struct {
 	// mu is the mutex for the migrator.
 	mu sync.RWMutex
 
-	// activeMigration is the migration that is currently in progress.
-	// It is nil if there is no migration in progress.
+	// activeMigration is the migration plan that is approved by the network.
+	// It is nil if there is no plan for a migration.
 	activeMigration *activeMigration
 
-	// Set to true if a migration is in progress.
-	// i.e if the block height is between the start and end height of the migration.
+	// Set to true when the migration is in progress.
+	// i.e the block height is between the start and end height of the migration.
 	inProgress bool
 
 	// snapshotter creates snapshots of the state.
@@ -76,6 +77,7 @@ type Migrator struct {
 	// but should be a different connection pool.
 	DB Database
 
+	// accounts tracks all the spends that have occurred in the block.
 	accounts SpendTracker
 
 	// lastChangeset is the height of the last changeset that was stored.
@@ -113,7 +115,6 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 	migrator.dir = dir
 	migrator.DB = db
 	migrator.accounts = accounts
-	migrator.lastChangeset = -1
 	migrator.doneChan = make(chan bool, 1)
 
 	// Initialize the DB
@@ -137,6 +138,13 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 		return nil, fmt.Errorf("failed to get migration state: %w", err)
 	}
 	migrator.activeMigration = m
+
+	// Get the last changeset that was stored
+	height, err := getLastStoredChangeset(ctx, tx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last stored changeset: %w", err)
+	}
+	migrator.lastChangeset = height
 
 	return migrator, nil
 }
@@ -266,6 +274,13 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 	return nil
 }
 
+func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return setLastStoredChangeset(ctx, tx, m.lastChangeset)
+}
+
 func (m *Migrator) InMigration(height int64) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -366,15 +381,9 @@ func (m *Migrator) GetGenesisSnapshotChunk(height int64, format uint32, chunkIdx
 		return nil, ErrNoActiveMigration
 	}
 
-	if height < m.activeMigration.StartHeight {
-		return nil, fmt.Errorf("requested changeset height is before the start of the migration")
+	if height != m.activeMigration.StartHeight {
+		return nil, fmt.Errorf("requested snapshot height is not the start of the migration")
 	}
-	if height > m.activeMigration.EndHeight {
-		return nil, fmt.Errorf("requested changeset height is after the end of the migration")
-	}
-	// if height > m.lastChangeset {
-	// 	return nil, fmt.Errorf("requested changeset height has not been recorded by the node yet")
-	// }
 
 	return m.snapshotter.LoadSnapshotChunk(uint64(height), format, chunkIdx)
 }
@@ -393,9 +402,9 @@ func (m *Migrator) GetChangesetMetadata(height int64) (*ChangesetMetdata, error)
 	if height > m.activeMigration.EndHeight {
 		return nil, fmt.Errorf("requested changeset height is after the end of the migration")
 	}
-	// if height > m.lastChangeset {
-	// 	return nil, fmt.Errorf("requested changeset height has not been recorded by the node yet")
-	// }
+	if height > m.lastChangeset {
+		return nil, fmt.Errorf("requested changeset height has not been recorded by the node yet")
+	}
 
 	return loadChangesetMetadata(formatChangesetMetadataFilename(m.dir, height))
 }
@@ -435,7 +444,6 @@ type ChangesetMetdata struct {
 	Height        int64
 	Chunks        int64
 	ChangesetSize int64
-	// Hash          [][HashLen]byte
 }
 
 // Serialize serializes the metadata to a file.
@@ -447,12 +455,12 @@ func (m *ChangesetMetdata) saveAs(file string) error {
 	return os.WriteFile(file, bts, 0644)
 }
 
-// LoadChangesetMetadata loads the metadata associated with a changeset.
+// LoadChangesetMetadata loads the metadata associated with a changeset.s
 // It reads the changeset metadata file and returns the metadata.
 func loadChangesetMetadata(metadatafile string) (*ChangesetMetdata, error) {
 	bts, err := os.ReadFile(metadatafile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("metadata file not found %s", err.Error())
 	}
 
 	var metadata ChangesetMetdata
@@ -497,11 +505,11 @@ func (bs *BlockSpends) Deserialize(bts []byte) error {
 type chunkWriter struct {
 	dir      string
 	height   int64
-	chunkIdx int64
+	chunkIdx int64 // current chunk index, zero based index
 
-	chunkFile         *os.File
-	chunkSize         int64 // number of bytes written to the current chunk file
-	totalBytesWritten int64 // total number of bytes written
+	chunkFile         *os.File // current chunk file being written to
+	chunkSize         int64    // number of bytes written to the current chunk file
+	totalBytesWritten int64    // total number of bytes written to disk for the changeset
 }
 
 func newChunkWriter(dir string, height int64) *chunkWriter {
@@ -598,7 +606,7 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 		switch ct := ch.(type) {
 		case *pg.ChangesetEntry:
 			// write the changeset to disk
-			ce := (*pg.ChangesetEntry)(ct)
+			ce := ct
 			if !ce.UserSchema {
 				// skip changesets that are not part of the user schema
 				continue
@@ -618,7 +626,7 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 			}
 		case *pg.Relation:
 			// write the relation to disk
-			relation := (*pg.Relation)(ct)
+			relation := ct
 			// serialize the relation and write it to disk
 			bts, err := relation.Serialize()
 			if err != nil {
@@ -655,7 +663,7 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 		return
 	}
 
-	// signal NotifyHeight that all changesets have been written to disk
+	// signals NotifyHeight that all changesets have been written to disk
 	m.doneChan <- true
 }
 
