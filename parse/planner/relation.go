@@ -35,8 +35,6 @@ func newEvalCtx(plan *planContext) *EvaluateContext {
 // It will perform type validations.
 func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 	switch n := rel.(type) {
-	default:
-		panic(fmt.Sprintf("unexpected node type %T", n))
 	case *EmptyScan:
 		return &Relation{}, nil
 	case *Scan:
@@ -202,6 +200,8 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 
 		return rel, nil
 	}
+
+	return nil, fmt.Errorf("unexpected node type %T", rel)
 }
 
 // planManyExpressions plans many expressions and returns the Field of the
@@ -299,9 +299,9 @@ func (s *EvaluateContext) evalScanSource(source ScanSource) (*Relation, error) {
 		return &Relation{Fields: cols}, nil
 	case *SubqueryScanSource:
 		return s.evalRelation(n.Subquery)
-	default:
-		panic(fmt.Sprintf("unexpected node type %T", n))
 	}
+
+	return nil, fmt.Errorf("unexpected node type %T", source)
 }
 
 // evalExpression takes a LogicalExpr and updates the context based on the contents
@@ -309,8 +309,6 @@ func (s *EvaluateContext) evalScanSource(source ScanSource) (*Relation, error) {
 // the currentRel is the relation that the expression is being evaluated in.
 func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation) (*Field, error) {
 	switch n := expr.(type) {
-	default:
-		panic(fmt.Sprintf("unexpected node type %T", n))
 	case *Literal:
 		return anonField(n.Type), nil
 	case *Variable:
@@ -643,7 +641,121 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 		}
 
 		return rel.Fields[0], nil
+	case *Collate:
+		field, err := s.evalExpression(n.Expr, currentRel)
+		if err != nil {
+			return nil, err
+		}
+
+		scalar, err := field.Scalar()
+		if err != nil {
+			return nil, err
+		}
+
+		switch n.Collation {
+		default:
+			panic(fmt.Sprintf("unexpected collation %s", n.Collation))
+		case NoCaseCollation:
+			if !scalar.Equals(types.TextType) {
+				return nil, fmt.Errorf("collation requires a text type, got %s", field)
+			}
+		}
+
+		// return the field b/c if you have
+		// "SELECT name COLLATE NOCASE FROM users",
+		// Postgres will return column "name"
+		return field, nil
+	case *IsIn:
+		left, err := s.isScalar(n.Left, currentRel)
+		if err != nil {
+			return nil, err
+		}
+
+		if n.Subquery != nil {
+			right, err := s.isScalar(n.Subquery, currentRel)
+			if err != nil {
+				return nil, err
+			}
+
+			if !left.Equals(right) {
+				return nil, fmt.Errorf("is in requires the same data types, got %s and %s", left, right)
+			}
+		} else {
+			for _, expr := range n.Expressions {
+				right, err := s.isScalar(expr, currentRel)
+				if err != nil {
+					return nil, err
+				}
+
+				if !left.Equals(right) {
+					return nil, fmt.Errorf("is in requires the same data types, got %s and %s", left, right)
+				}
+			}
+		}
+
+		return anonField(types.BoolType), nil
+	case *Case:
+		// expectedWhenType is the type that we want every
+		// WHEN to evaluate to. This is set by SELECT [expr] CASE ...
+		// if there is no expr, then it expects a boolean type
+		expectedWhenType := types.BoolType
+		if n.Value != nil {
+			var err error
+			expectedWhenType, err = s.isScalar(n.Value, currentRel)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// the type that will be returned by the CASE statement
+		var returnType *types.DataType
+
+		for _, when := range n.WhenClauses {
+			if err := s.evalsTo(when[0], expectedWhenType, currentRel); err != nil {
+				return nil, err
+			}
+
+			then, err := s.isScalar(when[1], currentRel)
+			if err != nil {
+				return nil, err
+			}
+
+			if returnType == nil {
+				returnType = then
+			} else {
+				if !returnType.Equals(then) {
+					return nil, fmt.Errorf("all THEN clauses in CASE must be of the same type")
+				}
+			}
+		}
+
+		if n.Else != nil {
+			elseType, err := s.isScalar(n.Else, currentRel)
+			if err != nil {
+				return nil, err
+			}
+
+			// I dont think returnType can be nil here because
+			// "SELECT CASE ELSE 1 END" is invalid,
+			// but just in case
+			if returnType != nil {
+				returnType = elseType
+			} else {
+				if !returnType.Equals(elseType) {
+					return nil, fmt.Errorf("ELSE clause in CASE must be of the same type as the THEN clauses")
+				}
+			}
+		}
+
+		// also don't think this can be nil, but just in case
+		if returnType == nil {
+			return nil, fmt.Errorf("CASE must have at least one THEN clause")
+		}
+
+		return anonField(returnType), nil
 	}
+
+	return nil, fmt.Errorf("unexpected node type %T", expr)
 }
 
 /*

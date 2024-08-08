@@ -126,6 +126,11 @@ var comparisonOps = map[parse.ComparisonOperator]ComparisonOperator{
 	parse.ComparisonOperatorGreaterThanOrEqual: GreaterThanOrEqual,
 }
 
+var stringComparisonOps = map[parse.StringComparisonOperator]ComparisonOperator{
+	parse.StringComparisonOperatorLike:  Like,
+	parse.StringComparisonOperatorILike: ILike,
+}
+
 var logicalOps = map[parse.LogicalOperator]LogicalOperator{
 	parse.LogicalOperatorAnd: And,
 	parse.LogicalOperatorOr:  Or,
@@ -351,37 +356,80 @@ func (p *plannerVisitor) VisitExpressionColumn(node *parse.ExpressionColumn) any
 }
 
 func (p *plannerVisitor) VisitExpressionCollate(node *parse.ExpressionCollate) any {
-	panic("TODO: Implement")
+	c := &Collate{
+		Expr: node.Expression.Accept(p).(LogicalExpr),
+	}
+
+	switch strings.ToLower(node.Collation) {
+	case "nocase":
+		c.Collation = NoCaseCollation
+	default:
+		panic(fmt.Sprintf(`unknown collation "%s"`, node.Collation))
+	}
+
+	return c
 }
 
 func (p *plannerVisitor) VisitExpressionStringComparison(node *parse.ExpressionStringComparison) any {
-	panic("TODO: Implement")
+	var expr LogicalExpr = &ComparisonOp{
+		Left:  node.Left.Accept(p).(LogicalExpr),
+		Right: node.Right.Accept(p).(LogicalExpr),
+		Op:    get(stringComparisonOps, node.Operator),
+	}
+
+	if node.Not {
+		expr = &UnaryOp{
+			Expr: expr,
+			Op:   Not,
+		}
+	}
+
+	return expr
 }
 
 func (p *plannerVisitor) VisitExpressionIs(node *parse.ExpressionIs) any {
-	var op ComparisonOperator
-	switch {
-	case node.Not && node.Distinct:
-		op = IsNotDistinctFrom
-	case node.Not && !node.Distinct:
-		op = IsNot
-	case !node.Not && node.Distinct:
+	op := Is
+	if node.Distinct {
 		op = IsDistinctFrom
-	case !node.Not && !node.Distinct:
-		op = Is
-	default:
-		panic("internal bug: unexpected combination of NOT and DISTINCT")
 	}
 
-	return &ComparisonOp{
+	var plan LogicalExpr = &ComparisonOp{
 		Left:  node.Left.Accept(p).(LogicalExpr),
 		Right: node.Right.Accept(p).(LogicalExpr),
 		Op:    op,
 	}
+
+	if node.Not {
+		plan = &UnaryOp{
+			Expr: plan,
+			Op:   Not,
+		}
+	}
+
+	return plan
 }
 
 func (p *plannerVisitor) VisitExpressionIn(node *parse.ExpressionIn) any {
-	panic("TODO: Implement")
+	in := &IsIn{
+		Left: node.Expression.Accept(p).(LogicalExpr),
+	}
+
+	if node.Subquery != nil {
+		in.Subquery = node.Subquery.Accept(p).(*Subquery)
+	} else {
+		in.Expressions = p.exprs(node.List)
+	}
+
+	var expr LogicalExpr = in
+
+	if node.Not {
+		expr = &UnaryOp{
+			Expr: expr,
+			Op:   Not,
+		}
+	}
+
+	return expr
 }
 
 func (p *plannerVisitor) VisitExpressionBetween(node *parse.ExpressionBetween) any {
@@ -432,7 +480,24 @@ func (p *plannerVisitor) VisitExpressionSubquery(node *parse.ExpressionSubquery)
 }
 
 func (p *plannerVisitor) VisitExpressionCase(node *parse.ExpressionCase) any {
-	panic("TODO: Implement")
+	c := &Case{}
+
+	if node.Case != nil {
+		c.Value = node.Case.Accept(p).(LogicalExpr)
+	}
+
+	for _, when := range node.WhenThen {
+		c.WhenClauses = append(c.WhenClauses, [2]LogicalExpr{
+			when[0].Accept(p).(LogicalExpr),
+			when[1].Accept(p).(LogicalExpr),
+		})
+	}
+
+	if node.Else != nil {
+		c.Else = node.Else.Accept(p).(LogicalExpr)
+	}
+
+	return c
 }
 
 /*

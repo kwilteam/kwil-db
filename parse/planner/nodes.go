@@ -896,10 +896,10 @@ const (
 	GreaterThanOrEqual                           // sargable
 	// IS and IS NOT are rarely sargable because they can only be used
 	// with NULL values or BOOLEAN values
-	Is                // rarely sargable
-	IsNot             // rarely sargable
-	IsDistinctFrom    // not sargable
-	IsNotDistinctFrom // not sargable
+	Is             // rarely sargable
+	IsDistinctFrom // not sargable
+	Like           // not sargable
+	ILike          // not sargable
 )
 
 func (c ComparisonOperator) String() string {
@@ -917,13 +917,13 @@ func (c ComparisonOperator) String() string {
 	case GreaterThanOrEqual:
 		return ">="
 	case Is:
-		return " IS "
-	case IsNot:
-		return " IS NOT "
+		return "IS"
 	case IsDistinctFrom:
-		return " IS DISTINCT FROM "
-	case IsNotDistinctFrom:
-		return " IS NOT DISTINCT FROM "
+		return "IS DISTINCT FROM"
+	case Like:
+		return "LIKE"
+	case ILike:
+		return "ILIKE"
 	default:
 		panic(fmt.Sprintf("unknown comparison operator %d", c))
 	}
@@ -964,7 +964,7 @@ func (l *LogicalOp) String() string {
 		op = "OR"
 	}
 
-	return fmt.Sprintf("(%s %s %s)", l.Left.String(), op, l.Right.String())
+	return fmt.Sprintf("%s %s %s", l.Left.String(), op, l.Right.String())
 }
 
 func (l *LogicalOp) Children() []LogicalNode {
@@ -1193,6 +1193,164 @@ func (s SubqueryType) String() string {
 	default:
 		panic(fmt.Sprintf("unknown subquery type %d", s))
 	}
+}
+
+type Collate struct {
+	baseLogicalExpr
+	Expr      LogicalExpr
+	Collation CollationType
+}
+
+func (c *Collate) String() string {
+	return fmt.Sprintf("%s COLLATE %s", c.Expr.String(), c.Collation.String())
+}
+
+func (c *Collate) Children() []LogicalNode {
+	return []LogicalNode{c.Expr}
+}
+
+func (c *Collate) Plans() []LogicalPlan {
+	return c.Expr.Plans()
+}
+
+type CollationType uint8
+
+const (
+	// NoCaseCollation is a collation that is case-insensitive.
+	NoCaseCollation CollationType = iota
+)
+
+func (c CollationType) String() string {
+	switch c {
+	case NoCaseCollation:
+		return "nocase"
+	default:
+		panic(fmt.Sprintf("unknown collation type %d", c))
+	}
+}
+
+type IsIn struct {
+	baseLogicalExpr
+	// Left is the expression that is being compared.
+	Left LogicalExpr
+
+	// IsIn can have either a list of expressions or a subquery.
+	// Either Expressions or Subquery will be set, but not both.
+
+	Expressions []LogicalExpr
+	Subquery    *Subquery
+}
+
+func (i *IsIn) String() string {
+	str := strings.Builder{}
+	str.WriteString(i.Left.String())
+
+	str.WriteString(" IN (")
+	if i.Expressions != nil {
+		for j, expr := range i.Expressions {
+			if j > 0 {
+				str.WriteString(", ")
+			}
+			str.WriteString(expr.String())
+		}
+	} else {
+		str.WriteString(i.Subquery.String())
+	}
+	str.WriteString(")")
+
+	return str.String()
+}
+
+func (i *IsIn) Children() []LogicalNode {
+	var c []LogicalNode
+	c = append(c, i.Left)
+	if i.Expressions != nil {
+		for _, expr := range i.Expressions {
+			c = append(c, expr)
+		}
+	} else {
+		c = append(c, i.Subquery)
+	}
+	return c
+}
+
+func (i *IsIn) Plans() []LogicalPlan {
+	c := i.Left.Plans()
+	if i.Expressions != nil {
+		for _, expr := range i.Expressions {
+			c = append(c, expr.Plans()...)
+		}
+	} else {
+		c = append(c, i.Subquery.Plans()...)
+	}
+	return c
+}
+
+type Case struct {
+	baseLogicalExpr
+	// Value is the value that is being compared.
+	// Can be nil if there is no value to compare.
+	Value LogicalExpr
+	// WhenClauses are the list of when/then pairs.
+	// The first element of each pair is the condition,
+	// which must match the data type of Value. If Value
+	// is nil, the condition must be a boolean.
+	WhenClauses [][2]LogicalExpr
+	// Else is the else clause. Can be nil.
+	Else LogicalExpr
+}
+
+func (c *Case) String() string {
+	str := strings.Builder{}
+	str.WriteString("CASE")
+	if c.Value != nil {
+		str.WriteString(" [")
+		str.WriteString(c.Value.String())
+		str.WriteString("]")
+	}
+	for _, when := range c.WhenClauses {
+		str.WriteString(" WHEN [")
+		str.WriteString(when[0].String())
+		str.WriteString("] THEN [")
+		str.WriteString(when[1].String())
+		str.WriteString("]")
+	}
+	if c.Else != nil {
+		str.WriteString(" ELSE [")
+		str.WriteString(c.Else.String())
+		str.WriteString("]")
+	}
+	str.WriteString(" END")
+	return str.String()
+}
+
+func (c *Case) Children() []LogicalNode {
+	var ch []LogicalNode
+	if c.Value != nil {
+		ch = append(ch, c.Value)
+	}
+	for _, when := range c.WhenClauses {
+		ch = append(ch, when[0], when[1])
+	}
+	if c.Else != nil {
+		ch = append(ch, c.Else)
+	}
+	return ch
+}
+
+func (c *Case) Plans() []LogicalPlan {
+	var ch []LogicalPlan
+	if c.Value != nil {
+		ch = append(ch, c.Value.Plans()...)
+	}
+	for _, when := range c.WhenClauses {
+		ch = append(ch, when[0].Plans()...)
+		ch = append(ch, when[1].Plans()...)
+	}
+	if c.Else != nil {
+		ch = append(ch, c.Else.Plans()...)
+	}
+	return ch
 }
 
 // traverse traverses a logical plan in preorder.
