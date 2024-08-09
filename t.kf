@@ -1,0 +1,7 @@
+database a;
+
+procedure aa() public {
+    with a as (select id, name from users),
+				b as (select * from a)
+				select * from b;
+}

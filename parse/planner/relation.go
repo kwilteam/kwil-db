@@ -172,8 +172,20 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 
 		// TODO: we need to use aggregate.go to enforce aggregation rules
 
-		if _, err := s.manyAreScalar(n.GroupingExpressions, rel); err != nil {
-			return nil, err
+		// aggregate expressions return the grouping and aggregate expressions
+		var fields []*Field
+		for _, expr := range n.GroupingExpressions {
+			field, err := s.evalExpression(expr, rel)
+			if err != nil {
+				return nil, err
+			}
+
+			_, err = field.Scalar()
+			if err != nil {
+				return nil, err
+			}
+
+			fields = append(fields, field)
 		}
 
 		// need to do this manually because it is a concrete type
@@ -187,12 +199,11 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 			if err != nil {
 				return nil, err
 			}
+
+			fields = append(fields, field)
 		}
 
-		// TODO: this is incorrect, we actually should return the grouping expressions
-		// and the aggregate expressions
-
-		return rel, nil
+		return &Relation{Fields: fields}, nil
 	case *Distinct:
 		return s.evalRelation(n.Child)
 	case *SetOperation:
@@ -1178,7 +1189,6 @@ type ReferenceableColumn struct {
 // is a constant. If this is the last expression in a relation,
 // the "Name" field will be the name of the column in the result.
 type Field struct {
-	// TODO: idk if parent is needed
 	Parent string // the parent relation name
 	Name   string // the field name
 	// val is the value of the field.
@@ -1226,4 +1236,13 @@ func (f *Field) Object() (map[string]*types.DataType, error) {
 		panic(fmt.Sprintf("unexpected return type %T", f.val))
 	}
 	return obj, nil
+}
+
+func eq[T comparable](t1 *T, t2 any) bool {
+	t3, ok := t2.(*T)
+	if !ok {
+		return false
+	}
+
+	return *t1 == *t3
 }

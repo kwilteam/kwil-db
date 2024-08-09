@@ -730,7 +730,6 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 	var expandFuncs []expandFunc
 
 	// we analyze the returned columns to see if there are any aggregates
-	// we will revisit them later for the full analysis after GROUP BY
 	var aggs []*AggregateFunctionCall
 	for _, resultCol := range node.Columns {
 		switch resultCol := resultCol.(type) {
