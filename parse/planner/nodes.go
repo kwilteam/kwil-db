@@ -1625,6 +1625,11 @@ func (d *Delete) Plans() []LogicalPlan {
 
 // TODO: I dont love this insert. Everything else feels very relational, but this
 // feels like it is too much about the ast still.
+// The general complexity of both the AST visitor and the evaluation phase
+// makes me feel uneasy.
+// I really think it is the UPDATE conflict target that feels wrong to me, but
+// I am not sure what to do.
+// Will revisit tomorrow.
 
 // Insert is a node that plans an insert operation.
 type Insert struct {
@@ -1744,7 +1749,8 @@ type ConflictUpdate struct {
 	// Assignments are the expressions to update if there is a conflict.
 	// Cannot be nil.
 	Assignments []*Assignment
-	// ConflictFilter is the filter to use to determine if there is a conflict.
+	// ConflictFilter is a predicate that allows us to selectively
+	// update or raise an error if there is a conflict.
 	// Can be nil.
 	ConflictFilter LogicalExpr
 }
