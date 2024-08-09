@@ -415,7 +415,7 @@ func (p *plannerVisitor) VisitExpressionIn(node *parse.ExpressionIn) any {
 	}
 
 	if node.Subquery != nil {
-		in.Subquery = node.Subquery.Accept(p).(*Subquery)
+		in.Subquery = node.Subquery.Accept(p).(*SubqueryExpr)
 	} else {
 		in.Expressions = p.exprs(node.List)
 	}
@@ -455,28 +455,26 @@ func (p *plannerVisitor) VisitExpressionBetween(node *parse.ExpressionBetween) a
 }
 
 func (p *plannerVisitor) VisitExpressionSubquery(node *parse.ExpressionSubquery) any {
-	subqType := ScalarSubquery
-	if node.Exists {
-		subqType = ExistsSubquery
-		if node.Not {
-			subqType = NotExistsSubquery
+	var sub LogicalExpr = &SubqueryExpr{
+		Query: &Subquery{
+			Plan: &Subplan{
+				Plan: node.Subquery.Accept(p).(LogicalPlan),
+				ID:   strconv.Itoa(p.planCtx.SubqueryCount),
+				Type: SubplanTypeSubquery,
+			},
+		},
+		Exists: node.Exists,
+	}
+	p.planCtx.SubqueryCount++
+
+	if node.Exists && node.Not {
+		sub = &UnaryOp{
+			Expr: sub,
+			Op:   Not,
 		}
 	}
 
-	stmt := node.Subquery.Accept(p).(LogicalPlan)
-
-	v := cast(&Subquery{
-		SubqueryType: subqType,
-		Query: &Subplan{
-			Plan: stmt,
-			ID:   strconv.Itoa(p.planCtx.SubqueryCount),
-			Type: SubplanTypeSubquery,
-		},
-		ID: strconv.Itoa(p.planCtx.SubqueryCount),
-	}, node)
-
-	p.planCtx.SubqueryCount++
-	return v
+	return sub
 }
 
 func (p *plannerVisitor) VisitExpressionCase(node *parse.ExpressionCase) any {
@@ -842,10 +840,21 @@ func (p *plannerVisitor) VisitRelationSubquery(node *parse.RelationSubquery) any
 
 	subq := node.Subquery.Accept(p).(LogicalPlan)
 
-	return &Scan{
-		Source:       &SubqueryScanSource{Subquery: subq},
+	s := &Scan{
+		Source: &Subquery{
+			ReturnsRelation: true,
+			Plan: &Subplan{
+				Plan: subq,
+				ID:   strconv.Itoa(p.planCtx.SubqueryCount),
+				Type: SubplanTypeSubquery,
+			},
+			// Correlated will be set later
+		},
 		RelationName: node.Alias,
 	}
+
+	p.planCtx.SubqueryCount++
+	return s
 }
 
 func (p *plannerVisitor) VisitRelationFunctionCall(node *parse.RelationFunctionCall) any {
@@ -901,29 +910,404 @@ func (p *plannerVisitor) VisitRelationFunctionCall(node *parse.RelationFunctionC
 	}
 }
 
+// ALIAS: aliases can be used everywhere in update statements except in the SET clause
 func (p *plannerVisitor) VisitUpdateStatement(node *parse.UpdateStatement) any {
-	panic("TODO: Implement")
-}
+	plan, err := p.buildCartesian(node.Table, node.Alias, node.From, node.Joins, node.Where)
+	if err != nil {
+		panic(err)
+	}
 
-func (p *plannerVisitor) VisitUpdateSetClause(node *parse.UpdateSetClause) any {
-	panic("TODO: Implement")
+	assignments := make([]*Assignment, len(node.SetClause))
+	for i, set := range node.SetClause {
+		assignments[i] = &Assignment{
+			Column: set.Column,
+			Value:  set.Value.Accept(p).(LogicalExpr),
+		}
+	}
+
+	return &Update{
+		Child:       plan,
+		Assignments: assignments,
+		Table:       node.Table,
+	}
 }
 
 func (p *plannerVisitor) VisitDeleteStatement(node *parse.DeleteStatement) any {
-	panic("TODO: Implement")
+	plan, err := p.buildCartesian(node.Table, node.Alias, node.From, node.Joins, node.Where)
+	if err != nil {
+		panic(err)
+	}
+
+	return &Delete{
+		Child: plan,
+		Table: node.Table,
+	}
 }
 
+// buildCartesian builds a cartesian product for several relations. It is meant to be used
+// explicitly for update and delete, where we start by planning a cartesian join between the
+// target table and the FROM + JOIN tables, and later optimize the filter.
+func (p *plannerVisitor) buildCartesian(targetTable, alias string, from parse.Table, joins []*parse.Join, filter parse.Expression) (LogicalPlan, error) {
+	_, ok := p.schema.FindTable(targetTable)
+	if !ok {
+		return nil, fmt.Errorf(`unknown table "%s"`, targetTable)
+	}
+	if alias == "" {
+		alias = targetTable
+	}
+
+	var targetRel LogicalPlan = &Scan{
+		Source: &TableScanSource{
+			TableName: targetTable,
+			Type:      TableSourcePhysical,
+		},
+		RelationName: alias,
+	}
+
+	// if there is no FROM clause, we will simply return the target relation
+	if from == nil {
+		if filter != nil {
+			filterExpr := filter.Accept(p).(LogicalExpr)
+			return &Filter{
+				Condition: filterExpr,
+				Child:     targetRel,
+			}, nil
+		}
+
+		return targetRel, nil
+	}
+
+	// we will build the source rel, and then apply the cartesian join
+	var sourceRel LogicalPlan = from.Accept(p).(LogicalPlan)
+
+	for _, join := range joins {
+		sourceRel = &Join{
+			Left:      sourceRel,
+			Right:     join.Relation.Accept(p).(LogicalPlan),
+			Condition: join.On.Accept(p).(LogicalExpr),
+			JoinType:  get(joinTypes, join.Type),
+		}
+	}
+
+	// cartesian product with filter
+	targetRel = &CartesianProduct{
+		Left:  targetRel,
+		Right: sourceRel,
+	}
+
+	if filter == nil {
+		return nil, fmt.Errorf("a WHERE clause must be provided for update and delete statements that use FROM")
+	}
+
+	return &Filter{
+		Condition: filter.Accept(p).(LogicalExpr),
+		Child:     targetRel,
+	}, nil
+}
+
+// ALIAS: the alias can only be used in the "ON CONFLICT DO UPDATE SET ... WHERE [here]" clause
 func (p *plannerVisitor) VisitInsertStatement(node *parse.InsertStatement) any {
-	panic("TODO: Implement")
+	ins := &Insert{
+		Table: node.Table,
+		Alias: node.Alias,
+	}
+
+	tbl, found := p.schema.FindTable(node.Table)
+	if !found {
+		panic(fmt.Sprintf(`unknown table "%s"`, node.Table))
+	}
+
+	// orderAndFillNulls is a helper function that orders logical expressions
+	// according to their position in the table, and fills in nulls for any
+	// columns that were not specified in the insert. It starts as being empty,
+	// since it only needs logic if the user specifies columns.
+	orderAndFillNulls := func(exprs []LogicalExpr) []LogicalExpr {
+		return exprs
+	}
+
+	// if Columns are specified, then the second dimension of the Values
+	// must exactly match the number of columns. Otherwise, the second
+	// dimension of Values must exactly match the number of columns in the table.
+	var expectedColLen int
+	var expectedColTypes []*types.DataType // TODO: delete, we check this in eval
+	if len(node.Columns) > 0 {
+		expectedColLen = len(node.Columns)
+
+		// check if the columns are valid
+		var err error
+		expectedColTypes, err = checkNullableColumns(tbl, node.Columns)
+		if err != nil {
+			panic(err)
+		}
+
+		// we need to set the orderAndFillNulls function
+		// We will do this by creating a map of the position
+		// of a specified column's position to its column index in the table.
+
+		// first, we will create a map of the table's columns
+		tableColPos := make(map[string]int, len(tbl.Columns))
+		for i, col := range tbl.Columns {
+			tableColPos[col.Name] = i
+		}
+
+		colPos := make(map[int]int, len(node.Columns))
+		for i, col := range node.Columns {
+			colPos[i] = tableColPos[col]
+		}
+
+		orderAndFillNulls = func(exprs []LogicalExpr) []LogicalExpr {
+			newExprs := make([]LogicalExpr, len(tbl.Columns))
+
+			for i, expr := range exprs {
+				newExprs[colPos[i]] = expr
+			}
+
+			for i := range tbl.Columns {
+				if newExprs[i] != nil {
+					continue
+				}
+
+				newExprs[i] = &Literal{
+					Value: nil,
+					Type:  types.NullType.Copy(),
+				}
+			}
+
+			return newExprs
+		}
+
+	} else {
+		expectedColLen = len(tbl.Columns)
+
+		for _, col := range tbl.Columns {
+			expectedColTypes = append(expectedColTypes, col.Type.Copy())
+		}
+	}
+
+	for _, vals := range node.Values {
+		if len(vals) != expectedColLen {
+			panic(fmt.Sprintf("expected %d insert values, got %d", expectedColLen, len(vals)))
+		}
+
+		var row []LogicalExpr
+
+		for i, val := range vals {
+			individualVal := val.Accept(p).(LogicalExpr)
+
+			// get the expected type
+			field, err := newEvalCtx(p.planCtx).evalExpression(individualVal, &Relation{})
+			if err != nil {
+				panic(err)
+			}
+
+			scalar, err := field.Scalar()
+			if err != nil {
+				panic(err)
+			}
+
+			if !expectedColTypes[i].Equals(scalar) {
+				panic(fmt.Sprintf("expected type %s for insert position %d, got %s", expectedColTypes[i], i+1, scalar))
+			}
+
+			row = append(row, individualVal)
+		}
+
+		ins.Values = append(ins.Values, orderAndFillNulls(row))
+	}
+
+	// finally, we need to check if there is an ON CONFLICT clause,
+	// and if so, we need to process it.
+	if node.Upsert != nil {
+		conflict, err := p.buildUpsert(node.Upsert, tbl)
+		if err != nil {
+			panic(err)
+		}
+
+		ins.ConflictResolution = conflict
+	}
+
+	return ins
+}
+
+func (p *plannerVisitor) buildUpsert(node *parse.UpsertClause, table *types.Table) (ConflictResolution, error) {
+	// all DO UPDATE upserts need to have an arbiter index.
+	// DO NOTHING can optionally have one, but it is not required.
+	var arbiterIndex Index
+	switch len(node.ConflictColumns) {
+	// must be a unique index or pk that exactly matches the columns
+	case 0:
+		// do nothing
+	case 1:
+		// check the column for a unique or pk contraint, as well as all indexes
+		col, ok := table.FindColumn(node.ConflictColumns[0])
+		if !ok {
+			return nil, fmt.Errorf(`conflict column "%s" not found in table`, node.ConflictColumns[0])
+		}
+
+		if col.HasAttribute(types.PRIMARY_KEY) {
+			arbiterIndex = &IndexColumnConstraint{
+				Table:          table.Name,
+				Column:         col.Name,
+				ConstraintType: PrimaryKeyConstraintIndex,
+			}
+		} else if col.HasAttribute(types.UNIQUE) {
+			arbiterIndex = &IndexColumnConstraint{
+				Table:          table.Name,
+				Column:         col.Name,
+				ConstraintType: UniqueConstraintIndex,
+			}
+		} else {
+			// check all indexes for unique indexes that match the column
+			for _, idx := range table.Indexes {
+				if (idx.Type == types.UNIQUE_BTREE || idx.Type == types.PRIMARY) && len(idx.Columns) == 1 && idx.Columns[0] == col.Name {
+					arbiterIndex = &IndexNamed{
+						Name: idx.Name,
+					}
+				}
+			}
+		}
+
+		if arbiterIndex == nil {
+			return nil, fmt.Errorf(`conflict column "%s" must be have a unique index or primary key`, node.ConflictColumns[0])
+		}
+	default:
+		// check all indexes for a unique or pk index that matches the columns
+		for _, idx := range table.Indexes {
+			if idx.Type != types.UNIQUE_BTREE && idx.Type != types.PRIMARY {
+				continue
+			}
+
+			if len(idx.Columns) != len(node.ConflictColumns) {
+				continue
+			}
+
+			inIdxCols := make(map[string]struct{}, len(idx.Columns))
+			for _, col := range idx.Columns {
+				inIdxCols[col] = struct{}{}
+			}
+
+			hasAllCols := true
+			for _, col := range node.ConflictColumns {
+				_, ok := inIdxCols[col]
+				if !ok {
+					hasAllCols = false
+					break
+				}
+			}
+
+			if hasAllCols {
+				arbiterIndex = &IndexNamed{
+					Name: idx.Name,
+				}
+				break
+			}
+		}
+
+		if arbiterIndex == nil {
+			return nil, fmt.Errorf(`conflict columns must have a unique index or primary key`)
+		}
+	}
+
+	if len(node.DoUpdate) == 0 {
+		return &ConflictDoNothing{
+			ArbiterIndex: arbiterIndex,
+		}, nil
+	}
+	if node.ConflictWhere != nil {
+		// This would be "ON CONFLICT(id) [WHERE ...] DO UPDATE SET ..."
+		// This is the `index_predicate`, specified here:
+		// https://www.postgresql.org/docs/current/sql-insert.html
+		// IDK why our syntax supports this, there is literally not a way
+		// somebody could make use of this within Kwil right now.
+		panic("engine does not yet support index predicates on upsert. Try using a WHERE constraint after the SET clause.")
+	}
+	if arbiterIndex == nil {
+		return nil, fmt.Errorf("conflict column must be specified for DO UPDATE")
+	}
+
+	res := &ConflictUpdate{
+		ArbiterIndex: arbiterIndex,
+	}
+
+	for _, set := range node.DoUpdate {
+		res.Assignments = append(res.Assignments, &Assignment{
+			Column: set.Column,
+			Value:  set.Value.Accept(p).(LogicalExpr),
+		})
+	}
+
+	if node.UpdateWhere != nil {
+		res.ConflictFilter = node.UpdateWhere.Accept(p).(LogicalExpr)
+	}
+
+	return res, nil
+}
+
+// checkNullableColumns takes a table and a set of columns, and checks if
+// any column in the table not in the set is nullable. If so, it returns
+// an error. It also checks if all columns in the set are in the table.
+// If not, it returns an error. If all checks pass, it returns a slice
+// of data types that the insert order must match.
+func checkNullableColumns(tbl *types.Table, cols []string) ([]*types.DataType, error) {
+	specifiedColSet := make(map[string]struct{}, len(cols))
+	for _, col := range cols {
+		specifiedColSet[col] = struct{}{}
+	}
+
+	pks, err := tbl.GetPrimaryKey()
+	if err != nil {
+		return nil, err
+	}
+	pkSet := make(map[string]struct{}, len(pks))
+	for _, pk := range pks {
+		pkSet[pk] = struct{}{}
+	}
+
+	// we will build a set of columns to decrease the time complexity
+	// for checking if a column is in the set.
+	tblColSet := make(map[string]*types.DataType, len(tbl.Columns))
+	for _, col := range tbl.Columns {
+		tblColSet[col.Name] = col.Type.Copy()
+
+		_, ok := specifiedColSet[col.Name]
+		if ok {
+			continue
+		}
+
+		// the column is not in the set, so we need to check if it is nullable
+		if col.HasAttribute(types.NOT_NULL) || col.HasAttribute(types.PRIMARY_KEY) {
+			return nil, fmt.Errorf(`column "%s" cannot be null, and was not specified as an insert column`, col.Name)
+		}
+
+		// it is also possible that a primary index contains the column
+		_, ok = pkSet[col.Name]
+		if !ok {
+			return nil, fmt.Errorf(`column "%s" cannot be null, and was not specified as an insert column`, col.Name)
+		}
+		// otherwise, we are good
+	}
+
+	dataTypeArr := make([]*types.DataType, len(cols))
+	// now we need to check if all columns in the set are in the table
+	for _, col := range cols {
+		colType, ok := tblColSet[col]
+		if !ok {
+			return nil, fmt.Errorf(`column "%s" not found in table`, col)
+		}
+
+		dataTypeArr = append(dataTypeArr, colType)
+	}
+
+	return dataTypeArr, nil
 }
 
 func (p *plannerVisitor) VisitUpsertClause(node *parse.UpsertClause) any {
-	panic("TODO: Implement")
+	panic("internal bug: do not use this directly. Use the buildUpsert method.")
 }
 
 /*
 	to make sure that we do not have any unimplemented visitor methods (which would cause unexpected bugs),
-	below we include all used ones, and panic if they are called.
+	below we include them, and panic if they are called.
 */
 
 func (p *plannerVisitor) VisitResultColumnExpression(node *parse.ResultColumnExpression) any {
@@ -941,4 +1325,8 @@ func (p *plannerVisitor) VisitOrderingTerm(node *parse.OrderingTerm) any {
 func (p *plannerVisitor) VisitJoin(node *parse.Join) any {
 	// for safety, since it is easier to iterate over the joins in the select core
 	panic("internal bug: VisitJoin should not be called directly while building relational algebra")
+}
+
+func (p *plannerVisitor) VisitUpdateSetClause(node *parse.UpdateSetClause) any {
+	panic("internal bug: VisitUpdateSetClause should not be called directly while building relational algebra")
 }

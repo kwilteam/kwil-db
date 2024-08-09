@@ -53,9 +53,26 @@ func Test_Planner(t *testing.T) {
 			wt: "Projection: u.name\n" +
 				"└─Join [inner]: u.id = p.owner_id\n" +
 				"  ├─Scan Table [alias=\"u\"]: users [physical]\n" +
-				"  └─Scan Subquery [alias=\"p\"]:\n" +
-				"    └─Projection: posts.owner_id\n" +
-				"      └─Scan Table: posts [physical]\n",
+				"  └─Scan Subquery [alias=\"p\"]: [subplan_id=0] (uncorrelated)\n" +
+				"Subplan [subquery] [id=0]\n" +
+				"└─Projection: posts.owner_id\n" +
+				"  └─Scan Table: posts [physical]\n",
+		},
+		{
+			name: "correlated joined subquery",
+			sql:  "select name from users u where id = (select owner_id from posts inner join (select age from users where id = u.id) as u2 on u2.age=length(posts.content))",
+			wt: "Projection: u.name\n" +
+				"└─Filter: u.id = [subquery (scalar) (subplan_id=1) (correlated: u.id)]\n" +
+				"  └─Scan Table [alias=\"u\"]: users [physical]\n" +
+				"Subplan [subquery] [id=1]\n" +
+				"└─Projection: posts.owner_id\n" +
+				"  └─Join [inner]: u2.age = length(posts.content)\n" +
+				"    ├─Scan Table: posts [physical]\n" +
+				"    └─Scan Subquery [alias=\"u2\"]: [subplan_id=0] (correlated: u.id)\n" +
+				"Subplan [subquery] [id=0]\n" +
+				"└─Projection: users.age\n" +
+				"  └─Filter: users.id = u.id\n" +
+				"    └─Scan Table: users [physical]\n",
 		},
 		{
 			name: "scalar subquery in where clause",
@@ -160,10 +177,11 @@ func Test_Planner(t *testing.T) {
 				"    │ │ │ └─Scan Table [alias=\"p\"]: posts [physical]\n" +
 				"    │ │ └─Scan Procedure [alias=\"c\"]: [foreign=true] [dbid='dbid'] [proc='proc'] owned_cars($id)\n" +
 				"    │ └─Scan Procedure [alias=\"pu\"]: [foreign=false] posts_by_user($name)\n" +
-				"    └─Scan Subquery [alias=\"u2\"]:\n" +
-				"      └─Projection: users.id\n" +
-				"        └─Filter: users.age > 18\n" +
-				"          └─Scan Table: users [physical]\n",
+				"    └─Scan Subquery [alias=\"u2\"]: [subplan_id=0] (uncorrelated)\n" +
+				"Subplan [subquery] [id=0]\n" +
+				"└─Projection: users.id\n" +
+				"  └─Filter: users.age > 18\n" +
+				"    └─Scan Table: users [physical]\n",
 		},
 		{
 			name: "common table expressions",
@@ -264,7 +282,7 @@ func Test_Planner(t *testing.T) {
 		},
 		{
 			name: "like and ilike",
-			// planner rewrite NOT LIKE/ILIKE to unary NOT(LIKE/ILIKE) for simplicity
+			// planner rewrites NOT LIKE/ILIKE to unary NOT(LIKE/ILIKE) for simplicity
 			sql: "select name from users where name like 's%' or name not ilike 'w_Nd%'",
 			wt: "Projection: users.name\n" +
 				"└─Filter: users.name LIKE 's%' OR NOT users.name ILIKE 'w_Nd%'\n" +
@@ -284,6 +302,37 @@ func Test_Planner(t *testing.T) {
 				"└─Filter: CASE WHEN [users.age = 20] THEN [true] ELSE [false] END\n" +
 				"  └─Scan Table: users [physical]\n",
 		},
+		// TODO: im gonna sleep on INSERT and come back to it
+		{
+			name: "basic update",
+			sql:  "update users set name = 'satoshi' where age = 1",
+			wt: "Update [users]: name = 'satoshi'\n" +
+				"└─Filter: users.age = 1\n" +
+				"  └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "update from with join",
+			sql:  "update users set name = pu.content from posts p inner join posts_by_user('satoshi') pu on p.content = pu.content where p.owner_id = users.id",
+			// will be unoptimized, so it will use a cartesian product
+			// optimization could re-write the filter to a join, as well as
+			// add projections.
+			wt: "Update [users]: name = pu.content\n" +
+				"└─Filter: p.owner_id = users.id\n" +
+				"  └─Cartesian Product\n" +
+				"    ├─Scan Table: users [physical]\n" +
+				"    └─Join [inner]: p.content = pu.content\n" +
+				"      ├─Scan Table [alias=\"p\"]: posts [physical]\n" +
+				"      └─Scan Procedure [alias=\"pu\"]: [foreign=false] posts_by_user('satoshi')\n",
+		},
+		{
+			name: "basic delete",
+			sql:  "delete from users where age = 1",
+			wt: "Delete [users]\n" +
+				"└─Filter: users.age = 1\n" +
+				"  └─Scan Table: users [physical]\n",
+		},
+		// TODO: we don't actually support DELETE with joins, however we can now.
+		// once we do, we should add tests for it
 	}
 
 	for _, test := range tests {

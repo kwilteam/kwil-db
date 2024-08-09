@@ -149,30 +149,40 @@ func (f *ProcedureScanSource) Plans() []LogicalPlan {
 	return plans
 }
 
-// SubqueryScanSource represents a scan of a subquery.
-// This is used, for example, in the query "SELECT * FROM (SELECT * FROM users) AS subquery".
-type SubqueryScanSource struct {
-	Subquery LogicalPlan
+// Subquery holds information for a subquery.
+// It is a TableSource that can be used in a Scan, but
+// also can be used within expressions. If ReturnsRelation
+// is true, it is a TableSource. If false, it is a scalar
+// subquery (used in expressions).
+type Subquery struct {
+	// ReturnsRelation is true if the subquery returns an entire relation.
+	// If false, the subquery returns a single value.
+	ReturnsRelation bool
+	// Plan is the logical plan for the subquery.
+	Plan *Subplan
+
+	// Everything below this is set during evaluation.
+
+	// Correlated is the list of columns that are correlated
+	// to the outer query. If empty, the subquery is uncorrelated.
+	Correlated []*ColumnRef
 }
 
-func (s *SubqueryScanSource) Children() []LogicalNode {
-	return []LogicalNode{s.Subquery}
+func (s *Subquery) Children() []LogicalNode {
+	return []LogicalNode{s.Plan}
 }
 
-func (s *SubqueryScanSource) FormatScan() string {
+func (s *Subquery) FormatScan() string {
 	return ""
 }
 
-func (s *SubqueryScanSource) Plans() []LogicalPlan {
-	return []LogicalPlan{s.Subquery}
+func (s *Subquery) Plans() []LogicalPlan {
+	return []LogicalPlan{s.Plan}
 }
 
 type LogicalNode interface {
 	fmt.Stringer
 	Traversable
-	// Subplan returns the children of the node that are
-	// logical plans.
-	Plans() []LogicalPlan
 }
 
 type LogicalPlan interface {
@@ -230,8 +240,21 @@ func (s *Scan) String() string {
 		return fmt.Sprintf(`Scan Table%s %s`, end, s.Source.FormatScan())
 	case *ProcedureScanSource:
 		return fmt.Sprintf(`Scan Procedure%s %s`, end, s.Source.FormatScan())
-	case *SubqueryScanSource:
-		return fmt.Sprintf(`Scan Subquery%s`, end)
+	case *Subquery:
+		str := fmt.Sprintf(`Scan Subquery%s [subplan_id=%s]`, end, t.Plan.ID)
+		if len(t.Correlated) > 0 {
+			str += " (correlated: "
+			for i, col := range t.Correlated {
+				if i > 0 {
+					str += ", "
+				}
+				str += col.String()
+			}
+			str += ")"
+		} else {
+			str += " (uncorrelated)"
+		}
+		return str
 	default:
 		panic(fmt.Sprintf("unknown scan source type %T", s.Source))
 	}
@@ -1120,34 +1143,37 @@ func (f *FieldAccess) Plans() []LogicalPlan {
 	return f.Object.Plans()
 }
 
-type Subquery struct {
+type SubqueryExpr struct {
 	baseLogicalExpr
-	SubqueryType SubqueryType
-	Query        *Subplan
-	// ID is the number of the subquery in the query.
-	ID string
-	// Correlated is the list of columns that are correlated
-	// to the outer query. If empty, the subquery is uncorrelated.
-	Correlated []*ColumnRef
+	Query *Subquery
+	// If Exists is true, we are checking if the subquery returns any rows.
+	// Otherwise, the subquery will return a single value.
+	// If the query is a NOT EXISTS, a unary negation will wrap this expression.
+	Exists bool
 }
 
-var _ LogicalExpr = (*Subquery)(nil)
+var _ LogicalExpr = (*SubqueryExpr)(nil)
 
-func (s *Subquery) String() string {
+func (s *SubqueryExpr) String() string {
 	str := strings.Builder{}
 	str.WriteString("[subquery (")
 
-	str.WriteString(s.SubqueryType.String())
+	if s.Exists {
+		str.WriteString("exists")
+	} else {
+		str.WriteString("scalar")
+	}
+
 	str.WriteString(") (subplan_id=")
-	str.WriteString(s.ID)
+	str.WriteString(s.Query.Plan.ID)
 	str.WriteString(") ")
 
-	if len(s.Correlated) == 0 {
+	if len(s.Query.Correlated) == 0 {
 		str.WriteString("(uncorrelated)")
 	} else {
 		str.WriteString("(correlated: ")
 
-		for i, field := range s.Correlated {
+		for i, field := range s.Query.Correlated {
 			if i > 0 {
 				str.WriteString(", ")
 			}
@@ -1166,33 +1192,12 @@ func (s *Subquery) String() string {
 	return str.String()
 }
 
-func (s *Subquery) Children() []LogicalNode {
-	return []LogicalNode{s.Query}
+func (s *SubqueryExpr) Children() []LogicalNode {
+	return []LogicalNode{s.Query.Plan}
 }
 
-func (s *Subquery) Plans() []LogicalPlan {
-	return []LogicalPlan{s.Query}
-}
-
-type SubqueryType uint8
-
-const (
-	ScalarSubquery SubqueryType = iota
-	ExistsSubquery
-	NotExistsSubquery
-)
-
-func (s SubqueryType) String() string {
-	switch s {
-	case ScalarSubquery:
-		return "scalar"
-	case ExistsSubquery:
-		return "exists"
-	case NotExistsSubquery:
-		return "not exists"
-	default:
-		panic(fmt.Sprintf("unknown subquery type %d", s))
-	}
+func (s *SubqueryExpr) Plans() []LogicalPlan {
+	return s.Query.Plans()
 }
 
 type Collate struct {
@@ -1238,7 +1243,7 @@ type IsIn struct {
 	// Either Expressions or Subquery will be set, but not both.
 
 	Expressions []LogicalExpr
-	Subquery    *Subquery
+	Subquery    *SubqueryExpr
 }
 
 func (i *IsIn) String() string {
@@ -1427,3 +1432,356 @@ func innerFormat(plan LogicalNode, count int, printLong []bool) (string, []*Subp
 	}
 	return msg.String(), topLevel
 }
+
+/*
+	###########################
+	#                         #
+	#      Modifications      #
+	#                         #
+	###########################
+*/
+
+type Modification interface {
+	LogicalPlan
+	modification()
+}
+
+type baseModification struct {
+	baseLogicalPlan
+}
+
+func (b *baseModification) modification() {}
+
+// Assignment is a struct that represents an assignment in an update statement.
+type Assignment struct {
+	// Column is the column to update.
+	Column string
+	// Value is the value to update the column to.
+	Value LogicalExpr
+}
+
+/*
+	For modifying relations, we will use the following process:
+	1. Materialize the source relation (exactly same as any SELECT).
+	This is all relations specified in FROM and JOIN in UPDATE and DELETE.
+	2. Produce a cartesian product of the target relation and the source relation.
+	We will use the ModifiableProduct node to represent this, since we want to keep
+	this logically separate from joins so that we can know which side of the join
+	can be modified.
+	3. Apply the filter to the cartesian product / ModifiableProduct.
+*/
+
+// // ModifiableProduct is a logical plan node that represents a cartesian product
+// // between a table that can be modified and a source relation which can be
+// // referenced for modification. This is used in updates and deletes to determine
+// // which rows to modify. Prior to optimization, this will always have a filter
+// // on top of the ModifiableProduct.
+// //
+// // Once we have a query optimizer, we can push down this filter to create a join
+// // condition between the target and source relations (so that we don't have to
+// // perform a cartesian product). If the optimizer cannot push down the filter, it
+// // will throw an error, since we do not want to perform a cartesian product.
+// type ModifiableProduct struct {
+// 	baseModification
+// 	baseLogicalPlan // so that we can use this in the optimizer
+// 	// Target is the relation that is being modified.
+// 	// It will always be scanning a physical table.
+// 	Target *Scan
+// 	// Source is the relation that is being used to modify the target.
+// 	// It can be nil.
+// 	Source LogicalPlan
+// 	// JoinCondition is the join condition to use to join the target and source.
+// 	// Prior to optimization, this is nil. It will always be an inner join.
+// 	JoinCondition LogicalExpr
+// }
+
+// func (m *ModifiableProduct) String() string {
+// 	str := strings.Builder{}
+// 	str.WriteString("ModifiableProduct [")
+// 	str.WriteString(m.Target.RelationName)
+// 	str.WriteString("]: ")
+
+// 	if m.Source == nil {
+// 		// we will probably error out in the optimizer before
+// 		// hit this, but I have it here for testing purposes.
+// 		str.WriteString("[cartesian product]")
+// 	} else {
+// 		str.WriteString(m.JoinCondition.String())
+// 	}
+
+// 	return str.String()
+// }
+
+// func (m *ModifiableProduct) Children() []LogicalNode {
+// 	var c []LogicalNode
+// 	c = append(c, m.Target)
+// 	if m.Source != nil {
+// 		c = append(c, m.Source)
+// 	}
+// 	return c
+// }
+
+// func (m *ModifiableProduct) Plans() []LogicalPlan {
+// 	return append([]LogicalPlan{m.Target}, m.Source)
+// }
+
+/*
+	I don't think this is right. It seems like we could just have a cartesian product
+	node and then optimize it to a join. Since our whole goal here is to detect selectivity,
+	we should just detect the selectivity of the join (optimized from the product).
+*/
+
+// CartesianProduct is a logical plan node that represents a cartesian product
+// between two relations. This is used in joins and set operations.
+// Kwil doesn't actually allow cartesian products to be executed, but it is a necessary
+// intermediate step for planning complex updates and deletes.
+type CartesianProduct struct {
+	baseLogicalPlan
+	Left  LogicalPlan
+	Right LogicalPlan
+}
+
+func (c *CartesianProduct) String() string {
+	return "Cartesian Product"
+}
+
+func (c *CartesianProduct) Children() []LogicalNode {
+	return []LogicalNode{c.Left, c.Right}
+}
+
+func (c *CartesianProduct) Plans() []LogicalPlan {
+	return []LogicalPlan{c.Left, c.Right}
+}
+
+// Update is a node that plans an update operation.
+type Update struct {
+	baseModification
+	// Child is the input to the update.
+	Child LogicalPlan
+	// Table is the target table name.
+	// It will always be the table name and not an alias.
+	Table string
+	// Assignments are the assignments to update.
+	Assignments []*Assignment
+}
+
+func (u *Update) String() string {
+	str := strings.Builder{}
+	str.WriteString("Update [")
+	str.WriteString(u.Table)
+	str.WriteString("]: ")
+
+	for i, assign := range u.Assignments {
+		if i > 0 {
+			str.WriteString("; ")
+		}
+		str.WriteString(assign.Column)
+		str.WriteString(" = ")
+		str.WriteString(assign.Value.String())
+	}
+
+	return str.String()
+}
+
+func (u *Update) Children() []LogicalNode {
+	var c []LogicalNode
+	for _, assign := range u.Assignments {
+		c = append(c, assign.Value)
+	}
+	c = append(c, u.Child)
+	return c
+}
+
+func (u *Update) Plans() []LogicalPlan {
+	var c []LogicalPlan
+	for _, assign := range u.Assignments {
+		c = append(c, assign.Value.Plans()...)
+	}
+	c = append(c, u.Child)
+	return c
+}
+
+// Delete is a node that plans a delete operation.
+type Delete struct {
+	baseModification
+	// Child is the input to the delete.
+	Child LogicalPlan
+	// Table is the target table name.
+	// It will always be the table name and not an alias.
+	Table string
+}
+
+func (d *Delete) String() string {
+	return fmt.Sprintf("Delete [%s]", d.Table)
+}
+
+func (d *Delete) Children() []LogicalNode {
+	return []LogicalNode{d.Child}
+}
+
+func (d *Delete) Plans() []LogicalPlan {
+	return []LogicalPlan{d.Child}
+}
+
+// TODO: I dont love this insert. Everything else feels very relational, but this
+// feels like it is too much about the ast still.
+
+// Insert is a node that plans an insert operation.
+type Insert struct {
+	baseModification
+	// Table is the physical table to insert into.
+	Table string
+	// Alias is the alias of the table.
+	// It can only be referenced in the conflict resolution.
+	// It can be empty.
+	Alias string
+	// Values are the values to insert.
+	// The length of each second dimensional slice in Values must be equal to the length of Columns.
+	// If the user does not specify a column, it will be set to null literal.
+	Values [][]LogicalExpr
+	// ConflictResolution is the conflict resolution to use if there is a conflict.
+	ConflictResolution ConflictResolution
+}
+
+func (i *Insert) String() string {
+	str := strings.Builder{}
+	str.WriteString("Insert [")
+	str.WriteString(i.Table)
+	str.WriteString("]")
+	if i.Alias != "" {
+		str.WriteString(" [alias=")
+		str.WriteString(i.Alias)
+		str.WriteString("]")
+	}
+	str.WriteString(": ")
+
+	for i, val := range i.Values {
+		if i > 0 {
+			str.WriteString("; ")
+		}
+		str.WriteString("(")
+		for j, v := range val {
+			if j > 0 {
+				str.WriteString(", ")
+			}
+			str.WriteString(v.String())
+		}
+		str.WriteString(")")
+	}
+
+	return str.String()
+}
+
+func (i *Insert) Children() []LogicalNode {
+	var c []LogicalNode
+	for _, val := range i.Values {
+		for _, v := range val {
+			c = append(c, v)
+		}
+	}
+
+	if i.ConflictResolution != nil {
+		if con, ok := i.ConflictResolution.(*ConflictUpdate); ok {
+			if con.ConflictFilter != nil {
+				c = append(c, con.ConflictFilter)
+			}
+
+			for _, assign := range con.Assignments {
+				c = append(c, assign.Value)
+			}
+		}
+	}
+
+	return c
+}
+
+func (i *Insert) Plans() []LogicalPlan {
+	var c []LogicalPlan
+	for _, val := range i.Values {
+		for _, v := range val {
+			c = append(c, v.Plans()...)
+		}
+	}
+
+	if i.ConflictResolution != nil {
+		if con, ok := i.ConflictResolution.(*ConflictUpdate); ok {
+			if con.ConflictFilter != nil {
+				c = append(c, con.ConflictFilter.Plans()...)
+			}
+
+			for _, assign := range con.Assignments {
+				c = append(c, assign.Value.Plans()...)
+			}
+		}
+	}
+
+	return c
+}
+
+type ConflictResolution interface {
+	conflictResolution()
+}
+
+// ConflictDoNothing is a struct that represents the resolution of a conflict
+// using DO NOTHING.
+type ConflictDoNothing struct {
+	// ArbiterIndex is the index to use to determine if there is a conflict.
+	// If/when Kwil supports partial indexes, we will turn this into a list
+	// of indexes. Can be nil when DO NOTHING is used.
+	ArbiterIndex Index
+}
+
+func (c *ConflictDoNothing) conflictResolution() {}
+
+// ConflictUpdate is a struct that represents the resolution of a conflict
+// using DO UPDATE SET.
+type ConflictUpdate struct {
+	// ArbiterIndex is the index to use to determine if there is a conflict.
+	// If/when Kwil supports partial indexes, we will turn this into a list
+	// of indexes. See: https://github.com/cockroachdb/cockroach/issues/53170
+	// Cannot be nil when DO UPDATE is used.
+	ArbiterIndex Index
+	// Assignments are the expressions to update if there is a conflict.
+	// Cannot be nil.
+	Assignments []*Assignment
+	// ConflictFilter is the filter to use to determine if there is a conflict.
+	// Can be nil.
+	ConflictFilter LogicalExpr
+}
+
+func (c *ConflictUpdate) conflictResolution() {}
+
+// Index is an interface that represents an index.
+// Since Kwil's internal catalog does not individually name
+// all indexes (e.g. UNIQUE and PRIMARY column constraints),
+// we use this interface to represent an index.
+type Index interface {
+	index()
+}
+
+type IndexColumnConstraint struct {
+	// Table is the physical table that the index is on.
+	Table string
+	// Column is the column that the constraint is on.
+	Column string
+	// ConstraintType is the type of constraint that the index is.
+	ConstraintType IndexConstraintType
+}
+
+func (i *IndexColumnConstraint) index() {}
+
+type IndexConstraintType uint8
+
+const (
+	UniqueConstraintIndex IndexConstraintType = iota
+	PrimaryKeyConstraintIndex
+)
+
+// IndexNamed is any index that is specified explicitly
+// and has a referenceable name.
+type IndexNamed struct {
+	// Name is the name of the index.
+	Name string
+}
+
+func (i *IndexNamed) index() {}
