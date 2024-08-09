@@ -297,9 +297,9 @@ func Test_Planner(t *testing.T) {
 		},
 		{
 			name: "unary and alias",
-			sql:  "select -age as neg_age, age from users",
-			wt: "Return: neg_age, age\n" +
-				"└─Projection: -users.age AS neg_age; users.age\n" +
+			sql:  "select age as pos_age, -age from users",
+			wt: "Return: pos_age, ?column?\n" +
+				"└─Projection: users.age AS pos_age; -users.age\n" +
 				"  └─Scan Table: users [physical]\n",
 		},
 		{
@@ -408,6 +408,16 @@ func Test_Planner(t *testing.T) {
 				}
 				// TODO: end delete here
 
+				require.Equal(t, test.wt, plan.Format())
+
+				// check that Relation() works
+				plan.Plan.Relation()
+
+				for _, cte := range plan.CTEs {
+					cte.Relation()
+				}
+
+				// make sure nothing changed
 				require.Equal(t, test.wt, plan.Format())
 			}
 		})

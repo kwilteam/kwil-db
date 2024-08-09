@@ -43,12 +43,17 @@ type Traversable interface {
 type ScanSource interface {
 	Traversable
 	FormatScan() string
+	Relation() *Relation
 }
 
 // TableScanSource represents a scan of a physical table or a CTE.
 type TableScanSource struct {
 	TableName string
 	Type      TableSourceType
+
+	// rel is the relation that the table scan source represents.
+	// It is set during the evaluation phase.
+	rel *Relation
 }
 
 func (t *TableScanSource) Children() []LogicalNode {
@@ -61,6 +66,12 @@ func (t *TableScanSource) FormatScan() string {
 
 func (t *TableScanSource) Plans() []LogicalPlan {
 	return nil
+}
+
+func (t *TableScanSource) Relation() *Relation {
+	// we will copy it since this is meant to be re-useable,
+	// but some callers may modify it
+	return t.rel.Copy()
 }
 
 type TableSourceType int
@@ -95,6 +106,9 @@ type ProcedureScanSource struct {
 	ContextualArgs []LogicalExpr
 	// IsForeign is true if the function is a foreign procedure.
 	IsForeign bool
+	// rel is the relation that the procedure scan source represents.
+	// It is set during the evaluation phase.
+	rel *Relation
 }
 
 func (f *ProcedureScanSource) Children() []LogicalNode {
@@ -149,6 +163,10 @@ func (f *ProcedureScanSource) Plans() []LogicalPlan {
 	return plans
 }
 
+func (f *ProcedureScanSource) Relation() *Relation {
+	return f.rel.Copy()
+}
+
 // Subquery holds information for a subquery.
 // It is a TableSource that can be used in a Scan, but
 // also can be used within expressions. If ReturnsRelation
@@ -180,6 +198,10 @@ func (s *Subquery) Plans() []LogicalPlan {
 	return []LogicalPlan{s.Plan}
 }
 
+func (s *Subquery) Relation() *Relation {
+	return s.Plan.Relation()
+}
+
 type LogicalNode interface {
 	fmt.Stringer
 	Traversable
@@ -187,6 +209,7 @@ type LogicalNode interface {
 
 type LogicalPlan interface {
 	LogicalNode
+	Relation() *Relation
 	plan()
 }
 
@@ -208,6 +231,10 @@ func (n *EmptyScan) Plans() []LogicalPlan {
 
 func (n *EmptyScan) String() string {
 	return "Empty Scan"
+}
+
+func (n *EmptyScan) Relation() *Relation {
+	return &Relation{}
 }
 
 type Scan struct {
@@ -260,6 +287,16 @@ func (s *Scan) String() string {
 	}
 }
 
+func (s *Scan) Relation() *Relation {
+	rel := s.Source.Relation()
+
+	for _, col := range rel.Fields {
+		col.Parent = s.RelationName
+	}
+
+	return rel
+}
+
 type Project struct {
 	baseLogicalPlan
 
@@ -309,6 +346,16 @@ func (p *Project) String() string {
 	return str.String()
 }
 
+func (p *Project) Relation() *Relation {
+	var fields []*Field
+
+	for _, expr := range p.Expressions {
+		fields = append(fields, expr.Field())
+	}
+
+	return &Relation{Fields: fields}
+}
+
 type Filter struct {
 	baseLogicalPlan
 	Condition LogicalExpr
@@ -325,6 +372,10 @@ func (f *Filter) String() string {
 
 func (f *Filter) Plans() []LogicalPlan {
 	return append([]LogicalPlan{f.Child}, f.Condition.Plans()...)
+}
+
+func (f *Filter) Relation() *Relation {
+	return f.Child.Relation()
 }
 
 type Join struct {
@@ -351,6 +402,15 @@ func (j *Join) String() string {
 
 func (j *Join) Plans() []LogicalPlan {
 	return append([]LogicalPlan{j.Left, j.Right}, j.Condition.Plans()...)
+}
+
+func (j *Join) Relation() *Relation {
+	left := j.Left.Relation()
+	right := j.Right.Relation()
+
+	return &Relation{
+		Fields: append(left.Fields, right.Fields...),
+	}
 }
 
 type Sort struct {
@@ -409,6 +469,10 @@ func (s *Sort) Plans() []LogicalPlan {
 	return c
 }
 
+func (s *Sort) Relation() *Relation {
+	return s.Child.Relation()
+}
+
 type Limit struct {
 	baseLogicalPlan
 	Child  LogicalPlan
@@ -445,6 +509,10 @@ func (l *Limit) Plans() []LogicalPlan {
 	return c
 }
 
+func (l *Limit) Relation() *Relation {
+	return l.Child.Relation()
+}
+
 type Distinct struct {
 	baseLogicalPlan
 	Child LogicalPlan
@@ -460,6 +528,10 @@ func (d *Distinct) String() string {
 
 func (d *Distinct) Plans() []LogicalPlan {
 	return []LogicalPlan{d.Child}
+}
+
+func (d *Distinct) Relation() *Relation {
+	return d.Child.Relation()
 }
 
 type SetOperation struct {
@@ -483,6 +555,22 @@ func (s *SetOperation) String() string {
 	str.WriteString("Set: ")
 	str.WriteString(s.OpType.String())
 	return str.String()
+}
+
+func (s *SetOperation) Relation() *Relation {
+	left := s.Left.Relation()
+	right := s.Right.Relation()
+
+	for _, field := range left.Fields {
+		field.Parent = ""
+	}
+	for _, field := range right.Fields {
+		field.Parent = ""
+	}
+
+	return &Relation{
+		Fields: append(left.Fields, right.Fields...),
+	}
 }
 
 type Aggregate struct {
@@ -543,6 +631,20 @@ func (a *Aggregate) String() string {
 	}
 
 	return str.String()
+}
+
+func (a *Aggregate) Relation() *Relation {
+	// we return the grouping expressions and the aggregate expressions
+	var fields []*Field
+	for _, expr := range a.GroupingExpressions {
+		fields = append(fields, expr.Field())
+	}
+
+	for _, expr := range a.AggregateExpressions {
+		fields = append(fields, expr.Field())
+	}
+
+	return &Relation{Fields: fields}
 }
 
 type JoinType int
@@ -625,6 +727,10 @@ func (s *Subplan) String() string {
 	return str.String()
 }
 
+func (s *Subplan) Relation() *Relation {
+	return s.Plan.Relation()
+}
+
 type SubplanType int
 
 const (
@@ -653,6 +759,7 @@ func (s SubplanType) String() string {
 
 type LogicalExpr interface {
 	LogicalNode
+	Field() *Field
 	expr()
 }
 
@@ -686,11 +793,19 @@ func (l *Literal) Plans() []LogicalPlan {
 	return nil
 }
 
+func (l *Literal) Field() *Field {
+	return anonField(l.Type.Copy())
+}
+
 // Variable reference
 type Variable struct {
 	baseLogicalExpr
 	// name is something like $id, @caller, etc.
 	VarName string
+	// dataType is the data type, which is detected
+	// during the evaluation phase.
+	// it is either a *types.DataType or map[string]*types.DataType
+	dataType any
 }
 
 func (v *Variable) String() string {
@@ -705,6 +820,12 @@ func (v *Variable) Plans() []LogicalPlan {
 	return nil
 }
 
+func (v *Variable) Field() *Field {
+	return &Field{
+		val: v.dataType,
+	}
+}
+
 // Column reference
 type ColumnRef struct {
 	baseLogicalExpr
@@ -713,6 +834,9 @@ type ColumnRef struct {
 	// during the planning phase.
 	Parent     string
 	ColumnName string
+	// dataType is the data type, which is detected
+	// during the evaluation phase.
+	dataType *types.DataType
 }
 
 func (c *ColumnRef) String() string {
@@ -730,12 +854,23 @@ func (c *ColumnRef) Plans() []LogicalPlan {
 	return nil
 }
 
+func (c *ColumnRef) Field() *Field {
+	return &Field{
+		Parent: c.Parent,
+		Name:   c.ColumnName,
+		val:    c.dataType,
+	}
+}
+
 type AggregateFunctionCall struct {
 	baseLogicalExpr
 	FunctionName string
 	Args         []LogicalExpr
 	Star         bool
 	Distinct     bool
+	// returnType is the data type of the return value.
+	// It is set during the evaluation phase.
+	returnType *types.DataType
 }
 
 func (a *AggregateFunctionCall) String() string {
@@ -775,11 +910,18 @@ func (a *AggregateFunctionCall) Plans() []LogicalPlan {
 	return c
 }
 
+func (a *AggregateFunctionCall) Field() *Field {
+	return anonField(a.returnType.Copy())
+}
+
 // Function call
 type ScalarFunctionCall struct {
 	baseLogicalExpr
 	FunctionName string
 	Args         []LogicalExpr
+	// returnType is the data type of the return value.
+	// It is set during the evaluation phase.
+	returnType *types.DataType
 }
 
 func (f *ScalarFunctionCall) String() string {
@@ -812,6 +954,10 @@ func (f *ScalarFunctionCall) Plans() []LogicalPlan {
 	return c
 }
 
+func (f *ScalarFunctionCall) Field() *Field {
+	return anonField(f.returnType.Copy())
+}
+
 // ProcedureCall is a call to a procedure.
 // This can be a call to either a procedure in the same schema, or
 // to a foreign procedure.
@@ -821,6 +967,9 @@ type ProcedureCall struct {
 	Foreign       bool
 	Args          []LogicalExpr
 	ContextArgs   []LogicalExpr
+	// returnType is the data type of the return value.
+	// It is set during the evaluation phase.
+	returnType *types.DataType
 }
 
 func (p *ProcedureCall) String() string {
@@ -859,6 +1008,10 @@ func (p *ProcedureCall) Plans() []LogicalPlan {
 		c = append(c, arg.Plans()...)
 	}
 	return c
+}
+
+func (p *ProcedureCall) Field() *Field {
+	return anonField(p.returnType.Copy())
 }
 
 type ArithmeticOp struct {
@@ -902,6 +1055,15 @@ func (a *ArithmeticOp) Children() []LogicalNode {
 
 func (a *ArithmeticOp) Plans() []LogicalPlan {
 	return append(a.Left.Plans(), a.Right.Plans()...)
+}
+
+func (a *ArithmeticOp) Field() *Field {
+	scalar, err := a.Left.Field().Scalar()
+	if err != nil {
+		panic(err)
+	}
+
+	return anonField(scalar.Copy())
 }
 
 type ComparisonOp struct {
@@ -974,6 +1136,10 @@ func (c *ComparisonOp) String() string {
 	return fmt.Sprintf("%s %s %s", c.Left.String(), c.Op.String(), c.Right.String())
 }
 
+func (c *ComparisonOp) Field() *Field {
+	return anonField(types.BoolType.Copy())
+}
+
 type LogicalOp struct {
 	baseLogicalExpr
 	Left  LogicalExpr
@@ -1006,6 +1172,10 @@ func (l *LogicalOp) Children() []LogicalNode {
 
 func (l *LogicalOp) Plans() []LogicalPlan {
 	return append(l.Left.Plans(), l.Right.Plans()...)
+}
+
+func (l *LogicalOp) Field() *Field {
+	return anonField(types.BoolType.Copy())
 }
 
 type UnaryOp struct {
@@ -1047,6 +1217,10 @@ func (u *UnaryOp) Plans() []LogicalPlan {
 	return u.Expr.Plans()
 }
 
+func (u *UnaryOp) Field() *Field {
+	return u.Expr.Field()
+}
+
 type TypeCast struct {
 	baseLogicalExpr
 	Expr LogicalExpr
@@ -1063,6 +1237,10 @@ func (t *TypeCast) Children() []LogicalNode {
 
 func (t *TypeCast) Plans() []LogicalPlan {
 	return t.Expr.Plans()
+}
+
+func (t *TypeCast) Field() *Field {
+	return anonField(t.Type.Copy())
 }
 
 type AliasExpr struct {
@@ -1083,6 +1261,10 @@ func (a *AliasExpr) Plans() []LogicalPlan {
 	return a.Expr.Plans()
 }
 
+func (a *AliasExpr) Field() *Field {
+	return a.Expr.Field()
+}
+
 type ArrayAccess struct {
 	baseLogicalExpr
 	Array LogicalExpr
@@ -1099,6 +1281,16 @@ func (a *ArrayAccess) Children() []LogicalNode {
 
 func (a *ArrayAccess) Plans() []LogicalPlan {
 	return append(a.Array.Plans(), a.Index.Plans()...)
+}
+
+func (a *ArrayAccess) Field() *Field {
+	scalar, err := a.Array.Field().Scalar()
+	if err != nil {
+		panic(err)
+	}
+
+	scalar.IsArray = false
+	return anonField(scalar.Copy())
 }
 
 type ArrayConstructor struct {
@@ -1135,14 +1327,29 @@ func (a *ArrayConstructor) Plans() []LogicalPlan {
 	return c
 }
 
+func (a *ArrayConstructor) Field() *Field {
+	if len(a.Elements) == 0 {
+		// should get caught several times before this point
+		panic("empty array constructor")
+	}
+
+	scalar, err := a.Elements[0].Field().Scalar()
+	if err != nil {
+		panic(err)
+	}
+
+	scalar.IsArray = true
+	return anonField(scalar.Copy())
+}
+
 type FieldAccess struct {
 	baseLogicalExpr
 	Object LogicalExpr
-	Field  string
+	Key    string
 }
 
 func (f *FieldAccess) String() string {
-	return fmt.Sprintf("%s.%s", f.Object.String(), f.Field)
+	return fmt.Sprintf("%s.%s", f.Object.String(), f.Key)
 }
 
 func (f *FieldAccess) Children() []LogicalNode {
@@ -1151,6 +1358,20 @@ func (f *FieldAccess) Children() []LogicalNode {
 
 func (f *FieldAccess) Plans() []LogicalPlan {
 	return f.Object.Plans()
+}
+
+func (f *FieldAccess) Field() *Field {
+	scalar, err := f.Object.Field().Object()
+	if err != nil {
+		panic(err)
+	}
+
+	val, ok := scalar[f.Key]
+	if !ok {
+		panic(fmt.Sprintf("field %s not found in object", f.Key))
+	}
+
+	return anonField(val.Copy())
 }
 
 type SubqueryExpr struct {
@@ -1210,6 +1431,14 @@ func (s *SubqueryExpr) Plans() []LogicalPlan {
 	return s.Query.Plans()
 }
 
+func (s *SubqueryExpr) Field() *Field {
+	if s.Exists {
+		return anonField(types.BoolType.Copy())
+	}
+
+	return s.Query.Plan.Relation().Fields[0]
+}
+
 type Collate struct {
 	baseLogicalExpr
 	Expr      LogicalExpr
@@ -1226,6 +1455,10 @@ func (c *Collate) Children() []LogicalNode {
 
 func (c *Collate) Plans() []LogicalPlan {
 	return c.Expr.Plans()
+}
+
+func (c *Collate) Field() *Field {
+	return c.Expr.Field()
 }
 
 type CollationType uint8
@@ -1301,6 +1534,10 @@ func (i *IsIn) Plans() []LogicalPlan {
 	return c
 }
 
+func (i *IsIn) Field() *Field {
+	return anonField(types.BoolType.Copy())
+}
+
 type Case struct {
 	baseLogicalExpr
 	// Value is the value that is being compared.
@@ -1366,6 +1603,19 @@ func (c *Case) Plans() []LogicalPlan {
 		ch = append(ch, c.Else.Plans()...)
 	}
 	return ch
+}
+
+func (c *Case) Field() *Field {
+	if c.Else != nil {
+		return c.Else.Field()
+	}
+
+	if len(c.WhenClauses) == 0 {
+		// should get caught before this point
+		panic("case statement must have at least one when clause")
+	}
+
+	return c.WhenClauses[0][1].Field()
 }
 
 // traverse traverses a logical plan in preorder.
@@ -1465,7 +1715,8 @@ func (b *baseTopLevel) topLevel() {}
 
 // Return is a node that plans a return operation. It specifies columns to
 // return from a query. This is similar to a projection, however it cannot
-// be optimized using pushdowns, since it is at the top level.
+// be optimized using pushdowns, since it is at the top level (and therefore
+// user requested).
 type Return struct {
 	baseTopLevel
 	// Fields are the fields to return.
@@ -1499,6 +1750,11 @@ func (r *Return) Plans() []LogicalPlan {
 	return []LogicalPlan{r.Child}
 }
 
+// Relation returns the relation of the child.
+func (r *Return) Relation() *Relation {
+	return r.Child.Relation()
+}
+
 /*
 	For modifying relations, we will use the following process:
 	1. Materialize the source relation (exactly same as any SELECT).
@@ -1530,6 +1786,13 @@ func (c *CartesianProduct) Children() []LogicalNode {
 
 func (c *CartesianProduct) Plans() []LogicalPlan {
 	return []LogicalPlan{c.Left, c.Right}
+}
+
+func (c *CartesianProduct) Relation() *Relation {
+	// we return the relation of the left side of the cartesian product
+	return &Relation{
+		Fields: append(c.Left.Relation().Fields, c.Right.Relation().Fields...),
+	}
 }
 
 // Update is a node that plans an update operation.
@@ -1580,6 +1843,10 @@ func (u *Update) Plans() []LogicalPlan {
 	return c
 }
 
+func (u *Update) Relation() *Relation {
+	return &Relation{}
+}
+
 // Delete is a node that plans a delete operation.
 type Delete struct {
 	baseTopLevel
@@ -1600,6 +1867,10 @@ func (d *Delete) Children() []LogicalNode {
 
 func (d *Delete) Plans() []LogicalPlan {
 	return []LogicalPlan{d.Child}
+}
+
+func (d *Delete) Relation() *Relation {
+	return &Relation{}
 }
 
 // TODO: I dont love this insert. Everything else feels very relational, but this
@@ -1700,6 +1971,10 @@ func (i *Insert) Plans() []LogicalPlan {
 	}
 
 	return c
+}
+
+func (i *Insert) Relation() *Relation {
+	return &Relation{}
 }
 
 // Assignment is a struct that represents an assignment in an update statement.

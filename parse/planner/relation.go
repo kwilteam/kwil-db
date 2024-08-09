@@ -189,6 +189,9 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 			}
 		}
 
+		// TODO: this is incorrect, we actually should return the grouping expressions
+		// and the aggregate expressions
+
 		return rel, nil
 	case *Distinct:
 		return s.evalRelation(n.Child)
@@ -396,14 +399,16 @@ func (s *EvaluateContext) evalScanSource(source ScanSource) (*Relation, error) {
 				return nil, fmt.Errorf(`table "%s" not found`, n.TableName)
 			}
 
-			return relationFromTable(tbl), nil
+			n.rel = relationFromTable(tbl)
+			return n.rel.Copy(), nil
 		case TableSourceCTE:
 			cte, ok := s.plan.CTEs[n.TableName]
 			if !ok {
 				return nil, fmt.Errorf(`cte "%s" not found`, n.TableName)
 			}
 
-			return cte, nil
+			n.rel = cte.Copy()
+			return cte.Copy(), nil
 		default:
 			panic(fmt.Sprintf("unexpected table source type %d", n.Type))
 		}
@@ -460,7 +465,9 @@ func (s *EvaluateContext) evalScanSource(source ScanSource) (*Relation, error) {
 			})
 		}
 
-		return &Relation{Fields: cols}, nil
+		n.rel = &Relation{Fields: cols}
+
+		return n.rel.Copy(), nil
 	case *Subquery:
 		if !n.ReturnsRelation {
 			panic("internal bug: planner planned a join against a scalar subquery")
@@ -499,11 +506,20 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 			if !ok {
 				return nil, fmt.Errorf(`variable "%s" not found`, n.VarName)
 			}
+
+			copyMap := make(map[string]*types.DataType)
+			for k, v := range obj {
+				copyMap[k] = v.Copy()
+			}
+			n.dataType = copyMap
+
 			return &Field{
 				Name: n.VarName,
 				val:  obj,
 			}, nil
 		}
+
+		n.dataType = dt.Copy()
 
 		return anonField(dt), nil
 	case *ColumnRef:
@@ -523,9 +539,21 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 
 			n.Parent = field.Parent
 
+			sc, err := field.Scalar()
+			if err != nil {
+				return nil, err
+			}
+			n.dataType = sc.Copy()
+
 			return field, nil
 		}
 		n.Parent = field.Parent
+		scalar, err := field.Scalar()
+		if err != nil {
+			return nil, err
+		}
+		n.dataType = scalar.Copy()
+
 		return field, err
 	case *AggregateFunctionCall:
 		fn, ok := parse.Functions[n.FunctionName]
@@ -544,6 +572,8 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 		if err != nil {
 			return nil, err
 		}
+
+		n.returnType = returnType.Copy()
 
 		return &Field{
 			Name: n.FunctionName,
@@ -565,6 +595,8 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 		if err != nil {
 			return nil, err
 		}
+
+		n.returnType = returnType.Copy()
 
 		return &Field{
 			Name: n.FunctionName,
@@ -609,6 +641,8 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 		if err := s.manyEvalTo(n.Args, neededArgs, currentRel); err != nil {
 			return nil, err
 		}
+
+		n.returnType = returns.Fields[0].Type.Copy()
 
 		return &Field{
 			Name: n.ProcedureName,
@@ -750,9 +784,9 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 			return nil, err
 		}
 
-		objField, ok := obj[n.Field]
+		objField, ok := obj[n.Key]
 		if !ok {
-			return nil, fmt.Errorf(`field "%s" not found in object`, n.Field)
+			return nil, fmt.Errorf(`field "%s" not found in object`, n.Key)
 		}
 
 		return anonField(objField), nil
@@ -1025,6 +1059,31 @@ func (s *EvaluateContext) isScalar(expr LogicalExpr, currentRel *Relation) (*typ
 // Relation is the current relation in the query plan.
 type Relation struct {
 	Fields []*Field
+}
+
+func (r *Relation) Copy() *Relation {
+	var fields []*Field
+	for _, f := range r.Fields {
+		var val any
+		switch v := f.val.(type) {
+		case *types.DataType:
+			val = v.Copy()
+		case map[string]*types.DataType:
+			val = make(map[string]*types.DataType)
+			for k, v := range v {
+				val.(map[string]*types.DataType)[k] = v.Copy()
+			}
+		}
+
+		fields = append(fields, &Field{
+			Parent: f.Parent,
+			Name:   f.Name,
+			val:    val,
+		})
+	}
+	return &Relation{
+		Fields: fields,
+	}
 }
 
 func (s *Relation) ColumnsByParent(name string) []*Field {

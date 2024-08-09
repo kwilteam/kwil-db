@@ -303,7 +303,7 @@ func (p *plannerVisitor) VisitExpressionMakeArray(node *parse.ExpressionMakeArra
 func (p *plannerVisitor) VisitExpressionFieldAccess(node *parse.ExpressionFieldAccess) any {
 	return cast(&FieldAccess{
 		Object: node.Record.Accept(p).(LogicalExpr),
-		Field:  node.Field,
+		Key:    node.Field,
 	}, node)
 }
 
