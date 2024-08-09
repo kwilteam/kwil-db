@@ -262,8 +262,18 @@ func (s *Scan) String() string {
 
 type Project struct {
 	baseLogicalPlan
+
+	// ! Expressions aren't set until the evaluation phase,
+	// by the expandFuncs.
+
+	// Expressions are the expressions that are projected.
 	Expressions []LogicalExpr
 	Child       LogicalPlan
+	// expandFuncs are functions that adds to the list of expressions.
+	// It is set while visiting the parse AST, and should be called during
+	// the evaluation phase. It is used to expand wildcards like "SELECT *",
+	// which can only be done during evaluation when we know the full relation.
+	expandFuncs []expandFunc
 }
 
 func (p *Project) Children() []LogicalNode {
@@ -1436,28 +1446,57 @@ func innerFormat(plan LogicalNode, count int, printLong []bool) (string, []*Subp
 /*
 	###########################
 	#                         #
-	#      Modifications      #
+	#      Top Level Ops      #
 	#                         #
 	###########################
 */
 
-type Modification interface {
+// TopLevel is a logical plan that is at the top level of a query.
+type TopLevel interface {
 	LogicalPlan
-	modification()
+	topLevel()
 }
 
-type baseModification struct {
+type baseTopLevel struct {
 	baseLogicalPlan
 }
 
-func (b *baseModification) modification() {}
+func (b *baseTopLevel) topLevel() {}
 
-// Assignment is a struct that represents an assignment in an update statement.
-type Assignment struct {
-	// Column is the column to update.
-	Column string
-	// Value is the value to update the column to.
-	Value LogicalExpr
+// Return is a node that plans a return operation. It specifies columns to
+// return from a query. This is similar to a projection, however it cannot
+// be optimized using pushdowns, since it is at the top level.
+type Return struct {
+	baseTopLevel
+	// Fields are the fields to return.
+	Fields []string
+	// Child is the input to the return.
+	Child LogicalPlan
+}
+
+// expandFuncs take a relation and return a list of expressions that should be added to the projection.
+type expandFunc func(*Relation) []LogicalExpr
+
+func (r *Return) String() string {
+	str := strings.Builder{}
+	str.WriteString("Return: ")
+
+	for i, expr := range r.Fields {
+		if i > 0 {
+			str.WriteString(", ")
+		}
+		str.WriteString(expr)
+	}
+
+	return str.String()
+}
+
+func (r *Return) Children() []LogicalNode {
+	return []LogicalNode{r.Child}
+}
+
+func (r *Return) Plans() []LogicalPlan {
+	return []LogicalPlan{r.Child}
 }
 
 /*
@@ -1469,66 +1508,6 @@ type Assignment struct {
 	this logically separate from joins so that we can know which side of the join
 	can be modified.
 	3. Apply the filter to the cartesian product / ModifiableProduct.
-*/
-
-// // ModifiableProduct is a logical plan node that represents a cartesian product
-// // between a table that can be modified and a source relation which can be
-// // referenced for modification. This is used in updates and deletes to determine
-// // which rows to modify. Prior to optimization, this will always have a filter
-// // on top of the ModifiableProduct.
-// //
-// // Once we have a query optimizer, we can push down this filter to create a join
-// // condition between the target and source relations (so that we don't have to
-// // perform a cartesian product). If the optimizer cannot push down the filter, it
-// // will throw an error, since we do not want to perform a cartesian product.
-// type ModifiableProduct struct {
-// 	baseModification
-// 	baseLogicalPlan // so that we can use this in the optimizer
-// 	// Target is the relation that is being modified.
-// 	// It will always be scanning a physical table.
-// 	Target *Scan
-// 	// Source is the relation that is being used to modify the target.
-// 	// It can be nil.
-// 	Source LogicalPlan
-// 	// JoinCondition is the join condition to use to join the target and source.
-// 	// Prior to optimization, this is nil. It will always be an inner join.
-// 	JoinCondition LogicalExpr
-// }
-
-// func (m *ModifiableProduct) String() string {
-// 	str := strings.Builder{}
-// 	str.WriteString("ModifiableProduct [")
-// 	str.WriteString(m.Target.RelationName)
-// 	str.WriteString("]: ")
-
-// 	if m.Source == nil {
-// 		// we will probably error out in the optimizer before
-// 		// hit this, but I have it here for testing purposes.
-// 		str.WriteString("[cartesian product]")
-// 	} else {
-// 		str.WriteString(m.JoinCondition.String())
-// 	}
-
-// 	return str.String()
-// }
-
-// func (m *ModifiableProduct) Children() []LogicalNode {
-// 	var c []LogicalNode
-// 	c = append(c, m.Target)
-// 	if m.Source != nil {
-// 		c = append(c, m.Source)
-// 	}
-// 	return c
-// }
-
-// func (m *ModifiableProduct) Plans() []LogicalPlan {
-// 	return append([]LogicalPlan{m.Target}, m.Source)
-// }
-
-/*
-	I don't think this is right. It seems like we could just have a cartesian product
-	node and then optimize it to a join. Since our whole goal here is to detect selectivity,
-	we should just detect the selectivity of the join (optimized from the product).
 */
 
 // CartesianProduct is a logical plan node that represents a cartesian product
@@ -1555,7 +1534,7 @@ func (c *CartesianProduct) Plans() []LogicalPlan {
 
 // Update is a node that plans an update operation.
 type Update struct {
-	baseModification
+	baseTopLevel
 	// Child is the input to the update.
 	Child LogicalPlan
 	// Table is the target table name.
@@ -1603,7 +1582,7 @@ func (u *Update) Plans() []LogicalPlan {
 
 // Delete is a node that plans a delete operation.
 type Delete struct {
-	baseModification
+	baseTopLevel
 	// Child is the input to the delete.
 	Child LogicalPlan
 	// Table is the target table name.
@@ -1633,7 +1612,7 @@ func (d *Delete) Plans() []LogicalPlan {
 
 // Insert is a node that plans an insert operation.
 type Insert struct {
-	baseModification
+	baseTopLevel
 	// Table is the physical table to insert into.
 	Table string
 	// Alias is the alias of the table.
@@ -1721,6 +1700,14 @@ func (i *Insert) Plans() []LogicalPlan {
 	}
 
 	return c
+}
+
+// Assignment is a struct that represents an assignment in an update statement.
+type Assignment struct {
+	// Column is the column to update.
+	Column string
+	// Value is the value to update the column to.
+	Value LogicalExpr
 }
 
 type ConflictResolution interface {

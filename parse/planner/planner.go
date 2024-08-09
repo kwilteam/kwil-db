@@ -38,12 +38,6 @@ func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*
 
 	lp := statement.Accept(visitor).(LogicalPlan)
 
-	evalCtx := newEvalCtx(ctx)
-	_, err = evalCtx.evalRelation(lp)
-	if err != nil {
-		return nil, err
-	}
-
 	return &AnalyzedPlan{
 		Plan: lp,
 		CTEs: ctx.CTEPlans,
@@ -455,6 +449,7 @@ func (p *plannerVisitor) VisitExpressionBetween(node *parse.ExpressionBetween) a
 }
 
 func (p *plannerVisitor) VisitExpressionSubquery(node *parse.ExpressionSubquery) any {
+
 	var sub LogicalExpr = &SubqueryExpr{
 		Query: &Subquery{
 			Plan: &Subplan{
@@ -553,7 +548,34 @@ func (p *plannerVisitor) VisitSQLStatement(node *parse.SQLStatement) any {
 		cte.Accept(p)
 	}
 
-	return node.SQL.Accept(p)
+	stmt := node.SQL.Accept(p).(LogicalPlan)
+
+	rel, err := newEvalCtx(p.planCtx).evalRelation(stmt)
+	if err != nil {
+		panic(err)
+	}
+
+	// if it a sql select, we should add a return operation.
+	// We can't add this within VisitSelectStatement because
+	// we don't want to add it to subqueries.
+	if _, ok := node.SQL.(*parse.SelectStatement); ok {
+		var fields []string
+		for _, col := range rel.Fields {
+			name := col.Name
+			if name == "" {
+				name = "?column?"
+			}
+
+			fields = append(fields, name)
+		}
+
+		return &Return{
+			Fields: fields,
+			Child:  stmt,
+		}
+	}
+
+	return stmt
 }
 
 // The order of building is:
@@ -626,7 +648,8 @@ func (p *plannerVisitor) VisitSelectStatement(node *parse.SelectStatement) any {
 		plan = lim
 	}
 
-	return finish(plan)
+	res := finish(plan)
+	return res
 }
 
 // The order of building is:
@@ -661,13 +684,23 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 			}
 		}
 
+		isDistinct := node.Distinct
+
 		return &selectCoreResult{
 			plan: &EmptyScan{},
 			projectFunc: func(newPlan LogicalPlan) LogicalPlan {
-				return &Project{
-					Expressions: exprs,
+				var p LogicalPlan = &Project{
 					Child:       newPlan,
+					expandFuncs: []expandFunc{func(rel *Relation) []LogicalExpr { return exprs }},
 				}
+
+				if isDistinct {
+					p = &Distinct{
+						Child: p,
+					}
+				}
+
+				return p
 			},
 		}
 	}
@@ -691,14 +724,67 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 		}
 	}
 
+	// expandFuncs delay expanding wildcards until we can evaluate the relation
+	// they are projecting on. We have to do this at an entirely different step
+	// once the entire tree is constructed (in evalRelation).
+	var expandFuncs []expandFunc
+
 	// we analyze the returned columns to see if there are any aggregates
 	// we will revisit them later for the full analysis after GROUP BY
 	var aggs []*AggregateFunctionCall
 	for _, resultCol := range node.Columns {
-		if resultCol, ok := resultCol.(*parse.ResultColumnExpression); ok {
+		switch resultCol := resultCol.(type) {
+		default:
+			panic(fmt.Sprintf("unexpected result column type %T", resultCol))
+		case *parse.ResultColumnExpression:
 			logicalExpr := resultCol.Expression.Accept(p).(LogicalExpr)
 			found := getAggregateTerms(logicalExpr)
 			aggs = append(aggs, found...)
+
+			// we don't need to delay planning of regular expressions,
+			// but we put it in a function to maintain order of result
+			// columns.
+
+			if resultCol.Alias != "" {
+				logicalExpr = &AliasExpr{
+					Expr:  logicalExpr,
+					Alias: resultCol.Alias,
+				}
+			}
+
+			newFunc := func(rel *Relation) []LogicalExpr {
+				return []LogicalExpr{logicalExpr}
+			}
+
+			expandFuncs = append(expandFuncs, newFunc)
+		case *parse.ResultColumnWildcard:
+			// expand the wildcard
+
+			// avoid loop variable capture
+			tbl := resultCol.Table
+
+			// wrap any other expandFunc in a new function that will
+			// expand the current wildcard
+			newExpand := func(rel *Relation) []LogicalExpr {
+				var newFields []*Field
+				if tbl != "" {
+					newFields = rel.ColumnsByParent(tbl)
+				} else {
+					newFields = rel.Fields
+				}
+
+				var exprs []LogicalExpr
+				for _, field := range newFields {
+					exprs = append(exprs, &ColumnRef{
+						Parent:     field.Parent,
+						ColumnName: field.Name,
+					})
+				}
+
+				return exprs
+			}
+
+			expandFuncs = append(expandFuncs, newExpand)
 		}
 	}
 
@@ -729,56 +815,15 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 		}
 	}
 
-	// now, we re-analyze results and expand wildcards
-	var results []LogicalExpr
-	for _, resultCol := range node.Columns {
-		switch resultCol := resultCol.(type) {
-		default:
-			panic(fmt.Sprintf("unexpected result column type %T", resultCol))
-		case *parse.ResultColumnExpression:
-			// if expression, we need to ensure it is an aggregate
-			expr := resultCol.Expression.Accept(p).(LogicalExpr)
-			if resultCol.Alias != "" {
-				expr = &AliasExpr{
-					Expr:  expr,
-					Alias: resultCol.Alias,
-				}
-			}
-
-			results = append(results, expr)
-		case *parse.ResultColumnWildcard:
-			// expand the wildcard
-			rel, err := newEvalCtx(p.planCtx).evalRelation(plan)
-			if err != nil {
-				panic(err)
-			}
-
-			var fields []*Field
-			if resultCol.Table != "" {
-				fields = rel.ColumnsByParent(resultCol.Table)
-			} else {
-				fields = rel.Fields
-			}
-
-			for _, col := range fields {
-				results = append(results, &ColumnRef{
-					Parent:     col.Parent,
-					ColumnName: col.Name,
-				})
-			}
-		}
-	}
-
 	// see the selectCoreResult documentation below for an explanation as to
 	// why this is returned instead of just the plan.
 	return &selectCoreResult{
 		plan: plan,
 		projectFunc: func(newPlan LogicalPlan) LogicalPlan {
 			var plan2 LogicalPlan = &Project{
-				Expressions: results,
 				Child:       newPlan,
+				expandFuncs: expandFuncs,
 			}
-
 			if node.Distinct {
 				plan2 = &Distinct{
 					Child: plan2,
@@ -804,7 +849,14 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 //
 // This struct allows us to conditionally handle this logic in the calling VisitSelectStatement method.
 type selectCoreResult struct {
-	plan        LogicalPlan
+	// plan is the plan that is returned from the select core prior
+	// to applying any projection.
+	plan LogicalPlan
+	// projectFunc is a function that will apply a projection to the plan.
+	// it is not directly applied within the select core because if there
+	// are multiple select cores, we need to apply the projection before
+	// the set operation, but if there is 1, we want to apply the projection
+	// after the sort and limit.
 	projectFunc func(LogicalPlan) LogicalPlan
 }
 

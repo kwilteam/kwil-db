@@ -48,11 +48,42 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 		}
 
 		return rel, nil
+	case *Return:
+		rel, err := s.evalRelation(n.Child)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(rel.Fields) != len(n.Fields) {
+			return nil, fmt.Errorf("expected %d columns, got %d", len(n.Fields), len(rel.Fields))
+		}
+
+		newFields := make([]*Field, len(n.Fields))
+		for i, field := range rel.Fields {
+			scalar, err := field.Scalar()
+			if err != nil {
+				return nil, err
+			}
+
+			newFields[i] = &Field{
+				Name: n.Fields[i],
+				val:  scalar,
+				// we discard the parent because it is not needed,
+				// as postgres does not return parent names in the result
+			}
+		}
+
+		return &Relation{Fields: newFields}, nil
 	case *Project:
 		rel, err := s.evalRelation(n.Child)
 		if err != nil {
 			return nil, err
 		}
+
+		for _, expand := range n.expandFuncs {
+			n.Expressions = append(n.Expressions, expand(rel)...)
+		}
+		n.expandFuncs = nil // never want to expand more than once
 
 		fields, err := s.planManyExpressions(n.Expressions, rel)
 		if err != nil {
@@ -191,6 +222,15 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 				return nil, fmt.Errorf("compound operations must have the same data types")
 			}
 		}
+
+		// parent tables cannot be referenced after a set operation.
+		// e.g. "SELECT * FROM users UNION SELECT * FROM posts SORT BY id;" is valid,
+		// but "SELECT * FROM users UNION SELECT * FROM posts SORT BY users.id;" is not
+
+		for _, col := range left.Fields {
+			col.Parent = ""
+		}
+
 		return left, nil
 	case *Subplan:
 		rel, err := s.evalRelation(n.Plan)
@@ -570,7 +610,10 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 			return nil, err
 		}
 
-		return anonField(returns.Fields[0].Type.Copy()), nil
+		return &Field{
+			Name: n.ProcedureName,
+			val:  returns.Fields[0].Type.Copy(),
+		}, nil
 	case *ArithmeticOp:
 		left, err := s.isScalar(n.Left, currentRel)
 		if err != nil {
@@ -914,25 +957,6 @@ func (s *EvaluateContext) evalSubquery(sub *Subquery, currentRel *Relation) (*Re
 	return rel, nil
 }
 
-// // evalModification evaluates a modification and returns all the columns that
-// // are modifiable. It will perform type validations.
-// func (s *EvaluateContext) evalModification(mod Modification) error {
-// 	switch n := mod.(type) {
-// 	case *ModifiableProduct:
-// 		target, err := s.evalRelation(n.Target)
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		source, err := s.evalRelation(n.Source)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-
-// 	return fmt.Errorf("unexpected node type %T", mod)
-// }
-
 /*
 	Helpers for removing duplicate code
 */
@@ -1018,7 +1042,7 @@ var errColumnNotFound = fmt.Errorf("column not found")
 // Search searches for a column by parent and name.
 // If the column is not found, an error is returned.
 // If no parent is specified and many columns have the same name,
-// an error is returned. The returned column will always be qualified.
+// an error is returned.
 func (s *Relation) Search(parent, name string) (*Field, error) {
 	if parent == "" {
 		var column *Field
