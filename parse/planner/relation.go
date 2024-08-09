@@ -199,6 +199,130 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 		}
 
 		return rel, nil
+	case *CartesianProduct:
+		left, err := s.evalRelation(n.Left)
+		if err != nil {
+			return nil, err
+		}
+
+		right, err := s.evalRelation(n.Right)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Relation{
+			Fields: append(left.Fields, right.Fields...),
+		}, nil
+	case *Insert:
+		// for modifications, we simply evaluate and typecheck the expressions.
+		// They dont return relations since they are not queries and we don't
+		// support RETURNING clauses
+
+		var expectedTypes []*types.DataType
+		tbl, ok := s.plan.Schema.FindTable(n.Table)
+		if !ok {
+			return nil, fmt.Errorf(`table "%s" not found`, n.Table)
+		}
+
+		// colSet for quick lookup later
+		colSet := make(map[string]*types.DataType)
+		for _, col := range tbl.Columns {
+			colSet[col.Name] = col.Type
+			expectedTypes = append(expectedTypes, col.Type.Copy())
+		}
+
+		for _, newTuple := range n.Values {
+			for i, expr := range newTuple {
+				if err := s.evalsTo(expr, expectedTypes[i], &Relation{}); err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		tableRel := relationFromTable(tbl)
+
+		if n.ConflictResolution != nil {
+			res, ok := n.ConflictResolution.(*ConflictUpdate)
+			if ok {
+				for _, expr := range res.Assignments {
+					// TODO: we need a way to get an EXCLUDED relation: https://www.jooq.org/doc/latest/manual/sql-building/sql-statements/insert-statement/insert-on-conflict-excluded/
+					// TODO: we also need to include the alias here!
+					scalar, err := s.isScalar(expr.Value, tableRel)
+					if err != nil {
+						return nil, err
+					}
+
+					expected, ok := colSet[expr.Column]
+					if !ok {
+						return nil, fmt.Errorf(`column "%s" not found in table "%s"`, expr.Column, n.Table)
+					}
+
+					if !expected.Equals(scalar) {
+						return nil, fmt.Errorf(`conflict resolution requires the same type as the column "%s"`, expr.Column)
+					}
+				}
+
+				if res.ConflictFilter != nil {
+					scalar, err := s.isScalar(res.ConflictFilter, tableRel)
+					if err != nil {
+						return nil, err
+					}
+
+					if !scalar.Equals(types.BoolType) {
+						return nil, fmt.Errorf("conflict filter requires a boolean type, got %s", scalar)
+					}
+				}
+			}
+			// nothing to do if it is a DO NOTHING resolution
+		}
+
+		return &Relation{}, nil
+	case *Update:
+		tbl, ok := s.plan.Schema.FindTable(n.Table)
+		if !ok {
+			return nil, fmt.Errorf(`table "%s" not found`, n.Table)
+		}
+
+		colSet := make(map[string]*types.DataType)
+		for _, col := range tbl.Columns {
+			colSet[col.Name] = col.Type
+		}
+
+		child, err := s.evalRelation(n.Child)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, expr := range n.Assignments {
+			scalar, err := s.isScalar(expr.Value, child)
+			if err != nil {
+				return nil, err
+			}
+
+			expected, ok := colSet[expr.Column]
+			if !ok {
+				return nil, fmt.Errorf(`column "%s" not found in table "%s"`, expr.Column, n.Table)
+			}
+
+			if !expected.Equals(scalar) {
+				return nil, fmt.Errorf(`assignment requires the same type as the column "%s"`, expr.Column)
+			}
+		}
+
+		return &Relation{}, nil
+	case *Delete:
+		_, ok := s.plan.Schema.FindTable(n.Table)
+		if !ok {
+			return nil, fmt.Errorf(`table "%s" not found`, n.Table)
+		}
+
+		_, err := s.evalRelation(n.Child)
+		if err != nil {
+			return nil, err
+		}
+
+		// we simply need to check these exist and are scalar
+		return &Relation{}, nil
 	}
 
 	return nil, fmt.Errorf("unexpected node type %T", rel)
@@ -297,8 +421,24 @@ func (s *EvaluateContext) evalScanSource(source ScanSource) (*Relation, error) {
 		}
 
 		return &Relation{Fields: cols}, nil
-	case *SubqueryScanSource:
-		return s.evalRelation(n.Subquery)
+	case *Subquery:
+		if !n.ReturnsRelation {
+			panic("internal bug: planner planned a join against a scalar subquery")
+		}
+
+		// we pass an empty relation because the subquery can't
+		// refer to the current relation, but they can be correlated against some
+		// outer relation.
+		// for example, "select * from users u inner join (select * from posts where posts.id = u.id) as p on u.id=p.id;"
+		// is invalid, but
+		// "select * from users where id = (select posts.id from posts inner join (select * from posts where id = users.id) as s on s.id=posts.id);"
+		// is valid
+		rel, err := s.evalSubquery(n, &Relation{})
+		if err != nil {
+			return nil, err
+		}
+
+		return rel, nil
 	}
 
 	return nil, fmt.Errorf("unexpected node type %T", source)
@@ -573,57 +713,15 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 		}
 
 		return anonField(objField), nil
-	case *Subquery:
-		// for a subquery, we will add the current relation to the outer relation,
-		// to allow for correlated subqueries
-		oldOuter := s.OuterRelation
-		oldCorrelations := s.Correlations
-
-		s.OuterRelation = &Relation{
-			Fields: append(s.OuterRelation.Fields, currentRel.Fields...),
+	case *SubqueryExpr:
+		if n.Query.ReturnsRelation {
+			panic("internal bug: planner planned a table subquery in an expression")
 		}
-		// we don't need access to the old correlations since we will simply
-		// recognize them as correlated again if they are used in the subquery
-		s.Correlations = []*ColumnRef{}
 
-		defer func() {
-			s.OuterRelation = oldOuter
-			s.Correlations = oldCorrelations
-		}()
-
-		rel, err := s.evalRelation(n.Query)
+		rel, err := s.evalSubquery(n.Query, currentRel)
 		if err != nil {
 			return nil, err
 		}
-
-		// for all new correlations, we need to check if they are present on
-		// the oldOuter relation. If so, then we simply add them as correlated
-		// to the subplan. If not, then we also need to pass them back to the
-		// oldCorrelations so that they can be used in the outer query (in the case
-		// of a multi-level correlated subquery)
-		oldMap := make(map[[2]string]struct{})
-		for _, cor := range oldCorrelations {
-			oldMap[[2]string{cor.Parent, cor.ColumnName}] = struct{}{}
-		}
-
-		for _, cor := range s.Correlations {
-			_, err = currentRel.Search(cor.Parent, cor.ColumnName)
-			// if the column is not found in the current relation, then we need to
-			// pass it back to the oldCorrelations
-			if errors.Is(err, errColumnNotFound) {
-				// if not known to the outer correlation, then add it
-				_, ok := oldMap[[2]string{cor.Parent, cor.ColumnName}]
-				if !ok {
-					oldCorrelations = append(oldCorrelations, cor)
-					continue
-				}
-			} else if err != nil {
-				// some other error occurred
-				return nil, err
-			}
-			// if no error, it is correlated to this query, do nothing
-		}
-		n.Correlated = s.Correlations
 
 		// subquery must return exactly one column
 
@@ -636,7 +734,7 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 			return nil, err
 		}
 
-		if n.SubqueryType == ExistsSubquery || n.SubqueryType == NotExistsSubquery {
+		if n.Exists {
 			return anonField(types.BoolType), nil
 		}
 
@@ -757,6 +855,83 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 
 	return nil, fmt.Errorf("unexpected node type %T", expr)
 }
+
+// evalSubquery evaluates a subquery and returns the relation that the subquery
+// represents. It will perform type validations. It takes the relation of the calling
+// query to allow for correlated subqueries.
+func (s *EvaluateContext) evalSubquery(sub *Subquery, currentRel *Relation) (*Relation, error) {
+	// for a subquery, we will add the current relation to the outer relation,
+	// to allow for correlated subqueries
+	oldOuter := s.OuterRelation
+	oldCorrelations := s.Correlations
+
+	s.OuterRelation = &Relation{
+		Fields: append(s.OuterRelation.Fields, currentRel.Fields...),
+	}
+	// we don't need access to the old correlations since we will simply
+	// recognize them as correlated again if they are used in the subquery
+	s.Correlations = []*ColumnRef{}
+
+	defer func() {
+		s.OuterRelation = oldOuter
+		s.Correlations = oldCorrelations
+	}()
+
+	rel, err := s.evalRelation(sub.Plan)
+	if err != nil {
+		return nil, err
+	}
+
+	// for all new correlations, we need to check if they are present on
+	// the oldOuter relation. If so, then we simply add them as correlated
+	// to the subplan. If not, then we also need to pass them back to the
+	// oldCorrelations so that they can be used in the outer query (in the case
+	// of a multi-level correlated subquery)
+	oldMap := make(map[[2]string]struct{})
+	for _, cor := range oldCorrelations {
+		oldMap[[2]string{cor.Parent, cor.ColumnName}] = struct{}{}
+	}
+
+	for _, cor := range s.Correlations {
+		_, err = currentRel.Search(cor.Parent, cor.ColumnName)
+		// if the column is not found in the current relation, then we need to
+		// pass it back to the oldCorrelations
+		if errors.Is(err, errColumnNotFound) {
+			// if not known to the outer correlation, then add it
+			_, ok := oldMap[[2]string{cor.Parent, cor.ColumnName}]
+			if !ok {
+				oldCorrelations = append(oldCorrelations, cor)
+				continue
+			}
+		} else if err != nil {
+			// some other error occurred
+			return nil, err
+		}
+		// if no error, it is correlated to this query, do nothing
+	}
+	sub.Correlated = s.Correlations
+
+	return rel, nil
+}
+
+// // evalModification evaluates a modification and returns all the columns that
+// // are modifiable. It will perform type validations.
+// func (s *EvaluateContext) evalModification(mod Modification) error {
+// 	switch n := mod.(type) {
+// 	case *ModifiableProduct:
+// 		target, err := s.evalRelation(n.Target)
+// 		if err != nil {
+// 			return err
+// 		}
+
+// 		source, err := s.evalRelation(n.Source)
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+
+// 	return fmt.Errorf("unexpected node type %T", mod)
+// }
 
 /*
 	Helpers for removing duplicate code

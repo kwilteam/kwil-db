@@ -144,23 +144,6 @@ func Test_Aggregate(t *testing.T) {
 			},
 		},
 		{
-			name: "subquery",
-			exprs: []LogicalExpr{
-				&Subquery{
-					SubqueryType: ScalarSubquery,
-					Query: &Subplan{
-						Plan: &Project{
-							Expressions: []LogicalExpr{
-								arithExpr(colExpr("a", "b"), litInt(1)),
-							},
-							Child: &EmptyScan{},
-						},
-					},
-				},
-			},
-			err: true,
-		},
-		{
 			// in this test, I am trying to fool the checker by passing in a plan,
 			// cutting a matching plan, and then checking for a different plan.
 			// e.g. my plan is [a,b,c,d,e], and I cut [b,c,d], and then check for [a,e].

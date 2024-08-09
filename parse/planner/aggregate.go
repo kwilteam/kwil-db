@@ -52,7 +52,7 @@ func newAggregateChecker(exprs []LogicalExpr) (*aggregateChecker, error) {
 			case *AggregateFunctionCall:
 				err = fmt.Errorf("aggregate functions are not allowed in GROUP BY clause")
 				return false
-			case *Subquery:
+			case *SubqueryExpr:
 				err = fmt.Errorf("subqueries are not allowed in GROUP BY clause")
 				return false
 			case *ColumnRef:
@@ -287,7 +287,7 @@ func getAggregateTerms(e LogicalExpr) []*AggregateFunctionCall {
 		case *AggregateFunctionCall:
 			aggs = append(aggs, n)
 			return false
-		case *Subquery:
+		case *SubqueryExpr:
 			return false
 		case LogicalPlan:
 			// if it is a plan like a scan / project, exit
@@ -311,7 +311,7 @@ func mergeAggregates(a []*AggregateFunctionCall, b []*AggregateFunctionCall) []*
 		var flat []LogicalExpr
 		traverse(a, func(n LogicalNode) bool {
 			switch n := n.(type) {
-			case *Subquery:
+			case *SubqueryExpr:
 				return false
 			default:
 				expr, ok := n.(LogicalExpr)
