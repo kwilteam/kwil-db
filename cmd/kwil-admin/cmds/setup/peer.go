@@ -16,7 +16,7 @@ var (
 It will automatically generate required directories and keypairs, and can be given a genesis file and peer list for an existing network.`
 
 	peerExample = `# Initialize a node as a peer to an existing network
-kwil-admin setup peer --root-dir ./kwil-node --genesis /path/to/genesis.json --peers`
+kwil-admin setup peer --root-dir ./kwil-node --genesis /path/to/genesis.json`
 )
 
 func peerCmd() *cobra.Command {
