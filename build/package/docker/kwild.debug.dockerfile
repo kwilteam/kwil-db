@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine3.19 AS build
+FROM golang:1.23-alpine3.19 AS build
 
 # Build Delve
 RUN go install -v github.com/go-delve/delve/cmd/dlv@latest

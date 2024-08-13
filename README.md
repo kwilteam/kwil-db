@@ -30,7 +30,7 @@ For more information on kwil-db, check out the [Kwil node documentation](https:/
 
 To build Kwil, you will need to install:
 
-1. [Go](https://golang.org/doc/install) 1.21 or 1.22
+1. [Go](https://golang.org/doc/install) 1.22 or 1.23
 2. (optional) [Protocol Buffers](https://protobuf.dev/downloads/), with the `protoc` executable binary on your `PATH`.
 3. (optional) [Taskfile](https://taskfile.dev/installation)
 4. (optional) Protocol buffers go plugins and other command line tools. The `tool` task will install the required versions of the tools into your `GOPATH`, so be sure to include `GOPATH/bin` on your `PATH`.
