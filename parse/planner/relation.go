@@ -185,6 +185,8 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 				return nil, err
 			}
 
+			field.signature = expr.String()
+
 			fields = append(fields, field)
 		}
 
@@ -200,8 +202,13 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 				return nil, err
 			}
 
+			field.signature = agg.String()
+
 			fields = append(fields, field)
 		}
+
+		// now that we have fully qualified the fields, we can remove duplicates
+		n.AggregateExpressions = removeDuplicates(n.AggregateExpressions)
 
 		return &Relation{Fields: fields}, nil
 	case *Distinct:
@@ -567,6 +574,14 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 
 		return field, err
 	case *AggregateFunctionCall:
+		// // check for matching signatures in case we are referencing a value
+		// // that is already computed. This is useful for aggregates, where we
+		// // perform the aggregation at a previous level
+		// matched, ok := currentRel.matchingSignature(n.String())
+		// if ok {
+		// 	return matched, nil
+		// }
+
 		fn, ok := parse.Functions[n.FunctionName]
 		if !ok {
 			// should get caught during parsing and/or planning phase,
@@ -939,6 +954,15 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 		}
 
 		return anonField(returnType), nil
+		// case *ExprRef:
+		// 	// check for matching signatures in case we are referencing a value
+		// 	// that is already computed. This is useful for aggregates, where we
+		// 	// perform the aggregation at a previous level
+		// 	matched, ok := currentRel.matchingSignature(n.Expr.String())
+		// 	if ok {
+		// 		return matched, nil
+		// 	}
+		// 	return nil, fmt.Errorf("internal bug: expression reference %s not found", n.Expr.String())
 	}
 
 	return nil, fmt.Errorf("unexpected node type %T", expr)
@@ -1001,6 +1025,8 @@ func (s *EvaluateContext) evalSubquery(sub *Subquery, currentRel *Relation) (*Re
 
 	return rel, nil
 }
+
+// evaluableRelation is a relation with unevaluated expressions.
 
 /*
 	Helpers for removing duplicate code
@@ -1152,6 +1178,18 @@ func (s *Relation) Search(parent, name string) (*Field, error) {
 	return nil, fmt.Errorf(`%w: "%s.%s"`, errColumnNotFound, parent, name)
 }
 
+// matchingSignature returns the field with the matching signature.
+// If no field is found, the second return value is false.
+func (r *Relation) matchingSignature(s string) (*Field, bool) {
+	for _, f := range r.Fields {
+		if f.signature == s {
+			return f, true
+		}
+	}
+
+	return nil, false
+}
+
 func relationFromTable(tbl *types.Table) *Relation {
 	s := &Relation{}
 	for _, col := range tbl.Columns {
@@ -1162,26 +1200,6 @@ func relationFromTable(tbl *types.Table) *Relation {
 		})
 	}
 	return s
-}
-
-type Column struct {
-	Parent   string          // Parent relation name
-	Name     string          // Column name
-	DataType *types.DataType // Column data type
-	Nullable bool            // Column is nullable
-	// TODO: we don't have a way to account for composite indexes.
-	// This is ok for now, it will just make our cost estimates higher
-	// for index seeks on composite indexes / primary keys.
-	HasIndex  bool // Column has an index
-	HasUnique bool // Column has a unique constraint or unique index
-}
-
-// ReferenceableColumn is a column that can be referenced in a query.
-// They are used to represent columns that can be used in expressions.
-type ReferenceableColumn struct {
-	Parent   string          // the parent relation name
-	Name     string          // the column name
-	DataType *types.DataType // the column data type
 }
 
 // Field is a field in a relation.
@@ -1196,6 +1214,11 @@ type Field struct {
 	// depending on the field type.
 	// This value should be accessed using the Scalar() or Object()
 	val any
+	// signature is a string signature of the field. It can be used to check
+	// for equality during the evaluation phase. It is unexported because it is
+	// not used for every field, but instead only for fields where we expect
+	// to use signature matching to reference previously evaluated fields.
+	signature string
 }
 
 func anonField(dt *types.DataType) *Field {

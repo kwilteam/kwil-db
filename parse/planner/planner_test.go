@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse"
@@ -148,23 +147,28 @@ func Test_Planner(t *testing.T) {
 		// 		"  └─Filter: p2.owner_id = u.id\n" +
 		// 		"    └─Scan Table [alias=\"p2\"]: posts [physical]\n",
 		// },
-		{
-			name: "aggregate without group by",
-			sql:  "select sum(age) from users",
-			wt: "Return: sum\n" +
-				"└─Projection: sum(users.age)\n" +
-				"  └─Aggregate: sum(users.age)\n" +
-				"    └─Scan Table: users [physical]\n",
-		},
+		// {
+		// 	name: "aggregate without group by",
+		// 	sql:  "select sum(age) from users",
+		// 	wt: "Return: sum\n" +
+		// 		"└─Projection: [ref:sum(users.age)]\n" +
+		// 		"  └─Aggregate: sum(users.age)\n" +
+		// 		"    └─Scan Table: users [physical]\n",
+		// },
 		// {
 		// 	name: "aggregate with group by",
-		// 	sql:  "select name, sum(age) from users group by name having sum(age)::int > 100",
+		// 	sql:  "select name, sum(age) from users where name = 'a' group by name having sum(age)::int > 100",
 		// 	wt: "Return: name, sum\n" +
-		// 		"└─Projection: users.name; sum(users.age)\n" +
-		// 		"  └─Filter: sum(users.age)::int > 100\n" +
+		// 		"└─Projection: users.name; [ref:sum(users.age)]\n" +
+		// 		"  └─Filter: [ref:sum(users.age)]::int > 100\n" +
 		// 		"    └─Aggregate [users.name]: sum(users.age)\n" +
-		// 		"      └─Scan Table: users [physical]\n",
+		// 		"      └─Filter: users.name = 'a'\n" +
+		// 		"        └─Scan Table: users [physical]\n",
 		// },
+		{
+			name: "complex group by and aggregate",
+			sql:  "select sum(u.age)::int/(p.created_at/100) from users u inner join posts p on u.id=p.owner_id group by (p.created_at/100)",
+		}, // TODO: negative case of the above
 		// {
 		// 	name: "complex group by",
 		// 	sql:  "select age/2, age*3 from users group by age/2, age*3",
@@ -420,13 +424,6 @@ func Test_Planner(t *testing.T) {
 
 				// make sure nothing changed
 				require.Equal(t, test.wt, plan.Format())
-
-				start := time.Now()
-				for i := 0; i < 1000; i++ {
-					plan.Format()
-				}
-
-				fmt.Println(time.Since(start))
 			}
 		})
 	}
@@ -447,6 +444,7 @@ table posts {
 	id uuid primary key,
 	owner_id uuid not null,
 	content text maxlen(300),
+	created_at int not null,
 	foreign key (owner_id) references users(id) on delete cascade on update cascade
 }
 

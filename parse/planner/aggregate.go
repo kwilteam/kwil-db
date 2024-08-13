@@ -47,7 +47,7 @@ func newAggregateChecker(exprs []LogicalExpr) (*aggregateChecker, error) {
 	for _, expr := range exprs {
 		var cols [][2]string // track all columns used in the expression
 		var plan []LogicalExpr
-		traverse(expr, func(node LogicalNode) bool {
+		traverse(expr, func(node Traversable) bool {
 			switch n := node.(type) {
 			case *AggregateFunctionCall:
 				err = fmt.Errorf("aggregate functions are not allowed in GROUP BY clause")
@@ -123,7 +123,7 @@ func (a *aggregateChecker) check(e LogicalExpr) error {
 	// we need to cut for it twice
 	var foundCols [][2]string
 	var traversed []LogicalExpr
-	traverse(e, func(node LogicalNode) bool {
+	traverse(e, func(node Traversable) bool {
 		switch n := node.(type) {
 		case *AggregateFunctionCall:
 			// if it is an aggregate, we don't care what it does
@@ -282,9 +282,10 @@ func equalExpr(a, b LogicalExpr) bool {
 // correlated subqueries
 func getAggregateTerms(e LogicalExpr) []*AggregateFunctionCall {
 	var aggs []*AggregateFunctionCall
-	traverse(e, func(node LogicalNode) bool {
+	traverse(e, func(node Traversable) bool {
 		switch n := node.(type) {
 		case *AggregateFunctionCall:
+			// here, I need to replace the aggregate function with an ExprRef
 			aggs = append(aggs, n)
 			return false
 		case *SubqueryExpr:
@@ -309,7 +310,7 @@ func getAggregateTerms(e LogicalExpr) []*AggregateFunctionCall {
 func mergeAggregates(a []*AggregateFunctionCall, b []*AggregateFunctionCall) []*AggregateFunctionCall {
 	flattenWithoutSubqueries := func(a *AggregateFunctionCall) []LogicalExpr {
 		var flat []LogicalExpr
-		traverse(a, func(n LogicalNode) bool {
+		traverse(a, func(n Traversable) bool {
 			switch n := n.(type) {
 			case *SubqueryExpr:
 				return false
@@ -360,6 +361,23 @@ func mergeAggregates(a []*AggregateFunctionCall, b []*AggregateFunctionCall) []*
 		if !equal {
 			unique = append(unique, node)
 		}
+	}
+
+	return unique
+}
+
+// removeDuplicates removes duplicate aggregate functions from a list.
+func removeDuplicates(a []LogicalExpr) []LogicalExpr {
+	found := map[string]struct{}{}
+	var unique []LogicalExpr
+	for _, node := range a {
+		key := node.String()
+		if _, ok := found[key]; ok {
+			continue
+		}
+
+		found[key] = struct{}{}
+		unique = append(unique, node)
 	}
 
 	return unique

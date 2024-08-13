@@ -242,6 +242,18 @@ func (p *plannerVisitor) VisitExpressionFunctionCall(node *parse.ExpressionFunct
 
 	// now we need to apply rules depending on if it is aggregate or not
 	if funcDef.IsAggregate {
+		// If an aggregate, we wrap it in an ExprRef, so that later, we can
+		// replace it with a reference to the aggregate in the aggregate node.
+
+		// return cast(&AggregateFunctionCall{
+		// 	FunctionName: node.Name,
+		// 	Args:         args,
+		// 	Star:         node.Star,
+		// 	Distinct:     node.Distinct,
+		// }, node)
+
+		// we apply cast outside the reference because we want to keep the reference
+		// specific to the aggregate function call.
 		return cast(&AggregateFunctionCall{
 			FunctionName: node.Name,
 			Args:         args,
@@ -659,7 +671,7 @@ func (p *plannerVisitor) VisitSelectStatement(node *parse.SelectStatement) any {
 // 4. having(can use reference from select)
 // 5. select (project)
 // 6. distinct
-func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
+func (p *plannerVisitor) visitSelectCore(node *parse.SelectCore) any {
 	// if there is no from, then we will simply return a projection
 	// of the return values on a noop plan.
 	if node.From == nil {
@@ -729,8 +741,11 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 	// once the entire tree is constructed (in evalRelation).
 	var expandFuncs []expandFunc
 
+	// TODO: how can we get all aggregate useage from the select columns and having clause,
+	// replace them with references, and then add them to the aggregate node?
+
 	// we analyze the returned columns to see if there are any aggregates
-	var aggs []*AggregateFunctionCall
+	var aggs []LogicalExpr
 	for _, resultCol := range node.Columns {
 		switch resultCol := resultCol.(type) {
 		default:
@@ -738,7 +753,9 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 		case *parse.ResultColumnExpression:
 			logicalExpr := resultCol.Expression.Accept(p).(LogicalExpr)
 			found := getAggregateTerms(logicalExpr)
-			aggs = append(aggs, found...)
+			for _, agg := range found {
+				aggs = append(aggs, agg)
+			}
 
 			// we don't need to delay planning of regular expressions,
 			// but we put it in a function to maintain order of result
@@ -799,7 +816,11 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 		if node.Having != nil {
 			havingExpr := node.Having.Accept(p).(LogicalExpr)
 			havingAggs := getAggregateTerms(havingExpr)
-			agg.AggregateExpressions = mergeAggregates(agg.AggregateExpressions, havingAggs)
+
+			// we will remove duplicates during evaluation once columns are qualified
+			for _, a := range havingAggs {
+				agg.AggregateExpressions = append(agg.AggregateExpressions, a)
+			}
 
 			plan = &Filter{
 				Condition: havingExpr,
@@ -832,6 +853,32 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 			return plan2
 		},
 	}
+}
+
+// The order of building is:
+// 1. from (combining any joins into single source plan)
+// 2. where
+// 3. group by(can use reference from select)
+// 4. having(can use reference from select)
+// 5. select (project)
+// 6. distinct
+func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
+	/*
+		This is my second attempt at select core. I am doing this because I am totally
+		fucking stuck on how to properly represent aggregates, and separate them from result sets.
+
+		If a user does "SELECT sum(id), age/2 from users group by age/2", what needs to happen is:
+		- project ref(a), ref(b)
+		- aggregate [sum(id) as a] group by [age/2 as b]
+		- scan users
+
+		In order to do this, we need to be able to:
+		a. match and rewrite all aggregate functions in having and return to be ExprRef
+		b. match any arbitrary tree in the grouping to any term in the having and return clause, and then rewrite them as ExprRef
+		c. recognize exprefs by name in both the aggregate and other clause to ensure they are accessible within that scope (maybe)?
+
+	*/
+	panic("not impl")
 }
 
 // selectCoreResult is a helper struct that is only returned from VisitSelectCore.

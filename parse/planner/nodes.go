@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -35,6 +36,10 @@ type Traversable interface {
 	// Plans returns all the logical plans that are referenced
 	// by the node (or the nearest node that contains them).
 	Plans() []LogicalPlan
+	// Accept is used to traverse the node.
+	Accept(Visitor) any
+	// Equal is used to compare two nodes.
+	Equal(other Traversable) bool
 }
 
 // ScanSource is a source of data that a Scan can be performed on.
@@ -56,6 +61,9 @@ type TableScanSource struct {
 	rel *Relation
 }
 
+func (s *TableScanSource) Accept(v Visitor) any {
+	return v.VisitTableScanSource(s)
+}
 func (t *TableScanSource) Children() []LogicalNode {
 	return nil
 }
@@ -72,6 +80,15 @@ func (t *TableScanSource) Relation() *Relation {
 	// we will copy it since this is meant to be re-useable,
 	// but some callers may modify it
 	return t.rel.Copy()
+}
+
+func (t *TableScanSource) Equal(other Traversable) bool {
+	o, ok := other.(*TableScanSource)
+	if !ok {
+		return false
+	}
+
+	return t.TableName == o.TableName && t.Type == o.Type
 }
 
 type TableSourceType int
@@ -111,6 +128,9 @@ type ProcedureScanSource struct {
 	rel *Relation
 }
 
+func (s *ProcedureScanSource) Accept(v Visitor) any {
+	return v.VisitProcedureScanSource(s)
+}
 func (f *ProcedureScanSource) Children() []LogicalNode {
 	var c []LogicalNode
 	for _, arg := range f.Args {
@@ -167,6 +187,35 @@ func (f *ProcedureScanSource) Relation() *Relation {
 	return f.rel.Copy()
 }
 
+func (f *ProcedureScanSource) Equal(other Traversable) bool {
+	o, ok := other.(*ProcedureScanSource)
+	if !ok {
+		return false
+	}
+
+	if f.ProcedureName != o.ProcedureName || f.IsForeign != o.IsForeign {
+		return false
+	}
+
+	if len(f.Args) != len(o.Args) || len(f.ContextualArgs) != len(o.ContextualArgs) {
+		return false
+	}
+
+	for i, arg := range f.Args {
+		if !arg.Equal(o.Args[i]) {
+			return false
+		}
+	}
+
+	for i, arg := range f.ContextualArgs {
+		if !arg.Equal(o.ContextualArgs[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Subquery holds information for a subquery.
 // It is a TableSource that can be used in a Scan, but
 // also can be used within expressions. If ReturnsRelation
@@ -183,11 +232,20 @@ type Subquery struct {
 
 	// Correlated is the list of columns that are correlated
 	// to the outer query. If empty, the subquery is uncorrelated.
+	// TODO: we need to revisit this, because expressions in result sets can be correlated
 	Correlated []*ColumnRef
 }
 
+func (s *Subquery) Accept(v Visitor) any {
+	return v.VisitSubquery(s)
+}
 func (s *Subquery) Children() []LogicalNode {
-	return []LogicalNode{s.Plan}
+	c := []LogicalNode{s.Plan}
+	for _, col := range s.Correlated {
+		c = append(c, col)
+	}
+
+	return c
 }
 
 func (s *Subquery) FormatScan() string {
@@ -195,11 +253,47 @@ func (s *Subquery) FormatScan() string {
 }
 
 func (s *Subquery) Plans() []LogicalPlan {
-	return []LogicalPlan{s.Plan}
+	var plans []LogicalPlan
+	plans = append(plans, s.Plan)
+	for _, col := range s.Correlated {
+		plans = append(plans, col.Plans()...)
+	}
+
+	return plans
 }
 
 func (s *Subquery) Relation() *Relation {
 	return s.Plan.Relation()
+}
+
+func (s *Subquery) Equal(other Traversable) bool {
+	o, ok := other.(*Subquery)
+	if !ok {
+		return false
+	}
+
+	// we want to check all of the fields without an
+	// Equal method first, to try to exit early
+
+	if s.ReturnsRelation != o.ReturnsRelation {
+		return false
+	}
+
+	if len(s.Correlated) != len(o.Correlated) {
+		return false
+	}
+
+	if !s.Plan.Equal(o.Plan) {
+		return false
+	}
+
+	for i, col := range s.Correlated {
+		if !col.Equal(o.Correlated[i]) {
+			return false
+		}
+	}
+
+	return true
 }
 
 type LogicalNode interface {
@@ -221,6 +315,9 @@ type EmptyScan struct {
 	baseLogicalPlan
 }
 
+func (s *EmptyScan) Accept(v Visitor) any {
+	return v.VisitEmptyScan(s)
+}
 func (n *EmptyScan) Children() []LogicalNode {
 	return nil
 }
@@ -237,6 +334,11 @@ func (n *EmptyScan) Relation() *Relation {
 	return &Relation{}
 }
 
+func (n *EmptyScan) Equal(other Traversable) bool {
+	_, ok := other.(*EmptyScan)
+	return ok
+}
+
 type Scan struct {
 	baseLogicalPlan
 	Source ScanSource
@@ -247,6 +349,9 @@ type Scan struct {
 	RelationName string
 }
 
+func (s *Scan) Accept(v Visitor) any {
+	return v.VisitScan(s)
+}
 func (s *Scan) Children() []LogicalNode {
 	return s.Source.Children()
 }
@@ -297,6 +402,19 @@ func (s *Scan) Relation() *Relation {
 	return rel
 }
 
+func (s *Scan) Equal(other Traversable) bool {
+	o, ok := other.(*Scan)
+	if !ok {
+		return false
+	}
+
+	if s.RelationName != o.RelationName {
+		return false
+	}
+
+	return s.Source.Equal(o.Source)
+}
+
 type Project struct {
 	baseLogicalPlan
 
@@ -313,6 +431,9 @@ type Project struct {
 	expandFuncs []expandFunc
 }
 
+func (s *Project) Accept(v Visitor) any {
+	return v.VisitProject(s)
+}
 func (p *Project) Children() []LogicalNode {
 	var c []LogicalNode
 	for _, expr := range p.Expressions {
@@ -356,12 +477,34 @@ func (p *Project) Relation() *Relation {
 	return &Relation{Fields: fields}
 }
 
+func (p *Project) Equal(other Traversable) bool {
+	o, ok := other.(*Project)
+	if !ok {
+		return false
+	}
+
+	if len(p.Expressions) != len(o.Expressions) {
+		return false
+	}
+
+	for i, expr := range p.Expressions {
+		if !expr.Equal(o.Expressions[i]) {
+			return false
+		}
+	}
+
+	return p.Child.Equal(o.Child)
+}
+
 type Filter struct {
 	baseLogicalPlan
 	Condition LogicalExpr
 	Child     LogicalPlan
 }
 
+func (s *Filter) Accept(v Visitor) any {
+	return v.VisitFilter(s)
+}
 func (f *Filter) Children() []LogicalNode {
 	return []LogicalNode{f.Child, f.Condition}
 }
@@ -378,6 +521,15 @@ func (f *Filter) Relation() *Relation {
 	return f.Child.Relation()
 }
 
+func (f *Filter) Equal(other Traversable) bool {
+	o, ok := other.(*Filter)
+	if !ok {
+		return false
+	}
+
+	return f.Condition.Equal(o.Condition) && f.Child.Equal(o.Child)
+}
+
 type Join struct {
 	baseLogicalPlan
 	Left      LogicalPlan
@@ -386,6 +538,9 @@ type Join struct {
 	Condition LogicalExpr
 }
 
+func (s *Join) Accept(v Visitor) any {
+	return v.VisitJoin(s)
+}
 func (j *Join) Children() []LogicalNode {
 	return []LogicalNode{j.Left, j.Right, j.Condition}
 }
@@ -411,6 +566,23 @@ func (j *Join) Relation() *Relation {
 	return &Relation{
 		Fields: append(left.Fields, right.Fields...),
 	}
+}
+
+func (j *Join) Equal(other Traversable) bool {
+	o, ok := other.(*Join)
+	if !ok {
+		return false
+	}
+
+	if j.JoinType != o.JoinType {
+		return false
+	}
+
+	if !j.Condition.Equal(o.Condition) {
+		return false
+	}
+
+	return j.Left.Equal(o.Left) && j.Right.Equal(o.Right)
 }
 
 type Sort struct {
@@ -450,6 +622,9 @@ func (s *Sort) String() string {
 	return str.String()
 }
 
+func (s *Sort) Accept(v Visitor) any {
+	return v.VisitSort(s)
+}
 func (s *Sort) Children() []LogicalNode {
 	var c []LogicalNode
 	for _, sortExpr := range s.SortExpressions {
@@ -473,6 +648,33 @@ func (s *Sort) Relation() *Relation {
 	return s.Child.Relation()
 }
 
+func (s *Sort) Equal(other Traversable) bool {
+	o, ok := other.(*Sort)
+	if !ok {
+		return false
+	}
+
+	if len(s.SortExpressions) != len(o.SortExpressions) {
+		return false
+	}
+
+	for i, sortExpr := range s.SortExpressions {
+		if sortExpr.Ascending != o.SortExpressions[i].Ascending {
+			return false
+		}
+
+		if sortExpr.NullsLast != o.SortExpressions[i].NullsLast {
+			return false
+		}
+
+		if !sortExpr.Expr.Equal(o.SortExpressions[i].Expr) {
+			return false
+		}
+	}
+
+	return s.Child.Equal(o.Child)
+}
+
 type Limit struct {
 	baseLogicalPlan
 	Child  LogicalPlan
@@ -480,6 +682,9 @@ type Limit struct {
 	Offset LogicalExpr
 }
 
+func (s *Limit) Accept(v Visitor) any {
+	return v.VisitLimit(s)
+}
 func (l *Limit) Children() []LogicalNode {
 	return []LogicalNode{l.Child, l.Limit, l.Offset}
 }
@@ -513,11 +718,31 @@ func (l *Limit) Relation() *Relation {
 	return l.Child.Relation()
 }
 
+func (l *Limit) Equal(other Traversable) bool {
+	o, ok := other.(*Limit)
+	if !ok {
+		return false
+	}
+
+	if l.Limit != nil && !l.Limit.Equal(o.Limit) {
+		return false
+	}
+
+	if l.Offset != nil && !l.Offset.Equal(o.Offset) {
+		return false
+	}
+
+	return l.Child.Equal(o.Child)
+}
+
 type Distinct struct {
 	baseLogicalPlan
 	Child LogicalPlan
 }
 
+func (s *Distinct) Accept(v Visitor) any {
+	return v.VisitDistinct(s)
+}
 func (d *Distinct) Children() []LogicalNode {
 	return []LogicalNode{d.Child}
 }
@@ -534,6 +759,15 @@ func (d *Distinct) Relation() *Relation {
 	return d.Child.Relation()
 }
 
+func (d *Distinct) Equal(other Traversable) bool {
+	_, ok := other.(*Distinct)
+	if !ok {
+		return false
+	}
+
+	return d.Child.Equal(other)
+}
+
 type SetOperation struct {
 	baseLogicalPlan
 	Left   LogicalPlan
@@ -542,6 +776,9 @@ type SetOperation struct {
 }
 
 // SetOperation
+func (s *SetOperation) Accept(v Visitor) any {
+	return v.VisitSetOperation(s)
+}
 func (s *SetOperation) Children() []LogicalNode {
 	return []LogicalNode{s.Left, s.Right}
 }
@@ -573,6 +810,15 @@ func (s *SetOperation) Relation() *Relation {
 	}
 }
 
+func (s *SetOperation) Equal(other Traversable) bool {
+	o, ok := other.(*SetOperation)
+	if !ok {
+		return false
+	}
+
+	return s.OpType == o.OpType && s.Left.Equal(o.Left) && s.Right.Equal(o.Right)
+}
+
 type Aggregate struct {
 	baseLogicalPlan
 	// GroupingExpressions are the expressions used
@@ -580,12 +826,15 @@ type Aggregate struct {
 	GroupingExpressions []LogicalExpr
 	// AggregateExpressions are the expressions used
 	// in the SELECT clause (e.g. SUM(x), COUNT(y)).
-	AggregateExpressions []*AggregateFunctionCall
+	AggregateExpressions []LogicalExpr
 	// Child is the input to the aggregation
 	// (e.g. a Project node).
 	Child LogicalPlan
 }
 
+func (s *Aggregate) Accept(v Visitor) any {
+	return v.VisitAggregate(s)
+}
 func (a *Aggregate) Children() []LogicalNode {
 	var c []LogicalNode
 	for _, expr := range a.GroupingExpressions {
@@ -645,6 +894,35 @@ func (a *Aggregate) Relation() *Relation {
 	}
 
 	return &Relation{Fields: fields}
+}
+
+func (a *Aggregate) Equal(other Traversable) bool {
+	o, ok := other.(*Aggregate)
+	if !ok {
+		return false
+	}
+
+	if len(a.GroupingExpressions) != len(o.GroupingExpressions) {
+		return false
+	}
+
+	if len(a.AggregateExpressions) != len(o.AggregateExpressions) {
+		return false
+	}
+
+	for i, expr := range a.GroupingExpressions {
+		if !expr.Equal(o.GroupingExpressions[i]) {
+			return false
+		}
+	}
+
+	for i, expr := range a.AggregateExpressions {
+		if !expr.Equal(o.AggregateExpressions[i]) {
+			return false
+		}
+	}
+
+	return a.Child.Equal(o.Child)
 }
 
 type JoinType int
@@ -707,6 +985,9 @@ type Subplan struct {
 	extraInfo string
 }
 
+func (s *Subplan) Accept(v Visitor) any {
+	return v.VisitSubplan(s)
+}
 func (s *Subplan) Children() []LogicalNode {
 	return []LogicalNode{s.Plan}
 }
@@ -731,6 +1012,15 @@ func (s *Subplan) Relation() *Relation {
 	return s.Plan.Relation()
 }
 
+func (s *Subplan) Equal(other Traversable) bool {
+	o, ok := other.(*Subplan)
+	if !ok {
+		return false
+	}
+
+	return s.ID == o.ID && s.Type == o.Type && s.Plan.Equal(o.Plan)
+}
+
 type SubplanType int
 
 const (
@@ -749,6 +1039,47 @@ func (s SubplanType) String() string {
 	}
 }
 
+// CartesianProduct is a logical plan node that represents a cartesian product
+// between two relations. This is used in joins and set operations.
+// Kwil doesn't actually allow cartesian products to be executed, but it is a necessary
+// intermediate step for planning complex updates and deletes.
+type CartesianProduct struct {
+	baseLogicalPlan
+	Left  LogicalPlan
+	Right LogicalPlan
+}
+
+func (c *CartesianProduct) String() string {
+	return "Cartesian Product"
+}
+
+func (s *CartesianProduct) Accept(v Visitor) any {
+	return v.VisitCartesianProduct(s)
+}
+func (c *CartesianProduct) Children() []LogicalNode {
+	return []LogicalNode{c.Left, c.Right}
+}
+
+func (c *CartesianProduct) Plans() []LogicalPlan {
+	return []LogicalPlan{c.Left, c.Right}
+}
+
+func (c *CartesianProduct) Relation() *Relation {
+	// we return the relation of the left side of the cartesian product
+	return &Relation{
+		Fields: append(c.Left.Relation().Fields, c.Right.Relation().Fields...),
+	}
+}
+
+func (c *CartesianProduct) Equal(other Traversable) bool {
+	o, ok := other.(*CartesianProduct)
+	if !ok {
+		return false
+	}
+
+	return c.Left.Equal(o.Left) && c.Right.Equal(o.Right)
+}
+
 /*
 	###########################
 	#                         #
@@ -760,16 +1091,10 @@ func (s SubplanType) String() string {
 type LogicalExpr interface {
 	LogicalNode
 	Field() *Field
-	expr()
 }
-
-type baseLogicalExpr struct{}
-
-func (b *baseLogicalExpr) expr() {}
 
 // Literal value
 type Literal struct {
-	baseLogicalExpr
 	Value interface{}
 	Type  *types.DataType
 }
@@ -785,6 +1110,9 @@ func (l *Literal) String() string {
 	}
 }
 
+func (s *Literal) Accept(v Visitor) any {
+	return v.VisitLiteral(s)
+}
 func (l *Literal) Children() []LogicalNode {
 	return nil
 }
@@ -797,9 +1125,32 @@ func (l *Literal) Field() *Field {
 	return anonField(l.Type.Copy())
 }
 
+func (l *Literal) Equal(other Traversable) bool {
+	o, ok := other.(*Literal)
+	if !ok {
+		return false
+	}
+
+	if !l.Type.EqualsStrict(o.Type) {
+		return false
+	}
+
+	typeOf := reflect.TypeOf(l.Value)
+	typeOfOther := reflect.TypeOf(o.Value)
+
+	if typeOf.Kind() != typeOfOther.Kind() {
+		return false
+	}
+
+	if typeOf.Kind() == reflect.Ptr {
+		return reflect.ValueOf(l.Value).Pointer() == reflect.ValueOf(o.Value).Pointer()
+	}
+
+	return l.Value == o.Value
+}
+
 // Variable reference
 type Variable struct {
-	baseLogicalExpr
 	// name is something like $id, @caller, etc.
 	VarName string
 	// dataType is the data type, which is detected
@@ -812,6 +1163,9 @@ func (v *Variable) String() string {
 	return v.VarName
 }
 
+func (s *Variable) Accept(v Visitor) any {
+	return v.VisitVariable(s)
+}
 func (v *Variable) Children() []LogicalNode {
 	return nil
 }
@@ -826,9 +1180,17 @@ func (v *Variable) Field() *Field {
 	}
 }
 
+func (v *Variable) Equal(other Traversable) bool {
+	o, ok := other.(*Variable)
+	if !ok {
+		return false
+	}
+
+	return v.VarName == o.VarName
+}
+
 // Column reference
 type ColumnRef struct {
-	baseLogicalExpr
 	// Parent relation name, can be empty.
 	// If not specified by user, it will be qualified
 	// during the planning phase.
@@ -846,6 +1208,9 @@ func (c *ColumnRef) String() string {
 	return c.ColumnName
 }
 
+func (s *ColumnRef) Accept(v Visitor) any {
+	return v.VisitColumnRef(s)
+}
 func (c *ColumnRef) Children() []LogicalNode {
 	return nil
 }
@@ -862,8 +1227,16 @@ func (c *ColumnRef) Field() *Field {
 	}
 }
 
+func (c *ColumnRef) Equal(other Traversable) bool {
+	o, ok := other.(*ColumnRef)
+	if !ok {
+		return false
+	}
+
+	return c.Parent == o.Parent && c.ColumnName == o.ColumnName
+}
+
 type AggregateFunctionCall struct {
-	baseLogicalExpr
 	FunctionName string
 	Args         []LogicalExpr
 	Star         bool
@@ -894,6 +1267,9 @@ func (a *AggregateFunctionCall) String() string {
 	return buf.String()
 }
 
+func (s *AggregateFunctionCall) Accept(v Visitor) any {
+	return v.VisitAggregateFunctionCall(s)
+}
 func (a *AggregateFunctionCall) Children() []LogicalNode {
 	var c []LogicalNode
 	for _, arg := range a.Args {
@@ -914,9 +1290,39 @@ func (a *AggregateFunctionCall) Field() *Field {
 	return anonField(a.returnType.Copy())
 }
 
+func (a *AggregateFunctionCall) Equal(other Traversable) bool {
+	o, ok := other.(*AggregateFunctionCall)
+	if !ok {
+		return false
+	}
+
+	if a.FunctionName != o.FunctionName {
+		return false
+	}
+
+	if a.Star != o.Star {
+		return false
+	}
+
+	if a.Distinct != o.Distinct {
+		return false
+	}
+
+	if len(a.Args) != len(o.Args) {
+		return false
+	}
+
+	for i, arg := range a.Args {
+		if !arg.Equal(o.Args[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Function call
 type ScalarFunctionCall struct {
-	baseLogicalExpr
 	FunctionName string
 	Args         []LogicalExpr
 	// returnType is the data type of the return value.
@@ -938,6 +1344,9 @@ func (f *ScalarFunctionCall) String() string {
 	return buf.String()
 }
 
+func (s *ScalarFunctionCall) Accept(v Visitor) any {
+	return v.VisitScalarFunctionCall(s)
+}
 func (f *ScalarFunctionCall) Children() []LogicalNode {
 	var c []LogicalNode
 	for _, arg := range f.Args {
@@ -958,11 +1367,33 @@ func (f *ScalarFunctionCall) Field() *Field {
 	return anonField(f.returnType.Copy())
 }
 
+func (f *ScalarFunctionCall) Equal(other Traversable) bool {
+	o, ok := other.(*ScalarFunctionCall)
+	if !ok {
+		return false
+	}
+
+	if f.FunctionName != o.FunctionName {
+		return false
+	}
+
+	if len(f.Args) != len(o.Args) {
+		return false
+	}
+
+	for i, arg := range f.Args {
+		if !arg.Equal(o.Args[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // ProcedureCall is a call to a procedure.
 // This can be a call to either a procedure in the same schema, or
 // to a foreign procedure.
 type ProcedureCall struct {
-	baseLogicalExpr
 	ProcedureName string
 	Foreign       bool
 	Args          []LogicalExpr
@@ -994,6 +1425,9 @@ func (p *ProcedureCall) String() string {
 	return buf.String()
 }
 
+func (s *ProcedureCall) Accept(v Visitor) any {
+	return v.VisitProcedureCall(s)
+}
 func (p *ProcedureCall) Children() []LogicalNode {
 	var c []LogicalNode
 	for _, arg := range p.Args {
@@ -1014,8 +1448,34 @@ func (p *ProcedureCall) Field() *Field {
 	return anonField(p.returnType.Copy())
 }
 
+func (p *ProcedureCall) Equal(other Traversable) bool {
+	o, ok := other.(*ProcedureCall)
+	if !ok {
+		return false
+	}
+
+	if p.ProcedureName != o.ProcedureName {
+		return false
+	}
+
+	if p.Foreign != o.Foreign {
+		return false
+	}
+
+	if len(p.Args) != len(o.Args) {
+		return false
+	}
+
+	for i, arg := range p.Args {
+		if !arg.Equal(o.Args[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
 type ArithmeticOp struct {
-	baseLogicalExpr
 	Left  LogicalExpr
 	Right LogicalExpr
 	Op    ArithmeticOperator
@@ -1049,6 +1509,9 @@ func (a *ArithmeticOp) String() string {
 	return fmt.Sprintf("%s %s %s", a.Left.String(), op, a.Right.String())
 }
 
+func (s *ArithmeticOp) Accept(v Visitor) any {
+	return v.VisitArithmeticOp(s)
+}
 func (a *ArithmeticOp) Children() []LogicalNode {
 	return []LogicalNode{a.Left, a.Right}
 }
@@ -1066,8 +1529,16 @@ func (a *ArithmeticOp) Field() *Field {
 	return anonField(scalar.Copy())
 }
 
+func (a *ArithmeticOp) Equal(other Traversable) bool {
+	o, ok := other.(*ArithmeticOp)
+	if !ok {
+		return false
+	}
+
+	return a.Op == o.Op && a.Left.Equal(o.Left) && a.Right.Equal(o.Right)
+}
+
 type ComparisonOp struct {
-	baseLogicalExpr
 	Left  LogicalExpr
 	Right LogicalExpr
 	Op    ComparisonOperator
@@ -1124,6 +1595,9 @@ func (c ComparisonOperator) String() string {
 	}
 }
 
+func (s *ComparisonOp) Accept(v Visitor) any {
+	return v.VisitComparisonOp(s)
+}
 func (c *ComparisonOp) Children() []LogicalNode {
 	return []LogicalNode{c.Left, c.Right}
 }
@@ -1140,8 +1614,16 @@ func (c *ComparisonOp) Field() *Field {
 	return anonField(types.BoolType.Copy())
 }
 
+func (c *ComparisonOp) Equal(other Traversable) bool {
+	o, ok := other.(*ComparisonOp)
+	if !ok {
+		return false
+	}
+
+	return c.Op == o.Op && c.Left.Equal(o.Left) && c.Right.Equal(o.Right)
+}
+
 type LogicalOp struct {
-	baseLogicalExpr
 	Left  LogicalExpr
 	Right LogicalExpr
 	Op    LogicalOperator
@@ -1166,6 +1648,9 @@ func (l *LogicalOp) String() string {
 	return fmt.Sprintf("%s %s %s", l.Left.String(), op, l.Right.String())
 }
 
+func (s *LogicalOp) Accept(v Visitor) any {
+	return v.VisitLogicalOp(s)
+}
 func (l *LogicalOp) Children() []LogicalNode {
 	return []LogicalNode{l.Left, l.Right}
 }
@@ -1178,8 +1663,16 @@ func (l *LogicalOp) Field() *Field {
 	return anonField(types.BoolType.Copy())
 }
 
+func (l *LogicalOp) Equal(other Traversable) bool {
+	o, ok := other.(*LogicalOp)
+	if !ok {
+		return false
+	}
+
+	return l.Op == o.Op && l.Left.Equal(o.Left) && l.Right.Equal(o.Right)
+}
+
 type UnaryOp struct {
-	baseLogicalExpr
 	Expr LogicalExpr
 	Op   UnaryOperator
 }
@@ -1209,6 +1702,9 @@ func (u UnaryOp) String() string {
 	return fmt.Sprintf("%s%s", u.Op.String(), u.Expr.String())
 }
 
+func (s *UnaryOp) Accept(v Visitor) any {
+	return v.VisitUnaryOp(s)
+}
 func (u *UnaryOp) Children() []LogicalNode {
 	return []LogicalNode{u.Expr}
 }
@@ -1221,8 +1717,16 @@ func (u *UnaryOp) Field() *Field {
 	return u.Expr.Field()
 }
 
+func (u *UnaryOp) Equal(other Traversable) bool {
+	o, ok := other.(*UnaryOp)
+	if !ok {
+		return false
+	}
+
+	return u.Op == o.Op && u.Expr.Equal(o.Expr)
+}
+
 type TypeCast struct {
-	baseLogicalExpr
 	Expr LogicalExpr
 	Type *types.DataType
 }
@@ -1231,6 +1735,9 @@ func (t *TypeCast) String() string {
 	return fmt.Sprintf("%s::%s", t.Expr.String(), t.Type.Name)
 }
 
+func (s *TypeCast) Accept(v Visitor) any {
+	return v.VisitTypeCast(s)
+}
 func (t *TypeCast) Children() []LogicalNode {
 	return []LogicalNode{t.Expr}
 }
@@ -1243,8 +1750,16 @@ func (t *TypeCast) Field() *Field {
 	return anonField(t.Type.Copy())
 }
 
+func (t *TypeCast) Equal(other Traversable) bool {
+	o, ok := other.(*TypeCast)
+	if !ok {
+		return false
+	}
+
+	return t.Type.EqualsStrict(o.Type) && t.Expr.Equal(o.Expr)
+}
+
 type AliasExpr struct {
-	baseLogicalExpr
 	Expr  LogicalExpr
 	Alias string
 }
@@ -1253,6 +1768,9 @@ func (a *AliasExpr) String() string {
 	return fmt.Sprintf("%s AS %s", a.Expr.String(), a.Alias)
 }
 
+func (s *AliasExpr) Accept(v Visitor) any {
+	return v.VisitAliasExpr(s)
+}
 func (a *AliasExpr) Children() []LogicalNode {
 	return []LogicalNode{a.Expr}
 }
@@ -1265,8 +1783,16 @@ func (a *AliasExpr) Field() *Field {
 	return a.Expr.Field()
 }
 
+func (a *AliasExpr) Equal(other Traversable) bool {
+	o, ok := other.(*AliasExpr)
+	if !ok {
+		return false
+	}
+
+	return a.Alias == o.Alias && a.Expr.Equal(o.Expr)
+}
+
 type ArrayAccess struct {
-	baseLogicalExpr
 	Array LogicalExpr
 	Index LogicalExpr
 }
@@ -1275,6 +1801,9 @@ func (a *ArrayAccess) String() string {
 	return fmt.Sprintf("%s[%s]", a.Array.String(), a.Index.String())
 }
 
+func (s *ArrayAccess) Accept(v Visitor) any {
+	return v.VisitArrayAccess(s)
+}
 func (a *ArrayAccess) Children() []LogicalNode {
 	return []LogicalNode{a.Array, a.Index}
 }
@@ -1293,8 +1822,16 @@ func (a *ArrayAccess) Field() *Field {
 	return anonField(scalar.Copy())
 }
 
+func (a *ArrayAccess) Equal(other Traversable) bool {
+	o, ok := other.(*ArrayAccess)
+	if !ok {
+		return false
+	}
+
+	return a.Array.Equal(o.Array) && a.Index.Equal(o.Index)
+}
+
 type ArrayConstructor struct {
-	baseLogicalExpr
 	Elements []LogicalExpr
 }
 
@@ -1311,6 +1848,9 @@ func (a *ArrayConstructor) String() string {
 	return buf.String()
 }
 
+func (s *ArrayConstructor) Accept(v Visitor) any {
+	return v.VisitArrayConstructor(s)
+}
 func (a *ArrayConstructor) Children() []LogicalNode {
 	var c []LogicalNode
 	for _, elem := range a.Elements {
@@ -1342,8 +1882,26 @@ func (a *ArrayConstructor) Field() *Field {
 	return anonField(scalar.Copy())
 }
 
+func (a *ArrayConstructor) Equal(other Traversable) bool {
+	o, ok := other.(*ArrayConstructor)
+	if !ok {
+		return false
+	}
+
+	if len(a.Elements) != len(o.Elements) {
+		return false
+	}
+
+	for i, elem := range a.Elements {
+		if !elem.Equal(o.Elements[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
 type FieldAccess struct {
-	baseLogicalExpr
 	Object LogicalExpr
 	Key    string
 }
@@ -1352,6 +1910,9 @@ func (f *FieldAccess) String() string {
 	return fmt.Sprintf("%s.%s", f.Object.String(), f.Key)
 }
 
+func (s *FieldAccess) Accept(v Visitor) any {
+	return v.VisitFieldAccess(s)
+}
 func (f *FieldAccess) Children() []LogicalNode {
 	return []LogicalNode{f.Object}
 }
@@ -1374,8 +1935,16 @@ func (f *FieldAccess) Field() *Field {
 	return anonField(val.Copy())
 }
 
+func (f *FieldAccess) Equal(other Traversable) bool {
+	o, ok := other.(*FieldAccess)
+	if !ok {
+		return false
+	}
+
+	return f.Key == o.Key && f.Object.Equal(o.Object)
+}
+
 type SubqueryExpr struct {
-	baseLogicalExpr
 	Query *Subquery
 	// If Exists is true, we are checking if the subquery returns any rows.
 	// Otherwise, the subquery will return a single value.
@@ -1423,6 +1992,9 @@ func (s *SubqueryExpr) String() string {
 	return str.String()
 }
 
+func (s *SubqueryExpr) Accept(v Visitor) any {
+	return v.VisitSubqueryExpr(s)
+}
 func (s *SubqueryExpr) Children() []LogicalNode {
 	return []LogicalNode{s.Query.Plan}
 }
@@ -1439,8 +2011,16 @@ func (s *SubqueryExpr) Field() *Field {
 	return s.Query.Plan.Relation().Fields[0]
 }
 
+func (s *SubqueryExpr) Equal(other Traversable) bool {
+	o, ok := other.(*SubqueryExpr)
+	if !ok {
+		return false
+	}
+
+	return s.Query.Plan.ID == o.Query.Plan.ID && s.Exists == o.Exists
+}
+
 type Collate struct {
-	baseLogicalExpr
 	Expr      LogicalExpr
 	Collation CollationType
 }
@@ -1449,6 +2029,9 @@ func (c *Collate) String() string {
 	return fmt.Sprintf("%s COLLATE %s", c.Expr.String(), c.Collation.String())
 }
 
+func (s *Collate) Accept(v Visitor) any {
+	return v.VisitCollate(s)
+}
 func (c *Collate) Children() []LogicalNode {
 	return []LogicalNode{c.Expr}
 }
@@ -1459,6 +2042,15 @@ func (c *Collate) Plans() []LogicalPlan {
 
 func (c *Collate) Field() *Field {
 	return c.Expr.Field()
+}
+
+func (c *Collate) Equal(other Traversable) bool {
+	o, ok := other.(*Collate)
+	if !ok {
+		return false
+	}
+
+	return c.Collation == o.Collation && c.Expr.Equal(o.Expr)
 }
 
 type CollationType uint8
@@ -1478,7 +2070,6 @@ func (c CollationType) String() string {
 }
 
 type IsIn struct {
-	baseLogicalExpr
 	// Left is the expression that is being compared.
 	Left LogicalExpr
 
@@ -1509,6 +2100,9 @@ func (i *IsIn) String() string {
 	return str.String()
 }
 
+func (s *IsIn) Accept(v Visitor) any {
+	return v.VisitIsIn(s)
+}
 func (i *IsIn) Children() []LogicalNode {
 	var c []LogicalNode
 	c = append(c, i.Left)
@@ -1538,8 +2132,37 @@ func (i *IsIn) Field() *Field {
 	return anonField(types.BoolType.Copy())
 }
 
+func (i *IsIn) Equal(other Traversable) bool {
+	o, ok := other.(*IsIn)
+	if !ok {
+		return false
+	}
+
+	if !i.Left.Equal(o.Left) {
+		return false
+	}
+
+	if len(i.Expressions) != len(o.Expressions) {
+		return false
+	}
+
+	for j, expr := range i.Expressions {
+		if !expr.Equal(o.Expressions[j]) {
+			return false
+		}
+	}
+
+	if i.Subquery != nil {
+		if o.Subquery == nil {
+			return false
+		}
+		return i.Subquery.Equal(o.Subquery)
+	}
+
+	return o.Subquery == nil
+}
+
 type Case struct {
-	baseLogicalExpr
 	// Value is the value that is being compared.
 	// Can be nil if there is no value to compare.
 	Value LogicalExpr
@@ -1576,6 +2199,9 @@ func (c *Case) String() string {
 	return str.String()
 }
 
+func (s *Case) Accept(v Visitor) any {
+	return v.VisitCase(s)
+}
 func (c *Case) Children() []LogicalNode {
 	var ch []LogicalNode
 	if c.Value != nil {
@@ -1618,11 +2244,120 @@ func (c *Case) Field() *Field {
 	return c.WhenClauses[0][1].Field()
 }
 
+func (c *Case) Equal(other Traversable) bool {
+	o, ok := other.(*Case)
+	if !ok {
+		return false
+	}
+
+	if c.Value != nil && o.Value != nil {
+		if !c.Value.Equal(o.Value) {
+			return false
+		}
+	} else if c.Value != nil || o.Value != nil {
+		return false
+	}
+
+	if len(c.WhenClauses) != len(o.WhenClauses) {
+		return false
+	}
+
+	for i, when := range c.WhenClauses {
+		if !when[0].Equal(o.WhenClauses[i][0]) {
+			return false
+		}
+		if !when[1].Equal(o.WhenClauses[i][1]) {
+			return false
+		}
+	}
+
+	if c.Else != nil && o.Else != nil {
+		return c.Else.Equal(o.Else)
+	}
+
+	return c.Else == nil && o.Else == nil
+}
+
+// ExprRef is a reference to an expression in the query.
+// It is used when a part of the query is referenced in another.
+// For example, SELECT SUM(a) FROM table1 GROUP BY a HAVING SUM(a) > 10,
+// both SUM(a) expressions are the same, and will reference the same ExprRef
+// (which would actually occur in the Aggregate node).
+type ExprRef struct {
+	// Identified is the expression that is being referenced.
+	// It is a pointer to the actual expression.
+	Identified *IdentifiedExpr
+}
+
+func (e *ExprRef) String() string {
+	return fmt.Sprintf(`[ref:%s]`, e.Identified.ID)
+}
+
+func (e *ExprRef) Field() *Field {
+	return e.Identified.Field()
+}
+
+func (s *ExprRef) Accept(v Visitor) any {
+	return v.VisitExprRef(s)
+}
+func (e *ExprRef) Children() []LogicalNode {
+	return []LogicalNode{e.Identified}
+}
+
+func (e *ExprRef) Plans() []LogicalPlan {
+	return e.Identified.Plans()
+}
+
+func (e *ExprRef) Equal(other Traversable) bool {
+	o, ok := other.(*ExprRef)
+	if !ok {
+		return false
+	}
+
+	return e.Identified.Equal(o.Identified)
+}
+
+// IdentifiedExpr is an expression that can be referenced.
+type IdentifiedExpr struct {
+	// ID is the unique identifier for the expression.
+	ID string
+	// Expr is the expression that is being identified.
+	Expr LogicalExpr
+}
+
+func (i *IdentifiedExpr) String() string {
+	return fmt.Sprintf(`[id:%s; %s]`, i.ID, i.Expr.String())
+}
+
+func (i *IdentifiedExpr) Field() *Field {
+	return i.Expr.Field()
+}
+
+func (s *IdentifiedExpr) Accept(v Visitor) any {
+	return v.VisitIdentifiedExpr(s)
+}
+func (i *IdentifiedExpr) Children() []LogicalNode {
+	return []LogicalNode{i.Expr}
+}
+
+func (i *IdentifiedExpr) Plans() []LogicalPlan {
+	return i.Expr.Plans()
+}
+
+func (i *IdentifiedExpr) Equal(other Traversable) bool {
+	o, ok := other.(*IdentifiedExpr)
+	if !ok {
+		return false
+	}
+
+	return i.ID == o.ID && i.Expr.Equal(o.Expr)
+}
+
 // traverse traverses a logical plan in preorder.
 // It will call the callback function for each node in the plan.
 // If the callback function returns false, the traversal will not
 // continue to the children of the node.
-func traverse(node LogicalNode, callback func(node LogicalNode) bool) {
+func traverse(node Traversable, callback func(node Traversable) bool) {
 	if !callback(node) {
 		return
 	}
@@ -1742,6 +2477,9 @@ func (r *Return) String() string {
 	return str.String()
 }
 
+func (s *Return) Accept(v Visitor) any {
+	return v.VisitReturn(s)
+}
 func (r *Return) Children() []LogicalNode {
 	return []LogicalNode{r.Child}
 }
@@ -1755,6 +2493,25 @@ func (r *Return) Relation() *Relation {
 	return r.Child.Relation()
 }
 
+func (r *Return) Equal(t Traversable) bool {
+	o, ok := t.(*Return)
+	if !ok {
+		return false
+	}
+
+	if len(r.Fields) != len(o.Fields) {
+		return false
+	}
+
+	for i, field := range r.Fields {
+		if field != o.Fields[i] {
+			return false
+		}
+	}
+
+	return r.Child.Equal(o.Child)
+}
+
 /*
 	For modifying relations, we will use the following process:
 	1. Materialize the source relation (exactly same as any SELECT).
@@ -1765,35 +2522,6 @@ func (r *Return) Relation() *Relation {
 	can be modified.
 	3. Apply the filter to the cartesian product / ModifiableProduct.
 */
-
-// CartesianProduct is a logical plan node that represents a cartesian product
-// between two relations. This is used in joins and set operations.
-// Kwil doesn't actually allow cartesian products to be executed, but it is a necessary
-// intermediate step for planning complex updates and deletes.
-type CartesianProduct struct {
-	baseLogicalPlan
-	Left  LogicalPlan
-	Right LogicalPlan
-}
-
-func (c *CartesianProduct) String() string {
-	return "Cartesian Product"
-}
-
-func (c *CartesianProduct) Children() []LogicalNode {
-	return []LogicalNode{c.Left, c.Right}
-}
-
-func (c *CartesianProduct) Plans() []LogicalPlan {
-	return []LogicalPlan{c.Left, c.Right}
-}
-
-func (c *CartesianProduct) Relation() *Relation {
-	// we return the relation of the left side of the cartesian product
-	return &Relation{
-		Fields: append(c.Left.Relation().Fields, c.Right.Relation().Fields...),
-	}
-}
 
 // Update is a node that plans an update operation.
 type Update struct {
@@ -1825,6 +2553,9 @@ func (u *Update) String() string {
 	return str.String()
 }
 
+func (s *Update) Accept(v Visitor) any {
+	return v.VisitUpdate(s)
+}
 func (u *Update) Children() []LogicalNode {
 	var c []LogicalNode
 	for _, assign := range u.Assignments {
@@ -1847,6 +2578,33 @@ func (u *Update) Relation() *Relation {
 	return &Relation{}
 }
 
+func (u *Update) Equal(t Traversable) bool {
+	o, ok := t.(*Update)
+	if !ok {
+		return false
+	}
+
+	if u.Table != o.Table {
+		return false
+	}
+
+	if len(u.Assignments) != len(o.Assignments) {
+		return false
+	}
+
+	for i, assign := range u.Assignments {
+		if assign.Column != o.Assignments[i].Column {
+			return false
+		}
+
+		if !assign.Value.Equal(o.Assignments[i].Value) {
+			return false
+		}
+	}
+
+	return u.Child.Equal(o.Child)
+}
+
 // Delete is a node that plans a delete operation.
 type Delete struct {
 	baseTopLevel
@@ -1861,6 +2619,9 @@ func (d *Delete) String() string {
 	return fmt.Sprintf("Delete [%s]", d.Table)
 }
 
+func (s *Delete) Accept(v Visitor) any {
+	return v.VisitDelete(s)
+}
 func (d *Delete) Children() []LogicalNode {
 	return []LogicalNode{d.Child}
 }
@@ -1871,6 +2632,19 @@ func (d *Delete) Plans() []LogicalPlan {
 
 func (d *Delete) Relation() *Relation {
 	return &Relation{}
+}
+
+func (d *Delete) Equal(t Traversable) bool {
+	o, ok := t.(*Delete)
+	if !ok {
+		return false
+	}
+
+	if d.Table != o.Table {
+		return false
+	}
+
+	return d.Child.Equal(o.Child)
 }
 
 // TODO: I dont love this insert. Everything else feels very relational, but this
@@ -1891,8 +2665,7 @@ type Insert struct {
 	// It can be empty.
 	Alias string
 	// Values are the values to insert.
-	// The length of each second dimensional slice in Values must be equal to the length of Columns.
-	// If the user does not specify a column, it will be set to null literal.
+	// The length of each second dimensional slice in Values must be equal to all others.
 	Values [][]LogicalExpr
 	// ConflictResolution is the conflict resolution to use if there is a conflict.
 	ConflictResolution ConflictResolution
@@ -1927,6 +2700,9 @@ func (i *Insert) String() string {
 	return str.String()
 }
 
+func (s *Insert) Accept(v Visitor) any {
+	return v.VisitInsert(s)
+}
 func (i *Insert) Children() []LogicalNode {
 	var c []LogicalNode
 	for _, val := range i.Values {
@@ -1977,6 +2753,43 @@ func (i *Insert) Relation() *Relation {
 	return &Relation{}
 }
 
+func (i *Insert) Equal(t Traversable) bool {
+	o, ok := t.(*Insert)
+	if !ok {
+		return false
+	}
+
+	if i.Table != o.Table || i.Alias != o.Alias {
+		return false
+	}
+
+	if len(i.Values) != len(o.Values) {
+		return false
+	}
+
+	for j, val := range i.Values {
+		if len(val) != len(o.Values[j]) {
+			return false
+		}
+
+		for k, v := range val {
+			if !v.Equal(o.Values[j][k]) {
+				return false
+			}
+		}
+	}
+
+	if i.ConflictResolution == nil && o.ConflictResolution == nil {
+		return true
+	}
+
+	if i.ConflictResolution == nil || o.ConflictResolution == nil {
+		return false
+	}
+
+	return i.ConflictResolution.Equal(o.ConflictResolution)
+}
+
 // Assignment is a struct that represents an assignment in an update statement.
 type Assignment struct {
 	// Column is the column to update.
@@ -1986,6 +2799,7 @@ type Assignment struct {
 }
 
 type ConflictResolution interface {
+	Equal(ConflictResolution) bool
 	conflictResolution()
 }
 
@@ -1999,6 +2813,15 @@ type ConflictDoNothing struct {
 }
 
 func (c *ConflictDoNothing) conflictResolution() {}
+
+func (c *ConflictDoNothing) Equal(other ConflictResolution) bool {
+	o, ok := other.(*ConflictDoNothing)
+	if !ok {
+		return false
+	}
+
+	return c.ArbiterIndex.Equal(o.ArbiterIndex)
+}
 
 // ConflictUpdate is a struct that represents the resolution of a conflict
 // using DO UPDATE SET.
@@ -2019,12 +2842,46 @@ type ConflictUpdate struct {
 
 func (c *ConflictUpdate) conflictResolution() {}
 
+func (c *ConflictUpdate) Equal(other ConflictResolution) bool {
+	o, ok := other.(*ConflictUpdate)
+	if !ok {
+		return false
+	}
+
+	if !c.ArbiterIndex.Equal(o.ArbiterIndex) {
+		return false
+	}
+
+	if (c.ConflictFilter == nil) != (o.ConflictFilter == nil) {
+		return false
+	}
+
+	if c.ConflictFilter != nil && o.ConflictFilter != nil {
+		if !c.ConflictFilter.Equal(o.ConflictFilter) {
+			return false
+		}
+	}
+
+	if len(c.Assignments) != len(o.Assignments) {
+		return false
+	}
+
+	for i, assign := range c.Assignments {
+		if !assign.Value.Equal(o.Assignments[i].Value) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Index is an interface that represents an index.
 // Since Kwil's internal catalog does not individually name
 // all indexes (e.g. UNIQUE and PRIMARY column constraints),
 // we use this interface to represent an index.
 type Index interface {
 	index()
+	Equal(Index) bool
 }
 
 type IndexColumnConstraint struct {
@@ -2037,6 +2894,15 @@ type IndexColumnConstraint struct {
 }
 
 func (i *IndexColumnConstraint) index() {}
+
+func (i *IndexColumnConstraint) Equal(other Index) bool {
+	o, ok := other.(*IndexColumnConstraint)
+	if !ok {
+		return false
+	}
+
+	return i.Table == o.Table && i.Column == o.Column && i.ConstraintType == o.ConstraintType
+}
 
 type IndexConstraintType uint8
 
@@ -2053,3 +2919,55 @@ type IndexNamed struct {
 }
 
 func (i *IndexNamed) index() {}
+
+func (i *IndexNamed) Equal(other Index) bool {
+	o, ok := other.(*IndexNamed)
+	if !ok {
+		return false
+	}
+
+	return i.Name == o.Name
+}
+
+type Visitor interface {
+	VisitTableScanSource(*TableScanSource) any
+	VisitProcedureScanSource(*ProcedureScanSource) any
+	VisitSubquery(*Subquery) any
+	VisitEmptyScan(*EmptyScan) any
+	VisitScan(*Scan) any
+	VisitProject(*Project) any
+	VisitFilter(*Filter) any
+	VisitJoin(*Join) any
+	VisitSort(*Sort) any
+	VisitLimit(*Limit) any
+	VisitDistinct(*Distinct) any
+	VisitSetOperation(*SetOperation) any
+	VisitAggregate(*Aggregate) any
+	VisitSubplan(*Subplan) any
+	VisitLiteral(*Literal) any
+	VisitVariable(*Variable) any
+	VisitColumnRef(*ColumnRef) any
+	VisitAggregateFunctionCall(*AggregateFunctionCall) any
+	VisitScalarFunctionCall(*ScalarFunctionCall) any
+	VisitProcedureCall(*ProcedureCall) any
+	VisitArithmeticOp(*ArithmeticOp) any
+	VisitComparisonOp(*ComparisonOp) any
+	VisitLogicalOp(*LogicalOp) any
+	VisitUnaryOp(*UnaryOp) any
+	VisitTypeCast(*TypeCast) any
+	VisitAliasExpr(*AliasExpr) any
+	VisitArrayAccess(*ArrayAccess) any
+	VisitArrayConstructor(*ArrayConstructor) any
+	VisitFieldAccess(*FieldAccess) any
+	VisitSubqueryExpr(*SubqueryExpr) any
+	VisitCollate(*Collate) any
+	VisitIsIn(*IsIn) any
+	VisitCase(*Case) any
+	VisitExprRef(*ExprRef) any
+	VisitIdentifiedExpr(*IdentifiedExpr) any
+	VisitReturn(*Return) any
+	VisitCartesianProduct(*CartesianProduct) any
+	VisitUpdate(*Update) any
+	VisitDelete(*Delete) any
+	VisitInsert(*Insert) any
+}
