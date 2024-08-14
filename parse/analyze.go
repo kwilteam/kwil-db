@@ -426,21 +426,21 @@ var _ Visitor = (*sqlAnalyzer)(nil)
 // typeErr should be used when a type error is encountered.
 // It returns an unknown attribute and adds an error to the error listener.
 func (s *sqlAnalyzer) typeErr(node Node, t1, t2 *types.DataType) *types.DataType {
-	s.errs.AddErr(node, ErrType, fmt.Sprintf("%s != %s", t1.String(), t2.String()))
+	s.errs.AddErr(node, ErrType, "%s != %s", t1, t2)
 	return cast(node, types.UnknownType)
 }
 
 // expect is a helper function that expects a certain type, and adds an error if it is not found.
 func (s *sqlAnalyzer) expect(node Node, t *types.DataType, expected *types.DataType) {
 	if !t.Equals(expected) {
-		s.errs.AddErr(node, ErrType, fmt.Sprintf("expected %s, received %s", expected.String(), t.String()))
+		s.errs.AddErr(node, ErrType, "expected %s, received %s", expected, t)
 	}
 }
 
 // expectedNumeric is a helper function that expects a numeric type, and adds an error if it is not found.
 func (s *sqlAnalyzer) expectedNumeric(node Node, t *types.DataType) {
 	if !t.IsNumeric() {
-		s.errs.AddErr(node, ErrType, fmt.Sprintf("expected numeric type, received %s", t.String()))
+		s.errs.AddErr(node, ErrType, "expected numeric type, received %s", t)
 	}
 }
 
@@ -821,7 +821,7 @@ func (s *sqlAnalyzer) VisitExpressionFieldAccess(p0 *ExpressionFieldAccess) any 
 
 	dt, ok := anonType[p0.Field]
 	if !ok {
-		s.errs.AddErr(p0, ErrType, fmt.Sprintf("unknown field %s", p0.Field))
+		s.errs.AddErr(p0, ErrType, "unknown field %s", p0.Field)
 		return cast(p0, types.UnknownType)
 	}
 
@@ -1677,12 +1677,7 @@ func (s *sqlAnalyzer) VisitRelationTable(p0 *RelationTable) any {
 
 		rel = cte.Copy()
 	} else {
-		var err error
-		rel, err = tableToRelation(tbl)
-		if err != nil {
-			s.errs.AddErr(p0, err, "table: %s", p0.Table)
-			return []*Attribute{}
-		}
+		rel = tableToRelation(tbl)
 
 		// since we have joined a new table, we need to add it to the joined tables.
 		name := p0.Table
@@ -1690,7 +1685,7 @@ func (s *sqlAnalyzer) VisitRelationTable(p0 *RelationTable) any {
 			name = p0.Alias
 		}
 
-		err = s.sqlCtx.join(name, tbl)
+		err := s.sqlCtx.join(name, tbl)
 		if err != nil {
 			s.errs.AddErr(p0, err, name)
 			return []*Attribute{}
@@ -2030,11 +2025,7 @@ func (s *sqlAnalyzer) setTargetTable(table string, alias string) (*types.Table, 
 		return nil, name, err
 	}
 
-	rel, err := tableToRelation(tbl)
-	if err != nil {
-		return nil, name, err
-	}
-
+	rel := tableToRelation(tbl)
 	rel.Name = name
 
 	err = s.sqlCtx.joinRelation(rel)
@@ -2113,7 +2104,7 @@ func (s *sqlAnalyzer) VisitOrderingTerm(p0 *OrderingTerm) any {
 }
 
 // tableToRelation converts a table to a relation.
-func tableToRelation(t *types.Table) (*Relation, error) {
+func tableToRelation(t *types.Table) *Relation {
 	attrs := make([]*Attribute, len(t.Columns))
 	for i, col := range t.Columns {
 		attrs[i] = &Attribute{
@@ -2125,7 +2116,7 @@ func tableToRelation(t *types.Table) (*Relation, error) {
 	return &Relation{
 		Name:       t.Name,
 		Attributes: attrs,
-	}, nil
+	}
 }
 
 // procedureContext holds context for the procedure analyzer.
