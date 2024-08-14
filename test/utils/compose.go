@@ -10,11 +10,11 @@ const DefaultDockerImage = "kwild:latest"
 
 type ComposeConfig struct {
 	Network string
-	// ExposedHTTPPorts can be left empty to not expose any ports to the host,
+	// ExposedRPCPorts can be left empty to not expose any ports to the host,
 	// or set to the host ports to expose the http interface for each node. e.g.
 	// []int{8081, 8082, ...}
-	ExposedHTTPPorts []int
-	DockerImage      string
+	ExposedRPCPorts []int
+	DockerImage     string
 }
 
 func genCompose(templateFile string, config ComposeConfig) (string, error) {

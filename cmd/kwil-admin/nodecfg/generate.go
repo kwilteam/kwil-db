@@ -455,12 +455,6 @@ func addressSpecificConfig(c *config.KwildConfig) error {
 	}
 	c.AppCfg.JSONRPCListenAddress = jsonrpcAddr
 
-	httpAddr, err := incrementPort(c.AppCfg.HTTPListenAddress, 1)
-	if err != nil {
-		return err
-	}
-	c.AppCfg.HTTPListenAddress = httpAddr
-
 	p2pAddr, err := incrementPort(c.ChainCfg.P2P.ListenAddress, -1) // decrement since default rpc is 1 higher than p2p, so p2p needs to be 1 lower
 	if err != nil {
 		return err

@@ -60,14 +60,6 @@ func KwildJSONRPCEndpoints(ctr *testcontainers.DockerContainer, ctx context.Cont
 	return getEndpoints(ctr, ctx, "8484", "http")
 }
 
-func KwildHTTPEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
-	return getEndpoints(ctr, ctx, "8080", "http")
-}
-
-func KwildWSEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
-	return getEndpoints(ctr, ctx, "8080", "ws")
-}
-
 func KwildAdminEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
 	return getEndpoints(ctr, ctx, "8485", "tcp") // unused because we are using kwil-admin inside the container with a unix socket
 }

@@ -4,7 +4,6 @@ services:
   kwild:
     image: kwild:latest
     ports:
-      - "8080"
       - "8484"
       - "26656"
       - "26657"
@@ -32,7 +31,6 @@ services:
       --log.time-format=rfc3339milli
       --app.extension-endpoints=ext:50051
       --app.admin-listen-addr=/tmp/admin.socket
-      --app.http-listen-addr=:8080
       --chain.p2p.external-address=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg

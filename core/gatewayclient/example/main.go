@@ -5,6 +5,10 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"log"
+	"net/http"
+	"slices"
+
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/gatewayclient"
@@ -12,9 +16,6 @@ import (
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
-	"log"
-	"net/http"
-	"slices"
 )
 
 const (

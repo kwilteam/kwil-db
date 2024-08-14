@@ -5,7 +5,6 @@ services:
   node0:
     image: kwild:latest
     ports:
-      - "8080"
       - "8484"
       - "26656"
       - "26657"
@@ -28,7 +27,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.http-listen-addr=:8080
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -71,7 +69,6 @@ services:
   node1:
     image: kwild:latest
     ports:
-      - "8080"
       - "8484"
       - "26656"
       - "26657"
@@ -92,7 +89,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.http-listen-addr=:8080
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -136,7 +132,6 @@ services:
 #    container_name: node2
     image: kwild:latest
     ports:
-      - "8080"
       - "8484"
       - "26656"
       - "26657"
@@ -157,7 +152,6 @@ services:
       --log.format=plain
       --log.time-format=rfc3339milli
       --app.extension-endpoints=ext1:50051
-      --app.http-listen-addr=:8080
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -203,7 +197,6 @@ services:
   node3:
     image: kwild:latest
     ports:
-      - "8080"
       - "8484"
       - "26656"
       - "26657"
@@ -224,7 +217,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext3:50051
-      --app.http-listen-addr=:8080
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -267,7 +259,6 @@ services:
   node4:
     image: kwild:latest
     ports:
-      - "8080"
       - "8484"
       - "26656"
       - "26657"
@@ -288,7 +279,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.http-listen-addr=:8080
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -331,7 +321,6 @@ services:
   node5:
     image: kwild:latest
     ports:
-      - "8080"
       - "8484"
       - "26656"
       - "26657"
@@ -352,7 +341,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.http-listen-addr=:8080
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -432,7 +420,7 @@ services:
       --log-level ${LOG_LEVEL:-info}
       --log-outputs stdout /app/kgwlog/kgw.log
       --cors-allow-origins *
-      --backends node0:8080 node1:8080 node2:8080 node3:8080
+      --backends node0:8484 node1:8484 node2:8484 node3:8484
       --domain http://localhost:8090
       --statement "Trust me ok?"
       --session-secret "kgwtest"

@@ -18,7 +18,6 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	// General APP flags:
 	flagSet.StringVar(&cfg.AppCfg.PrivateKeyPath, "app.private-key-path", cfg.AppCfg.PrivateKeyPath, "Path to the node private key file")
 	flagSet.StringVar(&cfg.AppCfg.JSONRPCListenAddress, "app.jsonrpc-listen-addr", cfg.AppCfg.JSONRPCListenAddress, "kwild JSON-RPC listen address")
-	flagSet.StringVar(&cfg.AppCfg.HTTPListenAddress, "app.http-listen-addr", cfg.AppCfg.HTTPListenAddress, "kwild HTTP listen address")
 	flagSet.StringVar(&cfg.AppCfg.AdminListenAddress, "app.admin-listen-addr", cfg.AppCfg.AdminListenAddress, "kwild admin listen address (unix or tcp)")
 	flagSet.StringVar(&cfg.AppCfg.AdminRPCPass, "app.admin-pass", cfg.AppCfg.AdminRPCPass, "password for the kwil admin service (may be empty)")
 	flagSet.BoolVar(&cfg.AppCfg.NoTLS, "app.admin-notls", cfg.AppCfg.NoTLS, "do not enable TLS on admin server (automatically disabled for unix socket or loopback listen addresses)")

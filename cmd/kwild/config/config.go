@@ -53,7 +53,6 @@ type Logging struct {
 
 type AppConfig struct {
 	JSONRPCListenAddress string `mapstructure:"jsonrpc_listen_addr"`
-	HTTPListenAddress    string `mapstructure:"http_listen_addr"` // DEPRECATED: use the JSON-RPC services
 	AdminListenAddress   string `mapstructure:"admin_listen_addr"`
 
 	PrivateKeyPath string `mapstructure:"private_key_path"`
@@ -313,7 +312,7 @@ func GetCfg(flagCfg *KwildConfig) (*KwildConfig, bool, error) {
 
 	// Remember the default listen addresses in case we need to apply the
 	// default port to a user override.
-	defaultListenJSONRPC, defaultListenHTTP := cfg.AppCfg.JSONRPCListenAddress, cfg.AppCfg.HTTPListenAddress
+	defaultListenJSONRPC := cfg.AppCfg.JSONRPCListenAddress
 
 	// read in env config
 	envCfg, err := LoadEnvConfig()
@@ -383,7 +382,6 @@ func GetCfg(flagCfg *KwildConfig) (*KwildConfig, bool, error) {
 		cfg.ChainCfg.Moniker = defaultMoniker()
 	}
 
-	cfg.AppCfg.HTTPListenAddress = cleanListenAddr(cfg.AppCfg.HTTPListenAddress, defaultListenHTTP)
 	cfg.AppCfg.JSONRPCListenAddress = cleanListenAddr(cfg.AppCfg.JSONRPCListenAddress, defaultListenJSONRPC)
 
 	return cfg, configFileExists, nil
@@ -565,7 +563,6 @@ func DefaultConfig() *KwildConfig {
 	return &KwildConfig{
 		AppCfg: &AppConfig{
 			JSONRPCListenAddress: "0.0.0.0:8484",
-			HTTPListenAddress:    "0.0.0.0:8080",
 			AdminListenAddress:   "/tmp/kwild.socket", // Or, suggested, 127.0.0.1:8485
 			PrivateKeyPath:       PrivateKeyFileName,
 			DBHost:               "127.0.0.1",

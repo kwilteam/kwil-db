@@ -45,7 +45,6 @@ services:
       context: ../../../
       dockerfile: ./build/package/docker/kwild.dockerfile
     ports:
-      - "8080:8080"
       - "8484:8484"
       - "26656:26656"
       - "26657:26657"
@@ -65,7 +64,6 @@ services:
       --root-dir=/app/.kwild
       --log.level=debug
       --app.admin-listen-addr=/tmp/admin.socket
-      --app.http-listen-addr=:8080
       --chain.p2p.external-address=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=172.5.100.3

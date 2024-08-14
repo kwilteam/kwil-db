@@ -4,8 +4,6 @@ run:
 
 issues:
   exclude-dirs:
-    - core/rpc/protobuf
-    - core/rpc/http
     - parse/sql/gen
     - parse/procedures/gen
     - parse/kuneiform/gen

@@ -6,10 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"runtime"
-	"time"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	"go.uber.org/zap"
@@ -21,8 +19,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/listeners"
-	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
-	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/version"
@@ -30,10 +26,8 @@ import (
 
 // Server controls the gRPC server and http gateway.
 type Server struct {
-	grpcServer         *grpc.Server
 	jsonRPCServer      *rpcserver.Server
 	jsonRPCAdminServer *rpcserver.Server
-	gateway            *gateway.GatewayServer
 	cometBftNode       *cometbft.CometBftNode
 	listenerManager    *listeners.ListenerManager
 	closers            *closeFuncs
@@ -156,36 +150,6 @@ func (s *Server) Start(ctx context.Context) error {
 			return nil
 		}
 	})
-
-	group.Go(func() error {
-		go func() {
-			<-groupCtx.Done()
-			s.log.Info("stop http server")
-			ctx2, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := s.gateway.Shutdown(ctx2); err != nil {
-				s.log.Error("http server shutdown error", zap.Error(err))
-			}
-		}()
-
-		s.log.Info("http server started", zap.String("address", s.cfg.AppCfg.HTTPListenAddress))
-		err := s.gateway.Start()
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil // normal Shutdown
-		}
-		return err
-	})
-
-	group.Go(func() error {
-		go func() {
-			<-groupCtx.Done()
-			s.log.Info("stop grpc server")
-			s.grpcServer.Stop()
-		}()
-
-		return s.grpcServer.Start()
-	})
-	s.log.Info("grpc server started", zap.String("address", s.grpcServer.Addr()))
 
 	group.Go(func() error {
 		s.log.Info("starting user json-rpc server", zap.String("address", s.cfg.AppCfg.JSONRPCListenAddress))
