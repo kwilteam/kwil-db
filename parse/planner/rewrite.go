@@ -6,19 +6,27 @@ import (
 
 // RewriteConfig is a configuration for the rewriter.
 type RewriteConfig struct {
-	// ExprCallback is the function that will be called on each expression
-	ExprCallback func(LogicalExpr) (LogicalExpr, error)
+	// ExprCallback is the function that will be called on each expression.
+	// It returns the new node, which will replace the old node,
+	// a boolean, which indicates whether the nodes children should be visited,
+	// and an error, which will be returned if an error occurs.
+	ExprCallback func(LogicalExpr) (LogicalExpr, bool, error)
 	// PlanCallback is the function that will be called on each plan
-	PlanCallback func(LogicalPlan) (LogicalPlan, error)
+	// It returns the new node, which will replace the old node,
+	// a boolean, which indicates whether the nodes children should be visited,
+	// and an error, which will be returned if an error occurs.
+	PlanCallback func(LogicalPlan) (LogicalPlan, bool, error)
 	// ScanSourceCallback is the function that will be called on each scan source
-	ScanSourceCallback func(ScanSource) (ScanSource, error)
+	// It returns the new node, which will replace the old node,
+	// a boolean, which indicates whether the nodes children should be visited,
+	// and an error, which will be returned if an error occurs.
+	ScanSourceCallback func(ScanSource) (ScanSource, bool, error)
 	// If true, the callback will be called before visiting children,
 	// and any expression acting on a plan will be called before visiting the plan.
 	// If false, the callback will be called after visiting children,
 	// and any expression acting on a plan will be called after visiting the plan.
-	// If order doesn't matter, it is recommended to set this to false, since
-	// setting it to true can lead to infinite loops.
-	CallbackBeforeVisit bool
+	// !IMPORTANT: If this is set to true, then the callback functions must always return false.
+	CallbackAfterVisit bool // TODO: I think we can get rid of this with the addition of the bool return in the callback functions
 	// PostOrderVisit determines the order in which fields are visited.
 	// If visitng in post order, then children are visited first, then the parent.
 	// For example, for a Project node, if PostOrderVisit is true, then the child
@@ -46,22 +54,22 @@ func Rewrite(node LogicalNode, cfg *RewriteConfig) (lp LogicalNode, err error) {
 		exprCallback:       cfg.ExprCallback,
 		planCallback:       cfg.PlanCallback,
 		scanSourceCallback: cfg.ScanSourceCallback,
-		callbackFuncFirst:  cfg.CallbackBeforeVisit,
+		callbackFuncLast:   cfg.CallbackAfterVisit,
 		postOrderVisit:     cfg.PostOrderVisit,
 	}
 	if v.exprCallback == nil {
-		v.exprCallback = func(e LogicalExpr) (LogicalExpr, error) {
-			return e, nil
+		v.exprCallback = func(e LogicalExpr) (LogicalExpr, bool, error) {
+			return e, true, nil
 		}
 	}
 	if v.planCallback == nil {
-		v.planCallback = func(p LogicalPlan) (LogicalPlan, error) {
-			return p, nil
+		v.planCallback = func(p LogicalPlan) (LogicalPlan, bool, error) {
+			return p, true, nil
 		}
 	}
 	if v.scanSourceCallback == nil {
-		v.scanSourceCallback = func(s ScanSource) (ScanSource, error) {
-			return s, nil
+		v.scanSourceCallback = func(s ScanSource) (ScanSource, bool, error) {
+			return s, true, nil
 		}
 	}
 
@@ -74,14 +82,14 @@ func Rewrite(node LogicalNode, cfg *RewriteConfig) (lp LogicalNode, err error) {
 // order as they would need to be visited to evaluate the relation).
 type rewriteVisitor struct {
 	// exprCallback is the function that will be called on each expression
-	exprCallback func(LogicalExpr) (LogicalExpr, error)
+	exprCallback func(LogicalExpr) (LogicalExpr, bool, error)
 	// planCallback is the function that will be called on each plan
-	planCallback func(LogicalPlan) (LogicalPlan, error)
+	planCallback func(LogicalPlan) (LogicalPlan, bool, error)
 	// scanSourceCallback is the function that will be called on each scan source
-	scanSourceCallback func(ScanSource) (ScanSource, error)
+	scanSourceCallback func(ScanSource) (ScanSource, bool, error)
 	// if true, the callback will be called before visiting children
 	// if false, the callback will be called after visiting children
-	callbackFuncFirst bool
+	callbackFuncLast bool
 	// if true, then fields are visited in post order
 	// if false, then fields are visited in pre order
 	postOrderVisit bool
@@ -419,22 +427,28 @@ func (r *rewriteVisitor) scanSource(node ScanSource, fn ...func()) ScanSource {
 }
 
 // rewriteInOrder is a generic function for executing a rewrite based on a certain order.
-func rewriteInOrder[T Traversable](r *rewriteVisitor, callback func(T) (T, error), fields []func(), node T) T {
-	if r.callbackFuncFirst {
-		res, err := callback(node)
+func rewriteInOrder[T Traversable](r *rewriteVisitor, callback func(T) (T, bool, error), fields []func(), node T) T {
+	if r.callbackFuncLast {
+		r.execFields(fields)
+		res, visitFields, err := callback(node)
+		if visitFields {
+			panic("cannot decline to visit fields when callback is called after visiting fields")
+		}
 		if err != nil {
 			panic(err)
 		}
 
-		r.execFields(fields)
+		return res
+	}
+
+	res, visitFields, err := callback(node)
+	if err != nil {
+		panic(err)
+	}
+	if !visitFields {
 		return res
 	}
 
 	r.execFields(fields)
-	res, err := callback(node)
-	if err != nil {
-		panic(err)
-	}
-
 	return res
 }

@@ -7,15 +7,20 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/utils/order"
 	"github.com/kwilteam/kwil-db/parse"
 )
 
 func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType, objects map[string]map[string]*types.DataType) (analyzed *AnalyzedPlan, err error) {
-	// defer func() {
-	// 	if r := recover(); r != nil {
-	// 		err = fmt.Errorf("panic: %v", r)
-	// 	}
-	// }()
+	defer func() {
+		if r := recover(); r != nil {
+			err2, ok := r.(error)
+			if !ok {
+				err2 = fmt.Errorf("%v", r)
+			}
+			err = err2
+		}
+	}()
 
 	if vars == nil {
 		vars = make(map[string]*types.DataType)
@@ -104,6 +109,10 @@ type planContext struct {
 	// This field should be updated as the query planner
 	// processes the query.
 	SubqueryCount int
+	// ReferenceCount is the number of references in the query.
+	// This field should be updated as the query planner
+	// processes the query.
+	ReferenceCount int
 }
 
 // the following maps map constants from parse to their logical
@@ -566,19 +575,19 @@ func (p *plannerVisitor) VisitSQLStatement(node *parse.SQLStatement) any {
 	if err != nil {
 		panic(err)
 	}
+	rel = rel.Copy()
 
 	// if it a sql select, we should add a return operation.
 	// We can't add this within VisitSelectStatement because
 	// we don't want to add it to subqueries.
 	if _, ok := node.SQL.(*parse.SelectStatement); ok {
-		var fields []string
+		var fields []*Field
 		for _, col := range rel.Fields {
-			name := col.Name
-			if name == "" {
-				name = "?column?"
+			if col.Name == "" {
+				col.Name = "?column?"
 			}
 
-			fields = append(fields, name)
+			fields = append(fields, col)
 		}
 
 		return &Return{
@@ -671,7 +680,20 @@ func (p *plannerVisitor) VisitSelectStatement(node *parse.SelectStatement) any {
 // 4. having(can use reference from select)
 // 5. select (project)
 // 6. distinct
-func (p *plannerVisitor) visitSelectCore(node *parse.SelectCore) any {
+// ! This method is insanely complex and needs to be refactored.
+func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
+	/*
+		If a user does "SELECT sum(id), age/2 from users group by age/2", what needs to happen is:
+			- project ref(a), ref(b)
+			- aggregate [sum(id) as a] group by [age/2 as b]
+			- scan users
+
+		In order to do this, we need to be able to:
+			a. match and rewrite all aggregate functions in having and return to be ExprRef
+			b. match any arbitrary tree in the grouping to any term in the having and return clause, and then rewrite them as ExprRef
+			c. recognize exprefs by name in both the aggregate and other clause to ensure they are accessible within that scope (maybe)?
+
+	*/
 	// if there is no from, then we will simply return a projection
 	// of the return values on a noop plan.
 	if node.From == nil {
@@ -703,7 +725,7 @@ func (p *plannerVisitor) visitSelectCore(node *parse.SelectCore) any {
 			projectFunc: func(newPlan LogicalPlan) LogicalPlan {
 				var p LogicalPlan = &Project{
 					Child:       newPlan,
-					expandFuncs: []expandFunc{func(rel *Relation) []LogicalExpr { return exprs }},
+					expandFuncs: []expandFunc{func() []LogicalExpr { return exprs }},
 				}
 
 				if isDistinct {
@@ -729,6 +751,8 @@ func (p *plannerVisitor) visitSelectCore(node *parse.SelectCore) any {
 		}
 	}
 
+	lastJoin := plan // will be referenced later to expand aggregate functions
+
 	if node.Where != nil {
 		plan = &Filter{
 			Condition: node.Where.Accept(p).(LogicalExpr),
@@ -736,30 +760,169 @@ func (p *plannerVisitor) visitSelectCore(node *parse.SelectCore) any {
 		}
 	}
 
+	// aggTerms maps the signature of an aggregate function to its identified expression.
+	// It is used to rewrite the having and return clauses to reference aggregate expressions.
+	aggTerms := make(map[string]*IdentifiedExpr)
+
+	// groupingTerms is a list of all terms in the group by clause.
+	// It is used to cut and reference terms from the having clause
+	// and result columns
+	groupingTerms := make(map[string]*IdentifiedExpr)
+
+	// havingExpr is the expression that will be used in the having clause.
+	// If there is no having clause, this will be nil.
+	var havingExpr LogicalExpr
+
+	// wrapAggPlan is a function that wraps the plan in an aggregate, and optionally
+	// a filter (if there is a having clause).
+	wrapAggPlan := func(plan LogicalPlan) LogicalPlan {
+		if len(aggTerms)+len(groupingTerms) == 0 {
+			return plan
+		}
+
+		agg := &Aggregate{
+			Child: plan,
+		}
+
+		// for determinism
+		for _, aggTerm := range order.OrderMap(aggTerms) {
+			agg.AggregateExpressions = append(agg.AggregateExpressions, aggTerm.Value)
+		}
+
+		for _, groupTerm := range order.OrderMap(groupingTerms) {
+			agg.GroupingExpressions = append(agg.GroupingExpressions, groupTerm.Value)
+		}
+
+		if havingExpr != nil {
+			return &Filter{
+				Condition: havingExpr,
+				Child:     agg,
+			}
+		}
+
+		return agg
+	}
+
+	if node.GroupBy != nil {
+		for _, expr := range node.GroupBy {
+			// if there is a duplicate, we will ignore it
+			logicalExpr := expr.Accept(p).(LogicalExpr)
+			_, ok := groupingTerms[logicalExpr.String()]
+			if ok {
+				continue
+			}
+
+			identified := &IdentifiedExpr{
+				Expr: logicalExpr,
+				ID:   numberToLetters(p.planCtx.ReferenceCount),
+			}
+			p.planCtx.ReferenceCount++
+
+			groupingTerms[logicalExpr.String()] = identified
+		}
+
+		if node.Having != nil {
+			havingExpr = node.Having.Accept(p).(LogicalExpr)
+
+			// rewrite all aggregate functions to be a reference to the identified expression.
+			// If we find any, we add them to the mapping of aggTerms
+			havingNode, err := Rewrite(havingExpr, &RewriteConfig{
+				ExprCallback: func(le LogicalExpr) (LogicalExpr, bool, error) {
+					switch n := le.(type) {
+					case *AggregateFunctionCall:
+						existingIdent, ok := aggTerms[n.String()]
+						if ok {
+							return &ExprRef{
+								Identified: existingIdent,
+							}, false, nil
+						}
+
+						ident := &IdentifiedExpr{
+							Expr: n,
+							ID:   numberToLetters(p.planCtx.ReferenceCount),
+						}
+						p.planCtx.ReferenceCount++
+						aggTerms[n.String()] = ident
+						return &ExprRef{
+							Identified: ident,
+						}, false, nil
+					}
+					return le, true, nil
+				},
+			})
+			if err != nil {
+				panic(err)
+			}
+
+			havingExpr = havingNode.(LogicalExpr)
+		}
+	}
+
+	// now, we visit the result columns. We will attempt to rewrite any aggregate functions
+	// or expressions that match
+
 	// expandFuncs delay expanding wildcards until we can evaluate the relation
 	// they are projecting on. We have to do this at an entirely different step
 	// once the entire tree is constructed (in evalRelation).
 	var expandFuncs []expandFunc
 
-	// TODO: how can we get all aggregate useage from the select columns and having clause,
-	// replace them with references, and then add them to the aggregate node?
-
-	// we analyze the returned columns to see if there are any aggregates
-	var aggs []LogicalExpr
+	// TODO: this doesn't work because in order to expand the wildcard, we need to know
+	// the relation that is joined. The relation joined should be PRIOR to any aggregate,
+	// but with expandFuncs, this occurs after the aggregate. Take for example:
+	// "SELECT * FROM users GROUP BY name". In this query, we need to expand all columns
+	// from the users table, but due to the way expandFuncs work, we are expanding only
+	// the aggregate result. IMO it seems like we should do something to get rid of expandFuncs,
+	// however I am not sure what, since we don't know what we are expanding until we evaluate
+	// relations. It seems like we need to run the expand funcs directly after all of the joins
+	// are performed (but the result must take place after the aggregate).
 	for _, resultCol := range node.Columns {
 		switch resultCol := resultCol.(type) {
 		default:
 			panic(fmt.Sprintf("unexpected result column type %T", resultCol))
 		case *parse.ResultColumnExpression:
 			logicalExpr := resultCol.Expression.Accept(p).(LogicalExpr)
-			found := getAggregateTerms(logicalExpr)
-			for _, agg := range found {
-				aggs = append(aggs, agg)
-			}
 
-			// we don't need to delay planning of regular expressions,
-			// but we put it in a function to maintain order of result
-			// columns.
+			// attempt to rewrite, if necessary
+			logicalNode, err := Rewrite(logicalExpr, &RewriteConfig{
+				ExprCallback: func(le LogicalExpr) (LogicalExpr, bool, error) {
+					switch n := le.(type) {
+					case *AggregateFunctionCall:
+						existingIdent, ok := aggTerms[n.String()]
+						if ok {
+							return &ExprRef{
+								Identified: existingIdent,
+							}, false, nil
+						}
+
+						ident := &IdentifiedExpr{
+							Expr: n,
+							ID:   numberToLetters(p.planCtx.ReferenceCount),
+						}
+						p.planCtx.ReferenceCount++
+
+						aggTerms[n.String()] = ident
+						return &ExprRef{
+							Identified: ident,
+						}, false, nil
+					case *ExprRef, *IdentifiedExpr:
+						// if it has already been replaced, do not replace it again
+						return le, false, nil
+					default:
+						groupingTerm, ok := groupingTerms[n.String()]
+						if ok {
+							return &ExprRef{
+								Identified: groupingTerm,
+							}, false, nil
+						}
+
+						return le, true, nil
+					}
+				},
+			})
+			if err != nil {
+				panic(err)
+			}
+			logicalExpr = logicalNode.(LogicalExpr)
 
 			if resultCol.Alias != "" {
 				logicalExpr = &AliasExpr{
@@ -768,20 +931,21 @@ func (p *plannerVisitor) visitSelectCore(node *parse.SelectCore) any {
 				}
 			}
 
-			newFunc := func(rel *Relation) []LogicalExpr {
+			newFunc := func() []LogicalExpr {
 				return []LogicalExpr{logicalExpr}
 			}
 
 			expandFuncs = append(expandFuncs, newFunc)
 		case *parse.ResultColumnWildcard:
-			// expand the wildcard
-
 			// avoid loop variable capture
 			tbl := resultCol.Table
 
+			// expand the wildcard
 			// wrap any other expandFunc in a new function that will
 			// expand the current wildcard
-			newExpand := func(rel *Relation) []LogicalExpr {
+			newExpand := func() []LogicalExpr {
+				rel := lastJoin.Relation()
+
 				var newFields []*Field
 				if tbl != "" {
 					newFields = rel.ColumnsByParent(tbl)
@@ -791,10 +955,26 @@ func (p *plannerVisitor) visitSelectCore(node *parse.SelectCore) any {
 
 				var exprs []LogicalExpr
 				for _, field := range newFields {
-					exprs = append(exprs, &ColumnRef{
-						Parent:     field.Parent,
+					var colRef LogicalExpr = &ColumnRef{
+						// we don't immediately set the parent, because we need to
+						// check if this same field is in the grouping terms.
+						// If it is, then the term in the grouping terms will be used
+						// (which is already qualified).
 						ColumnName: field.Name,
-					})
+					}
+
+					// if it is in the grouping terms, we need to replace it with a reference.
+					groupingTerm, ok := groupingTerms[colRef.String()]
+					if ok {
+						colRef = &ExprRef{
+							Identified: groupingTerm,
+						}
+					} else {
+						// if not, then we can qualify.
+						colRef.(*ColumnRef).Parent = field.Parent
+					}
+
+					exprs = append(exprs, colRef)
 				}
 
 				return exprs
@@ -804,39 +984,10 @@ func (p *plannerVisitor) visitSelectCore(node *parse.SelectCore) any {
 		}
 	}
 
-	if node.GroupBy != nil {
-		agg := &Aggregate{
-			GroupingExpressions:  p.exprs(node.GroupBy),
-			AggregateExpressions: aggs,
-			Child:                plan,
-		}
-
-		plan = agg
-
-		if node.Having != nil {
-			havingExpr := node.Having.Accept(p).(LogicalExpr)
-			havingAggs := getAggregateTerms(havingExpr)
-
-			// we will remove duplicates during evaluation once columns are qualified
-			for _, a := range havingAggs {
-				agg.AggregateExpressions = append(agg.AggregateExpressions, a)
-			}
-
-			plan = &Filter{
-				Condition: havingExpr,
-				Child:     plan,
-			}
-		}
-	} else if len(aggs) > 0 { // otherwise, still need to see if we have any aggregates without grouping
-		plan = &Aggregate{
-			GroupingExpressions:  nil,
-			AggregateExpressions: aggs,
-			Child:                plan,
-		}
-	}
-
 	// see the selectCoreResult documentation below for an explanation as to
 	// why this is returned instead of just the plan.
+	plan = wrapAggPlan(plan)
+
 	return &selectCoreResult{
 		plan: plan,
 		projectFunc: func(newPlan LogicalPlan) LogicalPlan {
@@ -853,32 +1004,6 @@ func (p *plannerVisitor) visitSelectCore(node *parse.SelectCore) any {
 			return plan2
 		},
 	}
-}
-
-// The order of building is:
-// 1. from (combining any joins into single source plan)
-// 2. where
-// 3. group by(can use reference from select)
-// 4. having(can use reference from select)
-// 5. select (project)
-// 6. distinct
-func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
-	/*
-		This is my second attempt at select core. I am doing this because I am totally
-		fucking stuck on how to properly represent aggregates, and separate them from result sets.
-
-		If a user does "SELECT sum(id), age/2 from users group by age/2", what needs to happen is:
-		- project ref(a), ref(b)
-		- aggregate [sum(id) as a] group by [age/2 as b]
-		- scan users
-
-		In order to do this, we need to be able to:
-		a. match and rewrite all aggregate functions in having and return to be ExprRef
-		b. match any arbitrary tree in the grouping to any term in the having and return clause, and then rewrite them as ExprRef
-		c. recognize exprefs by name in both the aggregate and other clause to ensure they are accessible within that scope (maybe)?
-
-	*/
-	panic("not impl")
 }
 
 // selectCoreResult is a helper struct that is only returned from VisitSelectCore.
@@ -1427,4 +1552,34 @@ func (p *plannerVisitor) VisitJoin(node *parse.Join) any {
 
 func (p *plannerVisitor) VisitUpdateSetClause(node *parse.UpdateSetClause) any {
 	panic("internal bug: VisitUpdateSetClause should not be called directly while building relational algebra")
+}
+
+const (
+	alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	base     = len(alphabet)
+)
+
+// numberToLetters allows us to assign a letter-based identifier for
+// expression references. We do this to avoid confusion with subplan
+// references, which are numbers.
+func numberToLetters(n int) string {
+	if n == 0 {
+		return string(alphabet[0])
+	}
+
+	var sb strings.Builder
+	for n > 0 {
+		remainder := n % base
+		sb.WriteByte(alphabet[remainder])
+		n = n / base
+	}
+
+	// Reverse the string because the current order is backward
+	result := sb.String()
+	runes := []rune(result)
+	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
+	}
+
+	return string(runes)
 }

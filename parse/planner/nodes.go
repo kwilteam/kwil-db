@@ -870,6 +870,10 @@ func (a *Aggregate) String() string {
 		str.WriteString(expr.String())
 		str.WriteString("]")
 	}
+	if len(a.AggregateExpressions) == 0 {
+		return str.String()
+	}
+
 	str.WriteString(": ")
 
 	for i, expr := range a.AggregateExpressions {
@@ -2290,7 +2294,7 @@ type ExprRef struct {
 }
 
 func (e *ExprRef) String() string {
-	return fmt.Sprintf(`[ref:%s]`, e.Identified.ID)
+	return fmt.Sprintf(`{%s}`, e.Identified.ref())
 }
 
 func (e *ExprRef) Field() *Field {
@@ -2326,7 +2330,7 @@ type IdentifiedExpr struct {
 }
 
 func (i *IdentifiedExpr) String() string {
-	return fmt.Sprintf(`[id:%s; %s]`, i.ID, i.Expr.String())
+	return fmt.Sprintf(`{%s = %s}`, i.ref(), i.Expr.String())
 }
 
 func (i *IdentifiedExpr) Field() *Field {
@@ -2351,6 +2355,11 @@ func (i *IdentifiedExpr) Equal(other Traversable) bool {
 	}
 
 	return i.ID == o.ID && i.Expr.Equal(o.Expr)
+}
+
+// ref prints the reference name for the identified expression.
+func (i *IdentifiedExpr) ref() string {
+	return fmt.Sprintf(`#ref(%s)`, i.ID)
 }
 
 // traverse traverses a logical plan in preorder.
@@ -2455,13 +2464,13 @@ func (b *baseTopLevel) topLevel() {}
 type Return struct {
 	baseTopLevel
 	// Fields are the fields to return.
-	Fields []string
+	Fields []*Field
 	// Child is the input to the return.
 	Child LogicalPlan
 }
 
 // expandFuncs take a relation and return a list of expressions that should be added to the projection.
-type expandFunc func(*Relation) []LogicalExpr
+type expandFunc func() []LogicalExpr
 
 func (r *Return) String() string {
 	str := strings.Builder{}
@@ -2471,7 +2480,7 @@ func (r *Return) String() string {
 		if i > 0 {
 			str.WriteString(", ")
 		}
-		str.WriteString(expr)
+		str.WriteString(expr.String())
 	}
 
 	return str.String()

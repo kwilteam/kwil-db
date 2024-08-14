@@ -3,6 +3,7 @@ package planner
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse"
@@ -58,22 +59,13 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 			return nil, fmt.Errorf("expected %d columns, got %d", len(n.Fields), len(rel.Fields))
 		}
 
-		newFields := make([]*Field, len(n.Fields))
 		for i, field := range rel.Fields {
-			scalar, err := field.Scalar()
-			if err != nil {
-				return nil, err
-			}
-
-			newFields[i] = &Field{
-				Name: n.Fields[i],
-				val:  scalar,
-				// we discard the parent because it is not needed,
-				// as postgres does not return parent names in the result
+			if !field.Equals(n.Fields[i]) {
+				return nil, fmt.Errorf("expected column %d to be %s, got %s", i, n.Fields[i].String(), field.String())
 			}
 		}
 
-		return &Relation{Fields: newFields}, nil
+		return &Relation{Fields: rel.Fields}, nil
 	case *Project:
 		rel, err := s.evalRelation(n.Child)
 		if err != nil {
@@ -81,7 +73,7 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 		}
 
 		for _, expand := range n.expandFuncs {
-			n.Expressions = append(n.Expressions, expand(rel)...)
+			n.Expressions = append(n.Expressions, expand()...)
 		}
 		n.expandFuncs = nil // never want to expand more than once
 
@@ -185,8 +177,6 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 				return nil, err
 			}
 
-			field.signature = expr.String()
-
 			fields = append(fields, field)
 		}
 
@@ -202,13 +192,8 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 				return nil, err
 			}
 
-			field.signature = agg.String()
-
 			fields = append(fields, field)
 		}
-
-		// now that we have fully qualified the fields, we can remove duplicates
-		n.AggregateExpressions = removeDuplicates(n.AggregateExpressions)
 
 		return &Relation{Fields: fields}, nil
 	case *Distinct:
@@ -542,7 +527,7 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 		return anonField(dt), nil
 	case *ColumnRef:
 		field, err := currentRel.Search(n.Parent, n.ColumnName)
-		if errors.Is(err, errColumnNotFound) {
+		if errors.Is(err, ErrColumnNotFound) {
 			// check outer relation
 			field, err = s.OuterRelation.Search(n.Parent, n.ColumnName)
 			if err != nil {
@@ -954,15 +939,22 @@ func (s *EvaluateContext) evalExpression(expr LogicalExpr, currentRel *Relation)
 		}
 
 		return anonField(returnType), nil
-		// case *ExprRef:
-		// 	// check for matching signatures in case we are referencing a value
-		// 	// that is already computed. This is useful for aggregates, where we
-		// 	// perform the aggregation at a previous level
-		// 	matched, ok := currentRel.matchingSignature(n.Expr.String())
-		// 	if ok {
-		// 		return matched, nil
-		// 	}
-		// 	return nil, fmt.Errorf("internal bug: expression reference %s not found", n.Expr.String())
+	case *ExprRef:
+		return currentRel.FindReference(n.Identified.ref())
+	case *IdentifiedExpr:
+		ex, err := s.evalExpression(n.Expr, currentRel)
+		if err != nil {
+			return nil, err
+		}
+
+		// shallow copy since we don't want to modify the original
+		// with a reference ID
+		return &Field{
+			Parent:      ex.Parent,
+			Name:        ex.Name,
+			val:         ex.val,
+			ReferenceID: n.ref(),
+		}, nil
 	}
 
 	return nil, fmt.Errorf("unexpected node type %T", expr)
@@ -1008,7 +1000,7 @@ func (s *EvaluateContext) evalSubquery(sub *Subquery, currentRel *Relation) (*Re
 		_, err = currentRel.Search(cor.Parent, cor.ColumnName)
 		// if the column is not found in the current relation, then we need to
 		// pass it back to the oldCorrelations
-		if errors.Is(err, errColumnNotFound) {
+		if errors.Is(err, ErrColumnNotFound) {
 			// if not known to the outer correlation, then add it
 			_, ok := oldMap[[2]string{cor.Parent, cor.ColumnName}]
 			if !ok {
@@ -1022,6 +1014,11 @@ func (s *EvaluateContext) evalSubquery(sub *Subquery, currentRel *Relation) (*Re
 		// if no error, it is correlated to this query, do nothing
 	}
 	sub.Correlated = s.Correlations
+
+	// the returned relation should not have any parent tables
+	for _, col := range rel.Fields {
+		col.Parent = ""
+	}
 
 	return rel, nil
 }
@@ -1113,9 +1110,10 @@ func (r *Relation) Copy() *Relation {
 		}
 
 		fields = append(fields, &Field{
-			Parent: f.Parent,
-			Name:   f.Name,
-			val:    val,
+			Parent:      f.Parent,
+			Name:        f.Name,
+			val:         val,
+			ReferenceID: f.ReferenceID,
 		})
 	}
 	return &Relation{
@@ -1133,7 +1131,7 @@ func (s *Relation) ColumnsByParent(name string) []*Field {
 	return columns
 }
 
-var errColumnNotFound = fmt.Errorf("column not found")
+var ErrColumnNotFound = fmt.Errorf("column not found or cannot be referenced in this part of the query")
 
 // Search searches for a column by parent and name.
 // If the column is not found, an error is returned.
@@ -1150,7 +1148,7 @@ func (s *Relation) Search(parent, name string) (*Field, error) {
 			}
 		}
 		if count == 0 {
-			return nil, fmt.Errorf(`%w: "%s"`, errColumnNotFound, name)
+			return nil, fmt.Errorf(`%w: "%s"`, ErrColumnNotFound, name)
 		}
 		if count > 1 {
 			return nil, fmt.Errorf(`column "%s" is ambiguous`, name)
@@ -1175,19 +1173,29 @@ func (s *Relation) Search(parent, name string) (*Field, error) {
 		}
 	}
 
-	return nil, fmt.Errorf(`%w: "%s.%s"`, errColumnNotFound, parent, name)
+	return nil, fmt.Errorf(`%w: "%s.%s"`, ErrColumnNotFound, parent, name)
 }
 
-// matchingSignature returns the field with the matching signature.
-// If no field is found, the second return value is false.
-func (r *Relation) matchingSignature(s string) (*Field, bool) {
+// FindReference finds a field by its reference ID.
+// If there are many fields with the same reference ID, or no fields
+// with the reference ID, an error is returned.
+func (r *Relation) FindReference(id string) (*Field, error) {
+	var found []*Field
 	for _, f := range r.Fields {
-		if f.signature == s {
-			return f, true
+		if f.ReferenceID == id {
+			found = append(found, f)
 		}
 	}
 
-	return nil, false
+	if len(found) == 0 {
+		return nil, fmt.Errorf(`field with reference ID "%s" not found`, id)
+	}
+
+	if len(found) > 1 {
+		return nil, fmt.Errorf(`field with reference ID "%s" is ambiguous`, id)
+	}
+
+	return found[0], nil
 }
 
 func relationFromTable(tbl *types.Table) *Relation {
@@ -1214,11 +1222,84 @@ type Field struct {
 	// depending on the field type.
 	// This value should be accessed using the Scalar() or Object()
 	val any
-	// signature is a string signature of the field. It can be used to check
-	// for equality during the evaluation phase. It is unexported because it is
-	// not used for every field, but instead only for fields where we expect
-	// to use signature matching to reference previously evaluated fields.
-	signature string
+	// ReferenceID is the ID with which this field can be referenced.
+	// It can be empty if the field is not referenced.
+	ReferenceID string
+}
+
+func (f *Field) String() string {
+	str := strings.Builder{}
+	str.WriteString(f.Name)
+
+	str.WriteString(" [")
+	scalar, err := f.Scalar()
+	if err != nil {
+		str.WriteString("object")
+	} else {
+		str.WriteString(scalar.String())
+	}
+	str.WriteString("]")
+
+	if f.ReferenceID != "" {
+		str.WriteString(" (from ")
+		str.WriteString(f.ReferenceID)
+		str.WriteString(")")
+	} else if f.Parent != "" {
+		str.WriteString(" (from ")
+		str.WriteString(f.Parent)
+		str.WriteString(".")
+		str.WriteString(f.Name)
+		str.WriteString(")")
+	}
+
+	return str.String()
+}
+
+func (f *Field) Equals(other *Field) bool {
+	if f.Parent != other.Parent {
+		return false
+	}
+	if f.Name != other.Name {
+		return false
+	}
+	if f.ReferenceID != other.ReferenceID {
+		return false
+	}
+
+	if scalar1, err := f.Scalar(); err == nil {
+		if scalar2, err := other.Scalar(); err == nil {
+			return scalar1.Equals(scalar2)
+		}
+
+		return false
+	} else {
+		obj1, err := f.Object()
+		if err != nil {
+			return false
+		}
+
+		obj2, err := other.Object()
+		if err != nil {
+			return false
+		}
+
+		if len(obj1) != len(obj2) {
+			return false
+		}
+
+		for k, v1 := range obj1 {
+			v2, ok := obj2[k]
+			if !ok {
+				return false
+			}
+
+			if !v1.Equals(v2) {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 func anonField(dt *types.DataType) *Field {
@@ -1259,13 +1340,4 @@ func (f *Field) Object() (map[string]*types.DataType, error) {
 		panic(fmt.Sprintf("unexpected return type %T", f.val))
 	}
 	return obj, nil
-}
-
-func eq[T comparable](t1 *T, t2 any) bool {
-	t3, ok := t2.(*T)
-	if !ok {
-		return false
-	}
-
-	return *t1 == *t3
 }
