@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -264,7 +265,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 
 	// Close the writer when pg_dump completes to signal EOF to sed
 	if err := pgDumpCmd.Wait(); err != nil {
-		return nil, fmt.Errorf(stderr.String())
+		return nil, errors.New(stderr.String())
 	}
 
 	gzipWriter.Flush()

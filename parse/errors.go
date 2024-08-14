@@ -126,20 +126,34 @@ func (e *errorListener) MarshalJSON() ([]byte, error) {
 func (e *errorListener) AddErr(node GetPositioner, err error, msg string, v ...any) {
 	// TODO: we should change the ParseError struct. It should use the passed error as the "Type",
 	// and replace the Err field with message.
+	if len(v) > 0 {
+		// Almost always incorrect to "printf" a format string with no args. Any
+		// "%" in the string will result in an error string.
+		// https://go-review.googlesource.com/c/tools/+/585795
+		// https://github.com/golang/go/issues/60529
+		//
+		// Even with this workaround, it would arguably be better to have the
+		// caller do the formatting since lint cannot identify invalid format
+		// specifiers (number or type). Leaving API the same for now.
+		msg = fmt.Sprintf(msg, v...)
+	}
 	e.errs = append(e.errs, &ParseError{
 		ParserName: e.name,
 		Err:        err,
-		Message:    fmt.Sprintf(msg, v...),
+		Message:    msg,
 		Position:   node.GetPosition(),
 	})
 }
 
 // TokenErr adds an error that comes from an Antlr token.
 func (e *errorListener) TokenErr(t antlr.Token, err error, msg string, v ...any) {
+	if len(v) > 0 {
+		msg = fmt.Sprintf(msg, v...)
+	}
 	e.errs = append(e.errs, &ParseError{
 		ParserName: e.name,
 		Err:        err,
-		Message:    fmt.Sprintf(msg, v...),
+		Message:    msg,
 		Position:   unaryNode(t.GetLine(), t.GetColumn()),
 	})
 }
@@ -148,10 +162,13 @@ func (e *errorListener) TokenErr(t antlr.Token, err error, msg string, v ...any)
 func (e *errorListener) RuleErr(ctx antlr.ParserRuleContext, err error, msg string, v ...any) {
 	node := &Position{}
 	node.Set(ctx)
+	if len(v) > 0 {
+		msg = fmt.Sprintf(msg, v...)
+	}
 	e.errs = append(e.errs, &ParseError{
 		ParserName: e.name,
 		Err:        err,
-		Message:    fmt.Sprintf(msg, v...),
+		Message:    msg,
 		Position:   node,
 	})
 }

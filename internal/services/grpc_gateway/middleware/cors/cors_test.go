@@ -5,9 +5,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	http2 "github.com/kwilteam/kwil-db/internal/services/grpc_gateway/middleware/http-dummy"
 )
+
+type dummyHttpHandler struct {
+	Data string
+}
+
+func (d dummyHttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(d.Data))
+}
 
 func TestCors_ServeHTTP(t *testing.T) {
 	type fields struct {
@@ -31,7 +37,7 @@ func TestCors_ServeHTTP(t *testing.T) {
 		{
 			name: "cors allow *",
 			fields: fields{
-				h: &http2.DummyHttpHandler{Data: testData},
+				h: &dummyHttpHandler{Data: testData},
 			},
 			args: args{
 				r: func() *http.Request {
@@ -50,7 +56,7 @@ func TestCors_ServeHTTP(t *testing.T) {
 		{
 			name: "cors allow origins return request origin",
 			fields: fields{
-				h: &http2.DummyHttpHandler{Data: testData},
+				h: &dummyHttpHandler{Data: testData},
 			},
 			args: args{
 				r: func() *http.Request {
@@ -69,7 +75,7 @@ func TestCors_ServeHTTP(t *testing.T) {
 		{
 			name: "empty",
 			fields: fields{
-				h: &http2.DummyHttpHandler{Data: testData},
+				h: &dummyHttpHandler{Data: testData},
 			},
 			args: args{
 				r: func() *http.Request {
@@ -84,7 +90,7 @@ func TestCors_ServeHTTP(t *testing.T) {
 		{
 			name: "non options method",
 			fields: fields{
-				h: &http2.DummyHttpHandler{Data: testData},
+				h: &dummyHttpHandler{Data: testData},
 			},
 			args: args{
 				r: func() *http.Request {
