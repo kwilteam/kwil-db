@@ -29,14 +29,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/kv"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
 	"github.com/kwilteam/kwil-db/internal/listeners"
-	functionSvc "github.com/kwilteam/kwil-db/internal/services/grpc/function/v0"
-	"github.com/kwilteam/kwil-db/internal/services/grpc/healthsvc/v0"
-	txSvc "github.com/kwilteam/kwil-db/internal/services/grpc/txsvc/v1"
-	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
-	"github.com/kwilteam/kwil-db/internal/services/grpc_gateway/middleware/cors"
-	kwilgrpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
-	healthcheck "github.com/kwilteam/kwil-db/internal/services/health"
-	simple_checker "github.com/kwilteam/kwil-db/internal/services/health/simple-checker"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/adminsvc"
 	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/funcsvc"
@@ -50,16 +42,12 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	functionpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/function/v0"
-	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/rpc/transport"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 	"github.com/kwilteam/kwil-db/core/types"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 // initStores prepares the datastores with an atomic DB transaction. These
@@ -235,15 +223,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	jsonRPCAdminServer.RegisterSvc(jsonRPCTxSvc)
 	jsonRPCAdminServer.RegisterSvc(&funcsvc.Service{})
 
-	// legacy tx service and grpc server
-	txsvc := buildTxSvc(d, db, e, wrappedCmtClient, txApp, abciApp)
-	grpcServer := buildGrpcServer(d, txsvc)
-
 	return &Server{
-		grpcServer:         grpcServer,
 		jsonRPCServer:      jsonRPCServer,
 		jsonRPCAdminServer: jsonRPCAdminServer,
-		gateway:            buildGatewayServer(d, grpcServer.Addr()),
 		cometBftNode:       cometBftNode,
 		listenerManager:    listeners,
 		log:                *d.log.Named("server"),
@@ -394,13 +376,6 @@ func buildEventStore(d *coreDependencies, closers *closeFuncs) *voting.EventStor
 	}
 
 	return e
-}
-
-func buildTxSvc(d *coreDependencies, db *pg.DB, txsvc txSvc.EngineReader, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication, pricer txSvc.Pricer) *txSvc.Service {
-	return txSvc.NewService(db, txsvc, cometBftClient, nodeApp, pricer,
-		txSvc.WithLogger(*d.log.Named("tx-service")),
-		txSvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)),
-	)
 }
 
 func buildSigner(d *coreDependencies) *auth.Ed25519Signer {
@@ -802,59 +777,6 @@ func loadTLSCertificate(keyFile, certFile, hostname string) (*tls.Certificate, e
 		return nil, fmt.Errorf("failed to load TLS key pair: %v", err)
 	}
 	return &keyPair, nil
-}
-
-func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *kwilgrpc.Server {
-	lis, err := net.Listen("tcp", "127.0.0.1:0") // listen on random available port
-	if err != nil {
-		failBuild(err, "failed to build grpc server")
-	}
-
-	// Increase the maximum message size to the largest allowable transaction
-	// size plus a very generous 16KiB buffer for message overhead.
-	const msgOverHeadBuffer = 16384
-	recvLimit := d.cfg.ChainCfg.Mempool.MaxTxBytes + msgOverHeadBuffer
-	grpcServer := kwilgrpc.New(*d.log.Named("grpc-server"), lis,
-		kwilgrpc.WithSrvOpt(grpc.MaxRecvMsgSize(recvLimit)),
-		kwilgrpc.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)),
-	)
-	txpb.RegisterTxServiceServer(grpcServer, txsvc)
-
-	// right now, the function service is just registered to the public tx service
-	functionsvc := functionSvc.FunctionService{}
-	functionpb.RegisterFunctionServiceServer(grpcServer, &functionsvc)
-
-	grpc_health_v1.RegisterHealthServer(grpcServer, buildHealthSvc(d))
-
-	return grpcServer
-}
-
-func buildHealthSvc(d *coreDependencies) *healthsvc.Server {
-	// health service
-	registrar := healthcheck.NewRegistrar(*d.log.Named("auth-healthcheck"))
-	registrar.RegisterAsyncCheck(10*time.Second, 3*time.Second, healthcheck.Check{
-		Name: "dummy",
-		Check: func(ctx context.Context) error {
-			// error make this check fail, nil will make it succeed
-			return nil
-		},
-	})
-	ck := registrar.BuildChecker(simple_checker.New(d.log))
-	return healthsvc.NewServer(ck)
-}
-
-func buildGatewayServer(d *coreDependencies, gRPCAddr string) *gateway.GatewayServer {
-	gw, err := gateway.NewGateway(d.ctx, d.cfg.AppCfg.HTTPListenAddress,
-		gateway.WithLogger(*d.log.Named("gateway")),
-		gateway.WithMiddleware(cors.MCors([]string{})),
-		gateway.WithGrpcService(gRPCAddr, txpb.RegisterTxServiceHandlerFromEndpoint),
-		gateway.WithGrpcService(gRPCAddr, functionpb.RegisterFunctionServiceHandlerFromEndpoint),
-	)
-	if err != nil {
-		failBuild(err, "failed to build gateway server")
-	}
-
-	return gw
 }
 
 func buildCometBftClient(cometBftNode *cometbft.CometBftNode) *cmtlocal.Local {

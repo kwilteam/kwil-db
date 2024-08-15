@@ -5,8 +5,7 @@ services:
   node0:
     image: {{ .DockerImage }}
     ports:
-      - "{{with .ExposedHTTPPorts}}{{index . 0}}:{{end}}8080"
-      - "{{with .ExposedHTTPPorts}}{{index . 0 | plus 404 }}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 0}}:{{end}}8484"
       - "26656"
       - "26657"
     #env_file:
@@ -30,7 +29,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.http-listen-addr=:8080
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -73,8 +71,7 @@ services:
   node1:
     image: {{ .DockerImage }}
     ports:
-      - "{{with .ExposedHTTPPorts}}{{index . 1}}:{{end}}8080"
-      - "{{with .ExposedHTTPPorts}}{{index . 1 | plus 404 }}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 1}}:{{end}}8484"
       - "26656"
       - "26657"
     environment:
@@ -96,7 +93,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.http-listen-addr=:8080
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -139,8 +135,7 @@ services:
   node2:
     image: {{ .DockerImage }}
     ports:
-      - "{{with .ExposedHTTPPorts}}{{index . 2}}:{{end}}8080"
-      - "{{with .ExposedHTTPPorts}}{{index . 2 | plus 404 }}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 2}}:{{end}}8484"
       - "26656"
       - "26657"
     environment:
@@ -162,7 +157,6 @@ services:
       --log.format=plain
       --log.time-format=rfc3339milli
       --app.extension-endpoints=ext1:50051
-      --app.http-listen-addr=:8080
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -208,8 +202,7 @@ services:
   node3:
     image: {{ .DockerImage }}
     ports:
-      - "{{with .ExposedHTTPPorts}}{{index . 3}}:{{end}}8080"
-      - "{{with .ExposedHTTPPorts}}{{index . 3 | plus 404 }}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 3}}:{{end}}8484"
       - "26656"
       - "26657"
     environment:
@@ -231,7 +224,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext3:50051
-      --app.http-listen-addr=:8080
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -274,8 +266,7 @@ services:
   node4:
     image: {{ .DockerImage }}
     ports:
-      - "{{with .ExposedHTTPPorts}}{{index . 4}}:{{end}}8080"
-      - "{{with .ExposedHTTPPorts}}{{index . 4 | plus 404 }}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 4}}:{{end}}8484"
       - "26656"
       - "26657"
     environment:
@@ -297,7 +288,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.http-listen-addr=:8080
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -340,8 +330,7 @@ services:
   node5:
     image: {{ .DockerImage }}
     ports:
-      - "{{with .ExposedHTTPPorts}}{{index . 5}}:{{end}}8080"
-      - "{{with .ExposedHTTPPorts}}{{index . 5 | plus 404 }}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 5}}:{{end}}8484"
       - "26656"
       - "26657"
     environment:
@@ -363,7 +352,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.http-listen-addr=:8080
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657

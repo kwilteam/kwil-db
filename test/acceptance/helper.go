@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"net/url"
 	"os"
 	"os/signal"
 	"path"
@@ -20,7 +19,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/kwilteam/kwil-db/test/utils"
@@ -40,7 +38,6 @@ const TestChainID = "kwil-test-chain"
 // ActTestCfg is the config for acceptance test
 type ActTestCfg struct {
 	JSONRPCEndpoint string
-	HTTPEndpoint    string
 	P2PAddress      string // cometbft p2p address
 	AdminRPC        string // tcp or unix socket
 
@@ -70,7 +67,6 @@ func (e *ActTestCfg) VisitorIdent() []byte {
 func (e *ActTestCfg) DumpToEnv() error {
 	var envTemplage = `
 JSONRPC_ENDPOINT=%s
-GATEWAY_ENDPOINT=%s
 CHAIN_ENDPOINT=%s
 CREATOR_PRIVATE_KEY=%s
 CREATOR_PUBLIC_KEY=%x
@@ -79,7 +75,6 @@ VISITOR_PUBLIC_KEY=%x
 `
 	content := fmt.Sprintf(envTemplage,
 		e.JSONRPCEndpoint,
-		e.HTTPEndpoint,
 		e.P2PAddress,
 		e.CreatorRawPk,
 		e.CreatorIdent(),
@@ -132,7 +127,6 @@ func (r *ActHelper) LoadConfig() *ActTestCfg {
 		SchemaFile:                getEnv("KACT_SCHEMA", "./test-data/test_db.kf"),
 		LogLevel:                  getEnv("KACT_LOG_LEVEL", "info"),
 		JSONRPCEndpoint:           getEnv("KACT_JSONRPC_ENDPOINT", "http://127.0.0.1:8484"),
-		HTTPEndpoint:              getEnv("KACT_HTTP_ENDPOINT", "http://127.0.0.1:8080/"),
 		P2PAddress:                getEnv("KACT_CHAIN_ENDPOINT", "tcp://0.0.0.0:26656"),
 		AdminRPC:                  getEnv("KACT_ADMIN_RPC", "/tmp/admin.socket"),
 		DockerComposeFile:         getEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
@@ -260,10 +254,6 @@ func (r *ActHelper) Setup(ctx context.Context) {
 	jsonrpcEndpoint, _, err := utils.KwildJSONRPCEndpoints(r.container, ctx)
 	require.NoError(r.t, err, "failed to get json-rpc endpoint")
 	r.cfg.JSONRPCEndpoint = jsonrpcEndpoint
-
-	httpEndpoint, _, err := utils.KwildHTTPEndpoints(r.container, ctx)
-	require.NoError(r.t, err, "failed to get http endpoint")
-	r.cfg.HTTPEndpoint = httpEndpoint
 }
 
 func (r *ActHelper) WaitUntilInterrupt() {
@@ -288,8 +278,6 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 	switch driveType {
 	case "jsonrpc":
 		return r.getJSONRPCClientDriver(signer, r.cfg.JSONRPCEndpoint)
-	case "http":
-		return r.getHTTPClientDriver(signer, r.cfg.HTTPEndpoint)
 	case "cli":
 		return r.getCliDriver(pk, signer.Identity(), r.cfg.JSONRPCEndpoint)
 	default:
@@ -306,23 +294,6 @@ func (r *ActHelper) getJSONRPCClientDriver(signer auth.Signer, endpoint string) 
 		Logger:  logger,
 	})
 	require.NoError(r.t, err, "failed to create json-rpc client")
-
-	return driver.NewKwildClientDriver(kwilClt, signer, nil, logger)
-}
-
-func (r *ActHelper) getHTTPClientDriver(signer auth.Signer, endpoint string) KwilAcceptanceDriver {
-	logger := log.New(log.Config{Level: r.cfg.LogLevel})
-
-	parsedURL, err := url.Parse(endpoint)
-	require.NoError(r.t, err, "bad url")
-
-	httpClient := http.NewClient(parsedURL)
-
-	kwilClt, err := client.WrapClient(context.TODO(), httpClient, &clientType.Options{
-		Signer: signer,
-		Logger: logger,
-	})
-	require.NoError(r.t, err, "failed to create http client")
 
 	return driver.NewKwildClientDriver(kwilClt, signer, nil, logger)
 }

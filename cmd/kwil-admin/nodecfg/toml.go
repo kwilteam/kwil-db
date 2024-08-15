@@ -107,9 +107,6 @@ private_key_path = "{{ .AppCfg.PrivateKeyPath }}"
 # TCP address for the KWILD App's JSON-RPC server to listen on
 jsonrpc_listen_addr = "{{ .AppCfg.JSONRPCListenAddress }}"
 
-# TCP address for the KWILD App's HTTP server to listen on
-http_listen_addr = "{{ .AppCfg.HTTPListenAddress }}"
-
 # Unix socket or TCP address for the KWILD App's Admin GRPC server to listen on
 admin_listen_addr = "{{ .AppCfg.AdminListenAddress }}"
 

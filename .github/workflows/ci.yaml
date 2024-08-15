@@ -91,14 +91,6 @@ jobs:
         run: |
           ./scripts/mods/check_tidy
 
-      - name: Ensure generated protobuf Go source is up-to-date
-        run: |
-          ./scripts/proto/check_up
-
-      - name: Ensure generated swagger Go code is up-to-date
-        run: |
-          ./scripts/swagger/check_up
-
       - name: Ensure generate antlr Go code is up-to-date
         run: |
           ./scripts/kuneiform/check_tidy

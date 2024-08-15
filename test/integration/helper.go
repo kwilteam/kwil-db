@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"net/url"
 	"os"
 	"os/signal"
 	"path"
@@ -32,7 +31,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/gatewayclient"
 	"github.com/kwilteam/kwil-db/core/log"
-	http "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
 	ethdeposits "github.com/kwilteam/kwil-db/extensions/listeners/eth_deposits"
 	"github.com/kwilteam/kwil-db/test/driver"
@@ -80,7 +78,6 @@ const (
 // This is totally separate from acceptance test
 type IntTestConfig struct {
 	JSONRPCEndpoint string
-	HTTPEndpoint    string
 	ChainEndpoint   string
 	AdminRPC        string // Should be of form /var/run/kwil/admin.sock or 127.0.0.1:8485
 
@@ -88,7 +85,7 @@ type IntTestConfig struct {
 	DockerComposeFile         string
 	DockerComposeOverrideFile string
 	WithETHDevNet             bool
-	ExposedHTTPPorts          bool
+	ExposedRPCPorts           bool
 
 	WaitTimeout time.Duration
 	LogLevel    string
@@ -198,9 +195,9 @@ func WithNonValidators(n int) HelperOpt {
 	}
 }
 
-func WithExposedHTTPPorts() HelperOpt {
+func WithExposedRPCPorts() HelperOpt {
 	return func(r *IntHelper) {
-		r.cfg.ExposedHTTPPorts = true
+		r.cfg.ExposedRPCPorts = true
 	}
 }
 
@@ -301,7 +298,6 @@ func (r *IntHelper) LoadConfig() {
 		VisitorRawPK:              getEnv("KIT_VISITOR_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
 		SchemaFile:                getEnv("KIT_SCHEMA", "./test-data/test_db.kf"),
 		LogLevel:                  getEnv("KIT_LOG_LEVEL", "info"),
-		HTTPEndpoint:              getEnv("KIT_HTTP_ENDPOINT", "http://localhost:8080/"),
 		JSONRPCEndpoint:           getEnv("KIT_JSONRPC_ENDPOINT", "http://localhost:8484"),
 		AdminRPC:                  getEnv("KIT_ADMIN_RPC", "/tmp/admin.socket"),
 		DockerComposeFile:         getEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
@@ -618,13 +614,13 @@ func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 	// docker-compose file is to use envs in docker-compose.yml, but it doesn't work
 	//r.updateEnv("KWIL_NETWORK", localNetworkName)
 
-	var exposedHTTPPorts []int
-	if r.cfg.ExposedHTTPPorts {
+	var ExposedRPCPorts []int
+	if r.cfg.ExposedRPCPorts {
 		// Actually only need this as long as the number of nodes defined in
 		// the docker-compose.yml.template file. This is not related to
 		// NValidators and NNValidators.
 		for i := 0; i < 20; i++ { // more than enough, which is 6 presently
-			exposedHTTPPorts = append(exposedHTTPPorts, i+8080+1)
+			ExposedRPCPorts = append(ExposedRPCPorts, i+8484+1)
 		}
 	}
 
@@ -638,9 +634,9 @@ func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 	}
 	err = utils.CreateComposeFile(composeFile, "./docker-compose.yml.template",
 		utils.ComposeConfig{
-			Network:          localNetworkName,
-			ExposedHTTPPorts: exposedHTTPPorts,
-			DockerImage:      dockerImageName,
+			Network:         localNetworkName,
+			ExposedRPCPorts: ExposedRPCPorts,
+			DockerImage:     dockerImageName,
 		})
 	require.NoError(r.t, err, "failed to create docker compose file")
 
@@ -742,12 +738,10 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverTy
 	ctr := r.containers[nodeName]
 	jsonrpcURL, _, err := utils.KwildJSONRPCEndpoints(ctr, ctx)
 	require.NoError(r.t, err, "failed to get json-rpc url")
-	httpURL, _, err := utils.KwildHTTPEndpoints(ctr, ctx)
-	require.NoError(r.t, err, "failed to get http url")
 	cometBftURL, _, err := utils.KwildRpcEndpoints(ctr, ctx)
 	require.NoError(r.t, err, "failed to get cometBft url")
-	r.t.Logf("httpURL: %s jsonrpcURL: %s cometBftURL: %s for container: %s",
-		httpURL, jsonrpcURL, cometBftURL, nodeName)
+	r.t.Logf("jsonrpcURL: %s cometBftURL: %s for container: %s",
+		jsonrpcURL, cometBftURL, nodeName)
 
 	signer := r.cfg.CreatorSigner
 	pk := r.cfg.CreatorRawPk
@@ -755,8 +749,6 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverTy
 	switch driverType {
 	case "jsonrpc":
 		return r.getJSONRPCClientDriver(signer, jsonrpcURL, gatewayProvider, deployer)
-	case "http":
-		return r.getHTTPClientDriver(signer, httpURL, gatewayProvider, deployer)
 	case "cli":
 		return r.getCliDriver(jsonrpcURL, pk, signer.Identity(), gatewayProvider, deployer)
 	default:
@@ -796,9 +788,6 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driv
 
 		return r.getCLIAdminClientDriver(r.cfg.AdminRPC, c)
 
-	case "http", "grpc":
-		r.t.Fatalf("driver not supported for node operator: %v", driverType)
-		return nil
 	default:
 		r.t.Fatalf("unknown node operator driver: %v", driverType)
 		return nil
@@ -830,36 +819,6 @@ func (r *IntHelper) getJSONRPCClientDriver(signer auth.Signer, endpoint string, 
 	}
 
 	require.NoError(r.t, err, "failed to create kwil client")
-
-	return driver.NewKwildClientDriver(kwilClt, signer, deployer, logger)
-}
-
-func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gatewayProvider bool, deployer *ethdeployer.Deployer) *driver.KwildClientDriver {
-	logger := log.New(log.Config{Level: r.cfg.LogLevel})
-	logger = *logger.With(log.String("testCase", r.t.Name()))
-
-	parsedURL, err := url.Parse(endpoint)
-	require.NoError(r.t, err, "bad url")
-
-	var kwilClt clientType.Client
-
-	if gatewayProvider {
-		kwilClt, err = gatewayclient.NewClient(context.TODO(), endpoint, &gatewayclient.GatewayOptions{
-			Options: clientType.Options{
-				Signer:  signer,
-				ChainID: testChainID,
-				Logger:  logger,
-			},
-		})
-	} else {
-		httpClient := http.NewClient(parsedURL)
-		kwilClt, err = client.WrapClient(context.TODO(), httpClient, &clientType.Options{
-			Signer:  signer,
-			ChainID: testChainID,
-			Logger:  logger,
-		})
-	}
-	require.NoError(r.t, err, "wrapping http client failed")
 
 	return driver.NewKwildClientDriver(kwilClt, signer, deployer, logger)
 }

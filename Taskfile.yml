@@ -1,8 +1,5 @@
 version: "3"
 
-includes:
-  pb: ./Taskfile-pb.yml
-
 tasks:
   default:
     cmds:
@@ -16,30 +13,11 @@ tasks:
     aliases: [tools]
     desc: Install tools required to build this app
     cmds:
-      - go install "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.16.2"
-      - go install "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.16.2"
       - go install "golang.org/x/tools/cmd/goimports@v0.14.0"
-      - go install "google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0"
-      - go install "google.golang.org/protobuf/cmd/protoc-gen-go@v1.31.0"
-
-  git:init:
-    desc: Initialize git submodules
-    cmds:
-      - git submodule update --init
-
-  git:sync:
-    desc: Sync git submodules to required revisions
-    cmds:
-      - git submodule update
-
-  git:advance:
-    desc: Advance git submodules to latest main revision
-    cmds:
-      - git submodule update --remote
 
   init:
     desc: Initialize the project
-    deps: [install:deps, git:init]
+    deps: [install:deps]
     cmds:
       - go mod download
 
@@ -49,10 +27,8 @@ tasks:
       # goimports does not allow to ignore certain paths (protobuf) with modules,
       # so we have to list all the folders that are adjacent to protobuf.
       - |
-        goimports -format-only -w ./cmd ./internal ./test ./core/client \
-          ./core/crypto ./core/log ./core/rpc/client \
-          ./core/rpc/transport ./core/types ./core/utils \
-          ./parse/*.go ./parse/wasm ./parse/postgres
+        goimports -format-only -w ./cmd ./common ./internal ./test ./testing \
+          ./core ./extensions ./parse/*.go ./parse/wasm ./parse/postgres
 
   tidy:
     desc: go mod tidy each module

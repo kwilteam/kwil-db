@@ -56,7 +56,7 @@ func TestLocalDevSetup(t *testing.T) {
 		integration.WithBlockInterval(time.Second),
 		integration.WithValidators(4),
 		integration.WithNonValidators(0),
-		integration.WithExposedHTTPPorts(),
+		integration.WithExposedRPCPorts(),
 	}
 
 	helper := integration.NewIntHelper(t, opts...)
@@ -698,7 +698,7 @@ func TestSpamListener(t *testing.T) {
 
 	// Wait for the network to produce atleast 1 block for the genesis validators to get committed and synced.
 	time.Sleep(2 * time.Second)
-	node0Driver := helper.GetUserDriver(ctx, "node0", "http", nil)
+	node0Driver := helper.GetUserDriver(ctx, "node0", "jsonrpc", nil)
 
 	// Verify that the spam listener is running and does not overwhelm the network
 	// Also keep issuing some transactions to ensure that the network is up and not saturated

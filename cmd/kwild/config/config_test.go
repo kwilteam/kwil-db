@@ -23,7 +23,6 @@ func Test_Config_Toml(t *testing.T) {
 	assert.Equal(t, "warn", cfg.Logging.ConsensusLevel)
 
 	assert.Equal(t, "192.168.1.1:8484", cfg.AppCfg.JSONRPCListenAddress)
-	assert.Equal(t, "localhost:8080", cfg.AppCfg.HTTPListenAddress)
 
 	// extension endpoints
 	assert.Equal(t, 3, len(cfg.AppCfg.ExtensionEndpoints))
