@@ -450,23 +450,3 @@ func rewriteInOrder[T Traversable](r *rewriteVisitor, callback func(T) (T, bool,
 	r.execFields(fields)
 	return res
 }
-
-// visitAllExprs visits all nodes in a tree, calling the given function on each expression.
-func visitAllNodes(node LogicalNode, f func(Traversable)) error {
-	// this uses the rewrite but doesn't actually rewrite anything
-	_, err := Rewrite(node, &RewriteConfig{
-		ExprCallback: func(e LogicalExpr) (LogicalExpr, bool, error) {
-			f(e)
-			return e, true, nil
-		},
-		PlanCallback: func(p LogicalPlan) (LogicalPlan, bool, error) {
-			f(p)
-			return p, true, nil
-		},
-		ScanSourceCallback: func(s ScanSource) (ScanSource, bool, error) {
-			f(s)
-			return s, true, nil
-		},
-	})
-	return err
-}

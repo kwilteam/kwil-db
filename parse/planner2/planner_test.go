@@ -384,35 +384,40 @@ func Test_Planner(t *testing.T) {
 				"  └─Filter: CASE WHEN [users.age = 20] THEN [true] ELSE [false] END\n" +
 				"    └─Scan Table: users [physical]\n",
 		},
-		// // TODO: im gonna sleep on INSERT and come back to it
-		// {
-		// 	name: "basic update",
-		// 	sql:  "update users set name = 'satoshi' where age = 1",
-		// 	wt: "Update [users]: name = 'satoshi'\n" +
-		// 		"└─Filter: users.age = 1\n" +
-		// 		"  └─Scan Table: users [physical]\n",
-		// },
-		// {
-		// 	name: "update from with join",
-		// 	sql:  "update users set name = pu.content from posts p inner join posts_by_user('satoshi') pu on p.content = pu.content where p.owner_id = users.id",
-		// 	// will be unoptimized, so it will use a cartesian product
-		// 	// optimization could re-write the filter to a join, as well as
-		// 	// add projections.
-		// 	wt: "Update [users]: name = pu.content\n" +
-		// 		"└─Filter: p.owner_id = users.id\n" +
-		// 		"  └─Cartesian Product\n" +
-		// 		"    ├─Scan Table: users [physical]\n" +
-		// 		"    └─Join [inner]: p.content = pu.content\n" +
-		// 		"      ├─Scan Table [alias=\"p\"]: posts [physical]\n" +
-		// 		"      └─Scan Procedure [alias=\"pu\"]: [foreign=false] posts_by_user('satoshi')\n",
-		// },
-		// {
-		// 	name: "basic delete",
-		// 	sql:  "delete from users where age = 1",
-		// 	wt: "Delete [users]\n" +
-		// 		"└─Filter: users.age = 1\n" +
-		// 		"  └─Scan Table: users [physical]\n",
-		// },
+		// TODO: im gonna sleep on INSERT and come back to it
+		{
+			name: "basic update",
+			sql:  "update users set name = 'satoshi' where age = 1",
+			wt: "Update [users]: name = 'satoshi'\n" +
+				"└─Filter: users.age = 1\n" +
+				"  └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "update from with join",
+			sql:  "update users set name = pu.content from posts p inner join posts_by_user('satoshi') pu on p.content = pu.content where p.owner_id = users.id",
+			// will be unoptimized, so it will use a cartesian product
+			// optimization could re-write the filter to a join, as well as
+			// add projections.
+			wt: "Update [users]: name = pu.content\n" +
+				"└─Filter: p.owner_id = users.id\n" +
+				"  └─Cartesian Product\n" +
+				"    ├─Scan Table: users [physical]\n" +
+				"    └─Join [inner]: p.content = pu.content\n" +
+				"      ├─Scan Table [alias=\"p\"]: posts [physical]\n" +
+				"      └─Scan Procedure [alias=\"pu\"]: [foreign=false] posts_by_user('satoshi')\n",
+		},
+		{
+			name: "update with from without where",
+			sql:  "update users set name = pu.content from posts_by_user('satoshi') pu",
+			err:  planner2.ErrUpdateOrDeleteWithoutWhere,
+		},
+		{
+			name: "basic delete",
+			sql:  "delete from users where age = 1",
+			wt: "Delete [users]\n" +
+				"└─Filter: users.age = 1\n" +
+				"  └─Scan Table: users [physical]\n",
+		},
 		// TODO: we don't actually support DELETE with joins, however we can now.
 		// once we do, we should add tests for it
 	}

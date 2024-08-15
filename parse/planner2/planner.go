@@ -148,6 +148,12 @@ func (s *scopeContext) sqlStmt(node *parse.SQLStatement) (TopLevelPlan, error) {
 			Child:  plan,
 			Fields: res.Fields,
 		}, nil
+	case *parse.UpdateStatement:
+		return s.update(node)
+	case *parse.DeleteStatement:
+		return s.delete(node)
+	case *parse.InsertStatement:
+		panic("insert not implemented")
 	}
 }
 
@@ -375,10 +381,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 
 	containsAgg := false
 	for _, result := range results {
-		containsAgg, err = hasAggregate(result.Expr)
-		if err != nil {
-			return nil, err
-		}
+		containsAgg = hasAggregate(result.Expr)
 	}
 
 	// if there is no group by or aggregate, we can apply any distinct and return
@@ -416,9 +419,9 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 	// This means that for all result columns, we need to rewrite any
 	// column references or aggregate usage as columnrefs to the aggregate
 	// functions matching term.
-	aggTerms := make(map[string]*identFieldPair)      // any aggregate function used in the result or having
-	groupingTerms := make(map[string]*IdentifiedExpr) // any grouping term used in the GROUP BY
-	aggregateRel := &Relation{}                       // the relation resulting from the aggregation
+	aggTerms := make(map[string]*exprFieldPair[*IdentifiedExpr]) // any aggregate function used in the result or having
+	groupingTerms := make(map[string]*IdentifiedExpr)            // any grouping term used in the GROUP BY
+	aggregateRel := &Relation{}                                  // the relation resulting from the aggregation
 
 	aggPlan := &Aggregate{ // defined separately so we can reference it in the below clauses
 		Child: plan,
@@ -432,11 +435,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 		}
 
 		// TODO: disallow subqueries in group by
-		containsAgg, err := hasAggregate(groupExpr)
-		if err != nil {
-			return nil, err
-		}
-		if containsAgg {
+		if hasAggregate(groupExpr) {
 			return nil, fmt.Errorf(`aggregate functions are not allowed in GROUP BY`)
 		}
 
@@ -490,7 +489,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 
 	// finally, all of the aggregated columns need to be added to the Aggregate node
 	for _, agg := range order.OrderMap(aggTerms) {
-		aggPlan.AggregateExpressions = append(aggPlan.AggregateExpressions, agg.Value.Identified)
+		aggPlan.AggregateExpressions = append(aggPlan.AggregateExpressions, agg.Value.Expr)
 		aggregateRel.Fields = append(aggregateRel.Fields, agg.Value.Field)
 	}
 
@@ -524,29 +523,23 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 }
 
 // hasAggregate returns true if the expression contains an aggregate function.
-func hasAggregate(expr LogicalNode) (bool, error) {
+func hasAggregate(expr LogicalNode) bool {
 	var hasAggregate bool
-	err := visitAllNodes(expr, func(le Traversable) {
-		if _, ok := le.(*AggregateFunctionCall); ok {
+	traverse(expr, func(node Traversable) bool {
+		if _, ok := node.(*AggregateFunctionCall); ok {
 			hasAggregate = true
+			return false
 		}
+
+		return true
 	})
-	if err != nil {
-		return false, err
-	}
 
-	return hasAggregate, nil
-}
-
-// identFieldPair is a helper struct that pairs an identified expression with a field.
-type identFieldPair struct {
-	Identified *IdentifiedExpr
-	Field      *Field
+	return hasAggregate
 }
 
 // exprFieldPair is a helper struct that pairs an expression with a field.
-type exprFieldPair struct {
-	Expr  LogicalExpr
+type exprFieldPair[T LogicalExpr] struct {
+	Expr  T
 	Field *Field
 }
 
@@ -581,7 +574,7 @@ type selectCoreResult struct {
 // rewriteAccordingToAggregate rewrites an expression according to the rules of aggregation.
 // This is used to rewrite both the select list and having clause to validate that all columns
 // are either captured in aggregates or have an exactly matching expression in the group by.
-func (s *scopeContext) rewriteAccordingToAggregate(expr LogicalExpr, groupingTerms map[string]*IdentifiedExpr, aggTerms map[string]*identFieldPair) (LogicalExpr, error) {
+func (s *scopeContext) rewriteAccordingToAggregate(expr LogicalExpr, groupingTerms map[string]*IdentifiedExpr, aggTerms map[string]*exprFieldPair[*IdentifiedExpr]) (LogicalExpr, error) {
 	node, err := Rewrite(expr, &RewriteConfig{
 		ExprCallback: func(le LogicalExpr) (LogicalExpr, bool, error) {
 			// if it matches any group by term, we need to rewrite it
@@ -605,7 +598,7 @@ func (s *scopeContext) rewriteAccordingToAggregate(expr LogicalExpr, groupingTer
 				identified, ok := aggTerms[le.String()]
 				if ok {
 					return &ExprRef{
-						Identified: identified.Identified,
+						Identified: identified.Expr,
 					}, false, nil
 				}
 
@@ -614,8 +607,8 @@ func (s *scopeContext) rewriteAccordingToAggregate(expr LogicalExpr, groupingTer
 					ID:   s.plan.uniqueRefIdentifier(),
 				}
 
-				aggTerms[le.String()] = &identFieldPair{
-					Identified: newIdentified,
+				aggTerms[le.String()] = &exprFieldPair[*IdentifiedExpr]{
+					Expr: newIdentified,
 					Field: &Field{
 						Name:        le.FunctionName,
 						val:         le.returnType.Copy(),
@@ -640,7 +633,7 @@ func (s *scopeContext) rewriteAccordingToAggregate(expr LogicalExpr, groupingTer
 
 // expandResultCols takes a relation and result columns, and converts them to expressions
 // in the order provided. This is used to expand a wildcard in a select statement.
-func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn) ([]*exprFieldPair, error) {
+func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn) ([]*exprFieldPair[LogicalExpr], error) {
 	var resultCols []LogicalExpr
 	var resultFields []*Field
 	for _, col := range cols {
@@ -683,9 +676,9 @@ func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn
 		}
 	}
 
-	var pairs []*exprFieldPair
+	var pairs []*exprFieldPair[LogicalExpr]
 	for i, expr := range resultCols {
-		pairs = append(pairs, &exprFieldPair{
+		pairs = append(pairs, &exprFieldPair[LogicalExpr]{
 			Expr:  expr,
 			Field: resultFields[i],
 		})
@@ -1614,6 +1607,162 @@ func (s *scopeContext) join(child LogicalPlan, childRel *Relation, join *parse.J
 	}
 
 	return plan, newRel, nil
+}
+
+// update builds a plan for an update
+func (s *scopeContext) update(node *parse.UpdateStatement) (*Update, error) {
+	plan, targetRel, cartesianRel, err := s.cartesian(node.Table, node.Alias, node.From, node.Joins, node.Where)
+	if err != nil {
+		return nil, err
+	}
+
+	assigns, err := s.assignments(node.SetClause, targetRel, cartesianRel)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Update{
+		Child:       plan,
+		Assignments: assigns,
+		Table:       node.Table,
+	}, nil
+}
+
+// delete builds a plan for a delete
+func (s *scopeContext) delete(node *parse.DeleteStatement) (*Delete, error) {
+	plan, _, _, err := s.cartesian(node.Table, node.Alias, node.From, node.Joins, node.Where)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Delete{
+		Child: plan,
+		Table: node.Table,
+	}, nil
+}
+
+// cartesian builds a cartesian product for several relations. It is meant to be used
+// explicitly for update and delete, where we start by planning a cartesian join between the
+// target table and the FROM + JOIN tables, and later optimize the filter.
+// It returns the plan for the join, the relation that is being targeted, the relation that is the cartesian join
+// between the target and the FROM + JOIN tables, and an error if one occurred.
+func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, joins []*parse.Join,
+	filter parse.Expression) (plan LogicalPlan, targetRel *Relation, cartesianRel *Relation, err error) {
+
+	tbl, ok := s.plan.Schema.FindTable(targetTable)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf(`unknown table "%s"`, targetTable)
+	}
+	if alias == "" {
+		alias = targetTable
+	}
+
+	targetRel = relationFromTable(tbl)
+	// copy that can be overwritten
+	rel := targetRel.Copy()
+
+	// plan the target table
+	var targetPlan LogicalPlan = &Scan{
+		Source: &TableScanSource{
+			TableName: targetTable,
+			Type:      TableSourcePhysical,
+		},
+		RelationName: alias,
+	}
+
+	// if there is no FROM clause, we can simply apply the filter and return
+	if from == nil {
+		if filter != nil {
+			expr, _, err := s.expr(filter, rel)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			return &Filter{
+				Child:     targetPlan,
+				Condition: expr,
+			}, targetRel, rel, nil
+		}
+
+		return targetPlan, rel, nil, nil
+	}
+
+	// update and delete statements with a FROM require a WHERE clause,
+	// otherwise it is impossible to optimize the query to not be a cartesian product
+	if filter == nil {
+		return nil, nil, nil, ErrUpdateOrDeleteWithoutWhere
+	}
+
+	// plan the FROM clause
+
+	var sourceRel LogicalPlan
+	var fromRel *Relation
+	sourceRel, fromRel, err = s.table(from)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	for _, join := range joins {
+		sourceRel, fromRel, err = s.join(sourceRel, fromRel, join)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	// build a cartesian product and apply the filter
+	targetPlan = &CartesianProduct{
+		Left:  targetPlan,
+		Right: sourceRel,
+	}
+
+	rel = joinRels(fromRel, rel)
+
+	expr, _, err := s.expr(filter, rel)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return &Filter{
+		Child:     targetPlan,
+		Condition: expr,
+	}, targetRel, rel, nil
+}
+
+// assignments builds the assignments for update and conflict clauses
+func (s *scopeContext) assignments(assignments []*parse.UpdateSetClause, targetRel *Relation, cartesianRel *Relation) ([]*Assignment, error) {
+	assigns := make([]*Assignment, len(assignments))
+	for i, assign := range assignments {
+		field, err := targetRel.Search("", assign.Column)
+		if err != nil {
+			return nil, err
+		}
+
+		expr, assignType, err := s.expr(assign.Value, cartesianRel)
+		if err != nil {
+			return nil, err
+		}
+
+		scalarField, err := assignType.Scalar()
+		if err != nil {
+			return nil, err
+		}
+
+		scalarAssign, err := field.Scalar()
+		if err != nil {
+			return nil, err
+		}
+
+		if !scalarField.Equals(scalarAssign) {
+			return nil, fmt.Errorf(`cannot assign type %s to column "%s", expected type %s`, scalarField, field.Name, scalarAssign)
+		}
+
+		assigns[i] = &Assignment{
+			Column: field.Name,
+			Value:  expr,
+		}
+	}
+
+	return assigns, nil
 }
 
 const (
