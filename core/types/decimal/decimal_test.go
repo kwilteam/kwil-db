@@ -4,9 +4,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/core/types/decimal"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gotest.tools/assert"
+
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
 func Test_NewParsedDecimal(t *testing.T) {
@@ -561,4 +562,128 @@ func Test_BigAndExp(t *testing.T) {
 			require.Equal(t, tt.outScale, d.Scale())
 		})
 	}
+}
+func TestDecimalBinaryMarshaling(t *testing.T) {
+	tests := []struct {
+		name     string
+		decimal  string
+		prec     uint16
+		scale    uint16
+		expected []byte
+	}{
+		{
+			name:     "positive decimal",
+			decimal:  "123.456",
+			prec:     6,
+			scale:    3,
+			expected: append([]byte{0, 6, 0, 3}, []byte("123.456")...),
+		},
+		{
+			name:     "negative decimal",
+			decimal:  "-987.654",
+			prec:     6,
+			scale:    3,
+			expected: append([]byte{0, 6, 0, 3}, []byte("-987.654")...),
+		},
+		{
+			name:     "zero",
+			decimal:  "0",
+			prec:     1,
+			scale:    0,
+			expected: append([]byte{0, 1, 0, 0}, []byte("0")...),
+		},
+		{
+			name:     "large precision and scale",
+			decimal:  "1234567890.0987654321",
+			prec:     20,
+			scale:    10,
+			expected: append([]byte{0, 20, 0, 10}, []byte("1234567890.0987654321")...),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d, err := decimal.NewExplicit(tt.decimal, tt.prec, tt.scale)
+			require.NoError(t, err)
+
+			marshaled, err := d.MarshalBinary()
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, marshaled)
+
+			var unmarshaled decimal.Decimal
+			err = unmarshaled.UnmarshalBinary(marshaled)
+			require.NoError(t, err)
+
+			assert.Equal(t, d.String(), unmarshaled.String())
+			assert.Equal(t, d.Precision(), unmarshaled.Precision())
+			assert.Equal(t, d.Scale(), unmarshaled.Scale())
+		})
+	}
+}
+
+func TestDecimalBinaryUnmarshalingErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       []byte
+		expectedErr string
+	}{
+		{
+			name:        "empty input",
+			input:       []byte{},
+			expectedErr: "invalid binary data",
+		},
+		{
+			name:        "insufficient data",
+			input:       []byte{0, 1, 0},
+			expectedErr: "invalid binary data",
+		},
+		{
+			name:        "invalid decimal data",
+			input:       []byte{0, 1, 0, 0, 255},
+			expectedErr: "parse mantissa",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var d decimal.Decimal
+			err := d.UnmarshalBinary(tt.input)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectedErr)
+		})
+	}
+}
+
+func TestDecimalBinaryRoundTrip(t *testing.T) {
+	original, err := decimal.NewFromString("12345.6789")
+	require.NoError(t, err)
+
+	marshaled, err := original.MarshalBinary()
+	require.NoError(t, err)
+
+	var unmarshaled decimal.Decimal
+	err = unmarshaled.UnmarshalBinary(marshaled)
+	require.NoError(t, err)
+
+	assert.Equal(t, original.String(), unmarshaled.String())
+	assert.Equal(t, original.Precision(), unmarshaled.Precision())
+	assert.Equal(t, original.Scale(), unmarshaled.Scale())
+}
+
+func TestDecimalJSONRoundTrip(t *testing.T) {
+	str := "12345.6789"
+	original, err := decimal.NewFromString(str)
+	require.NoError(t, err)
+
+	marshaled, err := original.MarshalJSON()
+	require.NoError(t, err)
+	require.Equal(t, `"`+str+`"`, string(marshaled))
+
+	var unmarshaled decimal.Decimal
+	err = unmarshaled.UnmarshalJSON(marshaled)
+	require.NoError(t, err)
+
+	assert.Equal(t, original.String(), unmarshaled.String())
+	assert.Equal(t, original.Precision(), unmarshaled.Precision())
+	assert.Equal(t, original.Scale(), unmarshaled.Scale())
 }
