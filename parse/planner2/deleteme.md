@@ -1,6 +1,0 @@
-I plan on deleting this, but am just using it to spew thoughts while I reflect on how I can make this fucking planner work.
-
-As far as I can tell, I am correct on pretty much everything in the planner. It all works super elegantly. The only thing that is super fucked are aggregates.
-The issues with the aggregates are:
-
-- Expanding usage of "SELECT *" when we have a group by is pretty much impossible, since we have to delay that until the evaluation step. The issue with that is that the evaluation step is where we perform qualification, and so we aren't able to handle matching expressions where some columns are correlated and others aren't. The reason it is so hard to correlate prior to the evaluation phase is because correlation requires us to know what relations are in the context, which requires a pre-order traversal (EDIT: this isn't true. I think moving these into the same phase could be the solution. it seems like if we have everything in one phase (and move type-checking later), then this could work.).
