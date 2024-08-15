@@ -73,7 +73,7 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 		}
 
 		for _, expand := range n.expandFuncs {
-			n.Expressions = append(n.Expressions, expand()...)
+			n.Expressions = append(n.Expressions, expand(rel)...)
 		}
 		n.expandFuncs = nil // never want to expand more than once
 
@@ -161,8 +161,6 @@ func (s *EvaluateContext) evalRelation(rel LogicalPlan) (*Relation, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		// TODO: we need to use aggregate.go to enforce aggregation rules
 
 		// aggregate expressions return the grouping and aggregate expressions
 		var fields []*Field
@@ -1098,23 +1096,7 @@ type Relation struct {
 func (r *Relation) Copy() *Relation {
 	var fields []*Field
 	for _, f := range r.Fields {
-		var val any
-		switch v := f.val.(type) {
-		case *types.DataType:
-			val = v.Copy()
-		case map[string]*types.DataType:
-			val = make(map[string]*types.DataType)
-			for k, v := range v {
-				val.(map[string]*types.DataType)[k] = v.Copy()
-			}
-		}
-
-		fields = append(fields, &Field{
-			Parent:      f.Parent,
-			Name:        f.Name,
-			val:         val,
-			ReferenceID: f.ReferenceID,
-		})
+		fields = append(fields, f.Copy())
 	}
 	return &Relation{
 		Fields: fields,
@@ -1155,21 +1137,16 @@ func (s *Relation) Search(parent, name string) (*Field, error) {
 		}
 
 		// return a new instance since we are qualifying the column
-		return &Field{
-			Parent: column.Parent, // fully qualify the column
-			Name:   column.Name,
-			val:    column.val,
-		}, nil
+		newCol := column.Copy()
+		if newCol.Parent == "" {
+			newCol.Parent = column.Name
+		}
+		return newCol, nil
 	}
 
 	for _, c := range s.Fields {
 		if c.Parent == parent && c.Name == name {
-			// shallow copy
-			return &Field{
-				Parent: parent,
-				Name:   name,
-				val:    c.val,
-			}, nil
+			return c.Copy(), nil
 		}
 	}
 
@@ -1196,6 +1173,33 @@ func (r *Relation) FindReference(id string) (*Field, error) {
 	}
 
 	return found[0], nil
+}
+
+// setReferenceID sets the reference ID of a field.
+func (r *Relation) setReferenceID(parent, name, id string) error {
+	for _, f := range r.Fields {
+		if f.Parent == parent && f.Name == name {
+			f.ReferenceID = id
+			return nil
+		}
+	}
+
+	// it is possible name matches and parent does not
+	var found []*Field
+	for _, f := range r.Fields {
+		if f.Name == name {
+			found = append(found, f)
+		}
+	}
+
+	if len(found) == 0 {
+		return fmt.Errorf(`%w: "%s"`, ErrColumnNotFound, name)
+	} else if len(found) > 1 {
+		return fmt.Errorf(`column "%s" is ambiguous`, name)
+	}
+
+	found[0].ReferenceID = id
+	return nil
 }
 
 func relationFromTable(tbl *types.Table) *Relation {
@@ -1253,6 +1257,26 @@ func (f *Field) String() string {
 	}
 
 	return str.String()
+}
+
+func (f *Field) Copy() *Field {
+	var val any
+	switch v := f.val.(type) {
+	case *types.DataType:
+		val = v.Copy()
+	case map[string]*types.DataType:
+		val = make(map[string]*types.DataType)
+		for k, v := range v {
+			val.(map[string]*types.DataType)[k] = v.Copy()
+		}
+	}
+
+	return &Field{
+		Parent:      f.Parent,
+		Name:        f.Name,
+		val:         val,
+		ReferenceID: f.ReferenceID,
+	}
 }
 
 func (f *Field) Equals(other *Field) bool {

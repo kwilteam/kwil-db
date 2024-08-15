@@ -725,7 +725,7 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 			projectFunc: func(newPlan LogicalPlan) LogicalPlan {
 				var p LogicalPlan = &Project{
 					Child:       newPlan,
-					expandFuncs: []expandFunc{func() []LogicalExpr { return exprs }},
+					expandFuncs: []expandFunc{func(rel *Relation) []LogicalExpr { return exprs }},
 				}
 
 				if isDistinct {
@@ -931,7 +931,7 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 				}
 			}
 
-			newFunc := func() []LogicalExpr {
+			newFunc := func(rel *Relation) []LogicalExpr {
 				return []LogicalExpr{logicalExpr}
 			}
 
@@ -943,7 +943,9 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 			// expand the wildcard
 			// wrap any other expandFunc in a new function that will
 			// expand the current wildcard
-			newExpand := func() []LogicalExpr {
+			newExpand := func(_ *Relation) []LogicalExpr {
+				// we don't use the passed relation, but instead the join relation,
+				// to expand.
 				rel := lastJoin.Relation()
 
 				var newFields []*Field
@@ -956,10 +958,7 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 				var exprs []LogicalExpr
 				for _, field := range newFields {
 					var colRef LogicalExpr = &ColumnRef{
-						// we don't immediately set the parent, because we need to
-						// check if this same field is in the grouping terms.
-						// If it is, then the term in the grouping terms will be used
-						// (which is already qualified).
+						Parent:     field.Parent,
 						ColumnName: field.Name,
 					}
 
@@ -969,9 +968,6 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 						colRef = &ExprRef{
 							Identified: groupingTerm,
 						}
-					} else {
-						// if not, then we can qualify.
-						colRef.(*ColumnRef).Parent = field.Parent
 					}
 
 					exprs = append(exprs, colRef)

@@ -1,4 +1,4 @@
-package planner
+package planner2
 
 import (
 	"bytes"
@@ -224,7 +224,7 @@ func (f *ProcedureScanSource) Equal(other Traversable) bool {
 type Subquery struct {
 	// ReturnsRelation is true if the subquery returns an entire relation.
 	// If false, the subquery returns a single value.
-	ReturnsRelation bool
+	ReturnsRelation bool // TODO: I think we can axe this with our new plan structure
 	// Plan is the logical plan for the subquery.
 	Plan *Subplan
 
@@ -233,19 +233,14 @@ type Subquery struct {
 	// Correlated is the list of columns that are correlated
 	// to the outer query. If empty, the subquery is uncorrelated.
 	// TODO: we need to revisit this, because expressions in result sets can be correlated
-	Correlated []*ColumnRef
+	Correlated []*Field
 }
 
 func (s *Subquery) Accept(v Visitor) any {
 	return v.VisitSubquery(s)
 }
 func (s *Subquery) Children() []LogicalNode {
-	c := []LogicalNode{s.Plan}
-	for _, col := range s.Correlated {
-		c = append(c, col)
-	}
-
-	return c
+	return []LogicalNode{s.Plan}
 }
 
 func (s *Subquery) FormatScan() string {
@@ -253,13 +248,7 @@ func (s *Subquery) FormatScan() string {
 }
 
 func (s *Subquery) Plans() []LogicalPlan {
-	var plans []LogicalPlan
-	plans = append(plans, s.Plan)
-	for _, col := range s.Correlated {
-		plans = append(plans, col.Plans()...)
-	}
-
-	return plans
+	return []LogicalPlan{s.Plan}
 }
 
 func (s *Subquery) Relation() *Relation {
@@ -288,7 +277,7 @@ func (s *Subquery) Equal(other Traversable) bool {
 	}
 
 	for i, col := range s.Correlated {
-		if !col.Equal(o.Correlated[i]) {
+		if !col.Equals(o.Correlated[i]) {
 			return false
 		}
 	}
@@ -1986,7 +1975,7 @@ func (s *SubqueryExpr) String() string {
 				str.WriteString(".")
 			}
 
-			str.WriteString(field.ColumnName)
+			str.WriteString(field.Name)
 		}
 		str.WriteString(")")
 	}
