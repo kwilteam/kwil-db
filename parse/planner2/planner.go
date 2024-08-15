@@ -205,7 +205,8 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 		panic("no select cores")
 	}
 
-	selectCoreRes, err := s.selectCore(node.SelectCores[0])
+	var projectFunc func(LogicalPlan) (LogicalPlan, *Relation)
+	plan, rel, projectFunc, err = s.selectCore(node.SelectCores[0])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -215,22 +216,20 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 	// see the documentation for selectCoreResult for more info as to why
 	// we perform this if statement.
 	if len(node.SelectCores) == 1 {
-		plan = selectCoreRes.plan
-		rel = selectCoreRes.relation
 		defer func() {
-			plan, rel = selectCoreRes.projectFunc(plan)
+			plan, rel = projectFunc(plan)
 		}()
 	} else {
 		// otherwise, apply immediately so that we can apply the set operation(s)
-		plan, rel = selectCoreRes.projectFunc(selectCoreRes.plan)
+		plan, rel = projectFunc(plan)
 
 		for i, core := range node.SelectCores[1:] {
-			right, err := s.selectCore(core)
+			rightPlan, _, projectFunc, err := s.selectCore(core)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			rightPlan, _ := right.projectFunc(right.plan)
+			rightPlan, _ = projectFunc(rightPlan)
 			plan = &SetOperation{
 				Left:   plan,
 				Right:  rightPlan,
@@ -295,7 +294,20 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 // 4. having(can use reference from select)
 // 5. select (project)
 // 6. distinct
-func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, error) {
+// It returns a logical plan and relation that are PRIOR to any projection,
+// a function that will apply a projection and return the resulting relation,
+// and an error if one occurred.
+// It returns these because we need to handle conditionally
+// adding projection. If a query has a SET (a.k.a. compound) operation, we want to project before performing
+// the set. If a query has one select, then we want to project after sorting and limiting.
+// To give a concrete example of this, imagine a table users (id int, name text) with the queries:
+// 1.
+// "SELECT name FROM users ORDER BY id" - this is valid in Postgres, and since we can access "id", projection
+// should be done after sorting.
+// 2.
+// "SELECT name FROM users UNION 'hello' ORDER BY id" - this is invalid in Postgres, since "id" is not in the
+// result set. We need to project before the UNION.
+func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relation, func(LogicalPlan) (LogicalPlan, *Relation), error) {
 	// if there is no from, we just project the columns and return
 	if node.From == nil {
 		var exprs []LogicalExpr
@@ -307,7 +319,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 			case *parse.ResultColumnExpression:
 				expr, field, err := s.expr(resultCol.Expression, rel)
 				if err != nil {
-					return nil, err
+					return nil, nil, nil, err
 				}
 
 				if resultCol.Alias != "" {
@@ -327,44 +339,40 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 			}
 		}
 
-		return &selectCoreResult{
-			plan:     &EmptyScan{},
-			relation: rel,
-			projectFunc: func(lp LogicalPlan) (LogicalPlan, *Relation) {
-				var p LogicalPlan = &Project{
-					Child:       lp,
-					Expressions: exprs,
-				}
+		return &EmptyScan{}, rel, func(lp LogicalPlan) (LogicalPlan, *Relation) {
+			var p LogicalPlan = &Project{
+				Child:       lp,
+				Expressions: exprs,
+			}
 
-				if node.Distinct {
-					p = &Distinct{
-						Child: p,
-					}
+			if node.Distinct {
+				p = &Distinct{
+					Child: p,
 				}
+			}
 
-				return p, rel
-			},
+			return p, rel
 		}, nil
 	}
 
 	// otherwise, we need to build the from and join clauses
 	scan, rel, err := s.table(node.From)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	var plan LogicalPlan = scan
 
 	for _, join := range node.Joins {
 		plan, rel, err = s.join(plan, rel, join)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 	}
 
 	if node.Where != nil {
 		whereExpr, _, err := s.expr(node.Where, rel)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 
 		plan = &Filter{
@@ -376,7 +384,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 	// at this point, we have the full relation for the select core, and can expand the columns
 	results, err := s.expandResultCols(rel, node.Columns)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
 	containsAgg := false
@@ -386,32 +394,28 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 
 	// if there is no group by or aggregate, we can apply any distinct and return
 	if len(node.GroupBy) == 0 && !containsAgg {
-		return &selectCoreResult{
-			plan:     plan,
-			relation: rel,
-			projectFunc: func(lp LogicalPlan) (LogicalPlan, *Relation) {
-				var resExprs []LogicalExpr
-				var resFields []*Field
-				for _, result := range results {
-					resExprs = append(resExprs, result.Expr)
-					resFields = append(resFields, result.Field)
-				}
+		return plan, rel, func(lp LogicalPlan) (LogicalPlan, *Relation) {
+			var resExprs []LogicalExpr
+			var resFields []*Field
+			for _, result := range results {
+				resExprs = append(resExprs, result.Expr)
+				resFields = append(resFields, result.Field)
+			}
 
-				var p LogicalPlan = &Project{
-					Child:       lp,
-					Expressions: resExprs,
-				}
+			var p LogicalPlan = &Project{
+				Child:       lp,
+				Expressions: resExprs,
+			}
 
-				if node.Distinct {
-					p = &Distinct{
-						Child: p,
-					}
+			if node.Distinct {
+				p = &Distinct{
+					Child: p,
 				}
+			}
 
-				return p, &Relation{
-					Fields: resFields,
-				}
-			},
+			return p, &Relation{
+				Fields: resFields,
+			}
 		}, nil
 	}
 
@@ -431,12 +435,12 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 	for _, groupTerm := range node.GroupBy {
 		groupExpr, field, err := s.expr(groupTerm, rel)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 
 		// TODO: disallow subqueries in group by
 		if hasAggregate(groupExpr) {
-			return nil, fmt.Errorf(`aggregate functions are not allowed in GROUP BY`)
+			return nil, nil, nil, fmt.Errorf(`aggregate functions are not allowed in GROUP BY`)
 		}
 
 		_, ok := groupingTerms[groupExpr.String()]
@@ -464,13 +468,13 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 		// but it should be possible.
 		havingExpr, _, err := s.expr(node.Having, rel)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 
 		// rewrite the having expression to use the aggregate functions
 		havingExpr, err = s.rewriteAccordingToAggregate(havingExpr, groupingTerms, aggTerms)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 
 		plan = &Filter{
@@ -483,7 +487,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 	for i, resultCol := range results {
 		results[i].Expr, err = s.rewriteAccordingToAggregate(resultCol.Expr, groupingTerms, aggTerms)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 	}
 
@@ -493,32 +497,28 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 		aggregateRel.Fields = append(aggregateRel.Fields, agg.Value.Field)
 	}
 
-	return &selectCoreResult{
-		plan:     plan,
-		relation: aggregateRel,
-		projectFunc: func(lp LogicalPlan) (LogicalPlan, *Relation) {
-			var resultColExprs []LogicalExpr
-			var resultFields []*Field
-			for _, resultCol := range results {
-				resultColExprs = append(resultColExprs, resultCol.Expr)
-				resultFields = append(resultFields, resultCol.Field)
-			}
+	return plan, aggregateRel, func(lp LogicalPlan) (LogicalPlan, *Relation) {
+		var resultColExprs []LogicalExpr
+		var resultFields []*Field
+		for _, resultCol := range results {
+			resultColExprs = append(resultColExprs, resultCol.Expr)
+			resultFields = append(resultFields, resultCol.Field)
+		}
 
-			var p LogicalPlan = &Project{
-				Child:       lp,
-				Expressions: resultColExprs,
-			}
+		var p LogicalPlan = &Project{
+			Child:       lp,
+			Expressions: resultColExprs,
+		}
 
-			if node.Distinct {
-				p = &Distinct{
-					Child: p,
-				}
+		if node.Distinct {
+			p = &Distinct{
+				Child: p,
 			}
+		}
 
-			return p, &Relation{
-				Fields: resultFields,
-			}
-		},
+		return p, &Relation{
+			Fields: resultFields,
+		}
 	}, nil
 }
 
@@ -538,37 +538,12 @@ func hasAggregate(expr LogicalNode) bool {
 }
 
 // exprFieldPair is a helper struct that pairs an expression with a field.
+// It uses a generic because there are some times where we want to guarantee
+// that the expression is an IdentifiedExpr, and other times where we don't
+// care about the concrete type.
 type exprFieldPair[T LogicalExpr] struct {
 	Expr  T
 	Field *Field
-}
-
-// selectCoreResult is a helper struct that is only returned from VisitSelectCore.
-// It is returned from VisitSelectCore because we need to handle conditionally
-// adding projection. If a query has a SET (a.k.a. compound) operation, we want to project before performing
-// the set. If a query has one select, then we want to project after sorting and limiting.
-// To give a concrete example of this, imagine a table users (id int, name text) with the queries:
-// 1.
-// "SELECT name FROM users ORDER BY id" - this is valid in Postgres, and since we can access "id", projection
-// should be done after sorting.
-// 2.
-// "SELECT name FROM users UNION 'hello' ORDER BY id" - this is invalid in Postgres, since "id" is not in the
-// result set. We need to project before the UNION.
-//
-// This struct allows us to conditionally handle this logic in the calling VisitSelectStatement method.
-type selectCoreResult struct {
-	// plan is the plan that is returned from the select core prior
-	// to applying any projection.
-	plan LogicalPlan
-	// relation is the relation that is returned from the select core prior
-	// to applying any projection.
-	relation *Relation
-	// projectFunc is a function that will apply a projection to the plan.
-	// it is not directly applied within the select core because if there
-	// are multiple select cores, we need to apply the projection before
-	// the set operation, but if there is 1, we want to apply the projection
-	// after the sort and limit.
-	projectFunc func(LogicalPlan) (LogicalPlan, *Relation)
 }
 
 // rewriteAccordingToAggregate rewrites an expression according to the rules of aggregation.
