@@ -1248,7 +1248,7 @@ func (p *plannerVisitor) VisitInsertStatement(node *parse.InsertStatement) any {
 	// must exactly match the number of columns. Otherwise, the second
 	// dimension of Values must exactly match the number of columns in the table.
 	var expectedColLen int
-	var expectedColTypes []*types.DataType // TODO: delete, we check this in eval
+	var expectedColTypes []*types.DataType
 	if len(node.Columns) > 0 {
 		expectedColLen = len(node.Columns)
 

@@ -2582,10 +2582,9 @@ type Insert struct {
 	baseTopLevel
 	// Table is the physical table to insert into.
 	Table string
-	// Alias is the alias of the table.
-	// It can only be referenced in the conflict resolution.
-	// It can be empty.
-	Alias string
+	// ReferencedAs is how the table is referenced in the query.
+	// It is either a user-defined reference or the table name.
+	ReferencedAs string
 	// Values are the values to insert.
 	// The length of each second dimensional slice in Values must be equal to all others.
 	Values [][]LogicalExpr
@@ -2598,9 +2597,9 @@ func (i *Insert) String() string {
 	str.WriteString("Insert [")
 	str.WriteString(i.Table)
 	str.WriteString("]")
-	if i.Alias != "" {
+	if i.ReferencedAs != "" && i.ReferencedAs != i.Table {
 		str.WriteString(" [alias=")
-		str.WriteString(i.Alias)
+		str.WriteString(i.ReferencedAs)
 		str.WriteString("]")
 	}
 	str.WriteString(": ")
@@ -2681,7 +2680,7 @@ func (i *Insert) Equal(t Traversable) bool {
 		return false
 	}
 
-	if i.Table != o.Table || i.Alias != o.Alias {
+	if i.Table != o.Table || i.ReferencedAs != o.ReferencedAs {
 		return false
 	}
 

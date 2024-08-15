@@ -12,16 +12,18 @@ import (
 	"github.com/kwilteam/kwil-db/parse"
 )
 
-func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType, objects map[string]map[string]*types.DataType) (analyzed *AnalyzedPlan, err error) {
-	// defer func() {
-	// 	if r := recover(); r != nil {
-	// 		err2, ok := r.(error)
-	// 		if !ok {
-	// 			err2 = fmt.Errorf("%v", r)
-	// 		}
-	// 		err = err2
-	// 	}
-	// }()
+// Plan creates a logical plan from a SQL statement.
+func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType,
+	objects map[string]map[string]*types.DataType) (analyzed *AnalyzedPlan, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err2, ok := r.(error)
+			if !ok {
+				err2 = fmt.Errorf("%v", r)
+			}
+			err = err2
+		}
+	}()
 
 	if vars == nil {
 		vars = make(map[string]*types.DataType)
@@ -153,7 +155,7 @@ func (s *scopeContext) sqlStmt(node *parse.SQLStatement) (TopLevelPlan, error) {
 	case *parse.DeleteStatement:
 		return s.delete(node)
 	case *parse.InsertStatement:
-		panic("insert not implemented")
+		return s.insert(node)
 	}
 }
 
@@ -1616,6 +1618,316 @@ func (s *scopeContext) delete(node *parse.DeleteStatement) (*Delete, error) {
 	}, nil
 }
 
+// insert builds a plan for an insert
+func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
+	ins := &Insert{
+		Table:        node.Table,
+		ReferencedAs: node.Alias,
+	}
+
+	tbl, found := s.plan.Schema.FindTable(node.Table)
+	if !found {
+		return nil, fmt.Errorf(`%w: "%s"`, ErrUnknownTable, node.Table)
+	}
+
+	// orderAndFillNulls is a helper function that orders logical expressions
+	// according to their position in the table, and fills in nulls for any
+	// columns that were not specified in the insert. It starts as being empty,
+	// since it only needs logic if the user specifies columns.
+	orderAndFillNulls := func(exprs []LogicalExpr) []LogicalExpr {
+		return exprs
+	}
+
+	// if Columns are specified, then the second dimension of the Values
+	// must exactly match the number of columns. Otherwise, the second
+	// dimension of Values must exactly match the number of columns in the table.
+	var expectedColLen int
+	var expectedColTypes []*types.DataType
+	if len(node.Columns) > 0 {
+		expectedColLen = len(node.Columns)
+
+		// check if the columns are valid
+		var err error
+		expectedColTypes, err = checkNullableColumns(tbl, node.Columns)
+		if err != nil {
+			panic(err)
+		}
+
+		// we need to set the orderAndFillNulls function
+		// We will do this by creating a map of the position
+		// of a specified column's position to its column index in the table.
+
+		// first, we will create a map of the table's columns
+		tableColPos := make(map[string]int, len(tbl.Columns))
+		for i, col := range tbl.Columns {
+			tableColPos[col.Name] = i
+		}
+
+		colPos := make(map[int]int, len(node.Columns))
+		for i, col := range node.Columns {
+			colPos[i] = tableColPos[col]
+		}
+
+		orderAndFillNulls = func(exprs []LogicalExpr) []LogicalExpr {
+			newExprs := make([]LogicalExpr, len(tbl.Columns))
+
+			for i, expr := range exprs {
+				newExprs[colPos[i]] = expr
+			}
+
+			for i := range tbl.Columns {
+				if newExprs[i] != nil {
+					continue
+				}
+
+				newExprs[i] = &Literal{
+					Value: nil,
+					Type:  types.NullType.Copy(),
+				}
+			}
+
+			return newExprs
+		}
+	} else {
+		expectedColLen = len(tbl.Columns)
+		expectedColTypes = make([]*types.DataType, len(tbl.Columns))
+		for i, col := range tbl.Columns {
+			expectedColTypes[i] = col.Type.Copy()
+		}
+	}
+
+	rel := relationFromTable(tbl)
+
+	// check the value types and lengths
+	for _, vals := range node.Values {
+		if len(vals) != expectedColLen {
+			return nil, fmt.Errorf(`insert has %d columns but %d values were supplied`, expectedColLen, len(vals))
+		}
+
+		var row []LogicalExpr
+
+		for i, val := range vals {
+			expr, field, err := s.expr(val, rel)
+			if err != nil {
+				return nil, err
+			}
+
+			scalar, err := field.Scalar()
+			if err != nil {
+				return nil, err
+			}
+
+			if !scalar.Equals(expectedColTypes[i]) {
+				return nil, fmt.Errorf(`insert value %d must be of type %s, received %s`, i+1, expectedColTypes[i], field.val)
+			}
+
+			row = append(row, expr)
+		}
+
+		ins.Values = append(ins.Values, orderAndFillNulls(row))
+	}
+
+	// finally, we need to check if there is an ON CONFLICT clause,
+	// and if so, we need to process it.
+	if node.Upsert != nil {
+		conflict, err := s.buildUpsert(node.Upsert, tbl)
+		if err != nil {
+			panic(err)
+		}
+
+		ins.ConflictResolution = conflict
+	}
+
+	return ins, nil
+}
+
+func (s *scopeContext) buildUpsert(node *parse.UpsertClause, table *types.Table) (ConflictResolution, error) {
+	// all DO UPDATE upserts need to have an arbiter index.
+	// DO NOTHING can optionally have one, but it is not required.
+	var arbiterIndex Index
+	switch len(node.ConflictColumns) {
+	// must be a unique index or pk that exactly matches the columns
+	case 0:
+		// do nothing
+	case 1:
+		// check the column for a unique or pk contraint, as well as all indexes
+		col, ok := table.FindColumn(node.ConflictColumns[0])
+		if !ok {
+			return nil, fmt.Errorf(`conflict column "%s" not found in table`, node.ConflictColumns[0])
+		}
+
+		if col.HasAttribute(types.PRIMARY_KEY) {
+			arbiterIndex = &IndexColumnConstraint{
+				Table:          table.Name,
+				Column:         col.Name,
+				ConstraintType: PrimaryKeyConstraintIndex,
+			}
+		} else if col.HasAttribute(types.UNIQUE) {
+			arbiterIndex = &IndexColumnConstraint{
+				Table:          table.Name,
+				Column:         col.Name,
+				ConstraintType: UniqueConstraintIndex,
+			}
+		} else {
+			// check all indexes for unique indexes that match the column
+			for _, idx := range table.Indexes {
+				if (idx.Type == types.UNIQUE_BTREE || idx.Type == types.PRIMARY) && len(idx.Columns) == 1 && idx.Columns[0] == col.Name {
+					arbiterIndex = &IndexNamed{
+						Name: idx.Name,
+					}
+				}
+			}
+		}
+
+		if arbiterIndex == nil {
+			return nil, fmt.Errorf(`conflict column "%s" must be have a unique index or primary key`, node.ConflictColumns[0])
+		}
+	default:
+		// check all indexes for a unique or pk index that matches the columns
+		for _, idx := range table.Indexes {
+			if idx.Type != types.UNIQUE_BTREE && idx.Type != types.PRIMARY {
+				continue
+			}
+
+			if len(idx.Columns) != len(node.ConflictColumns) {
+				continue
+			}
+
+			inIdxCols := make(map[string]struct{}, len(idx.Columns))
+			for _, col := range idx.Columns {
+				inIdxCols[col] = struct{}{}
+			}
+
+			hasAllCols := true
+			for _, col := range node.ConflictColumns {
+				_, ok := inIdxCols[col]
+				if !ok {
+					hasAllCols = false
+					break
+				}
+			}
+
+			if hasAllCols {
+				arbiterIndex = &IndexNamed{
+					Name: idx.Name,
+				}
+				break
+			}
+		}
+
+		if arbiterIndex == nil {
+			return nil, fmt.Errorf(`conflict columns must have a unique index or primary key`)
+		}
+	}
+
+	if len(node.DoUpdate) == 0 {
+		return &ConflictDoNothing{
+			ArbiterIndex: arbiterIndex,
+		}, nil
+	}
+	if node.ConflictWhere != nil {
+		// This would be "ON CONFLICT(id) [WHERE ...] DO UPDATE SET ..."
+		// This is the `index_predicate`, specified here:
+		// https://www.postgresql.org/docs/current/sql-insert.html
+		// IDK why our syntax supports this, there is literally not a way
+		// somebody could make use of this within Kwil right now.
+		return nil, errors.New("engine does not yet support index predicates on upsert. Try using a WHERE constraint after the SET clause")
+	}
+	if arbiterIndex == nil {
+		return nil, fmt.Errorf("conflict column must be specified for DO UPDATE")
+	}
+
+	res := &ConflictUpdate{
+		ArbiterIndex: arbiterIndex,
+	}
+
+	rel := relationFromTable(table)
+
+	var err error
+	res.Assignments, err = s.assignments(node.DoUpdate, rel, rel)
+	if err != nil {
+		return nil, err
+	}
+
+	if node.UpdateWhere != nil {
+		conflictFilter, field, err := s.expr(node.UpdateWhere, rel)
+		if err != nil {
+			return nil, err
+		}
+
+		scalar, err := field.Scalar()
+		if err != nil {
+			return nil, err
+		}
+
+		if !scalar.Equals(types.BoolType) {
+			return nil, fmt.Errorf("conflict filter must be of type bool, received %s", field)
+		}
+
+		res.ConflictFilter = conflictFilter
+	}
+
+	return res, nil
+}
+
+// checkNullableColumns takes a table and a set of columns, and checks if
+// any column in the table not in the set is nullable. If so, it returns
+// an error. It also checks if all columns in the set are in the table.
+// If not, it returns an error. If all checks pass, it returns a slice
+// of data types that the insert order must match.
+func checkNullableColumns(tbl *types.Table, cols []string) ([]*types.DataType, error) {
+	specifiedColSet := make(map[string]struct{}, len(cols))
+	for _, col := range cols {
+		specifiedColSet[col] = struct{}{}
+	}
+
+	pks, err := tbl.GetPrimaryKey()
+	if err != nil {
+		return nil, err
+	}
+	pkSet := make(map[string]struct{}, len(pks))
+	for _, pk := range pks {
+		pkSet[pk] = struct{}{}
+	}
+
+	// we will build a set of columns to decrease the time complexity
+	// for checking if a column is in the set.
+	tblColSet := make(map[string]*types.DataType, len(tbl.Columns))
+	for _, col := range tbl.Columns {
+		tblColSet[col.Name] = col.Type.Copy()
+
+		_, ok := specifiedColSet[col.Name]
+		if ok {
+			continue
+		}
+
+		// the column is not in the set, so we need to check if it is nullable
+		if col.HasAttribute(types.NOT_NULL) || col.HasAttribute(types.PRIMARY_KEY) {
+			return nil, fmt.Errorf(`column "%s" cannot be null, and was not specified as an insert column`, col.Name)
+		}
+
+		// it is also possible that a primary index contains the column
+		_, ok = pkSet[col.Name]
+		if !ok {
+			return nil, fmt.Errorf(`column "%s" cannot be null, and was not specified as an insert column`, col.Name)
+		}
+		// otherwise, we are good
+	}
+
+	dataTypeArr := make([]*types.DataType, len(cols))
+	// now we need to check if all columns in the set are in the table
+	for _, col := range cols {
+		colType, ok := tblColSet[col]
+		if !ok {
+			return nil, fmt.Errorf(`column "%s" not found in table`, col)
+		}
+
+		dataTypeArr = append(dataTypeArr, colType)
+	}
+
+	return dataTypeArr, nil
+}
+
 // cartesian builds a cartesian product for several relations. It is meant to be used
 // explicitly for update and delete, where we start by planning a cartesian join between the
 // target table and the FROM + JOIN tables, and later optimize the filter.
@@ -1703,8 +2015,10 @@ func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, jo
 	}, targetRel, rel, nil
 }
 
-// assignments builds the assignments for update and conflict clauses
-func (s *scopeContext) assignments(assignments []*parse.UpdateSetClause, targetRel *Relation, cartesianRel *Relation) ([]*Assignment, error) {
+// assignments builds the assignments for update and conflict clauses.
+// It takes a list of update set clauses, the target relation (where columns are being assigned),
+// and a relation that can be referenced in the assigning expressions.
+func (s *scopeContext) assignments(assignments []*parse.UpdateSetClause, targetRel *Relation, referenceRel *Relation) ([]*Assignment, error) {
 	assigns := make([]*Assignment, len(assignments))
 	for i, assign := range assignments {
 		field, err := targetRel.Search("", assign.Column)
@@ -1712,7 +2026,7 @@ func (s *scopeContext) assignments(assignments []*parse.UpdateSetClause, targetR
 			return nil, err
 		}
 
-		expr, assignType, err := s.expr(assign.Value, cartesianRel)
+		expr, assignType, err := s.expr(assign.Value, referenceRel)
 		if err != nil {
 			return nil, err
 		}
