@@ -1111,8 +1111,6 @@ func (s *Relation) ColumnsByParent(name string) []*Field {
 	return columns
 }
 
-var ErrColumnNotFound = fmt.Errorf("column not found or cannot be referenced in this part of the query")
-
 // Search searches for a column by parent and name.
 // If the column is not found, an error is returned.
 // If no parent is specified and many columns have the same name,
@@ -1203,6 +1201,24 @@ type Field struct {
 }
 
 func (f *Field) String() string {
+	if f.ReferenceID != "" {
+		// TODO: we should make a test that correlates on a reference
+		return fmt.Sprintf("[ref: %s]", f.ReferenceID)
+	}
+
+	str := strings.Builder{}
+	if f.Parent != "" {
+		str.WriteString(f.Parent)
+		str.WriteString(".")
+	}
+	str.WriteString(f.Name)
+
+	return str.String()
+}
+
+// ResultString returns a string representation of the field that contains information
+// as to how the field will be represented as a user-facing column in the result.
+func (f *Field) ResultString() string {
 	str := strings.Builder{}
 	str.WriteString(f.Name)
 
@@ -1214,18 +1230,6 @@ func (f *Field) String() string {
 		str.WriteString(scalar.String())
 	}
 	str.WriteString("]")
-
-	if f.ReferenceID != "" {
-		str.WriteString(" (from ")
-		str.WriteString(f.ReferenceID)
-		str.WriteString(")")
-	} else if f.Parent != "" {
-		str.WriteString(" (from ")
-		str.WriteString(f.Parent)
-		str.WriteString(".")
-		str.WriteString(f.Name)
-		str.WriteString(")")
-	}
 
 	return str.String()
 }

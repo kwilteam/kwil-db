@@ -3,6 +3,7 @@ package planner2
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -10,6 +11,75 @@ import (
 	"github.com/kwilteam/kwil-db/core/utils/order"
 	"github.com/kwilteam/kwil-db/parse"
 )
+
+func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType, objects map[string]map[string]*types.DataType) (analyzed *AnalyzedPlan, err error) {
+	// defer func() {
+	// 	if r := recover(); r != nil {
+	// 		err2, ok := r.(error)
+	// 		if !ok {
+	// 			err2 = fmt.Errorf("%v", r)
+	// 		}
+	// 		err = err2
+	// 	}
+	// }()
+
+	if vars == nil {
+		vars = make(map[string]*types.DataType)
+	}
+
+	if objects == nil {
+		objects = make(map[string]map[string]*types.DataType)
+	}
+
+	ctx := &planContext{
+		Schema:    schema,
+		CTEs:      make(map[string]*Relation),
+		Variables: vars,
+		Objects:   objects,
+	}
+
+	scope := &scopeContext{
+		plan:          ctx,
+		OuterRelation: &Relation{},
+	}
+
+	plan, err := scope.sqlStmt(statement)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AnalyzedPlan{
+		Plan: plan,
+		CTEs: ctx.CTEPlans,
+	}, nil
+}
+
+// AnalyzedPlan is the full result of a logical plan that has been analyzed.
+type AnalyzedPlan struct {
+	// Plan is the plan of the query.
+	Plan LogicalPlan
+	// CTEs are plans for the common table expressions in the query.
+	// They are in the order that they were defined.
+	CTEs []*Subplan
+}
+
+// Format formats the plan into a human-readable string.
+func (a *AnalyzedPlan) Format() string {
+	res := Format(a.Plan)
+
+	str := strings.Builder{}
+	str.WriteString(res)
+
+	// we will copy and reverse the cte list for printing, so that
+	// any CTE that references another CTE will be above it.
+	// This matches the printing of subqueries.
+	cte2 := slices.Clone(a.CTEs)
+	slices.Reverse(cte2)
+
+	printSubplans(&str, cte2)
+
+	return str.String()
+}
 
 // planContext holds information that is needed during the planning process.
 type planContext struct {
@@ -23,7 +93,7 @@ type planContext struct {
 	// CTEPlans are the logical plans for the common table expressions
 	// in the query. This field should be updated as the query planner
 	// processes the query.
-	CTEPlans []*Subplan // TODO: idk if we need this anymore
+	CTEPlans []*Subplan
 	// Variables are the variables in the query.
 	Variables map[string]*types.DataType
 	// Objects are the objects in the query.
@@ -51,6 +121,78 @@ type scopeContext struct {
 	Correlations []*Field
 }
 
+// sqlStmt builds a logical plan for a top-level SQL statement.
+func (s *scopeContext) sqlStmt(node *parse.SQLStatement) (TopLevelPlan, error) {
+	for _, cte := range node.CTEs {
+		if err := s.cte(cte); err != nil {
+			return nil, err
+		}
+	}
+
+	switch node := node.SQL.(type) {
+	default:
+		panic(fmt.Sprintf("unexpected SQL statement type %T", node))
+	case *parse.SelectStatement:
+		plan, res, err := s.selectStmt(node)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, field := range res.Fields {
+			if field.Name == "" {
+				field.Name = "?column?"
+			}
+		}
+
+		return &Return{
+			Child:  plan,
+			Fields: res.Fields,
+		}, nil
+	}
+}
+
+// cte builds a common table expression.
+func (s *scopeContext) cte(node *parse.CommonTableExpression) error {
+	plan, rel, err := s.selectStmt(node.Query)
+	if err != nil {
+		return err
+	}
+
+	var extraInfo string // debug info
+
+	// if there are columns specific, we need to check that the columns are valid
+	// and rename the relation fields
+	if len(node.Columns) > 0 {
+		if len(node.Columns) != len(rel.Fields) {
+			panic(fmt.Sprintf(`cte "%s" has %d columns, but %d were specified`, node.Name, len(rel.Fields), len(node.Columns)))
+		}
+
+		for i, col := range node.Columns {
+			extraInfo += fmt.Sprintf(" [%s.%s -> %s]", rel.Fields[i].Parent, rel.Fields[i].Name, col)
+
+			rel.Fields[i].Parent = node.Name
+			rel.Fields[i].Name = col
+		}
+	} else {
+		// otherwise, we need to rename the relation parents
+		// to the CTE's name
+		for _, field := range rel.Fields {
+			extraInfo += fmt.Sprintf(" [%s.%s -> %s]", field.Parent, field.Name, field.Name)
+			field.Parent = node.Name
+		}
+	}
+
+	s.plan.CTEs[node.Name] = rel
+	s.plan.CTEPlans = append(s.plan.CTEPlans, &Subplan{
+		Plan:      plan,
+		ID:        node.Name,
+		Type:      SubplanTypeCTE,
+		extraInfo: extraInfo,
+	})
+
+	return nil
+}
+
 // select builds a logical plan for a select statement.
 func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan, rel *Relation, err error) {
 	if len(node.SelectCores) == 0 {
@@ -68,6 +210,7 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 	// we perform this if statement.
 	if len(node.SelectCores) == 1 {
 		plan = selectCoreRes.plan
+		rel = selectCoreRes.relation
 		defer func() {
 			plan, rel = selectCoreRes.projectFunc(plan)
 		}()
@@ -108,6 +251,8 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 				NullsLast: get(orderNullsLast, order.Nulls),
 			})
 		}
+
+		plan = sort
 	}
 
 	if node.Limit != nil {
@@ -164,6 +309,8 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 						Expr:  expr,
 						Alias: resultCol.Alias,
 					}
+					field.Parent = ""
+					field.Name = resultCol.Alias
 				}
 
 				exprs = append(exprs, expr)
@@ -175,7 +322,8 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 		}
 
 		return &selectCoreResult{
-			plan: &EmptyScan{},
+			plan:     &EmptyScan{},
+			relation: rel,
 			projectFunc: func(lp LogicalPlan) (LogicalPlan, *Relation) {
 				var p LogicalPlan = &Project{
 					Child:       lp,
@@ -220,14 +368,14 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 	}
 
 	// at this point, we have the full relation for the select core, and can expand the columns
-	resultColExprs, resultFields, err := s.expandResultCols(rel, node.Columns)
+	results, err := s.expandResultCols(rel, node.Columns)
 	if err != nil {
 		return nil, err
 	}
 
 	containsAgg := false
-	for _, resultCol := range resultColExprs {
-		containsAgg, err = hasAggregate(resultCol)
+	for _, result := range results {
+		containsAgg, err = hasAggregate(result.Expr)
 		if err != nil {
 			return nil, err
 		}
@@ -236,11 +384,19 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 	// if there is no group by or aggregate, we can apply any distinct and return
 	if len(node.GroupBy) == 0 && !containsAgg {
 		return &selectCoreResult{
-			plan: plan,
+			plan:     plan,
+			relation: rel,
 			projectFunc: func(lp LogicalPlan) (LogicalPlan, *Relation) {
+				var resExprs []LogicalExpr
+				var resFields []*Field
+				for _, result := range results {
+					resExprs = append(resExprs, result.Expr)
+					resFields = append(resFields, result.Field)
+				}
+
 				var p LogicalPlan = &Project{
 					Child:       lp,
-					Expressions: resultColExprs,
+					Expressions: resExprs,
 				}
 
 				if node.Distinct {
@@ -250,7 +406,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 				}
 
 				return p, &Relation{
-					Fields: resultFields,
+					Fields: resFields,
 				}
 			},
 		}, nil
@@ -275,6 +431,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 			return nil, err
 		}
 
+		// TODO: disallow subqueries in group by
 		containsAgg, err := hasAggregate(groupExpr)
 		if err != nil {
 			return nil, err
@@ -293,7 +450,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 			Expr: groupExpr,
 			ID:   s.plan.uniqueRefIdentifier(),
 		}
-		aggPlan.GroupingExpressions = append(aggPlan.GroupingExpressions, groupExpr)
+		aggPlan.GroupingExpressions = append(aggPlan.GroupingExpressions, identified)
 
 		field.ReferenceID = identified.ID
 		aggregateRel.Fields = append(aggregateRel.Fields, field)
@@ -313,6 +470,9 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 
 		// rewrite the having expression to use the aggregate functions
 		havingExpr, err = s.rewriteAccordingToAggregate(havingExpr, groupingTerms, aggTerms)
+		if err != nil {
+			return nil, err
+		}
 
 		plan = &Filter{
 			Child:     plan,
@@ -321,8 +481,8 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 	}
 
 	// now we need to rewrite the select list to use the aggregate functions
-	for i, resultCol := range resultColExprs {
-		resultColExprs[i], err = s.rewriteAccordingToAggregate(resultCol, groupingTerms, aggTerms)
+	for i, resultCol := range results {
+		results[i].Expr, err = s.rewriteAccordingToAggregate(resultCol.Expr, groupingTerms, aggTerms)
 		if err != nil {
 			return nil, err
 		}
@@ -335,8 +495,16 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 	}
 
 	return &selectCoreResult{
-		plan: plan,
+		plan:     plan,
+		relation: aggregateRel,
 		projectFunc: func(lp LogicalPlan) (LogicalPlan, *Relation) {
+			var resultColExprs []LogicalExpr
+			var resultFields []*Field
+			for _, resultCol := range results {
+				resultColExprs = append(resultColExprs, resultCol.Expr)
+				resultFields = append(resultFields, resultCol.Field)
+			}
+
 			var p LogicalPlan = &Project{
 				Child:       lp,
 				Expressions: resultColExprs,
@@ -348,7 +516,9 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (*selectCoreResult, er
 				}
 			}
 
-			return p, aggregateRel
+			return p, &Relation{
+				Fields: resultFields,
+			}
 		},
 	}, nil
 }
@@ -374,6 +544,12 @@ type identFieldPair struct {
 	Field      *Field
 }
 
+// exprFieldPair is a helper struct that pairs an expression with a field.
+type exprFieldPair struct {
+	Expr  LogicalExpr
+	Field *Field
+}
+
 // selectCoreResult is a helper struct that is only returned from VisitSelectCore.
 // It is returned from VisitSelectCore because we need to handle conditionally
 // adding projection. If a query has a SET (a.k.a. compound) operation, we want to project before performing
@@ -391,6 +567,9 @@ type selectCoreResult struct {
 	// plan is the plan that is returned from the select core prior
 	// to applying any projection.
 	plan LogicalPlan
+	// relation is the relation that is returned from the select core prior
+	// to applying any projection.
+	relation *Relation
 	// projectFunc is a function that will apply a projection to the plan.
 	// it is not directly applied within the select core because if there
 	// are multiple select cores, we need to apply the projection before
@@ -418,7 +597,7 @@ func (s *scopeContext) rewriteAccordingToAggregate(expr LogicalExpr, groupingTer
 			case *ColumnRef:
 				// if it is a column and in the current relation, it is an error, since
 				// it was not contained in an aggregate function or group by.
-				return nil, false, fmt.Errorf(`column "%s" must appear in the GROUP BY clause or be used in an aggregate function`, le.String())
+				return nil, false, fmt.Errorf(`%w: column "%s" must appear in the GROUP BY clause or be used in an aggregate function`, ErrIllegalAggregate, le.String())
 			case *AggregateFunctionCall:
 				// TODO: do we need to check for the aggregate being called on a correlated column?
 				// if it matches any aggregate function, we need to rewrite it
@@ -461,7 +640,7 @@ func (s *scopeContext) rewriteAccordingToAggregate(expr LogicalExpr, groupingTer
 
 // expandResultCols takes a relation and result columns, and converts them to expressions
 // in the order provided. This is used to expand a wildcard in a select statement.
-func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn) ([]LogicalExpr, []*Field, error) {
+func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn) ([]*exprFieldPair, error) {
 	var resultCols []LogicalExpr
 	var resultFields []*Field
 	for _, col := range cols {
@@ -471,7 +650,7 @@ func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn
 		case *parse.ResultColumnExpression:
 			expr, field, err := s.expr(col.Expression, rel)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 
 			if col.Alias != "" {
@@ -484,7 +663,7 @@ func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn
 				field.Name = col.Alias
 			}
 
-			rel.Fields = append(rel.Fields, field)
+			resultFields = append(resultFields, field)
 			resultCols = append(resultCols, expr)
 		case *parse.ResultColumnWildcard:
 			var newFields []*Field
@@ -504,11 +683,39 @@ func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn
 		}
 	}
 
-	return resultCols, resultFields, nil
+	var pairs []*exprFieldPair
+	for i, expr := range resultCols {
+		pairs = append(pairs, &exprFieldPair{
+			Expr:  expr,
+			Field: resultFields[i],
+		})
+	}
+
+	return pairs, nil
 }
 
 // expr visits an expression node.
 func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (LogicalExpr, *Field, error) {
+	// cast is a helper function for type casting results based on the current node
+	cast := func(expr LogicalExpr, field *Field) (LogicalExpr, *Field, error) {
+		castable, ok := node.(interface{ GetTypeCast() *types.DataType })
+		if !ok {
+			return expr, field, nil
+		}
+
+		if castable.GetTypeCast() != nil {
+			field2 := field.Copy()
+			field2.val = castable.GetTypeCast()
+
+			return &TypeCast{
+				Expr: expr,
+				Type: castable.GetTypeCast(),
+			}, field2, nil
+		}
+
+		return expr, field, nil
+	}
+
 	switch node := node.(type) {
 	default:
 		panic(fmt.Sprintf("unexpected expression type %T", node))
@@ -516,7 +723,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		return cast(&Literal{
 			Value: node.Value,
 			Type:  node.Type,
-		}, node), anonField(node.Type), nil
+		}, anonField(node.Type))
 	case *parse.ExpressionFunctionCall:
 		args, fields, err := s.manyExprs(node.Args, currentRel)
 		if err != nil {
@@ -545,12 +752,13 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			}
 
 			return cast(&ProcedureCall{
-					ProcedureName: node.Name,
-					Args:          args,
-				}, node), &Field{
-					Name: node.Name,
-					val:  returns,
-				}, nil
+				ProcedureName: node.Name,
+				Args:          args,
+				returnType:    returns,
+			}, &Field{
+				Name: node.Name,
+				val:  returns,
+			})
 		}
 
 		// it is a built-in function
@@ -572,16 +780,6 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 
 		// now we need to apply rules depending on if it is aggregate or not
 		if funcDef.IsAggregate {
-			// If an aggregate, we wrap it in an ExprRef, so that later, we can
-			// replace it with a reference to the aggregate in the aggregate node.
-
-			// return cast(&AggregateFunctionCall{
-			// 	FunctionName: node.Name,
-			// 	Args:         args,
-			// 	Star:         node.Star,
-			// 	Distinct:     node.Distinct,
-			// }, node)
-
 			// we apply cast outside the reference because we want to keep the reference
 			// specific to the aggregate function call.
 			return cast(&AggregateFunctionCall{
@@ -589,7 +787,8 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 				Args:         args,
 				Star:         node.Star,
 				Distinct:     node.Distinct,
-			}, node), returnField, nil
+				returnType:   returnVal,
+			}, returnField)
 		}
 
 		if node.Star {
@@ -602,7 +801,8 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		return cast(&ScalarFunctionCall{
 			FunctionName: node.Name,
 			Args:         args,
-		}, node), returnField, nil
+			returnType:   returnVal,
+		}, returnField)
 	case *parse.ExpressionForeignCall:
 		proc, found := s.plan.Schema.FindForeignProcedure(node.Name)
 		if !found {
@@ -629,22 +829,22 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		}
 
 		return cast(&ProcedureCall{
-				ProcedureName: node.Name,
-				Foreign:       true,
-				Args:          args,
-				ContextArgs:   contextArgs,
-			}, node), &Field{
-				Name: node.Name,
-				val:  returns,
-			}, nil
+			ProcedureName: node.Name,
+			Foreign:       true,
+			Args:          args,
+			ContextArgs:   contextArgs,
+		}, &Field{
+			Name: node.Name,
+			val:  returns,
+		})
 	case *parse.ExpressionVariable:
 		var val any // can be a data type or object
-		dt, ok := s.plan.Variables[node.Name]
+		dt, ok := s.plan.Variables[node.String()]
 		if !ok {
 			// might be an object
-			obj, ok := s.plan.Objects[node.Name]
+			obj, ok := s.plan.Objects[node.String()]
 			if !ok {
-				return nil, nil, fmt.Errorf(`unknown variable "%s"`, node.Name)
+				return nil, nil, fmt.Errorf(`unknown variable "%s"`, node.String())
 			}
 
 			val = obj
@@ -653,8 +853,8 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		}
 
 		return cast(&Variable{
-			VarName: node.Name,
-		}, node), &Field{val: val}, nil
+			VarName: node.String(),
+		}, &Field{val: val})
 	case *parse.ExpressionArrayAccess:
 		array, field, err := s.expr(node.Array, currentRel)
 		if err != nil {
@@ -676,7 +876,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		return cast(&ArrayAccess{
 			Array: array,
 			Index: index,
-		}, node), field2, nil
+		}, field2)
 	case *parse.ExpressionMakeArray:
 		if len(node.Values) == 0 {
 			return nil, nil, fmt.Errorf("array constructor must have at least one element")
@@ -707,10 +907,10 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		firstValCopy.IsArray = true
 
 		return cast(&ArrayConstructor{
-				Elements: exprs,
-			}, node), &Field{
-				val: firstValCopy,
-			}, nil
+			Elements: exprs,
+		}, &Field{
+			val: firstValCopy,
+		})
 	case *parse.ExpressionFieldAccess:
 		obj, field, err := s.expr(node.Record, currentRel)
 		if err != nil {
@@ -728,20 +928,20 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		}
 
 		return cast(&FieldAccess{
-				Object: obj,
-				Key:    node.Field,
-			}, node), &Field{
-				val: fieldType,
-			}, nil
+			Object: obj,
+			Key:    node.Field,
+		}, &Field{
+			val: fieldType,
+		})
 	case *parse.ExpressionParenthesized:
 		expr, field, err := s.expr(node.Inner, currentRel)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		return cast(expr, node), field, nil
+		return cast(expr, field)
 	case *parse.ExpressionComparison:
-		left, leftField, err := s.expr(node.Left, currentRel)
+		left, _, err := s.expr(node.Left, currentRel)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -755,7 +955,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			Left:  left,
 			Right: right,
 			Op:    get(comparisonOps, node.Operator),
-		}, &Field{val: leftField.val}, nil
+		}, anonField(types.BoolType.Copy()), nil
 	case *parse.ExpressionLogical:
 		left, _, err := s.expr(node.Left, currentRel)
 		if err != nil {
@@ -815,7 +1015,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			return cast(&ColumnRef{
 				Parent:     field.Parent,
 				ColumnName: field.Name,
-			}, node), field, nil
+			}, field)
 		}
 		if err != nil {
 			return nil, nil, err
@@ -824,7 +1024,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		return cast(&ColumnRef{
 			Parent:     field.Parent,
 			ColumnName: field.Name,
-		}, node), field, nil
+		}, field)
 	case *parse.ExpressionCollate:
 		expr, field, err := s.expr(node.Expression, currentRel)
 		if err != nil {
@@ -1013,7 +1213,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 				returnType = thenType
 			} else {
 				if !returnType.Equals(thenType) {
-					return nil, nil, fmt.Errorf(`all THEN expressions must be of the same type %s, received %s`, returnType, thenExpr)
+					return nil, nil, fmt.Errorf(`all THEN expressions must be of the same type %s, received %s`, returnType, thenType)
 				}
 			}
 
@@ -1023,7 +1223,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			}
 
 			if !expectedWhenType.Equals(whenScalar) {
-				return nil, nil, fmt.Errorf(`WHEN expression must be of type %s, received %s`, expectedWhenType, whenExpr)
+				return nil, nil, fmt.Errorf(`WHEN expression must be of type %s, received %s`, expectedWhenType, whenScalar)
 			}
 
 			c.WhenClauses = append(c.WhenClauses, [2]LogicalExpr{whenExpr, thenExpr})
@@ -1184,18 +1384,6 @@ func procedureReturnExpr(node *types.ProcedureReturn) (*types.DataType, error) {
 	return node.Fields[0].Type.Copy(), nil
 }
 
-// cast wraps the expression with a typecast if one is used in the node.
-func cast(expr LogicalExpr, node interface{ GetTypeCast() *types.DataType }) LogicalExpr {
-	if node.GetTypeCast() != nil {
-		return &TypeCast{
-			Expr: expr,
-			Type: node.GetTypeCast(),
-		}
-	}
-
-	return expr
-}
-
 // anonField creates an anonymous field with the given data type.
 func anonField(dt *types.DataType) *Field {
 	return &Field{
@@ -1228,6 +1416,10 @@ func (s *scopeContext) table(node parse.Table) (*Scan, *Relation, error) {
 			return nil, nil, fmt.Errorf(`unknown table "%s"`, node.Table)
 		}
 
+		for _, col := range rel.Fields {
+			col.Parent = alias
+		}
+
 		return &Scan{
 			Source: &TableScanSource{
 				TableName: node.Table,
@@ -1251,6 +1443,10 @@ func (s *scopeContext) table(node parse.Table) (*Scan, *Relation, error) {
 		subq, rel, err := s.planSubquery(node.Subquery, &Relation{})
 		if err != nil {
 			return nil, nil, err
+		}
+
+		for _, col := range rel.Fields {
+			col.Parent = node.Alias
 		}
 
 		return &Scan{
@@ -1377,8 +1573,9 @@ func (s *scopeContext) table(node parse.Table) (*Scan, *Relation, error) {
 		rel := &Relation{}
 		for _, field := range procReturns.Fields {
 			rel.Fields = append(rel.Fields, &Field{
-				Name: field.Name,
-				val:  field.Type.Copy(),
+				Parent: node.Alias,
+				Name:   field.Name,
+				val:    field.Type.Copy(),
 			})
 		}
 
@@ -1434,11 +1631,13 @@ func (p *planContext) uniqueRefIdentifier() string {
 		return string(alphabet[0])
 	}
 
+	n := p.ReferenceCount
+
 	var sb strings.Builder
-	for p.ReferenceCount > 0 {
-		remainder := p.ReferenceCount % base
+	for n > 0 {
+		remainder := n % base
 		sb.WriteByte(alphabet[remainder])
-		p.ReferenceCount = p.ReferenceCount / base
+		n = n / base
 	}
 
 	// Reverse the string because the current order is backward

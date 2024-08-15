@@ -407,17 +407,9 @@ func (s *Scan) Equal(other Traversable) bool {
 type Project struct {
 	baseLogicalPlan
 
-	// ! Expressions aren't set until the evaluation phase,
-	// by the expandFuncs.
-
 	// Expressions are the expressions that are projected.
 	Expressions []LogicalExpr
 	Child       LogicalPlan
-	// expandFuncs are functions that adds to the list of expressions.
-	// It is set while visiting the parse AST, and should be called during
-	// the evaluation phase. It is used to expand wildcards like "SELECT *",
-	// which can only be done during evaluation when we know the full relation.
-	expandFuncs []expandFunc
 }
 
 func (s *Project) Accept(v Visitor) any {
@@ -444,7 +436,7 @@ func (p *Project) Plans() []LogicalPlan {
 
 func (p *Project) String() string {
 	str := strings.Builder{}
-	str.WriteString("Projection: ")
+	str.WriteString("Project: ")
 
 	for i, expr := range p.Expressions {
 		if i > 0 {
@@ -2283,7 +2275,11 @@ type ExprRef struct {
 }
 
 func (e *ExprRef) String() string {
-	return fmt.Sprintf(`{%s}`, e.Identified.ref())
+	return fmt.Sprintf(`{%s}`, formatRef(e.Identified.ID))
+}
+
+func formatRef(id string) string {
+	return fmt.Sprintf(`#ref(%s)`, id)
 }
 
 func (e *ExprRef) Field() *Field {
@@ -2319,7 +2315,7 @@ type IdentifiedExpr struct {
 }
 
 func (i *IdentifiedExpr) String() string {
-	return fmt.Sprintf(`{%s = %s}`, i.ref(), i.Expr.String())
+	return fmt.Sprintf(`{%s = %s}`, formatRef(i.ID), i.Expr.String())
 }
 
 func (i *IdentifiedExpr) Field() *Field {
@@ -2344,11 +2340,6 @@ func (i *IdentifiedExpr) Equal(other Traversable) bool {
 	}
 
 	return i.ID == o.ID && i.Expr.Equal(o.Expr)
-}
-
-// ref prints the reference name for the identified expression.
-func (i *IdentifiedExpr) ref() string {
-	return fmt.Sprintf(`#ref(%s)`, i.ID)
 }
 
 // traverse traverses a logical plan in preorder.
@@ -2434,8 +2425,8 @@ func innerFormat(plan LogicalNode, count int, printLong []bool) (string, []*Subp
 	###########################
 */
 
-// TopLevel is a logical plan that is at the top level of a query.
-type TopLevel interface {
+// TopLevelPlan is a logical plan that is at the top level of a query.
+type TopLevelPlan interface {
 	LogicalPlan
 	topLevel()
 }
@@ -2458,9 +2449,6 @@ type Return struct {
 	Child LogicalPlan
 }
 
-// expandFuncs take a relation and return a list of expressions that should be added to the projection.
-type expandFunc func(*Relation) []LogicalExpr
-
 func (r *Return) String() string {
 	str := strings.Builder{}
 	str.WriteString("Return: ")
@@ -2469,7 +2457,7 @@ func (r *Return) String() string {
 		if i > 0 {
 			str.WriteString(", ")
 		}
-		str.WriteString(expr.String())
+		str.WriteString(expr.ResultString())
 	}
 
 	return str.String()
