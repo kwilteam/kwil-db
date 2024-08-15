@@ -7,7 +7,9 @@ package decimal
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
@@ -373,17 +375,33 @@ func (d *Decimal) Float64() (float64, error) {
 	return d.dec.Float64()
 }
 
+var _ json.Marshaler = Decimal{}
+var _ json.Marshaler = (*Decimal)(nil)
+
 // MarshalJSON implements the json.Marshaler interface.
 func (d Decimal) MarshalJSON() ([]byte, error) {
-	return []byte(d.dec.String()), nil
+	return []byte(`"` + d.dec.String() + `"`), nil // faster than json.Marshal(str)
 }
+
+var _ json.Unmarshaler = (*Decimal)(nil)
 
 // UnmarshalJSON implements the json.Unmarshaler interface.
 func (d *Decimal) UnmarshalJSON(data []byte) error {
-	return d.SetString(string(data))
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	if err := d.SetPrecisionAndScale(inferPrecisionAndScale(str)); err != nil {
+		return err
+	}
+	return d.SetString(str)
 }
 
-// MarshalBinary implements the encoding.BinaryMarshaler interface.
+var _ encoding.BinaryMarshaler = Decimal{}
+var _ encoding.BinaryMarshaler = (*Decimal)(nil)
+
+// MarshalBinary implements the encoding.BinaryMarshaler interface. This
+// supports a variety of standard library functionality, include Gob encoding.
 func (d Decimal) MarshalBinary() ([]byte, error) {
 	bts, err := d.dec.MarshalText()
 	if err != nil {
@@ -397,6 +415,8 @@ func (d Decimal) MarshalBinary() ([]byte, error) {
 	return append(b[:], bts...), nil
 }
 
+var _ encoding.BinaryUnmarshaler = (*Decimal)(nil)
+
 // UnmarshalBinary implements the encoding.BinaryUnmarshaler interface.
 func (d *Decimal) UnmarshalBinary(data []byte) error {
 	if len(data) < 4 {
@@ -406,7 +426,7 @@ func (d *Decimal) UnmarshalBinary(data []byte) error {
 	d.precision = binary.BigEndian.Uint16(data[:2])
 	d.scale = binary.BigEndian.Uint16(data[2:4])
 
-	return d.UnmarshalBinary(data[4:])
+	return d.dec.UnmarshalText(data[4:])
 }
 
 var ErrOverflow = fmt.Errorf("overflow")
