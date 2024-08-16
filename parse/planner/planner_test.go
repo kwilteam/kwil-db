@@ -174,7 +174,22 @@ func Test_Planner(t *testing.T) {
 				"    └─Join [inner]: u.id = p.owner_id\n" +
 				"      ├─Scan Table [alias=\"u\"]: users [physical]\n" +
 				"      └─Scan Table [alias=\"p\"]: posts [physical]\n",
-		}, // TODO: negative case of the above
+		},
+		{
+			name: "invalid group by column",
+			sql:  "select age from users group by age/2",
+			err:  planner.ErrIllegalAggregate,
+		},
+		{
+			name: "aggregate in group by",
+			sql:  "select sum(age) from users group by sum(age)",
+			err:  planner.ErrIllegalAggregate,
+		},
+		{
+			name: "aggregate in where clause",
+			sql:  "select sum(age) from users where sum(age)::int > 100",
+			err:  planner.ErrAggregateInWhere,
+		},
 		{
 			name: "complex group by",
 			sql:  "select age/2, age*3 from users group by age/2, age*3",
@@ -183,7 +198,6 @@ func Test_Planner(t *testing.T) {
 				"  └─Aggregate [{#ref(A) = users.age / 2}] [{#ref(B) = users.age * 3}]\n" +
 				"    └─Scan Table: users [physical]\n",
 		},
-		// TODO: negative case of the above
 		{
 			name: "select * with group by",
 			sql:  "select * from users group by name, age, id",
@@ -206,7 +220,6 @@ func Test_Planner(t *testing.T) {
 				"    └─Aggregate [{#ref(A) = users.name}]: {#ref(D) = sum(users.age * 10)}; {#ref(C) = sum(users.age / 2)}; {#ref(B) = sum(users.age)}\n" +
 				"      └─Scan Table: users [physical]\n",
 		},
-		// TODO: test that we cannot use aggregates in where clause
 		{
 			name: "duplicate group by columns",
 			sql:  "select name, age from users group by name, name, age",
@@ -294,7 +307,34 @@ func Test_Planner(t *testing.T) {
 				"  └─Project: users.id; users.name\n" +
 				"    └─Scan Table: users [physical]\n",
 		},
-		// TODO: negative case for incompatible set schemas
+		{
+			name: "incompatible set schema types",
+			sql: `select id, name from users
+				union
+				select id, owner_id from posts;`,
+			err: planner.ErrSetIncompatibleSchemas,
+		},
+		{
+			name: "incompatible set schema lengths",
+			sql: `select id, name from users
+				union
+				select 1;`,
+			err: planner.ErrSetIncompatibleSchemas,
+		},
+		{
+			name: "set operations with order by and limit",
+			sql: `select id, name from users
+				union
+				select id, content from posts
+				order by name desc;`,
+			wt: "Return: id [uuid], name [text]\n" +
+				"└─Sort: [name] desc nulls last\n" +
+				"  └─Set: union\n" +
+				"    ├─Project: users.id; users.name\n" +
+				"    │ └─Scan Table: users [physical]\n" +
+				"    └─Project: posts.id; posts.content\n" +
+				"      └─Scan Table: posts [physical]\n",
+		},
 		{
 			name: "sort",
 			sql:  "select name, age from users order by name desc nulls last, id asc",
@@ -303,7 +343,11 @@ func Test_Planner(t *testing.T) {
 				"  └─Sort: [users.name] desc nulls last; [users.id] asc nulls last\n" +
 				"    └─Scan Table: users [physical]\n",
 		},
-		// TODO: negative case for sorting on invalid column
+		{
+			name: "sort invalid column",
+			sql:  "select name, age from users order by wallet",
+			err:  planner.ErrColumnNotFound,
+		},
 		{
 			name: "limit and offset",
 			sql:  "select name, age from users limit 10 offset 5",
@@ -349,7 +393,7 @@ func Test_Planner(t *testing.T) {
 				"└─Project: users.name COLLATE nocase\n" +
 				"  └─Filter: users.name = 'SATOSHI' COLLATE nocase\n" +
 				"    └─Scan Table: users [physical]\n",
-		}, // TODO: invalid collation name / invalid column type
+		},
 		{
 			name: "in",
 			sql:  "select name from users where name not in ('satoshi', 'wendys_drive_through_lady')",
@@ -384,7 +428,6 @@ func Test_Planner(t *testing.T) {
 				"  └─Filter: CASE WHEN [users.age = 20] THEN [true] ELSE [false] END\n" +
 				"    └─Scan Table: users [physical]\n",
 		},
-		// TODO: im gonna sleep on INSERT and come back to it
 		{
 			name: "basic update",
 			sql:  "update users set name = 'satoshi' where age = 1",
@@ -418,8 +461,86 @@ func Test_Planner(t *testing.T) {
 				"└─Filter: users.age = 1\n" +
 				"  └─Scan Table: users [physical]\n",
 		},
-		// TODO: we don't actually support DELETE with joins, however we can now.
-		// once we do, we should add tests for it
+		{
+			name: "insert",
+			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1), ('123e4567-e89b-12d3-a456-426614174001'::uuid, 'satoshi2', 2)",
+			wt: "Insert [users]: id [uuid], name [text], age [int]\n" +
+				"└─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1); ('123e4567-e89b-12d3-a456-426614174001'::uuid, 'satoshi2', 2)\n",
+		},
+		{
+			name: "insert with null",
+			sql:  "insert into users (id, name) values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi')",
+			wt: "Insert [users]: id [uuid], name [text], age [int]\n" +
+				"└─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', NULL)\n",
+		},
+		{
+			name: "insert null in non-nullable column",
+			sql:  "insert into users (name) values ('satoshi')",
+			err:  planner.ErrNotNullableColumn,
+		},
+		{
+			name: "on conflict do nothing",
+			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict do nothing",
+			wt: "Insert [users]: id [uuid], name [text], age [int]\n" +
+				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1)\n" +
+				"└─Conflict [nothing]\n",
+		},
+		{
+			name: "on conflict do update (arbiter index primary key)",
+			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (id) do update set name = 'satoshi'",
+			wt: "Insert [users]: id [uuid], name [text], age [int]\n" +
+				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1)\n" +
+				"└─Conflict [update] [arbiter=users.id (primary key)]: [name = 'satoshi']\n",
+		},
+		{
+			name: "on conflict do update (arbiter unique constraint)",
+			sql:  "insert into posts values ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid, 'hello', 1) on conflict (content) do update set owner_id = '123e4567-e89b-12d3-a456-426614174001'::uuid",
+			wt: "Insert [posts]: id [uuid], owner_id [uuid], content [text], created_at [int]\n" +
+				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid, 'hello', 1)\n" +
+				"└─Conflict [update] [arbiter=posts.content (unique)]: [owner_id = '123e4567-e89b-12d3-a456-426614174001'::uuid]\n",
+		},
+		{
+			name: "on conflict do update (arbiter index non-primary key)",
+			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (name) do update set name = 'satoshi' WHERE users.age = 1",
+			wt: "Insert [users]: id [uuid], name [text], age [int]\n" +
+				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1)\n" +
+				"└─Conflict [update] [arbiter=name_idx (index)]: [name = 'satoshi'] where [users.age = 1]\n",
+		},
+		{
+			name: "on conflict with non-arbiter column",
+			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (age) do update set name = 'satoshi'",
+			err:  planner.ErrIllegalConflictArbiter,
+		},
+		{
+			name: "on conflict with half of a composite index",
+			sql:  "insert into posts values ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid, 'hello', 1) on conflict (owner_id) do update set content = 'hello'",
+			err:  planner.ErrIllegalConflictArbiter,
+		},
+		{
+			name: "on conflict with non-unique index",
+			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (age) do update set name = 'satoshi'",
+			err:  planner.ErrIllegalConflictArbiter,
+		},
+		{
+			name: "conflict on compound unique index",
+			sql:  "insert into posts values ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid, 'hello', 1) on conflict (owner_id, created_at) do update set content = 'hello'",
+			wt: "Insert [posts]: id [uuid], owner_id [uuid], content [text], created_at [int]\n" +
+				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid, 'hello', 1)\n" +
+				"└─Conflict [update] [arbiter=owner_created_idx (index)]: [content = 'hello']\n",
+		},
+		{
+			name: "excluded clause",
+			sql:  "insert into users (id, name) values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi') on conflict (id) do update set name = excluded.name where (excluded.age/2) = 0",
+			wt: "Insert [users]: id [uuid], name [text], age [int]\n" +
+				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', NULL)\n" +
+				"└─Conflict [update] [arbiter=users.id (primary key)]: [name = excluded.name] where [excluded.age / 2 = 0]\n",
+		},
+		{
+			// surprisingly, this mirrors Postgres's behavior
+			name: "ambiguous column due to excluded",
+			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (name) do update set name = 'satoshi' WHERE age = 1",
+			err:  planner.ErrAmbiguousColumn,
+		},
 	}
 
 	for _, test := range tests {
@@ -455,12 +576,12 @@ func Test_Planner(t *testing.T) {
 
 				require.Equal(t, test.wt, plan.Format())
 
-				// // check that Relation() works
-				// plan.Plan.Relation()
+				// check that Relation() works
+				plan.Plan.Relation()
 
-				// for _, cte := range plan.CTEs {
-				// 	cte.Relation()
-				// }
+				for _, cte := range plan.CTEs {
+					cte.Relation()
+				}
 
 				// make sure nothing changed
 				require.Equal(t, test.wt, plan.Format())
@@ -477,15 +598,18 @@ var testSchema = `database planner;
 table users {
 	id uuid primary key,
 	name text,
-	age int max(150)
+	age int max(150),
+	#name_idx unique(name),
+	#age_idx index(age)
 }
 
 table posts {
 	id uuid primary key,
 	owner_id uuid not null,
-	content text maxlen(300),
+	content text maxlen(300) unique,
 	created_at int not null,
-	foreign key (owner_id) references users(id) on delete cascade on update cascade
+	foreign key (owner_id) references users(id) on delete cascade on update cascade,
+	#owner_created_idx unique(owner_id, created_at)
 }
 
 procedure posts_by_user($name text) public view returns table(content text) {

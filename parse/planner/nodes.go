@@ -32,7 +32,7 @@ type Traversable interface {
 	// Children returns the children of the node.
 	// These are all LogicalPlans and LogicalExprs that are
 	// referenced by the node.
-	Children() []LogicalNode
+	Children() []Traversable
 	// Plans returns all the logical plans that are referenced
 	// by the node (or the nearest node that contains them).
 	Plans() []LogicalPlan
@@ -64,7 +64,7 @@ type TableScanSource struct {
 func (s *TableScanSource) Accept(v Visitor) any {
 	return v.VisitTableScanSource(s)
 }
-func (t *TableScanSource) Children() []LogicalNode {
+func (t *TableScanSource) Children() []Traversable {
 	return nil
 }
 
@@ -131,8 +131,8 @@ type ProcedureScanSource struct {
 func (s *ProcedureScanSource) Accept(v Visitor) any {
 	return v.VisitProcedureScanSource(s)
 }
-func (f *ProcedureScanSource) Children() []LogicalNode {
-	var c []LogicalNode
+func (f *ProcedureScanSource) Children() []Traversable {
+	var c []Traversable
 	for _, arg := range f.Args {
 		c = append(c, arg)
 	}
@@ -239,8 +239,8 @@ type Subquery struct {
 func (s *Subquery) Accept(v Visitor) any {
 	return v.VisitSubquery(s)
 }
-func (s *Subquery) Children() []LogicalNode {
-	return []LogicalNode{s.Plan}
+func (s *Subquery) Children() []Traversable {
+	return []Traversable{s.Plan}
 }
 
 func (s *Subquery) FormatScan() string {
@@ -307,7 +307,7 @@ type EmptyScan struct {
 func (s *EmptyScan) Accept(v Visitor) any {
 	return v.VisitEmptyScan(s)
 }
-func (n *EmptyScan) Children() []LogicalNode {
+func (n *EmptyScan) Children() []Traversable {
 	return nil
 }
 
@@ -341,7 +341,7 @@ type Scan struct {
 func (s *Scan) Accept(v Visitor) any {
 	return v.VisitScan(s)
 }
-func (s *Scan) Children() []LogicalNode {
+func (s *Scan) Children() []Traversable {
 	return s.Source.Children()
 }
 
@@ -415,8 +415,8 @@ type Project struct {
 func (s *Project) Accept(v Visitor) any {
 	return v.VisitProject(s)
 }
-func (p *Project) Children() []LogicalNode {
-	var c []LogicalNode
+func (p *Project) Children() []Traversable {
+	var c []Traversable
 	for _, expr := range p.Expressions {
 		c = append(c, expr)
 	}
@@ -486,8 +486,8 @@ type Filter struct {
 func (s *Filter) Accept(v Visitor) any {
 	return v.VisitFilter(s)
 }
-func (f *Filter) Children() []LogicalNode {
-	return []LogicalNode{f.Child, f.Condition}
+func (f *Filter) Children() []Traversable {
+	return []Traversable{f.Child, f.Condition}
 }
 
 func (f *Filter) String() string {
@@ -522,8 +522,8 @@ type Join struct {
 func (s *Join) Accept(v Visitor) any {
 	return v.VisitJoin(s)
 }
-func (j *Join) Children() []LogicalNode {
-	return []LogicalNode{j.Left, j.Right, j.Condition}
+func (j *Join) Children() []Traversable {
+	return []Traversable{j.Left, j.Right, j.Condition}
 }
 
 func (j *Join) String() string {
@@ -606,8 +606,8 @@ func (s *Sort) String() string {
 func (s *Sort) Accept(v Visitor) any {
 	return v.VisitSort(s)
 }
-func (s *Sort) Children() []LogicalNode {
-	var c []LogicalNode
+func (s *Sort) Children() []Traversable {
+	var c []Traversable
 	for _, sortExpr := range s.SortExpressions {
 		c = append(c, sortExpr.Expr)
 	}
@@ -666,8 +666,8 @@ type Limit struct {
 func (s *Limit) Accept(v Visitor) any {
 	return v.VisitLimit(s)
 }
-func (l *Limit) Children() []LogicalNode {
-	r := []LogicalNode{l.Child, l.Limit}
+func (l *Limit) Children() []Traversable {
+	r := []Traversable{l.Child, l.Limit}
 	if l.Offset != nil {
 		r = append(r, l.Offset)
 	}
@@ -729,8 +729,8 @@ type Distinct struct {
 func (s *Distinct) Accept(v Visitor) any {
 	return v.VisitDistinct(s)
 }
-func (d *Distinct) Children() []LogicalNode {
-	return []LogicalNode{d.Child}
+func (d *Distinct) Children() []Traversable {
+	return []Traversable{d.Child}
 }
 
 func (d *Distinct) String() string {
@@ -765,8 +765,8 @@ type SetOperation struct {
 func (s *SetOperation) Accept(v Visitor) any {
 	return v.VisitSetOperation(s)
 }
-func (s *SetOperation) Children() []LogicalNode {
-	return []LogicalNode{s.Left, s.Right}
+func (s *SetOperation) Children() []Traversable {
+	return []Traversable{s.Left, s.Right}
 }
 
 func (s *SetOperation) Plans() []LogicalPlan {
@@ -781,19 +781,15 @@ func (s *SetOperation) String() string {
 }
 
 func (s *SetOperation) Relation() *Relation {
+	// the relation returned from a set operation
+	// is the left relation without the parent
 	left := s.Left.Relation()
-	right := s.Right.Relation()
 
 	for _, field := range left.Fields {
 		field.Parent = ""
 	}
-	for _, field := range right.Fields {
-		field.Parent = ""
-	}
 
-	return &Relation{
-		Fields: append(left.Fields, right.Fields...),
-	}
+	return left
 }
 
 func (s *SetOperation) Equal(other Traversable) bool {
@@ -821,8 +817,8 @@ type Aggregate struct {
 func (s *Aggregate) Accept(v Visitor) any {
 	return v.VisitAggregate(s)
 }
-func (a *Aggregate) Children() []LogicalNode {
-	var c []LogicalNode
+func (a *Aggregate) Children() []Traversable {
+	var c []Traversable
 	for _, expr := range a.GroupingExpressions {
 		c = append(c, expr)
 	}
@@ -978,8 +974,8 @@ type Subplan struct {
 func (s *Subplan) Accept(v Visitor) any {
 	return v.VisitSubplan(s)
 }
-func (s *Subplan) Children() []LogicalNode {
-	return []LogicalNode{s.Plan}
+func (s *Subplan) Children() []Traversable {
+	return []Traversable{s.Plan}
 }
 
 func (s *Subplan) Plans() []LogicalPlan {
@@ -1046,8 +1042,8 @@ func (c *CartesianProduct) String() string {
 func (s *CartesianProduct) Accept(v Visitor) any {
 	return v.VisitCartesianProduct(s)
 }
-func (c *CartesianProduct) Children() []LogicalNode {
-	return []LogicalNode{c.Left, c.Right}
+func (c *CartesianProduct) Children() []Traversable {
+	return []Traversable{c.Left, c.Right}
 }
 
 func (c *CartesianProduct) Plans() []LogicalPlan {
@@ -1095,6 +1091,8 @@ func (l *Literal) String() string {
 		return "'" + c + "'"
 	case []byte:
 		return "0x" + hex.EncodeToString(c)
+	case nil:
+		return "NULL"
 	default:
 		return fmt.Sprintf("%v", l.Value)
 	}
@@ -1103,7 +1101,7 @@ func (l *Literal) String() string {
 func (s *Literal) Accept(v Visitor) any {
 	return v.VisitLiteral(s)
 }
-func (l *Literal) Children() []LogicalNode {
+func (l *Literal) Children() []Traversable {
 	return nil
 }
 
@@ -1156,7 +1154,7 @@ func (v *Variable) String() string {
 func (s *Variable) Accept(v Visitor) any {
 	return v.VisitVariable(s)
 }
-func (v *Variable) Children() []LogicalNode {
+func (v *Variable) Children() []Traversable {
 	return nil
 }
 
@@ -1201,7 +1199,7 @@ func (c *ColumnRef) String() string {
 func (s *ColumnRef) Accept(v Visitor) any {
 	return v.VisitColumnRef(s)
 }
-func (c *ColumnRef) Children() []LogicalNode {
+func (c *ColumnRef) Children() []Traversable {
 	return nil
 }
 
@@ -1260,8 +1258,8 @@ func (a *AggregateFunctionCall) String() string {
 func (s *AggregateFunctionCall) Accept(v Visitor) any {
 	return v.VisitAggregateFunctionCall(s)
 }
-func (a *AggregateFunctionCall) Children() []LogicalNode {
-	var c []LogicalNode
+func (a *AggregateFunctionCall) Children() []Traversable {
+	var c []Traversable
 	for _, arg := range a.Args {
 		c = append(c, arg)
 	}
@@ -1277,7 +1275,10 @@ func (a *AggregateFunctionCall) Plans() []LogicalPlan {
 }
 
 func (a *AggregateFunctionCall) Field() *Field {
-	return anonField(a.returnType.Copy())
+	return &Field{
+		Name: a.FunctionName,
+		val:  a.returnType.Copy(),
+	}
 }
 
 func (a *AggregateFunctionCall) Equal(other Traversable) bool {
@@ -1337,8 +1338,8 @@ func (f *ScalarFunctionCall) String() string {
 func (s *ScalarFunctionCall) Accept(v Visitor) any {
 	return v.VisitScalarFunctionCall(s)
 }
-func (f *ScalarFunctionCall) Children() []LogicalNode {
-	var c []LogicalNode
+func (f *ScalarFunctionCall) Children() []Traversable {
+	var c []Traversable
 	for _, arg := range f.Args {
 		c = append(c, arg)
 	}
@@ -1354,7 +1355,10 @@ func (f *ScalarFunctionCall) Plans() []LogicalPlan {
 }
 
 func (f *ScalarFunctionCall) Field() *Field {
-	return anonField(f.returnType.Copy())
+	return &Field{
+		Name: f.FunctionName,
+		val:  f.returnType.Copy(),
+	}
 }
 
 func (f *ScalarFunctionCall) Equal(other Traversable) bool {
@@ -1418,8 +1422,8 @@ func (p *ProcedureCall) String() string {
 func (s *ProcedureCall) Accept(v Visitor) any {
 	return v.VisitProcedureCall(s)
 }
-func (p *ProcedureCall) Children() []LogicalNode {
-	var c []LogicalNode
+func (p *ProcedureCall) Children() []Traversable {
+	var c []Traversable
 	for _, arg := range p.Args {
 		c = append(c, arg)
 	}
@@ -1440,7 +1444,10 @@ func (p *ProcedureCall) Plans() []LogicalPlan {
 }
 
 func (p *ProcedureCall) Field() *Field {
-	return anonField(p.returnType.Copy())
+	return &Field{
+		Name: p.ProcedureName,
+		val:  p.returnType.Copy(),
+	}
 }
 
 func (p *ProcedureCall) Equal(other Traversable) bool {
@@ -1507,8 +1514,8 @@ func (a *ArithmeticOp) String() string {
 func (s *ArithmeticOp) Accept(v Visitor) any {
 	return v.VisitArithmeticOp(s)
 }
-func (a *ArithmeticOp) Children() []LogicalNode {
-	return []LogicalNode{a.Left, a.Right}
+func (a *ArithmeticOp) Children() []Traversable {
+	return []Traversable{a.Left, a.Right}
 }
 
 func (a *ArithmeticOp) Plans() []LogicalPlan {
@@ -1593,8 +1600,8 @@ func (c ComparisonOperator) String() string {
 func (s *ComparisonOp) Accept(v Visitor) any {
 	return v.VisitComparisonOp(s)
 }
-func (c *ComparisonOp) Children() []LogicalNode {
-	return []LogicalNode{c.Left, c.Right}
+func (c *ComparisonOp) Children() []Traversable {
+	return []Traversable{c.Left, c.Right}
 }
 
 func (c *ComparisonOp) Plans() []LogicalPlan {
@@ -1646,8 +1653,8 @@ func (l *LogicalOp) String() string {
 func (s *LogicalOp) Accept(v Visitor) any {
 	return v.VisitLogicalOp(s)
 }
-func (l *LogicalOp) Children() []LogicalNode {
-	return []LogicalNode{l.Left, l.Right}
+func (l *LogicalOp) Children() []Traversable {
+	return []Traversable{l.Left, l.Right}
 }
 
 func (l *LogicalOp) Plans() []LogicalPlan {
@@ -1700,8 +1707,8 @@ func (u UnaryOp) String() string {
 func (s *UnaryOp) Accept(v Visitor) any {
 	return v.VisitUnaryOp(s)
 }
-func (u *UnaryOp) Children() []LogicalNode {
-	return []LogicalNode{u.Expr}
+func (u *UnaryOp) Children() []Traversable {
+	return []Traversable{u.Expr}
 }
 
 func (u *UnaryOp) Plans() []LogicalPlan {
@@ -1733,8 +1740,8 @@ func (t *TypeCast) String() string {
 func (s *TypeCast) Accept(v Visitor) any {
 	return v.VisitTypeCast(s)
 }
-func (t *TypeCast) Children() []LogicalNode {
-	return []LogicalNode{t.Expr}
+func (t *TypeCast) Children() []Traversable {
+	return []Traversable{t.Expr}
 }
 
 func (t *TypeCast) Plans() []LogicalPlan {
@@ -1766,8 +1773,8 @@ func (a *AliasExpr) String() string {
 func (s *AliasExpr) Accept(v Visitor) any {
 	return v.VisitAliasExpr(s)
 }
-func (a *AliasExpr) Children() []LogicalNode {
-	return []LogicalNode{a.Expr}
+func (a *AliasExpr) Children() []Traversable {
+	return []Traversable{a.Expr}
 }
 
 func (a *AliasExpr) Plans() []LogicalPlan {
@@ -1799,8 +1806,8 @@ func (a *ArrayAccess) String() string {
 func (s *ArrayAccess) Accept(v Visitor) any {
 	return v.VisitArrayAccess(s)
 }
-func (a *ArrayAccess) Children() []LogicalNode {
-	return []LogicalNode{a.Array, a.Index}
+func (a *ArrayAccess) Children() []Traversable {
+	return []Traversable{a.Array, a.Index}
 }
 
 func (a *ArrayAccess) Plans() []LogicalPlan {
@@ -1846,8 +1853,8 @@ func (a *ArrayConstructor) String() string {
 func (s *ArrayConstructor) Accept(v Visitor) any {
 	return v.VisitArrayConstructor(s)
 }
-func (a *ArrayConstructor) Children() []LogicalNode {
-	var c []LogicalNode
+func (a *ArrayConstructor) Children() []Traversable {
+	var c []Traversable
 	for _, elem := range a.Elements {
 		c = append(c, elem)
 	}
@@ -1908,8 +1915,8 @@ func (f *FieldAccess) String() string {
 func (s *FieldAccess) Accept(v Visitor) any {
 	return v.VisitFieldAccess(s)
 }
-func (f *FieldAccess) Children() []LogicalNode {
-	return []LogicalNode{f.Object}
+func (f *FieldAccess) Children() []Traversable {
+	return []Traversable{f.Object}
 }
 
 func (f *FieldAccess) Plans() []LogicalPlan {
@@ -1990,8 +1997,8 @@ func (s *SubqueryExpr) String() string {
 func (s *SubqueryExpr) Accept(v Visitor) any {
 	return v.VisitSubqueryExpr(s)
 }
-func (s *SubqueryExpr) Children() []LogicalNode {
-	return []LogicalNode{s.Query.Plan}
+func (s *SubqueryExpr) Children() []Traversable {
+	return []Traversable{s.Query.Plan}
 }
 
 func (s *SubqueryExpr) Plans() []LogicalPlan {
@@ -2027,8 +2034,8 @@ func (c *Collate) String() string {
 func (s *Collate) Accept(v Visitor) any {
 	return v.VisitCollate(s)
 }
-func (c *Collate) Children() []LogicalNode {
-	return []LogicalNode{c.Expr}
+func (c *Collate) Children() []Traversable {
+	return []Traversable{c.Expr}
 }
 
 func (c *Collate) Plans() []LogicalPlan {
@@ -2098,8 +2105,8 @@ func (i *IsIn) String() string {
 func (s *IsIn) Accept(v Visitor) any {
 	return v.VisitIsIn(s)
 }
-func (i *IsIn) Children() []LogicalNode {
-	var c []LogicalNode
+func (i *IsIn) Children() []Traversable {
+	var c []Traversable
 	c = append(c, i.Left)
 	if i.Subquery != nil {
 		c = append(c, i.Subquery)
@@ -2198,8 +2205,8 @@ func (c *Case) String() string {
 func (s *Case) Accept(v Visitor) any {
 	return v.VisitCase(s)
 }
-func (c *Case) Children() []LogicalNode {
-	var ch []LogicalNode
+func (c *Case) Children() []Traversable {
+	var ch []Traversable
 	if c.Value != nil {
 		ch = append(ch, c.Value)
 	}
@@ -2300,8 +2307,8 @@ func (e *ExprRef) Field() *Field {
 func (s *ExprRef) Accept(v Visitor) any {
 	return v.VisitExprRef(s)
 }
-func (e *ExprRef) Children() []LogicalNode {
-	return []LogicalNode{e.Identified}
+func (e *ExprRef) Children() []Traversable {
+	return []Traversable{e.Identified}
 }
 
 func (e *ExprRef) Plans() []LogicalPlan {
@@ -2336,8 +2343,8 @@ func (i *IdentifiedExpr) Field() *Field {
 func (s *IdentifiedExpr) Accept(v Visitor) any {
 	return v.VisitIdentifiedExpr(s)
 }
-func (i *IdentifiedExpr) Children() []LogicalNode {
-	return []LogicalNode{i.Expr}
+func (i *IdentifiedExpr) Children() []Traversable {
+	return []Traversable{i.Expr}
 }
 
 func (i *IdentifiedExpr) Plans() []LogicalPlan {
@@ -2402,8 +2409,8 @@ func (r *Return) String() string {
 func (s *Return) Accept(v Visitor) any {
 	return v.VisitReturn(s)
 }
-func (r *Return) Children() []LogicalNode {
-	return []LogicalNode{r.Child}
+func (r *Return) Children() []Traversable {
+	return []Traversable{r.Child}
 }
 
 func (r *Return) Plans() []LogicalPlan {
@@ -2478,8 +2485,8 @@ func (u *Update) String() string {
 func (s *Update) Accept(v Visitor) any {
 	return v.VisitUpdate(s)
 }
-func (u *Update) Children() []LogicalNode {
-	var c []LogicalNode
+func (u *Update) Children() []Traversable {
+	var c []Traversable
 	for _, assign := range u.Assignments {
 		c = append(c, assign.Value)
 	}
@@ -2544,8 +2551,8 @@ func (d *Delete) String() string {
 func (s *Delete) Accept(v Visitor) any {
 	return v.VisitDelete(s)
 }
-func (d *Delete) Children() []LogicalNode {
-	return []LogicalNode{d.Child}
+func (d *Delete) Children() []Traversable {
+	return []Traversable{d.Child}
 }
 
 func (d *Delete) Plans() []LogicalPlan {
@@ -2585,9 +2592,11 @@ type Insert struct {
 	// ReferencedAs is how the table is referenced in the query.
 	// It is either a user-defined reference or the table name.
 	ReferencedAs string
+	// Columns are the columns to insert into.
+	Columns []*Field
 	// Values are the values to insert.
 	// The length of each second dimensional slice in Values must be equal to all others.
-	Values [][]LogicalExpr
+	Values *Tuples
 	// ConflictResolution is the conflict resolution to use if there is a conflict.
 	ConflictResolution ConflictResolution
 }
@@ -2604,18 +2613,11 @@ func (i *Insert) String() string {
 	}
 	str.WriteString(": ")
 
-	for i, val := range i.Values {
+	for i, col := range i.Columns {
 		if i > 0 {
-			str.WriteString("; ")
+			str.WriteString(", ")
 		}
-		str.WriteString("(")
-		for j, v := range val {
-			if j > 0 {
-				str.WriteString(", ")
-			}
-			str.WriteString(v.String())
-		}
-		str.WriteString(")")
+		str.WriteString(col.ResultString())
 	}
 
 	return str.String()
@@ -2624,47 +2626,21 @@ func (i *Insert) String() string {
 func (s *Insert) Accept(v Visitor) any {
 	return v.VisitInsert(s)
 }
-func (i *Insert) Children() []LogicalNode {
-	var c []LogicalNode
-	for _, val := range i.Values {
-		for _, v := range val {
-			c = append(c, v)
-		}
-	}
+func (i *Insert) Children() []Traversable {
+	c := i.Values.Children()
 
 	if i.ConflictResolution != nil {
-		if con, ok := i.ConflictResolution.(*ConflictUpdate); ok {
-			if con.ConflictFilter != nil {
-				c = append(c, con.ConflictFilter)
-			}
-
-			for _, assign := range con.Assignments {
-				c = append(c, assign.Value)
-			}
-		}
+		c = append(c, i.ConflictResolution)
 	}
 
 	return c
 }
 
 func (i *Insert) Plans() []LogicalPlan {
-	var c []LogicalPlan
-	for _, val := range i.Values {
-		for _, v := range val {
-			c = append(c, v.Plans()...)
-		}
-	}
+	c := []LogicalPlan{i.Values}
 
 	if i.ConflictResolution != nil {
-		if con, ok := i.ConflictResolution.(*ConflictUpdate); ok {
-			if con.ConflictFilter != nil {
-				c = append(c, con.ConflictFilter.Plans()...)
-			}
-
-			for _, assign := range con.Assignments {
-				c = append(c, assign.Value.Plans()...)
-			}
-		}
+		c = append(c, i.ConflictResolution)
 	}
 
 	return c
@@ -2684,20 +2660,8 @@ func (i *Insert) Equal(t Traversable) bool {
 		return false
 	}
 
-	if len(i.Values) != len(o.Values) {
+	if !i.Values.Equal(o.Values) {
 		return false
-	}
-
-	for j, val := range i.Values {
-		if len(val) != len(o.Values[j]) {
-			return false
-		}
-
-		for k, v := range val {
-			if !v.Equal(o.Values[j][k]) {
-				return false
-			}
-		}
 	}
 
 	if i.ConflictResolution == nil && o.ConflictResolution == nil {
@@ -2711,6 +2675,88 @@ func (i *Insert) Equal(t Traversable) bool {
 	return i.ConflictResolution.Equal(o.ConflictResolution)
 }
 
+// Tuples is a list tuple being inserted into a table.
+type Tuples struct {
+	baseLogicalPlan
+	Values [][]LogicalExpr
+	rel    *Relation
+}
+
+func (t *Tuples) Equal(other Traversable) bool {
+	o, ok := other.(*Tuples)
+	if !ok {
+		return false
+	}
+
+	if len(t.Values) != len(o.Values) {
+		return false
+	}
+
+	for i, val := range t.Values {
+		if len(val) != len(o.Values[i]) {
+			return false
+		}
+
+		for j, v := range val {
+			if !v.Equal(o.Values[i][j]) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func (t *Tuples) String() string {
+	str := strings.Builder{}
+	str.WriteString("Values: ")
+
+	for i, val := range t.Values {
+		if i > 0 {
+			str.WriteString("; ")
+		}
+
+		str.WriteString("(")
+		for j, v := range val {
+			if j > 0 {
+				str.WriteString(", ")
+			}
+			str.WriteString(v.String())
+		}
+		str.WriteString(")")
+	}
+
+	return str.String()
+}
+
+func (s *Tuples) Accept(v Visitor) any {
+	return v.VisitTuples(s)
+}
+
+func (t *Tuples) Children() []Traversable {
+	var c []Traversable
+	for _, val := range t.Values {
+		for _, v := range val {
+			c = append(c, v)
+		}
+	}
+	return c
+}
+
+func (t *Tuples) Plans() []LogicalPlan {
+	var c []LogicalPlan
+	for _, val := range t.Values {
+		for _, v := range val {
+			c = append(c, v.Plans()...)
+		}
+	}
+	return c
+}
+
+func (t *Tuples) Relation() *Relation {
+	return t.rel.Copy()
+}
+
 // Assignment is a struct that represents an assignment in an update statement.
 type Assignment struct {
 	// Column is the column to update.
@@ -2720,13 +2766,14 @@ type Assignment struct {
 }
 
 type ConflictResolution interface {
-	Equal(ConflictResolution) bool
+	LogicalPlan
 	conflictResolution()
 }
 
 // ConflictDoNothing is a struct that represents the resolution of a conflict
 // using DO NOTHING.
 type ConflictDoNothing struct {
+	baseLogicalPlan
 	// ArbiterIndex is the index to use to determine if there is a conflict.
 	// If/when Kwil supports partial indexes, we will turn this into a list
 	// of indexes. Can be nil when DO NOTHING is used.
@@ -2735,7 +2782,7 @@ type ConflictDoNothing struct {
 
 func (c *ConflictDoNothing) conflictResolution() {}
 
-func (c *ConflictDoNothing) Equal(other ConflictResolution) bool {
+func (c *ConflictDoNothing) Equal(other Traversable) bool {
 	o, ok := other.(*ConflictDoNothing)
 	if !ok {
 		return false
@@ -2744,9 +2791,34 @@ func (c *ConflictDoNothing) Equal(other ConflictResolution) bool {
 	return c.ArbiterIndex.Equal(o.ArbiterIndex)
 }
 
+func (c *ConflictDoNothing) String() string {
+	str := "Conflict [nothing]"
+	if c.ArbiterIndex != nil {
+		str += " [arbiter=" + c.ArbiterIndex.String() + "]"
+	}
+	return str
+}
+
+func (s *ConflictDoNothing) Accept(v Visitor) any {
+	return v.VisitConflictDoNothing(s)
+}
+
+func (c *ConflictDoNothing) Children() []Traversable {
+	return nil
+}
+
+func (c *ConflictDoNothing) Plans() []LogicalPlan {
+	return nil
+}
+
+func (c *ConflictDoNothing) Relation() *Relation {
+	return &Relation{}
+}
+
 // ConflictUpdate is a struct that represents the resolution of a conflict
 // using DO UPDATE SET.
 type ConflictUpdate struct {
+	baseLogicalPlan
 	// ArbiterIndex is the index to use to determine if there is a conflict.
 	// If/when Kwil supports partial indexes, we will turn this into a list
 	// of indexes. See: https://github.com/cockroachdb/cockroach/issues/53170
@@ -2763,7 +2835,7 @@ type ConflictUpdate struct {
 
 func (c *ConflictUpdate) conflictResolution() {}
 
-func (c *ConflictUpdate) Equal(other ConflictResolution) bool {
+func (c *ConflictUpdate) Equal(other Traversable) bool {
 	o, ok := other.(*ConflictUpdate)
 	if !ok {
 		return false
@@ -2796,11 +2868,66 @@ func (c *ConflictUpdate) Equal(other ConflictResolution) bool {
 	return true
 }
 
+func (c *ConflictUpdate) String() string {
+	str := strings.Builder{}
+	str.WriteString("Conflict [update] [arbiter=")
+	str.WriteString(c.ArbiterIndex.String())
+	str.WriteString("]:")
+
+	for _, assign := range c.Assignments {
+		str.WriteString(" [")
+		str.WriteString(assign.Column)
+		str.WriteString(" = ")
+		str.WriteString(assign.Value.String())
+		str.WriteString("]")
+	}
+
+	if c.ConflictFilter != nil {
+		str.WriteString(" where ")
+		str.WriteString("[")
+		str.WriteString(c.ConflictFilter.String())
+		str.WriteString("]")
+	}
+
+	return str.String()
+}
+
+func (s *ConflictUpdate) Accept(v Visitor) any {
+	return v.VisitConflictUpdate(s)
+}
+
+func (c *ConflictUpdate) Children() []Traversable {
+	var ch []Traversable
+	for _, assign := range c.Assignments {
+		ch = append(ch, assign.Value)
+	}
+	if c.ConflictFilter != nil {
+		ch = append(ch, c.ConflictFilter)
+	}
+	return ch
+}
+
+func (c *ConflictUpdate) Plans() []LogicalPlan {
+	var ch []LogicalPlan
+	for _, assign := range c.Assignments {
+		ch = append(ch, assign.Value.Plans()...)
+	}
+	if c.ConflictFilter != nil {
+		ch = append(ch, c.ConflictFilter.Plans()...)
+	}
+	return ch
+}
+
+func (c *ConflictUpdate) Relation() *Relation {
+	return &Relation{}
+}
+
 // Index is an interface that represents an index.
 // Since Kwil's internal catalog does not individually name
 // all indexes (e.g. UNIQUE and PRIMARY column constraints),
 // we use this interface to represent an index.
 type Index interface {
+	fmt.Stringer
 	index()
 	Equal(Index) bool
 }
@@ -2825,12 +2952,27 @@ func (i *IndexColumnConstraint) Equal(other Index) bool {
 	return i.Table == o.Table && i.Column == o.Column && i.ConstraintType == o.ConstraintType
 }
 
+func (i *IndexColumnConstraint) String() string {
+	return fmt.Sprintf("%s.%s (%s)", i.Table, i.Column, i.ConstraintType.String())
+}
+
 type IndexConstraintType uint8
 
 const (
 	UniqueConstraintIndex IndexConstraintType = iota
 	PrimaryKeyConstraintIndex
 )
+
+func (i IndexConstraintType) String() string {
+	switch i {
+	case UniqueConstraintIndex:
+		return "unique"
+	case PrimaryKeyConstraintIndex:
+		return "primary key"
+	default:
+		panic(fmt.Sprintf("unknown index constraint type %d", i))
+	}
+}
 
 // IndexNamed is any index that is specified explicitly
 // and has a referenceable name.
@@ -2848,6 +2990,10 @@ func (i *IndexNamed) Equal(other Index) bool {
 	}
 
 	return i.Name == o.Name
+}
+
+func (i *IndexNamed) String() string {
+	return i.Name + " (index)"
 }
 
 type Visitor interface {
@@ -2891,6 +3037,9 @@ type Visitor interface {
 	VisitUpdate(*Update) any
 	VisitDelete(*Delete) any
 	VisitInsert(*Insert) any
+	VisitConflictDoNothing(*ConflictDoNothing) any
+	VisitConflictUpdate(*ConflictUpdate) any
+	VisitTuples(*Tuples) any
 }
 
 /*

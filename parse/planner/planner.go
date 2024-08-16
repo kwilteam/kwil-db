@@ -15,15 +15,15 @@ import (
 // Plan creates a logical plan from a SQL statement.
 func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType,
 	objects map[string]map[string]*types.DataType) (analyzed *AnalyzedPlan, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err2, ok := r.(error)
-			if !ok {
-				err2 = fmt.Errorf("%v", r)
-			}
-			err = err2
-		}
-	}()
+	// defer func() {
+	// 	if r := recover(); r != nil {
+	// 		err2, ok := r.(error)
+	// 		if !ok {
+	// 			err2 = fmt.Errorf("%v", r)
+	// 		}
+	// 		err = err2
+	// 	}
+	// }()
 
 	if vars == nil {
 		vars = make(map[string]*types.DataType)
@@ -225,13 +225,42 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 		// otherwise, apply immediately so that we can apply the set operation(s)
 		plan, rel = projectFunc(plan)
 
+		// we need to remove the parent from the fields, since when a set operation
+		// is performed, only the columns from the left side can be referenced.
+		// e.g. in "select id, name from users union select id2, content from posts"
+		// we can only order by "name" and "id", not "content" or "id2" or "users.id" or "users.name"
+		for _, field := range rel.Fields {
+			field.Parent = ""
+		}
+
 		for i, core := range node.SelectCores[1:] {
 			rightPlan, _, projectFunc, err := s.selectCore(core)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			rightPlan, _ = projectFunc(rightPlan)
+			rightPlan, rightRel := projectFunc(rightPlan)
+
+			if len(rightRel.Fields) != len(rel.Fields) {
+				return nil, nil, fmt.Errorf(`%w: the number of columns in the SELECT clauses must match`, ErrSetIncompatibleSchemas)
+			}
+
+			for i, field := range rightRel.Fields {
+				rightScalar, err := field.Scalar()
+				if err != nil {
+					return nil, nil, err
+				}
+
+				leftScalar, err := rel.Fields[i].Scalar()
+				if err != nil {
+					return nil, nil, err
+				}
+
+				if !rightScalar.Equals(leftScalar) {
+					return nil, nil, fmt.Errorf(`%w: the types of columns in the SELECT clauses must match`, ErrSetIncompatibleSchemas)
+				}
+			}
+
 			plan = &SetOperation{
 				Left:   plan,
 				Right:  rightPlan,
@@ -409,6 +438,19 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 			Child:     plan,
 			Condition: whereExpr,
 		}
+
+		// we need to check that the where clause does not contain any aggregate functions
+		contains := false
+		traverse(whereExpr, func(node Traversable) bool {
+			if _, ok := node.(*AggregateFunctionCall); ok {
+				contains = true
+				return false
+			}
+			return true
+		})
+		if contains {
+			return nil, nil, nil, ErrAggregateInWhere
+		}
 	}
 
 	// at this point, we have the full relation for the select core, and can expand the columns
@@ -471,10 +513,10 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 		traverse(groupExpr, func(node Traversable) bool {
 			switch node.(type) {
 			case *AggregateFunctionCall:
-				err = fmt.Errorf(`aggregate functions are not allowed in GROUP BY`)
+				err = fmt.Errorf(`%w: aggregate functions are not allowed in GROUP BY`, ErrIllegalAggregate)
 				return false
 			case *Subquery:
-				err = fmt.Errorf(`subqueries are not allowed in GROUP BY`)
+				err = fmt.Errorf(`%w: subqueries are not allowed in GROUP BY`, ErrIllegalAggregate)
 				return false
 			}
 			return true
@@ -891,6 +933,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			Foreign:       true,
 			Args:          args,
 			ContextArgs:   contextArgs,
+			returnType:    returns,
 		}, &Field{
 			Name: node.Name,
 			val:  returns,
@@ -1917,7 +1960,7 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 	// according to their position in the table, and fills in nulls for any
 	// columns that were not specified in the insert. It starts as being empty,
 	// since it only needs logic if the user specifies columns.
-	orderAndFillNulls := func(exprs []LogicalExpr) []LogicalExpr {
+	orderAndFillNulls := func(exprs []*exprFieldPair[LogicalExpr]) []*exprFieldPair[LogicalExpr] {
 		return exprs
 	}
 
@@ -1933,7 +1976,7 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 		var err error
 		expectedColTypes, err = checkNullableColumns(tbl, node.Columns)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 
 		// we need to set the orderAndFillNulls function
@@ -1951,21 +1994,28 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 			colPos[i] = tableColPos[col]
 		}
 
-		orderAndFillNulls = func(exprs []LogicalExpr) []LogicalExpr {
-			newExprs := make([]LogicalExpr, len(tbl.Columns))
+		orderAndFillNulls = func(exprs []*exprFieldPair[LogicalExpr]) []*exprFieldPair[LogicalExpr] {
+			newExprs := make([]*exprFieldPair[LogicalExpr], len(tbl.Columns))
 
 			for i, expr := range exprs {
 				newExprs[colPos[i]] = expr
 			}
 
-			for i := range tbl.Columns {
+			for i, col := range tbl.Columns {
 				if newExprs[i] != nil {
 					continue
 				}
 
-				newExprs[i] = &Literal{
-					Value: nil,
-					Type:  types.NullType.Copy(),
+				newExprs[i] = &exprFieldPair[LogicalExpr]{
+					Expr: &Literal{
+						Value: nil,
+						Type:  types.NullType.Copy(),
+					},
+					Field: &Field{
+						Parent: tbl.Name,
+						Name:   col.Name,
+						val:    col.Type.Copy(),
+					},
 				}
 			}
 
@@ -1973,23 +2023,27 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 		}
 	} else {
 		expectedColLen = len(tbl.Columns)
-		expectedColTypes = make([]*types.DataType, len(tbl.Columns))
-		for i, col := range tbl.Columns {
-			expectedColTypes[i] = col.Type.Copy()
+		for _, col := range tbl.Columns {
+			expectedColTypes = append(expectedColTypes, col.Type.Copy())
 		}
 	}
 
 	rel := relationFromTable(tbl)
+	ins.Columns = rel.Fields
+
+	tup := &Tuples{
+		rel: &Relation{},
+	}
 
 	// check the value types and lengths
-	for _, vals := range node.Values {
+	for i, vals := range node.Values {
 		if len(vals) != expectedColLen {
 			return nil, fmt.Errorf(`insert has %d columns but %d values were supplied`, expectedColLen, len(vals))
 		}
 
-		var row []LogicalExpr
+		var row []*exprFieldPair[LogicalExpr]
 
-		for i, val := range vals {
+		for j, val := range vals {
 			expr, field, err := s.expr(val, rel)
 			if err != nil {
 				return nil, err
@@ -2000,22 +2054,40 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 				return nil, err
 			}
 
-			if !scalar.Equals(expectedColTypes[i]) {
-				return nil, fmt.Errorf(`insert value %d must be of type %s, received %s`, i+1, expectedColTypes[i], field.val)
+			if !scalar.Equals(expectedColTypes[j]) {
+				return nil, fmt.Errorf(`insert value %d must be of type %s, received %s`, j+1, expectedColTypes[j], field.val)
 			}
 
-			row = append(row, expr)
+			field.Name = tbl.Columns[j].Name
+			field.Parent = tbl.Name
+			row = append(row, &exprFieldPair[LogicalExpr]{
+				Expr:  expr,
+				Field: field,
+			})
 		}
 
-		ins.Values = append(ins.Values, orderAndFillNulls(row))
+		pairs := orderAndFillNulls(row)
+		var newRow []LogicalExpr
+		for _, pair := range pairs {
+			newRow = append(newRow, pair.Expr)
+
+			// if we are on the first row, we should build the tuple's relation
+			if i == 0 {
+				tup.rel.Fields = append(tup.rel.Fields, pair.Field)
+			}
+		}
+
+		tup.Values = append(tup.Values, newRow)
 	}
+
+	ins.Values = tup
 
 	// finally, we need to check if there is an ON CONFLICT clause,
 	// and if so, we need to process it.
 	if node.Upsert != nil {
-		conflict, err := s.buildUpsert(node.Upsert, tbl)
+		conflict, err := s.buildUpsert(node.Upsert, tbl, tup)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 
 		ins.ConflictResolution = conflict
@@ -2024,7 +2096,9 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 	return ins, nil
 }
 
-func (s *scopeContext) buildUpsert(node *parse.UpsertClause, table *types.Table) (ConflictResolution, error) {
+// buildUpsert builds the conflict resolution for an upsert statement.
+// It takes the upsert clause, the table, and the tuples that might cause a conflict.
+func (s *scopeContext) buildUpsert(node *parse.UpsertClause, table *types.Table, tuples *Tuples) (ConflictResolution, error) {
 	// all DO UPDATE upserts need to have an arbiter index.
 	// DO NOTHING can optionally have one, but it is not required.
 	var arbiterIndex Index
@@ -2063,7 +2137,7 @@ func (s *scopeContext) buildUpsert(node *parse.UpsertClause, table *types.Table)
 		}
 
 		if arbiterIndex == nil {
-			return nil, fmt.Errorf(`conflict column "%s" must be have a unique index or primary key`, node.ConflictColumns[0])
+			return nil, fmt.Errorf(`%w: conflict column "%s" must have a unique index or be a primary key`, ErrIllegalConflictArbiter, node.ConflictColumns[0])
 		}
 	default:
 		// check all indexes for a unique or pk index that matches the columns
@@ -2126,14 +2200,23 @@ func (s *scopeContext) buildUpsert(node *parse.UpsertClause, table *types.Table)
 
 	rel := relationFromTable(table)
 
+	// we need to use the tuples to create a "excluded" relation
+	// https://www.jooq.org/doc/latest/manual/sql-building/sql-statements/insert-statement/insert-on-conflict-excluded/
+	excluded := tuples.Relation()
+	for _, col := range excluded.Fields {
+		col.Parent = "excluded"
+	}
+
+	referenceRel := joinRels(rel, excluded)
+
 	var err error
-	res.Assignments, err = s.assignments(node.DoUpdate, rel, rel)
+	res.Assignments, err = s.assignments(node.DoUpdate, rel, referenceRel)
 	if err != nil {
 		return nil, err
 	}
 
 	if node.UpdateWhere != nil {
-		conflictFilter, field, err := s.expr(node.UpdateWhere, rel)
+		conflictFilter, field, err := s.expr(node.UpdateWhere, referenceRel)
 		if err != nil {
 			return nil, err
 		}
@@ -2186,26 +2269,26 @@ func checkNullableColumns(tbl *types.Table, cols []string) ([]*types.DataType, e
 
 		// the column is not in the set, so we need to check if it is nullable
 		if col.HasAttribute(types.NOT_NULL) || col.HasAttribute(types.PRIMARY_KEY) {
-			return nil, fmt.Errorf(`column "%s" cannot be null, and was not specified as an insert column`, col.Name)
+			return nil, fmt.Errorf(`%w: column "%s" must be specified as an insert column`, ErrNotNullableColumn, col.Name)
 		}
 
 		// it is also possible that a primary index contains the column
 		_, ok = pkSet[col.Name]
-		if !ok {
-			return nil, fmt.Errorf(`column "%s" cannot be null, and was not specified as an insert column`, col.Name)
+		if ok {
+			return nil, fmt.Errorf(`%w: column "%s" must be specified as an insert column`, ErrNotNullableColumn, col.Name)
 		}
 		// otherwise, we are good
 	}
 
 	dataTypeArr := make([]*types.DataType, len(cols))
 	// now we need to check if all columns in the set are in the table
-	for _, col := range cols {
+	for i, col := range cols {
 		colType, ok := tblColSet[col]
 		if !ok {
 			return nil, fmt.Errorf(`column "%s" not found in table`, col)
 		}
 
-		dataTypeArr = append(dataTypeArr, colType)
+		dataTypeArr[i] = colType
 	}
 
 	return dataTypeArr, nil

@@ -50,13 +50,13 @@ func (s *Relation) Search(parent, name string) (*Field, error) {
 			return nil, fmt.Errorf(`%w: "%s"`, ErrColumnNotFound, name)
 		}
 		if count > 1 {
-			return nil, fmt.Errorf(`column "%s" is ambiguous`, name)
+			return nil, fmt.Errorf(`%w: "%s"`, ErrAmbiguousColumn, name)
 		}
 
 		// return a new instance since we are qualifying the column
 		newCol := column.Copy()
 		if newCol.Parent == "" {
-			newCol.Parent = column.Name
+			newCol.Parent = column.Parent
 		}
 		return newCol, nil
 	}

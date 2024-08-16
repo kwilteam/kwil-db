@@ -380,19 +380,42 @@ func (r *rewriteVisitor) VisitDelete(p0 *Delete) any {
 func (r *rewriteVisitor) VisitInsert(p0 *Insert) any {
 	return r.plan(p0,
 		func() {
-			for _, row := range p0.Values {
-				r.slice(row)
-			}
+			p0.Values = p0.Values.Accept(r).(*Tuples)
 		},
 		func() {
 			if p0.ConflictResolution != nil {
-				doUpdate, ok := p0.ConflictResolution.(*ConflictUpdate)
-				if ok {
-					doUpdate.ConflictFilter = doUpdate.ConflictFilter.Accept(r).(LogicalExpr)
-				}
+				p0.ConflictResolution = p0.ConflictResolution.Accept(r).(ConflictResolution)
 			}
 		},
 	)
+}
+
+func (r *rewriteVisitor) VisitConflictDoNothing(p0 *ConflictDoNothing) any {
+	// we don't currently allow callbacks for conflicts because there is no need
+	return p0
+}
+
+func (r *rewriteVisitor) VisitConflictUpdate(p0 *ConflictUpdate) any {
+	// we don't currently allow callbacks for conflicts because there is no need
+	for i := range p0.Assignments {
+		p0.Assignments[i].Value = p0.Assignments[i].Value.Accept(r).(LogicalExpr)
+	}
+
+	if p0.ConflictFilter != nil {
+		p0.ConflictFilter = p0.ConflictFilter.Accept(r).(LogicalExpr)
+	}
+
+	return p0
+}
+
+func (r *rewriteVisitor) VisitTuples(p0 *Tuples) any {
+	// tuples do not have callbacks
+	for i := range p0.Values {
+		for j := range p0.Values[i] {
+			p0.Values[i][j] = p0.Values[i][j].Accept(r).(LogicalExpr)
+		}
+	}
+	return p0
 }
 
 // execFields executes the given fields in the correct order.
