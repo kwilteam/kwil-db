@@ -2002,7 +2002,7 @@ func exprLit(v any) parse.Expression {
 
 		liter := &parse.ExpressionLiteral{
 			Type:  types.IntType,
-			Value: int64(t),
+			Value: t,
 		}
 
 		if isNeg {
