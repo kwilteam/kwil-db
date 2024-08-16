@@ -279,33 +279,40 @@ delete_statement:
     (WHERE where=sql_expr)?
 ;
 
+// https://docs.kwil.com/docs/kuneiform/operators
 sql_expr:
-    literal type_cast?                                                              # literal_sql_expr
+    // highest precedence:
+    LPAREN sql_expr RPAREN type_cast?                                               # paren_sql_expr
+    | sql_expr PERIOD identifier type_cast?                                         # field_access_sql_expr
+    | sql_expr LBRACKET sql_expr RBRACKET type_cast?                                # array_access_sql_expr
+    | <assoc=right> (PLUS|MINUS) sql_expr                                           # unary_sql_expr
     | sql_expr COLLATE identifier                                                   # collate_sql_expr
+    | left=sql_expr (STAR | DIV | MOD) right=sql_expr                               # arithmetic_sql_expr
+    | left=sql_expr (PLUS | MINUS) right=sql_expr                                   # arithmetic_sql_expr
+
+    // any unspecified operator:
+    | literal type_cast?                                                            # literal_sql_expr
     | sql_function_call type_cast?                                                  # function_call_sql_expr
     | variable type_cast?                                                           # variable_sql_expr
-    | (table=identifier PERIOD)? column=identifier type_cast?                       # column_sql_expr
-    | sql_expr LBRACKET sql_expr RBRACKET type_cast?                                # array_access_sql_expr
-    | sql_expr PERIOD identifier type_cast?                                         # field_access_sql_expr
-    | LPAREN sql_expr RPAREN type_cast?                                             # paren_sql_expr
-    | left=sql_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) right=sql_expr    # comparison_sql_expr
-    | sql_expr NOT? IN LPAREN (sql_expr_list|select_statement) RPAREN               # in_sql_expr
-    | left=sql_expr NOT? (LIKE|ILIKE) right=sql_expr                                # like_sql_expr
-    | <assoc=right> (NOT|PLUS|MINUS) sql_expr                                       # unary_sql_expr
-    | element=sql_expr (NOT)? BETWEEN lower=sql_expr AND upper=sql_expr             # between_sql_expr
-    | left=sql_expr IS NOT? ((DISTINCT FROM right=sql_expr) | NULL | TRUE | FALSE)  # is_sql_expr
+    | (table=identifier PERIOD)? column=identifier type_cast?                       # column_sql_expr 
     | CASE case_clause=sql_expr?
         (when_then_clause)+
         (ELSE else_clause=sql_expr)? END                                            # case_expr
     | (NOT? EXISTS)? LPAREN select_statement RPAREN type_cast?                      # subquery_sql_expr
     // setting precedence for arithmetic operations:
     | left=sql_expr CONCAT right=sql_expr                                           # arithmetic_sql_expr
-    | left=sql_expr (STAR | DIV | MOD) right=sql_expr                               # arithmetic_sql_expr
-    | left=sql_expr (PLUS | MINUS) right=sql_expr                                   # arithmetic_sql_expr
-    // setting precedence for logical operations:
+
+    // the rest:
+    | sql_expr NOT? IN LPAREN (sql_expr_list|select_statement) RPAREN               # in_sql_expr
+    | left=sql_expr NOT? (LIKE|ILIKE) right=sql_expr                                # like_sql_expr
+    | element=sql_expr (NOT)? BETWEEN lower=sql_expr AND upper=sql_expr             # between_sql_expr
+    | left=sql_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) right=sql_expr    # comparison_sql_expr
+    | left=sql_expr IS NOT? ((DISTINCT FROM right=sql_expr) | NULL | TRUE | FALSE)  # is_sql_expr
+    | <assoc=right> (NOT) sql_expr                                                  # unary_sql_expr
     | left=sql_expr AND right=sql_expr                                              # logical_sql_expr
     | left=sql_expr OR right=sql_expr                                               # logical_sql_expr
 ;
+
 
 when_then_clause:
     WHEN when_condition=sql_expr THEN then=sql_expr
@@ -347,22 +354,29 @@ procedure_block:
     proc_statement*
 ;
 
+// https://docs.kwil.com/docs/kuneiform/operators
 procedure_expr:
-    literal type_cast?                                                                          # literal_procedure_expr
+    // highest precedence:
+    LPAREN procedure_expr RPAREN type_cast?                                                     # paren_procedure_expr
+    | procedure_expr PERIOD IDENTIFIER type_cast?                                               # field_access_procedure_expr
+    | procedure_expr LBRACKET procedure_expr RBRACKET type_cast?                                # array_access_procedure_expr
+    | <assoc=right> (PLUS|MINUS|EXCL) procedure_expr                                            # unary_procedure_expr
+    | procedure_expr (STAR | DIV | MOD) procedure_expr                                          # procedure_expr_arithmetic
+    | procedure_expr (PLUS | MINUS) procedure_expr                                              # procedure_expr_arithmetic
+
+    // any unspecified operator:
+    | literal type_cast?                                                                        # literal_procedure_expr
     | procedure_function_call type_cast?                                                        # function_call_procedure_expr
     | variable type_cast?                                                                       # variable_procedure_expr
     | LBRACKET (procedure_expr_list)? RBRACKET type_cast?                                       # make_array_procedure_expr
-    | procedure_expr LBRACKET procedure_expr RBRACKET type_cast?                                # array_access_procedure_expr
-    | LPAREN procedure_expr RPAREN type_cast?                                                   # paren_procedure_expr
-    | procedure_expr PERIOD IDENTIFIER type_cast?                                               # field_access_procedure_expr
-    | procedure_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) procedure_expr               # comparison_procedure_expr
-    | (MINUS|PLUS|EXCL) procedure_expr                                                          # unary_procedure_expr
-    | left=procedure_expr IS NOT? ((DISTINCT FROM right=procedure_expr) | NULL | TRUE | FALSE)  # is_procedure_expr
-    | procedure_expr (AND | OR) procedure_expr                                                  # logical_procedure_expr
-    // setting precedence for arithmetic operations:
     | procedure_expr CONCAT procedure_expr                                                      # procedure_expr_arithmetic
-    | procedure_expr (STAR | DIV | MOD) procedure_expr                                          # procedure_expr_arithmetic
-    | procedure_expr (PLUS | MINUS) procedure_expr                                              # procedure_expr_arithmetic
+
+    // the rest:
+    | procedure_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) procedure_expr               # comparison_procedure_expr
+    | left=procedure_expr IS NOT? ((DISTINCT FROM right=procedure_expr) | NULL | TRUE | FALSE)  # is_procedure_expr
+    | <assoc=right> (NOT) procedure_expr                                                        # unary_procedure_expr
+    | procedure_expr AND procedure_expr                                                         # logical_procedure_expr
+    | procedure_expr OR procedure_expr                                                          # logical_procedure_expr
 ;
 
 procedure_expr_list:

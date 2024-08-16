@@ -1862,6 +1862,27 @@ func Test_Procedure(t *testing.T) {
 		`,
 			err: parse.ErrUndeclaredVariable,
 		},
+		{ // regression test
+			name: "equals order of operations",
+			proc: `
+			$a := 1+2 == 3;
+			`,
+			want: &parse.ProcedureParseResult{
+				Variables: map[string]*types.DataType{
+					"$a": types.BoolType,
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$a"),
+						Value: &parse.ExpressionComparison{
+							Left:     &parse.ExpressionArithmetic{Left: exprLit(1), Operator: parse.ArithmeticOperatorAdd, Right: exprLit(2)},
+							Operator: parse.ComparisonOperatorEqual,
+							Right:    exprLit(3),
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1952,18 +1973,46 @@ func mustNewDecimal(precision, scale uint16) *types.DataType {
 
 // exprLit makes an ExpressionLiteral.
 // it can only make strings and ints
-func exprLit(v any) *parse.ExpressionLiteral {
+func exprLit(v any) parse.Expression {
 	switch t := v.(type) {
 	case int:
-		return &parse.ExpressionLiteral{
+		isNeg := t < 0
+		if isNeg {
+			t *= -1
+		}
+
+		liter := &parse.ExpressionLiteral{
 			Type:  types.IntType,
 			Value: int64(t),
 		}
+
+		if isNeg {
+			return &parse.ExpressionUnary{
+				Operator:   parse.UnaryOperatorNeg,
+				Expression: liter,
+			}
+		}
+
+		return liter
 	case int64:
-		return &parse.ExpressionLiteral{
+		isNeg := t < 0
+		if isNeg {
+			t *= -1
+		}
+
+		liter := &parse.ExpressionLiteral{
 			Type:  types.IntType,
 			Value: t,
 		}
+
+		if isNeg {
+			return &parse.ExpressionUnary{
+				Operator:   parse.UnaryOperatorNeg,
+				Expression: liter,
+			}
+		}
+
+		return liter
 	case string:
 		return &parse.ExpressionLiteral{
 			Type:  types.TextType,

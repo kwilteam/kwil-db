@@ -169,11 +169,11 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#logical_sql_expr.
 	VisitLogical_sql_expr(ctx *Logical_sql_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#array_access_sql_expr.
-	VisitArray_access_sql_expr(ctx *Array_access_sql_exprContext) interface{}
-
 	// Visit a parse tree produced by KuneiformParser#field_access_sql_expr.
 	VisitField_access_sql_expr(ctx *Field_access_sql_exprContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#array_access_sql_expr.
+	VisitArray_access_sql_expr(ctx *Array_access_sql_exprContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#comparison_sql_expr.
 	VisitComparison_sql_expr(ctx *Comparison_sql_exprContext) interface{}
@@ -199,11 +199,11 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#is_sql_expr.
 	VisitIs_sql_expr(ctx *Is_sql_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#like_sql_expr.
-	VisitLike_sql_expr(ctx *Like_sql_exprContext) interface{}
-
 	// Visit a parse tree produced by KuneiformParser#arithmetic_sql_expr.
 	VisitArithmetic_sql_expr(ctx *Arithmetic_sql_exprContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#like_sql_expr.
+	VisitLike_sql_expr(ctx *Like_sql_exprContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#subquery_sql_expr.
 	VisitSubquery_sql_expr(ctx *Subquery_sql_exprContext) interface{}

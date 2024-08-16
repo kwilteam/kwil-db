@@ -223,11 +223,11 @@ func (v *BaseKuneiformParserVisitor) VisitLogical_sql_expr(ctx *Logical_sql_expr
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitArray_access_sql_expr(ctx *Array_access_sql_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitField_access_sql_expr(ctx *Field_access_sql_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitField_access_sql_expr(ctx *Field_access_sql_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitArray_access_sql_expr(ctx *Array_access_sql_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -263,11 +263,11 @@ func (v *BaseKuneiformParserVisitor) VisitIs_sql_expr(ctx *Is_sql_exprContext) i
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitLike_sql_expr(ctx *Like_sql_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitArithmetic_sql_expr(ctx *Arithmetic_sql_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitArithmetic_sql_expr(ctx *Arithmetic_sql_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitLike_sql_expr(ctx *Like_sql_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

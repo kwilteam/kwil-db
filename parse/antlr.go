@@ -1894,7 +1894,7 @@ func (s *schemaVisitor) VisitUnary_procedure_expr(ctx *gen.Unary_procedure_exprC
 
 	// this is the only known unary right now
 	switch {
-	case ctx.EXCL() != nil:
+	case ctx.EXCL() != nil || ctx.NOT() != nil:
 		e.Operator = UnaryOperatorNot
 	case ctx.MINUS() != nil:
 		e.Operator = UnaryOperatorNeg
