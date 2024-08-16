@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -11,7 +12,9 @@ import (
 	"github.com/kwilteam/kwil-db/parse"
 )
 
-func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType, objects map[string]map[string]*types.DataType) (analyzed *AnalyzedPlan, err error) {
+// Plan creates a logical plan from a SQL statement.
+func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType,
+	objects map[string]map[string]*types.DataType) (analyzed *AnalyzedPlan, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err2, ok := r.(error)
@@ -25,6 +28,7 @@ func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*
 	if vars == nil {
 		vars = make(map[string]*types.DataType)
 	}
+
 	if objects == nil {
 		objects = make(map[string]map[string]*types.DataType)
 	}
@@ -36,15 +40,18 @@ func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*
 		Objects:   objects,
 	}
 
-	visitor := &plannerVisitor{
-		planCtx: ctx,
-		schema:  schema,
+	scope := &scopeContext{
+		plan:          ctx,
+		OuterRelation: &Relation{},
 	}
 
-	lp := statement.Accept(visitor).(LogicalPlan)
+	plan, err := scope.sqlStmt(statement)
+	if err != nil {
+		return nil, err
+	}
 
 	return &AnalyzedPlan{
-		Plan: lp,
+		Plan: plan,
 		CTEs: ctx.CTEPlans,
 	}, nil
 }
@@ -76,16 +83,6 @@ func (a *AnalyzedPlan) Format() string {
 	return str.String()
 }
 
-// the planner file converts the parse AST into a logical query plan.
-
-type plannerVisitor struct {
-	parse.UnimplementedSqlVisitor
-	planCtx *planContext
-
-	// schema is the underlying schema that the AST was parsed against.
-	schema *types.Schema
-}
-
 // planContext holds information that is needed during the planning process.
 type planContext struct {
 	// Schema is the underlying database schema that the query should
@@ -115,416 +112,58 @@ type planContext struct {
 	ReferenceCount int
 }
 
-// the following maps map constants from parse to their logical
-// equivalents. I thought about just using the parse constants,
-// but decided to have clean separation so that other parts of the
-// planner don't have to rely on the parse package.
-
-var comparisonOps = map[parse.ComparisonOperator]ComparisonOperator{
-	parse.ComparisonOperatorEqual:              Equal,
-	parse.ComparisonOperatorNotEqual:           NotEqual,
-	parse.ComparisonOperatorLessThan:           LessThan,
-	parse.ComparisonOperatorLessThanOrEqual:    LessThanOrEqual,
-	parse.ComparisonOperatorGreaterThan:        GreaterThan,
-	parse.ComparisonOperatorGreaterThanOrEqual: GreaterThanOrEqual,
+// scopeContext contains information about the current scope of the query.
+type scopeContext struct {
+	// plan is the larger plan context that applies to the entire query.
+	plan *planContext
+	// OuterRelation is the relation of all outer queries that can be
+	// referenced from a subquery.
+	OuterRelation *Relation
+	// Correlations are the fields that are corellated to an outer query.
+	Correlations []*Field
 }
 
-var stringComparisonOps = map[parse.StringComparisonOperator]ComparisonOperator{
-	parse.StringComparisonOperatorLike:  Like,
-	parse.StringComparisonOperatorILike: ILike,
-}
-
-var logicalOps = map[parse.LogicalOperator]LogicalOperator{
-	parse.LogicalOperatorAnd: And,
-	parse.LogicalOperatorOr:  Or,
-}
-
-var arithmeticOps = map[parse.ArithmeticOperator]ArithmeticOperator{
-	parse.ArithmeticOperatorAdd:      Add,
-	parse.ArithmeticOperatorSubtract: Subtract,
-	parse.ArithmeticOperatorMultiply: Multiply,
-	parse.ArithmeticOperatorDivide:   Divide,
-	parse.ArithmeticOperatorModulo:   Modulo,
-}
-
-var unaryOps = map[parse.UnaryOperator]UnaryOperator{
-	parse.UnaryOperatorNeg: Negate,
-	parse.UnaryOperatorNot: Not,
-	parse.UnaryOperatorPos: Positive,
-}
-
-var joinTypes = map[parse.JoinType]JoinType{
-	parse.JoinTypeInner: InnerJoin,
-	parse.JoinTypeLeft:  LeftOuterJoin,
-	parse.JoinTypeRight: RightOuterJoin,
-	parse.JoinTypeFull:  FullOuterJoin,
-}
-
-var compoundTypes = map[parse.CompoundOperator]SetOperationType{
-	parse.CompoundOperatorUnion:     Union,
-	parse.CompoundOperatorUnionAll:  UnionAll,
-	parse.CompoundOperatorIntersect: Intersect,
-	parse.CompoundOperatorExcept:    Except,
-}
-
-var orderAsc = map[parse.OrderType]bool{
-	parse.OrderTypeAsc:  true,
-	parse.OrderTypeDesc: false,
-	"":                  true, // default to ascending
-}
-
-var orderNullsLast = map[parse.NullOrder]bool{
-	parse.NullOrderFirst: false,
-	parse.NullOrderLast:  true,
-	"":                   true, // default to nulls last
-}
-
-// get retrieves a value from a map, and panics if the key is not found.
-// it is used to catch internal errors if we add new nodes to the AST
-// without updating the planner.
-func get[A comparable, B any](m map[A]B, a A) B {
-	if v, ok := m[a]; ok {
-		return v
-	}
-	panic(fmt.Sprintf("key %v not found in map %v", a, m))
-}
-
-/*
-	all of the following methods should return a LogicalExpr
-*/
-
-// cast wraps the expression with a typecast if one is used in the node.
-func cast(expr LogicalExpr, node interface{ GetTypeCast() *types.DataType }) LogicalExpr {
-	if node.GetTypeCast() != nil {
-		return &TypeCast{
-			Expr: expr,
-			Type: node.GetTypeCast(),
+// sqlStmt builds a logical plan for a top-level SQL statement.
+func (s *scopeContext) sqlStmt(node *parse.SQLStatement) (TopLevelPlan, error) {
+	for _, cte := range node.CTEs {
+		if err := s.cte(cte); err != nil {
+			return nil, err
 		}
 	}
 
-	return expr
-}
-
-// exprs converts a slice of parse expressions to a slice of logical expressions.
-func (p *plannerVisitor) exprs(nodes []parse.Expression) []LogicalExpr {
-	exprs := make([]LogicalExpr, len(nodes))
-	for i, node := range nodes {
-		exprs[i] = node.Accept(p).(LogicalExpr)
-	}
-	return exprs
-}
-
-func (p *plannerVisitor) VisitExpressionLiteral(node *parse.ExpressionLiteral) any {
-	return cast(&Literal{
-		Value: node.Value,
-		Type:  node.Type,
-	}, node)
-}
-
-func (p *plannerVisitor) VisitExpressionFunctionCall(node *parse.ExpressionFunctionCall) any {
-	var args []LogicalExpr
-	for _, arg := range node.Args {
-		args = append(args, arg.Accept(p).(LogicalExpr))
-	}
-
-	// can be either a procedure call or a built-in function
-	funcDef, ok := parse.Functions[node.Name]
-	if !ok {
-		if node.Star {
-			panic("star (*) not allowed in procedure calls")
-		}
-		if node.Distinct {
-			panic("DISTINCT not allowed in procedure calls")
-		}
-
-		// must be a procedure call
-		_, found := p.schema.FindProcedure(node.Name)
-		if !found {
-			panic(fmt.Sprintf(`no function or procedure "%s" found`, node.Name))
-		}
-
-		return cast(&ProcedureCall{
-			ProcedureName: node.Name,
-			Args:          args,
-		}, node)
-	}
-
-	// now we need to apply rules depending on if it is aggregate or not
-	if funcDef.IsAggregate {
-		// If an aggregate, we wrap it in an ExprRef, so that later, we can
-		// replace it with a reference to the aggregate in the aggregate node.
-
-		// return cast(&AggregateFunctionCall{
-		// 	FunctionName: node.Name,
-		// 	Args:         args,
-		// 	Star:         node.Star,
-		// 	Distinct:     node.Distinct,
-		// }, node)
-
-		// we apply cast outside the reference because we want to keep the reference
-		// specific to the aggregate function call.
-		return cast(&AggregateFunctionCall{
-			FunctionName: node.Name,
-			Args:         args,
-			Star:         node.Star,
-			Distinct:     node.Distinct,
-		}, node)
-	}
-
-	if node.Star {
-		panic("star (*) not allowed in non-aggregate function calls")
-	}
-	if node.Distinct {
-		panic("DISTINCT not allowed in non-aggregate function calls")
-	}
-
-	return cast(&ScalarFunctionCall{
-		FunctionName: node.Name,
-		Args:         p.exprs(node.Args),
-	}, node)
-}
-
-func (p *plannerVisitor) VisitExpressionForeignCall(node *parse.ExpressionForeignCall) any {
-	_, found := p.schema.FindForeignProcedure(node.Name)
-	if !found {
-		panic(fmt.Sprintf(`no foreign procedure "%s" found`, node.Name))
-	}
-
-	if len(node.ContextualArgs) != 2 {
-		panic("foreign calls must have 2 contextual arguments")
-	}
-
-	return cast(&ProcedureCall{
-		ProcedureName: node.Name,
-		Foreign:       true,
-		Args:          p.exprs(node.Args),
-		ContextArgs:   p.exprs(node.ContextualArgs),
-	}, node)
-}
-
-func (p *plannerVisitor) VisitExpressionVariable(node *parse.ExpressionVariable) any {
-	return cast(&Variable{
-		VarName: node.String(),
-	}, node)
-}
-
-func (p *plannerVisitor) VisitExpressionArrayAccess(node *parse.ExpressionArrayAccess) any {
-	return cast(&ArrayAccess{
-		Array: node.Array.Accept(p).(LogicalExpr),
-		Index: node.Index.Accept(p).(LogicalExpr),
-	}, node)
-}
-
-func (p *plannerVisitor) VisitExpressionMakeArray(node *parse.ExpressionMakeArray) any {
-	return cast(&ArrayConstructor{
-		Elements: p.exprs(node.Values),
-	}, node)
-}
-
-func (p *plannerVisitor) VisitExpressionFieldAccess(node *parse.ExpressionFieldAccess) any {
-	return cast(&FieldAccess{
-		Object: node.Record.Accept(p).(LogicalExpr),
-		Key:    node.Field,
-	}, node)
-}
-
-func (p *plannerVisitor) VisitExpressionParenthesized(node *parse.ExpressionParenthesized) any {
-	return cast(node.Inner.Accept(p).(LogicalExpr), node)
-}
-
-func (p *plannerVisitor) VisitExpressionComparison(node *parse.ExpressionComparison) any {
-	return &ComparisonOp{
-		Left:  node.Left.Accept(p).(LogicalExpr),
-		Right: node.Right.Accept(p).(LogicalExpr),
-		Op:    get(comparisonOps, node.Operator),
-	}
-}
-
-func (p *plannerVisitor) VisitExpressionLogical(node *parse.ExpressionLogical) any {
-	return &LogicalOp{
-		Left:  node.Left.Accept(p).(LogicalExpr),
-		Right: node.Right.Accept(p).(LogicalExpr),
-		Op:    get(logicalOps, node.Operator),
-	}
-}
-
-func (p *plannerVisitor) VisitExpressionArithmetic(node *parse.ExpressionArithmetic) any {
-	return &ArithmeticOp{
-		Left:  node.Left.Accept(p).(LogicalExpr),
-		Right: node.Right.Accept(p).(LogicalExpr),
-		Op:    get(arithmeticOps, node.Operator),
-	}
-}
-
-func (p *plannerVisitor) VisitExpressionUnary(node *parse.ExpressionUnary) any {
-	return &UnaryOp{
-		Expr: node.Expression.Accept(p).(LogicalExpr),
-		Op:   get(unaryOps, node.Operator),
-	}
-}
-
-func (p *plannerVisitor) VisitExpressionColumn(node *parse.ExpressionColumn) any {
-	return cast(&ColumnRef{
-		Parent:     node.Table,
-		ColumnName: node.Column,
-	}, node)
-}
-
-func (p *plannerVisitor) VisitExpressionCollate(node *parse.ExpressionCollate) any {
-	c := &Collate{
-		Expr: node.Expression.Accept(p).(LogicalExpr),
-	}
-
-	switch strings.ToLower(node.Collation) {
-	case "nocase":
-		c.Collation = NoCaseCollation
+	switch node := node.SQL.(type) {
 	default:
-		panic(fmt.Sprintf(`unknown collation "%s"`, node.Collation))
-	}
-
-	return c
-}
-
-func (p *plannerVisitor) VisitExpressionStringComparison(node *parse.ExpressionStringComparison) any {
-	var expr LogicalExpr = &ComparisonOp{
-		Left:  node.Left.Accept(p).(LogicalExpr),
-		Right: node.Right.Accept(p).(LogicalExpr),
-		Op:    get(stringComparisonOps, node.Operator),
-	}
-
-	if node.Not {
-		expr = &UnaryOp{
-			Expr: expr,
-			Op:   Not,
+		panic(fmt.Sprintf("unexpected SQL statement type %T", node))
+	case *parse.SelectStatement:
+		plan, res, err := s.selectStmt(node)
+		if err != nil {
+			return nil, err
 		}
-	}
 
-	return expr
-}
-
-func (p *plannerVisitor) VisitExpressionIs(node *parse.ExpressionIs) any {
-	op := Is
-	if node.Distinct {
-		op = IsDistinctFrom
-	}
-
-	var plan LogicalExpr = &ComparisonOp{
-		Left:  node.Left.Accept(p).(LogicalExpr),
-		Right: node.Right.Accept(p).(LogicalExpr),
-		Op:    op,
-	}
-
-	if node.Not {
-		plan = &UnaryOp{
-			Expr: plan,
-			Op:   Not,
+		for _, field := range res.Fields {
+			if field.Name == "" {
+				field.Name = "?column?"
+			}
 		}
-	}
 
-	return plan
-}
-
-func (p *plannerVisitor) VisitExpressionIn(node *parse.ExpressionIn) any {
-	in := &IsIn{
-		Left: node.Expression.Accept(p).(LogicalExpr),
-	}
-
-	if node.Subquery != nil {
-		in.Subquery = node.Subquery.Accept(p).(*SubqueryExpr)
-	} else {
-		in.Expressions = p.exprs(node.List)
-	}
-
-	var expr LogicalExpr = in
-
-	if node.Not {
-		expr = &UnaryOp{
-			Expr: expr,
-			Op:   Not,
-		}
-	}
-
-	return expr
-}
-
-func (p *plannerVisitor) VisitExpressionBetween(node *parse.ExpressionBetween) any {
-	leftOp, rightOp := GreaterThanOrEqual, LessThanOrEqual
-	if node.Not {
-		leftOp, rightOp = LessThan, GreaterThan
-	}
-
-	// we will simply convert this to a logical AND expression of two comparisons
-	return &LogicalOp{
-		Left: &ComparisonOp{
-			Left:  node.Expression.Accept(p).(LogicalExpr),
-			Right: node.Lower.Accept(p).(LogicalExpr),
-			Op:    leftOp,
-		},
-		Right: &ComparisonOp{
-			Left:  node.Expression.Accept(p).(LogicalExpr),
-			Right: node.Upper.Accept(p).(LogicalExpr),
-			Op:    rightOp,
-		},
-		Op: And,
+		return &Return{
+			Child:  plan,
+			Fields: res.Fields,
+		}, nil
+	case *parse.UpdateStatement:
+		return s.update(node)
+	case *parse.DeleteStatement:
+		return s.delete(node)
+	case *parse.InsertStatement:
+		return s.insert(node)
 	}
 }
 
-func (p *plannerVisitor) VisitExpressionSubquery(node *parse.ExpressionSubquery) any {
-
-	var sub LogicalExpr = &SubqueryExpr{
-		Query: &Subquery{
-			Plan: &Subplan{
-				Plan: node.Subquery.Accept(p).(LogicalPlan),
-				ID:   strconv.Itoa(p.planCtx.SubqueryCount),
-				Type: SubplanTypeSubquery,
-			},
-		},
-		Exists: node.Exists,
-	}
-	p.planCtx.SubqueryCount++
-
-	if node.Exists && node.Not {
-		sub = &UnaryOp{
-			Expr: sub,
-			Op:   Not,
-		}
-	}
-
-	return sub
-}
-
-func (p *plannerVisitor) VisitExpressionCase(node *parse.ExpressionCase) any {
-	c := &Case{}
-
-	if node.Case != nil {
-		c.Value = node.Case.Accept(p).(LogicalExpr)
-	}
-
-	for _, when := range node.WhenThen {
-		c.WhenClauses = append(c.WhenClauses, [2]LogicalExpr{
-			when[0].Accept(p).(LogicalExpr),
-			when[1].Accept(p).(LogicalExpr),
-		})
-	}
-
-	if node.Else != nil {
-		c.Else = node.Else.Accept(p).(LogicalExpr)
-	}
-
-	return c
-}
-
-/*
-	all of the following methods should return a LogicalPlan
-*/
-
-func (p *plannerVisitor) VisitCommonTableExpression(node *parse.CommonTableExpression) any {
-	// still have a bit to do here.
-	plan := node.Query.Accept(p).(LogicalPlan)
-
-	rel, err := newEvalCtx(p.planCtx).evalRelation(plan)
+// cte builds a common table expression.
+func (s *scopeContext) cte(node *parse.CommonTableExpression) error {
+	plan, rel, err := s.selectStmt(node.Query)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	var extraInfo string // debug info
@@ -551,128 +190,124 @@ func (p *plannerVisitor) VisitCommonTableExpression(node *parse.CommonTableExpre
 		}
 	}
 
-	p.planCtx.CTEs[node.Name] = rel
-	p.planCtx.CTEPlans = append(p.planCtx.CTEPlans, &Subplan{
+	s.plan.CTEs[node.Name] = rel
+	s.plan.CTEPlans = append(s.plan.CTEPlans, &Subplan{
 		Plan:      plan,
 		ID:        node.Name,
 		Type:      SubplanTypeCTE,
 		extraInfo: extraInfo,
 	})
 
-	// I am unsure if we need to return this plan, since all that matters
-	// is that it is added to the ctes slice.
-	return plan
+	return nil
 }
 
-func (p *plannerVisitor) VisitSQLStatement(node *parse.SQLStatement) any {
-	for _, cte := range node.CTEs {
-		cte.Accept(p)
-	}
-
-	stmt := node.SQL.Accept(p).(LogicalPlan)
-
-	rel, err := newEvalCtx(p.planCtx).evalRelation(stmt)
-	if err != nil {
-		panic(err)
-	}
-	rel = rel.Copy()
-
-	// if it a sql select, we should add a return operation.
-	// We can't add this within VisitSelectStatement because
-	// we don't want to add it to subqueries.
-	if _, ok := node.SQL.(*parse.SelectStatement); ok {
-		var fields []*Field
-		for _, col := range rel.Fields {
-			if col.Name == "" {
-				col.Name = "?column?"
-			}
-
-			fields = append(fields, col)
-		}
-
-		return &Return{
-			Fields: fields,
-			Child:  stmt,
-		}
-	}
-
-	return stmt
-}
-
-// The order of building is:
-// 1. All select cores.
-// 2. Set operations combining the select cores.
-// 3. Order by
-// 4. Limit and offset
-func (p *plannerVisitor) VisitSelectStatement(node *parse.SelectStatement) any {
+// select builds a logical plan for a select statement.
+func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan, rel *Relation, err error) {
 	if len(node.SelectCores) == 0 {
 		panic("no select cores")
 	}
 
-	var plan LogicalPlan
-
-	selectCore := node.SelectCores[0].Accept(p).(*selectCoreResult)
-
-	// finish is a function that is called at the end of the function.
-	// Normally, we would handle this with a defer, but since the visitor has
-	// to return "any", this is not an option. By default, it does nothing,
-	// but in the logic directly below, we might set it to apply a projection
-	finish := func(pln LogicalPlan) LogicalPlan {
-		return pln
+	var projectFunc func(LogicalPlan) (LogicalPlan, *Relation)
+	plan, rel, projectFunc, err = s.selectCore(node.SelectCores[0])
+	if err != nil {
+		return nil, nil, err
 	}
 
-	// see the documentation for selectCoreResult for an explanation as to why
+	// if there is one select core, we want to project after sorting and limiting.
+	// if there are multiple select cores, we want to project before the set operation.
+	// see the documentation for selectCoreResult for more info as to why
 	// we perform this if statement.
 	if len(node.SelectCores) == 1 {
-		plan = selectCore.plan
-		finish = selectCore.projectFunc
+		defer func() {
+			plan, rel = projectFunc(plan)
+		}()
 	} else {
-		// otherwise, apply immediately
-		plan = selectCore.projectFunc(selectCore.plan)
-		for i, core := range node.SelectCores[1:] {
-			right := core.Accept(p).(*selectCoreResult)
+		// otherwise, apply immediately so that we can apply the set operation(s)
+		plan, rel = projectFunc(plan)
 
+		for i, core := range node.SelectCores[1:] {
+			rightPlan, _, projectFunc, err := s.selectCore(core)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			rightPlan, _ = projectFunc(rightPlan)
 			plan = &SetOperation{
 				Left:   plan,
-				Right:  right.projectFunc(right.plan),
+				Right:  rightPlan,
 				OpType: get(compoundTypes, node.CompoundOperators[i]),
 			}
 		}
 	}
 
+	// apply order by, limit, and offset
 	if len(node.Ordering) > 0 {
-		sort := Sort{
+		sort := &Sort{
 			Child: plan,
 		}
 
 		for _, order := range node.Ordering {
+			// ordering term can be of any type
+			sortExpr, _, err := s.expr(order.Expression, rel)
+			if err != nil {
+				return nil, nil, err
+			}
+
 			sort.SortExpressions = append(sort.SortExpressions, &SortExpression{
-				Expr:      order.Expression.Accept(p).(LogicalExpr),
+				Expr:      sortExpr,
 				Ascending: get(orderAsc, order.Order),
 				NullsLast: get(orderNullsLast, order.Nulls),
 			})
 		}
 
-		plan = &sort
+		plan = sort
 	}
 
 	if node.Limit != nil {
+		limitExpr, limitField, err := s.expr(node.Limit, rel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		scalar, err := limitField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !scalar.Equals(types.IntType) {
+			return nil, nil, fmt.Errorf("LIMIT must be an int")
+		}
+
 		lim := &Limit{
 			Child: plan,
-			Limit: node.Limit.Accept(p).(LogicalExpr),
+			Limit: limitExpr,
 		}
 
 		if node.Offset != nil {
-			lim.Offset = node.Offset.Accept(p).(LogicalExpr)
+			offsetExpr, offsetField, err := s.expr(node.Offset, rel)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			scalar, err := offsetField.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !scalar.Equals(types.IntType) {
+				return nil, nil, fmt.Errorf("OFFSET must be an int")
+			}
+
+			lim.Offset = offsetExpr
 		}
 
 		plan = lim
 	}
 
-	res := finish(plan)
-	return res
+	return plan, rel, nil
 }
 
+// selectCore builds a logical plan for a select core.
 // The order of building is:
 // 1. from (combining any joins into single source plan)
 // 2. where
@@ -680,330 +315,10 @@ func (p *plannerVisitor) VisitSelectStatement(node *parse.SelectStatement) any {
 // 4. having(can use reference from select)
 // 5. select (project)
 // 6. distinct
-// ! This method is insanely complex and needs to be refactored.
-func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
-	/*
-		If a user does "SELECT sum(id), age/2 from users group by age/2", what needs to happen is:
-			- project ref(a), ref(b)
-			- aggregate [sum(id) as a] group by [age/2 as b]
-			- scan users
-
-		In order to do this, we need to be able to:
-			a. match and rewrite all aggregate functions in having and return to be ExprRef
-			b. match any arbitrary tree in the grouping to any term in the having and return clause, and then rewrite them as ExprRef
-			c. recognize exprefs by name in both the aggregate and other clause to ensure they are accessible within that scope (maybe)?
-
-	*/
-	// if there is no from, then we will simply return a projection
-	// of the return values on a noop plan.
-	if node.From == nil {
-		var exprs []LogicalExpr
-		for _, resultCol := range node.Columns {
-			switch resultCol := resultCol.(type) {
-			default:
-				panic(fmt.Sprintf("unexpected result column type %T", resultCol))
-			case *parse.ResultColumnExpression:
-				expr2 := resultCol.Expression.Accept(p).(LogicalExpr)
-				if resultCol.Alias != "" {
-					expr2 = &AliasExpr{
-						Expr:  expr2,
-						Alias: resultCol.Alias,
-					}
-				}
-
-				exprs = append(exprs, expr2)
-			case *parse.ResultColumnWildcard:
-				// if there is no from, we cannot expand the wildcard
-				panic(`wildcard "*" cannot be used without a FROM clause`)
-			}
-		}
-
-		isDistinct := node.Distinct
-
-		return &selectCoreResult{
-			plan: &EmptyScan{},
-			projectFunc: func(newPlan LogicalPlan) LogicalPlan {
-				var p LogicalPlan = &Project{
-					Child:       newPlan,
-					expandFuncs: []expandFunc{func(rel *Relation) []LogicalExpr { return exprs }},
-				}
-
-				if isDistinct {
-					p = &Distinct{
-						Child: p,
-					}
-				}
-
-				return p
-			},
-		}
-	}
-
-	// otherwise, we will build the plan from the from clause
-	plan := node.From.Accept(p).(LogicalPlan)
-
-	for _, join := range node.Joins {
-		plan = &Join{
-			Left:      plan,
-			Right:     join.Relation.Accept(p).(LogicalPlan),
-			Condition: join.On.Accept(p).(LogicalExpr),
-			JoinType:  get(joinTypes, join.Type),
-		}
-	}
-
-	lastJoin := plan // will be referenced later to expand aggregate functions
-
-	if node.Where != nil {
-		plan = &Filter{
-			Condition: node.Where.Accept(p).(LogicalExpr),
-			Child:     plan,
-		}
-	}
-
-	// aggTerms maps the signature of an aggregate function to its identified expression.
-	// It is used to rewrite the having and return clauses to reference aggregate expressions.
-	aggTerms := make(map[string]*IdentifiedExpr)
-
-	// groupingTerms is a list of all terms in the group by clause.
-	// It is used to cut and reference terms from the having clause
-	// and result columns
-	groupingTerms := make(map[string]*IdentifiedExpr)
-
-	// havingExpr is the expression that will be used in the having clause.
-	// If there is no having clause, this will be nil.
-	var havingExpr LogicalExpr
-
-	// wrapAggPlan is a function that wraps the plan in an aggregate, and optionally
-	// a filter (if there is a having clause).
-	wrapAggPlan := func(plan LogicalPlan) LogicalPlan {
-		if len(aggTerms)+len(groupingTerms) == 0 {
-			return plan
-		}
-
-		agg := &Aggregate{
-			Child: plan,
-		}
-
-		// for determinism
-		for _, aggTerm := range order.OrderMap(aggTerms) {
-			agg.AggregateExpressions = append(agg.AggregateExpressions, aggTerm.Value)
-		}
-
-		for _, groupTerm := range order.OrderMap(groupingTerms) {
-			agg.GroupingExpressions = append(agg.GroupingExpressions, groupTerm.Value)
-		}
-
-		if havingExpr != nil {
-			return &Filter{
-				Condition: havingExpr,
-				Child:     agg,
-			}
-		}
-
-		return agg
-	}
-
-	if node.GroupBy != nil {
-		for _, expr := range node.GroupBy {
-			// if there is a duplicate, we will ignore it
-			logicalExpr := expr.Accept(p).(LogicalExpr)
-			_, ok := groupingTerms[logicalExpr.String()]
-			if ok {
-				continue
-			}
-
-			identified := &IdentifiedExpr{
-				Expr: logicalExpr,
-				ID:   numberToLetters(p.planCtx.ReferenceCount),
-			}
-			p.planCtx.ReferenceCount++
-
-			groupingTerms[logicalExpr.String()] = identified
-		}
-
-		if node.Having != nil {
-			havingExpr = node.Having.Accept(p).(LogicalExpr)
-
-			// rewrite all aggregate functions to be a reference to the identified expression.
-			// If we find any, we add them to the mapping of aggTerms
-			havingNode, err := Rewrite(havingExpr, &RewriteConfig{
-				ExprCallback: func(le LogicalExpr) (LogicalExpr, bool, error) {
-					switch n := le.(type) {
-					case *AggregateFunctionCall:
-						existingIdent, ok := aggTerms[n.String()]
-						if ok {
-							return &ExprRef{
-								Identified: existingIdent,
-							}, false, nil
-						}
-
-						ident := &IdentifiedExpr{
-							Expr: n,
-							ID:   numberToLetters(p.planCtx.ReferenceCount),
-						}
-						p.planCtx.ReferenceCount++
-						aggTerms[n.String()] = ident
-						return &ExprRef{
-							Identified: ident,
-						}, false, nil
-					}
-					return le, true, nil
-				},
-			})
-			if err != nil {
-				panic(err)
-			}
-
-			havingExpr = havingNode.(LogicalExpr)
-		}
-	}
-
-	// now, we visit the result columns. We will attempt to rewrite any aggregate functions
-	// or expressions that match
-
-	// expandFuncs delay expanding wildcards until we can evaluate the relation
-	// they are projecting on. We have to do this at an entirely different step
-	// once the entire tree is constructed (in evalRelation).
-	var expandFuncs []expandFunc
-
-	// TODO: this doesn't work because in order to expand the wildcard, we need to know
-	// the relation that is joined. The relation joined should be PRIOR to any aggregate,
-	// but with expandFuncs, this occurs after the aggregate. Take for example:
-	// "SELECT * FROM users GROUP BY name". In this query, we need to expand all columns
-	// from the users table, but due to the way expandFuncs work, we are expanding only
-	// the aggregate result. IMO it seems like we should do something to get rid of expandFuncs,
-	// however I am not sure what, since we don't know what we are expanding until we evaluate
-	// relations. It seems like we need to run the expand funcs directly after all of the joins
-	// are performed (but the result must take place after the aggregate).
-	for _, resultCol := range node.Columns {
-		switch resultCol := resultCol.(type) {
-		default:
-			panic(fmt.Sprintf("unexpected result column type %T", resultCol))
-		case *parse.ResultColumnExpression:
-			logicalExpr := resultCol.Expression.Accept(p).(LogicalExpr)
-
-			// attempt to rewrite, if necessary
-			logicalNode, err := Rewrite(logicalExpr, &RewriteConfig{
-				ExprCallback: func(le LogicalExpr) (LogicalExpr, bool, error) {
-					switch n := le.(type) {
-					case *AggregateFunctionCall:
-						existingIdent, ok := aggTerms[n.String()]
-						if ok {
-							return &ExprRef{
-								Identified: existingIdent,
-							}, false, nil
-						}
-
-						ident := &IdentifiedExpr{
-							Expr: n,
-							ID:   numberToLetters(p.planCtx.ReferenceCount),
-						}
-						p.planCtx.ReferenceCount++
-
-						aggTerms[n.String()] = ident
-						return &ExprRef{
-							Identified: ident,
-						}, false, nil
-					case *ExprRef, *IdentifiedExpr:
-						// if it has already been replaced, do not replace it again
-						return le, false, nil
-					default:
-						groupingTerm, ok := groupingTerms[n.String()]
-						if ok {
-							return &ExprRef{
-								Identified: groupingTerm,
-							}, false, nil
-						}
-
-						return le, true, nil
-					}
-				},
-			})
-			if err != nil {
-				panic(err)
-			}
-			logicalExpr = logicalNode.(LogicalExpr)
-
-			if resultCol.Alias != "" {
-				logicalExpr = &AliasExpr{
-					Expr:  logicalExpr,
-					Alias: resultCol.Alias,
-				}
-			}
-
-			newFunc := func(rel *Relation) []LogicalExpr {
-				return []LogicalExpr{logicalExpr}
-			}
-
-			expandFuncs = append(expandFuncs, newFunc)
-		case *parse.ResultColumnWildcard:
-			// avoid loop variable capture
-			tbl := resultCol.Table
-
-			// expand the wildcard
-			// wrap any other expandFunc in a new function that will
-			// expand the current wildcard
-			newExpand := func(_ *Relation) []LogicalExpr {
-				// we don't use the passed relation, but instead the join relation,
-				// to expand.
-				rel := lastJoin.Relation()
-
-				var newFields []*Field
-				if tbl != "" {
-					newFields = rel.ColumnsByParent(tbl)
-				} else {
-					newFields = rel.Fields
-				}
-
-				var exprs []LogicalExpr
-				for _, field := range newFields {
-					var colRef LogicalExpr = &ColumnRef{
-						Parent:     field.Parent,
-						ColumnName: field.Name,
-					}
-
-					// if it is in the grouping terms, we need to replace it with a reference.
-					groupingTerm, ok := groupingTerms[colRef.String()]
-					if ok {
-						colRef = &ExprRef{
-							Identified: groupingTerm,
-						}
-					}
-
-					exprs = append(exprs, colRef)
-				}
-
-				return exprs
-			}
-
-			expandFuncs = append(expandFuncs, newExpand)
-		}
-	}
-
-	// see the selectCoreResult documentation below for an explanation as to
-	// why this is returned instead of just the plan.
-	plan = wrapAggPlan(plan)
-
-	return &selectCoreResult{
-		plan: plan,
-		projectFunc: func(newPlan LogicalPlan) LogicalPlan {
-			var plan2 LogicalPlan = &Project{
-				Child:       newPlan,
-				expandFuncs: expandFuncs,
-			}
-			if node.Distinct {
-				plan2 = &Distinct{
-					Child: plan2,
-				}
-			}
-
-			return plan2
-		},
-	}
-}
-
-// selectCoreResult is a helper struct that is only returned from VisitSelectCore.
-// It is returned from VisitSelectCore because we need to handle conditionally
+// It returns a logical plan and relation that are PRIOR to any projection,
+// a function that will apply a projection and return the resulting relation,
+// and an error if one occurred.
+// It returns these because we need to handle conditionally
 // adding projection. If a query has a SET (a.k.a. compound) operation, we want to project before performing
 // the set. If a query has one select, then we want to project after sorting and limiting.
 // To give a concrete example of this, imagine a table users (id int, name text) with the queries:
@@ -1013,227 +328,1589 @@ func (p *plannerVisitor) VisitSelectCore(node *parse.SelectCore) any {
 // 2.
 // "SELECT name FROM users UNION 'hello' ORDER BY id" - this is invalid in Postgres, since "id" is not in the
 // result set. We need to project before the UNION.
-//
-// This struct allows us to conditionally handle this logic in the calling VisitSelectStatement method.
-type selectCoreResult struct {
-	// plan is the plan that is returned from the select core prior
-	// to applying any projection.
-	plan LogicalPlan
-	// projectFunc is a function that will apply a projection to the plan.
-	// it is not directly applied within the select core because if there
-	// are multiple select cores, we need to apply the projection before
-	// the set operation, but if there is 1, we want to apply the projection
-	// after the sort and limit.
-	projectFunc func(LogicalPlan) LogicalPlan
-}
+func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relation, func(LogicalPlan) (LogicalPlan, *Relation), error) {
+	// if there is no from, we just project the columns and return
+	if node.From == nil {
+		var exprs []LogicalExpr
+		rel := &Relation{}
+		for _, resultCol := range node.Columns {
+			switch resultCol := resultCol.(type) {
+			default:
+				panic(fmt.Sprintf("unexpected result column type %T", resultCol))
+			case *parse.ResultColumnExpression:
+				expr, field, err := s.expr(resultCol.Expression, rel)
+				if err != nil {
+					return nil, nil, nil, err
+				}
 
-func (p *plannerVisitor) VisitRelationTable(node *parse.RelationTable) any {
-	alias := node.Table
-	if node.Alias != "" {
-		alias = node.Alias
-	}
+				if resultCol.Alias != "" {
+					expr = &AliasExpr{
+						Expr:  expr,
+						Alias: resultCol.Alias,
+					}
+					field.Parent = ""
+					field.Name = resultCol.Alias
+				}
 
-	var scanTblType TableSourceType
-	// determine the type:
-	if _, ok := p.schema.FindTable(node.Table); ok {
-		scanTblType = TableSourcePhysical
-	} else if _, ok = p.planCtx.CTEs[node.Table]; ok {
-		scanTblType = TableSourceCTE
-	} else {
-		panic(fmt.Sprintf(`no table or cte "%s" found`, node.Table))
-	}
-
-	return &Scan{
-		Source: &TableScanSource{
-			TableName: node.Table,
-			Type:      scanTblType,
-		},
-		RelationName: alias,
-	}
-}
-
-func (p *plannerVisitor) VisitRelationSubquery(node *parse.RelationSubquery) any {
-	if node.Alias == "" {
-		panic("subquery must have an alias")
-	}
-
-	subq := node.Subquery.Accept(p).(LogicalPlan)
-
-	s := &Scan{
-		Source: &Subquery{
-			ReturnsRelation: true,
-			Plan: &Subplan{
-				Plan: subq,
-				ID:   strconv.Itoa(p.planCtx.SubqueryCount),
-				Type: SubplanTypeSubquery,
-			},
-			// Correlated will be set later
-		},
-		RelationName: node.Alias,
-	}
-
-	p.planCtx.SubqueryCount++
-	return s
-}
-
-func (p *plannerVisitor) VisitRelationFunctionCall(node *parse.RelationFunctionCall) any {
-	if node.Alias == "" {
-		panic("joins against function calls must have an alias")
-	}
-
-	// the function call must either be a procedure, or foreign procedure, that returns
-	// a table.
-
-	var procReturns *types.ProcedureReturn
-	var isForeign bool
-	proc, found := p.schema.FindProcedure(node.FunctionCall.FunctionName())
-	if found {
-		procReturns = proc.Returns
-	} else {
-		foreignProc, found := p.schema.FindForeignProcedure(node.FunctionCall.FunctionName())
-		if !found {
-			panic(fmt.Sprintf(`no procedure or foreign procedure "%s" found`, node.FunctionCall.FunctionName()))
+				exprs = append(exprs, expr)
+				rel.Fields = append(rel.Fields, field)
+			case *parse.ResultColumnWildcard:
+				// if there is no from, we cannot expand the wildcard
+				panic(`wildcard "*" cannot be used without a FROM clause`)
+			}
 		}
 
-		procReturns = foreignProc.Returns
-		isForeign = true
+		return &EmptyScan{}, rel, func(lp LogicalPlan) (LogicalPlan, *Relation) {
+			var p LogicalPlan = &Project{
+				Child:       lp,
+				Expressions: exprs,
+			}
+
+			if node.Distinct {
+				p = &Distinct{
+					Child: p,
+				}
+			}
+
+			return p, rel
+		}, nil
 	}
 
-	if procReturns == nil {
-		panic(fmt.Sprintf(`procedure "%s" does not return a table`, node.FunctionCall.FunctionName()))
-	}
-	if !procReturns.IsTable {
-		panic(fmt.Sprintf(`procedure "%s" does not return a table`, node.FunctionCall.FunctionName()))
-	}
-
-	var args []LogicalExpr
-	var contextualArgs []LogicalExpr
-	switch t := node.FunctionCall.(type) {
-	default:
-		panic(fmt.Sprintf("unexpected function call type %T", t))
-	case *parse.ExpressionFunctionCall:
-		args = p.exprs(t.Args)
-	case *parse.ExpressionForeignCall:
-		args = p.exprs(t.Args)
-		contextualArgs = p.exprs(t.ContextualArgs)
-	}
-
-	return &Scan{
-		Source: &ProcedureScanSource{
-			ProcedureName:  node.FunctionCall.FunctionName(),
-			Args:           args,
-			ContextualArgs: contextualArgs,
-			IsForeign:      isForeign,
-		},
-		RelationName: node.Alias,
-	}
-}
-
-// ALIAS: aliases can be used everywhere in update statements except in the SET clause
-func (p *plannerVisitor) VisitUpdateStatement(node *parse.UpdateStatement) any {
-	plan, err := p.buildCartesian(node.Table, node.Alias, node.From, node.Joins, node.Where)
+	// otherwise, we need to build the from and join clauses
+	scan, rel, err := s.table(node.From)
 	if err != nil {
-		panic(err)
+		return nil, nil, nil, err
+	}
+	var plan LogicalPlan = scan
+
+	for _, join := range node.Joins {
+		plan, rel, err = s.join(plan, rel, join)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
-	assignments := make([]*Assignment, len(node.SetClause))
-	for i, set := range node.SetClause {
-		assignments[i] = &Assignment{
-			Column: set.Column,
-			Value:  set.Value.Accept(p).(LogicalExpr),
+	if node.Where != nil {
+		whereExpr, whereType, err := s.expr(node.Where, rel)
+		if err != nil {
+			return nil, nil, nil, err
 		}
+
+		scalar, err := whereType.Scalar()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		if !scalar.Equals(types.BoolType) {
+			return nil, nil, nil, errors.New("WHERE must be a boolean")
+		}
+
+		plan = &Filter{
+			Child:     plan,
+			Condition: whereExpr,
+		}
+	}
+
+	// at this point, we have the full relation for the select core, and can expand the columns
+	results, err := s.expandResultCols(rel, node.Columns)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	containsAgg := false
+	for _, result := range results {
+		containsAgg = hasAggregate(result.Expr)
+	}
+
+	// if there is no group by or aggregate, we can apply any distinct and return
+	if len(node.GroupBy) == 0 && !containsAgg {
+		return plan, rel, func(lp LogicalPlan) (LogicalPlan, *Relation) {
+			var resExprs []LogicalExpr
+			var resFields []*Field
+			for _, result := range results {
+				resExprs = append(resExprs, result.Expr)
+				resFields = append(resFields, result.Field)
+			}
+
+			var p LogicalPlan = &Project{
+				Child:       lp,
+				Expressions: resExprs,
+			}
+
+			if node.Distinct {
+				p = &Distinct{
+					Child: p,
+				}
+			}
+
+			return p, &Relation{
+				Fields: resFields,
+			}
+		}, nil
+	}
+
+	// otherwise, we need to build the group by and having clauses.
+	// This means that for all result columns, we need to rewrite any
+	// column references or aggregate usage as columnrefs to the aggregate
+	// functions matching term.
+	aggTerms := make(map[string]*exprFieldPair[*IdentifiedExpr]) // any aggregate function used in the result or having
+	groupingTerms := make(map[string]*IdentifiedExpr)            // any grouping term used in the GROUP BY
+	aggregateRel := &Relation{}                                  // the relation resulting from the aggregation
+
+	aggPlan := &Aggregate{ // defined separately so we can reference it in the below clauses
+		Child: plan,
+	}
+	plan = aggPlan
+
+	for _, groupTerm := range node.GroupBy {
+		groupExpr, field, err := s.expr(groupTerm, rel)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		traverse(groupExpr, func(node Traversable) bool {
+			switch node.(type) {
+			case *AggregateFunctionCall:
+				err = fmt.Errorf(`aggregate functions are not allowed in GROUP BY`)
+				return false
+			case *Subquery:
+				err = fmt.Errorf(`subqueries are not allowed in GROUP BY`)
+				return false
+			}
+			return true
+		})
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		_, ok := groupingTerms[groupExpr.String()]
+		if ok {
+			continue
+		}
+
+		// we should identify it so it can be referenced
+		identified := &IdentifiedExpr{
+			Expr: groupExpr,
+			ID:   s.plan.uniqueRefIdentifier(),
+		}
+		aggPlan.GroupingExpressions = append(aggPlan.GroupingExpressions, identified)
+
+		field.ReferenceID = identified.ID
+		aggregateRel.Fields = append(aggregateRel.Fields, field)
+
+		groupingTerms[groupExpr.String()] = identified
+	}
+
+	if node.Having != nil {
+		// hmmmmm this doesnt work because the having rel needs to be the aggregation rel,
+		// but we need to use this to build the aggregation rel :(
+		// 2: on second thought, maybe not. We will have to do some tree matching and rewriting,
+		// but it should be possible.
+		havingExpr, field, err := s.expr(node.Having, rel)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		scalar, err := field.Scalar()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		if !scalar.Equals(types.BoolType) {
+			return nil, nil, nil, errors.New("HAVING must evaluate to a boolean")
+		}
+
+		// rewrite the having expression to use the aggregate functions
+		havingExpr, err = s.rewriteAccordingToAggregate(havingExpr, groupingTerms, aggTerms)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		plan = &Filter{
+			Child:     plan,
+			Condition: havingExpr,
+		}
+	}
+
+	// now we need to rewrite the select list to use the aggregate functions
+	for i, resultCol := range results {
+		results[i].Expr, err = s.rewriteAccordingToAggregate(resultCol.Expr, groupingTerms, aggTerms)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	// finally, all of the aggregated columns need to be added to the Aggregate node
+	for _, agg := range order.OrderMap(aggTerms) {
+		aggPlan.AggregateExpressions = append(aggPlan.AggregateExpressions, agg.Value.Expr)
+		aggregateRel.Fields = append(aggregateRel.Fields, agg.Value.Field)
+	}
+
+	return plan, aggregateRel, func(lp LogicalPlan) (LogicalPlan, *Relation) {
+		var resultColExprs []LogicalExpr
+		var resultFields []*Field
+		for _, resultCol := range results {
+			resultColExprs = append(resultColExprs, resultCol.Expr)
+			resultFields = append(resultFields, resultCol.Field)
+		}
+
+		var p LogicalPlan = &Project{
+			Child:       lp,
+			Expressions: resultColExprs,
+		}
+
+		if node.Distinct {
+			p = &Distinct{
+				Child: p,
+			}
+		}
+
+		return p, &Relation{
+			Fields: resultFields,
+		}
+	}, nil
+}
+
+// hasAggregate returns true if the expression contains an aggregate function.
+func hasAggregate(expr LogicalNode) bool {
+	var hasAggregate bool
+	traverse(expr, func(node Traversable) bool {
+		if _, ok := node.(*AggregateFunctionCall); ok {
+			hasAggregate = true
+			return false
+		}
+
+		return true
+	})
+
+	return hasAggregate
+}
+
+// exprFieldPair is a helper struct that pairs an expression with a field.
+// It uses a generic because there are some times where we want to guarantee
+// that the expression is an IdentifiedExpr, and other times where we don't
+// care about the concrete type.
+type exprFieldPair[T LogicalExpr] struct {
+	Expr  T
+	Field *Field
+}
+
+// rewriteAccordingToAggregate rewrites an expression according to the rules of aggregation.
+// This is used to rewrite both the select list and having clause to validate that all columns
+// are either captured in aggregates or have an exactly matching expression in the group by.
+func (s *scopeContext) rewriteAccordingToAggregate(expr LogicalExpr, groupingTerms map[string]*IdentifiedExpr, aggTerms map[string]*exprFieldPair[*IdentifiedExpr]) (LogicalExpr, error) {
+	node, err := Rewrite(expr, &RewriteConfig{
+		ExprCallback: func(le LogicalExpr) (LogicalExpr, bool, error) {
+			// if it matches any group by term, we need to rewrite it
+			// and stop traversing any children
+			identified, ok := groupingTerms[le.String()]
+			if ok {
+				return &ExprRef{
+					Identified: identified,
+				}, false, nil
+			}
+
+			switch le := le.(type) {
+			case *ColumnRef:
+				// if it is a column and in the current relation, it is an error, since
+				// it was not contained in an aggregate function or group by.
+				return nil, false, fmt.Errorf(`%w: column "%s" must appear in the GROUP BY clause or be used in an aggregate function`, ErrIllegalAggregate, le.String())
+			case *AggregateFunctionCall:
+				// TODO: do we need to check for the aggregate being called on a correlated column?
+				// if it matches any aggregate function, we need to rewrite it
+				// to that reference. Otherwise, register it as a new aggregate
+				identified, ok := aggTerms[le.String()]
+				if ok {
+					return &ExprRef{
+						Identified: identified.Expr,
+					}, false, nil
+				}
+
+				newIdentified := &IdentifiedExpr{
+					Expr: le,
+					ID:   s.plan.uniqueRefIdentifier(),
+				}
+
+				aggTerms[le.String()] = &exprFieldPair[*IdentifiedExpr]{
+					Expr: newIdentified,
+					Field: &Field{
+						Name:        le.FunctionName,
+						val:         le.returnType.Copy(),
+						ReferenceID: newIdentified.ID,
+					},
+				}
+
+				return &ExprRef{
+					Identified: newIdentified,
+				}, false, nil
+			default:
+				return le, true, nil
+			}
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return node.(LogicalExpr), nil
+}
+
+// expandResultCols takes a relation and result columns, and converts them to expressions
+// in the order provided. This is used to expand a wildcard in a select statement.
+func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn) ([]*exprFieldPair[LogicalExpr], error) {
+	var resultCols []LogicalExpr
+	var resultFields []*Field
+	for _, col := range cols {
+		switch col := col.(type) {
+		default:
+			panic(fmt.Sprintf("unexpected result column type %T", col))
+		case *parse.ResultColumnExpression:
+			expr, field, err := s.expr(col.Expression, rel)
+			if err != nil {
+				return nil, err
+			}
+
+			if col.Alias != "" {
+				expr = &AliasExpr{
+					Expr:  expr,
+					Alias: col.Alias,
+				}
+				// since it is aliased, we now ignore the parent
+				field.Parent = ""
+				field.Name = col.Alias
+			}
+
+			resultFields = append(resultFields, field)
+			resultCols = append(resultCols, expr)
+		case *parse.ResultColumnWildcard:
+			var newFields []*Field
+			if col.Table != "" {
+				newFields = rel.ColumnsByParent(col.Table)
+			} else {
+				newFields = rel.Fields
+			}
+
+			for _, field := range newFields {
+				resultCols = append(resultCols, &ColumnRef{
+					Parent:     field.Parent,
+					ColumnName: field.Name,
+				})
+				resultFields = append(resultFields, field)
+			}
+		}
+	}
+
+	var pairs []*exprFieldPair[LogicalExpr]
+	for i, expr := range resultCols {
+		pairs = append(pairs, &exprFieldPair[LogicalExpr]{
+			Expr:  expr,
+			Field: resultFields[i],
+		})
+	}
+
+	return pairs, nil
+}
+
+// expr visits an expression node.
+func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (LogicalExpr, *Field, error) {
+	// cast is a helper function for type casting results based on the current node
+	cast := func(expr LogicalExpr, field *Field) (LogicalExpr, *Field, error) {
+		castable, ok := node.(interface{ GetTypeCast() *types.DataType })
+		if !ok {
+			return expr, field, nil
+		}
+
+		if castable.GetTypeCast() != nil {
+			field2 := field.Copy()
+			field2.val = castable.GetTypeCast()
+
+			return &TypeCast{
+				Expr: expr,
+				Type: castable.GetTypeCast(),
+			}, field2, nil
+		}
+
+		return expr, field, nil
+	}
+
+	switch node := node.(type) {
+	default:
+		panic(fmt.Sprintf("unexpected expression type %T", node))
+	case *parse.ExpressionLiteral:
+		return cast(&Literal{
+			Value: node.Value,
+			Type:  node.Type,
+		}, anonField(node.Type))
+	case *parse.ExpressionFunctionCall:
+		args, fields, err := s.manyExprs(node.Args, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// can be either a procedure call or a built-in function
+		funcDef, ok := parse.Functions[node.Name]
+		if !ok {
+			if node.Star {
+				panic("star (*) not allowed in procedure calls")
+			}
+			if node.Distinct {
+				panic("DISTINCT not allowed in procedure calls")
+			}
+
+			// must be a procedure call
+			proc, found := s.plan.Schema.FindProcedure(node.Name)
+			if !found {
+				panic(fmt.Sprintf(`no function or procedure "%s" found`, node.Name))
+			}
+
+			returns, err := procedureReturnExpr(proc.Returns)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if len(node.Args) != len(proc.Parameters) {
+				panic(fmt.Sprintf(`procedure "%s" expects %d arguments, but %d were provided`, node.Name, len(proc.Parameters), len(node.Args)))
+			}
+
+			for i, param := range proc.Parameters {
+				scalar, err := fields[i].Scalar()
+				if err != nil {
+					return nil, nil, err
+				}
+
+				if !param.Type.Equals(scalar) {
+					return nil, nil, fmt.Errorf(`procedure "%s" expects argument %d to be of type %s, but %s was provided`, node.Name, i+1, param.Type, scalar)
+				}
+			}
+
+			return cast(&ProcedureCall{
+				ProcedureName: node.Name,
+				Args:          args,
+				returnType:    returns,
+			}, &Field{
+				Name: node.Name,
+				val:  returns,
+			})
+		}
+
+		// it is a built-in function
+
+		types, err := dataTypes(fields)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		returnVal, err := funcDef.ValidateArgs(types)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		returnField := &Field{
+			Name: node.Name,
+			val:  returnVal,
+		}
+
+		// now we need to apply rules depending on if it is aggregate or not
+		if funcDef.IsAggregate {
+			// we apply cast outside the reference because we want to keep the reference
+			// specific to the aggregate function call.
+			return cast(&AggregateFunctionCall{
+				FunctionName: node.Name,
+				Args:         args,
+				Star:         node.Star,
+				Distinct:     node.Distinct,
+				returnType:   returnVal,
+			}, returnField)
+		}
+
+		if node.Star {
+			panic("star (*) not allowed in non-aggregate function calls")
+		}
+		if node.Distinct {
+			panic("DISTINCT not allowed in non-aggregate function calls")
+		}
+
+		return cast(&ScalarFunctionCall{
+			FunctionName: node.Name,
+			Args:         args,
+			returnType:   returnVal,
+		}, returnField)
+	case *parse.ExpressionForeignCall:
+		proc, found := s.plan.Schema.FindForeignProcedure(node.Name)
+		if !found {
+			return nil, nil, fmt.Errorf(`unknown foreign procedure "%s"`, node.Name)
+		}
+
+		returns, err := procedureReturnExpr(proc.Returns)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		args, argFields, err := s.manyExprs(node.Args, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if len(node.Args) != len(proc.Parameters) {
+			return nil, nil, fmt.Errorf(`foreign procedure "%s" expects %d arguments, but %d were provided`, node.Name, len(proc.Parameters), len(node.Args))
+		}
+
+		for i, param := range proc.Parameters {
+			scalar, err := argFields[i].Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !param.Equals(scalar) {
+				return nil, nil, fmt.Errorf(`foreign procedure "%s" expects argument %d to be of type %s, but %s was provided`, node.Name, i+1, param, scalar)
+			}
+		}
+
+		contextArgs, ctxFields, err := s.manyExprs(node.ContextualArgs, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if len(ctxFields) != 2 {
+			return nil, nil, fmt.Errorf("foreign calls must have 2 contextual arguments")
+		}
+
+		for i, field := range ctxFields {
+			scalar, err := field.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !scalar.Equals(types.TextType) {
+				return nil, nil, fmt.Errorf("foreign call contextual argument %d must be a string", i+1)
+			}
+		}
+
+		return cast(&ProcedureCall{
+			ProcedureName: node.Name,
+			Foreign:       true,
+			Args:          args,
+			ContextArgs:   contextArgs,
+		}, &Field{
+			Name: node.Name,
+			val:  returns,
+		})
+	case *parse.ExpressionVariable:
+		var val any // can be a data type or object
+		dt, ok := s.plan.Variables[node.String()]
+		if !ok {
+			// might be an object
+			obj, ok := s.plan.Objects[node.String()]
+			if !ok {
+				return nil, nil, fmt.Errorf(`unknown variable "%s"`, node.String())
+			}
+
+			val = obj
+		} else {
+			val = dt
+		}
+
+		return cast(&Variable{
+			VarName:  node.String(),
+			dataType: val,
+		}, &Field{val: val})
+	case *parse.ExpressionArrayAccess:
+		array, field, err := s.expr(node.Array, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		index, idxField, err := s.expr(node.Index, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		scalar, err := idxField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !scalar.Equals(types.IntType) {
+			return nil, nil, fmt.Errorf("array index must be an int")
+		}
+
+		field2 := field.Copy()
+		scalar2, err := field2.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		scalar2.IsArray = false // since we are accessing an array, it is no longer an array
+
+		return cast(&ArrayAccess{
+			Array: array,
+			Index: index,
+		}, field2)
+	case *parse.ExpressionMakeArray:
+		if len(node.Values) == 0 {
+			return nil, nil, fmt.Errorf("array constructor must have at least one element")
+		}
+
+		exprs, fields, err := s.manyExprs(node.Values, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		firstVal, err := fields[0].Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		for _, field := range fields[1:] {
+			scalar, err := field.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !firstVal.Equals(scalar) {
+				return nil, nil, fmt.Errorf("array constructor must have elements of the same type")
+			}
+		}
+
+		firstValCopy := firstVal.Copy()
+		firstValCopy.IsArray = true
+
+		return cast(&ArrayConstructor{
+			Elements: exprs,
+		}, &Field{
+			val: firstValCopy,
+		})
+	case *parse.ExpressionFieldAccess:
+		obj, field, err := s.expr(node.Record, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		objType, err := field.Object()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		fieldType, ok := objType[node.Field]
+		if !ok {
+			return nil, nil, fmt.Errorf(`object "%s" does not have field "%s"`, field.Name, node.Field)
+		}
+
+		return cast(&FieldAccess{
+			Object: obj,
+			Key:    node.Field,
+		}, &Field{
+			val: fieldType,
+		})
+	case *parse.ExpressionParenthesized:
+		expr, field, err := s.expr(node.Inner, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return cast(expr, field)
+	case *parse.ExpressionComparison:
+		left, leftField, err := s.expr(node.Left, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		right, rightField, err := s.expr(node.Right, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		leftScalar, err := leftField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		rightScalar, err := rightField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !leftScalar.Equals(rightScalar) {
+			return nil, nil, fmt.Errorf("comparison operands must be of the same type. %s != %s", leftScalar, rightScalar)
+		}
+
+		return &ComparisonOp{
+			Left:  left,
+			Right: right,
+			Op:    get(comparisonOps, node.Operator),
+		}, anonField(types.BoolType.Copy()), nil
+	case *parse.ExpressionLogical:
+		left, leftField, err := s.expr(node.Left, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		right, rightField, err := s.expr(node.Right, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		scalar, err := leftField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !scalar.Equals(types.BoolType) {
+			return nil, nil, fmt.Errorf("logical operators must be applied to boolean types")
+		}
+
+		scalar, err = rightField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !scalar.Equals(types.BoolType) {
+			return nil, nil, fmt.Errorf("logical operators must be applied to boolean types")
+		}
+
+		return &LogicalOp{
+			Left:  left,
+			Right: right,
+			Op:    get(logicalOps, node.Operator),
+		}, anonField(types.BoolType.Copy()), nil
+	case *parse.ExpressionArithmetic:
+		left, leftField, err := s.expr(node.Left, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		right, rightField, err := s.expr(node.Right, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		leftScalar, err := leftField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		rightScalar, err := rightField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !leftScalar.Equals(rightScalar) {
+			return nil, nil, fmt.Errorf("arithmetic operands must be of the same type. %s != %s", leftScalar, rightScalar)
+		}
+
+		return &ArithmeticOp{
+			Left:  left,
+			Right: right,
+			Op:    get(arithmeticOps, node.Operator),
+		}, &Field{val: leftField.val}, nil
+	case *parse.ExpressionUnary:
+		expr, field, err := s.expr(node.Expression, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		op := get(unaryOps, node.Operator)
+
+		scalar, err := field.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		switch op {
+		case Negate:
+			if !scalar.IsNumeric() {
+				return nil, nil, fmt.Errorf("negation can only be applied to numeric types")
+			}
+
+			if scalar.Equals(types.Uint256Type) {
+				return nil, nil, fmt.Errorf("negation cannot be applied to uint256")
+			}
+		case Not:
+			if !scalar.Equals(types.BoolType) {
+				return nil, nil, fmt.Errorf("logical negation can only be applied to boolean types")
+			}
+		case Positive:
+			if !scalar.IsNumeric() {
+				return nil, nil, fmt.Errorf("positive can only be applied to numeric types")
+			}
+		}
+
+		// surprisingly, Postgres won't return a columns name
+		// if it is wrapped in a unary operator
+		return &UnaryOp{
+			Expr: expr,
+			Op:   op,
+		}, &Field{val: field.val}, nil
+	case *parse.ExpressionColumn:
+		field, err := currentRel.Search(node.Table, node.Column)
+		if errors.Is(err, ErrColumnNotFound) {
+			// might be in the outer relation, correlated
+			field, err = s.OuterRelation.Search(node.Table, node.Column)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			scalar, err := field.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			// add to correlations
+			s.Correlations = append(s.Correlations, field)
+
+			return cast(&ColumnRef{
+				Parent:     field.Parent,
+				ColumnName: field.Name,
+				dataType:   scalar,
+			}, field)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+
+		scalar, err := field.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return cast(&ColumnRef{
+			Parent:     field.Parent,
+			ColumnName: field.Name,
+			dataType:   scalar,
+		}, field)
+	case *parse.ExpressionCollate:
+		expr, field, err := s.expr(node.Expression, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		scalar, err := field.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		c := &Collate{
+			Expr: expr,
+		}
+
+		switch strings.ToLower(node.Collation) {
+		case "nocase":
+			c.Collation = NoCaseCollation
+
+			if !scalar.Equals(types.TextType) {
+				return nil, nil, fmt.Errorf("NOCASE collation can only be applied to text types")
+			}
+		default:
+			return nil, nil, fmt.Errorf(`unknown collation "%s"`, node.Collation)
+		}
+
+		// return the whole field since collations don't overwrite the return value's name
+		return c, field, nil
+	case *parse.ExpressionStringComparison:
+		left, leftField, err := s.expr(node.Left, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		right, rightField, err := s.expr(node.Right, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		leftScalar, err := leftField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		rightScalar, err := rightField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !leftScalar.Equals(types.TextType) || !rightScalar.Equals(types.TextType) {
+			return nil, nil, fmt.Errorf("string comparison operands must be of type string. %s != %s", leftScalar, rightScalar)
+		}
+
+		var expr LogicalExpr = &ComparisonOp{
+			Left:  left,
+			Right: right,
+			Op:    get(stringComparisonOps, node.Operator),
+		}
+
+		if node.Not {
+			expr = &UnaryOp{
+				Expr: expr,
+				Op:   Not,
+			}
+		}
+
+		return expr, anonField(types.BoolType.Copy()), nil
+	case *parse.ExpressionIs:
+		op := Is
+		if node.Distinct {
+			op = IsDistinctFrom
+		}
+
+		left, leftField, err := s.expr(node.Left, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		right, rightField, err := s.expr(node.Right, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		leftScalar, err := leftField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		rightScalar, err := rightField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if node.Distinct {
+			if !leftScalar.Equals(rightScalar) {
+				return nil, nil, fmt.Errorf("IS DISTINCT FROM requires operands of the same type. %s != %s", leftScalar, rightScalar)
+			}
+		} else {
+			if !rightScalar.Equals(types.NullType) {
+				return nil, nil, fmt.Errorf("IS requires the right operand to be NULL")
+			}
+		}
+
+		var expr LogicalExpr = &ComparisonOp{
+			Left:  left,
+			Right: right,
+			Op:    op,
+		}
+
+		if node.Not {
+			expr = &UnaryOp{
+				Expr: expr,
+				Op:   Not,
+			}
+		}
+
+		return expr, anonField(types.BoolType.Copy()), nil
+	case *parse.ExpressionIn:
+		left, lField, err := s.expr(node.Expression, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		lScalar, err := lField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		in := &IsIn{
+			Left: left,
+		}
+
+		if node.Subquery != nil {
+			subq, rel, err := s.planSubquery(node.Subquery, currentRel)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if len(rel.Fields) != 1 {
+				return nil, nil, fmt.Errorf("subquery must return exactly one column")
+			}
+
+			scalar, err := rel.Fields[0].Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !lScalar.Equals(scalar) {
+				return nil, nil, fmt.Errorf("IN subquery must return the same type as the left expression. %s != %s", lScalar, scalar)
+			}
+
+			in.Subquery = &SubqueryExpr{
+				Query: subq,
+			}
+		} else {
+			right, rFields, err := s.manyExprs(node.List, currentRel)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			for _, r := range rFields {
+				scalar, err := r.Scalar()
+				if err != nil {
+					return nil, nil, err
+				}
+
+				if !lScalar.Equals(scalar) {
+					return nil, nil, fmt.Errorf("IN list must contain elements of the same type as the left expression. %s != %s", lScalar, scalar)
+				}
+			}
+
+			in.Expressions = right
+		}
+
+		var expr LogicalExpr = in
+
+		if node.Not {
+			expr = &UnaryOp{
+				Expr: expr,
+				Op:   Not,
+			}
+		}
+
+		return expr, anonField(types.BoolType.Copy()), nil
+	case *parse.ExpressionBetween:
+		leftOp, rightOp := GreaterThanOrEqual, LessThanOrEqual
+		if node.Not {
+			leftOp, rightOp = LessThan, GreaterThan
+		}
+
+		left, exprField, err := s.expr(node.Expression, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		exprScalar, err := exprField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		lower, lowerField, err := s.expr(node.Lower, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		lowerScalar, err := lowerField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		upper, upperField, err := s.expr(node.Upper, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		upScalar, err := upperField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !exprScalar.Equals(lowerScalar) {
+			return nil, nil, fmt.Errorf("BETWEEN lower bound must be of the same type as the expression. %s != %s", exprScalar, lowerScalar)
+		}
+
+		if !exprScalar.Equals(upScalar) {
+			return nil, nil, fmt.Errorf("BETWEEN upper bound must be of the same type as the expression. %s != %s", exprScalar, upScalar)
+		}
+
+		return &LogicalOp{
+			Left: &ComparisonOp{
+				Left:  left,
+				Right: lower,
+				Op:    leftOp,
+			},
+			Right: &ComparisonOp{
+				Left:  left,
+				Right: upper,
+				Op:    rightOp,
+			},
+			Op: And,
+		}, anonField(types.BoolType.Copy()), nil
+	case *parse.ExpressionCase:
+		c := &Case{}
+
+		// all whens must be bool unless an expression is used before CASE
+		expectedWhenType := types.BoolType.Copy()
+		if node.Case != nil {
+			caseExpr, field, err := s.expr(node.Case, currentRel)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			c.Value = caseExpr
+			expectedWhenType, err = field.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+
+		var returnType *types.DataType
+		for _, whenThen := range node.WhenThen {
+			whenExpr, whenField, err := s.expr(whenThen[0], currentRel)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			thenExpr, thenField, err := s.expr(whenThen[1], currentRel)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			thenType, err := thenField.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+			if returnType == nil {
+				returnType = thenType
+			} else {
+				if !returnType.Equals(thenType) {
+					return nil, nil, fmt.Errorf(`all THEN expressions must be of the same type %s, received %s`, returnType, thenType)
+				}
+			}
+
+			whenScalar, err := whenField.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !expectedWhenType.Equals(whenScalar) {
+				return nil, nil, fmt.Errorf(`WHEN expression must be of type %s, received %s`, expectedWhenType, whenScalar)
+			}
+
+			c.WhenClauses = append(c.WhenClauses, [2]LogicalExpr{whenExpr, thenExpr})
+		}
+
+		if node.Else != nil {
+			elseExpr, elseField, err := s.expr(node.Else, currentRel)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			elseType, err := elseField.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !returnType.Equals(elseType) {
+				return nil, nil, fmt.Errorf(`ELSE expression must be of the same type of THEN expressions %s, received %s`, returnType, elseExpr)
+			}
+
+			c.Else = elseExpr
+		}
+
+		return c, anonField(returnType), nil
+	case *parse.ExpressionSubquery:
+		subq, rel, err := s.planSubquery(node.Subquery, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		subqExpr := &SubqueryExpr{
+			Query: subq,
+		}
+		if node.Exists {
+			subqExpr.Exists = true
+
+			var plan LogicalExpr = subqExpr
+			if node.Not {
+				plan = &UnaryOp{
+					Expr: plan,
+					Op:   Not,
+				}
+			}
+
+			return plan, anonField(types.BoolType.Copy()), nil
+		} else {
+			if len(rel.Fields) != 1 {
+				return nil, nil, fmt.Errorf("scalar subquery must return exactly one column")
+			}
+		}
+
+		return subqExpr, rel.Fields[0], nil
+	}
+}
+
+// planSubquery plans a subquery.
+// It takes the relation of the calling query to allow for correlated subqueries.
+func (s *scopeContext) planSubquery(node *parse.SelectStatement, currentRel *Relation) (*Subquery, *Relation, error) {
+	// for a subquery, we will add the current relation to the outer relation,
+	// to allow for correlated subqueries
+	oldOuter := s.OuterRelation
+	oldCorrelations := s.Correlations
+
+	s.OuterRelation = &Relation{
+		Fields: append(s.OuterRelation.Fields, currentRel.Fields...),
+	}
+	// we don't need access to the old correlations since we will simply
+	// recognize them as correlated again if they are used in the subquery
+	s.Correlations = []*Field{}
+
+	defer func() {
+		s.OuterRelation = oldOuter
+		s.Correlations = oldCorrelations
+	}()
+
+	query, rel, err := s.selectStmt(node)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// for all new correlations, we need to check if they are present on
+	// the oldOuter relation. If so, then we simply add them as correlated
+	// to the subplan. If not, then we also need to pass them back to the
+	// oldCorrelations so that they can be used in the outer query (in the case
+	// of a multi-level correlated subquery)
+	oldMap := make(map[[2]string]struct{})
+	for _, cor := range oldCorrelations {
+		oldMap[[2]string{cor.Parent, cor.Name}] = struct{}{}
+	}
+	for _, cor := range s.Correlations {
+		_, err = currentRel.Search(cor.Parent, cor.Name)
+		// if the column is not found in the current relation, then we need to
+		// pass it back to the oldCorrelations
+		if errors.Is(err, ErrColumnNotFound) {
+			// if not known to the outer correlation, then add it
+			_, ok := oldMap[[2]string{cor.Parent, cor.Name}]
+			if !ok {
+				oldCorrelations = append(oldCorrelations, cor)
+				continue
+			}
+		} else if err != nil {
+			// some other error occurred
+			return nil, nil, err
+		}
+		// if no error, it is correlated to this query, do nothing
+	}
+
+	plan := &Subplan{
+		Plan: query,
+		ID:   strconv.Itoa(s.plan.SubqueryCount),
+		Type: SubplanTypeSubquery,
+	}
+
+	s.plan.SubqueryCount++
+
+	// the returned relation should not have any parent tables
+	for _, col := range rel.Fields {
+		col.Parent = ""
+	}
+
+	return &Subquery{
+		Plan:       plan,
+		Correlated: s.Correlations,
+	}, rel, nil
+}
+
+// manyExprs is a helper function that applies the expr function to many expressions.
+func (s *scopeContext) manyExprs(nodes []parse.Expression, currentRel *Relation) ([]LogicalExpr, []*Field, error) {
+	var exprs []LogicalExpr
+	var fields []*Field
+	for _, node := range nodes {
+		expr, field, err := s.expr(node, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		exprs = append(exprs, expr)
+		fields = append(fields, field)
+	}
+
+	return exprs, fields, nil
+}
+
+// procedureReturnExpr gets the returned data type from a procedure return.
+func procedureReturnExpr(node *types.ProcedureReturn) (*types.DataType, error) {
+	if node == nil {
+		return nil, fmt.Errorf("procedure does not return a value")
+	}
+
+	if node.IsTable {
+		return nil, fmt.Errorf("procedure returns a table, not a scalar value")
+	}
+
+	if len(node.Fields) != 1 {
+		return nil, fmt.Errorf("procedures in expressions must return exactly one value, received %d", len(node.Fields))
+	}
+
+	return node.Fields[0].Type.Copy(), nil
+}
+
+// anonField creates an anonymous field with the given data type.
+func anonField(dt *types.DataType) *Field {
+	return &Field{
+		val: dt,
+	}
+}
+
+// table takes a parse.Table interface and returns the plan and relation
+// for the table.
+func (s *scopeContext) table(node parse.Table) (*Scan, *Relation, error) {
+	switch node := node.(type) {
+	default:
+		panic(fmt.Sprintf("unexpected parse table type %T", node))
+	case *parse.RelationTable:
+		// either a CTE or a physical table
+		alias := node.Table
+		if node.Alias != "" {
+			alias = node.Alias
+		}
+
+		var scanTblType TableSourceType
+		var rel *Relation
+		if physicalTbl, ok := s.plan.Schema.FindTable(node.Table); ok {
+			scanTblType = TableSourcePhysical
+			rel = relationFromTable(physicalTbl)
+		} else if cte, ok := s.plan.CTEs[node.Table]; ok {
+			scanTblType = TableSourceCTE
+			rel = cte
+		} else {
+			return nil, nil, fmt.Errorf(`unknown table "%s"`, node.Table)
+		}
+
+		for _, col := range rel.Fields {
+			col.Parent = alias
+		}
+
+		return &Scan{
+			Source: &TableScanSource{
+				TableName: node.Table,
+				Type:      scanTblType,
+				rel:       rel.Copy(),
+			},
+			RelationName: alias,
+		}, rel, nil
+	case *parse.RelationSubquery:
+		if node.Alias == "" {
+			return nil, nil, fmt.Errorf("join against subquery must have an alias")
+		}
+
+		// we pass an empty relation because the subquery can't
+		// refer to the current relation, but they can be correlated against some
+		// outer relation.
+		// for example, "select * from users u inner join (select * from posts where posts.id = u.id) as p on u.id=p.id;"
+		// is invalid, but
+		// "select * from users where id = (select posts.id from posts inner join (select * from posts where id = users.id) as s on s.id=posts.id);"
+		// is valid
+		subq, rel, err := s.planSubquery(node.Subquery, &Relation{})
+		if err != nil {
+			return nil, nil, err
+		}
+
+		for _, col := range rel.Fields {
+			col.Parent = node.Alias
+		}
+
+		return &Scan{
+			Source:       subq,
+			RelationName: node.Alias,
+		}, rel, nil
+	case *parse.RelationFunctionCall:
+		if node.Alias == "" {
+			return nil, nil, fmt.Errorf("join against procedure calls must have an alias")
+		}
+
+		// the function call must either be a procedure or foreign procedure that returns
+		// a table.
+
+		var args []LogicalExpr
+		var contextArgs []LogicalExpr
+		var procReturns *types.ProcedureReturn
+		var isForeign bool
+		if proc, ok := s.plan.Schema.FindProcedure(node.FunctionCall.FunctionName()); ok {
+			procReturns = proc.Returns
+
+			procCall, ok := node.FunctionCall.(*parse.ExpressionFunctionCall)
+			if !ok {
+				// I don't think this is possible, but just in case
+				return nil, nil, fmt.Errorf(`unexpected procedure type "%T"`, node.FunctionCall)
+			}
+
+			var fields []*Field
+			var err error
+			// we pass an empty relation because the subquery can't
+			// refer to the current relation, but they can be correlated against some
+			// outer relation.
+			args, fields, err = s.manyExprs(procCall.Args, &Relation{})
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if len(fields) != len(proc.Parameters) {
+				return nil, nil, fmt.Errorf(`procedure "%s" expects %d arguments, received %d`, node.FunctionCall.FunctionName(), len(proc.Parameters), len(fields))
+			}
+
+			for i, field := range fields {
+				scalar, err := field.Scalar()
+				if err != nil {
+					return nil, nil, err
+				}
+
+				if !scalar.Equals(proc.Parameters[i].Type) {
+					return nil, nil, fmt.Errorf(`procedure "%s" expects argument %d to be of type %s, received %s`, node.FunctionCall.FunctionName(), i+1, proc.Parameters[i].Type, field)
+				}
+			}
+
+		} else if proc, ok := s.plan.Schema.FindForeignProcedure(node.FunctionCall.FunctionName()); ok {
+			procReturns = proc.Returns
+			isForeign = true
+
+			procCall, ok := node.FunctionCall.(*parse.ExpressionForeignCall)
+			if !ok {
+				// this is possible if the user doesn't pass contextual arguments,
+				// (the parser will parse it as a regular function call instead of a foreign call)
+				return nil, nil, fmt.Errorf(`procedure "%s" is a foreign procedure and must have contextual arguments passed with []`, node.FunctionCall.FunctionName())
+			}
+
+			var fields []*Field
+			var err error
+			// we pass an empty relation because the subquery can't
+			// refer to the current relation, but they can be correlated against some
+			// outer relation.
+			args, fields, err = s.manyExprs(procCall.Args, &Relation{})
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if len(fields) != len(proc.Parameters) {
+				return nil, nil, fmt.Errorf(`foreign procedure "%s" expects %d arguments, received %d`, node.FunctionCall.FunctionName(), len(proc.Parameters), len(fields))
+			}
+
+			for i, field := range fields {
+				scalar, err := field.Scalar()
+				if err != nil {
+					return nil, nil, err
+				}
+
+				if !scalar.Equals(proc.Parameters[i]) {
+					return nil, nil, fmt.Errorf(`foreign procedure "%s" expects argument %d to be of type %s, received %s`, node.FunctionCall.FunctionName(), i+1, proc.Parameters[i], field)
+				}
+			}
+
+			// must have 2 contextual arguments
+			if len(procCall.ContextualArgs) != 2 {
+				return nil, nil, fmt.Errorf(`foreign procedure "%s" must have 2 contextual arguments`, node.FunctionCall.FunctionName())
+			}
+
+			contextArgs, fields, err = s.manyExprs(procCall.ContextualArgs, &Relation{})
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if len(fields) != 2 {
+				return nil, nil, fmt.Errorf(`foreign procedure "%s" expects 2 contextual arguments, received %d`, node.FunctionCall.FunctionName(), len(fields))
+			}
+
+			for i, field := range fields {
+				scalar, err := field.Scalar()
+				if err != nil {
+					return nil, nil, err
+				}
+
+				if !scalar.Equals(types.TextType) {
+					return nil, nil, fmt.Errorf(`foreign procedure "%s" expects contextual argument %d to be of type %s, received %s`, node.FunctionCall.FunctionName(), i+1, types.TextType, field)
+				}
+			}
+		} else {
+			return nil, nil, fmt.Errorf(`unknown procedure "%s"`, node.FunctionCall.FunctionName())
+		}
+
+		if procReturns == nil {
+			return nil, nil, fmt.Errorf(`procedure "%s" does not return a table`, node.FunctionCall.FunctionName())
+		}
+		if !procReturns.IsTable {
+			return nil, nil, fmt.Errorf(`procedure "%s" does not return a table`, node.FunctionCall.FunctionName())
+		}
+
+		rel := &Relation{}
+		for _, field := range procReturns.Fields {
+			rel.Fields = append(rel.Fields, &Field{
+				Parent: node.Alias,
+				Name:   field.Name,
+				val:    field.Type.Copy(),
+			})
+		}
+
+		return &Scan{
+			Source: &ProcedureScanSource{
+				ProcedureName:  node.FunctionCall.FunctionName(),
+				Args:           args,
+				ContextualArgs: contextArgs,
+				IsForeign:      isForeign,
+				rel:            rel.Copy(),
+			},
+			RelationName: node.Alias,
+		}, rel, nil
+	}
+}
+
+// join wraps the given plan in a join node.
+func (s *scopeContext) join(child LogicalPlan, childRel *Relation, join *parse.Join) (LogicalPlan, *Relation, error) {
+	tbl, tblRel, err := s.table(join.Relation)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	newRel := joinRels(childRel, tblRel)
+
+	onExpr, joinField, err := s.expr(join.On, newRel)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	scalar, err := joinField.Scalar()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !scalar.Equals(types.BoolType) {
+		return nil, nil, fmt.Errorf("JOIN condition must be of type boolean, received %s", scalar)
+	}
+
+	plan := &Join{
+		Left:      child,
+		Right:     tbl,
+		Condition: onExpr,
+		JoinType:  get(joinTypes, join.Type),
+	}
+
+	return plan, newRel, nil
+}
+
+// update builds a plan for an update
+func (s *scopeContext) update(node *parse.UpdateStatement) (*Update, error) {
+	plan, targetRel, cartesianRel, err := s.cartesian(node.Table, node.Alias, node.From, node.Joins, node.Where)
+	if err != nil {
+		return nil, err
+	}
+
+	assigns, err := s.assignments(node.SetClause, targetRel, cartesianRel)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Update{
 		Child:       plan,
-		Assignments: assignments,
+		Assignments: assigns,
 		Table:       node.Table,
-	}
+	}, nil
 }
 
-func (p *plannerVisitor) VisitDeleteStatement(node *parse.DeleteStatement) any {
-	plan, err := p.buildCartesian(node.Table, node.Alias, node.From, node.Joins, node.Where)
+// delete builds a plan for a delete
+func (s *scopeContext) delete(node *parse.DeleteStatement) (*Delete, error) {
+	plan, _, _, err := s.cartesian(node.Table, node.Alias, node.From, node.Joins, node.Where)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	return &Delete{
 		Child: plan,
 		Table: node.Table,
-	}
-}
-
-// buildCartesian builds a cartesian product for several relations. It is meant to be used
-// explicitly for update and delete, where we start by planning a cartesian join between the
-// target table and the FROM + JOIN tables, and later optimize the filter.
-func (p *plannerVisitor) buildCartesian(targetTable, alias string, from parse.Table, joins []*parse.Join, filter parse.Expression) (LogicalPlan, error) {
-	_, ok := p.schema.FindTable(targetTable)
-	if !ok {
-		return nil, fmt.Errorf(`unknown table "%s"`, targetTable)
-	}
-	if alias == "" {
-		alias = targetTable
-	}
-
-	var targetRel LogicalPlan = &Scan{
-		Source: &TableScanSource{
-			TableName: targetTable,
-			Type:      TableSourcePhysical,
-		},
-		RelationName: alias,
-	}
-
-	// if there is no FROM clause, we will simply return the target relation
-	if from == nil {
-		if filter != nil {
-			filterExpr := filter.Accept(p).(LogicalExpr)
-			return &Filter{
-				Condition: filterExpr,
-				Child:     targetRel,
-			}, nil
-		}
-
-		return targetRel, nil
-	}
-
-	// we will build the source rel, and then apply the cartesian join
-	var sourceRel LogicalPlan = from.Accept(p).(LogicalPlan)
-
-	for _, join := range joins {
-		sourceRel = &Join{
-			Left:      sourceRel,
-			Right:     join.Relation.Accept(p).(LogicalPlan),
-			Condition: join.On.Accept(p).(LogicalExpr),
-			JoinType:  get(joinTypes, join.Type),
-		}
-	}
-
-	// cartesian product with filter
-	targetRel = &CartesianProduct{
-		Left:  targetRel,
-		Right: sourceRel,
-	}
-
-	if filter == nil {
-		return nil, fmt.Errorf("a WHERE clause must be provided for update and delete statements that use FROM")
-	}
-
-	return &Filter{
-		Condition: filter.Accept(p).(LogicalExpr),
-		Child:     targetRel,
 	}, nil
 }
 
-// ALIAS: the alias can only be used in the "ON CONFLICT DO UPDATE SET ... WHERE [here]" clause
-func (p *plannerVisitor) VisitInsertStatement(node *parse.InsertStatement) any {
+// insert builds a plan for an insert
+func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 	ins := &Insert{
-		Table: node.Table,
-		Alias: node.Alias,
+		Table:        node.Table,
+		ReferencedAs: node.Alias,
 	}
 
-	tbl, found := p.schema.FindTable(node.Table)
+	tbl, found := s.plan.Schema.FindTable(node.Table)
 	if !found {
-		panic(fmt.Sprintf(`unknown table "%s"`, node.Table))
+		return nil, fmt.Errorf(`%w: "%s"`, ErrUnknownTable, node.Table)
 	}
 
 	// orderAndFillNulls is a helper function that orders logical expressions
@@ -1294,41 +1971,40 @@ func (p *plannerVisitor) VisitInsertStatement(node *parse.InsertStatement) any {
 
 			return newExprs
 		}
-
 	} else {
 		expectedColLen = len(tbl.Columns)
-
-		for _, col := range tbl.Columns {
-			expectedColTypes = append(expectedColTypes, col.Type.Copy())
+		expectedColTypes = make([]*types.DataType, len(tbl.Columns))
+		for i, col := range tbl.Columns {
+			expectedColTypes[i] = col.Type.Copy()
 		}
 	}
 
+	rel := relationFromTable(tbl)
+
+	// check the value types and lengths
 	for _, vals := range node.Values {
 		if len(vals) != expectedColLen {
-			panic(fmt.Sprintf("expected %d insert values, got %d", expectedColLen, len(vals)))
+			return nil, fmt.Errorf(`insert has %d columns but %d values were supplied`, expectedColLen, len(vals))
 		}
 
 		var row []LogicalExpr
 
 		for i, val := range vals {
-			individualVal := val.Accept(p).(LogicalExpr)
-
-			// get the expected type
-			field, err := newEvalCtx(p.planCtx).evalExpression(individualVal, &Relation{})
+			expr, field, err := s.expr(val, rel)
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
 
 			scalar, err := field.Scalar()
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
 
-			if !expectedColTypes[i].Equals(scalar) {
-				panic(fmt.Sprintf("expected type %s for insert position %d, got %s", expectedColTypes[i], i+1, scalar))
+			if !scalar.Equals(expectedColTypes[i]) {
+				return nil, fmt.Errorf(`insert value %d must be of type %s, received %s`, i+1, expectedColTypes[i], field.val)
 			}
 
-			row = append(row, individualVal)
+			row = append(row, expr)
 		}
 
 		ins.Values = append(ins.Values, orderAndFillNulls(row))
@@ -1337,7 +2013,7 @@ func (p *plannerVisitor) VisitInsertStatement(node *parse.InsertStatement) any {
 	// finally, we need to check if there is an ON CONFLICT clause,
 	// and if so, we need to process it.
 	if node.Upsert != nil {
-		conflict, err := p.buildUpsert(node.Upsert, tbl)
+		conflict, err := s.buildUpsert(node.Upsert, tbl)
 		if err != nil {
 			panic(err)
 		}
@@ -1345,10 +2021,10 @@ func (p *plannerVisitor) VisitInsertStatement(node *parse.InsertStatement) any {
 		ins.ConflictResolution = conflict
 	}
 
-	return ins
+	return ins, nil
 }
 
-func (p *plannerVisitor) buildUpsert(node *parse.UpsertClause, table *types.Table) (ConflictResolution, error) {
+func (s *scopeContext) buildUpsert(node *parse.UpsertClause, table *types.Table) (ConflictResolution, error) {
 	// all DO UPDATE upserts need to have an arbiter index.
 	// DO NOTHING can optionally have one, but it is not required.
 	var arbiterIndex Index
@@ -1438,7 +2114,7 @@ func (p *plannerVisitor) buildUpsert(node *parse.UpsertClause, table *types.Tabl
 		// https://www.postgresql.org/docs/current/sql-insert.html
 		// IDK why our syntax supports this, there is literally not a way
 		// somebody could make use of this within Kwil right now.
-		panic("engine does not yet support index predicates on upsert. Try using a WHERE constraint after the SET clause.")
+		return nil, errors.New("engine does not yet support index predicates on upsert. Try using a WHERE constraint after the SET clause")
 	}
 	if arbiterIndex == nil {
 		return nil, fmt.Errorf("conflict column must be specified for DO UPDATE")
@@ -1448,15 +2124,30 @@ func (p *plannerVisitor) buildUpsert(node *parse.UpsertClause, table *types.Tabl
 		ArbiterIndex: arbiterIndex,
 	}
 
-	for _, set := range node.DoUpdate {
-		res.Assignments = append(res.Assignments, &Assignment{
-			Column: set.Column,
-			Value:  set.Value.Accept(p).(LogicalExpr),
-		})
+	rel := relationFromTable(table)
+
+	var err error
+	res.Assignments, err = s.assignments(node.DoUpdate, rel, rel)
+	if err != nil {
+		return nil, err
 	}
 
 	if node.UpdateWhere != nil {
-		res.ConflictFilter = node.UpdateWhere.Accept(p).(LogicalExpr)
+		conflictFilter, field, err := s.expr(node.UpdateWhere, rel)
+		if err != nil {
+			return nil, err
+		}
+
+		scalar, err := field.Scalar()
+		if err != nil {
+			return nil, err
+		}
+
+		if !scalar.Equals(types.BoolType) {
+			return nil, fmt.Errorf("conflict filter must be of type bool, received %s", field)
+		}
+
+		res.ConflictFilter = conflictFilter
 	}
 
 	return res, nil
@@ -1520,34 +2211,148 @@ func checkNullableColumns(tbl *types.Table, cols []string) ([]*types.DataType, e
 	return dataTypeArr, nil
 }
 
-func (p *plannerVisitor) VisitUpsertClause(node *parse.UpsertClause) any {
-	panic("internal bug: do not use this directly. Use the buildUpsert method.")
+// cartesian builds a cartesian product for several relations. It is meant to be used
+// explicitly for update and delete, where we start by planning a cartesian join between the
+// target table and the FROM + JOIN tables, and later optimize the filter.
+// It returns the plan for the join, the relation that is being targeted, the relation that is the cartesian join
+// between the target and the FROM + JOIN tables, and an error if one occurred.
+func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, joins []*parse.Join,
+	filter parse.Expression) (plan LogicalPlan, targetRel *Relation, cartesianRel *Relation, err error) {
+
+	tbl, ok := s.plan.Schema.FindTable(targetTable)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf(`unknown table "%s"`, targetTable)
+	}
+	if alias == "" {
+		alias = targetTable
+	}
+
+	targetRel = relationFromTable(tbl)
+	// copy that can be overwritten
+	rel := targetRel.Copy()
+
+	// plan the target table
+	var targetPlan LogicalPlan = &Scan{
+		Source: &TableScanSource{
+			TableName: targetTable,
+			Type:      TableSourcePhysical,
+		},
+		RelationName: alias,
+	}
+
+	// if there is no FROM clause, we can simply apply the filter and return
+	if from == nil {
+		if filter != nil {
+			expr, field, err := s.expr(filter, rel)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			scalar, err := field.Scalar()
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			if !scalar.Equals(types.BoolType) {
+				return nil, nil, nil, fmt.Errorf("WHERE clause must be of type boolean, received %s", field)
+			}
+
+			return &Filter{
+				Child:     targetPlan,
+				Condition: expr,
+			}, targetRel, rel, nil
+		}
+
+		return targetPlan, rel, nil, nil
+	}
+
+	// update and delete statements with a FROM require a WHERE clause,
+	// otherwise it is impossible to optimize the query to not be a cartesian product
+	if filter == nil {
+		return nil, nil, nil, ErrUpdateOrDeleteWithoutWhere
+	}
+
+	// plan the FROM clause
+
+	var sourceRel LogicalPlan
+	var fromRel *Relation
+	sourceRel, fromRel, err = s.table(from)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	for _, join := range joins {
+		sourceRel, fromRel, err = s.join(sourceRel, fromRel, join)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	// build a cartesian product and apply the filter
+	targetPlan = &CartesianProduct{
+		Left:  targetPlan,
+		Right: sourceRel,
+	}
+
+	rel = joinRels(fromRel, rel)
+
+	expr, field, err := s.expr(filter, rel)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	scalar, err := field.Scalar()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if !scalar.Equals(types.BoolType) {
+		return nil, nil, nil, fmt.Errorf("WHERE clause must be of type boolean, received %s", field)
+	}
+
+	return &Filter{
+		Child:     targetPlan,
+		Condition: expr,
+	}, targetRel, rel, nil
 }
 
-/*
-	to make sure that we do not have any unimplemented visitor methods (which would cause unexpected bugs),
-	below we include them, and panic if they are called.
-*/
+// assignments builds the assignments for update and conflict clauses.
+// It takes a list of update set clauses, the target relation (where columns are being assigned),
+// and a relation that can be referenced in the assigning expressions.
+func (s *scopeContext) assignments(assignments []*parse.UpdateSetClause, targetRel *Relation, referenceRel *Relation) ([]*Assignment, error) {
+	assigns := make([]*Assignment, len(assignments))
+	for i, assign := range assignments {
+		field, err := targetRel.Search("", assign.Column)
+		if err != nil {
+			return nil, err
+		}
 
-func (p *plannerVisitor) VisitResultColumnExpression(node *parse.ResultColumnExpression) any {
-	panic("internal bug: VisitResultColumnExpression should not be called directly while building relational algebra")
-}
+		expr, assignType, err := s.expr(assign.Value, referenceRel)
+		if err != nil {
+			return nil, err
+		}
 
-func (p *plannerVisitor) VisitResultColumnWildcard(node *parse.ResultColumnWildcard) any {
-	panic("internal bug: VisitResultColumnWildcard should not be called directly while building relational algebra")
-}
+		scalarField, err := assignType.Scalar()
+		if err != nil {
+			return nil, err
+		}
 
-func (p *plannerVisitor) VisitOrderingTerm(node *parse.OrderingTerm) any {
-	panic("internal bug: VisitOrderingTerm should not be called directly while building relational algebra")
-}
+		scalarAssign, err := field.Scalar()
+		if err != nil {
+			return nil, err
+		}
 
-func (p *plannerVisitor) VisitJoin(node *parse.Join) any {
-	// for safety, since it is easier to iterate over the joins in the select core
-	panic("internal bug: VisitJoin should not be called directly while building relational algebra")
-}
+		if !scalarField.Equals(scalarAssign) {
+			return nil, fmt.Errorf(`cannot assign type %s to column "%s", expected type %s`, scalarField, field.Name, scalarAssign)
+		}
 
-func (p *plannerVisitor) VisitUpdateSetClause(node *parse.UpdateSetClause) any {
-	panic("internal bug: VisitUpdateSetClause should not be called directly while building relational algebra")
+		assigns[i] = &Assignment{
+			Column: field.Name,
+			Value:  expr,
+		}
+	}
+
+	return assigns, nil
 }
 
 const (
@@ -1555,13 +2360,17 @@ const (
 	base     = len(alphabet)
 )
 
-// numberToLetters allows us to assign a letter-based identifier for
-// expression references. We do this to avoid confusion with subplan
-// references, which are numbers.
-func numberToLetters(n int) string {
-	if n == 0 {
+// uniqueRefIdentifier generates a unique reference identifier for an expression.
+// This is used to avoid conflicts when referencing expressions in the query.
+// It uses letters instead of numbers to avoid confusion with subplan references.
+// It uses a base 26 system, where A = 0, B = 1, ..., Z = 25, AA = 26, AB = 27, etc.
+func (p *planContext) uniqueRefIdentifier() string {
+	if p.ReferenceCount == 0 {
+		p.ReferenceCount++
 		return string(alphabet[0])
 	}
+
+	n := p.ReferenceCount
 
 	var sb strings.Builder
 	for n > 0 {
@@ -1576,6 +2385,8 @@ func numberToLetters(n int) string {
 	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
 		runes[i], runes[j] = runes[j], runes[i]
 	}
+
+	p.ReferenceCount++
 
 	return string(runes)
 }

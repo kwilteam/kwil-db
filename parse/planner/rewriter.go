@@ -1,8 +1,6 @@
 package planner
 
-import (
-	"fmt"
-)
+import "fmt"
 
 // RewriteConfig is a configuration for the rewriter.
 type RewriteConfig struct {
@@ -25,8 +23,8 @@ type RewriteConfig struct {
 	// and any expression acting on a plan will be called before visiting the plan.
 	// If false, the callback will be called after visiting children,
 	// and any expression acting on a plan will be called after visiting the plan.
-	// !IMPORTANT: If this is set to true, then the callback functions must always return false.
-	CallbackAfterVisit bool // TODO: I think we can get rid of this with the addition of the bool return in the callback functions
+	// ! IMPORTANT: If this is set to true, then the callback functions must always return false.
+	CallbackAfterVisit bool
 	// PostOrderVisit determines the order in which fields are visited.
 	// If visitng in post order, then children are visited first, then the parent.
 	// For example, for a Project node, if PostOrderVisit is true, then the child
@@ -130,7 +128,7 @@ func (r *rewriteVisitor) VisitSubquery(p0 *Subquery) any {
 func (r *rewriteVisitor) subqueryFuncs(p0 *Subquery) []func() {
 	return []func(){func() {
 		p0.Plan.Plan = p0.Plan.Plan.Accept(r).(LogicalPlan)
-	}} // TODO: once we switch the Correlated column from column refs to exprs, we should visit the expressions here
+	}}
 }
 
 func (r *rewriteVisitor) VisitEmptyScan(p0 *EmptyScan) any {

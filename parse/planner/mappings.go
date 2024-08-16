@@ -1,4 +1,4 @@
-package planner2
+package planner
 
 import (
 	"fmt"
