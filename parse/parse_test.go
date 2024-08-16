@@ -1973,18 +1973,46 @@ func mustNewDecimal(precision, scale uint16) *types.DataType {
 
 // exprLit makes an ExpressionLiteral.
 // it can only make strings and ints
-func exprLit(v any) *parse.ExpressionLiteral {
+func exprLit(v any) parse.Expression {
 	switch t := v.(type) {
 	case int:
-		return &parse.ExpressionLiteral{
+		isNeg := t < 0
+		if isNeg {
+			t *= -1
+		}
+
+		liter := &parse.ExpressionLiteral{
 			Type:  types.IntType,
 			Value: int64(t),
 		}
-	case int64:
-		return &parse.ExpressionLiteral{
-			Type:  types.IntType,
-			Value: t,
+
+		if isNeg {
+			return &parse.ExpressionUnary{
+				Operator:   parse.UnaryOperatorNeg,
+				Expression: liter,
+			}
 		}
+
+		return liter
+	case int64:
+		isNeg := t < 0
+		if isNeg {
+			t *= -1
+		}
+
+		liter := &parse.ExpressionLiteral{
+			Type:  types.IntType,
+			Value: int64(t),
+		}
+
+		if isNeg {
+			return &parse.ExpressionUnary{
+				Operator:   parse.UnaryOperatorNeg,
+				Expression: liter,
+			}
+		}
+
+		return liter
 	case string:
 		return &parse.ExpressionLiteral{
 			Type:  types.TextType,
