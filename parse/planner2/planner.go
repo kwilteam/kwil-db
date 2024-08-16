@@ -247,6 +247,7 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 		}
 
 		for _, order := range node.Ordering {
+			// ordering term can be of any type
 			sortExpr, _, err := s.expr(order.Expression, rel)
 			if err != nil {
 				return nil, nil, err
@@ -263,9 +264,18 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 	}
 
 	if node.Limit != nil {
-		limitExpr, _, err := s.expr(node.Limit, rel)
+		limitExpr, limitField, err := s.expr(node.Limit, rel)
 		if err != nil {
 			return nil, nil, err
+		}
+
+		scalar, err := limitField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !scalar.Equals(types.IntType) {
+			return nil, nil, fmt.Errorf("LIMIT must be an int")
 		}
 
 		lim := &Limit{
@@ -274,9 +284,18 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 		}
 
 		if node.Offset != nil {
-			offsetExpr, _, err := s.expr(node.Offset, rel)
+			offsetExpr, offsetField, err := s.expr(node.Offset, rel)
 			if err != nil {
 				return nil, nil, err
+			}
+
+			scalar, err := offsetField.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !scalar.Equals(types.IntType) {
+				return nil, nil, fmt.Errorf("OFFSET must be an int")
 			}
 
 			lim.Offset = offsetExpr
@@ -372,9 +391,18 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 	}
 
 	if node.Where != nil {
-		whereExpr, _, err := s.expr(node.Where, rel)
+		whereExpr, whereType, err := s.expr(node.Where, rel)
 		if err != nil {
 			return nil, nil, nil, err
+		}
+
+		scalar, err := whereType.Scalar()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		if !scalar.Equals(types.BoolType) {
+			return nil, nil, nil, errors.New("WHERE must be a boolean")
 		}
 
 		plan = &Filter{
@@ -440,9 +468,19 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 			return nil, nil, nil, err
 		}
 
-		// TODO: disallow subqueries in group by
-		if hasAggregate(groupExpr) {
-			return nil, nil, nil, fmt.Errorf(`aggregate functions are not allowed in GROUP BY`)
+		traverse(groupExpr, func(node Traversable) bool {
+			switch node.(type) {
+			case *AggregateFunctionCall:
+				err = fmt.Errorf(`aggregate functions are not allowed in GROUP BY`)
+				return false
+			case *Subquery:
+				err = fmt.Errorf(`subqueries are not allowed in GROUP BY`)
+				return false
+			}
+			return true
+		})
+		if err != nil {
+			return nil, nil, nil, err
 		}
 
 		_, ok := groupingTerms[groupExpr.String()]
@@ -468,9 +506,18 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 		// but we need to use this to build the aggregation rel :(
 		// 2: on second thought, maybe not. We will have to do some tree matching and rewriting,
 		// but it should be possible.
-		havingExpr, _, err := s.expr(node.Having, rel)
+		havingExpr, field, err := s.expr(node.Having, rel)
 		if err != nil {
 			return nil, nil, nil, err
+		}
+
+		scalar, err := field.Scalar()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		if !scalar.Equals(types.BoolType) {
+			return nil, nil, nil, errors.New("HAVING must evaluate to a boolean")
 		}
 
 		// rewrite the having expression to use the aggregate functions
@@ -721,6 +768,21 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 				return nil, nil, err
 			}
 
+			if len(node.Args) != len(proc.Parameters) {
+				panic(fmt.Sprintf(`procedure "%s" expects %d arguments, but %d were provided`, node.Name, len(proc.Parameters), len(node.Args)))
+			}
+
+			for i, param := range proc.Parameters {
+				scalar, err := fields[i].Scalar()
+				if err != nil {
+					return nil, nil, err
+				}
+
+				if !param.Type.Equals(scalar) {
+					return nil, nil, fmt.Errorf(`procedure "%s" expects argument %d to be of type %s, but %s was provided`, node.Name, i+1, param.Type, scalar)
+				}
+			}
+
 			return cast(&ProcedureCall{
 				ProcedureName: node.Name,
 				Args:          args,
@@ -776,11 +838,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 	case *parse.ExpressionForeignCall:
 		proc, found := s.plan.Schema.FindForeignProcedure(node.Name)
 		if !found {
-			panic(fmt.Sprintf(`unknown foreign procedure "%s"`, node.Name))
-		}
-
-		if len(node.ContextualArgs) != 2 {
-			panic("foreign calls must have 2 contextual arguments")
+			return nil, nil, fmt.Errorf(`unknown foreign procedure "%s"`, node.Name)
 		}
 
 		returns, err := procedureReturnExpr(proc.Returns)
@@ -788,14 +846,44 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			return nil, nil, err
 		}
 
-		args, _, err := s.manyExprs(node.Args, currentRel)
+		args, argFields, err := s.manyExprs(node.Args, currentRel)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		contextArgs, _, err := s.manyExprs(node.ContextualArgs, currentRel)
+		if len(node.Args) != len(proc.Parameters) {
+			return nil, nil, fmt.Errorf(`foreign procedure "%s" expects %d arguments, but %d were provided`, node.Name, len(proc.Parameters), len(node.Args))
+		}
+
+		for i, param := range proc.Parameters {
+			scalar, err := argFields[i].Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !param.Equals(scalar) {
+				return nil, nil, fmt.Errorf(`foreign procedure "%s" expects argument %d to be of type %s, but %s was provided`, node.Name, i+1, param, scalar)
+			}
+		}
+
+		contextArgs, ctxFields, err := s.manyExprs(node.ContextualArgs, currentRel)
 		if err != nil {
 			return nil, nil, err
+		}
+
+		if len(ctxFields) != 2 {
+			return nil, nil, fmt.Errorf("foreign calls must have 2 contextual arguments")
+		}
+
+		for i, field := range ctxFields {
+			scalar, err := field.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !scalar.Equals(types.TextType) {
+				return nil, nil, fmt.Errorf("foreign call contextual argument %d must be a string", i+1)
+			}
 		}
 
 		return cast(&ProcedureCall{
@@ -823,7 +911,8 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		}
 
 		return cast(&Variable{
-			VarName: node.String(),
+			VarName:  node.String(),
+			dataType: val,
 		}, &Field{val: val})
 	case *parse.ExpressionArrayAccess:
 		array, field, err := s.expr(node.Array, currentRel)
@@ -831,17 +920,27 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			return nil, nil, err
 		}
 
-		index, _, err := s.expr(node.Index, currentRel)
+		index, idxField, err := s.expr(node.Index, currentRel)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		field2 := field.Copy()
-		scalar, err := field2.Scalar()
+		scalar, err := idxField.Scalar()
 		if err != nil {
 			return nil, nil, err
 		}
-		scalar.IsArray = false // since we are accessing an array, it is no longer an array
+
+		if !scalar.Equals(types.IntType) {
+			return nil, nil, fmt.Errorf("array index must be an int")
+		}
+
+		field2 := field.Copy()
+		scalar2, err := field2.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		scalar2.IsArray = false // since we are accessing an array, it is no longer an array
 
 		return cast(&ArrayAccess{
 			Array: array,
@@ -911,14 +1010,28 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 
 		return cast(expr, field)
 	case *parse.ExpressionComparison:
-		left, _, err := s.expr(node.Left, currentRel)
+		left, leftField, err := s.expr(node.Left, currentRel)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		right, _, err := s.expr(node.Right, currentRel)
+		right, rightField, err := s.expr(node.Right, currentRel)
 		if err != nil {
 			return nil, nil, err
+		}
+
+		leftScalar, err := leftField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		rightScalar, err := rightField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !leftScalar.Equals(rightScalar) {
+			return nil, nil, fmt.Errorf("comparison operands must be of the same type. %s != %s", leftScalar, rightScalar)
 		}
 
 		return &ComparisonOp{
@@ -927,14 +1040,32 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			Op:    get(comparisonOps, node.Operator),
 		}, anonField(types.BoolType.Copy()), nil
 	case *parse.ExpressionLogical:
-		left, _, err := s.expr(node.Left, currentRel)
+		left, leftField, err := s.expr(node.Left, currentRel)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		right, _, err := s.expr(node.Right, currentRel)
+		right, rightField, err := s.expr(node.Right, currentRel)
 		if err != nil {
 			return nil, nil, err
+		}
+
+		scalar, err := leftField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !scalar.Equals(types.BoolType) {
+			return nil, nil, fmt.Errorf("logical operators must be applied to boolean types")
+		}
+
+		scalar, err = rightField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !scalar.Equals(types.BoolType) {
+			return nil, nil, fmt.Errorf("logical operators must be applied to boolean types")
 		}
 
 		return &LogicalOp{
@@ -948,9 +1079,23 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			return nil, nil, err
 		}
 
-		right, _, err := s.expr(node.Right, currentRel)
+		right, rightField, err := s.expr(node.Right, currentRel)
 		if err != nil {
 			return nil, nil, err
+		}
+
+		leftScalar, err := leftField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		rightScalar, err := rightField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !leftScalar.Equals(rightScalar) {
+			return nil, nil, fmt.Errorf("arithmetic operands must be of the same type. %s != %s", leftScalar, rightScalar)
 		}
 
 		return &ArithmeticOp{
@@ -964,11 +1109,37 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			return nil, nil, err
 		}
 
+		op := get(unaryOps, node.Operator)
+
+		scalar, err := field.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		switch op {
+		case Negate:
+			if !scalar.IsNumeric() {
+				return nil, nil, fmt.Errorf("negation can only be applied to numeric types")
+			}
+
+			if scalar.Equals(types.Uint256Type) {
+				return nil, nil, fmt.Errorf("negation cannot be applied to uint256")
+			}
+		case Not:
+			if !scalar.Equals(types.BoolType) {
+				return nil, nil, fmt.Errorf("logical negation can only be applied to boolean types")
+			}
+		case Positive:
+			if !scalar.IsNumeric() {
+				return nil, nil, fmt.Errorf("positive can only be applied to numeric types")
+			}
+		}
+
 		// surprisingly, Postgres won't return a columns name
 		// if it is wrapped in a unary operator
 		return &UnaryOp{
 			Expr: expr,
-			Op:   get(unaryOps, node.Operator),
+			Op:   op,
 		}, &Field{val: field.val}, nil
 	case *parse.ExpressionColumn:
 		field, err := currentRel.Search(node.Table, node.Column)
@@ -979,14 +1150,25 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 				return nil, nil, err
 			}
 
+			scalar, err := field.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
 			// add to correlations
 			s.Correlations = append(s.Correlations, field)
 
 			return cast(&ColumnRef{
 				Parent:     field.Parent,
 				ColumnName: field.Name,
+				dataType:   scalar,
 			}, field)
 		}
+		if err != nil {
+			return nil, nil, err
+		}
+
+		scalar, err := field.Scalar()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -994,9 +1176,15 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		return cast(&ColumnRef{
 			Parent:     field.Parent,
 			ColumnName: field.Name,
+			dataType:   scalar,
 		}, field)
 	case *parse.ExpressionCollate:
 		expr, field, err := s.expr(node.Expression, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		scalar, err := field.Scalar()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1008,6 +1196,10 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		switch strings.ToLower(node.Collation) {
 		case "nocase":
 			c.Collation = NoCaseCollation
+
+			if !scalar.Equals(types.TextType) {
+				return nil, nil, fmt.Errorf("NOCASE collation can only be applied to text types")
+			}
 		default:
 			return nil, nil, fmt.Errorf(`unknown collation "%s"`, node.Collation)
 		}
@@ -1015,14 +1207,28 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		// return the whole field since collations don't overwrite the return value's name
 		return c, field, nil
 	case *parse.ExpressionStringComparison:
-		left, _, err := s.expr(node.Left, currentRel)
+		left, leftField, err := s.expr(node.Left, currentRel)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		right, _, err := s.expr(node.Right, currentRel)
+		right, rightField, err := s.expr(node.Right, currentRel)
 		if err != nil {
 			return nil, nil, err
+		}
+
+		leftScalar, err := leftField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		rightScalar, err := rightField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !leftScalar.Equals(types.TextType) || !rightScalar.Equals(types.TextType) {
+			return nil, nil, fmt.Errorf("string comparison operands must be of type string. %s != %s", leftScalar, rightScalar)
 		}
 
 		var expr LogicalExpr = &ComparisonOp{
@@ -1045,14 +1251,34 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			op = IsDistinctFrom
 		}
 
-		left, _, err := s.expr(node.Left, currentRel)
+		left, leftField, err := s.expr(node.Left, currentRel)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		right, _, err := s.expr(node.Right, currentRel)
+		right, rightField, err := s.expr(node.Right, currentRel)
 		if err != nil {
 			return nil, nil, err
+		}
+
+		leftScalar, err := leftField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		rightScalar, err := rightField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if node.Distinct {
+			if !leftScalar.Equals(rightScalar) {
+				return nil, nil, fmt.Errorf("IS DISTINCT FROM requires operands of the same type. %s != %s", leftScalar, rightScalar)
+			}
+		} else {
+			if !rightScalar.Equals(types.NullType) {
+				return nil, nil, fmt.Errorf("IS requires the right operand to be NULL")
+			}
 		}
 
 		var expr LogicalExpr = &ComparisonOp{
@@ -1070,7 +1296,12 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 
 		return expr, anonField(types.BoolType.Copy()), nil
 	case *parse.ExpressionIn:
-		left, _, err := s.expr(node.Expression, currentRel)
+		left, lField, err := s.expr(node.Expression, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		lScalar, err := lField.Scalar()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1089,13 +1320,33 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 				return nil, nil, fmt.Errorf("subquery must return exactly one column")
 			}
 
+			scalar, err := rel.Fields[0].Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !lScalar.Equals(scalar) {
+				return nil, nil, fmt.Errorf("IN subquery must return the same type as the left expression. %s != %s", lScalar, scalar)
+			}
+
 			in.Subquery = &SubqueryExpr{
 				Query: subq,
 			}
 		} else {
-			right, _, err := s.manyExprs(node.List, currentRel)
+			right, rFields, err := s.manyExprs(node.List, currentRel)
 			if err != nil {
 				return nil, nil, err
+			}
+
+			for _, r := range rFields {
+				scalar, err := r.Scalar()
+				if err != nil {
+					return nil, nil, err
+				}
+
+				if !lScalar.Equals(scalar) {
+					return nil, nil, fmt.Errorf("IN list must contain elements of the same type as the left expression. %s != %s", lScalar, scalar)
+				}
 			}
 
 			in.Expressions = right
@@ -1117,19 +1368,42 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			leftOp, rightOp = LessThan, GreaterThan
 		}
 
-		left, _, err := s.expr(node.Expression, currentRel)
+		left, exprField, err := s.expr(node.Expression, currentRel)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		lower, _, err := s.expr(node.Lower, currentRel)
+		exprScalar, err := exprField.Scalar()
 		if err != nil {
 			return nil, nil, err
 		}
 
-		upper, _, err := s.expr(node.Upper, currentRel)
+		lower, lowerField, err := s.expr(node.Lower, currentRel)
 		if err != nil {
 			return nil, nil, err
+		}
+
+		lowerScalar, err := lowerField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		upper, upperField, err := s.expr(node.Upper, currentRel)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		upScalar, err := upperField.Scalar()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !exprScalar.Equals(lowerScalar) {
+			return nil, nil, fmt.Errorf("BETWEEN lower bound must be of the same type as the expression. %s != %s", exprScalar, lowerScalar)
+		}
+
+		if !exprScalar.Equals(upScalar) {
+			return nil, nil, fmt.Errorf("BETWEEN upper bound must be of the same type as the expression. %s != %s", exprScalar, upScalar)
 		}
 
 		return &LogicalOp{
@@ -1571,9 +1845,18 @@ func (s *scopeContext) join(child LogicalPlan, childRel *Relation, join *parse.J
 
 	newRel := joinRels(childRel, tblRel)
 
-	onExpr, _, err := s.expr(join.On, newRel)
+	onExpr, joinField, err := s.expr(join.On, newRel)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	scalar, err := joinField.Scalar()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !scalar.Equals(types.BoolType) {
+		return nil, nil, fmt.Errorf("JOIN condition must be of type boolean, received %s", scalar)
 	}
 
 	plan := &Join{
@@ -1960,9 +2243,18 @@ func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, jo
 	// if there is no FROM clause, we can simply apply the filter and return
 	if from == nil {
 		if filter != nil {
-			expr, _, err := s.expr(filter, rel)
+			expr, field, err := s.expr(filter, rel)
 			if err != nil {
 				return nil, nil, nil, err
+			}
+
+			scalar, err := field.Scalar()
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			if !scalar.Equals(types.BoolType) {
+				return nil, nil, nil, fmt.Errorf("WHERE clause must be of type boolean, received %s", field)
 			}
 
 			return &Filter{
@@ -2004,9 +2296,18 @@ func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, jo
 
 	rel = joinRels(fromRel, rel)
 
-	expr, _, err := s.expr(filter, rel)
+	expr, field, err := s.expr(filter, rel)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+
+	scalar, err := field.Scalar()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if !scalar.Equals(types.BoolType) {
+		return nil, nil, nil, fmt.Errorf("WHERE clause must be of type boolean, received %s", field)
 	}
 
 	return &Filter{
