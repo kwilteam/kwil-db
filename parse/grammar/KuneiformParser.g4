@@ -288,7 +288,6 @@ sql_expr:
     | sql_expr LBRACKET sql_expr RBRACKET type_cast?                                # array_access_sql_expr
     | sql_expr PERIOD identifier type_cast?                                         # field_access_sql_expr
     | LPAREN sql_expr RPAREN type_cast?                                             # paren_sql_expr
-    | left=sql_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) right=sql_expr    # comparison_sql_expr
     | sql_expr NOT? IN LPAREN (sql_expr_list|select_statement) RPAREN               # in_sql_expr
     | left=sql_expr NOT? (LIKE|ILIKE) right=sql_expr                                # like_sql_expr
     | <assoc=right> (NOT|PLUS|MINUS) sql_expr                                       # unary_sql_expr
@@ -302,6 +301,8 @@ sql_expr:
     | left=sql_expr CONCAT right=sql_expr                                           # arithmetic_sql_expr
     | left=sql_expr (STAR | DIV | MOD) right=sql_expr                               # arithmetic_sql_expr
     | left=sql_expr (PLUS | MINUS) right=sql_expr                                   # arithmetic_sql_expr
+    // assignments and equality should come after arithmetic operations
+    | left=sql_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) right=sql_expr    # comparison_sql_expr
     // setting precedence for logical operations:
     | left=sql_expr AND right=sql_expr                                              # logical_sql_expr
     | left=sql_expr OR right=sql_expr                                               # logical_sql_expr
@@ -355,7 +356,6 @@ procedure_expr:
     | procedure_expr LBRACKET procedure_expr RBRACKET type_cast?                                # array_access_procedure_expr
     | LPAREN procedure_expr RPAREN type_cast?                                                   # paren_procedure_expr
     | procedure_expr PERIOD IDENTIFIER type_cast?                                               # field_access_procedure_expr
-    | procedure_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) procedure_expr               # comparison_procedure_expr
     | (MINUS|PLUS|EXCL) procedure_expr                                                          # unary_procedure_expr
     | left=procedure_expr IS NOT? ((DISTINCT FROM right=procedure_expr) | NULL | TRUE | FALSE)  # is_procedure_expr
     | procedure_expr (AND | OR) procedure_expr                                                  # logical_procedure_expr
@@ -363,6 +363,8 @@ procedure_expr:
     | procedure_expr CONCAT procedure_expr                                                      # procedure_expr_arithmetic
     | procedure_expr (STAR | DIV | MOD) procedure_expr                                          # procedure_expr_arithmetic
     | procedure_expr (PLUS | MINUS) procedure_expr                                              # procedure_expr_arithmetic
+    // assignments and equality should come after arithmetic operations
+    | procedure_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) procedure_expr               # comparison_procedure_expr
 ;
 
 procedure_expr_list:

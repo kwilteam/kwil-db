@@ -1862,6 +1862,27 @@ func Test_Procedure(t *testing.T) {
 		`,
 			err: parse.ErrUndeclaredVariable,
 		},
+		{ // regression test
+			name: "equals order of operations",
+			proc: `
+			$a := 1+2 == 3;
+			`,
+			want: &parse.ProcedureParseResult{
+				Variables: map[string]*types.DataType{
+					"$a": types.BoolType,
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$a"),
+						Value: &parse.ExpressionComparison{
+							Left:     &parse.ExpressionArithmetic{Left: exprLit(1), Operator: parse.ArithmeticOperatorAdd, Right: exprLit(2)},
+							Operator: parse.ComparisonOperatorEqual,
+							Right:    exprLit(3),
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

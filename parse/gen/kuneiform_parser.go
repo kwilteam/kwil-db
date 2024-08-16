@@ -172,25 +172,25 @@ func kuneiformparserParserInit() {
 		1, 44, 1, 44, 1, 44, 1, 44, 3, 44, 754, 8, 44, 1, 44, 4, 44, 757, 8, 44,
 		11, 44, 12, 44, 758, 1, 44, 1, 44, 3, 44, 763, 8, 44, 1, 44, 1, 44, 1,
 		44, 3, 44, 768, 8, 44, 1, 44, 3, 44, 771, 8, 44, 1, 44, 1, 44, 1, 44, 1,
-		44, 3, 44, 777, 8, 44, 3, 44, 779, 8, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1,
-		44, 3, 44, 786, 8, 44, 1, 44, 1, 44, 1, 44, 1, 44, 3, 44, 792, 8, 44, 1,
-		44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44,
+		44, 3, 44, 777, 8, 44, 3, 44, 779, 8, 44, 1, 44, 1, 44, 3, 44, 783, 8,
+		44, 1, 44, 1, 44, 1, 44, 1, 44, 3, 44, 789, 8, 44, 1, 44, 1, 44, 1, 44,
 		1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1,
-		44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 3, 44, 822, 8, 44, 1, 44,
-		1, 44, 1, 44, 1, 44, 3, 44, 828, 8, 44, 1, 44, 1, 44, 3, 44, 832, 8, 44,
-		1, 44, 1, 44, 1, 44, 1, 44, 3, 44, 838, 8, 44, 1, 44, 1, 44, 1, 44, 1,
-		44, 1, 44, 3, 44, 845, 8, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44,
-		3, 44, 853, 8, 44, 5, 44, 855, 8, 44, 10, 44, 12, 44, 858, 9, 44, 1, 45,
-		1, 45, 1, 45, 1, 45, 1, 45, 1, 46, 1, 46, 1, 46, 5, 46, 868, 8, 46, 10,
-		46, 12, 46, 871, 9, 46, 1, 47, 1, 47, 1, 47, 3, 47, 876, 8, 47, 1, 47,
-		1, 47, 3, 47, 880, 8, 47, 1, 47, 1, 47, 1, 47, 1, 47, 1, 47, 1, 47, 1,
-		47, 1, 47, 1, 47, 1, 47, 3, 47, 892, 8, 47, 1, 47, 1, 47, 3, 47, 896, 8,
-		47, 1, 48, 1, 48, 1, 48, 5, 48, 901, 8, 48, 10, 48, 12, 48, 904, 9, 48,
-		1, 49, 1, 49, 1, 49, 1, 49, 3, 49, 910, 8, 49, 1, 49, 1, 49, 1, 49, 1,
-		49, 3, 49, 916, 8, 49, 1, 49, 1, 49, 1, 49, 1, 49, 1, 49, 3, 49, 923, 8,
-		49, 1, 49, 3, 49, 926, 8, 49, 1, 50, 5, 50, 929, 8, 50, 10, 50, 12, 50,
-		932, 9, 50, 1, 51, 1, 51, 1, 51, 3, 51, 937, 8, 51, 1, 51, 1, 51, 3, 51,
-		941, 8, 51, 1, 51, 1, 51, 3, 51, 945, 8, 51, 1, 51, 1, 51, 3, 51, 949,
+		44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44,
+		1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 3, 44, 822, 8, 44, 1,
+		44, 1, 44, 1, 44, 1, 44, 3, 44, 828, 8, 44, 1, 44, 1, 44, 3, 44, 832, 8,
+		44, 1, 44, 1, 44, 1, 44, 1, 44, 3, 44, 838, 8, 44, 1, 44, 1, 44, 1, 44,
+		1, 44, 1, 44, 3, 44, 845, 8, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1, 44, 1,
+		44, 3, 44, 853, 8, 44, 5, 44, 855, 8, 44, 10, 44, 12, 44, 858, 9, 44, 1,
+		45, 1, 45, 1, 45, 1, 45, 1, 45, 1, 46, 1, 46, 1, 46, 5, 46, 868, 8, 46,
+		10, 46, 12, 46, 871, 9, 46, 1, 47, 1, 47, 1, 47, 3, 47, 876, 8, 47, 1,
+		47, 1, 47, 3, 47, 880, 8, 47, 1, 47, 1, 47, 1, 47, 1, 47, 1, 47, 1, 47,
+		1, 47, 1, 47, 1, 47, 1, 47, 3, 47, 892, 8, 47, 1, 47, 1, 47, 3, 47, 896,
+		8, 47, 1, 48, 1, 48, 1, 48, 5, 48, 901, 8, 48, 10, 48, 12, 48, 904, 9,
+		48, 1, 49, 1, 49, 1, 49, 1, 49, 3, 49, 910, 8, 49, 1, 49, 1, 49, 1, 49,
+		1, 49, 3, 49, 916, 8, 49, 1, 49, 1, 49, 1, 49, 1, 49, 1, 49, 3, 49, 923,
+		8, 49, 1, 49, 3, 49, 926, 8, 49, 1, 50, 5, 50, 929, 8, 50, 10, 50, 12,
+		50, 932, 9, 50, 1, 51, 1, 51, 1, 51, 3, 51, 937, 8, 51, 1, 51, 1, 51, 3,
+		51, 941, 8, 51, 1, 51, 1, 51, 3, 51, 945, 8, 51, 1, 51, 1, 51, 3, 51, 949,
 		8, 51, 1, 51, 1, 51, 3, 51, 953, 8, 51, 1, 51, 1, 51, 1, 51, 1, 51, 3,
 		51, 959, 8, 51, 1, 51, 1, 51, 3, 51, 963, 8, 51, 1, 51, 1, 51, 1, 51, 1,
 		51, 1, 51, 1, 51, 1, 51, 1, 51, 1, 51, 1, 51, 1, 51, 1, 51, 1, 51, 1, 51,
@@ -217,8 +217,8 @@ func kuneiformparserParserInit() {
 		76, 78, 80, 82, 84, 86, 88, 90, 92, 94, 96, 98, 100, 102, 104, 106, 108,
 		110, 112, 114, 0, 16, 1, 0, 20, 21, 1, 0, 115, 116, 1, 0, 126, 127, 3,
 		0, 43, 43, 47, 47, 58, 58, 1, 0, 55, 56, 1, 0, 38, 41, 1, 0, 74, 75, 1,
-		0, 101, 102, 2, 0, 70, 72, 96, 96, 2, 0, 20, 21, 57, 57, 2, 0, 15, 16,
-		23, 27, 1, 0, 61, 62, 3, 0, 14, 14, 19, 19, 22, 22, 2, 0, 11, 11, 20, 21,
+		0, 101, 102, 2, 0, 70, 72, 96, 96, 2, 0, 20, 21, 57, 57, 1, 0, 61, 62,
+		3, 0, 14, 14, 19, 19, 22, 22, 2, 0, 15, 16, 23, 27, 2, 0, 11, 11, 20, 21,
 		1, 0, 59, 60, 2, 0, 29, 29, 126, 126, 1298, 0, 116, 1, 0, 0, 0, 2, 119,
 		1, 0, 0, 0, 4, 122, 1, 0, 0, 0, 6, 125, 1, 0, 0, 0, 8, 142, 1, 0, 0, 0,
 		10, 148, 1, 0, 0, 0, 12, 150, 1, 0, 0, 0, 14, 158, 1, 0, 0, 0, 16, 170,
@@ -470,7 +470,7 @@ func kuneiformparserParserInit() {
 		8, 0, 741, 740, 1, 0, 0, 0, 741, 742, 1, 0, 0, 0, 742, 779, 1, 0, 0, 0,
 		743, 744, 5, 7, 0, 0, 744, 745, 3, 88, 44, 0, 745, 747, 5, 8, 0, 0, 746,
 		748, 3, 16, 8, 0, 747, 746, 1, 0, 0, 0, 747, 748, 1, 0, 0, 0, 748, 779,
-		1, 0, 0, 0, 749, 750, 7, 9, 0, 0, 750, 779, 3, 88, 44, 10, 751, 753, 5,
+		1, 0, 0, 0, 749, 750, 7, 9, 0, 0, 750, 779, 3, 88, 44, 11, 751, 753, 5,
 		85, 0, 0, 752, 754, 3, 88, 44, 0, 753, 752, 1, 0, 0, 0, 753, 754, 1, 0,
 		0, 0, 754, 756, 1, 0, 0, 0, 755, 757, 3, 90, 45, 0, 756, 755, 1, 0, 0,
 		0, 757, 758, 1, 0, 0, 0, 758, 756, 1, 0, 0, 0, 758, 759, 1, 0, 0, 0, 759,
@@ -483,34 +483,34 @@ func kuneiformparserParserInit() {
 		16, 8, 0, 776, 775, 1, 0, 0, 0, 776, 777, 1, 0, 0, 0, 777, 779, 1, 0, 0,
 		0, 778, 721, 1, 0, 0, 0, 778, 726, 1, 0, 0, 0, 778, 730, 1, 0, 0, 0, 778,
 		737, 1, 0, 0, 0, 778, 743, 1, 0, 0, 0, 778, 749, 1, 0, 0, 0, 778, 751,
-		1, 0, 0, 0, 778, 770, 1, 0, 0, 0, 779, 856, 1, 0, 0, 0, 780, 781, 10, 13,
-		0, 0, 781, 782, 7, 10, 0, 0, 782, 855, 3, 88, 44, 14, 783, 785, 10, 11,
-		0, 0, 784, 786, 5, 57, 0, 0, 785, 784, 1, 0, 0, 0, 785, 786, 1, 0, 0, 0,
-		786, 787, 1, 0, 0, 0, 787, 788, 7, 11, 0, 0, 788, 855, 3, 88, 44, 12, 789,
-		791, 10, 9, 0, 0, 790, 792, 5, 57, 0, 0, 791, 790, 1, 0, 0, 0, 791, 792,
-		1, 0, 0, 0, 792, 793, 1, 0, 0, 0, 793, 794, 5, 64, 0, 0, 794, 795, 3, 88,
-		44, 0, 795, 796, 5, 59, 0, 0, 796, 797, 3, 88, 44, 10, 797, 855, 1, 0,
-		0, 0, 798, 799, 10, 5, 0, 0, 799, 800, 5, 13, 0, 0, 800, 855, 3, 88, 44,
-		6, 801, 802, 10, 4, 0, 0, 802, 803, 7, 12, 0, 0, 803, 855, 3, 88, 44, 5,
-		804, 805, 10, 3, 0, 0, 805, 806, 7, 0, 0, 0, 806, 855, 3, 88, 44, 4, 807,
-		808, 10, 2, 0, 0, 808, 809, 5, 59, 0, 0, 809, 855, 3, 88, 44, 3, 810, 811,
-		10, 1, 0, 0, 811, 812, 5, 60, 0, 0, 812, 855, 3, 88, 44, 2, 813, 814, 10,
-		20, 0, 0, 814, 815, 5, 92, 0, 0, 815, 855, 3, 10, 5, 0, 816, 817, 10, 16,
-		0, 0, 817, 818, 5, 3, 0, 0, 818, 819, 3, 88, 44, 0, 819, 821, 5, 4, 0,
-		0, 820, 822, 3, 16, 8, 0, 821, 820, 1, 0, 0, 0, 821, 822, 1, 0, 0, 0, 822,
+		1, 0, 0, 0, 778, 770, 1, 0, 0, 0, 779, 856, 1, 0, 0, 0, 780, 782, 10, 12,
+		0, 0, 781, 783, 5, 57, 0, 0, 782, 781, 1, 0, 0, 0, 782, 783, 1, 0, 0, 0,
+		783, 784, 1, 0, 0, 0, 784, 785, 7, 10, 0, 0, 785, 855, 3, 88, 44, 13, 786,
+		788, 10, 10, 0, 0, 787, 789, 5, 57, 0, 0, 788, 787, 1, 0, 0, 0, 788, 789,
+		1, 0, 0, 0, 789, 790, 1, 0, 0, 0, 790, 791, 5, 64, 0, 0, 791, 792, 3, 88,
+		44, 0, 792, 793, 5, 59, 0, 0, 793, 794, 3, 88, 44, 11, 794, 855, 1, 0,
+		0, 0, 795, 796, 10, 6, 0, 0, 796, 797, 5, 13, 0, 0, 797, 855, 3, 88, 44,
+		7, 798, 799, 10, 5, 0, 0, 799, 800, 7, 11, 0, 0, 800, 855, 3, 88, 44, 6,
+		801, 802, 10, 4, 0, 0, 802, 803, 7, 0, 0, 0, 803, 855, 3, 88, 44, 5, 804,
+		805, 10, 3, 0, 0, 805, 806, 7, 12, 0, 0, 806, 855, 3, 88, 44, 4, 807, 808,
+		10, 2, 0, 0, 808, 809, 5, 59, 0, 0, 809, 855, 3, 88, 44, 3, 810, 811, 10,
+		1, 0, 0, 811, 812, 5, 60, 0, 0, 812, 855, 3, 88, 44, 2, 813, 814, 10, 20,
+		0, 0, 814, 815, 5, 92, 0, 0, 815, 855, 3, 10, 5, 0, 816, 817, 10, 16, 0,
+		0, 817, 818, 5, 3, 0, 0, 818, 819, 3, 88, 44, 0, 819, 821, 5, 4, 0, 0,
+		820, 822, 3, 16, 8, 0, 821, 820, 1, 0, 0, 0, 821, 822, 1, 0, 0, 0, 822,
 		855, 1, 0, 0, 0, 823, 824, 10, 15, 0, 0, 824, 825, 5, 12, 0, 0, 825, 827,
 		3, 10, 5, 0, 826, 828, 3, 16, 8, 0, 827, 826, 1, 0, 0, 0, 827, 828, 1,
-		0, 0, 0, 828, 855, 1, 0, 0, 0, 829, 831, 10, 12, 0, 0, 830, 832, 5, 57,
+		0, 0, 0, 828, 855, 1, 0, 0, 0, 829, 831, 10, 13, 0, 0, 830, 832, 5, 57,
 		0, 0, 831, 830, 1, 0, 0, 0, 831, 832, 1, 0, 0, 0, 832, 833, 1, 0, 0, 0,
 		833, 834, 5, 63, 0, 0, 834, 837, 5, 7, 0, 0, 835, 838, 3, 92, 46, 0, 836,
 		838, 3, 64, 32, 0, 837, 835, 1, 0, 0, 0, 837, 836, 1, 0, 0, 0, 838, 839,
-		1, 0, 0, 0, 839, 840, 5, 8, 0, 0, 840, 855, 1, 0, 0, 0, 841, 842, 10, 8,
+		1, 0, 0, 0, 839, 840, 5, 8, 0, 0, 840, 855, 1, 0, 0, 0, 841, 842, 10, 9,
 		0, 0, 842, 844, 5, 65, 0, 0, 843, 845, 5, 57, 0, 0, 844, 843, 1, 0, 0,
 		0, 844, 845, 1, 0, 0, 0, 845, 852, 1, 0, 0, 0, 846, 847, 5, 89, 0, 0, 847,
 		848, 5, 90, 0, 0, 848, 853, 3, 88, 44, 0, 849, 853, 5, 52, 0, 0, 850, 853,
 		5, 115, 0, 0, 851, 853, 5, 116, 0, 0, 852, 846, 1, 0, 0, 0, 852, 849, 1,
 		0, 0, 0, 852, 850, 1, 0, 0, 0, 852, 851, 1, 0, 0, 0, 853, 855, 1, 0, 0,
-		0, 854, 780, 1, 0, 0, 0, 854, 783, 1, 0, 0, 0, 854, 789, 1, 0, 0, 0, 854,
+		0, 854, 780, 1, 0, 0, 0, 854, 786, 1, 0, 0, 0, 854, 795, 1, 0, 0, 0, 854,
 		798, 1, 0, 0, 0, 854, 801, 1, 0, 0, 0, 854, 804, 1, 0, 0, 0, 854, 807,
 		1, 0, 0, 0, 854, 810, 1, 0, 0, 0, 854, 813, 1, 0, 0, 0, 854, 816, 1, 0,
 		0, 0, 854, 823, 1, 0, 0, 0, 854, 829, 1, 0, 0, 0, 854, 841, 1, 0, 0, 0,
@@ -553,19 +553,19 @@ func kuneiformparserParserInit() {
 		953, 1, 0, 0, 0, 953, 963, 1, 0, 0, 0, 954, 955, 5, 7, 0, 0, 955, 956,
 		3, 102, 51, 0, 956, 958, 5, 8, 0, 0, 957, 959, 3, 16, 8, 0, 958, 957, 1,
 		0, 0, 0, 958, 959, 1, 0, 0, 0, 959, 963, 1, 0, 0, 0, 960, 961, 7, 13, 0,
-		0, 961, 963, 3, 102, 51, 6, 962, 933, 1, 0, 0, 0, 962, 938, 1, 0, 0, 0,
+		0, 961, 963, 3, 102, 51, 7, 962, 933, 1, 0, 0, 0, 962, 938, 1, 0, 0, 0,
 		962, 942, 1, 0, 0, 0, 962, 946, 1, 0, 0, 0, 962, 954, 1, 0, 0, 0, 962,
-		960, 1, 0, 0, 0, 963, 1007, 1, 0, 0, 0, 964, 965, 10, 7, 0, 0, 965, 966,
-		7, 10, 0, 0, 966, 1006, 3, 102, 51, 8, 967, 968, 10, 4, 0, 0, 968, 969,
-		7, 14, 0, 0, 969, 1006, 3, 102, 51, 5, 970, 971, 10, 3, 0, 0, 971, 972,
-		5, 13, 0, 0, 972, 1006, 3, 102, 51, 4, 973, 974, 10, 2, 0, 0, 974, 975,
-		7, 12, 0, 0, 975, 1006, 3, 102, 51, 3, 976, 977, 10, 1, 0, 0, 977, 978,
-		7, 0, 0, 0, 978, 1006, 3, 102, 51, 2, 979, 980, 10, 10, 0, 0, 980, 981,
+		960, 1, 0, 0, 0, 963, 1007, 1, 0, 0, 0, 964, 965, 10, 5, 0, 0, 965, 966,
+		7, 14, 0, 0, 966, 1006, 3, 102, 51, 6, 967, 968, 10, 4, 0, 0, 968, 969,
+		5, 13, 0, 0, 969, 1006, 3, 102, 51, 5, 970, 971, 10, 3, 0, 0, 971, 972,
+		7, 11, 0, 0, 972, 1006, 3, 102, 51, 4, 973, 974, 10, 2, 0, 0, 974, 975,
+		7, 0, 0, 0, 975, 1006, 3, 102, 51, 3, 976, 977, 10, 1, 0, 0, 977, 978,
+		7, 12, 0, 0, 978, 1006, 3, 102, 51, 2, 979, 980, 10, 10, 0, 0, 980, 981,
 		5, 3, 0, 0, 981, 982, 3, 102, 51, 0, 982, 984, 5, 4, 0, 0, 983, 985, 3,
 		16, 8, 0, 984, 983, 1, 0, 0, 0, 984, 985, 1, 0, 0, 0, 985, 1006, 1, 0,
 		0, 0, 986, 987, 10, 8, 0, 0, 987, 988, 5, 12, 0, 0, 988, 990, 5, 125, 0,
 		0, 989, 991, 3, 16, 8, 0, 990, 989, 1, 0, 0, 0, 990, 991, 1, 0, 0, 0, 991,
-		1006, 1, 0, 0, 0, 992, 993, 10, 5, 0, 0, 993, 995, 5, 65, 0, 0, 994, 996,
+		1006, 1, 0, 0, 0, 992, 993, 10, 6, 0, 0, 993, 995, 5, 65, 0, 0, 994, 996,
 		5, 57, 0, 0, 995, 994, 1, 0, 0, 0, 995, 996, 1, 0, 0, 0, 996, 1003, 1,
 		0, 0, 0, 997, 998, 5, 89, 0, 0, 998, 999, 5, 90, 0, 0, 999, 1004, 3, 102,
 		51, 0, 1000, 1004, 5, 52, 0, 0, 1001, 1004, 5, 115, 0, 0, 1002, 1004, 5,
@@ -633,7 +633,7 @@ func kuneiformparserParserInit() {
 		546, 549, 553, 560, 562, 566, 569, 575, 578, 582, 585, 587, 590, 599, 602,
 		607, 610, 615, 618, 626, 634, 637, 641, 651, 654, 660, 673, 677, 686, 688,
 		699, 704, 706, 712, 715, 719, 724, 728, 732, 737, 741, 747, 753, 758, 762,
-		767, 770, 776, 778, 785, 791, 821, 827, 831, 837, 844, 852, 854, 856, 869,
+		767, 770, 776, 778, 782, 788, 821, 827, 831, 837, 844, 852, 854, 856, 869,
 		875, 879, 891, 895, 902, 909, 915, 922, 925, 930, 936, 940, 944, 948, 952,
 		958, 962, 984, 990, 995, 1003, 1005, 1007, 1015, 1027, 1032, 1039, 1051,
 		1057, 1068, 1076, 1080, 1090, 1098, 1105, 1116, 1120, 1127,
@@ -13955,7 +13955,7 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 		}
 		{
 			p.SetState(750)
-			p.sql_expr(10)
+			p.sql_expr(11)
 		}
 
 	case 7:
@@ -14141,47 +14141,17 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 
 			switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 118, p.GetParserRuleContext()) {
 			case 1:
-				localctx = NewComparison_sql_exprContext(p, NewSql_exprContext(p, _parentctx, _parentState))
-				localctx.(*Comparison_sql_exprContext).left = _prevctx
-
-				p.PushNewRecursionContext(localctx, _startState, KuneiformParserRULE_sql_expr)
-				p.SetState(780)
-
-				if !(p.Precpred(p.GetParserRuleContext(), 13)) {
-					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 13)", ""))
-					goto errorExit
-				}
-				{
-					p.SetState(781)
-					_la = p.GetTokenStream().LA(1)
-
-					if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&260145152) != 0) {
-						p.GetErrorHandler().RecoverInline(p)
-					} else {
-						p.GetErrorHandler().ReportMatch(p)
-						p.Consume()
-					}
-				}
-				{
-					p.SetState(782)
-
-					var _x = p.sql_expr(14)
-
-					localctx.(*Comparison_sql_exprContext).right = _x
-				}
-
-			case 2:
 				localctx = NewLike_sql_exprContext(p, NewSql_exprContext(p, _parentctx, _parentState))
 				localctx.(*Like_sql_exprContext).left = _prevctx
 
 				p.PushNewRecursionContext(localctx, _startState, KuneiformParserRULE_sql_expr)
-				p.SetState(783)
+				p.SetState(780)
 
-				if !(p.Precpred(p.GetParserRuleContext(), 11)) {
-					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 11)", ""))
+				if !(p.Precpred(p.GetParserRuleContext(), 12)) {
+					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 12)", ""))
 					goto errorExit
 				}
-				p.SetState(785)
+				p.SetState(782)
 				p.GetErrorHandler().Sync(p)
 				if p.HasError() {
 					goto errorExit
@@ -14190,7 +14160,7 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 
 				if _la == KuneiformParserNOT {
 					{
-						p.SetState(784)
+						p.SetState(781)
 						p.Match(KuneiformParserNOT)
 						if p.HasError() {
 							// Recognition error - abort rule
@@ -14200,7 +14170,7 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 
 				}
 				{
-					p.SetState(787)
+					p.SetState(784)
 					_la = p.GetTokenStream().LA(1)
 
 					if !(_la == KuneiformParserLIKE || _la == KuneiformParserILIKE) {
@@ -14211,25 +14181,25 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 					}
 				}
 				{
-					p.SetState(788)
+					p.SetState(785)
 
-					var _x = p.sql_expr(12)
+					var _x = p.sql_expr(13)
 
 					localctx.(*Like_sql_exprContext).right = _x
 				}
 
-			case 3:
+			case 2:
 				localctx = NewBetween_sql_exprContext(p, NewSql_exprContext(p, _parentctx, _parentState))
 				localctx.(*Between_sql_exprContext).element = _prevctx
 
 				p.PushNewRecursionContext(localctx, _startState, KuneiformParserRULE_sql_expr)
-				p.SetState(789)
+				p.SetState(786)
 
-				if !(p.Precpred(p.GetParserRuleContext(), 9)) {
-					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 9)", ""))
+				if !(p.Precpred(p.GetParserRuleContext(), 10)) {
+					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 10)", ""))
 					goto errorExit
 				}
-				p.SetState(791)
+				p.SetState(788)
 				p.GetErrorHandler().Sync(p)
 				if p.HasError() {
 					goto errorExit
@@ -14238,7 +14208,7 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 
 				if _la == KuneiformParserNOT {
 					{
-						p.SetState(790)
+						p.SetState(787)
 						p.Match(KuneiformParserNOT)
 						if p.HasError() {
 							// Recognition error - abort rule
@@ -14248,7 +14218,7 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 
 				}
 				{
-					p.SetState(793)
+					p.SetState(790)
 					p.Match(KuneiformParserBETWEEN)
 					if p.HasError() {
 						// Recognition error - abort rule
@@ -14256,14 +14226,14 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 					}
 				}
 				{
-					p.SetState(794)
+					p.SetState(791)
 
 					var _x = p.sql_expr(0)
 
 					localctx.(*Between_sql_exprContext).lower = _x
 				}
 				{
-					p.SetState(795)
+					p.SetState(792)
 					p.Match(KuneiformParserAND)
 					if p.HasError() {
 						// Recognition error - abort rule
@@ -14271,11 +14241,38 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 					}
 				}
 				{
-					p.SetState(796)
+					p.SetState(793)
 
-					var _x = p.sql_expr(10)
+					var _x = p.sql_expr(11)
 
 					localctx.(*Between_sql_exprContext).upper = _x
+				}
+
+			case 3:
+				localctx = NewArithmetic_sql_exprContext(p, NewSql_exprContext(p, _parentctx, _parentState))
+				localctx.(*Arithmetic_sql_exprContext).left = _prevctx
+
+				p.PushNewRecursionContext(localctx, _startState, KuneiformParserRULE_sql_expr)
+				p.SetState(795)
+
+				if !(p.Precpred(p.GetParserRuleContext(), 6)) {
+					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 6)", ""))
+					goto errorExit
+				}
+				{
+					p.SetState(796)
+					p.Match(KuneiformParserCONCAT)
+					if p.HasError() {
+						// Recognition error - abort rule
+						goto errorExit
+					}
+				}
+				{
+					p.SetState(797)
+
+					var _x = p.sql_expr(7)
+
+					localctx.(*Arithmetic_sql_exprContext).right = _x
 				}
 
 			case 4:
@@ -14291,10 +14288,13 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 				}
 				{
 					p.SetState(799)
-					p.Match(KuneiformParserCONCAT)
-					if p.HasError() {
-						// Recognition error - abort rule
-						goto errorExit
+					_la = p.GetTokenStream().LA(1)
+
+					if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&4734976) != 0) {
+						p.GetErrorHandler().RecoverInline(p)
+					} else {
+						p.GetErrorHandler().ReportMatch(p)
+						p.Consume()
 					}
 				}
 				{
@@ -14320,7 +14320,7 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 					p.SetState(802)
 					_la = p.GetTokenStream().LA(1)
 
-					if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&4734976) != 0) {
+					if !(_la == KuneiformParserPLUS || _la == KuneiformParserMINUS) {
 						p.GetErrorHandler().RecoverInline(p)
 					} else {
 						p.GetErrorHandler().ReportMatch(p)
@@ -14336,8 +14336,8 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 				}
 
 			case 6:
-				localctx = NewArithmetic_sql_exprContext(p, NewSql_exprContext(p, _parentctx, _parentState))
-				localctx.(*Arithmetic_sql_exprContext).left = _prevctx
+				localctx = NewComparison_sql_exprContext(p, NewSql_exprContext(p, _parentctx, _parentState))
+				localctx.(*Comparison_sql_exprContext).left = _prevctx
 
 				p.PushNewRecursionContext(localctx, _startState, KuneiformParserRULE_sql_expr)
 				p.SetState(804)
@@ -14350,7 +14350,7 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 					p.SetState(805)
 					_la = p.GetTokenStream().LA(1)
 
-					if !(_la == KuneiformParserPLUS || _la == KuneiformParserMINUS) {
+					if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&260145152) != 0) {
 						p.GetErrorHandler().RecoverInline(p)
 					} else {
 						p.GetErrorHandler().ReportMatch(p)
@@ -14362,7 +14362,7 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 
 					var _x = p.sql_expr(4)
 
-					localctx.(*Arithmetic_sql_exprContext).right = _x
+					localctx.(*Comparison_sql_exprContext).right = _x
 				}
 
 			case 7:
@@ -14522,8 +14522,8 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 				p.PushNewRecursionContext(localctx, _startState, KuneiformParserRULE_sql_expr)
 				p.SetState(829)
 
-				if !(p.Precpred(p.GetParserRuleContext(), 12)) {
-					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 12)", ""))
+				if !(p.Precpred(p.GetParserRuleContext(), 13)) {
+					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 13)", ""))
 					goto errorExit
 				}
 				p.SetState(831)
@@ -14599,8 +14599,8 @@ func (p *KuneiformParser) sql_expr(_p int) (localctx ISql_exprContext) {
 				p.PushNewRecursionContext(localctx, _startState, KuneiformParserRULE_sql_expr)
 				p.SetState(841)
 
-				if !(p.Precpred(p.GetParserRuleContext(), 8)) {
-					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 8)", ""))
+				if !(p.Precpred(p.GetParserRuleContext(), 9)) {
+					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 9)", ""))
 					goto errorExit
 				}
 				{
@@ -17371,7 +17371,7 @@ func (p *KuneiformParser) procedure_expr(_p int) (localctx IProcedure_exprContex
 		}
 		{
 			p.SetState(961)
-			p.procedure_expr(6)
+			p.procedure_expr(7)
 		}
 
 	case antlr.ATNInvalidAltNumber:
@@ -17401,19 +17401,19 @@ func (p *KuneiformParser) procedure_expr(_p int) (localctx IProcedure_exprContex
 
 			switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 142, p.GetParserRuleContext()) {
 			case 1:
-				localctx = NewComparison_procedure_exprContext(p, NewProcedure_exprContext(p, _parentctx, _parentState))
+				localctx = NewLogical_procedure_exprContext(p, NewProcedure_exprContext(p, _parentctx, _parentState))
 				p.PushNewRecursionContext(localctx, _startState, KuneiformParserRULE_procedure_expr)
 				p.SetState(964)
 
-				if !(p.Precpred(p.GetParserRuleContext(), 7)) {
-					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 7)", ""))
+				if !(p.Precpred(p.GetParserRuleContext(), 5)) {
+					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 5)", ""))
 					goto errorExit
 				}
 				{
 					p.SetState(965)
 					_la = p.GetTokenStream().LA(1)
 
-					if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&260145152) != 0) {
+					if !(_la == KuneiformParserAND || _la == KuneiformParserOR) {
 						p.GetErrorHandler().RecoverInline(p)
 					} else {
 						p.GetErrorHandler().ReportMatch(p)
@@ -17422,11 +17422,11 @@ func (p *KuneiformParser) procedure_expr(_p int) (localctx IProcedure_exprContex
 				}
 				{
 					p.SetState(966)
-					p.procedure_expr(8)
+					p.procedure_expr(6)
 				}
 
 			case 2:
-				localctx = NewLogical_procedure_exprContext(p, NewProcedure_exprContext(p, _parentctx, _parentState))
+				localctx = NewProcedure_expr_arithmeticContext(p, NewProcedure_exprContext(p, _parentctx, _parentState))
 				p.PushNewRecursionContext(localctx, _startState, KuneiformParserRULE_procedure_expr)
 				p.SetState(967)
 
@@ -17436,13 +17436,10 @@ func (p *KuneiformParser) procedure_expr(_p int) (localctx IProcedure_exprContex
 				}
 				{
 					p.SetState(968)
-					_la = p.GetTokenStream().LA(1)
-
-					if !(_la == KuneiformParserAND || _la == KuneiformParserOR) {
-						p.GetErrorHandler().RecoverInline(p)
-					} else {
-						p.GetErrorHandler().ReportMatch(p)
-						p.Consume()
+					p.Match(KuneiformParserCONCAT)
+					if p.HasError() {
+						// Recognition error - abort rule
+						goto errorExit
 					}
 				}
 				{
@@ -17461,10 +17458,13 @@ func (p *KuneiformParser) procedure_expr(_p int) (localctx IProcedure_exprContex
 				}
 				{
 					p.SetState(971)
-					p.Match(KuneiformParserCONCAT)
-					if p.HasError() {
-						// Recognition error - abort rule
-						goto errorExit
+					_la = p.GetTokenStream().LA(1)
+
+					if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&4734976) != 0) {
+						p.GetErrorHandler().RecoverInline(p)
+					} else {
+						p.GetErrorHandler().ReportMatch(p)
+						p.Consume()
 					}
 				}
 				{
@@ -17485,7 +17485,7 @@ func (p *KuneiformParser) procedure_expr(_p int) (localctx IProcedure_exprContex
 					p.SetState(974)
 					_la = p.GetTokenStream().LA(1)
 
-					if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&4734976) != 0) {
+					if !(_la == KuneiformParserPLUS || _la == KuneiformParserMINUS) {
 						p.GetErrorHandler().RecoverInline(p)
 					} else {
 						p.GetErrorHandler().ReportMatch(p)
@@ -17498,7 +17498,7 @@ func (p *KuneiformParser) procedure_expr(_p int) (localctx IProcedure_exprContex
 				}
 
 			case 5:
-				localctx = NewProcedure_expr_arithmeticContext(p, NewProcedure_exprContext(p, _parentctx, _parentState))
+				localctx = NewComparison_procedure_exprContext(p, NewProcedure_exprContext(p, _parentctx, _parentState))
 				p.PushNewRecursionContext(localctx, _startState, KuneiformParserRULE_procedure_expr)
 				p.SetState(976)
 
@@ -17510,7 +17510,7 @@ func (p *KuneiformParser) procedure_expr(_p int) (localctx IProcedure_exprContex
 					p.SetState(977)
 					_la = p.GetTokenStream().LA(1)
 
-					if !(_la == KuneiformParserPLUS || _la == KuneiformParserMINUS) {
+					if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&260145152) != 0) {
 						p.GetErrorHandler().RecoverInline(p)
 					} else {
 						p.GetErrorHandler().ReportMatch(p)
@@ -17609,8 +17609,8 @@ func (p *KuneiformParser) procedure_expr(_p int) (localctx IProcedure_exprContex
 				p.PushNewRecursionContext(localctx, _startState, KuneiformParserRULE_procedure_expr)
 				p.SetState(992)
 
-				if !(p.Precpred(p.GetParserRuleContext(), 5)) {
-					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 5)", ""))
+				if !(p.Precpred(p.GetParserRuleContext(), 6)) {
+					p.SetError(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 6)", ""))
 					goto errorExit
 				}
 				{
@@ -20007,13 +20007,13 @@ func (p *KuneiformParser) Sempred(localctx antlr.RuleContext, ruleIndex, predInd
 func (p *KuneiformParser) Sql_expr_Sempred(localctx antlr.RuleContext, predIndex int) bool {
 	switch predIndex {
 	case 0:
-		return p.Precpred(p.GetParserRuleContext(), 13)
+		return p.Precpred(p.GetParserRuleContext(), 12)
 
 	case 1:
-		return p.Precpred(p.GetParserRuleContext(), 11)
+		return p.Precpred(p.GetParserRuleContext(), 10)
 
 	case 2:
-		return p.Precpred(p.GetParserRuleContext(), 9)
+		return p.Precpred(p.GetParserRuleContext(), 6)
 
 	case 3:
 		return p.Precpred(p.GetParserRuleContext(), 5)
@@ -20040,10 +20040,10 @@ func (p *KuneiformParser) Sql_expr_Sempred(localctx antlr.RuleContext, predIndex
 		return p.Precpred(p.GetParserRuleContext(), 15)
 
 	case 11:
-		return p.Precpred(p.GetParserRuleContext(), 12)
+		return p.Precpred(p.GetParserRuleContext(), 13)
 
 	case 12:
-		return p.Precpred(p.GetParserRuleContext(), 8)
+		return p.Precpred(p.GetParserRuleContext(), 9)
 
 	default:
 		panic("No predicate with index: " + fmt.Sprint(predIndex))
@@ -20053,7 +20053,7 @@ func (p *KuneiformParser) Sql_expr_Sempred(localctx antlr.RuleContext, predIndex
 func (p *KuneiformParser) Procedure_expr_Sempred(localctx antlr.RuleContext, predIndex int) bool {
 	switch predIndex {
 	case 13:
-		return p.Precpred(p.GetParserRuleContext(), 7)
+		return p.Precpred(p.GetParserRuleContext(), 5)
 
 	case 14:
 		return p.Precpred(p.GetParserRuleContext(), 4)
@@ -20074,7 +20074,7 @@ func (p *KuneiformParser) Procedure_expr_Sempred(localctx antlr.RuleContext, pre
 		return p.Precpred(p.GetParserRuleContext(), 8)
 
 	case 20:
-		return p.Precpred(p.GetParserRuleContext(), 5)
+		return p.Precpred(p.GetParserRuleContext(), 6)
 
 	default:
 		panic("No predicate with index: " + fmt.Sprint(predIndex))
