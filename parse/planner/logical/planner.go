@@ -1640,6 +1640,11 @@ func (s *scopeContext) planSubquery(node *parse.SelectStatement, currentRel *Rel
 	}
 	for _, cor := range s.Correlations {
 		_, err = currentRel.Search(cor.Parent, cor.Name)
+		// if no error, it is correlated to this query, do nothing
+		if err == nil {
+			continue
+		}
+
 		// if the column is not found in the current relation, then we need to
 		// pass it back to the oldCorrelations
 		if errors.Is(err, ErrColumnNotFound) {
@@ -1649,11 +1654,10 @@ func (s *scopeContext) planSubquery(node *parse.SelectStatement, currentRel *Rel
 				oldCorrelations = append(oldCorrelations, cor)
 				continue
 			}
-		} else if err != nil {
-			// some other error occurred
-			return nil, nil, err
 		}
-		// if no error, it is correlated to this query, do nothing
+		// some other error occurred
+		return nil, nil, err
+
 	}
 
 	plan := &Subplan{
@@ -2274,11 +2278,10 @@ func (s *scopeContext) buildUpsert(node *parse.UpsertClause, table *types.Table,
 	return res, nil
 }
 
-// checkNullableColumns takes a table and a set of columns, and checks if
-// any column in the table not in the set is nullable. If so, it returns
-// an error. It also checks if all columns in the set are in the table.
-// If not, it returns an error. If all checks pass, it returns a slice
-// of data types that the insert order must match.
+// checkNullableColumns takes a table and a slice of column names, and checks
+// if the columns are nullable. If they are not nullable, it returns an error.
+// If they are nullable, it returns their data types in the order that they
+// were passed in.
 func checkNullableColumns(tbl *types.Table, cols []string) ([]*types.DataType, error) {
 	specifiedColSet := make(map[string]struct{}, len(cols))
 	for _, col := range cols {

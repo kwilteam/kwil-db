@@ -17,19 +17,6 @@ type RewriteConfig struct {
 	// a boolean, which indicates whether the nodes children should be visited,
 	// and an error, which will be returned if an error occurs.
 	ScanSourceCallback func(ScanSource) (ScanSource, bool, error)
-	// If true, the callback will be called after visiting children,
-	// and any expression acting on a plan will be called before visiting the plan.
-	// If false, the callback will be called before visiting children,
-	// and any expression acting on a plan will be called after visiting the plan.
-	// ! IMPORTANT: If this is set to true, then the callback functions must always return false.
-	// ! I am not sure if we need this anymore.
-	CallbackAfterVisit bool
-	// PostOrderVisit determines the order in which fields are visited.
-	// If visitng in post order, then children are visited first, then the parent.
-	// For example, for a Project node, if PostOrderVisit is true, then the child
-	// is visited first, then the expressions.
-	// If PostOrderVisit is false, then the expressions are visited first, then the child.
-	PostOrderVisit bool
 }
 
 // Rewrite rewrites a logical plan using the given configuration.
@@ -51,8 +38,6 @@ func Rewrite(node LogicalNode, cfg *RewriteConfig) (lp LogicalNode, err error) {
 		exprCallback:       cfg.ExprCallback,
 		planCallback:       cfg.PlanCallback,
 		scanSourceCallback: cfg.ScanSourceCallback,
-		callbackFuncLast:   cfg.CallbackAfterVisit,
-		postOrderVisit:     cfg.PostOrderVisit,
 	}
 	if v.exprCallback == nil {
 		v.exprCallback = func(e Expression) (Expression, bool, error) {
@@ -84,12 +69,13 @@ type rewriteVisitor struct {
 	planCallback func(Plan) (Plan, bool, error)
 	// scanSourceCallback is the function that will be called on each scan source
 	scanSourceCallback func(ScanSource) (ScanSource, bool, error)
-	// if true, the callback will be called before visiting children
-	// if false, the callback will be called after visiting children
-	callbackFuncLast bool
-	// if true, then fields are visited in post order
-	// if false, then fields are visited in pre order
-	postOrderVisit bool
+	// if true, the children of the node are visited in post order
+	// if false, the children of the node are visited in pre order
+	postOrder bool
+	// if true, then fields are visited in the reverse order of their logic.
+	// For example, if true in a projection, the fields representing the projected
+	// expressions are visited before the child. If false, the child is visited first.
+	reverseFieldOrder bool
 }
 
 func (r *rewriteVisitor) VisitTableScanSource(p0 *TableScanSource) any {
@@ -428,7 +414,7 @@ func (r *rewriteVisitor) VisitTuples(p0 *Tuples) any {
 
 // execFields executes the given fields in the correct order.
 func (r *rewriteVisitor) execFields(fields []func()) {
-	if r.postOrderVisit {
+	if r.reverseFieldOrder {
 		for i := len(fields) - 1; i >= 0; i-- {
 			fields[i]()
 		}
@@ -457,7 +443,7 @@ func (r *rewriteVisitor) scanSource(node ScanSource, fn ...func()) ScanSource {
 
 // rewriteInOrder is a generic function for executing a rewrite based on a certain order.
 func rewriteInOrder[T Traversable](r *rewriteVisitor, callback func(T) (T, bool, error), fields []func(), node T) T {
-	if r.callbackFuncLast {
+	if r.postOrder {
 		r.execFields(fields)
 
 		res, visitFields, err := callback(node)
