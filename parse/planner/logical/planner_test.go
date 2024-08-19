@@ -1,4 +1,4 @@
-package planner_test
+package logical_test
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse"
-	"github.com/kwilteam/kwil-db/parse/planner"
+	"github.com/kwilteam/kwil-db/parse/planner/logical"
 	"github.com/stretchr/testify/require"
 )
 
@@ -178,17 +178,17 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "invalid group by column",
 			sql:  "select age from users group by age/2",
-			err:  planner.ErrIllegalAggregate,
+			err:  logical.ErrIllegalAggregate,
 		},
 		{
 			name: "aggregate in group by",
 			sql:  "select sum(age) from users group by sum(age)",
-			err:  planner.ErrIllegalAggregate,
+			err:  logical.ErrIllegalAggregate,
 		},
 		{
 			name: "aggregate in where clause",
 			sql:  "select sum(age) from users where sum(age)::int > 100",
-			err:  planner.ErrAggregateInWhere,
+			err:  logical.ErrAggregateInWhere,
 		},
 		{
 			name: "complex group by",
@@ -209,7 +209,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "select * with group by (not enough group by columns)",
 			sql:  "select * from users group by name",
-			err:  planner.ErrIllegalAggregate,
+			err:  logical.ErrIllegalAggregate,
 		},
 		{
 			name: "complex having",
@@ -312,14 +312,14 @@ func Test_Planner(t *testing.T) {
 			sql: `select id, name from users
 				union
 				select id, owner_id from posts;`,
-			err: planner.ErrSetIncompatibleSchemas,
+			err: logical.ErrSetIncompatibleSchemas,
 		},
 		{
 			name: "incompatible set schema lengths",
 			sql: `select id, name from users
 				union
 				select 1;`,
-			err: planner.ErrSetIncompatibleSchemas,
+			err: logical.ErrSetIncompatibleSchemas,
 		},
 		{
 			name: "set operations with order by and limit",
@@ -346,7 +346,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "sort invalid column",
 			sql:  "select name, age from users order by wallet",
-			err:  planner.ErrColumnNotFound,
+			err:  logical.ErrColumnNotFound,
 		},
 		{
 			name: "limit and offset",
@@ -385,6 +385,14 @@ func Test_Planner(t *testing.T) {
 			wt: "Return: pos_age [int], ?column? [int]\n" +
 				"└─Project: users.age AS pos_age; -users.age\n" +
 				"  └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "order by alias",
+			sql:  "select age as pos_age from users order by pos_age",
+			wt: "Return: pos_age [int]\n" +
+				"└─Project: users.age AS pos_age\n" +
+				"  └─Sort: [pos_age] asc nulls last\n" +
+				"    └─Scan Table: users [physical]\n",
 		},
 		{
 			name: "collate",
@@ -452,7 +460,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "update with from without where",
 			sql:  "update users set name = pu.content from posts_by_user('satoshi') pu",
-			err:  planner.ErrUpdateOrDeleteWithoutWhere,
+			err:  logical.ErrUpdateOrDeleteWithoutWhere,
 		},
 		{
 			name: "basic delete",
@@ -476,7 +484,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "insert null in non-nullable column",
 			sql:  "insert into users (name) values ('satoshi')",
-			err:  planner.ErrNotNullableColumn,
+			err:  logical.ErrNotNullableColumn,
 		},
 		{
 			name: "on conflict do nothing",
@@ -509,17 +517,17 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "on conflict with non-arbiter column",
 			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (age) do update set name = 'satoshi'",
-			err:  planner.ErrIllegalConflictArbiter,
+			err:  logical.ErrIllegalConflictArbiter,
 		},
 		{
 			name: "on conflict with half of a composite index",
 			sql:  "insert into posts values ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid, 'hello', 1) on conflict (owner_id) do update set content = 'hello'",
-			err:  planner.ErrIllegalConflictArbiter,
+			err:  logical.ErrIllegalConflictArbiter,
 		},
 		{
 			name: "on conflict with non-unique index",
 			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (age) do update set name = 'satoshi'",
-			err:  planner.ErrIllegalConflictArbiter,
+			err:  logical.ErrIllegalConflictArbiter,
 		},
 		{
 			name: "conflict on compound unique index",
@@ -539,7 +547,7 @@ func Test_Planner(t *testing.T) {
 			// surprisingly, this mirrors Postgres's behavior
 			name: "ambiguous column due to excluded",
 			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (name) do update set name = 'satoshi' WHERE age = 1",
-			err:  planner.ErrAmbiguousColumn,
+			err:  logical.ErrAmbiguousColumn,
 		},
 	}
 
@@ -552,7 +560,7 @@ func Test_Planner(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, parsedSql.ParseErrs.Err())
 
-			plan, err := planner.Plan(parsedSql.AST, schema, test.vars, test.objects)
+			plan, err := logical.Plan(parsedSql.AST, schema, test.vars, test.objects)
 			if test.err != nil {
 				require.Error(t, err)
 

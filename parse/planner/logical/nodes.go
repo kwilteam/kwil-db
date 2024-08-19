@@ -1,4 +1,4 @@
-package planner
+package logical
 
 import (
 	"bytes"
@@ -222,9 +222,6 @@ func (f *ProcedureScanSource) Equal(other Traversable) bool {
 // is true, it is a TableSource. If false, it is a scalar
 // subquery (used in expressions).
 type Subquery struct {
-	// ReturnsRelation is true if the subquery returns an entire relation.
-	// If false, the subquery returns a single value.
-	ReturnsRelation bool // TODO: I think we can axe this with our new plan structure
 	// Plan is the logical plan for the subquery.
 	Plan *Subplan
 
@@ -258,13 +255,6 @@ func (s *Subquery) Relation() *Relation {
 func (s *Subquery) Equal(other Traversable) bool {
 	o, ok := other.(*Subquery)
 	if !ok {
-		return false
-	}
-
-	// we want to check all of the fields without an
-	// Equal method first, to try to exit early
-
-	if s.ReturnsRelation != o.ReturnsRelation {
 		return false
 	}
 

@@ -1,4 +1,4 @@
-package planner
+package logical
 
 import (
 	"errors"
@@ -15,15 +15,15 @@ import (
 // Plan creates a logical plan from a SQL statement.
 func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType,
 	objects map[string]map[string]*types.DataType) (analyzed *AnalyzedPlan, err error) {
-	// defer func() {
-	// 	if r := recover(); r != nil {
-	// 		err2, ok := r.(error)
-	// 		if !ok {
-	// 			err2 = fmt.Errorf("%v", r)
-	// 		}
-	// 		err = err2
-	// 	}
-	// }()
+	defer func() {
+		if r := recover(); r != nil {
+			err2, ok := r.(error)
+			if !ok {
+				err2 = fmt.Errorf("%v", r)
+			}
+			err = err2
+		}
+	}()
 
 	if vars == nil {
 		vars = make(map[string]*types.DataType)
@@ -201,47 +201,81 @@ func (s *scopeContext) cte(node *parse.CommonTableExpression) error {
 	return nil
 }
 
+// joinUnique joins two relations, but won't allow duplicate columns.
+func joinUnique(left, right *Relation) *Relation {
+	// 1st element is the relation name, 2nd element is the field name
+	foundSet := make(map[[2]string]struct{})
+	var unique []*Field
+	for _, field := range left.Fields {
+		foundSet[[2]string{field.Parent, field.Name}] = struct{}{}
+		unique = append(unique, field)
+	}
+
+	for _, field := range right.Fields {
+		if _, ok := foundSet[[2]string{field.Parent, field.Name}]; ok {
+			continue
+		}
+		foundSet[[2]string{field.Parent, field.Name}] = struct{}{}
+
+		unique = append(unique, field)
+	}
+
+	return &Relation{
+		Fields: unique,
+	}
+}
+
 // select builds a logical plan for a select statement.
 func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan, rel *Relation, err error) {
 	if len(node.SelectCores) == 0 {
 		panic("no select cores")
 	}
 
-	var projectFunc func(LogicalPlan) (LogicalPlan, *Relation)
-	plan, rel, projectFunc, err = s.selectCore(node.SelectCores[0])
+	var projectFunc func(LogicalPlan) LogicalPlan
+	var preProjectRel, resultRel *Relation
+	plan, preProjectRel, resultRel, projectFunc, err = s.selectCore(node.SelectCores[0])
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// if there is one select core, we want to project after sorting and limiting.
-	// if there are multiple select cores, we want to project before the set operation.
-	// see the documentation for selectCoreResult for more info as to why
-	// we perform this if statement.
+	defer func() {
+		// the resulting relation will always be resultRel
+		rel = resultRel
+	}()
+
+	// if there is one select core, thenr the sorting and limiting can refer
+	// to both the preProjectRel and the resultRel. If it is a compound query,
+	// then the sorting and resultRel can only refer to the resultRel.
+	sortAndOrderRel := resultRel
 	if len(node.SelectCores) == 1 {
+		sortAndOrderRel = joinUnique(preProjectRel, resultRel)
 		defer func() {
-			plan, rel = projectFunc(plan)
+			// we need to make sure we project only the returned columns
+			// after sorting and limiting, so we defer the projection
+			plan = projectFunc(plan)
 		}()
 	} else {
 		// otherwise, apply immediately so that we can apply the set operation(s)
-		plan, rel = projectFunc(plan)
+		plan = projectFunc(plan)
 
 		// we need to remove the parent from the fields, since when a set operation
 		// is performed, only the columns from the left side can be referenced.
 		// e.g. in "select id, name from users union select id2, content from posts"
 		// we can only order by "name" and "id", not "content" or "id2" or "users.id" or "users.name"
-		for _, field := range rel.Fields {
+		for _, field := range resultRel.Fields {
 			field.Parent = ""
 		}
 
 		for i, core := range node.SelectCores[1:] {
-			rightPlan, _, projectFunc, err := s.selectCore(core)
+			rightPlan, _, rightRel, projectFunc, err := s.selectCore(core)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			rightPlan, rightRel := projectFunc(rightPlan)
+			// project the result values to match the left side
+			rightPlan = projectFunc(rightPlan)
 
-			if len(rightRel.Fields) != len(rel.Fields) {
+			if len(rightRel.Fields) != len(resultRel.Fields) {
 				return nil, nil, fmt.Errorf(`%w: the number of columns in the SELECT clauses must match`, ErrSetIncompatibleSchemas)
 			}
 
@@ -251,7 +285,7 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 					return nil, nil, err
 				}
 
-				leftScalar, err := rel.Fields[i].Scalar()
+				leftScalar, err := resultRel.Fields[i].Scalar()
 				if err != nil {
 					return nil, nil, err
 				}
@@ -277,7 +311,7 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 
 		for _, order := range node.Ordering {
 			// ordering term can be of any type
-			sortExpr, _, err := s.expr(order.Expression, rel)
+			sortExpr, _, err := s.expr(order.Expression, sortAndOrderRel)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -293,7 +327,7 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 	}
 
 	if node.Limit != nil {
-		limitExpr, limitField, err := s.expr(node.Limit, rel)
+		limitExpr, limitField, err := s.expr(node.Limit, sortAndOrderRel)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -313,7 +347,7 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 		}
 
 		if node.Offset != nil {
-			offsetExpr, offsetField, err := s.expr(node.Offset, rel)
+			offsetExpr, offsetField, err := s.expr(node.Offset, sortAndOrderRel)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -357,7 +391,8 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 // 2.
 // "SELECT name FROM users UNION 'hello' ORDER BY id" - this is invalid in Postgres, since "id" is not in the
 // result set. We need to project before the UNION.
-func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relation, func(LogicalPlan) (LogicalPlan, *Relation), error) {
+func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan LogicalPlan, preProjectRel *Relation, resultRel *Relation,
+	projectFunc func(LogicalPlan) LogicalPlan, err error) {
 	// if there is no from, we just project the columns and return
 	if node.From == nil {
 		var exprs []LogicalExpr
@@ -369,7 +404,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 			case *parse.ResultColumnExpression:
 				expr, field, err := s.expr(resultCol.Expression, rel)
 				if err != nil {
-					return nil, nil, nil, err
+					return nil, nil, nil, nil, err
 				}
 
 				if resultCol.Alias != "" {
@@ -389,7 +424,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 			}
 		}
 
-		return &EmptyScan{}, rel, func(lp LogicalPlan) (LogicalPlan, *Relation) {
+		return &EmptyScan{}, rel, rel, func(lp LogicalPlan) LogicalPlan {
 			var p LogicalPlan = &Project{
 				Child:       lp,
 				Expressions: exprs,
@@ -401,37 +436,37 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 				}
 			}
 
-			return p, rel
+			return p
 		}, nil
 	}
 
 	// otherwise, we need to build the from and join clauses
 	scan, rel, err := s.table(node.From)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	var plan LogicalPlan = scan
 
 	for _, join := range node.Joins {
 		plan, rel, err = s.join(plan, rel, join)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 	}
 
 	if node.Where != nil {
 		whereExpr, whereType, err := s.expr(node.Where, rel)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		scalar, err := whereType.Scalar()
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		if !scalar.Equals(types.BoolType) {
-			return nil, nil, nil, errors.New("WHERE must be a boolean")
+			return nil, nil, nil, nil, errors.New("WHERE must be a boolean")
 		}
 
 		plan = &Filter{
@@ -449,14 +484,14 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 			return true
 		})
 		if contains {
-			return nil, nil, nil, ErrAggregateInWhere
+			return nil, nil, nil, nil, ErrAggregateInWhere
 		}
 	}
 
 	// at this point, we have the full relation for the select core, and can expand the columns
 	results, err := s.expandResultCols(rel, node.Columns)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	containsAgg := false
@@ -464,16 +499,16 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 		containsAgg = hasAggregate(result.Expr)
 	}
 
+	var resExprs []LogicalExpr
+	var resFields []*Field
+	for _, result := range results {
+		resExprs = append(resExprs, result.Expr)
+		resFields = append(resFields, result.Field)
+	}
+
 	// if there is no group by or aggregate, we can apply any distinct and return
 	if len(node.GroupBy) == 0 && !containsAgg {
-		return plan, rel, func(lp LogicalPlan) (LogicalPlan, *Relation) {
-			var resExprs []LogicalExpr
-			var resFields []*Field
-			for _, result := range results {
-				resExprs = append(resExprs, result.Expr)
-				resFields = append(resFields, result.Field)
-			}
-
+		return plan, rel, &Relation{Fields: resFields}, func(lp LogicalPlan) LogicalPlan {
 			var p LogicalPlan = &Project{
 				Child:       lp,
 				Expressions: resExprs,
@@ -485,9 +520,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 				}
 			}
 
-			return p, &Relation{
-				Fields: resFields,
-			}
+			return p
 		}, nil
 	}
 
@@ -507,7 +540,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 	for _, groupTerm := range node.GroupBy {
 		groupExpr, field, err := s.expr(groupTerm, rel)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		traverse(groupExpr, func(node Traversable) bool {
@@ -522,7 +555,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 			return true
 		})
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		_, ok := groupingTerms[groupExpr.String()]
@@ -550,22 +583,22 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 		// but it should be possible.
 		havingExpr, field, err := s.expr(node.Having, rel)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		scalar, err := field.Scalar()
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		if !scalar.Equals(types.BoolType) {
-			return nil, nil, nil, errors.New("HAVING must evaluate to a boolean")
+			return nil, nil, nil, nil, errors.New("HAVING must evaluate to a boolean")
 		}
 
 		// rewrite the having expression to use the aggregate functions
 		havingExpr, err = s.rewriteAccordingToAggregate(havingExpr, groupingTerms, aggTerms)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		plan = &Filter{
@@ -578,7 +611,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 	for i, resultCol := range results {
 		results[i].Expr, err = s.rewriteAccordingToAggregate(resultCol.Expr, groupingTerms, aggTerms)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 	}
 
@@ -588,29 +621,30 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (LogicalPlan, *Relatio
 		aggregateRel.Fields = append(aggregateRel.Fields, agg.Value.Field)
 	}
 
-	return plan, aggregateRel, func(lp LogicalPlan) (LogicalPlan, *Relation) {
-		var resultColExprs []LogicalExpr
-		var resultFields []*Field
-		for _, resultCol := range results {
-			resultColExprs = append(resultColExprs, resultCol.Expr)
-			resultFields = append(resultFields, resultCol.Field)
-		}
+	var resultColExprs []LogicalExpr
+	var resultFields []*Field
+	for _, resultCol := range results {
+		resultColExprs = append(resultColExprs, resultCol.Expr)
+		resultFields = append(resultFields, resultCol.Field)
+	}
 
-		var p LogicalPlan = &Project{
-			Child:       lp,
-			Expressions: resultColExprs,
-		}
-
-		if node.Distinct {
-			p = &Distinct{
-				Child: p,
-			}
-		}
-
-		return p, &Relation{
+	return plan, aggregateRel, &Relation{
 			Fields: resultFields,
-		}
-	}, nil
+		}, func(lp LogicalPlan) LogicalPlan {
+
+			var p LogicalPlan = &Project{
+				Child:       lp,
+				Expressions: resultColExprs,
+			}
+
+			if node.Distinct {
+				p = &Distinct{
+					Child: p,
+				}
+			}
+
+			return p
+		}, nil
 }
 
 // hasAggregate returns true if the expression contains an aggregate function.
@@ -1186,6 +1220,22 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		}, &Field{val: field.val}, nil
 	case *parse.ExpressionColumn:
 		field, err := currentRel.Search(node.Table, node.Column)
+		// if no error, then we found the column in the current relation
+		// and can return it
+		if err == nil {
+			scalar, err := field.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			return cast(&ColumnRef{
+				Parent:     field.Parent,
+				ColumnName: field.Name,
+				dataType:   scalar,
+			}, field)
+		}
+		// If the error is not that the column was not found, check if
+		// the column is in the outer relation
 		if errors.Is(err, ErrColumnNotFound) {
 			// might be in the outer relation, correlated
 			field, err = s.OuterRelation.Search(node.Table, node.Column)
@@ -1198,7 +1248,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 				return nil, nil, err
 			}
 
-			// add to correlations
+			// mark as correlated
 			s.Correlations = append(s.Correlations, field)
 
 			return cast(&ColumnRef{
@@ -1207,20 +1257,8 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 				dataType:   scalar,
 			}, field)
 		}
-		if err != nil {
-			return nil, nil, err
-		}
-
-		scalar, err := field.Scalar()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return cast(&ColumnRef{
-			Parent:     field.Parent,
-			ColumnName: field.Name,
-			dataType:   scalar,
-		}, field)
+		// otherwise, return the error
+		return nil, nil, err
 	case *parse.ExpressionCollate:
 		expr, field, err := s.expr(node.Expression, currentRel)
 		if err != nil {

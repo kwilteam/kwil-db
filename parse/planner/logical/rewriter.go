@@ -1,4 +1,4 @@
-package planner
+package logical
 
 import "fmt"
 
@@ -19,11 +19,12 @@ type RewriteConfig struct {
 	// a boolean, which indicates whether the nodes children should be visited,
 	// and an error, which will be returned if an error occurs.
 	ScanSourceCallback func(ScanSource) (ScanSource, bool, error)
-	// If true, the callback will be called before visiting children,
+	// If true, the callback will be called after visiting children,
 	// and any expression acting on a plan will be called before visiting the plan.
-	// If false, the callback will be called after visiting children,
+	// If false, the callback will be called before visiting children,
 	// and any expression acting on a plan will be called after visiting the plan.
 	// ! IMPORTANT: If this is set to true, then the callback functions must always return false.
+	// ! I am not sure if we need this anymore.
 	CallbackAfterVisit bool
 	// PostOrderVisit determines the order in which fields are visited.
 	// If visitng in post order, then children are visited first, then the parent.
