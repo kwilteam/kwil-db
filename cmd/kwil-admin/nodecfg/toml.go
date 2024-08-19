@@ -275,6 +275,10 @@ external_address = "{{ .ChainCfg.P2P.ExternalAddress }}"
 # Example: "d128266b8b9f64c313de466cf29e0a6182dba54d@172.10.100.2:26656,9440f4a8059cf7ff31454973c4f9c68de65fe526@172.10.100.3:26656"
 persistent_peers = "{{ .ChainCfg.P2P.PersistentPeers }}"
 
+# WhitelistPeers is a comma seperated list of nodeIDs that can connect to this node.
+# persistent peers, seeds and current validators are automatically whitelisted and need not be added here.
+whitelist_peers = "{{ .ChainCfg.P2P.WhitelistPeers }}"
+
 # Set true for strict address routability rules
 # Set false for private or local networks
 addr_book_strict = {{ .ChainCfg.P2P.AddrBookStrict }}

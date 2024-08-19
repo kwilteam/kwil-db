@@ -78,3 +78,13 @@ type DB interface {
 	sql.ReadTxMaker
 	sql.SnapshotTxMaker
 }
+
+// PeerModule is an interface that manages network peers.
+type PeerModule interface {
+	// AddPeer adds a peer to the Peers object.
+	AddPeer(ctx context.Context, peer string) error
+	// RemovePeer removes a peer from the Peers object.
+	RemovePeer(ctx context.Context, peer string) error
+	// HasPeer checks if a peer is in the Peers object.
+	HasPeer(ctx context.Context, peer string) bool
+}

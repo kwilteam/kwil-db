@@ -227,3 +227,15 @@ func (n *CometBftNode) Stop() error {
 func (n *CometBftNode) IsCatchup() bool {
 	return n.Node.ConsensusReactor().WaitSync()
 }
+
+func (n *CometBftNode) RemovePeer(nodeID string) error {
+	peerInfo := n.Node.Switch().Peers()
+	id := p2p.ID(nodeID)
+	peer := peerInfo.Get(id)
+	if peer == nil {
+		return fmt.Errorf("peer %s not found", nodeID)
+	}
+
+	n.Node.Switch().StopPeerGracefully(peer)
+	return nil
+}

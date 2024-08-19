@@ -18,3 +18,7 @@ type JoinStatusRequest struct {
 }
 type ListValidatorsRequest struct{}
 type ListJoinRequestsRequest struct{}
+
+type PeerRequest struct {
+	PeerID string `json:"peerid"`
+}

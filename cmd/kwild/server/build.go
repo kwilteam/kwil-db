@@ -179,12 +179,17 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// but the tx router needs the cometbft client
 	txApp := buildTxApp(d, db, e, ev)
 
-	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer, closers)
+	p2p := buildPeers(d, db)
+
+	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer, p2p, closers)
 
 	// NOTE: buildCometNode immediately starts talking to the abciApp and
 	// replaying blocks (and using atomic db tx commits), i.e. calling
 	// FinalizeBlock+Commit. This is not just a constructor, sadly.
 	cometBftNode := buildCometNode(d, closers, abciApp)
+
+	// Give abci p2p module access to removing peers
+	p2p.SetRemovePeerFn(cometBftNode.RemovePeer)
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 	wrappedCmtClient := &wrappedCometBFTClient{
@@ -216,7 +221,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	// admin service and server
 	signer := buildSigner(d)
-	jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, signer, d.cfg,
+	// TODO: db? should this be the same as the consensus db connection? As the updates can occur
+	// outside the block context. should be used similar to the event store.
+	jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, signer, p2p, d.cfg,
 		d.genesisCfg.ChainID, *d.log.Named("admin-json-svc"))
 	jsonRPCAdminServer := buildJRPCAdminServer(d)
 	jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)
@@ -328,7 +335,65 @@ func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext,
 	return txApp
 }
 
-func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, closers *closeFuncs) *abci.AbciApp {
+func buildPeers(d *coreDependencies, db sql.TxMaker) *cometbft.Peers {
+	// extract node IDs from the genesis validators, persistent peers and seeds
+	var whitelistPeers []string
+
+	genVals := d.genesisCfg.Validators
+	for _, v := range genVals {
+		addr, err := pubkeyToAddr(v.PubKey)
+		if err != nil {
+			failBuild(err, "failed to extract node ID from genesis validators")
+		}
+		whitelistPeers = append(whitelistPeers, strings.ToLower(addr))
+	}
+
+	if d.cfg.ChainCfg.P2P.PersistentPeers != "" {
+		persistentPeers := strings.Split(d.cfg.ChainCfg.P2P.PersistentPeers, ",")
+		for _, p := range persistentPeers {
+			// split the persistent peer string into node ID and host:port
+			parts := strings.Split(p, "@")
+			if len(parts) != 2 {
+				failBuild(nil, "invalid persistent peer format")
+			}
+			whitelistPeers = append(whitelistPeers, parts[0])
+		}
+	}
+
+	if d.cfg.ChainCfg.P2P.Seeds != "" {
+		seeds := strings.Split(d.cfg.ChainCfg.P2P.Seeds, ",")
+		for _, s := range seeds {
+			// split the seed string into node ID and host:port
+			parts := strings.Split(s, "@")
+			if len(parts) != 2 {
+				failBuild(nil, "invalid seed format")
+			}
+			whitelistPeers = append(whitelistPeers, parts[0])
+		}
+	}
+
+	// Get the whitelist peers
+	if d.cfg.ChainCfg.P2P.WhitelistPeers != "" {
+		whitelistPeers = strings.Split(d.cfg.ChainCfg.P2P.WhitelistPeers, ",")
+	}
+
+	p2p, err := cometbft.P2PInit(d.ctx, db, whitelistPeers)
+	if err != nil {
+		failBuild(err, "failed to initialize P2P store")
+	}
+
+	return p2p
+}
+
+func pubkeyToAddr(pubkey []byte) (string, error) {
+	if len(pubkey) != cmtEd.PubKeySize {
+		return "", errors.New("invalid public key")
+	}
+	publicKey := cmtEd.PubKey(pubkey)
+	return publicKey.Address().String(), nil
+}
+
+func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, p2p *cometbft.Peers, closers *closeFuncs) *abci.AbciApp {
 	var sh abci.SnapshotModule
 	if snapshotter != nil {
 		sh = snapshotter
@@ -348,7 +413,7 @@ func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *st
 		ForkHeights:        d.genesisCfg.ForkHeights,
 	}
 	app, err := abci.NewAbciApp(d.ctx, cfg, sh, ss, txApp,
-		d.genesisCfg.ConsensusParams, db, *d.log.Named("abci"))
+		d.genesisCfg.ConsensusParams, p2p, db, *d.log.Named("abci"))
 	if err != nil {
 		failBuild(err, "failed to build ABCI application")
 	}

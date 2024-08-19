@@ -40,6 +40,11 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	ABCIPeerFilterPath    = "/p2p/filter/"
+	ABCIPeerFilterPathLen = len(ABCIPeerFilterPath)
+)
+
 // AbciConfig includes data that defines the chain and allow the application to
 // satisfy the ABCI Application interface.
 type AbciConfig struct {
@@ -53,7 +58,7 @@ type AbciConfig struct {
 }
 
 func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule, statesyncer StateSyncModule,
-	txRouter TxApp, consensusParams *chain.ConsensusParams, db DB, log log.Logger) (*AbciApp, error) {
+	txRouter TxApp, consensusParams *chain.ConsensusParams, peers PeerModule, db DB, log log.Logger) (*AbciApp, error) {
 	app := &AbciApp{
 		db:              db,
 		cfg:             *cfg,
@@ -62,8 +67,8 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		txApp:           txRouter,
 		consensusParams: consensusParams,
 		appHash:         cfg.GenesisAppHash,
-
-		log: log,
+		p2p:             peers,
+		log:             log,
 
 		validatorAddressToPubKey: make(map[string][]byte),
 		verifiedTxns:             make(map[chainHash]struct{}),
@@ -236,6 +241,9 @@ type AbciApp struct {
 
 	// bootstrapper is the bootstrapper module that handles bootstrapping the database
 	statesyncer StateSyncModule
+
+	// p2p is the p2p module that handles peer management
+	p2p PeerModule
 
 	log log.Logger
 
@@ -682,8 +690,15 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 		if up.Power == 0 {
 			delete(a.validatorAddressToPubKey, addr)
+			if err = a.p2p.RemovePeer(ctx, addr); err != nil {
+				return nil, fmt.Errorf("failed to remove demoted validator %s from the network: %v", addr, err)
+			}
 		} else {
 			a.validatorAddressToPubKey[addr] = up.PubKey // there may be new validators we need to add
+			// Add the validator to the peer list
+			if err = a.p2p.AddPeer(ctx, addr); err != nil {
+				return nil, fmt.Errorf("failed to add peer %s : %w", addr, err)
+			}
 		}
 
 		res.ValidatorUpdates[i] = abciTypes.Ed25519ValidatorUpdate(up.PubKey, up.Power)
@@ -1423,6 +1438,7 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 }
 
 func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abciTypes.ResponseQuery, error) {
+	a.log.Info("ABCI Query", zap.String("path", req.Path), zap.String("data", string(req.Data)))
 	if req.Path == statesync.ABCISnapshotQueryPath { // "/snapshot/height"
 		if a.snapshotter == nil {
 			return &abciTypes.ResponseQuery{}, nil
@@ -1450,7 +1466,37 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 			return nil, err
 		}
 		return &abciTypes.ResponseQuery{Value: bts}, nil
+	} else if strings.HasPrefix(req.Path, ABCIPeerFilterPath) {
+		// When CometBFT connects to a peer, it sends two queries to the ABCI application
+		// using the following paths, with no additional data:
+		//   - `/p2p/filter/addr/<IP:PORT>`
+		// 	 - `p2p/filter/id/<ID>` where ID is the peer's node ID
+		// If either of these queries return a non-zero ABCI code, CometBFT will refuse to connect to the peer.
+		// We manage allowed list based on the peer's node ID rather than the IP addresses, so we only need to
+		// handle the `id` query and return accept for all `addr` queries.
+
+		paths := strings.Split(req.Path[ABCIPeerFilterPathLen:], "/")
+		if len(paths) != 2 {
+			return &abciTypes.ResponseQuery{Code: 1}, fmt.Errorf("invalid path: %s", req.Path)
+		}
+
+		switch paths[0] {
+		case "id":
+			if a.p2p.HasPeer(ctx, paths[1]) {
+				a.log.Info("peer is allowed to connect", zap.String("peerID", paths[1]))
+				return &abciTypes.ResponseQuery{Code: abciTypes.CodeTypeOK}, nil
+			}
+			a.log.Info("peer is not allowed to connect", zap.String("peerID", paths[1]))
+			// ID is not in the allowed list of peers, so reject the connection
+			return &abciTypes.ResponseQuery{Code: 1}, nil
+		case "addr":
+			return &abciTypes.ResponseQuery{Code: abciTypes.CodeTypeOK}, nil
+		default:
+			return &abciTypes.ResponseQuery{Code: 1}, fmt.Errorf("invalid path: %s", req.Path)
+		}
+
 	}
+
 	return &abciTypes.ResponseQuery{}, nil
 }
 

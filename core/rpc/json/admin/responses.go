@@ -82,3 +82,5 @@ type ListJoinRequestsResponse struct {
 type GetConfigResponse struct {
 	Config []byte `json:"config,omitempty"`
 }
+
+type PeerResponse struct{}

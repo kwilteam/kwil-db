@@ -199,3 +199,21 @@ func (cl *Client) Ping(ctx context.Context) (string, error) {
 	}
 	return res.Message, nil
 }
+
+// AddPeer adds a new peer to the node's peer list.
+func (cl *Client) AddPeer(ctx context.Context, peerID string) error {
+	cmd := &adminjson.PeerRequest{
+		PeerID: peerID,
+	}
+	res := &adminjson.PeerResponse{}
+	return cl.CallMethod(ctx, string(adminjson.MethodAddPeer), cmd, res)
+}
+
+// RemovePeer adds a new peer to the node's peer list.
+func (cl *Client) RemovePeer(ctx context.Context, peerID string) error {
+	cmd := &adminjson.PeerRequest{
+		PeerID: peerID,
+	}
+	res := &adminjson.PeerResponse{}
+	return cl.CallMethod(ctx, string(adminjson.MethodRemovePeer), cmd, res)
+}

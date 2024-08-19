@@ -119,6 +119,9 @@ type P2PConfig struct {
 	// PersistentPeers is a comma separated list of nodes to keep persistent
 	// connections to.
 	PersistentPeers string `mapstructure:"persistent_peers"`
+	// WhitelistPeers is a comma seperated list of nodeIDs that can connect to this node.
+	// This is excluding any persistent peers or seeds or current validators.
+	WhitelistPeers string `mapstructure:"whitelist_peers"`
 	// AddrBookStrict enforces strict address routability rules. This must be
 	// false for private or local networks.
 	AddrBookStrict bool `mapstructure:"addr_book_strict"`
