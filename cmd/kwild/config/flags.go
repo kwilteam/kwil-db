@@ -70,6 +70,10 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 sharing them with incoming peers before immediately disconnecting. It is recommended
 to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.`)
 
+	// Network flags
+	flagSet.BoolVarP(&cfg.ChainCfg.P2P.PrivateMode, "chain.p2p.private-mode", "p", cfg.ChainCfg.P2P.PrivateMode, "Run the node in private mode. In private mode, the connectivity to the node is restricted to the current validators and whitelist peers.")
+	flagSet.StringVar(&cfg.ChainCfg.P2P.WhitelistPeers, "chain.p2p.whitelist-peers", cfg.ChainCfg.P2P.WhitelistPeers, "List of allowed sentry nodes that can connect to the node. Whitelist peers can be updated dynamically using kwil-admin peer commands.")
+
 	// Chain Mempool flags
 	flagSet.IntVar(&cfg.ChainCfg.Mempool.Size, "chain.mempool.size", cfg.ChainCfg.Mempool.Size, "Chain mempool size")
 	flagSet.IntVar(&cfg.ChainCfg.Mempool.CacheSize, "chain.mempool.cache-size", cfg.ChainCfg.Mempool.CacheSize, "Chain mempool cache size")

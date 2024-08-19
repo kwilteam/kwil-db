@@ -232,8 +232,9 @@ func (n *CometBftNode) RemovePeer(nodeID string) error {
 	peerInfo := n.Node.Switch().Peers()
 	id := p2p.ID(nodeID)
 	peer := peerInfo.Get(id)
-	if peer == nil {
-		return fmt.Errorf("peer %s not found", nodeID)
+	if peer == nil { // peer is not connected to this node, so nothing to do
+		n.Node.Logger.Info("peer is not connected", "peerID", nodeID)
+		return nil
 	}
 
 	n.Node.Switch().StopPeerGracefully(peer)

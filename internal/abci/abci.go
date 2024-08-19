@@ -87,7 +87,7 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		return nil, fmt.Errorf("failed to get validators: %w", err)
 	}
 	for _, val := range validators {
-		addr, err := pubkeyToAddr(val.PubKey)
+		addr, err := PubkeyToAddr(val.PubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert pubkey to address: %w", err)
 		}
@@ -195,12 +195,12 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 	return app, nil
 }
 
-// pubkeyToAddr converts an Ed25519 public key as used to identify nodes in
+// PubkeyToAddr converts an Ed25519 public key as used to identify nodes in
 // CometBFT into an address, which for ed25519 in comet is an upper case
 // truncated sha256 hash of the pubkey. For secp256k1, they do like BTC with
 // RIPEMD160(SHA256(pubkey)).  If we support both (if either), we'll need a type
 // flag.
-func pubkeyToAddr(pubkey []byte) (string, error) {
+func PubkeyToAddr(pubkey []byte) (string, error) {
 	if len(pubkey) != ed25519.PubKeySize {
 		return "", errors.New("invalid public key")
 	}
@@ -684,7 +684,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	res.ValidatorUpdates = make([]abciTypes.ValidatorUpdate, len(valUpdates))
 	for i, up := range valUpdates {
-		addr, err := pubkeyToAddr(up.PubKey)
+		addr, err := PubkeyToAddr(up.PubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert pubkey to address: %w", err)
 		}
@@ -893,7 +893,7 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 			Power:  vi.Power,
 		}
 
-		addr, err := pubkeyToAddr(pk)
+		addr, err := PubkeyToAddr(pk)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert pubkey to address: %w", err)
 		}
@@ -1438,7 +1438,8 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 }
 
 func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abciTypes.ResponseQuery, error) {
-	a.log.Info("ABCI Query", zap.String("path", req.Path), zap.String("data", string(req.Data)))
+	a.log.Debug("ABCI Query", zap.String("path", req.Path), zap.String("data", string(req.Data)))
+
 	if req.Path == statesync.ABCISnapshotQueryPath { // "/snapshot/height"
 		if a.snapshotter == nil {
 			return &abciTypes.ResponseQuery{}, nil
@@ -1473,7 +1474,7 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 		// 	 - `p2p/filter/id/<ID>` where ID is the peer's node ID
 		// If either of these queries return a non-zero ABCI code, CometBFT will refuse to connect to the peer.
 		// We manage allowed list based on the peer's node ID rather than the IP addresses, so we only need to
-		// handle the `id` query and return accept for all `addr` queries.
+		// handle the `id` query and return OK for all `addr` queries.
 
 		paths := strings.Split(req.Path[ABCIPeerFilterPathLen:], "/")
 		if len(paths) != 2 {
@@ -1482,12 +1483,11 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 
 		switch paths[0] {
 		case "id":
-			if a.p2p.HasPeer(ctx, paths[1]) {
-				a.log.Info("peer is allowed to connect", zap.String("peerID", paths[1]))
+			if a.p2p.IsPeerWhitelisted(paths[1]) {
 				return &abciTypes.ResponseQuery{Code: abciTypes.CodeTypeOK}, nil
 			}
-			a.log.Info("peer is not allowed to connect", zap.String("peerID", paths[1]))
 			// ID is not in the allowed list of peers, so reject the connection
+			a.log.Warn("Connection attempt rejected, peer is not allowed to connect", zap.String("peerID", paths[1]))
 			return &abciTypes.ResponseQuery{Code: 1}, nil
 		case "addr":
 			return &abciTypes.ResponseQuery{Code: abciTypes.CodeTypeOK}, nil

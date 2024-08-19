@@ -179,7 +179,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// but the tx router needs the cometbft client
 	txApp := buildTxApp(d, db, e, ev)
 
-	p2p := buildPeers(d, db)
+	p2p := buildPeers(d, closers)
 
 	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer, p2p, closers)
 
@@ -335,19 +335,45 @@ func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext,
 	return txApp
 }
 
-func buildPeers(d *coreDependencies, db sql.TxMaker) *cometbft.Peers {
-	// extract node IDs from the genesis validators, persistent peers and seeds
+func buildPeers(d *coreDependencies, closers *closeFuncs) *cometbft.PeerWhiteList {
 	var whitelistPeers []string
 
-	genVals := d.genesisCfg.Validators
-	for _, v := range genVals {
-		addr, err := pubkeyToAddr(v.PubKey)
-		if err != nil {
-			failBuild(err, "failed to extract node ID from genesis validators")
-		}
-		whitelistPeers = append(whitelistPeers, strings.ToLower(addr))
+	db, err := d.poolOpener(d.ctx, d.cfg.AppCfg.DBName, 10)
+	if err != nil {
+		failBuild(err, "failed to build event store")
+	}
+	closers.addCloser(db.Close, "closing event store")
+
+	if d.cfg.ChainCfg.P2P.WhitelistPeers != "" {
+		whitelistPeers = strings.Split(d.cfg.ChainCfg.P2P.WhitelistPeers, ",")
 	}
 
+	// Load the validators from the database if the database is already initialized
+	// If the database is not initialized, the validators will be loaded from the genesis file
+	vals, err := voting.GetValidators(d.ctx, db)
+	if err != nil {
+		failBuild(err, "failed to load validators")
+	}
+	if len(vals) > 0 {
+		for _, v := range vals {
+			addr, err := abci.PubkeyToAddr(v.PubKey)
+			if err != nil {
+				failBuild(err, "failed to convert pubkey to address")
+			}
+			whitelistPeers = append(whitelistPeers, addr)
+		}
+	} else {
+		// Load the validators from the genesis file
+		for _, v := range d.genesisCfg.Validators {
+			addr, err := abci.PubkeyToAddr(v.PubKey)
+			if err != nil {
+				failBuild(err, "failed to convert pubkey to address")
+			}
+			whitelistPeers = append(whitelistPeers, addr)
+		}
+	}
+
+	// Add seeds and persistent peers to the whitelist
 	if d.cfg.ChainCfg.P2P.PersistentPeers != "" {
 		persistentPeers := strings.Split(d.cfg.ChainCfg.P2P.PersistentPeers, ",")
 		for _, p := range persistentPeers {
@@ -372,28 +398,16 @@ func buildPeers(d *coreDependencies, db sql.TxMaker) *cometbft.Peers {
 		}
 	}
 
-	// Get the whitelist peers
-	if d.cfg.ChainCfg.P2P.WhitelistPeers != "" {
-		whitelistPeers = strings.Split(d.cfg.ChainCfg.P2P.WhitelistPeers, ",")
-	}
-
-	p2p, err := cometbft.P2PInit(d.ctx, db, whitelistPeers)
+	// Initialize the Peers with the whitelist peers.
+	peers, err := cometbft.P2PInit(d.ctx, db, d.cfg.ChainCfg.P2P.PrivateMode, whitelistPeers)
 	if err != nil {
 		failBuild(err, "failed to initialize P2P store")
 	}
 
-	return p2p
+	return peers
 }
 
-func pubkeyToAddr(pubkey []byte) (string, error) {
-	if len(pubkey) != cmtEd.PubKeySize {
-		return "", errors.New("invalid public key")
-	}
-	publicKey := cmtEd.PubKey(pubkey)
-	return publicKey.Address().String(), nil
-}
-
-func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, p2p *cometbft.Peers, closers *closeFuncs) *abci.AbciApp {
+func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, p2p *cometbft.PeerWhiteList, closers *closeFuncs) *abci.AbciApp {
 	var sh abci.SnapshotModule
 	if snapshotter != nil {
 		sh = snapshotter

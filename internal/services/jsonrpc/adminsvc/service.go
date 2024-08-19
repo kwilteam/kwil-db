@@ -51,17 +51,12 @@ type P2P interface {
 	RemovePeer(ctx context.Context, nodeID string) error
 }
 
-type DB interface {
-	sql.DelayedReadTxMaker
-	sql.TxMaker
-}
-
 type Service struct {
 	log log.Logger
 
 	blockchain BlockchainTransactor // node is the local node that can accept transactions.
 	TxApp      TxApp
-	db         DB
+	db         sql.DelayedReadTxMaker
 	pricer     Pricer
 	p2p        P2P
 
@@ -146,7 +141,7 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 }
 
 // NewService constructs a new Service.
-func NewService(db DB, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, signer auth.Signer, p2p P2P, cfg *config.KwildConfig,
+func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, signer auth.Signer, p2p P2P, cfg *config.KwildConfig,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,
@@ -420,7 +415,7 @@ func (svc *Service) GetConfig(ctx context.Context, req *adminjson.GetConfigReque
 func (svc *Service) AddPeer(ctx context.Context, req *adminjson.PeerRequest) (*adminjson.PeerResponse, *jsonrpc.Error) {
 	err := svc.p2p.AddPeer(ctx, req.PeerID)
 	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to add peer", nil)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to add a peer. Reason: "+err.Error(), nil)
 	}
 	return &adminjson.PeerResponse{}, nil
 }
@@ -428,7 +423,8 @@ func (svc *Service) AddPeer(ctx context.Context, req *adminjson.PeerRequest) (*a
 func (svc *Service) RemovePeer(ctx context.Context, req *adminjson.PeerRequest) (*adminjson.PeerResponse, *jsonrpc.Error) {
 	err := svc.p2p.RemovePeer(ctx, req.PeerID)
 	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to remove peer", nil)
+		svc.log.Error("failed to remove peer", zap.Error(err))
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to remove peer : "+err.Error(), nil)
 	}
 	return &adminjson.PeerResponse{}, nil
 }

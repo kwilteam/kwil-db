@@ -119,7 +119,11 @@ type P2PConfig struct {
 	// PersistentPeers is a comma separated list of nodes to keep persistent
 	// connections to.
 	PersistentPeers string `mapstructure:"persistent_peers"`
-	// WhitelistPeers is a comma seperated list of nodeIDs that can connect to this node.
+	// PrivateMode prevents other nodes from connecting to the node unless
+	// they are the current validators or a part of the whitelistPeers.
+	// If disabled, the node by default operates in public mode, where any node can connect to it.
+	PrivateMode bool `mapstructure:"private_mode"`
+	// WhitelistPeers is a comma separated list of nodeIDs that can connect to this node.
 	// This is excluding any persistent peers or seeds or current validators.
 	WhitelistPeers string `mapstructure:"whitelist_peers"`
 	// AddrBookStrict enforces strict address routability rules. This must be
@@ -595,6 +599,7 @@ func DefaultConfig() *KwildConfig {
 			P2P: &P2PConfig{
 				ListenAddress:       "tcp://0.0.0.0:26656",
 				ExternalAddress:     "",
+				PrivateMode:         false,
 				AddrBookStrict:      false, // override comet
 				MaxNumInboundPeers:  40,
 				MaxNumOutboundPeers: 10,

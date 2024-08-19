@@ -85,6 +85,7 @@ type PeerModule interface {
 	AddPeer(ctx context.Context, peer string) error
 	// RemovePeer removes a peer from the Peers object.
 	RemovePeer(ctx context.Context, peer string) error
-	// HasPeer checks if a peer is in the Peers object.
-	HasPeer(ctx context.Context, peer string) bool
+	// IsPeerWhitelisted checks if a peer is in the PeerWhitelist object.
+	// If private mode is distabled, it always returns true.
+	IsPeerWhitelisted(peer string) bool
 }
