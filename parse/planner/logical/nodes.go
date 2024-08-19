@@ -35,7 +35,7 @@ type Traversable interface {
 	Children() []Traversable
 	// Plans returns all the logical plans that are referenced
 	// by the node (or the nearest node that contains them).
-	Plans() []LogicalPlan
+	Plans() []Plan
 	// Accept is used to traverse the node.
 	Accept(Visitor) any
 	// Equal is used to compare two nodes.
@@ -72,7 +72,7 @@ func (t *TableScanSource) FormatScan() string {
 	return t.TableName + " [" + t.Type.String() + "]"
 }
 
-func (t *TableScanSource) Plans() []LogicalPlan {
+func (t *TableScanSource) Plans() []Plan {
 	return nil
 }
 
@@ -117,10 +117,10 @@ type ProcedureScanSource struct {
 	// ProcedureName is the name of the procedure being targeted.
 	ProcedureName string
 	// Args are the base arguments to the procedure.
-	Args []LogicalExpr
+	Args []Expression
 	// ContextualArgs are the arguments that are passed in if
 	// the procedure is a foreign procedure.
-	ContextualArgs []LogicalExpr
+	ContextualArgs []Expression
 	// IsForeign is true if the function is a foreign procedure.
 	IsForeign bool
 	// rel is the relation that the procedure scan source represents.
@@ -169,8 +169,8 @@ func (f *ProcedureScanSource) FormatScan() string {
 	return str.String()
 }
 
-func (f *ProcedureScanSource) Plans() []LogicalPlan {
-	var plans []LogicalPlan
+func (f *ProcedureScanSource) Plans() []Plan {
+	var plans []Plan
 
 	for _, arg := range f.Args {
 		plans = append(plans, arg.Plans()...)
@@ -244,8 +244,8 @@ func (s *Subquery) FormatScan() string {
 	return ""
 }
 
-func (s *Subquery) Plans() []LogicalPlan {
-	return []LogicalPlan{s.Plan}
+func (s *Subquery) Plans() []Plan {
+	return []Plan{s.Plan}
 }
 
 func (s *Subquery) Relation() *Relation {
@@ -280,7 +280,7 @@ type LogicalNode interface {
 	Traversable
 }
 
-type LogicalPlan interface {
+type Plan interface {
 	LogicalNode
 	Relation() *Relation
 	plan()
@@ -301,7 +301,7 @@ func (n *EmptyScan) Children() []Traversable {
 	return nil
 }
 
-func (n *EmptyScan) Plans() []LogicalPlan {
+func (n *EmptyScan) Plans() []Plan {
 	return nil
 }
 
@@ -326,6 +326,13 @@ type Scan struct {
 	// the RelationName will be the table name.
 	// All other scan types (functions and subqueries) require an alias.
 	RelationName string
+	// Filter holds the optional filter condition that can be
+	// pushed down to the scan operation. This allows filtering data
+	// during the scan, which can improve query performance by reducing
+	// the amount of data processed in subsequent operations.
+	// This field won't ever be set in the initial logical plan, but
+	// can be set during the optimization phase.
+	Filter Expression
 }
 
 func (s *Scan) Accept(v Visitor) any {
@@ -335,40 +342,50 @@ func (s *Scan) Children() []Traversable {
 	return s.Source.Children()
 }
 
-func (s *Scan) Plans() []LogicalPlan {
+func (s *Scan) Plans() []Plan {
 	return s.Source.Plans()
 }
 
 func (s *Scan) String() string {
-	end := fmt.Sprintf(` [alias="%s"]:`, s.RelationName)
+	alias := fmt.Sprintf(` [alias="%s"]`, s.RelationName)
+
+	filter := ""
+	if s.Filter != nil {
+		filter = fmt.Sprintf(" filter=[%s]", s.Filter.String())
+	}
+
+	str := strings.Builder{}
 	switch t := s.Source.(type) {
 	case *TableScanSource:
 		// if relation name == table name, remove the alias
 		if t.TableName == s.RelationName {
-			end = ":"
+			alias = ""
 		}
 
-		return fmt.Sprintf(`Scan Table%s %s`, end, s.Source.FormatScan())
+		str.WriteString(fmt.Sprintf(`Scan Table%s: %s`, alias, s.Source.FormatScan()))
 	case *ProcedureScanSource:
-		return fmt.Sprintf(`Scan Procedure%s %s`, end, s.Source.FormatScan())
+		str.WriteString(fmt.Sprintf(`Scan Procedure%s: %s`, alias, s.Source.FormatScan()))
 	case *Subquery:
-		str := fmt.Sprintf(`Scan Subquery%s [subplan_id=%s]`, end, t.Plan.ID)
+		str.WriteString(fmt.Sprintf(`Scan Subquery%s: [subplan_id=%s]`, alias, t.Plan.ID))
 		if len(t.Correlated) > 0 {
-			str += " (correlated: "
+			str.WriteString(" (correlated: ")
 			for i, col := range t.Correlated {
 				if i > 0 {
-					str += ", "
+					str.WriteString(", ")
 				}
-				str += col.String()
+				str.WriteString(col.String())
 			}
-			str += ")"
+			str.WriteString(")")
 		} else {
-			str += " (uncorrelated)"
+			str.WriteString(" (uncorrelated)")
 		}
-		return str
 	default:
 		panic(fmt.Sprintf("unknown scan source type %T", s.Source))
 	}
+
+	str.WriteString(filter)
+
+	return str.String()
 }
 
 func (s *Scan) Relation() *Relation {
@@ -398,8 +415,8 @@ type Project struct {
 	baseLogicalPlan
 
 	// Expressions are the expressions that are projected.
-	Expressions []LogicalExpr
-	Child       LogicalPlan
+	Expressions []Expression
+	Child       Plan
 }
 
 func (s *Project) Accept(v Visitor) any {
@@ -415,8 +432,8 @@ func (p *Project) Children() []Traversable {
 	return c
 }
 
-func (p *Project) Plans() []LogicalPlan {
-	c := []LogicalPlan{p.Child}
+func (p *Project) Plans() []Plan {
+	c := []Plan{p.Child}
 	for _, expr := range p.Expressions {
 		c = append(c, expr.Plans()...)
 	}
@@ -469,8 +486,8 @@ func (p *Project) Equal(other Traversable) bool {
 
 type Filter struct {
 	baseLogicalPlan
-	Condition LogicalExpr
-	Child     LogicalPlan
+	Condition Expression
+	Child     Plan
 }
 
 func (s *Filter) Accept(v Visitor) any {
@@ -484,8 +501,8 @@ func (f *Filter) String() string {
 	return fmt.Sprintf("Filter: %s", f.Condition.String())
 }
 
-func (f *Filter) Plans() []LogicalPlan {
-	return append([]LogicalPlan{f.Child}, f.Condition.Plans()...)
+func (f *Filter) Plans() []Plan {
+	return append([]Plan{f.Child}, f.Condition.Plans()...)
 }
 
 func (f *Filter) Relation() *Relation {
@@ -503,10 +520,10 @@ func (f *Filter) Equal(other Traversable) bool {
 
 type Join struct {
 	baseLogicalPlan
-	Left      LogicalPlan
-	Right     LogicalPlan
+	Left      Plan
+	Right     Plan
 	JoinType  JoinType
-	Condition LogicalExpr
+	Condition Expression
 }
 
 func (s *Join) Accept(v Visitor) any {
@@ -526,8 +543,8 @@ func (j *Join) String() string {
 	return str.String()
 }
 
-func (j *Join) Plans() []LogicalPlan {
-	return append([]LogicalPlan{j.Left, j.Right}, j.Condition.Plans()...)
+func (j *Join) Plans() []Plan {
+	return append([]Plan{j.Left, j.Right}, j.Condition.Plans()...)
 }
 
 func (j *Join) Relation() *Relation {
@@ -559,11 +576,11 @@ func (j *Join) Equal(other Traversable) bool {
 type Sort struct {
 	baseLogicalPlan
 	SortExpressions []*SortExpression
-	Child           LogicalPlan
+	Child           Plan
 }
 
 type SortExpression struct {
-	Expr      LogicalExpr
+	Expr      Expression
 	Ascending bool
 	NullsLast bool
 }
@@ -606,8 +623,8 @@ func (s *Sort) Children() []Traversable {
 	return c
 }
 
-func (s *Sort) Plans() []LogicalPlan {
-	c := []LogicalPlan{s.Child}
+func (s *Sort) Plans() []Plan {
+	c := []Plan{s.Child}
 	for _, sortExpr := range s.SortExpressions {
 		c = append(c, sortExpr.Expr.Plans()...)
 	}
@@ -648,9 +665,9 @@ func (s *Sort) Equal(other Traversable) bool {
 
 type Limit struct {
 	baseLogicalPlan
-	Child  LogicalPlan
-	Limit  LogicalExpr
-	Offset LogicalExpr
+	Child  Plan
+	Limit  Expression
+	Offset Expression
 }
 
 func (s *Limit) Accept(v Visitor) any {
@@ -679,8 +696,8 @@ func (l *Limit) String() string {
 	return str.String()
 }
 
-func (l *Limit) Plans() []LogicalPlan {
-	c := []LogicalPlan{l.Child}
+func (l *Limit) Plans() []Plan {
+	c := []Plan{l.Child}
 	if l.Limit != nil {
 		c = append(c, l.Limit.Plans()...)
 	}
@@ -713,7 +730,7 @@ func (l *Limit) Equal(other Traversable) bool {
 
 type Distinct struct {
 	baseLogicalPlan
-	Child LogicalPlan
+	Child Plan
 }
 
 func (s *Distinct) Accept(v Visitor) any {
@@ -727,8 +744,8 @@ func (d *Distinct) String() string {
 	return "Distinct"
 }
 
-func (d *Distinct) Plans() []LogicalPlan {
-	return []LogicalPlan{d.Child}
+func (d *Distinct) Plans() []Plan {
+	return []Plan{d.Child}
 }
 
 func (d *Distinct) Relation() *Relation {
@@ -746,8 +763,8 @@ func (d *Distinct) Equal(other Traversable) bool {
 
 type SetOperation struct {
 	baseLogicalPlan
-	Left   LogicalPlan
-	Right  LogicalPlan
+	Left   Plan
+	Right  Plan
 	OpType SetOperationType
 }
 
@@ -759,8 +776,8 @@ func (s *SetOperation) Children() []Traversable {
 	return []Traversable{s.Left, s.Right}
 }
 
-func (s *SetOperation) Plans() []LogicalPlan {
-	return []LogicalPlan{s.Left, s.Right}
+func (s *SetOperation) Plans() []Plan {
+	return []Plan{s.Left, s.Right}
 }
 
 func (s *SetOperation) String() string {
@@ -795,13 +812,13 @@ type Aggregate struct {
 	baseLogicalPlan
 	// GroupingExpressions are the expressions used
 	// in the GROUP BY clause.
-	GroupingExpressions []LogicalExpr
+	GroupingExpressions []Expression
 	// AggregateExpressions are the expressions used
 	// in the SELECT clause (e.g. SUM(x), COUNT(y)).
-	AggregateExpressions []LogicalExpr
+	AggregateExpressions []Expression
 	// Child is the input to the aggregation
 	// (e.g. a Project node).
-	Child LogicalPlan
+	Child Plan
 }
 
 func (s *Aggregate) Accept(v Visitor) any {
@@ -820,8 +837,8 @@ func (a *Aggregate) Children() []Traversable {
 	return c
 }
 
-func (a *Aggregate) Plans() []LogicalPlan {
-	c := []LogicalPlan{a.Child}
+func (a *Aggregate) Plans() []Plan {
+	c := []Plan{a.Child}
 	for _, expr := range a.GroupingExpressions {
 		c = append(c, expr.Plans()...)
 	}
@@ -951,7 +968,7 @@ func (s SetOperationType) String() string {
 
 type Subplan struct {
 	baseLogicalPlan
-	Plan LogicalPlan
+	Plan Plan
 	ID   string
 	Type SubplanType
 
@@ -968,8 +985,8 @@ func (s *Subplan) Children() []Traversable {
 	return []Traversable{s.Plan}
 }
 
-func (s *Subplan) Plans() []LogicalPlan {
-	return []LogicalPlan{s.Plan}
+func (s *Subplan) Plans() []Plan {
+	return []Plan{s.Plan}
 }
 
 func (s *Subplan) String() string {
@@ -1021,8 +1038,8 @@ func (s SubplanType) String() string {
 // intermediate step for planning complex updates and deletes.
 type CartesianProduct struct {
 	baseLogicalPlan
-	Left  LogicalPlan
-	Right LogicalPlan
+	Left  Plan
+	Right Plan
 }
 
 func (c *CartesianProduct) String() string {
@@ -1036,8 +1053,8 @@ func (c *CartesianProduct) Children() []Traversable {
 	return []Traversable{c.Left, c.Right}
 }
 
-func (c *CartesianProduct) Plans() []LogicalPlan {
-	return []LogicalPlan{c.Left, c.Right}
+func (c *CartesianProduct) Plans() []Plan {
+	return []Plan{c.Left, c.Right}
 }
 
 func (c *CartesianProduct) Relation() *Relation {
@@ -1064,7 +1081,7 @@ func (c *CartesianProduct) Equal(other Traversable) bool {
 	###########################
 */
 
-type LogicalExpr interface {
+type Expression interface {
 	LogicalNode
 	Field() *Field
 }
@@ -1095,7 +1112,7 @@ func (l *Literal) Children() []Traversable {
 	return nil
 }
 
-func (l *Literal) Plans() []LogicalPlan {
+func (l *Literal) Plans() []Plan {
 	return nil
 }
 
@@ -1148,7 +1165,7 @@ func (v *Variable) Children() []Traversable {
 	return nil
 }
 
-func (v *Variable) Plans() []LogicalPlan {
+func (v *Variable) Plans() []Plan {
 	return nil
 }
 
@@ -1193,7 +1210,7 @@ func (c *ColumnRef) Children() []Traversable {
 	return nil
 }
 
-func (c *ColumnRef) Plans() []LogicalPlan {
+func (c *ColumnRef) Plans() []Plan {
 	return nil
 }
 
@@ -1216,7 +1233,7 @@ func (c *ColumnRef) Equal(other Traversable) bool {
 
 type AggregateFunctionCall struct {
 	FunctionName string
-	Args         []LogicalExpr
+	Args         []Expression
 	Star         bool
 	Distinct     bool
 	// returnType is the data type of the return value.
@@ -1256,8 +1273,8 @@ func (a *AggregateFunctionCall) Children() []Traversable {
 	return c
 }
 
-func (a *AggregateFunctionCall) Plans() []LogicalPlan {
-	var c []LogicalPlan
+func (a *AggregateFunctionCall) Plans() []Plan {
+	var c []Plan
 	for _, arg := range a.Args {
 		c = append(c, arg.Plans()...)
 	}
@@ -1305,7 +1322,7 @@ func (a *AggregateFunctionCall) Equal(other Traversable) bool {
 // Function call
 type ScalarFunctionCall struct {
 	FunctionName string
-	Args         []LogicalExpr
+	Args         []Expression
 	// returnType is the data type of the return value.
 	// It is set during the evaluation phase.
 	returnType *types.DataType
@@ -1336,8 +1353,8 @@ func (f *ScalarFunctionCall) Children() []Traversable {
 	return c
 }
 
-func (f *ScalarFunctionCall) Plans() []LogicalPlan {
-	var c []LogicalPlan
+func (f *ScalarFunctionCall) Plans() []Plan {
+	var c []Plan
 	for _, arg := range f.Args {
 		c = append(c, arg.Plans()...)
 	}
@@ -1380,8 +1397,8 @@ func (f *ScalarFunctionCall) Equal(other Traversable) bool {
 type ProcedureCall struct {
 	ProcedureName string
 	Foreign       bool
-	Args          []LogicalExpr
-	ContextArgs   []LogicalExpr
+	Args          []Expression
+	ContextArgs   []Expression
 	// returnType is the data type of the return value.
 	// It is set during the evaluation phase.
 	returnType *types.DataType
@@ -1425,8 +1442,8 @@ func (p *ProcedureCall) Children() []Traversable {
 	return c
 }
 
-func (p *ProcedureCall) Plans() []LogicalPlan {
-	var c []LogicalPlan
+func (p *ProcedureCall) Plans() []Plan {
+	var c []Plan
 	for _, arg := range p.Args {
 		c = append(c, arg.Plans()...)
 	}
@@ -1468,8 +1485,8 @@ func (p *ProcedureCall) Equal(other Traversable) bool {
 }
 
 type ArithmeticOp struct {
-	Left  LogicalExpr
-	Right LogicalExpr
+	Left  Expression
+	Right Expression
 	Op    ArithmeticOperator
 }
 
@@ -1508,7 +1525,7 @@ func (a *ArithmeticOp) Children() []Traversable {
 	return []Traversable{a.Left, a.Right}
 }
 
-func (a *ArithmeticOp) Plans() []LogicalPlan {
+func (a *ArithmeticOp) Plans() []Plan {
 	return append(a.Left.Plans(), a.Right.Plans()...)
 }
 
@@ -1531,8 +1548,8 @@ func (a *ArithmeticOp) Equal(other Traversable) bool {
 }
 
 type ComparisonOp struct {
-	Left  LogicalExpr
-	Right LogicalExpr
+	Left  Expression
+	Right Expression
 	Op    ComparisonOperator
 }
 
@@ -1594,7 +1611,7 @@ func (c *ComparisonOp) Children() []Traversable {
 	return []Traversable{c.Left, c.Right}
 }
 
-func (c *ComparisonOp) Plans() []LogicalPlan {
+func (c *ComparisonOp) Plans() []Plan {
 	return append(c.Left.Plans(), c.Right.Plans()...)
 }
 
@@ -1616,8 +1633,8 @@ func (c *ComparisonOp) Equal(other Traversable) bool {
 }
 
 type LogicalOp struct {
-	Left  LogicalExpr
-	Right LogicalExpr
+	Left  Expression
+	Right Expression
 	Op    LogicalOperator
 }
 
@@ -1647,7 +1664,7 @@ func (l *LogicalOp) Children() []Traversable {
 	return []Traversable{l.Left, l.Right}
 }
 
-func (l *LogicalOp) Plans() []LogicalPlan {
+func (l *LogicalOp) Plans() []Plan {
 	return append(l.Left.Plans(), l.Right.Plans()...)
 }
 
@@ -1665,7 +1682,7 @@ func (l *LogicalOp) Equal(other Traversable) bool {
 }
 
 type UnaryOp struct {
-	Expr LogicalExpr
+	Expr Expression
 	Op   UnaryOperator
 }
 
@@ -1701,7 +1718,7 @@ func (u *UnaryOp) Children() []Traversable {
 	return []Traversable{u.Expr}
 }
 
-func (u *UnaryOp) Plans() []LogicalPlan {
+func (u *UnaryOp) Plans() []Plan {
 	return u.Expr.Plans()
 }
 
@@ -1719,7 +1736,7 @@ func (u *UnaryOp) Equal(other Traversable) bool {
 }
 
 type TypeCast struct {
-	Expr LogicalExpr
+	Expr Expression
 	Type *types.DataType
 }
 
@@ -1734,7 +1751,7 @@ func (t *TypeCast) Children() []Traversable {
 	return []Traversable{t.Expr}
 }
 
-func (t *TypeCast) Plans() []LogicalPlan {
+func (t *TypeCast) Plans() []Plan {
 	return t.Expr.Plans()
 }
 
@@ -1752,7 +1769,7 @@ func (t *TypeCast) Equal(other Traversable) bool {
 }
 
 type AliasExpr struct {
-	Expr  LogicalExpr
+	Expr  Expression
 	Alias string
 }
 
@@ -1767,7 +1784,7 @@ func (a *AliasExpr) Children() []Traversable {
 	return []Traversable{a.Expr}
 }
 
-func (a *AliasExpr) Plans() []LogicalPlan {
+func (a *AliasExpr) Plans() []Plan {
 	return a.Expr.Plans()
 }
 
@@ -1785,8 +1802,8 @@ func (a *AliasExpr) Equal(other Traversable) bool {
 }
 
 type ArrayAccess struct {
-	Array LogicalExpr
-	Index LogicalExpr
+	Array Expression
+	Index Expression
 }
 
 func (a *ArrayAccess) String() string {
@@ -1800,7 +1817,7 @@ func (a *ArrayAccess) Children() []Traversable {
 	return []Traversable{a.Array, a.Index}
 }
 
-func (a *ArrayAccess) Plans() []LogicalPlan {
+func (a *ArrayAccess) Plans() []Plan {
 	return append(a.Array.Plans(), a.Index.Plans()...)
 }
 
@@ -1824,7 +1841,7 @@ func (a *ArrayAccess) Equal(other Traversable) bool {
 }
 
 type ArrayConstructor struct {
-	Elements []LogicalExpr
+	Elements []Expression
 }
 
 func (a *ArrayConstructor) String() string {
@@ -1851,8 +1868,8 @@ func (a *ArrayConstructor) Children() []Traversable {
 	return c
 }
 
-func (a *ArrayConstructor) Plans() []LogicalPlan {
-	var c []LogicalPlan
+func (a *ArrayConstructor) Plans() []Plan {
+	var c []Plan
 	for _, elem := range a.Elements {
 		c = append(c, elem.Plans()...)
 	}
@@ -1894,7 +1911,7 @@ func (a *ArrayConstructor) Equal(other Traversable) bool {
 }
 
 type FieldAccess struct {
-	Object LogicalExpr
+	Object Expression
 	Key    string
 }
 
@@ -1909,7 +1926,7 @@ func (f *FieldAccess) Children() []Traversable {
 	return []Traversable{f.Object}
 }
 
-func (f *FieldAccess) Plans() []LogicalPlan {
+func (f *FieldAccess) Plans() []Plan {
 	return f.Object.Plans()
 }
 
@@ -1944,7 +1961,7 @@ type SubqueryExpr struct {
 	Exists bool
 }
 
-var _ LogicalExpr = (*SubqueryExpr)(nil)
+var _ Expression = (*SubqueryExpr)(nil)
 
 func (s *SubqueryExpr) String() string {
 	str := strings.Builder{}
@@ -1991,7 +2008,7 @@ func (s *SubqueryExpr) Children() []Traversable {
 	return []Traversable{s.Query.Plan}
 }
 
-func (s *SubqueryExpr) Plans() []LogicalPlan {
+func (s *SubqueryExpr) Plans() []Plan {
 	return s.Query.Plans()
 }
 
@@ -2013,7 +2030,7 @@ func (s *SubqueryExpr) Equal(other Traversable) bool {
 }
 
 type Collate struct {
-	Expr      LogicalExpr
+	Expr      Expression
 	Collation CollationType
 }
 
@@ -2028,7 +2045,7 @@ func (c *Collate) Children() []Traversable {
 	return []Traversable{c.Expr}
 }
 
-func (c *Collate) Plans() []LogicalPlan {
+func (c *Collate) Plans() []Plan {
 	return c.Expr.Plans()
 }
 
@@ -2063,12 +2080,12 @@ func (c CollationType) String() string {
 
 type IsIn struct {
 	// Left is the expression that is being compared.
-	Left LogicalExpr
+	Left Expression
 
 	// IsIn can have either a list of expressions or a subquery.
 	// Either Expressions or Subquery will be set, but not both.
 
-	Expressions []LogicalExpr
+	Expressions []Expression
 	Subquery    *SubqueryExpr
 }
 
@@ -2109,7 +2126,7 @@ func (i *IsIn) Children() []Traversable {
 	return c
 }
 
-func (i *IsIn) Plans() []LogicalPlan {
+func (i *IsIn) Plans() []Plan {
 	c := i.Left.Plans()
 	if i.Expressions != nil {
 		for _, expr := range i.Expressions {
@@ -2158,14 +2175,14 @@ func (i *IsIn) Equal(other Traversable) bool {
 type Case struct {
 	// Value is the value that is being compared.
 	// Can be nil if there is no value to compare.
-	Value LogicalExpr
+	Value Expression
 	// WhenClauses are the list of when/then pairs.
 	// The first element of each pair is the condition,
 	// which must match the data type of Value. If Value
 	// is nil, the condition must be a boolean.
-	WhenClauses [][2]LogicalExpr
+	WhenClauses [][2]Expression
 	// Else is the else clause. Can be nil.
-	Else LogicalExpr
+	Else Expression
 }
 
 func (c *Case) String() string {
@@ -2209,8 +2226,8 @@ func (c *Case) Children() []Traversable {
 	return ch
 }
 
-func (c *Case) Plans() []LogicalPlan {
-	var ch []LogicalPlan
+func (c *Case) Plans() []Plan {
+	var ch []Plan
 	if c.Value != nil {
 		ch = append(ch, c.Value.Plans()...)
 	}
@@ -2301,7 +2318,7 @@ func (e *ExprRef) Children() []Traversable {
 	return []Traversable{e.Identified}
 }
 
-func (e *ExprRef) Plans() []LogicalPlan {
+func (e *ExprRef) Plans() []Plan {
 	return e.Identified.Plans()
 }
 
@@ -2319,7 +2336,7 @@ type IdentifiedExpr struct {
 	// ID is the unique identifier for the expression.
 	ID string
 	// Expr is the expression that is being identified.
-	Expr LogicalExpr
+	Expr Expression
 }
 
 func (i *IdentifiedExpr) String() string {
@@ -2337,7 +2354,7 @@ func (i *IdentifiedExpr) Children() []Traversable {
 	return []Traversable{i.Expr}
 }
 
-func (i *IdentifiedExpr) Plans() []LogicalPlan {
+func (i *IdentifiedExpr) Plans() []Plan {
 	return i.Expr.Plans()
 }
 
@@ -2360,7 +2377,7 @@ func (i *IdentifiedExpr) Equal(other Traversable) bool {
 
 // TopLevelPlan is a logical plan that is at the top level of a query.
 type TopLevelPlan interface {
-	LogicalPlan
+	Plan
 	topLevel()
 }
 
@@ -2379,7 +2396,7 @@ type Return struct {
 	// Fields are the fields to return.
 	Fields []*Field
 	// Child is the input to the return.
-	Child LogicalPlan
+	Child Plan
 }
 
 func (r *Return) String() string {
@@ -2403,8 +2420,8 @@ func (r *Return) Children() []Traversable {
 	return []Traversable{r.Child}
 }
 
-func (r *Return) Plans() []LogicalPlan {
-	return []LogicalPlan{r.Child}
+func (r *Return) Plans() []Plan {
+	return []Plan{r.Child}
 }
 
 // Relation returns the relation of the child.
@@ -2446,7 +2463,7 @@ func (r *Return) Equal(t Traversable) bool {
 type Update struct {
 	baseTopLevel
 	// Child is the input to the update.
-	Child LogicalPlan
+	Child Plan
 	// Table is the target table name.
 	// It will always be the table name and not an alias.
 	Table string
@@ -2484,8 +2501,8 @@ func (u *Update) Children() []Traversable {
 	return c
 }
 
-func (u *Update) Plans() []LogicalPlan {
-	var c []LogicalPlan
+func (u *Update) Plans() []Plan {
+	var c []Plan
 	for _, assign := range u.Assignments {
 		c = append(c, assign.Value.Plans()...)
 	}
@@ -2528,7 +2545,7 @@ func (u *Update) Equal(t Traversable) bool {
 type Delete struct {
 	baseTopLevel
 	// Child is the input to the delete.
-	Child LogicalPlan
+	Child Plan
 	// Table is the target table name.
 	// It will always be the table name and not an alias.
 	Table string
@@ -2545,8 +2562,8 @@ func (d *Delete) Children() []Traversable {
 	return []Traversable{d.Child}
 }
 
-func (d *Delete) Plans() []LogicalPlan {
-	return []LogicalPlan{d.Child}
+func (d *Delete) Plans() []Plan {
+	return []Plan{d.Child}
 }
 
 func (d *Delete) Relation() *Relation {
@@ -2626,8 +2643,8 @@ func (i *Insert) Children() []Traversable {
 	return c
 }
 
-func (i *Insert) Plans() []LogicalPlan {
-	c := []LogicalPlan{i.Values}
+func (i *Insert) Plans() []Plan {
+	c := []Plan{i.Values}
 
 	if i.ConflictResolution != nil {
 		c = append(c, i.ConflictResolution)
@@ -2668,7 +2685,7 @@ func (i *Insert) Equal(t Traversable) bool {
 // Tuples is a list tuple being inserted into a table.
 type Tuples struct {
 	baseLogicalPlan
-	Values [][]LogicalExpr
+	Values [][]Expression
 	rel    *Relation
 }
 
@@ -2733,8 +2750,8 @@ func (t *Tuples) Children() []Traversable {
 	return c
 }
 
-func (t *Tuples) Plans() []LogicalPlan {
-	var c []LogicalPlan
+func (t *Tuples) Plans() []Plan {
+	var c []Plan
 	for _, val := range t.Values {
 		for _, v := range val {
 			c = append(c, v.Plans()...)
@@ -2752,11 +2769,11 @@ type Assignment struct {
 	// Column is the column to update.
 	Column string
 	// Value is the value to update the column to.
-	Value LogicalExpr
+	Value Expression
 }
 
 type ConflictResolution interface {
-	LogicalPlan
+	Plan
 	conflictResolution()
 }
 
@@ -2797,7 +2814,7 @@ func (c *ConflictDoNothing) Children() []Traversable {
 	return nil
 }
 
-func (c *ConflictDoNothing) Plans() []LogicalPlan {
+func (c *ConflictDoNothing) Plans() []Plan {
 	return nil
 }
 
@@ -2820,7 +2837,7 @@ type ConflictUpdate struct {
 	// ConflictFilter is a predicate that allows us to selectively
 	// update or raise an error if there is a conflict.
 	// Can be nil.
-	ConflictFilter LogicalExpr
+	ConflictFilter Expression
 }
 
 func (c *ConflictUpdate) conflictResolution() {}
@@ -2897,8 +2914,8 @@ func (c *ConflictUpdate) Children() []Traversable {
 	return ch
 }
 
-func (c *ConflictUpdate) Plans() []LogicalPlan {
-	var ch []LogicalPlan
+func (c *ConflictUpdate) Plans() []Plan {
+	var ch []Plan
 	for _, assign := range c.Assignments {
 		ch = append(ch, assign.Value.Plans()...)
 	}
@@ -3040,16 +3057,19 @@ type Visitor interface {
 	###########################
 */
 
-// traverse traverses a logical plan in preorder.
+// Traverse traverses a logical plan in preorder.
 // It will call the callback function for each node in the plan.
 // If the callback function returns false, the traversal will not
 // continue to the children of the node.
-func traverse(node Traversable, callback func(node Traversable) bool) {
+func Traverse(node Traversable, callback func(node Traversable) bool) {
+	if node == nil {
+		return
+	}
 	if !callback(node) {
 		return
 	}
 	for _, child := range node.Children() {
-		traverse(child, callback)
+		Traverse(child, callback)
 	}
 }
 

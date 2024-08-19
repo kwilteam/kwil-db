@@ -12,8 +12,8 @@ import (
 	"github.com/kwilteam/kwil-db/parse"
 )
 
-// Plan creates a logical plan from a SQL statement.
-func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType,
+// CreateLogicalPlan creates a logical plan from a SQL statement.
+func CreateLogicalPlan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType,
 	objects map[string]map[string]*types.DataType) (analyzed *AnalyzedPlan, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -59,7 +59,7 @@ func Plan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*
 // AnalyzedPlan is the full result of a logical plan that has been analyzed.
 type AnalyzedPlan struct {
 	// Plan is the plan of the query.
-	Plan LogicalPlan
+	Plan Plan
 	// CTEs are plans for the common table expressions in the query.
 	// They are in the order that they were defined.
 	CTEs []*Subplan
@@ -226,12 +226,12 @@ func joinUnique(left, right *Relation) *Relation {
 }
 
 // select builds a logical plan for a select statement.
-func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan, rel *Relation, err error) {
+func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan Plan, rel *Relation, err error) {
 	if len(node.SelectCores) == 0 {
 		panic("no select cores")
 	}
 
-	var projectFunc func(LogicalPlan) LogicalPlan
+	var projectFunc func(Plan) Plan
 	var preProjectRel, resultRel *Relation
 	plan, preProjectRel, resultRel, projectFunc, err = s.selectCore(node.SelectCores[0])
 	if err != nil {
@@ -379,7 +379,7 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 // 5. select (project)
 // 6. distinct
 // It returns a logical plan and relation that are PRIOR to any projection,
-// a function that will apply a projection and return the resulting relation,
+// the relation resulting from the projection, a function that will apply a projection to the plan,
 // and an error if one occurred.
 // It returns these because we need to handle conditionally
 // adding projection. If a query has a SET (a.k.a. compound) operation, we want to project before performing
@@ -391,11 +391,11 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan LogicalPlan
 // 2.
 // "SELECT name FROM users UNION 'hello' ORDER BY id" - this is invalid in Postgres, since "id" is not in the
 // result set. We need to project before the UNION.
-func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan LogicalPlan, preProjectRel *Relation, resultRel *Relation,
-	projectFunc func(LogicalPlan) LogicalPlan, err error) {
+func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Plan, preProjectRel *Relation, resultRel *Relation,
+	projectFunc func(Plan) Plan, err error) {
 	// if there is no from, we just project the columns and return
 	if node.From == nil {
-		var exprs []LogicalExpr
+		var exprs []Expression
 		rel := &Relation{}
 		for _, resultCol := range node.Columns {
 			switch resultCol := resultCol.(type) {
@@ -424,8 +424,8 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Logical
 			}
 		}
 
-		return &EmptyScan{}, rel, rel, func(lp LogicalPlan) LogicalPlan {
-			var p LogicalPlan = &Project{
+		return &EmptyScan{}, rel, rel, func(lp Plan) Plan {
+			var p Plan = &Project{
 				Child:       lp,
 				Expressions: exprs,
 			}
@@ -445,7 +445,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Logical
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	var plan LogicalPlan = scan
+	var plan Plan = scan
 
 	for _, join := range node.Joins {
 		plan, rel, err = s.join(plan, rel, join)
@@ -476,7 +476,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Logical
 
 		// we need to check that the where clause does not contain any aggregate functions
 		contains := false
-		traverse(whereExpr, func(node Traversable) bool {
+		Traverse(whereExpr, func(node Traversable) bool {
 			if _, ok := node.(*AggregateFunctionCall); ok {
 				contains = true
 				return false
@@ -499,7 +499,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Logical
 		containsAgg = hasAggregate(result.Expr)
 	}
 
-	var resExprs []LogicalExpr
+	var resExprs []Expression
 	var resFields []*Field
 	for _, result := range results {
 		resExprs = append(resExprs, result.Expr)
@@ -508,8 +508,8 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Logical
 
 	// if there is no group by or aggregate, we can apply any distinct and return
 	if len(node.GroupBy) == 0 && !containsAgg {
-		return plan, rel, &Relation{Fields: resFields}, func(lp LogicalPlan) LogicalPlan {
-			var p LogicalPlan = &Project{
+		return plan, rel, &Relation{Fields: resFields}, func(lp Plan) Plan {
+			var p Plan = &Project{
 				Child:       lp,
 				Expressions: resExprs,
 			}
@@ -543,7 +543,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Logical
 			return nil, nil, nil, nil, err
 		}
 
-		traverse(groupExpr, func(node Traversable) bool {
+		Traverse(groupExpr, func(node Traversable) bool {
 			switch node.(type) {
 			case *AggregateFunctionCall:
 				err = fmt.Errorf(`%w: aggregate functions are not allowed in GROUP BY`, ErrIllegalAggregate)
@@ -621,7 +621,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Logical
 		aggregateRel.Fields = append(aggregateRel.Fields, agg.Value.Field)
 	}
 
-	var resultColExprs []LogicalExpr
+	var resultColExprs []Expression
 	var resultFields []*Field
 	for _, resultCol := range results {
 		resultColExprs = append(resultColExprs, resultCol.Expr)
@@ -630,9 +630,9 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Logical
 
 	return plan, aggregateRel, &Relation{
 			Fields: resultFields,
-		}, func(lp LogicalPlan) LogicalPlan {
+		}, func(lp Plan) Plan {
 
-			var p LogicalPlan = &Project{
+			var p Plan = &Project{
 				Child:       lp,
 				Expressions: resultColExprs,
 			}
@@ -650,7 +650,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Logical
 // hasAggregate returns true if the expression contains an aggregate function.
 func hasAggregate(expr LogicalNode) bool {
 	var hasAggregate bool
-	traverse(expr, func(node Traversable) bool {
+	Traverse(expr, func(node Traversable) bool {
 		if _, ok := node.(*AggregateFunctionCall); ok {
 			hasAggregate = true
 			return false
@@ -666,7 +666,7 @@ func hasAggregate(expr LogicalNode) bool {
 // It uses a generic because there are some times where we want to guarantee
 // that the expression is an IdentifiedExpr, and other times where we don't
 // care about the concrete type.
-type exprFieldPair[T LogicalExpr] struct {
+type exprFieldPair[T Expression] struct {
 	Expr  T
 	Field *Field
 }
@@ -674,9 +674,9 @@ type exprFieldPair[T LogicalExpr] struct {
 // rewriteAccordingToAggregate rewrites an expression according to the rules of aggregation.
 // This is used to rewrite both the select list and having clause to validate that all columns
 // are either captured in aggregates or have an exactly matching expression in the group by.
-func (s *scopeContext) rewriteAccordingToAggregate(expr LogicalExpr, groupingTerms map[string]*IdentifiedExpr, aggTerms map[string]*exprFieldPair[*IdentifiedExpr]) (LogicalExpr, error) {
+func (s *scopeContext) rewriteAccordingToAggregate(expr Expression, groupingTerms map[string]*IdentifiedExpr, aggTerms map[string]*exprFieldPair[*IdentifiedExpr]) (Expression, error) {
 	node, err := Rewrite(expr, &RewriteConfig{
-		ExprCallback: func(le LogicalExpr) (LogicalExpr, bool, error) {
+		ExprCallback: func(le Expression) (Expression, bool, error) {
 			// if it matches any group by term, we need to rewrite it
 			// and stop traversing any children
 			identified, ok := groupingTerms[le.String()]
@@ -728,13 +728,13 @@ func (s *scopeContext) rewriteAccordingToAggregate(expr LogicalExpr, groupingTer
 		return nil, err
 	}
 
-	return node.(LogicalExpr), nil
+	return node.(Expression), nil
 }
 
 // expandResultCols takes a relation and result columns, and converts them to expressions
 // in the order provided. This is used to expand a wildcard in a select statement.
-func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn) ([]*exprFieldPair[LogicalExpr], error) {
-	var resultCols []LogicalExpr
+func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn) ([]*exprFieldPair[Expression], error) {
+	var resultCols []Expression
 	var resultFields []*Field
 	for _, col := range cols {
 		switch col := col.(type) {
@@ -776,9 +776,9 @@ func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn
 		}
 	}
 
-	var pairs []*exprFieldPair[LogicalExpr]
+	var pairs []*exprFieldPair[Expression]
 	for i, expr := range resultCols {
-		pairs = append(pairs, &exprFieldPair[LogicalExpr]{
+		pairs = append(pairs, &exprFieldPair[Expression]{
 			Expr:  expr,
 			Field: resultFields[i],
 		})
@@ -788,9 +788,9 @@ func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn
 }
 
 // expr visits an expression node.
-func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (LogicalExpr, *Field, error) {
+func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expression, *Field, error) {
 	// cast is a helper function for type casting results based on the current node
-	cast := func(expr LogicalExpr, field *Field) (LogicalExpr, *Field, error) {
+	cast := func(expr Expression, field *Field) (Expression, *Field, error) {
 		castable, ok := node.(interface{ GetTypeCast() *types.DataType })
 		if !ok {
 			return expr, field, nil
@@ -1312,7 +1312,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			return nil, nil, fmt.Errorf("string comparison operands must be of type string. %s != %s", leftScalar, rightScalar)
 		}
 
-		var expr LogicalExpr = &ComparisonOp{
+		var expr Expression = &ComparisonOp{
 			Left:  left,
 			Right: right,
 			Op:    get(stringComparisonOps, node.Operator),
@@ -1362,7 +1362,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			}
 		}
 
-		var expr LogicalExpr = &ComparisonOp{
+		var expr Expression = &ComparisonOp{
 			Left:  left,
 			Right: right,
 			Op:    op,
@@ -1433,7 +1433,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 			in.Expressions = right
 		}
 
-		var expr LogicalExpr = in
+		var expr Expression = in
 
 		if node.Not {
 			expr = &UnaryOp{
@@ -1551,7 +1551,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 				return nil, nil, fmt.Errorf(`WHEN expression must be of type %s, received %s`, expectedWhenType, whenScalar)
 			}
 
-			c.WhenClauses = append(c.WhenClauses, [2]LogicalExpr{whenExpr, thenExpr})
+			c.WhenClauses = append(c.WhenClauses, [2]Expression{whenExpr, thenExpr})
 		}
 
 		if node.Else != nil {
@@ -1585,7 +1585,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Logica
 		if node.Exists {
 			subqExpr.Exists = true
 
-			var plan LogicalExpr = subqExpr
+			var plan Expression = subqExpr
 			if node.Not {
 				plan = &UnaryOp{
 					Expr: plan,
@@ -1676,8 +1676,8 @@ func (s *scopeContext) planSubquery(node *parse.SelectStatement, currentRel *Rel
 }
 
 // manyExprs is a helper function that applies the expr function to many expressions.
-func (s *scopeContext) manyExprs(nodes []parse.Expression, currentRel *Relation) ([]LogicalExpr, []*Field, error) {
-	var exprs []LogicalExpr
+func (s *scopeContext) manyExprs(nodes []parse.Expression, currentRel *Relation) ([]Expression, []*Field, error) {
+	var exprs []Expression
 	var fields []*Field
 	for _, node := range nodes {
 		expr, field, err := s.expr(node, currentRel)
@@ -1786,8 +1786,8 @@ func (s *scopeContext) table(node parse.Table) (*Scan, *Relation, error) {
 		// the function call must either be a procedure or foreign procedure that returns
 		// a table.
 
-		var args []LogicalExpr
-		var contextArgs []LogicalExpr
+		var args []Expression
+		var contextArgs []Expression
 		var procReturns *types.ProcedureReturn
 		var isForeign bool
 		if proc, ok := s.plan.Schema.FindProcedure(node.FunctionCall.FunctionName()); ok {
@@ -1918,7 +1918,7 @@ func (s *scopeContext) table(node parse.Table) (*Scan, *Relation, error) {
 }
 
 // join wraps the given plan in a join node.
-func (s *scopeContext) join(child LogicalPlan, childRel *Relation, join *parse.Join) (LogicalPlan, *Relation, error) {
+func (s *scopeContext) join(child Plan, childRel *Relation, join *parse.Join) (Plan, *Relation, error) {
 	tbl, tblRel, err := s.table(join.Relation)
 	if err != nil {
 		return nil, nil, err
@@ -1998,7 +1998,7 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 	// according to their position in the table, and fills in nulls for any
 	// columns that were not specified in the insert. It starts as being empty,
 	// since it only needs logic if the user specifies columns.
-	orderAndFillNulls := func(exprs []*exprFieldPair[LogicalExpr]) []*exprFieldPair[LogicalExpr] {
+	orderAndFillNulls := func(exprs []*exprFieldPair[Expression]) []*exprFieldPair[Expression] {
 		return exprs
 	}
 
@@ -2032,8 +2032,8 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 			colPos[i] = tableColPos[col]
 		}
 
-		orderAndFillNulls = func(exprs []*exprFieldPair[LogicalExpr]) []*exprFieldPair[LogicalExpr] {
-			newExprs := make([]*exprFieldPair[LogicalExpr], len(tbl.Columns))
+		orderAndFillNulls = func(exprs []*exprFieldPair[Expression]) []*exprFieldPair[Expression] {
+			newExprs := make([]*exprFieldPair[Expression], len(tbl.Columns))
 
 			for i, expr := range exprs {
 				newExprs[colPos[i]] = expr
@@ -2044,7 +2044,7 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 					continue
 				}
 
-				newExprs[i] = &exprFieldPair[LogicalExpr]{
+				newExprs[i] = &exprFieldPair[Expression]{
 					Expr: &Literal{
 						Value: nil,
 						Type:  types.NullType.Copy(),
@@ -2079,7 +2079,7 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 			return nil, fmt.Errorf(`insert has %d columns but %d values were supplied`, expectedColLen, len(vals))
 		}
 
-		var row []*exprFieldPair[LogicalExpr]
+		var row []*exprFieldPair[Expression]
 
 		for j, val := range vals {
 			expr, field, err := s.expr(val, rel)
@@ -2098,14 +2098,14 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 
 			field.Name = tbl.Columns[j].Name
 			field.Parent = tbl.Name
-			row = append(row, &exprFieldPair[LogicalExpr]{
+			row = append(row, &exprFieldPair[Expression]{
 				Expr:  expr,
 				Field: field,
 			})
 		}
 
 		pairs := orderAndFillNulls(row)
-		var newRow []LogicalExpr
+		var newRow []Expression
 		for _, pair := range pairs {
 			newRow = append(newRow, pair.Expr)
 
@@ -2338,7 +2338,7 @@ func checkNullableColumns(tbl *types.Table, cols []string) ([]*types.DataType, e
 // It returns the plan for the join, the relation that is being targeted, the relation that is the cartesian join
 // between the target and the FROM + JOIN tables, and an error if one occurred.
 func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, joins []*parse.Join,
-	filter parse.Expression) (plan LogicalPlan, targetRel *Relation, cartesianRel *Relation, err error) {
+	filter parse.Expression) (plan Plan, targetRel *Relation, cartesianRel *Relation, err error) {
 
 	tbl, ok := s.plan.Schema.FindTable(targetTable)
 	if !ok {
@@ -2353,10 +2353,11 @@ func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, jo
 	rel := targetRel.Copy()
 
 	// plan the target table
-	var targetPlan LogicalPlan = &Scan{
+	var targetPlan Plan = &Scan{
 		Source: &TableScanSource{
 			TableName: targetTable,
 			Type:      TableSourcePhysical,
+			rel:       rel.Copy(),
 		},
 		RelationName: alias,
 	}
@@ -2395,7 +2396,7 @@ func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, jo
 
 	// plan the FROM clause
 
-	var sourceRel LogicalPlan
+	var sourceRel Plan
 	var fromRel *Relation
 	sourceRel, fromRel, err = s.table(from)
 	if err != nil {

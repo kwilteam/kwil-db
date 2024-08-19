@@ -2,7 +2,6 @@ package logical_test
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -560,7 +559,7 @@ func Test_Planner(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, parsedSql.ParseErrs.Err())
 
-			plan, err := logical.Plan(parsedSql.AST, schema, test.vars, test.objects)
+			plan, err := logical.CreateLogicalPlan(parsedSql.AST, schema, test.vars, test.objects)
 			if test.err != nil {
 				require.Error(t, err)
 
@@ -572,16 +571,6 @@ func Test_Planner(t *testing.T) {
 				require.ErrorIs(t, err, test.err)
 			} else {
 				require.NoError(t, err)
-
-				// TODO: delete this block once I am done debugging
-				rec := plan.Format()
-				if test.wt != rec {
-					fmt.Println("TEST: " + test.name)
-					fmt.Println(rec)
-					require.Equal(t, test.wt, rec)
-				}
-				// TODO: end delete here
-
 				require.Equal(t, test.wt, plan.Format())
 
 				// check that Relation() works
