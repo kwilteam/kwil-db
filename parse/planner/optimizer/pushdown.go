@@ -89,8 +89,7 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 	switch n := n.(type) {
 	case *logical.Filter:
 		if expr != nil {
-			// TODO: i doubt we keep this, just experimenting
-			panic("expressions should not be passed down to filters")
+			return nil, fmt.Errorf("unexpected pushdown of filter to filter")
 		}
 
 		if _, ok := n.Child.(*logical.Aggregate); ok {
