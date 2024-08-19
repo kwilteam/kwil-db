@@ -1,5 +1,7 @@
 package logical
 
+import "fmt"
+
 // RewriteConfig is a configuration for the rewriter.
 type RewriteConfig struct {
 	// ExprCallback is the function that will be called on each expression.
@@ -23,16 +25,16 @@ type RewriteConfig struct {
 // It returns the rewritten plan, but it also modifies the original plan in place.
 // The returned plan should always be used.
 func Rewrite(node LogicalNode, cfg *RewriteConfig) (lp LogicalNode, err error) {
-	// defer func() {
-	// 	if r := recover(); r != nil {
-	// 		err2, ok := r.(error)
-	// 		if !ok {
-	// 			err = fmt.Errorf("%v", r)
-	// 		} else {
-	// 			err = err2
-	// 		}
-	// 	}
-	// }()
+	defer func() {
+		if r := recover(); r != nil {
+			err2, ok := r.(error)
+			if !ok {
+				err = fmt.Errorf("%v", r)
+			} else {
+				err = err2
+			}
+		}
+	}()
 
 	v := &rewriteVisitor{
 		exprCallback:       cfg.ExprCallback,
@@ -69,8 +71,8 @@ type rewriteVisitor struct {
 	planCallback func(Plan) (Plan, bool, error)
 	// scanSourceCallback is the function that will be called on each scan source
 	scanSourceCallback func(ScanSource) (ScanSource, bool, error)
-	// if true, the children of the node are visited in post order
-	// if false, the children of the node are visited in pre order
+	// if true, the node is visited in post order
+	// if false, the node is visited in pre order
 	postOrder bool
 	// if true, then fields are visited in the reverse order of their logic.
 	// For example, if true in a projection, the fields representing the projected

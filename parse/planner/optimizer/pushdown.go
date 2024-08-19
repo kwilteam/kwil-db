@@ -1,6 +1,7 @@
 package optimizer
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/parse/planner/logical"
@@ -30,7 +31,11 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 	// expression can be pushed down either side of a join.
 	// It is defined separately here because the logic is used both in Join
 	// and CartesianProduct.
-	pushLeftRight := func(left, right logical.Plan, expr logical.Expression) (logical.Plan, logical.Plan, logical.Expression) {
+	pushLeftRight := func(left, right logical.Plan, expr logical.Expression) (logical.Plan, logical.Plan, logical.Expression, error) {
+		if expr == nil {
+			return left, right, nil, nil
+		}
+
 		ands := splitAnds(expr)
 		var leftover logical.Expression
 
@@ -58,12 +63,12 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 			switch {
 			case leftCount == 0 && rightCount == 0:
 				// we can't push down the filter
-				leftover = makeAnd(leftover, and)
+				return nil, nil, nil, errCannotPush
 			case leftCount == 0 && rightCount > 0:
 				// push down to the right side
 				res, err := push(right, and)
 				if err != nil {
-					return nil, nil, nil
+					return nil, nil, nil, err
 				}
 
 				right = res
@@ -71,7 +76,7 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 				// push down to the left side
 				res, err := push(left, and)
 				if err != nil {
-					return nil, nil, nil
+					return nil, nil, nil, err
 				}
 
 				left = res
@@ -83,13 +88,32 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 			}
 		}
 
-		return left, right, leftover
+		return left, right, leftover, nil
 	}
 
+	// we need to make sure that for all children, we visit the subplans.
+	// We will already rewrite for all logical.Plan nodes, but we need to
+	// rewrite for all expressions as well.
+	for _, child := range n.Children() {
+		if expr, ok := child.(logical.Expression); ok {
+			for _, plan := range expr.Plans() {
+				res, err := push(plan, nil)
+				if err != nil {
+					return nil, err
+				}
+
+				if res != plan {
+					return nil, fmt.Errorf("unhandled rewrite: tried to rewrite a %T as a child of a %T", res, n)
+				}
+			}
+		}
+	}
+
+	// we also perform a switch to directly rewrite each logical.Plan node.
 	switch n := n.(type) {
 	case *logical.Filter:
 		if expr != nil {
-			return nil, fmt.Errorf("unexpected pushdown of filter to filter")
+			return nil, errCannotPush
 		}
 
 		if _, ok := n.Child.(*logical.Aggregate); ok {
@@ -105,7 +129,11 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 		// since we no longer have a condition, we can just return the child
 		return fin, nil
 	case *logical.Join:
-		left, right, leftover := pushLeftRight(n.Left, n.Right, expr)
+		left, right, leftover, err := pushLeftRight(n.Left, n.Right, expr)
+		if err != nil {
+			return nil, err
+		}
+
 		n.Left = left
 		n.Right = right
 		n.Condition = makeAnd(n.Condition, leftover)
@@ -115,7 +143,11 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 		n.Filter = makeAnd(n.Filter, expr)
 		return n, nil
 	case *logical.Project:
-		res, err := push(n.Child, expr)
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
+		res, err := push(n.Child, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -127,9 +159,14 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 			return n, nil
 		}
 
-		left, right, leftover := pushLeftRight(n.Left, n.Right, expr)
+		left, right, leftover, err := pushLeftRight(n.Left, n.Right, expr)
+		if err != nil {
+			return nil, err
+		}
+
 		n.Left = left
 		n.Right = right
+
 		// if leftover is not nil, then we can rewrite as a join
 		if leftover == nil {
 			return n, nil
@@ -140,7 +177,124 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 			Right:     right,
 			Condition: leftover,
 		}, nil
+	case *logical.Aggregate:
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
+		res, err := push(n.Child, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		n.Child = res
+		return n, nil
+	case *logical.Sort:
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
+		res, err := push(n.Child, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		n.Child = res
+		return n, nil
+	case *logical.Limit:
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
+		res, err := push(n.Child, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		n.Child = res
+		return n, nil
+	case *logical.Distinct:
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
+		res, err := push(n.Child, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		n.Child = res
+		return n, nil
+	case *logical.SetOperation:
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
+		left, err := push(n.Left, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		right, err := push(n.Right, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		n.Left = left
+		n.Right = right
+
+		return n, nil
+	case *logical.Subplan:
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
+		res, err := push(n.Plan, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		n.Plan = res
+		return n, nil
+	case *logical.Return:
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
+		res, err := push(n.Child, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		n.Child = res
+		return n, nil
+	case *logical.Insert:
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
+		res, err := push(n.Values, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		n.Values = res.(*logical.Tuples)
+
+		if n.ConflictResolution != nil {
+			res, err = push(n.ConflictResolution, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			n.ConflictResolution = res.(logical.ConflictResolution)
+		}
+
+		return n, nil
 	case *logical.Update:
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
 		res, err := push(n.Child, expr)
 		if err != nil {
 			return nil, err
@@ -149,6 +303,10 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 		n.Child = res
 		return n, nil
 	case *logical.Delete:
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
 		res, err := push(n.Child, expr)
 		if err != nil {
 			return nil, err
@@ -156,34 +314,26 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 
 		n.Child = res
 		return n, nil
-	case *logical.Aggregate:
-		res, err := push(n.Child, nil)
-		if err != nil {
-			return nil, err
+	case *logical.ConflictDoNothing:
+		if expr != nil {
+			return nil, errCannotPush
 		}
 
-		n.Child = res
+		return n, nil
+	case *logical.ConflictUpdate:
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
 		return n, nil
 	default:
-		if expr != nil {
-			return nil, fmt.Errorf("unhandled predicate pushdown for %T", n)
-		}
-
-		// by default, we just can't push down the filter, but we should visit the children.
-		// If any rewrite is attempted, we should return an error.
-		for _, child := range n.Plans() {
-			res, err := push(child, nil)
-			if err != nil {
-				return nil, err
-			}
-			if res != child {
-				return nil, fmt.Errorf("unhandled rewrite: tried to rewrite a %T as a child of a %T", res, n)
-			}
-		}
-
-		return n, nil
+		panic(fmt.Sprintf("unhandled node type %T", n))
 	}
 }
+
+// errCannotPush is used when a predicate cannot be pushed down.
+// It is used to signal that the calling function should not attempt to rewrite the plan.
+var errCannotPush = errors.New("cannot push down predicate")
 
 // makeAnd combines two expressions with an AND operator.
 // If either expression is nil, the other expression is returned.
