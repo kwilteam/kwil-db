@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -17,7 +19,7 @@ func Test_UUID(t *testing.T) {
 	}
 }
 
-func Test_UUIDJSON(t *testing.T) {
+func Test_UUIDJSONRoundTrip(t *testing.T) {
 	seed := []byte("test")
 
 	uuid := types.NewUUIDV5(seed)
@@ -27,12 +29,13 @@ func Test_UUIDJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Log(uuid)
+	assert.Equal(t, `"24aa70cf-0e18-57c9-b449-da8c9db37821"`, string(b))
 
-	var uuid3 types.UUID
-	err = json.Unmarshal(b, &uuid3)
+	var uuidBack types.UUID
+	err = json.Unmarshal(b, &uuidBack)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log(uuid3) // 00000000-0000-0000-0000-000000000000
+
+	assert.Equal(t, *uuid, uuidBack)
 }
