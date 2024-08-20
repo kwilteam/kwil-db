@@ -696,7 +696,7 @@ func (s *sqlGenerator) VisitUpsertClause(p0 *parse.UpsertClause) any {
 	}
 
 	str.WriteString("DO ")
-	if p0.DoUpdate == nil {
+	if len(p0.DoUpdate) == 0 {
 		str.WriteString("NOTHING")
 	} else {
 		str.WriteString("UPDATE SET")

@@ -278,7 +278,10 @@ type SQLParseResult struct {
 // ParseSQL parses an SQL statement.
 // It requires a schema to be passed in, since SQL statements may reference
 // schema objects.
-func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error) {
+// If skipValidation is true, the AST will not be validated or analyzed.
+// TODO: once we get farther on the planner, we should remove all validation, in favor
+// of the planner.
+func ParseSQL(sql string, schema *types.Schema, skipValidation bool) (res *SQLParseResult, err error) {
 	parser, errLis, sqlVis, parseVis, deferFn, err := setupSQLParser(sql, schema)
 
 	res = &SQLParseResult{
@@ -295,6 +298,10 @@ func ParseSQL(sql string, schema *types.Schema) (res *SQLParseResult, err error)
 	res.AST = parser.Sql_entry().Accept(parseVis).(*SQLStatement)
 
 	if errLis.Err() != nil {
+		return res, nil
+	}
+
+	if skipValidation {
 		return res, nil
 	}
 
