@@ -11,15 +11,6 @@ import (
 // but decided to have clean separation so that other parts of the
 // planner don't have to rely on the parse package.
 
-var comparisonOps = map[parse.ComparisonOperator]ComparisonOperator{
-	parse.ComparisonOperatorEqual:              Equal,
-	parse.ComparisonOperatorNotEqual:           NotEqual,
-	parse.ComparisonOperatorLessThan:           LessThan,
-	parse.ComparisonOperatorLessThanOrEqual:    LessThanOrEqual,
-	parse.ComparisonOperatorGreaterThan:        GreaterThan,
-	parse.ComparisonOperatorGreaterThanOrEqual: GreaterThanOrEqual,
-}
-
 var stringComparisonOps = map[parse.StringComparisonOperator]ComparisonOperator{
 	parse.StringComparisonOperatorLike:  Like,
 	parse.StringComparisonOperatorILike: ILike,

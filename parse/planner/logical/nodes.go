@@ -1563,12 +1563,9 @@ const (
 	// https://en.wikipedia.org/wiki/Sargable
 	// for the purposes of our planner, we will treat rarely
 	// sargable as not sargable
-	Equal              ComparisonOperator = iota // sargable
-	NotEqual                                     // rarely sargable
-	LessThan                                     // sargable
-	LessThanOrEqual                              // sargable
-	GreaterThan                                  // sargable
-	GreaterThanOrEqual                           // sargable
+	Equal       ComparisonOperator = iota // sargable
+	LessThan                              // sargable
+	GreaterThan                           // sargable
 	// IS and IS NOT are rarely sargable because they can only be used
 	// with NULL values or BOOLEAN values
 	Is             // rarely sargable
@@ -1581,16 +1578,10 @@ func (c ComparisonOperator) String() string {
 	switch c {
 	case Equal:
 		return "="
-	case NotEqual:
-		return "!="
 	case LessThan:
 		return "<"
-	case LessThanOrEqual:
-		return "<="
 	case GreaterThan:
 		return ">"
-	case GreaterThanOrEqual:
-		return ">="
 	case Is:
 		return "IS"
 	case IsDistinctFrom:
