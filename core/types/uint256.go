@@ -3,6 +3,8 @@ package types
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding"
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -14,6 +16,9 @@ import (
 // extra methods for usage in Postgres.
 type Uint256 struct {
 	base uint256.Int // not exporting massive method set, which also has params and returns of holiman types
+	// Null indicates if this is a NULL value in a SQL table. This approach is
+	// typical in most sql.Valuers, which precludes using a nil pointer to
+	// indicate a NULL value.
 	Null bool
 }
 
@@ -22,7 +27,9 @@ func Uint256FromInt(i uint64) *Uint256 {
 	return &Uint256{base: *uint256.NewInt(i)}
 }
 
-// Uint256FromString creates a new Uint256 from a string.
+// Uint256FromString creates a new Uint256 from a string. A Uint256 representing
+// a NULL value should be created with a literal (&Uint256{ Null: true }) or via
+// of the unmarshal / scan methods.
 func Uint256FromString(s string) (*Uint256, error) {
 	i, err := uint256.FromDecimal(s)
 	if err != nil {
@@ -33,11 +40,17 @@ func Uint256FromString(s string) (*Uint256, error) {
 
 // Uint256FromBig creates a new Uint256 from a big.Int.
 func Uint256FromBig(i *big.Int) (*Uint256, error) {
+	if i == nil {
+		return &Uint256{Null: true}, nil
+	}
 	return Uint256FromString(i.String())
 }
 
 // Uint256FromBytes creates a new Uint256 from a byte slice.
 func Uint256FromBytes(b []byte) (*Uint256, error) {
+	if b == nil {
+		return &Uint256{Null: true}, nil
+	} // zero length non-null is for the actual value 0
 	bigInt := new(big.Int).SetBytes(b)
 	return Uint256FromBig(bigInt)
 }
@@ -54,10 +67,6 @@ func (u Uint256) ToBig() *big.Int {
 	return u.base.ToBig()
 }
 
-func (u Uint256) MarshalJSON() ([]byte, error) {
-	return []byte(u.base.String()), nil // ? json ?
-}
-
 func (u *Uint256) Clone() *Uint256 {
 	v := *u
 	return &v
@@ -71,13 +80,55 @@ func CmpUint256(u, v *Uint256) int {
 	return u.Cmp(v)
 }
 
+var _ json.Marshaler = Uint256{}
+var _ json.Marshaler = (*Uint256)(nil)
+
+func (u Uint256) MarshalJSON() ([]byte, error) {
+	if u.Null {
+		return []byte("null"), nil
+	}
+	return []byte(`"` + u.base.String() + `"`), nil
+}
+
+var _ json.Unmarshaler = (*Uint256)(nil)
+
 func (u *Uint256) UnmarshalJSON(b []byte) error {
-	u2, err := Uint256FromString(string(b))
+	var str string
+	if err := json.Unmarshal(b, &str); err != nil {
+		return err
+	}
+	if str == "" { // JSON data was null or ""
+		u.Null = true
+		u.base.Clear()
+		return nil
+	}
+	u2, err := Uint256FromString(str)
 	if err != nil {
 		return err
 	}
 
 	u.base = u2.base
+	return nil
+}
+
+var _ encoding.BinaryMarshaler = Uint256{}
+var _ encoding.BinaryMarshaler = (*Uint256)(nil)
+
+func (u Uint256) MarshalBinary() ([]byte, error) {
+	if u.Null {
+		return nil, nil
+	}
+	return u.base.Bytes(), nil
+}
+
+var _ encoding.BinaryUnmarshaler = (*Uint256)(nil)
+
+func (u *Uint256) UnmarshalBinary(data []byte) error {
+	if data == nil {
+		*u = Uint256{Null: true}
+		return nil
+	} // len(data) == 0 is the actual value 0
+	u.base.SetBytes(data) // u.base, _ = uint256.FromBig(new(big.Int).SetBytes(buf))
 	return nil
 }
 

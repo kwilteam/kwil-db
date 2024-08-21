@@ -51,10 +51,15 @@ func (u *UUID) Bytes() []byte {
 	return u[:]
 }
 
-// Over json, we want to send uuids as strings
+var _ json.Marshaler = UUID{}
+var _ json.Marshaler = (*UUID)(nil)
+
+// MarshalJSON implements json.Marshaler.
 func (u UUID) MarshalJSON() ([]byte, error) {
-	return json.Marshal(u.String())
+	return []byte(`"` + u.String() + `"`), nil
 }
+
+var _ json.Unmarshaler = (*UUID)(nil)
 
 func (u *UUID) UnmarshalJSON(b []byte) error {
 	var s string
