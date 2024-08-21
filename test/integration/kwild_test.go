@@ -218,10 +218,10 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			specifications.ValidatorJoinExpirySpecification(ctx, t, joinerDriver, joinerPubKey, expiryWait)
 
 			/*
-			 Join Process:
-			 - Node3 requests to join
-			 - Requires at least 2 nodes to approvee
-			 - Consensus reached, Node3 is a Validator
+				Join Process:
+				- Node3 requests to join
+				- Requires at least 2 nodes to approvee
+				- Consensus reached, Node3 is a Validator
 			*/
 			specifications.ValidatorNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
 			time.Sleep(2 * time.Second)
@@ -235,14 +235,14 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			specifications.CurrentValidatorsSpecification(ctx, t, node0Driver, 4)
 
 			/*
-			 Leave Process:
-			 - node3 issues a leave request -> removes it from the validator list
-			 - Validator set count should be reduced by 1
+				Leave Process:
+				- node3 issues a leave request -> removes it from the validator list
+				- Validator set count should be reduced by 1
 			*/
 			specifications.ValidatorNodeLeaveSpecification(ctx, t, joinerDriver)
 
 			/*
-			 Rejoin: (same as join process)
+				Rejoin: (same as join process)
 			*/
 			specifications.ValidatorNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
 			time.Sleep(2 * time.Second)
@@ -709,4 +709,119 @@ func TestSpamListener(t *testing.T) {
 		time.Sleep(4 * time.Second)
 	}
 	fmt.Println("Spam listener test completed")
+}
+
+func TestKwildPrivateNetworks(t *testing.T) {
+	if *parallelMode {
+		t.Parallel()
+	}
+
+	blockInterval := time.Second
+	opts := []integration.HelperOpt{
+		integration.WithValidators(1),
+		integration.WithNonValidators(2),
+		integration.WithBlockInterval(blockInterval),
+		// integration.WithAdminRPC("0.0.0.0:8485"),
+		integration.PopulatePersistentPeers(true),
+		integration.WithPrivateMode(), // Enables private mode
+	}
+
+	ctx := context.Background()
+
+	driverType := "cli"
+	t.Run("cli_driver", func(t *testing.T) {
+		helper := integration.NewIntHelper(t, opts...)
+		helper.Setup(ctx, basicServices) // 3 nodes, all connected to each other
+
+		nodeIDs := helper.NodeIDs()
+		node0 := nodeIDs["node0"]
+		node1 := nodeIDs["node1"]
+		node2 := nodeIDs["node2"]
+
+		userNode0Driver := helper.GetUserDriver(ctx, "node0", driverType, nil)
+		userNode1Driver := helper.GetUserDriver(ctx, "node1", driverType, nil)
+		userNode2Driver := helper.GetUserDriver(ctx, "node2", driverType, nil)
+
+		node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
+		node1Driver := helper.GetOperatorDriver(ctx, "node1", driverType)
+		node2Driver := helper.GetOperatorDriver(ctx, "node2", driverType)
+
+		// Isolate all the nodes from each other
+		// n0 n1 n2
+		specifications.RemovePeerSpecification(ctx, t, node0Driver, node1)
+		specifications.RemovePeerSpecification(ctx, t, node1Driver, node0)
+		specifications.RemovePeerSpecification(ctx, t, node0Driver, node2)
+		specifications.RemovePeerSpecification(ctx, t, node2Driver, node0)
+		specifications.RemovePeerSpecification(ctx, t, node1Driver, node2)
+		specifications.RemovePeerSpecification(ctx, t, node2Driver, node1)
+
+		// List whitelisted peers
+		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node0})
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1})
+		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node2})
+		// Deploy a database on node0 and verify that the database does not exist on node1 and node2
+		specifications.DatabaseDeploySpecification(ctx, t, userNode0Driver)
+
+		time.Sleep(2 * time.Second)
+		specifications.DatabaseVerifySpecification(ctx, t, userNode1Driver, false)
+		specifications.DatabaseVerifySpecification(ctx, t, userNode2Driver, false)
+
+		// Allow node0 to accept connections from node1
+		// n0 <-> n1  n2
+		specifications.AddPeerSpecification(ctx, t, node0Driver, node1)
+		specifications.AddPeerSpecification(ctx, t, node1Driver, node0)
+
+		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node0, node1})
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0})
+		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node2})
+
+		// Verify that the database exists on node1 but not on node2
+		time.Sleep(30 * time.Second) // TODO: node eventually connects and syncs // figure out the time interval
+		specifications.DatabaseVerifySpecification(ctx, t, userNode1Driver, true)
+		specifications.DatabaseVerifySpecification(ctx, t, userNode2Driver, false)
+
+		// Allow node0 to accept connections from node2
+		// n1 <-> n0 <-> n2
+		// n0 <-> n1  n2
+		specifications.AddPeerSpecification(ctx, t, node0Driver, node2)
+		specifications.AddPeerSpecification(ctx, t, node2Driver, node0)
+
+		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node0, node1, node2})
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0})
+		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node2, node0})
+
+		// ensure that the database exists on all nodes
+		time.Sleep(30 * time.Second)
+		specifications.DatabaseVerifySpecification(ctx, t, userNode2Driver, true)
+
+		// ensure that node2 is not connected to node1
+		specifications.PeerConnectivitySpecification(ctx, t, node2Driver, node1, false)
+		specifications.PeerConnectivitySpecification(ctx, t, node1Driver, node2, false)
+
+		// allow node1 to accept connections from node2, but not the other way around
+		specifications.AddPeerSpecification(ctx, t, node1Driver, node2)
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0, node2})
+		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node2, node0})
+
+		// so both the nodes are still not connected
+		specifications.PeerConnectivitySpecification(ctx, t, node1Driver, nodeIDs["node2"], false)
+		specifications.PeerConnectivitySpecification(ctx, t, node2Driver, nodeIDs["node1"], false)
+
+		// now make node1 a validator
+		node1PrivKey := helper.NodePrivateKey("node1")
+		node1PubKey := node1PrivKey.PubKey().Bytes()
+		specifications.ValidatorNodeJoinSpecification(ctx, t, node1Driver, node1PubKey, 1)
+		specifications.ValidatorNodeApproveSpecification(ctx, t, node0Driver, node1PubKey, 1, 2, true)
+
+		time.Sleep(30 * time.Second)
+		specifications.CurrentValidatorsSpecification(ctx, t, node0Driver, 2)
+		specifications.CurrentValidatorsSpecification(ctx, t, node2Driver, 2)
+
+		// node2 automatocally adds node1 as a peer as it is a validator
+		// time.Sleep(30 * time.Second)
+		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node1, node0, node2})
+		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node2, node0, node1})
+
+		// specifications.PeerConnectivitySpecification(ctx, t, node2Driver, nodeIDs["node1"], true)
+	})
 }

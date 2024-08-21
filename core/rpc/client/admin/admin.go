@@ -25,4 +25,5 @@ type AdminClient interface {
 
 	AddPeer(ctx context.Context, peerID string) error
 	RemovePeer(ctx context.Context, peerID string) error
+	ListPeers(ctx context.Context) ([]string, error)
 }

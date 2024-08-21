@@ -12,7 +12,7 @@ func PeersCmd() *cobra.Command {
 	peersCmd.AddCommand(
 		addCmd(),
 		removeCmd(),
-		// listCmd(),
+		listCmd(),
 	)
 	return peersCmd
 }

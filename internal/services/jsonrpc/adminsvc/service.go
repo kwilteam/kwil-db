@@ -49,6 +49,8 @@ type P2P interface {
 	AddPeer(ctx context.Context, nodeID string) error
 	// RemovePeer removes a peer from the node's peer list.
 	RemovePeer(ctx context.Context, nodeID string) error
+	// ListPeers returns the list of peers in the node's whitelist.
+	ListPeers(ctx context.Context) []string
 }
 
 type Service struct {
@@ -129,6 +131,9 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		adminjson.MethodRemovePeer: rpcserver.MakeMethodDef(svc.RemovePeer,
 			"add a peer to the network",
 			""),
+		adminjson.MethodListPeers: rpcserver.MakeMethodDef(svc.ListPeers,
+			"list the peers from the node's whitelist",
+			"the list of peers from which the node can accept connections from."),
 	}
 }
 
@@ -421,10 +426,17 @@ func (svc *Service) AddPeer(ctx context.Context, req *adminjson.PeerRequest) (*a
 }
 
 func (svc *Service) RemovePeer(ctx context.Context, req *adminjson.PeerRequest) (*adminjson.PeerResponse, *jsonrpc.Error) {
+	fmt.Println("RemovePeer : ", req.PeerID)
 	err := svc.p2p.RemovePeer(ctx, req.PeerID)
 	if err != nil {
 		svc.log.Error("failed to remove peer", zap.Error(err))
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to remove peer : "+err.Error(), nil)
 	}
 	return &adminjson.PeerResponse{}, nil
+}
+
+func (svc *Service) ListPeers(ctx context.Context, req *adminjson.PeersRequest) (*adminjson.ListPeersResponse, *jsonrpc.Error) {
+	return &adminjson.ListPeersResponse{
+		Peers: svc.p2p.ListPeers(ctx),
+	}, nil
 }

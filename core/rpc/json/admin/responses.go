@@ -84,3 +84,9 @@ type GetConfigResponse struct {
 }
 
 type PeerResponse struct{}
+
+// List of peers in the node's whitelist.
+// These are the peers the node will accept connections from.
+type ListPeersResponse struct {
+	Peers []string `json:"peers,omitempty"`
+}

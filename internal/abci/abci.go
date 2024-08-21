@@ -691,13 +691,17 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		if up.Power == 0 {
 			delete(a.validatorAddressToPubKey, addr)
 			if err = a.p2p.RemovePeer(ctx, addr); err != nil {
-				return nil, fmt.Errorf("failed to remove demoted validator %s from the network: %v", addr, err)
+				if !errors.Is(err, cometbft.ErrPeerNotWhitelisted) {
+					return nil, fmt.Errorf("failed to remove demoted validator %s from peer list: %w", addr, err)
+				}
 			}
 		} else {
 			a.validatorAddressToPubKey[addr] = up.PubKey // there may be new validators we need to add
 			// Add the validator to the peer list
 			if err = a.p2p.AddPeer(ctx, addr); err != nil {
-				return nil, fmt.Errorf("failed to add peer %s : %w", addr, err)
+				if !errors.Is(err, cometbft.ErrPeerAlreadyWhitelisted) {
+					return nil, fmt.Errorf("failed to whitelist promoted validator %s: %w", addr, err)
+				}
 			}
 		}
 

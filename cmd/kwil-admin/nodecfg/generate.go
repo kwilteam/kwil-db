@@ -54,6 +54,9 @@ type TestnetGenerateConfig struct {
 	ChainID       string
 	BlockInterval time.Duration
 	// InitialHeight           int64
+	AdminAddress string
+	AdminNoTLS   bool
+
 	NValidators             int
 	NNonValidators          int
 	ConfigFile              string
@@ -76,6 +79,7 @@ type TestnetGenerateConfig struct {
 	MaxSnapshots            uint64
 	SnapshotHeights         uint64
 	Forks                   map[string]*uint64
+	PrivateMode             bool
 }
 
 // ConfigOpts is a struct to alter the generation of the node config.
@@ -255,6 +259,11 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		}
 	}
 
+	if genCfg.AdminAddress != "" {
+		cfg.AppCfg.AdminListenAddress = genCfg.AdminAddress
+	}
+	cfg.AppCfg.NoTLS = genCfg.AdminNoTLS
+
 	privateKeys := make([]cmtEd.PrivKey, nNodes)
 	for i := range privateKeys {
 		privateKeys[i] = cmtEd.GenPrivKey()
@@ -320,6 +329,8 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	}
 	cfg.ChainCfg.P2P.AddrBookStrict = false
 	cfg.ChainCfg.P2P.AllowDuplicateIP = true
+	// private mode
+	cfg.ChainCfg.P2P.PrivateMode = genCfg.PrivateMode
 
 	if genCfg.SnapshotsEnabled {
 		cfg.AppCfg.Snapshots.Enabled = true

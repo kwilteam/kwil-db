@@ -6,6 +6,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedRPCPorts}}{{index . 0}}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 0}}:{{end}}8485"
       - "26656"
       - "26657"
     #env_file:
@@ -29,7 +30,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg0
@@ -72,6 +72,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedRPCPorts}}{{index . 1}}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 1}}:{{end}}8485"
       - "26656"
       - "26657"
     environment:
@@ -93,7 +94,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg1
@@ -136,6 +136,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedRPCPorts}}{{index . 2}}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 2}}:{{end}}8485"
       - "26656"
       - "26657"
     environment:
@@ -157,7 +158,6 @@ services:
       --log.format=plain
       --log.time-format=rfc3339milli
       --app.extension-endpoints=ext1:50051
-      --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg2
@@ -203,6 +203,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedRPCPorts}}{{index . 3}}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 3}}:{{end}}8485"
       - "26656"
       - "26657"
     environment:
@@ -225,7 +226,6 @@ services:
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext3:50051
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
-      --app.admin-listen-addr=/tmp/admin.socket
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg3
       --app.pg-db-port=5432
@@ -267,6 +267,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedRPCPorts}}{{index . 4}}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 4}}:{{end}}8485"
       - "26656"
       - "26657"
     environment:
@@ -288,7 +289,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg4
@@ -331,6 +331,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedRPCPorts}}{{index . 5}}:{{end}}8484"
+      - "{{with .ExposedRPCPorts}}{{index . 5}}:{{end}}8485"
       - "26656"
       - "26657"
     environment:
@@ -352,7 +353,6 @@ services:
       --log.time-format=rfc3339milli
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
-      --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
       --app.pg-db-host=pg5

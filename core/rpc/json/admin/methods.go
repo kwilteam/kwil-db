@@ -18,4 +18,5 @@ const (
 	MethodValListJoins  jsonrpc.Method = "admin.val_list_joins"
 	MethodAddPeer       jsonrpc.Method = "admin.add_peer"
 	MethodRemovePeer    jsonrpc.Method = "admin.remove_peer"
+	MethodListPeers     jsonrpc.Method = "admin.list_peers"
 )

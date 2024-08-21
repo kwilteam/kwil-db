@@ -3,6 +3,7 @@ package cometbft
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
@@ -12,7 +13,7 @@ import (
 )
 
 const (
-	p2pSchemaName = "peers"
+	p2pSchemaName = "kwild_peers"
 
 	p2pStoreVersion = 0
 
@@ -23,6 +24,13 @@ const (
 	addPeer = `INSERT INTO ` + p2pSchemaName + `.peers ` + `VALUES ($1);`
 
 	removePeer = `DELETE FROM ` + p2pSchemaName + `.peers ` + `WHERE peer_id = $1;`
+
+	listPeers = `SELECT peer_id FROM ` + p2pSchemaName + `.peers;`
+)
+
+var (
+	ErrPeerAlreadyWhitelisted = fmt.Errorf("peer already whitelisted")
+	ErrPeerNotWhitelisted     = fmt.Errorf("peer not whitelisted")
 )
 
 // PeerWhitelist object is used to manage the set of peers that a node is allowed to connect to.
@@ -92,6 +100,7 @@ func (p *PeerWhiteList) AddPeers(ctx context.Context, peers []string) error {
 	defer tx.Rollback(ctx)
 
 	for _, peer := range peers {
+		peer = strings.ToLower(peer)
 		_, ok := p.whitelistPeers[peer]
 		if ok {
 			continue
@@ -113,9 +122,10 @@ func (p *PeerWhiteList) AddPeer(ctx context.Context, peer string) error {
 	p.peerMtx.Lock()
 	defer p.peerMtx.Unlock()
 
+	peer = strings.ToLower(peer)
 	_, ok := p.whitelistPeers[peer]
 	if ok {
-		return fmt.Errorf("%s already a whitelisted peer", peer)
+		return ErrPeerAlreadyWhitelisted
 	}
 
 	tx, err := p.db.BeginTx(ctx)
@@ -140,9 +150,10 @@ func (p *PeerWhiteList) RemovePeer(ctx context.Context, peer string) error {
 	p.peerMtx.Lock()
 	defer p.peerMtx.Unlock()
 
+	peer = strings.ToLower(peer)
 	_, ok := p.whitelistPeers[peer] // check if peer exists
 	if !ok {
-		return fmt.Errorf("%s not found in the whitelisted peers", peer)
+		return ErrPeerNotWhitelisted
 	}
 
 	tx, err := p.db.BeginTx(ctx)
@@ -179,9 +190,23 @@ func (p *PeerWhiteList) IsPeerWhitelisted(peer string) bool {
 		return true
 	}
 
+	peer = strings.ToLower(peer)
 	// Check if peer is in the whitelistPeers
 	_, ok := p.whitelistPeers[peer]
 	return ok
+}
+
+// ListPeers returns the list of whitelisted peers.
+func (p *PeerWhiteList) ListPeers(ctx context.Context) []string {
+	p.peerMtx.RLock()
+	defer p.peerMtx.RUnlock()
+
+	var peers []string
+	for peer := range p.whitelistPeers {
+		peers = append(peers, peer)
+	}
+
+	return peers
 }
 
 // loadPeers loads the peers from the database into the whitelistPeers map.
@@ -192,7 +217,7 @@ func (p *PeerWhiteList) loadPeers(ctx context.Context) error {
 	}
 	defer tx.Rollback(ctx)
 
-	res, err := tx.Execute(ctx, `SELECT peer_id FROM `+p2pSchemaName+`.peers;`)
+	res, err := tx.Execute(ctx, listPeers)
 	if err != nil {
 		return err
 	}

@@ -217,3 +217,14 @@ func (cl *Client) RemovePeer(ctx context.Context, peerID string) error {
 	res := &adminjson.PeerResponse{}
 	return cl.CallMethod(ctx, string(adminjson.MethodRemovePeer), cmd, res)
 }
+
+// ListPeers lists all peers in the node's whitelist.
+func (cl *Client) ListPeers(ctx context.Context) ([]string, error) {
+	cmd := &adminjson.ListPeersRequest{}
+	res := &adminjson.ListPeersResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodListPeers), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res.Peers, err
+}

@@ -22,3 +22,5 @@ type ListJoinRequestsRequest struct{}
 type PeerRequest struct {
 	PeerID string `json:"peerid"`
 }
+
+type ListPeersRequest struct{}
