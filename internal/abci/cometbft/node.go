@@ -12,6 +12,7 @@ import (
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cometConfig "github.com/cometbft/cometbft/config"
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	cometEd25519 "github.com/cometbft/cometbft/crypto/ed25519"
 	cometLog "github.com/cometbft/cometbft/libs/log"
 	cometNodes "github.com/cometbft/cometbft/node"
@@ -239,4 +240,17 @@ func (n *CometBftNode) RemovePeer(nodeID string) error {
 
 	n.Node.Switch().StopPeerGracefully(peer)
 	return nil
+}
+
+// PubkeyToAddr converts an Ed25519 public key as used to identify nodes in
+// CometBFT into an address, which for ed25519 in comet is an upper case
+// truncated sha256 hash of the pubkey. For secp256k1, they do like BTC with
+// RIPEMD160(SHA256(pubkey)).  If we support both (if either), we'll need a type
+// flag.
+func PubkeyToAddr(pubkey []byte) (string, error) {
+	if len(pubkey) != ed25519.PubKeySize {
+		return "", errors.New("invalid public key")
+	}
+	publicKey := ed25519.PubKey(pubkey)
+	return publicKey.Address().String(), nil
 }

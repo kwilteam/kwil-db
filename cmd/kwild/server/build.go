@@ -171,6 +171,8 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	snapshotter := buildSnapshotter(d)
 	statesyncer := buildStatesyncer(d)
 
+	p2p := buildPeers(d, closers)
+
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
 	// in order to get this, we need the comet node
@@ -178,8 +180,6 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// to get the abci app, we need the tx router
 	// but the tx router needs the cometbft client
 	txApp := buildTxApp(d, db, e, ev)
-
-	p2p := buildPeers(d, closers)
 
 	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer, p2p, closers)
 
@@ -356,7 +356,7 @@ func buildPeers(d *coreDependencies, closers *closeFuncs) *cometbft.PeerWhiteLis
 	}
 	if len(vals) > 0 {
 		for _, v := range vals {
-			addr, err := abci.PubkeyToAddr(v.PubKey)
+			addr, err := cometbft.PubkeyToAddr(v.PubKey)
 			if err != nil {
 				failBuild(err, "failed to convert pubkey to address")
 			}
@@ -365,7 +365,7 @@ func buildPeers(d *coreDependencies, closers *closeFuncs) *cometbft.PeerWhiteLis
 	} else {
 		// Load the validators from the genesis file
 		for _, v := range d.genesisCfg.Validators {
-			addr, err := abci.PubkeyToAddr(v.PubKey)
+			addr, err := cometbft.PubkeyToAddr(v.PubKey)
 			if err != nil {
 				failBuild(err, "failed to convert pubkey to address")
 			}

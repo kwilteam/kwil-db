@@ -721,6 +721,7 @@ func TestKwildPrivateNetworks(t *testing.T) {
 		integration.WithValidators(1),
 		integration.WithNonValidators(2),
 		integration.WithBlockInterval(blockInterval),
+		integration.WithJoinExpiry(15),
 		// integration.WithAdminRPC("0.0.0.0:8485"),
 		integration.PopulatePersistentPeers(true),
 		integration.WithPrivateMode(), // Enables private mode
@@ -759,15 +760,16 @@ func TestKwildPrivateNetworks(t *testing.T) {
 		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node0})
 		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1})
 		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node2})
+
 		// Deploy a database on node0 and verify that the database does not exist on node1 and node2
 		specifications.DatabaseDeploySpecification(ctx, t, userNode0Driver)
-
 		time.Sleep(2 * time.Second)
 		specifications.DatabaseVerifySpecification(ctx, t, userNode1Driver, false)
 		specifications.DatabaseVerifySpecification(ctx, t, userNode2Driver, false)
 
 		// Allow node0 to accept connections from node1
-		// n0 <-> n1  n2
+		// n0: [n0, n1]
+		// n1: [n1, n0]
 		specifications.AddPeerSpecification(ctx, t, node0Driver, node1)
 		specifications.AddPeerSpecification(ctx, t, node1Driver, node0)
 
@@ -781,8 +783,9 @@ func TestKwildPrivateNetworks(t *testing.T) {
 		specifications.DatabaseVerifySpecification(ctx, t, userNode2Driver, false)
 
 		// Allow node0 to accept connections from node2
-		// n1 <-> n0 <-> n2
-		// n0 <-> n1  n2
+		// n0: [n0, n1, n2]
+		// n1: [n1, n0]
+		// n2: [n2, n0]
 		specifications.AddPeerSpecification(ctx, t, node0Driver, node2)
 		specifications.AddPeerSpecification(ctx, t, node2Driver, node0)
 
@@ -799,6 +802,9 @@ func TestKwildPrivateNetworks(t *testing.T) {
 		specifications.PeerConnectivitySpecification(ctx, t, node1Driver, node2, false)
 
 		// allow node1 to accept connections from node2, but not the other way around
+		// n0: [n0, n1, n2]
+		// n1: [n1, n0, n2]
+		// n2: [n2, n0]
 		specifications.AddPeerSpecification(ctx, t, node1Driver, node2)
 		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0, node2})
 		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node2, node0})
@@ -819,9 +825,26 @@ func TestKwildPrivateNetworks(t *testing.T) {
 
 		// node2 automatocally adds node1 as a peer as it is a validator
 		// time.Sleep(30 * time.Second)
-		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node1, node0, node2})
-		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node2, node0, node1})
+		// n0, n1, n3: [n0, n1, n2]
+		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node1, node0, node2})
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node2, node0, node1})
 
-		// specifications.PeerConnectivitySpecification(ctx, t, node2Driver, nodeIDs["node1"], true)
+		// node1 removes node2 from its peer list
+		specifications.RemovePeerSpecification(ctx, t, node1Driver, node2)
+
+		// Node2 sends a validator join request
+		// node1 approves the request -> node1 trusts node2 -> adds to its peer list
+		// validator request expires -> node1 removes node2 from its peer list
+		const expiryWait = 25 * time.Second
+		node2PrivKey := helper.NodePrivateKey("node2")
+		node2PubKey := node2PrivKey.PubKey().Bytes()
+		specifications.ValidatorNodeJoinSpecification(ctx, t, node2Driver, node2PubKey, 2)
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0})
+		specifications.ValidatorNodeApproveSpecification(ctx, t, node1Driver, node2PubKey, 2, 2, false)
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0, node2})
+
+		time.Sleep(expiryWait)
+		// as join request expires, node1 removes node2 from its peer list
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0})
 	})
 }

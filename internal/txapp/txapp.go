@@ -28,35 +28,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
-// NewTxApp creates a new router.
-func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer *auth.Ed25519Signer,
-	events Rebroadcaster, chainParams *chain.GenesisConfig,
-	extensionConfigs map[string]map[string]string, log log.Logger) (*TxApp, error) {
-	voteBodyTxSize, err := computeEmptyVoteBodyTxSize(chainParams.ChainID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute empty vote body tx size: %w", err)
-	}
-
-	resTypes := resolutions.ListResolutions()
-	slices.Sort(resTypes)
-
-	t := &TxApp{
-		Engine: engine,
-		events: events,
-		log:    log,
-		mempool: &mempool{accounts: make(map[string]*types.Account),
-			nodeAddr: signer.Identity(),
-		},
-		signer:              signer,
-		chainID:             chainParams.ChainID,
-		extensionConfigs:    extensionConfigs,
-		emptyVoteBodyTxSize: voteBodyTxSize,
-		resTypes:            resTypes,
-	}
-	t.forks.FromMap(chainParams.ForkHeights)
-	return t, nil
-}
-
 // TxApp maintains the state for Kwil's ABCI application.
 // It is responsible for interpreting payload bodies and routing them properly,
 // maintaining a mempool for uncommitted accounts, pricing transactions,
@@ -85,6 +56,35 @@ type TxApp struct {
 	// precomputed variables
 	emptyVoteBodyTxSize int64
 	resTypes            []string
+}
+
+// NewTxApp creates a new router.
+func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer *auth.Ed25519Signer,
+	events Rebroadcaster, chainParams *chain.GenesisConfig,
+	extensionConfigs map[string]map[string]string, log log.Logger) (*TxApp, error) {
+	voteBodyTxSize, err := computeEmptyVoteBodyTxSize(chainParams.ChainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute empty vote body tx size: %w", err)
+	}
+
+	resTypes := resolutions.ListResolutions()
+	slices.Sort(resTypes)
+
+	t := &TxApp{
+		Engine: engine,
+		events: events,
+		log:    log,
+		mempool: &mempool{accounts: make(map[string]*types.Account),
+			nodeAddr: signer.Identity(),
+		},
+		signer:              signer,
+		chainID:             chainParams.ChainID,
+		extensionConfigs:    extensionConfigs,
+		emptyVoteBodyTxSize: voteBodyTxSize,
+		resTypes:            resTypes,
+	}
+	t.forks.FromMap(chainParams.ForkHeights)
+	return t, nil
 }
 
 // GenesisInit initializes the TxApp. It must be called outside of a session,
@@ -306,15 +306,15 @@ func (r *TxApp) activations(height int64) []*consensus.Hardfork {
 // state modifications specified by hardforks activating at this height are
 // applied. It is given the old and new network parameters, and is expected to
 // use them to store any changes to the network parameters in the database.
-func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators []*types.Validator, err error) {
-	err = r.processVotes(ctx, db, block)
+func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators, approvedJoins, expiredJoins []*types.Validator, err error) {
+	expiredJoins, err = r.processVotes(ctx, db, block)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
 	finalValidators, err = getAllVoters(ctx, db)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
 	// Execute state modifications for the hard forks that activate at this
@@ -334,7 +334,7 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockCont
 			DB:     db,
 			Engine: r.Engine,
 		}); err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 	}
 
@@ -350,20 +350,61 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockCont
 			Engine: r.Engine,
 		}, block)
 		if err != nil {
-			return nil, fmt.Errorf("error running end block hook: %w", err)
+			return nil, nil, nil, fmt.Errorf("error running end block hook: %w", err)
 		}
+	}
+
+	// Get the join requests approved by this node
+	approvedJoins, err = r.approvedJoinRequests(ctx, db)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	r.valMtx.Lock()
 	r.validators = finalValidators
 	r.valMtx.Unlock()
 
-	return finalValidators, nil
+	return finalValidators, approvedJoins, expiredJoins, nil
+}
+
+// approvedJoinRequests returns the validator join requests that have been approved by this node.
+func (r *TxApp) approvedJoinRequests(ctx context.Context, db sql.DB) ([]*types.Validator, error) {
+	readTx, err := db.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer readTx.Rollback(ctx)
+
+	// get all validator-join resolutions
+	activeJoins, err := voting.GetResolutionsByType(ctx, readTx, voting.ValidatorJoinEventType)
+	if err != nil {
+		return nil, err
+	}
+
+	var approvedJoins []*types.Validator
+	for _, join := range activeJoins {
+		var req voting.UpdatePowerRequest
+		if err := req.UnmarshalBinary(join.Body); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal join request: %w", err)
+		}
+
+		for _, voter := range join.Voters {
+			if bytes.Equal(voter.PubKey, r.signer.Identity()) {
+				approvedJoins = append(approvedJoins, &types.Validator{
+					PubKey: req.PubKey,
+					Power:  req.Power,
+				})
+				break
+			}
+		}
+	}
+
+	return approvedJoins, nil
 }
 
 // processVotes confirms resolutions that have been approved by the network,
 // expires resolutions that have expired, and properly credits proposers and voters.
-func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.BlockContext) error {
+func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.BlockContext) ([]*types.Validator, error) {
 	credits := make(creditMap)
 
 	var finalizedIDs []*types.UUID
@@ -381,18 +422,18 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 
 	totalPower, err := r.validatorSetPower(ctx, db)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, resolutionType := range r.resTypes {
 		cfg, err := resolutions.GetResolution(resolutionType)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		finalized, err := getResolutionsByThresholdAndType(ctx, db, cfg.ConfirmationThreshold, resolutionType, totalPower)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		for _, resolution := range finalized {
@@ -420,7 +461,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 
 		tx, err := db.BeginTx(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		err = resolveFunc.ResolveFunc(ctx, &common.App{
@@ -435,7 +476,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 		if err != nil {
 			err2 := tx.Rollback(ctx)
 			if err2 != nil {
-				return fmt.Errorf("error rolling back transaction: %s, error: %s", err.Error(), err2.Error())
+				return nil, fmt.Errorf("error rolling back transaction: %s, error: %s", err.Error(), err2.Error())
 			}
 
 			// if the resolveFunc fails, we should still continue on, since it simply means
@@ -446,29 +487,43 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 
 		err = tx.Commit(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	// now we will expire resolutions
 	expired, err := getExpired(ctx, db, block.Height)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	expiredIDs := make([]*types.UUID, 0, len(expired))
 	requiredPowerMap := make(map[string]int64) // map of resolution type to required power
+	var expiredJoins []*types.Validator
+
 	for _, resolution := range expired {
 		expiredIDs = append(expiredIDs, resolution.ID)
 		if resolution.Type != voting.ValidatorJoinEventType && resolution.Type != voting.ValidatorRemoveEventType {
 			markProcessedIDs = append(markProcessedIDs, resolution.ID)
 		}
 
+		if resolution.Type == voting.ValidatorJoinEventType {
+			req := &voting.UpdatePowerRequest{}
+			if err := req.UnmarshalBinary(resolution.Body); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal join request: %w", err)
+			}
+
+			expiredJoins = append(expiredJoins, &types.Validator{
+				PubKey: req.PubKey,
+				Power:  req.Power,
+			})
+		}
+
 		threshold, ok := requiredPowerMap[resolution.Type]
 		if !ok {
 			cfg, err := resolutions.GetResolution(resolution.Type)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			// we need to use each configured resolutions refund threshold
@@ -487,12 +542,12 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	allIDs := append(finalizedIDs, expiredIDs...)
 	err = deleteResolutions(ctx, db, allIDs...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = markProcessed(ctx, db, markProcessedIDs...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// This is to ensure that the nodes that never get to vote on this event due to limitation
@@ -501,7 +556,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	// TODO: We need to figure out the consequences of resolutions getting expired due to the vote limits set per block. There can be scenarios where the events are observed by the nodes, but before they can vote, the event gets expired. rare but possible in the situations with higher event traffic.
 	err = deleteEvents(ctx, db, markProcessedIDs...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// now we will apply credits if gas is enabled.
@@ -510,12 +565,12 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 		for _, kv := range order.OrderMap(credits) {
 			err = credit(ctx, db, []byte(kv.Key), kv.Value)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
 
-	return nil
+	return expiredJoins, nil
 }
 
 var (
