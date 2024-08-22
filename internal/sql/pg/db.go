@@ -649,13 +649,15 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 	// statements, plus we are also injecting the seq update query.
 	var resChan chan []byte
 	var res *sql.ResultSet
+	var seq int64 // in case the tx errors
 	err := pgx.BeginTxFunc(ctx, db.pool.writer,
 		pgx.TxOptions{
 			AccessMode: pgx.ReadWrite,
 			IsoLevel:   pgx.ReadCommitted,
 		},
 		func(tx pgx.Tx) error {
-			seq, err := incrementSeq(ctx, tx)
+			var err error
+			seq, err = incrementSeq(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -669,6 +671,7 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 		},
 	)
 	if err != nil {
+		db.repl.abandonSeq(seq)
 		return nil, err
 	}
 	db.discardCommitID(ctx, resChan)

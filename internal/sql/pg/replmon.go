@@ -150,6 +150,11 @@ func (rm *replMon) recvID(seq int64, changes chan<- any) (chan []byte, bool) {
 	return c, true
 }
 
+func (rm *replMon) abandonSeq(seq int64) {
+	delete(rm.promises, seq)
+	rm.changesetWriter.csChan = nil
+}
+
 func (rm *replMon) stop() {
 	rm.quit()
 	<-rm.done
