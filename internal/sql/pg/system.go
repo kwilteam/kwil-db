@@ -6,11 +6,14 @@ package pg
 import (
 	"cmp"
 	"context"
+	"encoding/gob"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -244,6 +247,111 @@ type ColInfo struct {
 	defaultVal any
 }
 
+func convSliceAsserted[T any](s []any) []T {
+	out := make([]T, len(s))
+	for i := range s {
+		out[i] = s[i].(T)
+	}
+	return out
+}
+
+func convSliceInterfaces[T any](s []T) []any { //nolint
+	out := make([]any, len(s))
+	for i := range s {
+		out[i] = s[i]
+	}
+	return out
+}
+
+// joinSlices is for the case when I use `vals any // []T` rather than `vals []any`
+func joinSlices(s1, s2 any) any { //nolint
+	rt := reflect.TypeOf(s1)
+	if rt == nil || rt.Kind() != reflect.Slice {
+		panic("not a slice")
+	}
+	if rt.Elem() != reflect.TypeOf(s2).Elem() {
+		panic("different element types")
+	}
+
+	rv1 := reflect.ValueOf(s1)
+	rv2 := reflect.ValueOf(s2)
+	l1, l2 := rv1.Len(), rv2.Len()
+	tot := l1 + l2
+
+	s := mkSlice(rt.Elem(), tot)
+	for i := 0; i < l1; i++ {
+		s.Index(i).Set(rv1.Index(i))
+	}
+	for i := 0; i < l2; i++ {
+		s.Index(i + l1).Set(rv2.Index(i))
+	}
+	return s.Interface()
+}
+
+func mkSlice(rt reflect.Type, l int) reflect.Value {
+	st := reflect.SliceOf(rt)
+	return reflect.MakeSlice(st, l, l)
+}
+
+// typeFor returns the reflect.Type that represents the type argument T. TODO:
+// Remove this in favor of reflect.TypeFor when Go 1.22 becomes the minimum
+// required version since it is not available in Go 1.21.
+func typeFor[T any]() reflect.Type { //nolint
+	return reflect.TypeOf((*T)(nil)).Elem()
+}
+
+func statsVal(ct ColType) any {
+	// return reflect.New(statsValType(ct)).Interface()
+	switch ct {
+	case ColTypeInt:
+		return int64(0)
+	case ColTypeText:
+		return string("")
+	case ColTypeBool:
+		return bool(false)
+	case ColTypeByteA:
+		return []byte{}
+	case ColTypeUUID:
+		return new(types.UUID)
+	case ColTypeNumeric:
+		return new(decimal.Decimal)
+	case ColTypeUINT256:
+		return new(types.Uint256)
+	case ColTypeFloat:
+		return float64(0)
+	case ColTypeTime:
+		return time.Time{}
+	default:
+		return nil
+	}
+}
+
+func statsValType(ct ColType) reflect.Type {
+	return reflect.TypeOf(statsVal(ct))
+	/*switch ct {
+	case ColTypeInt:
+		return typeFor[int64]()
+	case ColTypeText:
+		return typeFor[string]()
+	case ColTypeBool:
+		return typeFor[bool]()
+	case ColTypeByteA:
+		return typeFor[[]byte]()
+	case ColTypeUUID:
+		return typeFor[*types.UUID]()
+	case ColTypeNumeric:
+		return typeFor[*decimal.Decimal]()
+	case ColTypeUINT256:
+		return typeFor[*types.Uint256]()
+	case ColTypeFloat:
+		return typeFor[float64]()
+	case ColTypeTime:
+		return typeFor[time.Time]()
+	default:
+		return nil
+	}*/
+}
+
 func scanVal(ct ColType) any {
 	switch ct {
 	case ColTypeInt:
@@ -364,6 +472,21 @@ const (
 
 	ColTypeUnknown ColType = "unknown"
 )
+
+// register the custom types for gob decoding.
+func init() {
+	gob.RegisterName("kwil_"+string(ColTypeUUID), statsVal(ColTypeUUID))
+	gob.RegisterName("kwil_"+string(ColTypeNumeric), statsVal(ColTypeNumeric))
+	gob.RegisterName("kwil_"+string(ColTypeUINT256), statsVal(ColTypeUINT256))
+	gob.Register(histo[int64]{})
+	gob.Register(histo[[]byte]{})
+	gob.Register(histo[float64]{})
+	gob.Register(histo[string]{})
+	gob.Register(histo[*decimal.Decimal]{})
+	gob.Register(histo[types.UUID]{})
+	gob.Register(histo[*types.UUID]{})
+	gob.Register(histo[*types.Uint256]{})
+}
 
 func arrayType(ct ColType) ColType {
 	switch ct {
@@ -567,11 +690,6 @@ func columnInfo(ctx context.Context, conn *pgx.Conn, schema, tbl string) ([]ColI
 
 // ColumnInfo attempts to describe the columns of a table in a specified
 // PostgreSQL schema. The results are **as reported by information_schema.column**.
-//
-// If the provided sql.Executor is also a ColumnInfoer, its ColumnInfo method
-// will be used. This is primarily for testing with a mocked DB transaction.
-// Otherwise, the Executor must be one of the transaction types created by this
-// package, which provide access to the underlying DB connection.
 func ColumnInfo(ctx context.Context, tx sql.Executor, schema, tbl string) ([]ColInfo, error) {
 	if ti, ok := tx.(conner); ok {
 		conn := ti.Conn()

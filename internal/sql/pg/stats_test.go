@@ -5,37 +5,62 @@ package pg
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strconv"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestTableStats(t *testing.T) {
+func mkTestTableDB(t *testing.T) *DB {
 	ctx := context.Background()
-
 	db, err := NewDB(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		defer db.Close()
+	})
+	return db
+}
 
-	tx, err := db.BeginTx(ctx)
+func mkStatsTestTableTx(t *testing.T, db *DB) sql.PreparedTx {
+	ctx := context.Background()
+	tx, err := db.BeginPreparedTx(ctx)
+	// tx, err := db.BeginTx(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback(ctx)
-
 	tbl := "colcheck"
+	t.Cleanup(func() {
+		defer tx.Rollback(ctx)
+		if t.Failed() {
+			db.AutoCommit(true)
+			db.Execute(ctx, `drop table if exists `+tbl)
+		}
+	})
+
 	_, err = tx.Execute(ctx, `drop table if exists `+tbl)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
-		` (a int8 primary key, b int4 default 42, c text, d bytea, e numeric(20,5), f int8[], g uint256, h uint256[])`)
+		` (a int8 primary key, b int8 default 42, c text, d bytea, e numeric(20,5), f int4[], g uint256, h uint256[])`)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	return tx
+}
+
+func TestTableStats(t *testing.T) {
+	ctx := context.Background()
+	db := mkTestTableDB(t)
+	tx := mkStatsTestTableTx(t, db)
+
+	tbl := "colcheck"
 
 	cols, err := ColumnInfo(ctx, tx, "", tbl)
 	if err != nil {
@@ -44,11 +69,11 @@ func TestTableStats(t *testing.T) {
 
 	wantCols := []ColInfo{
 		{Pos: 1, Name: "a", DataType: "bigint", Nullable: false},
-		{Pos: 2, Name: "b", DataType: "integer", Nullable: true, defaultVal: "42"},
+		{Pos: 2, Name: "b", DataType: "bigint", Nullable: true, defaultVal: "42"},
 		{Pos: 3, Name: "c", DataType: "text", Nullable: true},
 		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true},
 		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true},
-		{Pos: 6, Name: "f", DataType: "bigint", Array: true, Nullable: true},
+		{Pos: 6, Name: "f", DataType: "integer", Array: true, Nullable: true},
 		{Pos: 7, Name: "g", DataType: "uint256", Nullable: true},
 		{Pos: 8, Name: "h", DataType: "uint256", Array: true, Nullable: true},
 	}
@@ -75,8 +100,76 @@ func TestTableStats(t *testing.T) {
 	fmt.Println(stats.ColumnStatistics[4].Max)
 }
 
+// Test_scanSineBig is similar to Test_updates_demo, but actually uses a DB,
+// inserting data into a table and testing the TableStats function.
+func Test_scanSineBig(t *testing.T) {
+	// Build the full set of values
+	// sine wave with 100 samples per periods, 100 periods
+	const numUpdates = 40000
+	const samplesPerPeriod = 100
+	const ampl = 200.0   // larger => more integer discretization
+	const amplSteps = 10 // "noise" with small ampl variations between periods
+	const amplInc = 2.0  // each step adds a multiple of this to the amplitude
+	vals := makeTestVals(numUpdates, samplesPerPeriod, amplSteps, ampl, amplInc)
+
+	ctx := context.Background()
+
+	db := mkTestTableDB(t)
+	tx := mkStatsTestTableTx(t, db)
+	tbl := `colcheck`
+
+	for i, val := range vals {
+		_, err := tx.Execute(ctx, `INSERT INTO `+tbl+` VALUES($1,$2,$3);`,
+			i, val, strconv.FormatInt(val, 10))
+		require.NoError(t, err)
+	}
+
+	stats, err := TableStats(ctx, "", tbl, tx)
+	require.NoError(t, err)
+
+	require.True(t, stats.RowCount == numUpdates)
+
+	// check the MCVs for the int8 column
+	col := stats.ColumnStatistics[1]
+
+	require.Equal(t, len(col.MCFreqs), statsCap)
+	require.Equal(t, len(col.MCVals), statsCap)
+
+	_, ok := col.MCVals[0].(int64)
+	require.True(t, ok, "wrong value type")
+
+	valsT := convSliceAsserted[int64](col.MCVals)
+	require.True(t, slices.IsSorted(valsT))
+
+	t.Log(valsT)
+	t.Log(col.MCFreqs)
+
+	var totalFreqMCVs int
+	for _, f := range col.MCFreqs {
+		totalFreqMCVs += f
+	}
+	fracMCVs := float64(totalFreqMCVs) / numUpdates
+	t.Log(fracMCVs)
+
+	require.Greater(t, totalFreqMCVs, statsCap) // not just all ones
+	require.LessOrEqual(t, totalFreqMCVs, numUpdates)
+
+	hist := col.Histogram.(histo[int64])
+	t.Log(hist)
+	var totalFreqHist int
+	for _, f := range hist.freqs {
+		totalFreqHist += f
+	}
+	fracHists := float64(totalFreqHist) / numUpdates
+	t.Log(fracHists)
+
+	t.Log(fracMCVs + fracHists)
+
+	t.Log(col.Min.(int64), col.Max.(int64))
+}
+
 /*func TestScanBig(t *testing.T) {
-// This test is commented, but helpful for benchmarking performance with a large table.
+	// This test is commented, but helpful for benchmarking performance with a large table.
 	ctx := context.Background()
 
 	cfg := *cfg
@@ -97,13 +190,13 @@ func TestTableStats(t *testing.T) {
 	defer tx.Rollback(ctx)
 
 	tbl := `giant`
-	cols, err := ColumnInfo(ctx, tx, tbl)
+	cols, err := ColumnInfo(ctx, tx, "", tbl)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("%#v", cols)
 
-	stats, err := TableStats(ctx, tbl, tx)
+	stats, err := TableStats(ctx, "", tbl, tx)
 	if err != nil {
 		t.Fatal(err)
 	}

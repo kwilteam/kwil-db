@@ -43,6 +43,22 @@ type Decimal struct {
 	precision uint16
 }
 
+// Equal is like Cmp, but defined to satisfy the go-cmp package to assist with
+// unit tests.
+func (d *Decimal) Equal(v *Decimal) bool {
+	// NaN != NaN, but we're currently hijacking this as a NULL column value in Kwil.
+	if d.NaN() {
+		return v.NaN()
+	} else if v.NaN() {
+		return false
+	}
+	b, err := d.Cmp(v)
+	if err != nil {
+		return false
+	}
+	return b == 0
+}
+
 // NewExplicit creates a new Decimal from a string, with an explicit precision and scale.
 // The precision must be between 1 and 1000, and the scale must be between 0 and precision.
 func NewExplicit(s string, precision, scale uint16) (*Decimal, error) {
@@ -400,17 +416,20 @@ func (d *Decimal) UnmarshalJSON(data []byte) error {
 var _ encoding.BinaryMarshaler = Decimal{}
 var _ encoding.BinaryMarshaler = (*Decimal)(nil)
 
+const verBinaryDecimal uint16 = 0
+
 // MarshalBinary implements the encoding.BinaryMarshaler interface. This
 // supports a variety of standard library functionality, include Gob encoding.
 func (d Decimal) MarshalBinary() ([]byte, error) {
+	var b [6]byte
+	binary.BigEndian.PutUint16(b[:2], verBinaryDecimal)
+	binary.BigEndian.PutUint16(b[2:4], d.precision)
+	binary.BigEndian.PutUint16(b[4:], d.scale)
+
 	bts, err := d.dec.MarshalText()
 	if err != nil {
 		return nil, err
 	}
-
-	var b [4]byte
-	binary.BigEndian.PutUint16(b[:2], d.precision)
-	binary.BigEndian.PutUint16(b[2:], d.scale)
 
 	return append(b[:], bts...), nil
 }
@@ -419,10 +438,22 @@ var _ encoding.BinaryUnmarshaler = (*Decimal)(nil)
 
 // UnmarshalBinary implements the encoding.BinaryUnmarshaler interface.
 func (d *Decimal) UnmarshalBinary(data []byte) error {
-	if len(data) < 4 {
+	if len(data) < 2 {
 		return fmt.Errorf("invalid binary data")
 	}
 
+	ver := binary.BigEndian.Uint16(data[:2])
+	switch ver {
+	case verBinaryDecimal:
+		data = data[2:]
+	default:
+		return fmt.Errorf("unrecognized decimal binary version %d", ver)
+	}
+
+	// unmarshalBinaryV0...
+	if len(data) < 4 {
+		return fmt.Errorf("invalid binary data")
+	}
 	d.precision = binary.BigEndian.Uint16(data[:2])
 	d.scale = binary.BigEndian.Uint16(data[2:4])
 

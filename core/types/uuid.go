@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
@@ -13,6 +14,13 @@ var namespace = uuid.MustParse("cc1cd90f-b4db-47f4-b6df-4bbe5fca88eb")
 
 // UUID is a rfc4122 compliant uuidv5
 type UUID [16]byte
+
+// CmpUUID compares two UUIDs, returning 0 if equal, -1 if u<v, and 1 if u>v.
+// This satisfies the comparison function required by many generic functions in
+// the standard library and Kwil.
+func CmpUUID(u, v UUID) int {
+	return bytes.Compare(u[:], v[:])
+}
 
 // NewUUIDV5 generates a uuidv5 from a byte slice.
 // This is used to deterministically generate uuids.
@@ -49,6 +57,12 @@ func (u UUID) Value() (driver.Value, error) {
 
 func (u *UUID) Bytes() []byte {
 	return u[:]
+}
+
+// Equal is like Cmp, but defined to satisfy the go-cmp package to assist with
+// unit tests.
+func (u UUID) Equal(v UUID) bool {
+	return CmpUUID(u, v) == 0
 }
 
 var _ json.Marshaler = UUID{}

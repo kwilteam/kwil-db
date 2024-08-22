@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -16,9 +17,12 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
-// RowCount gets a precise row count for the named fully qualified table. If the
-// Executor satisfies the RowCounter interface, that method will be used
-// directly. Otherwise a simple select query is used.
+// statsCap is the limit on the number of MCVs and histogram bins when working
+// with column statistics. Fixed for now, but we should consider making a stats
+// field or settable another way.
+const statsCap = 100
+
+// RowCount gets a precise row count for the named fully qualified table.
 func RowCount(ctx context.Context, qualifiedTable string, db sql.Executor) (int64, error) {
 	stmt := fmt.Sprintf(`SELECT count(1) FROM %s`, qualifiedTable)
 	res, err := db.Execute(ctx, stmt)
@@ -120,24 +124,75 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 		pkCols[i] = row[0].(string)
 	}
 
-	numCols := len(colInfo)
-	colTypes := make([]ColType, numCols)
-	for i := range colInfo {
-		colTypes[i] = colInfo[i].Type()
-	}
-
-	colStats := make([]sql.ColumnStatistics, numCols)
-
-	// iterate over all rows (select *)
-	var scans []any
-	for _, col := range colInfo {
-		scans = append(scans, col.scanVal())
-	}
 	stmt := `SELECT * FROM ` + qualifiedTable
 	if len(pkCols) > 0 {
 		stmt += ` ORDER BY ` + strings.Join(pkCols, ",")
 	}
-	err = QueryRowFunc(ctx, db, stmt, scans,
+
+	colStats, err := colStatsInternal(ctx, nil, stmt, colInfo, db)
+	if err != nil {
+		return nil, err
+	}
+
+	// I sunk a bunch of time into a two-pass experiment to more accurate MCVs
+	// and better histogram bounds, but this is quite costly.  May remove.
+
+	return colStats, nil // single ASC pass
+	// second DESC pass:
+	// return colStatsInternal(ctx, colStats, stmt, colInfo, db)
+}
+
+func cmpBool(a, b bool) int {
+	if b {
+		if a { // true == true
+			return 0
+		}
+		return -1 // false < true
+	}
+	if a {
+		return 1 // true > false
+	}
+	return 0 // false == false
+}
+
+func cmpDecimal(val, mm *decimal.Decimal) int {
+	d, err := val.Cmp(mm)
+	if err != nil {
+		panic(fmt.Sprintf("%s: (nan decimal?) %v or %v", err, val, mm))
+	}
+	return d
+}
+
+func colStatsInternal(ctx context.Context, firstPass []sql.ColumnStatistics,
+	stmt string, colInfo []ColInfo, db sql.Executor) ([]sql.ColumnStatistics, error) {
+
+	// The idea I'm testing with a two-pass scan is to collect mcvs from a
+	// reverse-order scan. This is pointless if the MCVs is not at capacity as
+	// nothing new can be added.
+	if firstPass != nil {
+		stmt += ` DESC` // otherwise ASC is implied with ORDER BY
+	}
+
+	getLast := func(i int) *sql.ColumnStatistics {
+		if len(firstPass) != 0 {
+			return &firstPass[i]
+		}
+		return nil
+	}
+
+	// Iterate over all rows (select *), scan into NULLable values like
+	// pgtype.Int8, then make statistics with Go native or Kwil types.
+
+	var scans []any
+	colTypes := make([]ColType, len(colInfo))
+	for i, col := range colInfo {
+		colTypes[i] = colInfo[i].Type()
+		scans = append(scans, col.scanVal())
+	}
+
+	colStats := make([]sql.ColumnStatistics, len(colInfo))
+
+	err := QueryRowFunc(ctx, db, stmt, scans,
 		func() error {
 			var err error
 			for i, val := range scans {
@@ -172,7 +227,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						}
 					}
 
-					ins(stat, valInt, cmp.Compare[int64])
+					ins(stat, getLast(i), valInt, cmp.Compare[int64], interpNum)
 
 				case ColTypeText: // use string in stats
 					valStr, null, ok := TextValue(val) // val.(string)
@@ -184,7 +239,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						continue
 					}
 
-					ins(stat, valStr, strings.Compare)
+					ins(stat, getLast(i), valStr, strings.Compare, interpString)
 
 				case ColTypeByteA: // use []byte in stats
 					var valBytea []byte
@@ -220,7 +275,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						return fmt.Errorf("not bytea: %T", val)
 					}
 
-					ins(stat, valBytea, bytes.Compare)
+					ins(stat, getLast(i), valBytea, bytes.Compare, interpBts)
 
 				case ColTypeBool: // use bool in stats
 					var b bool
@@ -246,7 +301,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						return fmt.Errorf("invalid bool (%T)", val)
 					}
 
-					ins(stat, b, cmpBool)
+					ins(stat, getLast(i), b, cmpBool, interpBool) // there should never be a boolean histogram!
 
 				case ColTypeNumeric: // use *decimal.Decimal in stats
 					var dec *decimal.Decimal
@@ -298,7 +353,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						dec = &v2
 					}
 
-					ins(stat, dec, cmpDecimal)
+					ins(stat, getLast(i), dec, cmpDecimal, interpDec)
 
 				case ColTypeUINT256:
 					v, ok := val.(*types.Uint256)
@@ -311,7 +366,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						continue
 					}
 
-					ins(stat, v.Clone(), types.CmpUint256)
+					ins(stat, getLast(i), v.Clone(), types.CmpUint256, interpUint256)
 
 				case ColTypeFloat: // we don't want, don't have
 					var varFloat float64
@@ -353,7 +408,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 						return fmt.Errorf("invalid float (%T)", val)
 					}
 
-					ins(stat, varFloat, cmp.Compare[float64])
+					ins(stat, getLast(i), varFloat, cmp.Compare[float64], interpNum)
 
 				case ColTypeUUID:
 					fallthrough // TODO
@@ -369,35 +424,375 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 		return nil, err
 	}
 
+	// If this is a second pass, merge. See other comments about the two-pass
+	// approach. It is costly, complex, and hard to quantify benefit. Likely to remove!
+	for i, p := range firstPass {
+		if len(colStats[i].MCFreqs) == 0 { // nothing new was recorded for this column
+			colStats[i].MCFreqs = p.MCFreqs
+			colStats[i].MCVals = p.MCVals
+			continue
+		}
+
+		// merge up the last mcvs.  This is horribly inefficient for now:
+		// concat, build slice of sortable struct, sort by frequency, extract
+		// up to statsCap, re-sort by value.
+		freqs := append(colStats[i].MCFreqs, p.MCFreqs...)
+		vals := append(colStats[i].MCVals, p.MCVals...)
+
+		type mcv struct {
+			freq int
+			val  any
+		}
+		mcvs := make([]mcv, len(freqs))
+		for i := range freqs {
+			mcvs[i] = mcv{freqs[i], vals[i]}
+		}
+		if len(mcvs) > statsCap { // drop the lowest frequency values
+			slices.SortFunc(mcvs, func(a, b mcv) int {
+				return cmp.Compare(b.freq, a.freq) // descending freq
+			})
+			mcvs = mcvs[:statsCap] // mcvs = slices.Delete(mcvs, statsCap, len(mcvs))
+		}
+
+		valCompFun := compFun(vals[0]) // based on prototype value
+		slices.SortFunc(mcvs, func(a, b mcv) int {
+			return valCompFun(b.val, a.val) // ascending value
+		})
+
+		// extract the values and frequencies slices
+		freqs, vals = nil, nil // clear and preserve type
+		for i := range mcvs {
+			freqs = append(freqs, mcvs[i].freq)
+			vals = append(vals, mcvs[i].val)
+			if i == statsCap {
+				break
+			}
+		}
+
+		/* ALT in-place with sort.Interface
+		if len(mcvs) > statsCap { // drop the lowest frequency values
+			sort.Sort(mcvDescendingFreq{
+				vals:  vals,
+				freqs: freqs,
+			})
+			vals = vals[:statsCap]
+			freqs = freqs[:statsCap]
+		}
+		sort.Sort(mcvAscendingValue{
+			vals:  vals,
+			freqs: freqs,
+			comp:  compFun(vals[0]),
+		}) */
+		colStats[i].MCFreqs = freqs
+		colStats[i].MCVals = vals
+	}
+
 	return colStats, nil
 }
 
-func cmpBool(a, b bool) int {
-	if b {
-		if a { // true == true
-			return 0
+/* xx will remove if we decide a two-pass scan isn't worth it
+type mcvDescendingFreq struct {
+	vals  []any
+	freqs []int
+}
+
+func (m mcvDescendingFreq) Len() int { return len(m.vals) }
+
+func (m mcvDescendingFreq) Less(i int, j int) bool {
+	return m.freqs[i] < m.freqs[j]
+}
+
+func (m mcvDescendingFreq) Swap(i int, j int) {
+	m.vals[i], m.vals[j] = m.vals[j], m.vals[i]
+	m.freqs[i], m.freqs[j] = m.freqs[j], m.freqs[i]
+}
+
+type mcvAscendingValue struct {
+	vals  []any
+	freqs []int
+	comp  func(a, b any) int
+}
+
+func (m mcvAscendingValue) Len() int { return len(m.vals) }
+
+func (m mcvAscendingValue) Less(i int, j int) bool {
+	return m.comp(m.vals[i], m.vals[j]) == 0
+}
+
+func (m mcvAscendingValue) Swap(i int, j int) {
+	m.vals[i], m.vals[j] = m.vals[j], m.vals[i]
+	m.freqs[i], m.freqs[j] = m.freqs[j], m.freqs[i]
+}
+*/
+
+// the pain of []any vs. []T (in an any)
+func wrapCompFun[T any](f func(a, b T) int) func(a, b any) int {
+	return func(a, b any) int { // must not be nil
+		return f(a.(T), b.(T))
+	}
+}
+
+// vs func compFun[T any]() func(a, b T) int
+func compFun(val any) func(a, b any) int {
+	switch val.(type) {
+	case []byte:
+		return wrapCompFun(bytes.Compare)
+	case int64:
+		return wrapCompFun(cmp.Compare[int64])
+	case float64:
+		return wrapCompFun(cmp.Compare[float64])
+	case string:
+		return wrapCompFun(strings.Compare)
+	case bool:
+		return wrapCompFun(cmpBool)
+	case *decimal.Decimal:
+		return wrapCompFun(cmpDecimal)
+	case *types.Uint256:
+		return wrapCompFun(types.CmpUint256)
+	case types.UUID:
+		return wrapCompFun(types.CmpUint256)
+
+	case decimal.DecimalArray: // TODO
+	case types.Uint256Array: // TODO
+	case []string:
+	case []int64:
+	}
+
+	panic(fmt.Sprintf("no comp fun for type %T", val))
+}
+
+// maybe we do this instead a comp field of histo[T]. It's simpler, but slower.
+func compareStatsVal(a, b any) int { //nolint:unused
+	switch at := a.(type) {
+	case int64:
+		return cmp.Compare(at, b.(int64))
+	case bool:
+		return cmpBool(at, b.(bool))
+	case []bool:
+		return slices.CompareFunc(at, b.([]bool), cmpBool)
+	case string:
+		return strings.Compare(at, b.(string))
+	case []string:
+		return slices.Compare(at, b.([]string))
+	case []int64:
+		return slices.Compare(at, b.([]int64))
+	case float64:
+		return cmp.Compare(at, b.(float64))
+	case []byte:
+		return bytes.Compare(at, b.([]byte))
+	case [][]byte:
+		return slices.CompareFunc(at, b.([][]byte), bytes.Compare)
+	case []*decimal.Decimal:
+		return slices.CompareFunc(at, b.([]*decimal.Decimal), cmpDecimal)
+	case decimal.DecimalArray:
+		return slices.CompareFunc(at, b.(decimal.DecimalArray), cmpDecimal)
+	case *decimal.Decimal:
+		return cmpDecimal(at, b.(*decimal.Decimal))
+	case *types.Uint256:
+		return at.Cmp(b.(*types.Uint256))
+	case types.Uint256Array:
+		return slices.CompareFunc(at, b.(types.Uint256Array), types.CmpUint256)
+	case []*types.Uint256:
+		return slices.CompareFunc(at, b.([]*types.Uint256), types.CmpUint256)
+	case *types.UUID:
+		return types.CmpUUID(*at, *(b.(*types.UUID)))
+	case types.UUID:
+		return types.CmpUUID(at, b.(types.UUID))
+	case []*types.UUID:
+		return slices.CompareFunc(at, b.([]*types.UUID), func(a, b *types.UUID) int {
+			return types.CmpUUID(*a, *b)
+		})
+	default:
+		panic(fmt.Sprintf("unrecognized type %T", a))
+	}
+}
+
+// The following functions perform a type switch to correctly handle null values
+// and then dispatch to the generic ins/up functions with the appropriate
+// comparison function for the underlying type: upColStatsWithInsert,
+// upColStatsWithDelete, and upColStatsWithUpdate.
+
+// upColStatsWithInsert expects a value of the type created with a
+// (*datatype).DeserializeChangeset method.
+func upColStatsWithInsert(stats *sql.ColumnStatistics, val any) error {
+	if val == nil {
+		stats.NullCount++
+		return nil
+	}
+	// INSERT
+	switch nt := val.(type) {
+	case []byte:
+		return ins(stats, nil, nt, bytes.Compare, interpBts)
+	case int64:
+		return ins(stats, nil, nt, cmp.Compare[int64], interpNum[int64])
+	case float64:
+		return ins(stats, nil, nt, cmp.Compare[float64], interpNum[float64])
+	case string:
+		return ins(stats, nil, nt, strings.Compare, interpString)
+	case bool:
+		return ins(stats, nil, nt, cmpBool, interpBool)
+
+	case *decimal.Decimal:
+		if nt.NaN() {
+			stats.NullCount++
+			return nil // ignore, don't put in stats
 		}
-		return -1 // false < true
+		nt2 := *nt
+		return ins(stats, nil, &nt2, cmpDecimal, interpDec)
+
+	case *types.Uint256:
+		if nt.Null {
+			stats.NullCount++
+			return nil
+		}
+
+		return ins(stats, nil, nt.Clone(), types.CmpUint256, interpUint256)
+
+	case types.UUID:
+
+		return ins(stats, nil, nt, types.CmpUUID, interpUUID)
+
+	case decimal.DecimalArray: // TODO
+	case types.Uint256Array: // TODO
+	case []string:
+	case []int64:
+
+	default:
+		return fmt.Errorf("unrecognized tuple column type %T", val)
 	}
-	if a {
-		return 1 // true > false
-	}
-	return 0 // false == false
+
+	fmt.Printf("unhandled %T", val)
+
+	return nil // known type, just no stats handling
 }
 
-func cmpDecimal(val, mm *decimal.Decimal) int {
-	d, err := val.Cmp(mm)
+func upColStatsWithDelete(stats *sql.ColumnStatistics, old any) error {
+	// DELETE:
+	// - unset min max if removing it. reference mincount and maxcount to know
+	// - update null count
+	// - adjust mcvs / histogram
+
+	if old == nil {
+		stats.NullCount--
+		return nil
+	}
+
+	switch nt := old.(type) {
+	case int64:
+		del(stats, nt, cmp.Compare[int64])
+	case string:
+		del(stats, nt, strings.Compare)
+	case float64:
+		del(stats, nt, cmp.Compare[float64])
+	case bool:
+		del(stats, nt, cmpBool)
+	case []byte:
+		del(stats, nt, bytes.Compare)
+
+	case *decimal.Decimal:
+		if nt.NaN() {
+			stats.NullCount--
+			return nil // ignore, don't put in stats
+		}
+		nt2 := *nt
+
+		del(stats, &nt2, cmpDecimal)
+
+	case *types.Uint256:
+		if nt.Null {
+			stats.NullCount--
+			return nil
+		}
+
+		return del(stats, nt.Clone(), types.CmpUint256)
+
+	case types.UUID:
+
+		return del(stats, nt, types.CmpUUID)
+
+	case decimal.DecimalArray: // TODO
+	case types.Uint256Array: // TODO
+	case []string:
+	case []int64:
+
+	default:
+		return fmt.Errorf("unrecognized tuple column type %T", old)
+	}
+
+	return nil
+}
+
+func upColStatsWithUpdate(stats *sql.ColumnStatistics, old, up any) error { //nolint:unused
+	if compareStatsVal(old, up) == 0 {
+		// With replica identity full, any update to the row creates a tuple
+		// update for the full row. Ignore unchanged columns.
+		return nil
+	}
+	// update may or may not affect null count
+	err := upColStatsWithDelete(stats, old)
 	if err != nil {
-		panic(fmt.Sprintf("%s: (nan decimal?) %v or %v", err, val, mm))
+		return err
 	}
-	return d
+	return upColStatsWithInsert(stats, up)
 }
 
-func ins[T any](stats *sql.ColumnStatistics, val T, comp func(v, m T) int) error {
-	if stats.Min == nil {
+// The following are the generic functions that handle the re-typed and non-NULL
+// values from the upColStatsWith* functions above.
+
+// insMCVs attempts to insert a new value into the MCV set. If the set already
+// includes the value, its frequency is incremented. If the value is new and the
+// set is not yet at capacity, it is inserted at the appropriate location in the
+// slices to keep them sorted by value The sorting is needed later when
+// computing cumulative frequency with inequality conditions, and it allows
+// locating known values in log time.
+func insMCVs[T any](vals []any, freqs []int, val T, comp func(a, b T) int) ([]any, bool, []int) {
+	var spill bool
+	// sort.Search is much harder to use than slices.BinarySearchFunc but here we are
+	loc := sort.Search(len(vals), func(i int) bool {
+		v := vals[i].(T)
+		return comp(v, val) != -1 // v[i] >= val
+	})
+	found := loc != len(vals) && comp(vals[loc].(T), val) == 0
+	if found {
+		if comp(vals[loc].(T), val) != 0 {
+			panic("wrong loc")
+		}
+		freqs[loc]++
+	} else if len(vals) < statsCap {
+		vals = slices.Insert(vals, loc, any(val))
+		freqs = slices.Insert(freqs, loc, 1)
+	} else {
+		spill = true
+	}
+	return vals, spill, freqs
+}
+
+// this is SOOO much easier with vals as a []T rather than []any.
+// alas, that created pains in other places... might switch back.
+
+/*func insMCVs[T any](vals []T, freqs []int, val T, comp func(a, b T) int) ([]T, []int) {
+	loc, found := slices.BinarySearchFunc(vals, val, comp)
+	if found {
+		freqs[loc]++
+	} else if len(vals) < statsCap {
+		vals = slices.Insert(vals, loc, val)
+		freqs = slices.Insert(freqs, loc, 1)
+	}
+	return vals, freqs
+}*/
+
+// ins is used to insert a non-NULL value, but it can be used in different contexts:
+// (1) performing a full scan, where mcvSpill may be non-nil on a second pass,
+// (2) maintaining stats estimate on an insert. del and update only apply in the
+// latter context.
+func ins[T any](stats, prev *sql.ColumnStatistics, val T, comp func(v, m T) int,
+	interp func(f float64, a, b T) T) error {
+
+	switch mn := stats.Min.(type) {
+	case nil: // first observation
 		stats.Min = val
 		stats.MinCount = 1
-	} else if mn, ok := stats.Min.(T); ok {
+	case T:
 		switch comp(val, mn) {
 		case -1: // new MINimum
 			stats.Min = val
@@ -405,23 +800,147 @@ func ins[T any](stats *sql.ColumnStatistics, val T, comp func(v, m T) int) error
 		case 0: // another of the same
 			stats.MinCount++
 		}
-	} else {
+	case unknown: // it was deleted, only full (re)scan can figure it out
+	default:
 		return fmt.Errorf("invalid stats value type %T for tuple of type %T", val, stats.Min)
 	}
 
-	if stats.Max == nil {
+	switch mn := stats.Max.(type) {
+	case nil: // first observation (also would have set Min above)
 		stats.Max = val
 		stats.MaxCount = 1
-	} else if mx, ok := stats.Max.(T); ok {
-		switch comp(val, mx) {
+	case T:
+		switch comp(val, mn) {
 		case 1: // new MAXimum
 			stats.Max = val
 			stats.MaxCount = 1
 		case 0: // another of the same
 			stats.MaxCount++
 		}
-	} else {
+	case unknown: // it was deleted, only full (re)scan can figure it out
+	default:
+		return fmt.Errorf("invalid stats value type %T for tuple of type %T", val, stats.Min)
+	}
+
+	if stats.MCVals == nil {
+		stats.MCVals = []any{} // insMCVs: = []T{val} ; stats.MCFreqs = []int{1}
+	}
+
+	var missed bool
+	if prev == nil || len(prev.MCVals) < statsCap { // first pass of full scan, pointless second pass, or no-context insert
+		stats.MCVals, missed, stats.MCFreqs = insMCVs(stats.MCVals, stats.MCFreqs, val, comp)
+		// vals, freqs, _ := insMCVs(convSlice[T](stats.MCVals), stats.MCFreqs, val, comp)
+		// stats.MCVals, stats.MCFreqs = convSlice2(vals), freqs
+	} else { // a second pass in a full scan
+		// The freqs for MCVals are complete, representing the entire table.
+		// Fill the spills struct instead, but EXCLUDING vals in MCVals,
+		// allowing possibly higher counts in later rows. Caller should merge
+		// back to the MCVals/MCFreqs after the complete second pass.
+
+		// When MCVals was an any (underlying []T) rather than a []any, we were
+		// able to simply assert to []T, but I switched to []any for other reasons.
+		// _, found := slices.BinarySearchFunc(stats.MCVals.([]T), val, comp)
+
+		loc := sort.Search(len(prev.MCVals), func(i int) bool {
+			v := prev.MCVals[i].(T)
+			return comp(v, val) != -1 // v[i] >= val
+		})
+		found := loc != len(prev.MCVals) && comp(prev.MCVals[loc].(T), val) == 0
+		// _, found := slices.BinarySearchFunc(convSlice[T](prev.MCVals), val, comp)
+		if !found { // not in previous scan
+			stats.MCVals, missed, stats.MCFreqs = insMCVs(stats.MCVals, stats.MCFreqs, val, comp)
+		} // else ignore this value, already counted in prev pass
+	}
+
+	// If the value was not included in the MCVs, it spills into the histogram.
+	if missed {
+		// we create the histogram only *after* MCVs have been collected so that
+		// the bounds can be chosen based on at least some observed values.
+		if stats.Histogram == nil {
+			var left, right T
+			if mn, ok := stats.Min.(T); ok {
+				left = mn
+			} else {
+				left = stats.MCVals[0].(T)
+			}
+			if mn, ok := stats.Max.(T); ok {
+				right = mn
+			} else {
+				right = stats.MCVals[len(stats.MCVals)-1].(T)
+			}
+			bounds := makeBounds(statsCap, left, right, comp, interp)
+			stats.Histogram = makeHisto(bounds, comp)
+		}
+
+		h := stats.Histogram.(histo[T])
+		h.ins(val)
+	}
+
+	return nil
+}
+
+// If we've eliminated all of a value via delete, then the real Min/Max is
+// unknown, and it just cannot be used to affect selectivity. Further inserts
+// also cannot be compared with an unknown min/max. Rescan is needed to identify
+// the actual value. This type signals this case.
+type unknown struct{}
+
+// del is used to delete a non-NULL value.
+func del[T any](stats *sql.ColumnStatistics, val T, comp func(v, m T) int) error {
+
+	switch mn := stats.Min.(type) {
+	case nil: // should not happen
+		return errors.New("nil Min on del")
+	case T:
+		if comp(val, mn) == 0 {
+			stats.MinCount--
+			if stats.MinCount == 0 {
+				stats.Min = unknown{}
+			}
+		}
+	case unknown: // it was deleted, only full (re)scan can figure it out
+	default:
+		return fmt.Errorf("invalid stats value type %T for tuple of type %T", val, stats.Min)
+	}
+
+	switch mn := stats.Max.(type) {
+	case nil: // should not happen
+		return errors.New("nil Max on del")
+	case T:
+		if comp(val, mn) == 0 {
+			stats.MaxCount--
+			if stats.MaxCount == 0 {
+				stats.Max = unknown{}
+			}
+		}
+	case unknown: // it was deleted, only full (re)scan can figure it out
+	default:
 		return fmt.Errorf("invalid stats value type %T for tuple of type %T", val, stats.Max)
+	}
+
+	// Look for it in the MCVs
+	loc := sort.Search(len(stats.MCVals), func(i int) bool {
+		v := stats.MCVals[i].(T)
+		return comp(v, val) != -1 // v[i] >= val
+	})
+	found := loc != len(stats.MCVals) && comp(stats.MCVals[loc].(T), val) == 0
+	// loc, found := slices.BinarySearchFunc(convSlice[T](stats.MCVals), val, comp)
+	if found {
+		if stats.MCFreqs[loc] == 1 {
+			stats.MCVals = slices.Delete(stats.MCVals, loc, loc+1)
+			stats.MCFreqs = slices.Delete(stats.MCFreqs, loc, loc+1)
+		} else {
+			stats.MCFreqs[loc]--
+		}
+	} else {
+		// adjust histogram freq--
+		hist, ok := stats.Histogram.(histo[T])
+		if !ok {
+			fmt.Println("mcvs:", convSliceAsserted[T](stats.MCVals))
+			fmt.Println("val:", val)
+			panic("nil histogram on delete but mcv missed!")
+		}
+		hist.rm(val)
 	}
 
 	return nil

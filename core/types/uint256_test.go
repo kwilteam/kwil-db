@@ -21,27 +21,27 @@ func TestUint256BinaryMarshaling(t *testing.T) {
 		{
 			name:     "small int",
 			val:      "123",
-			expected: []byte{0x7b},
+			expected: []byte{0, 0, 0, 0x7b},
 		},
 		{
 			name:     "zero",
 			val:      "0",
-			expected: []byte{}, // optimized to empty slice
+			expected: []byte{0, 0, 0}, // optimized to empty data slice (after version and null flag)
 		},
 		{
 			name:     "null",
 			val:      "", // special case
-			expected: nil,
+			expected: []byte{0, 0, 1},
 		},
 		{
 			name:     "just bigger than uint64",
 			val:      hugeIntStrP1,
-			expected: []byte{0x01, 0, 0, 0, 0, 0, 0, 0, 0},
+			expected: []byte{0, 0, 0, 0x01, 0, 0, 0, 0, 0, 0, 0, 0},
 		},
 		{
 			name:     "much than uint64",
 			val:      hugeIntStrX10,
-			expected: []byte{0x09, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf6},
+			expected: []byte{0, 0, 0, 0x09, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf6},
 		},
 	}
 

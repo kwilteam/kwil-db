@@ -576,28 +576,28 @@ func TestDecimalBinaryMarshaling(t *testing.T) {
 			decimal:  "123.456",
 			prec:     6,
 			scale:    3,
-			expected: append([]byte{0, 6, 0, 3}, []byte("123.456")...),
+			expected: append([]byte{0, 0, 0, 6, 0, 3}, []byte("123.456")...),
 		},
 		{
 			name:     "negative decimal",
 			decimal:  "-987.654",
 			prec:     6,
 			scale:    3,
-			expected: append([]byte{0, 6, 0, 3}, []byte("-987.654")...),
+			expected: append([]byte{0, 0, 0, 6, 0, 3}, []byte("-987.654")...),
 		},
 		{
 			name:     "zero",
 			decimal:  "0",
 			prec:     1,
 			scale:    0,
-			expected: append([]byte{0, 1, 0, 0}, []byte("0")...),
+			expected: append([]byte{0, 0, 0, 1, 0, 0}, []byte("0")...),
 		},
 		{
 			name:     "large precision and scale",
 			decimal:  "1234567890.0987654321",
 			prec:     20,
 			scale:    10,
-			expected: append([]byte{0, 20, 0, 10}, []byte("1234567890.0987654321")...),
+			expected: append([]byte{0, 0, 0, 20, 0, 10}, []byte("1234567890.0987654321")...),
 		},
 	}
 
@@ -633,13 +633,18 @@ func TestDecimalBinaryUnmarshalingErrors(t *testing.T) {
 			expectedErr: "invalid binary data",
 		},
 		{
+			name:        "unknown version",
+			input:       []byte{0, 1, 1, 0},
+			expectedErr: "unrecognized decimal binary version 1",
+		},
+		{
 			name:        "insufficient data",
-			input:       []byte{0, 1, 0},
+			input:       []byte{0, 0, 1, 0},
 			expectedErr: "invalid binary data",
 		},
 		{
 			name:        "invalid decimal data",
-			input:       []byte{0, 1, 0, 0, 255},
+			input:       []byte{0, 0, 1, 0, 0, 255},
 			expectedErr: "parse mantissa",
 		},
 	}

@@ -5,7 +5,36 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
+
+// mustDecimal panics if the string cannot be converted to a decimal.
+func mustDecimal(s string) *decimal.Decimal {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
+}
+
+func mustParseUUID(s string) *types.UUID {
+	u, err := types.ParseUUID(s)
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
+
+// mustUint256 panics if the string cannot be converted to a Uint256.
+func mustUint256(s string) *types.Uint256 {
+	u, err := types.Uint256FromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
 
 func Test_ArrayEncodeDecode(t *testing.T) {
 	arr := []string{"a", "b", "c"}

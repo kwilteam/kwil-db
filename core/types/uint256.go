@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -76,6 +77,17 @@ func (u *Uint256) Cmp(v *Uint256) int {
 	return u.base.Cmp(&v.base)
 }
 
+// Equal is like Cmp, but defined to satisfy the go-cmp package to assist with
+// unit tests.
+func (u *Uint256) Equal(v *Uint256) bool {
+	if u.Null {
+		return v.Null
+	} else if v.Null {
+		return false
+	}
+	return u.base.Cmp(&v.base) == 0
+}
+
 func CmpUint256(u, v *Uint256) int {
 	return u.Cmp(v)
 }
@@ -114,20 +126,44 @@ func (u *Uint256) UnmarshalJSON(b []byte) error {
 var _ encoding.BinaryMarshaler = Uint256{}
 var _ encoding.BinaryMarshaler = (*Uint256)(nil)
 
+const verBinaryUint256 uint16 = 0
+
 func (u Uint256) MarshalBinary() ([]byte, error) {
+	b := binary.BigEndian.AppendUint16(nil, verBinaryUint256)
+
 	if u.Null {
-		return nil, nil
+		b = append(b, 0x1)
+		return b, nil
 	}
-	return u.base.Bytes(), nil
+	b = append(b, 0x0)
+	return append(b, u.base.Bytes()...), nil
 }
 
 var _ encoding.BinaryUnmarshaler = (*Uint256)(nil)
 
 func (u *Uint256) UnmarshalBinary(data []byte) error {
-	if data == nil {
+	if len(data) < 2 {
+		return fmt.Errorf("insufficient data for uint256")
+	}
+	switch ver := binary.BigEndian.Uint16(data); ver {
+	case verBinaryUint256:
+		data = data[2:]
+	default:
+		return fmt.Errorf("unrecognized uint256 binary version %d", ver)
+	}
+
+	// unmarshalBinaryV0...
+	if len(data) < 1 {
+		return fmt.Errorf("insufficient data for v0 uint256")
+	}
+	isNull := data[0] != 0
+	if isNull {
 		*u = Uint256{Null: true}
 		return nil
-	} // len(data) == 0 is the actual value 0
+	}
+	data = data[1:]
+	// NOTE: len(data) == 0 is the actual value 0, is it's ok for this to be the
+	// end of the slice.
 	u.base.SetBytes(data) // u.base, _ = uint256.FromBig(new(big.Int).SetBytes(buf))
 	return nil
 }

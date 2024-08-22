@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"slices"
 	"strconv"
@@ -27,7 +28,7 @@ import (
 
 func TestMain(m *testing.M) {
 	// UseLogger(log.NewStdOut(log.InfoLevel))
-	m.Run()
+	os.Exit(m.Run())
 }
 
 const (
@@ -263,13 +264,6 @@ func TestNULL(t *testing.T) {
 
 	require.Equal(t, avn.Int64, int64(0))
 	require.Equal(t, bvn.Int64, insB)
-}
-
-// typeFor returns the reflect.Type that represents the type argument T. TODO:
-// Remove this in favor of reflect.TypeFor when Go 1.22 becomes the minimum
-// required version since it is not available in Go 1.21.
-func typeFor[T any]() reflect.Type {
-	return reflect.TypeOf((*T)(nil)).Elem()
 }
 
 func TestScanVal(t *testing.T) {
@@ -971,32 +965,6 @@ func TestTypeRoundtrip(t *testing.T) {
 			require.EqualValues(t, nil, res.Rows[0][0])
 		})
 	}
-}
-
-// mustDecimal panics if the string cannot be converted to a decimal.
-func mustDecimal(s string) *decimal.Decimal {
-	d, err := decimal.NewFromString(s)
-	if err != nil {
-		panic(err)
-	}
-	return d
-}
-
-func mustParseUUID(s string) *types.UUID {
-	u, err := types.ParseUUID(s)
-	if err != nil {
-		panic(err)
-	}
-	return u
-}
-
-// mustUint256 panics if the string cannot be converted to a Uint256.
-func mustUint256(s string) *types.Uint256 {
-	u, err := types.Uint256FromString(s)
-	if err != nil {
-		panic(err)
-	}
-	return u
 }
 
 func Test_DelayedTx(t *testing.T) {
@@ -1749,7 +1717,10 @@ func Test_CancelListen(t *testing.T) {
 
 	var received []string
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for s := range collected {
 			received = append(received, s)
 		}
@@ -1770,5 +1741,6 @@ func Test_CancelListen(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	wg.Wait()
 	require.Len(t, received, 10)
 }
