@@ -50,7 +50,7 @@ type TxApp interface {
 	Begin(ctx context.Context, height int64) error
 	Commit(ctx context.Context)
 	Execute(ctx txapp.TxContext, db sql.DB, tx *transactions.Transaction) *txapp.TxResponse
-	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators, approvedJoins, expiredJoins []*types.Validator, err error)
+	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators []*types.Validator, approvedJoins, expiredJoins [][]byte, err error)
 	GenesisInit(ctx context.Context, db sql.DB, validators []*types.Validator, genesisAccounts []*types.Account, initialHeight int64, chain *common.ChainContext) error
 	GetValidators(ctx context.Context, db sql.DB) ([]*types.Validator, error)
 	ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxTxsSize int64, block *common.BlockContext) ([][]byte, error)

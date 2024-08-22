@@ -695,8 +695,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// Join requests approved by this node are added to the peer list.
-	for _, join := range approvedJoins {
-		addr, err := cometbft.PubkeyToAddr(join.PubKey)
+	for _, pubKey := range approvedJoins {
+		addr, err := cometbft.PubkeyToAddr(pubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert pubkey to address: %w", err)
 		}
@@ -708,8 +708,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// peers whose join requests have expired are removed from the peer list
-	for _, join := range expiredJoins {
-		addr, err := cometbft.PubkeyToAddr(join.PubKey)
+	for _, pubKey := range expiredJoins {
+		addr, err := cometbft.PubkeyToAddr(pubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert pubkey to address: %w", err)
 		}
@@ -1500,6 +1500,7 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 		switch paths[0] {
 		case "id":
 			if a.p2p.IsPeerWhitelisted(paths[1]) {
+				a.log.Info("Connection attempt accepted, peer is allowed to connect", zap.String("peerID", paths[1]))
 				return &abciTypes.ResponseQuery{Code: abciTypes.CodeTypeOK}, nil
 			}
 			// ID is not in the allowed list of peers, so reject the connection

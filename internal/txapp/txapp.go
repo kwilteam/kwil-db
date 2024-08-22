@@ -56,6 +56,9 @@ type TxApp struct {
 	// precomputed variables
 	emptyVoteBodyTxSize int64
 	resTypes            []string
+
+	// list of pubkeys of join candidates approved by this node in the current block
+	approvedJoins [][]byte
 }
 
 // NewTxApp creates a new router.
@@ -244,7 +247,29 @@ func (r *TxApp) Execute(ctx TxContext, db sql.DB, tx *transactions.Transaction) 
 
 	r.log.Debug("executing transaction", log.Any("tx", tx))
 
+	// Check if the tx is a approval vote by this node for a validator join request
+	// record the approval in the approvedJoins list
+	r.logValidatorJoinApprovals(tx)
+
 	return route.Execute(ctx, r, db, tx)
+}
+
+func (r *TxApp) logValidatorJoinApprovals(tx *transactions.Transaction) {
+	if tx.Body.PayloadType != transactions.PayloadTypeValidatorApprove {
+		return
+	}
+
+	if !bytes.Equal(tx.Sender, r.signer.Identity()) {
+		return
+	}
+
+	approve := &transactions.ValidatorApprove{}
+	if err := approve.UnmarshalBinary(tx.Body.Payload); err != nil {
+		return
+	}
+
+	r.approvedJoins = append(r.approvedJoins, approve.Candidate)
+
 }
 
 // Begin signals that a new block has begun. This creates an outer database
@@ -306,7 +331,7 @@ func (r *TxApp) activations(height int64) []*consensus.Hardfork {
 // state modifications specified by hardforks activating at this height are
 // applied. It is given the old and new network parameters, and is expected to
 // use them to store any changes to the network parameters in the database.
-func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators, approvedJoins, expiredJoins []*types.Validator, err error) {
+func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators []*types.Validator, approvedJoins, expiredJoins [][]byte, err error) {
 	expiredJoins, err = r.processVotes(ctx, db, block)
 	if err != nil {
 		return nil, nil, nil, err
@@ -354,57 +379,16 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockCont
 		}
 	}
 
-	// Get the join requests approved by this node
-	approvedJoins, err = r.approvedJoinRequests(ctx, db)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
 	r.valMtx.Lock()
 	r.validators = finalValidators
 	r.valMtx.Unlock()
 
-	return finalValidators, approvedJoins, expiredJoins, nil
-}
-
-// approvedJoinRequests returns the validator join requests that have been approved by this node.
-func (r *TxApp) approvedJoinRequests(ctx context.Context, db sql.DB) ([]*types.Validator, error) {
-	readTx, err := db.BeginTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer readTx.Rollback(ctx)
-
-	// get all validator-join resolutions
-	activeJoins, err := voting.GetResolutionsByType(ctx, readTx, voting.ValidatorJoinEventType)
-	if err != nil {
-		return nil, err
-	}
-
-	var approvedJoins []*types.Validator
-	for _, join := range activeJoins {
-		var req voting.UpdatePowerRequest
-		if err := req.UnmarshalBinary(join.Body); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal join request: %w", err)
-		}
-
-		for _, voter := range join.Voters {
-			if bytes.Equal(voter.PubKey, r.signer.Identity()) {
-				approvedJoins = append(approvedJoins, &types.Validator{
-					PubKey: req.PubKey,
-					Power:  req.Power,
-				})
-				break
-			}
-		}
-	}
-
-	return approvedJoins, nil
+	return finalValidators, r.approvedJoins, expiredJoins, nil
 }
 
 // processVotes confirms resolutions that have been approved by the network,
 // expires resolutions that have expired, and properly credits proposers and voters.
-func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.BlockContext) ([]*types.Validator, error) {
+func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.BlockContext) ([][]byte, error) {
 	credits := make(creditMap)
 
 	var finalizedIDs []*types.UUID
@@ -499,7 +483,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 
 	expiredIDs := make([]*types.UUID, 0, len(expired))
 	requiredPowerMap := make(map[string]int64) // map of resolution type to required power
-	var expiredJoins []*types.Validator
+	var expiredJoins [][]byte
 
 	for _, resolution := range expired {
 		expiredIDs = append(expiredIDs, resolution.ID)
@@ -513,10 +497,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 				return nil, fmt.Errorf("failed to unmarshal join request: %w", err)
 			}
 
-			expiredJoins = append(expiredJoins, &types.Validator{
-				PubKey: req.PubKey,
-				Power:  req.Power,
-			})
+			expiredJoins = append(expiredJoins, req.PubKey)
 		}
 
 		threshold, ok := requiredPowerMap[resolution.Type]
@@ -615,6 +596,7 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) {
 func (r *TxApp) Commit(ctx context.Context) {
 	r.announceValidators()
 	r.mempool.reset()
+	r.approvedJoins = nil
 }
 
 // ApplyMempool applies the transactions in the mempool.

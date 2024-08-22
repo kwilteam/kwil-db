@@ -411,7 +411,7 @@ func (m *mockTxApp) Execute(ctx txapp.TxContext, db sql.DB, tx *transactions.Tra
 	return nil
 }
 
-func (m *mockTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (validatorUpgrades, approvedJoins, expiredJoins []*types.Validator, err error) {
+func (m *mockTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (validatorUpgrades []*types.Validator, approvedJoins, expiredJoins [][]byte, err error) {
 	return nil, nil, nil, nil
 }
 
