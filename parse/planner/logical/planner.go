@@ -1111,11 +1111,27 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			return nil, nil, fmt.Errorf("comparison operands must be of the same type. %s != %s", leftScalar, rightScalar)
 		}
 
-		return &ComparisonOp{
-			Left:  left,
-			Right: right,
-			Op:    get(comparisonOps, node.Operator),
-		}, anonField(types.BoolType.Copy()), nil
+		var op []ComparisonOperator
+		negate := false
+		switch node.Operator {
+		case parse.ComparisonOperatorEqual:
+			op = []ComparisonOperator{Equal}
+		case parse.ComparisonOperatorNotEqual:
+			op = []ComparisonOperator{Equal}
+			negate = true
+		case parse.ComparisonOperatorLessThan:
+			op = []ComparisonOperator{LessThan}
+		case parse.ComparisonOperatorLessThanOrEqual:
+			op = []ComparisonOperator{LessThan, Equal}
+		case parse.ComparisonOperatorGreaterThan:
+			op = []ComparisonOperator{GreaterThan}
+		case parse.ComparisonOperatorGreaterThanOrEqual:
+			op = []ComparisonOperator{GreaterThan, Equal}
+		}
+
+		expr := applyOps(left, right, op, negate)
+
+		return expr, anonField(types.BoolType.Copy()), nil
 	case *parse.ExpressionLogical:
 		left, leftField, err := s.expr(node.Left, currentRel)
 		if err != nil {
@@ -1312,18 +1328,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			return nil, nil, fmt.Errorf("string comparison operands must be of type string. %s != %s", leftScalar, rightScalar)
 		}
 
-		var expr Expression = &ComparisonOp{
-			Left:  left,
-			Right: right,
-			Op:    get(stringComparisonOps, node.Operator),
-		}
-
-		if node.Not {
-			expr = &UnaryOp{
-				Expr: expr,
-				Op:   Not,
-			}
-		}
+		expr := applyOps(left, right, []ComparisonOperator{get(stringComparisonOps, node.Operator)}, node.Not)
 
 		return expr, anonField(types.BoolType.Copy()), nil
 	case *parse.ExpressionIs:
@@ -1444,9 +1449,10 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 
 		return expr, anonField(types.BoolType.Copy()), nil
 	case *parse.ExpressionBetween:
-		leftOp, rightOp := GreaterThanOrEqual, LessThanOrEqual
-		if node.Not {
-			leftOp, rightOp = LessThan, GreaterThan
+		leftOps, rightOps := []ComparisonOperator{GreaterThan}, []ComparisonOperator{LessThan}
+		if !node.Not {
+			leftOps = append(leftOps, Equal)
+			rightOps = append(rightOps, Equal)
 		}
 
 		left, exprField, err := s.expr(node.Expression, currentRel)
@@ -1488,17 +1494,9 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 		}
 
 		return &LogicalOp{
-			Left: &ComparisonOp{
-				Left:  left,
-				Right: lower,
-				Op:    leftOp,
-			},
-			Right: &ComparisonOp{
-				Left:  left,
-				Right: upper,
-				Op:    rightOp,
-			},
-			Op: And,
+			Left:  applyOps(left, lower, leftOps, false),
+			Right: applyOps(left, upper, rightOps, false),
+			Op:    And,
 		}, anonField(types.BoolType.Copy()), nil
 	case *parse.ExpressionCase:
 		c := &Case{}
@@ -1711,6 +1709,36 @@ func procedureReturnExpr(node *types.ProcedureReturn) (*types.DataType, error) {
 	}
 
 	return node.Fields[0].Type.Copy(), nil
+}
+
+// applyComparisonOps applies a series of comparison operators to the left and right expressions.
+// If negate is true, then the final expression is negated.
+func applyOps(left, right Expression, ops []ComparisonOperator, negate bool) Expression {
+	var expr Expression = &ComparisonOp{
+		Left:  left,
+		Right: right,
+		Op:    ops[0],
+	}
+	for _, op := range ops[1:] {
+		expr = &LogicalOp{
+			Left: expr,
+			Right: &ComparisonOp{
+				Left:  left,
+				Right: right,
+				Op:    op,
+			},
+			Op: Or,
+		}
+	}
+
+	if negate {
+		expr = &UnaryOp{
+			Expr: expr,
+			Op:   Not,
+		}
+	}
+
+	return expr
 }
 
 // anonField creates an anonymous field with the given data type.
