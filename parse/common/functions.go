@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
@@ -402,6 +403,22 @@ var (
 				return args[1], nil
 			},
 			PGFormatFunc: defaultFormat("array_prepend"),
+			EvaluateFunc: func(interp Interpreter, args []Value) (Value, error) {
+				scal := args[0].(ScalarValue)
+				arr := args[1].(ArrayValue)
+
+				var scalars []ScalarValue
+				// 1-indexed
+				for i := 1; i <= arr.Len(); i++ {
+					newScal, err := arr.Index(int64(i))
+					if err != nil {
+						return nil, err
+					}
+					scalars = append(scalars, newScal)
+				}
+
+				return scal.Array(scalars...)
+			},
 		},
 		"array_cat": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -424,6 +441,24 @@ var (
 				return args[0], nil
 			},
 			PGFormatFunc: defaultFormat("array_cat"),
+			EvaluateFunc: func(interp Interpreter, args []Value) (Value, error) {
+				arr1 := args[0].(ArrayValue)
+				arr2 := args[1].(ArrayValue)
+
+				startIdx := arr1.Len()
+				for i := 1; i <= arr2.Len(); i++ {
+					newScal, err := arr2.Index(int64(i))
+					if err != nil {
+						return nil, err
+					}
+					err = arr1.Set(int64(startIdx+i), newScal)
+					if err != nil {
+						return nil, err
+					}
+				}
+
+				return arr1, nil
+			},
 		},
 		"array_length": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -439,6 +474,10 @@ var (
 			},
 			PGFormatFunc: func(inputs []string) (string, error) {
 				return fmt.Sprintf("array_length(%s, 1)", inputs[0]), nil
+			},
+			EvaluateFunc: func(interp Interpreter, args []Value) (Value, error) {
+				arr := args[0].(ArrayValue)
+				return &IntValue{Val: int64(arr.Len())}, nil
 			},
 		},
 		// string functions
@@ -456,6 +495,10 @@ var (
 				return types.IntType, nil
 			},
 			PGFormatFunc: defaultFormat("bit_length"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				text := args[0].(*TextValue).Val
+				return &IntValue{Val: int64(len(text) * 8)}, nil
+			},
 		},
 		"char_length": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -470,6 +513,10 @@ var (
 				return types.IntType, nil
 			},
 			PGFormatFunc: defaultFormat("char_length"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				text := args[0].(*TextValue).Val
+				return &IntValue{Val: int64(utf8.RuneCountInString(text))}, nil
+			},
 		},
 		"character_length": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -484,6 +531,10 @@ var (
 				return types.IntType, nil
 			},
 			PGFormatFunc: defaultFormat("character_length"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				text := args[0].(*TextValue).Val
+				return &IntValue{Val: int64(utf8.RuneCountInString(text))}, nil
+			},
 		},
 		"length": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -498,6 +549,10 @@ var (
 				return types.IntType, nil
 			},
 			PGFormatFunc: defaultFormat("length"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				text := args[0].(*TextValue).Val
+				return &IntValue{Val: int64(utf8.RuneCountInString(text))}, nil
+			},
 		},
 		"lower": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -512,6 +567,10 @@ var (
 				return types.TextType, nil
 			},
 			PGFormatFunc: defaultFormat("lower"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				text := args[0].(*TextValue).Val
+				return &TextValue{Val: strings.ToLower(text)}, nil
+			},
 		},
 		"lpad": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -535,6 +594,16 @@ var (
 				return types.TextType, nil
 			},
 			PGFormatFunc: defaultFormat("lpad"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				text := args[0].(*TextValue).Val
+				length := args[1].(*IntValue).Val
+				padStr := " "
+				if len(args) == 3 {
+					padStr = args[2].(*TextValue).Val
+				}
+
+				return &TextValue{Val: pad(text, int(length), padStr, true)}, nil
+			},
 		},
 		"ltrim": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -552,6 +621,14 @@ var (
 				return types.TextType, nil
 			},
 			PGFormatFunc: defaultFormat("ltrim"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				text := args[0].(*TextValue).Val
+				chars := " "
+				if len(args) == 2 {
+					chars = args[1].(*TextValue).Val
+				}
+				return &TextValue{Val: strings.TrimLeft(text, chars)}, nil
+			},
 		},
 		"octet_length": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -566,6 +643,10 @@ var (
 				return types.IntType, nil
 			},
 			PGFormatFunc: defaultFormat("octet_length"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				text := args[0].(*TextValue).Val
+				return &IntValue{Val: int64(len(text))}, nil
+			},
 		},
 		"overlay": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -608,6 +689,22 @@ var (
 
 				return str.String(), nil
 			},
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				input := args[0].(*TextValue).Val
+				replace := args[1].(*TextValue).Val
+				start := args[2].(*IntValue).Val
+
+				if start < 0 {
+					return nil, ErrNegativeSubstringLength
+				}
+
+				length := int64(len(replace))
+				if len(args) == 4 {
+					length = args[3].(*IntValue).Val
+				}
+
+				return &TextValue{Val: overlay(input, replace, int(start), int(length))}, nil
+			},
 		},
 		"position": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -626,6 +723,21 @@ var (
 			},
 			PGFormatFunc: func(inputs []string) (string, error) {
 				return fmt.Sprintf("position(%s in %s)", inputs[0], inputs[1]), nil
+			},
+			EvaluateFunc: func(interp Interpreter, args []Value) (Value, error) {
+				substr := args[0].(*TextValue).Val
+				str := args[1].(*TextValue).Val
+
+				pos := strings.Index(str, substr)
+
+				var res int64
+				if pos == -1 {
+					res = 0
+				} else {
+					res = int64(utf8.RuneCountInString(str[:pos])) + 1
+				}
+
+				return &IntValue{Val: res}, nil
 			},
 		},
 		"rpad": &ScalarFunctionDefinition{
@@ -650,6 +762,16 @@ var (
 				return types.TextType, nil
 			},
 			PGFormatFunc: defaultFormat("rpad"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				text := args[0].(*TextValue).Val
+				length := args[1].(*IntValue).Val
+				padStr := " "
+				if len(args) == 3 {
+					padStr = args[2].(*TextValue).Val
+				}
+
+				return &TextValue{Val: pad(text, int(length), padStr, false)}, nil
+			},
 		},
 		"rtrim": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -667,6 +789,14 @@ var (
 				return types.TextType, nil
 			},
 			PGFormatFunc: defaultFormat("rtrim"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				text := args[0].(*TextValue).Val
+				chars := " "
+				if len(args) == 2 {
+					chars = args[1].(*TextValue).Val
+				}
+				return &TextValue{Val: strings.TrimRight(text, chars)}, nil
+			},
 		},
 		"substring": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -707,8 +837,48 @@ var (
 
 				return str.String(), nil
 			},
+			EvaluateFunc: func(_ Interpreter, args []Value) (v Value, err error) {
+				defer func() {
+					if r := recover(); r != nil {
+						err = fmt.Errorf("panic: %v", r)
+					}
+				}()
+
+				text := args[0].(*TextValue).Val
+				start := args[1].(*IntValue).Val
+
+				if start > int64(len(text)) {
+					// not sure why Postgres does this, but it does.
+					return &TextValue{Val: ""}, nil
+				}
+
+				length := int64(len(text))
+
+				if len(args) == 3 {
+					length = args[2].(*IntValue).Val
+				}
+
+				if length < 0 {
+					return nil, ErrNegativeSubstringLength
+				}
+
+				runes := []rune(text)
+				if start < 1 {
+					// if start is negative, then we subtract the difference from 1
+					// from the length. I don't know why Postgres does this, but it does.
+					length -= 1 - start
+					start = 1
+				}
+				if length < 0 {
+					// if length is negative, then we set it to 0.
+					// Not sure why Postgres does this, but it does.
+					length = 0
+				}
+				end := min(int64(len(runes)), start-1+length)
+				return &TextValue{Val: string(runes[start-1 : end])}, nil
+			},
 		},
-		"trim": &ScalarFunctionDefinition{ // kwil only supports trim both
+		"trim": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
 				// 1-2 args, both must be text
 				if len(args) < 1 || len(args) > 2 {
@@ -724,6 +894,14 @@ var (
 				return types.TextType, nil
 			},
 			PGFormatFunc: defaultFormat("trim"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				text := args[0].(*TextValue).Val
+				chars := " "
+				if len(args) == 2 {
+					chars = args[1].(*TextValue).Val
+				}
+				return &TextValue{Val: strings.Trim(text, chars)}, nil
+			},
 		},
 		"upper": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -738,6 +916,10 @@ var (
 				return types.TextType, nil
 			},
 			PGFormatFunc: defaultFormat("upper"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				text := args[0].(*TextValue).Val
+				return &TextValue{Val: strings.ToUpper(text)}, nil
+			},
 		},
 		"format": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -752,6 +934,16 @@ var (
 				return types.TextType, nil
 			},
 			PGFormatFunc: defaultFormat("format"),
+			EvaluateFunc: func(_ Interpreter, args []Value) (Value, error) {
+				format := args[0].(*TextValue).Val
+
+				values := []any{}
+				for _, arg := range args[1:] {
+					values = append(values, arg.Value())
+				}
+
+				return &TextValue{Val: positionalSprintf(format, values...)}, nil
+			},
 		},
 		// Aggregate functions
 		"count": &AggregateFunctionDefinition{
@@ -861,6 +1053,68 @@ var (
 		},
 	}
 )
+
+// pad pads either side of a string. The side can be specified with the side parameter (left is true, right is false)
+func pad(input string, length int, padStr string, side bool) string {
+	inputLength := len(input)
+	if inputLength >= length {
+		return input[:length] // Truncate if the input string is longer than the desired length
+	}
+
+	padLength := len(padStr)
+	if padLength == 0 {
+		return input // If padStr is empty, return the input as is
+	}
+
+	// Calculate the number of times the padStr needs to be repeated
+	repeatCount := (length - inputLength) / padLength
+	remainder := (length - inputLength) % padLength
+
+	// Build the left padding
+	p := strings.Repeat(padStr, repeatCount) + padStr[:remainder]
+
+	if side {
+		return p + input
+	}
+	return input + p
+}
+
+// overlay function mimics the behavior of the PostgreSQL overlay function
+func overlay(input, replace string, start, forInt int) string {
+	if start < 1 {
+		start = 1
+	}
+
+	// Convert start and length to rune-based indices
+	startIndex := start - 1
+	endIndex := startIndex + forInt
+
+	// Get the slice indices in bytes
+	inputRunes := []rune(input)
+	replaceRunes := []rune(replace)
+
+	// Adjust indices if they go beyond the string length
+	if startIndex > len(inputRunes) {
+		startIndex = len(inputRunes)
+	}
+	if endIndex > len(inputRunes) {
+		endIndex = len(inputRunes)
+	}
+
+	// Replace the specified section of the string with the replacement string
+	resultRunes := append(inputRunes[:startIndex], append(replaceRunes, inputRunes[endIndex:]...)...)
+	return string(resultRunes)
+}
+
+// positionalSprintf is a version of fmt.Sprintf that supports positional arguments.
+// It mimics Postgres's "format"
+func positionalSprintf(format string, args ...interface{}) string {
+	for i, arg := range args {
+		placeholder := fmt.Sprintf("%%%d$s", i+1)
+		format = strings.ReplaceAll(format, placeholder, fmt.Sprintf("%v", arg))
+	}
+	return fmt.Sprintf(format, args...)
+}
 
 // defaultFormat is the default PGFormat function for functions that do not have a custom one.
 func defaultFormat(name string) func(inputs []string) (string, error) {
