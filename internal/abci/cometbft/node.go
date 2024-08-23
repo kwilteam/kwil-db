@@ -12,7 +12,6 @@ import (
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cometConfig "github.com/cometbft/cometbft/config"
-	"github.com/cometbft/cometbft/crypto/ed25519"
 	cometEd25519 "github.com/cometbft/cometbft/crypto/ed25519"
 	cometLog "github.com/cometbft/cometbft/libs/log"
 	cometNodes "github.com/cometbft/cometbft/node"
@@ -248,9 +247,9 @@ func (n *CometBftNode) RemovePeer(nodeID string) error {
 // RIPEMD160(SHA256(pubkey)).  If we support both (if either), we'll need a type
 // flag.
 func PubkeyToAddr(pubkey []byte) (string, error) {
-	if len(pubkey) != ed25519.PubKeySize {
+	if len(pubkey) != cometEd25519.PubKeySize {
 		return "", errors.New("invalid public key")
 	}
-	publicKey := ed25519.PubKey(pubkey)
+	publicKey := cometEd25519.PubKey(pubkey)
 	return publicKey.Address().String(), nil
 }

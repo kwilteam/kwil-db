@@ -45,10 +45,10 @@ type Pricer interface {
 }
 
 type P2P interface {
-	// AddPeer adds a peer to the node's peer list.
-	AddPeer(ctx context.Context, nodeID string) error
-	// RemovePeer removes a peer from the node's peer list.
-	RemovePeer(ctx context.Context, nodeID string) error
+	// AddPeer adds a peer to the node's peer list and persists it.
+	AddAndPersistPeer(ctx context.Context, nodeID string) error
+	// RemovePeer removes a peer from the node's peer list permanently.
+	RemovePersistedPeer(ctx context.Context, nodeID string) error
 	// ListPeers returns the list of peers in the node's whitelist.
 	ListPeers(ctx context.Context) []string
 }
@@ -418,7 +418,7 @@ func (svc *Service) GetConfig(ctx context.Context, req *adminjson.GetConfigReque
 }
 
 func (svc *Service) AddPeer(ctx context.Context, req *adminjson.PeerRequest) (*adminjson.PeerResponse, *jsonrpc.Error) {
-	err := svc.p2p.AddPeer(ctx, req.PeerID)
+	err := svc.p2p.AddAndPersistPeer(ctx, req.PeerID)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to add a peer. Reason: "+err.Error(), nil)
 	}
@@ -427,7 +427,7 @@ func (svc *Service) AddPeer(ctx context.Context, req *adminjson.PeerRequest) (*a
 
 func (svc *Service) RemovePeer(ctx context.Context, req *adminjson.PeerRequest) (*adminjson.PeerResponse, *jsonrpc.Error) {
 	fmt.Println("RemovePeer : ", req.PeerID)
-	err := svc.p2p.RemovePeer(ctx, req.PeerID)
+	err := svc.p2p.RemovePersistedPeer(ctx, req.PeerID)
 	if err != nil {
 		svc.log.Error("failed to remove peer", zap.Error(err))
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to remove peer : "+err.Error(), nil)

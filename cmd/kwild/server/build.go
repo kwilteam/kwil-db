@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/tls"
@@ -373,6 +374,26 @@ func buildPeers(d *coreDependencies, closers *closeFuncs) *cometbft.PeerWhiteLis
 		}
 	}
 
+	nodePubKey := d.privKey.PubKey().Bytes()
+	nodeID, err := cometbft.PubkeyToAddr(nodePubKey)
+	if err != nil {
+		failBuild(err, "failed to convert pubkey to address")
+	}
+
+	// Add the nodes whose validator join requests have been approved by the node
+	// to the whitelist
+	approvedValidators, err := getPendingValidatorsApprovedByNode(d.ctx, db, d.privKey.PubKey().Bytes())
+	if err != nil {
+		failBuild(err, "failed to get approved validators")
+	}
+	for _, v := range approvedValidators {
+		addr, err := cometbft.PubkeyToAddr(v.PubKey)
+		if err != nil {
+			failBuild(err, "failed to convert pubkey to address")
+		}
+		whitelistPeers = append(whitelistPeers, addr)
+	}
+
 	// Add seeds and persistent peers to the whitelist
 	if d.cfg.ChainCfg.P2P.PersistentPeers != "" {
 		persistentPeers := strings.Split(d.cfg.ChainCfg.P2P.PersistentPeers, ",")
@@ -399,12 +420,39 @@ func buildPeers(d *coreDependencies, closers *closeFuncs) *cometbft.PeerWhiteLis
 	}
 
 	// Initialize the Peers with the whitelist peers.
-	peers, err := cometbft.P2PInit(d.ctx, db, d.cfg.ChainCfg.P2P.PrivateMode, whitelistPeers)
+	peers, err := cometbft.P2PInit(d.ctx, db, d.cfg.ChainCfg.P2P.PrivateMode, whitelistPeers, nodeID)
 	if err != nil {
 		failBuild(err, "failed to initialize P2P store")
 	}
 
 	return peers
+}
+
+func getPendingValidatorsApprovedByNode(ctx context.Context, db sql.ReadTxMaker, pubKey []byte) ([]*types.Validator, error) {
+	readTx, err := db.BeginReadTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer readTx.Rollback(ctx)
+
+	// get the pending validators join resolutions
+	resolutions, err := voting.GetResolutionsByType(ctx, readTx, voting.ValidatorJoinEventType)
+	if err != nil {
+		return nil, err
+	}
+
+	var validators []*types.Validator
+
+	// get the pending validators remove resolutions
+	for _, res := range resolutions {
+		for _, voter := range res.Voters {
+			if bytes.Equal(voter.PubKey, pubKey) {
+				validators = append(validators, voter)
+			}
+		}
+	}
+
+	return validators, nil
 }
 
 func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, p2p *cometbft.PeerWhiteList, closers *closeFuncs) *abci.AbciApp {

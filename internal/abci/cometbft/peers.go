@@ -41,6 +41,9 @@ var (
 // are automatically added to the whitelist peers and demoted validators are removed from the whitelist.
 // The Peers gossiped using PEX are not automatically trusted, and to be added manually if needed.
 type PeerWhiteList struct {
+	// localNodeID is the node ID of this node.
+	localNodeID string
+
 	// privateMode is a flag to run the node in private mode. If disabled, the node will accept connections from any peer.
 	// If enabled, the node will only accept connections from the current validators and whitelist peers.
 	privateMode bool
@@ -61,7 +64,7 @@ func initTables(ctx context.Context, tx sql.DB) error {
 }
 
 // NewPeers creates a new Peers object.
-func P2PInit(ctx context.Context, db sql.TxMaker, privateMode bool, whitelistPeers []string) (*PeerWhiteList, error) {
+func P2PInit(ctx context.Context, db sql.TxMaker, privateMode bool, whitelistPeers []string, nodeID string) (*PeerWhiteList, error) {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initTables,
 	}
@@ -74,6 +77,7 @@ func P2PInit(ctx context.Context, db sql.TxMaker, privateMode bool, whitelistPee
 		whitelistPeers: make(map[string]bool),
 		db:             db,
 		privateMode:    privateMode,
+		localNodeID:    strings.ToLower(nodeID),
 	}
 
 	// Load peers from disk
@@ -81,39 +85,13 @@ func P2PInit(ctx context.Context, db sql.TxMaker, privateMode bool, whitelistPee
 		return nil, err
 	}
 
-	// add and persist peers from the whitelistPeers config if not already present
-	if err := p.AddPeers(ctx, whitelistPeers); err != nil {
-		return nil, err
+	// add peers from the whitelistPeers config if not already present
+	// these are not persisted to the database
+	for _, peer := range whitelistPeers {
+		p.AddPeer(ctx, peer)
 	}
 
 	return p, nil
-}
-
-func (p *PeerWhiteList) AddPeers(ctx context.Context, peers []string) error {
-	p.peerMtx.Lock()
-	defer p.peerMtx.Unlock()
-
-	tx, err := p.db.BeginTx(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	for _, peer := range peers {
-		peer = strings.ToLower(peer)
-		_, ok := p.whitelistPeers[peer]
-		if ok {
-			continue
-		}
-
-		p.whitelistPeers[peer] = true
-		// Persist peers to disk
-		_, err = tx.Execute(ctx, addPeer, peer)
-		if err != nil {
-			return err
-		}
-	}
-	return tx.Commit(ctx)
 }
 
 // AddPeer adds a peer to the whitelistPeers list. If the peer is already in the list,
@@ -123,11 +101,24 @@ func (p *PeerWhiteList) AddPeer(ctx context.Context, peer string) error {
 	defer p.peerMtx.Unlock()
 
 	peer = strings.ToLower(peer)
+
+	// Skip adding local node to the whitelistPeers
+	if p.isLocalNode(peer) {
+		return nil
+	}
+
 	_, ok := p.whitelistPeers[peer]
 	if ok {
 		return ErrPeerAlreadyWhitelisted
 	}
 
+	p.whitelistPeers[peer] = true
+
+	return nil
+}
+
+// AddAndPersistPeer adds a peer to the whitelistPeers list and persists the peer to disk.
+func (p *PeerWhiteList) AddAndPersistPeer(ctx context.Context, peer string) error {
 	tx, err := p.db.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -135,11 +126,17 @@ func (p *PeerWhiteList) AddPeer(ctx context.Context, peer string) error {
 	defer tx.Rollback(ctx)
 
 	// Persist peers to disk
+	peer = strings.ToLower(peer)
+	// Skip adding local node to the whitelistPeers
+	if p.isLocalNode(peer) {
+		return nil
+	}
 	_, err = tx.Execute(ctx, addPeer, peer)
 	if err != nil {
 		return err
 	}
-	p.whitelistPeers[peer] = true
+
+	p.AddPeer(ctx, peer)
 
 	return tx.Commit(ctx)
 }
@@ -156,17 +153,6 @@ func (p *PeerWhiteList) RemovePeer(ctx context.Context, peer string) error {
 		return ErrPeerNotWhitelisted
 	}
 
-	tx, err := p.db.BeginTx(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	// Remove peer from the whitelisted peers list and from the database
-	_, err = tx.Execute(ctx, removePeer, peer)
-	if err != nil {
-		return err
-	}
 	delete(p.whitelistPeers, peer)
 
 	// Call removePeerFn to gracefully stop and remove the peer connection
@@ -176,6 +162,29 @@ func (p *PeerWhiteList) RemovePeer(ctx context.Context, peer string) error {
 			return fmt.Errorf("failed to remove peer %s: %w", peer, err)
 		}
 	}
+	return nil
+}
+
+// RemovePersistedPeer removes a peer from the whitelistPeers list and from the database.
+func (p *PeerWhiteList) RemovePersistedPeer(ctx context.Context, peer string) error {
+	tx, err := p.db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	peer = strings.ToLower(peer)
+	// Remove peer from the whitelisted peers list and from the database
+	_, err = tx.Execute(ctx, removePeer, peer)
+	if err != nil {
+		return err
+	}
+
+	// remove peer from the in-memory whitelistPeers and disconnect the peer
+	if err = p.RemovePeer(ctx, peer); err != nil {
+		return err
+	}
+
 	return tx.Commit(ctx)
 }
 
@@ -192,6 +201,8 @@ func (p *PeerWhiteList) IsPeerWhitelisted(peer string) bool {
 
 	peer = strings.ToLower(peer)
 	// Check if peer is in the whitelistPeers
+
+	fmt.Println("whitelisted peers: ", p.whitelistPeers, " peer: ", peer)
 	_, ok := p.whitelistPeers[peer]
 	return ok
 }
@@ -244,4 +255,8 @@ func (p *PeerWhiteList) SetRemovePeerFn(fn func(peerID string) error) {
 func NodeIDAddressString(pubkey ed25519.PubKey, hostPort string) string {
 	nodeID := p2p.PubKeyToID(pubkey)
 	return p2p.IDAddressString(nodeID, hostPort)
+}
+
+func (p *PeerWhiteList) isLocalNode(nodeID string) bool {
+	return p.localNodeID == nodeID
 }

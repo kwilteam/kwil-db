@@ -757,9 +757,9 @@ func TestKwildPrivateNetworks(t *testing.T) {
 		specifications.RemovePeerSpecification(ctx, t, node2Driver, node1)
 
 		// List whitelisted peers
-		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node0})
-		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1})
-		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node2})
+		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{})
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{})
+		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{})
 
 		// Deploy a database on node0 and verify that the database does not exist on node1 and node2
 		specifications.DatabaseDeploySpecification(ctx, t, userNode0Driver)
@@ -773,9 +773,9 @@ func TestKwildPrivateNetworks(t *testing.T) {
 		specifications.AddPeerSpecification(ctx, t, node0Driver, node1)
 		specifications.AddPeerSpecification(ctx, t, node1Driver, node0)
 
-		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node0, node1})
-		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0})
-		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node2})
+		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node1})
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node0})
+		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{})
 
 		// Verify that the database exists on node1 but not on node2
 		time.Sleep(30 * time.Second) // TODO: node eventually connects and syncs // figure out the time interval
@@ -789,9 +789,9 @@ func TestKwildPrivateNetworks(t *testing.T) {
 		specifications.AddPeerSpecification(ctx, t, node0Driver, node2)
 		specifications.AddPeerSpecification(ctx, t, node2Driver, node0)
 
-		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node0, node1, node2})
-		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0})
-		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node2, node0})
+		specifications.ListPeersSpecification(ctx, t, node0Driver, []string{node1, node2})
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node0})
+		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node0})
 
 		// ensure that the database exists on all nodes
 		time.Sleep(30 * time.Second)
@@ -806,8 +806,8 @@ func TestKwildPrivateNetworks(t *testing.T) {
 		// n1: [n1, n0, n2]
 		// n2: [n2, n0]
 		specifications.AddPeerSpecification(ctx, t, node1Driver, node2)
-		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0, node2})
-		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node2, node0})
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node0, node2})
+		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node0})
 
 		// so both the nodes are still not connected
 		specifications.PeerConnectivitySpecification(ctx, t, node1Driver, nodeIDs["node2"], false)
@@ -826,8 +826,8 @@ func TestKwildPrivateNetworks(t *testing.T) {
 		// node2 automatocally adds node1 as a peer as it is a validator
 		// time.Sleep(30 * time.Second)
 		// n0, n1, n3: [n0, n1, n2]
-		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node1, node0, node2})
-		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node2, node0, node1})
+		specifications.ListPeersSpecification(ctx, t, node2Driver, []string{node1, node0})
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node2, node0})
 
 		// node1 removes node2 from its peer list
 		specifications.RemovePeerSpecification(ctx, t, node1Driver, node2)
@@ -839,12 +839,12 @@ func TestKwildPrivateNetworks(t *testing.T) {
 		node2PrivKey := helper.NodePrivateKey("node2")
 		node2PubKey := node2PrivKey.PubKey().Bytes()
 		specifications.ValidatorNodeJoinSpecification(ctx, t, node2Driver, node2PubKey, 2)
-		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0})
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node0})
 		specifications.ValidatorNodeApproveSpecification(ctx, t, node1Driver, node2PubKey, 2, 2, false)
-		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0, node2})
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node0, node2})
 
 		time.Sleep(expiryWait)
 		// as join request expires, node1 removes node2 from its peer list
-		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node1, node0})
+		specifications.ListPeersSpecification(ctx, t, node1Driver, []string{node0})
 	})
 }
