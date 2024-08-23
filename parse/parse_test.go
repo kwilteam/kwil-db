@@ -2092,11 +2092,10 @@ func exprVar(n string) *parse.ExpressionVariable {
 	if n[0] != '$' && n[0] != '@' {
 		panic("TEST ERROR: variable name must start with $ or @")
 	}
-	pref := parse.VariablePrefix(n[0])
 
 	return &parse.ExpressionVariable{
-		Name:   n[1:],
-		Prefix: pref,
+		Name:   n,
+		Prefix: parse.VariablePrefix(n[0]),
 	}
 }
 

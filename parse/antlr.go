@@ -297,18 +297,18 @@ func (s *schemaVisitor) VisitVariable(ctx *gen.VariableContext) any {
 	switch {
 	case ctx.VARIABLE() != nil:
 		e = &ExpressionVariable{
-			Name:   strings.ToLower(strings.TrimLeft(ctx.GetText(), "$")),
+			Name:   strings.ToLower(ctx.GetText()),
 			Prefix: VariablePrefixDollar,
 		}
 		tok = ctx.VARIABLE().GetSymbol()
 	case ctx.CONTEXTUAL_VARIABLE() != nil:
 		e = &ExpressionVariable{
-			Name:   strings.ToLower(strings.TrimLeft(ctx.GetText(), "@")),
+			Name:   strings.ToLower(ctx.GetText()),
 			Prefix: VariablePrefixAt,
 		}
 		tok = ctx.CONTEXTUAL_VARIABLE().GetSymbol()
 
-		_, ok := SessionVars[e.Name]
+		_, ok := SessionVars[e.Name[1:]]
 		if !ok {
 			s.errs.RuleErr(ctx, ErrUnknownContextualVariable, e.Name)
 		}
@@ -2035,7 +2035,7 @@ func varFromString(s string) *ExpressionVariable {
 		panic("invalid variable: " + s)
 	}
 
-	e.Name = strings.ToLower(s[1:])
+	e.Name = strings.ToLower(s)
 
 	return e
 }
@@ -2072,14 +2072,13 @@ func (s *schemaVisitor) VisitVariable_or_underscore(ctx *gen.Variable_or_undersc
 func (s *schemaVisitor) VisitStmt_variable_assignment(ctx *gen.Stmt_variable_assignmentContext) any {
 	stmt := &ProcedureStmtAssign{}
 
-	stmt.Variable = ctx.Procedure_expr(0).Accept(s).(Expression)
-	// this can either be a variable or an array access
-	switch v := stmt.Variable.(type) {
-	case *ExpressionVariable, *ExpressionArrayAccess:
-		// ok
-	default:
-		s.errs.RuleErr(ctx.Procedure_expr(0), ErrSyntax, "cannot assign to %T", v)
+	assignVariable := ctx.Procedure_expr(0).Accept(s).(Expression)
+
+	assignable, ok := assignVariable.(Assignable)
+	if !ok {
+		s.errs.RuleErr(ctx.Procedure_expr(0), ErrSyntax, "cannot assign to %T", assignVariable)
 	}
+	stmt.Variable = assignable
 	stmt.Value = ctx.Procedure_expr(1).Accept(s).(Expression)
 
 	if ctx.Type_() != nil {

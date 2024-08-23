@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/parse"
+	"github.com/kwilteam/kwil-db/parse/common"
 )
 
 /*
@@ -56,7 +57,7 @@ func (s *sqlGenerator) VisitExpressionFunctionCall(p0 *parse.ExpressionFunctionC
 
 	// if this is not a built-in function, we need to prefix it with
 	// the schema name, since it is a local procedure
-	fn, ok := parse.Functions[p0.Name]
+	fn, ok := common.Functions[p0.Name]
 	if !ok {
 		// if not found, it is a local procedure
 		str.WriteString(s.pgSchema)
@@ -74,7 +75,16 @@ func (s *sqlGenerator) VisitExpressionFunctionCall(p0 *parse.ExpressionFunctionC
 		return str.String()
 	}
 
-	pgFmt, err := fn.PGFormat(args, p0.Distinct, p0.Star)
+	var pgFmt string
+	var err error
+	switch fn := fn.(type) {
+	case *common.ScalarFunctionDefinition:
+		pgFmt, err = fn.PGFormatFunc(args)
+	case *common.AggregateFunctionDefinition:
+		pgFmt, err = fn.PGFormatFunc(args, p0.Distinct)
+	default:
+		panic("unknown function type " + fmt.Sprintf("%T", fn))
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -974,9 +984,9 @@ func formatReturnVar(i int) string {
 func formatVariable(e *parse.ExpressionVariable) string {
 	switch e.Prefix {
 	case parse.VariablePrefixDollar:
-		return formatParameterName(e.Name)
+		return formatParameterName(e.Name[1:])
 	case parse.VariablePrefixAt:
-		return formatContextualVariableName(e.Name)
+		return formatContextualVariableName(e.Name[1:])
 	default:
 		// should never happen
 		panic("invalid variable prefix: " + string(e.Prefix))

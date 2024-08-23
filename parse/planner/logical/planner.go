@@ -10,6 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils/order"
 	"github.com/kwilteam/kwil-db/parse"
+	"github.com/kwilteam/kwil-db/parse/common"
 )
 
 // CreateLogicalPlan creates a logical plan from a SQL statement.
@@ -824,7 +825,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 		}
 
 		// can be either a procedure call or a built-in function
-		funcDef, ok := parse.Functions[node.Name]
+		funcDef, ok := common.Functions[node.Name]
 		if !ok {
 			if node.Star {
 				panic("star (*) not allowed in procedure calls")
@@ -887,7 +888,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 		}
 
 		// now we need to apply rules depending on if it is aggregate or not
-		if funcDef.IsAggregate {
+		if _, ok = funcDef.(*common.AggregateFunctionDefinition); ok {
 			// we apply cast outside the reference because we want to keep the reference
 			// specific to the aggregate function call.
 			return cast(&AggregateFunctionCall{

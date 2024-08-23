@@ -3,8 +3,10 @@ package parse
 import (
 	"fmt"
 	"maps"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/parse/common"
 )
 
 /*
@@ -520,7 +522,7 @@ func (s *sqlAnalyzer) VisitExpressionLiteral(p0 *ExpressionLiteral) any {
 
 func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) any {
 	// function call should either be against a known function, or a procedure.
-	fn, ok := Functions[p0.Name]
+	fn, ok := common.Functions[p0.Name]
 	if !ok {
 		// if not found, it might be a schema procedure.
 		proc, found := s.schema.FindProcedure(p0.Name)
@@ -568,14 +570,16 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 		return cast(p0, types.UnknownType)
 	}
 
+	_, isAggregate := fn.(*common.AggregateFunctionDefinition)
+
 	// the function is a built in function. If using DISTINCT, it needs to be an aggregate
 	// if using *, it needs to support it.
-	if p0.Distinct && !fn.IsAggregate {
+	if p0.Distinct && !isAggregate {
 		s.errs.AddErr(p0, ErrFunctionSignature, "DISTINCT can only be used with aggregate functions")
 		return cast(p0, types.UnknownType)
 	}
 
-	if fn.IsAggregate {
+	if isAggregate {
 		s.sqlCtx._inAggregate = true
 		s.sqlCtx._containsAggregate = true
 		defer func() { s.sqlCtx._inAggregate = false }()
@@ -585,8 +589,8 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 	// If not, then we validate all args and return the type.
 	var returnType *types.DataType
 	if p0.Star {
-		if fn.StarArgReturn == nil {
-			s.errs.AddErr(p0, ErrFunctionSignature, "function does not support *")
+		if strings.ToLower(p0.Name) != "count" {
+			s.errs.AddErr(p0, ErrFunctionSignature, "cannot use * with function %s", p0.Name)
 			return cast(p0, types.UnknownType)
 		}
 
@@ -596,7 +600,11 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 			return cast(p0, types.UnknownType)
 		}
 
-		returnType = fn.StarArgReturn
+		var err error
+		returnType, err = fn.ValidateArgs(nil)
+		if err != nil {
+			s.errs.AddErr(p0, ErrType, err.Error())
+		}
 	} else {
 		argTyps := make([]*types.DataType, len(p0.Args))
 		for i, arg := range p0.Args {
@@ -611,7 +619,7 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 		var err error
 		returnType, err = fn.ValidateArgs(argTyps)
 		if err != nil {
-			s.errs.AddErr(p0, ErrFunctionSignature, err.Error())
+			s.errs.AddErr(p0, ErrType, err.Error())
 			return cast(p0, types.UnknownType)
 		}
 	}

@@ -18,6 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/utils/order"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/parse"
+	common1 "github.com/kwilteam/kwil-db/parse/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -469,7 +470,7 @@ func Test_Procedures(t *testing.T) {
 			var rec []string
 			go func() {
 				for n := range notice {
-					_, notc, err := parse.ParseNotice(n)
+					_, notc, err := common1.ParseNotice(n)
 					require.NoError(t, err)
 					rec = append(rec, notc)
 				}

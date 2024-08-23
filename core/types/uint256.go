@@ -72,6 +72,67 @@ func (u *Uint256) Clone() *Uint256 {
 	return &v
 }
 
+func (u *Uint256) Add(v *Uint256) *Uint256 {
+	z := uint256.NewInt(0)
+
+	return &Uint256{
+		base: *z.Add(&u.base, &v.base),
+	}
+}
+
+func (u *Uint256) Sub(v *Uint256) (*Uint256, error) {
+	z := uint256.NewInt(0)
+	res, overflow := z.SubOverflow(&u.base, &v.base)
+	if overflow {
+		return nil, fmt.Errorf("overflow")
+	}
+
+	return &Uint256{
+		base: *res,
+	}, nil
+}
+
+func (u *Uint256) Mul(v *Uint256) (*Uint256, error) {
+	z := uint256.NewInt(0)
+
+	res, overflow := z.MulOverflow(&u.base, &v.base)
+	if overflow {
+		return nil, fmt.Errorf("overflow")
+	}
+
+	return &Uint256{
+		base: *res,
+	}, nil
+}
+
+func (u *Uint256) Div(v *Uint256) *Uint256 {
+	z := uint256.NewInt(0)
+
+	return &Uint256{
+		base: *z.Div(&u.base, &v.base),
+	}
+}
+
+func (u *Uint256) DivMod(v *Uint256) (*Uint256, *Uint256) {
+	z := uint256.NewInt(0)
+	mod := uint256.NewInt(0)
+	z.DivMod(&u.base, &v.base, mod)
+
+	return &Uint256{
+			base: *z,
+		}, &Uint256{
+			base: *mod,
+		}
+}
+
+func (u *Uint256) Mod(v *Uint256) *Uint256 {
+	z := uint256.NewInt(0)
+
+	return &Uint256{
+		base: *z.Mod(&u.base, &v.base),
+	}
+}
+
 func (u *Uint256) Cmp(v *Uint256) int {
 	return u.base.Cmp(&v.base)
 }
