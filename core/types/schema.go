@@ -1292,6 +1292,11 @@ var (
 	UnknownType = &DataType{
 		Name: unknownStr,
 	}
+	// RecordType is a special type used internally to represent
+	// an record with referenceable fields.
+	RecordType = &DataType{
+		Name: "record",
+	}
 )
 
 // ArrayType creates an array type of the given type.

@@ -15,6 +15,9 @@ import (
 	"sync"
 	"sync/atomic"
 
+	abciTypes "github.com/cometbft/cometbft/abci/types"
+	"github.com/cometbft/cometbft/crypto/ed25519"
+	"github.com/cometbft/cometbft/crypto/tmhash"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/common/chain/forks"
@@ -32,11 +35,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/statesync"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/version"
-	"github.com/kwilteam/kwil-db/parse"
-
-	abciTypes "github.com/cometbft/cometbft/abci/types"
-	"github.com/cometbft/cometbft/crypto/ed25519"
-	"github.com/cometbft/cometbft/crypto/tmhash"
+	common1 "github.com/kwilteam/kwil-db/parse/common"
 	"go.uber.org/zap"
 )
 
@@ -528,7 +527,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			if !ok {
 				break
 			}
-			txid, notice, err := parse.ParseNotice(log)
+			txid, notice, err := common1.ParseNotice(log)
 			if err != nil {
 				// should be deterministic so nbd to not halt here
 				a.log.Errorf("failed to parse notice: %v", err)

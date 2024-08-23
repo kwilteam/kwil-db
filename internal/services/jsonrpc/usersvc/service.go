@@ -12,7 +12,6 @@ import (
 
 	// BlockchainTransactor returns have some big structs from cometbft.
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types" // :(
-
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/ident"
 	"github.com/kwilteam/kwil-db/common/sql"
@@ -26,7 +25,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/execution" // errors from engine
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/version"
-	"github.com/kwilteam/kwil-db/parse"
+	common1 "github.com/kwilteam/kwil-db/parse/common"
 )
 
 // Service is the "user" RPC service, also known as txsvc in other contexts.
@@ -535,7 +534,7 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 					return
 				}
 
-				_, notc, err := parse.ParseNotice(logMsg)
+				_, notc, err := common1.ParseNotice(logMsg)
 				if err != nil {
 					svc.log.Error("failed to parse notice", log.Error(err))
 					continue
