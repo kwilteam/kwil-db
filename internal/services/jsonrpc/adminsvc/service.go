@@ -14,9 +14,11 @@ import (
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	adminjson "github.com/kwilteam/kwil-db/core/rpc/json/admin"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
+	coretypes "github.com/kwilteam/kwil-db/core/types"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/internal/migrations"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/version"
 	"github.com/kwilteam/kwil-db/internal/voting"
@@ -53,6 +55,13 @@ type P2P interface {
 	ListPeers(ctx context.Context) []string
 }
 
+type Migrator interface {
+	GetChangesetMetadata(height int64) (*migrations.ChangesetMetdata, error)
+	GetChangeset(height int64, index int64) ([]byte, error)
+	GetMigrationMetadata() (*coretypes.MigrationMetadata, error)
+	GetGenesisSnapshotChunk(height int64, format uint32, chunkIdx uint32) ([]byte, error)
+}
+
 type Service struct {
 	log log.Logger
 
@@ -61,6 +70,7 @@ type Service struct {
 	db         sql.DelayedReadTxMaker
 	pricer     Pricer
 	p2p        P2P
+	migrator   Migrator
 
 	cfg     *config.KwildConfig
 	chainID string
@@ -134,6 +144,21 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		adminjson.MethodListPeers: rpcserver.MakeMethodDef(svc.ListPeers,
 			"list the peers from the node's whitelist",
 			"the list of peers from which the node can accept connections from."),
+		adminjson.MethodCreateResolution: rpcserver.MakeMethodDef(svc.CreateResolution,
+			"create a resolution",
+			"the hash of the broadcasted create resolution transaction",
+		),
+		adminjson.MethodApproveResolution: rpcserver.MakeMethodDef(svc.ApproveResolution,
+			"approve a resolution",
+			"the hash of the broadcasted approve resolution transaction",
+		),
+		adminjson.MethodDeleteResolution: rpcserver.MakeMethodDef(svc.DeleteResolution,
+			"delete a resolution",
+			"the hash of the broadcasted delete resolution transaction",
+		),
+		adminjson.MethodResolutionStatus: rpcserver.MakeMethodDef(svc.ResolutionStatus,
+			"get the status of a resolution",
+			"the status of the resolution"),
 	}
 }
 
@@ -146,7 +171,7 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 }
 
 // NewService constructs a new Service.
-func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, signer auth.Signer, p2p P2P, cfg *config.KwildConfig,
+func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, p2p P2P, migrator Migrator, signer auth.Signer, cfg *config.KwildConfig,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,
@@ -155,6 +180,7 @@ func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txAp
 		chainID:    chainID,
 		pricer:     pricer,
 		p2p:        p2p,
+		migrator:   migrator,
 		cfg:        cfg,
 		log:        logger,
 		db:         db,
@@ -367,40 +393,15 @@ func toPendingInfo(ctx context.Context, db sql.DB, resolution *resolutions.Resol
 		return nil, fmt.Errorf("failed to unmarshal join request")
 	}
 
-	allVoters, err := voting.GetValidators(ctx, db)
+	expiresAt, board, approvals, err := voting.ResolutionStatus(ctx, db, resolution)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve voters")
-	}
-
-	// to create the board, we will take a list of all approvers and append the voters.
-	// we will then remove any duplicates the second time we see them.
-	// this will result with all approvers at the start of the list, and all voters at the end.
-	// finally, the approvals will be true for the length of the approvers, and false for found.length - voters.length
-	board := make([][]byte, 0, len(allVoters))
-	approvals := make([]bool, len(allVoters))
-	for i, v := range resolution.Voters {
-		board = append(board, v.PubKey)
-		approvals[i] = true
-	}
-	for _, v := range allVoters {
-		board = append(board, v.PubKey)
-	}
-
-	// we will now remove duplicates from the board.
-	found := make(map[string]struct{})
-	for i := 0; i < len(board); i++ {
-		if _, ok := found[string(board[i])]; ok {
-			board = append(board[:i], board[i+1:]...)
-			i--
-			continue
-		}
-		found[string(board[i])] = struct{}{}
+		return nil, fmt.Errorf("failed to retrieve join request status")
 	}
 
 	return &adminjson.PendingJoin{
 		Candidate: resolution.Proposer,
 		Power:     resolutionBody.Power,
-		ExpiresAt: resolution.ExpirationHeight,
+		ExpiresAt: expiresAt,
 		Board:     board,
 		Approved:  approvals,
 	}, nil
@@ -438,5 +439,58 @@ func (svc *Service) RemovePeer(ctx context.Context, req *adminjson.PeerRequest) 
 func (svc *Service) ListPeers(ctx context.Context, req *adminjson.PeersRequest) (*adminjson.ListPeersResponse, *jsonrpc.Error) {
 	return &adminjson.ListPeersResponse{
 		Peers: svc.p2p.ListPeers(ctx),
+	}, nil
+}
+
+func (svc *Service) CreateResolution(ctx context.Context, req *adminjson.CreateResolutionRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
+	res := &transactions.CreateResolution{
+		Resolution: &transactions.VotableEvent{
+			Type: req.ResolutionType,
+			Body: req.Resolution,
+		},
+	}
+
+	return svc.sendTx(ctx, res)
+}
+
+func (svc *Service) ApproveResolution(ctx context.Context, req *adminjson.ApproveResolutionRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
+	res := &transactions.ApproveResolution{
+		ResolutionID: req.ResolutionID,
+	}
+
+	return svc.sendTx(ctx, res)
+}
+
+func (svc *Service) DeleteResolution(ctx context.Context, req *adminjson.DeleteResolutionRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
+	res := &transactions.DeleteResolution{
+		ResolutionID: req.ResolutionID,
+	}
+
+	return svc.sendTx(ctx, res)
+}
+
+func (svc *Service) ResolutionStatus(ctx context.Context, req *adminjson.ResolutionStatusRequest) (*adminjson.ResolutionStatusResponse, *jsonrpc.Error) {
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	uuid := req.ResolutionID
+	resolution, err := voting.GetResolutionInfo(ctx, readTx, uuid)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve resolution", nil)
+	}
+
+	// get the status of the resolution
+	expiresAt, board, approvals, err := voting.ResolutionStatus(ctx, readTx, resolution)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve resolution status", nil)
+	}
+
+	return &adminjson.ResolutionStatusResponse{
+		Status: &coretypes.PendingResolution{
+			ResolutionID: req.ResolutionID,
+			ExpiresAt:    expiresAt,
+			Board:        board,
+			Approved:     approvals,
+		},
 	}, nil
 }

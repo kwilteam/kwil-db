@@ -228,3 +228,55 @@ func (cl *Client) ListPeers(ctx context.Context) ([]string, error) {
 	}
 	return res.Peers, err
 }
+
+// Create Resolution broadcasts a resolution to the network.
+func (cl *Client) CreateResolution(ctx context.Context, resolution []byte, resolutionType string) ([]byte, error) {
+	cmd := &adminjson.CreateResolutionRequest{
+		Resolution:     resolution,
+		ResolutionType: resolutionType,
+	}
+	res := &userjson.BroadcastResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodCreateResolution), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res.TxHash, nil
+}
+
+// ApproveResolution approves a resolution.
+func (cl *Client) ApproveResolution(ctx context.Context, resolutionID *types.UUID) ([]byte, error) {
+	cmd := &adminjson.ApproveResolutionRequest{
+		ResolutionID: resolutionID,
+	}
+	res := &userjson.BroadcastResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodApproveResolution), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res.TxHash, nil
+}
+
+// DeleteResolution deletes a resolution.
+func (cl *Client) DeleteResolution(ctx context.Context, resolutionID *types.UUID) ([]byte, error) {
+	cmd := &adminjson.DeleteResolutionRequest{
+		ResolutionID: resolutionID,
+	}
+	res := &userjson.BroadcastResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodDeleteResolution), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res.TxHash, nil
+}
+
+func (cl *Client) ResolutionStatus(ctx context.Context, resolutionID *types.UUID) (*types.PendingResolution, error) {
+	cmd := &adminjson.ResolutionStatusRequest{
+		ResolutionID: resolutionID,
+	}
+	res := &adminjson.ResolutionStatusResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodResolutionStatus), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res.Status, nil
+}

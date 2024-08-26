@@ -87,12 +87,31 @@ func Spend(ctx context.Context, tx sql.Executor, account []byte, amount *big.Int
 	}
 
 	newBal := new(big.Int).Sub(acct.Balance, amount)
-	// if negative, spend the entire balance and increment the nonce
 	if newBal.Sign() < 0 {
 		return errInsufficientFunds(account, amount, acct.Balance)
 	}
 
 	return updateAccount(ctx, tx, account, newBal, nonce)
+}
+
+// ApplySpend spends an amount from an account. It blocks until the spend is written to the database.
+// This is used by the new nodes during migration to replicate spends from the old network to the new network.
+// If the account does not have enough funds to spend the amount, spend the entire balance.
+// Nonces on the new network take precedence over the old network, so the nonces are not checked.
+func ApplySpend(ctx context.Context, tx sql.Executor, account []byte, amount *big.Int, nonce int64) error {
+	acct, err := getAccount(ctx, tx, account)
+	if err != nil {
+		// Spends should not occur on accounts that do not exist during migration as credits are disabled.
+		return err
+	}
+
+	// If the balance is insufficient, spend the entire balance, else spend the amount
+	newBal := new(big.Int).Sub(acct.Balance, amount)
+	if newBal.Sign() < 0 {
+		newBal = big.NewInt(0)
+	}
+
+	return updateAccount(ctx, tx, account, newBal, acct.Nonce)
 }
 
 // Transfer transfers an amount from one account to another. If the from account does not have enough funds to transfer the amount,

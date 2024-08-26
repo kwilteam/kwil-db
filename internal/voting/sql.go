@@ -110,6 +110,9 @@ const (
 	// it is meant to be used in formatResolutionList
 	deleteResolutions = `DELETE FROM ` + votingSchemaName + `.resolutions WHERE id =ANY($1);` // $1 is a UUID[], unlike when using IN where you need a *list/set*
 
+	// deleteResolution deletes a resolution
+	deleteResolution = `DELETE FROM ` + votingSchemaName + `.resolutions WHERE id = $1;`
+
 	// createResolutionType creates a resolution type
 	createResolutionType = `INSERT INTO ` + votingSchemaName + `.resolution_types (id, name) VALUES ($1, $2)
 		ON CONFLICT(id) DO NOTHING;`
@@ -188,6 +191,9 @@ const (
 	INNER JOIN ` + votingSchemaName + `.resolution_types AS t ON r.type = t.id
 	WHERE t.name = $1 AND vote_body_proposer = $2
 	ORDER BY r.id;` // order by id for determinism
+
+	// resolutionExists checks if a resolution exists
+	resolutionExists = `SELECT id FROM ` + votingSchemaName + `.resolutions WHERE id = $1;`
 )
 
 // upgrades V0 -> V1

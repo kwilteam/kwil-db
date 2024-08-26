@@ -318,6 +318,12 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 			logicalMsg.Namespace, logicalMsg.RelationName)
 		relations[logicalMsg.RelationID] = logicalMsg
 
+		if !okSchema(logicalMsg.Namespace) {
+			// logger.Debugf("ignoring update to relation %v", relName)
+			break
+		}
+		changesetWriter.WriteNewRelation(logicalMsg)
+
 	case *pglogrepl.BeginMessage:
 		logger.Debugf(" [msg] Begin: LSN %v (%d)", logicalMsg.FinalLSN, uint64(logicalMsg.FinalLSN))
 		// Indicates the beginning of a group of changes in a transaction. This

@@ -136,6 +136,22 @@ func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableE
 	return tx.Commit(ctx)
 }
 
+// DeleteResolution deletes a resolution from the database by ID if it exists.
+func DeleteResolution(ctx context.Context, db sql.TxMaker, id *types.UUID) error {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Execute(ctx, deleteResolution, id[:])
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
 // fromRow converts a row from the database into a resolutions.Resolution
 // It expects there to be 7 columns in the row, in the following order:
 // id, body, type, expiration, approved_power, voters, voteBodyProposer
@@ -343,6 +359,16 @@ func GetResolutionIDsByTypeAndProposer(ctx context.Context, db sql.Executor, res
 	return ids, nil
 }
 
+// ResolutionExists checks if a resolution of the given ID exists.
+func ResolutionExists(ctx context.Context, db sql.Executor, id *types.UUID) (bool, error) {
+	res, err := db.Execute(ctx, resolutionExists, id[:])
+	if err != nil {
+		return false, err
+	}
+
+	return len(res.Rows) == 1, nil
+}
+
 // DeleteResolutions deletes a slice of resolution IDs from the database.
 // It will mark the resolutions as processed in the processed table.
 func DeleteResolutions(ctx context.Context, db sql.Executor, ids ...*types.UUID) error {
@@ -507,4 +533,38 @@ func intDivUpFraction(val, numerator, divisor int64) int64 {
 	tempNumerator := new(big.Int).Mul(numerBig, valBig)
 	tempNumerator.Add(tempNumerator, new(big.Int).Sub(divBig, big.NewInt(1)))
 	return new(big.Int).Div(tempNumerator, divBig).Int64()
+}
+
+func ResolutionStatus(ctx context.Context, db sql.DB, resolution *resolutions.Resolution) (expiresAt int64, board [][]byte, approvals []bool, err error) {
+	allVoters, err := GetValidators(ctx, db)
+	if err != nil {
+		return 0, nil, nil, fmt.Errorf("failed to retrieve voters")
+	}
+
+	// to create the board, we will take a list of all approvers and append the voters.
+	// we will then remove any duplicates the second time we see them.
+	// this will result with all approvers at the start of the list, and all voters at the end.
+	// finally, the approvals will be true for the length of the approvers, and false for found.length - voters.length
+	board = make([][]byte, 0, len(allVoters))
+	approvals = make([]bool, len(allVoters))
+	for i, v := range resolution.Voters {
+		board = append(board, v.PubKey)
+		approvals[i] = true
+	}
+	for _, v := range allVoters {
+		board = append(board, v.PubKey)
+	}
+
+	// we will now remove duplicates from the board.
+	found := make(map[string]struct{})
+	for i := 0; i < len(board); i++ {
+		if _, ok := found[string(board[i])]; ok {
+			board = append(board[:i], board[i+1:]...)
+			i--
+			continue
+		}
+		found[string(board[i])] = struct{}{}
+	}
+
+	return resolution.ExpirationHeight, board, approvals, nil
 }

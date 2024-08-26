@@ -19,6 +19,7 @@ import (
 	adminRpc "github.com/kwilteam/kwil-db/core/rpc/client/admin"
 	adminjson "github.com/kwilteam/kwil-db/core/rpc/client/admin/jsonrpc"
 	"github.com/kwilteam/kwil-db/core/rpc/transport"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils/url"
 )
@@ -49,6 +50,13 @@ type adminSvcClient interface {
 	Ping(ctx context.Context) (string, error)
 	// TxQuery queries a transaction by hash.
 	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)
+
+	// migration methods
+	ListMigrations(ctx context.Context) ([]*types.Migration, error)
+	GenesisState(ctx context.Context) (*types.MigrationMetadata, error)
+	GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error)
+	LoadChangeset(ctx context.Context, height int64, index int64) ([]byte, error)
+	ChangesetMetadata(ctx context.Context, height int64) (int64, []int64, error)
 }
 
 // defaultTransport constructs a new http.Transport that is equivalent to the

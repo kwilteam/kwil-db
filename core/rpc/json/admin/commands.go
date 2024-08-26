@@ -2,6 +2,8 @@
 // and response objects.
 package adminjson
 
+import "github.com/kwilteam/kwil-db/core/types"
+
 type StatusRequest struct{}
 type PeersRequest struct{}
 type GetConfigRequest struct{}
@@ -24,3 +26,20 @@ type PeerRequest struct {
 }
 
 type ListPeersRequest struct{}
+
+type CreateResolutionRequest struct {
+	Resolution     []byte `json:"resolution"`
+	ResolutionType string `json:"resolution_type"`
+}
+
+type ApproveResolutionRequest struct {
+	ResolutionID *types.UUID `json:"resolution_id"` // Id is the resolution ID
+}
+
+type DeleteResolutionRequest struct {
+	ResolutionID *types.UUID `json:"resolution_id"` // Id is the resolution ID
+}
+
+type ResolutionStatusRequest struct {
+	ResolutionID *types.UUID `json:"resolution_id"` // Id is the resolution ID
+}

@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/common/chain"
 
 	"github.com/spf13/cobra"
@@ -58,7 +59,7 @@ func createCmd() *cobra.Command {
 		Long:    createLongExplain,
 		Example: createExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			snapshotDir, err := expandPath(snapshotDir)
+			snapshotDir, err := common.ExpandPath(snapshotDir)
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to expand snapshot directory path: %v", err))
 			}
@@ -94,17 +95,6 @@ func (c *createSnapshotRes) MarshalJSON() ([]byte, error) {
 
 func (c *createSnapshotRes) MarshalText() (text []byte, err error) {
 	return []byte(fmt.Sprintf("Snapshot created successfully\n%s", strings.Join(c.Logs, "\n"))), nil
-}
-
-func expandPath(path string) (string, error) {
-	if strings.HasPrefix(path, "~") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		path = filepath.Join(home, path[2:])
-	}
-	return filepath.Abs(path)
 }
 
 // PGDump uses pg_dump to create a snapshot of the database.

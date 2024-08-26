@@ -90,3 +90,7 @@ type PeerResponse struct{}
 type ListPeersResponse struct {
 	Peers []string `json:"peers,omitempty"`
 }
+
+type ResolutionStatusResponse struct {
+	Status *types.PendingResolution `json:"status,omitempty"`
+}

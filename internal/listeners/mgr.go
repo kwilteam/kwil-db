@@ -8,6 +8,7 @@ import (
 	"time"
 
 	common "github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/listeners"
@@ -21,6 +22,7 @@ import (
 // It stops the running listeners when the node loses its validator status
 type ListenerManager struct {
 	config     map[string]map[string]string
+	genesisCfg *chain.GenesisConfig
 	eventStore *voting.EventStore
 	vstore     ValidatorGetter
 	cometNode  *cometbft.CometBftNode
@@ -38,10 +40,11 @@ type ValidatorGetter interface {
 	SubscribeValidators() <-chan []*types.Validator
 }
 
-func NewListenerManager(config map[string]map[string]string, eventStore *voting.EventStore,
+func NewListenerManager(config map[string]map[string]string, genesisCfg *chain.GenesisConfig, eventStore *voting.EventStore,
 	node *cometbft.CometBftNode, nodePubKey []byte, vstore ValidatorGetter, logger log.Logger) *ListenerManager {
 	return &ListenerManager{
 		config:     config,
+		genesisCfg: genesisCfg,
 		eventStore: eventStore,
 		vstore:     vstore,
 		cometNode:  node,
@@ -79,6 +82,7 @@ func (omgr *ListenerManager) Start() (err error) {
 					err := start(ctx2, &common.Service{
 						Logger:           omgr.logger.Named(name).Sugar(),
 						ExtensionConfigs: omgr.config,
+						GenesisConfig:    omgr.genesisCfg,
 					}, &scopedKVEventStore{
 						ev: omgr.eventStore,
 						// we add a space to prevent collisions in the KV

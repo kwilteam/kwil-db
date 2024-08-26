@@ -40,9 +40,10 @@ const (
 	CodeInvalidSender       TxCode = 9
 
 	// engine-related error code
-	CodeInvalidSchema  TxCode = 100
-	CodeDatasetMissing TxCode = 110
-	CodeDatasetExists  TxCode = 120
+	CodeInvalidSchema         TxCode = 100
+	CodeDatasetMissing        TxCode = 110
+	CodeDatasetExists         TxCode = 120
+	CodeInvalidResolutionType TxCode = 130
 
 	CodeNetworkInMigration TxCode = 200
 

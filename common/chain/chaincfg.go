@@ -74,6 +74,7 @@ type BaseConsensusParams struct {
 	Validator ValidatorParams `json:"validator"`
 	Votes     VoteParams      `json:"votes"`
 	ABCI      ABCIParams      `json:"abci"`
+	Migration MigrationParams `json:"migration"`
 }
 
 // ConsensusParams combines BaseConsensusParams with WithoutGasCosts.
@@ -125,6 +126,14 @@ type VersionParams struct {
 	App uint64 `json:"app"`
 }
 
+type MigrationParams struct {
+	// StartHeight is the height from which the state from the old chain is to be migrated.
+	StartHeight int64 `json:"start_height"`
+
+	// EndHeight is the height till which the state from the old chain is to be migrated.
+	EndHeight int64 `json:"end_height"`
+}
+
 func defaultConsensusParams() *ConsensusParams {
 	return &ConsensusParams{
 		BaseConsensusParams: BaseConsensusParams{
@@ -154,6 +163,10 @@ func defaultConsensusParams() *ConsensusParams {
 			ABCI: ABCIParams{
 				VoteExtensionsEnableHeight: 0, // disabled, needs coordinated upgrade to enable
 			},
+			Migration: MigrationParams{
+				StartHeight: -1, // not a zero-downtime migration
+				EndHeight:   -1,
+			},
 		},
 		WithoutGasCosts: true,
 	}
@@ -171,6 +184,7 @@ func DefaultGenesisConfig() *GenesisConfig {
 		DataAppHash:     nil,
 		Validators:      nil,
 		ConsensusParams: defaultConsensusParams(),
+		Alloc:           make(map[string]*big.Int),
 	}
 }
 

@@ -107,7 +107,7 @@ func (r *respValJoinStatus) MarshalText() ([]byte, error) {
 			approvedTerm = "not approved"
 		}
 
-		msg.WriteString(fmt.Sprintf("  Validator %x, %s\n",
+		msg.WriteString(fmt.Sprintf("Validator %x, %s\n",
 			r.Data.Board[i], approvedTerm))
 	}
 

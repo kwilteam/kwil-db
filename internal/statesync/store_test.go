@@ -18,7 +18,7 @@ func NewMockSnapshotter(dir string) *MockSnapshotter {
 	return &MockSnapshotter{snapshotDir: dir}
 }
 
-func (m *MockSnapshotter) CreateSnapshot(ctx context.Context, height uint64, snapshotID string) (*Snapshot, error) {
+func (m *MockSnapshotter) CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludeTables []string, excludeTableData []string) (*Snapshot, error) {
 	data := sha256.Sum256([]byte(snapshotID))
 
 	snapshot := &Snapshot{
@@ -91,7 +91,7 @@ func TestCreateSnapshots(t *testing.T) {
 	require.True(t, store.IsSnapshotDue(height))
 
 	// Create a snapshot
-	err = store.CreateSnapshot(ctx, height, "snapshot1")
+	err = store.CreateSnapshot(ctx, height, "snapshot1", nil, nil, nil)
 	require.NoError(t, err)
 
 	// List snapshots
@@ -102,7 +102,7 @@ func TestCreateSnapshots(t *testing.T) {
 
 	// Create 2nd snapshot
 	height = 2
-	err = store.CreateSnapshot(ctx, height, "snapshot2")
+	err = store.CreateSnapshot(ctx, height, "snapshot2", nil, nil, nil)
 	require.NoError(t, err)
 
 	// List snapshots
@@ -111,7 +111,7 @@ func TestCreateSnapshots(t *testing.T) {
 
 	// Create 3rd snapshot, should purge the snapshot with height 1
 	height = 3
-	err = store.CreateSnapshot(ctx, height, "snapshot3")
+	err = store.CreateSnapshot(ctx, height, "snapshot3", nil, nil, nil)
 	require.NoError(t, err)
 
 	// List snapshots
@@ -147,7 +147,7 @@ func TestRegisterSnapshot(t *testing.T) {
 
 	// Create a snapshot at height 1 through the snapshotter
 	height := uint64(1)
-	snapshot, err = store.snapshotter.CreateSnapshot(ctx, height, "snapshot1")
+	snapshot, err = store.snapshotter.CreateSnapshot(ctx, height, "snapshot1", nil, nil, nil)
 	require.NoError(t, err)
 
 	// Register the snapshot
@@ -155,7 +155,7 @@ func TestRegisterSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create another snapshot at height 1
-	snapshot2, err := store.snapshotter.CreateSnapshot(ctx, height, "snapshot1-2")
+	snapshot2, err := store.snapshotter.CreateSnapshot(ctx, height, "snapshot1-2", nil, nil, nil)
 	require.NoError(t, err)
 
 	// Register the snapshot, as snapshot already exists at the height, its a no-op
@@ -171,7 +171,7 @@ func TestRegisterSnapshot(t *testing.T) {
 
 	// Create a snapshot at height 2
 	height = 2
-	snapshot, err = store.snapshotter.CreateSnapshot(ctx, height, "snapshot2")
+	snapshot, err = store.snapshotter.CreateSnapshot(ctx, height, "snapshot2", nil, nil, nil)
 	require.NoError(t, err)
 
 	// Register the snapshot
@@ -184,7 +184,7 @@ func TestRegisterSnapshot(t *testing.T) {
 
 	// Create a snapshot at height 3
 	height = 3
-	snapshot, err = store.snapshotter.CreateSnapshot(ctx, height, "snapshot3")
+	snapshot, err = store.snapshotter.CreateSnapshot(ctx, height, "snapshot3", nil, nil, nil)
 	require.NoError(t, err)
 
 	// Register the snapshot
@@ -216,7 +216,7 @@ func TestLoadSnapshotChunk(t *testing.T) {
 
 	// Create a snapshot at height 1
 	height := uint64(1)
-	snapshot, err := snapshotter.CreateSnapshot(ctx, height, "snapshot1")
+	snapshot, err := snapshotter.CreateSnapshot(ctx, height, "snapshot1", nil, nil, nil)
 	require.NoError(t, err)
 
 	// Register the snapshot

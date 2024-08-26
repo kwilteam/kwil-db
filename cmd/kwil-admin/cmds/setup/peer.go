@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
@@ -30,7 +31,7 @@ func peerCmd() *cobra.Command {
 		Example: peerExample,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			expandedDir, err := expandPath(cfg.RootDir)
+			expandedDir, err := common.ExpandPath(cfg.RootDir)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -42,7 +43,7 @@ func peerCmd() *cobra.Command {
 
 			// if genesis path is given, copy it to the node directory
 			if genesisPath != "" {
-				genesisPath, err = expandPath(genesisPath)
+				genesisPath, err = common.ExpandPath(genesisPath)
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}

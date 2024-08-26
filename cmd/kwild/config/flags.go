@@ -47,6 +47,7 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	flagSet.StringVar(&cfg.AppCfg.Snapshots.SnapshotDir, "app.snapshots.snapshot-dir", cfg.AppCfg.Snapshots.SnapshotDir, "Snapshot directory path")
 
 	flagSet.StringVar(&cfg.AppCfg.GenesisState, "app.genesis-state", cfg.AppCfg.GenesisState, "Path to the genesis state file")
+	flagSet.StringVar(&cfg.AppCfg.MigrateFrom, "app.migrate-from", cfg.AppCfg.MigrateFrom, "kwild JSON-RPC listening address of the node to replicate the state from.")
 
 	// Basic Chain Config flags
 	flagSet.StringVar(&cfg.ChainCfg.Moniker, "chain.moniker", cfg.ChainCfg.Moniker, "Node moniker")

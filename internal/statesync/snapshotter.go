@@ -57,7 +57,7 @@ func NewSnapshotter(cfg *DBConfig, dir string, MaxRowSize int, logger log.Logger
 }
 
 // CreateSnapshot creates a snapshot at the given height and snapshotID
-func (s *Snapshotter) CreateSnapshot(ctx context.Context, height uint64, snapshotID string) (*Snapshot, error) {
+func (s *Snapshotter) CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludeTables []string, excludeTableData []string) (*Snapshot, error) {
 	// create snapshot directory
 	snapshotDir := snapshotHeightDir(s.snapshotDir, height)
 	chunkDir := snapshotChunkDir(s.snapshotDir, height, DefaultSnapshotFormat)
@@ -67,7 +67,7 @@ func (s *Snapshotter) CreateSnapshot(ctx context.Context, height uint64, snapsho
 	}
 
 	// Stage1: Dump the database at the given height and snapshot ID
-	err = s.dbSnapshot(ctx, height, DefaultSnapshotFormat, snapshotID)
+	err = s.dbSnapshot(ctx, height, DefaultSnapshotFormat, snapshotID, schemas, excludeTables, excludeTableData)
 	if err != nil {
 		os.RemoveAll(snapshotDir)
 		return nil, err
@@ -100,25 +100,28 @@ func (s *Snapshotter) CreateSnapshot(ctx context.Context, height uint64, snapsho
 // dbSnapshot is the STAGE1 of the snapshot creation process
 // It uses pg_dump to dump the database state at the given height and snapshotID
 // The pg dump is stored as "/stage1output.sql" in the snapshot directory
-// This is a temporary file and will be removed after the snapshot is created
-func (s *Snapshotter) dbSnapshot(ctx context.Context, height uint64, format uint32, snapshotID string) error {
+// This is a temporary file and will be removed after the snapshot is created.
+// The function takes the following parameters to specify what to include in the snapshot:
+// schemas: List of schemas to include in the snapshot
+// excludeTables: List of tables to exclude from the snapshot
+// excludeTableData: List of tables for which definitions should be included but not the data
+func (s *Snapshotter) dbSnapshot(ctx context.Context, height uint64, format uint32, snapshotID string, schemas, excludeTables []string, excludeTableData []string) error {
 	snapshotDir := snapshotFormatDir(s.snapshotDir, height, format)
 	dumpFile := filepath.Join(snapshotDir, stage1output)
 
-	pgDumpCmd := exec.CommandContext(ctx,
-		"pg_dump",
+	args := []string{
 		// File format options
-		"--dbname", s.dbConfig.DBName,
 		"--file", dumpFile,
 		"--format", "plain",
-		// List of schemas to include in the dump
-		"--schema", "kwild_voting",
-		"--schema", "kwild_chain",
-		"--schema", "kwild_accts",
-		"--schema", "kwild_internal",
-		"--schema", "ds_*",
-		// Tables to exclude from the dump
-		"-T", "kwild_internal.sentry",
+		// Snapshot ID ensures a consistent snapshot taken at the given block boundary across all nodes
+		"--dbname", s.dbConfig.DBName,
+		// Connection options
+		"-U", s.dbConfig.DBUser,
+		"-h", s.dbConfig.DBHost,
+		"-p", s.dbConfig.DBPort,
+		"--no-password",
+		// Snapshot options
+		"--snapshot", snapshotID,
 		// other sql dump specific options
 		"--no-unlogged-table-data",
 		"--no-comments",
@@ -131,14 +134,24 @@ func (s *Snapshotter) dbSnapshot(ctx context.Context, height uint64, format uint
 		"--no-subscriptions",
 		"--large-objects",
 		"--no-owner",
-		// Snapshot ID ensures a consistent snapshot taken at the given block boundary across all nodes
-		"--snapshot", snapshotID,
-		// Connection options
-		"-U", s.dbConfig.DBUser,
-		"-h", s.dbConfig.DBHost,
-		"-p", s.dbConfig.DBPort,
-		"--no-password",
-	)
+	}
+
+	// Schemas to include in the snapshot
+	for _, schema := range schemas {
+		args = append(args, "--schema", schema)
+	}
+
+	// Tables to exclude from the snapshot
+	for _, table := range excludeTables {
+		args = append(args, "-T", table)
+	}
+
+	// Tables for which defintions should be included but not the data
+	for _, table := range excludeTableData {
+		args = append(args, "--exclude-table-data", table)
+	}
+
+	pgDumpCmd := exec.CommandContext(ctx, "pg_dump", args...)
 
 	if s.dbConfig.DBPass != "" {
 		pgDumpCmd.Env = append(pgDumpCmd.Env, "PGPASSWORD="+s.dbConfig.DBPass)

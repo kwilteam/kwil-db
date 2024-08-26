@@ -24,8 +24,10 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/abci"             // errors from chainClient
 	"github.com/kwilteam/kwil-db/internal/engine/execution" // errors from engine
+	"github.com/kwilteam/kwil-db/internal/migrations"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/version"
+	"github.com/kwilteam/kwil-db/internal/voting"
 	"github.com/kwilteam/kwil-db/parse"
 )
 
@@ -39,6 +41,7 @@ type Service struct {
 	nodeApp     NodeApplication // so we don't have to do ABCIQuery (indirect)
 	chainClient BlockchainTransactor
 	pricer      Pricer
+	migrator    Migrator
 }
 
 type DB interface {
@@ -65,7 +68,7 @@ const defaultReadTxTimeout = 5 * time.Second
 
 // NewService creates a new instance of the user RPC service.
 func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
-	nodeApp NodeApplication, pricer Pricer, logger log.Logger, opts ...Opt) *Service {
+	nodeApp NodeApplication, pricer Pricer, migrator Migrator, logger log.Logger, opts ...Opt) *Service {
 	cfg := &serviceCfg{
 		readTxTimeout: defaultReadTxTimeout,
 	}
@@ -80,6 +83,7 @@ func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
 		pricer:        pricer,
 		chainClient:   chainClient,
 		db:            db,
+		migrator:      migrator,
 	}
 }
 
@@ -158,6 +162,28 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 			"query for the status of a transaction",
 			"the execution status of a transaction",
 		),
+
+		// Migration methods
+		userjson.MethodListMigrations: rpcserver.MakeMethodDef(svc.ListPendingMigrations,
+			"list active migration resolutions",
+			"the list of all the pending migration resolutions",
+		),
+		userjson.MethodLoadChangesetMetadata: rpcserver.MakeMethodDef(svc.LoadChangesetMetadata,
+			"get the changeset metadata for a given height",
+			"the changesets metadata for the given height",
+		),
+		userjson.MethodLoadChangeset: rpcserver.MakeMethodDef(svc.LoadChangeset,
+			"load a changeset for a given height and index",
+			"the changeset for the given height and index",
+		),
+		userjson.MethodMigrationMetadata: rpcserver.MakeMethodDef(svc.MigrationMetadata,
+			"get the migration information",
+			"the metadata for the given migration",
+		),
+		userjson.MethodMigrationGenesisChunk: rpcserver.MakeMethodDef(svc.MigrationGenesisChunk,
+			"get a genesis snapshot chunk of given idx",
+			"the genesis chunk for the given index",
+		),
 	}
 }
 
@@ -203,6 +229,13 @@ type NodeApplication interface {
 
 type Pricer interface {
 	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
+}
+
+type Migrator interface {
+	GetChangesetMetadata(height int64) (*migrations.ChangesetMetdata, error)
+	GetChangeset(height int64, index int64) ([]byte, error)
+	GetMigrationMetadata() (*types.MigrationMetadata, error)
+	GetGenesisSnapshotChunk(height int64, format uint32, chunkIdx uint32) ([]byte, error)
 }
 
 func (svc *Service) ChainInfo(ctx context.Context, req *userjson.ChainInfoRequest) (*userjson.ChainInfoResponse, *jsonrpc.Error) {
@@ -619,5 +652,80 @@ func (svc *Service) TxQuery(ctx context.Context, req *userjson.TxQueryRequest) (
 		Height:   cmtResult.Height,
 		Tx:       tx,
 		TxResult: txResult,
+	}, nil
+}
+
+func (svc *Service) LoadChangeset(ctx context.Context, req *userjson.ChangesetRequest) (*userjson.ChangesetsResponse, *jsonrpc.Error) {
+	bts, err := svc.migrator.GetChangeset(req.Height, req.Index)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load changesets", nil)
+	}
+
+	return &userjson.ChangesetsResponse{
+		Changesets: bts,
+	}, nil
+}
+
+func (svc *Service) LoadChangesetMetadata(ctx context.Context, req *userjson.ChangesetMetadataRequest) (*userjson.ChangesetMetadataResponse, *jsonrpc.Error) {
+	metadata, err := svc.migrator.GetChangesetMetadata(req.Height)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load changeset metadata", nil)
+	}
+
+	return &userjson.ChangesetMetadataResponse{
+		Height:     metadata.Height,
+		Changesets: metadata.Chunks,
+		ChunkSizes: metadata.ChunkSizes,
+	}, nil
+}
+
+func (svc *Service) MigrationMetadata(ctx context.Context, req *userjson.MigrationMetadataRequest) (*userjson.MigrationMetadataResponse, *jsonrpc.Error) {
+	metadata, err := svc.migrator.GetMigrationMetadata()
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, err.Error(), nil)
+	}
+
+	return &userjson.MigrationMetadataResponse{
+		Metadata: metadata,
+	}, nil
+}
+
+func (svc *Service) MigrationGenesisChunk(ctx context.Context, req *userjson.MigrationSnapshotChunkRequest) (*userjson.MigrationSnapshotChunkResponse, *jsonrpc.Error) {
+	bts, err := svc.migrator.GetGenesisSnapshotChunk(int64(req.Height), 0, req.ChunkIndex)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load genesis chunk", nil)
+	}
+
+	return &userjson.MigrationSnapshotChunkResponse{
+		Chunk: bts,
+	}, nil
+}
+
+func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.ListMigrationsRequest) (*userjson.ListMigrationsResponse, *jsonrpc.Error) {
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	resolutions, err := voting.GetResolutionsByType(ctx, readTx, migrations.StartMigrationEventType)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to get migration resolutions", nil)
+	}
+
+	var pendingMigrations []*types.Migration
+
+	for _, res := range resolutions {
+		mig := &migrations.MigrationDeclaration{}
+		if err := mig.UnmarshalBinary(res.Body); err != nil {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to unmarshal migration declaration", nil)
+		}
+		pendingMigrations = append(pendingMigrations, &types.Migration{
+			ID:               res.ID,
+			ActivationPeriod: (int64)(mig.ActivationPeriod),
+			Duration:         (int64)(mig.Duration),
+			ChainID:          mig.ChainID,
+		})
+	}
+
+	return &userjson.ListMigrationsResponse{
+		Migrations: pendingMigrations,
 	}, nil
 }

@@ -406,3 +406,23 @@ func (c *Client) WaitTx(ctx context.Context, txHash []byte, interval time.Durati
 func (c *Client) ChainID() string {
 	return c.chainID
 }
+
+func (c *Client) ListMigrations(ctx context.Context) ([]*types.Migration, error) {
+	return c.txClient.ListMigrations(ctx)
+}
+
+func (c *Client) LoadChangeset(ctx context.Context, height int64, index int64) ([]byte, error) {
+	return c.txClient.LoadChangeset(ctx, height, index)
+}
+
+func (c *Client) ChangesetMetadata(ctx context.Context, height int64) (numChangesets int64, chunkSizes []int64, err error) {
+	return c.txClient.ChangesetMetadata(ctx, height)
+}
+
+func (c *Client) GenesisState(ctx context.Context) (*types.MigrationMetadata, error) {
+	return c.txClient.GenesisState(ctx)
+}
+
+func (c *Client) GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error) {
+	return c.txClient.GenesisSnapshotChunk(ctx, height, chunkIdx)
+}

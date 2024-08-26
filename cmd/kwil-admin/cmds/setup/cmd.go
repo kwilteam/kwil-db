@@ -1,10 +1,6 @@
 package setup
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
-
 	"github.com/spf13/cobra"
 )
 
@@ -31,13 +27,13 @@ func NewSetupCmd() *cobra.Command {
 	return setupCmd
 }
 
-func expandPath(path string) (string, error) {
-	if strings.HasPrefix(path, "~") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		path = filepath.Join(home, path[2:])
-	}
-	return filepath.Abs(path)
-}
+// func expandPath(path string) (string, error) {
+// 	if strings.HasPrefix(path, "~") {
+// 		home, err := os.UserHomeDir()
+// 		if err != nil {
+// 			return "", err
+// 		}
+// 		path = filepath.Join(home, path[2:])
+// 	}
+// 	return filepath.Abs(path)
+// }
