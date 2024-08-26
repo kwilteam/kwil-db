@@ -77,6 +77,7 @@ type AppConfig struct {
 	DBName string `mapstructure:"pg_db_name"`
 
 	RPCTimeout         Duration                     `mapstructure:"rpc_timeout"`
+	RPCMaxReqSize      int                          `mapstructure:"rpc_req_limit"`
 	ReadTxTimeout      Duration                     `mapstructure:"db_read_timeout"`
 	ExtensionEndpoints []string                     `mapstructure:"extension_endpoints"`
 	AdminRPCPass       string                       `mapstructure:"admin_pass"`
@@ -563,6 +564,7 @@ func DefaultConfig() *KwildConfig {
 			DBUser:               "kwild",
 			DBName:               "kwild",
 			RPCTimeout:           Duration(45 * time.Second),
+			RPCMaxReqSize:        4_200_000,
 			ReadTxTimeout:        Duration(5 * time.Second),
 			Extensions:           make(map[string]map[string]string),
 			Snapshots: SnapshotConfig{
