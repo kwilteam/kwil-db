@@ -50,7 +50,7 @@ type TxApp interface {
 	Begin(ctx context.Context, height int64) error
 	Commit(ctx context.Context)
 	Execute(ctx txapp.TxContext, db sql.DB, tx *transactions.Transaction) *txapp.TxResponse
-	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators []*types.Validator, err error)
+	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators []*types.Validator, approvedJoins, expiredJoins [][]byte, err error)
 	GenesisInit(ctx context.Context, db sql.DB, validators []*types.Validator, genesisAccounts []*types.Account, initialHeight int64, chain *common.ChainContext) error
 	GetValidators(ctx context.Context, db sql.DB) ([]*types.Validator, error)
 	ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxTxsSize int64, block *common.BlockContext) ([][]byte, error)
@@ -77,4 +77,15 @@ type DB interface {
 	sql.PreparedTxMaker
 	sql.ReadTxMaker
 	sql.SnapshotTxMaker
+}
+
+// PeerModule is an interface that manages network peers.
+type WhitelistPeersModule interface {
+	// AddPeer adds a peer to the Peers object.
+	AddPeer(ctx context.Context, peer string) error
+	// RemovePeer removes a peer from the Peers object.
+	RemovePeer(ctx context.Context, peer string) error
+	// IsPeerWhitelisted checks if a peer is in the PeerWhitelist object.
+	// If private mode is distabled, it always returns true.
+	IsPeerWhitelisted(peer string) bool
 }

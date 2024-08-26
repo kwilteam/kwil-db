@@ -227,3 +227,29 @@ func (n *CometBftNode) Stop() error {
 func (n *CometBftNode) IsCatchup() bool {
 	return n.Node.ConsensusReactor().WaitSync()
 }
+
+func (n *CometBftNode) RemovePeer(nodeID string) error {
+	peerInfo := n.Node.Switch().Peers()
+	id := p2p.ID(nodeID)
+	peer := peerInfo.Get(id)
+	if peer == nil { // peer is not connected to this node, so nothing to do
+		n.Node.Logger.Info("peer is not connected", "peerID", nodeID)
+		return nil
+	}
+
+	n.Node.Switch().StopPeerGracefully(peer)
+	return nil
+}
+
+// PubkeyToAddr converts an Ed25519 public key as used to identify nodes in
+// CometBFT into an address, which for ed25519 in comet is an upper case
+// truncated sha256 hash of the pubkey. For secp256k1, they do like BTC with
+// RIPEMD160(SHA256(pubkey)).  If we support both (if either), we'll need a type
+// flag.
+func PubkeyToAddr(pubkey []byte) (string, error) {
+	if len(pubkey) != cometEd25519.PubKeySize {
+		return "", errors.New("invalid public key")
+	}
+	publicKey := cometEd25519.PubKey(pubkey)
+	return publicKey.Address().String(), nil
+}

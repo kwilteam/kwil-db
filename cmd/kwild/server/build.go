@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/tls"
@@ -171,6 +172,8 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	snapshotter := buildSnapshotter(d)
 	statesyncer := buildStatesyncer(d)
 
+	p2p := buildPeers(d, closers)
+
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
 	// in order to get this, we need the comet node
@@ -179,12 +182,15 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// but the tx router needs the cometbft client
 	txApp := buildTxApp(d, db, e, ev)
 
-	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer, closers)
+	abciApp := buildAbci(d, db, txApp, snapshotter, statesyncer, p2p, closers)
 
 	// NOTE: buildCometNode immediately starts talking to the abciApp and
 	// replaying blocks (and using atomic db tx commits), i.e. calling
 	// FinalizeBlock+Commit. This is not just a constructor, sadly.
 	cometBftNode := buildCometNode(d, closers, abciApp)
+
+	// Give abci p2p module access to removing peers
+	p2p.SetRemovePeerFn(cometBftNode.RemovePeer)
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 	wrappedCmtClient := &wrappedCometBFTClient{
@@ -216,7 +222,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	// admin service and server
 	signer := buildSigner(d)
-	jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, signer, d.cfg,
+	// TODO: db? should this be the same as the consensus db connection? As the updates can occur
+	// outside the block context. should be used similar to the event store.
+	jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, signer, p2p, d.cfg,
 		d.genesisCfg.ChainID, *d.log.Named("admin-json-svc"))
 	jsonRPCAdminServer := buildJRPCAdminServer(d)
 	jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)
@@ -328,7 +336,126 @@ func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext,
 	return txApp
 }
 
-func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, closers *closeFuncs) *abci.AbciApp {
+func buildPeers(d *coreDependencies, closers *closeFuncs) *cometbft.PeerWhiteList {
+	var whitelistPeers []string
+
+	db, err := d.poolOpener(d.ctx, d.cfg.AppCfg.DBName, 10)
+	if err != nil {
+		failBuild(err, "failed to build event store")
+	}
+	closers.addCloser(db.Close, "closing event store")
+
+	if d.cfg.ChainCfg.P2P.WhitelistPeers != "" {
+		whitelistPeers = strings.Split(d.cfg.ChainCfg.P2P.WhitelistPeers, ",")
+	}
+
+	// Load the validators from the database if the database is already initialized
+	// If the database is not initialized, the validators will be loaded from the genesis file
+	vals, err := voting.GetValidators(d.ctx, db)
+	if err != nil {
+		failBuild(err, "failed to load validators")
+	}
+	if len(vals) > 0 {
+		for _, v := range vals {
+			addr, err := cometbft.PubkeyToAddr(v.PubKey)
+			if err != nil {
+				failBuild(err, "failed to convert pubkey to address")
+			}
+			whitelistPeers = append(whitelistPeers, addr)
+		}
+	} else {
+		// Load the validators from the genesis file
+		for _, v := range d.genesisCfg.Validators {
+			addr, err := cometbft.PubkeyToAddr(v.PubKey)
+			if err != nil {
+				failBuild(err, "failed to convert pubkey to address")
+			}
+			whitelistPeers = append(whitelistPeers, addr)
+		}
+	}
+
+	nodePubKey := d.privKey.PubKey().Bytes()
+	nodeID, err := cometbft.PubkeyToAddr(nodePubKey)
+	if err != nil {
+		failBuild(err, "failed to convert pubkey to address")
+	}
+
+	// Add the nodes whose validator join requests have been approved by the node
+	// to the whitelist
+	approvedValidators, err := getPendingValidatorsApprovedByNode(d.ctx, db, d.privKey.PubKey().Bytes())
+	if err != nil {
+		failBuild(err, "failed to get approved validators")
+	}
+	for _, v := range approvedValidators {
+		addr, err := cometbft.PubkeyToAddr(v.PubKey)
+		if err != nil {
+			failBuild(err, "failed to convert pubkey to address")
+		}
+		whitelistPeers = append(whitelistPeers, addr)
+	}
+
+	// Add seeds and persistent peers to the whitelist
+	if d.cfg.ChainCfg.P2P.PersistentPeers != "" {
+		persistentPeers := strings.Split(d.cfg.ChainCfg.P2P.PersistentPeers, ",")
+		for _, p := range persistentPeers {
+			// split the persistent peer string into node ID and host:port
+			parts := strings.Split(p, "@")
+			if len(parts) != 2 {
+				failBuild(nil, "invalid persistent peer format")
+			}
+			whitelistPeers = append(whitelistPeers, parts[0])
+		}
+	}
+
+	if d.cfg.ChainCfg.P2P.Seeds != "" {
+		seeds := strings.Split(d.cfg.ChainCfg.P2P.Seeds, ",")
+		for _, s := range seeds {
+			// split the seed string into node ID and host:port
+			parts := strings.Split(s, "@")
+			if len(parts) != 2 {
+				failBuild(nil, "invalid seed format")
+			}
+			whitelistPeers = append(whitelistPeers, parts[0])
+		}
+	}
+
+	// Initialize the Peers with the whitelist peers.
+	peers, err := cometbft.P2PInit(d.ctx, db, d.cfg.ChainCfg.P2P.PrivateMode, whitelistPeers, nodeID)
+	if err != nil {
+		failBuild(err, "failed to initialize P2P store")
+	}
+
+	return peers
+}
+
+func getPendingValidatorsApprovedByNode(ctx context.Context, db sql.ReadTxMaker, pubKey []byte) ([]*types.Validator, error) {
+	readTx, err := db.BeginReadTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer readTx.Rollback(ctx)
+
+	// get the pending validators join resolutions
+	resolutions, err := voting.GetResolutionsByType(ctx, readTx, voting.ValidatorJoinEventType)
+	if err != nil {
+		return nil, err
+	}
+
+	var validators []*types.Validator
+
+	// get the pending validators remove resolutions
+	for _, res := range resolutions {
+		for _, voter := range res.Voters {
+			if bytes.Equal(voter.PubKey, pubKey) {
+				validators = append(validators, voter)
+			}
+		}
+	}
+
+	return validators, nil
+}
+
+func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, p2p *cometbft.PeerWhiteList, closers *closeFuncs) *abci.AbciApp {
 	var sh abci.SnapshotModule
 	if snapshotter != nil {
 		sh = snapshotter
@@ -348,7 +475,7 @@ func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *st
 		ForkHeights:        d.genesisCfg.ForkHeights,
 	}
 	app, err := abci.NewAbciApp(d.ctx, cfg, sh, ss, txApp,
-		d.genesisCfg.ConsensusParams, db, *d.log.Named("abci"))
+		d.genesisCfg.ConsensusParams, p2p, db, *d.log.Named("abci"))
 	if err != nil {
 		failBuild(err, "failed to build ABCI application")
 	}

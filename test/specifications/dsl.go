@@ -141,3 +141,11 @@ type DeployerDsl interface {
 type TxInfoer interface {
 	TxInfo(ctx context.Context, hash []byte) (*transactions.TcTxQueryResponse, error)
 }
+
+type PeersDsl interface {
+	ListPeers(ctx context.Context) ([]string, error)
+	AddPeer(ctx context.Context, peerID string) error
+	RemovePeer(ctx context.Context, peerID string) error
+
+	ConnectedPeers(ctx context.Context) ([]string, error)
+}

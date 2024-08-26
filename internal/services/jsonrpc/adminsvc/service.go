@@ -44,6 +44,15 @@ type Pricer interface {
 	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
 }
 
+type P2P interface {
+	// AddPeer adds a peer to the node's peer list and persists it.
+	AddAndPersistPeer(ctx context.Context, nodeID string) error
+	// RemovePeer removes a peer from the node's peer list permanently.
+	RemovePersistedPeer(ctx context.Context, nodeID string) error
+	// ListPeers returns the list of peers in the node's whitelist.
+	ListPeers(ctx context.Context) []string
+}
+
 type Service struct {
 	log log.Logger
 
@@ -51,6 +60,7 @@ type Service struct {
 	TxApp      TxApp
 	db         sql.DelayedReadTxMaker
 	pricer     Pricer
+	p2p        P2P
 
 	cfg     *config.KwildConfig
 	chainID string
@@ -116,6 +126,14 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		adminjson.MethodValRemove: rpcserver.MakeMethodDef(svc.Remove,
 			"vote to remote a validator",
 			"the hash of the broadcasted validator remove transaction"),
+		adminjson.MethodAddPeer: rpcserver.MakeMethodDef(svc.AddPeer,
+			"add a peer to the network", ""),
+		adminjson.MethodRemovePeer: rpcserver.MakeMethodDef(svc.RemovePeer,
+			"add a peer to the network",
+			""),
+		adminjson.MethodListPeers: rpcserver.MakeMethodDef(svc.ListPeers,
+			"list the peers from the node's whitelist",
+			"the list of peers from which the node can accept connections from."),
 	}
 }
 
@@ -128,7 +146,7 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 }
 
 // NewService constructs a new Service.
-func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, signer auth.Signer, cfg *config.KwildConfig,
+func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, signer auth.Signer, p2p P2P, cfg *config.KwildConfig,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,
@@ -136,6 +154,7 @@ func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txAp
 		signer:     signer,
 		chainID:    chainID,
 		pricer:     pricer,
+		p2p:        p2p,
 		cfg:        cfg,
 		log:        logger,
 		db:         db,
@@ -395,5 +414,29 @@ func (svc *Service) GetConfig(ctx context.Context, req *adminjson.GetConfigReque
 
 	return &adminjson.GetConfigResponse{
 		Config: bts,
+	}, nil
+}
+
+func (svc *Service) AddPeer(ctx context.Context, req *adminjson.PeerRequest) (*adminjson.PeerResponse, *jsonrpc.Error) {
+	err := svc.p2p.AddAndPersistPeer(ctx, req.PeerID)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to add a peer. Reason: "+err.Error(), nil)
+	}
+	return &adminjson.PeerResponse{}, nil
+}
+
+func (svc *Service) RemovePeer(ctx context.Context, req *adminjson.PeerRequest) (*adminjson.PeerResponse, *jsonrpc.Error) {
+	fmt.Println("RemovePeer : ", req.PeerID)
+	err := svc.p2p.RemovePersistedPeer(ctx, req.PeerID)
+	if err != nil {
+		svc.log.Error("failed to remove peer", zap.Error(err))
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to remove peer : "+err.Error(), nil)
+	}
+	return &adminjson.PeerResponse{}, nil
+}
+
+func (svc *Service) ListPeers(ctx context.Context, req *adminjson.PeersRequest) (*adminjson.ListPeersResponse, *jsonrpc.Error) {
+	return &adminjson.ListPeersResponse{
+		Peers: svc.p2p.ListPeers(ctx),
 	}, nil
 }

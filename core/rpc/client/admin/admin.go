@@ -22,4 +22,8 @@ type AdminClient interface {
 	// GetConfig gets the current config from the node.
 	// It returns the config serialized as JSON.
 	GetConfig(ctx context.Context) ([]byte, error)
+
+	AddPeer(ctx context.Context, peerID string) error
+	RemovePeer(ctx context.Context, peerID string) error
+	ListPeers(ctx context.Context) ([]string, error)
 }

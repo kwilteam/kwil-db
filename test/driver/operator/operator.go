@@ -6,4 +6,5 @@ import "github.com/kwilteam/kwil-db/test/specifications"
 type KwilOperatorDriver interface {
 	specifications.ValidatorOpsDsl // TODO: split into ValidatorJoinDsl, ValidatorApproveDsl, ValidatorLeaveDsl
 	specifications.ValidatorRemoveDsl
+	specifications.PeersDsl
 }

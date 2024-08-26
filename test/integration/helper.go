@@ -100,11 +100,13 @@ type IntTestConfig struct {
 	Allocs map[string]*big.Int
 	Forks  map[string]*uint64
 
-	NValidator    int
-	NNonValidator int
-	JoinExpiry    int64
-	VoteExpiry    int64
-	WithGas       bool
+	NValidator              int
+	NNonValidator           int
+	JoinExpiry              int64
+	VoteExpiry              int64
+	WithGas                 bool
+	PopulatePersistentPeers bool
+	PrivateMode             bool
 
 	// The following options are mutually exclusive, as they are used to use
 	// alternate docker images with kwild variants with differnet extensions.
@@ -162,6 +164,8 @@ func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 				MaxSnapshots:    3,
 				RecurringHeight: 10,
 			},
+			PopulatePersistentPeers: true,
+			PrivateMode:             false,
 		},
 		envs: make(map[string]string),
 	}
@@ -176,6 +180,12 @@ func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 }
 
 type HelperOpt func(*IntHelper)
+
+func WithAdminRPC(addr string) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.AdminRPC = addr
+	}
+}
 
 func WithBlockInterval(d time.Duration) HelperOpt {
 	return func(r *IntHelper) {
@@ -286,6 +296,18 @@ func WithRecurringHeight(heights uint64) HelperOpt {
 	}
 }
 
+func PopulatePersistentPeers(populate bool) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.PopulatePersistentPeers = populate
+	}
+}
+
+func WithPrivateMode() HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.PrivateMode = true
+	}
+}
+
 // LoadConfig loads config from system env and .env file.
 // Envs defined in envFile will not overwrite existing env vars.
 func (r *IntHelper) LoadConfig() {
@@ -320,6 +342,9 @@ func (r *IntHelper) LoadConfig() {
 	// Overwritten using helperOpts
 	r.cfg.VoteExpiry = 14400
 	r.cfg.JoinExpiry = 14400
+	r.cfg.PopulatePersistentPeers = true
+	r.cfg.PrivateMode = false
+	r.cfg.AdminRPC = "/tmp/admin.socket"
 }
 
 func (r *IntHelper) Config() *IntTestConfig {
@@ -379,15 +404,19 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 	err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
 		ChainID:       testChainID,
 		BlockInterval: r.cfg.BlockInterval,
+		AdminAddress:  r.cfg.AdminRPC,
+		AdminNoTLS:    true,
 		// InitialHeight:           0,
 		NValidators:             r.cfg.NValidator,
 		NNonValidators:          r.cfg.NNonValidator,
 		ConfigFile:              "",
 		OutputDir:               homeDir,
 		NodeDirPrefix:           "node",
-		PopulatePersistentPeers: true,
+		PopulatePersistentPeers: r.cfg.PopulatePersistentPeers,
 		HostnamePrefix:          "kwil-",
 		HostnameSuffix:          "",
+		PrivateMode:             r.cfg.PrivateMode,
+
 		// use this to ease the process running test parallel
 		// NOTE: need to match docker-compose kwild service name
 		DnsNamePrefix:     "node",
@@ -872,4 +901,12 @@ func (r *IntHelper) NodeKeys() map[string]ed25519.PrivKey {
 
 func (r *IntHelper) ServiceContainer(name string) *testcontainers.DockerContainer {
 	return r.containers[name]
+}
+
+func (r *IntHelper) NodeIDs() map[string]string {
+	nodeIDs := make(map[string]string)
+	for name, key := range r.privateKeys {
+		nodeIDs[name] = hex.EncodeToString(key.PubKey().Address())
+	}
+	return nodeIDs
 }

@@ -68,6 +68,7 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 		nodeCfg.Moniker = userChainCfg.Moniker
 	}
 
+	nodeCfg.FilterPeers = true
 	nodeCfg.RPC.ListenAddress = cleanListenAddr(userChainCfg.RPC.ListenAddress,
 		portFromURL(nodeCfg.RPC.ListenAddress))
 	nodeCfg.RPC.TLSCertFile = cfg.AppCfg.TLSCertFile

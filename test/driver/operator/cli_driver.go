@@ -9,6 +9,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/core/types"
+	admintypes "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/test/driver"
 )
 
@@ -132,6 +133,39 @@ func (o *OperatorCLIDriver) ValidatorsList(ctx context.Context) ([]*types.Valida
 	}
 
 	return res, nil
+}
+
+func (o *OperatorCLIDriver) AddPeer(ctx context.Context, peerID string) error {
+	var peer string
+	return o.runCommand(ctx, &peer, "peers", "add", peerID)
+}
+
+func (o *OperatorCLIDriver) RemovePeer(ctx context.Context, peerID string) error {
+	var peer string
+	return o.runCommand(ctx, &peer, "peers", "remove", peerID)
+}
+
+func (o *OperatorCLIDriver) ListPeers(ctx context.Context) ([]string, error) {
+	var res []string
+	err := o.runCommand(ctx, &res, "peers", "list")
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (o *OperatorCLIDriver) ConnectedPeers(ctx context.Context) ([]string, error) {
+	var res []*admintypes.PeerInfo
+	err := o.runCommand(ctx, &res, "node", "peers")
+	if err != nil {
+		return nil, err
+	}
+
+	var peers []string
+	for _, p := range res {
+		peers = append(peers, p.RemoteAddr)
+	}
+	return peers, nil
 }
 
 type cliResponse struct {

@@ -57,3 +57,29 @@ func (a *AdminClientDriver) ValidatorNodeRemove(ctx context.Context, target []by
 func (a *AdminClientDriver) ValidatorsList(ctx context.Context) ([]*types.Validator, error) {
 	return a.Client.ListValidators(ctx)
 }
+
+func (a *AdminClientDriver) AddPeer(ctx context.Context, peerID string) error {
+	return a.Client.AddPeer(ctx, peerID)
+}
+
+func (a *AdminClientDriver) ListPeers(ctx context.Context) ([]string, error) {
+	return a.Client.ListPeers(ctx)
+}
+
+func (a *AdminClientDriver) RemovePeer(ctx context.Context, peerID string) error {
+	return a.Client.RemovePeer(ctx, peerID)
+}
+
+func (a *AdminClientDriver) ConnectedPeers(ctx context.Context) ([]string, error) {
+	peersInfo, err := a.Client.Peers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	peers := make([]string, 0, len(peersInfo))
+	for _, peer := range peersInfo {
+		peers = append(peers, peer.RemoteAddr)
+	}
+
+	return peers, nil
+}
