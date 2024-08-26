@@ -35,6 +35,7 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	flagSet.StringVar(&cfg.AppCfg.ProfileFile, "app.profile-file", cfg.AppCfg.ProfileFile, "kwild profile output file path (e.g. cpu.pprof)")
 
 	flagSet.Var(&cfg.AppCfg.RPCTimeout, "app.rpc-timeout", "timeout for RPC requests (through reading the request, handling the request, and sending the response)")
+	flagSet.IntVar(&cfg.AppCfg.RPCMaxReqSize, "app.rpc-req-limit", cfg.AppCfg.RPCMaxReqSize, "RPC request size limit")
 	flagSet.Var(&cfg.AppCfg.ReadTxTimeout, "app.db-read-timeout", "timeout for database reads initiated by RPC requests")
 
 	// Extension endpoints flags

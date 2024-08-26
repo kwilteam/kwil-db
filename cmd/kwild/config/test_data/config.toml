@@ -43,6 +43,9 @@ rpc_timeout = "45s"
 # Timeout on database reads initiated by the user RPC service
 db_read_timeout = "5s"
 
+# RPC request size limit in bytes
+rpc_req_limit = 4200000
+
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = ["localhost:50052", "localhost:50053", "localhost:50054"]
 
