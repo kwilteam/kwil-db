@@ -119,6 +119,9 @@ rpc_timeout = "{{ .AppCfg.RPCTimeout }}"
 # Timeout on database reads initiated by the user RPC service
 db_read_timeout = "{{ .AppCfg.ReadTxTimeout }}"
 
+# RPC request size limit in bytes
+rpc_req_limit = {{ .AppCfg.RPCMaxReqSize }}
+
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = {{arrayFormatter .AppCfg.ExtensionEndpoints}}
 
