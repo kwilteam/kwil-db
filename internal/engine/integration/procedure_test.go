@@ -281,7 +281,8 @@ func Test_Procedures(t *testing.T) {
 		},
 		{
 			name: "sum",
-			procedure: `procedure sum() public view returns (sum decimal(1000,0)) {
+			// cannot use duplicate function names, so we use sum2
+			procedure: `procedure sum2() public view returns (sum decimal(1000,0)) {
 				for $row in select sum(user_num) as s from users {
 					return $row.s;
 				}
