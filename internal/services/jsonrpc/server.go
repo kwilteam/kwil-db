@@ -53,6 +53,7 @@ type serverConfig struct {
 	timeout    time.Duration
 	enableCORS bool
 	specInfo   *openrpc.Info
+	reqSzLimit int
 }
 
 type Opt func(*serverConfig)
@@ -80,6 +81,13 @@ func WithTLS(cfg *tls.Config) Opt {
 func WithServerInfo(specInfo *openrpc.Info) Opt {
 	return func(c *serverConfig) {
 		c.specInfo = specInfo
+	}
+}
+
+// WithReqSizeLimit sets the request size limit in bytes.
+func WithReqSizeLimit(sz int) Opt {
+	return func(c *serverConfig) {
+		c.reqSzLimit = sz
 	}
 }
 
@@ -124,8 +132,12 @@ func checkAddr(addr string) (string, bool, error) {
 	return net.JoinHostPort(host, port), false, nil
 }
 
-// defaultWriteTimeout is the default WriteTimeout for the http.Server.
-const defaultWriteTimeout = 45 * time.Second
+const (
+	// defaultWriteTimeout is the default WriteTimeout for the http.Server.
+	defaultWriteTimeout = 45 * time.Second
+	// 4 MiB + overhead request size limit
+	defaultSzLimit = 1<<22 + 1<<14
+)
 
 var (
 	defaultSpecInfo = &openrpc.Info{
@@ -160,8 +172,9 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	}
 
 	cfg := &serverConfig{
-		timeout:  defaultWriteTimeout,
-		specInfo: defaultSpecInfo,
+		timeout:    defaultWriteTimeout,
+		specInfo:   defaultSpecInfo,
+		reqSzLimit: defaultSzLimit,
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -202,7 +215,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 
 	var h http.Handler
 	h = http.HandlerFunc(s.handlerV1)
-	h = http.MaxBytesHandler(h, 1<<22)
+	h = http.MaxBytesHandler(h, int64(cfg.reqSzLimit))
 	// amazingly, exceeding the server's write timeout does not cancel request
 	// contexts: https://github.com/golang/go/issues/59602
 	// So, we add a timeout to the Request's context.
@@ -385,9 +398,6 @@ func (s *Server) ServeOn(ctx context.Context, ln net.Listener) error {
 	return err
 }
 
-// 4 MiB request size limit
-const szLimit = 1 << 22
-
 // handlerV1 handles all https json requests. It is the http.Handler for the
 // JSON-RPC service mounted on the "/rpc/v1" endpoint. The endpoint is the same
 // for all methods since this is JSON-RPC with a "method" field of the JSON
@@ -413,8 +423,7 @@ func (s *Server) handlerV1(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	bodyReader := http.MaxBytesReader(w, r.Body, szLimit)
-	body, err := io.ReadAll(bodyReader)
+	body, err := io.ReadAll(r.Body)
 	r.Body.Close()
 	if err != nil {
 		http.Error(w, "error reading request body", http.StatusBadRequest)
