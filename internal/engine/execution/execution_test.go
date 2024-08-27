@@ -30,10 +30,11 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				assert.NoError(t, err)
 
@@ -49,20 +50,22 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				assert.NoError(t, err)
 
 				_, ok := db.dbs[testdata.TestSchema.DBID()]
 				assert.True(t, ok)
 
-				err = eng.DeleteDataset(ctx, db, testdata.TestSchema.DBID(), &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid2",
+				err = eng.DeleteDataset(ctx, db, testdata.TestSchema.DBID(), &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid2",
 				})
 				assert.NoError(t, err)
 
@@ -76,17 +79,19 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				assert.NoError(t, err)
 
-				err = eng.DeleteDataset(ctx, db, testdata.TestSchema.DBID(), &common.TransactionData{
-					Signer: []byte("not_owner"),
-					Caller: "not_owner",
-					TxID:   "txid1",
+				err = eng.DeleteDataset(ctx, db, testdata.TestSchema.DBID(), &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       []byte("not_owner"),
+					Caller:       "not_owner",
+					TxID:         "txid1",
 				})
 				assert.Error(t, err)
 			},
@@ -97,10 +102,11 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.DeleteDataset(ctx, db, "not_a_real_db", &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid2",
+				err := eng.DeleteDataset(ctx, db, "not_a_real_db", &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid2",
 				})
 				assert.Error(t, err)
 			},
@@ -111,10 +117,11 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				assert.NoError(t, err)
 
@@ -122,10 +129,11 @@ func Test_Execution(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: "create_user",
 					Args:      []any{1, "brennan", 22},
-					TransactionData: common.TransactionData{
-						Signer: testdata.TestSchema.Owner,
-						Caller: string(testdata.TestSchema.Owner),
-						TxID:   "txid2",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       testdata.TestSchema.Owner,
+						Caller:       string(testdata.TestSchema.Owner),
+						TxID:         "txid2",
 					},
 				})
 				assert.NoError(t, err)
@@ -137,10 +145,11 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				assert.NoError(t, err)
 
@@ -148,10 +157,11 @@ func Test_Execution(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: "create_user",
 					Args:      []any{1, "brennan"}, // missing age
-					TransactionData: common.TransactionData{
-						Signer: testdata.TestSchema.Owner,
-						Caller: string(testdata.TestSchema.Owner),
-						TxID:   "txid2",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       testdata.TestSchema.Owner,
+						Caller:       string(testdata.TestSchema.Owner),
+						TxID:         "txid2",
 					},
 				})
 				assert.Error(t, err)
@@ -163,10 +173,11 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				assert.NoError(t, err)
 
@@ -174,10 +185,11 @@ func Test_Execution(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionRecursive.Name,
 					Args:      []any{"id000000", "asdfasdfasdfasdf", "bigbigbigbigbigbigbigbigbigbig"},
-					TransactionData: common.TransactionData{
-						Signer: testdata.TestSchema.Owner,
-						Caller: string(testdata.TestSchema.Owner),
-						TxID:   "txid2",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       testdata.TestSchema.Owner,
+						Caller:       string(testdata.TestSchema.Owner),
+						TxID:         "txid2",
 					},
 				})
 				assert.ErrorIs(t, err, ErrMaxStackDepth)
@@ -189,10 +201,11 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				assert.NoError(t, err)
 
@@ -200,10 +213,11 @@ func Test_Execution(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionRecursiveSneakyA.Name,
 					Args:      []any{},
-					TransactionData: common.TransactionData{
-						Signer: testdata.TestSchema.Owner,
-						Caller: string(testdata.TestSchema.Owner),
-						TxID:   "txid2",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       testdata.TestSchema.Owner,
+						Caller:       string(testdata.TestSchema.Owner),
+						TxID:         "txid2",
 					},
 				})
 				assert.ErrorIs(t, err, ErrMaxStackDepth)
@@ -215,10 +229,11 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				assert.NoError(t, err)
 
@@ -228,10 +243,11 @@ func Test_Execution(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: "create_user",
 					Args:      []any{1, "brennan", 22},
-					TransactionData: common.TransactionData{
-						Signer: testdata.TestSchema.Owner,
-						Caller: string(testdata.TestSchema.Owner),
-						TxID:   "txid2",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       testdata.TestSchema.Owner,
+						Caller:       string(testdata.TestSchema.Owner),
+						TxID:         "txid2",
 					},
 				})
 				assert.Error(t, err)
@@ -241,10 +257,11 @@ func Test_Execution(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: "get_user_by_address",
 					Args:      []any{"address"},
-					TransactionData: common.TransactionData{
-						Signer: testdata.TestSchema.Owner,
-						Caller: string(testdata.TestSchema.Owner),
-						TxID:   "txid3",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       testdata.TestSchema.Owner,
+						Caller:       string(testdata.TestSchema.Owner),
+						TxID:         "txid3",
 					},
 				})
 				assert.NoError(t, err)
@@ -256,10 +273,11 @@ func Test_Execution(t *testing.T) {
 				ctx := context.Background()
 				db := newDB(false)
 
-				err := eng.CreateDataset(ctx, db, testSchema, &common.TransactionData{
-					Signer: testSchema.Owner,
-					Caller: string(testSchema.Owner),
-					TxID:   "txid1",
+				err := eng.CreateDataset(ctx, db, testSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testSchema.Owner,
+					Caller:       string(testSchema.Owner),
+					TxID:         "txid1",
 				})
 				assert.NoError(t, err)
 
@@ -267,9 +285,10 @@ func Test_Execution(t *testing.T) {
 					Dataset:   testSchema.DBID(),
 					Procedure: "use_math",
 					Args:      []any{1, 2},
-					TransactionData: common.TransactionData{
-						Signer: testSchema.Owner,
-						Caller: string(testSchema.Owner),
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       testSchema.Owner,
+						Caller:       string(testSchema.Owner),
 						// no txid since it is non-mutative
 					},
 				})
@@ -281,10 +300,11 @@ func Test_Execution(t *testing.T) {
 					Dataset:   testSchema.DBID(),
 					Procedure: "use_math",
 					Args:      []any{1, 2},
-					TransactionData: common.TransactionData{
-						Signer: testSchema.Owner,
-						Caller: string(testSchema.Owner),
-						TxID:   "txid3",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       testSchema.Owner,
+						Caller:       string(testSchema.Owner),
+						TxID:         "txid3",
 					},
 				})
 				assert.NoError(t, err)
@@ -298,10 +318,11 @@ func Test_Execution(t *testing.T) {
 
 				owner := "owner"
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: []byte(owner),
-					Caller: owner,
-					TxID:   "txid1",
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       []byte(owner),
+					Caller:       owner,
+					TxID:         "txid1",
 				})
 				assert.NoError(t, err)
 
@@ -324,10 +345,11 @@ func Test_Execution(t *testing.T) {
 
 				owner := "owner"
 
-				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TransactionData{
-					Signer: []byte(owner),
-					Caller: owner,
-					TxID:   "txid1",
+				err := eng.CreateDataset(ctx, db, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       []byte(owner),
+					Caller:       owner,
+					TxID:         "txid1",
 				})
 				assert.NoError(t, err)
 
@@ -335,9 +357,10 @@ func Test_Execution(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcGetUsersByAge.Name,
 					Args:      []any{22},
-					TransactionData: common.TransactionData{
-						Signer: []byte(owner),
-						Caller: owner,
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte(owner),
+						Caller:       owner,
 					},
 				})
 				assert.NoError(t, err)

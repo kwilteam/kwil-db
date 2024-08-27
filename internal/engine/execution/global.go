@@ -187,7 +187,7 @@ func (g *GlobalContext) Reload(ctx context.Context, db sql.Executor) error {
 
 // CreateDataset deploys a schema.
 // It will create the requisite tables, and perform the required initializations.
-func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, txdata *common.TransactionData) (err error) {
+func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, txdata *common.TxContext) (err error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -215,7 +215,7 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *ty
 
 // DeleteDataset deletes a dataset.
 // It will ensure that the caller is the owner of the dataset.
-func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid string, txdata *common.TransactionData) error {
+func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid string, txdata *common.TxContext) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -257,12 +257,9 @@ func (g *GlobalContext) Procedure(ctx context.Context, tx sql.DB, options *commo
 
 	procedureCtx := &precompiles.ProcedureContext{
 		Ctx:       ctx,
-		Signer:    options.Signer,
-		Caller:    options.Caller,
+		TxCtx:     options.TxCtx,
 		DBID:      options.Dataset,
 		Procedure: options.Procedure,
-		TxID:      options.TxID,
-		Height:    options.Height,
 		// starting with stack depth 0, increment in each action call
 	}
 
@@ -335,20 +332,6 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 		return nil, ErrDatasetNotFound
 	}
 
-	// errLis := parseTypes.NewErrorListener()
-
-	// // We have to parse the query and ensure the dbid is used to derive schema.
-	// // OR do we permit (or require) the schema to be specified in the query? It
-	// // could go either way, but this ad hoc query function is questionable anyway.
-	// parsed, err := sqlanalyzer.ApplyRules(query,
-	// 	sqlanalyzer.AllRules,
-	// 	dataset.schema, dbidSchema(dbid), errLis)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// if errLis.Err() != nil {
-	// 	return nil, errLis.Err()
-	// }
 	res, err := parse.ParseSQL(query, dataset.schema, false)
 	if err != nil {
 		return nil, err

@@ -47,46 +47,46 @@ func Test_Schemas(t *testing.T) {
 
 				// create user
 				_, err := global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:         usersDBID,
-					Procedure:       "create_user",
-					Args:            []any{"satoshi"},
-					TransactionData: txData(),
+					Dataset:   usersDBID,
+					Procedure: "create_user",
+					Args:      []any{"satoshi"},
+					TxCtx:     txData(),
 				})
 				require.NoError(t, err)
 
 				// make a post
 				_, err = global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:         socialDBID,
-					Procedure:       "create_post",
-					Args:            []any{"hello world"},
-					TransactionData: txData(),
+					Dataset:   socialDBID,
+					Procedure: "create_post",
+					Args:      []any{"hello world"},
+					TxCtx:     txData(),
 				})
 				require.NoError(t, err)
 
 				// make another post
 				_, err = global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:         socialDBID,
-					Procedure:       "create_post",
-					Args:            []any{"goodbye world"},
-					TransactionData: txData(),
+					Dataset:   socialDBID,
+					Procedure: "create_post",
+					Args:      []any{"goodbye world"},
+					TxCtx:     txData(),
 				})
 				require.NoError(t, err)
 
 				// make one more large post
 				_, err = global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:         socialDBID,
-					Procedure:       "create_post",
-					Args:            []any{"this is a longer post than the others`"},
-					TransactionData: txData(),
+					Dataset:   socialDBID,
+					Procedure: "create_post",
+					Args:      []any{"this is a longer post than the others`"},
+					TxCtx:     txData(),
 				})
 				require.NoError(t, err)
 
 				// get posts using get_recent_posts
 				res, err := global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:         socialDBID,
-					Procedure:       "get_recent_posts",
-					Args:            []any{"satoshi"},
-					TransactionData: txData(),
+					Dataset:   socialDBID,
+					Procedure: "get_recent_posts",
+					Args:      []any{"satoshi"},
+					TxCtx:     txData(),
 				})
 				require.NoError(t, err)
 
@@ -104,10 +104,10 @@ func Test_Schemas(t *testing.T) {
 
 				// use get_recent_posts_by_size to only get posts larger than 20 characters
 				res, err = global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:         socialDBID,
-					Procedure:       "get_recent_posts_by_size",
-					Args:            []any{"satoshi", 20, 10}, // takes username, size, limit
-					TransactionData: txData(),
+					Dataset:   socialDBID,
+					Procedure: "get_recent_posts_by_size",
+					Args:      []any{"satoshi", 20, 10}, // takes username, size, limit
+					TxCtx:     txData(),
 				})
 				require.NoError(t, err)
 
@@ -133,28 +133,28 @@ func Test_Schemas(t *testing.T) {
 
 				// create user
 				_, err := global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:         usersDBID,
-					Procedure:       "create_user",
-					Args:            []any{"satoshi"},
-					TransactionData: txData(),
+					Dataset:   usersDBID,
+					Procedure: "create_user",
+					Args:      []any{"satoshi"},
+					TxCtx:     txData(),
 				})
 				require.NoError(t, err)
 
 				// set the user's high score
 				_, err = global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:         gameDBID,
-					Procedure:       "set_high_score",
-					Args:            []any{100},
-					TransactionData: txData(),
+					Dataset:   gameDBID,
+					Procedure: "set_high_score",
+					Args:      []any{100},
+					TxCtx:     txData(),
 				})
 				require.NoError(t, err)
 
 				// get the user's high score
 				res, err := global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:         gameDBID,
-					Procedure:       "get_high_score",
-					Args:            []any{"satoshi"},
-					TransactionData: txData(),
+					Dataset:   gameDBID,
+					Procedure: "get_high_score",
+					Args:      []any{"satoshi"},
+					TxCtx:     txData(),
 				})
 				require.NoError(t, err)
 
@@ -177,19 +177,19 @@ func Test_Schemas(t *testing.T) {
 				// create user. we do this in the social_media db to ensure the
 				// procedure can write to a foreign dataset
 				_, err := global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:         social_media,
-					Procedure:       "create_user",
-					Args:            []any{"satoshi"},
-					TransactionData: txData(),
+					Dataset:   social_media,
+					Procedure: "create_user",
+					Args:      []any{"satoshi"},
+					TxCtx:     txData(),
 				})
 				require.NoError(t, err)
 
 				// get the user by name
 				res, err := global.Procedure(ctx, db, &common.ExecutionData{
-					Dataset:         usersDBID,
-					Procedure:       "get_user_by_name",
-					Args:            []any{"satoshi"},
-					TransactionData: txData(),
+					Dataset:   usersDBID,
+					Procedure: "get_user_by_name",
+					Args:      []any{"satoshi"},
+					TxCtx:     txData(),
 				})
 				require.NoError(t, err)
 
@@ -248,7 +248,7 @@ func deployAllSchemas(t *testing.T, global *execution.GlobalContext, db sql.DB) 
 		require.NoError(t, err)
 
 		transactionData := txData()
-		err = global.CreateDataset(ctx, db, schema, &transactionData)
+		err = global.CreateDataset(ctx, db, schema, transactionData)
 		require.NoError(t, err)
 	}
 
@@ -278,26 +278,26 @@ func deployAllSchemas(t *testing.T, global *execution.GlobalContext, db sql.DB) 
 	// - userbyowner: the procedure to get a user by owner
 	for _, dbid := range []string{socialMedia, videoGame} {
 		_, err := global.Procedure(ctx, db, &common.ExecutionData{
-			Dataset:         dbid,
-			Procedure:       "admin_set",
-			Args:            []any{"dbid", users},
-			TransactionData: txData(),
+			Dataset:   dbid,
+			Procedure: "admin_set",
+			Args:      []any{"dbid", users},
+			TxCtx:     txData(),
 		})
 		require.NoError(t, err)
 
 		_, err = global.Procedure(ctx, db, &common.ExecutionData{
-			Dataset:         dbid,
-			Procedure:       "admin_set",
-			Args:            []any{"userbyname", "get_user_by_name"},
-			TransactionData: txData(),
+			Dataset:   dbid,
+			Procedure: "admin_set",
+			Args:      []any{"userbyname", "get_user_by_name"},
+			TxCtx:     txData(),
 		})
 		require.NoError(t, err)
 
 		_, err = global.Procedure(ctx, db, &common.ExecutionData{
-			Dataset:         dbid,
-			Procedure:       "admin_set",
-			Args:            []any{"userbyowner", "get_user_by_owner"},
-			TransactionData: txData(),
+			Dataset:   dbid,
+			Procedure: "admin_set",
+			Args:      []any{"userbyowner", "get_user_by_owner"},
+			TxCtx:     txData(),
 		})
 		require.NoError(t, err)
 	}
@@ -313,11 +313,12 @@ func nextTxID() string {
 	return fmt.Sprintf("tx_%d", txCounter)
 }
 
-// txData returns a common.TransactionData with the owner as the signer and caller.
-func txData() common.TransactionData {
-	return common.TransactionData{
-		Signer: owner,
-		Caller: string(owner),
-		TxID:   nextTxID(),
+// txData returns a common.TxContext with the owner as the signer and caller.
+func txData() *common.TxContext {
+	return &common.TxContext{
+		BlockContext: &common.BlockContext{},
+		Signer:       owner,
+		Caller:       string(owner),
+		TxID:         nextTxID(),
 	}
 }

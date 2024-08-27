@@ -36,10 +36,11 @@ func Test_Engine(t *testing.T) {
 			name: "create database",
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
-				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.NoError(t, err)
 			},
@@ -60,20 +61,22 @@ func Test_Engine(t *testing.T) {
 			name: "drop database",
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
-				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.NoError(t, err)
 
 			},
 			ses2: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
-				err := global.DeleteDataset(ctx, tx, testdata.TestSchema.DBID(), &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid2",
+				err := global.DeleteDataset(ctx, tx, testdata.TestSchema.DBID(), &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid2",
 				})
 				require.NoError(t, err)
 			},
@@ -88,10 +91,11 @@ func Test_Engine(t *testing.T) {
 			name: "execute procedures",
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
-				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.NoError(t, err)
 			},
@@ -103,9 +107,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
-					TransactionData: common.TransactionData{
-						Signer: []byte(signer),
-						Caller: signer,
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte(signer),
+						Caller:       signer,
 					},
 				})
 				require.NoError(t, err)
@@ -114,9 +119,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionCreatePost.Name,
 					Args:      []any{1, "Bitcoin!", "The Bitcoin Whitepaper", "9/31/2008"},
-					TransactionData: common.TransactionData{
-						Signer: []byte(signer),
-						Caller: signer,
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte(signer),
+						Caller:       signer,
 					},
 				})
 				require.NoError(t, err)
@@ -128,9 +134,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionGetPosts.Name,
 					Args:      []any{"satoshi"},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.NoError(t, err)
@@ -160,10 +167,11 @@ func Test_Engine(t *testing.T) {
 			name: "executing outside of a commit",
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
-				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.NoError(t, err)
 			},
@@ -174,9 +182,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionCreatePost.Name,
 					Args:      []any{1, "Bitcoin!", "The Bitcoin Whitepaper", "9/31/2008"},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.NotNil(t, err)
@@ -186,10 +195,11 @@ func Test_Engine(t *testing.T) {
 			name: "calling outside of a commit",
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
-				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.NoError(t, err)
 
@@ -197,9 +207,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.NoError(t, err)
@@ -211,9 +222,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionGetUserByAddress.Name,
 					Args:      []any{"signer"},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.NoError(t, err)
@@ -227,10 +239,11 @@ func Test_Engine(t *testing.T) {
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
-				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.NoError(t, err)
 
@@ -238,9 +251,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.NoError(t, err)
@@ -252,9 +266,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionGetUserByAddress.Name,
 					Args:      []any{"signer"},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.NoError(t, err)
@@ -284,19 +299,21 @@ func Test_Engine(t *testing.T) {
 					},
 				)
 
-				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.Error(t, err)
 
 				testdata.TestSchema.Extensions = oldExtensions
 
-				err = global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err = global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				assert.NoError(t, err)
 			},
@@ -306,10 +323,11 @@ func Test_Engine(t *testing.T) {
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
-				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.NoError(t, err)
 
@@ -317,9 +335,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionAdminDeleteUser.Name,
 					Args:      []any{1},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.Error(t, err)
@@ -328,9 +347,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionAdminDeleteUser.Name,
 					Args:      []any{1},
-					TransactionData: common.TransactionData{
-						Signer: testdata.TestSchema.Owner,
-						Caller: string(testdata.TestSchema.Owner),
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       testdata.TestSchema.Owner,
+						Caller:       string(testdata.TestSchema.Owner),
 					},
 				})
 				require.NoError(t, err)
@@ -341,10 +361,11 @@ func Test_Engine(t *testing.T) {
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
-				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.NoError(t, err)
 
@@ -353,9 +374,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionPrivate.Name,
 					Args:      []any{},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.Error(t, err)
@@ -365,9 +387,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionCallsPrivate.Name,
 					Args:      []any{},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.NoError(t, err)
@@ -382,10 +405,11 @@ func Test_Engine(t *testing.T) {
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
-				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.NoError(t, err)
 
@@ -393,9 +417,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.NoError(t, err)
@@ -404,9 +429,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ActionGetUserByAddress.Name,
 					Args:      []any{"signer"},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.NoError(t, err)
@@ -421,10 +447,11 @@ func Test_Engine(t *testing.T) {
 					newSchema := *testdata.TestSchema
 					newSchema.Name = testdata.TestSchema.Name + fmt.Sprint(i)
 
-					err := global.CreateDataset(ctx, tx, &newSchema, &common.TransactionData{
-						Signer: testdata.TestSchema.Owner,
-						Caller: string(testdata.TestSchema.Owner),
-						TxID:   "txid" + fmt.Sprint(i),
+					err := global.CreateDataset(ctx, tx, &newSchema, &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       testdata.TestSchema.Owner,
+						Caller:       string(testdata.TestSchema.Owner),
+						TxID:         "txid" + fmt.Sprint(i),
 					})
 					require.NoError(t, err)
 				}
@@ -435,17 +462,19 @@ func Test_Engine(t *testing.T) {
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
-				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.NoError(t, err)
 
-				err = global.DeleteDataset(ctx, tx, testdata.TestSchema.DBID(), &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid3",
+				err = global.DeleteDataset(ctx, tx, testdata.TestSchema.DBID(), &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid3",
 				})
 				require.NoError(t, err)
 			},
@@ -457,10 +486,11 @@ func Test_Engine(t *testing.T) {
 
 				schema := *caseSchema
 
-				err := global.CreateDataset(ctx, tx, &schema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, &schema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.NoError(t, err)
 
@@ -471,9 +501,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   schema.DBID(),
 					Procedure: "CREATE_USER",
 					Args:      []any{1, "satoshi"},
-					TransactionData: common.TransactionData{
-						Signer: []byte(caller),
-						Caller: string(signer),
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte(caller),
+						Caller:       string(signer),
 					},
 				})
 				require.NoError(t, err)
@@ -482,9 +513,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   schema.DBID(),
 					Procedure: "CREATE_USER",
 					Args:      []any{"2", "vitalik"},
-					TransactionData: common.TransactionData{
-						Signer: []byte(caller),
-						Caller: string(signer),
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte(caller),
+						Caller:       string(signer),
 					},
 				})
 				require.NoError(t, err)
@@ -493,9 +525,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   schema.DBID(),
 					Procedure: "CREATE_FOLLOWER",
 					Args:      []any{"satoshi", "vitalik"},
-					TransactionData: common.TransactionData{
-						Signer: []byte(caller),
-						Caller: string(signer),
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte(caller),
+						Caller:       string(signer),
 					},
 				})
 				require.NoError(t, err)
@@ -504,9 +537,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   schema.DBID(),
 					Procedure: "USE_EXTENSION",
 					Args:      []any{1, "2"}, // math_ext.add($arg1 + $arg2, 1)
-					TransactionData: common.TransactionData{
-						Signer: []byte(caller),
-						Caller: string(signer),
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte(caller),
+						Caller:       string(signer),
 					},
 				})
 				require.NoError(t, err)
@@ -525,10 +559,11 @@ func Test_Engine(t *testing.T) {
 			ses1: func(t *testing.T, global *execution.GlobalContext, tx sql.DB) {
 				ctx := context.Background()
 
-				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TransactionData{
-					Signer: testdata.TestSchema.Owner,
-					Caller: string(testdata.TestSchema.Owner),
-					TxID:   "txid1",
+				err := global.CreateDataset(ctx, tx, testdata.TestSchema, &common.TxContext{
+					BlockContext: &common.BlockContext{},
+					Signer:       testdata.TestSchema.Owner,
+					Caller:       string(testdata.TestSchema.Owner),
+					TxID:         "txid1",
 				})
 				require.NoError(t, err)
 			},
@@ -539,9 +574,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcCreateUser.Name,
 					Args:      []any{1, "satoshi", 42},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.NoError(t, err)
@@ -550,9 +586,10 @@ func Test_Engine(t *testing.T) {
 					Dataset:   testdata.TestSchema.DBID(),
 					Procedure: testdata.ProcGetUserByAddress.Name,
 					Args:      []any{"signer"},
-					TransactionData: common.TransactionData{
-						Signer: []byte("signer"),
-						Caller: "signer",
+					TxCtx: &common.TxContext{
+						BlockContext: &common.BlockContext{},
+						Signer:       []byte("signer"),
+						Caller:       "signer",
 					},
 				})
 				require.NoError(t, err)

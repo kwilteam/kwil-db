@@ -196,11 +196,13 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 
 				// deploy schemas
 				for _, schema := range parsedSchemas {
-					err := engine.CreateDataset(ctx, outerTx, schema, &common.TransactionData{
+					err := engine.CreateDataset(ctx, outerTx, schema, &common.TxContext{
 						Signer: deployer,
 						Caller: string(deployer),
 						TxID:   platform.Txid(),
-						Height: 0,
+						BlockContext: &common.BlockContext{
+							Height: 0,
+						},
 					})
 					if err != nil {
 						return err
@@ -297,11 +299,17 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 	platform.Logger.Logf(`executing action/procedure "%s" against schema "%s" (DBID: %s)`, e.Target, e.Database, dbid)
 
 	res, err := platform.Engine.Procedure(ctx, platform.DB, &common.ExecutionData{
-		TransactionData: common.TransactionData{
+		TxCtx: &common.TxContext{
 			Signer: []byte(caller),
 			Caller: caller,
-			Height: e.Height,
 			TxID:   platform.Txid(),
+			BlockContext: &common.BlockContext{
+				Height: e.Height,
+				ChainContext: &common.ChainContext{
+					MigrationParams:   &common.MigrationContext{},
+					NetworkParameters: &common.NetworkParameters{},
+				},
+			},
 		},
 		Dataset:   dbid,
 		Procedure: e.Target,

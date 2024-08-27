@@ -93,7 +93,7 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 		// add instructions for both owner only and view procedures
 		if action.IsOwnerOnly() {
 			instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
-				if !bytes.Equal(scope.Signer, owner) {
+				if !bytes.Equal(scope.TxCtx.Signer, owner) {
 					return fmt.Errorf("cannot call owner action, not owner")
 				}
 

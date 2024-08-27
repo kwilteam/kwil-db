@@ -583,10 +583,12 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		Dataset:   body.DBID,
 		Procedure: body.Action,
 		Args:      args,
-		TransactionData: common.TransactionData{
-			Signer:        signer,
-			Caller:        caller,
-			Height:        -1, // not available
+		TxCtx: &common.TxContext{
+			Signer: signer,
+			Caller: caller,
+			BlockContext: &common.BlockContext{
+				Height: -1, // cannot know the height here.
+			},
 			Authenticator: msg.AuthType,
 		},
 	})

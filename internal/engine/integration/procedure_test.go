@@ -437,10 +437,10 @@ func Test_Procedures(t *testing.T) {
 
 			// execute test procedure
 			res, err := global.Procedure(ctx, execTx, &common.ExecutionData{
-				TransactionData: d,
-				Dataset:         dbid,
-				Procedure:       procedureName,
-				Args:            test.inputs,
+				TxCtx:     d,
+				Dataset:   dbid,
+				Procedure: procedureName,
+				Args:      test.inputs,
 			})
 			if test.err != nil {
 				require.Error(t, err)
@@ -689,10 +689,10 @@ func Test_ForeignProcedures(t *testing.T) {
 
 			// execute test procedure
 			res, err := global.Procedure(ctx, tx, &common.ExecutionData{
-				TransactionData: d,
-				Dataset:         mainDBID,
-				Procedure:       procedureName,
-				Args:            test.inputs,
+				TxCtx:     d,
+				Dataset:   mainDBID,
+				Procedure: procedureName,
+				Args:      test.inputs,
 			})
 			if test.wantErr != "" {
 				require.Error(t, err)
@@ -820,7 +820,7 @@ func deploy(t *testing.T, global *execution.GlobalContext, db sql.DB, schema str
 
 	d := txData()
 
-	err = global.CreateDataset(ctx, db, parsed, &d)
+	err = global.CreateDataset(ctx, db, parsed, d)
 	require.NoError(t, err)
 
 	// get dbid
@@ -852,19 +852,19 @@ func deployAndSeed(t *testing.T, global *execution.GlobalContext, db sql.DB, ext
 	// create initial data
 	for _, kv := range order.OrderMap(initialData) {
 		_, err := global.Procedure(ctx, db, &common.ExecutionData{
-			TransactionData: txData(),
-			Dataset:         dbid,
-			Procedure:       "create_user",
-			Args:            []any{kv.Key},
+			TxCtx:     txData(),
+			Dataset:   dbid,
+			Procedure: "create_user",
+			Args:      []any{kv.Key},
 		})
 		require.NoError(t, err)
 
 		for _, post := range kv.Value {
 			_, err = global.Procedure(ctx, db, &common.ExecutionData{
-				TransactionData: txData(),
-				Dataset:         dbid,
-				Procedure:       "create_post",
-				Args:            []any{kv.Key, post},
+				TxCtx:     txData(),
+				Dataset:   dbid,
+				Procedure: "create_post",
+				Args:      []any{kv.Key, post},
 			})
 			require.NoError(t, err)
 		}

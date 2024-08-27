@@ -45,10 +45,9 @@ type DeploymentContext struct {
 type ProcedureContext struct {
 	// Ctx is the context of the current execution.
 	Ctx context.Context
+	// TxCtx is the transaction context of the current execution.
+	TxCtx *common.TxContext
 	// Signer is the address or public key of the caller.
-	Signer []byte
-	// Caller is the string identifier of the signer.
-	Caller string
 
 	// values are the variables that are available to the execution.
 	values map[string]any // note: bind $args or @caller
@@ -58,18 +57,12 @@ type ProcedureContext struct {
 	// will be the last used DBID.
 	DBID string
 
-	// TxID is the hash of the transaction that the scope
-	// was called in.
-	TxID string
-
 	// Procedure is the Procedure identifier for the current scope.
 	// if calling a precompile instance instead of a Procedure, it
 	// will be the last used Procedure.
 	Procedure string
 	// Result is the result of the most recent SQL query.
 	Result *sql.ResultSet
-	// Height is the block height of the current execution.
-	Height int64
 
 	// StackDepth tracks the current depth of the procedure call stack. It is
 	// incremented each time a procedure calls another procedure.
@@ -103,10 +96,13 @@ func (p *ProcedureContext) Values() map[string]any {
 	}
 
 	// set environment variables
-	values["@caller"] = p.Caller
-	values["@txid"] = p.TxID
-	values["@signer"] = p.Signer
-	values["@height"] = p.Height
+	values["@caller"] = p.TxCtx.Caller
+	values["@txid"] = p.TxCtx.TxID
+	values["@signer"] = p.TxCtx.Signer
+	values["@height"] = p.TxCtx.BlockContext.Height
+	values["@foreign_caller"] = p.DBID
+	values["@block_timestamp"] = p.TxCtx.BlockContext.Timestamp
+	values["@authenticator"] = p.TxCtx.Authenticator
 
 	return values
 }
@@ -117,15 +113,12 @@ func (p *ProcedureContext) Values() map[string]any {
 func (p *ProcedureContext) NewScope() *ProcedureContext {
 	return &ProcedureContext{
 		Ctx:        p.Ctx,
-		Signer:     p.Signer,
-		Caller:     p.Caller,
+		TxCtx:      p.TxCtx,
 		values:     make(map[string]any),
 		DBID:       p.DBID,
-		TxID:       p.TxID,
 		Procedure:  p.Procedure,
 		StackDepth: p.StackDepth,
 		UsedGas:    p.UsedGas,
-		Height:     p.Height,
 	}
 }
 

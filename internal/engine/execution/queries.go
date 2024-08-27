@@ -331,32 +331,32 @@ func setContextualVars(ctx context.Context, db sql.DB, data *common.ExecutionDat
 	// feature for setting session variables. For example, @caller
 	// is accessed via current_setting('ctx.caller')
 
-	_, err := db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.CallerVar, data.Caller))
+	_, err := db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.CallerVar, data.TxCtx.Caller))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.TxidVar, data.TxID))
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.TxidVar, data.TxCtx.TxID))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.SignerVar, base64.StdEncoding.EncodeToString(data.Signer)))
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.SignerVar, base64.StdEncoding.EncodeToString(data.TxCtx.Signer)))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = %d;`, generate.PgSessionPrefix, parse.HeightVar, data.Height))
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = %d;`, generate.PgSessionPrefix, parse.HeightVar, data.TxCtx.BlockContext.Height))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = %d;`, generate.PgSessionPrefix, parse.BlockTimestamp, data.BlockTimestamp))
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = %d;`, generate.PgSessionPrefix, parse.BlockTimestamp, data.TxCtx.BlockContext.Timestamp))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.Authenticator, data.Authenticator))
+	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.Authenticator, data.TxCtx.Authenticator))
 	if err != nil {
 		return err
 	}

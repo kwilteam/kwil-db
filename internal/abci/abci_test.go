@@ -406,7 +406,7 @@ func (m *mockTxApp) Begin(ctx context.Context, height int64) error {
 
 func (m *mockTxApp) Commit(ctx context.Context) {}
 
-func (m *mockTxApp) Execute(ctx txapp.TxContext, db sql.DB, tx *transactions.Transaction) *txapp.TxResponse {
+func (m *mockTxApp) Execute(ctx *common.TxContext, db sql.DB, tx *transactions.Transaction) *txapp.TxResponse {
 	return nil
 }
 
