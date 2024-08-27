@@ -368,6 +368,28 @@ func colStatsInternal(ctx context.Context, firstPass []sql.ColumnStatistics,
 
 					ins(stat, getLast(i), v.Clone(), types.CmpUint256, interpUint256)
 
+				case ColTypeUUID:
+
+					var varUUID types.UUID
+					switch v := val.(type) {
+					case pgtype.UUID:
+						if !v.Valid {
+							stat.NullCount++
+							continue
+						}
+						copy(varUUID[:], v.Bytes[:])
+					case *pgtype.UUID:
+						if !v.Valid {
+							stat.NullCount++
+							continue
+						}
+						copy(varUUID[:], v.Bytes[:])
+					default:
+						return fmt.Errorf("invalid uuid (%T)", val)
+					}
+
+					ins(stat, getLast(i), &varUUID, cmpUUIDPtr, interpUUIDPtr)
+
 				case ColTypeFloat: // we don't want, don't have
 					var varFloat float64
 					switch v := val.(type) {
@@ -410,8 +432,6 @@ func colStatsInternal(ctx context.Context, firstPass []sql.ColumnStatistics,
 
 					ins(stat, getLast(i), varFloat, cmp.Compare[float64], interpNum)
 
-				case ColTypeUUID:
-					fallthrough // TODO
 				default: // arrays and such
 					// fmt.Println("unknown", colTypes[i])
 				}
@@ -598,7 +618,7 @@ func compareStatsVal(a, b any) int { //nolint:unused
 	case []*types.Uint256:
 		return slices.CompareFunc(at, b.([]*types.Uint256), types.CmpUint256)
 	case *types.UUID:
-		return types.CmpUUID(*at, *(b.(*types.UUID)))
+		return cmpUUIDPtr(at, b.(*types.UUID))
 	case types.UUID:
 		return types.CmpUUID(at, b.(types.UUID))
 	case []*types.UUID:
@@ -654,11 +674,9 @@ func upColStatsWithInsert(stats *sql.ColumnStatistics, val any) error {
 		return ins(stats, nil, nt.Clone(), types.CmpUint256, interpUint256)
 
 	case types.UUID:
-		return ins(stats, nil, nt, types.CmpUUID, interpUUID)
+		return ins(stats, nil, &nt, cmpUUIDPtr, interpUUIDPtr)
 	case *types.UUID:
-		return del(stats, nt, func(a, b *types.UUID) int {
-			return types.CmpUUID(*a, *b)
-		})
+		return ins(stats, nil, nt, cmpUUIDPtr, interpUUIDPtr)
 
 	case decimal.DecimalArray: // TODO
 	case types.Uint256Array: // TODO
@@ -674,6 +692,10 @@ func upColStatsWithInsert(stats *sql.ColumnStatistics, val any) error {
 	fmt.Printf("unhandled insert %T", val)
 
 	return nil // known type, just no stats handling
+}
+
+func cmpUUIDPtr(a, b *types.UUID) int {
+	return types.CmpUUID(*a, *b)
 }
 
 func upColStatsWithDelete(stats *sql.ColumnStatistics, old any) error {
@@ -719,9 +741,7 @@ func upColStatsWithDelete(stats *sql.ColumnStatistics, old any) error {
 	case types.UUID:
 		return del(stats, nt, types.CmpUUID)
 	case *types.UUID:
-		return del(stats, nt, func(a, b *types.UUID) int {
-			return types.CmpUUID(*a, *b)
-		})
+		return del(stats, nt, cmpUUIDPtr)
 
 	case decimal.DecimalArray: // TODO
 	case types.Uint256Array: // TODO

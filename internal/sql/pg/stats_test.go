@@ -9,9 +9,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 func mkTestTableDB(t *testing.T) *DB {
@@ -35,7 +37,7 @@ func mkStatsTestTableTx(t *testing.T, db *DB) sql.PreparedTx {
 	}
 	tbl := "colcheck"
 	t.Cleanup(func() {
-		defer tx.Rollback(ctx)
+		tx.Rollback(ctx)
 		if t.Failed() {
 			db.AutoCommit(true)
 			db.Execute(ctx, `drop table if exists `+tbl)
@@ -47,7 +49,8 @@ func mkStatsTestTableTx(t *testing.T, db *DB) sql.PreparedTx {
 		t.Fatal(err)
 	}
 	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
-		` (a int8 primary key, b int8 default 42, c text, d bytea, e numeric(20,5), f int4[], g uint256, h uint256[])`)
+		` (a int8 primary key, b int8 default 42, c text, d bytea, 
+		e numeric(20,5), f int4[], g uint256, h uint256[], i uuid)`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,28 +79,92 @@ func TestTableStats(t *testing.T) {
 		{Pos: 6, Name: "f", DataType: "integer", Array: true, Nullable: true},
 		{Pos: 7, Name: "g", DataType: "uint256", Nullable: true},
 		{Pos: 8, Name: "h", DataType: "uint256", Array: true, Nullable: true},
+		{Pos: 9, Name: "i", DataType: "uuid", Nullable: true},
 	}
 
 	assert.Equal(t, wantCols, cols)
-	// t.Logf("%#v", cols)
 
+	/* equivalent insert:
 	_, err = tx.Execute(ctx, `insert into `+tbl+` values `+
-		`(5, null, '', '\xabab', 12.6, '{99}', 30, '{}'), `+
-		`(-1, 0, 'B', '\x01', -7, '{1, 2}', 20, '{184467440737095516150}'), `+
-		`(3, 1, null, '\x', 8.1, NULL, NULL, NULL), `+
-		`(0, 0, 'Q', NULL, NULL, NULL, NULL, NULL), `+
-		`(7, -4, 'c', '\x0001', 0.3333, '{2,3,4}', 40, '{5,4,3}')`)
+		`(5, null, '', '\xabab', 12.6, '{99}', 30, '{}', '0000857c-8671-4f4e-99bd-fcc621f9d3d1'), `+
+		`(-1, 0, 'B', '\x01', -7, '{1, 2}', 20, '{184467440737095516150}', '9000857c-8671-4f4e-99bd-fcc621f9d3d1'), `+
+		`(3, 1, null, '\x', 8.1, NULL, NULL, NULL, NULL), `+
+		`(0, 0, 'Q', NULL, NULL, NULL, NULL, NULL, NULL), `+
+		`(7, -4, 'c', '\x0001', 0.3333, '{2,3,4}', 40, '{5,4,3}', '0000157c-8671-4f4e-99bd-fcc621f9d3d1')`)
 	if err != nil {
 		t.Fatal(err)
+	}*/
+	rows := [][]any{
+		{int64(5), nil, "", []byte{0xab, 0xab}, mustDecimal("12.6"), []int64{99}, mustUint256("30"),
+			types.Uint256Array{}, mustParseUUID("0000857c-8671-4f4e-99bd-fcc621f9d3d1")},
+		{int64(-1), int64(0), "B", []byte{0x1}, mustDecimal("-7"), []int64{1, 2}, mustUint256("20"),
+			types.Uint256Array{mustUint256("184467440737095516150")}, mustParseUUID("9000857c-8671-4f4e-99bd-fcc621f9d3d1")},
+		{int64(3), int64(1), nil, []byte{}, mustDecimal("8.1"), nil, nil,
+			nil, nil},
+		{int64(0), int64(0), "Q", nil, nil, nil, nil,
+			nil, nil},
+		{int64(7), int64(-4), "c", []byte{0x0, 0x1}, mustDecimal("0.333"), []int64{2, 3, 4}, mustUint256("40"),
+			types.Uint256Array{mustUint256("5"), mustUint256("4"), mustUint256("3")}, mustParseUUID("0000157c-8671-4f4e-99bd-fcc621f9d3d1")},
 	}
+	for _, row := range rows {
+		_, err = tx.Execute(ctx, `insert into `+tbl+` values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, row...)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	wantStats := []struct {
+		Min any
+		Max any
+	}{
+		{ // a
+			Min: int64(-1),
+			Max: int64(7),
+		},
+		{ // b
+			Min: int64(-4),
+			Max: int64(1),
+		},
+		{ // c
+			Min: "",
+			Max: "c",
+		},
+		{ // d
+			Min: []byte{},           // []
+			Max: []byte{0xab, 0xab}, // [171 171]
+		},
+		{ // e
+			Min: mustDecimal("-7.00000"), // we don't control the precision we get back, only scale
+			Max: mustDecimal("12.60000"),
+		},
+		{ // f -- TODO array min/max!
+			Min: nil,
+			Max: nil,
+		},
+		{ // g
+			Min: mustUint256("20"),
+			Max: mustUint256("40"),
+		},
+		{ // h -- TODO array min/max!
+			Min: nil,
+			Max: nil,
+		},
+		{ // i -- UUID
+			Min: mustParseUUID("0000157c-8671-4f4e-99bd-fcc621f9d3d1"),
+			Max: mustParseUUID("9000857c-8671-4f4e-99bd-fcc621f9d3d1"),
+		},
+	}
+	//t.Log(wantStats)
 
 	stats, err := TableStats(ctx, "", tbl, tx)
 	require.NoError(t, err)
 
-	t.Log(stats)
+	for i := range stats.ColumnStatistics {
+		cs := &stats.ColumnStatistics[i]
 
-	fmt.Println(stats.ColumnStatistics[4].Min)
-	fmt.Println(stats.ColumnStatistics[4].Max)
+		require.Equal(t, wantStats[i].Min, cs.Min)
+		require.Equal(t, wantStats[i].Max, cs.Max)
+	}
 }
 
 // Test_scanSineBig is similar to Test_updates_demo, but actually uses a DB,

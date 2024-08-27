@@ -375,6 +375,11 @@ func interpUUID(f float64, a, b types.UUID) types.UUID {
 	return types.UUID(interpBts(f, a[:], b[:]))
 }
 
+func interpUUIDPtr(f float64, a, b *types.UUID) *types.UUID {
+	uuid := interpUUID(f, *a, *b)
+	return &uuid
+}
+
 // interpBool is largely nonsense and should be unused as there should not ever
 // be a boolean histogram, but it is here for completeness. Could just panic...
 func interpBool(f float64, a, b bool) bool {
