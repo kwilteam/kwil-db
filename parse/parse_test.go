@@ -977,6 +977,19 @@ func Test_Kuneiform(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "conflict with function",
+			kf: `database mydb;
+
+			table a {
+				id int primary key,
+				age int max(100)
+			}
+
+			procedure max() public view {}
+			`,
+			err: parse.ErrReservedKeyword,
+		},
 	}
 
 	for _, tt := range tests {

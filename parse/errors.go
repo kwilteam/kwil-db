@@ -257,4 +257,5 @@ var (
 	ErrAmbiguousConflictTable    = errors.New("ambiguous conflict table")
 	ErrCollation                 = errors.New("collation error")
 	ErrNoPrimaryKey              = errors.New("missing primary key")
+	ErrReservedKeyword           = errors.New("reserved keyword")
 )

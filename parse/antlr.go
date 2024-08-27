@@ -405,6 +405,16 @@ func (s *schemaVisitor) registerBlock(ctx antlr.ParserRuleContext, name string) 
 		return
 	}
 
+	if _, ok := Functions[lower]; ok {
+		s.errs.RuleErr(ctx, ErrReservedKeyword, lower)
+		return
+	}
+
+	if validation.IsKeyword(lower) {
+		s.errs.RuleErr(ctx, ErrReservedKeyword, lower)
+		return
+	}
+
 	node := &Position{}
 	node.Set(ctx)
 
