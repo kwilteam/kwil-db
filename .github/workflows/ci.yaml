@@ -112,7 +112,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6.0.0
         with:
           install-mode: "binary"
-          version: "latest"
+          version: "v1.59.1"
           args: ./... ./core/... ./parse/... ./test/... --timeout=10m --config=.golangci.yml
 
       # unit test

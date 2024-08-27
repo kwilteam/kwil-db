@@ -214,10 +214,16 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	rpcSvcLogger := increaseLogLevel("user-json-svc", &d.log, d.cfg.Logging.RPCLevel)
 	rpcServerLogger := increaseLogLevel("user-jsonrpc-server", &d.log, d.cfg.Logging.RPCLevel)
 
+	if d.cfg.AppCfg.RPCMaxReqSize < d.cfg.ChainCfg.Mempool.MaxTxBytes {
+		d.log.Warnf("RPC request size limit (%d) is less than maximium transaction size (%d)",
+			d.cfg.AppCfg.RPCMaxReqSize, d.cfg.ChainCfg.Mempool.MaxTxBytes)
+	}
+
 	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp,
 		*rpcSvcLogger, usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)))
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppCfg.JSONRPCListenAddress,
 		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)),
+		rpcserver.WithReqSizeLimit(d.cfg.AppCfg.RPCMaxReqSize),
 		rpcserver.WithCORS(), rpcserver.WithServerInfo(&usersvc.SpecInfo))
 	if err != nil {
 		failBuild(err, "unable to create json-rpc server")
