@@ -15,7 +15,7 @@ var (
 WARNING: This command should not be used on production systems. This should only be used to reset disposable test nodes.`
 
 	resetExample = `# Delete all of a Kwil node's data files
-kwil-admin setup reset --root-dir "~/.kwild" --sqlpath "~/.kwild/data/kwil.db"`
+kwil-admin setup reset --root-dir "~/.kwild"`
 )
 
 func resetCmd() *cobra.Command {

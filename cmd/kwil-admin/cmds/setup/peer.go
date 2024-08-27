@@ -25,11 +25,12 @@ func peerCmd() *cobra.Command {
 	var genesisPath string
 
 	cmd := &cobra.Command{
-		Use:     "peer",
-		Short:   "The `peer` command facilitates quick setup of a Kwil node as a peer to an existing node.",
-		Long:    peerLong,
-		Example: peerExample,
-		Args:    cobra.NoArgs,
+		Use:        "peer",
+		Short:      "The `peer` command facilitates quick setup of a Kwil node as a peer to an existing node.",
+		Long:       peerLong,
+		Example:    peerExample,
+		Args:       cobra.NoArgs,
+		Deprecated: "Please use `kwil-admin setup init` instead.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			expandedDir, err := common.ExpandPath(cfg.RootDir)
 			if err != nil {
