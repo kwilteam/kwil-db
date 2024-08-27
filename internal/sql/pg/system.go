@@ -301,7 +301,6 @@ func typeFor[T any]() reflect.Type { //nolint
 }
 
 func statsVal(ct ColType) any {
-	// return reflect.New(statsValType(ct)).Interface()
 	switch ct {
 	case ColTypeInt:
 		return int64(0)
@@ -328,28 +327,6 @@ func statsVal(ct ColType) any {
 
 func statsValType(ct ColType) reflect.Type {
 	return reflect.TypeOf(statsVal(ct))
-	/*switch ct {
-	case ColTypeInt:
-		return typeFor[int64]()
-	case ColTypeText:
-		return typeFor[string]()
-	case ColTypeBool:
-		return typeFor[bool]()
-	case ColTypeByteA:
-		return typeFor[[]byte]()
-	case ColTypeUUID:
-		return typeFor[*types.UUID]()
-	case ColTypeNumeric:
-		return typeFor[*decimal.Decimal]()
-	case ColTypeUINT256:
-		return typeFor[*types.Uint256]()
-	case ColTypeFloat:
-		return typeFor[float64]()
-	case ColTypeTime:
-		return typeFor[time.Time]()
-	default:
-		return nil
-	}*/
 }
 
 func scanVal(ct ColType) any {
@@ -478,14 +455,30 @@ func init() {
 	gob.RegisterName("kwil_"+string(ColTypeUUID), statsVal(ColTypeUUID))
 	gob.RegisterName("kwil_"+string(ColTypeNumeric), statsVal(ColTypeNumeric))
 	gob.RegisterName("kwil_"+string(ColTypeUINT256), statsVal(ColTypeUINT256))
+	gob.Register(unknown{})
+
 	gob.Register(histo[int64]{})
 	gob.Register(histo[[]byte]{})
 	gob.Register(histo[float64]{})
 	gob.Register(histo[string]{})
+
 	gob.Register(histo[*decimal.Decimal]{})
 	gob.Register(histo[types.UUID]{})
 	gob.Register(histo[*types.UUID]{})
 	gob.Register(histo[*types.Uint256]{})
+
+	gob.Register(histo[[]int64]{})
+	gob.Register(histo[[][]byte]{})
+	gob.Register(histo[[]float64]{})
+	gob.Register(histo[[]string]{})
+
+	gob.Register(histo[[]*decimal.Decimal]{})
+	gob.Register(histo[[]types.UUID]{})
+	gob.Register(histo[[]*types.UUID]{})
+	gob.Register(histo[[]*types.Uint256]{})
+	gob.Register(histo[decimal.DecimalArray]{})
+	gob.Register(histo[types.UUIDArray]{})
+	gob.Register(histo[types.Uint256Array]{})
 }
 
 func arrayType(ct ColType) ColType {

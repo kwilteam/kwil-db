@@ -454,9 +454,9 @@ func colStatsInternal(ctx context.Context, firstPass []sql.ColumnStatistics,
 			mcvs = mcvs[:statsCap] // mcvs = slices.Delete(mcvs, statsCap, len(mcvs))
 		}
 
-		valCompFun := compFun(vals[0]) // based on prototype value
+		// valCompFun := compFun(vals[0]) // based on prototype value
 		slices.SortFunc(mcvs, func(a, b mcv) int {
-			return valCompFun(b.val, a.val) // ascending value
+			return compareStatsVal(b.val, a.val) // ascending value
 		})
 
 		// extract the values and frequencies slices
@@ -525,6 +525,7 @@ func (m mcvAscendingValue) Swap(i int, j int) {
 }
 */
 
+/*
 // the pain of []any vs. []T (in an any)
 func wrapCompFun[T any](f func(a, b T) int) func(a, b any) int {
 	return func(a, b any) int { // must not be nil
@@ -550,7 +551,7 @@ func compFun(val any) func(a, b any) int {
 	case *types.Uint256:
 		return wrapCompFun(types.CmpUint256)
 	case types.UUID:
-		return wrapCompFun(types.CmpUint256)
+		return wrapCompFun(types.CmpUUID)
 
 	case decimal.DecimalArray: // TODO
 	case types.Uint256Array: // TODO
@@ -559,13 +560,15 @@ func compFun(val any) func(a, b any) int {
 	}
 
 	panic(fmt.Sprintf("no comp fun for type %T", val))
-}
+}*/
 
 // maybe we do this instead a comp field of histo[T]. It's simpler, but slower.
 func compareStatsVal(a, b any) int { //nolint:unused
 	switch at := a.(type) {
 	case int64:
 		return cmp.Compare(at, b.(int64))
+	case []int64:
+		return slices.Compare(at, b.([]int64))
 	case bool:
 		return cmpBool(at, b.(bool))
 	case []bool:
@@ -574,20 +577,20 @@ func compareStatsVal(a, b any) int { //nolint:unused
 		return strings.Compare(at, b.(string))
 	case []string:
 		return slices.Compare(at, b.([]string))
-	case []int64:
-		return slices.Compare(at, b.([]int64))
 	case float64:
 		return cmp.Compare(at, b.(float64))
+	case []float64:
+		return slices.Compare(at, b.([]float64))
 	case []byte:
 		return bytes.Compare(at, b.([]byte))
 	case [][]byte:
 		return slices.CompareFunc(at, b.([][]byte), bytes.Compare)
+	case *decimal.Decimal:
+		return cmpDecimal(at, b.(*decimal.Decimal))
 	case []*decimal.Decimal:
 		return slices.CompareFunc(at, b.([]*decimal.Decimal), cmpDecimal)
 	case decimal.DecimalArray:
 		return slices.CompareFunc(at, b.(decimal.DecimalArray), cmpDecimal)
-	case *decimal.Decimal:
-		return cmpDecimal(at, b.(*decimal.Decimal))
 	case *types.Uint256:
 		return at.Cmp(b.(*types.Uint256))
 	case types.Uint256Array:
@@ -602,6 +605,8 @@ func compareStatsVal(a, b any) int { //nolint:unused
 		return slices.CompareFunc(at, b.([]*types.UUID), func(a, b *types.UUID) int {
 			return types.CmpUUID(*a, *b)
 		})
+	case []types.UUID:
+		return slices.CompareFunc(at, b.([]types.UUID), types.CmpUUID)
 	default:
 		panic(fmt.Sprintf("unrecognized type %T", a))
 	}
@@ -649,11 +654,16 @@ func upColStatsWithInsert(stats *sql.ColumnStatistics, val any) error {
 		return ins(stats, nil, nt.Clone(), types.CmpUint256, interpUint256)
 
 	case types.UUID:
-
 		return ins(stats, nil, nt, types.CmpUUID, interpUUID)
+	case *types.UUID:
+		return del(stats, nt, func(a, b *types.UUID) int {
+			return types.CmpUUID(*a, *b)
+		})
 
 	case decimal.DecimalArray: // TODO
 	case types.Uint256Array: // TODO
+	case []*decimal.Decimal: // TODO
+	case []*types.Uint256: // TODO
 	case []string:
 	case []int64:
 
@@ -661,7 +671,7 @@ func upColStatsWithInsert(stats *sql.ColumnStatistics, val any) error {
 		return fmt.Errorf("unrecognized tuple column type %T", val)
 	}
 
-	fmt.Printf("unhandled %T", val)
+	fmt.Printf("unhandled insert %T", val)
 
 	return nil // known type, just no stats handling
 }
@@ -707,17 +717,24 @@ func upColStatsWithDelete(stats *sql.ColumnStatistics, old any) error {
 		return del(stats, nt.Clone(), types.CmpUint256)
 
 	case types.UUID:
-
 		return del(stats, nt, types.CmpUUID)
+	case *types.UUID:
+		return del(stats, nt, func(a, b *types.UUID) int {
+			return types.CmpUUID(*a, *b)
+		})
 
 	case decimal.DecimalArray: // TODO
 	case types.Uint256Array: // TODO
+	case []*decimal.Decimal: // TODO
+	case []*types.Uint256: // TODO
 	case []string:
 	case []int64:
 
 	default:
 		return fmt.Errorf("unrecognized tuple column type %T", old)
 	}
+
+	fmt.Printf("unhandled delete %T", old)
 
 	return nil
 }

@@ -27,6 +27,14 @@ func Test_histo_explicit_int(t *testing.T) {
 	t.Log(hInt)
 }
 
+func Test_bounds_string(t *testing.T) {
+	comp := strings.Compare
+	interp := interpString
+	bounds := makeBounds(100, "title_1", "title_99", comp, interp)
+	// Think this through more...
+	t.Log(bounds)
+}
+
 func Test_histo_num(t *testing.T) {
 	bounds := makeBoundsNum[int](10, -100, 800)
 	hInt := makeHisto(bounds, cmp.Compare[int])
