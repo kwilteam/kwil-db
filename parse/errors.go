@@ -231,6 +231,7 @@ var (
 	ErrUnknownTable               = errors.New("unknown table reference")
 	ErrTableDefinition            = errors.New("table definition error")
 	ErrUnknownColumn              = errors.New("unknown column reference")
+	ErrColumnConstraint           = errors.New("column constraint error")
 	ErrAmbiguousColumn            = errors.New("ambiguous column reference")
 	ErrDuplicateResultColumnName  = errors.New("duplicate result column name")
 	ErrUnknownFunctionOrProcedure = errors.New("unknown function or procedure")

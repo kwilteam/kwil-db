@@ -381,12 +381,12 @@ type Attribute struct {
 func (a *Attribute) Clean(col *Column) error {
 	switch a.Type {
 	case MIN, MAX:
-		if !col.Type.EqualsStrict(IntType) {
+		if !col.Type.EqualsStrict(IntType) && !col.Type.EqualsStrict(Uint256Type) && col.Type.Name != DecimalStr {
 			return fmt.Errorf("attribute %s is only valid for int columns", a.Type)
 		}
 	case MIN_LENGTH, MAX_LENGTH:
-		if !col.Type.EqualsStrict(TextType) {
-			return fmt.Errorf("attribute %s is only valid for text columns", a.Type)
+		if !col.Type.EqualsStrict(TextType) && !col.Type.EqualsStrict(BlobType) {
+			return fmt.Errorf("attribute %s is only valid for text and blob columns", a.Type)
 		}
 	}
 

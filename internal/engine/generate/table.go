@@ -20,7 +20,7 @@ func GenerateCreateTableStatement(pgSchema string, table *types.Table) (string, 
 		var colAttributes []string
 
 		for _, attr := range column.Attributes {
-			attrStr, err := attributeToSQLString(column.Name, attr)
+			attrStr, err := attributeToSQLString(column, attr)
 			if err != nil {
 				return "", err
 			}

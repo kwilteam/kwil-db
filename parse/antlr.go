@@ -349,7 +349,12 @@ func (s *schemaVisitor) VisitSchema(ctx *gen.SchemaContext) any {
 			// table.
 			pos, ok := s.schemaInfo.Blocks[strings.ToLower(fk.ParentTable)]
 			if !ok {
-				s.errs.RuleErr(ctx, ErrUnknownTable, fk.ParentTable)
+				pos2, ok2 := s.schemaInfo.Blocks[t.Name]
+				if ok2 {
+					s.errs.AddErr(pos2, ErrUnknownTable, fk.ParentTable)
+				} else {
+					s.errs.RuleErr(ctx, ErrUnknownTable, fk.ParentTable)
+				}
 				continue
 			}
 
@@ -402,6 +407,7 @@ func (s *schemaVisitor) registerBlock(ctx antlr.ParserRuleContext, name string) 
 
 	node := &Position{}
 	node.Set(ctx)
+
 	s.schemaInfo.Blocks[lower] = &Block{
 		Position: *node,
 		AbsStart: ctx.GetStart().GetStart(),
@@ -633,6 +639,14 @@ func (s *schemaVisitor) VisitColumn_def(ctx *gen.Column_defContext) any {
 			})
 		default:
 			s.errs.RuleErr(ctx, ErrSyntax, "unknown constraint: %s", constraints[i].ident)
+			return col
+		}
+	}
+
+	for _, con := range col.Attributes {
+		err := con.Clean(col)
+		if err != nil {
+			s.errs.RuleErr(ctx, ErrColumnConstraint, err.Error())
 			return col
 		}
 	}
