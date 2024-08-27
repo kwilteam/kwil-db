@@ -135,6 +135,7 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 		// identify the functions
 		for i := range tc.FunctionTests {
 			testFnIdentifiers = append(testFnIdentifiers, fmt.Sprintf("TestCase.Function-%d", i))
+			testNames = append(testNames, fmt.Sprintf("Function-%d", i))
 		}
 
 		// identify the executions
