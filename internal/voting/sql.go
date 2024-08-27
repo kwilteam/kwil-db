@@ -117,6 +117,8 @@ const (
 	createResolutionType = `INSERT INTO ` + votingSchemaName + `.resolution_types (id, name) VALUES ($1, $2)
 		ON CONFLICT(id) DO NOTHING;`
 
+	getResolutionTypesQuery = `SELECT name FROM ` + votingSchemaName + `.resolution_types;`
+
 	// markManyProcessed marks many resolutions as processed
 	markManyProcessed = `INSERT INTO ` + votingSchemaName + `.processed (id) SELECT unnest($1::BYTEA[]);`
 

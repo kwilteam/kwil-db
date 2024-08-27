@@ -41,22 +41,60 @@ func initializeVoteStore(ctx context.Context, db sql.TxMaker) error {
 	}
 	defer tx.Rollback(ctx)
 
-	// This is moved out of initVotingTables, to ensure that
-	// upgrade logic should just handle the schema changes, but not the data.
-	// If the database is initialized with the latest version, but for example,
-	// If there is a change in the supported resolution types, the upgrade logic
-	// skips the resolution types updates.
-	resolutions := resolutions.ListResolutions()
-	for _, name := range resolutions {
-		uuid := types.NewUUIDV5([]byte(name))
-		fmt.Printf("Creating resolution type %q with UUID %v\n", name, uuid)
-		_, err := tx.Execute(ctx, createResolutionType, uuid[:], name)
-		if err != nil {
-			return err
+	compiledResolutions := resolutions.ListResolutions()
+	dbResolutions, err := getResolutionTypes(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("failed to get resolution types: %w", err)
+	}
+
+	if len(dbResolutions) == 0 { // New database state, add the registered resolutions
+		// This is moved out of initVotingTables, to ensure that
+		// upgrade logic should just handle the schema changes, but not the data.
+		// If the database is initialized with the latest version, but for example,
+		// If there is a change in the supported resolution types, the upgrade logic
+		// skips the resolution types updates.
+
+		for _, name := range compiledResolutions {
+			uuid := types.NewUUIDV5([]byte(name))
+			fmt.Printf("Creating resolution type %q with UUID %v\n", name, uuid)
+			_, err := tx.Execute(ctx, createResolutionType, uuid[:], name)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		// Ensure that there is no mismatch between the registered resolutions and the resolutions stored in the votestore.
+		// Any mismatch at the startup would indicate unplanned consensus changes and should be treated as a critical error.
+		if len(compiledResolutions) != len(dbResolutions) {
+			return fmt.Errorf("resolution types mismatch, uncoordinated consensus changes: expected %v, got %v", compiledResolutions, dbResolutions)
+		}
+
+		for _, name := range compiledResolutions {
+			if _, ok := dbResolutions[name]; !ok {
+				return fmt.Errorf("resolution types mismatch, uncoordinated consensus changes: expected %v, got %v", compiledResolutions, dbResolutions)
+			}
 		}
 	}
 
 	return tx.Commit(ctx)
+}
+
+func getResolutionTypes(ctx context.Context, db sql.Executor) (map[string]bool, error) {
+	res, err := db.Execute(ctx, getResolutionTypesQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	var resTypes = make(map[string]bool)
+	for _, row := range res.Rows {
+		name, ok := row[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid type for name (%T)", row[0])
+		}
+		resTypes[name] = true
+	}
+
+	return resTypes, nil
 }
 
 func initVotingTables(ctx context.Context, db sql.DB) error {
