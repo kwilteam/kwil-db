@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -235,8 +236,19 @@ func (h *histo[T]) TotalCount() int {
 
 func (h histo[T]) String() string {
 	totalFreq := h.TotalCount()
-	return fmt.Sprintf("total = %d, bounds = %v, freqs = %v, cmp = %p",
-		totalFreq, h.bounds, h.freqs, h.comp)
+	if len(h.bounds) > 0 {
+		// only print the bounds slice for basic scalars, not variable length types.
+		switch reflect.TypeOf(h.bounds[0]).Kind() {
+		case reflect.Bool, reflect.Float64, reflect.Int, reflect.Int16,
+			reflect.Int32, reflect.Int64, reflect.Int8, reflect.Uint,
+			reflect.Uint16, reflect.Uint8, reflect.Uint32, reflect.Uint64:
+		default:
+			return fmt.Sprintf("total = %d, bounds = (len %d []%T), freqs = %v, cmp = %s",
+				totalFreq, len(h.bounds), h.bounds[0], h.freqs, reflect.TypeOf(h.comp))
+		}
+	}
+	return fmt.Sprintf("total = %d, bounds = %v, freqs = %v, cmp = %s",
+		totalFreq, h.bounds, h.freqs, reflect.TypeOf(h.comp))
 }
 
 // ltTotal returns the cumulative frequency for values less than (or equal) to
