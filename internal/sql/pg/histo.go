@@ -323,7 +323,7 @@ func interpNum[T Num](f float64, a, b T) T {
 }
 
 func interpBig(f float64, a, b *big.Int) *big.Int {
-	if b.Cmp(a) <= 0 {
+	if b.Cmp(a) == -1 {
 		panic("b must not be less than a")
 	}
 
@@ -372,7 +372,11 @@ func interpBts(f float64, a, b []byte) []byte {
 }
 
 func interpUUID(f float64, a, b types.UUID) types.UUID {
-	return types.UUID(interpBts(f, a[:], b[:]))
+	bts := interpBts(f, a[:], b[:])
+	if len(bts) != 16 {
+		bts = append(make([]byte, 16-len(bts)), bts...)
+	}
+	return types.UUID(bts)
 }
 
 func interpUUIDPtr(f float64, a, b *types.UUID) *types.UUID {
