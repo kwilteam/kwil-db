@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -34,7 +35,8 @@ type ChangesetEntry struct {
 
 	OldTuple []*TupleColumn // empty for insert
 	NewTuple []*TupleColumn // empty for delete
-	// both old and new are set for update
+	// both old and new are set for update, except that when a column is
+	// unchanged, elements of NewTuple may an unchanged{} instance.
 }
 
 func (ce *ChangesetEntry) Kind() string {
@@ -104,6 +106,17 @@ func (c *ChangesetEntry) DecodeTuples(relation *Relation) (oldValues, newValues 
 	return oldValues, newValues, nil
 }
 
+type unchanged struct{}
+
+func (uc unchanged) String() string {
+	return "<unchanged>"
+}
+
+func IsUnchanged(v any) bool {
+	_, same := v.(unchanged)
+	return same
+}
+
 func decodeTuple(cols []*TupleColumn, relation *Relation) ([]any, error) {
 	if cols == nil {
 		return nil, nil
@@ -113,6 +126,8 @@ func decodeTuple(cols []*TupleColumn, relation *Relation) ([]any, error) {
 	for i, col := range cols {
 		switch col.ValueType {
 		case NullValue, ToastValue:
+		case UnchangedUpdate: // deduped ChangesetEntry.NewTupls for an UPDATE
+			values[i] = unchanged{}
 		case SerializedValue:
 			dt, ok := kwilTypeToDataType[*relation.Columns[i].Type]
 			if !ok {
@@ -169,26 +184,34 @@ func (c *ChangesetEntry) applyUpdates(ctx context.Context, tx sql.DB, rel *Relat
 		return fmt.Errorf("relation %s.%s has no columns", rel.Schema, rel.Table)
 	}
 
-	var updateSql strings.Builder
-	fmt.Fprintf(&updateSql, "UPDATE %s.%s SET ", rel.Schema, rel.Table)
-	for i, col := range rel.Columns {
-		if i > 0 {
-			updateSql.WriteString(", ")
-		}
-		fmt.Fprintf(&updateSql, "%s = $%s", col.Name, strconv.Itoa(i+1))
-	}
-
-	updateSql.WriteString(" WHERE ")
-	// Conflict resolution:
-	// If new network's current record is same as the oldValues in the old network, then update the record
-	// Else, discard the update in favor of whatever data exists on the new network
 	oldVals, newVals, err := c.DecodeTuples(rel)
 	if err != nil {
 		return err
 	}
 
+	// In the context of an UPDATE, the changeset may omit the new values if
+	// they are unchanged. This is made explicit with an unchanged{} instance.
+
+	var updateSql strings.Builder
+	fmt.Fprintf(&updateSql, "UPDATE %s.%s SET ", rel.Schema, rel.Table)
+	var placeholder int = 1 // e.g. $1
+	for i, col := range rel.Columns {
+		if IsUnchanged(newVals[i]) {
+			continue
+		}
+		if placeholder > 1 {
+			updateSql.WriteString(", ")
+		}
+		fmt.Fprintf(&updateSql, "%s = $%d", col.Name, placeholder)
+		placeholder++
+	}
+
+	// Conflict resolution:
+	// If new network's current record is same as the oldValues in the old network, then update the record
+	// Else, discard the update in favor of whatever data exists on the new network
+	updateSql.WriteString(" WHERE ")
+
 	var oldArgs []any
-	cnt := 1
 	for i, v := range oldVals {
 		if i > 0 {
 			updateSql.WriteString(" AND ")
@@ -197,11 +220,17 @@ func (c *ChangesetEntry) applyUpdates(ctx context.Context, tx sql.DB, rel *Relat
 		if v == nil {
 			fmt.Fprintf(&updateSql, "%s IS NULL", rel.Columns[i].Name)
 		} else {
-			fmt.Fprintf(&updateSql, "%s = $%d", rel.Columns[i].Name, cnt+len(newVals))
+			fmt.Fprintf(&updateSql, "%s = $%d", rel.Columns[i].Name, placeholder)
 			oldArgs = append(oldArgs, v)
-			cnt++
+			placeholder++
 		}
 	}
+
+	// Clip out unchanged cols in newVals to match set stmt.
+	newVals = slices.DeleteFunc(newVals, func(val any) bool {
+		return IsUnchanged(val)
+	})
+
 	_, err = tx.Execute(ctx, updateSql.String(), append(newVals, oldArgs...)...)
 	return err
 }
@@ -329,6 +358,15 @@ func (c *changesetIoWriter) decodeUpdate(update *pglogrepl.UpdateMessageV2, rela
 	tup, err = convertPgxTuple(update.NewTuple, relation, c.oidToType)
 	if err != nil {
 		return err
+	}
+	// de-duplicate unchanged data
+	for i, old := range ce.OldTuple {
+		updated := tup.Columns[i]
+		if old.ValueType == updated.ValueType &&
+			bytes.Equal(old.Data, updated.Data) {
+			tup.Columns[i].ValueType = UnchangedUpdate
+			tup.Columns[i].Data = nil
+		}
 	}
 	ce.NewTuple = tup.Columns
 	c.csChan <- ce
@@ -500,8 +538,8 @@ type Tuple struct {
 
 // TupleColumn is a column within a tuple.
 type TupleColumn struct {
-	// ValueType gives information on the type of data in the column.
-	// If the type is of type Null or Toast, the Data field will be nil.
+	// ValueType gives information on the type of data in the column. If the
+	// type is of type Null, UnchangedUpdate, or Toast, the Data field will be nil.
 	ValueType ValueType
 	// Data is the actual data in the column.
 	Data []byte
@@ -521,4 +559,7 @@ const (
 	// SerializedValue indicates a column is a non-nil value
 	// and can be deserialized.
 	SerializedValue
+	// UnchangedUpdate indicates a column was unchanged. This is used in the new
+	// tuples in an UPDATE changeset entry.
+	UnchangedUpdate
 )
