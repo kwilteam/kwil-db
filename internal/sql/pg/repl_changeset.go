@@ -3,14 +3,17 @@ package pg
 import (
 	"bytes"
 	"context"
+	"encoding"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/jackc/pglogrepl"
+
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
@@ -22,7 +25,44 @@ type changesetIoWriter struct {
 	csChan    chan<- any           // *Relation / *ChangesetEntry
 }
 
-var (
+// ChangeStreamer is a type that supports streaming with StreamElement.
+// This and the associated helper functions could alternatively be in migrator.
+type ChangeStreamer interface {
+	encoding.BinaryMarshaler
+	Prefix() byte
+}
+
+// StreamElement writes the serialized changeset element to the writer, preceded
+// by the type's prefix and serialized size. This is supports streamed encoding.
+// When decoding, use DecodeStreamPrefix to interpret the 5-byte prefixes before
+// each encoded element.
+func StreamElement(w io.Writer, s ChangeStreamer) error {
+	bts, err := s.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write([]byte{s.Prefix()})
+	if err != nil {
+		return err
+	}
+
+	err = binary.Write(w, binary.LittleEndian, uint32(len(bts)))
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(bts)
+	return err
+}
+
+// DecodeStreamPrefix decodes prefix bytes for a changeset element. This mirrors
+// the encoding convention in StreamElement.
+func DecodeStreamPrefix(b [5]byte) (csType byte, sz uint32) {
+	return b[0], binary.LittleEndian.Uint32(b[1:])
+}
+
+const (
 	RelationType       = byte(0x01)
 	ChangesetEntryType = byte(0x02)
 	BlockSpendsType    = byte(0x03)
@@ -54,30 +94,19 @@ func (ce *ChangesetEntry) String() string {
 		ce.Kind(), ce.RelationIdx, len(ce.OldTuple), len(ce.NewTuple))
 }
 
-func (ce *ChangesetEntry) Serialize() ([]byte, error) {
-	buf := new(bytes.Buffer)
-	buf.WriteByte(ChangesetEntryType)
+var _ ChangeStreamer = (*ChangesetEntry)(nil)
 
-	bts, err := serialize.Encode(ce)
-	if err != nil {
-		return nil, err
-	}
-
-	size := uint32(len(bts))
-	err = binary.Write(buf, binary.LittleEndian, size)
-	if err != nil {
-		return nil, fmt.Errorf("failed to write size: %w", err)
-	}
-
-	_, err = buf.Write(bts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to write tuple data: %w", err)
-	}
-
-	return buf.Bytes(), nil
+func (ce *ChangesetEntry) Prefix() byte {
+	return ChangesetEntryType
 }
 
-func (ce *ChangesetEntry) Deserialize(data []byte) error {
+func (ce *ChangesetEntry) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(ce)
+}
+
+var _ encoding.BinaryUnmarshaler = (*ChangesetEntry)(nil)
+
+func (ce *ChangesetEntry) UnmarshalBinary(data []byte) error {
 	return serialize.Decode(data, ce)
 }
 
@@ -495,30 +524,19 @@ func (r *Relation) String() string {
 	return fmt.Sprintf("%s.%s", r.Schema, r.Table)
 }
 
-func (r *Relation) Serialize() ([]byte, error) {
-	buf := new(bytes.Buffer)
-	buf.WriteByte(RelationType)
+var _ ChangeStreamer = (*Relation)(nil)
 
-	bts, err := serialize.Encode(r)
-	if err != nil {
-		return nil, err
-	}
-
-	size := uint32(len(bts))
-	err = binary.Write(buf, binary.LittleEndian, size)
-	if err != nil {
-		return nil, fmt.Errorf("failed to write size: %w", err)
-	}
-
-	_, err = buf.Write(bts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to write tuple data: %w", err)
-	}
-
-	return buf.Bytes(), nil
+func (r *Relation) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(r)
 }
 
-func (r *Relation) Deserialize(data []byte) error {
+func (r *Relation) Prefix() byte {
+	return RelationType
+}
+
+var _ encoding.BinaryUnmarshaler = (*Relation)(nil)
+
+func (r *Relation) UnmarshalBinary(data []byte) error {
 	return serialize.Decode(data, r)
 }
 

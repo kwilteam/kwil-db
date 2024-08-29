@@ -1,9 +1,8 @@
 package migrations
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
+	"encoding"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -460,31 +459,19 @@ type BlockSpends struct {
 	Spends []*txapp.Spend
 }
 
-func (bs *BlockSpends) Serialize() ([]byte, error) {
-	buf := new(bytes.Buffer)
-	buf.WriteByte(pg.BlockSpendsType)
+var _ pg.ChangeStreamer = (*BlockSpends)(nil)
 
-	// serialize the spends
-	bts, err := serialize.Encode(bs)
-	if err != nil {
-		return nil, err
-	}
-
-	// write the length of the spends
-	size := uint32(len(bts))
-	if err = binary.Write(buf, binary.LittleEndian, size); err != nil {
-		return nil, err
-	}
-
-	// write the spends
-	if _, err = buf.Write(bts); err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
+func (bs *BlockSpends) Prefix() byte {
+	return pg.BlockSpendsType
 }
 
-func (bs *BlockSpends) Deserialize(bts []byte) error {
+func (bs *BlockSpends) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(bs)
+}
+
+var _ encoding.BinaryUnmarshaler = (*BlockSpends)(nil)
+
+func (bs *BlockSpends) UnmarshalBinary(bts []byte) error {
 	return serialize.Decode(bts, bs)
 }
 
@@ -506,16 +493,18 @@ func newChunkWriter(dir string, height int64) *chunkWriter {
 	}
 }
 
-func (cw *chunkWriter) Write(bts []byte) error {
+var _ io.Writer = (*chunkWriter)(nil)
+
+func (cw *chunkWriter) Write(bts []byte) (int, error) {
 	if len(bts) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	if cw.chunkFile == nil {
 		filename := formatChangesetFilename(cw.dir, cw.height, cw.chunkIdx)
 		file, err := os.Create(filename)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		cw.chunkFile = file
 		cw.chunkSizes = append(cw.chunkSizes, 0)
@@ -527,7 +516,7 @@ func (cw *chunkWriter) Write(bts []byte) error {
 		// write the maximum number of bytes that can be written to the file
 		n, err := cw.chunkFile.Write(bts[:maxBytesToWrite])
 		if err != nil {
-			return err
+			return 0, err
 		}
 		cw.totalBytesWritten += int64(n)
 		cw.chunkSizes[cw.chunkIdx] += int64(n)
@@ -535,7 +524,7 @@ func (cw *chunkWriter) Write(bts []byte) error {
 		// close the current file
 		err = cw.chunkFile.Close()
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		// increment the chunk index
@@ -544,18 +533,22 @@ func (cw *chunkWriter) Write(bts []byte) error {
 		cw.chunkFile = nil
 
 		// write the remaining bytes to the next file
-		return cw.Write(bts[maxBytesToWrite:])
+		nRem, err := cw.Write(bts[maxBytesToWrite:])
+		if err != nil {
+			return 0, err
+		}
+		return n + nRem, nil
 	}
 
 	// write the data to the file
 	n, err := cw.chunkFile.Write(bts)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	cw.chunkSize += int64(n)
 	cw.totalBytesWritten += int64(n)
 	cw.chunkSizes[cw.chunkIdx] += int64(n)
-	return nil
+	return n, nil
 }
 
 func (cw *chunkWriter) Close() error {
@@ -596,32 +589,16 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 		switch ct := ch.(type) {
 		case *pg.ChangesetEntry:
 			// write the changeset to disk
-			ce := ct
-
-			// serialize the changeset entry and write it to disk
-			bts, err := ce.Serialize()
+			err = pg.StreamElement(chunkWriter, ct)
 			if err != nil {
 				m.errChan <- err
 				return
 			}
 
-			// Write the changeset bts to disk
-			if err = chunkWriter.Write(bts); err != nil {
-				m.errChan <- err
-				return
-			}
 		case *pg.Relation:
 			// write the relation to disk
-			relation := ct
-			// serialize the relation and write it to disk
-			bts, err := relation.Serialize()
+			err = pg.StreamElement(chunkWriter, ct)
 			if err != nil {
-				m.errChan <- err
-				return
-			}
-
-			// Write the relation bts to disk
-			if err = chunkWriter.Write(bts); err != nil {
 				m.errChan <- err
 				return
 			}
@@ -632,14 +609,7 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 	bs := &BlockSpends{
 		Spends: m.accounts.GetBlockSpends(),
 	}
-
-	bts, err := bs.Serialize()
-	if err != nil {
-		m.errChan <- err
-		return
-	}
-
-	if err = chunkWriter.Write(bts); err != nil {
+	if pg.StreamElement(chunkWriter, bs); err != nil {
 		m.errChan <- err
 		return
 	}
