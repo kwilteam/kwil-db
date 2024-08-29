@@ -14,6 +14,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// These are bit flags used signal certain client features.
+// TODO: replace this with the options themselves.
 const (
 	// WithoutPrivateKey is a flag that can be passed to DialClient to indicate
 	// that the client does not require the private key for signing. If set in
@@ -24,6 +26,10 @@ const (
 	// UsingGateway is a flag that can be passed to DialClient to indicate that the client is talking to a gateway.
 	// Since very few commands use the gateway, we bind this to specific commands instead of making it a global flag.
 	UsingGateway
+
+	// AuthenticatedCalls indicates that call messages should include a
+	// signature and a server-provided challenge.
+	AuthenticatedCalls
 )
 
 type RoundTripper func(ctx context.Context, client clientType.Client, conf *config.KwilCliConfig) error
@@ -54,6 +60,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 	// if not using the gateway, then we can simply create a regular client and return
 	if flags&UsingGateway == 0 {
+		clientConfig.AuthenticateCalls = (flags&AuthenticatedCalls != 0)
 		client, err := client.NewClient(ctx, conf.Provider, &clientConfig)
 		if err != nil {
 			return err

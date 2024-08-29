@@ -34,6 +34,9 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.StringVar(&cfg.AppConfig.TLSCertFile, "app.tls-cert-file", cfg.AppConfig.TLSCertFile, "TLS certificate file path for the admin and consensus RPC server (optional)")
 	flagSet.StringVar(&cfg.AppConfig.TLSKeyFile, "app.tls-key-file", cfg.AppConfig.TLSKeyFile, "TLS key file path for the admin and consensus RPC servers (optional)")
 	flagSet.StringVar(&cfg.AppConfig.Hostname, "app.hostname", cfg.AppConfig.Hostname, format("%s Server hostname"))
+	flagSet.BoolVar(&cfg.AppConfig.PrivateRPC, "app.private-rpc", cfg.AppConfig.PrivateRPC, "Enforce data privacy with authenticated call request, disabled ad hoc queries, and no raw transaction retrieval")
+	flagSet.Var(&cfg.AppConfig.ChallengeExpiry, "app.challenge-expiry", "Time after which a challenge expires")
+	flagSet.Float64Var(&cfg.AppConfig.ChallengeRateLimit, "app.challenge-rate-limit", cfg.AppConfig.ChallengeRateLimit, "challenge request rate limit per second per client IP")
 
 	flagSet.StringVar(&cfg.AppConfig.DBHost, "app.pg-db-host", cfg.AppConfig.DBHost, "PostgreSQL host address (no port)")
 	flagSet.StringVar(&cfg.AppConfig.DBPort, "app.pg-db-port", cfg.AppConfig.DBPort, "PostgreSQL port")

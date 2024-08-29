@@ -70,6 +70,8 @@ var DefaultConfig = func() *commonConfig.KwildConfig {
 			DBName:               "kwild",
 			RPCTimeout:           commonConfig.Duration(45 * time.Second),
 			RPCMaxReqSize:        4_200_000,
+			ChallengeExpiry:      commonConfig.Duration(10 * time.Second),
+			ChallengeRateLimit:   10.0, // req/s
 			ReadTxTimeout:        commonConfig.Duration(5 * time.Second),
 			Extensions:           make(map[string]map[string]string),
 			Snapshots: commonConfig.SnapshotConfig{

@@ -119,6 +119,17 @@ db_read_timeout = "{{ .AppConfig.ReadTxTimeout }}"
 # RPC request size limit in bytes
 rpc_req_limit = {{ .AppConfig.RPCMaxReqSize }}
 
+# Enforce data privacy: authenticate JSON-RPC call requests using challenge-based
+# authentication. the node will only accept JSON-RPC requests that has a valid signed
+# challenge response. This also disables ad hoc queries, and no raw transaction retrieval.
+private_rpc = {{ .AppConfig.PrivateRPC }}
+
+# Time after which a "call" challenge expires.
+challenge_expiry = "{{ .AppConfig.ChallengeExpiry }}"
+
+# Call challenge request rate limit per second per client IP.
+challenge_rate_limit = {{ .AppConfig.ChallengeRateLimit }}
+
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = {{arrayFormatter .AppConfig.ExtensionEndpoints}}
 

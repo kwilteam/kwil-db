@@ -72,3 +72,50 @@ func checkGetPostResults(t *testing.T, results []map[string]any) {
 		t.Errorf("expected post id to be 1111, got %d", postId)
 	}
 }
+
+func ExecuteCallPrivateModeSpecification(ctx context.Context, t *testing.T, authCaller ExecuteActionsDsl, noAuthCaller ExecuteActionsDsl) {
+	t.Logf("Executing ExecuteCallPrivateModeSpecification")
+
+	db := SchemaLoader.Load(t, SchemaTestDB)
+	dbID := authCaller.DBID(db.Name)
+
+	// When i execute action to database
+	user1 := userTable{
+		ID:       1111,
+		UserName: "test_user",
+		Age:      22,
+	}
+
+	createUserActionInput := []any{user1.ID, user1.UserName, user1.Age}
+
+	txHash, err := authCaller.Execute(ctx, dbID, createUserActionName, createUserActionInput)
+	assert.NoError(t, err)
+
+	expectTxSuccess(t, authCaller, ctx, txHash, defaultTxQueryTimeout)()
+
+	// testing query database: disabled for all clients
+	_, err = noAuthCaller.QueryDatabase(ctx, dbID, "SELECT * FROM users")
+	assert.Error(t, err, "expected error querying database without authentication")
+
+	_, err = authCaller.QueryDatabase(ctx, dbID, "SELECT * FROM users")
+	assert.Error(t, err, "expected error even from authenticated calller")
+
+	// create post
+	const createPostQueryName = "create_post"
+	post1 := [][]any{
+		{1111, "test_post", "test_body"},
+	}
+
+	txHash, err = authCaller.Execute(ctx, dbID, createPostQueryName, post1...)
+	assert.NoError(t, err)
+
+	expectTxSuccess(t, authCaller, ctx, txHash, defaultTxQueryTimeout)()
+
+	// testing call action
+	getPostInput := []any{1111}
+	_, err = noAuthCaller.Call(ctx, dbID, "get_post", getPostInput)
+	assert.Error(t, err, "expected error calling action without authentication")
+
+	_, err = authCaller.Call(ctx, dbID, "get_post", getPostInput)
+	assert.NoError(t, err)
+}

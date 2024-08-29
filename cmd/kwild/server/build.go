@@ -219,7 +219,11 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	}
 
 	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp, abciApp, migrator,
-		*rpcSvcLogger, usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppConfig.ReadTxTimeout)))
+		*rpcSvcLogger, usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppConfig.ReadTxTimeout)),
+		usersvc.WithPrivateMode(d.cfg.AppConfig.PrivateRPC),
+		usersvc.WithChallengeExpiry(time.Duration(d.cfg.AppConfig.ChallengeExpiry)),
+		usersvc.WithChallengeRateLimit(d.cfg.AppConfig.ChallengeRateLimit))
+
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppConfig.JSONRPCListenAddress,
 		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppConfig.RPCTimeout)),
 		rpcserver.WithReqSizeLimit(d.cfg.AppConfig.RPCMaxReqSize),

@@ -53,7 +53,8 @@ type ActTestCfg struct {
 	CreatorSigner auth.Signer
 	VisitorSigner auth.Signer
 
-	GasEnabled bool
+	GasEnabled       bool
+	AuthenticateRPCs bool
 }
 
 func (e *ActTestCfg) CreatorIdent() []byte {
@@ -185,9 +186,10 @@ func (r *ActHelper) generateNodeConfig() {
 		ChainID:       TestChainID,
 		BlockInterval: time.Second,
 		// InitialHeight: 0,
-		OutputDir:       tmpPath,
-		JoinExpiry:      14400,
-		WithoutGasCosts: !r.cfg.GasEnabled,
+		OutputDir:        tmpPath,
+		JoinExpiry:       14400,
+		WithoutGasCosts:  !r.cfg.GasEnabled,
+		AuthenticateRPCs: r.cfg.AuthenticateRPCs,
 		Allocs: map[string]*big.Int{
 			creatorIdent: bal,
 		},
@@ -267,7 +269,7 @@ func (r *ActHelper) WaitUntilInterrupt() {
 
 // GetDriver returns a concrete driver for acceptance test, based on the driver
 // type and user. By default, the driver is created with the creator's private key.
-func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDriver {
+func (r *ActHelper) GetDriver(driveType string, user string, authenticateRPCs bool) KwilAcceptanceDriver {
 	pk := r.cfg.CreatorRawPk
 	signer := r.cfg.CreatorSigner
 	if user == "visitor" {
@@ -277,33 +279,34 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 
 	switch driveType {
 	case "jsonrpc":
-		return r.getJSONRPCClientDriver(signer, r.cfg.JSONRPCEndpoint)
+		return r.getJSONRPCClientDriver(signer, r.cfg.JSONRPCEndpoint, authenticateRPCs)
 	case "cli":
-		return r.getCliDriver(pk, signer.Identity(), r.cfg.JSONRPCEndpoint)
+		return r.getCliDriver(pk, signer.Identity(), r.cfg.JSONRPCEndpoint, authenticateRPCs)
 	default:
 		panic("unsupported driver type")
 	}
 }
 
-func (r *ActHelper) getJSONRPCClientDriver(signer auth.Signer, endpoint string) KwilAcceptanceDriver {
+func (r *ActHelper) getJSONRPCClientDriver(signer auth.Signer, endpoint string, authenticateRPCs bool) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	kwilClt, err := client.NewClient(context.TODO(), endpoint, &clientType.Options{
-		Signer:  signer,
-		ChainID: TestChainID,
-		Logger:  logger,
+		Signer:            signer,
+		ChainID:           TestChainID,
+		Logger:            logger,
+		AuthenticateCalls: authenticateRPCs,
 	})
 	require.NoError(r.t, err, "failed to create json-rpc client")
 
 	return driver.NewKwildClientDriver(kwilClt, signer, nil, logger)
 }
 
-func (r *ActHelper) getCliDriver(privKey string, identifier []byte, endpoint string) KwilAcceptanceDriver {
+func (r *ActHelper) getCliDriver(privKey string, identifier []byte, endpoint string, authenticateRPCs bool) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	_, currentFilePath, _, _ := runtime.Caller(1)
 	cliBinPath := path.Join(path.Dir(currentFilePath),
 		"../../.build/kwil-cli")
 
-	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, TestChainID, identifier, false, nil, logger)
+	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, TestChainID, identifier, false, nil, authenticateRPCs, logger)
 }

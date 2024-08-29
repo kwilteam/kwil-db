@@ -39,15 +39,14 @@ type KwildClientDriver struct {
 	logger   log.Logger
 }
 
-func NewKwildClientDriver(clt clientType.Client, signer auth.Signer, deployer *ethdeployer.Deployer, logger log.Logger) *KwildClientDriver {
-	driver := &KwildClientDriver{
+func NewKwildClientDriver(clt clientType.Client, signer auth.Signer,
+	deployer *ethdeployer.Deployer, logger log.Logger) *KwildClientDriver {
+	return &KwildClientDriver{
 		clt:      clt,
 		signer:   signer,
 		logger:   logger,
 		deployer: deployer,
 	}
-
-	return driver
 }
 
 func (d *KwildClientDriver) Client() clientType.Client {

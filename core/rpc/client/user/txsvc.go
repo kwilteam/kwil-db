@@ -35,4 +35,7 @@ type TxSvcClient interface {
 	// Changesets
 	LoadChangeset(ctx context.Context, height int64, index int64) ([]byte, error)
 	ChangesetMetadata(ctx context.Context, height int64) (int64, []int64, error)
+
+	// Challenge
+	Challenge(ctx context.Context) ([]byte, error)
 }

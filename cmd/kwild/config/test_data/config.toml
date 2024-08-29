@@ -46,6 +46,17 @@ db_read_timeout = "5s"
 # RPC request size limit in bytes
 rpc_req_limit = 4200000
 
+# Enforce data privacy: authenticate JSON-RPC call requests using challenge-based
+# authentication. the node will only accept JSON-RPC requests that has a valid signed
+# challenge response. This also disables ad hoc queries, and no raw transaction retrieval.
+private_rpc = false
+
+# Time after which a "call" challenge expires.
+challenge_expiry = "10s"
+
+# Call challenge request rate limit per second per client IP.
+challenge_rate_limit = 10.0
+
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = ["localhost:50052", "localhost:50053", "localhost:50054"]
 

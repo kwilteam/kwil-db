@@ -34,6 +34,12 @@ const (
 	pathSpecV1 = "/spec/v1"
 )
 
+type contextRPCKey string
+
+const (
+	RequestIPCtx contextRPCKey = "clientIP"
+)
+
 // Server is a JSON-RPC server.
 type Server struct {
 	srv            *http.Server
@@ -54,6 +60,7 @@ type serverConfig struct {
 	enableCORS bool
 	specInfo   *openrpc.Info
 	reqSzLimit int
+	proxyCount int
 }
 
 type Opt func(*serverConfig)
@@ -72,6 +79,12 @@ func WithPass(pass string) Opt {
 func WithTLS(cfg *tls.Config) Opt {
 	return func(c *serverConfig) {
 		c.tlsConfig = cfg
+	}
+}
+
+func WithTrustedProxyCount(trustedProxyCount int) Opt {
+	return func(c *serverConfig) {
+		c.proxyCount = trustedProxyCount
 	}
 }
 
@@ -175,6 +188,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		timeout:    defaultWriteTimeout,
 		specInfo:   defaultSpecInfo,
 		reqSzLimit: defaultSzLimit,
+		// default trusted proxy count is 0 (direct connect assumed)
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -214,7 +228,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	} // otherwise no basic auth check
 
 	var h http.Handler
-	h = http.HandlerFunc(s.handlerV1)
+	h = http.HandlerFunc(s.handlerV1) // last, after middleware below
 	h = http.MaxBytesHandler(h, int64(cfg.reqSzLimit))
 	// amazingly, exceeding the server's write timeout does not cancel request
 	// contexts: https://github.com/golang/go/issues/59602
@@ -223,9 +237,13 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	if cfg.enableCORS {
 		h = corsHandler(h)
 	}
-	h = recoverer(h, log)
+	h = realIPHandler(h, cfg.proxyCount) // for effective rate limiting
+	h = recoverer(h, log)                // first, wrap with defer and call next ^
 
 	mux.Handle(pathRPCV1, h)
+
+	// NOTE: for challenges at server level (above JSON-RPC methods):
+	// mux.Handle(pathRPCV1 + "/challenge", challengeHandler)
 
 	var specHandler http.Handler
 	specHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -237,6 +255,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		http.ServeContent(w, r, "openrpc.json", time.Time{}, bytes.NewReader(s.spec))
 	})
 	specHandler = corsHandler(specHandler)
+	specHandler = recoverer(specHandler, log)
 	mux.Handle(pathSpecV1, specHandler)
 
 	return s, nil
@@ -313,6 +332,62 @@ func recoverer(h http.Handler, log log.Logger) http.Handler {
 
 		h.ServeHTTP(w, r)
 	})
+}
+
+func realIPHandler(h http.Handler, trustedProxyCount int) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rip := realIP(r, trustedProxyCount); rip != "" {
+			// r.RemoteAddr = rip
+			r = r.WithContext(context.WithValue(r.Context(), RequestIPCtx, rip))
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+func addrHost(addr string) string {
+	if net.ParseIP(addr) != nil {
+		return addr
+	}
+	host, _, _ := net.SplitHostPort(addr)
+	return host
+}
+
+// realIP is taken with minimum mods from kgw. This uses the "Trusted proxy
+// count" method rather than the "Trusted proxy list" method.
+func realIP(r *http.Request, xffTrustProxyCount int) string {
+	if xffTrustProxyCount == 0 { // not behind any proxy
+		return addrHost(r.RemoteAddr)
+	}
+
+	if xrip := strings.TrimSpace(r.Header.Get("X-Real-Ip")); xrip != "" {
+		return xrip
+	}
+
+	xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
+	if xff == "" {
+		return addrHost(r.RemoteAddr)
+	}
+
+	parts := strings.Split(xff, ",")
+	for i, p := range parts {
+		parts[i] = strings.TrimSpace(p)
+	}
+
+	// can only be the user ip
+	if len(parts) == 1 {
+		return parts[0]
+	}
+
+	// X-Forwarded-For: <clientIP>, <proxy1IP>, <proxy2IP>
+	// -                    | 	        |           |
+	// set by:            proxy1	  proxy2      proxy3
+	// refer: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For#selecting_an_ip_address
+	if len(parts) >= xffTrustProxyCount {
+		return parts[len(parts)-xffTrustProxyCount]
+	}
+
+	return ""
+
 }
 
 func (s *Server) Serve(ctx context.Context) error {

@@ -31,6 +31,10 @@ type Options struct {
 	// Silence silences warnings logged from the client.
 	Silence bool
 
+	// AuthenticateCalls will sign call request messages, including a
+	// server-provided challenge.
+	AuthenticateCalls bool
+
 	// Conn is the http client to use.
 	Conn *http.Client
 }
@@ -60,6 +64,8 @@ func (c *Options) Apply(opts *Options) {
 	c.SkipVerifyChainID = opts.SkipVerifyChainID
 
 	c.Silence = opts.Silence
+
+	c.AuthenticateCalls = opts.AuthenticateCalls
 }
 
 // DefaultOptions returns the default options for the client.

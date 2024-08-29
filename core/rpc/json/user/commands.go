@@ -119,3 +119,5 @@ type ListMigrationsRequest struct{}
 type MigrationStatusRequest struct {
 	Id string `json:"id"` // Id is the migration proposal ID
 }
+
+type ChallengeRequest struct{}

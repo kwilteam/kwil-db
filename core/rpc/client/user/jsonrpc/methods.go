@@ -81,11 +81,7 @@ func (cl *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, s
 }
 
 func (cl *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...rpcclient.ActionCallOption) ([]map[string]any, []string, error) {
-	cmd := &userjson.CallRequest{
-		Body:     msg.Body,
-		AuthType: msg.AuthType,
-		Sender:   msg.Sender,
-	}
+	cmd := msg // same underlying type presently
 	res := &userjson.CallResponse{}
 	err := cl.CallMethod(ctx, string(userjson.MethodCall), cmd, res)
 	if err != nil {
@@ -286,4 +282,14 @@ func (cl *Client) GenesisSnapshotChunk(ctx context.Context, height uint64, chunk
 		return nil, err
 	}
 	return res.Chunk, nil
+}
+
+func (cl *Client) Challenge(ctx context.Context) ([]byte, error) {
+	cmd := &userjson.ChallengeRequest{}
+	res := &userjson.ChallengeResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodChallenge), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res.Challenge, nil
 }

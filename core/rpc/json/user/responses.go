@@ -101,3 +101,7 @@ type ListMigrationsResponse struct {
 type MigrationStatusResponse struct {
 	Status *types.PendingResolution `json:"status"`
 }
+
+type ChallengeResponse struct {
+	Challenge types.HexBytes `json:"challenge"`
+}

@@ -38,6 +38,8 @@ type Client struct {
 	skipVerifyChainID bool
 
 	noWarnings bool // silence warning logs
+
+	authCallRPC bool
 }
 
 // SvcClient is a trapdoor to access the underlying
@@ -105,6 +107,7 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 		chainID:           clientOptions.ChainID,
 		noWarnings:        clientOptions.Silence,
 		skipVerifyChainID: clientOptions.SkipVerifyChainID,
+		authCallRPC:       clientOptions.AuthenticateCalls,
 	}
 
 	if c.chainID == "" { // always use chain ID from remote host
@@ -307,14 +310,22 @@ func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs
 		Arguments: encoded,
 	}
 
-	msg, err := transactions.CreateCallMessage(payload)
-	if err != nil {
-		return nil, fmt.Errorf("create signed message: %w", err)
+	// If using authenticated call RPCs, request a challenge to include in the
+	// signed message text.
+	var challenge []byte
+	if c.authCallRPC {
+		if c.Signer == nil {
+			return nil, errors.New("a signer is required with authenticated call RPCs")
+		}
+		challenge, err = c.challenge(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	if c.Signer != nil {
-		msg.AuthType = c.Signer.AuthType()
-		msg.Sender = c.Signer.Identity()
+	msg, err := transactions.CreateCallMessage(payload, challenge, c.Signer)
+	if err != nil {
+		return nil, fmt.Errorf("create signed message: %w", err)
 	}
 
 	res, logs, err := c.txClient.Call(ctx, msg)
@@ -330,6 +341,10 @@ func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs
 
 // Query executes a query.
 func (c *Client) Query(ctx context.Context, dbid string, query string) (*clientType.Records, error) {
+	// if c.authCallRPC {
+	// 	return nil, errors.New("ad hoc queries are not handled with authenticated RPCs")
+	// }
+
 	res, err := c.txClient.Query(ctx, dbid, query)
 	if err != nil {
 		return nil, err
@@ -425,4 +440,8 @@ func (c *Client) GenesisState(ctx context.Context) (*types.MigrationMetadata, er
 
 func (c *Client) GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error) {
 	return c.txClient.GenesisSnapshotChunk(ctx, height, chunkIdx)
+}
+
+func (c *Client) challenge(ctx context.Context) ([]byte, error) {
+	return c.txClient.Challenge(ctx)
 }
