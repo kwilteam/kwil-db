@@ -58,6 +58,7 @@ func createCmd() *cobra.Command {
 		Short:   "Creates a snapshot of the database.",
 		Long:    createLongExplain,
 		Example: createExample,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			snapshotDir, err := common.ExpandPath(snapshotDir)
 			if err != nil {

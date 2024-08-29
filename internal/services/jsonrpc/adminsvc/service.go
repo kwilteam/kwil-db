@@ -56,7 +56,7 @@ type P2P interface {
 }
 
 type Migrator interface {
-	GetChangesetMetadata(height int64) (*migrations.ChangesetMetdata, error)
+	GetChangesetMetadata(height int64) (*migrations.ChangesetMetadata, error)
 	GetChangeset(height int64, index int64) ([]byte, error)
 	GetMigrationMetadata() (*coretypes.MigrationMetadata, error)
 	GetGenesisSnapshotChunk(height int64, format uint32, chunkIdx uint32) ([]byte, error)

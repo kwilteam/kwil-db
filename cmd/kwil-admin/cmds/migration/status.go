@@ -2,7 +2,6 @@ package migration
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -26,8 +25,7 @@ func statusCmd() *cobra.Command {
 		Example: statusExample,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-
+			ctx := cmd.Context()
 			clt, err := common.GetAdminSvcClient(ctx, cmd)
 			if err != nil {
 				return display.PrintErr(cmd, err)

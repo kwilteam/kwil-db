@@ -1,41 +1,42 @@
 package migration
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
+
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/internal/statesync"
-	"github.com/spf13/cobra"
 )
 
 var (
 	genesisFileName  = "genesis.json"
 	snapshotFileName = "snapshot.sql.gz"
 
-	genesisStateLong = "Download the genesis state for the new network from a trusted node on the source network. The genesis state includes the genesis config file (genesis.json) , genesis snapshot (snapshot.sql.gz) , and the migration info such as the start and end heights. The genesis state is saved in the root directory specified by the `--root-dir` flag. If there is no approved migration or if the migration has not started yet, the command will return a message indicating that there is no genesis state to download."
+	genesisStateLong = "Download the genesis state for the new network from a trusted node on the source network. The genesis state includes the genesis config file (genesis.json), genesis snapshot (snapshot.sql.gz), and the migration info such as the start and end heights. The genesis state is saved in the root directory specified by the `--root-dir` flag. If there is no approved migration or if the migration has not started yet, the command will return a message indicating that there is no genesis state to download."
 
 	genesisStateExample = `# Download the genesis state to the default root directory (~/.kwild)
-kwil-admin migration genesis-state
+kwil-admin migrate genesis-state
 
 # Download the genesis state to a custom root directory
-kwil-admin migration genesis-state --root-dir /path/to/root/dir.`
+kwil-admin migrate genesis-state --root-dir /path/to/root/dir`
 )
 
 func genesisStateCmd() *cobra.Command {
 	var rootDir string
 	cmd := &cobra.Command{
 		Use:     "genesis-state",
-		Short:   "Download the genesis state corresponding to the on-going migration.",
+		Short:   "Download the genesis state corresponding to the ongoing migration.",
 		Long:    genesisStateLong,
 		Example: genesisStateExample,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
+			ctx := cmd.Context()
 			clt, err := common.GetAdminSvcClient(ctx, cmd)
 			if err != nil {
 				return display.PrintErr(cmd, err)
@@ -116,7 +117,7 @@ func genesisStateCmd() *cobra.Command {
 	}
 
 	common.BindRPCFlags(cmd)
-	cmd.Flags().StringVar(&rootDir, "root-dir", "~/.kwild", "Root directory for the genesis state files")
+	cmd.Flags().StringVarP(&rootDir, "root-dir", "r", "~/.kwild", "Root directory for the genesis state files")
 	return cmd
 }
 

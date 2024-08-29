@@ -375,7 +375,7 @@ func (m *Migrator) GetGenesisSnapshotChunk(height int64, format uint32, chunkIdx
 }
 
 // GetChangesetMetadata gets the metadata for the changeset at the given height.
-func (m *Migrator) GetChangesetMetadata(height int64) (*ChangesetMetdata, error) {
+func (m *Migrator) GetChangesetMetadata(height int64) (*ChangesetMetadata, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -426,14 +426,14 @@ func (m *Migrator) GetChangeset(height int64, index int64) ([]byte, error) {
 //		genesis.json
 //		snapshot data.....
 
-type ChangesetMetdata struct {
+type ChangesetMetadata struct {
 	Height     int64
 	Chunks     int64
 	ChunkSizes []int64
 }
 
 // Serialize serializes the metadata to a file.
-func (m *ChangesetMetdata) saveAs(file string) error {
+func (m *ChangesetMetadata) saveAs(file string) error {
 	bts, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
@@ -443,13 +443,13 @@ func (m *ChangesetMetdata) saveAs(file string) error {
 
 // LoadChangesetMetadata loads the metadata associated with a changeset.s
 // It reads the changeset metadata file and returns the metadata.
-func loadChangesetMetadata(metadatafile string) (*ChangesetMetdata, error) {
+func loadChangesetMetadata(metadatafile string) (*ChangesetMetadata, error) {
 	bts, err := os.ReadFile(metadatafile)
 	if err != nil {
 		return nil, fmt.Errorf("metadata file not found %s", err.Error())
 	}
 
-	var metadata ChangesetMetdata
+	var metadata ChangesetMetadata
 	if err := json.Unmarshal(bts, &metadata); err != nil {
 		return nil, err
 	}
@@ -567,7 +567,7 @@ func (cw *chunkWriter) Close() error {
 
 func (cw *chunkWriter) SaveMetadata() error {
 	filename := formatChangesetMetadataFilename(cw.dir, cw.height)
-	metadata := &ChangesetMetdata{
+	metadata := &ChangesetMetadata{
 		Height:     cw.height,
 		Chunks:     cw.chunkIdx + 1,
 		ChunkSizes: cw.chunkSizes,
