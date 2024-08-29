@@ -765,19 +765,6 @@ func (cfg *KwildConfig) sanitizeCfgPaths() error {
 		fmt.Println("Snapshot file to initialize database from:", cfg.AppCfg.GenesisState)
 	}
 
-	migrations, ok := cfg.AppCfg.Extensions["migrations"]
-	if ok {
-		path, ok := migrations["kwild_tls_cert_file"]
-		if ok {
-			rootPath, err := rootify(path, rootDir)
-			if err != nil {
-				return fmt.Errorf("failed to expand tls cert file path \"%v\": %v", path, err)
-			}
-
-			migrations["kwild_tls_cert_file"] = rootPath
-			fmt.Println("Migrations extension Kwild TLS cert file:", path)
-		}
-	}
 	return nil
 }
 
