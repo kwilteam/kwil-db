@@ -1,8 +1,6 @@
 package generate
 
 import (
-	"fmt"
-
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/conv"
 )
@@ -26,7 +24,7 @@ func attributeToSQLString(col *types.Column, attr *types.Attribute) (string, err
 		// for max_len and min_len, we want to check that the value is an int.
 		// For regular max and min, it can be a decimal or uint256.
 
-		intVal, err := conv.Int(attr.Value)
+		_, err := conv.Int(attr.Value)
 		if err != nil {
 			return "", err
 		}
@@ -36,9 +34,9 @@ func attributeToSQLString(col *types.Column, attr *types.Attribute) (string, err
 			fn = "OCTET_LENGTH"
 		}
 
-		return "CHECK (" + fn + "(" + col.Name + ") >= " + fmt.Sprint(intVal) + ")", nil
+		return "CHECK (" + fn + "(" + col.Name + ") >= " + attr.Value + ")", nil
 	case types.MAX_LENGTH:
-		intVal, err := conv.Int(attr.Value)
+		_, err := conv.Int(attr.Value)
 		if err != nil {
 			return "", err
 		}
@@ -48,7 +46,7 @@ func attributeToSQLString(col *types.Column, attr *types.Attribute) (string, err
 			fn = "OCTET_LENGTH"
 		}
 
-		return "CHECK (" + fn + "(" + col.Name + ") <= " + fmt.Sprint(intVal) + ")", nil
+		return "CHECK (" + fn + "(" + col.Name + ") <= " + attr.Value + ")", nil
 	default:
 		return "", nil
 	}
