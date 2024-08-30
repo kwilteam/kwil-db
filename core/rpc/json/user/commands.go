@@ -67,7 +67,7 @@ const (
 )
 
 // CallRequest contains the request parameters for MethodCall.
-type CallRequest = transactions.CallMessage
+type CallRequest = types.CallMessage
 
 // ChainInfoRequest contains the request parameters for MethodChainInfo.
 type ChainInfoRequest struct{}

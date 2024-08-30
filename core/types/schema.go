@@ -1099,7 +1099,7 @@ type DataType struct {
 	// IsArray is true if the type is an array.
 	IsArray bool `json:"is_array"`
 	// Metadata is the metadata of the type.
-	Metadata [2]uint16 `json:"metadata"`
+	Metadata [2]uint16 `json:"metadata" rlp:"optional"`
 }
 
 // String returns the string representation of the type.

@@ -254,7 +254,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 // It can take any number of inputs, and if multiple tuples of inputs are passed,
 // it will execute them in the same transaction.
 func (c *Client) Execute(ctx context.Context, dbid string, procedure string, tuples [][]any, opts ...clientType.TxOpt) (transactions.TxHash, error) {
-	encodedTuples := make([][]*transactions.EncodedValue, len(tuples))
+	encodedTuples := make([][]*types.EncodedValue, len(tuples))
 	for i, tuple := range tuples {
 		encoded, err := encodeTuple(tuple)
 		if err != nil {
@@ -301,13 +301,13 @@ func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs
 		return nil, err
 	}
 
-	payload := &transactions.ActionCall{
+	payload := &types.ActionCall{
 		DBID:      dbid,
 		Action:    procedure,
 		Arguments: encoded,
 	}
 
-	msg, err := transactions.CreateCallMessage(payload)
+	msg, err := types.CreateCallMessage(payload)
 	if err != nil {
 		return nil, fmt.Errorf("create signed message: %w", err)
 	}
@@ -356,10 +356,10 @@ func (c *Client) GetAccount(ctx context.Context, acctID []byte, status types.Acc
 }
 
 // encodeTuple encodes a tuple for usage in a transaction.
-func encodeTuple(tup []any) ([]*transactions.EncodedValue, error) {
-	encoded := make([]*transactions.EncodedValue, 0, len(tup))
+func encodeTuple(tup []any) ([]*types.EncodedValue, error) {
+	encoded := make([]*types.EncodedValue, 0, len(tup))
 	for _, val := range tup {
-		ev, err := transactions.EncodeValue(val)
+		ev, err := types.EncodeValue(val)
 		if err != nil {
 			return nil, err
 		}

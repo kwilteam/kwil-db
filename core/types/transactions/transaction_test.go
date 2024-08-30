@@ -10,6 +10,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
@@ -98,7 +99,7 @@ func Test_TransactionBodyMarshalJSON(t *testing.T) {
 type actionExecutionV0 struct {
 	DBID      string
 	Action    string
-	Arguments [][]*transactions.EncodedValue
+	Arguments [][]*types.EncodedValue
 	// No other optional or tail fields defined.
 }
 
@@ -123,7 +124,7 @@ func TestActionExecution_Marshal(t *testing.T) {
 	ae := &transactions.ActionExecution{
 		DBID:   "dbid",
 		Action: "insert_thing",
-		Arguments: [][]*transactions.EncodedValue{
+		Arguments: [][]*types.EncodedValue{
 			{
 				mustDetect(nil),
 				mustDetect("b"),
@@ -171,7 +172,7 @@ func TestTransaction_Sign(t *testing.T) {
 	rawPayload := transactions.ActionExecution{
 		DBID:   "xf617af1ca774ebbd6d23e8fe12c56d41d25a22d81e88f67c6c6ee0d4",
 		Action: "create_user",
-		Arguments: [][]*transactions.EncodedValue{
+		Arguments: [][]*types.EncodedValue{
 			{
 				mustDetect("foo"),
 				mustDetect(32),
@@ -251,7 +252,7 @@ func TestTransactionBody_SerializeMsg(t *testing.T) {
 	rawPayload := transactions.ActionExecution{
 		DBID:   "xf617af1ca774ebbd6d23e8fe12c56d41d25a22d81e88f67c6c6ee0d4",
 		Action: "create_user",
-		Arguments: [][]*transactions.EncodedValue{
+		Arguments: [][]*types.EncodedValue{
 			{
 				mustDetect("foo"),
 				mustDetect(32),

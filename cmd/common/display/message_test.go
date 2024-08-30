@@ -91,10 +91,10 @@ func getExampleTxQueryResponse() *transactions.TcTxQueryResponse {
 	rawPayload := transactions.ActionExecution{
 		DBID:   "xf617af1ca774ebbd6d23e8fe12c56d41d25a22d81e88f67c6c6ee0d4",
 		Action: "create_user",
-		Arguments: [][]*transactions.EncodedValue{
+		Arguments: [][]*types.EncodedValue{
 			{
 				{
-					Type: transactions.DataType{
+					Type: types.DataType{
 						Name: types.TextType.Name,
 					},
 					Data: [][]byte{[]byte("foo")},

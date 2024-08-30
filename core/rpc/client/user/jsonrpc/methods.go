@@ -80,7 +80,7 @@ func (cl *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, s
 	return res.TxHash, nil
 }
 
-func (cl *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...rpcclient.ActionCallOption) ([]map[string]any, []string, error) {
+func (cl *Client) Call(ctx context.Context, msg *types.CallMessage, opts ...rpcclient.ActionCallOption) ([]map[string]any, []string, error) {
 	cmd := &userjson.CallRequest{
 		Body:     msg.Body,
 		AuthType: msg.AuthType,

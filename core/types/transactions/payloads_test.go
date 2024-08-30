@@ -94,7 +94,7 @@ func Test_Types(t *testing.T) {
 			obj: &transactions.ActionExecution{
 				DBID:   "db_id",
 				Action: "action",
-				Arguments: [][]*transactions.EncodedValue{
+				Arguments: [][]*types.EncodedValue{
 					{
 						mustDetect("arg1"),
 						mustDetect("arg2"),
@@ -111,7 +111,7 @@ func Test_Types(t *testing.T) {
 			obj: &transactions.ActionExecution{
 				DBID:   "db_id",
 				Action: "action",
-				Arguments: [][]*transactions.EncodedValue{
+				Arguments: [][]*types.EncodedValue{
 					{
 						mustDetect(nil),
 						mustDetect("arg2"),
@@ -120,28 +120,6 @@ func Test_Types(t *testing.T) {
 						mustDetect("arg3"),
 						mustDetect(nil),
 					},
-				},
-			},
-		},
-		{
-			name: "action_call no nils",
-			obj: &transactions.ActionCall{
-				DBID:   "db_id",
-				Action: "action",
-				Arguments: []*transactions.EncodedValue{
-					mustDetect("arg1"),
-					mustDetect("arg2"),
-				},
-			},
-		},
-		{
-			name: "action_call with nil",
-			obj: &transactions.ActionCall{
-				DBID:   "db_id",
-				Action: "action",
-				Arguments: []*transactions.EncodedValue{
-					mustDetect(nil),
-					mustDetect("arg2"),
 				},
 			},
 		},
@@ -219,8 +197,6 @@ func Test_Types(t *testing.T) {
 				obj = &transactions.Schema{}
 			case *transactions.ActionExecution:
 				obj = &transactions.ActionExecution{}
-			case *transactions.ActionCall:
-				obj = &transactions.ActionCall{}
 			case *transactions.DropSchema:
 				obj = &transactions.DropSchema{}
 			case *transactions.Transfer:
@@ -262,7 +238,6 @@ func TestUnmarshalPayload(t *testing.T) {
 	tests := []transactions.Payload{
 		&transactions.DropSchema{},
 		&transactions.Schema{},
-		&transactions.ActionCall{},
 		&transactions.ActionExecution{},
 		&transactions.Transfer{},
 		&transactions.ValidatorApprove{},
@@ -305,8 +280,8 @@ func TestExtendedPayloadType(t *testing.T) {
 	assert.True(t, noopPayload.Valid())
 }
 
-func mustDetect(v any) *transactions.EncodedValue {
-	ev, err := transactions.EncodeValue(v)
+func mustDetect(v any) *types.EncodedValue {
+	ev, err := types.EncodeValue(v)
 	if err != nil {
 		panic(err)
 	}
@@ -357,7 +332,7 @@ func Test_EncodeValue(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
-			res, err := transactions.EncodeValue(tt.val)
+			res, err := types.EncodeValue(tt.val)
 			if tt.wantErr {
 				require.Error(t, err)
 				return

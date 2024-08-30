@@ -480,23 +480,6 @@ func (svc *Service) Schema(ctx context.Context, req *userjson.SchemaRequest) (*u
 	}, nil
 }
 
-func convertActionCall(req *userjson.CallRequest) (*transactions.ActionCall, *transactions.CallMessage, error) {
-	var actionPayload transactions.ActionCall
-
-	err := actionPayload.UnmarshalBinary(req.Body.Payload)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &actionPayload, &transactions.CallMessage{
-		Body: &transactions.CallMessageBody{
-			Payload: req.Body.Payload,
-		},
-		AuthType: req.AuthType,
-		Sender:   req.Sender,
-	}, nil
-}
-
 func resultMap(r *sql.ResultSet) []map[string]any {
 	m := make([]map[string]any, len(r.Rows))
 	for i, row := range r.Rows {
@@ -512,11 +495,13 @@ func resultMap(r *sql.ResultSet) []map[string]any {
 }
 
 func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userjson.CallResponse, *jsonrpc.Error) {
-	body, msg, err := convertActionCall(req)
+	// Decode the ActionCall, which contains the args to the action call, from
+	// the request's serialized data field.
+	var body types.ActionCall
+	err := body.UnmarshalBinary(req.Body)
 	if err != nil {
 		// NOTE: http api needs to be able to get the error message
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to convert action call: "+err.Error(), nil)
-
 	}
 
 	args := make([]any, len(body.Arguments))
@@ -527,10 +512,10 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		}
 	}
 
-	signer := msg.Sender
-	caller := "" // string representation of sender, if signed.  Otherwise, empty string
-	if signer != nil && msg.AuthType != "" {
-		caller, err = ident.Identifier(msg.AuthType, signer)
+	var caller string // string representation of sender, if signed.  Otherwise, empty string
+	signer := req.Sender
+	if signer != nil && req.AuthType != "" {
+		caller, err = ident.Identifier(req.AuthType, signer)
 		if err != nil {
 			return nil, jsonrpc.NewError(jsonrpc.ErrorIdentInvalid, "failed to get caller: "+err.Error(), nil)
 		}
@@ -587,7 +572,7 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 			Signer:        signer,
 			Caller:        caller,
 			Height:        -1, // not available
-			Authenticator: msg.AuthType,
+			Authenticator: req.AuthType,
 		},
 	})
 	if err != nil {

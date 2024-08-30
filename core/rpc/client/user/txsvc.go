@@ -15,7 +15,7 @@ import (
 // The txsvc is the main service for end users to interact with a Kwil network.
 type TxSvcClient interface {
 	Broadcast(ctx context.Context, tx *transactions.Transaction, sync client.BroadcastWait) ([]byte, error)
-	Call(ctx context.Context, msg *transactions.CallMessage, opts ...client.ActionCallOption) ([]map[string]any, []string, error)
+	Call(ctx context.Context, msg *types.CallMessage, opts ...client.ActionCallOption) ([]map[string]any, []string, error)
 	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
 	EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
 	GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error)
