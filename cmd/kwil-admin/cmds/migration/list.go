@@ -60,6 +60,7 @@ func (m *MigrationsList) MarshalText() ([]byte, error) {
 		msg.WriteString(fmt.Sprintf("\tactivationPeriod: %d\n", migration.ActivationPeriod))
 		msg.WriteString(fmt.Sprintf("\tmigrationDuration: %d\n", migration.Duration))
 		msg.WriteString(fmt.Sprintf("\tchainID: %s\n", migration.ChainID))
+		msg.WriteString(fmt.Sprintf("\ttimestamp: %s\n", migration.Timestamp))
 	}
 	return msg.Bytes(), nil
 }

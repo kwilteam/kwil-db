@@ -25,7 +25,7 @@ func SubmitMigrationProposal(ctx context.Context, t *testing.T, netops Migration
 	t.Log("Executing migration trigger specification")
 
 	// Trigger migration"
-	txHash, err := netops.SubmitMigrationProposal(ctx, big.NewInt(5), big.NewInt(200), chainID)
+	txHash, err := netops.SubmitMigrationProposal(ctx, big.NewInt(1), big.NewInt(200), chainID)
 	require.NoError(t, err)
 
 	// Ensure that the Tx is mined.
@@ -76,7 +76,7 @@ func InstallGenesisState(ctx context.Context, t *testing.T, netops MigrationOpsD
 	require.Eventually(t, func() bool {
 		metadata, err = netops.GenesisState(ctx)
 		require.NoError(t, err)
-		return metadata.InMigration
+		return metadata.MigrationState.Status == types.MigrationInProgress
 	}, 6*time.Second, 500*time.Millisecond)
 
 	// Verify genesis state

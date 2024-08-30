@@ -1000,7 +1000,7 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 			1. This checks if the database exists on the new node
 			2. Verify if the user and posts are synced to the new node
 		*/
-		time.Sleep(time.Second * 20) // This is for the changesets to be synced and voted and resolved in the new network
+		time.Sleep(time.Second * 30) // This is for the changesets to be synced and voted and resolved in the new network
 
 		newNodeDriver := helper.GetMigrationUserDriver(ctx, "new-node0", "jsonrpc", nil)
 		specifications.DatabaseVerifySpecification(ctx, t, newNodeDriver, true)
@@ -1008,7 +1008,7 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 		// The user and posts should be synced to the new node through the changeset_listener extension
 		// Below specification checks if the user and posts are synced to the new node correctly
 		expectPosts := 1
-		specifications.ExecuteDBRecordsVerifySpecification(ctx, t, newNodeDriver, expectPosts)
+		specifications.ExecuteDBRecordsVerifySpecificationEventually(ctx, t, newNodeDriver, expectPosts)
 
 		// Bring up node3-1 using statesync
 		helper.EnableStatesync(ctx, newDir, "new-node3", []string{"new-node0", "new-node1", "new-node2"})
@@ -1018,9 +1018,7 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 
 		specifications.DatabaseVerifySpecificationEventually(ctx, t, newNode3Driver)
 
-		time.Sleep(30 * time.Second) // need time to catch up on changesets
-
-		specifications.ExecuteDBRecordsVerifySpecification(ctx, t, newNode3Driver, expectPosts)
+		specifications.ExecuteDBRecordsVerifySpecificationEventually(ctx, t, newNode3Driver, expectPosts)
 
 		t.Logf("Long Running Network Migration Test: Completed Successfully")
 	})

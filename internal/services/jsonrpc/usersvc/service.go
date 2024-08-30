@@ -235,7 +235,7 @@ type Migrator interface {
 	GetChangesetMetadata(height int64) (*migrations.ChangesetMetadata, error)
 	GetChangeset(height int64, index int64) ([]byte, error)
 	GetMigrationMetadata() (*types.MigrationMetadata, error)
-	GetGenesisSnapshotChunk(height int64, format uint32, chunkIdx uint32) ([]byte, error)
+	GetGenesisSnapshotChunk(chunkIdx uint32) ([]byte, error)
 }
 
 func (svc *Service) ChainInfo(ctx context.Context, req *userjson.ChainInfoRequest) (*userjson.ChainInfoResponse, *jsonrpc.Error) {
@@ -698,7 +698,7 @@ func (svc *Service) MigrationMetadata(ctx context.Context, req *userjson.Migrati
 }
 
 func (svc *Service) MigrationGenesisChunk(ctx context.Context, req *userjson.MigrationSnapshotChunkRequest) (*userjson.MigrationSnapshotChunkResponse, *jsonrpc.Error) {
-	bts, err := svc.migrator.GetGenesisSnapshotChunk(int64(req.Height), 0, req.ChunkIndex)
+	bts, err := svc.migrator.GetGenesisSnapshotChunk(req.ChunkIndex)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load genesis chunk", nil)
 	}
@@ -712,7 +712,7 @@ func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.Lis
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
-	resolutions, err := voting.GetResolutionsByType(ctx, readTx, migrations.StartMigrationEventType)
+	resolutions, err := voting.GetResolutionsByType(ctx, readTx, voting.StartMigrationEventType)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to get migration resolutions", nil)
 	}
@@ -729,6 +729,7 @@ func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.Lis
 			ActivationPeriod: (int64)(mig.ActivationPeriod),
 			Duration:         (int64)(mig.Duration),
 			ChainID:          mig.ChainID,
+			Timestamp:        mig.Timestamp,
 		})
 	}
 

@@ -196,6 +196,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// Give abci p2p module access to removing peers
 	p2p.SetRemovePeerFn(cometBftNode.RemovePeer)
 
+	// Give migrator access to the consensus params getter
+	migrator.SetConsensusParamsGetter(cometBftNode.ConsensusParams)
+
 	cometBftClient := buildCometBftClient(cometBftNode)
 	wrappedCmtClient := &wrappedCometBFTClient{
 		cl:    cometBftClient,
@@ -578,7 +581,7 @@ func buildSigner(d *coreDependencies) *auth.Ed25519Signer {
 func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 	// Check if the database is supposed to be restored from the snapshot
 	// If yes, restore the database from the snapshot
-	restoreDB(d)
+	fromSnapshot := restoreDB(d)
 
 	db, err := d.dbOpener(d.ctx, d.cfg.AppConfig.DBName, 24)
 	if err != nil {
@@ -586,6 +589,20 @@ func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 	}
 	closer.addCloser(db.Close, "closing main DB")
 
+	if fromSnapshot {
+		// readjust the expiry heights of all the pending resolutions after snapshot restore for Zero-downtime migrations
+		// snapshot tool handles the migration expiry height readjustment for offline migrations
+		adjustExpiration := false
+		startHeight := d.genesisCfg.ConsensusParams.Migration.StartHeight
+		if d.cfg.AppConfig.MigrateFrom != "" && startHeight != 0 {
+			adjustExpiration = true
+		}
+
+		err = migrations.CleanupResolutionsAfterMigration(d.ctx, db, adjustExpiration, startHeight)
+		if err != nil {
+			failBuild(err, "failed to cleanup resolutions after snapshot restore")
+		}
+	}
 	return db
 }
 
@@ -598,9 +615,9 @@ func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 //   - If the genesis apphash is not specified
 //   - If statesync is enabled. Statesync will take care of syncing the database
 //     to the network state using statesync snapshots.
-func restoreDB(d *coreDependencies) {
+func restoreDB(d *coreDependencies) bool {
 	if d.cfg.ChainConfig.StateSync.Enable || len(d.genesisCfg.DataAppHash) == 0 || isDbInitialized(d) {
-		return
+		return false
 	}
 
 	genCfg := d.genesisCfg
@@ -640,6 +657,7 @@ func restoreDB(d *coreDependencies) {
 	if err != nil {
 		failBuild(err, "failed to restore DB from snapshot")
 	}
+	return true
 }
 
 // isDbInitialized checks if the database is already initialized.

@@ -90,6 +90,10 @@ func RootCmd() *cobra.Command {
 				return fmt.Errorf("failed to initialize private key and genesis: %w", err)
 			}
 
+			if err := genesisConfig.SanityChecks(); err != nil {
+				return fmt.Errorf("genesis configuration failed sanity checks: %w", err)
+			}
+
 			if err := kwildCfg.ConfigureExtensions(genesisConfig); err != nil {
 				return err
 			}

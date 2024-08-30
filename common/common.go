@@ -139,12 +139,15 @@ type NetworkParameters struct {
 	VoteExpiry int64
 	// DisabledGasCosts dictates whether gas costs are disabled.
 	DisabledGasCosts bool
-	// InMigration is true if the network is being migrated to a new network.
-	// Once this is set to true, it can never be set to false. If true,
-	// new databases cannot be created, old databases cannot be deleted,
-	// balances cannot be transferred
-	// and the vote store is paused.
-	InMigration bool
+
+	// MigrationStatus determines the status of the migration.
+	// It can be one of the following:
+	// - NoActiveMigration: No active migration is in progress.
+	// - MigrationNotStarted: A migration has been approved but not yet activated.
+	// - MigrationInProgress: A migration is in progress.
+	// - MigrationCompleted: A migration has been completed.
+	MigrationStatus types.MigrationStatus
+
 	// MaxVotesPerTx is the maximum number of votes that can be included in a
 	// single transaction.
 	MaxVotesPerTx int64

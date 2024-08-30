@@ -202,9 +202,16 @@ func (genCfg *NodeGenerateConfig) ApplyGenesisParams(genesisCfg *chain.GenesisCo
 	if genCfg.ChainID != "" {
 		genesisCfg.ChainID = genCfg.ChainID
 	}
-	genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
+
+	if genCfg.JoinExpiry > 0 {
+		genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
+	}
+
 	genesisCfg.ConsensusParams.WithoutGasCosts = genCfg.WithoutGasCosts
-	genesisCfg.ConsensusParams.Votes.VoteExpiry = genCfg.VoteExpiry
+
+	if genCfg.VoteExpiry > 0 {
+		genesisCfg.ConsensusParams.Votes.VoteExpiry = genCfg.VoteExpiry
+	}
 
 	numAllocs := len(genCfg.Allocs)
 	if !genCfg.WithoutGasCosts { // when gas is enabled, give genesis validators some funds

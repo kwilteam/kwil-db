@@ -14,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/extensions/listeners"
+	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 // Changeset Extension polls the changesets from the old chain  during migration.
@@ -166,7 +167,7 @@ func (ml *migrationListener) RetrieveChangesets(ctx context.Context) error {
 				ml.logger.Info("broadcasting changeset migration event", "height", ml.currentHeight, "chunk", chunkIdx, "size", len(cs))
 
 				// Broadcast the changeset migration event to the event store for voting
-				err = ml.eventStore.Broadcast(ctx, ChangesetMigrationEventType, csEvt)
+				err = ml.eventStore.Broadcast(ctx, voting.ChangesetMigrationEventType, csEvt)
 				if err != nil {
 					errChan <- fmt.Errorf("failed to broadcast changeset migration event: %w", err)
 					return

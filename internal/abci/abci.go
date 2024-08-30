@@ -244,19 +244,26 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		app.consensusParams.Votes.MaxVotesPerTx = networkParams.MaxVotesPerTx
 	}
 
-	networkParams.InMigration = app.migrator.InMigration(height)
+	migrationStatus := app.migrator.MigrationStatus()
+	app.log.Infof("Migration status: %s", migrationStatus.String())
+
+	networkParams.MigrationStatus = migrationStatus
+
+	// if the migration is in progress, we need to set the network params to reflect that
+	// networkParams.InMigration = migrationStatus == types.MigrationInProgress || migrationStatus == types.MigrationCompleted
+
+	// if the migration is completed, we need to halt the network
+	// networkParams.MigrationCompleted = migrationStatus == types.MigrationCompleted
 
 	var migrationParams *common.MigrationContext
+	startHeight := app.consensusParams.Migration.StartHeight
+	endHeight := app.consensusParams.Migration.EndHeight
 
-	if (app.consensusParams.Migration.StartHeight != -1 && app.consensusParams.Migration.EndHeight == -1) ||
-		(app.consensusParams.Migration.StartHeight == -1 && app.consensusParams.Migration.EndHeight != -1) {
-		return nil, fmt.Errorf("migration start and end heights must both be set or both be unset")
-	}
-
-	if app.consensusParams.Migration.StartHeight != -1 && app.consensusParams.Migration.EndHeight != -1 {
+	if startHeight != 0 && endHeight != 0 {
+		// set this only if "migrate_from" is configured
 		migrationParams = &common.MigrationContext{
-			StartHeight: app.consensusParams.Migration.StartHeight,
-			EndHeight:   app.consensusParams.Migration.EndHeight,
+			StartHeight: startHeight,
+			EndHeight:   endHeight,
 		}
 	}
 
@@ -336,7 +343,8 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	newTx := incoming.Type == abciTypes.CheckTxType_New
 	logger := a.log.With(zap.Bool("recheck", !newTx))
 
-	if a.halted.Load() {
+	// If the network is halted for migration, we reject all transactions.
+	if a.halted.Load() || a.chainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
 		return &abciTypes.ResponseCheckTx{Code: codeInvalidTxType.Uint32(), Log: "network is halted for migration"}, nil
 	}
 
@@ -481,6 +489,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		VoteExpiry:       a.consensusParams.Votes.VoteExpiry,
 		DisabledGasCosts: a.consensusParams.WithoutGasCosts,
 		MaxVotesPerTx:    a.consensusParams.Votes.MaxVotesPerTx,
+		MigrationStatus:  a.chainContext.NetworkParameters.MigrationStatus,
 	}
 	oldNetworkParams := *networkParams
 
@@ -524,7 +533,9 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		Timestamp:    req.Time.Unix(),
 		Proposer:     proposerPubKey,
 	}
-	inMigration := blockCtx.ChainContext.NetworkParameters.InMigration
+
+	inMigration := blockCtx.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress
+	haltNetwork := blockCtx.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted
 
 	// since notifications are returned async from postgres, we will construct
 	// a map to track them in, and wait at the end of the function to add them
@@ -683,6 +694,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("failed to finalize transaction app: %w", err)
 	}
 
+	networkParams.MigrationStatus = a.chainContext.NetworkParameters.MigrationStatus
+
 	// store any changes to the network params
 	err = meta.StoreDiff(ctx, a.consensusTx, &oldNetworkParams, networkParams)
 	if err != nil {
@@ -703,7 +716,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	// Create a new changeset processor
 	csp := newChangesetProcessor()
 	// "migrator" module subscribes to the changeset processor to store changesets during the migration
-	if inMigration {
+	if inMigration && !haltNetwork {
 		csChanMigrator, err := csp.Subscribe(ctx, "migrator")
 		if err != nil {
 			return nil, fmt.Errorf("failed to subscribe to changeset processor: %w", err)
@@ -1417,7 +1430,7 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	if a.forks.IsHalt(uint64(req.Height)) {
+	if a.forks.IsHalt(uint64(req.Height)) || a.chainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
 		return &abciTypes.ResponsePrepareProposal{}, nil // No more transactions.
 	}
 
@@ -1540,7 +1553,7 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 	logger := a.log.With(zap.String("stage", "ABCI ProcessProposal"),
 		log.Int("height", req.Height), log.Int("txs", len(req.Txs)))
 
-	if a.forks.IsHalt(uint64(req.Height)) {
+	if a.forks.IsHalt(uint64(req.Height)) || a.chainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
 		if len(req.Txs) != 0 { // This network is done.  No more transactions.
 			return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
 		}

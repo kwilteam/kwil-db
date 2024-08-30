@@ -232,8 +232,9 @@ func (d *deployDatasetRoute) Price(ctx context.Context, app *common.App, tx *tra
 }
 
 func (d *deployDatasetRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
-		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot deploy dataset during migration")
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return transactions.CodeNetworkInMigration, errors.New("cannot deploy dataset during migration")
 	}
 
 	schemaPayload := &transactions.Schema{}
@@ -280,8 +281,9 @@ func (d *dropDatasetRoute) Price(ctx context.Context, app *common.App, tx *trans
 }
 
 func (d *dropDatasetRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
-		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot drop dataset during migration")
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return transactions.CodeNetworkInMigration, errors.New("cannot drop dataset during migration")
 	}
 
 	drop := &transactions.DropSchema{}
@@ -382,8 +384,9 @@ func (d *transferRoute) Price(ctx context.Context, app *common.App, tx *transact
 }
 
 func (d *transferRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
-		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot transfer during migration")
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return transactions.CodeNetworkInMigration, errors.New("cannot transfer during migration")
 	}
 
 	transferBody := &transactions.Transfer{}
@@ -437,8 +440,9 @@ func (d *validatorJoinRoute) Price(ctx context.Context, app *common.App, tx *tra
 }
 
 func (d *validatorJoinRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
-		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot join validator during migration")
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return transactions.CodeNetworkInMigration, errors.New("cannot join validator during migration")
 	}
 
 	join := &transactions.ValidatorJoin{}
@@ -509,8 +513,9 @@ func (d *validatorApproveRoute) Price(ctx context.Context, app *common.App, tx *
 }
 
 func (d *validatorApproveRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
-		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot approve validator join during migration")
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return transactions.CodeNetworkInMigration, errors.New("cannot approve validator join during migration")
 	}
 
 	approve := &transactions.ValidatorApprove{}
@@ -574,8 +579,9 @@ func (d *validatorRemoveRoute) Price(ctx context.Context, app *common.App, tx *t
 }
 
 func (d *validatorRemoveRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
-		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot remove validator during migration")
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return transactions.CodeNetworkInMigration, errors.New("cannot remove validator during migration")
 	}
 
 	remove := &transactions.ValidatorRemove{}
@@ -645,8 +651,9 @@ func (d *validatorLeaveRoute) Price(ctx context.Context, app *common.App, tx *tr
 }
 
 func (d *validatorLeaveRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
-		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot leave validator during migration")
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return transactions.CodeNetworkInMigration, errors.New("cannot leave validator during migration")
 	}
 	return 0, nil // no payload to decode or validate for this route
 }
@@ -689,8 +696,9 @@ func (d *validatorVoteIDsRoute) Price(ctx context.Context, app *common.App, tx *
 }
 
 func (d *validatorVoteIDsRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
-		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot vote during migration")
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return transactions.CodeNetworkInMigration, errors.New("cannot vote during migration")
 	}
 	return 0, nil
 }
@@ -769,9 +777,9 @@ func (d *validatorVoteBodiesRoute) Price(ctx context.Context, _ *common.App, tx 
 }
 
 func (d *validatorVoteBodiesRoute) PreTx(ctx *common.TxContext, _ *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
-		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot vote during migration")
-
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return transactions.CodeNetworkInMigration, errors.New("cannot vote during migration")
 	}
 
 	// Only proposer can issue a VoteBody transaction.
@@ -859,7 +867,8 @@ func (d *createResolutionRoute) Price(ctx context.Context, app *common.App, tx *
 }
 
 func (d *createResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
 		return transactions.CodeNetworkInMigration, errors.New("cannot create resolution during migration")
 	}
 
@@ -867,6 +876,12 @@ func (d *createResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service
 	err := res.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
 		return transactions.CodeEncodingError, err
+	}
+
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationNotStarted {
+		if res.Resolution.Type == voting.StartMigrationEventType {
+			return transactions.CodeNetworkInMigration, errors.New("migration is about to start, cannot accept new migration proposals")
+		}
 	}
 
 	// Check if its a valid event type
@@ -922,8 +937,9 @@ func (d *approveResolutionRoute) Price(ctx context.Context, app *common.App, tx 
 }
 
 func (d *approveResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
-		return transactions.CodeNetworkInMigration, errors.New("cannot approve a resolution during migration")
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot approve a resolution during migration")
 	}
 
 	res := &transactions.ApproveResolution{}
@@ -948,12 +964,17 @@ func (d *approveResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx
 
 	// Check if the resolution exists and is still pending
 	// You can only vote on a resolution that already exists
-	exists, err := resolutionExists(ctx.Ctx, app.DB, d.resolutionID)
+	resolution, err := resolutionByID(ctx.Ctx, app.DB, d.resolutionID)
 	if err != nil {
 		return transactions.CodeUnknownError, err
 	}
-	if !exists {
+	if resolution == nil {
 		return transactions.CodeUnknownError, fmt.Errorf("resolution with ID %s does not exist", d.resolutionID)
+	}
+
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationNotStarted &&
+		resolution.Type == voting.StartMigrationEventType {
+		return transactions.CodeNetworkInMigration, fmt.Errorf("migration is about to start, cannot accept new migration proposals")
 	}
 
 	// vote on the resolution
@@ -980,8 +1001,9 @@ func (d *deleteResolutionRoute) Price(ctx context.Context, app *common.App, tx *
 }
 
 func (d *deleteResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
-		return transactions.CodeNetworkInMigration, errors.New("cannot vote during migration")
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return transactions.CodeNetworkInMigration, errors.New("cannot delete resolution during migration")
 	}
 
 	res := &transactions.DeleteResolution{}

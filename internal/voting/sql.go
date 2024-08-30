@@ -113,6 +113,11 @@ const (
 	// deleteResolution deletes a resolution
 	deleteResolution = `DELETE FROM ` + votingSchemaName + `.resolutions WHERE id = $1;`
 
+	deleteResolutionsByTypeSQL = `DELETE FROM ` + votingSchemaName + `.resolutions WHERE type = ANY($1);`
+
+	// Subtracts the start height from the expiration height of all resolutions.
+	readjustExpirationsSQL = `UPDATE ` + votingSchemaName + `.resolutions SET expiration = expiration - $1;`
+
 	// createResolutionType creates a resolution type
 	createResolutionType = `INSERT INTO ` + votingSchemaName + `.resolution_types (id, name) VALUES ($1, $2)
 		ON CONFLICT(id) DO NOTHING;`
@@ -206,4 +211,15 @@ const (
 // upgrades V1 -> V2
 const (
 	dropExtraVoteID = `ALTER TABLE ` + votingSchemaName + `.resolutions DROP COLUMN extra_vote_id;`
+)
+
+// registered resolution types
+const (
+	// ummm.. import cycle issues, so moving them here from migrations pkg.
+
+	// "migration" is the event type used for
+	StartMigrationEventType = "migration"
+
+	// "changeset_migration" is the event type used for replication of changesets from old chain to new chain during migration.
+	ChangesetMigrationEventType = "changeset_migration"
 )

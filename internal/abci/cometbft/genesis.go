@@ -6,6 +6,7 @@ import (
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmtTypes "github.com/cometbft/cometbft/types"
 
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/extensions/consensus"
 )
@@ -47,6 +48,39 @@ func ExtractConsensusParams(cp *chain.BaseConsensusParams) *cmtTypes.ConsensusPa
 		ABCI: cmtTypes.ABCIParams{
 			VoteExtensionsEnableHeight: cp.ABCI.VoteExtensionsEnableHeight,
 		},
+	}
+}
+
+// MergeConsensusParams merges cometbft's ConsensusParams with kwild's NetworkParameters
+// to create a unified representation of the chain's consensus parameters.
+func MergeConsensusParams(cometbftParams *cmtTypes.ConsensusParams, abciParams *common.NetworkParameters) *chain.ConsensusParams {
+	return &chain.ConsensusParams{
+		BaseConsensusParams: chain.BaseConsensusParams{
+			Block: chain.BlockParams{
+				MaxBytes: abciParams.MaxBlockSize,
+				MaxGas:   cometbftParams.Block.MaxGas,
+			},
+			Evidence: chain.EvidenceParams{
+				MaxAgeNumBlocks: cometbftParams.Evidence.MaxAgeNumBlocks,
+				MaxAgeDuration:  cometbftParams.Evidence.MaxAgeDuration,
+				MaxBytes:        cometbftParams.Evidence.MaxBytes,
+			},
+			Version: chain.VersionParams{
+				App: cometbftParams.Version.App,
+			},
+			Validator: chain.ValidatorParams{
+				PubKeyTypes: cometbftParams.Validator.PubKeyTypes,
+				JoinExpiry:  abciParams.JoinExpiry,
+			},
+			Votes: chain.VoteParams{
+				VoteExpiry:    abciParams.VoteExpiry,
+				MaxVotesPerTx: abciParams.MaxVotesPerTx,
+			},
+			ABCI: chain.ABCIParams{
+				VoteExtensionsEnableHeight: cometbftParams.ABCI.VoteExtensionsEnableHeight,
+			},
+		},
+		WithoutGasCosts: abciParams.DisabledGasCosts,
 	}
 }
 
