@@ -80,8 +80,8 @@ func InstallGenesisState(ctx context.Context, t *testing.T, netops MigrationOpsD
 	}, 6*time.Second, 500*time.Millisecond)
 
 	// Verify genesis state
-	require.NotNil(t, metadata.GenesisConfig)
-	require.NotNil(t, metadata.SnapshotMetadata)
+	require.NotEmpty(t, metadata.GenesisConfig)
+	require.NotEmpty(t, metadata.SnapshotMetadata)
 
 	// Ensure the root directory exists
 	err = os.MkdirAll(rootDir, 0755)

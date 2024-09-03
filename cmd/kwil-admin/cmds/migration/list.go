@@ -2,14 +2,14 @@ package migration
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/spf13/cobra"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/spf13/cobra"
 )
 
 func listCmd() *cobra.Command {
@@ -21,8 +21,7 @@ func listCmd() *cobra.Command {
 kwil-admin migrate list`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-
+			ctx := cmd.Context()
 			clt, err := common.GetAdminSvcClient(ctx, cmd)
 			if err != nil {
 				return display.PrintErr(cmd, err)

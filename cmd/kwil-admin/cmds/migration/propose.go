@@ -1,17 +1,17 @@
 package migration
 
 import (
-	"context"
 	"errors"
+
+	"github.com/spf13/cobra"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/internal/migrations"
-	"github.com/spf13/cobra"
 )
 
 var (
-	proposeLong = "A Validator operator can submit a migration proposal using the `propose` subcommand. The migration proposal includes the new `chain-id`, `activation-period` and `duration`. This action will generate a migration resolution for the other validators to vote on. If a supermajority of validators approve the migration proposal, the migration will commence after the specified activation-period blocks from approval and will continue for the duration defined by duration blocks."
+	proposeLong = "A Validator operator can submit a migration proposal using the `propose` subcommand. The migration proposal includes the new `chain-id`, `activation-period` and `duration`. This action will generate a migration resolution for the other validators to vote on. If a super-majority of validators approve the migration proposal, the migration will commence after the specified activation-period blocks from approval and will continue for the duration defined by duration blocks."
 
 	proposeExample = `# Submit a migration proposal to migrate to a new chain "kwil-chain-new" with activation period 1000 and migration duration of 14400 blocks.
 kwil-admin migrate propose --activation-period 1000 --duration 14400 --chain-id kwil-chain-new
@@ -30,8 +30,7 @@ func proposeCmd() *cobra.Command {
 		Example: proposeExample,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-
+			ctx := cmd.Context()
 			clt, err := common.GetAdminSvcClient(ctx, cmd)
 			if err != nil {
 				return display.PrintErr(cmd, err)

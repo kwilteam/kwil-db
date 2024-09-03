@@ -1,8 +1,9 @@
 package migration
 
 import (
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/spf13/cobra"
+
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 )
 
 var migrationCmd = &cobra.Command{

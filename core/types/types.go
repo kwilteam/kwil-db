@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 )
@@ -94,9 +95,9 @@ type Migration struct {
 // consumers of what information the current node has available
 // for the migration.
 type MigrationMetadata struct {
-	InMigration      bool   `json:"in_migration"`      // InMigration is true if the node is in migration state i.e current height is between StartHeight and EndHeight
-	StartHeight      int64  `json:"start_height"`      // StartHeight is the block height at which the migration starts
-	EndHeight        int64  `json:"end_height"`        // EndHeight is the block height at which the migration ends
-	GenesisConfig    []byte `json:"genesis_config"`    // GenesisConfig is the genesis file data
-	SnapshotMetadata []byte `json:"snapshot_metadata"` // SnapshotMetadata is the snapshot metadata
+	InMigration      bool            `json:"in_migration"`      // InMigration is true if the node is in migration state i.e current height is between StartHeight and EndHeight
+	StartHeight      int64           `json:"start_height"`      // StartHeight is the block height at which the migration starts
+	EndHeight        int64           `json:"end_height"`        // EndHeight is the block height at which the migration ends
+	GenesisConfig    json.RawMessage `json:"genesis_config"`    // GenesisConfig is the genesis file data
+	SnapshotMetadata json.RawMessage `json:"snapshot_metadata"` // SnapshotMetadata is the snapshot metadata
 }
