@@ -64,7 +64,7 @@ func mainReal(ctx context.Context) error {
 	svc := &common.Service{
 		Logger: log.NewStdOut(log.DebugLevel).Sugar(),
 		LocalConfig: &config.KwildConfig{
-			AppCfg: &config.AppConfig{
+			AppConfig: &config.AppConfig{
 				Extensions: extensionConfig,
 			},
 		},

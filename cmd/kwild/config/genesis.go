@@ -73,5 +73,5 @@ func loadGenesisAndPrivateKey(autoGen bool, privKeyPath, rootDir string) (privKe
 
 func InitPrivateKeyAndGenesis(cfg *config.KwildConfig, autogen bool) (privateKey *crypto.Ed25519PrivateKey,
 	genConfig *chain.GenesisConfig, err error) {
-	return loadGenesisAndPrivateKey(autogen, cfg.AppCfg.PrivateKeyPath, cfg.RootDir)
+	return loadGenesisAndPrivateKey(autogen, cfg.AppConfig.PrivateKeyPath, cfg.RootDir)
 }

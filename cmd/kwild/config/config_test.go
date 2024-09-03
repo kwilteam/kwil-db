@@ -23,12 +23,12 @@ func Test_Config_Toml(t *testing.T) {
 	assert.Equal(t, "info", cfg.Logging.RPCLevel)
 	assert.Equal(t, "warn", cfg.Logging.ConsensusLevel)
 
-	assert.Equal(t, "192.168.1.1:8484", cfg.AppCfg.JSONRPCListenAddress)
+	assert.Equal(t, "192.168.1.1:8484", cfg.AppConfig.JSONRPCListenAddress)
 
 	// extension endpoints
-	assert.Equal(t, 3, len(cfg.AppCfg.ExtensionEndpoints))
-	assert.Equal(t, "localhost:50052", cfg.AppCfg.ExtensionEndpoints[0])
-	assert.Equal(t, "localhost:50053", cfg.AppCfg.ExtensionEndpoints[1])
+	assert.Equal(t, 3, len(cfg.AppConfig.ExtensionEndpoints))
+	assert.Equal(t, "localhost:50052", cfg.AppConfig.ExtensionEndpoints[0])
+	assert.Equal(t, "localhost:50053", cfg.AppConfig.ExtensionEndpoints[1])
 
 	// TODO: Add bunch of other validations for different types
 }

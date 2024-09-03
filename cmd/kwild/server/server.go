@@ -84,7 +84,7 @@ func New(ctx context.Context, cfg *config1.KwildConfig, genesisCfg *chain.Genesi
 		}
 	}()
 
-	if cfg.AppCfg.TLSKeyFile == "" || cfg.AppCfg.TLSCertFile == "" {
+	if cfg.AppConfig.TLSKeyFile == "" || cfg.AppConfig.TLSCertFile == "" {
 		return nil, errors.New("unspecified TLS key and/or certificate")
 	}
 
@@ -94,7 +94,7 @@ func New(ctx context.Context, cfg *config1.KwildConfig, genesisCfg *chain.Genesi
 
 	logger.Debug("loading TLS key pair for gRPC servers", log.String("key_file", "d.cfg.TLSKeyFile"),
 		log.String("cert_file", "d.cfg.TLSCertFile")) // wtf why can't we log yet?
-	keyPair, err := loadTLSCertificate(cfg.AppCfg.TLSKeyFile, cfg.AppCfg.TLSCertFile, cfg.AppCfg.Hostname)
+	keyPair, err := loadTLSCertificate(cfg.AppConfig.TLSKeyFile, cfg.AppConfig.TLSCertFile, cfg.AppConfig.Hostname)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func New(ctx context.Context, cfg *config1.KwildConfig, genesisCfg *chain.Genesi
 	dbLogger := increaseLogLevel("pg", &logger, cfg.Logging.DBLevel)
 	pg.UseLogger(*dbLogger)
 
-	host, port, user, pass := cfg.AppCfg.DBHost, cfg.AppCfg.DBPort, cfg.AppCfg.DBUser, cfg.AppCfg.DBPass
+	host, port, user, pass := cfg.AppConfig.DBHost, cfg.AppConfig.DBPort, cfg.AppConfig.DBUser, cfg.AppConfig.DBPass
 
 	deps := &coreDependencies{
 		ctx:        ctx,
@@ -152,12 +152,12 @@ func (s *Server) Start(ctx context.Context) error {
 	})
 
 	group.Go(func() error {
-		s.log.Info("starting user json-rpc server", zap.String("address", s.cfg.AppCfg.JSONRPCListenAddress))
+		s.log.Info("starting user json-rpc server", zap.String("address", s.cfg.AppConfig.JSONRPCListenAddress))
 		return s.jsonRPCServer.Serve(groupCtx)
 	})
 
 	group.Go(func() error {
-		s.log.Info("starting admin json-rpc server", zap.String("address", s.cfg.AppCfg.AdminListenAddress))
+		s.log.Info("starting admin json-rpc server", zap.String("address", s.cfg.AppConfig.AdminListenAddress))
 		return s.jsonRPCAdminServer.Serve(groupCtx)
 	})
 

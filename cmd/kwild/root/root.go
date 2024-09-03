@@ -75,7 +75,7 @@ func RootCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to parse extension flags: %w", err)
 			}
-			flagCfg.AppCfg.Extensions = extensionConfig
+			flagCfg.AppConfig.Extensions = extensionConfig
 
 			kwildCfg, configFileExists, err := config.GetCfg(flagCfg)
 			if err != nil {
@@ -199,13 +199,13 @@ func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 }
 
 func startProfilers(cfg *config1.KwildConfig) (func(), error) {
-	mode := cfg.AppCfg.ProfileMode
-	pprofFile := cfg.AppCfg.ProfileFile
+	mode := cfg.AppConfig.ProfileMode
+	pprofFile := cfg.AppConfig.ProfileFile
 	if pprofFile == "" {
 		pprofFile = fmt.Sprintf("kwild-%s.pprof", mode)
 	}
 
-	switch cfg.AppCfg.ProfileMode {
+	switch cfg.AppConfig.ProfileMode {
 	case "http":
 		// http pprof uses http.DefaultServeMux, so we register a redirect
 		// handler with the root path on the default mux.
@@ -267,6 +267,6 @@ func startProfilers(cfg *config1.KwildConfig) (func(), error) {
 	case "": // disabled
 		return func() {}, nil
 	default:
-		return nil, fmt.Errorf("unknown profile mode %s", cfg.AppCfg.ProfileMode)
+		return nil, fmt.Errorf("unknown profile mode %s", cfg.AppConfig.ProfileMode)
 	}
 }

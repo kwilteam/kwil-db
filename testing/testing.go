@@ -182,7 +182,7 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 				engine, err := execution.NewGlobalContext(ctx, outerTx, maps.Clone(precompiles.RegisteredPrecompiles()), &common.Service{
 					Logger: logger,
 					LocalConfig: &config.KwildConfig{
-						AppCfg: &config.AppConfig{
+						AppConfig: &config.AppConfig{
 							Extensions: map[string]map[string]string{},
 						},
 					},

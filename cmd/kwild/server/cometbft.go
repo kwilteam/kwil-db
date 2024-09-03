@@ -61,7 +61,7 @@ func newCometConfig(cfg *config1.KwildConfig) *cmtCfg.Config {
 	nodeCfg.Mempool.Recheck = true
 
 	// Translate the entire config.
-	userChainCfg := cfg.ChainCfg
+	userChainCfg := cfg.ChainConfig
 
 	if userChainCfg.Moniker != "" {
 		nodeCfg.Moniker = userChainCfg.Moniker
@@ -70,8 +70,8 @@ func newCometConfig(cfg *config1.KwildConfig) *cmtCfg.Config {
 	nodeCfg.FilterPeers = true
 	nodeCfg.RPC.ListenAddress = cleanListenAddr(userChainCfg.RPC.ListenAddress,
 		portFromURL(nodeCfg.RPC.ListenAddress))
-	nodeCfg.RPC.TLSCertFile = cfg.AppCfg.TLSCertFile
-	nodeCfg.RPC.TLSKeyFile = cfg.AppCfg.TLSKeyFile
+	nodeCfg.RPC.TLSCertFile = cfg.AppConfig.TLSCertFile
+	nodeCfg.RPC.TLSKeyFile = cfg.AppConfig.TLSKeyFile
 	nodeCfg.RPC.TimeoutBroadcastTxCommit = time.Duration(userChainCfg.RPC.BroadcastTxTimeout)
 
 	nodeCfg.P2P.ListenAddress = cleanListenAddr(userChainCfg.P2P.ListenAddress,
@@ -83,7 +83,7 @@ func newCometConfig(cfg *config1.KwildConfig) *cmtCfg.Config {
 	nodeCfg.P2P.MaxNumOutboundPeers = userChainCfg.P2P.MaxNumOutboundPeers
 	nodeCfg.P2P.UnconditionalPeerIDs = userChainCfg.P2P.UnconditionalPeerIDs
 	nodeCfg.P2P.PexReactor = userChainCfg.P2P.PexReactor
-	nodeCfg.P2P.AllowDuplicateIP = cfg.ChainCfg.P2P.AllowDuplicateIP
+	nodeCfg.P2P.AllowDuplicateIP = cfg.ChainConfig.P2P.AllowDuplicateIP
 	nodeCfg.P2P.HandshakeTimeout = time.Duration(userChainCfg.P2P.HandshakeTimeout)
 	nodeCfg.P2P.DialTimeout = time.Duration(userChainCfg.P2P.DialTimeout)
 	nodeCfg.P2P.SeedMode = userChainCfg.P2P.SeedMode

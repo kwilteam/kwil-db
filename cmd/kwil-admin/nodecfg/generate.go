@@ -120,13 +120,13 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	cfg := config.DefaultConfig()
 	cfg.RootDir = rootDir
 	if genCfg.BlockInterval > 0 {
-		cfg.ChainCfg.Consensus.TimeoutCommit = config1.Duration(genCfg.BlockInterval)
+		cfg.ChainConfig.Consensus.TimeoutCommit = config1.Duration(genCfg.BlockInterval)
 	}
 
 	if genCfg.Extensions != nil {
-		cfg.AppCfg.Extensions = genCfg.Extensions
+		cfg.AppConfig.Extensions = genCfg.Extensions
 	} else {
-		cfg.AppCfg.Extensions = make(map[string]map[string]string)
+		cfg.AppConfig.Extensions = make(map[string]map[string]string)
 	}
 
 	pub, err := GenerateNodeFiles(rootDir, cfg, false)
@@ -178,7 +178,7 @@ func GenerateNodeFiles(outputDir string, originalCfg *config1.KwildConfig, silen
 		return nil, err
 	}
 
-	cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName
+	cfg.AppConfig.PrivateKeyPath = config.PrivateKeyFileName
 	err = WriteConfigFile(filepath.Join(rootDir, config.ConfigFileName), cfg)
 	if err != nil {
 		return nil, err
@@ -261,9 +261,9 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	}
 
 	if genCfg.AdminAddress != "" {
-		cfg.AppCfg.AdminListenAddress = genCfg.AdminAddress
+		cfg.AppConfig.AdminListenAddress = genCfg.AdminAddress
 	}
-	cfg.AppCfg.NoTLS = genCfg.AdminNoTLS
+	cfg.AppConfig.NoTLS = genCfg.AdminNoTLS
 
 	privateKeys := make([]cmtEd.PrivKey, nNodes)
 	for i := range privateKeys {
@@ -326,22 +326,22 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 
 	// Overwrite default config
 	if genCfg.BlockInterval > 0 {
-		cfg.ChainCfg.Consensus.TimeoutCommit = config1.Duration(genCfg.BlockInterval)
+		cfg.ChainConfig.Consensus.TimeoutCommit = config1.Duration(genCfg.BlockInterval)
 	}
-	cfg.ChainCfg.P2P.AddrBookStrict = false
-	cfg.ChainCfg.P2P.AllowDuplicateIP = true
+	cfg.ChainConfig.P2P.AddrBookStrict = false
+	cfg.ChainConfig.P2P.AllowDuplicateIP = true
 	// private mode
-	cfg.ChainCfg.P2P.PrivateMode = genCfg.PrivateMode
+	cfg.ChainConfig.P2P.PrivateMode = genCfg.PrivateMode
 
 	if genCfg.SnapshotsEnabled {
-		cfg.AppCfg.Snapshots.Enabled = true
+		cfg.AppConfig.Snapshots.Enabled = true
 
 		if genCfg.MaxSnapshots != 0 {
-			cfg.AppCfg.Snapshots.MaxSnapshots = genCfg.MaxSnapshots
+			cfg.AppConfig.Snapshots.MaxSnapshots = genCfg.MaxSnapshots
 		}
 
 		if genCfg.SnapshotHeights != 0 {
-			cfg.AppCfg.Snapshots.RecurringHeight = genCfg.SnapshotHeights
+			cfg.AppConfig.Snapshots.RecurringHeight = genCfg.SnapshotHeights
 		}
 	}
 
@@ -350,10 +350,10 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		cfg.RootDir = nodeDir
 
 		if genCfg.PopulatePersistentPeers {
-			cfg.ChainCfg.P2P.PersistentPeers = persistentPeers
+			cfg.ChainConfig.P2P.PersistentPeers = persistentPeers
 		}
 		if i <= len(genCfg.Hostnames)-1 {
-			cfg.AppCfg.Hostname = genCfg.Hostnames[i]
+			cfg.AppConfig.Hostname = genCfg.Hostnames[i]
 		}
 		if opts.UniquePorts {
 			err = uniqueAdminAddress(cfg)
@@ -369,7 +369,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 			}
 		}
 
-		cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName // not abs/rooted because this might be run in a container
+		cfg.AppConfig.PrivateKeyPath = config.PrivateKeyFileName // not abs/rooted because this might be run in a container
 
 		// extension config
 		if i < genCfg.NValidators {
@@ -377,9 +377,9 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 				if len(genCfg.Extensions) != genCfg.NValidators {
 					return fmt.Errorf("extensions must be nil or have the same length as the number of validators")
 				}
-				cfg.AppCfg.Extensions = genCfg.Extensions[i]
+				cfg.AppConfig.Extensions = genCfg.Extensions[i]
 			} else {
-				cfg.AppCfg.Extensions = make(map[string]map[string]string)
+				cfg.AppConfig.Extensions = make(map[string]map[string]string)
 			}
 		}
 
@@ -461,23 +461,23 @@ func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivK
 // admin service address.
 func addressSpecificConfig(c *config1.KwildConfig) error {
 
-	jsonrpcAddr, err := incrementPort(c.AppCfg.JSONRPCListenAddress, -1) // decrement to avoid collision with admin rpc at 8485
+	jsonrpcAddr, err := incrementPort(c.AppConfig.JSONRPCListenAddress, -1) // decrement to avoid collision with admin rpc at 8485
 	if err != nil {
 		return err
 	}
-	c.AppCfg.JSONRPCListenAddress = jsonrpcAddr
+	c.AppConfig.JSONRPCListenAddress = jsonrpcAddr
 
-	p2pAddr, err := incrementPort(c.ChainCfg.P2P.ListenAddress, -1) // decrement since default rpc is 1 higher than p2p, so p2p needs to be 1 lower
+	p2pAddr, err := incrementPort(c.ChainConfig.P2P.ListenAddress, -1) // decrement since default rpc is 1 higher than p2p, so p2p needs to be 1 lower
 	if err != nil {
 		return err
 	}
-	c.ChainCfg.P2P.ListenAddress = p2pAddr
+	c.ChainConfig.P2P.ListenAddress = p2pAddr
 
-	rpcAddr, err := incrementPort(c.ChainCfg.RPC.ListenAddress, 1)
+	rpcAddr, err := incrementPort(c.ChainConfig.RPC.ListenAddress, 1)
 	if err != nil {
 		return err
 	}
-	c.ChainCfg.RPC.ListenAddress = rpcAddr
+	c.ChainConfig.RPC.ListenAddress = rpcAddr
 
 	return nil
 }
@@ -485,7 +485,7 @@ func addressSpecificConfig(c *config1.KwildConfig) error {
 // uniqueAdminAddress applies a unique address to the config. This only works
 // for host:port or unix socket paths, not URLs.
 func uniqueAdminAddress(cfg *config1.KwildConfig) error {
-	addr := cfg.AppCfg.AdminListenAddress
+	addr := cfg.AppConfig.AdminListenAddress
 
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -510,7 +510,7 @@ func uniqueAdminAddress(cfg *config1.KwildConfig) error {
 			return err
 		}
 
-		cfg.AppCfg.AdminListenAddress = addr
+		cfg.AppConfig.AdminListenAddress = addr
 		return nil
 	}
 
@@ -531,7 +531,7 @@ func uniqueAdminAddress(cfg *config1.KwildConfig) error {
 		}
 	}
 
-	cfg.AppCfg.AdminListenAddress = fileWithoutExt + "_" + strconv.Itoa(numberToUse) + extension
+	cfg.AppConfig.AdminListenAddress = fileWithoutExt + "_" + strconv.Itoa(numberToUse) + extension
 
 	return nil
 }

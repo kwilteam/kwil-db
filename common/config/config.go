@@ -18,9 +18,9 @@ import (
 type KwildConfig struct {
 	RootDir string
 
-	AppCfg   *AppConfig   `mapstructure:"app"`
-	ChainCfg *ChainConfig `mapstructure:"chain"`
-	Logging  *Logging     `mapstructure:"log"`
+	AppConfig   *AppConfig   `mapstructure:"app"`
+	ChainConfig *ChainConfig `mapstructure:"chain"`
+	Logging     *Logging     `mapstructure:"log"`
 }
 
 type Logging struct {
@@ -295,24 +295,24 @@ func (cfg *KwildConfig) LogConfig() (*log.Config, error) {
 
 // configureExtensions sets up the extensions for the node.
 func (cfg *KwildConfig) ConfigureExtensions(genCfg *chain.GenesisConfig) error {
-	extensions := cfg.AppCfg.Extensions
+	extensions := cfg.AppConfig.Extensions
 
 	// Migrations extension configuration
 	// sets the listener address from the migrate_from flag
-	if cfg.AppCfg.MigrateFrom != "" {
+	if cfg.AppConfig.MigrateFrom != "" {
 		if genCfg.ConsensusParams.Migration.StartHeight == -1 || genCfg.ConsensusParams.Migration.EndHeight == -1 {
 			return fmt.Errorf("migrate_from flag requires migration start and end heights in the genesis file")
 		}
 
 		extensions["migrations"] = map[string]string{
-			"listen_address": cfg.AppCfg.MigrateFrom,
+			"listen_address": cfg.AppConfig.MigrateFrom,
 			"start_height":   fmt.Sprintf("%d", genCfg.ConsensusParams.Migration.StartHeight),
 			"end_height":     fmt.Sprintf("%d", genCfg.ConsensusParams.Migration.EndHeight),
 		}
 	}
 
 	// other extensions can be configured here
-	cfg.AppCfg.Extensions = extensions
+	cfg.AppConfig.Extensions = extensions
 	return nil
 }
 

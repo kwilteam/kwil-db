@@ -211,16 +211,16 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	rpcSvcLogger := increaseLogLevel("user-json-svc", &d.log, d.cfg.Logging.RPCLevel)
 	rpcServerLogger := increaseLogLevel("user-jsonrpc-server", &d.log, d.cfg.Logging.RPCLevel)
 
-	if d.cfg.AppCfg.RPCMaxReqSize < d.cfg.ChainCfg.Mempool.MaxTxBytes {
+	if d.cfg.AppConfig.RPCMaxReqSize < d.cfg.ChainConfig.Mempool.MaxTxBytes {
 		d.log.Warnf("RPC request size limit (%d) is less than maximium transaction size (%d)",
-			d.cfg.AppCfg.RPCMaxReqSize, d.cfg.ChainCfg.Mempool.MaxTxBytes)
+			d.cfg.AppConfig.RPCMaxReqSize, d.cfg.ChainConfig.Mempool.MaxTxBytes)
 	}
 
 	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp, abciApp, migrator,
-		*rpcSvcLogger, usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)))
-	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppCfg.JSONRPCListenAddress,
-		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)),
-		rpcserver.WithReqSizeLimit(d.cfg.AppCfg.RPCMaxReqSize),
+		*rpcSvcLogger, usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppConfig.ReadTxTimeout)))
+	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppConfig.JSONRPCListenAddress,
+		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppConfig.RPCTimeout)),
+		rpcserver.WithReqSizeLimit(d.cfg.AppConfig.RPCMaxReqSize),
 		rpcserver.WithCORS(), rpcserver.WithServerInfo(&usersvc.SpecInfo))
 	if err != nil {
 		failBuild(err, "unable to create json-rpc server")
@@ -355,14 +355,14 @@ func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext,
 func buildPeers(d *coreDependencies, closers *closeFuncs) *cometbft.PeerWhiteList {
 	var whitelistPeers []string
 
-	db, err := d.poolOpener(d.ctx, d.cfg.AppCfg.DBName, 10)
+	db, err := d.poolOpener(d.ctx, d.cfg.AppConfig.DBName, 10)
 	if err != nil {
 		failBuild(err, "failed to build event store")
 	}
 	closers.addCloser(db.Close, "closing event store")
 
-	if d.cfg.ChainCfg.P2P.WhitelistPeers != "" {
-		whitelistPeers = strings.Split(d.cfg.ChainCfg.P2P.WhitelistPeers, ",")
+	if d.cfg.ChainConfig.P2P.WhitelistPeers != "" {
+		whitelistPeers = strings.Split(d.cfg.ChainConfig.P2P.WhitelistPeers, ",")
 	}
 
 	// Load the validators from the database if the database is already initialized
@@ -411,8 +411,8 @@ func buildPeers(d *coreDependencies, closers *closeFuncs) *cometbft.PeerWhiteLis
 	}
 
 	// Add seeds and persistent peers to the whitelist
-	if d.cfg.ChainCfg.P2P.PersistentPeers != "" {
-		persistentPeers := strings.Split(d.cfg.ChainCfg.P2P.PersistentPeers, ",")
+	if d.cfg.ChainConfig.P2P.PersistentPeers != "" {
+		persistentPeers := strings.Split(d.cfg.ChainConfig.P2P.PersistentPeers, ",")
 		for _, p := range persistentPeers {
 			// split the persistent peer string into node ID and host:port
 			parts := strings.Split(p, "@")
@@ -423,8 +423,8 @@ func buildPeers(d *coreDependencies, closers *closeFuncs) *cometbft.PeerWhiteLis
 		}
 	}
 
-	if d.cfg.ChainCfg.P2P.Seeds != "" {
-		seeds := strings.Split(d.cfg.ChainCfg.P2P.Seeds, ",")
+	if d.cfg.ChainConfig.P2P.Seeds != "" {
+		seeds := strings.Split(d.cfg.ChainConfig.P2P.Seeds, ",")
 		for _, s := range seeds {
 			// split the seed string into node ID and host:port
 			parts := strings.Split(s, "@")
@@ -436,7 +436,7 @@ func buildPeers(d *coreDependencies, closers *closeFuncs) *cometbft.PeerWhiteLis
 	}
 
 	// Initialize the Peers with the whitelist peers.
-	peers, err := cometbft.P2PInit(d.ctx, db, d.cfg.ChainCfg.P2P.PrivateMode, whitelistPeers, nodeID)
+	peers, err := cometbft.P2PInit(d.ctx, db, d.cfg.ChainConfig.P2P.PrivateMode, whitelistPeers, nodeID)
 	if err != nil {
 		failBuild(err, "failed to initialize P2P store")
 	}
@@ -472,7 +472,7 @@ func getPendingValidatorsApprovedByNode(ctx context.Context, db sql.ReadTxMaker,
 }
 
 func buildMigrator(d *coreDependencies, db *pg.DB, txApp *txapp.TxApp) *migrations.Migrator {
-	cfg := d.cfg.AppCfg
+	cfg := d.cfg.AppConfig
 	migrationsDir := filepath.Join(d.cfg.RootDir, config.MigrationsDirName)
 
 	err := os.MkdirAll(filepath.Join(migrationsDir, config.ChangesetsDirName), 0755)
@@ -550,7 +550,7 @@ func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broad
 
 func buildEventStore(d *coreDependencies, closers *closeFuncs) *voting.EventStore {
 	// NOTE: we're using the same postgresql database, but isolated pg schema.
-	db, err := d.poolOpener(d.ctx, d.cfg.AppCfg.DBName, 10)
+	db, err := d.poolOpener(d.ctx, d.cfg.AppConfig.DBName, 10)
 	if err != nil {
 		failBuild(err, "failed to build event store")
 	}
@@ -578,7 +578,7 @@ func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 	// If yes, restore the database from the snapshot
 	restoreDB(d)
 
-	db, err := d.dbOpener(d.ctx, d.cfg.AppCfg.DBName, 24)
+	db, err := d.dbOpener(d.ctx, d.cfg.AppConfig.DBName, 24)
 	if err != nil {
 		failBuild(err, "kwild database open failed")
 	}
@@ -597,12 +597,12 @@ func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 //   - If statesync is enabled. Statesync will take care of syncing the database
 //     to the network state using statesync snapshots.
 func restoreDB(d *coreDependencies) {
-	if d.cfg.ChainCfg.StateSync.Enable || len(d.genesisCfg.DataAppHash) == 0 || isDbInitialized(d) {
+	if d.cfg.ChainConfig.StateSync.Enable || len(d.genesisCfg.DataAppHash) == 0 || isDbInitialized(d) {
 		return
 	}
 
 	genCfg := d.genesisCfg
-	appCfg := d.cfg.AppCfg
+	appCfg := d.cfg.AppConfig
 	// DB is uninitialized and genesis apphash is specified.
 	// DB is supposed to be restored from the snapshot.
 	// Ensure that the snapshot file exists and the snapshot hash matches the genesis apphash.
@@ -642,7 +642,7 @@ func restoreDB(d *coreDependencies) {
 
 // isDbInitialized checks if the database is already initialized.
 func isDbInitialized(d *coreDependencies) bool {
-	db, err := d.poolOpener(d.ctx, d.cfg.AppCfg.DBName, 3)
+	db, err := d.poolOpener(d.ctx, d.cfg.AppConfig.DBName, 3)
 	if err != nil {
 		failBuild(err, "kwild database open failed")
 	}
@@ -657,7 +657,7 @@ func isDbInitialized(d *coreDependencies) bool {
 }
 
 func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
-	extensions, err := getExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
+	extensions, err := getExtensions(d.ctx, d.cfg.AppConfig.ExtensionEndpoints)
 	if err != nil {
 		failBuild(err, "failed to get extensions")
 	}
@@ -705,7 +705,7 @@ func initAccountRepository(d *coreDependencies, tx sql.Tx) {
 }
 
 func buildSnapshotter(d *coreDependencies) *statesync.SnapshotStore {
-	cfg := d.cfg.AppCfg
+	cfg := d.cfg.AppConfig
 	if !cfg.Snapshots.Enabled {
 		return nil
 	}
@@ -733,11 +733,11 @@ func buildSnapshotter(d *coreDependencies) *statesync.SnapshotStore {
 }
 
 func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
-	if !d.cfg.ChainCfg.StateSync.Enable {
+	if !d.cfg.ChainConfig.StateSync.Enable {
 		return nil
 	}
 
-	cfg := d.cfg.AppCfg
+	cfg := d.cfg.AppConfig
 
 	dbCfg := &statesync.DBConfig{
 		DBUser: cfg.DBUser,
@@ -747,7 +747,7 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 		DBName: cfg.DBName,
 	}
 
-	providers := strings.Split(d.cfg.ChainCfg.StateSync.RPCServers, ",")
+	providers := strings.Split(d.cfg.ChainConfig.StateSync.RPCServers, ",")
 
 	if len(providers) == 0 {
 		failBuild(nil, "failed to configure state syncer, no remote servers provided.")
@@ -757,7 +757,7 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 		// Duplicating the same provider to satisfy cometbft statesync requirement of having at least 2 providers.
 		// Statesynce module doesn't have the same requirements and
 		// can work with a single provider (providers are passed as is)
-		d.cfg.ChainCfg.StateSync.RPCServers += "," + providers[0]
+		d.cfg.ChainConfig.StateSync.RPCServers += "," + providers[0]
 	}
 
 	configDone := false
@@ -793,10 +793,10 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 		}
 
 		// Get the trust height and trust hash from the remote server
-		d.cfg.ChainCfg.StateSync.TrustHeight = res.Header.Height
-		d.cfg.ChainCfg.StateSync.TrustHash = res.Header.Hash().String()
+		d.cfg.ChainConfig.StateSync.TrustHeight = res.Header.Height
+		d.cfg.ChainConfig.StateSync.TrustHash = res.Header.Hash().String()
 
-		d.log.Infof("Provider %q: trust height %v, hash %v", p, d.cfg.ChainCfg.StateSync.TrustHeight, d.cfg.ChainCfg.StateSync.TrustHash)
+		d.log.Infof("Provider %q: trust height %v, hash %v", p, d.cfg.ChainConfig.StateSync.TrustHeight, d.cfg.ChainConfig.StateSync.TrustHash)
 
 		configDone = true
 
@@ -808,7 +808,7 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 	}
 
 	// create state syncer
-	return statesync.NewStateSyncer(d.ctx, dbCfg, d.cfg.ChainCfg.StateSync.SnapshotDir,
+	return statesync.NewStateSyncer(d.ctx, dbCfg, d.cfg.ChainConfig.StateSync.SnapshotDir,
 		providers, *d.log.Named("state-syncer"))
 }
 
@@ -868,7 +868,7 @@ func tlsConfig(d *coreDependencies, withClientAuth bool) *tls.Config {
 
 func buildJRPCAdminServer(d *coreDependencies) *rpcserver.Server {
 	var wantTLS bool
-	addr := d.cfg.AppCfg.AdminListenAddress
+	addr := d.cfg.AppConfig.AdminListenAddress
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		if strings.Contains(err.Error(), "missing port in address") {
@@ -888,7 +888,7 @@ func buildJRPCAdminServer(d *coreDependencies) *rpcserver.Server {
 
 	opts := []rpcserver.Opt{rpcserver.WithTimeout(10 * time.Minute)} // this is an administrator
 
-	adminPass := d.cfg.AppCfg.AdminRPCPass
+	adminPass := d.cfg.AppConfig.AdminRPCPass
 	if adminPass != "" {
 		opts = append(opts, rpcserver.WithPass(adminPass))
 	}
@@ -911,7 +911,7 @@ func buildJRPCAdminServer(d *coreDependencies) *rpcserver.Server {
 			loopback = netAddr.IP.IsLoopback()
 		}
 		if !loopback || wantTLS { // use TLS for encryption, maybe also client auth
-			if d.cfg.AppCfg.NoTLS {
+			if d.cfg.AppConfig.NoTLS {
 				d.log.Warn("disabling TLS on non-loopback admin service listen address",
 					log.String("addr", addr), log.Bool("with_password", adminPass != ""))
 			} else {

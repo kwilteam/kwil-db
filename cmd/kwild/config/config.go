@@ -66,7 +66,7 @@ func GetCfg(flagCfg *config.KwildConfig) (*config.KwildConfig, bool, error) {
 
 	// Remember the default listen addresses in case we need to apply the
 	// default port to a user override.
-	defaultListenJSONRPC := cfg.AppCfg.JSONRPCListenAddress
+	defaultListenJSONRPC := cfg.AppConfig.JSONRPCListenAddress
 
 	// read in env config
 	envCfg, err := LoadEnvConfig()
@@ -136,71 +136,71 @@ func GetCfg(flagCfg *config.KwildConfig) (*config.KwildConfig, bool, error) {
 		return nil, false, fmt.Errorf("failed to configure certs: %w", err)
 	}
 
-	if cfg.ChainCfg.Moniker == "" {
-		cfg.ChainCfg.Moniker = defaultMoniker()
+	if cfg.ChainConfig.Moniker == "" {
+		cfg.ChainConfig.Moniker = defaultMoniker()
 	}
 
-	cfg.AppCfg.JSONRPCListenAddress = cleanListenAddr(cfg.AppCfg.JSONRPCListenAddress, defaultListenJSONRPC)
+	cfg.AppConfig.JSONRPCListenAddress = cleanListenAddr(cfg.AppConfig.JSONRPCListenAddress, defaultListenJSONRPC)
 
 	return cfg, configFileExists, nil
 }
 
 func configureCerts(cfg *config.KwildConfig) error {
-	if cfg.AppCfg.TLSCertFile == "" {
-		cfg.AppCfg.TLSCertFile = DefaultTLSCertFile
+	if cfg.AppConfig.TLSCertFile == "" {
+		cfg.AppConfig.TLSCertFile = DefaultTLSCertFile
 	}
-	path, err := config.CleanPath(cfg.AppCfg.TLSCertFile, cfg.RootDir)
+	path, err := config.CleanPath(cfg.AppConfig.TLSCertFile, cfg.RootDir)
 	if err != nil {
 		return err
 	}
-	cfg.AppCfg.TLSCertFile = path
+	cfg.AppConfig.TLSCertFile = path
 
-	if cfg.AppCfg.TLSKeyFile == "" {
-		cfg.AppCfg.TLSKeyFile = defaultTLSKeyFile
+	if cfg.AppConfig.TLSKeyFile == "" {
+		cfg.AppConfig.TLSKeyFile = defaultTLSKeyFile
 	}
-	path, err = config.CleanPath(cfg.AppCfg.TLSKeyFile, cfg.RootDir)
+	path, err = config.CleanPath(cfg.AppConfig.TLSKeyFile, cfg.RootDir)
 	if err != nil {
 		return err
 	}
-	cfg.AppCfg.TLSKeyFile = path
+	cfg.AppConfig.TLSKeyFile = path
 	return nil
 }
 
 func sanitizeCfgPaths(cfg *config.KwildConfig) error {
 	rootDir := cfg.RootDir
 
-	path, err := config.CleanPath(cfg.AppCfg.PrivateKeyPath, rootDir)
+	path, err := config.CleanPath(cfg.AppConfig.PrivateKeyPath, rootDir)
 	if err != nil {
-		return fmt.Errorf("failed to expand private key path \"%v\": %v", cfg.AppCfg.PrivateKeyPath, err)
+		return fmt.Errorf("failed to expand private key path \"%v\": %v", cfg.AppConfig.PrivateKeyPath, err)
 	}
-	cfg.AppCfg.PrivateKeyPath = path
-	fmt.Println("Private key path:", cfg.AppCfg.PrivateKeyPath)
+	cfg.AppConfig.PrivateKeyPath = path
+	fmt.Println("Private key path:", cfg.AppConfig.PrivateKeyPath)
 
-	if cfg.AppCfg.Snapshots.Enabled {
-		path, err := config.CleanPath(cfg.AppCfg.Snapshots.SnapshotDir, rootDir)
+	if cfg.AppConfig.Snapshots.Enabled {
+		path, err := config.CleanPath(cfg.AppConfig.Snapshots.SnapshotDir, rootDir)
 		if err != nil {
-			return fmt.Errorf("failed to expand snapshot directory \"%v\": %v", cfg.AppCfg.Snapshots.SnapshotDir, err)
+			return fmt.Errorf("failed to expand snapshot directory \"%v\": %v", cfg.AppConfig.Snapshots.SnapshotDir, err)
 		}
-		cfg.AppCfg.Snapshots.SnapshotDir = path
-		fmt.Println("Snapshot directory:", cfg.AppCfg.Snapshots.SnapshotDir)
-	}
-
-	if cfg.ChainCfg.StateSync.Enable {
-		path, err := config.CleanPath(cfg.ChainCfg.StateSync.SnapshotDir, rootDir)
-		if err != nil {
-			return fmt.Errorf("failed to expand state sync snapshots directory \"%v\": %v", cfg.ChainCfg.StateSync.SnapshotDir, err)
-		}
-		cfg.ChainCfg.StateSync.SnapshotDir = path
-		fmt.Println("State sync received snapshots directory:", cfg.ChainCfg.StateSync.SnapshotDir)
+		cfg.AppConfig.Snapshots.SnapshotDir = path
+		fmt.Println("Snapshot directory:", cfg.AppConfig.Snapshots.SnapshotDir)
 	}
 
-	if cfg.AppCfg.GenesisState != "" {
-		path, err := config.CleanPath(cfg.AppCfg.GenesisState, rootDir)
+	if cfg.ChainConfig.StateSync.Enable {
+		path, err := config.CleanPath(cfg.ChainConfig.StateSync.SnapshotDir, rootDir)
 		if err != nil {
-			return fmt.Errorf("failed to expand snapshot file path \"%v\": %v", cfg.AppCfg.GenesisState, err)
+			return fmt.Errorf("failed to expand state sync snapshots directory \"%v\": %v", cfg.ChainConfig.StateSync.SnapshotDir, err)
 		}
-		cfg.AppCfg.GenesisState = path
-		fmt.Println("Snapshot file to initialize database from:", cfg.AppCfg.GenesisState)
+		cfg.ChainConfig.StateSync.SnapshotDir = path
+		fmt.Println("State sync received snapshots directory:", cfg.ChainConfig.StateSync.SnapshotDir)
+	}
+
+	if cfg.AppConfig.GenesisState != "" {
+		path, err := config.CleanPath(cfg.AppConfig.GenesisState, rootDir)
+		if err != nil {
+			return fmt.Errorf("failed to expand snapshot file path \"%v\": %v", cfg.AppConfig.GenesisState, err)
+		}
+		cfg.AppConfig.GenesisState = path
+		fmt.Println("Snapshot file to initialize database from:", cfg.AppConfig.GenesisState)
 	}
 
 	return nil
@@ -364,10 +364,10 @@ func fileExists(path string) bool {
 // structure.
 func DefaultEmptyConfig() *config.KwildConfig {
 	return &config.KwildConfig{
-		AppCfg: &config.AppConfig{
+		AppConfig: &config.AppConfig{
 			Extensions: make(map[string]map[string]string),
 		},
-		ChainCfg: &config.ChainConfig{
+		ChainConfig: &config.ChainConfig{
 			P2P:       &config.P2PConfig{},
 			RPC:       &config.ChainRPCConfig{},
 			Mempool:   &config.MempoolConfig{},
@@ -380,7 +380,7 @@ func DefaultEmptyConfig() *config.KwildConfig {
 
 func DefaultConfig() *config.KwildConfig {
 	return &config.KwildConfig{
-		AppCfg: &config.AppConfig{
+		AppConfig: &config.AppConfig{
 			JSONRPCListenAddress: "0.0.0.0:8484",
 			AdminListenAddress:   "/tmp/kwild.socket", // Or, suggested, 127.0.0.1:8485
 			PrivateKeyPath:       PrivateKeyFileName,
@@ -408,7 +408,7 @@ func DefaultConfig() *config.KwildConfig {
 			OutputPaths:  []string{"stdout", "kwild.log"},
 		},
 
-		ChainCfg: &config.ChainConfig{
+		ChainConfig: &config.ChainConfig{
 			P2P: &config.P2PConfig{
 				ListenAddress:       "tcp://0.0.0.0:26656",
 				ExternalAddress:     "",
@@ -452,10 +452,10 @@ func DefaultConfig() *config.KwildConfig {
 // This is useful for guaranteeing that all fields are set when merging
 func EmptyConfig() *config.KwildConfig {
 	return &config.KwildConfig{
-		AppCfg: &config.AppConfig{
+		AppConfig: &config.AppConfig{
 			ExtensionEndpoints: []string{},
 		},
-		ChainCfg: &config.ChainConfig{
+		ChainConfig: &config.ChainConfig{
 			P2P:     &config.P2PConfig{},
 			RPC:     &config.ChainRPCConfig{},
 			Mempool: &config.MempoolConfig{},

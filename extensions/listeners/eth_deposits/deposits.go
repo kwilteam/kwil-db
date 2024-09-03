@@ -37,7 +37,7 @@ func init() {
 // It will search for a local extension configuration named "eth_deposit".
 func Start(ctx context.Context, service *common.Service, eventStore listeners.EventStore) error {
 	config := &EthDepositConfig{}
-	listenerConfig, ok := service.LocalConfig.AppCfg.Extensions[ListenerName]
+	listenerConfig, ok := service.LocalConfig.AppConfig.Extensions[ListenerName]
 	if !ok {
 		service.Logger.Warn("no eth_deposit configuration found, eth_deposit oracle will not start")
 		return nil // no configuration, so we don't start the oracle
