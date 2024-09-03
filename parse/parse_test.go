@@ -1979,6 +1979,24 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 		},
+		{
+			// regression test https://github.com/kwilteam/kwil-db/pull/947
+			name: "string literal",
+			proc: `
+			$a := '\'hello\'';
+			`,
+			want: &parse.ProcedureParseResult{
+				Variables: map[string]*types.DataType{
+					"$a": types.TextType,
+				},
+				AST: []parse.ProcedureStmt{
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$a"),
+						Value:    exprLit("\\'hello\\'"),
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

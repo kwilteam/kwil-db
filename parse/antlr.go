@@ -97,10 +97,16 @@ func unknownExpression(ctx antlr.ParserRuleContext) *ExpressionLiteral {
 }
 
 func (s *schemaVisitor) VisitString_literal(ctx *gen.String_literalContext) any {
-	str := ctx.STRING_()
+	str := ctx.STRING_().GetText()
+
+	if !strings.HasPrefix(str, "'") || !strings.HasSuffix(str, "'") || len(str) < 2 {
+		panic("invalid string literal")
+	}
+	str = str[1 : len(str)-1]
+
 	n := &ExpressionLiteral{
 		Type:  types.TextType,
-		Value: strings.Trim(str.GetText(), "'"),
+		Value: str,
 	}
 
 	n.Set(ctx)
