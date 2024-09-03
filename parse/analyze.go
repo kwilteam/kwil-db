@@ -2656,6 +2656,13 @@ func (p *procedureAnalyzer) VisitProcedureStmtReturn(p0 *ProcedureStmtReturn) an
 		}
 	}
 	if returns.IsTable {
+		// if the procedure is expecting a table return, it can return nothing.
+		if len(p0.Values) == 0 {
+			return &procedureStmtResult{
+				willReturn: true,
+			}
+		}
+
 		p.errs.AddErr(p0, ErrReturn, "procedure expects table returns, cannot return scalar values")
 		return &procedureStmtResult{
 			willReturn: true,

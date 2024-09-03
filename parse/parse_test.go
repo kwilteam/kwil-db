@@ -894,6 +894,102 @@ func Test_Kuneiform(t *testing.T) {
 			`,
 			err: parse.ErrUnknownColumn,
 		},
+		{
+			// regression test for https://github.com/kwilteam/kwil-db/issues/896#issue-2423754035
+			name: "invalid foreign key",
+			kf: `database glow;
+
+			table data {
+				id uuid primary key,
+				owner_id uuid notnull,
+				foreign key (owner_id) references users(id) on update cascade
+				// TODO: add other columns
+			}
+			`,
+			err: parse.ErrUnknownTable,
+		},
+		{
+			// regression test for https://github.com/kwilteam/kwil-db/issues/896#issue-2423754035
+			name: "invalid foreign key",
+			kf: `database mydb;
+
+			table a {
+				id int primary key
+			}
+
+			table b {
+				id int primary key,
+				id2 int,
+				foreign key (id2) references a(id2)
+			}
+			`,
+			err: parse.ErrUnknownColumn,
+		},
+		{
+			// regression test for https://github.com/kwilteam/kwil-db/issues/896#issuecomment-2243806123
+			name: "max on non-numeric type",
+			kf: `database mydb;
+
+			table a {
+				id uuid primary key,
+				age text max(100)
+			}
+			`,
+			err: parse.ErrColumnConstraint,
+		},
+		{
+			// regression test for https://github.com/kwilteam/kwil-db/issues/896#issuecomment-2243835819
+			name: "mex_len on blob",
+			kf: `database mydb;
+
+			table a {
+				id uuid primary key,
+				bts blob maxlen(100)
+			}
+			`,
+			want: &types.Schema{
+				Name: "mydb",
+				Tables: []*types.Table{
+					{
+						Name: "a",
+						Columns: []*types.Column{
+							{
+								Name: "id",
+								Type: types.UUIDType,
+								Attributes: []*types.Attribute{
+									{
+										Type: types.PRIMARY_KEY,
+									},
+								},
+							},
+							{
+								Name: "bts",
+								Type: types.BlobType,
+								Attributes: []*types.Attribute{
+									{
+										Type:  types.MAX_LENGTH,
+										Value: "100",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "conflict with function",
+			kf: `database mydb;
+
+			table a {
+				id int primary key,
+				age int max(100)
+			}
+
+			procedure max() public view {}
+			`,
+			err: parse.ErrReservedKeyword,
+		},
 	}
 
 	for _, tt := range tests {

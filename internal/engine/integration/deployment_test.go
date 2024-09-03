@@ -181,6 +181,24 @@ func Test_Deployment(t *testing.T) {
 			`,
 			err: parse.ErrUnknownFunctionOrProcedure,
 		},
+		{
+			name: "schema with max_len blob",
+			schema: `database max_len_blob;
+
+			table users {
+				id int primary key,
+				data blob max_len(10)
+			}`,
+		},
+		{
+			name: "max on uint256",
+			schema: `database max_uint256;
+
+			table users {
+				id int primary key,
+				data uint256 max(1000000000000000000000000000000000000000)
+			}`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -219,6 +237,7 @@ func Test_Deployment(t *testing.T) {
 			// catches these errors
 			parsed, err := parse.ParseSchemaWithoutValidation([]byte(schema))
 			require.NoError(t, err)
+			parsed.Schema.Owner = owner
 
 			err = global.CreateDataset(ctx, tx, parsed.Schema, &common.TransactionData{
 				Signer: owner,

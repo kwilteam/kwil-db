@@ -1,13 +1,11 @@
 package generate
 
 import (
-	"fmt"
-
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/conv"
 )
 
-func attributeToSQLString(colName string, attr *types.Attribute) (string, error) {
+func attributeToSQLString(col *types.Column, attr *types.Attribute) (string, error) {
 	switch attr.Type {
 	case types.PRIMARY_KEY:
 		return "", nil
@@ -18,33 +16,37 @@ func attributeToSQLString(colName string, attr *types.Attribute) (string, error)
 	case types.UNIQUE:
 		return "UNIQUE", nil
 	case types.MIN:
-		intVal, err := conv.Int(attr.Value)
-		if err != nil {
-			return "", err
-		}
-
-		return "CHECK (" + colName + " >= " + fmt.Sprint(intVal) + ")", nil
+		return "CHECK (" + col.Name + " >= " + attr.Value + ")", nil
 	case types.MAX:
-		intVal, err := conv.Int(attr.Value)
-		if err != nil {
-			return "", err
-		}
-
-		return "CHECK (" + colName + " <= " + fmt.Sprint(intVal) + ")", nil
+		return "CHECK (" + col.Name + " <= " + attr.Value + ")", nil
 	case types.MIN_LENGTH:
-		intVal, err := conv.Int(attr.Value)
+
+		// for max_len and min_len, we want to check that the value is an int.
+		// For regular max and min, it can be a decimal or uint256.
+
+		_, err := conv.Int(attr.Value)
 		if err != nil {
 			return "", err
 		}
 
-		return "CHECK (LENGTH(" + colName + ") >= " + fmt.Sprint(intVal) + ")", nil
+		fn := "LENGTH"
+		if col.Type.Equals(types.BlobType) {
+			fn = "OCTET_LENGTH"
+		}
+
+		return "CHECK (" + fn + "(" + col.Name + ") >= " + attr.Value + ")", nil
 	case types.MAX_LENGTH:
-		intVal, err := conv.Int(attr.Value)
+		_, err := conv.Int(attr.Value)
 		if err != nil {
 			return "", err
 		}
 
-		return "CHECK (LENGTH(" + colName + ") <= " + fmt.Sprint(intVal) + ")", nil
+		fn := "LENGTH"
+		if col.Type.Equals(types.BlobType) {
+			fn = "OCTET_LENGTH"
+		}
+
+		return "CHECK (" + fn + "(" + col.Name + ") <= " + attr.Value + ")", nil
 	default:
 		return "", nil
 	}
