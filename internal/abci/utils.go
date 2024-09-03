@@ -70,6 +70,9 @@ func updateConsensusParams(p *chain.ConsensusParams, up *consensus.ParamUpdates)
 		if exp := up.Votes.VoteExpiry; exp != 0 {
 			p.Votes.VoteExpiry = exp
 		}
+		if mv := up.Votes.MaxVotesPerTx; mv != 0 {
+			p.Votes.MaxVotesPerTx = mv
+		}
 	}
 	if up.ABCI != nil {
 		// Disabling this after it was enabled is impossible under cometbft
