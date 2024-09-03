@@ -865,8 +865,17 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 
 	a.txApp.Commit(ctx)
 
-	if a.snapshotter != nil && a.replayingBlocks != nil &&
-		a.snapshotter.IsSnapshotDue(uint64(a.height)) && !a.replayingBlocks() {
+	// Snapshots are to be taken if:
+	// - the block height is a multiple of the snapshot interval
+	// - there are no snapshots in the store (This is to support the new nodes joining the network using
+	//   statesync. As the snapshot intervals are pretty large, the new nodes will not have any
+	//   snapshots to start with for a long time, during which the new nodes just hangs in the snapshot
+	//   discovery phase, which can be mitigated if we can produce a snapshot at the start of the network
+	//   or when the node joins network at any height)
+	snapshotsDue := a.snapshotter != nil &&
+		(a.snapshotter.IsSnapshotDue(uint64(a.height)) || len(a.snapshotter.ListSnapshots()) == 0)
+
+	if a.replayingBlocks != nil && snapshotsDue && !a.replayingBlocks() {
 		// we make a snapshot tx but don't directly use it. This is because under the hood,
 		// we are using the pg_dump executable to create the snapshot, and we are simply
 		// giving pg_dump the snapshot ID to guarantee it has an isolated view of the database.
