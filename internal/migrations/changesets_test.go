@@ -1,6 +1,9 @@
+//go:build pglive
+
 package migrations
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -17,13 +20,15 @@ func TestChangesetMigration(t *testing.T) {
 
 	db, err := dbtest.NewTestDB(t)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() {
+		db.Close()
+	})
 
 	cleanup := func() {
 		db.AutoCommit(true)
-		_, err = db.Execute(ctx, "drop table if exists ds_test.test", pg.QueryModeExec)
+		_, err = db.Execute(ctx, "drop table if exists ds_test.test")
 		require.NoError(t, err)
-		_, err = db.Execute(ctx, "drop schema if exists ds_test", pg.QueryModeExec)
+		_, err = db.Execute(ctx, "drop schema if exists ds_test")
 		require.NoError(t, err)
 		_, err = db.Execute(ctx, `DROP SCHEMA IF EXISTS `+migrationsSchemaName+` CASCADE;`)
 		require.NoError(t, err)
@@ -31,7 +36,9 @@ func TestChangesetMigration(t *testing.T) {
 	}
 	// attempt to clean up any old failed tests
 	cleanup()
-	defer cleanup()
+	t.Cleanup(func() {
+		cleanup()
+	})
 
 	err = createTestSchema(ctx, db, t)
 	require.NoError(t, err)
@@ -142,7 +149,7 @@ func sampleChangeset(ctx context.Context, db sql.PreparedTxMaker, t *testing.T) 
 	var changesetEntries []*pg.ChangesetEntry
 	var relations []*pg.Relation
 	done := make(chan struct{})
-	var csbts []byte
+	var csbts bytes.Buffer
 
 	go func() {
 		defer close(done)
@@ -150,19 +157,19 @@ func sampleChangeset(ctx context.Context, db sql.PreparedTxMaker, t *testing.T) 
 			switch ce := ce.(type) {
 			case *pg.ChangesetEntry:
 				changesetEntries = append(changesetEntries, ce)
-				bts, err := ce.Serialize()
+				err := pg.StreamElement(&csbts, ce)
 				if err != nil {
+					t.Error(err)
 					return
 				}
-				csbts = append(csbts, bts...)
 
 			case *pg.Relation:
 				relations = append(relations, ce)
-				bts, err := ce.Serialize()
+				err := pg.StreamElement(&csbts, ce)
 				if err != nil {
+					t.Error(err)
 					return
 				}
-				csbts = append(csbts, bts...)
 			}
 		}
 	}()
@@ -178,5 +185,5 @@ func sampleChangeset(ctx context.Context, db sql.PreparedTxMaker, t *testing.T) 
 	err = tx.Rollback(ctx)
 	require.NoError(t, err)
 
-	return csbts, nil
+	return csbts.Bytes(), nil
 }

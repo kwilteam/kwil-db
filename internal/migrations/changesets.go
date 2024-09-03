@@ -2,7 +2,6 @@ package migrations
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"math/big"
 
@@ -187,11 +186,10 @@ func applyChangeset(ctx context.Context, db sql.TxMaker, height int64, totalChun
 	defer tx.Rollback(ctx)
 
 	csReader := newChangesetReader(height, totalChunks)
-	var data []byte
 
 	var relations []*pg.Relation
 	for {
-		data, err = csReader.Read(ctx, tx, 5)
+		prefix, err := csReader.Read(ctx, tx, 5)
 		if err != nil {
 			// no more chunks or changesets not found
 			if errors.Is(err, ErrNoMoreChunksToRead) || errors.Is(err, ErrChangesetNotFound) {
@@ -200,10 +198,9 @@ func applyChangeset(ctx context.Context, db sql.TxMaker, height int64, totalChun
 			return err
 		}
 
-		csType := data[0]
-		csSize := binary.LittleEndian.Uint32(data[1:5])
+		csType, csSize := pg.DecodeStreamPrefix([5]byte(prefix))
 
-		data, err = csReader.Read(ctx, tx, int(csSize))
+		data, err := csReader.Read(ctx, tx, int(csSize))
 		if err != nil {
 			// invalid changeset
 			return err
@@ -212,14 +209,14 @@ func applyChangeset(ctx context.Context, db sql.TxMaker, height int64, totalChun
 		switch csType {
 		case pg.RelationType:
 			rel := &pg.Relation{}
-			if err = rel.Deserialize(data); err != nil {
+			if err = rel.UnmarshalBinary(data); err != nil {
 				return err
 			}
 			relations = append(relations, rel)
 
 		case pg.ChangesetEntryType:
 			ce := &pg.ChangesetEntry{}
-			if err = ce.Deserialize(data); err != nil {
+			if err = ce.UnmarshalBinary(data); err != nil {
 				return err
 			}
 
@@ -230,7 +227,7 @@ func applyChangeset(ctx context.Context, db sql.TxMaker, height int64, totalChun
 
 		case pg.BlockSpendsType:
 			bs := &BlockSpends{}
-			if err = bs.Deserialize(data); err != nil {
+			if err = bs.UnmarshalBinary(data); err != nil {
 				return err
 			}
 

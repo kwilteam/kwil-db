@@ -3,13 +3,17 @@ package pg
 import (
 	"bytes"
 	"context"
+	"encoding"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/jackc/pglogrepl"
+
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
@@ -21,7 +25,44 @@ type changesetIoWriter struct {
 	csChan    chan<- any           // *Relation / *ChangesetEntry
 }
 
-var (
+// ChangeStreamer is a type that supports streaming with StreamElement.
+// This and the associated helper functions could alternatively be in migrator.
+type ChangeStreamer interface {
+	encoding.BinaryMarshaler
+	Prefix() byte
+}
+
+// StreamElement writes the serialized changeset element to the writer, preceded
+// by the type's prefix and serialized size. This is supports streamed encoding.
+// When decoding, use DecodeStreamPrefix to interpret the 5-byte prefixes before
+// each encoded element.
+func StreamElement(w io.Writer, s ChangeStreamer) error {
+	bts, err := s.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write([]byte{s.Prefix()})
+	if err != nil {
+		return err
+	}
+
+	err = binary.Write(w, binary.LittleEndian, uint32(len(bts)))
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(bts)
+	return err
+}
+
+// DecodeStreamPrefix decodes prefix bytes for a changeset element. This mirrors
+// the encoding convention in StreamElement.
+func DecodeStreamPrefix(b [5]byte) (csType byte, sz uint32) {
+	return b[0], binary.LittleEndian.Uint32(b[1:])
+}
+
+const (
 	RelationType       = byte(0x01)
 	ChangesetEntryType = byte(0x02)
 	BlockSpendsType    = byte(0x03)
@@ -34,7 +75,8 @@ type ChangesetEntry struct {
 
 	OldTuple []*TupleColumn // empty for insert
 	NewTuple []*TupleColumn // empty for delete
-	// both old and new are set for update
+	// both old and new are set for update, except that when a column is
+	// unchanged, elements of NewTuple may an unchanged{} instance.
 }
 
 func (ce *ChangesetEntry) Kind() string {
@@ -52,30 +94,19 @@ func (ce *ChangesetEntry) String() string {
 		ce.Kind(), ce.RelationIdx, len(ce.OldTuple), len(ce.NewTuple))
 }
 
-func (ce *ChangesetEntry) Serialize() ([]byte, error) {
-	buf := new(bytes.Buffer)
-	buf.WriteByte(ChangesetEntryType)
+var _ ChangeStreamer = (*ChangesetEntry)(nil)
 
-	bts, err := serialize.Encode(ce)
-	if err != nil {
-		return nil, err
-	}
-
-	size := uint32(len(bts))
-	err = binary.Write(buf, binary.LittleEndian, size)
-	if err != nil {
-		return nil, fmt.Errorf("failed to write size: %w", err)
-	}
-
-	_, err = buf.Write(bts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to write tuple data: %w", err)
-	}
-
-	return buf.Bytes(), nil
+func (ce *ChangesetEntry) Prefix() byte {
+	return ChangesetEntryType
 }
 
-func (ce *ChangesetEntry) Deserialize(data []byte) error {
+func (ce *ChangesetEntry) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(ce)
+}
+
+var _ encoding.BinaryUnmarshaler = (*ChangesetEntry)(nil)
+
+func (ce *ChangesetEntry) UnmarshalBinary(data []byte) error {
 	return serialize.Decode(data, ce)
 }
 
@@ -104,6 +135,17 @@ func (c *ChangesetEntry) DecodeTuples(relation *Relation) (oldValues, newValues 
 	return oldValues, newValues, nil
 }
 
+type unchanged struct{}
+
+func (uc unchanged) String() string {
+	return "<unchanged>"
+}
+
+func IsUnchanged(v any) bool {
+	_, same := v.(unchanged)
+	return same
+}
+
 func decodeTuple(cols []*TupleColumn, relation *Relation) ([]any, error) {
 	if cols == nil {
 		return nil, nil
@@ -113,6 +155,8 @@ func decodeTuple(cols []*TupleColumn, relation *Relation) ([]any, error) {
 	for i, col := range cols {
 		switch col.ValueType {
 		case NullValue, ToastValue:
+		case UnchangedUpdate: // deduped ChangesetEntry.NewTupls for an UPDATE
+			values[i] = unchanged{}
 		case SerializedValue:
 			dt, ok := kwilTypeToDataType[*relation.Columns[i].Type]
 			if !ok {
@@ -169,26 +213,34 @@ func (c *ChangesetEntry) applyUpdates(ctx context.Context, tx sql.DB, rel *Relat
 		return fmt.Errorf("relation %s.%s has no columns", rel.Schema, rel.Table)
 	}
 
-	var updateSql strings.Builder
-	fmt.Fprintf(&updateSql, "UPDATE %s.%s SET ", rel.Schema, rel.Table)
-	for i, col := range rel.Columns {
-		if i > 0 {
-			updateSql.WriteString(", ")
-		}
-		fmt.Fprintf(&updateSql, "%s = $%s", col.Name, strconv.Itoa(i+1))
-	}
-
-	updateSql.WriteString(" WHERE ")
-	// Conflict resolution:
-	// If new network's current record is same as the oldValues in the old network, then update the record
-	// Else, discard the update in favor of whatever data exists on the new network
 	oldVals, newVals, err := c.DecodeTuples(rel)
 	if err != nil {
 		return err
 	}
 
+	// In the context of an UPDATE, the changeset may omit the new values if
+	// they are unchanged. This is made explicit with an unchanged{} instance.
+
+	var updateSql strings.Builder
+	fmt.Fprintf(&updateSql, "UPDATE %s.%s SET ", rel.Schema, rel.Table)
+	var placeholder int = 1 // e.g. $1
+	for i, col := range rel.Columns {
+		if IsUnchanged(newVals[i]) {
+			continue
+		}
+		if placeholder > 1 {
+			updateSql.WriteString(", ")
+		}
+		fmt.Fprintf(&updateSql, "%s = $%d", col.Name, placeholder)
+		placeholder++
+	}
+
+	// Conflict resolution:
+	// If new network's current record is same as the oldValues in the old network, then update the record
+	// Else, discard the update in favor of whatever data exists on the new network
+	updateSql.WriteString(" WHERE ")
+
 	var oldArgs []any
-	cnt := 1
 	for i, v := range oldVals {
 		if i > 0 {
 			updateSql.WriteString(" AND ")
@@ -197,11 +249,17 @@ func (c *ChangesetEntry) applyUpdates(ctx context.Context, tx sql.DB, rel *Relat
 		if v == nil {
 			fmt.Fprintf(&updateSql, "%s IS NULL", rel.Columns[i].Name)
 		} else {
-			fmt.Fprintf(&updateSql, "%s = $%d", rel.Columns[i].Name, cnt+len(newVals))
+			fmt.Fprintf(&updateSql, "%s = $%d", rel.Columns[i].Name, placeholder)
 			oldArgs = append(oldArgs, v)
-			cnt++
+			placeholder++
 		}
 	}
+
+	// Clip out unchanged cols in newVals to match set stmt.
+	newVals = slices.DeleteFunc(newVals, func(val any) bool {
+		return IsUnchanged(val)
+	})
+
 	_, err = tx.Execute(ctx, updateSql.String(), append(newVals, oldArgs...)...)
 	return err
 }
@@ -330,6 +388,15 @@ func (c *changesetIoWriter) decodeUpdate(update *pglogrepl.UpdateMessageV2, rela
 	if err != nil {
 		return err
 	}
+	// de-duplicate unchanged data
+	for i, old := range ce.OldTuple {
+		updated := tup.Columns[i]
+		if old.ValueType == updated.ValueType &&
+			bytes.Equal(old.Data, updated.Data) {
+			tup.Columns[i].ValueType = UnchangedUpdate
+			tup.Columns[i].Data = nil
+		}
+	}
 	ce.NewTuple = tup.Columns
 	c.csChan <- ce
 
@@ -457,30 +524,19 @@ func (r *Relation) String() string {
 	return fmt.Sprintf("%s.%s", r.Schema, r.Table)
 }
 
-func (r *Relation) Serialize() ([]byte, error) {
-	buf := new(bytes.Buffer)
-	buf.WriteByte(RelationType)
+var _ ChangeStreamer = (*Relation)(nil)
 
-	bts, err := serialize.Encode(r)
-	if err != nil {
-		return nil, err
-	}
-
-	size := uint32(len(bts))
-	err = binary.Write(buf, binary.LittleEndian, size)
-	if err != nil {
-		return nil, fmt.Errorf("failed to write size: %w", err)
-	}
-
-	_, err = buf.Write(bts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to write tuple data: %w", err)
-	}
-
-	return buf.Bytes(), nil
+func (r *Relation) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(r)
 }
 
-func (r *Relation) Deserialize(data []byte) error {
+func (r *Relation) Prefix() byte {
+	return RelationType
+}
+
+var _ encoding.BinaryUnmarshaler = (*Relation)(nil)
+
+func (r *Relation) UnmarshalBinary(data []byte) error {
 	return serialize.Decode(data, r)
 }
 
@@ -500,8 +556,8 @@ type Tuple struct {
 
 // TupleColumn is a column within a tuple.
 type TupleColumn struct {
-	// ValueType gives information on the type of data in the column.
-	// If the type is of type Null or Toast, the Data field will be nil.
+	// ValueType gives information on the type of data in the column. If the
+	// type is of type Null, UnchangedUpdate, or Toast, the Data field will be nil.
 	ValueType ValueType
 	// Data is the actual data in the column.
 	Data []byte
@@ -521,4 +577,7 @@ const (
 	// SerializedValue indicates a column is a non-nil value
 	// and can be deserialized.
 	SerializedValue
+	// UnchangedUpdate indicates a column was unchanged. This is used in the new
+	// tuples in an UPDATE changeset entry.
+	UnchangedUpdate
 )
