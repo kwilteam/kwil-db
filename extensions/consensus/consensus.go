@@ -215,14 +215,24 @@ func MergeConsensusUpdates(params, update *ParamUpdates) {
 				params.Validator = new(chain.ValidatorParams)
 			}
 			params.Validator.PubKeyTypes = slices.Clone(update.Validator.PubKeyTypes)
+		}
+		if update.Validator.JoinExpiry != 0 { // a kwil param
+			if params.Validator == nil {
+				params.Validator = new(chain.ValidatorParams)
+			}
 			params.Validator.JoinExpiry = update.Validator.JoinExpiry
 		}
 	}
-	if update.Votes != nil {
+	if update.Votes != nil { // entirely kwil params
 		if params.Votes == nil {
 			params.Votes = new(chain.VoteParams)
 		}
-		params.Votes.VoteExpiry = update.Votes.VoteExpiry
+		if ve := update.Votes.VoteExpiry; ve != 0 {
+			params.Votes.VoteExpiry = ve
+		}
+		if mv := update.Votes.MaxVotesPerTx; mv != 0 {
+			params.Votes.MaxVotesPerTx = mv
+		}
 	}
 	if update.Version != nil {
 		if update.Version.App > 0 {

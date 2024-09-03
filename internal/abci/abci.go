@@ -203,7 +203,9 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		// consensus parameter updates or state mods applied. When specified
 		// with activation height 0, the full desired consensus parameters
 		// should be specified in genesis.json. When restarting above genesis
-		// height, these updates would already have been applied.
+		// height, these updates would already have been applied by cometbft,
+		// except for the kwil-specific parameters, which are loaded from the
+		// ABCI and applied below.
 	}
 
 	// if the network params have never been stored (which is the case for a fresh network),
@@ -239,6 +241,7 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		app.consensusParams.Validator.JoinExpiry = networkParams.JoinExpiry
 		app.consensusParams.Votes.VoteExpiry = networkParams.VoteExpiry
 		app.consensusParams.WithoutGasCosts = networkParams.DisabledGasCosts
+		app.consensusParams.Votes.MaxVotesPerTx = networkParams.MaxVotesPerTx
 	}
 
 	networkParams.InMigration = app.migrator.InMigration(height)
@@ -464,6 +467,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		JoinExpiry:       a.consensusParams.Validator.JoinExpiry,
 		VoteExpiry:       a.consensusParams.Votes.VoteExpiry,
 		DisabledGasCosts: a.consensusParams.WithoutGasCosts,
+		MaxVotesPerTx:    a.consensusParams.Votes.MaxVotesPerTx,
 	}
 	oldNetworkParams := *networkParams
 
@@ -632,6 +636,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	networkParams.MaxBlockSize = a.consensusParams.Block.MaxBytes
 	networkParams.JoinExpiry = a.consensusParams.Validator.JoinExpiry
 	networkParams.VoteExpiry = a.consensusParams.Votes.VoteExpiry
+	networkParams.MaxVotesPerTx = a.consensusParams.Votes.MaxVotesPerTx
 	networkParams.DisabledGasCosts = a.consensusParams.WithoutGasCosts
 
 	// cometbft wants its api/tendermint type
