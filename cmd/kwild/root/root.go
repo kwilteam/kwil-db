@@ -15,19 +15,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
+	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"github.com/kwilteam/kwil-db/cmd/kwild/server"
+
 	// kwild's "root" command package assumes the responsibility of initializing
 	// certain packages, including the extensions and the chain config package.
 	// After loading the genesis.json file, the global chain.Forks instance is
 	// initialized with the hardfork activations defined in the file.
 	"github.com/kwilteam/kwil-db/common/chain"
+	config1 "github.com/kwilteam/kwil-db/common/config"
 	_ "github.com/kwilteam/kwil-db/extensions" // a base location where all extensions can be registered
 	_ "github.com/kwilteam/kwil-db/extensions/auth"
-
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
-	"github.com/kwilteam/kwil-db/cmd/kwild/server"
 	"github.com/kwilteam/kwil-db/internal/version"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -83,7 +83,7 @@ func RootCmd() *cobra.Command {
 				return err
 			}
 
-			nodeKey, genesisConfig, err := kwildCfg.InitPrivateKeyAndGenesis(autoGen)
+			nodeKey, genesisConfig, err := config.InitPrivateKeyAndGenesis(kwildCfg, autoGen)
 			if err != nil {
 				return fmt.Errorf("failed to initialize private key and genesis: %w", err)
 			}
@@ -198,7 +198,7 @@ func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 	return exts, nil
 }
 
-func startProfilers(cfg *config.KwildConfig) (func(), error) {
+func startProfilers(cfg *config1.KwildConfig) (func(), error) {
 	mode := cfg.AppCfg.ProfileMode
 	pprofFile := cfg.AppCfg.ProfileFile
 	if pprofFile == "" {

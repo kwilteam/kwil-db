@@ -18,6 +18,7 @@ import (
 
 	"github.com/cometbft/cometbft/test/e2e/pkg/exec"
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -179,9 +180,13 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 				}
 
 				engine, err := execution.NewGlobalContext(ctx, outerTx, maps.Clone(precompiles.RegisteredPrecompiles()), &common.Service{
-					Logger:           logger,
-					ExtensionConfigs: map[string]map[string]string{},
-					Identity:         []byte("node"),
+					Logger: logger,
+					LocalConfig: &config.KwildConfig{
+						AppCfg: &config.AppConfig{
+							Extensions: map[string]map[string]string{},
+						},
+					},
+					Identity: []byte("node"),
 				})
 				if err != nil {
 					return err

@@ -18,10 +18,19 @@ import (
 	"strings"
 	"time"
 
+	abciTypes "github.com/cometbft/cometbft/abci/types"
+	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
+	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/chain"
+	config1 "github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/rpc/transport"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/abci/meta"
@@ -40,16 +49,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/voting"
 	"github.com/kwilteam/kwil-db/internal/voting/broadcast"
-
-	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
-	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/core/rpc/transport"
-
-	abciTypes "github.com/cometbft/cometbft/abci/types"
-	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
-	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
-	"github.com/kwilteam/kwil-db/core/types"
 )
 
 // initStores prepares the datastores with an atomic DB transaction. These
@@ -299,13 +298,24 @@ func newPoolBOpener(host, port, user, pass string) poolOpener {
 type coreDependencies struct {
 	ctx        context.Context
 	autogen    bool
-	cfg        *config.KwildConfig
+	cfg        *config1.KwildConfig
 	genesisCfg *chain.GenesisConfig
 	privKey    cmtEd.PrivKey
 	log        log.Logger
 	dbOpener   dbOpener
 	poolOpener poolOpener
 	keypair    *tls.Certificate
+}
+
+// service returns a common.Service with the given logger name
+func (c *coreDependencies) service(loggerName string) *common.Service {
+	return &common.Service{
+		Logger:           c.log.Named(loggerName).Sugar(),
+		GenesisConfig:    c.genesisCfg,
+		LocalConfig:      c.cfg,
+		Identity:         c.privKey.PubKey().Bytes(),
+		ExtensionConfigs: make(map[string]map[string]string),
+	}
 }
 
 // closeFuncs holds a list of closers
@@ -335,8 +345,7 @@ func (c *closeFuncs) closeAll() error {
 
 func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext, ev *voting.EventStore) *txapp.TxApp {
 
-	txApp, err := txapp.NewTxApp(d.ctx, db, engine, buildSigner(d), ev, d.genesisCfg,
-		d.cfg.AppCfg.Extensions, *d.log.Named("tx-router"))
+	txApp, err := txapp.NewTxApp(d.ctx, db, engine, buildSigner(d), ev, d.service("txapp"))
 	if err != nil {
 		failBuild(err, "failed to build new TxApp")
 	}
@@ -668,10 +677,7 @@ func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
 		failBuild(err, "failed to initialize engine")
 	}
 
-	eng, err := execution.NewGlobalContext(d.ctx, tx, extensions, &common.Service{
-		Logger:           d.log.Named("engine").Sugar(),
-		ExtensionConfigs: d.cfg.AppCfg.Extensions,
-	})
+	eng, err := execution.NewGlobalContext(d.ctx, tx, extensions, d.service("engine"))
 	if err != nil {
 		failBuild(err, "failed to build engine")
 	}
@@ -1036,8 +1042,7 @@ func failBuild(err error, msg string) {
 
 func buildListenerManager(d *coreDependencies, ev *voting.EventStore, node *cometbft.CometBftNode, txapp *txapp.TxApp, db sql.ReadTxMaker) *listeners.ListenerManager {
 	vr := &validatorReader{db: db, txApp: txapp}
-
-	return listeners.NewListenerManager(d.cfg.AppCfg.Extensions, d.genesisCfg, ev, node, d.privKey.PubKey().Bytes(), vr, *d.log.Named("listener-manager"))
+	return listeners.NewListenerManager(d.service("listener-manager"), ev, node, vr)
 }
 
 // validatorReader reads the validator set from the chain state.

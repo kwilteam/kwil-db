@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
+	config1 "github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -22,8 +23,6 @@ import (
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/version"
 	"github.com/kwilteam/kwil-db/internal/voting"
-
-	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	"go.uber.org/zap"
 )
 
@@ -72,7 +71,7 @@ type Service struct {
 	p2p        P2P
 	migrator   Migrator
 
-	cfg     *config.KwildConfig
+	cfg     *config1.KwildConfig
 	chainID string
 	signer  auth.Signer // ed25519 signer derived from the node's private key
 }
@@ -171,7 +170,7 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 }
 
 // NewService constructs a new Service.
-func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, p2p P2P, migrator Migrator, signer auth.Signer, cfg *config.KwildConfig,
+func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp, pricer Pricer, p2p P2P, migrator Migrator, signer auth.Signer, cfg *config1.KwildConfig,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,

@@ -82,8 +82,7 @@ func setup(t *testing.T) (global *execution.GlobalContext, db *pg.DB, err error)
 	global, err = execution.NewGlobalContext(ctx, tx, map[string]actions.Initializer{
 		"math": (&mathInitializer{}).initialize,
 	}, &common.Service{
-		Logger:           log.NewNoOp().Sugar(),
-		ExtensionConfigs: map[string]map[string]string{},
+		Logger: log.NewNoOp().Sugar(),
 	})
 	require.NoError(t, err)
 

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -151,7 +152,7 @@ func Test_Rootify(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := rootify(tc.addr, rootDir)
+			got, err := config.CleanPath(tc.addr, rootDir)
 			require.NoError(t, err)
 			assert.Equal(t, tc.rootifyPath, got)
 

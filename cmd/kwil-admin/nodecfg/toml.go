@@ -8,7 +8,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	config1 "github.com/kwilteam/kwil-db/common/config"
 )
 
 var configTemplate *template.Template
@@ -17,7 +17,7 @@ func init() {
 	var err error
 	tmpl := template.New("configFileTemplate").Funcs(template.FuncMap{
 		"arrayFormatter": arrayFormatter,
-		"configDuration": func(d config.Duration) time.Duration {
+		"configDuration": func(d config1.Duration) time.Duration {
 			return time.Duration(d)
 		},
 	})
@@ -36,7 +36,7 @@ func arrayFormatter(items []string) string {
 }
 
 // WriteConfigFile writes the config to a file.
-func WriteConfigFile(configFilePath string, cfg *config.KwildConfig) error {
+func WriteConfigFile(configFilePath string, cfg *config1.KwildConfig) error {
 	var buffer bytes.Buffer
 
 	if err := configTemplate.Execute(&buffer, cfg); err != nil {

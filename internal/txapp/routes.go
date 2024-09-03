@@ -148,13 +148,9 @@ type baseRoute struct {
 
 func (d *baseRoute) Price(ctx context.Context, router *TxApp, db sql.DB, tx *transactions.Transaction) (*big.Int, error) {
 	return d.Route.Price(ctx, &common.App{
-		Service: &common.Service{
-			Logger:           router.log.Named("route_" + d.Name()).Sugar(),
-			ExtensionConfigs: router.extensionConfigs,
-			Identity:         router.signer.Identity(),
-		},
-		DB:     db,
-		Engine: router.Engine,
+		Service: router.service.NamedLogger("route_" + d.Name()),
+		DB:      db,
+		Engine:  router.Engine,
 	}, tx)
 }
 
@@ -168,9 +164,9 @@ func (d *baseRoute) Execute(ctx TxContext, router *TxApp, db sql.DB, tx *transac
 	if err != nil {
 		switch code {
 		case transactions.CodeOk, transactions.CodeInsufficientBalance, transactions.CodeInsufficientFee:
-			logErr(router.log, dbTx.Commit(ctx.Ctx))
+			logErr(&router.service.Logger, dbTx.Commit(ctx.Ctx))
 		default:
-			logErr(router.log, dbTx.Rollback(ctx.Ctx))
+			logErr(&router.service.Logger, dbTx.Rollback(ctx.Ctx))
 		}
 		return txRes(spend, code, err)
 	}
@@ -180,15 +176,11 @@ func (d *baseRoute) Execute(ctx TxContext, router *TxApp, db sql.DB, tx *transac
 		// transaction (tx2 below).
 		err := dbTx.Commit(ctx.Ctx) // must not fail this or user spend is reverted
 		if err != nil {
-			router.log.Error("failed to commit DB tx for the spend", log.Error(err))
+			router.service.Logger.Error("failed to commit DB tx for the spend", log.Error(err))
 		}
 	}()
 
-	svc := &common.Service{
-		Logger:           router.log.Named("route_" + d.Name()).Sugar(),
-		ExtensionConfigs: router.extensionConfigs,
-		Identity:         router.signer.Identity(),
-	}
+	svc := router.service.NamedLogger("route_" + d.Name())
 
 	code, err = d.PreTx(ctx, svc, tx)
 	if err != nil {

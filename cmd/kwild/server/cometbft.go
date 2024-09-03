@@ -8,14 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
-	"github.com/kwilteam/kwil-db/common/chain"
-	"github.com/kwilteam/kwil-db/core/utils/url"
-	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
-
 	cmtCfg "github.com/cometbft/cometbft/config"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmttypes "github.com/cometbft/cometbft/types"
+	"github.com/kwilteam/kwil-db/common/chain"
+	config1 "github.com/kwilteam/kwil-db/common/config"
+	"github.com/kwilteam/kwil-db/core/utils/url"
+	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 )
 
 // cleanListenAddr tries to ensure the address has a scheme and port, as
@@ -52,7 +51,7 @@ func portFromURL(u string) string {
 //
 // NOTE: this is somewhat error prone, so care must be taken to update this
 // function when fields are added to KwildConfig.ChainCfg.
-func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
+func newCometConfig(cfg *config1.KwildConfig) *cmtCfg.Config {
 	// Begin with CometBFT's default chain config.
 	nodeCfg := cmtCfg.DefaultConfig()
 

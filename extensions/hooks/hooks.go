@@ -31,10 +31,22 @@ func RegisterGenesisHook(name string, hook GenesisHook) error {
 var genesisHooks map[string]GenesisHook
 
 // ListGenesisHooks deterministically returns a list of all registered GenesisHooks.
-func ListGenesisHooks() []GenesisHook {
-	hooks := make([]GenesisHook, 0, len(genesisHooks))
+func ListGenesisHooks() []struct {
+	Name string
+	Hook GenesisHook
+} {
+	hooks := make([]struct {
+		Name string
+		Hook GenesisHook
+	}, 0, len(genesisHooks))
 	for _, hook := range order.OrderMap(genesisHooks) {
-		hooks = append(hooks, hook.Value)
+		hooks = append(hooks, struct {
+			Name string
+			Hook GenesisHook
+		}{
+			Name: hook.Key,
+			Hook: hook.Value,
+		})
 	}
 
 	return hooks
@@ -65,10 +77,22 @@ func RegisterEndBlockHook(name string, hook EndBlockHook) error {
 var endBlockHooks map[string]EndBlockHook
 
 // ListEndBlockHooks deterministically returns a list of all registered EndBlockHooks.
-func ListEndBlockHooks() []EndBlockHook {
-	var hooks []EndBlockHook
+func ListEndBlockHooks() []struct {
+	Name string
+	Hook EndBlockHook
+} {
+	var hooks []struct {
+		Name string
+		Hook EndBlockHook
+	}
 	for _, hook := range order.OrderMap(endBlockHooks) {
-		hooks = append(hooks, hook.Value)
+		hooks = append(hooks, struct {
+			Name string
+			Hook EndBlockHook
+		}{
+			Name: hook.Key,
+			Hook: hook.Value,
+		})
 	}
 
 	return hooks

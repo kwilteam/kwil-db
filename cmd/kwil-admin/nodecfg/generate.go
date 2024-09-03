@@ -21,6 +21,7 @@ import (
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common/chain"
+	config1 "github.com/kwilteam/kwil-db/common/config"
 	coreUrl "github.com/kwilteam/kwil-db/core/utils/url"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 )
@@ -119,7 +120,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	cfg := config.DefaultConfig()
 	cfg.RootDir = rootDir
 	if genCfg.BlockInterval > 0 {
-		cfg.ChainCfg.Consensus.TimeoutCommit = config.Duration(genCfg.BlockInterval)
+		cfg.ChainCfg.Consensus.TimeoutCommit = config1.Duration(genCfg.BlockInterval)
 	}
 
 	if genCfg.Extensions != nil {
@@ -150,7 +151,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 // GenerateNodeFiles will generate all generic node files that are not
 // dependent on the network configuration (e.g. genesis.json).
 // It can optionally be given a config file to merge with the default config.
-func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silence bool) (publicKey []byte, err error) {
+func GenerateNodeFiles(outputDir string, originalCfg *config1.KwildConfig, silence bool) (publicKey []byte, err error) {
 	cfg := config.DefaultConfig()
 	if originalCfg != nil {
 		err := cfg.Merge(originalCfg)
@@ -325,7 +326,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 
 	// Overwrite default config
 	if genCfg.BlockInterval > 0 {
-		cfg.ChainCfg.Consensus.TimeoutCommit = config.Duration(genCfg.BlockInterval)
+		cfg.ChainCfg.Consensus.TimeoutCommit = config1.Duration(genCfg.BlockInterval)
 	}
 	cfg.ChainCfg.P2P.AddrBookStrict = false
 	cfg.ChainCfg.P2P.AllowDuplicateIP = true
@@ -458,7 +459,7 @@ func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivK
 // it will begin at the default port and increment by 1 for each node.
 // it does not apply to the admin address. This does NOT change the
 // admin service address.
-func addressSpecificConfig(c *config.KwildConfig) error {
+func addressSpecificConfig(c *config1.KwildConfig) error {
 
 	jsonrpcAddr, err := incrementPort(c.AppCfg.JSONRPCListenAddress, -1) // decrement to avoid collision with admin rpc at 8485
 	if err != nil {
@@ -483,7 +484,7 @@ func addressSpecificConfig(c *config.KwildConfig) error {
 
 // uniqueAdminAddress applies a unique address to the config. This only works
 // for host:port or unix socket paths, not URLs.
-func uniqueAdminAddress(cfg *config.KwildConfig) error {
+func uniqueAdminAddress(cfg *config1.KwildConfig) error {
 	addr := cfg.AppCfg.AdminListenAddress
 
 	host, port, err := net.SplitHostPort(addr)

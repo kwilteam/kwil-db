@@ -359,8 +359,7 @@ func Test_Execution(t *testing.T) {
 				newDB(false), map[string]precompiles.Initializer{
 					"math": mth.initialize,
 				}, &common.Service{
-					Logger:           log.NewNoOp().Sugar(),
-					ExtensionConfigs: map[string]map[string]string{},
+					Logger: log.NewNoOp().Sugar(),
 				},
 			)
 			require.NoError(t, err)
@@ -578,8 +577,7 @@ func Test_OrderSchemas(t *testing.T) {
 		newDB(false), map[string]precompiles.Initializer{
 			"math": mth.initialize,
 		}, &common.Service{
-			Logger:           log.NewNoOp().Sugar(),
-			ExtensionConfigs: map[string]map[string]string{},
+			Logger: log.NewNoOp().Sugar(),
 		},
 	)
 	require.NoError(t, err)

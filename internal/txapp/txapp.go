@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/common/chain/forks"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -37,21 +36,17 @@ type TxApp struct {
 	// The various internal stores (accounts, votes, etc.) are accessed through
 	// the Database via the functions defined in relevant packages.
 
+	service *common.Service
+
 	forks forks.Forks
 
 	events Rebroadcaster
-
-	chainID string
-	signer  *auth.Ed25519Signer
-
-	log log.Logger
+	signer *auth.Ed25519Signer
 
 	mempool    *mempool
 	validators []*types.Validator // used to optimize reads, gets updated at the block boundaries
 	valMtx     sync.RWMutex       // protects validators access
 	valChans   []chan []*types.Validator
-
-	extensionConfigs map[string]map[string]string
 
 	// precomputed variables
 	emptyVoteBodyTxSize int64
@@ -66,9 +61,8 @@ type TxApp struct {
 
 // NewTxApp creates a new router.
 func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer *auth.Ed25519Signer,
-	events Rebroadcaster, chainParams *chain.GenesisConfig,
-	extensionConfigs map[string]map[string]string, log log.Logger) (*TxApp, error) {
-	voteBodyTxSize, err := computeEmptyVoteBodyTxSize(chainParams.ChainID)
+	events Rebroadcaster, service *common.Service) (*TxApp, error) {
+	voteBodyTxSize, err := computeEmptyVoteBodyTxSize(service.GenesisConfig.ChainID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute empty vote body tx size: %w", err)
 	}
@@ -79,17 +73,15 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer
 	t := &TxApp{
 		Engine: engine,
 		events: events,
-		log:    log,
 		mempool: &mempool{accounts: make(map[string]*types.Account),
 			nodeAddr: signer.Identity(),
 		},
 		signer:              signer,
-		chainID:             chainParams.ChainID,
-		extensionConfigs:    extensionConfigs,
 		emptyVoteBodyTxSize: voteBodyTxSize,
 		resTypes:            resTypes,
+		service:             service,
 	}
-	t.forks.FromMap(chainParams.ForkHeights)
+	t.forks.FromMap(service.GenesisConfig.ForkHeights)
 	return t, nil
 }
 
@@ -124,14 +116,10 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 
 	// genesis hooks
 	for _, hook := range hooks.ListGenesisHooks() {
-		err := hook(ctx, &common.App{
-			Service: &common.Service{
-				Logger:           r.log.Sugar(),
-				ExtensionConfigs: r.extensionConfigs,
-				Identity:         r.signer.Identity(),
-			},
-			DB:     db,
-			Engine: r.Engine,
+		err := hook.Hook(ctx, &common.App{
+			Service: r.service.NamedLogger(hook.Name),
+			DB:      db,
+			Engine:  r.Engine,
 		}, chain)
 		if err != nil {
 			return fmt.Errorf("error running genesis hook: %w", err)
@@ -188,7 +176,7 @@ func (r *TxApp) announceValidators() {
 		select {
 		case c <- vals:
 		default: // they'll get the next one... this is just supposed to be better than polling
-			r.log.Warn("Validator update channel is blocking")
+			r.service.Logger.Warn("Validator update channel is blocking")
 		}
 	}
 }
@@ -248,7 +236,7 @@ func (r *TxApp) Execute(ctx TxContext, db sql.DB, tx *transactions.Transaction) 
 		return txRes(nil, transactions.CodeInvalidTxType, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String()))
 	}
 
-	r.log.Debug("executing transaction", log.Any("tx", tx))
+	r.service.Logger.Debug("executing transaction", log.Any("tx", tx))
 
 	// Check if the tx is a approval vote by this node for a validator join request
 	// record the approval in the approvedJoins list
@@ -283,14 +271,14 @@ func (r *TxApp) Begin(ctx context.Context, height int64) error {
 	// Before executing transaction in this block, add/remove/update functionality.
 	forks := r.activations(height)
 	if len(forks) > 0 {
-		r.log.Infof("Forks activating at height %d: %v", height, len(forks))
+		r.service.Logger.S.Infof("Forks activating at height %d: %v", height, len(forks))
 	}
 	for _, fork := range forks {
-		r.log.Info("Hardfork activating", log.String("fork", fork.Name))
+		r.service.Logger.S.Info("Hardfork activating", log.String("fork", fork.Name))
 
 		// Update transaction payloads.
 		for _, newPayload := range fork.TxPayloads {
-			r.log.Infof("Registering transaction route for payload type %s", newPayload.Type)
+			r.service.Logger.S.Infof("Registering transaction route for payload type %s", newPayload.Type)
 			if err := RegisterRouteImpl(newPayload.Type, newPayload.Route); err != nil {
 				return fmt.Errorf("failed to register route for payload %v: %w", newPayload.Type, err)
 			}
@@ -321,7 +309,7 @@ func (r *TxApp) activations(height int64) []*consensus.Hardfork {
 	for _, name := range activationNames {
 		fork := consensus.Hardforks[name]
 		if fork == nil {
-			r.log.Errorf("hardfork %v at height %d has no definition", name, height)
+			r.service.Logger.S.Errorf("hardfork %v at height %d has no definition", name, height)
 			continue // really could be a panic
 		}
 		activations = append(activations, fork) // how to handle multiple at same height? alphabetical??
@@ -352,15 +340,11 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockCont
 		if fork.StateMod == nil {
 			continue
 		}
-		r.log.Info("running StateMod", log.String("hardfork", fork.Name))
+		r.service.Logger.Info("running StateMod", log.String("hardfork", fork.Name))
 		if err := fork.StateMod(ctx, &common.App{
-			Service: &common.Service{
-				Logger:           r.log.Sugar(),
-				ExtensionConfigs: r.extensionConfigs,
-				Identity:         r.signer.Identity(),
-			},
-			DB:     db,
-			Engine: r.Engine,
+			Service: r.service.NamedLogger(fork.Name),
+			DB:      db,
+			Engine:  r.Engine,
 		}); err != nil {
 			return nil, nil, nil, err
 		}
@@ -368,14 +352,10 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockCont
 
 	// end block hooks
 	for _, hook := range hooks.ListEndBlockHooks() {
-		err := hook(ctx, &common.App{
-			Service: &common.Service{
-				Logger:           r.log.Sugar(),
-				ExtensionConfigs: r.extensionConfigs,
-				Identity:         r.signer.Identity(),
-			},
-			DB:     db,
-			Engine: r.Engine,
+		err := hook.Hook(ctx, &common.App{
+			Service: r.service.NamedLogger(hook.Name),
+			DB:      db,
+			Engine:  r.Engine,
 		}, block)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("error running end block hook: %w", err)
@@ -444,7 +424,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 
 	// apply all resolutions
 	for _, resolveFunc := range resolveFuncs {
-		r.log.Debug("resolving resolution", log.String("type", resolveFunc.Resolution.Type), log.String("id", resolveFunc.Resolution.ID.String()))
+		r.service.Logger.Debug("resolving resolution", log.String("type", resolveFunc.Resolution.Type), log.String("id", resolveFunc.Resolution.ID.String()))
 
 		tx, err := db.BeginTx(ctx)
 		if err != nil {
@@ -452,13 +432,9 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 		}
 
 		err = resolveFunc.ResolveFunc(ctx, &common.App{
-			Service: &common.Service{
-				Logger:           r.log.Named("resolution_" + resolveFunc.Resolution.Type).Sugar(),
-				ExtensionConfigs: r.extensionConfigs,
-				Identity:         r.signer.Identity(),
-			},
-			DB:     tx,
-			Engine: r.Engine,
+			Service: r.service.NamedLogger(resolveFunc.Resolution.Type),
+			DB:      tx,
+			Engine:  r.Engine,
 		}, resolveFunc.Resolution, block)
 		if err != nil {
 			err2 := tx.Rollback(ctx)
@@ -468,7 +444,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 
 			// if the resolveFunc fails, we should still continue on, since it simply means
 			// some business logic failed in a deployed schema.
-			r.log.Warn("error resolving resolution", log.String("type", resolveFunc.Resolution.Type), log.String("id", resolveFunc.Resolution.ID.String()), log.Error(err))
+			r.service.Logger.Warn("error resolving resolution", log.String("type", resolveFunc.Resolution.Type), log.String("id", resolveFunc.Resolution.ID.String()), log.Error(err))
 			continue
 		}
 
@@ -519,7 +495,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 			credits.applyResolution(resolution)
 		}
 
-		r.log.Debug("expiring resolution", log.String("type", resolution.Type),
+		r.service.Logger.Debug("expiring resolution", log.String("type", resolution.Type),
 			log.String("id", resolution.ID.String()), log.Bool("refunded", refunded))
 	}
 
@@ -645,7 +621,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 	bal, nonce := acct.Balance, acct.Nonce
 
 	if !block.ChainContext.NetworkParameters.DisabledGasCosts && nonce == 0 && bal.Sign() == 0 {
-		r.log.Debug("proposer account has no balance, not allowed to propose any new transactions", log.Int("height", block.Height))
+		r.service.Logger.Debug("proposer account has no balance, not allowed to propose any new transactions", log.Int("height", block.Height))
 		return nil, nil
 	}
 
@@ -659,7 +635,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 		return nil, err
 	}
 	if len(events) == 0 {
-		r.log.Debug("no events to propose", log.Int("height", block.Height))
+		r.service.Logger.Debug("no events to propose", log.Int("height", block.Height))
 		return nil, nil
 	}
 
@@ -689,7 +665,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 
 		evtSz := int64(len(event.Type)) + int64(len(event.Body)) + eventRLPSize
 		if evtSz > maxTxsSize {
-			r.log.Debug("reached maximum proposer tx size", log.Int("height", block.Height))
+			r.service.Logger.Debug("reached maximum proposer tx size", log.Int("height", block.Height))
 			break
 		}
 		maxTxsSize -= evtSz
@@ -700,7 +676,7 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 	}
 
 	if len(finalEvents) == 0 {
-		r.log.Debug("found proposer events to propose, but cannot fit them in a block",
+		r.service.Logger.Debug("found proposer events to propose, but cannot fit them in a block",
 			log.Int("height", block.Height),
 			log.Int("maxTxsSize", maxTxsSize),
 			log.Int("emptyVoteBodyTxSize", r.emptyVoteBodyTxSize),
@@ -710,11 +686,11 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 		return nil, nil
 	}
 
-	r.log.Info("Creating new ValidatorVoteBodies transaction", log.Int("events", len(finalEvents)))
+	r.service.Logger.Info("Creating new ValidatorVoteBodies transaction", log.Int("events", len(finalEvents)))
 
 	tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteBodies{
 		Events: finalEvents,
-	}, r.chainID, txNonce)
+	}, r.service.GenesisConfig.ChainID, txNonce)
 	if err != nil {
 		return nil, err
 	}
@@ -925,7 +901,7 @@ func txRes(spend *big.Int, code transactions.TxCode, err error) *TxResponse {
 
 // lofIfErr logs an error to TxApp if it is not nil.
 // it should be used when committing or rolling back a transaction.
-func logErr(l log.Logger, err error) {
+func logErr(l *log.SugaredLogger, err error) {
 	if err != nil {
 		l.Error("error committing/rolling back transaction", log.Error(err))
 	}

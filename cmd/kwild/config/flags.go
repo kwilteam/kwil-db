@@ -1,9 +1,12 @@
 package config
 
-import "github.com/spf13/pflag"
+import (
+	"github.com/kwilteam/kwil-db/common/config"
+	"github.com/spf13/pflag"
+)
 
 // AddConfigFlags adds all flags from KwildConfig to the given flagSet
-func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
+func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.StringVarP(&cfg.RootDir, "root-dir", "r", "~/.kwild", "kwild root directory for config and data")
 
 	// logging

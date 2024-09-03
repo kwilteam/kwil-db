@@ -64,7 +64,7 @@ type migrationListener struct {
 func Start(ctx context.Context, service *common.Service, eventStore listeners.EventStore) error {
 	// Get the migration config from the service
 	cfg := &MigrationConfig{}
-	migrationCfg, ok := service.ExtensionConfigs[ListenerName]
+	migrationCfg, ok := service.LocalConfig.AppCfg.Extensions[ListenerName]
 	if !ok {
 		service.Logger.Warn("no migration config provided, skipping migration listener")
 		return nil // no migration config, nothing to do
