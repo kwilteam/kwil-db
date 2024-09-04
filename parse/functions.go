@@ -300,6 +300,28 @@ var (
 				return fmt.Sprintf("array_length(%s, 1)", inputs[0]), nil
 			},
 		},
+		"array_remove": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				if !args[0].IsArray {
+					return nil, fmt.Errorf("expected first argument to be an array, got %s", args[0].String())
+				}
+
+				if args[1].IsArray {
+					return nil, fmt.Errorf("expected second argument to be a scalar, got %s", args[1].String())
+				}
+
+				if !strings.EqualFold(args[0].Name, args[1].Name) {
+					return nil, fmt.Errorf("remove type must be equal to scalar array type: array type: %s remove type: %s", args[0].Name, args[1].Name)
+				}
+
+				return args[0], nil
+			},
+			PGFormat: defaultFormat("array_remove"),
+		},
 		// string functions
 		// the main SQL string functions defined here: https://www.postgresql.org/docs/16.1/functions-string.html
 		"bit_length": {
@@ -393,7 +415,30 @@ var (
 
 				return types.TextType, nil
 			},
-			PGFormat: defaultFormat("lpad"),
+			PGFormat: func(inputs []string, distinct, star bool) (string, error) {
+				// we need a custom function to type cast big int to int
+				if distinct {
+					return "", errDistinct("lpad")
+				}
+
+				if star {
+					return "", errStar("lpad")
+				}
+
+				str := strings.Builder{}
+				str.WriteString("lpad(")
+				str.WriteString(inputs[0])
+				str.WriteString(", ")
+				str.WriteString(inputs[1])
+				str.WriteString("::INT4")
+				if len(inputs) == 3 {
+					str.WriteString(", ")
+					str.WriteString(inputs[2])
+				}
+				str.WriteString(")")
+
+				return str.String(), nil
+			},
 		},
 		"ltrim": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
@@ -467,9 +512,11 @@ var (
 				str.WriteString(inputs[1])
 				str.WriteString(" from ")
 				str.WriteString(inputs[2])
+				str.WriteString("::INT4")
 				if len(inputs) == 4 {
 					str.WriteString(" for ")
 					str.WriteString(inputs[3])
+					str.WriteString("::INT4")
 				}
 				str.WriteString(")")
 
@@ -524,7 +571,30 @@ var (
 
 				return types.TextType, nil
 			},
-			PGFormat: defaultFormat("rpad"),
+			PGFormat: func(inputs []string, distinct, star bool) (string, error) {
+				// we need a custom function to type cast big int to int
+				if distinct {
+					return "", errDistinct("lpad")
+				}
+
+				if star {
+					return "", errStar("lpad")
+				}
+
+				str := strings.Builder{}
+				str.WriteString("rpad(")
+				str.WriteString(inputs[0])
+				str.WriteString(", ")
+				str.WriteString(inputs[1])
+				str.WriteString("::INT4")
+				if len(inputs) == 3 {
+					str.WriteString(", ")
+					str.WriteString(inputs[2])
+				}
+				str.WriteString(")")
+
+				return str.String(), nil
+			},
 		},
 		"rtrim": {
 			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
@@ -582,9 +652,11 @@ var (
 				str.WriteString(inputs[0])
 				str.WriteString(" from ")
 				str.WriteString(inputs[1])
+				str.WriteString("::INT4")
 				if len(inputs) == 3 {
 					str.WriteString(" for ")
 					str.WriteString(inputs[2])
+					str.WriteString("::INT4")
 				}
 				str.WriteString(")")
 

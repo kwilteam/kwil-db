@@ -265,6 +265,16 @@ func Test_Procedures(t *testing.T) {
 			}`,
 		},
 		{
+			name: "array functions",
+			procedure: `procedure array_funcs() public view {
+				$arr int[] := [1, 2, 3];
+				$arr := array_append($arr, 4);
+				if $arr != [1, 2, 3, 4] {
+					error('array_append failed');
+				}
+			}`,
+		},
+		{
 			name: "min/max",
 			procedure: `procedure min_max() public view returns (min int, max int) {
 				$max := 0;

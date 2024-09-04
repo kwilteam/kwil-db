@@ -507,7 +507,15 @@ func cast(castable any, fallback *types.DataType) *types.DataType {
 }
 
 func (s *sqlAnalyzer) VisitExpressionLiteral(p0 *ExpressionLiteral) any {
-	return cast(p0, p0.Type)
+	// if type casted by the user, we should just use their value. If not,
+	// we should assert the type since Postgres might detect it incorrectly.
+	if p0.TypeCast == nil && !p0.Type.EqualsStrict(types.NullType) {
+		// cannot cast to null
+		p0.TypeCast = p0.Type
+	} else {
+		return cast(p0, p0.Type)
+	}
+	return p0.TypeCast
 }
 
 func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) any {
