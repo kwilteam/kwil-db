@@ -25,7 +25,6 @@ const (
 	PayloadTypeDeploySchema        PayloadType = "deploy_schema"
 	PayloadTypeDropSchema          PayloadType = "drop_schema"
 	PayloadTypeExecute             PayloadType = "execute"
-	PayloadTypeCallAction          PayloadType = "call_action"
 	PayloadTypeTransfer            PayloadType = "transfer"
 	PayloadTypeValidatorJoin       PayloadType = "validator_join"
 	PayloadTypeValidatorLeave      PayloadType = "validator_leave"
@@ -44,7 +43,6 @@ var payloadConcreteTypes = map[PayloadType]Payload{
 	PayloadTypeDropSchema:          &DropSchema{},
 	PayloadTypeDeploySchema:        &Schema{},
 	PayloadTypeExecute:             &ActionExecution{},
-	PayloadTypeCallAction:          &ActionCall{},
 	PayloadTypeValidatorJoin:       &ValidatorJoin{},
 	PayloadTypeValidatorApprove:    &ValidatorApprove{},
 	PayloadTypeValidatorRemove:     &ValidatorRemove{},
@@ -88,7 +86,6 @@ func (p PayloadType) Valid() bool {
 	case PayloadTypeDeploySchema,
 		PayloadTypeDropSchema,
 		PayloadTypeExecute,
-		PayloadTypeCallAction,
 		PayloadTypeValidatorJoin,
 		PayloadTypeValidatorApprove,
 		PayloadTypeValidatorRemove,
@@ -113,7 +110,6 @@ var payloadTypes = map[PayloadType]bool{
 	PayloadTypeDeploySchema:        true,
 	PayloadTypeDropSchema:          true,
 	PayloadTypeExecute:             true,
-	PayloadTypeCallAction:          true,
 	PayloadTypeTransfer:            true,
 	PayloadTypeValidatorJoin:       true,
 	PayloadTypeValidatorLeave:      true,
@@ -187,12 +183,26 @@ func (a *ActionExecution) Type() PayloadType {
 	return PayloadTypeExecute
 }
 
-// ActionCall is the payload that is used to call an action
+// ActionCall models the arguments of an action call. It would be serialized
+// into CallMessage.Body. This is not a transaction payload. See
+// transactions.ActionExecution for the transaction payload used for executing
+// an action.
 type ActionCall struct {
 	DBID      string
 	Action    string
 	Arguments []*EncodedValue
 }
+
+func (a *ActionCall) MarshalBinary() (serialize.SerializedData, error) {
+	return serialize.Encode(a)
+}
+
+func (a *ActionCall) UnmarshalBinary(b serialize.SerializedData) error {
+	return serialize.Decode(b, a)
+}
+
+var _ encoding.BinaryUnmarshaler = (*ActionCall)(nil)
+var _ encoding.BinaryMarshaler = (*ActionCall)(nil)
 
 // EncodedValue is used to encode a value with its type specified
 type EncodedValue struct {
@@ -466,23 +476,6 @@ func EncodeValue(v any) (*EncodedValue, error) {
 		Type: localDt,
 		Data: [][]byte{enc},
 	}, nil
-}
-
-var _ Payload = (*ActionCall)(nil)
-
-func (a *ActionCall) MarshalBinary() (serialize.SerializedData, error) {
-	return serialize.Encode(a)
-}
-
-func (a *ActionCall) UnmarshalBinary(b serialize.SerializedData) error {
-	return serialize.Decode(b, a)
-}
-
-var _ encoding.BinaryUnmarshaler = (*ActionCall)(nil)
-var _ encoding.BinaryMarshaler = (*ActionCall)(nil)
-
-func (a *ActionCall) Type() PayloadType {
-	return PayloadTypeCallAction
 }
 
 // Transfer transfers an amount of tokens from the sender to the receiver.

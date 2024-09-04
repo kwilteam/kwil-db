@@ -124,28 +124,6 @@ func Test_Types(t *testing.T) {
 			},
 		},
 		{
-			name: "action_call no nils",
-			obj: &transactions.ActionCall{
-				DBID:   "db_id",
-				Action: "action",
-				Arguments: []*transactions.EncodedValue{
-					mustDetect("arg1"),
-					mustDetect("arg2"),
-				},
-			},
-		},
-		{
-			name: "action_call with nil",
-			obj: &transactions.ActionCall{
-				DBID:   "db_id",
-				Action: "action",
-				Arguments: []*transactions.EncodedValue{
-					mustDetect(nil),
-					mustDetect("arg2"),
-				},
-			},
-		},
-		{
 			name: "drop_schema",
 			obj: &transactions.DropSchema{
 				DBID: "db_id",
@@ -219,8 +197,6 @@ func Test_Types(t *testing.T) {
 				obj = &transactions.Schema{}
 			case *transactions.ActionExecution:
 				obj = &transactions.ActionExecution{}
-			case *transactions.ActionCall:
-				obj = &transactions.ActionCall{}
 			case *transactions.DropSchema:
 				obj = &transactions.DropSchema{}
 			case *transactions.Transfer:
@@ -254,6 +230,56 @@ func Test_Types(t *testing.T) {
 	}
 }
 
+func TestActionCall(t *testing.T) {
+	tests := []struct {
+		name string
+		obj  *transactions.ActionCall
+	}{
+		{
+			name: "action_call no nils",
+			obj: &transactions.ActionCall{
+				DBID:   "db_id",
+				Action: "action",
+				Arguments: []*transactions.EncodedValue{
+					mustDetect("arg1"),
+					mustDetect("arg2"),
+				},
+			},
+		},
+		{
+			name: "action_call with nil",
+			obj: &transactions.ActionCall{
+				DBID:   "db_id",
+				Action: "action",
+				Arguments: []*transactions.EncodedValue{
+					mustDetect(nil),
+					mustDetect("arg2"),
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			bts, err := tc.obj.MarshalBinary()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ac := new(transactions.ActionCall)
+			if err := ac.UnmarshalBinary(bts); err != nil {
+				t.Fatal(err)
+			}
+
+			// compare, considering empty and nil slices the same
+			if !cmp.Equal(tc.obj, ac, cmpopts.EquateEmpty()) {
+				t.Error("objects are not equal")
+				assert.EqualValuesf(t, tc.obj, ac, "objects are not equal") // for the diff
+			}
+		})
+	}
+}
+
 func TestUnmarshalPayload(t *testing.T) {
 	// for each payload type, ensure UnmarshalPayload can recreate an instance
 	// of the expected type from just []byte and PayloadType. Contents and RLP
@@ -262,7 +288,6 @@ func TestUnmarshalPayload(t *testing.T) {
 	tests := []transactions.Payload{
 		&transactions.DropSchema{},
 		&transactions.Schema{},
-		&transactions.ActionCall{},
 		&transactions.ActionExecution{},
 		&transactions.Transfer{},
 		&transactions.ValidatorApprove{},
