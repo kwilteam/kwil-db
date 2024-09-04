@@ -60,20 +60,20 @@ type Engine interface {
 	SchemaGetter
 	// CreateDataset deploys a new dataset from a schema.
 	// The dataset will be owned by the caller.
-	CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, txdata *TxContext) error
+	CreateDataset(ctx *TxContext, tx sql.DB, schema *types.Schema) error
 	// DeleteDataset deletes a dataset.
 	// The caller must be the owner of the dataset.
-	DeleteDataset(ctx context.Context, tx sql.DB, dbid string, txdata *TxContext) error
+	DeleteDataset(ctx *TxContext, tx sql.DB, dbid string) error
 	// Procedure executes a procedure in a dataset. It can be given
 	// either a readwrite or readonly database transaction. If it is
 	// given a read-only transaction, it will not be able to execute
 	// any procedures that are not `view`.
-	Procedure(ctx context.Context, tx sql.DB, options *ExecutionData) (*sql.ResultSet, error)
+	Procedure(ctx *TxContext, tx sql.DB, options *ExecutionData) (*sql.ResultSet, error)
 	// ListDatasets returns a list of all datasets on the network.
 	ListDatasets(caller []byte) ([]*types.DatasetIdentifier, error)
 	// Execute executes a SQL statement on a dataset.
 	// It uses Kwil's SQL dialect.
-	Execute(ctx context.Context, tx sql.DB, dbid, query string, values map[string]any) (*sql.ResultSet, error)
+	Execute(ctx *TxContext, tx sql.DB, dbid, query string, values map[string]any) (*sql.ResultSet, error)
 	// Reload reloads the engine with the latest db state
 	Reload(ctx context.Context, tx sql.Executor) error
 }
@@ -88,7 +88,7 @@ type SchemaGetter interface {
 // during call / execution. It is scoped to the lifetime of a single
 // execution.
 type ExecutionData struct {
-	TxCtx *TxContext
+	//TxCtx *TxContext
 	// Dataset is the DBID of the dataset that was called.
 	// Even if a procedure in another dataset is called, this will
 	// always be the original dataset.

@@ -61,7 +61,7 @@ func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App
 			return nil, fmt.Errorf(`procedure "%s" expects %d argument(s), got %d`, method, len(proc.parameters), len(inputs))
 		}
 
-		res, err := app.DB.Execute(caller.Ctx, proc.callString(d.schema.DBID()), append([]any{pg.QueryModeExec}, inputs...)...)
+		res, err := app.DB.Execute(caller.TxCtx.Ctx, proc.callString(d.schema.DBID()), append([]any{pg.QueryModeExec}, inputs...)...)
 		if err != nil {
 			return nil, err
 		}

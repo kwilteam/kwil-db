@@ -187,7 +187,7 @@ func (g *GlobalContext) Reload(ctx context.Context, db sql.Executor) error {
 
 // CreateDataset deploys a schema.
 // It will create the requisite tables, and perform the required initializations.
-func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, txdata *common.TxContext) (err error) {
+func (g *GlobalContext) CreateDataset(ctx *common.TxContext, tx sql.DB, schema *types.Schema) (err error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -195,16 +195,16 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *ty
 	if err != nil {
 		return errors.Join(err, ErrInvalidSchema)
 	}
-	schema.Owner = txdata.Signer
+	schema.Owner = ctx.Signer
 
-	err = g.loadDataset(ctx, schema)
+	err = g.loadDataset(ctx.Ctx, schema)
 	if err != nil {
 		return err
 	}
 
 	// it is critical that the schema is loaded before being created.
 	// the engine will not be able to parse the schema if it is not loaded.
-	err = createSchema(ctx, tx, schema, txdata.TxID)
+	err = createSchema(ctx.Ctx, tx, schema, ctx.TxID)
 	if err != nil {
 		g.unloadDataset(schema.DBID())
 		return err
@@ -215,7 +215,7 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, tx sql.DB, schema *ty
 
 // DeleteDataset deletes a dataset.
 // It will ensure that the caller is the owner of the dataset.
-func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid string, txdata *common.TxContext) error {
+func (g *GlobalContext) DeleteDataset(ctx *common.TxContext, tx sql.DB, dbid string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -224,11 +224,11 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid strin
 		return ErrDatasetNotFound
 	}
 
-	if !bytes.Equal(txdata.Signer, dataset.schema.Owner) {
+	if !bytes.Equal(ctx.Signer, dataset.schema.Owner) {
 		return fmt.Errorf(`cannot delete dataset "%s", not owner`, dbid)
 	}
 
-	err := deleteSchema(ctx, tx, dbid)
+	err := deleteSchema(ctx.Ctx, tx, dbid)
 	if err != nil {
 		return errors.Join(err, ErrDBInternal)
 	}
@@ -241,7 +241,7 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, tx sql.DB, dbid strin
 // Procedure calls a procedure on a dataset. It can be given either a readwrite or
 // readonly transaction. If it is given a read-only transaction, it will not be
 // able to execute any procedures that are not `view`.
-func (g *GlobalContext) Procedure(ctx context.Context, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error) {
+func (g *GlobalContext) Procedure(ctx *common.TxContext, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error) {
 	err := options.Clean()
 	if err != nil {
 		return nil, err
@@ -256,18 +256,17 @@ func (g *GlobalContext) Procedure(ctx context.Context, tx sql.DB, options *commo
 	}
 
 	procedureCtx := &precompiles.ProcedureContext{
-		Ctx:       ctx,
-		TxCtx:     options.TxCtx,
+		TxCtx:     ctx,
 		DBID:      options.Dataset,
 		Procedure: options.Procedure,
 		// starting with stack depth 0, increment in each action call
 	}
 
-	tx2, err := tx.BeginTx(ctx)
+	tx2, err := tx.BeginTx(ctx.Ctx)
 	if err != nil {
 		return nil, errors.Join(err, ErrDBInternal)
 	}
-	defer tx2.Rollback(ctx)
+	defer tx2.Rollback(ctx.Ctx)
 
 	err = setContextualVars(ctx, tx2, options)
 	if err != nil {
@@ -283,7 +282,7 @@ func (g *GlobalContext) Procedure(ctx context.Context, tx sql.DB, options *commo
 		return nil, err
 	}
 
-	return procedureCtx.Result, tx2.Commit(ctx)
+	return procedureCtx.Result, tx2.Commit(ctx.Ctx)
 }
 
 // ListDatasets list datasets deployed by a specific caller.
@@ -324,7 +323,7 @@ func (g *GlobalContext) GetSchema(dbid string) (*types.Schema, error) {
 
 // Execute executes a SQL statement on a dataset. If the statement is mutative,
 // the tx must also be a sql.AccessModer. It uses Kwil's SQL dialect.
-func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query string, values map[string]any) (*sql.ResultSet, error) {
+func (g *GlobalContext) Execute(ctx *common.TxContext, tx sql.DB, dbid, query string, values map[string]any) (*sql.ResultSet, error) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	dataset, ok := g.datasets[dbid]
@@ -359,7 +358,13 @@ func (g *GlobalContext) Execute(ctx context.Context, tx sql.DB, dbid, query stri
 	args := orderAndCleanValueMap(values, params)
 	args = append([]any{pg.QueryModeExec}, args...)
 
-	result, err := tx.Execute(ctx, sqlStmt, args...)
+	// all execution data is empty, but things like @caller can still be used
+	err = setContextualVars(ctx, tx, &common.ExecutionData{})
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := tx.Execute(ctx.Ctx, sqlStmt, args...)
 	if err != nil {
 		return nil, decorateExecuteErr(err, query)
 	}

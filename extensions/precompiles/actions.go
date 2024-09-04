@@ -43,8 +43,6 @@ type DeploymentContext struct {
 
 // ProcedureContext is the context for a procedure and action execution.
 type ProcedureContext struct {
-	// Ctx is the context of the current execution.
-	Ctx context.Context
 	// TxCtx is the transaction context of the current execution.
 	TxCtx *common.TxContext
 	// Signer is the address or public key of the caller.
@@ -112,7 +110,6 @@ func (p *ProcedureContext) Values() map[string]any {
 // It will inherit the dbid, procedure, and stack depth from the parent.
 func (p *ProcedureContext) NewScope() *ProcedureContext {
 	return &ProcedureContext{
-		Ctx:        p.Ctx,
 		TxCtx:      p.TxCtx,
 		values:     make(map[string]any),
 		DBID:       p.DBID,

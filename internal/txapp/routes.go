@@ -266,7 +266,7 @@ func (d *deployDatasetRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 }
 
 func (d *deployDatasetRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
-	err := app.Engine.CreateDataset(ctx.Ctx, app.DB, d.schema, ctx)
+	err := app.Engine.CreateDataset(ctx, app.DB, d.schema)
 	if err != nil {
 		return transactions.CodeUnknownError, err
 	}
@@ -303,7 +303,7 @@ func (d *dropDatasetRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx 
 }
 
 func (d *dropDatasetRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
-	err := app.Engine.DeleteDataset(ctx.Ctx, app.DB, d.dbid, ctx)
+	err := app.Engine.DeleteDataset(ctx, app.DB, d.dbid)
 	if err != nil {
 		return transactions.CodeUnknownError, err
 	}
@@ -362,11 +362,10 @@ func (d *executeActionRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 
 func (d *executeActionRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	for i := range d.args {
-		_, err := app.Engine.Procedure(ctx.Ctx, app.DB, &common.ExecutionData{
+		_, err := app.Engine.Procedure(ctx, app.DB, &common.ExecutionData{
 			Dataset:   d.dbid,
 			Procedure: d.action,
 			Args:      d.args[i],
-			TxCtx:     ctx,
 		})
 		if err != nil {
 			return codeForEngineError(err), err

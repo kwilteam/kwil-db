@@ -436,8 +436,7 @@ func Test_Procedures(t *testing.T) {
 			}()
 
 			// execute test procedure
-			res, err := global.Procedure(ctx, execTx, &common.ExecutionData{
-				TxCtx:     d,
+			res, err := global.Procedure(d, execTx, &common.ExecutionData{
 				Dataset:   dbid,
 				Procedure: procedureName,
 				Args:      test.inputs,
@@ -688,8 +687,7 @@ func Test_ForeignProcedures(t *testing.T) {
 			}
 
 			// execute test procedure
-			res, err := global.Procedure(ctx, tx, &common.ExecutionData{
-				TxCtx:     d,
+			res, err := global.Procedure(d, tx, &common.ExecutionData{
 				Dataset:   mainDBID,
 				Procedure: procedureName,
 				Args:      test.inputs,
@@ -813,14 +811,12 @@ var satoshisUUID = &types.UUID{0x38, 0xeb, 0x77, 0xcb, 0x1e, 0x5a, 0x56, 0xc0, 0
 // deploy deploys a schema.
 // if deployer is not "", it will set the deployer as the owner.
 func deploy(t *testing.T, global *execution.GlobalContext, db sql.DB, schema string) (dbid string) {
-	ctx := context.Background()
-
 	parsed, err := parse.Parse([]byte(schema))
 	require.NoError(t, err)
 
 	d := txData()
 
-	err = global.CreateDataset(ctx, db, parsed, d)
+	err = global.CreateDataset(d, db, parsed)
 	require.NoError(t, err)
 
 	// get dbid
@@ -839,8 +835,6 @@ func deploy(t *testing.T, global *execution.GlobalContext, db sql.DB, schema str
 
 // deployAndSeed deploys the test schema and seeds it with data
 func deployAndSeed(t *testing.T, global *execution.GlobalContext, db sql.DB, extraProcedures ...string) (dbid string) {
-	ctx := context.Background()
-
 	schema := testSchema
 	for _, proc := range extraProcedures {
 		schema += proc + "\n"
@@ -851,8 +845,7 @@ func deployAndSeed(t *testing.T, global *execution.GlobalContext, db sql.DB, ext
 
 	// create initial data
 	for _, kv := range order.OrderMap(initialData) {
-		_, err := global.Procedure(ctx, db, &common.ExecutionData{
-			TxCtx:     txData(),
+		_, err := global.Procedure(txData(), db, &common.ExecutionData{
 			Dataset:   dbid,
 			Procedure: "create_user",
 			Args:      []any{kv.Key},
@@ -860,8 +853,7 @@ func deployAndSeed(t *testing.T, global *execution.GlobalContext, db sql.DB, ext
 		require.NoError(t, err)
 
 		for _, post := range kv.Value {
-			_, err = global.Procedure(ctx, db, &common.ExecutionData{
-				TxCtx:     txData(),
+			_, err = global.Procedure(txData(), db, &common.ExecutionData{
 				Dataset:   dbid,
 				Procedure: "create_post",
 				Args:      []any{kv.Key, post},

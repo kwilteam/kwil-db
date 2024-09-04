@@ -47,7 +47,7 @@ func (e *RemoteExtension) Execute(ctx *precompiles.ProcedureContext, metadata ma
 	}
 
 	return e.client.CallMethod(&types.ExecutionContext{
-		Ctx:      ctx.Ctx,
+		Ctx:      ctx.TxCtx.Ctx,
 		Metadata: metadata,
 	}, method, args...)
 }

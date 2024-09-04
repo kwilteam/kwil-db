@@ -63,7 +63,7 @@ func (adhocExtension) Call(scope *ProcedureContext, app *common.App, method stri
 		return nil, fmt.Errorf(`adhoc: unknown method "%s"`, method)
 	}
 
-	res, err := app.Engine.Execute(scope.Ctx, app.DB, scope.DBID, stmt, scope.Values())
+	res, err := app.Engine.Execute(scope.TxCtx, app.DB, scope.DBID, stmt, scope.Values())
 	if err != nil {
 		return nil, err
 	}

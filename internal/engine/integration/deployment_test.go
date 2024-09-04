@@ -239,12 +239,13 @@ func Test_Deployment(t *testing.T) {
 			require.NoError(t, err)
 			parsed.Schema.Owner = owner
 
-			err = global.CreateDataset(ctx, tx, parsed.Schema, &common.TxContext{
+			err = global.CreateDataset(&common.TxContext{
 				BlockContext: &common.BlockContext{},
 				Signer:       owner,
 				Caller:       string(owner),
 				TxID:         "test",
-			})
+				Ctx:          ctx,
+			}, tx, parsed.Schema)
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {
