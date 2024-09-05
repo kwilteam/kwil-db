@@ -32,36 +32,48 @@ import (
 	"github.com/spf13/viper"
 )
 
-var long = `kwild is the Kwil blockchain node and RPC server.
+var long = `%s is the Kwil blockchain node and RPC server.
 
-kwild is a full-node implementation of the Kwil protocol. It provides the
-ability to fully participate in the Kwil network, and can run as either a
+%s is a full-node implementation of the Kwil protocol. It provides the
+ability to fully participate in a Kwil network, and can run as either a
 validator or a non-validating node.
 
 Extensions can be configured by passing flags delimited by a double dash, e.g.
-"kwild --autogen -- --extension.extension1.flag1 value1 --extension.extension2.flag2 value2"
+"%s --autogen -- --extension.extension1.flag1 value1 --extension.extension2.flag2 value2"
 This follows the POSIX guidelines for additional operands.
 `
 
-var example = `# Start kwild and auto-generate a private key, genesis file, and config file
-kwild --autogen
+var example = `# Start %s and auto-generate a private key, genesis file, and config file
+%s --autogen
 
-# Start kwild from a root directory with a config file
-kwild --root-dir /path/to/root
+# Start %s from a root directory with a config file
+%s --root-dir /path/to/root
 
-# Start kwild with extensions
-kwild -- --extension.extension1.flag1=value1 --extension.extension2.flag2=value2`
+# Start %s with extensions
+%s -- --extension.extension1.flag1=value1 --extension.extension2.flag2=value2`
 
 func RootCmd() *cobra.Command {
+	return CustomRootCmd("kwild", "kwild", "")
+}
+
+// CustomRootCmd creates a new root command with the given name and a function that modifies the default config.
+// It can be given a project name (human-readable name used in documentation), the command usage, the root command (if
+// this is the root command, leave it empty), and a function that modifies the default config.
+func CustomRootCmd(projectName, cmdUsage, rootCmd string) *cobra.Command {
 	// we use an empty config because this config gets merged later, and should only contain flag values
 	flagCfg := kwildcfg.EmptyConfig()
 	var autoGen bool
 
+	fullUsage := cmdUsage
+	if rootCmd != "" {
+		fullUsage = rootCmd + " " + cmdUsage
+	}
+
 	cmd := &cobra.Command{
-		Use:               "kwild",
-		Short:             "kwild node and rpc server",
-		Long:              long,
-		Example:           example,
+		Use:               cmdUsage,
+		Short:             projectName + " node and rpc server",
+		Long:              fmt.Sprintf(long, projectName, projectName, fullUsage),
+		Example:           fmt.Sprintf(example, projectName, fullUsage, projectName, fullUsage, projectName, fullUsage),
 		DisableAutoGenTag: true,
 		Version:           version.KwilVersion,
 		SilenceUsage:      true, // not all errors imply cli misuse

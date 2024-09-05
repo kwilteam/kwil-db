@@ -378,7 +378,7 @@ func DefaultEmptyConfig() *config.KwildConfig {
 	}
 }
 
-func DefaultConfig() *config.KwildConfig {
+var DefaultConfig = func() *config.KwildConfig {
 	return &config.KwildConfig{
 		AppConfig: &config.AppConfig{
 			JSONRPCListenAddress: "0.0.0.0:8484",
