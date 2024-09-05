@@ -507,7 +507,15 @@ func cast(castable any, fallback *types.DataType) *types.DataType {
 }
 
 func (s *sqlAnalyzer) VisitExpressionLiteral(p0 *ExpressionLiteral) any {
-	return cast(p0, p0.Type)
+	// if type casted by the user, we should just use their value. If not,
+	// we should assert the type since Postgres might detect it incorrectly.
+	if p0.TypeCast == nil && !p0.Type.EqualsStrict(types.NullType) {
+		// cannot cast to null
+		p0.TypeCast = p0.Type
+	} else {
+		return cast(p0, p0.Type)
+	}
+	return p0.TypeCast
 }
 
 func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) any {
@@ -747,12 +755,31 @@ func (s *sqlAnalyzer) VisitExpressionArrayAccess(p0 *ExpressionArrayAccess) any 
 		s.errs.AddErr(p0, ErrAssignment, "array access is not supported in in-line action statements")
 	}
 
-	idxAttr, ok := p0.Index.Accept(s).(*types.DataType)
-	if !ok {
-		return s.expressionTypeErr(p0.Index)
-	}
-	if !idxAttr.Equals(types.IntType) {
-		return s.typeErr(p0.Index, idxAttr, types.IntType)
+	var isArray bool
+	if p0.Index != nil {
+		// if single index, result is not an array
+		idxAttr, ok := p0.Index.Accept(s).(*types.DataType)
+		if !ok {
+			return s.expressionTypeErr(p0.Index)
+		}
+		if !idxAttr.Equals(types.IntType) {
+			return s.typeErr(p0.Index, idxAttr, types.IntType)
+		}
+	} else {
+		// if multiple indexes, result is an array
+		isArray = true
+		for _, idx := range p0.FromTo {
+			if idx == nil {
+				continue
+			}
+			idxAttr, ok := idx.Accept(s).(*types.DataType)
+			if !ok {
+				return s.expressionTypeErr(idx)
+			}
+			if !idxAttr.Equals(types.IntType) {
+				return s.typeErr(idx, idxAttr, types.IntType)
+			}
+		}
 	}
 
 	arrAttr, ok := p0.Array.Accept(s).(*types.DataType)
@@ -768,7 +795,7 @@ func (s *sqlAnalyzer) VisitExpressionArrayAccess(p0 *ExpressionArrayAccess) any 
 	return cast(p0, &types.DataType{
 		Name:     arrAttr.Name,
 		Metadata: arrAttr.Metadata,
-		// leave IsArray as false since we are accessing an element.
+		IsArray:  isArray,
 	})
 }
 

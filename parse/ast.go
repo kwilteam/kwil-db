@@ -187,7 +187,16 @@ type ExpressionArrayAccess struct {
 	// Array is the array that is being accessed.
 	Array Expression
 	// Index is the index that is being accessed.
+	// Either Index or FromTo is set, but not both.
 	Index Expression
+	// FromTo is the range that is being accessed.
+	// Either Index or FromTo is set, but not both.
+	// If FromTo is set, then it is a range access.
+	// If both values are set, then it is arr[FROM:TO].
+	// If only From is set, then it is arr[FROM:].
+	// If only To is set, then it is arr[:TO].
+	// If neither are set and index is not set, then it is arr[:].
+	FromTo [2]Expression
 }
 
 func (e *ExpressionArrayAccess) Accept(v Visitor) any {

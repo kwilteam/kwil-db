@@ -284,7 +284,11 @@ sql_expr:
     // highest precedence:
     LPAREN sql_expr RPAREN type_cast?                                               # paren_sql_expr
     | sql_expr PERIOD identifier type_cast?                                         # field_access_sql_expr
-    | sql_expr LBRACKET sql_expr RBRACKET type_cast?                                # array_access_sql_expr
+    | array_element=sql_expr LBRACKET (
+        // can be arr[1], arr[1:2], arr[1:], arr[:2], arr[:]
+            single=sql_expr
+            | (left=sql_expr? COL right=sql_expr?)
+        ) RBRACKET type_cast?                                                       # array_access_sql_expr
     | <assoc=right> (PLUS|MINUS) sql_expr                                           # unary_sql_expr
     | sql_expr COLLATE identifier                                                   # collate_sql_expr
     | left=sql_expr (STAR | DIV | MOD) right=sql_expr                               # arithmetic_sql_expr
@@ -359,7 +363,11 @@ procedure_expr:
     // highest precedence:
     LPAREN procedure_expr RPAREN type_cast?                                                     # paren_procedure_expr
     | procedure_expr PERIOD IDENTIFIER type_cast?                                               # field_access_procedure_expr
-    | procedure_expr LBRACKET procedure_expr RBRACKET type_cast?                                # array_access_procedure_expr
+    | array_element=procedure_expr LBRACKET (
+            // can be arr[1], arr[1:2], arr[1:], arr[:2], arr[:]
+            single=procedure_expr
+            | (left=procedure_expr? COL right=procedure_expr?)        
+        ) RBRACKET type_cast?                                                                   # array_access_procedure_expr
     | <assoc=right> (PLUS|MINUS|EXCL) procedure_expr                                            # unary_procedure_expr
     | procedure_expr (STAR | DIV | MOD) procedure_expr                                          # procedure_expr_arithmetic
     | procedure_expr (PLUS | MINUS) procedure_expr                                              # procedure_expr_arithmetic
