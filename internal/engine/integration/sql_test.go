@@ -238,12 +238,12 @@ func Test_SQL(t *testing.T) {
 
 			// if there is a pre statement, execute it
 			if tt.pre != "" {
-				_, err := global.Execute(ctx, tx, dbid, tt.pre, nil)
+				_, err := global.Execute(txData(), tx, dbid, tt.pre, nil)
 				require.NoError(t, err)
 			}
 
 			// execute sql
-			res, err := global.Execute(ctx, tx, dbid, tt.sql, tt.values)
+			res, err := global.Execute(txData(), tx, dbid, tt.sql, tt.values)
 			if tt.err != nil {
 				require.Error(t, err)
 				require.ErrorIs(t, err, tt.err)

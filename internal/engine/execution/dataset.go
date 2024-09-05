@@ -48,7 +48,7 @@ func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App
 		if !proc.public {
 			return nil, fmt.Errorf(`%w: "%s"`, ErrPrivate, method)
 		}
-		if proc.ownerOnly && !bytes.Equal(caller.Signer, d.schema.Owner) {
+		if proc.ownerOnly && !bytes.Equal(caller.TxCtx.Signer, d.schema.Owner) {
 			return nil, fmt.Errorf(`%w: "%s"`, ErrOwnerOnly, method)
 		}
 		if !proc.view && app.DB.(sql.AccessModer).AccessMode() == sql.ReadOnly {
@@ -61,7 +61,7 @@ func (d *baseDataset) Call(caller *precompiles.ProcedureContext, app *common.App
 			return nil, fmt.Errorf(`procedure "%s" expects %d argument(s), got %d`, method, len(proc.parameters), len(inputs))
 		}
 
-		res, err := app.DB.Execute(caller.Ctx, proc.callString(d.schema.DBID()), append([]any{pg.QueryModeExec}, inputs...)...)
+		res, err := app.DB.Execute(caller.TxCtx.Ctx, proc.callString(d.schema.DBID()), append([]any{pg.QueryModeExec}, inputs...)...)
 		if err != nil {
 			return nil, err
 		}

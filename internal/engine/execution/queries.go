@@ -326,37 +326,37 @@ func deleteSchema(ctx context.Context, tx sql.TxMaker, dbid string) error {
 }
 
 // setContextualVars sets the contextual variables for the given postgres session.
-func setContextualVars(ctx context.Context, db sql.DB, data *common.ExecutionData) error {
+func setContextualVars(ctx *common.TxContext, db sql.DB, data *common.ExecutionData) error {
 	// for contextual parameters, we use postgres's current_setting()
 	// feature for setting session variables. For example, @caller
 	// is accessed via current_setting('ctx.caller')
 
-	_, err := db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.CallerVar, data.Caller))
+	_, err := db.Execute(ctx.Ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.CallerVar, ctx.Caller))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.TxidVar, data.TxID))
+	_, err = db.Execute(ctx.Ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.TxidVar, ctx.TxID))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.SignerVar, base64.StdEncoding.EncodeToString(data.Signer)))
+	_, err = db.Execute(ctx.Ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.SignerVar, base64.StdEncoding.EncodeToString(ctx.Signer)))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = %d;`, generate.PgSessionPrefix, parse.HeightVar, data.Height))
+	_, err = db.Execute(ctx.Ctx, fmt.Sprintf(`SET LOCAL %s.%s = %d;`, generate.PgSessionPrefix, parse.HeightVar, ctx.BlockContext.Height))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = %d;`, generate.PgSessionPrefix, parse.BlockTimestamp, data.BlockTimestamp))
+	_, err = db.Execute(ctx.Ctx, fmt.Sprintf(`SET LOCAL %s.%s = %d;`, generate.PgSessionPrefix, parse.BlockTimestamp, ctx.BlockContext.Timestamp))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.Authenticator, data.Authenticator))
+	_, err = db.Execute(ctx.Ctx, fmt.Sprintf(`SET LOCAL %s.%s = '%s';`, generate.PgSessionPrefix, parse.Authenticator, ctx.Authenticator))
 	if err != nil {
 		return err
 	}
@@ -365,7 +365,7 @@ func setContextualVars(ctx context.Context, db sql.DB, data *common.ExecutionDat
 	// We can't leave it nil because once a config parameter is set, it cannot be unset.
 	// This means that we cannot properly handle scoping of the foreign caller in the outermost
 	// function call.
-	_, err = db.Execute(ctx, fmt.Sprintf(`SET LOCAL %s.%s = '';`, generate.PgSessionPrefix, parse.ForeignCaller))
+	_, err = db.Execute(ctx.Ctx, fmt.Sprintf(`SET LOCAL %s.%s = '';`, generate.PgSessionPrefix, parse.ForeignCaller))
 	if err != nil {
 		return err
 	}

@@ -46,27 +46,34 @@ type TxContext struct {
 	// BlockContext is the context of the current block.
 	BlockContext *BlockContext
 	// TxID is the ID of the current transaction.
-	TxID []byte
+	TxID string
+	// Signer is the public key of the transaction signer.
+	Signer []byte
+	// Caller is the string identifier of the transaction signer.
+	// It is derived from the signer's registered authenticator.
+	Caller string
+	// Authenticator is the authenticator used to sign the transaction.
+	Authenticator string
 }
 
 type Engine interface {
 	SchemaGetter
 	// CreateDataset deploys a new dataset from a schema.
 	// The dataset will be owned by the caller.
-	CreateDataset(ctx context.Context, tx sql.DB, schema *types.Schema, txdata *TransactionData) error
+	CreateDataset(ctx *TxContext, tx sql.DB, schema *types.Schema) error
 	// DeleteDataset deletes a dataset.
 	// The caller must be the owner of the dataset.
-	DeleteDataset(ctx context.Context, tx sql.DB, dbid string, txdata *TransactionData) error
+	DeleteDataset(ctx *TxContext, tx sql.DB, dbid string) error
 	// Procedure executes a procedure in a dataset. It can be given
 	// either a readwrite or readonly database transaction. If it is
 	// given a read-only transaction, it will not be able to execute
 	// any procedures that are not `view`.
-	Procedure(ctx context.Context, tx sql.DB, options *ExecutionData) (*sql.ResultSet, error)
+	Procedure(ctx *TxContext, tx sql.DB, options *ExecutionData) (*sql.ResultSet, error)
 	// ListDatasets returns a list of all datasets on the network.
 	ListDatasets(caller []byte) ([]*types.DatasetIdentifier, error)
 	// Execute executes a SQL statement on a dataset.
 	// It uses Kwil's SQL dialect.
-	Execute(ctx context.Context, tx sql.DB, dbid, query string, values map[string]any) (*sql.ResultSet, error)
+	Execute(ctx *TxContext, tx sql.DB, dbid, query string, values map[string]any) (*sql.ResultSet, error)
 	// Reload reloads the engine with the latest db state
 	Reload(ctx context.Context, tx sql.Executor) error
 }
@@ -77,37 +84,11 @@ type SchemaGetter interface {
 	GetSchema(dbid string) (*types.Schema, error)
 }
 
-// TransactionData holds contextual data about the transaction that
-// called the procedure.
-type TransactionData struct {
-	// Signer is the address of public key that signed the incoming
-	// transaction.
-	Signer []byte
-
-	// Caller is a string identifier for the signer.
-	// It is derived from the signer's registered authenticator.
-	// It is injected as a variable for usage in the query, under
-	// the variable name "@caller".
-	Caller string
-
-	// TxID is the transaction ID of the incoming transaction.
-	TxID string
-
-	// Height is the block height of the incoming transaction.
-	Height int64
-
-	// BlockTimestamp is the unix timestamp of the block, set by the block proposer.
-	BlockTimestamp int64
-
-	// Authenticator is the authenticator used to sign the transaction.
-	Authenticator string
-}
-
 // ExecutionOptions is contextual data that is passed to a procedure
 // during call / execution. It is scoped to the lifetime of a single
 // execution.
 type ExecutionData struct {
-	TransactionData
+	//TxCtx *TxContext
 	// Dataset is the DBID of the dataset that was called.
 	// Even if a procedure in another dataset is called, this will
 	// always be the original dataset.
