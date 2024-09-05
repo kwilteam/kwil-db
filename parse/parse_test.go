@@ -1358,6 +1358,8 @@ func Test_Procedure(t *testing.T) {
 			$arr4 := [4,5];
 
 			$arr5 := array_cat($arr3, $arr4);
+			$arr6 := $arr5[1:2];
+			$arr7 := $arr5[1:];
 			`,
 			inputs: map[string]*types.DataType{
 				"$arr": types.ArrayType(types.IntType),
@@ -1368,6 +1370,8 @@ func Test_Procedure(t *testing.T) {
 					"$arr3": types.ArrayType(types.IntType),
 					"$arr4": types.ArrayType(types.IntType),
 					"$arr5": types.ArrayType(types.IntType),
+					"$arr6": types.ArrayType(types.IntType),
+					"$arr7": types.ArrayType(types.IntType),
 				},
 				AST: []parse.ProcedureStmt{
 					&parse.ProcedureStmtCall{
@@ -1411,6 +1415,25 @@ func Test_Procedure(t *testing.T) {
 							Args: []parse.Expression{
 								exprVar("$arr3"),
 								exprVar("$arr4"),
+							},
+						},
+					},
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$arr6"),
+						Value: &parse.ExpressionArrayAccess{
+							Array: exprVar("$arr5"),
+							FromTo: [2]parse.Expression{
+								exprLit(1),
+								exprLit(2),
+							},
+						},
+					},
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$arr7"),
+						Value: &parse.ExpressionArrayAccess{
+							Array: exprVar("$arr5"),
+							FromTo: [2]parse.Expression{
+								exprLit(1),
 							},
 						},
 					},
@@ -2098,6 +2121,9 @@ func exprLit(v any) parse.Expression {
 		liter := &parse.ExpressionLiteral{
 			Type:  types.IntType,
 			Value: int64(t),
+			Typecastable: parse.Typecastable{
+				TypeCast: types.IntType,
+			},
 		}
 
 		if isNeg {
@@ -2117,6 +2143,9 @@ func exprLit(v any) parse.Expression {
 		liter := &parse.ExpressionLiteral{
 			Type:  types.IntType,
 			Value: t,
+			Typecastable: parse.Typecastable{
+				TypeCast: types.IntType,
+			},
 		}
 
 		if isNeg {
@@ -2131,11 +2160,17 @@ func exprLit(v any) parse.Expression {
 		return &parse.ExpressionLiteral{
 			Type:  types.TextType,
 			Value: t,
+			Typecastable: parse.Typecastable{
+				TypeCast: types.TextType,
+			},
 		}
 	case bool:
 		return &parse.ExpressionLiteral{
 			Type:  types.BoolType,
 			Value: t,
+			Typecastable: parse.Typecastable{
+				TypeCast: types.BoolType,
+			},
 		}
 	default:
 		panic("TEST ERROR: invalid type for literal")
@@ -2188,10 +2223,7 @@ func Test_SQL(t *testing.T) {
 							Where: &parse.ExpressionComparison{
 								Left:     exprColumn("u", "id"),
 								Operator: parse.ComparisonOperatorEqual,
-								Right: &parse.ExpressionLiteral{
-									Type:  types.IntType,
-									Value: int64(1),
-								},
+								Right:    exprLit(1),
 							},
 						},
 					},
@@ -2214,20 +2246,11 @@ func Test_SQL(t *testing.T) {
 					Columns: []string{"id", "author_id"},
 					Values: [][]parse.Expression{
 						{
-							&parse.ExpressionLiteral{
-								Type:  types.IntType,
-								Value: int64(1),
-							},
-							&parse.ExpressionLiteral{
-								Type:  types.IntType,
-								Value: int64(1),
-							},
+							exprLit(1),
+							exprLit(1),
 						},
 						{
-							&parse.ExpressionLiteral{
-								Type:  types.IntType,
-								Value: int64(2),
-							},
+							exprLit(2),
 							&parse.ExpressionSubquery{
 								Subquery: &parse.SelectStatement{
 									SelectCores: []*parse.SelectCore{
@@ -2243,17 +2266,11 @@ func Test_SQL(t *testing.T) {
 											Where: &parse.ExpressionComparison{
 												Left:     exprColumn("", "username"),
 												Operator: parse.ComparisonOperatorEqual,
-												Right: &parse.ExpressionLiteral{
-													Type:  types.TextType,
-													Value: "user2",
-												},
+												Right:    exprLit("user2"),
 											},
 										},
 									},
-									Limit: &parse.ExpressionLiteral{
-										Type:  types.IntType,
-										Value: int64(1),
-									},
+									Limit: exprLit(1),
 									// apply default ordering
 									Ordering: []*parse.OrderingTerm{
 										{
@@ -2307,10 +2324,7 @@ func Test_SQL(t *testing.T) {
 							Where: &parse.ExpressionComparison{
 								Left:     exprColumn("u", "username"),
 								Operator: parse.ComparisonOperatorEqual,
-								Right: &parse.ExpressionLiteral{
-									Type:  types.TextType,
-									Value: "satoshi",
-								},
+								Right:    exprLit("satoshi"),
 							},
 						},
 					},
@@ -2341,10 +2355,7 @@ func Test_SQL(t *testing.T) {
 					Where: &parse.ExpressionComparison{
 						Left:     exprColumn("", "id"),
 						Operator: parse.ComparisonOperatorEqual,
-						Right: &parse.ExpressionLiteral{
-							Type:  types.IntType,
-							Value: int64(1),
-						},
+						Right:    exprLit(1),
 					},
 				},
 			},
@@ -2358,10 +2369,7 @@ func Test_SQL(t *testing.T) {
 					Columns: []string{"id"},
 					Values: [][]parse.Expression{
 						{
-							&parse.ExpressionLiteral{
-								Type:  types.IntType,
-								Value: int64(1),
-							},
+							exprLit(1),
 						},
 					},
 					Upsert: &parse.UpsertClause{

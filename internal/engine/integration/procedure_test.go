@@ -265,6 +265,35 @@ func Test_Procedures(t *testing.T) {
 			}`,
 		},
 		{
+			name: "arrays",
+			// all arrays are 1-indexed
+			procedure: `procedure array_funcs() public view {
+				$arr int[] := [1, 2, 3];
+				$arr := array_append($arr, 4);
+				if $arr != [1, 2, 3, 4] {
+					error('array_append failed');
+				}
+
+				$arr2 := $arr[2:4]; // should be [2, 3, 4]
+				if $arr2 != [2, 3, 4] {
+					error('array slice failed');
+				}
+
+				$arr3 := array_prepend(0, $arr);
+				if $arr3 != [0, 1, 2, 3, 4] {
+					error('array_prepend failed');
+				}
+
+				if array_remove($arr3, 3) != [0, 1, 2, 4] {
+					error('array_remove failed');
+				}
+
+				if array_cat($arr[:2], $arr[4:]) != [1, 2, 4] {
+					error('array_cat failed');
+				}
+			}`,
+		},
+		{
 			name: "min/max",
 			procedure: `procedure min_max() public view returns (min int, max int) {
 				$max := 0;
