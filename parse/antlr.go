@@ -1315,8 +1315,9 @@ func (s *schemaVisitor) VisitLogical_sql_expr(ctx *gen.Logical_sql_exprContext) 
 func (s *schemaVisitor) VisitArray_access_sql_expr(ctx *gen.Array_access_sql_exprContext) any {
 	e := &ExpressionArrayAccess{
 		Array: ctx.Sql_expr(0).Accept(s).(Expression),
-		Index: ctx.Sql_expr(1).Accept(s).(Expression),
 	}
+
+	s.makeArray(e, ctx.GetSingle(), ctx.GetLeft(), ctx.GetRight())
 
 	if ctx.Type_cast() != nil {
 		e.TypeCast = ctx.Type_cast().Accept(s).(*types.DataType)
@@ -1324,6 +1325,25 @@ func (s *schemaVisitor) VisitArray_access_sql_expr(ctx *gen.Array_access_sql_exp
 
 	e.Set(ctx)
 	return e
+}
+
+// makeArray modifies the passed ExpressionArrayAccess based on the single, left, and right fields.
+// single: arr[1], left: arr[1:], right: arr[:1], left and right: arr[1:2], neither: arr[:]
+func (s *schemaVisitor) makeArray(e *ExpressionArrayAccess, single, left, right antlr.ParserRuleContext) {
+	if single != nil {
+		e.Index = single.Accept(s).(Expression)
+		return
+	}
+
+	var start, end Expression
+	if left != nil {
+		start = left.Accept(s).(Expression)
+	}
+	if right != nil {
+		end = right.Accept(s).(Expression)
+	}
+
+	e.FromTo = [2]Expression{start, end}
 }
 
 func (s *schemaVisitor) VisitField_access_sql_expr(ctx *gen.Field_access_sql_exprContext) any {
@@ -1906,8 +1926,9 @@ func (s *schemaVisitor) VisitFunction_call_procedure_expr(ctx *gen.Function_call
 func (s *schemaVisitor) VisitArray_access_procedure_expr(ctx *gen.Array_access_procedure_exprContext) any {
 	e := &ExpressionArrayAccess{
 		Array: ctx.Procedure_expr(0).Accept(s).(Expression),
-		Index: ctx.Procedure_expr(1).Accept(s).(Expression),
 	}
+
+	s.makeArray(e, ctx.GetSingle(), ctx.GetLeft(), ctx.GetRight())
 
 	if ctx.Type_cast() != nil {
 		e.TypeCast = ctx.Type_cast().Accept(s).(*types.DataType)

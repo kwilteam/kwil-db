@@ -1358,6 +1358,8 @@ func Test_Procedure(t *testing.T) {
 			$arr4 := [4,5];
 
 			$arr5 := array_cat($arr3, $arr4);
+			$arr6 := $arr5[1:2];
+			$arr7 := $arr5[1:];
 			`,
 			inputs: map[string]*types.DataType{
 				"$arr": types.ArrayType(types.IntType),
@@ -1368,6 +1370,8 @@ func Test_Procedure(t *testing.T) {
 					"$arr3": types.ArrayType(types.IntType),
 					"$arr4": types.ArrayType(types.IntType),
 					"$arr5": types.ArrayType(types.IntType),
+					"$arr6": types.ArrayType(types.IntType),
+					"$arr7": types.ArrayType(types.IntType),
 				},
 				AST: []parse.ProcedureStmt{
 					&parse.ProcedureStmtCall{
@@ -1411,6 +1415,25 @@ func Test_Procedure(t *testing.T) {
 							Args: []parse.Expression{
 								exprVar("$arr3"),
 								exprVar("$arr4"),
+							},
+						},
+					},
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$arr6"),
+						Value: &parse.ExpressionArrayAccess{
+							Array: exprVar("$arr5"),
+							FromTo: [2]parse.Expression{
+								exprLit(1),
+								exprLit(2),
+							},
+						},
+					},
+					&parse.ProcedureStmtAssign{
+						Variable: exprVar("$arr7"),
+						Value: &parse.ExpressionArrayAccess{
+							Array: exprVar("$arr5"),
+							FromTo: [2]parse.Expression{
+								exprLit(1),
 							},
 						},
 					},
