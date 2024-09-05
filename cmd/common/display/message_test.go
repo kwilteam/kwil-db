@@ -75,7 +75,7 @@ func ExampleRespTxHash_json_withError() {
 	prettyPrint(msg, "json", os.Stdout, os.Stderr)
 	// Output:
 	// {
-	//   "result": "",
+	//   "result": null,
 	//   "error": "an error"
 	// }
 }

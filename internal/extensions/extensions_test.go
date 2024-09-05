@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common"
 	actions "github.com/kwilteam/kwil-db/extensions/precompiles"
 	extensions "github.com/kwilteam/kwil-db/internal/extensions"
 	"github.com/kwilteam/kwil-extensions/client"
@@ -56,7 +57,9 @@ func (m *mockClient) Initialize(ctx context.Context, metadata map[string]string)
 func Test_LocalExtension(t *testing.T) {
 	ctx := context.Background()
 	callCtx := &actions.ProcedureContext{
-		Ctx: ctx,
+		TxCtx: &common.TxContext{
+			Ctx: ctx,
+		},
 	}
 
 	metadata := map[string]string{
@@ -133,7 +136,9 @@ func Test_RemoteExtension(t *testing.T) {
 	ctx := context.Background()
 	ext := extensions.New("local:8080")
 	callCtx := &actions.ProcedureContext{
-		Ctx: ctx,
+		TxCtx: &common.TxContext{
+			Ctx: ctx,
+		},
 	}
 
 	err := ext.Connect(ctx)

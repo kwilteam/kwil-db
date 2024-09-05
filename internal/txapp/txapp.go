@@ -230,7 +230,7 @@ func (r *TxApp) validatorSetPower(ctx context.Context, tx sql.Executor) (int64, 
 // appropriate module(s) and return the response. This method must only be
 // called from the consensus engine, sequentially, when executing transactions
 // in a block.
-func (r *TxApp) Execute(ctx TxContext, db sql.DB, tx *transactions.Transaction) *TxResponse {
+func (r *TxApp) Execute(ctx *common.TxContext, db sql.DB, tx *transactions.Transaction) *TxResponse {
 	route, ok := routes[tx.Body.PayloadType.String()] // and RegisterRoute call is not concurrent
 	if !ok {
 		return txRes(nil, transactions.CodeInvalidTxType, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String()))
@@ -781,7 +781,7 @@ func (s *Spend) ApplySpend(ctx context.Context, db sql.DB) error {
 
 // recordSpend records a spend occurred during the block execution.
 // This only records spends during migrations.
-func (r *TxApp) recordSpend(ctx TxContext, spend *Spend) {
+func (r *TxApp) recordSpend(ctx *common.TxContext, spend *Spend) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		r.spends = append(r.spends, spend)
 	}
@@ -804,7 +804,7 @@ func (r *TxApp) GetBlockSpends() []*Spend {
 // It also returns an error code.
 // if we allow users to implement their own routes, this function will need to
 // be exported.
-func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, pricer Pricer, dbTx sql.DB) (*big.Int, transactions.TxCode, error) {
+func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *transactions.Transaction, pricer Pricer, dbTx sql.DB) (*big.Int, transactions.TxCode, error) {
 	amt := big.NewInt(0)
 	var err error
 

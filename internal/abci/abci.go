@@ -389,6 +389,16 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	}
 	defer readTx.Rollback(ctx) // always rollback since we are read-only
 
+	auth, err := authExt.GetAuthenticator(tx.Signature.Type)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get authenticator: %w", err)
+	}
+
+	ident, err := auth.Identifier(tx.Sender)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get identifier: %w", err)
+	}
+
 	err = a.txApp.ApplyMempool(&common.TxContext{
 		Ctx: ctx,
 		BlockContext: &common.BlockContext{
@@ -396,7 +406,10 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 			Height:       a.height + 1, // height increments at the start of FinalizeBlock,
 			Proposer:     nil,          // we don't know the proposer here
 		},
-		TxID: cometTXID(incoming.Tx),
+		TxID:          hex.EncodeToString(cometTXID(incoming.Tx)),
+		Signer:        tx.Sender,
+		Caller:        ident,
+		Authenticator: tx.Signature.Type,
 	}, readTx, tx)
 	if err != nil {
 		if errors.Is(err, transactions.ErrInvalidNonce) {
@@ -506,10 +519,10 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	res := &abciTypes.ResponseFinalizeBlock{}
 
 	blockCtx := common.BlockContext{
-		ChainContext:   a.chainContext,
-		Height:         req.Height,
-		BlockTimestamp: req.Time.Unix(),
-		Proposer:       proposerPubKey,
+		ChainContext: a.chainContext,
+		Height:       req.Height,
+		Timestamp:    req.Time.Unix(),
+		Proposer:     proposerPubKey,
 	}
 	inMigration := blockCtx.ChainContext.NetworkParameters.InMigration
 
@@ -589,10 +602,23 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 		txHash := sha256.Sum256(tx)
 
-		txRes := a.txApp.Execute(txapp.TxContext{
-			Ctx:          ctx,
-			TxID:         txHash[:], // tmhash.Sum(tx), // use cometbft TmHash to get the same hash as is indexed
-			BlockContext: &blockCtx,
+		auth, err := authExt.GetAuthenticator(decoded.Signature.Type)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get authenticator: %w", err)
+		}
+
+		ident, err := auth.Identifier(decoded.Sender)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get identifier: %w", err)
+		}
+
+		txRes := a.txApp.Execute(&common.TxContext{
+			Ctx:           ctx,
+			TxID:          hex.EncodeToString(txHash[:]), // tmhash.Sum(tx), // use cometbft TmHash to get the same hash as is indexed
+			BlockContext:  &blockCtx,
+			Signer:        decoded.Sender,
+			Authenticator: decoded.Signature.Type,
+			Caller:        ident,
 		}, a.consensusTx, decoded)
 
 		abciRes := &abciTypes.ExecTxResult{}

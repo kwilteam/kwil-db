@@ -35,9 +35,9 @@ type Route interface {
 	// returned by the router in case of an error. A route may perform all
 	// actions with InTx, but others may use PreTx for initial validation prior
 	// to creating a nested transaction with the DB backend (expensive).
-	PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error)
+	PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error)
 	// InTx executes the transaction, which may include state changes via the DB
 	// or Engine. The TxCode is returned by the Router, and it should be CodeOk
 	// for a nil error.
-	InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error)
+	InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error)
 }

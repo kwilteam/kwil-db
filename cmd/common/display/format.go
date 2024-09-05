@@ -68,7 +68,10 @@ func (e *emptyResult) MarshalText() ([]byte, error) {
 }
 
 func (e *emptyResult) MarshalJSON() ([]byte, error) {
-	return []byte(`""`), nil
+	// an empty string will fail to unmarshal for all result types. JSON null
+	// (not a string or any type at all) is better, but unmarshalling should be
+	// skipped entirely if the error field of wrappedMsg is set
+	return []byte(`null`), nil
 }
 
 // MsgFormatter is an interface that wraps the MarshalText and MarshalJSON

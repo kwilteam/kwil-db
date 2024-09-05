@@ -3,7 +3,6 @@ package txapp
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -49,7 +48,7 @@ type Route interface {
 	// All transactions should spend, regardless of success or failure.
 	// Therefore, a nested transaction should be used for all database
 	// operations after the initial checkAndSpend.
-	Execute(ctx TxContext, router *TxApp, db sql.DB, tx *transactions.Transaction) *TxResponse
+	Execute(ctx *common.TxContext, router *TxApp, db sql.DB, tx *transactions.Transaction) *TxResponse
 }
 
 // NewRoute creates a complete Route for the TxApp from a consensus.Route.
@@ -62,10 +61,6 @@ func NewRoute(impl consensus.Route) Route {
 func RegisterRouteImpl(payloadType transactions.PayloadType, route consensus.Route) error {
 	return RegisterRoute(payloadType, NewRoute(route))
 }
-
-// TxContext is the context for transaction execution. It is a type alias for
-// common.TxContext (same type) for convenience.
-type TxContext = common.TxContext
 
 // ConsensusParams holds network level parameters that may evolve over time.
 type ConsensusParams struct {
@@ -154,7 +149,7 @@ func (d *baseRoute) Price(ctx context.Context, router *TxApp, db sql.DB, tx *tra
 	}, tx)
 }
 
-func (d *baseRoute) Execute(ctx TxContext, router *TxApp, db sql.DB, tx *transactions.Transaction) *TxResponse {
+func (d *baseRoute) Execute(ctx *common.TxContext, router *TxApp, db sql.DB, tx *transactions.Transaction) *TxResponse {
 	dbTx, err := db.BeginTx(ctx.Ctx)
 	if err != nil {
 		return txRes(nil, transactions.CodeUnknownError, err)
@@ -236,7 +231,7 @@ func (d *deployDatasetRoute) Price(ctx context.Context, app *common.App, tx *tra
 	return big.NewInt(1000000000000000000), nil
 }
 
-func (d *deployDatasetRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *deployDatasetRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot deploy dataset during migration")
 	}
@@ -262,16 +257,8 @@ func (d *deployDatasetRoute) PreTx(ctx common.TxContext, svc *common.Service, tx
 	return 0, nil
 }
 
-func (d *deployDatasetRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
-	err := app.Engine.CreateDataset(ctx.Ctx, app.DB, d.schema,
-		&common.TransactionData{
-			Signer:         tx.Sender,
-			Caller:         d.identifier,
-			TxID:           hex.EncodeToString(ctx.TxID),
-			Height:         ctx.BlockContext.Height,
-			BlockTimestamp: ctx.BlockContext.BlockTimestamp,
-			Authenticator:  d.authType,
-		})
+func (d *deployDatasetRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+	err := app.Engine.CreateDataset(ctx, app.DB, d.schema)
 	if err != nil {
 		return transactions.CodeUnknownError, err
 	}
@@ -279,9 +266,7 @@ func (d *deployDatasetRoute) InTx(ctx common.TxContext, app *common.App, tx *tra
 }
 
 type dropDatasetRoute struct {
-	dbid       string
-	identifier string
-	authType   string
+	dbid string
 }
 
 var _ consensus.Route = (*dropDatasetRoute)(nil)
@@ -294,7 +279,7 @@ func (d *dropDatasetRoute) Price(ctx context.Context, app *common.App, tx *trans
 	return big.NewInt(10000000000000), nil
 }
 
-func (d *dropDatasetRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *dropDatasetRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot drop dataset during migration")
 	}
@@ -305,26 +290,12 @@ func (d *dropDatasetRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *
 		return transactions.CodeEncodingError, err
 	}
 
-	d.identifier, err = ident.Identifier(tx.Signature.Type, tx.Sender)
-	if err != nil {
-		return transactions.CodeUnknownError, err
-	}
-
-	d.authType = tx.Signature.Type
-
 	d.dbid = drop.DBID
 	return 0, nil
 }
 
-func (d *dropDatasetRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
-	err := app.Engine.DeleteDataset(ctx.Ctx, app.DB, d.dbid, &common.TransactionData{
-		Signer:         tx.Sender,
-		Caller:         d.identifier,
-		TxID:           hex.EncodeToString(ctx.TxID),
-		Height:         ctx.BlockContext.Height,
-		BlockTimestamp: ctx.BlockContext.BlockTimestamp,
-		Authenticator:  d.authType,
-	})
+func (d *dropDatasetRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+	err := app.Engine.DeleteDataset(ctx, app.DB, d.dbid)
 	if err != nil {
 		return transactions.CodeUnknownError, err
 	}
@@ -332,11 +303,9 @@ func (d *dropDatasetRoute) InTx(ctx common.TxContext, app *common.App, tx *trans
 }
 
 type executeActionRoute struct {
-	identifier string
-	authType   string
-	dbid       string
-	action     string
-	args       [][]any
+	dbid   string
+	action string
+	args   [][]any
 }
 
 var _ consensus.Route = (*executeActionRoute)(nil)
@@ -349,7 +318,7 @@ func (d *executeActionRoute) Price(ctx context.Context, app *common.App, tx *tra
 	return big.NewInt(2000000000000000), nil
 }
 
-func (d *executeActionRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *executeActionRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	action := &transactions.ActionExecution{}
 	err := action.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
@@ -358,12 +327,6 @@ func (d *executeActionRoute) PreTx(ctx common.TxContext, svc *common.Service, tx
 
 	d.action = action.Action
 	d.dbid = action.DBID
-	d.authType = tx.Signature.Type
-
-	d.identifier, err = ident.Identifier(tx.Signature.Type, tx.Sender)
-	if err != nil {
-		return transactions.CodeUnknownError, err
-	}
 
 	// here, we decode the [][]transactions.EncodedTypes into [][]any
 	args := make([][]any, len(action.Arguments))
@@ -389,20 +352,12 @@ func (d *executeActionRoute) PreTx(ctx common.TxContext, svc *common.Service, tx
 	return 0, nil
 }
 
-func (d *executeActionRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *executeActionRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	for i := range d.args {
-		_, err := app.Engine.Procedure(ctx.Ctx, app.DB, &common.ExecutionData{
+		_, err := app.Engine.Procedure(ctx, app.DB, &common.ExecutionData{
 			Dataset:   d.dbid,
 			Procedure: d.action,
 			Args:      d.args[i],
-			TransactionData: common.TransactionData{
-				Signer:         tx.Sender,
-				Caller:         d.identifier,
-				TxID:           hex.EncodeToString(ctx.TxID),
-				Height:         ctx.BlockContext.Height,
-				BlockTimestamp: ctx.BlockContext.BlockTimestamp,
-				Authenticator:  d.authType,
-			},
 		})
 		if err != nil {
 			return codeForEngineError(err), err
@@ -426,7 +381,7 @@ func (d *transferRoute) Price(ctx context.Context, app *common.App, tx *transact
 	return big.NewInt(210_000), nil
 }
 
-func (d *transferRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *transferRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot transfer during migration")
 	}
@@ -453,7 +408,7 @@ func (d *transferRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *tra
 	return 0, nil
 }
 
-func (d *transferRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *transferRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	err := transfer(ctx.Ctx, app.DB, tx.Sender, d.to, d.amt)
 	if err != nil {
 		if errors.Is(err, accounts.ErrInsufficientFunds) {
@@ -481,7 +436,7 @@ func (d *validatorJoinRoute) Price(ctx context.Context, app *common.App, tx *tra
 	return big.NewInt(10000000000000), nil
 }
 
-func (d *validatorJoinRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *validatorJoinRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot join validator during migration")
 	}
@@ -496,7 +451,7 @@ func (d *validatorJoinRoute) PreTx(ctx common.TxContext, svc *common.Service, tx
 	return 0, nil
 }
 
-func (d *validatorJoinRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	// ensure this candidate is not already a validator
 	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
 	if err != nil {
@@ -553,7 +508,7 @@ func (d *validatorApproveRoute) Price(ctx context.Context, app *common.App, tx *
 	return big.NewInt(10000000000000), nil
 }
 
-func (d *validatorApproveRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *validatorApproveRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot approve validator join during migration")
 	}
@@ -572,7 +527,7 @@ func (d *validatorApproveRoute) PreTx(ctx common.TxContext, svc *common.Service,
 	return 0, nil
 }
 
-func (d *validatorApproveRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *validatorApproveRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	// each pending validator can only have one active join request at a time
 	// we need to retrieve the join request and ensure that it is still pending
 	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, app.DB, voting.ValidatorJoinEventType, d.candidate)
@@ -618,7 +573,7 @@ func (d *validatorRemoveRoute) Price(ctx context.Context, app *common.App, tx *t
 	return big.NewInt(100_000), nil
 }
 
-func (d *validatorRemoveRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *validatorRemoveRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot remove validator during migration")
 	}
@@ -633,7 +588,7 @@ func (d *validatorRemoveRoute) PreTx(ctx common.TxContext, svc *common.Service, 
 	return 0, nil
 }
 
-func (d *validatorRemoveRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	removeReq := &voting.UpdatePowerRequest{
 		PubKey: d.target,
 		Power:  0,
@@ -689,14 +644,14 @@ func (d *validatorLeaveRoute) Price(ctx context.Context, app *common.App, tx *tr
 	return big.NewInt(10000000000000), nil
 }
 
-func (d *validatorLeaveRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *validatorLeaveRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot leave validator during migration")
 	}
 	return 0, nil // no payload to decode or validate for this route
 }
 
-func (d *validatorLeaveRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *validatorLeaveRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
 	if err != nil {
 		return transactions.CodeUnknownError, err
@@ -733,14 +688,14 @@ func (d *validatorVoteIDsRoute) Price(ctx context.Context, app *common.App, tx *
 	return big.NewInt(int64(len(ids.ResolutionIDs)) * ValidatorVoteIDPrice.Int64()), nil
 }
 
-func (d *validatorVoteIDsRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *validatorVoteIDsRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot vote during migration")
 	}
 	return 0, nil
 }
 
-func (d *validatorVoteIDsRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *validatorVoteIDsRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	// if the caller has 0 power, they are not a validator, and should not be able to vote
 	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
 	if err != nil {
@@ -813,7 +768,7 @@ func (d *validatorVoteBodiesRoute) Price(ctx context.Context, _ *common.App, tx 
 	return big.NewInt(totalSize * ValidatorVoteBodyBytePrice), nil
 }
 
-func (d *validatorVoteBodiesRoute) PreTx(ctx common.TxContext, _ *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *validatorVoteBodiesRoute) PreTx(ctx *common.TxContext, _ *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		return transactions.CodeNetworkInMigration, fmt.Errorf("cannot vote during migration")
 
@@ -835,7 +790,7 @@ func (d *validatorVoteBodiesRoute) PreTx(ctx common.TxContext, _ *common.Service
 	return 0, nil
 }
 
-func (d *validatorVoteBodiesRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *validatorVoteBodiesRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	fromLocalValidator := bytes.Equal(tx.Sender, app.Service.Identity)
 
 	// Expectation:
@@ -903,7 +858,7 @@ func (d *createResolutionRoute) Price(ctx context.Context, app *common.App, tx *
 	return big.NewInt(int64(len(res.Resolution.Body)) * ValidatorVoteBodyBytePrice), nil
 }
 
-func (d *createResolutionRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *createResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		return transactions.CodeNetworkInMigration, errors.New("cannot create resolution during migration")
 	}
@@ -926,7 +881,7 @@ func (d *createResolutionRoute) PreTx(ctx common.TxContext, svc *common.Service,
 	return 0, nil
 }
 
-func (d *createResolutionRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *createResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	// ensure the sender is a validator
 	// only validators can create resolutions
 	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
@@ -966,7 +921,7 @@ func (d *approveResolutionRoute) Price(ctx context.Context, app *common.App, tx 
 	return ValidatorVoteIDPrice, nil
 }
 
-func (d *approveResolutionRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *approveResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		return transactions.CodeNetworkInMigration, errors.New("cannot approve a resolution during migration")
 	}
@@ -981,7 +936,7 @@ func (d *approveResolutionRoute) PreTx(ctx common.TxContext, svc *common.Service
 	return 0, nil
 }
 
-func (d *approveResolutionRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *approveResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	// ensure the sender is a validator
 	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
 	if err != nil {
@@ -1024,7 +979,7 @@ func (d *deleteResolutionRoute) Price(ctx context.Context, app *common.App, tx *
 	return ValidatorVoteIDPrice, nil
 }
 
-func (d *deleteResolutionRoute) PreTx(ctx common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *deleteResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
 		return transactions.CodeNetworkInMigration, errors.New("cannot vote during migration")
 	}
@@ -1040,7 +995,7 @@ func (d *deleteResolutionRoute) PreTx(ctx common.TxContext, svc *common.Service,
 }
 
 // deleteResolutionRoute is a route for deleting a resolution.
-func (d *deleteResolutionRoute) InTx(ctx common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *deleteResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *transactions.Transaction) (transactions.TxCode, error) {
 	// ensure the sender is a validator
 	power, err := getVoterPower(ctx.Ctx, app.DB, tx.Sender)
 	if err != nil {

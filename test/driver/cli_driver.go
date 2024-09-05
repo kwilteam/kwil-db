@@ -404,39 +404,45 @@ func (d *KwilCliDriver) ChainInfo(_ context.Context) (*types.ChainInfo, error) {
 
 ///////// helper functions
 
+type genericResponse struct {
+	Result json.RawMessage `json:"result"`
+	Error  string          `json:"error"`
+}
+
 // mustRun runs the give command, and parse stdout
 func mustRun[T any](cmd *exec.Cmd, logger log.Logger) (T, error) {
 	cmd.Stderr = os.Stderr
-	t := new(T)
+	var t T
 	// here we capture the stdout
-	var out bytes.Buffer
+	var out, stdErr bytes.Buffer
 	cmd.Stdout = &out
+	cmd.Stderr = &stdErr
 	err := cmd.Run()
 	if err != nil {
-		return *t, err
+		return t, err
 	}
 
 	output := out.Bytes()
 	logger.Debug("cmd output", zap.String("output", string(output)))
 
-	var result cliResponse[T]
-	err = json.Unmarshal(output, &result)
+	var jsonResult genericResponse
+	err = json.Unmarshal(output, &jsonResult)
 	if err != nil {
-		logger.Error("bad cmd output", zap.String("output", string(output)))
-
-		// if an error message is in the result, return it
-		if result.Error != "" {
-			return *t, errors.New(result.Error)
-		}
-
-		return *t, err
+		logger.Error("bad cmd output", zap.Error(err), zap.String("output", string(output)), zap.String("stderr", stdErr.String()))
+		return t, err
 	}
 
-	if result.Error != "" {
-		return *t, errors.New(result.Error)
+	if jsonResult.Error != "" {
+		return t, errors.New(jsonResult.Error)
 	}
 
-	return result.Result, nil
+	err = json.Unmarshal(jsonResult.Result, &t)
+	if err != nil {
+		logger.Error("bad cmd output result field", zap.Error(err), zap.String("result", string(jsonResult.Result)), zap.String("stderr", stdErr.String()))
+		return t, err
+	}
+
+	return t, nil
 }
 
 // mustRunCallIgnorePrompt runs the given `kwil-cli database call` command, and
@@ -444,13 +450,13 @@ func mustRun[T any](cmd *exec.Cmd, logger log.Logger) (T, error) {
 // kwil-cli will prompt for confirmation.
 func mustRunCallIgnorePrompt[T any](cmd *exec.Cmd, logger log.Logger) (T, error) {
 	cmd.Stderr = os.Stderr
-	t := new(T)
+	var t T
 	// here we capture the stdout
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
-		return *t, err
+		return t, err
 	}
 
 	output := out.Bytes()
@@ -464,22 +470,24 @@ func mustRunCallIgnorePrompt[T any](cmd *exec.Cmd, logger log.Logger) (T, error)
 		output = []byte(delimiter + strings.SplitN(string(output), delimiter, 2)[1])
 	}
 
-	var result *cliResponse[T]
-	err = json.Unmarshal(output, &result)
+	var jsonResult genericResponse
+	err = json.Unmarshal(output, &jsonResult)
 	if err != nil {
-		return *t, err
+		logger.Error("bad cmd output", zap.Error(err), zap.String("output", string(output)))
+		return t, err
 	}
 
-	if result.Error != "" {
-		return *t, errors.New(result.Error)
+	if jsonResult.Error != "" {
+		return t, errors.New(jsonResult.Error)
 	}
 
-	return result.Result, nil
-}
+	err = json.Unmarshal(jsonResult.Result, &t)
+	if err != nil {
+		logger.Error("bad cmd output result field", zap.Error(err), zap.String("result", string(jsonResult.Result)))
+		return t, err
+	}
 
-type cliResponse[T any] struct {
-	Result T      `json:"result"`
-	Error  string `json:"error"`
+	return t, nil
 }
 
 // Types below (resp*) are kind of duplicated with `cmd/kwil-cli`,  and i probably
