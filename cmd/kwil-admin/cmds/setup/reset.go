@@ -3,6 +3,7 @@ package setup
 import (
 	"errors"
 
+	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
@@ -22,41 +23,40 @@ func resetCmd() *cobra.Command {
 	var rootDir, snapPath string
 	var force bool
 
-	cmd := &cobra.Command{
+	resetCmd := &cobra.Command{
 		Use:     "reset",
 		Short:   "To delete all of a Kwil node's data files, use the `reset` command.",
 		Long:    resetLong,
 		Example: resetExample,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cobraCmd *cobra.Command, args []string) error {
 			if rootDir == "" {
 				if !force {
-					return display.PrintErr(cmd, errors.New("not removing default home directory without --force or --root-dir"))
+					return display.PrintErr(cobraCmd, errors.New("not removing default home directory without --force or --root-dir"))
 				}
 				rootDir = common.DefaultKwildRoot()
 			}
 
 			if snapPath == "" {
-				snapPath = config.SnapshotDirName
+				snapPath = cmd.DefaultConfig().AppConfig.Snapshots.SnapshotDir
 			}
 
 			expandedRoot, err := common.ExpandPath(rootDir)
 			if err != nil {
-				return display.PrintErr(cmd, err)
+				return display.PrintErr(cobraCmd, err)
 			}
 
 			err = config.ResetAll(expandedRoot, snapPath)
 			if err != nil {
-				return display.PrintErr(cmd, err)
+				return display.PrintErr(cobraCmd, err)
 			}
 
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVarP(&rootDir, "root-dir", "r", "", "root directory of the kwild node")
-	// cmd.Flags().StringVarP(&sqlPath, "sqlpath", "s", "", "path to the SQLite database") // TODO: postgres config
-	cmd.Flags().StringVarP(&snapPath, "snappath", "p", "", "path to the snapshot directory")
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "force removal of default home directory")
+	resetCmd.Flags().StringVarP(&rootDir, "root-dir", "r", "", "root directory of the kwild node")
+	resetCmd.Flags().StringVarP(&snapPath, "snappath", "p", "", "path to the snapshot directory")
+	resetCmd.Flags().BoolVarP(&force, "force", "f", false, "force removal of default home directory")
 
-	return cmd
+	return resetCmd
 }

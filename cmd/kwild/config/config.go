@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/mitchellh/mapstructure"
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/viper"
@@ -61,7 +61,7 @@ func GetCfg(flagCfg *config.KwildConfig) (*config.KwildConfig, bool, error) {
 	*/
 
 	// 1. identify the root dir
-	cfg := DefaultConfig()
+	cfg := cmd.DefaultConfig()
 	rootDir := cfg.RootDir
 
 	// Remember the default listen addresses in case we need to apply the
@@ -375,76 +375,6 @@ func DefaultEmptyConfig() *config.KwildConfig {
 			Consensus: &config.ConsensusConfig{},
 		},
 		Logging: &config.Logging{},
-	}
-}
-
-var DefaultConfig = func() *config.KwildConfig {
-	return &config.KwildConfig{
-		AppConfig: &config.AppConfig{
-			JSONRPCListenAddress: "0.0.0.0:8484",
-			AdminListenAddress:   "/tmp/kwild.socket", // Or, suggested, 127.0.0.1:8485
-			PrivateKeyPath:       PrivateKeyFileName,
-			DBHost:               "127.0.0.1",
-			DBPort:               "5432", // ignored with unix socket, but applies if IP used for DBHost
-			DBUser:               "kwild",
-			DBName:               "kwild",
-			RPCTimeout:           config.Duration(45 * time.Second),
-			RPCMaxReqSize:        4_200_000,
-			ReadTxTimeout:        config.Duration(5 * time.Second),
-			Extensions:           make(map[string]map[string]string),
-			Snapshots: config.SnapshotConfig{
-				Enabled:         false,
-				RecurringHeight: 14400, // 1 day at 6s block time
-				MaxSnapshots:    3,
-				SnapshotDir:     SnapshotDirName,
-				MaxRowSize:      4 * 1024 * 1024,
-			},
-			GenesisState: "",
-		},
-		Logging: &config.Logging{
-			Level:        "info",
-			Format:       log.FormatJSON,
-			TimeEncoding: log.TimeEncodingEpochFloat,
-			OutputPaths:  []string{"stdout", "kwild.log"},
-		},
-
-		ChainConfig: &config.ChainConfig{
-			P2P: &config.P2PConfig{
-				ListenAddress:       "tcp://0.0.0.0:26656",
-				ExternalAddress:     "",
-				PrivateMode:         false,
-				AddrBookStrict:      false, // override comet
-				MaxNumInboundPeers:  40,
-				MaxNumOutboundPeers: 10,
-				AllowDuplicateIP:    true, // override comet
-				PexReactor:          true,
-				HandshakeTimeout:    config.Duration(20 * time.Second),
-				DialTimeout:         config.Duration(3 * time.Second),
-			},
-			RPC: &config.ChainRPCConfig{
-				ListenAddress:      "tcp://127.0.0.1:26657",
-				BroadcastTxTimeout: config.Duration(15 * time.Second), // 2.5x default TimeoutCommit (6s)
-			},
-			Mempool: &config.MempoolConfig{
-				Size:        50000,
-				CacheSize:   60000,
-				MaxTxBytes:  1024 * 1024 * 4,   // 4 MiB
-				MaxTxsBytes: 1024 * 1024 * 512, // 512 MiB
-			},
-			StateSync: &config.StateSyncConfig{
-				Enable:              false,
-				SnapshotDir:         ReceivedSnapsDirName,
-				DiscoveryTime:       config.Duration(15 * time.Second),
-				ChunkRequestTimeout: config.Duration(10 * time.Second),
-				TrustPeriod:         config.Duration(36000 * time.Second),
-			},
-			Consensus: &config.ConsensusConfig{
-				TimeoutPropose:   config.Duration(3 * time.Second),
-				TimeoutPrevote:   config.Duration(2 * time.Second),
-				TimeoutPrecommit: config.Duration(2 * time.Second),
-				TimeoutCommit:    config.Duration(6 * time.Second),
-			},
-		},
 	}
 }
 

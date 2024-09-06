@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 )
@@ -55,7 +56,7 @@ func ResetAll(rootDir, snapshotDir string) error {
 		fmt.Println("Error removing all signing", "dir", sigDir, "err", err)
 	}
 
-	rcvdSnaps := filepath.Join(rootDir, ReceivedSnapsDirName)
+	rcvdSnaps := filepath.Join(rootDir, cmd.DefaultConfig().ChainConfig.StateSync.SnapshotDir)
 	if err := os.RemoveAll(rcvdSnaps); err == nil {
 		fmt.Println("Removed all rcvdSnaps", "dir", rcvdSnaps)
 	} else {

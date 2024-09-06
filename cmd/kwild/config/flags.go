@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/cmd/common"
+	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/common/config"
 	"github.com/spf13/pflag"
 )
@@ -11,7 +11,7 @@ import (
 // AddConfigFlags adds all flags from KwildConfig to the given flagSet.
 func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	format := func(s string) string {
-		return fmt.Sprintf(s, common.BinaryConfig.NodeCmd)
+		return fmt.Sprintf(s, cmd.BinaryConfig.NodeCmd)
 	}
 
 	flagSet.StringVarP(&cfg.RootDir, "root-dir", "r", "~/.kwild", format("%s root directory for config and data"))
@@ -84,7 +84,7 @@ to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.`))
 
 	// Network flags
 	flagSet.BoolVarP(&cfg.ChainConfig.P2P.PrivateMode, "chain.p2p.private-mode", "p", cfg.ChainConfig.P2P.PrivateMode, "Run the node in private mode. In private mode, the connectivity to the node is restricted to the current validators and whitelist peers.")
-	flagSet.StringVar(&cfg.ChainConfig.P2P.WhitelistPeers, "chain.p2p.whitelist-peers", cfg.ChainConfig.P2P.WhitelistPeers, fmt.Sprintf("List of allowed sentry nodes that can connect to the node. Whitelist peers can be updated dynamically using `%s` commands.", common.BinaryConfig.AdminUsage()))
+	flagSet.StringVar(&cfg.ChainConfig.P2P.WhitelistPeers, "chain.p2p.whitelist-peers", cfg.ChainConfig.P2P.WhitelistPeers, fmt.Sprintf("List of allowed sentry nodes that can connect to the node. Whitelist peers can be updated dynamically using `%s` commands.", cmd.BinaryConfig.AdminUsage()))
 
 	// Chain Mempool flags
 	flagSet.IntVar(&cfg.ChainConfig.Mempool.Size, "chain.mempool.size", cfg.ChainConfig.Mempool.Size, "Chain mempool size")

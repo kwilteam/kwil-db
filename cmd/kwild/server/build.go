@@ -22,6 +22,7 @@ import (
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 
+	"github.com/kwilteam/kwil-db/cmd"
 	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/chain"
@@ -481,7 +482,7 @@ func buildMigrator(d *coreDependencies, db *pg.DB, txApp *txapp.TxApp) *migratio
 		failBuild(err, "failed to create changesets directory")
 	}
 
-	err = os.MkdirAll(filepath.Join(migrationsDir, kwildcfg.SnapshotDirName), 0755)
+	err = os.MkdirAll(filepath.Join(migrationsDir, cmd.DefaultConfig().AppConfig.Snapshots.SnapshotDir), 0755)
 	if err != nil {
 		failBuild(err, "failed to create migrations snapshots directory")
 	}
@@ -496,7 +497,7 @@ func buildMigrator(d *coreDependencies, db *pg.DB, txApp *txapp.TxApp) *migratio
 	}
 
 	snapshotCfg := &statesync.SnapshotConfig{
-		SnapshotDir:     filepath.Join(migrationsDir, kwildcfg.SnapshotDirName),
+		SnapshotDir:     filepath.Join(migrationsDir, cmd.DefaultConfig().AppConfig.Snapshots.SnapshotDir),
 		RecurringHeight: 0,
 		MaxSnapshots:    1, // only one snapshot is needed for network migrations, taken at the activation height
 		MaxRowSize:      cfg.Snapshots.MaxRowSize,

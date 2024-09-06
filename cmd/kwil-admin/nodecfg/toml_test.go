@@ -4,14 +4,14 @@ import (
 	"os"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_Generate_TOML(t *testing.T) {
-	cfg := config.DefaultConfig()
+	cfg := cmd.DefaultConfig()
 
 	cfg.AppConfig.DBHost = "/tmp/custom_pg_socket_path"
 	cfg.AppConfig.JSONRPCListenAddress = "127.0.0.1:9494"
@@ -21,7 +21,7 @@ func Test_Generate_TOML(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.Remove("test.toml")
 
-	updatedcfg := config.DefaultConfig()
+	updatedcfg := cmd.DefaultConfig()
 	tomlCfg, err := config.LoadConfigFile("test.toml")
 	assert.NoError(t, err)
 

@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kwilteam/kwil-db/cmd/common"
+	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/cmd/kwild/server"
@@ -59,11 +59,11 @@ func RootCmd() *cobra.Command {
 	flagCfg := kwildcfg.EmptyConfig()
 	var autoGen bool
 
-	cmd := &cobra.Command{
-		Use:               common.BinaryConfig.NodeCmd,
-		Short:             common.BinaryConfig.ProjectName + " node and rpc server",
-		Long:              fmt.Sprintf(long, common.BinaryConfig.NodeUsage(), common.BinaryConfig.ProjectName, common.BinaryConfig.NodeUsage(), common.BinaryConfig.NodeUsage()),
-		Example:           fmt.Sprintf(example, common.BinaryConfig.NodeCmd, common.BinaryConfig.NodeUsage(), common.BinaryConfig.NodeCmd, common.BinaryConfig.NodeUsage(), common.BinaryConfig.NodeCmd, common.BinaryConfig.NodeUsage()),
+	cmd1 := &cobra.Command{
+		Use:               cmd.BinaryConfig.NodeCmd,
+		Short:             cmd.BinaryConfig.ProjectName + " node and rpc server",
+		Long:              fmt.Sprintf(long, cmd.BinaryConfig.NodeUsage(), cmd.BinaryConfig.ProjectName, cmd.BinaryConfig.NodeUsage(), cmd.BinaryConfig.NodeUsage()),
+		Example:           fmt.Sprintf(example, cmd.BinaryConfig.NodeCmd, cmd.BinaryConfig.NodeUsage(), cmd.BinaryConfig.NodeCmd, cmd.BinaryConfig.NodeUsage(), cmd.BinaryConfig.NodeCmd, cmd.BinaryConfig.NodeUsage()),
 		DisableAutoGenTag: true,
 		Version:           version.KwilVersion,
 		SilenceUsage:      true, // not all errors imply cli misuse
@@ -138,7 +138,7 @@ func RootCmd() *cobra.Command {
 		},
 	}
 
-	flagSet := cmd.Flags()
+	flagSet := cmd1.Flags()
 	flagSet.SortFlags = false
 	kwildcfg.AddConfigFlags(flagSet, flagCfg)
 	viper.BindPFlags(flagSet)
@@ -146,7 +146,7 @@ func RootCmd() *cobra.Command {
 	flagSet.BoolVarP(&autoGen, "autogen", "a", false,
 		"auto generate private key, genesis file, and config file if not exist")
 
-	return cmd
+	return cmd1
 }
 
 // parseExtensionFlags parses the extension flags from the command line and

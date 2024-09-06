@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/chain"
@@ -661,5 +662,5 @@ func formatChangesetMetadataFilename(mdir string, height int64) string {
 }
 
 func formatGenesisFilename(mdir string) string {
-	return filepath.Join(mdir, config.SnapshotDirName, genesisFileName)
+	return filepath.Join(mdir, cmd.DefaultConfig().AppConfig.Snapshots.SnapshotDir, genesisFileName)
 }

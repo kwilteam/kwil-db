@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
@@ -33,9 +34,9 @@ func initCmd() *cobra.Command {
 	var joinExpiry int64 // block height
 	var withGas bool
 	var allocs AllocsFlag
-	cfg := config.DefaultConfig()
+	cfg := cmd.DefaultConfig()
 
-	cmd := &cobra.Command{
+	cmd1 := &cobra.Command{
 		Use:     "init",
 		Short:   "The `init` command facilitates quick setup of an isolated Kwil node.",
 		Long:    initLong,
@@ -109,21 +110,21 @@ func initCmd() *cobra.Command {
 	}
 
 	// genesis.json flags
-	cmd.Flags().StringVarP(&genesisPath, "genesis", "g", "", "path to genesis file")
-	cmd.Flags().StringVar(&chainId, "chain-id", "", "chain ID to use for the genesis file")
-	cmd.Flags().Int64Var(&joinExpiry, "join-expiry", 14400, "number of blocks before a join request expires")
-	cmd.Flags().BoolVar(&withGas, "gas", false, "enable gas")
-	cmd.Flags().Var(&allocs, "alloc", "account=amount pairs of genesis account allocations")
+	cmd1.Flags().StringVarP(&genesisPath, "genesis", "g", "", "path to genesis file")
+	cmd1.Flags().StringVar(&chainId, "chain-id", "", "chain ID to use for the genesis file")
+	cmd1.Flags().Int64Var(&joinExpiry, "join-expiry", 14400, "number of blocks before a join request expires")
+	cmd1.Flags().BoolVar(&withGas, "gas", false, "enable gas")
+	cmd1.Flags().Var(&allocs, "alloc", "account=amount pairs of genesis account allocations")
 
 	// config.toml flags
-	config.AddConfigFlags(cmd.Flags(), cfg)
+	config.AddConfigFlags(cmd1.Flags(), cfg)
 
 	// TODO: deprecate below flags in v0.10.0
-	cmd.Flags().StringVarP(&out, "output-dir", "o", "./.testnet", "generated node parent directory. To be deprecated in v0.10.0, until then --root-dir is ignored")
-	cmd.Flags().MarkDeprecated("output-dir", "use --cfg.root-dir instead from v0.10.0")
-	cmd.Flags().DurationVarP(&blockInterval, "block-interval", "i", 6*time.Second, "shortest block interval in seconds. To be deprecated in v0.10.0")
-	cmd.Flags().MarkDeprecated("block-interval", "use --chain.consensus.timeout-commit instead from v0.10.0")
-	return cmd
+	cmd1.Flags().StringVarP(&out, "output-dir", "o", "./.testnet", "generated node parent directory. To be deprecated in v0.10.0, until then --root-dir is ignored")
+	cmd1.Flags().MarkDeprecated("output-dir", "use --cfg.root-dir instead from v0.10.0")
+	cmd1.Flags().DurationVarP(&blockInterval, "block-interval", "i", 6*time.Second, "shortest block interval in seconds. To be deprecated in v0.10.0")
+	cmd1.Flags().MarkDeprecated("block-interval", "use --chain.consensus.timeout-commit instead from v0.10.0")
+	return cmd1
 }
 
 type AllocsFlag struct {

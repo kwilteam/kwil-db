@@ -4,14 +4,12 @@ package custom
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
-
-	"github.com/kwilteam/kwil-db/cmd/common"
+	"github.com/kwilteam/kwil-db/cmd"
 	kwilAdminRoot "github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds"
 	kwilCLIRoot "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds"
-	kwildConfig "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	kwildRoot "github.com/kwilteam/kwil-db/cmd/kwild/root"
 	"github.com/kwilteam/kwil-db/common/config"
+	"github.com/spf13/cobra"
 )
 
 // CommonCmdConfig configures the root command.
@@ -42,11 +40,11 @@ subcommands, respectively:
 - Admin: https://docs.kwil.com/docs/admin/installation`
 
 func NewCustomCmd(cmdConfig CommonCmdConfig) *cobra.Command {
-	common.BinaryConfig.ProjectName = cmdConfig.ProjectName
-	common.BinaryConfig.ClientCmd = "client"
-	common.BinaryConfig.AdminCmd = "admin"
-	common.BinaryConfig.NodeCmd = "node"
-	common.BinaryConfig.RootCmd = cmdConfig.RootCmd
+	cmd.BinaryConfig.ProjectName = cmdConfig.ProjectName
+	cmd.BinaryConfig.ClientCmd = "client"
+	cmd.BinaryConfig.AdminCmd = "admin"
+	cmd.BinaryConfig.NodeCmd = "node"
+	cmd.BinaryConfig.RootCmd = cmdConfig.RootCmd
 
 	root := &cobra.Command{
 		Use:   cmdConfig.RootCmd,
@@ -66,8 +64,8 @@ func NewCustomCmd(cmdConfig CommonCmdConfig) *cobra.Command {
 		cmdConfig.RootCmd = cmdConfig.ProjectName
 	}
 
-	oldDefault := kwildConfig.DefaultConfig()
-	kwildConfig.DefaultConfig = func() *config.KwildConfig {
+	oldDefault := cmd.DefaultConfig()
+	cmd.DefaultConfig = func() *config.KwildConfig {
 		cmdConfig.DefaultConfig(oldDefault)
 		return oldDefault
 	}
