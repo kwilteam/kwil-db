@@ -41,13 +41,34 @@ func initializeVoteStore(ctx context.Context, db sql.TxMaker) error {
 	}
 	defer tx.Rollback(ctx)
 
+	compiledResolutions := resolutions.ListResolutions()
+	resMap := make(map[string]bool, len(compiledResolutions))
+	for _, name := range compiledResolutions {
+		resMap[name] = true
+	}
+
+	dbResolutions, err := getResolutionTypes(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("failed to get resolution types: %w", err)
+	}
+
+	// Ensure that all the resolutions in the database are registered
+	for name := range dbResolutions {
+		if !resMap[name] {
+			return fmt.Errorf("resolution %q is in the database but not registered", name)
+		}
+	}
+
 	// This is moved out of initVotingTables, to ensure that
 	// upgrade logic should just handle the schema changes, but not the data.
 	// If the database is initialized with the latest version, but for example,
 	// If there is a change in the supported resolution types, the upgrade logic
 	// skips the resolution types updates.
-	resolutions := resolutions.ListResolutions()
-	for _, name := range resolutions {
+	for _, name := range compiledResolutions {
+		if dbResolutions[name] {
+			continue // already exists
+		}
+		// add the newly registered resolutions to the database.
 		uuid := types.NewUUIDV5([]byte(name))
 		fmt.Printf("Creating resolution type %q with UUID %v\n", name, uuid)
 		_, err := tx.Execute(ctx, createResolutionType, uuid[:], name)
@@ -57,6 +78,24 @@ func initializeVoteStore(ctx context.Context, db sql.TxMaker) error {
 	}
 
 	return tx.Commit(ctx)
+}
+
+func getResolutionTypes(ctx context.Context, db sql.Executor) (map[string]bool, error) {
+	res, err := db.Execute(ctx, getResolutionTypesQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	var resTypes = make(map[string]bool)
+	for _, row := range res.Rows {
+		name, ok := row[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid type for name (%T)", row[0])
+		}
+		resTypes[name] = true
+	}
+
+	return resTypes, nil
 }
 
 func initVotingTables(ctx context.Context, db sql.DB) error {
