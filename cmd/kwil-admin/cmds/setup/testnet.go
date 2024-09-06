@@ -38,7 +38,7 @@ func testnetCmd() *cobra.Command {
 	var blockInterval time.Duration
 	var joinExpiry int64
 	var validatorAmount, nonValidatorAmount, p2pPort int
-	var withGas, snapshotsEnabled bool
+	var withGas, snapshotsEnabled, privateMode bool
 	var allocs AllocsFlag
 	var snapshotHeights, maxSnapshots uint64
 
@@ -68,6 +68,7 @@ func testnetCmd() *cobra.Command {
 				SnapshotsEnabled:        snapshotsEnabled,
 				MaxSnapshots:            maxSnapshots,
 				SnapshotHeights:         snapshotHeights,
+				PrivateMode:             privateMode,
 			}, &nodecfg.ConfigOpts{
 				UniquePorts: true,
 			})
@@ -97,5 +98,6 @@ func testnetCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&snapshotsEnabled, "snaps", false, "enables db snapshots")
 	cmd.Flags().Uint64Var(&maxSnapshots, "max-snaps", 3, "maximum number of snapshots to store in the device")
 	cmd.Flags().Uint64Var(&snapshotHeights, "snap-heights", 10000, "recurring heights (multipes of --snap-heights) to take snapshots at")
+	cmd.Flags().BoolVarP(&privateMode, "private", "m", false, "enable private mode for the network")
 	return cmd
 }

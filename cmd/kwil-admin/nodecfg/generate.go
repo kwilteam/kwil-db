@@ -140,7 +140,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	_, err = os.Stat(genFile)
 	if os.IsNotExist(err) {
 		genesisCfg := chain.NewGenesisWithValidator(pub)
-		genCfg.applyGenesisParams(genesisCfg)
+		genCfg.ApplyGenesisParams(genesisCfg)
 		return genesisCfg.SaveAs(genFile)
 
 	}
@@ -197,7 +197,7 @@ func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silenc
 	return pubKey, nil
 }
 
-func (genCfg *NodeGenerateConfig) applyGenesisParams(genesisCfg *chain.GenesisConfig) {
+func (genCfg *NodeGenerateConfig) ApplyGenesisParams(genesisCfg *chain.GenesisConfig) {
 	if genCfg.ChainID != "" {
 		genesisCfg.ChainID = genCfg.ChainID
 	}
