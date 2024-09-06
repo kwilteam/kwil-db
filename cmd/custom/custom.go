@@ -4,12 +4,13 @@ package custom
 import (
 	"fmt"
 
+	"github.com/spf13/cobra"
+
 	kwilAdminRoot "github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds"
 	kwilCLIRoot "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds"
 	kwildConfig "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	kwildRoot "github.com/kwilteam/kwil-db/cmd/kwild/root"
 	"github.com/kwilteam/kwil-db/common/config"
-	"github.com/spf13/cobra"
 )
 
 // CommonCmdConfig configures the root command.
@@ -31,8 +32,8 @@ There are 3 subcommands:
 - ` + "`" + `admin` + "`" + `: Utilities for managing a %s node and network participation.
 
 For guides and reference documentation, see the following links. The links document ` + "`" + `kwild` + "`" + `,
-` + "`" + `kwil-cli` + "`" + `, and ` + "`" + `kwil-admin` + "`" + `, which directly correspond to the ` + "`" + `
-node` + "`" + `, ` + "`" + `client` + "`" + `, and ` + "`" + `admin` + "`" + ` subcommands, respectively.
+` + "`" + `kwil-cli` + "`" + `, and ` + "`" + `kwil-admin` + "`" + `, which directly correspond to the ` + "`" + `node` + "`" +
+	`, ` + "`" + `client` + "`" + `, and ` + "`" + `admin` + "`" + ` subcommands, respectively.
 - Node: https://docs.kwil.com/docs/node/quickstart
 - Client: https://docs.kwil.com/docs/ref/kwil-cli
 - Admin: https://docs.kwil.com/docs/admin/installation`

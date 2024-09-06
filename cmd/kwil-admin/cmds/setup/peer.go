@@ -70,7 +70,7 @@ func peerCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&genesisPath, "genesis", "g", "", "path to genesis file")
-	config.AddConfigFlags(cmd.Flags(), cfg)
+	config.AddConfigFlags(cmd.Flags(), cfg, "kwild")
 
 	return cmd
 }

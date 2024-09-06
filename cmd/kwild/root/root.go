@@ -150,7 +150,7 @@ func CustomRootCmd(projectName, cmdUsage, rootCmd string) *cobra.Command {
 
 	flagSet := cmd.Flags()
 	flagSet.SortFlags = false
-	kwildcfg.AddConfigFlags(flagSet, flagCfg)
+	kwildcfg.AddConfigFlags(flagSet, flagCfg, cmdUsage)
 	viper.BindPFlags(flagSet)
 
 	flagSet.BoolVarP(&autoGen, "autogen", "a", false,
