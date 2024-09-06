@@ -33,7 +33,9 @@ There are 3 subcommands:
 
 For guides and reference documentation, see the following links. The links document ` + "`" + `kwild` + "`" + `,
 ` + "`" + `kwil-cli` + "`" + `, and ` + "`" + `kwil-admin` + "`" + `, which directly correspond to the ` + "`" + `node` + "`" +
-	`, ` + "`" + `client` + "`" + `, and ` + "`" + `admin` + "`" + ` subcommands, respectively.
+	`, ` + "`" + `client` + "`" + `, and ` + "`" + `admin` + "`" + `
+subcommands, respectively:
+
 - Node: https://docs.kwil.com/docs/node/quickstart
 - Client: https://docs.kwil.com/docs/ref/kwil-cli
 - Admin: https://docs.kwil.com/docs/admin/installation`
@@ -64,7 +66,7 @@ func NewCustomCmd(cmdConfig CommonCmdConfig) *cobra.Command {
 	}
 
 	root.AddCommand(kwildRoot.CustomRootCmd(cmdConfig.ProjectName, "node", cmdConfig.RootCmd))
-	root.AddCommand(kwilCLIRoot.CustomRootCmd("client", cmdConfig.ProjectName))
+	root.AddCommand(kwilCLIRoot.CustomRootCmd("client", cmdConfig.RootCmd, cmdConfig.ProjectName))
 	root.AddCommand(kwilAdminRoot.CustomRootCmd("admin", cmdConfig.ProjectName))
 
 	return root

@@ -18,19 +18,25 @@ import (
 
 var longDesc = `Command line interface client for using %s.
 	
-	The %s CLI is a command line interface for interacting with %s.  It can be used to deploy, update, and query databases.
+` + "`" + `%s` + "`" + ` is a command line interface for interacting with %s. It can be used to deploy, update, and query databases.
 	
-	The %s CLI can be configured with a persistent configuration file.  This file can be configured with the '%s configure' command.  The %s CLI will look for a configuration file at ` + "`" + `$HOME/.kwil-cli/config.json` + "`" + `.`
+` + "`" + `%s` + "`" + ` can be configured with a persistent configuration file. This file can be configured with the '%s configure' command.
+` + "`" + `%s` + "`" + ` will look for a configuration file at ` + "`" + `$HOME/.kwil-cli/config.json` + "`" + `.`
 
 func NewRootCmd() *cobra.Command {
-	return CustomRootCmd("kwil-cli", "Kwil")
+	return CustomRootCmd("kwil-cli", "", "Kwil")
 }
 
-func CustomRootCmd(usage, projectName string) *cobra.Command {
+func CustomRootCmd(usage, rootCmdName, projectName string) *cobra.Command {
+	fullUsage := usage
+	if rootCmdName != "" {
+		fullUsage = rootCmdName + " " + usage
+	}
+
 	rootCmd := &cobra.Command{
 		Use:               usage,
 		Short:             fmt.Sprintf("Command line interface client for using %s.", projectName),
-		Long:              fmt.Sprintf(longDesc, projectName, projectName, projectName, projectName, usage, projectName),
+		Long:              fmt.Sprintf(longDesc, projectName, fullUsage, projectName, fullUsage, fullUsage, fullUsage),
 		SilenceUsage:      true,
 		DisableAutoGenTag: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
