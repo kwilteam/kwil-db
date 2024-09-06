@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kwilteam/kwil-db/cmd/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/cmd/kwild/server"
@@ -32,9 +33,9 @@ import (
 	"github.com/spf13/viper"
 )
 
-var long = `%s is the Kwil blockchain node and RPC server.
+var long = "`" + `%s` + "`" + ` runs the %s blockchain node and RPC server.
 
-%s is a full-node implementation of the Kwil protocol. It provides the
+` + "`" + `%s` + "`" + ` is a full-node implementation of the Kwil protocol. It provides the
 ability to fully participate in a Kwil network, and can run as either a
 validator or a non-validating node.
 
@@ -52,28 +53,17 @@ var example = `# Start %s and auto-generate a private key, genesis file, and con
 # Start %s with extensions
 %s -- --extension.extension1.flag1=value1 --extension.extension2.flag2=value2`
 
+// RootCmd creates a new `kwild` node root command
 func RootCmd() *cobra.Command {
-	return CustomRootCmd("kwild", "kwild", "")
-}
-
-// CustomRootCmd creates a new root command with the given name and a function that modifies the default config.
-// It can be given a project name (human-readable name used in documentation), the command usage, the root command (if
-// this is the root command, leave it empty), and a function that modifies the default config.
-func CustomRootCmd(projectName, cmdUsage, rootCmd string) *cobra.Command {
 	// we use an empty config because this config gets merged later, and should only contain flag values
 	flagCfg := kwildcfg.EmptyConfig()
 	var autoGen bool
 
-	fullUsage := cmdUsage
-	if rootCmd != "" {
-		fullUsage = rootCmd + " " + cmdUsage
-	}
-
 	cmd := &cobra.Command{
-		Use:               cmdUsage,
-		Short:             projectName + " node and rpc server",
-		Long:              fmt.Sprintf(long, projectName, projectName, fullUsage),
-		Example:           fmt.Sprintf(example, projectName, fullUsage, projectName, fullUsage, projectName, fullUsage),
+		Use:               common.BinaryConfig.NodeCmd,
+		Short:             common.BinaryConfig.ProjectName + " node and rpc server",
+		Long:              fmt.Sprintf(long, common.BinaryConfig.NodeUsage(), common.BinaryConfig.ProjectName, common.BinaryConfig.NodeUsage(), common.BinaryConfig.NodeUsage()),
+		Example:           fmt.Sprintf(example, common.BinaryConfig.NodeCmd, common.BinaryConfig.NodeUsage(), common.BinaryConfig.NodeCmd, common.BinaryConfig.NodeUsage(), common.BinaryConfig.NodeCmd, common.BinaryConfig.NodeUsage()),
 		DisableAutoGenTag: true,
 		Version:           version.KwilVersion,
 		SilenceUsage:      true, // not all errors imply cli misuse
@@ -150,7 +140,7 @@ func CustomRootCmd(projectName, cmdUsage, rootCmd string) *cobra.Command {
 
 	flagSet := cmd.Flags()
 	flagSet.SortFlags = false
-	kwildcfg.AddConfigFlags(flagSet, flagCfg, cmdUsage)
+	kwildcfg.AddConfigFlags(flagSet, flagCfg)
 	viper.BindPFlags(flagSet)
 
 	flagSet.BoolVarP(&autoGen, "autogen", "a", false,

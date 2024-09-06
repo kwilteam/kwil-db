@@ -116,8 +116,7 @@ func initCmd() *cobra.Command {
 	cmd.Flags().Var(&allocs, "alloc", "account=amount pairs of genesis account allocations")
 
 	// config.toml flags
-	// in an ideal world we would be able to use a custom binary name here, but it would require a big change and overall isn't worth it
-	config.AddConfigFlags(cmd.Flags(), cfg, "kwild")
+	config.AddConfigFlags(cmd.Flags(), cfg)
 
 	// TODO: deprecate below flags in v0.10.0
 	cmd.Flags().StringVarP(&out, "output-dir", "o", "./.testnet", "generated node parent directory. To be deprecated in v0.10.0, until then --root-dir is ignored")

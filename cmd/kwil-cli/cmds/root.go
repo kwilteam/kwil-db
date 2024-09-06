@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	cmdCommon "github.com/kwilteam/kwil-db/cmd/common"
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/common/version"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/account"
@@ -24,19 +25,10 @@ var longDesc = `Command line interface client for using %s.
 ` + "`" + `%s` + "`" + ` will look for a configuration file at ` + "`" + `$HOME/.kwil-cli/config.json` + "`" + `.`
 
 func NewRootCmd() *cobra.Command {
-	return CustomRootCmd("kwil-cli", "", "Kwil")
-}
-
-func CustomRootCmd(usage, rootCmdName, projectName string) *cobra.Command {
-	fullUsage := usage
-	if rootCmdName != "" {
-		fullUsage = rootCmdName + " " + usage
-	}
-
 	rootCmd := &cobra.Command{
-		Use:               usage,
-		Short:             fmt.Sprintf("Command line interface client for using %s.", projectName),
-		Long:              fmt.Sprintf(longDesc, projectName, fullUsage, projectName, fullUsage, fullUsage, fullUsage),
+		Use:               cmdCommon.BinaryConfig.ClientCmd,
+		Short:             fmt.Sprintf("Command line interface client for using %s.", cmdCommon.BinaryConfig.ProjectName),
+		Long:              fmt.Sprintf(longDesc, cmdCommon.BinaryConfig.ProjectName, cmdCommon.BinaryConfig.ClientUsage(), cmdCommon.BinaryConfig.ProjectName, cmdCommon.BinaryConfig.ClientUsage(), cmdCommon.BinaryConfig.ClientUsage(), cmdCommon.BinaryConfig.ClientUsage()),
 		SilenceUsage:      true,
 		DisableAutoGenTag: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

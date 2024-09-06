@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kwilteam/kwil-db/cmd/common"
 	kwilAdminRoot "github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds"
 	kwilCLIRoot "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds"
 	kwildConfig "github.com/kwilteam/kwil-db/cmd/kwild/config"
@@ -41,6 +42,12 @@ subcommands, respectively:
 - Admin: https://docs.kwil.com/docs/admin/installation`
 
 func NewCustomCmd(cmdConfig CommonCmdConfig) *cobra.Command {
+	common.BinaryConfig.ProjectName = cmdConfig.ProjectName
+	common.BinaryConfig.ClientCmd = "client"
+	common.BinaryConfig.AdminCmd = "admin"
+	common.BinaryConfig.NodeCmd = "node"
+	common.BinaryConfig.RootCmd = cmdConfig.RootCmd
+
 	root := &cobra.Command{
 		Use:   cmdConfig.RootCmd,
 		Short: "Command line interface client for using " + cmdConfig.ProjectName + ".",
@@ -65,9 +72,9 @@ func NewCustomCmd(cmdConfig CommonCmdConfig) *cobra.Command {
 		return oldDefault
 	}
 
-	root.AddCommand(kwildRoot.CustomRootCmd(cmdConfig.ProjectName, "node", cmdConfig.RootCmd))
-	root.AddCommand(kwilCLIRoot.CustomRootCmd("client", cmdConfig.RootCmd, cmdConfig.ProjectName))
-	root.AddCommand(kwilAdminRoot.CustomRootCmd("admin", cmdConfig.ProjectName))
+	root.AddCommand(kwildRoot.RootCmd())
+	root.AddCommand(kwilCLIRoot.NewRootCmd())
+	root.AddCommand(kwilAdminRoot.NewRootCmd())
 
 	return root
 }
