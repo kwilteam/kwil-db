@@ -15,19 +15,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
+	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"github.com/kwilteam/kwil-db/cmd/kwild/server"
+
 	// kwild's "root" command package assumes the responsibility of initializing
 	// certain packages, including the extensions and the chain config package.
 	// After loading the genesis.json file, the global chain.Forks instance is
 	// initialized with the hardfork activations defined in the file.
 	"github.com/kwilteam/kwil-db/common/chain"
+	config "github.com/kwilteam/kwil-db/common/config"
 	_ "github.com/kwilteam/kwil-db/extensions" // a base location where all extensions can be registered
 	_ "github.com/kwilteam/kwil-db/extensions/auth"
-
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
-	"github.com/kwilteam/kwil-db/cmd/kwild/server"
 	"github.com/kwilteam/kwil-db/internal/version"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -54,7 +54,7 @@ kwild -- --extension.extension1.flag1=value1 --extension.extension2.flag2=value2
 
 func RootCmd() *cobra.Command {
 	// we use an empty config because this config gets merged later, and should only contain flag values
-	flagCfg := config.EmptyConfig()
+	flagCfg := kwildcfg.EmptyConfig()
 	var autoGen bool
 
 	cmd := &cobra.Command{
@@ -75,15 +75,15 @@ func RootCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to parse extension flags: %w", err)
 			}
-			flagCfg.AppCfg.Extensions = extensionConfig
+			flagCfg.AppConfig.Extensions = extensionConfig
 
-			kwildCfg, configFileExists, err := config.GetCfg(flagCfg)
+			kwildCfg, configFileExists, err := kwildcfg.GetCfg(flagCfg)
 			if err != nil {
 				cmd.Usage()
 				return err
 			}
 
-			nodeKey, genesisConfig, err := kwildCfg.InitPrivateKeyAndGenesis(autoGen)
+			nodeKey, genesisConfig, err := kwildcfg.InitPrivateKeyAndGenesis(kwildCfg, autoGen)
 			if err != nil {
 				return fmt.Errorf("failed to initialize private key and genesis: %w", err)
 			}
@@ -100,7 +100,7 @@ func RootCmd() *cobra.Command {
 				len(genesisConfig.ForkHeights), genesisConfig.Forks())
 
 			if autoGen && !configFileExists { // write config.toml if it didn't exist, and doing autogen
-				cfgPath := filepath.Join(kwildCfg.RootDir, config.ConfigFileName)
+				cfgPath := filepath.Join(kwildCfg.RootDir, kwildcfg.ConfigFileName)
 				fmt.Printf("Writing config file to %v\n", cfgPath)
 				err = nodecfg.WriteConfigFile(cfgPath, kwildCfg)
 				if err != nil {
@@ -138,7 +138,7 @@ func RootCmd() *cobra.Command {
 
 	flagSet := cmd.Flags()
 	flagSet.SortFlags = false
-	config.AddConfigFlags(flagSet, flagCfg)
+	kwildcfg.AddConfigFlags(flagSet, flagCfg)
 	viper.BindPFlags(flagSet)
 
 	flagSet.BoolVarP(&autoGen, "autogen", "a", false,
@@ -199,13 +199,13 @@ func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 }
 
 func startProfilers(cfg *config.KwildConfig) (func(), error) {
-	mode := cfg.AppCfg.ProfileMode
-	pprofFile := cfg.AppCfg.ProfileFile
+	mode := cfg.AppConfig.ProfileMode
+	pprofFile := cfg.AppConfig.ProfileFile
 	if pprofFile == "" {
 		pprofFile = fmt.Sprintf("kwild-%s.pprof", mode)
 	}
 
-	switch cfg.AppCfg.ProfileMode {
+	switch cfg.AppConfig.ProfileMode {
 	case "http":
 		// http pprof uses http.DefaultServeMux, so we register a redirect
 		// handler with the root path on the default mux.
@@ -267,6 +267,6 @@ func startProfilers(cfg *config.KwildConfig) (func(), error) {
 	case "": // disabled
 		return func() {}, nil
 	default:
-		return nil, fmt.Errorf("unknown profile mode %s", cfg.AppCfg.ProfileMode)
+		return nil, fmt.Errorf("unknown profile mode %s", cfg.AppConfig.ProfileMode)
 	}
 }

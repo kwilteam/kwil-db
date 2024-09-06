@@ -825,7 +825,7 @@ func (r *IntHelper) EnableStatesync(ctx context.Context, homeDir string, node st
 	require.NoError(r.t, err, "failed to load config file")
 
 	// Check if statesync is enabled for the node and update the config
-	cfg.ChainCfg.StateSync.Enable = true
+	cfg.ChainConfig.StateSync.Enable = true
 
 	providers := []string{}
 	for _, provider := range snapshotProviders {
@@ -839,7 +839,7 @@ func (r *IntHelper) EnableStatesync(ctx context.Context, homeDir string, node st
 	}
 
 	// join the snapshot providers with comma
-	cfg.ChainCfg.StateSync.RPCServers = strings.Join(providers, ",")
+	cfg.ChainConfig.StateSync.RPCServers = strings.Join(providers, ",")
 
 	// write back to the config.toml file
 	err = nodecfg.WriteConfigFile(tomlFile, cfg)

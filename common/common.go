@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/common/chain"
+	"github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -18,11 +19,27 @@ type Service struct {
 	// ExtensionConfigs is a map of the nodes extensions and local
 	// configurations.
 	// It maps: extension_name -> config_key -> config_value
+	//
+	// DEPRECATED: Use LocalConfig.AppCfg.Extensions instead.
 	ExtensionConfigs map[string]map[string]string
 	// GenesisConfig is the genesis configuration of the network.
 	GenesisConfig *chain.GenesisConfig
+	// LocalConfig is the local configuration of the node.
+	LocalConfig *config.KwildConfig
 	// Identity is the node/validator identity (pubkey).
 	Identity []byte
+}
+
+// NameLogger returns a new Service with the logger named.
+// Every other field is the same pointer as the original.
+func (s *Service) NamedLogger(name string) *Service {
+	return &Service{
+		Logger:           *s.Logger.Named(name),
+		ExtensionConfigs: s.ExtensionConfigs,
+		GenesisConfig:    s.GenesisConfig,
+		LocalConfig:      s.LocalConfig,
+		Identity:         s.Identity,
+	}
 }
 
 // App is an application that can modify and query the local database

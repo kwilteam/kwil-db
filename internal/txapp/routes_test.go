@@ -274,14 +274,16 @@ func Test_Routes(t *testing.T) {
 			tc.fn(t, func() {
 				db := &mockTx{&mockDb{}}
 				app := &TxApp{}
-
-				// since every test case needs an account store, we'll just create a mock one here
-				// if one isn't provided
-				if app.log.L == nil {
-					app.log = log.NewNoOp()
-				}
 				if app.signer == nil {
 					app.signer = validatorSigner1()
+				}
+				// since every test case needs an account store, we'll just create a mock one here
+				// if one isn't provided
+				if app.service == nil {
+					app.service = &common.Service{
+						Logger:   log.New(log.Config{}).Sugar(),
+						Identity: app.signer.Identity(),
+					}
 				}
 
 				if tc.ctx == nil {

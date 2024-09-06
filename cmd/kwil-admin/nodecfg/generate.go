@@ -19,8 +19,9 @@ import (
 	// NOTE: do not use the types from these internal packages on nodecfg's
 	// exported API.
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common/chain"
+	config "github.com/kwilteam/kwil-db/common/config"
 	coreUrl "github.com/kwilteam/kwil-db/core/utils/url"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 )
@@ -29,7 +30,7 @@ const (
 	nodeDirPerm   = 0755
 	chainIDPrefix = "kwil-chain-"
 
-	abciDir     = config.ABCIDirName
+	abciDir     = kwildcfg.ABCIDirName
 	abciDataDir = cometbft.DataDir
 )
 
@@ -111,21 +112,21 @@ type ConfigOpts struct {
 //     will include the node as a validator; existing genesis is not updated.
 //   - The config.toml file is generated if it does not exist.
 func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
-	rootDir, err := config.ExpandPath(genCfg.OutputDir)
+	rootDir, err := kwildcfg.ExpandPath(genCfg.OutputDir)
 	if err != nil {
 		return fmt.Errorf("failed to get absolute path for output directory: %w", err)
 	}
 
-	cfg := config.DefaultConfig()
+	cfg := kwildcfg.DefaultConfig()
 	cfg.RootDir = rootDir
 	if genCfg.BlockInterval > 0 {
-		cfg.ChainCfg.Consensus.TimeoutCommit = config.Duration(genCfg.BlockInterval)
+		cfg.ChainConfig.Consensus.TimeoutCommit = config.Duration(genCfg.BlockInterval)
 	}
 
 	if genCfg.Extensions != nil {
-		cfg.AppCfg.Extensions = genCfg.Extensions
+		cfg.AppConfig.Extensions = genCfg.Extensions
 	} else {
-		cfg.AppCfg.Extensions = make(map[string]map[string]string)
+		cfg.AppConfig.Extensions = make(map[string]map[string]string)
 	}
 
 	pub, err := GenerateNodeFiles(rootDir, cfg, false)
@@ -151,7 +152,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 // dependent on the network configuration (e.g. genesis.json).
 // It can optionally be given a config file to merge with the default config.
 func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silence bool) (publicKey []byte, err error) {
-	cfg := config.DefaultConfig()
+	cfg := kwildcfg.DefaultConfig()
 	if originalCfg != nil {
 		err := cfg.Merge(originalCfg)
 		if err != nil {
@@ -159,7 +160,7 @@ func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silenc
 		}
 	}
 
-	rootDir, err := config.ExpandPath(outputDir)
+	rootDir, err := kwildcfg.ExpandPath(outputDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get absolute path for output directory: %w", err)
 	}
@@ -177,15 +178,15 @@ func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silenc
 		return nil, err
 	}
 
-	cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName
-	err = WriteConfigFile(filepath.Join(rootDir, config.ConfigFileName), cfg)
+	cfg.AppConfig.PrivateKeyPath = kwildcfg.PrivateKeyFileName
+	err = WriteConfigFile(filepath.Join(rootDir, kwildcfg.ConfigFileName), cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	// Load or generate private key.
-	fullKeyPath := filepath.Join(rootDir, config.PrivateKeyFileName)
-	_, pubKey, newKey, err := config.ReadOrCreatePrivateKeyFile(fullKeyPath, true)
+	fullKeyPath := filepath.Join(rootDir, kwildcfg.PrivateKeyFileName)
+	_, pubKey, newKey, err := kwildcfg.ReadOrCreatePrivateKeyFile(fullKeyPath, true)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read or create private key: %w", err)
 	}
@@ -231,7 +232,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	}
 
 	var err error
-	genCfg.OutputDir, err = config.ExpandPath(genCfg.OutputDir)
+	genCfg.OutputDir, err = kwildcfg.ExpandPath(genCfg.OutputDir)
 	if err != nil {
 		fmt.Println("Error while getting absolute path for output directory: ", err)
 		return err
@@ -246,9 +247,9 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	}
 
 	// overwrite default config if set and valid
-	cfg := config.DefaultConfig()
+	cfg := kwildcfg.DefaultConfig()
 	if genCfg.ConfigFile != "" {
-		configFile, err := config.LoadConfigFile(genCfg.ConfigFile)
+		configFile, err := kwildcfg.LoadConfigFile(genCfg.ConfigFile)
 		if err != nil {
 			return fmt.Errorf("failed to load config file %s: %w", genCfg.ConfigFile, err)
 		}
@@ -260,9 +261,9 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	}
 
 	if genCfg.AdminAddress != "" {
-		cfg.AppCfg.AdminListenAddress = genCfg.AdminAddress
+		cfg.AppConfig.AdminListenAddress = genCfg.AdminAddress
 	}
-	cfg.AppCfg.NoTLS = genCfg.AdminNoTLS
+	cfg.AppConfig.NoTLS = genCfg.AdminNoTLS
 
 	privateKeys := make([]cmtEd.PrivKey, nNodes)
 	for i := range privateKeys {
@@ -285,7 +286,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		}
 
 		privKeyHex := hex.EncodeToString(privateKeys[i][:])
-		privKeyFile := filepath.Join(nodeDir, config.PrivateKeyFileName)
+		privKeyFile := filepath.Join(nodeDir, kwildcfg.PrivateKeyFileName)
 		err = os.WriteFile(privKeyFile, []byte(privKeyHex), 0644) // permissive for testnet only
 		if err != nil {
 			return fmt.Errorf("creating private key file: %w", err)
@@ -325,22 +326,22 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 
 	// Overwrite default config
 	if genCfg.BlockInterval > 0 {
-		cfg.ChainCfg.Consensus.TimeoutCommit = config.Duration(genCfg.BlockInterval)
+		cfg.ChainConfig.Consensus.TimeoutCommit = config.Duration(genCfg.BlockInterval)
 	}
-	cfg.ChainCfg.P2P.AddrBookStrict = false
-	cfg.ChainCfg.P2P.AllowDuplicateIP = true
+	cfg.ChainConfig.P2P.AddrBookStrict = false
+	cfg.ChainConfig.P2P.AllowDuplicateIP = true
 	// private mode
-	cfg.ChainCfg.P2P.PrivateMode = genCfg.PrivateMode
+	cfg.ChainConfig.P2P.PrivateMode = genCfg.PrivateMode
 
 	if genCfg.SnapshotsEnabled {
-		cfg.AppCfg.Snapshots.Enabled = true
+		cfg.AppConfig.Snapshots.Enabled = true
 
 		if genCfg.MaxSnapshots != 0 {
-			cfg.AppCfg.Snapshots.MaxSnapshots = genCfg.MaxSnapshots
+			cfg.AppConfig.Snapshots.MaxSnapshots = genCfg.MaxSnapshots
 		}
 
 		if genCfg.SnapshotHeights != 0 {
-			cfg.AppCfg.Snapshots.RecurringHeight = genCfg.SnapshotHeights
+			cfg.AppConfig.Snapshots.RecurringHeight = genCfg.SnapshotHeights
 		}
 	}
 
@@ -349,10 +350,10 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		cfg.RootDir = nodeDir
 
 		if genCfg.PopulatePersistentPeers {
-			cfg.ChainCfg.P2P.PersistentPeers = persistentPeers
+			cfg.ChainConfig.P2P.PersistentPeers = persistentPeers
 		}
 		if i <= len(genCfg.Hostnames)-1 {
-			cfg.AppCfg.Hostname = genCfg.Hostnames[i]
+			cfg.AppConfig.Hostname = genCfg.Hostnames[i]
 		}
 		if opts.UniquePorts {
 			err = uniqueAdminAddress(cfg)
@@ -368,7 +369,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 			}
 		}
 
-		cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName // not abs/rooted because this might be run in a container
+		cfg.AppConfig.PrivateKeyPath = kwildcfg.PrivateKeyFileName // not abs/rooted because this might be run in a container
 
 		// extension config
 		if i < genCfg.NValidators {
@@ -376,13 +377,13 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 				if len(genCfg.Extensions) != genCfg.NValidators {
 					return fmt.Errorf("extensions must be nil or have the same length as the number of validators")
 				}
-				cfg.AppCfg.Extensions = genCfg.Extensions[i]
+				cfg.AppConfig.Extensions = genCfg.Extensions[i]
 			} else {
-				cfg.AppCfg.Extensions = make(map[string]map[string]string)
+				cfg.AppConfig.Extensions = make(map[string]map[string]string)
 			}
 		}
 
-		WriteConfigFile(filepath.Join(nodeDir, config.ConfigFileName), cfg)
+		WriteConfigFile(filepath.Join(nodeDir, kwildcfg.ConfigFileName), cfg)
 	}
 
 	fmt.Printf("Successfully initialized %d node directories: %s\n",
@@ -460,23 +461,23 @@ func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivK
 // admin service address.
 func addressSpecificConfig(c *config.KwildConfig) error {
 
-	jsonrpcAddr, err := incrementPort(c.AppCfg.JSONRPCListenAddress, -1) // decrement to avoid collision with admin rpc at 8485
+	jsonrpcAddr, err := incrementPort(c.AppConfig.JSONRPCListenAddress, -1) // decrement to avoid collision with admin rpc at 8485
 	if err != nil {
 		return err
 	}
-	c.AppCfg.JSONRPCListenAddress = jsonrpcAddr
+	c.AppConfig.JSONRPCListenAddress = jsonrpcAddr
 
-	p2pAddr, err := incrementPort(c.ChainCfg.P2P.ListenAddress, -1) // decrement since default rpc is 1 higher than p2p, so p2p needs to be 1 lower
+	p2pAddr, err := incrementPort(c.ChainConfig.P2P.ListenAddress, -1) // decrement since default rpc is 1 higher than p2p, so p2p needs to be 1 lower
 	if err != nil {
 		return err
 	}
-	c.ChainCfg.P2P.ListenAddress = p2pAddr
+	c.ChainConfig.P2P.ListenAddress = p2pAddr
 
-	rpcAddr, err := incrementPort(c.ChainCfg.RPC.ListenAddress, 1)
+	rpcAddr, err := incrementPort(c.ChainConfig.RPC.ListenAddress, 1)
 	if err != nil {
 		return err
 	}
-	c.ChainCfg.RPC.ListenAddress = rpcAddr
+	c.ChainConfig.RPC.ListenAddress = rpcAddr
 
 	return nil
 }
@@ -484,7 +485,7 @@ func addressSpecificConfig(c *config.KwildConfig) error {
 // uniqueAdminAddress applies a unique address to the config. This only works
 // for host:port or unix socket paths, not URLs.
 func uniqueAdminAddress(cfg *config.KwildConfig) error {
-	addr := cfg.AppCfg.AdminListenAddress
+	addr := cfg.AppConfig.AdminListenAddress
 
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -509,7 +510,7 @@ func uniqueAdminAddress(cfg *config.KwildConfig) error {
 			return err
 		}
 
-		cfg.AppCfg.AdminListenAddress = addr
+		cfg.AppConfig.AdminListenAddress = addr
 		return nil
 	}
 
@@ -530,7 +531,7 @@ func uniqueAdminAddress(cfg *config.KwildConfig) error {
 		}
 	}
 
-	cfg.AppCfg.AdminListenAddress = fileWithoutExt + "_" + strconv.Itoa(numberToUse) + extension
+	cfg.AppConfig.AdminListenAddress = fileWithoutExt + "_" + strconv.Itoa(numberToUse) + extension
 
 	return nil
 }

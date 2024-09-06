@@ -4,29 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 )
-
-func rootify(path, rootDir string) (string, error) {
-	// If the path is already absolute, return it as is.
-	if filepath.IsAbs(path) {
-		return path, nil
-	}
-
-	// If the path is ~/..., expand it to the user's home directory.
-	if tail, cut := strings.CutPrefix(path, "~/"); cut {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		return filepath.Join(homeDir, tail), nil
-	}
-
-	// Otherwise, treat it as relative to the root directory.
-	return filepath.Join(rootDir, path), nil
-}
 
 func ResetChainState(rootDir string) error {
 	chainRoot := filepath.Join(rootDir, ABCIDirName)
@@ -92,7 +73,7 @@ func ResetAll(rootDir, snapshotDir string) error {
 
 	// TODO: support postgres database drop or schema drops
 
-	snapshotDir, err := rootify(snapshotDir, rootDir)
+	snapshotDir, err := config.CleanPath(snapshotDir, rootDir)
 	if err != nil {
 		return err
 	}

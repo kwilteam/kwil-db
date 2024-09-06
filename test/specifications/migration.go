@@ -119,14 +119,14 @@ func InstallGenesisState(ctx context.Context, t *testing.T, netops MigrationOpsD
 		cfg, err := config.LoadConfigFile(tomlFile)
 		require.NoError(t, err)
 
-		cfg.AppCfg.GenesisState = "snapshot.sql.gz"
-		cfg.AppCfg.MigrateFrom = listenAddresses[i]
+		cfg.AppConfig.GenesisState = "snapshot.sql.gz"
+		cfg.AppConfig.MigrateFrom = listenAddresses[i]
 		// cfg.AppCfg.Extensions["migrations"] = map[string]string{
 		// 	"start_height":         fmt.Sprintf("%d", metadata.StartHeight),
 		// 	"end_height":           fmt.Sprintf("%d", metadata.EndHeight),
 		// 	"admin_listen_address": adminAddresses[i],
 		// }
-		cfg.ChainCfg.P2P.PersistentPeers = updatePersistentPeers(cfg.ChainCfg.P2P.PersistentPeers)
+		cfg.ChainConfig.P2P.PersistentPeers = updatePersistentPeers(cfg.ChainConfig.P2P.PersistentPeers)
 		err = nodecfg.WriteConfigFile(tomlFile, cfg)
 		require.NoError(t, err, "failed to write config file")
 	}

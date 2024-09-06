@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/kwilteam/kwil-db/common/chain"
+	"github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 )
@@ -68,4 +69,9 @@ func loadGenesisAndPrivateKey(autoGen bool, privKeyPath, rootDir string) (privKe
 	}
 	fmt.Printf("Generated new genesis file: %v\n", genFile)
 	return privKey, genesisCfg, nil
+}
+
+func InitPrivateKeyAndGenesis(cfg *config.KwildConfig, autogen bool) (privateKey *crypto.Ed25519PrivateKey,
+	genConfig *chain.GenesisConfig, err error) {
+	return loadGenesisAndPrivateKey(autogen, cfg.AppConfig.PrivateKeyPath, cfg.RootDir)
 }
