@@ -21,10 +21,11 @@ import (
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+
+	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/chain"
-	config1 "github.com/kwilteam/kwil-db/common/config"
+	config "github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -92,7 +93,7 @@ func migrateOldChainState(d *coreDependencies, initTx sql.Tx) error {
 	} // else we are either at genesis or we need to migrate from badger
 
 	// detect old badger kv DB for ABCI's metadata
-	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, config.ABCIInfoSubDirName)
+	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, kwildcfg.ABCIInfoSubDirName)
 	height, appHash, err = getOldChainState(d, badgerPath)
 	if err != nil {
 		return fmt.Errorf("unable to read old metadata store: %w", err)
@@ -298,7 +299,7 @@ func newPoolBOpener(host, port, user, pass string) poolOpener {
 type coreDependencies struct {
 	ctx        context.Context
 	autogen    bool
-	cfg        *config1.KwildConfig
+	cfg        *config.KwildConfig
 	genesisCfg *chain.GenesisConfig
 	privKey    cmtEd.PrivKey
 	log        log.Logger
@@ -473,14 +474,14 @@ func getPendingValidatorsApprovedByNode(ctx context.Context, db sql.ReadTxMaker,
 
 func buildMigrator(d *coreDependencies, db *pg.DB, txApp *txapp.TxApp) *migrations.Migrator {
 	cfg := d.cfg.AppConfig
-	migrationsDir := filepath.Join(d.cfg.RootDir, config.MigrationsDirName)
+	migrationsDir := filepath.Join(d.cfg.RootDir, kwildcfg.MigrationsDirName)
 
-	err := os.MkdirAll(filepath.Join(migrationsDir, config.ChangesetsDirName), 0755)
+	err := os.MkdirAll(filepath.Join(migrationsDir, kwildcfg.ChangesetsDirName), 0755)
 	if err != nil {
 		failBuild(err, "failed to create changesets directory")
 	}
 
-	err = os.MkdirAll(filepath.Join(migrationsDir, config.SnapshotDirName), 0755)
+	err = os.MkdirAll(filepath.Join(migrationsDir, kwildcfg.SnapshotDirName), 0755)
 	if err != nil {
 		failBuild(err, "failed to create migrations snapshots directory")
 	}
@@ -495,7 +496,7 @@ func buildMigrator(d *coreDependencies, db *pg.DB, txApp *txapp.TxApp) *migratio
 	}
 
 	snapshotCfg := &statesync.SnapshotConfig{
-		SnapshotDir:     filepath.Join(migrationsDir, config.SnapshotDirName),
+		SnapshotDir:     filepath.Join(migrationsDir, kwildcfg.SnapshotDirName),
 		RecurringHeight: 0,
 		MaxSnapshots:    1, // only one snapshot is needed for network migrations, taken at the activation height
 		MaxRowSize:      cfg.Snapshots.MaxRowSize,

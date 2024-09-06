@@ -10,9 +10,12 @@ import (
 	"runtime"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+
+	kconfig "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common/chain"
-	config1 "github.com/kwilteam/kwil-db/common/config"
+	config "github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
@@ -20,8 +23,6 @@ import (
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/version"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 // Server controls the gRPC server and http gateway.
@@ -38,20 +39,20 @@ type Server struct {
 		Err() error
 	}
 
-	cfg *config1.KwildConfig
+	cfg *config.KwildConfig
 
 	cancelCtxFunc context.CancelFunc
 }
 
 const (
 	// Top-level directory structure for the Server's systems
-	abciDirName      = config.ABCIDirName
-	rcvdSnapsDirName = config.ReceivedSnapsDirName
-	signingDirName   = config.SigningDirName
+	abciDirName      = kconfig.ABCIDirName
+	rcvdSnapsDirName = kconfig.ReceivedSnapsDirName
+	signingDirName   = kconfig.SigningDirName
 )
 
 // New builds the kwild server.
-func New(ctx context.Context, cfg *config1.KwildConfig, genesisCfg *chain.GenesisConfig,
+func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *chain.GenesisConfig,
 	nodeKey *crypto.Ed25519PrivateKey, autogen bool) (svr *Server, err error) {
 	logCfg, err := cfg.LogConfig()
 	if err != nil {

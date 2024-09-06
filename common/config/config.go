@@ -1,3 +1,4 @@
+// Package config contains Kwil's config structures.
 package config
 
 import (
