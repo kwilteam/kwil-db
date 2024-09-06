@@ -153,7 +153,18 @@ func (s *sqlGenerator) VisitExpressionArrayAccess(p0 *parse.ExpressionArrayAcces
 	str := strings.Builder{}
 	str.WriteString(p0.Array.Accept(s).(string))
 	str.WriteString("[")
-	str.WriteString(p0.Index.Accept(s).(string))
+	switch {
+	case p0.Index != nil:
+		str.WriteString(p0.Index.Accept(s).(string))
+	default:
+		if p0.FromTo[0] != nil {
+			str.WriteString(p0.FromTo[0].Accept(s).(string))
+		}
+		str.WriteString(":")
+		if p0.FromTo[1] != nil {
+			str.WriteString(p0.FromTo[1].Accept(s).(string))
+		}
+	}
 	str.WriteString("]")
 	typeCast(p0, &str)
 	return str.String()

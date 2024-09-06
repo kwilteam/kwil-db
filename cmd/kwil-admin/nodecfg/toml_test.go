@@ -13,9 +13,9 @@ import (
 func Test_Generate_TOML(t *testing.T) {
 	cfg := config.DefaultConfig()
 
-	cfg.AppCfg.DBHost = "/tmp/custom_pg_socket_path"
-	cfg.AppCfg.JSONRPCListenAddress = "127.0.0.1:9494"
-	cfg.AppCfg.ExtensionEndpoints = []string{"localhost:9001", "localhost:9002"}
+	cfg.AppConfig.DBHost = "/tmp/custom_pg_socket_path"
+	cfg.AppConfig.JSONRPCListenAddress = "127.0.0.1:9494"
+	cfg.AppConfig.ExtensionEndpoints = []string{"localhost:9001", "localhost:9002"}
 	cfg.Logging.OutputPaths = []string{"stdout", "file"}
 	err := WriteConfigFile("test.toml", cfg)
 	assert.NoError(t, err)
@@ -29,8 +29,8 @@ func Test_Generate_TOML(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.NoError(t, err)
-	assert.Equal(t, cfg.AppCfg.DBHost, updatedcfg.AppCfg.DBHost)
-	assert.Equal(t, cfg.AppCfg.ExtensionEndpoints, updatedcfg.AppCfg.ExtensionEndpoints)
+	assert.Equal(t, cfg.AppConfig.DBHost, updatedcfg.AppConfig.DBHost)
+	assert.Equal(t, cfg.AppConfig.ExtensionEndpoints, updatedcfg.AppConfig.ExtensionEndpoints)
 	assert.Equal(t, cfg.Logging.OutputPaths, updatedcfg.Logging.OutputPaths)
 }
 

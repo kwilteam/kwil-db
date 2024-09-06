@@ -18,7 +18,7 @@ func init() {
 }
 
 func Start(ctx context.Context, service *common.Service, eventStore listeners.EventStore) error {
-	if cfg, ok := service.ExtensionConfigs[ListenerName]; !ok {
+	if cfg, ok := service.LocalConfig.AppConfig.Extensions[ListenerName]; !ok {
 		return fmt.Errorf("spammer listener not configured, not starting spam oracle")
 	} else if cfg["enabled"] != "true" {
 		service.Logger.Info("Spam oracle is DISABLED")

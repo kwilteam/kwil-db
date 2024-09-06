@@ -59,7 +59,7 @@ func Test_Routes(t *testing.T) {
 		fn      func(t *testing.T, callback func()) // required, uses callback to control when the test is run
 		payload transactions.Payload                // required
 		fee     int64                               // optional, if nil, will automatically use 0
-		ctx     TxContext                           // optional, if nil, will automatically create a mock
+		ctx     *common.TxContext                   // optional, if nil, will automatically create a mock
 		from    auth.Signer                         // optional, if nil, will automatically use default validatorSigner1
 		err     error                               // if not nil, expect this error
 	}
@@ -191,7 +191,7 @@ func Test_Routes(t *testing.T) {
 					},
 				},
 			},
-			ctx: TxContext{
+			ctx: &common.TxContext{
 				BlockContext: &common.BlockContext{
 					Proposer: validatorSigner1().Identity(),
 				},
@@ -227,7 +227,7 @@ func Test_Routes(t *testing.T) {
 					},
 				},
 			},
-			ctx: TxContext{
+			ctx: &common.TxContext{
 				BlockContext: &common.BlockContext{
 					Proposer: validatorSigner1().Identity(),
 				},
@@ -274,14 +274,20 @@ func Test_Routes(t *testing.T) {
 			tc.fn(t, func() {
 				db := &mockTx{&mockDb{}}
 				app := &TxApp{}
-
-				// since every test case needs an account store, we'll just create a mock one here
-				// if one isn't provided
-				if app.log.L == nil {
-					app.log = log.NewNoOp()
-				}
 				if app.signer == nil {
 					app.signer = validatorSigner1()
+				}
+				// since every test case needs an account store, we'll just create a mock one here
+				// if one isn't provided
+				if app.service == nil {
+					app.service = &common.Service{
+						Logger:   log.New(log.Config{}).Sugar(),
+						Identity: app.signer.Identity(),
+					}
+				}
+
+				if tc.ctx == nil {
+					tc.ctx = &common.TxContext{}
 				}
 
 				if tc.ctx.BlockContext == nil {

@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	ethLog "github.com/ethereum/go-ethereum/log"
+	"github.com/kwilteam/kwil-db/common/config"
 	deposits "github.com/kwilteam/kwil-db/extensions/listeners/eth_deposits"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -61,8 +62,12 @@ func mainReal(ctx context.Context) error {
 		deposits.ListenerName: cfg.Map(),
 	}
 	svc := &common.Service{
-		Logger:           log.NewStdOut(log.DebugLevel).Sugar(),
-		ExtensionConfigs: extensionConfig,
+		Logger: log.NewStdOut(log.DebugLevel).Sugar(),
+		LocalConfig: &config.KwildConfig{
+			AppConfig: &config.AppConfig{
+				Extensions: extensionConfig,
+			},
+		},
 	}
 	es := &memEvtStore{svc.Logger, make(map[string][]byte)}
 

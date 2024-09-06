@@ -93,7 +93,7 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 		// add instructions for both owner only and view procedures
 		if action.IsOwnerOnly() {
 			instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
-				if !bytes.Equal(scope.Signer, owner) {
+				if !bytes.Equal(scope.TxCtx.Signer, owner) {
 					return fmt.Errorf("cannot call owner action, not owner")
 				}
 
@@ -240,7 +240,7 @@ func (e *callMethod) execute(scope *precompiles.ProcedureContext, global *Global
 	var inputs []any
 	vals := scope.Values() // declare here since scope.Values() is expensive
 	for _, arg := range e.Args {
-		val, err := arg(scope.Ctx, db.Execute, vals)
+		val, err := arg(scope.TxCtx.Ctx, db.Execute, vals)
 		if err != nil {
 			return err
 		}
@@ -335,7 +335,7 @@ func (e *dmlStmt) execute(scope *precompiles.ProcedureContext, _ *GlobalContext,
 	// Expend the arguments based on the ordered parameters for the DML statement.
 	params := orderAndCleanValueMap(scope.Values(), e.OrderedParameters)
 	// args := append([]any{pg.QueryModeExec}, params...)
-	results, err := db.Execute(scope.Ctx, e.SQLStatement, append([]any{pg.QueryModeExec}, params...)...)
+	results, err := db.Execute(scope.TxCtx.Ctx, e.SQLStatement, append([]any{pg.QueryModeExec}, params...)...)
 	if err != nil {
 		return decorateExecuteErr(err, e.SQLStatement)
 	}

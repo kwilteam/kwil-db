@@ -8,7 +8,6 @@ import (
 	"time"
 
 	common "github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/listeners"
@@ -21,17 +20,11 @@ import (
 // It starts the listeners only when the node is a validator and is caught up
 // It stops the running listeners when the node loses its validator status
 type ListenerManager struct {
-	config     map[string]map[string]string
-	genesisCfg *chain.GenesisConfig
 	eventStore *voting.EventStore
 	vstore     ValidatorGetter
 	cometNode  *cometbft.CometBftNode
-	// pubKey is the public key of the node
-	pubKey []byte
-
-	logger log.Logger
-
-	cancel context.CancelFunc // cancels the context for the listener manager
+	service    *common.Service
+	cancel     context.CancelFunc // cancels the context for the listener manager
 }
 
 // ValidatorGetter is able to read the current validator set.
@@ -40,16 +33,13 @@ type ValidatorGetter interface {
 	SubscribeValidators() <-chan []*types.Validator
 }
 
-func NewListenerManager(config map[string]map[string]string, genesisCfg *chain.GenesisConfig, eventStore *voting.EventStore,
-	node *cometbft.CometBftNode, nodePubKey []byte, vstore ValidatorGetter, logger log.Logger) *ListenerManager {
+func NewListenerManager(svc *common.Service, eventStore *voting.EventStore,
+	node *cometbft.CometBftNode, vstore ValidatorGetter) *ListenerManager {
 	return &ListenerManager{
-		config:     config,
-		genesisCfg: genesisCfg,
 		eventStore: eventStore,
 		vstore:     vstore,
 		cometNode:  node,
-		pubKey:     nodePubKey,
-		logger:     logger,
+		service:    svc,
 	}
 }
 
@@ -75,22 +65,18 @@ func (omgr *ListenerManager) Start() (err error) {
 			ctx2, cancel2 := context.WithCancel(ctx)
 			listenerInstanceCancel = cancel2
 
-			omgr.logger.Info("Node is a validator and caught up with the network, starting listeners")
+			omgr.service.Logger.Info("Node is a validator and caught up with the network, starting listeners")
 
 			for name, start := range listeners.RegisteredListeners() {
 				go func(start listeners.ListenFunc, name string) {
-					err := start(ctx2, &common.Service{
-						Logger:           omgr.logger.Named(name).Sugar(),
-						ExtensionConfigs: omgr.config,
-						GenesisConfig:    omgr.genesisCfg,
-					}, &scopedKVEventStore{
+					err := start(ctx2, omgr.service.NamedLogger(name), &scopedKVEventStore{
 						ev: omgr.eventStore,
 						// we add a space to prevent collisions in the KV
 						// oracle names cannot have spaces
 						KV: omgr.eventStore.KV([]byte(name + " ")),
 					})
 					if err != nil {
-						omgr.logger.Error("==========================  Event listener stopped  ==========================",
+						omgr.service.Logger.Error("==========================  Event listener stopped  ==========================",
 							log.String("listener", name), log.Error(err))
 						if !errors.Is(err, context.Canceled) {
 							errChan <- err
@@ -98,26 +84,26 @@ func (omgr *ListenerManager) Start() (err error) {
 						cancel2() // Stop other listeners
 					} else {
 						// Listener exited with nil, no need to stop other listeners in this case
-						omgr.logger.Debug("Event listener stopped (cleanly)", log.String("listener", name))
+						omgr.service.Logger.Debug("Event listener stopped (cleanly)", log.String("listener", name))
 					}
 				}(start, name)
 
 			}
 		} else if listenerInstanceCancel != nil && !isValidator {
 			// Stop the listeners if they are running
-			omgr.logger.Info("Node is no longer a validator, stopping listeners")
+			omgr.service.Logger.Info("Node is no longer a validator, stopping listeners")
 			listenerInstanceCancel()
 			listenerInstanceCancel = nil
 		}
 	}
 
 	defer func() {
-		omgr.logger.Info("ListenerManager stopped.", log.Error(err))
+		omgr.service.Logger.Info("ListenerManager stopped.", log.Error(err))
 	}()
 
 	containsMe := func(validators []*types.Validator) bool {
 		return slices.ContainsFunc(validators, func(v *types.Validator) bool {
-			return bytes.Equal(v.PubKey, omgr.pubKey)
+			return bytes.Equal(v.PubKey, omgr.service.Identity)
 		})
 	}
 

@@ -101,7 +101,7 @@ func (d *gremlinNoopRoute) Price(context.Context, *common.App, *transactions.Tra
 	return big.NewInt(42000), nil
 }
 
-func (d *gremlinNoopRoute) PreTx(_ common.TxContext, _ *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
+func (d *gremlinNoopRoute) PreTx(_ *common.TxContext, _ *common.Service, tx *transactions.Transaction) (transactions.TxCode, error) {
 	if len(tx.Body.Payload) != 1 {
 		return transactions.CodeEncodingError, errors.New("incorrect payload length")
 	}
@@ -112,6 +112,6 @@ func (d *gremlinNoopRoute) PreTx(_ common.TxContext, _ *common.Service, tx *tran
 	return 0, nil
 }
 
-func (d *gremlinNoopRoute) InTx(common.TxContext, *common.App, *transactions.Transaction) (transactions.TxCode, error) {
+func (d *gremlinNoopRoute) InTx(*common.TxContext, *common.App, *transactions.Transaction) (transactions.TxCode, error) {
 	return transactions.CodeOk, nil // no-op, no app state mods
 }

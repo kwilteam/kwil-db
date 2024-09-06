@@ -18,6 +18,7 @@ import (
 
 	"github.com/cometbft/cometbft/test/e2e/pkg/exec"
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -179,9 +180,13 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 				}
 
 				engine, err := execution.NewGlobalContext(ctx, outerTx, maps.Clone(precompiles.RegisteredPrecompiles()), &common.Service{
-					Logger:           logger,
-					ExtensionConfigs: map[string]map[string]string{},
-					Identity:         []byte("node"),
+					Logger: logger,
+					LocalConfig: &config.KwildConfig{
+						AppConfig: &config.AppConfig{
+							Extensions: map[string]map[string]string{},
+						},
+					},
+					Identity: []byte("node"),
 				})
 				if err != nil {
 					return err
@@ -196,12 +201,15 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 
 				// deploy schemas
 				for _, schema := range parsedSchemas {
-					err := engine.CreateDataset(ctx, outerTx, schema, &common.TransactionData{
+					err := engine.CreateDataset(&common.TxContext{
+						Ctx:    ctx,
 						Signer: deployer,
 						Caller: string(deployer),
 						TxID:   platform.Txid(),
-						Height: 0,
-					})
+						BlockContext: &common.BlockContext{
+							Height: 0,
+						},
+					}, outerTx, schema)
 					if err != nil {
 						return err
 					}
@@ -217,7 +225,14 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 
 					for _, sql := range seed {
 						dbid := utils.GenerateDBID(dbName, deployer)
-						_, err = engine.Execute(ctx, outerTx, dbid, sql, nil)
+						_, err = engine.Execute(&common.TxContext{
+							Signer: deployer,
+							Caller: string(deployer),
+							TxID:   platform.Txid(),
+							BlockContext: &common.BlockContext{
+								Height: 0,
+							},
+						}, outerTx, dbid, sql, nil)
 						if err != nil {
 							return fmt.Errorf(`error executing seed query "%s" on schema "%s": %s`, sql, dbName, err)
 						}
@@ -296,13 +311,19 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 	// log to help users debug failed tests
 	platform.Logger.Logf(`executing action/procedure "%s" against schema "%s" (DBID: %s)`, e.Target, e.Database, dbid)
 
-	res, err := platform.Engine.Procedure(ctx, platform.DB, &common.ExecutionData{
-		TransactionData: common.TransactionData{
-			Signer: []byte(caller),
-			Caller: caller,
+	res, err := platform.Engine.Procedure(&common.TxContext{
+		Ctx:    ctx,
+		Signer: []byte(caller),
+		Caller: caller,
+		TxID:   platform.Txid(),
+		BlockContext: &common.BlockContext{
 			Height: e.Height,
-			TxID:   platform.Txid(),
+			ChainContext: &common.ChainContext{
+				MigrationParams:   &common.MigrationContext{},
+				NetworkParameters: &common.NetworkParameters{},
+			},
 		},
+	}, platform.DB, &common.ExecutionData{
 		Dataset:   dbid,
 		Procedure: e.Target,
 		Args:      e.Args,

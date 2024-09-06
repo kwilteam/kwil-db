@@ -207,10 +207,10 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 }
 
 type EngineReader interface {
-	Procedure(ctx context.Context, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error)
+	Procedure(ctx *common.TxContext, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error)
 	GetSchema(dbid string) (*types.Schema, error)
 	ListDatasets(owner []byte) ([]*types.DatasetIdentifier, error)
-	Execute(ctx context.Context, tx sql.DB, dbid string, query string, values map[string]any) (*sql.ResultSet, error)
+	Execute(ctx *common.TxContext, tx sql.DB, dbid string, query string, values map[string]any) (*sql.ResultSet, error)
 }
 
 // NOTE:
@@ -363,7 +363,12 @@ func (svc *Service) Query(ctx context.Context, req *userjson.QueryRequest) (*use
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
-	result, err := svc.engine.Execute(ctxExec, readTx, req.DBID, req.Query, nil)
+	result, err := svc.engine.Execute(&common.TxContext{
+		Ctx: ctxExec,
+		BlockContext: &common.BlockContext{
+			Height: -1, // cannot know the height here.
+		},
+	}, readTx, req.DBID, req.Query, nil)
 	if err != nil {
 		// We don't know for sure that it's an invalid argument, but an invalid
 		// user-provided query isn't an internal server error.
@@ -579,16 +584,18 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		}
 	}()
 
-	executeResult, err := svc.engine.Procedure(ctxExec, readTx, &common.ExecutionData{
+	executeResult, err := svc.engine.Procedure(&common.TxContext{
+		Ctx:    ctxExec,
+		Signer: signer,
+		Caller: caller,
+		BlockContext: &common.BlockContext{
+			Height: -1, // cannot know the height here.
+		},
+		Authenticator: msg.AuthType,
+	}, readTx, &common.ExecutionData{
 		Dataset:   body.DBID,
 		Procedure: body.Action,
 		Args:      args,
-		TransactionData: common.TransactionData{
-			Signer:        signer,
-			Caller:        caller,
-			Height:        -1, // not available
-			Authenticator: msg.AuthType,
-		},
 	})
 	if err != nil {
 		return nil, engineError(err)
