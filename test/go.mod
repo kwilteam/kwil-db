@@ -17,8 +17,8 @@ require (
 	github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246
 	github.com/ethereum/go-ethereum v1.14.3
 	github.com/kwilteam/kwil-db v0.7.2
-	github.com/kwilteam/kwil-db/core v0.2.1
-	github.com/kwilteam/kwil-db/parse v0.2.3
+	github.com/kwilteam/kwil-db/core v0.2.2-0.20240717191559-0d1f4145bae8
+	github.com/kwilteam/kwil-db/parse v0.2.4-0.20240807151754-7dc015c29267
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go v0.31.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.29.2-0.20240321072901-c83b93cb1eff
