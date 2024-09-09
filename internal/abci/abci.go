@@ -320,10 +320,14 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		logger.Info("punish validator", zap.String("addr", addr))
 		// FORKSITE: could alter punishment system (consider misbehavior Type)
 
-		// This is why we need the addr=>pubkey map. Why, comet, why?
+		// CometBFT gives the address, not public key, so we have to remember them.
 		pubkey, ok := a.validatorAddressToPubKey[addr]
 		if !ok {
-			return nil, fmt.Errorf("unknown validator address %v", addr)
+			// It is possible or likely that a misbehaving validator will
+			// misbehave in consecutive blocks, so it should not be an error
+			// here since it could merely be a subsequent misbehavior if we have
+			// removed them from our app's map.
+			continue
 		}
 
 		const punishDelta = 1
@@ -340,6 +344,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		// only if the block has no transactions.
 		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to address %v", addr)
 	}
+	// Note that in the !ok case, empty Txs is required, and the proposerPubKey
+	// may be empty!
 
 	res := &abciTypes.ResponseFinalizeBlock{}
 
