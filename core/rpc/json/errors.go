@@ -41,14 +41,6 @@ const (
 	ErrorValidatorsInternal ErrorCode = -800
 	ErrorValidatorNotFound  ErrorCode = -801
 
-	ErrorCallChallengeNotFound ErrorCode = -1001
-	ErrorInvalidCallChallenge  ErrorCode = -1002
-	ErrorCallChallengeExpired  ErrorCode = -1003
-	ErrorInvalidCallSignature  ErrorCode = -1004
-	ErrorMismatchCallAuthType  ErrorCode = -1005
-	ErrorTooFastChallengeReqs  ErrorCode = -1006
-	ErrorNoQueryWithPrivateRPC ErrorCode = -1007
-
 	// reserve -900 to -999 for the KGW
 	ErrorKGWInternal         ErrorCode = -900
 	ErrorKGWNotAuthorized    ErrorCode = -901
@@ -57,6 +49,14 @@ const (
 	ErrorKGWNotFound         ErrorCode = -904
 	ErrorKGWTooManyRequests  ErrorCode = -905
 	ErrorKGWMethodNotAllowed ErrorCode = -906
+
+	ErrorCallChallengeNotFound ErrorCode = -1001
+	ErrorInvalidCallChallenge  ErrorCode = -1002
+	ErrorCallChallengeExpired  ErrorCode = -1003
+	ErrorInvalidCallSignature  ErrorCode = -1004
+	ErrorMismatchCallAuthType  ErrorCode = -1005
+	ErrorTooFastChallengeReqs  ErrorCode = -1006
+	ErrorNoQueryWithPrivateRPC ErrorCode = -1007
 )
 
 // More detailed errors use a structured error type in the "data" field of the

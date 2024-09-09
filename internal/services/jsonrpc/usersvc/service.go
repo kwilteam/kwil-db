@@ -124,7 +124,7 @@ func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
 		privateMode:      cfg.privateMode,
 		challengeExpiry:  cfg.challengeExpiry,
 		challenges:       make(map[[32]byte]time.Time),
-		challengeLimiter: ratelimit.NewIPRateLimiter(cfg.challengeRateLimit, int(6*defaultChallengeRateLimit)),
+		challengeLimiter: ratelimit.NewIPRateLimiter(cfg.challengeRateLimit, int(6*defaultChallengeRateLimit)), // allow many calls at start of block
 	}
 
 	// Start the expiry goroutine, unsupervised for now since services don't
@@ -583,15 +583,15 @@ func resultMap(r *sql.ResultSet) []map[string]any {
 
 func (svc *Service) verifyCallChallenge(challenge [32]byte) *jsonrpc.Error {
 	svc.challengeMtx.Lock()
-	defer svc.challengeMtx.Unlock()
-
 	challengeTime, ok := svc.challenges[challenge]
 	if !ok {
+		svc.challengeMtx.Unlock()
 		return jsonrpc.NewError(jsonrpc.ErrorCallChallengeNotFound, "invalid challenge", nil)
 	}
 
 	// remove the challenge from the list
 	delete(svc.challenges, challenge)
+	svc.challengeMtx.Unlock()
 
 	// ensure that challenge is not expired
 	if time.Now().After(challengeTime) {
@@ -851,7 +851,7 @@ func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.Lis
 }
 
 func (svc *Service) expireChallenges() {
-	now := time.Now()
+	now := time.Now().UTC()
 	svc.challengeMtx.Lock()
 	defer svc.challengeMtx.Unlock()
 	for ch, exp := range svc.challenges {
@@ -861,23 +861,30 @@ func (svc *Service) expireChallenges() {
 	}
 }
 
+// CallChallenge is the handler for the user.challenge RPC. It gives the user a
+// new challenge for use with a signed call request. They are single use, and
+// they expire according to the service's challenge expiry configuration.
 func (svc *Service) CallChallenge(ctx context.Context, req *userjson.ChallengeRequest) (*userjson.ChallengeResponse, *jsonrpc.Error) {
 	clientIP, _ := ctx.Value(rpcserver.RequestIPCtx).(string)
 	if clientIP != "" && !svc.challengeLimiter.IP(clientIP).Allow() {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTooFastChallengeReqs, "too many challenge requests", nil)
 	}
 
-	svc.challengeMtx.Lock()
-	defer svc.challengeMtx.Unlock()
+	expiry := time.Now().Add(svc.challengeExpiry).UTC()
 
 	var challenge [32]byte
 	if _, err := rand.Read(challenge[:]); err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, err.Error(), nil)
 	}
+
+	svc.challengeMtx.Lock()
 	if _, have := svc.challenges[challenge]; have {
+		svc.challengeMtx.Unlock()
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to generate unique challenge", nil)
 	} // that should not happen with 256-bits of randomness
-	svc.challenges[challenge] = time.Now().Add(svc.challengeExpiry)
+
+	svc.challenges[challenge] = expiry
+	svc.challengeMtx.Unlock()
 
 	return &userjson.ChallengeResponse{
 		Challenge: challenge[:],

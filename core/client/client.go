@@ -341,10 +341,6 @@ func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs
 
 // Query executes a query.
 func (c *Client) Query(ctx context.Context, dbid string, query string) (*clientType.Records, error) {
-	// if c.authCallRPC {
-	// 	return nil, errors.New("ad hoc queries are not handled with authenticated RPCs")
-	// }
-
 	res, err := c.txClient.Query(ctx, dbid, query)
 	if err != nil {
 		return nil, err
