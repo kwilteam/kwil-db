@@ -43,13 +43,14 @@ type NodeGenerateConfig struct {
 	ChainID       string
 	BlockInterval time.Duration
 	// InitialHeight int64 // ?
-	OutputDir       string
-	JoinExpiry      int64
-	WithoutGasCosts bool
-	Allocs          map[string]*big.Int
-	VoteExpiry      int64
-	Extensions      map[string]map[string]string
-	Forks           map[string]*uint64
+	OutputDir        string
+	JoinExpiry       int64
+	WithoutGasCosts  bool
+	Allocs           map[string]*big.Int
+	VoteExpiry       int64
+	Extensions       map[string]map[string]string
+	Forks            map[string]*uint64
+	AuthenticateRPCs bool
 }
 
 type TestnetGenerateConfig struct {
@@ -129,7 +130,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	} else {
 		cfg.AppConfig.Extensions = make(map[string]map[string]string)
 	}
-
+	cfg.AppConfig.PrivateRPC = genCfg.AuthenticateRPCs
 	pub, err := GenerateNodeFiles(rootDir, cfg, false)
 	if err != nil {
 		return err

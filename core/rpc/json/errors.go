@@ -49,6 +49,14 @@ const (
 	ErrorKGWNotFound         ErrorCode = -904
 	ErrorKGWTooManyRequests  ErrorCode = -905
 	ErrorKGWMethodNotAllowed ErrorCode = -906
+
+	ErrorCallChallengeNotFound ErrorCode = -1001
+	ErrorInvalidCallChallenge  ErrorCode = -1002
+	ErrorCallChallengeExpired  ErrorCode = -1003
+	ErrorInvalidCallSignature  ErrorCode = -1004
+	ErrorMismatchCallAuthType  ErrorCode = -1005
+	ErrorTooFastChallengeReqs  ErrorCode = -1006
+	ErrorNoQueryWithPrivateRPC ErrorCode = -1007
 )
 
 // More detailed errors use a structured error type in the "data" field of the

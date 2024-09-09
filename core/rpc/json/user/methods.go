@@ -20,4 +20,5 @@ const (
 	MethodLoadChangesetMetadata jsonrpc.Method = "user.changeset_metadata"
 	MethodMigrationMetadata     jsonrpc.Method = "user.migration_metadata"
 	MethodMigrationGenesisChunk jsonrpc.Method = "user.migration_genesis_chunk"
+	MethodChallenge             jsonrpc.Method = "user.challenge"
 )

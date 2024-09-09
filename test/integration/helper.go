@@ -1019,7 +1019,7 @@ func (r *IntHelper) getCliDriver(endpoint, privKey string, identity []byte,
 	_, currentFilePath, _, _ := runtime.Caller(1)
 	cliBinPath := path.Join(path.Dir(currentFilePath), "../../.build/kwil-cli")
 
-	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, testChainID, identity, gatewayProvider, deployer, logger)
+	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, testChainID, identity, gatewayProvider, deployer, false, logger)
 }
 
 func (r *IntHelper) NodePrivateKey(name string) ed25519.PrivKey {

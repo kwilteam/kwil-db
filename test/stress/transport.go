@@ -98,7 +98,7 @@ func (tc *timedClient) Ping(ctx context.Context) (string, error) {
 	return tc.Client.Ping(ctx)
 }
 
-func (tc *timedClient) Query(ctx context.Context, dbid string, query string) (*clientType.Records, error) {
+func (tc *timedClient) Query(ctx context.Context, dbid, query string) (*clientType.Records, error) {
 	if tc.showReqDur {
 		defer tc.printDur(time.Now(), "Query")
 	}

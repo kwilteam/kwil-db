@@ -2,6 +2,7 @@ package usersvc
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -26,6 +27,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/execution" // errors from engine
 	"github.com/kwilteam/kwil-db/internal/migrations"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
+	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/ratelimit"
 	"github.com/kwilteam/kwil-db/internal/version"
 	"github.com/kwilteam/kwil-db/internal/voting"
 	"github.com/kwilteam/kwil-db/parse"
@@ -42,6 +44,13 @@ type Service struct {
 	chainClient BlockchainTransactor
 	pricer      Pricer
 	migrator    Migrator
+
+	privateMode bool
+	// challenges issued to the clients
+	challenges       map[[32]byte]time.Time
+	challengeExpiry  time.Duration
+	challengeMtx     sync.Mutex
+	challengeLimiter *ratelimit.IPRateLimiter
 }
 
 type DB interface {
@@ -50,7 +59,10 @@ type DB interface {
 }
 
 type serviceCfg struct {
-	readTxTimeout time.Duration
+	readTxTimeout      time.Duration
+	privateMode        bool
+	challengeExpiry    time.Duration
+	challengeRateLimit float64 // challenge requests/sec, sustained
 }
 
 // Opt is a Service option.
@@ -64,27 +76,70 @@ func WithReadTxTimeout(timeout time.Duration) Opt {
 	}
 }
 
-const defaultReadTxTimeout = 5 * time.Second
+func WithPrivateMode(privateMode bool) Opt {
+	return func(cfg *serviceCfg) {
+		cfg.privateMode = privateMode
+	}
+}
+
+func WithChallengeExpiry(expiry time.Duration) Opt {
+	return func(cfg *serviceCfg) {
+		cfg.challengeExpiry = expiry
+	}
+}
+
+func WithChallengeRateLimit(limit float64) Opt {
+	return func(cfg *serviceCfg) {
+		cfg.challengeRateLimit = limit
+	}
+}
+
+const (
+	defaultReadTxTimeout      = 5 * time.Second
+	defaultChallengeExpiry    = 10 * time.Second // TODO: or maybe more?
+	defaultChallengeRateLimit = 10.0
+)
 
 // NewService creates a new instance of the user RPC service.
 func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
 	nodeApp NodeApplication, pricer Pricer, migrator Migrator, logger log.Logger, opts ...Opt) *Service {
 	cfg := &serviceCfg{
-		readTxTimeout: defaultReadTxTimeout,
+		readTxTimeout:      defaultReadTxTimeout,
+		challengeExpiry:    defaultChallengeExpiry,
+		challengeRateLimit: defaultChallengeRateLimit,
 	}
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	return &Service{
-		log:           logger,
-		readTxTimeout: cfg.readTxTimeout,
-		engine:        engine,
-		nodeApp:       nodeApp,
-		pricer:        pricer,
-		chainClient:   chainClient,
-		db:            db,
-		migrator:      migrator,
+
+	svc := &Service{
+		log:              logger,
+		readTxTimeout:    cfg.readTxTimeout,
+		engine:           engine,
+		nodeApp:          nodeApp,
+		pricer:           pricer,
+		chainClient:      chainClient,
+		db:               db,
+		migrator:         migrator,
+		privateMode:      cfg.privateMode,
+		challengeExpiry:  cfg.challengeExpiry,
+		challenges:       make(map[[32]byte]time.Time),
+		challengeLimiter: ratelimit.NewIPRateLimiter(cfg.challengeRateLimit, int(6*defaultChallengeRateLimit)), // allow many calls at start of block
 	}
+
+	// Start the expiry goroutine, unsupervised for now since services don't
+	// "start" or "stop", but their lifetime is roughly that of the process.
+	if cfg.privateMode {
+		go func() {
+			ticker := time.NewTicker(5 * time.Second)
+			defer ticker.Stop()
+			for range ticker.C {
+				svc.expireChallenges()
+			}
+		}()
+	}
+
+	return svc
 }
 
 // The "user" service is versioned by these values. However, despite this API
@@ -183,6 +238,12 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		userjson.MethodMigrationGenesisChunk: rpcserver.MakeMethodDef(svc.MigrationGenesisChunk,
 			"get a genesis snapshot chunk of given idx",
 			"the genesis chunk for the given index",
+		),
+
+		// Challenge method
+		userjson.MethodChallenge: rpcserver.MakeMethodDef(svc.CallChallenge,
+			"request a call challenge",
+			"the challenge value for the client to include in a call request signature",
 		),
 	}
 }
@@ -360,6 +421,11 @@ func (svc *Service) Query(ctx context.Context, req *userjson.QueryRequest) (*use
 	ctxExec, cancel := context.WithTimeout(ctx, svc.readTxTimeout)
 	defer cancel()
 
+	if svc.privateMode {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorNoQueryWithPrivateRPC,
+			"query is prohibited when authenticated calls are enforced (private mode)", nil)
+	}
+
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
@@ -485,7 +551,7 @@ func (svc *Service) Schema(ctx context.Context, req *userjson.SchemaRequest) (*u
 	}, nil
 }
 
-func convertActionCall(req *userjson.CallRequest) (*transactions.ActionCall, *transactions.CallMessage, error) {
+func unmarshalActionCall(req *userjson.CallRequest) (*transactions.ActionCall, *transactions.CallMessage, error) {
 	var actionPayload transactions.ActionCall
 
 	err := actionPayload.UnmarshalBinary(req.Body.Payload)
@@ -493,13 +559,12 @@ func convertActionCall(req *userjson.CallRequest) (*transactions.ActionCall, *tr
 		return nil, nil, err
 	}
 
-	return &actionPayload, &transactions.CallMessage{
-		Body: &transactions.CallMessageBody{
-			Payload: req.Body.Payload,
-		},
-		AuthType: req.AuthType,
-		Sender:   req.Sender,
-	}, nil
+	cm := *req
+
+	// sigtxt := transactions.CallSigText(actionPayload.DBID, actionPayload.Action,
+	// 	req.Body.Payload, req.Body.Challenge)
+
+	return &actionPayload, &cm, nil
 }
 
 func resultMap(r *sql.ResultSet) []map[string]any {
@@ -516,12 +581,59 @@ func resultMap(r *sql.ResultSet) []map[string]any {
 	return m
 }
 
+func (svc *Service) verifyCallChallenge(challenge [32]byte) *jsonrpc.Error {
+	svc.challengeMtx.Lock()
+	challengeTime, ok := svc.challenges[challenge]
+	if !ok {
+		svc.challengeMtx.Unlock()
+		return jsonrpc.NewError(jsonrpc.ErrorCallChallengeNotFound, "invalid challenge", nil)
+	}
+
+	// remove the challenge from the list
+	delete(svc.challenges, challenge)
+	svc.challengeMtx.Unlock()
+
+	// ensure that challenge is not expired
+	if time.Now().After(challengeTime) {
+		return jsonrpc.NewError(jsonrpc.ErrorCallChallengeExpired, "challenge expired", nil)
+	}
+
+	return nil
+}
+
 func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userjson.CallResponse, *jsonrpc.Error) {
-	body, msg, err := convertActionCall(req)
+	body, msg, err := unmarshalActionCall(req)
 	if err != nil {
 		// NOTE: http api needs to be able to get the error message
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to convert action call: "+err.Error(), nil)
 
+	}
+
+	// Authenticate by validating the challenge was server-issued, and verify
+	// the signature on the serialized call message that include the challenge.
+	if svc.privateMode {
+		// The message must have a sig, sender, and challenge.
+		if msg.Signature == nil || len(msg.Sender) == 0 {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorCallChallengeNotFound, "signed call message with challenge required", nil)
+		}
+		if len(msg.Body.Challenge) != 32 {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidCallChallenge, "incorrect challenge data length", nil)
+		}
+		// The call message sender must be interpreted consistently with
+		// signature verification, so ensure the auth types match.
+		if msg.AuthType != msg.Signature.Type {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorMismatchCallAuthType, "different authentication schemes in signature and caller", nil)
+		}
+		// Ensure we issued the message's challenge.
+		if err := svc.verifyCallChallenge([32]byte(msg.Body.Challenge)); err != nil {
+			return nil, err
+		}
+		sigtxt := transactions.CallSigText(body.DBID, body.Action,
+			msg.Body.Payload, msg.Body.Challenge)
+		err = ident.VerifySignature(msg.Sender, []byte(sigtxt), msg.Signature)
+		if err != nil {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidCallSignature, "invalid signature on call message", nil)
+		}
 	}
 
 	args := make([]any, len(body.Arguments))
@@ -633,9 +745,10 @@ func (svc *Service) TxQuery(ctx context.Context, req *userjson.TxQueryRequest) (
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to query transaction", nil)
 	}
 
-	//cmtResult.Tx can be nil
+	// Decode the tex bytes if cmtResult.Tx is not nil, which it can be, and we
+	// are not in private mode where we do not return it to the client.
 	var tx *transactions.Transaction
-	if cmtResult.Tx != nil {
+	if cmtResult.Tx != nil && !svc.privateMode {
 		tx = &transactions.Transaction{}
 		if err := tx.UnmarshalBinary(cmtResult.Tx); err != nil {
 			logger.Error("failed to deserialize transaction", log.Error(err))
@@ -735,5 +848,46 @@ func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.Lis
 
 	return &userjson.ListMigrationsResponse{
 		Migrations: pendingMigrations,
+	}, nil
+}
+
+func (svc *Service) expireChallenges() {
+	now := time.Now().UTC()
+	svc.challengeMtx.Lock()
+	defer svc.challengeMtx.Unlock()
+	for ch, exp := range svc.challenges {
+		if now.After(exp) { // passed expiry time?
+			delete(svc.challenges, ch)
+		}
+	}
+}
+
+// CallChallenge is the handler for the user.challenge RPC. It gives the user a
+// new challenge for use with a signed call request. They are single use, and
+// they expire according to the service's challenge expiry configuration.
+func (svc *Service) CallChallenge(ctx context.Context, req *userjson.ChallengeRequest) (*userjson.ChallengeResponse, *jsonrpc.Error) {
+	clientIP, _ := ctx.Value(rpcserver.RequestIPCtx).(string)
+	if clientIP != "" && !svc.challengeLimiter.IP(clientIP).Allow() {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorTooFastChallengeReqs, "too many challenge requests", nil)
+	}
+
+	expiry := time.Now().Add(svc.challengeExpiry).UTC()
+
+	var challenge [32]byte
+	if _, err := rand.Read(challenge[:]); err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, err.Error(), nil)
+	}
+
+	svc.challengeMtx.Lock()
+	if _, have := svc.challenges[challenge]; have {
+		svc.challengeMtx.Unlock()
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to generate unique challenge", nil)
+	} // that should not happen with 256-bits of randomness
+
+	svc.challenges[challenge] = expiry
+	svc.challengeMtx.Unlock()
+
+	return &userjson.ChallengeResponse{
+		Challenge: challenge[:],
 	}, nil
 }

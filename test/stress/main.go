@@ -22,7 +22,8 @@ var (
 	key             string
 	quiet           bool
 
-	chainId string
+	chainId  string
+	authCall bool
 
 	runTime time.Duration
 
@@ -57,6 +58,7 @@ func main() {
 	flag.BoolVar(&quiet, "q", false, "only print errors")
 
 	flag.StringVar(&chainId, "chain", "", "chain ID to require (default is any)")
+	flag.BoolVar(&authCall, "authcall", false, "sign our call requests expecting the server to authenticate (private mode)")
 
 	flag.DurationVar(&runTime, "run", 30*time.Minute, "terminate after running this long")
 

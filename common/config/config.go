@@ -60,6 +60,9 @@ type AppConfig struct {
 
 	RPCTimeout         Duration                     `mapstructure:"rpc_timeout"`
 	RPCMaxReqSize      int                          `mapstructure:"rpc_req_limit"`
+	PrivateRPC         bool                         `mapstructure:"private_rpc"`
+	ChallengeExpiry    Duration                     `mapstructure:"challenge_expiry"`
+	ChallengeRateLimit float64                      `mapstructure:"challenge_rate_limit"`
 	ReadTxTimeout      Duration                     `mapstructure:"db_read_timeout"`
 	ExtensionEndpoints []string                     `mapstructure:"extension_endpoints"`
 	AdminRPCPass       string                       `mapstructure:"admin_pass"`

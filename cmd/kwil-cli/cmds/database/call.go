@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -44,7 +45,7 @@ kwil-cli database call --action get_user --dbid 0x9228624C3185FCBcf24c1c9dB76D8B
 
 func callCmd() *cobra.Command {
 	var action string
-	var authenticate, logs bool
+	var gwAuth, logs, signCall bool
 
 	cmd := &cobra.Command{
 		Use:     "call <parameter_1:value_1> <parameter_2:value_2> ...",
@@ -52,10 +53,17 @@ func callCmd() *cobra.Command {
 		Long:    callLong,
 		Example: callExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// We only need a private key if using gateway auth or signing the
+			// call message.
 			dialFlags := common.WithoutPrivateKey
-			if authenticate {
+			if gwAuth {
 				// overwrite the WithoutPrivateKey flag, and add the UsingGateway flag
 				dialFlags = common.UsingGateway
+				if signCall {
+					return display.PrintErr(cmd, errors.New("gateway auth should not be used with signed call requests"))
+				}
+			} else if signCall {
+				dialFlags = common.AuthenticatedCalls
 			}
 
 			return common.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, clnt clientType.Client, conf *config.KwilCliConfig) error {
@@ -101,7 +109,8 @@ func callCmd() *cobra.Command {
 	cmd.Flags().StringP(ownerFlag, "o", "", "the target database schema owner")
 	cmd.Flags().StringP(dbidFlag, "i", "", "the target database id")
 	cmd.Flags().StringVarP(&action, actionNameFlag, "a", "", "the target action name (required)")
-	cmd.Flags().BoolVar(&authenticate, "authenticate", false, "authenticate signals that the call is being made to a gateway and should be authenticated with the private key")
+	cmd.Flags().BoolVar(&gwAuth, "authenticate", false, "authenticate signals that the call is being made to a gateway and should be authenticated with the private key")
+	cmd.Flags().BoolVar(&signCall, "callauth", false, "authenticate call RPCs by signing a challenge response with the call data")
 	cmd.Flags().BoolVar(&logs, "logs", false, "result will include logs from notices raised during the call")
 
 	cmd.MarkFlagRequired(actionNameFlag)

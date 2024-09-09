@@ -43,6 +43,17 @@ db_read_timeout = "5s"
 # RPC request size limit in bytes
 rpc_req_limit = 4200000
 
+# Enforce data privacy: authenticate JSON-RPC call requests using challenge-based
+# authentication. the node will only accept JSON-RPC requests that has a valid signed
+# challenge response. This also disables ad hoc queries, and no raw transaction retrieval.
+private_rpc = false
+
+# Time after which a "call" challenge expires.
+challenge_expiry = "10s"
+
+# Call challenge request rate limit per second per client IP.
+challenge_rate_limit = 10.0
+
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = []
 
@@ -93,6 +104,10 @@ hostname = ""
 # Used during the network migration process.
 # Might be either absolute path or path related to the kwild root directory.
 genesis_state = ""
+
+# The listening address of the node to migrate the app state from.
+# mandatory if the start_height and end_height are provided in the genesis file.
+migrate_from = ""
 
 #######################################################################
 ###                     Extension Configuration                     ###
@@ -204,6 +219,11 @@ external_address = ""
 # Example: "d128266b8b9f64c313de466cf29e0a6182dba54d@172.10.100.2:26656,9440f4a8059cf7ff31454973c4f9c68de65fe526@172.10.100.3:26656"
 persistent_peers = ""
 
+# PrivateMode prevents other nodes from connecting to the node unless the node is 
+# a current validator, or a seed node or a persistent peer or a whitelist peer.
+# If disabled, the node will accept connections from any peer.
+private_mode = false
+
 # Set true for strict address routability rules
 # Set false for private or local networks
 addr_book_strict = false
@@ -213,7 +233,7 @@ max_num_inbound_peers = 40
 
 # Maximum number of outbound peers to connect to, excluding persistent peers
 max_num_outbound_peers = 10
-  
+
 # List of node IDs, to which a connection will be (re)established ignoring any existing limits
 unconditional_peer_ids = ""
 
