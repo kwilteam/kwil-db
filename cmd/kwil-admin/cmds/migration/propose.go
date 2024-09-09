@@ -2,12 +2,14 @@ package migration
 
 import (
 	"errors"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/internal/migrations"
+	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 var (
@@ -48,6 +50,7 @@ func proposeCmd() *cobra.Command {
 				ActivationPeriod: activationPeriod,
 				Duration:         migrationDuration,
 				ChainID:          chainID,
+				Timestamp:        time.Now().String(),
 			}
 			proposalBts, err := proposal.MarshalBinary()
 			if err != nil {
@@ -55,7 +58,7 @@ func proposeCmd() *cobra.Command {
 			}
 
 			// Submit a migration proposal
-			txHash, err := clt.CreateResolution(ctx, proposalBts, migrations.StartMigrationEventType)
+			txHash, err := clt.CreateResolution(ctx, proposalBts, voting.StartMigrationEventType)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}

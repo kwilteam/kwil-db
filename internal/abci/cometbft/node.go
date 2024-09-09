@@ -17,6 +17,7 @@ import (
 	cometNodes "github.com/cometbft/cometbft/node"
 	"github.com/cometbft/cometbft/p2p"
 	"github.com/cometbft/cometbft/proxy"
+	cometLocal "github.com/cometbft/cometbft/rpc/client/local"
 	"github.com/cometbft/cometbft/types"
 
 	"go.uber.org/zap"
@@ -252,4 +253,14 @@ func PubkeyToAddr(pubkey []byte) (string, error) {
 	}
 	publicKey := cometEd25519.PubKey(pubkey)
 	return publicKey.Address().String(), nil
+}
+
+func (n *CometBftNode) ConsensusParams(ctx context.Context, height *int64) *types.ConsensusParams {
+	clt := cometLocal.New(n.Node)
+	res, err := clt.ConsensusParams(ctx, height)
+	if err != nil {
+		n.Node.Logger.Error("failed to get consensus params", "err", err)
+		return nil
+	}
+	return &res.ConsensusParams
 }

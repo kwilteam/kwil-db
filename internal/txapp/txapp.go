@@ -675,8 +675,8 @@ func (r *TxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxT
 		})
 	}
 
-	if len(finalEvents) == 0 {
-		r.service.Logger.Debug("found proposer events to propose, but cannot fit them in a block",
+	if len(finalEvents) == 0 && len(ids) > 0 {
+		r.service.Logger.Warn("found proposer events to propose, but cannot fit them in a block",
 			log.Int("height", block.Height),
 			log.Int("maxTxsSize", maxTxsSize),
 			log.Int("emptyVoteBodyTxSize", r.emptyVoteBodyTxSize),
@@ -782,7 +782,7 @@ func (s *Spend) ApplySpend(ctx context.Context, db sql.DB) error {
 // recordSpend records a spend occurred during the block execution.
 // This only records spends during migrations.
 func (r *TxApp) recordSpend(ctx *common.TxContext, spend *Spend) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress {
 		r.spends = append(r.spends, spend)
 	}
 }

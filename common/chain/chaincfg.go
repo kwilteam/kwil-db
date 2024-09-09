@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"os"
 	"sort"
@@ -163,10 +164,6 @@ func defaultConsensusParams() *ConsensusParams {
 			ABCI: ABCIParams{
 				VoteExtensionsEnableHeight: 0, // disabled, needs coordinated upgrade to enable
 			},
-			Migration: MigrationParams{
-				StartHeight: -1, // not a zero-downtime migration
-				EndHeight:   -1,
-			},
 		},
 		WithoutGasCosts: true,
 	}
@@ -287,4 +284,28 @@ func NewGenesisWithValidator(pubKey []byte) *GenesisConfig {
 		Name:   "validator-0",
 	})
 	return genesisCfg
+}
+
+func (gc *GenesisConfig) SanityChecks() error {
+	// Vote expiry shouldn't be 0
+	if gc.ConsensusParams.Votes.VoteExpiry == 0 {
+		return errors.New("vote expiry should be greater than 0")
+	}
+
+	// MaxVotesPerTx shouldn't be 0
+	if gc.ConsensusParams.Votes.MaxVotesPerTx == 0 {
+		return errors.New("max votes per tx should be greater than 0")
+	}
+
+	// join expiry shouldn't be 0
+	if gc.ConsensusParams.Validator.JoinExpiry == 0 {
+		return errors.New("join expiry should be greater than 0")
+	}
+
+	// Block params
+	if gc.ConsensusParams.Block.MaxBytes == 0 {
+		return errors.New("max bytes should be greater than 0")
+	}
+
+	return nil
 }

@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/adminclient"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/migrations"
+	"github.com/kwilteam/kwil-db/internal/voting"
 	"github.com/kwilteam/kwil-db/test/driver"
 )
 
@@ -95,13 +97,14 @@ func (a *AdminClientDriver) SubmitMigrationProposal(ctx context.Context, activat
 		ActivationPeriod: activationHeight,
 		Duration:         dur,
 		ChainID:          chainID,
+		Timestamp:        time.Now().String(),
 	}
 	proposalBts, err := res.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
 
-	return a.Client.CreateResolution(ctx, proposalBts, migrations.StartMigrationEventType)
+	return a.Client.CreateResolution(ctx, proposalBts, voting.StartMigrationEventType)
 }
 
 func (a *AdminClientDriver) ApproveMigration(ctx context.Context, migrationResolutionID *types.UUID) ([]byte, error) {

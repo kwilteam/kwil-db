@@ -8,9 +8,10 @@ import (
 // type StatusResponse = adminTypes.Status
 
 type StatusResponse struct {
-	Node      *NodeInfo  `json:"node,omitempty"`
-	Sync      *SyncInfo  `json:"sync,omitempty"`
-	Validator *Validator `json:"validator,omitempty"`
+	Node      *NodeInfo             `json:"node,omitempty"`
+	Sync      *SyncInfo             `json:"sync,omitempty"`
+	Validator *Validator            `json:"validator,omitempty"`
+	Migration *types.MigrationState `json:"migration,omitempty"`
 }
 
 type NodeInfo = adminTypes.NodeInfo

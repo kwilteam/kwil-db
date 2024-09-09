@@ -3,6 +3,7 @@ package specifications
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -151,4 +152,28 @@ func ExecuteDBRecordsVerifySpecification(ctx context.Context, t *testing.T, exec
 		counter++
 	}
 	assert.EqualValues(t, numRecords, counter)
+}
+
+func ExecuteDBRecordsVerifySpecificationEventually(ctx context.Context, t *testing.T, execute ExecuteQueryDsl, numRecords int) {
+	t.Logf("Executing verify db records eventually specification")
+	// Given a valid database schema
+	db := SchemaLoader.Load(t, SchemaTestDB)
+	dbID := execute.DBID(db.Name)
+
+	if execute.SupportBatch() {
+		numRecords = numRecords * 2
+	}
+
+	require.Eventually(t, func() bool {
+		records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
+		assert.NoError(t, err)
+		require.NotNil(t, records)
+
+		counter := 0
+		for records.Next() {
+			_ = records.Record()
+			counter++
+		}
+		return counter == numRecords
+	}, 1*time.Minute, 500*time.Millisecond)
 }

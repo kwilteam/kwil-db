@@ -1,7 +1,6 @@
 package types
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/big"
 )
@@ -89,15 +88,44 @@ type Migration struct {
 	ActivationPeriod int64  `json:"activation_height"`  // ActivationPeriod is the amount of blocks before the migration is activated.
 	Duration         int64  `json:"migration_duration"` // MigrationDuration is the duration of the migration process starting from the ActivationHeight
 	ChainID          string `json:"chain_id"`           // ChainID of the new network
+	Timestamp        string `json:"timestamp"`          // Timestamp when the migration was proposed
+}
+
+type MigrationStatus int
+
+const (
+	NoActiveMigration MigrationStatus = iota
+	MigrationNotStarted
+	MigrationInProgress
+	MigrationCompleted
+)
+
+func (status *MigrationStatus) String() string {
+	switch *status {
+	case NoActiveMigration:
+		return "NoActiveMigration"
+	case MigrationNotStarted:
+		return "MigrationNotStarted"
+	case MigrationInProgress:
+		return "MigrationInProgress"
+	case MigrationCompleted:
+		return "MigrationCompleted"
+	default:
+		return "Unknown"
+	}
+}
+
+type MigrationState struct {
+	Status      MigrationStatus `json:"status"`       // Status is the current status of the migration
+	StartHeight int64           `json:"start_height"` // StartHeight is the block height at which the migration started
+	EndHeight   int64           `json:"end_height"`   // EndHeight is the block height at which the migration ends
 }
 
 // MigrationMetadata holds metadata about a migration, informing
 // consumers of what information the current node has available
 // for the migration.
 type MigrationMetadata struct {
-	InMigration      bool            `json:"in_migration"`      // InMigration is true if the node is in migration state i.e current height is between StartHeight and EndHeight
-	StartHeight      int64           `json:"start_height"`      // StartHeight is the block height at which the migration starts
-	EndHeight        int64           `json:"end_height"`        // EndHeight is the block height at which the migration ends
-	GenesisConfig    json.RawMessage `json:"genesis_config"`    // GenesisConfig is the genesis file data
-	SnapshotMetadata json.RawMessage `json:"snapshot_metadata"` // SnapshotMetadata is the snapshot metadata
+	MigrationState   MigrationState `json:"migration_state"`   // MigrationState is the current state of the migration
+	GenesisConfig    []byte         `json:"genesis_config"`    // GenesisConfig is the genesis file data
+	SnapshotMetadata []byte         `json:"snapshot_metadata"` // SnapshotMetadata is the snapshot metadata
 }

@@ -300,15 +300,29 @@ func (cfg *KwildConfig) ConfigureExtensions(genCfg *chain.GenesisConfig) error {
 
 	// Migrations extension configuration
 	// sets the listener address from the migrate_from flag
-	if cfg.AppConfig.MigrateFrom != "" {
-		if genCfg.ConsensusParams.Migration.StartHeight == -1 || genCfg.ConsensusParams.Migration.EndHeight == -1 {
-			return fmt.Errorf("migrate_from flag requires migration start and end heights in the genesis file")
-		}
+	startHeight := genCfg.ConsensusParams.Migration.StartHeight
+	endHeight := genCfg.ConsensusParams.Migration.EndHeight
+	// validate migration configuration
+	// migration start and end heights must be set together
+	if (startHeight > 0 && endHeight == 0) || (startHeight == 0 && endHeight > 0) {
+		return fmt.Errorf("migration configuration requires both start and end heights to be set")
+	}
 
+	// if migration start and end heights are set, MigrateFrom must be set
+	if (startHeight > 0 && endHeight > 0) && cfg.AppConfig.MigrateFrom == "" {
+		return fmt.Errorf("migrate_from flag must be set when migration configuration is set in the genesis file")
+	}
+
+	// and vice versa
+	if cfg.AppConfig.MigrateFrom != "" && (startHeight == 0 || endHeight == 0) {
+		return fmt.Errorf("migrate_from flag requires migration start and end heights in the genesis file")
+	}
+
+	if cfg.AppConfig.MigrateFrom != "" {
 		extensions["migrations"] = map[string]string{
 			"listen_address": cfg.AppConfig.MigrateFrom,
-			"start_height":   fmt.Sprintf("%d", genCfg.ConsensusParams.Migration.StartHeight),
-			"end_height":     fmt.Sprintf("%d", genCfg.ConsensusParams.Migration.EndHeight),
+			"start_height":   fmt.Sprintf("%d", startHeight),
+			"end_height":     fmt.Sprintf("%d", endHeight),
 		}
 	}
 

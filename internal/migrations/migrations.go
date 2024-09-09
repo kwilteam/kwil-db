@@ -24,12 +24,10 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
-)
-
-const (
-	StartMigrationEventType = "migration"
+	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 // migrator instance responsible for managing zero downtime migrations.
@@ -38,7 +36,7 @@ var migrator *Migrator
 func init() {
 	migrator = &Migrator{}
 
-	err := resolutions.RegisterResolution(StartMigrationEventType, resolutions.ModAdd, MigrationResolution)
+	err := resolutions.RegisterResolution(voting.StartMigrationEventType, resolutions.ModAdd, MigrationResolution)
 	if err != nil {
 		panic(err)
 	}
@@ -57,6 +55,10 @@ type MigrationDeclaration struct {
 	// A new chain ID should always be used for a new network, to avoid
 	// cross-network replay attacks.
 	ChainID string
+	// Timestamp is the time the migration was created. It is set by the migration
+	// creator. The primary purpose of it is to guarantee uniqueness of the serialized
+	// MigrationDeclaration, since that is a requirement for the voting system.
+	Timestamp string
 }
 
 // MarshalBinary marshals the MigrationDeclaration into a binary format.
@@ -83,6 +85,13 @@ var MigrationResolution = resolutions.ResolutionConfig{
 }
 
 func (m *Migrator) startMigration(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
+	// check if the node is in migration mode already
+	if block.ChainContext.MigrationParams != nil {
+		app.Service.Logger.Warn("node is currently migrating from the old chain. Resubmit the migration proposal after the current migration is complete")
+		return nil
+	}
+
+	// check if there is already an active migration
 	alreadyHasMigration, err := migrationActive(ctx, app.DB)
 	if err != nil {
 		return err
@@ -115,9 +124,14 @@ func (m *Migrator) startMigration(ctx context.Context, app *common.App, resoluti
 		return err
 	}
 
+	block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationNotStarted
 	m.activeMigration = active
-
 	app.Service.Logger.Info("migration started", log.Int("start_height", active.StartHeight), log.Int("end_height", active.EndHeight))
+
+	// Delete the pending migration resolutions from the resolutions table
+	if err = voting.DeleteResolutionsByType(ctx, app.DB, []string{voting.StartMigrationEventType}); err != nil {
+		return err
+	}
 
 	return nil
 }

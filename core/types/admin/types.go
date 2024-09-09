@@ -49,6 +49,7 @@ type Status struct {
 	Node      *NodeInfo      `json:"node"`
 	Sync      *SyncInfo      `json:"sync"`
 	Validator *ValidatorInfo `json:"validator"`
+	Migration MigrationInfo  `json:"migration"`
 }
 
 // PeerInfo describes a connected peer node.
@@ -56,4 +57,10 @@ type PeerInfo struct {
 	NodeInfo   *NodeInfo `json:"node"`
 	Inbound    bool      `json:"inbound"`
 	RemoteAddr string    `json:"remote_addr"`
+}
+
+type MigrationInfo struct {
+	Status      string `json:"status"`
+	StartHeight int64  `json:"start_height"`
+	EndHeight   int64  `json:"end_height"`
 }

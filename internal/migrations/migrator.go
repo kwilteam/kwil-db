@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
+	cmtTypes "github.com/cometbft/cometbft/types"
 	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common"
@@ -18,6 +20,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
+	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
+	"github.com/kwilteam/kwil-db/internal/abci/meta"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
 	"github.com/kwilteam/kwil-db/internal/txapp"
@@ -48,7 +52,7 @@ var (
 )
 
 const (
-	MaxChunkSize = 4 * 1000 * 1000 // around 4MB
+	MaxChunkSize = 1 * 1000 * 1000 // around 1MB
 )
 
 // migrator is responsible for managing the migrations.
@@ -70,6 +74,9 @@ type Migrator struct {
 	// Set to true when the migration is in progress.
 	// i.e the block height is between the start and end height of the migration.
 	inProgress bool
+
+	// Set to true when the node is halted after the migration is completed.
+	halted bool
 
 	// snapshotter creates snapshots of the state.
 	snapshotter Snapshotter
@@ -98,6 +105,11 @@ type Migrator struct {
 
 	// errChan is a channel that receives errors from the changeset storage routine.
 	errChan chan error
+
+	// consensusParamsFn is a function that returns the consensus params for the chain.
+	consensusParamsFn ConsensusParamsGetter
+	// consensusParamsFnChan is a channel that is signals if the consensusParamsFn is set.
+	consensusParamsFnChan chan struct{}
 }
 
 // activeMigration is an in-process migration.
@@ -124,7 +136,7 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 	migrator.accounts = accounts
 	migrator.doneChan = make(chan bool, 1)
 	migrator.initialized = true
-
+	migrator.consensusParamsFnChan = make(chan struct{})
 	// Initialize the DB
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initializeMigrationSchema,
@@ -154,6 +166,19 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 	}
 	migrator.lastChangeset = height
 
+	// Check if the migration is in progress or completed
+	if migrator.activeMigration != nil {
+		if migrator.lastChangeset >= migrator.activeMigration.StartHeight {
+			// migration is in progress
+			migrator.inProgress = true
+		}
+
+		if migrator.lastChangeset >= migrator.activeMigration.EndHeight-1 {
+			// migration is completed
+			migrator.halted = true
+		}
+	}
+
 	return migrator, nil
 }
 
@@ -175,14 +200,13 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 	}
 
 	if block.Height > m.activeMigration.EndHeight {
-		m.inProgress = false
-		panic("internal bug: block height is greater than end height of migration")
+		return nil
 	}
 
 	if block.Height == m.activeMigration.StartHeight-1 {
 		// set the migration in progress, so that we record the changesets starting from the next block
 		m.inProgress = true
-		block.ChainContext.NetworkParameters.InMigration = true
+		block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationInProgress
 		return nil
 	}
 
@@ -205,29 +229,27 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 		if err != nil {
 			return err
 		}
-
-		err = m.snapshotter.CreateSnapshot(ctx, uint64(block.Height), snapshotId, networkMigrationSchemas, networkMigrationExcludedTables, networkMigrationExcludedTableData)
-		if err != nil {
+		defer func() {
 			err2 := tx.Rollback(ctx)
 			if err2 != nil {
 				// we can mostly ignore this error, since the original err will halt the node anyways
 				m.Logger.Errorf("failed to rollback transaction: %s", err2.Error())
 			}
+		}()
+
+		err = m.snapshotter.CreateSnapshot(ctx, uint64(block.Height), snapshotId, networkMigrationSchemas, networkMigrationExcludedTables, networkMigrationExcludedTableData)
+		if err != nil {
 			return err
 		}
 
 		// Generate a genesis file for the snapshot
 		vals, err := voting.GetValidators(ctx, tx)
 		if err != nil {
-			err2 := tx.Rollback(ctx)
-			if err2 != nil {
-				// we can mostly ignore this error, since the original err will halt the node anyways
-				m.Logger.Errorf("failed to rollback transaction: %s", err2.Error())
-			}
 			return err
 		}
 
-		err = tx.Rollback(ctx)
+		// Retrieve the consensus params stored in the DB
+		cfgParams, err := meta.LoadParams(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -241,7 +263,6 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 			return fmt.Errorf("migration is active, but more than one snapshot found. This should not happen, and is likely a bug")
 		}
 
-		genCfg := chain.DefaultGenesisConfig()
 		genesisVals := make([]*chain.GenesisValidator, len(vals))
 		for i, v := range vals {
 			genesisVals[i] = &chain.GenesisValidator{
@@ -251,24 +272,15 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 			}
 		}
 
-		genCfg.Validators = genesisVals
-		genCfg.DataAppHash = snapshots[0].SnapshotHash
-		genCfg.ChainID = m.activeMigration.ChainID
-
-		genCfg.ConsensusParams.Migration.StartHeight = m.activeMigration.StartHeight
-		genCfg.ConsensusParams.Migration.EndHeight = m.activeMigration.EndHeight
-
-		// Save the genesis file
-		err = genCfg.SaveAs(formatGenesisFilename(m.dir))
-		if err != nil {
-			return err
-		}
+		go m.generateGenesisConfig(ctx, cfgParams, snapshots[0].SnapshotHash, genesisVals, m.Logger)
 	}
 
 	if block.Height == m.activeMigration.EndHeight {
-		// an error here will halt the node.
-		// there might be a more elegant way to handle this, but for now, this is fine.
-		return fmt.Errorf(`NETWORK HALTED: migration to chain "%s" has completed`, m.activeMigration.ChainID)
+		// starting from here, no more transactions of any kind will be accepted or mined.
+		block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationCompleted
+		m.halted = true
+		m.Logger.Info("migration to chain completed, no new transactions will be accepted", log.String("ChainID", m.activeMigration.ChainID))
+		return nil
 	}
 
 	// wait for signal on doneChan, indicating that all changesets have been written to disk
@@ -285,6 +297,54 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 	return nil
 }
 
+// generateGenesisConfig generates the genesis config for the new chain based on the snapshot and the current
+// chain's consensus params. It saves the genesis file to the migrations/snapshots directory.
+// This function is called only once at the start height of the migration.
+// It is run asynchronously as we don't have access to the cometbft's state during replay.
+// Therefore we need to wait for the consensus params fn to be set before we can generate the genesis file.
+func (m *Migrator) generateGenesisConfig(ctx context.Context, cfgParams *common.NetworkParameters, snapshotHash []byte, genesisValidators []*chain.GenesisValidator, logger log.Logger) {
+	// block until the m.consensusParamsFn is closed
+	<-m.consensusParamsFnChan
+
+	// sanity check
+	if m.consensusParamsFn == nil {
+		logger.Error("consensus params fn is nil, cannot generate genesis config")
+		return
+	}
+
+	logger.Info("generating genesis config for the new chain", log.String("ChainID", m.activeMigration.ChainID))
+
+	height := m.activeMigration.StartHeight - 1
+	consensusParmas := m.consensusParamsFn(ctx, &height)
+	if consensusParmas == nil {
+		logger.Error("consensus params not found, cannot generate genesis config")
+		return
+	}
+
+	finalCfg := cometbft.MergeConsensusParams(consensusParmas, cfgParams)
+	// Migration Params
+	finalCfg.Migration.StartHeight = m.activeMigration.StartHeight
+	finalCfg.Migration.EndHeight = m.activeMigration.EndHeight
+
+	genCfg := &chain.GenesisConfig{
+		ChainID:     m.activeMigration.ChainID,
+		GenesisTime: time.Now().Round(0).UTC(),
+		// Initial height set to 0
+		DataAppHash: snapshotHash,
+		// Allocs are not needed, as the transfers are included in the snapshot
+		// forks can be dropped, as they maynot be relevant to the new chain
+		Validators:      genesisValidators,
+		ConsensusParams: finalCfg,
+	}
+
+	// Save the genesis file
+	err := genCfg.SaveAs(formatGenesisFilename(m.dir))
+	if err != nil {
+		logger.Error("failed to save genesis file", log.Error(err))
+		return
+	}
+}
+
 func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -292,15 +352,23 @@ func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Execut
 	return setLastStoredChangeset(ctx, tx, m.lastChangeset)
 }
 
-func (m *Migrator) InMigration(height int64) bool {
+func (m *Migrator) MigrationStatus() types.MigrationStatus {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	if m.activeMigration == nil {
-		return false
+		return types.NoActiveMigration
 	}
 
-	return height >= m.activeMigration.StartHeight
+	if m.halted {
+		return types.MigrationCompleted
+	}
+
+	if m.inProgress {
+		return types.MigrationInProgress
+	}
+
+	return types.MigrationNotStarted
 }
 
 // GetMigrationMetadata gets the metadata for the genesis snapshot,
@@ -311,15 +379,21 @@ func (m *Migrator) GetMigrationMetadata() (*types.MigrationMetadata, error) {
 
 	// if there is no planned migration, return
 	if m.activeMigration == nil {
-		return nil, ErrNoActiveMigration
+		return &types.MigrationMetadata{
+			MigrationState: types.MigrationState{
+				Status: types.NoActiveMigration,
+			},
+		}, nil
 	}
 
 	// Migration is triggered but not yet started
 	if !m.inProgress {
 		return &types.MigrationMetadata{
-			InMigration: false,
-			StartHeight: m.activeMigration.StartHeight,
-			EndHeight:   m.activeMigration.EndHeight,
+			MigrationState: types.MigrationState{
+				Status:      types.MigrationNotStarted,
+				StartHeight: m.activeMigration.StartHeight,
+				EndHeight:   m.activeMigration.EndHeight,
+			},
 		}, nil
 	}
 
@@ -349,17 +423,24 @@ func (m *Migrator) GetMigrationMetadata() (*types.MigrationMetadata, error) {
 		return nil, err
 	}
 
+	status := types.MigrationInProgress
+	if m.halted {
+		status = types.MigrationCompleted
+	}
+
 	return &types.MigrationMetadata{
-		InMigration:      true,
-		StartHeight:      m.activeMigration.StartHeight,
-		EndHeight:        m.activeMigration.EndHeight,
+		MigrationState: types.MigrationState{
+			Status:      status,
+			StartHeight: m.activeMigration.StartHeight,
+			EndHeight:   m.activeMigration.EndHeight,
+		},
 		SnapshotMetadata: snapshotBts,
 		GenesisConfig:    configBts,
 	}, nil
 }
 
 // GetGenesisSnapshotChunk gets the snapshot chunk of Index at the given height.
-func (m *Migrator) GetGenesisSnapshotChunk(height int64, format uint32, chunkIdx uint32) ([]byte, error) {
+func (m *Migrator) GetGenesisSnapshotChunk(chunkIdx uint32) ([]byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -367,11 +448,7 @@ func (m *Migrator) GetGenesisSnapshotChunk(height int64, format uint32, chunkIdx
 		return nil, ErrNoActiveMigration
 	}
 
-	if height != m.activeMigration.StartHeight {
-		return nil, fmt.Errorf("requested snapshot height is not the start of the migration")
-	}
-
-	return m.snapshotter.LoadSnapshotChunk(uint64(height), format, chunkIdx)
+	return m.snapshotter.LoadSnapshotChunk(uint64(m.activeMigration.StartHeight), 0, chunkIdx)
 }
 
 // GetChangesetMetadata gets the metadata for the changeset at the given height.
@@ -663,4 +740,52 @@ func formatChangesetMetadataFilename(mdir string, height int64) string {
 
 func formatGenesisFilename(mdir string) string {
 	return filepath.Join(mdir, cmd.DefaultConfig().AppConfig.Snapshots.SnapshotDir, genesisFileName)
+}
+
+// CleanupResolutionsAtStartup is called at startup to clean up the resolutions table. It does the below things:
+// - Remove all the pending migration, changeset, validator join and validator remove resolutions
+// - Fix the expiry heights of all the pending resolutions
+// (how to handle this for offline migrations? we have no way to know the last height of the old chain)
+func CleanupResolutionsAfterMigration(ctx context.Context, db sql.DB, adjustExpiration bool, snapshotHeight int64) error {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	resolutionTypes := []string{
+		voting.StartMigrationEventType,
+		voting.ChangesetMigrationEventType,
+		voting.ValidatorJoinEventType,
+		voting.ValidatorRemoveEventType,
+	}
+
+	err = voting.DeleteResolutionsByType(ctx, tx, resolutionTypes)
+	if err != nil {
+		return err
+	}
+
+	if adjustExpiration {
+		// Fix the expiry heights of all the pending resolutions
+		err = voting.ReadjustExpirations(ctx, tx, snapshotHeight)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
+type ConsensusParamsGetter func(ctx context.Context, height *int64) *cmtTypes.ConsensusParams
+
+// SetConsensusParamsGetter sets the function that returns the consensus params for the chain.
+// This closes the consensusParamsFnChan to signal that the function is set.
+// This is required especially in the replay mode, where the cometbft state is not available
+// until the replay is done. Therefore, the genesis config cannot be generated until the
+// consensus params are available.
+// SeeAlso: NewCometBftNode() in internal/abci/cometbft/node.go for the function that
+// generate the node config and does the replay.
+func (m *Migrator) SetConsensusParamsGetter(fn ConsensusParamsGetter) {
+	m.consensusParamsFn = fn
+	close(m.consensusParamsFnChan)
 }

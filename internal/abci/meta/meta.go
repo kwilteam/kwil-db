@@ -12,6 +12,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
 )
 
@@ -155,11 +156,10 @@ func StoreParams(ctx context.Context, db sql.TxMaker, params *common.NetworkPara
 		return err
 	}
 
-	buf = make([]byte, 1)
-	if params.InMigration {
-		buf[0] = 1
-	}
-	_, err = tx.Execute(ctx, upsertParam, inMigration, buf)
+	// migration status
+	buf = make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, uint64(params.MigrationStatus))
+	_, err = tx.Execute(ctx, upsertParam, migrationStatus, buf)
 	if err != nil {
 		return err
 	}
@@ -240,8 +240,8 @@ func LoadParams(ctx context.Context, db sql.Executor) (*common.NetworkParameters
 			params.VoteExpiry = int64(binary.LittleEndian.Uint64(value))
 		case disabledGasKey:
 			params.DisabledGasCosts = value[0] == 1
-		case inMigration:
-			params.InMigration = value[0] == 1
+		case migrationStatus:
+			params.MigrationStatus = types.MigrationStatus(binary.LittleEndian.Uint64(value))
 		case maxVotesPerTx:
 			params.MaxVotesPerTx = int64(binary.LittleEndian.Uint64(value))
 		default:
@@ -281,12 +281,10 @@ func diff(original, new *common.NetworkParameters) map[string][]byte {
 		d[disabledGasKey] = buf
 	}
 
-	if original.InMigration != new.InMigration {
-		buf := make([]byte, 1)
-		if new.InMigration {
-			buf[0] = 1
-		}
-		d[inMigration] = buf
+	if original.MigrationStatus != new.MigrationStatus {
+		buf := make([]byte, 8)
+		binary.LittleEndian.PutUint64(buf, uint64(new.MigrationStatus))
+		d[migrationStatus] = buf
 	}
 
 	if original.MaxVotesPerTx != new.MaxVotesPerTx {
@@ -303,6 +301,6 @@ const (
 	joinExpiryKey   = `join_expiry`
 	voteExpiryKey   = `vote_expiry`
 	disabledGasKey  = `disabled_gas_costs`
-	inMigration     = `in_migration`
+	migrationStatus = `migration_status`
 	maxVotesPerTx   = `max_votes_per_tx`
 )

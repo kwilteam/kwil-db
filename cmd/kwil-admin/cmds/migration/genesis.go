@@ -11,6 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/common/chain"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/statesync"
 )
 
@@ -48,8 +49,14 @@ func genesisStateCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			if !metadata.InMigration || metadata.GenesisConfig == nil || metadata.SnapshotMetadata == nil {
-				return display.PrintCmd(cmd, &MigrationState{InMigration: false, StartHeight: metadata.StartHeight, EndHeight: metadata.EndHeight})
+			// If there is no active migration or if the migration has not started yet, return the migration state
+			// indicating that there is no genesis state to download.
+			if metadata.MigrationState.Status == types.NoActiveMigration ||
+				metadata.MigrationState.Status == types.MigrationNotStarted ||
+				metadata.GenesisConfig == nil || metadata.SnapshotMetadata == nil {
+				return display.PrintCmd(cmd, &MigrationState{
+					Info: metadata.MigrationState,
+				})
 			}
 
 			// ensure the root directory exists
@@ -106,9 +113,7 @@ func genesisStateCmd() *cobra.Command {
 
 			// Print the migration state
 			return display.PrintCmd(cmd, &MigrationState{
-				InMigration: metadata.InMigration,
-				StartHeight: metadata.StartHeight,
-				EndHeight:   metadata.EndHeight,
+				Info:        metadata.MigrationState,
 				GenesisFile: genesisFile,
 				Snapshot:    snapshotFile,
 			})
@@ -122,16 +127,18 @@ func genesisStateCmd() *cobra.Command {
 }
 
 type MigrationState struct {
-	InMigration bool   `json:"in_migration"`
-	StartHeight int64  `json:"start_height"`
-	EndHeight   int64  `json:"end_height"`
-	GenesisFile string `json:"genesis_file"`
-	Snapshot    string `json:"snapshot"`
+	Info        types.MigrationState `json:"state"`
+	GenesisFile string               `json:"genesis_file"`
+	Snapshot    string               `json:"snapshot"`
 }
 
 func (m *MigrationState) MarshalText() ([]byte, error) {
-	if !m.InMigration {
-		return []byte(fmt.Sprintf("No genesis state to download yet. Migration is set to start at block height: %d", m.StartHeight)), nil
+	if m.Info.Status == types.NoActiveMigration {
+		return []byte("No active migration found."), nil
+	}
+
+	if m.Info.Status == types.MigrationNotStarted {
+		return []byte(fmt.Sprintf("No genesis state to download yet. Migration is set to start at block height: %d", m.Info.StartHeight)), nil
 	}
 
 	if m.GenesisFile == "" {
@@ -147,7 +154,7 @@ func (m *MigrationState) MarshalText() ([]byte, error) {
 		"\tEnd Height: %d\n"+
 		"\tGenesis File: %s\n"+
 		"\tSnapshot File: %s\n",
-		m.StartHeight, m.EndHeight, m.GenesisFile, m.Snapshot)), nil
+		m.Info.StartHeight, m.Info.EndHeight, m.GenesisFile, m.Snapshot)), nil
 }
 
 func (m *MigrationState) MarshalJSON() ([]byte, error) {

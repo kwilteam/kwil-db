@@ -57,7 +57,11 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *transactions.Trans
 	// if the network is in a migration, there are numerous
 	// transaction types we must disallow.
 	// see [internal/migrations/migrations.go] for more info
-	if ctx.BlockContext.ChainContext.NetworkParameters.InMigration {
+	status := ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus
+	inMigration := status == types.MigrationInProgress || status == types.MigrationCompleted
+	activeMigration := status != types.NoActiveMigration
+
+	if inMigration {
 		switch tx.Body.PayloadType {
 		case transactions.PayloadTypeValidatorJoin:
 			return fmt.Errorf("validator joins are not allowed during migration")
@@ -77,6 +81,34 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *transactions.Trans
 			return fmt.Errorf("drop schema transactions are not allowed during migration")
 		case transactions.PayloadTypeTransfer:
 			return fmt.Errorf("transfer transactions are not allowed during migration")
+		}
+	}
+
+	// Migration proposals and its approvals are not allowed once the migration is approved
+	if tx.Body.PayloadType == transactions.PayloadTypeCreateResolution {
+		res := &transactions.CreateResolution{}
+		if err := res.UnmarshalBinary(tx.Body.Payload); err != nil {
+			return err
+		}
+		if activeMigration && res.Resolution.Type == voting.StartMigrationEventType {
+			return fmt.Errorf(" migration resolutions are not allowed during migration")
+		}
+	}
+
+	if tx.Body.PayloadType == transactions.PayloadTypeApproveResolution {
+		res := &transactions.ApproveResolution{}
+		if err := res.UnmarshalBinary(tx.Body.Payload); err != nil {
+			return err
+		}
+
+		// check if resolution is a migration resolution
+		resolution, err := resolutionByID(ctx.Ctx, dbTx, res.ResolutionID)
+		if err != nil {
+			return errors.New("migration proposal not found")
+		}
+
+		if activeMigration && resolution.Type == voting.StartMigrationEventType {
+			return fmt.Errorf("approving migration resolutions are not allowed during migration")
 		}
 	}
 

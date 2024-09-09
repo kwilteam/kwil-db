@@ -63,7 +63,7 @@ func Test_NetworkParams(t *testing.T) {
 	param2.MaxBlockSize = 2000
 	param2.JoinExpiry = 200
 	param2.DisabledGasCosts = false
-	param2.InMigration = true
+	param2.MigrationStatus = 1
 
 	err = meta.StoreDiff(ctx, tx, param, param2)
 	require.NoError(t, err)

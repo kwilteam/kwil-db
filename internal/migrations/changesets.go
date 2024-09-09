@@ -12,21 +12,22 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/hooks"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
+	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
 const (
-	// "changeset_migration" is the event type used for replication of changesets from old chain to new chain during migration.
-	ChangesetMigrationEventType = "changeset_migration"
-	changesetsEndBlockHook      = "changesets"
+	changesetsEndBlockHook = "changesets"
 )
 
 var (
 	ErrNoMoreChunksToRead = errors.New("no more chunks to read")
 	ErrChangesetNotFound  = errors.New("changeset not found")
+
+	migrationCompleted = "migration completed. `migration` section of `genesis.json` and `migrate_from` config in `config.toml` is no longer relevant and should be removed"
 )
 
 func init() {
-	err := resolutions.RegisterResolution(ChangesetMigrationEventType, resolutions.ModAdd, changesetMigrationResolution)
+	err := resolutions.RegisterResolution(voting.ChangesetMigrationEventType, resolutions.ModAdd, changesetMigrationResolution)
 	if err != nil {
 		panic(err)
 	}
@@ -127,6 +128,7 @@ func applyChangesets(ctx context.Context, app *common.App, blockCtx *common.Bloc
 
 	if lastChangeset == endHeight {
 		blockCtx.ChainContext.MigrationParams = nil
+		app.Service.Logger.Info(migrationCompleted, log.Int("height", lastChangeset))
 		return nil // migration completed
 	}
 
@@ -140,7 +142,7 @@ func applyChangesets(ctx context.Context, app *common.App, blockCtx *common.Bloc
 		// If the current height is greater than the migration end height, break
 		if currentHeight >= endHeight {
 			blockCtx.ChainContext.MigrationParams = nil
-			app.Service.Logger.Info("changeset migration completed", log.Int("height", currentHeight))
+			app.Service.Logger.Info(migrationCompleted, log.Int("height", currentHeight))
 			break
 		}
 

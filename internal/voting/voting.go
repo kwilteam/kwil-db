@@ -607,3 +607,18 @@ func ResolutionStatus(ctx context.Context, db sql.DB, resolution *resolutions.Re
 
 	return resolution.ExpirationHeight, board, approvals, nil
 }
+
+func DeleteResolutionsByType(ctx context.Context, db sql.Executor, resTypes []string) error {
+	uuids := make([]*types.UUID, len(resTypes))
+	for i, resType := range resTypes {
+		uuids[i] = types.NewUUIDV5([]byte(resType))
+	}
+	_, err := db.Execute(ctx, deleteResolutionsByTypeSQL, types.UUIDArray(uuids).Bytes())
+	return err
+}
+
+func ReadjustExpirations(ctx context.Context, db sql.Executor, startHeight int64) error {
+	// Subtracts the start height from the expiration height of all resolutions
+	_, err := db.Execute(ctx, readjustExpirationsSQL, startHeight)
+	return err
+}
