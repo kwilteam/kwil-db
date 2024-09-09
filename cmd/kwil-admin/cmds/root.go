@@ -1,6 +1,9 @@
 package cmds
 
 import (
+	"fmt"
+
+	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/common/version"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/key"
@@ -15,6 +18,14 @@ import (
 )
 
 func NewRootCmd() *cobra.Command {
+	desc := fmt.Sprintf("The %s node admin tool.", cmd.BinaryConfig.ProjectName)
+	rootCmd := &cobra.Command{
+		Use:               cmd.BinaryConfig.AdminCmd,
+		Short:             desc,
+		Long:              desc,
+		SilenceUsage:      true,
+		DisableAutoGenTag: true,
+	}
 	rootCmd.AddCommand(
 		version.NewVersionCmd(),
 		key.NewKeyCmd(),
@@ -31,12 +42,4 @@ func NewRootCmd() *cobra.Command {
 	display.BindSilenceFlag(rootCmd)
 
 	return rootCmd
-}
-
-var rootCmd = &cobra.Command{
-	Use:               "kwil-admin",
-	Short:             "The Kwil node admin tool.",
-	Long:              `The Kwil node admin tool.`,
-	SilenceUsage:      true,
-	DisableAutoGenTag: true,
 }

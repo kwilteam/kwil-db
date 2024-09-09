@@ -5,13 +5,14 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/common/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_Config_Toml(t *testing.T) {
-	cfg := DefaultConfig()
+	cfg := cmd.DefaultConfig()
 
 	tomlCfg, err := LoadConfigFile(filepath.Join("test_data", ConfigFileName))
 	assert.NoError(t, err)

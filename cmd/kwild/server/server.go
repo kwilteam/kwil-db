@@ -46,9 +46,8 @@ type Server struct {
 
 const (
 	// Top-level directory structure for the Server's systems
-	abciDirName      = kconfig.ABCIDirName
-	rcvdSnapsDirName = kconfig.ReceivedSnapsDirName
-	signingDirName   = kconfig.SigningDirName
+	abciDirName    = kconfig.ABCIDirName
+	signingDirName = kconfig.SigningDirName
 )
 
 // New builds the kwild server.

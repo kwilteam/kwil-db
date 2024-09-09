@@ -1,32 +1,39 @@
 package config
 
 import (
+	"fmt"
+
+	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/common/config"
 	"github.com/spf13/pflag"
 )
 
-// AddConfigFlags adds all flags from KwildConfig to the given flagSet
+// AddConfigFlags adds all flags from KwildConfig to the given flagSet.
 func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
-	flagSet.StringVarP(&cfg.RootDir, "root-dir", "r", "~/.kwild", "kwild root directory for config and data")
+	format := func(s string) string {
+		return fmt.Sprintf(s, cmd.BinaryConfig.NodeCmd)
+	}
+
+	flagSet.StringVarP(&cfg.RootDir, "root-dir", "r", "~/.kwild", format("%s root directory for config and data"))
 
 	// logging
-	flagSet.StringVarP(&cfg.Logging.Level, "log.level", "l", cfg.Logging.Level, "kwild log level")
+	flagSet.StringVarP(&cfg.Logging.Level, "log.level", "l", cfg.Logging.Level, format("%s log level"))
 	flagSet.StringVar(&cfg.Logging.RPCLevel, "log.rpc-level", cfg.Logging.RPCLevel, "user rpc server log level")
 	flagSet.StringVar(&cfg.Logging.ConsensusLevel, "log.consensus_level", cfg.Logging.ConsensusLevel, "consensus (cometbft) log level")
 	flagSet.StringVar(&cfg.Logging.DBLevel, "log.db-level", cfg.Logging.DBLevel, "database backend (postgres) log level")
-	flagSet.StringVar(&cfg.Logging.Format, "log.format", cfg.Logging.Format, "kwild log format")
-	flagSet.StringVar(&cfg.Logging.TimeEncoding, "log.time-format", cfg.Logging.TimeEncoding, "kwild time log format")
-	flagSet.StringSliceVar(&cfg.Logging.OutputPaths, "log.output-paths", cfg.Logging.OutputPaths, "kwild log output paths")
+	flagSet.StringVar(&cfg.Logging.Format, "log.format", cfg.Logging.Format, format("%s log format"))
+	flagSet.StringVar(&cfg.Logging.TimeEncoding, "log.time-format", cfg.Logging.TimeEncoding, format("%s time log format"))
+	flagSet.StringSliceVar(&cfg.Logging.OutputPaths, "log.output-paths", cfg.Logging.OutputPaths, format("%s log output paths"))
 
 	// General APP flags:
 	flagSet.StringVar(&cfg.AppConfig.PrivateKeyPath, "app.private-key-path", cfg.AppConfig.PrivateKeyPath, "Path to the node private key file")
-	flagSet.StringVar(&cfg.AppConfig.JSONRPCListenAddress, "app.jsonrpc-listen-addr", cfg.AppConfig.JSONRPCListenAddress, "kwild JSON-RPC listen address")
-	flagSet.StringVar(&cfg.AppConfig.AdminListenAddress, "app.admin-listen-addr", cfg.AppConfig.AdminListenAddress, "kwild admin listen address (unix or tcp)")
-	flagSet.StringVar(&cfg.AppConfig.AdminRPCPass, "app.admin-pass", cfg.AppConfig.AdminRPCPass, "password for the kwil admin service (may be empty)")
+	flagSet.StringVar(&cfg.AppConfig.JSONRPCListenAddress, "app.jsonrpc-listen-addr", cfg.AppConfig.JSONRPCListenAddress, format("%s JSON-RPC listen address"))
+	flagSet.StringVar(&cfg.AppConfig.AdminListenAddress, "app.admin-listen-addr", cfg.AppConfig.AdminListenAddress, format("%s admin listen address (unix or tcp)"))
+	flagSet.StringVar(&cfg.AppConfig.AdminRPCPass, "app.admin-pass", cfg.AppConfig.AdminRPCPass, "password for the node's admin service (may be empty)")
 	flagSet.BoolVar(&cfg.AppConfig.NoTLS, "app.admin-notls", cfg.AppConfig.NoTLS, "do not enable TLS on admin server (automatically disabled for unix socket or loopback listen addresses)")
 	flagSet.StringVar(&cfg.AppConfig.TLSCertFile, "app.tls-cert-file", cfg.AppConfig.TLSCertFile, "TLS certificate file path for the admin and consensus RPC server (optional)")
 	flagSet.StringVar(&cfg.AppConfig.TLSKeyFile, "app.tls-key-file", cfg.AppConfig.TLSKeyFile, "TLS key file path for the admin and consensus RPC servers (optional)")
-	flagSet.StringVar(&cfg.AppConfig.Hostname, "app.hostname", cfg.AppConfig.Hostname, "kwild Server hostname")
+	flagSet.StringVar(&cfg.AppConfig.Hostname, "app.hostname", cfg.AppConfig.Hostname, format("%s Server hostname"))
 
 	flagSet.StringVar(&cfg.AppConfig.DBHost, "app.pg-db-host", cfg.AppConfig.DBHost, "PostgreSQL host address (no port)")
 	flagSet.StringVar(&cfg.AppConfig.DBPort, "app.pg-db-port", cfg.AppConfig.DBPort, "PostgreSQL port")
@@ -34,15 +41,15 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.StringVar(&cfg.AppConfig.DBPass, "app.pg-db-pass", cfg.AppConfig.DBPass, "PostgreSQL password name")
 	flagSet.StringVar(&cfg.AppConfig.DBName, "app.pg-db-name", cfg.AppConfig.DBName, "PostgreSQL database name")
 
-	flagSet.StringVar(&cfg.AppConfig.ProfileMode, "app.profile-mode", cfg.AppConfig.ProfileMode, "kwild profile mode (http, cpu, mem, mutex, or block)")
-	flagSet.StringVar(&cfg.AppConfig.ProfileFile, "app.profile-file", cfg.AppConfig.ProfileFile, "kwild profile output file path (e.g. cpu.pprof)")
+	flagSet.StringVar(&cfg.AppConfig.ProfileMode, "app.profile-mode", cfg.AppConfig.ProfileMode, format("%s profile mode (http, cpu, mem, mutex, or block)"))
+	flagSet.StringVar(&cfg.AppConfig.ProfileFile, "app.profile-file", cfg.AppConfig.ProfileFile, format("%s profile output file path (e.g. cpu.pprof)"))
 
 	flagSet.Var(&cfg.AppConfig.RPCTimeout, "app.rpc-timeout", "timeout for RPC requests (through reading the request, handling the request, and sending the response)")
 	flagSet.IntVar(&cfg.AppConfig.RPCMaxReqSize, "app.rpc-req-limit", cfg.AppConfig.RPCMaxReqSize, "RPC request size limit")
 	flagSet.Var(&cfg.AppConfig.ReadTxTimeout, "app.db-read-timeout", "timeout for database reads initiated by RPC requests")
 
 	// Extension endpoints flags
-	flagSet.StringSliceVar(&cfg.AppConfig.ExtensionEndpoints, "app.extension-endpoints", cfg.AppConfig.ExtensionEndpoints, "kwild extension endpoints")
+	flagSet.StringSliceVar(&cfg.AppConfig.ExtensionEndpoints, "app.extension-endpoints", cfg.AppConfig.ExtensionEndpoints, format("%s extension endpoints"))
 
 	// Snapshot Config flags
 	flagSet.BoolVar(&cfg.AppConfig.Snapshots.Enabled, "app.snapshots.enabled", cfg.AppConfig.Snapshots.Enabled, "Enable snapshots")
@@ -51,7 +58,7 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.StringVar(&cfg.AppConfig.Snapshots.SnapshotDir, "app.snapshots.snapshot-dir", cfg.AppConfig.Snapshots.SnapshotDir, "Snapshot directory path")
 
 	flagSet.StringVar(&cfg.AppConfig.GenesisState, "app.genesis-state", cfg.AppConfig.GenesisState, "Path to the genesis state file")
-	flagSet.StringVar(&cfg.AppConfig.MigrateFrom, "app.migrate-from", cfg.AppConfig.MigrateFrom, "kwild JSON-RPC listening address of the node to replicate the state from.")
+	flagSet.StringVar(&cfg.AppConfig.MigrateFrom, "app.migrate-from", cfg.AppConfig.MigrateFrom, format("%s JSON-RPC listening address of the node to replicate the state from."))
 
 	// Basic Chain Config flags
 	flagSet.StringVar(&cfg.ChainConfig.Moniker, "chain.moniker", cfg.ChainConfig.Moniker, "Node moniker")
@@ -71,13 +78,13 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.BoolVar(&cfg.ChainConfig.P2P.AllowDuplicateIP, "chain.p2p.allow-duplicate-ip", cfg.ChainConfig.P2P.AllowDuplicateIP, "Chain P2P allow multiple peers with the same IP address")
 	flagSet.BoolVar(&cfg.ChainConfig.P2P.PexReactor, "chain.p2p.pex", cfg.ChainConfig.P2P.PexReactor, "Enables peer information exchange")
 	flagSet.StringVar(&cfg.ChainConfig.P2P.Seeds, "chain.p2p.seeds", cfg.ChainConfig.P2P.Seeds, "Seed nodes for obtaining peer addresses, if address book is empty")
-	flagSet.BoolVar(&cfg.ChainConfig.P2P.SeedMode, "chain.p2p.seed-mode", cfg.ChainConfig.P2P.SeedMode, `Run kwild in a special "seed" mode where it crawls the network for peer addresses,
+	flagSet.BoolVar(&cfg.ChainConfig.P2P.SeedMode, "chain.p2p.seed-mode", cfg.ChainConfig.P2P.SeedMode, format(`Run %s in a special "seed" mode where it crawls the network for peer addresses,
 sharing them with incoming peers before immediately disconnecting. It is recommended
-to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.`)
+to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.`))
 
 	// Network flags
 	flagSet.BoolVarP(&cfg.ChainConfig.P2P.PrivateMode, "chain.p2p.private-mode", "p", cfg.ChainConfig.P2P.PrivateMode, "Run the node in private mode. In private mode, the connectivity to the node is restricted to the current validators and whitelist peers.")
-	flagSet.StringVar(&cfg.ChainConfig.P2P.WhitelistPeers, "chain.p2p.whitelist-peers", cfg.ChainConfig.P2P.WhitelistPeers, "List of allowed sentry nodes that can connect to the node. Whitelist peers can be updated dynamically using kwil-admin peer commands.")
+	flagSet.StringVar(&cfg.ChainConfig.P2P.WhitelistPeers, "chain.p2p.whitelist-peers", cfg.ChainConfig.P2P.WhitelistPeers, fmt.Sprintf("List of allowed sentry nodes that can connect to the node. Whitelist peers can be updated dynamically using `%s` commands.", cmd.BinaryConfig.AdminUsage()))
 
 	// Chain Mempool flags
 	flagSet.IntVar(&cfg.ChainConfig.Mempool.Size, "chain.mempool.size", cfg.ChainConfig.Mempool.Size, "Chain mempool size")

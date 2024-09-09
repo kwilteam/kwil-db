@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
@@ -21,10 +22,10 @@ kwil-admin setup peer --root-dir ./kwil-node --genesis /path/to/genesis.json --c
 )
 
 func peerCmd() *cobra.Command {
-	cfg := config.DefaultConfig()
+	cfg := cmd.DefaultConfig()
 	var genesisPath string
 
-	cmd := &cobra.Command{
+	cmd1 := &cobra.Command{
 		Use:        "peer",
 		Short:      "The `peer` command facilitates quick setup of a Kwil node as a peer to an existing node.",
 		Long:       peerLong,
@@ -69,8 +70,8 @@ func peerCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&genesisPath, "genesis", "g", "", "path to genesis file")
-	config.AddConfigFlags(cmd.Flags(), cfg)
+	cmd1.Flags().StringVarP(&genesisPath, "genesis", "g", "", "path to genesis file")
+	config.AddConfigFlags(cmd1.Flags(), cfg)
 
-	return cmd
+	return cmd1
 }

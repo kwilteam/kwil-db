@@ -19,6 +19,7 @@ import (
 	// NOTE: do not use the types from these internal packages on nodecfg's
 	// exported API.
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
+	"github.com/kwilteam/kwil-db/cmd"
 	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common/chain"
 	config "github.com/kwilteam/kwil-db/common/config"
@@ -117,7 +118,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 		return fmt.Errorf("failed to get absolute path for output directory: %w", err)
 	}
 
-	cfg := kwildcfg.DefaultConfig()
+	cfg := cmd.DefaultConfig()
 	cfg.RootDir = rootDir
 	if genCfg.BlockInterval > 0 {
 		cfg.ChainConfig.Consensus.TimeoutCommit = config.Duration(genCfg.BlockInterval)
@@ -152,7 +153,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 // dependent on the network configuration (e.g. genesis.json).
 // It can optionally be given a config file to merge with the default config.
 func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silence bool) (publicKey []byte, err error) {
-	cfg := kwildcfg.DefaultConfig()
+	cfg := cmd.DefaultConfig()
 	if originalCfg != nil {
 		err := cfg.Merge(originalCfg)
 		if err != nil {
@@ -178,14 +179,14 @@ func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silenc
 		return nil, err
 	}
 
-	cfg.AppConfig.PrivateKeyPath = kwildcfg.PrivateKeyFileName
+	cfg.AppConfig.PrivateKeyPath = cmd.DefaultConfig().AppConfig.PrivateKeyPath
 	err = WriteConfigFile(filepath.Join(rootDir, kwildcfg.ConfigFileName), cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	// Load or generate private key.
-	fullKeyPath := filepath.Join(rootDir, kwildcfg.PrivateKeyFileName)
+	fullKeyPath := filepath.Join(rootDir, cmd.DefaultConfig().AppConfig.PrivateKeyPath)
 	_, pubKey, newKey, err := kwildcfg.ReadOrCreatePrivateKeyFile(fullKeyPath, true)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read or create private key: %w", err)
@@ -247,7 +248,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	}
 
 	// overwrite default config if set and valid
-	cfg := kwildcfg.DefaultConfig()
+	cfg := cmd.DefaultConfig()
 	if genCfg.ConfigFile != "" {
 		configFile, err := kwildcfg.LoadConfigFile(genCfg.ConfigFile)
 		if err != nil {
@@ -286,7 +287,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		}
 
 		privKeyHex := hex.EncodeToString(privateKeys[i][:])
-		privKeyFile := filepath.Join(nodeDir, kwildcfg.PrivateKeyFileName)
+		privKeyFile := filepath.Join(nodeDir, cmd.DefaultConfig().AppConfig.PrivateKeyPath)
 		err = os.WriteFile(privKeyFile, []byte(privKeyHex), 0644) // permissive for testnet only
 		if err != nil {
 			return fmt.Errorf("creating private key file: %w", err)
@@ -369,7 +370,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 			}
 		}
 
-		cfg.AppConfig.PrivateKeyPath = kwildcfg.PrivateKeyFileName // not abs/rooted because this might be run in a container
+		cfg.AppConfig.PrivateKeyPath = cmd.DefaultConfig().AppConfig.PrivateKeyPath // not abs/rooted because this might be run in a container
 
 		// extension config
 		if i < genCfg.NValidators {
