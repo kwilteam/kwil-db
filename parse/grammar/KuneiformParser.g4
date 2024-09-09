@@ -373,7 +373,7 @@ proc_statement:
     VARIABLE type SCOL                                                                                  # stmt_variable_declaration
     // stmt_procedure_call must go above stmt_variable_assignment due to lexer ambiguity
     | ((variable_or_underscore) (COMMA (variable_or_underscore))* ASSIGN)? procedure_function_call SCOL # stmt_procedure_call
-    | procedure_expr type? ASSIGN procedure_expr SCOL                                                         # stmt_variable_assignment
+    | VARIABLE type? ASSIGN procedure_expr SCOL                                                         # stmt_variable_assignment
     | FOR receiver=VARIABLE IN (range|target_variable=variable|sql_statement) LBRACE proc_statement* RBRACE  # stmt_for_loop
     | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE proc_statement* RBRACE)?                         # stmt_if
     | sql_statement SCOL                                                                                # stmt_sql

@@ -362,16 +362,6 @@ func Test_Procedures(t *testing.T) {
 			}`,
 			outputs: [][]any{{false}},
 		},
-		{
-			name: "array",
-			procedure: `procedure assign_array() public view returns (ints int[]) {
-				$arr int[] := [1, 2, 3];
-
-				$arr[2] := 4;
-				return $arr;
-			}`,
-			outputs: [][]any{{[]any{int64(1), int64(4), int64(3)}}},
-		},
 	}
 
 	for _, test := range tests {

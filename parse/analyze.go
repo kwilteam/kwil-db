@@ -2241,18 +2241,12 @@ func (p *procedureAnalyzer) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssign
 		return zeroProcedureReturn()
 	}
 
-	// the variable can be either an ExpressionVariable or an ExpressionArrayAccess
-	// If it is an ExpressionVariable, we need to declare it
-
-	exprVar, ok := p0.Variable.(*ExpressionVariable)
-	if ok {
-		_, ok = p.variables[exprVar.String()]
-		if !ok {
-			// if it does not exist, we can declare it here.
-			p.variables[exprVar.String()] = dt
-			p.markDeclared(p0.Variable, exprVar.String(), dt)
-			return zeroProcedureReturn()
-		}
+	_, ok = p.variables[p0.Variable.String()]
+	if !ok {
+		// if it does not exist, we can declare it here.
+		p.variables[p0.Variable.String()] = dt
+		p.markDeclared(p0.Variable, p0.Variable.String(), dt)
+		return zeroProcedureReturn()
 	}
 
 	// the type can be inferred from the value.
