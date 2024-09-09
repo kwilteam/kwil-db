@@ -16,3 +16,4 @@ code:
   - added|modified: 'scripts/**/*'
   - added|modified: 'test/**/*'
   - 'test/!(stress/**)/**'
+  - 'parse/!(grammar)/**'
