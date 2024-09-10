@@ -18,7 +18,7 @@ require (
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/jpillora/backoff v1.0.0
 	github.com/kwilteam/kwil-db/core v0.2.1-0.20240909192711-653711416339
-	github.com/kwilteam/kwil-db/parse v0.2.0-beta.1
+	github.com/kwilteam/kwil-db/parse v0.2.1-0.20240910054312-c46b876071f0
 	github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/mapstructure v1.5.0
