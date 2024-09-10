@@ -4,10 +4,10 @@ go 1.21.0
 
 toolchain go1.22.3
 
-// replace (
-// 	github.com/kwilteam/kwil-db/core => ./core
-// 	github.com/kwilteam/kwil-db/parse => ./parse
-// )
+replace (
+	github.com/kwilteam/kwil-db/core => ./core
+	github.com/kwilteam/kwil-db/parse => ./parse
+)
 
 require (
 	dario.cat/mergo v1.0.0
