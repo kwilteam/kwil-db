@@ -55,9 +55,16 @@ type Service struct {
 
 const (
 	apiVerMajor = 0
-	apiVerMinor = 1
+	apiVerMinor = 2
 	apiVerPatch = 0
+
+	serviceName = "admin"
 )
+
+// API version log
+//
+// apiVerMinor = 2 indicates the presence of the peer whitelist, resolution, and
+// health methods added in Kwil v0.9
 
 var (
 	apiSemver = fmt.Sprintf("%d.%d.%d", apiVerMajor, apiVerMinor, apiVerPatch)
@@ -65,7 +72,7 @@ var (
 
 func verHandler(context.Context, *userjson.VersionRequest) (*userjson.VersionResponse, *jsonrpc.Error) {
 	return &userjson.VersionResponse{
-		Service:     "user",
+		Service:     serviceName,
 		Version:     apiSemver,
 		Major:       apiVerMajor,
 		Minor:       apiVerMinor,
@@ -76,6 +83,53 @@ func verHandler(context.Context, *userjson.VersionRequest) (*userjson.VersionRes
 
 // The admin Service must be usable as a Svc registered with a JSON-RPC Server.
 var _ rpcserver.Svc = (*Service)(nil)
+
+func (svc *Service) Name() string {
+	return serviceName
+}
+
+func (svc *Service) Health(ctx context.Context) (json.RawMessage, bool) {
+	healthResp, jsonErr := svc.HealthMethod(ctx, &userjson.HealthRequest{})
+	if jsonErr != nil { // unable to even perform the health check
+		// This is not for a JSON-RPC client.
+		svc.log.Error("health check failure", log.Error(jsonErr))
+		resp, _ := json.Marshal(struct {
+			Healthy bool `json:"healthy"`
+		}{}) // omit everything else since
+		return resp, false
+	}
+
+	resp, _ := json.Marshal(healthResp)
+
+	return resp, healthResp.Healthy
+}
+
+// HealthMethod is a JSON-RPC method handler for service health.
+func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest) (*adminjson.HealthResponse, *jsonrpc.Error) {
+	vals, jsonErr := svc.ListValidators(ctx, &adminjson.ListValidatorsRequest{})
+	if jsonErr != nil {
+		return nil, jsonErr
+	}
+
+	status, err := svc.blockchain.Status(ctx)
+	if err != nil {
+		svc.log.Error("chain status error", log.Error(err))
+		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "status failure", nil)
+	}
+
+	// health criteria: presently, nothing, we're just here.
+	// Being a validator may be a concern to the consumer.
+	happy := true
+
+	return &adminjson.HealthResponse{
+		Healthy:       happy,
+		Version:       apiSemver,
+		PubKey:        status.Validator.PubKey,
+		Validator:     status.Validator.Power > 0,
+		NumValidators: len(vals.Validators),
+	}, nil
+	// slices.ContainsFunc(vals.Validators, func(v *coretypes.Validator) bool { return bytes.Equal(v.PubKey, status.Validator.PubKey) })
+}
 
 func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 	return map[jsonrpc.Method]rpcserver.MethodDef{
@@ -112,6 +166,10 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		adminjson.MethodValRemove: rpcserver.MakeMethodDef(svc.Remove,
 			"vote to remote a validator",
 			"the hash of the broadcasted validator remove transaction"),
+		adminjson.MethodHealth: rpcserver.MakeMethodDef(svc.HealthMethod,
+			"check the admin service health",
+			"the health status and other relevant of the services health",
+		),
 	}
 }
 

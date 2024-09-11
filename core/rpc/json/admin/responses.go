@@ -36,14 +36,18 @@ type SyncInfo struct {
 	AppHash         string `json:"app_hash,omitempty"`
 	BestBlockHash   string `json:"best_block_hash,omitempty"`
 	BestBlockHeight int64  `json:"best_block_height,omitempty"`
-	BestBlockTime   int64  `json:"best_block_time,omitempty"` // duped for this...
+	BestBlockTime   int64  `json:"best_block_time,omitempty"` // epoch *milliseconds*
 	Syncing         bool   `json:"syncing,omitempty"`
 }
 
-// type Validator struct {
-// 	PubKey []byte `json:"pubkey,omitempty"`
-// 	Power  int64  `json:"power,omitempty"`
-// }
+// HealthResponse is the health check response.
+type HealthResponse struct {
+	Version       string         `json:"version"`
+	Healthy       bool           `json:"healthy"`
+	Validator     bool           `json:"is_validator"`
+	PubKey        types.HexBytes `json:"pubkey"`
+	NumValidators int            `json:"num_validators"`
+}
 
 type PeersResponse struct {
 	Peers []*adminTypes.PeerInfo `json:"peers"`

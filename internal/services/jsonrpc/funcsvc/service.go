@@ -2,6 +2,7 @@ package funcsvc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/common/ident"
@@ -19,18 +20,35 @@ const (
 	apiVerMajor = 0
 	apiVerMinor = 1
 	apiVerPatch = 0
+
+	serviceName = "function"
 )
 
 var (
 	apiSemver = fmt.Sprintf("%d.%d.%d", apiVerMajor, apiVerMinor, apiVerPatch)
 )
 
-// The admin Service must be usable as a Svc registered with a JSON-RPC Server.
+// The function Service must be usable as a Svc registered with a JSON-RPC Server.
 var _ rpcserver.Svc = (*Service)(nil)
+
+func (svc *Service) Name() string {
+	return serviceName
+}
+
+// The marshalled Health response is static, so we marshal it once.
+var healthResp, _ = json.Marshal(function.HealthResponse{
+	Healthy: true,
+	Version: apiSemver,
+})
+
+// Health for the function service is just a non-empty string, no real health.
+func (svc *Service) Health(context.Context) (json.RawMessage, bool) {
+	return healthResp, true
+}
 
 func verHandler(context.Context, *userjson.VersionRequest) (*userjson.VersionResponse, *jsonrpc.Error) {
 	return &userjson.VersionResponse{
-		Service:     "function",
+		Service:     serviceName,
 		Version:     apiSemver,
 		Major:       apiVerMajor,
 		Minor:       apiVerMinor,

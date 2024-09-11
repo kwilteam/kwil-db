@@ -97,3 +97,5 @@ type QueryRequest struct {
 type TxQueryRequest struct {
 	TxHash types.HexBytes `json:"tx_hash"`
 }
+
+type HealthRequest struct{}

@@ -219,8 +219,15 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 			d.cfg.AppCfg.RPCMaxReqSize, d.cfg.ChainCfg.Mempool.MaxTxBytes)
 	}
 
+	// Base a long block delay on the configured consensus timeouts
+	//  e.g. 6 + 2 + 2 + 3 = 13 sec longest single round
+	//  multiple by excessive consensus round count, like 6 => 78 sec
+	totalConsensusTimeouts := d.cfg.ChainCfg.Consensus.TimeoutCommit + d.cfg.ChainCfg.Consensus.TimeoutPrecommit +
+		d.cfg.ChainCfg.Consensus.TimeoutPrevote + d.cfg.ChainCfg.Consensus.TimeoutPropose
+
 	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp,
-		*rpcSvcLogger, usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)))
+		*rpcSvcLogger, usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)),
+		usersvc.WithBlockAgeHealth(6*totalConsensusTimeouts.Dur()))
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppCfg.JSONRPCListenAddress,
 		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)),
 		rpcserver.WithReqSizeLimit(d.cfg.AppCfg.RPCMaxReqSize),

@@ -112,6 +112,7 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 	}
 
 	app.height.Store(height)
+	app.appHash = appHash
 
 	return app, nil
 }
@@ -155,6 +156,8 @@ type AbciApp struct {
 	// height corresponds to the latest committed block. It is set in: the
 	// constructor, InitChain, and Commit.
 	height atomic.Int64
+
+	appHash []byte
 
 	broadcastFn EventBroadcaster
 
@@ -415,6 +418,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("failed to finalize transaction app: %w", err)
 	}
 	res.AppHash = appHash
+	a.appHash = appHash
 
 	if a.forks.BeginsHalt(uint64(req.Height) - 1) {
 		a.log.Info("This is the last block before halt.")
@@ -511,6 +515,17 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 // stored app hash corresponds to the block at height+1. This is simple, but the
 // discrepancy is worth noting.
 func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciTypes.ResponseInfo, error) {
+	if a.height.Load() > 0 { // has already been set and stored in FinalizeBlock
+		return &abciTypes.ResponseInfo{
+			LastBlockHeight:  a.height.Load(),
+			LastBlockAppHash: a.appHash,
+			Version:          version.KwilVersion, // the *software* semver string
+			AppVersion:       a.cfg.ApplicationVersion,
+		}, nil
+	}
+	// else we're probably responding to the ABCI "handshake" and need to read
+	// chain state from app DB.
+
 	height, appHash, err := a.txApp.ChainInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("chainInfo: %w", err)
@@ -590,6 +605,7 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 
 	logger.Info("initialized chain", zap.String("app hash", fmt.Sprintf("%x", a.cfg.GenesisAppHash)))
 	a.height.Store(req.InitialHeight)
+	a.appHash = a.cfg.GenesisAppHash
 
 	return &abciTypes.ResponseInitChain{
 		Validators: valUpdates,

@@ -224,6 +224,10 @@ type Duration time.Duration
 var _ encoding.TextUnmarshaler = (*Duration)(nil)
 var _ pflag.Value = (*Duration)(nil)
 
+func (d Duration) Dur() time.Duration {
+	return time.Duration(d)
+}
+
 func (d *Duration) UnmarshalText(b []byte) error {
 	x, err := time.ParseDuration(string(b))
 	if err != nil {
