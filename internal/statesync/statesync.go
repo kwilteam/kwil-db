@@ -16,11 +16,13 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 
+	cometClient "github.com/cometbft/cometbft/rpc/client"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 )
 
 const (
-	ABCISnapshotQueryPath = "/snapshot/height"
+	ABCISnapshotQueryPath        = "/snapshot/height"
+	ABCILatestSnapshotHeightPath = "/snapshot/latest"
 )
 
 // StateSyncer is responsible for initializing the database state from the
@@ -303,4 +305,24 @@ func ChainRPCClient(server string) (*rpchttp.HTTP, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+// GetLatestSnapshotHeight queries the trusted snapshot providers to get the latest snapshot height.
+func GetLatestSnapshotInfo(ctx context.Context, client cometClient.ABCIClient) (*Snapshot, error) {
+	res, err := client.ABCIQuery(ctx, ABCILatestSnapshotHeightPath, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(res.Response.Value) == 0 {
+		return nil, errors.New("no snapshot found")
+	}
+
+	var snap Snapshot
+	err = json.Unmarshal(res.Response.Value, &snap)
+	if err != nil {
+		return nil, err
+	}
+
+	return &snap, nil
 }

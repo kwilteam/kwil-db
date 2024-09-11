@@ -797,7 +797,17 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 		// arbitrary, 10s is a reasonable time out for a http server regardless
 		// of the location and network routes.
 		ctx, cancel := context.WithTimeout(d.ctx, 10*time.Second)
-		res, err := clt.Header(ctx, nil)
+
+		// we will first get the latest snapshot height that the trusted node has
+		latestSnapshot, err := statesync.GetLatestSnapshotInfo(ctx, clt)
+		if err != nil {
+			cancel()
+			d.log.Warnf("failed to get latest snapshot from snap provider: %v", err)
+			continue
+		}
+
+		latestHeight := int64(latestSnapshot.Height)
+		res, err := clt.Header(ctx, &latestHeight)
 		if err != nil {
 			cancel()
 			d.log.Warnf("failed to get header from snap provider: %v", err)

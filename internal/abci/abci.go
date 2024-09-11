@@ -1594,10 +1594,10 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 
 func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abciTypes.ResponseQuery, error) {
 	a.log.Debug("ABCI Query", zap.String("path", req.Path), zap.String("data", string(req.Data)))
-
-	if req.Path == statesync.ABCISnapshotQueryPath { // "/snapshot/height"
+	switch {
+	case req.Path == statesync.ABCISnapshotQueryPath:
 		if a.snapshotter == nil {
-			return &abciTypes.ResponseQuery{}, nil
+			return nil, fmt.Errorf("this node is not configured to serve snapshots")
 		}
 
 		var snapshot *statesync.Snapshot
@@ -1614,15 +1614,36 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 		}
 
 		if !exists {
-			return &abciTypes.ResponseQuery{}, nil
+			return nil, fmt.Errorf("snapshot not found for height %s", height)
 		}
 
-		bts, err := json.Marshal(snapshot)
+		bts, err := snapshot.MarshalBinary()
 		if err != nil {
 			return nil, err
 		}
 		return &abciTypes.ResponseQuery{Value: bts}, nil
-	} else if strings.HasPrefix(req.Path, ABCIPeerFilterPath) {
+	case req.Path == statesync.ABCILatestSnapshotHeightPath:
+		if a.snapshotter == nil {
+			return nil, fmt.Errorf("this node is not configured to serve snapshots")
+		}
+		snaps := a.snapshotter.ListSnapshots()
+		if len(snaps) == 0 {
+			return nil, fmt.Errorf("no snapshots available")
+		}
+		latest := snaps[len(snaps)-1]
+		for _, snap := range snaps {
+			if snap.Height > latest.Height {
+				latest = snap
+			}
+		}
+
+		bts, err := latest.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+
+		return &abciTypes.ResponseQuery{Value: bts}, nil
+	case strings.HasPrefix(req.Path, ABCIPeerFilterPath):
 		// When CometBFT connects to a peer, it sends two queries to the ABCI application
 		// using the following paths, with no additional data:
 		//   - `/p2p/filter/addr/<IP:PORT>`
@@ -1633,7 +1654,7 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 
 		paths := strings.Split(req.Path[ABCIPeerFilterPathLen:], "/")
 		if len(paths) != 2 {
-			return &abciTypes.ResponseQuery{Code: 1}, fmt.Errorf("invalid path: %s", req.Path)
+			return nil, fmt.Errorf("invalid path: %s", req.Path)
 		}
 
 		switch paths[0] {
@@ -1644,16 +1665,16 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 			}
 			// ID is not in the allowed list of peers, so reject the connection
 			a.log.Warn("Connection attempt rejected, peer is not allowed to connect", zap.String("peerID", paths[1]))
-			return &abciTypes.ResponseQuery{Code: 1}, nil
+			return nil, fmt.Errorf("node rejected connection attempt from peer %s", paths[1])
 		case "addr":
 			return &abciTypes.ResponseQuery{Code: abciTypes.CodeTypeOK}, nil
 		default:
-			return &abciTypes.ResponseQuery{Code: 1}, fmt.Errorf("invalid path: %s", req.Path)
+			return nil, fmt.Errorf("invalid path: %s", req.Path)
 		}
-
+	default:
+		// If the query path is not recognized, return an error.
+		return nil, fmt.Errorf("unknown query path: %s", req.Path)
 	}
-
-	return &abciTypes.ResponseQuery{}, nil
 }
 
 type EventBroadcaster func(ctx context.Context, db sql.DB, block *common.BlockContext) error

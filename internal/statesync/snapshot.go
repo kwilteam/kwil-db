@@ -41,3 +41,11 @@ func loadSnapshot(headerFile string) (*Snapshot, error) {
 	}
 	return &snapshot, nil
 }
+
+func (s *Snapshot) MarshalBinary() ([]byte, error) {
+	return json.Marshal(s)
+}
+
+func (s *Snapshot) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, s)
+}
