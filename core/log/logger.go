@@ -1,16 +1,21 @@
 package log
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
+	"github.com/jrick/logrotate/rotator"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 // Logger is a wrapper around zap.Logger, which adds some additional fields to critical log messages.
 type Logger struct {
-	L *zap.Logger
+	L     *zap.Logger
+	close func() error
 }
 
 func (l *Logger) Level() Level {
@@ -84,15 +89,15 @@ func (l *Logger) Named(name string) *Logger {
 	if name == "" {
 		return l
 	}
-	return &Logger{l.L.Named(name)}
+	return &Logger{L: l.L.Named(name), close: l.close}
 }
 
 func (l *Logger) With(fields ...Field) *Logger {
-	return &Logger{l.L.With(fields...)}
+	return &Logger{L: l.L.With(fields...), close: l.close}
 }
 
 func (l *Logger) WithOptions(opts ...zap.Option) *Logger {
-	return &Logger{l.L.WithOptions(opts...)}
+	return &Logger{L: l.L.WithOptions(opts...), close: l.close}
 }
 
 // IncreasedLevel creates a logger clone with a higher log level threshold,
@@ -103,6 +108,16 @@ func (l *Logger) IncreasedLevel(lvl Level) *Logger {
 
 func (l *Logger) Sync() error {
 	return l.L.Sync()
+}
+
+var _ io.Closer = (*Logger)(nil)
+var _ io.Closer = Logger{}
+
+func (l Logger) Close() error {
+	if l.close == nil {
+		return nil
+	}
+	return l.close()
 }
 
 func (l Logger) Sugar() SugaredLogger {
@@ -120,6 +135,14 @@ const (
 	TimeEncodingEpochFloat   = "epochfloat"
 )
 
+const (
+	// defaults for log data retained:
+	// - 6 GB total uncompressed in 100 (minus) gzipped files
+	// - up to 60 MB in current uncompressed log
+	maxLogRolls  = 100
+	maxLogSizeKB = 60_000
+)
+
 type Config struct {
 	Level string
 	// OutputPaths is a list of URLs or file paths to write logging output to.
@@ -129,6 +152,10 @@ type Config struct {
 	// EncodeTime indicates how to encode the time. The default is
 	// TimeEncodingEpochFloat.
 	EncodeTime string
+
+	MaxLogRolls int
+
+	MaxLogSizeKB int64
 }
 
 func rfc3339MilliTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
@@ -148,7 +175,6 @@ func New(config Config) Logger {
 }
 
 func NewChecked(config Config) (Logger, error) {
-	// poor man's config
 	cfg := zap.NewProductionConfig()
 	level, err := zap.ParseAtomicLevel(config.Level)
 	if err != nil {
@@ -169,11 +195,14 @@ func NewChecked(config Config) (Logger, error) {
 	}
 
 	// Translate from our formats to Zap's
+	var zapEncMaker func(cfg zapcore.EncoderConfig) zapcore.Encoder
 	switch enc := config.Format; enc {
 	case FormatPlain: // "plain" => "console"
 		cfg.Encoding = "console"
+		zapEncMaker = zapcore.NewConsoleEncoder
 	case FormatJSON, "": // also the default
 		cfg.Encoding = "json"
+		zapEncMaker = zapcore.NewJSONEncoder
 	default:
 		return Logger{}, fmt.Errorf("invalid log format %q", enc)
 	}
@@ -189,10 +218,84 @@ func NewChecked(config Config) (Logger, error) {
 		cfg.OutputPaths = []string{"stdout"}
 	}
 
-	// fields := make([]zap.Field, 0, 10) with cfg.Build(zap.Fields(fields...))
-	logger := zap.Must(cfg.Build())
+	if config.MaxLogRolls == 0 {
+		config.MaxLogRolls = maxLogRolls
+	}
+	if config.MaxLogSizeKB == 0 {
+		config.MaxLogSizeKB = maxLogSizeKB
+	}
+
+	var wss wsMultiWrapper
+	for _, w := range cfg.OutputPaths {
+		switch w {
+		case "stdout":
+			wss.tees = append(wss.tees, &noCloser{os.Stdout})
+		case "stderr":
+			wss.tees = append(wss.tees, &noCloser{os.Stderr})
+		default: // log file
+			rotator, err := rotator.New(w, config.MaxLogSizeKB,
+				false, config.MaxLogRolls)
+			if err != nil {
+				return Logger{}, err
+			}
+			wss.tees = append(wss.tees, rotator)
+		}
+	}
+
+	var writeSyncer zapcore.WriteSyncer = &wss
+
+	enc := zapEncMaker(cfg.EncoderConfig)
+	logCore := zapcore.NewCore(enc, writeSyncer, cfg.Level)
+	logger := zap.New(logCore)
+
 	logger = logger.WithOptions(zap.AddCallerSkip(1))
-	return Logger{L: logger}, nil
+	return Logger{L: logger, close: wss.Close}, nil
+}
+
+// noCloser embeds all the methods of a zapcore.WriteSyncer but hides any Close
+// method. This is used for os.Stdout and os.Stderr, which have a Close method,
+// but which should not be closed as per os docs.
+type noCloser struct{ zapcore.WriteSyncer }
+
+type wsMultiWrapper struct {
+	tees []io.Writer
+}
+
+var _ io.Writer = (*wsMultiWrapper)(nil)
+
+func (wss *wsMultiWrapper) Write(b []byte) (int, error) {
+	var err error
+	var n int
+	for _, w := range wss.tees {
+		ni, erri := w.Write(b)
+		err = errors.Join(err, erri)
+		n = max(ni, n)
+	}
+	return n, err
+}
+
+var _ zapcore.WriteSyncer = (*wsMultiWrapper)(nil)
+
+func (wss *wsMultiWrapper) Sync() error {
+	var err error
+	for _, w := range wss.tees {
+		if s, ok := w.(zapcore.WriteSyncer); ok {
+			err = errors.Join(err, s.Sync())
+		}
+	}
+	return err
+}
+
+var _ io.Closer = (*wsMultiWrapper)(nil)
+
+func (wss *wsMultiWrapper) Close() error {
+	var err error
+	for _, w := range wss.tees {
+		if s, ok := w.(io.Closer); ok {
+			err = errors.Join(err, s.Close())
+		}
+	}
+	return err
 }
 
 type Level = zapcore.Level

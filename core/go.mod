@@ -9,6 +9,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
 	github.com/holiman/uint256 v1.2.4
+	github.com/jrick/logrotate v1.1.2
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
 )

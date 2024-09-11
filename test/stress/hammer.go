@@ -77,6 +77,7 @@ func hammer(ctx context.Context) error {
 		Format:      log.FormatPlain,
 		EncodeTime:  log.TimeEncodingRFC3339Milli,
 	})
+	defer logger.Close()
 	logger = *logger.WithOptions(zap.AddStacktrace(zap.FatalLevel))
 	trLogger := *logger.WithOptions(zap.AddCallerSkip(1))
 
