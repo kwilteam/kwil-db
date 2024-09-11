@@ -45,6 +45,42 @@ type QueryResponse Result
 // ChainInfoResponse contains the response object for MethodChainInfo.
 type ChainInfoResponse = types.ChainInfo
 
+// ServiceMode describes the operating mode of the user service. Namely, if the
+// service is in private mode (where calls are authenticated, query is disabled,
+// and raw transactions cannot be retrieved).
+type ServiceMode string
+
+const (
+	ModeOpen    ServiceMode = "open"
+	ModePrivate ServiceMode = "private"
+)
+
+// HealthResponse is the response for MethodHealth. This determines the
+// serialized response for the Health method required by the rpcserver.Svc
+// interface. This is the response with which most health checks will be concerned.
+type HealthResponse struct {
+	// Healthy is is based on several factors determined by the service and it's
+	// configuration, such as the maximum age of the best block and if the node
+	// is still syncing (in catch-up or replay).
+	Healthy bool `json:"healthy"`
+
+	// Version is the service API version.
+	Version string `json:"version"`
+
+	ChainInfoResponse
+	BlockTimestamp int64          `json:"block_time"` // epoch millis
+	BlockAge       int64          `json:"block_age"`  // milliseconds
+	Syncing        bool           `json:"syncing"`
+	AppHeight      int64          `json:"app_height"` // may be less than block store best block
+	AppHash        types.HexBytes `json:"app_hash"`
+	PeerCount      int            `json:"peer_count"`
+
+	// Mode is an oddball field as it pertains to the service config rather than
+	// state of the node. It is provided here as a convenience so applications
+	// can discern node state and the mode of interaction with one request.
+	Mode ServiceMode `json:"mode"` // e.g. "private"
+}
+
 // SchemaResponse contains the response object for MethodSchema.
 type SchemaResponse struct {
 	Schema *types.Schema `json:"schema,omitempty"`

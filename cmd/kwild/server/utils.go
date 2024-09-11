@@ -114,10 +114,18 @@ func (wc *wrappedCometBFTClient) Peers(ctx context.Context) ([]*types.PeerInfo, 
 }
 
 func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, error) {
+	// chain / cometbft block store status
 	cmtStatus, err := wc.cl.Status(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	// application status
+	abciInfo, err := wc.cl.ABCIInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	ni, si, vi := &cmtStatus.NodeInfo, &cmtStatus.SyncInfo, &cmtStatus.ValidatorInfo
 	return &types.Status{
 		Node: convertNodeInfo(ni),
@@ -131,6 +139,10 @@ func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, err
 		Validator: &types.ValidatorInfo{
 			PubKey: vi.PubKey.Bytes(),
 			Power:  vi.VotingPower,
+		},
+		App: &types.AppInfo{
+			Height:  abciInfo.Response.LastBlockHeight,
+			AppHash: abciInfo.Response.LastBlockAppHash,
 		},
 	}, nil
 }

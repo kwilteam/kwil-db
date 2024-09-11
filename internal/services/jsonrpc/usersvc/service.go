@@ -35,8 +35,11 @@ import (
 
 // Service is the "user" RPC service, also known as txsvc in other contexts.
 type Service struct {
-	log           log.Logger
-	readTxTimeout time.Duration
+	log             log.Logger
+	readTxTimeout   time.Duration
+	blockAgeThresh  time.Duration
+	privateMode     bool
+	challengeExpiry time.Duration
 
 	engine      EngineReader
 	db          DB              // this should only ever make a read-only tx
@@ -45,11 +48,9 @@ type Service struct {
 	pricer      Pricer
 	migrator    Migrator
 
-	privateMode bool
 	// challenges issued to the clients
-	challenges       map[[32]byte]time.Time
-	challengeExpiry  time.Duration
 	challengeMtx     sync.Mutex
+	challenges       map[[32]byte]time.Time
 	challengeLimiter *ratelimit.IPRateLimiter
 }
 
@@ -63,6 +64,7 @@ type serviceCfg struct {
 	privateMode        bool
 	challengeExpiry    time.Duration
 	challengeRateLimit float64 // challenge requests/sec, sustained
+	blockAgeThresh     int64   // milliseconds
 }
 
 // Opt is a Service option.
@@ -94,10 +96,17 @@ func WithChallengeRateLimit(limit float64) Opt {
 	}
 }
 
+func WithBlockAgeHealth(ageThresh time.Duration) Opt {
+	return func(cfg *serviceCfg) {
+		cfg.blockAgeThresh = ageThresh.Milliseconds()
+	}
+}
+
 const (
 	defaultReadTxTimeout      = 5 * time.Second
 	defaultChallengeExpiry    = 10 * time.Second // TODO: or maybe more?
 	defaultChallengeRateLimit = 10.0
+	defaultAgeThreshMilli     = 129_000 // two minutes
 )
 
 // NewService creates a new instance of the user RPC service.
@@ -148,17 +157,97 @@ func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
 // are available, while the API major version would be bumped for method removal
 // or any other breaking changes.
 const (
-	apiVerUserMajor = 0
-	apiVerUserMinor = 1
-	apiVerUserPatch = 0
+	apiVerMajor = 0
+	apiVerMinor = 2
+	apiVerPatch = 0
+
+	serviceName = "user"
 )
 
+// API version log
+//
+// apiVerMinor = 2 indicates the presence of the migration, challenge, and
+// health methods added in Kwil v0.9
+
 var (
-	apiVerUserSemver = fmt.Sprintf("%d.%d.%d", apiVerUserMajor, apiVerUserMinor, apiVerUserPatch)
+	apiVerSemver = fmt.Sprintf("%d.%d.%d", apiVerMajor, apiVerMinor, apiVerPatch)
 )
 
 // The user Service must be usable as a Svc registered with a JSON-RPC Server.
 var _ rpcserver.Svc = (*Service)(nil)
+
+func (svc *Service) Name() string {
+	return serviceName
+}
+
+// Health for the user service responds with details from publicly available
+// information from the chain_info response such as best block age. The health
+// boolean also considers node state.
+func (svc *Service) Health(ctx context.Context) (json.RawMessage, bool) {
+	healthResp, jsonErr := svc.HealthMethod(ctx, &userjson.HealthRequest{})
+	if jsonErr != nil { // unable to even perform the health check
+		// This is not for a JSON-RPC client.
+		svc.log.Error("health check failure", log.Error(jsonErr))
+		resp, _ := json.Marshal(struct {
+			Healthy bool `json:"healthy"`
+		}{}) // omit everything else since
+		return resp, false
+	}
+
+	resp, _ := json.Marshal(healthResp)
+
+	return resp, healthResp.Healthy
+}
+
+// HealthMethod is a JSON-RPC method handler for service health.
+func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest) (*userjson.HealthResponse, *jsonrpc.Error) {
+	status, err := svc.chainClient.Status(ctx)
+	if err != nil {
+		svc.log.Error("chain status error", log.Error(err))
+		jsonErr := jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "status failure", nil)
+		return nil, jsonErr
+	}
+
+	peers, err := svc.chainClient.Peers(ctx)
+	if err != nil {
+		svc.log.Error("chain peers error", log.Error(err))
+		jsonErr := jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "peers list failure", nil)
+		return nil, jsonErr
+	}
+
+	blockAge := time.Since(status.Sync.BestBlockTime)
+
+	svcMode := userjson.ModeOpen
+	if svc.privateMode {
+		svcMode = userjson.ModePrivate
+	}
+
+	// For heath checks, apply the criterion:
+	happy := !status.Sync.Syncing && blockAge > svc.blockAgeThresh
+	// although, in any sensible deployment:
+	// && (statusResp.PeerCount > 0 || (isValidator && numValidators == 1)
+	// isValidator := status.Validator.Power > 0
+
+	healthResp := &userjson.HealthResponse{
+		Healthy: happy,
+		Version: apiVerSemver,
+		ChainInfoResponse: userjson.ChainInfoResponse{
+			ChainID:     status.Node.ChainID,
+			BlockHeight: uint64(status.Sync.BestBlockHeight),
+			BlockHash:   status.Sync.BestBlockHash,
+		},
+		BlockTimestamp: status.Sync.BestBlockTime.UnixMilli(),
+		BlockAge:       blockAge.Milliseconds(),
+		Syncing:        status.Sync.Syncing,
+		AppHeight:      status.App.Height,
+		AppHash:        status.App.AppHash,
+		PeerCount:      len(peers),
+
+		Mode: svcMode,
+	}
+
+	return healthResp, nil
+}
 
 func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 	return map[jsonrpc.Method]rpcserver.MethodDef{
@@ -245,16 +334,21 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 			"request a call challenge",
 			"the challenge value for the client to include in a call request signature",
 		),
+
+		userjson.MethodHealth: rpcserver.MakeMethodDef(svc.HealthMethod,
+			"check the user service health",
+			"the health status and other relevant of the services health",
+		),
 	}
 }
 
 func verHandler(context.Context, *userjson.VersionRequest) (*userjson.VersionResponse, *jsonrpc.Error) {
 	return &userjson.VersionResponse{
-		Service:     "user",
-		Version:     apiVerUserSemver,
-		Major:       apiVerUserMajor,
-		Minor:       apiVerUserMinor,
-		Patch:       apiVerUserPatch,
+		Service:     serviceName,
+		Version:     apiVerSemver,
+		Major:       apiVerMajor,
+		Minor:       apiVerMinor,
+		Patch:       apiVerPatch,
 		KwilVersion: version.KwilVersion,
 	}, nil
 }
@@ -280,6 +374,7 @@ type EngineReader interface {
 
 type BlockchainTransactor interface {
 	Status(ctx context.Context) (*adminTypes.Status, error)
+	Peers(context.Context) ([]*adminTypes.PeerInfo, error)
 	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (*cmtCoreTypes.ResultBroadcastTx, error)
 	TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error)
 }

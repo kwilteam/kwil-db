@@ -3,6 +3,8 @@ package rpcserver
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"reflect"
 
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
@@ -63,13 +65,23 @@ func MakeMethodDef[I, O any](handler Handler[I, O], desc, respDesc string) Metho
 //  4. calls the handler function, returning the result and error
 //  5. marshal either the result or the Error into a Response
 type Svc interface {
+	// Name should return a unique name for the RPC service. This is intended
+	// for meta endpoints provided by the RPC server, such as health checks.
+	Name() string
 	Methods() map[jsonrpc.Method]MethodDef
+	Health(context.Context) (detail json.RawMessage, happy bool)
 }
 
 // RegisterSvc registers every MethodHandler for a service.
 //
 // The Server's fixed endpoint is used.
 func (s *Server) RegisterSvc(svc Svc) {
+	svcName := svc.Name()
+	if _, have := s.services[svcName]; have {
+		panic(fmt.Sprintf("service already registered: %s", svcName))
+	}
+	s.services[svcName] = svc
+
 	for method, def := range svc.Methods() {
 		s.log.Debugf("Registering method %q", method)
 		s.RegisterMethodHandler(method, def.Handler)
@@ -80,6 +92,31 @@ func (s *Server) RegisterSvc(svc Svc) {
 			RespTypeDesc: def.RespDesc,
 		}
 	}
+}
+
+func (s *Server) health(ctx context.Context) *jsonrpc.HealthResponse {
+	resp := jsonrpc.HealthResponse{
+		Alive:    true,
+		Healthy:  true, // unless any one service is not
+		Services: make(map[string]json.RawMessage, len(s.services)),
+	}
+
+	for _, svc := range s.services {
+		svcResp, health := svc.Health(ctx)
+		resp.Healthy = resp.Healthy && health
+		resp.Services[svc.Name()] = svcResp
+	}
+	return &resp
+}
+
+func (s *Server) healthMethodHandler(w http.ResponseWriter, r *http.Request) {
+	resp := s.health(r.Context())
+
+	status := http.StatusOK
+	if !resp.Healthy {
+		status = http.StatusServiceUnavailable
+	}
+	s.writeJSON(w, resp, status)
 }
 
 // RegisterMethodHandler registers a single MethodHandler.

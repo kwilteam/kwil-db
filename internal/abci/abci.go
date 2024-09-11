@@ -66,12 +66,15 @@ type AbciApp struct {
 	consensusTx sql.PreparedTx
 	// genesisTx is the transaction that is used at genesis, and in the first block.
 	genesisTx sql.PreparedTx
+
+	stateMtx sync.Mutex
 	// appHash is the hash of the application state
 	appHash []byte
 	// height is the current block height
 	height int64
-	cfg    AbciConfig
-	forks  forks.Forks
+
+	cfg   AbciConfig
+	forks forks.Forks
 
 	// snapshotter is the snapshotter module that handles snapshotting
 	snapshotter SnapshotModule
@@ -162,6 +165,7 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		height = 0 // negative means first start (no state table yet), but need non-negative for below logic
 	}
 	app.appHash = appHash
+	app.height = height
 
 	app.log.Infof("Preparing ABCI application at height %v, appHash %x", height, appHash)
 
@@ -749,10 +753,12 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("failed to close subscription: %w", err)
 	}
 
+	a.stateMtx.Lock()
 	newAppHash := sha256.Sum256(append(a.appHash, appHash...))
 	res.AppHash = newAppHash[:]
 	a.appHash = newAppHash[:]
 	a.height = req.Height
+	a.stateMtx.Unlock()
 
 	if a.forks.BeginsHalt(uint64(req.Height) - 1) {
 		a.log.Info("This is the last block before halt.")
@@ -890,7 +896,10 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		return nil, fmt.Errorf("failed to begin outer tx: %w", err)
 	}
 
-	err = meta.SetChainState(ctx0, tx, a.height, a.appHash)
+	a.stateMtx.Lock()
+	height, appHash := a.height, a.appHash
+	a.stateMtx.Unlock()
+	err = meta.SetChainState(ctx0, tx, height, appHash)
 	if err != nil {
 		err2 := tx.Rollback(ctx0)
 		if err2 != nil {
@@ -967,6 +976,20 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 // stored app hash corresponds to the block at height+1. This is simple, but the
 // discrepancy is worth noting.
 func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciTypes.ResponseInfo, error) {
+	a.stateMtx.Lock()
+	if a.height > 0 { // has already been set and stored in FinalizeBlock
+		defer a.stateMtx.Unlock()
+		return &abciTypes.ResponseInfo{
+			LastBlockHeight:  a.height,
+			LastBlockAppHash: a.appHash,
+			Version:          version.KwilVersion, // the *software* semver string
+			AppVersion:       a.cfg.ApplicationVersion,
+		}, nil
+	}
+	a.stateMtx.Unlock()
+	// else we're probably responding to the ABCI "handshake" and need to read
+	// chain state from app DB.
+
 	readTx, err := a.db.BeginReadTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin read tx: %w", err)
@@ -1124,12 +1147,15 @@ func (a *AbciApp) ApplySnapshotChunk(ctx context.Context, req *abciTypes.Request
 		}
 
 		// Update the app Hash
-		_, appHash, err := meta.GetChainState(ctx, readTx)
+		height, appHash, err := meta.GetChainState(ctx, readTx)
 		if err != nil {
 			return nil, fmt.Errorf("GetChainState: %w", err)
 		}
 
+		a.stateMtx.Lock()
 		a.appHash = appHash
+		a.height = height
+		a.stateMtx.Unlock()
 	}
 
 	return &abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ACCEPT, RefetchChunks: nil}, nil
