@@ -405,8 +405,15 @@ func (genCfg *TestnetGenerateConfig) applyGenesisParams(genesisCfg *chain.Genesi
 	if genCfg.ChainID != "" {
 		genesisCfg.ChainID = genCfg.ChainID
 	}
-	genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
-	genesisCfg.ConsensusParams.Votes.VoteExpiry = genCfg.VoteExpiry
+
+	// update only if non-zero
+	if genCfg.JoinExpiry > 0 {
+		genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
+	}
+	if genCfg.VoteExpiry > 0 {
+		genesisCfg.ConsensusParams.Votes.VoteExpiry = genCfg.VoteExpiry
+	}
+
 	genesisCfg.ConsensusParams.WithoutGasCosts = genCfg.WithoutGasCosts
 	numAllocs := len(genCfg.Allocs)
 	if !genCfg.WithoutGasCosts { // when gas is enabled, give genesis validators some funds
