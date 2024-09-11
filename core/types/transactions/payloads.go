@@ -432,7 +432,7 @@ func EncodeValue(v any) (*EncodedValue, error) {
 		encoded := make([][]byte, 0)
 		// it can be of any slice type, e.g. []any, []string, []int, etc.
 		valueOf := reflect.ValueOf(v)
-		for i := 0; i < valueOf.Len(); i++ {
+		for i := range valueOf.Len() {
 			elem := valueOf.Index(i).Interface()
 			enc, t, err := encodeScalar(elem)
 			if err != nil {

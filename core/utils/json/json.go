@@ -77,7 +77,7 @@ func convertJsonNumbers(val any) any {
 		typeOf := reflect.TypeOf(val)
 		if typeOf.Kind() == reflect.Slice {
 			s := reflect.ValueOf(val)
-			for i := 0; i < s.Len(); i++ {
+			for i := range s.Len() {
 				s.Index(i).Set(reflect.ValueOf(convertJsonNumbers(s.Index(i).Interface())))
 			}
 			return s.Interface()

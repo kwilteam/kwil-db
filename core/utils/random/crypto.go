@@ -4,6 +4,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"math/rand"
+	rand2 "math/rand/v2"
 )
 
 // Source is a cryptographically secure random number source that satisfies the
@@ -33,6 +34,11 @@ var _ rand.Source64 = Source
 var _ rand.Source = &Source
 var _ rand.Source64 = &Source
 
+// math/rand/v2.Source is just interface { Uint64() uint64 }
+// so it does not need the Int64 method at all.
+var _ rand2.Source = Source
+var _ rand2.Source = &Source
+
 // New creates a new math/rand.Rand number generator that uses the
 // cryptographically secure source of randomness. This is helpful for the
 // versatile methods like Intn, Float64, etc., which crypto/rand does not
@@ -41,4 +47,8 @@ func New() *rand.Rand {
 	return rand.New(Source)
 }
 
-var rng = rand.New(Source)
+func New2() *rand2.Rand {
+	return rand2.New(Source)
+}
+
+var rng2 *rand2.Rand = New2()

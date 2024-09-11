@@ -11,11 +11,11 @@ var (
 func String(length int) string {
 	result := make([]rune, length)
 	// First character must be a letter
-	result[0] = letterRunes[rng.Intn(len(letterRunes))]
+	result[0] = letterRunes[rng2.IntN(len(letterRunes))]
 
 	// Rest of the characters can be alphanumeric
 	for i := 1; i < length; i++ {
-		result[i] = alphanumericRunes[rng.Intn(len(alphanumericRunes))]
+		result[i] = alphanumericRunes[rng2.IntN(len(alphanumericRunes))]
 	}
 
 	return string(result)

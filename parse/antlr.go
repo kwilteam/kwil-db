@@ -582,7 +582,7 @@ func (s *schemaVisitor) VisitColumn_def(ctx *gen.Column_defContext) any {
 		constraints[i] = con
 	}
 
-	for i := 0; i < len(constraints); i++ {
+	for i := range constraints {
 		switch constraints[i].ident {
 		case "min":
 			if constraints[i].lit == nil {

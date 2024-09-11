@@ -107,16 +107,6 @@ func lowerFirstChar(s string) string {
 	return strings.ToLower(string(r)) + s[sz:]
 }
 
-// typeFor returns the reflect.Type that represents the type argument T. TODO:
-// Remove this in favor of reflect.TypeFor when Go 1.22 becomes the minimum
-// required version since it is not available in Go 1.21.
-func typeFor[T any]() reflect.Type {
-	return reflect.TypeOf((*T)(nil)).Elem()
-}
-
-// var stringerType = typeFor[fmt.Stringer]()
-// t.Implements(stringerType)
-
 func typeToSchemaType(t reflect.Type) string {
 	// Some special cases first. These are types that our JSON-RPC service
 	// should marshal as a JSON string. In some cases this is by virtue of the
@@ -126,20 +116,20 @@ func typeToSchemaType(t reflect.Type) string {
 	// of the encoding/json package that uses a base64 string rather than a JSON
 	// "array".
 	switch t {
-	case reflect.TypeOf((*big.Int)(nil)), typeFor[big.Int]():
+	case reflect.TypeOf((*big.Int)(nil)), reflect.TypeFor[big.Int]():
 		// A big.Int field should marshal to/from a string.
 		return "string"
-	case typeFor[types.HexBytes]():
+	case reflect.TypeFor[types.HexBytes]():
 		// HexBytes defines MarshalJSON/UnmarshalJSON methods to represent
 		// []byte as a hexadecimal string.
 		return "string"
-	case typeFor[types.UUID](): // MarshalJSON also makes JSON string
+	case reflect.TypeFor[types.UUID](): // MarshalJSON also makes JSON string
 		return "string"
-	case typeFor[types.Uint256](): // MarshalJSON also makes JSON string
+	case reflect.TypeFor[types.Uint256](): // MarshalJSON also makes JSON string
 		return "string"
-	case typeFor[decimal.Decimal](): // MarshalJSON also makes JSON string
+	case reflect.TypeFor[decimal.Decimal](): // MarshalJSON also makes JSON string
 		return "string"
-	case typeFor[[]byte]():
+	case reflect.TypeFor[[]byte]():
 		// A regular []byte field is a base64 string.
 		return "string"
 	}
@@ -207,7 +197,7 @@ func reflectTypeInfo(t reflect.Type, knownSchemas map[reflect.Type]Schema) Schem
 		// For an "object" (dereferenced if pointer), set the "properties".
 		// Recurse for each field's type, merging fields of embedded types.
 		schema.Properties = make(map[string]Schema)
-		for i := 0; i < t.NumField(); i++ {
+		for i := range t.NumField() {
 			field := t.Field(i)
 
 			if field.Anonymous { // embedded field

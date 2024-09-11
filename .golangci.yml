@@ -1,6 +1,6 @@
 run:
   timeout: 10m
-  go: '1.21'
+  go: '1.22'
 
 issues:
   exclude-dirs:
@@ -19,7 +19,7 @@ linters:
     - asciicheck
     - bidichk
     - durationcheck
-    - exportloopref
+    - copyloopvar
     - gofmt
     - goimports
     - gosimple

@@ -138,14 +138,14 @@ func TestQueryRowFunc(t *testing.T) {
 	// First get the scan values with (*ColInfo).scanVal.
 
 	wantRTs := []reflect.Type{
-		typeFor[*pgtype.Int8](),
-		typeFor[*pgtype.Int8](),
-		typeFor[*pgtype.Text](),
-		typeFor[*[]uint8](),
-		typeFor[*decimal.Decimal](),
-		typeFor[*pgtype.Array[pgtype.Int8]](),
-		typeFor[*types.Uint256](),
-		typeFor[*types.Uint256Array](),
+		reflect.TypeFor[*pgtype.Int8](),
+		reflect.TypeFor[*pgtype.Int8](),
+		reflect.TypeFor[*pgtype.Text](),
+		reflect.TypeFor[*[]uint8](),
+		reflect.TypeFor[*decimal.Decimal](),
+		reflect.TypeFor[*pgtype.Array[pgtype.Int8]](),
+		reflect.TypeFor[*types.Uint256](),
+		reflect.TypeFor[*types.Uint256Array](),
 	}
 
 	var scans []any
@@ -241,7 +241,7 @@ func TestNULL(t *testing.T) {
 	// only non-NULL values get a type
 	b := res.Rows[0][1]
 	t.Logf("%v (%T)", b, b) // 6 (int64)
-	require.Equal(t, reflect.TypeOf(b), typeFor[int64]())
+	require.Equal(t, reflect.TypeOf(b), reflect.TypeFor[int64]())
 
 	// Now with scan vals
 
@@ -263,13 +263,6 @@ func TestNULL(t *testing.T) {
 
 	require.Equal(t, avn.Int64, int64(0))
 	require.Equal(t, bvn.Int64, insB)
-}
-
-// typeFor returns the reflect.Type that represents the type argument T. TODO:
-// Remove this in favor of reflect.TypeFor when Go 1.22 becomes the minimum
-// required version since it is not available in Go 1.21.
-func typeFor[T any]() reflect.Type {
-	return reflect.TypeOf((*T)(nil)).Elem()
 }
 
 func TestScanVal(t *testing.T) {
@@ -354,12 +347,12 @@ func TestQueryRowFuncAny(t *testing.T) {
 	}
 
 	wantTypes := []reflect.Type{ // same for each row scanned, when non-null
-		typeFor[int64](),
-		typeFor[int64](),
-		typeFor[string](),
-		typeFor[[]byte](),
-		typeFor[*decimal.Decimal](),
-		typeFor[[]int64](),
+		reflect.TypeFor[int64](),
+		reflect.TypeFor[int64](),
+		reflect.TypeFor[string](),
+		reflect.TypeFor[[]byte](),
+		reflect.TypeFor[*decimal.Decimal](),
+		reflect.TypeFor[[]int64](),
 	}
 	mustDec := func(s string) *decimal.Decimal {
 		d, err := decimal.NewFromString(s)
@@ -404,9 +397,9 @@ func TestQueryRowFuncAny(t *testing.T) {
 	// - OID 19 pertains to information_schema.sql_identifier, which scans as text
 	// - OID 1043 pertains to varchar, which can scan as text
 	wantTypes = []reflect.Type{ // same for each row scanned
-		typeFor[int64](),  // ordinal_position
-		typeFor[string](), // column_name
-		typeFor[string](), // is_nullable has boolean semantics but values of "YES"/"NO"
+		reflect.TypeFor[int64](),  // ordinal_position
+		reflect.TypeFor[string](), // column_name
+		reflect.TypeFor[string](), // is_nullable has boolean semantics but values of "YES"/"NO"
 	}
 	wantVals = [][]any{
 		{int64(1), "a", "NO"},

@@ -1,6 +1,6 @@
 module github.com/kwilteam/kwil-db/parse
 
-go 1.21.0
+go 1.22
 
 replace github.com/kwilteam/kwil-db/core => ../core
 
