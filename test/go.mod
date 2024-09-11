@@ -1,6 +1,6 @@
 module github.com/kwilteam/kwil-db/test
 
-go 1.21.0
+go 1.22
 
 // During development cycle, use the workspace kwil-db module. Remove this after
 // tagging kwil-db module.

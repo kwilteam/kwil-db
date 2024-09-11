@@ -462,7 +462,7 @@ func connectWithRetry(ctx context.Context, port string, n int) (*pg.DB, error) {
 	var db *pg.DB
 	var err error
 
-	for i := 0; i < n; i++ {
+	for range n {
 		db, err = pg.NewDB(ctx, &pg.DBConfig{
 			PoolConfig: pg.PoolConfig{
 				MaxConns: 11,

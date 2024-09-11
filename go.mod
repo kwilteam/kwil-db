@@ -1,6 +1,6 @@
 module github.com/kwilteam/kwil-db
 
-go 1.21.0
+go 1.22
 
 require (
 	dario.cat/mergo v1.0.0

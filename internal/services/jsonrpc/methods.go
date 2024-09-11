@@ -20,7 +20,7 @@ type MethodHandler func(ctx context.Context, s *Server) (argsPtr any, handler fu
 type Handler[I, O any] func(context.Context, *I) (*O, *jsonrpc.Error)
 
 func ioTypes[I, O any](Handler[I, O]) (reflect.Type, reflect.Type) {
-	return reflect.TypeOf((*I)(nil)).Elem(), reflect.TypeOf((*O)(nil)).Elem() // reflect.TypeFor[I](), reflect.TypeFor[O]()
+	return reflect.TypeFor[I](), reflect.TypeFor[O]()
 }
 
 func MakeMethodHandler[I, O any](fn Handler[I, O]) MethodHandler {

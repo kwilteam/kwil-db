@@ -1,6 +1,6 @@
 module github.com/kwilteam/kwil-db/core
 
-go 1.21
+go 1.22
 
 require (
 	github.com/antihax/optional v1.0.0

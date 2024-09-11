@@ -623,7 +623,7 @@ func (r *IntHelper) prepareDockerCompose(ctx context.Context, tmpDir string) {
 		// Actually only need this as long as the number of nodes defined in
 		// the docker-compose.yml.template file. This is not related to
 		// NValidators and NNValidators.
-		for i := 0; i < 20; i++ { // more than enough, which is 6 presently
+		for i := range 20 { // more than enough, which is 6 presently
 			exposedHTTPPorts = append(exposedHTTPPorts, i+8080+1)
 		}
 	}

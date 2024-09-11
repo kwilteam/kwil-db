@@ -479,11 +479,11 @@ func visitRecursive(v reflect.Value, target reflect.Type, fn func(reflect.Value)
 
 		visitRecursive(v.Elem(), target, fn)
 	case reflect.Struct:
-		for i := 0; i < v.NumField(); i++ {
+		for i := range v.NumField() {
 			visitRecursive(v.Field(i), target, fn)
 		}
 	case reflect.Slice, reflect.Array:
-		for i := 0; i < v.Len(); i++ {
+		for i := range v.Len() {
 			visitRecursive(v.Index(i), target, fn)
 		}
 	case reflect.Map:

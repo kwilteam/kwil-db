@@ -299,7 +299,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	}
 
 	// write genesis file
-	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
+	for i := range genCfg.NValidators + genCfg.NNonValidators {
 		nodeDir := filepath.Join(genCfg.OutputDir, fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i))
 		genFile := filepath.Join(nodeDir, cometbft.GenesisJSONName)
 		err = genConfig.SaveAs(genFile)
@@ -333,7 +333,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		}
 	}
 
-	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
+	for i := range genCfg.NValidators + genCfg.NNonValidators {
 		nodeDir := filepath.Join(genCfg.OutputDir, fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i))
 		cfg.RootDir = nodeDir
 
