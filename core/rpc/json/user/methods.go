@@ -3,6 +3,7 @@ package userjson
 import jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 
 const (
+	MethodHealth                jsonrpc.Method = "user.health"
 	MethodUserVersion           jsonrpc.Method = "user.version"
 	MethodPing                  jsonrpc.Method = "user.ping"
 	MethodChainInfo             jsonrpc.Method = "user.chain_info"

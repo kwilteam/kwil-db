@@ -30,6 +30,10 @@ import (
 
 // The endpoint path is constant for now.
 const (
+	pathAPIV1       = "/api/v1" // REST API endpoints
+	pathHealthV1    = pathAPIV1 + "/health"
+	pathSvcHealthV1 = pathHealthV1 + "/{svc}"
+
 	pathRPCV1  = "/rpc/v1"
 	pathSpecV1 = "/spec/v1"
 )
@@ -47,6 +51,7 @@ type Server struct {
 	log            log.Logger
 	methodHandlers map[jsonrpc.Method]MethodHandler
 	methodDefs     map[string]*openrpc.MethodDefinition
+	services       map[string]Svc
 	specInfo       *openrpc.Info
 	spec           json.RawMessage
 	authSHA        []byte
@@ -112,6 +117,8 @@ func WithTimeout(timeout time.Duration) Opt {
 	}
 }
 
+// WithCORS adds CORS headers to response so browser will permit cross origin
+// RPC requests.
 func WithCORS() Opt {
 	return func(c *serverConfig) {
 		c.enableCORS = true
@@ -218,6 +225,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		log:            log,
 		methodHandlers: make(map[jsonrpc.Method]MethodHandler),
 		methodDefs:     make(map[string]*openrpc.MethodDefinition),
+		services:       make(map[string]Svc),
 		specInfo:       cfg.specInfo,
 		tlsCfg:         cfg.tlsConfig,
 	}
@@ -227,8 +235,9 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		s.authSHA = slices.Clone(authSHA[:])
 	} // otherwise no basic auth check
 
+	// JSON-RPC handler (POST)
 	var h http.Handler
-	h = http.HandlerFunc(s.handlerV1) // last, after middleware below
+	h = http.HandlerFunc(s.handlerJSONRPCV1) // last, after middleware below
 	h = http.MaxBytesHandler(h, int64(cfg.reqSzLimit))
 	// amazingly, exceeding the server's write timeout does not cancel request
 	// contexts: https://github.com/golang/go/issues/59602
@@ -240,11 +249,12 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	h = realIPHandler(h, cfg.proxyCount) // for effective rate limiting
 	h = recoverer(h, log)                // first, wrap with defer and call next ^
 
-	mux.Handle(pathRPCV1, h)
+	mux.Handle("POST "+pathRPCV1, h)
 
 	// NOTE: for challenges at server level (above JSON-RPC methods):
 	// mux.Handle(pathRPCV1 + "/challenge", challengeHandler)
 
+	// OpenRPC specification handler (GET)
 	var specHandler http.Handler
 	specHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -256,9 +266,42 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	})
 	specHandler = corsHandler(specHandler)
 	specHandler = recoverer(specHandler, log)
-	mux.Handle(pathSpecV1, specHandler)
+	mux.Handle("GET "+pathSpecV1, specHandler)
+
+	// aggregate health endpoint handler
+	mux.Handle("GET "+pathHealthV1, http.HandlerFunc(s.healthMethodHandler))
+
+	// service specific health endpoint handler with wild card for service
+	mux.Handle("GET "+pathSvcHealthV1, http.HandlerFunc(s.handleSvcHealth))
 
 	return s, nil
+}
+
+// handleSvcHealth handles the /health/{svc} endpoint. This sets the HTTP status
+// code in the response to 200 if the service indicates it is healthy, otherwise
+// 503 (service unavailable). This is required to support common health checks
+// in major cloud providers that are limited to a simple GET and which infer
+// health exclusively based on the response status code.
+//
+// The response body includes a JSON object provided by the service.
+func (s *Server) handleSvcHealth(w http.ResponseWriter, r *http.Request) {
+	svcName := r.PathValue("svc")
+	if svcName == "" {
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
+	svc, ok := s.services[svcName]
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
+	resp, happy := svc.Health(r.Context())
+	status := http.StatusOK
+	if !happy {
+		status = http.StatusServiceUnavailable
+	}
+	s.writeJSON(w, resp, status)
+	// an alternative approach is svc.HealthHandler(w, r)...
 }
 
 // jsonRPCTimeoutHandler runs the handler with a time limit. This middleware
@@ -445,6 +488,16 @@ func (s *Server) ServeOn(ctx context.Context, ln net.Listener) error {
 		}),
 	)
 
+	s.RegisterMethodHandler(
+		"rpc.health",
+		MakeMethodHandler(func(ctx context.Context, _ *any) (*json.RawMessage, *jsonrpc.Error) {
+			healthResp := s.health(ctx)
+			res, _ := json.Marshal(healthResp)
+			resMsg := json.RawMessage(res)
+			return &resMsg, nil
+		}),
+	)
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -473,12 +526,14 @@ func (s *Server) ServeOn(ctx context.Context, ln net.Listener) error {
 	return err
 }
 
-// handlerV1 handles all https json requests. It is the http.Handler for the
-// JSON-RPC service mounted on the "/rpc/v1" endpoint. The endpoint is the same
-// for all methods since this is JSON-RPC with a "method" field of the JSON
-// request body indicating how to process the request. Other handlers can be
-// mounted on other endpoints without worry.
-func (s *Server) handlerV1(w http.ResponseWriter, r *http.Request) {
+// handlerJSONRPCV1 handles all https JSON-RPC requests. It is the
+// http.HandlerFunc for the JSON-RPC service mounted on the "/rpc/v1" endpoint.
+// The endpoint is the same for all methods since this is JSON-RPC with a
+// "method" field of the JSON request body indicating how to process the
+// request. Other handlers can be mounted on other endpoints without worry. This
+// method should only handle POST requests, so configure the request router as
+// appropriate.
+func (s *Server) handlerJSONRPCV1(w http.ResponseWriter, r *http.Request) {
 	// Close the connection when response handling is completed.
 	w.Header().Set("Connection", "close")
 	w.Header().Set("Content-Type", "application/json")
@@ -498,6 +553,22 @@ func (s *Server) handlerV1(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	/* stricter and inline decoding
+	req := new(jsonrpc.Request)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	err := dec.Decode(req)
+	if err != nil {
+		resp := jsonrpc.NewErrorResponse(-1, jsonrpc.NewError(jsonrpc.ErrorParse, "invalid request", nil))
+		s.writeJSON(w, resp, http.StatusBadRequest)
+		return
+	}
+	if dec.More() {
+		resp := jsonrpc.NewErrorResponse(-1, jsonrpc.NewError(jsonrpc.ErrorParse, "extra data in request body", nil))
+		s.writeJSON(w, resp, http.StatusBadRequest)
+		return
+	}*/
+
 	body, err := io.ReadAll(r.Body)
 	r.Body.Close()
 	if err != nil {
@@ -512,15 +583,15 @@ func (s *Server) handlerV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.processRequest(r.Context(), w, req)
+	s.processJSONRPCRequest(r.Context(), w, req)
 }
 
 // processRequest handles the jsonrpc.Request with handleRequest to call the
 // appropriate function for the method, creates a response message, and writes
 // it to the http.ResponseWriter.
-func (s *Server) processRequest(ctx context.Context, w http.ResponseWriter, req *jsonrpc.Request) {
+func (s *Server) processJSONRPCRequest(ctx context.Context, w http.ResponseWriter, req *jsonrpc.Request) {
 	// Handle and time the request.
-	resp := s.handleRequest(ctx, req)
+	resp := s.handleJSONRPCRequest(ctx, req)
 
 	// Some conventions dictate 200 for everything, with the Response.Error
 	// being the only sign of issue. However, a certain set of errors warrant an
@@ -573,8 +644,8 @@ func zeroID(id any) bool {
 	return false // already did rv.IsZero
 }
 
-// handleRequest sends the request to the correct handler function if able.
-func (s *Server) handleRequest(ctx context.Context, req *jsonrpc.Request) *jsonrpc.Response {
+// handleJSONRPCRequest sends the request to the correct handler function if able.
+func (s *Server) handleJSONRPCRequest(ctx context.Context, req *jsonrpc.Request) *jsonrpc.Response {
 	if req.JSONRPC != "2.0" || zeroID(req.ID) {
 		rpcErr := jsonrpc.NewError(jsonrpc.ErrorInvalidRequest, "invalid json-rpc request object", nil)
 		return jsonrpc.NewErrorResponse(req.ID, rpcErr)

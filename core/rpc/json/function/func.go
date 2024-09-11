@@ -31,3 +31,8 @@ type VerifySignatureResponse struct {
 	Valid  bool   `json:"valid"`
 	Reason string `json:"reason,omitempty"`
 }
+
+type HealthResponse struct {
+	Healthy bool   `json:"healthy"`
+	Version string `json:"version"`
+}

@@ -5,6 +5,7 @@ import (
 )
 
 const (
+	MethodHealth            jsonrpc.Method = "admin.health"
 	MethodVersion           jsonrpc.Method = "admin.version"
 	MethodStatus            jsonrpc.Method = "admin.status"
 	MethodPeers             jsonrpc.Method = "admin.peers"

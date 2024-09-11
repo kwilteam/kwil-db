@@ -121,3 +121,4 @@ type MigrationStatusRequest struct {
 }
 
 type ChallengeRequest struct{}
+type HealthRequest struct{}

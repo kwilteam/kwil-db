@@ -33,6 +33,11 @@ type SyncInfo struct {
 	Syncing bool `json:"syncing"`
 }
 
+type AppInfo struct {
+	Height  int64          `json:"height"`
+	AppHash types.HexBytes `json:"app_hash"`
+}
+
 // ValidatorInfo describes a validator node.
 type ValidatorInfo struct {
 	PubKey types.HexBytes `json:"pubkey"`
@@ -49,6 +54,7 @@ type Status struct {
 	Node      *NodeInfo      `json:"node"`
 	Sync      *SyncInfo      `json:"sync"`
 	Validator *ValidatorInfo `json:"validator"`
+	App       *AppInfo       `json:"app"`
 	Migration MigrationInfo  `json:"migration"`
 }
 
