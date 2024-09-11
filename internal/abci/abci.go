@@ -1595,7 +1595,9 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abciTypes.ResponseQuery, error) {
 	a.log.Debug("ABCI Query", zap.String("path", req.Path), zap.String("data", string(req.Data)))
 
-	if req.Path == statesync.ABCISnapshotQueryPath { // "/snapshot/height"
+	switch {
+	// TODO: why do we not return errors in case of the snapshotter not being configured?
+	case req.Path == statesync.ABCISnapshotQueryPath:
 		if a.snapshotter == nil {
 			return &abciTypes.ResponseQuery{}, nil
 		}
@@ -1622,7 +1624,28 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 			return nil, err
 		}
 		return &abciTypes.ResponseQuery{Value: bts}, nil
-	} else if strings.HasPrefix(req.Path, ABCIPeerFilterPath) {
+	case req.Path == statesync.ABCILatestSnapshotHeightPath:
+		if a.snapshotter == nil {
+			return &abciTypes.ResponseQuery{}, nil
+		}
+		snaps := a.snapshotter.ListSnapshots()
+		if len(snaps) == 0 {
+			return &abciTypes.ResponseQuery{}, nil
+		}
+		latest := snaps[len(snaps)-1]
+		for _, snap := range snaps {
+			if snap.Height > latest.Height {
+				latest = snap
+			}
+		}
+
+		bts, err := latest.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+
+		return &abciTypes.ResponseQuery{Value: bts}, nil
+	case strings.HasPrefix(req.Path, ABCIPeerFilterPath):
 		// When CometBFT connects to a peer, it sends two queries to the ABCI application
 		// using the following paths, with no additional data:
 		//   - `/p2p/filter/addr/<IP:PORT>`
@@ -1650,10 +1673,10 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 		default:
 			return &abciTypes.ResponseQuery{Code: 1}, fmt.Errorf("invalid path: %s", req.Path)
 		}
-
+	default:
+		// If the query path is not recognized, return an error.
+		return &abciTypes.ResponseQuery{Code: 1}, fmt.Errorf("unknown query path: %s", req.Path)
 	}
-
-	return &abciTypes.ResponseQuery{}, nil
 }
 
 type EventBroadcaster func(ctx context.Context, db sql.DB, block *common.BlockContext) error
