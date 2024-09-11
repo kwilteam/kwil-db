@@ -619,8 +619,22 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 			continue
 		}
 
-		// Try to fetch the status of the remote server.
-		res, err := clt.Header(d.ctx, nil)
+		// Try to fetch the status of the remote server. Set a timeout on the
+		// initial RPC so this doesn't hang for a very long time. Although
+		// arbitrary, 10s is a reasonable time out for a http server regardless
+		// of the location and network routes.
+		ctx, cancel := context.WithTimeout(d.ctx, 10*time.Second)
+
+		// we will first get the latest snapshot height that the trusted node has
+		latestSnapshot, err := statesync.GetLatestSnapshotInfo(ctx, clt)
+		if err != nil {
+			cancel()
+			d.log.Warnf("failed to get latest snapshot from snap provider: %v", err)
+			continue
+		}
+
+		latestHeight := int64(latestSnapshot.Height)
+		res, err := clt.Header(ctx, &latestHeight)
 		if err != nil {
 			d.log.Warnf("failed to get header from snap provider: %v", err)
 			continue

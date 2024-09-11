@@ -1066,9 +1066,11 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 }
 
 func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abciTypes.ResponseQuery, error) {
-	if req.Path == statesync.ABCISnapshotQueryPath { // "/snapshot/height"
+	a.log.Debug("ABCI Query", zap.String("path", req.Path), zap.String("data", string(req.Data)))
+	switch {
+	case req.Path == statesync.ABCISnapshotQueryPath:
 		if a.snapshotter == nil {
-			return &abciTypes.ResponseQuery{}, nil
+			return nil, fmt.Errorf("this node is not configured to serve snapshots")
 		}
 
 		var snapshot *statesync.Snapshot
@@ -1085,16 +1087,39 @@ func (a *AbciApp) Query(ctx context.Context, req *abciTypes.RequestQuery) (*abci
 		}
 
 		if !exists {
-			return &abciTypes.ResponseQuery{}, nil
+			return nil, fmt.Errorf("snapshot not found for height %s", height)
 		}
 
-		bts, err := json.Marshal(snapshot)
+		bts, err := snapshot.MarshalBinary()
 		if err != nil {
 			return nil, err
 		}
 		return &abciTypes.ResponseQuery{Value: bts}, nil
+	case req.Path == statesync.ABCILatestSnapshotHeightPath:
+		if a.snapshotter == nil {
+			return nil, fmt.Errorf("this node is not configured to serve snapshots")
+		}
+		snaps := a.snapshotter.ListSnapshots()
+		if len(snaps) == 0 {
+			return nil, fmt.Errorf("no snapshots available")
+		}
+		latest := snaps[len(snaps)-1]
+		for _, snap := range snaps {
+			if snap.Height > latest.Height {
+				latest = snap
+			}
+		}
+
+		bts, err := latest.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+
+		return &abciTypes.ResponseQuery{Value: bts}, nil
+	default:
+		// If the query path is not recognized, return an error.
+		return nil, fmt.Errorf("unknown query path: %s", req.Path)
 	}
-	return &abciTypes.ResponseQuery{}, nil
 }
 
 type EventBroadcaster func(ctx context.Context, proposer []byte) error
