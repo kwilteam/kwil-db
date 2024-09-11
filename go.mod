@@ -1,8 +1,6 @@
 module github.com/kwilteam/kwil-db
 
-go 1.21.0
-
-toolchain go1.22.3
+go 1.22
 
 replace (
 	github.com/kwilteam/kwil-db/core => ./core

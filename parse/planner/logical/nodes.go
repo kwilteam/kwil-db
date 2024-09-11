@@ -3094,7 +3094,7 @@ func innerFormat(plan LogicalNode, count int, printLong []bool) (string, []*Subp
 	}
 
 	var msg strings.Builder
-	for i := 0; i < count; i++ {
+	for i := range count {
 		if i == count-1 && len(printLong) > i && !printLong[i] {
 			msg.WriteString("└─")
 		} else if i == count-1 && len(printLong) > i && printLong[i] {

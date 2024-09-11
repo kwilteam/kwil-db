@@ -98,7 +98,7 @@ func InstallGenesisState(ctx context.Context, t *testing.T, netops MigrationOpsD
 	tempSnapshotFile := filepath.Join(rootDir, "snapshot.sql.gz")
 	downloadGenesisSnapshot(ctx, t, netops, tempSnapshotFile, snapshot.Height, snapshot.ChunkCount)
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		// Create sub nodes
 		nodeDir := filepath.Join(rootDir, fmt.Sprintf("new-node%d", i))
 		err = os.MkdirAll(nodeDir, 0755)

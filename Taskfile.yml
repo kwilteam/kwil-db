@@ -50,7 +50,7 @@ tasks:
   linter:
     desc: Install the linter (not for CI which has an action for this)
     cmds:
-      - go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.60.1"
+      - go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0"
 
   build:
     desc: Build cli, admin & kwild

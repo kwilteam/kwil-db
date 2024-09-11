@@ -1,6 +1,6 @@
 module github.com/kwilteam/kwil-db/core
 
-go 1.21
+go 1.22
 
 require (
 	github.com/cockroachdb/apd/v3 v3.2.1

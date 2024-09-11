@@ -137,7 +137,7 @@ func (r *respKwilCliConfig) MarshalText() ([]byte, error) {
 		t = t.Elem()
 	}
 
-	for i := 0; i < v.NumField(); i++ {
+	for i := range v.NumField() {
 		field := t.Field(i)
 		fieldValue := v.Field(i)
 		msg.WriteString(fmt.Sprintf("%s: %v\n", field.Name, fieldValue))

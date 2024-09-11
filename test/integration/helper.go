@@ -641,7 +641,7 @@ func (r *IntHelper) MigrationSetup(ctx context.Context) string {
 	tmpDir, err := r.TestnetDir()
 	require.NoError(r.t, err, "failed to get testnet dir")
 
-	for i := 0; i < r.cfg.NNonValidator+r.cfg.NValidator; i++ {
+	for i := range r.cfg.NNonValidator + r.cfg.NValidator {
 		// Create sub nodes
 		oldNodeDir := filepath.Join(tmpDir, fmt.Sprintf("node%d", i))
 		newNodeDir := filepath.Join(tmpDir, fmt.Sprintf("new-node%d", i))
@@ -718,7 +718,7 @@ func (r *IntHelper) prepareDockerCompose(_ context.Context, tmpDir string) {
 		// Actually only need this as long as the number of nodes defined in
 		// the docker-compose.yml.template file. This is not related to
 		// NValidators and NNValidators.
-		for i := 0; i < 20; i++ { // more than enough, which is 6 presently
+		for i := range 20 { // more than enough, which is 6 presently
 			ExposedRPCPorts = append(ExposedRPCPorts, i+8484+1)
 		}
 	}
