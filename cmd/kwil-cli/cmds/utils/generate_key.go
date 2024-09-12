@@ -14,7 +14,11 @@ import (
 
 var (
 	generateLong    = `Generates a new key ECDSA pair using the secp256k1 curve.`
-	generateExample = `kwil-cli utils generate-key`
+	generateExample = `# Generate a new key pair
+$ kwil-cli utils generate-key
+Private key: 5ecb2ce01dee61729f70e75830d2f0cd151514193f2e05816aad5c453a85edbd
+Public key: 0489590f68d80907d74df59b8d9392b78e060a015f4bc58f346820e0d3266d805766bc14fad70b1b8e8a76bab87c4239345790560b00bca7bf5bc7c6bc3c34a4d5
+Address: 0x7C4239345790560b00bcA7bF5bC7c6BC3C34a4D5`
 )
 
 // GenerateKeyCmd returns the command for generating a new key pair.
