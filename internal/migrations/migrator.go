@@ -278,7 +278,6 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 		block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationCompleted
 		m.halted = true
 		m.Logger.Info("migration to chain completed, no new transactions will be accepted", log.String("ChainID", m.activeMigration.ChainID))
-		return nil
 	}
 
 	// wait for signal on doneChan, indicating that all changesets have been written to disk
@@ -564,8 +563,9 @@ type chunkWriter struct {
 
 func newChunkWriter(dir string, height int64) *chunkWriter {
 	return &chunkWriter{
-		dir:    dir,
-		height: height,
+		dir:      dir,
+		height:   height,
+		chunkIdx: -1,
 	}
 }
 
@@ -577,6 +577,7 @@ func (cw *chunkWriter) Write(bts []byte) (int, error) {
 	}
 
 	if cw.chunkFile == nil {
+		cw.chunkIdx++
 		filename := formatChangesetFilename(cw.dir, cw.height, cw.chunkIdx)
 		file, err := os.Create(filename)
 		if err != nil {
@@ -604,7 +605,7 @@ func (cw *chunkWriter) Write(bts []byte) (int, error) {
 		}
 
 		// increment the chunk index
-		cw.chunkIdx++
+		// cw.chunkIdx++
 		cw.chunkSize = 0
 		cw.chunkFile = nil
 
@@ -638,7 +639,7 @@ func (cw *chunkWriter) SaveMetadata() error {
 	filename := formatChangesetMetadataFilename(cw.dir, cw.height)
 	metadata := &ChangesetMetadata{
 		Height:     cw.height,
-		Chunks:     cw.chunkIdx + 1,
+		Chunks:     cw.chunkIdx + 1, // + 1 ?
 		ChunkSizes: cw.chunkSizes,
 	}
 	return metadata.saveAs(filename)
@@ -685,9 +686,11 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 	bs := &BlockSpends{
 		Spends: m.accounts.GetBlockSpends(),
 	}
-	if pg.StreamElement(chunkWriter, bs); err != nil {
-		m.errChan <- err
-		return
+	if bs.Spends != nil {
+		if pg.StreamElement(chunkWriter, bs); err != nil {
+			m.errChan <- err
+			return
+		}
 	}
 
 	if err = chunkWriter.SaveMetadata(); err != nil {
