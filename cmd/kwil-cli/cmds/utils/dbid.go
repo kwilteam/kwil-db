@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	dbidLong = `"dbid" generates a dbid for a given schema name and deployer.`
+	dbidLong = "`" + `dbid` + "`" + ` generates a dbid for a given schema name and deployer.`
 
 	dbidExample = `# Generate a dbid for a schema and deployer
 kwil-cli utils dbid --schema=myschema --deployer=0x1234567890abcdef

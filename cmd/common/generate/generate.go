@@ -22,23 +22,23 @@ func WriteDocs(cmd *cobra.Command, dir string) error {
 		}
 
 		return os.Create(fullPath)
-	})
+	}, true)
 }
 
-func writeCmd(cmd *cobra.Command, dir string, idx int, write writeFunc) error {
+func writeCmd(cmd *cobra.Command, dir string, idx int, write writeFunc, first bool) error {
 	subCommands := cmd.Commands()
 	if len(subCommands) == 0 {
 		return createCmdFile(cmd, dir, idx, write)
 	}
 
-	err := createIndexFile(cmd, dir, write)
+	err := createIndexFile(cmd, dir, write, first)
 	if err != nil {
 		return err
 	}
 
 	subDir := dir + "/" + cmd.Name()
 	for i, subCmd := range subCommands {
-		err := writeCmd(subCmd, subDir, i+1, write)
+		err := writeCmd(subCmd, subDir, i+1, write, false)
 		if err != nil {
 			return err
 		}
@@ -48,16 +48,20 @@ func writeCmd(cmd *cobra.Command, dir string, idx int, write writeFunc) error {
 }
 
 // createIndexFile creates a file for a command that has subcommands.
-func createIndexFile(cmd *cobra.Command, dir string, write writeFunc) error {
+// If "first" is true, then this is the top-level command.
+func createIndexFile(cmd *cobra.Command, dir string, write writeFunc, first bool) error {
 	dir = dir + "/" + cmd.Name()
 
 	header := docusaursHeader{
-		sidebar_position: 0,
+		sidebar_position: 99, // we want these to always be at the bottom of the sidebar
 		sidebar_label:    cmd.Name(),
 		id:               strings.ReplaceAll(cmd.CommandPath(), " ", "-"),
 		title:            cmd.CommandPath(),
 		description:      cmd.Short,
 		slug:             getSlug(cmd),
+	}
+	if first {
+		header.sidebar_label = "Reference"
 	}
 
 	file, err := write(dir + "/index.md")
