@@ -3,6 +3,7 @@ package database
 import (
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -15,6 +16,7 @@ const (
 	nameFlag       = "name"
 	ownerFlag      = "owner"
 	actionNameFlag = "action"
+	targetFlag     = "target"
 )
 
 // getSelectedOwner is used to get the owner flag.  Since the owner flag is usually optional,
@@ -74,4 +76,45 @@ func getSelectedDbid(cmd *cobra.Command, conf *config.KwilCliConfig) (string, er
 	}
 
 	return utils.GenerateDBID(name, owner), nil
+}
+
+// bindFlagsTargetingProcedureOrAction binds the flags for any command that targets a procedure or action.
+// This includes the `execute`, `call`, and `batch` commands.
+func bindFlagsTargetingProcedureOrAction(cmd *cobra.Command) {
+	bindFlagsTargetingDatabase(cmd)
+	cmd.Flags().StringP(actionNameFlag, "a", "", "the target action name")
+	cmd.Flags().MarkDeprecated(actionNameFlag, "please use --target instead")
+	cmd.Flags().StringP(targetFlag, "t", "", "the target action or procedure name")
+}
+
+func getSelectedProcedureAndDBID(cmd *cobra.Command, conf *config.KwilCliConfig) (dbid string, procOrAction string, err error) {
+	dbid, err = getSelectedDbid(cmd, conf)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get dbid: %w", err)
+	}
+
+	var name string
+	if cmd.Flags().Changed(targetFlag) {
+		name, err = cmd.Flags().GetString(targetFlag)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get procedure name: %w", err)
+		}
+	} else if cmd.Flags().Changed(actionNameFlag) {
+		name, err = cmd.Flags().GetString(actionNameFlag)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get action name: %w", err)
+		}
+	} else {
+		return "", "", fmt.Errorf("neither procedure nor action was provided")
+	}
+
+	return dbid, strings.ToLower(name), nil
+}
+
+// bindFlagsTargetingDatabase binds the flags for any command that targets a database.
+// This includes the `query`, `execute`, `call`, and `batch` commands.
+func bindFlagsTargetingDatabase(cmd *cobra.Command) {
+	cmd.Flags().StringP(nameFlag, "n", "", "the target database name")
+	cmd.Flags().StringP(ownerFlag, "o", "", "the target database owner")
+	cmd.Flags().StringP(dbidFlag, "i", "", "the target database id")
 }

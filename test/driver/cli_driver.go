@@ -339,7 +339,7 @@ func (d *KwilCliDriver) Execute(_ context.Context, dbid string, action string, i
 		return nil, fmt.Errorf("failed to get action params: %w", err)
 	}
 
-	args := []string{"database", "execute", "--dbid", dbid, "--action", action}
+	args := []string{"database", "execute", "--dbid", dbid, "--target", action}
 	args = append(args, actionInputs...)
 
 	cmd := d.newKwilCliCmd(args...)
@@ -379,7 +379,7 @@ func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []an
 		return nil, fmt.Errorf("failed to prepare action params: %w", err)
 	}
 
-	args := []string{"database", "call", "--dbid", dbid, "--action", action, "--logs"}
+	args := []string{"database", "call", "--dbid", dbid, "--target", action, "--logs"}
 	args = append(args, actionInputs...)
 
 	if d.gatewayProvider {
