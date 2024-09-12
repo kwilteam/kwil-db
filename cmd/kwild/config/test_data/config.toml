@@ -143,7 +143,7 @@ output_paths = ["stdout"]
 
 # The threshold in KB at which the log file rolls over and archives
 # the current one as a numbered gz file.
-log_roll_size = 123000
+file_roll_size = 123000
 
 # Output format: 'plain' or 'json'
 format = "plain"
