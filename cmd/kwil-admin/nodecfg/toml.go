@@ -89,6 +89,10 @@ db_level = "{{ .Logging.DBLevel }}"
 # Output paths for the logger, can be stdout or a file path
 output_paths = {{arrayFormatter .Logging.OutputPaths }}
 
+# The threshold in KB at which the log file rolls over and archives
+# the current one as a numbered gz file.
+file_roll_size = {{ .Logging.MaxLogSizeKB }}
+
 # Output format: 'plain' or 'json'
 format = "{{ .Logging.Format }}"
 

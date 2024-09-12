@@ -153,9 +153,14 @@ type Config struct {
 	// TimeEncodingEpochFloat.
 	EncodeTime string
 
-	MaxLogRolls int
-
+	// MaxLogSizeKB is the threshold in KB at which the uncompressed log is
+	// gzipped and a new log file is started.
 	MaxLogSizeKB int64
+
+	// MaxLogRolls is the retention limit on the number of archived log files to
+	// keep. After this is reached, the oldest are deleted. Set -1 for default,
+	// or 0 for no limit (retain all).
+	MaxLogRolls int
 }
 
 func rfc3339MilliTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
@@ -218,7 +223,7 @@ func NewChecked(config Config) (Logger, error) {
 		cfg.OutputPaths = []string{"stdout"}
 	}
 
-	if config.MaxLogRolls == 0 {
+	if config.MaxLogRolls == -1 {
 		config.MaxLogRolls = maxLogRolls
 	}
 	if config.MaxLogSizeKB == 0 {

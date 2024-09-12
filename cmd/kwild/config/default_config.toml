@@ -154,6 +154,10 @@ db_level = "info"
 # Output paths for the logger, can be stdout or a file path
 output_paths = ["stdout","kwild.log"]
 
+# The threshold in KB at which the log file rolls over and archives
+# the current one as a numbered gz file.
+file_roll_size = 100000
+
 # Output format: 'plain' or 'json'
 format = "plain"
 
