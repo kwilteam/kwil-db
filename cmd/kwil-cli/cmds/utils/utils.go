@@ -22,6 +22,7 @@ func NewCmdUtils() *cobra.Command {
 		newParseCmd(),
 		testCmd(),
 		dbidCmd(),
+		generateKeyCmd(),
 	)
 
 	return cmd
