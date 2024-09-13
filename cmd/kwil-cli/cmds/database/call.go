@@ -106,8 +106,6 @@ func callCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&gwAuth, "authenticate", false, "authenticate signals that the call is being made to a gateway and should be authenticated with the private key")
 	cmd.Flags().BoolVar(&signCall, "callauth", false, "authenticate call RPCs by signing a challenge response with the call data")
 	cmd.Flags().BoolVar(&logs, "logs", false, "result will include logs from notices raised during the call")
-
-	cmd.MarkFlagRequired(actionNameFlag)
 	return cmd
 }
 
