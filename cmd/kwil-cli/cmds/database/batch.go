@@ -21,11 +21,11 @@ var (
 )
 
 var (
-	batchLong = `Batch executes an action on a database using inputs from a CSV file.
+	batchLong = `Batch executes an action or procedure on a database using inputs from a CSV file.
 
-To map a CSV column name to an action input, use the ` + "`" + `--map-inputs` + "`" + ` flag.
-The format is ` + "`" + `--map-inputs "<csv_column_1>:<action_input_1>,<csv_column_2>:<action_input_2>"` + "`" + `.  If the ` + "`" + `--map-inputs` + "`" + ` flag is not passed,
-the CSV column name will be used as the action input name.
+To map a CSV column name to a procedure input, use the ` + "`" + `--map-inputs` + "`" + ` flag.
+The format is ` + "`" + `--map-inputs "<csv_column_1>:<procedure_input_1>,<csv_column_2>:<procedure_input_2>"` + "`" + `.  If the ` + "`" + `--map-inputs` + "`" + ` flag is not passed,
+the CSV column name will be used as the procedure input name.
 
 You can also specify the input values directly using the ` + "`" + `--values` + "`" + ` flag, delimited by a colon.
 These values will apply to all inserted rows, and will override the CSV column mappings.
@@ -112,7 +112,6 @@ func batchCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&filePath, "path", "p", "", "path to the CSV file to use")
 
 	cmd.MarkFlagRequired("path")
-	cmd.MarkFlagRequired("action")
 	return cmd
 }
 

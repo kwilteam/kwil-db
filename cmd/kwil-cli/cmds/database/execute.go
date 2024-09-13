@@ -79,8 +79,6 @@ func executeCmd() *cobra.Command {
 	}
 
 	bindFlagsTargetingProcedureOrAction(cmd)
-
-	cmd.MarkFlagRequired(actionNameFlag)
 	return cmd
 }
 
