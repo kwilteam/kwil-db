@@ -636,12 +636,19 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 		latestHeight := int64(latestSnapshot.Height)
 		res, err := clt.Header(ctx, &latestHeight)
 		if err != nil {
+			cancel()
 			d.log.Warnf("failed to get header from snap provider: %v", err)
+			continue
+		}
+		if res.Header.Height == 0 {
+			cancel()
+			d.log.Warnf("snap provider has height 0, skipping")
 			continue
 		}
 
 		// If the remote server is in the same chain, we can trust it.
 		if res.Header.ChainID != d.genesisCfg.ChainID {
+			cancel()
 			d.log.Warnf("snap provider has wrong chain ID: want %v, got %v", d.genesisCfg.ChainID, res.Header.ChainID)
 			continue
 		}
@@ -654,11 +661,12 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 
 		configDone = true
 
+		cancel()
 		break
 	}
 
 	if !configDone {
-		failBuild(nil, "failed to configure state syncer, failed to fetch trust options from the remote server.")
+		failBuild(errors.New(""), "failed to configure state syncer, failed to fetch trust options from the remote server.")
 	}
 
 	// create state syncer
