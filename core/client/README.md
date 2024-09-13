@@ -191,6 +191,8 @@ file using `github.com/kwilteam/kwil-db/parse` as follows:
 
 ```go
 import (
+	"context"
+
 	"github.com/kwilteam/kwil-db/parse"
 	ctypes "github.com/kwilteam/kwil-db/core/types/client"
 )
@@ -205,7 +207,7 @@ func parseAndDeploy(client ctypes.Client, kf string) {
 		log.Fatal(err)
 	}
 
-	txHash, err := client.DeployDatabase(ctx, schema)
+	txHash, err := client.DeployDatabase(context.Background(), schema)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -280,18 +282,18 @@ checkTx(txHash, "drop database")
 
 NOTE: This is only permitted if you are the `owner` of the database i.e. you deployed it.
 
-### Action Execution
+### Procedure/Action Execution
 
 As with the database deploy and drop methods, action *execution* requires a
 transaction since it is used to modify data in a schema.  Use the
-`ExecuteAction` method.
+`Execute` method.
 
 In the schema deployed by our example app, the action called `"tag"` will insert data:
 
 ```go
 const actionName = "tag"
 args := [][]any{{"jon was here"}} // one execution, one argument
-txHash, err := cl.ExecuteAction(ctx, dbid, actionName, args, txOpts...)
+txHash, err := cl.Execute(ctx, dbid, actionName, args, txOpts...)
 if err != nil {
 	log.Fatal(err)
 }
@@ -322,22 +324,22 @@ args := [][]any{
 
 NOTE: To execute an action with no input arguments, provide `nil`.
 
-### View (read-only) Action Calls
+### View (read-only) Procedure Calls
 
 To run a read-only action, which is defined with the `view` modifier, use the
-`CallAction` method.
+`Call` method.
 
 For example, to call the `get_all` method that returns all records in the `tags` table:
 
 ```go
 // Use a read-only view call (no blockchain transaction) to list all entries
-records, err := cl.CallAction(ctx, dbid, "get_all", nil)
+records, err := cl.Call(ctx, dbid, "get_all", nil)
 if err != nil {
 	log.Fatal(err)
 }
 ```
 
-The `CallAction` method returns the data in the `core/types/client.Records`
+The `Call` method returns the data in the `core/types/client.Records`
 type. See the [godocs](https://pkg.go.dev/github.com/kwilteam/kwil-db/core/types/client)
 for this type to see the methods available for accessing the records.
 
