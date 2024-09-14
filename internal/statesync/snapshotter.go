@@ -209,7 +209,7 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 	scanner := bufio.NewScanner(dumpInst1)
 	scanner.Buffer(buf, s.maxRowSize)
 
-	var inCopyBlock bool
+	var inCopyBlock, inFunctionBlock bool
 	var lineHashes []hashedLine
 	var offset int64
 	hasher := sha256.New()
@@ -277,6 +277,17 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 				lineHashes = append(lineHashes, hashedLine{Hash: hash, offset: offset})
 				offset += numBytes
 			}
+		} else if inFunctionBlock {
+			// check if the function block has ended
+			if strings.HasPrefix(line, "$$;") {
+				inFunctionBlock = false
+			}
+			// write the line to the output file
+			_, err := outputFile.WriteString(line + "\n")
+			if err != nil {
+				return nil, fmt.Errorf("failed to write to sanitized dump file: %w", err)
+			}
+			offset += int64(len(line)) + 1 // +1 for newline character
 		} else {
 			offset += int64(len(line)) + 1 // +1 for newline character
 			if line == "" || strings.TrimSpace(line) == "" {
@@ -285,6 +296,14 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 			} else if strings.HasPrefix(line, "--") {
 				// skip comments
 				continue
+			} else if strings.HasPrefix(line, "CREATE FUNCTION") {
+				inFunctionBlock = true
+
+				// write the line to the output file
+				_, err := outputFile.WriteString(line + "\n")
+				if err != nil {
+					return nil, fmt.Errorf("failed to write to sanitized dump file: %w", err)
+				}
 			} else if strings.HasPrefix(line, "SET") || strings.HasPrefix(line, "SELECT") ||
 				(len(line) > 1 && strings.HasPrefix(line[1:], "connect")) ||
 				strings.HasPrefix(line, "CREATE DATABASE") {

@@ -184,7 +184,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 	defer pgDumpOutput.Close()
 
 	hasher := sha256.New()
-	var inVotersBlock bool
+	var inVotersBlock, inFunctionBlock bool
 	var validatorCount int64
 	genCfg := chain.DefaultGenesisConfig()
 	genCfg.Alloc = make(map[string]*big.Int)
@@ -233,8 +233,28 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				Name:   fmt.Sprintf("validator-%d", validatorCount),
 			})
 			validatorCount++
+		} else if inFunctionBlock {
+			if strings.HasPrefix(line, "$$;") {
+				inFunctionBlock = false
+			}
+
+			// Write the line to the output file
+			n, err := multiWriter.Write([]byte(line + "\n"))
+			if err != nil {
+				return -1, nil, fmt.Errorf("failed to write to gzip writer: %w", err)
+			}
+			totalBytes += int64(n)
 		} else {
-			if line == "" || strings.TrimSpace(line) == "" { // Skip empty lines
+			if strings.HasPrefix(line, "CREATE FUNCTION") {
+				inFunctionBlock = true
+
+				// write the line to the output file
+				n, err := multiWriter.Write([]byte(line + "\n"))
+				if err != nil {
+					return -1, nil, fmt.Errorf("failed to write to gzip writer: %w", err)
+				}
+				totalBytes += int64(n)
+			} else if line == "" || strings.TrimSpace(line) == "" { // Skip empty lines
 				continue
 			} else if strings.HasPrefix(line, "--") { // Skip comments
 				continue
