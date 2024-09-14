@@ -26,6 +26,10 @@ const (
 	stage1output = "stage1output.sql"
 	stage2output = "stage2output.sql"
 	stage3output = "stage3output.sql.gz"
+
+	CreateSchema   = "CREATE SCHEMA"
+	CreateTable    = "CREATE TABLE"
+	CreateFunction = "CREATE FUNCTION"
 )
 
 // This file deals with creating a snapshot instance at a given snapshotID
@@ -196,7 +200,7 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 	scanner := bufio.NewScanner(dumpInst1)
 	scanner.Buffer(buf, s.maxRowSize)
 
-	var inCopyBlock bool
+	var inCopyBlock, schemaStarted bool
 	var lineHashes []hashedLine
 	var offset int64
 	hasher := sha256.New()
@@ -204,6 +208,7 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 	for scanner.Scan() {
 		line := scanner.Text()
 		numBytes := int64(len(line)) + 1 // +1 for newline character
+		trimLine := strings.TrimSpace(line)
 
 		if inCopyBlock {
 			/*
@@ -213,7 +218,7 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 				3 entry3
 				\.
 			*/
-			if line == "\\." { // end of COPY block
+			if trimLine == "\\." { // end of COPY block
 				inCopyBlock = false
 
 				// Inline sort the lineHashes array based on the row hash
@@ -265,21 +270,30 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 				offset += numBytes
 			}
 		} else {
-			offset += int64(len(line)) + 1 // +1 for newline character
-			if line == "" || strings.TrimSpace(line) == "" {
+			offset += numBytes // +1 for newline character
+			if line == "" || trimLine == "" {
 				// skip empty lines
 				continue
-			} else if strings.HasPrefix(line, "--") {
+			} else if strings.HasPrefix(trimLine, "--") {
 				// skip comments
 				continue
-			} else if strings.HasPrefix(line, "SET") || strings.HasPrefix(line, "SELECT") ||
-				(len(line) > 1 && strings.HasPrefix(line[1:], "connect")) ||
-				strings.HasPrefix(line, "CREATE DATABASE") {
-				// skip SET, SELECT, CREATE DATABASE and connect statements
+			} else if !schemaStarted && (strings.HasPrefix(trimLine, CreateSchema) ||
+				strings.HasPrefix(trimLine, CreateTable) || strings.HasPrefix(trimLine, CreateFunction)) {
+				schemaStarted = true
+
+				// write the line to the output file
+				_, err := outputFile.WriteString(line + "\n")
+				if err != nil {
+					return nil, fmt.Errorf("failed to write to sanitized dump file: %w", err)
+				}
+			} else if !schemaStarted && (strings.HasPrefix(trimLine, "SET") || strings.HasPrefix(trimLine, "SELECT") ||
+				strings.HasPrefix(trimLine, "\\connect") || strings.HasPrefix(trimLine, "CREATE DATABASE")) {
+				// skip any SET, SELECT, CREATE DATABASE and connect statements that appear before the schema definition
+				// These are postgres specific commands that should not be included in the snapshot
 				continue
 			} else {
 				// Example: COPY kwild_voting.voters (id, name, power) FROM stdin;
-				if strings.HasPrefix(line, "COPY") && strings.Contains(line, "FROM stdin;") {
+				if strings.HasPrefix(trimLine, "COPY") && strings.Contains(trimLine, "FROM stdin;") {
 					inCopyBlock = true // start of COPY block
 				}
 				// write the line to the output file
