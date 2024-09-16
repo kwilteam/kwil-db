@@ -40,7 +40,7 @@ services:
       --app.pg-db-user=kwild
       --app.pg-db-pass=kwild
     healthcheck:
-      test: ["CMD-SHELL", "/app/kwil-cli utils chain-info"]
+      test: ["CMD", "curl", "--fail-with-body", "-s", "http://127.0.0.1:8484/api/v1/health/user"]
       interval: 2s
       timeout: 6s
       retries: 10
