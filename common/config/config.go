@@ -33,6 +33,7 @@ type Logging struct {
 	TimeEncoding   string   `mapstructure:"time_format"`
 	OutputPaths    []string `mapstructure:"output_paths"`
 	MaxLogSizeKB   int64    `mapstructure:"file_roll_size"`
+	MaxLogRolls    int      `mapstructure:"retain_max_rolls"`
 }
 
 type AppConfig struct {
@@ -300,7 +301,7 @@ func (cfg *KwildConfig) LogConfig() (*log.Config, error) {
 		Format:       cfg.Logging.Format,
 		EncodeTime:   cfg.Logging.TimeEncoding,
 		MaxLogSizeKB: cfg.Logging.MaxLogSizeKB,
-		// for now MaxLogRolls is zero, meaning no limit (all retained)
+		MaxLogRolls:  cfg.Logging.MaxLogRolls,
 	}, nil
 }
 

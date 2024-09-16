@@ -93,6 +93,10 @@ output_paths = {{arrayFormatter .Logging.OutputPaths }}
 # the current one as a numbered gz file.
 file_roll_size = {{ .Logging.MaxLogSizeKB }}
 
+# The retention limit on the number of archived log files to keep. After this is
+# reached, the oldest are deleted. 0 means no limit (retain all).
+retain_max_rolls = {{ .Logging.MaxLogRolls }}
+
 # Output format: 'plain' or 'json'
 format = "{{ .Logging.Format }}"
 

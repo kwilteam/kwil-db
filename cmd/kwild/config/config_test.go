@@ -28,6 +28,8 @@ func Test_Config_Toml(t *testing.T) {
 
 	assert.Equal(t, int64(123_000), cfg.Logging.MaxLogSizeKB)
 
+	assert.Equal(t, 6, cfg.Logging.MaxLogRolls)
+
 	// extension endpoints
 	assert.Equal(t, 3, len(cfg.AppConfig.ExtensionEndpoints))
 	assert.Equal(t, "localhost:50052", cfg.AppConfig.ExtensionEndpoints[0])

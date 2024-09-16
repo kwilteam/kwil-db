@@ -139,7 +139,7 @@ const (
 	// defaults for log data retained:
 	// - 6 GB total uncompressed in 100 (minus) gzipped files
 	// - up to 60 MB in current uncompressed log
-	maxLogRolls  = 100
+	maxLogRolls  = 5
 	maxLogSizeKB = 60_000
 )
 

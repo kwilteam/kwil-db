@@ -89,6 +89,7 @@ var DefaultConfig = func() *commonConfig.KwildConfig {
 			TimeEncoding: log.TimeEncodingEpochFloat,
 			OutputPaths:  []string{"stdout", "kwild.log"},
 			MaxLogSizeKB: 100_000, // 100 MB uncompressed threshold
+			MaxLogRolls:  0,       // the zero value means retain all (don't delete oldest archived logs)
 		},
 
 		ChainConfig: &commonConfig.ChainConfig{
