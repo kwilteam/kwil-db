@@ -164,7 +164,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 	defer pgDumpOutput.Close()
 
 	hasher := sha256.New()
-	var inVotersBlock bool
+	var inVotersBlock, schemaStarted bool
 	var validatorCount int64
 	genCfg := chain.DefaultGenesisConfig()
 	genCfg.Alloc = make(map[string]*big.Int)
@@ -178,6 +178,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		trimLine := strings.TrimSpace(line)
 
 		// Remove whitespaces, set and select statements, process voters table
 		if inVotersBlock {
@@ -214,17 +215,22 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 			})
 			validatorCount++
 		} else {
-			if line == "" || strings.TrimSpace(line) == "" { // Skip empty lines
+			if line == "" || trimLine == "" { // Skip empty lines
 				continue
-			} else if strings.HasPrefix(line, "--") { // Skip comments
+			} else if strings.HasPrefix(trimLine, "--") { // Skip comments
 				continue
-			} else if strings.HasPrefix(line, "SET") || strings.HasPrefix(line, "SELECT") || strings.HasPrefix(line[1:], "connect") {
-				// Skip SET and SELECT and connect statements
+			} else if !schemaStarted && (strings.HasPrefix(trimLine, "SET") || strings.HasPrefix(trimLine, "SELECT") || strings.HasPrefix(trimLine, "\\connect") || strings.HasPrefix(trimLine, "CREATE DATABASE")) {
+				// Skip SET and SELECT and connect and create database statements
 				continue
 			} else if strings.HasPrefix(line, createDatabase) {
 				// Skip CREATE DATABASE statement
 			} else {
-				if strings.HasPrefix(line, "COPY kwild_voting.voters") && strings.Contains(line, "FROM stdin;") {
+				// Start of schema
+				if !schemaStarted && (strings.HasPrefix(trimLine, "CREATE SCHEMA") || strings.HasPrefix(trimLine, "CREATE TABLE") || strings.HasPrefix(trimLine, "CREATE FUNCTION")) {
+					schemaStarted = true
+				}
+
+				if strings.HasPrefix(trimLine, "COPY kwild_voting.voters") && strings.Contains(trimLine, "FROM stdin;") {
 					inVotersBlock = true
 				}
 
