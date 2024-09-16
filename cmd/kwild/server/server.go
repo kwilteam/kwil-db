@@ -65,7 +65,7 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *chain.Genesis
 	logger = *logger.Named("kwild")
 
 	closers := &closeFuncs{
-		closers: make([]func() error, 0),
+		closers: []func() error{}, // logger.Close is not in here; do it in a defer in Start
 		logger:  logger,
 	}
 
@@ -121,17 +121,17 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *chain.Genesis
 
 func (s *Server) Start(ctx context.Context) error {
 	defer func() {
+		if err := recover(); err != nil {
+			s.log.Error("kwild server panic", zap.Any("error", err))
+		}
+
 		s.log.Info("Closing server resources...")
 		err := s.closers.closeAll()
 		if err != nil {
 			s.log.Error("failed to close resource:", zap.Error(err))
 		}
 		s.log.Info("Server is now shut down.")
-	}()
-	defer func() {
-		if err := recover(); err != nil {
-			s.log.Error("kwild server panic", zap.Any("error", err))
-		}
+		s.log.Close()
 	}()
 
 	s.log.Infof("Starting server (kwild version %v)...", version.KwilVersion)

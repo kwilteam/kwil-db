@@ -24,6 +24,8 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.StringVar(&cfg.Logging.Format, "log.format", cfg.Logging.Format, format("%s log format"))
 	flagSet.StringVar(&cfg.Logging.TimeEncoding, "log.time-format", cfg.Logging.TimeEncoding, format("%s time log format"))
 	flagSet.StringSliceVar(&cfg.Logging.OutputPaths, "log.output-paths", cfg.Logging.OutputPaths, format("%s log output paths"))
+	flagSet.Int64Var(&cfg.Logging.MaxLogSizeKB, "log.file-roll-size", cfg.Logging.MaxLogSizeKB, "threshold in KB at which the log file rolls over and archives the current one")
+	flagSet.IntVar(&cfg.Logging.MaxLogRolls, "log.retain-max-rolls", cfg.Logging.MaxLogRolls, "retention limit on the number of archived log files to keep (default is 0, meaning retain all)")
 
 	// General APP flags:
 	flagSet.StringVar(&cfg.AppConfig.PrivateKeyPath, "app.private-key-path", cfg.AppConfig.PrivateKeyPath, "Path to the node private key file")
