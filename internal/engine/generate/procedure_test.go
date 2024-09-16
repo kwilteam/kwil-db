@@ -35,7 +35,7 @@ func Test_Procedure(t *testing.T) {
 			},
 			returns: nil,
 			decls:   nil,
-			want:    "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 TEXT) \nRETURNS void AS $$\n#variable_conflict use_column\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want:    "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 TEXT) \nRETURNS void AS $kwil_reserved_delim$\n#variable_conflict use_column\nBEGIN\ntest_body\nEND;\n$kwil_reserved_delim$ LANGUAGE plpgsql;",
 		},
 		{
 			name: "multiple fields and return types",
@@ -70,7 +70,7 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 			decls: nil,
-			want:  "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 TEXT[], field2 TEXT, OUT _out_0 TEXT[], OUT _out_1 BOOL) AS $$\n#variable_conflict use_column\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want:  "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 TEXT[], field2 TEXT, OUT _out_0 TEXT[], OUT _out_1 BOOL) AS $kwil_reserved_delim$\n#variable_conflict use_column\nBEGIN\ntest_body\nEND;\n$kwil_reserved_delim$ LANGUAGE plpgsql;",
 		},
 		{
 			name:   "no fields, multiple return types",
@@ -93,7 +93,7 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 			decls: nil,
-			want:  "CREATE OR REPLACE FUNCTION test_schema.test_procedure(OUT _out_0 TEXT[], OUT _out_1 BOOL) AS $$\n#variable_conflict use_column\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want:  "CREATE OR REPLACE FUNCTION test_schema.test_procedure(OUT _out_0 TEXT[], OUT _out_1 BOOL) AS $kwil_reserved_delim$\n#variable_conflict use_column\nBEGIN\ntest_body\nEND;\n$kwil_reserved_delim$ LANGUAGE plpgsql;",
 		},
 		{
 			name: "single field, single return type",
@@ -112,7 +112,7 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 			decls: nil,
-			want:  "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 TEXT, OUT _out_0 TEXT) AS $$\n#variable_conflict use_column\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want:  "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 TEXT, OUT _out_0 TEXT) AS $kwil_reserved_delim$\n#variable_conflict use_column\nBEGIN\ntest_body\nEND;\n$kwil_reserved_delim$ LANGUAGE plpgsql;",
 		},
 		{
 			name:   "return table",
@@ -146,7 +146,7 @@ func Test_Procedure(t *testing.T) {
 					},
 				},
 			},
-			want: "CREATE OR REPLACE FUNCTION test_schema.test_procedure() \nRETURNS TABLE(field1 TEXT, field2 INT8[]) AS $$\n#variable_conflict use_column\nDECLARE\nlocal_type TEXT;\ncars INT8[];\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want: "CREATE OR REPLACE FUNCTION test_schema.test_procedure() \nRETURNS TABLE(field1 TEXT, field2 INT8[]) AS $kwil_reserved_delim$\n#variable_conflict use_column\nDECLARE\nlocal_type TEXT;\ncars INT8[];\nBEGIN\ntest_body\nEND;\n$kwil_reserved_delim$ LANGUAGE plpgsql;",
 		},
 		{
 			name: "variable is declared as parameter",
@@ -163,7 +163,7 @@ func Test_Procedure(t *testing.T) {
 					Type: types.TextType,
 				},
 			},
-			want: "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 TEXT) \nRETURNS void AS $$\n#variable_conflict use_column\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want: "CREATE OR REPLACE FUNCTION test_schema.test_procedure(field1 TEXT) \nRETURNS void AS $kwil_reserved_delim$\n#variable_conflict use_column\nBEGIN\ntest_body\nEND;\n$kwil_reserved_delim$ LANGUAGE plpgsql;",
 		},
 		{
 			name:    "loops",
@@ -173,7 +173,7 @@ func Test_Procedure(t *testing.T) {
 			loopTargets: []string{
 				"loop1",
 			},
-			want: "CREATE OR REPLACE FUNCTION test_schema.test_procedure() \nRETURNS void AS $$\n#variable_conflict use_column\nDECLARE\nloop1 RECORD;\nBEGIN\ntest_body\nEND;\n$$ LANGUAGE plpgsql;",
+			want: "CREATE OR REPLACE FUNCTION test_schema.test_procedure() \nRETURNS void AS $kwil_reserved_delim$\n#variable_conflict use_column\nDECLARE\nloop1 RECORD;\nBEGIN\ntest_body\nEND;\n$kwil_reserved_delim$ LANGUAGE plpgsql;",
 		},
 	}
 
@@ -213,4 +213,14 @@ func Test_Procedure(t *testing.T) {
 			assert.Equal(t, test.want, got)
 		})
 	}
+}
+
+func Test_Delimiter(t *testing.T) {
+	_, err := generateProcedureWrapper(&analyzedProcedure{
+		Name:       "test_procedure",
+		Parameters: nil,
+		Returns:    types.ProcedureReturn{},
+		Body:       "'" + delimiter + " other stuff'",
+	}, "test_schema")
+	assert.Error(t, err)
 }

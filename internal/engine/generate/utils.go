@@ -1,6 +1,8 @@
 package generate
 
 import (
+	"strings"
+
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/conv"
 )
@@ -50,4 +52,11 @@ func attributeToSQLString(col *types.Column, attr *types.Attribute) (string, err
 	default:
 		return "", nil
 	}
+}
+
+const delimiter = "$kwil_reserved_delim$"
+
+// containsDisallowedDelimiter checks if the string contains the delimiter
+func containsDisallowedDelimiter(s string) bool {
+	return strings.Contains(s, delimiter)
 }
