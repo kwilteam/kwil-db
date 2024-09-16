@@ -146,6 +146,10 @@ type analyzedProcedure struct {
 // It takes a procedure and the body of the procedure and returns the plpgsql code that creates
 // the procedure.
 func generateProcedureWrapper(proc *analyzedProcedure, pgSchema string) (string, error) {
+	if containsDisallowedDelimiter(proc.Body) {
+		return "", fmt.Errorf("procedure body contains disallowed delimiter")
+	}
+
 	str := strings.Builder{}
 	str.WriteString("CREATE OR REPLACE FUNCTION ")
 	str.WriteString(fmt.Sprintf("%s.%s(", pgSchema, proc.Name))
@@ -217,7 +221,9 @@ func generateProcedureWrapper(proc *analyzedProcedure, pgSchema string) (string,
 		str.WriteString("\nRETURNS void ")
 	}
 
-	str.WriteString("AS $$\n")
+	str.WriteString("AS ")
+	str.WriteString(delimiter)
+	str.WriteString("\n")
 
 	// we can only have conflict if we use RETURN TABLE. Since we don't allow
 	// direct assignment to columns like plpgsql, we always want these conflicts
@@ -262,7 +268,9 @@ func generateProcedureWrapper(proc *analyzedProcedure, pgSchema string) (string,
 
 	str.WriteString("BEGIN\n")
 	str.WriteString(proc.Body)
-	str.WriteString("\nEND;\n$$ LANGUAGE plpgsql;")
+	str.WriteString("\nEND;\n")
+	str.WriteString(delimiter)
+	str.WriteString(" LANGUAGE plpgsql;")
 
 	return str.String(), nil
 }

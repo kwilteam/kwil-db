@@ -214,3 +214,13 @@ func Test_Procedure(t *testing.T) {
 		})
 	}
 }
+
+func Test_Delimiter(t *testing.T) {
+	_, err := generateProcedureWrapper(&analyzedProcedure{
+		Name:       "test_procedure",
+		Parameters: nil,
+		Returns:    types.ProcedureReturn{},
+		Body:       "'" + delimiter + " other stuff'",
+	}, "test_schema")
+	assert.Error(t, err)
+}

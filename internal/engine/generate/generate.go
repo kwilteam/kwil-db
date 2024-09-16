@@ -22,6 +22,12 @@ func GenerateDDL(pgSchema string, table *types.Table) ([]string, error) {
 	}
 	statements = append(statements, createIndexStatements...)
 
+	for _, stmt := range statements {
+		if containsDisallowedDelimiter(stmt) {
+			return nil, fmt.Errorf("statement contains disallowed delimiter: %s", stmt)
+		}
+	}
+
 	return statements, nil
 }
 
