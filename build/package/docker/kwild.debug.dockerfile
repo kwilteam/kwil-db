@@ -26,7 +26,7 @@ FROM alpine:3.19
 COPY --from=build /go/bin/dlv /dlv
 WORKDIR /app
 RUN mkdir -p /var/run/kwil && chmod 777 /var/run/kwil
-RUN apk --no-cache add postgresql-client
+RUN apk --no-cache add postgresql-client curl
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /app/dist/kwild ./kwild
 COPY --from=build /app/dist/kwil-admin ./kwil-admin
