@@ -61,7 +61,7 @@ type AppConfig struct {
 	DBName string `mapstructure:"pg_db_name"`
 
 	RPCTimeout         Duration                     `mapstructure:"rpc_timeout"`
-	RPCMaxReqSize      int                          `mapstructure:"rpc_req_limit"`
+	RPCMaxReqSize      int                          `mapstructure:"max_req_size"`
 	PrivateRPC         bool                         `mapstructure:"private_rpc"`
 	ChallengeExpiry    Duration                     `mapstructure:"challenge_expiry"`
 	ChallengeRateLimit float64                      `mapstructure:"challenge_rate_limit"`
