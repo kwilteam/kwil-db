@@ -92,7 +92,6 @@ type SnapshotConfig struct {
 	RecurringHeight uint64 `mapstructure:"recurring_height"`
 	MaxSnapshots    uint64 `mapstructure:"max_snapshots"`
 	SnapshotDir     string `mapstructure:"snapshot_dir"`
-	MaxRowSize      int    `mapstructure:"max_row_size"`
 }
 
 type ChainRPCConfig struct {

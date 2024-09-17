@@ -67,7 +67,7 @@ func createCmd() *cobra.Command {
 				return display.PrintErr(cmd, fmt.Errorf("failed to expand snapshot directory path: %v", err))
 			}
 
-			height, logs, err := pgDump(cmd.Context(), dbName, dbUser, dbPass, dbHost, dbPort, maxRowSize, snapshotDir)
+			height, logs, err := pgDump(cmd.Context(), dbName, dbUser, dbPass, dbHost, dbPort, snapshotDir)
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to create database snapshot: %v", err))
 			}
@@ -83,8 +83,10 @@ func createCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dbPass, "password", "", "Password for the database user")
 	cmd.Flags().StringVar(&dbHost, "host", "localhost", "Host of the database")
 	cmd.Flags().StringVar(&dbPort, "port", "5432", "Port of the database")
-	cmd.Flags().IntVar(&maxRowSize, "max-row-size", 4*1024*1024, "Maximum row size to read from pg_dump (default: 4MB). Adjust this accordingly if you encounter 'bufio.Scanner: token too long' error.")
 
+	// TODO: Deprecate below flags
+	cmd.Flags().IntVar(&maxRowSize, "max-row-size", 4*1024*1024, "Maximum row size to read from pg_dump (default: 4MB). Adjust this accordingly if you encounter 'bufio.Scanner: token too long' error.")
+	cmd.Flags().MarkDeprecated("max-row-size", "max-row-size has no more influence on the snapshot creation process. It is deprecated and will be removed in v0.10.0")
 	return cmd
 }
 
@@ -103,7 +105,7 @@ func (c *createSnapshotRes) MarshalText() (text []byte, err error) {
 
 // PGDump uses pg_dump to create a snapshot of the database.
 // It returns messages to log and an error if any.
-func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, maxRowSize int, snapshotDir string) (height int64, logs []string, err error) {
+func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, snapshotDir string) (height int64, logs []string, err error) {
 	// Get the chain height
 	height, err = chainHeight(ctx, dbName, dbUser, dbPass, dbHost, dbPort)
 	if err != nil {
@@ -191,22 +193,27 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 	multiWriter := io.MultiWriter(gzipWriter, hasher)
 	var totalBytes int64
 
-	// Pass the output of pg_dump through scanner to sanitize it
-	buf := make([]byte, maxRowSize)
-	scanner := bufio.NewScanner(pgDumpOutput)
-	scanner.Buffer(buf, maxRowSize)
+	// Sanitize the output of pg_dump to include only the necessary tables and data
+	reader := bufio.NewReader(pgDumpOutput)
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return -1, nil, fmt.Errorf("failed to read pg_dump output: %w", err)
+		}
+
 		trimLine := strings.TrimSpace(line)
 
 		// Remove whitespaces, set and select statements, process voters table
 		if inVotersBlock {
 			// Example voter: \\xdae5e91f74b95a9db05fc0f1f8c07f95	\\x9e52ff636caf4988e72e4ac865e6ef83a1e262d1a6376a300f3db8884e1f2253	1
 
-			if line == "\\." { // End of voters block
+			if trimLine == "\\." { // End of voters block
 				inVotersBlock = false
-				n, err := multiWriter.Write([]byte(line + "\n"))
+				n, err := multiWriter.Write([]byte(line)) // line includes the \n
 				if err != nil {
 					return -1, nil, fmt.Errorf("failed to write to gzip writer: %w", err)
 				}
@@ -214,9 +221,9 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				continue
 			}
 
-			strs := strings.Split(line, "\t")
+			strs := strings.Split(trimLine, "\t")
 			if len(strs) != 3 {
-				return -1, nil, fmt.Errorf("invalid voter line: %s", line)
+				return -1, nil, fmt.Errorf("invalid voter line: %s", trimLine)
 			}
 			voterID, err := hex.DecodeString(strs[1][3:]) // Remove the leading \\x
 			if err != nil {
@@ -253,17 +260,13 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				}
 
 				// Write the sanitized line to the gzip writer
-				n, err := multiWriter.Write([]byte(line + "\n"))
+				n, err := multiWriter.Write([]byte(line)) // line includes the \n
 				if err != nil {
 					return -1, nil, fmt.Errorf("failed to write to gzip writer: %w", err)
 				}
 				totalBytes += int64(n)
 			}
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return -1, nil, fmt.Errorf("failed to scan pg_dump output: %w", err)
 	}
 
 	// Close the writer when pg_dump completes to signal EOF to sed

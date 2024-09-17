@@ -513,7 +513,6 @@ func buildMigrator(d *coreDependencies, db *pg.DB, txApp *txapp.TxApp) *migratio
 		SnapshotDir:     filepath.Join(migrationsDir, cmd.DefaultConfig().AppConfig.Snapshots.SnapshotDir),
 		RecurringHeight: 0,
 		MaxSnapshots:    1, // only one snapshot is needed for network migrations, taken at the activation height
-		MaxRowSize:      cfg.Snapshots.MaxRowSize,
 	}
 
 	ss, err := statesync.NewSnapshotStore(snapshotCfg, dbCfg, *d.log.Named("migrations-snapshots"))
@@ -752,7 +751,6 @@ func buildSnapshotter(d *coreDependencies) *statesync.SnapshotStore {
 		SnapshotDir:     cfg.Snapshots.SnapshotDir,
 		RecurringHeight: cfg.Snapshots.RecurringHeight,
 		MaxSnapshots:    int(cfg.Snapshots.MaxSnapshots),
-		MaxRowSize:      cfg.Snapshots.MaxRowSize,
 	}
 
 	ss, err := statesync.NewSnapshotStore(snapshotCfg, dbCfg, *d.log.Named("snapshot-store"))

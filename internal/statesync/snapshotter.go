@@ -47,15 +47,13 @@ const (
 type Snapshotter struct {
 	dbConfig    *DBConfig
 	snapshotDir string
-	maxRowSize  int
 	log         log.Logger
 }
 
-func NewSnapshotter(cfg *DBConfig, dir string, MaxRowSize int, logger log.Logger) *Snapshotter {
+func NewSnapshotter(cfg *DBConfig, dir string, logger log.Logger) *Snapshotter {
 	return &Snapshotter{
 		dbConfig:    cfg,
 		snapshotDir: dir,
-		maxRowSize:  MaxRowSize,
 		log:         logger,
 	}
 }
@@ -208,19 +206,23 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 	}
 	defer outputFile.Close()
 
-	// Scanner to read the dump file line by line
-	buf := make([]byte, s.maxRowSize)
-	scanner := bufio.NewScanner(dumpInst1)
-	scanner.Buffer(buf, s.maxRowSize)
+	reader := bufio.NewReader(dumpInst1)
 
 	var inCopyBlock, schemaStarted bool
 	var lineHashes []hashedLine
 	var offset int64
 	hasher := sha256.New()
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		numBytes := int64(len(line)) + 1 // +1 for newline character
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("failed to read line {%s} from pg dump file: %w", line, err)
+		}
+
+		numBytes := int64(len(line)) //  newline character is included in the line
 		trimLine := strings.TrimSpace(line)
 
 		if inCopyBlock {
@@ -265,7 +267,7 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 				}
 
 				// Write the end of COPY block to the output file
-				_, err = outputFile.WriteString(line + "\n")
+				_, err = outputFile.WriteString(line) // \n character is included in the line
 				if err != nil {
 					return nil, fmt.Errorf("failed to write to sanitized dump file: %w", err)
 				}
@@ -295,7 +297,7 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 				schemaStarted = true
 
 				// write the line to the output file
-				_, err := outputFile.WriteString(line + "\n")
+				_, err := outputFile.WriteString(line) // \n character is included in the line
 				if err != nil {
 					return nil, fmt.Errorf("failed to write to sanitized dump file: %w", err)
 				}
@@ -310,7 +312,7 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 					inCopyBlock = true // start of COPY block
 				}
 				// write the line to the output file
-				_, err := outputFile.WriteString(line + "\n")
+				_, err := outputFile.WriteString(line)
 				if err != nil {
 					return nil, fmt.Errorf("failed to write to sanitized dump file: %w", err)
 				}
@@ -318,9 +320,6 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to scan the dump file: %w", err)
-	}
 	outputFile.Sync()
 
 	// remove the dump file

@@ -57,7 +57,6 @@ type SnapshotConfig struct {
 	SnapshotDir     string
 	MaxSnapshots    int
 	RecurringHeight uint64
-	MaxRowSize      int
 }
 
 type SnapshotStore struct {
@@ -81,7 +80,7 @@ type DBSnapshotter interface {
 }
 
 func NewSnapshotStore(cfg *SnapshotConfig, dbCfg *DBConfig, logger log.Logger) (*SnapshotStore, error) {
-	snapshotter := NewSnapshotter(dbCfg, cfg.SnapshotDir, cfg.MaxRowSize, logger)
+	snapshotter := NewSnapshotter(dbCfg, cfg.SnapshotDir, logger)
 	ss := &SnapshotStore{
 		cfg:         cfg,
 		snapshots:   make(map[uint64]*Snapshot),

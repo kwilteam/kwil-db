@@ -14,14 +14,13 @@ import (
 const (
 	dump1File = "test_data/dump1.sql"
 	dump2File = "test_data/dump2.sql"
-	tokenSize = 64 * 1024 // 64KB
 )
 
 func TestSanitizeLogicalDump(t *testing.T) {
 	dir := t.TempDir()
 	logger := log.NewStdOut(log.DebugLevel)
 	// Create a snapshotter
-	snapshotter := NewSnapshotter(nil, dir, tokenSize, logger)
+	snapshotter := NewSnapshotter(nil, dir, logger)
 
 	// Create snapshot directory
 	height := uint64(1)

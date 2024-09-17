@@ -79,7 +79,6 @@ var DefaultConfig = func() *commonConfig.KwildConfig {
 				RecurringHeight: 14400, // 1 day at 6s block time
 				MaxSnapshots:    3,
 				SnapshotDir:     "snapshots",
-				MaxRowSize:      4 * 1024 * 1024,
 			},
 			GenesisState: "",
 		},
