@@ -9,11 +9,11 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/key"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/migration"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/node"
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/peers"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/setup"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/snapshot"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/utils"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/validators"
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/whitelist"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +34,7 @@ func NewRootCmd() *cobra.Command {
 		validators.NewValidatorsCmd(),
 		utils.NewUtilsCmd(),
 		snapshot.NewSnapshotCmd(),
-		peers.PeersCmd(),
+		whitelist.WhitelistCmd(),
 		migration.NewMigrationCmd(),
 	)
 

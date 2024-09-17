@@ -105,7 +105,7 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 	nodeCfg.StateSync.ChunkRequestTimeout = time.Duration(userChainCfg.StateSync.ChunkRequestTimeout)
 
 	// Light client verification
-	nodeCfg.StateSync.TrustPeriod = time.Duration(36000 * time.Second)
+	nodeCfg.StateSync.TrustPeriod = 36000 * time.Second // 10 hours (6s block time)
 
 	// Standardize the paths.
 	nodeCfg.DBPath = cometbft.DataDir // i.e. "data", we do not allow users to change

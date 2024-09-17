@@ -1,4 +1,4 @@
-package peers
+package whitelist
 
 import (
 	"context"
@@ -14,7 +14,7 @@ func listCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:     "list",
 		Short:   "List all peers in the node's whitelist.",
-		Example: "kwil-admin peers list",
+		Example: "kwil-admin whitelist list",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
@@ -43,7 +43,7 @@ type listPeersMsg struct {
 var _ display.MsgFormatter = (*listPeersMsg)(nil)
 
 func (l *listPeersMsg) MarshalText() ([]byte, error) {
-	return []byte("Peers:  \n" + strings.Join(l.peers, "\n")), nil
+	return []byte("Whitelisted Peers:  \n" + strings.Join(l.peers, "\n")), nil
 }
 
 func (l *listPeersMsg) MarshalJSON() ([]byte, error) {
