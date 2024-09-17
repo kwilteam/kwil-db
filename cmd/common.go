@@ -119,7 +119,6 @@ var DefaultConfig = func() *commonConfig.KwildConfig {
 				SnapshotDir:         "rcvdSnaps",
 				DiscoveryTime:       commonConfig.Duration(15 * time.Second),
 				ChunkRequestTimeout: commonConfig.Duration(10 * time.Second),
-				TrustPeriod:         commonConfig.Duration(36000 * time.Second),
 			},
 			Consensus: &commonConfig.ConsensusConfig{
 				TimeoutPropose:   commonConfig.Duration(3 * time.Second),

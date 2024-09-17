@@ -193,12 +193,6 @@ type StateSyncConfig struct {
 	// The timeout duration before re-requesting a chunk, possibly from a different
 	// peer (default: 1 minute).
 	ChunkRequestTimeout Duration `mapstructure:"chunk_request_timeout"`
-
-	// Light client verification options, Automatically fetched from the RPC Servers
-	// during the node initialization.
-	TrustHeight int64
-	TrustHash   string
-	TrustPeriod Duration
 }
 
 type ChainConfig struct {

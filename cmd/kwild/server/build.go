@@ -788,6 +788,18 @@ func buildStatesyncer(d *coreDependencies, db sql.ReadTxMaker) *statesync.StateS
 		d.cfg.ChainConfig.StateSync.RPCServers += "," + providers[0]
 	}
 
+	// create state syncer
+	return statesync.NewStateSyncer(d.ctx, dbCfg, d.cfg.ChainConfig.StateSync.SnapshotDir,
+		providers, db, *d.log.Named("state-syncer"))
+}
+
+func retrieveLightClientTrustOptions(d *coreDependencies) (height int64, hash string, err error) {
+	providers := strings.Split(d.cfg.ChainConfig.StateSync.RPCServers, ",")
+
+	if len(providers) == 0 {
+		failBuild(nil, "failed to configure state syncer, no remote servers provided.")
+	}
+
 	configDone := false
 	for _, p := range providers {
 		clt, err := statesync.ChainRPCClient(p)
@@ -831,10 +843,10 @@ func buildStatesyncer(d *coreDependencies, db sql.ReadTxMaker) *statesync.StateS
 		}
 
 		// Get the trust height and trust hash from the remote server
-		d.cfg.ChainConfig.StateSync.TrustHeight = res.Header.Height
-		d.cfg.ChainConfig.StateSync.TrustHash = res.Header.Hash().String()
+		height = res.Header.Height
+		hash = res.Header.Hash().String()
 
-		d.log.Infof("Provider %q: trust height %v, hash %v", p, d.cfg.ChainConfig.StateSync.TrustHeight, d.cfg.ChainConfig.StateSync.TrustHash)
+		d.log.Infof("Provider %q: trust height %v, hash %v", p, height, hash)
 
 		configDone = true
 
@@ -842,12 +854,10 @@ func buildStatesyncer(d *coreDependencies, db sql.ReadTxMaker) *statesync.StateS
 	}
 
 	if !configDone {
-		failBuild(nil, "failed to configure state syncer, failed to fetch trust options from the remote server.")
+		return -1, "", errors.New("failed to fetch trust options from the remote server")
 	}
 
-	// create state syncer
-	return statesync.NewStateSyncer(d.ctx, dbCfg, d.cfg.ChainConfig.StateSync.SnapshotDir,
-		providers, db, *d.log.Named("state-syncer"))
+	return height, hash, nil
 }
 
 // tlsConfig returns a tls.Config to be used with the admin RPC service. If
@@ -1033,6 +1043,16 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 			d.log.Warn("Enabling peer exchange to run in seed mode.")
 			nodeCfg.P2P.PexReactor = true
 		}
+	}
+
+	// If statesync is enabled, retrieve the Light client verification options from the trusted provider
+	if d.cfg.ChainConfig.StateSync.Enable {
+		height, hash, err := retrieveLightClientTrustOptions(d)
+		if err != nil {
+			failBuild(err, "failed to retrieve trust options from the remote server")
+		}
+		nodeCfg.StateSync.TrustHeight = height
+		nodeCfg.StateSync.TrustHash = hash
 	}
 
 	nodeLogger := increaseLogLevel("cometbft", &d.log, d.cfg.Logging.ConsensusLevel)
