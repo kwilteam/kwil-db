@@ -51,6 +51,9 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 
 	flagSet.Var(&cfg.AppConfig.RPCTimeout, "app.rpc-timeout", "timeout for RPC requests (through reading the request, handling the request, and sending the response)")
 	flagSet.IntVar(&cfg.AppConfig.RPCMaxReqSize, "app.max-req-size", cfg.AppConfig.RPCMaxReqSize, "RPC request size limit")
+	flagSet.IntVar(&cfg.AppConfig.RPCMaxReqSize, "app.rpc-req-limit", cfg.AppConfig.RPCMaxReqSize, "RPC request size limit")
+	flagSet.MarkDeprecated("app.rpc-req-limit", "use --app.max-req-size instead")
+
 	flagSet.Var(&cfg.AppConfig.ReadTxTimeout, "app.db-read-timeout", "timeout for database reads initiated by RPC requests")
 
 	// Extension endpoints flags
