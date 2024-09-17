@@ -1046,3 +1046,29 @@ func (r *IntHelper) JSONRPCListenAddress(ctx context.Context, name string) (stri
 	ctr := r.containers[name]
 	return utils.KwildJSONRPCEndpoints(ctr, ctx)
 }
+
+func (r *IntHelper) RestartNode(ctx context.Context, name string, delay time.Duration) {
+	ctr, ok := r.containers[name]
+	require.True(r.t, ok, "failed to get container for node %s", name)
+
+	// stop the container
+	r.t.Logf("stopping container %s", name)
+	err := ctr.Stop(ctx, nil)
+	require.NoError(r.t, err, "failed to stop container %s", name)
+
+	// wait for the container to stop
+	time.Sleep(delay)
+
+	// restart the container
+	r.t.Logf("starting container %s", name)
+	err = ctr.Start(ctx)
+	require.NoError(r.t, err, "failed to start container %s", name)
+
+	// wait for the container to start
+	require.Eventually(r.t, func() bool {
+		return ctr.IsRunning()
+	}, 10*time.Second, 1*time.Second, "container %s is not running", name)
+
+	// wait for the container to be healthy and catchup with the network
+	time.Sleep(delay)
+}
