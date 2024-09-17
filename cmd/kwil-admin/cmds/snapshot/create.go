@@ -53,7 +53,7 @@ WHERE pg_stat_activity.datname = 'kwild'
 */
 
 func createCmd() *cobra.Command {
-	var snapshotDir, dbName, dbUser, dbPass, dbHost, dbPort string
+	var snapshotDir string
 	var maxRowSize int
 	cmd := &cobra.Command{
 		Use:     "create",
@@ -67,7 +67,12 @@ func createCmd() *cobra.Command {
 				return display.PrintErr(cmd, fmt.Errorf("failed to expand snapshot directory path: %v", err))
 			}
 
-			height, logs, err := pgDump(cmd.Context(), dbName, dbUser, dbPass, dbHost, dbPort, snapshotDir)
+			pgConf, err := common.GetPostgresFlags(cmd)
+			if err != nil {
+				return display.PrintErr(cmd, fmt.Errorf("failed to get postgres flags: %v", err))
+			}
+
+			height, logs, _, err := PGDump(cmd.Context(), pgConf.DBName, pgConf.User, pgConf.Pass, pgConf.Host, pgConf.Port, snapshotDir)
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to create database snapshot: %v", err))
 			}
@@ -77,17 +82,14 @@ func createCmd() *cobra.Command {
 		},
 	}
 
+	common.BindPostgresFlags(cmd)
 	cmd.Flags().StringVar(&snapshotDir, "snapdir", "kwild-snaps", "Directory to store the snapshot and hash files")
-	cmd.Flags().StringVar(&dbName, "dbname", "kwild", "Name of the database to snapshot")
-	cmd.Flags().StringVar(&dbUser, "user", "postgres", "User with administrative privileges on the database")
-	cmd.Flags().StringVar(&dbPass, "password", "", "Password for the database user")
-	cmd.Flags().StringVar(&dbHost, "host", "localhost", "Host of the database")
-	cmd.Flags().StringVar(&dbPort, "port", "5432", "Port of the database")
 
 	// TODO: Remove below flags
 	cmd.Flags().IntVar(&maxRowSize, "max-row-size", 4*1024*1024, "Maximum row size to read from pg_dump (default: 4MB). Adjust this accordingly if you encounter 'bufio.Scanner: token too long' error.")
 	cmd.Flags().MarkDeprecated("max-row-size", "max-row-size has no more influence on the snapshot creation process. It is deprecated and will be removed in v0.10.0")
 	return cmd
+
 }
 
 type createSnapshotRes struct {
@@ -103,24 +105,28 @@ func (c *createSnapshotRes) MarshalText() (text []byte, err error) {
 	return []byte(fmt.Sprintf("Snapshot created successfully at height: %d \n%s", c.Height, strings.Join(c.Logs, "\n"))), nil
 }
 
+func migrationSnapshotFile(snapshotDir string) string {
+	return filepath.Join(snapshotDir, "kwildb-snapshot.sql.gz")
+}
+
 // PGDump uses pg_dump to create a snapshot of the database.
 // It returns messages to log and an error if any.
-func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, snapshotDir string) (height int64, logs []string, err error) {
+func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, snapshotDir string) (height int64, logs []string, genesisConfig *chain.GenesisConfig, err error) {
 	// Get the chain height
 	height, err = chainHeight(ctx, dbName, dbUser, dbPass, dbHost, dbPort)
 	if err != nil {
-		return -1, nil, fmt.Errorf("failed to get chain height: %w", err)
+		return -1, nil, nil, fmt.Errorf("failed to get chain height: %w", err)
 	}
 	// Check if the snapshot directory exists, if not create it
 	err = os.MkdirAll(snapshotDir, 0755)
 	if err != nil {
-		return -1, nil, fmt.Errorf("failed to create snapshot directory: %w", err)
+		return -1, nil, nil, fmt.Errorf("failed to create snapshot directory: %w", err)
 	}
 
-	dumpFile := filepath.Join(snapshotDir, "kwildb-snapshot.sql.gz")
+	dumpFile := migrationSnapshotFile(snapshotDir)
 	outputFile, err := os.Create(dumpFile)
 	if err != nil {
-		return -1, nil, fmt.Errorf("failed to create dump file: %w", err)
+		return -1, nil, nil, fmt.Errorf("failed to create dump file: %w", err)
 	}
 	// delete the dump file if an error occurs anywhere during the snapshot process
 	defer func() {
@@ -176,12 +182,12 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 	var stderr bytes.Buffer
 	pgDumpOutput, err := pgDumpCmd.StdoutPipe()
 	if err != nil {
-		return -1, nil, fmt.Errorf("failed to get stdout pipe: %w", err)
+		return -1, nil, nil, fmt.Errorf("failed to get stdout pipe: %w", err)
 	}
 	pgDumpCmd.Stderr = &stderr
 
 	if err := pgDumpCmd.Start(); err != nil {
-		return -1, nil, fmt.Errorf("failed to start pg_dump command: %w", err)
+		return -1, nil, nil, fmt.Errorf("failed to start pg_dump command: %w", err)
 	}
 	defer pgDumpOutput.Close()
 
@@ -202,7 +208,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 			if err == io.EOF {
 				break
 			}
-			return -1, nil, fmt.Errorf("failed to read pg_dump output: %w", err)
+			return -1, nil, nil, fmt.Errorf("failed to read pg_dump output: %w", err)
 		}
 
 		trimLine := strings.TrimSpace(line)
@@ -215,7 +221,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				inVotersBlock = false
 				n, err := multiWriter.Write([]byte(line)) // line includes the \n
 				if err != nil {
-					return -1, nil, fmt.Errorf("failed to write to gzip writer: %w", err)
+					return -1, nil, nil, fmt.Errorf("failed to write to gzip writer: %w", err)
 				}
 				totalBytes += int64(n)
 				continue
@@ -223,16 +229,16 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 
 			strs := strings.Split(trimLine, "\t")
 			if len(strs) != 3 {
-				return -1, nil, fmt.Errorf("invalid voter line: %s", trimLine)
+				return -1, nil, nil, fmt.Errorf("invalid voter line: %s", trimLine)
 			}
 			voterID, err := hex.DecodeString(strs[1][3:]) // Remove the leading \\x
 			if err != nil {
-				return -1, nil, fmt.Errorf("failed to decode voter ID: %w", err)
+				return -1, nil, nil, fmt.Errorf("failed to decode voter ID: %w", err)
 			}
 
 			power, err := strconv.ParseInt(strs[2], 10, 64)
 			if err != nil {
-				return -1, nil, fmt.Errorf("failed to parse power: %w", err)
+				return -1, nil, nil, fmt.Errorf("failed to parse power: %w", err)
 			}
 
 			genCfg.Validators = append(genCfg.Validators, &chain.GenesisValidator{
@@ -262,7 +268,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				// Write the sanitized line to the gzip writer
 				n, err := multiWriter.Write([]byte(line)) // line includes the \n
 				if err != nil {
-					return -1, nil, fmt.Errorf("failed to write to gzip writer: %w", err)
+					return -1, nil, nil, fmt.Errorf("failed to write to gzip writer: %w", err)
 				}
 				totalBytes += int64(n)
 			}
@@ -271,30 +277,34 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 
 	// Close the writer when pg_dump completes to signal EOF to sed
 	if err := pgDumpCmd.Wait(); err != nil {
-		return -1, nil, errors.New(stderr.String())
+		return -1, nil, nil, errors.New(stderr.String())
 	}
 
 	// Append the below sql statement to the dump file to adjust the expiration times of the resolutions
 	// This is to ensure that the resolutions are correctly expired on the new network
 	n, err := multiWriter.Write([]byte("UPDATE kwild_voting.resolutions SET expiration = expiration-" + strconv.FormatInt(height, 10) + ";\n"))
 	if err != nil {
-		return -1, nil, fmt.Errorf("failed to write resolution updates to gzip writer: %w", err)
+		return -1, nil, nil, fmt.Errorf("failed to write resolution updates to gzip writer: %w", err)
 	}
 
 	totalBytes += int64(n)
 
-	gzipWriter.Flush()
+	err = gzipWriter.Flush()
+	if err != nil {
+		return -1, nil, nil, fmt.Errorf("failed to flush gzip writer: %w", err)
+	}
+
 	hash := hasher.Sum(nil)
 	genCfg.DataAppHash = hash
 
 	// Write the genesis config to a file
 	genesisFile := filepath.Join(snapshotDir, "genesis.json")
 	if err := genCfg.SaveAs(genesisFile); err != nil {
-		return -1, nil, fmt.Errorf("failed to save genesis config: %w", err)
+		return -1, nil, nil, fmt.Errorf("failed to save genesis config: %w", err)
 	}
 
 	return height, []string{fmt.Sprintf("Snapshot created at: %s, Total bytes written: %d", dumpFile, totalBytes),
-		fmt.Sprintf("Genesis config created at: %s, Genesis hash: %s", genesisFile, fmt.Sprintf("%x", hash))}, nil
+		fmt.Sprintf("Genesis config created at: %s, Genesis hash: %s", genesisFile, fmt.Sprintf("%x", hash))}, genCfg, nil
 }
 
 func chainHeight(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string) (int64, error) {

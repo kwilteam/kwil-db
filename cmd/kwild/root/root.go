@@ -8,7 +8,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"strings"
@@ -106,7 +105,7 @@ func RootCmd() *cobra.Command {
 				len(genesisConfig.ForkHeights), genesisConfig.Forks())
 
 			if autoGen && !configFileExists { // write config.toml if it didn't exist, and doing autogen
-				cfgPath := filepath.Join(kwildCfg.RootDir, kwildcfg.ConfigFileName)
+				cfgPath := kwildcfg.ConfigFilePath(kwildCfg.RootDir)
 				fmt.Printf("Writing config file to %v\n", cfgPath)
 				err = nodecfg.WriteConfigFile(cfgPath, kwildCfg)
 				if err != nil {

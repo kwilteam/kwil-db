@@ -19,7 +19,7 @@ func NewSetupCmd() *cobra.Command {
 		initCmd(),
 		resetCmd(),
 		testnetCmd(),
-		// genesisHashCmd(), // TODO: add back once we've figured out what this means for postgres
+		genesisHashCmd(),
 		resetStateCmd(),
 		peerCmd(),
 	)

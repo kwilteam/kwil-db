@@ -12,8 +12,6 @@ import (
 	"time"
 
 	cmtTypes "github.com/cometbft/cometbft/types"
-	"github.com/kwilteam/kwil-db/cmd"
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/common/sql"
@@ -717,6 +715,17 @@ func (m *Migrator) loadChangeset(height int64, index int64) ([]byte, error) {
 	return bts, nil
 }
 
+const (
+	changesetsDirName = "changesets"
+	chunksDirName     = "chunks"
+)
+
+// ChangesetsDir returns the directory where changesets are stored,
+// relative to the migration directory.
+func ChangesetsDir(migrationDir string) string {
+	return filepath.Join(migrationDir, changesetsDirName)
+}
+
 // ensureChangesetDir creates the directory structure for a changeset block
 // if it does not exist.
 // dir created: migrations/changesets/block-<height>/chunks
@@ -730,16 +739,15 @@ func formatChangesetFilename(mdir string, height int64, index int64) string {
 }
 
 func formatChangsetBlockDir(mdir string, height int64) string {
-	return filepath.Join(mdir, config.ChangesetsDirName, fmt.Sprintf("block-%d", height), config.ChunksDirName)
-
+	return filepath.Join(mdir, changesetsDirName, fmt.Sprintf("block-%d", height), chunksDirName)
 }
 
 func formatChangesetMetadataFilename(mdir string, height int64) string {
-	return filepath.Join(mdir, config.ChangesetsDirName, fmt.Sprintf("block-%d", height), metadataFileName)
+	return filepath.Join(mdir, changesetsDirName, fmt.Sprintf("block-%d", height), metadataFileName)
 }
 
 func formatGenesisFilename(mdir string) string {
-	return filepath.Join(mdir, cmd.DefaultConfig().AppConfig.Snapshots.SnapshotDir, genesisFileName)
+	return filepath.Join(mdir, genesisFileName)
 }
 
 // CleanupResolutionsAtStartup is called at startup to clean up the resolutions table. It does the below things:

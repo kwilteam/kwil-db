@@ -72,12 +72,12 @@ func initCmd() *cobra.Command {
 					return display.PrintErr(cmd, err)
 				}
 
-				stateFile := filepath.Join(expandedDir, config.GenesisStateFileName)
+				stateFile := config.GenesisStateFileName(expandedDir)
 				if err = copyFile(genesisState, stateFile); err != nil {
 					return display.PrintErr(cmd, err)
 				}
 
-				cfg.AppConfig.GenesisState = config.GenesisStateFileName
+				cfg.AppConfig.GenesisState = stateFile
 			}
 
 			// saves config and private key files in the root directory

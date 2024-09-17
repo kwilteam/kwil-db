@@ -225,10 +225,6 @@ migrate_from = "{{ .AppConfig.MigrateFrom }}"
 # Enables snapshots
 enabled = {{.AppConfig.Snapshots.Enabled}}
 
-# Path to the snapshots directory
-# Might be either absolute path or path related to the kwild root directory.
-snapshot_dir = "{{.AppConfig.Snapshots.SnapshotDir}}"
-
 # Specifies the block heights(multiples of recurring_height) at which the snapshot should be taken
 recurring_height = {{.AppConfig.Snapshots.RecurringHeight}}
 
@@ -371,10 +367,6 @@ cache_size = {{ .ChainConfig.Mempool.CacheSize }}
 # has any local state (LastBlockHeight > 0). The node will have a truncated block history,
 # starting from the height of the snapshot.
 enable = {{ .ChainConfig.StateSync.Enable }}
-
-# SnapshotDir is the directory to store the received snapshot chunks.
-# Might be either absolute path or path related to the kwild root directory.
-snapshot_dir = "{{ .ChainConfig.StateSync.SnapshotDir }}"
 
 # Trusted snapshot providers (comma-separated chain RPC servers) are the source-of-truth for the snapshot integrity.
 # Snapshots are accepted for statesync only after verifying the snapshot metadata (snapshot hash, chunk count, height etc.) 

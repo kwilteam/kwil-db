@@ -10,6 +10,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/core/adminclient"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/spf13/cobra"
 )
 
@@ -179,4 +180,45 @@ func fullPath(path string) string {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
+}
+
+// BindPostgresFlags binds flags to connect to a postgres database.
+func BindPostgresFlags(cmd *cobra.Command) {
+	cmd.Flags().String("dbname", "kwild", "Name of the database in the PostgreSQL server")
+	cmd.Flags().String("user", "postgres", "User with administrative privileges on the database")
+	cmd.Flags().String("password", "", "Password for the database user")
+	cmd.Flags().String("host", "localhost", "Host of the database")
+	cmd.Flags().String("port", "5432", "Port of the database")
+}
+
+// GetPostgresFlags returns the postgres flags from the given command.
+func GetPostgresFlags(cmd *cobra.Command) (*pg.ConnConfig, error) {
+	conf := &pg.ConnConfig{}
+	var err error
+	conf.DBName, err = cmd.Flags().GetString("dbname")
+	if err != nil {
+		return nil, err
+	}
+
+	conf.User, err = cmd.Flags().GetString("user")
+	if err != nil {
+		return nil, err
+	}
+
+	conf.Pass, err = cmd.Flags().GetString("password")
+	if err != nil {
+		return nil, err
+	}
+
+	conf.Host, err = cmd.Flags().GetString("host")
+	if err != nil {
+		return nil, err
+	}
+
+	conf.Port, err = cmd.Flags().GetString("port")
+	if err != nil {
+		return nil, err
+	}
+
+	return conf, nil
 }

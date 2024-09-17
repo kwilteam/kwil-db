@@ -11,6 +11,7 @@ import (
 	cmtCfg "github.com/cometbft/cometbft/config"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmttypes "github.com/cometbft/cometbft/types"
+	kconfig "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common/chain"
 	config "github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/core/utils/url"
@@ -110,7 +111,7 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 	// Standardize the paths.
 	nodeCfg.DBPath = cometbft.DataDir // i.e. "data", we do not allow users to change
 
-	chainRoot := filepath.Join(cfg.RootDir, abciDirName)
+	chainRoot := kconfig.ABCIDir(cfg.RootDir)
 	nodeCfg.SetRoot(chainRoot)
 	// NOTE: The Genesis field is the one in cometbft's GenesisDoc, which is
 	// different from kwild's, which contains more fields (and not string

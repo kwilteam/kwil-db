@@ -98,7 +98,7 @@ func GetCfg(flagCfg *config.KwildConfig) (*config.KwildConfig, bool, error) {
 	// 2. Read in the config file
 	// read in config file and merge into default config
 	var configFileExists bool
-	fileCfg, err := LoadConfigFile(filepath.Join(rootDir, ConfigFileName))
+	fileCfg, err := LoadConfigFile(ConfigFilePath(rootDir))
 	if err == nil {
 		configFileExists = true
 		// merge in config file
@@ -184,24 +184,6 @@ func sanitizeCfgPaths(cfg *config.KwildConfig) error {
 	}
 	cfg.AppConfig.PrivateKeyPath = path
 	fmt.Println("Private key path:", cfg.AppConfig.PrivateKeyPath)
-
-	if cfg.AppConfig.Snapshots.Enabled {
-		path, err := config.CleanPath(cfg.AppConfig.Snapshots.SnapshotDir, rootDir)
-		if err != nil {
-			return fmt.Errorf("failed to expand snapshot directory \"%v\": %v", cfg.AppConfig.Snapshots.SnapshotDir, err)
-		}
-		cfg.AppConfig.Snapshots.SnapshotDir = path
-		fmt.Println("Snapshot directory:", cfg.AppConfig.Snapshots.SnapshotDir)
-	}
-
-	if cfg.ChainConfig.StateSync.Enable {
-		path, err := config.CleanPath(cfg.ChainConfig.StateSync.SnapshotDir, rootDir)
-		if err != nil {
-			return fmt.Errorf("failed to expand state sync snapshots directory \"%v\": %v", cfg.ChainConfig.StateSync.SnapshotDir, err)
-		}
-		cfg.ChainConfig.StateSync.SnapshotDir = path
-		fmt.Println("State sync received snapshots directory:", cfg.ChainConfig.StateSync.SnapshotDir)
-	}
 
 	if cfg.AppConfig.GenesisState != "" {
 		path, err := config.CleanPath(cfg.AppConfig.GenesisState, rootDir)

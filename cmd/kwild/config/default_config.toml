@@ -122,10 +122,6 @@ migrate_from = ""
 # Enables snapshots
 enabled = false
 
-# Path to the snapshots directory
-# Might be either absolute path or path related to the kwild root directory.
-snapshot_dir = "snapshots"
-
 # Specifies the block heights(multiples of recurring_height) at which the snapshot should be taken
 recurring_height = 10000
 
@@ -293,10 +289,6 @@ cache_size = 60000
 # has any local state (LastBlockHeight > 0). The node will have a truncated block history,
 # starting from the height of the snapshot.
 enable = false
-
-# SnapshotDir is the directory to store the received snapshot chunks.
-# Might be either absolute path or path related to the kwild root directory.
-snapshot_dir = "rcvdSnaps"
 
 # Trusted snapshot providers (comma-separated chain RPC servers) are the source-of-truth for the snapshot integrity.
 # Snapshots are accepted for statesync only after verifying the snapshot metadata (snapshot hash, chunk count, height etc.) 

@@ -31,7 +31,7 @@ func loadGenesisAndPrivateKey(autoGen bool, privKeyPath, rootDir string) (privKe
 		return nil, nil, fmt.Errorf("failed to make root directory: %w", err)
 	}
 
-	chainRootDir := filepath.Join(rootDir, ABCIDirName)
+	chainRootDir := ABCIDir(rootDir)
 	priv, pub, newKey, err := ReadOrCreatePrivateKeyFile(privKeyPath, autoGen)
 	if err != nil {
 		return nil, nil, err
