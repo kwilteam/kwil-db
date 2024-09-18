@@ -102,8 +102,6 @@ func deployCmd() *cobra.Command {
 
 	cmd.Flags().StringVarP(&fileType, "type", "t", "kf", "file type of the database definition file (kf or json)")
 	cmd.Flags().StringVarP(&overrideName, "name", "n", "", "set the name of the database, overriding the name in the schema file")
-
-	cmd.MarkFlagRequired("path")
 	return cmd
 }
 
