@@ -38,4 +38,6 @@ type TxSvcClient interface {
 
 	// Challenge
 	Challenge(ctx context.Context) ([]byte, error)
+
+	Health(ctx context.Context) (*types.Health, error)
 }

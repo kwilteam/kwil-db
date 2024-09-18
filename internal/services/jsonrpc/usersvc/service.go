@@ -217,9 +217,9 @@ func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest)
 
 	blockAge := time.Since(status.Sync.BestBlockTime)
 
-	svcMode := userjson.ModeOpen
+	svcMode := types.ModeOpen
 	if svc.privateMode {
-		svcMode = userjson.ModePrivate
+		svcMode = types.ModePrivate
 	}
 
 	// For heath checks, apply the criterion:
@@ -231,7 +231,7 @@ func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest)
 	healthResp := &userjson.HealthResponse{
 		Healthy: happy,
 		Version: apiVerSemver,
-		ChainInfoResponse: userjson.ChainInfoResponse{
+		ChainInfo: userjson.ChainInfoResponse{
 			ChainID:     status.Node.ChainID,
 			BlockHeight: uint64(status.Sync.BestBlockHeight),
 			BlockHash:   status.Sync.BestBlockHash,

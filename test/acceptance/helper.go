@@ -269,44 +269,50 @@ func (r *ActHelper) WaitUntilInterrupt() {
 
 // GetDriver returns a concrete driver for acceptance test, based on the driver
 // type and user. By default, the driver is created with the creator's private key.
-func (r *ActHelper) GetDriver(driveType string, user string, authenticateRPCs bool) KwilAcceptanceDriver {
+func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDriver {
 	pk := r.cfg.CreatorRawPk
 	signer := r.cfg.CreatorSigner
+	id := signer.Identity()
 	if user == "visitor" {
 		signer = r.cfg.VisitorSigner
 		pk = r.cfg.VisitorRawPK
+		id = signer.Identity()
+	} else if user == "" {
+		// to run tests without private key
+		signer = nil
+		pk = ""
+		id = nil
 	}
 
 	switch driveType {
 	case "jsonrpc":
-		return r.getJSONRPCClientDriver(signer, r.cfg.JSONRPCEndpoint, authenticateRPCs)
+		return r.getJSONRPCClientDriver(signer, r.cfg.JSONRPCEndpoint)
 	case "cli":
-		return r.getCliDriver(pk, signer.Identity(), r.cfg.JSONRPCEndpoint, authenticateRPCs)
+		return r.getCliDriver(pk, id, r.cfg.JSONRPCEndpoint)
 	default:
 		panic("unsupported driver type")
 	}
 }
 
-func (r *ActHelper) getJSONRPCClientDriver(signer auth.Signer, endpoint string, authenticateRPCs bool) KwilAcceptanceDriver {
+func (r *ActHelper) getJSONRPCClientDriver(signer auth.Signer, endpoint string) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	kwilClt, err := client.NewClient(context.TODO(), endpoint, &clientType.Options{
-		Signer:            signer,
-		ChainID:           TestChainID,
-		Logger:            logger,
-		AuthenticateCalls: authenticateRPCs,
+		Signer:  signer,
+		ChainID: TestChainID,
+		Logger:  logger,
 	})
 	require.NoError(r.t, err, "failed to create json-rpc client")
 
 	return driver.NewKwildClientDriver(kwilClt, signer, nil, logger)
 }
 
-func (r *ActHelper) getCliDriver(privKey string, identifier []byte, endpoint string, authenticateRPCs bool) KwilAcceptanceDriver {
+func (r *ActHelper) getCliDriver(privKey string, identifier []byte, endpoint string) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	_, currentFilePath, _, _ := runtime.Caller(1)
 	cliBinPath := path.Join(path.Dir(currentFilePath),
 		"../../.build/kwil-cli")
 
-	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, TestChainID, identifier, false, nil, authenticateRPCs, logger)
+	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, TestChainID, identifier, false, nil, logger)
 }

@@ -31,28 +31,26 @@ import (
 
 // KwilCliDriver is a driver for tests using `cmd/kwil-cli`
 type KwilCliDriver struct {
-	cliBin           string // kwil-cli binary path
-	rpcURL           string
-	privKey          string
-	identity         []byte
-	gatewayProvider  bool
-	chainID          string
-	deployer         *ethdeployer.Deployer
-	authenticateRPCs bool
-	logger           log.Logger
+	cliBin          string // kwil-cli binary path
+	rpcURL          string
+	privKey         string
+	identity        []byte
+	gatewayProvider bool
+	chainID         string
+	deployer        *ethdeployer.Deployer
+	logger          log.Logger
 }
 
-func NewKwilCliDriver(cliBin, rpcURL, privKey, chainID string, identity []byte, gatewayProvider bool, deployer *ethdeployer.Deployer, authenticateRPCs bool, logger log.Logger) *KwilCliDriver {
+func NewKwilCliDriver(cliBin, rpcURL, privKey, chainID string, identity []byte, gatewayProvider bool, deployer *ethdeployer.Deployer, logger log.Logger) *KwilCliDriver {
 	return &KwilCliDriver{
-		cliBin:           cliBin,
-		rpcURL:           rpcURL,
-		privKey:          privKey,
-		identity:         identity,
-		gatewayProvider:  gatewayProvider,
-		logger:           logger,
-		chainID:          chainID,
-		deployer:         deployer,
-		authenticateRPCs: authenticateRPCs,
+		cliBin:          cliBin,
+		rpcURL:          rpcURL,
+		privKey:         privKey,
+		identity:        identity,
+		gatewayProvider: gatewayProvider,
+		logger:          logger,
+		chainID:         chainID,
+		deployer:        deployer,
 	}
 }
 
@@ -358,9 +356,6 @@ func (d *KwilCliDriver) Execute(_ context.Context, dbid string, action string, i
 
 func (d *KwilCliDriver) QueryDatabase(_ context.Context, dbid, query string) (*clientType.Records, error) {
 	args := []string{"database", "query", "--dbid", dbid, query}
-	if d.authenticateRPCs {
-		args = append(args, "--callauth")
-	}
 
 	cmd := d.newKwilCliCmd(args...)
 	out, err := mustRun[*clientType.Records](cmd, d.logger)
@@ -384,10 +379,6 @@ func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []an
 
 	if d.gatewayProvider {
 		args = append(args, "--authenticate")
-	}
-
-	if d.authenticateRPCs {
-		args = append(args, "--callauth")
 	}
 
 	cmd := d.newKwilCliCmdWithYes(args...)

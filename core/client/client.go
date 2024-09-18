@@ -107,39 +107,36 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 		chainID:           clientOptions.ChainID,
 		noWarnings:        clientOptions.Silence,
 		skipVerifyChainID: clientOptions.SkipVerifyChainID,
-		authCallRPC:       clientOptions.AuthenticateCalls,
 	}
 
-	if c.chainID == "" { // always use chain ID from remote host
-		chainInfo, err := c.ChainInfo(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("chain_info: %w", err)
-		}
+	health, err := c.Health(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve the node's health: %w", err)
+	}
+	c.authCallRPC = health.Mode == types.ModePrivate
 
+	if c.chainID == "" { // always use chain ID from remote host
 		if !c.noWarnings {
 			c.logger.Warn("chain ID not set, trusting chain ID from remote host!",
-				zap.String("chainID", chainInfo.ChainID))
+				zap.String("chainID", health.ChainID))
 		}
 
-		c.chainID = chainInfo.ChainID
+		c.chainID = health.ChainID
 	} else {
 		if c.skipVerifyChainID {
 			if !c.noWarnings {
 				c.logger.Warn("chain ID is set, skip check against remote chain ID", zap.String("chainID", c.chainID))
 			}
-		} else {
-			chainInfo, err := c.ChainInfo(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("chain_info: %w", err)
-			}
-
-			if chainInfo.ChainID != c.chainID {
-				return nil, fmt.Errorf("remote host chain ID %q != client configured %q", chainInfo.ChainID, c.chainID)
-			}
+		} else if health.ChainID != c.chainID {
+			return nil, fmt.Errorf("remote host chain ID %q != client configured %q", health.ChainID, c.chainID)
 		}
 	}
 
 	return c, nil
+}
+
+func (c *Client) PrivateMode() bool {
+	return c.authCallRPC
 }
 
 func syncBcastFlag(syncBcast bool) rpcclient.BroadcastWait {
@@ -440,4 +437,8 @@ func (c *Client) GenesisSnapshotChunk(ctx context.Context, height uint64, chunkI
 
 func (c *Client) challenge(ctx context.Context) ([]byte, error) {
 	return c.txClient.Challenge(ctx)
+}
+
+func (c *Client) Health(ctx context.Context) (*types.Health, error) {
+	return c.txClient.Health(ctx)
 }

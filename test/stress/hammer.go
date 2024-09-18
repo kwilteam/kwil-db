@@ -92,10 +92,9 @@ func hammer(ctx context.Context) error {
 		})
 	} else {
 		kwilClt, err = client.NewClient(ctx, host, &clientType.Options{
-			Signer:            signer,
-			ChainID:           chainId,
-			Logger:            trLogger,
-			AuthenticateCalls: authCall,
+			Signer:  signer,
+			ChainID: chainId,
+			Logger:  trLogger,
 		})
 	}
 

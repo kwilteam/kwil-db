@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -44,7 +43,7 @@ kwil-cli database call get_user --dbid 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd6
 )
 
 func callCmd() *cobra.Command {
-	var gwAuth, logs, signCall bool
+	var gwAuth, logs bool
 
 	cmd := &cobra.Command{
 		Use:     "call <procedure_or_action> <parameter_1:value_1> <parameter_2:value_2> ...",
@@ -52,17 +51,12 @@ func callCmd() *cobra.Command {
 		Long:    callLong,
 		Example: callExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// We only need a private key if using gateway auth or signing the
-			// call message.
-			dialFlags := common.WithoutPrivateKey
+			// AuthenticatedCalls specifies that the call should be authenticated with the private key
+			// if the call is made to the Kwild node with private mode enabled. Else, no authentication is required.
+			dialFlags := common.AuthenticatedCalls
 			if gwAuth {
-				// overwrite the WithoutPrivateKey flag, and add the UsingGateway flag
+				// If the call is made to a gateway, the call should be authenticated with the private key.
 				dialFlags = common.UsingGateway
-				if signCall {
-					return display.PrintErr(cmd, errors.New("gateway auth should not be used with signed call requests"))
-				}
-			} else if signCall {
-				dialFlags = common.AuthenticatedCalls
 			}
 
 			return common.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, clnt clientType.Client, conf *config.KwilCliConfig) error {
@@ -109,7 +103,6 @@ func callCmd() *cobra.Command {
 
 	bindFlagsTargetingProcedureOrAction(cmd)
 	cmd.Flags().BoolVar(&gwAuth, "authenticate", false, "authenticate signals that the call is being made to a gateway and should be authenticated with the private key")
-	cmd.Flags().BoolVar(&signCall, "callauth", false, "authenticate call RPCs by signing a challenge response with the call data")
 	cmd.Flags().BoolVar(&logs, "logs", false, "result will include logs from notices raised during the call")
 	return cmd
 }
