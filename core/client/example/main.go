@@ -4,7 +4,6 @@ package main
 // core/client.Client type to interact with a Kwil chain via an RPC provider.
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"math/big"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/client"
@@ -28,6 +28,10 @@ import (
 const (
 	chainID  = "longhorn-2"
 	provider = "https://longhorn.kwil.com"
+	// If this chain requires gas, we need funds, and we can request funds from
+	// a faucet URL if needed.
+	gasEnabled = true
+	faucetURL  = "https://kwil-faucet-server.onrender.com/funds" // if set and now balance, request test funds
 
 	// For the client, this is a secp256k1 private key. This is the same type of
 	// key used by Ethereum wallets. The `kwil-cli utils generate-key` command
@@ -105,12 +109,11 @@ func main() {
 	}
 
 	const minBal int64 = 1e6 // dust
-	if acctInfo.Balance.Cmp(big.NewInt(minBal)) < 0 /* && chainInfo.GasEnabled */ {
-		fmt.Println("Account lacks sufficient funds to deploy a database. Requesting funds.")
+	if gasEnabled && acctInfo.Balance.Cmp(big.NewInt(minBal)) < 0 /* && chainInfo.GasEnabled */ {
+		fmt.Println("Account lacks sufficient funds for transaction gas. Requesting funds.")
 		addr, _ := auth.EthSecp256k1Authenticator{}.Identifier(acctID)
-		var r bytes.Buffer
-		fmt.Fprintf(&r, `{"address": "%s"}`, addr)
-		resp, err := http.Post("https://kwil-faucet-server.onrender.com/funds", "application/json", &r)
+		req := `{"address": "` + addr + `"}`
+		resp, err := http.Post(faucetURL, "application/json", strings.NewReader(req))
 		if err != nil {
 			log.Fatalf("failed to request funds: %v", err)
 		}
