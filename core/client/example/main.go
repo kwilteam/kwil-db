@@ -1,11 +1,18 @@
 package main
 
+// This is an example Kwil client application that demonstrates the use of the
+// core/client.Client type to interact with a Kwil chain via an RPC provider.
+
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
+	"net/http"
 	"slices"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -19,16 +26,30 @@ import (
 )
 
 const (
-	chainID  = "longhorn"
+	chainID  = "longhorn-2"
 	provider = "https://longhorn.kwil.com"
 
-	privKey = "..."
+	// For the client, this is a secp256k1 private key. This is the same type of
+	// key used by Ethereum wallets. The `kwil-cli utils generate-key` command
+	// may be used to generate a new client key (the client's identity) if one
+	// is not already available.
+	// If left empty, this example app will generate an ephemeral private key.
+	privKey = "" // empty or 64 hexadecimal characters of a secp256k1 private key
 )
 
 func main() {
 	ctx := context.Background()
-	signer := makeEthSigner(privKey)
+	var signer auth.Signer
+	if privKey == "" {
+		key := genEthKey()
+		fmt.Println("generated private key: ", key.Hex())
+		fmt.Printf("public key: %x\n", key.PubKey().Bytes())
+		signer = &auth.EthPersonalSigner{Key: *key}
+	} else {
+		signer = makeEthSigner(privKey)
+	}
 	acctID := signer.Identity()
+	fmt.Printf("address: 0x%x\n", acctID)
 
 	ctypes.DefaultOptions()
 	opts := &ctypes.Options{
@@ -83,6 +104,26 @@ func main() {
 		}
 	}
 
+	const minBal int64 = 1e6 // dust
+	if acctInfo.Balance.Cmp(big.NewInt(minBal)) < 0 /* && chainInfo.GasEnabled */ {
+		fmt.Println("Account lacks sufficient funds to deploy a database. Requesting funds.")
+		addr, _ := auth.EthSecp256k1Authenticator{}.Identifier(acctID)
+		var r bytes.Buffer
+		fmt.Fprintf(&r, `{"address": "%s"}`, addr)
+		resp, err := http.Post("https://kwil-faucet-server.onrender.com/funds", "application/json", &r)
+		if err != nil {
+			log.Fatalf("failed to request funds: %v", err)
+		}
+		bodyBts, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK {
+			log.Fatalf("failed to request funds (code %d): %v", resp.StatusCode, string(bodyBts))
+		}
+
+		fmt.Printf("funds requested: %v\n", string(bodyBts))
+		// cl.WaitTx(ctx, txHashFromPOSTResp, 500 * time.Millisecond)
+		time.Sleep(6 * time.Second)
+	}
+
 	// Deploy a Kuneiform schema called "was_here".
 	dbName := "was_here"
 	dbid := utils.GenerateDBID(dbName, acctID) // derive DBID
@@ -97,11 +138,6 @@ func main() {
 		schema, err := parse.Parse([]byte(testKf))
 		if err != nil {
 			log.Fatal(err)
-		}
-
-		const minBal int64 = 1e6 // dust
-		if acctInfo.Balance.Cmp(big.NewInt(minBal)) < 0 {
-			log.Fatalf("Account lacks sufficient funds to deploy a database.")
 		}
 
 		fmt.Printf("Deploying database %v...\n", schema.Name)
@@ -133,11 +169,11 @@ func main() {
 
 	// Use a read-only view call (no blockchain transaction) to list all entries
 	const getAllAction = "get_all"
-	records, err := cl.Call(ctx, dbid, getAllAction, nil)
+	result, err := cl.Call(ctx, dbid, getAllAction, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if tab := records.ExportString(); len(tab) == 0 {
+	if tab := result.Records.ExportString(); len(tab) == 0 {
 		fmt.Println("No data records in table.")
 	} else {
 		fmt.Println("All entries in tags table:")
@@ -168,7 +204,7 @@ func makeEthSigner(keyHex string) auth.Signer {
 	if err != nil {
 		panic(fmt.Sprintf("bad private key: %v", err))
 	}
-	return &auth.EthPersonalSigner{Key: *key}
+	return &auth.EthPersonalSigner{Key: *key} // , key.PubKey().Bytes()
 }
 
 func genEthKey() *crypto.Secp256k1PrivateKey {
@@ -181,7 +217,7 @@ func makeEdSigner(keyHex string) auth.Signer {
 	if err != nil {
 		panic(fmt.Sprintf("bad private key: %v", err))
 	}
-	return &auth.Ed25519Signer{*key}
+	return &auth.Ed25519Signer{Ed25519PrivateKey: *key}
 }
 
 func genEdKey() *crypto.Ed25519PrivateKey {

@@ -7,7 +7,7 @@ replace github.com/kwilteam/kwil-db/core => ../..
 replace github.com/kwilteam/kwil-db/parse => ../../../parse
 
 require (
-	github.com/kwilteam/kwil-db/core v0.2.0-beta.1
+	github.com/kwilteam/kwil-db/core v0.2.1-0.20240909192711-653711416339
 	github.com/kwilteam/kwil-db/parse v0.2.0-beta
 )
 
@@ -24,6 +24,7 @@ require (
 	github.com/ethereum/go-ethereum v1.14.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/holiman/uint256 v1.2.4 // indirect
+	github.com/jrick/logrotate v1.1.2 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/supranational/blst v0.3.11 // indirect
