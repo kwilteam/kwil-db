@@ -51,7 +51,7 @@ func batchCmd() *cobra.Command {
 	var inputValueMappings []string // these override the csv column mappings
 
 	cmd := &cobra.Command{
-		Use:     "batch",
+		Use:     "batch <procedure_or_action>",
 		Short:   "Batch execute an action using inputs from a CSV file.",
 		Long:    batchLong,
 		Example: batchExample,

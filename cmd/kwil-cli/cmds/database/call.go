@@ -47,7 +47,7 @@ func callCmd() *cobra.Command {
 	var gwAuth, logs, signCall bool
 
 	cmd := &cobra.Command{
-		Use:     "call <parameter_1:value_1> <parameter_2:value_2> ...",
+		Use:     "call <procedure_or_action> <parameter_1:value_1> <parameter_2:value_2> ...",
 		Short:   "Call a 'view' action, returning the result.",
 		Long:    callLong,
 		Example: callExample,

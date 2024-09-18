@@ -36,7 +36,7 @@ kwil-cli database execute create_user username:satoshi age:32 --dbid 0x9228624C3
 
 func executeCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "execute <parameter_1:value_1> <parameter_2:value_2> ...",
+		Use:     "execute <procedure_or_action> <parameter_1:value_1> <parameter_2:value_2> ...",
 		Short:   "Execute a procedure or action against a database.",
 		Long:    executeLong,
 		Example: executeExample,
