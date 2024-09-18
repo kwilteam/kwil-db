@@ -191,7 +191,7 @@ func (d *KwilCliDriver) DeployDatabase(_ context.Context, db *types.Schema) (txH
 		return nil, fmt.Errorf("failed to write database schema: %w", err)
 	}
 
-	cmd := d.newKwilCliCmd("database", "deploy", "-p", schemaFile, "-t", "json")
+	cmd := d.newKwilCliCmd("database", "deploy", schemaFile, "-t", "json")
 	out, err := mustRun[respTxHash](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deploy database: %w", err)
@@ -339,7 +339,7 @@ func (d *KwilCliDriver) Execute(_ context.Context, dbid string, action string, i
 		return nil, fmt.Errorf("failed to get action params: %w", err)
 	}
 
-	args := []string{"database", "execute", "--dbid", dbid, "--action", action}
+	args := []string{"database", "execute", action, "--dbid", dbid}
 	args = append(args, actionInputs...)
 
 	cmd := d.newKwilCliCmd(args...)
@@ -379,7 +379,7 @@ func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []an
 		return nil, fmt.Errorf("failed to prepare action params: %w", err)
 	}
 
-	args := []string{"database", "call", "--dbid", dbid, "--action", action, "--logs"}
+	args := []string{"database", "call", action, "--dbid", dbid, "--logs"}
 	args = append(args, actionInputs...)
 
 	if d.gatewayProvider {

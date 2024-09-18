@@ -21,11 +21,11 @@ var (
 )
 
 var (
-	batchLong = `Batch executes an action on a database using inputs from a CSV file.
+	batchLong = `Batch executes an action or procedure on a database using inputs from a CSV file.
 
-To map a CSV column name to an action input, use the ` + "`" + `--map-inputs` + "`" + ` flag.
-The format is ` + "`" + `--map-inputs "<csv_column_1>:<action_input_1>,<csv_column_2>:<action_input_2>"` + "`" + `.  If the ` + "`" + `--map-inputs` + "`" + ` flag is not passed,
-the CSV column name will be used as the action input name.
+To map a CSV column name to a procedure input, use the ` + "`" + `--map-inputs` + "`" + ` flag.
+The format is ` + "`" + `--map-inputs "<csv_column_1>:<procedure_input_1>,<csv_column_2>:<procedure_input_2>"` + "`" + `.  If the ` + "`" + `--map-inputs` + "`" + ` flag is not passed,
+the CSV column name will be used as the procedure input name.
 
 You can also specify the input values directly using the ` + "`" + `--values` + "`" + ` flag, delimited by a colon.
 These values will apply to all inserted rows, and will override the CSV column mappings.
@@ -41,7 +41,7 @@ flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner wi
 # 3,jack,35
 
 # Executing the ` + "`" + `create_user($user_id, $username, $user_age, $created_at)` + "`" + ` action on the "mydb" database
-kwil-cli database batch --path ./users.csv --action create_user --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 --map-inputs "id:user_id,name:username,age:user_age" --values created_at:$(date +%s)`
+kwil-cli database batch create_user --path ./users.csv --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 --map-inputs "id:user_id,name:username,age:user_age" --values created_at:$(date +%s)`
 )
 
 // batch is used for batch operations on databases
@@ -49,19 +49,23 @@ func batchCmd() *cobra.Command {
 	var filePath string
 	var csvColumnMappings []string
 	var inputValueMappings []string // these override the csv column mappings
-	var action string
 
 	cmd := &cobra.Command{
-		Use:     "batch",
+		Use:     "batch <procedure_or_action>",
 		Short:   "Batch execute an action using inputs from a CSV file.",
 		Long:    batchLong,
 		Example: batchExample,
 		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
-					return display.PrintErr(cmd, err)
+					return display.PrintErr(cmd, fmt.Errorf("error getting selected dbid from CLI flags: %w", err))
+				}
+
+				action, _, err := getSelectedActionOrProcedure(cmd, args)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
 				}
 
 				fileType, err := getFileType(filePath)
@@ -107,16 +111,12 @@ func batchCmd() *cobra.Command {
 		},
 	}
 
+	bindFlagsTargetingProcedureOrAction(cmd)
 	cmd.Flags().StringSliceVarP(&csvColumnMappings, "map-inputs", "m", []string{}, "csv column to action parameter mappings (e.g. csv_id:user_id, csv_name:user_name)")
 	cmd.Flags().StringSliceVarP(&inputValueMappings, "values", "v", []string{}, "action parameter mappings applied to all executions (e.g. id:123, name:john)")
 	cmd.Flags().StringVarP(&filePath, "path", "p", "", "path to the CSV file to use")
-	cmd.Flags().StringVarP(&action, "action", "a", "", "the action to execute")
-	cmd.Flags().StringP(nameFlag, "n", "", "the database name")
-	cmd.Flags().StringP(ownerFlag, "o", "", "the database owner")
-	cmd.Flags().StringP(dbidFlag, "i", "", "the database id")
 
 	cmd.MarkFlagRequired("path")
-	cmd.MarkFlagRequired("action")
 	return cmd
 }
 

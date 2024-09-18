@@ -121,9 +121,17 @@ func initCmd() *cobra.Command {
 
 	// TODO: deprecate below flags in v0.10.0
 	cmd1.Flags().StringVarP(&out, "output-dir", "o", "./.testnet", "generated node parent directory. To be deprecated in v0.10.0, until then --root-dir is ignored")
-	cmd1.Flags().MarkDeprecated("output-dir", "use --cfg.root-dir instead from v0.10.0")
+	err := cmd1.Flags().MarkDeprecated("output-dir", "use --cfg.root-dir instead from v0.10.0")
+	if err != nil {
+		panic(err)
+	}
+
 	cmd1.Flags().DurationVarP(&blockInterval, "block-interval", "i", 6*time.Second, "shortest block interval in seconds. To be deprecated in v0.10.0")
-	cmd1.Flags().MarkDeprecated("block-interval", "use --chain.consensus.timeout-commit instead from v0.10.0")
+	err = cmd1.Flags().MarkDeprecated("block-interval", "use --chain.consensus.timeout-commit instead from v0.10.0")
+	if err != nil {
+		panic(err)
+	}
+
 	return cmd1
 }
 

@@ -52,8 +52,6 @@ func queryCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringP(nameFlag, "n", "", "the target database name")
-	cmd.Flags().StringP(ownerFlag, "o", "", "the target database owner")
-	cmd.Flags().StringP(dbidFlag, "i", "", "the target database id")
+	bindFlagsTargetingDatabase(cmd)
 	return cmd
 }
