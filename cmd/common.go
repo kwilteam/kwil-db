@@ -80,7 +80,7 @@ var DefaultConfig = func() *commonConfig.KwildConfig {
 				MaxSnapshots:    3,
 				SnapshotDir:     "snapshots",
 			},
-			GenesisState: "",
+			GenesisState: "genesis-state.sql.gz",
 		},
 		Logging: &commonConfig.Logging{
 			Level:        "info",
