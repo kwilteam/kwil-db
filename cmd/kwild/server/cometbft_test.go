@@ -1,6 +1,8 @@
 package server
 
-import "testing"
+import (
+	"testing"
+)
 
 func Test_cleanListenAddr(t *testing.T) {
 	type args struct {

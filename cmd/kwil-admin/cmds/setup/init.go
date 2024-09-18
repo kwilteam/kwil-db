@@ -3,6 +3,7 @@ package setup
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -78,13 +79,7 @@ func initCmd() *cobra.Command {
 					return display.PrintErr(cmd, err)
 				}
 
-				file, err := os.ReadFile(genesisPath)
-				if err != nil {
-					return display.PrintErr(cmd, err)
-				}
-
-				err = os.WriteFile(genFile, file, 0644)
-				if err != nil {
+				if err = copyFile(genesisPath, genFile); err != nil {
 					return display.PrintErr(cmd, err)
 				}
 			} else {
@@ -113,14 +108,8 @@ func initCmd() *cobra.Command {
 					return display.PrintErr(cmd, err)
 				}
 
-				file, err := os.ReadFile(genesisState)
-				if err != nil {
-					return display.PrintErr(cmd, err)
-				}
-
 				stateFile := filepath.Join(expandedDir, config.GenesisStateFileName)
-				err = os.WriteFile(stateFile, file, 0644)
-				if err != nil {
+				if err = copyFile(genesisState, stateFile); err != nil {
 					return display.PrintErr(cmd, err)
 				}
 			}
@@ -182,4 +171,21 @@ func (a *AllocsFlag) Set(value string) error {
 
 func (a *AllocsFlag) Type() string {
 	return "allocFlag"
+}
+
+func copyFile(src, dst string) error {
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	_, err = io.Copy(out, in)
+	return err
 }

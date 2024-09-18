@@ -13,7 +13,7 @@ import (
 func listCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:     "list",
-		Short:   "List all peers in the node's whitelist.",
+		Short:   "List the peers in the node's whitelist.",
 		Example: "kwil-admin whitelist list",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {

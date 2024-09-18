@@ -12,7 +12,7 @@ import (
 func removeCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:     "remove <peerID>",
-		Short:   "Remove a peer from the node's whitelist peers and disconnect the peer",
+		Short:   "Remove a peer from the node's whitelist and disconnect it",
 		Example: "kwil-admin whitelist remove <peerID>",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

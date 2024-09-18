@@ -13,7 +13,6 @@ import (
 	"net"
 	neturl "net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -363,15 +362,15 @@ func (c *closeFuncs) closeAll() error {
 }
 
 func verifyDependencies(d *coreDependencies) {
-	// Check if pg_dump is installed, which is necessary for snapshotting during migrations and when snapshots are enabled
-	if _, err := exec.LookPath("pg_dump"); err != nil {
-		failBuild(err, "pg_dump is not installed. Please install it to use snapshots or migrations.")
+	// Check if pg_dump is installed, which is necessary for snapshotting during migrations and when snapshots are enabled. Ensure that the version is 16.x
+	if err := checkVersion("pg_dump", 16); err != nil {
+		failBuild(err, "pg_dump version is not 16.x. Please install the correct version.")
 	}
 
 	if d.cfg.ChainConfig.StateSync.Enable {
-		// Check if psql is installed, which is required for state-sync
-		if _, err := exec.LookPath("psql"); err != nil {
-			failBuild(err, "psql is not installed. Please install it to use statesync.")
+		// Check if psql is installed and is on version 16.x, which is required for state-sync
+		if err := checkVersion("psql", 16); err != nil {
+			failBuild(err, "psql version is not 16.x. Please install the correct version.")
 		}
 	}
 }

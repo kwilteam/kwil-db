@@ -12,7 +12,7 @@ import (
 func addCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:     "add <peerID>",
-		Short:   "Add a peer to the node's whitelist peers to accept connections from.",
+		Short:   "Add a peer to the node's whitelist of peers to accept connections from.",
 		Example: "kwil-admin whitelist add <peerID>",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

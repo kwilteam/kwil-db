@@ -233,7 +233,7 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 				3 entry3
 				\.
 			*/
-			if trimLine == "\\." { // end of COPY block
+			if trimLine == `\.` { // end of COPY block
 				inCopyBlock = false
 
 				// Inline sort the lineHashes array based on the row hash
@@ -302,7 +302,7 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 					return nil, fmt.Errorf("failed to write to sanitized dump file: %w", err)
 				}
 			} else if !schemaStarted && (strings.HasPrefix(trimLine, "SET") || strings.HasPrefix(trimLine, "SELECT") ||
-				strings.HasPrefix(trimLine, "\\connect") || strings.HasPrefix(trimLine, "CREATE DATABASE")) {
+				strings.HasPrefix(trimLine, `\connect`) || strings.HasPrefix(trimLine, "CREATE DATABASE")) {
 				// skip any SET, SELECT, CREATE DATABASE and connect statements that appear before the schema definition
 				// These are postgres specific commands that should not be included in the snapshot
 				continue

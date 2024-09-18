@@ -84,7 +84,7 @@ func createCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dbHost, "host", "localhost", "Host of the database")
 	cmd.Flags().StringVar(&dbPort, "port", "5432", "Port of the database")
 
-	// TODO: Deprecate below flags
+	// TODO: Remove below flags
 	cmd.Flags().IntVar(&maxRowSize, "max-row-size", 4*1024*1024, "Maximum row size to read from pg_dump (default: 4MB). Adjust this accordingly if you encounter 'bufio.Scanner: token too long' error.")
 	cmd.Flags().MarkDeprecated("max-row-size", "max-row-size has no more influence on the snapshot creation process. It is deprecated and will be removed in v0.10.0")
 	return cmd
@@ -211,7 +211,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 		if inVotersBlock {
 			// Example voter: \\xdae5e91f74b95a9db05fc0f1f8c07f95	\\x9e52ff636caf4988e72e4ac865e6ef83a1e262d1a6376a300f3db8884e1f2253	1
 
-			if trimLine == "\\." { // End of voters block
+			if trimLine == `\.` { // End of voters block
 				inVotersBlock = false
 				n, err := multiWriter.Write([]byte(line)) // line includes the \n
 				if err != nil {
@@ -246,7 +246,7 @@ func pgDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				continue
 			} else if strings.HasPrefix(trimLine, "--") { // Skip comments
 				continue
-			} else if !schemaStarted && (strings.HasPrefix(trimLine, "SET") || strings.HasPrefix(trimLine, "SELECT") || strings.HasPrefix(trimLine, "\\connect") || strings.HasPrefix(trimLine, "CREATE DATABASE")) {
+			} else if !schemaStarted && (strings.HasPrefix(trimLine, "SET") || strings.HasPrefix(trimLine, "SELECT") || strings.HasPrefix(trimLine, `\connect`) || strings.HasPrefix(trimLine, "CREATE DATABASE")) {
 				// Skip SET and SELECT and connect and create database statements
 				continue
 			} else {
