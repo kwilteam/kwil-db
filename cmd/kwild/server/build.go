@@ -13,6 +13,7 @@ import (
 	"net"
 	neturl "net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -157,6 +158,9 @@ func getOldChainState(d *coreDependencies, badgerPath string) (int64, []byte, er
 }
 
 func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
+	// Ensure that the required system utilities are installed on the system
+	verifyDependencies(d)
+
 	// main postgres db
 	db := buildDB(d, closers)
 
@@ -356,6 +360,20 @@ func (c *closeFuncs) closeAll() error {
 	}
 
 	return err
+}
+
+func verifyDependencies(d *coreDependencies) {
+	// Check if pg_dump is installed, which is necessary for snapshotting during migrations and when snapshots are enabled
+	if _, err := exec.LookPath("pg_dump"); err != nil {
+		failBuild(err, "pg_dump is not installed. Please install it to use snapshots or migrations.")
+	}
+
+	if d.cfg.ChainConfig.StateSync.Enable {
+		// Check if psql is installed, which is required for state-sync
+		if _, err := exec.LookPath("psql"); err != nil {
+			failBuild(err, "psql is not installed. Please install it to use statesync.")
+		}
+	}
 }
 
 func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext, ev *voting.EventStore) *txapp.TxApp {
