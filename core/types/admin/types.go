@@ -1,7 +1,5 @@
 // Package types contains the type used by the administrative RPC client and
-// servers. These types are shared like the protobuf types that these mimick,
-// but they contain the json tags and marshalling behavior we want, plus they
-// are not burdened by fields and methods from the google protobuf packages.
+// servers.
 package types
 
 import (
