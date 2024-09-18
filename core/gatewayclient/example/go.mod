@@ -1,21 +1,22 @@
 module mykgwapp
 
-go 1.21.0
+go 1.22
 
-require github.com/kwilteam/kwil-db/core v0.1.1-0.20240514193332-c61ba10f8a1c
+require github.com/kwilteam/kwil-db/core v0.3.0-beta.0.20240917145512-e6922733fc1a
 
 require (
 	github.com/bits-and-blooms/bitset v1.10.0 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.1 // indirect
+	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
 	github.com/consensys/gnark-crypto v0.12.1 // indirect
 	github.com/crate-crypto/go-kzg-4844 v1.0.0 // indirect
-	github.com/cstockton/go-conv v1.0.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/ethereum/c-kzg-4844 v1.0.0 // indirect
 	github.com/ethereum/go-ethereum v1.14.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/holiman/uint256 v1.2.4 // indirect
+	github.com/jrick/logrotate v1.1.2 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/supranational/blst v0.3.11 // indirect

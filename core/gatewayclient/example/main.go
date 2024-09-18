@@ -128,7 +128,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Result hello: ", result1.ExportString())
+	fmt.Println("Result hello: ", result1.Records.ExportString())
 
 	fmt.Println("call auth_only")
 	// signing required, i.e. message will be printed
@@ -139,7 +139,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Result auth_only: ", result2.ExportString())
+	fmt.Println("Result auth_only: ", result2.Records.ExportString())
 
 	// NOTE: the message will be printed every time you call this action for the
 	// first time of current HTTP connection, but the following calls will not
@@ -149,5 +149,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Result auth_only again: ", result3.ExportString())
+	fmt.Println("Result auth_only again: ", result3.Records.ExportString())
 }
