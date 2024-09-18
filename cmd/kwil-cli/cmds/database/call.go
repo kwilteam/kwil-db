@@ -22,13 +22,13 @@ var (
 
 ` + "`" + `view` + "`" + ` procedure are read-only procedure that do not require gas to execute.  They are
 the primary way to query the state of a database. The ` + "`" + `call` + "`" + ` command is used to call
-a ` + "`" + `view` + "`" + ` procedure on a database.  It takes the procedure name as a required flag, and the
-procedure inputs as arguments.
+a ` + "`" + `view` + "`" + ` procedure on a database.  It takes the procedure name as the first positional
+argument, and the procedure inputs as all subsequent arguments.
 
 To specify a procedure input, you first need to specify the input name, then the input value, delimited by a colon.
 For example, for procedure ` + "`" + `get_user($username)` + "`" + `, you would specify the procedure as follows:
 
-` + "`" + `username:satoshi` + "`" + ` --target=get_user
+` + "`" + `call get_user username:satoshi` + "`" + `
 
 You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + `
 flags, or you can specify the database by passing the database id with the ` + "`" + `--dbid` + "`" + ` flag.  If a ` + "`" + `--name` + "`" + `
@@ -37,10 +37,10 @@ flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner wi
 If you are interacting with a Kwil gateway, you can also pass the ` + "`" + `--authenticate` + "`" + ` flag to authenticate the call with your private key.`
 
 	callExample = `# Calling the ` + "`" + `get_user($username)` + "`" + ` procedure on the "mydb" database
-kwil-cli database call --target get_user --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 username:satoshi
+kwil-cli database call get_user --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 username:satoshi
 
 # Calling the ` + "`" + `get_user($username)` + "`" + ` procedure on a database using a dbid, authenticating with a private key
-kwil-cli database call --target get_user --dbid 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 username:satoshi --authenticate`
+kwil-cli database call get_user --dbid 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 username:satoshi --authenticate`
 )
 
 func callCmd() *cobra.Command {
@@ -66,9 +66,14 @@ func callCmd() *cobra.Command {
 			}
 
 			return common.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, clnt clientType.Client, conf *config.KwilCliConfig) error {
-				dbid, action, err := getSelectedProcedureAndDBID(cmd, conf)
+				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected procedure and dbid: %w", err))
+				}
+
+				action, args, err := getSelectedActionOrProcedure(cmd, args)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
 				}
 
 				inputs, err := parseInputs(args)

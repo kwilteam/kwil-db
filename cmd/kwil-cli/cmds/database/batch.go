@@ -41,7 +41,7 @@ flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner wi
 # 3,jack,35
 
 # Executing the ` + "`" + `create_user($user_id, $username, $user_age, $created_at)` + "`" + ` action on the "mydb" database
-kwil-cli database batch --path ./users.csv --target create_user --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 --map-inputs "id:user_id,name:username,age:user_age" --values created_at:$(date +%s)`
+kwil-cli database batch create_user --path ./users.csv --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 --map-inputs "id:user_id,name:username,age:user_age" --values created_at:$(date +%s)`
 )
 
 // batch is used for batch operations on databases
@@ -56,11 +56,16 @@ func batchCmd() *cobra.Command {
 		Long:    batchLong,
 		Example: batchExample,
 		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
-				dbid, action, err := getSelectedProcedureAndDBID(cmd, conf)
+				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected procedure and dbid: %w", err))
+				}
+
+				action, _, err := getSelectedActionOrProcedure(cmd, args)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
 				}
 
 				fileType, err := getFileType(filePath)

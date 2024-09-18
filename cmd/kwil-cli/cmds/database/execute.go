@@ -17,21 +17,21 @@ import (
 var (
 	executeLong = `Execute a procedure or action against a database.
 
-The procedure or action name is specified as a required "--target" flag, and the procedure parameters as arguments.
+The procedure or action name is specified as the first positional argument, and the procedure parameters as all subsequent arguments.
 In order to specify a procedure parameter, you first need to specify the parameter name, then the parameter value, delimited by a colon.
 
 For example, for procedure ` + "`" + `get_user($username)` + "`" + `, you would specify the procedure as follows:
-` + "`" + `username:satoshi` + "`" + ` --target=get_user
+` + "`" + `execute get_user username:satoshi` + "`" + `
 
 You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + `
 flags, or you can specify the database by passing the database id with the ` + "`" + `--dbid` + "`" + ` flag.  If a ` + "`" + `--name` + "`" + `
 flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner will be inferred from your configured wallet.`
 
 	executeExample = `# Executing the ` + "`" + `create_user($username, $age)` + "`" + ` procedure on the "mydb" database
-kwil-cli database execute username:satoshi age:32 --target create_user --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64
+kwil-cli database execute create_user username:satoshi age:32 --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64
 
 # Executing the ` + "`" + `create_user($username, $age)` + "`" + ` procedure on a database using a dbid
-kwil-cli database execute username:satoshi age:32 --target create_user --dbid 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64`
+kwil-cli database execute create_user username:satoshi age:32 --dbid 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64`
 )
 
 func executeCmd() *cobra.Command {
@@ -42,9 +42,14 @@ func executeCmd() *cobra.Command {
 		Example: executeExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
-				dbId, actionName, err := getSelectedProcedureAndDBID(cmd, conf)
+				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected procedure and dbid: %w", err))
+				}
+
+				action, args, err := getSelectedActionOrProcedure(cmd, args)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
 				}
 
 				parsedArgs, err := parseInputs(args)
@@ -52,14 +57,14 @@ func executeCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error parsing inputs: %w", err))
 				}
 
-				inputs, err := buildExecutionInputs(ctx, cl, dbId, actionName, parsedArgs)
+				inputs, err := buildExecutionInputs(ctx, cl, dbid, action, parsedArgs)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting inputs: %w", err))
 				}
 
 				// Could actually just directly pass nonce to the client method,
 				// but those methods don't need tx details in the inputs.
-				txHash, err := cl.Execute(ctx, dbId, actionName, inputs,
+				txHash, err := cl.Execute(ctx, dbid, action, inputs,
 					clientType.WithNonce(nonceOverride), clientType.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error executing database: %w", err))
