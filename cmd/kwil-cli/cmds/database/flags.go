@@ -16,7 +16,6 @@ const (
 	nameFlag       = "name"
 	ownerFlag      = "owner"
 	actionNameFlag = "action"
-	targetFlag     = "target"
 )
 
 // getSelectedOwner is used to get the owner flag.  Since the owner flag is usually optional,

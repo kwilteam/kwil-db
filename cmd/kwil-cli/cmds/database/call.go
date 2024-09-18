@@ -68,7 +68,7 @@ func callCmd() *cobra.Command {
 			return common.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, clnt clientType.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error getting selected procedure and dbid: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error getting selected dbid from CLI flags: %w", err))
 				}
 
 				action, args, err := getSelectedActionOrProcedure(cmd, args)

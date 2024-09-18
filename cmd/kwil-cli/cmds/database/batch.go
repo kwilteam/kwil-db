@@ -60,7 +60,7 @@ func batchCmd() *cobra.Command {
 			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error getting selected procedure and dbid: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error getting selected dbid from CLI flags: %w", err))
 				}
 
 				action, _, err := getSelectedActionOrProcedure(cmd, args)
