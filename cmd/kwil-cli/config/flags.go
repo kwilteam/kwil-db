@@ -58,5 +58,8 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 
 	// Add deprecated flag
 	fs.String("kwil-provider", cliCfg.Provider, "the Kwil provider RPC endpoint")
-	fs.MarkDeprecated("kwil-provider", "use '--provider' instead")
+	err := fs.MarkDeprecated("kwil-provider", "use '--provider' instead")
+	if err != nil {
+		panic(err)
+	}
 }

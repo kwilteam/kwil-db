@@ -191,7 +191,7 @@ func (d *KwilCliDriver) DeployDatabase(_ context.Context, db *types.Schema) (txH
 		return nil, fmt.Errorf("failed to write database schema: %w", err)
 	}
 
-	cmd := d.newKwilCliCmd("database", "deploy", "-p", schemaFile, "-t", "json")
+	cmd := d.newKwilCliCmd("database", "deploy", schemaFile, "-t", "json")
 	out, err := mustRun[respTxHash](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deploy database: %w", err)

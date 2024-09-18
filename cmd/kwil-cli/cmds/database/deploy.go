@@ -19,26 +19,36 @@ import (
 
 var (
 	deployLong = `Deploy a database schema to the target Kwil node.
-A path to a file containing the database schema must be provided using the --path flag.
+A path to a file containing the database schema must be provided as the first positional argument.
 
 Either a Kuneiform or a JSON file can be provided.  The file type is determined by the --type flag.
 By default, the file type is kf (Kuneiform).  Pass --type json to deploy a JSON file.`
 
 	deployExample = `# Deploy a database schema to the target Kwil node
-kwil-cli database deploy --path ./schema.kf`
+kwil-cli database deploy ./schema.kf`
 )
 
 func deployCmd() *cobra.Command {
 	var filePath, fileType, overrideName string
 
 	cmd := &cobra.Command{
-		Use:     "deploy",
+		Use:     "deploy <path>",
 		Short:   "Deploy a database schema to the target Kwil node.",
 		Long:    deployLong,
 		Example: deployExample,
-		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
+				if cmd.Flags().Changed("path") {
+					if len(args) > 0 {
+						return display.PrintErr(cmd, fmt.Errorf("no positional arguments are allowed when using the --path flag"))
+					}
+				} else {
+					if len(args) == 0 {
+						return display.PrintErr(cmd, fmt.Errorf("must provide a path to the database schema file"))
+					}
+					filePath = args[0]
+				}
+
 				// read in the file
 				file, err := os.Open(filePath)
 				if err != nil {
@@ -85,6 +95,11 @@ func deployCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&filePath, "path", "p", "", "path to the database definition file (required)")
+	err := cmd.Flags().MarkDeprecated("path", "specify the path as the first positional argument instead")
+	if err != nil {
+		panic(err)
+	}
+
 	cmd.Flags().StringVarP(&fileType, "type", "t", "kf", "file type of the database definition file (kf or json)")
 	cmd.Flags().StringVarP(&overrideName, "name", "n", "", "set the name of the database, overriding the name in the schema file")
 

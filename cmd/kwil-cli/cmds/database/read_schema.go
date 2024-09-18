@@ -15,9 +15,9 @@ import (
 var (
 	readSchemaLong = `Read schema is used to view the details of a deployed database schema.
 
-	You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + `
-	flags, or you can specify the database by passing the database id with the ` + "`" + `--dbid` + "`" + ` flag.  If a ` + "`" + `--name` + "`" + `
-	flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner will be inferred from your configured wallet.`
+You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + `
+flags, or you can specify the database by passing the database id with the ` + "`" + `--dbid` + "`" + ` flag.  If a ` + "`" + `--name` + "`" + `
+flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner will be inferred from your configured wallet.`
 
 	readSchemaExample = `# Reading the schema of the "mydb" database, owned by 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64
 kwil-cli database read-schema --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64`

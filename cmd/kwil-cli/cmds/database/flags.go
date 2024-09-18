@@ -83,7 +83,10 @@ func getSelectedDbid(cmd *cobra.Command, conf *config.KwilCliConfig) (string, er
 func bindFlagsTargetingProcedureOrAction(cmd *cobra.Command) {
 	bindFlagsTargetingDatabase(cmd)
 	cmd.Flags().StringP(actionNameFlag, "a", "", "the target action name")
-	cmd.Flags().MarkDeprecated(actionNameFlag, "pass the action name as the first argument")
+	err := cmd.Flags().MarkDeprecated(actionNameFlag, "pass the action name as the first argument")
+	if err != nil {
+		panic(err)
+	}
 }
 
 // getSelectedActionOrProcedure returns the action or procedure name that the user selected.
