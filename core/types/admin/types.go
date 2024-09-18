@@ -34,8 +34,9 @@ type SyncInfo struct {
 }
 
 type AppInfo struct {
-	Height  int64          `json:"height"`
-	AppHash types.HexBytes `json:"app_hash"`
+	Height     int64          `json:"height"`
+	AppHash    types.HexBytes `json:"app_hash"`
+	GasEnabled bool           `json:"gas_enabled"`
 }
 
 // ValidatorInfo describes a validator node.

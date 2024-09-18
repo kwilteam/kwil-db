@@ -1,6 +1,7 @@
 package abci
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -11,6 +12,7 @@ import (
 	"math/big"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -959,6 +961,43 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 	return &abciTypes.ResponseCommit{}, nil // RetainHeight stays 0 to not prune any blocks
 }
 
+const (
+	infoKeyGasEnabled = "gas_enabled"
+)
+
+// ABCIInfoData is the decoded ResponseInfo.Response.Data from ABCI's Info method.
+type ABCIInfoData struct {
+	GasEnabled bool
+}
+
+// ParseInfoRespData parses as much of the ResponseInfo.Response.Data field as
+// possible. If error is non-nil, assume ABCIInfoData is incomplete or
+// inaccurate.
+func ParseInfoRespData(data string) (*ABCIInfoData, error) {
+	infoData := &ABCIInfoData{}
+	var errs error
+	dataScanner := bufio.NewScanner(strings.NewReader(data))
+	for dataScanner.Scan() {
+		k, v, ok := strings.Cut(dataScanner.Text(), "=")
+		if !ok {
+			errs = errors.Join(errs, fmt.Errorf("BUG: abci info response data is not a kv pair"))
+			continue
+		}
+		switch k {
+		case infoKeyGasEnabled:
+			gasEnabled, err := strconv.ParseBool(v)
+			if err != nil {
+				errs = errors.Join(errs, fmt.Errorf("BUG: abci info response data is not a kv pair"))
+				continue
+			}
+			infoData.GasEnabled = gasEnabled
+		default:
+			errs = errors.Join(errs, fmt.Errorf("BUG: unrecognized key: %s", k))
+		}
+	}
+	return infoData, errs
+}
+
 // Info is part of the Info/Query connection. CometBFT will call this during
 // it's handshake, and if height 0 is returned it will then use InitChain. This
 // method should also be usable at any time (and read only) as it is used for
@@ -979,7 +1018,16 @@ func (a *AbciApp) Info(ctx context.Context, _ *abciTypes.RequestInfo) (*abciType
 	a.stateMtx.Lock()
 	if a.height > 0 { // has already been set and stored in FinalizeBlock
 		defer a.stateMtx.Unlock()
+
+		// Write data as a newline-delimited kv list. This should be decodable
+		// by ParseInfoRespData (update it if updating here).
+		var data strings.Builder
+		fmt.Fprintf(&data, "%s=%v\n", infoKeyGasEnabled, a.cfg.GasEnabled)
+		// ... any other kv data
+		// fmt.Fprintf(&data, "%s=%v\n", infoKeyMaxBytes, a.consensusParams.Block.MaxBytes)
+
 		return &abciTypes.ResponseInfo{
+			Data:             data.String(),
 			LastBlockHeight:  a.height,
 			LastBlockAppHash: a.appHash,
 			Version:          version.KwilVersion, // the *software* semver string

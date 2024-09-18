@@ -235,6 +235,7 @@ func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest)
 			ChainID:     status.Node.ChainID,
 			BlockHeight: uint64(status.Sync.BestBlockHeight),
 			BlockHash:   status.Sync.BestBlockHash,
+			GasEnabled:  status.App.GasEnabled,
 		},
 		BlockTimestamp: status.Sync.BestBlockTime.UnixMilli(),
 		BlockAge:       blockAge.Milliseconds(),
@@ -404,6 +405,7 @@ func (svc *Service) ChainInfo(ctx context.Context, req *userjson.ChainInfoReques
 		ChainID:     status.Node.ChainID,
 		BlockHeight: uint64(status.Sync.BestBlockHeight),
 		BlockHash:   status.Sync.BestBlockHash,
+		GasEnabled:  status.App.GasEnabled,
 	}, nil
 }
 

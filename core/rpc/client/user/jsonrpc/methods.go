@@ -125,9 +125,9 @@ func (cl *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction
 	return price, nil
 }
 
-func (cl *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
+func (cl *Client) GetAccount(ctx context.Context, acctID []byte, status types.AccountStatus) (*types.Account, error) {
 	cmd := &userjson.AccountRequest{
-		Identifier: pubKey,
+		Identifier: acctID,
 		Status:     &status,
 	}
 	res := &userjson.AccountResponse{}
@@ -149,7 +149,7 @@ func (cl *Client) GetAccount(ctx context.Context, pubKey []byte, status types.Ac
 	// }
 
 	return &types.Account{
-		Identifier: pubKey,
+		Identifier: acctID,
 		Balance:    balance,
 		Nonce:      res.Nonce,
 	}, nil
@@ -167,9 +167,9 @@ func (cl *Client) GetSchema(ctx context.Context, dbid string) (*types.Schema, er
 	return res.Schema, nil
 }
 
-func (cl *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]*types.DatasetIdentifier, error) {
+func (cl *Client) ListDatabases(ctx context.Context, acctID []byte) ([]*types.DatasetIdentifier, error) {
 	cmd := &userjson.ListDatabasesRequest{
-		Owner: ownerPubKey,
+		Owner: acctID,
 	}
 	res := &userjson.ListDatabasesResponse{}
 	err := cl.CallMethod(ctx, string(userjson.MethodDatabases), cmd, res)

@@ -125,6 +125,10 @@ func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, err
 	if err != nil {
 		return nil, err
 	}
+	abciExtendedInfo, err := abci.ParseInfoRespData(abciInfo.Response.Data)
+	if err != nil {
+		return nil, err
+	}
 
 	ni, si, vi := &cmtStatus.NodeInfo, &cmtStatus.SyncInfo, &cmtStatus.ValidatorInfo
 	return &types.Status{
@@ -141,8 +145,9 @@ func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, err
 			Power:  vi.VotingPower,
 		},
 		App: &types.AppInfo{
-			Height:  abciInfo.Response.LastBlockHeight,
-			AppHash: abciInfo.Response.LastBlockAppHash,
+			Height:     abciInfo.Response.LastBlockHeight,
+			AppHash:    abciInfo.Response.LastBlockAppHash,
+			GasEnabled: abciExtendedInfo.GasEnabled,
 		},
 	}, nil
 }

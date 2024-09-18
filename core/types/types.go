@@ -25,6 +25,7 @@ type ChainInfo struct {
 	ChainID     string `json:"chain_id"`
 	BlockHeight uint64 `json:"block_height"`
 	BlockHash   string `json:"block_hash"`
+	GasEnabled  bool   `json:"gas_enabled"`
 }
 
 // The validator related types that identify validators by pubkey are still

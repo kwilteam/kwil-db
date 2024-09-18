@@ -488,3 +488,69 @@ func (m *mockTx) BeginTx(ctx context.Context) (sql.Tx, error) {
 func (m *mockTx) Precommit(ctx context.Context, changes chan<- any) ([]byte, error) {
 	return nil, nil
 }
+
+func TestParseInfoRespData(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    string
+		want    *ABCIInfoData
+		wantErr bool
+	}{
+		{
+			name: "valid gas enabled",
+			data: "gas_enabled=true",
+			want: &ABCIInfoData{GasEnabled: true},
+		},
+		{
+			name: "valid gas disabled",
+			data: "gas_enabled=false",
+			want: &ABCIInfoData{GasEnabled: false},
+		},
+		{
+			name:    "invalid boolean value",
+			data:    "gas_enabled=notabool",
+			want:    &ABCIInfoData{},
+			wantErr: true,
+		},
+		{
+			name:    "missing value",
+			data:    "gas_enabled=",
+			want:    &ABCIInfoData{},
+			wantErr: true,
+		},
+		{
+			name:    "missing key",
+			data:    "=true",
+			want:    &ABCIInfoData{},
+			wantErr: true,
+		},
+		{
+			name:    "multiple lines with valid data",
+			data:    "gas_enabled=true\nother_key=value",
+			want:    &ABCIInfoData{GasEnabled: true},
+			wantErr: true,
+		},
+		{
+			name:    "multiple lines with invalid data",
+			data:    "gas_enabled=true\ninvalid_line\nother_key=value",
+			want:    &ABCIInfoData{GasEnabled: true},
+			wantErr: true,
+		},
+		{
+			name: "empty string",
+			data: "",
+			want: &ABCIInfoData{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseInfoRespData(tt.data)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseInfoRespData() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
