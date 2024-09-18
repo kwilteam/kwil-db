@@ -86,30 +86,6 @@ func bindFlagsTargetingProcedureOrAction(cmd *cobra.Command) {
 	cmd.Flags().MarkDeprecated(actionNameFlag, "pass the action name as the first argument")
 }
 
-func getSelectedProcedureAndDBID(cmd *cobra.Command, conf *config.KwilCliConfig) (dbid string, procOrAction string, err error) {
-	dbid, err = getSelectedDbid(cmd, conf)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get dbid: %w", err)
-	}
-
-	var name string
-	if cmd.Flags().Changed(targetFlag) {
-		name, err = cmd.Flags().GetString(targetFlag)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to get procedure name: %w", err)
-		}
-	} else if cmd.Flags().Changed(actionNameFlag) {
-		name, err = cmd.Flags().GetString(actionNameFlag)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to get action name: %w", err)
-		}
-	} else {
-		return "", "", fmt.Errorf("neither procedure nor action was provided")
-	}
-
-	return dbid, strings.ToLower(name), nil
-}
-
 // getSelectedActionOrProcedure returns the action or procedure name that the user selected.
 // It is made to be backwards compatible with the old way of passing the action name as the --action flag.
 // In v0.9, we changed this to have the action / procedure be passed as the first positional argument in
