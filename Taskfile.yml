@@ -24,8 +24,8 @@ tasks:
   fmt:
     desc: Format the code
     cmds:
-      # goimports does not allow to ignore certain paths (protobuf) with modules,
-      # so we have to list all the folders that are adjacent to protobuf.
+      # goimports does not allow to ignore certain paths with modules,
+      # so we have to list all the folders that are adjacent generated code.
       - |
         goimports -format-only -w ./cmd ./common ./internal ./test ./testing \
           ./core ./extensions ./parse/*.go ./parse/wasm ./parse/postgres
