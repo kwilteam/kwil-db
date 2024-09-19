@@ -172,7 +172,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	// these are dummies, but they might need init in the future.
 	snapshotter := buildSnapshotter(d)
-	statesyncer := buildStatesyncer(d)
+	statesyncer := buildStatesyncer(d, closers)
 
 	p2p := buildPeers(d, closers)
 
@@ -763,7 +763,7 @@ func buildSnapshotter(d *coreDependencies) *statesync.SnapshotStore {
 	return ss
 }
 
-func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
+func buildStatesyncer(d *coreDependencies, closer *closeFuncs) *statesync.StateSyncer {
 	if !d.cfg.ChainConfig.StateSync.Enable {
 		return nil
 	}
@@ -848,9 +848,15 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 		failBuild(nil, "failed to configure state syncer, failed to fetch trust options from the remote server.")
 	}
 
+	db, err := d.poolOpener(d.ctx, d.cfg.AppConfig.DBName, 3)
+	if err != nil {
+		failBuild(err, "failed to build db for state syncer")
+	}
+	closer.addCloser(db.Close, "closing state syncer db")
+
 	// create state syncer
 	return statesync.NewStateSyncer(d.ctx, dbCfg, d.cfg.ChainConfig.StateSync.SnapshotDir,
-		providers, *d.log.Named("state-syncer"))
+		providers, db, *d.log.Named("state-syncer"))
 }
 
 // tlsConfig returns a tls.Config to be used with the admin RPC service. If

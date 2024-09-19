@@ -14,7 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/internal/voting"
 
 	cometClient "github.com/cometbft/cometbft/rpc/client"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
@@ -34,6 +36,8 @@ const (
 type StateSyncer struct {
 	// statesync configuration
 	dbConfig *DBConfig
+
+	db sql.ReadTxMaker
 
 	// directory to store snapshots and chunks
 	// same as the snapshot store directory
@@ -57,10 +61,11 @@ type StateSyncer struct {
 // It takes the database configuration, snapshot directory, and the trusted snapshot providers.
 // Trusted snapshot providers are special nodes in the network trusted by the nodes and
 // have snapshot creation enabled. These nodes are responsible for creating and validating snapshots.
-func NewStateSyncer(ctx context.Context, cfg *DBConfig, snapshotDir string, providers []string, logger log.Logger) *StateSyncer {
+func NewStateSyncer(ctx context.Context, cfg *DBConfig, snapshotDir string, providers []string, db sql.ReadTxMaker, logger log.Logger) *StateSyncer {
 
 	ss := &StateSyncer{
 		dbConfig:     cfg,
+		db:           db,
 		snapshotsDir: snapshotDir,
 		log:          logger,
 	}
@@ -149,6 +154,20 @@ func (ss *StateSyncer) ApplySnapshotChunk(ctx context.Context, chunk []byte, ind
 	// Kick off the process of restoring the database if all chunks are received
 	if ss.rcvdChunks == ss.snapshot.ChunkCount {
 		ss.log.Info("All chunks received - Starting DB restore process")
+
+		// Ensure that the DB is empty before applying the snapshot
+		initialized, err := isDbInitialized(ctx, ss.db)
+		if err != nil {
+			ss.resetStateSync()
+			return false, errors.Join(err, ErrRejectSnapshot)
+		}
+
+		if initialized {
+			ss.resetStateSync()
+			// Statesync is not allowed on an initialized DB
+			return false, errors.Join(ErrAbortSnapshotChunk, errors.New("postgres DB state is not empty, please reset the DB state before applying the snapshot"))
+		}
+
 		// Restore the DB from the chunks
 		streamer := NewStreamer(ss.snapshot.ChunkCount, ss.snapshotsDir, ss.log)
 		defer streamer.Close()
@@ -325,4 +344,19 @@ func GetLatestSnapshotInfo(ctx context.Context, client cometClient.ABCIClient) (
 	}
 
 	return &snap, nil
+}
+
+func isDbInitialized(ctx context.Context, db sql.ReadTxMaker) (bool, error) {
+	tx, err := db.BeginReadTx(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+
+	vals, err := voting.GetValidators(ctx, tx)
+	if err != nil {
+		return false, err
+	}
+
+	return len(vals) > 0, nil
 }
