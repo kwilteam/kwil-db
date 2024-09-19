@@ -170,9 +170,8 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// Initialize the events and voting data stores
 	ev := buildEventStore(d, closers) // makes own DB connection
 
-	// these are dummies, but they might need init in the future.
 	snapshotter := buildSnapshotter(d)
-	statesyncer := buildStatesyncer(d)
+	statesyncer := buildStatesyncer(d, db)
 
 	p2p := buildPeers(d, closers)
 
@@ -763,7 +762,7 @@ func buildSnapshotter(d *coreDependencies) *statesync.SnapshotStore {
 	return ss
 }
 
-func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
+func buildStatesyncer(d *coreDependencies, db sql.ReadTxMaker) *statesync.StateSyncer {
 	if !d.cfg.ChainConfig.StateSync.Enable {
 		return nil
 	}
@@ -850,7 +849,7 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 
 	// create state syncer
 	return statesync.NewStateSyncer(d.ctx, dbCfg, d.cfg.ChainConfig.StateSync.SnapshotDir,
-		providers, *d.log.Named("state-syncer"))
+		providers, db, *d.log.Named("state-syncer"))
 }
 
 // tlsConfig returns a tls.Config to be used with the admin RPC service. If
