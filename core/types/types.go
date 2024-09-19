@@ -140,7 +140,7 @@ const (
 	ModePrivate ServiceMode = "private"
 )
 
-// HealthResponse is the response for MethodHealth. This determines the
+// Health is the response for MethodHealth. This determines the
 // serialized response for the Health method required by the rpcserver.Svc
 // interface. This is the response with which most health checks will be concerned.
 type Health struct {

@@ -113,6 +113,11 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve the node's health: %w", err)
 	}
+
+	if health.Healthy {
+		c.logger.Warnf("node reports that it is not healthy: %v", health)
+	}
+
 	c.authCallRPC = health.Mode == types.ModePrivate
 
 	if c.chainID == "" { // always use chain ID from remote host
@@ -135,6 +140,10 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 	return c, nil
 }
 
+// PrivateMode returns if it the client has connected to an RPC server that is
+// running in "private" mode where call requests require authentication. In
+// addition, queries are expected to be denied, and no verbose transaction
+// information will returned with a transaction status query.
 func (c *Client) PrivateMode() bool {
 	return c.authCallRPC
 }

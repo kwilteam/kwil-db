@@ -48,6 +48,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 	}
 
 	needPrivateKey := flags&WithoutPrivateKey == 0
+	authCalls := flags&AuthenticatedCalls != 0
 
 	clientConfig := clientType.Options{}
 	if conf.PrivateKey != nil {
@@ -55,7 +56,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 		if needPrivateKey { // only check chain ID if signing something
 			clientConfig.ChainID = conf.ChainID
 		}
-	} else if flags&WithoutPrivateKey == 0 && flags&AuthenticatedCalls == 0 {
+	} else if needPrivateKey && !authCalls {
 		// private key checks for call messages are done after creating the client
 		// as this requires whether the Kwild node is in private mode or not.
 		return fmt.Errorf("private key not provided")
@@ -68,7 +69,9 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 			return err
 		}
 
-		if client.PrivateMode() && flags&AuthenticatedCalls != 0 && conf.PrivateKey == nil {
+		// if we are making authenticated calls, we need to ensure that the private key is provided
+		// if the Kwild node is in private mode.
+		if authCalls && client.PrivateMode() && conf.PrivateKey == nil {
 			return fmt.Errorf("private key not provided for authenticated calls")
 		}
 
