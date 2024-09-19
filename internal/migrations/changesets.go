@@ -23,7 +23,7 @@ var (
 	ErrNoMoreChunksToRead = errors.New("no more chunks to read")
 	ErrChangesetNotFound  = errors.New("changeset not found")
 
-	migrationCompleted = "migration completed. `migration` section of `genesis.json` and `migrate_from` config in `config.toml` is no longer relevant and should be removed"
+	migrationCompleted = "Migration completed. The migration section in genesis.json and the migrate_from configuration in config.toml are no longer relevant and should be removed."
 )
 
 func init() {
