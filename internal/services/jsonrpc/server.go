@@ -58,6 +58,11 @@ type Server struct {
 	tlsCfg         *tls.Config
 }
 
+type handlerMount struct {
+	handler http.Handler
+	path    string
+}
+
 type serverConfig struct {
 	pass       string
 	tlsConfig  *tls.Config
@@ -66,6 +71,8 @@ type serverConfig struct {
 	specInfo   *openrpc.Info
 	reqSzLimit int
 	proxyCount int
+
+	extraMounts []handlerMount
 }
 
 type Opt func(*serverConfig)
@@ -99,6 +106,18 @@ func WithTrustedProxyCount(trustedProxyCount int) Opt {
 func WithServerInfo(specInfo *openrpc.Info) Opt {
 	return func(c *serverConfig) {
 		c.specInfo = specInfo
+	}
+}
+
+// WithMount indicates that an extra http.Handler should be mounted at the
+// provided path. Any matching requests will have the mount's path prefix
+// stripped from the request path before forwarding it to the handler.
+func WithMount(path string, handler http.Handler) Opt {
+	return func(c *serverConfig) {
+		c.extraMounts = append(c.extraMounts, handlerMount{
+			path:    path,
+			handler: handler,
+		})
 	}
 }
 
@@ -273,6 +292,34 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 
 	// service specific health endpoint handler with wild card for service
 	mux.Handle("GET "+pathSvcHealthV1, http.HandlerFunc(s.handleSvcHealth))
+
+	for _, extraMount := range cfg.extraMounts {
+		handler := extraMount.handler
+		// handler = corsHandler(handler)
+		// handler = recoverer(handler, log)
+		pfx := strings.TrimRight(extraMount.path, "/")
+
+		// var handler0 http.Handler
+		handler = http.StripPrefix(pfx, handler)
+		// handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 	if r.URL.Path != "" {
+		// 		h.ServeHTTP(w, r)
+		// 		return
+		// 	}
+		// 	r2 := new(http.Request)
+		// 	*r2 = *r
+		// 	r2.URL = new(url.URL)
+		// 	*r2.URL = *r.URL
+		// 	r2.URL.Path = "/"
+		// 	r2.URL.RawPath = "/"
+		// 	handler.ServeHTTP(w, r2)
+		// })
+
+		mux.Handle(pfx, handler) // "/path"
+
+		// handler1 := http.StripPrefix(pfx+"/", handler)
+		mux.Handle(pfx+"/", handler) // "/path/"
+	}
 
 	return s, nil
 }

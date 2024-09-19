@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	neturl "net/url"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
+	cometrpc "github.com/cometbft/cometbft/rpc/jsonrpc/server"
 
 	"github.com/kwilteam/kwil-db/cmd"
 	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
@@ -234,10 +236,20 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		usersvc.WithChallengeRateLimit(d.cfg.AppConfig.ChallengeRateLimit),
 		usersvc.WithBlockAgeHealth(6*totalConsensusTimeouts.Dur()))
 
+	rpcEnv, err := cometBftNode.Node.ConfigureRPC()
+	if err != nil {
+		failBuild(err, "unable to configure cometbf RPC")
+	}
+
+	cometRoutes := rpcEnv.GetRoutes()
+	cometMux := http.NewServeMux()
+	cometrpc.RegisterRPCFuncs(cometMux, cometRoutes, cometbft.NewLogWrapper(&d.log) /*change*/)
+
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppConfig.JSONRPCListenAddress,
 		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppConfig.RPCTimeout)),
 		rpcserver.WithReqSizeLimit(d.cfg.AppConfig.RPCMaxReqSize),
-		rpcserver.WithCORS(), rpcserver.WithServerInfo(&usersvc.SpecInfo))
+		rpcserver.WithCORS(), rpcserver.WithServerInfo(&usersvc.SpecInfo),
+		rpcserver.WithMount("/consensus", cometMux))
 	if err != nil {
 		failBuild(err, "unable to create json-rpc server")
 	}

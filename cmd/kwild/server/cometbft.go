@@ -70,8 +70,13 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 	nodeCfg.FilterPeers = true
 	nodeCfg.RPC.ListenAddress = cleanListenAddr(userChainCfg.RPC.ListenAddress,
 		portFromURL(nodeCfg.RPC.ListenAddress))
-	nodeCfg.RPC.TLSCertFile = cfg.AppConfig.TLSCertFile
-	nodeCfg.RPC.TLSKeyFile = cfg.AppConfig.TLSKeyFile
+	// TLS is presently always disabled.  Previously any TLS key pair that was
+	// configured for the Kwil admin service was applied somewhat
+	// inappropriately to the cometbft RPC service:
+	//   nodeCfg.RPC.TLSCertFile = cfg.AppConfig.TLSCertFile
+	//   nodeCfg.RPC.TLSKeyFile = cfg.AppConfig.TLSKeyFile
+	// If there is need to secure this, there should be a conf flag to indicate
+	// it is needed and possibly which separate certificate/key to use.
 	nodeCfg.RPC.TimeoutBroadcastTxCommit = time.Duration(userChainCfg.RPC.BroadcastTxTimeout)
 
 	nodeCfg.P2P.ListenAddress = cleanListenAddr(userChainCfg.P2P.ListenAddress,
