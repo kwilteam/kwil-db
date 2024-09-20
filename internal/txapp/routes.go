@@ -618,6 +618,15 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 		return transactions.CodeInvalidSender, ErrCallerNotValidator
 	}
 
+	// ensure that the target is a validator
+	power, err = getVoterPower(ctx.Ctx, app.DB, d.target)
+	if err != nil {
+		return transactions.CodeUnknownError, err
+	}
+	if power <= 0 {
+		return transactions.CodeInvalidSender, ErrTargetNotValidator
+	}
+
 	// we should try to create the resolution, since validator removals are never
 	// officially "started" by the user. If it fails because it already exists,
 	// then we should do nothing

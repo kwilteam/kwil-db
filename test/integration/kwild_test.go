@@ -144,7 +144,6 @@ func TestKwildValidatorRemoval(t *testing.T) {
 			node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetOperatorDriver(ctx, "node1", driverType)
 			node2Driver := helper.GetOperatorDriver(ctx, "node2", driverType)
-			node3Driver := helper.GetOperatorDriver(ctx, "node3", driverType)
 			targetPubKey := helper.NodePrivateKey("node3").PubKey().Bytes()
 
 			/* Remove node 3 (4 validators, nodes 0, 1, and 2 remove node 3)
@@ -159,7 +158,7 @@ func TestKwildValidatorRemoval(t *testing.T) {
 
 			//
 			// Node 3 is no longer a validator, removal should fail
-			specifications.RemoveNonValidatorSpecification(ctx, t, node3Driver, targetPubKey)
+			specifications.RemoveNonValidatorSpecification(ctx, t, node2Driver, targetPubKey)
 		})
 	}
 }
