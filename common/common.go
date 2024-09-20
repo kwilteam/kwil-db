@@ -73,6 +73,8 @@ type TxContext struct {
 	Authenticator string
 }
 
+// Engine is an interface for the main database engine that is responsible for deploying
+// and executing Kuneiform datasets.
 type Engine interface {
 	SchemaGetter
 	// CreateDataset deploys a new dataset from a schema.
@@ -95,6 +97,7 @@ type Engine interface {
 	Reload(ctx context.Context, tx sql.Executor) error
 }
 
+// SchemaGetter is an interface for getting the schema of a dataset.
 type SchemaGetter interface {
 	// GetSchema returns the schema of a dataset.
 	// It will return an error if the dataset does not exist.

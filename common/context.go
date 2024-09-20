@@ -35,6 +35,8 @@ type BlockContext struct {
 // MigrationContext provides context for all migration operations.
 // Fields in MigrationContext should never be mutated till the migration is completed.
 type MigrationContext struct {
+	// StartHeight is the height of the first block to start migration.
 	StartHeight int64
-	EndHeight   int64
+	// EndHeight is the height of the last block to end migration.
+	EndHeight int64
 }

@@ -142,6 +142,15 @@ func GetCfg(flagCfg *config.KwildConfig) (*config.KwildConfig, bool, error) {
 
 	cfg.AppConfig.JSONRPCListenAddress = cleanListenAddr(cfg.AppConfig.JSONRPCListenAddress, defaultListenJSONRPC)
 
+	// handling deprecation of configs:
+	if cfg.AppConfig.DEPRECATED_RPCReqLimit != 0 {
+		if cfg.AppConfig.RPCMaxReqSize != cmd.DefaultConfig().AppConfig.RPCMaxReqSize {
+			return nil, false, fmt.Errorf("cannot set both deprecated rpc request limit and rpc max request size")
+		}
+		cfg.AppConfig.RPCMaxReqSize = cfg.AppConfig.DEPRECATED_RPCReqLimit
+		fmt.Println("WARNING: app.rpc_req_limit is deprecated and will be removed in Kwil v0.10. use app.rpc_max_req_size instead")
+	}
+
 	return cfg, configFileExists, nil
 }
 

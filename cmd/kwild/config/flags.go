@@ -19,7 +19,7 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	// logging
 	flagSet.StringVarP(&cfg.Logging.Level, "log.level", "l", cfg.Logging.Level, format("%s log level"))
 	flagSet.StringVar(&cfg.Logging.RPCLevel, "log.rpc-level", cfg.Logging.RPCLevel, "user rpc server log level")
-	flagSet.StringVar(&cfg.Logging.ConsensusLevel, "log.consensus_level", cfg.Logging.ConsensusLevel, "consensus (cometbft) log level")
+	flagSet.StringVar(&cfg.Logging.ConsensusLevel, "log.consensus-level", cfg.Logging.ConsensusLevel, "consensus (cometbft) log level")
 	flagSet.StringVar(&cfg.Logging.DBLevel, "log.db-level", cfg.Logging.DBLevel, "database backend (postgres) log level")
 	flagSet.StringVar(&cfg.Logging.Format, "log.format", cfg.Logging.Format, format("%s log format"))
 	flagSet.StringVar(&cfg.Logging.TimeEncoding, "log.time-format", cfg.Logging.TimeEncoding, format("%s time log format"))
@@ -50,7 +50,10 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.StringVar(&cfg.AppConfig.ProfileFile, "app.profile-file", cfg.AppConfig.ProfileFile, format("%s profile output file path (e.g. cpu.pprof)"))
 
 	flagSet.Var(&cfg.AppConfig.RPCTimeout, "app.rpc-timeout", "timeout for RPC requests (through reading the request, handling the request, and sending the response)")
-	flagSet.IntVar(&cfg.AppConfig.RPCMaxReqSize, "app.rpc-req-limit", cfg.AppConfig.RPCMaxReqSize, "RPC request size limit")
+	flagSet.IntVar(&cfg.AppConfig.RPCMaxReqSize, "app.rpc-max-req-size", cfg.AppConfig.RPCMaxReqSize, "RPC request size limit")
+	flagSet.IntVar(&cfg.AppConfig.DEPRECATED_RPCReqLimit, "app.rpc-req-limit", cfg.AppConfig.DEPRECATED_RPCReqLimit, "RPC request size limit")
+	flagSet.MarkDeprecated("app.rpc-req-limit", "use --app.rpc-max-req-size instead")
+
 	flagSet.Var(&cfg.AppConfig.ReadTxTimeout, "app.db-read-timeout", "timeout for database reads initiated by RPC requests")
 
 	// Extension endpoints flags
@@ -86,6 +89,8 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.BoolVar(&cfg.ChainConfig.P2P.SeedMode, "chain.p2p.seed-mode", cfg.ChainConfig.P2P.SeedMode, format(`Run %s in a special "seed" mode where it crawls the network for peer addresses,
 sharing them with incoming peers before immediately disconnecting. It is recommended
 to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.`))
+	flagSet.Var(&cfg.ChainConfig.P2P.HandshakeTimeout, "chain.p2p.handshake-timeout", "Chain P2P handshake timeout")
+	flagSet.Var(&cfg.ChainConfig.P2P.DialTimeout, "chain.p2p.dial-timeout", "Chain P2P dial timeout")
 
 	// Network flags
 	flagSet.BoolVarP(&cfg.ChainConfig.P2P.PrivateMode, "chain.p2p.private-mode", "p", cfg.ChainConfig.P2P.PrivateMode, "Run the node in private mode. In private mode, the connectivity to the node is restricted to the current validators and whitelist peers.")
