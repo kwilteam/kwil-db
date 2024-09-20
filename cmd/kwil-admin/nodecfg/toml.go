@@ -125,7 +125,7 @@ rpc_timeout = "{{ .AppConfig.RPCTimeout }}"
 db_read_timeout = "{{ .AppConfig.ReadTxTimeout }}"
 
 # RPC request size limit in bytes
-rpc_req_limit = {{ .AppConfig.RPCMaxReqSize }}
+rpc_max_req_size = {{ .AppConfig.RPCMaxReqSize }}
 
 # Enforce data privacy: authenticate JSON-RPC call requests using challenge-based
 # authentication. the node will only accept JSON-RPC requests that has a valid signed
