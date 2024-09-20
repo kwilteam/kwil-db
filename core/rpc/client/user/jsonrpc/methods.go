@@ -293,3 +293,13 @@ func (cl *Client) Challenge(ctx context.Context) ([]byte, error) {
 	}
 	return res.Challenge, nil
 }
+
+func (cl *Client) Health(ctx context.Context) (*types.Health, error) {
+	cmd := &userjson.HealthRequest{}
+	res := &userjson.HealthResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodHealth), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}

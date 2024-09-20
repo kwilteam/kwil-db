@@ -28,7 +28,8 @@ const (
 	UsingGateway
 
 	// AuthenticatedCalls indicates that call messages should include a
-	// signature and a server-provided challenge.
+	// signature and a server-provided challenge if the client is talking to a
+	// private kwild node.
 	AuthenticatedCalls
 )
 
@@ -47,6 +48,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 	}
 
 	needPrivateKey := flags&WithoutPrivateKey == 0
+	authCalls := flags&AuthenticatedCalls != 0
 
 	clientConfig := clientType.Options{}
 	if conf.PrivateKey != nil {
@@ -54,16 +56,23 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 		if needPrivateKey { // only check chain ID if signing something
 			clientConfig.ChainID = conf.ChainID
 		}
-	} else if flags&WithoutPrivateKey == 0 {
+	} else if needPrivateKey && !authCalls {
+		// private key checks for call messages are done after creating the client
+		// as this requires whether the Kwild node is in private mode or not.
 		return fmt.Errorf("private key not provided")
 	}
 
 	// if not using the gateway, then we can simply create a regular client and return
 	if flags&UsingGateway == 0 {
-		clientConfig.AuthenticateCalls = (flags&AuthenticatedCalls != 0)
 		client, err := client.NewClient(ctx, conf.Provider, &clientConfig)
 		if err != nil {
 			return err
+		}
+
+		// if we are making authenticated calls, we need to ensure that the private key is provided
+		// if the Kwild node is in private mode.
+		if authCalls && client.PrivateMode() && conf.PrivateKey == nil {
+			return fmt.Errorf("private key not provided for authenticated calls")
 		}
 
 		return fn(ctx, client, conf)
@@ -76,6 +85,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 		return err
 	}
 
+	// Assumption that the nodes behind the gateway are not in the private mode.
 	client, err := gatewayclient.NewClient(ctx, conf.Provider, &gatewayclient.GatewayOptions{
 		Options: clientConfig,
 		AuthSignFunc: func(message string, signer auth.Signer) (*auth.Signature, error) {

@@ -69,10 +69,10 @@ func TestKwildTransferAcceptance(t *testing.T) {
 			// Wait for Genesis allocs to get credited at the end of 1st block, before issuing any transactions.
 			time.Sleep(2 * time.Second)
 
-			senderDriver := helper.GetDriver(driverType, "creator", false)
+			senderDriver := helper.GetDriver(driverType, "creator")
 			sender := specifications.TransferAmountDsl(senderDriver)
 
-			receiverDriver := helper.GetDriver(driverType, "visitor", false)
+			receiverDriver := helper.GetDriver(driverType, "visitor")
 			receiver := specifications.TransferAmountDsl(receiverDriver)
 
 			bal0Sender, err := sender.AccountBalance(ctx, senderIdentity)
@@ -140,7 +140,7 @@ func TestKwildProcedures(t *testing.T) {
 			if !*remote {
 				helper.Setup(ctx)
 			}
-			creatorDriver := helper.GetDriver(driverType, "creator", false)
+			creatorDriver := helper.GetDriver(driverType, "creator")
 
 			specifications.ExecuteProcedureSpecification(ctx, t, creatorDriver)
 		})
@@ -169,7 +169,7 @@ func TestKwildAcceptance(t *testing.T) {
 			if !*remote {
 				helper.Setup(ctx)
 			}
-			creatorDriver := helper.GetDriver(driverType, "creator", false)
+			creatorDriver := helper.GetDriver(driverType, "creator")
 
 			// ================
 			// When user deployed database
@@ -185,7 +185,7 @@ func TestKwildAcceptance(t *testing.T) {
 			// Read `test/specifications/README.md` for more information.
 			db := specifications.SchemaLoader.Load(t, specifications.SchemaTestDB)
 			dbid := creatorDriver.DBID(db.Name)
-			visitorDriver := helper.GetDriver(driverType, "visitor", false)
+			visitorDriver := helper.GetDriver(driverType, "visitor")
 			specifications.ExecuteOwnerActionFailSpecification(ctx, t, visitorDriver, dbid)
 
 			specifications.ExecuteDBInsertSpecification(ctx, t, creatorDriver)
@@ -242,7 +242,7 @@ func TestTypes(t *testing.T) {
 			if !*remote {
 				helper.Setup(ctx)
 			}
-			creatorDriver := helper.GetDriver(driverType, "creator", false)
+			creatorDriver := helper.GetDriver(driverType, "creator")
 
 			// we only test nils if using json rpc driver, becase the cli driver cannot support nil
 			// args to actions/procedures
@@ -275,10 +275,10 @@ func TestPrivateMode(t *testing.T) {
 				helper.Setup(ctx)
 			}
 
-			noAuthDriver := helper.GetDriver(driverType, "creator", false)
-			authDriver := helper.GetDriver(driverType, "creator", true)
+			noAuthDriver := helper.GetDriver(driverType, "")
+			authDriver := helper.GetDriver(driverType, "creator")
 
-			specifications.DatabaseDeploySpecification(ctx, t, noAuthDriver)
+			specifications.DatabaseDeploySpecification(ctx, t, authDriver)
 
 			specifications.ExecuteCallPrivateModeSpecification(ctx, t, authDriver, noAuthDriver)
 		})
