@@ -17,7 +17,6 @@ func EnsureNetworkExist(ctx context.Context, testName string) (
 	net, err := network.New(ctx,
 		network.WithCheckDuplicate(),
 		network.WithAttachable(),
-		network.WithEnableIPv6(),
 		network.WithIPAM(&dockerNet.IPAM{
 			Driver:  "default",
 			Options: map[string]string{},
