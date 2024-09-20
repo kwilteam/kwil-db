@@ -221,8 +221,14 @@ func (ml *migrationListener) retrieveChangesets(ctx context.Context) error {
 	}
 }
 
+const (
+	emptyChangesetChunksCount = 1
+	emptyChangesetChunkIdx    = 0
+)
+
 // AddEvent adds the chaneset migration event to the event store for voting
 // only if the changeset is not empty. If the changeset is empty, it is skipped.
+// This method readjusts the changeset sizes depending on the current chains block size.
 func (ml *migrationListener) addChangesetEvent(ctx context.Context, height uint64, numChunks int64, changesetSize int64) error {
 	// Check if the changeset is empty and skip it if it is not at the end height
 	// Add the changeset for the end height even if it is empty to signal the end of the migration
@@ -236,16 +242,20 @@ func (ml *migrationListener) addChangesetEvent(ctx context.Context, height uint6
 		return err
 	}
 
+	// numChunks is the total number of chunks for the changeset for the given height
+	// received from the old chain. totalChunks is the total number of chunks
+	// the changeset will be split into based on the current chain's block size.
 	totalChunks := changesetSize / ml.changesetSize
 	if changesetSize%ml.changesetSize != 0 {
 		totalChunks++
 	}
 
+	// reader to read the changeset chunks according to adjusted chunk size
 	reader := newChunkReader(height, totalChunks)
 
 	if numChunks == 0 && height == ml.config.EndHeight {
 		// Add the changeset migration event for the end height even if it is empty
-		if err := ml.addEvent(height, prevHeight, 1, 0, nil); err != nil {
+		if err := ml.addEvent(height, prevHeight, emptyChangesetChunksCount, emptyChangesetChunkIdx, nil); err != nil {
 			return err
 		}
 	} else {
