@@ -3,6 +3,7 @@ package setup
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -29,7 +30,7 @@ kwil-admin setup init -o ~/.kwild-new`
 )
 
 func initCmd() *cobra.Command {
-	var out, chainId, genesisPath string
+	var out, chainId, genesisPath, genesisState string
 	var blockInterval time.Duration
 	var joinExpiry int64 // block height
 	var withGas bool
@@ -65,25 +66,34 @@ func initCmd() *cobra.Command {
 			}
 			cfg.RootDir = expandedDir
 
+			// saves genesis state snapshot file in the root directory under the name "genesis_state.sql.gz"
+			if genesisState != "" {
+				if genesisState, err = common.ExpandPath(genesisState); err != nil {
+					return display.PrintErr(cmd, err)
+				}
+
+				stateFile := filepath.Join(expandedDir, config.GenesisStateFileName)
+				if err = copyFile(genesisState, stateFile); err != nil {
+					return display.PrintErr(cmd, err)
+				}
+
+				cfg.AppConfig.GenesisState = config.GenesisStateFileName
+			}
+
 			// saves config and private key files in the root directory
 			pub, err := nodecfg.GenerateNodeFiles(expandedDir, cfg, true)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
 
+			// copies the genesis.json file from the --genesis-file to the root directory
 			genFile := filepath.Join(expandedDir, cometbft.GenesisJSONName)
 			if genesisPath != "" {
 				if genesisPath, err = common.ExpandPath(genesisPath); err != nil {
 					return display.PrintErr(cmd, err)
 				}
 
-				file, err := os.ReadFile(genesisPath)
-				if err != nil {
-					return display.PrintErr(cmd, err)
-				}
-
-				err = os.WriteFile(genFile, file, 0644)
-				if err != nil {
+				if err = copyFile(genesisPath, genFile); err != nil {
 					return display.PrintErr(cmd, err)
 				}
 			} else {
@@ -105,6 +115,7 @@ func initCmd() *cobra.Command {
 					}
 				}
 			}
+
 			return display.PrintCmd(cmd, display.RespString("Initialized node in "+expandedDir))
 		},
 	}
@@ -115,6 +126,7 @@ func initCmd() *cobra.Command {
 	cmd1.Flags().Int64Var(&joinExpiry, "join-expiry", 14400, "number of blocks before a join request expires")
 	cmd1.Flags().BoolVar(&withGas, "gas", false, "enable gas")
 	cmd1.Flags().Var(&allocs, "alloc", "account=amount pairs of genesis account allocations")
+	cmd1.Flags().StringVarP(&genesisState, "genesis-state", "s", "", "path to genesis state snapshot file")
 
 	// config.toml flags
 	config.AddConfigFlags(cmd1.Flags(), cfg)
@@ -161,4 +173,21 @@ func (a *AllocsFlag) Set(value string) error {
 
 func (a *AllocsFlag) Type() string {
 	return "allocFlag"
+}
+
+func copyFile(src, dst string) error {
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	_, err = io.Copy(out, in)
+	return err
 }

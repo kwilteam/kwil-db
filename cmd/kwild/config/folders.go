@@ -14,5 +14,7 @@ const (
 	MigrationsDirName = "migrations"
 	ChangesetsDirName = "changesets"
 	ChunksDirName     = "chunks"
+
+	GenesisStateFileName = "genesis-state.sql.gz"
 	// Note that the sqlLite file path is user-configurable e.g. "data/kwil.db"
 )

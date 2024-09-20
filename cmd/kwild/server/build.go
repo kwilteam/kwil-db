@@ -157,6 +157,9 @@ func getOldChainState(d *coreDependencies, badgerPath string) (int64, []byte, er
 }
 
 func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
+	// Ensure that the required system utilities are installed on the system
+	verifyDependencies(d)
+
 	// main postgres db
 	db := buildDB(d, closers)
 
@@ -358,6 +361,24 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
+// verifyDependencies checks if the required dependencies are installed on the system, such as:
+//   - pg_dump: required for snapshotting during migrations and when snapshots are enabled.
+//     All nodes in the network must have 16.x version to produce consistent and deterministic snapshots.
+//   - psql: required for state-sync to restore the state from a snapshot. Required version is 16.x.
+func verifyDependencies(d *coreDependencies) {
+	// Check if pg_dump is installed, which is necessary for snapshotting during migrations and when snapshots are enabled. Ensure that the version is 16.x
+	if err := checkVersion("pg_dump", 16); err != nil {
+		failBuild(err, "pg_dump version is not 16.x. Please install the correct version.")
+	}
+
+	if d.cfg.ChainConfig.StateSync.Enable {
+		// Check if psql is installed and is on version 16.x, which is required for state-sync
+		if err := checkVersion("psql", 16); err != nil {
+			failBuild(err, "psql version is not 16.x. Please install the correct version.")
+		}
+	}
+}
+
 func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext, ev *voting.EventStore) *txapp.TxApp {
 
 	txApp, err := txapp.NewTxApp(d.ctx, db, engine, buildSigner(d), ev, d.service("txapp"))
@@ -513,7 +534,6 @@ func buildMigrator(d *coreDependencies, db *pg.DB, txApp *txapp.TxApp) *migratio
 		SnapshotDir:     filepath.Join(migrationsDir, cmd.DefaultConfig().AppConfig.Snapshots.SnapshotDir),
 		RecurringHeight: 0,
 		MaxSnapshots:    1, // only one snapshot is needed for network migrations, taken at the activation height
-		MaxRowSize:      cfg.Snapshots.MaxRowSize,
 	}
 
 	ss, err := statesync.NewSnapshotStore(snapshotCfg, dbCfg, *d.log.Named("migrations-snapshots"))
@@ -644,7 +664,7 @@ func restoreDB(d *coreDependencies) bool {
 	// Snapshot file exists
 	snapFile, err := os.Open(appCfg.GenesisState)
 	if err != nil {
-		failBuild(err, "failed to open snapshot file")
+		failBuild(err, "failed to open genesis state file")
 	}
 
 	// Check if the snapshot file is compressed, if yes decompress it
@@ -752,7 +772,6 @@ func buildSnapshotter(d *coreDependencies) *statesync.SnapshotStore {
 		SnapshotDir:     cfg.Snapshots.SnapshotDir,
 		RecurringHeight: cfg.Snapshots.RecurringHeight,
 		MaxSnapshots:    int(cfg.Snapshots.MaxSnapshots),
-		MaxRowSize:      cfg.Snapshots.MaxRowSize,
 	}
 
 	ss, err := statesync.NewSnapshotStore(snapshotCfg, dbCfg, *d.log.Named("snapshot-store"))
@@ -788,6 +807,22 @@ func buildStatesyncer(d *coreDependencies, db sql.ReadTxMaker) *statesync.StateS
 		// Statesynce module doesn't have the same requirements and
 		// can work with a single provider (providers are passed as is)
 		d.cfg.ChainConfig.StateSync.RPCServers += "," + providers[0]
+	}
+
+	// create state syncer
+	return statesync.NewStateSyncer(d.ctx, dbCfg, d.cfg.ChainConfig.StateSync.SnapshotDir,
+		providers, db, *d.log.Named("state-syncer"))
+}
+
+// retrieveLightClientTrustOptions fetches the trust options (Trusted Height and Hash) from the
+// trusted snapshot provider. Statesync module uses these trust options to determine the
+// snapshots to trust and restore the state from. Currently, the trusted height is set to 2 blocks
+// behind the latest snapshot available, to reduce the number of blocks cometbft has to download and validate.
+func retrieveLightClientTrustOptions(d *coreDependencies) (height int64, hash string, err error) {
+	providers := strings.Split(d.cfg.ChainConfig.StateSync.RPCServers, ",")
+
+	if len(providers) == 0 {
+		failBuild(nil, "failed to configure state syncer, no remote servers provided.")
 	}
 
 	configDone := false
@@ -833,10 +868,10 @@ func buildStatesyncer(d *coreDependencies, db sql.ReadTxMaker) *statesync.StateS
 		}
 
 		// Get the trust height and trust hash from the remote server
-		d.cfg.ChainConfig.StateSync.TrustHeight = res.Header.Height
-		d.cfg.ChainConfig.StateSync.TrustHash = res.Header.Hash().String()
+		height = res.Header.Height
+		hash = res.Header.Hash().String()
 
-		d.log.Infof("Provider %q: trust height %v, hash %v", p, d.cfg.ChainConfig.StateSync.TrustHeight, d.cfg.ChainConfig.StateSync.TrustHash)
+		d.log.Infof("Provider %q: trust height %v, hash %v", p, height, hash)
 
 		configDone = true
 
@@ -844,12 +879,10 @@ func buildStatesyncer(d *coreDependencies, db sql.ReadTxMaker) *statesync.StateS
 	}
 
 	if !configDone {
-		failBuild(nil, "failed to configure state syncer, failed to fetch trust options from the remote server.")
+		return -1, "", errors.New("failed to fetch trust options from the remote server")
 	}
 
-	// create state syncer
-	return statesync.NewStateSyncer(d.ctx, dbCfg, d.cfg.ChainConfig.StateSync.SnapshotDir,
-		providers, db, *d.log.Named("state-syncer"))
+	return height, hash, nil
 }
 
 // tlsConfig returns a tls.Config to be used with the admin RPC service. If
@@ -1035,6 +1068,16 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 			d.log.Warn("Enabling peer exchange to run in seed mode.")
 			nodeCfg.P2P.PexReactor = true
 		}
+	}
+
+	// If statesync is enabled, retrieve the Light client verification options from the trusted provider
+	if d.cfg.ChainConfig.StateSync.Enable {
+		height, hash, err := retrieveLightClientTrustOptions(d)
+		if err != nil {
+			failBuild(err, "failed to retrieve trust options from the remote server")
+		}
+		nodeCfg.StateSync.TrustHeight = height
+		nodeCfg.StateSync.TrustHash = hash
 	}
 
 	nodeLogger := increaseLogLevel("cometbft", &d.log, d.cfg.Logging.ConsensusLevel)

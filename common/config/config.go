@@ -94,7 +94,6 @@ type SnapshotConfig struct {
 	RecurringHeight uint64 `mapstructure:"recurring_height"`
 	MaxSnapshots    uint64 `mapstructure:"max_snapshots"`
 	SnapshotDir     string `mapstructure:"snapshot_dir"`
-	MaxRowSize      int    `mapstructure:"max_row_size"`
 }
 
 type ChainRPCConfig struct {
@@ -196,12 +195,6 @@ type StateSyncConfig struct {
 	// The timeout duration before re-requesting a chunk, possibly from a different
 	// peer (default: 1 minute).
 	ChunkRequestTimeout Duration `mapstructure:"chunk_request_timeout"`
-
-	// Light client verification options, Automatically fetched from the RPC Servers
-	// during the node initialization.
-	TrustHeight int64
-	TrustHash   string
-	TrustPeriod Duration
 }
 
 type ChainConfig struct {

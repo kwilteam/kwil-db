@@ -1,4 +1,4 @@
-package peers
+package whitelist
 
 import (
 	"context"
@@ -9,11 +9,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func addCmd() *cobra.Command {
+func removeCmd() *cobra.Command {
 	var cmd = &cobra.Command{
-		Use:     "add <peerID>",
-		Short:   "Add a peer to the node's whitelist peers to accept connections from",
-		Example: "kwil-admin peers add <peerID>",
+		Use:     "remove <peerID>",
+		Short:   "Remove a peer from the node's whitelist and disconnect it.",
+		Example: "kwil-admin whitelist remove <peerID>",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
@@ -22,12 +22,12 @@ func addCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			err = client.AddPeer(ctx, args[0])
+			err = client.RemovePeer(ctx, args[0])
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
 
-			return display.PrintCmd(cmd, &addMsg{peerID: args[0]})
+			return display.PrintCmd(cmd, &removeMsg{peerID: args[0]})
 		},
 	}
 	common.BindRPCFlags(cmd)
@@ -35,16 +35,16 @@ func addCmd() *cobra.Command {
 	return cmd
 }
 
-type addMsg struct {
+type removeMsg struct {
 	peerID string
 }
 
 var _ display.MsgFormatter = (*addMsg)(nil)
 
-func (a *addMsg) MarshalText() ([]byte, error) {
-	return []byte("Added peer " + a.peerID), nil
+func (a *removeMsg) MarshalText() ([]byte, error) {
+	return []byte("Removed peer " + a.peerID), nil
 }
 
-func (a *addMsg) MarshalJSON() ([]byte, error) {
+func (a *removeMsg) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a.peerID)
 }

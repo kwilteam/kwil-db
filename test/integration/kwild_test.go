@@ -100,12 +100,18 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 			specifications.DatabaseVerifySpecification(ctx, t, node2Driver, true)
 
 			specifications.ExecuteDBInsertSpecification(ctx, t, node0Driver)
+
+			// restart node1 and ensure that the app state is synced
+			helper.RestartNode(ctx, "node1", 15*time.Second)
+			node1Driver = helper.GetUserDriver(ctx, "node1", driverType, nil)
+
 			specifications.ExecuteDBUpdateSpecification(ctx, t, node1Driver)
 			specifications.ExecuteDBDeleteSpecification(ctx, t, node2Driver)
 
 			// specifications.ExecutePermissionedActionSpecification(ctx, t, invalidUserDriver)
 
 			specifications.DatabaseDropSpecification(ctx, t, node1Driver)
+
 		})
 	}
 }

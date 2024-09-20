@@ -138,17 +138,17 @@ func (o *OperatorCLIDriver) ValidatorsList(ctx context.Context) ([]*types.Valida
 
 func (o *OperatorCLIDriver) AddPeer(ctx context.Context, peerID string) error {
 	var peer string
-	return o.runCommand(ctx, &peer, "peers", "add", peerID)
+	return o.runCommand(ctx, &peer, "whitelist", "add", peerID)
 }
 
 func (o *OperatorCLIDriver) RemovePeer(ctx context.Context, peerID string) error {
 	var peer string
-	return o.runCommand(ctx, &peer, "peers", "remove", peerID)
+	return o.runCommand(ctx, &peer, "whitelist", "remove", peerID)
 }
 
 func (o *OperatorCLIDriver) ListPeers(ctx context.Context) ([]string, error) {
 	var res []string
-	err := o.runCommand(ctx, &res, "peers", "list")
+	err := o.runCommand(ctx, &res, "whitelist", "list")
 	if err != nil {
 		return nil, err
 	}
