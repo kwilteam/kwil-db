@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	dockerNet "github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
@@ -16,6 +17,16 @@ func EnsureNetworkExist(ctx context.Context, testName string) (
 	net, err := network.New(ctx,
 		network.WithCheckDuplicate(),
 		network.WithAttachable(),
+		network.WithEnableIPv6(),
+		network.WithIPAM(&dockerNet.IPAM{
+			Driver:  "default",
+			Options: map[string]string{},
+			Config: []dockerNet.IPAMConfig{
+				{
+					Subnet: "10.9.0.0/16",
+				},
+			},
+		}),
 		//network.WithInternal(), // we need to expose the network to the host
 		network.WithLabels(map[string]string{"test": "integration"}),
 		network.WithDriver("bridge"),
