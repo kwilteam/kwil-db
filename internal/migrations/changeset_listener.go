@@ -245,7 +245,7 @@ func (ml *migrationListener) addChangesetEvent(ctx context.Context, height uint6
 
 	if numChunks == 0 && height == ml.config.EndHeight {
 		// Add the changeset migration event for the end height even if it is empty
-		if err := ml.addEvent(height, prevHeight, uint64(totalChunks), 0, nil); err != nil {
+		if err := ml.addEvent(height, prevHeight, 1, 0, nil); err != nil {
 			return err
 		}
 	} else {
