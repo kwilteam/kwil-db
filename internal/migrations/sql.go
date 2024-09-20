@@ -50,8 +50,8 @@ var (
 	// Primary key should always be 1, to help us ensure there are no bugs in the code.
 	tableMigrationsSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.migration (
 		id INT PRIMARY KEY,
-		start_height INT NOT NULL,
-		end_height INT NOT NULL,
+		start_height INT8 NOT NULL,
+		end_height INT8 NOT NULL,
 		chain_id TEXT NOT NULL
 	)`
 
@@ -67,7 +67,7 @@ var (
 	// tableLastChangesetSQL is the table that tracks last stored changeset. It is a single row table with the row name as "last_stored_changeset".
 	tableLastStoredChangesetSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.last_stored_changeset (
 			name TEXT PRIMARY KEY,
-			height INT -- height of the last stored changeset
+			height INT8 -- height of the last stored changeset
 		)`
 
 	// upsertLastChangesetSQL is the sql query used to set the last changeset.
@@ -182,7 +182,7 @@ var (
 	// tableLastChangesetSQL is the table that tracks last applied changeset. It is a single row table with the row name as "last_changeset".
 	tableLastChangesetSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.last_changeset (
 		name TEXT PRIMARY KEY, -- name of the row, should always be "height"
-		height INT
+		height INT8
 	)`
 
 	// upsertLastChangesetSQL is the sql query used to set the last changeset.
@@ -193,14 +193,15 @@ var (
 
 	// tableChangesetMetadataSQL is the table that stores changesets.
 	tableChangesetsMetadataSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.changesets_metadata (
-		height INT PRIMARY KEY,
+		height INT8 PRIMARY KEY,
 		total_chunks INT, -- total number of chunks in the changeset
-		received INT -- number of chunks received
+		received INT, -- number of chunks received
+		prev_height INT8 -- height of the previous changeset
 	)`
 
 	// tableChangesetsSQL is the table that stores changeset chunks. These are identified by height and index.
 	tableChangesetsSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.changesets (
-		height INT,
+		height INT8,
 		index INT,
 		changeset BYTEA,
 		FOREIGN KEY (height) REFERENCES ` + migrationsSchemaName + `.changesets_metadata(height) ON DELETE CASCADE,
@@ -208,7 +209,7 @@ var (
 	)`
 
 	// insertChangesetMetadataSQL is the sql query used to insert changeset metadata.
-	insertChangesetMetadataSQL = `INSERT INTO ` + migrationsSchemaName + `.changesets_metadata (height, total_chunks, received) VALUES ($1, $2, $3) ON CONFLICT (height) DO NOTHING;`
+	insertChangesetMetadataSQL = `INSERT INTO ` + migrationsSchemaName + `.changesets_metadata (height, total_chunks, received, prev_height) VALUES ($1, $2, $3, $4) ON CONFLICT (height) DO NOTHING;`
 
 	// updateChangesetMetadataSQL is the sql query used to update changeset metadata.
 	updateChangesetMetadataSQL = `UPDATE ` + migrationsSchemaName + `.changesets_metadata SET received = received + 1 WHERE height = $1;`
@@ -217,7 +218,10 @@ var (
 	deleteChangesetMetadataSQL = `DELETE FROM ` + migrationsSchemaName + `.changesets_metadata WHERE height = $1;`
 
 	// getChangesetMetadataSQL is the sql query used to get changeset metadata.
-	getChangesetMetadataSQL = `SELECT total_chunks, received FROM ` + migrationsSchemaName + `.changesets_metadata WHERE height = $1;`
+	// getChangesetMetadataSQL = `SELECT total_chunks, received, prev_height FROM ` + migrationsSchemaName + `.changesets_metadata WHERE height = $1;`
+
+	// get the metadata for the earliest changeset.
+	getEarliestChangesetMetadataSQL = `SELECT height, total_chunks, received, prev_height FROM ` + migrationsSchemaName + `.changesets_metadata ORDER BY height ASC LIMIT 1;`
 
 	// insertChangesetSQL is the sql query used to insert changeset.
 	insertChangesetSQL = `INSERT INTO ` + migrationsSchemaName + `.changesets (height, index, changeset) VALUES ($1, $2, $3) ON CONFLICT (height, index) DO NOTHING;`
@@ -264,8 +268,8 @@ func getLastChangeset(ctx context.Context, db sql.Executor) (int64, error) {
 }
 
 // insertChangesetMetadata inserts the changeset metadata into the database.
-func insertChangesetMetadata(ctx context.Context, db sql.Executor, height int64, totalChunks int64) error {
-	_, err := db.Execute(ctx, insertChangesetMetadataSQL, height, totalChunks, 0)
+func insertChangesetMetadata(ctx context.Context, db sql.Executor, height int64, totalChunks int64, prev_height int64) error {
+	_, err := db.Execute(ctx, insertChangesetMetadataSQL, height, totalChunks, 0, prev_height)
 	return err
 }
 
@@ -282,40 +286,51 @@ func insertChangesetChunk(ctx context.Context, db sql.Executor, height int64, in
 	return err
 }
 
-// getChangesetMetadata gets the changeset metadata from the database.
-func getChangesetMetadata(ctx context.Context, db sql.Executor, height int64) (int64, int64, error) {
-	res, err := db.Execute(ctx, getChangesetMetadataSQL, height)
+// getEarliestChangesetMetadata gets the changeset metadata from the database for the earliest changeset received.
+func getEarliestChangesetMetadata(ctx context.Context, db sql.Executor) (height int64, prevHeight int64, chunksToReceive int64, totalChunks int64, err error) {
+	res, err := db.Execute(ctx, getEarliestChangesetMetadataSQL)
 	if err != nil {
-		return 0, 0, err
+		return -1, -1, 0, 0, err
 	}
 
 	// row doesnt exist.
 	if len(res.Rows) == 0 {
-		return -1, -1, nil
+		return -1, -1, -1, -1, nil
 	}
 
 	if len(res.Rows) != 1 {
 		// should never happen
-		return 0, 0, fmt.Errorf("internal bug: expected one row for changeset metadata, got %d", len(res.Rows))
+		return -1, -1, 0, 0, fmt.Errorf("internal bug: expected one row for changeset metadata, got %d", len(res.Rows))
 	}
 
-	if len(res.Rows[0]) != 2 {
+	if len(res.Rows[0]) != 4 {
 		// should never happen
-		return 0, 0, fmt.Errorf("internal bug: expected two columns for changeset metadata, got %d", len(res.Rows[0]))
+		return -1, -1, 0, 0, fmt.Errorf("internal bug: expected four columns for changeset metadata, got %d", len(res.Rows[0]))
 	}
 
 	row := res.Rows[0]
-	chunksToReceive, ok := row[0].(int64)
+	var ok bool
+	height, ok = row[0].(int64)
 	if !ok {
-		return 0, 0, fmt.Errorf("internal bug: chunks to receive is not an int64")
+		return -1, -1, 0, 0, fmt.Errorf("internal bug: height is not an int64")
 	}
 
-	totalChunks, ok := row[1].(int64)
+	chunksToReceive, ok = row[1].(int64)
 	if !ok {
-		return 0, 0, fmt.Errorf("internal bug: total chunks is not an int64")
+		return -1, -1, 0, 0, fmt.Errorf("internal bug: chunks to receive is not an int64")
 	}
 
-	return totalChunks, chunksToReceive, nil
+	totalChunks, ok = row[2].(int64)
+	if !ok {
+		return -1, -1, 0, 0, fmt.Errorf("internal bug: total chunks is not an int64")
+	}
+
+	prevHeight, ok = row[3].(int64)
+	if !ok {
+		return -1, -1, 0, 0, fmt.Errorf("internal bug: prev height is not an int64")
+	}
+
+	return height, prevHeight, chunksToReceive, totalChunks, nil
 }
 
 // changesetChunkExists checks if a changeset chunk already exists in the database.

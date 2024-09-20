@@ -81,16 +81,42 @@ const (
 		height INT NOT NULL
 	);`
 
-	// upsertResolution is the sql statement used to ensure a resolution is
+	sqlInsertResolution = `CREATE OR REPLACE FUNCTION ` + votingSchemaName + `.insert_resolution(
+		v_id BYTEA,
+		v_body BYTEA,
+		v_type TEXT,
+		v_expiration BIGINT,
+		v_vote_body_proposer BYTEA
+	) RETURNS VOID AS $$
+	DECLARE
+		v_already_processed BOOLEAN;
+	BEGIN
+		-- Check if already processed
+		SELECT EXISTS (
+			SELECT 1 FROM ` + votingSchemaName + `.processed WHERE id = v_id
+		) INTO v_already_processed;
+
+		IF v_already_processed THEN
+			RAISE EXCEPTION 'Resolution with id % has already been processed', v_id;
+		END IF;
+
+		-- If not already processed, insert the resolution
+		INSERT INTO ` + votingSchemaName + `.resolutions (id, body, type, expiration, vote_body_proposer)
+		VALUES (
+			v_id,
+			v_body,
+			(SELECT id FROM ` + votingSchemaName + `.resolution_types WHERE name = v_type),
+			v_expiration,
+			v_vote_body_proposer
+		);
+	END;
+	$$ LANGUAGE plpgsql;`
+
+	// insertResolution is the sql statement used to ensure a resolution is
 	// present in the resolutions table. In scenarios where VoteID is received
 	// before VoteBody, the body, type and expiration will be updated in the existing
 	// resolution entry.
-	insertResolution = `INSERT INTO ` + votingSchemaName + `.resolutions (id, body, type, expiration, vote_body_proposer)
-	VALUES ($1, $2, (
-		SELECT id
-		FROM ` + votingSchemaName + `.resolution_types
-		WHERE name = $3
-	), $4, $5) ON CONFLICT(id) DO NOTHING;` // should fail if the resolution already exists
+	insertResolution = `select ` + votingSchemaName + `.insert_resolution($1, $2, $3, $4, $5);`
 
 	// upsertVoter is the sql statement used to ensure a voter is present in the voters table.  If the voter is present, the power is updated.
 	upsertVoter = `INSERT INTO ` + votingSchemaName + `.voters (id, name, power) VALUES ($1, $2, $3)

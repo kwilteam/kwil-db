@@ -54,6 +54,10 @@ func Test_Voting(t *testing.T) {
 				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"))
 				require.NoError(t, err)
 
+				// duplicate creation should fail
+				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"))
+				require.Error(t, err)
+
 				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("a"))
 				require.NoError(t, err)
 
@@ -128,6 +132,10 @@ func Test_Voting(t *testing.T) {
 
 				processed, err = IsProcessed(ctx, db, testEvent.ID())
 				require.NoError(t, err)
+
+				// Resolution creation should fail if the resolution is already processed
+				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"))
+				require.Error(t, err)
 
 				require.True(t, processed)
 			},

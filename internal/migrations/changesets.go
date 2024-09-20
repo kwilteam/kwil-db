@@ -23,7 +23,7 @@ var (
 	ErrNoMoreChunksToRead = errors.New("no more chunks to read")
 	ErrChangesetNotFound  = errors.New("changeset not found")
 
-	migrationCompleted = "migration completed. `migration` section of `genesis.json` and `migrate_from` config in `config.toml` is no longer relevant and should be removed"
+	migrationCompleted = "Migration completed. The migration section in genesis.json and the migrate_from configuration in config.toml are no longer relevant and should be removed."
 )
 
 func init() {
@@ -58,6 +58,9 @@ type changesetMigration struct {
 
 	// Changeset is the serialized changeset chunk.
 	Changeset []byte
+
+	// PreviousBlock is the last block with non empty changesets.
+	PreviousBlock uint64
 }
 
 // MarshalBinary marshals the ChangesetMigration into a binary format.
@@ -119,7 +122,6 @@ func applyChangesets(ctx context.Context, app *common.App, blockCtx *common.Bloc
 	}
 	defer tx.Rollback(ctx)
 
-	var currentHeight int64
 	// get the last changeset height applied
 	lastChangeset, err := getLastChangeset(ctx, tx)
 	if err != nil {
@@ -132,24 +134,24 @@ func applyChangesets(ctx context.Context, app *common.App, blockCtx *common.Bloc
 		return nil // migration completed
 	}
 
-	currentHeight = lastChangeset + 1
-	if currentHeight == 0 {
-		currentHeight = startHeight
+	if lastChangeset == -1 {
+		lastChangeset = 0 // set the last changeset to 0, because migration declaration doesn't accept int64 (-1)
 	}
 
-	// Apply the changesets in the order of block heights
 	for {
-		// If the current height is greater than the migration end height, break
-		if currentHeight >= endHeight {
-			blockCtx.ChainContext.MigrationParams = nil
-			app.Service.Logger.Info(migrationCompleted, log.Int("height", currentHeight))
+		// get the metadata for the earliest height that has not been applied
+		height, prevHeight, totalChunks, chunksReceived, err := getEarliestChangesetMetadata(ctx, tx)
+		if err != nil {
+			return err
+		}
+
+		if height == -1 { // no changesets to apply
 			break
 		}
 
-		// Check if all chunks have been received for the current height, if not, break
-		totalChunks, chunksReceived, err := getChangesetMetadata(ctx, tx, currentHeight)
-		if err != nil {
-			return err
+		if height != startHeight && prevHeight != lastChangeset {
+			// If the previous changeset is not applied, break
+			break
 		}
 
 		// If no chunks have been received or all chunks have not been received, break
@@ -157,24 +159,29 @@ func applyChangesets(ctx context.Context, app *common.App, blockCtx *common.Bloc
 			break
 		}
 
-		// Apply the changeset
-		if err = applyChangeset(ctx, tx, currentHeight, totalChunks); err != nil {
+		// Apply the changeset if all chunks have been received
+		if err = applyChangeset(ctx, tx, height, totalChunks); err != nil {
 			return err
 		}
 
-		app.Service.Logger.Info("Applied changesets", log.Int("height", currentHeight))
+		app.Service.Logger.Info("Applied changesets", log.Int("height", height))
 
 		// Delete the changeset after it has been applied
-		if err = deleteChangesets(ctx, tx, currentHeight); err != nil {
+		if err = deleteChangesets(ctx, tx, height); err != nil {
 			return err
 		}
 
 		// Increment the last changeset
-		if err = setLastChangeset(ctx, tx, currentHeight); err != nil {
+		if err = setLastChangeset(ctx, tx, height); err != nil {
 			return err
 		}
+		lastChangeset = height
 
-		currentHeight += 1 // move to the next height
+		if height == endHeight {
+			blockCtx.ChainContext.MigrationParams = nil
+			app.Service.Logger.Info(migrationCompleted, log.Int("height", height))
+			break
+		}
 	}
 
 	return tx.Commit(ctx)
@@ -293,7 +300,7 @@ func (cm *changesetMigration) insertChangeset(ctx context.Context, db sql.TxMake
 	defer tx.Rollback(ctx)
 
 	//  Check if the changeset metadata entry exists, if not, create it
-	if err := insertChangesetMetadata(ctx, tx, int64(cm.Height), int64(cm.TotalChunks)); err != nil {
+	if err := insertChangesetMetadata(ctx, tx, int64(cm.Height), int64(cm.TotalChunks), int64(cm.PreviousBlock)); err != nil {
 		return err
 	}
 

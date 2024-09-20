@@ -77,7 +77,16 @@ func initializeVoteStore(ctx context.Context, db sql.TxMaker) error {
 		}
 	}
 
+	if err = ensureInsertResolutionFunc(ctx, tx); err != nil {
+		return fmt.Errorf("failed to create insert resolution function: %w", err)
+	}
+
 	return tx.Commit(ctx)
+}
+
+func ensureInsertResolutionFunc(ctx context.Context, db sql.Executor) error {
+	_, err := db.Execute(ctx, sqlInsertResolution)
+	return err
 }
 
 func getResolutionTypes(ctx context.Context, db sql.Executor) (map[string]bool, error) {
@@ -154,9 +163,8 @@ func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID *types.
 }
 
 // CreateResolution creates a resolution for a votable event. The expiration
-// should be a block height. If the resolution already exists do nothing. We
-// should not add resolutions that have been processed, but we will because it
-// will be cleaned out after they reach expiry without being processed.
+// should be a block height. Resolution creation will fail if the resolution
+// either already exists or has been processed.
 func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableEvent, expiration int64, voteBodyProposer []byte) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {

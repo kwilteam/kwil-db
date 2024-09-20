@@ -67,10 +67,11 @@ func TestChangesetMigration(t *testing.T) {
 			end = len(bts)
 		}
 		csMigrations = append(csMigrations, &changesetMigration{
-			Height:      height,
-			ChunkIdx:    idx,
-			TotalChunks: totalChunks,
-			Changeset:   bts[i:end],
+			Height:        height,
+			ChunkIdx:      idx,
+			TotalChunks:   totalChunks,
+			Changeset:     bts[i:end],
+			PreviousBlock: 0,
 		})
 		idx++
 	}
@@ -79,18 +80,23 @@ func TestChangesetMigration(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
+	var h, ph, total, rcvd int64
+
 	// Insert the changeset migration into the database
 	for idx, cs := range csMigrations {
 		nestedTx, err := tx.BeginTx(ctx)
 		require.NoError(t, err)
 
 		// check if all changesets are received for this height
-		total, rcvd, err := getChangesetMetadata(ctx, nestedTx, int64(cs.Height))
+		h, ph, total, rcvd, err = getEarliestChangesetMetadata(ctx, tx)
 		require.NoError(t, err)
+
 		if idx != 0 {
 			require.NoError(t, err)
-			assert.Equal(t, total, int64(idx))
-			assert.NotEqual(t, total, rcvd, "total chunks should not be equal")
+			require.Equal(t, int64(height), h)
+			require.Equal(t, int64(0), ph)
+			assert.Equal(t, total, int64(totalChunks))
+			assert.NotEqual(t, rcvd, idx, "total chunks should not be equal")
 		}
 
 		// insert the changeset chunk
@@ -103,8 +109,10 @@ func TestChangesetMigration(t *testing.T) {
 	}
 
 	// Check if all changesets are received
-	total, rcvd, err := getChangesetMetadata(ctx, tx, int64(height))
+	h, ph, total, rcvd, err = getEarliestChangesetMetadata(ctx, tx)
 	require.NoError(t, err)
+	assert.Equal(t, int64(1), h)
+	assert.Equal(t, int64(0), ph)
 	assert.Equal(t, total, rcvd, "total chunks should be equal")
 
 	// Apply the changesets
