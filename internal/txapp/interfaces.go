@@ -56,9 +56,9 @@ var (
 	createResolution                 = voting.CreateResolution
 	approveResolution                = voting.ApproveResolution
 	getVoterPower                    = voting.GetValidatorPower
-	// resolutionExists                 = voting.ResolutionExists
-	resolutionByID   = voting.GetResolutionInfo
-	deleteResolution = voting.DeleteResolution
+	resolutionExists                 = voting.ResolutionExists
+	resolutionByID                   = voting.GetResolutionInfo
+	deleteResolution                 = voting.DeleteResolution
 
 	// account functions
 	getAccount = accounts.GetAccount

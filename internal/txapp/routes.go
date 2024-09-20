@@ -628,14 +628,20 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 	}
 
 	// we should try to create the resolution, since validator removals are never
-	// officially "started" by the user. If it fails because it already exists,
-	// then we should do nothing
-
-	err = createResolution(ctx.Ctx, app.DB, event, ctx.BlockContext.Height+ctx.BlockContext.ChainContext.NetworkParameters.JoinExpiry, tx.Sender)
-	if errors.Is(err, voting.ErrResolutionAlreadyHasBody) {
-		app.Service.Logger.Debug("validator removal resolution already exists")
-	} else if err != nil {
+	// officially "started" by the user. Since we don't have a seperare process for
+	// creating and approving Validator Removals, check if the resolution already exists
+	// and if it does, approve it, otherwise create and approve it.
+	exists, err := resolutionExists(ctx.Ctx, app.DB, event.ID())
+	if err != nil {
 		return transactions.CodeUnknownError, err
+	}
+
+	// if the resolution does not exist, create it
+	if !exists {
+		err = createResolution(ctx.Ctx, app.DB, event, ctx.BlockContext.Height+ctx.BlockContext.ChainContext.NetworkParameters.JoinExpiry, tx.Sender)
+		if err != nil {
+			return transactions.CodeUnknownError, err
+		}
 	}
 
 	// we need to approve the resolution as well
@@ -917,6 +923,7 @@ func (d *createResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 	}
 
 	// create the resolution
+	// if resolution already exists, it will return an error
 	err = createResolution(ctx.Ctx, app.DB, d.resolution, d.expiry, tx.Sender)
 	if err != nil {
 		return transactions.CodeUnknownError, err

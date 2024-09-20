@@ -639,7 +639,7 @@ func (cw *chunkWriter) SaveMetadata() error {
 	filename := formatChangesetMetadataFilename(cw.dir, cw.height)
 	metadata := &ChangesetMetadata{
 		Height:     cw.height,
-		Chunks:     cw.chunkIdx + 1, // + 1 ?
+		Chunks:     cw.chunkIdx + 1,
 		ChunkSizes: cw.chunkSizes,
 	}
 	return metadata.saveAs(filename)
@@ -686,7 +686,7 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 	bs := &BlockSpends{
 		Spends: m.accounts.GetBlockSpends(),
 	}
-	if bs.Spends != nil {
+	if len(bs.Spends) > 0 {
 		if pg.StreamElement(chunkWriter, bs); err != nil {
 			m.errChan <- err
 			return

@@ -50,8 +50,8 @@ var (
 	// Primary key should always be 1, to help us ensure there are no bugs in the code.
 	tableMigrationsSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.migration (
 		id INT PRIMARY KEY,
-		start_height INT NOT NULL,
-		end_height INT NOT NULL,
+		start_height INT8 NOT NULL,
+		end_height INT8 NOT NULL,
 		chain_id TEXT NOT NULL
 	)`
 
@@ -67,7 +67,7 @@ var (
 	// tableLastChangesetSQL is the table that tracks last stored changeset. It is a single row table with the row name as "last_stored_changeset".
 	tableLastStoredChangesetSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.last_stored_changeset (
 			name TEXT PRIMARY KEY,
-			height INT -- height of the last stored changeset
+			height INT8 -- height of the last stored changeset
 		)`
 
 	// upsertLastChangesetSQL is the sql query used to set the last changeset.
@@ -182,7 +182,7 @@ var (
 	// tableLastChangesetSQL is the table that tracks last applied changeset. It is a single row table with the row name as "last_changeset".
 	tableLastChangesetSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.last_changeset (
 		name TEXT PRIMARY KEY, -- name of the row, should always be "height"
-		height INT
+		height INT8
 	)`
 
 	// upsertLastChangesetSQL is the sql query used to set the last changeset.
@@ -193,15 +193,15 @@ var (
 
 	// tableChangesetMetadataSQL is the table that stores changesets.
 	tableChangesetsMetadataSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.changesets_metadata (
-		height INT PRIMARY KEY,
+		height INT8 PRIMARY KEY,
 		total_chunks INT, -- total number of chunks in the changeset
 		received INT, -- number of chunks received
-		prev_height INT -- height of the previous changeset
+		prev_height INT8 -- height of the previous changeset
 	)`
 
 	// tableChangesetsSQL is the table that stores changeset chunks. These are identified by height and index.
 	tableChangesetsSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.changesets (
-		height INT,
+		height INT8,
 		index INT,
 		changeset BYTEA,
 		FOREIGN KEY (height) REFERENCES ` + migrationsSchemaName + `.changesets_metadata(height) ON DELETE CASCADE,
