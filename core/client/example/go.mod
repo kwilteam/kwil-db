@@ -7,8 +7,8 @@ replace github.com/kwilteam/kwil-db/core => ../..
 replace github.com/kwilteam/kwil-db/parse => ../../../parse
 
 require (
-	github.com/kwilteam/kwil-db/core v0.2.1-0.20240909192711-653711416339
-	github.com/kwilteam/kwil-db/parse v0.2.0-beta
+	github.com/kwilteam/kwil-db/core v0.3.0-beta.0.20240917145512-e6922733fc1a
+	github.com/kwilteam/kwil-db/parse v0.3.0-beta.0.20240917145512-e6922733fc1a
 )
 
 require (
