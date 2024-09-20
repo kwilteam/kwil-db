@@ -1,54 +1,43 @@
 package setup
 
 import (
-	"errors"
-
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/spf13/cobra"
 )
 
 var (
-	resetStateLong = `Delete blockchain state files.`
+	resetStateLong = "`reset-state`" + ` deletes the data in Postgres.
 
-	resetStateExample = `# Delete blockchain state files
-kwil-admin setup reset-state --root-dir "~/.kwild"`
+Unlike the ` + "`" + `reset` + "`" + ` command, which deletes all of the application data in Postgres and all of the block data
+in the root directory, ` + "`" + `reset-state` + "`" + ` only deletes the application data in Postgres. This command is useful if
+you want to replay all of the blocks without having to re-download them.`
+
+	resetStateExample = `kwil-admin setup reset-state --host localhost --port 5432 --user kwild --password kwild --dbname kwild`
 )
 
 func resetStateCmd() *cobra.Command {
-	var rootDir string
-	var force bool
-
 	cmd := &cobra.Command{
 		Use:     "reset-state",
-		Short:   "Delete blockchain state files.",
+		Short:   "`reset-state` deletes the data in Postgres.",
 		Long:    resetStateLong,
 		Example: resetStateExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if rootDir == "" {
-				if !force {
-					return display.PrintErr(cmd, errors.New("not removing default home directory without --force or --root-dir"))
-				}
-				rootDir = common.DefaultKwildRoot()
-			}
-
-			expandedDir, err := common.ExpandPath(rootDir)
+			pgConf, err := common.GetPostgresFlags(cmd)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
 
-			err = config.ResetChainState(expandedDir)
+			err = resetPGState(cmd.Context(), pgConf)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
 
-			return nil
+			return display.PrintCmd(cmd, display.RespString("Reset state in Postgres"))
 		},
 	}
 
-	cmd.Flags().StringVarP(&rootDir, "root-dir", "r", "", "root directory of the kwild node")
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "force removal of default home directory")
+	common.BindPostgresFlags(cmd)
 
 	return cmd
 }

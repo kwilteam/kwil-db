@@ -13,7 +13,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	kconfig "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common/chain"
 	config "github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -43,12 +42,6 @@ type Server struct {
 
 	cancelCtxFunc context.CancelFunc
 }
-
-const (
-	// Top-level directory structure for the Server's systems
-	abciDirName    = kconfig.ABCIDirName
-	signingDirName = kconfig.SigningDirName
-)
 
 // New builds the kwild server.
 func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *chain.GenesisConfig,

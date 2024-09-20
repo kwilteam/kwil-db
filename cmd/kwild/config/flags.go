@@ -56,6 +56,10 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 
 	flagSet.Var(&cfg.AppConfig.ReadTxTimeout, "app.db-read-timeout", "timeout for database reads initiated by RPC requests")
 
+	// genesis state / migration flags
+	flagSet.StringVar(&cfg.AppConfig.GenesisState, "app.genesis-state", cfg.AppConfig.GenesisState, "Path to the genesis state file")
+	flagSet.StringVar(&cfg.AppConfig.MigrateFrom, "app.migrate-from", cfg.AppConfig.MigrateFrom, format("%s JSON-RPC listening address of the node to replicate the state from."))
+
 	// Extension endpoints flags
 	flagSet.StringSliceVar(&cfg.AppConfig.ExtensionEndpoints, "app.extension-endpoints", cfg.AppConfig.ExtensionEndpoints, format("%s extension endpoints"))
 
@@ -63,10 +67,6 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.BoolVar(&cfg.AppConfig.Snapshots.Enabled, "app.snapshots.enabled", cfg.AppConfig.Snapshots.Enabled, "Enable snapshots")
 	flagSet.Uint64Var(&cfg.AppConfig.Snapshots.RecurringHeight, "app.snapshots.recurring-height", cfg.AppConfig.Snapshots.RecurringHeight, "Recurring heights to create snapshots")
 	flagSet.Uint64Var(&cfg.AppConfig.Snapshots.MaxSnapshots, "app.snapshots.max-snapshots", cfg.AppConfig.Snapshots.MaxSnapshots, "Maximum snapshots to store on disk. Default is 3. If max snapshots is reached, the oldest snapshot is deleted.")
-	flagSet.StringVar(&cfg.AppConfig.Snapshots.SnapshotDir, "app.snapshots.snapshot-dir", cfg.AppConfig.Snapshots.SnapshotDir, "Snapshot directory path")
-
-	flagSet.StringVar(&cfg.AppConfig.GenesisState, "app.genesis-state", cfg.AppConfig.GenesisState, "Path to the genesis state file")
-	flagSet.StringVar(&cfg.AppConfig.MigrateFrom, "app.migrate-from", cfg.AppConfig.MigrateFrom, format("%s JSON-RPC listening address of the node to replicate the state from."))
 
 	// Basic Chain Config flags
 	flagSet.StringVar(&cfg.ChainConfig.Moniker, "chain.moniker", cfg.ChainConfig.Moniker, "Node moniker")
@@ -110,8 +110,13 @@ to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.`))
 
 	// State Sync flags
 	flagSet.BoolVar(&cfg.ChainConfig.StateSync.Enable, "chain.statesync.enable", cfg.ChainConfig.StateSync.Enable, "Chain state sync enable")
-	flagSet.StringVar(&cfg.ChainConfig.StateSync.SnapshotDir, "chain.statesync.snapshot-dir", cfg.ChainConfig.StateSync.SnapshotDir, "Chain state sync snapshot directory")
 	flagSet.StringVar(&cfg.ChainConfig.StateSync.RPCServers, "chain.statesync.rpc-servers", cfg.ChainConfig.StateSync.RPCServers, "Chain state sync rpc servers")
 	flagSet.Var(&cfg.ChainConfig.StateSync.DiscoveryTime, "chain.statesync.discovery-time", "Chain state sync discovery time")
 	flagSet.Var(&cfg.ChainConfig.StateSync.ChunkRequestTimeout, "chain.statesync.chunk-request-timeout", "Chain state sync chunk request timeout")
+
+	// TODO: delete in v0.10.0
+	flagSet.String("app.snapshots.snapshot-dir", "", "Snapshot directory path")
+	flagSet.MarkDeprecated("app.snapshots.snapshot-dir", "this value is no longer configurable")
+	flagSet.String("chain.statesync.snapshot-dir", "", "Chain state sync snapshot directory")
+	flagSet.MarkDeprecated("chain.statesync.snapshot-dir", "this value is no longer configurable")
 }

@@ -1,71 +1,242 @@
 package setup
 
 import (
+	"compress/gzip"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/snapshot"
+	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/spf13/cobra"
 )
 
 //nolint:unused
 var (
-	genesisHashLong = `Compute genesis hash from existing PostgreSQL datasets, and optionally update ` + "`" + `genesis.json` + "`" + `.
-It takes up to 4 arguments, which are the postgres DB name, host, port, user, and password to access the datasets to be included in the genesis hash.
+	genesisHashLong = `Compute the genesis hash from existing PostgreSQL datasets, and optionally update a ` + "`" + `genesis.json` + "`" + ` file.
+It can be configured to connect to Postgres either using the root directory (from which the ` + "`" + `config.toml` + "`" + ` will be read),
+or by specifying the connection details directly.
+
+Alternatively, a snapshot file can be provided to compute the genesis hash from a snapshot file instead of the database. The snapshot can either be
+a .sql or .sql.gz file.
 
 By default, it will print the genesis hash to stdout. To specify a genesis file to update as well, use the ` + "`" + `--genesis` + "`" + ` flag.`
 
-	genesisHashExample = `# Compute genesis hash from existing PostgreSQL datasets, and add it to a genesis file
-kwil-admin setup genesis-hash "kwild" "127.0.0.1" "5432" "kwild" "" --genesis "~/.kwild/abci/config/genesis.json"`
+	genesisHashExample = `# Compute the genesis hash from an existing PostgreSQL database using a connection, and add it to a genesis file
+kwil-admin setup genesis-hash --dbname kwild --host "127.0.0.1" --port "5432" --user kwild --genesis "~/.kwild/abci/config/genesis.json"
+
+# Compute the genesis hash from an existing PostgreSQL database using the root directory
+kwil-admin setup genesis-hash --genesis "~/.kwild/abci/config/genesis.json" --root-dir "~/.kwild"
+
+# Compute the genesis hash from a snapshot file
+kwil-admin setup genesis-hash --snapshot "/path/to/snapshot.sql.gz" --genesis "~/.kwild/abci/config/genesis.json"`
 )
 
 func genesisHashCmd() *cobra.Command { //nolint:unused
-
 	var genesisFile string
+	var rootDir string
+	var snapshotFile string
 
 	cmd := &cobra.Command{
 		Use:     "genesis-hash",
 		Short:   "Compute genesis hash from existing PostgreSQL datasets, and optionally update `genesis.json`.",
 		Long:    genesisHashLong,
 		Example: genesisHashExample,
-		Hidden:  true, // also not listed added, but this is going to be experimental even when implement properly
-		Args:    cobra.RangeArgs(0, 4),
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return display.PrintErr(cmd, errors.New("not implemented"))
-			/* TODO: make this work with postgres
-			dbCfg := &pg.ConnConfig{ // defaults
-				Host:   "127.0.0.1",
-				Port:   "5432",
-				DBName: "kwild",
-				User:   "kwild",
-				Pass:   "kwild",
-			}
-			if len(args) > 0 {
-				dbCfg.Host = args[0]
-			}
-			if len(args) > 1 {
-				dbCfg.Port = args[1]
-			}
-			if len(args) > 2 {
-				dbCfg.DBName = args[2]
-			}
-			if len(args) > 3 {
-				dbCfg.User = args[3]
-			}
-			if len(args) > 4 {
-				dbCfg.Pass = args[4]
+			if cmd.Flags().Changed("snapshot") && cmd.Flags().Changed("root-dir") {
+				return display.PrintErr(cmd, errors.New("cannot use both --snapshot and --root-dir"))
 			}
 
-			appHash, err := config.PatchGenesisAppHash(cmd.Context(), dbCfg, genesisFile)
-			if err != nil {
-				return display.PrintErr(cmd, err)
+			var appHash []byte
+			if cmd.Flags().Changed("snapshot") {
+				snapshotFile, err := common.ExpandPath(snapshotFile)
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+
+				file, err := os.Open(snapshotFile)
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+				defer file.Close()
+
+				var reader io.Reader
+				if filepath.Ext(snapshotFile) == ".gz" {
+					reader, err = gzip.NewReader(file)
+					if err != nil {
+						return display.PrintErr(cmd, err)
+					}
+				} else {
+					reader = file
+				}
+
+				hash := sha256.New()
+
+				_, err = io.Copy(hash, reader)
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+
+				appHash = hash.Sum(nil)
+			} else {
+
+				pgConf, err := common.GetPostgresFlags(cmd)
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+
+				if rootDir != "" {
+					rootDir, err = common.ExpandPath(rootDir)
+					if err != nil {
+						return display.PrintErr(cmd, err)
+					}
+
+					pgConf, err = getPGConnUsingLocalConfig(pgConf, rootDir)
+					if err != nil {
+						return display.PrintErr(cmd, err)
+					}
+				}
+
+				// clean up any previous temp admin snapshots
+				err = cleanupTmpKwilAdminDir()
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+
+				// ensure the temp admin snapshots directory exists
+				err = ensureTmpKwilAdminDir()
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+				defer cleanupTmpKwilAdminDir()
+
+				dir, err := tmpKwilAdminSnapshotDir()
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+
+				// TODO: once https://github.com/kwilteam/kwil-db/pull/985 goes in, we can delete the max row size.
+				_, _, genCfg, err := snapshot.PGDump(cmd.Context(), pgConf.DBName, pgConf.User, pgConf.Pass, pgConf.Host, pgConf.Port, dir)
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+
+				appHash = genCfg.DataAppHash
 			}
 
-			return display.PrintCmd(cmd, display.RespString(hex.EncodeToString(appHash)))
-			*/
+			return writeAndReturnGenesisHash(cmd, genesisFile, appHash)
 		},
 	}
 
 	cmd.Flags().StringVarP(&genesisFile, "genesis", "g", "", "optional path to the genesis file to patch with the computed app hash")
+	cmd.Flags().StringVarP(&rootDir, "root-dir", "r", "", "optional path to the root directory of the kwild node from which the genesis hash will be computed")
+	cmd.Flags().StringVarP(&snapshotFile, "snapshot", "s", "", "optional path to the snapshot file to use for the genesis hash computation")
+	common.BindPostgresFlags(cmd)
 
 	return cmd
+}
+
+func writeAndReturnGenesisHash(cmd *cobra.Command, genesisFile string, appHash []byte) error {
+	if genesisFile != "" {
+		genesisFile, err := common.ExpandPath(genesisFile)
+		if err != nil {
+			return display.PrintErr(cmd, err)
+		}
+
+		file, err := os.ReadFile(genesisFile)
+		if err != nil {
+			return display.PrintErr(cmd, err)
+		}
+
+		var cfg chain.GenesisConfig
+		err = json.Unmarshal(file, &cfg)
+		if err != nil {
+			return display.PrintErr(cmd, err)
+		}
+
+		cfg.DataAppHash = appHash
+
+		file, err = json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			return display.PrintErr(cmd, err)
+		}
+
+		err = os.WriteFile(genesisFile, file, 0644)
+		if err != nil {
+			return display.PrintErr(cmd, err)
+		}
+	}
+
+	return display.PrintCmd(cmd, &genesisHashRes{
+		Hash: base64.StdEncoding.EncodeToString(appHash),
+	})
+}
+
+type genesisHashRes struct {
+	Hash string
+}
+
+func (g *genesisHashRes) MarshalJSON() ([]byte, error) {
+	type Alias genesisHashRes
+	return json.Marshal(*(*Alias)(g))
+}
+
+func (g *genesisHashRes) MarshalText() (text []byte, err error) {
+	return []byte("App Hash: " + g.Hash), nil
+}
+
+// tmpKwilAdminSnapshotDir returns the temporary directory for kwil-admin snapshots.
+func tmpKwilAdminSnapshotDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	r, err := common.ExpandPath(filepath.Join(home, ".kwil-admin-snaps-temp"))
+	if err != nil {
+		return "", err
+	}
+
+	return r, nil
+}
+
+// ensureTmpKwilAdminDir ensures that the temporary directory for kwil-admin snapshots exists.
+func ensureTmpKwilAdminDir() error {
+	dir, err := tmpKwilAdminSnapshotDir()
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err = os.Mkdir(dir, 0755)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// cleanupTmpKwilAdminDir removes the temporary directory for kwil-admin snapshots.
+func cleanupTmpKwilAdminDir() error {
+	dir, err := tmpKwilAdminSnapshotDir()
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(dir); err == nil {
+		err = os.RemoveAll(dir)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

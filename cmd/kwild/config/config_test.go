@@ -14,7 +14,7 @@ import (
 func Test_Config_Toml(t *testing.T) {
 	cfg := cmd.DefaultConfig()
 
-	tomlCfg, err := LoadConfigFile(filepath.Join("test_data", ConfigFileName))
+	tomlCfg, err := LoadConfigFile(ConfigFilePath("test_data"))
 	assert.NoError(t, err)
 
 	err = cfg.Merge(tomlCfg)

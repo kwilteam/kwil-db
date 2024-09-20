@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"time"
 
 	commonConfig "github.com/kwilteam/kwil-db/common/config"
@@ -60,6 +62,7 @@ func defaultBinaryConfig() binaryConfig {
 // It is exported as a function so that users can customize the default configuration.
 var DefaultConfig = func() *commonConfig.KwildConfig {
 	return &commonConfig.KwildConfig{
+		RootDir: defaultKwildRoot(),
 		AppConfig: &commonConfig.AppConfig{
 			JSONRPCListenAddress: "0.0.0.0:8484",
 			AdminListenAddress:   "/tmp/kwild.socket", // Or, suggested, 127.0.0.1:8485
@@ -78,7 +81,6 @@ var DefaultConfig = func() *commonConfig.KwildConfig {
 				Enabled:         false,
 				RecurringHeight: 14400, // 1 day at 6s block time
 				MaxSnapshots:    3,
-				SnapshotDir:     "snapshots",
 			},
 			GenesisState: "",
 		},
@@ -116,7 +118,6 @@ var DefaultConfig = func() *commonConfig.KwildConfig {
 			},
 			StateSync: &commonConfig.StateSyncConfig{
 				Enable:              false,
-				SnapshotDir:         "rcvdSnaps",
 				DiscoveryTime:       commonConfig.Duration(15 * time.Second),
 				ChunkRequestTimeout: commonConfig.Duration(10 * time.Second),
 			},
@@ -128,4 +129,9 @@ var DefaultConfig = func() *commonConfig.KwildConfig {
 			},
 		},
 	}
+}
+
+func defaultKwildRoot() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".kwild")
 }

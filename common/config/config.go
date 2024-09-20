@@ -93,7 +93,6 @@ type SnapshotConfig struct {
 	Enabled         bool   `mapstructure:"enabled"`
 	RecurringHeight uint64 `mapstructure:"recurring_height"`
 	MaxSnapshots    uint64 `mapstructure:"max_snapshots"`
-	SnapshotDir     string `mapstructure:"snapshot_dir"`
 }
 
 type ChainRPCConfig struct {
@@ -180,9 +179,6 @@ type ConsensusConfig struct {
 
 type StateSyncConfig struct {
 	Enable bool `mapstructure:"enable"`
-
-	// SnapshotDir is the directory to store the received snapshot chunks.
-	SnapshotDir string `mapstructure:"snapshot_dir"`
 
 	// Trusted snapshot servers to fetch/validate the snapshots from.
 	// At least 1 server is required for the state sync to work.

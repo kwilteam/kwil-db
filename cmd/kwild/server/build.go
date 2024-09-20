@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -22,7 +21,6 @@ import (
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 
-	"github.com/kwilteam/kwil-db/cmd"
 	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/chain"
@@ -38,7 +36,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci/meta"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
-	"github.com/kwilteam/kwil-db/internal/kv"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
 	"github.com/kwilteam/kwil-db/internal/listeners"
 	"github.com/kwilteam/kwil-db/internal/migrations"
@@ -65,10 +62,6 @@ func initStores(d *coreDependencies, db *pg.DB) error {
 
 	// chain meta data for abci and txApp
 	initChainMetadata(d, initTx)
-	// upgrade v0.7.0 that had ABCI meta in badgerDB and nowhere else...
-	if err = migrateOldChainState(d, initTx); err != nil {
-		return err
-	}
 
 	// account store
 	initAccountRepository(d, initTx)
@@ -78,82 +71,6 @@ func initStores(d *coreDependencies, db *pg.DB) error {
 	}
 
 	return nil
-}
-
-// migrateOldChainState detects if the old badger-based chain metadata store
-// needs to be migrated into the new postgres metadata store and does the update.
-func migrateOldChainState(d *coreDependencies, initTx sql.Tx) error {
-	height, appHash, err := meta.GetChainState(d.ctx, initTx)
-	if err != nil {
-		return fmt.Errorf("failed to get chain state from metadata store: %w", err)
-	}
-	if height != -1 { // have already updated the meta chain tables
-		d.log.Infof("Application's chain metadata store loaded at height %d / app hash %x",
-			height, appHash)
-		return nil
-	} // else we are either at genesis or we need to migrate from badger
-
-	// detect old badger kv DB for ABCI's metadata
-	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, kwildcfg.ABCIInfoSubDirName)
-	height, appHash, err = getOldChainState(d, badgerPath)
-	if err != nil {
-		return fmt.Errorf("unable to read old metadata store: %w", err)
-	}
-	if height < 1 { // badger hadn't been used, and we're just at genesis
-		if height == 0 { // files existed, but still at genesis
-			if err = os.RemoveAll(badgerPath); err != nil {
-				d.log.Errorf("failed to remove old badger db file (%s): %v", badgerPath, err)
-			}
-		}
-		return nil
-	}
-
-	d.log.Infof("Migrating from badger DB chain metadata to postgresql: height %d, apphash %x",
-		height, appHash)
-	err = meta.SetChainState(d.ctx, initTx, height, appHash)
-	if err != nil {
-		return fmt.Errorf("failed to migrate height and app hash: %w", err)
-	}
-
-	if err = os.RemoveAll(badgerPath); err != nil {
-		d.log.Errorf("failed to remove old badger db file (%s): %v", badgerPath, err)
-	}
-
-	return nil
-}
-
-// getOldChainState attempts to retrieve the height and app hash from any legacy
-// badger metadata store. If the folder does not exists, it is not an error, but
-// height -1 is returned. If the DB exists but there are no entries, it returns
-// 0 and no error.
-func getOldChainState(d *coreDependencies, badgerPath string) (int64, []byte, error) {
-	if _, err := os.Stat(badgerPath); errors.Is(err, os.ErrNotExist) {
-		return -1, nil, nil // would hit the kv.ErrKeyNotFound case, but we don't want artifacts
-	}
-	badgerKv, err := badger.NewBadgerDB(d.ctx, badgerPath, &badger.Options{
-		Logger: *d.log.Named("old-abci-kv-store"),
-	})
-	if err != nil {
-		return 0, nil, fmt.Errorf("failed to open badger: %w", err)
-	}
-
-	defer badgerKv.Close()
-
-	appHash, err := badgerKv.Get([]byte("a"))
-	if err == kv.ErrKeyNotFound {
-		return 0, nil, nil
-	}
-	if err != nil {
-		return 0, nil, err
-	}
-	height, err := badgerKv.Get([]byte("b"))
-	if err == kv.ErrKeyNotFound {
-		return 0, nil, nil
-	}
-	if err != nil {
-		return 0, nil, err
-	}
-	return int64(binary.BigEndian.Uint64(height)), slices.Clone(appHash), nil
 }
 
 func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
@@ -509,14 +426,14 @@ func getPendingValidatorsApprovedByNode(ctx context.Context, db sql.ReadTxMaker,
 
 func buildMigrator(d *coreDependencies, db *pg.DB, txApp *txapp.TxApp) *migrations.Migrator {
 	cfg := d.cfg.AppConfig
-	migrationsDir := filepath.Join(d.cfg.RootDir, kwildcfg.MigrationsDirName)
+	migrationsDir := kwildcfg.MigrationDir(d.cfg.RootDir)
 
-	err := os.MkdirAll(filepath.Join(migrationsDir, kwildcfg.ChangesetsDirName), 0755)
+	err := os.MkdirAll(migrations.ChangesetsDir(migrationsDir), 0755)
 	if err != nil {
 		failBuild(err, "failed to create changesets directory")
 	}
 
-	err = os.MkdirAll(filepath.Join(migrationsDir, cmd.DefaultConfig().AppConfig.Snapshots.SnapshotDir), 0755)
+	err = os.MkdirAll(kwildcfg.LocalSnapshotsDir(d.cfg.RootDir), 0755)
 	if err != nil {
 		failBuild(err, "failed to create migrations snapshots directory")
 	}
@@ -531,7 +448,7 @@ func buildMigrator(d *coreDependencies, db *pg.DB, txApp *txapp.TxApp) *migratio
 	}
 
 	snapshotCfg := &statesync.SnapshotConfig{
-		SnapshotDir:     filepath.Join(migrationsDir, cmd.DefaultConfig().AppConfig.Snapshots.SnapshotDir),
+		SnapshotDir:     kwildcfg.LocalSnapshotsDir(d.cfg.RootDir),
 		RecurringHeight: 0,
 		MaxSnapshots:    1, // only one snapshot is needed for network migrations, taken at the activation height
 	}
@@ -769,7 +686,7 @@ func buildSnapshotter(d *coreDependencies) *statesync.SnapshotStore {
 	}
 
 	snapshotCfg := &statesync.SnapshotConfig{
-		SnapshotDir:     cfg.Snapshots.SnapshotDir,
+		SnapshotDir:     kwildcfg.LocalSnapshotsDir(d.cfg.RootDir),
 		RecurringHeight: cfg.Snapshots.RecurringHeight,
 		MaxSnapshots:    int(cfg.Snapshots.MaxSnapshots),
 	}
@@ -810,7 +727,7 @@ func buildStatesyncer(d *coreDependencies, db sql.ReadTxMaker) *statesync.StateS
 	}
 
 	// create state syncer
-	return statesync.NewStateSyncer(d.ctx, dbCfg, d.cfg.ChainConfig.StateSync.SnapshotDir,
+	return statesync.NewStateSyncer(d.ctx, dbCfg, kwildcfg.ReceivedSnapshotsDir(d.cfg.RootDir),
 		providers, db, *d.log.Named("state-syncer"))
 }
 
@@ -1042,7 +959,7 @@ func buildCometBftClient(cometBftNode *cometbft.CometBftNode) *cmtlocal.Local {
 func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.Application) *cometbft.CometBftNode {
 	// for now, I'm just using a KV store for my atomic commit.  This probably is not ideal; a file may be better
 	// I'm simply using this because we know it fsyncs the data to disk
-	db, err := badger.NewBadgerDB(d.ctx, filepath.Join(d.cfg.RootDir, signingDirName), &badger.Options{
+	db, err := badger.NewBadgerDB(d.ctx, kwildcfg.SigningDir(d.cfg.RootDir), &badger.Options{
 		GuaranteeFSync: true,
 		Logger:         *increaseLogLevel("private-validator-signature-store", &d.log, log.WarnLevel.String()), // badger is too noisy for an internal component
 	})

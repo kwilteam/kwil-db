@@ -28,11 +28,7 @@ import (
 )
 
 const (
-	nodeDirPerm   = 0755
-	chainIDPrefix = "kwil-chain-"
-
-	abciDir     = kwildcfg.ABCIDirName
-	abciDataDir = cometbft.DataDir
+	nodeDirPerm = 0755
 )
 
 var (
@@ -168,20 +164,21 @@ func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silenc
 	}
 	cfg.RootDir = rootDir
 
-	cometbftRoot := filepath.Join(outputDir, abciDir)
+	cometbftRoot := kwildcfg.ABCIDir(cfg.RootDir)
 
 	err = os.MkdirAll(cometbftRoot, nodeDirPerm)
 	if err != nil {
 		return nil, err
 	}
 
-	err = os.MkdirAll(filepath.Join(cometbftRoot, abciDataDir), nodeDirPerm)
+	err = os.MkdirAll(filepath.Join(cometbftRoot, cometbft.DataDir), nodeDirPerm)
 	if err != nil {
 		return nil, err
 	}
 
 	cfg.AppConfig.PrivateKeyPath = cmd.DefaultConfig().AppConfig.PrivateKeyPath
-	err = WriteConfigFile(filepath.Join(rootDir, kwildcfg.ConfigFileName), cfg)
+
+	err = WriteConfigFile(kwildcfg.ConfigFilePath(rootDir), cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +277,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 
 		nodeDirName := fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i)
 		nodeDir := filepath.Join(genCfg.OutputDir, nodeDirName)
-		chainRoot := filepath.Join(nodeDir, abciDir)
+		chainRoot := kwildcfg.ABCIDir(nodeDir)
 
 		err := os.MkdirAll(chainRoot, nodeDirPerm)
 		if err != nil {
@@ -288,7 +285,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 			return err
 		}
 
-		err = os.MkdirAll(filepath.Join(chainRoot, abciDataDir), nodeDirPerm)
+		err = os.MkdirAll(filepath.Join(chainRoot, cometbft.DataDir), nodeDirPerm)
 		if err != nil {
 			_ = os.RemoveAll(genCfg.OutputDir)
 			return err
@@ -392,7 +389,10 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 			}
 		}
 
-		WriteConfigFile(filepath.Join(nodeDir, kwildcfg.ConfigFileName), cfg)
+		err = WriteConfigFile(kwildcfg.ConfigFilePath(nodeDir), cfg)
+		if err != nil {
+			return fmt.Errorf("failed to write config file: %w", err)
+		}
 	}
 
 	fmt.Printf("Successfully initialized %d node directories: %s\n",
