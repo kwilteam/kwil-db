@@ -361,6 +361,10 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
+// verifyDependencies checks if the required dependencies are installed on the system, such as:
+//   - pg_dump: required for snapshotting during migrations and when snapshots are enabled.
+//     All nodes in the network must have 16.x version to produce consistent and deterministic snapshots.
+//   - psql: required for state-sync to restore the state from a snapshot. Required version is 16.x.
 func verifyDependencies(d *coreDependencies) {
 	// Check if pg_dump is installed, which is necessary for snapshotting during migrations and when snapshots are enabled. Ensure that the version is 16.x
 	if err := checkVersion("pg_dump", 16); err != nil {
@@ -810,6 +814,10 @@ func buildStatesyncer(d *coreDependencies, db sql.ReadTxMaker) *statesync.StateS
 		providers, db, *d.log.Named("state-syncer"))
 }
 
+// retrieveLightClientTrustOptions fetches the trust options (Trusted Height and Hash) from the
+// trusted snapshot provider. Statesync module uses these trust options to determine the
+// snapshots to trust and restore the state from. Currently, the trusted height is set to 2 blocks
+// behind the latest snapshot available, to reduce the number of blocks cometbft has to download and validate.
 func retrieveLightClientTrustOptions(d *coreDependencies) (height int64, hash string, err error) {
 	providers := strings.Split(d.cfg.ChainConfig.StateSync.RPCServers, ",")
 

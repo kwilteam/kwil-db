@@ -66,6 +66,20 @@ func initCmd() *cobra.Command {
 			}
 			cfg.RootDir = expandedDir
 
+			// saves genesis state snapshot file in the root directory under the name "genesis_state.sql.gz"
+			if genesisState != "" {
+				if genesisState, err = common.ExpandPath(genesisState); err != nil {
+					return display.PrintErr(cmd, err)
+				}
+
+				stateFile := filepath.Join(expandedDir, config.GenesisStateFileName)
+				if err = copyFile(genesisState, stateFile); err != nil {
+					return display.PrintErr(cmd, err)
+				}
+
+				cfg.AppConfig.GenesisState = config.GenesisStateFileName
+			}
+
 			// saves config and private key files in the root directory
 			pub, err := nodecfg.GenerateNodeFiles(expandedDir, cfg, true)
 			if err != nil {
@@ -99,18 +113,6 @@ func initCmd() *cobra.Command {
 					if err = genesisCfg.SaveAs(genFile); err != nil {
 						return display.PrintErr(cmd, err)
 					}
-				}
-			}
-
-			// saves genesis state snapshot file in the root directory under the name "genesis_state.sql.gz"
-			if genesisState != "" {
-				if genesisState, err = common.ExpandPath(genesisState); err != nil {
-					return display.PrintErr(cmd, err)
-				}
-
-				stateFile := filepath.Join(expandedDir, config.GenesisStateFileName)
-				if err = copyFile(genesisState, stateFile); err != nil {
-					return display.PrintErr(cmd, err)
 				}
 			}
 
