@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/abci/meta"
 	"github.com/kwilteam/kwil-db/internal/accounts"
+	"github.com/kwilteam/kwil-db/internal/statesync"
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
@@ -37,6 +38,9 @@ type Snapshotter interface {
 
 	// IsSnapshotDue returns true if a snapshot is due at the given height.
 	IsSnapshotDue(height uint64) bool
+
+	// Lists all the available snapshots in the snapshotstore and returns the snapshot metadata
+	ListSnapshots() []*statesync.Snapshot
 }
 
 // package level funcs
