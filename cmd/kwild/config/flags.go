@@ -33,8 +33,8 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.StringVar(&cfg.AppConfig.AdminListenAddress, "app.admin-listen-addr", cfg.AppConfig.AdminListenAddress, format("%s admin listen address (unix or tcp)"))
 	flagSet.StringVar(&cfg.AppConfig.AdminRPCPass, "app.admin-pass", cfg.AppConfig.AdminRPCPass, "password for the node's admin service (may be empty)")
 	flagSet.BoolVar(&cfg.AppConfig.NoTLS, "app.admin-notls", cfg.AppConfig.NoTLS, "do not enable TLS on admin server (automatically disabled for unix socket or loopback listen addresses)")
-	flagSet.StringVar(&cfg.AppConfig.TLSCertFile, "app.tls-cert-file", cfg.AppConfig.TLSCertFile, "TLS certificate file path for the admin and consensus RPC server (optional)")
-	flagSet.StringVar(&cfg.AppConfig.TLSKeyFile, "app.tls-key-file", cfg.AppConfig.TLSKeyFile, "TLS key file path for the admin and consensus RPC servers (optional)")
+	flagSet.StringVar(&cfg.AppConfig.AdminTLSCertFile, "app.admin-tls-cert-file", cfg.AppConfig.AdminTLSCertFile, "TLS certificate file path for the admin RPC server (optional)")
+	flagSet.StringVar(&cfg.AppConfig.AdminTLSKeyFile, "app.admin-tls-key-file", cfg.AppConfig.AdminTLSKeyFile, "TLS key file path for the admin RPC server (optional)")
 	flagSet.StringVar(&cfg.AppConfig.Hostname, "app.hostname", cfg.AppConfig.Hostname, format("%s Server hostname"))
 	flagSet.BoolVar(&cfg.AppConfig.PrivateRPC, "app.private-rpc", cfg.AppConfig.PrivateRPC, "Enforce data privacy with authenticated call request, disabled ad hoc queries, and no raw transaction retrieval")
 	flagSet.Var(&cfg.AppConfig.ChallengeExpiry, "app.challenge-expiry", "Time after which a challenge expires")
@@ -119,11 +119,17 @@ to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.`))
 	flagSet.StringVar(&cfg.Instrumentation.PromListenAddr, "instrumentation.prometheus-listen-addr", cfg.Instrumentation.PromListenAddr, "listen address for prometheus metrics")
 	flagSet.IntVar(&cfg.Instrumentation.MaxConnections, "instrumentation.max-open-connections", cfg.Instrumentation.MaxConnections, "maximum number of simultaneous connections")
 
-	// TODO: delete in v0.10.0
+	// DEPRECATED flags to delete in v0.10.0
 	flagSet.String("app.snapshots.snapshot-dir", "", "Snapshot directory path")
 	flagSet.MarkDeprecated("app.snapshots.snapshot-dir", "this value is no longer configurable")
 	flagSet.String("chain.statesync.snapshot-dir", "", "Chain state sync snapshot directory")
 	flagSet.MarkDeprecated("chain.statesync.snapshot-dir", "this value is no longer configurable")
+
 	flagSet.BoolVar(&cfg.AppConfig.Snapshots.DEPRECATED_Enabled, "app.snapshots.enabled", cfg.AppConfig.Snapshots.DEPRECATED_Enabled, "Enable snapshots")
 	flagSet.MarkDeprecated("app.snapshots.enabled", "use --app.snapshots.enable instead")
+	
+	flagSet.StringVar(&cfg.AppConfig.DEPRECATED_TLSCertFile, "app.tls-cert-file", cfg.AppConfig.DEPRECATED_TLSCertFile, "TLS certificate file path for the admin RPC server (optional)")
+	flagSet.MarkDeprecated("app.tls-cert-file", "use --app.admin-tls-cert-file instead")
+	flagSet.StringVar(&cfg.AppConfig.DEPRECATED_TLSKeyFile, "app.tls-key-file", cfg.AppConfig.DEPRECATED_TLSKeyFile, "TLS key file path for the admin RPC server (optional)")
+	flagSet.MarkDeprecated("app.tls-key-file", "use --app.admin-tls-key-file instead")
 }

@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test_Config_Toml ensures that the various mapstructure tags are set
+// correctly, as per the cmd/kwild/config/test_data/config.toml file.
 func Test_Config_Toml(t *testing.T) {
 	cfg := cmd.DefaultConfig()
 
@@ -34,6 +36,9 @@ func Test_Config_Toml(t *testing.T) {
 	assert.Equal(t, 3, len(cfg.AppConfig.ExtensionEndpoints))
 	assert.Equal(t, "localhost:50052", cfg.AppConfig.ExtensionEndpoints[0])
 	assert.Equal(t, "localhost:50053", cfg.AppConfig.ExtensionEndpoints[1])
+
+	assert.Equal(t, "somewhere.cert", cfg.AppConfig.AdminTLSCertFile)
+	assert.Equal(t, "somewhere.key", cfg.AppConfig.AdminTLSKeyFile)
 
 	assert.Equal(t, true, cfg.Instrumentation.Prometheus)
 	assert.Equal(t, 6, cfg.Instrumentation.MaxConnections)

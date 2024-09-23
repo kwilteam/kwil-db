@@ -31,7 +31,9 @@
 # TCP address for the KWILD App's JSON-RPC server to listen on
 jsonrpc_listen_addr = "0.0.0.0:8484"
 
-# Unix socket or TCP address for the KWILD App's Admin GRPC server to listen on
+# Unix socket or TCP address for the KWILD App's Admin GRPC server to listen on.
+# For a non-loopback TCP address, TLS is automatically enabled unless
+# admin_notls is set to true.
 admin_listen_addr = "/tmp/kwild.socket"
 
 # Timeout on requests on the user RPC servers
@@ -82,20 +84,17 @@ admin_pass = ""
 # any TCP listen address.
 admin_notls = false
 
-# The path to a file containing certificate that is used to create the HTTPS server.
-# Might be either absolute path or path related to the kwild root directory.
-# If the certificate is signed by a certificate authority,
-# the certFile should be the concatenation of the server's certificate, any intermediates,
-# and the CA's certificate.
-# NOTE: both tls_cert_file and tls_key_file must be present for CometBFT to create HTTPS server.
-# Otherwise, HTTP server is run.
-tls_cert_file = ""
+# The path to a file containing certificate that is used to create the admin HTTPS server.
+# It may be either an absolute path or a path related to the kwild root directory.
+# If set, admin_tls_cert_file must also be set.
+# If unset, an HTTP server is run.
+admin_tls_cert_file = ""
 
-# The path to a file containing matching private key that is used to create the HTTPS server.
-# Might be either absolute path or path related to the kwild root directory.
-# NOTE: both tls_cert_file and tls_key_file must be present for CometBFT to create HTTPS server.
-# Otherwise, HTTP server is run.
-tls_key_file = ""
+# The path to a file containing matching private key that is used to create the admin HTTPS server.
+# It may be either an absolute path or a path related to the kwild root directory.
+# If set, admin_tls_cert_file must also be set.
+# If unset, an HTTP server is run.
+admin_tls_key_file = ""
 
 # Kwild Server hostname
 hostname = ""

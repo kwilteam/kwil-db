@@ -24,9 +24,9 @@ import (
 )
 
 const (
-	DefaultTLSCertFile  = "rpc.cert"
-	defaultTLSKeyFile   = "rpc.key"
-	defaultAdminClients = "clients.pem"
+	DefaultTLSCertFileName = "rpc.cert"
+	defaultTLSKeyFileName  = "rpc.key"
+	defaultAdminClients    = "clients.pem"
 )
 
 var _ encoding.TextUnmarshaler = (*config.Duration)(nil)
@@ -131,7 +131,10 @@ func GetCfg(flagCfg *config.KwildConfig) (*config.KwildConfig, bool, error) {
 		return nil, false, fmt.Errorf("failed to sanitize config paths: %w", err)
 	}
 
-	err = configureCerts(cfg)
+	rawTLSCert, rawTLSCertDEPRECATED := cfg.AppConfig.AdminTLSCertFile, cfg.AppConfig.DEPRECATED_TLSCertFile
+	rawTLSKey, rawTLSKeyDEPRECATED := cfg.AppConfig.AdminTLSKeyFile, cfg.AppConfig.DEPRECATED_TLSKeyFile
+
+	err = configureAdminCerts(cfg)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to configure certs: %w", err)
 	}
@@ -150,6 +153,20 @@ func GetCfg(flagCfg *config.KwildConfig) (*config.KwildConfig, bool, error) {
 		cfg.AppConfig.RPCMaxReqSize = cfg.AppConfig.DEPRECATED_RPCReqLimit
 		fmt.Println("WARNING: app.rpc_req_limit is deprecated and will be removed in Kwil v0.10. use app.rpc_max_req_size instead")
 	}
+	if rawTLSCertDEPRECATED != "" {
+		if rawTLSCert != "" {
+			return nil, false, fmt.Errorf("cannot set both deprecated tls cert file and admin cert file")
+		}
+		cfg.AppConfig.AdminTLSCertFile = cfg.AppConfig.DEPRECATED_TLSCertFile
+		fmt.Println("WARNING: app.tls_cert_file is deprecated and will be removed in Kwil v0.10. use app.admin_tls_cert_file instead")
+	}
+	if rawTLSKeyDEPRECATED != "" {
+		if rawTLSKey != "" {
+			return nil, false, fmt.Errorf("cannot set both deprecated tls key file and admin key file")
+		}
+		cfg.AppConfig.AdminTLSKeyFile = cfg.AppConfig.DEPRECATED_TLSKeyFile
+		fmt.Println("WARNING: app.tls_key_file is deprecated and will be removed in Kwil v0.10. use app.admin_tls_key_file instead")
+	}
 
 	if cfg.AppConfig.Snapshots.DEPRECATED_Enabled {
 		if cfg.AppConfig.Snapshots.Enable {
@@ -162,24 +179,24 @@ func GetCfg(flagCfg *config.KwildConfig) (*config.KwildConfig, bool, error) {
 	return cfg, configFileExists, nil
 }
 
-func configureCerts(cfg *config.KwildConfig) error {
-	if cfg.AppConfig.TLSCertFile == "" {
-		cfg.AppConfig.TLSCertFile = DefaultTLSCertFile
+func configureAdminCerts(cfg *config.KwildConfig) error {
+	if cfg.AppConfig.AdminTLSCertFile == "" {
+		cfg.AppConfig.AdminTLSCertFile = DefaultTLSCertFileName
 	}
-	path, err := config.CleanPath(cfg.AppConfig.TLSCertFile, cfg.RootDir)
+	path, err := config.CleanPath(cfg.AppConfig.AdminTLSCertFile, cfg.RootDir)
 	if err != nil {
 		return err
 	}
-	cfg.AppConfig.TLSCertFile = path
+	cfg.AppConfig.AdminTLSCertFile = path
 
-	if cfg.AppConfig.TLSKeyFile == "" {
-		cfg.AppConfig.TLSKeyFile = defaultTLSKeyFile
+	if cfg.AppConfig.AdminTLSKeyFile == "" {
+		cfg.AppConfig.AdminTLSKeyFile = defaultTLSKeyFileName
 	}
-	path, err = config.CleanPath(cfg.AppConfig.TLSKeyFile, cfg.RootDir)
+	path, err = config.CleanPath(cfg.AppConfig.AdminTLSKeyFile, cfg.RootDir)
 	if err != nil {
 		return err
 	}
-	cfg.AppConfig.TLSKeyFile = path
+	cfg.AppConfig.AdminTLSKeyFile = path
 	return nil
 }
 

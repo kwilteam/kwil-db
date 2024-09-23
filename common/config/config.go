@@ -67,23 +67,26 @@ type AppConfig struct {
 	DBPass string `mapstructure:"pg_db_pass"`
 	DBName string `mapstructure:"pg_db_name"`
 
-	RPCTimeout    Duration `mapstructure:"rpc_timeout"`
-	RPCMaxReqSize int      `mapstructure:"rpc_max_req_size"`
-	// TODO: remove DEPRECATED_RPCReqLimit in v0.10
-	DEPRECATED_RPCReqLimit int                          `mapstructure:"rpc_req_limit"` // DEPRECATED: use RPCMaxReqSize
-	PrivateRPC             bool                         `mapstructure:"private_rpc"`
-	ChallengeExpiry        Duration                     `mapstructure:"challenge_expiry"`
-	ChallengeRateLimit     float64                      `mapstructure:"challenge_rate_limit"`
-	ReadTxTimeout          Duration                     `mapstructure:"db_read_timeout"`
-	ExtensionEndpoints     []string                     `mapstructure:"extension_endpoints"`
-	AdminRPCPass           string                       `mapstructure:"admin_pass"`
-	NoTLS                  bool                         `mapstructure:"admin_notls"`
-	TLSCertFile            string                       `mapstructure:"tls_cert_file"`
-	TLSKeyFile             string                       `mapstructure:"tls_key_file"`
-	Hostname               string                       `mapstructure:"hostname"`
-	ProfileMode            string                       `mapstructure:"profile_mode"`
-	ProfileFile            string                       `mapstructure:"profile_file"`
-	Extensions             map[string]map[string]string `mapstructure:"extensions"`
+	RPCTimeout         Duration                     `mapstructure:"rpc_timeout"`
+	RPCMaxReqSize      int                          `mapstructure:"rpc_max_req_size"`
+	PrivateRPC         bool                         `mapstructure:"private_rpc"`
+	ChallengeExpiry    Duration                     `mapstructure:"challenge_expiry"`
+	ChallengeRateLimit float64                      `mapstructure:"challenge_rate_limit"`
+	ReadTxTimeout      Duration                     `mapstructure:"db_read_timeout"`
+	ExtensionEndpoints []string                     `mapstructure:"extension_endpoints"`
+	AdminRPCPass       string                       `mapstructure:"admin_pass"`
+	NoTLS              bool                         `mapstructure:"admin_notls"`
+	AdminTLSCertFile   string                       `mapstructure:"admin_tls_cert_file"`
+	AdminTLSKeyFile    string                       `mapstructure:"admin_tls_key_file"`
+	Hostname           string                       `mapstructure:"hostname"`
+	ProfileMode        string                       `mapstructure:"profile_mode"`
+	ProfileFile        string                       `mapstructure:"profile_file"`
+	Extensions         map[string]map[string]string `mapstructure:"extensions"`
+
+	// DEPRECATED in v0.9: remove these in v0.10
+	DEPRECATED_RPCReqLimit int    `mapstructure:"rpc_req_limit"` // use RPCMaxReqSize instead
+	DEPRECATED_TLSCertFile string `mapstructure:"tls_cert_file"` // use AdminTLSCertFile instead
+	DEPRECATED_TLSKeyFile  string `mapstructure:"tls_key_file"`  // use AdminTLSKeyFile instead
 
 	Snapshots SnapshotConfig `mapstructure:"snapshots"`
 
