@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -61,6 +62,9 @@ func (o *OperatorCLIDriver) TxSuccess(ctx context.Context, txHash []byte) error 
 	var res respTxQuery
 	err := o.runCommand(ctx, &res, "utils", "query-tx", hex.EncodeToString(txHash))
 	if err != nil {
+		if strings.Contains(err.Error(), "code = -202, message = transaction not found") {
+			return driver.ErrTxNotFound // This is what we need to solve!  See the docs on this error type.
+		}
 		return err
 	}
 
