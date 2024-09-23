@@ -21,8 +21,8 @@ jobs:
         shell: bash
         run: |
           version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//' | cut -d '.' -f 2`
-          kgw_version=$(v8="3"; v7="2"; v6="1"; eval echo \${v$version})
-          kjs_version=$(v8="7"; v7="6"; v6="5"; eval echo \${v$version})
+          kgw_version=$(v9="3"; v8="3"; v7="2"; v6="1"; eval echo \${v$version})
+          kjs_version=$(v9="8"; v8="7"; v7="6"; v6="5"; eval echo \${v$version})
           echo "kdb_version=v0.$version" >> $GITHUB_OUTPUT
           echo "kgw_version=v0.$kgw_version" >> $GITHUB_OUTPUT
           echo "kjs_version=v0.$kjs_version" >> $GITHUB_OUTPUT
