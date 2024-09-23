@@ -19,13 +19,13 @@ var (
 	genesisFileName  = "genesis.json"
 	snapshotFileName = "snapshot.sql.gz"
 
-	genesisStateLong = "Download the genesis state for the new network from a trusted node on the source network. The genesis state includes the genesis config file (genesis.json), genesis snapshot (snapshot.sql.gz), and the migration info such as the start and end heights. The genesis state is saved in the root directory specified by the `--root-dir` flag. If there is no approved migration or if the migration has not started yet, the command will return a message indicating that there is no genesis state to download."
+	genesisStateLong = "Download the genesis state for the new network from a trusted node on the source network. The genesis state includes the genesis config file (genesis.json), genesis snapshot (snapshot.sql.gz), and the migration info such as the start and end heights. The genesis state is saved in the root directory specified by the `--out-dir` flag. If there is no approved migration or if the migration has not started yet, the command will return a message indicating that there is no genesis state to download."
 
-	genesisStateExample = `# Download the genesis state to the default root directory (~/.kwild)
+	genesisStateExample = `# Download the genesis state to the default output directory (~/.genesis-state)
 kwil-admin migrate genesis-state
 
 # Download the genesis state to a custom root directory
-kwil-admin migrate genesis-state --root-dir /path/to/root/dir`
+kwil-admin migrate genesis-state --out-dir /path/to/out/dir`
 )
 
 func genesisStateCmd() *cobra.Command {
@@ -122,7 +122,7 @@ func genesisStateCmd() *cobra.Command {
 	}
 
 	common.BindRPCFlags(cmd)
-	cmd.Flags().StringVarP(&rootDir, "root-dir", "r", "~/.kwild", "Root directory for the genesis state files")
+	cmd.Flags().StringVarP(&rootDir, "out-dir", "o", "~/.genesis-state", "The target directory for downloading the genesis state files.")
 	return cmd
 }
 
