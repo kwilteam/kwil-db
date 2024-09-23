@@ -90,7 +90,7 @@ func testnetCmd() *cobra.Command {
 	cmd.Flags().StringSliceVar(&hostnames, "hostnames", []string{}, "override all hostnames of the nodes (list of hostnames must be the same length as the number of nodes)")
 	cmd.Flags().IntVarP(&p2pPort, "p2p-port", "p", 26656, "p2p port for nodes")
 	cmd.Flags().DurationVarP(&blockInterval, "block-interval", "i", 6*time.Second, "shortest block interval in seconds")
-	cmd.Flags().Int64Var(&joinExpiry, "join-expiry", 14400, "number of blocks before a join request expires")
+	cmd.Flags().Int64Var(&joinExpiry, "join-expiry", 100800, "number of blocks before a join request expires")
 	cmd.Flags().IntVarP(&validatorAmount, "validators", "v", 3, "number of validators to generate")
 	cmd.Flags().IntVarP(&nonValidatorAmount, "non-validators", "n", 0, "number of non-validators to generate")
 	cmd.Flags().BoolVar(&withGas, "gas", false, "enable gas")
