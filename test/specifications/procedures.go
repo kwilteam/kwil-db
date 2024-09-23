@@ -24,7 +24,7 @@ func ExecuteProcedureSpecification(ctx context.Context, t *testing.T, caller Pro
 	txHash, err := caller.DeployDatabase(ctx, schema)
 	require.NoError(t, err, "error deploying schema")
 
-	expectTxSuccess(t, caller, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, caller, ctx, txHash, defaultTxQueryTimeout)
 
 	dbid := caller.DBID(schema.Name)
 
@@ -80,9 +80,9 @@ func (e *executor) Execute(ctx context.Context, actionName string, actionInputs 
 	require.NoError(e.t, err, "error executing action")
 
 	if len(expectFail) > 0 && expectFail[0] {
-		expectTxFail(e.t, e.dsl, ctx, res, defaultTxQueryTimeout)()
+		expectTxFail(e.t, e.dsl, ctx, res, defaultTxQueryTimeout)
 	} else {
-		expectTxSuccess(e.t, e.dsl, ctx, res, defaultTxQueryTimeout)()
+		expectTxSuccess(e.t, e.dsl, ctx, res, defaultTxQueryTimeout)
 	}
 }
 

@@ -20,7 +20,7 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 	require.NoError(t, err, "failed to send deploy database tx")
 
 	// Then i expect success
-	expectTxSuccess(t, deploy, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, deploy, ctx, txHash, defaultTxQueryTimeout)
 
 	// And i expect database should exist
 	err = deploy.DatabaseExists(ctx, deploy.DBID(db.Name))
@@ -39,14 +39,14 @@ func DatabaseDeployInvalidSql1Specification(ctx context.Context, t *testing.T, d
 	require.NoError(t, err, "failed to send deploy database tx")
 
 	// Then i expect tx failure
-	expectTxFail(t, deploy, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxFail(t, deploy, ctx, txHash, defaultTxQueryTimeout)
 
 	// deploy fixed schema
 	db2 := SchemaLoader.Load(t, schemaInvalidSqlSyntaxFixed)
 	txHash2, err := deploy.DeployDatabase(ctx, db2)
 	require.NoError(t, err, "failed to send deploy database tx")
 
-	expectTxSuccess(t, deploy, ctx, txHash2, defaultTxQueryTimeout)()
+	expectTxSuccess(t, deploy, ctx, txHash2, defaultTxQueryTimeout)
 
 	err = deploy.DatabaseExists(ctx, deploy.DBID(db.Name))
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func DatabaseDeployInvalidExtensionSpecification(ctx context.Context, t *testing
 	require.NoError(t, err, "failed to send deploy database tx")
 
 	// Then i expect tx failure
-	expectTxFail(t, deploy, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxFail(t, deploy, ctx, txHash, defaultTxQueryTimeout)
 
 	// And i expect database should not exist
 	err = deploy.DatabaseExists(ctx, deploy.DBID(db.Name))

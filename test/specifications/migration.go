@@ -24,7 +24,7 @@ func SubmitMigrationProposal(ctx context.Context, t *testing.T, netops Migration
 	require.NoError(t, err)
 
 	// Ensure that the Tx is mined.
-	expectTxSuccess(t, netops, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, netops, ctx, txHash, defaultTxQueryTimeout)
 
 	// Check migration status
 	migrations, err := netops.ListMigrations(ctx)
@@ -46,7 +46,7 @@ func ApproveMigration(ctx context.Context, t *testing.T, netops MigrationOpsDsl,
 	require.NoError(t, err)
 
 	// Ensure that the Tx is mined.
-	expectTxSuccess(t, netops, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, netops, ctx, txHash, defaultTxQueryTimeout)
 
 	// Check migration status
 	migrations, err = netops.ListMigrations(ctx)

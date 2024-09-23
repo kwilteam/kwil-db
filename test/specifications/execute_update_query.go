@@ -28,7 +28,7 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	txHash, err := execute.Execute(ctx, dbID, actionName, actionInput...)
 	assert.NoError(t, err)
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)
 
 	// Then i expect row to be updated
 	receipt, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users WHERE id = 2222")

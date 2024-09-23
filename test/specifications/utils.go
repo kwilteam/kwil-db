@@ -2,15 +2,14 @@ package specifications
 
 import (
 	"context"
-	"errors"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse"
 	"github.com/kwilteam/kwil-db/test/driver"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -60,47 +59,37 @@ func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSch
 }
 
 func ExpectTxSuccess(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte) {
-	expectTxSuccess(t, spec, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, spec, ctx, txHash, defaultTxQueryTimeout)
 }
 
-func expectTxSuccess(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte, waitFor time.Duration) func() {
-	return func() {
-		var status strings.Builder
-		require.Eventually(t, func() bool {
-			// prevent appending to the prior invocation(s)
-			status.Reset()
-			if err := spec.TxSuccess(ctx, txHash); err == nil {
-				return true
-				// Consider failing faster for unexpected errors:
-				// } else if !errors.Is(err, driver.ErrTxNotConfirmed) {
-				// 	t.Fatal(err)
-				// 	return false
-			} else {
-				status.WriteString(err.Error())
-				return false
-			}
-		}, waitFor, time.Millisecond*300, "tx failed: %s", status.String())
-	}
+func expectTxSuccess(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte, waitFor time.Duration) {
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		err := spec.TxSuccess(ctx, txHash)
+		if err == nil {
+			return // stop checking
+		}
+
+		require.ErrorIs(collect, err, driver.ErrTxNotConfirmed) // fail fast if unexpected error
+
+		collect.Errorf("not confirmed") // keep checking
+	}, waitFor, time.Millisecond*300, "tx did not succeed")
 }
 
-func ExpectTxfail(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte) {
-	expectTxFail(t, spec, ctx, txHash, defaultTxQueryTimeout)()
+func ExpectTxFail(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte) {
+	expectTxFail(t, spec, ctx, txHash, defaultTxQueryTimeout)
 }
 
-func expectTxFail(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte, waitFor time.Duration) func() {
-	return func() {
-		var status strings.Builder
-		require.Eventually(t, func() bool {
-			// prevent appending to the prior invocation(s)
-			status.Reset()
-			if err := spec.TxSuccess(ctx, txHash); err == nil {
-				status.WriteString("success")
-				return false
-			} else {
-				status.WriteString(err.Error())
-				// NOTE: ErrTxNotConfirmed is not considered a failure, should retry
-				return !errors.Is(err, driver.ErrTxNotConfirmed)
-			}
-		}, waitFor, time.Second*1, "tx should fail - status: %v, hash %x", status.String(), txHash)
-	}
+// expectTxFail should fail if spec.TxSuccess returns an error that is NOT of
+// type driver.ErrTxNotConfirmed. It will keep checking while the error IS
+// driver.ErrTxNotConfirmed. If spec.TxSuccess return without error, this should
+// also fail the test (TODO: it keeps checking until waitFor timeout!)
+func expectTxFail(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte, waitFor time.Duration) {
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		err := spec.TxSuccess(ctx, txHash)
+		require.Error(collect, err, "transaction succeeded") // fail fast with require if it executed without error
+
+		assert.NotErrorIs(collect, err, driver.ErrTxNotConfirmed) // tick again if not confirmed
+
+		// otherwise it failed (yay) and we're done checking (raise no errors in this tick)
+	}, waitFor, time.Second*1, "tx should have failed")
 }

@@ -25,7 +25,7 @@ func ExecuteNoticeSpecification(ctx context.Context, t *testing.T, caller Notice
 	require.NoError(t, err, "failed to send deploy database tx")
 
 	// Then i expect success
-	expectTxSuccess(t, caller, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, caller, ctx, txHash, defaultTxQueryTimeout)
 
 	// And i expect database should exist
 	err = caller.DatabaseExists(ctx, caller.DBID(db.Name))

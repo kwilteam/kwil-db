@@ -30,7 +30,7 @@ func ValidatorNodeJoinSpecification(ctx context.Context, t *testing.T, netops Va
 	require.NoError(t, err)
 
 	// Ensure that the Tx is mined.
-	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)()
+	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)
 
 	// Get Request status, #approvals = 0, #board = valCount
 	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner)
@@ -52,7 +52,7 @@ func JoinExistingValidatorSpecification(ctx context.Context, t *testing.T, netop
 	require.NoError(t, err)
 
 	// Ensure that the Tx is mined.
-	expectTxFail(t, netops, ctx, rec, defaultTxQueryTimeout)()
+	expectTxFail(t, netops, ctx, rec, defaultTxQueryTimeout)
 
 	// Get Request status, #approvals = 0, #board = valCount
 	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner)
@@ -73,7 +73,7 @@ func NonValidatorLeaveSpecification(ctx context.Context, t *testing.T, netops Va
 	require.NoError(t, err)
 
 	// Ensure that the Validator Leave Tx is mined.
-	expectTxFail(t, netops, ctx, rec, defaultTxQueryTimeout)()
+	expectTxFail(t, netops, ctx, rec, defaultTxQueryTimeout)
 
 	// ValidatorSet count should remain same
 	postVals, err := netops.ValidatorsList(ctx)
@@ -93,7 +93,7 @@ func RemoveNonValidatorSpecification(ctx context.Context, t *testing.T, netops V
 	require.NoError(t, err)
 
 	// Ensure that the Validator Remove Tx is mined.
-	expectTxFail(t, netops, ctx, rec, defaultTxQueryTimeout)()
+	expectTxFail(t, netops, ctx, rec, defaultTxQueryTimeout)
 
 	// ValidatorSet count should remain same
 	postVals, err := netops.ValidatorsList(ctx)
@@ -120,7 +120,7 @@ func ValidatorNodeRemoveSpecificationV4R1(ctx context.Context, t *testing.T, n0,
 	rec, err := n0.ValidatorNodeRemove(ctx, target)
 	require.NoError(t, err)
 
-	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)()
+	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)
 
 	// node 3 is still in the validator set
 	vals, err = n0.ValidatorsList(ctx)
@@ -135,7 +135,7 @@ func ValidatorNodeRemoveSpecificationV4R1(ctx context.Context, t *testing.T, n0,
 	rec, err = n1.ValidatorNodeRemove(ctx, target)
 	assert.NoError(t, err)
 
-	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)()
+	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)
 
 	// node 3 is still in the validator set (2 / 4 validators is sub-threshold)
 	vals, err = n0.ValidatorsList(ctx)
@@ -150,7 +150,7 @@ func ValidatorNodeRemoveSpecificationV4R1(ctx context.Context, t *testing.T, n0,
 	rec, err = n2.ValidatorNodeRemove(ctx, target)
 	assert.NoError(t, err)
 
-	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)()
+	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)
 
 	// node 3 is gone from the validator set
 	vals, err = n0.ValidatorsList(ctx)
@@ -182,7 +182,7 @@ func ValidatorNodeApproveSpecification(ctx context.Context, t *testing.T, netops
 	require.NoError(t, err)
 
 	// Ensure that the Tx is mined.
-	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)()
+	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)
 
 	/*
 		Check Join Request Status:
@@ -216,7 +216,7 @@ func ValidatorNodeSelfApproveSpecification(ctx context.Context, t *testing.T, ne
 	require.NoError(t, err)
 
 	// TX should fail as validator cannot approve its own join request
-	expectTxFail(t, netops, ctx, rec, defaultTxQueryTimeout)()
+	expectTxFail(t, netops, ctx, rec, defaultTxQueryTimeout)
 
 	// Check Join Request Status: #approvals = preApprovalCnt
 	joinStatus, err = netops.ValidatorJoinStatus(ctx, joiner)
@@ -238,7 +238,7 @@ func ValidatorNodeLeaveSpecification(ctx context.Context, t *testing.T, netops V
 	require.NoError(t, err)
 
 	// Ensure that the Validator Leave Tx is mined.
-	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)()
+	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)
 
 	// ValidatorSet count should be reduced by 1
 	vals, err = netops.ValidatorsList(ctx)
@@ -265,7 +265,7 @@ func ValidatorJoinExpirySpecification(ctx context.Context, t *testing.T, netops 
 	assert.NoError(t, err)
 
 	// Ensure that the Tx is mined.
-	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)()
+	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)
 
 	// Get Request status, #approvals = 0
 	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner)

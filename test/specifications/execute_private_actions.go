@@ -23,7 +23,7 @@ func ExecutePrivateActionSpecification(ctx context.Context, t *testing.T, execut
 	txHash, err := execute.Execute(ctx, dbID, "create_post_private", createPostActionInput)
 	require.NoError(t, err, "error executing private action")
 
-	expectTxFail(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxFail(t, execute, ctx, txHash, defaultTxQueryTimeout)
 
 	if hasUser(ctx, t, execute, dbID, id) {
 		t.Fatalf("user %d should not exist", id)
@@ -33,7 +33,7 @@ func ExecutePrivateActionSpecification(ctx context.Context, t *testing.T, execut
 	txHash, err = execute.Execute(ctx, dbID, "create_post_nested", createPostActionInput)
 	require.NoError(t, err, "error executing nested action")
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)
 
 	if !hasUser(ctx, t, execute, dbID, id) {
 		t.Fatalf("user %d should exist", id)

@@ -18,7 +18,7 @@ func DatabaseDropSpecification(ctx context.Context, t *testing.T, drop DatabaseD
 	require.NoError(t, err, "failed to send drop database tx")
 
 	// Then i expect success
-	expectTxSuccess(t, drop, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, drop, ctx, txHash, defaultTxQueryTimeout)
 
 	// And i expect database should not exist
 	err = drop.DatabaseExists(ctx, drop.DBID(db.Name))
@@ -29,5 +29,5 @@ func DatabaseDropSpecification(ctx context.Context, t *testing.T, drop DatabaseD
 	require.NoError(t, err, "failed to send drop database tx")
 
 	// Then i expect tx failure
-	expectTxFail(t, drop, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxFail(t, drop, ctx, txHash, defaultTxQueryTimeout)
 }

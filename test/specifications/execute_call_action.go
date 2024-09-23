@@ -91,7 +91,7 @@ func ExecuteCallPrivateModeSpecification(ctx context.Context, t *testing.T, auth
 	txHash, err := authCaller.Execute(ctx, dbID, createUserActionName, createUserActionInput)
 	assert.NoError(t, err)
 
-	expectTxSuccess(t, authCaller, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, authCaller, ctx, txHash, defaultTxQueryTimeout)
 
 	// testing query database: disabled for all clients
 	_, err = noAuthCaller.QueryDatabase(ctx, dbID, "SELECT * FROM users")
@@ -109,7 +109,7 @@ func ExecuteCallPrivateModeSpecification(ctx context.Context, t *testing.T, auth
 	txHash, err = authCaller.Execute(ctx, dbID, createPostQueryName, post1...)
 	assert.NoError(t, err)
 
-	expectTxSuccess(t, authCaller, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, authCaller, ctx, txHash, defaultTxQueryTimeout)
 
 	// testing call action
 	getPostInput := []any{1111}

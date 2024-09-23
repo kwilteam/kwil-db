@@ -23,7 +23,7 @@ func ExecuteExtensionSpecification(ctx context.Context, t *testing.T, execute Ex
 	txHash, err := execute.Execute(ctx, dbID, divideActionName, []any{2, 1, 2})
 	assert.NoError(t, err)
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)
 
 	records, err := execute.Call(ctx, dbID, divideActionName, []any{2, 1, 2})
 	assert.NoError(t, err)

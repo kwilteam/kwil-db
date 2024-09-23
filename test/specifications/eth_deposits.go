@@ -162,7 +162,7 @@ func DeployDbInsufficientFundsSpecification(ctx context.Context, t *testing.T, d
 	require.NoError(t, err, "failed to send deploy database tx")
 
 	// Then i expect failure
-	expectTxFail(t, deployer, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxFail(t, deployer, ctx, txHash, defaultTxQueryTimeout)
 
 	time.Sleep(2 * time.Second) // ensure sync from other nodes
 
@@ -220,7 +220,7 @@ func FundValidatorSpecification(ctx context.Context, t *testing.T, sender Deploy
 	require.NoError(t, err, "failed to send transfer tx")
 
 	// I expect success
-	expectTxSuccess(t, sender, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, sender, ctx, txHash, defaultTxQueryTimeout)
 
 	time.Sleep(2 * time.Second) // it reports the old state very briefly, wait a sec
 
@@ -270,7 +270,7 @@ func DeployDbSuccessSpecification(ctx context.Context, t *testing.T, deployer De
 	require.NoError(t, err, "failed to send deploy database tx")
 
 	// Then i expect success
-	expectTxSuccess(t, deployer, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, deployer, ctx, txHash, defaultTxQueryTimeout)
 
 	time.Sleep(2 * time.Second) // ensure sync from other nodes
 

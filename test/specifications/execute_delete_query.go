@@ -34,7 +34,7 @@ func ExecuteDBDeleteSpecification(ctx context.Context, t *testing.T, execute Exe
 	txHash, err := execute.Execute(ctx, dbID, actionName, []any{user1Id})
 	assert.NoError(t, err)
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)
 
 	// check that user is deleted
 	res, err = execute.QueryDatabase(ctx, dbID, fmt.Sprintf("SELECT * FROM users WHERE id = %d", user1Id))

@@ -21,7 +21,7 @@ func ExecuteOwnerActionSpecification(ctx context.Context, t *testing.T, execute 
 	txHash, err := execute.Execute(ctx, dbID, ownerOnlyActionName, actionInputs)
 	require.NoError(t, err, "error executing owner action")
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)
 }
 
 func ExecuteOwnerActionFailSpecification(ctx context.Context, t *testing.T, execute ExecuteActionsDsl, dbID string) {
@@ -32,7 +32,7 @@ func ExecuteOwnerActionFailSpecification(ctx context.Context, t *testing.T, exec
 	txHash, err := execute.Execute(ctx, dbID, ownerOnlyActionName, actionInputs)
 	require.NoError(t, err, "error executing owner action")
 
-	expectTxFail(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxFail(t, execute, ctx, txHash, defaultTxQueryTimeout)
 
 	// call authenticated, should fail
 	_, err = execute.Call(ctx, dbID, ownerOnlyActionName, actionInputs)

@@ -48,7 +48,7 @@ func ExecuteDBSingleInsertSpecification(ctx context.Context, t *testing.T, execu
 	txHash, err := execute.Execute(ctx, dbID, createUserActionName, createUserActionInput)
 	assert.NoError(t, err)
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)
 
 	// testing query database
 	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users")
@@ -64,7 +64,7 @@ func ExecuteDBSingleInsertSpecification(ctx context.Context, t *testing.T, execu
 	txHash, err = execute.Execute(ctx, dbID, createPostQueryName, post1...)
 	assert.NoError(t, err)
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)
 
 	records, err = execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
 	assert.NoError(t, err)
@@ -80,7 +80,7 @@ func ExecuteDBSingleInsertSpecification(ctx context.Context, t *testing.T, execu
 	//txHash, err = execute.Execute(ctx, dbID, multiStmtActionName, nil)
 	//assert.NoError(t, err)
 	//
-	//expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+	//expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)
 }
 
 // ExecuteDBBatchInsertSpecification is a specification for database batch insert,
@@ -104,7 +104,7 @@ func ExecuteDBBatchInsertSpecification(ctx context.Context, t *testing.T, execut
 	txHash, err := execute.Execute(ctx, dbID, createUserActionName, createUserActionInput)
 	assert.NoError(t, err)
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)
 
 	// testing query database
 	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users")
@@ -121,7 +121,7 @@ func ExecuteDBBatchInsertSpecification(ctx context.Context, t *testing.T, execut
 	txHash, err = execute.Execute(ctx, dbID, createPostQueryName, post1...)
 	assert.NoError(t, err)
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)
 
 	records, err = execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
 	assert.NoError(t, err)

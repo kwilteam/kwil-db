@@ -174,7 +174,7 @@ func testUint256(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid s
 	res, err = execute.Execute(ctx, dbid, callType+"_store_uint256s", []any{"115792089237316195423570985008687907853269984665640564039457584007913129639936", uint256Arr})
 	require.NoError(t, err)
 
-	ExpectTxfail(t, execute, ctx, res)
+	ExpectTxFail(t, execute, ctx, res)
 }
 
 func testText(ctx context.Context, t *testing.T, execute ProcedureDSL, dbid string, callType string) {
