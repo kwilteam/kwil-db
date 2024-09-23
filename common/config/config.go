@@ -19,9 +19,10 @@ import (
 type KwildConfig struct {
 	RootDir string
 
-	AppConfig   *AppConfig   `mapstructure:"app"`
-	ChainConfig *ChainConfig `mapstructure:"chain"`
-	Logging     *Logging     `mapstructure:"log"`
+	AppConfig       *AppConfig             `mapstructure:"app"`
+	ChainConfig     *ChainConfig           `mapstructure:"chain"`
+	Logging         *Logging               `mapstructure:"log"`
+	Instrumentation *InstrumentationConfig `mapstructure:"instrumentation"`
 }
 
 type Logging struct {
@@ -34,6 +35,12 @@ type Logging struct {
 	OutputPaths    []string `mapstructure:"output_paths"`
 	MaxLogSizeKB   int64    `mapstructure:"file_roll_size"`
 	MaxLogRolls    int      `mapstructure:"retain_max_rolls"`
+}
+
+type InstrumentationConfig struct {
+	Prometheus     bool   `mapstructure:"prometheus"`
+	PromListenAddr string `mapstructure:"prometheus_listen_addr"`
+	MaxConnections int    `mapstructure:"max_open_connections"`
 }
 
 type AppConfig struct {

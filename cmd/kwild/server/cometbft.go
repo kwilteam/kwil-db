@@ -105,6 +105,13 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 	nodeCfg.StateSync.DiscoveryTime = time.Duration(userChainCfg.StateSync.DiscoveryTime)
 	nodeCfg.StateSync.ChunkRequestTimeout = time.Duration(userChainCfg.StateSync.ChunkRequestTimeout)
 
+	nodeCfg.Instrumentation = &cmtCfg.InstrumentationConfig{
+		Prometheus:           cfg.Instrumentation.Prometheus,
+		PrometheusListenAddr: cfg.Instrumentation.PromListenAddr,
+		MaxOpenConnections:   cfg.Instrumentation.MaxConnections,
+		Namespace:            "cometbft",
+	}
+
 	// Light client verification
 	nodeCfg.StateSync.TrustPeriod = 36000 * time.Second // 10 hours (6s block time)
 

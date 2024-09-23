@@ -23,6 +23,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/openrpc"
@@ -56,6 +58,14 @@ type Server struct {
 	spec           json.RawMessage
 	authSHA        []byte
 	tlsCfg         *tls.Config
+
+	// UNSTABLE: this is not much more than a placeholder to ensure we can add
+	// our own metrics to the global prometheus metrics registry.
+	metrics map[string]Metrics
+}
+
+type Metrics interface {
+	Inc()
 }
 
 type serverConfig struct {
@@ -171,9 +181,21 @@ var (
 	}
 )
 
+type Mux interface {
+	Handle()
+}
+
 // NewServer creates a new JSON-RPC server. Use RegisterMethodHandler or
 // RegisterSvc to add method handlers.
 func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
+	counter := prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "json-rpc-server",
+		Name:      "JSON RPC Server counter (UNSTABLE)",
+	})
+	metrics := map[string]Metrics{
+		"req_counter": counter,
+	}
+
 	addr, isUNIX, err := checkAddr(addr)
 	if err != nil {
 		return nil, err
@@ -228,6 +250,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		services:       make(map[string]Svc),
 		specInfo:       cfg.specInfo,
 		tlsCfg:         cfg.tlsConfig,
+		metrics:        metrics,
 	}
 
 	if cfg.pass != "" {
@@ -246,6 +269,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	if cfg.enableCORS {
 		h = corsHandler(h)
 	}
+	h = reqCounter(h, metrics)
 	h = realIPHandler(h, cfg.proxyCount) // for effective rate limiting
 	h = recoverer(h, log)                // first, wrap with defer and call next ^
 
@@ -352,6 +376,14 @@ func corsHandler(h http.Handler) http.Handler {
 		}
 
 		// Other SIMPLE requests and non-cors requests
+		h.ServeHTTP(w, r)
+	})
+}
+
+func reqCounter(h http.Handler, metrics map[string]Metrics) http.Handler {
+	reqCounter := metrics["req_count"]
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqCounter.Inc()
 		h.ServeHTTP(w, r)
 	})
 }

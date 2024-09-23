@@ -20,6 +20,8 @@ import (
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 
 	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common"
@@ -111,6 +113,11 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// replaying blocks (and using atomic db tx commits), i.e. calling
 	// FinalizeBlock+Commit. This is not just a constructor, sadly.
 	cometBftNode := buildCometNode(d, closers, abciApp)
+
+	prometheus.MustRegister(
+		collectors.NewBuildInfoCollector(),
+		// collectors.NewDBStatsCollector() // TODO: do something like this for pg.DB
+	)
 
 	// Give abci p2p module access to removing peers
 	p2p.SetRemovePeerFn(cometBftNode.RemovePeer)
