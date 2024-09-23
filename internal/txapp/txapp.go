@@ -838,9 +838,15 @@ func (r *TxApp) Commit(ctx context.Context) (int64, error) {
 
 	r.announceValidators()
 
-	// Take a snapshot of the database if node is not in the catchup mode and snapshots are enabled
-	if r.snapshotter != nil && r.replayStatusFn != nil &&
-		r.snapshotter.IsSnapshotDue(uint64(r.height)) && !r.replayStatusFn() {
+	// Snapshots are to be taken if:
+	// - the block height is a multiple of the snapshot interval
+	// - there are no snapshots in the store (This is to support the new nodes joining the network using
+	//   statesync. As the snapshot intervals are pretty large, the new nodes will not have any
+	//   snapshots to start with for a long time, during which the new nodes just hangs in the snapshot
+	//   discovery phase, which can be mitigated if we can produce a snapshot at the start of the network
+	//   or when the node joins network at any height)
+	if r.snapshotter != nil && r.replayStatusFn != nil && !r.replayStatusFn() &&
+		(r.snapshotter.IsSnapshotDue(uint64(r.height)) || len(r.snapshotter.ListSnapshots()) == 0) {
 		err = r.snapshotDatabase(ctx)
 		if err != nil {
 			return 0, err
