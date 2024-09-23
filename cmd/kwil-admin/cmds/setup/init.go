@@ -123,7 +123,7 @@ func initCmd() *cobra.Command {
 	// genesis.json flags
 	cmd1.Flags().StringVarP(&genesisPath, "genesis", "g", "", "path to genesis file")
 	cmd1.Flags().StringVar(&chainId, "chain-id", "", "chain ID to use for the genesis file")
-	cmd1.Flags().Int64Var(&joinExpiry, "join-expiry", 14400, "number of blocks before a join request expires")
+	cmd1.Flags().Int64Var(&joinExpiry, "join-expiry", 100800, "number of blocks before a join request expires")
 	cmd1.Flags().BoolVar(&withGas, "gas", false, "enable gas")
 	cmd1.Flags().Var(&allocs, "alloc", "account=amount pairs of genesis account allocations")
 	cmd1.Flags().StringVarP(&genesisState, "genesis-state", "s", "", "path to genesis state snapshot file")
