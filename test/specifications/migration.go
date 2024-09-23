@@ -25,7 +25,7 @@ func SubmitMigrationProposal(ctx context.Context, t *testing.T, netops Migration
 	t.Log("Executing migration trigger specification")
 
 	// Trigger migration"
-	txHash, err := netops.SubmitMigrationProposal(ctx, big.NewInt(1), big.NewInt(50), chainID)
+	txHash, err := netops.SubmitMigrationProposal(ctx, big.NewInt(1), big.NewInt(100), chainID)
 	require.NoError(t, err)
 
 	// Ensure that the Tx is mined.

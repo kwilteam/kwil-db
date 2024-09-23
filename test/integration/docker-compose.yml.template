@@ -6,7 +6,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedRPCPorts}}{{index . 0}}:{{end}}8484"
-      - "{{with .ExposedRPCPorts}}{{index . 0}}:{{end}}8485"
+      - "{{with .ExposedRPCPorts}}{{index . 0 | plus 100}}:{{end}}8485"
       - "26656"
       - "26657"
     #env_file:
@@ -72,7 +72,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedRPCPorts}}{{index . 1}}:{{end}}8484"
-      - "{{with .ExposedRPCPorts}}{{index . 1}}:{{end}}8485"
+      - "{{with .ExposedRPCPorts}}{{index . 1 | plus 100}}:{{end}}8485"
       - "26656"
       - "26657"
     environment:
@@ -136,7 +136,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedRPCPorts}}{{index . 2}}:{{end}}8484"
-      - "{{with .ExposedRPCPorts}}{{index . 2}}:{{end}}8485"
+      - "{{with .ExposedRPCPorts}}{{index . 2 | plus 100}}:{{end}}8485"
       - "26656"
       - "26657"
     environment:
@@ -203,7 +203,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedRPCPorts}}{{index . 3}}:{{end}}8484"
-      - "{{with .ExposedRPCPorts}}{{index . 3}}:{{end}}8485"
+      - "{{with .ExposedRPCPorts}}{{index . 3 | plus 100}}:{{end}}8485"
       - "26656"
       - "26657"
     environment:
@@ -267,7 +267,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedRPCPorts}}{{index . 4}}:{{end}}8484"
-      - "{{with .ExposedRPCPorts}}{{index . 4}}:{{end}}8485"
+      - "{{with .ExposedRPCPorts}}{{index . 4 | plus 100}}:{{end}}8485"
       - "26656"
       - "26657"
     environment:
@@ -331,7 +331,7 @@ services:
     image: {{ .DockerImage }}
     ports:
       - "{{with .ExposedRPCPorts}}{{index . 5}}:{{end}}8484"
-      - "{{with .ExposedRPCPorts}}{{index . 5}}:{{end}}8485"
+      - "{{with .ExposedRPCPorts}}{{index . 5 | plus 100}}:{{end}}8485"
       - "26656"
       - "26657"
     environment:
