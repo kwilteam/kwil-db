@@ -604,12 +604,12 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	defer done(ctx)
 
 	// wait group to wait at the end of the function for all logs to be received
-	doneLogs := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
 		// we enforce that the cumulative size of logs is less than 1KB
 		// per tx. This is a work-around until we have gas costs to protect
 		// against log spam.
-		defer close(doneLogs)
 		for {
 			log, ok := <-logs
 			if !ok {
@@ -640,6 +640,9 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			}
 		}
 
+		// logs channel will be closed when the tx is precommitted,
+		// so finish the wait group
+		wg.Done()
 	}()
 
 	for i, tx := range req.Txs {
@@ -831,11 +834,12 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	for _, pubKey := range approvedJoins {
 		addr, err := cometbft.PubkeyToAddr(pubKey)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert pubkey to address: %w", err)
+			a.log.Warn("failed to convert pubkey to address", zap.Error(err))
+			continue
 		}
 		if err = a.p2p.AddPeer(ctx, addr); err != nil {
 			if !errors.Is(err, cometbft.ErrPeerAlreadyWhitelisted) {
-				return nil, fmt.Errorf("failed to whitelist new validator %s: %w", addr, err)
+				a.log.Warn("failed to whitelist new validator", zap.String("address", addr), zap.Error(err))
 			}
 		}
 	}
@@ -844,7 +848,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	for _, pubKey := range expiredJoins {
 		addr, err := cometbft.PubkeyToAddr(pubKey)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert pubkey to address: %w", err)
+			a.log.Warn("failed to convert pubkey to address", zap.Error(err))
 		}
 		if err = a.p2p.RemovePeer(ctx, addr); err != nil {
 			if !errors.Is(err, cometbft.ErrPeerNotWhitelisted) {
@@ -854,10 +858,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// wait for all logs to be received
-	select {
-	case <-doneLogs:
-	case <-ctx.Done():
-	}
+	wg.Wait()
 
 	for _, result := range resultArr {
 		logs, ok := logMap[hex.EncodeToString(result.TxHash)]
