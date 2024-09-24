@@ -164,6 +164,12 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 	if height == -1 {
 		height = 0 // negative means first start (no state table yet), but need non-negative for below logic
 	}
+
+	if bytes.Equal(appHash, []byte{0x42}) {
+		return nil, fmt.Errorf(`Application state is INCONSISTENT. ` +
+			`Manually recreate the PostgreSQL database and restart to replay all blocks.`)
+	}
+
 	app.appHash = appHash
 	app.height = height
 
@@ -697,7 +703,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 	}
 
-	a.log.Debug("Finalize(start)", log.Int("height", a.height), log.String("appHash", hex.EncodeToString(a.appHash)))
+	a.log.Info("Finalize(start)", log.Int("height", a.height), log.String("appHash", hex.EncodeToString(a.appHash)))
 	// Get the new validator set and apphash from txApp.
 	finalValidators, approvedJoins, expiredJoins, err := a.txApp.Finalize(ctx, a.consensusTx, &blockCtx)
 	if err != nil {
@@ -759,6 +765,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	a.appHash = newAppHash[:]
 	a.height = req.Height
 	a.stateMtx.Unlock()
+
+	a.log.Infof("New app hash %x for block %d", newAppHash, req.Height)
 
 	if a.forks.BeginsHalt(uint64(req.Height) - 1) {
 		a.log.Info("This is the last block before halt.")
