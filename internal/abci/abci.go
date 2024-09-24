@@ -186,8 +186,12 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		if err != nil {
 			return nil, err
 		}
+
+		if height != lc.Height {
+			return nil, fmt.Errorf("height mismatch between chain state and last commit info: %d != %d", height, lc.Height)
+		}
+
 		appHash = lc.AppHash
-		height = lc.Height
 		log.Info("Recovered last commit info", zap.Int64("height", height), zap.String("appHash", hex.EncodeToString(appHash)))
 	}
 
@@ -605,8 +609,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		// we enforce that the cumulative size of logs is less than 1KB
 		// per tx. This is a work-around until we have gas costs to protect
 		// against log spam.
+		defer close(doneLogs)
 		for {
-			defer close(doneLogs)
 			log, ok := <-logs
 			if !ok {
 				break
@@ -954,11 +958,6 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		return nil, fmt.Errorf("failed to persist last changeset height: %w", err)
 	}
 
-	// Observed same behavior as the crash after the Commit(start log message)
-	// if a.height == 5 {
-	// 	panic("DIE here ? ")
-	// }
-
 	err = tx.Commit(ctx0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction app: %w", err)
@@ -1004,8 +1003,8 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 // lastCommitInfo is a struct to store the last commit info such as
 // height and apphash at the end of the FinalizeBlock method.
 type lastCommitInfo struct {
-	AppHash []byte
-	Height  int64
+	AppHash types.HexBytes `json:"app_hash"`
+	Height  int64          `json:"height"`
 }
 
 // saveAs saves the last commit info to root_dir/abci/last_commit_info.json.
