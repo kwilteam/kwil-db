@@ -14,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/snapshot"
 	"github.com/kwilteam/kwil-db/common/chain"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/spf13/cobra"
 )
 
@@ -87,18 +88,15 @@ func genesisHashCmd() *cobra.Command { //nolint:unused
 				appHash = hash.Sum(nil)
 			} else {
 
-				pgConf, err := common.GetPostgresFlags(cmd)
-				if err != nil {
-					return display.PrintErr(cmd, err)
-				}
-
+				var pgConf *pg.ConnConfig
+				var err error
 				if rootDir != "" {
 					rootDir, err = common.ExpandPath(rootDir)
 					if err != nil {
 						return display.PrintErr(cmd, err)
 					}
 
-					pgConf, err = getPGConnUsingLocalConfig(pgConf, rootDir)
+					pgConf, err = getPGConnUsingLocalConfig(cmd, rootDir)
 					if err != nil {
 						return display.PrintErr(cmd, err)
 					}

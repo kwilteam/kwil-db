@@ -43,17 +43,12 @@ func resetCmd() *cobra.Command {
 				}
 			}
 
-			pgConn, err := common.GetPostgresFlags(cobraCmd)
+			pgConf, err := getPGConnUsingLocalConfig(cobraCmd, rootDir)
 			if err != nil {
 				return display.PrintErr(cobraCmd, err)
 			}
 
-			pgConf, err := getPGConnUsingLocalConfig(pgConn, rootDir)
-			if err != nil {
-				return display.PrintErr(cobraCmd, err)
-			}
-
-			err = resetPGState(context.Background(), pgConf)
+			err = resetPGState(cobraCmd.Context(), pgConf)
 			if err != nil {
 				return display.PrintErr(cobraCmd, err)
 			}
@@ -85,13 +80,8 @@ func resetCmd() *cobra.Command {
 
 // getPGConnUsingLocalConfig gets the postgres connection that should be used, including configurations set by the local config.
 // It uses the same precedence as `kwild`, which is (lowest to highest): default, config file, env. flag.
-func getPGConnUsingLocalConfig(conn *pg.ConnConfig, rootDir string) (*pg.ConnConfig, error) {
+func getPGConnUsingLocalConfig(cmd *cobra.Command, rootDir string) (*pg.ConnConfig, error) {
 	cfg := config.EmptyConfig()
-	cfg.AppConfig.DBHost = conn.Host
-	cfg.AppConfig.DBPort = conn.Port
-	cfg.AppConfig.DBUser = conn.User
-	cfg.AppConfig.DBPass = conn.Pass
-	cfg.AppConfig.DBName = conn.DBName
 	cfg.RootDir = rootDir
 
 	// merge it with any configured values
@@ -100,13 +90,15 @@ func getPGConnUsingLocalConfig(conn *pg.ConnConfig, rootDir string) (*pg.ConnCon
 		return nil, err
 	}
 
-	return &pg.ConnConfig{
+	conf := &pg.ConnConfig{
 		Host:   cfg.AppConfig.DBHost,
 		Port:   cfg.AppConfig.DBPort,
 		User:   cfg.AppConfig.DBUser,
 		Pass:   cfg.AppConfig.DBPass,
 		DBName: cfg.AppConfig.DBName,
-	}, nil
+	}
+
+	return common.MergePostgresFlags(conf, cmd)
 }
 
 // resetPGState drops and creates the database.

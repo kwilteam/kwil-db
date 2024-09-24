@@ -193,32 +193,57 @@ func BindPostgresFlags(cmd *cobra.Command) {
 
 // GetPostgresFlags returns the postgres flags from the given command.
 func GetPostgresFlags(cmd *cobra.Command) (*pg.ConnConfig, error) {
-	conf := &pg.ConnConfig{}
+	return MergePostgresFlags(DefaultPostgresConnConfig(), cmd)
+}
+
+// MergePostgresFlags merges the given connection config with the flags from the given command.
+// It only sets the fields that are set in the flags.
+func MergePostgresFlags(conf *pg.ConnConfig, cmd *cobra.Command) (*pg.ConnConfig, error) {
 	var err error
-	conf.DBName, err = cmd.Flags().GetString("dbname")
-	if err != nil {
-		return nil, err
+	if cmd.Flags().Changed("dbname") {
+		conf.DBName, err = cmd.Flags().GetString("dbname")
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	conf.User, err = cmd.Flags().GetString("user")
-	if err != nil {
-		return nil, err
+	if cmd.Flags().Changed("user") {
+		conf.User, err = cmd.Flags().GetString("user")
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	conf.Pass, err = cmd.Flags().GetString("password")
-	if err != nil {
-		return nil, err
+	if cmd.Flags().Changed("password") {
+		conf.Pass, err = cmd.Flags().GetString("password")
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	conf.Host, err = cmd.Flags().GetString("host")
-	if err != nil {
-		return nil, err
+	if cmd.Flags().Changed("host") {
+		conf.Host, err = cmd.Flags().GetString("host")
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	conf.Port, err = cmd.Flags().GetString("port")
-	if err != nil {
-		return nil, err
+	if cmd.Flags().Changed("port") {
+		conf.Port, err = cmd.Flags().GetString("port")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return conf, nil
+}
+
+// DefaultPostgresConnConfig returns a default connection config for a postgres database.
+func DefaultPostgresConnConfig() *pg.ConnConfig {
+	return &pg.ConnConfig{
+		DBName: "kwild",
+		User:   "postgres",
+		Host:   "localhost",
+		Port:   "5432",
+	}
 }
