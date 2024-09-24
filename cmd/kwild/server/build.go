@@ -681,7 +681,7 @@ func initAccountRepository(d *coreDependencies, tx sql.Tx) {
 
 func buildSnapshotter(d *coreDependencies) *statesync.SnapshotStore {
 	cfg := d.cfg.AppConfig
-	if !cfg.Snapshots.Enabled {
+	if !cfg.Snapshots.Enable {
 		return nil
 	}
 

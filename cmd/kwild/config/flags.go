@@ -64,7 +64,7 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.StringSliceVar(&cfg.AppConfig.ExtensionEndpoints, "app.extension-endpoints", cfg.AppConfig.ExtensionEndpoints, format("%s extension endpoints"))
 
 	// Snapshot Config flags
-	flagSet.BoolVar(&cfg.AppConfig.Snapshots.Enabled, "app.snapshots.enabled", cfg.AppConfig.Snapshots.Enabled, "Enable snapshots")
+	flagSet.BoolVar(&cfg.AppConfig.Snapshots.Enable, "app.snapshots.enable", cfg.AppConfig.Snapshots.Enable, "Enable snapshots")
 	flagSet.Uint64Var(&cfg.AppConfig.Snapshots.RecurringHeight, "app.snapshots.recurring-height", cfg.AppConfig.Snapshots.RecurringHeight, "Recurring heights to create snapshots")
 	flagSet.Uint64Var(&cfg.AppConfig.Snapshots.MaxSnapshots, "app.snapshots.max-snapshots", cfg.AppConfig.Snapshots.MaxSnapshots, "Maximum snapshots to store on disk. Default is 3. If max snapshots is reached, the oldest snapshot is deleted.")
 
@@ -124,4 +124,6 @@ to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.`))
 	flagSet.MarkDeprecated("app.snapshots.snapshot-dir", "this value is no longer configurable")
 	flagSet.String("chain.statesync.snapshot-dir", "", "Chain state sync snapshot directory")
 	flagSet.MarkDeprecated("chain.statesync.snapshot-dir", "this value is no longer configurable")
+	flagSet.BoolVar(&cfg.AppConfig.Snapshots.DEPRECATED_Enabled, "app.snapshots.enabled", cfg.AppConfig.Snapshots.DEPRECATED_Enabled, "Enable snapshots")
+	flagSet.MarkDeprecated("app.snapshots.enabled", "use --app.snapshots.enable instead")
 }

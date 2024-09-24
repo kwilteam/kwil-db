@@ -120,7 +120,7 @@ migrate_from = ""
 [app.snapshots]
 
 # Enables snapshots
-enabled = false
+enable = false
 
 # Specifies the block heights(multiples of recurring_height) at which the snapshot should be taken
 recurring_height = 10000

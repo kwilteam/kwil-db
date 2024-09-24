@@ -223,7 +223,7 @@ migrate_from = "{{ .AppConfig.MigrateFrom }}"
 [app.snapshots]
 
 # Enables snapshots
-enabled = {{.AppConfig.Snapshots.Enabled}}
+enable = {{.AppConfig.Snapshots.Enable}}
 
 # Specifies the block heights(multiples of recurring_height) at which the snapshot should be taken
 recurring_height = {{.AppConfig.Snapshots.RecurringHeight}}

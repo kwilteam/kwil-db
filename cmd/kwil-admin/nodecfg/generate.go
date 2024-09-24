@@ -340,7 +340,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	cfg.ChainConfig.P2P.PrivateMode = genCfg.PrivateMode
 
 	if genCfg.SnapshotsEnabled {
-		cfg.AppConfig.Snapshots.Enabled = true
+		cfg.AppConfig.Snapshots.Enable = true
 
 		if genCfg.MaxSnapshots != 0 {
 			cfg.AppConfig.Snapshots.MaxSnapshots = genCfg.MaxSnapshots

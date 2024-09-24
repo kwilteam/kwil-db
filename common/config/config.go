@@ -97,9 +97,10 @@ type AppConfig struct {
 }
 
 type SnapshotConfig struct {
-	Enabled         bool   `mapstructure:"enabled"`
-	RecurringHeight uint64 `mapstructure:"recurring_height"`
-	MaxSnapshots    uint64 `mapstructure:"max_snapshots"`
+	DEPRECATED_Enabled bool   `mapstructure:"enabled"` // DEPRECATED: use StateSync.Enable
+	Enable             bool   `mapstructure:"enable"`
+	RecurringHeight    uint64 `mapstructure:"recurring_height"`
+	MaxSnapshots       uint64 `mapstructure:"max_snapshots"`
 }
 
 type ChainRPCConfig struct {
