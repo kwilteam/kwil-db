@@ -807,7 +807,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			delete(a.validatorAddressToPubKey, addr)
 			if err = a.p2p.RemovePeer(ctx, addr); err != nil {
 				if !errors.Is(err, cometbft.ErrPeerNotWhitelisted) {
-					return nil, fmt.Errorf("failed to remove demoted validator %s from peer list: %w", addr, err)
+					a.log.Warn("failed to remove demoted validator from peer list", zap.String("address", addr), zap.Error(err))
 				}
 			}
 		} else {
@@ -815,7 +815,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			// Add the validator to the peer list
 			if err = a.p2p.AddPeer(ctx, addr); err != nil {
 				if !errors.Is(err, cometbft.ErrPeerAlreadyWhitelisted) {
-					return nil, fmt.Errorf("failed to whitelist promoted validator %s: %w", addr, err)
+					a.log.Warn("failed to whitelist promoted validator", zap.String("address", addr), zap.Error(err))
 				}
 			}
 		}
@@ -844,7 +844,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 		if err = a.p2p.RemovePeer(ctx, addr); err != nil {
 			if !errors.Is(err, cometbft.ErrPeerNotWhitelisted) {
-				return nil, fmt.Errorf("failed to remove expired validator %s from peer list: %w", addr, err)
+				a.log.Warn("failed to remove expired validator from peer list", zap.String("address", addr), zap.Error(err))
 			}
 		}
 	}
