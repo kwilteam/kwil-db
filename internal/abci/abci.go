@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -44,6 +46,7 @@ var (
 	ABCIPeerFilterPathLen    = len(ABCIPeerFilterPath)
 	statesyncSnapshotSchemas = []string{"kwild_voting", "kwild_internal", "kwild_chain", "kwild_accts", "kwild_migrations", "ds_*"}
 	statsyncExcludedTables   = []string{"kwild_internal.sentry"}
+	lastCommitInfoFile       = "last_commit_info.json"
 )
 
 // AbciConfig includes data that defines the chain and allow the application to
@@ -116,21 +119,26 @@ type AbciApp struct {
 
 	// Migrator is the migrator module that handles migrations
 	migrator MigratorModule
+
+	// lastCommitInfoFileName is the file name of the last commit info file
+	// which stores the app hash and height at the end of FinalizeBlock.
+	lastCommitInfoFileName string
 }
 
 func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule, statesyncer StateSyncModule,
-	txRouter TxApp, consensusParams *chain.ConsensusParams, peers WhitelistPeersModule, migrator MigratorModule, db DB, log log.Logger) (*AbciApp, error) {
+	txRouter TxApp, consensusParams *chain.ConsensusParams, peers WhitelistPeersModule, migrator MigratorModule, db DB, dir string, log log.Logger) (*AbciApp, error) {
 	app := &AbciApp{
-		db:              db,
-		cfg:             *cfg,
-		statesyncer:     statesyncer,
-		snapshotter:     snapshotter,
-		txApp:           txRouter,
-		migrator:        migrator,
-		consensusParams: consensusParams,
-		appHash:         cfg.GenesisAppHash,
-		p2p:             peers,
-		log:             log,
+		db:                     db,
+		cfg:                    *cfg,
+		statesyncer:            statesyncer,
+		snapshotter:            snapshotter,
+		txApp:                  txRouter,
+		migrator:               migrator,
+		consensusParams:        consensusParams,
+		appHash:                cfg.GenesisAppHash,
+		p2p:                    peers,
+		log:                    log,
+		lastCommitInfoFileName: filepath.Join(dir, lastCommitInfoFile),
 
 		validatorAddressToPubKey: make(map[string][]byte),
 		verifiedTxns:             make(map[chainHash]struct{}),
@@ -164,6 +172,25 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 	if height == -1 {
 		height = 0 // negative means first start (no state table yet), but need non-negative for below logic
 	}
+
+	if bytes.Equal(appHash, []byte{0x42}) {
+		// This is an interesting corner case where the node crashes after the commit of block execution
+		// state but before the commit of the app hash. The chain state will have the app hash as "42".
+		// CometBFT seems to persist the FinalizeBlock responses, so during restart it calls "Commit"
+		// directly without calling FinalizeBlock and assumes that the application has the correct state
+		// persisted, whereas the application has the app hash as "42". This will cause the current block
+		// to be committed with an invalid app hash (sentry node blocksyncing will fail at this point).
+		// To fix this, we will store the last commit info in a file and use that as the application's
+		// app hash whenever we find the chain state to be inconsistent signified by the app hash as "42".
+		lc, err := loadLastCommitInfo(app.lastCommitInfoFileName)
+		if err != nil {
+			return nil, err
+		}
+		appHash = lc.AppHash
+		height = lc.Height
+		log.Info("Recovered last commit info", zap.Int64("height", height), zap.String("appHash", hex.EncodeToString(appHash)))
+	}
+
 	app.appHash = appHash
 	app.height = height
 
@@ -573,13 +600,13 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	defer done(ctx)
 
 	// wait group to wait at the end of the function for all logs to be received
-	var wg sync.WaitGroup
-	wg.Add(1)
+	doneLogs := make(chan struct{})
 	go func() {
 		// we enforce that the cumulative size of logs is less than 1KB
 		// per tx. This is a work-around until we have gas costs to protect
 		// against log spam.
 		for {
+			defer close(doneLogs)
 			log, ok := <-logs
 			if !ok {
 				break
@@ -609,9 +636,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			}
 		}
 
-		// logs channel will be closed when the tx is precommitted,
-		// so finish the wait group
-		wg.Done()
 	}()
 
 	for i, tx := range req.Txs {
@@ -826,13 +850,26 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// wait for all logs to be received
-	wg.Wait()
+	select {
+	case <-doneLogs:
+	case <-ctx.Done():
+	}
+
 	for _, result := range resultArr {
 		logs, ok := logMap[hex.EncodeToString(result.TxHash)]
 		if !ok {
 			continue
 		}
 		result.Result.Log += logs.logs
+	}
+
+	// Persist app hash and height to the disk for recovery purposes.
+	lc := &lastCommitInfo{
+		Height:  req.Height,
+		AppHash: newAppHash[:],
+	}
+	if err = lc.saveAs(a.lastCommitInfoFileName); err != nil {
+		return nil, fmt.Errorf("failed to save last commit info: %w", err)
 	}
 
 	return res, nil
@@ -917,6 +954,11 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		return nil, fmt.Errorf("failed to persist last changeset height: %w", err)
 	}
 
+	// Observed same behavior as the crash after the Commit(start log message)
+	// if a.height == 5 {
+	// 	panic("DIE here ? ")
+	// }
+
 	err = tx.Commit(ctx0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction app: %w", err)
@@ -957,6 +999,38 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 	// rechecked and possibly evicted immediately following our commit Response.
 
 	return &abciTypes.ResponseCommit{}, nil // RetainHeight stays 0 to not prune any blocks
+}
+
+// lastCommitInfo is a struct to store the last commit info such as
+// height and apphash at the end of the FinalizeBlock method.
+type lastCommitInfo struct {
+	AppHash []byte
+	Height  int64
+}
+
+// saveAs saves the last commit info to root_dir/abci/last_commit_info.json.
+func (lc *lastCommitInfo) saveAs(filename string) error {
+	bts, err := json.MarshalIndent(lc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal last commit info: %w", err)
+	}
+
+	return os.WriteFile(filename, bts, 0644)
+}
+
+// loadLastCommitInfo loads the last commit info from root_dir/abci/last_commit_info.json.
+func loadLastCommitInfo(filename string) (*lastCommitInfo, error) {
+	bts, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read last commit info: %w", err)
+	}
+
+	var lc lastCommitInfo
+	if err = json.Unmarshal(bts, &lc); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal last commit info: %w", err)
+	}
+
+	return &lc, nil
 }
 
 // Info is part of the Info/Query connection. CometBFT will call this during

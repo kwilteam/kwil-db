@@ -493,8 +493,10 @@ func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *st
 		GasEnabled:         !d.genesisCfg.ConsensusParams.WithoutGasCosts,
 		ForkHeights:        d.genesisCfg.ForkHeights,
 	}
+
+	abciDir := filepath.Join(d.cfg.RootDir, "abci")
 	app, err := abci.NewAbciApp(d.ctx, cfg, sh, ss, txApp,
-		d.genesisCfg.ConsensusParams, p2p, migrator, db, *d.log.Named("abci"))
+		d.genesisCfg.ConsensusParams, p2p, migrator, db, abciDir, *d.log.Named("abci"))
 	if err != nil {
 		failBuild(err, "failed to build ABCI application")
 	}
