@@ -163,7 +163,8 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppConfig.JSONRPCListenAddress,
 		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppConfig.RPCTimeout)),
 		rpcserver.WithReqSizeLimit(d.cfg.AppConfig.RPCMaxReqSize),
-		rpcserver.WithCORS(), rpcserver.WithServerInfo(&usersvc.SpecInfo))
+		rpcserver.WithCORS(), rpcserver.WithServerInfo(&usersvc.SpecInfo),
+		rpcserver.WithMetricsNamespace("kwil_json_rpc_user_server"))
 	if err != nil {
 		failBuild(err, "unable to create json-rpc server")
 	}

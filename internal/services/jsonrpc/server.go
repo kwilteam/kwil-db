@@ -76,6 +76,7 @@ type serverConfig struct {
 	specInfo   *openrpc.Info
 	reqSzLimit int
 	proxyCount int
+	namespace  string
 }
 
 type Opt func(*serverConfig)
@@ -100,6 +101,13 @@ func WithTLS(cfg *tls.Config) Opt {
 func WithTrustedProxyCount(trustedProxyCount int) Opt {
 	return func(c *serverConfig) {
 		c.proxyCount = trustedProxyCount
+	}
+}
+
+// WithMetricsNamespace enables metrics with the provided namespace.
+func WithMetricsNamespace(namespace string) Opt {
+	return func(c *serverConfig) {
+		c.namespace = namespace
 	}
 }
 
@@ -181,21 +189,14 @@ var (
 	}
 )
 
-type Mux interface {
-	Handle()
-}
+const (
+	// This is name of the counter for all JSON-RPC requests (on /rpc/v1).
+	reqCounterName = "jsonrpc_request_counter_UNSTABLE"
+)
 
 // NewServer creates a new JSON-RPC server. Use RegisterMethodHandler or
 // RegisterSvc to add method handlers.
 func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
-	counter := prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: "json-rpc-server",
-		Name:      "JSON RPC Server counter (UNSTABLE)",
-	})
-	metrics := map[string]Metrics{
-		"req_counter": counter,
-	}
-
 	addr, isUNIX, err := checkAddr(addr)
 	if err != nil {
 		return nil, err
@@ -221,6 +222,22 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	}
 	for _, opt := range opts {
 		opt(cfg)
+	}
+
+	// A more complete and structured metrics system should to be created, but
+	// this is a start to ensure we are accessing the global metrics system used
+	// by cometbft. In Grafana or another prom dash,
+	// 'kwil_json_rpc_user_server_request_counter_UNSTABLE' will be graphable.
+	var metrics map[string]Metrics
+	if cfg.namespace != "" {
+		counter := prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: cfg.namespace,
+			Name:      reqCounterName,
+		})
+		prometheus.MustRegister(counter)
+		metrics = map[string]Metrics{
+			reqCounterName: counter,
+		}
 	}
 
 	mux := http.NewServeMux() // http.DefaultServeMux has the pprof endpoints mounted
@@ -269,7 +286,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	if cfg.enableCORS {
 		h = corsHandler(h)
 	}
-	h = reqCounter(h, metrics)
+	h = reqCounter(h, metrics[reqCounterName])
 	h = realIPHandler(h, cfg.proxyCount) // for effective rate limiting
 	h = recoverer(h, log)                // first, wrap with defer and call next ^
 
@@ -380,10 +397,12 @@ func corsHandler(h http.Handler) http.Handler {
 	})
 }
 
-func reqCounter(h http.Handler, metrics map[string]Metrics) http.Handler {
-	reqCounter := metrics["req_count"]
+func reqCounter(h http.Handler, counter Metrics) http.Handler {
+	if counter == nil {
+		return h
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqCounter.Inc()
+		counter.Inc()
 		h.ServeHTTP(w, r)
 	})
 }
