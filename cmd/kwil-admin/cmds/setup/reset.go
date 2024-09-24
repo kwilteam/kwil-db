@@ -3,7 +3,6 @@ package setup
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
@@ -43,8 +42,6 @@ func resetCmd() *cobra.Command {
 					return display.PrintErr(cobraCmd, err)
 				}
 			}
-
-			fmt.Println("Resetting all data in", rootDir)
 
 			pgConf, err := getPGConnUsingLocalConfig(cobraCmd, rootDir)
 			if err != nil {
