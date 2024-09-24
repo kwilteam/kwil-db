@@ -1,6 +1,8 @@
 package setup
 
 import (
+	"fmt"
+
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/spf13/cobra"
@@ -33,7 +35,7 @@ func resetStateCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			return display.PrintCmd(cmd, display.RespString("Reset state in Postgres"))
+			return display.PrintCmd(cmd, display.RespString(fmt.Sprintf("Reset state in Postgres. Host: %s; Port: %s; Database: %s", pgConf.Host, pgConf.Port, pgConf.DBName)))
 		},
 	}
 
