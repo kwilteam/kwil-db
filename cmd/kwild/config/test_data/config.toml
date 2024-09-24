@@ -109,7 +109,7 @@ hostname = ""
 [app.snapshots]
 
 # Enables snapshots
-enabled = false
+enable = false
 
 # Path to the snapshots directory
 # Might be either absolute path or path related to the kwild root directory.

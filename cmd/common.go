@@ -78,7 +78,7 @@ var DefaultConfig = func() *commonConfig.KwildConfig {
 			ReadTxTimeout:        commonConfig.Duration(5 * time.Second),
 			Extensions:           make(map[string]map[string]string),
 			Snapshots: commonConfig.SnapshotConfig{
-				Enabled:         false,
+				Enable:          false,
 				RecurringHeight: 14400, // 1 day at 6s block time
 				MaxSnapshots:    3,
 			},
