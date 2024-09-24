@@ -151,6 +151,14 @@ func GetCfg(flagCfg *config.KwildConfig) (*config.KwildConfig, bool, error) {
 		fmt.Println("WARNING: app.rpc_req_limit is deprecated and will be removed in Kwil v0.10. use app.rpc_max_req_size instead")
 	}
 
+	if cfg.AppConfig.Snapshots.DEPRECATED_Enabled {
+		if cfg.AppConfig.Snapshots.Enable {
+			return nil, false, fmt.Errorf("cannot set both deprecated snapshots enabled and snapshots enable")
+		}
+		cfg.AppConfig.Snapshots.Enable = cfg.AppConfig.Snapshots.DEPRECATED_Enabled
+		fmt.Println("WARNING: app.snapshots.enabled is deprecated and will be removed in Kwil v0.10. use app.snapshots.enable instead")
+	}
+
 	return cfg, configFileExists, nil
 }
 
