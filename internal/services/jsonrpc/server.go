@@ -23,6 +23,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/openrpc"
@@ -56,6 +58,14 @@ type Server struct {
 	spec           json.RawMessage
 	authSHA        []byte
 	tlsCfg         *tls.Config
+
+	// UNSTABLE: this is not much more than a placeholder to ensure we can add
+	// our own metrics to the global prometheus metrics registry.
+	metrics map[string]Metrics
+}
+
+type Metrics interface {
+	Inc()
 }
 
 type serverConfig struct {
@@ -66,6 +76,7 @@ type serverConfig struct {
 	specInfo   *openrpc.Info
 	reqSzLimit int
 	proxyCount int
+	namespace  string
 }
 
 type Opt func(*serverConfig)
@@ -90,6 +101,13 @@ func WithTLS(cfg *tls.Config) Opt {
 func WithTrustedProxyCount(trustedProxyCount int) Opt {
 	return func(c *serverConfig) {
 		c.proxyCount = trustedProxyCount
+	}
+}
+
+// WithMetricsNamespace enables metrics with the provided namespace.
+func WithMetricsNamespace(namespace string) Opt {
+	return func(c *serverConfig) {
+		c.namespace = namespace
 	}
 }
 
@@ -171,6 +189,11 @@ var (
 	}
 )
 
+const (
+	// This is name of the counter for all JSON-RPC requests (on /rpc/v1).
+	reqCounterName = "jsonrpc_request_counter_UNSTABLE"
+)
+
 // NewServer creates a new JSON-RPC server. Use RegisterMethodHandler or
 // RegisterSvc to add method handlers.
 func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
@@ -201,6 +224,22 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		opt(cfg)
 	}
 
+	// A more complete and structured metrics system should to be created, but
+	// this is a start to ensure we are accessing the global metrics system used
+	// by cometbft. In Grafana or another prom dash,
+	// 'kwil_json_rpc_user_server_request_counter_UNSTABLE' will be graphable.
+	var metrics map[string]Metrics
+	if cfg.namespace != "" {
+		counter := prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: cfg.namespace,
+			Name:      reqCounterName,
+		})
+		prometheus.MustRegister(counter)
+		metrics = map[string]Metrics{
+			reqCounterName: counter,
+		}
+	}
+
 	mux := http.NewServeMux() // http.DefaultServeMux has the pprof endpoints mounted
 
 	disconnectTimeout := cfg.timeout + 5*time.Second // for jsonRPCTimeoutHandler to respond, don't disconnect immediately
@@ -228,6 +267,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		services:       make(map[string]Svc),
 		specInfo:       cfg.specInfo,
 		tlsCfg:         cfg.tlsConfig,
+		metrics:        metrics,
 	}
 
 	if cfg.pass != "" {
@@ -246,6 +286,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	if cfg.enableCORS {
 		h = corsHandler(h)
 	}
+	h = reqCounter(h, metrics[reqCounterName])
 	h = realIPHandler(h, cfg.proxyCount) // for effective rate limiting
 	h = recoverer(h, log)                // first, wrap with defer and call next ^
 
@@ -352,6 +393,16 @@ func corsHandler(h http.Handler) http.Handler {
 		}
 
 		// Other SIMPLE requests and non-cors requests
+		h.ServeHTTP(w, r)
+	})
+}
+
+func reqCounter(h http.Handler, counter Metrics) http.Handler {
+	if counter == nil {
+		return h
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		counter.Inc()
 		h.ServeHTTP(w, r)
 	})
 }

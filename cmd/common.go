@@ -92,6 +92,11 @@ var DefaultConfig = func() *commonConfig.KwildConfig {
 			MaxLogSizeKB: 100_000, // 100 MB uncompressed threshold
 			MaxLogRolls:  0,       // the zero value means retain all (don't delete oldest archived logs)
 		},
+		Instrumentation: &commonConfig.InstrumentationConfig{
+			Prometheus:     false,
+			PromListenAddr: "0.0.0.0:26660",
+			MaxConnections: 1,
+		},
 
 		ChainConfig: &commonConfig.ChainConfig{
 			P2P: &commonConfig.P2PConfig{

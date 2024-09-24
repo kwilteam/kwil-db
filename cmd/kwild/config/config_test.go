@@ -35,6 +35,10 @@ func Test_Config_Toml(t *testing.T) {
 	assert.Equal(t, "localhost:50052", cfg.AppConfig.ExtensionEndpoints[0])
 	assert.Equal(t, "localhost:50053", cfg.AppConfig.ExtensionEndpoints[1])
 
+	assert.Equal(t, true, cfg.Instrumentation.Prometheus)
+	assert.Equal(t, 6, cfg.Instrumentation.MaxConnections)
+	assert.Equal(t, "9.8.7.6:20660", cfg.Instrumentation.PromListenAddr)
+
 	// TODO: Add bunch of other validations for different types
 }
 

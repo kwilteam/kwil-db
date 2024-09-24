@@ -308,3 +308,15 @@ chunk_request_timeout = "10s"
 
 # Note: If the requested chunk is not received for a duration of 2 minutes (hard-coded default), 
 # the state sync process is aborted and the node will fall back to the regular block sync process.
+
+[instrumentation]
+
+# collect and serve are served under /metrics
+prometheus = false
+
+# listen address for prometheus metrics
+prometheus_listen_addr = "0.0.0.0:26660"
+
+# Maximum number of simultaneous connections.
+# 0 - unlimited.
+max_open_connections = 1

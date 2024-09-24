@@ -23,6 +23,7 @@ require (
 	github.com/near/borsh-go v0.3.1
 	github.com/olekukonko/tablewriter v0.0.6-0.20230925090304-df64c4bbad77
 	github.com/pelletier/go-toml/v2 v2.2.2
+	github.com/prometheus/client_golang v1.20.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
@@ -116,7 +117,6 @@ require (
 	github.com/pganalyze/pg_query_go/v5 v5.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/client_golang v1.20.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect

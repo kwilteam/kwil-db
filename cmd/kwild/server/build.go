@@ -20,6 +20,8 @@ import (
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 
 	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common"
@@ -112,6 +114,11 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// FinalizeBlock+Commit. This is not just a constructor, sadly.
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
+	prometheus.MustRegister(
+		collectors.NewBuildInfoCollector(),
+		// collectors.NewDBStatsCollector() // TODO: do something like this for pg.DB
+	)
+
 	// Give abci p2p module access to removing peers
 	p2p.SetRemovePeerFn(cometBftNode.RemovePeer)
 
@@ -156,7 +163,8 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppConfig.JSONRPCListenAddress,
 		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppConfig.RPCTimeout)),
 		rpcserver.WithReqSizeLimit(d.cfg.AppConfig.RPCMaxReqSize),
-		rpcserver.WithCORS(), rpcserver.WithServerInfo(&usersvc.SpecInfo))
+		rpcserver.WithCORS(), rpcserver.WithServerInfo(&usersvc.SpecInfo),
+		rpcserver.WithMetricsNamespace("kwil_json_rpc_user_server"))
 	if err != nil {
 		failBuild(err, "unable to create json-rpc server")
 	}

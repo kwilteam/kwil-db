@@ -365,27 +365,28 @@ func DefaultEmptyConfig() *config.KwildConfig {
 			StateSync: &config.StateSyncConfig{},
 			Consensus: &config.ConsensusConfig{},
 		},
-		Logging: &config.Logging{},
+		Logging:         &config.Logging{},
+		Instrumentation: &config.InstrumentationConfig{},
 	}
 }
 
-// EmptyConfig returns a config with all fields set to their zero values.
-// This is useful for guaranteeing that all fields are set when merging
+// EmptyConfig returns a config with all fields set to their zero values (except
+// no nil pointers for the sub-sections structs). This is useful for
+// guaranteeing that all fields are set when merging.
 func EmptyConfig() *config.KwildConfig {
 	return &config.KwildConfig{
 		AppConfig: &config.AppConfig{
 			ExtensionEndpoints: []string{},
 		},
 		ChainConfig: &config.ChainConfig{
-			P2P:     &config.P2PConfig{},
-			RPC:     &config.ChainRPCConfig{},
-			Mempool: &config.MempoolConfig{},
-			StateSync: &config.StateSyncConfig{
-				RPCServers: "",
-			},
+			P2P:       &config.P2PConfig{},
+			RPC:       &config.ChainRPCConfig{},
+			Mempool:   &config.MempoolConfig{},
+			StateSync: &config.StateSyncConfig{},
 			Consensus: &config.ConsensusConfig{},
 		},
-		Logging: &config.Logging{},
+		Logging:         &config.Logging{},
+		Instrumentation: &config.InstrumentationConfig{},
 	}
 }
 
