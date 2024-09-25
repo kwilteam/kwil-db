@@ -127,7 +127,7 @@ to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.`))
 
 	flagSet.BoolVar(&cfg.AppConfig.Snapshots.DEPRECATED_Enabled, "app.snapshots.enabled", cfg.AppConfig.Snapshots.DEPRECATED_Enabled, "Enable snapshots")
 	flagSet.MarkDeprecated("app.snapshots.enabled", "use --app.snapshots.enable instead")
-	
+
 	flagSet.StringVar(&cfg.AppConfig.DEPRECATED_TLSCertFile, "app.tls-cert-file", cfg.AppConfig.DEPRECATED_TLSCertFile, "TLS certificate file path for the admin RPC server (optional)")
 	flagSet.MarkDeprecated("app.tls-cert-file", "use --app.admin-tls-cert-file instead")
 	flagSet.StringVar(&cfg.AppConfig.DEPRECATED_TLSKeyFile, "app.tls-key-file", cfg.AppConfig.DEPRECATED_TLSKeyFile, "TLS key file path for the admin RPC server (optional)")
