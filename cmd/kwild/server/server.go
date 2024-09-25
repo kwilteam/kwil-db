@@ -57,6 +57,8 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *chain.Genesis
 	}
 	logger = *logger.Named("kwild")
 
+	logger.Infof("version %s commit %s", version.KwilVersion, version.Build.RevisionShort)
+
 	closers := &closeFuncs{
 		closers: []func() error{}, // logger.Close is not in here; do it in a defer in Start
 		logger:  logger,
