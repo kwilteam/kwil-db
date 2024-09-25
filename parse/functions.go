@@ -826,6 +826,32 @@ var (
 				return fmt.Sprintf("max(%s)", inputs[0]), nil
 			},
 		},
+		"array_agg": {
+			ValidateArgs: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if args[0].IsArray {
+					return nil, fmt.Errorf("expected argument to be a scalar, got %s", args[0].String())
+				}
+
+				a2 := args[0].Copy()
+				a2.IsArray = true
+				return a2, nil
+			},
+			IsAggregate: true,
+			PGFormat: func(inputs []string, distinct bool, star bool) (string, error) {
+				if star {
+					return "", errStar("array_agg")
+				}
+				if distinct {
+					return "array_agg(DISTINCT %s)", nil
+				}
+
+				return fmt.Sprintf("array_agg(%s ORDER BY %s)", inputs[0], inputs[0]), nil
+			},
+		},
 	}
 )
 

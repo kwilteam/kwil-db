@@ -291,6 +291,17 @@ func Test_Procedures(t *testing.T) {
 				if array_cat($arr[:2], $arr[4:]) != [1, 2, 4] {
 					error('array_cat failed');
 				}
+
+				$count := 0;
+				for $row in select array_agg(a) as a2 from (select 1 as a union select 2 as a) as b {
+					$count := $count + 1;
+					if $row.a2 != [1, 2] {
+						error('array_agg failed');
+					}
+				}
+				if $count != 1 {
+					error('array_agg failed');
+				}
 			}`,
 		},
 		{
