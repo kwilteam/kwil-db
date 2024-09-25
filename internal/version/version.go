@@ -28,7 +28,7 @@ var (
 func init() {
 	if KwilVersion == "" { // not set via ldflags
 		KwilVersion = kwilVersion
-		if Build != nil {
+		if Build != nil && Build.RevisionShort != "" {
 			// Append VCS revision and workspace dirty flag.
 			sep := "+" // start build metadata
 			if strings.Contains(KwilVersion, "+") {
