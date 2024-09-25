@@ -59,6 +59,8 @@ type AbciConfig struct {
 	GenesisAllocs      map[string]*big.Int
 	GasEnabled         bool
 	ForkHeights        map[string]*uint64
+
+	ABCIDir string
 }
 
 type AbciApp struct {
@@ -126,7 +128,7 @@ type AbciApp struct {
 }
 
 func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule, statesyncer StateSyncModule,
-	txRouter TxApp, consensusParams *chain.ConsensusParams, peers WhitelistPeersModule, migrator MigratorModule, db DB, dir string, log log.Logger) (*AbciApp, error) {
+	txRouter TxApp, consensusParams *chain.ConsensusParams, peers WhitelistPeersModule, migrator MigratorModule, db DB, logger log.Logger) (*AbciApp, error) {
 	app := &AbciApp{
 		db:                     db,
 		cfg:                    *cfg,
@@ -137,8 +139,8 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		consensusParams:        consensusParams,
 		appHash:                cfg.GenesisAppHash,
 		p2p:                    peers,
-		log:                    log,
-		lastCommitInfoFileName: filepath.Join(dir, lastCommitInfoFile),
+		log:                    logger,
+		lastCommitInfoFileName: filepath.Join(cfg.ABCIDir, lastCommitInfoFile),
 
 		validatorAddressToPubKey: make(map[string][]byte),
 		verifiedTxns:             make(map[chainHash]struct{}),
@@ -179,20 +181,20 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		// CometBFT seems to persist the FinalizeBlock responses, so during restart it calls "Commit"
 		// directly without calling FinalizeBlock and assumes that the application has the correct state
 		// persisted, whereas the application has the app hash as "42". This will cause the current block
-		// to be committed with an invalid app hash (sentry node blocksyncing will fail at this point).
+		// to be committed with an invalid app hash (any node doing a blocksync will fail at this point).
 		// To fix this, we will store the last commit info in a file and use that as the application's
 		// app hash whenever we find the chain state to be inconsistent signified by the app hash as "42".
 		lc, err := loadLastCommitInfo(app.lastCommitInfoFileName)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to load last commit info due to error: %v. Please drop PostgresDB and rebuild state from existing block data", err)
 		}
 
 		if height != lc.Height {
-			return nil, fmt.Errorf("height mismatch between chain state and last commit info: %d != %d", height, lc.Height)
+			return nil, fmt.Errorf("height mismatch between chain state and last commit info: %d != %d. Please drop PostgresDB and rebuild state from existing block data", height, lc.Height)
 		}
 
 		appHash = lc.AppHash
-		log.Info("Recovered last commit info", zap.Int64("height", height), zap.String("appHash", hex.EncodeToString(appHash)))
+		logger.Warn("Recovered last commit info", log.Int("height", height), log.String("appHash", hex.EncodeToString(appHash)))
 	}
 
 	app.appHash = appHash
@@ -216,7 +218,7 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 
 		// Update transaction payloads.
 		for _, newPayload := range fork.TxPayloads {
-			log.Infof("Registering transaction route for payload type %v", fork.Name)
+			logger.Infof("Registering transaction route for payload type %v", fork.Name)
 			if err := txapp.RegisterRouteImpl(newPayload.Type, newPayload.Route); err != nil {
 				return nil, fmt.Errorf("failed to register route for payload %v: %w", newPayload.Type, err)
 			}
@@ -814,7 +816,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			delete(a.validatorAddressToPubKey, addr)
 			if err = a.p2p.RemovePeer(ctx, addr); err != nil {
 				if !errors.Is(err, cometbft.ErrPeerNotWhitelisted) {
-					a.log.Warn("failed to remove demoted validator from peer list", zap.String("address", addr), zap.Error(err))
+					a.log.Warn("failed to remove demoted validator from peer list", log.String("address", addr), log.Error(err))
 				}
 			}
 		} else {
@@ -822,7 +824,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			// Add the validator to the peer list
 			if err = a.p2p.AddPeer(ctx, addr); err != nil {
 				if !errors.Is(err, cometbft.ErrPeerAlreadyWhitelisted) {
-					a.log.Warn("failed to whitelist promoted validator", zap.String("address", addr), zap.Error(err))
+					a.log.Warn("failed to whitelist promoted validator", log.String("address", addr), log.Error(err))
 				}
 			}
 		}
@@ -834,12 +836,12 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	for _, pubKey := range approvedJoins {
 		addr, err := cometbft.PubkeyToAddr(pubKey)
 		if err != nil {
-			a.log.Warn("failed to convert pubkey to address", zap.Error(err))
+			a.log.Warn("failed to convert pubkey to address", log.Error(err))
 			continue
 		}
 		if err = a.p2p.AddPeer(ctx, addr); err != nil {
 			if !errors.Is(err, cometbft.ErrPeerAlreadyWhitelisted) {
-				a.log.Warn("failed to whitelist new validator", zap.String("address", addr), zap.Error(err))
+				a.log.Warn("failed to whitelist new validator", log.String("address", addr), log.Error(err))
 			}
 		}
 	}
@@ -852,7 +854,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 		if err = a.p2p.RemovePeer(ctx, addr); err != nil {
 			if !errors.Is(err, cometbft.ErrPeerNotWhitelisted) {
-				a.log.Warn("failed to remove expired validator from peer list", zap.String("address", addr), zap.Error(err))
+				a.log.Warn("failed to remove expired validator from peer list", log.String("address", addr), log.Error(err))
 			}
 		}
 	}
@@ -874,7 +876,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		AppHash: newAppHash[:],
 	}
 	if err = lc.saveAs(a.lastCommitInfoFileName); err != nil {
-		return nil, fmt.Errorf("failed to save last commit info: %w", err)
+		a.log.Warn("failed to save last commit info", log.Error(err))
 	}
 
 	return res, nil
@@ -1008,7 +1010,7 @@ type lastCommitInfo struct {
 	Height  int64          `json:"height"`
 }
 
-// saveAs saves the last commit info to root_dir/abci/last_commit_info.json.
+// saveAs saves the last commit info to the given file.
 func (lc *lastCommitInfo) saveAs(filename string) error {
 	bts, err := json.MarshalIndent(lc, "", "  ")
 	if err != nil {
@@ -1018,7 +1020,7 @@ func (lc *lastCommitInfo) saveAs(filename string) error {
 	return os.WriteFile(filename, bts, 0644)
 }
 
-// loadLastCommitInfo loads the last commit info from root_dir/abci/last_commit_info.json.
+// loadLastCommitInfo loads the last commit info from the given file.
 func loadLastCommitInfo(filename string) (*lastCommitInfo, error) {
 	bts, err := os.ReadFile(filename)
 	if err != nil {
