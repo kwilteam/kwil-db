@@ -89,12 +89,15 @@ func RootCmd() *cobra.Command {
 				return fmt.Errorf("failed to initialize private key and genesis: %w", err)
 			}
 
-			if err := genesisConfig.SanityChecks(); err != nil {
-				return fmt.Errorf("genesis configuration failed sanity checks: %w", err)
+			if kwildCfg.MigrationConfig.Enable {
+				kwildCfg, genesisConfig, err = server.PrepareForMigration(cmd.Context(), kwildCfg, genesisConfig)
+				if err != nil {
+					return fmt.Errorf("failed to prepare for migration: %w", err)
+				}
 			}
 
-			if err := kwildCfg.ConfigureExtensions(genesisConfig); err != nil {
-				return err
+			if err := genesisConfig.SanityChecks(); err != nil {
+				return fmt.Errorf("genesis configuration failed sanity checks: %w", err)
 			}
 
 			// Set the chain package's active forks variable. This provides easy

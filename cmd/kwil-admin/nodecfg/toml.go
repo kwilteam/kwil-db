@@ -104,6 +104,18 @@ format = "{{ .Logging.Format }}"
 time_format = "{{ .Logging.TimeEncoding }}"
 
 #######################################################################
+###                    Migration Config Options                     ###
+#######################################################################
+
+[migration]
+# Setting this to true will enable the migration process on the node.
+enable = {{ .MigrationConfig.Enable }}
+
+# The listening address of the node to migrate the app state from.
+# mandatory if the start_height and end_height are provided in the genesis file.
+migrate_from = "{{ .MigrationConfig.MigrateFrom }}"
+
+#######################################################################
 ###                      App Config Options                         ###
 #######################################################################
 
@@ -189,9 +201,6 @@ hostname = "{{ .AppConfig.Hostname }}"
 # Might be either absolute path or path related to the kwild root directory.
 genesis_state = "{{ .AppConfig.GenesisState }}"
 
-# The listening address of the node to migrate the app state from.
-# mandatory if the start_height and end_height are provided in the genesis file.
-migrate_from = "{{ .AppConfig.MigrateFrom }}"
 
 #######################################################################
 ###                     Extension Configuration                     ###
