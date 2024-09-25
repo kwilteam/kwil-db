@@ -3,10 +3,12 @@ package utils
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	dockerNet "github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
+	"github.com/kwilteam/kwil-db/core/utils/random"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
 )
@@ -14,6 +16,11 @@ import (
 // EnsureNetworkExist creates a new docker network with a random UUID name.
 func EnsureNetworkExist(ctx context.Context, testName string) (
 	*testcontainers.DockerNetwork, error) {
+	// random subnet 10.A.B.0/20 with 4096 addresses each, not overlapping
+	rng := random.New2()
+	randA := strconv.Itoa(rng.IntN(255))
+	randB := strconv.Itoa(rng.IntN(16) * 16)
+	subnet := "10." + randA + "." + randB + ".0/20"
 	net, err := network.New(ctx,
 		network.WithCheckDuplicate(),
 		network.WithAttachable(),
@@ -22,7 +29,7 @@ func EnsureNetworkExist(ctx context.Context, testName string) (
 			Options: map[string]string{},
 			Config: []dockerNet.IPAMConfig{
 				{
-					Subnet: "10.9.0.0/16",
+					Subnet: subnet,
 				},
 			},
 		}),
@@ -30,6 +37,8 @@ func EnsureNetworkExist(ctx context.Context, testName string) (
 		network.WithLabels(map[string]string{"test": "integration"}),
 		network.WithDriver("bridge"),
 	)
+
+	fmt.Printf("subnet: %s\n", subnet)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker network for %s: %w", testName, err)
