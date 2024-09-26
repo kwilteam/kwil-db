@@ -101,6 +101,8 @@ func RootCmd() *cobra.Command {
 			}
 			logger = *logger.Named("kwild")
 
+			logger.Infof("version %s commit %s", version.KwilVersion, version.Build.RevisionShort)
+
 			if kwildCfg.MigrationConfig.Enable {
 				kwildCfg, genesisConfig, err = server.PrepareForMigration(cmd.Context(), kwildCfg, genesisConfig, logger)
 				if err != nil {

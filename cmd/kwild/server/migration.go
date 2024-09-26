@@ -1,10 +1,14 @@
 package server
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -49,6 +53,17 @@ func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, g
 		return nil, nil, errors.New("migrate_from is mandatory for migration")
 	}
 
+	snapshotFileName := config.GenesisStateFileName(kwildCfg.RootDir)
+	// check if genesis hash is set in the genesis config
+	if genesisCfg.DataAppHash != nil &&
+		genesisCfg.ConsensusParams.Migration.StartHeight != 0 &&
+		genesisCfg.ConsensusParams.Migration.EndHeight != 0 &&
+		validateGenesisState(snapshotFileName, genesisCfg.DataAppHash) {
+		// genesis state already downloaded. No need to poll for genesis state
+		logger.Info("Genesis state already downloaded", log.String("genesis snapshot", snapshotFileName))
+		return kwildCfg, genesisCfg, nil
+	}
+
 	// old chain client
 	clt, err := client.NewClient(ctx, kwildCfg.MigrationConfig.MigrateFrom, nil)
 	if err != nil {
@@ -61,23 +76,8 @@ func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, g
 		clt:              clt,
 		kwildCfg:         kwildCfg,
 		genesisCfg:       genesisCfg,
-		snapshotFileName: config.GenesisStateFileName(kwildCfg.RootDir),
+		snapshotFileName: snapshotFileName,
 		logger:           logger,
-	}
-
-	// check if the genesis state is already available, ie. snapshot file is already present
-	fileExists := false
-	if _, err := os.Stat(m.snapshotFileName); err == nil {
-		fileExists = true
-	}
-
-	// check if genesis hash is set in the genesis config
-	if genesisCfg.DataAppHash != nil && fileExists &&
-		genesisCfg.ConsensusParams.Migration.StartHeight != 0 &&
-		genesisCfg.ConsensusParams.Migration.EndHeight != 0 {
-		// genesis state already downloaded. No need to poll for genesis state
-		m.logger.Info("Genesis state already downloaded", log.String("genesis snapshot", m.snapshotFileName))
-		return m.kwildCfg, m.genesisCfg, nil
 	}
 
 	// poll for the genesis state
@@ -98,7 +98,7 @@ func (m *migrationClient) pollForGenesisState(ctx context.Context) (err error) {
 		if err = m.downloadGenesisState(ctx); err == nil {
 			return nil
 		}
-		m.logger.Info("Genesis state not available", log.Error(err), log.Duration("retry after (sec)", defaultPollFrequency))
+		m.logger.Info("Genesis state not available", log.Error(err), log.Duration("retry after(sec)", defaultPollFrequency))
 
 		// retry after defaultPollFrequency
 		select {
@@ -110,7 +110,7 @@ func (m *migrationClient) pollForGenesisState(ctx context.Context) (err error) {
 }
 
 func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
-
+	// Get the genesis state from the old chain
 	metadata, err := m.clt.GenesisState(ctx)
 	if err != nil {
 		return err
@@ -181,4 +181,32 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 
 	m.logger.Info("Genesis state downloaded successfully", log.String("genesis snapshot", m.snapshotFileName))
 	return nil
+}
+
+func validateGenesisState(filename string, appHash []byte) bool {
+	// check if the genesis state file exists
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return false
+	}
+
+	genesisStateFile, err := os.Open(filename)
+	if err != nil {
+		return false
+	}
+
+	// gzip reader and hash reader
+	gzipReader, err := gzip.NewReader(genesisStateFile)
+	if err != nil {
+		failBuild(err, "failed to create gzip reader")
+	}
+	defer gzipReader.Close()
+
+	hasher := sha256.New()
+	_, err = io.Copy(hasher, gzipReader)
+	if err != nil {
+		return false
+	}
+
+	hash := hasher.Sum(nil)
+	return appHash != nil && len(hash) == len(appHash) && bytes.Equal(hash, appHash)
 }
