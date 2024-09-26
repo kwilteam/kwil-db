@@ -179,6 +179,7 @@ func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 			},
 			PopulatePersistentPeers: true,
 			PrivateMode:             false,
+			WaitTimeout:             30 * time.Second,
 		},
 		envs: make(map[string]string),
 	}
@@ -360,6 +361,7 @@ func (r *IntHelper) LoadConfig() {
 	r.cfg.PopulatePersistentPeers = true
 	r.cfg.PrivateMode = false
 	r.cfg.AdminRPC = "/tmp/admin.socket"
+	r.cfg.WaitTimeout = 30 * time.Second
 }
 
 func (r *IntHelper) TestnetDir() (string, error) {

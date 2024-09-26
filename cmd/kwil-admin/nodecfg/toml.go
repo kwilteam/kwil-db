@@ -108,7 +108,7 @@ time_format = "{{ .Logging.TimeEncoding }}"
 #######################################################################
 
 [migration]
-# Setting this to true will enable the migration process on the node.
+# Setting this to true will enable the zero-downtime migration process on the node.
 enable = {{ .MigrationConfig.Enable }}
 
 # The listening address of the node to migrate the app state from.

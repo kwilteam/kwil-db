@@ -72,9 +72,11 @@ func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, g
 	}
 
 	// check if genesis hash is set in the genesis config
-	if genesisCfg.DataAppHash != nil && fileExists {
-		// potentially a restart, return the existing configs as it is.
-		m.logger.Info("Genesis state already available", log.String("genesis snapshot", m.snapshotFileName))
+	if genesisCfg.DataAppHash != nil && fileExists &&
+		genesisCfg.ConsensusParams.Migration.StartHeight != 0 &&
+		genesisCfg.ConsensusParams.Migration.EndHeight != 0 {
+		// genesis state already downloaded. No need to poll for genesis state
+		m.logger.Info("Genesis state already downloaded", log.String("genesis snapshot", m.snapshotFileName))
 		return m.kwildCfg, m.genesisCfg, nil
 	}
 
@@ -116,7 +118,7 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 
 	// Check if the genesis state is ready
 	if metadata.MigrationState.Status == types.NoActiveMigration || metadata.MigrationState.Status == types.MigrationNotStarted {
-		return fmt.Errorf("migration not started: status %s", metadata.MigrationState.Status.String())
+		return fmt.Errorf("status %s", metadata.MigrationState.Status.String())
 	}
 
 	// Genesis state should ready
