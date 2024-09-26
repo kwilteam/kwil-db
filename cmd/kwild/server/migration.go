@@ -98,13 +98,13 @@ func (m *migrationClient) pollForGenesisState(ctx context.Context) (err error) {
 		if err = m.downloadGenesisState(ctx); err == nil {
 			return nil
 		}
+		m.logger.Info("Genesis state not available", log.Error(err), log.Duration("retry after (sec)", defaultPollFrequency))
 
 		// retry after defaultPollFrequency
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(defaultPollFrequency):
-			m.logger.Info("Genesis state not available", log.Error(err), log.Duration("retry after (sec)", defaultPollFrequency))
 		}
 	}
 }
@@ -164,6 +164,7 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	m.genesisCfg.DataAppHash = genCfg.DataAppHash
 	m.genesisCfg.Validators = genCfg.Validators
 	m.genesisCfg.ConsensusParams.Migration = genCfg.ConsensusParams.Migration
+	m.genesisCfg.InitialHeight = metadata.MigrationState.StartHeight
 
 	// persist the genesis config
 	if err := m.genesisCfg.SaveAs(filepath.Join(m.kwildCfg.RootDir, cometbft.GenesisJSONName)); err != nil {

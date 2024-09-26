@@ -108,11 +108,12 @@ time_format = "{{ .Logging.TimeEncoding }}"
 #######################################################################
 
 [migration]
-# Setting this to true will enable the zero-downtime migration process on the node.
+# Enables migration mode
 enable = {{ .MigrationConfig.Enable }}
 
-# The listening address of the node to migrate the app state from.
-# mandatory if the start_height and end_height are provided in the genesis file.
+# The listening address of the trusted node from the old network. This is used to
+# fetch the genesis state and the block changes from the old network during migration.
+# This is a mandatory field if migration is enabled.
 migrate_from = "{{ .MigrationConfig.MigrateFrom }}"
 
 #######################################################################
