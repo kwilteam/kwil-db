@@ -57,35 +57,11 @@ func genesisHashCmd() *cobra.Command { //nolint:unused
 
 			var appHash []byte
 			if cmd.Flags().Changed("snapshot") {
-				snapshotFile, err := common.ExpandPath(snapshotFile)
+				var err error
+				appHash, err = appHashFromSnapshotFile(snapshotFile)
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
-
-				file, err := os.Open(snapshotFile)
-				if err != nil {
-					return display.PrintErr(cmd, err)
-				}
-				defer file.Close()
-
-				var reader io.Reader
-				if filepath.Ext(snapshotFile) == ".gz" {
-					reader, err = gzip.NewReader(file)
-					if err != nil {
-						return display.PrintErr(cmd, err)
-					}
-				} else {
-					reader = file
-				}
-
-				hash := sha256.New()
-
-				_, err = io.Copy(hash, reader)
-				if err != nil {
-					return display.PrintErr(cmd, err)
-				}
-
-				appHash = hash.Sum(nil)
 			} else {
 
 				var pgConf *pg.ConnConfig
@@ -175,6 +151,39 @@ func writeAndReturnGenesisHash(cmd *cobra.Command, genesisFile string, appHash [
 	return display.PrintCmd(cmd, &genesisHashRes{
 		Hash: base64.StdEncoding.EncodeToString(appHash),
 	})
+}
+
+// appHashFromSnapshotFile computes the app hash from a snapshot file.
+func appHashFromSnapshotFile(filePath string) ([]byte, error) {
+	filePath, err := common.ExpandPath(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var reader io.Reader
+	if filepath.Ext(filePath) == ".gz" {
+		reader, err = gzip.NewReader(file)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		reader = file
+	}
+
+	hash := sha256.New()
+
+	_, err = io.Copy(hash, reader)
+	if err != nil {
+		return nil, err
+	}
+
+	return hash.Sum(nil), nil
 }
 
 type genesisHashRes struct {
