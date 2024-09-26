@@ -16,20 +16,21 @@ import (
 )
 
 var (
-	genesisLong = `` + "`" + `genesis` + "`" + `creates a new genesis.json file.
+	genesisLong = `` + "`" + `genesis` + "`" + ` creates a new genesis.json file.
 
-This command allows users to create genesis files without having to write them manually.
+This command creates a new genesis file with optionally specified modifications.
 
-If the ` + "`" + `--migration` + "`" + ` flag is set, an incomplete genesis file is generated that can be used in a zero downtime migration.
-If generating a migration genesis file, validators and initial state cannot be set.
+If the ` + "`" + `--migration` + "`" + ` flag is set, an incomplete genesis file is generated that can be used in a zero
+downtime migration. If generating a migration genesis file, validators and initial state cannot be set.
 
-Validators, balance allocations, and forks should have the format "name:key:power", "address:balance", and "name:height" respectively.`
+Validators, balance allocations, and forks should have the format "name:key:power", "address:balance",
+and "name:height" respectively.`
 
 	genesisExample = `# Create a new genesis.json file in the current directory
 kwil-admin setup genesis
 
 # Create a new genesis.json file in a specific directory with a specific chain ID and a validator with 1 power
-kwil-admin setup genesis --output /path/to/directory --chain-id mychainid --validator 890fe7ae9cb1fa6177555d5651e1b8451b4a9c64021c876236c700bc2690ff1d:1
+kwil-admin setup genesis --output /path/to/directory --chain-id mychainid --validator my_validator:890fe7ae9cb1fa6177555d5651e1b8451b4a9c64021c876236c700bc2690ff1d:1
 
 # Create a new genesis.json with the specified allocation
 kwil-admin setup genesis --alloc 0x7f5f4552091a69125d5dfcb7b8c2659029395bdf:100
