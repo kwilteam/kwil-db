@@ -126,6 +126,7 @@ func RootCmd() *cobra.Command {
 
 			go func() {
 				<-signalChan
+				fmt.Println("Shutdown signal received.")
 				cancel()
 			}()
 
