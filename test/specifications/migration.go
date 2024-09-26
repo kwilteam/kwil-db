@@ -2,7 +2,6 @@ package specifications
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
@@ -10,13 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
-	"github.com/kwilteam/kwil-db/common/chain"
-	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/statesync"
 	"github.com/stretchr/testify/require"
 )
 
@@ -65,38 +60,13 @@ func ApproveMigration(ctx context.Context, t *testing.T, netops MigrationOpsDsl,
 	}
 }
 
-// Genesis state
-func InstallGenesisState(ctx context.Context, t *testing.T, netops MigrationOpsDsl, rootDir string, numNodes int, listenAddresses []string) {
-	t.Log("Executing migration genesis state specification")
-
-	// Query genesis state
-	var metadata *types.MigrationMetadata
-	var err error
-
-	require.Eventually(t, func() bool {
-		metadata, err = netops.GenesisState(ctx)
-		require.NoError(t, err)
-		return metadata.MigrationState.Status == types.MigrationInProgress
-	}, 6*time.Second, 500*time.Millisecond)
-
-	// Verify genesis state
-	require.NotEmpty(t, metadata.GenesisConfig)
-	require.NotEmpty(t, metadata.SnapshotMetadata)
+func ConfigureNewNetwork(ctx context.Context, t *testing.T, netops MigrationOpsDsl, rootDir string, numNodes int, listenAddresses []string) {
+	// Set the MigrationConfig to true and migrate_from
+	// update persistent peers
 
 	// Ensure the root directory exists
-	err = os.MkdirAll(rootDir, 0755)
+	err := os.MkdirAll(rootDir, 0755)
 	require.NoError(t, err)
-
-	var genCfg *chain.GenesisConfig
-	err = json.Unmarshal(metadata.GenesisConfig, &genCfg)
-	require.NoError(t, err)
-
-	var snapshot *statesync.Snapshot
-	err = json.Unmarshal(metadata.SnapshotMetadata, &snapshot)
-	require.NoError(t, err)
-
-	tempSnapshotFile := filepath.Join(rootDir, "snapshot.sql.gz")
-	downloadGenesisSnapshot(ctx, t, netops, tempSnapshotFile, snapshot.Height, snapshot.ChunkCount)
 
 	for i := range numNodes {
 		// Create sub nodes
@@ -104,46 +74,16 @@ func InstallGenesisState(ctx context.Context, t *testing.T, netops MigrationOpsD
 		err = os.MkdirAll(nodeDir, 0755)
 		require.NoError(t, err)
 
-		// Save genesis file
-		genesisFile := filepath.Join(nodeDir, "genesis.json")
-		err = genCfg.SaveAs(genesisFile)
-		require.NoError(t, err)
-
-		// Save snapshot file
-		snapshotFile := filepath.Join(nodeDir, "snapshot.sql.gz")
-		err = CopyFiles(tempSnapshotFile, snapshotFile)
-		require.NoError(t, err)
-
 		// Update the config file
 		tomlFile := filepath.Join(nodeDir, "config.toml")
 		cfg, err := config.LoadConfigFile(tomlFile)
 		require.NoError(t, err)
 
-		cfg.AppConfig.GenesisState = "snapshot.sql.gz"
-		cfg.AppConfig.MigrateFrom = listenAddresses[i]
-		// cfg.AppCfg.Extensions["migrations"] = map[string]string{
-		// 	"start_height":         fmt.Sprintf("%d", metadata.StartHeight),
-		// 	"end_height":           fmt.Sprintf("%d", metadata.EndHeight),
-		// 	"admin_listen_address": adminAddresses[i],
-		// }
+		cfg.MigrationConfig.Enable = true
+		cfg.MigrationConfig.MigrateFrom = listenAddresses[i]
 		cfg.ChainConfig.P2P.PersistentPeers = updatePersistentPeers(cfg.ChainConfig.P2P.PersistentPeers)
 		err = nodecfg.WriteConfigFile(tomlFile, cfg)
 		require.NoError(t, err, "failed to write config file")
-	}
-}
-
-func downloadGenesisSnapshot(ctx context.Context, t *testing.T, netops MigrationOpsDsl, snapshotFile string, height uint64, chunks uint32) {
-	snapshot, err := os.Create(snapshotFile)
-	require.NoError(t, err)
-	defer snapshot.Close()
-
-	for i := uint32(0); i < chunks; i++ {
-		data, err := netops.GenesisSnapshotChunk(ctx, height, i)
-		require.NoError(t, err)
-
-		n, err := snapshot.Write(data)
-		require.NoError(t, err)
-		require.Equal(t, len(data), n)
 	}
 }
 

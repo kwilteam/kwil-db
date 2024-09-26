@@ -67,25 +67,25 @@ type migrationListener struct {
 func Start(ctx context.Context, service *common.Service, eventStore listeners.EventStore) error {
 	// Get the migration config from the service
 	cfg := &MigrationConfig{}
-	migrationCfg, ok := service.LocalConfig.AppConfig.Extensions[ListenerName]
-	if !ok {
+
+	if service.LocalConfig.MigrationConfig == nil || !service.LocalConfig.MigrationConfig.Enable {
 		service.Logger.Warn("no migration config provided, skipping migration listener")
-		return nil // no migration config, nothing to do
+		return nil // no migration config provided
 	}
 
-	cfg.ListenAddress, ok = migrationCfg["listen_address"]
-	if !ok {
-		return errors.New("migration listen_address not provided")
+	if service.LocalConfig.MigrationConfig.MigrateFrom == "" {
+		return errors.New("migrate_from is mandatory for migration")
 	}
+
+	cfg.ListenAddress = service.LocalConfig.MigrationConfig.MigrateFrom
+	cfg.StartHeight = uint64(service.GenesisConfig.ConsensusParams.Migration.StartHeight)
+	cfg.EndHeight = uint64(service.GenesisConfig.ConsensusParams.Migration.EndHeight)
 
 	// Kwild RPC client connection to the old chain
 	clt, err := client.NewClient(ctx, cfg.ListenAddress, nil)
 	if err != nil {
 		return err
 	}
-
-	cfg.StartHeight = uint64(service.GenesisConfig.ConsensusParams.Migration.StartHeight)
-	cfg.EndHeight = uint64(service.GenesisConfig.ConsensusParams.Migration.EndHeight)
 
 	// Get the block height of the last changesets received from the old chain
 	// If no height is found, start from the start height of the migrations.

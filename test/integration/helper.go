@@ -27,6 +27,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/adminclient"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -320,6 +321,12 @@ func WithPrivateMode() HelperOpt {
 	}
 }
 
+func WithWaitTimeout(timeout time.Duration) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.WaitTimeout = timeout
+	}
+}
+
 // LoadConfig loads config from system env and .env file.
 // Envs defined in envFile will not overwrite existing env vars.
 func (r *IntHelper) LoadConfig() {
@@ -337,10 +344,6 @@ func (r *IntHelper) LoadConfig() {
 		DockerComposeFile:         getEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KIT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
-
-	waitTimeout := getEnv("KIT_WAIT_TIMEOUT", "20s")
-	r.cfg.WaitTimeout, err = time.ParseDuration(waitTimeout)
-	require.NoError(r.t, err, "invalid wait timeout")
 
 	creatorPk, err := crypto.Secp256k1PrivateKeyFromHex(r.cfg.CreatorRawPk)
 	require.NoError(r.t, err, "invalid creator private key")
@@ -658,6 +661,17 @@ func (r *IntHelper) MigrationSetup(ctx context.Context) string {
 		require.NoError(r.t, err)
 
 		// update the config file when we have the migration info
+		// copy the genesis file
+		err = specifications.CopyFiles(filepath.Join(oldNodeDir, "genesis.json"), filepath.Join(newNodeDir, "genesis.json"))
+		require.NoError(r.t, err)
+
+		// update the genesis file to change chainID
+		genCfg, err := chain.LoadGenesisConfig(filepath.Join(newNodeDir, "genesis.json"))
+		require.NoError(r.t, err)
+
+		genCfg.ChainID = MigrationChainID
+		err = genCfg.SaveAs(filepath.Join(newNodeDir, "genesis.json"))
+		require.NoError(r.t, err)
 	}
 
 	return tmpDir

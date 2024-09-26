@@ -18,6 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/cmd/kwild/server"
+	"github.com/kwilteam/kwil-db/core/log"
 
 	// kwild's "root" command package assumes the responsibility of initializing
 	// certain packages, including the extensions and the chain config package.
@@ -89,8 +90,19 @@ func RootCmd() *cobra.Command {
 				return fmt.Errorf("failed to initialize private key and genesis: %w", err)
 			}
 
+			logCfg, err := kwildCfg.LogConfig()
+			if err != nil {
+				return err
+			}
+
+			logger, err := log.NewChecked(*logCfg)
+			if err != nil {
+				return fmt.Errorf("invalid logger config: %w", err)
+			}
+			logger = *logger.Named("kwild")
+
 			if kwildCfg.MigrationConfig.Enable {
-				kwildCfg, genesisConfig, err = server.PrepareForMigration(cmd.Context(), kwildCfg, genesisConfig)
+				kwildCfg, genesisConfig, err = server.PrepareForMigration(cmd.Context(), kwildCfg, genesisConfig, logger)
 				if err != nil {
 					return fmt.Errorf("failed to prepare for migration: %w", err)
 				}
@@ -132,7 +144,7 @@ func RootCmd() *cobra.Command {
 				cancel()
 			}()
 
-			svr, err := server.New(ctx, kwildCfg, genesisConfig, nodeKey, autoGen)
+			svr, err := server.New(ctx, kwildCfg, genesisConfig, nodeKey, autoGen, logger)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					return nil // early but clean shutdown
