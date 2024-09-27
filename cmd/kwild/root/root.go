@@ -110,6 +110,7 @@ func RootCmd() *cobra.Command {
 				}
 			}
 
+			logger.Info("Entering startup mode")
 			if err := genesisConfig.SanityChecks(); err != nil {
 				return fmt.Errorf("genesis configuration failed sanity checks: %w", err)
 			}

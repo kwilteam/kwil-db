@@ -48,10 +48,16 @@ type migrationClient struct {
 	logger log.Logger
 }
 
+// PrepareForMigration initiates the migration mode for the kwild node. This is a pre-start phase where
+// the node periodically polls the old chain for the genesis state. This mode is used to prepare the node
+// for migration by downloading the genesis state from the old chain for the new chain to start from.
+// It also updates the genesis and kwild configurations required for the migration process.
 func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, genesisCfg *chain.GenesisConfig, logger log.Logger) (*commonCfg.KwildConfig, *chain.GenesisConfig, error) {
 	if kwildCfg.MigrationConfig.MigrateFrom == "" {
 		return nil, nil, errors.New("migrate_from is mandatory for migration")
 	}
+
+	logger.Info("Entering migration mode", log.String("migrate_from", kwildCfg.MigrationConfig.MigrateFrom))
 
 	snapshotFileName := config.GenesisStateFileName(kwildCfg.RootDir)
 	// check if genesis hash is set in the genesis config
@@ -88,9 +94,7 @@ func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, g
 	return m.kwildCfg, m.genesisCfg, nil
 }
 
-// pollForGenesisState polls for the genesis state from the old chain
-// and downloads the genesis state to the snapshot file abnd updates the genesis config
-// and the kwild config with the configuration required for migration
+// pollForGenesisState polls for the genesis state from the old chain at a regular interval until the genesis state is available.
 func (m *migrationClient) pollForGenesisState(ctx context.Context) (err error) {
 	// Poll for the genesis state from the old chain
 	m.logger.Info("Requesting genesis state from the old chain", log.String("listen_address", m.listenAddress))
@@ -109,6 +113,10 @@ func (m *migrationClient) pollForGenesisState(ctx context.Context) (err error) {
 	}
 }
 
+// downloadGenesisState retrieves the genesis state from the old chain and stores it in the node's root directory.
+// It modifies the genesis configuration parameters, including app hash, initial height, validators, and
+// migration settings, and saves the updated state. Additionally, it updates the genesis-state location
+// in the kwild configuration and saves it.
 func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	// Get the genesis state from the old chain
 	metadata, err := m.clt.GenesisState(ctx)
