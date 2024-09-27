@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/spf13/cobra"
 )
@@ -30,13 +31,13 @@ and "name:height" respectively.`
 kwil-admin setup genesis
 
 # Create a new genesis.json file in a specific directory with a specific chain ID and a validator with 1 power
-kwil-admin setup genesis --output /path/to/directory --chain-id mychainid --validator my_validator:890fe7ae9cb1fa6177555d5651e1b8451b4a9c64021c876236c700bc2690ff1d:1
+kwil-admin setup genesis --out /path/to/directory --chain-id mychainid --validator my_validator:890fe7ae9cb1fa6177555d5651e1b8451b4a9c64021c876236c700bc2690ff1d:1
 
 # Create a new genesis.json with the specified allocation
 kwil-admin setup genesis --alloc 0x7f5f4552091a69125d5dfcb7b8c2659029395bdf:100
 
 # Create a new genesis.json file to be used in a network migration
-kwil-admin setup genesis --migration --output /path/to/directory --chain-id mychainid`
+kwil-admin setup genesis --migration --out /path/to/directory --chain-id mychainid`
 )
 
 func genesisCmd() *cobra.Command {
@@ -50,6 +51,16 @@ func genesisCmd() *cobra.Command {
 		Long:    genesisLong,
 		Example: genesisExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			output, err := common.ExpandPath(output)
+			if err != nil {
+				return display.PrintErr(cmd, fmt.Errorf("failed to expand output path: %w", err))
+			}
+
+			err = os.MkdirAll(output, 0755)
+			if err != nil {
+				return display.PrintErr(cmd, fmt.Errorf("failed to create output directory: %w", err))
+			}
+
 			out := filepath.Join(output, "genesis.json")
 
 			makeErr := func(e error) error {
@@ -177,7 +188,7 @@ func genesisCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&output, outputFlag, "", "Output directory for the genesis.json file")
+	cmd.Flags().StringVar(&output, outFlag, "", "Output directory for the genesis.json file")
 	cmd.Flags().StringVar(&chainID, chainIDFlag, "", "Chain ID for the genesis.json file")
 	cmd.Flags().StringArrayVar(&validators, validatorsFlag, nil, "Public keys and power of initial validator(s)")
 	cmd.Flags().StringArrayVar(&allocs, allocsFlag, nil, "Address and initial balance allocation(s)")
@@ -194,7 +205,7 @@ func genesisCmd() *cobra.Command {
 }
 
 const (
-	outputFlag           = "output"
+	outFlag              = "out"
 	chainIDFlag          = "chain-id"
 	validatorsFlag       = "validator"
 	allocsFlag           = "alloc"
