@@ -3,14 +3,12 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	merge "dario.cat/mergo"
-	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/pflag"
@@ -21,6 +19,7 @@ type KwildConfig struct {
 
 	AppConfig       *AppConfig             `mapstructure:"app"`
 	ChainConfig     *ChainConfig           `mapstructure:"chain"`
+	MigrationConfig *MigrationConfig       `mapstructure:"migration"`
 	Logging         *Logging               `mapstructure:"log"`
 	Instrumentation *InstrumentationConfig `mapstructure:"instrumentation"`
 }
@@ -91,7 +90,10 @@ type AppConfig struct {
 	// to be loaded on startup during network initialization. If genesis app_hash
 	// is not provided, this snapshot file is not used.
 	GenesisState string `mapstructure:"genesis_state"`
+}
 
+type MigrationConfig struct {
+	Enable bool `mapstructure:"enable"`
 	// MigrateFrom is the JSON-RPC listening address of the node to replicate the state from.
 	MigrateFrom string `mapstructure:"migrate_from"`
 }
@@ -302,43 +304,6 @@ func (cfg *KwildConfig) LogConfig() (*log.Config, error) {
 		MaxLogSizeKB: cfg.Logging.MaxLogSizeKB,
 		MaxLogRolls:  cfg.Logging.MaxLogRolls,
 	}, nil
-}
-
-// configureExtensions sets up the extensions for the node.
-func (cfg *KwildConfig) ConfigureExtensions(genCfg *chain.GenesisConfig) error {
-	extensions := cfg.AppConfig.Extensions
-
-	// Migrations extension configuration
-	// sets the listener address from the migrate_from flag
-	startHeight := genCfg.ConsensusParams.Migration.StartHeight
-	endHeight := genCfg.ConsensusParams.Migration.EndHeight
-	// validate migration configuration
-	// migration start and end heights must be set together
-	if (startHeight > 0 && endHeight == 0) || (startHeight == 0 && endHeight > 0) {
-		return fmt.Errorf("migration configuration requires both start and end heights to be set")
-	}
-
-	// if migration start and end heights are set, MigrateFrom must be set
-	if (startHeight > 0 && endHeight > 0) && cfg.AppConfig.MigrateFrom == "" {
-		return fmt.Errorf("migrate_from flag must be set when migration configuration is set in the genesis file")
-	}
-
-	// and vice versa
-	if cfg.AppConfig.MigrateFrom != "" && (startHeight == 0 || endHeight == 0) {
-		return fmt.Errorf("migrate_from flag requires migration start and end heights in the genesis file")
-	}
-
-	if cfg.AppConfig.MigrateFrom != "" {
-		extensions["migrations"] = map[string]string{
-			"listen_address": cfg.AppConfig.MigrateFrom,
-			"start_height":   fmt.Sprintf("%d", startHeight),
-			"end_height":     fmt.Sprintf("%d", endHeight),
-		}
-	}
-
-	// other extensions can be configured here
-	cfg.AppConfig.Extensions = extensions
-	return nil
 }
 
 // CleanPath returns an absolute path for the given path, relative to the root directory.

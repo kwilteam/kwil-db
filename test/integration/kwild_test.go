@@ -947,6 +947,7 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 		integration.WithAdminRPC("0.0.0.0:8485"),
 		integration.WithSnapshots(),
 		integration.WithRecurringHeight(5),
+		integration.WithWaitTimeout(90 * time.Second), // give them enough time to download the genesis state and start the network
 	}
 
 	t.Run("jsonrpc_driver", func(t *testing.T) {
@@ -993,7 +994,7 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 		time.Sleep(10 * time.Second)
 
 		// Retrieve the genesis state and update the config for the new network
-		specifications.InstallGenesisState(ctx, t, node0Driver, newDir, 4, addresses)
+		specifications.ConfigureNewNetwork(ctx, t, node0Driver, newDir, 4, addresses)
 
 		// Bring up the new network using the genesis state and the genesis file installed from the old network
 		helper.RunDockerComposeWithServices(ctx, migrationServices)

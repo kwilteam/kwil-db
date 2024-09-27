@@ -18,6 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/cmd/kwild/server"
+	"github.com/kwilteam/kwil-db/core/log"
 
 	// kwild's "root" command package assumes the responsibility of initializing
 	// certain packages, including the extensions and the chain config package.
@@ -89,12 +90,29 @@ func RootCmd() *cobra.Command {
 				return fmt.Errorf("failed to initialize private key and genesis: %w", err)
 			}
 
-			if err := genesisConfig.SanityChecks(); err != nil {
-				return fmt.Errorf("genesis configuration failed sanity checks: %w", err)
+			logCfg, err := kwildCfg.LogConfig()
+			if err != nil {
+				return err
 			}
 
-			if err := kwildCfg.ConfigureExtensions(genesisConfig); err != nil {
-				return err
+			logger, err := log.NewChecked(*logCfg)
+			if err != nil {
+				return fmt.Errorf("invalid logger config: %w", err)
+			}
+			logger = *logger.Named("kwild")
+
+			logger.Infof("version %s commit %s", version.KwilVersion, version.Build.RevisionShort)
+
+			if kwildCfg.MigrationConfig.Enable {
+				kwildCfg, genesisConfig, err = server.PrepareForMigration(cmd.Context(), kwildCfg, genesisConfig, logger)
+				if err != nil {
+					return fmt.Errorf("failed to prepare for migration: %w", err)
+				}
+			}
+
+			logger.Info("Entering startup mode")
+			if err := genesisConfig.SanityChecks(); err != nil {
+				return fmt.Errorf("genesis configuration failed sanity checks: %w", err)
 			}
 
 			// Set the chain package's active forks variable. This provides easy
@@ -130,7 +148,7 @@ func RootCmd() *cobra.Command {
 				cancel()
 			}()
 
-			svr, err := server.New(ctx, kwildCfg, genesisConfig, nodeKey, autoGen)
+			svr, err := server.New(ctx, kwildCfg, genesisConfig, nodeKey, autoGen, logger)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					return nil // early but clean shutdown

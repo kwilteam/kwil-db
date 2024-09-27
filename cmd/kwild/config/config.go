@@ -383,6 +383,7 @@ func DefaultEmptyConfig() *config.KwildConfig {
 // guaranteeing that all fields are set when merging.
 func EmptyConfig() *config.KwildConfig {
 	return &config.KwildConfig{
+		MigrationConfig: &config.MigrationConfig{},
 		AppConfig: &config.AppConfig{
 			ExtensionEndpoints: []string{},
 		},

@@ -552,7 +552,7 @@ func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 		// snapshot tool handles the migration expiry height readjustment for offline migrations
 		adjustExpiration := false
 		startHeight := d.genesisCfg.ConsensusParams.Migration.StartHeight
-		if d.cfg.AppConfig.MigrateFrom != "" && startHeight != 0 {
+		if d.cfg.MigrationConfig.Enable && startHeight != 0 {
 			adjustExpiration = true
 		}
 

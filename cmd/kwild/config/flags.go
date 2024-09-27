@@ -27,6 +27,10 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.Int64Var(&cfg.Logging.MaxLogSizeKB, "log.file-roll-size", cfg.Logging.MaxLogSizeKB, "threshold in KB at which the log file rolls over and archives the current one")
 	flagSet.IntVar(&cfg.Logging.MaxLogRolls, "log.retain-max-rolls", cfg.Logging.MaxLogRolls, "retention limit on the number of archived log files to keep (default is 0, meaning retain all)")
 
+	// Migration flags:
+	flagSet.BoolVar(&cfg.MigrationConfig.Enable, "migration.enable", cfg.MigrationConfig.Enable, "Enable migration")
+	flagSet.StringVar(&cfg.MigrationConfig.MigrateFrom, "migration.from", cfg.MigrationConfig.MigrateFrom, format("%s JSON-RPC listening address of the node to replicate the state from."))
+
 	// General APP flags:
 	flagSet.StringVar(&cfg.AppConfig.PrivateKeyPath, "app.private-key-path", cfg.AppConfig.PrivateKeyPath, "Path to the node private key file")
 	flagSet.StringVar(&cfg.AppConfig.JSONRPCListenAddress, "app.jsonrpc-listen-addr", cfg.AppConfig.JSONRPCListenAddress, format("%s JSON-RPC listen address"))
@@ -58,7 +62,6 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 
 	// genesis state / migration flags
 	flagSet.StringVar(&cfg.AppConfig.GenesisState, "app.genesis-state", cfg.AppConfig.GenesisState, "Path to the genesis state file")
-	flagSet.StringVar(&cfg.AppConfig.MigrateFrom, "app.migrate-from", cfg.AppConfig.MigrateFrom, format("%s JSON-RPC listening address of the node to replicate the state from."))
 
 	// Extension endpoints flags
 	flagSet.StringSliceVar(&cfg.AppConfig.ExtensionEndpoints, "app.extension-endpoints", cfg.AppConfig.ExtensionEndpoints, format("%s extension endpoints"))

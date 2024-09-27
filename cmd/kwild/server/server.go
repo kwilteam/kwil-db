@@ -45,20 +45,7 @@ type Server struct {
 
 // New builds the kwild server.
 func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *chain.GenesisConfig,
-	nodeKey *crypto.Ed25519PrivateKey, autogen bool) (svr *Server, err error) {
-	logCfg, err := cfg.LogConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	logger, err := log.NewChecked(*logCfg)
-	if err != nil {
-		return nil, fmt.Errorf("invalid logger config: %w", err)
-	}
-	logger = *logger.Named("kwild")
-
-	logger.Infof("version %s commit %s", version.KwilVersion, version.Build.RevisionShort)
-
+	nodeKey *crypto.Ed25519PrivateKey, autogen bool, logger log.Logger) (svr *Server, err error) {
 	closers := &closeFuncs{
 		closers: []func() error{}, // logger.Close is not in here; do it in a defer in Start
 		logger:  logger,

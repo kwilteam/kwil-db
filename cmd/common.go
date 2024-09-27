@@ -63,6 +63,9 @@ func defaultBinaryConfig() binaryConfig {
 var DefaultConfig = func() *commonConfig.KwildConfig {
 	return &commonConfig.KwildConfig{
 		RootDir: defaultKwildRoot(),
+		MigrationConfig: &commonConfig.MigrationConfig{
+			Enable: false,
+		},
 		AppConfig: &commonConfig.AppConfig{
 			JSONRPCListenAddress: "0.0.0.0:8484",
 			AdminListenAddress:   "/tmp/kwild.socket", // Or, suggested, 127.0.0.1:8485
