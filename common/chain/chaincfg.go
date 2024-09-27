@@ -21,6 +21,7 @@ import (
 const (
 	abciPubKeyTypeEd25519 = "ed25519"
 	chainIDPrefix         = "kwil-chain-"
+	appVersion            = 1
 )
 
 type HexBytes = types.HexBytes
@@ -151,7 +152,7 @@ func defaultConsensusParams() *ConsensusParams {
 				MaxBytes:        1024 * 1024,    // 1 MiB
 			},
 			Version: VersionParams{
-				App: 0,
+				App: appVersion,
 			},
 			Validator: ValidatorParams{
 				PubKeyTypes: []string{abciPubKeyTypeEd25519},
