@@ -20,7 +20,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
 	"github.com/kwilteam/kwil-db/internal/txapp"
-	"github.com/kwilteam/kwil-db/internal/version"
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
@@ -378,7 +377,7 @@ func (m *Migrator) GetMigrationMetadata() (*types.MigrationMetadata, error) {
 			MigrationState: types.MigrationState{
 				Status: types.NoActiveMigration,
 			},
-			KwildMinorVersion: string(version.MinorVersionV9),
+			Version: MigrationVersion,
 		}, nil
 	}
 
@@ -390,7 +389,7 @@ func (m *Migrator) GetMigrationMetadata() (*types.MigrationMetadata, error) {
 				StartHeight: m.activeMigration.StartHeight,
 				EndHeight:   m.activeMigration.EndHeight,
 			},
-			KwildMinorVersion: string(version.MinorVersionV9),
+			Version: MigrationVersion,
 		}, nil
 	}
 
@@ -432,9 +431,9 @@ func (m *Migrator) GetMigrationMetadata() (*types.MigrationMetadata, error) {
 			StartHeight: m.activeMigration.StartHeight,
 			EndHeight:   m.activeMigration.EndHeight,
 		},
-		SnapshotMetadata:  snapshotBts,
-		GenesisInfo:       &genesisInfo,
-		KwildMinorVersion: string(version.MinorVersionV9),
+		SnapshotMetadata: snapshotBts,
+		GenesisInfo:      &genesisInfo,
+		Version:          MigrationVersion,
 	}, nil
 }
 

@@ -21,6 +21,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
+	"github.com/kwilteam/kwil-db/internal/migrations"
 	"github.com/kwilteam/kwil-db/internal/statesync"
 )
 
@@ -141,6 +142,13 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	metadata, err := m.clt.GenesisState(ctx)
 	if err != nil {
 		return err
+	}
+
+	// this check should change in every version:
+	// For backwards compatibility, we should be able to unmarshal structs from previous versions.
+	// Since v0.9 is our first time supporting migration, we only need to check for v0.9.
+	if metadata.Version != migrations.MigrationVersion {
+		return fmt.Errorf("genesis state download is incompatible. Received version: %d, supported versions: [%d]", metadata.Version, migrations.MigrationVersion)
 	}
 
 	// Check if the genesis state is ready

@@ -42,6 +42,8 @@ func init() {
 	}
 }
 
+const MigrationVersion int = 0
+
 // MigrationDeclaration creates a new migration. It is used to agree on terms of a migration,
 // and is voted on using Kwil's vote store.
 type MigrationDeclaration struct {

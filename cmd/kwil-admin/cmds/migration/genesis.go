@@ -12,8 +12,8 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/migrations"
 	"github.com/kwilteam/kwil-db/internal/statesync"
-	"github.com/kwilteam/kwil-db/internal/version"
 )
 
 var (
@@ -53,8 +53,8 @@ func genesisStateCmd() *cobra.Command {
 			// this check should change in every version:
 			// For backwards compatibility, we should be able to unmarshal structs from previous versions.
 			// Since v0.9 is our first time supporting migration, we only need to check for v0.9.
-			if metadata.KwildMinorVersion != string(version.KwilMinorVersion) {
-				return display.PrintErr(cmd, fmt.Errorf("genesis state download is incompatible. Received version: %s, supported versions: [%s]", metadata.KwildMinorVersion, version.KwilMinorVersion))
+			if metadata.Version != migrations.MigrationVersion {
+				return display.PrintErr(cmd, fmt.Errorf("genesis state download is incompatible. Received version: %d, supported versions: [%d]", metadata.Version, migrations.MigrationVersion))
 			}
 
 			// If there is no active migration or if the migration has not started yet, return the migration state

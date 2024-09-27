@@ -15,30 +15,19 @@ import (
 //   - 0.6.0+release
 //   - 0.6.1
 //   - 0.6.2-alpha0+go1.21.nocgo
-const kwilVersion = "0." + MinorVersionV9 + ".0-pre"
-
-// MinorVersion is the minor version of the major version 0.
-type MinorVersion string
-
-// we start with 9 because we only started tracking this in v0.9.0
-const (
-	// MinorVersionV0 is the first minor version of the major version 0.
-	MinorVersionV9 MinorVersion = "9"
-)
+const kwilVersion = "0.9.0-pre"
 
 // KwildVersion may be set at compile time by:
 //
 //	go build -ldflags "-s -w -X github.com/kwilteam/kwil-db/internal/version.KwilVersion=0.6.0+release"
 var (
 	KwilVersion string
-	// KwilMinorVersion is the minor version of the major version 0.
-	KwilMinorVersion MinorVersion = MinorVersionV9
-	Build                         = vcsInfo()
+	Build       = vcsInfo()
 )
 
 func init() {
 	if KwilVersion == "" { // not set via ldflags
-		KwilVersion = string(kwilVersion)
+		KwilVersion = kwilVersion
 		if Build != nil && Build.RevisionShort != "" {
 			// Append VCS revision and workspace dirty flag.
 			sep := "+" // start build metadata
