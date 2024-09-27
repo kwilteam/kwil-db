@@ -120,7 +120,7 @@ type IntTestConfig struct {
 	WithGas                 bool
 	PopulatePersistentPeers bool
 	PrivateMode             bool
-	AuthenticateRPCs        bool
+	PrivateRPC              bool
 
 	// The following options are mutually exclusive, as they are used to use
 	// alternate docker images with kwild variants with differnet extensions.
@@ -325,7 +325,7 @@ func WithPrivateMode() HelperOpt {
 
 func WithAuthenticateRPC() HelperOpt {
 	return func(r *IntHelper) {
-		r.cfg.AuthenticateRPCs = true
+		r.cfg.PrivateRPC = true
 	}
 }
 
@@ -353,8 +353,8 @@ func (r *IntHelper) LoadConfig() {
 		DockerComposeOverrideFile: getEnv("KIT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
 
-	r.cfg.AuthenticateRPCs, err = strconv.ParseBool(getEnv("KIT_AUTHENTICATE_RPCS", "false"))
-	require.NoError(r.t, err, "invalid authenticateRPCs bool")
+	r.cfg.PrivateRPC, err = strconv.ParseBool(getEnv("KIT_PRIVATE_RPC", "false"))
+	require.NoError(r.t, err, "invalid privateRPC bool")
 
 	creatorPk, err := crypto.Secp256k1PrivateKeyFromHex(r.cfg.CreatorRawPk)
 	require.NoError(r.t, err, "invalid creator private key")
@@ -458,7 +458,7 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 		HostnamePrefix:          "kwil-",
 		HostnameSuffix:          "",
 		PrivateMode:             r.cfg.PrivateMode,
-		AuthenticateRPCs:        r.cfg.AuthenticateRPCs,
+		PrivateRPC:              r.cfg.PrivateRPC,
 
 		// use this to ease the process running test parallel
 		// NOTE: need to match docker-compose kwild service name

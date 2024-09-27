@@ -270,7 +270,7 @@ func TestDataPrivateMode(t *testing.T) {
 			// setup for each driver
 			helper := acceptance.NewActHelper(t)
 			cfg := helper.LoadConfig()
-			cfg.AuthenticateRPCs = true
+			cfg.PrivateRPC = true
 			if !*remote {
 				helper.Setup(ctx)
 			}
