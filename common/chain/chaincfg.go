@@ -129,10 +129,10 @@ type VersionParams struct {
 
 type MigrationParams struct {
 	// StartHeight is the height from which the state from the old chain is to be migrated.
-	StartHeight int64 `json:"start_height"`
+	StartHeight int64 `json:"start_height,omitempty"`
 
 	// EndHeight is the height till which the state from the old chain is to be migrated.
-	EndHeight int64 `json:"end_height"`
+	EndHeight int64 `json:"end_height,omitempty"`
 }
 
 func defaultConsensusParams() *ConsensusParams {

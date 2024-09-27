@@ -22,6 +22,7 @@ func NewSetupCmd() *cobra.Command {
 		genesisHashCmd(),
 		resetStateCmd(),
 		peerCmd(),
+		genesisCmd(),
 	)
 
 	return setupCmd
