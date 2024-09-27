@@ -70,6 +70,13 @@ func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, g
 		return kwildCfg, genesisCfg, nil
 	}
 
+	// if we reach here, then we still need to download the genesis state
+	// Therefore, the genesis app hash, validator set, and chain id should not
+	// already be set in the genesis config.
+	if genesisCfg.DataAppHash != nil || genesisCfg.Validators != nil || genesisCfg.ChainID != "" {
+		return nil, nil, errors.New("migration genesis config should not have app hash, validators or chain id set")
+	}
+
 	// old chain client
 	clt, err := client.NewClient(ctx, kwildCfg.MigrationConfig.MigrateFrom, nil)
 	if err != nil {
