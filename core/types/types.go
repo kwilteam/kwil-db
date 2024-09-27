@@ -127,7 +127,7 @@ type MigrationMetadata struct {
 	MigrationState   MigrationState `json:"migration_state"`   // MigrationState is the current state of the migration
 	GenesisInfo      *GenesisInfo   `json:"genesis_info"`      // GenesisInfo is the genesis information
 	SnapshotMetadata []byte         `json:"snapshot_metadata"` // SnapshotMetadata is the snapshot metadata
-	Version          int            `json:"kwild_version"`     // Version of the migration metadata
+	Version          int            `json:"version"`           // Version of the migration metadata
 }
 
 // GenesisInfo holds the genesis information that the new network should use
