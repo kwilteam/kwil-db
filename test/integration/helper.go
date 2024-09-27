@@ -120,6 +120,7 @@ type IntTestConfig struct {
 	WithGas                 bool
 	PopulatePersistentPeers bool
 	PrivateMode             bool
+	AuthenticateRPCs        bool
 
 	// The following options are mutually exclusive, as they are used to use
 	// alternate docker images with kwild variants with differnet extensions.
@@ -322,6 +323,12 @@ func WithPrivateMode() HelperOpt {
 	}
 }
 
+func WithAuthenticateRPC() HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.AuthenticateRPCs = true
+	}
+}
+
 func WithWaitTimeout(timeout time.Duration) HelperOpt {
 	return func(r *IntHelper) {
 		r.cfg.WaitTimeout = timeout
@@ -346,6 +353,9 @@ func (r *IntHelper) LoadConfig() {
 		DockerComposeOverrideFile: getEnv("KIT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
 
+	r.cfg.AuthenticateRPCs, err = strconv.ParseBool(getEnv("KIT_AUTHENTICATE_RPCS", "false"))
+	require.NoError(r.t, err, "invalid authenticateRPCs bool")
+
 	creatorPk, err := crypto.Secp256k1PrivateKeyFromHex(r.cfg.CreatorRawPk)
 	require.NoError(r.t, err, "invalid creator private key")
 
@@ -359,7 +369,6 @@ func (r *IntHelper) LoadConfig() {
 	r.cfg.VoteExpiry = 14400
 	r.cfg.JoinExpiry = 14400
 	r.cfg.PopulatePersistentPeers = true
-	r.cfg.PrivateMode = false
 	r.cfg.AdminRPC = "/tmp/admin.socket"
 	r.cfg.WaitTimeout = 30 * time.Second
 }
@@ -449,6 +458,7 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 		HostnamePrefix:          "kwil-",
 		HostnameSuffix:          "",
 		PrivateMode:             r.cfg.PrivateMode,
+		AuthenticateRPCs:        r.cfg.AuthenticateRPCs,
 
 		// use this to ease the process running test parallel
 		// NOTE: need to match docker-compose kwild service name

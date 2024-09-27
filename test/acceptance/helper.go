@@ -134,6 +134,9 @@ func (r *ActHelper) LoadConfig() *ActTestCfg {
 		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
 
+	cfg.AuthenticateRPCs, err = strconv.ParseBool(getEnv("KACT_AUTHENTICATE_RPCS", "false"))
+	require.NoError(r.t, err, "invalid authenticateRPCs bool")
+
 	cfg.GasEnabled, err = strconv.ParseBool(getEnv("KACT_GAS_ENABLED", "false"))
 	require.NoError(r.t, err, "invalid gasEnabled bool")
 

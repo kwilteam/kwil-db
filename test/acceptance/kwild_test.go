@@ -254,7 +254,7 @@ func TestTypes(t *testing.T) {
 	}
 }
 
-func TestPrivateMode(t *testing.T) {
+func TestDataPrivateMode(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
