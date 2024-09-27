@@ -1,0 +1,26 @@
+# This is an example systemd service definition for a Kwil node.
+# Modify the ExecStart and ReadWritePaths with the actual locations of the
+# kwild binary and root_directory on the host system.
+[Unit]
+Description=The Kwil DB node
+Documentation=https://docs.kwil.com/
+Requires=local-fs.target network-online.target network.target
+After=local-fs.target network-online.target network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/kwil/kwild -r /home/kwild/.kwild
+#ExecStop=
+KillSignal=SIGINT
+TimeoutStopSec=15s
+KillMode=process
+Restart=on-abnormal
+RestartSec=20s
+User=kwild
+Group=kwild
+
+ReadWritePaths=/home/kwild/.kwild
+#ReadWritePaths=/opt/kwil
+
+[Install]
+WantedBy=multi-user.target
