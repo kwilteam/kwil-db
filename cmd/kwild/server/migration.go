@@ -60,15 +60,6 @@ func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, g
 	logger.Info("Entering migration mode", log.String("migrate_from", kwildCfg.MigrationConfig.MigrateFrom))
 
 	snapshotFileName := config.GenesisStateFileName(kwildCfg.RootDir)
-	// check if genesis hash is set in the genesis config
-	if genesisCfg.DataAppHash != nil &&
-		genesisCfg.ConsensusParams.Migration.StartHeight != 0 &&
-		genesisCfg.ConsensusParams.Migration.EndHeight != 0 &&
-		validateGenesisState(snapshotFileName, genesisCfg.DataAppHash) {
-		// genesis state already downloaded. No need to poll for genesis state
-		logger.Info("Genesis state already downloaded", log.String("genesis snapshot", snapshotFileName))
-		return kwildCfg, genesisCfg, nil
-	}
 
 	// old chain client
 	clt, err := client.NewClient(ctx, kwildCfg.MigrationConfig.MigrateFrom, nil)
@@ -139,33 +130,40 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 		return fmt.Errorf("failed to unmarshal genesis config: %w", err)
 	}
 
-	// Save the genesis state
-	var snapshotMetadata statesync.Snapshot
-	if err := json.Unmarshal(metadata.SnapshotMetadata, &snapshotMetadata); err != nil {
-		return fmt.Errorf("failed to unmarshal snapshot metadata: %w", err)
-	}
+	genesisStateExists := bytes.Equal(genCfg.DataAppHash, m.genesisCfg.DataAppHash) &&
+		validateGenesisState(m.snapshotFileName, genCfg.DataAppHash)
 
-	m.logger.Info("Genesis state available for download")
+	if !genesisStateExists {
+		var snapshotMetadata statesync.Snapshot
+		if err := json.Unmarshal(metadata.SnapshotMetadata, &snapshotMetadata); err != nil {
+			return fmt.Errorf("failed to unmarshal snapshot metadata: %w", err)
+		}
 
-	// create snapshot file
-	genesisStateFile, err := os.Create(m.snapshotFileName)
-	if err != nil {
-		return fmt.Errorf("failed to create genesis snapshot file: %w", err)
-	}
+		m.logger.Info("Genesis state available for download")
 
-	// retrieve all the snapshot chunks
-	for i := uint32(0); i < snapshotMetadata.ChunkCount; i++ {
-		chunk, err := m.clt.GenesisSnapshotChunk(ctx, snapshotMetadata.Height, i)
+		// create snapshot file
+		genesisStateFile, err := os.Create(m.snapshotFileName)
 		if err != nil {
-			return fmt.Errorf("failed to download genesis snapshot chunk: %d  error: %w", i, err)
+			return fmt.Errorf("failed to create genesis snapshot file: %w", err)
 		}
-		n, err := genesisStateFile.Write(chunk)
-		if err != nil {
-			return fmt.Errorf("failed to write genesis snapshot chunk: %d  error: %w", i, err)
+
+		// retrieve all the snapshot chunks
+		for i := uint32(0); i < snapshotMetadata.ChunkCount; i++ {
+			chunk, err := m.clt.GenesisSnapshotChunk(ctx, snapshotMetadata.Height, i)
+			if err != nil {
+				return fmt.Errorf("failed to download genesis snapshot chunk: %d  error: %w", i, err)
+			}
+			n, err := genesisStateFile.Write(chunk)
+			if err != nil {
+				return fmt.Errorf("failed to write genesis snapshot chunk: %d  error: %w", i, err)
+			}
+			if n != len(chunk) {
+				return fmt.Errorf("incomplete write to genesis snapshot chunk. expected: %d, written: %d", len(chunk), n)
+			}
 		}
-		if n != len(chunk) {
-			return fmt.Errorf("incomplete write to genesis snapshot chunk. expected: %d, written: %d", len(chunk), n)
-		}
+	} else {
+		// Skip downloading the genesis state if it already exists
+		m.logger.Info("Genesis state is already downloaded, so skipping the download process", log.String("genesis snapshot", m.snapshotFileName))
 	}
 
 	// Update the genesis config
