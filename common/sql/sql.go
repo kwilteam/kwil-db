@@ -156,10 +156,13 @@ type AccessModer interface {
 // When subscribed, the passed channel will receive notifications.
 // Only one subscription is allowed per transaction.
 type Subscriber interface {
-	// Subscribe subscribes to notifications passed using the special
-	// `notice()` function. Only `notice()` calls made after the subscription,
-	// on this tx, will be received. It returns a done function that should be
-	// called when the subscription is no longer needed. It is the callers
-	// responsibility to call done and close the channel.
+	// Subscribe subscribes to notifications passed using the special `notice()`
+	// function. Only `notice()` calls made after the subscription, on this tx,
+	// will be received. A done function is returned that should be called to
+	// signal that no more statements that emit notices will be executed. The
+	// channel will only be closed after all notices have been sent AND the done
+	// is called, or if the database shuts down prematurely. In case of an
+	// unexpected DB shutdown, an empty string is sent on the channel before it
+	// is closed. It is the caller's responsibility to call done.
 	Subscribe(ctx context.Context) (ch <-chan string, done func(context.Context) error, err error)
 }

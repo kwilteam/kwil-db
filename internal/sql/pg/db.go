@@ -221,6 +221,20 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 
 		db.pool.Close()
 
+		// If the DB has shut down, there will be no more notices, which may be
+		// needed to unblock a receiver e.g. FinalizeBlock, so we close the
+		// channels to unblock them and allow the application to return.
+		db.pool.subscribers.Exclusive(func(m map[int64]chan<- string) {
+			for txid, sub := range m {
+				// We won't be sending any more message with the 'pgtx:' prefix,
+				// so we send an empty string PRIOR to closing the channel to
+				// signal premature completion.
+				sub <- ""
+				close(sub)
+				delete(m, txid)
+			}
+		})
+
 		// Potentially we can have a newReplMon restart loop here instead of
 		// shutdown. However, this proved complex and unlikely to succeed.
 	}()

@@ -606,21 +606,28 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	defer done(ctx)
 
 	// wait group to wait at the end of the function for all logs to be received
-	var wg sync.WaitGroup
-	wg.Add(1)
+	logsDone := make(chan error, 1)
 	go func() {
+		defer close(logsDone)
+
 		// we enforce that the cumulative size of logs is less than 1KB
 		// per tx. This is a work-around until we have gas costs to protect
 		// against log spam.
 		for {
 			log, ok := <-logs
-			if !ok {
-				break
+			if !ok { // empty and closed (normal completion)
+				return // logsDone receiver gets nil error
+			}
+			if log == "" {
+				// The DB has shut down with active subscribers. Fail.
+				logsDone <- errors.New("premature notice stream termination")
+				return
 			}
 			txid, notice, err := parse.ParseNotice(log)
 			if err != nil {
-				// should be deterministic so nbd to not halt here
-				a.log.Errorf("failed to parse notice: %v", err)
+				// will still be deterministic so nbd to not halt here
+				a.log.Errorf("failed to parse notice (%.20s...): %v", log, err)
+				continue // since txid is invalid and won't match any result.TxHash
 			}
 
 			currentLog, ok := logMap[txid]
@@ -641,10 +648,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 				currentLog.logs += "\n" + notice
 			}
 		}
-
-		// logs channel will be closed when the tx is precommitted,
-		// so finish the wait group
-		wg.Done()
 	}()
 
 	for i, tx := range req.Txs {
@@ -859,8 +862,17 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 	}
 
-	// wait for all logs to be received
-	wg.Wait()
+	// wait for all logs to be received, or a premature shutdown
+	select {
+	case <-ctx.Done():
+		// NOTE: this will not happen until cometbft v1.0 since in v0.38
+		// FinalizeBlock is still called with context.TODO().
+		return nil, ctx.Err()
+	case err := <-logsDone:
+		if err != nil {
+			return nil, fmt.Errorf("DB failure: %w", err)
+		} // else we got all the notice
+	}
 
 	for _, result := range resultArr {
 		logs, ok := logMap[hex.EncodeToString(result.TxHash)]
