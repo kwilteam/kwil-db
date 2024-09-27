@@ -323,7 +323,7 @@ func WithPrivateMode() HelperOpt {
 	}
 }
 
-func WithAuthenticateRPC() HelperOpt {
+func WithPrivateRPC() HelperOpt {
 	return func(r *IntHelper) {
 		r.cfg.PrivateRPC = true
 	}
