@@ -152,6 +152,11 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to create custom collations: %w", err)
 	}
 
+	// Make sure all tables in all "ds_" schemas have full replica identity.
+	if err = ensureFullReplicaIdentityAllTables(ctx, conn); err != nil {
+		return nil, fmt.Errorf("failed to create full replication identity trigger: %w", err)
+	}
+
 	// Ensure all tables that are created with no primary key or unique index
 	// are altered to have "full replication identity" for UPDATE and DELETES.
 	if err = ensureFullReplicaIdentityTrigger(ctx, conn); err != nil {

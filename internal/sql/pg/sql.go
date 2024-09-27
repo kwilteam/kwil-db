@@ -96,6 +96,20 @@ BEGIN
     END LOOP;
 END;
 $$;`
+
+	sqlAlterAllWithReplicaIdentFull = `DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT schemaname, tablename
+        FROM pg_tables
+        WHERE schemaname LIKE 'ds_%'
+    )
+    LOOP
+        EXECUTE 'ALTER TABLE ' || quote_ident(r.schemaname) || '.' || quote_ident(r.tablename) || ' REPLICA IDENTITY FULL;';
+    END LOOP;
+END $$;`
 )
 
 func checkSuperuser(ctx context.Context, conn *pgx.Conn) error {
@@ -215,6 +229,11 @@ const (
 func tableExists(ctx context.Context, schema, table string, conn *pgx.Conn) (bool, error) {
 	rows, _ := conn.Query(ctx, sqlSchemaTableExists, schema, table)
 	return pgx.CollectExactlyOneRow(rows, pgx.RowTo[bool])
+}
+
+func ensureFullReplicaIdentityAllTables(ctx context.Context, conn *pgx.Conn) error {
+	_, err := conn.Exec(ctx, sqlAlterAllWithReplicaIdentFull)
+	return err
 }
 
 // ensureFullReplicaIdentityTrigger creates an event trigger to set the replica
