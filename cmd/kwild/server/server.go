@@ -66,7 +66,7 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *chain.Genesis
 		}
 	}()
 
-	if cfg.AppConfig.TLSKeyFile == "" || cfg.AppConfig.TLSCertFile == "" {
+	if cfg.AppConfig.AdminTLSKeyFile == "" || cfg.AppConfig.AdminTLSCertFile == "" {
 		return nil, errors.New("unspecified TLS key and/or certificate")
 	}
 
@@ -74,9 +74,9 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *chain.Genesis
 		return nil, fmt.Errorf("failed to create root directory %q: %w", cfg.RootDir, err)
 	}
 
-	logger.Debug("loading TLS key pair for gRPC servers", log.String("key_file", "d.cfg.TLSKeyFile"),
-		log.String("cert_file", "d.cfg.TLSCertFile")) // wtf why can't we log yet?
-	keyPair, err := loadTLSCertificate(cfg.AppConfig.TLSKeyFile, cfg.AppConfig.TLSCertFile, cfg.AppConfig.Hostname)
+	logger.Debug("loading TLS key pair for gRPC servers", log.String("key_file", "d.cfg.AdminTLSKeyFile"),
+		log.String("cert_file", "d.cfg.AdminTLSCertFile")) // wtf why can't we log yet?
+	keyPair, err := loadTLSCertificate(cfg.AppConfig.AdminTLSKeyFile, cfg.AppConfig.AdminTLSCertFile, cfg.AppConfig.Hostname)
 	if err != nil {
 		return nil, err
 	}

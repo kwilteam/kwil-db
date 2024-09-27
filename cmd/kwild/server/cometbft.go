@@ -71,8 +71,10 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 	nodeCfg.FilterPeers = true
 	nodeCfg.RPC.ListenAddress = cleanListenAddr(userChainCfg.RPC.ListenAddress,
 		portFromURL(nodeCfg.RPC.ListenAddress))
-	nodeCfg.RPC.TLSCertFile = cfg.AppConfig.TLSCertFile
-	nodeCfg.RPC.TLSKeyFile = cfg.AppConfig.TLSKeyFile
+	// NOTE: we would add new config settings to configure CometBFT's RPC server
+	// to use TLS, if that is something people want:
+	// nodeCfg.RPC.TLSCertFile = cfg.AppConfig.ConsensusTLSCertFile
+	// nodeCfg.RPC.TLSKeyFile = cfg.AppConfig.ConsensusAdminTLSKeyFile
 	nodeCfg.RPC.TimeoutBroadcastTxCommit = time.Duration(userChainCfg.RPC.BroadcastTxTimeout)
 
 	nodeCfg.P2P.ListenAddress = cleanListenAddr(userChainCfg.P2P.ListenAddress,

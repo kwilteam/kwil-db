@@ -128,7 +128,9 @@ private_key_path = "{{ .AppConfig.PrivateKeyPath }}"
 # TCP address for the KWILD App's JSON-RPC server to listen on
 jsonrpc_listen_addr = "{{ .AppConfig.JSONRPCListenAddress }}"
 
-# Unix socket or TCP address for the KWILD App's Admin GRPC server to listen on
+# Unix socket or TCP address for the KWILD App's Admin GRPC server to listen on.
+# For a non-loopback TCP address, TLS is automatically enabled unless
+# admin_notls is set to true.
 admin_listen_addr = "{{ .AppConfig.AdminListenAddress }}"
 
 # Timeout on requests on the user RPC servers
@@ -179,20 +181,17 @@ pg_db_name = "{{ .AppConfig.DBName }}"
 # any TCP listen address.
 admin_notls = {{ .AppConfig.NoTLS }}
 
-# The path to a file containing certificate that is used to create the HTTPS server.
-# Might be either absolute path or path related to the kwild root directory.
-# If the certificate is signed by a certificate authority,
-# the certFile should be the concatenation of the server's certificate, any intermediates,
-# and the CA's certificate.
-# NOTE: both tls_cert_file and tls_key_file must be present for CometBFT to create HTTPS server.
-# Otherwise, HTTP server is run.
-tls_cert_file = "{{ .AppConfig.TLSCertFile }}"
+# The path to a file containing certificate that is used to create the admin HTTPS server.
+# It may be either an absolute path or a path related to the kwild root directory.
+# If set, admin_tls_cert_file must also be set.
+# If unset, an HTTP server is run.
+admin_tls_cert_file = "{{ .AppConfig.AdminTLSCertFile }}"
 
-# The path to a file containing matching private key that is used to create the HTTPS server.
-# Might be either absolute path or path related to the kwild root directory.
-# NOTE: both tls_cert_file and tls_key_file must be present for CometBFT to create HTTPS server.
-# Otherwise, HTTP server is run.
-tls_key_file = "{{ .AppConfig.TLSKeyFile }}"
+# The path to a file containing matching private key that is used to create the admin HTTPS server.
+# It may be either an absolute path or a path related to the kwild root directory.
+# If set, admin_tls_cert_file must also be set.
+# If unset, an HTTP server is run.
+admin_tls_key_file = "{{ .AppConfig.AdminTLSKeyFile }}"
 
 # Kwild Server hostname
 hostname = "{{ .AppConfig.Hostname }}"

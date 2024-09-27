@@ -7,7 +7,7 @@
 | Latest beta or release candidate    | ✅        |
 | v0.9.x  | ✅        |
 | v0.8.x  | ✅        |
-| < v0.8  | ❌        |
+| < v0.9  | ❌        |
 
 ## Reporting a Vulnerability
 

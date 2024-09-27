@@ -147,7 +147,7 @@ func writeCometBFTConfigs(conf *cometConfig.Config, genDoc *types.GenesisDoc) er
 	}
 
 	// Now "abci/config/config.toml"
-	conf.RPC.TLSCertFile, conf.RPC.TLSKeyFile = "", "" // not needed for debugging and recovery
+	conf.RPC.TLSCertFile, conf.RPC.TLSKeyFile = "", "" // not needed for debugging and recovery, so clear any settings from kwild
 	cmtConfigFile := filepath.Join(cometConfigPath, "config.toml")
 	cometConfig.WriteConfigFile(cmtConfigFile, conf)
 

@@ -73,9 +73,8 @@ func GetAdminSvcClient(ctx context.Context, cmd *cobra.Command) (*adminclient.Ad
 }
 
 const (
-	// kwildTLSCertFileName is the default file name for kwild's TLS certificate
-	// when we look in the .kwild folder for it (when kwild is on this machine).
-	kwildTLSCertFileName = config.DefaultTLSCertFile
+	// kwildTLSCertFileName is the default file name for a TLS certificate.
+	kwildTLSCertFileName = config.DefaultTLSCertFileName
 
 	// capturedKwildTLSCertFileName is the name of the kwild TLS certificate when
 	// we look in the .kwil-admin folder for it.
