@@ -53,8 +53,8 @@ type ActTestCfg struct {
 	CreatorSigner auth.Signer
 	VisitorSigner auth.Signer
 
-	GasEnabled       bool
-	AuthenticateRPCs bool
+	GasEnabled bool
+	PrivateRPC bool
 }
 
 func (e *ActTestCfg) CreatorIdent() []byte {
@@ -134,6 +134,9 @@ func (r *ActHelper) LoadConfig() *ActTestCfg {
 		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
 
+	cfg.PrivateRPC, err = strconv.ParseBool(getEnv("KACT_PRIVATE_RPC", "false"))
+	require.NoError(r.t, err, "invalid privateRPC bool")
+
 	cfg.GasEnabled, err = strconv.ParseBool(getEnv("KACT_GAS_ENABLED", "false"))
 	require.NoError(r.t, err, "invalid gasEnabled bool")
 
@@ -189,7 +192,7 @@ func (r *ActHelper) generateNodeConfig() {
 		OutputDir:        tmpPath,
 		JoinExpiry:       14400,
 		WithoutGasCosts:  !r.cfg.GasEnabled,
-		AuthenticateRPCs: r.cfg.AuthenticateRPCs,
+		AuthenticateRPCs: r.cfg.PrivateRPC,
 		Allocs: map[string]*big.Int{
 			creatorIdent: bal,
 		},

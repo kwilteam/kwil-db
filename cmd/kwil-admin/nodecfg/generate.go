@@ -79,6 +79,7 @@ type TestnetGenerateConfig struct {
 	SnapshotHeights         uint64
 	Forks                   map[string]*uint64
 	PrivateMode             bool
+	PrivateRPC              bool
 }
 
 // ConfigOpts is a struct to alter the generation of the node config.
@@ -388,6 +389,8 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 				cfg.AppConfig.Extensions = make(map[string]map[string]string)
 			}
 		}
+
+		cfg.AppConfig.PrivateRPC = genCfg.PrivateRPC
 
 		err = WriteConfigFile(kwildcfg.ConfigFilePath(nodeDir), cfg)
 		if err != nil {

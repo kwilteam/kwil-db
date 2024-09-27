@@ -190,7 +190,7 @@ tasks:
     desc: Start the dev environment(with testnet) without rebuilding docker image
     dir: test # different module
     cmds:
-      - go test ./integration -run ^TestLocalDevSetup$ -timeout 12h -dev -v
+      - go test ./integration -run ^TestLocalDevSetup$ -timeout 12h -dev -v {{.CLI_ARGS}}
 
   # ************ test ************
   # test with build:docker task support passing CLI_ARGS to go test, e.g. task test:act -- -debug

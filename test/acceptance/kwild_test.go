@@ -254,7 +254,7 @@ func TestTypes(t *testing.T) {
 	}
 }
 
-func TestPrivateMode(t *testing.T) {
+func TestDataPrivateMode(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
@@ -270,7 +270,7 @@ func TestPrivateMode(t *testing.T) {
 			// setup for each driver
 			helper := acceptance.NewActHelper(t)
 			cfg := helper.LoadConfig()
-			cfg.AuthenticateRPCs = true
+			cfg.PrivateRPC = true
 			if !*remote {
 				helper.Setup(ctx)
 			}
