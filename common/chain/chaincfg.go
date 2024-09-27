@@ -135,6 +135,11 @@ type MigrationParams struct {
 	EndHeight int64 `json:"end_height,omitempty"`
 }
 
+// IsMigration returns true if the migration parameters are set.
+func (m *MigrationParams) IsMigration() bool {
+	return m.StartHeight != 0 && m.EndHeight != 0
+}
+
 func defaultConsensusParams() *ConsensusParams {
 	return &ConsensusParams{
 		BaseConsensusParams: BaseConsensusParams{

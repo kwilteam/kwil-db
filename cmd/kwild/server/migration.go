@@ -73,8 +73,9 @@ func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, g
 	// if we reach here, then we still need to download the genesis state
 	// Therefore, the genesis app hash, validator set, and chain id should not
 	// already be set in the genesis config.
-	if genesisCfg.DataAppHash != nil || genesisCfg.Validators != nil || genesisCfg.ChainID != "" {
-		return nil, nil, errors.New("migration genesis config should not have app hash, validators or chain id set")
+	if genesisCfg.DataAppHash != nil || genesisCfg.Validators != nil || genesisCfg.ChainID != "" ||
+		genesisCfg.InitialHeight != 0 || genesisCfg.ConsensusParams.Migration.IsMigration() {
+		return nil, nil, errors.New("migration genesis config should not have app hash, validators, initial height, migration info, or chain id set")
 	}
 
 	// old chain client
