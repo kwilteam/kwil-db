@@ -13,17 +13,20 @@ import (
 )
 
 var (
-	proposeLong = "A Validator operator can submit a migration proposal using the `propose` subcommand. The migration proposal includes the new `chain-id`, `activation-period` and `duration`. This action will generate a migration resolution for the other validators to vote on. If a super-majority of validators approve the migration proposal, the migration will commence after the specified activation-period blocks from approval and will continue for the duration defined by duration blocks."
+	proposeLong = `A validator operator can submit a migration proposal using the ` + "`" + `propose` + "`" + ` subcommand.
+	
+The migration proposal includes the ` + "`" + `activation-period` + "`" + ` and ` + "`" + `duration` + "`" + `. This will generate a migration resolution
+for the other validators to vote on. If a super-majority of validators approve the migration proposal, the migration will
+commence after the specified activation-period blocks from approval and will continue for the duration defined by duration blocks.`
 
-	proposeExample = `# Submit a migration proposal to migrate to a new chain "kwil-chain-new" with activation period 1000 and migration duration of 14400 blocks.
-kwil-admin migrate propose --activation-period 1000 --duration 14400 --chain-id kwil-chain-new
+	proposeExample = `# Submit a migration proposal to migrate to a new chain with activation period 1000 and migration duration of 14400 blocks.
+kwil-admin migrate propose --activation-period 1000 --duration 14400
 (or)
-kwil-admin migrate propose -a 1000 -d 14400 -c kwil-chain-new`
+kwil-admin migrate propose -a 1000 -d 14400`
 )
 
 func proposeCmd() *cobra.Command {
 	var activationPeriod, migrationDuration uint64
-	var chainID string
 
 	cmd := &cobra.Command{
 		Use:     "propose",
@@ -42,14 +45,9 @@ func proposeCmd() *cobra.Command {
 				return display.PrintErr(cmd, errors.New("start-height and migration duration must be greater than 0"))
 			}
 
-			if chainID == "" {
-				return display.PrintErr(cmd, errors.New("chain-id configuration is not set"))
-			}
-
 			proposal := migrations.MigrationDeclaration{
 				ActivationPeriod: activationPeriod,
 				Duration:         migrationDuration,
-				ChainID:          chainID,
 				Timestamp:        time.Now().String(),
 			}
 			proposalBts, err := proposal.MarshalBinary()
@@ -70,6 +68,5 @@ func proposeCmd() *cobra.Command {
 
 	cmd.Flags().Uint64VarP(&activationPeriod, "activation-period", "a", 0, "The number of blocks before the migration is activated since the approval of the proposal.")
 	cmd.Flags().Uint64VarP(&migrationDuration, "duration", "d", 0, "The duration of the migration.")
-	cmd.Flags().StringVarP(&chainID, "chain-id", "c", "", "The chain ID of the migration.")
 	return cmd
 }

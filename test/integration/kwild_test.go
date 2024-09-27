@@ -979,7 +979,7 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 		newDir := helper.MigrationSetup(ctx)
 
 		// Trigger a network migration request
-		specifications.SubmitMigrationProposal(ctx, t, node0Driver, integration.MigrationChainID)
+		specifications.SubmitMigrationProposal(ctx, t, node0Driver)
 
 		// node1 approves the migration and verifies that the migration is still pending
 		specifications.ApproveMigration(ctx, t, node1Driver, true)

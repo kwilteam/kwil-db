@@ -13,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/statesync"
+	"github.com/kwilteam/kwil-db/internal/version"
 )
 
 var (
@@ -49,11 +50,18 @@ func genesisStateCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
+			// this check should change in every version:
+			// For backwards compatibility, we should be able to unmarshal structs from previous versions.
+			// Since v0.9 is our first time supporting migration, we only need to check for v0.9.
+			if metadata.KwildMinorVersion != string(version.KwilMinorVersion) {
+				return display.PrintErr(cmd, fmt.Errorf("genesis state download is incompatible. Received version: %s, supported versions: [%s]", metadata.KwildMinorVersion, version.KwilMinorVersion))
+			}
+
 			// If there is no active migration or if the migration has not started yet, return the migration state
 			// indicating that there is no genesis state to download.
 			if metadata.MigrationState.Status == types.NoActiveMigration ||
 				metadata.MigrationState.Status == types.MigrationNotStarted ||
-				metadata.GenesisConfig == nil || metadata.SnapshotMetadata == nil {
+				metadata.GenesisInfo == nil || metadata.SnapshotMetadata == nil {
 				return display.PrintCmd(cmd, &MigrationState{
 					Info: metadata.MigrationState,
 				})
@@ -69,16 +77,31 @@ func genesisStateCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			// retrieve the genesis config
-			var genCfg chain.GenesisConfig
-			if err = json.Unmarshal(metadata.GenesisConfig, &genCfg); err != nil {
-				return display.PrintErr(cmd, err)
-			}
-
 			// retrieve the snapshot metadata
 			var snapshotMetadata statesync.Snapshot
 			if err = json.Unmarshal(metadata.SnapshotMetadata, &snapshotMetadata); err != nil {
 				return display.PrintErr(cmd, err)
+			}
+
+			genCfg := chain.GenesisConfig{
+				DataAppHash:   metadata.GenesisInfo.AppHash,
+				InitialHeight: metadata.MigrationState.StartHeight,
+				ConsensusParams: &chain.ConsensusParams{
+					BaseConsensusParams: chain.BaseConsensusParams{
+						Migration: chain.MigrationParams{
+							StartHeight: metadata.MigrationState.StartHeight,
+							EndHeight:   metadata.MigrationState.EndHeight,
+						},
+					},
+				},
+			}
+
+			for _, nv := range metadata.GenesisInfo.Validators {
+				genCfg.Validators = append(genCfg.Validators, &chain.GenesisValidator{
+					Name:   nv.Name,
+					PubKey: nv.PubKey,
+					Power:  nv.Power,
+				})
 			}
 
 			// Print the genesis state to the genesis.json file

@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	cmtTypes "github.com/cometbft/cometbft/types"
 	"github.com/kwilteam/kwil-db/common"
@@ -18,11 +17,10 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
-	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
-	"github.com/kwilteam/kwil-db/internal/abci/meta"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
 	"github.com/kwilteam/kwil-db/internal/txapp"
+	"github.com/kwilteam/kwil-db/internal/version"
 	"github.com/kwilteam/kwil-db/internal/voting"
 )
 
@@ -46,7 +44,6 @@ var (
 	}
 
 	metadataFileName = "metadata.json"
-	genesisFileName  = "genesis.json"
 )
 
 const (
@@ -116,8 +113,6 @@ type activeMigration struct {
 	StartHeight int64
 	// EndHeight is the height at which the migration ends.
 	EndHeight int64
-	// ChainID is the chain ID of the migration.
-	ChainID string
 }
 
 // SetupMigrator initializes the migrator instance with the necessary dependencies.
@@ -246,12 +241,6 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 			return err
 		}
 
-		// Retrieve the consensus params stored in the DB
-		cfgParams, err := meta.LoadParams(ctx, tx)
-		if err != nil {
-			return err
-		}
-
 		// Retrieve snapshot hash
 		snapshots := m.snapshotter.ListSnapshots()
 		if len(snapshots) == 0 {
@@ -270,14 +259,14 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 			}
 		}
 
-		go m.generateGenesisConfig(ctx, cfgParams, snapshots[0].SnapshotHash, genesisVals, m.Logger)
+		go m.generateGenesisConfig(ctx, snapshots[0].SnapshotHash, genesisVals, m.Logger)
 	}
 
 	if block.Height == m.activeMigration.EndHeight {
 		// starting from here, no more transactions of any kind will be accepted or mined.
 		block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationCompleted
 		m.halted = true
-		m.Logger.Info("migration to chain completed, no new transactions will be accepted", log.String("ChainID", m.activeMigration.ChainID))
+		m.Logger.Info("migration to chain completed, no new transactions will be accepted")
 	}
 
 	// wait for signal on doneChan, indicating that all changesets have been written to disk
@@ -299,7 +288,7 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 // This function is called only once at the start height of the migration.
 // It is run asynchronously as we don't have access to the cometbft's state during replay.
 // Therefore we need to wait for the consensus params fn to be set before we can generate the genesis file.
-func (m *Migrator) generateGenesisConfig(ctx context.Context, cfgParams *common.NetworkParameters, snapshotHash []byte, genesisValidators []*chain.GenesisValidator, logger log.Logger) {
+func (m *Migrator) generateGenesisConfig(ctx context.Context, snapshotHash []byte, genesisValidators []*chain.GenesisValidator, logger log.Logger) {
 	// block until the m.consensusParamsFn is closed
 	<-m.consensusParamsFnChan
 
@@ -309,7 +298,7 @@ func (m *Migrator) generateGenesisConfig(ctx context.Context, cfgParams *common.
 		return
 	}
 
-	logger.Info("generating genesis config for the new chain", log.String("ChainID", m.activeMigration.ChainID))
+	logger.Info("generating genesis config for the new chain")
 
 	height := m.activeMigration.StartHeight - 1
 	consensusParmas := m.consensusParamsFn(ctx, &height)
@@ -318,28 +307,37 @@ func (m *Migrator) generateGenesisConfig(ctx context.Context, cfgParams *common.
 		return
 	}
 
-	finalCfg := cometbft.MergeConsensusParams(consensusParmas, cfgParams)
-	// Migration Params
-	finalCfg.Migration.StartHeight = m.activeMigration.StartHeight
-	finalCfg.Migration.EndHeight = m.activeMigration.EndHeight
+	var genVals []*types.NamedValidator
 
-	genCfg := &chain.GenesisConfig{
-		ChainID:     m.activeMigration.ChainID,
-		GenesisTime: time.Now().Round(0).UTC(),
-		// Initial height set to 0
-		DataAppHash: snapshotHash,
-		// Allocs are not needed, as the transfers are included in the snapshot
-		// forks can be dropped, as they maynot be relevant to the new chain
-		Validators:      genesisValidators,
-		ConsensusParams: finalCfg,
+	for _, v := range genesisValidators {
+		genVals = append(genVals, &types.NamedValidator{
+			Name: v.Name,
+			Validator: types.Validator{
+				PubKey: v.PubKey,
+				Power:  v.Power,
+			},
+		})
 	}
 
-	// Save the genesis file
-	err := genCfg.SaveAs(formatGenesisFilename(m.dir))
+	genInfo := &types.GenesisInfo{
+		AppHash:    snapshotHash,
+		Validators: genVals,
+	}
+
+	bts, err := json.Marshal(genInfo)
 	if err != nil {
-		logger.Error("failed to save genesis file", log.Error(err))
+		logger.Error("failed to marshal genesis info", log.Error(err))
 		return
 	}
+
+	// Save the genesis info
+	err = os.WriteFile(formatGenesisInfoFileName(m.dir), bts, 0644)
+	if err != nil {
+		logger.Error("failed to save genesis info", log.Error(err))
+		return
+	}
+
+	logger.Info("genesis config generated successfully")
 }
 
 func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error {
@@ -380,6 +378,7 @@ func (m *Migrator) GetMigrationMetadata() (*types.MigrationMetadata, error) {
 			MigrationState: types.MigrationState{
 				Status: types.NoActiveMigration,
 			},
+			KwildMinorVersion: string(version.MinorVersionV9),
 		}, nil
 	}
 
@@ -391,6 +390,7 @@ func (m *Migrator) GetMigrationMetadata() (*types.MigrationMetadata, error) {
 				StartHeight: m.activeMigration.StartHeight,
 				EndHeight:   m.activeMigration.EndHeight,
 			},
+			KwildMinorVersion: string(version.MinorVersionV9),
 		}, nil
 	}
 
@@ -409,14 +409,15 @@ func (m *Migrator) GetMigrationMetadata() (*types.MigrationMetadata, error) {
 		return nil, err
 	}
 
-	genCfg, err := chain.LoadGenesisConfig(formatGenesisFilename(m.dir))
+	// read the genesis config
+	genCfg, err := os.ReadFile(formatGenesisInfoFileName(m.dir))
 	if err != nil {
 		return nil, err
 	}
 
-	// serialize genesis config data
-	configBts, err := json.Marshal(genCfg)
-	if err != nil {
+	// unmarshal
+	var genesisInfo types.GenesisInfo
+	if err := json.Unmarshal(genCfg, &genesisInfo); err != nil {
 		return nil, err
 	}
 
@@ -431,8 +432,9 @@ func (m *Migrator) GetMigrationMetadata() (*types.MigrationMetadata, error) {
 			StartHeight: m.activeMigration.StartHeight,
 			EndHeight:   m.activeMigration.EndHeight,
 		},
-		SnapshotMetadata: snapshotBts,
-		GenesisConfig:    configBts,
+		SnapshotMetadata:  snapshotBts,
+		GenesisInfo:       &genesisInfo,
+		KwildMinorVersion: string(version.MinorVersionV9),
 	}, nil
 }
 
@@ -749,8 +751,8 @@ func formatChangesetMetadataFilename(mdir string, height int64) string {
 	return filepath.Join(mdir, changesetsDirName, fmt.Sprintf("block-%d", height), metadataFileName)
 }
 
-func formatGenesisFilename(mdir string) string {
-	return filepath.Join(mdir, genesisFileName)
+func formatGenesisInfoFileName(mdir string) string {
+	return filepath.Join(mdir, "genesis_info.json")
 }
 
 // CleanupResolutionsAtStartup is called at startup to clean up the resolutions table. It does the below things:

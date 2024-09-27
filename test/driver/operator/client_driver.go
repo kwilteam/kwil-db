@@ -88,7 +88,7 @@ func (a *AdminClientDriver) ConnectedPeers(ctx context.Context) ([]string, error
 	return peers, nil
 }
 
-func (a *AdminClientDriver) SubmitMigrationProposal(ctx context.Context, activationPeriod, migrationDuration *big.Int, chainID string) ([]byte, error) {
+func (a *AdminClientDriver) SubmitMigrationProposal(ctx context.Context, activationPeriod, migrationDuration *big.Int) ([]byte, error) {
 	// return a.Client.SubmitMigrationProposal(ctx, activationHeight, migrationDuration, chainID)
 	activationHeight := activationPeriod.Uint64()
 	dur := migrationDuration.Uint64()
@@ -96,7 +96,6 @@ func (a *AdminClientDriver) SubmitMigrationProposal(ctx context.Context, activat
 	res := migrations.MigrationDeclaration{
 		ActivationPeriod: activationHeight,
 		Duration:         dur,
-		ChainID:          chainID,
 		Timestamp:        time.Now().String(),
 	}
 	proposalBts, err := res.MarshalBinary()

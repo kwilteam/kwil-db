@@ -51,16 +51,15 @@ var (
 	tableMigrationsSQL = `CREATE TABLE IF NOT EXISTS ` + migrationsSchemaName + `.migration (
 		id INT PRIMARY KEY,
 		start_height INT8 NOT NULL,
-		end_height INT8 NOT NULL,
-		chain_id TEXT NOT NULL
+		end_height INT8 NOT NULL
 	)`
 
 	// getMigrationSQL is the sql query used to get the current migration.
-	getMigrationSQL = `SELECT start_height, end_height, chain_id FROM ` + migrationsSchemaName + `.migration;`
+	getMigrationSQL = `SELECT start_height, end_height FROM ` + migrationsSchemaName + `.migration;`
 	// migrationIsActiveSQL is the sql query used  to check if a migration is active.
 	migrationIsActiveSQL = `SELECT EXISTS(SELECT 1 FROM ` + migrationsSchemaName + `.migration);`
 	// createMigrationSQL is the sql query used to create a new migration.
-	createMigrationSQL = `INSERT INTO ` + migrationsSchemaName + `.migration (id, start_height, end_height, chain_id) VALUES ($1, $2, $3, $4);`
+	createMigrationSQL = `INSERT INTO ` + migrationsSchemaName + `.migration (id, start_height, end_height) VALUES ($1, $2, $3, $4);`
 
 	lastStoreChangeset = `last_stored_changeset`
 
@@ -108,11 +107,6 @@ func getMigrationState(ctx context.Context, db sql.Executor) (*activeMigration, 
 		return nil, fmt.Errorf("internal bug: duration is not an int64")
 	}
 
-	md.ChainID, ok = row[2].(string)
-	if !ok {
-		return nil, fmt.Errorf("internal bug: chain ID is not a string")
-	}
-
 	return md, nil
 }
 
@@ -139,7 +133,7 @@ func migrationActive(ctx context.Context, db sql.Executor) (bool, error) {
 
 // createMigration creates a new migration state in the database.
 func createMigration(ctx context.Context, db sql.Executor, md *activeMigration) error {
-	_, err := db.Execute(ctx, createMigrationSQL, 1, md.StartHeight, md.EndHeight, md.ChainID)
+	_, err := db.Execute(ctx, createMigrationSQL, 1, md.StartHeight, md.EndHeight)
 	return err
 }
 
