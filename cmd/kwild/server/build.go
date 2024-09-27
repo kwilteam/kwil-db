@@ -210,9 +210,6 @@ func newDBOpener(host, port, user, pass string) dbOpener {
 				},
 				MaxConns: maxConns,
 			},
-			SchemaFilter: func(s string) bool {
-				return strings.HasPrefix(s, pg.DefaultSchemaFilterPrefix)
-			},
 		}
 		return pg.NewDB(ctx, cfg)
 	}
@@ -559,6 +556,10 @@ func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 		err = migrations.CleanupResolutionsAfterMigration(d.ctx, db, adjustExpiration, startHeight)
 		if err != nil {
 			failBuild(err, "failed to cleanup resolutions after snapshot restore")
+		}
+
+		if err = db.EnsureFullReplicaIdentityDatasets(d.ctx); err != nil {
+			failBuild(err, "failed enable full replica identity on user datasets")
 		}
 	}
 	return db

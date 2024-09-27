@@ -231,11 +231,6 @@ func tableExists(ctx context.Context, schema, table string, conn *pgx.Conn) (boo
 	return pgx.CollectExactlyOneRow(rows, pgx.RowTo[bool])
 }
 
-func ensureFullReplicaIdentityAllTables(ctx context.Context, conn *pgx.Conn) error {
-	_, err := conn.Exec(ctx, sqlAlterAllWithReplicaIdentFull)
-	return err
-}
-
 // ensureFullReplicaIdentityTrigger creates an event trigger to set the replica
 // identity to "full" for all tables that are created.
 func ensureFullReplicaIdentityTrigger(ctx context.Context, conn *pgx.Conn) error {
