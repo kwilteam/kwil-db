@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/spf13/cobra"
 )
@@ -50,6 +51,16 @@ func genesisCmd() *cobra.Command {
 		Long:    genesisLong,
 		Example: genesisExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			output, err := common.ExpandPath(output)
+			if err != nil {
+				return display.PrintErr(cmd, fmt.Errorf("failed to expand output path: %w", err))
+			}
+
+			err = os.MkdirAll(output, 0755)
+			if err != nil {
+				return display.PrintErr(cmd, fmt.Errorf("failed to create output directory: %w", err))
+			}
+
 			out := filepath.Join(output, "genesis.json")
 
 			makeErr := func(e error) error {
@@ -177,7 +188,7 @@ func genesisCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&output, outputFlag, "", "Output directory for the genesis.json file")
+	cmd.Flags().StringVar(&output, outFlag, "", "Output directory for the genesis.json file")
 	cmd.Flags().StringVar(&chainID, chainIDFlag, "", "Chain ID for the genesis.json file")
 	cmd.Flags().StringArrayVar(&validators, validatorsFlag, nil, "Public keys and power of initial validator(s)")
 	cmd.Flags().StringArrayVar(&allocs, allocsFlag, nil, "Address and initial balance allocation(s)")
@@ -194,7 +205,7 @@ func genesisCmd() *cobra.Command {
 }
 
 const (
-	outputFlag           = "output"
+	outFlag              = "out"
 	chainIDFlag          = "chain-id"
 	validatorsFlag       = "validator"
 	allocsFlag           = "alloc"
