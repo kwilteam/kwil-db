@@ -615,16 +615,15 @@ func (cw *chunkWriter) SaveMetadata() error {
 // storeChangeset persists a changeset to the migrations/changesets directory.
 // errChan is a channel that receives errors from the changeset storage routine and signals
 // abci that the changeset storage has completed or failed.
-func (m *Migrator) StoreChangesets(height int64, changes <-chan any, errChan chan<- error) {
+func (m *Migrator) StoreChangesets(height int64, changes <-chan any) error {
 	if changes == nil {
 		// no changesets to store, not in a migration
-		return
+		return nil
 	}
 
 	err := ensureChangesetDir(m.dir, height)
 	if err != nil {
-		errChan <- err
-		return
+		return err
 	}
 
 	// create a chunk writer
@@ -637,16 +636,14 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any, errChan cha
 			// write the changeset to disk
 			err = pg.StreamElement(chunkWriter, ct)
 			if err != nil {
-				errChan <- err
-				return
+				return err
 			}
 
 		case *pg.Relation:
 			// write the relation to disk
 			err = pg.StreamElement(chunkWriter, ct)
 			if err != nil {
-				errChan <- err
-				return
+				return err
 			}
 		}
 	}
@@ -657,18 +654,16 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any, errChan cha
 	}
 	if len(bs.Spends) > 0 {
 		if pg.StreamElement(chunkWriter, bs); err != nil {
-			errChan <- err
-			return
+			return err
 		}
 	}
 
 	if err = chunkWriter.SaveMetadata(); err != nil {
-		errChan <- err
-		return
+		return err
 	}
 
 	// signals NotifyHeight that all changesets have been written to disk
-	errChan <- nil
+	return nil
 }
 
 // LoadChangesets loads changesets at a given height from the migration directory.
