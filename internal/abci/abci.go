@@ -297,10 +297,7 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		}
 	}
 
-	migrationStatus, err := migrator.MigrationStatus(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get migration status: %w", err)
-	}
+	migrationStatus := migrator.MigrationStatus(ctx)
 	app.log.Infof("Migration status: %s", migrationStatus.String())
 	networkParams.MigrationStatus = migrationStatus
 	app.lastMigrationStatus = migrationStatus

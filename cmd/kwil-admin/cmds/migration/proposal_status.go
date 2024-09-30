@@ -19,7 +19,7 @@ kwil-admin migrate proposal-status <proposal_id>`
 
 func proposalStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "proposal-status",
+		Use:     "proposal-status <proposal_id>",
 		Short:   "Get the status of the pending migration proposal.",
 		Long:    "Get the status of the pending migration proposal.",
 		Example: statusExample,
