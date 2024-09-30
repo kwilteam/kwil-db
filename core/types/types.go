@@ -115,10 +115,10 @@ const (
 )
 
 type MigrationState struct {
-	Status        MigrationStatus `json:"status"`       // Status is the current status of the migration
-	StartHeight   int64           `json:"start_height"` // StartHeight is the block height at which the migration started
-	EndHeight     int64           `json:"end_height"`   // EndHeight is the block height at which the migration ends
-	CurrentHeight int64           `json:"chain_height"` // CurrentHeight is the current block height of the node
+	Status        MigrationStatus `json:"status"`                 // Status is the current status of the migration
+	StartHeight   int64           `json:"start_height,omitempty"` // StartHeight is the block height at which the migration started on the old chain
+	EndHeight     int64           `json:"end_height,omitempty"`   // EndHeight is the block height at which the migration ends on the old chain
+	CurrentHeight int64           `json:"chain_height,omitempty"` // CurrentHeight is the current block height of the node
 }
 
 // MigrationMetadata holds metadata about a migration, informing

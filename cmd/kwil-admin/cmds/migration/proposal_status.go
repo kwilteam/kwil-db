@@ -73,7 +73,7 @@ func (m *MigrationStatus) MarshalText() ([]byte, error) {
 	var msg bytes.Buffer
 	msg.WriteString("Migration Status:\n")
 	msg.WriteString(fmt.Sprintf("\tProposal ID: %s\n", m.ProposalID.String()))
-	msg.WriteString(fmt.Sprintf("\tExpiresAt: %d\n", m.ExpiresAt))
+	msg.WriteString(fmt.Sprintf("\tExpires At: %d\n", m.ExpiresAt))
 	msg.WriteString(fmt.Sprintf("\tApprovals Received: %d (needed %d)\n", approved, needed))
 
 	for i := range m.Board {
