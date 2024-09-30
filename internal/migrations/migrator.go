@@ -17,7 +17,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
-	"github.com/kwilteam/kwil-db/internal/abci/meta"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
 	"github.com/kwilteam/kwil-db/internal/txapp"
@@ -88,12 +87,6 @@ type Migrator struct {
 	// It is expected to be a full path.
 	dir string
 
-	// doneChan is a channel that is closed when all the block changes have been written to disk.
-	doneChan chan bool
-
-	// errChan is a channel that receives errors from the changeset storage routine.
-	errChan chan error
-
 	// consensusParamsFn is a function that returns the consensus params for the chain.
 	consensusParamsFn ConsensusParamsGetter
 	// consensusParamsFnChan is a channel that is signals if the consensusParamsFn is set.
@@ -125,7 +118,6 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 	migrator.dir = dir
 	migrator.DB = db
 	migrator.accounts = accounts
-	migrator.doneChan = make(chan bool, 1)
 	migrator.initialized = true
 	migrator.consensusParamsFnChan = make(chan struct{})
 	// Initialize the DB
@@ -344,12 +336,18 @@ func (m *Migrator) GetMigrationMetadata(ctx context.Context) (*types.MigrationMe
 
 	// if there is no planned migration, return
 	if m.migrationStatus == types.NoActiveMigration {
-		return &types.MigrationMetadata{
+		metadata := &types.MigrationMetadata{
 			MigrationState: types.MigrationState{
 				Status: types.NoActiveMigration,
 			},
 			Version: MigrationVersion,
-		}, nil
+		}
+
+		if m.genesisMigrationParams.StartHeight != 0 && m.genesisMigrationParams.EndHeight != 0 {
+			metadata.MigrationState.StartHeight = m.genesisMigrationParams.StartHeight
+			metadata.MigrationState.EndHeight = m.genesisMigrationParams.EndHeight
+		}
+		return metadata, nil
 	}
 
 	m.mu.RLock()
@@ -616,6 +614,8 @@ func (cw *chunkWriter) SaveMetadata() error {
 }
 
 // storeChangeset persists a changeset to the migrations/changesets directory.
+// doneChan is a channel that is closed when all the block changes have been written to disk.
+// errChan is a channel that receives errors from the changeset storage routine.
 func (m *Migrator) StoreChangesets(height int64, changes <-chan any, doneChan chan<- bool, errChan chan<- error) {
 	if changes == nil {
 		// no changesets to store, not in a migration
