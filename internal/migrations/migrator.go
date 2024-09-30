@@ -100,6 +100,8 @@ type Migrator struct {
 	consensusParamsFnChan chan struct{}
 
 	genesisMigrationParams chain.MigrationParams
+
+	migrationStatus types.MigrationStatus
 }
 
 // activeMigration is an in-process migration.
@@ -154,6 +156,24 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 		return nil, fmt.Errorf("failed to get last stored changeset: %w", err)
 	}
 	migrator.lastChangeset = height
+
+	// migration status
+	if migrationParams.EndHeight == 0 {
+		inGenesisMigration, err := InGenesisMigration(ctx, db, migrationParams.EndHeight)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check if in genesis migration: %w", err)
+		}
+
+		if inGenesisMigration {
+			migrator.migrationStatus = types.GenesisMigration
+		}
+	} else {
+		status, err := meta.MigrationStatus(ctx, db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get migration status: %w", err)
+		}
+		migrator.migrationStatus = status
+	}
 
 	return migrator, nil
 }
@@ -328,36 +348,20 @@ func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Execut
 	return setLastStoredChangeset(ctx, tx, m.lastChangeset)
 }
 
-func (m *Migrator) MigrationStatus(ctx context.Context) (types.MigrationStatus, error) {
-	if m.genesisMigrationParams.EndHeight == 0 {
-		inGenesisMigration, err := InGenesisMigration(ctx, m.DB, m.genesisMigrationParams.EndHeight)
-		if err != nil {
-			return types.NoActiveMigration, fmt.Errorf("failed to check if in genesis migration: %w", err)
-		}
+func (m *Migrator) MigrationStatus(ctx context.Context) types.MigrationStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-		if inGenesisMigration {
-			return types.GenesisMigration, nil
-		}
-	}
-
-	status, err := meta.MigrationStatus(ctx, m.DB)
-	if err != nil {
-		return types.NoActiveMigration, fmt.Errorf("failed to get migration status: %w", err)
-	}
-	return status, nil
+	return m.migrationStatus
 }
 
 // GetMigrationMetadata gets the metadata for the genesis snapshot,
 // as well as the available changesets.
 func (m *Migrator) GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error) {
-	status, err := m.MigrationStatus(ctx)
-	if err != nil {
-		return nil, err
-	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	m.Logger.Info("migration status", log.String("status", status.String()))
-
-	if status == types.GenesisMigration {
+	if m.migrationStatus == types.GenesisMigration {
 		return &types.MigrationMetadata{
 			MigrationState: types.MigrationState{
 				Status:      types.GenesisMigration,
@@ -368,7 +372,7 @@ func (m *Migrator) GetMigrationMetadata(ctx context.Context) (*types.MigrationMe
 	}
 
 	// if there is no planned migration, return
-	if status == types.NoActiveMigration {
+	if m.migrationStatus == types.NoActiveMigration {
 		return &types.MigrationMetadata{
 			MigrationState: types.MigrationState{
 				Status: types.NoActiveMigration,
@@ -381,7 +385,7 @@ func (m *Migrator) GetMigrationMetadata(ctx context.Context) (*types.MigrationMe
 	defer m.mu.RUnlock()
 
 	// Migration is triggered but not yet started
-	if status == types.ActivationPeriod {
+	if m.migrationStatus == types.ActivationPeriod {
 		return &types.MigrationMetadata{
 			MigrationState: types.MigrationState{
 				Status:      types.ActivationPeriod,
@@ -421,7 +425,7 @@ func (m *Migrator) GetMigrationMetadata(ctx context.Context) (*types.MigrationMe
 
 	return &types.MigrationMetadata{
 		MigrationState: types.MigrationState{
-			Status:      status,
+			Status:      m.migrationStatus,
 			StartHeight: m.activeMigration.StartHeight,
 			EndHeight:   m.activeMigration.EndHeight,
 		},
