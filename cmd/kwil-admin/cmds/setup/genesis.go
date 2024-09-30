@@ -21,9 +21,6 @@ var (
 
 This command creates a new genesis file with optionally specified modifications.
 
-If the ` + "`" + `--migration` + "`" + ` flag is set, an incomplete genesis file is generated that can be used in a zero
-downtime migration. If generating a migration genesis file, validators and initial state cannot be set.
-
 Validators, balance allocations, and forks should have the format "name:key:power", "address:balance",
 and "name:height" respectively.`
 
@@ -34,16 +31,13 @@ kwil-admin setup genesis
 kwil-admin setup genesis --out /path/to/directory --chain-id mychainid --validator my_validator:890fe7ae9cb1fa6177555d5651e1b8451b4a9c64021c876236c700bc2690ff1d:1
 
 # Create a new genesis.json with the specified allocation
-kwil-admin setup genesis --alloc 0x7f5f4552091a69125d5dfcb7b8c2659029395bdf:100
-
-# Create a new genesis.json file to be used in a network migration
-kwil-admin setup genesis --migration --out /path/to/directory --chain-id mychainid`
+kwil-admin setup genesis --alloc 0x7f5f4552091a69125d5dfcb7b8c2659029395bdf:100`
 )
 
 func genesisCmd() *cobra.Command {
 	var validators, allocs, forks []string
 	var chainID, output, genesisState string
-	var migration, withGasCosts bool
+	var withGasCosts bool
 	var maxBytesPerBlock, joinExpiry, voteExpiry, maxVotesPerBlock int64
 	cmd := &cobra.Command{
 		Use:     "genesis",
@@ -69,10 +63,6 @@ func genesisCmd() *cobra.Command {
 
 			genesisInfo := chain.DefaultGenesisConfig()
 			if cmd.Flags().Changed(validatorsFlag) {
-				if migration {
-					return makeErr(errors.New("cannot set validators when generating a migration genesis file"))
-				}
-
 				for _, v := range validators {
 					parts := strings.Split(v, ":")
 					if len(parts) != 3 {
@@ -134,17 +124,9 @@ func genesisCmd() *cobra.Command {
 				}
 			}
 			if cmd.Flags().Changed(chainIDFlag) {
-				if migration {
-					return makeErr(errors.New("cannot set chain ID when generating a migration genesis file"))
-				}
-
 				genesisInfo.ChainID = chainID
 			}
 			if cmd.Flags().Changed(genesisStateFlag) {
-				if migration {
-					return makeErr(errors.New("cannot set genesis state when generating a migration genesis file"))
-				}
-
 				apphash, err := appHashFromSnapshotFile(genesisState)
 				if err != nil {
 					return makeErr(err)
@@ -164,12 +146,6 @@ func genesisCmd() *cobra.Command {
 			}
 			if cmd.Flags().Changed(maxVotesPerTxFlag) {
 				genesisInfo.ConsensusParams.Votes.MaxVotesPerTx = maxVotesPerBlock
-			}
-
-			if migration {
-				genesisInfo.Validators = nil
-				genesisInfo.Alloc = nil
-				genesisInfo.ForkHeights = nil
 			}
 
 			existingFile, err := os.Stat(out)
@@ -198,7 +174,6 @@ func genesisCmd() *cobra.Command {
 	cmd.Flags().Int64Var(&joinExpiry, joinExpiryFlag, 0, "Number of blocks before a join proposal expires")
 	cmd.Flags().Int64Var(&voteExpiry, voteExpiryFlag, 0, "Number of blocks before a vote proposal expires")
 	cmd.Flags().Int64Var(&maxVotesPerBlock, maxVotesPerTxFlag, 0, "Maximum number of votes per validator transaction (each validator has 1 validator tx per block)")
-	cmd.Flags().BoolVar(&migration, migrationFlag, false, "Generate an incomplete genesis file for zero downtime migration")
 	cmd.Flags().StringVar(&genesisState, genesisStateFlag, "", "Path to a genesis state file")
 
 	return cmd
