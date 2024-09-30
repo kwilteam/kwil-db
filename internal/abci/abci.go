@@ -96,7 +96,11 @@ type AbciApp struct {
 	txApp TxApp
 
 	consensusParams *chain.ConsensusParams
-	chainContext    *common.ChainContext
+	// As the consensus params are persisted before calling NotifyHeight, we need to track
+	// the last blocks migration status to correctly persist the migration status in the chain state.
+	lastMigrationStatus types.MigrationStatus
+
+	chainContext *common.ChainContext
 
 	broadcastFn EventBroadcaster
 
@@ -281,17 +285,6 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		app.consensusParams.Votes.MaxVotesPerTx = networkParams.MaxVotesPerTx
 	}
 
-	migrationStatus := app.migrator.MigrationStatus()
-	app.log.Infof("Migration status: %s", migrationStatus.String())
-
-	networkParams.MigrationStatus = migrationStatus
-
-	// if the migration is in progress, we need to set the network params to reflect that
-	// networkParams.InMigration = migrationStatus == types.MigrationInProgress || migrationStatus == types.MigrationCompleted
-
-	// if the migration is completed, we need to halt the network
-	// networkParams.MigrationCompleted = migrationStatus == types.MigrationCompleted
-
 	var migrationParams *common.MigrationContext
 	startHeight := app.consensusParams.Migration.StartHeight
 	endHeight := app.consensusParams.Migration.EndHeight
@@ -303,6 +296,20 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 			EndHeight:   endHeight,
 		}
 	}
+
+	migrationStatus, err := migrator.MigrationStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get migration status: %w", err)
+	}
+	app.log.Infof("Migration status: %s", migrationStatus.String())
+	networkParams.MigrationStatus = migrationStatus
+	app.lastMigrationStatus = migrationStatus
+
+	// if the migration is in progress, we need to set the network params to reflect that
+	// networkParams.InMigration = migrationStatus == types.MigrationInProgress || migrationStatus == types.MigrationCompleted
+
+	// if the migration is completed, we need to halt the network
+	// networkParams.MigrationCompleted = migrationStatus == types.MigrationCompleted
 
 	app.chainContext = &common.ChainContext{
 		ChainID:           cfg.ChainID,
@@ -529,6 +536,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		MigrationStatus:  a.chainContext.NetworkParameters.MigrationStatus,
 	}
 	oldNetworkParams := *networkParams
+	oldNetworkParams.MigrationStatus = a.lastMigrationStatus
 
 	initialValidators, err := a.txApp.GetValidators(ctx, a.consensusTx)
 	if err != nil {
@@ -741,12 +749,14 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	networkParams.MigrationStatus = a.chainContext.NetworkParameters.MigrationStatus
-
 	// store any changes to the network params
 	err = meta.StoreDiff(ctx, a.consensusTx, &oldNetworkParams, networkParams)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store network params diff: %w", err)
 	}
+
+	// update the last migration status
+	a.lastMigrationStatus = networkParams.MigrationStatus
 
 	// While still in the DB transaction, update to this next height but dummy
 	// app hash. If we crash before Commit can store the next app hash that we

@@ -57,7 +57,7 @@ type P2P interface {
 type Migrator interface {
 	GetChangesetMetadata(height int64) (*migrations.ChangesetMetadata, error)
 	GetChangeset(height int64, index int64) ([]byte, error)
-	GetMigrationMetadata() (*coretypes.MigrationMetadata, error)
+	GetMigrationMetadata(ctx context.Context) (*coretypes.MigrationMetadata, error)
 	GetGenesisSnapshotChunk(chunkIdx uint32) ([]byte, error)
 }
 
@@ -261,11 +261,6 @@ func (svc *Service) Status(ctx context.Context, req *adminjson.StatusRequest) (*
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "node status unavailable", nil)
 	}
 
-	metadata, err := svc.migrator.GetMigrationMetadata()
-	if err != nil || metadata == nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "migration state unavailable", nil)
-	}
-
 	return &adminjson.StatusResponse{
 		Node: status.Node,
 		Sync: convertSyncInfo(status.Sync),
@@ -273,7 +268,6 @@ func (svc *Service) Status(ctx context.Context, req *adminjson.StatusRequest) (*
 			PubKey: status.Validator.PubKey,
 			Power:  status.Validator.Power,
 		},
-		Migration: &metadata.MigrationState,
 	}, nil
 }
 

@@ -31,6 +31,7 @@ type TxSvcClient interface {
 	// Active Migration State
 	GenesisState(ctx context.Context) (*types.MigrationMetadata, error)
 	GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error)
+	MigrationStatus(ctx context.Context) (*types.MigrationState, error)
 
 	// Changesets
 	LoadChangeset(ctx context.Context, height int64, index int64) ([]byte, error)

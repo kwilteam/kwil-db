@@ -104,7 +104,7 @@ type ListMigrationsResponse struct {
 }
 
 type MigrationStatusResponse struct {
-	Status *types.PendingResolution `json:"status"`
+	Status *types.MigrationState `json:"status"`
 }
 
 type ChallengeResponse struct {
