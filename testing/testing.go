@@ -501,7 +501,8 @@ const ContainerName = "kwil-testing-postgres"
 
 // startCommand returns the docker start command
 func startCommand(port string) []string {
-	return []string{"docker", "run", "-d", "-p", fmt.Sprintf("%s:5432", port), "--name", ContainerName, "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "kwildb/postgres:latest"}
+	return []string{"docker", "run", "-d", "-p", fmt.Sprintf("%s:5432", port), "--name", ContainerName,
+		"-e", "POSTGRES_HOST_AUTH_METHOD=trust", "kwildb/postgres:16.4-1"}
 }
 
 // connectWithRetry tries to connect to Postgres, and will retry n times at
