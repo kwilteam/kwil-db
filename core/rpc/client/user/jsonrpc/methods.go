@@ -284,6 +284,16 @@ func (cl *Client) GenesisSnapshotChunk(ctx context.Context, height uint64, chunk
 	return res.Chunk, nil
 }
 
+func (cl *Client) MigrationStatus(ctx context.Context) (*types.MigrationState, error) {
+	cmd := &userjson.MigrationStatusRequest{}
+	res := &userjson.MigrationStatusResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodMigrationStatus), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res.Status, nil
+}
+
 func (cl *Client) Challenge(ctx context.Context) ([]byte, error) {
 	cmd := &userjson.ChallengeRequest{}
 	res := &userjson.ChallengeResponse{}

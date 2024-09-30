@@ -328,6 +328,10 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 			"get a genesis snapshot chunk of given idx",
 			"the genesis chunk for the given index",
 		),
+		userjson.MethodMigrationStatus: rpcserver.MakeMethodDef(svc.MigrationStatus,
+			"get the migration status",
+			"the status of the migration",
+		),
 
 		// Challenge method
 		userjson.MethodChallenge: rpcserver.MakeMethodDef(svc.CallChallenge,
@@ -390,7 +394,7 @@ type Pricer interface {
 type Migrator interface {
 	GetChangesetMetadata(height int64) (*migrations.ChangesetMetadata, error)
 	GetChangeset(height int64, index int64) ([]byte, error)
-	GetMigrationMetadata() (*types.MigrationMetadata, error)
+	GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error)
 	GetGenesisSnapshotChunk(chunkIdx uint32) ([]byte, error)
 }
 
@@ -895,7 +899,7 @@ func (svc *Service) LoadChangesetMetadata(ctx context.Context, req *userjson.Cha
 }
 
 func (svc *Service) MigrationMetadata(ctx context.Context, req *userjson.MigrationMetadataRequest) (*userjson.MigrationMetadataResponse, *jsonrpc.Error) {
-	metadata, err := svc.migrator.GetMigrationMetadata()
+	metadata, err := svc.migrator.GetMigrationMetadata(ctx)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, err.Error(), nil)
 	}
@@ -943,6 +947,27 @@ func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.Lis
 
 	return &userjson.ListMigrationsResponse{
 		Migrations: pendingMigrations,
+	}, nil
+}
+
+func (svc *Service) MigrationStatus(ctx context.Context, req *userjson.MigrationStatusRequest) (*userjson.MigrationStatusResponse, *jsonrpc.Error) {
+	metadata, err := svc.migrator.GetMigrationMetadata(ctx)
+	if err != nil || metadata == nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "migration state unavailable", nil)
+	}
+
+	chainStatus, err := svc.chainClient.Status(ctx)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get chain status", nil)
+	}
+
+	return &userjson.MigrationStatusResponse{
+		Status: &types.MigrationState{
+			Status:       metadata.MigrationState.Status,
+			StartHeight:  metadata.MigrationState.StartHeight,
+			EndHeight:    metadata.MigrationState.EndHeight,
+			CurrentBlock: chainStatus.Sync.BestBlockHeight,
+		},
 	}, nil
 }
 

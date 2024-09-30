@@ -893,7 +893,7 @@ func (d *createResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service
 		return transactions.CodeEncodingError, err
 	}
 
-	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationNotStarted {
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus != types.NoActiveMigration {
 		if res.Resolution.Type == voting.StartMigrationEventType {
 			return transactions.CodeNetworkInMigration, errors.New("migration is about to start, cannot accept new migration proposals")
 		}
@@ -988,7 +988,7 @@ func (d *approveResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx
 		return transactions.CodeUnknownError, fmt.Errorf("resolution with ID %s does not exist", d.resolutionID)
 	}
 
-	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationNotStarted &&
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus != types.NoActiveMigration &&
 		resolution.Type == voting.StartMigrationEventType {
 		return transactions.CodeNetworkInMigration, fmt.Errorf("migration is about to start, cannot accept new migration proposals")
 	}

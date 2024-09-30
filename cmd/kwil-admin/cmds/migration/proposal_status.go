@@ -14,12 +14,12 @@ import (
 
 var (
 	statusExample = `# Get the status of the pending migration.
-kwil-admin migrate status <proposalID>`
+kwil-admin migrate proposal-status <proposal_id>`
 )
 
-func statusCmd() *cobra.Command {
+func proposalStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "status",
+		Use:     "proposal-status",
 		Short:   "Get the status of the pending migration proposal.",
 		Long:    "Get the status of the pending migration proposal.",
 		Example: statusExample,

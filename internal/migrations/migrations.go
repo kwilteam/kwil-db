@@ -124,7 +124,7 @@ func (m *Migrator) startMigration(ctx context.Context, app *common.App, resoluti
 		return err
 	}
 
-	block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationNotStarted
+	block.ChainContext.NetworkParameters.MigrationStatus = types.ActivationPeriod
 	m.activeMigration = active
 	app.Service.Logger.Info("migration started", log.Int("start_height", active.StartHeight), log.Int("end_height", active.EndHeight))
 

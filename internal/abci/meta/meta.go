@@ -304,3 +304,21 @@ const (
 	migrationStatus = `migration_status`
 	maxVotesPerTx   = `max_votes_per_tx`
 )
+
+func MigrationStatus(ctx context.Context, db sql.ReadTxMaker) (types.MigrationStatus, error) {
+	tx, err := db.BeginReadTx(ctx)
+	if err != nil {
+		return types.NoActiveMigration, err
+	}
+	defer tx.Rollback(ctx)
+
+	params, err := LoadParams(ctx, tx)
+	if err != nil {
+		if err == ErrParamsNotFound {
+			return types.NoActiveMigration, nil
+		}
+		return types.NoActiveMigration, err
+	}
+
+	return params.MigrationStatus, nil
+}

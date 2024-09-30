@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/extensions/hooks"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
@@ -129,9 +130,11 @@ func applyChangesets(ctx context.Context, app *common.App, blockCtx *common.Bloc
 	}
 
 	if lastChangeset == endHeight {
+		// migration completed
 		blockCtx.ChainContext.MigrationParams = nil
 		app.Service.Logger.Info(migrationCompleted, log.Int("height", lastChangeset))
-		return nil // migration completed
+		blockCtx.ChainContext.NetworkParameters.MigrationStatus = types.NoActiveMigration
+		return nil
 	}
 
 	if lastChangeset == -1 {
@@ -178,7 +181,9 @@ func applyChangesets(ctx context.Context, app *common.App, blockCtx *common.Bloc
 		lastChangeset = height
 
 		if height == endHeight {
+			// migration completed
 			blockCtx.ChainContext.MigrationParams = nil
+			blockCtx.ChainContext.NetworkParameters.MigrationStatus = types.NoActiveMigration
 			app.Service.Logger.Info(migrationCompleted, log.Int("height", height))
 			break
 		}

@@ -17,8 +17,9 @@ func NewMigrationCmd() *cobra.Command {
 		proposeCmd(),
 		approveCmd(),
 		listCmd(),
-		statusCmd(),
+		proposalStatusCmd(),
 		genesisStateCmd(),
+		networkStatusCmd(),
 	)
 
 	common.BindRPCFlags(migrationCmd)

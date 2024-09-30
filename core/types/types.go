@@ -94,31 +94,50 @@ type Migration struct {
 type MigrationStatus int
 
 const (
+	// NoActiveMigration indicates there is currently no migration process happening on the network.
 	NoActiveMigration MigrationStatus = iota
-	MigrationNotStarted
+
+	// ActivationPeriod represents the phase after the migration proposal has been approved by the network,
+	// but before the migration begins. During this phase, validators prepare their nodes for migration.
+	ActivationPeriod
+
+	// MigrationInProgress is the phase where the migration is actively occurring. The old and new networks
+	// run concurrently, with state changes from the old network being replicated to the new network.
 	MigrationInProgress
+
+	// MigrationCompleted indicates the migration process has successfully finished,
+	// and the old network is ready to be decommissioned.
 	MigrationCompleted
+
+	// GenesisMigration refers to the phase where the node initializes with the genesis state,
+	// tries to replicate the state changes from the old network.
+	GenesisMigration
+
+	UnknownMigrationStatus
 )
 
 func (status *MigrationStatus) String() string {
 	switch *status {
 	case NoActiveMigration:
 		return "NoActiveMigration"
-	case MigrationNotStarted:
-		return "MigrationNotStarted"
+	case ActivationPeriod:
+		return "ActivationPeriod"
 	case MigrationInProgress:
 		return "MigrationInProgress"
 	case MigrationCompleted:
 		return "MigrationCompleted"
+	case GenesisMigration:
+		return "GenesisMigration"
 	default:
 		return "Unknown"
 	}
 }
 
 type MigrationState struct {
-	Status      MigrationStatus `json:"status"`       // Status is the current status of the migration
-	StartHeight int64           `json:"start_height"` // StartHeight is the block height at which the migration started
-	EndHeight   int64           `json:"end_height"`   // EndHeight is the block height at which the migration ends
+	Status       MigrationStatus `json:"status"`       // Status is the current status of the migration
+	StartHeight  int64           `json:"start_height"` // StartHeight is the block height at which the migration started
+	EndHeight    int64           `json:"end_height"`   // EndHeight is the block height at which the migration ends
+	CurrentBlock int64           `json:"chain_height"` // CurrentBlock is the current block height of the node
 }
 
 // MigrationMetadata holds metadata about a migration, informing

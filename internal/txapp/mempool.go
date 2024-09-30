@@ -60,6 +60,7 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *transactions.Trans
 	status := ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus
 	inMigration := status == types.MigrationInProgress || status == types.MigrationCompleted
 	activeMigration := status != types.NoActiveMigration
+	genesisMigration := status == types.GenesisMigration
 
 	if inMigration {
 		switch tx.Body.PayloadType {
@@ -90,7 +91,7 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *transactions.Trans
 		if err := res.UnmarshalBinary(tx.Body.Payload); err != nil {
 			return err
 		}
-		if activeMigration && res.Resolution.Type == voting.StartMigrationEventType {
+		if (activeMigration || genesisMigration) && res.Resolution.Type == voting.StartMigrationEventType {
 			return fmt.Errorf(" migration resolutions are not allowed during migration")
 		}
 	}
@@ -107,7 +108,7 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *transactions.Trans
 			return errors.New("migration proposal not found")
 		}
 
-		if activeMigration && resolution.Type == voting.StartMigrationEventType {
+		if (activeMigration || genesisMigration) && resolution.Type == voting.StartMigrationEventType {
 			return fmt.Errorf("approving migration resolutions are not allowed during migration")
 		}
 	}
