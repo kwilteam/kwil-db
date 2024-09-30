@@ -5,11 +5,12 @@ import (
 	"os"
 )
 
-// Snapshot is the header of a snapshot file representing the snapshot of the database at a certain height.
-// It contains the height, format, chunk count, hash, size, and name of the snapshot.
-
 const HashLen int = 32
 
+// Snapshot is the header of a snapshot file representing the snapshot of the database at a certain height.
+// It contains the height, format, chunk count, hash, size, and name of the snapshot.
+// WARNING: This struct CAN NOT be changed without breaking functionality,
+// since it is used for communication between nodes.
 type Snapshot struct {
 	Height       uint64          `json:"height"`
 	Format       uint32          `json:"format"`

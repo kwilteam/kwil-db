@@ -158,7 +158,7 @@ type PeersDsl interface {
 
 type MigrationOpsDsl interface {
 	TxQueryDsl
-	SubmitMigrationProposal(ctx context.Context, activationHeight *big.Int, migrationDuration *big.Int, chainID string) ([]byte, error)
+	SubmitMigrationProposal(ctx context.Context, activationHeight *big.Int, migrationDuration *big.Int) ([]byte, error)
 	ApproveMigration(ctx context.Context, migrationResolutionID *types.UUID) ([]byte, error)
 	ListMigrations(ctx context.Context) ([]*types.Migration, error)
 	GenesisState(ctx context.Context) (*types.MigrationMetadata, error)

@@ -936,7 +936,6 @@ func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.Lis
 			ID:               res.ID,
 			ActivationPeriod: (int64)(mig.ActivationPeriod),
 			Duration:         (int64)(mig.Duration),
-			ChainID:          mig.ChainID,
 			Timestamp:        mig.Timestamp,
 		})
 	}

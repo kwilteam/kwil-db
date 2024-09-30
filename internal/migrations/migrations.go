@@ -42,6 +42,8 @@ func init() {
 	}
 }
 
+const MigrationVersion int = 0
+
 // MigrationDeclaration creates a new migration. It is used to agree on terms of a migration,
 // and is voted on using Kwil's vote store.
 type MigrationDeclaration struct {
@@ -51,10 +53,6 @@ type MigrationDeclaration struct {
 	ActivationPeriod uint64
 	// Duration is the amount of blocks the migration will take to complete.
 	Duration uint64
-	// ChainID is the new chain ID that the network will migrate to.
-	// A new chain ID should always be used for a new network, to avoid
-	// cross-network replay attacks.
-	ChainID string
 	// Timestamp is the time the migration was created. It is set by the migration
 	// creator. The primary purpose of it is to guarantee uniqueness of the serialized
 	// MigrationDeclaration, since that is a requirement for the voting system.
@@ -116,7 +114,6 @@ func (m *Migrator) startMigration(ctx context.Context, app *common.App, resoluti
 	active := &activeMigration{
 		StartHeight: block.Height + activationPeriod,
 		EndHeight:   block.Height + activationPeriod + dur,
-		ChainID:     mig.ChainID,
 	}
 
 	err = createMigration(ctx, app.DB, active)

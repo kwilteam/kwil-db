@@ -21,6 +21,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
+	"github.com/kwilteam/kwil-db/internal/migrations"
 	"github.com/kwilteam/kwil-db/internal/statesync"
 )
 
@@ -60,14 +61,33 @@ func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, g
 	logger.Info("Entering migration mode", log.String("migrate_from", kwildCfg.MigrationConfig.MigrateFrom))
 
 	snapshotFileName := config.GenesisStateFileName(kwildCfg.RootDir)
-	// check if genesis hash is set in the genesis config
-	if genesisCfg.DataAppHash != nil &&
-		genesisCfg.ConsensusParams.Migration.StartHeight != 0 &&
-		genesisCfg.ConsensusParams.Migration.EndHeight != 0 &&
-		validateGenesisState(snapshotFileName, genesisCfg.DataAppHash) {
-		// genesis state already downloaded. No need to poll for genesis state
+
+	// if the genesis state is already downloaded, then no need to poll for genesis state
+	_, err := os.Stat(snapshotFileName)
+	if err == nil {
 		logger.Info("Genesis state already downloaded", log.String("genesis snapshot", snapshotFileName))
+
+		if err := validateGenesisState(snapshotFileName, genesisCfg.DataAppHash); err != nil {
+			return nil, nil, err
+		}
+
 		return kwildCfg, genesisCfg, nil
+	} else if !os.IsNotExist(err) {
+		return nil, nil, fmt.Errorf("failed to check genesis state file: %w", err)
+	}
+
+	// if we reach here, then we still need to download the genesis state
+	// Therefore, the genesis app hash, initial height, and migration info
+	// should not already be set in the genesis config.
+	if len(genesisCfg.DataAppHash) != 0 {
+		return nil, nil, errors.New("migration genesis config should not have app hash set")
+	}
+	if genesisCfg.InitialHeight != 0 && genesisCfg.InitialHeight != 1 {
+		// we are forcing users to adopt the height provided by the old chain
+		return nil, nil, errors.New("migration genesis config should not have initial height set")
+	}
+	if genesisCfg.ConsensusParams.Migration.IsMigration() {
+		return nil, nil, errors.New("migration genesis config should not have migration info set")
 	}
 
 	// old chain client
@@ -124,19 +144,21 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 		return err
 	}
 
+	// this check should change in every version:
+	// For backwards compatibility, we should be able to unmarshal structs from previous versions.
+	// Since v0.9 is our first time supporting migration, we only need to check for v0.9.
+	if metadata.Version != migrations.MigrationVersion {
+		return fmt.Errorf("genesis state download is incompatible. Received version: %d, supported versions: [%d]", metadata.Version, migrations.MigrationVersion)
+	}
+
 	// Check if the genesis state is ready
 	if metadata.MigrationState.Status == types.NoActiveMigration || metadata.MigrationState.Status == types.MigrationNotStarted {
 		return fmt.Errorf("status %s", metadata.MigrationState.Status.String())
 	}
 
 	// Genesis state should ready
-	if metadata.SnapshotMetadata == nil || metadata.GenesisConfig == nil {
+	if metadata.SnapshotMetadata == nil || metadata.GenesisInfo == nil {
 		return errors.New("genesis state not available")
-	}
-
-	var genCfg chain.GenesisConfig
-	if err := json.Unmarshal(metadata.GenesisConfig, &genCfg); err != nil {
-		return fmt.Errorf("failed to unmarshal genesis config: %w", err)
 	}
 
 	// Save the genesis state
@@ -169,10 +191,26 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	}
 
 	// Update the genesis config
-	m.genesisCfg.DataAppHash = genCfg.DataAppHash
-	m.genesisCfg.Validators = genCfg.Validators
-	m.genesisCfg.ConsensusParams.Migration = genCfg.ConsensusParams.Migration
+	m.genesisCfg.DataAppHash = metadata.GenesisInfo.AppHash
+	m.genesisCfg.ConsensusParams.Migration = chain.MigrationParams{
+		StartHeight: metadata.MigrationState.StartHeight,
+		EndHeight:   metadata.MigrationState.EndHeight,
+	}
 	m.genesisCfg.InitialHeight = metadata.MigrationState.StartHeight
+
+	// if validators are not set in the genesis config, then set them.
+	// Otherwise, ignore the validators from the old chain.
+	if len(m.genesisCfg.Validators) == 0 {
+		for _, v := range metadata.GenesisInfo.Validators {
+			m.genesisCfg.Validators = append(m.genesisCfg.Validators, &chain.GenesisValidator{
+				Name:   v.Name,
+				PubKey: v.PubKey,
+				Power:  v.Power,
+			})
+		}
+	} else {
+		m.logger.Warn("Validators already set in the genesis config. Ignoring the validators from the old chain")
+	}
 
 	// persist the genesis config
 	if err := m.genesisCfg.SaveAs(filepath.Join(m.kwildCfg.RootDir, cometbft.GenesisJSONName)); err != nil {
@@ -191,30 +229,34 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	return nil
 }
 
-func validateGenesisState(filename string, appHash []byte) bool {
-	// check if the genesis state file exists
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		return false
-	}
+// validateGenesisState validates the genesis state file against the app hash.
+// It is the caller's responsibility to check if the file exists.
+func validateGenesisState(filename string, appHash []byte) error {
+	// we don't need to check if the file exists since the caller should have already checked it
 
 	genesisStateFile, err := os.Open(filename)
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to open genesis state file: %w", err)
 	}
 
 	// gzip reader and hash reader
 	gzipReader, err := gzip.NewReader(genesisStateFile)
 	if err != nil {
-		failBuild(err, "failed to create gzip reader")
+		return fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 	defer gzipReader.Close()
 
 	hasher := sha256.New()
 	_, err = io.Copy(hasher, gzipReader)
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to hash genesis state file: %w", err)
 	}
 
 	hash := hasher.Sum(nil)
-	return appHash != nil && len(hash) == len(appHash) && bytes.Equal(hash, appHash)
+
+	if !bytes.Equal(hash, appHash) {
+		return errors.New("app hash does not match the genesis state")
+	}
+
+	return nil
 }

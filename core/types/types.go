@@ -87,7 +87,6 @@ type Migration struct {
 	ID               *UUID  `json:"id"`                 // ID is the UUID of the migration resolution/proposal
 	ActivationPeriod int64  `json:"activation_height"`  // ActivationPeriod is the amount of blocks before the migration is activated.
 	Duration         int64  `json:"migration_duration"` // MigrationDuration is the duration of the migration process starting from the ActivationHeight
-	ChainID          string `json:"chain_id"`           // ChainID of the new network
 	Timestamp        string `json:"timestamp"`          // Timestamp when the migration was proposed
 }
 
@@ -126,8 +125,26 @@ type MigrationState struct {
 // for the migration.
 type MigrationMetadata struct {
 	MigrationState   MigrationState `json:"migration_state"`   // MigrationState is the current state of the migration
-	GenesisConfig    []byte         `json:"genesis_config"`    // GenesisConfig is the genesis file data
+	GenesisInfo      *GenesisInfo   `json:"genesis_info"`      // GenesisInfo is the genesis information
 	SnapshotMetadata []byte         `json:"snapshot_metadata"` // SnapshotMetadata is the snapshot metadata
+	Version          int            `json:"version"`           // Version of the migration metadata
+}
+
+// GenesisInfo holds the genesis information that the new network should use
+// in its genesis file.
+type GenesisInfo struct {
+	// AppHash is the application hash of the old network at the StartHeight
+	AppHash HexBytes `json:"app_hash"`
+	// Validators is the list of validators that the new network should start with
+	Validators []*NamedValidator `json:"validators"`
+}
+
+// NamedValidator is a validator with a name.
+// Since CometBFT assigns validators human-readable names, this struct
+// is used to represent a validator with its name that will be used in the genesis file.
+type NamedValidator struct {
+	Name      string `json:"name"`
+	Validator `json:"validator"`
 }
 
 // ServiceMode describes the operating mode of the user service. Namely, if the
