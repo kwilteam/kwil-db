@@ -45,7 +45,7 @@ type Service struct {
 	db          DB              // this should only ever make a read-only tx
 	nodeApp     NodeApplication // so we don't have to do ABCIQuery (indirect)
 	chainClient BlockchainTransactor
-	pricer      Pricer
+	abci        ABCI // handles pricing, migration status etc.
 	migrator    Migrator
 
 	// challenges issued to the clients
@@ -111,7 +111,7 @@ const (
 
 // NewService creates a new instance of the user RPC service.
 func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
-	nodeApp NodeApplication, pricer Pricer, migrator Migrator, logger log.Logger, opts ...Opt) *Service {
+	nodeApp NodeApplication, abci ABCI, migrator Migrator, logger log.Logger, opts ...Opt) *Service {
 	cfg := &serviceCfg{
 		readTxTimeout:      defaultReadTxTimeout,
 		challengeExpiry:    defaultChallengeExpiry,
@@ -126,7 +126,7 @@ func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
 		readTxTimeout:    cfg.readTxTimeout,
 		engine:           engine,
 		nodeApp:          nodeApp,
-		pricer:           pricer,
+		abci:             abci,
 		chainClient:      chainClient,
 		db:               db,
 		migrator:         migrator,
@@ -387,14 +387,14 @@ type NodeApplication interface {
 	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
 }
 
-type Pricer interface {
+type ABCI interface {
 	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
+	GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error)
 }
 
 type Migrator interface {
 	GetChangesetMetadata(height int64) (*migrations.ChangesetMetadata, error)
 	GetChangeset(height int64, index int64) ([]byte, error)
-	GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error)
 	GetGenesisSnapshotChunk(chunkIdx uint32) ([]byte, error)
 }
 
@@ -505,7 +505,7 @@ func (svc *Service) EstimatePrice(ctx context.Context, req *userjson.EstimatePri
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
-	price, err := svc.pricer.Price(ctx, readTx, req.Tx)
+	price, err := svc.abci.Price(ctx, readTx, req.Tx)
 	if err != nil {
 		svc.log.Error("failed to estimate price", log.Error(err)) // why not tell the client though?
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to estimate price", nil)
@@ -899,7 +899,7 @@ func (svc *Service) LoadChangesetMetadata(ctx context.Context, req *userjson.Cha
 }
 
 func (svc *Service) MigrationMetadata(ctx context.Context, req *userjson.MigrationMetadataRequest) (*userjson.MigrationMetadataResponse, *jsonrpc.Error) {
-	metadata, err := svc.migrator.GetMigrationMetadata(ctx)
+	metadata, err := svc.abci.GetMigrationMetadata(ctx)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, err.Error(), nil)
 	}
@@ -950,7 +950,7 @@ func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.Lis
 }
 
 func (svc *Service) MigrationStatus(ctx context.Context, req *userjson.MigrationStatusRequest) (*userjson.MigrationStatusResponse, *jsonrpc.Error) {
-	metadata, err := svc.migrator.GetMigrationMetadata(ctx)
+	metadata, err := svc.abci.GetMigrationMetadata(ctx)
 	if err != nil || metadata == nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "migration state unavailable", nil)
 	}

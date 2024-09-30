@@ -97,7 +97,8 @@ type AbciApp struct {
 
 	consensusParams *chain.ConsensusParams
 
-	chainContext *common.ChainContext
+	chainContext    *common.ChainContext
+	chainContextMtx sync.RWMutex
 
 	broadcastFn EventBroadcaster
 
@@ -300,8 +301,6 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		NetworkParameters: networkParams,
 		MigrationParams:   migrationParams,
 	}
-
-	migrator.SetMigrationStatus(app.chainContext.NetworkParameters.MigrationStatus)
 
 	err = tx.Commit(ctx)
 	if err != nil {
@@ -510,6 +509,9 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	if err != nil {
 		return nil, fmt.Errorf("begin tx commit failed: %w", err)
 	}
+
+	a.chainContextMtx.Lock()
+	defer a.chainContextMtx.Unlock()
 
 	// we copy the Kwil consensus params to ensure we persist any changes
 	// made during the block execution
@@ -747,8 +749,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("failed to store network params diff: %w", err)
 	}
 
-	a.migrator.SetMigrationStatus(networkParams.MigrationStatus)
-
 	// While still in the DB transaction, update to this next height but dummy
 	// app hash. If we crash before Commit can store the next app hash that we
 	// get after Precommit, the startup handshake's call to Info will detect the
@@ -764,6 +764,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	csp := newChangesetProcessor()
 	// "migrator" module subscribes to the changeset processor to store changesets during the migration
 	csErrChan := make(chan error, 1)
+	defer close(csErrChan)
+
 	if inMigration && !haltNetwork {
 		csChanMigrator, err := csp.Subscribe(ctx, "migrator")
 		if err != nil {
@@ -771,7 +773,9 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 		// migrator go routine will receive changesets from the changeset processor
 		// give the new channel to the migrator to store changesets
-		go a.migrator.StoreChangesets(req.Height, csChanMigrator, csErrChan)
+		go func() {
+			csErrChan <- a.migrator.StoreChangesets(req.Height, csChanMigrator)
+		}()
 	}
 
 	// statistics module can subscribe to the changeset processor to listen for changesets for updating statistics
@@ -1862,8 +1866,12 @@ func (a *AbciApp) Price(ctx context.Context, db sql.DB, tx *transactions.Transac
 	return a.txApp.Price(ctx, db, tx, a.chainContext)
 }
 
-func (a *AbciApp) MigrationStatus() types.MigrationStatus {
-	return a.chainContext.NetworkParameters.MigrationStatus
+func (a *AbciApp) GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error) {
+	a.chainContextMtx.RLock()
+	defer a.chainContextMtx.RUnlock()
+
+	status := a.chainContext.NetworkParameters.MigrationStatus
+	return a.migrator.GetMigrationMetadata(ctx, status)
 }
 
 // ChangesetProcessor is a PubSub that listens for changesets and broadcasts them to the receivers.

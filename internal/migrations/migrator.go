@@ -94,8 +94,6 @@ type Migrator struct {
 	consensusParamsFnChan chan struct{}
 
 	genesisMigrationParams chain.MigrationParams
-
-	migrationStatus types.MigrationStatus
 }
 
 // activeMigration is an in-process migration.
@@ -306,12 +304,6 @@ func (m *Migrator) generateGenesisConfig(ctx context.Context, snapshotHash []byt
 	logger.Info("genesis config generated successfully")
 }
 
-func (m *Migrator) SetMigrationStatus(status types.MigrationStatus) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.migrationStatus = status
-}
-
 func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -321,29 +313,25 @@ func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Execut
 
 // GetMigrationMetadata gets the metadata for the genesis snapshot,
 // as well as the available changesets.
-func (m *Migrator) GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error) {
+func (m *Migrator) GetMigrationMetadata(ctx context.Context, status types.MigrationStatus) (*types.MigrationMetadata, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if m.migrationStatus == types.GenesisMigration {
-		return &types.MigrationMetadata{
-			MigrationState: types.MigrationState{
-				Status:      types.GenesisMigration,
-				StartHeight: m.genesisMigrationParams.StartHeight,
-				EndHeight:   m.genesisMigrationParams.EndHeight,
-			},
-		}, nil
+	metadata := &types.MigrationMetadata{
+		MigrationState: types.MigrationState{
+			Status: status,
+		},
+		Version: MigrationVersion,
+	}
+
+	if status == types.GenesisMigration {
+		metadata.MigrationState.StartHeight = m.genesisMigrationParams.StartHeight
+		metadata.MigrationState.EndHeight = m.genesisMigrationParams.EndHeight
+		return metadata, nil
 	}
 
 	// if there is no planned migration, return
-	if m.migrationStatus == types.NoActiveMigration {
-		metadata := &types.MigrationMetadata{
-			MigrationState: types.MigrationState{
-				Status: types.NoActiveMigration,
-			},
-			Version: MigrationVersion,
-		}
-
+	if status == types.NoActiveMigration {
 		if m.genesisMigrationParams.StartHeight != 0 && m.genesisMigrationParams.EndHeight != 0 {
 			metadata.MigrationState.StartHeight = m.genesisMigrationParams.StartHeight
 			metadata.MigrationState.EndHeight = m.genesisMigrationParams.EndHeight
@@ -354,16 +342,17 @@ func (m *Migrator) GetMigrationMetadata(ctx context.Context) (*types.MigrationMe
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	// network is either in ActivationPeriod or MigrationInProgress or MigrationCompleted state
+	if m.activeMigration == nil {
+		return nil, fmt.Errorf("no active migration found")
+	}
+
+	metadata.MigrationState.StartHeight = m.activeMigration.StartHeight
+	metadata.MigrationState.EndHeight = m.activeMigration.EndHeight
+
 	// Migration is triggered but not yet started
-	if m.migrationStatus == types.ActivationPeriod {
-		return &types.MigrationMetadata{
-			MigrationState: types.MigrationState{
-				Status:      types.ActivationPeriod,
-				StartHeight: m.activeMigration.StartHeight,
-				EndHeight:   m.activeMigration.EndHeight,
-			},
-			Version: MigrationVersion,
-		}, nil
+	if status == types.ActivationPeriod {
+		return metadata, nil
 	}
 
 	// Migration is in progress, retrieve the snapshot and the genesis config
@@ -393,16 +382,9 @@ func (m *Migrator) GetMigrationMetadata(ctx context.Context) (*types.MigrationMe
 		return nil, err
 	}
 
-	return &types.MigrationMetadata{
-		MigrationState: types.MigrationState{
-			Status:      m.migrationStatus,
-			StartHeight: m.activeMigration.StartHeight,
-			EndHeight:   m.activeMigration.EndHeight,
-		},
-		SnapshotMetadata: snapshotBts,
-		GenesisInfo:      &genesisInfo,
-		Version:          MigrationVersion,
-	}, nil
+	metadata.GenesisInfo = &genesisInfo
+	metadata.SnapshotMetadata = snapshotBts
+	return metadata, nil
 }
 
 // GetGenesisSnapshotChunk gets the snapshot chunk of Index at the given height.
@@ -615,18 +597,15 @@ func (cw *chunkWriter) SaveMetadata() error {
 }
 
 // storeChangeset persists a changeset to the migrations/changesets directory.
-// errChan is a channel that receives errors from the changeset storage routine and signals
-// abci that the changeset storage has completed or failed.
-func (m *Migrator) StoreChangesets(height int64, changes <-chan any, errChan chan<- error) {
+func (m *Migrator) StoreChangesets(height int64, changes <-chan any) error {
 	if changes == nil {
 		// no changesets to store, not in a migration
-		return
+		return nil
 	}
 
 	err := ensureChangesetDir(m.dir, height)
 	if err != nil {
-		errChan <- err
-		return
+		return err
 	}
 
 	// create a chunk writer
@@ -639,16 +618,14 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any, errChan cha
 			// write the changeset to disk
 			err = pg.StreamElement(chunkWriter, ct)
 			if err != nil {
-				errChan <- err
-				return
+				return err
 			}
 
 		case *pg.Relation:
 			// write the relation to disk
 			err = pg.StreamElement(chunkWriter, ct)
 			if err != nil {
-				errChan <- err
-				return
+				return err
 			}
 		}
 	}
@@ -659,18 +636,16 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any, errChan cha
 	}
 	if len(bs.Spends) > 0 {
 		if pg.StreamElement(chunkWriter, bs); err != nil {
-			errChan <- err
-			return
+			return err
 		}
 	}
 
 	if err = chunkWriter.SaveMetadata(); err != nil {
-		errChan <- err
-		return
+		return err
 	}
 
 	// signals NotifyHeight that all changesets have been written to disk
-	errChan <- nil
+	return nil
 }
 
 // LoadChangesets loads changesets at a given height from the migration directory.
