@@ -91,47 +91,28 @@ type Migration struct {
 	Timestamp        string `json:"timestamp"`          // Timestamp when the migration was proposed
 }
 
-type MigrationStatus int
+type MigrationStatus string
 
 const (
 	// NoActiveMigration indicates there is currently no migration process happening on the network.
-	NoActiveMigration MigrationStatus = iota
+	NoActiveMigration MigrationStatus = "NoActiveMigration"
 
 	// ActivationPeriod represents the phase after the migration proposal has been approved by the network,
 	// but before the migration begins. During this phase, validators prepare their nodes for migration.
-	ActivationPeriod
+	ActivationPeriod MigrationStatus = "ActivationPeriod"
 
 	// MigrationInProgress is the phase where the migration is actively occurring. The old and new networks
 	// run concurrently, with state changes from the old network being replicated to the new network.
-	MigrationInProgress
+	MigrationInProgress MigrationStatus = "MigrationInProgress"
 
 	// MigrationCompleted indicates the migration process has successfully finished,
 	// and the old network is ready to be decommissioned.
-	MigrationCompleted
+	MigrationCompleted MigrationStatus = "MigrationCompleted"
 
 	// GenesisMigration refers to the phase where the node initializes with the genesis state,
 	// tries to replicate the state changes from the old network.
-	GenesisMigration
-
-	UnknownMigrationStatus
+	GenesisMigration MigrationStatus = "GenesisMigration"
 )
-
-func (status *MigrationStatus) String() string {
-	switch *status {
-	case NoActiveMigration:
-		return "NoActiveMigration"
-	case ActivationPeriod:
-		return "ActivationPeriod"
-	case MigrationInProgress:
-		return "MigrationInProgress"
-	case MigrationCompleted:
-		return "MigrationCompleted"
-	case GenesisMigration:
-		return "GenesisMigration"
-	default:
-		return "Unknown"
-	}
-}
 
 type MigrationState struct {
 	Status       MigrationStatus `json:"status"`       // Status is the current status of the migration

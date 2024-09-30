@@ -29,10 +29,6 @@ func networkStatusCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			if status.Status == types.UnknownMigrationStatus {
-				return display.PrintErr(cmd, fmt.Errorf("migration status unknown"))
-			}
-
 			return display.PrintCmd(cmd, &migrationStatus{
 				Status:        status.Status,
 				StartHeight:   status.StartHeight,
@@ -65,8 +61,8 @@ func (m *migrationStatus) MarshalText() ([]byte, error) {
 	}
 
 	return []byte(fmt.Sprintf("Migration Status: %s\n"+
-		"StartHeight: %d\n"+
-		"EndHeight: %d\n"+
-		"CurrentBlock: %d\n",
-		m.Status.String(), m.StartHeight, m.EndHeight, m.CurrentHeight)), nil
+		"Start Height: %d\n"+
+		"End Height: %d\n"+
+		"Current Block: %d\n",
+		m.Status, m.StartHeight, m.EndHeight, m.CurrentHeight)), nil
 }

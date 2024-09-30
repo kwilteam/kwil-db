@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/abci/meta"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/stretchr/testify/require"
@@ -63,7 +64,7 @@ func Test_NetworkParams(t *testing.T) {
 	param2.MaxBlockSize = 2000
 	param2.JoinExpiry = 200
 	param2.DisabledGasCosts = false
-	param2.MigrationStatus = 1
+	param2.MigrationStatus = types.NoActiveMigration
 
 	err = meta.StoreDiff(ctx, tx, param, param2)
 	require.NoError(t, err)
