@@ -33,7 +33,7 @@ func networkStatusCmd() *cobra.Command {
 				Status:        status.Status,
 				StartHeight:   status.StartHeight,
 				EndHeight:     status.EndHeight,
-				CurrentHeight: status.CurrentBlock,
+				CurrentHeight: status.CurrentHeight,
 			})
 		},
 	}

@@ -58,7 +58,8 @@ const (
 // at the appropriate height, persisting changesets for the migration for each
 // block as it occurs, and making that data available via RPC for the new node.
 // Similarly, if the local process is the new node, it is responsible for reading
-// changesets from the external node and applying them   to the local database.
+// changesets from the external node and applying them to the local database.
+// The changesets are stored from the start height of the migration to the end height (both inclusive).
 type Migrator struct {
 	initialized bool // set to true after the migrator is initialized
 
@@ -612,9 +613,9 @@ func (cw *chunkWriter) SaveMetadata() error {
 }
 
 // storeChangeset persists a changeset to the migrations/changesets directory.
-// doneChan is a channel that is closed when all the block changes have been written to disk.
-// errChan is a channel that receives errors from the changeset storage routine.
-func (m *Migrator) StoreChangesets(height int64, changes <-chan any, doneChan chan<- bool, errChan chan<- error) {
+// errChan is a channel that receives errors from the changeset storage routine and signals
+// abci that the changeset storage has completed or failed.
+func (m *Migrator) StoreChangesets(height int64, changes <-chan any, errChan chan<- error) {
 	if changes == nil {
 		// no changesets to store, not in a migration
 		return
@@ -667,7 +668,7 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any, doneChan ch
 	}
 
 	// signals NotifyHeight that all changesets have been written to disk
-	doneChan <- true
+	errChan <- nil
 }
 
 // LoadChangesets loads changesets at a given height from the migration directory.
