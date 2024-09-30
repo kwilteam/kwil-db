@@ -69,6 +69,7 @@ type DBConfig struct {
 	// SchemaFilter is used to include WAL data for certain *postgres* schema
 	// (not Kwil schema). If nil, the default is to include updates to tables in
 	// any schema prefixed by "ds_".
+	// DEPRECATED: This has become baked into Kwil's DB conventions in many places.
 	SchemaFilter func(string) bool
 }
 
@@ -240,6 +241,23 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 	}()
 
 	return db, nil
+}
+
+// EnsureFullReplicaIdentityDatasets should be used after the first time opening
+// a database that was restored from a snapshot, which may have been created
+// with an older version of kwild that did not set this on all tables.
+func (db *DB) EnsureFullReplicaIdentityDatasets(ctx context.Context) error {
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = db.Execute(ctx, sqlAlterAllWithReplicaIdentFull)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // Close shuts down the Kwil DB. This stops all connections and the WAL data
