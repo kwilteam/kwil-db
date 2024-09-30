@@ -282,6 +282,7 @@ func diff(original, new *common.NetworkParameters) map[string][]byte {
 	}
 
 	if original.MigrationStatus != new.MigrationStatus {
+		fmt.Println("Migration status changed", original.MigrationStatus, new.MigrationStatus)
 		buf := make([]byte, 8)
 		binary.LittleEndian.PutUint64(buf, uint64(new.MigrationStatus))
 		d[migrationStatus] = buf

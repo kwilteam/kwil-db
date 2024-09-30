@@ -96,9 +96,6 @@ type AbciApp struct {
 	txApp TxApp
 
 	consensusParams *chain.ConsensusParams
-	// As the consensus params are persisted before calling NotifyHeight, we need to track
-	// the last blocks migration status to correctly persist the migration status in the chain state.
-	lastMigrationStatus types.MigrationStatus
 
 	chainContext *common.ChainContext
 
@@ -249,42 +246,6 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		// ABCI and applied below.
 	}
 
-	// if the network params have never been stored (which is the case for a fresh network),
-	// we need to persist them for the first time. If they are found, we need to update our consensus params
-	// with whatever the value is, since the consensus params here are read from the genesis file, and
-	// may have been altered if this is not a new network.
-	networkParams, err := meta.LoadParams(ctx, tx)
-	if errors.Is(err, meta.ErrParamsNotFound) {
-		// we need to store the genesis network params
-		err = meta.StoreParams(ctx, tx, &common.NetworkParameters{
-			MaxBlockSize:     app.consensusParams.Block.MaxBytes,
-			JoinExpiry:       app.consensusParams.Validator.JoinExpiry,
-			VoteExpiry:       app.consensusParams.Votes.VoteExpiry,
-			DisabledGasCosts: app.consensusParams.WithoutGasCosts,
-			MaxVotesPerTx:    app.consensusParams.Votes.MaxVotesPerTx,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to store network params: %w", err)
-		}
-
-		networkParams = &common.NetworkParameters{
-			MaxBlockSize:     app.consensusParams.Block.MaxBytes,
-			JoinExpiry:       app.consensusParams.Validator.JoinExpiry,
-			VoteExpiry:       app.consensusParams.Votes.VoteExpiry,
-			DisabledGasCosts: app.consensusParams.WithoutGasCosts,
-			MaxVotesPerTx:    app.consensusParams.Votes.MaxVotesPerTx,
-		}
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to load network params: %w", err)
-	} else {
-		// we will apply the netParams to the consensus params
-		app.consensusParams.Block.MaxBytes = networkParams.MaxBlockSize
-		app.consensusParams.Validator.JoinExpiry = networkParams.JoinExpiry
-		app.consensusParams.Votes.VoteExpiry = networkParams.VoteExpiry
-		app.consensusParams.WithoutGasCosts = networkParams.DisabledGasCosts
-		app.consensusParams.Votes.MaxVotesPerTx = networkParams.MaxVotesPerTx
-	}
-
 	var migrationParams *common.MigrationContext
 	startHeight := app.consensusParams.Migration.StartHeight
 	endHeight := app.consensusParams.Migration.EndHeight
@@ -297,22 +258,57 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 		}
 	}
 
-	migrationStatus := migrator.MigrationStatus(ctx)
-	app.log.Infof("Migration status: %s", migrationStatus.String())
-	networkParams.MigrationStatus = migrationStatus
-	app.lastMigrationStatus = migrationStatus
+	// if the network params have never been stored (which is the case for a fresh network),
+	// we need to persist them for the first time. If they are found, we need to update our consensus params
+	// with whatever the value is, since the consensus params here are read from the genesis file, and
+	// may have been altered if this is not a new network.
 
-	// if the migration is in progress, we need to set the network params to reflect that
-	// networkParams.InMigration = migrationStatus == types.MigrationInProgress || migrationStatus == types.MigrationCompleted
+	networkParams, err := meta.LoadParams(ctx, tx)
+	if errors.Is(err, meta.ErrParamsNotFound) {
+		status := types.NoActiveMigration
+		if startHeight != 0 && endHeight != 0 {
+			status = types.GenesisMigration
+		}
 
-	// if the migration is completed, we need to halt the network
-	// networkParams.MigrationCompleted = migrationStatus == types.MigrationCompleted
+		// we need to store the genesis network params
+		err = meta.StoreParams(ctx, tx, &common.NetworkParameters{
+			MaxBlockSize:     app.consensusParams.Block.MaxBytes,
+			JoinExpiry:       app.consensusParams.Validator.JoinExpiry,
+			VoteExpiry:       app.consensusParams.Votes.VoteExpiry,
+			DisabledGasCosts: app.consensusParams.WithoutGasCosts,
+			MaxVotesPerTx:    app.consensusParams.Votes.MaxVotesPerTx,
+			MigrationStatus:  status,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to store network params: %w", err)
+		}
+
+		networkParams = &common.NetworkParameters{
+			MaxBlockSize:     app.consensusParams.Block.MaxBytes,
+			JoinExpiry:       app.consensusParams.Validator.JoinExpiry,
+			VoteExpiry:       app.consensusParams.Votes.VoteExpiry,
+			DisabledGasCosts: app.consensusParams.WithoutGasCosts,
+			MaxVotesPerTx:    app.consensusParams.Votes.MaxVotesPerTx,
+			MigrationStatus:  status,
+		}
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to load network params: %w", err)
+	} else {
+		// we will apply the netParams to the consensus params
+		app.consensusParams.Block.MaxBytes = networkParams.MaxBlockSize
+		app.consensusParams.Validator.JoinExpiry = networkParams.JoinExpiry
+		app.consensusParams.Votes.VoteExpiry = networkParams.VoteExpiry
+		app.consensusParams.WithoutGasCosts = networkParams.DisabledGasCosts
+		app.consensusParams.Votes.MaxVotesPerTx = networkParams.MaxVotesPerTx
+	}
 
 	app.chainContext = &common.ChainContext{
 		ChainID:           cfg.ChainID,
 		NetworkParameters: networkParams,
 		MigrationParams:   migrationParams,
 	}
+
+	migrator.SetMigrationStatus(app.chainContext.NetworkParameters.MigrationStatus)
 
 	err = tx.Commit(ctx)
 	if err != nil {
@@ -533,7 +529,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		MigrationStatus:  a.chainContext.NetworkParameters.MigrationStatus,
 	}
 	oldNetworkParams := *networkParams
-	oldNetworkParams.MigrationStatus = a.lastMigrationStatus
 
 	initialValidators, err := a.txApp.GetValidators(ctx, a.consensusTx)
 	if err != nil {
@@ -745,15 +740,21 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		return nil, fmt.Errorf("failed to finalize transaction app: %w", err)
 	}
 
+	// Notify the migrator of the changeset
+	err = a.migrator.NotifyHeight(ctx, &blockCtx, a.db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to notify migrator of changeset: %w", err)
+	}
+
 	networkParams.MigrationStatus = a.chainContext.NetworkParameters.MigrationStatus
+
 	// store any changes to the network params
 	err = meta.StoreDiff(ctx, a.consensusTx, &oldNetworkParams, networkParams)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store network params diff: %w", err)
 	}
 
-	// update the last migration status
-	a.lastMigrationStatus = networkParams.MigrationStatus
+	a.migrator.SetMigrationStatus(networkParams.MigrationStatus)
 
 	// While still in the DB transaction, update to this next height but dummy
 	// app hash. If we crash before Commit can store the next app hash that we
@@ -769,6 +770,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	// Create a new changeset processor
 	csp := newChangesetProcessor()
 	// "migrator" module subscribes to the changeset processor to store changesets during the migration
+	csDoneChan := make(chan bool, 1)
+	csErrChan := make(chan error, 1)
 	if inMigration && !haltNetwork {
 		csChanMigrator, err := csp.Subscribe(ctx, "migrator")
 		if err != nil {
@@ -776,7 +779,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 		// migrator go routine will receive changesets from the changeset processor
 		// give the new channel to the migrator to store changesets
-		go a.migrator.StoreChangesets(req.Height, csChanMigrator)
+		go a.migrator.StoreChangesets(req.Height, csChanMigrator, csDoneChan, csErrChan)
 	}
 
 	// statistics module can subscribe to the changeset processor to listen for changesets for updating statistics
@@ -806,12 +809,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	if a.forks.BeginsHalt(uint64(req.Height) - 1) {
 		a.log.Info("This is the last block before halt.")
 		a.halted.Store(true)
-	}
-
-	// Notify the migrator of the changeset
-	err = a.migrator.NotifyHeight(ctx, &blockCtx, a.db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to notify migrator of changeset: %w", err)
 	}
 
 	valUpdates := validatorUpdates(initialValidators, finalValidators)
@@ -887,6 +884,15 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			continue
 		}
 		result.Result.Log += logs.logs
+	}
+
+	if inMigration && !haltNetwork {
+		select {
+		case <-csDoneChan:
+			// migrator has finished storing changesets
+		case err := <-csErrChan:
+			return nil, fmt.Errorf("failed to store changesets: %w", err)
+		}
 	}
 
 	// Persist app hash and height to the disk for recovery purposes.
@@ -1863,6 +1869,10 @@ func (a *AbciApp) Close() error {
 // reading from the DB can use this method.
 func (a *AbciApp) Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error) {
 	return a.txApp.Price(ctx, db, tx, a.chainContext)
+}
+
+func (a *AbciApp) MigrationStatus() types.MigrationStatus {
+	return a.chainContext.NetworkParameters.MigrationStatus
 }
 
 // ChangesetProcessor is a PubSub that listens for changesets and broadcasts them to the receivers.

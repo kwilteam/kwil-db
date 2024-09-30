@@ -49,6 +49,9 @@ func genesisStateCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
+			if metadata.MigrationState.Status == types.GenesisMigration {
+				return display.PrintErr(cmd, fmt.Errorf("genesis state command should only be used against the nodes from a network being migrated from"))
+			}
 			// If there is no active migration or if the migration has not started yet, return the migration state
 			// indicating that there is no genesis state to download.
 			if metadata.MigrationState.Status == types.NoActiveMigration ||
@@ -135,10 +138,6 @@ type MigrationState struct {
 func (m *MigrationState) MarshalText() ([]byte, error) {
 	if m.Info.Status == types.NoActiveMigration {
 		return []byte("No active migration found."), nil
-	}
-
-	if m.Info.Status == types.GenesisMigration {
-		return []byte("Genesis migration in progress. No genesis state to download."), nil
 	}
 
 	if m.Info.Status == types.ActivationPeriod {

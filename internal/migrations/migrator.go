@@ -162,24 +162,6 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 	}
 	migrator.lastChangeset = height
 
-	// migration status
-	if migrationParams.EndHeight == 0 {
-		inGenesisMigration, err := InGenesisMigration(ctx, db, migrationParams.EndHeight)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check if in genesis migration: %w", err)
-		}
-
-		if inGenesisMigration {
-			migrator.migrationStatus = types.GenesisMigration
-		}
-	} else {
-		status, err := meta.MigrationStatus(ctx, db)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get migration status: %w", err)
-		}
-		migrator.migrationStatus = status
-	}
-
 	return migrator, nil
 }
 
@@ -281,16 +263,6 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 		m.Logger.Info("migration to chain completed, no new transactions will be accepted", log.String("ChainID", m.activeMigration.ChainID))
 	}
 
-	// wait for signal on doneChan, indicating that all changesets have been written to disk
-	select {
-	case <-m.doneChan:
-		break
-	case err := <-m.errChan:
-		return err
-	case <-ctx.Done():
-		return nil
-	}
-
 	m.lastChangeset = block.Height
 	return nil
 }
@@ -343,18 +315,17 @@ func (m *Migrator) generateGenesisConfig(ctx context.Context, cfgParams *common.
 	}
 }
 
+func (m *Migrator) SetMigrationStatus(status types.MigrationStatus) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.migrationStatus = status
+}
+
 func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	return setLastStoredChangeset(ctx, tx, m.lastChangeset)
-}
-
-func (m *Migrator) MigrationStatus(ctx context.Context) types.MigrationStatus {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	return m.migrationStatus
 }
 
 // GetMigrationMetadata gets the metadata for the genesis snapshot,
@@ -643,7 +614,7 @@ func (cw *chunkWriter) SaveMetadata() error {
 }
 
 // storeChangeset persists a changeset to the migrations/changesets directory.
-func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
+func (m *Migrator) StoreChangesets(height int64, changes <-chan any, doneChan chan<- bool, errChan chan<- error) {
 	if changes == nil {
 		// no changesets to store, not in a migration
 		return
@@ -651,7 +622,7 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 
 	err := ensureChangesetDir(m.dir, height)
 	if err != nil {
-		m.errChan <- err
+		errChan <- err
 		return
 	}
 
@@ -665,7 +636,7 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 			// write the changeset to disk
 			err = pg.StreamElement(chunkWriter, ct)
 			if err != nil {
-				m.errChan <- err
+				errChan <- err
 				return
 			}
 
@@ -673,7 +644,7 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 			// write the relation to disk
 			err = pg.StreamElement(chunkWriter, ct)
 			if err != nil {
-				m.errChan <- err
+				errChan <- err
 				return
 			}
 		}
@@ -685,18 +656,18 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 	}
 	if len(bs.Spends) > 0 {
 		if pg.StreamElement(chunkWriter, bs); err != nil {
-			m.errChan <- err
+			errChan <- err
 			return
 		}
 	}
 
 	if err = chunkWriter.SaveMetadata(); err != nil {
-		m.errChan <- err
+		errChan <- err
 		return
 	}
 
 	// signals NotifyHeight that all changesets have been written to disk
-	m.doneChan <- true
+	doneChan <- true
 }
 
 // LoadChangesets loads changesets at a given height from the migration directory.
