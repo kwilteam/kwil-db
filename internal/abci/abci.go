@@ -771,7 +771,10 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 		// migrator go routine will receive changesets from the changeset processor
 		// give the new channel to the migrator to store changesets
-		go a.migrator.StoreChangesets(req.Height, csChanMigrator, csErrChan)
+		go func() {
+			err := a.migrator.StoreChangesets(req.Height, csChanMigrator)
+			csErrChan <- err
+		}()
 	}
 
 	// statistics module can subscribe to the changeset processor to listen for changesets for updating statistics
