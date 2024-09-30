@@ -67,8 +67,8 @@ func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, g
 	if err == nil {
 		logger.Info("Genesis state already downloaded", log.String("genesis snapshot", snapshotFileName))
 
-		if !validateGenesisState(snapshotFileName, genesisCfg.DataAppHash) {
-			return nil, nil, errors.New("app hash does not match the genesis state")
+		if err := validateGenesisState(snapshotFileName, genesisCfg.DataAppHash); err != nil {
+			return nil, nil, err
 		}
 
 		return kwildCfg, genesisCfg, nil
@@ -229,30 +229,34 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	return nil
 }
 
-func validateGenesisState(filename string, appHash []byte) bool {
-	// check if the genesis state file exists
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		return false
-	}
+// validateGenesisState validates the genesis state file against the app hash.
+// It is the caller's responsibility to check if the file exists.
+func validateGenesisState(filename string, appHash []byte) error {
+	// we don't need to check if the file exists since the caller should have already checked it
 
 	genesisStateFile, err := os.Open(filename)
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to open genesis state file: %w", err)
 	}
 
 	// gzip reader and hash reader
 	gzipReader, err := gzip.NewReader(genesisStateFile)
 	if err != nil {
-		failBuild(err, "failed to create gzip reader")
+		return fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 	defer gzipReader.Close()
 
 	hasher := sha256.New()
 	_, err = io.Copy(hasher, gzipReader)
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to hash genesis state file: %w", err)
 	}
 
 	hash := hasher.Sum(nil)
-	return appHash != nil && len(hash) == len(appHash) && bytes.Equal(hash, appHash)
+
+	if !bytes.Equal(hash, appHash) {
+		return errors.New("app hash does not match the genesis state")
+	}
+
+	return nil
 }
