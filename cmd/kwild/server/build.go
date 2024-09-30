@@ -173,7 +173,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	// admin service and server
 	signer := buildSigner(d)
-	jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, p2p, migrator, signer, d.cfg,
+	jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, p2p, signer, d.cfg,
 		d.genesisCfg.ChainID, *d.log.Named("admin-json-svc"))
 	jsonRPCAdminServer := buildJRPCAdminServer(d)
 	jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)

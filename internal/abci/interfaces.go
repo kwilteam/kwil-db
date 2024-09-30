@@ -93,7 +93,7 @@ type WhitelistPeersModule interface {
 
 type MigratorModule interface {
 	NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database) error
-	StoreChangesets(height int64, changes <-chan any)
-	MigrationStatus(ctx context.Context) types.MigrationStatus
+	StoreChangesets(height int64, changes <-chan any, doneChan chan<- bool, errChan chan<- error)
 	PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error
+	SetMigrationStatus(status types.MigrationStatus)
 }
