@@ -59,7 +59,7 @@ var (
 	// migrationIsActiveSQL is the sql query used  to check if a migration is active.
 	migrationIsActiveSQL = `SELECT EXISTS(SELECT 1 FROM ` + migrationsSchemaName + `.migration);`
 	// createMigrationSQL is the sql query used to create a new migration.
-	createMigrationSQL = `INSERT INTO ` + migrationsSchemaName + `.migration (id, start_height, end_height) VALUES ($1, $2, $3, $4);`
+	createMigrationSQL = `INSERT INTO ` + migrationsSchemaName + `.migration (id, start_height, end_height) VALUES ($1, $2, $3);`
 
 	lastStoreChangeset = `last_stored_changeset`
 
