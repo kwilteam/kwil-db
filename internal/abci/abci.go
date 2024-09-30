@@ -251,7 +251,6 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 	endHeight := app.consensusParams.Migration.EndHeight
 
 	if startHeight != 0 && endHeight != 0 {
-		// set this only if "migrate_from" is configured
 		migrationParams = &common.MigrationContext{
 			StartHeight: startHeight,
 			EndHeight:   endHeight,
@@ -270,19 +269,6 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 			status = types.GenesisMigration
 		}
 
-		// we need to store the genesis network params
-		err = meta.StoreParams(ctx, tx, &common.NetworkParameters{
-			MaxBlockSize:     app.consensusParams.Block.MaxBytes,
-			JoinExpiry:       app.consensusParams.Validator.JoinExpiry,
-			VoteExpiry:       app.consensusParams.Votes.VoteExpiry,
-			DisabledGasCosts: app.consensusParams.WithoutGasCosts,
-			MaxVotesPerTx:    app.consensusParams.Votes.MaxVotesPerTx,
-			MigrationStatus:  status,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to store network params: %w", err)
-		}
-
 		networkParams = &common.NetworkParameters{
 			MaxBlockSize:     app.consensusParams.Block.MaxBytes,
 			JoinExpiry:       app.consensusParams.Validator.JoinExpiry,
@@ -291,6 +277,13 @@ func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule
 			MaxVotesPerTx:    app.consensusParams.Votes.MaxVotesPerTx,
 			MigrationStatus:  status,
 		}
+
+		// we need to store the genesis network params
+		err = meta.StoreParams(ctx, tx, networkParams)
+		if err != nil {
+			return nil, fmt.Errorf("failed to store network params: %w", err)
+		}
+
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to load network params: %w", err)
 	} else {
@@ -770,7 +763,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	// Create a new changeset processor
 	csp := newChangesetProcessor()
 	// "migrator" module subscribes to the changeset processor to store changesets during the migration
-	csDoneChan := make(chan bool, 1)
 	csErrChan := make(chan error, 1)
 	if inMigration && !haltNetwork {
 		csChanMigrator, err := csp.Subscribe(ctx, "migrator")
@@ -779,7 +771,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 		// migrator go routine will receive changesets from the changeset processor
 		// give the new channel to the migrator to store changesets
-		go a.migrator.StoreChangesets(req.Height, csChanMigrator, csDoneChan, csErrChan)
+		go a.migrator.StoreChangesets(req.Height, csChanMigrator, csErrChan)
 	}
 
 	// statistics module can subscribe to the changeset processor to listen for changesets for updating statistics
@@ -887,10 +879,9 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	if inMigration && !haltNetwork {
-		select {
-		case <-csDoneChan:
-			// migrator has finished storing changesets
-		case err := <-csErrChan:
+		// wait for the migrator to finish storing changesets
+		err = <-csErrChan
+		if err != nil {
 			return nil, fmt.Errorf("failed to store changesets: %w", err)
 		}
 	}

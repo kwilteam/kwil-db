@@ -962,10 +962,10 @@ func (svc *Service) MigrationStatus(ctx context.Context, req *userjson.Migration
 
 	return &userjson.MigrationStatusResponse{
 		Status: &types.MigrationState{
-			Status:       metadata.MigrationState.Status,
-			StartHeight:  metadata.MigrationState.StartHeight,
-			EndHeight:    metadata.MigrationState.EndHeight,
-			CurrentBlock: chainStatus.Sync.BestBlockHeight,
+			Status:        metadata.MigrationState.Status,
+			StartHeight:   metadata.MigrationState.StartHeight,
+			EndHeight:     metadata.MigrationState.EndHeight,
+			CurrentHeight: chainStatus.Sync.BestBlockHeight,
 		},
 	}, nil
 }

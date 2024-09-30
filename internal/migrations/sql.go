@@ -365,25 +365,3 @@ func getChangeset(ctx context.Context, db sql.Executor, height int64, index int6
 
 	return changeset, nil
 }
-
-// InGenesisMigration checks if the node is going through a genesis migration.
-// It returns true if the node is still syncing with the old network.
-func InGenesisMigration(ctx context.Context, db sql.ReadTxMaker, endHeight int64) (bool, error) {
-	if endHeight == 0 {
-		return false, nil
-	}
-
-	tx, err := db.BeginReadTx(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback(ctx)
-
-	// Check if the migration table exists
-	height, err := getLastChangeset(ctx, tx)
-	if err != nil {
-		return false, err
-	}
-
-	return height < endHeight, nil
-}
