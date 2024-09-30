@@ -44,7 +44,7 @@ jobs:
 
     services:
       postgres:
-        image: kwildb/postgres:16.2-1
+        image: kwildb/postgres:16.4-1
         env:
           POSTGRES_PORT: 5432
           POSTGRES_HOST_AUTH_METHOD: trust

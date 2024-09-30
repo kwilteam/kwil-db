@@ -709,7 +709,6 @@ func (r *IntHelper) createLocalNetwork(ctx context.Context) string {
 // It does the following:
 // 1. Create a new network for current test
 // 2. Generate new docker-compose.yml using newly generated network
-// 3. Copy pginit.sql to the same directory as docker-compose.yml
 //
 // NOTE:
 // By default, the subnet pool assigned by docker is too big. Since we create
@@ -780,14 +779,6 @@ func (r *IntHelper) prepareDockerCompose(_ context.Context, tmpDir string) {
 
 	r.t.Logf("generated compose file: %s, network: %s, test: %s",
 		migrationComposeFile, localNetworkName, testName)
-
-	// copy pginit.sql to same directory as docker-compose.yml
-	// so it can be mounted into the pg containers
-	pgInitSQL, err := os.ReadFile("./pginit.sql")
-	require.NoError(r.t, err, "failed to read pginit.sql")
-	pgInitFile := filepath.Join(tmpDir, "pginit.sql")
-	err = os.WriteFile(pgInitFile, pgInitSQL, 0644)
-	require.NoError(r.t, err, "failed to write pginit.sql")
 
 	// copy docker-compose.override.yml if exists
 	if fileExists(dockerComposeOverrideFile) {
