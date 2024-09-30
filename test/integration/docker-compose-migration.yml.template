@@ -43,7 +43,7 @@ services:
       retries: 10
 
   new-pg0:
-    image: postgres:16.2
+    image: kwildb/postgres:16.4-1
     ports:
       - "5432"
     restart: always
@@ -51,15 +51,6 @@ services:
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
       POSTGRES_INITDB_ARGS: --data-checksums
-    command: |
-      -c wal_level=logical
-      -c max_wal_senders=10
-      -c max_replication_slots=10
-      -c max_prepared_transactions=2
-      -c track_commit_timestamp=true
-      -c wal_sender_timeout=0
-    volumes:
-      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
       - {{ .Network }}
     healthcheck:
@@ -107,7 +98,7 @@ services:
       retries: 10
 
   new-pg1:
-    image: postgres:16.2
+    image: kwildb/postgres:16.4-1
     ports:
       - "5432"
     restart: always
@@ -115,15 +106,6 @@ services:
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
       POSTGRES_INITDB_ARGS: --data-checksums
-    command: |
-      -c wal_level=logical
-      -c max_wal_senders=10
-      -c max_replication_slots=10
-      -c max_prepared_transactions=2
-      -c track_commit_timestamp=true
-      -c wal_sender_timeout=0
-    volumes:
-      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
       - {{ .Network }}
     healthcheck:
@@ -171,7 +153,7 @@ services:
       retries: 10
 
   new-pg2:
-    image: postgres:16.2
+    image: kwildb/postgres:16.4-1
     ports:
       - "5432"
     restart: always
@@ -179,15 +161,6 @@ services:
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
       POSTGRES_INITDB_ARGS: --data-checksums
-    command: |
-      -c wal_level=logical
-      -c max_wal_senders=10
-      -c max_replication_slots=10
-      -c max_prepared_transactions=2
-      -c track_commit_timestamp=true
-      -c wal_sender_timeout=0
-    volumes:
-      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
       - {{ .Network }}
     healthcheck:
@@ -238,7 +211,7 @@ services:
       retries: 10
 
   new-pg3:
-    image: postgres:16.2
+    image: kwildb/postgres:16.4-1
     ports:
       - "5432"
     restart: always
@@ -246,15 +219,6 @@ services:
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
       POSTGRES_INITDB_ARGS: --data-checksums
-    command: |
-      -c wal_level=logical
-      -c max_wal_senders=10
-      -c max_replication_slots=10
-      -c max_prepared_transactions=2
-      -c track_commit_timestamp=true
-      -c wal_sender_timeout=0
-    volumes:
-      - ./pginit.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
       - {{ .Network }}
     healthcheck:

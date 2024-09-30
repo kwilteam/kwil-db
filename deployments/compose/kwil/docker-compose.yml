@@ -7,7 +7,7 @@ volumes:
 services:
   pg:
     container_name: postgres-kwild-single
-    image: postgres:16.2
+    image: kwildb/postgres:16.4-1
     ports:
       - "15432:5432"
     restart: always
@@ -19,16 +19,8 @@ services:
       # POSTGRES_USER: kwild
       # POSTGRES_PASSWORD: kwild
       # POSTGRES_DB: kwild
-    command: |
-      -c wal_level=logical
-      -c max_wal_senders=10
-      -c max_replication_slots=10
-      -c max_prepared_transactions=2
-      -c track_commit_timestamp=true
-      -c wal_sender_timeout=0
     volumes:
       - pgkwil:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/create_user.sql
     networks:
       kwilnet0:
         ipv4_address: 172.5.100.3
