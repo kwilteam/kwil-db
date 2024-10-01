@@ -39,7 +39,7 @@ const (
 	tableResolutions = `CREATE TABLE IF NOT EXISTS ` + votingSchemaName + `.resolutions (
 		id BYTEA PRIMARY KEY, -- id is an rfc4122 uuid derived from the body
 		body BYTEA, -- body is the actual resolution info
-		type BYTEA, -- type is the type of resolution
+		type BYTEA NOT NULL, -- type is the type of resolution
 		vote_body_proposer BYTEA, -- vote_body_proposer is the identifier of the node that supplied the vote body
 		expiration INT8 NOT NULL, -- expiration is the blockheight at which the resolution expires
 		extra_vote_id BOOLEAN NOT NULL DEFAULT FALSE, -- If vote_body_proposer had sent VoteID before VoteBody, this is set to true
