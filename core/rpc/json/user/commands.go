@@ -116,9 +116,7 @@ type MigrationSnapshotChunkRequest struct {
 type MigrationMetadataRequest struct{}
 type ListMigrationsRequest struct{}
 
-type MigrationStatusRequest struct {
-	Id string `json:"id"` // Id is the migration proposal ID
-}
+type MigrationStatusRequest struct{}
 
 type ChallengeRequest struct{}
 type HealthRequest struct{}

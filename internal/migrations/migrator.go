@@ -54,7 +54,8 @@ const (
 // at the appropriate height, persisting changesets for the migration for each
 // block as it occurs, and making that data available via RPC for the new node.
 // Similarly, if the local process is the new node, it is responsible for reading
-// changesets from the external node and applying them   to the local database.
+// changesets from the external node and applying them to the local database.
+// The changesets are stored from the start height of the migration to the end height (both inclusive).
 type Migrator struct {
 	initialized bool // set to true after the migrator is initialized
 
@@ -64,13 +65,6 @@ type Migrator struct {
 	// activeMigration is the migration plan that is approved by the network.
 	// It is nil if there is no plan for a migration.
 	activeMigration *activeMigration
-
-	// Set to true when the migration is in progress.
-	// i.e the block height is between the start and end height of the migration.
-	inProgress bool
-
-	// Set to true when the node is halted after the migration is completed.
-	halted bool
 
 	// snapshotter creates snapshots of the state.
 	snapshotter Snapshotter
@@ -94,16 +88,12 @@ type Migrator struct {
 	// It is expected to be a full path.
 	dir string
 
-	// doneChan is a channel that is closed when all the block changes have been written to disk.
-	doneChan chan bool
-
-	// errChan is a channel that receives errors from the changeset storage routine.
-	errChan chan error
-
 	// consensusParamsFn is a function that returns the consensus params for the chain.
 	consensusParamsFn ConsensusParamsGetter
 	// consensusParamsFnChan is a channel that is signals if the consensusParamsFn is set.
 	consensusParamsFnChan chan struct{}
+
+	genesisMigrationParams chain.MigrationParams
 }
 
 // activeMigration is an in-process migration.
@@ -115,18 +105,18 @@ type activeMigration struct {
 }
 
 // SetupMigrator initializes the migrator instance with the necessary dependencies.
-func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, accounts SpendTracker, dir string, logger log.Logger) (*Migrator, error) {
+func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, accounts SpendTracker, dir string, migrationParams chain.MigrationParams, logger log.Logger) (*Migrator, error) {
 	if migrator.initialized {
 		return nil, fmt.Errorf("migrator already initialized")
 	}
 
 	// Set the migrator declared in migrations.go
+	migrator.genesisMigrationParams = migrationParams
 	migrator.snapshotter = snapshotter
 	migrator.Logger = logger
 	migrator.dir = dir
 	migrator.DB = db
 	migrator.accounts = accounts
-	migrator.doneChan = make(chan bool, 1)
 	migrator.initialized = true
 	migrator.consensusParamsFnChan = make(chan struct{})
 	// Initialize the DB
@@ -158,19 +148,6 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 	}
 	migrator.lastChangeset = height
 
-	// Check if the migration is in progress or completed
-	if migrator.activeMigration != nil {
-		if migrator.lastChangeset >= migrator.activeMigration.StartHeight {
-			// migration is in progress
-			migrator.inProgress = true
-		}
-
-		if migrator.lastChangeset >= migrator.activeMigration.EndHeight-1 {
-			// migration is completed
-			migrator.halted = true
-		}
-	}
-
 	return migrator, nil
 }
 
@@ -197,7 +174,6 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 
 	if block.Height == m.activeMigration.StartHeight-1 {
 		// set the migration in progress, so that we record the changesets starting from the next block
-		m.inProgress = true
 		block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationInProgress
 		return nil
 	}
@@ -264,18 +240,7 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 	if block.Height == m.activeMigration.EndHeight {
 		// starting from here, no more transactions of any kind will be accepted or mined.
 		block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationCompleted
-		m.halted = true
 		m.Logger.Info("migration to chain completed, no new transactions will be accepted")
-	}
-
-	// wait for signal on doneChan, indicating that all changesets have been written to disk
-	select {
-	case <-m.doneChan:
-		break
-	case err := <-m.errChan:
-		return err
-	case <-ctx.Done():
-		return nil
 	}
 
 	m.lastChangeset = block.Height
@@ -346,51 +311,48 @@ func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Execut
 	return setLastStoredChangeset(ctx, tx, m.lastChangeset)
 }
 
-func (m *Migrator) MigrationStatus() types.MigrationStatus {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if m.activeMigration == nil {
-		return types.NoActiveMigration
-	}
-
-	if m.halted {
-		return types.MigrationCompleted
-	}
-
-	if m.inProgress {
-		return types.MigrationInProgress
-	}
-
-	return types.MigrationNotStarted
-}
-
 // GetMigrationMetadata gets the metadata for the genesis snapshot,
 // as well as the available changesets.
-func (m *Migrator) GetMigrationMetadata() (*types.MigrationMetadata, error) {
+func (m *Migrator) GetMigrationMetadata(ctx context.Context, status types.MigrationStatus) (*types.MigrationMetadata, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// if there is no planned migration, return
-	if m.activeMigration == nil {
-		return &types.MigrationMetadata{
-			MigrationState: types.MigrationState{
-				Status: types.NoActiveMigration,
-			},
-			Version: MigrationVersion,
-		}, nil
+	metadata := &types.MigrationMetadata{
+		MigrationState: types.MigrationState{
+			Status: status,
+		},
+		Version: MigrationVersion,
 	}
 
+	if status == types.GenesisMigration {
+		metadata.MigrationState.StartHeight = m.genesisMigrationParams.StartHeight
+		metadata.MigrationState.EndHeight = m.genesisMigrationParams.EndHeight
+		return metadata, nil
+	}
+
+	// if there is no planned migration, return
+	if status == types.NoActiveMigration {
+		if m.genesisMigrationParams.StartHeight != 0 && m.genesisMigrationParams.EndHeight != 0 {
+			metadata.MigrationState.StartHeight = m.genesisMigrationParams.StartHeight
+			metadata.MigrationState.EndHeight = m.genesisMigrationParams.EndHeight
+		}
+		return metadata, nil
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// network is either in ActivationPeriod or MigrationInProgress or MigrationCompleted state
+	if m.activeMigration == nil {
+		return nil, fmt.Errorf("no active migration found")
+	}
+
+	metadata.MigrationState.StartHeight = m.activeMigration.StartHeight
+	metadata.MigrationState.EndHeight = m.activeMigration.EndHeight
+
 	// Migration is triggered but not yet started
-	if !m.inProgress {
-		return &types.MigrationMetadata{
-			MigrationState: types.MigrationState{
-				Status:      types.MigrationNotStarted,
-				StartHeight: m.activeMigration.StartHeight,
-				EndHeight:   m.activeMigration.EndHeight,
-			},
-			Version: MigrationVersion,
-		}, nil
+	if status == types.ActivationPeriod {
+		return metadata, nil
 	}
 
 	// Migration is in progress, retrieve the snapshot and the genesis config
@@ -420,21 +382,9 @@ func (m *Migrator) GetMigrationMetadata() (*types.MigrationMetadata, error) {
 		return nil, err
 	}
 
-	status := types.MigrationInProgress
-	if m.halted {
-		status = types.MigrationCompleted
-	}
-
-	return &types.MigrationMetadata{
-		MigrationState: types.MigrationState{
-			Status:      status,
-			StartHeight: m.activeMigration.StartHeight,
-			EndHeight:   m.activeMigration.EndHeight,
-		},
-		SnapshotMetadata: snapshotBts,
-		GenesisInfo:      &genesisInfo,
-		Version:          MigrationVersion,
-	}, nil
+	metadata.GenesisInfo = &genesisInfo
+	metadata.SnapshotMetadata = snapshotBts
+	return metadata, nil
 }
 
 // GetGenesisSnapshotChunk gets the snapshot chunk of Index at the given height.
@@ -647,16 +597,15 @@ func (cw *chunkWriter) SaveMetadata() error {
 }
 
 // storeChangeset persists a changeset to the migrations/changesets directory.
-func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
+func (m *Migrator) StoreChangesets(height int64, changes <-chan any) error {
 	if changes == nil {
 		// no changesets to store, not in a migration
-		return
+		return nil
 	}
 
 	err := ensureChangesetDir(m.dir, height)
 	if err != nil {
-		m.errChan <- err
-		return
+		return err
 	}
 
 	// create a chunk writer
@@ -669,16 +618,14 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 			// write the changeset to disk
 			err = pg.StreamElement(chunkWriter, ct)
 			if err != nil {
-				m.errChan <- err
-				return
+				return err
 			}
 
 		case *pg.Relation:
 			// write the relation to disk
 			err = pg.StreamElement(chunkWriter, ct)
 			if err != nil {
-				m.errChan <- err
-				return
+				return err
 			}
 		}
 	}
@@ -689,18 +636,16 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) {
 	}
 	if len(bs.Spends) > 0 {
 		if pg.StreamElement(chunkWriter, bs); err != nil {
-			m.errChan <- err
-			return
+			return err
 		}
 	}
 
 	if err = chunkWriter.SaveMetadata(); err != nil {
-		m.errChan <- err
-		return
+		return err
 	}
 
 	// signals NotifyHeight that all changesets have been written to disk
-	m.doneChan <- true
+	return nil
 }
 
 // LoadChangesets loads changesets at a given height from the migration directory.

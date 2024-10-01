@@ -53,6 +53,7 @@ type adminSvcClient interface {
 
 	// migration methods
 	ListMigrations(ctx context.Context) ([]*types.Migration, error)
+	MigrationStatus(ctx context.Context) (*types.MigrationState, error)
 	GenesisState(ctx context.Context) (*types.MigrationMetadata, error)
 	GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error)
 	LoadChangeset(ctx context.Context, height int64, index int64) ([]byte, error)

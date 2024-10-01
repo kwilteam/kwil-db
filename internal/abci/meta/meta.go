@@ -157,9 +157,7 @@ func StoreParams(ctx context.Context, db sql.TxMaker, params *common.NetworkPara
 	}
 
 	// migration status
-	buf = make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, uint64(params.MigrationStatus))
-	_, err = tx.Execute(ctx, upsertParam, migrationStatus, buf)
+	_, err = tx.Execute(ctx, upsertParam, migrationStatus, []byte(params.MigrationStatus))
 	if err != nil {
 		return err
 	}
@@ -241,7 +239,7 @@ func LoadParams(ctx context.Context, db sql.Executor) (*common.NetworkParameters
 		case disabledGasKey:
 			params.DisabledGasCosts = value[0] == 1
 		case migrationStatus:
-			params.MigrationStatus = types.MigrationStatus(binary.LittleEndian.Uint64(value))
+			params.MigrationStatus = types.MigrationStatus(value)
 		case maxVotesPerTx:
 			params.MaxVotesPerTx = int64(binary.LittleEndian.Uint64(value))
 		default:
@@ -282,9 +280,8 @@ func diff(original, new *common.NetworkParameters) map[string][]byte {
 	}
 
 	if original.MigrationStatus != new.MigrationStatus {
-		buf := make([]byte, 8)
-		binary.LittleEndian.PutUint64(buf, uint64(new.MigrationStatus))
-		d[migrationStatus] = buf
+		fmt.Println("Migration status changed", original.MigrationStatus, new.MigrationStatus)
+		d[migrationStatus] = []byte(new.MigrationStatus)
 	}
 
 	if original.MaxVotesPerTx != new.MaxVotesPerTx {

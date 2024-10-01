@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
@@ -49,7 +50,10 @@ func TestChangesetMigration(t *testing.T) {
 	// Split the changeset into chunks of 100 bytes each
 	logger := log.NewStdOut(log.InfoLevel)
 
-	migrator, err = SetupMigrator(ctx, db, nil, nil, "migration_test", logger)
+	migrator, err = SetupMigrator(ctx, db, nil, nil, "migration_test", chain.MigrationParams{
+		StartHeight: 0,
+		EndHeight:   0,
+	}, logger)
 	require.NoError(t, err)
 
 	// Create a changeset migration

@@ -144,11 +144,6 @@ type NetworkParameters struct {
 	DisabledGasCosts bool
 
 	// MigrationStatus determines the status of the migration.
-	// It can be one of the following:
-	// - NoActiveMigration: No active migration is in progress.
-	// - MigrationNotStarted: A migration has been approved but not yet activated.
-	// - MigrationInProgress: A migration is in progress.
-	// - MigrationCompleted: A migration has been completed.
 	MigrationStatus types.MigrationStatus
 
 	// MaxVotesPerTx is the maximum number of votes that can be included in a

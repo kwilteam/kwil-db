@@ -215,7 +215,7 @@ func (o *OperatorCLIDriver) GenesisState(ctx context.Context) (*types.MigrationM
 
 func (o *OperatorCLIDriver) ListMigrations(ctx context.Context) ([]*types.Migration, error) {
 	var res []*types.Migration
-	err := o.runCommand(ctx, &res, "migrate", "list")
+	err := o.runCommand(ctx, &res, "migrate", "proposals")
 	if err != nil {
 		return nil, err
 	}

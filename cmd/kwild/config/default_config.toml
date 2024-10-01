@@ -23,6 +23,21 @@
 # The rest of the files & directories are created by the kwild node on startup
 
 #######################################################################
+###                    Migration Config Options                     ###
+#######################################################################
+
+[migration]
+
+# Enables migration mode
+enable = false
+
+# The listening address of the trusted node from the old network. This is used to
+# fetch the genesis state and the block changes from the old network during migration.
+# This is a mandatory field if migration is enabled.
+# from = "http://localhost:8484"
+from = ""
+
+#######################################################################
 ###                      App Config Options                         ###
 #######################################################################
 

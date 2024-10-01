@@ -19,7 +19,6 @@ import (
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
-	"github.com/kwilteam/kwil-db/internal/migrations"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/version"
 	"github.com/kwilteam/kwil-db/internal/voting"
@@ -54,13 +53,6 @@ type P2P interface {
 	ListPeers(ctx context.Context) []string
 }
 
-type Migrator interface {
-	GetChangesetMetadata(height int64) (*migrations.ChangesetMetadata, error)
-	GetChangeset(height int64, index int64) ([]byte, error)
-	GetMigrationMetadata() (*coretypes.MigrationMetadata, error)
-	GetGenesisSnapshotChunk(chunkIdx uint32) ([]byte, error)
-}
-
 type Service struct {
 	log log.Logger
 
@@ -69,7 +61,6 @@ type Service struct {
 	db         sql.DelayedReadTxMaker
 	pricer     Pricer
 	p2p        P2P
-	migrator   Migrator
 
 	cfg     *config.KwildConfig
 	chainID string
@@ -229,7 +220,7 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 
 // NewService constructs a new Service.
 func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp,
-	pricer Pricer, p2p P2P, migrator Migrator, signer auth.Signer, cfg *config.KwildConfig,
+	pricer Pricer, p2p P2P, signer auth.Signer, cfg *config.KwildConfig,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,
@@ -238,7 +229,6 @@ func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txAp
 		chainID:    chainID,
 		pricer:     pricer,
 		p2p:        p2p,
-		migrator:   migrator,
 		cfg:        cfg,
 		log:        logger,
 		db:         db,
@@ -261,11 +251,6 @@ func (svc *Service) Status(ctx context.Context, req *adminjson.StatusRequest) (*
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "node status unavailable", nil)
 	}
 
-	metadata, err := svc.migrator.GetMigrationMetadata()
-	if err != nil || metadata == nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "migration state unavailable", nil)
-	}
-
 	return &adminjson.StatusResponse{
 		Node: status.Node,
 		Sync: convertSyncInfo(status.Sync),
@@ -273,7 +258,6 @@ func (svc *Service) Status(ctx context.Context, req *adminjson.StatusRequest) (*
 			PubKey: status.Validator.PubKey,
 			Power:  status.Validator.Power,
 		},
-		Migration: &metadata.MigrationState,
 	}, nil
 }
 

@@ -98,7 +98,7 @@ type AppConfig struct {
 type MigrationConfig struct {
 	Enable bool `mapstructure:"enable"`
 	// MigrateFrom is the JSON-RPC listening address of the node to replicate the state from.
-	MigrateFrom string `mapstructure:"migrate_from"`
+	MigrateFrom string `mapstructure:"from"`
 }
 
 type SnapshotConfig struct {

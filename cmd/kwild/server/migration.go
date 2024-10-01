@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common/chain"
 	commonCfg "github.com/kwilteam/kwil-db/common/config"
@@ -152,8 +151,8 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	}
 
 	// Check if the genesis state is ready
-	if metadata.MigrationState.Status == types.NoActiveMigration || metadata.MigrationState.Status == types.MigrationNotStarted {
-		return fmt.Errorf("status %s", metadata.MigrationState.Status.String())
+	if metadata.MigrationState.Status == types.NoActiveMigration || metadata.MigrationState.Status == types.ActivationPeriod {
+		return fmt.Errorf("status %s", metadata.MigrationState.Status)
 	}
 
 	// Genesis state should ready
@@ -220,11 +219,6 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	// Update the kwild config
 	m.kwildCfg.AppConfig.GenesisState = m.snapshotFileName
 
-	// persist the kwild config
-	if err := nodecfg.WriteConfigFile(filepath.Join(m.kwildCfg.RootDir, cometbft.ConfigTOMLName), m.kwildCfg); err != nil {
-		return fmt.Errorf("failed to save kwild config: %w", err)
-	}
-
 	m.logger.Info("Genesis state downloaded successfully", log.String("genesis snapshot", m.snapshotFileName))
 	return nil
 }
@@ -233,6 +227,9 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 // It is the caller's responsibility to check if the file exists.
 func validateGenesisState(filename string, appHash []byte) error {
 	// we don't need to check if the file exists since the caller should have already checked it
+	if appHash == nil {
+		return errors.New("genesis file should have app hash set")
+	}
 
 	genesisStateFile, err := os.Open(filename)
 	if err != nil {

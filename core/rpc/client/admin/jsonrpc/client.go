@@ -150,11 +150,6 @@ func (cl *Client) Status(ctx context.Context) (*adminTypes.Status, error) {
 			PubKey: res.Validator.PubKey,
 			Power:  res.Validator.Power,
 		},
-		Migration: adminTypes.MigrationInfo{
-			Status:      res.Migration.Status.String(),
-			StartHeight: res.Migration.StartHeight,
-			EndHeight:   res.Migration.EndHeight,
-		},
 	}, nil
 }
 

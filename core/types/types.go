@@ -90,34 +90,35 @@ type Migration struct {
 	Timestamp        string `json:"timestamp"`          // Timestamp when the migration was proposed
 }
 
-type MigrationStatus int
+// MigrationStatus represents the status of the nodes in the zero downtime migration process.
+type MigrationStatus string
 
 const (
-	NoActiveMigration MigrationStatus = iota
-	MigrationNotStarted
-	MigrationInProgress
-	MigrationCompleted
+	// NoActiveMigration indicates there is currently no migration process happening on the network.
+	NoActiveMigration MigrationStatus = "NoActiveMigration"
+
+	// ActivationPeriod represents the phase after the migration proposal has been approved by the network,
+	// but before the migration begins. During this phase, validators prepare their nodes for migration.
+	ActivationPeriod MigrationStatus = "ActivationPeriod"
+
+	// MigrationInProgress indicates that the nodes on the old network are in migration mode and
+	// records the state changes to be replicated on the new network.
+	MigrationInProgress MigrationStatus = "MigrationInProgress"
+
+	// MigrationCompleted indicates that the migration process has successfully finished on the old network,
+	// and the old network is ready to be decommissioned once the new network has caught up.
+	MigrationCompleted MigrationStatus = "MigrationCompleted"
+
+	// GenesisMigration refers to the phase where the nodes on the new network during migration bootstraps
+	// with the genesis state and replicates the state changes from the old network.
+	GenesisMigration MigrationStatus = "GenesisMigration"
 )
 
-func (status *MigrationStatus) String() string {
-	switch *status {
-	case NoActiveMigration:
-		return "NoActiveMigration"
-	case MigrationNotStarted:
-		return "MigrationNotStarted"
-	case MigrationInProgress:
-		return "MigrationInProgress"
-	case MigrationCompleted:
-		return "MigrationCompleted"
-	default:
-		return "Unknown"
-	}
-}
-
 type MigrationState struct {
-	Status      MigrationStatus `json:"status"`       // Status is the current status of the migration
-	StartHeight int64           `json:"start_height"` // StartHeight is the block height at which the migration started
-	EndHeight   int64           `json:"end_height"`   // EndHeight is the block height at which the migration ends
+	Status        MigrationStatus `json:"status"`                 // Status is the current status of the migration
+	StartHeight   int64           `json:"start_height,omitempty"` // StartHeight is the block height at which the migration started on the old chain
+	EndHeight     int64           `json:"end_height,omitempty"`   // EndHeight is the block height at which the migration ends on the old chain
+	CurrentHeight int64           `json:"chain_height,omitempty"` // CurrentHeight is the current block height of the node
 }
 
 // MigrationMetadata holds metadata about a migration, informing
