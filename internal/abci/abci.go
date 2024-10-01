@@ -59,6 +59,7 @@ type AbciConfig struct {
 	GenesisAllocs      map[string]*big.Int
 	GasEnabled         bool
 	ForkHeights        map[string]*uint64
+	InitialHeight      int64
 
 	ABCIDir string
 }
@@ -989,6 +990,7 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 	//   or when the node joins network at any height)
 	snapshotsDue := a.snapshotter != nil &&
 		(a.snapshotter.IsSnapshotDue(uint64(a.height)) || len(a.snapshotter.ListSnapshots()) == 0)
+	snapshotsDue = snapshotsDue && a.height > max(1, a.cfg.InitialHeight)
 
 	if a.replayingBlocks != nil && snapshotsDue && !a.replayingBlocks() {
 		// we make a snapshot tx but don't directly use it. This is because under the hood,
