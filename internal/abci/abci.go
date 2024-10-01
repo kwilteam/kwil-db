@@ -59,6 +59,7 @@ type AbciConfig struct {
 	GenesisAllocs      map[string]*big.Int
 	GasEnabled         bool
 	ForkHeights        map[string]*uint64
+	InitialHeight      int64
 
 	ABCIDir string
 }
@@ -77,12 +78,6 @@ type AbciApp struct {
 	appHash []byte
 	// height is the current block height
 	height int64
-
-	// initialDone says if this app instances has committed a block yet. This is
-	// a simple way to ensure we don't make a snapshot at the InitialHeight
-	// where it is very possible the first block's header that is stamped with
-	// the genesis time may be quite old and expired for the purpose of statesync.
-	initialDone bool
 
 	cfg   AbciConfig
 	forks forks.Forks
@@ -995,13 +990,7 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 	//   or when the node joins network at any height)
 	snapshotsDue := a.snapshotter != nil &&
 		(a.snapshotter.IsSnapshotDue(uint64(a.height)) || len(a.snapshotter.ListSnapshots()) == 0)
-	// If configured to create snapshots, try to schedule one on the first block
-	// *after* InitialHeight. At this point there should be no other snapshots,
-	// and this is the earliest point we may create a snapshot for which the
-	// block header will not be expired and thus fail validation on a peer
-	// performing statesync. Since we otherwise don't need to store block time
-	// stamps in our meta table, we're checking if we've committed *a* block yet.
-	snapshotsDue = snapshotsDue && a.initialDone
+	snapshotsDue = snapshotsDue && a.height > a.cfg.InitialHeight
 
 	if a.replayingBlocks != nil && snapshotsDue && !a.replayingBlocks() {
 		// we make a snapshot tx but don't directly use it. This is because under the hood,
@@ -1024,8 +1013,6 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 
 	// If a broadcast was accepted during execution of that block, it will be
 	// rechecked and possibly evicted immediately following our commit Response.
-
-	a.initialDone = true
 
 	return &abciTypes.ResponseCommit{}, nil // RetainHeight stays 0 to not prune any blocks
 }

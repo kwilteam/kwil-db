@@ -490,6 +490,7 @@ func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *st
 		GenesisAllocs:      d.genesisCfg.Alloc,
 		GasEnabled:         !d.genesisCfg.ConsensusParams.WithoutGasCosts,
 		ForkHeights:        d.genesisCfg.ForkHeights,
+		InitialHeight:      d.genesisCfg.InitialHeight,
 		ABCIDir:            abciDir,
 	}
 
