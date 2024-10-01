@@ -2,6 +2,18 @@
 
 This guide provides instructions for upgrading to specific [versions](https://github.com/kwilteam/kwil-db/releases) of `kwild`, `kwil-cli`, and `kwil-admin`. It also includes information on on changes to the Core Module (Go SDK).
 
+## v0.9.0
+
+As with previous major releases, there are many change to Kuneiform, transaction execution, and other areas of the application protocol that necessitate a network migration when upgrading from v0.8.
+
+### Upgrading from v0.8.x
+
+See the processes outlined in [#upgrading-from-v0.7.x].
+
+Note that zero downtime migrations are not usable to upgrade from v0.8 to v0.9 since this is the first version that adds the migration system that the old network uses to communicate with the new network during the migration phase.
+
+...
+
 ## v0.8.0
 
 Kwil v0.8 introduces substantial changes to the Kuneiform language (SQL smart contracts), an improved network migration process, a system for coordinating consensus rules changes, and a JSON-RPC server.
@@ -50,7 +62,7 @@ To check if your schemas are compatible with v0.8, use the `kwil-cli utils parse
 
 #### Breaking Changes:
 
-- The HTTP server (`http_listen_addr`) is DEPRECATED and will be removed in the susbequent release.
+- The HTTP server (`http_listen_addr`) is DEPRECATED and will be removed in the subsequent release.
 - The gRPC server (`grpc_listen_addr`) is no longer exposed.
 
 ### Node Configuration Changes
