@@ -90,6 +90,7 @@ const (
 	) RETURNS VOID AS $$
 	DECLARE
 		v_already_processed BOOLEAN;
+		res_type_exists BOOLEAN;
 	BEGIN
 		-- Check if already processed
 		SELECT EXISTS (
@@ -98,6 +99,15 @@ const (
 
 		IF v_already_processed THEN
 			RAISE EXCEPTION 'Resolution with id % has already been processed', v_id;
+		END IF;
+
+		-- Check if resolution type exists
+		SELECT EXISTS (
+			SELECT 1 FROM ` + votingSchemaName + `.resolution_types WHERE name = v_type
+		) INTO res_type_exists;
+		
+		IF NOT res_type_exists THEN
+			RAISE EXCEPTION 'Resolution type % does not exist', v_type;
 		END IF;
 
 		-- If not already processed, insert the resolution
