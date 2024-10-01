@@ -56,6 +56,8 @@ The highlights are:
 
 Upgrading to this release requires a network migration. See the [network migration documents](https://docs.kwil.com/docs/node/network-migrations) for instructions on how to perform a network migration. Only upgrading from v0.8 is supported.
 
+The application's protocol version is [bumped from 0 to 1](https://github.com/kwilteam/kwil-db/commit/be7bd1e5e0a1c4ca4901d0a3342c46bd786df04e). This prevents nodes that are running different versions of Kwil from operating on the same network. The genesis file no longer includes a "version" section since this is determined by the application logic.
+
 In certain cases, deployed schemas may not be compatible with v0.9. See the [Kuneiform Language](#kuneiform-language) section for details.
 
 ## Build Requirements and Dependencies
