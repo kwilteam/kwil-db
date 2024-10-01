@@ -47,8 +47,11 @@ func Test_Voting(t *testing.T) {
 			fn: func(t *testing.T, db sql.DB) {
 				ctx := context.Background()
 
+				err := CreateResolution(ctx, db, dummyEvent, 10, []byte("a"))
+				require.Error(t, err)
+
 				// Can't approve non-existent resolutions
-				err := ApproveResolution(ctx, db, testEvent.ID(), []byte("a"))
+				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("a"))
 				require.Error(t, err)
 
 				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"))
@@ -325,4 +328,8 @@ var testEvent = &types.VotableEvent{
 	Type: testType,
 }
 
+var dummyEvent = &types.VotableEvent{
+	Body: []byte("test"),
+	Type: "blah",
+}
 var testConfirmationThreshold = big.NewRat(2, 3)

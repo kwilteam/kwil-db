@@ -16,12 +16,22 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
 	"github.com/kwilteam/kwil-db/internal/voting"
 	"github.com/kwilteam/kwil-db/internal/voting/broadcast"
 )
 
 const maxVoteIDsPerTx = 100
+
+const testType = "test"
+
+func init() {
+	err := resolutions.RegisterResolution(testType, resolutions.ModAdd, resolutions.ResolutionConfig{})
+	if err != nil {
+		panic(err)
+	}
+}
 
 func Test_Broadcaster(t *testing.T) {
 	type testCase struct {
