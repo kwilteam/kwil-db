@@ -2,7 +2,7 @@ module mykgwapp
 
 go 1.22
 
-require github.com/kwilteam/kwil-db/core v0.3.0-beta.0.20240917145512-e6922733fc1a
+require github.com/kwilteam/kwil-db/core v0.3.0
 
 require (
 	github.com/bits-and-blooms/bitset v1.10.0 // indirect
