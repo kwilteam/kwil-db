@@ -40,6 +40,8 @@ tasks:
         (cd parse; go mod tidy)
         go mod tidy
         (cd test; go mod tidy)
+        (cd core/client/example; go mod tidy)
+        (cd core/gatewayclient/example; go mod tidy)
 
   lint:
     desc: Lint with golangci-lint
