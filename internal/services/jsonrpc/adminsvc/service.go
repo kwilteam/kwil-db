@@ -196,10 +196,10 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 			"approve a resolution",
 			"the hash of the broadcasted approve resolution transaction",
 		),
-		adminjson.MethodDeleteResolution: rpcserver.MakeMethodDef(svc.DeleteResolution,
-			"delete a resolution",
-			"the hash of the broadcasted delete resolution transaction",
-		),
+		// adminjson.MethodDeleteResolution: rpcserver.MakeMethodDef(svc.DeleteResolution,
+		// 	"delete a resolution",
+		// 	"the hash of the broadcasted delete resolution transaction",
+		// ),
 		adminjson.MethodResolutionStatus: rpcserver.MakeMethodDef(svc.ResolutionStatus,
 			"get the status of a resolution",
 			"the status of the resolution"),
@@ -510,6 +510,7 @@ func (svc *Service) ApproveResolution(ctx context.Context, req *adminjson.Approv
 	return svc.sendTx(ctx, res)
 }
 
+/* disabled until the tx route is tested
 func (svc *Service) DeleteResolution(ctx context.Context, req *adminjson.DeleteResolutionRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
 	res := &transactions.DeleteResolution{
 		ResolutionID: req.ResolutionID,
@@ -517,6 +518,7 @@ func (svc *Service) DeleteResolution(ctx context.Context, req *adminjson.DeleteR
 
 	return svc.sendTx(ctx, res)
 }
+*/
 
 func (svc *Service) ResolutionStatus(ctx context.Context, req *adminjson.ResolutionStatusRequest) (*adminjson.ResolutionStatusResponse, *jsonrpc.Error) {
 	readTx := svc.db.BeginDelayedReadTx()

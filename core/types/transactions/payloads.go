@@ -34,7 +34,7 @@ const (
 	PayloadTypeValidatorVoteBodies PayloadType = "validator_vote_bodies"
 	PayloadTypeCreateResolution    PayloadType = "create_resolution"
 	PayloadTypeApproveResolution   PayloadType = "approve_resolution"
-	PayloadTypeDeleteResolution    PayloadType = "delete_resolution"
+	// PayloadTypeDeleteResolution    PayloadType = "delete_resolution"
 )
 
 // payloadConcreteTypes associates a payload type with the concrete type of
@@ -52,7 +52,7 @@ var payloadConcreteTypes = map[PayloadType]Payload{
 	PayloadTypeValidatorVoteBodies: &ValidatorVoteBodies{},
 	PayloadTypeCreateResolution:    &CreateResolution{},
 	PayloadTypeApproveResolution:   &ApproveResolution{},
-	PayloadTypeDeleteResolution:    &DeleteResolution{},
+	// PayloadTypeDeleteResolution:    &DeleteResolution{},
 }
 
 // UnmarshalPayload unmarshals a serialized transaction payload into an instance
@@ -93,7 +93,7 @@ func (p PayloadType) Valid() bool {
 		PayloadTypeTransfer,
 		PayloadTypeCreateResolution,
 		PayloadTypeApproveResolution,
-		PayloadTypeDeleteResolution,
+		// PayloadTypeDeleteResolution,
 		// These should not come in user transactions, but they are not invalid
 		// payload types in general.
 		PayloadTypeValidatorVoteIDs,
@@ -119,7 +119,7 @@ var payloadTypes = map[PayloadType]bool{
 	PayloadTypeValidatorVoteBodies: true,
 	PayloadTypeCreateResolution:    true,
 	PayloadTypeApproveResolution:   true,
-	PayloadTypeDeleteResolution:    true,
+	// PayloadTypeDeleteResolution:    true,
 }
 
 // RegisterPayload registers a new payload type. This should be done on
@@ -666,6 +666,8 @@ func (v *ApproveResolution) UnmarshalBinary(p0 serialize.SerializedData) error {
 	return serialize.Decode(p0, v)
 }
 
+/* no delete resolution for now since it has never been tested and has no immediate use
+
 // DeleteResolution is a payload for deleting a resolution.
 type DeleteResolution struct {
 	ResolutionID *types.UUID
@@ -684,3 +686,4 @@ func (d *DeleteResolution) Type() PayloadType {
 func (d *DeleteResolution) UnmarshalBinary(p0 serialize.SerializedData) error {
 	return serialize.Decode(p0, d)
 }
+*/

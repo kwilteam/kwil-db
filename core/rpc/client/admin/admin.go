@@ -31,6 +31,6 @@ type AdminClient interface {
 	// Resolutions
 	CreateResolution(ctx context.Context, resolution []byte, resolutionType string) ([]byte, error)
 	ApproveResolution(ctx context.Context, resolutionID *types.UUID) ([]byte, error)
-	DeleteResolution(ctx context.Context, resolutionID *types.UUID) ([]byte, error)
+	// DeleteResolution(ctx context.Context, resolutionID *types.UUID) ([]byte, error)
 	ResolutionStatus(ctx context.Context, resolutionID *types.UUID) (*types.PendingResolution, error)
 }

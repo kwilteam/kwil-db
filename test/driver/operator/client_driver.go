@@ -110,9 +110,9 @@ func (a *AdminClientDriver) ApproveMigration(ctx context.Context, migrationResol
 	return a.Client.ApproveResolution(ctx, migrationResolutionID)
 }
 
-func (a *AdminClientDriver) DeleteMigration(ctx context.Context, migrationResolutionID *types.UUID) ([]byte, error) {
-	return a.Client.DeleteResolution(ctx, migrationResolutionID)
-}
+// func (a *AdminClientDriver) DeleteMigration(ctx context.Context, migrationResolutionID *types.UUID) ([]byte, error) {
+// 	return a.Client.DeleteResolution(ctx, migrationResolutionID)
+// }
 
 func (a *AdminClientDriver) GenesisState(ctx context.Context) (*types.MigrationMetadata, error) {
 	return a.Client.GenesisState(ctx)

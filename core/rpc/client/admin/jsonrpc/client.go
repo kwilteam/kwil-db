@@ -256,7 +256,7 @@ func (cl *Client) ApproveResolution(ctx context.Context, resolutionID *types.UUI
 	return res.TxHash, nil
 }
 
-// DeleteResolution deletes a resolution.
+/* DeleteResolution deletes a resolution. This is disabled until the tx route is tested.
 func (cl *Client) DeleteResolution(ctx context.Context, resolutionID *types.UUID) ([]byte, error) {
 	cmd := &adminjson.DeleteResolutionRequest{
 		ResolutionID: resolutionID,
@@ -267,7 +267,7 @@ func (cl *Client) DeleteResolution(ctx context.Context, resolutionID *types.UUID
 		return nil, err
 	}
 	return res.TxHash, nil
-}
+}*/
 
 func (cl *Client) ResolutionStatus(ctx context.Context, resolutionID *types.UUID) (*types.PendingResolution, error) {
 	cmd := &adminjson.ResolutionStatusRequest{
