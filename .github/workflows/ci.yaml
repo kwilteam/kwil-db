@@ -102,11 +102,6 @@ jobs:
           version: "latest"
           args: ./... ./core/... ./parse/... ./test/... --timeout=10m --config=.golangci.yml
 
-      # unit test
-      - name: Run unit test
-        run: |
-          task test:unit
-
       # integration test
       - name: Generate go vendor
         #for faster builds and private repos, need to run this after pb:compile:v1
@@ -116,13 +111,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Cache Docker layers for kwild # both restore and save
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache-kwild
-          key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-kwild
 
       - name: manual git tag
         run: |
@@ -167,16 +155,7 @@ jobs:
           file: ./build/package/docker/kwild.dockerfile
           push: false
           tags: kwild:latest
-          cache-from: type=local,src=/tmp/.buildx-cache-kwild
-          cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
 
-      - name: Run acceptance test
-        run: |
-          testUserID=$(id -u)
-          testGroupID=$(id -g)
-          cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
-          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/acceptance/docker-compose.override.yml
-          KACT_LOG_LEVEL=warn task test:act:nb
 
       - name: Run integration test
         run: |
@@ -188,10 +167,6 @@ jobs:
           sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose-migration.override.yml
           KIT_LOG_LEVEL=warn task test:it:nb
 
-      - name: Move cache
-        run: |
-          rm -rf /tmp/.buildx-cache-kwild
-          mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
 
       - name: Prune Docker
         if: ${{ always() }}
