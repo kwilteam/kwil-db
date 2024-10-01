@@ -22,6 +22,6 @@ const (
 	MethodListPeers         jsonrpc.Method = "admin.list_peers"
 	MethodCreateResolution  jsonrpc.Method = "admin.create_resolution"
 	MethodApproveResolution jsonrpc.Method = "admin.approve_resolution"
-	MethodDeleteResolution  jsonrpc.Method = "admin.delete_resolution"
 	MethodResolutionStatus  jsonrpc.Method = "admin.resolution_status"
+	// MethodDeleteResolution  jsonrpc.Method = "admin.delete_resolution"
 )

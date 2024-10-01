@@ -36,9 +36,9 @@ type ApproveResolutionRequest struct {
 	ResolutionID *types.UUID `json:"resolution_id"` // Id is the resolution ID
 }
 
-type DeleteResolutionRequest struct {
-	ResolutionID *types.UUID `json:"resolution_id"` // Id is the resolution ID
-}
+// type DeleteResolutionRequest struct {
+// 	ResolutionID *types.UUID `json:"resolution_id"` // Id is the resolution ID
+// }
 
 type ResolutionStatusRequest struct {
 	ResolutionID *types.UUID `json:"resolution_id"` // Id is the resolution ID
