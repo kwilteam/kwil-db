@@ -627,12 +627,34 @@ func isDbInitialized(d *coreDependencies) bool {
 	}
 	defer db.Close()
 
-	// Check if the database is empty or initialized previously
-	// If the database is empty, we need to restore the database from the snapshot
-	vals, _ := voting.GetValidators(d.ctx, db)
-	// ERROR: relation "kwild_voting.voters" does not exist
-	// assumption that error is due to the missing table and schema.
-	return len(vals) > 0
+	// Check if the kwild_voting schema exists
+	exists, err := schemaExists(d.ctx, db, "kwild_voting")
+	if err != nil {
+		failBuild(err, "failed to check if schema exists")
+	}
+
+	// If the schema exists, the database is already initialized
+	// If the schema does not exist, the database is not initialized
+	return exists
+}
+
+// schemaExists checks if the schema with the given name exists in the database
+func schemaExists(ctx context.Context, db sql.Executor, schema string) (bool, error) {
+	query := fmt.Sprintf("SELECT 1 FROM information_schema.schemata WHERE schema_name = '%s'", schema)
+	res, err := db.Execute(ctx, query)
+	if err != nil {
+		return false, err
+	}
+
+	if len(res.Rows) == 0 {
+		return false, nil
+	}
+
+	if len(res.Rows) > 1 {
+		return false, fmt.Errorf("more than one schema found with name %s", schema)
+	}
+
+	return true, nil
 }
 
 func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {

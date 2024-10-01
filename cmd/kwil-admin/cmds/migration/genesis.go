@@ -10,17 +10,16 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
-	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/migrations"
 	"github.com/kwilteam/kwil-db/internal/statesync"
 )
 
 var (
-	genesisFileName  = "genesis.json"
+	genesisFileName  = "genesis_info.json"
 	snapshotFileName = "snapshot.sql.gz"
 
-	genesisStateLong = "Download the genesis state for the new network from a trusted node on the source network. The genesis state includes the genesis config file (genesis.json), genesis snapshot (snapshot.sql.gz), and the migration info such as the start and end heights. The genesis state is saved in the root directory specified by the `--out-dir` flag. If there is no approved migration or if the migration has not started yet, the command will return a message indicating that there is no genesis state to download."
+	genesisStateLong = "Download the genesis state for the new network from a trusted node on the source network. The genesis state includes the genesis info file (genesis_info.json) and genesis snapshot (snapshot.sql.gz). The genesis state is saved in the root directory specified by the `--out-dir` flag. If there is no approved migration or if the migration has not started yet, the command will return a message indicating that there is no genesis state to download. The genesis info file includes the app hash, validators and the migration settings required to manually start the new network."
 
 	genesisStateExample = `# Download the genesis state to the default output directory (~/.genesis-state)
 kwil-admin migrate genesis-state
@@ -86,30 +85,16 @@ func genesisStateCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			genCfg := chain.GenesisConfig{
-				DataAppHash:   metadata.GenesisInfo.AppHash,
-				InitialHeight: metadata.MigrationState.StartHeight,
-				ConsensusParams: &chain.ConsensusParams{
-					BaseConsensusParams: chain.BaseConsensusParams{
-						Migration: chain.MigrationParams{
-							StartHeight: metadata.MigrationState.StartHeight,
-							EndHeight:   metadata.MigrationState.EndHeight,
-						},
-					},
-				},
-			}
-
-			for _, nv := range metadata.GenesisInfo.Validators {
-				genCfg.Validators = append(genCfg.Validators, &chain.GenesisValidator{
-					Name:   nv.Name,
-					PubKey: nv.PubKey,
-					Power:  nv.Power,
-				})
+			genInfo := &genesisInfo{
+				AppHash:     metadata.GenesisInfo.AppHash,
+				Validators:  metadata.GenesisInfo.Validators,
+				StartHeight: metadata.MigrationState.StartHeight,
+				EndHeight:   metadata.MigrationState.EndHeight,
 			}
 
 			// Print the genesis state to the genesis.json file
 			genesisFile := filepath.Join(expandedDir, genesisFileName)
-			err = genCfg.SaveAs(genesisFile)
+			err = genInfo.saveAs(genesisFile)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -152,6 +137,25 @@ func genesisStateCmd() *cobra.Command {
 	return cmd
 }
 
+type genesisInfo struct {
+	// AppHash is the application hash of the old network at the StartHeight
+	AppHash []byte `json:"app_hash"`
+	// Validators is the list of validators that the new network should start with
+	Validators []*types.NamedValidator `json:"validators"`
+
+	StartHeight int64 `json:"start_height"`
+	EndHeight   int64 `json:"end_height"`
+}
+
+func (g *genesisInfo) saveAs(file string) error {
+	data, err := json.MarshalIndent(g, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(file, data, 0644)
+}
+
 type MigrationState struct {
 	Info        types.MigrationState `json:"state"`
 	GenesisFile string               `json:"genesis_file"`
@@ -178,7 +182,7 @@ func (m *MigrationState) MarshalText() ([]byte, error) {
 	return []byte(fmt.Sprintf("Migration State:\n"+
 		"\tStart Height: %d\n"+
 		"\tEnd Height: %d\n"+
-		"\tGenesis File: %s\n"+
+		"\tGenesis Info File: %s\n"+
 		"\tSnapshot File: %s\n",
 		m.Info.StartHeight, m.Info.EndHeight, m.GenesisFile, m.Snapshot)), nil
 }

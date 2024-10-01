@@ -14,11 +14,11 @@ import (
 
 func listCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list",
+		Use:   "proposals",
 		Short: "List all the pending migration proposals.",
 		Long:  "List all the pending migration proposals.",
 		Example: `# List all the pending migration proposals.
-kwil-admin migrate list`,
+kwil-admin migrate proposals`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

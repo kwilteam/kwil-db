@@ -114,7 +114,7 @@ enable = {{ .MigrationConfig.Enable }}
 # The listening address of the trusted node from the old network. This is used to
 # fetch the genesis state and the block changes from the old network during migration.
 # This is a mandatory field if migration is enabled.
-migrate_from = "{{ .MigrationConfig.MigrateFrom }}"
+from = "{{ .MigrationConfig.MigrateFrom }}"
 
 #######################################################################
 ###                      App Config Options                         ###
