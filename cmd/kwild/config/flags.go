@@ -29,7 +29,7 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 
 	// Migration flags:
 	flagSet.BoolVar(&cfg.MigrationConfig.Enable, "migration.enable", cfg.MigrationConfig.Enable, "Enable migration")
-	flagSet.StringVar(&cfg.MigrationConfig.MigrateFrom, "migration.from", cfg.MigrationConfig.MigrateFrom, format("%s JSON-RPC listening address of the node to replicate the state from."))
+	flagSet.StringVar(&cfg.MigrationConfig.MigrateFrom, "migration.migrate-from", cfg.MigrationConfig.MigrateFrom, format("%s JSON-RPC listening address of the node to replicate the state from."))
 
 	// General APP flags:
 	flagSet.StringVar(&cfg.AppConfig.PrivateKeyPath, "app.private-key-path", cfg.AppConfig.PrivateKeyPath, "Path to the node private key file")
