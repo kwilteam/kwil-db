@@ -9,7 +9,6 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/common/functions"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -53,7 +52,7 @@ func init() {
 		},
 
 		ParamsUpdates: &consensus.ParamUpdates{
-			Version: &chain.VersionParams{
+			Version: &consensus.VersionParams{
 				App: 9876,
 			},
 		},

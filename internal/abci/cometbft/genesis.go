@@ -27,8 +27,9 @@ func AddrBookPath(chainRootDir string) string {
 
 // ExtractConsensusParams creates cometbft's ConsensusParams from kwild's, which
 // includes a subset of cometbft's and other parameters that pertain to the ABCI
-// application (kwild) rather than the consensus engine (cometbft).
-func ExtractConsensusParams(cp *chain.BaseConsensusParams) *cmtTypes.ConsensusParams {
+// application (kwild) rather than the consensus engine (cometbft). The
+// appVersion indicates state machine logic and it not an application parameter.
+func ExtractConsensusParams(cp *chain.BaseConsensusParams, appVersion uint64) *cmtTypes.ConsensusParams {
 	return &cmtTypes.ConsensusParams{
 		Block: cmtTypes.BlockParams{
 			MaxBytes: cp.Block.MaxBytes,
@@ -40,7 +41,7 @@ func ExtractConsensusParams(cp *chain.BaseConsensusParams) *cmtTypes.ConsensusPa
 			MaxBytes:        cp.Evidence.MaxBytes,
 		},
 		Version: cmtTypes.VersionParams{
-			App: cp.Version.App,
+			App: appVersion,
 		},
 		Validator: cmtTypes.ValidatorParams{
 			PubKeyTypes: cp.Validator.PubKeyTypes,
@@ -64,9 +65,6 @@ func MergeConsensusParams(cometbftParams *cmtTypes.ConsensusParams, abciParams *
 				MaxAgeNumBlocks: cometbftParams.Evidence.MaxAgeNumBlocks,
 				MaxAgeDuration:  cometbftParams.Evidence.MaxAgeDuration,
 				MaxBytes:        cometbftParams.Evidence.MaxBytes,
-			},
-			Version: chain.VersionParams{
-				App: cometbftParams.Version.App,
 			},
 			Validator: chain.ValidatorParams{
 				PubKeyTypes: cometbftParams.Validator.PubKeyTypes,
