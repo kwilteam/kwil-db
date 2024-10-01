@@ -18,7 +18,7 @@ require (
 	github.com/ethereum/go-ethereum v1.14.8
 	github.com/kwilteam/kwil-db v0.7.2
 	github.com/kwilteam/kwil-db/core v0.3.0
-	github.com/kwilteam/kwil-db/parse v0.2.1-0.20240910054312-c46b876071f0
+	github.com/kwilteam/kwil-db/parse v0.3.0
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go v0.31.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.29.2-0.20240321072901-c83b93cb1eff
