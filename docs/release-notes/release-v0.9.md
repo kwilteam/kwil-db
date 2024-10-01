@@ -216,7 +216,7 @@ The new setting `--log.file-roll-size` is a number in KB at which the current lo
 
 For example, when an uncompressed `kwild.log` file reaches the configured size threshold, it will create "kwild.log.1.gz", and kwild.log be cleared. When it reaches the threshold again, it will create "kwild.log.2.gz" and so on.
 
-```
+```plain
 -rw-r--r--   1 usr grp   18433 Sep 12 11:43 kwild.log
 -rw-r--r--   1 usr grp    3296 Sep 11 17:50 kwild.log.1.gz
 -rw-r--r--   1 usr grp    3596 Sep 11 17:52 kwild.log.2.gz
@@ -286,7 +286,7 @@ Please note the changes to Kuneiform and the parser in [Kuneiform Changes](#kune
 ### Breaking Changes to Extension Interfaces
 
 * Removed the transaction-specific information from `common.ExecutionData` to avoid duplication with `common.TxContext`. Changed the `common/Engine.CreateDataset()` and `common/Engine.DeleteDataset()` methods to take a transaction context as the first parameter, replacing the `context.Context` and removing the fourth parameter `common.TransactionData` which previously contained the transaction data. Changed the `common/Engine.Procedure()` and `common/Engine.Execute()` methods to take a transaction context as the first parameter, replacing the `context.Context`. Extensions that previously passed transaction information to any of the above methods using either `common.TransactionData` or `common.ExecutionData` should now pass the information to each methods' first parameter `common.TxContext`. `common.Route.PreTx()` and `common.Route.InTx()` methods now use `common.TxContext` as the first parameter, instead of `context.Context`.
-([c55b5f4](<https://github.com/kwilteam/kwil-db/commit/c55b5f4056f99dbf71d9a5803b37bb8feedfcce4>)). 
+([c55b5f4](<https://github.com/kwilteam/kwil-db/commit/c55b5f4056f99dbf71d9a5803b37bb8feedfcce4>)).
 
 ## Minor Features and Changes
 
