@@ -985,7 +985,7 @@ func (d *approveResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx
 		return transactions.CodeUnknownError, err
 	}
 	if resolution == nil {
-		return transactions.CodeUnknownError, fmt.Errorf("resolution with ID %s does not exist", d.resolutionID)
+		return transactions.CodeInvalidResolutionType, fmt.Errorf("resolution with ID %s does not exist", d.resolutionID)
 	}
 
 	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus != types.NoActiveMigration &&
@@ -1001,6 +1001,8 @@ func (d *approveResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx
 
 	return 0, nil
 }
+
+/* enable and test this in the future
 
 type deleteResolutionRoute struct {
 	resolutionID *types.UUID
@@ -1061,3 +1063,4 @@ func (d *deleteResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 
 	return 0, nil
 }
+*/
