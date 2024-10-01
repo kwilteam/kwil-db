@@ -78,9 +78,11 @@ func expectTxSuccess(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash 
 			require.Less(collect, notFoundCount, 4, "transaction still not found after several attempts")
 			t.Logf("TRANSACTION NOT FOUND!") // but keep checking
 			notFoundCount++
-		} else if !errors.Is(err, driver.ErrTxNotConfirmed) {
-			t.Logf("other unexpected error: %v", err)
-			collect.FailNow()
+		} else {
+			// if !errors.Is(err, driver.ErrTxNotConfirmed) {
+			// t.Logf("other unexpected error: %v", err)
+			// collect.FailNow()
+			require.NotErrorIs(collect, err, driver.ErrTxNotConfirmed)
 		}
 
 		// require.ErrorIs(collect, err, driver.ErrTxNotConfirmed) // fail fast if unexpected error
@@ -101,15 +103,13 @@ func expectTxFail(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []b
 	var notFoundCount int
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		err := spec.TxSuccess(ctx, txHash)
-		// require.Error(collect, err, "transaction succeeded") // fail fast with require if it executed without error
-		assert.Error(collect, err, "transaction succeeded") // we can't fail fast cleanly without https://github.com/stretchr/testify/issues/1396
+		require.Error(collect, err, "transaction succeeded") // fail fast with require if it executed without error
 
 		// Tick again if not found, for now (see expectTxSuccess).
 		// assert.NotErrorIs(collect, err, driver.ErrTxNotFound)
 		if errors.Is(err, driver.ErrTxNotFound) {
 			require.Less(collect, notFoundCount, 4, "transaction still not found after several attempts")
 			t.Logf("TRANSACTION NOT FOUND!") // but keep checking
-			collect.Errorf("transaction not found")
 			notFoundCount++
 		} else {
 			assert.NotErrorIs(collect, err, driver.ErrTxNotConfirmed) // tick again if not confirmed

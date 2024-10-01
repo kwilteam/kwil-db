@@ -22,7 +22,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.9.1-0.20241001093137-16a09b708612
 	github.com/tonistiigi/go-rosetta v0.0.0-20220804170347-3f4430f2d346
 	go.uber.org/zap v1.27.0
 	golang.org/x/sync v0.8.0
