@@ -52,6 +52,24 @@ import (
 	"github.com/kwilteam/kwil-db/internal/voting/broadcast"
 )
 
+var (
+	// AppVersion is the application's "protocol version", signaling changes in
+	// the application's component of the state machine that could impact
+	// consensus. This version should be bumped whenever changes in the
+	// application's logic might cause nodes with different versions to come to
+	// different conclusions about the validity of transactions, blocks, votes,
+	// or the resulting state.
+	//
+	// It should NOT be bumped for changes that do not affect consensus, such as
+	// performance optimizations, logging updates, or bug fixes that do not
+	// alter how transactions are validated or blocks are processed.
+	//
+	// Custom applications, especially those use extensions to extend or modify
+	// the state machine's logic, should set this variable appropriately prior
+	// to starting the Server or executing the root command.
+	AppVersion uint64 = 1
+)
+
 // initStores prepares the datastores with an atomic DB transaction. These
 // actions are performed outside of ABCI's DB sessions. The stores should not
 // keep the db after initialization. Their functions accept a DB connection.
@@ -486,7 +504,7 @@ func buildAbci(d *coreDependencies, db *pg.DB, txApp abci.TxApp, snapshotter *st
 	cfg := &abci.AbciConfig{
 		GenesisAppHash:     d.genesisCfg.ComputeGenesisHash(),
 		ChainID:            d.genesisCfg.ChainID,
-		ApplicationVersion: d.genesisCfg.ConsensusParams.Version.App,
+		ApplicationVersion: AppVersion,
 		GenesisAllocs:      d.genesisCfg.Alloc,
 		GasEnabled:         !d.genesisCfg.ConsensusParams.WithoutGasCosts,
 		ForkHeights:        d.genesisCfg.ForkHeights,

@@ -71,7 +71,6 @@ type GenesisValidator struct {
 type BaseConsensusParams struct {
 	Block     BlockParams     `json:"block"`
 	Evidence  EvidenceParams  `json:"evidence"`
-	Version   VersionParams   `json:"version"`
 	Validator ValidatorParams `json:"validator"`
 	Votes     VoteParams      `json:"votes"`
 	ABCI      ABCIParams      `json:"abci"`
@@ -123,10 +122,6 @@ type VoteParams struct {
 	MaxVotesPerTx int64 `json:"max_votes_per_tx"`
 }
 
-type VersionParams struct {
-	App uint64 `json:"app"`
-}
-
 type MigrationParams struct {
 	// StartHeight is the height from which the state from the old chain is to be migrated.
 	StartHeight int64 `json:"start_height,omitempty"`
@@ -154,9 +149,6 @@ func defaultConsensusParams() *ConsensusParams {
 				MaxAgeNumBlocks: 100_000,        // 27.8 hrs at 1 block/s
 				MaxAgeDuration:  48 * time.Hour, // 2 days
 				MaxBytes:        1024 * 1024,    // 1 MiB
-			},
-			Version: VersionParams{
-				App: 0,
 			},
 			Validator: ValidatorParams{
 				PubKeyTypes: []string{abciPubKeyTypeEd25519},

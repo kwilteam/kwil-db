@@ -55,9 +55,6 @@ func updateConsensusParams(p *chain.ConsensusParams, up *consensus.ParamUpdates)
 		p.Evidence.MaxAgeNumBlocks = up.Evidence.MaxAgeNumBlocks
 		p.Evidence.MaxBytes = up.Evidence.MaxBytes
 	}
-	if up.Version != nil { // if set, expect all set
-		p.Version.App = up.Version.App
-	}
 	if up.Validator != nil {
 		if pkt := up.Validator.PubKeyTypes; len(pkt) > 0 {
 			p.Validator.PubKeyTypes = pkt

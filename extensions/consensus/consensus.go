@@ -141,10 +141,25 @@ type Hardfork struct {
 type ParamUpdates struct {
 	Block     *chain.BlockParams     `json:"block,omitempty"`
 	Evidence  *chain.EvidenceParams  `json:"evidence,omitempty"`
-	Version   *chain.VersionParams   `json:"version,omitempty"`
+	Version   *VersionParams         `json:"version,omitempty"`
 	Validator *chain.ValidatorParams `json:"validator,omitempty"`
 	Votes     *chain.VoteParams      `json:"votes,omitempty"`
 	ABCI      *chain.ABCIParams      `json:"abci,omitempty"`
+}
+
+// VersionParams contains an update to the application protocol version to give
+// to cometbft. While not required, this can help proactively signal a new
+// application version with altered logic that affects state machine. For
+// instance, a coordinated height-based upgrade to consensus logic could be
+// accompanied by an update to this version to ensure all nodes made the same
+// update at the same height. Canonical configurable hard fork activations on
+// the other hand would not do this; only hard-coded changes.
+//
+// In the case of new major release that has incompatible logic, a global
+// AppVersion would be bumped (compared to the old network) at genesis instead
+// of using this update, which is to change a live network.
+type VersionParams struct {
+	App uint64 `json:"app"`
 }
 
 // ResolutionMod defines a modification to a consensus resolution used by the
@@ -237,7 +252,7 @@ func MergeConsensusUpdates(params, update *ParamUpdates) {
 	if update.Version != nil {
 		if update.Version.App > 0 {
 			if params.Version == nil {
-				params.Version = new(chain.VersionParams)
+				params.Version = new(VersionParams)
 			}
 			params.Version.App = update.Version.App
 		}

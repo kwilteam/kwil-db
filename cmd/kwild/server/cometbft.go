@@ -141,10 +141,12 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 
 // extractGenesisDoc is used by cometbft while initializing the node to extract
 // the genesis configuration. Note that cometbft's GenesisDoc is a subset of
-// kwild's genesis file.
+// kwild's genesis file. The app version set in AppVersion is used to supply
+// cometbft with the application protocol version, which is determined by the
+// app code rather than a configurable value in our genesis config.
 func extractGenesisDoc(g *chain.GenesisConfig) (*cmttypes.GenesisDoc, error) {
 	// BaseConsensusParms => cometbft's ConsensusParms
-	consensusParams := cometbft.ExtractConsensusParams(&g.ConsensusParams.BaseConsensusParams)
+	consensusParams := cometbft.ExtractConsensusParams(&g.ConsensusParams.BaseConsensusParams, AppVersion)
 
 	genDoc := &cmttypes.GenesisDoc{
 		ChainID:         g.ChainID,
