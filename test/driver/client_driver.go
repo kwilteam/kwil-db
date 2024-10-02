@@ -66,7 +66,7 @@ func (d *KwildClientDriver) TxSuccess(ctx context.Context, txHash []byte) error 
 	resp, err := d.clt.TxQuery(ctx, txHash)
 	if err != nil {
 		if errors.Is(err, rpcclient.ErrNotFound) {
-			return ErrTxNotConfirmed // not quite, but for this driver it's a retry condition
+			return ErrTxNotFound // fix this
 		}
 		return fmt.Errorf("failed to query: %w", err)
 	}
@@ -233,6 +233,7 @@ func (d *KwildClientDriver) TxInfo(ctx context.Context, hash []byte) (*transacti
 	res, err := d.clt.TxQuery(ctx, hash)
 	if err != nil {
 		if strings.Contains(err.Error(), "transaction not found") {
+			fmt.Println("TX NOT FOUND in TxInfo")
 			// try again, hacking around comet's mempool inconsistency
 			time.Sleep(500 * time.Millisecond)
 			return d.clt.TxQuery(ctx, hash)

@@ -208,7 +208,7 @@ func (d *KwilCliDriver) TxSuccess(_ context.Context, txHash []byte) error {
 	out, err := mustRun[respTxQuery](cmd, d.logger)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return ErrTxNotConfirmed // not quite, but for this driver it's a retry condition
+			return ErrTxNotFound // This is what we need to solve!  See the docs on this error type.
 		}
 		return fmt.Errorf("failed to query tx: %w", err)
 	}
@@ -609,6 +609,7 @@ func (d *KwilCliDriver) TxInfo(ctx context.Context, hash []byte) (*transactions.
 	out, err := mustRun[*transactions.TcTxQueryResponse](cmd, d.logger)
 	if err != nil {
 		if strings.Contains(err.Error(), "transaction not found") {
+			fmt.Println("TX NOT FOUND in TxInfo!")
 			// try again, hacking around comet's mempool inconsistency
 			time.Sleep(500 * time.Millisecond)
 			res2, err := mustRun[*transactions.TcTxQueryResponse](cmd, d.logger)
