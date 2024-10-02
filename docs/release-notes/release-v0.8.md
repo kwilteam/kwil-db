@@ -200,7 +200,7 @@ type Signature struct {
 
 #### `core/types`
 
-- The `Schema` struct and all of it's composing types are now mirrored in `core/types.Schema`.
+- The `Schema` struct and all of its composing types are now mirrored in `core/types.Schema`.
 - Added many new type definitions to support procedures and strongly typed values. See `core/types/transactions/payload_schema.go`.
 
 ##### Breaking Changes
