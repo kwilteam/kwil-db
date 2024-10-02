@@ -275,7 +275,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		s.authSHA = slices.Clone(authSHA[:])
 	} // otherwise no basic auth check
 
-	// JSON-RPC handler (POST)
+	// JSON-RPC handler (POST+OPTIONS)
 	var h http.Handler
 	h = http.HandlerFunc(s.handlerJSONRPCV1) // last, after middleware below
 	h = http.MaxBytesHandler(h, int64(cfg.reqSzLimit))
@@ -290,7 +290,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	h = realIPHandler(h, cfg.proxyCount) // for effective rate limiting
 	h = recoverer(h, log)                // first, wrap with defer and call next ^
 
-	mux.Handle("POST "+pathRPCV1, h)
+	mux.Handle(pathRPCV1, h) // do not add method! We need to handle OPTIONS for CORS, but only POST in JSON-RPC
 
 	// NOTE: for challenges at server level (above JSON-RPC methods):
 	// mux.Handle(pathRPCV1 + "/challenge", challengeHandler)
@@ -307,13 +307,21 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	})
 	specHandler = corsHandler(specHandler)
 	specHandler = recoverer(specHandler, log)
-	mux.Handle("GET "+pathSpecV1, specHandler)
+	mux.Handle(pathSpecV1, specHandler)
 
 	// aggregate health endpoint handler
-	mux.Handle("GET "+pathHealthV1, http.HandlerFunc(s.healthMethodHandler))
+	var healthHandler http.Handler
+	healthHandler = http.HandlerFunc(s.healthMethodHandler)
+	healthHandler = corsHandler(healthHandler)
+	healthHandler = recoverer(healthHandler, log)
+	mux.Handle(pathHealthV1, healthHandler)
 
 	// service specific health endpoint handler with wild card for service
-	mux.Handle("GET "+pathSvcHealthV1, http.HandlerFunc(s.handleSvcHealth))
+	var userHealthHandler http.Handler
+	userHealthHandler = http.HandlerFunc(s.handleSvcHealth)
+	userHealthHandler = corsHandler(userHealthHandler)
+	userHealthHandler = recoverer(userHealthHandler, log)
+	mux.Handle(pathSvcHealthV1, userHealthHandler)
 
 	return s, nil
 }
@@ -326,6 +334,10 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 //
 // The response body includes a JSON object provided by the service.
 func (s *Server) handleSvcHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	svcName := r.PathValue("svc")
 	if svcName == "" {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
@@ -585,6 +597,11 @@ func (s *Server) ServeOn(ctx context.Context, ln net.Listener) error {
 // method should only handle POST requests, so configure the request router as
 // appropriate.
 func (s *Server) handlerJSONRPCV1(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required for JSON-RPC", http.StatusMethodNotAllowed)
+		return
+	}
+
 	// Close the connection when response handling is completed.
 	w.Header().Set("Connection", "close")
 	w.Header().Set("Content-Type", "application/json")

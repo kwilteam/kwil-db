@@ -110,6 +110,11 @@ func (s *Server) health(ctx context.Context) *jsonrpc.HealthResponse {
 }
 
 func (s *Server) healthMethodHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+
 	resp := s.health(r.Context())
 
 	status := http.StatusOK
