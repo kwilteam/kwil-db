@@ -90,9 +90,12 @@ jobs:
         run: |
           ./scripts/kuneiform/check_tidy
 
+      - name: Initialize Go workspace
+        run: |
+          task work
+
       - name: Compile packages, apps, and specs
-        run: | # enter workspace mode to do this on one line
-          go work init . ./test ./core ./parse
+        run: |
           go build -mod=readonly ./... ./core/... ./parse/... ./test/specifications/
 
       - name: Lint
@@ -141,11 +144,11 @@ jobs:
           task build:admin
 
       - name: compile the core/client/example app
-        run: GOWORK=off go build -o /dev/null
+        run: go build -o /dev/null
         working-directory: core/client/example
 
       - name: compile the core/gatewayclient/example app
-        run: GOWORK=off go build -o /dev/null
+        run: go build -o /dev/null
         working-directory: core/gatewayclient/example
 
       - name: Pull math extension docker image

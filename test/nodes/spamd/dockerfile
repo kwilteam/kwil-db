@@ -5,10 +5,9 @@ RUN mkdir -p /var/run/kwil
 RUN chmod 777 /var/run/kwil
 
 COPY . .
-RUN rm go.work
 
 WORKDIR /app/test/nodes/spamd
-RUN GOWORK=off CGO_ENABLED=0 go build -v  -ldflags -extldflags=-static -o /app/dist/spamd
+RUN CGO_ENABLED=0 go build -v  -ldflags -extldflags=-static -o /app/dist/spamd
 RUN chmod +x /app/dist/spamd 
 RUN /app/dist/spamd -v
 
