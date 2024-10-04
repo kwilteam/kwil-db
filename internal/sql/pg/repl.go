@@ -148,7 +148,7 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
 	var inStream bool
 	var seq int64 = -1
 
-	stats := new(walStats)
+	stats := &walStats{rels: make(map[string]int)}
 
 	// The following loop receives messages from the replication receiver
 	// connection. This includes ALL message types, not just replication
@@ -271,8 +271,9 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64,
 				logger.Logf(lvl, "Commit hash %x, seq %d, LSN %v (%d) delta %d",
 					cHash, seq, xld.WALStart, xld.WALStart, lsnDelta)
 
-				logger.Debug("wal commit stats", log.Uint("inserts", stats.inserts), log.Uint("updates", stats.updates),
-					log.Uint("deletes", stats.deletes), log.Uint("truncates", stats.truncs))
+				logger.Log(lvl, "wal commit stats", log.Uint("inserts", stats.inserts), log.Uint("updates", stats.updates),
+					log.Uint("deletes", stats.deletes), log.Uint("truncates", stats.truncs),
+					log.String("rels", fmt.Sprintln(stats.rels)))
 				stats.reset()
 				seq = -1 // next commit may be untracked, forget this one
 			}
@@ -288,10 +289,13 @@ type walStats struct {
 	updates uint64
 	deletes uint64
 	truncs  uint64
+	rels    map[string]int
 }
 
 func (ws *walStats) reset() {
-	*ws = walStats{}
+	*ws = walStats{
+		rels: map[string]int{},
+	}
 }
 
 // decodeWALData decodes a wal data message given known relations, returning
@@ -309,9 +313,14 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 
 	switch logicalMsg := logicalMsg.(type) {
 	case *pglogrepl.RelationMessageV2:
-		logger.Debugf(" [msg] Relation: %d (%v.%v)", logicalMsg.RelationID,
+		_, seenRel := relations[logicalMsg.RelationID]
+		lvl := log.DebugLevel
+		if !seenRel { // first time seeing this relation (since starting up)
+			lvl = log.InfoLevel
+			relations[logicalMsg.RelationID] = logicalMsg
+		}
+		logger.Logf(lvl, " [msg] Relation: %d (%v.%v)", logicalMsg.RelationID,
 			logicalMsg.Namespace, logicalMsg.RelationName)
-		relations[logicalMsg.RelationID] = logicalMsg
 
 	case *pglogrepl.BeginMessage:
 		logger.Debugf(" [msg] Begin: LSN %v (%d)", logicalMsg.FinalLSN, uint64(logicalMsg.FinalLSN))
@@ -346,6 +355,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 			rel.Namespace, rel.RelationName, &lazyValues{logicalMsg.Tuple.Columns, rel})
 
 		stats.inserts++
+		stats.rels[relName]++
 
 	case *pglogrepl.UpdateMessageV2:
 		rel, ok := relations[logicalMsg.RelationID]
@@ -386,6 +396,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 			oldValues, &lazyValues{logicalMsg.NewTuple.Columns, rel})
 
 		stats.updates++
+		stats.rels[relName]++
 
 	case *pglogrepl.DeleteMessageV2:
 		rel, ok := relations[logicalMsg.RelationID]
@@ -407,6 +418,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 			&lazyValues{logicalMsg.OldTuple.Columns, rel})
 
 		stats.deletes++
+		stats.rels[relName]++
 
 	case *pglogrepl.TruncateMessageV2:
 		rels := make(map[uint32]*pglogrepl.RelationMessageV2)
@@ -418,7 +430,9 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 			}
 			if okSchema(rel.Namespace) {
 				rels[relID] = rel
-				// relName := rel.Namespace + "." + rel.RelationName
+				relName := rel.Namespace + "." + rel.RelationName
+				stats.truncs++
+				stats.rels[relName]++
 			}
 		}
 		if len(rels) == 0 {
@@ -427,7 +441,6 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 		}
 
 		hasher.Write(encodeTruncateMsg(rels, &logicalMsg.TruncateMessage))
-		stats.truncs++
 
 	case *pglogrepl.TypeMessageV2:
 		logger.Debugf("type message: %v %v %v", logicalMsg.Name, logicalMsg.Namespace, logicalMsg.DataType)
