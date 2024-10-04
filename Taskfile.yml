@@ -7,19 +7,16 @@ tasks:
 
   work:
     cmds:
-      - go work init . ./core ./test ./parse
+      - cmd: go work init . ./core ./test ./parse ./core/client/example ./core/gatewayclient/example
+        ignore_error: true
+    generates:
+      - go.work
 
-  install:deps:
-    aliases: [tools]
+  tools:
+    aliases: [install:deps]
     desc: Install tools required to build this app
     cmds:
-      - go install "golang.org/x/tools/cmd/goimports@v0.14.0"
-
-  init:
-    desc: Initialize the project
-    deps: [install:deps]
-    cmds:
-      - go mod download
+      - go install "golang.org/x/tools/cmd/goimports@v0.25.0"
 
   fmt:
     desc: Format the code
@@ -110,9 +107,9 @@ tasks:
     desc: Generate vendor
     deps:
       - task: vendor:clean
+      - task: work
     cmds:
-      # somehow GOWORK=off has no effect on local dev workflow, it will include local module changes
-      - GOWORK=off go mod vendor
+      - go work vendor
 
   vendor:clean:
     desc: Clean vendor

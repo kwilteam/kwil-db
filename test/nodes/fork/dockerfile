@@ -5,10 +5,9 @@ RUN mkdir -p /var/run/kwil
 RUN chmod 777 /var/run/kwil
 
 COPY . .
-RUN rm go.work
 
 WORKDIR /app/test/nodes/fork
-RUN GOWORK=off CGO_ENABLED=0 go build -v  -ldflags -extldflags=-static -o /app/dist/forkd
+RUN CGO_ENABLED=0 go build -v  -ldflags -extldflags=-static -o /app/dist/forkd
 RUN chmod +x /app/dist/forkd 
 RUN /app/dist/forkd -v
 
