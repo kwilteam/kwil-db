@@ -152,12 +152,6 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to create custom collations: %w", err)
 	}
 
-	// Ensure all tables that are created with no primary key or unique index
-	// are altered to have "full replication identity" for UPDATE and DELETES.
-	if err = ensureTriggerReplIdentity(ctx, conn); err != nil {
-		return nil, fmt.Errorf("failed to create replication identity trigger: %w", err)
-	}
-
 	// Create the publication that is required for logical replication.
 	if err = ensurePublication(ctx, conn); err != nil {
 		return nil, fmt.Errorf("failed to create publication: %w", err)
