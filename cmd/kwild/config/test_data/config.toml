@@ -282,3 +282,5 @@ discovery_time = "15s"
 # The timeout duration before re-requesting a chunk, possibly from a different
 # peer (default: 1 minute).
 chunk_request_timeout = "10s"
+
+trust_period = "1h"

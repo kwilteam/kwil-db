@@ -3,6 +3,7 @@ package config
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -28,6 +29,7 @@ func Test_Config_Toml(t *testing.T) {
 	assert.Equal(t, "localhost:50052", cfg.AppCfg.ExtensionEndpoints[0])
 	assert.Equal(t, "localhost:50053", cfg.AppCfg.ExtensionEndpoints[1])
 
+	assert.Equal(t, Duration(1*time.Hour), cfg.ChainCfg.StateSync.TrustPeriod)
 	// TODO: Add bunch of other validations for different types
 }
 
