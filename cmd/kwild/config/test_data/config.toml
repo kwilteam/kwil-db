@@ -298,6 +298,7 @@ chunk_request_timeout = "10s"
 
 # Note: If the requested chunk is not received for a duration of 2 minutes (hard-coded default), 
 # the state sync process is aborted and the node will fall back to the regular block sync process.
+trust_period = "1h"
 
 [instrumentation]
 
