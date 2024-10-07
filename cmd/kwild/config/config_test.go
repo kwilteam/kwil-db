@@ -47,7 +47,7 @@ func Test_Config_Toml(t *testing.T) {
 
 	// TODO: Add bunch of other validations for different types
 	// 1h -> 3600s
-	assert.Equal(t, time.Duration(1*time.Hour), cfg.ChainConfig.StateSync.TrustPeriod.Dur())
+	assert.Equal(t, 1*time.Hour, cfg.ChainConfig.StateSync.TrustPeriod.Dur())
 	assert.Equal(t, config.Duration(1*time.Hour), cfg.ChainConfig.StateSync.TrustPeriod)
 }
 
