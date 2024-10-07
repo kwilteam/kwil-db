@@ -7,6 +7,7 @@ DECLARE
 BEGIN
     FOR obj IN SELECT * FROM pg_event_trigger_ddl_commands() 
                 WHERE command_tag = 'CREATE TABLE' AND object_type = 'table'
+                AND object_identity NOT LIKE 'ds_%'
     LOOP
         SELECT EXISTS (
             SELECT 1 
