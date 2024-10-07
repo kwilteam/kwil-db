@@ -140,6 +140,13 @@ func (s *Server) handleMethod(ctx context.Context, method jsonrpc.Method, params
 
 	argsPtr, handler := maker(ctx, s)
 
+	// Treat omitted params as null, which may or may not be acceptable
+	// depending on the handler's parameters type. Otherwise json.Unmarshal
+	// always errors with "unexpected end of JSON input".
+	if params == nil {
+		params = []byte(`null`)
+	}
+
 	err := json.Unmarshal(params, argsPtr)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, err.Error(), nil)

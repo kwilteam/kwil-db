@@ -305,21 +305,27 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		w.Header().Set("content-type", "application/json; charset=utf-8")
 		http.ServeContent(w, r, "openrpc.json", time.Time{}, bytes.NewReader(s.spec))
 	})
-	specHandler = corsHandler(specHandler)
+	if cfg.enableCORS {
+		specHandler = corsHandler(specHandler)
+	}
 	specHandler = recoverer(specHandler, log)
 	mux.Handle(pathSpecV1, specHandler)
 
 	// aggregate health endpoint handler
 	var healthHandler http.Handler
 	healthHandler = http.HandlerFunc(s.healthMethodHandler)
-	healthHandler = corsHandler(healthHandler)
+	if cfg.enableCORS {
+		healthHandler = corsHandler(healthHandler)
+	}
 	healthHandler = recoverer(healthHandler, log)
 	mux.Handle(pathHealthV1, healthHandler)
 
 	// service specific health endpoint handler with wild card for service
 	var userHealthHandler http.Handler
 	userHealthHandler = http.HandlerFunc(s.handleSvcHealth)
-	userHealthHandler = corsHandler(userHealthHandler)
+	if cfg.enableCORS {
+		userHealthHandler = corsHandler(userHealthHandler)
+	}
 	userHealthHandler = recoverer(userHealthHandler, log)
 	mux.Handle(pathSvcHealthV1, userHealthHandler)
 
