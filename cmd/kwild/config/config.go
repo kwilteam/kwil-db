@@ -610,7 +610,7 @@ func DefaultConfig() *KwildConfig {
 				SnapshotDir:         ReceivedSnapsDirName,
 				DiscoveryTime:       Duration(15 * time.Second),
 				ChunkRequestTimeout: Duration(10 * time.Second),
-				TrustPeriod:         Duration(36000 * time.Second),
+				TrustPeriod:         Duration(36000 * time.Hour),
 			},
 			Consensus: &ConsensusConfig{
 				TimeoutPropose:   Duration(3 * time.Second),
