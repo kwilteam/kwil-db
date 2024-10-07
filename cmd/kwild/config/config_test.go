@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/kwilteam/kwil-db/cmd"
 	"github.com/kwilteam/kwil-db/common/config"
@@ -45,6 +46,9 @@ func Test_Config_Toml(t *testing.T) {
 	assert.Equal(t, "9.8.7.6:20660", cfg.Instrumentation.PromListenAddr)
 
 	// TODO: Add bunch of other validations for different types
+	// 1h -> 3600s
+	assert.Equal(t, time.Duration(1*time.Hour), cfg.ChainConfig.StateSync.TrustPeriod.Dur())
+	assert.Equal(t, config.Duration(1*time.Hour), cfg.ChainConfig.StateSync.TrustPeriod)
 }
 
 func Test_cleanListenAddr(t *testing.T) {
