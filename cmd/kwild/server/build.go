@@ -768,7 +768,7 @@ func buildStatesyncer(d *coreDependencies, db sql.ReadTxMaker) *statesync.StateS
 
 	providers := strings.Split(d.cfg.ChainConfig.StateSync.RPCServers, ",")
 
-	if len(providers) == 0 {
+	if len(providers) == 0 || d.cfg.ChainConfig.StateSync.RPCServers == "" {
 		failBuild(nil, "failed to configure state syncer, no remote servers provided.")
 	}
 
@@ -776,12 +776,22 @@ func buildStatesyncer(d *coreDependencies, db sql.ReadTxMaker) *statesync.StateS
 		// Duplicating the same provider to satisfy cometbft statesync requirement of having at least 2 providers.
 		// Statesynce module doesn't have the same requirements and
 		// can work with a single provider (providers are passed as is)
-		d.cfg.ChainConfig.StateSync.RPCServers += "," + providers[0]
+		providers[0] = strings.TrimSpace(providers[0])
+		d.cfg.ChainConfig.StateSync.RPCServers = providers[0] + "," + providers[0]
+	} else {
+		// sanitize the providers
+		for i, p := range providers {
+			providers[i] = strings.TrimSpace(p)
+		}
+		d.cfg.ChainConfig.StateSync.RPCServers = strings.Join(providers, ",")
 	}
 
 	// create state syncer
-	return statesync.NewStateSyncer(d.ctx, dbCfg, kwildcfg.ReceivedSnapshotsDir(d.cfg.RootDir),
-		providers, db, *d.log.Named("state-syncer"))
+	ss, err := statesync.NewStateSyncer(d.ctx, dbCfg, kwildcfg.ReceivedSnapshotsDir(d.cfg.RootDir), providers, db, *d.log.Named("state-syncer"))
+	if err != nil {
+		failBuild(err, "failed to build state syncer")
+	}
+	return ss
 }
 
 // retrieveLightClientTrustOptions fetches the trust options (Trusted Height and Hash) from the
@@ -790,10 +800,6 @@ func buildStatesyncer(d *coreDependencies, db sql.ReadTxMaker) *statesync.StateS
 // behind the latest snapshot available, to reduce the number of blocks cometbft has to download and validate.
 func retrieveLightClientTrustOptions(d *coreDependencies) (height int64, hash string, err error) {
 	providers := strings.Split(d.cfg.ChainConfig.StateSync.RPCServers, ",")
-
-	if len(providers) == 0 {
-		failBuild(nil, "failed to configure state syncer, no remote servers provided.")
-	}
 
 	configDone := false
 	for _, p := range providers {

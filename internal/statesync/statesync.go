@@ -61,7 +61,7 @@ type StateSyncer struct {
 // It takes the database configuration, snapshot directory, and the trusted snapshot providers.
 // Trusted snapshot providers are special nodes in the network trusted by the nodes and
 // have snapshot creation enabled. These nodes are responsible for creating and validating snapshots.
-func NewStateSyncer(ctx context.Context, cfg *DBConfig, snapshotDir string, providers []string, db sql.ReadTxMaker, logger log.Logger) *StateSyncer {
+func NewStateSyncer(ctx context.Context, cfg *DBConfig, snapshotDir string, providers []string, db sql.ReadTxMaker, logger log.Logger) (*StateSyncer, error) {
 
 	ss := &StateSyncer{
 		dbConfig:     cfg,
@@ -73,23 +73,20 @@ func NewStateSyncer(ctx context.Context, cfg *DBConfig, snapshotDir string, prov
 	for _, s := range providers {
 		clt, err := ChainRPCClient(s)
 		if err != nil {
-			logger.Error("Failed to create rpc client", log.String("server", s), log.Error(err))
-			return nil
+			return nil, fmt.Errorf("failed to create rpc client: %s, error %w", s, err)
 		}
 		ss.snapshotProviders = append(ss.snapshotProviders, clt)
 	}
 
 	// Ensure that the snapshot directory exists and is empty
 	if err := os.RemoveAll(snapshotDir); err != nil {
-		logger.Error("Failed to delete snapshot directory", log.String("dir", snapshotDir), log.Error(err))
-		return nil
+		return nil, fmt.Errorf("failed to delete snapshot directory: %s with error: %w", snapshotDir, err)
 	}
 	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
-		logger.Error("Failed to create snapshot directory", log.String("dir", snapshotDir), log.Error(err))
-		return nil
+		return nil, fmt.Errorf("failed to create snapshot directory: %s with error: %w", snapshotDir, err)
 	}
 
-	return ss
+	return ss, nil
 }
 
 // OfferSnapshot checks if the snapshot is valid and kicks off the state sync process
