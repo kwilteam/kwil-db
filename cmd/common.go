@@ -128,6 +128,7 @@ var DefaultConfig = func() *commonConfig.KwildConfig {
 				Enable:              false,
 				DiscoveryTime:       commonConfig.Duration(15 * time.Second),
 				ChunkRequestTimeout: commonConfig.Duration(10 * time.Second),
+				TrustPeriod:         commonConfig.Duration(730 * time.Hour), // 1 month
 			},
 			Consensus: &commonConfig.ConsensusConfig{
 				TimeoutPropose:   commonConfig.Duration(3 * time.Second),

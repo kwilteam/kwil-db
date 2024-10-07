@@ -116,6 +116,7 @@ to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.`))
 	flagSet.StringVar(&cfg.ChainConfig.StateSync.RPCServers, "chain.statesync.rpc-servers", cfg.ChainConfig.StateSync.RPCServers, "Chain state sync rpc servers")
 	flagSet.Var(&cfg.ChainConfig.StateSync.DiscoveryTime, "chain.statesync.discovery-time", "Chain state sync discovery time")
 	flagSet.Var(&cfg.ChainConfig.StateSync.ChunkRequestTimeout, "chain.statesync.chunk-request-timeout", "Chain state sync chunk request timeout")
+	flagSet.Var(&cfg.ChainConfig.StateSync.TrustPeriod, "chain.statesync.trust-period", "Duration for which the state sync snapshots are considered trustworthy.")
 
 	// Instrumentation flags
 	flagSet.BoolVar(&cfg.Instrumentation.Prometheus, "instrumentation.prometheus", cfg.Instrumentation.Prometheus, "collect and serve prometheus metrics")

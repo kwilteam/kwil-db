@@ -204,6 +204,10 @@ type StateSyncConfig struct {
 	// The timeout duration before re-requesting a chunk, possibly from a different
 	// peer (default: 1 minute).
 	ChunkRequestTimeout Duration `mapstructure:"chunk_request_timeout"`
+
+	// Trust period is the duration for which the node trusts the state sync snapshots.
+	// Snapshots older than the trust period are considered to be expired and are not used for state sync.
+	TrustPeriod Duration `mapstructure:"trust_period"`
 }
 
 type ChainConfig struct {
