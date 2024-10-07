@@ -202,7 +202,7 @@ type StateSyncConfig struct {
 	// during the node initialization.
 	TrustHeight int64
 	TrustHash   string
-	TrustPeriod Duration
+	TrustPeriod Duration `mapstructure:"trust_period"`
 }
 
 type ChainConfig struct {

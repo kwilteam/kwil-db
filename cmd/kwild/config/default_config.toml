@@ -284,3 +284,7 @@ discovery_time = "15s"
 # The timeout duration before re-requesting a chunk, possibly from a different
 # peer (default: 1 minute).
 chunk_request_timeout = "10s"
+
+# Trust period is the duration for which the node trusts the state sync snapshots.
+# Snapshots older than the trust period are considered to be expired and are not used for state sync.
+trust_period = "36000h"

@@ -90,5 +90,5 @@ to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.`)
 	flagSet.StringVar(&cfg.ChainCfg.StateSync.RPCServers, "chain.statesync.rpc-servers", cfg.ChainCfg.StateSync.RPCServers, "Chain state sync rpc servers")
 	flagSet.Var(&cfg.ChainCfg.StateSync.DiscoveryTime, "chain.statesync.discovery-time", "Chain state sync discovery time")
 	flagSet.Var(&cfg.ChainCfg.StateSync.ChunkRequestTimeout, "chain.statesync.chunk-request-timeout", "Chain state sync chunk request timeout")
-	flagSet.Var(&cfg.ChainCfg.StateSync.TrustPeriod, "chain.statesync.trust-period", "Duration of time for which the snapshots are trusted")
+	flagSet.Var(&cfg.ChainCfg.StateSync.TrustPeriod, "chain.statesync.trust-period", "Duration for which the state sync snapshots are considered trustworthy.")
 }
