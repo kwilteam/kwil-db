@@ -600,7 +600,7 @@ func buildStatesyncer(d *coreDependencies) *statesync.StateSyncer {
 
 	providers := strings.Split(d.cfg.ChainCfg.StateSync.RPCServers, ",")
 
-	if len(providers) == 0 {
+	if len(providers) == 0 || d.cfg.ChainCfg.StateSync.RPCServers == "" {
 		failBuild(nil, "failed to configure state syncer, no remote servers provided.")
 	}
 

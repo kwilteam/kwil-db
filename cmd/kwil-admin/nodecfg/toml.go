@@ -359,4 +359,8 @@ chunk_request_timeout = "{{ .ChainCfg.StateSync.ChunkRequestTimeout }}"
 
 # Note: If the requested chunk is not received for a duration of 2 minutes (hard-coded default), 
 # the state sync process is aborted and the node will fall back to the regular block sync process.
+
+# Trust period is the duration for which the node trusts the state sync snapshots.
+# Snapshots older than the trust period are considered to be expired and are not used for state sync.
+trust_period = "{{ .ChainCfg.StateSync.TrustPeriod }}"
 `
