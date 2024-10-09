@@ -79,6 +79,7 @@ type AppConfig struct {
 	RPCTimeout         Duration                     `mapstructure:"rpc_timeout"`
 	RPCMaxReqSize      int                          `mapstructure:"rpc_req_limit"`
 	ReadTxTimeout      Duration                     `mapstructure:"db_read_timeout"`
+	MaxDBConnections   uint32                       `mapstructure:"db_max_connections"`
 	ExtensionEndpoints []string                     `mapstructure:"extension_endpoints"`
 	AdminRPCPass       string                       `mapstructure:"admin_pass"`
 	NoTLS              bool                         `mapstructure:"admin_notls"`
@@ -566,6 +567,7 @@ func DefaultConfig() *KwildConfig {
 			RPCTimeout:           Duration(45 * time.Second),
 			RPCMaxReqSize:        4_200_000,
 			ReadTxTimeout:        Duration(5 * time.Second),
+			MaxDBConnections:     24,
 			Extensions:           make(map[string]map[string]string),
 			Snapshots: SnapshotConfig{
 				Enabled:         false,
