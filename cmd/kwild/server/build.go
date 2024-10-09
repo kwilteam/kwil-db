@@ -426,7 +426,7 @@ func buildDB(d *coreDependencies, closer *closeFuncs) *pg.DB {
 	// If yes, restore the database from the snapshot
 	restoreDB(d)
 
-	db, err := d.dbOpener(d.ctx, d.cfg.AppCfg.DBName, 24)
+	db, err := d.dbOpener(d.ctx, d.cfg.AppCfg.DBName, uint32(d.cfg.AppCfg.MaxDBConnections))
 	if err != nil {
 		failBuild(err, "kwild database open failed")
 	}

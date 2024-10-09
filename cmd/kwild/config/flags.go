@@ -38,6 +38,7 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	flagSet.Var(&cfg.AppCfg.RPCTimeout, "app.rpc-timeout", "timeout for RPC requests (through reading the request, handling the request, and sending the response)")
 	flagSet.IntVar(&cfg.AppCfg.RPCMaxReqSize, "app.rpc-req-limit", cfg.AppCfg.RPCMaxReqSize, "RPC request size limit")
 	flagSet.Var(&cfg.AppCfg.ReadTxTimeout, "app.db-read-timeout", "timeout for database reads initiated by RPC requests")
+	flagSet.Uint32Var(&cfg.AppCfg.MaxDBConnections, "app.db-max-connections", cfg.AppCfg.MaxDBConnections, "maximum number of database connections")
 
 	// Extension endpoints flags
 	flagSet.StringSliceVar(&cfg.AppCfg.ExtensionEndpoints, "app.extension-endpoints", cfg.AppCfg.ExtensionEndpoints, "kwild extension endpoints")
