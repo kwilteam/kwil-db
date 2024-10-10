@@ -5,6 +5,8 @@ import (
 	"os"
 )
 
+// CopyFile copies a named file from src to dst. If the destination file exists,
+// it is truncated.
 func CopyFile(src, dst string) error {
 	out, err := os.Create(dst)
 	if err != nil {

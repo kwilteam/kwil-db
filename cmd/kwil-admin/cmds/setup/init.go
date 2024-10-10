@@ -3,7 +3,6 @@ package setup
 import (
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common/chain"
+	"github.com/kwilteam/kwil-db/core/utils"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/spf13/cobra"
 )
@@ -73,7 +73,7 @@ func initCmd() *cobra.Command {
 				}
 
 				stateFile := config.GenesisStateFileName(expandedDir)
-				if err = copyFile(genesisState, stateFile); err != nil {
+				if err = utils.CopyFile(genesisState, stateFile); err != nil {
 					return display.PrintErr(cmd, err)
 				}
 
@@ -93,7 +93,7 @@ func initCmd() *cobra.Command {
 					return display.PrintErr(cmd, err)
 				}
 
-				if err = copyFile(genesisPath, genFile); err != nil {
+				if err = utils.CopyFile(genesisPath, genFile); err != nil {
 					return display.PrintErr(cmd, err)
 				}
 			} else {
@@ -173,21 +173,4 @@ func (a *AllocsFlag) Set(value string) error {
 
 func (a *AllocsFlag) Type() string {
 	return "allocFlag"
-}
-
-func copyFile(src, dst string) error {
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	_, err = io.Copy(out, in)
-	return err
 }
