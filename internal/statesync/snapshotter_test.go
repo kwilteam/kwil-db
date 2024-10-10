@@ -2,12 +2,12 @@ package statesync
 
 import (
 	"bufio"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/utils"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,14 +30,14 @@ func TestSanitizeLogicalDump(t *testing.T) {
 
 	// copy the logical dump file1
 	stage1File := filepath.Join(formatDir, stage1output)
-	err = copyFile(dump1File, stage1File)
+	err = utils.CopyFile(dump1File, stage1File)
 	require.NoError(t, err)
 
 	hash1, err := snapshotter.sanitizeDump(height, 0)
 	require.NoError(t, err)
 
 	// Sanitize the second dump file
-	err = copyFile(dump2File, stage1File)
+	err = utils.CopyFile(dump2File, stage1File)
 	require.NoError(t, err)
 
 	hash2, err := snapshotter.sanitizeDump(height, 0)
@@ -60,25 +60,4 @@ func TestSanitizeLogicalDump(t *testing.T) {
 
 	err = scanner.Err()
 	require.NoError(t, err)
-}
-
-func copyFile(file1 string, file2 string) error {
-	src, err := os.Open(file1)
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-
-	dst, err := os.Create(file2)
-	if err != nil {
-		return err
-	}
-	defer dst.Close()
-
-	_, err = io.Copy(dst, src)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

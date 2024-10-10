@@ -101,6 +101,7 @@ func CopyFiles(src, dst string) error {
 	if dstFile, err = os.Create(dst); err != nil {
 		return err
 	}
+	defer dstFile.Close()
 
 	// Copy the contents of the source file into the destination file
 	if _, err = io.Copy(dstFile, srcFile); err != nil {
