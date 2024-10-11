@@ -23,6 +23,7 @@ import (
 	kwildcfg "github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/common/chain"
 	config "github.com/kwilteam/kwil-db/common/config"
+	"github.com/kwilteam/kwil-db/core/utils"
 	coreUrl "github.com/kwilteam/kwil-db/core/utils/url"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 )
@@ -176,7 +177,9 @@ func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silenc
 	if err != nil {
 		return nil, err
 	}
-
+	// Try to read a key at the given path and copy it to the default location.
+	customKeyPath := cfg.AppConfig.PrivateKeyPath
+	// ...writing the default relative path to the config file.
 	cfg.AppConfig.PrivateKeyPath = cmd.DefaultConfig().AppConfig.PrivateKeyPath
 
 	err = WriteConfigFile(kwildcfg.ConfigFilePath(rootDir), cfg)
@@ -185,7 +188,19 @@ func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silenc
 	}
 
 	// Load or generate private key.
-	fullKeyPath := filepath.Join(rootDir, cmd.DefaultConfig().AppConfig.PrivateKeyPath)
+	fullKeyPath := filepath.Join(rootDir, cfg.AppConfig.PrivateKeyPath)
+	// If setting not the default and exists, copy it into the destination folder.
+	if customKeyPath != cfg.AppConfig.PrivateKeyPath {
+		fullCustomPath, _ := filepath.Abs(customKeyPath)
+		if fid, err := os.Stat(fullCustomPath); err == nil && !fid.IsDir() {
+			if err = utils.CopyFile(customKeyPath, fullKeyPath); err != nil {
+				return nil, fmt.Errorf("unable to copy private key from %q to %q: %w", customKeyPath, fullKeyPath, err)
+			}
+		} else {
+			return nil, fmt.Errorf("custom private key file not accessible or is a directory: %w", err)
+		}
+	}
+
 	_, pubKey, newKey, err := kwildcfg.ReadOrCreatePrivateKeyFile(fullKeyPath, true)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read or create private key: %w", err)
