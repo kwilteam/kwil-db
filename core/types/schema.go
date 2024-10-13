@@ -1099,7 +1099,7 @@ type DataType struct {
 	// IsArray is true if the type is an array.
 	IsArray bool `json:"is_array"`
 	// Metadata is the metadata of the type.
-	Metadata [2]uint16 `json:"metadata"`
+	Metadata *[2]uint16 `json:"metadata"`
 }
 
 // String returns the string representation of the type.
@@ -1121,8 +1121,6 @@ func (c *DataType) String() string {
 	return str.String()
 }
 
-var ZeroMetadata = [2]uint16{}
-
 // PGString returns the string representation of the type in Postgres.
 func (c *DataType) PGString() (string, error) {
 	var scalar string
@@ -1140,11 +1138,11 @@ func (c *DataType) PGString() (string, error) {
 	case uint256Str:
 		scalar = "UINT256"
 	case DecimalStr:
-		if c.Metadata == ZeroMetadata {
-			return "", fmt.Errorf("decimal type must have metadata")
+		if c.Metadata == nil {
+			scalar = "NUMERIC"
+		} else {
+			scalar = fmt.Sprintf("NUMERIC(%d,%d)", c.Metadata[0], c.Metadata[1])
 		}
-
-		scalar = fmt.Sprintf("NUMERIC(%d,%d)", c.Metadata[0], c.Metadata[1])
 	case nullStr:
 		return "", fmt.Errorf("cannot have null column type")
 	case unknownStr:
@@ -1164,14 +1162,15 @@ func (c *DataType) Clean() error {
 	c.Name = strings.ToLower(c.Name)
 	switch c.Name {
 	case intStr, textStr, boolStr, blobStr, uuidStr, uint256Str: // ok
-		if c.Metadata != ZeroMetadata {
+		if c.Metadata != nil {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
 		}
 
 		return nil
 	case DecimalStr:
-		if c.Metadata == ZeroMetadata {
-			return fmt.Errorf("decimal type must have metadata")
+		if c.Metadata == nil {
+			// numeric can have unspecified precision and scale
+			return nil
 		}
 
 		err := decimal.CheckPrecisionAndScale(c.Metadata[0], c.Metadata[1])
@@ -1185,7 +1184,7 @@ func (c *DataType) Clean() error {
 			return fmt.Errorf("type %s cannot be an array", c.Name)
 		}
 
-		if c.Metadata != ZeroMetadata {
+		if c.Metadata != nil {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
 		}
 
@@ -1219,10 +1218,10 @@ func (c *DataType) EqualsStrict(other *DataType) bool {
 		return false
 	}
 
-	if (c.Metadata == ZeroMetadata) != (other.Metadata == ZeroMetadata) {
+	if (c.Metadata == nil) != (other.Metadata == nil) {
 		return false
 	}
-	if c.Metadata != ZeroMetadata {
+	if c.Metadata != nil {
 		if c.Metadata[0] != other.Metadata[0] || c.Metadata[1] != other.Metadata[1] {
 			return false
 		}
@@ -1275,8 +1274,8 @@ var (
 	// For type detection, users should prefer compare a datatype
 	// name with the DecimalStr constant.
 	DecimalType = &DataType{
-		Name:     DecimalStr,
-		Metadata: [2]uint16{1, 0}, // the minimum precision and scale
+		Name: DecimalStr,
+		// unspecified precision and scale
 	}
 	DecimalArrayType = ArrayType(DecimalType)
 	Uint256Type      = &DataType{
@@ -1332,8 +1331,10 @@ func NewDecimalType(precision, scale uint16) (*DataType, error) {
 		return nil, err
 	}
 
+	met := [2]uint16{precision, scale}
+
 	return &DataType{
 		Name:     DecimalStr,
-		Metadata: [2]uint16{precision, scale},
+		Metadata: &met,
 	}, nil
 }

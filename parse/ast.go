@@ -100,6 +100,8 @@ func literalToString(value any) (string, error) {
 	return str.String(), nil
 }
 
+// TODO: we can remove this interface since in v0.10, we are getting rid of foreign calls
+// this means that there will be only 1 implementation of ExpressionCall
 type ExpressionCall interface {
 	Expression
 	Cast(*types.DataType)

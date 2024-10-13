@@ -2,7 +2,6 @@ package interpreter_test
 
 import (
 	"context"
-	"math"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/parse"
@@ -100,8 +99,7 @@ func Test_Interpeter(t *testing.T) {
 				t.Fatalf("procedure %s not found", test.procName)
 			}
 
-			// start := time.Now()
-			res, err := interpreter.Run(ctx, proc, schema, test.inputVals, math.MaxInt64, interpreter.ZeroCostTable())
+			res, err := interpreter.Run(ctx, proc, schema, test.inputVals)
 			if test.err != nil {
 				require.Error(t, err)
 				require.ErrorIs(t, err, test.err)
@@ -109,11 +107,6 @@ func Test_Interpeter(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			// fmt.Println(time.Since(start))
-			// panic("")
-
-			// since we are using the ZeroCostTable, the cost should be 0
-			require.Equalf(t, res.Cost, int64(0), "cost is not 0")
 
 			require.Equal(t, len(test.expected), len(res.Values))
 			for i, row := range res.Values {

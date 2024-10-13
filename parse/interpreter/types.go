@@ -6,27 +6,33 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/parse/common"
 )
 
 // executionContext is the context of the entire execution.
 type executionContext struct {
-	// maxCost is the maximum allowable cost of the execution.
-	maxCost int64
-	// currentCost is the current cost of the execution.
-	currentCost int64
 	// scope is the current scope.
 	scope *scopeContext
-	// costTable is the cost table for the execution.
-	costTable *CostTable
-	// procedures maps local procedure names to their procedure func.
-	procedures map[string]procedureCallFunc
+	// availableFunctions is a map of both built-in functions and user-defined PL/pgSQL functions.
+	// When the interpreter planner is created, it will be populated with all built-in functions,
+	// and then it will be updated with user-defined functions, effectively allowing users to override
+	// some function name with their own implementation. This allows Kwil to add new built-in
+	// functions without worrying about breaking user schemas.
+	// This will not include aggregate and window functions, as those can only be used in SQL.
+	// availableFunctions maps local action names to their execution func.
+	availableFunctions map[string]*executable
+}
+
+// executable is the interface and function to call a built-in Postgres function,
+// a user-defined Postgres procedure, or a user-defined Kwil action.
+type executable struct {
+	Signature *FunctionSignature
+	Func      functionCall
 }
 
 // newScope creates a new scope.
 func newScope() *scopeContext {
 	return &scopeContext{
-		variables: make(map[string]common.Value),
+		variables: make(map[string]Value),
 	}
 }
 
@@ -34,35 +40,13 @@ func newScope() *scopeContext {
 func (s *scopeContext) subScope() *scopeContext {
 	return &scopeContext{
 		parent:    s,
-		variables: make(map[string]common.Value),
+		variables: make(map[string]Value),
 	}
-}
-
-// Spend spends a certain amount of cost.
-// If the cost exceeds the maximum cost, it returns an error.
-func (e *executionContext) Spend(cost int64) error {
-	if e.currentCost+cost > e.maxCost {
-
-		e.currentCost = e.maxCost
-		return fmt.Errorf("exceeded maximum cost: %d", e.maxCost)
-	}
-	e.currentCost += cost
-	return nil
-}
-
-// Notice logs a notice.
-func (e *executionContext) Notice(format string) {
-	panic("notice not implemented")
 }
 
 // setVariable sets a variable in the current scope.
 // It will allocate the variable if it does not exist.
-func (e *executionContext) setVariable(name string, value common.Value) error {
-	err := e.Spend(e.costTable.GetVariableCost)
-	if err != nil {
-		return err
-	}
-
+func (e *executionContext) setVariable(name string, value Value) error {
 	_, foundScope, err := getVarFromScope(name, e.scope)
 	if err != nil {
 		if errors.Is(err, ErrVariableNotFound) {
@@ -72,22 +56,12 @@ func (e *executionContext) setVariable(name string, value common.Value) error {
 		}
 	}
 
-	err = e.Spend(e.costTable.SetVariableCost + e.costTable.SizeCostConstant*int64(value.Size()))
-	if err != nil {
-		return err
-	}
-
 	foundScope.variables[name] = value
 	return nil
 }
 
 // allocateVariable allocates a variable in the current scope.
-func (e *executionContext) allocateVariable(name string, value common.Value) error {
-	err := e.Spend(e.costTable.AllocateVariableCost + e.costTable.SizeCostConstant*int64(value.Size()))
-	if err != nil {
-		return err
-	}
-
+func (e *executionContext) allocateVariable(name string, value Value) error {
 	_, ok := e.scope.variables[name]
 	if ok {
 		return fmt.Errorf(`variable "%s" already exists`, name)
@@ -99,19 +73,14 @@ func (e *executionContext) allocateVariable(name string, value common.Value) err
 
 // getVariable gets a variable from the current scope.
 // It searches the parent scopes if the variable is not found.
-func (e *executionContext) getVariable(name string) (common.Value, error) {
-	err := e.Spend(e.costTable.GetVariableCost)
-	if err != nil {
-		return nil, err
-	}
-
+func (e *executionContext) getVariable(name string) (Value, error) {
 	v, _, err := getVarFromScope(name, e.scope)
 	return v, err
 }
 
 // getVarFromScope recursively searches the scopes for a variable.
 // It returns the value, as well as the scope it was found in.
-func getVarFromScope(variable string, scope *scopeContext) (common.Value, *scopeContext, error) {
+func getVarFromScope(variable string, scope *scopeContext) (Value, *scopeContext, error) {
 	if v, ok := scope.variables[variable]; ok {
 		return v, scope, nil
 	}
@@ -127,7 +96,7 @@ type scopeContext struct {
 	// if the parent is nil, this is the root
 	parent *scopeContext
 	// variables are the variables stored in memory.
-	variables map[string]common.Value
+	variables map[string]Value
 }
 
 // Cursor is the cursor for the current execution.
@@ -136,7 +105,7 @@ type Cursor interface {
 	// Next moves the cursor to the next result.
 	// It returns the value returned, if the cursor is done, and an error.
 	// If the cursor is done, the value returned is not valid.
-	Next(context.Context) (common.RecordValue, bool, error)
+	Next(context.Context) (RecordValue, bool, error)
 	// Close closes the cursor.
 	Close() error
 }
@@ -146,19 +115,19 @@ type Cursor interface {
 // results.
 type returnableCursor struct {
 	expectedShape []*types.DataType
-	recordChan    chan []common.Value
+	recordChan    chan []Value
 	errChan       chan error
 }
 
 func newReturnableCursor(expectedShape []*types.DataType) *returnableCursor {
 	return &returnableCursor{
 		expectedShape: expectedShape,
-		recordChan:    make(chan []common.Value),
+		recordChan:    make(chan []Value),
 		errChan:       make(chan error),
 	}
 }
 
-func (r *returnableCursor) Record() chan<- []common.Value {
+func (r *returnableCursor) Record() chan<- []Value {
 	return r.recordChan
 }
 
@@ -172,24 +141,24 @@ func (r *returnableCursor) Close() error {
 	return nil
 }
 
-func (r *returnableCursor) Next(ctx context.Context) (common.RecordValue, bool, error) {
+func (r *returnableCursor) Next(ctx context.Context) (RecordValue, bool, error) {
 	select {
 	case rec, ok := <-r.recordChan:
 		if !ok {
-			return common.RecordValue{}, true, nil
+			return RecordValue{}, true, nil
 		} else {
 			// check if the shape is correct
 			if len(r.expectedShape) != len(rec) {
-				return common.RecordValue{}, false, fmt.Errorf("expected %d columns, got %d", len(r.expectedShape), len(rec))
+				return RecordValue{}, false, fmt.Errorf("expected %d columns, got %d", len(r.expectedShape), len(rec))
 			}
 
-			record := common.RecordValue{
-				Fields: map[string]common.Value{},
+			record := RecordValue{
+				Fields: map[string]Value{},
 			}
 
 			for i, expected := range r.expectedShape {
 				if !expected.EqualsStrict(rec[i].Type()) {
-					return common.RecordValue{}, false, fmt.Errorf("expected type %s, got %s", expected, rec[i].Type())
+					return RecordValue{}, false, fmt.Errorf("expected type %s, got %s", expected, rec[i].Type())
 				}
 
 				record.Fields[expected.Name] = rec[i]
@@ -200,17 +169,17 @@ func (r *returnableCursor) Next(ctx context.Context) (common.RecordValue, bool, 
 		}
 	case err := <-r.errChan:
 		if err == errReturn {
-			return common.RecordValue{}, true, nil
+			return RecordValue{}, true, nil
 		}
 
-		return common.RecordValue{}, false, err
+		return RecordValue{}, false, err
 	case <-ctx.Done():
-		return common.RecordValue{}, false, ctx.Err()
+		return RecordValue{}, false, ctx.Err()
 	}
 }
 
 // returnChans is a helper interface for returning values to channels.
 type returnChans interface {
-	Record() chan<- []common.Value
+	Record() chan<- []Value
 	Err() chan<- error
 }

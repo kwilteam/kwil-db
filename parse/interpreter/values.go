@@ -1,4 +1,4 @@
-package common
+package interpreter
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
+	"github.com/kwilteam/kwil-db/parse/common"
 )
 
 // Value is a value that can be compared, used in arithmetic operations,
@@ -15,26 +16,26 @@ import (
 type Value interface {
 	// Compare compares the variable with another variable using the given comparison operator.
 	// It will return a boolean value, or null either of the variables is null.
-	Compare(v Value, op ComparisonOp) (Value, error)
+	Compare(v Value, op common.ComparisonOp) (Value, error)
 	// Type returns the type of the variable.
 	Type() *types.DataType
 	// Value returns the value of the variable.
 	Value() any
 	// Size is the size of the variable in bytes.
 	Size() int
+	// Cast casts the variable to the given type.
+	Cast(t *types.DataType) (Value, error)
 }
 
 // ScalarValue is a scalar value that can be computed on and have unary operations applied to it.
 type ScalarValue interface {
 	Value
 	// Arithmetic performs an arithmetic operation on the variable with another variable.
-	Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error)
+	Arithmetic(v ScalarValue, op common.ArithmeticOp) (ScalarValue, error)
 	// Unary applies a unary operation to the variable.
-	Unary(op UnaryOp) (ScalarValue, error)
+	Unary(op common.UnaryOp) (ScalarValue, error)
 	// Array creates an array from this scalar value and any other scalar values.
 	Array(v ...ScalarValue) (ArrayValue, error)
-	// Cast casts the variable to the given type.
-	Cast(t *types.DataType) (Value, error)
 }
 
 // ArrayValue is an array value that can be compared and have unary operations applied to it.
@@ -146,14 +147,14 @@ func NewNullValue(t *types.DataType) Value {
 }
 
 func makeTypeErr(left, right Value) error {
-	return fmt.Errorf("%w: left: %s right: %s", ErrTypeMismatch, left.Type(), right.Type())
+	return fmt.Errorf("%w: left: %s right: %s", common.ErrTypeMismatch, left.Type(), right.Type())
 }
 
 type IntValue struct {
 	Val int64
 }
 
-func (v *IntValue) Compare(v2 Value, op ComparisonOp) (Value, error) {
+func (v *IntValue) Compare(v2 Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v2, op); early {
 		return res, nil
 	}
@@ -165,13 +166,13 @@ func (v *IntValue) Compare(v2 Value, op ComparisonOp) (Value, error) {
 
 	var b bool
 	switch op {
-	case Equal:
+	case common.Equal:
 		b = v.Val == val2.Val
-	case LessThan:
+	case common.LessThan:
 		b = v.Val < val2.Val
-	case GreaterThan:
+	case common.GreaterThan:
 		b = v.Val > val2.Val
-	case IsDistinctFrom:
+	case common.IsDistinctFrom:
 		b = v.Val != val2.Val
 	default:
 		return nil, fmt.Errorf("cannot compare int with operator id %d", op)
@@ -183,23 +184,23 @@ func (v *IntValue) Compare(v2 Value, op ComparisonOp) (Value, error) {
 // nullCmp is a helper function for comparing null values.
 // It returns a Value, and a boolean as to whether the caller should return early.
 // It is meant to be called from methods for non-null values that might need to compare with null.
-func nullCmp(v Value, op ComparisonOp) (Value, bool) {
+func nullCmp(v Value, op common.ComparisonOp) (Value, bool) {
 	if _, ok := v.(*NullValue); !ok {
 		return nil, false
 	}
 
-	if op == IsDistinctFrom {
+	if op == common.IsDistinctFrom {
 		return &BoolValue{Val: true}, true
 	}
 
-	if op == Is {
+	if op == common.Is {
 		return &BoolValue{Val: false}, true
 	}
 
 	return &NullValue{DataType: v.Type()}, true
 }
 
-func (i *IntValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (i *IntValue) Arithmetic(v ScalarValue, op common.ArithmeticOp) (ScalarValue, error) {
 	if _, ok := v.(*NullValue); ok {
 		return &NullValue{DataType: types.IntType}, nil
 	}
@@ -210,18 +211,18 @@ func (i *IntValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, erro
 	}
 
 	switch op {
-	case Add:
+	case common.Add:
 		return &IntValue{Val: i.Val + val2.Val}, nil
-	case Sub:
+	case common.Sub:
 		return &IntValue{Val: i.Val - val2.Val}, nil
-	case Mul:
+	case common.Mul:
 		return &IntValue{Val: i.Val * val2.Val}, nil
-	case Div:
+	case common.Div:
 		if val2.Val == 0 {
 			return nil, fmt.Errorf("cannot divide by zero")
 		}
 		return &IntValue{Val: i.Val / val2.Val}, nil
-	case Mod:
+	case common.Mod:
 		if val2.Val == 0 {
 			return nil, fmt.Errorf("cannot modulo by zero")
 		}
@@ -231,13 +232,13 @@ func (i *IntValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, erro
 	}
 }
 
-func (i *IntValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (i *IntValue) Unary(op common.UnaryOp) (ScalarValue, error) {
 	switch op {
-	case Neg:
+	case common.Neg:
 		return &IntValue{Val: -i.Val}, nil
-	case Not:
+	case common.Not:
 		return nil, fmt.Errorf("cannot apply logical NOT to an integer")
-	case Pos:
+	case common.Pos:
 		return i, nil
 	default:
 		return nil, fmt.Errorf("unknown unary operator: %d", op)
@@ -313,7 +314,7 @@ type TextValue struct {
 	Val string
 }
 
-func (s *TextValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (s *TextValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -325,13 +326,13 @@ func (s *TextValue) Compare(v Value, op ComparisonOp) (Value, error) {
 
 	var b bool
 	switch op {
-	case Equal:
+	case common.Equal:
 		b = s.Val == val2.Val
-	case LessThan:
+	case common.LessThan:
 		b = s.Val < val2.Val
-	case GreaterThan:
+	case common.GreaterThan:
 		b = s.Val > val2.Val
-	case IsDistinctFrom:
+	case common.IsDistinctFrom:
 		b = s.Val != val2.Val
 	default:
 		return nil, fmt.Errorf("unknown comparison operator: %d", op)
@@ -340,20 +341,20 @@ func (s *TextValue) Compare(v Value, op ComparisonOp) (Value, error) {
 	return &BoolValue{Val: b}, nil
 }
 
-func (s *TextValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (s *TextValue) Arithmetic(v ScalarValue, op common.ArithmeticOp) (ScalarValue, error) {
 	val2, ok := v.(*TextValue)
 	if !ok {
 		return nil, makeTypeErr(s, v)
 	}
 
-	if op == Concat {
+	if op == common.Concat {
 		return &TextValue{Val: s.Val + val2.Val}, nil
 	}
 
 	return nil, fmt.Errorf("cannot perform arithmetic operation id %d on type string", op)
 }
 
-func (s *TextValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (s *TextValue) Unary(op common.UnaryOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("cannot perform unary operation on string")
 }
 
@@ -440,7 +441,7 @@ type BoolValue struct {
 	Val bool
 }
 
-func (b *BoolValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (b *BoolValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -452,9 +453,9 @@ func (b *BoolValue) Compare(v Value, op ComparisonOp) (Value, error) {
 
 	var b2 bool
 	switch op {
-	case Equal, Is:
+	case common.Equal, common.Is:
 		b2 = b.Val == val2.Val
-	case IsDistinctFrom:
+	case common.IsDistinctFrom:
 		b2 = b.Val != val2.Val
 	default:
 		return nil, fmt.Errorf("unknown comparison operator: %d", op)
@@ -463,13 +464,13 @@ func (b *BoolValue) Compare(v Value, op ComparisonOp) (Value, error) {
 	return &BoolValue{Val: b2}, nil
 }
 
-func (b *BoolValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (b *BoolValue) Arithmetic(v ScalarValue, op common.ArithmeticOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("cannot perform arithmetic operation on bool")
 }
 
-func (b *BoolValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (b *BoolValue) Unary(op common.UnaryOp) (ScalarValue, error) {
 	switch op {
-	case Not:
+	case common.Not:
 		return &BoolValue{Val: !b.Val}, nil
 	default:
 		return nil, fmt.Errorf("unexpected operator id %d for bool", op)
@@ -528,7 +529,7 @@ type BlobValue struct {
 	Val []byte
 }
 
-func (b *BlobValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (b *BlobValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -540,9 +541,9 @@ func (b *BlobValue) Compare(v Value, op ComparisonOp) (Value, error) {
 
 	var b2 bool
 	switch op {
-	case Equal:
+	case common.Equal:
 		b2 = string(b.Val) == string(val2.Val)
-	case IsDistinctFrom:
+	case common.IsDistinctFrom:
 		b2 = string(b.Val) != string(val2.Val)
 	default:
 		return nil, fmt.Errorf("unknown comparison operator: %d", op)
@@ -551,11 +552,11 @@ func (b *BlobValue) Compare(v Value, op ComparisonOp) (Value, error) {
 	return &BoolValue{Val: b2}, nil
 }
 
-func (b *BlobValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (b *BlobValue) Arithmetic(v ScalarValue, op common.ArithmeticOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("cannot perform arithmetic operation on blob")
 }
 
-func (b *BlobValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (b *BlobValue) Unary(op common.UnaryOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("cannot perform unary operation on blob")
 }
 
@@ -610,7 +611,7 @@ type UUIDValue struct {
 	Val types.UUID
 }
 
-func (u *UUIDValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (u *UUIDValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -622,9 +623,9 @@ func (u *UUIDValue) Compare(v Value, op ComparisonOp) (Value, error) {
 
 	var b bool
 	switch op {
-	case Equal:
+	case common.Equal:
 		b = u.Val == val2.Val
-	case IsDistinctFrom:
+	case common.IsDistinctFrom:
 		b = u.Val != val2.Val
 	default:
 		return nil, fmt.Errorf("unknown comparison operator: %d", op)
@@ -633,11 +634,11 @@ func (u *UUIDValue) Compare(v Value, op ComparisonOp) (Value, error) {
 	return &BoolValue{Val: b}, nil
 }
 
-func (u *UUIDValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (u *UUIDValue) Arithmetic(v ScalarValue, op common.ArithmeticOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("cannot perform arithmetic operation on uuid")
 }
 
-func (u *UUIDValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (u *UUIDValue) Unary(op common.UnaryOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("cannot perform unary operation on uuid")
 }
 
@@ -688,7 +689,7 @@ type DecimalValue struct {
 	Dec *decimal.Decimal
 }
 
-func (d *DecimalValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (d *DecimalValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -706,7 +707,7 @@ func (d *DecimalValue) Compare(v Value, op ComparisonOp) (Value, error) {
 	return cmpIntegers(res, 0, op)
 }
 
-func (d *DecimalValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (d *DecimalValue) Arithmetic(v ScalarValue, op common.ArithmeticOp) (ScalarValue, error) {
 	// we perform an extra check here to ensure scale and precision are the same
 	if !v.Type().EqualsStrict(d.Type()) {
 		return nil, makeTypeErr(d, v)
@@ -720,15 +721,15 @@ func (d *DecimalValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, 
 	var d2 *decimal.Decimal
 	var err error
 	switch op {
-	case Add:
+	case common.Add:
 		d2, err = decimal.Add(d.Dec, val2.Dec)
-	case Sub:
+	case common.Sub:
 		d2, err = decimal.Sub(d.Dec, val2.Dec)
-	case Mul:
+	case common.Mul:
 		d2, err = decimal.Mul(d.Dec, val2.Dec)
-	case Div:
+	case common.Div:
 		d2, err = decimal.Div(d.Dec, val2.Dec)
-	case Mod:
+	case common.Mod:
 		d2, err = decimal.Mod(d.Dec, val2.Dec)
 	default:
 		return nil, fmt.Errorf("unexpected operator id %d for decimal", op)
@@ -743,15 +744,15 @@ func (d *DecimalValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, 
 
 }
 
-func (d *DecimalValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (d *DecimalValue) Unary(op common.UnaryOp) (ScalarValue, error) {
 	switch op {
-	case Neg:
+	case common.Neg:
 		dec2 := d.Dec.Copy()
 		err := dec2.Neg()
 		return &DecimalValue{
 			Dec: dec2,
 		}, err
-	case Pos:
+	case common.Pos:
 		return d, nil
 	default:
 		return nil, fmt.Errorf("unexpected operator id %d for decimal", op)
@@ -795,7 +796,7 @@ type Uint256Value struct {
 	Val *types.Uint256
 }
 
-func (u *Uint256Value) Compare(v Value, op ComparisonOp) (Value, error) {
+func (u *Uint256Value) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -810,7 +811,7 @@ func (u *Uint256Value) Compare(v Value, op ComparisonOp) (Value, error) {
 	return cmpIntegers(c, 0, op)
 }
 
-func (u *Uint256Value) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (u *Uint256Value) Arithmetic(v ScalarValue, op common.ArithmeticOp) (ScalarValue, error) {
 	if _, ok := v.(*NullValue); ok {
 		return &NullValue{DataType: types.Uint256Type}, nil
 	}
@@ -821,22 +822,22 @@ func (u *Uint256Value) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, 
 	}
 
 	switch op {
-	case Add:
+	case common.Add:
 		res := u.Val.Add(val2.Val)
 		return &Uint256Value{Val: res}, nil
-	case Sub:
+	case common.Sub:
 		res, err := u.Val.Sub(val2.Val)
 		return &Uint256Value{Val: res}, err
-	case Mul:
+	case common.Mul:
 		res, err := u.Val.Mul(val2.Val)
 		return &Uint256Value{Val: res}, err
-	case Div:
+	case common.Div:
 		if val2.Val.Cmp(types.Uint256FromInt(0)) == 0 {
 			return nil, fmt.Errorf("cannot divide by zero")
 		}
 		res := u.Val.Div(val2.Val)
 		return &Uint256Value{Val: res}, nil
-	case Mod:
+	case common.Mod:
 		if val2.Val.Cmp(types.Uint256FromInt(0)) == 0 {
 			return nil, fmt.Errorf("cannot divide by zero")
 		}
@@ -847,13 +848,13 @@ func (u *Uint256Value) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, 
 	}
 }
 
-func (u *Uint256Value) Unary(op UnaryOp) (ScalarValue, error) {
+func (u *Uint256Value) Unary(op common.UnaryOp) (ScalarValue, error) {
 	switch op {
-	case Neg:
+	case common.Neg:
 		return nil, fmt.Errorf("cannot apply unary negation to a uint256")
-	case Not:
+	case common.Not:
 		return nil, fmt.Errorf("cannot apply logical NOT to a uint256")
-	case Pos:
+	case common.Pos:
 		return u, nil
 	default:
 		return nil, fmt.Errorf("unknown unary operator: %d", op)
@@ -913,7 +914,7 @@ type IntArrayValue struct {
 	Val []*int64
 }
 
-func (a *IntArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (a *IntArrayValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -938,13 +939,13 @@ func (a *IntArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
 
 		var b bool
 		switch op {
-		case Equal:
+		case common.Equal:
 			b = *v1 == *v2
-		case LessThan:
+		case common.LessThan:
 			b = *v1 < *v2
-		case GreaterThan:
+		case common.GreaterThan:
 			b = *v1 > *v2
-		case IsDistinctFrom:
+		case common.IsDistinctFrom:
 			b = *v1 != *v2
 		default:
 			return nil, fmt.Errorf("unknown comparison operator: %d", op)
@@ -1015,11 +1016,77 @@ func (a *IntArrayValue) Size() int {
 	return size
 }
 
+func (a *IntArrayValue) Cast(t *types.DataType) (Value, error) {
+	switch t {
+	case types.TextArrayType:
+		res := make([]*string, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				res[i] = new(string)
+				*res[i] = strconv.FormatInt(*v, 10)
+			}
+		}
+
+		return &TextArrayValue{
+			Val: res,
+		}, nil
+	case types.BoolArrayType:
+		res := make([]*bool, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				b := *v != 0
+				res[i] = &b
+			}
+		}
+
+		return &BoolArrayValue{
+			Val: res,
+		}, nil
+	case types.Uint256ArrayType:
+		res := make([]*types.Uint256, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				res[i] = types.Uint256FromInt(uint64(*v))
+			}
+		}
+
+		return &Uint256ArrayValue{
+			Val: res,
+		}, nil
+	case types.DecimalArrayType:
+		res := make([]*decimal.Decimal, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				dec, err := decimal.NewFromBigInt(big.NewInt(*v), 0)
+				if err != nil {
+					return nil, err
+				}
+				res[i] = dec
+			}
+		}
+
+		return &DecimalArrayValue{
+			Val:      res,
+			DataType: types.DecimalType,
+		}, nil
+	default:
+		return nil, fmt.Errorf("cannot cast int array to %s", t)
+	}
+}
+
 type TextArrayValue struct {
 	Val []*string
 }
 
-func (a *TextArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (a *TextArrayValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -1044,13 +1111,13 @@ func (a *TextArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
 
 		var b bool
 		switch op {
-		case Equal:
+		case common.Equal:
 			b = *v1 == *v2
-		case LessThan:
+		case common.LessThan:
 			b = *v1 < *v2
-		case GreaterThan:
+		case common.GreaterThan:
 			b = *v1 > *v2
-		case IsDistinctFrom:
+		case common.IsDistinctFrom:
 			b = *v1 != *v2
 		default:
 			return nil, fmt.Errorf("unknown comparison operator: %d", op)
@@ -1121,11 +1188,104 @@ func (a *TextArrayValue) Size() int {
 	return size
 }
 
+func (a *TextArrayValue) Cast(t *types.DataType) (Value, error) {
+	switch t {
+	case types.IntArrayType:
+		res := make([]*int64, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				i, err := strconv.ParseInt(*v, 10, 64)
+				if err != nil {
+					return nil, fmt.Errorf("cannot cast text array to int array: %w", err)
+				}
+				res[i] = &i
+			}
+		}
+
+		return &IntArrayValue{
+			Val: res,
+		}, nil
+	case types.BoolArrayType:
+		res := make([]*bool, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				b, err := strconv.ParseBool(*v)
+				if err != nil {
+					return nil, fmt.Errorf("cannot cast text array to bool array: %w", err)
+				}
+				res[i] = &b
+			}
+		}
+
+		return &BoolArrayValue{
+			Val: res,
+		}, nil
+	case types.Uint256ArrayType:
+		res := make([]*types.Uint256, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				u, err := types.Uint256FromString(*v)
+				if err != nil {
+					return nil, fmt.Errorf("cannot cast text array to uint256 array: %w", err)
+				}
+				res[i] = u
+			}
+		}
+
+		return &Uint256ArrayValue{
+			Val: res,
+		}, nil
+	case types.DecimalArrayType:
+		res := make([]*decimal.Decimal, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				dec, err := decimal.NewFromString(*v)
+				if err != nil {
+					return nil, fmt.Errorf("cannot cast text array to decimal array: %w", err)
+				}
+				res[i] = dec
+			}
+		}
+
+		return &DecimalArrayValue{
+			Val:      res,
+			DataType: types.DecimalType,
+		}, nil
+	case types.UUIDArrayType:
+		res := make([]*types.UUID, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				u, err := types.ParseUUID(*v)
+				if err != nil {
+					return nil, fmt.Errorf("cannot cast text array to uuid array: %w", err)
+				}
+				res[i] = u
+			}
+		}
+
+		return &UuidArrayValue{
+			Val: res,
+		}, nil
+	default:
+		return nil, fmt.Errorf("cannot cast text array to %s", t)
+	}
+}
+
 type BoolArrayValue struct {
 	Val []*bool
 }
 
-func (a *BoolArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (a *BoolArrayValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -1150,9 +1310,9 @@ func (a *BoolArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
 
 		var b bool
 		switch op {
-		case Equal:
+		case common.Equal:
 			b = *v1 == *v2
-		case IsDistinctFrom:
+		case common.IsDistinctFrom:
 			b = *v1 != *v2
 		default:
 			return nil, fmt.Errorf("unknown comparison operator: %d", op)
@@ -1217,12 +1377,44 @@ func (a *BoolArrayValue) Size() int {
 	return len(a.Val)
 }
 
+func (a *BoolArrayValue) Cast(t *types.DataType) (Value, error) {
+	switch t {
+	case types.TextArrayType:
+		res := make([]*string, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				s := strconv.FormatBool(*v)
+				res[i] = &s
+			}
+		}
+		return &TextArrayValue{Val: res}, nil
+	case types.IntArrayType:
+		res := make([]*int64, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				var i int64
+				if *v {
+					i = 1
+				}
+				res[i] = &i
+			}
+		}
+		return &IntArrayValue{Val: res}, nil
+	default:
+		return nil, fmt.Errorf("cannot cast bool array to %s", t)
+	}
+}
+
 type DecimalArrayValue struct {
 	Val      []*decimal.Decimal
 	DataType *types.DataType
 }
 
-func (a *DecimalArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (a *DecimalArrayValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -1360,11 +1552,43 @@ func (a *DecimalArrayValue) Size() int {
 	return size
 }
 
+func (a *DecimalArrayValue) Cast(t *types.DataType) (Value, error) {
+	switch t {
+	case types.TextArrayType:
+		res := make([]*string, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				s := v.String()
+				res[i] = &s
+			}
+		}
+		return &TextArrayValue{Val: res}, nil
+	case types.IntArrayType:
+		res := make([]*int64, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				i, err := v.Int64()
+				if err != nil {
+					return nil, fmt.Errorf("cannot cast decimal to int: %w", err)
+				}
+				res[i] = &i
+			}
+		}
+		return &IntArrayValue{Val: res}, nil
+	default:
+		return nil, fmt.Errorf("cannot cast decimal array to %s", t)
+	}
+}
+
 type Uint256ArrayValue struct {
 	Val []*types.Uint256
 }
 
-func (a *Uint256ArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (a *Uint256ArrayValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -1389,13 +1613,13 @@ func (a *Uint256ArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
 
 		var b bool
 		switch op {
-		case Equal:
+		case common.Equal:
 			b = v1.Cmp(v2) == 0
-		case LessThan:
+		case common.LessThan:
 			b = v1.Cmp(v2) < 0
-		case GreaterThan:
+		case common.GreaterThan:
 			b = v1.Cmp(v2) > 0
-		case IsDistinctFrom:
+		case common.IsDistinctFrom:
 			b = v1.Cmp(v2) != 0
 		default:
 			return nil, fmt.Errorf("unknown comparison operator: %d", op)
@@ -1466,11 +1690,29 @@ func (a *Uint256ArrayValue) Size() int {
 	return size
 }
 
+func (a *Uint256ArrayValue) Cast(t *types.DataType) (Value, error) {
+	switch t {
+	case types.TextArrayType:
+		res := make([]*string, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				s := v.String()
+				res[i] = &s
+			}
+		}
+		return &TextArrayValue{Val: res}, nil
+	default:
+		return nil, fmt.Errorf("cannot cast uint256 array to %s", t)
+	}
+}
+
 type BlobArrayValue struct {
 	Val [][]byte
 }
 
-func (a *BlobArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (a *BlobArrayValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -1495,9 +1737,9 @@ func (a *BlobArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
 
 		var b bool
 		switch op {
-		case Equal:
+		case common.Equal:
 			b = string(v1) == string(v2)
-		case IsDistinctFrom:
+		case common.IsDistinctFrom:
 			b = string(v1) != string(v2)
 		default:
 			return nil, fmt.Errorf("unknown comparison operator: %d", op)
@@ -1568,11 +1810,29 @@ func (a *BlobArrayValue) Size() int {
 	return size
 }
 
+func (a *BlobArrayValue) Cast(t *types.DataType) (Value, error) {
+	switch t {
+	case types.TextArrayType:
+		res := make([]*string, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				s := string(v)
+				res[i] = &s
+			}
+		}
+		return &TextArrayValue{Val: res}, nil
+	default:
+		return nil, fmt.Errorf("cannot cast blob array to %s", t)
+	}
+}
+
 type UuidArrayValue struct {
 	Val []*types.UUID
 }
 
-func (a *UuidArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (a *UuidArrayValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -1597,9 +1857,9 @@ func (a *UuidArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
 
 		var b bool
 		switch op {
-		case Equal:
+		case common.Equal:
 			b = *v1 == *v2
-		case IsDistinctFrom:
+		case common.IsDistinctFrom:
 			b = *v1 != *v2
 		default:
 			return nil, fmt.Errorf("unknown comparison operator: %d", op)
@@ -1670,31 +1930,49 @@ func (a *UuidArrayValue) Size() int {
 	return size
 }
 
+func (a *UuidArrayValue) Cast(t *types.DataType) (Value, error) {
+	switch t {
+	case types.TextArrayType:
+		res := make([]*string, len(a.Val))
+		for i, v := range a.Val {
+			if v == nil {
+				res[i] = nil
+			} else {
+				s := v.String()
+				res[i] = &s
+			}
+		}
+		return &TextArrayValue{Val: res}, nil
+	default:
+		return nil, fmt.Errorf("cannot cast uuid array to %s", t)
+	}
+}
+
 type NullValue struct {
 	DataType *types.DataType
 }
 
-func (n *NullValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (n *NullValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if _, ok := v.(*NullValue); !ok {
 		return &NullValue{DataType: n.DataType}, nil
 	}
 
-	if op == IsDistinctFrom {
+	if op == common.IsDistinctFrom {
 		return &BoolValue{Val: false}, nil
 	}
 
-	if op == Is {
+	if op == common.Is {
 		return &BoolValue{Val: true}, nil
 	}
 
 	return &NullValue{DataType: n.DataType}, nil
 }
 
-func (n *NullValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (n *NullValue) Arithmetic(v ScalarValue, op common.ArithmeticOp) (ScalarValue, error) {
 	return &NullValue{DataType: n.DataType}, nil
 }
 
-func (n *NullValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (n *NullValue) Unary(op common.UnaryOp) (ScalarValue, error) {
 	return &NullValue{DataType: n.DataType}, nil
 }
 
@@ -1735,7 +2013,7 @@ type RecordValue struct {
 	Order  []string
 }
 
-func (o *RecordValue) Compare(v Value, op ComparisonOp) (Value, error) {
+func (o *RecordValue) Compare(v Value, op common.ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
 	}
@@ -1758,7 +2036,7 @@ func (o *RecordValue) Compare(v Value, op ComparisonOp) (Value, error) {
 				break
 			}
 
-			eq, err := o.Fields[field].Compare(v2, Equal)
+			eq, err := o.Fields[field].Compare(v2, common.Equal)
 			if err != nil {
 				return nil, err
 			}
@@ -1777,7 +2055,7 @@ func (o *RecordValue) Compare(v Value, op ComparisonOp) (Value, error) {
 	}
 
 	switch op {
-	case Equal:
+	case common.Equal:
 		return &BoolValue{Val: isSame}, nil
 	default:
 		return nil, fmt.Errorf("unknown comparison operator: %d", op)
@@ -1801,17 +2079,19 @@ func (o *RecordValue) Size() int {
 	return size
 }
 
-const nullSize = 1
+func (o *RecordValue) Cast(t *types.DataType) (Value, error) {
+	return nil, fmt.Errorf("cannot cast record to %s", t)
+}
 
-func cmpIntegers(a, b int, op ComparisonOp) (Value, error) {
+func cmpIntegers(a, b int, op common.ComparisonOp) (Value, error) {
 	switch op {
-	case Equal:
+	case common.Equal:
 		return &BoolValue{Val: a == b}, nil
-	case LessThan:
+	case common.LessThan:
 		return &BoolValue{Val: a < b}, nil
-	case GreaterThan:
+	case common.GreaterThan:
 		return &BoolValue{Val: a > b}, nil
-	case IsDistinctFrom:
+	case common.IsDistinctFrom:
 		return &BoolValue{Val: a != b}, nil
 	default:
 		return nil, fmt.Errorf("unknown comparison operator: %d", op)

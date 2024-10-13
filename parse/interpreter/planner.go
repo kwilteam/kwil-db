@@ -13,7 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/parse/common"
 )
 
-func Run(ctx context.Context, proc *types.Procedure, schema *types.Schema, args []any, maxCost int64, costTable *CostTable) (*ProcedureRunResult, error) {
+func Run(ctx context.Context, proc *types.Procedure, schema *types.Schema, args []any) (*ProcedureRunResult, error) {
 	parseResult, err := parse.ParseProcedure(proc, schema)
 	if err != nil {
 		return nil, err
@@ -25,9 +25,7 @@ func Run(ctx context.Context, proc *types.Procedure, schema *types.Schema, args 
 	i := &interpreterPlanner{}
 
 	exec := &executionContext{
-		maxCost:   maxCost,
-		scope:     newScope(),
-		costTable: costTable,
+		scope: newScope(),
 	}
 
 	if len(proc.Parameters) != len(args) {
@@ -35,7 +33,7 @@ func Run(ctx context.Context, proc *types.Procedure, schema *types.Schema, args 
 	}
 
 	for j, arg := range args {
-		val, err := common.NewVariable(arg)
+		val, err := NewVariable(arg)
 		if err != nil {
 			return nil, err
 		}
@@ -59,10 +57,6 @@ func Run(ctx context.Context, proc *types.Procedure, schema *types.Schema, args 
 
 	res := newReturnableCursor(expectedShape)
 	procRes := &ProcedureRunResult{}
-
-	defer func() {
-		procRes.Cost = exec.currentCost
-	}()
 
 	go func() {
 		for _, stmt := range parseResult.AST {
@@ -148,7 +142,7 @@ func Run(ctx context.Context, proc *types.Procedure, schema *types.Schema, args 
 	return procRes, nil
 }
 
-func makeNamedReturns(expected []*types.NamedType, record common.RecordValue) ([]*NamedValue, error) {
+func makeNamedReturns(expected []*types.NamedType, record RecordValue) ([]*NamedValue, error) {
 	if len(expected) != len(record.Fields) {
 		return nil, fmt.Errorf("expected %d return fields, got %d", len(expected), len(record.Fields))
 	}
@@ -176,34 +170,33 @@ func makeNamedReturns(expected []*types.NamedType, record common.RecordValue) ([
 
 type NamedValue struct {
 	Name  string
-	Value common.Value
+	Value Value
 }
 
 type ProcedureRunResult struct {
-	Cost   int64
 	Values [][]*NamedValue
 }
 
-// procedureCallFunc is a function that is generated for a procedure call.
-// It is used to call a procedure.
-type procedureCallFunc func(ctx context.Context, exec *executionContext, args []common.Value) (Cursor, error)
+// functionCall contains logic for either a user-defined PL/pgSQL function, a built-in function,
+// or an action.
+type functionCall func(ctx context.Context, exec *executionContext, args []Value) (Cursor, error)
 
-func (i *interpreterPlanner) makeProcedureCallFunc(procAst []parse.ProcedureStmt, procParams []*types.NamedType, procReturns *types.ProcedureReturn) procedureCallFunc {
-	stmtFns := make([]stmtFunc, len(procAst))
-	for j, stmt := range procAst {
+func (i *interpreterPlanner) makeActionCallFunc(ast []parse.ProcedureStmt, params []*types.NamedType, returns *types.ProcedureReturn) functionCall {
+	stmtFns := make([]stmtFunc, len(ast))
+	for j, stmt := range ast {
 		stmtFns[j] = stmt.Accept(i).(stmtFunc)
 	}
 
 	var expectedShape []*types.DataType
-	if procReturns != nil {
-		for _, f := range procReturns.Fields {
+	if returns != nil {
+		for _, f := range returns.Fields {
 			expectedShape = append(expectedShape, f.Type)
 		}
 	}
 
-	return func(ctx context.Context, exec *executionContext, args []common.Value) (Cursor, error) {
-		if len(procParams) != len(args) {
-			return nil, fmt.Errorf("expected %d arguments, got %d", len(procParams), len(args))
+	return func(ctx context.Context, exec *executionContext, args []Value) (Cursor, error) {
+		if len(params) != len(args) {
+			return nil, fmt.Errorf("expected %d arguments, got %d", len(params), len(args))
 		}
 
 		ret := newReturnableCursor(expectedShape)
@@ -214,15 +207,14 @@ func (i *interpreterPlanner) makeProcedureCallFunc(procAst []parse.ProcedureStmt
 		}()
 
 		// procedures cannot access variables from the parent scope, so we create a new scope
-		// TODO: handle @foreign_caller
 		exec.scope = newScope()
 
 		for j, arg := range args {
-			if !procParams[j].Type.EqualsStrict(arg.Type()) {
-				return nil, fmt.Errorf("expected argument %d to be %s, got %s", j+1, procParams[j].Type, arg.Type())
+			if !params[j].Type.EqualsStrict(arg.Type()) {
+				return nil, fmt.Errorf("expected argument %d to be %s, got %s", j+1, params[j].Type, arg.Type())
 			}
 
-			err := exec.allocateVariable(procParams[j].Name, arg)
+			err := exec.allocateVariable(params[j].Name, arg)
 			if err != nil {
 				return nil, err
 			}
@@ -237,12 +229,18 @@ func (i *interpreterPlanner) makeProcedureCallFunc(procAst []parse.ProcedureStmt
 	}
 }
 
-// interpreterPlanner is a basic interpreterPlanner for Kuneiform procedures.
-type interpreterPlanner struct {
-	// schema is the database schema.
-	schema *types.Schema
-	// procedures are the asts
-	// TODO: make a map
+// interpreterPlanner creates functions for running Kuneiform logic.
+type interpreterPlanner struct{}
+
+// FunctionSignature is the signature for either a user-defined PL/pgSQL function, a built-in function,
+// or an action.
+type FunctionSignature struct {
+	// Name is the name of the function.
+	Name string
+	// Parameters are the parameters of the function.
+	Parameters []*types.NamedType
+	// Returns are the return values of the function.
+	Returns *types.ProcedureReturn
 }
 
 var (
@@ -257,7 +255,7 @@ type stmtFunc func(ctx context.Context, exec *executionContext, ret returnChans)
 
 func (i *interpreterPlanner) VisitProcedureStmtDeclaration(p0 *parse.ProcedureStmtDeclaration) any {
 	return stmtFunc(func(ctx context.Context, exec *executionContext, ret returnChans) error {
-		return exec.allocateVariable(p0.Variable.Name, common.NewNullValue(p0.Type))
+		return exec.allocateVariable(p0.Variable.Name, NewNullValue(p0.Type))
 	})
 }
 
@@ -280,7 +278,7 @@ func (i *interpreterPlanner) VisitProcedureStmtAssignment(p0 *parse.ProcedureStm
 		case *parse.ExpressionVariable:
 			return exec.setVariable(a.Name, val)
 		case *parse.ExpressionArrayAccess:
-			scalarVal, ok := val.(common.ScalarValue)
+			scalarVal, ok := val.(ScalarValue)
 			if !ok {
 				return fmt.Errorf("expected scalar value, got %T", val)
 			}
@@ -290,14 +288,9 @@ func (i *interpreterPlanner) VisitProcedureStmtAssignment(p0 *parse.ProcedureStm
 				return err
 			}
 
-			arr, ok := arrVal.(common.ArrayValue)
+			arr, ok := arrVal.(ArrayValue)
 			if !ok {
 				return fmt.Errorf("expected array, got %T", arrVal)
-			}
-
-			err = exec.Spend(exec.costTable.ArrayAccessCost + exec.costTable.SetVariableCost)
-			if err != nil {
-				return err
 			}
 
 			index, err := indexFn(ctx, exec)
@@ -317,7 +310,99 @@ func (i *interpreterPlanner) VisitProcedureStmtAssignment(p0 *parse.ProcedureStm
 }
 
 func (i *interpreterPlanner) VisitProcedureStmtCall(p0 *parse.ProcedureStmtCall) any {
-	panic("TODO: Implement")
+	fnCall, ok := p0.Call.(*parse.ExpressionFunctionCall)
+	if !ok {
+		// this will get removed once we update the AST with v0.10 changes
+		panic("expected function call")
+	}
+
+	// we cannot simply use the same visitor as the expression function call, because expression function
+	// calls always return exactly one value. Here, we can return 0 values, many values, or a table.
+
+	receivers := make([]string, len(p0.Receivers))
+	for j, r := range p0.Receivers {
+		receivers[j] = r.Name
+	}
+
+	args := make([]exprFunc, len(fnCall.Args))
+	for j, arg := range fnCall.Args {
+		args[j] = arg.Accept(i).(exprFunc)
+	}
+
+	return stmtFunc(func(ctx context.Context, exec *executionContext, ret returnChans) error {
+		funcDef, ok := exec.availableFunctions[fnCall.Name]
+		if !ok {
+			return fmt.Errorf(`action "%s" no longer exists`, fnCall.Name)
+		}
+
+		// verify that the args match the function signature
+		if len(funcDef.Signature.Parameters) != len(args) {
+			return fmt.Errorf("expected %d arguments, got %d", len(funcDef.Signature.Parameters), len(args))
+		}
+
+		// verify the returns.
+		// If the user expects values, then it must exactly match the number of returns.
+		// If the user does not expect values, then the function can return anything / return nothing.
+		if len(receivers) != 0 {
+			if funcDef.Signature.Returns == nil {
+				return fmt.Errorf(`expected function "%s" to return %d values, but it does not return anything`, funcDef.Signature.Name, len(receivers))
+			}
+
+			if len(funcDef.Signature.Returns.Fields) != len(receivers) {
+				return fmt.Errorf(`expected function "%s" to return %d values, but it returns %d`, funcDef.Signature.Name, len(receivers), len(funcDef.Signature.Returns.Fields))
+			}
+
+			if funcDef.Signature.Returns.IsTable {
+				return fmt.Errorf(`expected function "%s" to return %d values, but it returns a table`, funcDef.Signature.Name, len(receivers))
+			}
+		}
+
+		vals := make([]Value, len(args))
+		for j, valFn := range args {
+			val, err := valFn(ctx, exec)
+			if err != nil {
+				return err
+			}
+
+			vals[j] = val
+		}
+
+		cursor, err := funcDef.Func(ctx, exec, vals)
+		if err != nil {
+			return err
+		}
+
+		defer cursor.Close()
+
+		for {
+			rec, done, err := cursor.Next(ctx)
+			if err != nil {
+				return err
+			}
+			if done {
+				break
+			}
+
+			if len(receivers) != 0 {
+				// since cursors return a map, we need to match up
+				// the expected return field names with the actual field names,
+				// and then assign the values to the receivers in the correct order.
+				for j, sigField := range funcDef.Signature.Returns.Fields {
+					val, ok := rec.Fields[sigField.Name]
+					if !ok {
+						return fmt.Errorf(`expected return value "%s" not found`, sigField.Name)
+					}
+
+					err = exec.setVariable(receivers[j], val)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		return nil
+	})
 }
 
 // executeBlock executes a block of statements with their own sub-scope.
@@ -369,11 +454,6 @@ func (i *interpreterPlanner) VisitProcedureStmtForLoop(p0 *parse.ProcedureStmtFo
 			}
 			if done {
 				break
-			}
-
-			err = exec.Spend(exec.costTable.LoopCost)
-			if err != nil {
-				return err
 			}
 
 			err = executeBlock(ctx, exec, ret, []*NamedValue{
@@ -434,14 +514,14 @@ type rangeLooper struct {
 	current int64
 }
 
-func (r *rangeLooper) Next(ctx context.Context) (common.Value, bool, error) {
+func (r *rangeLooper) Next(ctx context.Context) (Value, bool, error) {
 	if r.current > r.end {
 		return nil, true, nil
 	}
 
 	ret := r.current
 	r.current++
-	return &common.IntValue{
+	return &IntValue{
 		Val: ret,
 	}, false, nil
 }
@@ -461,7 +541,7 @@ func (i *interpreterPlanner) VisitLoopTermVariable(p0 *parse.LoopTermVariable) a
 			return nil, err
 		}
 
-		arr, ok := val.(common.ArrayValue)
+		arr, ok := val.(ArrayValue)
 		if !ok {
 			return nil, fmt.Errorf("expected array, got %T", val)
 		}
@@ -475,16 +555,16 @@ func (i *interpreterPlanner) VisitLoopTermVariable(p0 *parse.LoopTermVariable) a
 
 // loopReturn is an interface for iterating over the result of a loop term.
 type loopReturn interface {
-	Next(ctx context.Context) (common.Value, bool, error)
+	Next(ctx context.Context) (Value, bool, error)
 	Close() error
 }
 
 type arrayLooper struct {
-	arr   common.ArrayValue
+	arr   ArrayValue
 	index int64
 }
 
-func (a *arrayLooper) Next(ctx context.Context) (common.Value, bool, error) {
+func (a *arrayLooper) Next(ctx context.Context) (Value, bool, error) {
 	ret, err := a.arr.Index(a.index)
 	if err != nil {
 		if err == common.ErrIndexOutOfBounds {
@@ -543,11 +623,11 @@ func (i *interpreterPlanner) VisitProcedureStmtIf(p0 *parse.ProcedureStmtIf) any
 			}
 
 			switch c := cond.(type) {
-			case *common.BoolValue:
+			case *BoolValue:
 				if !c.Val {
 					continue
 				}
-			case *common.NullValue:
+			case *NullValue:
 				continue
 			default:
 				return fmt.Errorf("expected bool, got %s", c.Type())
@@ -578,10 +658,6 @@ func (i *interpreterPlanner) VisitProcedureStmtSQL(p0 *parse.ProcedureStmtSQL) a
 
 func (i *interpreterPlanner) VisitProcedureStmtBreak(p0 *parse.ProcedureStmtBreak) any {
 	return stmtFunc(func(ctx context.Context, exec *executionContext, ret returnChans) error {
-		if err := exec.Spend(exec.costTable.BreakCost); err != nil {
-			return err
-		}
-
 		return errBreak
 	})
 }
@@ -593,11 +669,7 @@ func (i *interpreterPlanner) VisitProcedureStmtReturn(p0 *parse.ProcedureStmtRet
 	}
 
 	return stmtFunc(func(ctx context.Context, exec *executionContext, ret returnChans) error {
-		if err := exec.Spend(exec.costTable.ReturnCost); err != nil {
-			return err
-		}
-
-		vals := make([]common.Value, len(p0.Values))
+		vals := make([]Value, len(p0.Values))
 		for j, valFn := range valFns {
 			val, err := valFn(ctx, exec)
 			if err != nil {
@@ -620,11 +692,7 @@ func (i *interpreterPlanner) VisitProcedureStmtReturnNext(p0 *parse.ProcedureStm
 	}
 
 	return stmtFunc(func(ctx context.Context, exec *executionContext, ret returnChans) error {
-		if err := exec.Spend(exec.costTable.ReturnCost); err != nil {
-			return err
-		}
-
-		vals := make([]common.Value, len(p0.Values))
+		vals := make([]Value, len(p0.Values))
 		for j, valFn := range valFns {
 			val, err := valFn(ctx, exec)
 			if err != nil {
@@ -645,11 +713,11 @@ func (i *interpreterPlanner) VisitProcedureStmtReturnNext(p0 *parse.ProcedureStm
 // everything in this section is for expressions, which evaluate to exactly one value.
 
 // exprFunc is a function that returns a value.
-type exprFunc func(ctx context.Context, exec *executionContext) (common.Value, error)
+type exprFunc func(ctx context.Context, exec *executionContext) (Value, error)
 
 func (i *interpreterPlanner) VisitExpressionLiteral(p0 *parse.ExpressionLiteral) any {
-	return exprFunc(func(ctx context.Context, exec *executionContext) (common.Value, error) {
-		return common.NewVariable(p0.Value)
+	return exprFunc(func(ctx context.Context, exec *executionContext) (Value, error) {
+		return NewVariable(p0.Value)
 	})
 }
 
@@ -659,55 +727,74 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 		args[j] = arg.Accept(i).(exprFunc)
 	}
 
-	// can be a built-in function or a user-defined procedure
-	funcDef, ok := common.Functions[p0.Name]
-	if ok {
-		scalarFunc, ok := funcDef.(*common.ScalarFunctionDefinition)
+	return exprFunc(func(ctx context.Context, exec *executionContext) (Value, error) {
+		// we check again because the action might have been dropped
+		funcDef, ok := exec.availableFunctions[p0.Name]
 		if !ok {
-			panic("cannot call non-scalar function in procedure")
+			return nil, fmt.Errorf(`function "%s" no longer exists`, p0.Name)
 		}
 
-		return makeBuiltInFunctionCall(scalarFunc, args)
-	}
-	panic("TODO: Implement")
-	// // otherwise, it must be a user defined procedure.
-	// proc, ok := i.schema.FindProcedure(p0.Name)
-	// if !ok {
-	// 	panic("procedure not found")
-	// }
-
-	// return exprFunc(func(ctx context.Context, exec *executionContext) (common.Value, error) {
-
-	// })
-}
-
-func makeBuiltInFunctionCall(funcDef *common.ScalarFunctionDefinition, args []exprFunc) exprFunc {
-	return exprFunc(func(ctx context.Context, exec *executionContext) (common.Value, error) {
-		err := exec.Spend(exec.costTable.CallBuiltInFunctionCost)
-		if err != nil {
-			return nil, err
+		if len(funcDef.Signature.Parameters) != len(args) {
+			return nil, fmt.Errorf("expected %d arguments, got %d", len(funcDef.Signature.Parameters), len(args))
 		}
 
-		vals := make([]common.Value, len(args))
-		for i, arg := range args {
+		if funcDef.Signature.Returns == nil {
+			return nil, fmt.Errorf(`cannot call function "%s" in an expression because it returns nothing`, p0.Name)
+		}
+		if funcDef.Signature.Returns.IsTable {
+			return nil, fmt.Errorf(`cannot call function "%s" in an expression because it returns a table`, p0.Name)
+		}
+		if len(funcDef.Signature.Returns.Fields) != 1 {
+			return nil, fmt.Errorf(`cannot call function "%s" in an expression because it returns multiple values`, p0.Name)
+		}
+
+		vals := make([]Value, len(args))
+		for j, arg := range args {
 			val, err := arg(ctx, exec)
 			if err != nil {
 				return nil, err
 			}
 
-			vals[i] = val
+			if !val.Type().EqualsStrict(funcDef.Signature.Parameters[j].Type) {
+				return nil, fmt.Errorf("expected argument %d to be %s, got %s", j+1, funcDef.Signature.Parameters[j].Type, val.Type())
+			}
+
+			vals[j] = val
 		}
 
-		return funcDef.EvaluateFunc(exec, vals)
+		cursor, err := funcDef.Func(ctx, exec, vals)
+		if err != nil {
+			return nil, err
+		}
+
+		defer cursor.Close()
+
+		rec, done, err := cursor.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if done {
+			return nil, fmt.Errorf("expected scalar value, got nothing")
+		}
+
+		if len(rec.Fields) != 1 {
+			return nil, fmt.Errorf("expected scalar value, got record with %d fields", len(rec.Fields))
+		}
+
+		return rec.Fields[rec.Order[0]], nil
 	})
 }
 
 func (i *interpreterPlanner) VisitExpressionForeignCall(p0 *parse.ExpressionForeignCall) any {
-	panic("TODO: Implement")
+	// since v0.10 is single-schema, we don't need to support foreign calls
+	// This should be caught at a higher level, but we panic here just in case.
+	// Will probably remove this in the future.
+	panic("foreign calls are no longer supported as of Kwil v0.10")
 }
 
 func (i *interpreterPlanner) VisitExpressionVariable(p0 *parse.ExpressionVariable) any {
-	return exprFunc(func(ctx context.Context, exec *executionContext) (common.Value, error) {
+	return exprFunc(func(ctx context.Context, exec *executionContext) (Value, error) {
 		return exec.getVariable(p0.Name)
 	})
 }
@@ -716,18 +803,13 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 	arrFn := p0.Array.Accept(i).(exprFunc)
 	indexFn := p0.Index.Accept(i).(exprFunc)
 
-	return exprFunc(func(ctx context.Context, exec *executionContext) (common.Value, error) {
-		err := exec.Spend(exec.costTable.ArrayAccessCost)
-		if err != nil {
-			return nil, err
-		}
-
+	return exprFunc(func(ctx context.Context, exec *executionContext) (Value, error) {
 		arrVal, err := arrFn(ctx, exec)
 		if err != nil {
 			return nil, err
 		}
 
-		arr, ok := arrVal.(common.ArrayValue)
+		arr, ok := arrVal.(ArrayValue)
 		if !ok {
 			return nil, fmt.Errorf("expected array, got %T", arrVal)
 		}
@@ -751,12 +833,7 @@ func (i *interpreterPlanner) VisitExpressionMakeArray(p0 *parse.ExpressionMakeAr
 		valFns[j] = v.Accept(i).(exprFunc)
 	}
 
-	return exprFunc(func(ctx context.Context, exec *executionContext) (common.Value, error) {
-		err := exec.Spend(exec.costTable.MakeArrayCost)
-		if err != nil {
-			return nil, err
-		}
-
+	return exprFunc(func(ctx context.Context, exec *executionContext) (Value, error) {
 		if len(valFns) == 0 {
 			return nil, fmt.Errorf("array must have at least one element")
 		}
@@ -766,12 +843,12 @@ func (i *interpreterPlanner) VisitExpressionMakeArray(p0 *parse.ExpressionMakeAr
 			return nil, err
 		}
 
-		scal, ok := val0.(common.ScalarValue)
+		scal, ok := val0.(ScalarValue)
 		if !ok {
 			return nil, fmt.Errorf("expected scalar value, got %T", val0)
 		}
 
-		var vals []common.ScalarValue
+		var vals []ScalarValue
 		for j, valFn := range valFns {
 			if j == 0 {
 				continue
@@ -782,7 +859,7 @@ func (i *interpreterPlanner) VisitExpressionMakeArray(p0 *parse.ExpressionMakeAr
 				return nil, err
 			}
 
-			scal, ok := val.(common.ScalarValue)
+			scal, ok := val.(ScalarValue)
 			if !ok {
 				return nil, fmt.Errorf("expected scalar value, got %T", val)
 			}
@@ -797,18 +874,13 @@ func (i *interpreterPlanner) VisitExpressionMakeArray(p0 *parse.ExpressionMakeAr
 func (i *interpreterPlanner) VisitExpressionFieldAccess(p0 *parse.ExpressionFieldAccess) any {
 	recordFn := p0.Record.Accept(i).(exprFunc)
 
-	return exprFunc(func(ctx context.Context, exec *executionContext) (common.Value, error) {
-		err := exec.Spend(exec.costTable.GetVariableCost)
-		if err != nil {
-			return nil, err
-		}
-
+	return exprFunc(func(ctx context.Context, exec *executionContext) (Value, error) {
 		objVal, err := recordFn(ctx, exec)
 		if err != nil {
 			return nil, err
 		}
 
-		obj, ok := objVal.(*common.RecordValue)
+		obj, ok := objVal.(*RecordValue)
 		if !ok {
 			return nil, fmt.Errorf("expected object, got %T", objVal)
 		}
@@ -847,11 +919,7 @@ func (i *interpreterPlanner) VisitExpressionComparison(p0 *parse.ExpressionCompa
 
 // makeComparisonFunc returns a function that compares two values.
 func makeComparisonFunc(left, right exprFunc, cmpOps common.ComparisonOp) exprFunc {
-	return func(ctx context.Context, exec *executionContext) (common.Value, error) {
-		if err := exec.Spend(exec.costTable.ComparisonCost); err != nil {
-			return nil, err
-		}
-
+	return func(ctx context.Context, exec *executionContext) (Value, error) {
 		leftVal, err := left(ctx, exec)
 		if err != nil {
 			return nil, err
@@ -877,11 +945,7 @@ func (i *interpreterPlanner) VisitExpressionLogical(p0 *parse.ExpressionLogical)
 // makeLogicalFunc returns a function that performs a logical operation.
 // If and is true, it performs an AND operation, otherwise it performs an OR operation.
 func makeLogicalFunc(left, right exprFunc, and bool) exprFunc {
-	return func(ctx context.Context, exec *executionContext) (common.Value, error) {
-		if err := exec.Spend(exec.costTable.LogicalCost); err != nil {
-			return nil, err
-		}
-
+	return func(ctx context.Context, exec *executionContext) (Value, error) {
 		leftVal, err := left(ctx, exec)
 		if err != nil {
 			return nil, err
@@ -896,37 +960,32 @@ func makeLogicalFunc(left, right exprFunc, and bool) exprFunc {
 			return nil, fmt.Errorf("expected bools, got %s and %s", leftVal.Type(), rightVal.Type())
 		}
 
-		if _, ok := leftVal.(*common.NullValue); ok {
+		if _, ok := leftVal.(*NullValue); ok {
 			return leftVal, nil
 		}
 
-		if _, ok := rightVal.(*common.NullValue); ok {
+		if _, ok := rightVal.(*NullValue); ok {
 			return rightVal, nil
 		}
 
 		if and {
-			return &common.BoolValue{
+			return &BoolValue{
 				Val: leftVal.Value().(bool) && rightVal.Value().(bool),
 			}, nil
 		}
 
-		return &common.BoolValue{
+		return &BoolValue{
 			Val: leftVal.Value().(bool) || rightVal.Value().(bool),
 		}, nil
 	}
 }
 
 func (i *interpreterPlanner) VisitExpressionArithmetic(p0 *parse.ExpressionArithmetic) any {
-
 	op := parse.ConvertArithmeticOp(p0.Operator)
 
 	leftFn := p0.Left.Accept(i).(exprFunc)
 	rightFn := p0.Right.Accept(i).(exprFunc)
-	return exprFunc(func(ctx context.Context, exec *executionContext) (common.Value, error) {
-		if err := exec.Spend(exec.costTable.ArithmeticCost); err != nil {
-			return nil, err
-		}
-
+	return exprFunc(func(ctx context.Context, exec *executionContext) (Value, error) {
 		left, err := leftFn(ctx, exec)
 		if err != nil {
 			return nil, err
@@ -937,12 +996,12 @@ func (i *interpreterPlanner) VisitExpressionArithmetic(p0 *parse.ExpressionArith
 			return nil, err
 		}
 
-		leftScalar, ok := left.(common.ScalarValue)
+		leftScalar, ok := left.(ScalarValue)
 		if !ok {
 			return nil, fmt.Errorf("expected scalar, got %T", left)
 		}
 
-		rightScalar, ok := right.(common.ScalarValue)
+		rightScalar, ok := right.(ScalarValue)
 		if !ok {
 			return nil, fmt.Errorf("expected scalar, got %T", right)
 		}
@@ -959,17 +1018,13 @@ func (i *interpreterPlanner) VisitExpressionUnary(p0 *parse.ExpressionUnary) any
 
 // makeUnaryFunc returns a function that performs a unary operation.
 func makeUnaryFunc(val exprFunc, op common.UnaryOp) exprFunc {
-	return exprFunc(func(ctx context.Context, exec *executionContext) (common.Value, error) {
-		if err := exec.Spend(exec.costTable.UnaryCost); err != nil {
-			return nil, err
-		}
-
+	return exprFunc(func(ctx context.Context, exec *executionContext) (Value, error) {
 		v, err := val(ctx, exec)
 		if err != nil {
 			return nil, err
 		}
 
-		vScalar, ok := v.(common.ScalarValue)
+		vScalar, ok := v.(ScalarValue)
 		if !ok {
 			return nil, fmt.Errorf("%w: expected scalar, got %T", ErrUnaryOnNonScalar, v)
 		}
@@ -1000,107 +1055,107 @@ func (i *interpreterPlanner) VisitExpressionIs(p0 *parse.ExpressionIs) any {
 // since we will have separate handling for SQL statements at a later stage.
 
 func (i *interpreterPlanner) VisitExpressionColumn(p0 *parse.ExpressionColumn) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitExpressionCollate(p0 *parse.ExpressionCollate) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitExpressionStringComparison(p0 *parse.ExpressionStringComparison) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitExpressionIn(p0 *parse.ExpressionIn) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitExpressionBetween(p0 *parse.ExpressionBetween) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitExpressionSubquery(p0 *parse.ExpressionSubquery) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitExpressionCase(p0 *parse.ExpressionCase) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitCommonTableExpression(p0 *parse.CommonTableExpression) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitSQLStatement(p0 *parse.SQLStatement) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitSelectStatement(p0 *parse.SelectStatement) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitSelectCore(p0 *parse.SelectCore) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitResultColumnExpression(p0 *parse.ResultColumnExpression) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitResultColumnWildcard(p0 *parse.ResultColumnWildcard) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitRelationTable(p0 *parse.RelationTable) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitRelationSubquery(p0 *parse.RelationSubquery) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitRelationFunctionCall(p0 *parse.RelationFunctionCall) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitJoin(p0 *parse.Join) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitUpdateStatement(p0 *parse.UpdateStatement) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitUpdateSetClause(p0 *parse.UpdateSetClause) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitDeleteStatement(p0 *parse.DeleteStatement) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitInsertStatement(p0 *parse.InsertStatement) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitUpsertClause(p0 *parse.UpsertClause) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitOrderingTerm(p0 *parse.OrderingTerm) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitActionStmtSQL(p0 *parse.ActionStmtSQL) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitActionStmtExtensionCall(p0 *parse.ActionStmtExtensionCall) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitActionStmtActionCall(p0 *parse.ActionStmtActionCall) any {
-	panic("TODO: Implement")
+	panic("intepreter planner should not be called for SQL expressions")
 }
 
 func (i *interpreterPlanner) VisitIfThen(p0 *parse.IfThen) any {

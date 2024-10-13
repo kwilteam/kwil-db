@@ -2,7 +2,6 @@ package interpreter
 
 import (
 	"context"
-	"math"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -64,7 +63,7 @@ func BenchmarkLoops(b *testing.B) {
 			schema.Procedures = []*types.Procedure{tt.proc}
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, err := Run(ctx, tt.proc, schema, tt.args, math.MaxInt64, ZeroCostTable())
+				_, err := Run(ctx, tt.proc, schema, tt.args)
 				if err != nil {
 					b.Fatal(err)
 				}
