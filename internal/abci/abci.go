@@ -36,8 +36,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/statesync"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/version"
-	parseCommon "github.com/kwilteam/kwil-db/parse/common"
-
+	"github.com/kwilteam/kwil-db/parse"
 	"go.uber.org/zap"
 )
 
@@ -619,7 +618,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 				logsDone <- errors.New("premature notice stream termination")
 				return
 			}
-			txid, notice, err := parseCommon.ParseNotice(log)
+			txid, notice, err := parse.ParseNotice(log)
 			if err != nil {
 				// will still be deterministic so nbd to not halt here
 				a.log.Errorf("failed to parse notice (%.20s...): %v", log, err)

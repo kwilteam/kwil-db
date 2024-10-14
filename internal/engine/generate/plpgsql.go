@@ -8,7 +8,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/parse"
-	"github.com/kwilteam/kwil-db/parse/common"
 )
 
 /*
@@ -57,7 +56,7 @@ func (s *sqlGenerator) VisitExpressionFunctionCall(p0 *parse.ExpressionFunctionC
 
 	// if this is not a built-in function, we need to prefix it with
 	// the schema name, since it is a local procedure
-	fn, ok := common.Functions[p0.Name]
+	fn, ok := parse.Functions[p0.Name]
 	if !ok {
 		// if not found, it is a local procedure
 		str.WriteString(s.pgSchema)
@@ -78,9 +77,9 @@ func (s *sqlGenerator) VisitExpressionFunctionCall(p0 *parse.ExpressionFunctionC
 	var pgFmt string
 	var err error
 	switch fn := fn.(type) {
-	case *common.ScalarFunctionDefinition:
+	case *parse.ScalarFunctionDefinition:
 		pgFmt, err = fn.PGFormatFunc(args)
-	case *common.AggregateFunctionDefinition:
+	case *parse.AggregateFunctionDefinition:
 		pgFmt, err = fn.PGFormatFunc(args, p0.Distinct)
 	default:
 		panic("unknown function type " + fmt.Sprintf("%T", fn))

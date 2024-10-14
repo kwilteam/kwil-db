@@ -25,9 +25,19 @@ type executionContext struct {
 // executable is the interface and function to call a built-in Postgres function,
 // a user-defined Postgres procedure, or a user-defined Kwil action.
 type executable struct {
-	Signature *FunctionSignature
-	Func      functionCall
+	// Name is the name of the function.
+	Name string
+	// ReturnType is a function that takes the arguments for the function and returns the return type.
+	// The function can return a nil error AND a nil return type if the function does not return anything.
+	ReturnType returnTypeFunc
+	// Func is a function that executes the function.
+	Func functionCall
 }
+
+// returnTypeFunc is a function that validates the arguments of a function and gives
+// the return type of the function based on the arguments.
+// The return type can be nil if the function does not return anything.
+type returnTypeFunc func([]Value) (*types.ProcedureReturn, error)
 
 // newScope creates a new scope.
 func newScope() *scopeContext {
@@ -46,6 +56,8 @@ func (s *scopeContext) subScope() *scopeContext {
 
 // setVariable sets a variable in the current scope.
 // It will allocate the variable if it does not exist.
+// if we are setting a variable that was defined in an outer scope,
+// it will overwrite the variable in the outer scope.
 func (e *executionContext) setVariable(name string, value Value) error {
 	_, foundScope, err := getVarFromScope(name, e.scope)
 	if err != nil {

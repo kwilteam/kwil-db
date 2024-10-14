@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/internal/interpreter"
 	"github.com/kwilteam/kwil-db/parse"
-	"github.com/kwilteam/kwil-db/parse/interpreter"
 	"github.com/stretchr/testify/require"
 )
 

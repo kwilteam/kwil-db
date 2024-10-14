@@ -12,7 +12,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/core/types/validation"
-	"github.com/kwilteam/kwil-db/parse/common"
 	"github.com/kwilteam/kwil-db/parse/gen"
 )
 
@@ -413,7 +412,7 @@ func (s *schemaVisitor) registerBlock(ctx antlr.ParserRuleContext, name string) 
 		return
 	}
 
-	if _, ok := common.Functions[lower]; ok {
+	if _, ok := Functions[lower]; ok {
 		s.errs.RuleErr(ctx, ErrReservedKeyword, lower)
 		return
 	}

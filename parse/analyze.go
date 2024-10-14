@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/parse/common"
 )
 
 /*
@@ -522,7 +521,7 @@ func (s *sqlAnalyzer) VisitExpressionLiteral(p0 *ExpressionLiteral) any {
 
 func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) any {
 	// function call should either be against a known function, or a procedure.
-	fn, ok := common.Functions[p0.Name]
+	fn, ok := Functions[p0.Name]
 	if !ok {
 		// if not found, it might be a schema procedure.
 		proc, found := s.schema.FindProcedure(p0.Name)
@@ -570,7 +569,7 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 		return cast(p0, types.UnknownType)
 	}
 
-	_, isAggregate := fn.(*common.AggregateFunctionDefinition)
+	_, isAggregate := fn.(*AggregateFunctionDefinition)
 
 	// the function is a built in function. If using DISTINCT, it needs to be an aggregate
 	// if using *, it needs to support it.

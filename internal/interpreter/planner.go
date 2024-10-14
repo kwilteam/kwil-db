@@ -10,7 +10,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse"
-	"github.com/kwilteam/kwil-db/parse/common"
 )
 
 func Run(ctx context.Context, proc *types.Procedure, schema *types.Schema, args []any) (*ProcedureRunResult, error) {
@@ -181,10 +180,11 @@ type ProcedureRunResult struct {
 // or an action.
 type functionCall func(ctx context.Context, exec *executionContext, args []Value) (Cursor, error)
 
-func (i *interpreterPlanner) makeActionCallFunc(ast []parse.ProcedureStmt, params []*types.NamedType, returns *types.ProcedureReturn) functionCall {
+func makeActionToExecutable(name string, ast []parse.ProcedureStmt, params []*types.ProcedureParameter, returns *types.ProcedureReturn) *executable {
+	planner := &interpreterPlanner{}
 	stmtFns := make([]stmtFunc, len(ast))
 	for j, stmt := range ast {
-		stmtFns[j] = stmt.Accept(i).(stmtFunc)
+		stmtFns[j] = stmt.Accept(planner).(stmtFunc)
 	}
 
 	var expectedShape []*types.DataType
@@ -194,7 +194,7 @@ func (i *interpreterPlanner) makeActionCallFunc(ast []parse.ProcedureStmt, param
 		}
 	}
 
-	return func(ctx context.Context, exec *executionContext, args []Value) (Cursor, error) {
+	execFn := func(ctx context.Context, exec *executionContext, args []Value) (Cursor, error) {
 		if len(params) != len(args) {
 			return nil, fmt.Errorf("expected %d arguments, got %d", len(params), len(args))
 		}
@@ -226,6 +226,26 @@ func (i *interpreterPlanner) makeActionCallFunc(ast []parse.ProcedureStmt, param
 		}
 
 		return ret, nil
+	}
+
+	validateArgs := func(v []Value) (*types.ProcedureReturn, error) {
+		if len(params) != len(v) {
+			return nil, fmt.Errorf("expected %d arguments, got %d", len(params), len(v))
+		}
+
+		for j, arg := range v {
+			if !params[j].Type.EqualsStrict(arg.Type()) {
+				return nil, fmt.Errorf("expected argument %d to be %s, got %s", j+1, params[j].Type, arg.Type())
+			}
+		}
+
+		return returns, nil
+	}
+
+	return &executable{
+		Name:       name,
+		ReturnType: validateArgs,
+		Func:       execFn,
 	}
 }
 
@@ -335,28 +355,6 @@ func (i *interpreterPlanner) VisitProcedureStmtCall(p0 *parse.ProcedureStmtCall)
 			return fmt.Errorf(`action "%s" no longer exists`, fnCall.Name)
 		}
 
-		// verify that the args match the function signature
-		if len(funcDef.Signature.Parameters) != len(args) {
-			return fmt.Errorf("expected %d arguments, got %d", len(funcDef.Signature.Parameters), len(args))
-		}
-
-		// verify the returns.
-		// If the user expects values, then it must exactly match the number of returns.
-		// If the user does not expect values, then the function can return anything / return nothing.
-		if len(receivers) != 0 {
-			if funcDef.Signature.Returns == nil {
-				return fmt.Errorf(`expected function "%s" to return %d values, but it does not return anything`, funcDef.Signature.Name, len(receivers))
-			}
-
-			if len(funcDef.Signature.Returns.Fields) != len(receivers) {
-				return fmt.Errorf(`expected function "%s" to return %d values, but it returns %d`, funcDef.Signature.Name, len(receivers), len(funcDef.Signature.Returns.Fields))
-			}
-
-			if funcDef.Signature.Returns.IsTable {
-				return fmt.Errorf(`expected function "%s" to return %d values, but it returns a table`, funcDef.Signature.Name, len(receivers))
-			}
-		}
-
 		vals := make([]Value, len(args))
 		for j, valFn := range args {
 			val, err := valFn(ctx, exec)
@@ -365,6 +363,28 @@ func (i *interpreterPlanner) VisitProcedureStmtCall(p0 *parse.ProcedureStmtCall)
 			}
 
 			vals[j] = val
+		}
+
+		returns, err := funcDef.ReturnType(vals)
+		if err != nil {
+			return err
+		}
+
+		// verify the returns.
+		// If the user expects values, then it must exactly match the number of returns.
+		// If the user does not expect values, then the function can return anything / return nothing.
+		if len(receivers) != 0 {
+			if returns == nil {
+				return fmt.Errorf(`expected function "%s" to return %d values, but it does not return anything`, funcDef.Name, len(receivers))
+			}
+
+			if len(returns.Fields) != len(receivers) {
+				return fmt.Errorf(`expected function "%s" to return %d values, but it returns %d`, funcDef.Name, len(receivers), len(returns.Fields))
+			}
+
+			if returns.IsTable {
+				return fmt.Errorf(`expected function "%s" to return %d values, but it returns a table`, funcDef.Name, len(receivers))
+			}
 		}
 
 		cursor, err := funcDef.Func(ctx, exec, vals)
@@ -387,7 +407,7 @@ func (i *interpreterPlanner) VisitProcedureStmtCall(p0 *parse.ProcedureStmtCall)
 				// since cursors return a map, we need to match up
 				// the expected return field names with the actual field names,
 				// and then assign the values to the receivers in the correct order.
-				for j, sigField := range funcDef.Signature.Returns.Fields {
+				for j, sigField := range returns.Fields {
 					val, ok := rec.Fields[sigField.Name]
 					if !ok {
 						return fmt.Errorf(`expected return value "%s" not found`, sigField.Name)
@@ -567,7 +587,7 @@ type arrayLooper struct {
 func (a *arrayLooper) Next(ctx context.Context) (Value, bool, error) {
 	ret, err := a.arr.Index(a.index)
 	if err != nil {
-		if err == common.ErrIndexOutOfBounds {
+		if err == ErrIndexOutOfBounds {
 			return nil, true, nil
 		}
 		return nil, false, err
@@ -734,20 +754,6 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 			return nil, fmt.Errorf(`function "%s" no longer exists`, p0.Name)
 		}
 
-		if len(funcDef.Signature.Parameters) != len(args) {
-			return nil, fmt.Errorf("expected %d arguments, got %d", len(funcDef.Signature.Parameters), len(args))
-		}
-
-		if funcDef.Signature.Returns == nil {
-			return nil, fmt.Errorf(`cannot call function "%s" in an expression because it returns nothing`, p0.Name)
-		}
-		if funcDef.Signature.Returns.IsTable {
-			return nil, fmt.Errorf(`cannot call function "%s" in an expression because it returns a table`, p0.Name)
-		}
-		if len(funcDef.Signature.Returns.Fields) != 1 {
-			return nil, fmt.Errorf(`cannot call function "%s" in an expression because it returns multiple values`, p0.Name)
-		}
-
 		vals := make([]Value, len(args))
 		for j, arg := range args {
 			val, err := arg(ctx, exec)
@@ -755,11 +761,22 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 				return nil, err
 			}
 
-			if !val.Type().EqualsStrict(funcDef.Signature.Parameters[j].Type) {
-				return nil, fmt.Errorf("expected argument %d to be %s, got %s", j+1, funcDef.Signature.Parameters[j].Type, val.Type())
-			}
-
 			vals[j] = val
+		}
+
+		returns, err := funcDef.ReturnType(vals)
+		if err != nil {
+			return nil, err
+		}
+
+		if returns == nil {
+			return nil, fmt.Errorf(`cannot call function "%s" in an expression because it returns nothing`, p0.Name)
+		}
+		if returns.IsTable {
+			return nil, fmt.Errorf(`cannot call function "%s" in an expression because it returns a table`, p0.Name)
+		}
+		if len(returns.Fields) != 1 {
+			return nil, fmt.Errorf(`cannot call function "%s" in an expression because it returns multiple values`, p0.Name)
 		}
 
 		cursor, err := funcDef.Func(ctx, exec, vals)
@@ -899,7 +916,7 @@ func (i *interpreterPlanner) VisitExpressionParenthesized(p0 *parse.ExpressionPa
 }
 
 func (i *interpreterPlanner) VisitExpressionComparison(p0 *parse.ExpressionComparison) any {
-	cmpOps, negate := parse.GetComparisonOps(p0.Operator)
+	cmpOps, negate := getComparisonOps(p0.Operator)
 
 	left := p0.Left.Accept(i).(exprFunc)
 	right := p0.Right.Accept(i).(exprFunc)
@@ -911,14 +928,14 @@ func (i *interpreterPlanner) VisitExpressionComparison(p0 *parse.ExpressionCompa
 	}
 
 	if negate {
-		return makeUnaryFunc(retFn, common.Not)
+		return makeUnaryFunc(retFn, not)
 	}
 
 	return retFn
 }
 
 // makeComparisonFunc returns a function that compares two values.
-func makeComparisonFunc(left, right exprFunc, cmpOps common.ComparisonOp) exprFunc {
+func makeComparisonFunc(left, right exprFunc, cmpOps ComparisonOp) exprFunc {
 	return func(ctx context.Context, exec *executionContext) (Value, error) {
 		leftVal, err := left(ctx, exec)
 		if err != nil {
@@ -981,7 +998,7 @@ func makeLogicalFunc(left, right exprFunc, and bool) exprFunc {
 }
 
 func (i *interpreterPlanner) VisitExpressionArithmetic(p0 *parse.ExpressionArithmetic) any {
-	op := parse.ConvertArithmeticOp(p0.Operator)
+	op := convertArithmeticOp(p0.Operator)
 
 	leftFn := p0.Left.Accept(i).(exprFunc)
 	rightFn := p0.Right.Accept(i).(exprFunc)
@@ -1011,13 +1028,13 @@ func (i *interpreterPlanner) VisitExpressionArithmetic(p0 *parse.ExpressionArith
 }
 
 func (i *interpreterPlanner) VisitExpressionUnary(p0 *parse.ExpressionUnary) any {
-	op := parse.ConvertUnaryOp(p0.Operator)
+	op := convertUnaryOp(p0.Operator)
 	val := p0.Expression.Accept(i).(exprFunc)
 	return makeUnaryFunc(val, op)
 }
 
 // makeUnaryFunc returns a function that performs a unary operation.
-func makeUnaryFunc(val exprFunc, op common.UnaryOp) exprFunc {
+func makeUnaryFunc(val exprFunc, op UnaryOp) exprFunc {
 	return exprFunc(func(ctx context.Context, exec *executionContext) (Value, error) {
 		v, err := val(ctx, exec)
 		if err != nil {
@@ -1037,15 +1054,15 @@ func (i *interpreterPlanner) VisitExpressionIs(p0 *parse.ExpressionIs) any {
 	left := p0.Left.Accept(i).(exprFunc)
 	right := p0.Right.Accept(i).(exprFunc)
 
-	op := common.Is
+	op := is
 	if p0.Distinct {
-		op = common.IsDistinctFrom
+		op = isDistinctFrom
 	}
 
 	retFn := makeComparisonFunc(left, right, op)
 
 	if p0.Not {
-		return makeUnaryFunc(retFn, common.Not)
+		return makeUnaryFunc(retFn, not)
 	}
 
 	return retFn
