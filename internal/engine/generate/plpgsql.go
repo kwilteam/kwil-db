@@ -74,7 +74,16 @@ func (s *sqlGenerator) VisitExpressionFunctionCall(p0 *parse.ExpressionFunctionC
 		return str.String()
 	}
 
-	pgFmt, err := fn.PGFormat(args, p0.Distinct, p0.Star)
+	var pgFmt string
+	var err error
+	switch fn := fn.(type) {
+	case *parse.ScalarFunctionDefinition:
+		pgFmt, err = fn.PGFormatFunc(args)
+	case *parse.AggregateFunctionDefinition:
+		pgFmt, err = fn.PGFormatFunc(args, p0.Distinct)
+	default:
+		panic("unknown function type " + fmt.Sprintf("%T", fn))
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -974,9 +983,9 @@ func formatReturnVar(i int) string {
 func formatVariable(e *parse.ExpressionVariable) string {
 	switch e.Prefix {
 	case parse.VariablePrefixDollar:
-		return formatParameterName(e.Name)
+		return formatParameterName(e.Name[1:])
 	case parse.VariablePrefixAt:
-		return formatContextualVariableName(e.Name)
+		return formatContextualVariableName(e.Name[1:])
 	default:
 		// should never happen
 		panic("invalid variable prefix: " + string(e.Prefix))

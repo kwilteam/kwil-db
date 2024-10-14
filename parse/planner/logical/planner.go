@@ -887,7 +887,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 		}
 
 		// now we need to apply rules depending on if it is aggregate or not
-		if funcDef.IsAggregate {
+		if _, ok = funcDef.(*parse.AggregateFunctionDefinition); ok {
 			// we apply cast outside the reference because we want to keep the reference
 			// specific to the aggregate function call.
 			return cast(&AggregateFunctionCall{

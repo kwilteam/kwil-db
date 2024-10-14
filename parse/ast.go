@@ -42,6 +42,12 @@ type Expression interface {
 	Node
 }
 
+// Assignable is an interface for all expressions that can be assigned to.
+type Assignable interface {
+	Expression
+	assignable()
+}
+
 // ExpressionLiteral is a literal expression.
 type ExpressionLiteral struct {
 	Position
@@ -94,6 +100,8 @@ func literalToString(value any) (string, error) {
 	return str.String(), nil
 }
 
+// TODO: we can remove this interface since in v0.10, we are getting rid of foreign calls
+// this means that there will be only 1 implementation of ExpressionCall
 type ExpressionCall interface {
 	Expression
 	Cast(*types.DataType)
@@ -170,8 +178,10 @@ func (e *ExpressionVariable) Accept(v Visitor) any {
 // String returns the string representation, as it was passed
 // in Kuneiform.
 func (e *ExpressionVariable) String() string {
-	return string(e.Prefix) + e.Name
+	return e.Name
 }
+
+func (e *ExpressionVariable) assignable() {}
 
 type VariablePrefix string
 
@@ -202,6 +212,8 @@ type ExpressionArrayAccess struct {
 func (e *ExpressionArrayAccess) Accept(v Visitor) any {
 	return v.VisitExpressionArrayAccess(e)
 }
+
+func (e *ExpressionArrayAccess) assignable() {}
 
 // ExpressionMakeArray makes a new array.
 type ExpressionMakeArray struct {
@@ -845,7 +857,7 @@ func (p *ProcedureStmtDeclaration) Accept(v Visitor) any {
 type ProcedureStmtAssign struct {
 	baseProcedureStmt
 	// Variable is the variable that is being assigned.
-	Variable Expression
+	Variable Assignable
 	// Type is the type of the variable.
 	// It can be nil if the variable is not being assigned,
 	// or if the type should be inferred.

@@ -160,7 +160,7 @@ func Example_respTxQuery_json() {
 	//       },
 	//       "body": {
 	//         "desc": "This is a test transaction for cli",
-	//         "payload": "AAH4Vrg5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2Vyzs3MxoR0ZXh0gMSDZm9v",
+	//         "payload": "AAH4V7g5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2Vyz87Nx4R0ZXh0gMDEg2Zvbw==",
 	//         "type": "execute",
 	//         "fee": "100",
 	//         "nonce": 10,
@@ -194,7 +194,7 @@ func Example_respTxQuery_WithRaw_json() {
 	//       },
 	//       "body": {
 	//         "desc": "This is a test transaction for cli",
-	//         "payload": "AAH4Vrg5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2Vyzs3MxoR0ZXh0gMSDZm9v",
+	//         "payload": "AAH4V7g5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2Vyz87Nx4R0ZXh0gMDEg2Zvbw==",
 	//         "type": "execute",
 	//         "fee": "100",
 	//         "nonce": 10,
@@ -209,8 +209,8 @@ func Example_respTxQuery_WithRaw_json() {
 	//       "gas_used": 10,
 	//       "gas_wanted": 10
 	//     },
-	//     "raw": "0001f8eaf850b841cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e2534758008c736563703235366b315f6570f88ea25468697320697320612074657374207472616e73616374696f6e20666f7220636c69b85a0001f856b8397866363137616631636137373465626264366432336538666531326335366434316432356132326438316538386636376336633665653064348b6372656174655f75736572cecdccc6847465787480c483666f6f8765786563757465640a846173646686636f6e63617480",
-	//     "warning": "HASH MISMATCH: requested 31303234; received f866b4251d21552de1bc5b819a4b563a540146954e956e8150163574ce5325ac"
+	//     "raw": "0001f8ebf850b841cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e2534758008c736563703235366b315f6570f88fa25468697320697320612074657374207472616e73616374696f6e20666f7220636c69b85b0001f857b8397866363137616631636137373465626264366432336538666531326335366434316432356132326438316538386636376336633665653064348b6372656174655f75736572cfcecdc7847465787480c0c483666f6f8765786563757465640a846173646686636f6e63617480",
+	//     "warning": "HASH MISMATCH: requested 31303234; received 3a05fc591b97c720a3c67852807f3df5a27ab51d41fca03b86c92af9a1915c4c"
 	//   },
 	//   "error": ""
 	// }
@@ -224,7 +224,7 @@ func Test_TxHashAndExecResponse(t *testing.T) {
 		Hash:      hash,
 		QueryResp: &RespTxQuery{Msg: qr},
 	}
-	expectJson := `{"tx_hash":"0102030405","exec_result":{"hash":"0102030405","height":10,"tx":{"signature":{"sig":"yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=","type":"secp256k1_ep"},"body":{"desc":"This is a test transaction for cli","payload":"AAH4Vrg5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2Vyzs3MxoR0ZXh0gMSDZm9v","type":"execute","fee":"100","nonce":10,"chain_id":"asdf"},"serialization":"concat","sender":""},"tx_result":{"code":0,"log":"This is log","gas_used":10,"gas_wanted":10}}}`
+	expectJson := "{\"tx_hash\":\"0102030405\",\"exec_result\":{\"hash\":\"0102030405\",\"height\":10,\"tx\":{\"signature\":{\"sig\":\"yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=\",\"type\":\"secp256k1_ep\"},\"body\":{\"desc\":\"This is a test transaction for cli\",\"payload\":\"AAH4V7g5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2Vyz87Nx4R0ZXh0gMDEg2Zvbw==\",\"type\":\"execute\",\"fee\":\"100\",\"nonce\":10,\"chain_id\":\"asdf\"},\"serialization\":\"concat\",\"sender\":\"\"},\"tx_result\":{\"code\":0,\"log\":\"This is log\",\"gas_used\":10,\"gas_wanted\":10}}}"
 	expectText := "TxHash: 0102030405\nStatus: success\nHeight: 10\nLog: This is log"
 
 	outText, err := resp.MarshalText()
