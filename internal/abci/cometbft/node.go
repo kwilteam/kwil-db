@@ -10,6 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft/privval"
 
+	cometDB "github.com/cometbft/cometbft-db"
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cometConfig "github.com/cometbft/cometbft/config"
 	cometEd25519 "github.com/cometbft/cometbft/crypto/ed25519"
@@ -18,6 +19,7 @@ import (
 	"github.com/cometbft/cometbft/p2p"
 	"github.com/cometbft/cometbft/proxy"
 	cometLocal "github.com/cometbft/cometbft/rpc/client/local"
+	"github.com/cometbft/cometbft/store"
 	"github.com/cometbft/cometbft/types"
 
 	"go.uber.org/zap"
@@ -171,7 +173,7 @@ WARNING: These files are overwritten on kwild startup.`
 // NewCometBftNode creates a new CometBFT node.
 func NewCometBftNode(ctx context.Context, app abciTypes.Application, conf *cometConfig.Config,
 	genDoc *types.GenesisDoc, privateKey cometEd25519.PrivKey, atomicStore privval.AtomicReadWriter,
-	logger *log.Logger) (*CometBftNode, error) {
+	logger *log.Logger, appHeight int64) (*CometBftNode, error) {
 	if err := writeCometBFTConfigs(conf, genDoc); err != nil {
 		return nil, fmt.Errorf("failed to write the effective cometbft config files: %w", err)
 	}
@@ -188,6 +190,19 @@ func NewCometBftNode(ctx context.Context, app abciTypes.Application, conf *comet
 		return nil, fmt.Errorf("failed to create private validator: %v", err)
 	}
 
+	dbProvider := func(ctx *cometConfig.DBContext) (cometDB.DB, error) {
+		dbType := cometDB.BackendType(ctx.Config.DBBackend)
+		db, err := cometDB.NewDB(ctx.ID, dbType, ctx.Config.DBDir())
+		if err != nil {
+			return nil, err
+		}
+		bss := store.LoadBlockStoreState(db)
+		if appHeight > bss.Height {
+			return nil, errors.New("application (postgresql) height is past blockchain database -- drop postgresql to proceed")
+		}
+		return db, nil
+	}
+
 	node, err := cometNodes.NewNodeWithContext(
 		ctx,
 		conf,
@@ -197,7 +212,7 @@ func NewCometBftNode(ctx context.Context, app abciTypes.Application, conf *comet
 		},
 		proxy.NewConnSyncLocalClientCreator(app), // "connection-synchronized" local client
 		genesisDocProvider(genDoc),
-		cometConfig.DefaultDBProvider,
+		dbProvider,
 		cometNodes.DefaultMetricsProvider(conf.Instrumentation),
 		NewLogWrapper(logger),
 	)
