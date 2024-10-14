@@ -73,24 +73,24 @@ var (
 // initStores prepares the datastores with an atomic DB transaction. These
 // actions are performed outside of ABCI's DB sessions. The stores should not
 // keep the db after initialization. Their functions accept a DB connection.
-func initStores(d *coreDependencies, db *pg.DB) error {
+func initStores(d *coreDependencies, db *pg.DB) (int64, error) {
 	initTx, err := db.BeginTx(d.ctx)
 	if err != nil {
-		return fmt.Errorf("could not start app initialization DB transaction: %w", err)
+		return 0, fmt.Errorf("could not start app initialization DB transaction: %w", err)
 	}
 	defer initTx.Rollback(d.ctx)
 
 	// chain meta data for abci and txApp
-	initChainMetadata(d, initTx)
+	height := initChainMetadata(d, initTx)
 
 	// account store
 	initAccountRepository(d, initTx)
 
 	if err = initTx.Commit(d.ctx); err != nil {
-		return fmt.Errorf("failed to commit the app initialization DB transaction: %w", err)
+		return 0, fmt.Errorf("failed to commit the app initialization DB transaction: %w", err)
 	}
 
-	return nil
+	return height, nil
 }
 
 func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
@@ -100,7 +100,8 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// main postgres db
 	db := buildDB(d, closers)
 
-	if err := initStores(d, db); err != nil {
+	appHeight, err := initStores(d, db)
+	if err != nil {
 		failBuild(err, "initStores failed")
 	}
 
@@ -130,7 +131,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// NOTE: buildCometNode immediately starts talking to the abciApp and
 	// replaying blocks (and using atomic db tx commits), i.e. calling
 	// FinalizeBlock+Commit. This is not just a constructor, sadly.
-	cometBftNode := buildCometNode(d, closers, abciApp)
+	cometBftNode := buildCometNode(d, closers, abciApp, appHeight)
 
 	prometheus.MustRegister(
 		collectors.NewBuildInfoCollector(),
@@ -710,11 +711,16 @@ func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
 	return eng
 }
 
-func initChainMetadata(d *coreDependencies, tx sql.Tx) {
+func initChainMetadata(d *coreDependencies, tx sql.Tx) int64 {
 	err := meta.InitializeMetaStore(d.ctx, tx)
 	if err != nil {
 		failBuild(err, "failed to initialize chain metadata store")
 	}
+	height, _, err := meta.GetChainState(d.ctx, tx)
+	if err != nil {
+		failBuild(err, "failed to initialize chain metadata store")
+	}
+	return height
 }
 
 func initAccountRepository(d *coreDependencies, tx sql.Tx) {
@@ -1015,7 +1021,8 @@ func buildCometBftClient(cometBftNode *cometbft.CometBftNode) *cmtlocal.Local {
 	return cmtlocal.New(cometBftNode.Node)
 }
 
-func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.Application) *cometbft.CometBftNode {
+func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.Application,
+	appHeight int64) *cometbft.CometBftNode {
 	// for now, I'm just using a KV store for my atomic commit.  This probably is not ideal; a file may be better
 	// I'm simply using this because we know it fsyncs the data to disk
 	db, err := badger.NewBadgerDB(d.ctx, kwildcfg.SigningDir(d.cfg.RootDir), &badger.Options{
@@ -1058,7 +1065,7 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 
 	nodeLogger := increaseLogLevel("cometbft", &d.log, d.cfg.Logging.ConsensusLevel)
 	node, err := cometbft.NewCometBftNode(d.ctx, abciApp, nodeCfg, genDoc, d.privKey,
-		readWriter, nodeLogger)
+		readWriter, nodeLogger, appHeight)
 	if err != nil {
 		failBuild(err, "failed to build comet node")
 	}
