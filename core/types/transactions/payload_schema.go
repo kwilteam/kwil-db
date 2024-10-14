@@ -179,7 +179,7 @@ type DataType struct {
 	// IsArray is true if the type is an array.
 	IsArray bool
 	// Metadata is the metadata of the type.
-	Metadata *[2]uint16 `rlp:"optional"`
+	Metadata *[2]uint16 `rlp:"nil"`
 }
 
 // ForeignProcedure is a foreign procedure call in a database

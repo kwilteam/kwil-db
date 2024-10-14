@@ -278,6 +278,28 @@ var (
 				return fmt.Sprintf("array_length(%s, 1)", inputs[0]), nil
 			},
 		},
+		"array_remove": &ScalarFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				if !args[0].IsArray {
+					return nil, fmt.Errorf("expected first argument to be an array, got %s", args[0].String())
+				}
+
+				if args[1].IsArray {
+					return nil, fmt.Errorf("expected second argument to be a scalar, got %s", args[1].String())
+				}
+
+				if !strings.EqualFold(args[0].Name, args[1].Name) {
+					return nil, fmt.Errorf("remove type must be equal to scalar array type: array type: %s remove type: %s", args[0].Name, args[1].Name)
+				}
+
+				return args[0], nil
+			},
+			PGFormatFunc: defaultFormat("array_remove"),
+		},
 		// string functions
 		// the main SQL string functions defined here: https://www.postgresql.org/docs/16.1/functions-string.html
 		"bit_length": &ScalarFunctionDefinition{
@@ -371,7 +393,21 @@ var (
 
 				return types.TextType, nil
 			},
-			PGFormatFunc: defaultFormat("lpad"),
+			PGFormatFunc: func(inputs []string) (string, error) {
+				str := strings.Builder{}
+				str.WriteString("lpad(")
+				str.WriteString(inputs[0])
+				str.WriteString(", ")
+				str.WriteString(inputs[1])
+				str.WriteString("::INT4")
+				if len(inputs) == 3 {
+					str.WriteString(", ")
+					str.WriteString(inputs[2])
+				}
+				str.WriteString(")")
+
+				return str.String(), nil
+			},
 		},
 		"ltrim": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -437,9 +473,11 @@ var (
 				str.WriteString(inputs[1])
 				str.WriteString(" from ")
 				str.WriteString(inputs[2])
+				str.WriteString("::INT4")
 				if len(inputs) == 4 {
 					str.WriteString(" for ")
 					str.WriteString(inputs[3])
+					str.WriteString("::INT4")
 				}
 				str.WriteString(")")
 
@@ -486,7 +524,21 @@ var (
 
 				return types.TextType, nil
 			},
-			PGFormatFunc: defaultFormat("rpad"),
+			PGFormatFunc: func(inputs []string) (string, error) {
+				str := strings.Builder{}
+				str.WriteString("rpad(")
+				str.WriteString(inputs[0])
+				str.WriteString(", ")
+				str.WriteString(inputs[1])
+				str.WriteString("::INT4")
+				if len(inputs) == 3 {
+					str.WriteString(", ")
+					str.WriteString(inputs[2])
+				}
+				str.WriteString(")")
+
+				return str.String(), nil
+			},
 		},
 		"rtrim": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -536,9 +588,11 @@ var (
 				str.WriteString(inputs[0])
 				str.WriteString(" from ")
 				str.WriteString(inputs[1])
+				str.WriteString("::INT4")
 				if len(inputs) == 3 {
 					str.WriteString(" for ")
 					str.WriteString(inputs[2])
+					str.WriteString("::INT4")
 				}
 				str.WriteString(")")
 
@@ -696,6 +750,28 @@ var (
 				return fmt.Sprintf("max(%s)", inputs[0]), nil
 			},
 		},
+		"array_agg": &AggregateFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if args[0].IsArray {
+					return nil, fmt.Errorf("expected argument to be a scalar, got %s", args[0].String())
+				}
+
+				a2 := args[0].Copy()
+				a2.IsArray = true
+				return a2, nil
+			},
+			PGFormatFunc: func(inputs []string, distinct bool) (string, error) {
+				if distinct {
+					return "array_agg(DISTINCT %s)", nil
+				}
+
+				return fmt.Sprintf("array_agg(%s ORDER BY %s)", inputs[0], inputs[0]), nil
+			},
+		},
 	}
 )
 
@@ -793,10 +869,4 @@ func ParseNotice(log string) (txID string, notice string, err error) {
 	}
 
 	return parts[0], parts[1], nil
-}
-
-// Interpreter allows functions to interact with the interpreter.
-type Interpreter interface {
-	Spend(amount int64) error
-	Notice(notice string)
 }
