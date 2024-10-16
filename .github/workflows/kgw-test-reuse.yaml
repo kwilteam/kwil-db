@@ -109,29 +109,35 @@ jobs:
         # if kgw on non-release branches, we want to use go workspace, so that kgw
         # always uses the latest version of kwil-db/core
         run: |
+          echo "KWK_DIR=$(pwd)/.." >> $GITHUB_ENV
           kdbDir=$(pwd)
+          echo "KDB_DIR=$(pwd)" >> $GITHUB_ENV
+          echo "current dir: " $kdbDir
+          cd ..
+          rm -rf ./kgw
           git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
-          rm -rf /tmp/kgw
-          git clone -b ${{ inputs.kgw-ref }}  https://github.com/kwilteam/kgw.git /tmp/kgw
+          git clone -b ${{ inputs.kgw-ref }}  https://github.com/kwilteam/kgw.git ./kgw
           rm -rf ~/.gitconfig
-          cd /tmp/kgw
+          cd ./kgw
+          echo "KGW_DIR=$(pwd)" >> $GITHUB_ENV
           if [[ ${{ inputs.kgw-ref }} == release-* ]]; then
             go mod vendor
           else
             # non release branch, use go workspace to always use the latest version of kwil-db/core
-            go work init . $kdbDir/core
+            test -f go.work || go work init . ../kwil-db/core
             go work vendor
           fi
           cd -
+          cd $kdbDir
 
       - name: Build kgw image
         id: docker_build_kgw
         uses: docker/build-push-action@v5
         with:
-          context: /tmp/kgw
+          context: ${{ env.KGW_DIR }}/..
           load: true
           builder: ${{ steps.buildx.outputs.name }}
-          file: /tmp/kgw/Dockerfile
+          file: ${{ env.KGW_DIR }}/Dockerfile.workspace
           push: false
           tags: kgw:latest
           cache-from: type=local,src=/tmp/.buildx-cache-kgw
