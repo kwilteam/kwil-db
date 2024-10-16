@@ -37,6 +37,9 @@ type Client struct {
 	// This is only effective when chainID is set.
 	skipVerifyChainID bool
 
+	// skipHealthcheck will skip check remote nodes' health status.
+	skipHealthcheck bool
+
 	noWarnings bool // silence warning logs
 
 	authCallRPC bool
@@ -107,33 +110,60 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 		chainID:           clientOptions.ChainID,
 		noWarnings:        clientOptions.Silence,
 		skipVerifyChainID: clientOptions.SkipVerifyChainID,
+		skipHealthcheck:   clientOptions.SkipHealthcheck,
 	}
 
-	health, err := c.Health(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve the node's health: %w", err)
-	}
+	var remoteChainID string
 
-	if health.Healthy {
-		c.logger.Warnf("node reports that it is not healthy: %v", health)
-	}
+	if c.skipHealthcheck {
+		health, err := c.Health(ctx)
+		// NOTE: we ignore all errors from c.Health call since we ignore health check
+		if err == nil {
+			// this is v09 API, we just take the result.
+			c.authCallRPC = health.Mode == types.ModePrivate
+			remoteChainID = health.ChainID
 
-	c.authCallRPC = health.Mode == types.ModePrivate
+			// NOTE: since original health check only log, why not ?
+			if health.Healthy {
+				c.logger.Warnf("node reports that it is not healthy: %v", health)
+			}
+		} else {
+			// fall back to v08 API
+			chainInfo, err := c.ChainInfo(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to retrieve the node's chain info: %w", err)
+			}
+
+			remoteChainID = chainInfo.ChainID
+		}
+	} else {
+		health, err := c.Health(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to retrieve the node's health: %w", err)
+		}
+
+		if health.Healthy {
+			c.logger.Warnf("node reports that it is not healthy: %v", health)
+		}
+
+		c.authCallRPC = health.Mode == types.ModePrivate
+		remoteChainID = health.ChainID
+	}
 
 	if c.chainID == "" { // always use chain ID from remote host
 		if !c.noWarnings {
 			c.logger.Warn("chain ID not set, trusting chain ID from remote host!",
-				zap.String("chainID", health.ChainID))
+				zap.String("chainID", remoteChainID))
 		}
 
-		c.chainID = health.ChainID
+		c.chainID = remoteChainID
 	} else {
 		if c.skipVerifyChainID {
 			if !c.noWarnings {
 				c.logger.Warn("chain ID is set, skip check against remote chain ID", zap.String("chainID", c.chainID))
 			}
-		} else if health.ChainID != c.chainID {
-			return nil, fmt.Errorf("remote host chain ID %q != client configured %q", health.ChainID, c.chainID)
+		} else if remoteChainID != c.chainID {
+			return nil, fmt.Errorf("remote host chain ID %q != client configured %q", remoteChainID, c.chainID)
 		}
 	}
 

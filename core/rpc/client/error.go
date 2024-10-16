@@ -11,6 +11,7 @@ var (
 	// It is the equivalent of http status code 401
 	ErrUnauthorized   = errors.New("unauthorized")
 	ErrNotFound       = errors.New("not found")
+	ErrMethodNotFound = errors.New("method not found")
 	ErrInvalidRequest = errors.New("invalid request")
 	ErrNotAllowed     = errors.New("not allowed")
 )
