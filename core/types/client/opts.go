@@ -28,6 +28,9 @@ type Options struct {
 	// This option is only effective when ChainID is set.
 	SkipVerifyChainID bool
 
+	// SkipHealthcheck will skip check remote nodes' health status.
+	SkipHealthcheck bool
+
 	// Silence silences warnings logged from the client.
 	Silence bool
 
@@ -58,6 +61,8 @@ func (c *Options) Apply(opts *Options) {
 	}
 
 	c.SkipVerifyChainID = opts.SkipVerifyChainID
+
+	c.SkipHealthcheck = opts.SkipHealthcheck
 
 	c.Silence = opts.Silence
 }
