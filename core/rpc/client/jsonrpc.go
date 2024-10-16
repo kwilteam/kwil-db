@@ -208,7 +208,7 @@ func (cl *JSONRPCClient) CallMethod(ctx context.Context, method string, cmd, res
 // clientError joins a jsonrpc.Error with a client.RPCError and any appropriate
 // named error kind like ErrNotFound, ErrUnauthorized, etc. based on the code.
 func clientError(jsonRPCErr *jsonrpc.Error) error {
-	rpcErr := &RPCError{
+	rpcErr := &RPCError{ // @Jon, should we change this to RPCError instead of *RPCError ?
 		Msg:  jsonRPCErr.Message,
 		Code: int32(jsonRPCErr.Code),
 	}
@@ -218,9 +218,7 @@ func clientError(jsonRPCErr *jsonrpc.Error) error {
 	case jsonrpc.ErrorEngineDatasetNotFound, jsonrpc.ErrorTxNotFound, jsonrpc.ErrorValidatorNotFound:
 		return errors.Join(ErrNotFound, err)
 	case jsonrpc.ErrorUnknownMethod:
-		// TODO: change to client.ErrMethodNotFound. This should be different
-		// from other "not found" conditions
-		return errors.Join(ErrNotFound, err)
+		return errors.Join(ErrMethodNotFound, err)
 	// case jsonrpc.ErrorUnauthorized: // not yet used on server
 	// 	return errors.Join(client.ErrUnauthorized, err)
 	// case jsonrpc.ErrorInvalidSignature: // or leave this to core/client.Client to detect and report
