@@ -59,6 +59,7 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.MarkDeprecated("app.rpc-req-limit", "use --app.rpc-max-req-size instead")
 
 	flagSet.Var(&cfg.AppConfig.ReadTxTimeout, "app.db-read-timeout", "timeout for database reads initiated by RPC requests")
+	flagSet.Uint32Var(&cfg.AppConfig.MaxDBConnections, "app.db-max-connections", cfg.AppConfig.MaxDBConnections, "maximum number of database connections")
 
 	// genesis state / migration flags
 	flagSet.StringVar(&cfg.AppConfig.GenesisState, "app.genesis-state", cfg.AppConfig.GenesisState, "Path to the genesis state file")
