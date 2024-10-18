@@ -72,6 +72,7 @@ type AppConfig struct {
 	ChallengeExpiry    Duration                     `mapstructure:"challenge_expiry"`
 	ChallengeRateLimit float64                      `mapstructure:"challenge_rate_limit"`
 	ReadTxTimeout      Duration                     `mapstructure:"db_read_timeout"`
+	MaxDBConnections   uint32                       `mapstructure:"db_max_connections"`
 	ExtensionEndpoints []string                     `mapstructure:"extension_endpoints"`
 	AdminRPCPass       string                       `mapstructure:"admin_pass"`
 	NoTLS              bool                         `mapstructure:"admin_notls"`
