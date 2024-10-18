@@ -79,6 +79,7 @@ var DefaultConfig = func() *commonConfig.KwildConfig {
 			ChallengeExpiry:      commonConfig.Duration(10 * time.Second),
 			ChallengeRateLimit:   10.0, // req/s
 			ReadTxTimeout:        commonConfig.Duration(5 * time.Second),
+			MaxDBConnections:     24,
 			Extensions:           make(map[string]map[string]string),
 			Snapshots: commonConfig.SnapshotConfig{
 				Enable:          false,
