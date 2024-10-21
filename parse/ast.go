@@ -100,15 +100,6 @@ func literalToString(value any) (string, error) {
 	return str.String(), nil
 }
 
-// TODO: we can remove this interface since in v0.10, we are getting rid of foreign calls
-// this means that there will be only 1 implementation of ExpressionCall
-type ExpressionCall interface {
-	Expression
-	Cast(*types.DataType)
-	GetTypeCast() *types.DataType
-	FunctionName() string
-}
-
 // ExpressionFunctionCall is a function call expression.
 type ExpressionFunctionCall struct {
 	Position
@@ -125,39 +116,34 @@ type ExpressionFunctionCall struct {
 	Star bool
 }
 
-var _ ExpressionCall = (*ExpressionFunctionCall)(nil)
-
 func (e *ExpressionFunctionCall) Accept(v Visitor) any {
 	return v.VisitExpressionFunctionCall(e)
 }
 
-func (e *ExpressionFunctionCall) FunctionName() string {
-	return e.Name
-}
-
-// ExpressionForeignCall is a call to an external procedure.
-type ExpressionForeignCall struct {
+// ExpressionWindowFunctionCall is a window function call expression.
+type ExpressionWindowFunctionCall struct {
 	Position
-	Typecastable
-	// Name is the name of the function.
-	Name string
-	// ContextualArgs are arguments that are contextual to the function call.
-	// They are passed using []
-	ContextualArgs []Expression
-	// Args are the arguments to the function call.
-	// They are passed using ()
-	Args []Expression
+	FunctionCall *ExpressionFunctionCall
+	// Window is the window function that is being called.
+	Window *Window
 }
 
-func (e *ExpressionForeignCall) Accept(v Visitor) any {
-	return v.VisitExpressionForeignCall(e)
+func (e *ExpressionWindowFunctionCall) Accept(v Visitor) any {
+	return v.VisitExpressionWindowFunctionCall(e)
 }
 
-func (e *ExpressionForeignCall) FunctionName() string {
-	return e.Name
+type Window struct {
+	Position
+	// PartitionBy is the partition by clause.
+	PartitionBy []Expression
+	// OrderBy is the order by clause.
+	OrderBy []*OrderingTerm
+	// In the future, when/if we support frame clauses, we can add it here.
 }
 
-var _ ExpressionCall = (*ExpressionForeignCall)(nil)
+func (w *Window) Accept(v Visitor) any {
+	return v.VisitWindow(w)
+}
 
 // ExpressionVariable is a variable.
 // This can either be $ or @ variables.
@@ -580,6 +566,10 @@ type SelectCore struct {
 	Where    Expression   // can be nil
 	GroupBy  []Expression // can be nil
 	Having   Expression   // can be nil
+	Windows  []*struct {
+		Name   string
+		Window *Window
+	} // can be nil
 }
 
 func (s *SelectCore) Accept(v Visitor) any {
@@ -656,20 +646,6 @@ func (r *RelationSubquery) Accept(v Visitor) any {
 }
 
 func (RelationSubquery) table() {}
-
-type RelationFunctionCall struct {
-	Position
-	FunctionCall ExpressionCall
-	// The alias cannot be empty, as our syntax forces
-	// it for function calls
-	Alias string
-}
-
-func (r *RelationFunctionCall) Accept(v Visitor) any {
-	return v.VisitRelationFunctionCall(r)
-}
-
-func (RelationFunctionCall) table() {}
 
 // Join is a join in a SELECT statement.
 type Join struct {
@@ -876,7 +852,7 @@ type ProcedureStmtCall struct {
 	// Receivers are the variables being assigned. If nil, then the
 	// receiver can be ignored.
 	Receivers []*ExpressionVariable
-	Call      ExpressionCall
+	Call      *ExpressionFunctionCall
 }
 
 func (p *ProcedureStmtCall) Accept(v Visitor) any {
@@ -1048,7 +1024,8 @@ type ProcedureVisitor interface {
 type SQLVisitor interface {
 	VisitExpressionLiteral(*ExpressionLiteral) any
 	VisitExpressionFunctionCall(*ExpressionFunctionCall) any
-	VisitExpressionForeignCall(*ExpressionForeignCall) any
+	VisitExpressionWindowFunctionCall(*ExpressionWindowFunctionCall) any
+	VisitWindow(*Window) any
 	VisitExpressionVariable(*ExpressionVariable) any
 	VisitExpressionArrayAccess(*ExpressionArrayAccess) any
 	VisitExpressionMakeArray(*ExpressionMakeArray) any
@@ -1074,7 +1051,6 @@ type SQLVisitor interface {
 	VisitResultColumnWildcard(*ResultColumnWildcard) any
 	VisitRelationTable(*RelationTable) any
 	VisitRelationSubquery(*RelationSubquery) any
-	VisitRelationFunctionCall(*RelationFunctionCall) any
 	VisitJoin(*Join) any
 	VisitUpdateStatement(*UpdateStatement) any
 	VisitUpdateSetClause(*UpdateSetClause) any

@@ -103,9 +103,6 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#procedure_declaration.
 	VisitProcedure_declaration(ctx *Procedure_declarationContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#foreign_procedure_declaration.
-	VisitForeign_procedure_declaration(ctx *Foreign_procedure_declarationContext) interface{}
-
 	// Visit a parse tree produced by KuneiformParser#procedure_return.
 	VisitProcedure_return(ctx *Procedure_returnContext) interface{}
 
@@ -135,9 +132,6 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#subquery_relation.
 	VisitSubquery_relation(ctx *Subquery_relationContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#function_relation.
-	VisitFunction_relation(ctx *Function_relationContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#join.
 	VisitJoin(ctx *JoinContext) interface{}
@@ -217,6 +211,9 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#in_sql_expr.
 	VisitIn_sql_expr(ctx *In_sql_exprContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#window.
+	VisitWindow(ctx *WindowContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#when_then_clause.
 	VisitWhen_then_clause(ctx *When_then_clauseContext) interface{}
 
@@ -225,9 +222,6 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#normal_call_sql.
 	VisitNormal_call_sql(ctx *Normal_call_sqlContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#foreign_call_sql.
-	VisitForeign_call_sql(ctx *Foreign_call_sqlContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#action_block.
 	VisitAction_block(ctx *Action_blockContext) interface{}
@@ -315,9 +309,6 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#normal_call_procedure.
 	VisitNormal_call_procedure(ctx *Normal_call_procedureContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#foreign_call_procedure.
-	VisitForeign_call_procedure(ctx *Foreign_call_procedureContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#if_then_block.
 	VisitIf_then_block(ctx *If_then_blockContext) interface{}

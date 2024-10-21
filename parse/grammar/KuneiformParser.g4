@@ -83,7 +83,6 @@ schema:
     database_declaration
     (use_declaration | table_declaration
      | action_declaration | procedure_declaration
-     | foreign_procedure_declaration
     )*
 ;
 
@@ -169,13 +168,6 @@ procedure_declaration:
     LBRACE procedure_block RBRACE
 ;
 
-
-foreign_procedure_declaration:
-    FOREIGN PROCEDURE IDENTIFIER
-    LPAREN (unnamed_params=type_list|named_params=typed_variable_list)? RPAREN
-    (procedure_return)?
-;
-
 procedure_return:
     RETURNS (TABLE? LPAREN return_columns=named_type_list RPAREN
     | LPAREN unnamed_return_types=type_list RPAREN)
@@ -224,6 +216,7 @@ select_core:
         GROUP BY group_by=sql_expr_list
         (HAVING having=sql_expr)?
     )?
+    (WINDOW (identifier AS window)? (COMMA identifier AS window)*)?
 ;
 
 relation:
@@ -232,7 +225,6 @@ relation:
     // but we allow it to pass here since it is standard SQL to not require it, and
     // we can throw a better error message after parsing.
     | LPAREN select_statement RPAREN (AS? alias=identifier)?    # subquery_relation
-    | sql_function_call (AS? alias=identifier?)                 # function_relation
 ;
 
 join:
@@ -296,7 +288,8 @@ sql_expr:
 
     // any unspecified operator:
     | literal type_cast?                                                            # literal_sql_expr
-    | sql_function_call type_cast?                                                  # function_call_sql_expr
+    // direct function calls can have a type cast, but window functions cannot
+    | sql_function_call (window | type_cast)?                                       # function_call_sql_expr
     | variable type_cast?                                                           # variable_sql_expr
     | (table=identifier PERIOD)? column=identifier type_cast?                       # column_sql_expr 
     | CASE case_clause=sql_expr?
@@ -317,6 +310,13 @@ sql_expr:
     | left=sql_expr OR right=sql_expr                                               # logical_sql_expr
 ;
 
+window:
+    OVER LPAREN 
+        (PARTITION BY partition=sql_expr_list)?
+        (ORDER BY ordering_term (COMMA ordering_term)*)?
+     RPAREN
+;
+
 
 when_then_clause:
     WHEN when_condition=sql_expr THEN then=sql_expr
@@ -328,7 +328,6 @@ sql_expr_list:
 
 sql_function_call:
     identifier LPAREN (DISTINCT? sql_expr_list|STAR)? RPAREN                                                #normal_call_sql
-    | identifier LBRACKET dbid=sql_expr COMMA procedure=sql_expr RBRACKET LPAREN (sql_expr_list)? RPAREN    #foreign_call_sql
 ;
 
 /*
@@ -410,7 +409,6 @@ variable_or_underscore:
 
 procedure_function_call:
     IDENTIFIER LPAREN (procedure_expr_list)? RPAREN                                                                         #normal_call_procedure
-    | IDENTIFIER LBRACKET dbid=procedure_expr COMMA procedure=procedure_expr RBRACKET LPAREN (procedure_expr_list)? RPAREN  #foreign_call_procedure
 ;
 
 if_then_block:

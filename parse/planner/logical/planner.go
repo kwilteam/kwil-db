@@ -13,8 +13,10 @@ import (
 )
 
 // CreateLogicalPlan creates a logical plan from a SQL statement.
+// If applyDefaultOrdering is true, it will rewrite the query to apply default ordering.
+// Default ordering will modify the passed query.
 func CreateLogicalPlan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType,
-	objects map[string]map[string]*types.DataType) (analyzed *AnalyzedPlan, err error) {
+	objects map[string]map[string]*types.DataType, applyDefaultOrdering bool) (analyzed *AnalyzedPlan, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err2, ok := r.(error)
@@ -34,10 +36,11 @@ func CreateLogicalPlan(statement *parse.SQLStatement, schema *types.Schema, vars
 	}
 
 	ctx := &planContext{
-		Schema:    schema,
-		CTEs:      make(map[string]*Relation),
-		Variables: vars,
-		Objects:   objects,
+		Schema:               schema,
+		CTEs:                 make(map[string]*Relation),
+		Variables:            vars,
+		Objects:              objects,
+		applyDefaultOrdering: applyDefaultOrdering,
 	}
 
 	scope := &scopeContext{
@@ -110,6 +113,9 @@ type planContext struct {
 	// This field should be updated as the query planner
 	// processes the query.
 	ReferenceCount int
+	// applyDefaultOrdering is true if the query should be rewritten
+	// to apply default ordering.
+	applyDefaultOrdering bool
 }
 
 // scopeContext contains information about the current scope of the query.
@@ -365,6 +371,18 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan Plan, rel *
 		}
 
 		plan = lim
+	}
+
+	// if applyDefaultOrdering is true, we need to order all results.
+	// In postgres, this is simply done by adding ORDER BY 1, 2, 3, ...
+	if s.plan.applyDefaultOrdering {
+		for i := range rel.Fields {
+			node.Ordering = append(node.Ordering, &parse.OrderingTerm{
+				Expression: &parse.ExpressionLiteral{
+					Value: strconv.Itoa(i + 1), // 1-indexed
+				},
+			})
+		}
 	}
 
 	return plan, rel, nil
@@ -911,67 +929,6 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			Args:         args,
 			returnType:   returnVal,
 		}, returnField)
-	case *parse.ExpressionForeignCall:
-		proc, found := s.plan.Schema.FindForeignProcedure(node.Name)
-		if !found {
-			return nil, nil, fmt.Errorf(`unknown foreign procedure "%s"`, node.Name)
-		}
-
-		returns, err := procedureReturnExpr(proc.Returns)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		args, argFields, err := s.manyExprs(node.Args, currentRel)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if len(node.Args) != len(proc.Parameters) {
-			return nil, nil, fmt.Errorf(`foreign procedure "%s" expects %d arguments, but %d were provided`, node.Name, len(proc.Parameters), len(node.Args))
-		}
-
-		for i, param := range proc.Parameters {
-			scalar, err := argFields[i].Scalar()
-			if err != nil {
-				return nil, nil, err
-			}
-
-			if !param.Equals(scalar) {
-				return nil, nil, fmt.Errorf(`foreign procedure "%s" expects argument %d to be of type %s, but %s was provided`, node.Name, i+1, param, scalar)
-			}
-		}
-
-		contextArgs, ctxFields, err := s.manyExprs(node.ContextualArgs, currentRel)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if len(ctxFields) != 2 {
-			return nil, nil, fmt.Errorf("foreign calls must have 2 contextual arguments")
-		}
-
-		for i, field := range ctxFields {
-			scalar, err := field.Scalar()
-			if err != nil {
-				return nil, nil, err
-			}
-
-			if !scalar.Equals(types.TextType) {
-				return nil, nil, fmt.Errorf("foreign call contextual argument %d must be a string", i+1)
-			}
-		}
-
-		return cast(&ProcedureCall{
-			ProcedureName: node.Name,
-			Foreign:       true,
-			Args:          args,
-			ContextArgs:   contextArgs,
-			returnType:    returns,
-		}, &Field{
-			Name: node.Name,
-			val:  returns,
-		})
 	case *parse.ExpressionVariable:
 		var val any // can be a data type or object
 		dt, ok := s.plan.Variables[node.String()]
@@ -1808,142 +1765,6 @@ func (s *scopeContext) table(node parse.Table) (*Scan, *Relation, error) {
 
 		return &Scan{
 			Source:       subq,
-			RelationName: node.Alias,
-		}, rel, nil
-	case *parse.RelationFunctionCall:
-		if node.Alias == "" {
-			return nil, nil, fmt.Errorf("join against procedure calls must have an alias")
-		}
-
-		// the function call must either be a procedure or foreign procedure that returns
-		// a table.
-
-		var args []Expression
-		var contextArgs []Expression
-		var procReturns *types.ProcedureReturn
-		var isForeign bool
-		if proc, ok := s.plan.Schema.FindProcedure(node.FunctionCall.FunctionName()); ok {
-			procReturns = proc.Returns
-
-			procCall, ok := node.FunctionCall.(*parse.ExpressionFunctionCall)
-			if !ok {
-				// I don't think this is possible, but just in case
-				return nil, nil, fmt.Errorf(`unexpected procedure type "%T"`, node.FunctionCall)
-			}
-
-			var fields []*Field
-			var err error
-			// we pass an empty relation because the subquery can't
-			// refer to the current relation, but they can be correlated against some
-			// outer relation.
-			args, fields, err = s.manyExprs(procCall.Args, &Relation{})
-			if err != nil {
-				return nil, nil, err
-			}
-
-			if len(fields) != len(proc.Parameters) {
-				return nil, nil, fmt.Errorf(`procedure "%s" expects %d arguments, received %d`, node.FunctionCall.FunctionName(), len(proc.Parameters), len(fields))
-			}
-
-			for i, field := range fields {
-				scalar, err := field.Scalar()
-				if err != nil {
-					return nil, nil, err
-				}
-
-				if !scalar.Equals(proc.Parameters[i].Type) {
-					return nil, nil, fmt.Errorf(`procedure "%s" expects argument %d to be of type %s, received %s`, node.FunctionCall.FunctionName(), i+1, proc.Parameters[i].Type, field)
-				}
-			}
-
-		} else if proc, ok := s.plan.Schema.FindForeignProcedure(node.FunctionCall.FunctionName()); ok {
-			procReturns = proc.Returns
-			isForeign = true
-
-			procCall, ok := node.FunctionCall.(*parse.ExpressionForeignCall)
-			if !ok {
-				// this is possible if the user doesn't pass contextual arguments,
-				// (the parser will parse it as a regular function call instead of a foreign call)
-				return nil, nil, fmt.Errorf(`procedure "%s" is a foreign procedure and must have contextual arguments passed with []`, node.FunctionCall.FunctionName())
-			}
-
-			var fields []*Field
-			var err error
-			// we pass an empty relation because the subquery can't
-			// refer to the current relation, but they can be correlated against some
-			// outer relation.
-			args, fields, err = s.manyExprs(procCall.Args, &Relation{})
-			if err != nil {
-				return nil, nil, err
-			}
-
-			if len(fields) != len(proc.Parameters) {
-				return nil, nil, fmt.Errorf(`foreign procedure "%s" expects %d arguments, received %d`, node.FunctionCall.FunctionName(), len(proc.Parameters), len(fields))
-			}
-
-			for i, field := range fields {
-				scalar, err := field.Scalar()
-				if err != nil {
-					return nil, nil, err
-				}
-
-				if !scalar.Equals(proc.Parameters[i]) {
-					return nil, nil, fmt.Errorf(`foreign procedure "%s" expects argument %d to be of type %s, received %s`, node.FunctionCall.FunctionName(), i+1, proc.Parameters[i], field)
-				}
-			}
-
-			// must have 2 contextual arguments
-			if len(procCall.ContextualArgs) != 2 {
-				return nil, nil, fmt.Errorf(`foreign procedure "%s" must have 2 contextual arguments`, node.FunctionCall.FunctionName())
-			}
-
-			contextArgs, fields, err = s.manyExprs(procCall.ContextualArgs, &Relation{})
-			if err != nil {
-				return nil, nil, err
-			}
-
-			if len(fields) != 2 {
-				return nil, nil, fmt.Errorf(`foreign procedure "%s" expects 2 contextual arguments, received %d`, node.FunctionCall.FunctionName(), len(fields))
-			}
-
-			for i, field := range fields {
-				scalar, err := field.Scalar()
-				if err != nil {
-					return nil, nil, err
-				}
-
-				if !scalar.Equals(types.TextType) {
-					return nil, nil, fmt.Errorf(`foreign procedure "%s" expects contextual argument %d to be of type %s, received %s`, node.FunctionCall.FunctionName(), i+1, types.TextType, field)
-				}
-			}
-		} else {
-			return nil, nil, fmt.Errorf(`unknown procedure "%s"`, node.FunctionCall.FunctionName())
-		}
-
-		if procReturns == nil {
-			return nil, nil, fmt.Errorf(`procedure "%s" does not return a table`, node.FunctionCall.FunctionName())
-		}
-		if !procReturns.IsTable {
-			return nil, nil, fmt.Errorf(`procedure "%s" does not return a table`, node.FunctionCall.FunctionName())
-		}
-
-		rel := &Relation{}
-		for _, field := range procReturns.Fields {
-			rel.Fields = append(rel.Fields, &Field{
-				Parent: node.Alias,
-				Name:   field.Name,
-				val:    field.Type.Copy(),
-			})
-		}
-
-		return &Scan{
-			Source: &ProcedureScanSource{
-				ProcedureName:  node.FunctionCall.FunctionName(),
-				Args:           args,
-				ContextualArgs: contextArgs,
-				IsForeign:      isForeign,
-				rel:            rel.Copy(),
-			},
 			RelationName: node.Alias,
 		}, rel, nil
 	}

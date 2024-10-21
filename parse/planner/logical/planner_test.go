@@ -2,6 +2,7 @@ package logical_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -241,23 +242,17 @@ func Test_Planner(t *testing.T) {
 				"$id":   types.IntType,
 				"$name": types.TextType,
 			},
-			sql: `select c.brand, pu.content, u.name, u2.id, count(p.id) from users u
+			sql: `select u.name, u2.id, count(p.id) from users u
 				inner join posts p on u.id = p.owner_id
-				left join owned_cars['dbid', 'proc']($id) c on c.owner_name = u.name
-				right join posts_by_user($name) pu on pu.content = p.content
 				full join (select id from users where age > 18) u2 on u2.id = u.id
-				group by c.brand, pu.content, u.name, u2.id;`,
-			wt: "Return: brand [text], content [text], name [text], id [uuid], count [int]\n" +
-				"└─Project: {#ref(A)}; {#ref(B)}; {#ref(C)}; {#ref(D)}; {#ref(E)}\n" +
-				"  └─Aggregate [{#ref(A) = c.brand}] [{#ref(B) = pu.content}] [{#ref(C) = u.name}] [{#ref(D) = u2.id}]: {#ref(E) = count(p.id)}\n" +
+				group by u.name, u2.id;`,
+			wt: "Return: name [text], id [uuid], count [int]\n" +
+				"└─Project: {#ref(A)}; {#ref(B)}; {#ref(C)}\n" +
+				"  └─Aggregate [{#ref(A) = u.name}] [{#ref(B) = u2.id}]: {#ref(C) = count(p.id)}\n" +
 				"    └─Join [outer]: u2.id = u.id\n" +
-				"      ├─Join [right]: pu.content = p.content\n" +
-				"      │ ├─Join [left]: c.owner_name = u.name\n" +
-				"      │ │ ├─Join [inner]: u.id = p.owner_id\n" +
-				"      │ │ │ ├─Scan Table [alias=\"u\"]: users [physical]\n" +
-				"      │ │ │ └─Scan Table [alias=\"p\"]: posts [physical]\n" +
-				"      │ │ └─Scan Procedure [alias=\"c\"]: [foreign=true] [dbid='dbid'] [proc='proc'] owned_cars($id)\n" +
-				"      │ └─Scan Procedure [alias=\"pu\"]: [foreign=false] posts_by_user($name)\n" +
+				"      ├─Join [inner]: u.id = p.owner_id\n" +
+				"      │ ├─Scan Table [alias=\"u\"]: users [physical]\n" +
+				"      │ └─Scan Table [alias=\"p\"]: posts [physical]\n" +
 				"      └─Scan Subquery [alias=\"u2\"]: [subplan_id=0] (uncorrelated)\n" +
 				"Subplan [subquery] [id=0]\n" +
 				"└─Project: users.id\n" +
@@ -364,10 +359,10 @@ func Test_Planner(t *testing.T) {
 				"    └─Scan Table: users [physical]\n",
 		},
 		{
-			name: "scalar function, procedure, foreign procedure",
-			sql:  "select car_count['dbid', 'proc'](id), post_count(id), abs(age) from users",
-			wt: "Return: car_count [int], post_count [int], abs [int]\n" +
-				"└─Project: car_count['dbid', 'proc'](users.id); post_count(users.id); abs(users.age)\n" +
+			name: "scalar function, procedure",
+			sql:  "select post_count(id), abs(age) from users",
+			wt: "Return: post_count [int], abs [int]\n" +
+				"└─Project: post_count(users.id); abs(users.age)\n" +
 				"  └─Scan Table: users [physical]\n",
 		},
 		{
@@ -444,7 +439,11 @@ func Test_Planner(t *testing.T) {
 		},
 		{
 			name: "update from with join",
-			sql:  "update users set name = pu.content from posts p inner join posts_by_user('satoshi') pu on p.content = pu.content where p.owner_id = users.id",
+			sql: `update users set name = pu.content from posts p inner join (
+			select p.content from posts p
+		inner join users u on p.owner_id = u.id
+		where u.name = 'satoshi'
+		) pu on p.content = pu.content where p.owner_id = users.id`,
 			// will be unoptimized, so it will use a cartesian product
 			// optimization could re-write the filter to a join, as well as
 			// add projections.
@@ -454,11 +453,17 @@ func Test_Planner(t *testing.T) {
 				"    ├─Scan Table: users [physical]\n" +
 				"    └─Join [inner]: p.content = pu.content\n" +
 				"      ├─Scan Table [alias=\"p\"]: posts [physical]\n" +
-				"      └─Scan Procedure [alias=\"pu\"]: [foreign=false] posts_by_user('satoshi')\n",
+				"      └─Scan Subquery [alias=\"pu\"]: [subplan_id=0] (uncorrelated)\n" +
+				"Subplan [subquery] [id=0]\n" +
+				"└─Project: p.content\n" +
+				"  └─Filter: u.name = 'satoshi'\n" +
+				"    └─Join [inner]: p.owner_id = u.id\n" +
+				"      ├─Scan Table [alias=\"p\"]: posts [physical]\n" +
+				"      └─Scan Table [alias=\"u\"]: users [physical]\n",
 		},
 		{
 			name: "update with from without where",
-			sql:  "update users set name = pu.content from posts_by_user('satoshi') pu",
+			sql:  "update users set name = pu.content from posts pu",
 			err:  logical.ErrUpdateOrDeleteWithoutWhere,
 		},
 		{
@@ -559,7 +564,7 @@ func Test_Planner(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, parsedSql.ParseErrs.Err())
 
-			plan, err := logical.CreateLogicalPlan(parsedSql.AST, schema, test.vars, test.objects)
+			plan, err := logical.CreateLogicalPlan(parsedSql.AST, schema, test.vars, test.objects, false)
 			if test.err != nil {
 				require.Error(t, err)
 
@@ -571,6 +576,16 @@ func Test_Planner(t *testing.T) {
 				require.ErrorIs(t, err, test.err)
 			} else {
 				require.NoError(t, err)
+
+				if plan.Format() != test.wt {
+					fmt.Println(test.name)
+					fmt.Println("Expected:")
+					fmt.Println(plan.Format())
+					fmt.Println("----")
+					fmt.Println("Actual:")
+					fmt.Println(test.wt)
+				}
+
 				require.Equal(t, test.wt, plan.Format())
 
 				// check that Relation() works
@@ -620,7 +635,4 @@ procedure post_count($id uuid) public view returns (int) {
 		return $row.count;
 	}
 }
-
-foreign procedure owned_cars($id int) returns table(owner_name text, brand text, model text)
-foreign procedure car_count($id uuid) returns (int)
 `

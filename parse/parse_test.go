@@ -466,139 +466,6 @@ func Test_Kuneiform(t *testing.T) {
 			},
 		},
 		{
-			name: "foreign, no parameters, returns nothing",
-			kf: `
-			database mydb;
-
-			foreign procedure get_users()
-			`,
-			want: &types.Schema{
-				Name: "mydb",
-				ForeignProcedures: []*types.ForeignProcedure{
-					{
-						Name: "get_users",
-					},
-				},
-			},
-		},
-		{
-			name: "foreign, with parameters, returns unnamed types",
-			kf: `
-			database mydb;
-
-			foreign procedure get_users(int, text) RETURNS (int, text)
-			`,
-			want: &types.Schema{
-				Name: "mydb",
-				ForeignProcedures: []*types.ForeignProcedure{
-					{
-						Name: "get_users",
-						Parameters: []*types.DataType{
-							types.IntType,
-							types.TextType,
-						},
-						Returns: &types.ProcedureReturn{
-							Fields: []*types.NamedType{
-								{
-									Name: "col0",
-									Type: types.IntType,
-								},
-								{
-									Name: "col1",
-									Type: types.TextType,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "foreign, with parameters, returns named types",
-			kf: `
-			database mydb;
-
-			foreign procedure get_users() RETURNS (id int, name text)
-			`,
-			want: &types.Schema{
-				Name: "mydb",
-				ForeignProcedures: []*types.ForeignProcedure{
-					{
-						Name: "get_users",
-						Returns: &types.ProcedureReturn{
-							Fields: []*types.NamedType{
-								{
-									Name: "id",
-									Type: types.IntType,
-								},
-								{
-									Name: "name",
-									Type: types.TextType,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "foreign,  returns table",
-			kf: `
-			database mydb;
-
-			foreign   procedure   get_users() RETURNS table(id int)
-			`,
-			want: &types.Schema{
-				Name: "mydb",
-				ForeignProcedures: []*types.ForeignProcedure{
-					{
-						Name: "get_users",
-						Returns: &types.ProcedureReturn{
-							IsTable: true,
-							Fields: []*types.NamedType{
-								{
-									Name: "id",
-									Type: types.IntType,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "named foreign parameters",
-			kf: `
-			database mydb;
-
-			foreign procedure get_users($id int, $name text) returns (id int, name text)
-			`,
-			want: &types.Schema{
-				Name: "mydb",
-				ForeignProcedures: []*types.ForeignProcedure{
-					{
-						Name: "get_users",
-						Parameters: []*types.DataType{
-							types.IntType,
-							types.TextType,
-						},
-						Returns: &types.ProcedureReturn{
-							Fields: []*types.NamedType{
-								{
-									Name: "id",
-									Type: types.IntType,
-								},
-								{
-									Name: "name",
-									Type: types.TextType,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
 			// this test tries to break case sensitivity in every way possible
 			name: "case insensitive",
 			kf: `
@@ -620,8 +487,6 @@ func Test_Kuneiform(t *testing.T) {
 			pRoceDure get_Users($nAme tExt) Public viEw ReTURNS tablE(iD iNt) {
 				return select id from users; // this wont actually get parsed in this test
 			}
-
-			fOreign proceduRe get_othEr_Users($Id inT, $nAme Text) RETURNS table(iD inT, Name tExt)
 
 			@kGw( autHn='tRue' )
 			AcTion create_User ($Id, $usErname) Public {
@@ -727,28 +592,6 @@ func Test_Kuneiform(t *testing.T) {
 						Body: `return select id from users;`, // comments will not be parsed
 					},
 				},
-				ForeignProcedures: []*types.ForeignProcedure{
-					{
-						Name: "get_other_users",
-						Parameters: []*types.DataType{
-							types.IntType,
-							types.TextType,
-						},
-						Returns: &types.ProcedureReturn{
-							IsTable: true,
-							Fields: []*types.NamedType{
-								{
-									Name: "id",
-									Type: types.IntType,
-								},
-								{
-									Name: "name",
-									Type: types.TextType,
-								},
-							},
-						},
-					},
-				},
 				Actions: []*types.Action{
 					{
 						Annotations: []string{"@kgw(authn='tRue')"},
@@ -774,20 +617,6 @@ func Test_Kuneiform(t *testing.T) {
 			name:          "incomplete database block",
 			kf:            `datab`,
 			want:          &types.Schema{},
-			err:           parse.ErrSyntax,
-			checkAfterErr: true,
-		},
-		{
-			// similar to the above test, the same edge case existed for foreign procedures
-			name: "incomplete foreign procedure",
-			kf: `database a;
-			foreign proce`,
-			want: &types.Schema{
-				Name: "a",
-				ForeignProcedures: []*types.ForeignProcedure{
-					{}, // there will be one empty foreign procedure
-				},
-			},
 			err:           parse.ErrSyntax,
 			checkAfterErr: true,
 		},
@@ -1156,10 +985,13 @@ var (
 		Body: `return select id from users;`,
 	}
 
-	foreignProcGetUser = &types.ForeignProcedure{
+	procGetUserId = &types.Procedure{
 		Name: "get_user_id",
-		Parameters: []*types.DataType{
-			types.TextType,
+		Parameters: []*types.ProcedureParameter{
+			{
+				Name: "$username",
+				Type: types.TextType,
+			},
 		},
 		Returns: &types.ProcedureReturn{
 			Fields: []*types.NamedType{
@@ -1171,12 +1003,20 @@ var (
 		},
 	}
 
-	foreignProcCreateUser = &types.ForeignProcedure{
-		Name: "foreign_create_user",
-		Parameters: []*types.DataType{
-			types.IntType,
-			types.TextType,
+	procCreateUser = &types.Procedure{
+		Name:   "create_user",
+		Public: true,
+		Parameters: []*types.ProcedureParameter{
+			{
+				Name: "$id",
+				Type: types.IntType,
+			},
+			{
+				Name: "$username",
+				Type: types.TextType,
+			},
 		},
+		Body: `insert into users (id, username) values ($id, $username);`,
 	}
 )
 
@@ -1722,7 +1562,7 @@ func Test_Procedure(t *testing.T) {
 				}},
 			},
 			proc: `
-			for $row in select * from get_all_user_ids() {
+			for $row in select * from users {
 				return next $row.id;
 			}
 			`,
@@ -1739,16 +1579,14 @@ func Test_Procedure(t *testing.T) {
 									SelectCores: []*parse.SelectCore{
 										{
 											Columns: []parse.ResultColumn{&parse.ResultColumnWildcard{}},
-											From: &parse.RelationFunctionCall{
-												FunctionCall: &parse.ExpressionFunctionCall{
-													Name: "get_all_user_ids",
-												},
+											From: &parse.RelationTable{
+												Table: "users",
 											},
 										},
 									},
 									Ordering: []*parse.OrderingTerm{
 										{
-											Expression: exprColumn("", "id"),
+											Expression: exprColumn("users", "id"),
 										},
 									},
 								},
@@ -1792,7 +1630,7 @@ func Test_Procedure(t *testing.T) {
 		},
 		{
 			// this tests for regression on a previously known bug
-			name: "foreign procedure returning nothing to a variable",
+			name: "procedure returning nothing to a variable",
 			returns: &types.ProcedureReturn{
 				Fields: []*types.NamedType{
 					{
@@ -1802,7 +1640,7 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 			proc: `
-			return foreign_create_user['xbd', 'create_user'](1, 'user1');
+			return create_user(1, 'user1');
 			`,
 			err: parse.ErrType,
 		},
@@ -1810,17 +1648,13 @@ func Test_Procedure(t *testing.T) {
 			// regression test for a previously known bug
 			name: "calling a procedure that returns nothing works fine",
 			proc: `
-			foreign_create_user['xbd', 'create_user'](1, 'user1');
+			create_user(1, 'user1');
 			`,
 			want: &parse.ProcedureParseResult{
 				AST: []parse.ProcedureStmt{
 					&parse.ProcedureStmtCall{
-						Call: &parse.ExpressionForeignCall{
-							Name: "foreign_create_user",
-							ContextualArgs: []parse.Expression{
-								exprLit("xbd"),
-								exprLit("create_user"),
-							},
+						Call: &parse.ExpressionFunctionCall{
+							Name: "create_user",
 							Args: []parse.Expression{
 								exprLit(1),
 								exprLit("user1"),
@@ -2049,10 +1883,8 @@ func Test_Procedure(t *testing.T) {
 				Procedures: []*types.Procedure{
 					proc,
 					procGetAllUserIds,
-				},
-				ForeignProcedures: []*types.ForeignProcedure{
-					foreignProcGetUser,
-					foreignProcCreateUser,
+					procCreateUser,
+					procGetUserId,
 				},
 			})
 			require.NoError(t, err)
@@ -2393,32 +2225,6 @@ func Test_SQL(t *testing.T) {
 			err:  parse.ErrAmbiguousConflictTable,
 		},
 		{
-			name: "select against unnamed procedure",
-			sql:  "select * from get_all_user_ids();",
-			want: &parse.SQLStatement{
-				SQL: &parse.SelectStatement{
-					SelectCores: []*parse.SelectCore{
-						{
-							Columns: []parse.ResultColumn{
-								&parse.ResultColumnWildcard{},
-							},
-							From: &parse.RelationFunctionCall{
-								FunctionCall: &parse.ExpressionFunctionCall{
-									Name: "get_all_user_ids",
-								},
-							},
-						},
-					},
-					// apply default ordering
-					Ordering: []*parse.OrderingTerm{
-						{
-							Expression: exprColumn("", "id"),
-						},
-					},
-				},
-			},
-		},
-		{
 			name: "select join with unnamed subquery",
 			sql: `SELECT p.id as id, u.username as author FROM posts AS p
 			INNER JOIN (SELECT id as uid FROM users WHERE id = 1) ON p.author_id = uid;`,
@@ -2724,36 +2530,6 @@ func Test_SQL(t *testing.T) {
 			sql:  `SELECT u.username, p.id FROM (SELECT * FROM users) inner join posts as p on users.id = p.author_id;`,
 			err:  parse.ErrUnnamedJoin,
 		},
-		{
-			name: "default ordering on procedure call",
-			sql:  `SELECT * FROM get_all_user_ids();`,
-			want: &parse.SQLStatement{
-				SQL: &parse.SelectStatement{
-					SelectCores: []*parse.SelectCore{
-						{
-							Columns: []parse.ResultColumn{
-								&parse.ResultColumnWildcard{},
-							},
-							From: &parse.RelationFunctionCall{
-								FunctionCall: &parse.ExpressionFunctionCall{
-									Name: "get_all_user_ids",
-								},
-							},
-						},
-					},
-					Ordering: []*parse.OrderingTerm{
-						{
-							Expression: exprColumn("", "id"),
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "join against unnamed function call fails",
-			sql:  `SELECT * FROM users inner join get_all_user_ids() on users.id = u.id;`,
-			err:  parse.ErrUnnamedJoin,
-		},
 		{name: "non utf-8", sql: "\xbd\xb2\x3d\xbc\x20\xe2\x8c\x98;", err: parse.ErrSyntax},
 		{
 			// this select doesn't make much sense, however
@@ -3026,7 +2802,6 @@ func cmpOpts() []cmp.Option {
 		cmp.AllowUnexported(
 			parse.ExpressionLiteral{},
 			parse.ExpressionFunctionCall{},
-			parse.ExpressionForeignCall{},
 			parse.ExpressionVariable{},
 			parse.ExpressionArrayAccess{},
 			parse.ExpressionMakeArray{},

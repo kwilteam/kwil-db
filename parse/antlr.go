@@ -335,12 +335,11 @@ func (s *schemaVisitor) VisitVariable_list(ctx *gen.Variable_listContext) any {
 
 func (s *schemaVisitor) VisitSchema(ctx *gen.SchemaContext) any {
 	s.schema = &types.Schema{
-		Name:              ctx.Database_declaration().Accept(s).(string),
-		Tables:            arr[*types.Table](len(ctx.AllTable_declaration())),
-		Extensions:        arr[*types.Extension](len(ctx.AllUse_declaration())),
-		Actions:           arr[*types.Action](len(ctx.AllAction_declaration())),
-		Procedures:        arr[*types.Procedure](len(ctx.AllProcedure_declaration())),
-		ForeignProcedures: arr[*types.ForeignProcedure](len(ctx.AllForeign_procedure_declaration())),
+		Name:       ctx.Database_declaration().Accept(s).(string),
+		Tables:     arr[*types.Table](len(ctx.AllTable_declaration())),
+		Extensions: arr[*types.Extension](len(ctx.AllUse_declaration())),
+		Actions:    arr[*types.Action](len(ctx.AllAction_declaration())),
+		Procedures: arr[*types.Procedure](len(ctx.AllProcedure_declaration())),
 	}
 
 	for i, t := range ctx.AllTable_declaration() {
@@ -393,11 +392,6 @@ func (s *schemaVisitor) VisitSchema(ctx *gen.SchemaContext) any {
 	for i, p := range ctx.AllProcedure_declaration() {
 		s.schema.Procedures[i] = p.Accept(s).(*types.Procedure)
 		s.registerBlock(p, s.schema.Procedures[i].Name)
-	}
-
-	for i, p := range ctx.AllForeign_procedure_declaration() {
-		s.schema.ForeignProcedures[i] = p.Accept(s).(*types.ForeignProcedure)
-		s.registerBlock(p, s.schema.ForeignProcedures[i].Name)
 	}
 
 	return s.schema
@@ -866,40 +860,6 @@ func (s *schemaVisitor) VisitProcedure_declaration(ctx *gen.Procedure_declaratio
 	return proc
 }
 
-func (s *schemaVisitor) VisitForeign_procedure_declaration(ctx *gen.Foreign_procedure_declarationContext) any {
-	// similar to https://github.com/kwilteam/kwil-db/issues/752, the parser will recognize
-	// `foreign proced`` as a foreign procedure named `proced`. it will throw an error, but we
-	// don't want to return this to the client either.
-	fp := &types.ForeignProcedure{}
-	if isErrNode(ctx.FOREIGN()) {
-		return fp
-	}
-	if isErrNode(ctx.PROCEDURE()) {
-		return fp
-	}
-
-	fp.Name = s.getIdent(ctx.IDENTIFIER())
-
-	if ctx.Procedure_return() != nil {
-		fp.Returns = ctx.Procedure_return().Accept(s).(*types.ProcedureReturn)
-	}
-
-	// no default, since foreign procedures can take no inputs optionally
-	switch {
-	case ctx.GetUnnamed_params() != nil:
-		fp.Parameters = ctx.GetUnnamed_params().Accept(s).([]*types.DataType)
-	case ctx.GetNamed_params() != nil:
-		ps := ctx.GetNamed_params().Accept(s).([]*types.ProcedureParameter)
-		var dataTypes []*types.DataType
-		for _, p := range ps {
-			dataTypes = append(dataTypes, p.Type)
-		}
-		fp.Parameters = dataTypes
-	}
-
-	return fp
-}
-
 func (s *schemaVisitor) VisitProcedure_return(ctx *gen.Procedure_returnContext) any {
 	ret := &types.ProcedureReturn{}
 
@@ -1075,6 +1035,24 @@ func (s *schemaVisitor) VisitSelect_core(ctx *gen.Select_coreContext) any {
 		stmt.Having = ctx.GetHaving().Accept(s).(Expression)
 	}
 
+	if ctx.WINDOW() != nil {
+		// the only Identifier used in the SELECT CORE grammar is for naming windows,
+		// so we can safely get identifiers by index here.
+		for i, window := range ctx.AllWindow() {
+			name := s.getIdent(ctx.Identifier(i).IDENTIFIER())
+
+			win := window.Accept(s).(*Window)
+
+			stmt.Windows = append(stmt.Windows, &struct {
+				Name   string
+				Window *Window
+			}{
+				Name:   name,
+				Window: win,
+			})
+		}
+	}
+
 	stmt.Set(ctx)
 	return stmt
 }
@@ -1095,21 +1073,6 @@ func (s *schemaVisitor) VisitTable_relation(ctx *gen.Table_relationContext) any 
 func (s *schemaVisitor) VisitSubquery_relation(ctx *gen.Subquery_relationContext) any {
 	t := &RelationSubquery{
 		Subquery: ctx.Select_statement().Accept(s).(*SelectStatement),
-	}
-
-	// alias is technially required here, but we allow it in the grammar
-	// to throw a better error message here.
-	if ctx.Identifier() != nil {
-		t.Alias = ctx.Identifier().Accept(s).(string)
-	}
-
-	t.Set(ctx)
-	return t
-}
-
-func (s *schemaVisitor) VisitFunction_relation(ctx *gen.Function_relationContext) any {
-	t := &RelationFunctionCall{
-		FunctionCall: ctx.Sql_function_call().Accept(s).(ExpressionCall),
 	}
 
 	// alias is technially required here, but we allow it in the grammar
@@ -1415,7 +1378,19 @@ func (s *schemaVisitor) VisitBetween_sql_expr(ctx *gen.Between_sql_exprContext) 
 }
 
 func (s *schemaVisitor) VisitFunction_call_sql_expr(ctx *gen.Function_call_sql_exprContext) any {
-	call := ctx.Sql_function_call().Accept(s).(ExpressionCall)
+	call := ctx.Sql_function_call().Accept(s).(*ExpressionFunctionCall)
+
+	if ctx.Window() != nil {
+		win := ctx.Window().Accept(s).(*Window)
+
+		e := &ExpressionWindowFunctionCall{
+			FunctionCall: call,
+			Window:       win,
+		}
+
+		e.Set(ctx)
+		return e
+	}
 
 	if ctx.Type_cast() != nil {
 		call.Cast(ctx.Type_cast().Accept(s).(*types.DataType))
@@ -1667,24 +1642,6 @@ func (s *schemaVisitor) VisitNormal_call_sql(ctx *gen.Normal_call_sqlContext) an
 	return call
 }
 
-func (s *schemaVisitor) VisitForeign_call_sql(ctx *gen.Foreign_call_sqlContext) any {
-	e := &ExpressionForeignCall{
-		Name: ctx.Identifier().Accept(s).(string),
-	}
-
-	if ctx.Sql_expr_list() != nil {
-		e.Args = ctx.Sql_expr_list().Accept(s).([]Expression)
-	}
-
-	dbid := ctx.GetDbid().Accept(s).(Expression)
-	proc := ctx.GetProcedure().Accept(s).(Expression)
-	e.ContextualArgs = append(e.ContextualArgs, dbid, proc)
-
-	e.Set(ctx)
-
-	return e
-}
-
 func (s *schemaVisitor) VisitAction_block(ctx *gen.Action_blockContext) any {
 	var stmts []ActionStmt
 
@@ -1913,7 +1870,7 @@ func (s *schemaVisitor) VisitComparison_procedure_expr(ctx *gen.Comparison_proce
 }
 
 func (s *schemaVisitor) VisitFunction_call_procedure_expr(ctx *gen.Function_call_procedure_exprContext) any {
-	call := ctx.Procedure_function_call().Accept(s).(ExpressionCall)
+	call := ctx.Procedure_function_call().Accept(s).(*ExpressionFunctionCall)
 
 	if ctx.Type_cast() != nil {
 		call.Cast(ctx.Type_cast().Accept(s).(*types.DataType))
@@ -2043,7 +2000,7 @@ func varFromString(s string) *ExpressionVariable {
 
 func (s *schemaVisitor) VisitStmt_procedure_call(ctx *gen.Stmt_procedure_callContext) any {
 	stmt := &ProcedureStmtCall{
-		Call: ctx.Procedure_function_call().Accept(s).(ExpressionCall),
+		Call: ctx.Procedure_function_call().Accept(s).(*ExpressionFunctionCall),
 	}
 
 	for i, v := range ctx.AllVariable_or_underscore() {
@@ -2217,24 +2174,6 @@ func (s *schemaVisitor) VisitNormal_call_procedure(ctx *gen.Normal_call_procedur
 	return call
 }
 
-func (s *schemaVisitor) VisitForeign_call_procedure(ctx *gen.Foreign_call_procedureContext) any {
-	e := &ExpressionForeignCall{
-		Name: s.getIdent(ctx.IDENTIFIER()),
-	}
-
-	if ctx.Procedure_expr_list() != nil {
-		e.Args = ctx.Procedure_expr_list().Accept(s).([]Expression)
-	}
-
-	dbid := ctx.GetDbid().Accept(s).(Expression)
-	proc := ctx.GetProcedure().Accept(s).(Expression)
-	e.ContextualArgs = append(e.ContextualArgs, dbid, proc)
-
-	e.Set(ctx)
-
-	return e
-}
-
 func (s *schemaVisitor) VisitRange(ctx *gen.RangeContext) any {
 	r := &LoopTermRange{
 		Start: ctx.Procedure_expr(0).Accept(s).(Expression),
@@ -2243,6 +2182,25 @@ func (s *schemaVisitor) VisitRange(ctx *gen.RangeContext) any {
 
 	r.Set(ctx)
 	return r
+}
+
+func (s *schemaVisitor) VisitWindow(ctx *gen.WindowContext) any {
+	win := &Window{}
+
+	if ctx.GetPartition() != nil {
+		win.PartitionBy = ctx.GetPartition().Accept(s).([]Expression)
+	}
+
+	if ctx.ORDER() != nil {
+		for _, o := range ctx.AllOrdering_term() {
+			win.OrderBy = append(win.OrderBy, o.Accept(s).(*OrderingTerm))
+		}
+	}
+
+	// currently does not support frame
+
+	win.Set(ctx)
+	return win
 }
 
 func (s *schemaVisitor) Visit(tree antlr.ParseTree) interface {

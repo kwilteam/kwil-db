@@ -107,22 +107,37 @@ func typeCast(t interface{ GetTypeCast() *types.DataType }, s *strings.Builder) 
 	}
 }
 
-func (s *sqlGenerator) VisitExpressionForeignCall(p0 *parse.ExpressionForeignCall) any {
+func (s *sqlGenerator) VisitExpressionWindowFunctionCall(p0 *parse.ExpressionWindowFunctionCall) any {
 	str := strings.Builder{}
-	str.WriteString(s.pgSchema)
-	str.WriteString(".")
-	str.WriteString(formatForeignProcedureName(p0.Name))
-	str.WriteString("(")
-	for i, arg := range append(p0.ContextualArgs, p0.Args...) {
-		if i > 0 {
-			str.WriteString(", ")
-		}
-
-		str.WriteString(arg.Accept(s).(string))
-	}
+	str.WriteString(p0.FunctionCall.Accept(s).(string))
+	str.WriteString(" OVER (")
+	str.WriteString(p0.Window.Accept(s).(string))
 	str.WriteString(")")
+	return str.String()
+}
 
-	typeCast(p0, &str)
+func (s *sqlGenerator) VisitWindow(p0 *parse.Window) any {
+	str := strings.Builder{}
+
+	if len(p0.PartitionBy) > 0 {
+		str.WriteString("PARTITION BY ")
+		for i, arg := range p0.PartitionBy {
+			if i > 0 {
+				str.WriteString(", ")
+			}
+			str.WriteString(arg.Accept(s).(string))
+		}
+	}
+
+	if p0.OrderBy != nil {
+		str.WriteString(" ORDER BY ")
+		for i, arg := range p0.OrderBy {
+			if i > 0 {
+				str.WriteString(", ")
+			}
+			str.WriteString(arg.Accept(s).(string))
+		}
+	}
 
 	return str.String()
 }
@@ -494,6 +509,18 @@ func (s *sqlGenerator) VisitSelectCore(p0 *parse.SelectCore) any {
 		}
 	}
 
+	if len(p0.Windows) > 0 {
+		str.WriteString("\nWINDOW ")
+		for i, window := range p0.Windows {
+			if i > 0 {
+				str.WriteString(", ")
+			}
+			str.WriteString(window.Name)
+			str.WriteString(" AS ")
+			str.WriteString(window.Window.Accept(s).(string))
+		}
+	}
+
 	return str.String()
 }
 
@@ -536,17 +563,6 @@ func (s *sqlGenerator) VisitRelationSubquery(p0 *parse.RelationSubquery) any {
 	str.WriteString("(")
 	str.WriteString(p0.Subquery.Accept(s).(string))
 	str.WriteString(") ")
-	if p0.Alias != "" {
-		str.WriteString("AS ")
-		str.WriteString(p0.Alias)
-	}
-	return str.String()
-}
-
-func (s *sqlGenerator) VisitRelationFunctionCall(p0 *parse.RelationFunctionCall) any {
-	str := strings.Builder{}
-	str.WriteString(p0.FunctionCall.Accept(s).(string))
-	str.WriteString(" ")
 	if p0.Alias != "" {
 		str.WriteString("AS ")
 		str.WriteString(p0.Alias)
@@ -961,12 +977,6 @@ func formatPGLiteral(value any) (string, error) {
 	}
 
 	return str.String(), nil
-}
-
-// FormatProcedureName formats a procedure name for usage in postgres. This
-// simply prepends the name with _fp_
-func formatForeignProcedureName(name string) string {
-	return "_fp_" + name
 }
 
 // formatAnonymousReceiver creates a plpgsql variable name for anonymous receivers.

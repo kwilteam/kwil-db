@@ -107,7 +107,7 @@ func Test_Pushdown(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, parsedSql.ParseErrs.Err())
 
-			plan, err := logical.CreateLogicalPlan(parsedSql.AST, schema, map[string]*types.DataType{}, map[string]map[string]*types.DataType{})
+			plan, err := logical.CreateLogicalPlan(parsedSql.AST, schema, map[string]*types.DataType{}, map[string]map[string]*types.DataType{}, false)
 			require.NoError(t, err)
 
 			newPlan, err := PushdownPredicates(plan.Plan)
