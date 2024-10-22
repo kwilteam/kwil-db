@@ -531,11 +531,139 @@ type SQLCore interface {
 type SQLStatementType string
 
 const (
-	SQLStatementTypeInsert SQLStatementType = "insert"
-	SQLStatementTypeUpdate SQLStatementType = "update"
-	SQLStatementTypeDelete SQLStatementType = "delete"
-	SQLStatementTypeSelect SQLStatementType = "select"
+	SQLStatementTypeInsert      SQLStatementType = "insert"
+	SQLStatementTypeUpdate      SQLStatementType = "update"
+	SQLStatementTypeDelete      SQLStatementType = "delete"
+	SQLStatementTypeSelect      SQLStatementType = "select"
+	SQLStatementTypeCreateTable SQLStatementType = "create_table"
+	SQLStatementTypeAlterTable  SQLStatementType = "alter_table"
+	SQLStatementTypeCreateIndex SQLStatementType = "create_index"
+	SQLStatementTypeDropIndex   SQLStatementType = "drop_index"
+	//SQLStatementTypeDropTable   SQLStatementType = "drop_table"
 )
+
+// CreateTableStatement is a CREATE TABLE statement.
+type CreateTableStatement struct {
+	Position
+
+	Name        string
+	Columns     []*Column
+	Indexes     []*Index
+	ForeignKeys []*ForeignKey
+	PrimaryKey  []string
+}
+
+// Column represents a table column.
+type Column struct {
+	Position
+
+	Name        string
+	Type        *types.DataType
+	Constraints []Constraint
+	ForeignKey  *ForeignKey
+	Index       *Index
+}
+
+//type Constraint interface {
+//	constraint()
+//}
+
+// Constraint represents a table column constraint.
+type Constraint struct {
+	Position
+
+	Type  string
+	Value *types.DataType
+}
+
+type IndexType string
+
+const (
+	// IndexTypePrimary is a primary index, created by using `PRIMARY KEY`.
+	// Only one primary index is allowed per table.
+	IndexTypePrimary IndexType = "primary"
+	// IndexTypeBTree is the default index, created by using `INDEX`.
+	IndexTypeBTree IndexType = "btree"
+	// IndexTypeUnique is a unique BTree index, created by using `UNIQUE INDEX`.
+	IndexTypeUnique IndexType = "unique"
+)
+
+type Index struct {
+	Position
+
+	Name    string
+	Columns []string
+	Type    IndexType
+}
+
+// ForeignKey is a foreign key in a table.
+type ForeignKey struct {
+	// ChildKeys are the columns that are referencing another.
+	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "a" is the child key
+	ChildKeys []string `json:"child_keys"`
+
+	// ParentKeys are the columns that are being referred to.
+	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "b" is the parent key
+	ParentKeys []string `json:"parent_keys"`
+
+	// ParentTable is the table that holds the parent columns.
+	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "tbl2" is the parent table
+	ParentTable string `json:"parent_table"`
+
+	// Do we need parent schema stored with meta data or should assume and
+	// enforce same schema when creating the dataset with generated DDL.
+	// ParentSchema string `json:"parent_schema"`
+
+	// Action refers to what the foreign key should do when the parent is altered.
+	// This is NOT the same as a database action;
+	// however sqlite's docs refer to these as actions,
+	// so we should be consistent with that.
+	// For example, ON DELETE CASCADE is a foreign key action
+	Actions []*ForeignKeyAction `json:"actions"`
+}
+
+// ForeignKeyActionOn specifies when a foreign key action should occur.
+// It can be either "UPDATE" or "DELETE".
+type ForeignKeyActionOn string
+
+// ForeignKeyActionOn types
+const (
+	// ON_UPDATE is used to specify an action should occur when a parent key is updated
+	ON_UPDATE ForeignKeyActionOn = "UPDATE"
+	// ON_DELETE is used to specify an action should occur when a parent key is deleted
+	ON_DELETE ForeignKeyActionOn = "DELETE"
+)
+
+// ForeignKeyActionDo specifies what should be done when a foreign key action is triggered.
+type ForeignKeyActionDo string
+
+// ForeignKeyActionDo types
+const (
+	// DO_NO_ACTION does nothing when a parent key is altered
+	DO_NO_ACTION ForeignKeyActionDo = "NO ACTION"
+
+	// DO_RESTRICT prevents the parent key from being altered
+	DO_RESTRICT ForeignKeyActionDo = "RESTRICT"
+
+	// DO_SET_NULL sets the child key(s) to NULL
+	DO_SET_NULL ForeignKeyActionDo = "SET NULL"
+
+	// DO_SET_DEFAULT sets the child key(s) to their default values
+	DO_SET_DEFAULT ForeignKeyActionDo = "SET DEFAULT"
+
+	// DO_CASCADE updates the child key(s) or deletes the records (depending on the action type)
+	DO_CASCADE ForeignKeyActionDo = "CASCADE"
+)
+
+// ForeignKeyAction is used to specify what should occur
+// if a parent key is updated or deleted
+type ForeignKeyAction struct {
+	// On can be either "UPDATE" or "DELETE"
+	On ForeignKeyActionOn `json:"on"`
+
+	// Do specifies what a foreign key action should do
+	Do ForeignKeyActionDo `json:"do"`
+}
 
 // SelectStatement is a SELECT statement.
 type SelectStatement struct {

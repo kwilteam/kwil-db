@@ -39,6 +39,91 @@ type schemaVisitor struct {
 	actions map[string][]ActionStmt
 }
 
+func (s *schemaVisitor) VisitC_column_def(ctx *gen.C_column_defContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitC_index_def(ctx *gen.C_index_defContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitC_constraint(ctx *gen.C_constraintContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitFk_action(ctx *gen.Fk_actionContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitFk_constraint(ctx *gen.Fk_constraintContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitConstraint_def(ctx *gen.Constraint_defContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitUnnamed_constraint_def(ctx *gen.Unnamed_constraint_defContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitAlter_table_statement(ctx *gen.Alter_table_statementContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitAlter_column_clause(ctx *gen.Alter_column_clauseContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitAdd_column_clause(ctx *gen.Add_column_clauseContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitDrop_column_clause(ctx *gen.Drop_column_clauseContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitRename_column_clause(ctx *gen.Rename_column_clauseContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitRename_table_clause(ctx *gen.Rename_table_clauseContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitAdd_fk_clause(ctx *gen.Add_fk_clauseContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitDrop_fk_clause(ctx *gen.Drop_fk_clauseContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitCreate_index_statement(ctx *gen.Create_index_statementContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitDrop_index_statement(ctx *gen.Drop_index_statementContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
 // getTextFromStream gets the text from the input stream for a given range.
 // This is a hack over a bug in the generated antlr code, where it will try
 // to access index out of bounds.
@@ -906,6 +991,14 @@ func (s *schemaVisitor) VisitSql_statement(ctx *gen.Sql_statementContext) any {
 	}
 
 	switch {
+	case ctx.Create_table_statement() != nil:
+		stmt.SQL = ctx.Create_table_statement().Accept(s).(*CreateTableStatement)
+	//case ctx.Alter_table_statement() != nil:
+	//	stmt.SQL = ctx.Alter_table_statement().Accept(s).(*AlterTableStatement)
+	//case ctx.Create_index_statement() != nil:
+	//	stmt.SQL = ctx.Create_index_statement().Accept(s).(*CreateIndexStatement)
+	//case ctx.Drop_index_statement() != nil:
+	//	stmt.SQL = ctx.Drop_index_statement().Accept(s).(*DropIndexStatement)
 	case ctx.Select_statement() != nil:
 		stmt.SQL = ctx.Select_statement().Accept(s).(*SelectStatement)
 	case ctx.Update_statement() != nil:
@@ -936,6 +1029,32 @@ func (s *schemaVisitor) VisitCommon_table_expression(ctx *gen.Common_table_expre
 	cte.Set(ctx)
 
 	return cte
+}
+
+func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statementContext) any {
+	stmt := &CreateTableStatement{
+		Name:        ctx.GetName().Accept(s).(string),
+		Columns:     arr[*Column](len(ctx.AllC_column_def())),
+		Indexes:     nil,
+		ForeignKeys: nil,
+	}
+	for i, c := range ctx.AllC_column_def() {
+		stmt.Columns[i] = c.Accept(s).(*Column)
+	}
+
+	var allIndexes []*Index
+	var allForeignKeys []*ForeignKey
+
+	for _, c := range ctx.AllC_index_def() {
+		allIndexes = append(allIndexes, c.Accept(s).(*Index))
+	}
+
+	for _, c := range ctx.AllConstraint_def() {
+
+	}
+
+	stmt.Set(ctx)
+	return stmt
 }
 
 func (s *schemaVisitor) VisitSelect_statement(ctx *gen.Select_statementContext) any {

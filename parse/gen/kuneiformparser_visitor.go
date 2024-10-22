@@ -7,6 +7,9 @@ import "github.com/antlr4-go/antlr/v4"
 type KuneiformParserVisitor interface {
 	antlr.ParseTreeVisitor
 
+	// Visit a parse tree produced by KuneiformParser#src.
+	VisitSrc(ctx *SrcContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#schema_entry.
 	VisitSchema_entry(ctx *Schema_entryContext) interface{}
 
@@ -73,8 +76,14 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#column_def.
 	VisitColumn_def(ctx *Column_defContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#c_column_def.
+	VisitC_column_def(ctx *C_column_defContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#index_def.
 	VisitIndex_def(ctx *Index_defContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#c_index_def.
+	VisitC_index_def(ctx *C_index_defContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#foreign_key_def.
 	VisitForeign_key_def(ctx *Foreign_key_defContext) interface{}
@@ -93,6 +102,15 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#constraint.
 	VisitConstraint(ctx *ConstraintContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#inline_constraint.
+	VisitInline_constraint(ctx *Inline_constraintContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#fk_action.
+	VisitFk_action(ctx *Fk_actionContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#fk_constraint.
+	VisitFk_constraint(ctx *Fk_constraintContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#access_modifier.
 	VisitAccess_modifier(ctx *Access_modifierContext) interface{}
@@ -114,6 +132,45 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#common_table_expression.
 	VisitCommon_table_expression(ctx *Common_table_expressionContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#create_table_statement.
+	VisitCreate_table_statement(ctx *Create_table_statementContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#constraint_def.
+	VisitConstraint_def(ctx *Constraint_defContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#unnamed_constraint.
+	VisitUnnamed_constraint(ctx *Unnamed_constraintContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#alter_table_statement.
+	VisitAlter_table_statement(ctx *Alter_table_statementContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#alter_column_clause.
+	VisitAlter_column_clause(ctx *Alter_column_clauseContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#add_column_clause.
+	VisitAdd_column_clause(ctx *Add_column_clauseContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#drop_column_clause.
+	VisitDrop_column_clause(ctx *Drop_column_clauseContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#rename_column_clause.
+	VisitRename_column_clause(ctx *Rename_column_clauseContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#rename_table_clause.
+	VisitRename_table_clause(ctx *Rename_table_clauseContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#add_fk_clause.
+	VisitAdd_fk_clause(ctx *Add_fk_clauseContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#drop_fk_clause.
+	VisitDrop_fk_clause(ctx *Drop_fk_clauseContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#create_index_statement.
+	VisitCreate_index_statement(ctx *Create_index_statementContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#drop_index_statement.
+	VisitDrop_index_statement(ctx *Drop_index_statementContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#select_statement.
 	VisitSelect_statement(ctx *Select_statementContext) interface{}
