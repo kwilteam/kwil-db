@@ -480,7 +480,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 
 		hasher.Reset()
 
-	// v2 Stream control messages.  Not expected for kwil
+	// v2 Stream control messages.  Only expected with large transactions.
 	case *pglogrepl.StreamStartMessageV2:
 		*inStream = true
 		logger.Warnf(" [msg] StreamStartMessageV2: xid %d, first segment? %d", logicalMsg.Xid, logicalMsg.FirstSegment)
