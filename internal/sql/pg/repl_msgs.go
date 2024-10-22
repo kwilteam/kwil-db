@@ -14,6 +14,7 @@ const (
 	MessageTypeBeginPrepare     pglogrepl.MessageType = 'b'
 	MessageTypeCommitPrepared   pglogrepl.MessageType = 'K'
 	MessageTypeRollbackPrepared pglogrepl.MessageType = 'r'
+	MessageTypeStreamPrepare    pglogrepl.MessageType = 'p'
 )
 
 // msgTypeToString is helpful for debugging, but normally unused.
@@ -21,6 +22,8 @@ func msgTypeToString(t pglogrepl.MessageType) string { //nolint:unused
 	switch t {
 	case MessageTypePrepare:
 		return "Prepare"
+	case MessageTypeStreamPrepare:
+		return "Stream Prepared"
 	case MessageTypeBeginPrepare:
 		return "Begin Prepared"
 	case MessageTypeCommitPrepared:
@@ -39,7 +42,7 @@ func parseV3(data []byte, inStream bool) (m pglogrepl.Message, err error) {
 	var decoder pglogrepl.MessageDecoder // v1 and v3 have same Decode signature (stream not relevant)
 
 	switch msgType {
-	case MessageTypePrepare:
+	case MessageTypePrepare, MessageTypeStreamPrepare: // same encoding
 		decoder = new(PrepareMessageV3)
 	case MessageTypeBeginPrepare:
 		decoder = new(BeginPrepareMessageV3)
