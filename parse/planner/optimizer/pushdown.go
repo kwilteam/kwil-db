@@ -225,6 +225,18 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 
 		n.Child = res
 		return n, nil
+	case *logical.Window:
+		if expr != nil {
+			return nil, errCannotPush
+		}
+
+		res, err := push(n.Child, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		n.Child = res
+		return n, nil
 	case *logical.SetOperation:
 		if expr != nil {
 			return nil, errCannotPush
@@ -273,12 +285,12 @@ func push(n logical.Plan, expr logical.Expression) (logical.Plan, error) {
 			return nil, errCannotPush
 		}
 
-		res, err := push(n.Values, nil)
+		res, err := push(n.InsertionValues, nil)
 		if err != nil {
 			return nil, err
 		}
 
-		n.Values = res.(*logical.Tuples)
+		n.InsertionValues = res.(*logical.Tuples)
 
 		if n.ConflictResolution != nil {
 			res, err = push(n.ConflictResolution, nil)

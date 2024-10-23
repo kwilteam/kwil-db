@@ -644,6 +644,24 @@ var (
 			},
 			PGFormatFunc: defaultFormat("format"),
 		},
+		"coalesce": &ScalarFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) < 1 {
+					return nil, fmt.Errorf("invalid number of arguments: expected at least 1, got %d", len(args))
+				}
+
+				firstType := args[0]
+				// all arguments must be the same type
+				for i, arg := range args {
+					if !firstType.EqualsStrict(arg) {
+						return nil, fmt.Errorf("all arguments must be the same type, but argument %d is %s and argument 1 is %s", i+1, arg.String(), firstType.String())
+					}
+				}
+
+				return firstType, nil
+			},
+			PGFormatFunc: defaultFormat("coalesce"),
+		},
 		// Aggregate functions
 		"count": &AggregateFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -772,6 +790,123 @@ var (
 				return fmt.Sprintf("array_agg(%s ORDER BY %s)", inputs[0], inputs[0]), nil
 			},
 		},
+		"avg": &AggregateFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				// Postgres supports any numeric type for average, but we will enforce that it is numeric
+				// to guarantee determinism.
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if !strings.EqualFold(args[0].Name, types.DecimalStr) {
+					return nil, fmt.Errorf("expected argument to be numeric, got %s", args[0].String())
+				}
+
+				return args[0], nil
+			},
+			PGFormatFunc: func(inputs []string, distinct bool) (string, error) {
+				if distinct {
+					return "avg(DISTINCT %s)", nil
+				}
+
+				return fmt.Sprintf("avg(%s)", inputs[0]), nil
+			},
+		},
+		// Window functions
+		"lag": &WindowFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				// LAG(value_expression [, offset [, default_value]])
+				if len(args) < 1 || len(args) > 3 {
+					return nil, fmt.Errorf("invalid number of arguments: expected 1-3, got %d", len(args))
+				}
+
+				if len(args) >= 2 {
+					if !args[1].EqualsStrict(types.IntType) {
+						return nil, wrapErrArgumentType(types.IntType, args[1])
+					}
+				}
+
+				if len(args) == 3 {
+					if !args[2].EqualsStrict(args[0]) {
+						return nil, fmt.Errorf("expected default value to be the same type as the value expression: %s != %s", args[0].String(), args[2].String())
+					}
+				}
+
+				return args[0], nil
+			},
+			PGFormatFunc: defaultFormat("lag"),
+		},
+		"lead": &WindowFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				// LEAD(value_expression [, offset [, default_value]])
+				if len(args) < 1 || len(args) > 3 {
+					return nil, fmt.Errorf("invalid number of arguments: expected 1-3, got %d", len(args))
+				}
+
+				if len(args) >= 2 {
+					if !args[1].EqualsStrict(types.IntType) {
+						return nil, wrapErrArgumentType(types.IntType, args[1])
+					}
+				}
+
+				if len(args) == 3 {
+					if !args[2].EqualsStrict(args[0]) {
+						return nil, fmt.Errorf("expected default value to be the same type as the value expression: %s != %s", args[0].String(), args[2].String())
+					}
+				}
+
+				return args[0], nil
+			},
+			PGFormatFunc: defaultFormat("lead"),
+		},
+		"first_value": &WindowFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				// FIRST_VALUE(value_expression) OVER (...)
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				return args[0], nil
+			},
+			PGFormatFunc: defaultFormat("first_value"),
+		},
+		"last_value": &WindowFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				// LAST_VALUE(value_expression) OVER (...)
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				return args[0], nil
+			},
+			PGFormatFunc: defaultFormat("last_value"),
+		},
+		"nth_value": &WindowFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				// NTH_VALUE(value_expression, nth) OVER (...)
+				if len(args) != 2 {
+					return nil, wrapErrArgumentNumber(2, len(args))
+				}
+
+				if !args[1].EqualsStrict(types.IntType) {
+					return nil, wrapErrArgumentType(types.IntType, args[1])
+				}
+
+				return args[0], nil
+			},
+			PGFormatFunc: defaultFormat("nth_value"),
+		},
+		"row_number": &WindowFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				// ROW_NUMBER() OVER (...)
+				if len(args) != 0 {
+					return nil, wrapErrArgumentNumber(0, len(args))
+				}
+
+				return types.IntType, nil
+			},
+			PGFormatFunc: defaultFormat("row_number"),
+		},
 	}
 )
 
@@ -843,6 +978,22 @@ func (a *AggregateFunctionDefinition) ValidateArgs(args []*types.DataType) (*typ
 }
 
 func (a *AggregateFunctionDefinition) funcdef() {}
+
+type WindowFunctionDefinition struct {
+	// ValidateArgs is a function that checks the arguments passed to the function.
+	// It can check the argument type and amount of arguments.
+	ValidateArgsFunc func(args []*types.DataType) (*types.DataType, error)
+	// PGFormat is a function that formats the inputs to the function in Postgres format.
+	// For example, the function `sum` would format the inputs as `sum($1)`.
+	// It can also format the inputs with DISTINCT. If no inputs are given, it is a *.
+	PGFormatFunc func(inputs []string) (string, error)
+}
+
+func (w *WindowFunctionDefinition) ValidateArgs(args []*types.DataType) (*types.DataType, error) {
+	return w.ValidateArgsFunc(args)
+}
+
+func (w *WindowFunctionDefinition) funcdef() {}
 
 // FormatFunc is a function that formats a string of inputs for a SQL function.
 type FormatFunc func(inputs []string) (string, error)

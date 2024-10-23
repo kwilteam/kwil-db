@@ -1155,7 +1155,7 @@ func (i *interpreterPlanner) VisitInsertStatement(p0 *parse.InsertStatement) any
 	panic("intepreter planner should not be called for SQL expressions")
 }
 
-func (i *interpreterPlanner) VisitUpsertClause(p0 *parse.UpsertClause) any {
+func (i *interpreterPlanner) VisitUpsertClause(p0 *parse.OnConflict) any {
 	panic("intepreter planner should not be called for SQL expressions")
 }
 

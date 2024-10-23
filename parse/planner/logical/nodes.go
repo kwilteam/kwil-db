@@ -39,7 +39,26 @@ type Traversable interface {
 	// Accept is used to traverse the node.
 	Accept(Visitor) any
 	// Equal is used to compare two nodes.
-	Equal(other Traversable) bool
+	// Equal(other Traversable) bool
+}
+
+// I am unsure if equal is needed, and so I am commenting it out for now.
+// Its quite hard to implement, so I do not want to delete yet, but will leave it
+// unused for now.
+// This function allows us to keep the equal functionality in the nodes themselves,
+// while removing it from the interface.
+func eq(a, b Traversable) bool {
+	aEq, ok := a.(interface{ Equal(other Traversable) bool })
+	if !ok {
+		panic("equal called, but it is not implemented")
+	}
+
+	_, ok = b.(interface{ Equal(other Traversable) bool })
+	if !ok {
+		panic("equal called, but it is not implemented")
+	}
+
+	return aEq.Equal(b)
 }
 
 // ScanSource is a source of data that a Scan can be performed on.
@@ -202,13 +221,13 @@ func (f *ProcedureScanSource) Equal(other Traversable) bool {
 	}
 
 	for i, arg := range f.Args {
-		if !arg.Equal(o.Args[i]) {
+		if !eq(arg, o.Args[i]) {
 			return false
 		}
 	}
 
 	for i, arg := range f.ContextualArgs {
-		if !arg.Equal(o.ContextualArgs[i]) {
+		if !eq(arg, o.ContextualArgs[i]) {
 			return false
 		}
 	}
@@ -408,7 +427,7 @@ func (s *Scan) Equal(other Traversable) bool {
 		return false
 	}
 
-	return s.Source.Equal(o.Source)
+	return eq(s.Source, o.Source)
 }
 
 type Project struct {
@@ -476,12 +495,12 @@ func (p *Project) Equal(other Traversable) bool {
 	}
 
 	for i, expr := range p.Expressions {
-		if !expr.Equal(o.Expressions[i]) {
+		if !eq(expr, o.Expressions[i]) {
 			return false
 		}
 	}
 
-	return p.Child.Equal(o.Child)
+	return eq(p.Child, o.Child)
 }
 
 type Filter struct {
@@ -515,7 +534,7 @@ func (f *Filter) Equal(other Traversable) bool {
 		return false
 	}
 
-	return f.Condition.Equal(o.Condition) && f.Child.Equal(o.Child)
+	return eq(f.Condition, o.Condition) && eq(f.Child, o.Child)
 }
 
 type Join struct {
@@ -566,11 +585,11 @@ func (j *Join) Equal(other Traversable) bool {
 		return false
 	}
 
-	if !j.Condition.Equal(o.Condition) {
+	if !eq(j.Condition, o.Condition) {
 		return false
 	}
 
-	return j.Left.Equal(o.Left) && j.Right.Equal(o.Right)
+	return eq(j.Left, o.Left) && eq(j.Right, o.Right)
 }
 
 type Sort struct {
@@ -585,27 +604,34 @@ type SortExpression struct {
 	NullsLast bool
 }
 
+func (s *SortExpression) String() string {
+	str := strings.Builder{}
+	str.WriteString("")
+	str.WriteString(s.Expr.String())
+	str.WriteString(" ")
+	if s.Ascending {
+		str.WriteString("asc ")
+	} else {
+		str.WriteString("desc ")
+	}
+	if s.NullsLast {
+		str.WriteString("nulls last")
+	} else {
+		str.WriteString("nulls first")
+	}
+
+	return str.String()
+}
+
 func (s *Sort) String() string {
 	str := strings.Builder{}
-	str.WriteString("Sort:")
+	str.WriteString("Sort: ")
 	for i, sortExpr := range s.SortExpressions {
 		if i > 0 {
-			str.WriteString(";")
+			str.WriteString("; ")
 		}
 
-		str.WriteString(" [")
-		str.WriteString(sortExpr.Expr.String())
-		str.WriteString("] ")
-		if sortExpr.Ascending {
-			str.WriteString("asc ")
-		} else {
-			str.WriteString("desc ")
-		}
-		if sortExpr.NullsLast {
-			str.WriteString("nulls last")
-		} else {
-			str.WriteString("nulls first")
-		}
+		str.WriteString(sortExpr.String())
 	}
 	return str.String()
 }
@@ -655,12 +681,12 @@ func (s *Sort) Equal(other Traversable) bool {
 			return false
 		}
 
-		if !sortExpr.Expr.Equal(o.SortExpressions[i].Expr) {
+		if !eq(sortExpr.Expr, o.SortExpressions[i].Expr) {
 			return false
 		}
 	}
 
-	return s.Child.Equal(o.Child)
+	return eq(s.Child, o.Child)
 }
 
 type Limit struct {
@@ -717,15 +743,15 @@ func (l *Limit) Equal(other Traversable) bool {
 		return false
 	}
 
-	if l.Limit != nil && !l.Limit.Equal(o.Limit) {
+	if l.Limit != nil && !eq(l.Limit, o.Limit) {
 		return false
 	}
 
-	if l.Offset != nil && !l.Offset.Equal(o.Offset) {
+	if l.Offset != nil && !eq(l.Offset, o.Offset) {
 		return false
 	}
 
-	return l.Child.Equal(o.Child)
+	return eq(l.Child, o.Child)
 }
 
 type Distinct struct {
@@ -758,7 +784,7 @@ func (d *Distinct) Equal(other Traversable) bool {
 		return false
 	}
 
-	return d.Child.Equal(other)
+	return eq(d.Child, other)
 }
 
 type SetOperation struct {
@@ -805,7 +831,7 @@ func (s *SetOperation) Equal(other Traversable) bool {
 		return false
 	}
 
-	return s.OpType == o.OpType && s.Left.Equal(o.Left) && s.Right.Equal(o.Right)
+	return s.OpType == o.OpType && eq(s.Left, o.Left) && eq(s.Right, o.Right)
 }
 
 type Aggregate struct {
@@ -815,7 +841,7 @@ type Aggregate struct {
 	GroupingExpressions []Expression
 	// AggregateExpressions are the expressions used
 	// in the SELECT clause (e.g. SUM(x), COUNT(y)).
-	AggregateExpressions []Expression
+	AggregateExpressions []*IdentifiedExpr
 	// Child is the input to the aggregation
 	// (e.g. a Project node).
 	Child Plan
@@ -904,18 +930,197 @@ func (a *Aggregate) Equal(other Traversable) bool {
 	}
 
 	for i, expr := range a.GroupingExpressions {
-		if !expr.Equal(o.GroupingExpressions[i]) {
+		if !eq(expr, o.GroupingExpressions[i]) {
 			return false
 		}
 	}
 
 	for i, expr := range a.AggregateExpressions {
-		if !expr.Equal(o.AggregateExpressions[i]) {
+		if !eq(expr, o.AggregateExpressions[i]) {
 			return false
 		}
 	}
 
-	return a.Child.Equal(o.Child)
+	return eq(a.Child, o.Child)
+}
+
+// Window is a logical plan node that represents a window function.
+// It applies the window function to the input relation, and returns
+// both the input relation and the window function result as a single
+// relation.
+type Window struct {
+	baseLogicalPlan
+	// PartitionBy are the expressions used in the PARTITION BY clause.
+	PartitionBy []Expression
+	// OrderBy are the expressions used in the ORDER BY clause.
+	OrderBy []*SortExpression
+	// Functions are the window functions that are applied.
+	Functions []*IdentifiedExpr
+	// Frames are not yet supported, but when they are, they will
+	// be added here.
+	Child Plan
+}
+
+func (s *Window) Accept(v Visitor) any {
+	return v.VisitWindow(s)
+}
+
+func (w *Window) Children() []Traversable {
+	var c []Traversable
+	for _, expr := range w.PartitionBy {
+		c = append(c, expr)
+	}
+	for _, expr := range w.OrderBy {
+		c = append(c, expr.Expr.Children()...)
+	}
+
+	for _, wf := range w.Functions {
+		c = append(c, wf.Children()...)
+	}
+
+	c = append(c, w.Child)
+
+	return c
+}
+
+func (w *Window) Plans() []Plan {
+	var c []Plan
+
+	for _, expr := range w.PartitionBy {
+		c = append(c, expr.Plans()...)
+	}
+
+	for _, expr := range w.OrderBy {
+		c = append(c, expr.Expr.Plans()...)
+	}
+
+	for _, wf := range w.Functions {
+		c = append(c, wf.Plans()...)
+	}
+
+	c = append(c, w.Child)
+
+	return c
+}
+
+func (w *Window) String() string {
+	str := strings.Builder{}
+	str.WriteString("Window")
+
+	if len(w.PartitionBy) > 0 {
+		str.WriteString(" [partition_by=")
+		for i, expr := range w.PartitionBy {
+			if i > 0 {
+				str.WriteString(", ")
+			}
+			str.WriteString(expr.String())
+		}
+		str.WriteString("]")
+	}
+
+	if len(w.OrderBy) > 0 {
+		str.WriteString(" [order_by=")
+		for i, expr := range w.OrderBy {
+			if i > 0 {
+				str.WriteString(", ")
+			}
+			str.WriteString(expr.String())
+		}
+		str.WriteString("]")
+	}
+
+	if len(w.Functions) > 0 {
+		str.WriteString(": ")
+		for i, wf := range w.Functions {
+			if i > 0 {
+				str.WriteString("; ")
+			}
+			str.WriteString(wf.String())
+		}
+	}
+
+	return str.String()
+}
+
+func (w *Window) Relation() *Relation {
+	// we return the input relation and the window function results
+	// as a single relation
+	r := w.Child.Relation()
+	for _, wf := range w.Functions {
+		r.Fields = append(r.Fields, wf.Field())
+	}
+
+	return r
+}
+
+// WindowFunction references a function being applied in a window.
+type WindowFunction struct {
+	// Name is the function being applied.
+	Name string
+	// Args are the arguments to the function.
+	Args []Expression
+	// Filter is the optional filter condition that can be applied to the function.
+	Filter Expression
+	// returnType is the return type of the window function.
+	returnType *types.DataType
+}
+
+func (w *WindowFunction) Field() *Field {
+	return &Field{
+		Name: w.Name,
+		val:  w.returnType.Copy(),
+	}
+}
+
+func (w *WindowFunction) String() string {
+	str := strings.Builder{}
+	str.WriteString(w.Name)
+	str.WriteString("(")
+	for i, arg := range w.Args {
+		if i > 0 {
+			str.WriteString(", ")
+		}
+		str.WriteString(arg.String())
+	}
+	str.WriteString(")")
+
+	if w.Filter != nil {
+		str.WriteString(" filter=[")
+		str.WriteString(w.Filter.String())
+		str.WriteString("]")
+	}
+
+	return str.String()
+}
+
+func (w *WindowFunction) Children() []Traversable {
+	var c []Traversable
+	for _, arg := range w.Args {
+		c = append(c, arg)
+	}
+
+	if w.Filter != nil {
+		c = append(c, w.Filter)
+	}
+
+	return c
+}
+
+func (w *WindowFunction) Plans() []Plan {
+	var c []Plan
+	for _, arg := range w.Args {
+		c = append(c, arg.Plans()...)
+	}
+
+	if w.Filter != nil {
+		c = append(c, w.Filter.Plans()...)
+	}
+
+	return c
+}
+
+func (w *WindowFunction) Accept(v Visitor) any {
+	return v.VisitWindowFunction(w)
 }
 
 type JoinType int
@@ -1011,7 +1216,7 @@ func (s *Subplan) Equal(other Traversable) bool {
 		return false
 	}
 
-	return s.ID == o.ID && s.Type == o.Type && s.Plan.Equal(o.Plan)
+	return s.ID == o.ID && s.Type == o.Type && eq(s.Plan, o.Plan)
 }
 
 type SubplanType int
@@ -1070,7 +1275,7 @@ func (c *CartesianProduct) Equal(other Traversable) bool {
 		return false
 	}
 
-	return c.Left.Equal(o.Left) && c.Right.Equal(o.Right)
+	return eq(c.Left, o.Left) && eq(c.Right, o.Right)
 }
 
 /*
@@ -1100,6 +1305,8 @@ func (l *Literal) String() string {
 		return "0x" + hex.EncodeToString(c)
 	case nil:
 		return "NULL"
+	case fmt.Stringer:
+		return c.String()
 	default:
 		return fmt.Sprintf("%v", l.Value)
 	}
@@ -1311,7 +1518,7 @@ func (a *AggregateFunctionCall) Equal(other Traversable) bool {
 	}
 
 	for i, arg := range a.Args {
-		if !arg.Equal(o.Args[i]) {
+		if !eq(arg, o.Args[i]) {
 			return false
 		}
 	}
@@ -1383,7 +1590,7 @@ func (f *ScalarFunctionCall) Equal(other Traversable) bool {
 	}
 
 	for i, arg := range f.Args {
-		if !arg.Equal(o.Args[i]) {
+		if !eq(arg, o.Args[i]) {
 			return false
 		}
 	}
@@ -1391,6 +1598,7 @@ func (f *ScalarFunctionCall) Equal(other Traversable) bool {
 	return true
 }
 
+// TODO: remove this since it wont be supported
 // ProcedureCall is a call to a procedure.
 // This can be a call to either a procedure in the same schema, or
 // to a foreign procedure.
@@ -1476,7 +1684,7 @@ func (p *ProcedureCall) Equal(other Traversable) bool {
 	}
 
 	for i, arg := range p.Args {
-		if !arg.Equal(o.Args[i]) {
+		if !eq(arg, o.Args[i]) {
 			return false
 		}
 	}
@@ -1544,7 +1752,7 @@ func (a *ArithmeticOp) Equal(other Traversable) bool {
 		return false
 	}
 
-	return a.Op == o.Op && a.Left.Equal(o.Left) && a.Right.Equal(o.Right)
+	return a.Op == o.Op && eq(a.Left, o.Left) && eq(a.Right, o.Right)
 }
 
 type ComparisonOp struct {
@@ -1620,7 +1828,7 @@ func (c *ComparisonOp) Equal(other Traversable) bool {
 		return false
 	}
 
-	return c.Op == o.Op && c.Left.Equal(o.Left) && c.Right.Equal(o.Right)
+	return c.Op == o.Op && eq(c.Left, o.Left) && eq(c.Right, o.Right)
 }
 
 type LogicalOp struct {
@@ -1669,7 +1877,7 @@ func (l *LogicalOp) Equal(other Traversable) bool {
 		return false
 	}
 
-	return l.Op == o.Op && l.Left.Equal(o.Left) && l.Right.Equal(o.Right)
+	return l.Op == o.Op && eq(l.Left, o.Left) && eq(l.Right, o.Right)
 }
 
 type UnaryOp struct {
@@ -1723,7 +1931,7 @@ func (u *UnaryOp) Equal(other Traversable) bool {
 		return false
 	}
 
-	return u.Op == o.Op && u.Expr.Equal(o.Expr)
+	return u.Op == o.Op && eq(u.Expr, o.Expr)
 }
 
 type TypeCast struct {
@@ -1756,7 +1964,7 @@ func (t *TypeCast) Equal(other Traversable) bool {
 		return false
 	}
 
-	return t.Type.EqualsStrict(o.Type) && t.Expr.Equal(o.Expr)
+	return t.Type.EqualsStrict(o.Type) && eq(t.Expr, o.Expr)
 }
 
 type AliasExpr struct {
@@ -1780,7 +1988,9 @@ func (a *AliasExpr) Plans() []Plan {
 }
 
 func (a *AliasExpr) Field() *Field {
-	return a.Expr.Field()
+	f := a.Expr.Field()
+	f.Name = a.Alias
+	return f
 }
 
 func (a *AliasExpr) Equal(other Traversable) bool {
@@ -1789,7 +1999,7 @@ func (a *AliasExpr) Equal(other Traversable) bool {
 		return false
 	}
 
-	return a.Alias == o.Alias && a.Expr.Equal(o.Expr)
+	return a.Alias == o.Alias && eq(a.Expr, o.Expr)
 }
 
 type ArrayAccess struct {
@@ -1828,7 +2038,7 @@ func (a *ArrayAccess) Equal(other Traversable) bool {
 		return false
 	}
 
-	return a.Array.Equal(o.Array) && a.Index.Equal(o.Index)
+	return eq(a.Array, o.Array) && eq(a.Index, o.Index)
 }
 
 type ArrayConstructor struct {
@@ -1893,7 +2103,7 @@ func (a *ArrayConstructor) Equal(other Traversable) bool {
 	}
 
 	for i, elem := range a.Elements {
-		if !elem.Equal(o.Elements[i]) {
+		if !eq(elem, o.Elements[i]) {
 			return false
 		}
 	}
@@ -1941,7 +2151,7 @@ func (f *FieldAccess) Equal(other Traversable) bool {
 		return false
 	}
 
-	return f.Key == o.Key && f.Object.Equal(o.Object)
+	return f.Key == o.Key && eq(f.Object, o.Object)
 }
 
 type SubqueryExpr struct {
@@ -2050,7 +2260,7 @@ func (c *Collate) Equal(other Traversable) bool {
 		return false
 	}
 
-	return c.Collation == o.Collation && c.Expr.Equal(o.Expr)
+	return c.Collation == o.Collation && eq(c.Expr, o.Expr)
 }
 
 type CollationType uint8
@@ -2139,7 +2349,7 @@ func (i *IsIn) Equal(other Traversable) bool {
 		return false
 	}
 
-	if !i.Left.Equal(o.Left) {
+	if !eq(i.Left, o.Left) {
 		return false
 	}
 
@@ -2148,7 +2358,7 @@ func (i *IsIn) Equal(other Traversable) bool {
 	}
 
 	for j, expr := range i.Expressions {
-		if !expr.Equal(o.Expressions[j]) {
+		if !eq(expr, o.Expressions[j]) {
 			return false
 		}
 	}
@@ -2252,7 +2462,7 @@ func (c *Case) Equal(other Traversable) bool {
 	}
 
 	if c.Value != nil && o.Value != nil {
-		if !c.Value.Equal(o.Value) {
+		if !eq(c.Value, o.Value) {
 			return false
 		}
 	} else if c.Value != nil || o.Value != nil {
@@ -2264,16 +2474,16 @@ func (c *Case) Equal(other Traversable) bool {
 	}
 
 	for i, when := range c.WhenClauses {
-		if !when[0].Equal(o.WhenClauses[i][0]) {
+		if !eq(when[0], o.WhenClauses[i][0]) {
 			return false
 		}
-		if !when[1].Equal(o.WhenClauses[i][1]) {
+		if !eq(when[1], o.WhenClauses[i][1]) {
 			return false
 		}
 	}
 
 	if c.Else != nil && o.Else != nil {
-		return c.Else.Equal(o.Else)
+		return eq(c.Else, o.Else)
 	}
 
 	return c.Else == nil && o.Else == nil
@@ -2355,7 +2565,7 @@ func (i *IdentifiedExpr) Equal(other Traversable) bool {
 		return false
 	}
 
-	return i.ID == o.ID && i.Expr.Equal(o.Expr)
+	return i.ID == o.ID && eq(i.Expr, o.Expr)
 }
 
 /*
@@ -2436,7 +2646,7 @@ func (r *Return) Equal(t Traversable) bool {
 		}
 	}
 
-	return r.Child.Equal(o.Child)
+	return eq(r.Child, o.Child)
 }
 
 /*
@@ -2524,12 +2734,12 @@ func (u *Update) Equal(t Traversable) bool {
 			return false
 		}
 
-		if !assign.Value.Equal(o.Assignments[i].Value) {
+		if !eq(assign.Value, o.Assignments[i].Value) {
 			return false
 		}
 	}
 
-	return u.Child.Equal(o.Child)
+	return eq(u.Child, o.Child)
 }
 
 // Delete is a node that plans a delete operation.
@@ -2571,7 +2781,7 @@ func (d *Delete) Equal(t Traversable) bool {
 		return false
 	}
 
-	return d.Child.Equal(o.Child)
+	return eq(d.Child, o.Child)
 }
 
 // TODO: I dont love this insert. Everything else feels very relational, but this
@@ -2592,9 +2802,9 @@ type Insert struct {
 	ReferencedAs string
 	// Columns are the columns to insert into.
 	Columns []*Field
-	// Values are the values to insert.
-	// The length of each second dimensional slice in Values must be equal to all others.
-	Values *Tuples
+	// InsertionValues are the values to insert.
+	// These can be either values specified using VALUES or a subquery.
+	InsertionValues Plan
 	// ConflictResolution is the conflict resolution to use if there is a conflict.
 	ConflictResolution ConflictResolution
 }
@@ -2625,7 +2835,7 @@ func (s *Insert) Accept(v Visitor) any {
 	return v.VisitInsert(s)
 }
 func (i *Insert) Children() []Traversable {
-	c := i.Values.Children()
+	c := i.InsertionValues.Children()
 
 	if i.ConflictResolution != nil {
 		c = append(c, i.ConflictResolution)
@@ -2635,7 +2845,7 @@ func (i *Insert) Children() []Traversable {
 }
 
 func (i *Insert) Plans() []Plan {
-	c := []Plan{i.Values}
+	c := []Plan{i.InsertionValues}
 
 	if i.ConflictResolution != nil {
 		c = append(c, i.ConflictResolution)
@@ -2658,7 +2868,7 @@ func (i *Insert) Equal(t Traversable) bool {
 		return false
 	}
 
-	if !i.Values.Equal(o.Values) {
+	if !eq(i.InsertionValues, o.InsertionValues) {
 		return false
 	}
 
@@ -2670,7 +2880,7 @@ func (i *Insert) Equal(t Traversable) bool {
 		return false
 	}
 
-	return i.ConflictResolution.Equal(o.ConflictResolution)
+	return eq(i.ConflictResolution, o.ConflictResolution)
 }
 
 // Tuples is a list tuple being inserted into a table.
@@ -2696,7 +2906,7 @@ func (t *Tuples) Equal(other Traversable) bool {
 		}
 
 		for j, v := range val {
-			if !v.Equal(o.Values[i][j]) {
+			if !eq(v, o.Values[i][j]) {
 				return false
 			}
 		}
@@ -2848,7 +3058,7 @@ func (c *ConflictUpdate) Equal(other Traversable) bool {
 	}
 
 	if c.ConflictFilter != nil && o.ConflictFilter != nil {
-		if !c.ConflictFilter.Equal(o.ConflictFilter) {
+		if !eq(c.ConflictFilter, o.ConflictFilter) {
 			return false
 		}
 	}
@@ -2858,7 +3068,7 @@ func (c *ConflictUpdate) Equal(other Traversable) bool {
 	}
 
 	for i, assign := range c.Assignments {
-		if !assign.Value.Equal(o.Assignments[i].Value) {
+		if !eq(assign.Value, o.Assignments[i].Value) {
 			return false
 		}
 	}
@@ -3008,6 +3218,7 @@ type Visitor interface {
 	VisitDistinct(*Distinct) any
 	VisitSetOperation(*SetOperation) any
 	VisitAggregate(*Aggregate) any
+	VisitWindow(*Window) any
 	VisitSubplan(*Subplan) any
 	VisitLiteral(*Literal) any
 	VisitVariable(*Variable) any
@@ -3038,6 +3249,7 @@ type Visitor interface {
 	VisitConflictDoNothing(*ConflictDoNothing) any
 	VisitConflictUpdate(*ConflictUpdate) any
 	VisitTuples(*Tuples) any
+	VisitWindowFunction(*WindowFunction) any
 }
 
 /*

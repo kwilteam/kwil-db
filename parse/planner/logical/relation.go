@@ -104,6 +104,35 @@ func relationFromTable(tbl *types.Table) *Relation {
 	return s
 }
 
+// equalShape checks that two relations have the same shape.
+// This means that they have the same number of fields and that
+// the fields have the same data types. The fields do NOT need
+// to have the same names. If the relations do not have the same
+// shape, an error is returned.
+func equalShape(r1, r2 *Relation) error {
+	if len(r1.Fields) != len(r2.Fields) {
+		return fmt.Errorf("relations do not have the same number of fields")
+	}
+
+	for i, f := range r1.Fields {
+		scalarR, err := f.Scalar()
+		if err != nil {
+			return err
+		}
+
+		scalarL, err := r2.Fields[i].Scalar()
+		if err != nil {
+			return err
+		}
+
+		if !scalarR.Equals(scalarL) {
+			return fmt.Errorf("field %d (named %s and %s) does not have the same data type", i, f.Name, r2.Fields[i].Name)
+		}
+	}
+
+	return nil
+}
+
 // Field is a field in a relation.
 // Parent and Name can be empty, if the expression
 // is a constant. If this is the last expression in a relation,

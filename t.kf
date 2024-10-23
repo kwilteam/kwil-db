@@ -1,0 +1,38 @@
+database aa;
+
+table ids {
+    id uuid primary key
+}
+
+procedure crash($count int) public {
+    for $i in 1..$count {
+        INSERT INTO ids(id) VALUES(uuid_generate_v5('eeab0e48-eeee-4612-9dee-1fef36ec201f'::uuid, $i::text||@txid));
+    }
+}
+
+procedure migrate() public {
+    for $row in SELECT * FROM ids {
+        INSERT INTO ids(id) VALUES($row.id);
+    }
+}
+
+WITH RECURSIVE cte1 AS (
+    -- Base case
+    SELECT 1 AS n
+    UNION ALL
+    -- Recursive case
+    SELECT n + 1
+    FROM cte1
+    WHERE n < 5
+),
+cte2 AS (
+    -- Base case
+    SELECT 10 AS m
+    UNION ALL
+    -- Recursive case
+    SELECT m + 2
+    FROM cte2
+    WHERE m < 20
+)
+SELECT *
+FROM cte1, cte2;

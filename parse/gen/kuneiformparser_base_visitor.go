@@ -251,6 +251,10 @@ func (v *BaseKuneiformParserVisitor) VisitVariable_sql_expr(ctx *Variable_sql_ex
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitWindow_function_call_sql_expr(ctx *Window_function_call_sql_exprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitIs_sql_expr(ctx *Is_sql_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }

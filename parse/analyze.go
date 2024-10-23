@@ -1941,9 +1941,9 @@ func (s *sqlAnalyzer) VisitInsertStatement(p0 *InsertStatement) any {
 		}
 	}
 
-	if p0.Upsert != nil {
+	if p0.OnConflict != nil {
 		s.sqlCtx.inConflict = true
-		p0.Upsert.Accept(s)
+		p0.OnConflict.Accept(s)
 		s.sqlCtx.inConflict = false
 	}
 
@@ -1986,7 +1986,7 @@ func (s *sqlAnalyzer) setTargetTable(table string, alias string) (*types.Table, 
 	return tbl, "", nil
 }
 
-func (s *sqlAnalyzer) VisitUpsertClause(p0 *UpsertClause) any {
+func (s *sqlAnalyzer) VisitUpsertClause(p0 *OnConflict) any {
 	// upsert clause can only be called in an insert. Inserts will
 	// always have exactly 1 table joined to the context. We will
 	// need to retrieve the one table, verify all conflict columns
@@ -2682,7 +2682,11 @@ func (p *procedureAnalyzer) VisitProcedureStmtReturnNext(p0 *ProcedureStmtReturn
 }
 
 // adding these panics here because the analyzer is being replaced by the query planner
-func (s *sqlAnalyzer) VisitWindow(p0 *Window) any {
+func (s *sqlAnalyzer) VisitWindowImpl(p0 *WindowImpl) any {
+	panic("window functions are not allowed in procedures")
+}
+
+func (s *sqlAnalyzer) VisitWindowReference(p0 *WindowReference) any {
 	panic("window functions are not allowed in procedures")
 }
 

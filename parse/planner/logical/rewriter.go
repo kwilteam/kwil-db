@@ -376,7 +376,7 @@ func (r *rewriteVisitor) VisitDelete(p0 *Delete) any {
 func (r *rewriteVisitor) VisitInsert(p0 *Insert) any {
 	return r.plan(p0,
 		func() {
-			p0.Values = p0.Values.Accept(r).(*Tuples)
+			p0.InsertionValues = p0.InsertionValues.Accept(r).(*Tuples)
 		},
 		func() {
 			if p0.ConflictResolution != nil {
@@ -412,6 +412,25 @@ func (r *rewriteVisitor) VisitTuples(p0 *Tuples) any {
 		}
 	}
 	return p0
+}
+
+func (r *rewriteVisitor) VisitWindow(p0 *Window) any {
+	return r.plan(p0,
+		func() { p0.Child = p0.Child.Accept(r).(Plan) },
+		func() { r.slice(p0.PartitionBy) },
+		func() { r.slice(p0.OrderBy) },
+	)
+}
+
+func (r *rewriteVisitor) VisitWindowFunction(p0 *WindowFunction) any {
+	return r.expr(p0,
+		func() { r.slice(p0.Args) },
+		func() {
+			if p0.Filter != nil {
+				p0.Filter = p0.Filter.Accept(r).(Expression)
+			}
+		},
+	)
 }
 
 // execFields executes the given fields in the correct order.

@@ -130,6 +130,8 @@ NEXT:       'next';
 OVER:       'over';
 PARTITION:  'partition';
 WINDOW:     'window';
+FILTER:     'filter';
+RECURSIVE:  'recursive';
 
 
 // Literals
