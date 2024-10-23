@@ -1,4 +1,4 @@
-package consensus
+package dummyce
 
 import (
 	"context"

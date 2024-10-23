@@ -9,7 +9,7 @@ import (
 	"io"
 	"log"
 	mrand2 "math/rand/v2"
-	"p2p/node/consensus"
+	dummyce "p2p/node/consensus/mock"
 	"p2p/node/mempool"
 	"p2p/node/store"
 	"p2p/node/types"
@@ -103,7 +103,7 @@ func NewNode(port uint64, privKey []byte, leader, pex bool) (*Node, error) {
 		txi:     txi,
 		mp:      mp,
 		bki:     blkStr,
-		ce:      consensus.New(blkStr, txi, mp),
+		ce:      dummyce.New(blkStr, txi, mp),
 		ackChan: make(chan AckRes, 1),
 	}
 
