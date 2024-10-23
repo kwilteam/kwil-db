@@ -167,13 +167,14 @@ func Test_Planner(t *testing.T) {
 		},
 		{
 			name: "complex group by and aggregate",
-			sql:  "select sum(u.age)::int/(p.created_at/100) as res from users u inner join posts p on u.id=p.owner_id group by (p.created_at/100)",
+			sql:  "select sum(u.age)::int/(p.created_at/100) as res from users u inner join posts p on u.id=p.owner_id group by (p.created_at/100) having (p.created_at/100)>10",
 			wt: "Return: res [int]\n" +
 				"└─Project: {#ref(B)}::int / {#ref(A)} AS res\n" +
-				"  └─Aggregate [{#ref(A) = p.created_at / 100}]: {#ref(B) = sum(u.age)}\n" +
-				"    └─Join [inner]: u.id = p.owner_id\n" +
-				"      ├─Scan Table [alias=\"u\"]: users [physical]\n" +
-				"      └─Scan Table [alias=\"p\"]: posts [physical]\n",
+				"  └─Filter: {#ref(A)} > 10\n" +
+				"    └─Aggregate [{#ref(A) = p.created_at / 100}]: {#ref(B) = sum(u.age)}\n" +
+				"      └─Join [inner]: u.id = p.owner_id\n" +
+				"        ├─Scan Table [alias=\"u\"]: users [physical]\n" +
+				"        └─Scan Table [alias=\"p\"]: posts [physical]\n",
 		},
 		{
 			name: "invalid group by column",
@@ -188,7 +189,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "aggregate in where clause",
 			sql:  "select sum(age) from users where sum(age)::int > 100",
-			err:  logical.ErrAggregateInWhere,
+			err:  logical.ErrIllegalAggregate,
 		},
 		{
 			name: "complex group by",
@@ -217,7 +218,7 @@ func Test_Planner(t *testing.T) {
 			wt: "Return: name [text], ?column? [decimal(1000,0)]\n" +
 				"└─Project: {#ref(A)}; {#ref(C)} + {#ref(D)}\n" +
 				"  └─Filter: {#ref(B)}::int > 100 OR {#ref(C)}::int > 10\n" +
-				"    └─Aggregate [{#ref(A) = users.name}]: {#ref(D) = sum(users.age * 10)}; {#ref(C) = sum(users.age / 2)}; {#ref(B) = sum(users.age)}\n" +
+				"    └─Aggregate [{#ref(A) = users.name}]: {#ref(B) = sum(users.age)}; {#ref(C) = sum(users.age / 2)}; {#ref(D) = sum(users.age * 10)}\n" +
 				"      └─Scan Table: users [physical]\n",
 		},
 		{
@@ -257,6 +258,22 @@ func Test_Planner(t *testing.T) {
 				"Subplan [subquery] [id=0]\n" +
 				"└─Project: users.id\n" +
 				"  └─Filter: users.age > 18\n" +
+				"    └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "basic inline window",
+			sql:  "select name, sum(age) over (partition by name) from users",
+			wt: "Return: name [text], sum [decimal(1000,0)]\n" +
+				"└─Project: users.name; {#ref(A)}\n" +
+				"  └─Window [partition_by=users.name]: {#ref(A) = sum(users.age)}\n" +
+				"    └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "named window used several times",
+			sql:  "select name, sum(age) over w1, array_agg(name) over w1 from users window w1 as (partition by name order by age)",
+			wt: "Return: name [text], sum [decimal(1000,0)], array_agg [text[]]\n" +
+				"└─Project: users.name; {#ref(A)}; {#ref(B)}\n" +
+				"  └─Window [partition_by=users.name] [order_by=users.age asc nulls last]: {#ref(A) = sum(users.age)}; {#ref(B) = array_agg(users.name)}\n" +
 				"    └─Scan Table: users [physical]\n",
 		},
 		{
@@ -322,7 +339,7 @@ func Test_Planner(t *testing.T) {
 				select id, content from posts
 				order by name desc;`,
 			wt: "Return: id [uuid], name [text]\n" +
-				"└─Sort: [name] desc nulls last\n" +
+				"└─Sort: name desc nulls last\n" +
 				"  └─Set: union\n" +
 				"    ├─Project: users.id; users.name\n" +
 				"    │ └─Scan Table: users [physical]\n" +
@@ -334,8 +351,27 @@ func Test_Planner(t *testing.T) {
 			sql:  "select name, age from users order by name desc nulls last, id asc",
 			wt: "Return: name [text], age [int]\n" +
 				"└─Project: users.name; users.age\n" +
-				"  └─Sort: [users.name] desc nulls last; [users.id] asc nulls last\n" +
+				"  └─Sort: users.name desc nulls last; users.id asc nulls last\n" +
 				"    └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "sort with group by",
+			sql:  "select name, sum(age) from users group by name order by name, sum(age)",
+			wt: "Return: name [text], sum [decimal(1000,0)]\n" +
+				"└─Project: {#ref(A)}; {#ref(B)}\n" +
+				"  └─Sort: {#ref(A)} asc nulls last; {#ref(B)} asc nulls last\n" +
+				"    └─Aggregate [{#ref(A) = users.name}]: {#ref(B) = sum(users.age)}\n" +
+				"      └─Scan Table: users [physical]\n",
+		},
+		{
+			// unlike the above, this tests that we can make new aggregate references from the ORDER BY clause
+			name: "sort with aggregate",
+			sql:  "select name from users group by name order by sum(age)",
+			wt: "Return: name [text]\n" +
+				"└─Project: {#ref(A)}\n" +
+				"  └─Sort: {#ref(B)} asc nulls last\n" +
+				"    └─Aggregate [{#ref(A) = users.name}]: {#ref(B) = sum(users.age)}\n" +
+				"      └─Scan Table: users [physical]\n",
 		},
 		{
 			name: "sort invalid column",
@@ -359,13 +395,6 @@ func Test_Planner(t *testing.T) {
 				"    └─Scan Table: users [physical]\n",
 		},
 		{
-			name: "scalar function, procedure",
-			sql:  "select post_count(id), abs(age) from users",
-			wt: "Return: post_count [int], abs [int]\n" +
-				"└─Project: post_count(users.id); abs(users.age)\n" +
-				"  └─Scan Table: users [physical]\n",
-		},
-		{
 			name: "distinct aggregate",
 			sql:  "select count(distinct name), sum(age) from users",
 			wt: "Return: count [int], sum [decimal(1000,0)]\n" +
@@ -385,7 +414,7 @@ func Test_Planner(t *testing.T) {
 			sql:  "select age as pos_age from users order by pos_age",
 			wt: "Return: pos_age [int]\n" +
 				"└─Project: users.age AS pos_age\n" +
-				"  └─Sort: [pos_age] asc nulls last\n" +
+				"  └─Sort: pos_age asc nulls last\n" +
 				"    └─Scan Table: users [physical]\n",
 		},
 		{
@@ -553,6 +582,13 @@ func Test_Planner(t *testing.T) {
 			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (name) do update set name = 'satoshi' WHERE age = 1",
 			err:  logical.ErrAmbiguousColumn,
 		},
+		{
+			name: "insert with select",
+			sql:  "insert into users select * from users",
+			wt: "Insert [users]: id [uuid], name [text], age [int]\n" +
+				"└─Project: users.id; users.name; users.age\n" +
+				"  └─Scan Table: users [physical]\n",
+		},
 	}
 
 	for _, test := range tests {
@@ -580,10 +616,10 @@ func Test_Planner(t *testing.T) {
 				if plan.Format() != test.wt {
 					fmt.Println(test.name)
 					fmt.Println("Expected:")
-					fmt.Println(plan.Format())
-					fmt.Println("----")
-					fmt.Println("Actual:")
 					fmt.Println(test.wt)
+					fmt.Println("----")
+					fmt.Println("Received:")
+					fmt.Println(plan.Format())
 				}
 
 				require.Equal(t, test.wt, plan.Format())

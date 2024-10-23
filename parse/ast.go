@@ -124,15 +124,26 @@ func (e *ExpressionFunctionCall) Accept(v Visitor) any {
 type ExpressionWindowFunctionCall struct {
 	Position
 	FunctionCall *ExpressionFunctionCall
+	// Filter is the filter clause.
+	// If nil, then there is no filter clause.
+	Filter Expression
 	// Window is the window function that is being called.
-	Window *Window
+	Window Window
 }
 
 func (e *ExpressionWindowFunctionCall) Accept(v Visitor) any {
 	return v.VisitExpressionWindowFunctionCall(e)
 }
 
-type Window struct {
+// Window is an interface for all window functions.
+// It can either reference an exact window (e.g. OVER (partition by ... order by ...))
+// or it can reference a window function name (e.g. OVER my_window).
+type Window interface {
+	Node
+	window()
+}
+
+type WindowImpl struct {
 	Position
 	// PartitionBy is the partition by clause.
 	PartitionBy []Expression
@@ -141,9 +152,23 @@ type Window struct {
 	// In the future, when/if we support frame clauses, we can add it here.
 }
 
-func (w *Window) Accept(v Visitor) any {
-	return v.VisitWindow(w)
+func (w *WindowImpl) Accept(v Visitor) any {
+	return v.VisitWindowImpl(w)
 }
+
+func (w *WindowImpl) window() {}
+
+type WindowReference struct {
+	Position
+	// Name is the name of the window.
+	Name string
+}
+
+func (w *WindowReference) Accept(v Visitor) any {
+	return v.VisitWindowReference(w)
+}
+
+func (w *WindowReference) window() {}
 
 // ExpressionVariable is a variable.
 // This can either be $ or @ variables.
@@ -343,6 +368,13 @@ type ExpressionColumn struct {
 	Column string
 }
 
+func (e *ExpressionColumn) String() string {
+	if e.Table == "" {
+		return e.Column
+	}
+	return e.Table + "." + e.Column
+}
+
 func (e *ExpressionColumn) Accept(v Visitor) any {
 	return v.VisitExpressionColumn(e)
 }
@@ -479,6 +511,8 @@ func (c *CommonTableExpression) Accept(v Visitor) any {
 type SQLStatement struct {
 	Position
 	CTEs []*CommonTableExpression
+	// Recursive is true if the RECUSRIVE keyword is present.
+	Recursive bool
 	// SQL can be an insert, update, delete, or select statement.
 	SQL SQLCore
 }
@@ -568,7 +602,7 @@ type SelectCore struct {
 	Having   Expression   // can be nil
 	Windows  []*struct {
 		Name   string
-		Window *Window
+		Window *WindowImpl
 	} // can be nil
 }
 
@@ -719,8 +753,10 @@ type InsertStatement struct {
 	Table   string
 	Alias   string   // can be empty
 	Columns []string // can be empty
-	Values  [][]Expression
-	Upsert  *UpsertClause // can be nil
+	// Either Values or Select is set, but not both.
+	Values     [][]Expression   // can be empty
+	Select     *SelectStatement // can be nil
+	OnConflict *OnConflict      // can be nil
 }
 
 func (i *InsertStatement) Accept(v Visitor) any {
@@ -731,7 +767,7 @@ func (i *InsertStatement) StmtType() SQLStatementType {
 	return SQLStatementTypeInsert
 }
 
-type UpsertClause struct {
+type OnConflict struct {
 	Position
 	ConflictColumns []string           // can be empty
 	ConflictWhere   Expression         // can be nil
@@ -739,7 +775,7 @@ type UpsertClause struct {
 	UpdateWhere     Expression         // can be nil
 }
 
-func (u *UpsertClause) Accept(v Visitor) any {
+func (u *OnConflict) Accept(v Visitor) any {
 	return v.VisitUpsertClause(u)
 }
 
@@ -1025,7 +1061,8 @@ type SQLVisitor interface {
 	VisitExpressionLiteral(*ExpressionLiteral) any
 	VisitExpressionFunctionCall(*ExpressionFunctionCall) any
 	VisitExpressionWindowFunctionCall(*ExpressionWindowFunctionCall) any
-	VisitWindow(*Window) any
+	VisitWindowImpl(*WindowImpl) any
+	VisitWindowReference(*WindowReference) any
 	VisitExpressionVariable(*ExpressionVariable) any
 	VisitExpressionArrayAccess(*ExpressionArrayAccess) any
 	VisitExpressionMakeArray(*ExpressionMakeArray) any
@@ -1056,7 +1093,7 @@ type SQLVisitor interface {
 	VisitUpdateSetClause(*UpdateSetClause) any
 	VisitDeleteStatement(*DeleteStatement) any
 	VisitInsertStatement(*InsertStatement) any
-	VisitUpsertClause(*UpsertClause) any
+	VisitUpsertClause(*OnConflict) any
 	VisitOrderingTerm(*OrderingTerm) any
 }
 

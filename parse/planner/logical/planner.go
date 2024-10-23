@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/utils/order"
 	"github.com/kwilteam/kwil-db/parse"
 )
 
@@ -46,6 +45,13 @@ func CreateLogicalPlan(statement *parse.SQLStatement, schema *types.Schema, vars
 	scope := &scopeContext{
 		plan:          ctx,
 		OuterRelation: &Relation{},
+		// intentionally leave preGroupRelation nil
+		onWindowFuncExpr: func(ewfc *parse.ExpressionWindowFunctionCall, _ *Relation, _ map[string]*IdentifiedExpr) (Expression, *Field, error) {
+			return nil, nil, fmt.Errorf("%w: cannot use window functions in this context", ErrIllegalWindowFunction)
+		},
+		onAggregateFuncExpr: func(efc *parse.ExpressionFunctionCall, agg *parse.AggregateFunctionDefinition, _ map[string]*IdentifiedExpr) (Expression, *Field, error) {
+			return nil, nil, fmt.Errorf("%w: cannot use aggregate functions in this context", ErrIllegalAggregate)
+		},
 	}
 
 	plan, err := scope.sqlStmt(statement)
@@ -125,9 +131,36 @@ type scopeContext struct {
 	// OuterRelation is the relation of all outer queries that can be
 	// referenced from a subquery.
 	OuterRelation *Relation
+	// preGroupRelation is the relation that is used before grouping.
+	// It is simply used to give more helpful error messages.
+	preGroupRelation *Relation
 	// Correlations are the fields that are corellated to an outer query.
 	Correlations []*Field
+	// onWindowFuncExpr is a function that is called when evaluating a window function.
+	onWindowFuncExpr func(*parse.ExpressionWindowFunctionCall, *Relation, map[string]*IdentifiedExpr) (Expression, *Field, error)
+	// onAggregateFuncExpr is a function that is called when evaluating an aggregate function.
+	// It is NOT called if the aggregate function is being used as a window function; in this case,
+	// onWindowFuncExpr is called.
+	onAggregateFuncExpr func(*parse.ExpressionFunctionCall, *parse.AggregateFunctionDefinition, map[string]*IdentifiedExpr) (Expression, *Field, error)
+	// aggViolationColumn is the column that is causing an aggregate violation.
+	aggViolationColumn string
 }
+
+type QuerySection string
+
+const (
+	querySectionUnknown  QuerySection = "UNKNOWN"
+	querySectionWhere    QuerySection = "WHERE"
+	querySectionGroupBy  QuerySection = "GROUP BY"
+	querySectionJoin     QuerySection = "JOIN"
+	querySectionWindow   QuerySection = "WINDOW"
+	querySectionHaving   QuerySection = "HAVING"
+	querySectionOrderBy  QuerySection = "ORDER BY"
+	querySectionLimit    QuerySection = "LIMIT"
+	querySectionOffset   QuerySection = "OFFSET"
+	querySectionResults  QuerySection = "RESULTS"
+	querySectionCompound QuerySection = "COMPOUND"
+)
 
 // sqlStmt builds a logical plan for a top-level SQL statement.
 func (s *scopeContext) sqlStmt(node *parse.SQLStatement) (TopLevelPlan, error) {
@@ -239,16 +272,23 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan Plan, rel *
 
 	var projectFunc func(Plan) Plan
 	var preProjectRel, resultRel *Relation
-	plan, preProjectRel, resultRel, projectFunc, err = s.selectCore(node.SelectCores[0])
+	var groupingTerms map[string]*IdentifiedExpr
+	plan, preProjectRel, groupingTerms, resultRel, projectFunc, err = s.selectCore(node.SelectCores[0])
 	if err != nil {
 		return nil, nil, err
 	}
 
+	logSection := false
+	querySection := querySectionUnknown
 	defer func() {
 		// the resulting relation will always be resultRel
 		rel = resultRel
+		if logSection {
+			if err != nil {
+				err = fmt.Errorf("error in %s section: %w", querySection, err)
+			}
+		}
 	}()
-
 	// if there is one select core, thenr the sorting and limiting can refer
 	// to both the preProjectRel and the resultRel. If it is a compound query,
 	// then the sorting and resultRel can only refer to the resultRel.
@@ -272,33 +312,23 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan Plan, rel *
 			field.Parent = ""
 		}
 
+		querySection = querySectionCompound
 		for i, core := range node.SelectCores[1:] {
-			rightPlan, _, rightRel, projectFunc, err := s.selectCore(core)
+			// if a compound query, then old group by terms cannot be referenced in ORDER / LIMIT / OFFSET
+			groupingTerms = nil
+
+			logSection = false // in case of error, the select core will log the section, so we don't want to log it again
+			rightPlan, _, _, rightRel, projectFunc, err := s.selectCore(core)
 			if err != nil {
 				return nil, nil, err
 			}
+			logSection = true
 
 			// project the result values to match the left side
 			rightPlan = projectFunc(rightPlan)
 
-			if len(rightRel.Fields) != len(resultRel.Fields) {
-				return nil, nil, fmt.Errorf(`%w: the number of columns in the SELECT clauses must match`, ErrSetIncompatibleSchemas)
-			}
-
-			for i, field := range rightRel.Fields {
-				rightScalar, err := field.Scalar()
-				if err != nil {
-					return nil, nil, err
-				}
-
-				leftScalar, err := resultRel.Fields[i].Scalar()
-				if err != nil {
-					return nil, nil, err
-				}
-
-				if !rightScalar.Equals(leftScalar) {
-					return nil, nil, fmt.Errorf(`%w: the types of columns in the SELECT clauses must match`, ErrSetIncompatibleSchemas)
-				}
+			if err := equalShape(resultRel, rightRel); err != nil {
+				return nil, nil, fmt.Errorf("%w: %s", ErrSetIncompatibleSchemas, err)
 			}
 
 			plan = &SetOperation{
@@ -308,32 +338,34 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan Plan, rel *
 			}
 		}
 	}
+	logSection = true // will be true for the rest of the function
 
+	// if applyDefaultOrdering is true, we need to order all results.
+	// In postgres, this is simply done by adding ORDER BY 1, 2, 3, ...
+	if s.plan.applyDefaultOrdering {
+		for i := range rel.Fields {
+			node.Ordering = append(node.Ordering, &parse.OrderingTerm{
+				Expression: &parse.ExpressionLiteral{
+					Value: strconv.Itoa(i + 1), // 1-indexed
+				},
+			})
+		}
+	}
+
+	querySection = querySectionOrderBy
 	// apply order by, limit, and offset
 	if len(node.Ordering) > 0 {
-		sort := &Sort{
-			Child: plan,
-		}
-
-		for _, order := range node.Ordering {
-			// ordering term can be of any type
-			sortExpr, _, err := s.expr(order.Expression, sortAndOrderRel)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			sort.SortExpressions = append(sort.SortExpressions, &SortExpression{
-				Expr:      sortExpr,
-				Ascending: get(orderAsc, order.Order),
-				NullsLast: get(orderNullsLast, order.Nulls),
-			})
+		sort, err := s.buildSort(plan, sortAndOrderRel, node.Ordering, groupingTerms)
+		if err != nil {
+			return nil, nil, err
 		}
 
 		plan = sort
 	}
 
+	querySection = querySectionLimit
 	if node.Limit != nil {
-		limitExpr, limitField, err := s.expr(node.Limit, sortAndOrderRel)
+		limitExpr, limitField, err := s.expr(node.Limit, sortAndOrderRel, groupingTerms)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -353,7 +385,8 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan Plan, rel *
 		}
 
 		if node.Offset != nil {
-			offsetExpr, offsetField, err := s.expr(node.Offset, sortAndOrderRel)
+			querySection = querySectionOffset
+			offsetExpr, offsetField, err := s.expr(node.Offset, sortAndOrderRel, groupingTerms)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -373,19 +406,30 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan Plan, rel *
 		plan = lim
 	}
 
-	// if applyDefaultOrdering is true, we need to order all results.
-	// In postgres, this is simply done by adding ORDER BY 1, 2, 3, ...
-	if s.plan.applyDefaultOrdering {
-		for i := range rel.Fields {
-			node.Ordering = append(node.Ordering, &parse.OrderingTerm{
-				Expression: &parse.ExpressionLiteral{
-					Value: strconv.Itoa(i + 1), // 1-indexed
-				},
-			})
-		}
+	return plan, rel, nil
+}
+
+// ordering builds a logical plan for an ordering.
+func (s *scopeContext) buildSort(plan Plan, rel *Relation, ordering []*parse.OrderingTerm, groupingTerms map[string]*IdentifiedExpr) (*Sort, error) {
+	sort := &Sort{
+		Child: plan,
 	}
 
-	return plan, rel, nil
+	for _, order := range ordering {
+		// ordering term can be of any type
+		sortExpr, _, err := s.expr(order.Expression, rel, groupingTerms)
+		if err != nil {
+			return nil, err
+		}
+
+		sort.SortExpressions = append(sort.SortExpressions, &SortExpression{
+			Expr:      sortExpr,
+			Ascending: get(orderAsc, order.Order),
+			NullsLast: get(orderNullsLast, order.Nulls),
+		})
+	}
+
+	return sort, nil
 }
 
 // selectCore builds a logical plan for a select core.
@@ -409,137 +453,66 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan Plan, rel *
 // 2.
 // "SELECT name FROM users UNION 'hello' ORDER BY id" - this is invalid in Postgres, since "id" is not in the
 // result set. We need to project before the UNION.
-func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Plan, preProjectRel *Relation, resultRel *Relation,
+func (s *scopeContext) selectCore(node *parse.SelectCore) (preProjectPlan Plan, preProjectRel *Relation, groupingTerms map[string]*IdentifiedExpr, resultRel *Relation,
 	projectFunc func(Plan) Plan, err error) {
+	querySection := querySectionUnknown
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("error in %s section: %w", querySection, err)
+		}
+	}()
+
 	// if there is no from, we just project the columns and return
 	if node.From == nil {
-		var exprs []Expression
-		rel := &Relation{}
-		for _, resultCol := range node.Columns {
-			switch resultCol := resultCol.(type) {
-			default:
-				panic(fmt.Sprintf("unexpected result column type %T", resultCol))
-			case *parse.ResultColumnExpression:
-				expr, field, err := s.expr(resultCol.Expression, rel)
-				if err != nil {
-					return nil, nil, nil, nil, err
-				}
-
-				if resultCol.Alias != "" {
-					expr = &AliasExpr{
-						Expr:  expr,
-						Alias: resultCol.Alias,
-					}
-					field.Parent = ""
-					field.Name = resultCol.Alias
-				}
-
-				exprs = append(exprs, expr)
-				rel.Fields = append(rel.Fields, field)
-			case *parse.ResultColumnWildcard:
-				// if there is no from, we cannot expand the wildcard
-				panic(`wildcard "*" cannot be used without a FROM clause`)
-			}
-		}
-
-		return &EmptyScan{}, rel, rel, func(lp Plan) Plan {
-			var p Plan = &Project{
-				Child:       lp,
-				Expressions: exprs,
-			}
-
-			if node.Distinct {
-				p = &Distinct{
-					Child: p,
-				}
-			}
-
-			return p
-		}, nil
+		querySection = querySectionResults
+		return s.selectCoreWithoutFrom(node.Columns, node.Distinct)
 	}
+
+	// applyPreProject is a set of functions that are run right before the projection.
+	var applyPreProject []func()
 
 	// otherwise, we need to build the from and join clauses
 	scan, rel, err := s.table(node.From)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	var plan Plan = scan
 
+	querySection = querySectionJoin
 	for _, join := range node.Joins {
 		plan, rel, err = s.join(plan, rel, join)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 	}
 
+	querySection = querySectionWhere
 	if node.Where != nil {
-		whereExpr, whereType, err := s.expr(node.Where, rel)
+		whereExpr, whereType, err := s.expr(node.Where, rel, map[string]*IdentifiedExpr{})
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 
 		scalar, err := whereType.Scalar()
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 
 		if !scalar.Equals(types.BoolType) {
-			return nil, nil, nil, nil, errors.New("WHERE must be a boolean")
+			return nil, nil, nil, nil, nil, errors.New("WHERE must be a boolean")
 		}
 
 		plan = &Filter{
 			Child:     plan,
 			Condition: whereExpr,
 		}
-
-		// we need to check that the where clause does not contain any aggregate functions
-		contains := false
-		Traverse(whereExpr, func(node Traversable) bool {
-			if _, ok := node.(*AggregateFunctionCall); ok {
-				contains = true
-				return false
-			}
-			return true
-		})
-		if contains {
-			return nil, nil, nil, nil, ErrAggregateInWhere
-		}
 	}
 
-	// at this point, we have the full relation for the select core, and can expand the columns
+	querySection = querySectionUnknown
+	// wildcards expand all columns found at this point.
 	results, err := s.expandResultCols(rel, node.Columns)
 	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-
-	containsAgg := false
-	for _, result := range results {
-		containsAgg = hasAggregate(result.Expr)
-	}
-
-	var resExprs []Expression
-	var resFields []*Field
-	for _, result := range results {
-		resExprs = append(resExprs, result.Expr)
-		resFields = append(resFields, result.Field)
-	}
-
-	// if there is no group by or aggregate, we can apply any distinct and return
-	if len(node.GroupBy) == 0 && !containsAgg {
-		return plan, rel, &Relation{Fields: resFields}, func(lp Plan) Plan {
-			var p Plan = &Project{
-				Child:       lp,
-				Expressions: resExprs,
-			}
-
-			if node.Distinct {
-				p = &Distinct{
-					Child: p,
-				}
-			}
-
-			return p
-		}, nil
+		return nil, nil, nil, nil, nil, err
 	}
 
 	// otherwise, we need to build the group by and having clauses.
@@ -547,35 +520,28 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Plan, p
 	// column references or aggregate usage as columnrefs to the aggregate
 	// functions matching term.
 	aggTerms := make(map[string]*exprFieldPair[*IdentifiedExpr]) // any aggregate function used in the result or having
-	groupingTerms := make(map[string]*IdentifiedExpr)            // any grouping term used in the GROUP BY
+	groupingTerms = make(map[string]*IdentifiedExpr)             // any grouping term used in the GROUP BY
 	aggregateRel := &Relation{}                                  // the relation resulting from the aggregation
 
 	aggPlan := &Aggregate{ // defined separately so we can reference it in the below clauses
 		Child: plan,
 	}
-	plan = aggPlan
+	hasGroupBy := false
 
+	oldPreGroupRel := s.preGroupRelation
+	s.preGroupRelation = rel
+	applyPreProject = append(applyPreProject, func() { s.preGroupRelation = oldPreGroupRel })
+
+	querySection = querySectionGroupBy
 	for _, groupTerm := range node.GroupBy {
-		groupExpr, field, err := s.expr(groupTerm, rel)
+		hasGroupBy = true
+		// we do not pass the grouping terms yet because they cannot be referenced in the group by
+		groupExpr, field, err := s.expr(groupTerm, rel, map[string]*IdentifiedExpr{})
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 
-		Traverse(groupExpr, func(node Traversable) bool {
-			switch node.(type) {
-			case *AggregateFunctionCall:
-				err = fmt.Errorf(`%w: aggregate functions are not allowed in GROUP BY`, ErrIllegalAggregate)
-				return false
-			case *Subquery:
-				err = fmt.Errorf(`%w: subqueries are not allowed in GROUP BY`, ErrIllegalAggregate)
-				return false
-			}
-			return true
-		})
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-
+		// if this group term already exists, we can skip it to avoid duplicate columns
 		_, ok := groupingTerms[groupExpr.String()]
 		if ok {
 			continue
@@ -588,35 +554,44 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Plan, p
 		}
 		aggPlan.GroupingExpressions = append(aggPlan.GroupingExpressions, identified)
 
-		field.ReferenceID = identified.ID
 		aggregateRel.Fields = append(aggregateRel.Fields, field)
 
 		groupingTerms[groupExpr.String()] = identified
 	}
 
+	if hasGroupBy {
+		plan = aggPlan
+		rel = aggregateRel
+	}
+
+	// if we use an agg without group by, we will have to later alter the plan to include the aggregate node
+	usesAggWithoutGroupBy := false
+
+	// on each aggregate function, we will rewrite it to be a reference, and place the actual function itself on the Aggregate node
+	oldOnAggregate := s.onAggregateFuncExpr
+	applyPreProject = append(applyPreProject, func() { s.onAggregateFuncExpr = oldOnAggregate })
+	newOnAggregate := s.makeOnAggregateFunc(aggTerms, &aggPlan.AggregateExpressions)
+	s.onAggregateFuncExpr = func(efc *parse.ExpressionFunctionCall, afd *parse.AggregateFunctionDefinition, grouping map[string]*IdentifiedExpr) (Expression, *Field, error) {
+		if !hasGroupBy {
+			usesAggWithoutGroupBy = true
+		}
+		return newOnAggregate(efc, afd, grouping)
+	}
+
+	querySection = querySectionHaving
 	if node.Having != nil {
-		// hmmmmm this doesnt work because the having rel needs to be the aggregation rel,
-		// but we need to use this to build the aggregation rel :(
-		// 2: on second thought, maybe not. We will have to do some tree matching and rewriting,
-		// but it should be possible.
-		havingExpr, field, err := s.expr(node.Having, rel)
+		havingExpr, field, err := s.expr(node.Having, rel, groupingTerms)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 
 		scalar, err := field.Scalar()
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 
 		if !scalar.Equals(types.BoolType) {
-			return nil, nil, nil, nil, errors.New("HAVING must evaluate to a boolean")
-		}
-
-		// rewrite the having expression to use the aggregate functions
-		havingExpr, err = s.rewriteAccordingToAggregate(havingExpr, groupingTerms, aggTerms)
-		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, errors.New("HAVING must evaluate to a boolean")
 		}
 
 		plan = &Filter{
@@ -625,30 +600,75 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Plan, p
 		}
 	}
 
-	// now we need to rewrite the select list to use the aggregate functions
-	for i, resultCol := range results {
-		results[i].Expr, err = s.rewriteAccordingToAggregate(resultCol.Expr, groupingTerms, aggTerms)
-		if err != nil {
-			return nil, nil, nil, nil, err
+	// now we plan all window functions
+	windows := make(map[string]*Window)
+	unappliedWindows := []*Window{} // we wait to apply these to the plan until after evluating all, since subsequent windows cannot reference previous ones
+	querySection = querySectionWindow
+	for _, window := range node.Windows {
+		_, ok := windows[window.Name]
+		if ok {
+			return nil, nil, nil, nil, nil, fmt.Errorf(`%w: window "%s" is already defined`, ErrWindowAlreadyDefined, window.Name)
 		}
+
+		win, err := s.planWindow(plan, rel, window.Window, groupingTerms)
+		if err != nil {
+			return nil, nil, nil, nil, nil, err
+		}
+
+		windows[window.Name] = win
+
+		unappliedWindows = append(unappliedWindows, win)
 	}
 
-	// finally, all of the aggregated columns need to be added to the Aggregate node
-	for _, agg := range order.OrderMap(aggTerms) {
-		aggPlan.AggregateExpressions = append(aggPlan.AggregateExpressions, agg.Value.Expr)
-		aggregateRel.Fields = append(aggregateRel.Fields, agg.Value.Field)
+	// on each window function, we will rewrite it to be a reference, and add the window function to
+	// the corresponding window node. If no window node exists (if the window is defined inline with the function),
+	// we will create a new window node.
+	oldOnWindow := s.onWindowFuncExpr
+	applyPreProject = append(applyPreProject, func() { s.onWindowFuncExpr = oldOnWindow })
+	s.onWindowFuncExpr = s.makeOnWindowFunc(&unappliedWindows, windows, plan)
+
+	// now we can evaluate all return columns.
+
+	querySection = querySectionResults
+	resultFields := make([]*Field, len(results))
+	resultColExprs := make([]Expression, len(results))
+	for i, resultCol := range results {
+		expr, field, err := s.expr(resultCol.Expression, rel, groupingTerms)
+		if err != nil {
+			return nil, nil, nil, nil, nil, err
+		}
+
+		if resultCol.Alias != "" {
+			expr = &AliasExpr{
+				Expr:  expr,
+				Alias: resultCol.Alias,
+			}
+			field.Name = resultCol.Alias
+			field.Parent = ""
+		}
+
+		resultColExprs[i] = expr
+		resultFields[i] = field
 	}
 
-	var resultColExprs []Expression
-	var resultFields []*Field
-	for _, resultCol := range results {
-		resultColExprs = append(resultColExprs, resultCol.Expr)
-		resultFields = append(resultFields, resultCol.Field)
+	if usesAggWithoutGroupBy {
+		// we need to add the aggregate node to the plan
+		plan = aggPlan
 	}
 
-	return plan, aggregateRel, &Relation{
+	// apply the unnamed window functions
+	for _, window := range unappliedWindows {
+		window.Child = plan
+		plan = window
+	}
+
+	return plan, rel, groupingTerms, &Relation{
 			Fields: resultFields,
 		}, func(lp Plan) Plan {
+
+			for _, apply := range applyPreProject {
+				apply()
+			}
 
 			var p Plan = &Project{
 				Child:       lp,
@@ -665,19 +685,289 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (prePrjectPlan Plan, p
 		}, nil
 }
 
-// hasAggregate returns true if the expression contains an aggregate function.
-func hasAggregate(expr LogicalNode) bool {
-	var hasAggregate bool
-	Traverse(expr, func(node Traversable) bool {
-		if _, ok := node.(*AggregateFunctionCall); ok {
-			hasAggregate = true
-			return false
+// makeOnWindowFunc makes a function that can be used as the callback for onWindowFuncExpr.
+// The passed in unnamedWindows will be used to store any windows that are defined inline with the function.
+// The namedWindows should be any windows that were defined in the SELECT statement.
+// Callers of this function should pass an empty slice which can be written to.
+func (s *scopeContext) makeOnWindowFunc(unnamedWindows *[]*Window, namedWindows map[string]*Window, plan Plan) func(*parse.ExpressionWindowFunctionCall, *Relation, map[string]*IdentifiedExpr) (Expression, *Field, error) {
+	return func(ewfc *parse.ExpressionWindowFunctionCall, rel *Relation, groupingTerms map[string]*IdentifiedExpr) (Expression, *Field, error) {
+		// the referenced function here must be either an aggregate
+		// or a window function.
+		// We don't simply call expr on the function because we want to ensure
+		// it is a window and handle it differently.
+		funcDef, ok := parse.Functions[ewfc.FunctionCall.Name]
+		if !ok {
+			return nil, nil, fmt.Errorf(`%w: "%s"`, ErrFunctionDoesNotExist, ewfc.FunctionCall.Name)
 		}
 
-		return true
-	})
+		if ewfc.FunctionCall.Star {
+			return nil, nil, fmt.Errorf(`%w: window functions do not support "*"`, ErrInvalidWindowFunction)
+		}
+		if ewfc.FunctionCall.Distinct {
+			return nil, nil, fmt.Errorf(`%w: window functions do not support DISTINCT`, ErrInvalidWindowFunction)
+		}
 
-	return hasAggregate
+		switch funcDef.(type) {
+		case *parse.AggregateFunctionDefinition, *parse.WindowFunctionDefinition:
+			// intentionally do nothing
+		default:
+			return nil, nil, fmt.Errorf(`function "%s" is not a window function`, ewfc.FunctionCall.Name)
+		}
+
+		var args []Expression
+		var fields []*Field
+		for _, arg := range ewfc.FunctionCall.Args {
+			expr, field, err := s.expr(arg, rel, groupingTerms)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			args = append(args, expr)
+			fields = append(fields, field)
+		}
+
+		dataTypes, err := dataTypes(fields)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		returnType, err := funcDef.ValidateArgs(dataTypes)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// if a filter exists, ensure it is a boolean
+		var filterExpr Expression
+		if ewfc.Filter != nil {
+			var filterField *Field
+			filterExpr, filterField, err = s.expr(ewfc.Filter, rel, groupingTerms)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			scalar, err := filterField.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !scalar.Equals(types.BoolType) {
+				return nil, nil, errors.New("filter expression evaluate to a boolean")
+			}
+		}
+
+		// the window can either reference an already declared window, or it can be anonymous.
+		// If referencing an already declared window, we simply add the window function to that window.
+		// If it is anonymous, we create a new window node and add the function to that.
+		var identified *IdentifiedExpr
+		switch win := ewfc.Window.(type) {
+		default:
+			panic(fmt.Sprintf("unexpected window type %T", ewfc.Window))
+		case *parse.WindowImpl:
+			// it is an anonymous window, so we need to create a new window node
+			window, err := s.planWindow(plan, rel, win, groupingTerms)
+			if err != nil {
+				return nil, nil, err
+			}
+			identified = &IdentifiedExpr{
+				Expr: &WindowFunction{
+					Name:       ewfc.FunctionCall.Name,
+					Args:       args,
+					Filter:     filterExpr,
+					returnType: returnType,
+				},
+				ID: s.plan.uniqueRefIdentifier(),
+			}
+
+			window.Functions = append(window.Functions, identified)
+			*unnamedWindows = append(*unnamedWindows, window)
+		case *parse.WindowReference:
+			// it must be a reference to a window that has already been declared
+			window, ok := namedWindows[win.Name]
+			if !ok {
+				return nil, nil, fmt.Errorf(`%w: window "%s" is not defined`, ErrWindowNotDefined, win.Name)
+			}
+
+			identified = &IdentifiedExpr{
+				Expr: &WindowFunction{
+					Name:       ewfc.FunctionCall.Name,
+					Args:       args,
+					Filter:     filterExpr,
+					returnType: returnType,
+				},
+				ID: s.plan.uniqueRefIdentifier(),
+			}
+
+			window.Functions = append(window.Functions, identified)
+		}
+
+		return &ExprRef{
+				Identified: identified,
+			}, &Field{
+				Name:        ewfc.FunctionCall.Name,
+				val:         returnType,
+				ReferenceID: identified.ID,
+			}, nil
+	}
+}
+
+// makeOnAggregateFunc makes a function that can be used as the callback for onAggregateFuncExpr.
+// The passed in aggTerms will be both read from and written to.
+// The passed in aggregateExpressions slice will be written to with any new aggregate expressions.
+func (s *scopeContext) makeOnAggregateFunc(aggTerms map[string]*exprFieldPair[*IdentifiedExpr], aggregateExpression *[]*IdentifiedExpr) func(*parse.ExpressionFunctionCall, *parse.AggregateFunctionDefinition, map[string]*IdentifiedExpr) (Expression, *Field, error) {
+	return func(efc *parse.ExpressionFunctionCall, afd *parse.AggregateFunctionDefinition, groupingTerms map[string]*IdentifiedExpr) (Expression, *Field, error) {
+		// if it matches any aggregate function, we should reference it.
+		// Otherwise, register it as a new aggregate
+
+		if s.preGroupRelation == nil {
+			return nil, nil, errors.New("cannot use aggregate functions in this part of the query")
+		}
+
+		args := make([]Expression, len(efc.Args))
+		argTypes := make([]*types.DataType, len(efc.Args))
+		for i, arg := range efc.Args {
+			expr, fields, err := s.expr(arg, s.preGroupRelation, groupingTerms)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			args[i] = expr
+			argTypes[i], err = fields.Scalar()
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+
+		returnType, err := afd.ValidateArgs(argTypes)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		rawExpr := &AggregateFunctionCall{
+			FunctionName: efc.Name,
+			Args:         args,
+			Star:         efc.Star,
+			Distinct:     efc.Distinct,
+			returnType:   returnType,
+		}
+
+		identified, ok := aggTerms[rawExpr.String()]
+		// if found, just use the reference
+		if ok {
+			return &ExprRef{
+				Identified: identified.Expr,
+			}, identified.Field, nil
+		}
+
+		// otherwise, register it as a new aggregate
+		newIdentified := &IdentifiedExpr{
+			Expr: rawExpr,
+			ID:   s.plan.uniqueRefIdentifier(),
+		}
+
+		// add the expression to the aggregate node
+		*aggregateExpression = append(*aggregateExpression, newIdentified)
+
+		field := newIdentified.Field()
+		aggTerms[rawExpr.String()] = &exprFieldPair[*IdentifiedExpr]{
+			Expr:  newIdentified,
+			Field: field,
+		}
+
+		return &ExprRef{
+			Identified: newIdentified,
+		}, field, nil
+	}
+}
+
+// selectCoreWithoutFrom builds a logical plan for a select core without a FROM clause.
+func (s *scopeContext) selectCoreWithoutFrom(cols []parse.ResultColumn, isDistinct bool) (preProjectPlan Plan, preProjectRel *Relation, groupingTerms map[string]*IdentifiedExpr, resultRel *Relation,
+	projectFunc func(Plan) Plan, err error) {
+	var exprs []Expression
+	rel := &Relation{}
+
+	for _, resultCol := range cols {
+		switch resultCol := resultCol.(type) {
+		default:
+			panic(fmt.Sprintf("unexpected result column type %T", resultCol))
+		case *parse.ResultColumnExpression:
+			expr, field, err := s.expr(resultCol.Expression, rel, nil)
+			if err != nil {
+				return nil, nil, nil, nil, nil, err
+			}
+
+			if resultCol.Alias != "" {
+				expr = &AliasExpr{
+					Expr:  expr,
+					Alias: resultCol.Alias,
+				}
+				field.Parent = ""
+				field.Name = resultCol.Alias
+			}
+
+			exprs = append(exprs, expr)
+			rel.Fields = append(rel.Fields, field)
+		case *parse.ResultColumnWildcard:
+			// if there is no from, we cannot expand the wildcard
+			return nil, nil, nil, nil, nil, fmt.Errorf(`wildcard "*" cannot be used without a FROM clause`)
+		}
+	}
+
+	return &EmptyScan{}, rel, map[string]*IdentifiedExpr{}, rel, func(lp Plan) Plan {
+		var p Plan = &Project{
+			Child:       lp,
+			Expressions: exprs,
+		}
+
+		if isDistinct {
+			p = &Distinct{
+				Child: p,
+			}
+		}
+
+		return p
+	}, nil
+}
+
+// planWindow plans a window function.
+func (s *scopeContext) planWindow(plan Plan, rel *Relation, win *parse.WindowImpl, groupingTerms map[string]*IdentifiedExpr) (*Window, error) {
+	var partitionBy []Expression
+	if len(win.PartitionBy) > 0 {
+		for _, partition := range win.PartitionBy {
+			partition, _, err := s.expr(partition, rel, groupingTerms)
+			if err != nil {
+				return nil, err
+			}
+
+			partitionBy = append(partitionBy, partition)
+		}
+	}
+
+	// to add default ordering, we will now add numbers to the window's order by
+	if s.plan.applyDefaultOrdering {
+		for i := range win.OrderBy {
+			win.OrderBy = append(win.OrderBy, &parse.OrderingTerm{
+				Expression: &parse.ExpressionLiteral{
+					Value: strconv.Itoa(i + 1),
+				},
+			})
+		}
+	}
+
+	var orderBy []*SortExpression
+	if len(win.OrderBy) > 0 {
+		sort, err := s.buildSort(plan, rel, win.OrderBy, groupingTerms)
+		if err != nil {
+			return nil, err
+		}
+
+		orderBy = sort.SortExpressions
+	}
+
+	return &Window{
+		PartitionBy: partitionBy,
+		OrderBy:     orderBy,
+		Child:       plan,
+	}, nil
 }
 
 // exprFieldPair is a helper struct that pairs an expression with a field.
@@ -689,56 +979,28 @@ type exprFieldPair[T Expression] struct {
 	Field *Field
 }
 
-// rewriteAccordingToAggregate rewrites an expression according to the rules of aggregation.
-// This is used to rewrite both the select list and having clause to validate that all columns
-// are either captured in aggregates or have an exactly matching expression in the group by.
-func (s *scopeContext) rewriteAccordingToAggregate(expr Expression, groupingTerms map[string]*IdentifiedExpr, aggTerms map[string]*exprFieldPair[*IdentifiedExpr]) (Expression, error) {
+// rewriteGroupingTerms rewrites all known grouping terms to be references.
+// For example, in the query "SELECT name FROM users GROUP BY name", it rewrites the logical tree to be
+// "SELECT #REF(A) FROM USERS GROUP BY name->#REF(A)".
+func (s *scopeContext) rewriteGroupingTerms(expr Expression, groupingTerms map[string]*IdentifiedExpr) (Expression, error) {
 	node, err := Rewrite(expr, &RewriteConfig{
 		ExprCallback: func(le Expression) (Expression, bool, error) {
 			// if it matches any group by term, we need to rewrite it
-			// and stop traversing any children
-			identified, ok := groupingTerms[le.String()]
-			if ok {
+			if identified, ok := groupingTerms[le.String()]; ok {
 				return &ExprRef{
 					Identified: identified,
 				}, false, nil
 			}
 
 			switch le := le.(type) {
-			case *ColumnRef:
-				// if it is a column and in the current relation, it is an error, since
-				// it was not contained in an aggregate function or group by.
-				return nil, false, fmt.Errorf(`%w: column "%s" must appear in the GROUP BY clause or be used in an aggregate function`, ErrIllegalAggregate, le.String())
-			case *AggregateFunctionCall:
-				// TODO: do we need to check for the aggregate being called on a correlated column?
-				// if it matches any aggregate function, we need to rewrite it
-				// to that reference. Otherwise, register it as a new aggregate
-				identified, ok := aggTerms[le.String()]
-				if ok {
-					return &ExprRef{
-						Identified: identified.Expr,
-					}, false, nil
-				}
-
-				newIdentified := &IdentifiedExpr{
-					Expr: le,
-					ID:   s.plan.uniqueRefIdentifier(),
-				}
-
-				aggTerms[le.String()] = &exprFieldPair[*IdentifiedExpr]{
-					Expr: newIdentified,
-					Field: &Field{
-						Name:        le.FunctionName,
-						val:         le.returnType.Copy(),
-						ReferenceID: newIdentified.ID,
-					},
-				}
-
-				return &ExprRef{
-					Identified: newIdentified,
-				}, false, nil
 			default:
 				return le, true, nil
+			case *ColumnRef:
+				// if it is a column reference, then it was not found in the group by
+				return nil, false, fmt.Errorf(`%w: column "%s" must appear in the GROUP BY clause or be used in an aggregate function`, ErrIllegalAggregate, le.String())
+			case *AggregateFunctionCall:
+				// if it is an aggregate, we dont need to keep searching because it does not need to be rewritten
+				return le, false, nil
 			}
 		},
 	})
@@ -749,33 +1011,15 @@ func (s *scopeContext) rewriteAccordingToAggregate(expr Expression, groupingTerm
 	return node.(Expression), nil
 }
 
-// expandResultCols takes a relation and result columns, and converts them to expressions
-// in the order provided. This is used to expand a wildcard in a select statement.
-func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn) ([]*exprFieldPair[Expression], error) {
-	var resultCols []Expression
-	var resultFields []*Field
+// expandResultCols expands all wildcards to their respective column references.
+func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn) ([]*parse.ResultColumnExpression, error) {
+	var res []*parse.ResultColumnExpression
 	for _, col := range cols {
 		switch col := col.(type) {
 		default:
 			panic(fmt.Sprintf("unexpected result column type %T", col))
 		case *parse.ResultColumnExpression:
-			expr, field, err := s.expr(col.Expression, rel)
-			if err != nil {
-				return nil, err
-			}
-
-			if col.Alias != "" {
-				expr = &AliasExpr{
-					Expr:  expr,
-					Alias: col.Alias,
-				}
-				// since it is aliased, we now ignore the parent
-				field.Parent = ""
-				field.Name = col.Alias
-			}
-
-			resultFields = append(resultFields, field)
-			resultCols = append(resultCols, expr)
+			res = append(res, col)
 		case *parse.ResultColumnWildcard:
 			var newFields []*Field
 			if col.Table != "" {
@@ -785,33 +1029,51 @@ func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn
 			}
 
 			for _, field := range newFields {
-				resultCols = append(resultCols, &ColumnRef{
-					Parent:     field.Parent,
-					ColumnName: field.Name,
+				res = append(res, &parse.ResultColumnExpression{
+					Expression: &parse.ExpressionColumn{
+						Table:  col.Table,
+						Column: field.Name,
+					},
 				})
-				resultFields = append(resultFields, field)
 			}
 		}
 	}
 
-	var pairs []*exprFieldPair[Expression]
-	for i, expr := range resultCols {
-		pairs = append(pairs, &exprFieldPair[Expression]{
-			Expr:  expr,
-			Field: resultFields[i],
-		})
-	}
-
-	return pairs, nil
+	return res, nil
 }
 
 // expr visits an expression node.
-func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expression, *Field, error) {
+// It returns the logical plan for the expression, the field that the expression represents,
+// and an error if one occurred. The Expression and Field will be nil if an error occurred.
+// If a group by is present, expressions will be rewritten to reference the group by terms.
+// nil can be passed for the groupingTerms if there is no group by.
+func (s *scopeContext) expr(node parse.Expression, currentRel *Relation, groupingTerms map[string]*IdentifiedExpr) (Expression, *Field, error) {
+	if groupingTerms == nil {
+		groupingTerms = make(map[string]*IdentifiedExpr)
+	}
+
+	e, f, r, err := s.exprWithAggRewrite(node, currentRel, groupingTerms)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// if we should rewrite, then we will traverse the expression and see if we can rewrite it.
+	// We do this to ensure that we match the longest possible rewrite tree.
+	if r {
+		e2, err := s.rewriteGroupingTerms(e, groupingTerms)
+		return e2, f, err
+	}
+
+	return e, f, nil
+}
+
+func (s *scopeContext) exprWithAggRewrite(node parse.Expression, currentRel *Relation, groupingTerms map[string]*IdentifiedExpr,
+) (resExpr Expression, resField *Field, shouldRewrite bool, err error) {
 	// cast is a helper function for type casting results based on the current node
-	cast := func(expr Expression, field *Field) (Expression, *Field, error) {
+	cast := func(expr Expression, field *Field) (Expression, *Field, bool, error) {
 		castable, ok := node.(interface{ GetTypeCast() *types.DataType })
 		if !ok {
-			return expr, field, nil
+			return expr, field, shouldRewrite, nil
 		}
 
 		if castable.GetTypeCast() != nil {
@@ -821,10 +1083,39 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			return &TypeCast{
 				Expr: expr,
 				Type: castable.GetTypeCast(),
-			}, field2, nil
+			}, field2, shouldRewrite, nil
 		}
 
-		return expr, field, nil
+		return expr, field, shouldRewrite, nil
+	}
+
+	// rExpr is a helper function that should be used to recursively call expr().
+	// The returned boolean indicates whether the expression violates grouping rules, and should
+	// attempt to rewrite the expression to reference the group by terms before failing.
+	rExpr := func(node parse.Expression) (Expression, *Field, error) {
+		e, f, r, err2 := s.exprWithAggRewrite(node, currentRel, groupingTerms)
+		if err2 != nil {
+			return nil, nil, err2
+		}
+
+		if r {
+			// // if we should rewrite, we should try to match the expression to a group by term
+			// // if successful, we can tell the caller to not rewrite
+			// // if not, we tell the caller to attempt to rewrite
+			// grouped, ok := groupingTerms[e.String()]
+			// if ok {
+			// 	s.aggViolationColumn = ""
+			// 	return &ExprRef{
+			// 		Identified: grouped,
+			// 	}, f, nil
+			// }
+
+			// if we could not find the expression in the group by terms, we should rewrite.
+			// This will tell the caller to rewrite the returned expression
+			shouldRewrite = true
+		}
+
+		return e, f, nil
 	}
 
 	switch node := node.(type) {
@@ -836,67 +1127,48 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			Type:  node.Type,
 		}, anonField(node.Type))
 	case *parse.ExpressionFunctionCall:
-		args, fields, err := s.manyExprs(node.Args, currentRel)
-		if err != nil {
-			return nil, nil, err
+		funcDef, ok := parse.Functions[node.Name]
+		// if it is an aggregate function, we need to handle it differently
+		if ok {
+			// now we need to apply rules depending on if it is aggregate or not
+			if aggFn, ok := funcDef.(*parse.AggregateFunctionDefinition); ok {
+				expr, field, err := s.onAggregateFuncExpr(node, aggFn, groupingTerms)
+				if err != nil {
+					return nil, nil, false, err
+				}
+
+				return cast(expr, field)
+			}
+		}
+
+		var args []Expression
+		var fields []*Field
+		for _, arg := range node.Args {
+			expr, field, err := rExpr(arg)
+			if err != nil {
+				return nil, nil, false, err
+			}
+
+			args = append(args, expr)
+			fields = append(fields, field)
 		}
 
 		// can be either a procedure call or a built-in function
-		funcDef, ok := parse.Functions[node.Name]
+
 		if !ok {
-			if node.Star {
-				panic("star (*) not allowed in procedure calls")
-			}
-			if node.Distinct {
-				panic("DISTINCT not allowed in procedure calls")
-			}
-
-			// must be a procedure call
-			proc, found := s.plan.Schema.FindProcedure(node.Name)
-			if !found {
-				panic(fmt.Sprintf(`no function or procedure "%s" found`, node.Name))
-			}
-
-			returns, err := procedureReturnExpr(proc.Returns)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			if len(node.Args) != len(proc.Parameters) {
-				panic(fmt.Sprintf(`procedure "%s" expects %d arguments, but %d were provided`, node.Name, len(proc.Parameters), len(node.Args)))
-			}
-
-			for i, param := range proc.Parameters {
-				scalar, err := fields[i].Scalar()
-				if err != nil {
-					return nil, nil, err
-				}
-
-				if !param.Type.Equals(scalar) {
-					return nil, nil, fmt.Errorf(`procedure "%s" expects argument %d to be of type %s, but %s was provided`, node.Name, i+1, param.Type, scalar)
-				}
-			}
-
-			return cast(&ProcedureCall{
-				ProcedureName: node.Name,
-				Args:          args,
-				returnType:    returns,
-			}, &Field{
-				Name: node.Name,
-				val:  returns,
-			})
+			return nil, nil, false, fmt.Errorf(`%w: "%s"`, ErrFunctionDoesNotExist, node.Name)
 		}
 
 		// it is a built-in function
 
 		types, err := dataTypes(fields)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		returnVal, err := funcDef.ValidateArgs(types)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		returnField := &Field{
@@ -904,24 +1176,11 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			val:  returnVal,
 		}
 
-		// now we need to apply rules depending on if it is aggregate or not
-		if _, ok = funcDef.(*parse.AggregateFunctionDefinition); ok {
-			// we apply cast outside the reference because we want to keep the reference
-			// specific to the aggregate function call.
-			return cast(&AggregateFunctionCall{
-				FunctionName: node.Name,
-				Args:         args,
-				Star:         node.Star,
-				Distinct:     node.Distinct,
-				returnType:   returnVal,
-			}, returnField)
-		}
-
 		if node.Star {
-			panic("star (*) not allowed in non-aggregate function calls")
+			return nil, nil, false, fmt.Errorf("star (*) not allowed in non-aggregate function calls")
 		}
 		if node.Distinct {
-			panic("DISTINCT not allowed in non-aggregate function calls")
+			return nil, nil, false, fmt.Errorf("DISTINCT not allowed in non-aggregate function calls")
 		}
 
 		return cast(&ScalarFunctionCall{
@@ -929,6 +1188,13 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			Args:         args,
 			returnType:   returnVal,
 		}, returnField)
+	case *parse.ExpressionWindowFunctionCall:
+		wind, field, err := s.onWindowFuncExpr(node, currentRel, groupingTerms)
+		if err != nil {
+			return nil, nil, false, err
+		}
+
+		return cast(wind, field)
 	case *parse.ExpressionVariable:
 		var val any // can be a data type or object
 		dt, ok := s.plan.Variables[node.String()]
@@ -936,7 +1202,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			// might be an object
 			obj, ok := s.plan.Objects[node.String()]
 			if !ok {
-				return nil, nil, fmt.Errorf(`unknown variable "%s"`, node.String())
+				return nil, nil, false, fmt.Errorf(`unknown variable "%s"`, node.String())
 			}
 
 			val = obj
@@ -949,29 +1215,29 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			dataType: val,
 		}, &Field{val: val})
 	case *parse.ExpressionArrayAccess:
-		array, field, err := s.expr(node.Array, currentRel)
+		array, field, err := rExpr(node.Array)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
-		index, idxField, err := s.expr(node.Index, currentRel)
+		index, idxField, err := rExpr(node.Index)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		scalar, err := idxField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		if !scalar.Equals(types.IntType) {
-			return nil, nil, fmt.Errorf("array index must be an int")
+			return nil, nil, false, fmt.Errorf("array index must be an int")
 		}
 
 		field2 := field.Copy()
 		scalar2, err := field2.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		scalar2.IsArray = false // since we are accessing an array, it is no longer an array
@@ -982,27 +1248,34 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 		}, field2)
 	case *parse.ExpressionMakeArray:
 		if len(node.Values) == 0 {
-			return nil, nil, fmt.Errorf("array constructor must have at least one element")
+			return nil, nil, false, fmt.Errorf("array constructor must have at least one element")
 		}
 
-		exprs, fields, err := s.manyExprs(node.Values, currentRel)
-		if err != nil {
-			return nil, nil, err
+		var exprs []Expression
+		var fields []*Field
+		for _, val := range node.Values {
+			expr, field, err := rExpr(val)
+			if err != nil {
+				return nil, nil, false, err
+			}
+
+			exprs = append(exprs, expr)
+			fields = append(fields, field)
 		}
 
 		firstVal, err := fields[0].Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		for _, field := range fields[1:] {
 			scalar, err := field.Scalar()
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 
 			if !firstVal.Equals(scalar) {
-				return nil, nil, fmt.Errorf("array constructor must have elements of the same type")
+				return nil, nil, false, fmt.Errorf("array constructor must have elements of the same type")
 			}
 		}
 
@@ -1015,19 +1288,19 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			val: firstValCopy,
 		})
 	case *parse.ExpressionFieldAccess:
-		obj, field, err := s.expr(node.Record, currentRel)
+		obj, field, err := rExpr(node.Record)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		objType, err := field.Object()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		fieldType, ok := objType[node.Field]
 		if !ok {
-			return nil, nil, fmt.Errorf(`object "%s" does not have field "%s"`, field.Name, node.Field)
+			return nil, nil, false, fmt.Errorf(`object "%s" does not have field "%s"`, field.Name, node.Field)
 		}
 
 		return cast(&FieldAccess{
@@ -1037,35 +1310,35 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			val: fieldType,
 		})
 	case *parse.ExpressionParenthesized:
-		expr, field, err := s.expr(node.Inner, currentRel)
+		expr, field, err := rExpr(node.Inner)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		return cast(expr, field)
 	case *parse.ExpressionComparison:
-		left, leftField, err := s.expr(node.Left, currentRel)
+		left, leftField, err := rExpr(node.Left)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
-		right, rightField, err := s.expr(node.Right, currentRel)
+		right, rightField, err := rExpr(node.Right)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		leftScalar, err := leftField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		rightScalar, err := rightField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		if !leftScalar.Equals(rightScalar) {
-			return nil, nil, fmt.Errorf("comparison operands must be of the same type. %s != %s", leftScalar, rightScalar)
+			return nil, nil, false, fmt.Errorf("comparison operands must be of the same type. %s != %s", leftScalar, rightScalar)
 		}
 
 		var op []ComparisonOperator
@@ -1088,100 +1361,100 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 
 		expr := applyOps(left, right, op, negate)
 
-		return expr, anonField(types.BoolType.Copy()), nil
+		return expr, anonField(types.BoolType.Copy()), shouldRewrite, nil
 	case *parse.ExpressionLogical:
-		left, leftField, err := s.expr(node.Left, currentRel)
+		left, leftField, err := rExpr(node.Left)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
-		right, rightField, err := s.expr(node.Right, currentRel)
+		right, rightField, err := rExpr(node.Right)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		scalar, err := leftField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		if !scalar.Equals(types.BoolType) {
-			return nil, nil, fmt.Errorf("logical operators must be applied to boolean types")
+			return nil, nil, false, fmt.Errorf("logical operators must be applied to boolean types")
 		}
 
 		scalar, err = rightField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		if !scalar.Equals(types.BoolType) {
-			return nil, nil, fmt.Errorf("logical operators must be applied to boolean types")
+			return nil, nil, false, fmt.Errorf("logical operators must be applied to boolean types")
 		}
 
 		return &LogicalOp{
 			Left:  left,
 			Right: right,
 			Op:    get(logicalOps, node.Operator),
-		}, anonField(types.BoolType.Copy()), nil
+		}, anonField(types.BoolType.Copy()), shouldRewrite, nil
 	case *parse.ExpressionArithmetic:
-		left, leftField, err := s.expr(node.Left, currentRel)
+		left, leftField, err := rExpr(node.Left)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
-		right, rightField, err := s.expr(node.Right, currentRel)
+		right, rightField, err := rExpr(node.Right)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		leftScalar, err := leftField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		rightScalar, err := rightField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		if !leftScalar.Equals(rightScalar) {
-			return nil, nil, fmt.Errorf("arithmetic operands must be of the same type. %s != %s", leftScalar, rightScalar)
+			return nil, nil, false, fmt.Errorf("arithmetic operands must be of the same type. %s != %s", leftScalar, rightScalar)
 		}
 
 		return &ArithmeticOp{
 			Left:  left,
 			Right: right,
 			Op:    get(arithmeticOps, node.Operator),
-		}, &Field{val: leftField.val}, nil
+		}, &Field{val: leftField.val}, shouldRewrite, nil
 	case *parse.ExpressionUnary:
-		expr, field, err := s.expr(node.Expression, currentRel)
+		expr, field, err := rExpr(node.Expression)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		op := get(unaryOps, node.Operator)
 
 		scalar, err := field.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		switch op {
 		case Negate:
 			if !scalar.IsNumeric() {
-				return nil, nil, fmt.Errorf("negation can only be applied to numeric types")
+				return nil, nil, false, fmt.Errorf("negation can only be applied to numeric types")
 			}
 
 			if scalar.Equals(types.Uint256Type) {
-				return nil, nil, fmt.Errorf("negation cannot be applied to uint256")
+				return nil, nil, false, fmt.Errorf("negation cannot be applied to uint256")
 			}
 		case Not:
 			if !scalar.Equals(types.BoolType) {
-				return nil, nil, fmt.Errorf("logical negation can only be applied to boolean types")
+				return nil, nil, false, fmt.Errorf("logical negation can only be applied to boolean types")
 			}
 		case Positive:
 			if !scalar.IsNumeric() {
-				return nil, nil, fmt.Errorf("positive can only be applied to numeric types")
+				return nil, nil, false, fmt.Errorf("positive can only be applied to numeric types")
 			}
 		}
 
@@ -1190,7 +1463,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 		return &UnaryOp{
 			Expr: expr,
 			Op:   op,
-		}, &Field{val: field.val}, nil
+		}, &Field{val: field.val}, shouldRewrite, nil
 	case *parse.ExpressionColumn:
 		field, err := currentRel.Search(node.Table, node.Column)
 		// if no error, then we found the column in the current relation
@@ -1198,27 +1471,55 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 		if err == nil {
 			scalar, err := field.Scalar()
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 
-			return cast(&ColumnRef{
+			casted, castField, rewrite, err := cast(&ColumnRef{
 				Parent:     field.Parent,
 				ColumnName: field.Name,
 				dataType:   scalar,
 			}, field)
+			if err != nil {
+				return nil, nil, false, err
+			}
+
+			// if the column is in the group by, then we should rewrite it.
+			_, ok := groupingTerms[field.String()]
+
+			return casted, castField, rewrite || ok, nil
 		}
 		// If the error is not that the column was not found, check if
 		// the column is in the outer relation
 		if errors.Is(err, ErrColumnNotFound) {
 			// might be in the outer relation, correlated
 			field, err = s.OuterRelation.Search(node.Table, node.Column)
-			if err != nil {
-				return nil, nil, err
+			if errors.Is(err, ErrColumnNotFound) {
+				// if not found, see if it is in the relation but not grouped
+				field, err2 := s.preGroupRelation.Search(node.Table, node.Column)
+				// if the column exist in the outer relation, then it might be part of an expression
+				// contained in the group by. We should tell the caller to attempt to rewrite the expression
+				if err2 == nil {
+					// we return the column because the caller might try to handle the error
+					scalar, err := field.Scalar()
+					if err != nil {
+						return nil, nil, false, err
+					}
+
+					s.aggViolationColumn = node.String()
+					return &ColumnRef{
+						Parent:     field.Parent,
+						ColumnName: field.Name,
+						dataType:   scalar,
+					}, field, true, nil
+				}
+				return nil, nil, false, err
+			} else if err != nil {
+				return nil, nil, false, err
 			}
 
 			scalar, err := field.Scalar()
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 
 			// mark as correlated
@@ -1231,16 +1532,16 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			}, field)
 		}
 		// otherwise, return the error
-		return nil, nil, err
+		return nil, nil, false, err
 	case *parse.ExpressionCollate:
-		expr, field, err := s.expr(node.Expression, currentRel)
+		expr, field, err := rExpr(node.Expression)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		scalar, err := field.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		c := &Collate{
@@ -1252,75 +1553,75 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			c.Collation = NoCaseCollation
 
 			if !scalar.Equals(types.TextType) {
-				return nil, nil, fmt.Errorf("NOCASE collation can only be applied to text types")
+				return nil, nil, false, fmt.Errorf("NOCASE collation can only be applied to text types")
 			}
 		default:
-			return nil, nil, fmt.Errorf(`unknown collation "%s"`, node.Collation)
+			return nil, nil, false, fmt.Errorf(`unknown collation "%s"`, node.Collation)
 		}
 
 		// return the whole field since collations don't overwrite the return value's name
-		return c, field, nil
+		return c, field, shouldRewrite, nil
 	case *parse.ExpressionStringComparison:
-		left, leftField, err := s.expr(node.Left, currentRel)
+		left, leftField, err := rExpr(node.Left)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
-		right, rightField, err := s.expr(node.Right, currentRel)
+		right, rightField, err := rExpr(node.Right)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		leftScalar, err := leftField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		rightScalar, err := rightField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		if !leftScalar.Equals(types.TextType) || !rightScalar.Equals(types.TextType) {
-			return nil, nil, fmt.Errorf("string comparison operands must be of type string. %s != %s", leftScalar, rightScalar)
+			return nil, nil, false, fmt.Errorf("string comparison operands must be of type string. %s != %s", leftScalar, rightScalar)
 		}
 
 		expr := applyOps(left, right, []ComparisonOperator{get(stringComparisonOps, node.Operator)}, node.Not)
 
-		return expr, anonField(types.BoolType.Copy()), nil
+		return expr, anonField(types.BoolType.Copy()), shouldRewrite, nil
 	case *parse.ExpressionIs:
 		op := Is
 		if node.Distinct {
 			op = IsDistinctFrom
 		}
 
-		left, leftField, err := s.expr(node.Left, currentRel)
+		left, leftField, err := rExpr(node.Left)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
-		right, rightField, err := s.expr(node.Right, currentRel)
+		right, rightField, err := rExpr(node.Right)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		leftScalar, err := leftField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		rightScalar, err := rightField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		if node.Distinct {
 			if !leftScalar.Equals(rightScalar) {
-				return nil, nil, fmt.Errorf("IS DISTINCT FROM requires operands of the same type. %s != %s", leftScalar, rightScalar)
+				return nil, nil, false, fmt.Errorf("IS DISTINCT FROM requires operands of the same type. %s != %s", leftScalar, rightScalar)
 			}
 		} else {
 			if !rightScalar.Equals(types.NullType) {
-				return nil, nil, fmt.Errorf("IS requires the right operand to be NULL")
+				return nil, nil, false, fmt.Errorf("IS requires the right operand to be NULL")
 			}
 		}
 
@@ -1337,16 +1638,16 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			}
 		}
 
-		return expr, anonField(types.BoolType.Copy()), nil
+		return expr, anonField(types.BoolType.Copy()), shouldRewrite, nil
 	case *parse.ExpressionIn:
-		left, lField, err := s.expr(node.Expression, currentRel)
+		left, lField, err := rExpr(node.Expression)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		lScalar, err := lField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		in := &IsIn{
@@ -1356,39 +1657,46 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 		if node.Subquery != nil {
 			subq, rel, err := s.planSubquery(node.Subquery, currentRel)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 
 			if len(rel.Fields) != 1 {
-				return nil, nil, fmt.Errorf("subquery must return exactly one column")
+				return nil, nil, false, fmt.Errorf("subquery must return exactly one column")
 			}
 
 			scalar, err := rel.Fields[0].Scalar()
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 
 			if !lScalar.Equals(scalar) {
-				return nil, nil, fmt.Errorf("IN subquery must return the same type as the left expression. %s != %s", lScalar, scalar)
+				return nil, nil, false, fmt.Errorf("IN subquery must return the same type as the left expression. %s != %s", lScalar, scalar)
 			}
 
 			in.Subquery = &SubqueryExpr{
 				Query: subq,
 			}
 		} else {
-			right, rFields, err := s.manyExprs(node.List, currentRel)
-			if err != nil {
-				return nil, nil, err
+			var right []Expression
+			var rFields []*Field
+			for _, expr := range node.List {
+				r, rField, err := rExpr(expr)
+				if err != nil {
+					return nil, nil, false, err
+				}
+
+				right = append(right, r)
+				rFields = append(rFields, rField)
 			}
 
 			for _, r := range rFields {
 				scalar, err := r.Scalar()
 				if err != nil {
-					return nil, nil, err
+					return nil, nil, false, err
 				}
 
 				if !lScalar.Equals(scalar) {
-					return nil, nil, fmt.Errorf("IN list must contain elements of the same type as the left expression. %s != %s", lScalar, scalar)
+					return nil, nil, false, fmt.Errorf("IN list must contain elements of the same type as the left expression. %s != %s", lScalar, scalar)
 				}
 			}
 
@@ -1404,7 +1712,7 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			}
 		}
 
-		return expr, anonField(types.BoolType.Copy()), nil
+		return expr, anonField(types.BoolType.Copy()), shouldRewrite, nil
 	case *parse.ExpressionBetween:
 		leftOps, rightOps := []ComparisonOperator{GreaterThan}, []ComparisonOperator{LessThan}
 		if !node.Not {
@@ -1412,126 +1720,126 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 			rightOps = append(rightOps, Equal)
 		}
 
-		left, exprField, err := s.expr(node.Expression, currentRel)
+		left, exprField, err := rExpr(node.Expression)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		exprScalar, err := exprField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
-		lower, lowerField, err := s.expr(node.Lower, currentRel)
+		lower, lowerField, err := rExpr(node.Lower)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		lowerScalar, err := lowerField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
-		upper, upperField, err := s.expr(node.Upper, currentRel)
+		upper, upperField, err := rExpr(node.Upper)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		upScalar, err := upperField.Scalar()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		if !exprScalar.Equals(lowerScalar) {
-			return nil, nil, fmt.Errorf("BETWEEN lower bound must be of the same type as the expression. %s != %s", exprScalar, lowerScalar)
+			return nil, nil, false, fmt.Errorf("BETWEEN lower bound must be of the same type as the expression. %s != %s", exprScalar, lowerScalar)
 		}
 
 		if !exprScalar.Equals(upScalar) {
-			return nil, nil, fmt.Errorf("BETWEEN upper bound must be of the same type as the expression. %s != %s", exprScalar, upScalar)
+			return nil, nil, false, fmt.Errorf("BETWEEN upper bound must be of the same type as the expression. %s != %s", exprScalar, upScalar)
 		}
 
 		return &LogicalOp{
 			Left:  applyOps(left, lower, leftOps, false),
 			Right: applyOps(left, upper, rightOps, false),
 			Op:    And,
-		}, anonField(types.BoolType.Copy()), nil
+		}, anonField(types.BoolType.Copy()), shouldRewrite, nil
 	case *parse.ExpressionCase:
 		c := &Case{}
 
 		// all whens must be bool unless an expression is used before CASE
 		expectedWhenType := types.BoolType.Copy()
 		if node.Case != nil {
-			caseExpr, field, err := s.expr(node.Case, currentRel)
+			caseExpr, field, err := rExpr(node.Case)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 
 			c.Value = caseExpr
 			expectedWhenType, err = field.Scalar()
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 		}
 
 		var returnType *types.DataType
 		for _, whenThen := range node.WhenThen {
-			whenExpr, whenField, err := s.expr(whenThen[0], currentRel)
+			whenExpr, whenField, err := rExpr(whenThen[0])
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 
-			thenExpr, thenField, err := s.expr(whenThen[1], currentRel)
+			thenExpr, thenField, err := rExpr(whenThen[1])
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 
 			thenType, err := thenField.Scalar()
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 			if returnType == nil {
 				returnType = thenType
 			} else {
 				if !returnType.Equals(thenType) {
-					return nil, nil, fmt.Errorf(`all THEN expressions must be of the same type %s, received %s`, returnType, thenType)
+					return nil, nil, false, fmt.Errorf(`all THEN expressions must be of the same type %s, received %s`, returnType, thenType)
 				}
 			}
 
 			whenScalar, err := whenField.Scalar()
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 
 			if !expectedWhenType.Equals(whenScalar) {
-				return nil, nil, fmt.Errorf(`WHEN expression must be of type %s, received %s`, expectedWhenType, whenScalar)
+				return nil, nil, false, fmt.Errorf(`WHEN expression must be of type %s, received %s`, expectedWhenType, whenScalar)
 			}
 
 			c.WhenClauses = append(c.WhenClauses, [2]Expression{whenExpr, thenExpr})
 		}
 
 		if node.Else != nil {
-			elseExpr, elseField, err := s.expr(node.Else, currentRel)
+			elseExpr, elseField, err := rExpr(node.Else)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 
 			elseType, err := elseField.Scalar()
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, false, err
 			}
 
 			if !returnType.Equals(elseType) {
-				return nil, nil, fmt.Errorf(`ELSE expression must be of the same type of THEN expressions %s, received %s`, returnType, elseExpr)
+				return nil, nil, false, fmt.Errorf(`ELSE expression must be of the same type of THEN expressions %s, received %s`, returnType, elseExpr)
 			}
 
 			c.Else = elseExpr
 		}
 
-		return c, anonField(returnType), nil
+		return c, anonField(returnType), shouldRewrite, nil
 	case *parse.ExpressionSubquery:
 		subq, rel, err := s.planSubquery(node.Subquery, currentRel)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		subqExpr := &SubqueryExpr{
@@ -1548,14 +1856,14 @@ func (s *scopeContext) expr(node parse.Expression, currentRel *Relation) (Expres
 				}
 			}
 
-			return plan, anonField(types.BoolType.Copy()), nil
+			return plan, anonField(types.BoolType.Copy()), shouldRewrite, nil
 		} else {
 			if len(rel.Fields) != 1 {
-				return nil, nil, fmt.Errorf("scalar subquery must return exactly one column")
+				return nil, nil, false, fmt.Errorf("scalar subquery must return exactly one column")
 			}
 		}
 
-		return subqExpr, rel.Fields[0], nil
+		return subqExpr, rel.Fields[0], shouldRewrite, nil
 	}
 }
 
@@ -1632,40 +1940,6 @@ func (s *scopeContext) planSubquery(node *parse.SelectStatement, currentRel *Rel
 		Plan:       plan,
 		Correlated: s.Correlations,
 	}, rel, nil
-}
-
-// manyExprs is a helper function that applies the expr function to many expressions.
-func (s *scopeContext) manyExprs(nodes []parse.Expression, currentRel *Relation) ([]Expression, []*Field, error) {
-	var exprs []Expression
-	var fields []*Field
-	for _, node := range nodes {
-		expr, field, err := s.expr(node, currentRel)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		exprs = append(exprs, expr)
-		fields = append(fields, field)
-	}
-
-	return exprs, fields, nil
-}
-
-// procedureReturnExpr gets the returned data type from a procedure return.
-func procedureReturnExpr(node *types.ProcedureReturn) (*types.DataType, error) {
-	if node == nil {
-		return nil, fmt.Errorf("procedure does not return a value")
-	}
-
-	if node.IsTable {
-		return nil, fmt.Errorf("procedure returns a table, not a scalar value")
-	}
-
-	if len(node.Fields) != 1 {
-		return nil, fmt.Errorf("procedures in expressions must return exactly one value, received %d", len(node.Fields))
-	}
-
-	return node.Fields[0].Type.Copy(), nil
 }
 
 // applyComparisonOps applies a series of comparison operators to the left and right expressions.
@@ -1779,7 +2053,7 @@ func (s *scopeContext) join(child Plan, childRel *Relation, join *parse.Join) (P
 
 	newRel := joinRels(childRel, tblRel)
 
-	onExpr, joinField, err := s.expr(join.On, newRel)
+	onExpr, joinField, err := s.expr(join.On, newRel, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1922,61 +2196,74 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 	rel := relationFromTable(tbl)
 	ins.Columns = rel.Fields
 
-	tup := &Tuples{
-		rel: &Relation{},
+	if node.Select != nil {
+		// if a select statement is present, we need to plan it
+		plan, newRel, err := s.selectStmt(node.Select)
+		if err != nil {
+			return nil, err
+		}
+
+		// check that the select statement returns the correct number of columns and types
+		if err = equalShape(rel, newRel); err != nil {
+			return nil, err
+		}
+
+		ins.InsertionValues = plan
+	} else {
+		tup := &Tuples{
+			rel: &Relation{},
+		}
+		// check the value types and lengths
+		for i, vals := range node.Values {
+			if len(vals) != expectedColLen {
+				return nil, fmt.Errorf(`insert has %d columns but %d values were supplied`, expectedColLen, len(vals))
+			}
+
+			var row []*exprFieldPair[Expression]
+
+			for j, val := range vals {
+				expr, field, err := s.expr(val, rel, nil)
+				if err != nil {
+					return nil, err
+				}
+
+				scalar, err := field.Scalar()
+				if err != nil {
+					return nil, err
+				}
+
+				if !scalar.Equals(expectedColTypes[j]) {
+					return nil, fmt.Errorf(`insert value %d must be of type %s, received %s`, j+1, expectedColTypes[j], field.val)
+				}
+
+				field.Name = tbl.Columns[j].Name
+				field.Parent = tbl.Name
+				row = append(row, &exprFieldPair[Expression]{
+					Expr:  expr,
+					Field: field,
+				})
+			}
+
+			pairs := orderAndFillNulls(row)
+			var newRow []Expression
+			for _, pair := range pairs {
+				newRow = append(newRow, pair.Expr)
+
+				// if we are on the first row, we should build the tuple's relation
+				if i == 0 {
+					tup.rel.Fields = append(tup.rel.Fields, pair.Field)
+				}
+			}
+
+			tup.Values = append(tup.Values, newRow)
+		}
+		ins.InsertionValues = tup
 	}
-
-	// check the value types and lengths
-	for i, vals := range node.Values {
-		if len(vals) != expectedColLen {
-			return nil, fmt.Errorf(`insert has %d columns but %d values were supplied`, expectedColLen, len(vals))
-		}
-
-		var row []*exprFieldPair[Expression]
-
-		for j, val := range vals {
-			expr, field, err := s.expr(val, rel)
-			if err != nil {
-				return nil, err
-			}
-
-			scalar, err := field.Scalar()
-			if err != nil {
-				return nil, err
-			}
-
-			if !scalar.Equals(expectedColTypes[j]) {
-				return nil, fmt.Errorf(`insert value %d must be of type %s, received %s`, j+1, expectedColTypes[j], field.val)
-			}
-
-			field.Name = tbl.Columns[j].Name
-			field.Parent = tbl.Name
-			row = append(row, &exprFieldPair[Expression]{
-				Expr:  expr,
-				Field: field,
-			})
-		}
-
-		pairs := orderAndFillNulls(row)
-		var newRow []Expression
-		for _, pair := range pairs {
-			newRow = append(newRow, pair.Expr)
-
-			// if we are on the first row, we should build the tuple's relation
-			if i == 0 {
-				tup.rel.Fields = append(tup.rel.Fields, pair.Field)
-			}
-		}
-
-		tup.Values = append(tup.Values, newRow)
-	}
-
-	ins.Values = tup
 
 	// finally, we need to check if there is an ON CONFLICT clause,
 	// and if so, we need to process it.
-	if node.Upsert != nil {
-		conflict, err := s.buildUpsert(node.Upsert, tbl, tup)
+	if node.OnConflict != nil {
+		conflict, err := s.buildUpsert(node.OnConflict, tbl, ins.InsertionValues)
 		if err != nil {
 			return nil, err
 		}
@@ -1988,8 +2275,8 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 }
 
 // buildUpsert builds the conflict resolution for an upsert statement.
-// It takes the upsert clause, the table, and the tuples that might cause a conflict.
-func (s *scopeContext) buildUpsert(node *parse.UpsertClause, table *types.Table, tuples *Tuples) (ConflictResolution, error) {
+// It takes the upsert clause, the table, and the plan that is being inserted (either VALUES or SELECT).
+func (s *scopeContext) buildUpsert(node *parse.OnConflict, table *types.Table, insertFrom Plan) (ConflictResolution, error) {
 	// all DO UPDATE upserts need to have an arbiter index.
 	// DO NOTHING can optionally have one, but it is not required.
 	var arbiterIndex Index
@@ -2093,7 +2380,7 @@ func (s *scopeContext) buildUpsert(node *parse.UpsertClause, table *types.Table,
 
 	// we need to use the tuples to create a "excluded" relation
 	// https://www.jooq.org/doc/latest/manual/sql-building/sql-statements/insert-statement/insert-on-conflict-excluded/
-	excluded := tuples.Relation()
+	excluded := insertFrom.Relation()
 	for _, col := range excluded.Fields {
 		col.Parent = "excluded"
 	}
@@ -2107,7 +2394,7 @@ func (s *scopeContext) buildUpsert(node *parse.UpsertClause, table *types.Table,
 	}
 
 	if node.UpdateWhere != nil {
-		conflictFilter, field, err := s.expr(node.UpdateWhere, referenceRel)
+		conflictFilter, field, err := s.expr(node.UpdateWhere, referenceRel, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -2217,7 +2504,7 @@ func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, jo
 	// if there is no FROM clause, we can simply apply the filter and return
 	if from == nil {
 		if filter != nil {
-			expr, field, err := s.expr(filter, rel)
+			expr, field, err := s.expr(filter, rel, nil)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -2270,7 +2557,7 @@ func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, jo
 
 	rel = joinRels(fromRel, rel)
 
-	expr, field, err := s.expr(filter, rel)
+	expr, field, err := s.expr(filter, rel, nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -2301,7 +2588,7 @@ func (s *scopeContext) assignments(assignments []*parse.UpdateSetClause, targetR
 			return nil, err
 		}
 
-		expr, assignType, err := s.expr(assign.Value, referenceRel)
+		expr, assignType, err := s.expr(assign.Value, referenceRel, nil)
 		if err != nil {
 			return nil, err
 		}

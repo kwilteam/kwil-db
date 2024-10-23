@@ -190,6 +190,9 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#variable_sql_expr.
 	VisitVariable_sql_expr(ctx *Variable_sql_exprContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#window_function_call_sql_expr.
+	VisitWindow_function_call_sql_expr(ctx *Window_function_call_sql_exprContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#is_sql_expr.
 	VisitIs_sql_expr(ctx *Is_sql_exprContext) interface{}
 

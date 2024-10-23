@@ -2203,7 +2203,7 @@ func Test_SQL(t *testing.T) {
 							exprLit(1),
 						},
 					},
-					Upsert: &parse.UpsertClause{
+					OnConflict: &parse.OnConflict{
 						ConflictColumns: []string{"id"},
 						DoUpdate: []*parse.UpdateSetClause{
 							{

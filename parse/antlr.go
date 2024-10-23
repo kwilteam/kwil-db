@@ -901,6 +901,10 @@ func (s *schemaVisitor) VisitSql_statement(ctx *gen.Sql_statementContext) any {
 		stmt.CTEs[i] = cte.Accept(s).(*CommonTableExpression)
 	}
 
+	if ctx.RECURSIVE() != nil {
+		stmt.Recursive = true
+	}
+
 	switch {
 	case ctx.Select_statement() != nil:
 		stmt.SQL = ctx.Select_statement().Accept(s).(*SelectStatement)
@@ -1041,11 +1045,11 @@ func (s *schemaVisitor) VisitSelect_core(ctx *gen.Select_coreContext) any {
 		for i, window := range ctx.AllWindow() {
 			name := s.getIdent(ctx.Identifier(i).IDENTIFIER())
 
-			win := window.Accept(s).(*Window)
+			win := window.Accept(s).(*WindowImpl)
 
 			stmt.Windows = append(stmt.Windows, &struct {
 				Name   string
-				Window *Window
+				Window *WindowImpl
 			}{
 				Name:   name,
 				Window: win,
@@ -1178,8 +1182,14 @@ func (s *schemaVisitor) VisitInsert_statement(ctx *gen.Insert_statementContext) 
 		Table: ctx.GetTable_name().Accept(s).(string),
 	}
 
-	for _, valList := range ctx.AllSql_expr_list() {
-		ins.Values = append(ins.Values, valList.Accept(s).([]Expression))
+	// can either be INSERT INTO table VALUES (1, 2, 3) or
+	// INSERT INTO table SELECT * FROM table2
+	if ctx.Select_statement() != nil {
+		ins.Select = ctx.Select_statement().Accept(s).(*SelectStatement)
+	} else {
+		for _, valList := range ctx.AllSql_expr_list() {
+			ins.Values = append(ins.Values, valList.Accept(s).([]Expression))
+		}
 	}
 
 	if ctx.GetAlias() != nil {
@@ -1191,7 +1201,7 @@ func (s *schemaVisitor) VisitInsert_statement(ctx *gen.Insert_statementContext) 
 	}
 
 	if ctx.Upsert_clause() != nil {
-		ins.Upsert = ctx.Upsert_clause().Accept(s).(*UpsertClause)
+		ins.OnConflict = ctx.Upsert_clause().Accept(s).(*OnConflict)
 	}
 
 	ins.Set(ctx)
@@ -1199,7 +1209,7 @@ func (s *schemaVisitor) VisitInsert_statement(ctx *gen.Insert_statementContext) 
 }
 
 func (s *schemaVisitor) VisitUpsert_clause(ctx *gen.Upsert_clauseContext) any {
-	u := &UpsertClause{}
+	u := &OnConflict{}
 
 	if ctx.GetConflict_columns() != nil {
 		u.ConflictColumns = ctx.GetConflict_columns().Accept(s).([]string)
@@ -1380,18 +1390,6 @@ func (s *schemaVisitor) VisitBetween_sql_expr(ctx *gen.Between_sql_exprContext) 
 func (s *schemaVisitor) VisitFunction_call_sql_expr(ctx *gen.Function_call_sql_exprContext) any {
 	call := ctx.Sql_function_call().Accept(s).(*ExpressionFunctionCall)
 
-	if ctx.Window() != nil {
-		win := ctx.Window().Accept(s).(*Window)
-
-		e := &ExpressionWindowFunctionCall{
-			FunctionCall: call,
-			Window:       win,
-		}
-
-		e.Set(ctx)
-		return e
-	}
-
 	if ctx.Type_cast() != nil {
 		call.Cast(ctx.Type_cast().Accept(s).(*types.DataType))
 	}
@@ -1399,6 +1397,31 @@ func (s *schemaVisitor) VisitFunction_call_sql_expr(ctx *gen.Function_call_sql_e
 	call.Set(ctx)
 
 	return call
+}
+
+func (s *schemaVisitor) VisitWindow_function_call_sql_expr(ctx *gen.Window_function_call_sql_exprContext) any {
+	e := &ExpressionWindowFunctionCall{
+		FunctionCall: ctx.Sql_function_call().Accept(s).(*ExpressionFunctionCall),
+	}
+
+	if ctx.IDENTIFIER() != nil {
+		name := s.getIdent(ctx.IDENTIFIER())
+		wr := &WindowReference{
+			Name: name,
+		}
+		wr.SetToken(ctx.IDENTIFIER().GetSymbol())
+		e.Window = wr
+	} else {
+		e.Window = ctx.Window().Accept(s).(*WindowImpl)
+	}
+
+	if ctx.FILTER() != nil {
+		e.Filter = ctx.Sql_expr().Accept(s).(Expression)
+	}
+
+	e.Set(ctx)
+
+	return e
 }
 
 func (s *schemaVisitor) VisitParen_sql_expr(ctx *gen.Paren_sql_exprContext) any {
@@ -2185,7 +2208,7 @@ func (s *schemaVisitor) VisitRange(ctx *gen.RangeContext) any {
 }
 
 func (s *schemaVisitor) VisitWindow(ctx *gen.WindowContext) any {
-	win := &Window{}
+	win := &WindowImpl{}
 
 	if ctx.GetPartition() != nil {
 		win.PartitionBy = ctx.GetPartition().Accept(s).([]Expression)

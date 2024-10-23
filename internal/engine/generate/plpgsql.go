@@ -110,14 +110,21 @@ func typeCast(t interface{ GetTypeCast() *types.DataType }, s *strings.Builder) 
 func (s *sqlGenerator) VisitExpressionWindowFunctionCall(p0 *parse.ExpressionWindowFunctionCall) any {
 	str := strings.Builder{}
 	str.WriteString(p0.FunctionCall.Accept(s).(string))
-	str.WriteString(" OVER (")
+
+	if p0.Filter != nil {
+		str.WriteString(" FILTER (WHERE ")
+		str.WriteString(p0.Filter.Accept(s).(string))
+		str.WriteString(")")
+	}
+
+	str.WriteString(" OVER ")
 	str.WriteString(p0.Window.Accept(s).(string))
-	str.WriteString(")")
 	return str.String()
 }
 
-func (s *sqlGenerator) VisitWindow(p0 *parse.Window) any {
+func (s *sqlGenerator) VisitWindowImpl(p0 *parse.WindowImpl) any {
 	str := strings.Builder{}
+	str.WriteString("(")
 
 	if len(p0.PartitionBy) > 0 {
 		str.WriteString("PARTITION BY ")
@@ -139,7 +146,12 @@ func (s *sqlGenerator) VisitWindow(p0 *parse.Window) any {
 		}
 	}
 
+	str.WriteString(")")
 	return str.String()
+}
+
+func (s *sqlGenerator) VisitWindowReference(p0 *parse.WindowReference) any {
+	return p0.Name
 }
 
 func (s *sqlGenerator) VisitExpressionVariable(p0 *parse.ExpressionVariable) any {
@@ -420,6 +432,9 @@ func (s *sqlGenerator) VisitSQLStatement(p0 *parse.SQLStatement) any {
 		}
 		if i == 0 {
 			str.WriteString("WITH ")
+			if p0.Recursive {
+				str.WriteString("RECURSIVE ")
+			}
 		}
 		str.WriteString(cte.Accept(s).(string))
 	}
@@ -687,31 +702,36 @@ func (s *sqlGenerator) VisitInsertStatement(p0 *parse.InsertStatement) any {
 
 		str.WriteString(") ")
 	}
-	str.WriteString("\nVALUES ")
 
-	for i, val := range p0.Values {
-		if i > 0 {
-			str.WriteString(",")
-		}
-		str.WriteString("\n(")
-		for j, v := range val {
-			if j > 0 {
-				str.WriteString(", ")
+	str.WriteString("\n")
+	if p0.Select != nil {
+		str.WriteString(p0.Select.Accept(s).(string))
+	} else {
+		str.WriteString("VALUES ")
+		for i, val := range p0.Values {
+			if i > 0 {
+				str.WriteString(",")
 			}
-			str.WriteString(v.Accept(s).(string))
+			str.WriteString("\n(")
+			for j, v := range val {
+				if j > 0 {
+					str.WriteString(", ")
+				}
+				str.WriteString(v.Accept(s).(string))
+			}
+			str.WriteString(")")
 		}
-		str.WriteString(")")
 	}
 
-	if p0.Upsert != nil {
+	if p0.OnConflict != nil {
 		str.WriteString("\n")
-		str.WriteString(p0.Upsert.Accept(s).(string))
+		str.WriteString(p0.OnConflict.Accept(s).(string))
 	}
 
 	return str.String()
 }
 
-func (s *sqlGenerator) VisitUpsertClause(p0 *parse.UpsertClause) any {
+func (s *sqlGenerator) VisitUpsertClause(p0 *parse.OnConflict) any {
 	str := strings.Builder{}
 	str.WriteString("ON CONFLICT ")
 	if len(p0.ConflictColumns) > 0 {
