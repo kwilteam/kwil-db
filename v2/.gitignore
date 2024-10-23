@@ -1,2 +1,5 @@
 p2p
 .vscode/
+go.work
+go.work.sum
+.data-*
