@@ -33,6 +33,8 @@ api/openapi-spec/api/v0/api.swagger.json
 .env
 test/stress/stress
 **/debug.test*
+# local golangci-lint config
+.golangci.json
 
 gen/
 # helm charts deps
