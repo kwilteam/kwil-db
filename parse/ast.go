@@ -42,6 +42,12 @@ type Expression interface {
 	Node
 }
 
+// Assignable is an interface for all expressions that can be assigned to.
+type Assignable interface {
+	Expression
+	assignable()
+}
+
 // ExpressionLiteral is a literal expression.
 type ExpressionLiteral struct {
 	Position
@@ -94,13 +100,6 @@ func literalToString(value any) (string, error) {
 	return str.String(), nil
 }
 
-type ExpressionCall interface {
-	Expression
-	Cast(*types.DataType)
-	GetTypeCast() *types.DataType
-	FunctionName() string
-}
-
 // ExpressionFunctionCall is a function call expression.
 type ExpressionFunctionCall struct {
 	Position
@@ -117,39 +116,59 @@ type ExpressionFunctionCall struct {
 	Star bool
 }
 
-var _ ExpressionCall = (*ExpressionFunctionCall)(nil)
-
 func (e *ExpressionFunctionCall) Accept(v Visitor) any {
 	return v.VisitExpressionFunctionCall(e)
 }
 
-func (e *ExpressionFunctionCall) FunctionName() string {
-	return e.Name
-}
-
-// ExpressionForeignCall is a call to an external procedure.
-type ExpressionForeignCall struct {
+// ExpressionWindowFunctionCall is a window function call expression.
+type ExpressionWindowFunctionCall struct {
 	Position
-	Typecastable
-	// Name is the name of the function.
+	FunctionCall *ExpressionFunctionCall
+	// Filter is the filter clause.
+	// If nil, then there is no filter clause.
+	Filter Expression
+	// Window is the window function that is being called.
+	Window Window
+}
+
+func (e *ExpressionWindowFunctionCall) Accept(v Visitor) any {
+	return v.VisitExpressionWindowFunctionCall(e)
+}
+
+// Window is an interface for all window functions.
+// It can either reference an exact window (e.g. OVER (partition by ... order by ...))
+// or it can reference a window function name (e.g. OVER my_window).
+type Window interface {
+	Node
+	window()
+}
+
+type WindowImpl struct {
+	Position
+	// PartitionBy is the partition by clause.
+	PartitionBy []Expression
+	// OrderBy is the order by clause.
+	OrderBy []*OrderingTerm
+	// In the future, when/if we support frame clauses, we can add it here.
+}
+
+func (w *WindowImpl) Accept(v Visitor) any {
+	return v.VisitWindowImpl(w)
+}
+
+func (w *WindowImpl) window() {}
+
+type WindowReference struct {
+	Position
+	// Name is the name of the window.
 	Name string
-	// ContextualArgs are arguments that are contextual to the function call.
-	// They are passed using []
-	ContextualArgs []Expression
-	// Args are the arguments to the function call.
-	// They are passed using ()
-	Args []Expression
 }
 
-func (e *ExpressionForeignCall) Accept(v Visitor) any {
-	return v.VisitExpressionForeignCall(e)
+func (w *WindowReference) Accept(v Visitor) any {
+	return v.VisitWindowReference(w)
 }
 
-func (e *ExpressionForeignCall) FunctionName() string {
-	return e.Name
-}
-
-var _ ExpressionCall = (*ExpressionForeignCall)(nil)
+func (w *WindowReference) window() {}
 
 // ExpressionVariable is a variable.
 // This can either be $ or @ variables.
@@ -170,8 +189,10 @@ func (e *ExpressionVariable) Accept(v Visitor) any {
 // String returns the string representation, as it was passed
 // in Kuneiform.
 func (e *ExpressionVariable) String() string {
-	return string(e.Prefix) + e.Name
+	return e.Name
 }
+
+func (e *ExpressionVariable) assignable() {}
 
 type VariablePrefix string
 
@@ -202,6 +223,8 @@ type ExpressionArrayAccess struct {
 func (e *ExpressionArrayAccess) Accept(v Visitor) any {
 	return v.VisitExpressionArrayAccess(e)
 }
+
+func (e *ExpressionArrayAccess) assignable() {}
 
 // ExpressionMakeArray makes a new array.
 type ExpressionMakeArray struct {
@@ -345,6 +368,13 @@ type ExpressionColumn struct {
 	Column string
 }
 
+func (e *ExpressionColumn) String() string {
+	if e.Table == "" {
+		return e.Column
+	}
+	return e.Table + "." + e.Column
+}
+
 func (e *ExpressionColumn) Accept(v Visitor) any {
 	return v.VisitExpressionColumn(e)
 }
@@ -481,6 +511,8 @@ func (c *CommonTableExpression) Accept(v Visitor) any {
 type SQLStatement struct {
 	Position
 	CTEs []*CommonTableExpression
+	// Recursive is true if the RECUSRIVE keyword is present.
+	Recursive bool
 	// SQL can be an insert, update, delete, or select statement.
 	SQL SQLCore
 }
@@ -568,6 +600,10 @@ type SelectCore struct {
 	Where    Expression   // can be nil
 	GroupBy  []Expression // can be nil
 	Having   Expression   // can be nil
+	Windows  []*struct {
+		Name   string
+		Window *WindowImpl
+	} // can be nil
 }
 
 func (s *SelectCore) Accept(v Visitor) any {
@@ -645,20 +681,6 @@ func (r *RelationSubquery) Accept(v Visitor) any {
 
 func (RelationSubquery) table() {}
 
-type RelationFunctionCall struct {
-	Position
-	FunctionCall ExpressionCall
-	// The alias cannot be empty, as our syntax forces
-	// it for function calls
-	Alias string
-}
-
-func (r *RelationFunctionCall) Accept(v Visitor) any {
-	return v.VisitRelationFunctionCall(r)
-}
-
-func (RelationFunctionCall) table() {}
-
 // Join is a join in a SELECT statement.
 type Join struct {
 	Position
@@ -731,8 +753,10 @@ type InsertStatement struct {
 	Table   string
 	Alias   string   // can be empty
 	Columns []string // can be empty
-	Values  [][]Expression
-	Upsert  *UpsertClause // can be nil
+	// Either Values or Select is set, but not both.
+	Values     [][]Expression   // can be empty
+	Select     *SelectStatement // can be nil
+	OnConflict *OnConflict      // can be nil
 }
 
 func (i *InsertStatement) Accept(v Visitor) any {
@@ -743,7 +767,7 @@ func (i *InsertStatement) StmtType() SQLStatementType {
 	return SQLStatementTypeInsert
 }
 
-type UpsertClause struct {
+type OnConflict struct {
 	Position
 	ConflictColumns []string           // can be empty
 	ConflictWhere   Expression         // can be nil
@@ -751,7 +775,7 @@ type UpsertClause struct {
 	UpdateWhere     Expression         // can be nil
 }
 
-func (u *UpsertClause) Accept(v Visitor) any {
+func (u *OnConflict) Accept(v Visitor) any {
 	return v.VisitUpsertClause(u)
 }
 
@@ -845,7 +869,7 @@ func (p *ProcedureStmtDeclaration) Accept(v Visitor) any {
 type ProcedureStmtAssign struct {
 	baseProcedureStmt
 	// Variable is the variable that is being assigned.
-	Variable Expression
+	Variable Assignable
 	// Type is the type of the variable.
 	// It can be nil if the variable is not being assigned,
 	// or if the type should be inferred.
@@ -864,7 +888,7 @@ type ProcedureStmtCall struct {
 	// Receivers are the variables being assigned. If nil, then the
 	// receiver can be ignored.
 	Receivers []*ExpressionVariable
-	Call      ExpressionCall
+	Call      *ExpressionFunctionCall
 }
 
 func (p *ProcedureStmtCall) Accept(v Visitor) any {
@@ -1036,7 +1060,9 @@ type ProcedureVisitor interface {
 type SQLVisitor interface {
 	VisitExpressionLiteral(*ExpressionLiteral) any
 	VisitExpressionFunctionCall(*ExpressionFunctionCall) any
-	VisitExpressionForeignCall(*ExpressionForeignCall) any
+	VisitExpressionWindowFunctionCall(*ExpressionWindowFunctionCall) any
+	VisitWindowImpl(*WindowImpl) any
+	VisitWindowReference(*WindowReference) any
 	VisitExpressionVariable(*ExpressionVariable) any
 	VisitExpressionArrayAccess(*ExpressionArrayAccess) any
 	VisitExpressionMakeArray(*ExpressionMakeArray) any
@@ -1062,13 +1088,12 @@ type SQLVisitor interface {
 	VisitResultColumnWildcard(*ResultColumnWildcard) any
 	VisitRelationTable(*RelationTable) any
 	VisitRelationSubquery(*RelationSubquery) any
-	VisitRelationFunctionCall(*RelationFunctionCall) any
 	VisitJoin(*Join) any
 	VisitUpdateStatement(*UpdateStatement) any
 	VisitUpdateSetClause(*UpdateSetClause) any
 	VisitDeleteStatement(*DeleteStatement) any
 	VisitInsertStatement(*InsertStatement) any
-	VisitUpsertClause(*UpsertClause) any
+	VisitUpsertClause(*OnConflict) any
 	VisitOrderingTerm(*OrderingTerm) any
 }
 

@@ -375,6 +375,20 @@ func (d *Decimal) Float64() (float64, error) {
 	return d.dec.Float64()
 }
 
+// Copy returns a copy of the decimal.
+func (d *Decimal) Copy() *Decimal {
+	return &Decimal{
+		dec: apd.Decimal{
+			Coeff:    *apd.NewBigInt(d.dec.Coeff.Int64()),
+			Form:     d.dec.Form,
+			Negative: d.dec.Negative,
+			Exponent: d.dec.Exponent,
+		},
+		scale:     d.scale,
+		precision: d.precision,
+	}
+}
+
 var _ json.Marshaler = Decimal{}
 var _ json.Marshaler = (*Decimal)(nil)
 

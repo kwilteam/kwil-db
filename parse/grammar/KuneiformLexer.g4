@@ -127,6 +127,11 @@ ELSE:       'else';
 BREAK:      'break';
 RETURN:     'return';
 NEXT:       'next';
+OVER:       'over';
+PARTITION:  'partition';
+WINDOW:     'window';
+FILTER:     'filter';
+RECURSIVE:  'recursive';
 
 
 // Literals

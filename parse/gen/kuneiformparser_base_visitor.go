@@ -135,10 +135,6 @@ func (v *BaseKuneiformParserVisitor) VisitProcedure_declaration(ctx *Procedure_d
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitForeign_procedure_declaration(ctx *Foreign_procedure_declarationContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseKuneiformParserVisitor) VisitProcedure_return(ctx *Procedure_returnContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -176,10 +172,6 @@ func (v *BaseKuneiformParserVisitor) VisitTable_relation(ctx *Table_relationCont
 }
 
 func (v *BaseKuneiformParserVisitor) VisitSubquery_relation(ctx *Subquery_relationContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitFunction_relation(ctx *Function_relationContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -259,6 +251,10 @@ func (v *BaseKuneiformParserVisitor) VisitVariable_sql_expr(ctx *Variable_sql_ex
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitWindow_function_call_sql_expr(ctx *Window_function_call_sql_exprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitIs_sql_expr(ctx *Is_sql_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -287,6 +283,10 @@ func (v *BaseKuneiformParserVisitor) VisitIn_sql_expr(ctx *In_sql_exprContext) i
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitWindow(ctx *WindowContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitWhen_then_clause(ctx *When_then_clauseContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -296,10 +296,6 @@ func (v *BaseKuneiformParserVisitor) VisitSql_expr_list(ctx *Sql_expr_listContex
 }
 
 func (v *BaseKuneiformParserVisitor) VisitNormal_call_sql(ctx *Normal_call_sqlContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitForeign_call_sql(ctx *Foreign_call_sqlContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -416,10 +412,6 @@ func (v *BaseKuneiformParserVisitor) VisitVariable_or_underscore(ctx *Variable_o
 }
 
 func (v *BaseKuneiformParserVisitor) VisitNormal_call_procedure(ctx *Normal_call_procedureContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitForeign_call_procedure(ctx *Foreign_call_procedureContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

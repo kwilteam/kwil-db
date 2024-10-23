@@ -3,6 +3,7 @@ package parse
 import (
 	"fmt"
 	"maps"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
 )
@@ -454,8 +455,8 @@ func (s *sqlAnalyzer) expressionTypeErr(e Expression) *types.DataType {
 	// with an incompatible return type. prefixMsg will attempt to get the name of the function/procedure
 	prefixMsg := func() string {
 		msg := "expression"
-		if call, ok := e.(ExpressionCall); ok {
-			msg = fmt.Sprintf(`function/procedure "%s"`, call.FunctionName())
+		if call, ok := e.(*ExpressionFunctionCall); ok {
+			msg = fmt.Sprintf(`function/procedure "%s"`, call.Name)
 		}
 		return msg
 	}
@@ -568,14 +569,16 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 		return cast(p0, types.UnknownType)
 	}
 
+	_, isAggregate := fn.(*AggregateFunctionDefinition)
+
 	// the function is a built in function. If using DISTINCT, it needs to be an aggregate
 	// if using *, it needs to support it.
-	if p0.Distinct && !fn.IsAggregate {
+	if p0.Distinct && !isAggregate {
 		s.errs.AddErr(p0, ErrFunctionSignature, "DISTINCT can only be used with aggregate functions")
 		return cast(p0, types.UnknownType)
 	}
 
-	if fn.IsAggregate {
+	if isAggregate {
 		s.sqlCtx._inAggregate = true
 		s.sqlCtx._containsAggregate = true
 		defer func() { s.sqlCtx._inAggregate = false }()
@@ -585,8 +588,8 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 	// If not, then we validate all args and return the type.
 	var returnType *types.DataType
 	if p0.Star {
-		if fn.StarArgReturn == nil {
-			s.errs.AddErr(p0, ErrFunctionSignature, "function does not support *")
+		if strings.ToLower(p0.Name) != "count" {
+			s.errs.AddErr(p0, ErrFunctionSignature, "cannot use * with function %s", p0.Name)
 			return cast(p0, types.UnknownType)
 		}
 
@@ -596,7 +599,11 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 			return cast(p0, types.UnknownType)
 		}
 
-		returnType = fn.StarArgReturn
+		var err error
+		returnType, err = fn.ValidateArgs(nil)
+		if err != nil {
+			s.errs.AddErr(p0, ErrType, err.Error())
+		}
 	} else {
 		argTyps := make([]*types.DataType, len(p0.Args))
 		for i, arg := range p0.Args {
@@ -611,7 +618,7 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 		var err error
 		returnType, err = fn.ValidateArgs(argTyps)
 		if err != nil {
-			s.errs.AddErr(p0, ErrFunctionSignature, err.Error())
+			s.errs.AddErr(p0, ErrType, err.Error())
 			return cast(p0, types.UnknownType)
 		}
 	}
@@ -625,56 +632,9 @@ func (s *sqlAnalyzer) VisitExpressionFunctionCall(p0 *ExpressionFunctionCall) an
 	return cast(p0, returnType)
 }
 
-func (s *sqlAnalyzer) VisitExpressionForeignCall(p0 *ExpressionForeignCall) any {
-	if s.sqlCtx.isInlineAction {
-		s.errs.AddErr(p0, ErrFunctionSignature, "foreign calls are not supported in in-line action statements")
-	}
-
-	// foreign call must be defined as a foreign procedure
-	proc, found := s.schema.FindForeignProcedure(p0.Name)
-	if !found {
-		s.errs.AddErr(p0, ErrUnknownFunctionOrProcedure, p0.Name)
-		return cast(p0, types.UnknownType)
-	}
-
-	if len(p0.ContextualArgs) != 2 {
-		s.errs.AddErr(p0, ErrFunctionSignature, "expected 2 contextual arguments, received %d", len(p0.ContextualArgs))
-		return cast(p0, types.UnknownType)
-	}
-
-	// contextual args have to be strings
-	for _, ctxArgs := range p0.ContextualArgs {
-		dt, ok := ctxArgs.Accept(s).(*types.DataType)
-		if !ok {
-			return s.expressionTypeErr(ctxArgs)
-		}
-
-		s.expect(ctxArgs, dt, types.TextType)
-	}
-
-	// verify the inputs
-	if len(p0.Args) != len(proc.Parameters) {
-		s.errs.AddErr(p0, ErrFunctionSignature, "expected %d arguments, received %d", len(proc.Parameters), len(p0.Args))
-		return cast(p0, types.UnknownType)
-	}
-
-	for i, arg := range p0.Args {
-		dt, ok := arg.Accept(s).(*types.DataType)
-		if !ok {
-			return s.expressionTypeErr(arg)
-		}
-
-		if !dt.Equals(proc.Parameters[i]) {
-			return s.typeErr(arg, dt, proc.Parameters[i])
-		}
-	}
-
-	return s.returnProcedureReturnExpr(p0, p0.Name, proc.Returns)
-}
-
 // returnProcedureReturnExpr handles a procedure return used as an expression return. It mandates
 // that the procedure returns a single value, or a table.
-func (s *sqlAnalyzer) returnProcedureReturnExpr(p0 ExpressionCall, procedureName string, ret *types.ProcedureReturn) any {
+func (s *sqlAnalyzer) returnProcedureReturnExpr(p0 *ExpressionFunctionCall, procedureName string, ret *types.ProcedureReturn) any {
 	// if an expression calls a function, it should return exactly one value or a table.
 	if ret == nil {
 		if p0.GetTypeCast() != nil {
@@ -1776,48 +1736,6 @@ func (s *sqlAnalyzer) VisitRelationSubquery(p0 *RelationSubquery) any {
 	return nil
 }
 
-func (s *sqlAnalyzer) VisitRelationFunctionCall(p0 *RelationFunctionCall) any {
-	if s.sqlCtx.hasAnonymousTable {
-		s.errs.AddErr(p0, ErrUnnamedJoin, "statement uses an unnamed subquery or procedure join. to join another table, alias the subquery or procedure")
-		return []*Attribute{}
-	}
-
-	// the function call here must return []*Attribute
-	// this logic is handled in returnProcedureReturnExpr.
-	ret, ok := p0.FunctionCall.Accept(s).(*returnsTable)
-	if !ok {
-		s.errs.AddErr(p0, ErrType, "cannot join procedure that does not return type table")
-	}
-
-	// alias is usually required for subquery joins
-	if p0.Alias == "" {
-		// if alias is not given, then this must be a select and there must be exactly one table joined
-		if !s.sqlCtx.inSelect {
-			s.errs.AddErr(p0, ErrUnnamedJoin, "joins against procedures must be aliased")
-			return []*Attribute{}
-		}
-
-		// must be no relations, since this needs to be the first and only relation
-		if len(s.sqlCtx.joinedRelations) != 0 {
-			s.errs.AddErr(p0, ErrUnnamedJoin, "joins against procedures must be aliased")
-			return []*Attribute{}
-		}
-
-		s.sqlCtx.hasAnonymousTable = true
-	}
-
-	err := s.sqlCtx.joinRelation(&Relation{
-		Name:       p0.Alias,
-		Attributes: ret.attrs,
-	})
-	if err != nil {
-		s.errs.AddErr(p0, err, p0.Alias)
-		return []*Attribute{}
-	}
-
-	return nil
-}
-
 func (s *sqlAnalyzer) VisitJoin(p0 *Join) any {
 	// call visit on the comparison to perform regular type checking
 	p0.Relation.Accept(s)
@@ -2023,9 +1941,9 @@ func (s *sqlAnalyzer) VisitInsertStatement(p0 *InsertStatement) any {
 		}
 	}
 
-	if p0.Upsert != nil {
+	if p0.OnConflict != nil {
 		s.sqlCtx.inConflict = true
-		p0.Upsert.Accept(s)
+		p0.OnConflict.Accept(s)
 		s.sqlCtx.inConflict = false
 	}
 
@@ -2068,7 +1986,7 @@ func (s *sqlAnalyzer) setTargetTable(table string, alias string) (*types.Table, 
 	return tbl, "", nil
 }
 
-func (s *sqlAnalyzer) VisitUpsertClause(p0 *UpsertClause) any {
+func (s *sqlAnalyzer) VisitUpsertClause(p0 *OnConflict) any {
 	// upsert clause can only be called in an insert. Inserts will
 	// always have exactly 1 table joined to the context. We will
 	// need to retrieve the one table, verify all conflict columns
@@ -2332,14 +2250,14 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 
 	// if calling the `error` function, then this branch will return
 	exits := false
-	if p0.Call.FunctionName() == "error" {
+	if p0.Call.Name == "error" {
 		exits = true
 	}
 
 	// if calling a non-view procedure, the above will set the sqlResult to be mutative
 	// if this procedure is a view, we should throw an error.
 	if !alreadyMutative && p.sqlResult.Mutative && p.procCtx.procedureDefinition.IsView() {
-		p.errs.AddErr(p0, ErrViewMutatesState, `view procedure calls non-view procedure "%s"`, p0.Call.FunctionName())
+		p.errs.AddErr(p0, ErrViewMutatesState, `view procedure calls non-view procedure "%s"`, p0.Call.Name)
 	}
 
 	// users can discard returns by simply not having receivers.
@@ -2353,7 +2271,7 @@ func (p *procedureAnalyzer) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
 	// we do not have to capture all return values, but we need to ensure
 	// we do not have more receivers than return values.
 	if len(p0.Receivers) != len(callReturns) {
-		p.errs.AddErr(p0, ErrResultShape, `function/procedure "%s" returns %d value(s), statement expects %d value(s)`, p0.Call.FunctionName(), len(callReturns), len(p0.Receivers))
+		p.errs.AddErr(p0, ErrResultShape, `function/procedure "%s" returns %d value(s), statement expects %d value(s)`, p0.Call.Name, len(callReturns), len(p0.Receivers))
 		return zeroProcedureReturn()
 	}
 
@@ -2761,6 +2679,19 @@ func (p *procedureAnalyzer) VisitProcedureStmtReturnNext(p0 *ProcedureStmtReturn
 	return &procedureStmtResult{
 		willReturn: true,
 	}
+}
+
+// adding these panics here because the analyzer is being replaced by the query planner
+func (s *sqlAnalyzer) VisitWindowImpl(p0 *WindowImpl) any {
+	panic("window functions are not allowed in procedures")
+}
+
+func (s *sqlAnalyzer) VisitWindowReference(p0 *WindowReference) any {
+	panic("window functions are not allowed in procedures")
+}
+
+func (s *sqlAnalyzer) VisitExpressionWindowFunctionCall(p0 *ExpressionWindowFunctionCall) any {
+	panic("window functions are not allowed in procedures")
 }
 
 // zeroProcedureReturn creates a new procedure return with all 0 values.
