@@ -21,6 +21,7 @@ import (
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/libp2p/go-libp2p"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -46,6 +47,8 @@ type ConsensusEngine interface {
 
 	AcceptCommit(height int64, blkID types.Hash) bool
 	CommitBlock(blk *types.Block, appHash types.Hash) error
+
+	BlockLeaderStream() <-chan *types.QualifiedBlock
 }
 
 type Node struct {
@@ -152,48 +155,26 @@ func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
 	return nil
 }
 
-// mine will simulate mining a block by harvesting transactions from the tx
-// index (would be mempool), assembling a block, and advertising it to peers.
-// Only the leader does this.
-//
-// !!!!!!!!!!!!!!!!!!!
-//   - this must become a ConsensusEngine processes.
-//   - CE should reap, assemble, announce, store in ce.proposed
-//   - then CE should execute, store result in ce.prepared
-//   - CE should commit ce.prepared after ack thresh
-func (n *Node) mine(ctx context.Context) {
-	var height int64
-	const N = blockTxCount
+// announceBlockProposals announces new blocks created when leader.
+func (n *Node) announceBlockProposals(ctx context.Context) {
+	blkChan := n.ce.BlockLeaderStream()
+
 	for {
-		if n.mp.Size() < N || !n.leader.Load() {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(time.Second):
-			}
-			continue
+		var blk *types.QualifiedBlock
+		select {
+		case <-ctx.Done():
+			return
+		case blk = <-blkChan:
 		}
 
-		log.Println("MINED BLOCK -- serializing and announcing!")
+		rawBlk := types.EncodeBlock(blk.Block)
+		blkID := blk.Hash.String()
+		height := blk.Block.Header.Height
+		log.Printf("ANNOUNCING PROPOSED BLOCK %v / %d size = %d, txs = %d\n",
+			blkID, height, len(rawBlk), len(blk.Block.Txns))
 
-		// Reap txns from mempool for the block
-		txids, txns := n.mp.ReapN(N)
-
-		var prevHash types.Hash    // TODO
-		var prevAppHash types.Hash // TODO
-		blk := types.NewBlock(0, height, prevHash, prevAppHash, time.Now(), txns)
-		rawBlk := types.EncodeBlock(blk)
-		hash := blk.Header.Hash()
-		blkID := hash.String()
-
-		log.Printf("confirmed %d transactions in block %d (%v)", len(txids), height, blkID)
-
-		n.bki.Store(hash, height, rawBlk)
-
-		log.Printf("ANNOUNCING BLOCK %v / %d size = %d, txs = %d\n", blkID, height, len(rawBlk), len(txids))
-
-		go n.announceBlk(ctx, blkID, height, rawBlk, n.host.ID())
-		height++
+		go n.announceBlkProp(ctx, blkID, height, blk.Block.Header.PrevHash.String(),
+			rawBlk, n.host.ID())
 	}
 }
 
@@ -242,13 +223,13 @@ func (n *Node) txGetStreamHandler(s network.Stream) {
 // Start begins tx and block gossip, connects to any bootstrap peers, and begins
 // peer discovery.
 func (n *Node) Start(ctx context.Context, peers ...string) error {
-	// ps, err := pubsub.NewGossipSub(ctx, n.host)
-	// if err != nil {
-	// 	return err
-	// }
-	// if err := n.startTxGossip(ctx, ps); err != nil { // gossip.go
-	// 	return err
-	// }
+	ps, err := pubsub.NewGossipSub(ctx, n.host)
+	if err != nil {
+		return err
+	}
+	if err := n.startAckGossip(ctx, ps); err != nil { // gossip.go
+		return err
+	}
 
 	// custom stream-based gossip uses txAnnStreamHandler and announceTx.
 	// This dummy method will make create+announce new pretend transactions.
@@ -259,7 +240,7 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
-		n.mine(ctx)
+		n.announceBlockProposals(ctx)
 	}()
 
 	// connect to bootstrap peers, if any

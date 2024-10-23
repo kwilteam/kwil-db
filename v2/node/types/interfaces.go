@@ -9,7 +9,7 @@ type BlockStore interface {
 	Have(Hash) bool
 	Get(Hash) (int64, []byte)
 	Store(Hash, int64, []byte)
-	PreFetch(Hash) bool // maybe app level instead
+	PreFetch(Hash) bool // should be app level instead
 }
 
 type MemPool interface {
@@ -19,11 +19,24 @@ type MemPool interface {
 	Store(Hash, []byte)
 	FeedN(n int) <-chan NamedTx
 	// Check([]byte)
-	PreFetch(txid Hash) bool
+	PreFetch(txid Hash) bool // should be app level instead
 }
 
+type QualifiedBlock struct { // basically just caches the hash
+	Block *Block
+	Hash  Hash
+}
+
+type TxResult struct {
+	Code   uint16
+	Log    string
+	Events []Event
+}
+
+type Event struct{}
+
 type Execution interface {
-	ExecBlock(blk *Block) (commit func() error, appHash Hash, err error)
+	ExecBlock(blk *Block) (commit func() error, appHash Hash, res []TxResult, err error)
 }
 
 type NamedTx struct {

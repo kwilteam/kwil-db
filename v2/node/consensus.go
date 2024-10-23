@@ -23,6 +23,28 @@ type ackFrom struct {
 	res        AckRes
 }
 
+func (n *Node) announceBlkProp(ctx context.Context, blkid string, height int64,
+	prevHash string, rawBlk []byte, from peer.ID) {
+	peers := n.peers()
+	if len(peers) == 0 {
+		log.Println("no peers to advertise block to")
+		return
+	}
+
+	for _, peerID := range peers {
+		if peerID == from {
+			continue
+		}
+		log.Printf("advertising block proposal %s (height %d / txs %d) to peer %v", blkid, height, len(rawBlk), peerID)
+		resID := annPropMsgPrefix + blkid + ":" + strconv.Itoa(int(height)) + ":" + prevHash
+		err := advertiseToPeer(ctx, n.host, peerID, ProtocolIDBlkAnn, resID, rawBlk)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+	}
+}
+
 // blkPropStreamHandler is the stream handler for the ProtocolIDBlockPropose
 // protocol i.e. proposed block announcements, which originate from the leader,
 // but may be re-announced by other validators.

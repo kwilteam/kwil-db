@@ -2,10 +2,56 @@ package consensus
 
 import (
 	"bytes"
+	"context"
 	"log"
 	"p2p/node/types"
 	"slices"
+	"time"
 )
+
+const (
+	blockTxCount    = 50              // for "mining"
+	dummyTxSize     = 123_000         // for broadcast
+	dummyTxInterval = 1 * time.Second // broadcast freq
+)
+
+func (ce *Engine) mine(ctx context.Context, interval time.Duration) {
+	var height int64
+	const N = blockTxCount
+	for {
+		if ce.mp.Size() < N || !ce.leader.Load() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(interval):
+			}
+			continue
+		}
+
+		// Reap txns from mempool for the block
+		txids, txns := ce.mp.ReapN(N)
+
+		var prevHash types.Hash    // TODO
+		var prevAppHash types.Hash // TODO
+		blk := types.NewBlock(0, height, prevHash, prevAppHash, time.Now(), txns)
+		hash := blk.Header.Hash()
+
+		log.Printf("built new block with %d transactions at height %d (%v)", len(txids), height, hash)
+
+		// rawBlk := types.EncodeBlock(blk)
+		// ce.bki.Store(hash, height, rawBlk)
+
+		ce.mined <- &types.QualifiedBlock{
+			Block: blk,
+			Hash:  hash,
+		}
+		height++
+	}
+}
+
+func (ce *Engine) BlockLeaderStream() <-chan *types.QualifiedBlock {
+	return ce.mined
+}
 
 // ProcessACK is used for leader to register a validator's ack message (the
 // async response to leader's block proposal).

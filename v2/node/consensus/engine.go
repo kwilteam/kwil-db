@@ -1,11 +1,13 @@
 package consensus
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"p2p/node/types"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type blkCommit struct {
@@ -29,17 +31,9 @@ type blkResult struct {
 	commit func() error
 
 	appHash types.Hash
-	txRes   []txResults
+	txRes   []types.TxResult
 	// other updates for next block...
 }
-
-type txResults struct {
-	Code   uint16
-	Log    string
-	Events []Event
-}
-
-type Event struct{}
 
 type Engine struct {
 	bki types.BlockStore
@@ -48,7 +42,9 @@ type Engine struct {
 
 	exec types.Execution
 
+	wg     sync.WaitGroup
 	leader atomic.Bool
+	mined  chan *types.QualifiedBlock
 
 	mtx        sync.RWMutex
 	lastCommit blkCommit
@@ -62,10 +58,26 @@ type Engine struct {
 
 func New(bs types.BlockStore, txi types.TxIndex, mp types.MemPool) *Engine {
 	return &Engine{
-		bki: bs,
-		txi: txi,
-		mp:  mp,
+		bki:   bs,
+		txi:   txi,
+		mp:    mp,
+		mined: make(chan *types.QualifiedBlock, 1),
 	}
+}
+
+func (ce *Engine) Start(ctx context.Context) error {
+	const blkInterval = 4 * time.Second
+	ce.wg.Add(1)
+	go func() {
+		defer ce.wg.Done()
+		ce.mine(ctx, blkInterval)
+	}()
+
+	ce.wg.Wait()
+
+	<-ctx.Done()
+
+	return nil
 }
 
 // CommitBlock reports a full block to commit. This would be used when:
