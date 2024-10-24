@@ -56,6 +56,10 @@ type Block struct {
 	Signature []byte // Signature is the block producer's signature (leader in our model)
 }
 
+func (b *Block) Hash() Hash {
+	return b.Header.Hash()
+}
+
 func DecodeBlockHeader(r io.Reader) (*BlockHeader, error) {
 	hdr := new(BlockHeader)
 

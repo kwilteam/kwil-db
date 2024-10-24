@@ -67,7 +67,7 @@ func (n *Node) startTxGossip(ctx context.Context, ps *pubsub.PubSub) error {
 
 			txHash := randBytes(32)
 			txid := hex.EncodeToString(txHash)
-			n.txi.Store(types.Hash(txHash), randBytes(10))
+			n.mp.Store(types.Hash(txHash), randBytes(10))
 			fmt.Printf("announcing txid %x\n", txid)
 			err := topicTx.Publish(ctx, []byte(txid))
 			if err != nil {
@@ -99,7 +99,7 @@ func (n *Node) startTxGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			txid := hex.EncodeToString(txMsg.Data)
 			fromPeerID := txMsg.GetFrom()
 
-			have := n.txi.Get(types.Hash(txMsg.Data)) != nil // danger conversion
+			have := n.mp.Get(types.Hash(txMsg.Data)) != nil // danger conversion
 			log.Printf("received tx msg from %v (rcvd from %s), data = %x, already have = %v\n",
 				txMsg.GetFrom(), txMsg.ReceivedFrom, txMsg.Message.Data, have)
 			if have {
@@ -118,7 +118,7 @@ func (n *Node) startTxGossip(ctx context.Context, ps *pubsub.PubSub) error {
 				continue
 			}
 
-			n.txi.Store(types.Hash(txMsg.Data), txRaw) // danger conversion
+			n.mp.Store(types.Hash(txMsg.Data), txRaw) // danger conversion
 
 			// txMsg.ID
 			// txMsg.ReceivedFrom

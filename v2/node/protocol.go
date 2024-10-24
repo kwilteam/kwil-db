@@ -3,6 +3,7 @@ package node
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -21,7 +22,7 @@ const (
 	ProtocolIDBlkAnn   protocol.ID = "/kwil/blkann/1.0.0"
 
 	ProtocolIDBlockPropose protocol.ID = "/kwil/blkprop/1.0.0"
-	ProtocolIDACKProposal  protocol.ID = "/kwil/blkack/1.0.0"
+	// ProtocolIDACKProposal  protocol.ID = "/kwil/blkack/1.0.0"
 
 	// These prefixes are protocol specific. They are intended to future proof
 	// the protocol handlers so different proto versions can be handled with
@@ -85,22 +86,31 @@ func readResp(rd io.Reader, limit int64) ([]byte, error) {
 	return resp, nil
 }
 
+type contentAnn struct {
+	cType   string
+	ann     []byte // may be cType if self-describing
+	content []byte
+}
+
+func (ca contentAnn) String() string {
+	return ca.cType
+}
+
 // advertiseToPeer sends a lightweight advertisement to a connected peer.
-// The stream remains open in case the peer wants to request the content right.
-func advertiseToPeer(ctx context.Context, host host.Host, peerID peer.ID, proto protocol.ID,
-	resID string, content []byte) error {
+// The stream remains open in case the peer wants to request the content .
+func advertiseToPeer(ctx context.Context, host host.Host, peerID peer.ID, proto protocol.ID, ann contentAnn) error {
 	s, err := host.NewStream(ctx, peerID, proto)
 	if err != nil {
 		return fmt.Errorf("failed to open stream to peer: %w", err)
 	}
 
 	// Send a lightweight advertisement with the object ID
-	_, err = s.Write([]byte(resID))
+	_, err = s.Write([]byte(ann.ann))
 	if err != nil {
 		return fmt.Errorf("send content ID failed: %w", err)
 	}
 
-	log.Printf("advertised content %s to peer %s", resID, peerID)
+	log.Printf("advertised content %s to peer %s", ann, peerID)
 
 	// Keep the stream open for potential content requests
 	go func() {
@@ -108,16 +118,20 @@ func advertiseToPeer(ctx context.Context, host host.Host, peerID peer.ID, proto 
 
 		req := make([]byte, 128)
 		n, err := s.Read(req)
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			log.Println("bad get blk req", err)
 			return
 		}
-		req, ok := bytes.CutPrefix(req[:n], []byte(getMsg))
-		if !ok {
-			log.Println("bad get blk request")
+		if n == 0 { // they didn't want it
 			return
 		}
-		s.Write(content)
+		req = req[:n]
+		req, ok := bytes.CutPrefix(req, []byte(getMsg))
+		if !ok {
+			log.Printf("bad get request for %s: %v", ann, req)
+			return
+		}
+		s.Write(ann.content)
 	}()
 
 	return nil

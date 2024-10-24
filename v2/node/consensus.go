@@ -2,14 +2,13 @@ package node
 
 import (
 	"bufio"
-	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"p2p/node/types"
-	"strconv"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -23,8 +22,51 @@ type ackFrom struct {
 	res        AckRes
 }
 
-func (n *Node) announceBlkProp(ctx context.Context, blkid string, height int64,
-	prevHash string, rawBlk []byte, from peer.ID) {
+type blockProp struct {
+	Height   int64
+	Hash     types.Hash
+	PrevHash types.Hash
+}
+
+func (bp blockProp) String() string {
+	return fmt.Sprintf("prop{height:%d hash:%s prevHash:%s}",
+		bp.Height, bp.Hash, bp.PrevHash)
+}
+
+func (bp blockProp) MarshalBinary() ([]byte, error) {
+	buf := make([]byte, 8+2*types.HashLen) // 8 bytes for int64 + 2 hash lengths
+	binary.LittleEndian.PutUint64(buf[:8], uint64(bp.Height))
+	copy(buf[8:], bp.Hash[:])
+	copy(buf[8+types.HashLen:], bp.PrevHash[:])
+	return buf, nil
+}
+
+func (bp *blockProp) UnmarshalBinary(data []byte) error {
+	if len(data) < 8+2*types.HashLen {
+		return fmt.Errorf("insufficient data for blockProp")
+	}
+	bp.Height = int64(binary.LittleEndian.Uint64(data[:8]))
+	copy(bp.Hash[:], data[8:8+types.HashLen])
+	copy(bp.PrevHash[:], data[8+types.HashLen:])
+	return nil
+}
+
+func (bp *blockProp) UnmarshalFromReader(r io.Reader) error {
+	buf := make([]byte, 8+2*types.HashLen)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return fmt.Errorf("reading blockProp: %w", err)
+	}
+	return bp.UnmarshalBinary(buf)
+}
+
+func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block, from peer.ID) {
+	rawBlk := types.EncodeBlock(blk)
+	blkHash := blk.Hash()
+	height := blk.Header.Height
+
+	log.Printf("ANNOUNCING PROPOSED BLOCK %v / %d size = %d, txs = %d\n",
+		blkHash, height, len(rawBlk), len(blk.Txns))
+
 	peers := n.peers()
 	if len(peers) == 0 {
 		log.Println("no peers to advertise block to")
@@ -35,9 +77,11 @@ func (n *Node) announceBlkProp(ctx context.Context, blkid string, height int64,
 		if peerID == from {
 			continue
 		}
-		log.Printf("advertising block proposal %s (height %d / txs %d) to peer %v", blkid, height, len(rawBlk), peerID)
-		resID := annPropMsgPrefix + blkid + ":" + strconv.Itoa(int(height)) + ":" + prevHash
-		err := advertiseToPeer(ctx, n.host, peerID, ProtocolIDBlkAnn, resID, rawBlk)
+		prop := blockProp{Height: height, Hash: blkHash, PrevHash: blk.Header.PrevHash}
+		log.Printf("advertising block proposal %s (height %d / txs %d) to peer %v", blkHash, height, len(rawBlk), peerID)
+		// resID := annPropMsgPrefix + strconv.Itoa(int(height)) + ":" + prevHash + ":" + blkid
+		propID, _ := prop.MarshalBinary()
+		err := advertiseToPeer(ctx, n.host, peerID, ProtocolIDBlockPropose, contentAnn{prop.String(), propID, rawBlk})
 		if err != nil {
 			log.Println(err)
 			continue
@@ -66,39 +110,22 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 		return
 	}
 
-	// "prop:height:prevHash"
-	propID := make([]byte, 128)
-	nr, err := s.Read(propID)
+	var prop blockProp
+	err := prop.UnmarshalFromReader(s)
 	if err != nil {
-		log.Println("failed to read block proposal ID:", err)
-		return
-	}
-	propID, ok := bytes.CutPrefix(propID[nr:], []byte(annPropMsgPrefix))
-	if !ok {
-		log.Println("bad block proposal ID:", propID)
-		return
-	}
-	heightStr, prevBlkID, ok := bytes.Cut(propID, []byte(":"))
-	if !ok {
-		log.Println("bad block proposal ID:", propID)
-		return
-	}
-	height, err := strconv.ParseInt(string(heightStr), 10, 64)
-	if err != nil {
-		log.Println("invalid height in proposal ID:", err)
-		return
-	}
-	prevHash, err := types.NewHashFromString(string(prevBlkID))
-	if err != nil {
-		log.Println("invalid prev block hash in proposal ID:", err)
+		log.Println("invalid block proposal message:", err)
 		return
 	}
 
-	if !n.ce.AcceptProposalID(height, prevHash) {
+	height := prop.Height
+
+	if !n.ce.AcceptProposalID(height, prop.PrevHash) {
+		// NOTE: if this is ahead of our last commit height, we have to try to catch up
+		log.Println("don't want proposal content", height, prop.PrevHash)
 		return
 	}
 
-	nr, err = s.Write([]byte(getMsg))
+	_, err = s.Write([]byte(getMsg))
 	if err != nil {
 		log.Println("failed to request block proposal contents:", err)
 		return
@@ -123,9 +150,16 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 		return
 	}
 
+	annHash := prop.Hash
 	hash := blk.Header.Hash()
+	if hash != annHash {
+		log.Printf("unexpected hash: wanted %s, got %s", hash, annHash)
+		return
+	}
 
-	go n.ce.ProcessProposal(blk, func(ack bool, appHash types.Hash) error {
+	log.Println("processing prop for", hash)
+
+	go n.ce.ProcessProposal(blk, func(ack bool, appHash *types.Hash) error {
 		return n.sendACK(ack, hash, appHash)
 	})
 
@@ -135,7 +169,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 // sendACK is a callback for the result of validator block execution/precommit.
 // After then consensus engine executes the block, this is used to gossip the
 // result back to the leader.
-func (n *Node) sendACK(ack bool, blkID types.Hash, appHash types.Hash) error {
+func (n *Node) sendACK(ack bool, blkID types.Hash, appHash *types.Hash) error {
 	n.ackChan <- types.AckRes{
 		ACK:     ack,
 		AppHash: appHash,
@@ -166,6 +200,7 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 		for {
 			select {
 			case <-ctx.Done():
+				return
 			case ack := <-n.ackChan:
 				ackMsg, _ := ack.MarshalBinary()
 				err := topicAck.Publish(ctx, ackMsg)
@@ -242,7 +277,7 @@ func (n *Node) blkAckStreamHandler(s network.Stream) {
 		log.Println("failed to read block proposal ID:", err)
 		return
 	}
-	blkAck, ok := bytes.CutPrefix(ackMsg[nr:], []byte(ackMsg))
+	blkAck, ok := bytes.CutPrefix(ackMsg[:nr], []byte(ackMsg))
 	if !ok {
 		log.Println("bad block proposal ID:", ackMsg)
 		return

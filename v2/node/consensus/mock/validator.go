@@ -1,6 +1,7 @@
 package dummyce
 
 import (
+	"context"
 	"log"
 	"p2p/node/types"
 )
@@ -37,7 +38,7 @@ func (ce *Engine) AcceptProposalID(height int64, prevHash types.Hash) bool {
 // res callback function is called with ACK+appHash/nACK, which in the context
 // of the node will send the outcome back to the leader where validator
 // responses are tallied.
-func (ce *Engine) ProcessProposal(blk *types.Block, res func(ack bool, appHash types.Hash) error) {
+func (ce *Engine) ProcessProposal(blk *types.Block, res func(ack bool, appHash *types.Hash) error) {
 	if ce.leader.Load() {
 		return // not for leader
 	}
@@ -58,6 +59,8 @@ func (ce *Engine) ProcessProposal(blk *types.Block, res func(ack bool, appHash t
 
 	// we will then begin execution, and later report with ack/nack
 
+	log.Printf("accepted proposal for height %d, hash %v", blk.Header.Height, blkHash)
+
 	ce.proposed = &blkProp{
 		height: blk.Header.Height,
 		hash:   blkHash,
@@ -71,8 +74,44 @@ func (ce *Engine) ProcessProposal(blk *types.Block, res func(ack bool, appHash t
 
 	// ce event loop will send ACK+appHash or NACK.
 
-	// ce should have some handle to p2p, like a function or channel into an
-	// outgoing p2p msg loop.
+	// now "execute" and put result in prepared for later commit
+	go func() {
+		commitFn, appHash, txRes, err := ce.exec.ExecBlock(blk)
+		if err != nil {
+			res(false, nil) // nACK
+			log.Fatal("ExecBlock:", err)
+			return
+		}
+
+		// send our ACK with app hash
+		err = res(true, &appHash)
+		if err != nil {
+			log.Fatal("failed to announce ACK/nACK:", err)
+			return
+		}
+
+		log.Printf("executed block %d / %v, now prepared", blk.Header.Height, blkHash)
+
+		ce.mtx.Lock()
+		defer ce.mtx.Unlock()
+		ce.prepared = &blkResult{
+			commit:  commitFn,
+			appHash: appHash,
+			txRes:   txRes,
+		}
+		// here's why we really need an event loop rather than setting fields under lock!
+		if ce.earlyCommitAppHash == nil {
+			log.Println("now waiting for commit message")
+			return // wait to commit until we get the commit message
+		}
+		if appHash != *ce.earlyCommitAppHash {
+			log.Printf("we got the wrong apphash")
+			ce.rollbackPrepared(context.TODO())
+			return
+		}
+		log.Println("already got commit message, committing!")
+		ce.commitPrepared(context.TODO())
+	}()
 }
 
 // AcceptCommit is used for a validator to handle a committed block
@@ -84,17 +123,35 @@ func (ce *Engine) ProcessProposal(blk *types.Block, res func(ack bool, appHash t
 //
 // This will return true if we should fetch the block, which is the case if BOTH
 // we did not have a proposal for this block, and it is the next in our block store.
-func (ce *Engine) AcceptCommit(height int64, blkHash types.Hash) (fetch bool) {
+func (ce *Engine) AcceptCommit(height int64, blkHash types.Hash, appHash types.Hash) (fetch bool) {
 	if ce.leader.Load() {
 		return // not for leader
 	}
 
+	ctx := context.TODO()
+
+	ce.mtx.Lock()
+	defer ce.mtx.Unlock()
+
 	if ce.proposed != nil && ce.proposed.hash == blkHash {
 		// this should signal for CE to commit the block once it is executed.
+		if ce.prepared != nil { // already executed...
+			if ce.prepared.appHash == appHash {
+				ce.commitPrepared(ctx)
+			} else {
+				log.Printf("rolling back due to apphash mismatch: %v != %v", ce.prepared.appHash, appHash)
+				ce.rollbackPrepared(ctx)
+			}
+		} else { // for when it finishes executing
+			log.Println("recording early leader appHash from commit msg:", appHash)
+			ce.earlyCommitAppHash = &appHash
+		}
 		return false
 	}
+
 	if height != ce.lastCommit.height+1 {
 		return false
 	}
+
 	return !ce.bki.Have(blkHash)
 }

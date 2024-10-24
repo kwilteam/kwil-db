@@ -75,26 +75,24 @@ func (mp *Mempool) ReapN(n int) ([]types.Hash, [][]byte) {
 		delete(mp.txns, txid)
 		txids = append(txids, txid)
 		txns = append(txns, rawTx)
+		if len(txids) == cap(txids) {
+			break
+		}
 	}
 	return txids, txns
 }
 
-func (mp *Mempool) FeedN(n int) <-chan types.NamedTx {
-	n = min(40, n)
-	c := make(chan types.NamedTx, n)
-
-	go func() {
-		mp.mtx.RLock()
-		defer mp.mtx.RUnlock()
-		var count int
-		for txid, rawTx := range mp.txns {
-			c <- types.NamedTx{txid, rawTx}
-			count++
-			if count >= n {
-				break
-			}
+func (mp *Mempool) PeekN(n int) []types.NamedTx {
+	mp.mtx.RLock()
+	defer mp.mtx.RUnlock()
+	n = min(n, len(mp.txns))
+	txns := make([]types.NamedTx, 0, n)
+	for txid, rawTx := range mp.txns {
+		txns = append(txns, types.NamedTx{ID: txid, Tx: rawTx})
+		if len(txns) == n {
+			break
 		}
-	}()
+	}
 
-	return c
+	return txns
 }

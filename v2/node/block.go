@@ -61,7 +61,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	ctx, cancel := context.WithTimeout(context.Background(), blkGetTimeout)
 	defer cancel()
 
-	req := make([]byte, 128)
+	req := make([]byte, 256)
 	nr, err := s.Read(req)
 	if err != nil && err != io.EOF {
 		log.Println("bad blk ann req", err)
@@ -86,9 +86,10 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	if cut {
 		appHash, err = types.NewHashFromString(appHashStr)
 		if err != nil {
-			log.Println("appHash in blk ann request")
+			log.Println("BAD appHash in blk ann request", err)
 			return
 		}
+		log.Println("appHash in blk ann request")
 	}
 
 	blkHash, err := types.NewHashFromString(blkid)
@@ -109,22 +110,18 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 
 	// If we are a validator and this is the commit ann for a proposed block
 	// that we already started executing, consensus engine will handle it.
-	if !n.ce.AcceptCommit(height, blkHash) {
+	if !n.ce.AcceptCommit(height, blkHash, appHash) {
 		return
 	}
 
 	// Possibly ce will handle it regardless.  For now, below is block store
 	// code like a sentry node might do.
 
-	if !n.bki.PreFetch(blkHash) {
+	need, done := n.bki.PreFetch(blkHash)
+	defer done()
+	if !need {
 		return // we have or are currently fetching it, do nothing, assuming we have already re-announced
 	}
-	var success bool
-	defer func() {
-		if !success { // did not get the rawTx
-			n.bki.Store(blkHash, -1, nil) // no longer fetching
-		}
-	}()
 
 	log.Printf("retrieving new block: %q", blkid)
 	t0 := time.Now()
@@ -164,8 +161,6 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		return
 	}
 
-	success = true
-
 	// re-announce
 
 	go func() {
@@ -173,11 +168,26 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 			log.Printf("cannot commit announced block: %v", err)
 			return
 		}
-		n.announceBlk(context.Background(), blkid, height, rawBlk, s.Conn().RemotePeer())
+		var appHashStr string
+		if !appHash.IsZero() {
+			appHashStr = appHash.String()
+		}
+		n.announceRawBlk(context.Background(), blkid, height, rawBlk, appHashStr, s.Conn().RemotePeer())
 	}()
 }
 
-func (n *Node) announceBlk(ctx context.Context, blkid string, height int64, rawBlk []byte, from peer.ID) {
+func (n *Node) announceBlk(ctx context.Context, blk *types.Block, appHash *types.Hash, from peer.ID) {
+	rawBlk := types.EncodeBlock(blk)
+	var appHashStr string
+	if appHash != nil && !appHash.IsZero() {
+		appHashStr = appHash.String()
+	}
+	n.announceRawBlk(ctx, blk.Hash().String(), blk.Header.Height, rawBlk, appHashStr, from)
+	return
+}
+
+func (n *Node) announceRawBlk(ctx context.Context, blkid string, height int64,
+	rawBlk []byte, appHash string, from peer.ID) {
 	peers := n.peers()
 	if len(peers) == 0 {
 		log.Println("no peers to advertise block to")
@@ -190,7 +200,10 @@ func (n *Node) announceBlk(ctx context.Context, blkid string, height int64, rawB
 		}
 		log.Printf("advertising block %s (height %d / txs %d) to peer %v", blkid, height, len(rawBlk), peerID)
 		resID := annBlkMsgPrefix + blkid + ":" + strconv.Itoa(int(height))
-		err := advertiseToPeer(ctx, n.host, peerID, ProtocolIDBlkAnn, resID, rawBlk)
+		if appHash != "" {
+			resID += ":" + appHash
+		}
+		err := advertiseToPeer(ctx, n.host, peerID, ProtocolIDBlkAnn, contentAnn{resID, []byte(resID), rawBlk})
 		if err != nil {
 			log.Println(err)
 			continue

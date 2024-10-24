@@ -11,15 +11,16 @@ import (
 )
 
 type blkCommit struct {
-	height int64
-	hash   types.Hash
+	height  int64
+	hash    types.Hash
+	appHash types.Hash
 }
 
 type blkProp struct {
 	height int64
 	hash   types.Hash
 	blk    *types.Block
-	resCb  func(ack bool, appHash types.Hash) error
+	resCb  func(ack bool, appHash *types.Hash) error
 }
 
 type ackFrom struct {
@@ -28,7 +29,7 @@ type ackFrom struct {
 }
 
 type blkResult struct {
-	commit func() error
+	commit func(ctx context.Context, rollback bool) error
 
 	appHash types.Hash
 	txRes   []types.TxResult
@@ -37,7 +38,6 @@ type blkResult struct {
 
 type Engine struct {
 	bki types.BlockStore
-	txi types.TxIndex
 	mp  types.MemPool
 
 	exec types.Execution
@@ -51,17 +51,32 @@ type Engine struct {
 	validators [][]byte
 	proposed   *blkProp
 	prepared   *blkResult
+
+	// if leader commit message comes before we finish executing ce.proposed
+	// (and setting ce.prepared), remember the given apphash
+	earlyCommitAppHash *types.Hash
+
 	// as leader, we collect acks for the proposed block. after ack threshold,
 	// we commit and clear proposed/prepared for next block
 	acks []ackFrom
 }
 
-func New(bs types.BlockStore, txi types.TxIndex, mp types.MemPool) *Engine {
+var NumValidatorsFake = 3 // B, C, D
+
+func New(bs types.BlockStore, mp types.MemPool) *Engine {
+	height, hash := bs.Best()
+	lc := blkCommit{
+		height:  height,
+		hash:    hash,
+		appHash: fakeAppHash(height),
+	}
 	return &Engine{
-		bki:   bs,
-		txi:   txi,
-		mp:    mp,
-		mined: make(chan *types.QualifiedBlock, 1),
+		lastCommit: lc,
+		bki:        bs,
+		mp:         mp,
+		mined:      make(chan *types.QualifiedBlock, 1),
+		validators: make([][]byte, NumValidatorsFake),
+		exec:       &dummyExecEngine{},
 	}
 }
 
@@ -80,17 +95,42 @@ func (ce *Engine) Start(ctx context.Context) error {
 	return nil
 }
 
+func (ce *Engine) BeLeader(leader bool) {
+	ce.leader.Store(leader)
+}
+
 // CommitBlock reports a full block to commit. This would be used when:
 //  1. retrieval of a block following in an announcement for a new+next block
 //  2. iterative block retrieval in catch-up / sync
 func (ce *Engine) CommitBlock(blk *types.Block, appHash types.Hash) error {
+	ctx := context.TODO()
+
 	height := blk.Header.Height
-	if ce.proposed == nil {
+	if ce.proposed == nil { // block sync
 		// execute and commit if it is next
 		if height != ce.lastCommit.height+1 {
 			return fmt.Errorf("block at height %d does not follow %d", height, ce.lastCommit.height)
 		}
-		// TODO: execute and commit
+
+		hash := blk.Header.Hash()
+
+		commitFn, appHash, _ /*res*/, err := ce.exec.ExecBlock(blk)
+		if err != nil {
+			return err
+		}
+		if err = commitFn(ctx, false); err != nil {
+			return err
+		}
+		// todo store apphash and tx res
+
+		ce.lastCommit = blkCommit{
+			height:  blk.Header.Height,
+			hash:    hash,
+			appHash: appHash,
+		}
+
+		ce.confirmBlkTxns(blk)
+
 		return nil
 	}
 
@@ -104,7 +144,18 @@ func (ce *Engine) CommitBlock(blk *types.Block, appHash types.Hash) error {
 			blkHash, ce.proposed.hash, height)
 	}
 
-	// TODO: flag OK to commit ce.proposed.blk (with expected apphash)
+	if ce.prepared != nil { // we were ready
+		if ce.prepared.appHash != appHash {
+			ce.rollbackPrepared(ctx)
+			return fmt.Errorf("block %d appHash mismatch: leader %s != computed %s",
+				height, appHash, ce.prepared.appHash)
+		}
+		ce.commitPrepared(ctx)
+		return nil
+	}
+
+	// this is super dumb and why we need changes to go through loop with channels
+	ce.earlyCommitAppHash = &appHash
 
 	return nil
 }
@@ -116,10 +167,9 @@ func (ce *Engine) confirmBlkTxns(blk *types.Block) {
 	log.Printf("confirming %d transactions in block %d (%v)", len(blk.Txns), height, blkHash)
 	for _, txn := range blk.Txns {
 		txHash := types.HashBytes(txn)
-		ce.txi.Store(txHash, txn) // add to tx index
-		ce.mp.Store(txHash, nil)  // rm from mempool
+		ce.mp.Store(txHash, nil) // rm from mempool
 	}
 
-	rawBlk := types.EncodeBlock(blk)
-	ce.bki.Store(blkHash, height, rawBlk)
+	// rawBlk := types.EncodeBlock(blk)
+	ce.bki.Store(blk)
 }

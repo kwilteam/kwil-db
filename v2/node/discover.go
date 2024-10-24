@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -92,7 +93,7 @@ func (pm *peerMan) FindPeers(ctx context.Context, ns string, opts ...discovery.O
 	peers := pm.h.Network().Peers()
 	if len(peers) == 0 {
 		close(peerChan)
-		fmt.Println("no existing peers for peer discovery")
+		log.Println("no existing peers for peer discovery")
 		return peerChan, nil
 	}
 

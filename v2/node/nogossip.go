@@ -51,13 +51,12 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	}()
 
 	// not in mempool, check tx index
-	if n.txi.Get(txHash) != nil {
+	if n.bki.HaveTx(txHash) {
 		return // we have or are currently fetching it, do nothing, assuming we have already re-announced
 	}
 	// we don't have it. time to fetch
 
-	t0 := time.Now()
-	// log.Printf("retrieving new tx: %q", txid)
+	// t0 := time.Now(); log.Printf("retrieving new tx: %q", txid)
 
 	// First try to get from this stream.
 	rawTx, err := requestTx(s, []byte(getMsg))
@@ -72,7 +71,7 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 		}
 	}
 
-	log.Printf("obtained content for tx %q in %v", txid, time.Since(t0))
+	// log.Printf("obtained content for tx %q in %v", txid, time.Since(t0))
 
 	// here we could check tx index again in case a block was mined with it
 	// while we were fetching it
@@ -193,8 +192,10 @@ func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time
 				defer cancel()
 
 				const sendN = 20
-				log.Printf("re-announcing up to %d unconfirmed txns", sendN)
-				for nt := range n.mp.FeedN(sendN) {
+				txns := n.mp.PeekN(sendN)
+				log.Printf("re-announcing %d unconfirmed txns", len(txns))
+
+				for _, nt := range txns {
 					n.announceTx(ctx, nt.ID.String(), nt.Tx, n.host.ID()) // response handling is async
 					if ctx.Err() != nil {
 						log.Println("interrupting long re-broadcast")

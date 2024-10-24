@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"p2p/node"
+	dummyce "p2p/node/consensus/mock"
 )
 
 func main() {
@@ -40,6 +41,7 @@ var (
 	connectTo string
 	noPex     bool
 	leader    bool
+	numVals   int
 )
 
 func run(ctx context.Context) error {
@@ -48,7 +50,10 @@ func run(ctx context.Context) error {
 	flag.StringVar(&connectTo, "connect", "", "peer multiaddr to connect to")
 	flag.BoolVar(&noPex, "no-pd", false, "disable peer discover")
 	flag.BoolVar(&leader, "leader", false, "make this node produce blocks (should only be one in a network)")
+	flag.IntVar(&numVals, "v", 1, "number of validators (all peers are validators!)")
 	flag.Parse()
+
+	dummyce.NumValidatorsFake = numVals
 
 	rr := rand.Reader
 	if port != 0 { // deterministic key based on port for testing
@@ -83,7 +88,7 @@ func run(ctx context.Context) error {
 	}
 
 	addr := node.Addr()
-	log.Printf("to connect: %s\n", addr)
+	log.Printf("to connect: %s", addr)
 
 	var bootPeers []string
 	if connectTo != "" {

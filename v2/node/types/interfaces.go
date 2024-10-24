@@ -1,30 +1,44 @@
 package types
 
-type TxIndex interface {
-	Get(Hash) []byte
-	Store(Hash, []byte)
-}
+import "context"
+
+// type TxIndex interface {
+// 	Get(Hash) (int64, []byte)
+// 	Have(Hash) bool
+// 	Store(Hash, int64, []byte)
+// }
 
 type BlockStore interface {
+	TxGetter
+
+	Best() (int64, Hash)
 	Have(Hash) bool
 	Get(Hash) (int64, []byte)
-	Store(Hash, int64, []byte)
-	PreFetch(Hash) bool // should be app level instead
+	GetByHeight(int64) (Hash, []byte)
+	Store(*Block)
+	PreFetch(Hash) (bool, func()) // should be app level instead
+}
+
+type TxGetter interface {
+	GetTx(Hash) (int64, []byte)
+	HaveTx(Hash) bool
 }
 
 type MemPool interface {
 	Size() int
-	ReapN(int) ([]Hash, [][]byte)
+	ReapN(int) ([]Hash, [][]byte) // Reap(n int, maxBts int) ([]Hash, [][]byte)
 	Get(Hash) []byte
 	Store(Hash, []byte)
-	FeedN(n int) <-chan NamedTx
+	PeekN(n int) []NamedTx
 	// Check([]byte)
 	PreFetch(txid Hash) bool // should be app level instead
 }
 
 type QualifiedBlock struct { // basically just caches the hash
-	Block *Block
-	Hash  Hash
+	Block    *Block
+	Hash     Hash
+	Proposed bool
+	AppHash  *Hash
 }
 
 type TxResult struct {
@@ -36,7 +50,7 @@ type TxResult struct {
 type Event struct{}
 
 type Execution interface {
-	ExecBlock(blk *Block) (commit func() error, appHash Hash, res []TxResult, err error)
+	ExecBlock(blk *Block) (commit func(context.Context, bool) error, appHash Hash, res []TxResult, err error)
 }
 
 type NamedTx struct {

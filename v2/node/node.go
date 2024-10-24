@@ -5,19 +5,22 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	mrand2 "math/rand/v2"
-	dummyce "p2p/node/consensus/mock"
-	"p2p/node/mempool"
-	"p2p/node/store"
-	"p2p/node/types"
 	"path/filepath"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"p2p/node/consensus"
+	dummyce "p2p/node/consensus/mock"
+	"p2p/node/mempool"
+	"p2p/node/store"
+	"p2p/node/types"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/libp2p/go-libp2p"
@@ -40,22 +43,45 @@ const (
 )
 
 type ConsensusEngine interface {
+	Start(context.Context) error
+
+	AcceptProposal(height int64, prevHash types.Hash) bool
+	AcceptCommit(height int64, blkID types.Hash) bool
+	AcceptACK(height int64, blkID types.Hash) bool
+
+	SendConsensusMessage(msg *consensus.ConsensusMessage)
+
+	// Note: Not sure if these are needed here, just for seperate of concerns:
+	// p2p stream handlers role is to downlaod the messages and pass it to the
+	// respective modules to process it and we probably should not be triggering any consensus
+	// affecting methods.
+
+	// ProcessProposal(blk *types.Block, cb func(ack bool, appHash types.Hash) error)
+	// ProcessACK(validatorPK []byte, ack types.AckRes)
+	// CommitBlock(blk *types.Block, appHash types.Hash) error
+}
+
+// parallel CE dev is leading node and p2p dev, so this "Node" currently uses an
+// old interface for a working mock CE. Node code should be updated with final interface
+
+type ConsensusEngineForToyNode interface { // quick and dirty for toy node prototype
+	Start(context.Context) error
+
 	AcceptProposalID(height int64, prevHash types.Hash) bool
-	ProcessProposal(blk *types.Block, cb func(ack bool, appHash types.Hash) error)
+	ProcessProposal(blk *types.Block, cb func(ack bool, appHash *types.Hash) error)
 
 	ProcessACK(validatorPK []byte, ack types.AckRes)
 
-	AcceptCommit(height int64, blkID types.Hash) bool
+	AcceptCommit(height int64, blkID types.Hash, appHash types.Hash) bool
 	CommitBlock(blk *types.Block, appHash types.Hash) error
 
 	BlockLeaderStream() <-chan *types.QualifiedBlock
 }
 
 type Node struct {
-	txi types.TxIndex
 	bki types.BlockStore
 	mp  types.MemPool
-	ce  ConsensusEngine
+	ce  ConsensusEngineForToyNode
 
 	pm *peerMan
 	// pf *prefetch
@@ -66,16 +92,23 @@ type Node struct {
 	pex    bool
 	leader atomic.Bool
 	wg     sync.WaitGroup
+	close  func() error
+}
+
+func addClose(close, top func() error) func() error {
+	return func() error { err := top(); return errors.Join(err, close()) }
 }
 
 func NewNode(port uint64, privKey []byte, leader, pex bool) (*Node, error) {
+	close := func() error { return nil }
+
 	host, err := newHost(port, privKey)
 	if err != nil {
 		return nil, err
 	}
+	close = addClose(close, host.Close)
 	// n.host.Network().InterfaceListenAddresses() // expands 0.0.0.0
 
-	txi := store.NewTransactionIndex()
 	mp := mempool.New()
 
 	pm := &peerMan{h: host}
@@ -87,24 +120,27 @@ func NewNode(port uint64, privKey []byte, leader, pex bool) (*Node, error) {
 		})
 	}
 
-	dir := host.ID().String()
+	dir := ".data-" + host.ID().String()
 	dir, _ = filepath.Abs(dir)
-	fmt.Println(dir)
 
 	blkStr, err := store.NewBlockStore(dir)
 	if err != nil {
 		return nil, err
 	}
+	close = addClose(close, blkStr.Close)
+
+	ce := dummyce.New(blkStr, mp)
+	ce.BeLeader(leader)
 
 	node := &Node{
 		host:    host,
 		pm:      pm,
 		pex:     pex,
-		txi:     txi,
 		mp:      mp,
 		bki:     blkStr,
-		ce:      dummyce.New(blkStr, txi, mp),
+		ce:      ce,
 		ackChan: make(chan AckRes, 1),
+		close:   close,
 	}
 
 	node.leader.Store(leader)
@@ -133,96 +169,12 @@ func (n *Node) ID() string {
 	return n.host.ID().String()
 }
 
-func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
-	for _, pid := range []protocol.ID{
-		ProtocolIDDiscover,
-		ProtocolIDTx,
-		ProtocolIDTxAnn,
-		ProtocolIDBlock,
-		ProtocolIDBlkAnn,
-		ProtocolIDBlockPropose,
-		ProtocolIDACKProposal,
-		// pubsub.GossipSubID_v12,
-	} {
-		ok, err := checkProtocolSupport(ctx, n.host, peer, pid)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("protocol not supported: %v", pid)
-		}
-	}
-	return nil
-}
-
-// announceBlockProposals announces new blocks created when leader.
-func (n *Node) announceBlockProposals(ctx context.Context) {
-	blkChan := n.ce.BlockLeaderStream()
-
-	for {
-		var blk *types.QualifiedBlock
-		select {
-		case <-ctx.Done():
-			return
-		case blk = <-blkChan:
-		}
-
-		rawBlk := types.EncodeBlock(blk.Block)
-		blkID := blk.Hash.String()
-		height := blk.Block.Header.Height
-		log.Printf("ANNOUNCING PROPOSED BLOCK %v / %d size = %d, txs = %d\n",
-			blkID, height, len(rawBlk), len(blk.Block.Txns))
-
-		go n.announceBlkProp(ctx, blkID, height, blk.Block.Header.PrevHash.String(),
-			rawBlk, n.host.ID())
-	}
-}
-
-func (n *Node) txGetStreamHandler(s network.Stream) {
-	defer s.Close()
-
-	req := make([]byte, 128)
-	nr, err := s.Read(req)
-	if err != nil && err != io.EOF {
-		fmt.Println("bad get tx req:", err)
-		return
-	}
-	req, ok := bytes.CutPrefix(req[:nr], []byte(getTxMsgPrefix))
-	if !ok {
-		fmt.Println("txGetStreamHandler: bad get tx request", string(req))
-		return
-	}
-	txid := string(req)
-	// log.Printf("requested txid: %q", txid)
-	txHash, err := types.NewHashFromString(txid)
-	if err != nil {
-		fmt.Println("bad txid:", err)
-		return
-	}
-
-	// first check mempool
-	rawTx := n.mp.Get(txHash)
-	if rawTx != nil {
-		s.Write(rawTx)
-		return
-	}
-
-	// this is racy, and should be different in product
-
-	// then confirmed tx index
-	rawTx = n.txi.Get(txHash)
-	if rawTx == nil {
-		s.Write(noData) // don't have it
-	} else {
-		s.Write(rawTx)
-	}
-
-	// NOTE: response could also include conf/unconf or block height (-1 or N)
-}
-
 // Start begins tx and block gossip, connects to any bootstrap peers, and begins
 // peer discovery.
 func (n *Node) Start(ctx context.Context, peers ...string) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	ps, err := pubsub.NewGossipSub(ctx, n.host)
 	if err != nil {
 		return err
@@ -240,7 +192,16 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
-		n.announceBlockProposals(ctx)
+		defer cancel()
+		n.ce.Start(ctx)
+	}()
+
+	// mine is our block anns goroutine, which must be only for leader
+	n.wg.Add(1)
+	go func() {
+		defer n.wg.Done()
+		defer cancel()
+		n.announceBlocks(ctx)
 	}()
 
 	// connect to bootstrap peers, if any
@@ -295,7 +256,91 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 
 	n.wg.Wait()
 
-	return n.host.Close()
+	return n.close()
+}
+
+func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
+	for _, pid := range []protocol.ID{
+		ProtocolIDDiscover,
+		ProtocolIDTx,
+		ProtocolIDTxAnn,
+		ProtocolIDBlock,
+		ProtocolIDBlkAnn,
+		ProtocolIDBlockPropose,
+		// ProtocolIDACKProposal,
+		// pubsub.GossipSubID_v12,
+	} {
+		ok, err := checkProtocolSupport(ctx, n.host, peer, pid)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("protocol not supported: %v", pid)
+		}
+	}
+	return nil
+}
+
+// announceBlocks announces new committed and proposed blocks when the leader.
+func (n *Node) announceBlocks(ctx context.Context) {
+	blkChan := n.ce.BlockLeaderStream()
+
+	for {
+		var blk *types.QualifiedBlock
+		select {
+		case <-ctx.Done():
+			return
+		case blk = <-blkChan:
+		}
+
+		if blk.Proposed {
+			go n.announceBlkProp(ctx, blk.Block, n.host.ID())
+		} else {
+			go n.announceBlk(ctx, blk.Block, blk.AppHash, n.host.ID())
+		}
+	}
+}
+
+func (n *Node) txGetStreamHandler(s network.Stream) {
+	defer s.Close()
+
+	req := make([]byte, 128)
+	nr, err := s.Read(req)
+	if err != nil && err != io.EOF {
+		fmt.Println("bad get tx req:", err)
+		return
+	}
+	req, ok := bytes.CutPrefix(req[:nr], []byte(getTxMsgPrefix))
+	if !ok {
+		fmt.Println("txGetStreamHandler: bad get tx request", string(req))
+		return
+	}
+	txid := string(req)
+	// log.Printf("requested txid: %q", txid)
+	txHash, err := types.NewHashFromString(txid)
+	if err != nil {
+		fmt.Println("bad txid:", err)
+		return
+	}
+
+	// first check mempool
+	rawTx := n.mp.Get(txHash)
+	if rawTx != nil {
+		s.Write(rawTx)
+		return
+	}
+
+	// this is racy, and should be different in product
+
+	// then confirmed tx index
+	_, rawTx = n.bki.GetTx(txHash)
+	if rawTx == nil {
+		s.Write(noData) // don't have it
+	} else {
+		s.Write(rawTx)
+	}
+
+	// NOTE: response could also include conf/unconf or block height (-1 or N)
 }
 
 type randSrc struct{}
@@ -361,7 +406,7 @@ func hostPort(host host.Host) ([]string, []int) {
 		as, _ := addr.ValueForProtocol(multiaddr.P_IP4)
 		addrStr = append(addrStr, as)
 
-		fmt.Println("Listening on", addr)
+		log.Println("Listening on", addr)
 	}
 
 	return addrStr, ports
