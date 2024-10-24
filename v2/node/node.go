@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"p2p/node/consensus"
-	dummyce "p2p/node/consensus/mock"
 	"p2p/node/mempool"
 	"p2p/node/store"
 	"p2p/node/types"
@@ -43,13 +42,15 @@ const (
 )
 
 type ConsensusEngine interface {
-	Start(context.Context) error
-
 	AcceptProposal(height int64, prevHash types.Hash) bool
-	AcceptCommit(height int64, blkID types.Hash) bool
-	AcceptACK(height int64, blkID types.Hash) bool
+	NotifyBlockProposal(blk *types.Block)
 
-	SendConsensusMessage(msg *consensus.ConsensusMessage)
+	AcceptCommit(height int64, blkID types.Hash, appHash types.Hash) bool
+	NotifyBlockCommit(blk *types.Block, appHash types.Hash)
+
+	NotifyACK(validatorPK []byte, ack types.AckRes)
+
+	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster, blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster)
 
 	// Note: Not sure if these are needed here, just for seperate of concerns:
 	// p2p stream handlers role is to downlaod the messages and pass it to the
@@ -81,7 +82,8 @@ type ConsensusEngineForToyNode interface { // quick and dirty for toy node proto
 type Node struct {
 	bki types.BlockStore
 	mp  types.MemPool
-	ce  ConsensusEngineForToyNode
+	// ce  ConsensusEngineForToyNode
+	ce ConsensusEngine
 
 	pm *peerMan
 	// pf *prefetch
@@ -129,8 +131,16 @@ func NewNode(port uint64, privKey []byte, leader, pex bool) (*Node, error) {
 	}
 	close = addClose(close, blkStr.Close)
 
-	ce := dummyce.New(blkStr, mp)
-	ce.BeLeader(leader)
+	// ce := dummyce.New(blkStr, mp)
+	var role types.Role
+	if leader {
+		role = types.RoleLeader
+	} else {
+		role = types.RoleValidator
+	}
+
+	ce := consensus.New(role, host.ID(), mp, blkStr, nil)
+	// ce.BeLeader(leader)
 
 	node := &Node{
 		host:    host,
@@ -193,16 +203,16 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 	go func() {
 		defer n.wg.Done()
 		defer cancel()
-		n.ce.Start(ctx)
+		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK)
 	}()
 
 	// mine is our block anns goroutine, which must be only for leader
-	n.wg.Add(1)
-	go func() {
-		defer n.wg.Done()
-		defer cancel()
-		n.announceBlocks(ctx)
-	}()
+	// n.wg.Add(1)
+	// go func() {
+	// 	defer n.wg.Done()
+	// 	defer cancel()
+	// 	n.announceBlocks(ctx)
+	// }()
 
 	// connect to bootstrap peers, if any
 	for _, peer := range peers {
@@ -282,24 +292,24 @@ func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
 }
 
 // announceBlocks announces new committed and proposed blocks when the leader.
-func (n *Node) announceBlocks(ctx context.Context) {
-	blkChan := n.ce.BlockLeaderStream()
+// func (n *Node) announceBlocks(ctx context.Context) {
+// 	blkChan := n.ce.BlockLeaderStream()
 
-	for {
-		var blk *types.QualifiedBlock
-		select {
-		case <-ctx.Done():
-			return
-		case blk = <-blkChan:
-		}
+// 	for {
+// 		var blk *types.QualifiedBlock
+// 		select {
+// 		case <-ctx.Done():
+// 			return
+// 		case blk = <-blkChan:
+// 		}
 
-		if blk.Proposed {
-			go n.announceBlkProp(ctx, blk.Block, n.host.ID())
-		} else {
-			go n.announceBlk(ctx, blk.Block, blk.AppHash, n.host.ID())
-		}
-	}
-}
+// 		if blk.Proposed {
+// 			go n.announceBlkProp(ctx, blk.Block, n.host.ID())
+// 		} else {
+// 			go n.announceBlk(ctx, blk.Block, blk.AppHash, n.host.ID())
+// 		}
+// 	}
+// }
 
 func (n *Node) txGetStreamHandler(s network.Stream) {
 	defer s.Close()

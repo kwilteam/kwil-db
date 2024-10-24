@@ -41,8 +41,8 @@ func NewHashFromBytes(b []byte) (Hash, error) {
 	return h, nil
 }
 
-var zeroHash Hash
+var ZeroHash Hash
 
 func (h Hash) IsZero() bool {
-	return h == zeroHash
+	return h == ZeroHash
 }

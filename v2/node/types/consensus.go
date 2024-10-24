@@ -1,11 +1,13 @@
 package types
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 )
 
 type AckRes struct {
+	Height  int64
 	ACK     bool
 	BlkHash Hash
 	AppHash *Hash
@@ -20,7 +22,7 @@ func (ar AckRes) ack() string {
 
 func (ar AckRes) String() string {
 	if ar.ACK {
-		return fmt.Sprintf("%s: block %v, appHash %v", ar.ack(), ar.BlkHash, ar.AppHash)
+		return fmt.Sprintf("%s: height: %d, block %v, appHash %v", ar.ack(), ar.Height, ar.BlkHash, ar.AppHash)
 	}
 	return ar.ack()
 }
@@ -32,10 +34,11 @@ func (ar AckRes) MarshalBinary() ([]byte, error) {
 	if ar.AppHash == nil {
 		return nil, errors.New("missing apphash in ACK")
 	}
-	buf := make([]byte, 1+2*HashLen)
+	buf := make([]byte, 1+2*HashLen+8)
 	buf[0] = 1
-	copy(buf[1:], ar.BlkHash[:])
-	copy(buf[1+len(ar.BlkHash):], ar.AppHash[:])
+	binary.LittleEndian.PutUint64(buf[1:], uint64(ar.Height))
+	copy(buf[1+8:], ar.BlkHash[:])
+	copy(buf[1+8+HashLen:], ar.AppHash[:])
 	return buf, nil
 }
 
@@ -53,11 +56,12 @@ func (ar *AckRes) UnmarshalBinary(data []byte) error {
 		return nil
 	}
 	data = data[1:]
-	if len(data) < 2*HashLen {
+	if len(data) < 2*HashLen+8 {
 		return fmt.Errorf("insufficient data for ACK")
 	}
+	ar.Height = int64(binary.LittleEndian.Uint64(data[:8]))
 	ar.AppHash = new(Hash)
-	copy(ar.BlkHash[:], data[:len(ar.BlkHash)])
-	copy(ar.AppHash[:], data[len(ar.BlkHash):])
+	copy(ar.BlkHash[:], data[8:8+HashLen])
+	copy(ar.AppHash[:], data[8+HashLen:])
 	return nil
 }

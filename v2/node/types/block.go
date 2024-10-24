@@ -10,7 +10,11 @@ import (
 	"time"
 )
 
-func NewBlock(ver uint16, height int64, prevHash, appHash Hash, stamp time.Time, txns [][]byte) *Block {
+const (
+	BlockVersion = 0
+)
+
+func NewBlock(height int64, prevHash, appHash Hash, stamp time.Time, txns [][]byte) *Block {
 	numTxns := len(txns)
 	txHashes := make([]Hash, numTxns)
 	for i := range txns {
@@ -18,13 +22,13 @@ func NewBlock(ver uint16, height int64, prevHash, appHash Hash, stamp time.Time,
 	}
 	merkelRoot := CalcMerkleRoot(txHashes)
 	hdr := &BlockHeader{
-		Version:     ver,
+		Version:     BlockVersion,
 		Height:      height,
 		PrevHash:    prevHash,
 		PrevAppHash: appHash,
 		NumTxns:     uint32(numTxns),
 		Timestamp:   stamp.UTC(),
-		MerkelRoot:  merkelRoot,
+		MerkleRoot:  merkelRoot,
 	}
 	return &Block{
 		Header: hdr,
@@ -39,7 +43,7 @@ type BlockHeader struct {
 	PrevHash    Hash // previous block's hash
 	PrevAppHash Hash // app hash after last block
 	Timestamp   time.Time
-	MerkelRoot  Hash // Merkle tree reference to hash of all transactions for the block
+	MerkleRoot  Hash // Merkle tree reference to hash of all transactions for the block
 
 	// Proposer []byte should be leader, so probably pointless here
 
@@ -58,6 +62,14 @@ type Block struct {
 
 func (b *Block) Hash() Hash {
 	return b.Header.Hash()
+}
+
+func (b *Block) MerkleRoot() Hash {
+	txHashes := make([]Hash, len(b.Txns))
+	for i := range b.Txns {
+		txHashes[i] = HashBytes(b.Txns[i])
+	}
+	return CalcMerkleRoot(txHashes)
 }
 
 func DecodeBlockHeader(r io.Reader) (*BlockHeader, error) {
@@ -91,7 +103,7 @@ func DecodeBlockHeader(r io.Reader) (*BlockHeader, error) {
 	}
 	hdr.Timestamp = time.UnixMilli(int64(timeStamp)).UTC()
 
-	_, err = io.ReadFull(r, hdr.MerkelRoot[:])
+	_, err = io.ReadFull(r, hdr.MerkleRoot[:])
 	if err != nil {
 		return nil, fmt.Errorf("failed to read merkel root: %w", err)
 	}
@@ -107,7 +119,7 @@ func (bh *BlockHeader) String() string {
 		bh.PrevHash,
 		bh.PrevAppHash,
 		bh.Timestamp.Format(time.RFC3339),
-		bh.MerkelRoot)
+		bh.MerkleRoot)
 }
 
 func (bh *BlockHeader) writeBlockHeader(w io.Writer) error {
@@ -135,7 +147,7 @@ func (bh *BlockHeader) writeBlockHeader(w io.Writer) error {
 		return fmt.Errorf("failed to write timestamp: %w", err)
 	}
 
-	if _, err := w.Write(bh.MerkelRoot[:]); err != nil {
+	if _, err := w.Write(bh.MerkleRoot[:]); err != nil {
 		return fmt.Errorf("failed to write merkel root: %w", err)
 	}
 
