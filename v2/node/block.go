@@ -89,7 +89,6 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 			log.Println("BAD appHash in blk ann request", err)
 			return
 		}
-		log.Println("appHash in blk ann request")
 	}
 
 	blkHash, err := types.NewHashFromString(blkid)
@@ -164,10 +163,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	// re-announce
 
 	go func() {
-		if err := n.ce.CommitBlock(blk, appHash); err != nil {
-			log.Printf("cannot commit announced block: %v", err)
-			return
-		}
+		n.ce.NotifyBlockCommit(blk, appHash)
 		var appHashStr string
 		if !appHash.IsZero() {
 			appHashStr = appHash.String()
@@ -176,10 +172,11 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	}()
 }
 
-func (n *Node) announceBlk(ctx context.Context, blk *types.Block, appHash *types.Hash, from peer.ID) {
+func (n *Node) announceBlk(ctx context.Context, blk *types.Block, appHash types.Hash, from peer.ID) {
+	fmt.Println("announceBlk", blk.Header.Height, blk.Header.Hash(), appHash, from)
 	rawBlk := types.EncodeBlock(blk)
 	var appHashStr string
-	if appHash != nil && !appHash.IsZero() {
+	if !appHash.IsZero() {
 		appHashStr = appHash.String()
 	}
 	n.announceRawBlk(ctx, blk.Hash().String(), blk.Header.Height, rawBlk, appHashStr, from)

@@ -27,7 +27,7 @@ func createTestBlock(height int64) *types.Block {
 		[]byte("tx1"),
 		[]byte("tx2"),
 	}
-	return types.NewBlock(2, height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8},
+	return types.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8},
 		time.Unix(1729723553, 0), txns)
 }
 

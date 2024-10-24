@@ -119,7 +119,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	height := prop.Height
 
-	if !n.ce.AcceptProposalID(height, prop.PrevHash) {
+	if !n.ce.AcceptProposal(height, prop.PrevHash) {
 		// NOTE: if this is ahead of our last commit height, we have to try to catch up
 		log.Println("don't want proposal content", height, prop.PrevHash)
 		return
@@ -159,9 +159,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	log.Println("processing prop for", hash)
 
-	go n.ce.ProcessProposal(blk, func(ack bool, appHash *types.Hash) error {
-		return n.sendACK(ack, hash, appHash)
-	})
+	go n.ce.NotifyBlockProposal(blk)
 
 	return
 }
@@ -169,11 +167,13 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 // sendACK is a callback for the result of validator block execution/precommit.
 // After then consensus engine executes the block, this is used to gossip the
 // result back to the leader.
-func (n *Node) sendACK(ack bool, blkID types.Hash, appHash *types.Hash) error {
+func (n *Node) sendACK(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error {
+	// fmt.Println("sending ACK", height, ack, blkID, appHash)
 	n.ackChan <- types.AckRes{
 		ACK:     ack,
 		AppHash: appHash,
 		BlkHash: blkID,
+		Height:  height,
 	}
 	return nil // actually gossip the nack
 }
@@ -202,6 +202,7 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			case <-ctx.Done():
 				return
 			case ack := <-n.ackChan:
+				// fmt.Println("received ACK:::", ack.ACK, ack.Height, ack.BlkHash, ack.AppHash)
 				ackMsg, _ := ack.MarshalBinary()
 				err := topicAck.Publish(ctx, ackMsg)
 				if err != nil {
@@ -246,8 +247,8 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			}
 			fromPeerID := ackMsg.GetFrom()
 
-			log.Printf("received ACK msg from %v (rcvd from %s), data = %x",
-				fromPeerID, ackMsg.ReceivedFrom, ackMsg.Message.Data)
+			log.Printf("received ACK msg from %s (rcvd from %s), data = %x",
+				fromPeerID.String(), ackMsg.ReceivedFrom.String(), ackMsg.Message.Data)
 
 			peerPubKey, err := fromPeerID.ExtractPublicKey()
 			if err != nil {
@@ -255,7 +256,7 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 				continue
 			}
 			pubkeyBytes, _ := peerPubKey.Raw() // does not error for secp256k1 or ed25519
-			go n.ce.ProcessACK(pubkeyBytes, ack)
+			go n.ce.NotifyACK(pubkeyBytes, ack)
 		}
 	}()
 
