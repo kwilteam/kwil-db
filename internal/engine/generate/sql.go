@@ -30,3 +30,21 @@ func WriteSQL(node *parse.SQLStatement, orderParams bool, pgSchema string) (stmt
 
 	return stmt + ";", sqlGen.orderedParams, nil
 }
+
+func DDL(node *parse.SQLStatement) (stmt string, err error) {
+	if node == nil {
+		return "", fmt.Errorf("SQL parse node is nil")
+	}
+
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("panic: %v", e)
+		}
+	}()
+
+	sqlGen := &sqlGenerator{}
+
+	stmt = node.Accept(sqlGen).(string)
+	// stmt[1:] remove the leading "\n"
+	return stmt[1:] + ";", nil
+}

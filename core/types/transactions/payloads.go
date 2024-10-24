@@ -64,7 +64,7 @@ func UnmarshalPayload(payloadType PayloadType, payload []byte) (Payload, error) 
 	}
 
 	t := reflect.TypeOf(prototype).Elem()
-	elem := reflect.New(t)       // reflect.Type => reflect.Value
+	elem := reflect.New(t)       // reflect.Type => reflect.Param
 	instance := elem.Interface() // reflect.Type => any
 
 	err := serialize.Decode(payload, instance)

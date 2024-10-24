@@ -39,37 +39,12 @@ type schemaVisitor struct {
 	actions map[string][]ActionStmt
 }
 
-func (s *schemaVisitor) VisitC_column_def(ctx *gen.C_column_defContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitC_index_def(ctx *gen.C_index_defContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitC_constraint(ctx *gen.C_constraintContext) interface{} {
+func (s *schemaVisitor) VisitSrc(ctx *gen.SrcContext) interface{} {
 	//TODO implement me
 	panic("implement me")
 }
 
 func (s *schemaVisitor) VisitFk_action(ctx *gen.Fk_actionContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitFk_constraint(ctx *gen.Fk_constraintContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitConstraint_def(ctx *gen.Constraint_defContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitUnnamed_constraint_def(ctx *gen.Unnamed_constraint_defContext) interface{} {
 	//TODO implement me
 	panic("implement me")
 }
@@ -1035,26 +1010,242 @@ func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statem
 	stmt := &CreateTableStatement{
 		Name:        ctx.GetName().Accept(s).(string),
 		Columns:     arr[*Column](len(ctx.AllC_column_def())),
-		Indexes:     nil,
-		ForeignKeys: nil,
+		Constraints: arr[Constraint](len(ctx.AllConstraint_def())),
+		Indexes:     arr[*Index](len(ctx.AllC_index_def())),
 	}
+
 	for i, c := range ctx.AllC_column_def() {
 		stmt.Columns[i] = c.Accept(s).(*Column)
 	}
 
-	var allIndexes []*Index
-	var allForeignKeys []*ForeignKey
+	var primaryKey []string
 
-	for _, c := range ctx.AllC_index_def() {
-		allIndexes = append(allIndexes, c.Accept(s).(*Index))
+	//for _, column := range stmt.Columns {
+	//	for _, constraint := range column.Constraints {
+	//		switch c := constraint.(type) {
+	//		case *ConstraintPrimaryKey:
+	//			c.Columns = []string{column.Name}
+	//			primaryKey = c.Columns
+	//		case *ConstraintUnique:
+	//			c.Columns = []string{column.Name}
+	//		case *ConstraintCheck:
+	//		case *ConstraintForeignKey:
+	//			c.Column = column.Name
+	//		case *ConstraintDefault:
+	//			c.Column = column.Name
+	//		case *ConstraintNotNull:
+	//			c.Column = column.Name
+	//		default:
+	//			panic("unknown constraint type")
+	//		}
+	//	}
+	//}
+	for _, column := range stmt.Columns {
+		for _, constraint := range column.Constraints {
+			switch constraint.(type) {
+			case *ConstraintPrimaryKey:
+				primaryKey = []string{column.Name}
+			}
+		}
 	}
 
-	for _, c := range ctx.AllConstraint_def() {
+	for i, c := range ctx.AllConstraint_def() {
+		constraint := c.Accept(s).(Constraint)
+		stmt.Constraints[i] = constraint
 
+		switch cc := constraint.(type) {
+		case *ConstraintPrimaryKey:
+			if len(primaryKey) != 0 {
+				s.errs.RuleErr(c, ErrRedeclarePrimaryKey, "primary key redeclared")
+				continue
+			}
+
+			primaryKey = cc.Columns
+		}
 	}
+
+	for i, c := range ctx.AllC_index_def() {
+		stmt.Indexes[i] = c.Accept(s).(*Index)
+	}
+
+	if len(primaryKey) == 0 {
+		s.errs.RuleErr(ctx, ErrNoPrimaryKey, "no primary key declared")
+	}
+
+	//// TODO: improve
+	//if ctx.GetExtra_comma() != nil {
+	//	s.errs.TokenErr(ctx.GetExtra_comma(), ErrSyntax, "extra comma")
+	//}
 
 	stmt.Set(ctx)
 	return stmt
+}
+
+func (s *schemaVisitor) VisitC_column_def(ctx *gen.C_column_defContext) interface{} {
+	column := &Column{
+		Name:        s.getIdent(ctx.IDENTIFIER()),
+		Type:        ctx.Type_().Accept(s).(*types.DataType),
+		Constraints: arr[Constraint](len(ctx.AllInline_constraint())),
+	}
+
+	// due to unfortunate lexing edge cases to support min/max, we
+	// have to parse the constraints here. Each constraint is a text, and should be
+	// one of:
+	// MIN/MAX/MINLEN/MAXLEN/MIN_LENGTH/MAX_LENGTH/NOTNULL/NOT/NULL/PRIMARY/KEY/PRIMARY_KEY/PK/DEFAULT/UNIQUE
+	// If NOT is present, it needs to be followed by NULL; similarly, if NULL is present, it needs to be preceded by NOT.
+	// If PRIMARY is present, it can be followed by key, but does not have to be. key must be preceded by primary.
+	// MIN, MAX, MINLEN, MAXLEN, MIN_LENGTH, MAX_LENGTH, and DEFAULT must also have a literal following them.
+
+	//type constraint struct {
+	//	ident string
+	//	vals  *types.DataType
+	//}
+
+	for i, c := range ctx.AllInline_constraint() {
+		column.Constraints[i] = c.Accept(s).(Constraint)
+	}
+
+	// TODO: basic validations, like default value should be same as column type
+
+	column.Set(ctx)
+	return column
+}
+
+func (s *schemaVisitor) VisitInline_constraint(ctx *gen.Inline_constraintContext) any {
+	switch {
+	case ctx.PRIMARY() != nil:
+		c := &ConstraintPrimaryKey{
+			//inline: true,
+		}
+		c.Set(ctx)
+		return c
+	case ctx.UNIQUE() != nil:
+		c := &ConstraintUnique{
+			//inline: true,
+		}
+		c.Set(ctx)
+		return c
+	case ctx.NOT() != nil:
+		c := &ConstraintNotNull{
+			//inline: true,
+		}
+		c.Set(ctx)
+		return c
+	case ctx.DEFAULT() != nil:
+		c := &ConstraintDefault{
+			//inline: true,
+			Value: ctx.Literal().Accept(s).(*ExpressionLiteral),
+		}
+		c.Set(ctx)
+		return c
+	case ctx.CHECK() != nil:
+		c := &ConstraintCheck{
+			Param: ctx.Sql_expr().Accept(s).(Expression),
+		}
+		c.Set(ctx)
+		return c
+	case ctx.Fk_constraint() != nil:
+		c := ctx.Fk_constraint().Accept(s).(*ConstraintForeignKey)
+		//c.inline = true
+		return c
+	default:
+		panic("unknown constraint")
+	}
+}
+
+func (s *schemaVisitor) VisitFk_constraint(ctx *gen.Fk_constraintContext) any {
+	c := &ConstraintForeignKey{
+		RefTable:  ctx.GetTable().Accept(s).(string),
+		RefColumn: ctx.GetColumn().Accept(s).(string),
+		Ons:       arr[ForeignKeyActionOn](len(ctx.AllFk_action())),
+		Dos:       arr[ForeignKeyActionDo](len(ctx.AllFk_action())),
+	}
+
+	for i, a := range ctx.AllFk_action() {
+		switch {
+		case a.UPDATE() != nil:
+			c.Ons[i] = ON_UPDATE
+		case a.DELETE() != nil:
+			c.Ons[i] = ON_DELETE
+		default:
+			panic("unknown foreign key on condition")
+		}
+
+		switch {
+		case a.NULL() != nil:
+			c.Dos[i] = DO_SET_NULL
+		case a.DEFAULT() != nil:
+			c.Dos[i] = DO_SET_DEFAULT
+		case a.RESTRICT() != nil:
+			c.Dos[i] = DO_RESTRICT
+		case a.ACTION() != nil:
+			c.Dos[i] = DO_NO_ACTION
+		case a.CASCADE() != nil:
+			c.Dos[i] = DO_CASCADE
+			return c
+		default:
+			panic("unknown foreign key action")
+		}
+	}
+
+	c.Set(ctx)
+	return c
+}
+
+func (s *schemaVisitor) VisitConstraint_def(ctx *gen.Constraint_defContext) any {
+	c := ctx.Unnamed_constraint().Accept(s).(Constraint)
+	if ctx.GetName() != nil {
+		c.SetName(ctx.GetName().Accept(s).(string))
+	}
+	c.Set(ctx)
+	return c
+}
+
+func (s *schemaVisitor) VisitUnnamed_constraint(ctx *gen.Unnamed_constraintContext) any {
+	switch {
+	case ctx.PRIMARY() != nil:
+		c := &ConstraintPrimaryKey{
+			Columns: ctx.Identifier_list().Accept(s).([]string),
+		}
+		c.Set(ctx)
+		return c
+	case ctx.UNIQUE() != nil:
+		c := &ConstraintUnique{
+			Columns: ctx.Identifier_list().Accept(s).([]string),
+		}
+		c.Set(ctx)
+		return c
+	case ctx.CHECK() != nil:
+		param := ctx.Sql_expr().Accept(s).(Expression)
+		c := &ConstraintCheck{
+			Param: param,
+		}
+		c.Set(ctx)
+		return c
+	case ctx.FOREIGN() != nil:
+		c := ctx.Fk_constraint().Accept(s).(*ConstraintForeignKey)
+		c.Set(ctx) ////====
+		c.Column = ctx.Identifier().Accept(s).(string)
+		return c
+	default:
+		panic("unknown constraint")
+	}
+}
+
+func (s *schemaVisitor) VisitC_index_def(ctx *gen.C_index_defContext) any {
+	index := &Index{
+		Name:    ctx.Identifier().Accept(s).(string),
+		Columns: ctx.Identifier_list().Accept(s).([]string),
+		Type:    IndexTypeBTree,
+	}
+
+	if ctx.UNIQUE() != nil {
+		index.Type = IndexTypeUnique
+	}
+
+	index.Set(ctx)
+	index.Set(ctx)
+	return index
 }
 
 func (s *schemaVisitor) VisitSelect_statement(ctx *gen.Select_statementContext) any {

@@ -790,6 +790,65 @@ func (s *sqlGenerator) VisitOrderingTerm(p0 *parse.OrderingTerm) any {
 	return str.String()
 }
 
+func (s *sqlGenerator) VisitCreateTableStatement(p0 *parse.CreateTableStatement) any {
+	str := strings.Builder{}
+	indent := "  "
+	str.WriteString("CREATE TABLE ")
+	str.WriteString(p0.Name)
+	str.WriteString(" (\n")
+	for i, col := range p0.Columns {
+		str.WriteString(indent)
+		str.WriteString(col.Name)
+		str.WriteString(" ")
+		str.WriteString(col.Type.String())
+		for _, con := range col.Constraints {
+			str.WriteString(" ")
+			if cc, ok := con.(*parse.ConstraintCheck); ok {
+				str.WriteString("CHECK(")
+				str.WriteString(cc.Param.Accept(s).(string))
+				str.WriteString(")")
+			} else {
+				str.WriteString(con.ToSQL())
+			}
+		}
+		if i < len(p0.Columns)-1 {
+			str.WriteString(",\n")
+		}
+	}
+
+	if len(p0.Constraints) > 0 {
+		str.WriteString(",\n")
+		for i, con := range p0.Constraints {
+			str.WriteString(indent)
+			if cc, ok := con.(*parse.ConstraintCheck); ok {
+				str.WriteString("CHECK(")
+				str.WriteString(cc.Param.Accept(s).(string))
+				str.WriteString(")")
+			} else {
+				str.WriteString(con.ToSQL())
+			}
+
+			if i < len(p0.Constraints)-1 {
+				str.WriteString(",\n")
+			}
+		}
+	}
+
+	if len(p0.Indexes) > 0 {
+		str.WriteString(",\n")
+		for i, index := range p0.Indexes {
+			str.WriteString(indent)
+			str.WriteString(index.String())
+			if i < len(p0.Indexes)-1 {
+				str.WriteString(",\n")
+			}
+		}
+	}
+
+	str.WriteString("\n)")
+	return str.String()
+}
+
 // procedureGenerator is a visitor that generates plpgsql code.
 type procedureGenerator struct {
 	sqlGenerator

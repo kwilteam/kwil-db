@@ -15,7 +15,7 @@ func doNothing(_ string) error {
 
 // CheckSyntaxReplaceDollar replaces all bind parameters($x) with 1 to bypass
 // syntax check errors.
-// ToSQL() method doesn't convert bind parameters to $1, $2, etc. so we need to
+// () method doesn't convert bind parameters to $1, $2, etc. so we need to
 // replace them manually, just so we can do the syntax check.
 func CheckSyntaxReplaceDollar(query string) error {
 	// Replace all bind parameters($x) with 1 to bypass syntax check errors

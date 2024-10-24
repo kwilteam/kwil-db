@@ -546,11 +546,21 @@ const (
 type CreateTableStatement struct {
 	Position
 
-	Name        string
-	Columns     []*Column
-	Indexes     []*Index
-	ForeignKeys []*ForeignKey
-	PrimaryKey  []string
+	Name    string
+	Columns []*Column
+	// Indexes contains the non-inline indexes
+	Indexes []*Index
+	// Constraints contains the non-inline constraints
+	Constraints []Constraint
+}
+
+func (c *CreateTableStatement) Accept(v Visitor) any {
+	return v.VisitCreateTableStatement(c)
+
+}
+
+func (c *CreateTableStatement) StmtType() SQLStatementType {
+	panic("implement me")
 }
 
 // Column represents a table column.
@@ -560,20 +570,198 @@ type Column struct {
 	Name        string
 	Type        *types.DataType
 	Constraints []Constraint
-	ForeignKey  *ForeignKey
-	Index       *Index
 }
 
-//type Constraint interface {
-//	constraint()
-//}
+type ConstraintType string
 
-// Constraint represents a table column constraint.
-type Constraint struct {
+const (
+	PRIMARY_KEY ConstraintType = "PRIMARY_KEY"
+	DEFAULT     ConstraintType = "DEFAULT"
+	NOT_NULL    ConstraintType = "NOT_NULL"
+	UNIQUE      ConstraintType = "UNIQUE"
+	CHECK       ConstraintType = "CHECK"
+	FOREIGN_KEY ConstraintType = "FOREIGN_KEY"
+	//CUSTOM      ConstraintType = "CUSTOM"
+)
+
+type Constraint interface {
+	Node
+
+	ConstraintType() ConstraintType
+	SetName(string)
+	ToSQL() string
+}
+
+type ConstraintPrimaryKey struct {
 	Position
 
-	Type  string
-	Value *types.DataType
+	Columns []string
+	//inline  bool
+}
+
+func (c *ConstraintPrimaryKey) Accept(visitor Visitor) any {
+	panic("implement me")
+}
+
+func (c *ConstraintPrimaryKey) ConstraintType() ConstraintType {
+	return PRIMARY_KEY
+}
+
+func (c *ConstraintPrimaryKey) ToSQL() string {
+	if len(c.Columns) == 0 {
+		return "PRIMARY KEY"
+	}
+
+	return "PRIMARY KEY (" + strings.Join(c.Columns, ", ") + ")"
+}
+
+func (c *ConstraintPrimaryKey) SetName(name string) {}
+
+type ConstraintUnique struct {
+	Position
+
+	Name    string
+	Columns []string
+	//inline  bool
+}
+
+func (c *ConstraintUnique) Accept(visitor Visitor) any {
+	panic("implement me")
+}
+
+func (c *ConstraintUnique) ConstraintType() ConstraintType {
+	return UNIQUE
+}
+
+func (c *ConstraintUnique) ToSQL() string {
+	if len(c.Columns) == 0 {
+		return "UNIQUE"
+	}
+
+	s := "UNIQUE (" + strings.Join(c.Columns, ", ") + ")"
+	if c.Name == "" {
+		return s
+	}
+
+	return "CONSTRAINT " + c.Name + " " + s
+}
+
+func (c *ConstraintUnique) SetName(name string) {
+	c.Name = name
+}
+
+type ConstraintDefault struct {
+	Position
+
+	Name   string
+	Column string
+	Value  *ExpressionLiteral
+	//inline bool
+}
+
+func (c *ConstraintDefault) Accept(visitor Visitor) any {
+	panic("implement me")
+}
+
+func (c *ConstraintDefault) ConstraintType() ConstraintType {
+	return DEFAULT
+}
+
+func (c *ConstraintDefault) ToSQL() string {
+	return "DEFAULT " + c.Value.String()
+}
+
+func (c *ConstraintDefault) SetName(name string) {
+	c.Name = name
+}
+
+type ConstraintNotNull struct {
+	Position
+
+	Name   string
+	Column string
+	//inline bool
+}
+
+func (c *ConstraintNotNull) Accept(visitor Visitor) any {
+	panic("implement me")
+}
+
+func (c *ConstraintNotNull) ConstraintType() ConstraintType {
+	return NOT_NULL
+}
+
+func (c *ConstraintNotNull) ToSQL() string {
+	return "NOT NULL"
+}
+
+func (c *ConstraintNotNull) SetName(name string) {
+	c.Name = name
+}
+
+type ConstraintCheck struct {
+	Position
+
+	Name  string
+	Param Expression
+	//inline bool
+}
+
+func (c *ConstraintCheck) Accept(visitor Visitor) any {
+	panic("implement me")
+}
+
+func (c *ConstraintCheck) ConstraintType() ConstraintType {
+	return CHECK
+}
+
+func (c *ConstraintCheck) ToSQL() string {
+	return ""
+}
+
+func (c *ConstraintCheck) SetName(name string) {
+	c.Name = name
+}
+
+type ConstraintForeignKey struct {
+	Position
+
+	Name      string
+	RefTable  string
+	RefColumn string
+	Column    string
+	Ons       []ForeignKeyActionOn
+	Dos       []ForeignKeyActionDo
+	//inline    bool
+}
+
+func (c *ConstraintForeignKey) Accept(visitor Visitor) any {
+	panic("implement me")
+}
+
+func (c *ConstraintForeignKey) ConstraintType() ConstraintType {
+	return FOREIGN_KEY
+}
+
+func (c *ConstraintForeignKey) ToSQL() string {
+	s := "REFERENCES " + c.RefTable + "(" + c.RefColumn + ")"
+	if len(c.Ons) == 0 {
+		return s
+	}
+
+	for i, on := range c.Ons {
+		s += " ON " + string(on) + " " + string(c.Dos[i])
+	}
+
+	if c.Name == "" {
+		return s
+	}
+
+	return "CONSTRAINT " + c.Name + " FOREIGN KEY (" + c.Column + ") " + s
+}
+
+func (c *ConstraintForeignKey) SetName(name string) {
+	c.Name = name
 }
 
 type IndexType string
@@ -588,12 +776,30 @@ const (
 	IndexTypeUnique IndexType = "unique"
 )
 
+// Index represents non-inline index declaration.
 type Index struct {
 	Position
+	//Constraint
 
 	Name    string
 	Columns []string
 	Type    IndexType
+}
+
+func (i *Index) String() string {
+	if i.Type == IndexTypeUnique && i.Name == "" { //inline
+		return "UNIQUE"
+	}
+
+	switch i.Type {
+	case IndexTypeBTree:
+		return "INDEX " + i.Name + " (" + strings.Join(i.Columns, ", ") + ")"
+	case IndexTypeUnique:
+		return "UNIQUE INDEX " + i.Name + " (" + strings.Join(i.Columns, ", ") + ")"
+	default:
+		// should not happen
+		panic("unknown index type")
+	}
 }
 
 // ForeignKey is a foreign key in a table.
@@ -1223,6 +1429,13 @@ type SQLVisitor interface {
 	VisitInsertStatement(*InsertStatement) any
 	VisitUpsertClause(*OnConflict) any
 	VisitOrderingTerm(*OrderingTerm) any
+	// DDL
+	VisitCreateTableStatement(*CreateTableStatement) any
+	//VisitConstraintPrimaryKey(*ConstraintPrimaryKey) any
+	//VisitConstraintDefault(*ConstraintDefault) any
+	//VisitConstraintCheck(*ConstraintCheck) any
+	//VisitConstraintUnique(*ConstraintCheck) any
+	//VisitConstraintForeignKey(*ConstraintForeignKey) any
 }
 
 // UnimplementedSqlVisitor is meant to be used when an implementing visitor only intends

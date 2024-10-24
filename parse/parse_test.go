@@ -2,6 +2,7 @@ package parse_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -874,6 +875,7 @@ func Test_Kuneiform(t *testing.T) {
 func assertPositionsAreSet(t *testing.T, v any) {
 	parse.RecursivelyVisitPositions(v, func(gp parse.GetPositioner) {
 		pos := gp.GetPosition()
+		fmt.Printf("%T: %+v\n", gp, pos)
 		// if not set, this will tell us the struct
 		assert.True(t, pos.IsSet, "position is not set. struct type: %T", gp)
 	})
@@ -2024,6 +2026,137 @@ func Test_SQL(t *testing.T) {
 	}
 
 	tests := []testCase{
+		{
+			name: "create table",
+			sql: `CREATE TABLE users (
+id int PRIMARY KEY,
+name text CHECK(LENGTH(name) > 10),
+address text NOT NULL DEFAULT 'usa',
+email text NOT NULL UNIQUE ,
+city_id int,
+group_id int REFERENCES groups(id) ON DELETE CASCADE,
+CONSTRAINT city_fk FOREIGN KEY (city_id) REFERENCES cities(id) ON UPDATE NO ACTION ,
+CHECK(LENGTH(email) > 1),
+UNIQUE (city_id, address),
+UNIQUE INDEX group_name_unique (group_id, name),
+INDEX ithome (name, address)
+);`,
+			want: &parse.SQLStatement{
+				SQL: &parse.CreateTableStatement{
+					Name: "users",
+					Columns: []*parse.Column{
+						{
+							Name: "id",
+							Type: types.IntType,
+							Constraints: []parse.Constraint{
+								&parse.ConstraintPrimaryKey{},
+							},
+						},
+						{
+							Name: "name",
+							Type: types.TextType,
+							Constraints: []parse.Constraint{
+								&parse.ConstraintCheck{
+									Param: &parse.ExpressionComparison{
+										Left:     exprFunctionCall("length", exprColumn("", "name")),
+										Right:    exprLit(10),
+										Operator: parse.ComparisonOperatorGreaterThan,
+									},
+								},
+							},
+						},
+						{
+							Name: "address",
+							Type: types.TextType,
+							Constraints: []parse.Constraint{
+								&parse.ConstraintNotNull{},
+								&parse.ConstraintDefault{
+									Value: &parse.ExpressionLiteral{
+										Type:  types.TextType,
+										Value: "usa",
+										Typecastable: parse.Typecastable{
+											TypeCast: types.TextType,
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "email",
+							Type: types.TextType,
+							Constraints: []parse.Constraint{
+								&parse.ConstraintNotNull{},
+								&parse.ConstraintUnique{},
+							},
+						},
+						{
+							Name: "city_id",
+							Type: types.IntType,
+						},
+						{
+							Name: "group_id",
+							Type: types.IntType,
+							Constraints: []parse.Constraint{
+								&parse.ConstraintForeignKey{
+									RefTable:  "groups",
+									RefColumn: "id",
+									Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
+									Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
+								},
+							},
+						},
+					},
+					Indexes: []*parse.Index{
+						{
+							Name:    "group_name_unique",
+							Columns: []string{"group_id", "name"},
+							Type:    parse.IndexTypeUnique,
+						},
+						{
+							Name:    "ithome",
+							Columns: []string{"name", "address"},
+							Type:    parse.IndexTypeBTree,
+						},
+					},
+					Constraints: []parse.Constraint{
+						&parse.ConstraintForeignKey{
+							Name:      "city_fk",
+							RefTable:  "cities",
+							RefColumn: "id",
+							Column:    "city_id",
+							Ons:       []parse.ForeignKeyActionOn{parse.ON_UPDATE},
+							Dos:       []parse.ForeignKeyActionDo{parse.DO_NO_ACTION},
+						},
+						&parse.ConstraintCheck{
+							Param: &parse.ExpressionComparison{
+								Left:     exprFunctionCall("length", exprColumn("", "email")),
+								Right:    exprLit(1),
+								Operator: parse.ComparisonOperatorGreaterThan,
+							},
+						},
+						&parse.ConstraintUnique{
+							Columns: []string{
+								"city_id",
+								"address",
+							},
+						},
+					},
+				},
+			},
+		},
+		//{
+		//	name: "create table with extra comma",
+		//	sql:  `CREATE TABLE users (id int primary key,);`,
+		//	err:  parse.ErrSyntax,
+		//},
+		{
+			name: "create table with redeclare primary",
+			sql: `CREATE TABLE users (id int primary key,
+name text check(length(name) > 10),
+primary key (name)
+);`,
+			err: parse.ErrRedeclarePrimaryKey,
+		},
 		{
 			name: "simple select",
 			sql:  "select *, id i, length(username) as name_len from users u where u.id = 1;",

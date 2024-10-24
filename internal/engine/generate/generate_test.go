@@ -7,9 +7,167 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/generate"
+	"github.com/kwilteam/kwil-db/parse"
 	"github.com/kwilteam/kwil-db/parse/postgres"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestGenerateDDLStatement(t *testing.T) {
+	node := &parse.SQLStatement{
+		SQL: &parse.CreateTableStatement{
+			Name: "users",
+			Columns: []*parse.Column{
+				{
+					Name: "id",
+					Type: types.IntType,
+					Constraints: []parse.Constraint{
+						&parse.ConstraintPrimaryKey{},
+					},
+				},
+				{
+					Name: "name",
+					Type: types.TextType,
+					Constraints: []parse.Constraint{
+						&parse.ConstraintCheck{
+							Param: &parse.ExpressionComparison{
+								Left: &parse.ExpressionFunctionCall{
+									Name: "length",
+									Args: []parse.Expression{
+										&parse.ExpressionColumn{
+											Table:  "",
+											Column: "name",
+										},
+									},
+								},
+								Right: &parse.ExpressionLiteral{
+									Type:  types.IntType,
+									Value: int64(10),
+								},
+								Operator: parse.ComparisonOperatorGreaterThan,
+							},
+						},
+					},
+				},
+				{
+					Name: "address",
+					Type: types.TextType,
+					Constraints: []parse.Constraint{
+						&parse.ConstraintNotNull{},
+						&parse.ConstraintDefault{
+							Value: &parse.ExpressionLiteral{
+								Type:  types.TextType,
+								Value: "usa",
+							},
+						},
+					},
+				},
+				{
+					Name: "email",
+					Type: types.TextType,
+					Constraints: []parse.Constraint{
+						&parse.ConstraintNotNull{},
+						&parse.ConstraintUnique{},
+					},
+				},
+				{
+					Name: "city_id",
+					Type: types.IntType,
+				},
+				{
+					Name: "group_id",
+					Type: types.IntType,
+					Constraints: []parse.Constraint{
+						&parse.ConstraintForeignKey{
+							RefTable:  "groups",
+							RefColumn: "id",
+							Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
+							Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
+						},
+					},
+				},
+			},
+			Indexes: []*parse.Index{
+				{
+					Name:    "group_name_unique",
+					Columns: []string{"group_id", "name"},
+					Type:    parse.IndexTypeUnique,
+				},
+				{
+					Name:    "ithome",
+					Columns: []string{"name", "address"},
+					Type:    parse.IndexTypeBTree,
+				},
+			},
+			Constraints: []parse.Constraint{
+				&parse.ConstraintForeignKey{
+					Name:      "city_fk",
+					RefTable:  "cities",
+					RefColumn: "id",
+					Column:    "city_id",
+					Ons:       []parse.ForeignKeyActionOn{parse.ON_UPDATE},
+					Dos:       []parse.ForeignKeyActionDo{parse.DO_NO_ACTION},
+				},
+				&parse.ConstraintCheck{
+					Param: &parse.ExpressionComparison{
+						Left: &parse.ExpressionFunctionCall{
+							Name: "length",
+							Args: []parse.Expression{
+								&parse.ExpressionColumn{
+									Table:  "",
+									Column: "email",
+								},
+							},
+						},
+						Right: &parse.ExpressionLiteral{
+							Type:  types.IntType,
+							Value: int64(1),
+						},
+						Operator: parse.ComparisonOperatorGreaterThan,
+					},
+				},
+				&parse.ConstraintUnique{
+					Columns: []string{
+						"city_id",
+						"address",
+					},
+				},
+			},
+		},
+	}
+
+	got, err := generate.DDL(node)
+	require.NoError(t, err)
+
+	//	expect := `CREATE TABLE users (
+	//id int primary key,
+	//name text check(length(name) > 10),
+	//address text not null default 'usa',
+	//email text not null unique,
+	//city_id int,
+	//group_id int references groups(id) on delete cascade,
+	//constraint city_fk foreign key (city_id) references cities(id) on update no action,
+	//check(length(email) > 1),
+	//unique(city_id, address),
+	//unique index group_name_unique (group_id, name),
+	//index ithome (name, address)
+	//);`
+	expect := `CREATE TABLE users (
+  id int PRIMARY KEY,
+  name text CHECK(length(name) > 10),
+  address text NOT NULL DEFAULT 'usa',
+  email text NOT NULL UNIQUE,
+  city_id int,
+  group_id int REFERENCES groups(id) ON DELETE CASCADE,
+  CONSTRAINT city_fk FOREIGN KEY (city_id) REFERENCES cities(id) ON UPDATE NO ACTION,
+  CHECK(length(email) > 1),
+  UNIQUE (city_id, address),
+  UNIQUE INDEX group_name_unique (group_id, name),
+  INDEX ithome (name, address)
+);`
+
+	assert.Equal(t, expect, got)
+}
 
 func TestGenerateDDL(t *testing.T) {
 	type args struct {
