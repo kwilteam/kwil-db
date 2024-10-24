@@ -7,15 +7,12 @@ import (
 	"time"
 
 	"p2p/node/types"
+
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const (
 	// Use these accordingly
-	acksInterval      = 100 * time.Millisecond
-	blockAnnInterval  = 100 * time.Millisecond
-	blockPropInterval = 100 * time.Millisecond
-	blockExecInterval = 1 * time.Second
-
 	MaxBlockSize = 4 * 1024 * 1024 // 1 MB
 	blockTxCount = 50
 )
@@ -31,7 +28,8 @@ const (
 // - Once the leader receives the threshold acks with the same appHash as the leader, the block is committed and the leader broadcasts the blockAnn message to the network. Nodes that receive this message will enter into the commit phase where they verify the appHash and commit the block.
 type ConsensusEngine struct {
 	role          types.Role
-	nodeID        string
+	host          peer.ID
+	pubKey        []byte
 	networkHeight int64
 	validatorSet  map[string]types.Validator
 
@@ -46,17 +44,17 @@ type ConsensusEngine struct {
 	mempool       Mempool
 	blockStore    BlockStore
 	blockExecutor BlockExecutor
-	indexer       Indexer
+	// indexer       Indexer
 
 	// Broadcasters and Requesters
-	proposalBroadcaster proposalBroadcaster
-	blkAnnouncer        blkAnnouncer
-	ackBroadcaster      ackBroadcaster
+	proposalBroadcaster ProposalBroadcaster
+	blkAnnouncer        BlkAnnouncer
+	ackBroadcaster      AckBroadcaster
 }
 
-type proposalBroadcaster func(ctx context.Context, blk *types.Block)
-type blkAnnouncer func(ctx context.Context, height int64, blkID types.Hash, appHash types.Hash)
-type ackBroadcaster func(ctx context.Context, appHash types.Hash, blkHash types.Hash)
+type ProposalBroadcaster func(ctx context.Context, blk *types.Block, id peer.ID)
+type BlkAnnouncer func(ctx context.Context, blk *types.Block, appHash types.Hash, from peer.ID)
+type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error
 
 // Consensus state that is applicable for processing the blioc at a speociifc height.
 type state struct {
@@ -71,10 +69,6 @@ type state struct {
 	votes map[string]*vote
 	// Move votes from the votes map to processedVotes map once the votes are processed.
 	processedVotes map[string]*vote
-
-	// Stats
-	acks  int64
-	nacks int64
 }
 
 type blockResult struct {
@@ -87,6 +81,7 @@ type lastCommit struct {
 	blkHash types.Hash
 
 	appHash types.Hash
+	blk     *types.Block
 }
 
 type txResult struct {
@@ -94,14 +89,35 @@ type txResult struct {
 	log  string
 }
 
-func New(mempool Mempool, bs BlockStore, indexer Indexer, vs map[string]types.Validator) *ConsensusEngine {
+func New(role types.Role, hostID peer.ID, mempool Mempool, bs BlockStore,
+	//indexer Indexer,
+	vs map[string]types.Validator) *ConsensusEngine {
+
+	pubKey, err := hostID.ExtractPublicKey()
+	if err != nil {
+		fmt.Println("Error extracting public key: ", err)
+		return nil
+	}
+	pubKeyBytes, err := pubKey.Raw()
+	if err != nil {
+		fmt.Println("Error extracting public key bytes: ", err)
+		return nil
+	}
+
 	// rethink how this state is initialized
 	return &ConsensusEngine{
+		role:   role,
+		host:   hostID,
+		pubKey: pubKeyBytes,
 		state: state{
 			blkProp:  nil,
 			blockRes: nil,
-			lc:       nil, // genesis state pull it from the blockstore or pg db or persist it somewhere
-			votes:    make(map[string]*vote),
+			lc: &lastCommit{
+				height:  0,
+				blkHash: types.ZeroHash,
+				appHash: types.ZeroHash,
+			},
+			votes: make(map[string]*vote),
 		},
 		networkHeight: 0,
 		validatorSet:  vs,
@@ -109,7 +125,7 @@ func New(mempool Mempool, bs BlockStore, indexer Indexer, vs map[string]types.Va
 		// interfaces
 		mempool:    mempool,
 		blockStore: bs,
-		indexer:    indexer,
+		// indexer:    indexer,
 	}
 }
 
@@ -124,11 +140,11 @@ func New(mempool Mempool, bs BlockStore, indexer Indexer, vs map[string]types.Va
 //
 // Sentry:
 //   - BlockAnn
-func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster proposalBroadcaster,
-	blkAnnouncer blkAnnouncer, ackackBroadcaster ackBroadcaster) {
+func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster ProposalBroadcaster,
+	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster) {
 	ce.proposalBroadcaster = proposerBroadcaster
 	ce.blkAnnouncer = blkAnnouncer
-	ce.ackBroadcaster = ackackBroadcaster
+	ce.ackBroadcaster = ackBroadcaster
 
 	// Fast catchup the node with the network height
 	if err := ce.catchup(ctx); err != nil {
@@ -139,11 +155,16 @@ func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster propos
 	// Start the mining process if the node is a leader
 	// validators and sentry nodes get activated when they receive a block proposal or block announce msgs.
 	if ce.role == types.RoleLeader {
+		fmt.Println("Starting the leader node")
+		// start new round after 1 second
+		time.Sleep(1 * time.Second)
 		go ce.startNewRound(ctx)
+	} else {
+		fmt.Println("Starting the validator/sentry node")
 	}
 
 	// start the event loop
-	var delay = 100 * time.Millisecond
+	var delay = 1 * time.Second
 	for {
 		select {
 		case <-ce.haltChan:
@@ -182,9 +203,6 @@ func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster propos
 					continue
 				}
 
-				// Process the votes
-				go ce.processVotes(ctx)
-
 			case "block_ann":
 				blkAnn, ok := m.Msg.(*blockAnnounce)
 				if !ok {
@@ -204,7 +222,9 @@ func (ce *ConsensusEngine) updateNetworkHeight(height int64) {
 }
 
 func (ce *ConsensusEngine) requiredThreshold() int64 {
-	return int64(len(ce.validatorSet)/2 + 1)
+	// TODO: update it
+	// return int64(len(ce.validatorSet)/2 + 1)
+	return 2
 }
 
 func (ce *ConsensusEngine) catchup(_ context.Context) error {
@@ -242,16 +262,21 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	if ce.role == types.RoleLeader {
 		// reannounce the blkProp message if the node is still waiting for the votes
 		if ce.state.blkProp != nil {
-			go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk)
+			go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk, ce.host)
 		}
-
-		go ce.blkAnnouncer(ctx, ce.state.lc.height, ce.state.lc.blkHash, ce.state.lc.appHash)
+		if ce.state.lc.height > 0 {
+			// Announce block commit message for the last committed block
+			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash, ce.host)
+		}
+		return
 	}
 
 	if ce.role == types.RoleValidator {
 		// reannounce the acks, if still waiting for the commit message
-		if ce.state.blkProp != nil && ce.state.blockRes != nil {
-			go ce.ackBroadcaster(ctx, ce.state.blockRes.appHash, ce.state.lc.blkHash)
+		if ce.state.blkProp != nil && ce.state.blockRes != nil && ce.state.blockRes.appHash != types.ZeroHash && ce.networkHeight <= ce.state.lc.height {
+			// TODO: rethink what to broadcast here ack/nack, how do u remember the ack/nack
+			fmt.Println("Reannouncing the acks", ce.state.blkProp.height, ce.state.blkProp.blkHash, ce.state.blockRes.appHash)
+			go ce.ackBroadcaster(true, ce.state.blkProp.height, ce.state.blkProp.blkHash, &ce.state.blockRes.appHash)
 		}
 	}
 }

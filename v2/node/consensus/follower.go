@@ -11,6 +11,7 @@ import (
 // Validator should only accept the proposal if it is not already processing a block and
 // the proposal is for the next block to be processed.
 func (ce *ConsensusEngine) AcceptProposal(height int64, prevBlockID types.Hash) bool {
+	// fmt.Println("Accept proposal?", height, prevBlockID)
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
@@ -42,7 +43,8 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, prevBlockID types.Hash) 
 // Only a validator should use this method, not leader or sentry. This method does it's best to ensure that this
 // is the next block to be processed, only then it notifies the consensus engine of the block proposal.
 // respCb is a callback function used to send the VoteMessage(ack/nack) back to the leader.
-func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block, respCb func(ack bool, appHash types.Hash) error) {
+func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
+	// fmt.Println("Notify block proposal", blk.Header.Height, blk.Header.Hash())
 	if ce.role == types.RoleLeader {
 		return
 	}
@@ -64,11 +66,12 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block, respCb func(ack
 		height:  blk.Header.Height,
 		blkHash: blk.Header.Hash(),
 		blk:     blk,
-		respCb:  respCb,
 	}
+
 	ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkProp.Type(),
 		Msg:     blkProp,
+		Sender:  ce.pubKey,
 	})
 }
 
@@ -77,9 +80,10 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block, respCb func(ack
 // This also checks if the node should request the block from its peers. This can happen
 // 1. If the node is a sentry node and doesn't have the block.
 // 2. If the node is a validator and missed the block proposal message.
-func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash) (fetchBlk bool, accept bool) {
+func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash types.Hash) bool {
+	// fmt.Println("Accept commit?", height, blkID, appHash)
 	if ce.role == types.RoleLeader {
-		return false, false
+		return false
 	}
 
 	ce.state.mtx.Lock()
@@ -89,22 +93,38 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash) (fetchBl
 
 	if ce.state.lc.height+1 != height {
 		// This is not the next block to be committed by the node.
-		return false, false
+		return false
 	}
 
-	if ce.state.blkProp != nil && ce.state.blockRes == nil {
-		// still processing the block, ignore the commit message for now and commit when ready.
-		return false, false
+	if ce.state.blkProp != nil {
+		if ce.state.blockRes == nil {
+			// still processing the block, ignore the commit message for now and commit when ready.
+			return false
+		} else {
+			// Waiting for the block to be committed, notify the consensus engine to commit the block.
+			blkCommit := &blockAnnounce{
+				blk:     ce.state.blkProp.blk,
+				appHash: appHash,
+			}
+
+			ce.sendConsensusMessage(&consensusMessage{
+				MsgType: blkCommit.Type(),
+				Msg:     blkCommit,
+				Sender:  ce.pubKey,
+			})
+		}
 	}
 
 	// either sentry node or slow validator
 	// check if this is the first time we are hearing about this block and not already downloaded it.
-	return !ce.blockStore.Have(blkID), true
+	return !ce.blockStore.Have(blkID)
 }
 
+// TODO: Can we club this and AcceptCommit into a single method?
 // NotifyBlockCommit is used by the p2p stream handler to notify the consensus engine of a new block commit.
 // It validates blk height, appHash and blkHash and only then notifies the consensus engine to commit the block.
 func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Hash) {
+	// fmt.Println("Notify block commit", blk.Header.Height, blk.Header.Hash(), appHash)
 	if ce.role == types.RoleLeader {
 		return
 	}
@@ -113,7 +133,6 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Has
 	ce.state.mtx.Unlock()
 
 	if ce.state.lc.height+1 != blk.Header.Height {
-		fmt.Printf("commit for height %d does not follow %d", blk.Header.Height, ce.state.lc.height)
 		return
 	}
 
@@ -136,13 +155,17 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Has
 	ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkCommit.Type(),
 		Msg:     blkCommit,
+		Sender:  ce.pubKey,
 	})
+	// fmt.Println("Notified consensus engine to commit the block", blk.Header.Height, blk.Header.Hash(), appHash)
 }
 
+// TODO: new block for same height: look into these cases
 // ProcessBlockProposal is used by the validator's consensus engine to process the new block proposal message.
 // This method is used to validate the received block, execute the block and generate appHash and
 // report the result back to the leader.
 func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *blockProposal) error {
+	fmt.Println("Processing block proposal", blkPropMsg.blk.Header.Height, blkPropMsg.blk.Header.Hash())
 	if ce.role != types.RoleValidator {
 		fmt.Println("Only validators can process block proposals")
 		return nil
@@ -156,17 +179,20 @@ func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *b
 	}
 
 	if err := ce.validateBlock(blkPropMsg.blk); err != nil {
-		go blkPropMsg.respCb(false, types.ZeroHash)
+		go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil)
+		fmt.Println("Error validating block, sending NACK", err)
 		return err
 	}
 	ce.state.blkProp = blkPropMsg
 
 	if err := ce.executeBlock(); err != nil {
+		fmt.Println("Error executing block", err)
 		return err
 	}
 
 	// Broadcast the result back to the leader
-	go blkPropMsg.respCb(true, ce.state.blockRes.appHash)
+	fmt.Println("Sending ack to the leader", blkPropMsg.height, blkPropMsg.blkHash.String(), ce.state.blockRes.appHash.String())
+	go ce.ackBroadcaster(true, blkPropMsg.height, blkPropMsg.blkHash, &ce.state.blockRes.appHash)
 
 	return nil
 }
@@ -177,6 +203,7 @@ func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *b
 // Validator nodes can skip the block execution and directly commit the block if they have already processed the block.
 // The nodes should only commit the block if the appHash is valid, else halt the node.
 func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) error {
+	// fmt.Println("processing Commit block", blk.Header.Height, blk.Header.Hash(), appHash)
 	if ce.role == types.RoleLeader {
 		return nil
 	}
@@ -196,10 +223,19 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 		return nil
 	}
 
+	// You are a validator
 	if ce.state.blkProp == nil {
 		// No block proposal received, execute the block, validate the appHash and commit the block.
 		go ce.processAndCommit(blk, appHash)
 		return nil
+	}
+
+	// ensure that you are processing the correct block
+	if ce.state.blkProp.blkHash != blk.Header.Hash() {
+		// Rollback and reprocess the block sent as part of the commit message.
+		ce.resetState()
+		// TODO: somehow signal the current block processing to halt and reprocess the new block.
+		go ce.processAndCommit(blk, appHash)
 	}
 
 	if ce.state.blockRes == nil {
@@ -215,6 +251,7 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 
 	// Commit the block
 	if err := ce.commit(); err != nil {
+		fmt.Println("Error committing block", err)
 		return err
 	}
 
@@ -226,10 +263,9 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 // Used by the sentry nodes and slow validators to process and commit the block, it wouldn't
 // send the ack back to the leader.
 func (ce *ConsensusEngine) processAndCommit(blk *types.Block, appHash types.Hash) error {
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
-
+	fmt.Println("Processing committed block", blk.Header.Height, blk.Header.Hash().String(), appHash.String())
 	if err := ce.validateBlock(blk); err != nil {
+		fmt.Println("Error validating block", err)
 		return err
 	}
 	ce.state.blkProp = &blockProposal{
@@ -240,6 +276,7 @@ func (ce *ConsensusEngine) processAndCommit(blk *types.Block, appHash types.Hash
 	}
 
 	if err := ce.executeBlock(); err != nil {
+		fmt.Println("Error executing block", err)
 		return err
 	}
 
@@ -251,6 +288,7 @@ func (ce *ConsensusEngine) processAndCommit(blk *types.Block, appHash types.Hash
 
 	// Commit the block if the appHash is valid
 	if err := ce.commit(); err != nil {
+		fmt.Println("Error committing block", err)
 		return err
 	}
 

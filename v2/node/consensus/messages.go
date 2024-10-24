@@ -27,7 +27,7 @@ type blockProposal struct {
 	blkHash types.Hash
 	blk     *types.Block
 	// respCb is a callback function used to send the VoteMessage(ack/nack) back to the leader.
-	respCb func(ack bool, appHash types.Hash) error
+	// respCb func(ack bool, appHash types.Hash) error
 }
 
 func (bpm *blockProposal) Type() string {
@@ -38,6 +38,7 @@ type vote struct {
 	ack     bool
 	blkHash types.Hash
 	appHash *types.Hash
+	height  int64
 }
 
 func (vm *vote) Type() string {
