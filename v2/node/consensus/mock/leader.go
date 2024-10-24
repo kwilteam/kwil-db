@@ -43,7 +43,7 @@ func (ce *Engine) mine(ctx context.Context, interval time.Duration) {
 
 		prevHash := ce.lastCommit.hash
 		prevAppHash := fakeAppHash(ce.lastCommit.height)
-		blk := types.NewBlock(0, height, prevHash, prevAppHash, time.Now().UTC(), txns)
+		blk := types.NewBlock(height, prevHash, prevAppHash, time.Now().UTC(), txns)
 		hash := blk.Header.Hash()
 
 		log.Printf("built new block with %d transactions at height %d (%v)", len(txids), height, hash)
