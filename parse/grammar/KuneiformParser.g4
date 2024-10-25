@@ -266,7 +266,7 @@ alter_table_action:
 ;
 
 create_index_statement:
-    CREATE UNIQUE? INDEX name=identifier ON table=identifier LPAREN  columns=identifier_list RPAREN
+    CREATE UNIQUE? INDEX name=identifier? ON table=identifier LPAREN  columns=identifier_list RPAREN
 ;
 
 drop_index_statement:
