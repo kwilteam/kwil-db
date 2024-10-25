@@ -284,6 +284,10 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 	}, nil
 }
 
+// GetRawBlockTx extracts a transaction from a serialized block by its index in
+// the block. This allows to more efficiently extract one transaction without
+// copying all of the transactions in the block, and it avoids hashing all of
+// the transactions, which would be required to match by txID.
 func GetRawBlockTx(rawBlk []byte, idx uint32) ([]byte, error) {
 	r := bytes.NewReader(rawBlk)
 
