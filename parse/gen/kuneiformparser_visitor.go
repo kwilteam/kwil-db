@@ -145,26 +145,29 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#alter_table_statement.
 	VisitAlter_table_statement(ctx *Alter_table_statementContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#alter_column_clause.
-	VisitAlter_column_clause(ctx *Alter_column_clauseContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#add_column_constraint.
+	VisitAdd_column_constraint(ctx *Add_column_constraintContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#add_column_clause.
-	VisitAdd_column_clause(ctx *Add_column_clauseContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#drop_column_constraint.
+	VisitDrop_column_constraint(ctx *Drop_column_constraintContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#drop_column_clause.
-	VisitDrop_column_clause(ctx *Drop_column_clauseContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#add_column.
+	VisitAdd_column(ctx *Add_columnContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#rename_column_clause.
-	VisitRename_column_clause(ctx *Rename_column_clauseContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#drop_column.
+	VisitDrop_column(ctx *Drop_columnContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#rename_table_clause.
-	VisitRename_table_clause(ctx *Rename_table_clauseContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#rename_column.
+	VisitRename_column(ctx *Rename_columnContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#add_fk_clause.
-	VisitAdd_fk_clause(ctx *Add_fk_clauseContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#rename_table.
+	VisitRename_table(ctx *Rename_tableContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#drop_fk_clause.
-	VisitDrop_fk_clause(ctx *Drop_fk_clauseContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#add_table_constraint.
+	VisitAdd_table_constraint(ctx *Add_table_constraintContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#drop_table_constraint.
+	VisitDrop_table_constraint(ctx *Drop_table_constraintContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#create_index_statement.
 	VisitCreate_index_statement(ctx *Create_index_statementContext) interface{}

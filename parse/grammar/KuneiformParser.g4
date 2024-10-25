@@ -162,14 +162,6 @@ constraint:
 ;
 
 //// TODO: rename to constraint once table_delcaration is removed
-//c_constraint:
-//    (PRIMARY KEY | NOT NULL | DEFAULT literal| UNIQUE | CHECK | FOREIGN KEY)
-//    LPAREN sql_expr_list  RPAREN
-//    fk_constraint?
-//;
-
-//
-//// TODO: rename to constraint once table_delcaration is removed
 inline_constraint:
     PRIMARY KEY
     | UNIQUE
@@ -178,15 +170,6 @@ inline_constraint:
     | fk_constraint
     | CHECK (LPAREN sql_expr RPAREN)
 ;
-
-//inline_constraint:
-//    PRIMARY KEY                      #inline_constraint_pk
-//    | UNIQUE                         #inline_constraint_unique
-//    | NOT NULL                       #inline_constraint_not_null
-//    | DEFAULT literal                #inline_constraint_default
-//    | fk_constraint                  #inline_constraint_fk
-//    | CHECK (LPAREN sql_expr RPAREN) #inline_constratin_check
-//;
 
 fk_action:
     ON (UPDATE|DELETE)
@@ -254,7 +237,7 @@ create_table_statement:
     RPAREN
 ;
 
-constraint_def:
+constraint_def: // TODO: rename to table_constraint
     (CONSTRAINT name=identifier)?
     unnamed_constraint
 ;
@@ -266,62 +249,20 @@ unnamed_constraint:
     | FOREIGN KEY LPAREN identifier RPAREN fk_constraint
 ;
 
-//alter_table_statement:
-//    ALTER TABLE table=identifier
-//    alter_clause (COMMA alter_clause)*
-//;
-//
-//alter_clause:
-//    ALTER COLUMN column=identifer
-//    op=(SET | DROP)
-//    ((NOT NULL | DEFAULT) literal | CONSTRAINT identifier)       # alter_column
-//    | ADD COLUMN column=identifer                                # add_column
-//    | DROP COLUMN column=identifer                               # drop_column
-//    | RENAME COLUMN old_column=identifer TO new_column=identifer # rename_column
-//    | RENAME TO new_table=identifer                              # rename_table
-//;
-
 alter_table_statement:
     ALTER TABLE table=identifier
-    (alter_column_clause
-    | add_column_clause (COMMA add_column_clause)*
-    | drop_column_clause (COMMA drop_column_clause)*
-    | rename_column_clause
-    | rename_table_clause
-    | add_fk_clause
-    | drop_fk_clause
-    )
+    alter_table_action
 ;
 
-alter_column_clause:
-    ALTER COLUMN column=identifier
-    op=(SET | DROP)
-    ((NOT NULL | DEFAULT) literal?
-    | CONSTRAINT identifier)
-;
-
-add_column_clause:
-    ADD COLUMN column=identifier type
-;
-
-drop_column_clause:
-    DROP COLUMN column=identifier
-;
-
-rename_column_clause:
-    RENAME COLUMN old_column=identifier TO new_column=identifier
-;
-
-rename_table_clause:
-    RENAME TO new_table=identifier
-;
-
-add_fk_clause:
-    ADD CONSTRAINT fk_name=identifier unnamed_constraint
-;
-
-drop_fk_clause:
-    DROP CONSTRAINT fk_name=identifier
+alter_table_action:
+      ALTER COLUMN column=identifier SET (NOT NULL | DEFAULT literal)                  # add_column_constraint
+    | ALTER COLUMN column=identifier DROP (NOT NULL | DEFAULT | CONSTRAINT identifier) # drop_column_constraint
+    | ADD COLUMN column=identifier type                                                # add_column
+    | DROP COLUMN column=identifier                                                    # drop_column
+    | RENAME COLUMN old_column=identifier TO new_column=identifier                     # rename_column
+    | RENAME TO new_table=identifier                                                   # rename_table
+    | ADD constraint_def                                                               # add_table_constraint
+    | DROP CONSTRAINT identifier                                                       # drop_table_constraint
 ;
 
 create_index_statement:
