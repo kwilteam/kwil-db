@@ -39,16 +39,6 @@ type schemaVisitor struct {
 	actions map[string][]ActionStmt
 }
 
-func (s *schemaVisitor) VisitSrc(ctx *gen.SrcContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitFk_action(ctx *gen.Fk_actionContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
 // getTextFromStream gets the text from the input stream for a given range.
 // This is a hack over a bug in the generated antlr code, where it will try
 // to access index out of bounds.
@@ -1140,6 +1130,10 @@ func (s *schemaVisitor) VisitFk_constraint(ctx *gen.Fk_constraintContext) any {
 
 	c.Set(ctx)
 	return c
+}
+
+func (s *schemaVisitor) VisitFk_action(ctx *gen.Fk_actionContext) interface{} {
+	panic("implement me")
 }
 
 func (s *schemaVisitor) VisitConstraint_def(ctx *gen.Constraint_defContext) any {

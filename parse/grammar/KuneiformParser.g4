@@ -17,11 +17,6 @@ options {
 // can be ambiguous between the different types of entries. Callers will know
 // which entry to use based on when they are parsing.
 
-src:
-   sql+
-   EOF
-;
-
 schema_entry:
     schema EOF
 ;

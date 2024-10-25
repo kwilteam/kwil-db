@@ -7,10 +7,6 @@ type BaseKuneiformParserVisitor struct {
 	*antlr.BaseParseTreeVisitor
 }
 
-func (v *BaseKuneiformParserVisitor) VisitSrc(ctx *SrcContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseKuneiformParserVisitor) VisitSchema_entry(ctx *Schema_entryContext) interface{} {
 	return v.VisitChildren(ctx)
 }

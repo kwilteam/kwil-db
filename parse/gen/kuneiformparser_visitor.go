@@ -7,9 +7,6 @@ import "github.com/antlr4-go/antlr/v4"
 type KuneiformParserVisitor interface {
 	antlr.ParseTreeVisitor
 
-	// Visit a parse tree produced by KuneiformParser#src.
-	VisitSrc(ctx *SrcContext) interface{}
-
 	// Visit a parse tree produced by KuneiformParser#schema_entry.
 	VisitSchema_entry(ctx *Schema_entryContext) interface{}
 
