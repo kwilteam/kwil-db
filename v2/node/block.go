@@ -45,11 +45,47 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 		return
 	}
 
-	height, rawBlk := n.bki.Get(blkHash)
-	if height == -1 {
+	blk, err := n.bki.Get(blkHash)
+	if err != nil {
 		s.Write(noData) // don't have it
 	} else {
-		binary.Write(s, binary.LittleEndian, height)
+		rawBlk := types.EncodeBlock(blk)
+		binary.Write(s, binary.LittleEndian, blk.Header.Height)
+		s.Write(rawBlk)
+	}
+}
+
+func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
+	defer s.Close()
+
+	req := make([]byte, 128)
+	// io.ReadFull(s, req)
+	nr, err := s.Read(req)
+	if err != nil && err != io.EOF {
+		fmt.Println("bad get blk req", err)
+		return
+	}
+	req, ok := bytes.CutPrefix(req[:nr], []byte(getBlkHeightMsgPrefix))
+	if !ok {
+		fmt.Println("bad get blk(height) request")
+		return
+	}
+	heightStr := strings.TrimSpace(string(req))
+	height, err := strconv.ParseInt(heightStr, 10, 64)
+	if err != nil {
+		fmt.Println("invalid block ID", err)
+		return
+	}
+	log.Printf("requested block height: %q", height)
+
+	hash, blk, err := n.bki.GetByHeight(height)
+	if err != nil {
+		s.Write(noData) // don't have it
+	} else {
+		rawBlk := types.EncodeBlock(blk) // blkHash := blk.Hash()
+		// maybe we remove hash from the protocol, was thinking receiver could
+		// hang up earlier depending...
+		s.Write(hash[:])
 		s.Write(rawBlk)
 	}
 }
@@ -263,4 +299,39 @@ func (n *Node) getBlk(ctx context.Context, blkid string) (int64, []byte, error) 
 		return int64(height), rawBlk, nil
 	}
 	return 0, nil, ErrBlkNotFound
+}
+
+func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []byte, error) {
+	for _, peer := range n.peers() {
+		log.Printf("requesting block number %d from %v", height, peer)
+		t0 := time.Now()
+		resID := getBlkHeightMsgPrefix + strconv.FormatInt(height, 10)
+		resp, err := requestFrom(ctx, n.host, peer, resID, ProtocolIDBlockHeight, blkReadLimit)
+		if errors.Is(err, ErrNotFound) {
+			log.Printf("block not available on %v", peer)
+			continue
+		}
+		if errors.Is(err, ErrNoResponse) {
+			log.Printf("no response to block request to %v", peer)
+			continue
+		}
+		if err != nil {
+			log.Printf("unexpected error from %v: %v", peer, err)
+			continue
+		}
+
+		if len(resp) < types.HashLen+1 {
+			log.Printf("block response too short")
+			continue
+		}
+
+		log.Printf("obtained content for block number %q in %v", height, time.Since(t0))
+
+		var hash types.Hash
+		copy(hash[:], resp[:types.HashLen])
+		rawBlk := resp[types.HashLen:]
+
+		return hash, rawBlk, nil
+	}
+	return types.Hash{}, nil, ErrBlkNotFound
 }

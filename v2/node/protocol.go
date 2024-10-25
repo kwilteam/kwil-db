@@ -15,11 +15,12 @@ import (
 )
 
 const (
-	ProtocolIDDiscover protocol.ID = "/kwil/discovery/1.0.0"
-	ProtocolIDTx       protocol.ID = "/kwil/tx/1.0.0"
-	ProtocolIDTxAnn    protocol.ID = "/kwil/txann/1.0.0"
-	ProtocolIDBlock    protocol.ID = "/kwil/blk/1.0.0"
-	ProtocolIDBlkAnn   protocol.ID = "/kwil/blkann/1.0.0"
+	ProtocolIDDiscover    protocol.ID = "/kwil/discovery/1.0.0"
+	ProtocolIDTx          protocol.ID = "/kwil/tx/1.0.0"
+	ProtocolIDTxAnn       protocol.ID = "/kwil/txann/1.0.0"
+	ProtocolIDBlockHeight protocol.ID = "/kwil/blkheight/1.0.0"
+	ProtocolIDBlock       protocol.ID = "/kwil/blk/1.0.0"
+	ProtocolIDBlkAnn      protocol.ID = "/kwil/blkann/1.0.0"
 
 	ProtocolIDBlockPropose protocol.ID = "/kwil/blkprop/1.0.0"
 	// ProtocolIDACKProposal  protocol.ID = "/kwil/blkack/1.0.0"
@@ -27,10 +28,12 @@ const (
 	// These prefixes are protocol specific. They are intended to future proof
 	// the protocol handlers so different proto versions can be handled with
 	// shared code.
-	annTxMsgPrefix  = "txann:"
-	getTxMsgPrefix  = "gettx:"
-	annBlkMsgPrefix = "blkann:"
-	getBlkMsgPrefix = "getblk:"
+	annTxMsgPrefix        = "txann:"
+	getTxMsgPrefix        = "tx:"
+	annBlkMsgPrefix       = "blkann:"
+	getBlkMsgPrefix       = "blk:"
+	getBlkHeightMsgPrefix = "blkht:"
+	// getBlkHeaderMsgPrefix = "blkhdr:"
 
 	annPropMsgPrefix = "prop:"
 	annAckMsgPrefix  = "ack:"

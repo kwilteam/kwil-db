@@ -108,7 +108,6 @@ func NewNode(port uint64, privKey []byte, leader, pex bool) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	close = addClose(close, host.Close)
 	// n.host.Network().InterfaceListenAddresses() // expands 0.0.0.0
 
 	mp := mempool.New()
@@ -129,7 +128,8 @@ func NewNode(port uint64, privKey []byte, leader, pex bool) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	close = addClose(close, blkStr.Close)
+	close = addClose(close, blkStr.Close) //close db after stopping p2p
+	close = addClose(close, host.Close)
 
 	// ce := dummyce.New(blkStr, mp)
 	var role types.Role
@@ -158,6 +158,7 @@ func NewNode(port uint64, privKey []byte, leader, pex bool) (*Node, error) {
 	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
 	host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
 	host.SetStreamHandler(ProtocolIDBlock, node.blkGetStreamHandler)
+	host.SetStreamHandler(ProtocolIDBlockHeight, node.blkGetHeightStreamHandler)
 	host.SetStreamHandler(ProtocolIDTx, node.txGetStreamHandler)
 
 	host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
@@ -343,8 +344,11 @@ func (n *Node) txGetStreamHandler(s network.Stream) {
 	// this is racy, and should be different in product
 
 	// then confirmed tx index
-	_, rawTx = n.bki.GetTx(txHash)
-	if rawTx == nil {
+	_, rawTx, err = n.bki.GetTx(txHash)
+	if err != nil {
+		if !errors.Is(err, types.ErrNotFound) {
+			log.Println("unexpected GetTx error:", err)
+		}
 		s.Write(noData) // don't have it
 	} else {
 		s.Write(rawTx)
