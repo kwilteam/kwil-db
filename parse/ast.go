@@ -581,7 +581,6 @@ const (
 	UNIQUE      ConstraintType = "UNIQUE"
 	CHECK       ConstraintType = "CHECK"
 	FOREIGN_KEY ConstraintType = "FOREIGN KEY"
-	NAMED       ConstraintType = "NAMED"
 	//CUSTOM      ConstraintType = "CUSTOM"
 )
 
@@ -597,7 +596,6 @@ type ConstraintPrimaryKey struct {
 	Position
 
 	Columns []string
-	//inline  bool
 }
 
 func (c *ConstraintPrimaryKey) Accept(visitor Visitor) any {
@@ -623,7 +621,6 @@ type ConstraintUnique struct {
 
 	Name    string
 	Columns []string
-	//inline  bool
 }
 
 func (c *ConstraintUnique) Accept(visitor Visitor) any {
@@ -657,7 +654,6 @@ type ConstraintDefault struct {
 	Name   string
 	Column string
 	Value  *ExpressionLiteral
-	//inline bool
 }
 
 func (c *ConstraintDefault) Accept(visitor Visitor) any {
@@ -681,7 +677,6 @@ type ConstraintNotNull struct {
 
 	Name   string
 	Column string
-	//inline bool
 }
 
 func (c *ConstraintNotNull) Accept(visitor Visitor) any {
@@ -705,7 +700,6 @@ type ConstraintCheck struct {
 
 	Name  string
 	Param Expression
-	//inline bool
 }
 
 func (c *ConstraintCheck) Accept(visitor Visitor) any {
@@ -733,7 +727,6 @@ type ConstraintForeignKey struct {
 	Column    string
 	Ons       []ForeignKeyActionOn
 	Dos       []ForeignKeyActionDo
-	//inline    bool
 }
 
 func (c *ConstraintForeignKey) Accept(visitor Visitor) any {
@@ -793,19 +786,14 @@ func (i *Index) String() string {
 	}
 
 	str := strings.Builder{}
-	str.WriteString("INDEX")
+	str.WriteString("INDEX ")
 	if i.Name != "" {
-		str.WriteString(" " + i.Name)
+		str.WriteString(i.Name + " ")
 	}
 	if i.On != "" {
-		str.WriteString(" ON " + i.On)
+		str.WriteString("ON " + i.On)
 	}
 	str.WriteString("(" + strings.Join(i.Columns, ", ") + ")")
-
-	//s := "INDEX " + i.Name + " (" + strings.Join(i.Columns, ", ") + ")"
-	//if i.On != "" {
-	//	s = "INDEX " + i.Name + " ON " + i.On + " (" + strings.Join(i.Columns, ", ") + ")"
-	//}
 
 	switch i.Type {
 	case IndexTypeBTree:
@@ -961,16 +949,21 @@ func (a *DropColumnConstraint) ToSQL() string {
 	str.WriteString("ALTER COLUMN ")
 	str.WriteString(a.Column)
 	str.WriteString(" DROP ")
-	switch a.Type {
-	case NOT_NULL:
-		str.WriteString("NOT NULL")
-	case DEFAULT:
-		str.WriteString("DEFAULT")
-	case NAMED:
+
+	if a.Type != "" {
+		switch a.Type {
+		case NOT_NULL:
+			str.WriteString("NOT NULL")
+		case DEFAULT:
+			str.WriteString("DEFAULT")
+		default:
+			panic("unknown constraint type")
+		}
+	}
+
+	if a.Name != "" {
 		str.WriteString("CONSTRAINT ")
 		str.WriteString(a.Name)
-	default:
-		panic("unknown constraint type")
 	}
 
 	return str.String()

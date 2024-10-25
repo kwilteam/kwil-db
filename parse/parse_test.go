@@ -2219,7 +2219,6 @@ primary key (name)
 					Table: "user",
 					Action: &parse.DropColumnConstraint{
 						Column: "name",
-						Type:   parse.NAMED,
 						Name:   "abc",
 					},
 				},

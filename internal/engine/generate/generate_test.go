@@ -222,7 +222,6 @@ func TestGenerateDDLStatement(t *testing.T) {
 					Table: "user",
 					Action: &parse.DropColumnConstraint{
 						Column: "name",
-						Type:   parse.NAMED,
 						Name:   "abc",
 					},
 				},

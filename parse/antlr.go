@@ -960,26 +960,6 @@ func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statem
 
 	var primaryKey []string
 
-	//for _, column := range stmt.Columns {
-	//	for _, constraint := range column.Constraints {
-	//		switch c := constraint.(type) {
-	//		case *ConstraintPrimaryKey:
-	//			c.Columns = []string{column.Name}
-	//			primaryKey = c.Columns
-	//		case *ConstraintUnique:
-	//			c.Columns = []string{column.Name}
-	//		case *ConstraintCheck:
-	//		case *ConstraintForeignKey:
-	//			c.Column = column.Name
-	//		case *ConstraintDefault:
-	//			c.Column = column.Name
-	//		case *ConstraintNotNull:
-	//			c.Column = column.Name
-	//		default:
-	//			panic("unknown constraint type")
-	//		}
-	//	}
-	//}
 	for _, column := range stmt.Columns {
 		for _, constraint := range column.Constraints {
 			switch constraint.(type) {
@@ -1028,19 +1008,6 @@ func (s *schemaVisitor) VisitC_column_def(ctx *gen.C_column_defContext) interfac
 		Constraints: arr[Constraint](len(ctx.AllInline_constraint())),
 	}
 
-	// due to unfortunate lexing edge cases to support min/max, we
-	// have to parse the constraints here. Each constraint is a text, and should be
-	// one of:
-	// MIN/MAX/MINLEN/MAXLEN/MIN_LENGTH/MAX_LENGTH/NOTNULL/NOT/NULL/PRIMARY/KEY/PRIMARY_KEY/PK/DEFAULT/UNIQUE
-	// If NOT is present, it needs to be followed by NULL; similarly, if NULL is present, it needs to be preceded by NOT.
-	// If PRIMARY is present, it can be followed by key, but does not have to be. key must be preceded by primary.
-	// MIN, MAX, MINLEN, MAXLEN, MIN_LENGTH, MAX_LENGTH, and DEFAULT must also have a literal following them.
-
-	//type constraint struct {
-	//	ident string
-	//	vals  *types.DataType
-	//}
-
 	for i, c := range ctx.AllInline_constraint() {
 		column.Constraints[i] = c.Accept(s).(Constraint)
 	}
@@ -1054,26 +1021,19 @@ func (s *schemaVisitor) VisitC_column_def(ctx *gen.C_column_defContext) interfac
 func (s *schemaVisitor) VisitInline_constraint(ctx *gen.Inline_constraintContext) any {
 	switch {
 	case ctx.PRIMARY() != nil:
-		c := &ConstraintPrimaryKey{
-			//inline: true,
-		}
+		c := &ConstraintPrimaryKey{}
 		c.Set(ctx)
 		return c
 	case ctx.UNIQUE() != nil:
-		c := &ConstraintUnique{
-			//inline: true,
-		}
+		c := &ConstraintUnique{}
 		c.Set(ctx)
 		return c
 	case ctx.NOT() != nil:
-		c := &ConstraintNotNull{
-			//inline: true,
-		}
+		c := &ConstraintNotNull{}
 		c.Set(ctx)
 		return c
 	case ctx.DEFAULT() != nil:
 		c := &ConstraintDefault{
-			//inline: true,
 			Value: ctx.Literal().Accept(s).(*ExpressionLiteral),
 		}
 		c.Set(ctx)
@@ -1086,7 +1046,6 @@ func (s *schemaVisitor) VisitInline_constraint(ctx *gen.Inline_constraintContext
 		return c
 	case ctx.Fk_constraint() != nil:
 		c := ctx.Fk_constraint().Accept(s).(*ConstraintForeignKey)
-		//c.inline = true
 		return c
 	default:
 		panic("unknown constraint")
@@ -1229,7 +1188,6 @@ func (s *schemaVisitor) VisitDrop_column_constraint(ctx *gen.Drop_column_constra
 	case ctx.DEFAULT() != nil:
 		a.Type = DEFAULT
 	case ctx.CONSTRAINT() != nil:
-		a.Type = NAMED
 		a.Name = ctx.Identifier(1).Accept(s).(string)
 	default:
 		panic("unknown constraint")
