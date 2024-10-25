@@ -45,11 +45,12 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 		return
 	}
 
-	height, rawBlk := n.bki.Get(blkHash)
-	if height == -1 {
+	blk, err := n.bki.Get(blkHash)
+	if err != nil {
 		s.Write(noData) // don't have it
 	} else {
-		binary.Write(s, binary.LittleEndian, height)
+		rawBlk := types.EncodeBlock(blk)
+		binary.Write(s, binary.LittleEndian, blk.Header.Height)
 		s.Write(rawBlk)
 	}
 }

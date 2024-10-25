@@ -284,6 +284,37 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 	}, nil
 }
 
+func GetRawBlockTx(rawBlk []byte, idx uint32) ([]byte, error) {
+	r := bytes.NewReader(rawBlk)
+
+	hdr, err := DecodeBlockHeader(r)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range hdr.NumTxns {
+		var txLen uint32
+		if err := binary.Read(r, binary.LittleEndian, &txLen); err != nil {
+			return nil, fmt.Errorf("failed to read tx length: %w", err)
+		}
+		if int(txLen) > len(rawBlk) { // TODO: do better than this
+			return nil, fmt.Errorf("invalid transaction length %d", txLen)
+		}
+		if idx == i {
+			tx := make([]byte, txLen)
+			if _, err := io.ReadFull(r, tx); err != nil {
+				return nil, fmt.Errorf("failed to read tx data: %w", err)
+			}
+			return tx, nil
+		}
+		// seek to the start of the next tx
+		if _, err := r.Seek(int64(txLen), io.SeekCurrent); err != nil {
+			return nil, fmt.Errorf("failed to seek to next tx: %w", err)
+		}
+	}
+	return nil, ErrNotFound
+}
+
 /*func decodeBlockTxns(raw []byte) (txns [][]byte, err error) {
 	rd := bytes.NewReader(raw)
 	for rd.Len() > 0 {

@@ -1,6 +1,11 @@
 package types
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var ErrNotFound = errors.New("not found")
 
 // type TxIndex interface {
 // 	Get(Hash) (int64, []byte)
@@ -13,14 +18,16 @@ type BlockStore interface {
 
 	Best() (int64, Hash)
 	Have(Hash) bool
-	Get(Hash) (int64, []byte)
-	GetByHeight(int64) (Hash, []byte)
-	Store(*Block)
+	Get(Hash) (*Block, error)
+	// GetRaw(Hash) (int64, []byte)
+	GetByHeight(int64) (*Block, error)
+	// GetRawByHeight(int64) (Hash, []byte)
+	Store(*Block) error
 	PreFetch(Hash) (bool, func()) // should be app level instead
 }
 
 type TxGetter interface {
-	GetTx(Hash) (int64, []byte)
+	GetTx(Hash) (int64, []byte, error)
 	HaveTx(Hash) bool
 }
 

@@ -1,7 +1,6 @@
 package store
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -15,22 +14,20 @@ import (
 	"github.com/dgraph-io/badger/v4"
 )
 
-// This version of BlockStore has one badger DB,
-
 type BlockStore struct {
 	mtx      sync.RWMutex
 	idx      map[types.Hash]int64
 	hashes   map[int64]types.Hash // []types.Hash, also could store pointer
 	fetching map[types.Hash]bool  // TODO: remove, app concern
 
-	log log.Logger
 	db  *badger.DB
+	tdb *badger.DB
 }
 
 var (
-	nsHeader = []byte("h:") // block metadata (header + signature)
-	nsBlock  = []byte("b:") // full block
-	nsTxn    = []byte("t:") // transaction index by tx hash
+	nsHeight = []byte("h:")
+	nsBlock  = []byte("b:")
+	nsTxn    = []byte("t:")
 )
 
 func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
@@ -46,11 +43,13 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 	bOpts := badger.DefaultOptions(filepath.Join(dir, "bstore"))
 	bOpts.WithLogger(&badgerLogger{logger})
 	bOpts = bOpts.WithLoggingLevel(badger.WARNING)
-	// opts.SyncWrites = true
-	// opts.Compression = options.ZSTD
-	// opts.ZSTDCompressionLevel = 3
-	bOpts = bOpts.WithLoggingLevel(badger.WARNING)
 	db, err := badger.Open(bOpts)
+	if err != nil {
+		return nil, err
+	}
+	bOpts = badger.DefaultOptions(filepath.Join(dir, "txi"))
+	bOpts = bOpts.WithLoggingLevel(badger.WARNING)
+	tdb, err := badger.Open(bOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -59,13 +58,12 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 		hashes:   make(map[int64]types.Hash),
 		fetching: make(map[types.Hash]bool),
 		db:       db,
-		log:      logger,
+		tdb:      tdb,
 	}
 
-	// Initialize block index from the db
 	itOpts := badger.DefaultIteratorOptions
-	itOpts.Prefix = nsHeader
-	pfxLen := len(nsHeader)
+	itOpts.Prefix = nsHeight // the heights only, not block content
+	pfxLen := len(nsHeight)
 
 	var hash types.Hash // reuse in loop
 
@@ -78,13 +76,10 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 			item := it.Item()
 			var height int64
 			err := item.Value(func(val []byte) error {
-				r := bytes.NewReader(val)
-				blockHeader, err := types.DecodeBlockHeader(r)
-				if err != nil {
-					return err
+				if len(val) < 8 {
+					return errors.New("invalid height in block index")
 				}
-				height = blockHeader.Height
-				// sig, err = io.ReadAll(r)
+				height = int64(binary.LittleEndian.Uint64(val))
 				return nil
 			})
 			if err != nil {
@@ -102,7 +97,8 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 			count++
 		}
 
-		logger.Infof("indexed %d blocks", count)
+		// logger.Infof("loaded %d blocks from the block store", count)
+		logger.Info("block index loaded", "blocks", count)
 
 		return nil
 	})
@@ -111,7 +107,7 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 }
 
 func (bki *BlockStore) Close() error {
-	return bki.db.Close()
+	return errors.Join(bki.db.Close(), bki.tdb.Close())
 }
 
 func (bki *BlockStore) Have(hash types.Hash) bool {
@@ -121,73 +117,54 @@ func (bki *BlockStore) Have(hash types.Hash) bool {
 	return have
 }
 
-const blkInfoLen = 8 + types.HashLen + 4
-
-func makeTxVal(height int64, blkHash types.Hash, idx uint32) []byte {
-	val := make([]byte, blkInfoLen)
-	binary.LittleEndian.PutUint64(val, uint64(height))
-	copy(val[8:], blkHash[:])
-	binary.LittleEndian.PutUint32(val[8+types.HashLen:], idx)
-	return val
-}
-
-func (bki *BlockStore) mayReplaceTx(txn *badger.Txn, err error) (*badger.Txn, error) {
-	if err == nil {
-		return txn, nil
-	}
-	if !errors.Is(err, badger.ErrTxnTooBig) {
-		return nil, err
-	}
-	bki.log.Warn("block store: replacing large txn")
-	if err = txn.Commit(); err != nil {
-		txn.Discard()
-		return nil, err
-	}
-	return bki.db.NewTransaction(true), nil
-}
-
 func (bki *BlockStore) Store(blk *types.Block) error {
 	blkHash := blk.Hash()
+	// blkid := blkHash.String()
 	height := blk.Header.Height
+
+	raw := types.EncodeBlock(blk)
 
 	bki.mtx.Lock()
 	defer bki.mtx.Unlock()
 	delete(bki.fetching, blkHash)
 	bki.idx[blkHash] = height
 	bki.hashes[height] = blkHash
-
-	txn := bki.db.NewTransaction(true)
-	defer txn.Discard()
-
-	// Store block metadata (header + signature)
-	key := slices.Concat(nsHeader, blkHash[:])
-	err := txn.Set(key, append(types.EncodeBlockHeader(blk.Header), blk.Signature...))
-	if err != nil {
-		return err
-	}
-
-	// Store the block contents with the nsBlock prefix
-	key = slices.Concat(nsBlock, blkHash[:])
-	err = txn.Set(key, types.EncodeBlock(blk))
-	if err != nil {
-		return err
-	}
-
-	// Store the txn index
-	txIDs := make([]byte, 0, len(blk.Txns)*types.HashLen)
-	for idx, tx := range blk.Txns {
-		txHash := types.HashBytes(tx)
-		key = slices.Concat(nsTxn, txHash[:]) // "t:txHash" => height + blkHash + blkIdx
-		val := makeTxVal(height, blkHash, uint32(idx))
-		err := txn.Set(key, val)
-		txn, err = bki.mayReplaceTx(txn, err)
+	heightBts := binary.LittleEndian.AppendUint64(nil, uint64(height))
+	err := bki.db.Update(func(txn *badger.Txn) error {
+		// store its height
+		key := slices.Concat(nsHeight, blkHash[:])
+		err := txn.Set(key, heightBts)
 		if err != nil {
 			return err
 		}
-		txIDs = append(txIDs, txHash[:]...)
+		// store the contents
+		key = slices.Concat(nsBlock, blkHash[:])
+		return txn.Set(key, raw)
+	})
+	if err != nil {
+		return err
 	}
 
-	return txn.Commit()
+	blkInfo := append(heightBts, blkHash[:]...)
+	for i, tx := range blk.Txns {
+		hash := types.HashBytes(tx)
+
+		err := bki.tdb.Update(func(txn *badger.Txn) error {
+			// store its block info
+			blkInfoIdx := binary.LittleEndian.AppendUint32(blkInfo, uint32(i))
+			key := slices.Concat(nsBlock, hash[:]) // tdb["b:txHash"] = block info
+			if err := txn.Set(key, blkInfoIdx); err != nil {
+				return err
+			}
+			// store its own content (todo: seek in block data to get one tx)
+			key = slices.Concat(nsTxn, hash[:]) // tdb["t:txHash"] = raw block
+			return txn.Set(key, tx)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (bki *BlockStore) PreFetch(blkid types.Hash) (bool, func()) { // TODO: remove
@@ -228,49 +205,52 @@ func (bki *BlockStore) Best() (int64, types.Hash) {
 	}
 	return bestHeight, bestHash
 }
-
-func (bki *BlockStore) Get(blkHash types.Hash) (*types.Block, error) {
+func (bki *BlockStore) Get(blkHash types.Hash) (int64, []byte, error) {
 	bki.mtx.RLock()
 	defer bki.mtx.RUnlock()
+	height, have := bki.idx[blkHash]
+	if !have {
+		return -1, nil, nil
+	}
 
-	var block *types.Block
+	var raw []byte
 	err := bki.db.View(func(txn *badger.Txn) error {
-		// Load the block and get the tx
-		blockKey := slices.Concat(nsBlock, blkHash[:])
-		item, err := txn.Get(blockKey)
+		key := slices.Concat(nsBlock, blkHash[:]) // bdb["b:hash"] => raw block
+		item, err := txn.Get(key)
 		if err != nil {
 			return err
 		}
-
-		return item.Value(func(val []byte) error {
-			block, err = types.DecodeBlock(val)
+		raw, err = item.ValueCopy(nil)
+		if err != nil {
 			return err
-		})
+		}
+		return err
 	})
-
-	if errors.Is(err, badger.ErrKeyNotFound) {
-		return nil, types.ErrNotFound
+	if err != nil {
+		return 0, nil, err
 	}
-
-	return block, err
+	return height, raw, nil
 }
 
-// GetByHeight retrieves the full block based on the block height.
-func (bki *BlockStore) GetByHeight(height int64) (*types.Block, error) {
+func (bki *BlockStore) GetByHeight(height int64) (types.Hash, []byte, error) {
 	bki.mtx.RLock()
 	defer bki.mtx.RUnlock()
-
 	hash, have := bki.hashes[height]
 	if !have {
-		return nil, fmt.Errorf("block not found at height %d", height)
+		return hash, nil, types.ErrNotFound
 	}
-	return bki.Get(hash)
+	storedHeight, raw, err := bki.Get(hash)
+	if storedHeight != height {
+		panic(fmt.Sprintf("internal inconsistency: %d != %d", storedHeight, height))
+	}
+	return hash, raw, err
 }
 
 func (bki *BlockStore) HaveTx(txHash types.Hash) bool {
 	var have bool
-	err := bki.db.View(func(txn *badger.Txn) error {
-		key := slices.Concat(nsTxn, txHash[:]) // tdb["t:txHash"]
+	err := bki.tdb.View(func(txn *badger.Txn) error {
+		// get the block info
+		key := slices.Concat(nsBlock, txHash[:]) // tdb["b:txHash"] => blk info
 		if _, err := txn.Get(key); err != nil {
 			if errors.Is(err, badger.ErrKeyNotFound) {
 				return nil
@@ -281,9 +261,6 @@ func (bki *BlockStore) HaveTx(txHash types.Hash) bool {
 		return nil
 	})
 	if err != nil {
-		if errors.Is(err, badger.ErrDBClosed) {
-			return false
-		}
 		panic(err)
 	}
 	return have
@@ -293,47 +270,35 @@ func (bki *BlockStore) GetTx(txHash types.Hash) (int64, []byte, error) {
 	var raw []byte
 	var height int64
 	var blkHash types.Hash
-	var blkIdx uint32
-	err := bki.db.View(func(txn *badger.Txn) error {
-		// Get block info from the tx index
-		key := slices.Concat(nsTxn, txHash[:]) // tdb["t:txHash"] => blk info
+	// var blkIdx uint32
+	err := bki.tdb.View(func(txn *badger.Txn) error {
+		// get the block info
+		key := slices.Concat(nsBlock, txHash[:]) // tdb["b:txHash"] => blk info
 		item, err := txn.Get(key)
 		if err != nil {
 			return err
 		}
 		err = item.Value(func(val []byte) error {
-			if len(val) < blkInfoLen {
+			if len(val) < 8+types.HashLen+4 {
 				return errors.New("invalid block info for tx")
 			}
 			height = int64(binary.LittleEndian.Uint64(val))
 			copy(blkHash[:], val[8:])
-			blkIdx = binary.LittleEndian.Uint32(val[8+types.HashLen:])
+			// blkIdx = binary.LittleEndian.Uint32(val[8+types.HashLen:])
 			return nil
 		})
 		if err != nil {
 			return err
 		}
 
-		// Load the block and get the tx
-		blockKey := slices.Concat(nsBlock, blkHash[:])
-		item, err = txn.Get(blockKey)
+		// get the transaction content
+		key = slices.Concat(nsTxn, txHash[:]) // tdb["t:txHash"] => raw tx
+		item, err = txn.Get(key)
 		if err != nil {
-			return err // bug
-		}
-
-		return item.Value(func(val []byte) error {
-			raw, err = types.GetRawBlockTx(val, blkIdx)
 			return err
-			// block, err := types.DecodeBlock(val)
-			// if err != nil {
-			// 	return err
-			// }
-			// if len(block.Txns) <= int(blkIdx) {
-			// 	return types.ErrNotFound // bug
-			// }
-			// raw = block.Txns[blkIdx]
-			// return nil
-		})
+		}
+		raw, err = item.ValueCopy(nil)
+		return err
 	})
 	if err != nil {
 		if errors.Is(err, badger.ErrKeyNotFound) {
@@ -341,6 +306,8 @@ func (bki *BlockStore) GetTx(txHash types.Hash) (int64, []byte, error) {
 		}
 		return 0, nil, err
 	}
+
+	// NOTE: we could now pull the block and seek to the tx location
 
 	return height, raw, nil
 }
