@@ -49,46 +49,6 @@ func (s *schemaVisitor) VisitFk_action(ctx *gen.Fk_actionContext) interface{} {
 	panic("implement me")
 }
 
-func (s *schemaVisitor) VisitAlter_table_statement(ctx *gen.Alter_table_statementContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitAlter_column_clause(ctx *gen.Alter_column_clauseContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitAdd_column_clause(ctx *gen.Add_column_clauseContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitDrop_column_clause(ctx *gen.Drop_column_clauseContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitRename_column_clause(ctx *gen.Rename_column_clauseContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitRename_table_clause(ctx *gen.Rename_table_clauseContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitAdd_fk_clause(ctx *gen.Add_fk_clauseContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitDrop_fk_clause(ctx *gen.Drop_fk_clauseContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (s *schemaVisitor) VisitCreate_index_statement(ctx *gen.Create_index_statementContext) interface{} {
 	//TODO implement me
 	panic("implement me")
@@ -968,8 +928,8 @@ func (s *schemaVisitor) VisitSql_statement(ctx *gen.Sql_statementContext) any {
 	switch {
 	case ctx.Create_table_statement() != nil:
 		stmt.SQL = ctx.Create_table_statement().Accept(s).(*CreateTableStatement)
-	//case ctx.Alter_table_statement() != nil:
-	//	stmt.SQL = ctx.Alter_table_statement().Accept(s).(*AlterTableStatement)
+	case ctx.Alter_table_statement() != nil:
+		stmt.SQL = ctx.Alter_table_statement().Accept(s).(*AlterTableStatement)
 	//case ctx.Create_index_statement() != nil:
 	//	stmt.SQL = ctx.Create_index_statement().Accept(s).(*CreateIndexStatement)
 	//case ctx.Drop_index_statement() != nil:
@@ -1246,6 +1206,109 @@ func (s *schemaVisitor) VisitC_index_def(ctx *gen.C_index_defContext) any {
 	index.Set(ctx)
 	index.Set(ctx)
 	return index
+}
+
+func (s *schemaVisitor) VisitAlter_table_statement(ctx *gen.Alter_table_statementContext) any {
+	stmt := &AlterTableStatement{
+		Table:  ctx.Identifier().Accept(s).(string),
+		Action: ctx.Alter_table_action().Accept(s).(AlterTableAction),
+	}
+
+	stmt.Set(ctx)
+	return stmt
+}
+
+func (s *schemaVisitor) VisitAdd_column_constraint(ctx *gen.Add_column_constraintContext) any {
+	a := &AddColumnConstraint{
+		Column: ctx.Identifier().Accept(s).(string),
+	}
+
+	if ctx.NULL() != nil {
+		a.Type = NOT_NULL
+	} else {
+		a.Type = DEFAULT
+		a.Value = ctx.Literal().Accept(s).(*ExpressionLiteral)
+	}
+
+	a.Set(ctx)
+	return a
+}
+
+func (s *schemaVisitor) VisitDrop_column_constraint(ctx *gen.Drop_column_constraintContext) any {
+	a := &DropColumnConstraint{
+		Column: ctx.Identifier(0).Accept(s).(string),
+	}
+
+	switch {
+	case ctx.NULL() != nil:
+		a.Type = NOT_NULL
+	case ctx.DEFAULT() != nil:
+		a.Type = DEFAULT
+	case ctx.CONSTRAINT() != nil:
+		a.Type = NAMED
+		a.Name = ctx.Identifier(1).Accept(s).(string)
+	default:
+		panic("unknown constraint")
+	}
+
+	a.Set(ctx)
+	return a
+}
+
+func (s *schemaVisitor) VisitAdd_column(ctx *gen.Add_columnContext) any {
+	a := &AddColumn{
+		Name: ctx.Identifier().Accept(s).(string),
+		Type: ctx.Type_().Accept(s).(*types.DataType),
+	}
+
+	a.Set(ctx)
+	return a
+}
+
+func (s *schemaVisitor) VisitDrop_column(ctx *gen.Drop_columnContext) any {
+	a := &DropColumn{
+		Name: ctx.Identifier().Accept(s).(string),
+	}
+
+	a.Set(ctx)
+	return a
+}
+
+func (s *schemaVisitor) VisitRename_column(ctx *gen.Rename_columnContext) any {
+	a := &RenameColumn{
+		OldName: ctx.GetOld_column().Accept(s).(string),
+		NewName: ctx.GetNew_column().Accept(s).(string),
+	}
+
+	a.Set(ctx)
+	return a
+}
+
+func (s *schemaVisitor) VisitRename_table(ctx *gen.Rename_tableContext) any {
+	a := &RenameTable{
+		Name: ctx.Identifier().Accept(s).(string),
+	}
+
+	a.Set(ctx)
+	return a
+}
+
+func (s *schemaVisitor) VisitAdd_table_constraint(ctx *gen.Add_table_constraintContext) any {
+	a := &AddTableConstraint{
+		Cons: ctx.Constraint_def().Accept(s).(Constraint),
+	}
+
+	a.Set(ctx)
+	return a
+}
+
+func (s *schemaVisitor) VisitDrop_table_constraint(ctx *gen.Drop_table_constraintContext) any {
+	a := &DropTableConstraint{
+		Name: ctx.Identifier().Accept(s).(string),
+	}
+
+	a.Set(ctx)
+	return a
 }
 
 func (s *schemaVisitor) VisitSelect_statement(ctx *gen.Select_statementContext) any {

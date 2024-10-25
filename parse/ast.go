@@ -560,7 +560,7 @@ func (c *CreateTableStatement) Accept(v Visitor) any {
 }
 
 func (c *CreateTableStatement) StmtType() SQLStatementType {
-	panic("implement me")
+	return SQLStatementTypeCreateTable
 }
 
 // Column represents a table column.
@@ -575,12 +575,13 @@ type Column struct {
 type ConstraintType string
 
 const (
-	PRIMARY_KEY ConstraintType = "PRIMARY_KEY"
+	PRIMARY_KEY ConstraintType = "PRIMARY KEY"
 	DEFAULT     ConstraintType = "DEFAULT"
-	NOT_NULL    ConstraintType = "NOT_NULL"
+	NOT_NULL    ConstraintType = "NOT NULL"
 	UNIQUE      ConstraintType = "UNIQUE"
 	CHECK       ConstraintType = "CHECK"
-	FOREIGN_KEY ConstraintType = "FOREIGN_KEY"
+	FOREIGN_KEY ConstraintType = "FOREIGN KEY"
+	NAMED       ConstraintType = "NAMED"
 	//CUSTOM      ConstraintType = "CUSTOM"
 )
 
@@ -869,6 +870,193 @@ type ForeignKeyAction struct {
 
 	// Do specifies what a foreign key action should do
 	Do ForeignKeyActionDo `json:"do"`
+}
+
+type AlterTableAction interface {
+	Node
+
+	alterTableAction()
+	ToSQL() string
+}
+
+// AlterTableStatement is a ALTER TABLE statement.
+type AlterTableStatement struct {
+	Position
+
+	Table  string
+	Action AlterTableAction
+}
+
+func (a *AlterTableStatement) Accept(v Visitor) any {
+	return v.VisitAlterTableStatement(a)
+}
+
+func (a *AlterTableStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeAlterTable
+}
+
+type AddColumnConstraint struct {
+	Position
+
+	Column string
+	Type   ConstraintType
+	Value  *ExpressionLiteral
+}
+
+func (a *AddColumnConstraint) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *AddColumnConstraint) alterTableAction() {}
+
+func (a *AddColumnConstraint) ToSQL() string {
+	str := strings.Builder{}
+	str.WriteString("ALTER COLUMN ")
+	str.WriteString(a.Column)
+	str.WriteString(" SET ")
+	switch a.Type {
+	case NOT_NULL:
+		str.WriteString("NOT NULL")
+	case DEFAULT:
+		str.WriteString("DEFAULT ")
+		str.WriteString(a.Value.String())
+	default:
+		panic("unknown constraint type")
+	}
+
+	return str.String()
+}
+
+type DropColumnConstraint struct {
+	Position
+
+	Column string
+	Type   ConstraintType
+	Name   string // will be set when drop a named constraint
+}
+
+func (a *DropColumnConstraint) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *DropColumnConstraint) alterTableAction() {}
+
+func (a *DropColumnConstraint) ToSQL() string {
+	str := strings.Builder{}
+	str.WriteString("ALTER COLUMN ")
+	str.WriteString(a.Column)
+	str.WriteString(" DROP ")
+	switch a.Type {
+	case NOT_NULL:
+		str.WriteString("NOT NULL")
+	case DEFAULT:
+		str.WriteString("DEFAULT")
+	case NAMED:
+		str.WriteString("CONSTRAINT ")
+		str.WriteString(a.Name)
+	default:
+		panic("unknown constraint type")
+	}
+
+	return str.String()
+}
+
+type AddColumn struct {
+	Position
+
+	Name string
+	Type *types.DataType
+}
+
+func (a *AddColumn) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *AddColumn) alterTableAction() {}
+
+func (a *AddColumn) ToSQL() string {
+	return "ADD COLUMN " + a.Name + " " + a.Type.String()
+}
+
+type DropColumn struct {
+	Position
+
+	Name string
+}
+
+func (a *DropColumn) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *DropColumn) alterTableAction() {}
+
+func (a *DropColumn) ToSQL() string {
+	return "DROP COLUMN " + a.Name
+}
+
+type RenameColumn struct {
+	Position
+
+	OldName string
+	NewName string
+}
+
+func (a *RenameColumn) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *RenameColumn) alterTableAction() {}
+
+func (a *RenameColumn) ToSQL() string {
+	return "RENAME COLUMN " + a.OldName + " TO " + a.NewName
+}
+
+type RenameTable struct {
+	Position
+
+	Name string
+}
+
+func (a *RenameTable) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *RenameTable) alterTableAction() {}
+
+func (a *RenameTable) ToSQL() string {
+	return "RENAME TO " + a.Name
+}
+
+type AddTableConstraint struct {
+	Position
+
+	Cons Constraint
+}
+
+func (a *AddTableConstraint) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *AddTableConstraint) alterTableAction() {}
+
+func (a *AddTableConstraint) ToSQL() string {
+	return ""
+}
+
+type DropTableConstraint struct {
+	Position
+
+	Name string
+}
+
+func (a *DropTableConstraint) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *DropTableConstraint) alterTableAction() {}
+
+func (a *DropTableConstraint) ToSQL() string {
+	return "DROP CONSTRAINT " + a.Name
 }
 
 // SelectStatement is a SELECT statement.
@@ -1431,11 +1619,7 @@ type SQLVisitor interface {
 	VisitOrderingTerm(*OrderingTerm) any
 	// DDL
 	VisitCreateTableStatement(*CreateTableStatement) any
-	//VisitConstraintPrimaryKey(*ConstraintPrimaryKey) any
-	//VisitConstraintDefault(*ConstraintDefault) any
-	//VisitConstraintCheck(*ConstraintCheck) any
-	//VisitConstraintUnique(*ConstraintCheck) any
-	//VisitConstraintForeignKey(*ConstraintForeignKey) any
+	VisitAlterTableStatement(*AlterTableStatement) any
 }
 
 // UnimplementedSqlVisitor is meant to be used when an implementing visitor only intends

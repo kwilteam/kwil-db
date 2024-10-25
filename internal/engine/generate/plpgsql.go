@@ -849,6 +849,33 @@ func (s *sqlGenerator) VisitCreateTableStatement(p0 *parse.CreateTableStatement)
 	return str.String()
 }
 
+func (s *sqlGenerator) VisitAlterTableStatement(p0 *parse.AlterTableStatement) any {
+	str := strings.Builder{}
+	str.WriteString("ALTER TABLE ")
+	str.WriteString(p0.Table)
+	str.WriteString(" ")
+
+	if action, ok := p0.Action.(*parse.AddTableConstraint); ok {
+		str.WriteString("ADD ")
+		switch cc := action.Cons.(type) {
+		case *parse.ConstraintCheck:
+			//str.WriteString(cc.Name)
+			str.WriteString("CHECK(")
+			str.WriteString(cc.Param.Accept(s).(string))
+			str.WriteString(")")
+		case *parse.ConstraintForeignKey:
+			//str.WriteString(cc.Name)
+			str.WriteString(cc.ToSQL())
+		default:
+			panic("unknown constraint type")
+		}
+	} else {
+		str.WriteString(p0.Action.ToSQL())
+	}
+
+	return str.String()
+}
+
 // procedureGenerator is a visitor that generates plpgsql code.
 type procedureGenerator struct {
 	sqlGenerator

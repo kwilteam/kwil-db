@@ -2055,6 +2055,10 @@ func (s *sqlAnalyzer) VisitCreateTableStatement(p0 *CreateTableStatement) any {
 	panic("sqlAnalyzer: not implemented")
 }
 
+func (s *sqlAnalyzer) VisitAlterTableStatement(p0 *AlterTableStatement) any {
+	panic("sqlAnalyzer: not implemented")
+}
+
 // tableToRelation converts a table to a relation.
 func tableToRelation(t *types.Table) *Relation {
 	attrs := make([]*Attribute, len(t.Columns))

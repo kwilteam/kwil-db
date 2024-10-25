@@ -2,7 +2,6 @@ package parse_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -875,7 +874,6 @@ func Test_Kuneiform(t *testing.T) {
 func assertPositionsAreSet(t *testing.T, v any) {
 	parse.RecursivelyVisitPositions(v, func(gp parse.GetPositioner) {
 		pos := gp.GetPosition()
-		fmt.Printf("%T: %+v\n", gp, pos)
 		// if not set, this will tell us the struct
 		assert.True(t, pos.IsSet, "position is not set. struct type: %T", gp)
 	})
@@ -2144,7 +2142,7 @@ INDEX ithome (name, address)
 				},
 			},
 		},
-		//{
+		//{ // TODO:
 		//	name: "create table with extra comma",
 		//	sql:  `CREATE TABLE users (id int primary key,);`,
 		//	err:  parse.ErrSyntax,
@@ -2156,6 +2154,157 @@ name text check(length(name) > 10),
 primary key (name)
 );`,
 			err: parse.ErrRedeclarePrimaryKey,
+		},
+		{
+			name: "alter table add column constraint NOT NULL",
+			sql:  `ALTER TABLE user ALTER COLUMN name SET NOT NULL;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.AlterTableStatement{
+					Table: "user",
+					Action: &parse.AddColumnConstraint{
+						Column: "name",
+						Type:   parse.NOT_NULL,
+					},
+				},
+			},
+		},
+		{
+			name: "alter table add column constraint DEFAULT",
+			sql:  `ALTER TABLE user ALTER COLUMN name SET DEFAULT 10;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.AlterTableStatement{
+					Table: "user",
+					Action: &parse.AddColumnConstraint{
+						Column: "name",
+						Type:   parse.DEFAULT,
+						Value: &parse.ExpressionLiteral{
+							Type:  types.IntType,
+							Value: int64(10),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "alter table drop column constraint NOT NULL",
+			sql:  `ALTER TABLE user ALTER COLUMN name DROP NOT NULL;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.AlterTableStatement{
+					Table: "user",
+					Action: &parse.DropColumnConstraint{
+						Column: "name",
+						Type:   parse.NOT_NULL,
+					},
+				},
+			},
+		},
+		{
+			name: "alter table drop column constraint DEFAULT",
+			sql:  `ALTER TABLE user ALTER COLUMN name DROP DEFAULT;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.AlterTableStatement{
+					Table: "user",
+					Action: &parse.DropColumnConstraint{
+						Column: "name",
+						Type:   parse.DEFAULT,
+					},
+				},
+			},
+		},
+		{
+			name: "alter table drop column constraint named",
+			sql:  `ALTER TABLE user ALTER COLUMN name DROP CONSTRAINT abc;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.AlterTableStatement{
+					Table: "user",
+					Action: &parse.DropColumnConstraint{
+						Column: "name",
+						Type:   parse.NAMED,
+						Name:   "abc",
+					},
+				},
+			},
+		},
+		{
+			name: "alter table add column",
+			sql:  `ALTER TABLE user ADD COLUMN abc int;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.AlterTableStatement{
+					Table: "user",
+					Action: &parse.AddColumn{
+						Name: "abc",
+						Type: types.IntType,
+					},
+				},
+			},
+		},
+		{
+			name: "alter table drop column",
+			sql:  `ALTER TABLE user DROP COLUMN abc;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.AlterTableStatement{
+					Table: "user",
+					Action: &parse.DropColumn{
+						Name: "abc",
+					},
+				},
+			},
+		},
+		{
+			name: "alter table rename column",
+			sql:  `ALTER TABLE user RENAME COLUMN abc TO def;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.AlterTableStatement{
+					Table: "user",
+					Action: &parse.RenameColumn{
+						OldName: "abc",
+						NewName: "def",
+					},
+				},
+			},
+		},
+		{
+			name: "alter table rename table",
+			sql:  `ALTER TABLE user RENAME TO account;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.AlterTableStatement{
+					Table: "user",
+					Action: &parse.RenameTable{
+						Name: "account",
+					},
+				},
+			},
+		},
+		{
+			name: "alter table add constraint fk",
+			sql:  `ALTER TABLE user ADD constraint new_fk FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.AlterTableStatement{
+					Table: "user",
+					Action: &parse.AddTableConstraint{
+						Cons: &parse.ConstraintForeignKey{
+							Name:      "new_fk",
+							RefTable:  "cities",
+							RefColumn: "id",
+							Column:    "city_id",
+							Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
+							Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "alter table drop constraint",
+			sql:  `ALTER TABLE user DROP CONSTRAINT abc;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.AlterTableStatement{
+					Table: "user",
+					Action: &parse.DropTableConstraint{
+						Name: "abc",
+					},
+				},
+			},
 		},
 		{
 			name: "simple select",
