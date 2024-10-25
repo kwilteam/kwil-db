@@ -255,16 +255,18 @@ func (bki *BlockStore) Get(blkHash types.Hash) (*types.Block, error) {
 	return block, err
 }
 
-// GetByHeight retrieves the full block based on the block height.
-func (bki *BlockStore) GetByHeight(height int64) (*types.Block, error) {
+// GetByHeight retrieves the full block based on the block height. The returned
+// hash is a convenience for the caller to spare computing it.
+func (bki *BlockStore) GetByHeight(height int64) (types.Hash, *types.Block, error) {
 	bki.mtx.RLock()
 	defer bki.mtx.RUnlock()
 
 	hash, have := bki.hashes[height]
 	if !have {
-		return nil, fmt.Errorf("block not found at height %d", height)
+		return types.Hash{}, nil, fmt.Errorf("block not found at height %d", height)
 	}
-	return bki.Get(hash)
+	blk, err := bki.Get(hash)
+	return hash, blk, err
 }
 
 func (bki *BlockStore) HaveTx(txHash types.Hash) bool {

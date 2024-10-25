@@ -20,7 +20,7 @@ type BlockStore interface {
 	Have(Hash) bool
 	Get(Hash) (*Block, error)
 	// GetRaw(Hash) (int64, []byte)
-	GetByHeight(int64) (*Block, error)
+	GetByHeight(int64) (Hash, *Block, error) // note: we can impl GetBlockHeader easily too
 	// GetRawByHeight(int64) (Hash, []byte)
 	Store(*Block) error
 	PreFetch(Hash) (bool, func()) // should be app level instead

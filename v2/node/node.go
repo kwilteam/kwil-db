@@ -158,6 +158,7 @@ func NewNode(port uint64, privKey []byte, leader, pex bool) (*Node, error) {
 	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
 	host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
 	host.SetStreamHandler(ProtocolIDBlock, node.blkGetStreamHandler)
+	host.SetStreamHandler(ProtocolIDBlockHeight, node.blkGetHeightStreamHandler)
 	host.SetStreamHandler(ProtocolIDTx, node.txGetStreamHandler)
 
 	host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)

@@ -72,12 +72,15 @@ func TestBlockStore_GetByHeight(t *testing.T) {
 	block := createTestBlock(1, 2)
 	bs.Store(block)
 
-	blk, err := bs.GetByHeight(1)
+	gotHash, blk, err := bs.GetByHeight(1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	hash := blk.Hash()
 	if hash != block.Hash() {
+		t.Errorf("Expected hash %x, got %x", block.Hash(), hash)
+	}
+	if hash != gotHash {
 		t.Errorf("Expected hash %x, got %x", block.Hash(), hash)
 	}
 
@@ -223,7 +226,7 @@ func TestBlockStore_StoreConcurrent(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		for j := 0; j < blockCount; j++ {
 			height := int64(i*blockCount + j)
-			blk, err := bs.GetByHeight(height)
+			_, blk, err := bs.GetByHeight(height)
 			if err != nil {
 				t.Errorf("Failed to get block at height %d: %v", height, err)
 			}
