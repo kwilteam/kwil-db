@@ -49,16 +49,6 @@ func (s *schemaVisitor) VisitFk_action(ctx *gen.Fk_actionContext) interface{} {
 	panic("implement me")
 }
 
-func (s *schemaVisitor) VisitCreate_index_statement(ctx *gen.Create_index_statementContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *schemaVisitor) VisitDrop_index_statement(ctx *gen.Drop_index_statementContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
 // getTextFromStream gets the text from the input stream for a given range.
 // This is a hack over a bug in the generated antlr code, where it will try
 // to access index out of bounds.
@@ -930,10 +920,10 @@ func (s *schemaVisitor) VisitSql_statement(ctx *gen.Sql_statementContext) any {
 		stmt.SQL = ctx.Create_table_statement().Accept(s).(*CreateTableStatement)
 	case ctx.Alter_table_statement() != nil:
 		stmt.SQL = ctx.Alter_table_statement().Accept(s).(*AlterTableStatement)
-	//case ctx.Create_index_statement() != nil:
-	//	stmt.SQL = ctx.Create_index_statement().Accept(s).(*CreateIndexStatement)
-	//case ctx.Drop_index_statement() != nil:
-	//	stmt.SQL = ctx.Drop_index_statement().Accept(s).(*DropIndexStatement)
+	case ctx.Create_index_statement() != nil:
+		stmt.SQL = ctx.Create_index_statement().Accept(s).(*CreateIndexStatement)
+	case ctx.Drop_index_statement() != nil:
+		stmt.SQL = ctx.Drop_index_statement().Accept(s).(*DropIndexStatement)
 	case ctx.Select_statement() != nil:
 		stmt.SQL = ctx.Select_statement().Accept(s).(*SelectStatement)
 	case ctx.Update_statement() != nil:
@@ -1305,6 +1295,40 @@ func (s *schemaVisitor) VisitAdd_table_constraint(ctx *gen.Add_table_constraintC
 func (s *schemaVisitor) VisitDrop_table_constraint(ctx *gen.Drop_table_constraintContext) any {
 	a := &DropTableConstraint{
 		Name: ctx.Identifier().Accept(s).(string),
+	}
+
+	a.Set(ctx)
+	return a
+}
+
+func (s *schemaVisitor) VisitCreate_index_statement(ctx *gen.Create_index_statementContext) any {
+	a := &CreateIndexStatement{
+		Index: Index{
+			On:      ctx.GetTable().Accept(s).(string),
+			Columns: ctx.GetColumns().Accept(s).([]string),
+			Type:    IndexTypeBTree,
+		},
+	}
+
+	if ctx.GetName() != nil {
+		a.Name = ctx.GetName().Accept(s).(string)
+	}
+
+	if ctx.UNIQUE() != nil {
+		a.Type = IndexTypeUnique
+	}
+
+	a.Set(ctx)
+	return a
+}
+
+func (s *schemaVisitor) VisitDrop_index_statement(ctx *gen.Drop_index_statementContext) interface{} {
+	a := &DropIndexStatement{
+		Name: ctx.Identifier().Accept(s).(string),
+	}
+
+	if ctx.EXISTS() != nil {
+		a.CheckExist = true
 	}
 
 	a.Set(ctx)

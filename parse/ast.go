@@ -780,23 +780,38 @@ const (
 // Index represents non-inline index declaration.
 type Index struct {
 	Position
-	//Constraint
 
 	Name    string
+	On      string
 	Columns []string
 	Type    IndexType
 }
 
 func (i *Index) String() string {
-	if i.Type == IndexTypeUnique && i.Name == "" { //inline
+	if i.Type == IndexTypeUnique && len(i.Columns) == 0 { //inline
 		return "UNIQUE"
 	}
 
+	str := strings.Builder{}
+	str.WriteString("INDEX")
+	if i.Name != "" {
+		str.WriteString(" " + i.Name)
+	}
+	if i.On != "" {
+		str.WriteString(" ON " + i.On)
+	}
+	str.WriteString("(" + strings.Join(i.Columns, ", ") + ")")
+
+	//s := "INDEX " + i.Name + " (" + strings.Join(i.Columns, ", ") + ")"
+	//if i.On != "" {
+	//	s = "INDEX " + i.Name + " ON " + i.On + " (" + strings.Join(i.Columns, ", ") + ")"
+	//}
+
 	switch i.Type {
 	case IndexTypeBTree:
-		return "INDEX " + i.Name + " (" + strings.Join(i.Columns, ", ") + ")"
+		return str.String()
 	case IndexTypeUnique:
-		return "UNIQUE INDEX " + i.Name + " (" + strings.Join(i.Columns, ", ") + ")"
+		return "UNIQUE " + str.String()
 	default:
 		// should not happen
 		panic("unknown index type")
@@ -1057,6 +1072,33 @@ func (a *DropTableConstraint) alterTableAction() {}
 
 func (a *DropTableConstraint) ToSQL() string {
 	return "DROP CONSTRAINT " + a.Name
+}
+
+type CreateIndexStatement struct {
+	Index
+}
+
+func (s *CreateIndexStatement) Accept(v Visitor) any {
+	return v.VisitCreateIndexStatement(s)
+}
+
+func (s *CreateIndexStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeCreateIndex
+}
+
+type DropIndexStatement struct {
+	Position
+
+	Name       string
+	CheckExist bool
+}
+
+func (s *DropIndexStatement) Accept(v Visitor) any {
+	return v.VisitDropIndexStatement(s)
+}
+
+func (s *DropIndexStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeDropIndex
 }
 
 // SelectStatement is a SELECT statement.
@@ -1620,6 +1662,8 @@ type SQLVisitor interface {
 	// DDL
 	VisitCreateTableStatement(*CreateTableStatement) any
 	VisitAlterTableStatement(*AlterTableStatement) any
+	VisitCreateIndexStatement(*CreateIndexStatement) any
+	VisitDropIndexStatement(*DropIndexStatement) any
 }
 
 // UnimplementedSqlVisitor is meant to be used when an implementing visitor only intends

@@ -876,6 +876,20 @@ func (s *sqlGenerator) VisitAlterTableStatement(p0 *parse.AlterTableStatement) a
 	return str.String()
 }
 
+func (s *sqlGenerator) VisitCreateIndexStatement(p0 *parse.CreateIndexStatement) any {
+	return "CREATE " + p0.Index.String()
+}
+
+func (s *sqlGenerator) VisitDropIndexStatement(p0 *parse.DropIndexStatement) any {
+	str := strings.Builder{}
+	str.WriteString("DROP INDEX ")
+	if p0.CheckExist {
+		str.WriteString("IF EXISTS ")
+	}
+	str.WriteString(p0.Name)
+	return str.String()
+}
+
 // procedureGenerator is a visitor that generates plpgsql code.
 type procedureGenerator struct {
 	sqlGenerator

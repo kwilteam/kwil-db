@@ -310,6 +310,67 @@ func TestGenerateDDLStatement(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "create index",
+			want: `CREATE INDEX abc ON user(name);`,
+			sql: &parse.SQLStatement{
+				SQL: &parse.CreateIndexStatement{
+					Index: parse.Index{
+						Name:    "abc",
+						On:      "user",
+						Columns: []string{"name"},
+						Type:    parse.IndexTypeBTree,
+					},
+				},
+			},
+		},
+		{
+			name: "create unique index",
+			want: `CREATE UNIQUE INDEX abc ON user(name);`,
+			sql: &parse.SQLStatement{
+				SQL: &parse.CreateIndexStatement{
+					Index: parse.Index{
+						Name:    "abc",
+						On:      "user",
+						Columns: []string{"name"},
+						Type:    parse.IndexTypeUnique,
+					},
+				},
+			},
+		},
+		{
+			name: "create index with no name",
+			want: `CREATE INDEX ON user(name);`,
+			sql: &parse.SQLStatement{
+				SQL: &parse.CreateIndexStatement{
+					Index: parse.Index{
+						On:      "user",
+						Columns: []string{"name"},
+						Type:    parse.IndexTypeBTree,
+					},
+				},
+			},
+		},
+		{
+			name: "drop index",
+			want: `DROP INDEX abc;`,
+			sql: &parse.SQLStatement{
+				SQL: &parse.DropIndexStatement{
+					Name: "abc",
+				},
+			},
+		},
+
+		{
+			name: "drop index check exist",
+			want: `DROP INDEX IF EXISTS abc;`,
+			sql: &parse.SQLStatement{
+				SQL: &parse.DropIndexStatement{
+					Name:       "abc",
+					CheckExist: true,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

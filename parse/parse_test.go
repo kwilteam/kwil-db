@@ -2307,6 +2307,67 @@ primary key (name)
 			},
 		},
 		{
+			name: "create index",
+			sql:  `CREATE INDEX abc ON user(name);`,
+			want: &parse.SQLStatement{
+				SQL: &parse.CreateIndexStatement{
+					Index: parse.Index{
+						Name:    "abc",
+						On:      "user",
+						Columns: []string{"name"},
+						Type:    parse.IndexTypeBTree,
+					},
+				},
+			},
+		},
+		{
+			name: "create unique index",
+			sql:  `CREATE UNIQUE INDEX abc ON user(name);`,
+			want: &parse.SQLStatement{
+				SQL: &parse.CreateIndexStatement{
+					Index: parse.Index{
+						Name:    "abc",
+						On:      "user",
+						Columns: []string{"name"},
+						Type:    parse.IndexTypeUnique,
+					},
+				},
+			},
+		},
+		{
+			name: "create index with no name",
+			sql:  `CREATE INDEX ON user(name);`,
+			want: &parse.SQLStatement{
+				SQL: &parse.CreateIndexStatement{
+					Index: parse.Index{
+						On:      "user",
+						Columns: []string{"name"},
+						Type:    parse.IndexTypeBTree,
+					},
+				},
+			},
+		},
+		{
+			name: "drop index",
+			sql:  `DROP INDEX abc;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.DropIndexStatement{
+					Name: "abc",
+				},
+			},
+		},
+
+		{
+			name: "drop index check exist",
+			sql:  `DROP INDEX IF EXISTS abc;`,
+			want: &parse.SQLStatement{
+				SQL: &parse.DropIndexStatement{
+					Name:       "abc",
+					CheckExist: true,
+				},
+			},
+		},
+		{
 			name: "simple select",
 			sql:  "select *, id i, length(username) as name_len from users u where u.id = 1;",
 			want: &parse.SQLStatement{
