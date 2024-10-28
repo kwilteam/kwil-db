@@ -286,6 +286,7 @@ func (ce *ConsensusEngine) init() error {
 		}
 
 		ce.state.lc.blk = blk
+		// WHat does it mean to have a dirty hash here? how would you handle it? roll back mechanics?
 		ce.state.lc.appHash = state.AppHash
 		ce.state.lc.blkHash = hash
 	}
@@ -295,27 +296,19 @@ func (ce *ConsensusEngine) init() error {
 
 // replayBlocks replays all the blocks from the blockstore if the app hasn't played all the blocks yet.
 func (ce *ConsensusEngine) replayBlocks() error {
-	_, blk, _, err := ce.blockStore.GetByHeight(ce.state.lc.height + 1)
-	if err != nil {
-		// no more blocks to replay
-		return nil
-	}
-
 	for {
 		// We need to fetch the next block for apphash validation
 		// TODO: Ummm, but what if this is a leader trying to recover from crash, so trying to replay the blocks
-		_, nextBlk, _, err := ce.blockStore.GetByHeight(ce.state.lc.height + 2)
+		_, blk, appHash, err := ce.blockStore.GetByHeight(ce.state.lc.height + 1)
 		if err != nil {
-			// App hash for the blk will be instead fetched from the network peers
+			// no more blocks to replay
 			return nil
 		}
 
-		err = ce.processAndCommit(blk, nextBlk.Header.PrevAppHash)
+		err = ce.processAndCommit(blk, appHash)
 		if err != nil {
 			return fmt.Errorf("failed replaying block: %v", err)
 		}
-
-		blk = nextBlk
 	}
 }
 
