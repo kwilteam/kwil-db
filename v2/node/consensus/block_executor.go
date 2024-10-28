@@ -1,8 +1,15 @@
 package consensus
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"p2p/node/types"
+	"path/filepath"
+)
+
+var (
+	dirtyHash = types.HashBytes([]byte("0x42"))
 )
 
 // Block processing methods
@@ -54,7 +61,11 @@ func (ce *ConsensusEngine) executeBlock() error {
 		})
 	}
 
+	ce.state.appState.Height = ce.state.blkProp.height
+	ce.state.appState.AppHash = dirtyHash
+
 	// Calculate the appHash (dummy for now)
+	// Precommit equivalent
 	appHash := types.HashBytes([]byte(string(ce.state.blkProp.blk.Header.PrevAppHash.String() + "random")))
 
 	ce.state.blockRes = &blockResult{
@@ -82,7 +93,12 @@ func (ce *ConsensusEngine) commit() error {
 	// 	return err
 	// }
 
+	ce.persistAppState()
+
 	// Update any other internal states like apphash and height to chain state and commit again
+
+	ce.state.appState.AppHash = ce.state.blockRes.appHash
+	ce.persistAppState()
 
 	// Add transactions to the txIndexer and remove them from the mempool
 	for _, txn := range ce.state.blkProp.blk.Txns {
@@ -114,12 +130,49 @@ func (ce *ConsensusEngine) resetState() {
 	ce.state.processedVotes = make(map[string]*vote)
 }
 
-// TODO: not needed.
-func tempBlock() *types.Block {
-	return &types.Block{
-		Header: &types.BlockHeader{
-			Height: 1,
-		},
-		Txns: [][]byte{},
+// temporary placeholder as this will be in the PG chainstate in future (as was in previous kwil implementations)
+type appState struct {
+	Height  int64      `json:"height"`
+	AppHash types.Hash `json:"app_hash"`
+}
+
+func (ce *ConsensusEngine) persistAppState() error {
+	bts, err := json.MarshalIndent(ce.state.appState, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshalling appstate: ", err)
+		return err
 	}
+	return os.WriteFile(ce.stateFile(), bts, 0644)
+}
+
+func (ce *ConsensusEngine) loadAppState() (*appState, error) {
+	bts, err := os.ReadFile(ce.stateFile())
+	if err != nil {
+		if os.IsNotExist(err) {
+
+			return &appState{Height: 0, AppHash: types.ZeroHash}, nil
+		}
+		return nil, fmt.Errorf("error reading appstate file: %w", err)
+	}
+	var state appState
+	if err := json.Unmarshal(bts, &state); err != nil {
+		return nil, fmt.Errorf("error unmarshalling appstate: %w", err)
+	}
+	return &state, nil
+}
+
+func (ce *ConsensusEngine) stateFile() string {
+	return filepath.Join(ce.dir, "state.json")
+}
+
+func LoadState(filename string) (int64, types.Hash) {
+	state := &appState{}
+	bts, err := os.ReadFile(filename)
+	if err != nil {
+		return 0, types.ZeroHash
+	}
+	if err := json.Unmarshal(bts, state); err != nil {
+		return 0, types.ZeroHash
+	}
+	return state.Height, state.AppHash
 }
