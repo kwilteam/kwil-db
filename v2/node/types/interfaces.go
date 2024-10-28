@@ -48,14 +48,6 @@ type QualifiedBlock struct { // basically just caches the hash
 	AppHash  *Hash
 }
 
-type TxResult struct {
-	Code   uint16
-	Log    string
-	Events []Event
-}
-
-type Event struct{}
-
 type Execution interface {
 	ExecBlock(blk *Block) (commit func(context.Context, bool) error, appHash Hash, res []TxResult, err error)
 }

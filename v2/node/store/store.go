@@ -127,7 +127,6 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 				return nil
 			})
 
-			copy(hash[:], key[pfxLen:])
 			bs.idx[hash] = height
 			bs.hashes[height] = blockHashes{
 				hash:    hash,
@@ -180,6 +179,89 @@ func (bki *BlockStore) mayReplaceTx(txn *badger.Txn, err error) (*badger.Txn, er
 	return bki.db.NewTransaction(true), nil
 }
 
+func (bki *BlockStore) StoreResults(hash types.Hash, results []types.TxResult) error {
+	txn := bki.db.NewTransaction(true)
+	defer txn.Discard()
+
+	// The key prefix will be nsResults + tx index
+	for i, res := range results {
+		key := slices.Concat(nsResults, hash[:], binary.LittleEndian.AppendUint32(nil, uint32(i)))
+		resBts, err := res.MarshalBinary()
+		if err != nil {
+			return err
+		}
+		err = txn.Set(key, resBts)
+		if err != nil {
+			txn, err = bki.mayReplaceTx(txn, err)
+			if err != nil {
+				return err
+			} // else we recovered
+			defer txn.Discard()
+		}
+	}
+
+	return txn.Commit()
+}
+
+func (bki *BlockStore) Results(hash types.Hash) ([]types.TxResult, error) {
+	prefixLen := len(nsResults) + types.HashLen
+
+	// Get block header to determine number of transactions
+	var txCount uint32
+	err := bki.db.View(func(txn *badger.Txn) error {
+		key := slices.Concat(nsHeader, hash[:])
+		item, err := txn.Get(key)
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			header, err := types.DecodeBlockHeader(bytes.NewReader(val))
+			if err != nil {
+				return err
+			}
+			txCount = header.NumTxns
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]types.TxResult, txCount)
+
+	err = bki.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Prefix = slices.Concat(nsResults, hash[:])
+
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			key := item.Key()
+			idx := binary.LittleEndian.Uint32(key[prefixLen:])
+			if idx >= txCount {
+				return fmt.Errorf("invalid tx index %d", idx)
+			}
+
+			err := item.Value(func(val []byte) error {
+				var result types.TxResult
+				if err := result.UnmarshalBinary(val); err != nil {
+					return err
+				}
+				results[idx] = result
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	return results, err
+}
+
 func (bki *BlockStore) Store(blk *types.Block, appHash types.Hash) error {
 	blkHash := blk.Hash()
 	height := blk.Header.Height
@@ -207,6 +289,8 @@ func (bki *BlockStore) Store(blk *types.Block, appHash types.Hash) error {
 	if err != nil {
 		return err
 	}
+	// NOTE: we are going to store this again in the next block's header, so
+	// this is possibly a suboptimal design.
 
 	// Store the txn index
 	txIDs := make([]byte, 0, len(blk.Txns)*types.HashLen)
