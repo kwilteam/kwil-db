@@ -50,7 +50,9 @@ type ConsensusEngine interface {
 
 	NotifyACK(validatorPK []byte, ack types.AckRes)
 
-	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster, blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster)
+	// Gonna remove this once we have the commit results such as app hash and the tx results stored in the block store.
+
+	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster, blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster, blkRequester consensus.BlkRequester)
 
 	// Note: Not sure if these are needed here, just for seperate of concerns:
 	// p2p stream handlers role is to downlaod the messages and pass it to the
@@ -93,6 +95,7 @@ type Node struct {
 	host   host.Host
 	pex    bool
 	leader atomic.Bool
+	dir    string
 	wg     sync.WaitGroup
 	close  func() error
 }
@@ -139,7 +142,7 @@ func NewNode(port uint64, privKey []byte, leader, pex bool) (*Node, error) {
 		role = types.RoleValidator
 	}
 
-	ce := consensus.New(role, host.ID(), mp, blkStr, nil)
+	ce := consensus.New(role, host.ID(), dir, mp, blkStr, nil)
 	// ce.BeLeader(leader)
 
 	node := &Node{
@@ -149,6 +152,7 @@ func NewNode(port uint64, privKey []byte, leader, pex bool) (*Node, error) {
 		mp:      mp,
 		bki:     blkStr,
 		ce:      ce,
+		dir:     dir,
 		ackChan: make(chan AckRes, 1),
 		close:   close,
 	}
@@ -204,7 +208,7 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 	go func() {
 		defer n.wg.Done()
 		defer cancel()
-		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK)
+		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight)
 	}()
 
 	// mine is our block anns goroutine, which must be only for leader

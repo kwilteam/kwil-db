@@ -54,6 +54,47 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	return nil
 }
 
+func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
+	// fmt.Println("NotifyACK: Received ACK from validator", string(validatorPK), ack.Height, ack.ACK, ack.BlkHash, ack.AppHash)
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
+
+	if ce.role != types.RoleLeader {
+		return
+	}
+
+	// Check if the vote is for the current block
+	if ce.state.blkProp == nil {
+		fmt.Println("NotifyACK: Not processing any block proposal at the moment")
+		return
+	}
+
+	if ce.state.blkProp.height != ack.Height {
+		fmt.Println("NotifyACK: Vote received for a different block, ignore it.", ce.state.blkProp.height, ack.Height)
+		return
+	}
+
+	// If the ack is for the current height, but the block hash is different? Ignore it.
+	if ce.state.blkProp.blkHash != ack.BlkHash {
+		fmt.Println("NotifyACK: Vote received for an incorrect block", ce.state.blkProp.blkHash, ack.BlkHash)
+		return
+	}
+
+	// else notify the vote to the consensus engine
+	voteMsg := &vote{
+		ack:     ack.ACK,
+		appHash: ack.AppHash,
+		blkHash: ack.BlkHash,
+		height:  ack.Height,
+	}
+	ce.sendConsensusMessage(&consensusMessage{
+		MsgType: voteMsg.Type(),
+		Msg:     voteMsg,
+		Sender:  validatorPK,
+	})
+	return
+}
+
 // Create Proposal creates a new block proposal for the leader
 // by reaping the transactions from the mempool. This also adds the
 // proposer transactions such as ValidatorVoteBodies.
@@ -130,6 +171,8 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		}
 	}
 
+	// TODO: Okay the logic if counting acks should change, rethink it once.
+
 	// Depending on the votes, leader will trigger one of the following:
 	// 1. Commit the block
 	// 2. Re-announce the block proposal
@@ -154,52 +197,13 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 	} else if nacks >= threshold {
 		// Majority of the validators have either rejected the block or disagreed on the appHash
 		// halt the network
-		ce.haltChan <- struct{}{}
+		// ce.haltChan <- struct{}{}
+		fmt.Println("Majority of the validators have rejected the block, halting the network", ce.state.blkProp.blk.Header.Height, acks, nacks)
+		close(ce.haltChan)
 		return nil
 	}
 
 	// If the threshold is not reached, leader will re-announce the block proposal at regular intervals
 	// until it receives the votes(threshold)
 	return nil
-}
-
-func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
-	// fmt.Println("NotifyACK: Received ACK from validator", string(validatorPK), ack.Height, ack.ACK, ack.BlkHash, ack.AppHash)
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
-
-	if ce.role != types.RoleLeader {
-		return
-	}
-
-	// Check if the vote is for the current block
-	if ce.state.blkProp == nil {
-		fmt.Println("NotifyACK: Not processing any block proposal at the moment")
-		return
-	}
-
-	if ce.state.blkProp.height != ack.Height {
-		fmt.Println("NotifyACK: Vote received for a different block, ignore it.", ce.state.blkProp.height, ack.Height)
-		return
-	}
-
-	// If the ack is for the current height, but the block hash is different? Ignore it.
-	if ce.state.blkProp.blkHash != ack.BlkHash {
-		fmt.Println("NotifyACK: Vote received for an incorrect block", ce.state.blkProp.blkHash, ack.BlkHash)
-		return
-	}
-
-	// else notify the vote to the consensus engine
-	voteMsg := &vote{
-		ack:     ack.ACK,
-		appHash: ack.AppHash,
-		blkHash: ack.BlkHash,
-		height:  ack.Height,
-	}
-	ce.sendConsensusMessage(&consensusMessage{
-		MsgType: voteMsg.Type(),
-		Msg:     voteMsg,
-		Sender:  validatorPK,
-	})
-	return
 }

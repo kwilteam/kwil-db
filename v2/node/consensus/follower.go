@@ -91,9 +91,15 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 
 	ce.updateNetworkHeight(height)
 
+	fmt.Println("Accept commit?", height, blkID, appHash, ce.state.lc.height+1, ce.state.lc.blkHash)
+	fmt.Println("lc: ", ce.state.blkProp, ce.state.blockRes)
 	if ce.state.lc.height+1 != height {
 		// This is not the next block to be committed by the node.
 		return false
+	}
+
+	blkCommit := &blockAnnounce{
+		appHash: appHash,
 	}
 
 	if ce.state.blkProp != nil {
@@ -102,22 +108,30 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 			return false
 		} else {
 			// Waiting for the block to be committed, notify the consensus engine to commit the block.
-			blkCommit := &blockAnnounce{
-				blk:     ce.state.blkProp.blk,
-				appHash: appHash,
-			}
-
+			blkCommit.blk = ce.state.blkProp.blk
 			ce.sendConsensusMessage(&consensusMessage{
 				MsgType: blkCommit.Type(),
 				Msg:     blkCommit,
 				Sender:  ce.pubKey,
 			})
 		}
+	} else {
+		// either sentry node or slow validator
+		// check if this is the first time we are hearing about this block and not already downloaded it.
+		blk, _, err := ce.blockStore.Get(blkID)
+		if err != nil {
+			return true
+		}
+
+		blkCommit.blk = blk
+		ce.sendConsensusMessage(&consensusMessage{
+			MsgType: blkCommit.Type(),
+			Msg:     blkCommit,
+			Sender:  ce.pubKey,
+		})
 	}
 
-	// either sentry node or slow validator
-	// check if this is the first time we are hearing about this block and not already downloaded it.
-	return !ce.blockStore.Have(blkID)
+	return false
 }
 
 // TODO: Can we club this and AcceptCommit into a single method?
@@ -126,6 +140,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Hash) {
 	// fmt.Println("Notify block commit", blk.Header.Height, blk.Header.Hash(), appHash)
 	if ce.role == types.RoleLeader {
+		// Leader can also use this in blocksync mode, when it tries to replay the blocks or catchup with the network.
 		return
 	}
 
@@ -244,8 +259,10 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 	}
 
 	if ce.state.blockRes.appHash != appHash {
+		fmt.Println("Incorrect AppHash, halt the node.", appHash.String(), ce.state.blockRes.appHash.String())
 		// Incorrect AppHash, halt the node.
-		ce.haltChan <- struct{}{}
+		// ce.haltChan <- struct{}{}
+		close(ce.haltChan)
 		return nil
 	}
 
@@ -282,8 +299,10 @@ func (ce *ConsensusEngine) processAndCommit(blk *types.Block, appHash types.Hash
 
 	if ce.state.blockRes.appHash != appHash {
 		// Incorrect AppHash, halt the node.
-		ce.haltChan <- struct{}{}
-		return nil
+		fmt.Println("Incorrect AppHash, processAndCommit.", appHash.String(), ce.state.blockRes.appHash.String())
+		// ce.haltChan <- struct{}{}
+		close(ce.haltChan)
+		return fmt.Errorf("appHash mismatch, expected: %s, received: %s", appHash.String(), ce.state.blockRes.appHash.String())
 	}
 
 	// Commit the block if the appHash is valid

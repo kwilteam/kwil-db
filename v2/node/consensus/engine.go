@@ -29,6 +29,7 @@ const (
 type ConsensusEngine struct {
 	role          types.Role
 	host          peer.ID
+	dir           string
 	pubKey        []byte
 	networkHeight int64
 	validatorSet  map[string]types.Validator
@@ -50,11 +51,13 @@ type ConsensusEngine struct {
 	proposalBroadcaster ProposalBroadcaster
 	blkAnnouncer        BlkAnnouncer
 	ackBroadcaster      AckBroadcaster
+	blkRequester        BlkRequester
 }
 
 type ProposalBroadcaster func(ctx context.Context, blk *types.Block, id peer.ID)
 type BlkAnnouncer func(ctx context.Context, blk *types.Block, appHash types.Hash, from peer.ID)
 type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error
+type BlkRequester func(ctx context.Context, height int64) (types.Hash, types.Hash, []byte, error)
 
 // Consensus state that is applicable for processing the blioc at a speociifc height.
 type state struct {
@@ -63,6 +66,7 @@ type state struct {
 	blkProp  *blockProposal
 	blockRes *blockResult
 	lc       *lastCommit
+	appState *appState
 
 	// Votes: Applicable only to the leader
 	// These are the Acks received from the validators.
@@ -81,7 +85,7 @@ type lastCommit struct {
 	blkHash types.Hash
 
 	appHash types.Hash
-	blk     *types.Block
+	blk     *types.Block // why is this needed? can be fetched from the blockstore too.
 }
 
 type txResult struct {
@@ -89,7 +93,7 @@ type txResult struct {
 	log  string
 }
 
-func New(role types.Role, hostID peer.ID, mempool Mempool, bs BlockStore,
+func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockStore,
 	//indexer Indexer,
 	vs map[string]types.Validator) *ConsensusEngine {
 
@@ -108,6 +112,7 @@ func New(role types.Role, hostID peer.ID, mempool Mempool, bs BlockStore,
 	return &ConsensusEngine{
 		role:   role,
 		host:   hostID,
+		dir:    dir,
 		pubKey: pubKeyBytes,
 		state: state{
 			blkProp:  nil,
@@ -122,6 +127,7 @@ func New(role types.Role, hostID peer.ID, mempool Mempool, bs BlockStore,
 		networkHeight: 0,
 		validatorSet:  vs,
 		msgChan:       make(chan consensusMessage, 1), // buffer size??
+		haltChan:      make(chan struct{}, 1),
 		// interfaces
 		mempool:    mempool,
 		blockStore: bs,
@@ -141,10 +147,11 @@ func New(role types.Role, hostID peer.ID, mempool Mempool, bs BlockStore,
 // Sentry:
 //   - BlockAnn
 func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster ProposalBroadcaster,
-	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster) {
+	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester) {
 	ce.proposalBroadcaster = proposerBroadcaster
 	ce.blkAnnouncer = blkAnnouncer
 	ce.ackBroadcaster = ackBroadcaster
+	ce.blkRequester = blkRequester
 
 	// Fast catchup the node with the network height
 	if err := ce.catchup(ctx); err != nil {
@@ -169,6 +176,7 @@ func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster Propos
 		select {
 		case <-ce.haltChan:
 			// Halt the network
+			fmt.Println("Received halt signal, stopping the consensus engine")
 			return
 		case <-ctx.Done():
 			return
@@ -227,37 +235,122 @@ func (ce *ConsensusEngine) requiredThreshold() int64 {
 	return 2
 }
 
-func (ce *ConsensusEngine) catchup(_ context.Context) error {
+func (ce *ConsensusEngine) catchup(ctx context.Context) error {
+	// Figure out the app state and initialize the node state.
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
+
+	// initialize the consensus engine state
+	if err := ce.init(); err != nil {
+		return err
+	}
+
+	fmt.Println("Initial APP State: ", ce.state.appState.Height, ce.state.appState.AppHash.String())
+	// Replay blocks from the blockstore.
+	if err := ce.replayBlocks(); err != nil {
+		return err
+	}
+	fmt.Println("Replayed blocks from the blockstore: ", ce.state.lc.height, ce.state.lc.appHash.String())
+
+	// Replay blocks from the network
+	if err := ce.replayBlockFromNetwork(ctx); err != nil {
+		return err
+	}
+	fmt.Println("Replayed blocks from the network: ", ce.state.lc.height, ce.state.lc.appHash.String())
+
 	return nil
 }
 
-// GenesisInit or GenesisBlock or GenesisCommit -> We need to commit the genesis block before we start processing the blocks/transactions.
-func (ce *ConsensusEngine) genesisCommit(_ context.Context) error {
-	// Get the genesis block from the blockstore
-	// Commit the block
-	// Announce the block
-
-	blk := types.NewBlock(0, types.ZeroHash, types.ZeroHash, time.Now(), nil)
-	blkProp := &blockProposal{
-		height:  0,
-		blkHash: blk.Header.Hash(),
-		blk:     blk,
+// init initializes the node state based on the appState info.
+func (ce *ConsensusEngine) init() error {
+	state, err := ce.loadAppState()
+	if err != nil {
+		return err
 	}
 
-	ce.state.blkProp = blkProp
-	ce.state.blockRes = &blockResult{
-		appHash:   types.ZeroHash,
-		txResults: nil,
+	ce.state.appState = state
+	ce.persistAppState()
+
+	// Retrieve the last commit info from the blockstore based on the appState info.
+	if state.Height > 0 {
+		if state.AppHash == dirtyHash {
+			ce.state.lc.height = state.Height - 1
+		} else {
+			ce.state.lc.height = state.Height
+		}
+
+		// retrieve the block from the blockstore
+		hash, blk, _, err := ce.blockStore.GetByHeight(ce.state.lc.height)
+		if err != nil {
+			return err
+		}
+
+		ce.state.lc.blk = blk
+		ce.state.lc.appHash = state.AppHash
+		ce.state.lc.blkHash = hash
 	}
 
-	ce.commitBlock(blk, types.ZeroHash)
-	ce.nextState()
 	return nil
 }
 
+// replayBlocks replays all the blocks from the blockstore if the app hasn't played all the blocks yet.
+func (ce *ConsensusEngine) replayBlocks() error {
+	_, blk, _, err := ce.blockStore.GetByHeight(ce.state.lc.height + 1)
+	if err != nil {
+		// no more blocks to replay
+		return nil
+	}
+
+	for {
+		// We need to fetch the next block for apphash validation
+		// TODO: Ummm, but what if this is a leader trying to recover from crash, so trying to replay the blocks
+		_, nextBlk, _, err := ce.blockStore.GetByHeight(ce.state.lc.height + 2)
+		if err != nil {
+			// App hash for the blk will be instead fetched from the network peers
+			return nil
+		}
+
+		err = ce.processAndCommit(blk, nextBlk.Header.PrevAppHash)
+		if err != nil {
+			return fmt.Errorf("failed replaying block: %v", err)
+		}
+
+		blk = nextBlk
+	}
+}
+
+// TODO: is this applicable only for the leader?
+func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
+	// Get the network's best height and replay the blocks from the network
+	// or just keep asking for your next block from the network.
+	for {
+		_, appHash, rawblk, err := ce.blkRequester(ctx, ce.state.lc.height+1)
+		fmt.Println("Requested block from network: ", ce.state.lc.height+1, appHash.String())
+		if err != nil {
+			return nil // no more blocks to sync from network.
+		}
+
+		if ce.state.lc.height != 0 && appHash == types.ZeroHash {
+			return nil
+		}
+
+		blk, err := types.DecodeBlock(rawblk)
+		if err != nil {
+			return fmt.Errorf("failed to decode block: %v", err)
+		}
+		if err := ce.processAndCommit(blk, appHash); err != nil {
+			return err
+		}
+	}
+}
+
+// TODO: probably different tickers for each kind of consensus message.
+// Blocksync need to be way quicker, whereas the others need not be that frequent.
 func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	// Leader should reannounce the blkProp and blkAnn messages
 	// Validators should reannounce the Ack messages
+	ce.state.mtx.RLock()
+	defer ce.state.mtx.RUnlock()
 
 	if ce.role == types.RoleLeader {
 		// reannounce the blkProp message if the node is still waiting for the votes
@@ -277,6 +370,14 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 			// TODO: rethink what to broadcast here ack/nack, how do u remember the ack/nack
 			fmt.Println("Reannouncing the acks", ce.state.blkProp.height, ce.state.blkProp.blkHash, ce.state.blockRes.appHash)
 			go ce.ackBroadcaster(true, ce.state.blkProp.height, ce.state.blkProp.blkHash, &ce.state.blockRes.appHash)
+		}
+	}
+
+	if ce.role != types.RoleLeader {
+		if ce.state.blkProp == nil && ce.state.blockRes == nil {
+			// catchup if needed with the leader/network.
+			fmt.Println("Requesting block from network (staggered validator): ", ce.state.lc.height+1)
+			ce.replayBlockFromNetwork(ctx)
 		}
 	}
 }
