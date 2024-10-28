@@ -92,7 +92,6 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 	ce.updateNetworkHeight(height)
 
 	fmt.Println("Accept commit?", height, blkID, appHash, ce.state.lc.height+1, ce.state.lc.blkHash)
-	fmt.Println("lc: ", ce.state.blkProp, ce.state.blockRes)
 	if ce.state.lc.height+1 != height {
 		// This is not the next block to be committed by the node.
 		return false

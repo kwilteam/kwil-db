@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"fmt"
 	"p2p/node/types"
 )
 
@@ -35,6 +36,10 @@ func (bpm *blockProposal) Type() string {
 	return "block_proposal"
 }
 
+func (bpm *blockProposal) String() string {
+	return fmt.Sprintf("BlockProposal {height: %d, blkHash: %s, prevAppHash: %s}", bpm.height, bpm.blkHash.String(), bpm.blk.Header.PrevAppHash.String())
+}
+
 type vote struct {
 	ack     bool
 	blkHash types.Hash
@@ -46,6 +51,10 @@ func (vm *vote) Type() string {
 	return "vote"
 }
 
+func (vm *vote) String() string {
+	return fmt.Sprintf("Vote {height: %d, ack: %t, blkHash: %s, appHash: %s}", vm.height, vm.ack, vm.blkHash.String(), vm.appHash.String())
+}
+
 type blockAnnounce struct {
 	appHash types.Hash
 	blk     *types.Block
@@ -53,6 +62,10 @@ type blockAnnounce struct {
 
 func (bam *blockAnnounce) Type() string {
 	return "block_ann"
+}
+
+func (bam *blockAnnounce) String() string {
+	return fmt.Sprintf("BlockAnnounce {height: %d, blkHash: %s, appHash: %s}", bam.blk.Header.Height, bam.blk.Hash().String(), bam.appHash.String())
 }
 
 // TODO: do we need a resetState message to rollback or stop processing certain block>
