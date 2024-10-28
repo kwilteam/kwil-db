@@ -170,13 +170,18 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		// Since we are aware, ask other peers. we could also put this in a goroutine
 		s.Close() // close the announcers stream first
 		var gotHeight int64
-		gotHeight, rawBlk, appHash, err = n.getBlkWithRetry(ctx, blkid, 500*time.Millisecond, 10)
+		var gotAppHash types.Hash
+		gotHeight, rawBlk, gotAppHash, err = n.getBlkWithRetry(ctx, blkid, 500*time.Millisecond, 10)
 		if err != nil {
 			log.Printf("unable to retrieve tx %v: %v", blkid, err)
 			return
 		}
 		if gotHeight != height {
 			log.Printf("getblk response had unexpected height: wanted %d, got %d", height, gotHeight)
+			return
+		}
+		if gotAppHash != appHash {
+			log.Printf("getblk response had unexpected appHash: wanted %v, got %v", appHash, gotAppHash)
 			return
 		}
 	}
