@@ -53,6 +53,6 @@ type Execution interface {
 }
 
 type NamedTx struct {
-	ID Hash
-	Tx []byte
+	Hash Hash
+	Tx   []byte
 }
