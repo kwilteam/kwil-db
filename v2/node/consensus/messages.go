@@ -54,3 +54,9 @@ type blockAnnounce struct {
 func (bam *blockAnnounce) Type() string {
 	return "block_ann"
 }
+
+// TODO: do we need a resetState message to rollback or stop processing certain block>
+// type resetState struct {
+// 	height int64
+//  ignoreBlk types.Hash
+// }

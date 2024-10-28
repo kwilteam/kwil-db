@@ -39,24 +39,31 @@ type ConsensusEngine struct {
 
 	// Channels
 	msgChan  chan consensusMessage
-	haltChan chan struct{}
+	haltChan chan struct{} // can take a msg or reason for halting the network
 
 	// interfaces
 	mempool       Mempool
 	blockStore    BlockStore
 	blockExecutor BlockExecutor
-	// indexer       Indexer
 
-	// Broadcasters and Requesters
 	proposalBroadcaster ProposalBroadcaster
 	blkAnnouncer        BlkAnnouncer
 	ackBroadcaster      AckBroadcaster
 	blkRequester        BlkRequester
+
+	// logger log.Logger
 }
 
+// ProposalBroadcaster broadcasts the new block proposal message to the network
 type ProposalBroadcaster func(ctx context.Context, blk *types.Block, id peer.ID)
+
+// BlkAnnouncer broadcasts the new committed block to the network using the blockAnn message
 type BlkAnnouncer func(ctx context.Context, blk *types.Block, appHash types.Hash, from peer.ID)
+
+// AckBroadcaster gossips the ack/nack messages to the network
 type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error
+
+// BlkRequester requests the block from the network based on the height
 type BlkRequester func(ctx context.Context, height int64) (types.Hash, types.Hash, []byte, error)
 
 // Consensus state that is applicable for processing the blioc at a speociifc height.
@@ -71,13 +78,12 @@ type state struct {
 	// Votes: Applicable only to the leader
 	// These are the Acks received from the validators.
 	votes map[string]*vote
-	// Move votes from the votes map to processedVotes map once the votes are processed.
-	processedVotes map[string]*vote
 }
 
 type blockResult struct {
+	ack       bool
 	appHash   types.Hash
-	txResults []txResult
+	txResults []types.TxResult
 }
 
 type lastCommit struct {
@@ -86,11 +92,6 @@ type lastCommit struct {
 
 	appHash types.Hash
 	blk     *types.Block // why is this needed? can be fetched from the blockstore too.
-}
-
-type txResult struct {
-	code uint16
-	log  string
 }
 
 func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockStore,
@@ -131,21 +132,9 @@ func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockS
 		// interfaces
 		mempool:    mempool,
 		blockStore: bs,
-		// indexer:    indexer,
 	}
 }
 
-// Start triggers the event loop for the consensus engine.
-// Below are the event triggers based on the node's role:
-// Leader:
-//   - Acks
-//
-// Validator:
-//   - BlockProp
-//   - BlockAnn
-//
-// Sentry:
-//   - BlockAnn
 func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster ProposalBroadcaster,
 	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester) {
 	ce.proposalBroadcaster = proposerBroadcaster
@@ -159,82 +148,110 @@ func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster Propos
 		return
 	}
 
-	// Start the mining process if the node is a leader
-	// validators and sentry nodes get activated when they receive a block proposal or block announce msgs.
-	if ce.role == types.RoleLeader {
-		fmt.Println("Starting the leader node")
-		// start new round after 1 second
-		time.Sleep(1 * time.Second)
-		go ce.startNewRound(ctx)
-	} else {
-		fmt.Println("Starting the validator/sentry node")
-	}
+	// start mining
+	ce.startMining(ctx)
 
 	// start the event loop
-	var delay = 1 * time.Second
+	ce.runEventLoop(ctx)
+}
+
+// runEventLoop starts the event loop for the consensus engine.
+// Below are the event triggers that nodes can receive depending on their role:
+// Leader:
+//   - Acks
+//
+// Validator:
+//   - BlockProp
+//   - BlockAnn
+//
+// Sentry:
+//   - BlockAnn
+//
+// Apart from the above events, the node also periodically checks if it needs to
+// catchup with the network and reannounce the messages.
+func (ce *ConsensusEngine) runEventLoop(ctx context.Context) error {
+	// TODO: make these configurable?
+	catchUpTicker := time.NewTicker(1 * time.Second)
+	reannounceTicker := time.NewTicker(200 * time.Millisecond)
+
 	for {
 		select {
+		case <-ctx.Done():
+			return nil
+
 		case <-ce.haltChan:
 			// Halt the network
 			fmt.Println("Received halt signal, stopping the consensus engine")
-			return
-		case <-ctx.Done():
-			return
+			return nil
 
-		case <-time.After(delay):
+		case <-catchUpTicker.C:
+			ce.doCatchup(ctx) // better name??
+
+		case <-reannounceTicker.C:
 			ce.reannounceMsgs(ctx)
 
 		case m := <-ce.msgChan:
-			fmt.Println("Msg received: ", m.MsgType, m.Sender)
-			switch m.MsgType {
-			case "block_proposal":
-				blkPropMsg, ok := m.Msg.(*blockProposal)
-				if !ok {
-					fmt.Println("Block proposal message is not valid")
-					continue
-				}
-				go ce.processBlockProposal(ctx, blkPropMsg) // This triggers the prepare phase
-
-			case "vote":
-				// only leader should receive votes
-				if ce.role != types.RoleLeader {
-					continue
-				}
-
-				vote, ok := m.Msg.(*vote)
-				if !ok {
-					continue
-				}
-
-				if err := ce.addVote(vote, string(m.Sender)); err != nil {
-					fmt.Println("Error adding vote: ", vote, err)
-					continue
-				}
-
-			case "block_ann":
-				blkAnn, ok := m.Msg.(*blockAnnounce)
-				if !ok {
-					return
-				}
-
-				go ce.commitBlock(blkAnn.blk, blkAnn.appHash)
-			}
+			ce.handleConsensusMessages(ctx, m)
 		}
 	}
 }
 
-func (ce *ConsensusEngine) updateNetworkHeight(height int64) {
-	if height > ce.networkHeight {
-		ce.networkHeight = height
+// startMining starts the mining process based on the role of the node.
+func (ce *ConsensusEngine) startMining(ctx context.Context) {
+	// Start the mining process if the node is a leader
+	// validators and sentry nodes get activated when they receive a block proposal or block announce msgs.
+	if ce.role == types.RoleLeader {
+		fmt.Println("Starting the leader node")
+		go ce.startNewRound(ctx)
+	} else {
+		fmt.Println("Starting the validator/sentry node")
 	}
 }
 
-func (ce *ConsensusEngine) requiredThreshold() int64 {
-	// TODO: update it
-	// return int64(len(ce.validatorSet)/2 + 1)
-	return 2
+// handleConsensusMessages handles the consensus messages based on the message type.
+func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg consensusMessage) {
+	// validate the message
+	// based on the message type, process the message
+	fmt.Println("Consensus message received: ", msg.MsgType, msg.Sender)
+
+	switch msg.MsgType {
+	case "block_proposal":
+		blkPropMsg, ok := msg.Msg.(*blockProposal)
+		if !ok {
+			fmt.Println("Invalid block proposal message")
+			return // ignore the message
+		}
+		go ce.processBlockProposal(ctx, blkPropMsg) // This triggers the processing of the block proposal
+
+	case "vote":
+		// only leader should receive votes
+		if ce.role != types.RoleLeader {
+			return
+		}
+
+		vote, ok := msg.Msg.(*vote)
+		if !ok {
+			fmt.Println("Invalid vote message")
+			return
+		}
+
+		if err := ce.addVote(ctx, vote, string(msg.Sender)); err != nil {
+			fmt.Println("Error adding vote: ", vote, err)
+			return
+		}
+
+	case "block_ann":
+		blkAnn, ok := msg.Msg.(*blockAnnounce)
+		if !ok {
+			fmt.Println("Invalid block announce message")
+			return
+		}
+
+		go ce.commitBlock(blkAnn.blk, blkAnn.appHash)
+	}
 }
 
+// catchup syncs the node first with the local blockstore and then with the network.
 func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	// Figure out the app state and initialize the node state.
 	ce.state.mtx.Lock()
@@ -247,7 +264,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 
 	fmt.Println("Initial APP State: ", ce.state.appState.Height, ce.state.appState.AppHash.String())
 	// Replay blocks from the blockstore.
-	if err := ce.replayBlocks(); err != nil {
+	if err := ce.replayLocalBlocks(); err != nil {
 		return err
 	}
 	fmt.Println("Replayed blocks from the blockstore: ", ce.state.lc.height, ce.state.lc.appHash.String())
@@ -295,13 +312,10 @@ func (ce *ConsensusEngine) init() error {
 }
 
 // replayBlocks replays all the blocks from the blockstore if the app hasn't played all the blocks yet.
-func (ce *ConsensusEngine) replayBlocks() error {
+func (ce *ConsensusEngine) replayLocalBlocks() error {
 	for {
-		// We need to fetch the next block for apphash validation
-		// TODO: Ummm, but what if this is a leader trying to recover from crash, so trying to replay the blocks
 		_, blk, appHash, err := ce.blockStore.GetByHeight(ce.state.lc.height + 1)
-		if err != nil {
-			// no more blocks to replay
+		if err != nil { // no more blocks to replay
 			return nil
 		}
 
@@ -312,10 +326,9 @@ func (ce *ConsensusEngine) replayBlocks() error {
 	}
 }
 
-// TODO: is this applicable only for the leader?
+// replayBlockFromNetwork requests the next blocks from the network and processes it
+// until it catches up with its peers.
 func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
-	// Get the network's best height and replay the blocks from the network
-	// or just keep asking for your next block from the network.
 	for {
 		_, appHash, rawblk, err := ce.blkRequester(ctx, ce.state.lc.height+1)
 		fmt.Println("Requested block from network: ", ce.state.lc.height+1, appHash.String())
@@ -337,7 +350,6 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 	}
 }
 
-// TODO: probably different tickers for each kind of consensus message.
 // Blocksync need to be way quicker, whereas the others need not be that frequent.
 func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	// Leader should reannounce the blkProp and blkAnn messages
@@ -359,12 +371,19 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 
 	if ce.role == types.RoleValidator {
 		// reannounce the acks, if still waiting for the commit message
-		if ce.state.blkProp != nil && ce.state.blockRes != nil && ce.state.blockRes.appHash != types.ZeroHash && ce.networkHeight <= ce.state.lc.height {
+		if ce.state.blkProp != nil && ce.state.blockRes != nil &&
+			ce.state.blockRes.appHash != types.ZeroHash &&
+			ce.networkHeight <= ce.state.lc.height { // To ensure that we are not reannouncing the acks for very stale blocks
 			// TODO: rethink what to broadcast here ack/nack, how do u remember the ack/nack
 			fmt.Println("Reannouncing the acks", ce.state.blkProp.height, ce.state.blkProp.blkHash, ce.state.blockRes.appHash)
 			go ce.ackBroadcaster(true, ce.state.blkProp.height, ce.state.blkProp.blkHash, &ce.state.blockRes.appHash)
 		}
 	}
+}
+
+func (ce *ConsensusEngine) doCatchup(ctx context.Context) {
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
 
 	if ce.role != types.RoleLeader {
 		if ce.state.blkProp == nil && ce.state.blockRes == nil {
@@ -373,4 +392,16 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 			ce.replayBlockFromNetwork(ctx)
 		}
 	}
+}
+
+func (ce *ConsensusEngine) updateNetworkHeight(height int64) {
+	if height > ce.networkHeight {
+		ce.networkHeight = height
+	}
+}
+
+func (ce *ConsensusEngine) requiredThreshold() int64 {
+	// TODO: update it
+	// return int64(len(ce.validatorSet)/2 + 1)
+	return 2
 }

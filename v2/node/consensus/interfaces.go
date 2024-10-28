@@ -16,9 +16,16 @@ type BlockStore interface {
 	Have(blkid types.Hash) bool
 	Get(blkid types.Hash) (*types.Block, types.Hash, error)
 	GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error)
+	StoreResults(hash types.Hash, results []types.TxResult) error
+	// Results(hash types.Hash) ([]types.TxResult, error)
 }
 
 type BlockExecutor interface {
-	Execute(tx []byte) (txResult, error)
+	Execute(tx []byte) (*types.TxResult, error)
 	Commit() error
 }
+
+// Question:
+// Blockstore: Blocks, Txs, Results, AppHash (for each block)
+// What is replaying a block from the blockstore? -> do we still have the results and apphash?
+// Do we overwrite the results? or skip adding it to the blockstore?
