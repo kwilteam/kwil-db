@@ -74,7 +74,7 @@ func (ce *ConsensusEngine) commit() error {
 
 	// Add the block to the blockstore
 	// rawBlk := types.EncodeBlock(ce.state.blkProp.blk)
-	ce.blockStore.Store(ce.state.blkProp.blk)
+	ce.blockStore.Store(ce.state.blkProp.blk, ce.state.blockRes.appHash)
 
 	// Commit the block to the postgres database
 	// TODO

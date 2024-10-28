@@ -11,12 +11,8 @@ type Mempool interface {
 
 type BlockStore interface {
 	// GetBlockByHeight(height int64) (types.Block, error)
-	Store(block *types.Block) error
+	Store(block *types.Block, appHash types.Hash) error
 	Have(blkid types.Hash) bool
-}
-
-type Indexer interface {
-	Store(txid types.Hash, tx []byte)
 }
 
 type BlockExecutor interface {

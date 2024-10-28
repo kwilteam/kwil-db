@@ -45,12 +45,13 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 		return
 	}
 
-	blk, err := n.bki.Get(blkHash)
+	blk, appHash, err := n.bki.Get(blkHash)
 	if err != nil {
 		s.Write(noData) // don't have it
 	} else {
 		rawBlk := types.EncodeBlock(blk)
 		binary.Write(s, binary.LittleEndian, blk.Header.Height)
+		s.Write(appHash[:])
 		s.Write(rawBlk)
 	}
 }
@@ -78,7 +79,7 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 	}
 	log.Printf("requested block height: %q", height)
 
-	hash, blk, err := n.bki.GetByHeight(height)
+	hash, blk, appHash, err := n.bki.GetByHeight(height)
 	if err != nil {
 		s.Write(noData) // don't have it
 	} else {
@@ -86,6 +87,7 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 		// maybe we remove hash from the protocol, was thinking receiver could
 		// hang up earlier depending...
 		s.Write(hash[:])
+		s.Write(appHash[:])
 		s.Write(rawBlk)
 	}
 }
@@ -168,7 +170,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		// Since we are aware, ask other peers. we could also put this in a goroutine
 		s.Close() // close the announcers stream first
 		var gotHeight int64
-		gotHeight, rawBlk, err = n.getBlkWithRetry(ctx, blkid, 500*time.Millisecond, 10)
+		gotHeight, rawBlk, appHash, err = n.getBlkWithRetry(ctx, blkid, 500*time.Millisecond, 10)
 		if err != nil {
 			log.Printf("unable to retrieve tx %v: %v", blkid, err)
 			return
@@ -245,12 +247,12 @@ func (n *Node) announceRawBlk(ctx context.Context, blkid string, height int64,
 }
 
 func (n *Node) getBlkWithRetry(ctx context.Context, blkid string, baseDelay time.Duration,
-	maxAttempts int) (int64, []byte, error) {
+	maxAttempts int) (int64, []byte, types.Hash, error) {
 	var attempts int
 	for {
-		height, raw, err := n.getBlk(ctx, blkid)
+		height, raw, appHash, err := n.getBlk(ctx, blkid)
 		if err == nil {
-			return height, raw, nil
+			return height, raw, appHash, nil
 		}
 
 		log.Printf("unable to retrieve block %v (%v), waiting to retry", blkid, err)
@@ -262,12 +264,12 @@ func (n *Node) getBlkWithRetry(ctx context.Context, blkid string, baseDelay time
 		baseDelay *= 2
 		attempts++
 		if attempts >= maxAttempts {
-			return 0, nil, ErrBlkNotFound
+			return 0, nil, types.Hash{}, ErrBlkNotFound
 		}
 	}
 }
 
-func (n *Node) getBlk(ctx context.Context, blkid string) (int64, []byte, error) {
+func (n *Node) getBlk(ctx context.Context, blkid string) (int64, []byte, types.Hash, error) {
 	for _, peer := range n.peers() {
 		log.Printf("requesting block %v from %v", blkid, peer)
 		t0 := time.Now()
@@ -294,14 +296,16 @@ func (n *Node) getBlk(ctx context.Context, blkid string) (int64, []byte, error) 
 		log.Printf("obtained content for block %q in %v", blkid, time.Since(t0))
 
 		height := binary.LittleEndian.Uint64(resp[:8])
-		rawBlk := resp[8:]
+		var appHash types.Hash
+		copy(appHash[:], resp[8:8+types.HashLen])
+		rawBlk := resp[8+types.HashLen:]
 
-		return int64(height), rawBlk, nil
+		return int64(height), rawBlk, appHash, nil
 	}
-	return 0, nil, ErrBlkNotFound
+	return 0, nil, types.Hash{}, ErrBlkNotFound
 }
 
-func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []byte, error) {
+func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, types.Hash, []byte, error) {
 	for _, peer := range n.peers() {
 		log.Printf("requesting block number %d from %v", height, peer)
 		t0 := time.Now()
@@ -327,11 +331,12 @@ func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []by
 
 		log.Printf("obtained content for block number %q in %v", height, time.Since(t0))
 
-		var hash types.Hash
+		var hash, appHash types.Hash
 		copy(hash[:], resp[:types.HashLen])
-		rawBlk := resp[types.HashLen:]
+		copy(appHash[:], resp[types.HashLen:types.HashLen*2])
+		rawBlk := resp[types.HashLen*2:]
 
-		return hash, rawBlk, nil
+		return hash, appHash, rawBlk, nil
 	}
-	return types.Hash{}, nil, ErrBlkNotFound
+	return types.Hash{}, types.ZeroHash, nil, ErrBlkNotFound
 }
