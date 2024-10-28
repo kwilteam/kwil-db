@@ -16,13 +16,13 @@ var ErrNotFound = errors.New("not found")
 type BlockStore interface {
 	TxGetter
 
-	Best() (int64, Hash)
+	Best() (int64, Hash, Hash)
 	Have(Hash) bool
-	Get(Hash) (*Block, error)
+	Get(Hash) (*Block, Hash, error)
 	// GetRaw(Hash) (int64, []byte)
-	GetByHeight(int64) (Hash, *Block, error) // note: we can impl GetBlockHeader easily too
+	GetByHeight(int64) (Hash, *Block, Hash, error) // note: we can impl GetBlockHeader easily too
 	// GetRawByHeight(int64) (Hash, []byte)
-	Store(*Block) error
+	Store(*Block, Hash) error
 	PreFetch(Hash) (bool, func()) // should be app level instead
 }
 
