@@ -13,6 +13,7 @@ import (
 	"p2p/node/types"
 
 	"github.com/dgraph-io/badger/v4"
+	boptions "github.com/dgraph-io/badger/v4/options"
 )
 
 // This version of BlockStore has one badger DB,
@@ -22,6 +23,8 @@ type BlockStore struct {
 	idx      map[types.Hash]int64
 	hashes   map[int64]types.Hash // []types.Hash, also could store pointer
 	fetching map[types.Hash]bool  // TODO: remove, app concern
+
+	// TODO: LRU cache for recent txns
 
 	log log.Logger
 	db  *badger.DB
@@ -46,9 +49,15 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 	bOpts := badger.DefaultOptions(filepath.Join(dir, "bstore"))
 	bOpts.WithLogger(&badgerLogger{logger})
 	bOpts = bOpts.WithLoggingLevel(badger.WARNING)
-	// opts.SyncWrites = true
-	// opts.Compression = options.ZSTD
-	// opts.ZSTDCompressionLevel = 3
+	// bOpts.SyncWrites = true
+	if options.compress {
+		const bs = 1 << 16 // 18 = 256 KiB
+		bOpts = bOpts.WithBlockSize(bs)
+		bOpts.Compression = boptions.ZSTD
+		bOpts.ZSTDCompressionLevel = 1
+	} else {
+		bOpts.Compression = boptions.None
+	}
 	bOpts = bOpts.WithLoggingLevel(badger.WARNING)
 	db, err := badger.Open(bOpts)
 	if err != nil {
@@ -150,12 +159,6 @@ func (bki *BlockStore) Store(blk *types.Block) error {
 	blkHash := blk.Hash()
 	height := blk.Header.Height
 
-	bki.mtx.Lock()
-	defer bki.mtx.Unlock()
-	delete(bki.fetching, blkHash)
-	bki.idx[blkHash] = height
-	bki.hashes[height] = blkHash
-
 	txn := bki.db.NewTransaction(true)
 	defer txn.Discard()
 
@@ -187,7 +190,18 @@ func (bki *BlockStore) Store(blk *types.Block) error {
 		txIDs = append(txIDs, txHash[:]...)
 	}
 
-	return txn.Commit()
+	bki.mtx.Lock()
+	defer bki.mtx.Unlock()
+
+	if err = txn.Commit(); err != nil {
+		return err
+	}
+
+	delete(bki.fetching, blkHash)
+	bki.idx[blkHash] = height
+	bki.hashes[height] = blkHash
+
+	return nil
 }
 
 func (bki *BlockStore) PreFetch(blkid types.Hash) (bool, func()) { // TODO: remove
@@ -230,8 +244,9 @@ func (bki *BlockStore) Best() (int64, types.Hash) {
 }
 
 func (bki *BlockStore) Get(blkHash types.Hash) (*types.Block, error) {
-	bki.mtx.RLock()
-	defer bki.mtx.RUnlock()
+	if !bki.Have(blkHash) {
+		return nil, types.ErrNotFound
+	}
 
 	var block *types.Block
 	err := bki.db.View(func(txn *badger.Txn) error {
