@@ -2,16 +2,53 @@ package store
 
 import (
 	"bytes"
-	"p2p/node/types"
+	"fmt"
+	"math/rand/v2"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"text/tabwriter"
 	"time"
+
+	"p2p/node/types"
 )
 
-func setupTestBlockStore(t *testing.T) (*BlockStore, string) {
+func getFileSizes(dirPath string) ([][2]string, error) {
+	var filesInfo [][2]string
+
+	// Walk through the directory
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		// Only get files, not directories
+		if !info.IsDir() {
+			// Store file name and size in KB
+			filesInfo = append(filesInfo, [2]string{info.Name(), fmt.Sprintf("%.2f KiB", float64(info.Size())/1024)})
+		}
+		return nil
+	})
+	return filesInfo, err
+}
+
+// Pretty print function
+func prettyPrintFileSizes(filesInfo [][2]string) {
+	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.TabIndent)
+	fmt.Fprintln(writer, "File Name\tSize")
+	fmt.Fprintln(writer, "---------\t----")
+
+	for _, fileInfo := range filesInfo {
+		fmt.Fprintf(writer, "%s\t%s\n", fileInfo[0], fileInfo[1])
+	}
+	writer.Flush()
+}
+
+func setupTestBlockStore(t *testing.T, compress ...bool) (*BlockStore, string) {
+	comp := len(compress) > 0 && compress[0]
 	tmpDir := t.TempDir()
-	bs, err := NewBlockStore(tmpDir)
+	bs, err := NewBlockStore(tmpDir, WithCompression(comp))
 	if err != nil {
 		t.Fatalf("Failed to create block store: %v", err)
 	}
@@ -261,7 +298,7 @@ func TestBlockStore_StoreDuplicateBlock(t *testing.T) {
 }
 
 func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
-	bs, _ := setupTestBlockStore(t)
+	bs, _ := setupTestBlockStore(t, true)
 	largeTx := make([]byte, 1<<20) // 1MB transaction
 	for i := range largeTx {
 		largeTx[i] = byte(i % 256)
@@ -295,4 +332,115 @@ func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
 			t.Error("Retrieved transaction data doesn't match original")
 		}
 	}
+
+	// bs.Close()
+	// filesInfo, err := getFileSizes(tmpDir)
+	// if err != nil {
+	// 	t.Logf("Error: %v", err)
+	// } else {
+	// 	prettyPrintFileSizes(filesInfo)
+	// }
+}
+
+func TestLargeBlockStore(t *testing.T) {
+	// This test demonstrates that zstd level 1 compression is faster than no
+	// compression for reasonably compressible data.
+
+	// Create block store
+	dir := t.TempDir()
+	bs, err := NewBlockStore(dir, WithCompression(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bs.Close()
+
+	// Generate large number of blocks with many txs
+	const numBlocks = 100
+	const txsPerBlock = 1000
+	const txSize = 1024 // 1KB per tx, small enough not to use vlog for the block
+
+	var prevHash types.Hash
+	var prevAppHash types.Hash
+
+	rngSrc := rand.NewChaCha8(prevHash)
+	rng := rand.New(rngSrc)
+
+	// Patterned tx body to make it compressible
+	txBody := make([]byte, txSize-8)
+	for i := range txBody {
+		txBody[i] = byte(i % 16)
+	}
+
+	// Create blocks with random transactions
+	for height := int64(1); height <= numBlocks; height++ {
+		// Generate random transactions
+		txs := make([][]byte, txsPerBlock)
+		for i := range txs {
+			tx := make([]byte, txSize)
+			rngSrc.Read(tx[:8]) // like a nonce, ensures txs are unique
+			copy(tx[8:], txBody)
+			txs[i] = tx
+		}
+
+		// Create and store block
+		block := types.NewBlock(height, prevHash, prevAppHash, time.Now(), txs)
+		err = bs.Store(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		prevHash = block.Hash()
+		prevAppHash = types.HashBytes([]byte(fmt.Sprintf("app-%d", height)))
+
+		// Verify block retrieval
+		if height%100 == 0 {
+			retrieved, err := bs.Get(prevHash)
+			if err != nil {
+				t.Errorf("Failed to get block at height %d: %v", height, err)
+			}
+			if retrieved.Hash() != prevHash {
+				t.Errorf("Retrieved block hash mismatch at height %d", height)
+			}
+
+			// Verify random transaction retrieval
+
+			txIdx := rng.IntN(len(txs))
+			txHash := types.HashBytes(txs[txIdx])
+			gotHeight, gotTx, err := bs.GetTx(txHash)
+			if err != nil {
+				t.Errorf("Failed to get tx at height %d, idx %d: %v", height, txIdx, err)
+			}
+			if gotHeight != height {
+				t.Errorf("Wrong tx height. Got %d, want %d", gotHeight, height)
+			}
+			if !bytes.Equal(gotTx, txs[txIdx]) {
+				t.Error("Retrieved tx data mismatch")
+			}
+		}
+	}
+
+	// Verify final database size
+	bs.Close() // else we are checking size of huge sparse allocated files
+	dbSize := getDirSize(dir)
+	t.Logf("Final database size: %d MB", dbSize/1024/1024)
+	filesInfo, err := getFileSizes(dir)
+	if err != nil {
+		t.Logf("Error: %v", err)
+	} else {
+		prettyPrintFileSizes(filesInfo)
+	}
+}
+
+func getDirSize(path string) int64 {
+	var size int64
+	filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+	return size
 }
