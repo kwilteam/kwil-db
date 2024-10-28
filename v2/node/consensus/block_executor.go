@@ -48,7 +48,7 @@ func (ce *ConsensusEngine) validateBlock(blk *types.Block) error {
 
 // TODO: need to stop execution when we receive a rollback signal of some sort.
 func (ce *ConsensusEngine) executeBlock() error {
-	var txResults []txResult
+	var txResults []types.TxResult
 	// Execute the block and return the appHash and store the txResults
 	for _, tx := range ce.state.blkProp.blk.Txns {
 		// res, err := ce.blockExecutor.Execute(tx)
@@ -56,8 +56,9 @@ func (ce *ConsensusEngine) executeBlock() error {
 		// 	return err
 		// }
 		hash, _ := types.NewHashFromBytes(tx)
-		txResults = append(txResults, txResult{
-			log: "success" + hash.String(),
+		txResults = append(txResults, types.TxResult{
+			Code: 0,
+			Log:  "success" + hash.String(),
 		})
 	}
 
@@ -86,6 +87,7 @@ func (ce *ConsensusEngine) commit() error {
 	// Add the block to the blockstore
 	// rawBlk := types.EncodeBlock(ce.state.blkProp.blk)
 	ce.blockStore.Store(ce.state.blkProp.blk, ce.state.blockRes.appHash)
+	ce.blockStore.StoreResults(ce.state.blkProp.blk.Header.Hash(), ce.state.blockRes.txResults)
 
 	// Commit the block to the postgres database
 	// TODO
@@ -125,9 +127,7 @@ func (ce *ConsensusEngine) nextState() {
 func (ce *ConsensusEngine) resetState() {
 	ce.state.blkProp = nil
 	ce.state.blockRes = nil
-
 	ce.state.votes = make(map[string]*vote)
-	ce.state.processedVotes = make(map[string]*vote)
 }
 
 // temporary placeholder as this will be in the PG chainstate in future (as was in previous kwil implementations)

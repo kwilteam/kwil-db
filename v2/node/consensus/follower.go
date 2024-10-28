@@ -11,7 +11,7 @@ import (
 // Validator should only accept the proposal if it is not already processing a block and
 // the proposal is for the next block to be processed.
 func (ce *ConsensusEngine) AcceptProposal(height int64, prevBlockID types.Hash) bool {
-	// fmt.Println("Accept proposal?", height, prevBlockID)
+	fmt.Println("Accept proposal?", height, prevBlockID)
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
@@ -175,7 +175,6 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Has
 	// fmt.Println("Notified consensus engine to commit the block", blk.Header.Height, blk.Header.Hash(), appHash)
 }
 
-// TODO: new block for same height: look into these cases
 // ProcessBlockProposal is used by the validator's consensus engine to process the new block proposal message.
 // This method is used to validate the received block, execute the block and generate appHash and
 // report the result back to the leader.
@@ -201,6 +200,7 @@ func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *b
 	ce.state.blkProp = blkPropMsg
 
 	if err := ce.executeBlock(); err != nil {
+		// TODO: what to do if the block execution fails? Send NACK?
 		fmt.Println("Error executing block", err)
 		return err
 	}
@@ -260,8 +260,6 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 
 	if ce.state.blockRes.appHash != appHash {
 		fmt.Println("Incorrect AppHash, halt the node.", appHash.String(), ce.state.blockRes.appHash.String())
-		// Incorrect AppHash, halt the node.
-		// ce.haltChan <- struct{}{}
 		close(ce.haltChan)
 		return nil
 	}
@@ -277,8 +275,8 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 	return nil
 }
 
-// Used by the sentry nodes and slow validators to process and commit the block, it wouldn't
-// send the ack back to the leader.
+// processAndCommit: used by the sentry nodes and slow validators to process and commit the block.
+// This is used when the acks are not required to be sent back to the leader, essentially in catchup mode.
 func (ce *ConsensusEngine) processAndCommit(blk *types.Block, appHash types.Hash) error {
 	fmt.Println("Processing committed block", blk.Header.Height, blk.Header.Hash().String(), appHash.String())
 	if err := ce.validateBlock(blk); err != nil {
@@ -315,8 +313,3 @@ func (ce *ConsensusEngine) processAndCommit(blk *types.Block, appHash types.Hash
 	ce.nextState()
 	return nil
 }
-
-// We can have a blocksyncer running in parallel that periodically probes the network for their height.
-// and fetches the blocks if the node is behind the network height.
-// It would send the blockAnn message to the consensus engine to commit the block.
-// This would avoid the need for conensus engine to be aware of the peerBlockRequestHandler.
