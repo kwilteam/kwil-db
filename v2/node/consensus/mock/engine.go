@@ -64,11 +64,11 @@ type Engine struct {
 var NumValidatorsFake = 3 // B, C, D
 
 func New(bs types.BlockStore, mp types.MemPool) *Engine {
-	height, hash := bs.Best()
+	height, hash, appHash := bs.Best()
 	lc := blkCommit{
 		height:  height,
 		hash:    hash,
-		appHash: fakeAppHash(height),
+		appHash: appHash,
 	}
 	return &Engine{
 		lastCommit: lc,
@@ -171,5 +171,5 @@ func (ce *Engine) confirmBlkTxns(blk *types.Block) {
 	}
 
 	// rawBlk := types.EncodeBlock(blk)
-	ce.bki.Store(blk)
+	ce.bki.Store(blk, fakeAppHash(height))
 }

@@ -16,13 +16,19 @@ import (
 	boptions "github.com/dgraph-io/badger/v4/options"
 )
 
-// This version of BlockStore has one badger DB,
+// This version of BlockStore has one badger DB. The block is one value.
+// Transaction gets seek into block.
+
+type blockHashes struct {
+	hash    types.Hash
+	appHash types.Hash
+}
 
 type BlockStore struct {
 	mtx      sync.RWMutex
 	idx      map[types.Hash]int64
-	hashes   map[int64]types.Hash // []types.Hash, also could store pointer
-	fetching map[types.Hash]bool  // TODO: remove, app concern
+	hashes   map[int64]blockHashes
+	fetching map[types.Hash]bool // TODO: remove, app concern
 
 	// TODO: LRU cache for recent txns
 
@@ -31,9 +37,11 @@ type BlockStore struct {
 }
 
 var (
-	nsHeader = []byte("h:") // block metadata (header + signature)
-	nsBlock  = []byte("b:") // full block
-	nsTxn    = []byte("t:") // transaction index by tx hash
+	nsHeader  = []byte("h:") // block metadata (header + signature)
+	nsBlock   = []byte("b:") // full block
+	nsTxn     = []byte("t:") // transaction index by tx hash
+	nsAppHash = []byte("a:") // app hash by block hash
+	nsResults = []byte("r:") // block execution results by block hash
 )
 
 func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
@@ -65,7 +73,7 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 	}
 	bs := &BlockStore{
 		idx:      make(map[types.Hash]int64),
-		hashes:   make(map[int64]types.Hash),
+		hashes:   make(map[int64]blockHashes),
 		fetching: make(map[types.Hash]bool),
 		db:       db,
 		log:      logger,
@@ -77,6 +85,7 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 	pfxLen := len(nsHeader)
 
 	var hash types.Hash // reuse in loop
+	var appHash types.Hash
 
 	err = db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(itOpts)
@@ -104,10 +113,26 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 			if len(key) < types.HashLen+pfxLen {
 				return errors.New("block hash in block index")
 			}
+			copy(hash[:], key[pfxLen:])
+
+			// get the app hash from nsAppHash
+			appHashKey := slices.Concat(nsAppHash, key[pfxLen:])
+			item, err = txn.Get(appHashKey)
+			if err != nil {
+				return err
+			}
+
+			err = item.Value(func(val []byte) error {
+				appHash = types.Hash(val)
+				return nil
+			})
 
 			copy(hash[:], key[pfxLen:])
 			bs.idx[hash] = height
-			bs.hashes[height] = hash
+			bs.hashes[height] = blockHashes{
+				hash:    hash,
+				appHash: appHash,
+			}
 			count++
 		}
 
@@ -155,7 +180,7 @@ func (bki *BlockStore) mayReplaceTx(txn *badger.Txn, err error) (*badger.Txn, er
 	return bki.db.NewTransaction(true), nil
 }
 
-func (bki *BlockStore) Store(blk *types.Block) error {
+func (bki *BlockStore) Store(blk *types.Block, appHash types.Hash) error {
 	blkHash := blk.Hash()
 	height := blk.Header.Height
 
@@ -172,6 +197,13 @@ func (bki *BlockStore) Store(blk *types.Block) error {
 	// Store the block contents with the nsBlock prefix
 	key = slices.Concat(nsBlock, blkHash[:])
 	err = txn.Set(key, types.EncodeBlock(blk))
+	if err != nil {
+		return err
+	}
+
+	// Store the appHash.
+	key = slices.Concat(nsAppHash, blkHash[:])
+	err = txn.Set(key, appHash[:])
 	if err != nil {
 		return err
 	}
@@ -199,7 +231,10 @@ func (bki *BlockStore) Store(blk *types.Block) error {
 
 	delete(bki.fetching, blkHash)
 	bki.idx[blkHash] = height
-	bki.hashes[height] = blkHash
+	bki.hashes[height] = blockHashes{
+		hash:    blkHash,
+		appHash: appHash,
+	}
 
 	return nil
 }
@@ -229,26 +264,28 @@ func (bki *BlockStore) size() int {
 	return len(bki.idx)
 }
 
-func (bki *BlockStore) Best() (int64, types.Hash) {
+func (bki *BlockStore) Best() (int64, types.Hash, types.Hash) {
 	bki.mtx.RLock()
 	defer bki.mtx.RUnlock()
 	var bestHeight int64
-	var bestHash types.Hash
-	for height, hash := range bki.hashes {
+	var bestHash, bestAppHash types.Hash
+	for height, hashes := range bki.hashes {
 		if height >= bestHeight {
 			bestHeight = height
-			bestHash = hash
+			bestHash = hashes.hash
+			bestAppHash = hashes.appHash
 		}
 	}
-	return bestHeight, bestHash
+	return bestHeight, bestHash, bestAppHash
 }
 
-func (bki *BlockStore) Get(blkHash types.Hash) (*types.Block, error) {
+func (bki *BlockStore) Get(blkHash types.Hash) (*types.Block, types.Hash, error) {
 	if !bki.Have(blkHash) {
-		return nil, types.ErrNotFound
+		return nil, types.Hash{}, types.ErrNotFound
 	}
 
 	var block *types.Block
+	var appHash types.Hash
 	err := bki.db.View(func(txn *badger.Txn) error {
 		// Load the block and get the tx
 		blockKey := slices.Concat(nsBlock, blkHash[:])
@@ -257,31 +294,55 @@ func (bki *BlockStore) Get(blkHash types.Hash) (*types.Block, error) {
 			return err
 		}
 
-		return item.Value(func(val []byte) error {
+		err = item.Value(func(val []byte) error {
 			block, err = types.DecodeBlock(val)
 			return err
+		})
+		if err != nil {
+			return err
+		}
+
+		// Load the apphash
+		appHashKey := slices.Concat(nsAppHash, blkHash[:])
+		item, err = txn.Get(appHashKey)
+		if err != nil {
+			return err
+		}
+
+		return item.Value(func(val []byte) error {
+			appHash = types.Hash(val)
+			return nil
 		})
 	})
 
 	if errors.Is(err, badger.ErrKeyNotFound) {
-		return nil, types.ErrNotFound
+		return nil, types.Hash{}, types.ErrNotFound
 	}
 
-	return block, err
+	return block, appHash, err
 }
 
 // GetByHeight retrieves the full block based on the block height. The returned
-// hash is a convenience for the caller to spare computing it.
-func (bki *BlockStore) GetByHeight(height int64) (types.Hash, *types.Block, error) {
+// hash is a convenience for the caller to spare computing it. The app hash,
+// which is encoded in the next block header, is also returned.
+func (bki *BlockStore) GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error) {
 	bki.mtx.RLock()
 	defer bki.mtx.RUnlock()
 
-	hash, have := bki.hashes[height]
+	hashes, have := bki.hashes[height]
 	if !have {
-		return types.Hash{}, nil, fmt.Errorf("block not found at height %d", height)
+		return types.Hash{}, nil, types.Hash{}, fmt.Errorf("block not found at height %d", height)
 	}
-	blk, err := bki.Get(hash)
-	return hash, blk, err
+	blk, appHash, err := bki.Get(hashes.hash)
+	if err != nil {
+		return types.Hash{}, nil, types.Hash{}, err
+	}
+	// NOTE: appHash should match hashes.appHash, so check it here.
+	if appHash != hashes.appHash {
+		return types.Hash{}, nil, types.Hash{}, fmt.Errorf("appHash mismatch: %s != %s", appHash, hashes.appHash)
+	}
+
+	return hashes.hash, blk, appHash, err
 }
 
 func (bki *BlockStore) HaveTx(txHash types.Hash) bool {
