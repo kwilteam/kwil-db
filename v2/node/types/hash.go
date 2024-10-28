@@ -3,6 +3,7 @@ package types
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 )
 
@@ -19,6 +20,32 @@ func HashBytes(b []byte) Hash {
 // String returns the hexadecimal representation of the hash (always 64 characters)
 func (h Hash) String() string {
 	return hex.EncodeToString(h[:])
+}
+
+var _ json.Marshaler = Hash{}
+var _ json.Marshaler = (*Hash)(nil)
+
+// MarshalJSON ensures the hash marshals to JSON as a hexadecimal string.
+func (h Hash) MarshalJSON() ([]byte, error) {
+	return json.Marshal(h.String()) // i.e. `"` + h.String() + `"`
+}
+
+var _ json.Unmarshaler = (*Hash)(nil)
+
+// UnmarshalJSON unmarshals a hash from a hexadecimal JSON string.
+func (h *Hash) UnmarshalJSON(data []byte) error {
+	var hexStr string
+	if err := json.Unmarshal(data, &hexStr); err != nil {
+		return err
+	}
+
+	parsed, err := NewHashFromString(hexStr)
+	if err != nil {
+		return err
+	}
+
+	*h = parsed
+	return nil
 }
 
 // NewHashFromString parses a hexadecimal string into a Hash.
