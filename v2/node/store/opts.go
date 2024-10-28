@@ -7,7 +7,8 @@ import (
 )
 
 type options struct {
-	logger log.Logger
+	logger   log.Logger
+	compress bool
 }
 
 type Option func(*options)
@@ -15,6 +16,12 @@ type Option func(*options)
 func WithLogger(logger log.Logger) Option {
 	return func(o *options) {
 		o.logger = logger
+	}
+}
+
+func WithCompression(compress bool) Option {
+	return func(o *options) {
+		o.compress = compress
 	}
 }
 
