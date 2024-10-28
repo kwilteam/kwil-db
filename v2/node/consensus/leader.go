@@ -8,7 +8,7 @@ import (
 	"p2p/node/types"
 )
 
-// Leader Modes:
+// Leader is the node that proposes the block and drives the consensus process:
 // 1. Prepare Phase:
 //   - Create a block proposal
 //   - Broadcast the block proposal
@@ -17,12 +17,14 @@ import (
 //
 // 2. Commit Phase:
 //   - Commit the block and start next prepare phase
+
+// startNewRound starts a new round of consensus process.
 func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	fmt.Println("Starting a new round", ce.state.lc.height+1)
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
-	blkProp, err := ce.createProposal()
+	blkProp, err := ce.createBlockProposal()
 	if err != nil {
 		fmt.Println("Error creating a block proposal", err)
 		return err
@@ -54,6 +56,8 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	return nil
 }
 
+// NotifyACK notifies the consensus engine about the ACK received from the validator.
+// This only notifies if leader is still processing the block the vote is for.
 func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 	// fmt.Println("NotifyACK: Received ACK from validator", string(validatorPK), ack.Height, ack.ACK, ack.BlkHash, ack.AppHash)
 	ce.state.mtx.Lock()
@@ -100,7 +104,7 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 // proposer transactions such as ValidatorVoteBodies.
 // This method orders the transactions in the nonce order and also
 // does basic gas and balance checks and enforces the block size limits.
-func (ce *ConsensusEngine) createProposal() (*blockProposal, error) {
+func (ce *ConsensusEngine) createBlockProposal() (*blockProposal, error) {
 	// fmt.Println("Creating a new block proposal")
 	_, txns := ce.mempool.ReapN(blockTxCount)
 	blk := types.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, time.Now(), txns)
@@ -112,7 +116,7 @@ func (ce *ConsensusEngine) createProposal() (*blockProposal, error) {
 }
 
 // addVote registers the vote received from the validator if it is for the current block.
-func (ce *ConsensusEngine) addVote(vote *vote, sender string) error {
+func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender string) error {
 	// fmt.Println("Adding vote", vote, sender)
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
@@ -142,21 +146,29 @@ func (ce *ConsensusEngine) addVote(vote *vote, sender string) error {
 		ce.state.votes[sender] = vote
 	}
 
-	ce.processVotes(context.Background())
+	// Good to do this sequentially, so that we only trigger one nextRound goroutine
+	ce.processVotes(ctx)
 	return nil
 }
 
 // ProcessVotes processes the votes received from the validators.
-// If threshold Acks are received with matching appHashes, then the block is committed.
-// If threshold Nacks are received, then the network stops.
-// If enough votes are not received, wait for them. Validators are programmed to
-// repeatedly send votes in regular intervals until they receive a BlockAnn or BlockProp msg.
-// If validators missed blockProp messages probably because they are catching up with the network,
-// Leader will re-annonuce the blockProp messages at regular intervals until it receives the votes(threshold).
+// Depending on the votes, leader will trigger one of the following:
+// 1. Commit the block
+// 2. Re-announce the block proposal
+// 3. Halt the network (should there be a message to halt the network?)
+// Leaders will re-announce the blkProp and blkRes for every reannounceTimer interval
+// for the slow valdiators to catchup incase they missed the event.
+// Validators will peridically reannounce the votes to the leader.
 func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 	fmt.Println("Processing votes")
-	// check if the votes are already processed and moved to the next round
-	if ce.state.blkProp == nil || ce.state.blockRes == nil {
+
+	if ce.state.blkProp == nil || ce.state.blockRes == nil { // Moved onto the next round
+		return nil
+	}
+
+	threshold := ce.requiredThreshold()
+	if len(ce.state.votes) < int(threshold) {
+		fmt.Println("Not enough votes received yet", len(ce.state.votes), threshold)
 		return nil
 	}
 
@@ -170,14 +182,6 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 			nacks++
 		}
 	}
-
-	// TODO: Okay the logic if counting acks should change, rethink it once.
-
-	// Depending on the votes, leader will trigger one of the following:
-	// 1. Commit the block
-	// 2. Re-announce the block proposal
-	// 3. Halting the network (should there be a message to halt the network?)
-	threshold := ce.requiredThreshold()
 
 	if acks >= threshold {
 		fmt.Println("Majority of the validators have accepted the block, proceeding to commit the block", ce.state.blkProp.blk.Header.Height, ce.state.blkProp.blkHash, acks, nacks)
@@ -193,17 +197,17 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 
 		// start the next round
 		ce.nextState()
+		// Wait for the timeout to start the next round
+		time.Sleep(1 * time.Second) // TODO: Is there a better way to handle this timeout?
 		go ce.startNewRound(ctx)
 	} else if nacks >= threshold {
-		// Majority of the validators have either rejected the block or disagreed on the appHash
 		// halt the network
-		// ce.haltChan <- struct{}{}
-		fmt.Println("Majority of the validators have rejected the block, halting the network", ce.state.blkProp.blk.Header.Height, acks, nacks)
+		fmt.Println("Majority of the validators have rejected the block, halting the network",
+			ce.state.blkProp.blk.Header.Height, acks, nacks)
 		close(ce.haltChan)
 		return nil
 	}
 
-	// If the threshold is not reached, leader will re-announce the block proposal at regular intervals
-	// until it receives the votes(threshold)
+	// No majority yet, wait for more votes
 	return nil
 }
