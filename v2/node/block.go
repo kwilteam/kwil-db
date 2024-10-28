@@ -1,17 +1,14 @@
 package node
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"log"
-	"p2p/node/types"
-	"strconv"
-	"strings"
 	"time"
+
+	"p2p/node/types"
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -25,27 +22,13 @@ const (
 func (n *Node) blkGetStreamHandler(s network.Stream) {
 	defer s.Close()
 
-	req := make([]byte, 128)
-	// io.ReadFull(s, req)
-	nr, err := s.Read(req)
-	if err != nil && err != io.EOF {
-		fmt.Println("bad get blk req", err)
-		return
-	}
-	req, ok := bytes.CutPrefix(req[:nr], []byte(getBlkMsgPrefix))
-	if !ok {
-		fmt.Println("bad get blk request")
-		return
-	}
-	blkid := strings.TrimSpace(string(req))
-	log.Printf("requested blkid: %q", blkid)
-	blkHash, err := types.NewHashFromString(blkid)
-	if err != nil {
-		fmt.Println("invalid block ID", err)
+	var req blockHashReq
+	if _, err := req.ReadFrom(s); err != nil {
+		fmt.Println("bad get blk request:", err)
 		return
 	}
 
-	blk, appHash, err := n.bki.Get(blkHash)
+	blk, appHash, err := n.bki.Get(req.Hash)
 	if err != nil {
 		s.Write(noData) // don't have it
 	} else {
@@ -59,27 +42,14 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 	defer s.Close()
 
-	req := make([]byte, 128)
-	// io.ReadFull(s, req)
-	nr, err := s.Read(req)
-	if err != nil && err != io.EOF {
-		fmt.Println("bad get blk req", err)
+	var req blockHeightReq
+	if _, err := req.ReadFrom(s); err != nil {
+		fmt.Println("bad get blk request:", err)
 		return
 	}
-	req, ok := bytes.CutPrefix(req[:nr], []byte(getBlkHeightMsgPrefix))
-	if !ok {
-		fmt.Println("bad get blk(height) request")
-		return
-	}
-	heightStr := strings.TrimSpace(string(req))
-	height, err := strconv.ParseInt(heightStr, 10, 64)
-	if err != nil {
-		fmt.Println("invalid block ID", err)
-		return
-	}
-	log.Printf("requested block height: %q", height)
+	log.Printf("requested block height: %q", req.Height)
 
-	hash, blk, appHash, err := n.bki.GetByHeight(height)
+	hash, blk, appHash, err := n.bki.GetByHeight(req.Height)
 	if err != nil {
 		s.Write(noData) // don't have it
 	} else {
@@ -99,46 +69,15 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	ctx, cancel := context.WithTimeout(context.Background(), blkGetTimeout)
 	defer cancel()
 
-	req := make([]byte, 256)
-	nr, err := s.Read(req)
-	if err != nil && err != io.EOF {
-		log.Println("bad blk ann req", err)
+	var reqMsg blockInitMsg
+	if _, err := reqMsg.ReadFrom(s); err != nil {
+		log.Println("bad blk ann request:", err)
 		return
-	}
-	req, ok := bytes.CutPrefix(req[:nr], []byte(annBlkMsgPrefix))
-	if !ok {
-		log.Println("bad blk ann request")
-		return
-	}
-	if len(req) <= 64 {
-		log.Println("short blk ann request")
-		return
-	}
-	blkid, after, cut := strings.Cut(string(req), ":")
-	if !cut {
-		log.Println("invalid blk ann request")
-		return
-	}
-	var appHash types.Hash
-	heightStr, appHashStr, cut := strings.Cut(after, ":")
-	if cut {
-		appHash, err = types.NewHashFromString(appHashStr)
-		if err != nil {
-			log.Println("BAD appHash in blk ann request", err)
-			return
-		}
 	}
 
-	blkHash, err := types.NewHashFromString(blkid)
-	if err != nil {
-		log.Printf("invalid block id: %v", err)
-		return
-	}
-	height, err := strconv.ParseInt(heightStr, 10, 64)
-	if err != nil {
-		log.Printf("invalid height in blk ann request: %v", err)
-		return
-	}
+	height, blkHash, appHash := reqMsg.Height, reqMsg.Hash, reqMsg.AppHash
+	blkid := blkHash.String()
+
 	if height < 0 {
 		log.Printf("invalid height in blk ann request: %d", height)
 		return
@@ -171,7 +110,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		s.Close() // close the announcers stream first
 		var gotHeight int64
 		var gotAppHash types.Hash
-		gotHeight, rawBlk, gotAppHash, err = n.getBlkWithRetry(ctx, blkid, 500*time.Millisecond, 10)
+		gotHeight, rawBlk, gotAppHash, err = n.getBlkWithRetry(ctx, blkHash, 500*time.Millisecond, 10)
 		if err != nil {
 			log.Printf("unable to retrieve tx %v: %v", blkid, err)
 			return
@@ -207,27 +146,20 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 
 	go func() {
 		n.ce.NotifyBlockCommit(blk, appHash)
-		var appHashStr string
-		if !appHash.IsZero() {
-			appHashStr = appHash.String()
-		}
-		n.announceRawBlk(context.Background(), blkid, height, rawBlk, appHashStr, s.Conn().RemotePeer())
+		n.announceRawBlk(context.Background(), blkHash, height, rawBlk, appHash, s.Conn().RemotePeer())
 	}()
 }
 
 func (n *Node) announceBlk(ctx context.Context, blk *types.Block, appHash types.Hash, from peer.ID) {
-	fmt.Println("announceBlk", blk.Header.Height, blk.Header.Hash(), appHash, from)
+	blkHash := blk.Hash()
+	fmt.Println("announceBlk", blk.Header.Height, blkHash, appHash, from)
 	rawBlk := types.EncodeBlock(blk)
-	var appHashStr string
-	if !appHash.IsZero() {
-		appHashStr = appHash.String()
-	}
-	n.announceRawBlk(ctx, blk.Hash().String(), blk.Header.Height, rawBlk, appHashStr, from)
+	n.announceRawBlk(ctx, blkHash, blk.Header.Height, rawBlk, appHash, from)
 	return
 }
 
-func (n *Node) announceRawBlk(ctx context.Context, blkid string, height int64,
-	rawBlk []byte, appHash string, from peer.ID) {
+func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height int64,
+	rawBlk []byte, appHash types.Hash, from peer.ID) {
 	peers := n.peers()
 	if len(peers) == 0 {
 		log.Println("no peers to advertise block to")
@@ -238,12 +170,19 @@ func (n *Node) announceRawBlk(ctx context.Context, blkid string, height int64,
 		if peerID == from {
 			continue
 		}
-		log.Printf("advertising block %s (height %d / txs %d) to peer %v", blkid, height, len(rawBlk), peerID)
-		resID := annBlkMsgPrefix + blkid + ":" + strconv.Itoa(int(height))
-		if appHash != "" {
-			resID += ":" + appHash
+		log.Printf("advertising block %s (height %d / txs %d) to peer %v",
+			blkHash, height, len(rawBlk), peerID)
+		resID, err := blockInitMsg{
+			Hash:    blkHash,
+			Height:  height,
+			AppHash: appHash,
+		}.MarshalBinary()
+		if err != nil {
+			log.Println(err)
+			continue
 		}
-		err := advertiseToPeer(ctx, n.host, peerID, ProtocolIDBlkAnn, contentAnn{resID, []byte(resID), rawBlk})
+		err = advertiseToPeer(ctx, n.host, peerID, ProtocolIDBlkAnn,
+			contentAnn{cType: "block announce", ann: resID, content: rawBlk})
 		if err != nil {
 			log.Println(err)
 			continue
@@ -251,16 +190,16 @@ func (n *Node) announceRawBlk(ctx context.Context, blkid string, height int64,
 	}
 }
 
-func (n *Node) getBlkWithRetry(ctx context.Context, blkid string, baseDelay time.Duration,
+func (n *Node) getBlkWithRetry(ctx context.Context, blkHash types.Hash, baseDelay time.Duration,
 	maxAttempts int) (int64, []byte, types.Hash, error) {
 	var attempts int
 	for {
-		height, raw, appHash, err := n.getBlk(ctx, blkid)
+		height, raw, appHash, err := n.getBlk(ctx, blkHash)
 		if err == nil {
 			return height, raw, appHash, nil
 		}
 
-		log.Printf("unable to retrieve block %v (%v), waiting to retry", blkid, err)
+		log.Printf("unable to retrieve block %v (%v), waiting to retry", blkHash, err)
 
 		select {
 		case <-ctx.Done():
@@ -274,11 +213,11 @@ func (n *Node) getBlkWithRetry(ctx context.Context, blkid string, baseDelay time
 	}
 }
 
-func (n *Node) getBlk(ctx context.Context, blkid string) (int64, []byte, types.Hash, error) {
+func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, types.Hash, error) {
 	for _, peer := range n.peers() {
-		log.Printf("requesting block %v from %v", blkid, peer)
+		log.Printf("requesting block %v from %v", blkHash, peer)
 		t0 := time.Now()
-		resID := getBlkMsgPrefix + blkid
+		resID, _ := blockHashReq{Hash: blkHash}.MarshalBinary()
 		resp, err := requestFrom(ctx, n.host, peer, resID, ProtocolIDBlock, blkReadLimit)
 		if errors.Is(err, ErrNotFound) {
 			log.Printf("block not available on %v", peer)
@@ -298,7 +237,7 @@ func (n *Node) getBlk(ctx context.Context, blkid string) (int64, []byte, types.H
 			continue
 		}
 
-		log.Printf("obtained content for block %q in %v", blkid, time.Since(t0))
+		log.Printf("obtained content for block %q in %v", blkHash, time.Since(t0))
 
 		height := binary.LittleEndian.Uint64(resp[:8])
 		var appHash types.Hash
@@ -314,7 +253,7 @@ func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, type
 	for _, peer := range n.peers() {
 		log.Printf("requesting block number %d from %v", height, peer)
 		t0 := time.Now()
-		resID := getBlkHeightMsgPrefix + strconv.FormatInt(height, 10)
+		resID, _ := blockHeightReq{Height: height}.MarshalBinary()
 		resp, err := requestFrom(ctx, n.host, peer, resID, ProtocolIDBlockHeight, blkReadLimit)
 		if errors.Is(err, ErrNotFound) {
 			log.Printf("block not available on %v", peer)

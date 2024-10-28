@@ -96,10 +96,11 @@ func (n *Node) startTxGossip(ctx context.Context, ps *pubsub.PubSub) error {
 				continue
 			}
 
-			txid := hex.EncodeToString(txMsg.Data)
+			txHash := types.Hash(txMsg.Data)
+			txid := txHash.String()
 			fromPeerID := txMsg.GetFrom()
 
-			have := n.mp.Get(types.Hash(txMsg.Data)) != nil // danger conversion
+			have := n.mp.Get(txHash) != nil // danger conversion
 			log.Printf("received tx msg from %v (rcvd from %s), data = %x, already have = %v\n",
 				txMsg.GetFrom(), txMsg.ReceivedFrom, txMsg.Message.Data, have)
 			if have {
@@ -112,7 +113,7 @@ func (n *Node) startTxGossip(ctx context.Context, ps *pubsub.PubSub) error {
 				log.Println("DELAY for fetch, gossip from non-peer")
 				time.Sleep(200 * time.Millisecond)
 			}
-			txRaw, err := n.getTxWithRetry(ctx, txid, 500*time.Millisecond, 10)
+			txRaw, err := n.getTxWithRetry(ctx, txHash, 500*time.Millisecond, 10)
 			if err != nil {
 				log.Printf("unable to retrieve tx %v: %v", txid, err)
 				continue

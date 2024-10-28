@@ -1,8 +1,9 @@
 package mempool
 
 import (
-	"p2p/node/types"
 	"sync"
+
+	"p2p/node/types"
 )
 
 // mempool is an index of unconfirmed transactions
@@ -88,7 +89,7 @@ func (mp *Mempool) PeekN(n int) []types.NamedTx {
 	n = min(n, len(mp.txns))
 	txns := make([]types.NamedTx, 0, n)
 	for txid, rawTx := range mp.txns {
-		txns = append(txns, types.NamedTx{ID: txid, Tx: rawTx})
+		txns = append(txns, types.NamedTx{Hash: txid, Tx: rawTx})
 		if len(txns) == n {
 			break
 		}
