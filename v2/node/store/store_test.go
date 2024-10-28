@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"math/rand/v2"
@@ -483,4 +484,143 @@ func getDirSize(path string) int64 {
 		return nil
 	})
 	return size
+}
+func TestBlockStore_StoreAndGetResults(t *testing.T) {
+	bs, _ := setupTestBlockStore(t)
+
+	block, appHash := createTestBlock(1, 3)
+	err := bs.Store(block, appHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	results := []types.TxResult{
+		{Code: 0, Log: "result1", Events: []types.Event{}},
+		{Code: 1, Log: "result2", Events: []types.Event{{}}},
+		{Code: 2, Log: "result3", Events: []types.Event{{}, {}}},
+	}
+
+	err = bs.StoreResults(block.Hash(), results)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotResults, err := bs.Results(block.Hash())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(gotResults) != len(results) {
+		t.Fatalf("Expected %d results, got %d", len(results), len(gotResults))
+	}
+
+	for i, res := range results {
+		if res.Code != gotResults[i].Code {
+			t.Errorf("Result %d: expected code %d, got %d", i, res.Code, gotResults[i].Code)
+		}
+		if res.Log != gotResults[i].Log {
+			t.Errorf("Result %d: expected data %s, got %s", i, res.Log, gotResults[i].Log)
+		}
+	}
+}
+
+func TestBlockStore_StoreResultsEmptyBlock(t *testing.T) {
+	bs, _ := setupTestBlockStore(t)
+
+	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8},
+		time.Unix(1729723553, 0), [][]byte{})
+	appHash := fakeAppHash(1)
+
+	err := bs.Store(block, appHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	results := []types.TxResult{}
+	err = bs.StoreResults(block.Hash(), results)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotResults, err := bs.Results(block.Hash())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(gotResults) != 0 {
+		t.Errorf("Expected empty results, got %d results", len(gotResults))
+	}
+}
+
+func TestBlockStore_ResultsNonExistentBlock(t *testing.T) {
+	bs, _ := setupTestBlockStore(t)
+
+	nonExistentHash := types.Hash{1, 2, 3}
+	_, err := bs.Results(nonExistentHash)
+	if err == nil {
+		t.Error("Expected error when getting results for non-existent block")
+	}
+}
+
+func TestBlockStore_StoreResultsLargeData(t *testing.T) {
+	bs, _ := setupTestBlockStore(t)
+
+	block, appHash := createTestBlock(1, 2)
+	err := bs.Store(block, appHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	largeData := make([]byte, 1<<20) // 1MB
+	// rngSrc := rand.NewChaCha8([32]byte{}) // deterministic random data
+	crand.Read(largeData)
+
+	results := []types.TxResult{
+		{Code: 0, Log: string(largeData)},
+		{Code: 1, Log: "small result"},
+	}
+
+	err = bs.StoreResults(block.Hash(), results)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotResults, err := bs.Results(block.Hash())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if gotResults[0].Log != string(largeData) {
+		t.Error("Large result data mismatch")
+	}
+	if gotResults[1].Log != "small result" {
+		t.Error("Small result data mismatch")
+	}
+}
+
+func TestBlockStore_StoreResultsMismatchedCount(t *testing.T) {
+	bs, _ := setupTestBlockStore(t)
+
+	block, appHash := createTestBlock(1, 2)
+	err := bs.Store(block, appHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	results := []types.TxResult{
+		{Code: 0, Log: "result1"},
+		{Code: 1, Log: "result2"},
+		{Code: 2, Log: "result3"}, // Extra result
+	}
+
+	err = bs.StoreResults(block.Hash(), results)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = bs.Results(block.Hash())
+	if err == nil {
+		t.Error("expected error when getting results for mismatched count")
+	}
+
 }
