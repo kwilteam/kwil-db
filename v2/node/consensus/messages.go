@@ -10,7 +10,8 @@ import (
 // 1. BlockProposal
 // 2. Ack
 // 3. BlockAnn
-
+// NOTE: only send these messages to the consensus engine if the state machine is
+// expecting them.
 type consensusMessage struct {
 	Sender  []byte
 	MsgType string
