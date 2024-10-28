@@ -3,7 +3,6 @@ package node
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -20,24 +19,13 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 
 	s.SetDeadline(time.Now().Add(txGetTimeout))
 
-	req := make([]byte, 128)
-	nr, err := s.Read(req)
-	if err != nil && err != io.EOF {
-		log.Println("bad get tx req:", err)
+	var ann txHashAnn
+	if _, err := ann.ReadFrom(s); err != nil {
+		fmt.Println("bad get tx req:", err)
 		return
 	}
-	req, ok := bytes.CutPrefix(req[:nr], []byte(annTxMsgPrefix))
-	if !ok {
-		log.Println("txAnnStreamHandler: bad get tx request", string(req))
-		return
-	}
-	txid := string(req)
-	// log.Printf("tx announcement received: %q", txid)
-	txHash, err := types.NewHashFromString(txid)
-	if err != nil {
-		fmt.Println("bad txid:", err)
-		return
-	}
+
+	txHash := ann.Hash
 
 	if !n.mp.PreFetch(txHash) { // it's in mempool
 		return
@@ -61,12 +49,12 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	// First try to get from this stream.
 	rawTx, err := requestTx(s, []byte(getMsg))
 	if err != nil {
-		log.Printf("announcer failed to provide %v, trying other peers", txid)
+		log.Printf("announcer failed to provide %v, trying other peers", txHash)
 		// Since we are aware, ask other peers. we could also put this in a goroutine
 		s.Close() // close the announcers stream first
-		rawTx, err = n.getTxWithRetry(context.TODO(), txid, 500*time.Millisecond, 10)
+		rawTx, err = n.getTxWithRetry(context.TODO(), txHash, 500*time.Millisecond, 10)
 		if err != nil {
-			log.Printf("unable to retrieve tx %v: %v", txid, err)
+			log.Printf("unable to retrieve tx %v: %v", txHash, err)
 			return
 		}
 	}
@@ -81,10 +69,10 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	fetched = true
 
 	// re-announce
-	go n.announceTx(context.Background(), txid, rawTx, s.Conn().RemotePeer())
+	go n.announceTx(context.Background(), txHash, rawTx, s.Conn().RemotePeer())
 }
 
-func (n *Node) announceTx(ctx context.Context, txid string, rawTx []byte, from peer.ID) {
+func (n *Node) announceTx(ctx context.Context, txHash types.Hash, rawTx []byte, from peer.ID) {
 	peers := n.host.Network().Peers()
 	if len(peers) == 0 {
 		log.Println("no peers to advertise tx to")
@@ -96,7 +84,7 @@ func (n *Node) announceTx(ctx context.Context, txid string, rawTx []byte, from p
 			continue
 		}
 		// log.Printf("advertising tx %v (len %d) to peer %v", txid, len(rawTx), peerID)
-		err := n.advertiseTxToPeer(ctx, peerID, txid, rawTx)
+		err := n.advertiseTxToPeer(ctx, peerID, txHash, rawTx)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -106,7 +94,7 @@ func (n *Node) announceTx(ctx context.Context, txid string, rawTx []byte, from p
 
 // advertiseTxToPeer sends a lightweight advertisement to a connected peer.
 // The stream remains open in case the peer wants to request the content right.
-func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txid string, rawTx []byte) error {
+func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash types.Hash, rawTx []byte) error {
 	s, err := n.host.NewStream(ctx, peerID, ProtocolIDTxAnn)
 	if err != nil {
 		return fmt.Errorf("failed to open stream to peer: %w", err)
@@ -116,7 +104,7 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txid strin
 	s.SetWriteDeadline(roundTripDeadline)
 
 	// Send a lightweight advertisement with the object ID
-	_, err = s.Write([]byte(annTxMsgPrefix + txid))
+	_, err = newTxHashAnn(txHash).WriteTo(s)
 	if err != nil {
 		return fmt.Errorf("txann failed: %w", err)
 	}
@@ -166,13 +154,12 @@ func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time
 			case <-time.After(newPeriod):
 			}
 
-			txHash := randBytes(32)
-			txid := hex.EncodeToString(txHash)
+			txHash := types.Hash(randBytes(32))
 			rawTx := randBytes(sz)
-			n.mp.Store(types.Hash(txHash), rawTx)
+			n.mp.Store(txHash, rawTx)
 
 			// log.Printf("announcing txid %v", txid)
-			n.announceTx(ctx, txid, rawTx, n.host.ID())
+			n.announceTx(ctx, types.Hash(txHash), rawTx, n.host.ID())
 		}
 	}()
 
@@ -196,7 +183,7 @@ func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time
 				log.Printf("re-announcing %d unconfirmed txns", len(txns))
 
 				for _, nt := range txns {
-					n.announceTx(ctx, nt.ID.String(), nt.Tx, n.host.ID()) // response handling is async
+					n.announceTx(ctx, nt.Hash, nt.Tx, n.host.ID()) // response handling is async
 					if ctx.Err() != nil {
 						log.Println("interrupting long re-broadcast")
 						break
