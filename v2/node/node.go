@@ -1,7 +1,6 @@
 package node
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
@@ -319,27 +318,14 @@ func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
 func (n *Node) txGetStreamHandler(s network.Stream) {
 	defer s.Close()
 
-	req := make([]byte, 128)
-	nr, err := s.Read(req)
-	if err != nil && err != io.EOF {
+	var req txHashReq
+	if _, err := req.ReadFrom(s); err != nil {
 		fmt.Println("bad get tx req:", err)
-		return
-	}
-	req, ok := bytes.CutPrefix(req[:nr], []byte(getTxMsgPrefix))
-	if !ok {
-		fmt.Println("txGetStreamHandler: bad get tx request", string(req))
-		return
-	}
-	txid := string(req)
-	// log.Printf("requested txid: %q", txid)
-	txHash, err := types.NewHashFromString(txid)
-	if err != nil {
-		fmt.Println("bad txid:", err)
 		return
 	}
 
 	// first check mempool
-	rawTx := n.mp.Get(txHash)
+	rawTx := n.mp.Get(req.Hash)
 	if rawTx != nil {
 		s.Write(rawTx)
 		return
@@ -348,7 +334,7 @@ func (n *Node) txGetStreamHandler(s network.Stream) {
 	// this is racy, and should be different in product
 
 	// then confirmed tx index
-	_, rawTx, err = n.bki.GetTx(txHash)
+	_, rawTx, err := n.bki.GetTx(req.Hash)
 	if err != nil {
 		if !errors.Is(err, types.ErrNotFound) {
 			log.Println("unexpected GetTx error:", err)
