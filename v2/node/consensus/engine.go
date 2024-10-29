@@ -3,10 +3,13 @@ package consensus
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
+	"p2p/log"
 	"p2p/node/types"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -43,6 +46,7 @@ type ConsensusEngine struct {
 	haltChan chan struct{} // can take a msg or reason for halting the network
 
 	// interfaces
+	log           log.Logger
 	mempool       Mempool
 	blockStore    BlockStore
 	blockExecutor BlockExecutor
@@ -96,7 +100,13 @@ type lastCommit struct {
 }
 
 func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockStore,
-	vs map[string]types.Validator) *ConsensusEngine {
+	vs map[string]types.Validator, logger log.Logger) *ConsensusEngine {
+
+	if logger == nil {
+		// logger = log.DiscardLogger // for prod
+		logger = log.New(log.WithName("CONS"), log.WithLevel(log.LevelDebug),
+			log.WithWriter(os.Stdout), log.WithFormat(log.FormatUnstructured))
+	}
 
 	pubKey, err := hostID.ExtractPublicKey()
 	if err != nil {
@@ -132,6 +142,7 @@ func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockS
 		// interfaces
 		mempool:    mempool,
 		blockStore: bs,
+		log:        logger,
 	}
 }
 
@@ -144,7 +155,7 @@ func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster Propos
 
 	// Fast catchup the node with the network height
 	if err := ce.catchup(ctx); err != nil {
-		fmt.Println("Error catching up: ", err)
+		ce.log.Errorf("Error catching up: %v", err)
 		return
 	}
 
@@ -177,11 +188,12 @@ func (ce *ConsensusEngine) runEventLoop(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			ce.log.Info("Shutting down the consensus engine")
 			return nil
 
 		case <-ce.haltChan:
 			// Halt the network
-			fmt.Println("Received halt signal, stopping the consensus engine")
+			ce.log.Error("Received halt signal, stopping the consensus engine")
 			return nil
 
 		case <-catchUpTicker.C:
@@ -201,10 +213,10 @@ func (ce *ConsensusEngine) startMining(ctx context.Context) {
 	// Start the mining process if the node is a leader
 	// validators and sentry nodes get activated when they receive a block proposal or block announce msgs.
 	if ce.role == types.RoleLeader {
-		fmt.Println("Starting the leader node")
+		ce.log.Infof("Starting the leader node")
 		go ce.startNewRound(ctx)
 	} else {
-		fmt.Println("Starting the validator/sentry node")
+		ce.log.Infof("Starting the validator/sentry node")
 	}
 }
 
@@ -212,13 +224,13 @@ func (ce *ConsensusEngine) startMining(ctx context.Context) {
 func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg consensusMessage) {
 	// validate the message
 	// based on the message type, process the message
-	fmt.Println("Consensus message received: ", msg.MsgType, hex.EncodeToString(msg.Sender))
+	ce.log.Info("Consensus message received", "type", msg.MsgType, "sender", hex.EncodeToString(msg.Sender))
 
 	switch msg.MsgType {
 	case "block_proposal":
 		blkPropMsg, ok := msg.Msg.(*blockProposal)
 		if !ok {
-			fmt.Println("Invalid block proposal message")
+			ce.log.Warnf("Invalid block proposal message")
 			return // ignore the message
 		}
 		go ce.processBlockProposal(ctx, blkPropMsg) // This triggers the processing of the block proposal
@@ -231,19 +243,19 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 
 		vote, ok := msg.Msg.(*vote)
 		if !ok {
-			fmt.Println("Invalid vote message")
+			ce.log.Warnf("Invalid vote message")
 			return
 		}
 
 		if err := ce.addVote(ctx, vote, hex.EncodeToString(msg.Sender)); err != nil {
-			fmt.Println("Error adding vote: ", vote, err)
+			ce.log.Error("Error adding vote", "vote", vote, "error", err)
 			return
 		}
 
 	case "block_ann":
 		blkAnn, ok := msg.Msg.(*blockAnnounce)
 		if !ok {
-			fmt.Println("Invalid block announce message")
+			ce.log.Error("Invalid block announce message")
 			return
 		}
 
@@ -262,18 +274,18 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Println("Initial APP State: ", ce.state.appState.Height, ce.state.appState.AppHash.String())
+	ce.log.Info("Initial APP State", "height", ce.state.appState.Height, "appHash", ce.state.appState.AppHash)
 	// Replay blocks from the blockstore.
 	if err := ce.replayLocalBlocks(); err != nil {
 		return err
 	}
-	fmt.Println("Replayed blocks from the blockstore: ", ce.state.lc.height, ce.state.lc.appHash.String())
+	ce.log.Info("Replayed blocks from the blockstore", "height", ce.state.lc.height, "appHash", ce.state.lc.appHash)
 
 	// Replay blocks from the network
 	if err := ce.replayBlockFromNetwork(ctx); err != nil {
 		return err
 	}
-	fmt.Println("Replayed blocks from the network: ", ce.state.lc.height, ce.state.lc.appHash.String())
+	ce.log.Info("Replayed blocks from the network", "height", ce.state.lc.height, "appHash", ce.state.lc.appHash)
 
 	return nil
 }
@@ -315,13 +327,16 @@ func (ce *ConsensusEngine) init() error {
 func (ce *ConsensusEngine) replayLocalBlocks() error {
 	for {
 		_, blk, appHash, err := ce.blockStore.GetByHeight(ce.state.lc.height + 1)
-		if err != nil { // no more blocks to replay
-			return nil
+		if err != nil {
+			if !errors.Is(err, types.ErrNotFound) {
+				return fmt.Errorf("unexpected blockstore error: %w", err)
+			}
+			return nil // no more blocks to replay
 		}
 
 		err = ce.processAndCommit(blk, appHash)
 		if err != nil {
-			return fmt.Errorf("failed replaying block: %v", err)
+			return fmt.Errorf("failed replaying block: %w", err)
 		}
 	}
 }
@@ -329,20 +344,21 @@ func (ce *ConsensusEngine) replayLocalBlocks() error {
 // replayBlockFromNetwork requests the next blocks from the network and processes it
 // until it catches up with its peers.
 func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
+	ce.log.Info("Requesting blocks from network to catch up (staggered validator)", "height", ce.state.lc.height+1)
 	for {
 		_, appHash, rawblk, err := ce.blkRequester(ctx, ce.state.lc.height+1)
-		fmt.Println("Requested block from network: ", ce.state.lc.height+1, appHash.String())
-		if err != nil {
+		ce.log.Info("Requested block from network", "height", ce.state.lc.height+1, "appHash", appHash)
+		if err != nil { // all kinds of errors?
 			return nil // no more blocks to sync from network.
 		}
 
-		if ce.state.lc.height != 0 && appHash == types.ZeroHash {
+		if ce.state.lc.height != 0 && appHash.IsZero() {
 			return nil
 		}
 
 		blk, err := types.DecodeBlock(rawblk)
 		if err != nil {
-			return fmt.Errorf("failed to decode block: %v", err)
+			return fmt.Errorf("failed to decode block: %w", err)
 		}
 		if err := ce.processAndCommit(blk, appHash); err != nil {
 			return err
@@ -375,7 +391,8 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 			ce.state.blockRes.appHash != types.ZeroHash &&
 			ce.networkHeight <= ce.state.lc.height { // To ensure that we are not reannouncing the acks for very stale blocks
 			// TODO: rethink what to broadcast here ack/nack, how do u remember the ack/nack
-			fmt.Println("Reannouncing the acks", ce.state.blkProp.height, ce.state.blkProp.blkHash, ce.state.blockRes.appHash)
+			ce.log.Info("Reannouncing ACKs", "height", ce.state.blkProp.height, "hash", ce.state.blkProp.blkHash,
+				"appHash", ce.state.blockRes.appHash)
 			go ce.ackBroadcaster(true, ce.state.blkProp.height, ce.state.blkProp.blkHash, &ce.state.blockRes.appHash)
 		}
 	}
@@ -392,7 +409,6 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) {
 	if ce.role != types.RoleLeader {
 		if ce.state.blkProp == nil && ce.state.blockRes == nil {
 			// catchup if needed with the leader/network.
-			fmt.Println("Requesting block from network (staggered validator): ", ce.state.lc.height+1)
 			ce.replayBlockFromNetwork(ctx)
 		}
 	}

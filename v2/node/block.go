@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"p2p/node/types"
@@ -24,7 +23,7 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 
 	var req blockHashReq
 	if _, err := req.ReadFrom(s); err != nil {
-		fmt.Println("bad get blk request:", err)
+		n.log.Warn("Bad get block (hash) request", "error", err) // Debug when we ship
 		return
 	}
 
@@ -44,10 +43,10 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 
 	var req blockHeightReq
 	if _, err := req.ReadFrom(s); err != nil {
-		fmt.Println("bad get blk request:", err)
+		n.log.Warn("Bad get block (height) request", "error", err) // Debug when we ship
 		return
 	}
-	log.Printf("requested block height: %d", req.Height)
+	n.log.Debug("Peer requested block", "height", req.Height)
 
 	hash, blk, appHash, err := n.bki.GetByHeight(req.Height)
 	if err != nil {
@@ -71,7 +70,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 
 	var reqMsg blockInitMsg
 	if _, err := reqMsg.ReadFrom(s); err != nil {
-		log.Println("bad blk ann request:", err)
+		n.log.Warn("bad blk ann request", "error", err)
 		return
 	}
 
@@ -79,10 +78,10 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	blkid := blkHash.String()
 
 	if height < 0 {
-		log.Printf("invalid height in blk ann request: %d", height)
+		n.log.Warn("invalid height in blk ann request", "height", height)
 		return
 	}
-	log.Printf("blk announcement received: %q / %d", blkid, height)
+	n.log.Info("blk announcement received", "hash", blkid, "height", height)
 
 	// If we are a validator and this is the commit ann for a proposed block
 	// that we already started executing, consensus engine will handle it.
@@ -99,46 +98,46 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		return // we have or are currently fetching it, do nothing, assuming we have already re-announced
 	}
 
-	log.Printf("retrieving new block: %q", blkid)
+	n.log.Info("retrieving new block", "hash", blkid)
 	t0 := time.Now()
 
 	// First try to get from this stream.
 	rawBlk, err := request(s, []byte(getMsg), blkReadLimit)
 	if err != nil {
-		log.Printf("announcer failed to provide %v, trying other peers", blkid)
+		n.log.Warnf("announcer failed to provide %v, trying other peers", blkid)
 		// Since we are aware, ask other peers. we could also put this in a goroutine
 		s.Close() // close the announcers stream first
 		var gotHeight int64
 		var gotAppHash types.Hash
 		gotHeight, rawBlk, gotAppHash, err = n.getBlkWithRetry(ctx, blkHash, 500*time.Millisecond, 10)
 		if err != nil {
-			log.Printf("unable to retrieve tx %v: %v", blkid, err)
+			n.log.Errorf("unable to retrieve tx %v: %v", blkid, err)
 			return
 		}
 		if gotHeight != height {
-			log.Printf("getblk response had unexpected height: wanted %d, got %d", height, gotHeight)
+			n.log.Errorf("getblk response had unexpected height: wanted %d, got %d", height, gotHeight)
 			return
 		}
 		if gotAppHash != appHash {
-			log.Printf("getblk response had unexpected appHash: wanted %v, got %v", appHash, gotAppHash)
+			n.log.Errorf("getblk response had unexpected appHash: wanted %v, got %v", appHash, gotAppHash)
 			return
 		}
 	}
 
-	log.Printf("obtained content for block %q in %v", blkid, time.Since(t0))
+	n.log.Infof("obtained content for block %q in %v", blkid, time.Since(t0))
 
 	blk, err := types.DecodeBlock(rawBlk)
 	if err != nil {
-		log.Printf("decodeBlock failed for %v: %v", blkid, err)
+		n.log.Infof("decodeBlock failed for %v: %v", blkid, err)
 		return
 	}
 	if blk.Header.Height != height {
-		log.Printf("getblk response had unexpected height: wanted %d, got %d", height, blk.Header.Height)
+		n.log.Infof("getblk response had unexpected height: wanted %d, got %d", height, blk.Header.Height)
 		return
 	}
 	gotBlkHash := blk.Header.Hash()
 	if gotBlkHash != blkHash {
-		log.Printf("invalid block hash: wanted %v, got %x", blkHash, gotBlkHash)
+		n.log.Infof("invalid block hash: wanted %v, got %x", blkHash, gotBlkHash)
 		return
 	}
 
@@ -162,7 +161,7 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 	rawBlk []byte, appHash types.Hash, from peer.ID) {
 	peers := n.peers()
 	if len(peers) == 0 {
-		log.Println("no peers to advertise block to")
+		n.log.Warn("No peers to advertise block to")
 		return
 	}
 
@@ -170,7 +169,7 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 		if peerID == from {
 			continue
 		}
-		log.Printf("advertising block %s (height %d / txs %d) to peer %v",
+		n.log.Infof("advertising block %s (height %d / txs %d) to peer %v",
 			blkHash, height, len(rawBlk), peerID)
 		resID, err := blockInitMsg{
 			Hash:    blkHash,
@@ -178,15 +177,16 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 			AppHash: appHash,
 		}.MarshalBinary()
 		if err != nil {
-			log.Println(err)
+			n.log.Error("Unable to marshal block announcement", "error", err)
 			continue
 		}
-		err = advertiseToPeer(ctx, n.host, peerID, ProtocolIDBlkAnn,
-			contentAnn{cType: "block announce", ann: resID, content: rawBlk})
+		ann := contentAnn{cType: "block announce", ann: resID, content: rawBlk}
+		err = n.advertiseToPeer(ctx, peerID, ProtocolIDBlkAnn, ann)
 		if err != nil {
-			log.Println(err)
+			n.log.Warn("Failed to advertise block", "peer", peerID, "error", err)
 			continue
 		}
+		n.log.Debugf("Advertised content %s to peer %s", ann, peerID)
 	}
 }
 
@@ -199,7 +199,7 @@ func (n *Node) getBlkWithRetry(ctx context.Context, blkHash types.Hash, baseDela
 			return height, raw, appHash, nil
 		}
 
-		log.Printf("unable to retrieve block %v (%v), waiting to retry", blkHash, err)
+		n.log.Warnf("unable to retrieve block %v (%v), waiting to retry", blkHash, err)
 
 		select {
 		case <-ctx.Done():
@@ -215,29 +215,29 @@ func (n *Node) getBlkWithRetry(ctx context.Context, blkHash types.Hash, baseDela
 
 func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, types.Hash, error) {
 	for _, peer := range n.peers() {
-		log.Printf("requesting block %v from %v", blkHash, peer)
+		n.log.Infof("requesting block %v from %v", blkHash, peer)
 		t0 := time.Now()
 		resID, _ := blockHashReq{Hash: blkHash}.MarshalBinary()
 		resp, err := requestFrom(ctx, n.host, peer, resID, ProtocolIDBlock, blkReadLimit)
 		if errors.Is(err, ErrNotFound) {
-			log.Printf("block not available on %v", peer)
+			n.log.Info("block not available", "peer", peer, "hash", blkHash)
 			continue
 		}
 		if errors.Is(err, ErrNoResponse) {
-			log.Printf("no response to block request to %v", peer)
+			n.log.Info("no response to block request", "peer", peer, "hash", blkHash)
 			continue
 		}
 		if err != nil {
-			log.Printf("unexpected error from %v: %v", peer, err)
+			n.log.Info("block request failed unexpectedly", "peer", peer, "hash", blkHash)
 			continue
 		}
 
 		if len(resp) < 8 {
-			log.Printf("block response too short")
+			n.log.Info("block response too short", "peer", peer, "hash", blkHash)
 			continue
 		}
 
-		log.Printf("obtained content for block %q in %v", blkHash, time.Since(t0))
+		n.log.Info("Obtained content for block", "block", blkHash, "elapsed", time.Since(t0))
 
 		height := binary.LittleEndian.Uint64(resp[:8])
 		var appHash types.Hash
@@ -251,29 +251,29 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, t
 
 func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, types.Hash, []byte, error) {
 	for _, peer := range n.peers() {
-		log.Printf("requesting block number %d from %v", height, peer)
+		n.log.Infof("requesting block number %d from %v", height, peer)
 		t0 := time.Now()
 		resID, _ := blockHeightReq{Height: height}.MarshalBinary()
 		resp, err := requestFrom(ctx, n.host, peer, resID, ProtocolIDBlockHeight, blkReadLimit)
 		if errors.Is(err, ErrNotFound) {
-			log.Printf("block not available on %v", peer)
+			n.log.Warnf("block not available on %v", peer)
 			continue
 		}
 		if errors.Is(err, ErrNoResponse) {
-			log.Printf("no response to block request to %v", peer)
+			n.log.Warnf("no response to block request to %v", peer)
 			continue
 		}
 		if err != nil {
-			log.Printf("unexpected error from %v: %v", peer, err)
+			n.log.Warnf("unexpected error from %v: %v", peer, err)
 			continue
 		}
 
 		if len(resp) < types.HashLen+1 {
-			log.Printf("block response too short")
+			n.log.Warnf("block response too short")
 			continue
 		}
 
-		log.Printf("obtained content for block number %d in %v", height, time.Since(t0))
+		n.log.Info("obtained block contents", "height", height, "elapsed", time.Since(t0))
 
 		var hash, appHash types.Hash
 		copy(hash[:], resp[:types.HashLen])

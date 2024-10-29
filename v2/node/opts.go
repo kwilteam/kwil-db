@@ -1,6 +1,7 @@
 package node
 
 import (
+	"p2p/log"
 	"p2p/node/types"
 
 	"github.com/libp2p/go-libp2p/core/host"
@@ -12,6 +13,7 @@ type options struct {
 	leader  bool
 	role    types.Role
 	pex     bool
+	logger  log.Logger
 	host    host.Host
 	bs      types.BlockStore
 	mp      types.MemPool
@@ -27,6 +29,11 @@ func (o *options) set(opts ...Option) {
 
 type Option func(*options)
 
+func WithLogger(logger log.Logger) Option {
+	return func(o *options) {
+		o.logger = logger
+	}
+}
 func WithPort(port uint64) Option {
 	return func(o *options) {
 		o.port = port
