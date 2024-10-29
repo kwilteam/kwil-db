@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
@@ -95,7 +96,6 @@ type lastCommit struct {
 }
 
 func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockStore,
-	//indexer Indexer,
 	vs map[string]types.Validator) *ConsensusEngine {
 
 	pubKey, err := hostID.ExtractPublicKey()
@@ -171,8 +171,8 @@ func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster Propos
 // catchup with the network and reannounce the messages.
 func (ce *ConsensusEngine) runEventLoop(ctx context.Context) error {
 	// TODO: make these configurable?
-	catchUpTicker := time.NewTicker(1 * time.Second)
-	reannounceTicker := time.NewTicker(200 * time.Millisecond)
+	catchUpTicker := time.NewTicker(5 * time.Second)
+	reannounceTicker := time.NewTicker(3 * time.Second)
 
 	for {
 		select {
@@ -212,7 +212,7 @@ func (ce *ConsensusEngine) startMining(ctx context.Context) {
 func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg consensusMessage) {
 	// validate the message
 	// based on the message type, process the message
-	fmt.Println("Consensus message received: ", msg.MsgType, msg.Sender)
+	fmt.Println("Consensus message received: ", msg.MsgType, hex.EncodeToString(msg.Sender))
 
 	switch msg.MsgType {
 	case "block_proposal":
@@ -235,7 +235,7 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 			return
 		}
 
-		if err := ce.addVote(ctx, vote, string(msg.Sender)); err != nil {
+		if err := ce.addVote(ctx, vote, hex.EncodeToString(msg.Sender)); err != nil {
 			fmt.Println("Error adding vote: ", vote, err)
 			return
 		}
@@ -385,6 +385,10 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
+	if ce.state.lc.height >= ce.networkHeight {
+		return
+	}
+
 	if ce.role != types.RoleLeader {
 		if ce.state.blkProp == nil && ce.state.blockRes == nil {
 			// catchup if needed with the leader/network.
@@ -401,7 +405,5 @@ func (ce *ConsensusEngine) updateNetworkHeight(height int64) {
 }
 
 func (ce *ConsensusEngine) requiredThreshold() int64 {
-	// TODO: update it
-	// return int64(len(ce.validatorSet)/2 + 1)
-	return 2
+	return int64(len(ce.validatorSet)/2 + 1)
 }

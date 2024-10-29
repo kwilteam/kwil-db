@@ -9,7 +9,6 @@ const (
 )
 
 type Validator struct {
-	Role   Role
-	PubKey string
+	PubKey []byte
 	Power  int64
 }

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"p2p/node/types"
 	"sync"
 	"testing"
 	"time"
@@ -70,7 +71,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		wg.Wait()
 	})
 
-	node1, err := NewNode(WithHost(h1), WithLeader(true))
+	node1, err := NewNode(".testnet", WithHost(h1), WithRole(types.RoleLeader))
 	if err != nil {
 		t.Fatalf("Failed to create Node 1: %v", err)
 	}
@@ -81,7 +82,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		node1.Start(ctx)
 	}()
 
-	node2, err := NewNode(WithHost(h2))
+	node2, err := NewNode(".n2", WithHost(h2), WithRole(types.RoleValidator))
 	if err != nil {
 		t.Fatalf("Failed to create Node 2: %v", err)
 	}
