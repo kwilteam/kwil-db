@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
-	"p2p/node/types"
 	"time"
+
+	"p2p/node/types"
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -49,17 +49,17 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	// First try to get from this stream.
 	rawTx, err := requestTx(s, []byte(getMsg))
 	if err != nil {
-		log.Printf("announcer failed to provide %v, trying other peers", txHash)
+		n.log.Infof("announcer failed to provide %v, trying other peers", txHash)
 		// Since we are aware, ask other peers. we could also put this in a goroutine
 		s.Close() // close the announcers stream first
 		rawTx, err = n.getTxWithRetry(context.TODO(), txHash, 500*time.Millisecond, 10)
 		if err != nil {
-			log.Printf("unable to retrieve tx %v: %v", txHash, err)
+			n.log.Infof("unable to retrieve tx %v: %v", txHash, err)
 			return
 		}
 	}
 
-	// log.Printf("obtained content for tx %q in %v", txid, time.Since(t0))
+	// n.log.Infof("obtained content for tx %q in %v", txid, time.Since(t0))
 
 	// here we could check tx index again in case a block was mined with it
 	// while we were fetching it
@@ -75,7 +75,7 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 func (n *Node) announceTx(ctx context.Context, txHash types.Hash, rawTx []byte, from peer.ID) {
 	peers := n.host.Network().Peers()
 	if len(peers) == 0 {
-		log.Println("no peers to advertise tx to")
+		n.log.Info("no peers to advertise tx to")
 		return
 	}
 
@@ -83,10 +83,10 @@ func (n *Node) announceTx(ctx context.Context, txHash types.Hash, rawTx []byte, 
 		if peerID == from {
 			continue
 		}
-		// log.Printf("advertising tx %v (len %d) to peer %v", txid, len(rawTx), peerID)
+		// n.log.Infof("advertising tx %v (len %d) to peer %v", txid, len(rawTx), peerID)
 		err := n.advertiseTxToPeer(ctx, peerID, txHash, rawTx)
 		if err != nil {
-			log.Println(err)
+			n.log.Warn("failed to advertise tx to peer", "peer", peerID, "error", err)
 			continue
 		}
 	}
@@ -109,7 +109,7 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 		return fmt.Errorf("txann failed: %w", err)
 	}
 
-	// log.Printf("advertised tx content %s to peer %s", txid, peerID)
+	// n.log.Infof("advertised tx content %s to peer %s", txid, peerID)
 
 	// Keep the stream open for potential content requests
 	go func() {
@@ -120,7 +120,7 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 		req := make([]byte, 128)
 		nr, err := s.Read(req)
 		if err != nil && !errors.Is(err, io.EOF) {
-			log.Println("bad get tx req:", err)
+			n.log.Warn("bad get tx req", "error", err)
 			return
 		}
 		if nr == 0 /*&& errors.Is(err, io.EOF)*/ {
@@ -129,7 +129,7 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 		req = req[:nr]
 		req, ok := bytes.CutPrefix(req, []byte(getMsg))
 		if !ok {
-			log.Printf("advertise wait: bad get tx request %q", string(req))
+			n.log.Warnf("advertise wait: bad get tx request %q", string(req))
 			return
 		}
 
@@ -158,7 +158,7 @@ func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time
 			rawTx := randBytes(sz)
 			n.mp.Store(txHash, rawTx)
 
-			// log.Printf("announcing txid %v", txid)
+			// n.log.Infof("announcing txid %v", txid)
 			n.announceTx(ctx, types.Hash(txHash), rawTx, n.host.ID())
 		}
 	}()
@@ -180,12 +180,12 @@ func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time
 
 				const sendN = 20
 				txns := n.mp.PeekN(sendN)
-				log.Printf("re-announcing %d unconfirmed txns", len(txns))
+				n.log.Infof("re-announcing %d unconfirmed txns", len(txns))
 
 				for _, nt := range txns {
 					n.announceTx(ctx, nt.Hash, nt.Tx, n.host.ID()) // response handling is async
 					if ctx.Err() != nil {
-						log.Println("interrupting long re-broadcast")
+						n.log.Warn("interrupting long re-broadcast")
 						break
 					}
 				}

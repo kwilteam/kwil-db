@@ -6,16 +6,16 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 
+	"p2p/log"
 	"p2p/node"
 	"p2p/node/types"
 
-	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/crypto" // TODO: isolate to config package not main
 )
 
 func main() {
@@ -36,17 +36,20 @@ func main() {
 }
 
 var (
+	rootDir string
 	// key       string
 	// port      uint64
 	// connectTo string
 	// noPex     bool
 	// leader    bool
 	// numVals   int
-	// role      int
-	rootDir string
+	logLevel  string
+	logFormat string
 )
 
 func run(ctx context.Context) error {
+	// TODO: restore flags, rethink config file (format and/or existence)
+
 	// flag.StringVar(&key, "key", "", "private key bytes (hexadecimal), empty is pseudo-random")
 	// flag.Uint64Var(&port, "port", 0, "listen port (0 for random)")
 	// flag.StringVar(&connectTo, "connect", "", "peer multiaddr to connect to")
@@ -54,9 +57,19 @@ func run(ctx context.Context) error {
 	// flag.BoolVar(&leader, "leader", false, "make this node produce blocks (should only be one in a network)")
 	// flag.IntVar(&role, "role", 0, "role of the node (0: leader, 1: validator, 2: sentry)")
 	// flag.IntVar(&numVals, "v", 1, "number of validators (all peers are validators!)")
-
 	flag.StringVar(&rootDir, "root", ".testnet", "root directory for the configuration")
+	flag.StringVar(&logLevel, "log-level", log.LevelInfo.String(), "log level")
+	flag.StringVar(&logFormat, "log-format", string(log.FormatUnstructured), "log format")
 	flag.Parse()
+
+	logLevel, err := log.ParseLevel(logLevel)
+	if err != nil {
+		return err
+	}
+
+	logger := log.New(log.WithLevel(logLevel), log.WithFormat(log.FormatUnstructured),
+		log.WithName("kwild2"))
+	// NOTE: level can be set independently for different system
 
 	// dummyce.NumValidatorsFake = numVals
 
@@ -141,14 +154,19 @@ func run(ctx context.Context) error {
 		}
 	}
 
+	// TODOs:
+	//  - node.WithGenesisConfig instead of WithGenesisValidators
+	//  - change node.WithPrivateKey to []byte or our own PrivateKey type
+
+	nodeLogger := logger.NewWithLevel(logLevel, "NODE")
 	node, err := node.NewNode(rootDir, node.WithPort(cfg.Port), node.WithPrivKey(cfg.PrivateKey),
-		node.WithRole(nRole), node.WithPex(cfg.Pex), node.WithGenesisValidators(valSet))
+		node.WithRole(nRole), node.WithPex(cfg.Pex), node.WithGenesisValidators(valSet), node.WithLogger(nodeLogger))
 	if err != nil {
 		return err
 	}
 
 	addr := node.Addr()
-	log.Printf("to connect: %s", addr)
+	logger.Infof("to connect: %s", addr)
 
 	var bootPeers []string
 	if cfg.SeedNode != "" {

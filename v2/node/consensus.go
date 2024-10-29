@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+
 	"p2p/node/types"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -64,12 +64,12 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block, from peer.
 	blkHash := blk.Hash()
 	height := blk.Header.Height
 
-	log.Printf("ANNOUNCING PROPOSED BLOCK %v / %d size = %d, txs = %d\n",
+	n.log.Infof("ANNOUNCING PROPOSED BLOCK %v / %d size = %d, txs = %d\n",
 		blkHash, height, len(rawBlk), len(blk.Txns))
 
 	peers := n.peers()
 	if len(peers) == 0 {
-		log.Println("no peers to advertise block to")
+		n.log.Infof("no peers to advertise block to")
 		return
 	}
 
@@ -78,12 +78,12 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block, from peer.
 			continue
 		}
 		prop := blockProp{Height: height, Hash: blkHash, PrevHash: blk.Header.PrevHash}
-		log.Printf("advertising block proposal %s (height %d / txs %d) to peer %v", blkHash, height, len(rawBlk), peerID)
+		n.log.Infof("advertising block proposal %s (height %d / txs %d) to peer %v", blkHash, height, len(rawBlk), peerID)
 		// resID := annPropMsgPrefix + strconv.Itoa(int(height)) + ":" + prevHash + ":" + blkid
 		propID, _ := prop.MarshalBinary()
-		err := advertiseToPeer(ctx, n.host, peerID, ProtocolIDBlockPropose, contentAnn{prop.String(), propID, rawBlk})
+		err := n.advertiseToPeer(ctx, peerID, ProtocolIDBlockPropose, contentAnn{prop.String(), propID, rawBlk})
 		if err != nil {
-			log.Println(err)
+			n.log.Infof(err.Error())
 			continue
 		}
 	}
@@ -113,7 +113,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 	var prop blockProp
 	err := prop.UnmarshalFromReader(s)
 	if err != nil {
-		log.Println("invalid block proposal message:", err)
+		n.log.Infof("invalid block proposal message:", err)
 		return
 	}
 
@@ -121,20 +121,20 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	if !n.ce.AcceptProposal(height, prop.PrevHash) {
 		// NOTE: if this is ahead of our last commit height, we have to try to catch up
-		log.Println("don't want proposal content", height, prop.PrevHash)
+		n.log.Infof("don't want proposal content", height, prop.PrevHash)
 		return
 	}
 
 	_, err = s.Write([]byte(getMsg))
 	if err != nil {
-		log.Println("failed to request block proposal contents:", err)
+		n.log.Infof("failed to request block proposal contents:", err)
 		return
 	}
 
 	rd := bufio.NewReader(s)
 	blkProp, err := io.ReadAll(rd)
 	if err != nil {
-		log.Println("failed to read block proposal contents:", err)
+		n.log.Infof("failed to read block proposal contents:", err)
 		return
 	}
 
@@ -142,22 +142,22 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	blk, err := types.DecodeBlock(blkProp)
 	if err != nil {
-		log.Printf("decodeBlock failed for proposal at height %d: %v", height, err)
+		n.log.Infof("decodeBlock failed for proposal at height %d: %v", height, err)
 		return
 	}
 	if blk.Header.Height != height {
-		log.Printf("unexpected height: wanted %d, got %d", height, blk.Header.Height)
+		n.log.Infof("unexpected height: wanted %d, got %d", height, blk.Header.Height)
 		return
 	}
 
 	annHash := prop.Hash
 	hash := blk.Header.Hash()
 	if hash != annHash {
-		log.Printf("unexpected hash: wanted %s, got %s", hash, annHash)
+		n.log.Infof("unexpected hash: wanted %s, got %s", hash, annHash)
 		return
 	}
 
-	log.Println("processing prop for", hash)
+	n.log.Infof("processing prop for", hash)
 
 	go n.ce.NotifyBlockProposal(blk)
 
@@ -224,7 +224,7 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			ackMsg, err := subAck.Next(ctx)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
-					log.Println("subTx.Next:", err)
+					n.log.Infof("subTx.Next:", err)
 				}
 				return
 			}
@@ -235,24 +235,24 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			}
 
 			if peer.ID(ackMsg.From) == me {
-				// log.Println("message from me ignored")
+				// n.log.Infof("message from me ignored")
 				continue
 			}
 
 			var ack AckRes
 			err = ack.UnmarshalBinary(ackMsg.Data)
 			if err != nil {
-				log.Printf("failed to decode ACK msg: %v", err)
+				n.log.Infof("failed to decode ACK msg: %v", err)
 				continue
 			}
 			fromPeerID := ackMsg.GetFrom()
 
-			log.Printf("received ACK msg from %s (rcvd from %s), data = %x",
+			n.log.Infof("received ACK msg from %s (rcvd from %s), data = %x",
 				fromPeerID.String(), ackMsg.ReceivedFrom.String(), ackMsg.Message.Data)
 
 			peerPubKey, err := fromPeerID.ExtractPublicKey()
 			if err != nil {
-				log.Printf("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
+				n.log.Infof("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
 				continue
 			}
 			pubkeyBytes, _ := peerPubKey.Raw() // does not error for secp256k1 or ed25519
@@ -275,40 +275,40 @@ func (n *Node) blkAckStreamHandler(s network.Stream) {
 	ackMsg := make([]byte, 128)
 	nr, err := s.Read(ackMsg)
 	if err != nil {
-		log.Println("failed to read block proposal ID:", err)
+		n.log.Infof("failed to read block proposal ID:", err)
 		return
 	}
 	blkAck, ok := bytes.CutPrefix(ackMsg[:nr], []byte(ackMsg))
 	if !ok {
-		log.Println("bad block proposal ID:", ackMsg)
+		n.log.Infof("bad block proposal ID:", ackMsg)
 		return
 	}
 	blkID, appHashStr, ok := strings.Cut(string(blkAck), ":")
 	if !ok {
-		log.Println("bad block proposal ID:", blkAck)
+		n.log.Infof("bad block proposal ID:", blkAck)
 		return
 	}
 
 	blkHash, err := types.NewHashFromString(blkID)
 	if err != nil {
-		log.Println("bad block ID in ack msg:", err)
+		n.log.Infof("bad block ID in ack msg:", err)
 		return
 	}
 	isNACK := len(appHashStr) == 0
 	if isNACK {
 		// do somethign
-		log.Printf("got nACK for block %v", blkHash)
+		n.log.Infof("got nACK for block %v", blkHash)
 		return
 	}
 
 	appHash, err := types.NewHashFromString(appHashStr)
 	if err != nil {
-		log.Println("bad block ID in ack msg:", err)
+		n.log.Infof("bad block ID in ack msg:", err)
 		return
 	}
 
 	// as leader, we tally the responses
-	log.Printf("got ACK for block %v, app hash %v", blkHash, appHash)
+	n.log.Infof("got ACK for block %v, app hash %v", blkHash, appHash)
 
 	return
 }
