@@ -82,7 +82,8 @@ func run(ctx context.Context) error {
 		}
 	}
 
-	node, err := node.NewNode(port, rawKey, leader, !noPex)
+	node, err := node.NewNode(node.WithPort(port), node.WithPrivKey(rawKey),
+		node.WithLeader(leader), node.WithPex(!noPex))
 	if err != nil {
 		return err
 	}
