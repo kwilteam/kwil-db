@@ -20,19 +20,19 @@ import (
 
 // startNewRound starts a new round of consensus process.
 func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
-	fmt.Println("Starting a new round", ce.state.lc.height+1)
+	ce.log.Info("Starting a new round", "height", ce.state.lc.height+1)
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
 	blkProp, err := ce.createBlockProposal()
 	if err != nil {
-		fmt.Println("Error creating a block proposal", err)
+		ce.log.Errorf("Error creating a block proposal: %v", err)
 		return err
 	}
 
 	// Validate the block proposal before announcing it to the network
 	if err := ce.validateBlock(blkProp.blk); err != nil {
-		fmt.Println("Error validating the block proposal", err)
+		ce.log.Errorf("Error validating the block proposal: %v", err)
 		return err
 	}
 	ce.state.blkProp = blkProp
@@ -42,7 +42,7 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 
 	// Execute the block and generate the appHash
 	if err := ce.executeBlock(); err != nil {
-		fmt.Println("Error executing the block", err)
+		ce.log.Errorf("Error executing the block: %v", err)
 		return err
 	}
 
@@ -69,18 +69,20 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 
 	// Check if the vote is for the current block
 	if ce.state.blkProp == nil {
-		fmt.Println("NotifyACK: Not processing any block proposal at the moment")
+		ce.log.Warn("NotifyACK: Not processing any block proposal at the moment")
 		return
 	}
 
 	if ce.state.blkProp.height != ack.Height {
-		fmt.Println("NotifyACK: Vote received for a different block, ignore it.", ce.state.blkProp.height, ack.Height)
+		ce.log.Warn("NotifyACK: Vote received for a different block, ignore it.",
+			"got_height", ack.Height, "expected_height", ce.state.blkProp.height)
 		return
 	}
 
 	// If the ack is for the current height, but the block hash is different? Ignore it.
 	if ce.state.blkProp.blkHash != ack.BlkHash {
-		fmt.Println("NotifyACK: Vote received for an incorrect block", ce.state.blkProp.blkHash, ack.BlkHash)
+		ce.log.Warn("NotifyACK: Vote received for an incorrect block",
+			"got_hash", ack.BlkHash, "expected_hash", ce.state.blkProp.blkHash)
 		return
 	}
 
@@ -159,7 +161,7 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 // for the slow valdiators to catchup incase they missed the event.
 // Validators will peridically reannounce the votes to the leader.
 func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
-	fmt.Println("Processing votes: ", ce.state.lc.height+1)
+	ce.log.Info("Processing votes", "height", ce.state.lc.height+1)
 
 	if ce.state.blkProp == nil || ce.state.blockRes == nil { // Moved onto the next round
 		return nil
@@ -167,7 +169,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 
 	threshold := ce.requiredThreshold()
 	if len(ce.state.votes) < int(threshold) {
-		fmt.Println("Not enough votes received yet", len(ce.state.votes), threshold)
+		ce.log.Warn("Not enough votes received yet", "have", len(ce.state.votes), "need", threshold)
 		return nil
 	}
 
@@ -183,25 +185,31 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 	}
 
 	if acks >= threshold {
-		fmt.Println("Majority of the validators have accepted the block, proceeding to commit the block", ce.state.blkProp.blk.Header.Height, ce.state.blkProp.blkHash, acks, nacks)
+		ce.log.Info("Majority of the validators have accepted the block, proceeding to commit the block",
+			"height", ce.state.blkProp.blk.Header.Height, "hash", ce.state.blkProp.blkHash, "acks", acks, "nacks", nacks)
 		// Commit the block and broadcast the blockAnn message
 		if err := ce.commit(); err != nil {
-			fmt.Println("Error committing the block: process votes", err)
+			ce.log.Errorf("Error committing the block (process votes): %v", err)
 			return err
 		}
 
-		fmt.Println("Announce committed block", ce.state.blkProp.blk.Header.Height, ce.state.blkProp.blkHash)
+		ce.log.Info("Announce committed block", ce.state.blkProp.blk.Header.Height, ce.state.blkProp.blkHash)
 		// Broadcast the blockAnn message
 		go ce.blkAnnouncer(ctx, ce.state.blkProp.blk, ce.state.blockRes.appHash, ce.host)
 
 		// start the next round
 		ce.nextState()
 		// Wait for the timeout to start the next round
-		time.Sleep(1 * time.Second) // TODO: Is there a better way to handle this timeout?
+		const blockTimeout = time.Second // TODO: config
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(blockTimeout):
+		}
 		go ce.startNewRound(ctx)
 	} else if nacks >= threshold {
 		// halt the network
-		fmt.Println("Majority of the validators have rejected the block, halting the network",
+		ce.log.Info("Majority of the validators have rejected the block, halting the network",
 			ce.state.blkProp.blk.Header.Height, acks, nacks)
 		close(ce.haltChan)
 		return nil

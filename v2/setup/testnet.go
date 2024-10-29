@@ -7,9 +7,10 @@ import (
 	"fmt"
 	mrand2 "math/rand/v2"
 	"os"
+	"path/filepath"
+
 	"p2p/node"
 	"p2p/node/types"
-	"path/filepath"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -107,14 +108,14 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 
 		nodeConfig := &node.NodeConfig{
 			Port:       startingPort + uint64(i),
-			Ip:         "127.0.0.1",
+			IP:         "127.0.0.1",
 			SeedNode:   "",
 			Pex:        !noPex,
 			PrivateKey: privKey,
 		}
 
 		if i != 0 {
-			nodeConfig.SeedNode = fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", nodeConfig.Ip, startingPort, leaderAddr.String())
+			nodeConfig.SeedNode = fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", nodeConfig.IP, startingPort, leaderAddr)
 		}
 
 		if err := nodeConfig.SaveAs(filepath.Join(nodeDir, "config.json")); err != nil {
