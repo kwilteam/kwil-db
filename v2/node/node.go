@@ -83,8 +83,7 @@ type ConsensusEngineForToyNode interface { // quick and dirty for toy node proto
 type Node struct {
 	bki types.BlockStore
 	mp  types.MemPool
-	// ce  ConsensusEngineForToyNode
-	ce ConsensusEngine
+	ce  ConsensusEngine
 
 	pm *peerMan
 	// pf *prefetch
@@ -103,19 +102,42 @@ func addClose(close, top func() error) func() error {
 	return func() error { err := top(); return errors.Join(err, close()) }
 }
 
-func NewNode(port uint64, privKey []byte, leader, pex bool) (*Node, error) {
+// Config is the configuration for a node. Although everything is presently set
+// with functional options, some settings may be required, such as identity, and
+// thus are best provided by a config struct.
+type Config struct {
+	PrivKey []byte
+	// Port    uint16
+	// Dir     string
+}
+
+// NewNode creates a new node. For now we are using functional options, but this
+// may be better suited by a config struct, or a hybrid where some settings are
+// required, such as identity.
+func NewNode(opts ...Option) (*Node, error) {
+	options := &options{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	close := func() error { return nil }
 
-	host, err := newHost(port, privKey)
-	if err != nil {
-		return nil, err
+	host := options.host
+	if host == nil {
+		var err error
+		host, err = newHost(options.port, options.privKey)
+		if err != nil {
+			return nil, err
+		}
 	}
-	// n.host.Network().InterfaceListenAddresses() // expands 0.0.0.0
 
-	mp := mempool.New()
+	mp := options.mp
+	if options.mp == nil {
+		mp = mempool.New()
+	}
 
 	pm := &peerMan{h: host}
-	if pex {
+	if options.pex {
 		host.SetStreamHandler(ProtocolIDDiscover, pm.discoveryStreamHandler)
 	} else {
 		host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
@@ -126,37 +148,43 @@ func NewNode(port uint64, privKey []byte, leader, pex bool) (*Node, error) {
 	dir := ".data-" + host.ID().String()
 	dir, _ = filepath.Abs(dir)
 
-	blkStr, err := store.NewBlockStore(dir)
-	if err != nil {
-		return nil, err
+	bs := options.bs
+	if bs == nil {
+		var err error
+		bs, err = store.NewBlockStore(dir)
+		if err != nil {
+			return nil, err
+		}
 	}
-	close = addClose(close, blkStr.Close) //close db after stopping p2p
+	close = addClose(close, bs.Close) //close db after stopping p2p
 	close = addClose(close, host.Close)
 
 	// ce := dummyce.New(blkStr, mp)
 	var role types.Role
-	if leader {
+	if options.leader {
 		role = types.RoleLeader
 	} else {
 		role = types.RoleValidator
 	}
 
-	ce := consensus.New(role, host.ID(), dir, mp, blkStr, nil)
-	// ce.BeLeader(leader)
+	ce := consensus.New(role, host.ID(), dir, mp, bs, nil)
+	if ce == nil {
+		return nil, errors.New("failed to create consensus engine")
+	}
 
 	node := &Node{
 		host:    host,
 		pm:      pm,
-		pex:     pex,
+		pex:     options.pex,
 		mp:      mp,
-		bki:     blkStr,
+		bki:     bs,
 		ce:      ce,
 		dir:     dir,
 		ackChan: make(chan AckRes, 1),
 		close:   close,
 	}
 
-	node.leader.Store(leader)
+	node.leader.Store(options.leader)
 
 	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
 	host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
@@ -179,6 +207,10 @@ func (n *Node) Addr() string {
 	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s\n", hosts[0], ports[0], id)
 }
 
+func (n *Node) Dir() string {
+	return n.dir
+}
+
 func (n *Node) ID() string {
 	return n.host.ID().String()
 }
@@ -194,6 +226,7 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 		return err
 	}
 	if err := n.startAckGossip(ctx, ps); err != nil { // gossip.go
+		cancel()
 		return err
 	}
 
@@ -408,6 +441,9 @@ func hostPort(host host.Host) ([]string, []int) {
 		port, _ := strconv.Atoi(ps)
 		ports = append(ports, port)
 		as, _ := addr.ValueForProtocol(multiaddr.P_IP4)
+		if as == "" {
+			as, _ = addr.ValueForProtocol(multiaddr.P_IP6)
+		}
 		addrStr = append(addrStr, as)
 
 		log.Println("Listening on", addr)
