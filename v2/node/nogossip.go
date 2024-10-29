@@ -75,7 +75,7 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 func (n *Node) announceTx(ctx context.Context, txHash types.Hash, rawTx []byte, from peer.ID) {
 	peers := n.host.Network().Peers()
 	if len(peers) == 0 {
-		n.log.Info("no peers to advertise tx to")
+		n.log.Warnf("no peers to advertise tx to")
 		return
 	}
 

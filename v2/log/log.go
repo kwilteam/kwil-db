@@ -78,6 +78,7 @@ func formatArgs(args ...any) string {
 		return ""
 	}
 	var msg strings.Builder
+	msg.WriteString(":")
 	// args are pairs of key-values, so we will print them in pairs after the message.
 	for i := 0; i < len(args); i += 2 {
 		// if odd, then we will just print the last value

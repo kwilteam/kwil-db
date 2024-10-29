@@ -64,12 +64,12 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block, from peer.
 	blkHash := blk.Hash()
 	height := blk.Header.Height
 
-	n.log.Infof("ANNOUNCING PROPOSED BLOCK %v / %d size = %d, txs = %d\n",
-		blkHash, height, len(rawBlk), len(blk.Txns))
+	n.log.Info("announcing proposed block", "hash", blkHash, "height", height,
+		"txs", len(blk.Txns), "size", len(rawBlk))
 
 	peers := n.peers()
 	if len(peers) == 0 {
-		n.log.Infof("no peers to advertise block to")
+		n.log.Warnf("no peers to advertise block to")
 		return
 	}
 

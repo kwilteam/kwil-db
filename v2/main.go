@@ -64,7 +64,7 @@ func run(ctx context.Context) error {
 
 	logLevel, err := log.ParseLevel(logLevel)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid log level: %w", err)
 	}
 
 	logger := log.New(log.WithLevel(logLevel), log.WithFormat(log.FormatUnstructured),
@@ -100,22 +100,17 @@ func run(ctx context.Context) error {
 	// 	}
 	// }
 
-	fmt.Println("Parsing the configuration")
-
-	valSet := make(map[string]types.Validator)
 	genFile := filepath.Join(rootDir, "genesis.json")
-	if _, err := os.Stat(genFile); os.IsNotExist(err) {
-		return fmt.Errorf("genesis file not found: %s", genFile)
-	}
 
-	fmt.Println("Loading the genesis configuration", genFile)
+	logger.Infof("Loading the genesis configuration from %s", genFile)
 
 	genConfig, err := node.LoadGenesisConfig(genFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load genesis config: %w", err)
 	}
 
 	// assuming static validators
+	valSet := make(map[string]types.Validator)
 	for _, val := range genConfig.Validators {
 		valSet[hex.EncodeToString(val.PubKey)] = val
 	}
@@ -123,10 +118,10 @@ func run(ctx context.Context) error {
 	cfgFile := filepath.Join(rootDir, "config.json")
 	cfg, err := node.LoadNodeConfig(cfgFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load node config: %w", err)
 	}
 
-	fmt.Println("Loading the node configuration", cfgFile)
+	logger.Infof("Loading the node configuration from %s", cfgFile)
 
 	privKey, err := crypto.UnmarshalSecp256k1PrivateKey(cfg.PrivateKey)
 	if err != nil {
@@ -137,20 +132,20 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Println("Parsing the pubkey key", hex.EncodeToString(pubKey))
+	logger.Info("Parsing the pubkey", "key", hex.EncodeToString(pubKey))
 	// Check if u are the leader
 	var nRole types.Role
 	if bytes.Equal(pubKey, genConfig.Leader) {
 		nRole = types.RoleLeader
-		fmt.Println("You are the leader")
+		logger.Info("You are the leader")
 	} else {
 		// check if you are a validator
 		if _, ok := valSet[hex.EncodeToString(pubKey)]; ok {
 			nRole = types.RoleValidator
-			fmt.Println("You are a validator")
+			logger.Info("You are a validator")
 		} else {
 			nRole = types.RoleSentry
-			fmt.Println("You are a sentry")
+			logger.Info("You are a sentry")
 		}
 	}
 
@@ -166,7 +161,7 @@ func run(ctx context.Context) error {
 	}
 
 	addr := node.Addr()
-	logger.Infof("to connect: %s", addr)
+	logger.Infof("To connect: %s", addr)
 
 	var bootPeers []string
 	if cfg.SeedNode != "" {
