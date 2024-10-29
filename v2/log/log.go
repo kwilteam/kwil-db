@@ -77,8 +77,9 @@ func formatArgs(args ...any) string {
 	if len(args) == 0 {
 		return ""
 	}
+	var sp string
 	var msg strings.Builder
-	msg.WriteString(":")
+	msg.WriteString(" {")
 	// args are pairs of key-values, so we will print them in pairs after the message.
 	for i := 0; i < len(args); i += 2 {
 		// if odd, then we will just print the last value
@@ -90,8 +91,12 @@ func formatArgs(args ...any) string {
 		if v, ok := val.([]byte); ok {
 			val = hex.EncodeToString(v)
 		}
-		fmt.Fprintf(&msg, " %s=%v", key, val)
+		fmt.Fprintf(&msg, "%s%s=%v", sp, key, val)
+		if i == 0 {
+			sp = " "
+		}
 	}
+	msg.WriteString("}")
 	return msg.String()
 }
 
@@ -358,8 +363,13 @@ func newLogger(options *options) Logger {
 		panic(fmt.Sprintf("unknown logging format: %s", options.format))
 	}
 
-	if options.name != "" { // name => group for stdlib log/slog
-		handler = handler.WithGroup(options.name)
+	// if options.name != "" { // name => group for stdlib log/slog
+	// 	handler = handler.WithGroup(options.name)
+	// }
+	if options.name != "" {
+		handler = handler.WithAttrs([]slog.Attr{
+			slog.String("system", options.name),
+		})
 	}
 
 	return &logger{

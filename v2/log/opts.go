@@ -1,6 +1,9 @@
 package log
 
-import "io"
+import (
+	"fmt"
+	"io"
+)
 
 type Format string
 
@@ -9,6 +12,15 @@ const (
 	FormatJSON         Format = "json"
 	FormatUnstructured Format = "plain"
 )
+
+func ParseFormat(format string) (Format, error) {
+	switch Format(format) {
+	case FormatText, FormatJSON, FormatUnstructured:
+		return Format(format), nil
+	default:
+		return FormatText, fmt.Errorf("unknown format: %s", format)
+	}
+}
 
 type Option func(*options)
 

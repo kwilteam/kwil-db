@@ -67,8 +67,13 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("invalid log level: %w", err)
 	}
 
-	logger := log.New(log.WithLevel(logLevel), log.WithFormat(log.FormatUnstructured),
-		log.WithName("kwild2"))
+	logFormat, err := log.ParseFormat(logFormat)
+	if err != nil {
+		return fmt.Errorf("invalid log format: %w", err)
+	}
+
+	logger := log.New(log.WithLevel(logLevel), log.WithFormat(logFormat),
+		log.WithName("KWILD"))
 	// NOTE: level can be set independently for different system
 
 	// dummyce.NumValidatorsFake = numVals
