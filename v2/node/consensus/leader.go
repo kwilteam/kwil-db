@@ -136,10 +136,9 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 	}
 
 	// Check if the vote is from a validator
-	// TODO: accept vote from anyone, till we have access to validator set
-	// if _, ok := ce.validatorSet[sender]; !ok {
-	// 	return fmt.Errorf("vote received from an unknown validator %s", sender)
-	// }
+	if _, ok := ce.validatorSet[sender]; !ok {
+		return fmt.Errorf("vote received from an unknown validator %s", sender)
+	}
 
 	// Add the vote to the votes map
 	if _, ok := ce.state.votes[sender]; !ok {
@@ -160,7 +159,7 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 // for the slow valdiators to catchup incase they missed the event.
 // Validators will peridically reannounce the votes to the leader.
 func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
-	fmt.Println("Processing votes")
+	fmt.Println("Processing votes: ", ce.state.lc.height+1)
 
 	if ce.state.blkProp == nil || ce.state.blockRes == nil { // Moved onto the next round
 		return nil

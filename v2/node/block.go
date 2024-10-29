@@ -273,7 +273,7 @@ func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, type
 			continue
 		}
 
-		log.Printf("obtained content for block number %q in %v", height, time.Since(t0))
+		log.Printf("obtained content for block number %d in %v", height, time.Since(t0))
 
 		var hash, appHash types.Hash
 		copy(hash[:], resp[:types.HashLen])

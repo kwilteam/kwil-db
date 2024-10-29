@@ -10,11 +10,13 @@ type options struct {
 	port    uint64
 	privKey []byte
 	leader  bool
+	role    types.Role
 	pex     bool
 	host    host.Host
 	bs      types.BlockStore
 	mp      types.MemPool
 	ce      ConsensusEngine
+	valSet  map[string]types.Validator
 }
 
 func (o *options) set(opts ...Option) {
@@ -35,9 +37,9 @@ func WithPrivKey(privKey []byte) Option {
 		o.privKey = privKey
 	}
 }
-func WithLeader(leader bool) Option {
+func WithRole(role types.Role) Option {
 	return func(o *options) {
-		o.leader = leader
+		o.role = role
 	}
 }
 func WithPex(pex bool) Option {
@@ -63,5 +65,11 @@ func WithMemPool(mp types.MemPool) Option {
 func WithConsensusEngine(ce ConsensusEngine) Option {
 	return func(o *options) {
 		o.ce = ce
+	}
+}
+
+func WithGenesisValidators(valSet map[string]types.Validator) Option {
+	return func(o *options) {
+		o.valSet = valSet
 	}
 }

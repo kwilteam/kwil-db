@@ -9,8 +9,10 @@ import (
 	"io"
 	"log"
 	mrand2 "math/rand/v2"
+	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -96,6 +98,9 @@ type Node struct {
 	dir    string
 	wg     sync.WaitGroup
 	close  func() error
+
+	role   types.Role
+	valSet map[string]types.Validator
 }
 
 func addClose(close, top func() error) func() error {
@@ -114,7 +119,7 @@ type Config struct {
 // NewNode creates a new node. For now we are using functional options, but this
 // may be better suited by a config struct, or a hybrid where some settings are
 // required, such as identity.
-func NewNode(opts ...Option) (*Node, error) {
+func NewNode(dir string, opts ...Option) (*Node, error) {
 	options := &options{}
 	for _, opt := range opts {
 		opt(options)
@@ -145,13 +150,11 @@ func NewNode(opts ...Option) (*Node, error) {
 		})
 	}
 
-	dir := ".data-" + host.ID().String()
-	dir, _ = filepath.Abs(dir)
-
 	bs := options.bs
+	var err error
 	if bs == nil {
-		var err error
-		bs, err = store.NewBlockStore(dir)
+		blkStrDir := filepath.Join(dir, "blockstore")
+		bs, err = store.NewBlockStore(blkStrDir)
 		if err != nil {
 			return nil, err
 		}
@@ -159,18 +162,11 @@ func NewNode(opts ...Option) (*Node, error) {
 	close = addClose(close, bs.Close) //close db after stopping p2p
 	close = addClose(close, host.Close)
 
-	// ce := dummyce.New(blkStr, mp)
-	var role types.Role
-	if options.leader {
-		role = types.RoleLeader
-	} else {
-		role = types.RoleValidator
-	}
-
-	ce := consensus.New(role, host.ID(), dir, mp, bs, nil)
+	ce := consensus.New(options.role, host.ID(), dir, mp, bs, options.valSet)
 	if ce == nil {
 		return nil, errors.New("failed to create consensus engine")
 	}
+	// ce.BeLeader(leader)
 
 	node := &Node{
 		host:    host,
@@ -182,9 +178,11 @@ func NewNode(opts ...Option) (*Node, error) {
 		dir:     dir,
 		ackChan: make(chan AckRes, 1),
 		close:   close,
+		role:    options.role,
+		valSet:  options.valSet,
 	}
 
-	node.leader.Store(options.leader)
+	node.leader.Store(options.role == types.RoleLeader)
 
 	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
 	host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
@@ -493,4 +491,15 @@ func checkProtocolSupport(_ context.Context, h host.Host, peerID peer.ID, protoI
 	// 	}
 	// }
 	// return true, nil
+}
+
+func ExpandPath(path string) (string, error) {
+	if strings.HasPrefix(path, "~") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		path = filepath.Join(home, path[2:])
+	}
+	return filepath.Abs(path)
 }
