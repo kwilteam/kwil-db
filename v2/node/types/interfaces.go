@@ -7,23 +7,36 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
-// type TxIndex interface {
-// 	Get(Hash) (int64, []byte)
-// 	Have(Hash) bool
-// 	Store(Hash, int64, []byte)
-// }
-
 type BlockStore interface {
+	BlockGetter
+	BlockStorer
 	TxGetter
+	BlockResultsStorer
 
 	Best() (int64, Hash, Hash)
+
+	PreFetch(Hash) (bool, func()) // should be app level instead (TODO: remove)
+
+	Close() error
+}
+
+type BlockGetter interface {
 	Have(Hash) bool
 	Get(Hash) (*Block, Hash, error)
-	// GetRaw(Hash) (int64, []byte)
 	GetByHeight(int64) (Hash, *Block, Hash, error) // note: we can impl GetBlockHeader easily too
-	// GetRawByHeight(int64) (Hash, []byte)
+}
+
+type RawGetter interface {
+	GetRaw(Hash) ([]byte, error)
+	GetRawByHeight(int64) (Hash, []byte)
+}
+
+type BlockStorer interface {
 	Store(*Block, Hash) error
-	PreFetch(Hash) (bool, func()) // should be app level instead
+}
+
+type BlockResultsStorer interface {
+	StoreResults(hash Hash, results []TxResult) error
 }
 
 type TxGetter interface {
